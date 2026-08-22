@@ -1,323 +1,295 @@
-# Lazurio root
+# Lazurio
 
-Sdílený framework repo pro **Lazurio**: jedno místo na počítači člověka nebo AI kolegy, odkud se načítá jeho osobní kontext a více GitHub-like Organizací.
+[![Testy](https://github.com/HumanAndMachines/Lazurio/actions/workflows/checks.yml/badge.svg?branch=main&event=push)](https://github.com/HumanAndMachines/Lazurio/actions/workflows/checks.yml)
 
-Tenhle root není jedna firma ani klientské workspace repo. Je to společný
-framework vyvíjený Rozjedeme.ai. Historická GitHub organization zůstává
-`HumanAndMachines` a canonical repo `HumanAndMachines/Lazurio`; tyto interní
-identity nejsou uživatelský název systému. Root drží sdílený Launchpad, Guide,
-šablony, manuály, privátní `personalspace/` mountpoint a lokální mountpointy
-Organizací; Organizace v něm zůstávají oddělené access hranice a vlastní Git
-repozitáře.
+**Lazurio je lokální pracovní systém, ve kterém lidé a AI spolupracují na
+firmách, projektech i osobní agendě — s jasným kontextem, oddělenými přístupy
+a vědomou kontrolou nad tím, co se zveřejní.**
 
-Cílové základy budoucího `Lazurio/Lazurio` drží
-[ARCHITECTURE.md](ARCHITECTURE.md): čtyři základní pojmy `Owner`, `Machine`,
-`Resident` a `Agent`, společný technický základ Buddyho a AI Kolegy a role
-Lazuria jako distribuční a lifecycle vrstvy. Dnešní názvy a provider cesty se
-od cíle mohou lišit do dokončení migrace `CAC-0092`.
+Z jednoho počítače pomáhá dlouhodobě spravovat více firem, projektů, aplikací
+a osobních podkladů, aniž by se jejich repozitáře, data nebo oprávnění slily
+dohromady. Grafický rozcestník ukazuje dostupné aplikace a rozpracovanou práci;
+příkazové nástroje, diagnostika a Git udržují stav a dohledatelnou historii.
 
-## Lazurio CLI v0
+Každý úkol začíná jednoznačným kontextem: pro koho se pracuje, které firmy nebo
+projektu se týká, jaká data smí AI nástroj použít a kdo může výsledek schválit
+nebo zveřejnit. Výsledek zůstává editovatelný a kontrolovatelný, dokud jej
+oprávněný člověk nebo AI spolupracovník vědomě neposune dál.
 
-První interní řez Lazurio CLI je nestabilní. Read-only příkazy Agentovi
-zpřístupňují bezpečnou projekci identity Principála, aktuální Mašiny a stavu
-Personalspace, na explicitní selektor jednu lokálně objevenou Organization a
-úzký manifest-scoped search pilot pro Lazurio; nečte SOUL, obsah GBrainu, chat,
-sessions, secrets ani mandáty.
-Chybějící lokální mount není tvrzení o GitHub přístupu — provider authority
-zůstává `not_evaluated`, dokud ji neověří živý provider readback.
+Lazurio není nový AI model ani společné cloudové úložiště všech dat. Je to
+koordinační vrstva, která propojuje lidi, AI nástroje, repozitáře a aplikace
+pod jednou sadou srozumitelných pravidel.
 
-Ve vývojovém checkoutu se CLI spouští přes Bun:
+Projekt je určený technickým zakladatelům, vývojářům a týmům, které chtějí
+dlouhodobě spolupracovat s AI pomocí srozumitelných postupů, skutečných
+oprávnění v používaných službách a výsledků, které lze před zveřejněním
+zkontrolovat a upravit — ne pomocí neviditelné agentní magie.
+
+> [!IMPORTANT]
+> Lazurio je ve fázi aktivního vývoje. Tento repozitář dnes slouží vývojářům,
+> kteří Lazurio spouštějí přímo ze zdrojového kódu. Jednoduchá instalace a
+> automaticky vytvořené pracovní prostředí ve zvoleném jazyce jsou cílový
+> směr, nikoli už vydaná distribuce. Zdrojový kód je nyní dostupný pod FSL,
+> která ještě není finální open-source licencí projektu; volba OSS licence je
+> bezprostřední navazující krok.
+
+## Společný slovník Lazuria
+
+Lazurio používá malý počet záměrně přesných pojmů pro role, pracovní prostory
+a rozhodování. Nejsou to jen interní názvy. **Společný slovník je součástí
+fungování Lazuria:** zajišťuje, aby lidé i AI nástroje stejně rozuměli tomu,
+pro koho se pracuje, kdo má jaká oprávnění, kde končí hranice dat a kdy je
+výsledek jen připravený ke kontrole, nebo už skutečně publikovaný.
+
+Bez společných definic mohou běžná slova jako „agent“, „uživatel“, „vlastník“
+nebo „schválení“ znamenat pro každého něco jiného. Od tohoto místa proto README
+používá následující pojmy s jejich přesným významem.
+
+### Lidé a agentní role
+
+| Pojem | Co znamená běžnou řečí |
+| --- | --- |
+| **Principál** | Ten, pro koho Agent právě pracuje, z čích oprávnění vychází a kdo má poslední slovo. Principálem může být člověk i AI Kolega. |
+| **Kolega** | Lidský Principál zapojený do práce podle svých firemních rolí a oprávnění. |
+| **AI Kolega** | Dlouhodobá AI identita s vlastním účtem, pracovním prostředím, odpovědností a přístupy. Není to jedna dočasná relace nástroje. |
+| **Agent / Task Agent** | Jedna nástrojová pracovní relace pro konkrétní úkol, například Codex nebo Claude Code. Pracuje jménem svého Principála a sama nevlastní žádná oprávnění. |
+| **Buddy** | Osobní AI zástupce právě jednoho člověka. Jedná v mezích jeho oprávnění a trvalých, ohraničených a odvolatelných mandátů. |
+
+### Prostory a práce
+
+| Pojem | Co znamená běžnou řečí |
+| --- | --- |
+| **Mašina** | Počítač nebo dedikovaný server ovládaný jedním Principálem. V Lazuriu tvoří základní lokální bezpečnostní hranici. |
+| **Organizace** | Jedna firma, její GitHub organizace a samostatná hranice repozitářů, dat a přístupů. |
+| **Personalspace** | Soukromý prostor jednoho Principála a jeho případného Buddyho. S firemní Organizací se automaticky nesdílí. |
+| **Root** | Kořenová složka pracovního prostředí, která zastřešuje Lazurio, dostupné Organizace a případný Personalspace. |
+| **Draft a Publikace** | Draft je vratný a editovatelný výsledek. Publikace jej zviditelní navenek nebo z něj udělá obtížně vratnou změnu a vyžaduje vědomé rozhodnutí oprávněného Principála. |
+
+Tento zkrácený slovník stačí pro čtení README. Úplný model spolupráce drží
+[pravidla pro Agenty](AGENTS.md#model-spolupráce-principál-a-agenti) a cílové
+vztahy mezi rolemi, prostory a runtime popisuje [architektura](ARCHITECTURE.md).
+
+## Proč Lazurio vzniká
+
+Běžné agentní nástroje umějí dobře vykonat jednotlivý úkol. Hůř se v nich ale
+udržuje dlouhodobý kontext: komu Agent slouží, ve které firmě právě pracuje,
+kam patří výsledek, co smí být sdílené a kdo může změnu publikovat.
+
+Lazurio nad tím staví malý počet pevných pravidel:
+
+- **jedna Mašina je jedna trust doména** se známým vlastníkem;
+- **GitHub je autorita pracovních přístupů** — Lazurio nevytváří paralelní
+  systém oprávnění;
+- **každá Organizace je samostatná hranice** a samostatný Git repozitář;
+- **Personalspace je privátní** a nikdy se automaticky nesdílí s Organizací;
+- **Agent pracuje pro svého Principála** a odevzdává editovatelný Draft;
+- **publikace zůstává vědomým rozhodnutím oprávněného Principála**.
+
+Výsledkem má být pracovní prostředí, ve kterém lidé i AI Kolegové používají
+stejnou organizační strukturu, stejné zdroje pravdy a stejné kontrolovatelné
+procesy.
+
+## Jak Lazurio zapadá dohromady
+
+### Dnešní vývojový tok
+
+```text
+Git repozitář Lazurio
+        │
+        ├── Lazurio CLI v0 a sdílené Core
+        ├── Launchpad, Guide, Doctor a manuály
+        ├── lokálně připojené Organizace
+        └── lokálně připojený Personalspace
+```
+
+Source checkout je dnes současně vývojovým pracovním rootem. Příkazy se
+spouštějí přes Bun a některé instalační nebo distribuční části jsou stále
+experimentální.
+
+### Cílová distribuce
+
+```text
+                         Lazurio source repo
+                         /                  \
+             lokální vývojový build      package-managed CLI
+                         \                  /
+                    jazykově generovaný non-Git Root
+                                   │
+              ┌────────────────────┼────────────────────┐
+          Launchpad            Personalspace       Organizace
+        a sdílené UI         jednoho vlastníka    oddělené Git scope
+```
+
+Repozitář zůstane zdrojem produktu. Vývojář sestaví Root z přesného lokálního
+source commitu; produkční instalaci bude materializovat jedno verzované
+`lazurio` CLI. Lokalizuje se lidský obsah výsledného Rootu, nikoli názvy cest,
+manifestové klíče, identifikátory nebo strojová schémata.
+
+Cílově CLI/Core vlastní stavová pravidla, instalaci, validaci, lifecycle a
+výsledný report. Dnešní Launchpad vedle grafického UI ještě přímo řídí start,
+stop a obnovu lokálních modulových procesů; tato odpovědnost se postupně skládá
+do společného Core. Produktová hranice se nemění: **Launchpad je klient
+společného kontraktu**, ne druhý nezávislý runtime engine. Lazurio Dashboard je
+samostatný povrch pro administraci Organizací a vstup do produkčních aplikací;
+Launchpad ho nenahrazuje.
+
+## Hlavní části systému
+
+| Část | Úloha |
+| --- | --- |
+| **Lazurio CLI/Core** | Headless kontrakt pro kontext, diagnostiku, synchronizaci, instalaci a reportování. Současné CLI v0 je interní a nestabilní. |
+| **Launchpad** | Builder-first grafický povrch nad stejnými pravidly: objevuje Organizace a moduly, spouští vývojové aplikace a ukazuje jejich stav. |
+| **Guide** | Netechnický průvodce spoluprací lidí, AI Kolegů a digitálních kanceláří. |
+| **Personalspace** | Privátní prostor právě jednoho vlastníka a jeho případného Buddyho; neleží uvnitř firemní Organizace. |
+| **Organizace** | Jedna firma, jedna GitHub Organization, jeden samostatný super-repozitář a jedna access hranice. |
+| **Workspace moduly** | Samostatné repozitáře pro každodenní práci uvnitř Organizace; Teamy jsou nad nimi logické N:M seskupení. |
+| **Productionspace** | Org-level repozitáře s vlastním release a provozním modelem, které Launchpad standardně ukazuje read-only. |
+| **Resident** | Dlouhodobá instalace Lazuria na Mašině, například profil Buddyho nebo AI Kolegy. |
+| **Task Agent** | Jedna nástrojová pracovní relace pro konkrétní úkol, například Codex nebo Claude Code; sama nevlastní žádná oprávnění. |
+
+Podrobný cílový model vysvětluje [ARCHITECTURE.md](ARCHITECTURE.md) a fyzické
+rozložení repozitářů [MAP.md](MAP.md).
+
+## Co funguje dnes a co je cílový stav
+
+| Oblast | Stav |
+| --- | --- |
+| Source checkout a Bun workflow | **Funguje dnes.** Obsahuje Launchpad, Guide, CLI v0, Doctory, manuály, šablony a build kontrakty. |
+| Launchpad | **Funguje dnes.** Je builder-first a dynamicky objevuje lokálně připojené Organizace. |
+| Lazurio CLI v0 | **Experimentální.** Umí omezený kontext, Doctor, synchronizaci, instalaci desktopového launcheru a scoped search; není ještě distribuční package ani stabilní veřejné API. |
+| Resident artefakty | **První funkční řez.** Deterministický build a lifecycle dnes pokrývají vybrané profily a platformy; nejde ještě o obecný onboarding každého uživatele. |
+| Package-managed `lazurio` CLI | **Cíl.** Má být jediným produkčním vstupem pro instalaci a údržbu Lazuria. Přesná nevydaná syntaxe zatím není veřejný kontrakt. |
+| Jazykově generovaný non-Git Root | **Cíl.** Lidský obsah se zvolí podle jazyka, zatímco strojové identity zůstanou stabilní. |
+| Lazurio Dashboard | **Samostatně vyvíjený povrch.** Není součástí tohoto root repozitáře ani runtime autoritou Launchpadu. |
+
+## Rychlý start pro vývojáře
+
+Aktuální podporovaná cesta vede přes source checkout. Potřebuješ [Git](https://git-scm.com/)
+a [Bun](https://bun.sh/).
 
 ```sh
+git clone https://github.com/HumanAndMachines/Lazurio.git
+cd Lazurio
+
+# Bezpečná projekce lokálního kontextu
 bun run lazurio -- context --json
-bun run lazurio -- context --organization HumanAndMachine-ai
+
+# Diagnostika checkoutu a připojených částí
 bun run lazurio -- doctor
-bun run lazurio -- update
-bun run lazurio -- launchpad install
-bun run lazurio -- search "český dotaz"
-bun run lazurio -- search --status
-```
 
-Všechny příkazy přijímají `--root <cesta>`. Root může být buď tento Launchpad root
-s `launchpad.gen3.json`, nebo samostatný Personalspace root na Buddy VPS s
-`personal.gen3.json`. `lazurio doctor` nevlastní diagnostická pravidla: v
-Launchpad rootu používá existující strukturované Doctor jádro, v Personalspace
-rootu spouští přesně doctor command deklarovaný jeho manifestem. CLI v0 není
-samostatný distribuční package, veřejné Core API ani MCP server. Má dvě
-explicitní a oddělené mutace. `lazurio update` sekvenčně aktualizuje Lazurio
-Root → Organization Rooty → Workspace Moduly na clean `main` přes ff-only.
-`lazurio launchpad install` pouze vybere existující platformní instalátor
-lokálního launcheru a beze změny předá jeho výstup i exit code; neaktualizuje
-Git a nevytváří druhý lifecycle engine. Přesný update kontrakt drží
-[manual/lazurio-runtime-install-interface.md](manual/lazurio-runtime-install-interface.md).
-Organization selektor nepředstírá membership ani effective permissions:
-Organization, Team, modul i aplikace ve výstupu drží provider access
-`not_evaluated` a oddělují jej od lokální přítomnosti checkoutu.
-
-## Rezidentní distribuce
-
-`distribution/` drží build kontrakt pro non-Git Lazurio Root profilů Buddy a
-Workspace. Z čistého exact source commitu generuje jediný root
-`AGENTS.md`, manifest s hashi payloadu, public-safe offline manuál, Resident
-Doctor a deterministický per-platformní USTAR artefakt. Profilové fragmenty se
-ve source nejmenují `AGENTS.md`, takže v development checkoutu nejsou aktivní.
-
-```sh
-bun run resident:build -- --profile buddy --target linux-x64 \
-  --version 0.1.0-candidate.1 --channel candidate
-```
-
-Build sám nic nereleasuje ani nemění na živém hostu. Kontrakt a omezení jsou v
-[distribution/README.md](distribution/README.md), veřejné vysvětlení ekosystému
-v [manual/lazurio-resident-profiles.md](manual/lazurio-resident-profiles.md).
-Oddělený source-only [operator plane](provisioning/README.md) připravuje
-Mašinu a volá stejný updater; není součástí resident artefaktu ani druhým
-lifecycle enginem.
-
-Search ve výchozím `exact` režimu čte aktuální filesystem přes `rg`, takže vidí
-i novou neindexovanou změnu v explicitně deklarovaném nested repu, přestože
-jeho Organization mount ignoruje parent root Git. Nespouští však plošné
-`rg --no-ignore` nad Lazuriem: povolené zdroje skládá z Launchpad discovery,
-Organization manifestu a verzovaného pilotního registru. QMD lane je volitelný
-lokální index pro `lexical`, `semantic` a `hybrid`; jeho stav a čerstvost ukáže
-`search --status` a rozbitý QMD neblokuje exact lane. Úplný kontrakt, bezpečnostní
-hranice a příkazy drží [lazurio/README.md](lazurio/README.md).
-
-## Začíná se v chatu
-
-Kolega začíná práci přímým chatem s App Agentem. Agent otevře Launchpad GEN3
-ve vestavěném browser povrchu na Organizaci nebo lokálním Personalspace, o kterém
-je řeč. Launchpad je grafická vrstva stejného lokálního pracovního kontextu:
-Kolega na něj může ukazovat a Agent jej může přes podporovanou browser capability
-procházet a pomáhat s ním. Ruční opisování adresy ani Dock ikona proto nejsou
-primární produktový vstup.
-
-Tento onboardingový tok je určený pro přímý chat člověka s Codex/ChatGPT App
-Agentem nebo Claude App Agentem. Neřídí životní cyklus Buddyho ani AI Kolegy.
-Přesný agentní kontrakt je v [AGENTS.md](AGENTS.md#chat-first-vstup-do-launchpadu-pro-app-agenty)
-a stabilní URL schéma v [launchpad/README.md](launchpad/README.md#stabilní-odkazy-na-prostor).
-
-## Navržený tvar
-
-```text
-Lazurio/
-├── launchpad/
-├── guide/
-├── templates/
-├── manual/
-├── launchpad.gen3.json
-├── personalspace/              # lokální gitignored osobní/config mount
-└── organizations/
-    ├── README.md               # jediný soubor trackovaný v root repu
-    ├── ExampleOrg_GEN3/        # lokální gitignored Organization repo checkout
-    ├── OtherOrg_GEN3/          # lokální gitignored Organization repo checkout
-    └── <ClientOrg>_GEN3/       # lokální gitignored Organization repo checkout
-        ├── workspace/          # plochá složka všech workspace modulů
-        │   └── <modul>/        # Workspace příslušnost deklaruje manifest
-        └── productionspace/    # org-level repa mimo workspace moduly
-```
-
-## Personalspace je součást Lazuria
-
-`personalspace/` není externí doplněk ani další Organizace. Je to integrální
-privátní vrstva tohoto rootu: Lazurio drží mountpoint, isolation pravidla,
-Doctor a onboarding, zatímco konkrétní obsah žije v samostatných privátních
-repozitářích jejich vlastníků. Instance vlastníka může plnohodnotně fungovat bez
-Buddyho; Buddy je volitelná navazující vazba.
-
-`HumanAndMachines/Lazurio` zůstává veřejný direct-pull framework a
-**není GitHub template**. Pro založení osobního prostoru bude po
-public-readiness gate `CAC-0071` sloužit veřejný GitHub template
-`HumanAndMachines/PersonalspaceTemplate_GEN3`; do té doby zůstává template
-private. Výsledné repo musí být vždy privátní a pojmenované:
-
-```text
-<github-login>/<github-login>_GEN3
-```
-
-Lokální mount je `personalspace/<github-login>_GEN3/`. Gbrain software se
-instaluje z veřejného `garrytan/gbrain`, ale osobní Markdown paměť patří do
-odděleného privátního data repa vlastníka mountovaného v `gbrain/`. Detailní
-custody a agentní pravidla drží [personalspace/README.md](personalspace/README.md);
-kanonický model drží decisions 0079/0080 v
-[lokálním registru](manual/decision-register.md).
-Implementační self-service runbook je
-[manual/create-personalspace.md](manual/create-personalspace.md).
-
-Na jedné mašině se materializuje pouze Personalspace jejího Principála,
-určený v gitignored `launchpad.gen3.local.json`. Cizí Personalspace se
-nemountuje ani nezobrazuje; historický checkout je Doctor failure a musí se
-odmountovat a jeho GitHub collaborator granty odebrat podle runbooku v
-PersonalspaceTemplate_GEN3 (decision 0091 v `manual/decision-register.md`).
-
-Root příkaz je připravený fail-closed. Dokud upstream public-readiness audit
-drží template jako private, zastaví se ještě v preflightu a nic nevytvoří. Až
-po explicitním publication gatu template spustí vlastník no-Buddy tok:
-
-```text
-bun run personalspace:create -- --display-name "<jméno>" --apply --install-gbrain
-```
-
-Třírepo onboarding s private Hermes profilem Buddyho zůstává **PENDING
-`CAC-0072`**. Live root parser `--with-buddy` odmítá jako neznámý argument a
-nesmí tvrdit vytvoření Buddy repa ani VPS handoffu, dokud nebude samostatný
-adapter publikovaný a cross-repo otestovaný.
-
-## Hlavní pojmy
-
-- Lazurio root — lokální celek více Organizací pod jedním Launchpadem na jedné mašině; dostupné Organizace se auto-discoverují z `organizations/*/company.gen3.json`, `launchpad.gen3.json` drží jen sdílená root metadata; `planned` sloty jsou per-machine v gitignored `launchpad.gen3.local.json`.
-- `launchpad/` — sdílený **builder-first Launchpad GEN3** (decision 0047 v manual/decision-register.md, reviduje CEO-first 0024): surface pro Buildery Organizace (Organization Builder) — spouštění aplikací z `main` i z worktrees podle Mission Control plánů (decision 0049), read-only přehled productionspace a dynamické načítání Organizací/Workspaces/modulů se stavy `available` / `missing_access` / `planned_slot`; Admin Organizace (Organization Admin), vstup Uživatelů Organizace (Organization User) do produkčních workspace aplikací a deploy/server konfigurace patří do Lazurio Dashboardu.
-- `guide/` — sdílený netechnický onboarding kurz do práce s digitální kanceláří a AI kolegy; technická cesta „mapa systému“ (Launchpad root, Organizace, workspaces, productionspace, personalspace) je plánovaná budoucí část kurzu.
-- `launchpad.gen3.json` — strojově čitelná sdílená root metadata (root, lokální povrchy), ne allowlist Organizací; Organizace i šablony se auto-discoverují skenem disku a `planned` sloty s personalspace ownerem žijí per-machine v gitignored `launchpad.gen3.local.json`. Nový Organization Modul se po stažení čerstvého manifestu přes `lazurio update` bezpečně materializuje podle živého GitHub přístupu a rediscovery jej ukáže v Launchpadu (decisions 0042/0129).
-- `personalspace/` — integrální privátní mountpoint Lazurio rootu pro
-  owner repa lidí a AI kolegů. Nepatří do GitHub organizace firmy, funguje i
-  bez Buddyho a drží osobní moduly i Gbrain custody mimo firemní pravdu.
-  Buddy-enabled instance zde lokálně drží jen konfiguraci; runtime je VPS-only.
-- `organizations/` — lokální mountpoint pro Organizace ve smyslu GitHub Organization. V root repu je trackovaný pouze `organizations/README.md`; konkrétní `organizations/<org>/` jsou samostatné nested git checkouty Organizací a jsou gitignored.
-- Workspace uvnitř Organizace — pojmenovaná skupina modulů (digitální kancelář jednoho týmu NEBO značky/venture, „Oddělení“/„Kancelář“) s vlastním doctorem, pravidly a access hranicí. Všechny workspace moduly Organizace žijí fyzicky v jedné ploché složce `workspace/`; Workspace je logická deklarace v manifestu, ne adresář. Modul patří právě do jednoho Workspace; příslušnost deklaruje definice modulu (`modules[].workspace` / `module_slots[].workspace`), deklarace je autorita a UI grupuje podle ní; chybějící deklarace = default Workspace `workspace`; hosted vzor `<modul>.<workspace>.<doména>` se generuje z deklarace (decision 0041 v manual/decision-register.md).
-- `organizations/<org>/productionspace/` — org-level složka pro repozitáře dané Organizace, které nejsou workspace moduly, například firmware, connect a monorepo. Každé productionspace repo si definuje vlastní pravidla (branch model, release proces); doctor k nim přistupuje jinak než k workspace modulům a vynucuje jen bezpečné minimum (decision 0041 body 6–7 v manual/decision-register.md).
-
-## Proč Organization místo Space
-
-`Organization GEN3` líp sedí na existující paritu s GitHubem:
-
-- ExampleOrg a OtherOrg jsou GitHub organizace (příkladové názvy).
-- Sdílené firemní systémy patří do GitHub organizace.
-- `personalspace` naopak patří mimo organizaci — do osobního GitHub účtu člověka nebo AI kolegy.
-- Uvnitř Organizace může existovat víc povrchů: jeden nebo více workspaces (tým nebo značka/venture) pro každodenní práci a org-level `productionspace/` pro produkční systémy.
-
-## Aktuální pilot
-
-Aktuální lokální GEN3 pilot běží v Lazurio rootu
-s několika živými Organization checkouty, např.:
-
-```text
-organizations/ExampleOrg_GEN3/
-organizations/OtherOrg_GEN3/
-organizations/ClientX_GEN3/
-```
-
-Tyhle adresáře jsou na konkrétní mašině samostatné git repozitáře Organizací a
-jsou v root repu ignorované. Na GitHubu v `HumanAndMachines/Lazurio`
-má být uvnitř `organizations/` trackovaný pouze `README.md`. Modulové template
-a scaffold zdroje patří do `templates/`; pracovní Organization template smí
-být samostatný nested repo checkout pouze uvnitř `productionspace/` spravující
-Organizace (decision 0127), nikdy root submodule nebo druhý alias.
-
-## Základní agentní balík
-
-- `.agents/skills/` — sdílené postupy pro Buddy a AI kolegy v Launchpad rootu.
-- `manual/desktop-execution-agent-collaboration.md` — baseline pro spolupráci s Claude/Codex Desktop App: Desktop agent dělá maximum práce, Buddy drží QA gate a reviewer routing.
-- `manual/external-app-integrations.md` — závazný standard napojení na externí
-  aplikace: lokálně kurátorované MCP servery a CLI na každé mašině místo
-  cloudových konektorů a sdílených brokerů; per-provider runbooky v
-  `manual/integrations/`.
-- `manual/codex-manual-mcp-integrations.md` — Codex-specifický per-machine
-  runbook pro ruční MCP napojení a řízený přechod ze sdíleného integračního
-  brokeru; přímé STDIO a vzdálené HTTP integrace Docker nepotřebují.
-
-## Spuštění a validace
-
-```sh
+# Spuštění Launchpadu v prohlížeči
 bun run launchpad
+```
+
+Čerstvý checkout nemusí mít připojenou žádnou Organizaci ani Personalspace.
+To je platný stav: Launchpad je objevuje až z lokálních, Gitignored mountů a
+jejich manifestů. Varování Doctoru proto vždy čti podle uvedeného vlastníka a
+dalšího kroku; neopravuj je plošným kopírováním dat do root repozitáře.
+
+Na macOS a Windows lze z **primárního checkoutu** nainstalovat uživatelský
+desktopový launcher:
+
+```sh
+bun run lazurio -- launchpad install
+```
+
+Tento příkaz neinstaluje budoucí CLI do `PATH`, nemění Git checkout a na Linuxu
+zatím desktopový instalační slice nepodporuje. Detaily drží
+[dokumentace CLI](lazurio/README.md#instalace-launchpadu).
+
+### Kontrola změn
+
+```sh
 bun run check
 bun run doctor
 ```
 
-### macOS: aplikace pro Dock
+`check` ověřuje sdílené kontrakty a testy; `doctor` posuzuje konkrétní lokální
+instalaci a může správně hlásit stav připojených Organizací nebo aplikací.
 
-Z primárního Lazurio checkoutu nainstaluj stabilní uživatelskou aplikaci bez
-administrátorských práv:
+## Budoucí instalace
 
-```sh
-bun run lazurio -- launchpad install
+Cílem je jedno package-managed `lazurio` CLI pro macOS, Linux a Windows.
+Instalace má být bezpečně opakovatelná i po částečném selhání nebo aktualizaci
+instalátoru a má končit pravdivým reportem současného stavu:
+
+```text
+inspect → reconcile → final inspect → report
 ```
 
-Budoucí PATH distribuce zpřístupní stejný veřejný příkaz jako
-`lazurio launchpad install`; tento slice instalaci CLI do `PATH` ještě
-neprovádí. Package script `bun run install:macos-app` zůstává pouze
-vývojářský/bootstrap vstup do stejného adaptéru.
+Jednotlivé komponenty mají být idempotentní a crash-safe. Lazurio nemá
+udržovat druhý globální rollback systém ani skrytý paralelní stav; riskantní
+změny zůstávají explicitní a migrace dnešního Gitového Rootu bude samostatná,
+silně hlídaná operace s inventurou a obnovitelným rollbackem.
 
-Instalátor vytvoří ad-hoc podepsanou aplikaci
-`~/Applications/Lazurio Launchpad.app`, takže nepotřebuje vývojářský
-certifikát ani zápis do systémového `/Applications`. Aplikace drží pouze
-kanonickou cestu rootu a otevírá jeho `Launchpad.command`; Bun resolution,
-Server identity/install-generation, bezpečné nahrazení stale instance i porty
-tak dál vlastní jediný Lazurio/Launchpad runtime. macOS instalace nezavádí
-LaunchAgent, daemon ani druhou lifecycle autoritu.
+Dokud tento distribuční tok není vydaný, README záměrně neuvádí domnělý
+produkční instalační příkaz. Aktuální build rezidentních artefaktů popisuje
+[distribution/README.md](distribution/README.md) a profily
+[manual/lazurio-resident-profiles.md](manual/lazurio-resident-profiles.md).
 
-Reinstalace se mezi souběžnými procesy serializuje a publikuje celý app bundle
-nativní atomickou macOS výměnou, takže cesta připnutá v Docku během updatu
-nezmizí. Předchozí aplikaci zachová jako jedinou skrytou, ne-launchovatelnou
-rollback zálohu; starší zálohu odstraní až po úspěšném ověření nové generace.
-Instalace z linked worktree se odmítne;
-podporovaný je primární Git checkout, primární checkout se samostatným Git
-metadata adresářem a directory-only root AI Kolegy/Buddyho. Po úplném ověření
-nové aplikace instalátor rozpozná přesný historický bundle
-`/Applications/Launchpad GEN3.app`, odebere jej ze systémové složky a zachová
-jej obnovitelný v uživatelském Koši. Stejnojmenný symlink, soubor nebo bundle
-s jinou identitou odmítne a novou instalaci vrátí zpět; libovolnou cizí
-aplikaci tedy nemaže. Starší `~/Applications/Launchpad GEN3.app` zůstává beze
-změny a instalátor na něj upozorní. Do Docku připni `Lazurio Launchpad`
-přetažením z uživatelské složky `Applications`; instalátor Dock sám nemění.
+## Bezpečnost a soukromí
 
-### Windows: Start Menu a hlavní panel
+- **GitHub oprávnění rozhodují.** Textový název role ani lokální adresář
+  nevytvářejí přístup. Chybějící checkout také neznamená, že přístup neexistuje;
+  bez živého provider readbacku je stav pouze neověřený.
+- **Organizace se nemíchají.** Secrets, zákaznická data, firemní strategie ani
+  osobní overlaye se mezi nimi nekopírují. Sdílet lze jen obecné patterny,
+  anonymizované šablony a public-safe software.
+- **Personalspace je intimní hranice.** Patří jednomu vlastníkovi a jeho
+  případnému Buddymu. Cizí Personalspace se nemountuje ani neprohledává.
+- **Secrets nepatří do Gitu ani chatu.** Do repozitáře smějí pouze standardní
+  cesty, názvy proměnných a metadata-only ověření — nikdy tokeny, hesla,
+  OAuth soubory nebo obsah soukromé paměti.
+- **Mašina je bezpečnostní jednotka.** Pokud mají dva runtime procesy
+  root-equivalent přístup na stejné Mašině, běžný adresář nebo Unix user z nich
+  nedělá dvě nezávislé trust domény.
 
-Sdílený Launchpad lze na Windows nainstalovat jako uživatelskou zkratku bez
-administrátorských práv:
+Podrobnosti najdeš v [architektuře](ARCHITECTURE.md#vnější-bezpečnostní-hranice),
+[pravidlech pro Agenty](AGENTS.md#model-spolupráce-principál-a-agenti) a
+[standardu lokálního držení secrets](manual/security/local-secret-custody.md).
+Bezpečnostní problém nepublikuj do veřejného issue spolu s citlivými daty;
+nejdřív odstraň secrets a zákaznický či osobní obsah z reprodukce.
 
-```powershell
-bun run lazurio -- launchpad install
-```
+## Orientace v repozitáři
 
-Budoucí PATH distribuce zpřístupní stejný veřejný příkaz jako
-`lazurio launchpad install`; tento slice instalaci CLI do `PATH` ještě
-neprovádí. Package script `bun run install:windows-shortcut` zůstává jen
-přímý bootstrap vstup do stejného PowerShell adaptéru.
+| Cesta | Co v ní hledat |
+| --- | --- |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Cílový systémový model, pojmy a trust hranice. |
+| [MAP.md](MAP.md) | Lidská mapa fyzického rootu a jednotlivých scope. |
+| [lazurio/](lazurio/README.md) | Aktuální interní CLI v0 a jeho bezpečnostní kontrakty. |
+| [launchpad/](launchpad/README.md) | Builder-first Launchpad, discovery, runtime a UI kontrakty. |
+| [distribution/](distribution/README.md) | Deterministický build non-Git Resident rootů, updater a rollback. |
+| [guide/](guide/README.md) | Netechnický onboarding do digitální kanceláře a spolupráce s AI. |
+| [manual/](manual/README.md) | Provozní a maintenance dokumentace Lazurio rootu. |
+| [templates/](templates/README.md) | Sdílené public-safe šablony. |
+| [organizations/](organizations/README.md) | Pravidla mountpointu oddělených Organization repozitářů. |
+| [personalspace/](personalspace/README.md) | Privacy, custody a lokální mount osobního prostoru. |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Scope změn, kvalita PR, testy a review workflow. |
 
-Instalátor atomicky připraví stabilní uživatelský bootstrap a konfiguraci pod
-`%LOCALAPPDATA%\HumanAndMachine\Launchpad` (legacy interní instalační cesta),
-vytvoří položku `Lazurio Launchpad` ve Start Menu a požádá Windows o připnutí na
-hlavní panel. Zkratka neukazuje přímo do pohyblivého checkoutu: bootstrap
-načte canonical root z `install.json` a spustí jeho `Launchpad.ps1`, který
-zůstává jediným vlastníkem Bun resolution a startu Launchpadu. Instalace
-z linked worktree — bez ohledu na název jeho složky — nebo přes junction se
-odmítne; canonical cíl je primary checkout nebo podporovaný directory-only
-root. Primary checkout se samostatným stabilním Git metadata adresářem
-(`--separate-git-dir`) zůstává podporovaný; linked worktree se rozpozná podle
-Git admin struktury, ne jen podle názvu cesty nebo existence `.git` souboru.
-Port ani druhý lifecycle stav se do instalace nezapisují. Nový
-`install.json` se aktivuje až po validaci bootstrapu a všech požadovaných
-zkratek; selhání reinstalace zachová předchozí aktivní pointer a atomicky vrátí
-i každou zkratku, jejíž nahrazení už začalo. Existující
-aktivní zkratku se stejným názvem instalátor nahradí; její původní podobu
-nejdřív zachová v oddělené záloze pro Start Menu nebo taskbar pod
-`%LOCALAPPDATA%\HumanAndMachine\Launchpad\shortcut-backups\<timestamp>`.
+## Jak přispět
 
-Při prvním přechodu ze starého serveru může nový launcher vyžádat jeho ruční
-ukončení a opakované spuštění. Chybová zpráva i návratový kód zůstanou v okně
-viditelné; instalátor starý proces ani jeho port sám nepřebírá.
+Lazurio má zůstat sdíleným a fork-friendly frameworkem. Do tohoto repozitáře
+patří obecná oprava nebo funkce použitelná napříč instalacemi; pravidlo,
+workflow, vzhled nebo data jedné firmy patří do její Organizace.
 
-Windows 11 může programové připnutí na hlavní panel podle místní policy
-odmítnout. V takovém případě zůstane ověřená položka ve Start Menu: vyhledej
-`Lazurio Launchpad`, klikni pravým tlačítkem a zvol
-**Připnout na hlavní panel**. Instalátor nevypíná ani nemaže starší launchery.
-
-Jen Start Menu bez pokusu o připnutí:
-
-```powershell
-& .\Install-LaunchpadShortcut.ps1 -StartMenuOnly
-```
-
-Launchpad manifesty a aplikace se objevují z Organizací auto-discovernutých skenem `organizations/*/company.gen3.json`; `launchpad.gen3.json` k tomu drží jen sdílená root metadata a `planned` sloty jdou per-machine do gitignored `launchpad.gen3.local.json`.
-
-## První klientský rollout
-
-Pro nový klientský mount použij [manual/first-client-organization-rollout.md](manual/first-client-organization-rollout.md). Runbook drží hranici shared root vs klientská Organization, minimální mount/manifest postup, Doctor/Launchpad support-loop gate, Install/Repair smoke, secret custody a rollback bez mazání klientských dat.
+1. U chyby přilož malou, anonymizovanou reprodukci. Větší funkci nejdřív
+   prober v [GitHub issue](https://github.com/HumanAndMachines/Lazurio/issues).
+2. Před změnou si přečti [CONTRIBUTING.md](CONTRIBUTING.md) a pravidla scope
+   v [AGENTS.md](AGENTS.md).
+3. Pracuj v samostatné větvi nebo worktree, drž změnu úzce zaměřenou a přidej
+   odpovídající test nebo ověření.
+4. Před pull requestem spusť `bun run check`; u změn konfigurace nebo runtime
+   také `bun run doctor`.
+5. Do issue, commitu ani PR nikdy nevkládej secrets, osobní data nebo interní
+   obsah některé Organizace.
 
 ## Licence
 
-Repo je source-available pod licencí **FSL-1.1-Apache-2.0** (Functional
-Source License): volné užití, úpravy a forky pro vlastní potřebu; zakázané
-je konkurenční hostování/přeprodej. Každá vydaná verze se dva roky po
-vydání automaticky uvolňuje pod Apache 2.0. Plné znění: [LICENSE.md](LICENSE.md).
+Exact stav tohoto repozitáře se řídí souborem [LICENSE.md](LICENSE.md), který
+dnes používá **FSL-1.1-Apache-2.0**. Jde o source-available licenci s budoucím
+přechodem jednotlivých verzí na Apache 2.0; není to zatím finální OSS licenční
+režim, který má Lazurio nabídnout komunitě.
+
+Volba a publikace navazující OSS licence je samostatné explicitní rozhodnutí
+Principála. Dokud není nová licence skutečně publikovaná, nelze ji z plánů ani
+záměru projektu domýšlet a platí přesné znění aktuálního `LICENSE.md`.
