@@ -20,7 +20,7 @@ Lazurio/
 ├── AGENTS.md
 ├── manual/
 ├── .agents/skills/             # základní postupy pro Buddy a AI kolegy
-├── lazurio/                    # read-only Lazurio CLI v0: context, Doctor a scoped search
+├── lazurio/                    # Lazurio CLI v0: context, Doctor, update, install a scoped search
 ├── launchpad/
 ├── Launchpad.command
 ├── Launchpad.cmd
@@ -45,8 +45,10 @@ Lazurio/
 
 - `ARCHITECTURE.md` — krátká mapa cílového systému: Owner, Machine,
   Resident, Agent, pracovní prostory, runtime Modulů a bezpečnostní hranice.
-- `lazurio/` — interní read-only CLI pro bezpečný kontext, Doctor a ohraničené
-  vyhledávání. Aktuální příkazy a hranice popisuje `lazurio/README.md`.
+- `lazurio/` — interní CLI pro bezpečný kontext, Doctor a ohraničené
+  vyhledávání. Explicitní mutace jsou oddělené: Bun-managed PATH registrace,
+  Git-only update a desktop Launchpad install. CLI není MCP ani veřejné Core
+  API. Aktuální příkazy a hranice popisuje `lazurio/README.md`.
 - `launchpad.gen3.json` — metadata Lazurio rootu a lokální `planned` sloty.
   Není to allowlist; Organizace se objevují z lokálních mountů.
 - Organization manifest — dnes `company.gen3.json`, cílově
