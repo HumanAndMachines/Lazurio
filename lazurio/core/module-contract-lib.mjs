@@ -64,8 +64,8 @@ export function validateModuleManifest({
   validateTcpPolicy(manifest.tcp_port_policy, `${label}.tcp_port_policy`, issues);
   validateModuleApps(manifest, label, issues);
 
-  if (!Array.isArray(manifest.port_leases) || manifest.port_leases.length === 0) {
-    issues.push(`${label}.port_leases musí být neprázdné pole`);
+  if (!Array.isArray(manifest.port_leases)) {
+    issues.push(`${label}.port_leases musí být pole`);
     return issues;
   }
   const ids = new Set();
@@ -99,6 +99,15 @@ export function validateModuleManifest({
   }
 
   const mode = manifest.tcp_port_policy?.mode;
+  if (mode === "none" && manifest.port_leases.length !== 0) {
+    issues.push(`${label}.tcp_port_policy none vyžaduje prázdné port_leases`);
+  }
+  if (mode === "none" && (!Array.isArray(manifest.apps) || manifest.apps.length !== 0)) {
+    issues.push(`${label}.tcp_port_policy none je povolené jen pro explicitní apps: []`);
+  }
+  if (Array.isArray(manifest.apps) && manifest.apps.length === 0 && mode !== "none") {
+    issues.push(`${label}: modul s apps: [] musí mít tcp_port_policy.mode none`);
+  }
   if (mode === "single" && manifest.port_leases.length !== 1) {
     issues.push(`${label}.tcp_port_policy single vyžaduje právě jeden TCP port`);
   }
@@ -439,13 +448,13 @@ function validateTcpPolicy(policy, label, issues) {
   for (const key of Object.keys(policy)) {
     if (!POLICY_KEYS.has(key)) issues.push(`${label}.${key} není povolené pole`);
   }
-  if (!["single", "exception"].includes(policy.mode)) {
-    issues.push(`${label}.mode musí být single nebo exception`);
+  if (!["none", "single", "exception"].includes(policy.mode)) {
+    issues.push(`${label}.mode musí být none, single nebo exception`);
   }
   if (policy.mode === "exception" && (typeof policy.reason !== "string" || policy.reason.trim().length < 20)) {
     issues.push(`${label}.reason musí u výjimky obsahovat konkrétní zdůvodnění`);
   }
-  if (policy.mode === "single" && policy.reason !== undefined) {
+  if (["none", "single"].includes(policy.mode) && policy.reason !== undefined) {
     issues.push(`${label}.reason je povolené jen pro exception`);
   }
 }

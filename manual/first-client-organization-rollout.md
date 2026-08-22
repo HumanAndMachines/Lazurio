@@ -33,7 +33,7 @@ Vyplň před tím, než vytvoříš nebo mountneš klientský checkout:
 | Klientské podklady | Hledej ve schválené delivery/sales knowledgebase dodavatele a souvisejících deal/quote/proposal záznamech; vendor-specific cesty patří do AGENTS.md dané dodavatelské Organizace, ne do sdíleného runbooku. Do nové Organizace přenášej jen relevantní, netajný delivery kontext, ne raw interní reasoning ani secrets |
 | Shared Guide | bere se z `guide/` veřejného Lazurio rootu, nekopíruje se ani neforkuje do klientské Organizace |
 | Productionspace | co je release/produkční systém a nesmí být běžný workspace modul |
-| Zastřešující Admin Organizace | Nastav absolutní `ADMIN_ORGANIZATION_ROOT`, například `/Users/example/Conglomerate/organizations/AdminOrganization_GEN3`; musí být přímý Organization child tohoto Lazurio rootu. |
+| Zastřešující Admin Organizace | Nastav absolutní `ADMIN_ORGANIZATION_ROOT`, například `/Users/example/Lazurio/organizations/AdminOrganization_GEN3`; musí být přímý Organization child tohoto Lazurio rootu. |
 | Organization template checkout | Nastav absolutní `ORGANIZATION_TEMPLATE_ROOT` přesně na `$ADMIN_ORGANIZATION_ROOT/productionspace/OrganizationTemplate_GEN3`; checkout musí používat kanonický SSH origin. |
 
 ## Rollout fáze
@@ -46,13 +46,13 @@ Před spuštěním přečti root `AGENTS.md`, potom
 
 ```sh
 preflight_gen3_rollout() {
-cd /path/to/Conglomerate || return 1
-conglomerate_root="$(pwd -P)" || return 1
+cd /path/to/Lazurio || return 1
+lazurio_root="$(pwd -P)" || return 1
 git_common_dir="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || {
   echo "Lazurio root nemá čitelný Git common directory" >&2
   return 1
 }
-primary_conglomerate_root="$(cd "$git_common_dir/.." && pwd -P)" || return 1
+primary_lazurio_root="$(cd "$git_common_dir/.." && pwd -P)" || return 1
 git status --short --branch
 git fetch --no-tags origin main || return 1
 current_branch="$(git symbolic-ref --short HEAD 2>/dev/null)" || {
@@ -69,7 +69,7 @@ if [ "$current_branch" = "main" ]; then
     return 1
   }
 else
-  test "$conglomerate_root" != "$primary_conglomerate_root" || {
+  test "$lazurio_root" != "$primary_lazurio_root" || {
     echo "Feature branch smí rollout preflight spustit jen z izolovaného linked worktree" >&2
     return 1
   }
@@ -113,7 +113,7 @@ jq -e '(.organization_kind // "organization") == "organization"' "$admin_organiz
   echo "ADMIN_ORGANIZATION_ROOT musí být běžná Organizace, ne template mount" >&2
   return 1
 }
-admin_relative="${admin_organization_root#"$primary_conglomerate_root"/organizations/}"
+admin_relative="${admin_organization_root#"$primary_lazurio_root"/organizations/}"
 case "$admin_relative" in
   ""|*/*)
     echo "ADMIN_ORGANIZATION_ROOT musí být přímý child tohoto Lazurio organizations/" >&2
@@ -190,9 +190,9 @@ test "$(git -C "$organization_template_root" rev-parse HEAD)" = \
 
 for template_checkout in \
   "$organization_template_root" \
-  "$primary_conglomerate_root/templates/TemplatesRozjedeme-ai/MissionControlTemplate" \
-  "$primary_conglomerate_root/templates/TemplatesRozjedeme-ai/KnowledgebaseTemplate" \
-  "$primary_conglomerate_root/templates/TemplatesRozjedeme-ai/DesignSystemTemplate"
+  "$primary_lazurio_root/templates/TemplatesRozjedeme-ai/MissionControlTemplate" \
+  "$primary_lazurio_root/templates/TemplatesRozjedeme-ai/KnowledgebaseTemplate" \
+  "$primary_lazurio_root/templates/TemplatesRozjedeme-ai/DesignSystemTemplate"
 do
   test -d "$template_checkout/.git" || test -f "$template_checkout/.git" || {
     echo "Chybí required template Git checkout: $template_checkout" >&2
@@ -318,7 +318,7 @@ Team moduly.
 V rootu mountni klientem schválené repo jako běžný nested Git checkout a přidej fetch-only template upstream:
 
 ```sh
-cd /path/to/Conglomerate
+cd /path/to/Lazurio
 git clone <client-org-repo-url> organizations/<ClientOrg>_GEN3
 git -C organizations/<ClientOrg>_GEN3 remote add template git@github.com:TemplatesRozjedeme-ai/OrganizationTemplate_GEN3.git
 git -C organizations/<ClientOrg>_GEN3 config remote.template.pushurl DISABLED
@@ -333,7 +333,7 @@ test -d organizations/<ClientOrg>_GEN3/.git || test -f organizations/<ClientOrg>
 Pokud klient schválil lokální přípravu, ale GitHub hranici chce založit až společně později, naklonuj template rovnou do cílového mountu a pojmenuj jediný remote `template`:
 
 ```sh
-cd /path/to/Conglomerate
+cd /path/to/Lazurio
 git clone --origin template \
   git@github.com:TemplatesRozjedeme-ai/OrganizationTemplate_GEN3.git \
   organizations/<ClientOrg>_GEN3
@@ -357,7 +357,7 @@ Remote `origin` připoj až v klientem schváleném kroku, po kontrole přesné 
 ```sh
 set -euo pipefail
 
-ORG=/path/to/Conglomerate/organizations/<ClientOrg>_GEN3
+ORG=/path/to/Lazurio/organizations/<ClientOrg>_GEN3
 TEMPLATE_BASE="$(git -C "$ORG" config --get companyascode.templateBase)"
 
 test -n "$TEMPLATE_BASE"
@@ -394,8 +394,16 @@ Nesmí vzniknout:
 
 ### 3. Manifest a port pravidla
 
-Lazurio root drží jediný registry nepřekrývajících se Organization bloků,
-nikoli přesné app porty. Přesný port vlastní kořen modulu:
+Organization manifest drží jediný `module_port_pool` své Organizace. Dnes jej
+nese `company.gen3.json`; budoucí `lazurio.organization.json` převezme stejné
+normalizované pole. Lazurio root žádný cross-Organization registry nedrží.
+Přesný port vlastní kořen modulu:
+
+```json
+{
+  "module_port_pool": { "start": 24900, "end": 24999 }
+}
+```
 
 ```json
 {
@@ -409,7 +417,7 @@ nikoli přesné app porty. Přesný port vlastní kořen modulu:
 }
 ```
 
-Creator přidělí port jednou z centrálního blocku pod OS-level lockem. Každá
+Creator přidělí port jednou z poolu vlastní Organizace pod OS-level lockem. Každá
 aplikace pak deklaruje runnable kontrakt ve svém package souboru a na lease
 jen odkazuje. Minimální copy-paste validní package tvar je:
 
@@ -463,18 +471,21 @@ Kontrolní pravidla:
   i inline runtime porty jsou nevalidní.
 - Přesný port je verzovaný výhradně v module-root `lazurio.module.json`.
   Principál nenastavuje `PORT`, `HOST` ani
-  `LAZURIO_RUNTIME_LISTENER_<ID>_PORT/HOST` v `.env`; tyto proměnné jsou pouze
+  `LAZURIO_RUNTIME_LISTENER_<ID>_PORT/HOST` v `.env`, `.env.local` ani
+  načítaném mode-specific souboru, například `.env.test`; tyto proměnné jsou pouze
   Launchpadem injektované procesní rozhraní. Chybějící injekci nesmí modul
   obcházet lokálním `.env` fallbackem a Doctor takovou rezervovanou deklaraci
   odmítne bez vypsání její hodnoty.
-- Organization blok deklaruje jedině centrální `lazurio.port-registry.json`
-  a slouží jako allocator nových lease. Chybějící module lease, dvě Module ID
-  na stejném portu uvnitř jedné Organization a cross-module překryv jsou hard
-  Doctor failure a blokují Start/Open. Existující stabilní port mimo dnešní
-  blok se nepřečísluje.
-- Na portu modulu běží nejvýše jedna jeho verze. Start/Open případného živého
-  vlastníka deklarovaného portu ukončí a nahradí vybranou aplikací; kdo tento
-  lifecycle nechce, musí modulu přidělit jiný unikátní port.
+- Organization manifest deklaruje `module_port_pool` jako allocator nových
+  lease. Dnes jej nese `company.gen3.json`, cílový
+  `lazurio.organization.json` převezme stejné normalizované pole; root-wide
+  registry se nezakládá. Chybějící module lease, dvě Module ID na stejném portu
+  uvnitř jedné Organization a lease mimo pool jsou hard Doctor failure a
+  blokují Start/Open. Legacy port mimo pool vyžaduje vědomou volbu kompatibilního
+  poolu nebo koordinovanou migraci všech návazností.
+- Na portu modulu běží nejvýše jedna jeho verze. Start/Open jinou verzi stejného
+  Modulu nahradí automaticky. Známý vlastník jiné Organizace vyžaduje potvrzení
+  konkrétní aplikace a vypnutí jejího desired runtime; port se nepřemapuje.
 - Po přejmenování package nebo změně `lazurio.runtime` metadat spusť
   `bun install`/Repair v app cwd a zkontroluj lockfile diff. Bun 1.3 může
   ponechat původní workspace name v `bun.lock`; ruční lockfile diff je pak
@@ -486,7 +497,7 @@ Kontrolní pravidla:
 Po mountu nebo manifest změně spusť v shared rootu:
 
 ```sh
-cd /path/to/Conglomerate
+cd /path/to/Lazurio
 bun run check
 bun run doctor
 ```
@@ -498,7 +509,7 @@ Povinný výsledek pro klientský handoff:
 | Git root | čistý root checkout, žádné Organization submoduly |
 | Mounts | Organization mountpoint je Git checkout |
 | Discovery | klientská Organization je objevená; nezaložený modul je `planned_slot` bez repo URL, zatímco `missing_access` má vždy vlastní next action |
-| Runtime | žádný chybějící `lazurio.module.v1`, `invalid_manifest`, inline/dynamický port, cross-module konflikt uvnitř jedné Organization, drift lease referencí ani překryv alokačních bloků; nové lease jsou přidělené z Organization bloku, existující stabilní porty zůstávají beze změny a živý vlastník rezervovaného portu musí mít signalizovatelnou procesní skupinu |
+| Runtime | žádný chybějící `lazurio.module.v1`, `invalid_manifest`, inline/dynamický port, cross-module konflikt uvnitř jedné Organization, drift lease referencí ani lease mimo vlastní `module_port_pool`; nové lease jsou přidělené z Organization poolu a případná změna stabilního portu koordinuje ingress/VPN/hosting návaznosti. Překryv poolů nebo leases mezi namountovanými Organizacemi je viditelné varování a skutečný live takeover vyžaduje potvrzení konkrétní aplikace. |
 | Support loop | Doctor/Launchpad hlášky jsou `ok` nebo explicitně akceptované planned/stopped stavy |
 
 Template gate pro první instalaci:

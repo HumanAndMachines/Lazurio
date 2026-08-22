@@ -6,6 +6,7 @@ import {
   migrateLegacyRuntimePackage,
   moduleRootForPackage,
   packagePathsBelow,
+  parseRuntimeMigrationArgs,
   rewriteRuntimeScriptsFromModule,
 } from "./lazurio-runtime-migrate.mjs";
 
@@ -65,18 +66,57 @@ test("refuses to write a runtime generated from an invalid legacy manifest", () 
   expect(result.issues.join("\n")).toContain("path musí začínat /");
 });
 
-test("preserves a stable legacy port outside the new-allocation Organization block", () => {
+test("blocks a legacy port outside the tracked Organization pool", () => {
   const source = packageFixture(legacy);
   const result = migrateLegacyRuntimePackage(source, {
-    registry: {
-      schema_version: "lazurio.port_registry.v1",
-      allocation_strategy: "organization-blocks",
-      organization_blocks: [{ company: "Example", start: 24000, end: 24099 }],
+    organization: {
+      slug: "Example",
+      module_port_pool: { start: 24000, end: 24099 },
     },
   });
-  expect(result.changed).toBe(true);
-  expect(result.moduleManifest.port_leases[0].port).toBe(5392);
-  expect(result.issues).toEqual([]);
+  expect(result.changed).toBe(false);
+  expect(result.moduleManifest).toBeNull();
+  expect(result.issues.join("\n")).toContain("mimo Organization pool 24000-24099");
+});
+
+test("Organization migration fails closed on a missing or mismatched owning policy", () => {
+  const source = packageFixture(legacy);
+  const missing = migrateLegacyRuntimePackage(source, { organization: null });
+  expect(missing.changed).toBe(false);
+  expect(missing.issues.join("\n")).toContain("owning Organization nemá čitelnou port policy");
+
+  const mismatch = migrateLegacyRuntimePackage(source, {
+    organization: {
+      slug: "Different",
+      module_port_pool: { start: 5300, end: 5499 },
+    },
+  });
+  expect(mismatch.changed).toBe(false);
+  expect(mismatch.issues.join("\n")).toContain("company Example neodpovídá owning Organizaci Different");
+});
+
+test("migration CLI accepts one canonical root flag and rejects ambiguous root authority", () => {
+  expect(parseRuntimeMigrationArgs([
+    "--write",
+    "--lazurio-root",
+    "/tmp/Lazurio",
+    "/tmp/module/package.json",
+  ])).toEqual({
+    write: true,
+    explicitLazurioRoot: "/tmp/Lazurio",
+    usedDeprecatedRootFlag: false,
+    targets: ["/tmp/module/package.json"],
+  });
+  expect(() => parseRuntimeMigrationArgs([
+    "--lazurio-root",
+    "/tmp/Lazurio",
+    "--conglomerate-root",
+    "/tmp/legacy",
+    "/tmp/module/package.json",
+  ])).toThrow("Použij právě jeden");
+  expect(() => parseRuntimeMigrationArgs(["--lazurio-root", "--write", "/tmp/module"])).toThrow(
+    "--lazurio-root vyžaduje cestu",
+  );
 });
 
 test("preserves an invalid legacy host so validation blocks migration", () => {

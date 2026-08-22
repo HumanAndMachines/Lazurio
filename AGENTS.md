@@ -401,13 +401,16 @@ Launchpad je **builder-first** root surface (decision 0047): spouští
 aplikace z `main` i z worktrees podle Mission Control plánů (decision 0049),
 dynamicky načítá Organizace/Teamy/moduly a productionspace ukazuje jen
 read-only; admin konfigurace a vstup Organization Users do produkčních
-aplikací patří do Lazurio Dashboardu. Porty jsou module-owned
-(přiděluje je `lazurio.module.v1`, konkrétní runtime je pouze používá);
-shared Launchpad nikdy nedrží hardcodovaný port map jedné Organizace. Platný
-static module lease dává `Start`/`Open` autoritu tvrdě převzít každý bezpečně
-signalizovatelný proces na rezervovaném listeneru; explicitní `Stop` ukončuje
-jen managed aktivní instanci. Legacy nebo nevalidní lease takovou autoritu
-nedává. Productionspace
+aplikací patří do Lazurio Dashboardu. Přesný port je module-owned v
+`lazurio.module.v1`; Organization manifest vlastní jen `module_port_pool` pro
+alokaci a kontrolu unikátnosti uvnitř Organizace. Shared Launchpad nikdy
+nedrží root-wide port registry ani hardcodovaný port map jedné Organizace.
+Platný static module lease dává `Start`/`Open` autoritu bezpečně převzít
+rezervovaný listener. Verzi/worktree stejného Modulu nahradí automaticky;
+známý lease jiné Organizace vyžaduje výslovné potvrzení konkrétní nahrazované
+aplikace a vypnutí jejího desired runtime. Explicitní `Stop` ukončuje jen
+managed aktivní instanci. Legacy nebo nevalidní lease takovou autoritu nedává.
+Productionspace
 repozitáře z rootu nespouštěj ani nereleasuj bez explicitní org policy.
 
 ## Handoff / closeout

@@ -626,11 +626,10 @@ test("lazurio.runtime.v1 discovers one entrypoint and auxiliary listeners", asyn
       git: { url: "git@github.com:TestCompany/demo.git", branch: "main" },
     }],
   });
-  await writeJson(join(root, "lazurio.port-registry.json"), {
-    schema_version: "lazurio.port_registry.v1",
-    allocation_strategy: "organization-blocks",
-    organization_blocks: [{ company: "test-company", start: 4300, end: 4399 }],
-  });
+  const organizationManifestPath = join(root, "organizations", "TestCompany", "company.gen3.json");
+  const organizationManifest = await Bun.file(organizationManifestPath).json();
+  organizationManifest.module_port_pool = { start: 4300, end: 4399 };
+  await writeJson(organizationManifestPath, organizationManifest);
   await writeJson(join(root, "organizations", "TestCompany", "modules", "demo", "lazurio.module.json"), {
     schema_version: "lazurio.module.v1",
     id: "demo",
@@ -706,15 +705,15 @@ test("lazurio.runtime.v1 discovers one entrypoint and auxiliary listeners", asyn
   );
 
   await writeFile(runtimeSourcePath, "Bun.serve({ port: Number(process.env.PORT) });\n", "utf8");
-  const envPath = join(root, "organizations", "TestCompany", "modules", "demo", "app", "v1", ".env.local");
+  const envPath = join(root, "organizations", "TestCompany", "modules", "demo", "app", "v1", ".env.test");
   await writeFile(envPath, "SECRET=value\nPORT=5283\nLAZURIO_RUNTIME_LISTENER_WEB_HOST=0.0.0.0\n", "utf8");
   const envAuthority = await discoverLaunchpadApps(root);
   expect(envAuthority.invalid_apps).toHaveLength(1);
   expect(envAuthority.failures.join("\n")).toContain(
-    ".env.local: PORT nesmí být per-machine port autorita",
+    ".env.test: PORT nesmí být per-machine port autorita",
   );
   expect(envAuthority.failures.join("\n")).toContain(
-    ".env.local: LAZURIO_RUNTIME_LISTENER_WEB_HOST nesmí být per-machine port autorita",
+    ".env.test: LAZURIO_RUNTIME_LISTENER_WEB_HOST nesmí být per-machine port autorita",
   );
   expect(envAuthority.failures.join("\n")).not.toContain("SECRET=value");
   await rm(envPath);
@@ -1647,13 +1646,6 @@ async function createCompaniesWorkspaceFixture({ plugin, appOverrides = {} }) {
       display_name: "Test Companies",
       root_role: "companies-root",
     },
-  });
-  await writeJson(join(root, "lazurio.port-registry.json"), {
-    schema_version: "lazurio.port_registry.v1",
-    allocation_strategy: "organization-blocks",
-    organization_blocks: [
-      { company: "test-company", start: 24000, end: 24099 },
-    ],
   });
   await writeJson(join(companyRoot, "company.gen3.json"), {
     organization_generation: "gen3",

@@ -17,12 +17,12 @@ From the shared root:
 ```bash
 bun run sync:gen2-gen3:inventory -- \
   --gen2 /path/to/LegacyOrgGEN2 \
-  --gen3 /path/to/Conglomerate/organizations/ExampleOrg_GEN3 \
+  --gen3 /path/to/Lazurio/organizations/ExampleOrg_GEN3 \
   --label "Example Organization"
 
 bun run sync:gen2-gen3:inventory -- \
   --gen2 /path/to/LegacyOrgGEN2 \
-  --gen3 /path/to/Conglomerate/organizations/ExampleOrg_GEN3 \
+  --gen3 /path/to/Lazurio/organizations/ExampleOrg_GEN3 \
   --label "Example Organization" \
   --json \
   --include-shared-surfaces
@@ -45,7 +45,7 @@ Minimal pairs-file shape:
       "key": "example-org",
       "label": "Example Organization",
       "gen2": "/path/to/LegacyOrgGEN2",
-      "gen3": "/path/to/Conglomerate/organizations/ExampleOrg_GEN3"
+      "gen3": "/path/to/Lazurio/organizations/ExampleOrg_GEN3"
     }
   ]
 }
@@ -150,5 +150,5 @@ Before any script writes into a GEN3 target, add:
 4. post-apply validation per workspace;
 5. rollback instructions;
 6. source PR/handoff links back to the relevant plan;
-7. fixed Organization/module port registry checks, not ad-hoc port choices;
+7. tracked Organization pool and module-owned lease checks, not ad-hoc port choices;
 8. a no-Organization-data audit for any shared-root or template promotion.

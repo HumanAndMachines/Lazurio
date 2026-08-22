@@ -40,8 +40,8 @@ test("inventory separates Modules, empty Apps and nested repository-db slots", a
     schema_version: "lazurio.module.v1",
     id: "notes",
     company: "Example",
-    tcp_port_policy: { mode: "single" },
-    port_leases: [{ id: "main", host: "127.0.0.1", port: 24001 }],
+    tcp_port_policy: { mode: "none" },
+    port_leases: [],
     apps: [],
   });
 

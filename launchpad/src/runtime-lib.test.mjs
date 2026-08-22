@@ -2,7 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { existsSync } from "fs";
 import { createServer } from "net";
 import { tmpdir } from "os";
-import { join } from "path";
+import { dirname, join } from "path";
 import { cp, mkdir, mkdtemp, readFile, rm, utimes, writeFile } from "fs/promises";
 import {
   RuntimeActionError,
@@ -1788,6 +1788,91 @@ testWithInspectableProcessCwd("runtime manager při Open nahradí jen předchoz�
   }
 }, platformTestTimeout(15_000));
 
+testWithInspectableProcessCwd("cross-Organization listener takeover requires the exact peer confirmation", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port });
+  const { slug: sourceWorktreeSlug } = await createOwnedWorktreeFixture({
+    root,
+    slug: "DEV-6439-cross-organization-source",
+  });
+  const sourceRoot = join(root, "organizations", "TestCompany", "modules", "demo", "app", "v1");
+  const targetRoot = join(root, "organizations", "Beta", "modules", "control", "app", "v1");
+  await mkdir(dirname(targetRoot), { recursive: true });
+  await cp(sourceRoot, targetRoot, { recursive: true });
+
+  const source = withStaticEntrypoint(fixtureDiscoveryApp({
+    port,
+    overrides: {
+      module: "demo",
+      organization_path: "organizations/TestCompany",
+    },
+  }));
+  const target = withStaticEntrypoint(fixtureDiscoveryApp({
+    port,
+    overrides: {
+      id: "beta-control-v1",
+      title: "Beta Control",
+      company: "Beta",
+      module: "control",
+      organization_path: "organizations/Beta",
+      package_path: "organizations/Beta/modules/control/app/v1/package.json",
+      cwd: "organizations/Beta/modules/control/app/v1",
+    },
+  }));
+  const [sourceApp, targetApp] = withCrossOrganizationOverlap(source, target);
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "cross-organization-takeover",
+    discover: discoveryWithApps(sourceApp, targetApp),
+  });
+
+  try {
+    const sourceSelector = { source: { type: "worktree", slug: sourceWorktreeSlug } };
+    await runtime.start(sourceApp.id, sourceSelector);
+    await waitForStatus(() => runtime.health(sourceApp.id, sourceSelector), "healthy");
+
+    await expect(runtime.open(targetApp.id)).rejects.toMatchObject({
+      status: 409,
+      code: "cross_organization_takeover_confirmation_required",
+      metadata: {
+        replace_app_id: sourceApp.id,
+        replace_organization: "test-company",
+      },
+    });
+    expect(await runtime.health(sourceApp.id, sourceSelector)).toMatchObject({
+      status: "healthy",
+      owner: "current-instance",
+      runtime_source: { type: "worktree", slug: sourceWorktreeSlug },
+      desired: { enabled: true },
+    });
+
+    await expect(runtime.open(targetApp.id, {
+      confirmed: true,
+      replace_app_id: "unknown-peer",
+    })).rejects.toMatchObject({ code: "cross_organization_takeover_confirmation_required" });
+
+    const opened = await runtime.open(targetApp.id, {
+      confirmed: true,
+      replace_app_id: sourceApp.id,
+    });
+    expect(opened).toMatchObject({ action: "open", app_id: targetApp.id, status: "healthy" });
+    expect(await runtime.health(sourceApp.id, sourceSelector)).toMatchObject({
+      owner: "foreign-port",
+      runtime_source: { type: "worktree", slug: sourceWorktreeSlug },
+      desired: { enabled: false, status: "disabled" },
+    });
+    expect(await runtime.health(targetApp.id)).toMatchObject({
+      status: "healthy",
+      owner: "current-instance",
+      desired: { enabled: true },
+    });
+  } finally {
+    const health = await runtime.health(targetApp.id);
+    if (health.owner === "current-instance") await runtime.stop(targetApp.id);
+  }
+}, platformTestTimeout(20_000));
+
 test("runtime manager fail-closed neadoptuje zdravý port při neznámém CWD (Windows/restricted lookup)", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({ port });
@@ -3347,13 +3432,20 @@ test("boot reconcile restores exact main and owned worktree desired sources", as
     root: desiredRoot,
     state: buildDesiredModuleState({ app, source: { type: "main" } }),
   });
+  const reconcileLockKeys = [];
   const mainRuntime = createRuntimeManager({
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
     instanceId: "boot-main",
     discover: discoveryWithApp(app),
+    acquireModuleLockFn: async ({ key }) => {
+      reconcileLockKeys.push(key);
+      return { release: async () => {} };
+    },
   });
   expect(await mainRuntime.reconcileDesiredState()).toMatchObject({ active: 1, degraded: 0 });
+  expect(reconcileLockKeys).toContain(`listener/${mainPort}`);
+  expect(reconcileLockKeys).toContain("test-company/demo");
   expect(await mainRuntime.health(app.id)).toMatchObject({
     status: "healthy",
     desired: { source: { type: "main" }, status: "active" },
@@ -3995,8 +4087,24 @@ function fixtureModuleContract(app) {
     schema_version: "lazurio.module.v1",
     id: app.module,
     company: app.company,
+    tcp_port_policy: { mode: "single" },
+    port_leases: [{ id: "main", host: app.host, port: app.port }],
     module_path: `${app.organization_path}/modules/${app.module}/lazurio.module.json`,
   };
+}
+
+function withCrossOrganizationOverlap(...apps) {
+  const owners = apps.map((app) => ({
+    port: app.port,
+    host: app.host,
+    app_id: app.id,
+    company: app.company,
+    module: app.module,
+    package_path: app.package_path,
+    listener_id: app.entrypoint_listener.id,
+    lease_id: app.entrypoint_listener.lease,
+  }));
+  return apps.map((app) => ({ ...app, shared_port_owners: owners }));
 }
 
 function discoveryWithApp(app) {

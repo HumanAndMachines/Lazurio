@@ -1,7 +1,7 @@
 # ARCHITECTURE.md — Základy Lazuria
 
-Tento dokument popisuje cílový základ systému, který dnes vzniká v repozitáři
-`Conglomerate_GEN3` a bude přemigrován do `Lazurio/Lazurio`. Nejde o katalog
+Tento dokument popisuje cílový základ systému v kanonickém repozitáři
+`HumanAndMachines/Lazurio`. Nejde o katalog
 všech budoucích funkcí. Jde o malý počet pravidel, podle kterých se mají
 posuzovat další rozhodnutí, implementace i názvosloví.
 
@@ -104,6 +104,46 @@ HTTPS origin je dostupný pouze přes schválený Tailscale/VPN access plane a
 nikdy nepředstavuje veřejný produkční povrch. `lazurio.runtime.v1` proto
 popisuje jen runnable listenery a lifecycle pro Launchpad a Doctor, nikoli
 úplný produkční deployment, ingress, identity nebo MCP kontrakt.
+
+### Stabilní Module porty
+
+Přesný lokální listener je součást identity Modulu a má jedinou verzovanou
+autoritu: module-root `lazurio.module.json`. `lazurio.runtime.v1` port pouze
+pojmenovaným lease používá a Launchpad jej injektuje do procesu; `.env`, shell
+fallback ani root tabulka port znovu neurčují. Modul bez aplikace deklaruje
+`apps: []`, `tcp_port_policy.mode: none` a žádný TCP lease.
+
+Organization vlastní pouze `module_port_pool`, tedy interval pro deterministické
+přidělení nového Module lease a kontrolu unikátnosti uvnitř své access hranice.
+Pole je součástí normalizovaného Organization read modelu. V aktuálním
+kompatibilním formátu ho nese `company.gen3.json`; při přechodu na
+`lazurio.organization.json` se beze změny významu mapuje do
+`lazurio.organization.v1`. Lazurio root nedrží globální seznam Organization
+poolů ani přesných portů.
+
+Root-local a Personalspace aplikace nejsou součástí Organization allocatoru.
+Jejich případný přesný listener stále vlastní jejich `lazurio.module.json`, ale
+nevztahuje se na něj `module_port_pool` cizí ani syntetické Organizace.
+
+Pool není globální namespace mezi uživateli, Mašinami nebo Team Workspaces.
+Každý lokální root vyhodnotí jen skutečně namountované Organizace. Překryv
+jejich poolů je viditelné varování, nikoli důvod přemapovat stabilní Module
+porty. Pokud na jedné Mašině skutečně kolidují dva Module leases různých
+Organizací, mohou běžet po jednom a Launchpad vyžádá potvrzení konkrétní
+nahrazované aplikace; její desired runtime vypne, aby se Organizace o port
+nepřetahovaly. Verze a worktrees stejného Modulu se na jeho lease přepínají
+automaticky.
+
+Hosted Team Workspaces jsou oddělené network namespace, takže stejné interní
+číslo v různých Workspaces nekoliduje. Team service catalog, proxy a další
+odvozené kontrakty projektují interní port z exact source revision
+`lazurio.module.json`; nepřepisují jej. Externí hranicí zůstává autentizovaný
+HTTPS/WSS ingress na 443.
+
+Změna Module portu je povolená koordinovaná migrace, ne běžný runtime fallback:
+jedna změna aktualizuje `lazurio.module.json` a všechny odvozené ingress, VPN,
+hosting a observační kontrakty, jejichž validace musí projít proti stejnému
+exact source revision před aktivací.
 
 Produkční release je samostatná architektonická lane: chráněný source/tag se
 mění na reprodukovatelný immutable artefakt a ten běží v izolovaném produkčním

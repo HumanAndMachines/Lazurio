@@ -8,9 +8,10 @@ import {
   normalizeModuleManifest,
 } from "../../lazurio/core/module-contract-lib.mjs";
 import {
-  normalizePortRegistry,
-  validateModuleLeasesAgainstRegistry,
-} from "./port-registry-lib.mjs";
+  findLocalOrganizationPortPoolOverlaps,
+  normalizeOrganizationPortPool,
+  validateModuleLeasesAgainstOrganizationPools,
+} from "../../lazurio/core/organization-port-policy-lib.mjs";
 import {
   isCanonicalOrganizationRepositorySlotPath,
   normalizeOrganizationSlotPath,
@@ -56,7 +57,6 @@ const launchpadRoot = join(import.meta.dirname, "..");
 const appSchemaPath = join(launchpadRoot, "schemas", "launchpad-app.schema.json");
 const runtimeSchemaPath = join(launchpadRoot, "schemas", "lazurio-runtime.schema.json");
 const moduleSchemaPath = join(launchpadRoot, "schemas", "lazurio-module.schema.json");
-const portRegistrySchemaPath = join(launchpadRoot, "schemas", "lazurio-port-registry.schema.json");
 const pluginSchemaPath = join(launchpadRoot, "schemas", "launchpad-plugin.schema.json");
 const defaultOrganizationMountpoint = "organizations";
 const defaultModuleTemplateMountpoint = "templates";
@@ -962,7 +962,7 @@ function organizationKindFromCompanyJson(companyJson) {
   return companyJson?.organization_kind === "template" ? "template" : "organization";
 }
 
-function autoOrganizationFromCompanyJson({ companyJson, path, directoryName }) {
+function autoOrganizationFromCompanyJson({ companyJson, path, directoryName, modulePortPool }) {
   const company = companyJson.company ?? {};
   const kind = organizationKindFromCompanyJson(companyJson);
   const directorySlug = directoryName.replace(/_GEN3$/, "");
@@ -992,6 +992,8 @@ function autoOrganizationFromCompanyJson({ companyJson, path, directoryName }) {
     organization_type: kind === "template" ? "organization-template" : "organization-gen3",
     status: "mounted",
     discovery_source: "filesystem",
+    module_port_pool: modulePortPool,
+    module_port_pool_source: `${path}/company.gen3.json#module_port_pool`,
   };
 }
 
@@ -1072,7 +1074,17 @@ async function discoverOrganizations({
       }
     }
 
-    const mount = autoOrganizationFromCompanyJson({ companyJson, path, directoryName: entry.name });
+    const portPoolResult = normalizeOrganizationPortPool({
+      manifest: companyJson,
+      source: `${path}/company.gen3.json`,
+    });
+    failures.push(...portPoolResult.issues);
+    const mount = autoOrganizationFromCompanyJson({
+      companyJson,
+      path,
+      directoryName: entry.name,
+      modulePortPool: portPoolResult.pool,
+    });
     if (!mount) continue;
     if (mount.organization_kind === "template") {
       if (seenTemplateSlugs.has(mount.slug)) {
@@ -1467,24 +1479,6 @@ export async function discoverLaunchpadApps(
   if (moduleSchema?.properties?.schema_version?.const !== "lazurio.module.v1") {
     failures.push("launchpad/schemas/lazurio-module.schema.json nemá canonical lazurio.module.v1 schema_version");
   }
-  const portRegistrySchema = await readJson(portRegistrySchemaPath);
-  if (portRegistrySchema?.properties?.schema_version?.const !== "lazurio.port_registry.v1") {
-    failures.push("launchpad/schemas/lazurio-port-registry.schema.json nemá canonical lazurio.port_registry.v1 schema_version");
-  }
-  const portRegistryPath = join(companiesRoot, "lazurio.port-registry.json");
-  let portRegistry = null;
-  const portRegistryReadIssues = [];
-  if (!existsSync(portRegistryPath)) {
-    portRegistryReadIssues.push("Chybí centrální lazurio.port-registry.json");
-  } else {
-    try {
-      const normalizedRegistry = normalizePortRegistry(await readJson(portRegistryPath));
-      portRegistry = normalizedRegistry.registry;
-      portRegistryReadIssues.push(...normalizedRegistry.issues);
-    } catch (error) {
-      portRegistryReadIssues.push(`lazurio.port-registry.json nejde přečíst: ${error.message}`);
-    }
-  }
   const pluginSchema = await readJson(pluginSchemaPath);
   const packageEntries = [];
   const templatePackageEntries = [];
@@ -1517,6 +1511,7 @@ export async function discoverLaunchpadApps(
     );
     templateMounts = [];
   }
+  const organizationPortPoolOverlaps = findLocalOrganizationPortPoolOverlaps(organizations);
   const moduleTemplates = organizationSelector
     ? []
     : await discoverModuleTemplates({ companiesRoot });
@@ -1783,20 +1778,22 @@ export async function discoverLaunchpadApps(
     const entrypointOverlap = Number.isInteger(entrypointPort)
       ? overlapByPort.get(entrypointPort)
       : null;
-    // Legacy UI consumer uses this field as a list of safely switchable peers.
-    // Conflicts remain fully visible through listener_claims/port_overlaps, but
-    // must never be presented as candidates for a destructive switch.
-    app.shared_port_owners = entrypointOverlap?.classification === "module-version-lease"
+    // UI consumer uses this field only for declared replacement peers. Another
+    // version of the same Module is automatic; a cross-Organization peer is
+    // named and requires explicit confirmation. Hard conflicts are never
+    // presented as replacement candidates.
+    app.shared_port_owners = ["module-version-lease", "cross-organization-lease"].includes(
+      entrypointOverlap?.classification,
+    )
       ? entrypointOverlap.owners
       : [];
   }
   const moduleContracts = [...moduleContractsByPath.values()];
-  if (moduleContracts.length > 0) failures.push(...portRegistryReadIssues);
-  else warnings.push(...portRegistryReadIssues);
-  const portRegistryIssues = portRegistry
-    ? validateModuleLeasesAgainstRegistry({ modules: moduleContracts, registry: portRegistry })
-    : [];
-  failures.push(...portRegistryIssues);
+  const portPolicyIssues = validateModuleLeasesAgainstOrganizationPools({
+    modules: moduleContracts,
+    organizations,
+  });
+  failures.push(...portPolicyIssues);
 
   const templateApps = await collectTemplateApps({
     companiesRoot,
@@ -1817,7 +1814,8 @@ export async function discoverLaunchpadApps(
     listener_owners: listenerIndex.owners,
     module_listener_drifts: listenerIndex.module_listener_drifts,
     module_contracts: moduleContracts,
-    port_registry_issues: portRegistryIssues,
+    port_policy_issues: portPolicyIssues,
+    organization_port_pool_overlaps: organizationPortPoolOverlaps,
     // Internal per-machine evidence for downstream readiness classification.
     // buildLaunchpadAppsResponse does not expose this object through /api/apps.
     local_config: localConfig,

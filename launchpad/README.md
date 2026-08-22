@@ -360,15 +360,17 @@ generované výstupy z této kontroly záměrně vynechává.
 
 `apps` je explicitní inventář runnable package souborů relativně ke kořeni
 Modulu. Neprázdný seznam má právě jeden `default_app`; `apps: []` pravdivě říká,
-že Modul vlastní data nebo know-how, ale nemá aplikaci. Chybějící `apps` se po
-dobu GEN3 rollout čte jako legacy stav, nikdy jako prázdný seznam. Jakmile
-`apps` existuje, nový `lazurio.runtime` mimo tento seznam je nevalidní.
+že Modul vlastní data nebo know-how, ale nemá aplikaci, a proto současně
+vyžaduje `tcp_port_policy.mode: none` a prázdné `port_leases`. Chybějící `apps`
+se po dobu GEN3 rollout čte jako legacy stav, nikdy jako prázdný seznam.
+Jakmile `apps` existuje, nový `lazurio.runtime` mimo tento seznam je nevalidní.
 
-Existující číselný port je stabilní vlastnictví Modulu a migrace jej nemění.
-Organization blok v `lazurio.port-registry.json` slouží pouze k přidělování
-nových lease; není renumbering autoritou pro již provozované aplikace. Stejné
-číslo v různých Organizacích je kompatibilní s jejich oddělenými Team
-Workspace, zatímco dvě různá Module ID uvnitř jedné Organizace kolidovat nesmějí.
+Existující číselný port je stabilní vlastnictví Modulu. Organization manifest
+drží pouze `module_port_pool` pro deterministické přidělování nových lease a
+kontrolu uvnitř své access hranice. Dnes pole nese `company.gen3.json`; budoucí
+`lazurio.organization.json` převezme stejný normalizovaný význam. Root-wide
+registry neexistuje. Změna portu je koordinovaná migrace všech návazností,
+nikoli fallback nebo automatický renumbering.
 
 V multi-company rootu platí:
 
@@ -384,30 +386,35 @@ V multi-company rootu platí:
   GitHub repository owner se do této osy nepromítají.
 - každý materializovaný module lease vstupuje do owner-aware indexu. Dvě
   různá Module ID uvnitř stejné Organization nesmějí vlastnit shodný číselný
-  port. Oddělené Organizations stejné stabilní číslo zachovat mohou; na jedné
-  mašině pak listener používají po jednom a Start/Open přebírá jeho vlastnictví.
+  port. Oddělené Organizations stejné stabilní číslo mít mohou; jejich pooly
+  nejsou globální namespace mezi uživateli ani Mašinami. Na jedné Mašině pak
+  skutečně kolidující listener používají po jednom.
 - více verzí nebo worktrees jedné aplikace musí odkazovat na shodný pojmenovaný
   lease a současně běží nejvýše jedna varianta.
-- `lazurio.port-registry.json` v Lazurio rootu je jediná autorita
-  nepřekrývajících se Organization bloků. Creator pod OS-level lockem jednou
-  přidělí volný module port; Organization manifest blok neduplikuje.
+- Organization manifest je jediná autorita svého `module_port_pool`. Creator
+  pod OS-level Organization lockem přidělí první volný port a jednou jej zapíše
+  do `lazurio.module.json`; žádný cross-user ani root-wide seznam nevzniká.
 - chybějící module lease, inline/dynamický runtime port, odlišný Module ID na
   stejném portu uvnitř jedné Organization nebo drift referencí je hard failure.
-  Nový lease přiděluje creator z Organization bloku; již deklarovaný stabilní
-  port mimo dnešní blok se kvůli migraci nikdy nepřečísluje.
-- Start/Open preflightuje všechny listenery. Když deklarovaný modulový port
-  poslouchá, Launchpad ukončí jeho aktuálního vlastníka (SIGTERM, po timeoutu
-  SIGKILL) a spustí vybranou verzi modulu. Port se nikdy nepřemapuje. Samotný
-  Stop dál ukončuje jen proces spravovaný aktuální instancí Launchpadu.
-- Start/Open je pod OS-level company/module mutexem napříč instancemi
+  Nový lease přiděluje creator z Organization poolu. Legacy port mimo pool se
+  nemění potají: Organization buď zvolí kompatibilní pool, nebo provede
+  explicitní změnu portu se všemi ingress/VPN/hosting návaznostmi.
+- Start/Open preflightuje všechny listenery. Jinou verzi nebo worktree stejného
+  Modulu nahradí automaticky. U známého lease jiné Organizace vyžádá potvrzení
+  konkrétní nahrazované aplikace, vypne její desired runtime a teprve potom ji
+  ukončí. Port se nikdy nepřemapuje. Samotný Stop dál ukončuje jen proces
+  spravovaný aktuální instancí Launchpadu.
+- Start/Open je pod OS-level Module i listener mutexem napříč instancemi
   Launchpadu. Znovu zjistí vlastníka, ukončí celou process group SIGTERM →
   SIGKILL, ověří uvolnění, spustí variantu, ověří novou process group na všech
   listenerech a zapíše source/PID/takeover audit. Stop cílí jen managed instanci.
 - POSIX runtime běží v samostatné process group a Stop cílí celou skupinu;
   Windows cílí jen známý managed process tree. Runtime po startu porovná
   deklarované a pozorované listenery a neohlášené/missing porty varuje.
-- centrální registry drží jen Organization bloky; přesné porty vlastní vždy
-  `lazurio.module.v1` v module rootu, nikoli duplicitní root tabulka.
+- překryv poolů lokálně namountovaných Organizací je viditelné Doctor varování;
+  skutečný cross-Organization Module overlap je také varování a vyžaduje
+  potvrzený one-at-a-time takeover. Přesné porty vlastní vždy
+  `lazurio.module.v1` v module rootu.
 
 ## Personalspace (decision 0051, CAC-0048)
 
@@ -456,6 +463,9 @@ personalspace/*/gbrain/                        (Obsidian-compatible markdown vau
   rail mají **Private badge** a stejné runtime akce jako firemní aplikace
   (Instalovat / Spustit / Zastavit / Restart / Logy / Otevřít) přes oddělenou
   lane `POST /api/personalspace/apps/:id/:action`.
+- Přesný listener osobní aplikace vlastní její `lazurio.module.json`.
+  Organization `module_port_pool` se na Personalspace nevztahuje a neslouží
+  jako root-wide rezervace čísel.
 - Prostor Principála mašiny určuje výhradně gitignored
   `launchpad.gen3.local.json` → `personalspace_owner`. Bez něj se žádný prostor
   nematerializuje; cizí mount vyvolá failure (decision 0091).
@@ -514,21 +524,21 @@ spustí server a pokusí se otevřít prohlížeč. Když na stejném portu už 
 Launchpad GEN3 ze stejného kanonického rootu, druhé spuštění ověří hash identity
 rootu a pouze otevře existující instanci. Launchpad z jiného rootu ani cizí HTTP
 server se nepřevezme.
-`discover` vypíše nalezené aplikace. Discovery nejdřív načte registry metadata
+`discover` vypíše nalezené aplikace. Discovery nejdřív načte root metadata
 z `launchpad.gen3.json`, potom automaticky proskenuje lokální
 `organizations/*/company.gen3.json`. `check` validuje `lazurio.runtime.v1`
 podle `launchpad/schemas/lazurio-runtime.schema.json`; legacy
 `companyascode.app` zůstává jen čtecí migrační fallback. Nevalidní app manifest
 uvnitř konkrétní Organization se přeskočí a reportuje jako warning, aby jeden
 stale modul neshodil celý Launchpad. `check` dál selže, pokud chybí Launchpad
-GEN3 root struktura, registry Organization mountpoint, povinné Organization
+GEN3 root struktura, Organization mountpoint, povinné Organization
 soubory, plugin deklarace poruší read-only bezpečnost, dvě aplikace různých
 modulů v jedné Organization používají stejný číselný port, verze stejného
-module lease driftují v listener setu nebo se alokační Organization bloky
-překrývají. Existující stabilní lease smí ležet mimo dnešní alokační blok;
-nový port se z bloku přiděluje vždy. Stejné číslo v oddělených Organizations
-je owner-aware kompatibilní překryv, nikoli licence spustit oba listenery
-současně na jednom hostu.
+module lease driftují v listener setu nebo lease leží mimo její
+`module_port_pool`. Překryv poolů či Module leases mezi oddělenými Organizacemi
+je owner-aware varování, ne globální chyba ani důvod port přemapovat. Na jednom
+hostu pak skutečně kolidující aplikace běží po jedné a takeover vyžaduje
+potvrzení konkrétní nahrazované aplikace.
 
 V template repozitáři `check` toleruje chybějící ukázkové organizace. V
 reálném Launchpad GEN3 root používej `check:strict`, aby chybějící organization
@@ -777,7 +787,7 @@ Doctor musí hlídat:
 - validitu `lazurio.runtime.v1` a read-compatible legacy manifestů jako warnings pro jednotlivé stale appky
   a jako hard failure jen pro root/security/konfliktní validní runtime případy
 - owner-aware kolize materializovaných lease, chybějící module manifesty a
-  odchylky od centrálního Lazurio port registru
+  odchylky Module lease od `module_port_pool` jeho Organizace
 - existenci `dev_script`
 - existenci a validitu read-only plugin manifestu, pokud je uvedený
 - u Organizací, které přijaly agent-skills entrypoint kontrakt, že

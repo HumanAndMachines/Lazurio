@@ -94,6 +94,9 @@ The first schema must contain or preserve:
   provider ID; `repository_id` appears only after live Forge readback changes
   the state to `verified`;
 - `manifests.modules: modules.manifest.json`;
+- `module_port_pool` as the Organization-wide interval for deterministic new
+  Module lease allocation; exact ports remain owned only by each
+  `lazurio.module.json`;
 - current Organization-owned governance, Team, task-source and Doctor sections
   without semantic loss.
 
@@ -108,6 +111,11 @@ that survives a provider migration needs its own consumer-driven decision.
 Legacy `company.gen3.json#modules` is not copied into the new manifest. The
 migrator must reconcile every entry into `modules.manifest.json` or stop on a
 conflict. The new contract must not preserve two module inventories.
+
+Legacy `company.gen3.json#module_port_pool` is instead mapped without semantic
+change to `lazurio.organization.v1#module_port_pool`. It is Organization
+policy, not repository inventory. The migrator must prove semantic parity; it
+must not create a root-wide port registry or rewrite exact Module leases.
 
 Provider-specific data stays inside the root repository binding. Installing a
 Forge integration grants connectivity; it does not by itself create a Lazurio
