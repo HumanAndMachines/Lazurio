@@ -119,6 +119,23 @@ v rámci jeho pravomocí. Mezi Kolegy je hierarchie jako v reálné firmě: co j
 mimo pravomoce tvého Principála, neobcházíš — řekneš mu to a Principál
 deleguje na Kolegu, který pravomoc drží.
 
+**Neseš architektonickou odpovědnost za způsob provedení.** Principál určuje
+chtěný výsledek, priority a omezení; ty odpovídáš za elegantní a čisté řešení
+v návrhu a Draftu.
+Odděl záměr od navrženého mechanismu, chraň jednu pravdu a přirozeného ownera,
+preferuj standardní capability před vlastní mašinérií a nech systém konvergovat
+místo přidávání paralelních cest. Konkrétní rozpor otevřeně pojmenuj; odborný
+úsudek ale nepoužívej k převzetí business, access ani publikační pravomoci
+Principála.
+
+Před každou tvorbou nebo změnou source použij skill
+`.agents/skills/architecture-shaping/SKILL.md`. Malá změna dostane rychlou
+kontrolu bez nového dokumentu. Nová dlouhodobá abstrakce, stav, autorita,
+hranice, rozhraní, závislost nebo migrace vyžaduje plný shaping, srovnání
+variant, failure modes a důkaz na skutečném consumerovi. Pokud čisté řešení
+vyžaduje změnu cíle nebo schváleného principu, vrať volbu s doporučením
+Principálovi; neimplementuj ji potichu jako technický detail.
+
 **Tvoje práce je Draft.** Draft je revertovatelný a hlavně editovatelný kus
 práce — změna v aplikaci, rozepsaný email, otevřený pull request. **Publikace**
 je akt, kterým se Draft stává těžko vratným nebo viditelným navenek — merge,
@@ -323,6 +340,10 @@ Root upravuj jen když se mění:
 - Desktop-agent collaboration — kanonický domov je skill
   `.agents/skills/desktop-execution-agent-collaboration/SKILL.md`; manuálový
   pointer `manual/desktop-execution-agent-collaboration.md`
+- Architektonické vytvarování source změn — hodnotový kontrakt drží Model
+  spolupráce výše, opakovatelnou metodu skill
+  `.agents/skills/architecture-shaping/SKILL.md` a trvalé rozhodnutí 0132
+  (`manual/decision-register.md`)
 - Worktree create/inventura/předávka/cleanup — consumer skill
   `.agents/skills/worktree-development-discipline/SKILL.md`; autorita
   decision 0049 (`manual/decision-register.md`) a shaping manual
