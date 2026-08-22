@@ -125,7 +125,7 @@ Pojmenuj:
 Veškerá evidence musí být metadata-only. Doporučené lokální custody cesty:
 
 ```bash
-ROOT="${HOME}/Conglomerate"
+ROOT="${HOME}/Lazurio"
 OWNER_OS_USER="$(id -un)"                 # colleague overlay (Fáze 4D): company/colleagues/<os-user>
 PS_HANDLE="$(gh api user --jq .login)"    # personalspace slug = GitHub handle, ne OS user
 ORG="ExampleOrg"                         # proper-case interní identita
@@ -668,10 +668,17 @@ Platí:
 Kořen modulu deklaruje `lazurio.module.v1` jako jedinou autoritu přesného portu.
 Každá spustitelná appka deklaruje `lazurio.runtime.v1` ve svém `package.json`
 jako autoritu příkazu, protokolu a health checku; na module lease pouze
-odkazuje. `Lazurio/lazurio.port-registry.json` vlastní Organization blok
-pro přidělování nových lease, nikoli pro přečíslování existujících portů.
-Žádná z těchto hodnot se neduplikuje do `company.gen3.json` ani
-`modules.manifest.json`.
+odkazuje. Organization manifest vlastní `module_port_pool` pro přidělování
+nových lease a kontrolu unikátnosti uvnitř Organizace. V kompatibilní fázi jej
+nese `company.gen3.json`; cílový `lazurio.organization.json` převezme stejné
+pole beze změny významu. Root-wide port registry neexistuje a přesný port se
+neduplikuje do Organization ani repository-slot manifestu.
+
+```json
+{
+  "module_port_pool": { "start": 24000, "end": 24099 }
+}
+```
 
 ```json
 {
@@ -724,9 +731,11 @@ nejbližšího module manifestu; inline nebo dynamický port je nevalidní.
 Legacy `companyascode.app` zůstává pouze read-compatible vstupem během migrace.
 `apps` je explicitní seznam runnable package souborů relativně ke kořeni
 Modulu; neprázdný seznam vyžaduje `default_app`, zatímco `apps: []` znamená
-Modul bez aplikace. Chybějící `apps` je jen dočasně čitelný legacy stav. Již
-používaný Module port se při migraci zachovává; centrální Organization block
-slouží pouze jako allocator nových lease.
+Modul bez aplikace a vyžaduje `tcp_port_policy.mode: none` i prázdné
+`port_leases`. Chybějící `apps` je jen dočasně čitelný legacy stav. Legacy port
+mimo Organization pool migrátor nepřečísluje ani nepotvrdí potají: nejprve se
+zvolí kompatibilní pool, nebo se naplánuje koordinovaná změna portu a jeho
+ingress/VPN/hosting návazností.
 Workspace grouping pochází z module deklarace, nikoli z package cesty.
 Module lease je kanonický main/direct-run/worktree port. Worktree DEV runtime
 používá beze změny stejný materializovaný listener set přes
@@ -745,7 +754,9 @@ povrchem.
 
 Runtime proměnné jsou jednosměrná materializace tracked lease do child procesu.
 Nejsou per-machine konfigurace: Principál je nepřidává do `.env`, `.env.local`
-ani mode-specific `.env.*`. Launchpad je při každém Start/Open odvodí z
+ani mode-specific `.env.*` včetně `.env.test`. Verzované `.env.example`,
+`.env.sample` a `.env.template` smějí kontrakt pouze popsat bez konkrétní
+rezervované hodnoty. Launchpad je při každém Start/Open odvodí z
 `lazurio.module.json` a jeho hodnoty mají přednost před zděděným prostředím i
 automaticky načtenými `.env` soubory. Chybějící injekce při přímém spuštění se
 řeší spuštěním přes Launchpad nebo manifest-aware launcher, nikoli lokálním
@@ -1183,9 +1194,10 @@ Migrace Organizace je hotová teprve když:
 - každá required app má reference-only package `lazurio.runtime.v1` a její
   modul právě jeden module-root `lazurio.module.v1` port lease kontrakt;
   inline/dynamický runtime port, cross-module overlap uvnitř jedné Organization,
-  drift referencí a překryv alokačních bloků jsou hard Doctor failure; nový
-  lease musí být přidělen z Organization bloku, existující stabilní lease se
-  kvůli dnešnímu bloku nepřečísluje;
+  drift referencí a lease mimo vlastní Organization `module_port_pool` jsou
+  hard Doctor failure; nový lease musí být přidělen z Organization poolu.
+  Překryv mezi Organizacemi je lokální warning a live takeover vyžaduje
+  potvrzení; změna stabilního portu je samostatná koordinovaná migrace;
 - Mission Control má jednu app-code a jednu data autoritu, legacy fallback je
   vypnutý pouze po decision-0036 gates;
 - DEV kódy jsou unikátní nebo sémanticky remapované s provenance;

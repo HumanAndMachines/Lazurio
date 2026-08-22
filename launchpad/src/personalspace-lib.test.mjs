@@ -293,6 +293,37 @@ test("Personalspace materializes lazurio.runtime.v1 from the module-owned lease"
   });
 });
 
+test("Personalspace exact leases are not governed by a mounted Organization pool", async () => {
+  const root = await createPersonalspaceFixture({
+    localOwner: "exampleuser",
+    spaces: [{
+      dirName: "exampleuser_GEN3",
+      owner: "exampleuser",
+      config: personalConfig("exampleuser"),
+      apps: [{
+        module: "notes",
+        manifest: lazurioPersonalAppManifest("exampleuser", { id: "notes-v2" }),
+        moduleManifest: {
+          schema_version: "lazurio.module.v1",
+          id: "notes",
+          company: "exampleuser",
+          tcp_port_policy: { mode: "single" },
+          port_leases: [{ id: "main", host: "127.0.0.1", port: 41_120 }],
+        },
+      }],
+    }],
+  });
+  await writeJson(join(root, "organizations", "Acme_GEN3", "company.gen3.json"), {
+    company: { slug: "Acme" },
+    module_port_pool: { start: 41_100, end: 41_199 },
+  });
+
+  const result = await discoverPersonalspace(root);
+  expect(result.apps).toHaveLength(1);
+  expect(result.invalid_apps).toHaveLength(0);
+  expect(result.apps[0].port).toBe(41_120);
+});
+
 test("Personalspace isolates a lazurio runtime without its module lease", async () => {
   const root = await createPersonalspaceFixture({
     localOwner: "exampleuser",

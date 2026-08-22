@@ -742,13 +742,6 @@ export async function discoverPersonalspace(
 
   const appIds = new Set();
   const personalPortOwners = new Map();
-  let organizationBlocks = [];
-  try {
-    const registry = await readJson(join(companiesRoot, "lazurio.port-registry.json"));
-    organizationBlocks = Array.isArray(registry?.organization_blocks)
-      ? registry.organization_blocks.filter((block) => Number.isInteger(block?.start) && Number.isInteger(block?.end))
-      : [];
-  } catch {}
   for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
     if (!entry.isDirectory()) continue;
     if (entry.name.startsWith(".") || ignoredSpaceDirs.has(entry.name)) continue;
@@ -957,14 +950,6 @@ export async function discoverPersonalspace(
       };
       for (const listener of base.listeners) {
         if (!Number.isInteger(listener?.port)) continue;
-        const reservedBlock = organizationBlocks.find(
-          (block) => listener.port >= block.start && listener.port <= block.end,
-        );
-        if (reservedBlock) {
-          manifestIssues.push(
-            `${packagePath}: personal lease port ${listener.port} leží v rezervovaném bloku Organizace ${reservedBlock.company} ${reservedBlock.start}-${reservedBlock.end}`,
-          );
-        }
         const prior = personalPortOwners.get(listener.port);
         if (prior && prior.runtimeId !== runtimeId) {
           const issue = `personal lease port ${listener.port} vlastní dvě aplikace: ${prior.packagePath} a ${packagePath}`;

@@ -7,7 +7,7 @@ import { allocateModulePort } from "./lazurio-module-port.mjs";
 const roots = [];
 afterAll(async () => Promise.all(roots.map((root) => rm(root, { recursive: true, force: true }))));
 
-test("creator allocates once from the central Organization block", async () => {
+test("creator allocates once from the tracked Organization pool", async () => {
   const root = await mkdtemp(join(tmpdir(), "lazurio-port-creator-"));
   roots.push(root);
   const existingRoot = join(root, "organizations", "Acme", "workspace", "alpha");
@@ -16,11 +16,6 @@ test("creator allocates once from the central Organization block", async () => {
   await mkdir(existingRoot, { recursive: true });
   await mkdir(targetRoot, { recursive: true });
   await mkdir(guideRoot, { recursive: true });
-  await writeFile(join(root, "lazurio.port-registry.json"), JSON.stringify({
-    schema_version: "lazurio.port_registry.v1",
-    allocation_strategy: "organization-blocks",
-    organization_blocks: [{ company: "Acme", start: 24000, end: 24099 }],
-  }));
   await writeFile(join(root, "organizations", "Acme", "modules.manifest.json"), JSON.stringify({
     company: "Acme",
     module_slots: [
@@ -29,6 +24,8 @@ test("creator allocates once from the central Organization block", async () => {
     ],
   }));
   await writeFile(join(root, "organizations", "Acme", "company.gen3.json"), JSON.stringify({
+    company: { slug: "Acme" },
+    module_port_pool: { start: 24000, end: 24099 },
     modules: [{ path: "workspace/company-only", slug: "company-only" }],
   }));
   const companyOnlyRoot = join(root, "organizations", "Acme", "workspace", "company-only");
@@ -50,7 +47,7 @@ test("creator allocates once from the central Organization block", async () => {
   await writeFile(join(guideRoot, "lazurio.module.json"), JSON.stringify({
     schema_version: "lazurio.module.v1",
     id: "guide",
-    company: "Acme",
+    company: "Lazurio",
     tcp_port_policy: { mode: "single" },
     port_leases: [{ id: "main", host: "127.0.0.1", port: 24003 }],
   }));
@@ -71,14 +68,14 @@ test("creator allocates once from the central Organization block", async () => {
   }
 
   const result = await allocateModulePort({
-    conglomerateRoot: root,
+    lazurioRoot: root,
     moduleRoot: targetRoot,
     company: "Acme",
     module: "beta",
   });
-  expect(result.manifest.port_leases[0].port).toBe(24004);
+  expect(result.manifest.port_leases[0].port).toBe(24000);
   await expect(allocateModulePort({
-    conglomerateRoot: root,
+    lazurioRoot: root,
     moduleRoot: targetRoot,
     company: "Acme",
     module: "beta",
@@ -87,7 +84,7 @@ test("creator allocates once from the central Organization block", async () => {
   const worktreeTarget = join(root, "organizations", "Acme", ".worktrees", "workspace", "gamma", "DEV-2");
   await mkdir(worktreeTarget, { recursive: true });
   await expect(allocateModulePort({
-    conglomerateRoot: root,
+    lazurioRoot: root,
     moduleRoot: worktreeTarget,
     company: "Acme",
     module: "gamma",

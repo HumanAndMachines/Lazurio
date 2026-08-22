@@ -3090,7 +3090,7 @@ function isUntrustedPortOwner(app) {
 }
 
 function runningSharedPortPeer(app) {
-  if (app.runtime?.owner !== "foreign-port" || selectedRuntimeSourceForApp(app).type !== "main") return null;
+  if (app.runtime?.owner !== "foreign-port") return null;
   const targetPid = app.runtime?.pid;
   if (!Number.isInteger(targetPid)) return null;
   const declaredOwners = new Set((app.shared_port_owners ?? []).map((owner) => owner.app_id));
@@ -3100,9 +3100,24 @@ function runningSharedPortPeer(app) {
     && candidate.port === app.port
     && runtimeHostsShareListener(candidate.host, app.host)
     && declaredOwners.has(candidate.id)
-    && candidate.runtime?.owner === "current-instance"
-    && candidate.runtime?.controllable === true
+    && candidate.runtime?.pid === targetPid
+    && ["current-instance", "adopted-port"].includes(candidate.runtime?.owner)
   ) ?? null;
+}
+
+function isSameModulePeer(app, peer) {
+  return peer?.company === app.company && peer?.module === app.module;
+}
+
+function confirmedTakeoverPayload(app) {
+  const peer = runningSharedPortPeer(app);
+  if (!peer || isSameModulePeer(app, peer)) return {};
+  const confirmed = window.confirm(
+    `Port ${app.port} teď používá ${appBaseTitle(peer)} z Organizace ${peer.company}. `
+      + `Zastavit ji a spustit ${appBaseTitle(app)} z Organizace ${app.company}?`,
+  );
+  if (!confirmed) return null;
+  return { confirmed: true, replace_app_id: peer.id };
 }
 
 // Manifest povoluje dvě ekvivalentní loopback identity. Pro ownership je
@@ -3400,6 +3415,8 @@ async function openAppChain(app, { feedback } = {}) {
     openResultUrl(app.url, null, app);
     return;
   }
+  const takeover = confirmedTakeoverPayload(app);
+  if (takeover === null) return;
   if (state.openingApps.has(app.id)) return;
   state.openingApps.add(app.id);
   // Rezervace tabu PŘED akcí, aby ho prohlížeč nezablokoval (není to
@@ -3412,7 +3429,7 @@ async function openAppChain(app, { feedback } = {}) {
     const payload = await fetchJson(`/api/apps/${encodeURIComponent(app.id)}/open`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ source: sourcePayloadForApp(app) }),
+      body: JSON.stringify({ source: sourcePayloadForApp(app), ...takeover }),
     });
     if (payload.url) {
       writeCardProgress(feedback, "");
@@ -5301,6 +5318,10 @@ function appIconSvg(key) {
    ========================================================= */
 
 async function runRuntimeAction(app, action) {
+  const takeover = ["start", "restart"].includes(action)
+    ? confirmedTakeoverPayload(app)
+    : {};
+  if (takeover === null) return;
   state.pendingAction = `${app.id}:${action}`;
   state.actionMessage = null;
   state.runtimeActionErrors.delete(app.id);
@@ -5309,7 +5330,7 @@ async function runRuntimeAction(app, action) {
     const response = await fetch(`/api/apps/${encodeURIComponent(app.id)}/${action}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ source: sourcePayloadForApp(app) }),
+      body: JSON.stringify({ source: sourcePayloadForApp(app), ...takeover }),
       cache: "no-store",
     });
     const payload = await response.json();
@@ -5391,8 +5412,13 @@ function completedRuntimeActionLabel(action) {
 
 async function switchRuntimeApp(app, peer) {
   if (!peer || state.pendingAction === `${app.id}:switch`) return;
+  if (isSameModulePeer(app, peer)) {
+    await openAppChain(app);
+    return;
+  }
   const confirmed = window.confirm(
-    `Port ${app.port} teď používá ${appBaseTitle(peer)}. Zastavit ji a spustit ${appBaseTitle(app)}?`,
+    `Port ${app.port} teď používá ${appBaseTitle(peer)} z Organizace ${peer.company}. `
+      + `Zastavit ji a spustit ${appBaseTitle(app)} z Organizace ${app.company}?`,
   );
   if (!confirmed) return;
 

@@ -327,12 +327,13 @@ export function createRuntimeManager({
 
   async function start(appId, options = {}) {
     const app = await runtimeAppForAction(appId, { ...options, enforcePortContract: true });
-    return startRuntimeApp(app);
+    return startRuntimeApp(app, takeoverConfirmation(options));
   }
 
-  // Compatibility endpoint for older Launchpad clients. A switch is now only
-  // a named replacement between two versions of the same module lease. Normal
-  // Start/Open already performs the same replacement without a separate dialog.
+  // Compatibility endpoint for older Launchpad clients. A switch is a named,
+  // confirmed replacement on one fixed listener. It covers both another
+  // version of the same Module and the uncommon local cross-Organization
+  // collision; ports are never remapped.
   async function switchApp(appId, { replace_app_id: replaceAppId = null, confirmed = false, source = null } = {}) {
     if (confirmed !== true) {
       throw new RuntimeActionError(
@@ -351,11 +352,13 @@ export function createRuntimeManager({
 
     const target = await runtimeAppForAction(appId, { source, enforcePortContract: true });
     const replaced = await runtimeAppForAction(replaceAppId.trim(), { source: { type: "main" } });
-    if (!moduleRuntimeLeaseMatches(target, replaced)) {
+    const sameModule = moduleRuntimeLeaseMatches(target, replaced);
+    const crossOrganization = target.company !== replaced.company;
+    if (!sameModule && !crossOrganization) {
       throw new RuntimeActionError(
         409,
         "app_switch_module_mismatch",
-        "Přepnutí portu je povolené jen mezi verzemi stejného modulu.",
+        "Přepnutí portu je povolené jen mezi verzemi stejného Modulu nebo dvěma Organizacemi.",
         [`target_app: ${target.id}`, `replace_app: ${replaced.id}`],
       );
     }
@@ -368,7 +371,10 @@ export function createRuntimeManager({
       );
     }
 
-    const started = await startRuntimeApp(target);
+    const started = await startRuntimeApp(target, {
+      confirmed: true,
+      replaceAppId: replaced.id,
+    });
     return {
       action: "switch",
       app_id: target.id,
@@ -381,9 +387,9 @@ export function createRuntimeManager({
     };
   }
 
-  async function startRuntimeApp(app) {
+  async function startRuntimeApp(app, takeover = {}) {
     return withModuleLeaseLock(app, async () => {
-      const result = await startRuntimeAppUnlocked(app, { trigger: "user" });
+      const result = await startRuntimeAppUnlocked(app, { trigger: "user", takeover });
       let desired;
       try {
         desired = await acceptDesiredRuntime(app);
@@ -396,7 +402,7 @@ export function createRuntimeManager({
     });
   }
 
-  async function startRuntimeAppUnlocked(app, { trigger = "user" } = {}) {
+  async function startRuntimeAppUnlocked(app, { trigger = "user", takeover = {} } = {}) {
     const runtimeKey = runtimeKeyForApp(app);
     const runtimeSource = runtimeSourceForApp(app);
     app = await materializeRuntimeListeners(app);
@@ -423,6 +429,7 @@ export function createRuntimeManager({
     const reclaimedListeners = await prepareDeclaredListeners(app, {
       runtimeKey,
       logPath,
+      takeover,
     });
     const childEnv = runtimeProcessEnv(app, {
       PORT: String(app.port),
@@ -834,12 +841,13 @@ export function createRuntimeManager({
   // vlastní kroky (install/start) samy házejí RuntimeActionError s blokujícím
   // stavem. Port se nikdy nepřemapuje: Start/Open převezme statický module lease
   // a nahradí jakoukoli předchozí verzi, worktree nebo zaseklý proces.
-  async function open(appId, { source = null } = {}) {
+  async function open(appId, options = {}) {
+    const { source = null } = options;
     const app = await runtimeAppForAction(appId, { source, enforcePortContract: true });
-    return withModuleLeaseLock(app, () => openRuntimeAppUnlocked(app));
+    return withModuleLeaseLock(app, () => openRuntimeAppUnlocked(app, takeoverConfirmation(options)));
   }
 
-  async function openRuntimeAppUnlocked(app) {
+  async function openRuntimeAppUnlocked(app, takeover = {}) {
     const runtimeKey = runtimeKeyForApp(app);
     const runtimeSource = runtimeSourceForApp(app);
     const steps = [];
@@ -884,7 +892,7 @@ export function createRuntimeManager({
       steps.push({ step: "reuse", status: runtime.status });
       shouldConfirmStability = true;
     } else {
-      const startResult = await startRuntimeAppUnlocked(app, { trigger: "user" });
+      const startResult = await startRuntimeAppUnlocked(app, { trigger: "user", takeover });
       steps.push({ step: "start", status: startResult.runtime?.status ?? "starting" });
       shouldConfirmStability = true;
       runtime = startResult.runtime ?? (await healthForApp(app));
@@ -1517,7 +1525,8 @@ export function createRuntimeManager({
     }
   }
 
-  async function restart(appId, { source = null } = {}) {
+  async function restart(appId, options = {}) {
+    const { source = null } = options;
     const app = await runtimeAppForAction(appId, { source, enforcePortContract: true });
     const runtimeSource = runtimeSourceForApp(app);
     return withModuleLeaseLock(app, async () => {
@@ -1526,7 +1535,10 @@ export function createRuntimeManager({
       } catch (error) {
         if (error?.code !== "app_not_managed") throw error;
       }
-      const startResult = await startRuntimeAppUnlocked(app, { trigger: "user" });
+      const startResult = await startRuntimeAppUnlocked(app, {
+        trigger: "user",
+        takeover: takeoverConfirmation(options),
+      });
       let desired;
       try {
         desired = await acceptDesiredRuntime(app);
@@ -1607,7 +1619,13 @@ export function createRuntimeManager({
         });
         const scopedApp = scopedDiscovery.apps.find((item) => item.id === appId);
         if (scopedApp && scopedDiscovery.failures.length === 0) {
-          app = scopedApp;
+          app = {
+            ...scopedApp,
+            // Cross-Organization overlaps exist only in the global view. Keep
+            // the peer projection when an unrelated invalid Organization
+            // forces the action through scoped discovery.
+            shared_port_owners: app.shared_port_owners ?? [],
+          };
           discovery = {
             ...scopedDiscovery,
             port_overlaps: globalDiscovery.port_overlaps ?? scopedDiscovery.port_overlaps ?? [],
@@ -1676,7 +1694,7 @@ export function createRuntimeManager({
           failure_kind: "invalid_runtime_port_contract",
           conflict_count: conflicts.length,
           module_listener_drift_count: 0,
-          port_registry_issue_count: discovery.port_registry_issues?.length ?? 0,
+          port_policy_issue_count: discovery.port_policy_issues?.length ?? 0,
         },
       );
     }
@@ -1709,7 +1727,7 @@ export function createRuntimeManager({
         failure_kind: "invalid_runtime_port_contract",
         conflict_count: conflicts.length,
         module_listener_drift_count: drifts.length,
-        port_registry_issue_count: discovery.port_registry_issues?.length ?? 0,
+        port_policy_issue_count: discovery.port_policy_issues?.length ?? 0,
       },
     );
   }
@@ -1988,8 +2006,29 @@ export function createRuntimeManager({
       : `app/${app.id}`;
   }
 
+  function runtimeLeaseKeysForApp(app) {
+    const ports = [...new Set((app?.module_contract?.port_leases ?? [])
+      .map((lease) => lease?.port)
+      .filter(Number.isInteger))]
+      .sort((left, right) => left - right);
+    return [
+      // Preserve the durable per-Module lifecycle lock: Start/Open/Stop must
+      // still serialize desired state across main and worktrees.
+      moduleLeaseKeyForApp(app),
+      // Listener locks add the missing cross-Organization serialization.
+      // Sorted acquisition gives multi-listener Modules a stable lock order.
+      ...ports.map((port) => `listener/${port}`),
+    ].sort();
+  }
+
   async function withModuleLeaseLock(app, action, { timeoutMs = null } = {}) {
-    const key = moduleLeaseKeyForApp(app);
+    const keys = runtimeLeaseKeysForApp(app);
+    return withRuntimeLeaseLocks(keys, action, { timeoutMs });
+  }
+
+  async function withRuntimeLeaseLocks(keys, action, { timeoutMs = null } = {}, index = 0) {
+    if (index >= keys.length) return action();
+    const key = keys[index];
     const previous = moduleLeaseLocks.get(key) ?? Promise.resolve();
     let release;
     const current = new Promise((resolveCurrent) => {
@@ -2006,7 +2045,7 @@ export function createRuntimeManager({
         instanceId,
         ...(Number.isFinite(timeoutMs) ? { timeoutMs } : {}),
       });
-      return await action();
+      return await withRuntimeLeaseLocks(keys, action, { timeoutMs }, index + 1);
     } finally {
       try {
         if (osLock) await osLock.release();
@@ -2327,19 +2366,26 @@ export function createRuntimeManager({
       }
       const lockApp = { id: desired.app_id, company: desired.company, module: desired.module };
       try {
-        const result = await withModuleLeaseLock(lockApp, async () => {
+        // Resolve the exact source before locking so the lock set includes the
+        // Module's concrete listener leases. The desired revision is checked
+        // again under those locks before any runtime mutation.
+        const resolvedApp = await runtimeAppForAction(desired.app_id, {
+          source: desired.source,
+          enforcePortContract: true,
+        });
+        const result = await withModuleLeaseLock(resolvedApp, async () => {
           const current = await readDesiredModuleState({
             root: desiredStateRoot,
             company: desired.company,
             module: desired.module,
           });
-          if (!current?.enabled || current.revision !== desired.revision) {
+          if (!current?.enabled
+            || current.revision !== desired.revision
+            || current.app_id !== desired.app_id
+            || !runtimeSourcesEqual(current.source, desired.source)) {
             return { status: "superseded", desired: current };
           }
-          const app = await runtimeAppForAction(current.app_id, {
-            source: current.source,
-            enforcePortContract: true,
-          });
+          const app = resolvedApp;
           if (!moduleRuntimeLeaseMatches(app, lockApp)) {
             throw new RuntimeActionError(
               409,
@@ -2537,7 +2583,7 @@ export function createRuntimeManager({
     );
   }
 
-  async function prepareDeclaredListeners(app, { runtimeKey, logPath }) {
+  async function prepareDeclaredListeners(app, { runtimeKey, logPath, takeover = {} }) {
     const expectedCwd = join(companiesRoot, app.cwd ?? dirname(app.package_path ?? "package.json"));
     const conflicts = [];
     const reclaimed = [];
@@ -2580,6 +2626,28 @@ export function createRuntimeManager({
         )
       );
       if (managedPeer) {
+        const sameModuleLease = moduleRuntimeLeaseMatches(app, managedPeer.runtimeApp);
+        if (!sameModuleLease) {
+          if (managedPeer.runtimeApp.company === app.company) {
+            throw new RuntimeActionError(
+              409,
+              "invalid_runtime_port_contract",
+              `Port ${listener.port} deklarují dva různé Moduly Organizace ${app.company}.`,
+              [`target_app: ${app.id}`, `existing_app: ${managedPeer.runtimeApp.id}`],
+              { failure_kind: "same_organization_port_conflict", port: listener.port },
+            );
+          }
+          requireConfirmedCrossOrganizationTakeover(app, listener, takeover, {
+            expectedPeerId: managedPeer.runtimeApp.id,
+            peerTitle: managedPeer.runtimeApp.title,
+            peerCompany: managedPeer.runtimeApp.company,
+          });
+          // Disable the peer's durable intent before signalling it. Otherwise
+          // its bounded restart coordinator could reclaim the listener in the
+          // gap between Stop and the desired-state write.
+          await disableDesiredRuntime(managedPeer.runtimeApp, { acceptStoredSource: true });
+          resetDesiredRestartTracker(managedPeer.runtimeApp);
+        }
         try {
           await stopRuntimeAppUnlocked(managedPeer.runtimeApp);
         } catch (error) {
@@ -2601,6 +2669,28 @@ export function createRuntimeManager({
         });
         owner = await resolveOccupiedPortOwner(listener, expectedCwd);
         if (!owner) continue;
+      }
+
+      // After a Launchpad restart the live peer may be safely identifiable by
+      // discovery but no longer managed by this process. A declared static
+      // lease still authorizes the signal itself; cross-Organization overlap
+      // additionally requires a named, user-confirmed peer and disables its
+      // desired runtime before reclaim, so it cannot immediately restart.
+      const crossOrganizationOwners = declaredCrossOrganizationOwners(app, listener);
+      if (owner.cwd_matches !== true && crossOrganizationOwners.length > 0) {
+        const confirmedOwner = requireConfirmedCrossOrganizationTakeover(app, listener, takeover);
+        try {
+          const peerApp = await runtimeAppForAction(confirmedOwner.app_id, {
+            source: { type: "main" },
+            requireValidDiscovery: false,
+          });
+          await disableDesiredRuntime(peerApp, { acceptStoredSource: true });
+          resetDesiredRestartTracker(peerApp);
+        } catch (error) {
+          if (!["app_not_found", "worktree_not_found", "worktree_not_owned"].includes(error?.code)) {
+            throw error;
+          }
+        }
       }
 
       const result = await reclaimReservedListener(app, listener, {
@@ -2625,6 +2715,63 @@ export function createRuntimeManager({
           port: listener.port,
           pid: owner.pid ?? null,
           cwd_matches: owner.cwd_matches ?? null,
+        })),
+      },
+    );
+  }
+
+  function takeoverConfirmation(options = {}) {
+    return {
+      confirmed: options.confirmed === true,
+      replaceAppId: typeof options.replace_app_id === "string" ? options.replace_app_id : null,
+    };
+  }
+
+  function declaredCrossOrganizationOwners(app, listener) {
+    return (app.shared_port_owners ?? []).filter((owner) =>
+      owner?.app_id !== app.id
+      && owner?.company !== app.company
+      && owner?.port === listener.port
+      && runtimeHostsShareListener(owner?.host, listener.host)
+    );
+  }
+
+  function requireConfirmedCrossOrganizationTakeover(
+    app,
+    listener,
+    takeover,
+    { expectedPeerId = null, peerTitle = null, peerCompany = null } = {},
+  ) {
+    const owners = declaredCrossOrganizationOwners(app, listener);
+    const confirmedOwner = owners.find((owner) =>
+      takeover.confirmed === true
+      && takeover.replaceAppId === owner.app_id
+      && (!expectedPeerId || owner.app_id === expectedPeerId)
+    );
+    if (confirmedOwner) return confirmedOwner;
+
+    const expectedOwner = owners.find((owner) => owner.app_id === expectedPeerId) ?? owners[0] ?? null;
+    const replaceAppId = expectedPeerId ?? expectedOwner?.app_id ?? null;
+    const replaceOrganization = peerCompany ?? expectedOwner?.company ?? null;
+    throw new RuntimeActionError(
+      409,
+      "cross_organization_takeover_confirmation_required",
+      `Port ${listener.port} je současně deklarovaný jinou Organizací${replaceOrganization ? ` (${replaceOrganization})` : ""}; převzetí musí uživatel výslovně potvrdit.`,
+      [
+        `target_app: ${app.id}`,
+        `target_organization: ${app.company}`,
+        ...(replaceAppId ? [`replace_app: ${replaceAppId}`] : []),
+        ...(replaceOrganization ? [`replace_organization: ${replaceOrganization}`] : []),
+      ],
+      {
+        failure_kind: "cross_organization_takeover_confirmation_required",
+        port: listener.port,
+        replace_app_id: replaceAppId,
+        replace_app_title: peerTitle,
+        replace_organization: replaceOrganization,
+        candidates: owners.map((owner) => ({
+          app_id: owner.app_id,
+          organization: owner.company,
         })),
       },
     );

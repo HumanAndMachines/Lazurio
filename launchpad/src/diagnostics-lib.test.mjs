@@ -194,6 +194,7 @@ test("apps response materializes HTTPS endpoints from the module-owned lease", a
   await writeJson(join(companyRoot, "company.gen3.json"), {
     organization_generation: "gen3",
     company: { slug: "SecureCo", display_name: "Secure Co", github_org: "SecureCo" },
+    module_port_pool: { start: 5400, end: 5499 },
     teams: [{ slug: "workspace", display_name: "Workspace", default: true }],
   });
   await writeJson(join(companyRoot, "modules.manifest.json"), {
@@ -235,11 +236,6 @@ test("apps response materializes HTTPS endpoints from the module-owned lease", a
         }],
       },
     },
-  });
-  await writeJson(join(root, "lazurio.port-registry.json"), {
-    schema_version: "lazurio.port_registry.v1",
-    allocation_strategy: "organization-blocks",
-    organization_blocks: [{ company: "SecureCo", start: 5400, end: 5499 }],
   });
   await writeJson(join(companyRoot, "workspace", "secure", "lazurio.module.json"), {
     schema_version: "lazurio.module.v1",
@@ -292,13 +288,13 @@ test("apps response materializes HTTPS endpoints from the module-owned lease", a
     .find((module) => module.path === "workspace/planned");
   expect(plannedModule).toMatchObject({ status: "planned_slot" });
   expect(plannedModule?.apps).toBeUndefined();
-  expect(response.port_registry_issues).toEqual([]);
+  expect(response.port_policy_issues).toEqual([]);
   const report = buildDoctorReportFromAppsResponse(response);
   const check = report.checks.find((item) => item.id === "launchpad.port_ownership");
   expect(check?.status).toBe("ok");
 });
 
-test("Doctor treats central registry violations as hard errors", () => {
+test("Doctor treats Organization port policy violations as hard errors", () => {
   const report = buildDoctorReportFromAppsResponse({
     launchpad_root: { display_name: "Test root" },
     root: "/tmp/test-root",
@@ -306,11 +302,40 @@ test("Doctor treats central registry violations as hard errors", () => {
     warnings: [],
     apps: [],
     organizations: [],
-    port_registry_issues: ["module/lazurio.module.json: lease main port 5600 leží mimo block 5400-5499"],
+    port_policy_issues: ["module/lazurio.module.json: lease main port 5600 leží mimo Organization pool 5400-5499"],
   });
   const check = report.checks.find((item) => item.id === "launchpad.port_ownership");
   expect(check?.status).toBe("fail");
-  expect(check?.details.join("\n")).toContain("mimo block");
+  expect(check?.details.join("\n")).toContain("mimo Organization pool");
+});
+
+test("Doctor warns on local cross-Organization overlap without remapping ports", () => {
+  const report = buildDoctorReportFromAppsResponse({
+    launchpad_root: { display_name: "Test root" },
+    root: "/tmp/test-root",
+    failures: [],
+    warnings: [],
+    apps: [],
+    organizations: [],
+    port_overlaps: [{
+      host: "127.0.0.1",
+      port: 5401,
+      classification: "cross-organization-lease",
+      conflict: false,
+      owners: [
+        { app_id: "alpha-app", company: "Alpha", package_path: "organizations/Alpha/app/package.json" },
+        { app_id: "beta-app", company: "Beta", package_path: "organizations/Beta/app/package.json" },
+      ],
+    }],
+    organization_port_pool_overlaps: [{
+      start: 5400,
+      end: 5499,
+      organizations: [{ company: "Alpha" }, { company: "Beta" }],
+    }],
+  });
+  const check = report.checks.find((item) => item.id === "launchpad.port_ownership");
+  expect(check?.status).toBe("warn");
+  expect(check?.message).toContain("převzetí živé aplikace vyžaduje potvrzení");
 });
 
 test("Doctor reportuje deklarovaný port overlap jako hard failure", () => {
@@ -1829,13 +1854,6 @@ async function createCompaniesWorkspaceFixture() {
       display_name: "Test Companies",
       root_role: "companies-root",
     },
-  });
-  await writeJson(join(root, "lazurio.port-registry.json"), {
-    schema_version: "lazurio.port_registry.v1",
-    allocation_strategy: "organization-blocks",
-    organization_blocks: [
-      { company: "test-company", start: 24000, end: 24099 },
-    ],
   });
   await writeFile(
     join(root, ".gitignore"),

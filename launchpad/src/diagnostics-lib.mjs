@@ -110,6 +110,7 @@ export async function buildLaunchpadAppsResponse({
       repository: organization.repository ?? null,
       git_url: organization.git_url ?? null,
       default_branch: organization.default_branch ?? "main",
+      module_port_pool: organization.module_port_pool ?? null,
       generation: organization.generation ?? null,
       migration_marker: organization.migration_marker ?? null,
       materialization: organization.materialization ?? null,
@@ -245,7 +246,8 @@ export async function buildLaunchpadAppsResponse({
       company_count: companies.length,
       port_overlap_count: discovery.port_overlaps?.length ?? 0,
       module_listener_drift_count: discovery.module_listener_drifts?.length ?? 0,
-      port_registry_issue_count: discovery.port_registry_issues?.length ?? 0,
+      port_policy_issue_count: discovery.port_policy_issues?.length ?? 0,
+      organization_port_pool_overlap_count: discovery.organization_port_pool_overlaps?.length ?? 0,
       template_mount_count: templateMounts.length,
       template_app_count: templateApps.length,
       failure_count: discoveryFailures.length,
@@ -260,7 +262,8 @@ export async function buildLaunchpadAppsResponse({
     port_overlaps: discovery.port_overlaps ?? [],
     module_listener_drifts: discovery.module_listener_drifts ?? [],
     module_contracts: discovery.module_contracts ?? [],
-    port_registry_issues: discovery.port_registry_issues ?? [],
+    port_policy_issues: discovery.port_policy_issues ?? [],
+    organization_port_pool_overlaps: discovery.organization_port_pool_overlaps ?? [],
     failures: discoveryFailures,
     warnings: [...discoveryWarnings, ...gitContext.warnings],
   };
@@ -2115,14 +2118,16 @@ function discoveryCheck(appsResponse) {
 // Doctor i Launchpad čtou stejný owner-aware listener index. Uvnitř jedné
 // Organization smí port sdílet jen verze/worktrees stejného module listener
 // lease. Oddělené Organizations mohou zachovat stejné číslo; na jednom hostu
-// je jejich runtime one-at-a-time. Live proces na platném lease při Start/Open
-// Launchpad ukončí a nahradí deklarovanou aplikací; port se nepřemapovává.
+// je jejich runtime one-at-a-time a takeover je vždy potvrzený. Port se nikdy
+// nepřemapovává.
 function portOverlapCheck(appsResponse) {
   const overlaps = appsResponse.port_overlaps ?? [];
-  const registryIssues = appsResponse.port_registry_issues ?? [];
+  const policyIssues = appsResponse.port_policy_issues ?? [];
+  const poolOverlaps = appsResponse.organization_port_pool_overlaps ?? [];
   const moduleDrifts = appsResponse.module_listener_drifts ?? [];
   const conflicts = overlaps.filter((overlap) => overlap.conflict !== false);
-  const compatible = overlaps.filter((overlap) => overlap.conflict === false);
+  const moduleVersions = overlaps.filter((overlap) => overlap.classification === "module-version-lease");
+  const crossOrganizations = overlaps.filter((overlap) => overlap.classification === "cross-organization-lease");
   const details = overlaps.map(({ host = "127.0.0.1", port, classification, claim_group: claimGroup, owners = [] }) => {
     const labels = owners.map((owner) => {
       const listener = owner.listener_id ? `#${owner.listener_id}` : "";
@@ -2131,7 +2136,10 @@ function portOverlapCheck(appsResponse) {
     const claim = claimGroup ? ` group=${claimGroup}` : "";
     return `${host}:${port} [${classification ?? "legacy-overlap"}${claim}]: ${labels}`;
   });
-  details.push(...registryIssues);
+  details.push(...policyIssues);
+  details.push(...poolOverlaps.map(({ start, end, organizations = [] }) =>
+    `lokální Organization pooly se překrývají na ${start}-${end}: ${organizations.map((item) => item.company).join(", ")}; souběh je možný jen mimo skutečně kolidující module leases`,
+  ));
   details.push(...moduleDrifts.map((drift) => {
     const declarations = (drift.declarations ?? [])
       .map(({ endpoint, owners = [] }) => `${endpoint} (${owners.map((owner) => owner.app_id).join(", ")})`)
@@ -2139,21 +2147,25 @@ function portOverlapCheck(appsResponse) {
     return `${drift.module_lease}: verze modulu deklarují rozdílné listenery: ${declarations}`;
   }));
   const status = conflicts.length > 0
-    || registryIssues.length > 0
+    || policyIssues.length > 0
     || moduleDrifts.length > 0
     ? "fail"
-    : "ok";
+    : crossOrganizations.length > 0 || poolOverlaps.length > 0
+      ? "warn"
+      : "ok";
   return {
     id: "launchpad.port_ownership",
     status,
     severity: "runtime",
     title: "Runtime listener claims",
     message: status === "ok"
-      ? compatible.length > 0
-        ? `${formatCount(compatible.length, "sdílený module-version lease", "sdílené module-version leases", "sdílených module-version leases")}; žádný konflikt.`
+      ? moduleVersions.length > 0
+        ? `${formatCount(moduleVersions.length, "sdílený module-version lease", "sdílené module-version leases", "sdílených module-version leases")}; žádný konflikt.`
         : "Deklarované runtime listenery nemají konflikt ani drift module lease."
-      : `${formatCount(conflicts.length, "kolizní listener", "kolizní listenery", "kolizních listenerů")}, ${formatCount(moduleDrifts.length, "drift mezi verzemi", "drifty mezi verzemi", "driftů mezi verzemi")} a ${formatCount(registryIssues.length, "chyba port registru", "chyby port registru", "chyb port registru")}; deklarace musí být opravena.`,
-    paths: ["lazurio.port-registry.json", "organizations"],
+      : status === "warn"
+        ? `${formatCount(crossOrganizations.length, "skutečný cross-Organization překryv", "skutečné cross-Organization překryvy", "skutečných cross-Organization překryvů")} a ${formatCount(poolOverlaps.length, "lokální překryv poolů", "lokální překryvy poolů", "lokálních překryvů poolů")}; porty zůstávají pevné a převzetí živé aplikace vyžaduje potvrzení.`
+        : `${formatCount(conflicts.length, "kolizní listener", "kolizní listenery", "kolizních listenerů")}, ${formatCount(moduleDrifts.length, "drift mezi verzemi", "drifty mezi verzemi", "driftů mezi verzemi")} a ${formatCount(policyIssues.length, "chyba port policy", "chyby port policy", "chyb port policy")}; deklarace musí být opravena.`,
+    paths: ["organizations", "lazurio.module.json"],
     links: [],
     details,
   };

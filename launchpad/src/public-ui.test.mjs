@@ -1214,6 +1214,17 @@ test("Owner 2026-07-05: karta modulu je GEN2-minimal dlaždice bez velkých tla�
   expect(css).toContain(".app-menu-divider");
 });
 
+test("cross-Organization port takeover is named and confirmed before runtime mutation", async () => {
+  const js = await readFile(join(publicRoot, "app.js"), "utf8");
+  expect(js).toContain("function confirmedTakeoverPayload");
+  expect(js).toContain("replace_app_id: peer.id");
+  expect(js).toContain("Organizace ${peer.company}");
+  expect(js).toContain("Organizace ${app.company}");
+  expect(js).toContain("JSON.stringify({ source: sourcePayloadForApp(app), ...takeover })");
+  expect(js).toContain("if (!peer || isSameModulePeer(app, peer)) return {};");
+  expect(js).not.toContain('selectedRuntimeSourceForApp(app).type !== "main"');
+});
+
 test("rozcestník automaticky nevybírá první aplikaci ani neukazuje běžný runtime stav", async () => {
   const js = await readFile(join(publicRoot, "app.js"), "utf8");
   expect(js).not.toContain("state.selectedAppId = state.apps[0].id");

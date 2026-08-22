@@ -126,6 +126,28 @@ test("Module declaration validation has one physical Core owner", async () => {
   ]);
 });
 
+test("Organization port allocation policy has one physical Core owner", async () => {
+  const moduleName = "organization-port-policy-lib.mjs";
+  expect(existsSync(join(coreRoot, moduleName))).toBe(true);
+  expect(existsSync(join(repositoryRoot, "launchpad", "src", moduleName))).toBe(false);
+
+  const imports = await repositoryImports([
+    join(repositoryRoot, "lazurio"),
+    join(repositoryRoot, "launchpad", "src"),
+    join(repositoryRoot, "scripts"),
+  ]);
+  const consumers = imports
+    .filter(({ target }) => target === join(coreRoot, moduleName))
+    .map(({ importer }) => importer)
+    .sort();
+
+  expect(consumers).toEqual([
+    "launchpad/src/discovery-lib.mjs",
+    "scripts/lazurio-module-port.mjs",
+    "scripts/lazurio-runtime-migrate.mjs",
+  ]);
+});
+
 test("Server identity and install-generation compatibility have one Core owner", async () => {
   const moduleName = "server-identity-lib.mjs";
   expect(existsSync(join(coreRoot, moduleName))).toBe(true);

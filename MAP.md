@@ -5,9 +5,9 @@ Lazurio je současný název systému a sdíleného frameworku. Tento repo root
 framework pro Launchpad, Guide, templates, manuály a dynamické načítání
 Organizací; není to klientské Organization repo.
 
-Launchpad root drží lokální Konglomerát: více Organizací pod jedním rootem na jedné
-mašině. `launchpad.gen3.json` drží root registry/metadata, ale dostupné
-Organizace Launchpad zároveň automaticky skenuje z lokálních mountů
+Launchpad root drží více oddělených Organizací pod jedním Lazurio rootem na
+jedné mašině. `launchpad.gen3.json` drží pouze root metadata; dostupné
+Organizace Launchpad automaticky skenuje z lokálních mountů
 `organizations/*/company.gen3.json`.
 
 ```text
@@ -53,7 +53,8 @@ Lazurio/
   používá živé `rg`; lexical/semantic/hybrid lane používají fyzicky izolovaný
   lokální QMD index. Efektivní provider-scoped workspace zůstává navazující
   prací; CLI není MCP, write surface, distribuční package ani veřejné Core API.
-- `launchpad.gen3.json` — root metadata a `planned` sloty Konglomerátu (rootu, šablon a lokálních povrchů), ne allowlist Organizací; dostupné Organizace se auto-discoverují z `organizations/*/company.gen3.json` (decision 0042 v manual/decision-register.md)
+- `launchpad.gen3.json` — metadata Lazurio rootu a `planned` sloty (rootu, šablon a lokálních povrchů), ne allowlist Organizací; dostupné Organizace se auto-discoverují z `organizations/*/company.gen3.json` (decision 0042 v manual/decision-register.md)
+- Organization manifest — dnes kompatibilně `organizations/*/company.gen3.json`, cílově `lazurio.organization.json`; drží mimo jiné Organization-wide `module_port_pool`. Přesný port každého Modulu drží jeho `lazurio.module.json`; root-wide registry neexistuje.
 - `launchpad/` — sdílený builder-first Launchpad GEN3 (decision 0047 v manual/decision-register.md, reviduje CEO-first 0024): surface pro Buildery Organizace (Organization Builder) — spouštění aplikací z `main` i z worktrees podle Mission Control plánů (decision 0049) a read-only přehled productionspace; dynamicky načítá Organizace/Teamy/moduly a ukazuje stavy `available` / `missing_access` / `planned_slot`; Admin Organizace (Organization Admin), vstup Uživatelů Organizace (Organization User) do produkčních workspace aplikací a deploy/server konfigurace patří do Lazurio Dashboardu
 - `guide/` — sdílený netechnický onboarding kurz (26 lekcí) do práce s digitální kanceláří a AI kolegy; technická cesta „mapa systému“ (Launchpad root, Organizace, workspace, productionspace, personalspace) je plánovaná budoucí část, do té doby tato témata drží MAP.md a `manual/`
 - Lazurio Dashboard — v1 spike lokální mount (`dashboard/`) byl z rootu odstraněn i s launchery a Dock ikonou; aktuální Dashboard spike žije v privátním repu (v2 reference). Zůstává hostovaným surfacem pro Admin Organizace (billing, plány, přístupy, konfigurace, Buddy policies) a vstupem Uživatele Organizace (Organization User) do produkčních aplikací (decision 0047/0048 v manual/decision-register.md)

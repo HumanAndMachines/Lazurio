@@ -18,6 +18,8 @@ const moduleManifest = {
 
 test("module app inventory distinguishes explicit empty from legacy missing", () => {
   const explicit = structuredClone(moduleManifest);
+  explicit.tcp_port_policy = { mode: "none" };
+  explicit.port_leases = [];
   explicit.apps = [];
   delete explicit.default_app;
   const normalizedExplicit = normalizeModuleManifest({ manifest: explicit });
@@ -168,7 +170,13 @@ test("Core distinguishes explicit no-App, legacy fallback and invalid contracts"
   });
 
   const explicitNone = normalizeModuleManifest({
-    manifest: { ...moduleManifest, apps: [], default_app: undefined },
+    manifest: {
+      ...moduleManifest,
+      tcp_port_policy: { mode: "none" },
+      port_leases: [],
+      apps: [],
+      default_app: undefined,
+    },
     modulePath: `${moduleRootPath}/lazurio.module.json`,
   }).module;
   expect(resolveModuleApplications({ module: explicitNone, moduleRootPath, apps: legacyApps })).toMatchObject({
@@ -184,6 +192,28 @@ test("Core distinguishes explicit no-App, legacy fallback and invalid contracts"
     state: "unresolved-invalid",
     open_target_app_id: null,
   });
+});
+
+test("explicit no-App Module owns no TCP lease", () => {
+  const valid = structuredClone(moduleManifest);
+  valid.tcp_port_policy = { mode: "none" };
+  valid.port_leases = [];
+  valid.apps = [];
+  delete valid.default_app;
+  expect(normalizeModuleManifest({ manifest: valid }).issues).toEqual([]);
+
+  const reserved = structuredClone(valid);
+  reserved.port_leases = [{ id: "main", host: "127.0.0.1", port: 24209 }];
+  expect(normalizeModuleManifest({ manifest: reserved }).issues).toContain(
+    "lazurio.module.json: lazurio.module.tcp_port_policy none vyžaduje prázdné port_leases",
+  );
+
+  const mislabeled = structuredClone(moduleManifest);
+  mislabeled.apps = [];
+  delete mislabeled.default_app;
+  expect(normalizeModuleManifest({ manifest: mislabeled }).issues).toContain(
+    "lazurio.module.json: lazurio.module: modul s apps: [] musí mít tcp_port_policy.mode none",
+  );
 });
 
 test("legacy App belongs only to the most specific declared Module root", () => {

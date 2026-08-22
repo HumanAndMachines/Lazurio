@@ -2,12 +2,12 @@
 
 import { existsSync } from "fs";
 import { readdir, rename, writeFile } from "fs/promises";
-import { basename, dirname, join, relative, resolve, sep } from "path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "path";
 import { normalizeModuleManifest } from "../lazurio/core/module-contract-lib.mjs";
 import {
-  normalizePortRegistry,
-  validateModuleLeasesAgainstRegistry,
-} from "../launchpad/src/port-registry-lib.mjs";
+  normalizeOrganizationPortPool,
+  validateModuleLeasesAgainstOrganizationPools,
+} from "../lazurio/core/organization-port-policy-lib.mjs";
 import { validateDeclaredRuntime } from "../lazurio/core/runtime-contract-lib.mjs";
 import { readAllModuleContracts } from "./lazurio-module-port.mjs";
 
@@ -37,13 +37,13 @@ const ignoredDirectories = new Set([
 
 export function migrateLegacyRuntimePackage(packageJson, {
   packagePath = "package.json",
-  registry = null,
+  organization = undefined,
 } = {}) {
   if (packageJson?.lazurio?.runtime && packageJson?.companyascode?.app) {
     return blocked(packageJson, `${packagePath}: package deklaruje nový i legacy runtime`);
   }
   if (packageJson?.lazurio?.runtime) {
-    return migrateInlineRuntimePackage(packageJson, { packagePath, registry });
+    return migrateInlineRuntimePackage(packageJson, { packagePath, organization });
   }
   const legacy = packageJson?.companyascode?.app;
   if (!legacy) return unchanged(packageJson);
@@ -109,13 +109,13 @@ export function migrateLegacyRuntimePackage(packageJson, {
       port,
       packagePath,
     }),
-    registry,
+    organization,
   });
 }
 
 export function migrateInlineRuntimePackage(packageJson, {
   packagePath = "package.json",
-  registry = null,
+  organization = undefined,
 } = {}) {
   const runtime = packageJson?.lazurio?.runtime;
   if (!runtime) return unchanged(packageJson);
@@ -173,25 +173,32 @@ export function migrateInlineRuntimePackage(packageJson, {
     apps: [appPackagePathForModule(packagePath, runtime.module)],
     default_app: appPackagePathForModule(packagePath, runtime.module),
   };
-  return validateMigration({ packageJson: next, original: packageJson, packagePath, moduleManifest, registry });
+  return validateMigration({ packageJson: next, original: packageJson, packagePath, moduleManifest, organization });
 }
 
-function validateMigration({ packageJson, original, packagePath, moduleManifest, registry = null }) {
+function validateMigration({ packageJson, original, packagePath, moduleManifest, organization = undefined }) {
   const runtimeIssues = validateDeclaredRuntime({ runtime: packageJson.lazurio.runtime, packageJson, packagePath });
-  const moduleIssues = normalizeModuleManifest({
+  const normalizedModule = normalizeModuleManifest({
     manifest: moduleManifest,
     modulePath: `${moduleRootForPackage(packagePath, moduleManifest.id)}/lazurio.module.json`,
-  }).issues;
-  const registryIssues = registry
-    ? validateModuleLeasesAgainstRegistry({
-        modules: [{
-          ...moduleManifest,
-          module_path: `${moduleRootForPackage(packagePath, moduleManifest.id)}/lazurio.module.json`,
-        }],
-        registry,
-      })
-    : [];
-  const issues = [...runtimeIssues, ...moduleIssues, ...registryIssues];
+  });
+  const policyIssues = [];
+  if (normalizedModule.module && organization === null) {
+    policyIssues.push(`${normalizedModule.module.module_path}: owning Organization nemá čitelnou port policy`);
+  } else if (normalizedModule.module && organization) {
+    if (organization.slug !== normalizedModule.module.company) {
+      policyIssues.push(
+        `${normalizedModule.module.module_path}: company ${normalizedModule.module.company} `
+        + `neodpovídá owning Organizaci ${organization.slug}`,
+      );
+    } else {
+      policyIssues.push(...validateModuleLeasesAgainstOrganizationPools({
+        modules: [normalizedModule.module],
+        organizations: [organization],
+      }));
+    }
+  }
+  const issues = [...runtimeIssues, ...normalizedModule.issues, ...policyIssues];
   if (issues.length > 0) {
     return {
       changed: false,
@@ -345,34 +352,63 @@ export function rewriteRuntimeScriptsFromModule(packageJson, moduleManifest) {
   return { changed, packageJson: next };
 }
 
+export function parseRuntimeMigrationArgs(argv) {
+  let write = false;
+  let explicitLazurioRoot = null;
+  let usedDeprecatedRootFlag = false;
+  const targets = [];
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+    if (argument === "--write") {
+      write = true;
+      continue;
+    }
+    if (["--lazurio-root", "--conglomerate-root"].includes(argument)) {
+      if (explicitLazurioRoot !== null) {
+        throw new Error("Použij právě jeden z --lazurio-root nebo deprecated --conglomerate-root");
+      }
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) throw new Error(`${argument} vyžaduje cestu`);
+      explicitLazurioRoot = value;
+      usedDeprecatedRootFlag = argument === "--conglomerate-root";
+      index += 1;
+      continue;
+    }
+    if (argument.startsWith("--")) throw new Error(`Neznámý argument ${argument}`);
+    targets.push(argument);
+  }
+  return { write, explicitLazurioRoot, usedDeprecatedRootFlag, targets };
+}
+
 async function main(argv) {
-  const write = argv.includes("--write");
-  const rootFlagIndex = argv.indexOf("--conglomerate-root");
-  const explicitConglomerateRoot = rootFlagIndex >= 0 ? argv[rootFlagIndex + 1] : null;
-  const roots = argv
-    .filter((argument, index) =>
-      argument !== "--write"
-      && argument !== "--conglomerate-root"
-      && index !== rootFlagIndex + 1
-    )
-    .map((argument) => resolve(argument));
+  let parsed;
+  try {
+    parsed = parseRuntimeMigrationArgs(argv);
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 2;
+    return;
+  }
+  const { write, explicitLazurioRoot, usedDeprecatedRootFlag, targets } = parsed;
+  if (usedDeprecatedRootFlag) {
+    console.warn("warning: --conglomerate-root je deprecated; použij --lazurio-root");
+  }
+  const roots = targets.map((argument) => resolve(argument));
   if (roots.length === 0) {
-    console.error("Usage: bun scripts/lazurio-runtime-migrate.mjs [--write] <package.json|directory> [...]");
+    console.error("Usage: bun scripts/lazurio-runtime-migrate.mjs [--write] [--lazurio-root <path>] <package.json|directory> [...]");
     process.exitCode = 2;
     return;
   }
   const paths = [];
-  const conglomerateRoot = resolve(explicitConglomerateRoot ?? resolve(import.meta.dirname, ".."));
-  if (!existsSync(join(conglomerateRoot, "organizations"))) {
-    console.error(`${conglomerateRoot} není primární Lazurio root: chybí organizations/; předej --conglomerate-root`);
+  const lazurioRoot = resolve(explicitLazurioRoot ?? resolve(import.meta.dirname, ".."));
+  if (!existsSync(join(lazurioRoot, "organizations"))) {
+    console.error(`${lazurioRoot} není primární Lazurio root: chybí organizations/; předej --lazurio-root`);
     process.exitCode = 2;
     return;
   }
-  const registryResult = normalizePortRegistry(
-    await Bun.file(join(conglomerateRoot, "lazurio.port-registry.json")).json(),
-  );
-  if (!registryResult.registry || registryResult.issues.length > 0) {
-    console.error(`Centrální port registry je nevalidní:\n${registryResult.issues.join("\n")}`);
+  const organizationPolicies = await readOrganizationPolicies(lazurioRoot);
+  if (organizationPolicies.issues.length > 0) {
+    console.error(`Organization port policy je nevalidní:\n${organizationPolicies.issues.join("\n")}`);
     process.exitCode = 2;
     return;
   }
@@ -399,9 +435,14 @@ async function main(argv) {
       blockedCount += 1;
       continue;
     }
+    const organization = organizationPolicyForPackage({
+      lazurioRoot,
+      packagePath,
+      organizations: organizationPolicies.organizations,
+    });
     const result = migrateLegacyRuntimePackage(packageJson, {
       packagePath,
-      registry: registryResult.registry,
+      organization,
     });
     if (!result.changed && result.issues.length > 0) blockedCount += 1;
     let moduleManifest = result.moduleManifest;
@@ -448,19 +489,19 @@ async function main(argv) {
       }
     }
   }
-  if (blockedCount === 0 && modules.size > 0) {
+  if (blockedCount === 0) {
     const candidates = [];
     for (const [modulePath, manifest] of modules) {
       const normalized = normalizeModuleManifest({ manifest, modulePath });
       if (normalized.module) candidates.push(normalized.module);
     }
-    const registryIssues = validateModuleLeasesAgainstRegistry({
-      modules: [...await readAllModuleContracts(conglomerateRoot), ...candidates],
-      registry: registryResult.registry,
+    const policyIssues = validateModuleLeasesAgainstOrganizationPools({
+      modules: [...await readAllModuleContracts(lazurioRoot), ...candidates],
+      organizations: organizationPolicies.organizations,
     });
-    if (registryIssues.length > 0) {
-      for (const issue of registryIssues) console.warn(`warning: ${issue}`);
-      blockedCount += registryIssues.length;
+    if (policyIssues.length > 0) {
+      for (const issue of policyIssues) console.warn(`warning: ${issue}`);
+      blockedCount += policyIssues.length;
     }
   }
   if (blockedCount === 0) {
@@ -476,6 +517,63 @@ async function main(argv) {
   console.log(`lazurio module/runtime migration: ${pending} ${write ? "migrated" : "pending"}, ${blockedCount} blocked`);
   if (!write && pending > 0) process.exitCode = 1;
   if (blockedCount > 0) process.exitCode = 2;
+}
+
+async function readOrganizationPolicies(lazurioRoot) {
+  const organizations = [];
+  const issues = [];
+  const slugs = new Set();
+  const root = join(lazurioRoot, "organizations");
+  for (const entry of await readdir(root, { withFileTypes: true }).catch(() => [])) {
+    if (!entry.isDirectory() || ignoredDirectories.has(entry.name)) continue;
+    const manifestPath = join(root, entry.name, "company.gen3.json");
+    if (!existsSync(manifestPath)) continue;
+    let manifest;
+    try {
+      manifest = await Bun.file(manifestPath).json();
+    } catch (error) {
+      issues.push(`${manifestPath}: nejde přečíst: ${error.message}`);
+      continue;
+    }
+    if (manifest?.organization_kind === "template") continue;
+    const slug = manifest?.company?.slug;
+    if (typeof slug !== "string" || slug === "") {
+      issues.push(`${manifestPath}: company.slug chybí`);
+      continue;
+    }
+    if (slugs.has(slug)) {
+      issues.push(`${manifestPath}: Organization slug ${slug} je namountovaný vícekrát`);
+      continue;
+    }
+    slugs.add(slug);
+    const result = normalizeOrganizationPortPool({ manifest, source: manifestPath });
+    issues.push(...result.issues);
+    const organization = {
+      slug,
+      path: relative(lazurioRoot, join(root, entry.name)),
+      module_port_pool: result.pool,
+      module_port_pool_source: `${manifestPath}#module_port_pool`,
+    };
+    organizations.push(organization);
+  }
+  return { organizations, issues };
+}
+
+function organizationPolicyForPackage({ lazurioRoot, packagePath, organizations }) {
+  const organizationsRoot = resolve(lazurioRoot, "organizations");
+  const absolutePackagePath = resolve(packagePath);
+  if (!pathIsWithin(organizationsRoot, absolutePackagePath)) return undefined;
+  return organizations.find((organization) =>
+    pathIsWithin(resolve(lazurioRoot, organization.path), absolutePackagePath)
+  ) ?? null;
+}
+
+function pathIsWithin(root, candidate) {
+  const rel = relative(root, candidate);
+  return rel !== ""
+    && rel !== ".."
+    && !rel.startsWith(`..${sep}`)
+    && !isAbsolute(rel);
 }
 
 async function atomicJsonWrite(path, value) {

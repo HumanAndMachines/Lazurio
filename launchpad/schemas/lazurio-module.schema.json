@@ -13,6 +13,12 @@
         {
           "type": "object",
           "required": ["mode"],
+          "properties": { "mode": { "const": "none" } },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["mode"],
           "properties": { "mode": { "const": "single" } },
           "additionalProperties": false
         },
@@ -29,7 +35,7 @@
     },
     "port_leases": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 0,
       "items": {
         "type": "object",
         "required": ["id", "host", "port"],
@@ -56,6 +62,37 @@
   },
   "additionalProperties": false,
   "allOf": [
+    {
+      "if": {
+        "properties": {
+          "tcp_port_policy": {
+            "properties": { "mode": { "const": "none" } },
+            "required": ["mode"]
+          }
+        }
+      },
+      "then": {
+        "required": ["apps"],
+        "properties": {
+          "apps": { "maxItems": 0 },
+          "port_leases": { "maxItems": 0 }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["apps"],
+        "properties": { "apps": { "maxItems": 0 } }
+      },
+      "then": {
+        "properties": {
+          "tcp_port_policy": {
+            "properties": { "mode": { "const": "none" } },
+            "required": ["mode"]
+          }
+        }
+      }
+    },
     {
       "if": {
         "required": ["apps"],
