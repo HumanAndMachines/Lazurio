@@ -6,6 +6,7 @@ import {
   normalizeComparableCliPath,
   resolveTrustedGitExecutable,
   resolveTrustedGitHubCliExecutable,
+  sanitizedGitEnvironment,
 } from "./cli-provenance-lib.mjs";
 
 export const LAZURIO_INSTALL_REPORT_SCHEMA = "lazurio.install.report.v0";
@@ -365,7 +366,7 @@ function validGitCheckout({
   const result = runCommand({
     executable: gitExecutable,
     args: ["-C", sourceRoot, "rev-parse", "--show-toplevel"],
-    environment,
+    environment: sanitizedGitEnvironment(environment, platform),
     cwd: commandCwd,
   });
   if (result?.status !== 0 || typeof result.stdout !== "string") return false;

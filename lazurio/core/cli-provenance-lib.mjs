@@ -412,7 +412,7 @@ function runGitSync({ executable, cwd, args, environment }) {
   };
 }
 
-function sanitizedGitEnvironment(environment) {
+export function sanitizedGitEnvironment(environment, platform = process.platform) {
   const result = {};
   for (const key of ["PATH", "TMPDIR", "TEMP", "TMP", "SystemRoot", "ComSpec", "PATHEXT"]) {
     if (typeof environment[key] === "string") result[key] = environment[key];
@@ -422,7 +422,7 @@ function sanitizedGitEnvironment(environment) {
   result.GIT_OPTIONAL_LOCKS = "0";
   result.GIT_PAGER = "cat";
   result.GIT_CONFIG_NOSYSTEM = "1";
-  result.GIT_CONFIG_GLOBAL = process.platform === "win32" ? "NUL" : "/dev/null";
+  result.GIT_CONFIG_GLOBAL = platform === "win32" ? "NUL" : "/dev/null";
   result.GIT_CONFIG_COUNT = "0";
   return result;
 }
