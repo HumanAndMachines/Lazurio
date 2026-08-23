@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 
 const root = resolve(import.meta.dir, "..");
@@ -7,9 +8,9 @@ const historicalDecisionIds = new Set(["0063", "0090", "0112"]);
 
 describe("Task Agent terminology", () => {
   test("keeps the legacy name only in explicitly allowlisted historical decisions", () => {
-    const result = Bun.spawnSync(
+    const result = spawnSync(
+      "git",
       [
-        "git",
         "grep",
         "-nIi",
         "-E",
@@ -18,14 +19,13 @@ describe("Task Agent terminology", () => {
         ".",
         ":!scripts/task-agent-terminology.test.mjs",
       ],
-      { cwd: root, stdout: "pipe", stderr: "pipe" },
+      { cwd: root, encoding: "utf8", shell: false },
     );
 
-    expect([0, 1]).toContain(result.exitCode);
-    expect(result.stderr.toString()).toBe("");
+    expect([0, 1]).toContain(result.status);
+    expect(result.stderr).toBe("");
 
     const matches = result.stdout
-      .toString()
       .trim()
       .split("\n")
       .filter(Boolean)
