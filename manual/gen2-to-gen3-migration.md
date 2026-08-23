@@ -654,25 +654,29 @@ stejném review stacku. Legacy kopii po consumer census odstraň.
 
 Platí:
 
-- workspace modul má cestu `workspace/<module>` a právě jednu logickou
-  `module_slots[].workspace` deklaraci;
-- chybějící deklarace znamená default Workspace `workspace`;
+- workspace Modul má cestu `workspace/<module>` a příslušnost k Teamům v
+  `module_slots[].teams`; může patřit do více Teamů;
+- chybějící deklarace znamená výchozí Team `workspace`; singulární
+  `module_slots[].workspace` je jen přechodový legacy alias;
 - productionspace repo má cestu `productionspace/<repo>` a nesmí deklarovat
-  `workspace: "productionspace"`;
+  `productionspace` jako Team;
 - root governance mounty (`infra`, `mission-control`) jsou explicitní, ale
   nejsou tím automaticky běžné workspace moduly;
 - manifest deklaruje repo/materialization, ne druhou app/port autoritu.
 
 ### Module lease a package runtime mají oddělenou autoritu
 
-Kořen modulu deklaruje `lazurio.module.v1` jako jedinou autoritu přesného portu.
-Každá spustitelná appka deklaruje `lazurio.runtime.v1` ve svém `package.json`
-jako autoritu příkazu, protokolu a health checku; na module lease pouze
-odkazuje. Organization manifest vlastní `module_port_pool` pro přidělování
-nových lease a kontrolu unikátnosti uvnitř Organizace. V kompatibilní fázi jej
-nese `company.gen3.json`; cílový `lazurio.organization.json` převezme stejné
-pole beze změny významu. Root-wide port registry neexistuje a přesný port se
-neduplikuje do Organization ani repository-slot manifestu.
+Při migraci zachovej jednu autoritu pro každou otázku:
+
+| Otázka | Autorita |
+| --- | --- |
+| Z jakého rozsahu se přidělí nový port? | Organization `module_port_pool` |
+| Jaký přesný port Modul vlastní? | `lazurio.module.json` |
+| Jak se konkrétní aplikace spustí? | `package.json#lazurio.runtime` |
+
+V kompatibilní fázi nese pool `company.gen3.json`; cílový
+`lazurio.organization.json` převezme stejné pole. Globální registr neexistuje
+a přesný port se nikam neduplikuje.
 
 ```json
 {
@@ -719,16 +723,18 @@ neduplikuje do Organization ani repository-slot manifestu.
 }
 ```
 
-`lazurio.runtime.company` se musí case-sensitive rovnat čistému proper-case
-`company.slug`; app id je globálně unikátní lowercase kebab identifikátor
-s povinným lowercase Organization prefixem odvozeným z `company.slug`.
-Team, brand ani GitHub repository owner tento prefix neurčují. Runtime má právě
-jeden `entrypoint` a může mít pomocné listenery. Listenery popisují topologii
-`dev_script`, který Launchpad spouští; jiné package lifecycle skripty nejsou
-samostatnou runtime autoritou. Každý listener povinně odkazuje na lease
-nejbližšího module manifestu; inline nebo dynamický port je nevalidní.
-`dev_script` musí existovat v témže package souboru.
-Legacy `companyascode.app` zůstává pouze read-compatible vstupem během migrace.
+Platí:
+
+- `lazurio.runtime.company` se case-sensitive rovná čistému `company.slug`;
+- app id je globálně unikátní lowercase kebab identifikátor s Organization
+  prefixem odvozeným z tohoto slugu;
+- runtime má jeden `entrypoint`, případné pomocné listenery a všechny odkazují
+  na pojmenovaný lease nejbližšího module manifestu;
+- `dev_script` existuje ve stejném package souboru a je jediným skriptem, který
+  Launchpad spouští;
+- inline nebo dynamický port je nevalidní;
+- legacy `companyascode.app` je během migrace pouze čtecí vstup.
+
 `apps` je explicitní seznam runnable package souborů relativně ke kořeni
 Modulu; neprázdný seznam vyžaduje `default_app`, zatímco `apps: []` znamená
 Modul bez aplikace a vyžaduje `tcp_port_policy.mode: none` i prázdné
@@ -737,14 +743,12 @@ pool slouží výhradně k deterministickému přidělování nových lease; nen
 seznam všech historicky použitých portů. Migrátor proto existující port zachová
 i mimo aktuální pool. Jeho případná změna je samostatná koordinovaná migrace
 všech ingress/VPN/hosting návazností.
-Workspace grouping pochází z module deklarace, nikoli z package cesty.
-Module lease je kanonický main/direct-run/worktree port. Worktree DEV runtime
-používá beze změny stejný materializovaný listener set přes
-`LAZURIO_RUNTIME_LISTENERS_JSON` a per-listener
-`LAZURIO_RUNTIME_LISTENER_<ID>_PORT`; v jednu chvíli smí běžet jen jedna
-verze/worktree modulu. Živé manifesty lze převést pomocí
+
+Příslušnost k Teamům pochází z deklarace Modulu, nikoli z cesty package souboru.
+Main, verze a worktrees Modulu používají stejný lease; v jednu chvíli smí běžet
+jen jedna varianta. Živé manifesty lze převést pomocí
 `bun scripts/lazurio-runtime-migrate.mjs --write <cesta>`; migrátor vytvoří
-module lease, kontroluje drift verzí a ignoruje historii i generated output.
+lease Modulu, kontroluje shodu verzí a ignoruje historii i generované soubory.
 Doctor také zakáže číselnou kopii lease v živém runtime source. Kontrola
 záměrně vynechává testy, fixtures, migrace, archivy, data, build output a
 generované soubory, aby neměnila auditní historii ani odvozené artefakty.
@@ -753,22 +757,12 @@ listener pro UI i API. Productionspace app
 manifest se tímto automaticky nestává spustitelným Launchpad lifecycle
 povrchem.
 
-Runtime proměnné jsou jednosměrná materializace tracked lease do child procesu.
-Nejsou per-machine konfigurace: Principál je nepřidává do `.env`, `.env.local`
-ani mode-specific `.env.*`, který deklarovaný `dev_script` skutečně načítá.
-Launchpad pro Start/Open normalizuje `NODE_ENV=development` a z closure package
-scriptů zahrne explicitní `--mode`, `NODE_ENV` i přesnou `--env-file` cestu.
-Ta musí být statická a zůstat uvnitř owning Modulu; nested env se kontroluje na
-celé cestě. Neaktivní test/build env proto dev aplikaci neblokuje. Verzované `.env.example`,
-`.env.sample` a `.env.template` smějí kontrakt pouze popsat bez konkrétní
-rezervované hodnoty. Launchpad listener proměnné při každém Start/Open odvodí z
-`lazurio.module.json` a jeho hodnoty mají přednost před zděděným prostředím i
-automaticky načtenými `.env` soubory. Chybějící injekce při přímém spuštění se
-řeší spuštěním přes Launchpad nebo manifest-aware launcher, nikoli lokálním
-portovým fallbackem. `.env` zůstává pouze pro machine-local hodnoty, které
-nejsou verzovanou runtime identitou; Doctor deklaraci rezervovaných runtime
-port/host proměnných v načítaném `.env*` souboru odmítne bez zveřejnění její
-hodnoty.
+Runtime proměnné pouze přenesou verzovaný lease do child procesu. Principál je
+nenastavuje v `.env` a aplikace nemá náhradní číselnou hodnotu. Launchpad je
+při každém Start/Open odvodí z `lazurio.module.json`; Doctor kontroluje jen env soubory,
+které `dev_script` skutečně načítá. `.env` zůstává pro lokální hodnoty Mašiny,
+které nejsou identitou runtime. Přesný kontrakt validace drží
+[`launchpad/README.md`](../launchpad/README.md).
 
 Pro každou zděděnou `app/vN` udělej census: `wire`, `defer` nebo `retire` s
 ownerem a důvodem. Required daily app bez validního manifestu blokuje cohort

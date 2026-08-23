@@ -394,10 +394,18 @@ Nesmí vzniknout:
 
 ### 3. Manifest a port pravidla
 
-Organization manifest drží jediný `module_port_pool` své Organizace. Dnes jej
-nese `company.gen3.json`; budoucí `lazurio.organization.json` převezme stejné
-normalizované pole. Lazurio root žádný cross-Organization registry nedrží.
-Přesný port vlastní kořen modulu:
+Portový kontrakt má tři vrstvy:
+
+| Vrstva | Autorita |
+| --- | --- |
+| Organization manifest | `module_port_pool` pro přidělování nových portů |
+| `lazurio.module.json` | přesný port Modulu |
+| `package.json#lazurio.runtime` | způsob spuštění a odkaz na port podle ID |
+
+Lease znamená pojmenovanou rezervaci portu Modulu.
+
+Dnes pool nese `company.gen3.json`; budoucí `lazurio.organization.json`
+převezme stejné pole. Lazurio root žádný globální portový registr nedrží.
 
 ```json
 {
@@ -417,9 +425,10 @@ Přesný port vlastní kořen modulu:
 }
 ```
 
-Creator přidělí port jednou z poolu vlastní Organizace pod OS-level lockem. Každá
-aplikace pak deklaruje runnable kontrakt ve svém package souboru a na lease
-jen odkazuje. Minimální copy-paste validní package tvar je:
+Při založení Modulu přidělí zakládací nástroj pod systémovým zámkem Organizace
+jeden volný port a zapíše jej do manifestu Modulu. Aplikace pak deklaruje
+způsob spuštění a na pojmenovaný lease pouze odkazuje. Minimální validní
+`package.json` je:
 
 ```json
 {
@@ -469,25 +478,17 @@ Kontrolní pravidla:
 - Každý runtime listener odkazuje na stabilní module lease. Main, verze i
   worktrees stejného modulu používají shodný materializovaný port; dynamické
   i inline runtime porty jsou nevalidní.
-- Přesný port je verzovaný výhradně v module-root `lazurio.module.json`.
-  Principál nenastavuje `PORT`, `HOST` ani
-  `LAZURIO_RUNTIME_LISTENER_<ID>_PORT/HOST` v `.env`, `.env.local` ani
-  mode-specific souboru skutečně načítaném deklarovaným `dev_script`; tyto
-  proměnné jsou pouze Launchpadem injektované procesní rozhraní. Launchpad
-  normalizuje development mode a zohlední i explicitní `--mode`, `NODE_ENV`
-  nebo `--env-file` v odkazovaných package scriptech. Přesná env-file cesta smí
-  být statická a jen uvnitř owning Modulu; nested soubor se ověřuje na celé
-  cestě. Neaktivní test/build env dev aplikaci neblokuje. Chybějící injekci nesmí modul
-  obcházet lokálním `.env` fallbackem a Doctor takovou rezervovanou deklaraci
-  odmítne bez vypsání její hodnoty.
-- Organization manifest deklaruje `module_port_pool` jako allocator nových
-  lease. Dnes jej nese `company.gen3.json`, cílový
-  `lazurio.organization.json` převezme stejné normalizované pole; root-wide
-  registry se nezakládá. Chybějící module lease, dvě Module ID na stejném portu
-  uvnitř jedné Organization a drift referencí jsou hard Doctor failure a
-  blokují Start/Open. Zavedený stabilní lease smí zůstat mimo pool určený pro
-  nové alokace; změna takového portu je vždy koordinovaná migrace všech
-  návazností.
+- Přesný port je pouze v `lazurio.module.json`. Principál jej nenastavuje v
+  `.env`; `PORT`, `HOST` a listener proměnné předává procesu Launchpad. Doctor
+  odmítne portový fallback v runtime source i v env souboru, který `dev_script`
+  skutečně načítá. Přesná pravidla jsou v
+  [`launchpad/README.md`](../launchpad/README.md).
+- Pool přiděluje jen nové lease. Zavedený port smí zůstat mimo aktuální pool a
+  automaticky se nepřečísluje. Jeho změna je koordinovaná migrace všech
+  ingress, VPN a hosting návazností.
+- Chybějící lease, stejný port dvou různých Modulů uvnitř jedné Organizace a
+  drift referencí blokují Start/Open. Stejné číslo v oddělených Organizacích je
+  povolené a nevytváří globální registr.
 - Na portu modulu běží nejvýše jedna jeho verze. Start/Open jinou verzi stejného
   Modulu nahradí automaticky. Známý vlastník jiné Organizace vyžaduje potvrzení
   konkrétní aplikace a vypnutí jejího desired runtime; port se nepřemapuje.
@@ -514,7 +515,7 @@ Povinný výsledek pro klientský handoff:
 | Git root | čistý root checkout, žádné Organization submoduly |
 | Mounts | Organization mountpoint je Git checkout |
 | Discovery | klientská Organization je objevená; nezaložený modul je `planned_slot` bez repo URL, zatímco `missing_access` má vždy vlastní next action |
-| Runtime | žádný chybějící `lazurio.module.v1`, `invalid_manifest`, inline/dynamický port, cross-module konflikt uvnitř jedné Organization ani drift lease referencí; nové lease jsou přidělené z Organization poolu, zavedené lease se automaticky nepřečíslují a případná změna stabilního portu koordinuje ingress/VPN/hosting návaznosti. Překryv poolů nebo leases mezi namountovanými Organizacemi je viditelné varování a skutečný live takeover vyžaduje potvrzení konkrétní aplikace. |
+| Runtime | každý spustitelný Modul má platný module i runtime manifest; žádné inline porty, konflikt uvnitř Organizace ani drift referencí; nové porty pocházejí z poolu a zavedené se automaticky nepřečíslují; překryv mezi Organizacemi je viditelné varování a přepnutí vyžaduje potvrzení. |
 | Support loop | Doctor/Launchpad hlášky jsou `ok` nebo explicitně akceptované planned/stopped stavy |
 
 Template gate pro první instalaci:
@@ -583,12 +584,12 @@ Pro každou viditelnou aplikaci ověř:
 
 Po změně `package.json` metadat v klientském modulu může Launchpad oprávněně hlásit `stale_lockfile`, i když dependency tree zůstává stejný. Standardní krok je `Repair` / `bun install` v app cwd, zkontrolovat lockfile diff a teprve potom `Start`.
 
-U Knowledgebase ověř, že manifest port a skutečný Astro port nemohou driftovat:
-`lazurio.runtime.listeners[]` je autorita pro Launchpad a template runtime
-musí respektovat odpovídající
-`LAZURIO_RUNTIME_LISTENER_<ID>_PORT/HOST` env. Main, všechny verze a worktrees
-modulu deklarují tentýž port. Pokud appka běží jinde, je to template/module bug,
-ne Launchpad workaround.
+U Knowledgebase ověř, že se port nemůže rozcházet: přesné číslo vlastní
+`lazurio.module.json`, `lazurio.runtime.listeners[]` odkazuje na jeho lease a
+template runtime čte odpovídající
+`LAZURIO_RUNTIME_LISTENER_<ID>_PORT/HOST`. Main, verze a worktrees odkazují na
+stejný lease. Pokud aplikace běží jinde, je to chyba template nebo Modulu, ne
+důvod k Launchpad workaroundu.
 
 Samotný `Stop` ovládá jen proces spuštěný aktuálním Launchpadem. Explicitní
 `Start`, `Restart` nebo `Otevřít` nad validním static module lease naopak
