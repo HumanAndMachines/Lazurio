@@ -367,6 +367,7 @@ function validGitCheckout({
   });
   return provenance.status === "resolved"
     && provenance.root_kind === "source"
+    && provenance.source.dirty === false
     && provenance.source.repository?.toLowerCase()
     === LAZURIO_SOURCE_REPOSITORY.toLowerCase()
     && validLazurioSourceTree(sourceRoot, gitExecutable, environment, platform);
