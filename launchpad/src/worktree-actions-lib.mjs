@@ -4,7 +4,7 @@ import { lstat, mkdir, readFile, realpath, rm, writeFile } from "fs/promises";
 import { basename, dirname, join, posix, relative, resolve, win32 } from "path";
 import { writeSidecarAtomically } from "../../scripts/worktree-create-lib.mjs";
 import { acquireCreateLock, releaseCreateLock } from "../../scripts/worktree-create-lock.mjs";
-import { resolveTaskAgentIdentity } from "../../scripts/task-agent-identity.mjs";
+import { resolveTaskAgentIdentity } from "../../lazurio/core/task-agent-identity.mjs";
 import { buildGitInventory } from "./git-inventory-lib.mjs";
 import { GIT_LOCAL_TIMEOUT_MS, runGit, safeGitRemoteEnv } from "./git-lib.mjs";
 import { readGitRepoStatus } from "./git-status-lib.mjs";
