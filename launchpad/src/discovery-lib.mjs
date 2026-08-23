@@ -60,6 +60,7 @@ const runtimeSourceIgnoredDirs = new Set([
 const runtimeSourceExtensions = new Set([".cjs", ".js", ".jsx", ".mjs", ".ts", ".tsx"]);
 const genericListenerEnvSourcePatterns = [
   /(?:process\.env|Bun\.env)(?:\.(?:HOST|PORT)\b|\[\s*["'](?:HOST|PORT)["']\s*\])/,
+  /\benv(?:\.(?:HOST|PORT)\b|\[\s*["'](?:HOST|PORT)["']\s*\])/,
   /\b(?:const|let|var)\s*\{[^}\n]*\b(?:HOST|PORT)\b[^}\n]*\}\s*=\s*(?:process\.env|Bun\.env)\b/,
   /\bDeno\.env\.get\(\s*["'](?:HOST|PORT)["']\s*\)/,
 ];

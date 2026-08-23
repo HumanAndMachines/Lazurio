@@ -937,6 +937,8 @@ test("runtime source gate rejects generic HOST/PORT but allows namespaced depend
       "const ownPort = process.env.PORT;",
       "const ownHost = Bun.env['HOST'];",
       "const { PORT: destructuredPort } = process.env;",
+      "const indirectHost = env.HOST;",
+      "const indirectPort = env['PORT'];",
       "const dependencyPort = process.env.WIKI_APP_PORT;",
       "const injectedPort = process.env.LAZURIO_RUNTIME_LISTENER_WEB_PORT;",
     ].join("\n"),
@@ -952,6 +954,24 @@ test("runtime source gate rejects generic HOST/PORT but allows namespaced depend
   expect(issues.filter((issue) => issue.includes("používá obecné HOST/PORT"))).toHaveLength(1);
   expect(issues.join("\n")).not.toContain("WIKI_APP_PORT");
   expect(issues.join("\n")).not.toContain("LAZURIO_RUNTIME_LISTENER_WEB_PORT");
+});
+
+test("runtime source gate rejects generic listener aliases passed as env", async () => {
+  const packageDirectory = await mkdtemp(join(tmpdir(), "lazurio-runtime-indirect-env-"));
+  tempRoots.push(packageDirectory);
+  await writeFile(
+    join(packageDirectory, "server.mjs"),
+    "export function listener(env) { return { hostname: env.HOST, port: env['PORT'] }; }\n",
+    "utf8",
+  );
+
+  const issues = await runtimeSourcePortAuthorityIssues({
+    packageDirectory,
+    packagePath: "app/v1/package.json",
+    module: { port_leases: [{ id: "main", host: "127.0.0.1", port: 5693 }] },
+  });
+
+  expect(issues.filter((issue) => issue.includes("používá obecné HOST/PORT"))).toHaveLength(1);
 });
 test("duplicitní app id izoluje druhý manifest, první zůstává platný (decision 0043)", async () => {
   const root = await createCompaniesWorkspaceFixture({
