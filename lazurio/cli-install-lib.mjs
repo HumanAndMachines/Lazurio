@@ -20,6 +20,7 @@ import {
   computeServerInstallGeneration,
   computeServerRootId,
 } from "./core/server-identity-lib.mjs";
+import { buildLazurioCliProvenance } from "./core/cli-provenance-lib.mjs";
 
 export const LAZURIO_CLI_IDENTITY_SCHEMA = "lazurio.cli.identity.v1";
 export const LAZURIO_CLI_INSTALLATION_SCHEMA = "lazurio.cli.installation.v1";
@@ -204,6 +205,7 @@ export function inspectLazurioCliInstallation({
     action: "status",
     state,
     reason,
+    provenance: buildLazurioCliProvenance({ root: canonicalRoot }),
     expected: expectedIdentity,
     observed: observedIdentity,
     command: Object.freeze({

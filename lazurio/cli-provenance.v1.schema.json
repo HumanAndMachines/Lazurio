@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lazurio.cli.provenance.v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "product",
+    "status",
+    "reason",
+    "root_kind",
+    "root_path",
+    "verification",
+    "channel",
+    "version",
+    "source",
+    "artifact"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "lazurio.cli.provenance.v1"
+    },
+    "product": {
+      "const": "lazurio-cli"
+    },
+    "status": {
+      "enum": ["resolved", "unrecognized", "conflict"]
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "root_kind": {
+      "enum": ["source", "resident", "unknown", "conflict"]
+    },
+    "root_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "verification": {
+      "enum": ["git", "manifest", "none"]
+    },
+    "channel": {
+      "anyOf": [
+        { "enum": ["development", "nightly", "candidate", "stable"] },
+        { "enum": [null] }
+      ]
+    },
+    "version": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9.+-]*$"
+        },
+        { "enum": [null] }
+      ]
+    },
+    "source": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": ["repository", "commit", "dirty"],
+          "properties": {
+            "repository": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,38}/[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$"
+                },
+                { "enum": [null] }
+              ]
+            },
+            "commit": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40,64}$"
+            },
+            "dirty": {
+              "anyOf": [
+                { "type": "boolean" },
+                { "enum": [null] }
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        { "enum": [null] }
+      ]
+    },
+    "artifact": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": ["id", "profile", "target", "payload_digest"],
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "profile": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]*$"
+            },
+            "target": {
+              "type": "string",
+              "pattern": "^(linux|darwin|windows)-(x64|arm64)$"
+            },
+            "payload_digest": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "additionalProperties": false
+        },
+        { "enum": [null] }
+      ]
+    }
+  },
+  "additionalProperties": false
+}

@@ -144,6 +144,8 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
   ]);
   expect(first.manifest.payload.files.map((file) => file.path)).toEqual(expect.arrayContaining([
     "lazurio/core/organization-slot-scope-lib.mjs",
+    "lazurio/core/cli-provenance-lib.mjs",
+    "lazurio/cli-provenance.v1.schema.json",
     "lazurio/launchpad-install-lib.mjs",
     "Launchpad-Bootstrap.ps1",
     "manual/update-installed-resident.md",
@@ -200,6 +202,31 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
   });
   expect(lazurioHelp.status).toBe(0);
   expect(lazurioHelp.stdout).toContain("Lazurio CLI v0");
+  const version = spawnSync(process.execPath, ["lazurio/cli.mjs", "--version", "--json"], {
+    cwd: first.artifact_root,
+    encoding: "utf8",
+    shell: false,
+  });
+  expect(version.status, version.stderr).toBe(0);
+  expect(JSON.parse(version.stdout)).toMatchObject({
+    schema_version: "lazurio.cli.provenance.v1",
+    status: "resolved",
+    root_kind: "resident",
+    verification: "manifest",
+    channel: first.manifest.channel,
+    version: first.manifest.artifact_version,
+    source: {
+      repository: first.manifest.source.repository,
+      commit: first.manifest.source.commit,
+      dirty: null,
+    },
+    artifact: {
+      id: first.manifest.artifact_id,
+      profile: first.manifest.profile,
+      target,
+      payload_digest: first.manifest.payload.digest,
+    },
+  });
   const residentPathInstall = spawnSync(
     process.execPath,
     ["lazurio/cli.mjs", "cli", "install", "--root", first.artifact_root],

@@ -30,6 +30,21 @@ CLI bez `--root` vždy použije root vlastního entrypointu, takže funguje z
 libovolného pracovního adresáře. Explicitní `--root` zůstává vědomý override.
 Linked task/PR worktree se permanentním PATH targetem stát nesmí.
 
+Aktivní development override i budoucí immutable instalace publikují stejný
+read-only provenance kontrakt:
+
+```sh
+lazurio --version
+lazurio --version --json
+```
+
+Development verze se odvozuje přímo z aktuálního Git HEADu a pravdivě ukazuje
+`clean`/`dirty`; nevytváří generovaný version soubor, který by mohl zestárnout.
+Resident verze se čte z immutable `lazurio.resident.json`. Root s oběma markery
+je explicitní konflikt a directory-only root bez manifestu zůstává
+nerozpoznaný. `lazurio cli status --json` skládá stejnou provenance vedle
+stávající instalační identity; její schéma `lazurio.cli.identity.v1` se nemění.
+
 Potom lze samostatně nainstalovat desktop Launchpad:
 
 ```sh
