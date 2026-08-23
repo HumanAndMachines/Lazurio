@@ -472,8 +472,11 @@ Kontrolní pravidla:
 - Přesný port je verzovaný výhradně v module-root `lazurio.module.json`.
   Principál nenastavuje `PORT`, `HOST` ani
   `LAZURIO_RUNTIME_LISTENER_<ID>_PORT/HOST` v `.env`, `.env.local` ani
-  načítaném mode-specific souboru, například `.env.test`; tyto proměnné jsou pouze
-  Launchpadem injektované procesní rozhraní. Chybějící injekci nesmí modul
+  mode-specific souboru skutečně načítaném deklarovaným `dev_script`; tyto
+  proměnné jsou pouze Launchpadem injektované procesní rozhraní. Launchpad
+  normalizuje development mode a zohlední i explicitní `--mode`, `NODE_ENV`
+  nebo `--env-file` v odkazovaných package scriptech. Neaktivní test/build env
+  dev aplikaci neblokuje. Chybějící injekci nesmí modul
   obcházet lokálním `.env` fallbackem a Doctor takovou rezervovanou deklaraci
   odmítne bez vypsání její hodnoty.
 - Organization manifest deklaruje `module_port_pool` jako allocator nových

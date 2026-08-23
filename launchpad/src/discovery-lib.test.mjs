@@ -6,6 +6,7 @@ import {
   discoverLaunchpadApps,
   organizationRelativePathIssue,
   organizationRepositoryPathCasingIssue,
+  runtimeLoadedEnvFileNames,
 } from "./discovery-lib.mjs";
 
 const tempRoots = [];
@@ -705,18 +706,27 @@ test("lazurio.runtime.v1 discovers one entrypoint and auxiliary listeners", asyn
   );
 
   await writeFile(runtimeSourcePath, "Bun.serve({ port: Number(process.env.PORT) });\n", "utf8");
-  const envPath = join(root, "organizations", "TestCompany", "modules", "demo", "app", "v1", ".env.test");
-  await writeFile(envPath, "SECRET=value\nPORT=5283\nLAZURIO_RUNTIME_LISTENER_WEB_HOST=0.0.0.0\n", "utf8");
+  const envDirectory = join(root, "organizations", "TestCompany", "modules", "demo", "app", "v1");
+  const inactiveEnvPath = join(envDirectory, ".env.test");
+  const activeEnvPath = join(envDirectory, ".env.development");
+  const envSource = "SECRET=value\nPORT=5283\nLAZURIO_RUNTIME_LISTENER_WEB_HOST=0.0.0.0\n";
+  await writeFile(inactiveEnvPath, envSource, "utf8");
+  const inactiveEnv = await discoverLaunchpadApps(root);
+  expect(inactiveEnv.invalid_apps).toHaveLength(0);
+  expect(inactiveEnv.failures.join("\n")).not.toContain(".env.test");
+
+  await writeFile(activeEnvPath, envSource, "utf8");
   const envAuthority = await discoverLaunchpadApps(root);
   expect(envAuthority.invalid_apps).toHaveLength(1);
   expect(envAuthority.failures.join("\n")).toContain(
-    ".env.test: PORT nesmí být per-machine port autorita",
+    ".env.development: PORT nesmí být per-machine port autorita",
   );
   expect(envAuthority.failures.join("\n")).toContain(
-    ".env.test: LAZURIO_RUNTIME_LISTENER_WEB_HOST nesmí být per-machine port autorita",
+    ".env.development: LAZURIO_RUNTIME_LISTENER_WEB_HOST nesmí být per-machine port autorita",
   );
   expect(envAuthority.failures.join("\n")).not.toContain("SECRET=value");
-  await rm(envPath);
+  await rm(activeEnvPath);
+  await rm(inactiveEnvPath);
 
   packageJson.scripts.dev = "vite --port 5281";
   await writeJson(packagePath, packageJson);
@@ -745,6 +755,35 @@ test("lazurio.runtime.v1 discovers one entrypoint and auxiliary listeners", asyn
   expect(inlinePort.failures.join("\n")).toContain(
     "lazurio.runtime.listeners[0].port není povolené pole",
   );
+});
+
+test("runtime env gate follows the declared dev script closure and selected modes", () => {
+  const packageJson = {
+    scripts: {
+      dev: "concurrently \"bun run dev:web\" \"bun run dev:api\"",
+      "dev:web": "NODE_ENV=staging vite --mode local-offline --env-file=.env.explicit",
+      "dev:api": "bun server.ts",
+      test: "vite --mode test",
+    },
+  };
+  const names = runtimeLoadedEnvFileNames({
+    packageJson,
+    runtime: { dev_script: "dev" },
+  });
+  for (const expected of [
+    ".env",
+    ".env.local",
+    ".env.development",
+    ".env.development.local",
+    ".env.staging",
+    ".env.staging.local",
+    ".env.local-offline",
+    ".env.local-offline.local",
+    ".env.explicit",
+  ]) {
+    expect(names.has(expected)).toBe(true);
+  }
+  expect(names.has(".env.test")).toBe(false);
 });
 
 test("duplicitní app id izoluje druhý manifest, první zůstává platný (decision 0043)", async () => {

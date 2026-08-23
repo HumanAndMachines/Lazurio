@@ -432,6 +432,9 @@ export function createRuntimeManager({
       takeover,
     });
     const childEnv = runtimeProcessEnv(app, {
+      // Launchpad always starts the declared development task. Do not let the
+      // parent process select a different Bun/framework env mode per Machine.
+      NODE_ENV: "development",
       PORT: String(app.port),
       HOST: app.host,
       // Astro 7 auto-backgrounds dev/preview servers when it detects an AI
