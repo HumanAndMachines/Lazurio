@@ -46,19 +46,19 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(css).not.toContain("data-tile-experiment");
   expect(css).not.toContain("data-guide-icon-experiment");
   expect(css).not.toContain("data-header-experiment");
-  expect(js).toContain("const PIXEL_APP_ICON_FILES = Object.freeze({");
+  expect(js).toContain("const LAZURIO_APP_ICON_FILES = Object.freeze({");
   expect(js).toContain("const key = appIconKey(app);");
-  expect(js).toContain("const pixelArtIcon = pixelAppIcon(key);");
-  expect(js).toContain('return file ? `/app-icons/pixel/${file}` : "";');
-  const pixelResolverBlock = js.slice(js.indexOf("function pixelAppIcon"), js.indexOf("function appCardTone"));
-  expect(pixelResolverBlock).not.toContain("app.module");
-  expect(pixelResolverBlock).not.toContain("app.company");
+  expect(js).toContain("const lazurioIcon = lazurioAppIcon(key);");
+  expect(js).toContain('return file ? `/app-icons/lazurio/${file}` : "";');
+  const iconResolverBlock = js.slice(js.indexOf("function lazurioAppIcon"), js.indexOf("function appCardTone"));
+  expect(iconResolverBlock).not.toContain("app.module");
+  expect(iconResolverBlock).not.toContain("app.company");
   expect(css).toContain("@media (hover: hover) and (pointer: fine)");
   expect(css).toContain("linear-gradient(");
   expect(css).not.toContain("translateY(-3px)");
   expect(css).toContain(":hover .app-card-desc");
   expect(css).toContain("max-height: 4.8em");
-  expect(css).toContain("opacity 460ms var(--tile-reveal-ease)");
+  expect(css).toContain("opacity 340ms var(--tile-reveal-ease)");
   expect(css).toContain("max-height 420ms var(--tile-reveal-ease)");
   expect(css).toContain("@media (hover: none), (pointer: coarse)");
   expect(css).not.toContain("0 18px 36px color-mix(in srgb, var(--lz-ink) 9%, transparent)");
@@ -69,8 +69,8 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(css).toContain("border-radius: var(--lz-radius-md)");
   expect(css).toContain("0 10px 24px -22px color-mix(in srgb, var(--lz-ink) 24%, transparent)");
   expect(css).toContain("background: transparent");
-  expect(css).toContain(".app-card-icon.is-pixel-art img");
-  expect(css).toContain("image-rendering: pixelated");
+  expect(css).toContain(".app-card-icon.is-lazurio-art img");
+  expect(css).not.toContain("image-rendering: pixelated");
   expect(js).toContain("function spaceProfileCard");
   expect(js).toContain("function profileSettingsItem");
   expect(js).toContain("elements.spaceSwitcherButton.focus()");
@@ -200,18 +200,36 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(css).toContain(".app-card");
 });
 
-test("každá kanonická pixelová ikona odkazovaná UI existuje", async () => {
+test("každá kanonická Lazurio ikona odkazovaná UI existuje", async () => {
   const js = await readFile(join(publicRoot, "app.js"), "utf8");
-  const iconDirectory = join(publicRoot, "app-icons", "pixel");
+  const iconDirectory = join(publicRoot, "app-icons", "lazurio");
   const files = new Set(await readdir(iconDirectory));
   const iconMapBlock = js.slice(
-    js.indexOf("const PIXEL_APP_ICON_FILES"),
+    js.indexOf("const LAZURIO_APP_ICON_FILES"),
     js.indexOf("const APP_ICON_STYLES"),
   );
   const referencedFiles = [...iconMapBlock.matchAll(/"([a-z0-9-]+\.png)"/g)].map((match) => match[1]);
 
   expect(referencedFiles.length).toBeGreaterThan(0);
   for (const file of referencedFiles) expect(files.has(file)).toBe(true);
+});
+
+test("každý Lazurio kámen má vlastní shodnou barvu hover hrany", async () => {
+  const js = await readFile(join(publicRoot, "app.js"), "utf8");
+  const fileMapBlock = js.slice(
+    js.indexOf("const LAZURIO_APP_ICON_FILES"),
+    js.indexOf("const LAZURIO_APP_ICON_ACCENTS"),
+  );
+  const accentMapBlock = js.slice(
+    js.indexOf("const LAZURIO_APP_ICON_ACCENTS"),
+    js.indexOf("const APP_ICON_STYLES"),
+  );
+  const iconFiles = new Set([...fileMapBlock.matchAll(/"([a-z0-9-]+\.png)"/g)].map((match) => match[1]));
+  const accentFiles = new Set([...accentMapBlock.matchAll(/"([a-z0-9-]+\.png)"\s*:/g)].map((match) => match[1]));
+
+  expect([...accentFiles].sort()).toEqual([...iconFiles].sort());
+  expect(accentMapBlock).toContain('"lazurio-design-system-96.png": "var(--lz-expressive-orchid)"');
+  expect(accentMapBlock).toContain('"website-lazurio-96.png": "var(--lz-blue-500)"');
 });
 
 test("Launchpad drží kanonické Lazurio a nepřebírá skin Organizace", async () => {
@@ -751,7 +769,7 @@ test("Launchpad používá jednu explicitní Synchronizovat akci místo dílčí
   expect(html).toContain("Synchronizovat");
   expect(html).not.toContain('id="organizationGitPanel"');
   expect(js).not.toContain("moduleUpdateBanner");
-  expect(js).not.toContain("function renderModuleUpdateBanner");
+  expect(js).not.toContain("renderModuleUpdateBanner");
   expect(js).not.toContain("function pullOrganizationRepositories");
   expect(js).not.toContain("function canAutostashPull");
   expect(js).not.toContain("function builderPullScopeAllowedForRepo");

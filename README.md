@@ -33,6 +33,7 @@ bun run lazurio -- context --json
 bun run lazurio -- context --organization HumanAndMachine-ai
 bun run lazurio -- doctor
 bun run lazurio -- update
+bun run lazurio -- launchpad install
 bun run lazurio -- search "český dotaz"
 bun run lazurio -- search --status
 ```
@@ -42,10 +43,13 @@ s `launchpad.gen3.json`, nebo samostatný Personalspace root na Buddy VPS s
 `personal.gen3.json`. `lazurio doctor` nevlastní diagnostická pravidla: v
 Launchpad rootu používá existující strukturované Doctor jádro, v Personalspace
 rootu spouští přesně doctor command deklarovaný jeho manifestem. CLI v0 není
-distribuční package, veřejné Core API, MCP server ani write surface.
-Jediný mutační příkaz `lazurio update` sekvenčně aktualizuje Lazurio Root →
-Organization Rooty → Workspace Moduly na clean `main` přes ff-only; jeho přesný
-kontrakt drží [manual/lazurio-runtime-install-interface.md](manual/lazurio-runtime-install-interface.md).
+samostatný distribuční package, veřejné Core API ani MCP server. Má dvě
+explicitní a oddělené mutace. `lazurio update` sekvenčně aktualizuje Lazurio
+Root → Organization Rooty → Workspace Moduly na clean `main` přes ff-only.
+`lazurio launchpad install` pouze vybere existující platformní instalátor
+lokálního launcheru a beze změny předá jeho výstup i exit code; neaktualizuje
+Git a nevytváří druhý lifecycle engine. Přesný update kontrakt drží
+[manual/lazurio-runtime-install-interface.md](manual/lazurio-runtime-install-interface.md).
 Organization selektor nepředstírá membership ani effective permissions:
 Organization, Team, modul i aplikace ve výstupu drží provider access
 `not_evaluated` a oddělují jej od lokální přítomnosti checkoutu.
@@ -220,14 +224,56 @@ bun run check
 bun run doctor
 ```
 
+### macOS: aplikace pro Dock
+
+Z primárního Lazurio checkoutu nainstaluj stabilní uživatelskou aplikaci bez
+administrátorských práv:
+
+```sh
+bun run lazurio -- launchpad install
+```
+
+Budoucí PATH distribuce zpřístupní stejný veřejný příkaz jako
+`lazurio launchpad install`; tento slice instalaci CLI do `PATH` ještě
+neprovádí. Package script `bun run install:macos-app` zůstává pouze
+vývojářský/bootstrap vstup do stejného adaptéru.
+
+Instalátor vytvoří ad-hoc podepsanou aplikaci
+`~/Applications/Lazurio Launchpad.app`, takže nepotřebuje vývojářský
+certifikát ani zápis do systémového `/Applications`. Aplikace drží pouze
+kanonickou cestu rootu a otevírá jeho `Launchpad.command`; Bun resolution,
+Server identity/install-generation, bezpečné nahrazení stale instance i porty
+tak dál vlastní jediný Lazurio/Launchpad runtime. macOS instalace nezavádí
+LaunchAgent, daemon ani druhou lifecycle autoritu.
+
+Reinstalace se mezi souběžnými procesy serializuje a publikuje celý app bundle
+nativní atomickou macOS výměnou, takže cesta připnutá v Docku během updatu
+nezmizí. Předchozí aplikaci zachová jako jedinou skrytou, ne-launchovatelnou
+rollback zálohu; starší zálohu odstraní až po úspěšném ověření nové generace.
+Instalace z linked worktree se odmítne;
+podporovaný je primární Git checkout, primární checkout se samostatným Git
+metadata adresářem a directory-only root AI Kolegy/Buddyho. Po úplném ověření
+nové aplikace instalátor rozpozná přesný historický bundle
+`/Applications/Launchpad GEN3.app`, odebere jej ze systémové složky a zachová
+jej obnovitelný v uživatelském Koši. Stejnojmenný symlink, soubor nebo bundle
+s jinou identitou odmítne a novou instalaci vrátí zpět; libovolnou cizí
+aplikaci tedy nemaže. Starší `~/Applications/Launchpad GEN3.app` zůstává beze
+změny a instalátor na něj upozorní. Do Docku připni `Lazurio Launchpad`
+přetažením z uživatelské složky `Applications`; instalátor Dock sám nemění.
+
 ### Windows: Start Menu a hlavní panel
 
 Sdílený Launchpad lze na Windows nainstalovat jako uživatelskou zkratku bez
 administrátorských práv:
 
 ```powershell
-bun run install:windows-shortcut
+bun run lazurio -- launchpad install
 ```
+
+Budoucí PATH distribuce zpřístupní stejný veřejný příkaz jako
+`lazurio launchpad install`; tento slice instalaci CLI do `PATH` ještě
+neprovádí. Package script `bun run install:windows-shortcut` zůstává jen
+přímý bootstrap vstup do stejného PowerShell adaptéru.
 
 Instalátor atomicky připraví stabilní uživatelský bootstrap a konfiguraci pod
 `%LOCALAPPDATA%\HumanAndMachine\Launchpad` (legacy interní instalační cesta),
