@@ -17,6 +17,14 @@ import {
   renderHumanCliInstallation,
 } from "./cli-install-lib.mjs";
 import { buildLazurioCliProvenance } from "./core/cli-provenance-lib.mjs";
+import {
+  inspectLazurioInstallation,
+  installExitCode,
+} from "./core/install-core-lib.mjs";
+import {
+  renderHumanInstallReport,
+  selectInstallLanguage,
+} from "./install-output-lib.mjs";
 import { runLaunchpadInstall } from "./launchpad-install-lib.mjs";
 import {
   buildLazurioSearchStatus,
@@ -45,6 +53,24 @@ async function run(argv) {
     const provenance = buildLazurioCliProvenance({ root: cliCodeRoot() });
     console.log(options.json ? JSON.stringify(provenance, null, 2) : renderHumanVersion(provenance));
     return provenance.status === "resolved" ? 0 : 1;
+  }
+
+  if (options.command === "install") {
+    const codeRoot = cliCodeRoot();
+    const provenance = buildLazurioCliProvenance({ root: codeRoot });
+    const root = options.rootExplicit
+      ? options.root
+      : provenance.root_kind === "package"
+        ? null
+        : codeRoot;
+    const report = inspectLazurioInstallation({ root });
+    const language = selectInstallLanguage({ requested: options.language });
+    if (options.json) {
+      console.log(JSON.stringify(report, null, 2));
+    } else {
+      console.log(renderHumanInstallReport(report, { language }));
+    }
+    return installExitCode(report);
   }
 
   options.root ??= defaultOperatedRoot();
@@ -140,6 +166,7 @@ function parseArgs(argv) {
     root: null,
     rootExplicit: false,
     organization: null,
+    language: null,
     json: false,
     help: false,
     version: false,
@@ -231,6 +258,17 @@ function parseArgs(argv) {
       index += 1;
       continue;
     }
+    if (arg === "--language") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("-")) throw new Error("--language vyžaduje cs nebo en.");
+      parsed.language = value;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--language=")) {
+      parsed.language = requiredInlineValue(arg, "--language");
+      continue;
+    }
     if (arg.startsWith("--organization=")) {
       parsed.organization = requiredInlineValue(arg, "--organization");
       continue;
@@ -286,6 +324,9 @@ function parseArgs(argv) {
   if (parsed.organization !== null && parsed.command !== "context") {
     throw new Error("--organization lze použít pouze s příkazem context.");
   }
+  if (parsed.language !== null && parsed.command !== "install") {
+    throw new Error("--language lze použít pouze s příkazem install.");
+  }
   if (parsed.version && parsed.command !== null) {
     throw new Error("--version nelze kombinovat s příkazem.");
   }
@@ -322,6 +363,7 @@ function usage() {
     "",
     "Použití:",
     "  lazurio --version [--json]",
+    "  lazurio install [--language cs|en] [--json] [--root <cesta>]",
     "  lazurio context [--organization <slug>] [--json] [--root <cesta>]",
     "  lazurio doctor [--json] [--root <cesta>]",
     "  lazurio update [--json] [--root <cesta>]",

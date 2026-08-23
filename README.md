@@ -217,7 +217,7 @@ bun run doctor
 `check` ověřuje sdílené kontrakty a testy; `doctor` posuzuje konkrétní lokální
 instalaci a může správně hlásit stav připojených Organizací nebo aplikací.
 
-## Budoucí instalace
+## Postupná instalace
 
 Cílem je jedno package-managed `lazurio` CLI pro macOS, Linux a Windows.
 Instalace má být bezpečně opakovatelná i po částečném selhání nebo aktualizaci
@@ -232,11 +232,22 @@ udržovat druhý globální rollback systém ani skrytý paralelní stav; riskan
 změny zůstávají explicitní a migrace dnešního Gitového Rootu bude samostatná,
 silně hlídaná operace s inventurou a obnovitelným rollbackem.
 
-Dnešní `lazurio cli install` pouze zpřístupní CLI z tohoto checkoutu. Budoucí
-opakovatelný `lazurio install` má připravit celé lokální prostředí včetně
-generovaného Rootu a při každém běhu skončit aktuálním reportem. Aktuální build
-rezidentních artefaktů popisuje [distribution/README.md](distribution/README.md)
-a profily [manual/lazurio-resident-profiles.md](manual/lazurio-resident-profiles.md).
+Dnešní `lazurio cli install` pouze zpřístupní CLI z tohoto checkoutu. První
+read-only podoba opakovatelného příkazu už umí podat český, anglický nebo JSON
+report bez změny mašiny:
+
+```sh
+lazurio install --root <cesta>
+lazurio install --root <cesta> --language en
+lazurio install --root <cesta> --json
+```
+
+Kontroluje platformu, Bun, Git, GitHub CLI a přihlášení i tvar zvoleného Rootu.
+Chybějící součásti zatím pouze pojmenuje; nic neinstaluje a legacy Git Root
+nepřesouvá. Navazující řezy nad stejným Core doplní consent, generovaný Root a
+bezpečnou reconciliaci. Aktuální build rezidentních artefaktů popisuje
+[distribution/README.md](distribution/README.md) a profily
+[manual/lazurio-resident-profiles.md](manual/lazurio-resident-profiles.md).
 
 ## Bezpečnost a soukromí
 

@@ -1,0 +1,18 @@
+Lazurio install · this machine's status
+This first installer slice only inspects the machine and changes nothing.
+Result: action required
+Machine: darwin/arm64
+Lazurio Root: not selected
+
+✓ Platform — supported platform
+✓ Bun — Bun runtime is available
+✓ Git — Git is available
+! GitHub CLI — GitHub CLI was not found
+– GitHub sign-in — sign-in cannot be checked without GitHub CLI
+! Lazurio Root — a Lazurio Root must be selected
+
+What you need to do
+- Install GitHub CLI (`gh`) using your platform's standard procedure.
+- Run the command with `--root <path>`; a later interactive installer will offer a picker.
+
+Run this command again at any time; it always derives the current state again.
