@@ -14,6 +14,7 @@ import {
 } from "./git-fixture-helpers.test.mjs";
 import { platformTestTimeout } from "./test-platform-setup.mjs";
 import { computeServerRootId } from "../../lazurio/core/server-identity-lib.mjs";
+import { readServerLocator } from "../../lazurio/core/server-locator-lib.mjs";
 
 const tempRoots = [];
 const servers = [];
@@ -274,6 +275,13 @@ test("identity endpoint is local-only and a foreign root cannot reuse the port",
   expect(identity.install_generation).toMatch(/^[a-f0-9]{64}$/);
   expect(identity.instance_id).toMatch(/^[a-f0-9-]{36}$/);
   expect(Number.isFinite(Date.parse(identity.started_at))).toBe(true);
+  expect(await readServerLocator({ workspaceRoot: root })).toMatchObject({
+    schema_version: "lazurio.server.locator.v1",
+    origin: `http://127.0.0.1:${port}`,
+    root_id: identity.root_id,
+    instance_id: identity.instance_id,
+    install_generation: identity.install_generation,
+  });
 
   const crossOriginIdentity = await fetch(`http://127.0.0.1:${port}/api/launchpad/identity`, {
     headers: { origin: "https://evil.invalid", "sec-fetch-site": "cross-site" },
@@ -302,6 +310,7 @@ test("identity endpoint is local-only and a foreign root cannot reuse the port",
   expect(await sameRootLauncher.exited).toBe(0);
   expect(await new Response(sameRootLauncher.stdout).text()).toContain("používám existující instanci");
   expect((await getJson(port, "/api/lazurio/server-identity")).instance_id).toBe(identity.instance_id);
+  expect((await readServerLocator({ workspaceRoot: root })).instance_id).toBe(identity.instance_id);
 
   const otherRootLauncher = Bun.spawn(
     ["bun", "src/server.mjs", "--root", otherRoot, "--port", String(port), "--open"],

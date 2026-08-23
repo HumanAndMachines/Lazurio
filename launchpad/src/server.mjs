@@ -55,6 +55,7 @@ import {
   computeServerInstallGeneration,
   computeServerRootId,
 } from "../../lazurio/core/server-identity-lib.mjs";
+import { writeServerLocator } from "../../lazurio/core/server-locator-lib.mjs";
 
 const defaultHost = "127.0.0.1";
 const defaultPort = 4174;
@@ -172,16 +173,34 @@ try {
   throw error;
 }
 if (startResult.mode === "reused") {
+  const observation = await inspectRunningLaunchpad(startResult.url, {
+    rootId: launchpadRootId,
+    installGeneration: launchpadInstallGeneration,
+  });
+  if (observation.status !== "compatible") {
+    throw new Error("Reused Lazurio Server no longer has the expected identity.");
+  }
+  await writeServerLocator({
+    workspaceRoot: canonicalCompaniesRoot,
+    origin: startResult.url,
+    identity: observation.identity,
+  });
   const action = options.open ? "otevírám existující instanci" : "používám existující instanci bez otevření systémového browseru";
   console.log(`Launchpad GEN3 už běží na ${startResult.url}; ${action}.`);
   process.exit(0);
 }
 const server = startResult.server;
+const serverUrl = `http://${host}:${server.port}`;
+const serverLocator = await writeServerLocator({
+  workspaceRoot: canonicalCompaniesRoot,
+  origin: serverUrl,
+  identity: launchpadServerIdentity,
+});
 const bootReconcile = await runtimeManager.reconcileDesiredState();
 
-const serverUrl = `http://${host}:${server.port}`;
 console.log(`Launchpad GEN3 běží na ${serverUrl}`);
 console.log(`Launchpad GEN3 root: ${companiesRoot}`);
+console.log(`Launchpad GEN3 locator: ${serverLocator.path}`);
 console.log(`[launchpad] desired reconcile active=${bootReconcile.active} disabled=${bootReconcile.disabled} degraded=${bootReconcile.degraded}`);
 for (const result of bootReconcile.results.filter((item) => item.status === "degraded")) {
   console.warn(`[launchpad] desired reconcile degraded ${result.module_lease_key ?? result.file}: ${result.error}`);
