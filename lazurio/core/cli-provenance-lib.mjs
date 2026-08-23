@@ -124,7 +124,7 @@ export function normalizeComparableCliPath(path, platform = process.platform) {
   return resolve(path).replace(/[\\/]+$/u, "");
 }
 
-export function trustedGitCandidates(platform = process.platform, environment = process.env) {
+export function trustedGitCandidates(platform = process.platform) {
   if (platform === "darwin") {
     return ["/usr/bin/git", "/opt/homebrew/bin/git", "/usr/local/bin/git"];
   }
@@ -132,22 +132,15 @@ export function trustedGitCandidates(platform = process.platform, environment = 
     return ["/usr/bin/git", "/bin/git", "/usr/local/bin/git"];
   }
   if (platform !== "win32") return [];
-  const localAppData = environment.LOCALAPPDATA;
   return [
     "C:\\Program Files\\Git\\cmd\\git.exe",
     "C:\\Program Files\\Git\\bin\\git.exe",
     "C:\\Program Files (x86)\\Git\\cmd\\git.exe",
     "C:\\Program Files (x86)\\Git\\bin\\git.exe",
-    ...(typeof localAppData === "string" && win32.isAbsolute(localAppData)
-      ? [
-          win32.join(localAppData, "Programs", "Git", "cmd", "git.exe"),
-          win32.join(localAppData, "Programs", "Git", "bin", "git.exe"),
-        ]
-      : []),
   ];
 }
 
-export function trustedGitHubCliCandidates(platform = process.platform, environment = process.env) {
+export function trustedGitHubCliCandidates(platform = process.platform) {
   if (platform === "darwin") {
     return ["/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/usr/bin/gh"];
   }
@@ -155,31 +148,22 @@ export function trustedGitHubCliCandidates(platform = process.platform, environm
     return ["/usr/bin/gh", "/bin/gh", "/usr/local/bin/gh", "/home/linuxbrew/.linuxbrew/bin/gh"];
   }
   if (platform !== "win32") return [];
-  const localAppData = environment.LOCALAPPDATA;
   return [
     "C:\\Program Files\\GitHub CLI\\gh.exe",
     "C:\\Program Files (x86)\\GitHub CLI\\gh.exe",
-    ...(typeof localAppData === "string" && win32.isAbsolute(localAppData)
-      ? [
-          win32.join(localAppData, "Programs", "GitHub CLI", "bin", "gh.exe"),
-          win32.join(localAppData, "Programs", "GitHub CLI", "gh.exe"),
-        ]
-      : []),
   ];
 }
 
 export function resolveTrustedGitExecutable({
   platform = process.platform,
-  environment = process.env,
 } = {}) {
-  return resolveTrustedExecutable(trustedGitCandidates(platform, environment));
+  return resolveTrustedExecutable(trustedGitCandidates(platform));
 }
 
 export function resolveTrustedGitHubCliExecutable({
   platform = process.platform,
-  environment = process.env,
 } = {}) {
-  return resolveTrustedExecutable(trustedGitHubCliCandidates(platform, environment));
+  return resolveTrustedExecutable(trustedGitHubCliCandidates(platform));
 }
 
 function resolveTrustedExecutable(candidates) {
