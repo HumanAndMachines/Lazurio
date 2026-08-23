@@ -145,6 +145,7 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
   expect(first.manifest.payload.files.map((file) => file.path)).toEqual(expect.arrayContaining([
     "lazurio/core/organization-slot-scope-lib.mjs",
     "lazurio/core/cli-provenance-lib.mjs",
+    "lazurio/core/resident-manifest-lib.mjs",
     "lazurio/cli-provenance.v1.schema.json",
     "lazurio/launchpad-install-lib.mjs",
     "Launchpad-Bootstrap.ps1",
@@ -184,6 +185,9 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
   expect(residentPackage).toMatchObject({
     name: "lazurio",
     bin: { lazurio: "lazurio/cli.mjs" },
+    imports: {
+      "#lazurio-core/resident-manifest": "./lazurio/core/resident-manifest-lib.mjs",
+    },
   });
   expect(residentPackage.scripts).toMatchObject({
     "resident:doctor": "bun resident/doctor.mjs",

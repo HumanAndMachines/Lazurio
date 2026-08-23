@@ -410,6 +410,9 @@ function residentPackageJson(profile) {
     bin: {
       lazurio: "lazurio/cli.mjs",
     },
+    imports: {
+      "#lazurio-core/resident-manifest": "./lazurio/core/resident-manifest-lib.mjs",
+    },
     scripts: {
       doctor: "bun resident/doctor.mjs",
       "doctor:json": "bun resident/doctor.mjs --json",
