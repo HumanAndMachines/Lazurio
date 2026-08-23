@@ -404,9 +404,9 @@ V multi-company rootu platí:
   do `lazurio.module.json`; žádný cross-user ani root-wide seznam nevzniká.
 - chybějící module lease, inline/dynamický runtime port, odlišný Module ID na
   stejném portu uvnitř jedné Organization nebo drift referencí je hard failure.
-  Nový lease přiděluje creator z Organization poolu. Legacy port mimo pool se
-  nemění potají: Organization buď zvolí kompatibilní pool, nebo provede
-  explicitní změnu portu se všemi ingress/VPN/hosting návaznostmi.
+  Nový lease přiděluje creator z Organization poolu. Zavedený stabilní lease
+  smí zůstat mimo tento allocator interval a automaticky se nepřečísluje;
+  explicitní změna portu musí zahrnout všechny ingress/VPN/hosting návaznosti.
 - Start/Open preflightuje všechny listenery. Jinou verzi nebo worktree stejného
   Modulu nahradí automaticky. U známého lease jiné Organizace vyžádá potvrzení
   konkrétní nahrazované aplikace, vypne její desired runtime a teprve potom ji
@@ -795,7 +795,7 @@ Doctor musí hlídat:
 - validitu `lazurio.runtime.v1` a read-compatible legacy manifestů jako warnings pro jednotlivé stale appky
   a jako hard failure jen pro root/security/konfliktní validní runtime případy
 - owner-aware kolize materializovaných lease, chybějící module manifesty a
-  odchylky Module lease od `module_port_pool` jeho Organizace
+  chybějící Organization `module_port_pool` pro budoucí deterministické alokace
 - existenci `dev_script`
 - existenci a validitu read-only plugin manifestu, pokud je uvedený
 - u Organizací, které přijaly agent-skills entrypoint kontrakt, že

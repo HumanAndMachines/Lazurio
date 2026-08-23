@@ -732,10 +732,11 @@ Legacy `companyascode.app` zůstává pouze read-compatible vstupem během migra
 `apps` je explicitní seznam runnable package souborů relativně ke kořeni
 Modulu; neprázdný seznam vyžaduje `default_app`, zatímco `apps: []` znamená
 Modul bez aplikace a vyžaduje `tcp_port_policy.mode: none` i prázdné
-`port_leases`. Chybějící `apps` je jen dočasně čitelný legacy stav. Legacy port
-mimo Organization pool migrátor nepřečísluje ani nepotvrdí potají: nejprve se
-zvolí kompatibilní pool, nebo se naplánuje koordinovaná změna portu a jeho
-ingress/VPN/hosting návazností.
+`port_leases`. Chybějící `apps` je jen dočasně čitelný legacy stav. Organization
+pool slouží výhradně k deterministickému přidělování nových lease; není to
+seznam všech historicky použitých portů. Migrátor proto existující port zachová
+i mimo aktuální pool. Jeho případná změna je samostatná koordinovaná migrace
+všech ingress/VPN/hosting návazností.
 Workspace grouping pochází z module deklarace, nikoli z package cesty.
 Module lease je kanonický main/direct-run/worktree port. Worktree DEV runtime
 používá beze změny stejný materializovaný listener set přes
@@ -1197,9 +1198,10 @@ Migrace Organizace je hotová teprve když:
   mapování bez privátních dat;
 - každá required app má reference-only package `lazurio.runtime.v1` a její
   modul právě jeden module-root `lazurio.module.v1` port lease kontrakt;
-  inline/dynamický runtime port, cross-module overlap uvnitř jedné Organization,
-  drift referencí a lease mimo vlastní Organization `module_port_pool` jsou
-  hard Doctor failure; nový lease musí být přidělen z Organization poolu.
+  inline/dynamický runtime port, cross-module overlap uvnitř jedné Organization
+  a drift referencí jsou hard Doctor failure; nový lease musí být přidělen
+  z Organization poolu, zatímco už zavedený stabilní lease se kvůli nové
+  allocator policy nepřečísluje.
   Překryv mezi Organizacemi je lokální warning a live takeover vyžaduje
   potvrzení; změna stabilního portu je samostatná koordinovaná migrace;
 - Mission Control má jednu app-code a jednu data autoritu, legacy fallback je

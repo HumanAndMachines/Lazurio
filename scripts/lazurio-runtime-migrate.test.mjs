@@ -66,7 +66,7 @@ test("refuses to write a runtime generated from an invalid legacy manifest", () 
   expect(result.issues.join("\n")).toContain("path musí začínat /");
 });
 
-test("blocks a legacy port outside the tracked Organization pool", () => {
+test("preserves a legacy port outside the pool reserved for new allocations", () => {
   const source = packageFixture(legacy);
   const result = migrateLegacyRuntimePackage(source, {
     organization: {
@@ -74,9 +74,11 @@ test("blocks a legacy port outside the tracked Organization pool", () => {
       module_port_pool: { start: 24000, end: 24099 },
     },
   });
-  expect(result.changed).toBe(false);
-  expect(result.moduleManifest).toBeNull();
-  expect(result.issues.join("\n")).toContain("mimo Organization pool 24000-24099");
+  expect(result.changed).toBe(true);
+  expect(result.moduleManifest.port_leases).toEqual([
+    { id: "main", host: "127.0.0.1", port: legacy.port },
+  ]);
+  expect(result.issues).toEqual([]);
 });
 
 test("Organization migration fails closed on a missing or mismatched owning policy", () => {
