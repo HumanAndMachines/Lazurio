@@ -387,6 +387,11 @@ export function detectNonCanonicalSidecarFields(metadata) {
     || metadata.conversation_origin.local_only !== true
   ) {
     warnings.push("conversation_origin nemá kanonický tvar.");
+  } else if (
+    typeof metadata.conversation_origin.machine_ref !== "string"
+    || metadata.conversation_origin.machine_ref.trim() === ""
+  ) {
+    warnings.push("conversation_origin nemá machine_ref; legacy sidecar doplň při nejbližším bezpečném dotyku.");
   }
   if (!metadata.recovery_handoff) {
     warnings.push("Sidecar nemá recovery_handoff; doplň stav, summary, blocker a next action před pauzou nebo předáním.");

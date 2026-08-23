@@ -21,7 +21,10 @@ test("guarded create makes a canonical Mission-Control-owned worktree with sidec
     planPath: "mission-control/plans/2026/07/CAC-0042-deals-publish.yaml",
     branch: "CAC-0042-deals-publish",
     createdBy: "test-agent",
-    environment: { CODEX_THREAD_ID: "019f8950-test-thread" },
+    environment: {
+      CODEX_THREAD_ID: "019f8950-test-thread",
+      LAZURIO_MACHINE_REF: "fixture-machine",
+    },
   });
 
   expect(created).toMatchObject({
@@ -61,6 +64,7 @@ test("guarded create makes a canonical Mission-Control-owned worktree with sidec
     worktree_path: ".worktrees/workspace/deals/CAC-0042-deals-publish",
     created_by: "test-agent",
     conversation_origin: {
+      machine_ref: "fixture-machine",
       surface: "codex",
       agent_label: "test-agent",
       thread_id: "019f8950-test-thread",
@@ -109,6 +113,7 @@ test("guarded create writes a sidecar satisfying every worktree.schema.json requ
   expect(schema.properties.status.enum).toContain(sidecar.status);
   expect(sidecar.mission_control_plan_code).toMatch(new RegExp(schema.properties.mission_control_plan_code.pattern));
   expect(sidecar.conversation_origin).toMatchObject({
+    machine_ref: expect.any(String),
     surface: "launchpad",
     agent_label: "test-agent",
     thread_id: null,
@@ -669,6 +674,31 @@ test("guarded create rejects contradictory conversation locator metadata", async
   });
 });
 
+test("guarded create rejects a malformed local machine recovery label", async () => {
+  const { root } = await setupDealsRepoWithPlan();
+
+  await expect(
+    createWorktreeFromPlan({
+      companiesRoot: root,
+      repoKey: "BetaCo::deals",
+      planPath: "mission-control/plans/2026/07/CAC-0042-deals-publish.yaml",
+      branch: "CAC-0042-invalid-machine-ref",
+      createdBy: "test-agent",
+      conversationOrigin: {
+        machine_ref: "spoofed\nsecond-line",
+        surface: "codex",
+        agent_label: "test-agent",
+        thread_id: "thread-123",
+      },
+      environment: {},
+    }),
+  ).rejects.toMatchObject({
+    name: "WorktreeActionError",
+    code: "invalid_worktree_metadata",
+    status: 400,
+  });
+});
+
 test("explicit non-captured conversation status suppresses an ambient session ID", async () => {
   const { root, orgRoot } = await setupDealsRepoWithPlan();
 
@@ -679,6 +709,7 @@ test("explicit non-captured conversation status suppresses an ambient session ID
     branch: "CAC-0042-no-thread-capture",
     createdBy: "cleanup-automation",
     conversationOrigin: {
+      machine_ref: "automation-host",
       surface: "automation",
       agent_label: "Night cleanup",
       thread_id: null,
@@ -691,6 +722,7 @@ test("explicit non-captured conversation status suppresses an ambient session ID
     await readFile(join(orgRoot, ".worktrees", "workspace", "deals", "CAC-0042-no-thread-capture.worktree.json"), "utf8"),
   );
   expect(sidecar.conversation_origin).toMatchObject({
+    machine_ref: "automation-host",
     surface: "automation",
     agent_label: "Night cleanup",
     thread_id: null,
@@ -770,7 +802,7 @@ test("ambient server thread never replaces the worktree's captured origin", asyn
   await writeFile(join(root, created.worktree.path, "draft.md"), "publish me\n");
 
   // Launchpad server zdědil thread ID z úplně jiné session — nesmí přepsat
-  // provenance worktree.
+  // recovery vodítko worktree.
   await publishWorktreeDraft({
     companiesRoot: root,
     repoKey: "BetaCo::deals",
@@ -807,7 +839,12 @@ test("explicit handover records the new owner conversation origin", async () => 
     slug: "CAC-0042-deals-publish",
     commitMessage: "feat: publish deals draft",
     publisher: "codex-agent",
-    conversationOrigin: { surface: "codex", agent_label: "codex-agent", thread_id: "thread-xyz789" },
+    conversationOrigin: {
+      machine_ref: "handover-machine",
+      surface: "codex",
+      agent_label: "codex-agent",
+      thread_id: "thread-xyz789",
+    },
     environment: {},
   });
 
@@ -815,6 +852,7 @@ test("explicit handover records the new owner conversation origin", async () => 
     await readFile(join(orgRoot, ".worktrees", "workspace", "deals", "CAC-0042-deals-publish.worktree.json"), "utf8"),
   );
   expect(sidecar.conversation_origin).toMatchObject({
+    machine_ref: "handover-machine",
     surface: "codex",
     thread_id: "thread-xyz789",
     thread_locator_status: "captured",

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   auditRepository,
+  formatHuman,
   resolveAuthorityPlanPath,
 } from "../.agents/skills/worktree-development-discipline/scripts/worktree-inventory.mjs";
 
@@ -108,6 +109,55 @@ test("accepts an authority-backed exact Mission Control plan", async () => {
   expect(canonicalWorktree(report)).toMatchObject({
     sidecar_valid: true,
     sidecar_error: null,
+  });
+});
+
+test("human inventory exposes the self-reported machine, harness, and thread recovery hint", async () => {
+  const fixture = await createFixture({
+    authorityAvailable: true,
+    planAvailable: true,
+    sidecarOverrides: {
+      conversation_origin: {
+        machine_ref: "fixture-machine",
+        surface: "codex",
+        agent_label: "Codex",
+        thread_id: "thread-123",
+        thread_locator_status: "captured",
+        local_only: true,
+        captured_at: "2026-07-18T00:00:00Z",
+      },
+    },
+  });
+  const report = await auditRepository(fixture.root, {
+    authorityRoot: fixture.authorityRoot,
+  });
+
+  expect(formatHuman(report)).toContain("recovery:fixture-machine:codex:thread-123");
+});
+
+test("rejects a malformed machine recovery label without treating it as identity", async () => {
+  const fixture = await createFixture({
+    authorityAvailable: true,
+    planAvailable: true,
+    sidecarOverrides: {
+      conversation_origin: {
+        machine_ref: "fixture\nspoof",
+        surface: "codex",
+        agent_label: "Codex",
+        thread_id: "thread-123",
+        thread_locator_status: "captured",
+        local_only: true,
+        captured_at: "2026-07-18T00:00:00Z",
+      },
+    },
+  });
+  const report = await auditRepository(fixture.root, {
+    authorityRoot: fixture.authorityRoot,
+  });
+
+  expect(canonicalWorktree(report)).toMatchObject({
+    sidecar_valid: false,
+    sidecar_error: "conversation_origin.machine_ref is not a local single-line label",
   });
 });
 

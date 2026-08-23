@@ -38,9 +38,13 @@
     "mission_control_plan_path": { "type": "string", "minLength": 1 },
     "worktree_path": { "type": "string", "minLength": 1 },
     "created_at": { "type": "string", "minLength": 1 },
-    "created_by": { "type": "string", "minLength": 1 },
+    "created_by": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Self-reported local label; not a verified identity, authorship claim, or authorization input."
+    },
     "conversation_origin": {
-      "description": "Local recovery locator for the Task Agent currently responsible for this worktree; it is provenance, not authorization.",
+      "description": "Gitignored, self-reported local recovery hint linking this worktree to a harness conversation. It is mutable and spoofable, not identity, attribution, provenance proof, audit evidence, or authorization.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -52,9 +56,15 @@
         "captured_at"
       ],
       "properties": {
+        "machine_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "description": "Self-reported local machine label for Principal-local recovery; not a stable fingerprint or proof of machine origin. Optional only for compatibility with legacy v1 sidecars; new writers always populate it."
+        },
         "surface": {
           "type": "string",
-          "description": "Harness namespace forming the first half of the Task Agent ID.",
+          "description": "Harness namespace used with machine_ref and thread_id as a local recovery hint.",
           "pattern": "^[a-z0-9][a-z0-9._-]*$",
           "maxLength": 80
         },
@@ -63,7 +73,7 @@
           "type": ["string", "null"],
           "minLength": 1,
           "maxLength": 512,
-          "description": "Opaque harness thread, session, chat, or agent ID; together with surface this is the Task Agent ID."
+          "description": "Opaque harness task, thread, session, chat, or agent locator; not proof that the named conversation produced the worktree."
         },
         "thread_locator_status": {
           "type": "string",

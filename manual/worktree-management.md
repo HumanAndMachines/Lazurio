@@ -73,7 +73,7 @@ adresář ani branch.
 10. Root práce a Organization práce se nemíchají do jedné Git/access hranice.
     Shared změnu vlastní `CAC-XXXX`; Organization rollout má vlastní plán a
     prefix.
-11. Sidecar nese minimální lokální conversation provenance a recovery handoff.
+11. Sidecar nese minimální lokální recovery vodítko ke konverzaci a recovery handoff.
     Thread ID pomáhá otevřít původní kontext na stejné mašině, ale cleanup i
     publish rozhodnutí vždy vycházejí z živé Git/PR/runtime/MC evidence.
 
@@ -380,6 +380,7 @@ Minimální obsah:
   "created_at": "2026-07-11T00:00:00Z",
   "created_by": "builder-id",
   "conversation_origin": {
+    "machine_ref": "principal-laptop",
     "surface": "codex",
     "agent_label": "Codex",
     "thread_id": "<opaque-local-thread-id>",
@@ -446,22 +447,30 @@ Do sidecaru nepatří autoritativní `dirty`, `ahead`, `behind`, `pr_state`,
 odvozuje při každém status/cleanup běhu. Sidecar smí držet timestampovaný PR
 cache/readback, ale report musí jasně ukázat jeho stáří.
 
-`conversation_origin` je vždy lokální minimum: agentní surface, čitelný label
-agenta a opaque thread/session/chat/agent locator nebo výslovný stav
-`unavailable` či `not_applicable`. Dvojice `surface + thread_id` je v Lazuriu
-**Task Agent ID**. ID je recovery locator, kterým lze dohledat původní relaci;
-není to oprávnění, Git owner ani důkaz, že je relace stále dostupná.
+`conversation_origin` je gitignored lokální recovery vodítko: samodeklarované
+označení Mašiny, agentní surface, čitelný label a opaque
+task/thread/session/chat/agent locator nebo výslovný stav `unavailable` či
+`not_applicable`. Trojice `machine_ref + surface + thread_id` umožňuje
+Principálovi spojit worktree s původní relací a vrátit se k rozdělané práci.
+Není to identita ani podpis: hodnoty může lokální writer změnit nebo podvrhnout
+a mohou zastarat. Mechanismus proto neslouží k atribuci, auditu, oprávnění,
+organizačnímu přehledu práce, rozhodnutí o Publikaci ani cleanup autorizaci.
+GitHub zůstává jedinou autoritou přístupů a commitové atribuce. Nedostupná
+relace není důkazem, že je práce opuštěná.
 
 Kanonická create lane používá následující pořadí:
 
-| Harness | Zachycení Task Agent ID | Obnova |
+| Harness | Zachycení lokálního locatoru relace | Obnova |
 | --- | --- | --- |
 | Codex Desktop / CLI | `CODEX_THREAD_ID`, fallback `CODEX_SESSION_ID` | task v Codexu nebo `codex resume <id>` |
 | Claude Code | `CLAUDE_CODE_SESSION_ID`; `CLAUDE_SESSION_ID` zůstává pouze compatibility fallback | `claude --resume <id>` |
 | Cursor CLI / SDK | explicitní chat/agent ID; Cursor nemá napříč povrchy garantovanou společnou env proměnnou | `cursor-agent --resume <chat-id>` nebo SDK `Agent.resume(agent_id)` |
 | Jiný harness | `--task-agent-id <id> --surface <slug>` nebo `LAZURIO_TASK_AGENT_ID` + `LAZURIO_TASK_AGENT_SURFACE` | podle kontraktu harnessu |
 
-Agentní `worktrees:create` bez dohledatelného Task Agent ID failuje zavřeně.
+Create lane načte `machine_ref` z `LAZURIO_MACHINE_REF`, jinak použije lokální
+hostname. Jde pouze o lokální label, ne stabilní fingerprint nebo důkaz původu
+Mašiny. Agentní `worktrees:create` bez dohledatelného harness ID failuje
+zavřeně.
 Stav `not_applicable` je určený pro automatizaci či Launchpad akci, za kterou
 žádný Task Agent nestojí; `unavailable` je explicitní recovery varování, ne
 náhradní identita. Do sidecaru ani sdíleného Gitu se nekopíruje raw transcript,
@@ -472,11 +481,17 @@ historie. Legacy v1 sidecar bez těchto polí je migration advisory, ne invalid
 nebo cleanup autorizace.
 
 Zachycený `conversation_origin` přepisuje jen vědomé předání: nový Task Agent
-pošle svůj surface a ID v requestu explicitně. Ambientní prostředí (například
-Launchpad server, který zdědil `CODEX_THREAD_ID` z jiné session) origin nikdy nepřebíjí — jinak by
-publikace tiše nahradila recovery stopu worktree identitou serveru. Prázdný
-sidecar se z ambientního locatoru naplnit smí; už zachycenou provenance
-přepíše pouze explicitní zápis.
+pošle svůj machine ref, surface a ID v requestu explicitně. Ambientní
+prostředí — například Launchpad server, který zdědil `CODEX_THREAD_ID` z jiné
+session — origin nikdy nepřebíjí; jinak by publikace tiše nahradila recovery
+vodítko worktree údaji serveru. Prázdný sidecar se z ambientního locatoru
+naplnit smí; už zachycené vodítko přepíše pouze explicitní zápis.
+
+Kanonický recovery průchod inventarizuje nedokončené worktrees, vypíše jejich
+lokální vodítka a `recovery_handoff`, v dostupném harnessu otevře odpovídající
+chaty a Principálovi shrne blokery a možné další kroky. Obsah chatu se do
+sidecaru nekopíruje. Neplatné nebo nedohledatelné vodítko se hlásí jako
+nejistota; nikdy se z něj nedovozuje, kdo práci skutečně provedl.
 
 Create transakce navíc používá lokální journal. Sidecar se označí jako active
 až po úspěšném root + member vytvoření a validaci. Při pádu Doctor pokračuje z

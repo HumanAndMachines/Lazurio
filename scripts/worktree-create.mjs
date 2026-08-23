@@ -32,7 +32,7 @@ import {
   acquireCreateLock,
   releaseCreateLock,
 } from "./worktree-create-lock.mjs";
-import { resolveTaskAgentIdentity } from "../lazurio/core/task-agent-identity.mjs";
+import { resolveTaskAgentLocator } from "../lazurio/core/task-agent-locator.mjs";
 import {
   validateCanonicalMissionControlPlan,
 } from "../.agents/skills/worktree-development-discipline/scripts/worktree-inventory.mjs";
@@ -380,24 +380,28 @@ async function main() {
   }
   const now = new Date().toISOString();
   const explicitTaskAgentId = options["task-agent-id"] ?? options["thread-id"] ?? null;
-  const taskAgentIdentity = resolveTaskAgentIdentity({
+  const taskAgentLocator = resolveTaskAgentLocator({
     environment: process.env,
     id: explicitTaskAgentId,
     surface: options.surface ?? null,
   });
-  if (!taskAgentIdentity.id) {
+  if (!taskAgentLocator.id) {
     fail(
-      "Task Agent ID není dostupné. Codex poskytuje CODEX_THREAD_ID/CODEX_SESSION_ID, "
+      "Task Agent task/thread/session ID není dostupné. Codex poskytuje CODEX_THREAD_ID/CODEX_SESSION_ID, "
       + "Claude Code CLAUDE_CODE_SESSION_ID. Cursor a ostatní harnessy musí předat "
       + "--task-agent-id <id> --surface <slug> nebo LAZURIO_TASK_AGENT_ID společně s "
       + "LAZURIO_TASK_AGENT_SURFACE.",
     );
   }
-  if (!taskAgentIdentity.surface) {
+  if (!taskAgentLocator.surface) {
     fail(
-      "Task Agent ID nemá harness surface. Předej --surface <slug> nebo "
+      "Recovery locator nemá harness surface. Předej --surface <slug> nebo "
       + "LAZURIO_TASK_AGENT_SURFACE; samotné opaque ID není mezi harnessy jednoznačné.",
     );
+  }
+  const machineRef = (process.env.LAZURIO_MACHINE_REF ?? hostname()).trim();
+  if (!machineRef || machineRef.length > 255 || /[\0\r\n]/.test(machineRef)) {
+    fail("LAZURIO_MACHINE_REF musí být neprázdný jednořádkový lokální label do 255 znaků.");
   }
   const sidecar = {
     schema_version: "companiesascode.worktree.v1",
@@ -414,15 +418,16 @@ async function main() {
     mission_control_plan_path: plan.relative,
     worktree_path: `.worktrees/root/${planBasename}`,
     created_at: now,
-    created_by: options["created-by"] ?? `${taskAgentIdentity.surface}-for-${userInfo().username}@${hostname()}`,
+    created_by: options["created-by"] ?? `${taskAgentLocator.surface}-for-${userInfo().username}@${hostname()}`,
     last_touched: now,
     status: "active",
     pr_url: null,
     purpose: options.purpose ?? `Práce na plánu ${planCode} (${planBasename}).`,
     conversation_origin: {
-      surface: taskAgentIdentity.surface,
+      machine_ref: machineRef,
+      surface: taskAgentLocator.surface,
       agent_label: options["agent-label"] ?? "Task Agent",
-      thread_id: taskAgentIdentity.id,
+      thread_id: taskAgentLocator.id,
       thread_locator_status: "captured",
       local_only: true,
       captured_at: now,

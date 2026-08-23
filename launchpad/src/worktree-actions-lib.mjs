@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "fs";
 import { lstat, mkdir, readFile, realpath, rm, writeFile } from "fs/promises";
+import { hostname } from "node:os";
 import { basename, dirname, join, posix, relative, resolve, win32 } from "path";
 import { writeSidecarAtomically } from "../../scripts/worktree-create-lib.mjs";
 import { acquireCreateLock, releaseCreateLock } from "../../scripts/worktree-create-lock.mjs";
-import { resolveTaskAgentIdentity } from "../../lazurio/core/task-agent-identity.mjs";
+import { resolveTaskAgentLocator } from "../../lazurio/core/task-agent-locator.mjs";
 import { buildGitInventory } from "./git-inventory-lib.mjs";
 import { GIT_LOCAL_TIMEOUT_MS, runGit, safeGitRemoteEnv } from "./git-lib.mjs";
 import { readGitRepoStatus } from "./git-status-lib.mjs";
@@ -719,12 +720,13 @@ const RECOVERY_STATES = new Set([
 ]);
 
 // Publish běží i z Launchpad UI, kde request žádný conversationOrigin nenese.
-// Ambientní prostředí serveru pak není spolehlivý signál identity: server může
+// Ambientní prostředí serveru pak není spolehlivé recovery vodítko: server může
 // běžet dlouho a mít zděděné LAZURIO_TASK_AGENT_ID/CODEX_THREAD_ID/
 // CLAUDE_CODE_SESSION_ID z úplně jiné session. Implicitní env proto nikdy nepřebije
-// už zachycenou provenance — sidecar je jediná recovery stopa k původní
+// už zachycený locator — sidecar je jediná recovery stopa k původní
 // konverzaci. Předání ownershipu na nový thread je vědomý krok a musí přijít
-// jako explicitní conversationOrigin v requestu.
+// jako explicitní conversationOrigin v requestu. Ani zachycený locator není
+// důkaz identity nebo autorství; je to editovatelný lokální hint.
 async function preserveCapturedOrigin({ sidecarPath, resolved, explicit }) {
   if (explicit) return resolved;
   try {
@@ -735,7 +737,7 @@ async function preserveCapturedOrigin({ sidecarPath, resolved, explicit }) {
     }
   } catch {
     // Nečitelný nebo chybějící sidecar řeší až updateSidecar; publish se kvůli
-    // provenance metadatům nezastaví.
+    // recovery metadatům nezastaví.
   }
   return resolved;
 }
@@ -748,17 +750,22 @@ function resolveConversationOrigin({ provided, createdBy, environment, capturedA
     });
   }
   const env = environment && typeof environment === "object" ? environment : {};
+  const machineRef = requiredMetadataString(
+    provided?.machine_ref ?? env.LAZURIO_MACHINE_REF ?? hostname(),
+    "conversationOrigin.machine_ref",
+    255,
+  );
   const explicitThreadId = optionalMetadataString(provided?.thread_id, "conversationOrigin.thread_id", 512);
   const explicitLocatorStatus = provided?.thread_locator_status;
   const useEnvironmentLocator = explicitLocatorStatus === undefined || explicitLocatorStatus === "captured";
-  const ambientIdentity = useEnvironmentLocator
-    ? resolveTaskAgentIdentity({
+  const ambientLocator = useEnvironmentLocator
+    ? resolveTaskAgentLocator({
       environment: env,
       surface: provided?.surface ?? env.LAZURIO_TASK_AGENT_SURFACE ?? env.HUMANANDMACHINE_AGENT_SURFACE,
     })
     : { id: null, surface: null };
-  const threadId = explicitThreadId ?? ambientIdentity.id;
-  const inferredSurface = ambientIdentity.surface ?? "launchpad";
+  const threadId = explicitThreadId ?? ambientLocator.id;
+  const inferredSurface = ambientLocator.surface ?? "launchpad";
   const surface = requiredMetadataString(
     provided?.surface
       ?? env.LAZURIO_TASK_AGENT_SURFACE
@@ -801,6 +808,7 @@ function resolveConversationOrigin({ provided, createdBy, environment, capturedA
     });
   }
   return {
+    machine_ref: machineRef,
     surface,
     agent_label: agentLabel,
     thread_id: threadId ?? null,
