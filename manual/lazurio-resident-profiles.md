@@ -17,7 +17,7 @@ credentials.
 | Kolega | Lidský Principál. Na své Mašině dnes zpravidla používá Lazurio jako source checkout. |
 | Buddy | Osobní zástupce jednoho lidského Principála uvnitř jeho Personalspace. Jedná jen v mezích jeho práv a mandátů. |
 | AI Kolega | AI Principál s vlastní identitou, Mašinou, Personalspace a pracovními právy. Není Buddy. |
-| Worker Agent | Nástrojová pracovní relace, například Codex nebo Claude Code. Sama žádná práva nevlastní. |
+| Task Agent | Nástrojová pracovní relace, například Codex nebo Claude Code. Sama žádná práva nevlastní. |
 | Steward | Organizační role AI Kolegy nebo Kolegy. Její název nic neautorizuje; rozhodují živá GitHub práva. |
 | Mašina | Počítač nebo dedikovaný host jednoho Principála či jeho Buddyho. |
 | Personalspace | Privátní prostor právě jednoho Principála a případného Buddyho. |
@@ -66,7 +66,7 @@ hranice práce, soukromí a incidentního chování; neurčuje osobnost konkrét
 Buddyho. Ta spolu s ústavou, mandáty a pamětí zůstává v privátním
 Personalspace.
 
-Buddy není AI Kolega ani Steward. Běžný Worker Agent spuštěný na Buddyho
+Buddy není AI Kolega ani Steward. Běžný Task Agent spuštěný na Buddyho
 Mašině také není Buddy. Transakčně citlivé kroky — přístupy, secrets,
 destruktivní operace, billing, ownership a publish/release mimo trvalý mandát
 — vyžadují přesný souhlas lidského Principála.

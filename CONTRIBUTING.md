@@ -77,7 +77,7 @@ na Ready for review sám, ještě před handoffem — Ready není Publikace
 GitHub právy, ne textovým labelem role: chráněnou `main` merguje Organization
 Steward nebo Organization Admin (včetně vlastního PR, decision 0095);
 nechráněnou `main` mladého repozitáře smí publikovat i Builder, dokud ji
-Admin vědomě nezamkne (progresivní zamykání). Worker Agent merguje jen na
+Admin vědomě nezamkne (progresivní zamykání). Task Agent merguje jen na
 explicitní pokyn svého Principála platný v aktuálním threadu. Přímý push na
 `main` tohoto repa nemá nikdo kromě Admina. Otevřené PRs zachytává Nightly
 Steward PR Sweep, je-li pro repo aktivní; GitHub Draft PR bez aktivity delší

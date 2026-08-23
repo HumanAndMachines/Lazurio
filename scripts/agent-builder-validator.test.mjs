@@ -11,7 +11,7 @@ const validPack = {
   schema_version: "humanandmachines.agent_pack.v1",
   id: "support-triage",
   display_name: "Support triage",
-  agent_kind: "worker_agent",
+  agent_kind: "task_agent",
   purpose: "Prepare a reviewable support response draft.",
   principal: "support-lead",
   owner: "support-platform",
@@ -65,6 +65,15 @@ describe("validateAgentPack", () => {
     expect(result.errors).toEqual([]);
     expect(result.packId).toBe("support-triage");
     expect(result.evalCount).toBe(5);
+  });
+
+  test("rejects the pre-release legacy agent kind instead of keeping an active alias", async () => {
+    const legacyAgentKind = ["worker", "agent"].join("_");
+    const result = await validateAgentPack(
+      await createPack({ pack: { ...validPack, agent_kind: legacyAgentKind } }),
+    );
+
+    expect(result.errors).toContain("agent-pack.json: invalid agent_kind");
   });
 
   test.each([
