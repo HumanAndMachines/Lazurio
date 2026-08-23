@@ -1081,6 +1081,61 @@ input:focus-visible,
   text-transform: none;
 }
 
+/* Marketplace je zatím výhled, ne dostupná akce. Dlaždice proto používá
+   stejný materiál jako ostatní pravé panely, ale nemá odkaz, hover ani CTA. */
+.marketplace-teaser {
+  gap: var(--lz-space-16);
+  padding: var(--lz-space-16);
+}
+
+.marketplace-teaser-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--lz-space-12);
+}
+
+.marketplace-teaser-icon {
+  width: var(--lz-space-48);
+  height: var(--lz-space-48);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 var(--lz-space-48);
+  border-radius: var(--lz-radius-sm);
+  background: var(--lz-blue-50);
+  color: var(--lz-blue-600);
+}
+
+.marketplace-teaser-status {
+  padding-top: var(--lz-space-8);
+  color: var(--lz-blue-700);
+  font-size: var(--lz-size-meta);
+  font-weight: var(--lz-weight-akce);
+  line-height: var(--lz-leading-meta);
+}
+
+.marketplace-teaser-copy {
+  display: grid;
+  gap: var(--lz-space-8);
+}
+
+.marketplace-teaser-copy h2 {
+  margin: 0;
+  color: var(--lz-ink);
+  font-size: var(--lz-size-title);
+  font-weight: var(--lz-weight-title);
+  line-height: var(--lz-leading-title);
+  letter-spacing: var(--lz-track-title);
+}
+
+.marketplace-teaser-copy p {
+  margin: 0;
+  color: var(--lz-ink-muted);
+  font-size: var(--lz-size-meta);
+  line-height: var(--lz-leading-body);
+}
+
 .detail-panel {
   position: sticky;
   top: 4.5rem;
