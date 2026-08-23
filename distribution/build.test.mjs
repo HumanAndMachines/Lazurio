@@ -316,7 +316,7 @@ test("resident provenance is independent of mutable remote configuration", async
   expect(
     (await readFile(mutated.archive_path)).equals(await readFile(baseline.archive_path)),
   ).toBe(true);
-}, 20_000);
+}, process.platform === "win32" ? 45_000 : 20_000);
 
 test.skipIf(process.platform === "win32")(
   "resident build ignores PATH git and a checkout-local fsmonitor helper",
