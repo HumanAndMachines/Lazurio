@@ -217,15 +217,20 @@ test("GitHub repository normalization never echoes a credential-bearing origin",
   expectValid(result);
 });
 
-test("portable Windows paths and per-user Git candidates are deterministic", () => {
+test("portable Windows paths and trusted executable candidates are deterministic", () => {
   expect(normalizeComparableCliPath("C:\\Users\\Matous\\Lazurio\\", "win32"))
     .toBe(normalizeComparableCliPath("c:/users/matous/lazurio", "win32"));
   expect(normalizeComparableCliPath("\\\\?\\C:\\Users\\Matous\\Lazurio", "win32"))
     .toBe(normalizeComparableCliPath("c:\\users\\matous\\lazurio", "win32"));
-  expect(trustedGitCandidates("win32", { LOCALAPPDATA: "C:\\Users\\Matous\\AppData\\Local" }))
-    .toContain("C:\\Users\\Matous\\AppData\\Local\\Programs\\Git\\cmd\\git.exe");
-  expect(trustedGitCandidates("win32", { LOCALAPPDATA: "relative" }))
-    .not.toContain("relative\\Programs\\Git\\cmd\\git.exe");
+  expect(trustedGitCandidates("win32", {
+    PATH: "C:\\Shadow",
+    LOCALAPPDATA: "C:\\AttackerControlled",
+  })).toEqual([
+    "C:\\Program Files\\Git\\cmd\\git.exe",
+    "C:\\Program Files\\Git\\bin\\git.exe",
+    "C:\\Program Files (x86)\\Git\\cmd\\git.exe",
+    "C:\\Program Files (x86)\\Git\\bin\\git.exe",
+  ]);
   expect(trustedGitHubCliCandidates("darwin", { PATH: "/tmp/shadow" }))
     .toEqual(["/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/usr/bin/gh"]);
   expect(trustedGitHubCliCandidates("linux", { PATH: "/tmp/shadow" }))
@@ -236,8 +241,6 @@ test("portable Windows paths and per-user Git candidates are deterministic", () 
   })).toEqual([
     "C:\\Program Files\\GitHub CLI\\gh.exe",
     "C:\\Program Files (x86)\\GitHub CLI\\gh.exe",
-    "C:\\Users\\Matous\\AppData\\Local\\Programs\\GitHub CLI\\bin\\gh.exe",
-    "C:\\Users\\Matous\\AppData\\Local\\Programs\\GitHub CLI\\gh.exe",
   ]);
 });
 
