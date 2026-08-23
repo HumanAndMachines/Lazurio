@@ -32,7 +32,7 @@ import {
   acquireCreateLock,
   releaseCreateLock,
 } from "./worktree-create-lock.mjs";
-import { resolveTaskAgentIdentity } from "./task-agent-identity.mjs";
+import { resolveTaskAgentIdentity } from "../lazurio/core/task-agent-identity.mjs";
 import {
   validateCanonicalMissionControlPlan,
 } from "../.agents/skills/worktree-development-discipline/scripts/worktree-inventory.mjs";
