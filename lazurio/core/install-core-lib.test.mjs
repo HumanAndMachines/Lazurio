@@ -123,6 +123,32 @@ test("supported complete fixture exits zero with all probes completed", () => {
   ]);
 });
 
+test("unsupported architecture requires action even on a supported OS", () => {
+  const report = inspectLazurioInstallation({
+    root: "/fixture/root",
+    platform: "linux",
+    architecture: "mips64",
+    bunVersion: "1.3.14",
+    resolveGit: () => "/usr/bin/git",
+    resolveGitHubCli: () => "/usr/bin/gh",
+    runCommand: () => ({ status: 0 }),
+    inspectRoot: () => ({
+      path: "/fixture/root",
+      layout: "generated_root",
+      status: "completed",
+      reason: "generated_root_ready",
+    }),
+  });
+
+  expect(report.steps.find((step) => step.id === "platform")).toEqual({
+    id: "platform",
+    status: "action_required",
+    reason: "platform_unsupported",
+  });
+  expect(report.status).toBe("action_required");
+  expect(installExitCode(report)).toBe(1);
+});
+
 test("GitHub probes never execute an ambient PATH shadow", () => {
   const executables = [];
   const report = inspectLazurioInstallation({
@@ -271,6 +297,14 @@ test("generated Root requires the canonical Lazurio source repository", async ()
     "git@github.com:HumanAndMachines/Lazurio.git",
   ]);
   expect(rootStep(generated, { gitExecutable })).toMatchObject({
+    status: "action_required",
+    reason: "development_source_missing",
+  });
+
+  await writeSourceContract(sourceRoot);
+  runGit(gitExecutable, sourceRoot, ["add", "package.json", "lazurio/cli.mjs", "launchpad/package.json"]);
+  runGit(gitExecutable, sourceRoot, ["commit", "-m", "add Lazurio source contract"]);
+  expect(rootStep(generated, { gitExecutable })).toMatchObject({
     status: "completed",
     reason: "generated_root_ready",
   });
@@ -357,8 +391,8 @@ async function createSourceCheckout(root, gitExecutable) {
   runGit(gitExecutable, sourceRoot, ["init"]);
   runGit(gitExecutable, sourceRoot, ["config", "user.name", "Lazurio Test"]);
   runGit(gitExecutable, sourceRoot, ["config", "user.email", "lazurio-test@example.invalid"]);
-  await writeFile(join(sourceRoot, "tracked.txt"), "fixture\n", "utf8");
-  runGit(gitExecutable, sourceRoot, ["add", "tracked.txt"]);
+  await writeSourceContract(sourceRoot);
+  runGit(gitExecutable, sourceRoot, ["add", "package.json", "lazurio/cli.mjs", "launchpad/package.json"]);
   runGit(gitExecutable, sourceRoot, ["commit", "-m", "fixture"]);
   runGit(gitExecutable, sourceRoot, [
     "remote",
@@ -366,4 +400,16 @@ async function createSourceCheckout(root, gitExecutable) {
     "origin",
     "git@github.com:HumanAndMachines/Lazurio.git",
   ]);
+}
+
+async function writeSourceContract(sourceRoot) {
+  await mkdir(join(sourceRoot, "lazurio"), { recursive: true });
+  await mkdir(join(sourceRoot, "launchpad"), { recursive: true });
+  await writeFile(join(sourceRoot, "package.json"), `${JSON.stringify({
+    name: "lazurio",
+    type: "module",
+    bin: { lazurio: "lazurio/cli.mjs" },
+  })}\n`, "utf8");
+  await writeFile(join(sourceRoot, "lazurio", "cli.mjs"), "export {};\n", "utf8");
+  await writeFile(join(sourceRoot, "launchpad", "package.json"), "{}\n", "utf8");
 }

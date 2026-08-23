@@ -28,6 +28,7 @@ export const INSTALL_STEP_STATUSES = Object.freeze([
 ]);
 
 const supportedPlatforms = new Set(["darwin", "linux", "win32"]);
+const supportedArchitectures = new Set(["x64", "arm64"]);
 const ignoredEmptyRootEntries = new Set([".DS_Store", "Thumbs.db", "desktop.ini"]);
 const rootLayouts = new Set([
   "not_selected",
@@ -75,7 +76,7 @@ export function inspectLazurioInstallation({
   const commandCwd = trustedCommandCwd(platform, environment);
 
   steps.push(boundedProbe("platform", () => (
-    supportedPlatforms.has(platform)
+    supportedPlatforms.has(platform) && supportedArchitectures.has(architecture)
       ? completed("platform_supported")
       : actionRequired("platform_unsupported")
   )));
@@ -367,7 +368,44 @@ function validGitCheckout({
   return provenance.status === "resolved"
     && provenance.root_kind === "source"
     && provenance.source.repository?.toLowerCase()
-    === LAZURIO_SOURCE_REPOSITORY.toLowerCase();
+    === LAZURIO_SOURCE_REPOSITORY.toLowerCase()
+    && validLazurioSourceTree(sourceRoot, gitExecutable, environment, platform);
+}
+
+function validLazurioSourceTree(sourceRoot, gitExecutable, environment, platform) {
+  const gitEnvironment = sanitizedGitEnvironment(environment, platform);
+  const packageResult = runCommandSync({
+    executable: gitExecutable,
+    args: ["show", "HEAD:package.json"],
+    environment: gitEnvironment,
+    cwd: sourceRoot,
+  });
+  if (packageResult.status !== 0) return false;
+
+  let manifest;
+  try {
+    manifest = JSON.parse(packageResult.stdout);
+  } catch {
+    return false;
+  }
+  if (
+    !plainObject(manifest)
+    || manifest.name !== "lazurio"
+    || !plainObject(manifest.bin)
+    || manifest.bin.lazurio !== "lazurio/cli.mjs"
+  ) {
+    return false;
+  }
+
+  return ["lazurio/cli.mjs", "launchpad/package.json"].every((path) => (
+    commandSucceeded(
+      runCommandSync,
+      gitExecutable,
+      ["cat-file", "-e", `HEAD:${path}`],
+      gitEnvironment,
+      sourceRoot,
+    )
+  ));
 }
 
 function runCommandSync({ executable, args, environment, cwd }) {
