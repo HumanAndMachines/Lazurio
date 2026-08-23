@@ -1,0 +1,53 @@
+{
+  "schema_version": "lazurio.organization_host.adapter.v1",
+  "contract_version": 1,
+  "profile_state": "declared",
+  "topology": {
+    "host_kind": "organization-host",
+    "workspace_isolation": "per-team-runtime",
+    "workspace_privilege": "non-root",
+    "workspace_purpose": "private-development-only"
+  },
+  "runtime_pins": [
+    {
+      "component": "lazurio-resident",
+      "kind": "package-version",
+      "value": "0.1.0-candidate.1"
+    },
+    {
+      "component": "workspace-runtime",
+      "kind": "oci-digest",
+      "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "health_checks": ["host", "workspace", "access", "runtime", "ingress", "storage"],
+  "logging": {
+    "content": "metadata-only",
+    "secrets": "forbidden",
+    "retention": "organization-owned"
+  },
+  "recovery": {
+    "checkpoint_before_mutation": "required",
+    "restore_readback": "required",
+    "clean_rebuild": "required",
+    "rollback": "required"
+  },
+  "adapter": {
+    "interface_version": 1,
+    "transport": "stdio-json",
+    "entrypoint": "bin/organization-host-adapter",
+    "operations": {
+      "validate": { "mode": "read-only" },
+      "plan": { "mode": "read-only" },
+      "apply": { "mode": "mutation", "deploy_gate": "explicit" },
+      "readback": { "mode": "read-only" },
+      "rollback": { "mode": "mutation", "deploy_gate": "explicit" }
+    }
+  },
+  "custody": {
+    "desired_state": "organization-infra-repository",
+    "secrets": "organization-local-references-only",
+    "provider_state": "organization-owned",
+    "deploy_audit": "organization-infra-repository"
+  }
+}
