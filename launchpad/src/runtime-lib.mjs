@@ -444,8 +444,6 @@ export function createRuntimeManager({
       // Launchpad always starts the declared development task. Do not let the
       // parent process select a different Bun/framework env mode per Machine.
       NODE_ENV: "development",
-      PORT: String(app.port),
-      HOST: app.host,
       // Astro 7 auto-backgrounds dev/preview servers when it detects an AI
       // agent. Launchpad is already the process supervisor, so its child must
       // take Astro's supervised-child path and remain attached to this PID.
@@ -1754,11 +1752,19 @@ export function createRuntimeManager({
   }
 
   function runtimeProcessEnv(app, overrides) {
-    const env = { ...process.env };
+    const env = { ...systemEnvironment };
     // Launchpad může být sám spuštěný v Organization-scoped procesu. Každý
     // child dostane scope znovu odvozený z discovery; Personalspace a lokální
     // surfaces nesmí zdědit Organization root rodiče.
     delete env.COMPANYASCODE_ORGANIZATION_ROOT;
+    // Obecné HOST/PORT ani stale namespacovaná injekce rodiče nejsou runtime
+    // autorita child procesu. Hodnoty se znovu materializují pouze z app
+    // kontraktu odvozeného z module-root lazurio.module.json.
+    delete env.HOST;
+    delete env.PORT;
+    for (const name of Object.keys(env)) {
+      if (name.startsWith("LAZURIO_RUNTIME_")) delete env[name];
+    }
     return {
       ...env,
       ...organizationRuntimeEnv(app),

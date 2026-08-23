@@ -479,9 +479,10 @@ Kontrolní pravidla:
   worktrees stejného modulu používají shodný materializovaný port; dynamické
   i inline runtime porty jsou nevalidní.
 - Přesný port je pouze v `lazurio.module.json`. Principál jej nenastavuje v
-  `.env`; `PORT`, `HOST` a listener proměnné předává procesu Launchpad. Doctor
-  odmítne portový fallback v runtime source i v env souboru, který `dev_script`
-  skutečně načítá. Přesná pravidla jsou v
+  `.env`; Launchpad může procesu předat pouze namespacované
+  `LAZURIO_RUNTIME_*` hodnoty, které musí přesně souhlasit. Doctor odmítne
+  obecné `HOST`/`PORT`, portový fallback i portovou autoritu v env souboru,
+  který `dev_script` skutečně načítá. Přesná pravidla jsou v
   [`launchpad/README.md`](../launchpad/README.md).
 - Pool přiděluje jen nové lease. Zavedený port smí zůstat mimo aktuální pool a
   automaticky se nepřečísluje. Jeho změna je koordinovaná migrace všech

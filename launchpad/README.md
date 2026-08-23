@@ -379,9 +379,11 @@ deklarovaných workspace slotů, materializovaný Module vyžaduje vlastní Git
 checkout a `productionspace`, planned sloty i `repository-db-data` vypisuje
 odděleně jako vyloučené položky. Nic nezapisuje a cross-Organization výstup
 není nový source of truth.
-Doctor v živém runtime source odmítne číselnou kopii lease Modulu i náhradní
-číselnou hodnotu napojenou na `PORT` nebo listener env. Historii, build, testy,
-fixtures, migrace, archivy, data a generované výstupy nekontroluje.
+Doctor v živém runtime source odmítne číselnou kopii lease Modulu, obecné
+`HOST`/`PORT` i náhradní číselnou hodnotu napojenou na listener env. Stejnou
+kontrolu obecných `HOST`/`PORT` provede v runnable
+`dev`/`start`/`preview` skriptech. Historii, build, testy, fixtures, migrace,
+archivy, data a generované výstupy nekontroluje.
 Start/Open používá `NODE_ENV=development`. Doctor proto kontroluje běžné a
 development `.env` soubory i statický mode nebo `--env-file`, který skutečně
 načte `dev_script`. Explicitní cesta musí zůstat uvnitř Modulu. Neaktivní test

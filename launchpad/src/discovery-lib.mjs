@@ -58,6 +58,11 @@ const runtimeSourceIgnoredDirs = new Set([
   "vendor",
 ]);
 const runtimeSourceExtensions = new Set([".cjs", ".js", ".jsx", ".mjs", ".ts", ".tsx"]);
+const genericListenerEnvSourcePatterns = [
+  /(?:process\.env|Bun\.env)(?:\.(?:HOST|PORT)\b|\[\s*["'](?:HOST|PORT)["']\s*\])/,
+  /\b(?:const|let|var)\s*\{[^}\n]*\b(?:HOST|PORT)\b[^}\n]*\}\s*=\s*(?:process\.env|Bun\.env)\b/,
+  /\bDeno\.env\.get\(\s*["'](?:HOST|PORT)["']\s*\)/,
+];
 const launchpadRoot = join(import.meta.dirname, "..");
 const appSchemaPath = join(launchpadRoot, "schemas", "launchpad-app.schema.json");
 const runtimeSchemaPath = join(launchpadRoot, "schemas", "lazurio-runtime.schema.json");
@@ -502,27 +507,6 @@ async function declaredOrganizationModuleRoots(organizationRoot) {
   return [...new Set(paths)];
 }
 
-export function runtimeScriptPortAuthorityIssues({ packageJson, packagePath, module }) {
-  const issues = [];
-  for (const [scriptName, command] of Object.entries(packageJson?.scripts ?? {})) {
-    if (typeof command !== "string") continue;
-    const inlinePort = command.match(/(?:^|\s)--port(?:=|\s+)["']?(\d{4,5})(?=["'\s]|$)/);
-    if (inlinePort) {
-      issues.push(
-        `${packagePath}: scripts.${scriptName} obsahuje číselný port ${inlinePort[1]}; načti lease z lazurio.module.json a přijmi jen přesně shodnou Lazurio runtime injekci`,
-      );
-    }
-    for (const lease of (module?.port_leases ?? []).filter((entry) => Number.isInteger(entry?.port))) {
-      if (new RegExp(`(^|\\D)${lease.port}(?=\\D|$)`).test(command)) {
-        issues.push(
-          `${packagePath}: scripts.${scriptName} kopíruje module lease port ${lease.port}; načti lease z lazurio.module.json a přijmi jen přesně shodnou Lazurio runtime injekci`,
-        );
-      }
-    }
-  }
-  return issues;
-}
-
 const reservedRuntimeEnvNames = new Set([
   "HOST",
   "PORT",
@@ -566,9 +550,9 @@ function runtimeReferencedScriptNames({ command, scripts }) {
   return names;
 }
 
-function runtimeDevScriptCommands({ packageJson, runtime }) {
+function runtimeScriptCommands({ packageJson, entryScriptNames }) {
   const scripts = packageJson?.scripts ?? {};
-  const pending = [runtime?.dev_script];
+  const pending = [...entryScriptNames];
   const visited = new Set();
   const commands = [];
   while (pending.length > 0) {
@@ -577,12 +561,67 @@ function runtimeDevScriptCommands({ packageJson, runtime }) {
     visited.add(scriptName);
     const command = scripts[scriptName];
     if (typeof command !== "string") continue;
-    commands.push(command);
+    commands.push({ scriptName, command });
     for (const referencedScript of runtimeReferencedScriptNames({ command, scripts })) {
       if (typeof scripts[referencedScript] === "string") pending.push(referencedScript);
     }
   }
   return commands;
+}
+
+function runtimeDevScriptCommands({ packageJson, runtime }) {
+  return runtimeScriptCommands({
+    packageJson,
+    entryScriptNames: [runtime?.dev_script],
+  }).map(({ command }) => command);
+}
+
+function runtimeListenerLifecycleCommands({ packageJson, runtime }) {
+  const scripts = packageJson?.scripts ?? {};
+  const entryScriptNames = [
+    runtime?.dev_script,
+    ...Object.keys(scripts).filter((scriptName) => /^(?:dev|start|preview)(?::|$)/.test(scriptName)),
+  ];
+  return runtimeScriptCommands({ packageJson, entryScriptNames });
+}
+
+const genericListenerEnvCommandPattern = new RegExp([
+  "(?:^|[^A-Za-z0-9_])(?:HOST|PORT)\\s*=",
+  "\\$(?:\\{(?:HOST|PORT)\\}|(?:HOST|PORT)\\b)",
+  "%(?:HOST|PORT)%",
+  "\\$env:(?:HOST|PORT)\\b",
+  "(?:process\\.env|Bun\\.env)(?:\\.(?:HOST|PORT)\\b|\\[\\s*[\"'](?:HOST|PORT)[\"']\\s*\\])",
+].join("|"), "i");
+
+export function runtimeScriptPortAuthorityIssues({ packageJson, packagePath, module, runtime }) {
+  const issues = [];
+  const lifecycleScripts = new Map(
+    runtimeListenerLifecycleCommands({ packageJson, runtime })
+      .map(({ scriptName, command }) => [scriptName, command]),
+  );
+  for (const [scriptName, command] of Object.entries(packageJson?.scripts ?? {})) {
+    if (typeof command !== "string") continue;
+    const inlinePort = command.match(/(?:^|\s)--port(?:=|\s+)["']?(\d{4,5})(?=["'\s]|$)/);
+    if (inlinePort) {
+      issues.push(
+        `${packagePath}: scripts.${scriptName} obsahuje číselný port ${inlinePort[1]}; načti lease z lazurio.module.json a přijmi jen přesně shodnou Lazurio runtime injekci`,
+      );
+    }
+    for (const lease of (module?.port_leases ?? []).filter((entry) => Number.isInteger(entry?.port))) {
+      if (new RegExp(`(^|\\D)${lease.port}(?=\\D|$)`).test(command)) {
+        issues.push(
+          `${packagePath}: scripts.${scriptName} kopíruje module lease port ${lease.port}; načti lease z lazurio.module.json a přijmi jen přesně shodnou Lazurio runtime injekci`,
+        );
+      }
+    }
+  }
+  for (const [scriptName, command] of lifecycleScripts) {
+    if (!genericListenerEnvCommandPattern.test(command)) continue;
+    issues.push(
+      `${packagePath}: scripts.${scriptName} používá obecné HOST/PORT jako listener konfiguraci; přímý start musí načíst lazurio.module.json a volitelná Lazurio runtime injekce musí přesně souhlasit`,
+    );
+  }
+  return issues;
 }
 
 function runtimeEnvFileLiteralPath(value) {
@@ -776,6 +815,11 @@ export async function runtimeSourcePortAuthorityIssues({
         posix.dirname(packagePath),
         relative(packageDirectory, absolutePath).replace(/\\/g, "/"),
       );
+      if (genericListenerEnvSourcePatterns.some((pattern) => pattern.test(source))) {
+        issues.push(
+          `${sourcePath}: runtime source používá obecné HOST/PORT jako listener konfiguraci; načti lease z lazurio.module.json a volitelnou Lazurio runtime injekci přijmi jen při přesné shodě`,
+        );
+      }
       const fallbackPatterns = [
         /(?:process\.env|Bun\.env)(?:\.(?:PORT|LAZURIO_RUNTIME_LISTENER_[A-Z0-9_]+_PORT)|\[["'](?:PORT|LAZURIO_RUNTIME_LISTENER_[A-Z0-9_]+_PORT)["']\])\s*(?:\?\?|\|\|)\s*["']?(\d{4,5})["']?/g,
         /(?:Number|parseInt)\([^;\n)]*(?:PORT|_PORT)[^;\n)]*\)\s*(?:\?\?|\|\|)\s*["']?(\d{4,5})["']?/g,
@@ -1785,6 +1829,7 @@ export async function discoverLaunchpadApps(
           packageJson,
           packagePath,
           module: moduleResult.module,
+          runtime: app,
         }));
         runtimeContractIssues.push(...await runtimeEnvPortAuthorityIssues({
           packageDirectory: dirname(absolutePackagePath),
