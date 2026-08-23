@@ -1,7 +1,7 @@
 import { isAbsolute, posix } from "node:path";
 
 export const RESIDENT_MANIFEST_PATH = "lazurio.resident.json";
-export const RESIDENT_CHANNELS = Object.freeze(["nightly", "candidate", "stable"]);
+export const RESIDENT_CHANNELS = Object.freeze(["candidate", "stable"]);
 
 const ALLOWED_MUTABLE_MOUNTS = new Set(["organizations", "personalspace"]);
 

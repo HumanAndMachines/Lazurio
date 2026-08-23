@@ -31,7 +31,6 @@
     },
     "channel": {
       "enum": [
-        "nightly",
         "candidate",
         "stable"
       ]

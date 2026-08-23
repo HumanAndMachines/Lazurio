@@ -36,7 +36,6 @@ test("source provenance comes directly from clean and dirty Git state", () => {
     status: "resolved",
     root_kind: "source",
     verification: "git",
-    channel: "development",
     source: {
       repository: "HumanAndMachines/Lazurio",
       dirty: false,
@@ -63,7 +62,6 @@ test("linked worktree is valid development provenance but never a fake Resident"
   expect(result).toMatchObject({
     status: "resolved",
     root_kind: "source",
-    channel: "development",
   });
   // Git remains the authority for clean/dirty. A linked checkout may inherit
   // platform line-ending policy, but it must still be classified as source.
@@ -85,16 +83,16 @@ test("Resident provenance reads immutable manifest metadata without claiming pay
     root_kind: "resident",
     root_path: realpathSync.native(resolve(root)),
     verification: "manifest",
-    channel: "nightly",
-    version: "0.2.0-nightly.7",
+    version: "0.2.0-candidate.7",
     source: {
       repository: "HumanAndMachines/Lazurio",
       commit: "a".repeat(40),
       dirty: null,
     },
     artifact: {
-      id: "lazurio-resident-workspace-0.2.0-nightly.7-darwin-arm64",
+      id: "lazurio-resident-workspace-0.2.0-candidate.7-darwin-arm64",
       profile: "workspace",
+      build_channel: "candidate",
       target: "darwin-arm64",
       payload_digest: "b".repeat(64),
     },
@@ -216,9 +214,9 @@ function residentManifest() {
   const toolchain = JSON.parse(readFileSync(join(dependenciesRoot, "toolchain.json"), "utf8"));
   return {
     schema_version: "lazurio.resident.manifest.v1",
-    artifact_id: "lazurio-resident-workspace-0.2.0-nightly.7-darwin-arm64",
-    artifact_version: "0.2.0-nightly.7",
-    channel: "nightly",
+    artifact_id: "lazurio-resident-workspace-0.2.0-candidate.7-darwin-arm64",
+    artifact_version: "0.2.0-candidate.7",
+    channel: "candidate",
     profile: "workspace",
     role_overlays: [],
     target: { os: "darwin", arch: "arm64" },

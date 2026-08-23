@@ -11,10 +11,7 @@ import {
   resolve,
   win32,
 } from "node:path";
-import {
-  RESIDENT_CHANNELS,
-  validateResidentManifest,
-} from "./resident-manifest-lib.mjs";
+import { validateResidentManifest } from "./resident-manifest-lib.mjs";
 
 export const LAZURIO_CLI_PROVENANCE_SCHEMA = "lazurio.cli.provenance.v1";
 export const LAZURIO_CLI_PRODUCT = "lazurio-cli";
@@ -23,7 +20,6 @@ const commitPattern = /^[0-9a-f]{40,64}$/u;
 const digestPattern = /^[0-9a-f]{64}$/u;
 const repositoryPattern = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,38}\/[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$/u;
 const versionPattern = /^[A-Za-z0-9][A-Za-z0-9.+-]*$/u;
-const residentChannels = new Set(RESIDENT_CHANNELS);
 
 export function buildLazurioCliProvenance({
   root,
@@ -80,24 +76,20 @@ export function isValidLazurioCliProvenance(value) {
   if (!new Set(["git", "manifest", "none"]).has(value.verification)) return false;
   if (value.status === "resolved") {
     if (typeof value.version !== "string" || !versionPattern.test(value.version)) return false;
-    if (!new Set(["development", ...residentChannels]).has(value.channel)) return false;
     if (!validSource(value.source)) return false;
     if (value.root_kind === "source") {
-      return value.channel === "development"
-        && value.verification === "git"
+      return value.verification === "git"
         && typeof value.source.dirty === "boolean"
         && value.artifact === null;
     }
     if (value.root_kind === "resident") {
-      return residentChannels.has(value.channel)
-        && value.verification === "manifest"
+      return value.verification === "manifest"
         && value.source.dirty === null
         && validArtifact(value.artifact);
     }
     return false;
   }
   return value.version === null
-    && value.channel === null
     && value.source === null
     && value.artifact === null
     && value.verification === "none";
@@ -198,7 +190,6 @@ function sourceProvenance({
     status: "resolved",
     reason: "git_head_resolved",
     verification: "git",
-    channel: "development",
     version: `0.0.0-development.${head.value.slice(0, 12)}`,
     source: {
       repository,
@@ -227,7 +218,6 @@ function residentProvenance(root, marker) {
     status: "resolved",
     reason: "resident_manifest_resolved",
     verification: "manifest",
-    channel: manifest.channel,
     version: manifest.artifact_version,
     source: {
       repository: manifest.source.repository,
@@ -237,6 +227,7 @@ function residentProvenance(root, marker) {
     artifact: {
       id: manifest.artifact_id,
       profile: manifest.profile,
+      build_channel: manifest.channel,
       target: `${manifest.target.os}-${manifest.target.arch}`,
       payload_digest: manifest.payload.digest,
     },
@@ -265,6 +256,7 @@ function validArtifact(artifact) {
     && !Array.isArray(artifact)
     && typeof artifact.id === "string"
     && typeof artifact.profile === "string"
+    && new Set(["candidate", "stable"]).has(artifact.build_channel)
     && /^(linux|darwin|windows)-(x64|arm64)$/u.test(artifact.target ?? "")
     && digestPattern.test(artifact.payload_digest ?? ""),
   );
@@ -358,7 +350,6 @@ function provenance({
   status,
   reason,
   verification = "none",
-  channel = null,
   version = null,
   source = null,
   artifact = null,
@@ -371,7 +362,6 @@ function provenance({
     root_kind: rootKind,
     root_path: rootPath,
     verification,
-    channel,
     version,
     source: source ? Object.freeze(source) : null,
     artifact: artifact ? Object.freeze(artifact) : null,

@@ -89,7 +89,6 @@ test("--version a cli status skládají stejnou Core provenance", () => {
   expect(provenance).toMatchObject({
     status: "resolved",
     root_kind: "source",
-    channel: "development",
   });
 
   const unknown = runCli(sourceCli, ["--version", "--json", "--root", fixtureRoot], {

@@ -12,7 +12,6 @@
     "windows-arm64"
   ],
   "channels": [
-    "nightly",
     "candidate",
     "stable"
   ],

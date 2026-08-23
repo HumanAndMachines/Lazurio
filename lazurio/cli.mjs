@@ -323,7 +323,7 @@ function renderHumanVersion(provenance) {
   if (provenance.root_kind === "source") {
     return `Lazurio CLI ${provenance.version} · development · ${provenance.source.dirty ? "dirty" : "clean"}`;
   }
-  return `Lazurio CLI ${provenance.version} · ${provenance.channel} · ${commit} · ${provenance.artifact.target}`;
+  return `Lazurio CLI ${provenance.version} · ${commit} · ${provenance.artifact.target}`;
 }
 
 function renderHumanContext(context) {
