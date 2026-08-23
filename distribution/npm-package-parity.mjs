@@ -35,9 +35,10 @@ function canonicalPackageEvidence(value) {
     if (result !== "passed") throw new Error("npm package smoke evidence is not green");
   }
   // npm owns each archive's integrity. npm pack does not promise byte-identical
-  // gzip/tar output across operating systems, so transport fields remain in the
-  // audit evidence but are not a cross-OS content identity. Content identity is
-  // the exact Git object plus deterministic generated metadata and npm's
-  // unpacked file inventory.
+  // gzip/tar output or stat-derived mode reporting across operating systems, so
+  // transport fields and observed modes remain in the audit evidence but are
+  // not a cross-OS content identity. The exact Git object already owns source
+  // modes; parity adds deterministic generated metadata and npm's unpacked
+  // path/size inventory.
   return packageContentForParity(value);
 }

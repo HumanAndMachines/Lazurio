@@ -62,13 +62,16 @@ test("package evidence separates deterministic content from npm tarball transpor
   });
   expect(packageContentForParity(report)).toEqual({
     schema_version: report.schema_version,
-    package: report.package,
+    package: {
+      ...report.package,
+      files: [{ path: "package.json", size: 200 }],
+    },
     source: report.source,
     packer: report.packer,
   });
 });
 
-test("content parity ignores OS-specific npm archive encoding", () => {
+test("content parity ignores OS-specific npm archive encoding and stat mode", () => {
   const content = {
     schema_version: "lazurio.cli.npm-package-evidence.v1",
     package: {
@@ -83,6 +86,13 @@ test("content parity ignores OS-specific npm archive encoding", () => {
     packer: { name: "npm", version: "11.17.0" },
   };
   const linux = { ...content, transport: { integrity: "sha512-linux", shasum: "a".repeat(40), size: 100 } };
-  const windows = { ...content, transport: { integrity: "sha512-windows", shasum: "b".repeat(40), size: 101 } };
+  const windows = {
+    ...content,
+    package: {
+      ...content.package,
+      files: [{ path: "package.json", size: 200, mode: 493 }],
+    },
+    transport: { integrity: "sha512-windows", shasum: "b".repeat(40), size: 101 },
+  };
   expect(packageContentForParity(linux)).toEqual(packageContentForParity(windows));
 });

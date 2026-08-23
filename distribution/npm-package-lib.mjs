@@ -237,7 +237,10 @@ export function packageEvidenceForReport(evidence) {
 export function packageContentForParity(evidence) {
   return {
     schema_version: evidence.schema_version,
-    package: evidence.package,
+    package: {
+      ...evidence.package,
+      files: evidence.package.files.map(({ path, size }) => ({ path, size })),
+    },
     source: evidence.source,
     packer: evidence.packer,
   };
