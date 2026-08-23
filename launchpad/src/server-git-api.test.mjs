@@ -390,6 +390,51 @@ test("hosted Launchpad rejects forged gateway headers without a TLS-authenticate
   expect((await shutdown.json()).error).toBe("server_shutdown_forbidden");
 });
 
+test("hosted Launchpad omits another Team app and rejects its runtime route before runtime dispatch", async () => {
+  const root = await createLaunchpadGitFixture();
+  const stateRoot = `${root}-launchpad-state`;
+  tempRoots.push(root, stateRoot);
+  const externalOrigin = "https://launchpad.management.example.test";
+  const authPort = await findFreePort();
+  await createPackageApp({
+    root,
+    packagePath: "organizations/BetaCo_GEN3/workspace/deals/app/v1",
+    app: {
+      id: "betaco-hidden-deals-v1",
+      title: "Hidden Deals",
+      company: "BetaCo",
+      module: "deals",
+      port: await findFreePort(),
+    },
+  });
+  const { port } = await startLaunchpadServer(root, {
+    env: {
+      LAZURIO_WORKSPACE_PROFILE: "hosted",
+      LAZURIO_TEAM_ID: "management",
+      LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot,
+      LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN: externalOrigin,
+      LAZURIO_LAUNCHPAD_AUTH_COOKIE_NAME: "__Secure-lazurio-management-workspace",
+      LAZURIO_LAUNCHPAD_AUTH_CHECK_URL: `https://127.0.0.1:${authPort}/oauth2/auth`,
+      LAZURIO_TEAM_SERVICE_CATALOG_JSON: JSON.stringify({
+        schema_version: "lazurio.team_service_catalog.v1",
+        team_id: "management",
+        generated_at: "2026-08-23T00:00:00Z",
+        services: [],
+      }),
+    },
+  });
+
+  const apps = await getJson(port, "/api/apps");
+  expect(apps.apps.map((app) => app.id)).not.toContain("betaco-hidden-deals-v1");
+
+  const hiddenRuntime = await fetch(`http://127.0.0.1:${port}/api/apps/betaco-hidden-deals-v1/health`);
+  expect(hiddenRuntime.status).toBe(404);
+  expect(await hiddenRuntime.json()).toMatchObject({
+    error: "app_not_found",
+    message: "Aplikace není dostupná v aktivním Team Workspace.",
+  });
+});
+
 test("instance-bound local shutdown rejects stale callers and releases the exact port", async () => {
   const root = await createLaunchpadGitFixture();
   tempRoots.push(root);

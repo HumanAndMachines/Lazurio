@@ -201,7 +201,9 @@ export async function buildLaunchpadAppsResponse({
         git: compactGitSummaryForApp(gitContext.reposByKey.get(gitRepoKeyForApp(app))),
       }))
     : visibleApps;
-  const publicApps = appsWithGit.map((app) => projectActiveTeamApp(app, activeTeamId));
+  const publicApps = appsWithGit
+    .filter((app) => appVisibleForActiveTeam(app, activeTeamId))
+    .map((app) => projectActiveTeamApp(app, activeTeamId));
   // Template mounty (organization_kind=template) jsou validované, ale vyloučené z
   // runtime akcí, business přehledů i org počtů. Drží se v oddělených polích, aby
   // je žádný konzument organizations/apps nezapočítal; Doctor je jen označí.
@@ -284,6 +286,12 @@ function projectActiveTeamApp(app, activeTeamId) {
     teams,
     workspace: teams.length > 0 ? activeTeamId : null,
   };
+}
+
+function appVisibleForActiveTeam(app, activeTeamId) {
+  if (typeof activeTeamId !== "string" || activeTeamId.length === 0) return true;
+  if (app.space !== "workspace") return true;
+  return (app.teams ?? []).includes(activeTeamId);
 }
 
 export async function buildLaunchpadDoctorReport(options = {}) {
