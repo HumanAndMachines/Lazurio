@@ -183,10 +183,23 @@ test("fixture cleanup uses an explicit bounded Windows retry after child exit", 
 test("runtime manager spustí, změří a zastaví managed aplikaci", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({ port });
+  let childEnv = null;
   const runtime = createRuntimeManager({
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
     instanceId: "test-instance",
+    systemEnvironment: {
+      ...process.env,
+      HOST: "stale-parent-host",
+      PORT: "49999",
+      LAZURIO_RUNTIME_PORT: "49998",
+      LAZURIO_RUNTIME_LISTENER_WEB_PORT: "49997",
+    },
+    spawnProcess(command, options) {
+      childEnv = options.env;
+      return Bun.spawn(command, options);
+    },
+    spawnProcessIsNative: true,
   });
 
   const initialHealth = await runtime.health("test-company-demo-v1");
@@ -200,6 +213,16 @@ test("runtime manager spustí, změří a zastaví managed aplikaci", async () =
   const runtimeEnv = await (await fetch(`http://127.0.0.1:${port}/runtime-env`)).json();
   expect(runtimeEnv.organizationRoot).toBe(join(root, "organizations", "TestCompany"));
   expect(runtimeEnv.nodeEnv).toBe("development");
+  expect(runtimeEnv.runtimeHost).toBe("127.0.0.1");
+  expect(runtimeEnv.runtimePort).toBe(String(port));
+  const entrypoint = runtimeEnv.listeners.find((listener) => listener.role === "entrypoint");
+  expect(entrypoint).toMatchObject({ host: "127.0.0.1", port });
+  const listenerEnvKey = String(entrypoint.id).toUpperCase().replace(/[^A-Z0-9]/g, "_");
+  expect(childEnv.HOST).toBeUndefined();
+  expect(childEnv.PORT).toBeUndefined();
+  expect(childEnv.LAZURIO_RUNTIME_PORT).toBe(String(port));
+  expect(childEnv[`LAZURIO_RUNTIME_LISTENER_${listenerEnvKey}_HOST`]).toBe("127.0.0.1");
+  expect(childEnv[`LAZURIO_RUNTIME_LISTENER_${listenerEnvKey}_PORT`]).toBe(String(port));
   expect(runtimeEnv.astroDevBackground).toBe("1");
   expect(runtimeEnv.astroPreviewBackground).toBe("1");
 
@@ -636,7 +659,7 @@ test("static module lease rejects a runtime bound to a wildcard host", async () 
     serverSource: [
       "const server = Bun.serve({",
       "  hostname: '0.0.0.0',",
-      "  port: Number(process.env.PORT),",
+      "  port: Number(process.env.LAZURIO_RUNTIME_PORT),",
       "  fetch(request) { return new Response(new URL(request.url).pathname === '/health' ? 'ok' : 'ok'); },",
       "});",
       "setInterval(() => {}, 2147483647);",
@@ -1613,8 +1636,8 @@ testWithInspectableProcessCwd("runtime manager rozpozná app-owned port, ale pro
     cwd: appRoot,
     env: {
       ...process.env,
-      HOST: "127.0.0.1",
-      PORT: String(port),
+      LAZURIO_RUNTIME_HOST: "127.0.0.1",
+      LAZURIO_RUNTIME_PORT: String(port),
     },
     stdout: "ignore",
     stderr: "ignore",
@@ -1662,8 +1685,8 @@ testWithInspectableProcessCwd("runtime manager neadoptuje zdravý app-owned port
     cwd: foreignCwd,
     env: {
       ...process.env,
-      HOST: "127.0.0.1",
-      PORT: String(port),
+      LAZURIO_RUNTIME_HOST: "127.0.0.1",
+      LAZURIO_RUNTIME_PORT: String(port),
     },
     stdout: "ignore",
     stderr: "ignore",
@@ -1880,7 +1903,7 @@ test("runtime manager fail-closed neadoptuje zdravý port při neznámém CWD (W
   const appRoot = join(root, "organizations", "TestCompany", "modules", "demo", "app", "v1");
   const foreignProcess = spawnFixtureChild(root, ["bun", "server.mjs"], {
     cwd: appRoot,
-    env: { ...process.env, HOST: "127.0.0.1", PORT: String(port) },
+    env: { ...process.env, LAZURIO_RUNTIME_HOST: "127.0.0.1", LAZURIO_RUNTIME_PORT: String(port) },
     stdout: "ignore",
     stderr: "ignore",
   });
@@ -1923,7 +1946,7 @@ test("Windows po restartu adoptuje jen listener s platným capture-time owner pr
   const appRoot = join(root, "organizations", "TestCompany", "modules", "demo", "app", "v1");
   const ownedProcess = spawnFixtureChild(root, [process.execPath, "server.mjs"], {
     cwd: appRoot,
-    env: { ...process.env, HOST: "127.0.0.1", PORT: String(port) },
+    env: { ...process.env, LAZURIO_RUNTIME_HOST: "127.0.0.1", LAZURIO_RUNTIME_PORT: String(port) },
     stdout: "ignore",
     stderr: "ignore",
   });
@@ -2066,8 +2089,8 @@ test("Windows standalone Start doplní owner proof, i když listener začne být
     serverSource: [
       "await Bun.sleep(1400);",
       "const server = Bun.serve({",
-      "  hostname: process.env.HOST,",
-      "  port: Number(process.env.PORT),",
+      "  hostname: process.env.LAZURIO_RUNTIME_HOST,",
+      "  port: Number(process.env.LAZURIO_RUNTIME_PORT),",
       "  fetch(request) {",
       "    const url = new URL(request.url);",
       "    if (url.pathname === '/health') return Response.json({ status: 'ok' });",
@@ -2541,7 +2564,7 @@ test("adopted port zůstává diagnostický a Stop nikdy nezíská destruktivní
   const appRoot = join(root, "organizations", "TestCompany", "modules", "demo", "app", "v1");
   const adoptedProcess = spawnFixtureChild(root, ["bun", "server.mjs"], {
     cwd: appRoot,
-    env: { ...process.env, HOST: "127.0.0.1", PORT: String(port) },
+    env: { ...process.env, LAZURIO_RUNTIME_HOST: "127.0.0.1", LAZURIO_RUNTIME_PORT: String(port) },
     stdout: "ignore",
     stderr: "ignore",
   });
@@ -2581,8 +2604,8 @@ testWithInspectableProcessCwd("runtime manager neukončí ani stubborn adopted v
     serverSource: [
       "process.on('SIGTERM', () => {});",
       "const server = Bun.serve({",
-      "  hostname: process.env.HOST,",
-      "  port: Number(process.env.PORT),",
+      "  hostname: process.env.LAZURIO_RUNTIME_HOST,",
+      "  port: Number(process.env.LAZURIO_RUNTIME_PORT),",
       "  fetch(request) {",
       "    const url = new URL(request.url);",
       "    if (url.pathname === '/health') return Response.json({ status: 'ok' });",
@@ -2598,8 +2621,8 @@ testWithInspectableProcessCwd("runtime manager neukončí ani stubborn adopted v
     cwd: appRoot,
     env: {
       ...process.env,
-      HOST: "127.0.0.1",
-      PORT: String(port),
+      LAZURIO_RUNTIME_HOST: "127.0.0.1",
+      LAZURIO_RUNTIME_PORT: String(port),
     },
     stdout: "ignore",
     stderr: "ignore",
@@ -3006,8 +3029,8 @@ test("runtime manager open chain odmítne proces, který spadne hned po prvním 
     port,
     serverSource: [
       "const server = Bun.serve({",
-      "  hostname: process.env.HOST,",
-      "  port: Number(process.env.PORT),",
+      "  hostname: process.env.LAZURIO_RUNTIME_HOST,",
+      "  port: Number(process.env.LAZURIO_RUNTIME_PORT),",
       "  fetch(request) {",
       "    const url = new URL(request.url);",
       "    if (url.pathname === '/health') return Response.json({ status: 'ok' });",
@@ -4017,12 +4040,12 @@ async function createCompaniesWorkspaceFixture({
     join(appRoot, "server.mjs"),
     serverSource ?? [
       "const server = Bun.serve({",
-      "  hostname: process.env.HOST,",
-      "  port: Number(process.env.PORT),",
+      "  hostname: process.env.LAZURIO_RUNTIME_HOST,",
+      "  port: Number(process.env.LAZURIO_RUNTIME_PORT),",
       "  fetch(request) {",
       "    const url = new URL(request.url);",
       "    if (url.pathname === '/health') return Response.json({ status: 'ok' });",
-      "    if (url.pathname === '/runtime-env') return Response.json({ organizationRoot: process.env.COMPANYASCODE_ORGANIZATION_ROOT ?? null, nodeEnv: process.env.NODE_ENV ?? null, listeners: JSON.parse(process.env.LAZURIO_RUNTIME_LISTENERS_JSON ?? '[]'), astroDevBackground: process.env.ASTRO_DEV_BACKGROUND ?? null, astroPreviewBackground: process.env.ASTRO_PREVIEW_BACKGROUND ?? null });",
+      "    if (url.pathname === '/runtime-env') return Response.json({ organizationRoot: process.env.COMPANYASCODE_ORGANIZATION_ROOT ?? null, nodeEnv: process.env.NODE_ENV ?? null, runtimeHost: process.env.LAZURIO_RUNTIME_HOST ?? null, runtimePort: process.env.LAZURIO_RUNTIME_PORT ?? null, listeners: JSON.parse(process.env.LAZURIO_RUNTIME_LISTENERS_JSON ?? '[]'), astroDevBackground: process.env.ASTRO_DEV_BACKGROUND ?? null, astroPreviewBackground: process.env.ASTRO_PREVIEW_BACKGROUND ?? null });",
       "    return new Response('ok');",
       "  },",
       "});",
@@ -4247,8 +4270,8 @@ function crashOnceServerSource() {
     "const shouldCrash = !existsSync(marker);",
     "if (shouldCrash) writeFileSync(marker, 'crashed\\n');",
     "const server = Bun.serve({",
-    "  hostname: process.env.HOST,",
-    "  port: Number(process.env.PORT),",
+    "  hostname: process.env.LAZURIO_RUNTIME_HOST,",
+    "  port: Number(process.env.LAZURIO_RUNTIME_PORT),",
     "  fetch(request) {",
     "    const url = new URL(request.url);",
     "    if (url.pathname === '/health') return Response.json({ status: 'ok' });",
@@ -4264,8 +4287,8 @@ function crashOnceServerSource() {
 function alwaysCrashServerSource() {
   return [
     "const server = Bun.serve({",
-    "  hostname: process.env.HOST,",
-    "  port: Number(process.env.PORT),",
+    "  hostname: process.env.LAZURIO_RUNTIME_HOST,",
+    "  port: Number(process.env.LAZURIO_RUNTIME_PORT),",
     "  fetch(request) {",
     "    const url = new URL(request.url);",
     "    if (url.pathname === '/health') return Response.json({ status: 'ok' });",
@@ -4286,8 +4309,8 @@ function crashThenStayUnhealthyServerSource() {
     "const firstRun = !existsSync(marker);",
     "if (firstRun) writeFileSync(marker, 'crashed\\n');",
     "const server = Bun.serve({",
-    "  hostname: process.env.HOST,",
-    "  port: Number(process.env.PORT),",
+    "  hostname: process.env.LAZURIO_RUNTIME_HOST,",
+    "  port: Number(process.env.LAZURIO_RUNTIME_PORT),",
     "  fetch(request) {",
     "    const url = new URL(request.url);",
     "    if (url.pathname === '/health') return Response.json({ status: firstRun ? 'ok' : 'unhealthy' }, { status: firstRun ? 200 : 503 });",

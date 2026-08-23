@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "bun -e \"process.exit(process.env.HOST && process.env.PORT ? 0 : 1)\" && astro dev --host \"$HOST\" --port \"$PORT\"",
+    "dev": "astro dev",
     "build": "astro check && astro build",
-    "preview": "bun -e \"process.exit(process.env.HOST && process.env.PORT ? 0 : 1)\" && astro preview --host \"$HOST\" --port \"$PORT\""
+    "preview": "astro preview"
   },
   "dependencies": {
     "@astrojs/node": "^9.2.0",

@@ -749,9 +749,10 @@ Main, verze a worktrees Modulu používají stejný lease; v jednu chvíli smí 
 jen jedna varianta. Živé manifesty lze převést pomocí
 `bun scripts/lazurio-runtime-migrate.mjs --write <cesta>`; migrátor vytvoří
 lease Modulu, kontroluje shodu verzí a ignoruje historii i generované soubory.
-Doctor také zakáže číselnou kopii lease v živém runtime source. Kontrola
-záměrně vynechává testy, fixtures, migrace, archivy, data, build output a
-generované soubory, aby neměnila auditní historii ani odvozené artefakty.
+Doctor také zakáže číselnou kopii lease a obecné `HOST`/`PORT` v živém runtime
+source i ve spouštěcích `dev`/`start`/`preview` skriptech. Kontrola záměrně
+vynechává testy, fixtures, migrace, archivy, data, build output a generované
+soubory, aby neměnila auditní historii ani odvozené artefakty.
 Split web/API zůstává explicitní zdůvodněná výjimka, nový modul má jeden TCP
 listener pro UI i API. Productionspace app
 manifest se tímto automaticky nestává spustitelným Launchpad lifecycle

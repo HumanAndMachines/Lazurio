@@ -1518,8 +1518,8 @@ async function postJson(port, path, body, expectedStatus = 200) {
 function fixtureServerSource() {
   return [
     "const server = Bun.serve({",
-    "  hostname: process.env.HOST,",
-    "  port: Number(process.env.PORT),",
+    "  hostname: process.env.LAZURIO_RUNTIME_HOST,",
+    "  port: Number(process.env.LAZURIO_RUNTIME_PORT),",
     "  fetch(request) {",
     "    const url = new URL(request.url);",
     "    if (url.pathname === '/health') return Response.json({ status: 'ok' });",
