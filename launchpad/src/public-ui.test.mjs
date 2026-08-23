@@ -78,7 +78,8 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(css).toContain("column-gap: var(--lz-space-16)");
   expect(css).toContain("row-gap: var(--lz-space-16)");
   expect(css).toContain("border-radius: var(--lz-radius-md)");
-  expect(css).toContain("0 10px 24px -22px color-mix(in srgb, var(--lz-ink) 24%, transparent)");
+  expect(css).toContain("border: 1px solid var(--lz-line)");
+  expect(css).toContain("0 10px 24px -22px color-mix(in srgb, var(--lz-ink) 18%, transparent)");
   expect(css).toContain("background: transparent");
   expect(css).toContain(".app-card-icon.is-lazurio-art img");
   expect(css).not.toContain("image-rendering: pixelated");
@@ -1280,7 +1281,7 @@ test("Launchpad používá jednotný kompaktní grid s jemně zvýšenými dlaž
   expect(appCardRule).not.toContain("text-shadow");
   expect(appCardRule).not.toContain("drop-shadow");
   expect(appCardRule).not.toContain("--shadow-");
-  expect(css).toContain("box-shadow: 0 10px 24px -22px color-mix(in srgb, var(--lz-ink) 24%, transparent)");
+  expect(css).toContain("box-shadow: 0 10px 24px -22px color-mix(in srgb, var(--lz-ink) 18%, transparent)");
 });
 
 test("Organization workspace má kompaktní uvítání s dynamickým názvem firmy", async () => {

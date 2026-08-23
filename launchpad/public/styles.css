@@ -5653,7 +5653,7 @@ body {
   }
 }
 
-/* Materiálový průchod inspirovaný referencí: stejnoměrnější hrany,
+/* Materiálový průchod inspirovaný referencí: jemné hrany modulových karet,
    odstupňované neutrály a bílé pracovní objekty na teplém papíru. */
 .topbar {
   border-bottom-width: 1.5px;
@@ -5682,7 +5682,7 @@ body {
 }
 
 .app-card {
-  border-width: 1.5px;
+  border-width: 1px;
   border-color: var(--lz-line);
   background: var(--lz-white);
 }
@@ -5818,11 +5818,11 @@ body {
 
 .apps-grid > .app-card {
   margin: 0;
-  border: 1.5px solid var(--lz-line);
+  border: 1px solid var(--lz-line);
   border-radius: var(--lz-radius-md);
   background-color: var(--lz-white);
   background-image: none;
-  box-shadow: 0 10px 24px -22px color-mix(in srgb, var(--lz-ink) 24%, transparent);
+  box-shadow: 0 10px 24px -22px color-mix(in srgb, var(--lz-ink) 18%, transparent);
 }
 
 .apps-grid > .app-card:not(.has-open-menu):focus-within,
@@ -5868,7 +5868,7 @@ body {
     transform: none;
     border-color: var(--lz-line);
     background: var(--lz-white);
-    box-shadow: 0 10px 24px -22px color-mix(in srgb, var(--lz-ink) 24%, transparent);
+    box-shadow: 0 10px 24px -22px color-mix(in srgb, var(--lz-ink) 18%, transparent);
   }
 }
 
