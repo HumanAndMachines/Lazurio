@@ -756,8 +756,9 @@ Runtime proměnné jsou jednosměrná materializace tracked lease do child proce
 Nejsou per-machine konfigurace: Principál je nepřidává do `.env`, `.env.local`
 ani mode-specific `.env.*`, který deklarovaný `dev_script` skutečně načítá.
 Launchpad pro Start/Open normalizuje `NODE_ENV=development` a z closure package
-scriptů zahrne explicitní `--mode`, `NODE_ENV` i `--env-file`; neaktivní
-test/build env proto dev aplikaci neblokuje. Verzované `.env.example`,
+scriptů zahrne explicitní `--mode`, `NODE_ENV` i přesnou `--env-file` cestu.
+Ta musí být statická a zůstat uvnitř owning Modulu; nested env se kontroluje na
+celé cestě. Neaktivní test/build env proto dev aplikaci neblokuje. Verzované `.env.example`,
 `.env.sample` a `.env.template` smějí kontrakt pouze popsat bez konkrétní
 rezervované hodnoty. Launchpad listener proměnné při každém Start/Open odvodí z
 `lazurio.module.json` a jeho hodnoty mají přednost před zděděným prostředím i
