@@ -213,7 +213,28 @@ function runProcessSync(command, args, { cwd }) {
   };
 }
 
-export function packageEvidenceForParity(evidence) {
+export function packageEvidenceForReport(evidence) {
+  return {
+    schema_version: evidence.schema_version,
+    package: {
+      name: evidence.package.name,
+      version: evidence.package.version,
+      filename: evidence.package.filename,
+      unpacked_size: evidence.package.unpacked_size,
+      file_count: evidence.package.file_count,
+      files: evidence.package.files,
+    },
+    transport: {
+      integrity: evidence.package.integrity,
+      shasum: evidence.package.shasum,
+      size: evidence.package.size,
+    },
+    source: evidence.source,
+    packer: evidence.packer,
+  };
+}
+
+export function packageContentForParity(evidence) {
   return {
     schema_version: evidence.schema_version,
     package: evidence.package,

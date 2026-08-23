@@ -8,7 +8,7 @@ import { spawnSync } from "node:child_process";
 
 import {
   buildLazurioNpmPackage,
-  packageEvidenceForParity,
+  packageEvidenceForReport,
 } from "./npm-package-lib.mjs";
 
 const options = parseArgs(Bun.argv.slice(2));
@@ -27,7 +27,7 @@ try {
   await assertUpdaterBundle(build.paths.staging_root);
   const smoke = smokeInstalledArchive(build);
   const evidence = {
-    ...packageEvidenceForParity(build),
+    ...packageEvidenceForReport(build),
     smoke,
     runner: {
       os: process.platform,
