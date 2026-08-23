@@ -217,7 +217,6 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
     status: "resolved",
     root_kind: "resident",
     verification: "manifest",
-    channel: first.manifest.channel,
     version: first.manifest.artifact_version,
     source: {
       repository: first.manifest.source.repository,
@@ -227,6 +226,7 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
     artifact: {
       id: first.manifest.artifact_id,
       profile: first.manifest.profile,
+      build_channel: first.manifest.channel,
       target,
       payload_digest: first.manifest.payload.digest,
     },

@@ -10,7 +10,6 @@
     "root_kind",
     "root_path",
     "verification",
-    "channel",
     "version",
     "source",
     "artifact"
@@ -38,12 +37,6 @@
     },
     "verification": {
       "enum": ["git", "manifest", "none"]
-    },
-    "channel": {
-      "anyOf": [
-        { "enum": ["development", "nightly", "candidate", "stable"] },
-        { "enum": [null] }
-      ]
     },
     "version": {
       "anyOf": [
@@ -89,7 +82,7 @@
       "anyOf": [
         {
           "type": "object",
-          "required": ["id", "profile", "target", "payload_digest"],
+          "required": ["id", "profile", "build_channel", "target", "payload_digest"],
           "properties": {
             "id": {
               "type": "string",
@@ -98,6 +91,9 @@
             "profile": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9-]*$"
+            },
+            "build_channel": {
+              "enum": ["candidate", "stable"]
             },
             "target": {
               "type": "string",

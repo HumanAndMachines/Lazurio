@@ -44,6 +44,10 @@ Resident verze se čte z immutable `lazurio.resident.json`. Root s oběma marker
 je explicitní konflikt a directory-only root bez manifestu zůstává
 nerozpoznaný. `lazurio cli status --json` skládá stejnou provenance vedle
 stávající instalační identity; její schéma `lazurio.cli.identity.v1` se nemění.
+Immutable provenance záměrně neobsahuje uživatelův distribuční track. Budoucí
+`nightly`/`latest` je package-manager preference nad již vydanou verzí, ne
+vlastnost payload bytes; historický Resident channel je proto pouze explicitní
+`artifact.build_channel`.
 
 Potom lze samostatně nainstalovat desktop Launchpad:
 
