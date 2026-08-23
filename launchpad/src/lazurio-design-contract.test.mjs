@@ -203,9 +203,9 @@ test("kanonické modulové dlaždice jsou samostatné zaoblené karty", async ()
   expect(base).toMatch(/\.app-title-block\s*{[\s\S]*?gap: 28px/);
   expect(base).toMatch(/\.app-card-desc\s*{[\s\S]*?font-size: 15px;[\s\S]*?line-height: 1\.55/);
   expect(canonical).toMatch(/\.apps-grid\s*{[\s\S]*?column-gap: var\(--lz-space-16\);[\s\S]*?row-gap: var\(--lz-space-16\);[\s\S]*?border: 0/);
-  expect(canonical).toMatch(/\.apps-grid > \.app-card\s*{[\s\S]*?border: 1\.5px solid var\(--lz-line\);[\s\S]*?border-radius: var\(--lz-radius-md\)/);
+  expect(canonical).toMatch(/\.apps-grid > \.app-card\s*{[\s\S]*?border: 1px solid var\(--lz-line\);[\s\S]*?border-radius: var\(--lz-radius-md\)/);
   expect(canonical).toMatch(/\.apps-grid > \.app-card:not\(\.has-open-menu\):focus-within,[\s\S]*?\.apps-grid > \.app-card\.selected\s*{[\s\S]*?border-color: var\(--app-focus-accent, var\(--app-accent\)\)/);
-  expect(canonical).toMatch(/box-shadow: 0 10px 24px -22px color-mix\(in srgb, var\(--lz-ink\) 24%, transparent\)/);
+  expect(canonical).toMatch(/box-shadow: 0 10px 24px -22px color-mix\(in srgb, var\(--lz-ink\) 18%, transparent\)/);
   expect(canonical).toMatch(/\.app-card:not\(\.selected\):not\(\.has-open-menu\):hover\s*{[\s\S]*?transform: none;[\s\S]*?background-color: var\(--lz-white\);[\s\S]*?box-shadow:[\s\S]*?0 0 0 3px color-mix/);
   expect(canonical).toMatch(/\.app-card:not\(\.selected\):not\(\.has-open-menu\):hover\s*{[\s\S]*?border-color: var\(--app-accent\)/);
   expect(canonical).not.toContain("border-color: color-mix(in srgb, var(--app-accent)");
@@ -250,12 +250,12 @@ test("informace o přístupu k Teamům je schovaná pod otazníkem", async () =>
   expect(finalSurface).toMatch(/\.team-access-summary \.chip\s*{[\s\S]*?border: 0;[\s\S]*?background: transparent/);
 });
 
-test("materiálový průchod používá výraznější hrany a odstupňované Lazurio neutrály", async () => {
+test("materiálový průchod používá jemné modulové hrany a odstupňované Lazurio neutrály", async () => {
   const styles = await source("styles.css");
   const material = styles.slice(styles.indexOf("/* Materiálový průchod inspirovaný referencí"));
   expect(material).toMatch(/\.topbar\s*{[\s\S]*?border-bottom-width: 1\.5px;[\s\S]*?background: var\(--lz-white\)/);
   expect(material).toMatch(/\.search-field\s*{[\s\S]*?border-width: 1\.5px;[\s\S]*?background: var\(--lz-gray-50\)/);
-  expect(material).toMatch(/\.app-card\s*{[\s\S]*?border-width: 1\.5px;[\s\S]*?border-color: var\(--lz-line\);[\s\S]*?background: var\(--lz-white\)/);
+  expect(material).toMatch(/\.app-card\s*{[\s\S]*?border-width: 1px;[\s\S]*?border-color: var\(--lz-line\);[\s\S]*?background: var\(--lz-white\)/);
   expect(styles).toMatch(/\.app-card > \.card-warning\.is-fact,[\s\S]*?\.app-card > \.card-warning\.is-jen-akce\s*{[\s\S]*?display: flex;[\s\S]*?min-height: 52px;[\s\S]*?margin-top: auto;[\s\S]*?border-top: 1px solid var\(--lz-line-faint\)/);
   expect(styles).toContain(".app-card > .card-warning:not(.is-jen-akce):not(.is-fact)");
   expect(material).toMatch(/\.recent-changes-sidebar > \.update-banner-group \.update-banner\s*{[\s\S]*?background: var\(--lz-white\)/);
