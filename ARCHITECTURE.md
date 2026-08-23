@@ -113,6 +113,12 @@ pojmenovaným lease používá a Launchpad jej injektuje do procesu; `.env`, she
 fallback ani root tabulka port znovu neurčují. Modul bez aplikace deklaruje
 `apps: []`, `tcp_port_policy.mode: none` a žádný TCP lease.
 
+Start/Open normalizuje child `NODE_ENV=development` a Doctor vyhodnocuje jen
+env soubory, které deklarovaný `dev_script` skutečně načte: obecné `.env` /
+`.env.local`, development varianty a případný explicitní `--mode`, `NODE_ENV`
+nebo `--env-file` i v odkazovaném package scriptu. Neaktivní test/build mode
+není runtime autorita dev procesu a sám aplikaci neblokuje.
+
 Organization vlastní pouze `module_port_pool`, tedy interval pro deterministické
 přidělení nového Module lease a kontrolu unikátnosti uvnitř své access hranice.
 Pole je součástí normalizovaného Organization read modelu. V aktuálním

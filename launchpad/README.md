@@ -357,6 +357,12 @@ Doctor navíc prohledá živý runtime source příslušného package a odmítne
 hard error jak číselnou kopii module lease, tak jiný číselný fallback napojený
 na `PORT` nebo listener env. Build, testy, fixtures, migrace, archivy, data a
 generované výstupy z této kontroly záměrně vynechává.
+Start/Open vždy spouští development task s `NODE_ENV=development`. Env gate
+proto kontroluje `.env`, `.env.local`, development varianty a navíc přesný
+mode/env-file zvolený v closure `dev_script` (`--mode`, `NODE_ENV`,
+`--env-file`). Neaktivní `.env.test` nebo build mode dev aplikaci neblokuje;
+jakmile jej ale dev script explicitně zvolí, platí pro něj stejný zákaz
+rezervovaných listener proměnných.
 
 `apps` je explicitní inventář runnable package souborů relativně ke kořeni
 Modulu. Neprázdný seznam má právě jeden `default_app`; `apps: []` pravdivě říká,

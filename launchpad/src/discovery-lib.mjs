@@ -526,10 +526,63 @@ const reservedRuntimeEnvNames = new Set([
   "LAZURIO_RUNTIME_LISTENERS_JSON",
 ]);
 
-function isRuntimeLoadedEnvFile(name) {
-  if (name === ".env" || name === ".env.local") return true;
-  if (!name.startsWith(".env.")) return false;
-  return ![".env.example", ".env.sample", ".env.template"].includes(name);
+function commandValues(command, expression) {
+  return [...command.matchAll(expression)]
+    .map((match) => match[1] ?? match[2] ?? match[3] ?? null)
+    .filter(Boolean);
+}
+
+function runtimeDevScriptCommands({ packageJson, runtime }) {
+  const scripts = packageJson?.scripts ?? {};
+  const pending = [runtime?.dev_script];
+  const visited = new Set();
+  const commands = [];
+  while (pending.length > 0) {
+    const scriptName = pending.shift();
+    if (typeof scriptName !== "string" || visited.has(scriptName)) continue;
+    visited.add(scriptName);
+    const command = scripts[scriptName];
+    if (typeof command !== "string") continue;
+    commands.push(command);
+    for (const referencedScript of commandValues(
+      command,
+      /(?:^|[\s"';&|()])(?:bun|npm|pnpm|yarn)\s+(?:run\s+)?([A-Za-z0-9][A-Za-z0-9:_-]*)/g,
+    )) {
+      if (typeof scripts[referencedScript] === "string") pending.push(referencedScript);
+    }
+  }
+  return commands;
+}
+
+export function runtimeLoadedEnvFileNames({ packageJson, runtime }) {
+  const names = new Set([".env", ".env.local"]);
+  const modes = new Set(["development"]);
+  for (const command of runtimeDevScriptCommands({ packageJson, runtime })) {
+    for (const mode of commandValues(
+      command,
+      /(?:^|[\s"';&|()])--mode(?:=|\s+)(?:"([^"]+)"|'([^']+)'|([^\s"';&|()]+))/g,
+    )) {
+      if (/^[A-Za-z0-9_-]+$/.test(mode)) modes.add(mode);
+    }
+    for (const mode of commandValues(
+      command,
+      /(?:^|[\s"';&|()])NODE_ENV\s*=\s*(?:"([^"]+)"|'([^']+)'|([A-Za-z0-9_-]+))/g,
+    )) {
+      if (/^[A-Za-z0-9_-]+$/.test(mode)) modes.add(mode);
+    }
+    for (const explicitPath of commandValues(
+      command,
+      /(?:^|[\s"';&|()])--env-file(?:=|\s+)(?:"([^"]+)"|'([^']+)'|([^\s"';&|()]+))/g,
+    )) {
+      const fileName = basename(explicitPath);
+      if (fileName.startsWith(".env")) names.add(fileName);
+    }
+  }
+  for (const mode of modes) {
+    names.add(`.env.${mode}`);
+    names.add(`.env.${mode}.local`);
+  }
+  return names;
 }
 
 function isReservedRuntimeEnvName(name) {
@@ -537,7 +590,12 @@ function isReservedRuntimeEnvName(name) {
     || /^LAZURIO_RUNTIME_LISTENER_[A-Z0-9_]+_(?:HOST|PORT)$/.test(name);
 }
 
-export async function runtimeEnvPortAuthorityIssues({ packageDirectory, packagePath }) {
+export async function runtimeEnvPortAuthorityIssues({
+  packageDirectory,
+  packagePath,
+  packageJson,
+  runtime,
+}) {
   let entries;
   try {
     entries = await readdir(packageDirectory, { withFileTypes: true });
@@ -546,8 +604,9 @@ export async function runtimeEnvPortAuthorityIssues({ packageDirectory, packageP
   }
 
   const issues = [];
+  const runtimeLoadedEnvFiles = runtimeLoadedEnvFileNames({ packageJson, runtime });
   for (const entry of entries) {
-    if (!entry.isFile() || !isRuntimeLoadedEnvFile(entry.name)) continue;
+    if (!entry.isFile() || !runtimeLoadedEnvFiles.has(entry.name)) continue;
     const absolutePath = join(packageDirectory, entry.name);
     let source;
     try {
@@ -1613,6 +1672,8 @@ export async function discoverLaunchpadApps(
         runtimeContractIssues.push(...await runtimeEnvPortAuthorityIssues({
           packageDirectory: dirname(absolutePackagePath),
           packagePath,
+          packageJson,
+          runtime: app,
         }));
         runtimeContractIssues.push(...await runtimeSourcePortAuthorityIssues({
           packageDirectory: dirname(absolutePackagePath),

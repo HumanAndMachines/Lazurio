@@ -199,6 +199,7 @@ test("runtime manager spustí, změří a zastaví managed aplikaci", async () =
   expect(healthy.pid).toBeNumber();
   const runtimeEnv = await (await fetch(`http://127.0.0.1:${port}/runtime-env`)).json();
   expect(runtimeEnv.organizationRoot).toBe(join(root, "organizations", "TestCompany"));
+  expect(runtimeEnv.nodeEnv).toBe("development");
   expect(runtimeEnv.astroDevBackground).toBe("1");
   expect(runtimeEnv.astroPreviewBackground).toBe("1");
 
@@ -3971,7 +3972,7 @@ async function createCompaniesWorkspaceFixture({
       "  fetch(request) {",
       "    const url = new URL(request.url);",
       "    if (url.pathname === '/health') return Response.json({ status: 'ok' });",
-      "    if (url.pathname === '/runtime-env') return Response.json({ organizationRoot: process.env.COMPANYASCODE_ORGANIZATION_ROOT ?? null, listeners: JSON.parse(process.env.LAZURIO_RUNTIME_LISTENERS_JSON ?? '[]'), astroDevBackground: process.env.ASTRO_DEV_BACKGROUND ?? null, astroPreviewBackground: process.env.ASTRO_PREVIEW_BACKGROUND ?? null });",
+      "    if (url.pathname === '/runtime-env') return Response.json({ organizationRoot: process.env.COMPANYASCODE_ORGANIZATION_ROOT ?? null, nodeEnv: process.env.NODE_ENV ?? null, listeners: JSON.parse(process.env.LAZURIO_RUNTIME_LISTENERS_JSON ?? '[]'), astroDevBackground: process.env.ASTRO_DEV_BACKGROUND ?? null, astroPreviewBackground: process.env.ASTRO_PREVIEW_BACKGROUND ?? null });",
       "    return new Response('ok');",
       "  },",
       "});",
