@@ -11,7 +11,10 @@ import {
   resolve,
   win32,
 } from "node:path";
-import { validateResidentManifest } from "./resident-manifest-lib.mjs";
+import {
+  RESIDENT_CHANNELS,
+  validateResidentManifest,
+} from "./resident-manifest-lib.mjs";
 
 export const LAZURIO_CLI_PROVENANCE_SCHEMA = "lazurio.cli.provenance.v1";
 export const LAZURIO_CLI_PRODUCT = "lazurio-cli";
@@ -20,6 +23,7 @@ const commitPattern = /^[0-9a-f]{40,64}$/u;
 const digestPattern = /^[0-9a-f]{64}$/u;
 const repositoryPattern = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,38}\/[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$/u;
 const versionPattern = /^[A-Za-z0-9][A-Za-z0-9.+-]*$/u;
+const residentBuildChannels = new Set(RESIDENT_CHANNELS);
 
 export function buildLazurioCliProvenance({
   root,
@@ -256,7 +260,7 @@ function validArtifact(artifact) {
     && !Array.isArray(artifact)
     && typeof artifact.id === "string"
     && typeof artifact.profile === "string"
-    && new Set(["candidate", "stable"]).has(artifact.build_channel)
+    && residentBuildChannels.has(artifact.build_channel)
     && /^(linux|darwin|windows)-(x64|arm64)$/u.test(artifact.target ?? "")
     && digestPattern.test(artifact.payload_digest ?? ""),
   );

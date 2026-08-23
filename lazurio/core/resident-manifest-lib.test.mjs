@@ -15,9 +15,9 @@ test("Resident path normalization remains fail-closed in Core", () => {
 test("complete Resident validator rejects partial identity-only manifests", () => {
   expect(validateResidentManifest({
     schema_version: "lazurio.resident.manifest.v1",
-    artifact_id: "lazurio-resident-workspace-0.2.0-nightly.7-darwin-arm64",
-    artifact_version: "0.2.0-nightly.7",
-    channel: "nightly",
+    artifact_id: "lazurio-resident-workspace-0.2.0-candidate.7-darwin-arm64",
+    artifact_version: "0.2.0-candidate.7",
+    channel: "candidate",
     profile: "workspace",
     target: { os: "darwin", arch: "arm64" },
     source: { repository: "HumanAndMachines/Lazurio", commit: "a".repeat(40) },
