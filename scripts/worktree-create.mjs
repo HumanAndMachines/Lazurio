@@ -404,7 +404,7 @@ async function main() {
     purpose: options.purpose ?? `Práce na plánu ${planCode} (${planBasename}).`,
     conversation_origin: {
       surface: options.surface ?? "claude-code",
-      agent_label: options["agent-label"] ?? "Worker Agent",
+      agent_label: options["agent-label"] ?? "Task Agent",
       thread_id: threadId,
       thread_locator_status: threadId ? "captured" : "unavailable",
       local_only: true,

@@ -99,7 +99,7 @@ frameworku a k práci v Lazuriu nejsou potřeba.
   se s ním zachází stejně jako s Kolegou — má vlastní seat, identitu, Mašinu
   a pravomoce; žádná zvláštní pozice „člověk" neexistuje. Jediná osobní
   výjimka: Buddyho může mít pouze lidský Principál.
-- **Worker Agent** — to jsi ty: nástrojová pracovní relace (execution
+- **Task Agent** — to jsi ty: nástrojová pracovní relace (execution
   session — Claude Code, Codex, Cursor…), která pro svého Principála tvoří
   Drafty. Nemá žádné vlastní pravomoce a žádné nezíská promptem; „Agent" je
   přípustná hovorová zkratka.
@@ -186,10 +186,10 @@ a promítáš ho do pravidel a zvyklostí, aby Agenti dělali čím dál lepší
 Personalspace je výhradní intimní prostor právě jednoho Principála a jeho
 volitelného Buddyho (decision 0091 v `manual/decision-register.md`). Cizí
 Personalspace se na
-mašinu nemountuje, Launchpad ho nematerializuje a Worker Agent ho nečte.
+mašinu nemountuje, Launchpad ho nematerializuje a Task Agent ho nečte.
 Spolupráce s Kolegy a AI Kolegy patří do Organizace nebo do vědomě
 exportovaného Draftu. Principál má na své mašině plná práva; procesní hranici
-Worker Agentů drží sandbox jejich harnessu a pravidla práce, ne lokální
+Task Agentů drží sandbox jejich harnessu a pravidla práce, ne lokální
 per-modulový IAM.
 
 Má-li Principál **hostovaného Buddyho**, sahá jeho personalspace i mimo tuhle
@@ -207,7 +207,7 @@ Nepracuj v konkrétní firmě z rootu. Nejdřív vyber organizaci v `organizatio
 
 ## Chat-first vstup do Launchpadu pro App Agenty
 
-Když **Kolega přímo zahájí nový chat s Worker Agentem v Codex/ChatGPT App nebo
+Když **Kolega přímo zahájí nový chat s Task Agentem v Codex/ChatGPT App nebo
 Claude App**, Agent po minimálním určení scope otevře jako svůj první viditelný
 pracovní krok Launchpad GEN3 ve vestavěném browser povrchu dané App. Otevření
 provede jednou pro nový chat/task, ne znovu při každé zprávě, a pokud už správná
@@ -304,10 +304,10 @@ Root upravuj jen když se mění:
 - Nemíchej cílový a aktuální stav: `ARCHITECTURE.md` říká, kam systém směřuje;
   schémata, configy a kód dokazují, co je právě nasazené; `AGENTS.md` říká, jak
   v daném scope pracuje Agent. Výslovně evidovaná migrace smí dočasně držet
-  nasazený stav za cílem. `Worker Agent` a `Agent` označují tutéž roli, nikoli
-  dvě persony nebo runtime profily. Dokud founder samostatně neuzavře finální
-  podobu názvu, synchronizovaný provozní kontrakt smí používat delší variantu a
-  nové texty mohou preferovat kratší `Agent`.
+  nasazený stav za cílem. `Task Agent` je kanonický aktivní název nástrojové
+  pracovní relace; `Agent` je přípustná hovorová zkratka, nikoli druhá persona
+  nebo runtime profil. Strojový enum je `task_agent`; starší enum není aktivní
+  alias a v historických auditních záznamech zůstává pouze jako provenience.
 - Founder rozhodnutí 2026-07-02 drží formální decision records 0039–0046
   v maintainer source of truth; lokální shrnutí drží
   `manual/decision-register.md`. Historické drafty jsou superseded.

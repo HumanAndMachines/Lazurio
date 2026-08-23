@@ -7,8 +7,8 @@
 | Opakovatelný postup | skill | nový runtime Agenta |
 | Instalace pro další lidi | plugin se skilly | kopírování složek mezi repy |
 | Živá data a řízené akce | MCP/CLI/API + skill | instrukce s credentialy |
-| Stavový tool loop, handoffy, trace | Worker Agent runtime | neomezená autonomie |
-| Organizační AI persona | AI Kolega / AI Architekt proposal | Worker Agent vydávající se za Kolegu |
+| Stavový tool loop, handoffy, trace | Task Agent runtime | neomezená autonomie |
+| Organizační AI persona | AI Kolega / AI Architekt proposal | Task Agent vydávající se za Kolegu |
 
 Codex umí skills načítat repo-scoped z `.agents/skills`. Pro distribuci více
 skillů nebo skillu s konektorem je vhodný plugin. OpenAI Agents SDK podporuje

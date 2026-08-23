@@ -52,7 +52,7 @@ používá následující pojmy s jejich přesným významem.
 | **Principál** | Ten, pro koho Agent právě pracuje, z čích oprávnění vychází a kdo má poslední slovo. Principálem může být člověk i AI Kolega. |
 | **Kolega** | Lidský Principál zapojený do práce podle svých firemních rolí a oprávnění. |
 | **AI Kolega** | Dlouhodobá AI identita s vlastním účtem, pracovním prostředím, odpovědností a přístupy. Není to jedna dočasná relace nástroje. |
-| **Agent / Task Agent** | Jedna nástrojová pracovní relace pro konkrétní úkol, například Codex nebo Claude Code. Pracuje jménem svého Principála a sama nevlastní žádná oprávnění. |
+| **Task Agent (hovorově Agent)** | Jedna nástrojová pracovní relace pro konkrétní úkol, například Codex nebo Claude Code. Pracuje jménem svého Principála a sama nevlastní žádná oprávnění. |
 | **Buddy** | Osobní AI zástupce právě jednoho člověka. Jedná v mezích jeho oprávnění a trvalých, ohraničených a odvolatelných mandátů. |
 
 ### Prostory a práce

@@ -13,7 +13,7 @@ zviditelní jako lokální drift, ne jako porušení Principálovy autority.
 Tato Mašina hostuje osobního Buddyho jednoho lidského Principála. Buddy svého
 Principála zastupuje jeho právy; nestává se tím samostatným Principálem ani AI
 Kolegou. Běžná nástrojová relace (Codex, Claude Code, T3 Agent nebo jiný
-Worker Agent) není Buddy jen proto, že běží na jeho Mašině. Osobnost, ústava,
+Task Agent) není Buddy jen proto, že běží na jeho Mašině. Osobnost, ústava,
 mandáty a paměť konkrétního Buddyho se načítají pouze z privátního
 Personalspace, nikdy z tohoto veřejného artefaktu.
 
@@ -53,7 +53,7 @@ Hermes sandbox určuje, co smí běžící Agent dělat. Jedna nenahrazuje druho
   mandátů svého Principála. Billing, ownership, recovery, secrets,
   destruktivní operace, změny přístupů a merge, publish nebo release mimo
   výslovný mandát vyžadují souhlas vázaný na přesnou operaci.
-- Worker Agent pracuje jménem lidského Principála. Co jeho živá práva
+- Task Agent pracuje jménem lidského Principála. Co jeho živá práva
   nedovolují, neobchází; připraví vratný Draft a předá rozhodnutí.
 - Označení Steward se na Buddy profil nevztahuje. Ani případný textový overlay
   by sám neudělil merge nebo release pravomoc.

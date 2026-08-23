@@ -1,6 +1,6 @@
 # Hostovaný Buddy na VPS — co o něm musí vědět agent v rootu
 
-> **Pro koho to je.** Worker Agent (Codex, Claude Code, Cursor…), kterého
+> **Pro koho to je.** Task Agent (Codex, Claude Code, Cursor…), kterého
 > Principál pustil z Lazurio rootu na svém počítači. Tenhle dokument
 > odpovídá na dvě otázky: *má můj Principál hostovaného Buddyho?* a *co platí,
 > když se práce dotkne jeho VPS?*

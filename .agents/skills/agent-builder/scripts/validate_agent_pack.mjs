@@ -83,7 +83,7 @@ function validatePack(pack, errors) {
       errors.push(`agent-pack.json: ${field} must be a non-empty string or JSON object`);
     }
   }
-  if (!["worker_agent", "ai_colleague_proposal"].includes(pack.agent_kind)) {
+  if (!["task_agent", "ai_colleague_proposal"].includes(pack.agent_kind)) {
     errors.push("agent-pack.json: invalid agent_kind");
   }
   if (!isPlainObject(pack.scope)) {

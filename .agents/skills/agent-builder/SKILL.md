@@ -15,7 +15,7 @@ Nejdřív rozliš:
 
 - **Skill** — opakovatelný postup bez vlastního runtime; preferovaný první krok.
 - **Plugin** — distribuční balíček skillů a případných MCP nástrojů pro další lidi.
-- **Worker Agent** — řízený runtime s nástroji, evaly a trace; nemá vlastní
+- **Task Agent** — řízený runtime s nástroji, evaly a trace; nemá vlastní
   pravomoce a pracuje jménem Principála.
 - **AI Kolega / AI Architekt** — organizační persona se seatem, vlastníkem,
   governance a recovery kontraktem. Tento skill smí vytvořit jen návrh; nesmí

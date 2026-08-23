@@ -17,7 +17,7 @@ nikoli nehotové rozhodnutí.
 
 `access`, `approvals`, `evals`, `observability`, `cost_guardrails` a `release`
 jsou neprázdné JSON objekty: `null`, primitivní hodnota ani `{}` není platná
-governance definice. `agent_kind` je `worker_agent` nebo
+governance definice. `agent_kind` je `task_agent` nebo
 `ai_colleague_proposal`; druhý typ nesmí mít `release.activation` nastavené na
 `automatic`.
 

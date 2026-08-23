@@ -1,7 +1,7 @@
 # Napojení na externí aplikace: lokální MCP a CLI standard
 
 Tento manuál je kanonický standard Lazurio pro připojování
-Worker Agentů a Kolegů na externí aplikace (Gmail, Slack, Jira, Canva…).
+Task Agentů a Kolegů na externí aplikace (Gmail, Slack, Jira, Canva…).
 Definuje závazné defaultní chování, žebříček výběru integrace, kde žijí
 definice a kde přihlašovací artefakty. Harness-specifické detaily drží
 [codex-manual-mcp-integrations.md](codex-manual-mcp-integrations.md) pro
