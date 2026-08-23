@@ -302,11 +302,11 @@ test("Doctor treats Organization port policy violations as hard errors", () => {
     warnings: [],
     apps: [],
     organizations: [],
-    port_policy_issues: ["module/lazurio.module.json: lease main port 5600 leží mimo Organization pool 5400-5499"],
+    port_policy_issues: ["Example/demo má port lease, ale jeho Organizace nemá module_port_pool"],
   });
   const check = report.checks.find((item) => item.id === "launchpad.port_ownership");
   expect(check?.status).toBe("fail");
-  expect(check?.details.join("\n")).toContain("mimo Organization pool");
+  expect(check?.details.join("\n")).toContain("nemá module_port_pool");
 });
 
 test("Doctor warns on local cross-Organization overlap without remapping ports", () => {

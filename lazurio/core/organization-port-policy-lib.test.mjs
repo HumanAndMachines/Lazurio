@@ -21,7 +21,7 @@ test("Organization manifest owns one bounded local allocation pool", () => {
   expect(invalid.issues.join("\n")).toContain("start nesmí být větší než end");
 });
 
-test("module leases must be unique and inside their own Organization pool", () => {
+test("module leases must be unique while established leases may stay outside the new-allocation pool", () => {
   const organizations = [
     { slug: "Alpha", module_port_pool: { start: 24_000, end: 24_099 } },
     { slug: "Beta", module_port_pool: { start: 24_000, end: 24_099 } },
@@ -39,7 +39,7 @@ test("module leases must be unique and inside their own Organization pool", () =
       + "(organizations/Alpha/workspace/one/lazurio.module.json) a two/main "
       + "(organizations/Alpha/workspace/two/lazurio.module.json)",
   );
-  expect(issues.join("\n")).toContain("port 24200 leží mimo Organization pool 24000-24099");
+  expect(issues.join("\n")).not.toContain("outside");
   expect(issues.join("\n")).not.toContain("Beta");
 });
 

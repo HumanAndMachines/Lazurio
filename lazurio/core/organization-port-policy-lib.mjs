@@ -67,19 +67,12 @@ export function validateModuleLeasesAgainstOrganizationPools({ modules, organiza
     // deliberate non-Organization scope rather than an escape hatch.
     if (!organization) continue;
     const pool = organization?.module_port_pool;
-    const source = organization?.module_port_pool_source
-      ?? `${organization?.path ?? module.company}/Organization manifest#module_port_pool`;
     if (!pool) {
       issues.push(`${moduleKey} má port lease, ale jeho Organizace nemá module_port_pool`);
       continue;
     }
 
     for (const lease of leases) {
-      if (lease.port < pool.start || lease.port > pool.end) {
-        issues.push(
-          `${module.module_path}: lease ${lease.id} port ${lease.port} leží mimo Organization pool ${pool.start}-${pool.end} (${source})`,
-        );
-      }
       const ownerKey = `${module.company}/${lease.port}`;
       const owner = owners.get(ownerKey);
       if (owner && (

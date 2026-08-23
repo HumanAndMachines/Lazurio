@@ -484,9 +484,10 @@ Kontrolní pravidla:
   lease. Dnes jej nese `company.gen3.json`, cílový
   `lazurio.organization.json` převezme stejné normalizované pole; root-wide
   registry se nezakládá. Chybějící module lease, dvě Module ID na stejném portu
-  uvnitř jedné Organization a lease mimo pool jsou hard Doctor failure a
-  blokují Start/Open. Legacy port mimo pool vyžaduje vědomou volbu kompatibilního
-  poolu nebo koordinovanou migraci všech návazností.
+  uvnitř jedné Organization a drift referencí jsou hard Doctor failure a
+  blokují Start/Open. Zavedený stabilní lease smí zůstat mimo pool určený pro
+  nové alokace; změna takového portu je vždy koordinovaná migrace všech
+  návazností.
 - Na portu modulu běží nejvýše jedna jeho verze. Start/Open jinou verzi stejného
   Modulu nahradí automaticky. Známý vlastník jiné Organizace vyžaduje potvrzení
   konkrétní aplikace a vypnutí jejího desired runtime; port se nepřemapuje.
@@ -513,7 +514,7 @@ Povinný výsledek pro klientský handoff:
 | Git root | čistý root checkout, žádné Organization submoduly |
 | Mounts | Organization mountpoint je Git checkout |
 | Discovery | klientská Organization je objevená; nezaložený modul je `planned_slot` bez repo URL, zatímco `missing_access` má vždy vlastní next action |
-| Runtime | žádný chybějící `lazurio.module.v1`, `invalid_manifest`, inline/dynamický port, cross-module konflikt uvnitř jedné Organization, drift lease referencí ani lease mimo vlastní `module_port_pool`; nové lease jsou přidělené z Organization poolu a případná změna stabilního portu koordinuje ingress/VPN/hosting návaznosti. Překryv poolů nebo leases mezi namountovanými Organizacemi je viditelné varování a skutečný live takeover vyžaduje potvrzení konkrétní aplikace. |
+| Runtime | žádný chybějící `lazurio.module.v1`, `invalid_manifest`, inline/dynamický port, cross-module konflikt uvnitř jedné Organization ani drift lease referencí; nové lease jsou přidělené z Organization poolu, zavedené lease se automaticky nepřečíslují a případná změna stabilního portu koordinuje ingress/VPN/hosting návaznosti. Překryv poolů nebo leases mezi namountovanými Organizacemi je viditelné varování a skutečný live takeover vyžaduje potvrzení konkrétní aplikace. |
 | Support loop | Doctor/Launchpad hlášky jsou `ok` nebo explicitně akceptované planned/stopped stavy |
 
 Template gate pro první instalaci:
