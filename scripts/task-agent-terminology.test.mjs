@@ -12,6 +12,7 @@ describe("Task Agent terminology", () => {
         "git",
         "grep",
         "-nIi",
+        "-z",
         "-E",
         legacyPattern,
         "--",
@@ -29,10 +30,11 @@ describe("Task Agent terminology", () => {
       .trim()
       .split("\n")
       .filter(Boolean)
-      .map((line) => line.match(/^([^:]+):(\d+):(.*)$/))
-      .map((match) => {
-        expect(match).not.toBeNull();
-        return { path: match[1], text: match[3] };
+      .map((line) => line.replace(/\r$/, "").split("\0"))
+      .map((fields) => {
+        expect(fields).toHaveLength(3);
+        expect(fields[1]).toMatch(/^\d+$/);
+        return { path: fields[0], text: fields[2] };
       });
 
     expect(matches).toHaveLength(historicalDecisionIds.size);
