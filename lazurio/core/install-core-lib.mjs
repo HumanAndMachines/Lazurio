@@ -3,7 +3,8 @@ import { lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { join, resolve, win32 } from "node:path";
 
 import {
-  normalizeComparableCliPath,
+  buildLazurioCliProvenance,
+  LAZURIO_SOURCE_REPOSITORY,
   resolveTrustedGitExecutable,
   resolveTrustedGitHubCliExecutable,
   sanitizedGitEnvironment,
@@ -125,8 +126,6 @@ export function inspectLazurioInstallation({
     platform,
     environment,
     gitExecutable,
-    runCommand,
-    commandCwd,
   });
   steps.push(rootObservation.step);
 
@@ -218,8 +217,6 @@ function inspectRootLayout(rawRoot, {
   platform = process.platform,
   environment = process.env,
   gitExecutable = null,
-  runCommand = runCommandSync,
-  commandCwd = trustedCommandCwd(platform, environment),
 } = {}) {
   const selectedPath = resolve(rawRoot);
   let marker;
@@ -269,8 +266,6 @@ function inspectRootLayout(rawRoot, {
       platform,
       environment,
       gitExecutable,
-      runCommand,
-      commandCwd,
     })
   ) {
     return rootResult(
@@ -359,19 +354,18 @@ function validGitCheckout({
   platform,
   environment,
   gitExecutable,
-  runCommand,
-  commandCwd,
 }) {
   if (!gitExecutable) return false;
-  const result = runCommand({
-    executable: gitExecutable,
-    args: ["-C", sourceRoot, "rev-parse", "--show-toplevel"],
+  const provenance = buildLazurioCliProvenance({
+    root: sourceRoot,
+    platform,
     environment: sanitizedGitEnvironment(environment, platform),
-    cwd: commandCwd,
+    gitExecutable,
   });
-  if (result?.status !== 0 || typeof result.stdout !== "string") return false;
-  return normalizeComparableCliPath(result.stdout.trim(), platform)
-    === normalizeComparableCliPath(sourceRoot, platform);
+  return provenance.status === "resolved"
+    && provenance.root_kind === "source"
+    && provenance.source.repository?.toLowerCase()
+    === LAZURIO_SOURCE_REPOSITORY.toLowerCase();
 }
 
 function runCommandSync({ executable, args, environment, cwd }) {
