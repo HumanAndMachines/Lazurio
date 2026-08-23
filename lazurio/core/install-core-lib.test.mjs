@@ -1,6 +1,6 @@
 import { afterAll, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -273,6 +273,27 @@ test("generated Root requires the canonical Lazurio source repository", async ()
   expect(rootStep(generated, { gitExecutable })).toMatchObject({
     status: "completed",
     reason: "generated_root_ready",
+  });
+});
+
+test("generated Root rejects an intermediate source symlink outside the Root", async () => {
+  const parent = await trackedTempRoot("lazurio-install-source-boundary-");
+  const generated = join(parent, "generated");
+  const external = join(parent, "external");
+  const gitExecutable = resolveTrustedGitExecutable();
+  expect(gitExecutable).not.toBeNull();
+
+  await createSourceCheckout(external, gitExecutable);
+  await writeLaunchpadManifest(generated);
+  await symlink(
+    join(external, "development"),
+    join(generated, "development"),
+    process.platform === "win32" ? "junction" : "dir",
+  );
+
+  expect(rootStep(generated, { gitExecutable })).toMatchObject({
+    status: "action_required",
+    reason: "development_source_missing",
   });
 });
 
