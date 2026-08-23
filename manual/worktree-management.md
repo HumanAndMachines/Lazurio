@@ -131,8 +131,15 @@ plan-owned worktree a primary opraví bez ztráty historie.
 Bezprostředně před každým pushem PR branche agent spustí v edit worktree:
 
 ```sh
+# Pouze pokud vlastní root package.json repa deklaruje tento script:
 bun run pr:preflight
+# Nested repo bez vlastního scriptu; cwd zůstává jeho edit worktree:
+bun <Lazurio-root>/scripts/pr-preflight.mjs
 ```
+
+Na automatické hledání nadřazeného `package.json` se nespoléhej. V nested
+repozitáři by `bun run` mohl bez chyby zkontrolovat Lazurio root místo právě
+editovaného modulu.
 
 Gate vyžaduje clean feature branch a ověří, že fresh `origin/main` je předkem
 exact `HEAD`. Pokud ne, agent udělá `git rebase origin/main`, zopakuje všechny

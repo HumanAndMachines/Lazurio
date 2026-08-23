@@ -77,9 +77,13 @@ autoritu.
    scope, rebase nebo zásadním review nálezu srovnej se skutečným HEADem a
    Mission Control plánem; samotný seznam souborů, commitů nebo testů není
    dokončený handoff.
-8. Před každým pushem PR branche spusť v edit worktree `bun run
-   pr:preflight`. Gate fetchne `origin/main`, vyžaduje clean commit a čerstvý
-   main jako předka HEAD. Pokud neprojde, udělej `git rebase origin/main`,
+8. Před každým pushem PR branche spusť preflight s cwd v edit worktree.
+   `bun run pr:preflight` použij jen tehdy, když tento script deklaruje vlastní
+   root `package.json` editovaného repa. U nested repa bez něj spusť přímo
+   `bun <Lazurio-root>/scripts/pr-preflight.mjs`; Bun jinak může tiše vystoupat
+   k nadřazenému `package.json` a zkontrolovat jiné repo. Gate fetchne
+   `origin/main`, vyžaduje clean commit a čerstvý main jako předka HEAD. Pokud
+   neprojde, udělej `git rebase origin/main`,
    zopakuj validace a gate; přepsanou branch pushni pouze příkazem s exact
    `--force-with-lease`, který gate vypíše. Po pushi ověř na GitHubu PR base
    `main`, exact head, mergeability a checks.
@@ -147,7 +151,10 @@ bun run worktrees:check
 # pouze před taskem z primárního main checkoutu
 bun run doctor:task
 # před každým PR pushem z edit worktree
+# pokud vlastní root package.json deklaruje pr:preflight:
 bun run pr:preflight
+# jinak, stále s cwd v edit worktree:
+bun <Lazurio-root>/scripts/pr-preflight.mjs
 git status --short --branch
 git -C <worktree> status --short --branch
 jq '{conversation_origin, recovery_handoff}' <sidecar.worktree.json>
