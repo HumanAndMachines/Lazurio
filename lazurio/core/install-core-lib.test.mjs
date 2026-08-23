@@ -1,4 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,6 +13,7 @@ import {
   installReasonCodes,
   isValidLazurioInstallReport,
 } from "./install-core-lib.mjs";
+import { resolveTrustedGitExecutable } from "./cli-provenance-lib.mjs";
 
 const tempRoots = [];
 
@@ -196,6 +198,59 @@ test("real Root probe distinguishes missing, legacy and generated layouts", asyn
   });
 });
 
+test("ambient Git repository overrides cannot validate a bogus development checkout", async () => {
+  const parent = await trackedTempRoot("lazurio-install-git-environment-");
+  const ambientRepository = join(parent, "ambient-repository");
+  const generated = join(parent, "generated");
+  const sourceRoot = join(generated, "development", "Lazurio");
+  const gitExecutable = resolveTrustedGitExecutable();
+  expect(gitExecutable).not.toBeNull();
+
+  await mkdir(ambientRepository, { recursive: true });
+  const init = spawnSync(gitExecutable, ["init"], {
+    cwd: ambientRepository,
+    encoding: "utf8",
+    env: environmentWithoutGitOverrides(),
+    shell: false,
+    windowsHide: true,
+  });
+  expect(init.status, init.stderr).toBe(0);
+
+  await mkdir(sourceRoot, { recursive: true });
+  await writeFile(join(sourceRoot, ".git"), "not a git directory\n", "utf8");
+  await writeLaunchpadManifest(generated);
+  const observedGitEnvironments = [];
+  const poisonedEnvironment = {
+    ...environmentWithoutGitOverrides(),
+    GIT_DIR: join(ambientRepository, ".git"),
+  };
+  const report = inspectLazurioInstallation({
+    root: generated,
+    environment: poisonedEnvironment,
+    resolveGit: () => gitExecutable,
+    resolveGitHubCli: () => null,
+    runCommand: ({ executable, args, environment, cwd }) => {
+      if (args.includes("rev-parse")) observedGitEnvironments.push(environment);
+      return spawnSync(executable, args, {
+        cwd,
+        encoding: "utf8",
+        env: environment,
+        shell: false,
+        stdio: ["ignore", "pipe", "ignore"],
+        timeout: 10_000,
+        windowsHide: true,
+      });
+    },
+  });
+
+  expect(report.steps.find((step) => step.id === "root")).toMatchObject({
+    status: "action_required",
+    reason: "development_source_missing",
+  });
+  expect(observedGitEnvironments).toHaveLength(1);
+  expect(observedGitEnvironments[0].GIT_DIR).toBeUndefined();
+});
+
 function fixtureReport() {
   return inspectLazurioInstallation({
     root: null,
@@ -239,4 +294,10 @@ async function trackedTempRoot(prefix) {
   const root = await mkdtemp(join(tmpdir(), prefix));
   tempRoots.push(root);
   return root;
+}
+
+function environmentWithoutGitOverrides() {
+  return Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")),
+  );
 }
