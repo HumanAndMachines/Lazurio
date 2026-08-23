@@ -965,6 +965,16 @@ test("UI separates physical Organization/Workspace/Productionspace and prepares 
   expect(js).toContain("function workspaceModuleCard");
   expect(js).toContain("function workspaceModulesInView");
   expect(js).toContain("Otevřít složku");
+  expect(js).toContain('const availabilityClass = opensApp ? "is-available" : "is-unavailable"');
+  expect(js).toContain('folderAction.classList.add("btn", "btn-ghost", "btn-sm", "manifest-module-folder-action")');
+  expect(css).toContain(".apps-grid > .manifest-module-card.is-unavailable");
+  const unavailableModuleCss = css.slice(
+    css.indexOf(".apps-grid > .manifest-module-card.is-unavailable {"),
+    css.indexOf(".manifest-module-folder-action"),
+  );
+  expect(unavailableModuleCss).toContain("background: var(--lz-gray-50)");
+  expect(unavailableModuleCss).toContain("filter: grayscale(1)");
+  expect(unavailableModuleCss).toContain("outline-color: var(--line-strong)");
   expect(js).toContain("function openWorkspaceModuleFolder");
   expect(js).toContain('fetchJson("/api/modules/open-folder"');
   expect(js).toContain("function productionspaceSectionNode");

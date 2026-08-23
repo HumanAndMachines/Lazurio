@@ -2630,8 +2630,10 @@ function workspaceModuleCard(module, companySlug, options = {}) {
   const selected = state.selectedReadonlyDetail?.id === detail.id;
   const opensApp = Boolean(detail.default_app);
   const openable = opensApp || detail.can_open_folder;
+  const availabilityClass = opensApp ? "is-available" : "is-unavailable";
+  const interactionClass = openable ? "is-openable" : "is-readonly";
   const card = document.createElement("article");
-  card.className = `app-card system-card manifest-module-card ${openable ? "is-openable" : "is-readonly is-unavailable"} ${selected ? "selected" : ""}`.trim();
+  card.className = `app-card system-card manifest-module-card ${availabilityClass} ${interactionClass} ${selected ? "selected" : ""}`.trim();
   card.style.setProperty("--app-accent", appIconAccent(appIconKey(detail)));
   card.style.setProperty("--app-focus-accent", appIconFocusAccent(appIconKey(detail)));
   card.dataset.readonlyDetailId = detail.id;
@@ -2670,7 +2672,7 @@ function workspaceModuleCard(module, companySlug, options = {}) {
       () => openWorkspaceModuleFolder(detail),
       state.pendingAction === `${detail.id}:open-folder`,
     );
-    folderAction.classList.add("btn", "btn-ghost", "manifest-module-folder-action");
+    folderAction.classList.add("btn", "btn-ghost", "btn-sm", "manifest-module-folder-action");
     card.append(folderAction);
   }
   card.addEventListener("click", (event) => {
