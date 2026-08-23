@@ -126,23 +126,27 @@ Je to jedna sdílená vývojová dílna pro konkrétní Team:
 - různé Team Workspaces jsou od sebe oddělené;
 - individuální izolaci poskytne jednočlenný Team Workspace;
 - uvnitř běží T3 Code, nástroje Agentů, Launchpad, checkouty a worktrees;
-- řídicí infrastruktura, klíče poskytovatele, VPN sidecar a HTTPS ingress
+- řídicí infrastruktura, klíče poskytovatele, Tailscale/VPN sidecar a HTTPS ingress
   zůstávají mimo pracovní prostředí.
 
-Supervisor udržuje T3 Code a Launchpad. Vývojové procesy Modulů spouští a
+Supervisor udržuje pouze T3 Code a Launchpad. Vývojové procesy Modulů spouští a
 zastavuje Launchpad. Dashboard pouze zpřístupňuje vstupy pracovního prostoru;
 procesy Modulů neřídí. Per-module kontejnery, Docker-in-Docker a další
 orchestrátor nejsou součástí tohoto modelu.
 
-Hosted Team Workspace je privátní vývojové prostředí, ne produkce. Hostovaný
-odkaz na aplikaci vede přes autentizovaný HTTPS/WSS ingress; interní port
-Modulu se veřejně nevystavuje. Produkční aplikace se v Dashboardu mohou objevit
-jen z ověřeného katalogu nasazení, ne ze stavu vývojového Workspace.
+Hosted Team Workspace je privátní vývojové prostředí, ne produkční nasazení.
+Hostovaný odkaz na aplikaci vede přes autentizovaný HTTPS/WSS ingress; interní
+port Modulu se veřejně nevystavuje. Produkční aplikace se v Dashboardu mohou
+objevit jen z ověřeného katalogu produkčních nasazení, nikdy ze seznamu
+vývojových služeb Workspace.
 
 ## Runtime Modulu a porty
 
 Port je součást verzovaného kontraktu Modulu. „Lease“ v tomto kontextu znamená
 pojmenovanou rezervaci konkrétního listeneru.
+
+`lazurio.runtime.v1` popisuje vývojový proces pro Launchpad a Doctor: příkaz,
+listenery a health check. Není to kontrakt produkčního nasazení.
 
 | Vrstva | Co vlastní |
 | --- | --- |
@@ -211,11 +215,12 @@ Přesné rozhraní drží
 ## Produkce je oddělený systém
 
 Vývojová aplikace v Launchpadu ani Hosted Team Workspace není produkční
-deployment. Produkční cesta začíná chráněným source commitem nebo tagem,
-vytvoří reprodukovatelný immutable artefakt a spustí jej v izolovaném runtime.
+nasazení. Produkční cesta začíná chráněným source commitem nebo tagem, vytvoří
+reprodukovatelný neměnný (immutable) artefakt a spustí jej v izolovaném
+produkčním runtime.
 
-Produkce musí samostatně určit ingress (`public`, `authenticated` nebo
-`internal`), autentizaci a autorizaci aplikace, secrets, data, zálohy,
+Produkce musí samostatně určit ingress (`public | authenticated | internal`),
+autentizaci a autorizaci aplikace, secrets, data, zálohy,
 rollback a dohled. Neobsahuje T3 Code, Codex, Launchpad, dev checkouty
 ani worktrees. Konkrétní produkční topologie vyžaduje vlastní kontrakt.
 
