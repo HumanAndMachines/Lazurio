@@ -293,6 +293,44 @@
           "path": "launchpad/src/apps-response-cache-lib.mjs"
         }
       ]
+    },
+    {
+      "id": "issue-2026-08-23-001",
+      "title": "Dodat sdílený Knowledgebase editor do Lazurio rootu",
+      "status": "implementation_planning_required",
+      "severity": "medium",
+      "owner": "Lazurio shared editor maintainer",
+      "created_at": "2026-08-23",
+      "updated_at": "2026-08-23",
+      "tags": [
+        "launchpad",
+        "knowledgebase",
+        "editor",
+        "shared-component",
+        "runtime"
+      ],
+      "question": "Jak dodat jeden obecný sdílený Knowledgebase editor do Lazurio rootu a převést na něj moduly bez kopírování rozdílných Organization-local implementací?",
+      "impact": "Hlavní Knowledgebase aplikace běží správně v read-only režimu, ale volitelný lokální editor nelze v Organizacích bez starší vlastní kopie spustit. Modulové manifesty už mohou držet jeho budoucí samostatný port, listener však zůstává vypnutý, dokud root neposkytne sdílenou implementaci.",
+      "diagnosis": "KnowledgebaseTemplate PR #7 záměrně ukotvil resolver v Lazurio rootu a editor rollout ponechal jako samostatný follow-up. Root dnes neobsahuje `launchpad/components/editor/v2`; několik Organizací má historické v1 kopie, které se mezi sebou liší a nejsou bezpečným kanonickým zdrojem. Smoke test Lokreative na portu 24401 proto ověřil hlavní aplikaci, ale editor na 24402 skončil na chybějícím sdíleném modulu.",
+      "next_action": "Připravit úzký samostatný návrh a PR pro obecný editor v2 v rootu. Nejprve zvolit minimální společný kontrakt a migrační postup pro staré v1 kopie; org-specific branding, oprávnění ani business logiku do sdílené komponenty nepřenášet. Tento follow-up nemíchat do rollout PRů statických portů.",
+      "acceptance_criteria": [
+        "Lazurio root poskytuje jeden obecný sdílený editor v2 na stabilní dokumentované cestě.",
+        "Knowledgebase v2 resolver a reálný editor smoke test projdou v Organizaci bez vlastní kopie editoru.",
+        "Je jasně popsané, zda a jak se odstraní nebo převedou historické v1 kopie v Organizacích.",
+        "Sdílená implementace neobsahuje Organization-specific branding, přístupová pravidla ani business logiku.",
+        "Editor naslouchá pouze na svém trackovaném lease; případná `LAZURIO_RUNTIME_*` injekce se přijme jen při přesné shodě.",
+        "Když editor chybí nebo selže, hlavní Knowledgebase zůstane zdravá a dostupná v read-only režimu."
+      ],
+      "links": [
+        {
+          "label": "KnowledgebaseTemplate editor resolver PR #7",
+          "url": "https://github.com/TemplatesRozjedeme-ai/KnowledgebaseTemplate/pull/7"
+        },
+        {
+          "label": "Cílová root cesta sdíleného editoru",
+          "path": "launchpad/components/editor/v2"
+        }
+      ]
     }
   ]
 }
