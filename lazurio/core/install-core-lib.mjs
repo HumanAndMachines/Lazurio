@@ -257,9 +257,11 @@ function inspectRootLayout(rawRoot, {
     return rootResult(canonicalRoot, "legacy_git_root", "action_required", "legacy_git_root_detected");
   }
 
-  const sourceRoot = join(canonicalRoot, "development", "Lazurio");
+  const developmentRoot = join(canonicalRoot, "development");
+  const sourceRoot = join(developmentRoot, "Lazurio");
   if (
-    !safeDirectory(sourceRoot)
+    !safeDirectory(developmentRoot)
+    || !safeDirectory(sourceRoot)
     || !safeEntry(join(sourceRoot, ".git"))
     || !validGitCheckout({
       sourceRoot,
