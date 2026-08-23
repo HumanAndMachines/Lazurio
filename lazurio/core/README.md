@@ -19,6 +19,9 @@ cestu kořene Modulu; katalogový slug ani UI pořadí nejsou identita.
 běžící Server instance. Jediný deterministický digest runtime zdrojů je
 install generation pro source checkout i directory-only instalaci; Server jej
 zmrazí při bootu a launcher smí znovu použít jen exact compatible identitu.
+`cli-provenance-lib.mjs` je jediný vlastník rozlišení development Git checkoutu
+a immutable Resident instalace. Smí číst pouze lokální Git metadata nebo
+`lazurio.resident.json`; současný výskyt obou markerů je konflikt, ne fallback.
 `ui_exposure` zůstává pouze prezentační policy; nevytváří identitu resource ani
 access autoritu. Další doménové vrstvy se přesunují samostatnými PR až nad
 zeleným parity baseline; fyzický přesun souboru sám nesmí měnit schéma ani

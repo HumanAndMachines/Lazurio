@@ -16,6 +16,7 @@ import {
   renderHumanCliIdentity,
   renderHumanCliInstallation,
 } from "./cli-install-lib.mjs";
+import { buildLazurioCliProvenance } from "./core/cli-provenance-lib.mjs";
 import { runLaunchpadInstall } from "./launchpad-install-lib.mjs";
 import {
   buildLazurioSearchStatus,
@@ -38,6 +39,12 @@ async function run(argv) {
   if (options.help) {
     console.log(usage());
     return 0;
+  }
+
+  if (options.version) {
+    const provenance = buildLazurioCliProvenance({ root: options.root });
+    console.log(options.json ? JSON.stringify(provenance, null, 2) : renderHumanVersion(provenance));
+    return provenance.status === "resolved" ? 0 : 1;
   }
 
   if (options.command === "context") {
@@ -132,6 +139,7 @@ function parseArgs(argv) {
     organization: null,
     json: false,
     help: false,
+    version: false,
     scope: "lazurio",
     mode: "exact",
     limit: 50,
@@ -157,6 +165,10 @@ function parseArgs(argv) {
     }
     if (arg === "--help" || arg === "-h") {
       parsed.help = true;
+      continue;
+    }
+    if (arg === "--version" || arg === "-V") {
+      parsed.version = true;
       continue;
     }
     if (arg === "--embed") {
@@ -269,6 +281,9 @@ function parseArgs(argv) {
   if (parsed.organization !== null && parsed.command !== "context") {
     throw new Error("--organization lze použít pouze s příkazem context.");
   }
+  if (parsed.version && parsed.command !== null) {
+    throw new Error("--version nelze kombinovat s příkazem.");
+  }
   return parsed;
 }
 
@@ -287,6 +302,7 @@ function usage() {
     "Lazurio CLI v0 (unstable)",
     "",
     "Použití:",
+    "  lazurio --version [--json] [--root <cesta>]",
     "  lazurio context [--organization <slug>] [--json] [--root <cesta>]",
     "  lazurio doctor [--json] [--root <cesta>]",
     "  lazurio update [--json] [--root <cesta>]",
@@ -297,6 +313,17 @@ function usage() {
     "  lazurio search --status [--scope lazurio] [--json] [--root <cesta>]",
     "  lazurio search --update [--embed] [--scope lazurio] [--json] [--root <cesta>]",
   ].join("\n");
+}
+
+function renderHumanVersion(provenance) {
+  if (provenance.status !== "resolved") {
+    return `Lazurio CLI · verzi nelze určit (${provenance.reason})`;
+  }
+  const commit = provenance.source.commit.slice(0, 12);
+  if (provenance.root_kind === "source") {
+    return `Lazurio CLI ${provenance.version} · development · ${provenance.source.dirty ? "dirty" : "clean"}`;
+  }
+  return `Lazurio CLI ${provenance.version} · ${provenance.channel} · ${commit} · ${provenance.artifact.target}`;
 }
 
 function renderHumanContext(context) {

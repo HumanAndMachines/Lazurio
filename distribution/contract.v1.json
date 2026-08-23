@@ -48,6 +48,7 @@
     "launchpad/src/",
     "lazurio/cli.mjs",
     "lazurio/cli-install-lib.mjs",
+    "lazurio/cli-provenance.v1.schema.json",
     "lazurio/context-v0.schema.json",
     "lazurio/core/",
     "lazurio/launchpad-install-lib.mjs",

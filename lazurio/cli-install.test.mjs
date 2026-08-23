@@ -2,10 +2,12 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import {
   chmodSync,
+  copyFileSync,
   cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  linkSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -13,6 +15,7 @@ import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 
 import { buildLazurioCliIdentity } from "./cli-install-lib.mjs";
+import { buildLazurioCliProvenance } from "./core/cli-provenance-lib.mjs";
 
 const sourceRoot = resolve(import.meta.dir, "..");
 const sourceCli = join(sourceRoot, "lazurio", "cli.mjs");
@@ -65,13 +68,39 @@ test("CLI default root patří entrypointu, ne aktuálnímu adresáři", () => {
   expect(JSON.parse(explicit.stdout)).toEqual(buildLazurioCliIdentity({ root: fixtureRoot }));
 });
 
-test("help drží dvě jednoduché CLI instalační akce", () => {
+test("help drží jednoduché instalační akce a jeden version surface", () => {
   const help = runCli(sourceCli, ["--help"], { cwd: outsideCwd, environment: process.env });
   expect(help.status).toBe(0);
   expect(help.stdout).toContain("lazurio cli install [--json] [--root <cesta>]");
   expect(help.stdout).toContain("lazurio cli status [--json] [--root <cesta>]");
+  expect(help.stdout).toContain("lazurio --version [--json] [--root <cesta>]");
   expect(help.stdout).not.toContain("cli uninstall");
   expect(help.stdout).not.toContain("cli identity");
+});
+
+test("--version a cli status skládají stejnou Core provenance", () => {
+  const version = runCli(sourceCli, ["--version", "--json"], {
+    cwd: outsideCwd,
+    environment: process.env,
+  });
+  expect(version.status, version.stderr).toBe(0);
+  const provenance = JSON.parse(version.stdout);
+  expect(provenance).toEqual(buildLazurioCliProvenance({ root: sourceRoot }));
+  expect(provenance).toMatchObject({
+    status: "resolved",
+    root_kind: "source",
+    channel: "development",
+  });
+
+  const unknown = runCli(sourceCli, ["--version", "--json", "--root", fixtureRoot], {
+    cwd: outsideCwd,
+    environment: process.env,
+  });
+  expect(unknown.status).toBe(1);
+  expect(JSON.parse(unknown.stdout)).toMatchObject({
+    status: "unrecognized",
+    reason: "metadata_missing",
+  });
 });
 
 test("real Bun link projde install, direct status a idempotent reinstall", () => {
@@ -89,6 +118,11 @@ test("real Bun link projde install, direct status a idempotent reinstall", () =>
     changed: true,
     registration: { state: "owned" },
     bun: { global_bin_on_path: true },
+    provenance: {
+      schema_version: "lazurio.cli.provenance.v1",
+      status: "unrecognized",
+      reason: "metadata_missing",
+    },
   });
   expect(installed.command.path).toStartWith(isolated.globalBin);
 
@@ -209,7 +243,7 @@ test("chybějící Bun global bin v PATH skončí před mutací", () => {
   const isolated = isolatedBunEnvironment("missing-path");
   const environment = {
     ...isolated.environment,
-    PATH: process.env.PATH ?? "",
+    PATH: hostPathWithoutLazurio(),
   };
   const result = runCli(sourceCli, ["cli", "install", "--root", fixtureRoot], {
     cwd: outsideCwd,
@@ -237,12 +271,21 @@ function isolatedBunEnvironment(label) {
   const installRoot = join(root, "install root");
   const globalDirectory = join(root, "global packages");
   const globalBin = join(root, "global bin");
+  const runtimeBin = join(root, "runtime bin");
   mkdirSync(root, { recursive: true });
+  mkdirSync(runtimeBin, { recursive: true });
+  const isolatedBun = join(runtimeBin, process.platform === "win32" ? "bun.exe" : "bun");
+  try {
+    linkSync(process.execPath, isolatedBun);
+  } catch {
+    copyFileSync(process.execPath, isolatedBun);
+    if (process.platform !== "win32") chmodSync(isolatedBun, 0o755);
+  }
   const environment = { ...process.env };
   for (const name of Object.keys(environment)) {
     if (name.toLowerCase() === "path") delete environment[name];
   }
-  environment.PATH = `${globalBin}${delimiter}${process.env.PATH ?? process.env.Path ?? ""}`;
+  environment.PATH = `${globalBin}${delimiter}${runtimeBin}${delimiter}${hostPathWithoutLazurio()}`;
   return {
     root,
     installRoot,
@@ -255,6 +298,21 @@ function isolatedBunEnvironment(label) {
       BUN_INSTALL_BIN: globalBin,
     },
   };
+}
+
+function hostPathWithoutLazurio() {
+  const pathValue = process.env.PATH ?? process.env.Path ?? "";
+  return pathValue
+    .split(delimiter)
+    .filter((directory) => directory && !directoryContainsLazurioCommand(directory))
+    .join(delimiter);
+}
+
+function directoryContainsLazurioCommand(directory) {
+  const names = process.platform === "win32"
+    ? ["lazurio.exe", "lazurio.cmd", "lazurio.bat", "lazurio.com"]
+    : ["lazurio"];
+  return names.some((name) => existsSync(join(directory.replace(/^"|"$/gu, ""), name)));
 }
 
 function resolveInstalledCommand(globalBin) {
