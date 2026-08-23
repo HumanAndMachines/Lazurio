@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import {
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   realpathSync,
   rmSync,
   writeFileSync,
@@ -119,6 +120,19 @@ test("classifier fails closed for conflicts, invalid manifests and directory-onl
     reason: "resident_manifest_invalid_json",
   });
 
+  const incomplete = temporaryDirectory("incomplete-resident");
+  const incompleteManifest = residentManifest();
+  delete incompleteManifest.dependencies;
+  writeFileSync(
+    join(incomplete, "lazurio.resident.json"),
+    `${JSON.stringify(incompleteManifest, null, 2)}\n`,
+  );
+  expect(buildLazurioCliProvenance({ root: incomplete })).toMatchObject({
+    status: "unrecognized",
+    root_kind: "resident",
+    reason: "resident_manifest_invalid",
+  });
+
   const directoryOnly = temporaryDirectory("directory-only");
   const unknown = buildLazurioCliProvenance({ root: directoryOnly });
   expect(unknown).toMatchObject({
@@ -196,14 +210,57 @@ function git(root, args) {
 }
 
 function residentManifest() {
+  const dependenciesRoot = resolve(import.meta.dir, "../../distribution/dependencies");
+  const hermes = JSON.parse(readFileSync(join(dependenciesRoot, "hermes.json"), "utf8"));
+  const gbrain = JSON.parse(readFileSync(join(dependenciesRoot, "gbrain.json"), "utf8"));
+  const toolchain = JSON.parse(readFileSync(join(dependenciesRoot, "toolchain.json"), "utf8"));
   return {
     schema_version: "lazurio.resident.manifest.v1",
     artifact_id: "lazurio-resident-workspace-0.2.0-nightly.7-darwin-arm64",
     artifact_version: "0.2.0-nightly.7",
     channel: "nightly",
     profile: "workspace",
+    role_overlays: [],
     target: { os: "darwin", arch: "arm64" },
-    source: { repository: "HumanAndMachines/Lazurio", commit: "a".repeat(40) },
-    payload: { digest: "b".repeat(64) },
+    source: {
+      repository: "HumanAndMachines/Lazurio",
+      commit: "a".repeat(40),
+      commit_epoch: 1_700_000_000,
+    },
+    build_contract: 1,
+    compatibility: { resident_root: 1, rollback_from: [1] },
+    dependencies: {
+      hermes: {
+        repository: hermes.repository,
+        release_tag: hermes.release_tag,
+        commit: hermes.commit,
+        lock_sha256: hermes.lock_sha256,
+      },
+      gbrain: {
+        repository: gbrain.repository,
+        release_tag: gbrain.release_tag,
+        version: gbrain.version,
+        commit: gbrain.commit,
+        lock_sha256: gbrain.lock_sha256,
+        engine: gbrain.runtime.engine,
+        transport: gbrain.runtime.transport,
+      },
+      toolchain: {
+        bun: toolchain.tools.bun.version,
+        uv: toolchain.tools.uv.version,
+      },
+    },
+    mutable_mounts: ["organizations", "personalspace"],
+    payload: {
+      hash_algorithm: "sha256",
+      digest: "b".repeat(64),
+      manifest_excluded_from_inventory: true,
+      files: [{
+        path: "package.json",
+        mode: "0644",
+        size: 2,
+        sha256: "c".repeat(64),
+      }],
+    },
   };
 }

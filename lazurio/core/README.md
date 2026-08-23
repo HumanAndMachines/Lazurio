@@ -22,6 +22,8 @@ zmrazí při bootu a launcher smí znovu použít jen exact compatible identitu.
 `cli-provenance-lib.mjs` je jediný vlastník rozlišení development Git checkoutu
 a immutable Resident instalace. Smí číst pouze lokální Git metadata nebo
 `lazurio.resident.json`; současný výskyt obou markerů je konflikt, ne fallback.
+Úplný tvar Resident manifestu vlastní `resident-manifest-lib.mjs`; provenance,
+Doctor, build i updater používají tentýž validátor.
 `ui_exposure` zůstává pouze prezentační policy; nevytváří identitu resource ani
 access autoritu. Další doménové vrstvy se přesunují samostatnými PR až nad
 zeleným parity baseline; fyzický přesun souboru sám nesmí měnit schéma ani

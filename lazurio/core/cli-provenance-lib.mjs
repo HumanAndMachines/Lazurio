@@ -11,6 +11,7 @@ import {
   resolve,
   win32,
 } from "node:path";
+import { validateResidentManifest } from "./resident-manifest-lib.mjs";
 
 export const LAZURIO_CLI_PROVENANCE_SCHEMA = "lazurio.cli.provenance.v1";
 export const LAZURIO_CLI_PRODUCT = "lazurio-cli";
@@ -240,18 +241,7 @@ function residentProvenance(root, marker) {
 }
 
 function validResidentManifestProvenance(manifest) {
-  if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) return false;
-  if (manifest.schema_version !== "lazurio.resident.manifest.v1") return false;
-  if (!versionPattern.test(manifest.artifact_version ?? "")) return false;
-  if (!residentChannels.has(manifest.channel)) return false;
-  if (typeof manifest.profile !== "string" || !/^[a-z][a-z0-9-]*$/u.test(manifest.profile)) return false;
-  if (!new Set(["linux", "darwin", "windows"]).has(manifest.target?.os)) return false;
-  if (!new Set(["x64", "arm64"]).has(manifest.target?.arch)) return false;
-  if (!repositoryPattern.test(manifest.source?.repository ?? "")) return false;
-  if (!commitPattern.test(manifest.source?.commit ?? "")) return false;
-  if (!digestPattern.test(manifest.payload?.digest ?? "")) return false;
-  const expectedId = `lazurio-resident-${manifest.profile}-${manifest.artifact_version}-${manifest.target.os}-${manifest.target.arch}`;
-  return manifest.artifact_id === expectedId;
+  return validateResidentManifest(manifest).length === 0;
 }
 
 function validSource(source) {

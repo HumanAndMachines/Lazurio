@@ -35,6 +35,17 @@ test("Core imports only platform libraries and other Core modules", async () => 
   expect(findings).toEqual([]);
 });
 
+test("complete Resident manifest validation has one Core source owner", async () => {
+  const moduleName = "resident-manifest-lib.mjs";
+  expect(existsSync(join(coreRoot, moduleName))).toBe(true);
+  const integritySource = await readFile(
+    join(repositoryRoot, "distribution", "runtime", "integrity.mjs"),
+    "utf8",
+  );
+  expect(integritySource).toContain('from "#lazurio-core/resident-manifest"');
+  expect(integritySource).not.toContain("function validateResidentManifest");
+});
+
 test("slot classification has one physical owner shared by CLI and Launchpad", async () => {
   const moduleName = "organization-slot-scope-lib.mjs";
   expect(existsSync(join(coreRoot, moduleName))).toBe(true);

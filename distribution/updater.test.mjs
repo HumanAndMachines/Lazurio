@@ -329,9 +329,19 @@ async function buildFixture(root, version, target = currentResidentTarget()) {
   const toolchainPin = JSON.parse(toolchainPinBytes.toString("utf8"));
   const entries = new Map([
     ["AGENTS.md", { bytes: Buffer.from("<!-- generated:lazurio-resident-profile=buddy -->\n# Buddy\n"), mode: "0644" }],
-    ["package.json", { bytes: Buffer.from("{\"private\":true,\"type\":\"module\"}\n"), mode: "0644" }],
+    ["package.json", { bytes: Buffer.from(`${JSON.stringify({
+      private: true,
+      type: "module",
+      imports: {
+        "#lazurio-core/resident-manifest": "./lazurio/core/resident-manifest-lib.mjs",
+      },
+    })}\n`), mode: "0644" }],
     ["resident/doctor.mjs", { bytes: await readFile(join(import.meta.dir, "runtime", "doctor.mjs")), mode: "0755" }],
     ["resident/integrity.mjs", { bytes: await readFile(join(import.meta.dir, "runtime", "integrity.mjs")), mode: "0644" }],
+    ["lazurio/core/resident-manifest-lib.mjs", {
+      bytes: await readFile(join(import.meta.dir, "..", "lazurio", "core", "resident-manifest-lib.mjs")),
+      mode: "0644",
+    }],
     ["resident/profile.json", { bytes: Buffer.from(`${JSON.stringify({ schema_version: "lazurio.resident.profile.v1", id: "buddy" }, null, 2)}\n`), mode: "0644" }],
     ["resident/dependencies/hermes.json", { bytes: hermesPinBytes, mode: "0644" }],
     ["resident/dependencies/gbrain.json", { bytes: gbrainPinBytes, mode: "0644" }],
