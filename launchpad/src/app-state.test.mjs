@@ -405,6 +405,22 @@ test("Module tiles split by physical boundary and Workspace modules project N:M 
   expect(teams[1].families.map((family) => family.module)).toEqual(["knowledgebase", "sidebrand"]);
 });
 
+test("hosted Team projection cannot reconstruct hidden Teams from N:M app metadata", () => {
+  const families = groupAppFamilies([
+    {
+      id: "shared-kb",
+      company: "AlfaCo",
+      module: "knowledgebase",
+      title: "Knowledgebase",
+      space: "workspace",
+      teams: ["management", "technical"],
+    },
+  ]);
+  const projected = groupWorkspaceFamiliesByTeam(families, [{ slug: "management" }]);
+  expect(projected.map((section) => section.team)).toEqual(["management"]);
+  expect(projected[0].families.map((family) => family.module)).toEqual(["knowledgebase"]);
+});
+
 test("Organization-root a Team app stejného modulu zůstávají v oddělených sekcích", () => {
   const families = groupAppFamilies([
     {

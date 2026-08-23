@@ -195,12 +195,13 @@ export async function buildLaunchpadAppsResponse({
   const gitContext = includeGit
     ? await buildGitContext({ companiesRoot, gitStatusService })
     : { reposByKey: new Map(), warnings: [] };
-  const publicApps = includeGit
+  const appsWithGit = includeGit
     ? visibleApps.map((app) => ({
         ...app,
         git: compactGitSummaryForApp(gitContext.reposByKey.get(gitRepoKeyForApp(app))),
       }))
     : visibleApps;
+  const publicApps = appsWithGit.map((app) => projectActiveTeamApp(app, activeTeamId));
   // Template mounty (organization_kind=template) jsou validované, ale vyloučené z
   // runtime akcí, business přehledů i org počtů. Drží se v oddělených polích, aby
   // je žádný konzument organizations/apps nezapočítal; Doctor je jen označí.
@@ -271,6 +272,17 @@ function projectActiveTeamSpaces(spaces, activeTeamId) {
     teams,
     // Deprecated alias zůstává přesnou projekcí stejného aktivního Teamu.
     workspaces: teams,
+  };
+}
+
+function projectActiveTeamApp(app, activeTeamId) {
+  if (typeof activeTeamId !== "string" || activeTeamId.length === 0) return app;
+  if (app.space !== "workspace") return app;
+  const teams = (app.teams ?? []).filter((team) => team === activeTeamId);
+  return {
+    ...app,
+    teams,
+    workspace: teams.length > 0 ? activeTeamId : null,
   };
 }
 

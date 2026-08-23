@@ -1611,10 +1611,10 @@ test("app sekci určí fyzická cesta, manifest doplní N:M Team intent a sdíle
   });
   expect(hostedResponse.organizations[0].teams.map((team) => team.slug)).toEqual(["sidebrand"]);
   expect(hostedResponse.organizations[0].workspaces.map((team) => team.slug)).toEqual(["sidebrand"]);
-  expect(hostedResponse.apps.find((app) => app.id === "sidebrand-shop-v1")?.teams).toEqual([
-    "sidebrand",
-    "workspace",
-  ]);
+  expect(hostedResponse.apps.find((app) => app.id === "sidebrand-shop-v1")).toMatchObject({
+    teams: ["sidebrand"],
+    workspace: "sidebrand",
+  });
   const report = await buildLaunchpadDoctorReport({
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
