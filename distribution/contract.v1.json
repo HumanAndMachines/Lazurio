@@ -56,6 +56,8 @@
     "lazurio/launchpad-install-lib.mjs",
     "lazurio/lib.mjs",
     "lazurio/locales/",
+    "lazurio/organization-activation-lib.mjs",
+    "lazurio/organization-activation-report.v0.schema.json",
     "lazurio/search-lib.mjs",
     "scripts/worktree-create-lib.mjs",
     "scripts/worktree-create-lock.mjs",
