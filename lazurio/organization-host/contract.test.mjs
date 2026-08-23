@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
-import { readFile, readdir } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 
 import { validateAgainstSchema } from "../../launchpad/src/json-schema-mini.mjs";
 import {
@@ -65,64 +66,68 @@ test("entrypoint and operation shape cannot inject a second command path", async
     );
   }
   const fixture = await fixtureNamed("declared-linux.json");
-  fixture.adapter.operations.apply.mode = "read-only";
+  fixture.adapter.operations.apply = { mode: "mutation", deploy_gate: "explicit" };
+  expect(validateAgainstSchema(fixture, adapterSchema, "adapter").length).toBeGreaterThan(0);
   expect(validateOrganizationHostAdapter(fixture)).toContain(
-    "adapter.operations.apply.mode is invalid",
+    "adapter.operations.apply is not allowed",
   );
 });
 
-test("read-only invocation is fixed to one selected infra checkout", async () => {
+test("read-only invocation is fixed to one physical infra checkout", async () => {
   const declaration = await fixtureNamed("target-cloud.json");
-  const infraRoot = resolve(contractRoot, "test-infra");
-  const invocation = buildOrganizationHostAdapterInvocation({
-    declaration,
-    infraRoot,
-    operation: "readback",
-  });
-  expect(invocation).toEqual({
-    executable: join(infraRoot, "tools", "organization-host-adapter"),
-    args: ["readback", "--json"],
-    cwd: infraRoot,
-    mode: "read-only",
-  });
+  const infraRoot = await mkdtemp(join(tmpdir(), "lazurio-organization-host-"));
+  const executable = join(infraRoot, declaration.adapter.entrypoint);
+  try {
+    await mkdir(dirname(executable), { recursive: true });
+    await writeFile(executable, "#!/bin/sh\n", "utf8");
+    const invocation = buildOrganizationHostAdapterInvocation({
+      declaration,
+      infraRoot,
+      operation: "readback",
+    });
+    const physicalRoot = await realpath(infraRoot);
+    expect(invocation).toEqual({
+      executable: join(physicalRoot, declaration.adapter.entrypoint),
+      args: ["readback", "--json"],
+      cwd: physicalRoot,
+      mode: "read-only",
+    });
+  } finally {
+    await rm(infraRoot, { recursive: true, force: true });
+  }
 });
 
-test("mutation invocation fails until every independent gate is present", async () => {
+test("physical entrypoint containment rejects a symlink escape", async () => {
+  const declaration = await fixtureNamed("target-cloud.json");
+  const infraRoot = await mkdtemp(join(tmpdir(), "lazurio-organization-host-root-"));
+  const outsideRoot = await mkdtemp(join(tmpdir(), "lazurio-organization-host-outside-"));
+  try {
+    await writeFile(join(outsideRoot, "organization-host-adapter"), "#!/bin/sh\n", "utf8");
+    await symlink(
+      outsideRoot,
+      join(infraRoot, "tools"),
+      process.platform === "win32" ? "junction" : "dir",
+    );
+    expect(() => buildOrganizationHostAdapterInvocation({
+      declaration,
+      infraRoot,
+      operation: "readback",
+    })).toThrow("physical target escapes the selected infra repository");
+  } finally {
+    await rm(infraRoot, { recursive: true, force: true });
+    await rm(outsideRoot, { recursive: true, force: true });
+  }
+});
+
+test("the public invocation contract exposes no plan or mutation operation", async () => {
   const declaration = await fixtureNamed("declared-linux.json");
-  const baseline = {
-    declaration,
-    infraRoot: resolve(contractRoot, "test-infra"),
-    operation: "apply",
-  };
-  expect(() => buildOrganizationHostAdapterInvocation(baseline)).toThrow("explicit Organization selector");
-  expect(() => buildOrganizationHostAdapterInvocation({
-    ...baseline,
-    authorization: { organizationSelector: "selected-org" },
-  })).toThrow("plan-owned worktree");
-  expect(() => buildOrganizationHostAdapterInvocation({
-    ...baseline,
-    authorization: {
-      organizationSelector: "selected-org",
-      planOwnedWorktree: true,
-    },
-  })).toThrow("reviewed diff");
-  expect(() => buildOrganizationHostAdapterInvocation({
-    ...baseline,
-    authorization: {
-      organizationSelector: "selected-org",
-      planOwnedWorktree: true,
-      reviewedDiff: true,
-    },
-  })).toThrow("explicit deploy gate");
-  expect(buildOrganizationHostAdapterInvocation({
-    ...baseline,
-    authorization: {
-      organizationSelector: "selected-org",
-      planOwnedWorktree: true,
-      reviewedDiff: true,
-      deployGate: "explicit",
-    },
-  })).toMatchObject({ mode: "mutation", args: ["apply", "--json"] });
+  for (const operation of ["plan", "apply", "rollback"]) {
+    expect(() => buildOrganizationHostAdapterInvocation({
+      declaration,
+      infraRoot: contractRoot,
+      operation,
+    })).toThrow(`unsupported Organization Host operation: ${operation}`);
+  }
 });
 
 test("metadata-only readback has exact health coverage and no free-text fields", () => {
@@ -133,10 +138,12 @@ test("metadata-only readback has exact health coverage and no free-text fields",
   readback.health.message = "sensitive runtime detail";
   readback.health.checks.workspace = "fail";
   readback.next_action.reason_code = "contains spaces";
+  readback.next_action.operation = "apply";
   expect(validateAgainstSchema(readback, readbackSchema, "readback").length).toBeGreaterThan(0);
   expect(validateOrganizationHostReadback(readback)).toEqual(expect.arrayContaining([
     "health.message is not allowed",
     "health.overall does not match the individual checks",
+    "next_action.operation is invalid",
     "next_action.reason_code is invalid",
   ]));
 });
