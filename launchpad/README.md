@@ -360,9 +360,11 @@ generované výstupy z této kontroly záměrně vynechává.
 Start/Open vždy spouští development task s `NODE_ENV=development`. Env gate
 proto kontroluje `.env`, `.env.local`, development varianty a navíc přesný
 mode/env-file zvolený v closure `dev_script` (`--mode`, `NODE_ENV`,
-`--env-file`). Neaktivní `.env.test` nebo build mode dev aplikaci neblokuje;
-jakmile jej ale dev script explicitně zvolí, platí pro něj stejný zákaz
-rezervovaných listener proměnných.
+`--env-file`). Explicitní env-file zachová přesnou relativní cestu, smí zůstat
+jen uvnitř owning Modulu a nesmí být dynamicky odvozený ze shell/env; nested
+soubor se tedy nekontroluje jen podle basename. Neaktivní `.env.test` nebo
+build mode dev aplikaci neblokuje; jakmile jej ale dev script explicitně zvolí,
+platí pro něj stejný zákaz rezervovaných listener proměnných.
 
 `apps` je explicitní inventář runnable package souborů relativně ke kořeni
 Modulu. Neprázdný seznam má právě jeden `default_app`; `apps: []` pravdivě říká,

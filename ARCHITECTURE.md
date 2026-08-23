@@ -116,8 +116,10 @@ fallback ani root tabulka port znovu neurčují. Modul bez aplikace deklaruje
 Start/Open normalizuje child `NODE_ENV=development` a Doctor vyhodnocuje jen
 env soubory, které deklarovaný `dev_script` skutečně načte: obecné `.env` /
 `.env.local`, development varianty a případný explicitní `--mode`, `NODE_ENV`
-nebo `--env-file` i v odkazovaném package scriptu. Neaktivní test/build mode
-není runtime autorita dev procesu a sám aplikaci neblokuje.
+nebo přesná `--env-file` cesta i v odkazovaném package scriptu. Explicitní env
+cesta musí být statická a zůstat uvnitř owning Modulu; nested soubor se ověří
+na přesné cestě, ne jen podle basename. Neaktivní test/build mode není runtime
+autorita dev procesu a sám aplikaci neblokuje.
 
 Organization vlastní pouze `module_port_pool`, tedy interval pro deterministické
 přidělení nového Module lease a kontrolu unikátnosti uvnitř své access hranice.

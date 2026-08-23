@@ -554,8 +554,33 @@ function runtimeDevScriptCommands({ packageJson, runtime }) {
   return commands;
 }
 
-export function runtimeLoadedEnvFileNames({ packageJson, runtime }) {
-  const names = new Set([".env", ".env.local"]);
+function runtimeEnvFileLiteralPath(value) {
+  if (value !== value.trim() || value === "" || /[\0\r\n]/.test(value)) {
+    return { path: null, issue: "musí být neprázdná cesta bez okolního whitespace" };
+  }
+  if (/[$`%*?\[\]{}]/.test(value)) {
+    return { path: null, issue: "musí být statická literal cesta bez shell/env expanze nebo globu" };
+  }
+  const portablePath = value.replace(/\\/g, "/");
+  const absoluteLike =
+    isAbsolute(portablePath) ||
+    portablePath.startsWith("//") ||
+    /^[A-Za-z]:/.test(portablePath) ||
+    portablePath === "~" ||
+    portablePath.startsWith("~/");
+  if (absoluteLike) {
+    return { path: null, issue: "musí být relativní k runtime package a zůstat uvnitř owning Modulu" };
+  }
+  const normalized = posix.normalize(portablePath);
+  if (normalized === ".") {
+    return { path: null, issue: "musí označovat konkrétní env soubor" };
+  }
+  return { path: normalized, issue: null };
+}
+
+export function runtimeLoadedEnvFileSelection({ packageJson, runtime }) {
+  const paths = new Set([".env", ".env.local"]);
+  const issues = [];
   const modes = new Set(["development"]);
   for (const command of runtimeDevScriptCommands({ packageJson, runtime })) {
     for (const mode of commandValues(
@@ -574,15 +599,19 @@ export function runtimeLoadedEnvFileNames({ packageJson, runtime }) {
       command,
       /(?:^|[\s"';&|()])--env-file(?:=|\s+)(?:"([^"]+)"|'([^']+)'|([^\s"';&|()]+))/g,
     )) {
-      const fileName = basename(explicitPath);
-      if (fileName.startsWith(".env")) names.add(fileName);
+      const selection = runtimeEnvFileLiteralPath(explicitPath);
+      if (selection.issue) {
+        issues.push(`--env-file ${JSON.stringify(explicitPath)} ${selection.issue}`);
+      } else {
+        paths.add(selection.path);
+      }
     }
   }
   for (const mode of modes) {
-    names.add(`.env.${mode}`);
-    names.add(`.env.${mode}.local`);
+    paths.add(`.env.${mode}`);
+    paths.add(`.env.${mode}.local`);
   }
-  return names;
+  return { paths, issues };
 }
 
 function isReservedRuntimeEnvName(name) {
@@ -595,19 +624,47 @@ export async function runtimeEnvPortAuthorityIssues({
   packagePath,
   packageJson,
   runtime,
+  moduleDirectory = packageDirectory,
 }) {
-  let entries;
+  const issues = [];
+  const selection = runtimeLoadedEnvFileSelection({ packageJson, runtime });
+  issues.push(...selection.issues.map(
+    (issue) => `${packagePath}: ${issue}; použij statickou cestu uvnitř owning Modulu`,
+  ));
+
+  let canonicalModuleDirectory;
   try {
-    entries = await readdir(packageDirectory, { withFileTypes: true });
-  } catch {
-    return [];
+    canonicalModuleDirectory = realpathSync(moduleDirectory);
+  } catch (error) {
+    issues.push(`${packagePath}: owning Module env boundary nejde kanonicky ověřit: ${error.message}`);
+    return issues;
   }
 
-  const issues = [];
-  const runtimeLoadedEnvFiles = runtimeLoadedEnvFileNames({ packageJson, runtime });
-  for (const entry of entries) {
-    if (!entry.isFile() || !runtimeLoadedEnvFiles.has(entry.name)) continue;
-    const absolutePath = join(packageDirectory, entry.name);
+  for (const envPath of selection.paths) {
+    const absolutePath = resolve(packageDirectory, envPath);
+    const displayPath = posix.normalize(posix.join(
+      posix.dirname(packagePath.replace(/\\/g, "/")),
+      envPath,
+    ));
+    if (!pathIsWithin(moduleDirectory, absolutePath)) {
+      issues.push(
+        `${packagePath}: --env-file ${JSON.stringify(envPath)} uniká mimo owning Module; runtime env autorita musí zůstat uvnitř Modulu`,
+      );
+      continue;
+    }
+    try {
+      const canonicalPath = canonicalProspectivePath(absolutePath);
+      if (!pathIsWithin(canonicalModuleDirectory, canonicalPath)) {
+        issues.push(
+          `${displayPath}: env soubor se přes symlink/junction dostává mimo owning Module`,
+        );
+        continue;
+      }
+    } catch (error) {
+      issues.push(`${displayPath}: env cestu nelze bezpečně ověřit: ${error.message}`);
+      continue;
+    }
+
     let source;
     try {
       source = await readFile(absolutePath, "utf8");
@@ -619,7 +676,7 @@ export async function runtimeEnvPortAuthorityIssues({
       const name = declaration?.[1];
       if (!name || !isReservedRuntimeEnvName(name)) continue;
       issues.push(
-        `${posix.join(posix.dirname(packagePath), entry.name)}: ${name} nesmí být per-machine port autorita; deklaruj lease v module-root lazurio.module.json a nech ji injektovat Launchpadem`,
+        `${displayPath}: ${name} nesmí být per-machine port autorita; deklaruj lease v module-root lazurio.module.json a nech ji injektovat Launchpadem`,
       );
     }
   }
@@ -1674,6 +1731,7 @@ export async function discoverLaunchpadApps(
           packagePath,
           packageJson,
           runtime: app,
+          moduleDirectory: resolve(companiesRoot, dirname(moduleResult.module.module_path)),
         }));
         runtimeContractIssues.push(...await runtimeSourcePortAuthorityIssues({
           packageDirectory: dirname(absolutePackagePath),

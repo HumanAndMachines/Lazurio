@@ -6,7 +6,7 @@ import {
   discoverLaunchpadApps,
   organizationRelativePathIssue,
   organizationRepositoryPathCasingIssue,
-  runtimeLoadedEnvFileNames,
+  runtimeLoadedEnvFileSelection,
 } from "./discovery-lib.mjs";
 
 const tempRoots = [];
@@ -728,6 +728,27 @@ test("lazurio.runtime.v1 discovers one entrypoint and auxiliary listeners", asyn
   await rm(activeEnvPath);
   await rm(inactiveEnvPath);
 
+  const nestedEnvDirectory = join(envDirectory, "config");
+  const nestedEnvPath = join(nestedEnvDirectory, "runtime.env");
+  await mkdir(nestedEnvDirectory, { recursive: true });
+  await writeFile(nestedEnvPath, envSource, "utf8");
+  packageJson.scripts.dev = "bun --env-file=config/runtime.env server.mjs";
+  await writeJson(packagePath, packageJson);
+  const explicitNestedEnv = await discoverLaunchpadApps(root);
+  expect(explicitNestedEnv.invalid_apps).toHaveLength(1);
+  expect(explicitNestedEnv.failures.join("\n")).toContain(
+    "config/runtime.env: PORT nesmí být per-machine port autorita",
+  );
+  await rm(nestedEnvDirectory, { recursive: true });
+
+  packageJson.scripts.dev = "bun --env-file=../../../outside.env server.mjs";
+  await writeJson(packagePath, packageJson);
+  const escapedExplicitEnv = await discoverLaunchpadApps(root);
+  expect(escapedExplicitEnv.invalid_apps).toHaveLength(1);
+  expect(escapedExplicitEnv.failures.join("\n")).toContain(
+    "--env-file \"../../../outside.env\" uniká mimo owning Module",
+  );
+
   packageJson.scripts.dev = "vite --port 5281";
   await writeJson(packagePath, packageJson);
   const drift = await discoverLaunchpadApps(root);
@@ -757,16 +778,16 @@ test("lazurio.runtime.v1 discovers one entrypoint and auxiliary listeners", asyn
   );
 });
 
-test("runtime env gate follows the declared dev script closure and selected modes", () => {
+test("runtime env gate follows the declared dev script closure and exact selected files", () => {
   const packageJson = {
     scripts: {
       dev: "concurrently \"bun run dev:web\" \"bun run dev:api\"",
-      "dev:web": "NODE_ENV=staging vite --mode local-offline --env-file=.env.explicit",
+      "dev:web": "NODE_ENV=staging vite --mode local-offline --env-file=config/runtime.env",
       "dev:api": "bun server.ts",
       test: "vite --mode test",
     },
   };
-  const names = runtimeLoadedEnvFileNames({
+  const selection = runtimeLoadedEnvFileSelection({
     packageJson,
     runtime: { dev_script: "dev" },
   });
@@ -779,11 +800,25 @@ test("runtime env gate follows the declared dev script closure and selected mode
     ".env.staging.local",
     ".env.local-offline",
     ".env.local-offline.local",
-    ".env.explicit",
+    "config/runtime.env",
   ]) {
-    expect(names.has(expected)).toBe(true);
+    expect(selection.paths.has(expected)).toBe(true);
   }
-  expect(names.has(".env.test")).toBe(false);
+  expect(selection.paths.has("runtime.env")).toBe(false);
+  expect(selection.paths.has(".env.test")).toBe(false);
+  expect(selection.issues).toEqual([]);
+
+  const unsafe = runtimeLoadedEnvFileSelection({
+    packageJson: {
+      scripts: {
+        dev: "bun --env-file=$ENV_FILE --env-file=/tmp/runtime.env server.ts",
+      },
+    },
+    runtime: { dev_script: "dev" },
+  });
+  expect(unsafe.issues).toHaveLength(2);
+  expect(unsafe.issues.join("\n")).toContain("statická literal cesta");
+  expect(unsafe.issues.join("\n")).toContain("relativní k runtime package");
 });
 
 test("duplicitní app id izoluje druhý manifest, první zůstává platný (decision 0043)", async () => {
