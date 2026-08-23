@@ -77,13 +77,16 @@ pracuje v ohraničené relaci a odevzdá atribuovaný výsledek. Resident může
 Agentovi delegovat a Agent se může Residenta poradit; jejich identity se tím
 neslučují.
 
-Každý Task Agent má lokální recovery identitu tvořenou dvojicí **harness
-surface + opaque ID relace**. Worktree založený Task Agentem tuto dvojici nese
-v lokálním sidecaru jako `conversation_origin.surface` a
-`conversation_origin.thread_id`. Díky tomu lze po přerušení dohledat správný
-Codex task, Claude Code session, Cursor chat/agent nebo jiný podporovaný
-harness a bezpečně navázat. Locator není autorizační identita, Git owner ani
-důkaz, že je relace stále dostupná.
+Worktree založený Task Agentem nese v gitignored lokálním sidecaru recovery
+vodítko **Mašina + harness surface + opaque ID relace** jako
+`conversation_origin.machine_ref`, `conversation_origin.surface` a
+`conversation_origin.thread_id`. Principál díky němu může po přerušení spojit
+rozdělaný výstup se správným Codex taskem, Claude Code session, Cursor
+chatem/agentem nebo jiným podporovaným harness povrchem. Vodítko je
+samodeklarované, editovatelné a podvrhnutelné; není ověřenou identitou,
+podpisem, atribucí, auditním důkazem ani autorizačním vstupem a nedostupnost
+relace není důkazem opuštěné práce. Autoritu přístupů a commitovou atribuci
+drží GitHub, ne tento lokální recovery mechanismus.
 
 ### 4. Lazurio není povinný prostředník
 

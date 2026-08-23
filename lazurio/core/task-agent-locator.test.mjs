@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { resolveTaskAgentIdentity } from "./task-agent-identity.mjs";
+import { resolveTaskAgentLocator } from "./task-agent-locator.mjs";
 
-describe("Task Agent identity", () => {
+describe("Task Agent recovery locator", () => {
   test.each([
     [
       "Codex thread ID",
@@ -24,11 +24,11 @@ describe("Task Agent identity", () => {
       { id: "legacy-claude-session", surface: "claude-code", source: "CLAUDE_SESSION_ID" },
     ],
   ])("resolves %s", (_name, environment, expected) => {
-    expect(resolveTaskAgentIdentity({ environment })).toEqual(expected);
+    expect(resolveTaskAgentLocator({ environment })).toEqual(expected);
   });
 
   test("keeps the harness surface with an explicit Cursor chat ID", () => {
-    expect(resolveTaskAgentIdentity({
+    expect(resolveTaskAgentLocator({
       id: "cursor-chat-id",
       surface: "cursor-cli",
       environment: { CODEX_THREAD_ID: "inherited-codex-thread" },
@@ -36,17 +36,17 @@ describe("Task Agent identity", () => {
   });
 
   test("does not attach an inherited Codex ID to a Cursor surface", () => {
-    expect(resolveTaskAgentIdentity({
+    expect(resolveTaskAgentLocator({
       surface: "cursor-cli",
       environment: { CODEX_THREAD_ID: "inherited-codex-thread" },
     })).toEqual({ id: null, surface: "cursor-cli", source: null });
   });
 
   test("requires a surface alongside the harness-neutral Lazurio ID", () => {
-    expect(resolveTaskAgentIdentity({
+    expect(resolveTaskAgentLocator({
       environment: { LAZURIO_TASK_AGENT_ID: "opaque-id" },
     })).toEqual({ id: "opaque-id", surface: null, source: "LAZURIO_TASK_AGENT_ID" });
-    expect(resolveTaskAgentIdentity({
+    expect(resolveTaskAgentLocator({
       environment: {
         LAZURIO_TASK_AGENT_ID: "opaque-id",
         LAZURIO_TASK_AGENT_SURFACE: "cursor-cli",

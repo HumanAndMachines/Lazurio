@@ -506,6 +506,12 @@ async function validateSidecar(
   ]
     .filter((field) => !Object.hasOwn(data, field))
     .map((field) => `recommended operational field is missing: ${field}`);
+  if (
+    data.conversation_origin
+    && !Object.hasOwn(data.conversation_origin, "machine_ref")
+  ) {
+    advisories.push("legacy conversation_origin is missing machine_ref recovery hint");
+  }
   const authorityAvailable = await pathExists(effectiveAuthorityRoot);
   if (!authorityAvailable) {
     const error = "Mission Control authority checkout is unavailable; plan ownership was not verified";
@@ -681,6 +687,17 @@ function validateConversationOrigin(value) {
   if (value === undefined) return null;
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return "conversation_origin must be an object";
+  }
+  if (
+    Object.hasOwn(value, "machine_ref")
+    && (
+      typeof value.machine_ref !== "string"
+      || value.machine_ref.trim() === ""
+      || value.machine_ref.length > 255
+      || /[\0\r\n]/.test(value.machine_ref)
+    )
+  ) {
+    return "conversation_origin.machine_ref is not a local single-line label";
   }
   if (typeof value.surface !== "string" || !/^[a-z0-9][a-z0-9._-]*$/.test(value.surface)) {
     return "conversation_origin.surface is not canonical";
@@ -1680,8 +1697,8 @@ export function formatHuman(report) {
       (worktree.ahead ?? 0) > 0 ? `ahead:${worktree.ahead}` : null,
       (worktree.behind ?? 0) > 0 ? `behind:${worktree.behind}` : null,
       worktree.conversation_origin
-        ? `task-agent:${worktree.conversation_origin.surface}:${shortThreadId(worktree.conversation_origin)}`
-        : "task-agent:unknown",
+        ? `recovery:${shortMachineRef(worktree.conversation_origin)}:${worktree.conversation_origin.surface}:${shortThreadId(worktree.conversation_origin)}`
+        : "recovery:unknown",
       worktree.recovery_handoff ? `handoff:${worktree.recovery_handoff.state}` : "handoff:missing",
       worktree.disk_bytes !== null
         ? `${formatBytes(worktree.disk_bytes)}${worktree.disk_scan_complete ? "" : "+"}`
@@ -1720,6 +1737,12 @@ function shortThreadId(origin) {
   }
   const id = origin.thread_id;
   return id.length <= 16 ? id : `${id.slice(0, 8)}…${id.slice(-6)}`;
+}
+
+function shortMachineRef(origin) {
+  if (!origin?.machine_ref) return "unknown-machine";
+  const ref = origin.machine_ref;
+  return ref.length <= 24 ? ref : `${ref.slice(0, 12)}…${ref.slice(-8)}`;
 }
 
 async function main() {

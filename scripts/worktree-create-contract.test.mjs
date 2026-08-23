@@ -74,13 +74,13 @@ test("dry-run accepts a unique exact-code plan only after canonical validation",
   expect(result.stdout).toContain("ok - dry-run: plán data/mission-control/plans/CAC-0007.yaml");
 });
 
-test("dry-run fails closed when a Task Agent ID cannot be captured", async () => {
+test("dry-run fails closed when a Task Agent task/thread/session ID cannot be captured", async () => {
   const fixture = await createLaneFixture({
     plans: [["CAC-0007.yaml", validPlan]],
   });
   const result = runCreateLane({ ...fixture, includeTaskAgentIdentity: false });
   expect(result.status).toBe(1);
-  expect(result.stderr).toContain("Task Agent ID není dostupné");
+  expect(result.stderr).toContain("Task Agent task/thread/session ID není dostupné");
 });
 
 test("dry-run normalizes an explicit Organization root to repository-db", async () => {

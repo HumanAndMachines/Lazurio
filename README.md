@@ -52,14 +52,18 @@ používá následující pojmy s jejich přesným významem.
 | **Principál** | Ten, pro koho Agent právě pracuje, z čích oprávnění vychází a kdo má poslední slovo. Principálem může být člověk i AI Kolega. |
 | **Kolega** | Lidský Principál zapojený do práce podle svých firemních rolí a oprávnění. |
 | **AI Kolega** | Dlouhodobá AI identita s vlastním účtem, pracovním prostředím, odpovědností a přístupy. Není to jedna dočasná relace nástroje. |
-| **Task Agent (hovorově Agent)** | Jedna nástrojová pracovní relace pro konkrétní úkol, například Codex, Claude Code nebo Cursor. Pracuje jménem svého Principála, má dohledatelné ID své relace a sama nevlastní žádná oprávnění. |
+| **Task Agent (hovorově Agent)** | Jedna nástrojová pracovní relace pro konkrétní úkol, například Codex, Claude Code nebo Cursor. Pracuje jménem svého Principála; harness jí zpravidla přidělí task, thread nebo session ID, sama ale nevlastní žádná oprávnění. |
 | **Buddy** | Osobní AI zástupce právě jednoho člověka. Jedná v mezích jeho oprávnění a trvalých, ohraničených a odvolatelných mandátů. |
 
-**Task Agent ID** je lokální recovery identita pracovní relace: tvoří ji název
-harnessu a jeho opaque thread/session/chat ID. Lazurio ji zapisuje do sidecaru
-každého agentem založeného worktree, aby šlo i po přerušení dohledat správný
-task, obnovit jeho kontext a bezpečně pokračovat. ID samo nedává žádná
-oprávnění a do sdíleného Gitu se s ním nekopíruje transcript ani reasoning.
+**Lokální recovery vodítko Task Agenta** spojuje označení Mašiny, název
+harnessu a jeho opaque task/thread/session/chat ID. Lazurio je ukládá jen do
+gitignored sidecaru worktree, aby si Principál mohl spojit rozdělaný výstup se
+správným chatem, vrátit se k němu a zjistit případný blocker. Je to
+samodeklarovaný a editovatelný údaj: může být chybný, zastaralý nebo záměrně
+podvržený, a proto není podpisem, ověřenou identitou, důkazem autorství ani
+oprávněním. Organizační přístupy a commitovou atribuci dál autoritativně drží
+GitHub; Lazurio je tímto lokálním mechanismem neduplikuje. Do sdíleného Gitu
+se nekopíruje locator, transcript ani reasoning.
 
 ### Prostory a práce
 

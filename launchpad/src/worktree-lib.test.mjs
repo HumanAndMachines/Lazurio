@@ -80,6 +80,7 @@ test("detectNonCanonicalSidecarFields flags legacy aliases and missing recovery 
       repo_kind: "root_repo",
       status: "merged_cleanup_needed",
       conversation_origin: {
+        machine_ref: "fixture-machine",
         surface: "codex",
         agent_label: "Ultracode",
         thread_id: "thread-123",

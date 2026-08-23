@@ -11,14 +11,16 @@ function isClaudeSurface(surface) {
 }
 
 /**
- * Resolve the opaque Task Agent ID supplied by a supported harness.
+ * Resolve the opaque Task Agent task/thread/session locator supplied by a
+ * supported harness.
  *
- * The stable identity is the pair { surface, id }; IDs are not assumed to be
- * globally unique across harnesses. Cursor and other surfaces without a
- * documented ambient variable use an explicit ID or the Lazurio-neutral env
- * pair instead of filesystem/transcript heuristics.
+ * The pair { surface, id } is only a self-reported local recovery hint: it is
+ * mutable, spoofable, and not identity or provenance proof. IDs are not
+ * assumed to be globally unique across harnesses. Cursor and other surfaces
+ * without a documented ambient variable use an explicit ID or the
+ * Lazurio-neutral env pair instead of filesystem/transcript heuristics.
  */
-export function resolveTaskAgentIdentity({
+export function resolveTaskAgentLocator({
   environment = {},
   id = null,
   surface = null,
