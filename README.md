@@ -52,8 +52,14 @@ používá následující pojmy s jejich přesným významem.
 | **Principál** | Ten, pro koho Agent právě pracuje, z čích oprávnění vychází a kdo má poslední slovo. Principálem může být člověk i AI Kolega. |
 | **Kolega** | Lidský Principál zapojený do práce podle svých firemních rolí a oprávnění. |
 | **AI Kolega** | Dlouhodobá AI identita s vlastním účtem, pracovním prostředím, odpovědností a přístupy. Není to jedna dočasná relace nástroje. |
-| **Task Agent (hovorově Agent)** | Jedna nástrojová pracovní relace pro konkrétní úkol, například Codex nebo Claude Code. Pracuje jménem svého Principála a sama nevlastní žádná oprávnění. |
+| **Task Agent (hovorově Agent)** | Jedna nástrojová pracovní relace pro konkrétní úkol, například Codex, Claude Code nebo Cursor. Pracuje jménem svého Principála, má dohledatelné ID své relace a sama nevlastní žádná oprávnění. |
 | **Buddy** | Osobní AI zástupce právě jednoho člověka. Jedná v mezích jeho oprávnění a trvalých, ohraničených a odvolatelných mandátů. |
+
+**Task Agent ID** je lokální recovery identita pracovní relace: tvoří ji název
+harnessu a jeho opaque thread/session/chat ID. Lazurio ji zapisuje do sidecaru
+každého agentem založeného worktree, aby šlo i po přerušení dohledat správný
+task, obnovit jeho kontext a bezpečně pokračovat. ID samo nedává žádná
+oprávnění a do sdíleného Gitu se s ním nekopíruje transcript ani reasoning.
 
 ### Prostory a práce
 
@@ -146,7 +152,7 @@ Launchpad ho nenahrazuje.
 | **Workspace moduly** | Samostatné repozitáře pro každodenní práci uvnitř Organizace; Teamy jsou nad nimi logické N:M seskupení. |
 | **Productionspace** | Org-level repozitáře s vlastním release a provozním modelem, které Launchpad standardně ukazuje read-only. |
 | **Resident** | Dlouhodobá instalace Lazuria na Mašině, například profil Buddyho nebo AI Kolegy. |
-| **Task Agent** | Jedna nástrojová pracovní relace pro konkrétní úkol, například Codex nebo Claude Code; sama nevlastní žádná oprávnění. |
+| **Task Agent** | Jedna dohledatelná nástrojová pracovní relace pro konkrétní úkol, například Codex, Claude Code nebo Cursor; sama nevlastní žádná oprávnění. |
 
 Podrobný cílový model vysvětluje [ARCHITECTURE.md](ARCHITECTURE.md) a fyzické
 rozložení repozitářů [MAP.md](MAP.md).

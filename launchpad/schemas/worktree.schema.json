@@ -40,6 +40,7 @@
     "created_at": { "type": "string", "minLength": 1 },
     "created_by": { "type": "string", "minLength": 1 },
     "conversation_origin": {
+      "description": "Local recovery locator for the Task Agent currently responsible for this worktree; it is provenance, not authorization.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -53,11 +54,17 @@
       "properties": {
         "surface": {
           "type": "string",
+          "description": "Harness namespace forming the first half of the Task Agent ID.",
           "pattern": "^[a-z0-9][a-z0-9._-]*$",
           "maxLength": 80
         },
         "agent_label": { "type": "string", "minLength": 1, "maxLength": 120 },
-        "thread_id": { "type": ["string", "null"], "minLength": 1, "maxLength": 512 },
+        "thread_id": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Opaque harness thread, session, chat, or agent ID; together with surface this is the Task Agent ID."
+        },
         "thread_locator_status": {
           "type": "string",
           "enum": ["captured", "unavailable", "not_applicable"]

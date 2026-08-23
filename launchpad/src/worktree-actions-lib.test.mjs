@@ -732,7 +732,7 @@ test("publish preserves a captured conversation origin when the request carries 
     planPath: "mission-control/plans/2026/07/CAC-0042-deals-publish.yaml",
     branch: "CAC-0042-deals-publish",
     createdBy: "test-agent",
-    environment: { CLAUDE_SESSION_ID: "session-abc123" },
+    environment: { CLAUDE_CODE_SESSION_ID: "session-abc123" },
   });
   const sidecarPath = join(orgRoot, ".worktrees", "workspace", "deals", "CAC-0042-deals-publish.worktree.json");
   const captured = JSON.parse(await readFile(sidecarPath, "utf8")).conversation_origin;
@@ -765,7 +765,7 @@ test("ambient server thread never replaces the worktree's captured origin", asyn
     planPath: "mission-control/plans/2026/07/CAC-0042-deals-publish.yaml",
     branch: "CAC-0042-deals-publish",
     createdBy: "test-agent",
-    environment: { CLAUDE_SESSION_ID: "session-abc123" },
+    environment: { CLAUDE_CODE_SESSION_ID: "session-abc123" },
   });
   await writeFile(join(root, created.worktree.path, "draft.md"), "publish me\n");
 
@@ -797,7 +797,7 @@ test("explicit handover records the new owner conversation origin", async () => 
     planPath: "mission-control/plans/2026/07/CAC-0042-deals-publish.yaml",
     branch: "CAC-0042-deals-publish",
     createdBy: "test-agent",
-    environment: { CLAUDE_SESSION_ID: "session-abc123" },
+    environment: { CLAUDE_CODE_SESSION_ID: "session-abc123" },
   });
   await writeFile(join(root, created.worktree.path, "draft.md"), "publish me\n");
 

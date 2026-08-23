@@ -45,11 +45,13 @@ test("parses the supported create-lane arguments", () => {
     "--plan", "ABCDEF-0001",
     "--branch", "codex/ABCDEF-0001-fixture",
     "--surface", "codex-desktop",
+    "--task-agent-id", "task-agent-123",
     "--dry-run",
   ])).toEqual({
     plan: "ABCDEF-0001",
     branch: "codex/ABCDEF-0001-fixture",
     surface: "codex-desktop",
+    "task-agent-id": "task-agent-123",
     dryRun: true,
   });
 });
@@ -58,6 +60,7 @@ test.each([
   [["--unknown", "value"], "neznámý argument"],
   [["--plan"], "neúplný argument"],
   [["--surface", "Codex Desktop"], "neplatný formát"],
+  [["--task-agent-id", "one", "--thread-id", "two"], "si odporují"],
 ])("rejects invalid arguments %#", (argv, message) => {
   expect(() => parseWorktreeCreateArgs(argv)).toThrow(message);
 });
@@ -69,6 +72,15 @@ test("dry-run accepts a unique exact-code plan only after canonical validation",
   const result = runCreateLane(fixture);
   expect({ status: result.status, stderr: result.stderr }).toMatchObject({ status: 0 });
   expect(result.stdout).toContain("ok - dry-run: plán data/mission-control/plans/CAC-0007.yaml");
+});
+
+test("dry-run fails closed when a Task Agent ID cannot be captured", async () => {
+  const fixture = await createLaneFixture({
+    plans: [["CAC-0007.yaml", validPlan]],
+  });
+  const result = runCreateLane({ ...fixture, includeTaskAgentIdentity: false });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("Task Agent ID není dostupné");
 });
 
 test("dry-run normalizes an explicit Organization root to repository-db", async () => {
@@ -353,10 +365,23 @@ if (failures.length > 0) {
   return { root, organizationRoot, authorityRoot };
 }
 
-function runCreateLane({ root, authorityOverride = null }) {
+function runCreateLane({ root, authorityOverride = null, includeTaskAgentIdentity = true }) {
   const env = { ...process.env };
   delete env.MISSION_CONTROL_AUTHORITY_ROOT;
   delete env.LAZURIO_MISSION_CONTROL_ROOT;
+  for (const key of [
+    "LAZURIO_TASK_AGENT_ID",
+    "LAZURIO_TASK_AGENT_SURFACE",
+    "HUMANANDMACHINE_THREAD_ID",
+    "CODEX_THREAD_ID",
+    "CODEX_SESSION_ID",
+    "CLAUDE_CODE_SESSION_ID",
+    "CLAUDE_SESSION_ID",
+  ]) delete env[key];
+  if (includeTaskAgentIdentity) {
+    env.LAZURIO_TASK_AGENT_ID = "fixture-task-agent-id";
+    env.LAZURIO_TASK_AGENT_SURFACE = "test-harness";
+  }
   if (authorityOverride) env.MISSION_CONTROL_AUTHORITY_ROOT = authorityOverride;
   return spawnSync(process.execPath, [
     createScript,

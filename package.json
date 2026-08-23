@@ -51,7 +51,7 @@
     "runtime:migrate": "bun scripts/lazurio-runtime-migrate.mjs",
     "runtime:inventory": "bun scripts/lazurio-module-inventory.mjs",
     "runtime:migrate:test": "bun test scripts/lazurio-runtime-migrate.test.mjs scripts/lazurio-module-port.test.mjs scripts/lazurio-module-inventory.test.mjs",
-    "worktrees:test": "bun test scripts/worktree-inventory.contract.test.mjs scripts/worktree-create-contract.test.mjs scripts/worktree-create.test.mjs scripts/worktree-create-git-policy.test.mjs scripts/worktree-create-lock.test.mjs",
+    "worktrees:test": "bun test scripts/worktree-inventory.contract.test.mjs scripts/worktree-create-contract.test.mjs scripts/worktree-create.test.mjs scripts/worktree-create-git-policy.test.mjs scripts/worktree-create-lock.test.mjs scripts/task-agent-identity.test.mjs",
     "terminology:test": "bun test scripts/task-agent-terminology.test.mjs"
   }
 }

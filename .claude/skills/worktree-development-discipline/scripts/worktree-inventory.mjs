@@ -1680,8 +1680,8 @@ export function formatHuman(report) {
       (worktree.ahead ?? 0) > 0 ? `ahead:${worktree.ahead}` : null,
       (worktree.behind ?? 0) > 0 ? `behind:${worktree.behind}` : null,
       worktree.conversation_origin
-        ? `thread:${worktree.conversation_origin.surface}:${shortThreadId(worktree.conversation_origin)}`
-        : "thread:unknown",
+        ? `task-agent:${worktree.conversation_origin.surface}:${shortThreadId(worktree.conversation_origin)}`
+        : "task-agent:unknown",
       worktree.recovery_handoff ? `handoff:${worktree.recovery_handoff.state}` : "handoff:missing",
       worktree.disk_bytes !== null
         ? `${formatBytes(worktree.disk_bytes)}${worktree.disk_scan_complete ? "" : "+"}`

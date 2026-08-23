@@ -447,18 +447,33 @@ odvozuje při každém status/cleanup běhu. Sidecar smí držet timestampovaný
 cache/readback, ale report musí jasně ukázat jeho stáří.
 
 `conversation_origin` je vždy lokální minimum: agentní surface, čitelný label
-agenta a opaque thread/session locator nebo výslovný stav `unavailable` či
-`not_applicable`. Kde runtime poskytuje stabilní ID (například
-`CODEX_THREAD_ID`), writer ho zachytí automaticky. Do sidecaru ani sdíleného
-Gitu se nekopíruje raw transcript, reasoning, secrets, citlivý obsah jiné
-Organizace ani absolutní transcript path. `recovery_handoff` se aktualizuje při
-pauze, blockeru, předání a před koncem běhu; stručné summary a next action musí
-umožnit převzetí i bez dostupné historie. Legacy v1 sidecar bez těchto polí je
-migration advisory, ne invalid nebo cleanup autorizace.
+agenta a opaque thread/session/chat/agent locator nebo výslovný stav
+`unavailable` či `not_applicable`. Dvojice `surface + thread_id` je v Lazuriu
+**Task Agent ID**. ID je recovery locator, kterým lze dohledat původní relaci;
+není to oprávnění, Git owner ani důkaz, že je relace stále dostupná.
 
-Zachycený `conversation_origin` přepisuje jen vědomé předání: writer ho pošle
-v requestu explicitně. Ambientní prostředí (například Launchpad server, který
-zdědil `CODEX_THREAD_ID` z jiné session) origin nikdy nepřebíjí — jinak by
+Kanonická create lane používá následující pořadí:
+
+| Harness | Zachycení Task Agent ID | Obnova |
+| --- | --- | --- |
+| Codex Desktop / CLI | `CODEX_THREAD_ID`, fallback `CODEX_SESSION_ID` | task v Codexu nebo `codex resume <id>` |
+| Claude Code | `CLAUDE_CODE_SESSION_ID`; `CLAUDE_SESSION_ID` zůstává pouze compatibility fallback | `claude --resume <id>` |
+| Cursor CLI / SDK | explicitní chat/agent ID; Cursor nemá napříč povrchy garantovanou společnou env proměnnou | `cursor-agent --resume <chat-id>` nebo SDK `Agent.resume(agent_id)` |
+| Jiný harness | `--task-agent-id <id> --surface <slug>` nebo `LAZURIO_TASK_AGENT_ID` + `LAZURIO_TASK_AGENT_SURFACE` | podle kontraktu harnessu |
+
+Agentní `worktrees:create` bez dohledatelného Task Agent ID failuje zavřeně.
+Stav `not_applicable` je určený pro automatizaci či Launchpad akci, za kterou
+žádný Task Agent nestojí; `unavailable` je explicitní recovery varování, ne
+náhradní identita. Do sidecaru ani sdíleného Gitu se nekopíruje raw transcript,
+reasoning, secrets, citlivý obsah jiné Organizace ani absolutní transcript
+path. `recovery_handoff` se aktualizuje při pauze, blockeru, předání a před
+koncem běhu; stručné summary a next action musí umožnit převzetí i bez dostupné
+historie. Legacy v1 sidecar bez těchto polí je migration advisory, ne invalid
+nebo cleanup autorizace.
+
+Zachycený `conversation_origin` přepisuje jen vědomé předání: nový Task Agent
+pošle svůj surface a ID v requestu explicitně. Ambientní prostředí (například
+Launchpad server, který zdědil `CODEX_THREAD_ID` z jiné session) origin nikdy nepřebíjí — jinak by
 publikace tiše nahradila recovery stopu worktree identitou serveru. Prázdný
 sidecar se z ambientního locatoru naplnit smí; už zachycenou provenance
 přepíše pouze explicitní zápis.

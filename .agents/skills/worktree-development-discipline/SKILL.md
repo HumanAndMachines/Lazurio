@@ -58,8 +58,14 @@ autoritu.
    `conversation_origin` (`surface`, `agent_label`, opaque `thread_id` nebo
    výslovný locator status, `captured_at`, `local_only: true`) a
    `recovery_handoff` (stav, stručné netajné summary, blocker, next action,
-   `updated_at`). Stabilní ID poskytované agentním povrchem, například
-   `CODEX_THREAD_ID`, zachyť automaticky. U staršího schema-valid sidecaru jsou
+   `updated_at`). Dvojice `surface + thread_id` je lokální **Task Agent ID**:
+   recovery locator k relaci, ne oprávnění nebo Git owner. Codex ID zachyť z
+   `CODEX_THREAD_ID` (fallback `CODEX_SESSION_ID`), Claude Code ID z
+   `CLAUDE_CODE_SESSION_ID`. Cursor CLI/SDK a jiný harness bez spolehlivé
+   ambientní proměnné předá `--task-agent-id <id> --surface <slug>` nebo pár
+   `LAZURIO_TASK_AGENT_ID` + `LAZURIO_TASK_AGENT_SURFACE`. Agentní create lane
+   bez ID failuje zavřeně; `not_applicable` patří pouze automatizaci bez Task
+   Agenta. U staršího schema-valid sidecaru jsou
    absence těchto polí advisory, ne falešná nevalidita. Owner se čte z plánu,
    sidecar není druhá autorita. Neukládej raw transcript, chain-of-thought,
    secrets ani absolutní transcript path.
@@ -98,7 +104,7 @@ autoritu.
    vidět a další agent ji nemusí převzít. Rozdělaná práce, která existuje
    jen lokálně, je porušení disciplíny (decisions 0103/0112).
 10. Při pauze, blockeru, předání a před koncem agentního běhu aktualizuj
-   `last_touched`, conversation origin aktuálního writer ownera a recovery
+   `last_touched`, Task Agent ID aktuálního writera v conversation origin a recovery
    handoff. Morning/night/cleanup agent smí přes lokální thread dohledat
    kontext, ale před commitem, pushem, PR rozhodnutím nebo cleanupem ověří Git
    status/diff, remote, PR/checks, runtime a Mission Control. Nedostupný thread

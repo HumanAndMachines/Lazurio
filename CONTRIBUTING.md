@@ -43,7 +43,9 @@ změna Lazuria, ale kandidát na plugin nebo obsah Organizace.
   na `main` a slouží jako referenční strom. Worktree zakládej kanonickou lane
   `bun run worktrees:create -- --plan <KOD-XXXX>`; postup a guardy drží skill
   `.agents/skills/worktree-development-discipline/SKILL.md`, správnost hlídá
-  `bun run worktrees:check`. Dlouhodobá lokální větev na mašině je
+  `bun run worktrees:check`. Create lane zapíše do lokálního sidecaru Task
+  Agent ID (`surface + opaque ID relace`); harness bez automaticky dostupného
+  ID ho předá přes `--task-agent-id <id> --surface <slug>`. Dlouhodobá lokální větev na mašině je
   zakázaný stav; práce, která nemíří do PR, do Lazuria nepatří.
 
 ## Kvalita PR — co musí platit
