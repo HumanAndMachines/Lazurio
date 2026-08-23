@@ -73,12 +73,12 @@ test("help drží jednoduché instalační akce a jeden version surface", () => 
   expect(help.status).toBe(0);
   expect(help.stdout).toContain("lazurio cli install [--json] [--root <cesta>]");
   expect(help.stdout).toContain("lazurio cli status [--json] [--root <cesta>]");
-  expect(help.stdout).toContain("lazurio --version [--json] [--root <cesta>]");
+  expect(help.stdout).toContain("lazurio --version [--json]");
   expect(help.stdout).not.toContain("cli uninstall");
   expect(help.stdout).not.toContain("cli identity");
 });
 
-test("--version a cli status skládají stejnou Core provenance", () => {
+test("--version popisuje CLI code origin a nepřijímá operated Root", () => {
   const version = runCli(sourceCli, ["--version", "--json"], {
     cwd: outsideCwd,
     environment: process.env,
@@ -95,11 +95,8 @@ test("--version a cli status skládají stejnou Core provenance", () => {
     cwd: outsideCwd,
     environment: process.env,
   });
-  expect(unknown.status).toBe(1);
-  expect(JSON.parse(unknown.stdout)).toMatchObject({
-    status: "unrecognized",
-    reason: "metadata_missing",
-  });
+  expect(unknown.status).toBe(2);
+  expect(unknown.stderr).toContain("nepřijímá --root");
 });
 
 test("real Bun link projde install, direct status a idempotent reinstall", () => {

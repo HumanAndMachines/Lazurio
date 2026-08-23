@@ -42,10 +42,12 @@ async function run(argv) {
   }
 
   if (options.version) {
-    const provenance = buildLazurioCliProvenance({ root: options.root });
+    const provenance = buildLazurioCliProvenance({ root: cliCodeRoot() });
     console.log(options.json ? JSON.stringify(provenance, null, 2) : renderHumanVersion(provenance));
     return provenance.status === "resolved" ? 0 : 1;
   }
+
+  options.root ??= defaultOperatedRoot();
 
   if (options.command === "context") {
     const context = await buildLazurioContext({
@@ -135,7 +137,8 @@ async function run(argv) {
 function parseArgs(argv) {
   const parsed = {
     command: null,
-    root: defaultCliRoot(),
+    root: null,
+    rootExplicit: false,
     organization: null,
     json: false,
     help: false,
@@ -210,6 +213,7 @@ function parseArgs(argv) {
       const value = argv[index + 1];
       if (!value || value.startsWith("-")) throw new Error("--root vyžaduje cestu.");
       parsed.root = resolve(value);
+      parsed.rootExplicit = true;
       index += 1;
       continue;
     }
@@ -217,6 +221,7 @@ function parseArgs(argv) {
       const value = arg.slice("--root=".length);
       if (!value) throw new Error("--root vyžaduje cestu.");
       parsed.root = resolve(value);
+      parsed.rootExplicit = true;
       continue;
     }
     if (arg === "--organization") {
@@ -284,6 +289,9 @@ function parseArgs(argv) {
   if (parsed.version && parsed.command !== null) {
     throw new Error("--version nelze kombinovat s příkazem.");
   }
+  if (parsed.version && parsed.rootExplicit) {
+    throw new Error("--version popisuje nainstalované CLI a nepřijímá --root.");
+  }
   return parsed;
 }
 
@@ -293,8 +301,19 @@ function requiredInlineValue(arg, name) {
   return value;
 }
 
-function defaultCliRoot() {
+function cliCodeRoot() {
   return realpathSync.native(fileURLToPath(new URL("..", import.meta.url)));
+}
+
+function defaultOperatedRoot() {
+  const codeRoot = cliCodeRoot();
+  const provenance = buildLazurioCliProvenance({ root: codeRoot });
+  if (provenance.root_kind !== "package") return codeRoot;
+  const error = new Error(
+    "Toto package-managed Lazurio CLI zatím nemá zvolený Lazurio Root; použij --root <cesta>. Budoucí `lazurio install` tuto volbu uloží.",
+  );
+  error.lazurioExitCode = 1;
+  throw error;
 }
 
 function usage() {
@@ -302,7 +321,7 @@ function usage() {
     "Lazurio CLI v0 (unstable)",
     "",
     "Použití:",
-    "  lazurio --version [--json] [--root <cesta>]",
+    "  lazurio --version [--json]",
     "  lazurio context [--organization <slug>] [--json] [--root <cesta>]",
     "  lazurio doctor [--json] [--root <cesta>]",
     "  lazurio update [--json] [--root <cesta>]",
@@ -322,6 +341,9 @@ function renderHumanVersion(provenance) {
   const commit = provenance.source.commit.slice(0, 12);
   if (provenance.root_kind === "source") {
     return `Lazurio CLI ${provenance.version} · development · ${provenance.source.dirty ? "dirty" : "clean"}`;
+  }
+  if (provenance.root_kind === "package") {
+    return `Lazurio CLI ${provenance.version} · package · ${commit}`;
   }
   return `Lazurio CLI ${provenance.version} · ${commit} · ${provenance.artifact.target}`;
 }
