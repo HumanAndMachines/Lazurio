@@ -38,10 +38,7 @@
     "entrypoint": "bin/organization-host-adapter",
     "operations": {
       "validate": { "mode": "read-only" },
-      "plan": { "mode": "read-only" },
-      "apply": { "mode": "mutation", "deploy_gate": "explicit" },
-      "readback": { "mode": "read-only" },
-      "rollback": { "mode": "mutation", "deploy_gate": "explicit" }
+      "readback": { "mode": "read-only" }
     }
   },
   "custody": {

@@ -233,7 +233,7 @@
         "operation": {
           "anyOf": [
             {
-              "enum": ["validate", "plan", "apply", "readback", "rollback"]
+              "enum": ["validate", "readback"]
             },
             {
               "enum": [null]

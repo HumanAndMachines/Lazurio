@@ -121,22 +121,13 @@
         },
         "operations": {
           "type": "object",
-          "required": ["validate", "plan", "apply", "readback", "rollback"],
+          "required": ["validate", "readback"],
           "properties": {
             "validate": {
               "$ref": "#/definitions/read_only_operation"
             },
-            "plan": {
-              "$ref": "#/definitions/read_only_operation"
-            },
-            "apply": {
-              "$ref": "#/definitions/mutation_operation"
-            },
             "readback": {
               "$ref": "#/definitions/read_only_operation"
-            },
-            "rollback": {
-              "$ref": "#/definitions/mutation_operation"
             }
           },
           "additionalProperties": false
@@ -241,19 +232,6 @@
       "properties": {
         "mode": {
           "const": "read-only"
-        }
-      },
-      "additionalProperties": false
-    },
-    "mutation_operation": {
-      "type": "object",
-      "required": ["mode", "deploy_gate"],
-      "properties": {
-        "mode": {
-          "const": "mutation"
-        },
-        "deploy_gate": {
-          "const": "explicit"
         }
       },
       "additionalProperties": false

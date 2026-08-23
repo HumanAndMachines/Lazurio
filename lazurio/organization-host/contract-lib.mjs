@@ -1,3 +1,4 @@
+import { realpathSync, statSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
 export const ORGANIZATION_HOST_ADAPTER_SCHEMA = "lazurio.organization_host.adapter.v1";
@@ -6,10 +7,7 @@ export const ORGANIZATION_HOST_CONTRACT_VERSION = 1;
 
 export const ORGANIZATION_HOST_OPERATIONS = Object.freeze([
   "validate",
-  "plan",
-  "apply",
   "readback",
-  "rollback",
 ]);
 
 export const ORGANIZATION_HOST_HEALTH_CHECKS = Object.freeze([
@@ -21,8 +19,6 @@ export const ORGANIZATION_HOST_HEALTH_CHECKS = Object.freeze([
   "storage",
 ]);
 
-const READ_ONLY_OPERATIONS = new Set(["validate", "plan", "readback"]);
-const MUTATION_OPERATIONS = new Set(["apply", "rollback"]);
 const PROFILE_STATES = new Set(["legacy", "target", "declared"]);
 const PIN_KINDS = new Set(["git-commit", "oci-digest", "package-version"]);
 const HEALTH_STATUSES = new Set(["pass", "warn", "fail", "not-evaluated"]);
@@ -206,7 +202,6 @@ export function buildOrganizationHostAdapterInvocation({
   declaration,
   infraRoot,
   operation,
-  authorization = {},
 }) {
   const failures = validateOrganizationHostAdapter(declaration);
   if (failures.length > 0) throw new Error(`invalid Organization Host adapter: ${failures.join("; ")}`);
@@ -216,13 +211,12 @@ export function buildOrganizationHostAdapterInvocation({
   if (typeof infraRoot !== "string" || infraRoot.length === 0 || !isAbsolute(infraRoot)) {
     throw new Error("infraRoot must be an absolute path selected by the caller");
   }
-  if (MUTATION_OPERATIONS.has(operation)) validateMutationAuthorization(authorization);
-  const executable = resolveEntrypoint(infraRoot, declaration.adapter.entrypoint);
+  const target = resolvePhysicalEntrypoint(infraRoot, declaration.adapter.entrypoint);
   return Object.freeze({
-    executable,
+    executable: target.executable,
     args: Object.freeze([operation, "--json"]),
-    cwd: resolve(infraRoot),
-    mode: READ_ONLY_OPERATIONS.has(operation) ? "read-only" : "mutation",
+    cwd: target.root,
+    mode: "read-only",
   });
 }
 
@@ -242,6 +236,21 @@ export function resolveEntrypoint(infraRoot, entrypoint) {
     throw new Error("adapter.entrypoint escapes the selected infra repository");
   }
   return executable;
+}
+
+export function resolvePhysicalEntrypoint(infraRoot, entrypoint) {
+  const lexicalEntrypoint = resolveEntrypoint(infraRoot, entrypoint);
+  let root;
+  let executable;
+  try {
+    root = realpathSync(resolve(infraRoot));
+    executable = realpathSync(lexicalEntrypoint);
+  } catch {
+    throw new Error("adapter entrypoint and selected infra repository must exist");
+  }
+  assertContainedPath(root, executable, "adapter.entrypoint physical target escapes the selected infra repository");
+  if (!statSync(executable).isFile()) throw new Error("adapter.entrypoint physical target must be a file");
+  return { executable, root };
 }
 
 function validateAdapter(adapter, failures) {
@@ -268,31 +277,17 @@ function validateAdapter(adapter, failures) {
       failures.push(`adapter.operations.${operation} must be an object`);
       continue;
     }
-    const mutation = MUTATION_OPERATIONS.has(operation);
-    const allowed = mutation ? new Set(["mode", "deploy_gate"]) : new Set(["mode"]);
-    rejectUnknownKeys(contract, allowed, `adapter.operations.${operation}`, failures);
-    if (contract.mode !== (mutation ? "mutation" : "read-only")) {
+    rejectUnknownKeys(contract, new Set(["mode"]), `adapter.operations.${operation}`, failures);
+    if (contract.mode !== "read-only") {
       failures.push(`adapter.operations.${operation}.mode is invalid`);
-    }
-    if (mutation && contract.deploy_gate !== "explicit") {
-      failures.push(`adapter.operations.${operation}.deploy_gate is invalid`);
     }
   }
 }
 
-function validateMutationAuthorization(authorization) {
-  const selector = authorization.organizationSelector;
-  if (typeof selector !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(selector)) {
-    throw new Error("mutation requires an explicit Organization selector");
-  }
-  if (authorization.planOwnedWorktree !== true) {
-    throw new Error("mutation requires a plan-owned worktree");
-  }
-  if (authorization.reviewedDiff !== true) {
-    throw new Error("mutation requires a reviewed diff");
-  }
-  if (authorization.deployGate !== "explicit") {
-    throw new Error("mutation requires an explicit deploy gate");
+function assertContainedPath(root, candidate, errorMessage) {
+  const offset = relative(root, candidate);
+  if (offset === ".." || offset.startsWith(`..${sep}`) || isAbsolute(offset)) {
+    throw new Error(errorMessage);
   }
 }
 
