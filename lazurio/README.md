@@ -26,9 +26,12 @@ takže vlastní `.exe` nelze synchronně přesně odstranit bez druhého cleanup
 mechanismu. Exact Bun unlink proto patří pozdějšímu machine updateru, který
 neběží přes tento launcher.
 
-CLI bez `--root` vždy použije root vlastního entrypointu, takže funguje z
-libovolného pracovního adresáře. Explicitní `--root` zůstává vědomý override.
-Linked task/PR worktree se permanentním PATH targetem stát nesmí.
+Development link a Resident bez `--root` použijí Root vlastního entrypointu,
+takže fungují z libovolného pracovního adresáře. Platformně neutrální npm
+balíček je naopak pouze CLI code origin: dokud pozdější `lazurio install`
+neuloží zvolený pracovní Root, rootové příkazy vyžadují explicitní `--root`.
+`lazurio --version` vždy popisuje samotné spuštěné CLI a `--root` proto
+nepřijímá. Linked task/PR worktree se permanentním PATH targetem stát nesmí.
 
 Aktivní development override i budoucí immutable instalace publikují stejný
 read-only provenance kontrakt:
@@ -40,14 +43,24 @@ lazurio --version --json
 
 Development verze se odvozuje přímo z aktuálního Git HEADu a pravdivě ukazuje
 `clean`/`dirty`; nevytváří generovaný version soubor, který by mohl zestárnout.
-Resident verze se čte z immutable `lazurio.resident.json`. Root s oběma markery
-je explicitní konflikt a directory-only root bez manifestu zůstává
-nerozpoznaný. `lazurio cli status --json` skládá stejnou provenance vedle
-stávající instalační identity; její schéma `lazurio.cli.identity.v1` se nemění.
+Resident verze se čte z immutable `lazurio.resident.json`. Npm verze a exact
+source commit se čtou z generovaného standardního `package.json`; tarball
+integrity vlastní npm a Lazurio nevytváří druhý payload digest. Root s Git i
+Resident markerem je explicitní konflikt a directory-only root bez manifestu
+zůstává nerozpoznaný. `lazurio cli status --json` skládá stejnou provenance
+vedle stávající instalační identity; její schéma `lazurio.cli.identity.v1` se
+nemění.
 Immutable provenance záměrně neobsahuje uživatelův distribuční track. Budoucí
 `nightly`/`latest` je package-manager preference nad již vydanou verzí, ne
 vlastnost payload bytes; historický Resident channel je proto pouze explicitní
 `artifact.build_channel`.
+
+Package gate sestavuje z čistého exact Git HEADu jeden source balíček bez
+OS/arch variant, balí ho připnutým standardním npm packerem a instaluje
+skutečný tarball přes Bun do izolovaného globálního prefixu. CI porovnává npm
+integrity a inventory na macOS, Linuxu a Windows. Krátkodobé Actions artifacts
+přenášejí mezi joby pouze malé JSON evidence; nejsou distribučním kanálem.
+Tento gate nic nepublikuje na npm a source `package.json` zůstává `private`.
 
 Potom lze samostatně nainstalovat desktop Launchpad:
 

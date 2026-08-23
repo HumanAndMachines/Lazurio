@@ -100,6 +100,58 @@ test("Resident provenance reads immutable manifest metadata without claiming pay
   expectValid(result);
 });
 
+test("package provenance uses generated package.json metadata without pretending to be a Resident", () => {
+  const root = temporaryDirectory("package");
+  writeFileSync(join(root, "package.json"), `${JSON.stringify({
+    name: "lazurio",
+    version: "0.0.0-dev.abc123",
+    lazurio: {
+      schema_version: "lazurio.cli.package.v1",
+      source: {
+        repository: "HumanAndMachines/Lazurio",
+        commit: "a".repeat(40),
+        commit_epoch: 1_700_000_000,
+      },
+    },
+  }, null, 2)}\n`);
+
+  const result = buildLazurioCliProvenance({ root });
+  expect(result).toEqual({
+    schema_version: "lazurio.cli.provenance.v1",
+    product: "lazurio-cli",
+    status: "resolved",
+    reason: "package_manifest_resolved",
+    root_kind: "package",
+    root_path: realpathSync.native(resolve(root)),
+    verification: "package",
+    version: "0.0.0-dev.abc123",
+    source: {
+      repository: "HumanAndMachines/Lazurio",
+      commit: "a".repeat(40),
+      commit_epoch: 1_700_000_000,
+      dirty: null,
+    },
+    artifact: null,
+  });
+  expectValid(result);
+});
+
+test("package provenance fails closed for invalid Lazurio package metadata", () => {
+  const root = temporaryDirectory("invalid-package");
+  writeFileSync(join(root, "package.json"), `${JSON.stringify({
+    name: "lazurio",
+    version: "0.0.0-dev.test",
+    lazurio: { schema_version: "lazurio.cli.package.v1" },
+  })}\n`);
+  const result = buildLazurioCliProvenance({ root });
+  expect(result).toMatchObject({
+    status: "unrecognized",
+    root_kind: "package",
+    reason: "package_manifest_invalid",
+  });
+  expectValid(result);
+});
+
 test("classifier fails closed for conflicts, invalid manifests and directory-only roots", () => {
   const conflict = temporaryDirectory("conflict");
   mkdirSync(join(conflict, ".git"));

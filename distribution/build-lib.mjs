@@ -355,7 +355,7 @@ export async function buildResidentArtifact({
   };
 }
 
-function selectSourceEntries(repositoryRoot, tree, contract) {
+export function selectSourceEntries(repositoryRoot, tree, contract) {
   const entries = new Map();
   for (const [path, source] of tree) {
     if (!contract.source_includes.some((include) => matchesInclude(path, include))) continue;
@@ -394,7 +394,7 @@ function pruneWorkspaceRuntimeSources(entries) {
   }
 }
 
-function addGeneratedEntry(entries, path, value, mode) {
+export function addGeneratedEntry(entries, path, value, mode) {
   const normalized = normalizeArtifactPath(path);
   if (entries.has(normalized)) throw new Error(`artifact path collision: ${normalized}`);
   const bytes = Buffer.isBuffer(value) ? value : Buffer.from(value, "utf8");
@@ -682,7 +682,7 @@ function writeTarOctal(buffer, offset, length, value) {
   buffer[offset + length - 1] = 0;
 }
 
-function readGitTree(repositoryRoot, sourceCommit) {
+export function readGitTree(repositoryRoot, sourceCommit) {
   const output = gitBytes(repositoryRoot, ["ls-tree", "-rz", "--full-tree", sourceCommit]);
   const tree = new Map();
   for (const raw of output.toString("utf8").split("\0")) {
@@ -702,7 +702,7 @@ function readGitTree(repositoryRoot, sourceCommit) {
   return tree;
 }
 
-function readJsonBlob(repositoryRoot, tree, path) {
+export function readJsonBlob(repositoryRoot, tree, path) {
   try {
     return JSON.parse(readBlob(repositoryRoot, tree, path).toString("utf8"));
   } catch (error) {
@@ -739,7 +739,7 @@ function normalizeArtifactPath(path) {
   return normalized;
 }
 
-function sortedEntries(entries) {
+export function sortedEntries(entries) {
   return [...entries.entries()].sort(([left], [right]) => left.localeCompare(right));
 }
 
@@ -752,7 +752,7 @@ function normalizeOperatingSystem(platform) {
   return platform;
 }
 
-function gitText(cwd, args) {
+export function gitText(cwd, args) {
   return gitBytes(cwd, args).toString("utf8").trim();
 }
 

@@ -24,6 +24,7 @@ const digestPattern = /^[0-9a-f]{64}$/u;
 const repositoryPattern = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,38}\/[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$/u;
 const versionPattern = /^[A-Za-z0-9][A-Za-z0-9.+-]*$/u;
 const residentBuildChannels = new Set(RESIDENT_CHANNELS);
+const packageMetadataSchema = "lazurio.cli.package.v1";
 
 export function buildLazurioCliProvenance({
   root,
@@ -66,6 +67,8 @@ export function buildLazurioCliProvenance({
       runGit,
     });
   }
+  const packageMarker = safeLstat(join(canonicalRoot, "package.json"));
+  if (packageMarker) return packageProvenance(canonicalRoot, packageMarker);
   return unresolved(canonicalRoot, "metadata_missing");
 }
 
@@ -74,10 +77,10 @@ export function isValidLazurioCliProvenance(value) {
   if (value.schema_version !== LAZURIO_CLI_PROVENANCE_SCHEMA) return false;
   if (value.product !== LAZURIO_CLI_PRODUCT) return false;
   if (typeof value.root_path !== "string" || !isAbsolute(value.root_path)) return false;
-  if (!new Set(["source", "resident", "unknown", "conflict"]).has(value.root_kind)) return false;
+  if (!new Set(["source", "resident", "package", "unknown", "conflict"]).has(value.root_kind)) return false;
   if (!new Set(["resolved", "unrecognized", "conflict"]).has(value.status)) return false;
   if (typeof value.reason !== "string" || value.reason === "") return false;
-  if (!new Set(["git", "manifest", "none"]).has(value.verification)) return false;
+  if (!new Set(["git", "manifest", "package", "none"]).has(value.verification)) return false;
   if (value.status === "resolved") {
     if (typeof value.version !== "string" || !versionPattern.test(value.version)) return false;
     if (!validSource(value.source)) return false;
@@ -90,6 +93,13 @@ export function isValidLazurioCliProvenance(value) {
       return value.verification === "manifest"
         && value.source.dirty === null
         && validArtifact(value.artifact);
+    }
+    if (value.root_kind === "package") {
+      return value.verification === "package"
+        && value.source.dirty === null
+        && Number.isSafeInteger(value.source.commit_epoch)
+        && value.source.commit_epoch >= 0
+        && value.artifact === null;
     }
     return false;
   }
@@ -238,6 +248,43 @@ function residentProvenance(root, marker) {
   });
 }
 
+function packageProvenance(root, marker) {
+  if (!marker.isFile() || marker.isSymbolicLink()) {
+    return unresolved(root, "package_manifest_unsafe", "package");
+  }
+  let manifest;
+  try {
+    manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+  } catch {
+    return unresolved(root, "package_manifest_invalid_json", "package");
+  }
+  if (manifest?.name !== "lazurio" || !("lazurio" in manifest)) {
+    return unresolved(root, "metadata_missing");
+  }
+  const metadata = manifest.lazurio;
+  if (
+    metadata?.schema_version !== packageMetadataSchema
+    || !versionPattern.test(manifest.version ?? "")
+    || !validPackageSource(metadata.source)
+  ) {
+    return unresolved(root, "package_manifest_invalid", "package");
+  }
+  return provenance({
+    rootPath: root,
+    rootKind: "package",
+    status: "resolved",
+    reason: "package_manifest_resolved",
+    verification: "package",
+    version: manifest.version,
+    source: {
+      repository: metadata.source.repository,
+      commit: metadata.source.commit,
+      commit_epoch: metadata.source.commit_epoch,
+      dirty: null,
+    },
+  });
+}
+
 function validResidentManifestProvenance(manifest) {
   return validateResidentManifest(manifest).length === 0;
 }
@@ -249,7 +296,24 @@ function validSource(source) {
     && !Array.isArray(source)
     && (source.repository === null || repositoryPattern.test(source.repository))
     && commitPattern.test(source.commit ?? "")
+    && (
+      source.commit_epoch === undefined
+      || (Number.isSafeInteger(source.commit_epoch) && source.commit_epoch >= 0)
+    )
     && (typeof source.dirty === "boolean" || source.dirty === null),
+  );
+}
+
+function validPackageSource(source) {
+  return Boolean(
+    source
+    && typeof source === "object"
+    && !Array.isArray(source)
+    && repositoryPattern.test(source.repository ?? "")
+    && commitPattern.test(source.commit ?? "")
+    && Number.isSafeInteger(source.commit_epoch)
+    && source.commit_epoch >= 0
+    && Object.keys(source).every((key) => ["repository", "commit", "commit_epoch"].includes(key)),
   );
 }
 

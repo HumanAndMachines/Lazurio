@@ -29,14 +29,14 @@
       "minLength": 1
     },
     "root_kind": {
-      "enum": ["source", "resident", "unknown", "conflict"]
+      "enum": ["source", "resident", "package", "unknown", "conflict"]
     },
     "root_path": {
       "type": "string",
       "minLength": 1
     },
     "verification": {
-      "enum": ["git", "manifest", "none"]
+      "enum": ["git", "manifest", "package", "none"]
     },
     "version": {
       "anyOf": [
@@ -65,6 +65,10 @@
             "commit": {
               "type": "string",
               "pattern": "^[0-9a-f]{40,64}$"
+            },
+            "commit_epoch": {
+              "type": "integer",
+              "minimum": 0
             },
             "dirty": {
               "anyOf": [
