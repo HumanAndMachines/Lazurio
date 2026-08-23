@@ -7,6 +7,7 @@ import {
   organizationRelativePathIssue,
   organizationRepositoryPathCasingIssue,
   runtimeLoadedEnvFileSelection,
+  runtimeSourcePortAuthorityIssues,
 } from "./discovery-lib.mjs";
 
 const tempRoots = [];
@@ -871,6 +872,25 @@ test("runtime env gate follows the declared dev script closure and exact selecte
   expect(unsafeModes.issues).toHaveLength(2);
   expect(unsafeModes.issues.join("\n")).toContain('NODE_ENV "$RUNTIME_MODE"');
   expect(unsafeModes.issues.join("\n")).toContain('--mode "staging..prod"');
+});
+
+test("runtime source gate distinguishes its own listener fallback from a named legacy dependency", async () => {
+  const packageDirectory = await mkdtemp(join(tmpdir(), "lazurio-runtime-source-"));
+  tempRoots.push(packageDirectory);
+  await writeFile(
+    join(packageDirectory, "server.mjs"),
+    "const DEFAULT_PORT = 5693;\nconst WIKI_APP_PORT = 5691;\n",
+    "utf8",
+  );
+
+  const issues = await runtimeSourcePortAuthorityIssues({
+    packageDirectory,
+    packagePath: "app/v1/package.json",
+    module: { port_leases: [{ id: "main", host: "127.0.0.1", port: 5693 }] },
+  });
+
+  expect(issues.join("\n")).toContain("číselný port fallback 5693");
+  expect(issues.join("\n")).not.toContain("číselný port fallback 5691");
 });
 
 test("duplicitní app id izoluje druhý manifest, první zůstává platný (decision 0043)", async () => {

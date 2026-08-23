@@ -156,6 +156,10 @@ listenery a health check. Není to kontrakt produkčního nasazení.
 | Launchpad | Při startu načte lease, předá host a port procesu a řídí jeho životní cyklus. Port nevymýšlí ani trvale neukládá. |
 | Hosted infrastruktura | Ze stejné přesné revize zdroje odvodí proxy, subdoménu a interní cíl. Port nepřepisuje. |
 
+Při přímém vývojářském startu načte aplikace lease sama z
+`lazurio.module.json`. Při startu přes Launchpad dostane stejné hodnoty jako
+procesní vstup a odmítne je, pokud s manifestem nesouhlasí.
+
 Na jedné Mašině běží jeden sdílený Lazurio Server. Jeho aktuální lokální
 adresu drží pouze gitignored `launchpad/.local/server.json`; jde o ukazatel na
 Server, ne o registr modulových portů.
