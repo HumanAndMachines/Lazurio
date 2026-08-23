@@ -728,6 +728,17 @@ test("lazurio.runtime.v1 discovers one entrypoint and auxiliary listeners", asyn
   await rm(activeEnvPath);
   await rm(inactiveEnvPath);
 
+  const dottedModeEnvPath = join(envDirectory, ".env.staging.prod");
+  await writeFile(dottedModeEnvPath, envSource, "utf8");
+  packageJson.scripts.dev = "NODE_ENV=staging.prod bun server.mjs";
+  await writeJson(packagePath, packageJson);
+  const dottedModeAuthority = await discoverLaunchpadApps(root);
+  expect(dottedModeAuthority.invalid_apps).toHaveLength(1);
+  expect(dottedModeAuthority.failures.join("\n")).toContain(
+    ".env.staging.prod: PORT nesmí být per-machine port autorita",
+  );
+  await rm(dottedModeEnvPath);
+
   const nestedEnvDirectory = join(envDirectory, "config");
   const nestedEnvPath = join(nestedEnvDirectory, "runtime.env");
   await mkdir(nestedEnvDirectory, { recursive: true });
@@ -782,7 +793,7 @@ test("runtime env gate follows the declared dev script closure and exact selecte
   const packageJson = {
     scripts: {
       dev: "concurrently \"bun run dev:web\" \"bun run dev:api\"",
-      "dev:web": "NODE_ENV=staging vite --mode local-offline --env-file=config/runtime.env",
+      "dev:web": "NODE_ENV=staging.prod vite --mode local.offline --env-file=config/runtime.env",
       "dev:api": "bun server.ts",
       test: "vite --mode test",
     },
@@ -796,10 +807,10 @@ test("runtime env gate follows the declared dev script closure and exact selecte
     ".env.local",
     ".env.development",
     ".env.development.local",
-    ".env.staging",
-    ".env.staging.local",
-    ".env.local-offline",
-    ".env.local-offline.local",
+    ".env.staging.prod",
+    ".env.staging.prod.local",
+    ".env.local.offline",
+    ".env.local.offline.local",
     "config/runtime.env",
   ]) {
     expect(selection.paths.has(expected)).toBe(true);
@@ -819,6 +830,18 @@ test("runtime env gate follows the declared dev script closure and exact selecte
   expect(unsafe.issues).toHaveLength(2);
   expect(unsafe.issues.join("\n")).toContain("statická literal cesta");
   expect(unsafe.issues.join("\n")).toContain("relativní k runtime package");
+
+  const unsafeModes = runtimeLoadedEnvFileSelection({
+    packageJson: {
+      scripts: {
+        dev: "NODE_ENV=$RUNTIME_MODE vite --mode=staging..prod",
+      },
+    },
+    runtime: { dev_script: "dev" },
+  });
+  expect(unsafeModes.issues).toHaveLength(2);
+  expect(unsafeModes.issues.join("\n")).toContain('NODE_ENV "$RUNTIME_MODE"');
+  expect(unsafeModes.issues.join("\n")).toContain('--mode "staging..prod"');
 });
 
 test("duplicitní app id izoluje druhý manifest, první zůstává platný (decision 0043)", async () => {
