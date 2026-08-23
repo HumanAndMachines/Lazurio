@@ -103,7 +103,8 @@ Git repozitář Lazurio
 ```
 
 Source checkout je dnes současně vývojovým pracovním rootem. Příkazy se
-spouštějí přes Bun a některé instalační nebo distribuční části jsou stále
+spouštějí přes Bun; primární checkout lze také zpřístupnit jako uživatelský
+příkaz `lazurio` v `PATH`. Některé instalační a distribuční části jsou stále
 experimentální.
 
 ### Cílová distribuce
@@ -156,7 +157,7 @@ rozložení repozitářů [MAP.md](MAP.md).
 | --- | --- |
 | Source checkout a Bun workflow | **Funguje dnes.** Obsahuje Launchpad, Guide, CLI v0, Doctory, manuály, šablony a build kontrakty. |
 | Launchpad | **Funguje dnes.** Je builder-first a dynamicky objevuje lokálně připojené Organizace. |
-| Lazurio CLI v0 | **Experimentální.** Umí omezený kontext, Doctor, synchronizaci, instalaci desktopového launcheru a scoped search; není ještě distribuční package ani stabilní veřejné API. |
+| Lazurio CLI v0 | **Experimentální.** Umí omezený kontext, Doctor, synchronizaci, instalaci desktopového launcheru a scoped search. Primární checkout lze přes Bun zpřístupnit jako uživatelský příkaz `lazurio`; nejde ještě o stabilní distribuční balíček ani veřejné API. |
 | Resident artefakty | **První funkční řez.** Deterministický build a lifecycle dnes pokrývají vybrané profily a platformy; nejde ještě o obecný onboarding každého uživatele. |
 | Package-managed `lazurio` CLI | **Cíl.** Má být jediným produkčním vstupem pro instalaci a údržbu Lazuria. Přesná nevydaná syntaxe zatím není veřejný kontrakt. |
 | Jazykově generovaný non-Git Root | **Cíl.** Lidský obsah se zvolí podle jazyka, zatímco strojové identity zůstanou stabilní. |
@@ -181,6 +182,13 @@ bun run lazurio -- doctor
 bun run launchpad
 ```
 
+Stejný primární checkout můžeš bezpečně a opakovaně zpřístupnit v `PATH`:
+
+```sh
+bun run lazurio -- cli install
+lazurio cli status
+```
+
 Čerstvý checkout nemusí mít připojenou žádnou Organizaci ani Personalspace.
 To je platný stav: Launchpad je objevuje až z lokálních, Gitignored mountů a
 jejich manifestů. Varování Doctoru proto vždy čti podle uvedeného vlastníka a
@@ -193,9 +201,11 @@ desktopový launcher:
 bun run lazurio -- launchpad install
 ```
 
-Tento příkaz neinstaluje budoucí CLI do `PATH`, nemění Git checkout a na Linuxu
+Tento příkaz sám CLI do `PATH` neregistruje, nemění Git checkout a na Linuxu
 zatím desktopový instalační slice nepodporuje. Detaily drží
 [dokumentace CLI](lazurio/README.md#instalace-launchpadu).
+
+Po registraci CLI je stejná operace dostupná jako `lazurio launchpad install`.
 
 ### Kontrola změn
 
@@ -222,10 +232,11 @@ udržovat druhý globální rollback systém ani skrytý paralelní stav; riskan
 změny zůstávají explicitní a migrace dnešního Gitového Rootu bude samostatná,
 silně hlídaná operace s inventurou a obnovitelným rollbackem.
 
-Dokud tento distribuční tok není vydaný, README záměrně neuvádí domnělý
-produkční instalační příkaz. Aktuální build rezidentních artefaktů popisuje
-[distribution/README.md](distribution/README.md) a profily
-[manual/lazurio-resident-profiles.md](manual/lazurio-resident-profiles.md).
+Dnešní `lazurio cli install` pouze zpřístupní CLI z tohoto checkoutu. Budoucí
+opakovatelný `lazurio install` má připravit celé lokální prostředí včetně
+generovaného Rootu a při každém běhu skončit aktuálním reportem. Aktuální build
+rezidentních artefaktů popisuje [distribution/README.md](distribution/README.md)
+a profily [manual/lazurio-resident-profiles.md](manual/lazurio-resident-profiles.md).
 
 ## Bezpečnost a soukromí
 
