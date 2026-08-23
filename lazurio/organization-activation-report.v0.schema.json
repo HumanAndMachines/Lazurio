@@ -1,0 +1,253 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lazurio.ai/schemas/organization-activation-report.v0.schema.json",
+  "type": "object",
+  "required": ["schema_version", "contract_version", "request", "execution", "next_action"],
+  "properties": {
+    "schema_version": { "const": "lazurio.organization.activation.report.v0" },
+    "contract_version": { "const": "lazurio.organization.activation.v0" },
+    "request": { "$ref": "#/definitions/request" },
+    "execution": { "$ref": "#/definitions/execution" },
+    "outcome": { "enum": ["needs_activation", "active", "action_required"] },
+    "reasons": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "root_repository_absent",
+          "root_repository_empty",
+          "root_supported_legacy",
+          "root_supported_current",
+          "root_supported_transition",
+          "github_organization_owner_required",
+          "github_repository_creation_required",
+          "github_repository_push_required",
+          "github_app_installation_required",
+          "github_app_scope_unavailable",
+          "github_app_root_access_required",
+          "github_app_root_access_unverified",
+          "root_repository_conflict",
+          "root_manifest_unsupported"
+        ]
+      }
+    },
+    "next_action": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "none",
+            "run_activation",
+            "install_github_cli",
+            "authenticate_github",
+            "retry",
+            "verify_organization",
+            "request_organization_owner",
+            "allow_repository_creation",
+            "install_github_app",
+            "refresh_github_permissions",
+            "grant_root_repository",
+            "verify_root_repository_access",
+            "inspect_existing_repository"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "observations": { "$ref": "#/definitions/observations" }
+  },
+  "additionalProperties": false,
+  "if": {
+    "properties": {
+      "execution": { "properties": { "status": { "const": "ok" } } }
+    }
+  },
+  "then": {
+    "required": ["outcome", "reasons", "observations"]
+  },
+  "else": {
+    "not": {
+      "anyOf": [
+        { "required": ["outcome"] },
+        { "required": ["reasons"] },
+        { "required": ["observations"] }
+      ]
+    }
+  },
+  "definitions": {
+    "id": { "type": "string", "pattern": "^[1-9][0-9]{0,19}$" },
+    "nullableId": {
+      "anyOf": [
+        { "$ref": "#/definitions/id" },
+        { "enum": [null] }
+      ]
+    },
+    "nullableString": {
+      "anyOf": [
+        { "type": "string", "minLength": 1 },
+        { "enum": [null] }
+      ]
+    },
+    "nullableBoolean": {
+      "anyOf": [
+        { "type": "boolean" },
+        { "enum": [null] }
+      ]
+    },
+    "request": {
+      "type": "object",
+      "required": ["schema_version", "github_organization_id"],
+      "properties": {
+        "schema_version": { "const": "lazurio.organization.activation.request.v0" },
+        "github_organization_id": { "$ref": "#/definitions/id" }
+      },
+      "additionalProperties": false
+    },
+    "execution": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": { "enum": ["ok", "error"] },
+        "error": {
+          "type": "object",
+          "required": ["code", "retryable"],
+          "properties": {
+            "code": {
+              "enum": [
+                "github_cli_unavailable",
+                "github_auth_required",
+                "github_transport_failed",
+                "github_access_denied",
+                "github_organization_not_found",
+                "github_identity_inconsistent",
+                "github_repository_inspection_failed",
+                "github_response_invalid"
+              ]
+            },
+            "retryable": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "if": { "properties": { "status": { "const": "error" } } },
+      "then": { "required": ["error"] },
+      "else": { "not": { "required": ["error"] } }
+    },
+    "identity": {
+      "type": "object",
+      "required": ["id", "login"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "login": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "observations": {
+      "type": "object",
+      "required": ["github", "github_app", "root_repository"],
+      "properties": {
+        "github": {
+          "type": "object",
+          "required": ["principal", "organization"],
+          "properties": {
+            "principal": { "$ref": "#/definitions/identity" },
+            "organization": {
+              "type": "object",
+              "required": ["id", "login", "viewer_is_owner", "viewer_can_create_repositories"],
+              "properties": {
+                "id": { "$ref": "#/definitions/id" },
+                "login": { "type": "string", "minLength": 1 },
+                "viewer_is_owner": { "type": "boolean" },
+                "viewer_can_create_repositories": { "type": "boolean" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "github_app": {
+          "type": "object",
+          "required": ["status", "installation_id", "repository_selection", "root_access"],
+          "properties": {
+            "status": { "enum": ["installed", "missing", "unobservable"] },
+            "installation_id": { "$ref": "#/definitions/nullableId" },
+            "repository_selection": {
+              "anyOf": [
+                { "enum": ["all", "selected"] },
+                { "enum": [null] }
+              ]
+            },
+            "root_access": { "enum": ["included", "missing", "unverified", "not_applicable"] }
+          },
+          "additionalProperties": false,
+          "if": { "properties": { "status": { "const": "installed" } } },
+          "then": {
+            "properties": {
+              "installation_id": { "$ref": "#/definitions/id" },
+              "repository_selection": { "enum": ["all", "selected"] }
+            },
+            "if": { "properties": { "repository_selection": { "const": "all" } } },
+            "then": { "properties": { "root_access": { "const": "included" } } }
+          },
+          "else": {
+            "properties": {
+              "installation_id": { "enum": [null] },
+              "repository_selection": { "enum": [null] },
+              "root_access": { "const": "unverified" }
+            }
+          }
+        },
+        "root_repository": {
+          "type": "object",
+          "required": ["presence", "id", "name", "full_name", "default_branch", "viewer_can_push", "candidate_count", "resolver"],
+          "properties": {
+            "presence": { "enum": ["absent", "empty", "present"] },
+            "id": { "$ref": "#/definitions/nullableId" },
+            "name": { "type": "string", "minLength": 1 },
+            "full_name": { "type": "string", "minLength": 1 },
+            "default_branch": { "$ref": "#/definitions/nullableString" },
+            "viewer_can_push": { "$ref": "#/definitions/nullableBoolean" },
+            "candidate_count": { "type": "integer", "minimum": 0 },
+            "resolver": {
+              "type": "object",
+              "required": ["status", "format", "reason"],
+              "properties": {
+                "status": { "enum": ["not_applicable", "supported", "unsupported"] },
+                "format": {
+                  "anyOf": [
+                    { "enum": ["legacy", "current", "transition"] },
+                    { "enum": [null] }
+                  ]
+                },
+                "reason": { "type": "string", "minLength": 1 }
+              },
+              "additionalProperties": false,
+              "if": { "properties": { "status": { "const": "supported" } } },
+              "then": { "properties": { "format": { "enum": ["legacy", "current", "transition"] } } },
+              "else": { "properties": { "format": { "enum": [null] } } }
+            }
+          },
+          "additionalProperties": false,
+          "if": { "properties": { "presence": { "const": "absent" } } },
+          "then": {
+            "properties": {
+              "id": { "enum": [null] },
+              "default_branch": { "enum": [null] },
+              "viewer_can_push": { "enum": [null] }
+            }
+          },
+          "else": {
+            "properties": {
+              "id": { "$ref": "#/definitions/id" },
+              "viewer_can_push": { "type": "boolean" }
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

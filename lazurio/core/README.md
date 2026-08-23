@@ -28,6 +28,12 @@ Doctor, build i updater používají tentýž validátor.
 locale-neutral instalační stav pro CLI, Agent JSON a budoucí GUI. Nemá registry
 kroků, dependency DAG ani persisted workflow; UI, překlady, consent dialogy a
 veřejná serializace zůstávají v površích nad Core.
+`organization-activation-lib.mjs` vlastní čisté odvození živých GitHub,
+repository a resolver faktů na tři veřejné outcomes. Nevolá síť ani GitHub CLI,
+neukládá desired state a nemá workflow engine. Povrchový provider adapter pouze
+načte read-only fakta a Core nikdy nezamění technické selhání za známý stav
+Organization. Legacy identity-pair resolver je úzká compatibility kontrola;
+canonical manifest parser zůstává u DEV-6488 a activation jej neduplikuje.
 `ui_exposure` zůstává pouze prezentační policy; nevytváří identitu resource ani
 access autoritu. Další doménové vrstvy se přesunují samostatnými PR až nad
 zeleným parity baseline; fyzický přesun souboru sám nesmí měnit schéma ani

@@ -27,6 +27,11 @@ import {
 } from "./install-output-lib.mjs";
 import { runLaunchpadInstall } from "./launchpad-install-lib.mjs";
 import {
+  checkOrganizationActivation,
+  organizationActivationExitCode,
+  renderHumanOrganizationActivation,
+} from "./organization-activation-lib.mjs";
+import {
   buildLazurioSearchStatus,
   searchLazurioExact,
   searchLazurioQmd,
@@ -71,6 +76,16 @@ async function run(argv) {
       console.log(renderHumanInstallReport(report, { language }));
     }
     return installExitCode(report);
+  }
+
+  if (options.command === "organization") {
+    const report = checkOrganizationActivation({
+      githubOrganizationId: options.githubOrganizationId,
+    });
+    console.log(options.json
+      ? JSON.stringify(report, null, 2)
+      : renderHumanOrganizationActivation(report));
+    return organizationActivationExitCode(report);
   }
 
   options.root ??= defaultOperatedRoot();
@@ -176,6 +191,8 @@ function parseArgs(argv) {
     embed: false,
     status: false,
     update: false,
+    check: false,
+    githubOrganizationId: null,
     operands: [],
     searchFlags: new Set(),
   };
@@ -185,7 +202,7 @@ function parseArgs(argv) {
       parsed.command = arg;
       continue;
     }
-    if (["search", "launchpad", "cli"].includes(parsed.command) && !arg.startsWith("-")) {
+    if (["search", "launchpad", "cli", "organization"].includes(parsed.command) && !arg.startsWith("-")) {
       parsed.operands.push(arg);
       continue;
     }
@@ -204,6 +221,21 @@ function parseArgs(argv) {
     if (arg === "--embed") {
       parsed.embed = true;
       parsed.searchFlags.add("--embed");
+      continue;
+    }
+    if (arg === "--check") {
+      parsed.check = true;
+      continue;
+    }
+    if (arg === "--github-id") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("-")) throw new Error("--github-id vyžaduje immutable GitHub Organization ID.");
+      parsed.githubOrganizationId = value;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--github-id=")) {
+      parsed.githubOrganizationId = requiredInlineValue(arg, "--github-id");
       continue;
     }
     if (arg === "--status" || arg === "--update") {
@@ -318,6 +350,23 @@ function parseArgs(argv) {
       throw new Error("cli vyžaduje jedinou akci `install` nebo `status`.");
     }
     parsed.cliAction = parsed.operands[0];
+  } else if (parsed.command === "organization") {
+    if (parsed.searchFlags.size > 0) {
+      throw new Error(`${[...parsed.searchFlags].join(", ")} lze použít pouze s příkazem search.`);
+    }
+    if (parsed.operands.length !== 1 || parsed.operands[0] !== "activate") {
+      throw new Error("organization vyžaduje jedinou akci `activate`.");
+    }
+    if (!parsed.check) {
+      throw new Error("Remote writer zatím není veřejný; použij `lazurio organization activate --check --github-id <id>`.");
+    }
+    if (parsed.githubOrganizationId === null) {
+      throw new Error("organization activate --check vyžaduje --github-id <immutable GitHub Organization ID>.");
+    }
+    if (parsed.rootExplicit) {
+      throw new Error("organization activate --check pracuje s GitHubem a nepřijímá --root.");
+    }
+    parsed.organizationAction = "activate";
   } else if (parsed.searchFlags.size > 0) {
     throw new Error(`${[...parsed.searchFlags].join(", ")} lze použít pouze s příkazem search.`);
   }
@@ -326,6 +375,12 @@ function parseArgs(argv) {
   }
   if (parsed.language !== null && parsed.command !== "install") {
     throw new Error("--language lze použít pouze s příkazem install.");
+  }
+  if (parsed.check && parsed.command !== "organization") {
+    throw new Error("--check lze použít pouze s `lazurio organization activate`.");
+  }
+  if (parsed.githubOrganizationId !== null && parsed.command !== "organization") {
+    throw new Error("--github-id lze použít pouze s `lazurio organization activate`.");
   }
   if (parsed.version && parsed.command !== null) {
     throw new Error("--version nelze kombinovat s příkazem.");
@@ -364,6 +419,7 @@ function usage() {
     "Použití:",
     "  lazurio --version [--json]",
     "  lazurio install [--language cs|en] [--json] [--root <cesta>]",
+    "  lazurio organization activate --check --github-id <id> [--json]",
     "  lazurio context [--organization <slug>] [--json] [--root <cesta>]",
     "  lazurio doctor [--json] [--root <cesta>]",
     "  lazurio update [--json] [--root <cesta>]",

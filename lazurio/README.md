@@ -32,6 +32,37 @@ selhání kontroly. Tento slice nic neinstaluje, nevolá `lazurio cli install` a
 writer kroky přijdou jako samostatné řezy nad stejným kontraktem; žádná workflow
 databáze ani obecný provisioning engine nevzniká.
 
+## Read-only aktivace Organization
+
+První activation řez pouze pozoruje živý GitHub stav:
+
+```sh
+lazurio organization activate --check --github-id <immutable-id>
+lazurio organization activate --check --github-id <immutable-id> --json
+```
+
+Příkaz nepotřebuje existující Lazurio Root. Přes trusted instalaci `gh` sváže
+aktuální účet, Organization a oprávnění s immutable provider ID, ověří
+`Lazurio for GitHub`, canonical `<login>_GEN3` root a jeho podporovaný manifest.
+Core nad těmito fakty vrátí pouze `needs_activation`, `active` nebo
+`action_required`. Absent/empty repo a legacy/current formát jsou pozorování a
+reason kódy, ne další lifecycle stavy. Transportní nebo offline chyba používá
+oddělený `execution.status: error` a žádný Organization outcome nehádá.
+
+`--check` volá jen read-only GitHub API. Remote writer v tomto řezu veřejný
+není a bez `--check` CLI skončí před provider voláním. Instalaci se scope
+`all` lze ověřit přímo. U `selected` se CLI pokusí o standardní read endpoint;
+pokud jej aktuální `gh` token nemůže číst, vrátí přesný
+`verify_root_repository_access` místo broad App grantu, dalšího credential
+store nebo falešného úspěchu. Současný remote resolver podporuje dnešní GEN3
+identity pair. Canonical `lazurio.organization.json` zůstává fail-closed do
+publikace společného DEV-6488 resolveru; activation si jeho parser nevymýšlí.
+
+Exit code `0` znamená `active`, `1` znamená bezpečný další krok a `2`
+technickou chybu. Veřejný tvar drží
+`organization-activation-report.v0.schema.json`; `next_action.kind` je uzavřený
+enum a nikdy nepřenáší shell příkaz.
+
 ## Instalace Launchpadu
 
 Nejdřív zpřístupni CLI v uživatelském `PATH`:

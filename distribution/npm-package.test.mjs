@@ -20,6 +20,14 @@ test("source package remains private while generated package contract is platfor
     source_repository: "HumanAndMachines/Lazurio",
     packer: { name: "npm" },
   });
+  expect(contract.source_includes).toEqual(expect.arrayContaining([
+    "lazurio/organization-activation-lib.mjs",
+    "lazurio/organization-activation-report.v0.schema.json",
+  ]));
+  expect(contract.required_paths).toEqual(expect.arrayContaining([
+    "lazurio/organization-activation-lib.mjs",
+    "lazurio/organization-activation-report.v0.schema.json",
+  ]));
   expect(JSON.stringify(contract)).not.toMatch(/darwin|linux|windows|x64|arm64/u);
 });
 
