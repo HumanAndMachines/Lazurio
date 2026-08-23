@@ -18,6 +18,7 @@ import {
 
 export const LAZURIO_CLI_PROVENANCE_SCHEMA = "lazurio.cli.provenance.v1";
 export const LAZURIO_CLI_PRODUCT = "lazurio-cli";
+export const LAZURIO_SOURCE_REPOSITORY = "HumanAndMachines/Lazurio";
 
 const commitPattern = /^[0-9a-f]{40,64}$/u;
 const digestPattern = /^[0-9a-f]{64}$/u;

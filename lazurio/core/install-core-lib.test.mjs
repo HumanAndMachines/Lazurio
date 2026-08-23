@@ -147,6 +147,8 @@ test("GitHub probes never execute an ambient PATH shadow", () => {
 
 test("real Root probe distinguishes missing, legacy and generated layouts", async () => {
   const parent = await trackedTempRoot("lazurio-install-root-");
+  const gitExecutable = resolveTrustedGitExecutable();
+  expect(gitExecutable).not.toBeNull();
   const missing = join(parent, "missing");
   const legacy = join(parent, "legacy");
   const generated = join(parent, "generated");
@@ -156,7 +158,7 @@ test("real Root probe distinguishes missing, legacy and generated layouts", asyn
   const staleSource = join(parent, "stale-source");
   await mkdir(join(legacy, ".git"), { recursive: true });
   await writeLaunchpadManifest(legacy);
-  await mkdir(join(generated, "development", "Lazurio", ".git"), { recursive: true });
+  await createSourceCheckout(generated, gitExecutable);
   await writeLaunchpadManifest(generated);
   await mkdir(finderEmpty, { recursive: true });
   await writeFile(join(finderEmpty, ".DS_Store"), "finder metadata", "utf8");
@@ -168,31 +170,31 @@ test("real Root probe distinguishes missing, legacy and generated layouts", asyn
   await mkdir(join(staleSource, "development", "Lazurio", ".git"), { recursive: true });
   await writeLaunchpadManifest(staleSource);
 
-  expect(rootStep(missing)).toMatchObject({
+  expect(rootStep(missing, { gitExecutable })).toMatchObject({
     status: "action_required",
     reason: "root_creation_required",
   });
-  expect(rootStep(legacy)).toMatchObject({
+  expect(rootStep(legacy, { gitExecutable })).toMatchObject({
     status: "action_required",
     reason: "legacy_git_root_detected",
   });
-  expect(rootStep(generated)).toMatchObject({
+  expect(rootStep(generated, { gitExecutable })).toMatchObject({
     status: "completed",
     reason: "generated_root_ready",
   });
-  expect(rootStep(finderEmpty)).toMatchObject({
+  expect(rootStep(finderEmpty, { gitExecutable })).toMatchObject({
     status: "action_required",
     reason: "root_creation_required",
   });
-  expect(rootStep(ambiguous)).toMatchObject({
+  expect(rootStep(ambiguous, { gitExecutable })).toMatchObject({
     status: "action_required",
     reason: "root_unrecognized",
   });
-  expect(rootStep(invalidManifest)).toMatchObject({
+  expect(rootStep(invalidManifest, { gitExecutable })).toMatchObject({
     status: "action_required",
     reason: "root_unrecognized",
   });
-  expect(rootStep(staleSource, { gitCheckoutReady: false })).toMatchObject({
+  expect(rootStep(staleSource, { gitExecutable })).toMatchObject({
     status: "action_required",
     reason: "development_source_missing",
   });
@@ -219,7 +221,6 @@ test("ambient Git repository overrides cannot validate a bogus development check
   await mkdir(sourceRoot, { recursive: true });
   await writeFile(join(sourceRoot, ".git"), "not a git directory\n", "utf8");
   await writeLaunchpadManifest(generated);
-  const observedGitEnvironments = [];
   const poisonedEnvironment = {
     ...environmentWithoutGitOverrides(),
     GIT_DIR: join(ambientRepository, ".git"),
@@ -229,26 +230,50 @@ test("ambient Git repository overrides cannot validate a bogus development check
     environment: poisonedEnvironment,
     resolveGit: () => gitExecutable,
     resolveGitHubCli: () => null,
-    runCommand: ({ executable, args, environment, cwd }) => {
-      if (args.includes("rev-parse")) observedGitEnvironments.push(environment);
-      return spawnSync(executable, args, {
-        cwd,
-        encoding: "utf8",
-        env: environment,
-        shell: false,
-        stdio: ["ignore", "pipe", "ignore"],
-        timeout: 10_000,
-        windowsHide: true,
-      });
-    },
   });
 
   expect(report.steps.find((step) => step.id === "root")).toMatchObject({
     status: "action_required",
     reason: "development_source_missing",
   });
-  expect(observedGitEnvironments).toHaveLength(1);
-  expect(observedGitEnvironments[0].GIT_DIR).toBeUndefined();
+});
+
+test("generated Root requires the canonical Lazurio source repository", async () => {
+  const generated = await trackedTempRoot("lazurio-install-source-identity-");
+  const sourceRoot = join(generated, "development", "Lazurio");
+  const gitExecutable = resolveTrustedGitExecutable();
+  expect(gitExecutable).not.toBeNull();
+
+  await mkdir(sourceRoot, { recursive: true });
+  runGit(gitExecutable, sourceRoot, ["init"]);
+  runGit(gitExecutable, sourceRoot, ["config", "user.name", "Lazurio Test"]);
+  runGit(gitExecutable, sourceRoot, ["config", "user.email", "lazurio-test@example.invalid"]);
+  await writeFile(join(sourceRoot, "tracked.txt"), "fixture\n", "utf8");
+  runGit(gitExecutable, sourceRoot, ["add", "tracked.txt"]);
+  runGit(gitExecutable, sourceRoot, ["commit", "-m", "fixture"]);
+  runGit(gitExecutable, sourceRoot, [
+    "remote",
+    "add",
+    "origin",
+    "git@github.com:Example/Foreign.git",
+  ]);
+  await writeLaunchpadManifest(generated);
+
+  expect(rootStep(generated, { gitExecutable })).toMatchObject({
+    status: "action_required",
+    reason: "development_source_missing",
+  });
+
+  runGit(gitExecutable, sourceRoot, [
+    "remote",
+    "set-url",
+    "origin",
+    "git@github.com:HumanAndMachines/Lazurio.git",
+  ]);
+  expect(rootStep(generated, { gitExecutable })).toMatchObject({
+    status: "completed",
+    reason: "generated_root_ready",
+  });
 });
 
 function fixtureReport() {
@@ -263,20 +288,12 @@ function fixtureReport() {
   });
 }
 
-function rootStep(root, { gitCheckoutReady = true } = {}) {
+function rootStep(root, { gitExecutable = resolveTrustedGitExecutable() } = {}) {
   return inspectLazurioInstallation({
     root,
-    resolveGit: () => "/usr/bin/git",
-    resolveGitHubCli: () => "/usr/bin/gh",
-    runCommand: ({ executable, args }) => {
-      if (executable === "/usr/bin/git" && args[0] === "-C") {
-        return {
-          status: gitCheckoutReady ? 0 : 1,
-          stdout: gitCheckoutReady ? `${args[1]}\n` : "",
-        };
-      }
-      return { status: 0 };
-    },
+    environment: environmentWithoutGitOverrides(),
+    resolveGit: () => gitExecutable,
+    resolveGitHubCli: () => null,
   }).steps.find((step) => step.id === "root");
 }
 
@@ -300,4 +317,32 @@ function environmentWithoutGitOverrides() {
   return Object.fromEntries(
     Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")),
   );
+}
+
+function runGit(executable, cwd, args) {
+  const result = spawnSync(executable, args, {
+    cwd,
+    encoding: "utf8",
+    env: environmentWithoutGitOverrides(),
+    shell: false,
+    windowsHide: true,
+  });
+  expect(result.status, result.stderr).toBe(0);
+}
+
+async function createSourceCheckout(root, gitExecutable) {
+  const sourceRoot = join(root, "development", "Lazurio");
+  await mkdir(sourceRoot, { recursive: true });
+  runGit(gitExecutable, sourceRoot, ["init"]);
+  runGit(gitExecutable, sourceRoot, ["config", "user.name", "Lazurio Test"]);
+  runGit(gitExecutable, sourceRoot, ["config", "user.email", "lazurio-test@example.invalid"]);
+  await writeFile(join(sourceRoot, "tracked.txt"), "fixture\n", "utf8");
+  runGit(gitExecutable, sourceRoot, ["add", "tracked.txt"]);
+  runGit(gitExecutable, sourceRoot, ["commit", "-m", "fixture"]);
+  runGit(gitExecutable, sourceRoot, [
+    "remote",
+    "add",
+    "origin",
+    "git@github.com:HumanAndMachines/Lazurio.git",
+  ]);
 }
