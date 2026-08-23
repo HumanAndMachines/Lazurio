@@ -155,6 +155,22 @@ test("samostatné panely a popovery sdílejí měkký Lazurio radius", async () 
   expect(styles).toMatch(/\.app-version-menu-panel\s*{[\s\S]*?position: static/);
 });
 
+test("Marketplace teaser je klidná neinteraktivní dlaždice v pravém sloupci", async () => {
+  const [html, styles] = await Promise.all([source("index.html"), source("styles.css")]);
+  const teaser = html.slice(
+    html.indexOf('class="marketplace-teaser side-panel"'),
+    html.indexOf("</section>", html.indexOf('class="marketplace-teaser side-panel"')),
+  );
+  expect(teaser).toContain('aria-labelledby="marketplaceTeaserTitle"');
+  expect(teaser).toContain('id="marketplaceTeaserTitle">Marketplace</h2>');
+  expect(teaser).toContain('class="marketplace-teaser-status">Již brzy</span>');
+  expect(teaser).not.toContain("<button");
+  expect(teaser).not.toContain("<a ");
+  expect(styles).toMatch(/\.marketplace-teaser\s*{[^}]*gap: var\(--lz-space-16\);[^}]*padding: var\(--lz-space-16\)/);
+  expect(styles).toMatch(/\.marketplace-teaser-icon\s*{[^}]*background: var\(--lz-blue-50\);[^}]*color: var\(--lz-blue-600\)/);
+  expect(styles).toMatch(/\.marketplace-teaser-copy p\s*{[^}]*color: var\(--lz-ink-muted\);[^}]*font-size: var\(--lz-size-meta\)/);
+});
+
 test("mobilní klidové stavy tvoří kompaktní řadu a akční stav zůstává výrazný", async () => {
   const styles = await source("styles.css");
   const mobileStatus = styles.slice(styles.indexOf("/* Na mobilu jsou klidové provozní stavy"));

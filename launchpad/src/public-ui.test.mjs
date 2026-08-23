@@ -24,6 +24,17 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(html).toContain('id="spaceSwitcherButton"');
   expect(html).toContain('id="spaceSwitcherMenu"');
   expect(html).toContain('id="appsGrid"');
+  expect(html).toContain('class="marketplace-teaser side-panel"');
+  expect(html).toContain('id="marketplaceTeaserTitle">Marketplace</h2>');
+  expect(html).toContain('class="marketplace-teaser-status">Již brzy</span>');
+  expect(html).toContain("Moduly pro váš pracovní prostor od Lazuria i dalších tvůrců.");
+  const marketplaceBlock = html.slice(
+    html.indexOf('class="marketplace-teaser side-panel"'),
+    html.indexOf("</section>", html.indexOf('class="marketplace-teaser side-panel"')),
+  );
+  expect(marketplaceBlock).toContain("iconoir/shop");
+  expect(marketplaceBlock).not.toContain("<a ");
+  expect(marketplaceBlock).not.toContain("<button");
   expect(html).not.toContain('class="debug-table"');
   expect(html).not.toContain('id="appsTable"');
   expect(html).not.toContain('id="organizationRail"');
@@ -198,6 +209,8 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(css).not.toContain(".organization-rail");
   expect(css).toContain(".apps-grid");
   expect(css).toContain(".app-card");
+  expect(css).toContain(".marketplace-teaser");
+  expect(css).toContain("background: var(--lz-blue-50)");
 });
 
 test("každá kanonická Lazurio ikona odkazovaná UI existuje", async () => {
