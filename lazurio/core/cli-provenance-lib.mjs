@@ -11,7 +11,10 @@ import {
   resolve,
   win32,
 } from "node:path";
-import { validateResidentManifest } from "./resident-manifest-lib.mjs";
+import {
+  RESIDENT_CHANNELS,
+  validateResidentManifest,
+} from "./resident-manifest-lib.mjs";
 
 export const LAZURIO_CLI_PROVENANCE_SCHEMA = "lazurio.cli.provenance.v1";
 export const LAZURIO_CLI_PRODUCT = "lazurio-cli";
@@ -20,7 +23,7 @@ const commitPattern = /^[0-9a-f]{40,64}$/u;
 const digestPattern = /^[0-9a-f]{64}$/u;
 const repositoryPattern = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,38}\/[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$/u;
 const versionPattern = /^[A-Za-z0-9][A-Za-z0-9.+-]*$/u;
-const residentChannels = new Set(["nightly", "candidate", "stable"]);
+const residentChannels = new Set(RESIDENT_CHANNELS);
 
 export function buildLazurioCliProvenance({
   root,
@@ -335,8 +338,7 @@ function sanitizedGitEnvironment(environment) {
 function safeLstat(path) {
   try {
     return lstatSync(path);
-  } catch (error) {
-    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return null;
+  } catch {
     return null;
   }
 }

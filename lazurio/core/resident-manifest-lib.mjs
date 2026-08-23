@@ -1,9 +1,9 @@
 import { isAbsolute, posix } from "node:path";
 
 export const RESIDENT_MANIFEST_PATH = "lazurio.resident.json";
+export const RESIDENT_CHANNELS = Object.freeze(["nightly", "candidate", "stable"]);
 
 const ALLOWED_MUTABLE_MOUNTS = new Set(["organizations", "personalspace"]);
-const RESIDENT_CHANNELS = new Set(["nightly", "candidate", "stable"]);
 
 export function validateResidentManifest(manifest) {
   const failures = [];
@@ -21,7 +21,7 @@ export function validateResidentManifest(manifest) {
   if (typeof version !== "string" || !/^[A-Za-z0-9][A-Za-z0-9.+-]*$/u.test(version)) {
     failures.push("invalid artifact_version");
   }
-  if (!RESIDENT_CHANNELS.has(manifest.channel)) failures.push("invalid channel");
+  if (!RESIDENT_CHANNELS.includes(manifest.channel)) failures.push("invalid channel");
   if (!["linux", "darwin", "windows"].includes(os)) failures.push("invalid target OS");
   if (!["x64", "arm64"].includes(arch)) failures.push("invalid target architecture");
   const expectedId = `lazurio-resident-${profile}-${version}-${os}-${arch}`;
