@@ -1,401 +1,269 @@
-# ARCHITECTURE.md — Základy Lazuria
+# Architektura Lazuria
 
-Tento dokument popisuje cílový základ systému v kanonickém repozitáři
-`HumanAndMachines/Lazurio`. Nejde o katalog
-všech budoucích funkcí. Jde o malý počet pravidel, podle kterých se mají
-posuzovat další rozhodnutí, implementace i názvosloví.
+Tento dokument je krátká mapa cílového systému. Popisuje jeho hlavní části,
+hranice a pravidla. Neobsahuje podrobný provozní postup ani úplný popis
+současné implementace.
 
-Dokument zaznamenává founder direction z 2026-08-04. Historické decision
-records se nepřepisují; pokud s tímto cílem kolidují, musí být výslovně
-novelizovány před odpovídající implementací. Současný provider stav se od cíle
-může do dokončení migrace `CAC-0092` lišit.
+Při hledání odpovědi rozlišuj:
 
-## Autorita dokumentu
+- **Formální rozhodnutí** drží [decision register](manual/decision-register.md).
+  Pokud je s touto mapou v rozporu, musí se před změnou systému novelizovat.
+- **Cílový model** popisuje tento dokument.
+- **Aktuálně podporovaný stav** dokazují schémata, manifesty, kód a testy.
+- **Pracovní postup Agentů** určuje `AGENTS.md` v příslušné oblasti.
+- **Provozní detaily** patří do `manual/` a dokumentace konkrétního nástroje.
 
-`ARCHITECTURE.md` je kanonický zdroj pro **cílový systémový model a
-názvosloví** Lazuria. Neříká sám o sobě, co už je dnes nasazené, ani nenahrazuje
-provozní instrukce pro Agenty.
+Výslovně vedená migrace může dočasně znamenat, že nasazený stav ještě cílovému
+modelu neodpovídá. Dokumentace ale nesmí starý a cílový stav vydávat za dvě
+rovnocenné architektury.
 
-Při čtení zdrojů pravdy rozlišuj tři různé otázky:
-
-- **Co je formálně rozhodnuté:** decision records mají přednost před tímto
-  dokumentem. Kolidující decision se musí před implementací cíle výslovně
-  novelizovat.
-- **Kam systém směřuje:** tento dokument určuje cílovou architekturu a
-  význam základních pojmů a jejich vztahy. Schémata, configy a kód mohou během
-  výslovně evidované migrace popisovat starší nasazený stav.
-- **Jak Agent právě pracuje:** příslušný `AGENTS.md` určuje pracovní postup a
-  oprávnění v daném scope. Nemůže ale zavést druhý význam pojmů, které zde
-  definuje cílová architektura.
-
-GLOSSARY, kontrakty, Guide a nové provozní texty se mají s tímto dokumentem
-postupně srovnat v navazujících změnách. Tato hranice je zapsaná také v root
-`AGENTS.md`, aby nevznikaly dvě konkurenční autority.
-
-## Jádro v jedné větě
+## Model v jedné větě
 
 > **Owner vlastní Mašinu, na Mašině žije Resident, Agenti na ní vykonávají
-> práci a Lazurio celý model distribuuje a koordinuje, aniž musí stát mezi
-> Ownerem a jeho Residentem.**
+> práci a Lazurio systém distribuuje a koordinuje, aniž musí stát mezi Ownerem
+> a jeho Residentem.**
 
-## Čtyři základní pojmy
+```text
+Owner
+└── Machine                         jedna bezpečnostní hranice
+    ├── Resident                    dlouhodobá identita a mandát
+    └── Agent sessions              dočasní vykonavatelé práce
 
-### Owner
+Lazurio                             distribuce, životní cyklus a koordinace
+```
 
-Owner je člověk nebo Organizace, která drží Mašinu, její data, credentials a
-poslední slovo nad jejím provozem.
+## Základní pojmy
 
-- U Buddyho je Ownerem jeho Principál.
-- U AI Kolegy je Ownerem Organizace.
-- Lazurio není automaticky Ownerem cizí Mašiny jen proto, že dodalo software.
+| Pojem | Význam |
+| --- | --- |
+| **Owner** | Člověk nebo Organizace, která vlastní Mašinu, její data, přístupy a poslední cestu obnovy. |
+| **Machine (Mašina)** | Počítač, VPS nebo hostovaný pracovní prostor, který tvoří jednu bezpečnostní hranici. |
+| **Resident** | Dlouhodobá digitální identita s kontinuitou, pamětí a mandátem. Buddy a AI Kolega jsou dva profily Residenta. |
+| **Agent** | Dočasná pracovní relace, například Codex nebo Claude Code. `Agent` a `Worker Agent` jsou synonyma. |
+| **Organizace** | Jedna firma, jedna GitHub Organization a jedna access hranice. |
+| **Personalspace** | Privátní prostor právě jednoho Principála a jeho případného Buddyho. |
+| **Modul** | Verzovaná pracovní schopnost uvnitř Organizace nebo Personalspace. Může, ale nemusí obsahovat spustitelnou aplikaci. |
 
-### Machine
+Principál je ten, pro koho Agent právě pracuje. V osobním prostředí bývá
+Principál současně Ownerem. V Organizaci rozhodují jeho skutečná oprávnění u
+poskytovatelů, ne textový název role.
 
-Machine je jednotka provozu, custody a maximálního přijímaného blast radius.
-Může to být fyzický počítač nebo dedikovaná VPS. Provider účet, tailnet a
-recovery cesta musí mít známého vlastníka.
+## Pevná pravidla systému
 
-Pokud mají procesy uvnitř Mašiny root-equivalent autoritu, nejsou Unix user,
-container ani aplikační profil skutečnou bezpečnostní hranicí. Slouží pořádku,
-obnově a atribuci. Skutečnou hranicí je celá Machine.
+### 1. Jedna Mašina je jedna bezpečnostní hranice
 
-Z toho plyne základní pravidlo:
+Procesy s root nebo srovnatelnou autoritou mohou kompromitovat celou Mašinu.
+Unixový účet, kontejner nebo aplikační profil uvnitř ní proto nejsou samy o
+sobě tvrdou bezpečnostní hranicí. Pomáhají s pořádkem, obnovou a dohledatelností.
 
-> **Jedna Machine patří jedné trust doméně.**
+Více Residentů může sdílet Mašinu jen tehdy, když Owner vědomě přijímá společný
+rozsah rizika. Pokud mají být skutečně oddělení, potřebují oddělené Mašiny nebo
+rovnocenně silnou infrastrukturní izolaci.
 
-Více Residentů může sdílet jednu Mašinu pouze tehdy, když Owner vědomě přijímá,
-že kompromitace jednoho může kompromitovat všechny. Pokud mají mít oddělený
-blast radius, potřebují oddělené Mašiny.
+### 2. Přístup drží existující poskytovatelé
 
-### Hosted Team Workspace jako Mašina
+- **GitHub** určuje členství, přístup k repozitářům, review a možnost
+  publikovat.
+- **Tailscale nebo jiná schválená přístupová vrstva** určuje síťový přístup.
+- **Poskytovatel Mašiny** drží vlastnictví infrastruktury a cestu obnovy.
 
-Builder-visible Hosted Team Workspace má právě jeden non-root pracovní
-kontejner. Ve stejném user, `$HOME`, filesystem, PID a network namespace běží
-T3 Code, Codex CLI, Launchpad, `~/Lazurio`, checkouty, worktrees a
-Launchpadem spravované modulové child procesy. Uvnitř Team Workspace nejde o
-bezpečnostní hranice mezi jednotlivými členy; tvrdá access hranice je mezi
-Team Workspaces. Individuální izolaci poskytuje jednočlenný Team Workspace.
+Lazurio tato oprávnění nekopíruje do druhého interního IAM. Lokální přítomnost
+checkoutu také sama nedokazuje přístup u poskytovatele.
 
-Vně pracovního kontejneru zůstává jen infrastrukturní obal, například
-Tailscale sidecar a autentizovaný HTTPS ingress. Jejich control-plane sockety,
-host mounts, Caddy admin, sudo, zbytečné capabilities a provider private keys
-se do Workspace nemountují. Tenký init/supervisor obnovuje T3 a Launchpad;
-Launchpad je jediný owner modulových procesů a z durable desired state obnoví
-přesný main/worktree source. Per-module kontejnery, Docker-in-Docker ani další
-runtime orchestrátor do tohoto modelu nepatří.
+### 3. Resident a Agent jsou různé identity
 
-Dokud je Team Workspace zapnutý, T3 Code a Launchpad jsou
-`desired-running` a tenký supervisor hlídá pouze tyto dva stabilní procesy.
-Dashboard Development projektuje jen jejich vstupy; modulový dev proces
-spouští, zastavuje a otevírá výhradně Launchpad. Produkční aplikace se v
-Dashboardu objeví až z pozdějšího ověřeného deployment katalogu, nikdy z
-Workspace service katalogu nebo dev desired state.
+Resident má dlouhodobý vztah, paměť a mandát. Agent dostane konkrétní úkol,
+pracuje v ohraničené relaci a odevzdá atribuovaný výsledek. Resident může práci
+Agentovi delegovat a Agent se může Residenta poradit; jejich identity se tím
+neslučují.
 
-Lokální a hosted profil mají shodnou builder-visible strukturu a lifecycle
-postupy. Liší se pouze bezpečnostním a síťovým obalem: lokální `Open` vrací
-loopback, hosted `Open` exact autentizovaný HTTPS origin z Team service
-katalogu. Interní module leases nejsou VPN allowlist; externí hranicí je Team
-HTTPS/WSS ingress na 443.
+### 4. Lazurio není povinný prostředník
 
-Hosted Team Workspace je sdílená vývojová dílna, ne produkční deployment.
-Zdroj modulu lze editovat i bez běžící aplikace; Launchpad spouští modulový dev
-proces jen pro privátní UI/API/MCP preview, testování a debugging. Katalogový
-HTTPS origin je dostupný pouze přes schválený Tailscale/VPN access plane a
-nikdy nepředstavuje veřejný produkční povrch. `lazurio.runtime.v1` proto
-popisuje jen runnable listenery a lifecycle pro Launchpad a Doctor, nikoli
-úplný produkční deployment, ingress, identity nebo MCP kontrakt.
+Lazurio distribuuje software, drží kontrakty, Doctor, Launchpad, Guide a
+životní cyklus. Nemá být povinnou cestou každé zprávy, inference nebo lokální
+operace a nemá automaticky číst obsah Personalspace, GBrainu ani organizační
+paměti.
 
-### Stabilní Module porty
+Plný Resident musí po dočasném odpojení Lazuria dál komunikovat se svým
+Ownerem, používat lokální paměť a nástroje a pracovat s již udělenými
+přístupy u poskytovatelů.
 
-Přesný lokální listener je součást identity Modulu a má jedinou verzovanou
-autoritu: module-root `lazurio.module.json`. `lazurio.runtime.v1` port pouze
-pojmenovaným lease používá a Launchpad jej injektuje do procesu; `.env`, shell
-fallback ani root tabulka port znovu neurčují. Modul bez aplikace deklaruje
-`apps: []`, `tcp_port_policy.mode: none` a žádný TCP lease.
+## Buddy a AI Kolega
 
-Start/Open normalizuje child `NODE_ENV=development` a Doctor vyhodnocuje jen
-env soubory, které deklarovaný `dev_script` skutečně načte: obecné `.env` /
-`.env.local`, development varianty a případný explicitní `--mode`, `NODE_ENV`
-nebo přesná `--env-file` cesta i v odkazovaném package scriptu. Explicitní env
-cesta musí být statická a zůstat uvnitř owning Modulu; nested soubor se ověří
-na přesné cestě, ne jen podle basename. Neaktivní test/build mode není runtime
-autorita dev procesu a sám aplikaci neblokuje.
-
-Organization vlastní pouze `module_port_pool`, tedy interval pro deterministické
-přidělení nového Module lease a kontrolu unikátnosti uvnitř své access hranice.
-Pole je součástí normalizovaného Organization read modelu. V aktuálním
-kompatibilním formátu ho nese `company.gen3.json`; při přechodu na
-`lazurio.organization.json` se beze změny významu mapuje do
-`lazurio.organization.v1`. Lazurio root nedrží globální seznam Organization
-poolů ani přesných portů.
-
-Root-local a Personalspace aplikace nejsou součástí Organization allocatoru.
-Jejich případný přesný listener stále vlastní jejich `lazurio.module.json`, ale
-nevztahuje se na něj `module_port_pool` cizí ani syntetické Organizace.
-
-Pool není globální namespace mezi uživateli, Mašinami nebo Team Workspaces.
-Každý lokální root vyhodnotí jen skutečně namountované Organizace. Překryv
-jejich poolů je viditelné varování, nikoli důvod přemapovat stabilní Module
-porty. Pokud na jedné Mašině skutečně kolidují dva Module leases různých
-Organizací, mohou běžet po jednom a Launchpad vyžádá potvrzení konkrétní
-nahrazované aplikace; její desired runtime vypne, aby se Organizace o port
-nepřetahovaly. Verze a worktrees stejného Modulu se na jeho lease přepínají
-automaticky.
-
-Hosted Team Workspaces jsou oddělené network namespace, takže stejné interní
-číslo v různých Workspaces nekoliduje. Team service catalog, proxy a další
-odvozené kontrakty projektují interní port z exact source revision
-`lazurio.module.json`; nepřepisují jej. Externí hranicí zůstává autentizovaný
-HTTPS/WSS ingress na 443.
-
-Změna Module portu je povolená koordinovaná migrace, ne běžný runtime fallback:
-jedna změna aktualizuje `lazurio.module.json` a všechny odvozené ingress, VPN,
-hosting a observační kontrakty, jejichž validace musí projít proti stejnému
-exact source revision před aktivací.
-
-Produkční release je samostatná architektonická lane: chráněný source/tag se
-mění na reprodukovatelný immutable artefakt a ten běží v izolovaném produkčním
-runtime s explicitním `public | authenticated | internal` ingressem, app
-authentication/authorization, secrets, daty, backupem, rollbackem,
-observability a stateless remote MCP. Produkce neobsahuje T3, Codex, Launchpad,
-dev checkouty ani worktrees. Tato hranice nezavádí per-module produkční
-kontejnery do Hosted Workspace scope; konkrétní produkční topologie vyžaduje
-samostatný follow-up kontrakt.
-
-### Resident
-
-Resident je dlouhodobá digitální identita, která na Mašině žije. Má jméno,
-kontinuitu, paměť, vztah ke svému Ownerovi a dlouhodobý mandát.
-
-Existují dva základní produktové profily Residenta:
-
-- **Buddy** je osobní Resident jednoho Principála.
-- **AI Kolega** je organizační Resident s pracovním mandátem od Organizace.
-
-Buddy a AI Kolega nejsou dva různé runtime produkty. Jsou to dvě identity a dvě
-custody konfigurace nad stejným technickým základem.
-
-Kanonický pojem pro tuto dlouhodobou identitu je pouze **Resident**.
-
-### Agent
-
-Agent je výkonný pracovník spuštěný za konkrétním účelem. Dnešními příklady
-jsou Codex nebo Claude Code. Označení **Agent** a **Worker Agent** znamenají
-přesně tutéž roli; nejde o dvě persony, dva stupně autonomie ani dva runtime
-profily. Founder zatím finální podobu názvu neuzavřel a aktuálně preferuje
-kratší **Agent**, proto ho používá tento dokument a mohou ho preferovat nové
-texty. `Worker Agent` zůstává plně srozumitelným synonymem, dokud samostatné
-názvoslovné rozhodnutí neurčí jinak.
-
-Agent:
-
-- dostane úkol od Ownera nebo Residenta;
-- pracuje v konkrétním scope a session;
-- může mít na své Mašině plnou technickou autoritu;
-- nemá automaticky Residentovu identitu, paměť ani kontinuitu;
-- odevzdá výsledek jako atribuovanou práci.
-
-Resident může práci Agentovi delegovat a Agent se může Residenta explicitně
-poradit. Tím se jejich identity neslučují. Resident je dlouhodobý vztah a
-mandát; Agent je vykonavatel práce.
-
-## Jeden technický základ, dva Resident profily
+Buddy a AI Kolega používají stejný technický základ. Liší se vlastníkem,
+mandátem a správou dat, ne odděleným vývojem runtime.
 
 | Vlastnost | Buddy | AI Kolega |
 | --- | --- | --- |
-| Owner | Principál | Organizace |
+| Owner | jeden lidský Principál | Organizace |
 | Mandát | osobní | pracovní a organizační |
-| Dlouhodobá paměť | osobní GBrain | organizačně svěřený GBrain |
-| Síťová trust doména | tailnet Principála | tailnet Organizace |
-| Provider přístup | delegace Principála | grant Organizace |
-| Runtime | společný Resident runtime | společný Resident runtime |
-| Chat | Zulip | Zulip |
-| Vývoj a opravy | Agenti přes T3 Code nebo CLI | Agenti přes T3 Code nebo CLI |
+| Paměť | osobní GBrain | organizačně svěřený GBrain |
+| Síťová bezpečnostní hranice | Principálova | organizační |
+| Přístupy | delegace Principála | granty Organizace |
+| Technický základ | Resident runtime | stejný Resident runtime |
 
-Rozdíl mezi Buddym a AI Kolegou tedy nevzniká forkem runtime. Vzniká Ownerem,
-mandátem, datovou custody a providerovými granty.
+Buddyho smí oslovovat právě jeden lidský Principál přes privátní komunikační
+rozhraní. Mašinu vlastní Principál a může ji měnit. Co smí běžící Agent dělat,
+omezuje sandbox agentního runtime; Lazurio vedle něj nestaví druhý sandbox.
+Proces omezený sandboxem jej zároveň nesmí vlastnit ani přepisovat.
 
-## Dvě konverzační roviny
+Podrobný profil, instalaci a incidentní hranice popisuje
+[manuál Residentů](manual/lazurio-resident-profiles.md). Pravidla pro práci s
+hostovaným Buddym jsou v [manuálu hostovaného Buddyho](manual/hosted-buddy-vps.md).
 
-Uživatelský model musí zůstat srozumitelný i bez znalosti implementace:
+## Pracovní prostory
 
-- **Zulip je chat s Residentem.** Nese jeho identitu, kontinuitu, paměť a
-  mandát.
-- **T3 Code nebo CLI je chat s Agenty na Mašině.** Slouží vývoji, diagnostice,
-  opravám a jiné ohraničené práci.
+Lokální a hostovaný Workspace mají pro Buildera stejný model: Lazurio root,
+Organization checkouty, worktrees, nástroje Agentů, Launchpad a vývojové
+procesy Modulů. Liší se infrastrukturním a síťovým obalem.
 
-Když je Zulip nebo Resident runtime rozbitý, opravuje jej Agent přímo na
-Mašině. Kvůli tomu nevzniká druhý chat vydávající Agenta za Residenta.
+### Hosted Team Workspace
 
-### Lazurio CLI v0 je podklad Agenta, ne třetí identita
+Každý Hosted Team Workspace se v tomto modelu počítá jako samostatná Machine.
+Je to jedna sdílená vývojová dílna pro konkrétní Team:
 
-První Lazurio CLI řeší tři read-only potřeby Agenta: bezpečný strojový
-`context`, přístup ke stávajícímu Doctoru a úzký manifest-scoped search pilot
-pro první jmenovaný consumer. Je to projekce nad kanonickými manifesty a
-runtime fakty, nikoli nový store, IAM nebo veřejné Core API.
+- členové Teamu sdílejí soubory, procesy a síťový prostor;
+- různé Team Workspaces jsou od sebe oddělené;
+- individuální izolaci poskytne jednočlenný Team Workspace;
+- uvnitř běží T3 Code, nástroje Agentů, Launchpad, checkouty a worktrees;
+- řídicí infrastruktura, klíče poskytovatele, VPN sidecar a HTTPS ingress
+  zůstávají mimo pracovní prostředí.
 
-- `context` vrací pouze výslovně povolená metadata Principála, Mašiny a
-  Personalspace. S explicitním `--organization <slug>` přidá právě jednu
-  lokálně objevenou Organization projekci: Teamy, moduly, aplikace, worktrees a
-  základní vstupní body. Residentovu osobnost, paměť, chat, sessions, secrets
-  ani mandáty nenačítá.
-- Pozorování filesystemu a provider authority jsou dvě různé věci. Chybějící
-  mount je `absent`; GitHub nebo aplikační access zůstává `not_evaluated` bez
-  živého provider readbacku.
-- `doctor` nevytváří další diagnostický model. V Launchpad rootu používá stejné
-  strukturované jádro jako dnešní Doctor a na rootless Buddy VPS spouští doctor
-  deklarovaný samotným Personalspace manifestem.
-- Search nevytváří vlastní engine ani prohledávání celého rootu. Exact lane je
-  živý adapter nad `rg`; lexical/semantic/hybrid lane je adapter nad lokálním
-  QMD indexem. Scope vzniká průnikem Launchpad discovery, Organization manifestu
-  a explicitního pilotního registru, indexy jsou oddělené per Organization a
-  Principál a nefunkční QMD neblokuje exact lane.
-- Efektivní provider-scoped workspace, členství, MCP, writes, distribuce a
-  stabilní API vzniknou až z dalších ověřených consumerů; vybraná lokální
-  Organization projekce je za ně nevydává a access drží `not_evaluated`.
+Supervisor udržuje T3 Code a Launchpad. Vývojové procesy Modulů spouští a
+zastavuje Launchpad. Dashboard pouze zpřístupňuje vstupy pracovního prostoru;
+procesy Modulů neřídí. Per-module kontejnery, Docker-in-Docker a další
+orchestrátor nejsou součástí tohoto modelu.
 
-Zulip proto zůstává chat s Residentem, T3 Code nebo CLI chat s Agenty a Lazurio
-CLI jejich strojový podklad. Čistá Agent session se spuštěním CLI nestává
-Buddym ani AI Kolegou a nedědí jejich kontinuitu.
+Hosted Team Workspace je privátní vývojové prostředí, ne produkce. Hostovaný
+odkaz na aplikaci vede přes autentizovaný HTTPS/WSS ingress; interní port
+Modulu se veřejně nevystavuje. Produkční aplikace se v Dashboardu mohou objevit
+jen z ověřeného katalogu nasazení, ne ze stavu vývojového Workspace.
 
-## Vnější bezpečnostní hranice
+## Runtime Modulu a porty
 
-Model stojí na ramenou providerů, kteří už řeší identity a přístup:
+Port je součást verzovaného kontraktu Modulu. „Lease“ v tomto kontextu znamená
+pojmenovanou rezervaci konkrétního listeneru.
 
-- **Tailscale** určuje, kdo se k Mašině a jejím privátním povrchům vůbec
-  dostane.
-- **GitHub** drží software, provider identitu, repository scope, review a
-  durable výsledek práce.
-- **VPS nebo hardware provider** drží vlastnictví infrastruktury a poslední
-  recovery cestu.
+| Vrstva | Co vlastní |
+| --- | --- |
+| Organization manifest | Rozsah `module_port_pool` pro přidělení **nových** portů. Dnes jej nese `company.gen3.json`, cílově `lazurio.organization.json`. |
+| `lazurio.module.json` | Přesný port, jeho název a seznam aplikací Modulu. Je jedinou autoritou konkrétního čísla. |
+| `package.json#lazurio.runtime` | Příkaz, protokol, health check a odkaz na pojmenovaný lease. Číslo portu znovu neurčuje. |
+| Launchpad | Při startu načte lease, předá host a port procesu a řídí jeho životní cyklus. Port nevymýšlí ani trvale neukládá. |
+| Hosted infrastruktura | Ze stejné přesné revize zdroje odvodí proxy, subdoménu a interní cíl. Port nepřepisuje. |
 
-### Trust model Buddyho
+Z toho plynou tato pravidla:
 
-Model odpovídá na tři různé otázky; žádná z těchto hranic nenahrazuje jinou:
+1. Přesný port je v Gitu právě jednou: v `lazurio.module.json` daného Modulu.
+   Není v `.env`, náhradní hodnotě ve spouštěcím skriptu ani v centrálním
+   registru Lazurio rootu.
+2. `module_port_pool` je pouze přidělovač nových portů. Již používaný port se
+   automaticky nepřečísluje, ani když leží mimo později zvolený pool.
+3. Dvě různé Module ID v jedné Organizaci nesmějí vlastnit stejné číslo.
+   Oddělené Organizace stejné číslo mít mohou; globální ani veřejný seznam
+   portů napříč uživateli nevzniká.
+4. Main, verze a worktrees stejného Modulu sdílejí jeho lease. Na jedné Mašině
+   běží v jednu chvíli nejvýše jedna varianta.
+5. Pokud na jedné lokální Mašině kolidují Moduly dvou namountovaných
+   Organizací, Launchpad je nepřemapuje. Umožní potvrzené přepnutí z jedné
+   konkrétní aplikace na druhou. Oddělené Hosted Team Workspaces mají vlastní
+   síťové prostory, takže se jejich interní čísla neovlivní.
+6. Změna již používaného portu je koordinovaná migrace. Musí současně
+   aktualizovat module manifest a všechny navázané proxy, subdomény, VPN,
+   hosting a monitoring kontrakty a ověřit jejich shodu.
+7. Modul bez aplikace deklaruje prázdný seznam aplikací a žádný TCP lease.
+   Root-local a Personalspace aplikace mohou mít vlastní `lazurio.module.json`,
+   ale nepoužívají pool cizí ani syntetické Organizace.
 
-| Otázka | Odpověď | Kde se drží |
-| --- | --- | --- |
-| Kdo smí zadat Buddyho turn? | Právě jeden lidský Principál. | Privátní komunikační surface a jeho provider access. |
-| Kdo smí měnit Mašinu a Lazurio? | Principál; lokální změna je legitimní a Doctor ji pouze zviditelní jako drift. | Vlastnictví Mašiny, manifest, Doctor a vratný lifecycle. |
-| Co smí běžící Agent dělat? | Jen to, co dovolí sandbox agentního runtime. | Hermes Agent; Lazurio nestaví paralelní ACL ani sandbox. |
+`.env` zůstává určený pro lokální hodnoty Mašiny, které nejsou identitou
+runtime. Podrobnou validaci manifestů, aktivních env souborů, kolizí a přebírání
+procesu popisuje [dokumentace Launchpadu](launchpad/README.md). Migrační postup
+je v [GEN2 → GEN3 runbooku](manual/gen2-to-gen3-migration.md).
 
-Buddyho komunikační surface patří právě jednomu lidskému Principálovi. Privátní
-Zulip realm, jeho membership, credentials a síťový access plane musí zajistit,
-že vstupní turn smí zadat pouze tento Principál; technická identita Buddy botu
-jen odpovídá a poskytovatel komunikační infrastruktury není další Principál.
-To je primární bezpečnostní hranice Buddyho.
+## Konverzační a nástrojové povrchy
 
-Principál vlastní svou Mašinu a v tomto modelu není protivník. Lazurio mu proto
-nebrání měnit lokální soubory ownership triky, vlastní ACL vrstvou ani
-permission zámkem. Manifest, Doctor a verzovaný lifecycle slouží k tomu, aby
-byla odchylka vidět, oprava byla přenositelná a návrat vratný.
+- **Zulip je chat s Residentem.** Nese jeho identitu, kontinuitu a mandát.
+- **T3 Code nebo jiné agentní CLI je chat s Agenty na Mašině.** Slouží
+  konkrétní práci, opravám a diagnostice.
+- **Lazurio CLI je nástroj Agentů.** Promítá bezpečný kontext, Doctor a
+  ohraničené vyhledávání. Není třetí identita, nový IAM ani nový datový store.
 
-Omezení souborů a nástrojů uvnitř agentní relace drží sandbox agentního
-runtime — dnes Hermes Agent. Pokud je tato hranice nedostatečná, opravuje se
-nebo konfiguruje tam; Lazurio kolem ní nestaví paralelní sandbox. Běžné
-systemd oddělení procesu, sanitizované spouštění instalačních příkazů a
-integrity kontroly jsou provozní a recovery pojistky, ne druhý autorizační
-model proti Principálovi.
+Když Resident nebo jeho chat nefunguje, opravuje jej Agent přímo na Mašině.
+Podrobný aktuální kontrakt CLI je v [`lazurio/README.md`](lazurio/README.md).
 
-Sandbox ale nesmí být vlastněný ani zapisovatelný procesem, který sám omezuje.
-Hermes checkout a Bun binárku může vlastnit a měnit Principál nebo jím řízená
-maintenance identita, která nespouští agentní relaci. Účty `buddy` a
-`buddy-bridge` naopak nesmí tyto závislosti vlastnit, přepsat ani nahradit přes
-svůj parent. Preflight proto porovnává tracked Hermes bytes přímo s pinned
-commitem bez důvěry v Git index, replacement refs či symlinkované předky a ptá
-se host kernelu na vlastnictví i zapisovatelnost obou runtime účtů. To chrání
-integritu existujícího Hermes sandboxu před jeho vlastní relací; není to další
-ACL proti Principálovi.
+## Source, instalace a aktualizace
 
-Uvnitř autorizované trust domény se nestaví druhý interní IAM jen proto, aby
-napodoboval providerové granty. Nevznikají vlastní auth proxy, relaye, obecné
-permission brokery ani softwarové zdi bez konkrétně změřeného problému.
+Kanonický source checkout slouží vývoji. Z reviewovaného commitu se sestaví
+verzovaný non-Git Resident artefakt. Běžící runtime a měnitelná pracovní data
+musí zůstat fyzicky oddělené:
 
-Root uvnitř jedné Mašiny ale nikdy nerozšiřuje providerová práva mimo ni.
-GitHub installation, repository grant a Tailscale membership zůstávají
-vnějšími hranicemi mezi Ownery a Organizacemi.
+- neměnný artefakt obsahuje Launchpad, CLI, kontrakty a profil;
+- Organization checkouty, Personalspace a runtime data jsou samostatné
+  měnitelné mounty;
+- update nejdřív ověří nový artefakt, potom jej atomicky aktivuje;
+- poslední zdravá verze zůstává dostupná pro rollback;
+- běžící runtime se neaktualizuje přepisem vlastního source checkoutu.
 
-## Úloha Lazuria
+Přesné rozhraní drží
+[manuál immutable runtime](manual/lazurio-runtime-install-interface.md) a
+[manuál aktualizace Residenta](manual/update-installed-resident.md).
 
-Lazurio je zpočátku distribuční a lifecycle vrstva společného systému. Má:
+## Produkce je oddělený systém
 
-- vydávat verzovaný a reviewovaný software;
-- držet instalační šablony, kontrakty a dokumentaci;
-- koordinovat plán, rollout a releases;
-- poskytovat Mission Control;
-- případně přijímat pouze vědomě povolenou, obsahově bezpečnou health
-  telemetrii.
+Vývojová aplikace v Launchpadu ani Hosted Team Workspace není produkční
+deployment. Produkční cesta začíná chráněným source commitem nebo tagem,
+vytvoří reprodukovatelný immutable artefakt a spustí jej v izolovaném runtime.
 
-Lazurio nemá být povinným prostředníkem každé zprávy, inference nebo lokální
-operace. Nemá automaticky číst obsah Personalspace, GBrainu nebo organizační
-paměti a nemá univerzální root vstup do všech Mašin.
-
-### Test suverenity
-
-Plný Buddy i plný AI Kolega musí po odpojení Lazuria dál:
-
-- komunikovat se svým Ownerem;
-- používat lokální paměť a nástroje;
-- pracovat s již udělenými providerovými přístupy;
-- vytvářet obnovitelnou a reviewovatelnou práci.
-
-Pokud tento test některá budoucí hosted varianta nesplňuje, musí být popsána
-jako jiný provozní a trust kontrakt, ne jako neviditelně zmenšená verze
-suverénního Residenta.
+Produkce musí samostatně určit ingress (`public`, `authenticated` nebo
+`internal`), autentizaci a autorizaci aplikace, secrets, data, zálohy,
+rollback a dohled. Neobsahuje T3 Code, Codex, Launchpad, dev checkouty
+ani worktrees. Konkrétní produkční topologie vyžaduje vlastní kontrakt.
 
 ## Kde žije která pravda
 
 | Druh informace | Kanonický domov |
 | --- | --- |
-| Konverzace | Zulip |
+| Konverzace Residenta | Zulip |
 | Dlouhodobá znalost Residenta | GBrain |
 | Software, dokumentace a review | GitHub |
 | Plán, stav a odpovědnost | Mission Control |
 | Provozní a obnovitelný runtime stav | Machine |
 | Důvod zásadního rozhodnutí | decision record |
 
-Tyto vrstvy se nemají automaticky kopírovat jedna do druhé. GBrain není kopie
+Tyto vrstvy se nekopírují automaticky jedna do druhé. GBrain není kopie
 Mission Controlu, Zulip není task ledger a Lazurio není vzdálený sklad veškeré
 paměti Residenta.
 
-Aktuální dokumentace má popisovat současný cílový model jednou. Historické
-decision records smějí být složité; běžný Owner ani Agent nesmí potřebovat
-rekonstruovat dnešní pravidlo z řetězce deseti novelizací.
+## Generace nejsou produkty
 
-## Generace nejsou cílové produkty
+GEN2 je ověřovací kohorta a GEN3 první veřejně opakovatelná distribuce.
+Dlouhodobé názvy produktu jsou Lazurio, Buddy a AI Kolega. Generační označení
+může zůstat v historii a migračních formátech, ale není samostatnou vrstvou
+architektury.
 
-- **GEN2** je kohorta, která model provozně ověřuje a sbírá měřenou zkušenost.
-- **GEN3** je první veřejně opakovatelná distribuce vzniklá z tohoto ověření.
-- Cílový produkt se dlouhodobě jmenuje **Lazurio**, **Buddy** nebo **AI Kolega**,
-  nikoli „GEN3 systém“.
+## Kontrola nového návrhu
 
-Generační názvy mohou zůstat v historii a migračních repozitářích, ale nesmějí
-se stát trvalou vrstvou architektury.
-
-## Pravidla proti zbytečné složitosti
-
-1. Nový mechanismus vzniká až pro konkrétní, změřený problém.
-2. Providerová identita a grant mají přednost před vlastním paralelním ACL.
-3. Jedna technická schopnost má jeden kanonický domov a jednoho ownera.
-4. Oddělení uvnitř root Mašiny se nepopisuje jako bezpečnostní hranice.
-5. Resident a Agent mají vždy rozlišitelnou identitu a atribuci.
-6. Lazurio nesmí být skrytá runtime závislost suverénního Residenta.
-7. Buddy a AI Kolega sdílejí runtime; rozdíl drží Owner, mandát a custody.
-8. Do základní architektury nepatří přesný návrh funkce, kterou první kohorta
-   ještě nepotřebovala.
-
-## Kontrolní otázky pro další rozhodnutí
-
-Každý nový návrh musí umět stručně odpovědět:
+Nový návrh musí umět jednoduše odpovědět:
 
 1. Kdo je Owner?
-2. Která Machine je blast radius?
+2. Která Machine tvoří společnou bezpečnostní hranici?
 3. Kdo je Resident a jaký má mandát?
-4. Který Agent vykonává práci a komu ji připisujeme?
+4. Který Agent vykonává práci a komu se výsledek připíše?
 5. Který provider vynucuje přístup?
-6. Kde bude durable výsledek a kde případná paměť?
+6. Kde bude trvalý výsledek a kde paměť?
 7. Funguje Resident dál, když Lazurio není dostupné?
-8. Řeší nový mechanismus změřený problém, nebo jen představitelnou budoucnost?
+8. Řeší nový mechanismus konkrétní problém?
 
-Pokud návrh na tyto otázky neodpoví jednoduše, není připravený stát se součástí
-základů Lazuria.
+Pokud odpovědi vyžadují další skryté autority, registry nebo identity, návrh
+ještě není dost jednoduchý.
+
+## Další mapy a kontrakty
+
+- [MAP.md](MAP.md) — co v Lazurio rootu leží a kam změna patří.
+- [Launchpad README](launchpad/README.md) — discovery, procesy a runtime
+  kontrakt Modulů.
+- [Manifest family](manual/lazurio-manifest-family.md) — návrh přechodu z
+  generačních názvů manifestů na rodinu `lazurio.*.json`.
+- [Resident profiles](manual/lazurio-resident-profiles.md) — Buddy, AI Kolega,
+  instalovaný root a provozní hranice.
+- [AGENTS.md](AGENTS.md) — pravidla spolupráce, pravomoci a publikace.

@@ -6,7 +6,7 @@ decisions 0013 a 0021; strukturu definuje decision 0051
 (revidovaná pro self-service decision 0079 a VPS-only Buddy decision 0080;
 shrnutí drží `../manual/decision-register.md`).
 
-`personalspace/` je integrální privátní vrstva Conglomerate GEN3 a mountpoint
+`personalspace/` je integrální privátní vrstva Lazuria a mountpoint
 **jediného osobního prostoru Principála této mašiny**. Není to Organizace ani
 externí doplněk. Prostor je samostatné repo `<username>/<username>_GEN3` na
 osobním nebo agentním GitHub účtu (generační marker per decision 0045), mimo

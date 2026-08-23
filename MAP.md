@@ -43,19 +43,20 @@ Lazurio/
 
 ## Kam jít
 
-- `ARCHITECTURE.md` — cílové základy budoucího `Lazurio/Lazurio`: Owner,
-  Machine, Resident, Agent, společný runtime Buddyho a AI Kolegy a suverenita
-  vůči Lazuriu
-- `lazurio/` — interní a nestabilní Lazurio CLI v0: bezpečný read-only context
-  Principála/Mašiny/Personalspace a jedné explicitně vybrané lokální
-  Organization, tenký adapter nad existujícími Doctory a první explicitně
-  omezený Organization search pilot CAC-0093. Exact lane
-  používá živé `rg`; lexical/semantic/hybrid lane používají fyzicky izolovaný
-  lokální QMD index. Efektivní provider-scoped workspace zůstává navazující
-  prací; CLI není MCP, write surface, distribuční package ani veřejné Core API.
-- `launchpad.gen3.json` — metadata Lazurio rootu a `planned` sloty (rootu, šablon a lokálních povrchů), ne allowlist Organizací; dostupné Organizace se auto-discoverují z `organizations/*/company.gen3.json` (decision 0042 v manual/decision-register.md)
-- Organization manifest — dnes kompatibilně `organizations/*/company.gen3.json`, cílově `lazurio.organization.json`; drží mimo jiné Organization-wide `module_port_pool`. Přesný port každého Modulu drží jeho `lazurio.module.json`; root-wide registry neexistuje.
-- `launchpad/` — sdílený builder-first Launchpad GEN3 (decision 0047 v manual/decision-register.md, reviduje CEO-first 0024): surface pro Buildery Organizace (Organization Builder) — spouštění aplikací z `main` i z worktrees podle Mission Control plánů (decision 0049) a read-only přehled productionspace; dynamicky načítá Organizace/Teamy/moduly a ukazuje stavy `available` / `missing_access` / `planned_slot`; Admin Organizace (Organization Admin), vstup Uživatelů Organizace (Organization User) do produkčních workspace aplikací a deploy/server konfigurace patří do Lazurio Dashboardu
+- `ARCHITECTURE.md` — krátká mapa cílového systému: Owner, Machine,
+  Resident, Agent, pracovní prostory, runtime Modulů a bezpečnostní hranice.
+- `lazurio/` — interní read-only CLI pro bezpečný kontext, Doctor a ohraničené
+  vyhledávání. Aktuální příkazy a hranice popisuje `lazurio/README.md`.
+- `launchpad.gen3.json` — metadata Lazurio rootu a lokální `planned` sloty.
+  Není to allowlist; Organizace se objevují z lokálních mountů.
+- Organization manifest — dnes `company.gen3.json`, cílově
+  `lazurio.organization.json`. Drží Organization-wide pravidla včetně poolu
+  pro přidělování nových portů. Přesný port vlastní každý Modul ve svém
+  `lazurio.module.json`; globální registr neexistuje.
+- `launchpad/` — vývojový povrch pro Buildery. Objevuje Organizace, Teamy a
+  Moduly, spouští aplikace z `main` i worktrees a ukazuje read-only
+  productionspace. Admin konfigurace a produkční aplikace patří do Lazurio
+  Dashboardu.
 - `guide/` — sdílený netechnický onboarding kurz (26 lekcí) do práce s digitální kanceláří a AI kolegy; technická cesta „mapa systému“ (Launchpad root, Organizace, workspace, productionspace, personalspace) je plánovaná budoucí část, do té doby tato témata drží MAP.md a `manual/`
 - Lazurio Dashboard — v1 spike lokální mount (`dashboard/`) byl z rootu odstraněn i s launchery a Dock ikonou; aktuální Dashboard spike žije v privátním repu (v2 reference). Zůstává hostovaným surfacem pro Admin Organizace (billing, plány, přístupy, konfigurace, Buddy policies) a vstupem Uživatele Organizace (Organization User) do produkčních aplikací (decision 0047/0048 v manual/decision-register.md)
 - `manual/` — technický maintenance manuál Launchpad rootu
@@ -69,7 +70,12 @@ Lazurio/
 - `organizations/README.md` — vysvětlení mountpointu; jediný trackovaný soubor uvnitř `organizations/` v root repu
 - `organizations/<org>/` — lokální gitignored Organization GEN3 checkout, ideálně podle GitHub organizace
 - Legacy top-level Organization template mount s markerem `company.gen3.json` `organization_kind: "template"` zůstává discovery-kompatibilní, ale nový se nezakládá. Current pracovní checkout podle decision 0127 žije v `organizations/<AdminOrganization>/productionspace/OrganizationTemplate_GEN3`; template nástroje dostávají explicitní cestu a ověřují Git provenienci.
-- `organizations/<org>/workspace/` — plochá složka všech workspace modulů Organizace; Team (digitální kancelář týmu lidí nebo značky/venture s vlastním doctorem, pravidly a access hranicí) deklaruje manifest (kanonicky `modules[].teams` / `module_slots[].teams`; ještě nemigrované Organizace nesou legacy alias `modules[].workspace` / `module_slots[].workspace`), deklarace je autorita a UI grupuje podle ní; modul smí patřit do více Teamů zároveň (N:M), chybějící deklarace = default Team se slugem `workspace`; sdílený modul může použít čistě prezentační `launchpad_section: "organization"`, aby se jeho jedna dlaždice neopakovala v každém Teamu, zatímco fyzický mount, runtime a Git ownership zůstávají ve `workspace/`; hosted vzor `<modul>.<team>.<doména>` se generuje z deklarace (decision 0041 v manual/decision-register.md)
+- `organizations/<org>/workspace/` — plochá složka všech workspace Modulů.
+  Team příslušnost je N:M deklarace v `modules[].teams` nebo
+  `module_slots[].teams`, ne další adresář. Chybějící deklarace znamená Team
+  `workspace`; starší singulární `workspace` je pouze migrační alias. Launchpad
+  podle stejné deklarace grupuje karty a odvozuje hostovaný tvar
+  `<modul>.<team>.<doména>` (decision 0041).
 - `organizations/<org>/productionspace/` — org-level repozitáře dané Organizace, které nejsou workspace moduly (např. firmware, connect, platformní runtime nebo pracovní template checkout); každé repo si definuje vlastní pravidla a Doctor u nich vynucuje jen bezpečné minimum (decisions 0041 a 0127 v manual/decision-register.md)
 - `personalspace/` — privátní osobní repo mimo GitHub organizace; cílově obsahuje privátní moduly a per-user/per-colleague aplikace včetně GBrain rozhraní
 - **Hostovaný Buddy** — když si Principál Buddyho onboarduje, běží na dedikované per-owner VPS (decision 0080), ne lokálně; lokální mount `personalspace/<owner>_GEN3/buddy/` drží jen Git konfiguraci profilu. Na hostu platí vygenerované instrukce aktivního Buddy resident rootu spolu s privátním profilem Principála, ne pravidla source checkoutu — hranici a postup zjištění drží `manual/hosted-buddy-vps.md`

@@ -74,17 +74,13 @@ organizations/<org>/
 └── productionspace/        # org-level repa mimo workspace moduly
 ```
 
-- Všechny workspace moduly Organizace žijí fyzicky v jedné ploché složce
-  `workspace/`; složky `workspaces/<slug>/` se nezavádějí. Pojmenované
-  Workspaces („Oddělení“/„Kanceláře“ — digitální kancelář jednoho týmu NEBO
-  značky/venture) s vlastním doctorem, pravidly a access hranicí jsou
-  logická deklarace v manifestu (`modules[].workspace` /
-  `module_slots[].workspace`), ne adresář. Modul patří právě do jednoho
-  Workspace; deklarace je autorita a UI grupuje podle ní; chybějící
-  deklarace = default Workspace se slugem `workspace`; hosted vzor
-  `<modul>.<workspace>.<doména>` se generuje z deklarace
-  (decisions 0021/0023 v manual/decision-register.md; fyzický layout
-  revidován decision 0041 tamtéž).
+- Všechny workspace Moduly žijí v jedné ploché složce `workspace/`; adresáře
+  podle Teamů se nezavádějí. Team je logická deklarace v manifestu, kanonicky
+  `modules[].teams` / `module_slots[].teams`. Modul může patřit do více Teamů.
+  Chybějící deklarace znamená výchozí Team `workspace`. Starší Organizace
+  mohou během migrace ještě používat singulární alias `workspace`. Launchpad
+  grupuje podle deklarace a hostovaný tvar `<modul>.<team>.<doména>` z ní také
+  odvozuje (decisions 0021/0023/0041 v `manual/decision-register.md`).
 - `productionspace/` drží org-level repozitáře, které nejsou workspace
   moduly. productionspace nedefinuje pevná pravidla — každé repo si
   definuje vlastní branch model a release proces; doctor u nich vynucuje
