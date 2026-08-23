@@ -55,22 +55,10 @@ autoritu.
    a cleanup pravidlo. Organization-scoped plán nese odvozený relativní
    `mission_control_authority_path`; nepřepisuj ho absolutní cestou ani
    traversalem. Platný sidecar navíc obsahuje
-   `conversation_origin` (`machine_ref`, `surface`, `agent_label`, opaque
-   `thread_id` nebo výslovný locator status, `captured_at`, `local_only:
-   true`) a
+   `conversation_origin` a
    `recovery_handoff` (stav, stručné netajné summary, blocker, next action,
-   `updated_at`). Trojice `machine_ref + surface + thread_id` je pouze
-   samodeklarované lokální recovery vodítko pro Principála. Je editovatelné a
-   podvrhnutelné; není identitou, podpisem, atribucí, oprávněním, auditním
-   důkazem ani organizační telemetrií. Přístupy a commitovou atribuci drží
-   GitHub. `machine_ref` načti z `LAZURIO_MACHINE_REF`, jinak použij lokální
-   hostname jen jako label, nikdy jako stabilní fingerprint. Codex ID zachyť z
-   `CODEX_THREAD_ID` (fallback `CODEX_SESSION_ID`), Claude Code ID z
-   `CLAUDE_CODE_SESSION_ID`. Cursor CLI/SDK a jiný harness bez spolehlivé
-   ambientní proměnné předá `--task-agent-id <id> --surface <slug>` nebo pár
-   `LAZURIO_TASK_AGENT_ID` + `LAZURIO_TASK_AGENT_SURFACE`. Agentní create lane
-   bez harness ID failuje zavřeně; `not_applicable` patří pouze automatizaci bez Task
-   Agenta. U staršího schema-valid sidecaru jsou
+   `updated_at`) podle interního kontraktu v
+   `manual/worktree-management.md`. U staršího schema-valid sidecaru jsou
    absence těchto polí advisory, ne falešná nevalidita. Owner se čte z plánu,
    sidecar není druhá autorita. Neukládej raw transcript, chain-of-thought,
    secrets ani absolutní transcript path.
@@ -109,13 +97,10 @@ autoritu.
    vidět a další agent ji nemusí převzít. Rozdělaná práce, která existuje
    jen lokálně, je porušení disciplíny (decisions 0103/0112).
 10. Při pauze, blockeru, předání a před koncem agentního běhu aktualizuj
-   `last_touched`, lokální recovery vodítko aktuální relace v conversation
-   origin a recovery handoff. Recovery agent smí inventarizovat nedokončené
-   worktrees, přes lokální locator otevřít dostupné chaty a Principálovi
-   shrnout jejich blockery. Před commitem, pushem, PR rozhodnutím nebo
-   cleanupem vždy ověří Git status/diff, remote, PR/checks, runtime a Mission
-   Control; samodeklarované vodítko není důkaz identity ani autorství a
-   nedostupný thread není důkaz opuštění práce.
+   `last_touched`, conversation origin aktuálního writera a recovery handoff.
+   Při obnově práce lze podle lokálního vodítka dohledat původní chat, ale před
+   commitem, pushem, PR rozhodnutím nebo cleanupem vždy ověř Git status/diff,
+   remote, PR/checks, runtime a Mission Control.
 11. Před handoffem aktualizuj sidecar a znovu spusť audit i
    `bun run worktrees:check`. Check je nutný, ale ne dostačující — teprve po
    něm pokládej otázku na Publikaci.
