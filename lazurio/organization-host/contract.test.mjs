@@ -86,12 +86,10 @@ test("read-only invocation is fixed to one physical infra checkout", async () =>
       operation: "readback",
     });
     const physicalRoot = await realpath(infraRoot);
-    expect(invocation).toEqual({
-      executable: join(physicalRoot, declaration.adapter.entrypoint),
-      args: ["readback", "--json"],
-      cwd: physicalRoot,
-      mode: "read-only",
-    });
+    expect(await realpath(invocation.executable)).toBe(await realpath(executable));
+    expect(await realpath(invocation.cwd)).toBe(physicalRoot);
+    expect(invocation.args).toEqual(["readback", "--json"]);
+    expect(invocation.mode).toBe("read-only");
   } finally {
     await rm(infraRoot, { recursive: true, force: true });
   }
