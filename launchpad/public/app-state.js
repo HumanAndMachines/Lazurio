@@ -562,6 +562,8 @@ export function groupFamiliesBySpace(families) {
 export function groupWorkspaceFamiliesByTeam(families, teams = []) {
   const order = [];
   const grouped = new Map();
+  const declaredTeams = new Set(teams.map((team) => team.slug).filter(Boolean));
+  const restrictToDeclaredTeams = declaredTeams.size > 0;
   const ensure = (slug) => {
     if (!grouped.has(slug)) {
       grouped.set(slug, []);
@@ -571,7 +573,9 @@ export function groupWorkspaceFamiliesByTeam(families, teams = []) {
   };
   for (const team of teams) ensure(team.slug);
   for (const family of families) {
-    for (const team of appTeams(family.primary)) ensure(team).push(family);
+    for (const team of appTeams(family.primary)) {
+      if (!restrictToDeclaredTeams || declaredTeams.has(team)) ensure(team).push(family);
+    }
   }
   return order.map((team) => ({ team, families: grouped.get(team) }));
 }

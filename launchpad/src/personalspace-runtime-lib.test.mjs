@@ -5,6 +5,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "fs/promises";
 import {
   attachLiveRepositoryPrivacy,
   buildPersonalspaceResponse,
+  createPersonalspaceRuntimeManager,
   discoverGitHubCliExecutable,
   githubCliExecutableCandidates,
   inspectGitHubRepository,
@@ -18,6 +19,27 @@ const tempRoots = [];
 const privateRepoInspector = async (repo) => ({
   nameWithOwner: repo,
   visibility: "PRIVATE",
+});
+
+test("personalspace runtime uses the explicit mutable Launchpad state root", () => {
+  const expectedManager = {};
+  let received = null;
+  const manager = createPersonalspaceRuntimeManager({
+    companiesRoot: "/workspace",
+    launchpadRoot: "/opt/lazurio-runtime/launchpad",
+    stateRoot: "/home/builder/.local/state/lazurio/launchpad",
+    createRuntimeManagerFn: (options) => {
+      received = options;
+      return expectedManager;
+    },
+  });
+  expect(manager).toBe(expectedManager);
+  expect(received).toMatchObject({
+    companiesRoot: "/workspace",
+    launchpadRoot: "/opt/lazurio-runtime/launchpad",
+    stateRoot: "/home/builder/.local/state/lazurio/launchpad",
+  });
+  expect(typeof received.discover).toBe("function");
 });
 
 test("personalspace runtime URLs preserve HTTPS and bracket IPv6 loopback", () => {

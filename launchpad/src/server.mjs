@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { constants, existsSync, lstatSync, realpathSync } from "fs";
 import { open, readFile } from "fs/promises";
-import { isAbsolute, join, normalize, relative, resolve, sep } from "path";
+import { isAbsolute, join, normalize, relative, resolve } from "path";
 import {
   buildDoctorReportFromAppsResponse,
   buildLaunchpadAppsResponse,
@@ -48,6 +48,7 @@ import {
   safeGitCommandEnv,
 } from "./git-lib.mjs";
 import { createRequestTrustPolicy } from "./request-trust-lib.mjs";
+import { resolveLaunchpadStateRoot } from "./state-root-lib.mjs";
 import {
   buildServerIdentity,
   classifyServerIdentity,
@@ -93,6 +94,7 @@ const launchpadStateRoot = resolveLaunchpadStateRoot({
   hosted: hostedAppUrls.profile === "hosted",
   runtimeRoot: configuredRuntimeRoot,
   workspaceRoot: canonicalCompaniesRoot,
+  fallbackRoot: launchpadRoot,
 });
 const requestTrust = createRequestTrustPolicy({
   profile: hostedAppUrls.profile,
@@ -128,7 +130,11 @@ const appsResponseCache = createGenerationSafeResponseCache({
 // Personalspace lane (CAC-0048): úplně oddělený runtime manager pro osobní
 // aplikace. Local-only (server běží jen na 127.0.0.1). Osobní data se nikdy
 // nepropisují do org /api/apps ani /api/doctor shared výstupu.
-const personalspaceRuntimeManager = createPersonalspaceRuntimeManager({ companiesRoot, launchpadRoot });
+const personalspaceRuntimeManager = createPersonalspaceRuntimeManager({
+  companiesRoot,
+  launchpadRoot,
+  stateRoot: launchpadStateRoot,
+});
 let serverShutdownState = "running";
 let activeMutatingRequests = 0;
 
@@ -446,33 +452,6 @@ function contentType(path) {
   if (path.endsWith(".png")) return "image/png";
   if (path.endsWith(".ico")) return "image/x-icon";
   return "application/octet-stream";
-}
-
-function resolveLaunchpadStateRoot({ configuredStateRoot, hosted, runtimeRoot, workspaceRoot }) {
-  if (configuredStateRoot === undefined || configuredStateRoot === "") {
-    if (hosted) {
-      throw new Error("LAZURIO_LAUNCHPAD_STATE_ROOT is required for the hosted Workspace profile.");
-    }
-    return launchpadRoot;
-  }
-  if (!isAbsolute(configuredStateRoot)) {
-    throw new Error("LAZURIO_LAUNCHPAD_STATE_ROOT must be an absolute path.");
-  }
-  const stateRoot = resolve(configuredStateRoot);
-  if (hosted && [runtimeRoot, workspaceRoot].some((protectedRoot) => pathsOverlap(protectedRoot, stateRoot))) {
-    throw new Error("LAZURIO_LAUNCHPAD_STATE_ROOT must not overlap the immutable runtime or mutable Workspace root.");
-  }
-  return stateRoot;
-}
-
-function pathsOverlap(left, right) {
-  return pathContains(left, right) || pathContains(right, left);
-}
-
-function pathContains(parent, candidate) {
-  const relativePath = relative(resolve(parent), resolve(candidate));
-  return relativePath === ""
-    || (relativePath !== ".." && !relativePath.startsWith(`..${sep}`) && !isAbsolute(relativePath));
 }
 
 function parseArgs(args) {

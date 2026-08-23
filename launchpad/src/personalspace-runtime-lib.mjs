@@ -68,13 +68,19 @@ function personalspaceDiscoveryAdapter(companiesRoot) {
   };
 }
 
-// Jeden personalspace runtime manager per companiesRoot. Používá stejné
-// runtime/logs adresáře jako org lane — díky prefixovanému id (personal--…) se
-// stav/logy nekříží.
-export function createPersonalspaceRuntimeManager({ companiesRoot, launchpadRoot }) {
-  return createRuntimeManager({
+// Jeden personalspace runtime manager per companiesRoot. Používá stejný
+// explicitní mutable state root jako org lane — díky prefixovanému id
+// (personal--…) se stav/logy nekříží. Resident runtime tak zůstává read-only.
+export function createPersonalspaceRuntimeManager({
+  companiesRoot,
+  launchpadRoot,
+  stateRoot = launchpadRoot,
+  createRuntimeManagerFn = createRuntimeManager,
+}) {
+  return createRuntimeManagerFn({
     companiesRoot,
     launchpadRoot,
+    stateRoot,
     discover: personalspaceDiscoveryAdapter(companiesRoot),
   });
 }
