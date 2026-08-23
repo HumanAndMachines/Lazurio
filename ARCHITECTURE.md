@@ -39,7 +39,7 @@ Lazurio                             distribuce, životní cyklus a koordinace
 | **Owner** | Člověk nebo Organizace, která vlastní Mašinu, její data, přístupy a poslední cestu obnovy. |
 | **Machine (Mašina)** | Počítač, VPS nebo hostovaný pracovní prostor, který tvoří jednu bezpečnostní hranici. |
 | **Resident** | Dlouhodobá digitální identita s kontinuitou, pamětí a mandátem. Buddy a AI Kolega jsou dva profily Residenta. |
-| **Task Agent** | Dočasná a dohledatelná pracovní relace pro konkrétní úkol, například Codex, Claude Code nebo Cursor. V běžné řeči se může zkrátit na „Agent“. |
+| **Task Agent** | Dočasná pracovní relace pro konkrétní úkol, například Codex, Claude Code nebo Cursor. V běžné řeči se může zkrátit na „Agent“. |
 | **Organizace** | Jedna firma, jedna GitHub Organization a jedna access hranice. |
 | **Personalspace** | Privátní prostor právě jednoho Principála a jeho případného Buddyho. |
 | **Modul** | Verzovaná pracovní schopnost uvnitř Organizace nebo Personalspace. Může, ale nemusí obsahovat spustitelnou aplikaci. |
@@ -76,17 +76,6 @@ Resident má dlouhodobý vztah, paměť a mandát. Agent dostane konkrétní úk
 pracuje v ohraničené relaci a odevzdá atribuovaný výsledek. Resident může práci
 Agentovi delegovat a Agent se může Residenta poradit; jejich identity se tím
 neslučují.
-
-Worktree založený Task Agentem nese v gitignored lokálním sidecaru recovery
-vodítko **Mašina + harness surface + opaque ID relace** jako
-`conversation_origin.machine_ref`, `conversation_origin.surface` a
-`conversation_origin.thread_id`. Principál díky němu může po přerušení spojit
-rozdělaný výstup se správným Codex taskem, Claude Code session, Cursor
-chatem/agentem nebo jiným podporovaným harness povrchem. Vodítko je
-samodeklarované, editovatelné a podvrhnutelné; není ověřenou identitou,
-podpisem, atribucí, auditním důkazem ani autorizačním vstupem a nedostupnost
-relace není důkazem opuštěné práce. Autoritu přístupů a commitovou atribuci
-drží GitHub, ne tento lokální recovery mechanismus.
 
 ### 4. Lazurio není povinný prostředník
 

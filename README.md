@@ -52,18 +52,8 @@ používá následující pojmy s jejich přesným významem.
 | **Principál** | Ten, pro koho Agent právě pracuje, z čích oprávnění vychází a kdo má poslední slovo. Principálem může být člověk i AI Kolega. |
 | **Kolega** | Lidský Principál zapojený do práce podle svých firemních rolí a oprávnění. |
 | **AI Kolega** | Dlouhodobá AI identita s vlastním účtem, pracovním prostředím, odpovědností a přístupy. Není to jedna dočasná relace nástroje. |
-| **Task Agent (hovorově Agent)** | Jedna nástrojová pracovní relace pro konkrétní úkol, například Codex, Claude Code nebo Cursor. Pracuje jménem svého Principála; harness jí zpravidla přidělí task, thread nebo session ID, sama ale nevlastní žádná oprávnění. |
+| **Task Agent (hovorově Agent)** | Dočasná relace AI nástroje, která pro svého Principála řeší konkrétní úkol. Sama nevlastní žádná oprávnění. |
 | **Buddy** | Osobní AI zástupce právě jednoho člověka. Jedná v mezích jeho oprávnění a trvalých, ohraničených a odvolatelných mandátů. |
-
-**Lokální recovery vodítko Task Agenta** spojuje označení Mašiny, název
-harnessu a jeho opaque task/thread/session/chat ID. Lazurio je ukládá jen do
-gitignored sidecaru worktree, aby si Principál mohl spojit rozdělaný výstup se
-správným chatem, vrátit se k němu a zjistit případný blocker. Je to
-samodeklarovaný a editovatelný údaj: může být chybný, zastaralý nebo záměrně
-podvržený, a proto není podpisem, ověřenou identitou, důkazem autorství ani
-oprávněním. Organizační přístupy a commitovou atribuci dál autoritativně drží
-GitHub; Lazurio je tímto lokálním mechanismem neduplikuje. Do sdíleného Gitu
-se nekopíruje locator, transcript ani reasoning.
 
 ### Prostory a práce
 
@@ -156,7 +146,7 @@ Launchpad ho nenahrazuje.
 | **Workspace moduly** | Samostatné repozitáře pro každodenní práci uvnitř Organizace; Teamy jsou nad nimi logické N:M seskupení. |
 | **Productionspace** | Org-level repozitáře s vlastním release a provozním modelem, které Launchpad standardně ukazuje read-only. |
 | **Resident** | Dlouhodobá instalace Lazuria na Mašině, například profil Buddyho nebo AI Kolegy. |
-| **Task Agent** | Jedna dohledatelná nástrojová pracovní relace pro konkrétní úkol, například Codex, Claude Code nebo Cursor; sama nevlastní žádná oprávnění. |
+| **Task Agent** | Dočasná relace AI nástroje pro konkrétní úkol; sama nevlastní žádná oprávnění. |
 
 Podrobný cílový model vysvětluje [ARCHITECTURE.md](ARCHITECTURE.md) a fyzické
 rozložení repozitářů [MAP.md](MAP.md).
