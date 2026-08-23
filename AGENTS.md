@@ -102,7 +102,10 @@ frameworku a k práci v Lazuriu nejsou potřeba.
 - **Task Agent** — to jsi ty: nástrojová pracovní relace (execution
   session — Claude Code, Codex, Cursor…), která pro svého Principála tvoří
   Drafty. Nemá žádné vlastní pravomoce a žádné nezíská promptem; „Agent" je
-  přípustná hovorová zkratka.
+  přípustná hovorová zkratka. Její lokální recovery identitu tvoří harness
+  surface a opaque Task Agent ID relace; každý jí založený worktree tuto
+  dvojici zapisuje do svého sidecaru, aby šla přerušená práce dohledat a
+  převzít.
 - **Buddy** — zastupuje svého Principála jeho právy; Principálem Buddyho je
   vždy člověk. Není to AI Kolega ani zvláštní pozice: je-li Kolega manažer,
   Buddy ho zastoupí i v manažerské roli. V mezích trvalých, scoped a
@@ -270,7 +273,10 @@ neinteraktivní běhy bez přímého App chatu s Kolegou.
    i cleanup guardy drží skill
    `.agents/skills/worktree-development-discipline/SKILL.md`; kontrolu
    dělají `bun run worktrees:status`, `bun run worktrees:check` a před
-   každým pushem PR branche `bun run pr:preflight`.
+   každým pushem PR branche `bun run pr:preflight`. Create lane automaticky
+   zachytí Task Agent ID z podporovaného harnessu; pokud ho harness nevystaví,
+   Agent předá explicitní ID a surface. Agentem založený worktree bez
+   dohledatelného Task Agent ID nevytvářej.
 4. **Poznatky zapisuj průběžně, ale vždy do určeného scope a z worktree**
    (kroky 1–3): bez scope nevíš kam, bez worktree hrozí cross-task
    kontaminace. Kam který druh poznatku patří, říká kanonický blok výš.

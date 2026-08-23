@@ -6,7 +6,7 @@
 // Použití:
 //   bun run worktrees:create -- --plan CAC-0085 [--branch agent/<basename>]
 //     [--purpose "..."] [--surface claude-code] [--agent-label "Claude Code"]
-//     [--created-by <id>] [--dry-run]
+//     [--task-agent-id <opaque-id>] [--created-by <id>] [--dry-run]
 
 import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
 import { mkdir, readFile, readdir } from "node:fs/promises";
@@ -32,6 +32,7 @@ import {
   acquireCreateLock,
   releaseCreateLock,
 } from "./worktree-create-lock.mjs";
+import { resolveTaskAgentIdentity } from "./task-agent-identity.mjs";
 import {
   validateCanonicalMissionControlPlan,
 } from "../.agents/skills/worktree-development-discipline/scripts/worktree-inventory.mjs";
@@ -378,10 +379,26 @@ async function main() {
     );
   }
   const now = new Date().toISOString();
-  const threadId = options["thread-id"]
-    ?? process.env.CODEX_THREAD_ID
-    ?? process.env.CLAUDE_SESSION_ID
-    ?? null;
+  const explicitTaskAgentId = options["task-agent-id"] ?? options["thread-id"] ?? null;
+  const taskAgentIdentity = resolveTaskAgentIdentity({
+    environment: process.env,
+    id: explicitTaskAgentId,
+    surface: options.surface ?? null,
+  });
+  if (!taskAgentIdentity.id) {
+    fail(
+      "Task Agent ID není dostupné. Codex poskytuje CODEX_THREAD_ID/CODEX_SESSION_ID, "
+      + "Claude Code CLAUDE_CODE_SESSION_ID. Cursor a ostatní harnessy musí předat "
+      + "--task-agent-id <id> --surface <slug> nebo LAZURIO_TASK_AGENT_ID společně s "
+      + "LAZURIO_TASK_AGENT_SURFACE.",
+    );
+  }
+  if (!taskAgentIdentity.surface) {
+    fail(
+      "Task Agent ID nemá harness surface. Předej --surface <slug> nebo "
+      + "LAZURIO_TASK_AGENT_SURFACE; samotné opaque ID není mezi harnessy jednoznačné.",
+    );
+  }
   const sidecar = {
     schema_version: "companiesascode.worktree.v1",
     organization: identity.organization,
@@ -397,16 +414,16 @@ async function main() {
     mission_control_plan_path: plan.relative,
     worktree_path: `.worktrees/root/${planBasename}`,
     created_at: now,
-    created_by: options["created-by"] ?? `${options.surface ?? "agent"}-for-${userInfo().username}@${hostname()}`,
+    created_by: options["created-by"] ?? `${taskAgentIdentity.surface}-for-${userInfo().username}@${hostname()}`,
     last_touched: now,
     status: "active",
     pr_url: null,
     purpose: options.purpose ?? `Práce na plánu ${planCode} (${planBasename}).`,
     conversation_origin: {
-      surface: options.surface ?? "claude-code",
+      surface: taskAgentIdentity.surface,
       agent_label: options["agent-label"] ?? "Task Agent",
-      thread_id: threadId,
-      thread_locator_status: threadId ? "captured" : "unavailable",
+      thread_id: taskAgentIdentity.id,
+      thread_locator_status: "captured",
       local_only: true,
       captured_at: now,
     },

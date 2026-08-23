@@ -8,6 +8,7 @@ const VALUE_OPTIONS = new Set([
   "surface",
   "agent-label",
   "created-by",
+  "task-agent-id",
   "thread-id",
 ]);
 
@@ -35,6 +36,13 @@ export function parseWorktreeCreateArgs(argv) {
   }
   if (options.surface && !SURFACE_PATTERN.test(options.surface)) {
     throw new Error(`--surface má neplatný formát: ${options.surface}`);
+  }
+  if (
+    options["task-agent-id"]
+    && options["thread-id"]
+    && options["task-agent-id"] !== options["thread-id"]
+  ) {
+    throw new Error("--task-agent-id a legacy --thread-id si odporují");
   }
   return options;
 }

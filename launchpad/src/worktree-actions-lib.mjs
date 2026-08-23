@@ -4,6 +4,7 @@ import { lstat, mkdir, readFile, realpath, rm, writeFile } from "fs/promises";
 import { basename, dirname, join, posix, relative, resolve, win32 } from "path";
 import { writeSidecarAtomically } from "../../scripts/worktree-create-lib.mjs";
 import { acquireCreateLock, releaseCreateLock } from "../../scripts/worktree-create-lock.mjs";
+import { resolveTaskAgentIdentity } from "../../scripts/task-agent-identity.mjs";
 import { buildGitInventory } from "./git-inventory-lib.mjs";
 import { GIT_LOCAL_TIMEOUT_MS, runGit, safeGitRemoteEnv } from "./git-lib.mjs";
 import { readGitRepoStatus } from "./git-status-lib.mjs";
@@ -719,8 +720,8 @@ const RECOVERY_STATES = new Set([
 
 // Publish běží i z Launchpad UI, kde request žádný conversationOrigin nenese.
 // Ambientní prostředí serveru pak není spolehlivý signál identity: server může
-// běžet dlouho a mít zděděné HUMANANDMACHINE_THREAD_ID/CODEX_THREAD_ID/
-// CLAUDE_SESSION_ID z úplně jiné session. Implicitní env proto nikdy nepřebije
+// běžet dlouho a mít zděděné LAZURIO_TASK_AGENT_ID/CODEX_THREAD_ID/
+// CLAUDE_CODE_SESSION_ID z úplně jiné session. Implicitní env proto nikdy nepřebije
 // už zachycenou provenance — sidecar je jediná recovery stopa k původní
 // konverzaci. Předání ownershipu na nový thread je vědomý krok a musí přijít
 // jako explicitní conversationOrigin v requestu.
@@ -748,23 +749,21 @@ function resolveConversationOrigin({ provided, createdBy, environment, capturedA
   }
   const env = environment && typeof environment === "object" ? environment : {};
   const explicitThreadId = optionalMetadataString(provided?.thread_id, "conversationOrigin.thread_id", 512);
-  const genericThreadId = optionalMetadataString(env.HUMANANDMACHINE_THREAD_ID, "HUMANANDMACHINE_THREAD_ID", 512);
-  const codexThreadId = optionalMetadataString(env.CODEX_THREAD_ID, "CODEX_THREAD_ID", 512);
-  const claudeThreadId = optionalMetadataString(env.CLAUDE_SESSION_ID, "CLAUDE_SESSION_ID", 512);
   const explicitLocatorStatus = provided?.thread_locator_status;
   const useEnvironmentLocator = explicitLocatorStatus === undefined || explicitLocatorStatus === "captured";
-  const threadId = explicitThreadId ?? (useEnvironmentLocator
-    ? genericThreadId ?? codexThreadId ?? claudeThreadId
-    : null);
-  const inferredSurface = genericThreadId
-    ? "humanandmachine-agent"
-    : codexThreadId
-      ? "codex"
-      : claudeThreadId
-        ? "claude-code"
-        : "launchpad";
+  const ambientIdentity = useEnvironmentLocator
+    ? resolveTaskAgentIdentity({
+      environment: env,
+      surface: provided?.surface ?? env.LAZURIO_TASK_AGENT_SURFACE ?? env.HUMANANDMACHINE_AGENT_SURFACE,
+    })
+    : { id: null, surface: null };
+  const threadId = explicitThreadId ?? ambientIdentity.id;
+  const inferredSurface = ambientIdentity.surface ?? "launchpad";
   const surface = requiredMetadataString(
-    provided?.surface ?? env.HUMANANDMACHINE_AGENT_SURFACE ?? inferredSurface,
+    provided?.surface
+      ?? env.LAZURIO_TASK_AGENT_SURFACE
+      ?? env.HUMANANDMACHINE_AGENT_SURFACE
+      ?? inferredSurface,
     "conversationOrigin.surface",
     80,
   );
@@ -775,7 +774,10 @@ function resolveConversationOrigin({ provided, createdBy, environment, capturedA
     });
   }
   const agentLabel = requiredMetadataString(
-    provided?.agent_label ?? env.HUMANANDMACHINE_AGENT_LABEL ?? createdBy,
+    provided?.agent_label
+      ?? env.LAZURIO_TASK_AGENT_LABEL
+      ?? env.HUMANANDMACHINE_AGENT_LABEL
+      ?? createdBy,
     "conversationOrigin.agent_label",
     120,
   );
