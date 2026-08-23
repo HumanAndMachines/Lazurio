@@ -578,6 +578,16 @@ function runtimeEnvFileLiteralPath(value) {
   return { path: normalized, issue: null };
 }
 
+const runtimeModeNamePattern = /^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$/;
+
+function addRuntimeModeSelection({ modes, issues, source, mode }) {
+  if (runtimeModeNamePattern.test(mode)) {
+    modes.add(mode);
+    return;
+  }
+  issues.push(`${source} ${JSON.stringify(mode)} musí být statický název režimu z písmen, číslic, _, - a oddělených tečkových segmentů`);
+}
+
 export function runtimeLoadedEnvFileSelection({ packageJson, runtime }) {
   const paths = new Set([".env", ".env.local"]);
   const issues = [];
@@ -587,13 +597,13 @@ export function runtimeLoadedEnvFileSelection({ packageJson, runtime }) {
       command,
       /(?:^|[\s"';&|()])--mode(?:=|\s+)(?:"([^"]+)"|'([^']+)'|([^\s"';&|()]+))/g,
     )) {
-      if (/^[A-Za-z0-9_-]+$/.test(mode)) modes.add(mode);
+      addRuntimeModeSelection({ modes, issues, source: "--mode", mode });
     }
     for (const mode of commandValues(
       command,
-      /(?:^|[\s"';&|()])NODE_ENV\s*=\s*(?:"([^"]+)"|'([^']+)'|([A-Za-z0-9_-]+))/g,
+      /(?:^|[\s"';&|()])NODE_ENV\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s"';&|()]+))/g,
     )) {
-      if (/^[A-Za-z0-9_-]+$/.test(mode)) modes.add(mode);
+      addRuntimeModeSelection({ modes, issues, source: "NODE_ENV", mode });
     }
     for (const explicitPath of commandValues(
       command,
