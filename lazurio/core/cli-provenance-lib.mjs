@@ -146,16 +146,48 @@ export function trustedGitCandidates(platform = process.platform, environment = 
   ];
 }
 
+export function trustedGitHubCliCandidates(platform = process.platform, environment = process.env) {
+  if (platform === "darwin") {
+    return ["/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/usr/bin/gh"];
+  }
+  if (platform === "linux") {
+    return ["/usr/bin/gh", "/bin/gh", "/usr/local/bin/gh", "/home/linuxbrew/.linuxbrew/bin/gh"];
+  }
+  if (platform !== "win32") return [];
+  const localAppData = environment.LOCALAPPDATA;
+  return [
+    "C:\\Program Files\\GitHub CLI\\gh.exe",
+    "C:\\Program Files (x86)\\GitHub CLI\\gh.exe",
+    ...(typeof localAppData === "string" && win32.isAbsolute(localAppData)
+      ? [
+          win32.join(localAppData, "Programs", "GitHub CLI", "bin", "gh.exe"),
+          win32.join(localAppData, "Programs", "GitHub CLI", "gh.exe"),
+        ]
+      : []),
+  ];
+}
+
 export function resolveTrustedGitExecutable({
   platform = process.platform,
   environment = process.env,
 } = {}) {
-  for (const candidate of trustedGitCandidates(platform, environment)) {
+  return resolveTrustedExecutable(trustedGitCandidates(platform, environment));
+}
+
+export function resolveTrustedGitHubCliExecutable({
+  platform = process.platform,
+  environment = process.env,
+} = {}) {
+  return resolveTrustedExecutable(trustedGitHubCliCandidates(platform, environment));
+}
+
+function resolveTrustedExecutable(candidates) {
+  for (const candidate of candidates) {
     try {
       const canonicalPath = realpathSync.native(candidate);
       if (isAbsolute(canonicalPath) && statSync(canonicalPath).isFile()) return canonicalPath;
     } catch {
-      // Only fixed, system-owned candidates are considered.
+      // Only fixed installation candidates are considered.
     }
   }
   return null;

@@ -1,8 +1,12 @@
 import { spawnSync } from "node:child_process";
-import { lstatSync, readdirSync, realpathSync } from "node:fs";
+import { lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { join, resolve, win32 } from "node:path";
 
-import { resolveTrustedGitExecutable } from "./cli-provenance-lib.mjs";
+import {
+  normalizeComparableCliPath,
+  resolveTrustedGitExecutable,
+  resolveTrustedGitHubCliExecutable,
+} from "./cli-provenance-lib.mjs";
 
 export const LAZURIO_INSTALL_REPORT_SCHEMA = "lazurio.install.report.v0";
 export const INSTALL_MODE = "report";
@@ -61,6 +65,7 @@ export function inspectLazurioInstallation({
   bunVersion = process.versions.bun ?? null,
   environment = process.env,
   resolveGit = resolveTrustedGitExecutable,
+  resolveGitHubCli = resolveTrustedGitHubCliExecutable,
   runCommand = runCommandSync,
   inspectRoot = inspectRootLayout,
 } = {}) {
@@ -88,20 +93,25 @@ export function inspectLazurioInstallation({
       : failed("git_unusable");
   }));
 
-  let githubCliAvailable = false;
+  let githubCliExecutable = null;
   steps.push(boundedProbe("github_cli", () => {
-    const result = runCommand({ executable: "gh", args: ["--version"], environment, cwd: commandCwd });
-    if (commandMissing(result)) return actionRequired("github_cli_missing");
+    githubCliExecutable = resolveGitHubCli({ platform, environment });
+    if (!githubCliExecutable) return actionRequired("github_cli_missing");
+    const result = runCommand({
+      executable: githubCliExecutable,
+      args: ["--version"],
+      environment,
+      cwd: commandCwd,
+    });
     if (result?.status !== 0) return failed("github_cli_unusable");
-    githubCliAvailable = true;
     return completed("github_cli_available");
   }));
 
   steps.push(boundedProbe("github_auth", () => {
-    if (!githubCliAvailable) return skipped("github_cli_unavailable");
+    if (!githubCliExecutable) return skipped("github_cli_unavailable");
     return commandSucceeded(
       runCommand,
-      "gh",
+      githubCliExecutable,
       ["auth", "status", "--hostname", "github.com"],
       environment,
       commandCwd,
@@ -110,7 +120,13 @@ export function inspectLazurioInstallation({
       : actionRequired("github_login_required");
   }));
 
-  const rootObservation = boundedRootProbe(root, inspectRoot);
+  const rootObservation = boundedRootProbe(root, inspectRoot, {
+    platform,
+    environment,
+    gitExecutable,
+    runCommand,
+    commandCwd,
+  });
   steps.push(rootObservation.step);
 
   const summary = summarizeSteps(steps);
@@ -172,7 +188,7 @@ function boundedProbe(id, probe) {
   }
 }
 
-function boundedRootProbe(root, inspectRoot) {
+function boundedRootProbe(root, inspectRoot, context) {
   if (root === null) {
     return {
       step: { id: "root", status: "action_required", reason: "root_selection_required" },
@@ -180,7 +196,7 @@ function boundedRootProbe(root, inspectRoot) {
     };
   }
   try {
-    const observation = inspectRoot(root);
+    const observation = inspectRoot(root, context);
     return {
       step: { id: "root", status: observation.status, reason: observation.reason },
       root: {
@@ -197,7 +213,13 @@ function boundedRootProbe(root, inspectRoot) {
   }
 }
 
-function inspectRootLayout(rawRoot) {
+function inspectRootLayout(rawRoot, {
+  platform = process.platform,
+  environment = process.env,
+  gitExecutable = null,
+  runCommand = runCommandSync,
+  commandCwd = trustedCommandCwd(platform, environment),
+} = {}) {
   const selectedPath = resolve(rawRoot);
   let marker;
   try {
@@ -219,18 +241,37 @@ function inspectRootLayout(rawRoot) {
   if (entries.size === 0) {
     return rootResult(canonicalRoot, "empty", "action_required", "root_creation_required");
   }
-  if (entries.has("personal.gen3.json") && !entries.has("launchpad.gen3.json")) {
+  const hasLaunchpadManifest = entries.has("launchpad.gen3.json");
+  const hasPersonalspaceManifest = entries.has("personal.gen3.json");
+  if (hasLaunchpadManifest && hasPersonalspaceManifest) {
+    return rootResult(canonicalRoot, "unrecognized", "action_required", "root_unrecognized");
+  }
+  if (hasPersonalspaceManifest) {
     return rootResult(canonicalRoot, "personalspace", "action_required", "personalspace_root_not_supported");
   }
-  if (!entries.has("launchpad.gen3.json")) {
+  if (!hasLaunchpadManifest || !validLaunchpadRootMarker(join(canonicalRoot, "launchpad.gen3.json"))) {
     return rootResult(canonicalRoot, "unrecognized", "action_required", "root_unrecognized");
   }
   if (entries.has(".git")) {
+    if (!safeEntry(join(canonicalRoot, ".git"))) {
+      return rootResult(canonicalRoot, "unsafe", "failed", "root_path_unsafe");
+    }
     return rootResult(canonicalRoot, "legacy_git_root", "action_required", "legacy_git_root_detected");
   }
 
   const sourceRoot = join(canonicalRoot, "development", "Lazurio");
-  if (!safeDirectory(sourceRoot) || !safeEntry(join(sourceRoot, ".git"))) {
+  if (
+    !safeDirectory(sourceRoot)
+    || !safeEntry(join(sourceRoot, ".git"))
+    || !validGitCheckout({
+      sourceRoot,
+      platform,
+      environment,
+      gitExecutable,
+      runCommand,
+      commandCwd,
+    })
+  ) {
     return rootResult(
       canonicalRoot,
       "incomplete_generated_root",
@@ -291,13 +332,54 @@ function safeEntry(path) {
   }
 }
 
+function validLaunchpadRootMarker(path) {
+  try {
+    const entry = lstatSync(path);
+    if (!entry.isFile() || entry.isSymbolicLink()) return false;
+    const manifest = JSON.parse(readFileSync(path, "utf8"));
+    return plainObject(manifest)
+      && manifest.workspace_generation === "gen3"
+      && validMountpoint(manifest.organization_mountpoint)
+      && validMountpoint(manifest.personalspace_mountpoint)
+      && plainObject(manifest.launchpad_root)
+      && manifest.launchpad_root.root_role === "launchpad-root";
+  } catch {
+    return false;
+  }
+}
+
+function validMountpoint(value) {
+  return typeof value === "string"
+    && /^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(value);
+}
+
+function validGitCheckout({
+  sourceRoot,
+  platform,
+  environment,
+  gitExecutable,
+  runCommand,
+  commandCwd,
+}) {
+  if (!gitExecutable) return false;
+  const result = runCommand({
+    executable: gitExecutable,
+    args: ["-C", sourceRoot, "rev-parse", "--show-toplevel"],
+    environment,
+    cwd: commandCwd,
+  });
+  if (result?.status !== 0 || typeof result.stdout !== "string") return false;
+  return normalizeComparableCliPath(result.stdout.trim(), platform)
+    === normalizeComparableCliPath(sourceRoot, platform);
+}
+
 function runCommandSync({ executable, args, environment, cwd }) {
   return spawnSync(executable, args, {
     cwd,
     encoding: "utf8",
     env: environment,
     shell: false,
-    stdio: "ignore",
+    stdio: ["ignore", "pipe", "ignore"],
     timeout: 10_000,
     windowsHide: true,
   });
@@ -315,10 +397,6 @@ function trustedCommandCwd(platform, environment) {
     return win32.join(systemRoot, "System32");
   }
   return "C:\\Windows\\System32";
-}
-
-function commandMissing(result) {
-  return result?.error?.code === "ENOENT";
 }
 
 function plainObject(value) {

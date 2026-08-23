@@ -60,9 +60,10 @@ test("independent probes continue after a bounded failure", () => {
     resolveGit: () => {
       throw new Error("CANARY_GIT_FAILURE");
     },
+    resolveGitHubCli: () => "/trusted/bin/gh",
     runCommand: ({ executable, args }) => {
       invoked.push([executable, ...args].join(" "));
-      if (executable === "gh" && args[0] === "--version") return { status: 0 };
+      if (executable === "/trusted/bin/gh" && args[0] === "--version") return { status: 0 };
       return { status: 1, stdout: "CANARY_STDOUT", stderr: "CANARY_STDERR" };
     },
   });
@@ -74,22 +75,26 @@ test("independent probes continue after a bounded failure", () => {
   });
   expect(report.steps.find((step) => step.id === "github_cli").status).toBe("completed");
   expect(report.steps.find((step) => step.id === "github_auth").reason).toBe("github_login_required");
-  expect(invoked).toEqual(["gh --version", "gh auth status --hostname github.com"]);
+  expect(invoked).toEqual([
+    "/trusted/bin/gh --version",
+    "/trusted/bin/gh auth status --hostname github.com",
+  ]);
   expect(installExitCode(report)).toBe(2);
   expect(JSON.stringify(report)).not.toContain("CANARY");
 });
 
 test("supported complete fixture exits zero with all probes completed", () => {
-  const commandCwds = [];
+  const commands = [];
   const report = inspectLazurioInstallation({
     root: "/fixture/root",
     platform: "win32",
     architecture: "x64",
     bunVersion: "1.3.14",
     resolveGit: () => "C:\\Program Files\\Git\\cmd\\git.exe",
+    resolveGitHubCli: () => "C:\\Program Files\\GitHub CLI\\gh.exe",
     environment: { SystemRoot: "C:\\Windows" },
-    runCommand: ({ cwd }) => {
-      commandCwds.push(cwd);
+    runCommand: ({ executable, cwd }) => {
+      commands.push({ executable, cwd });
       return { status: 0 };
     },
     inspectRoot: () => ({
@@ -109,11 +114,33 @@ test("supported complete fixture exits zero with all probes completed", () => {
   });
   expect(installExitCode(report)).toBe(0);
   expect(isValidLazurioInstallReport(report)).toBe(true);
-  expect(commandCwds).toEqual([
-    "C:\\Windows\\System32",
-    "C:\\Windows\\System32",
-    "C:\\Windows\\System32",
+  expect(commands).toEqual([
+    { executable: "C:\\Program Files\\Git\\cmd\\git.exe", cwd: "C:\\Windows\\System32" },
+    { executable: "C:\\Program Files\\GitHub CLI\\gh.exe", cwd: "C:\\Windows\\System32" },
+    { executable: "C:\\Program Files\\GitHub CLI\\gh.exe", cwd: "C:\\Windows\\System32" },
   ]);
+});
+
+test("GitHub probes never execute an ambient PATH shadow", () => {
+  const executables = [];
+  const report = inspectLazurioInstallation({
+    root: null,
+    platform: "linux",
+    environment: { PATH: "/tmp/untrusted-shadow" },
+    resolveGit: () => "/usr/bin/git",
+    resolveGitHubCli: () => "/usr/bin/gh",
+    runCommand: ({ executable }) => {
+      executables.push(executable);
+      return { status: 0 };
+    },
+  });
+
+  expect(report.steps.find((step) => step.id === "github_cli")).toMatchObject({
+    status: "completed",
+    reason: "github_cli_available",
+  });
+  expect(executables).toEqual(["/usr/bin/git", "/usr/bin/gh", "/usr/bin/gh"]);
+  expect(executables).not.toContain("gh");
 });
 
 test("real Root probe distinguishes missing, legacy and generated layouts", async () => {
@@ -122,12 +149,22 @@ test("real Root probe distinguishes missing, legacy and generated layouts", asyn
   const legacy = join(parent, "legacy");
   const generated = join(parent, "generated");
   const finderEmpty = join(parent, "finder-empty");
+  const ambiguous = join(parent, "ambiguous");
+  const invalidManifest = join(parent, "invalid-manifest");
+  const staleSource = join(parent, "stale-source");
   await mkdir(join(legacy, ".git"), { recursive: true });
-  await writeFile(join(legacy, "launchpad.gen3.json"), "{}\n", "utf8");
+  await writeLaunchpadManifest(legacy);
   await mkdir(join(generated, "development", "Lazurio", ".git"), { recursive: true });
-  await writeFile(join(generated, "launchpad.gen3.json"), "{}\n", "utf8");
+  await writeLaunchpadManifest(generated);
   await mkdir(finderEmpty, { recursive: true });
   await writeFile(join(finderEmpty, ".DS_Store"), "finder metadata", "utf8");
+  await mkdir(join(ambiguous, "development", "Lazurio", ".git"), { recursive: true });
+  await writeLaunchpadManifest(ambiguous);
+  await writeFile(join(ambiguous, "personal.gen3.json"), "{}\n", "utf8");
+  await mkdir(join(invalidManifest, "development", "Lazurio", ".git"), { recursive: true });
+  await writeFile(join(invalidManifest, "launchpad.gen3.json"), "{}\n", "utf8");
+  await mkdir(join(staleSource, "development", "Lazurio", ".git"), { recursive: true });
+  await writeLaunchpadManifest(staleSource);
 
   expect(rootStep(missing)).toMatchObject({
     status: "action_required",
@@ -145,6 +182,18 @@ test("real Root probe distinguishes missing, legacy and generated layouts", asyn
     status: "action_required",
     reason: "root_creation_required",
   });
+  expect(rootStep(ambiguous)).toMatchObject({
+    status: "action_required",
+    reason: "root_unrecognized",
+  });
+  expect(rootStep(invalidManifest)).toMatchObject({
+    status: "action_required",
+    reason: "root_unrecognized",
+  });
+  expect(rootStep(staleSource, { gitCheckoutReady: false })).toMatchObject({
+    status: "action_required",
+    reason: "development_source_missing",
+  });
 });
 
 function fixtureReport() {
@@ -154,18 +203,36 @@ function fixtureReport() {
     architecture: "arm64",
     bunVersion: "1.3.14",
     resolveGit: () => "/usr/bin/git",
-    runCommand: ({ executable }) => executable === "gh"
-      ? { status: null, error: { code: "ENOENT" }, stdout: "CANARY_STDOUT", stderr: "CANARY_STDERR" }
-      : { status: 0 },
+    resolveGitHubCli: () => null,
+    runCommand: () => ({ status: 0, stdout: "CANARY_STDOUT", stderr: "CANARY_STDERR" }),
   });
 }
 
-function rootStep(root) {
+function rootStep(root, { gitCheckoutReady = true } = {}) {
   return inspectLazurioInstallation({
     root,
     resolveGit: () => "/usr/bin/git",
-    runCommand: () => ({ status: 0 }),
+    resolveGitHubCli: () => "/usr/bin/gh",
+    runCommand: ({ executable, args }) => {
+      if (executable === "/usr/bin/git" && args[0] === "-C") {
+        return {
+          status: gitCheckoutReady ? 0 : 1,
+          stdout: gitCheckoutReady ? `${args[1]}\n` : "",
+        };
+      }
+      return { status: 0 };
+    },
   }).steps.find((step) => step.id === "root");
+}
+
+async function writeLaunchpadManifest(root) {
+  await mkdir(root, { recursive: true });
+  await writeFile(join(root, "launchpad.gen3.json"), `${JSON.stringify({
+    workspace_generation: "gen3",
+    organization_mountpoint: "organizations",
+    personalspace_mountpoint: "personalspace",
+    launchpad_root: { root_role: "launchpad-root" },
+  }, null, 2)}\n`, "utf8");
 }
 
 async function trackedTempRoot(prefix) {
