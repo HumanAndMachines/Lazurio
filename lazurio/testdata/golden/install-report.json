@@ -1,0 +1,55 @@
+{
+  "schema_version": "lazurio.install.report.v0",
+  "mode": "report",
+  "status": "action_required",
+  "machine": {
+    "platform": "darwin",
+    "architecture": "arm64"
+  },
+  "root": {
+    "selected": false,
+    "path": null,
+    "layout": "not_selected"
+  },
+  "steps": [
+    {
+      "id": "platform",
+      "status": "completed",
+      "reason": "platform_supported"
+    },
+    {
+      "id": "bun",
+      "status": "completed",
+      "reason": "bun_runtime_available"
+    },
+    {
+      "id": "git",
+      "status": "completed",
+      "reason": "git_available"
+    },
+    {
+      "id": "github_cli",
+      "status": "action_required",
+      "reason": "github_cli_missing"
+    },
+    {
+      "id": "github_auth",
+      "status": "skipped",
+      "reason": "github_cli_unavailable"
+    },
+    {
+      "id": "root",
+      "status": "action_required",
+      "reason": "root_selection_required"
+    }
+  ],
+  "summary": {
+    "status": "action_required",
+    "counts": {
+      "completed": 3,
+      "skipped": 1,
+      "action_required": 2,
+      "failed": 0
+    }
+  }
+}

@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lazurio.ai/schemas/install-report.v0.schema.json",
+  "type": "object",
+  "required": ["schema_version", "mode", "status", "machine", "root", "steps", "summary"],
+  "properties": {
+    "schema_version": { "const": "lazurio.install.report.v0" },
+    "mode": { "const": "report" },
+    "status": { "enum": ["completed", "action_required", "failed"] },
+    "machine": {
+      "type": "object",
+      "required": ["platform", "architecture"],
+      "properties": {
+        "platform": { "type": "string", "minLength": 1 },
+        "architecture": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "root": {
+      "type": "object",
+      "required": ["selected", "path", "layout"],
+      "properties": {
+        "selected": { "type": "boolean" },
+        "path": {
+          "anyOf": [
+            { "type": "string", "minLength": 1 },
+            { "enum": [null] }
+          ]
+        },
+        "layout": {
+          "enum": [
+            "not_selected",
+            "missing",
+            "empty",
+            "legacy_git_root",
+            "generated_root",
+            "incomplete_generated_root",
+            "personalspace",
+            "unrecognized",
+            "unsafe"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "prefixItems": [
+        {
+          "type": "object",
+          "required": ["id", "status", "reason"],
+          "properties": {
+            "id": { "const": "platform" },
+            "status": { "enum": ["completed", "skipped", "action_required", "failed"] },
+            "reason": { "enum": ["platform_supported", "platform_unsupported", "probe_failed"] }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["id", "status", "reason"],
+          "properties": {
+            "id": { "const": "bun" },
+            "status": { "enum": ["completed", "skipped", "action_required", "failed"] },
+            "reason": { "enum": ["bun_runtime_available", "bun_runtime_unavailable", "probe_failed"] }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["id", "status", "reason"],
+          "properties": {
+            "id": { "const": "git" },
+            "status": { "enum": ["completed", "skipped", "action_required", "failed"] },
+            "reason": { "enum": ["git_available", "git_missing", "git_unusable", "probe_failed"] }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["id", "status", "reason"],
+          "properties": {
+            "id": { "const": "github_cli" },
+            "status": { "enum": ["completed", "skipped", "action_required", "failed"] },
+            "reason": { "enum": ["github_cli_available", "github_cli_missing", "github_cli_unusable", "probe_failed"] }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["id", "status", "reason"],
+          "properties": {
+            "id": { "const": "github_auth" },
+            "status": { "enum": ["completed", "skipped", "action_required", "failed"] },
+            "reason": { "enum": ["github_authenticated", "github_login_required", "github_cli_unavailable", "probe_failed"] }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["id", "status", "reason"],
+          "properties": {
+            "id": { "const": "root" },
+            "status": { "enum": ["completed", "skipped", "action_required", "failed"] },
+            "reason": {
+              "enum": [
+                "root_selection_required",
+                "root_creation_required",
+                "legacy_git_root_detected",
+                "generated_root_ready",
+                "development_source_missing",
+                "personalspace_root_not_supported",
+                "root_unrecognized",
+                "root_path_unsafe",
+                "root_probe_failed",
+                "probe_failed"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "items": {
+        "type": "object",
+        "required": ["id", "status", "reason"],
+        "properties": {
+          "id": { "enum": ["platform", "bun", "git", "github_cli", "github_auth", "root"] },
+          "status": { "enum": ["completed", "skipped", "action_required", "failed"] },
+          "reason": {
+            "enum": [
+              "platform_supported",
+              "platform_unsupported",
+              "bun_runtime_available",
+              "bun_runtime_unavailable",
+              "git_available",
+              "git_missing",
+              "git_unusable",
+              "github_cli_available",
+              "github_cli_missing",
+              "github_cli_unusable",
+              "github_authenticated",
+              "github_login_required",
+              "github_cli_unavailable",
+              "root_selection_required",
+              "root_creation_required",
+              "legacy_git_root_detected",
+              "generated_root_ready",
+              "development_source_missing",
+              "personalspace_root_not_supported",
+              "root_unrecognized",
+              "root_path_unsafe",
+              "root_probe_failed",
+              "probe_failed"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["status", "counts"],
+      "properties": {
+        "status": { "enum": ["completed", "action_required", "failed"] },
+        "counts": {
+          "type": "object",
+          "required": ["completed", "skipped", "action_required", "failed"],
+          "properties": {
+            "completed": { "type": "integer", "minimum": 0 },
+            "skipped": { "type": "integer", "minimum": 0 },
+            "action_required": { "type": "integer", "minimum": 0 },
+            "failed": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

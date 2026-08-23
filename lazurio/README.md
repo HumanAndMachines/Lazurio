@@ -7,6 +7,31 @@ Principála/Mašinu/Personalspace a na explicitní selektor jednu lokálně obje
 Organizaci, `doctor` znovu používá existující Doctor core a `search` přidává
 první explicitně omezený Organization pilot.
 
+## Stav localhost instalace
+
+Opakovatelný top-level příkaz má jednu dlouhodobou roli: znovu odvodit stav
+mašiny, doplnit jen odsouhlasené chybějící části a vždy skončit reportem. První
+slice je záměrně pouze read-only:
+
+```sh
+lazurio install --root <cesta>
+lazurio install --root <cesta> --language en
+lazurio install --root <cesta> --json
+```
+
+Source CLI bez explicitního `--root` kontroluje svůj source Root. Immutable npm
+CLI bez uložené volby místo pádu vrátí `root_selection_required`. Společné Core
+postupně ověří platformu, Bun runtime, Git, GitHub CLI, přihlášení ke github.com
+a tvar Rootu; chyba jednoho probe nezastaví nezávislé kontroly a výstup nikdy
+neobsahuje stdout ani stderr externího nástroje. JSON zůstává locale-neutral,
+český a anglický terminálový report jsou jen dva rendery stejného výsledku.
+
+Exit code `0` znamená připravený stav, `1` konkrétní akci uživatele a `2`
+selhání kontroly. Tento slice nic neinstaluje, nevolá `lazurio cli install` ani
+`lazurio launchpad install` a legacy Git Root nepřesouvá. Interaktivní consent a
+writer kroky přijdou jako samostatné řezy nad stejným kontraktem; žádná workflow
+databáze ani obecný provisioning engine nevzniká.
+
 ## Instalace Launchpadu
 
 Nejdřív zpřístupni CLI v uživatelském `PATH`:
@@ -28,7 +53,7 @@ neběží přes tento launcher.
 
 Development link a Resident bez `--root` použijí Root vlastního entrypointu,
 takže fungují z libovolného pracovního adresáře. Platformně neutrální npm
-balíček je naopak pouze CLI code origin: dokud pozdější `lazurio install`
+balíček je naopak pouze CLI code origin: dokud pozdější writer `lazurio install`
 neuloží zvolený pracovní Root, rootové příkazy vyžadují explicitní `--root`.
 `lazurio --version` vždy popisuje samotné spuštěné CLI a `--root` proto
 nepřijímá. Linked task/PR worktree se permanentním PATH targetem stát nesmí.
