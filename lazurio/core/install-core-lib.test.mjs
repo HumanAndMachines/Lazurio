@@ -331,6 +331,25 @@ test("generated Root rejects an intermediate source symlink outside the Root", a
   });
 });
 
+test("generated Root requires a clean canonical source checkout", async () => {
+  const generated = await trackedTempRoot("lazurio-install-clean-source-");
+  const gitExecutable = resolveTrustedGitExecutable();
+  expect(gitExecutable).not.toBeNull();
+
+  await createSourceCheckout(generated, gitExecutable);
+  await writeLaunchpadManifest(generated);
+  expect(rootStep(generated, { gitExecutable })).toMatchObject({
+    status: "completed",
+    reason: "generated_root_ready",
+  });
+
+  await rm(join(generated, "development", "Lazurio", "lazurio", "cli.mjs"));
+  expect(rootStep(generated, { gitExecutable })).toMatchObject({
+    status: "action_required",
+    reason: "development_source_missing",
+  });
+});
+
 function fixtureReport() {
   return inspectLazurioInstallation({
     root: null,
