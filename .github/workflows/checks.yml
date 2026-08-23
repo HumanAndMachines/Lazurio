@@ -119,5 +119,5 @@ jobs:
           pattern: lazurio-npm-package-evidence-*
           path: dist/npm-evidence
           merge-multiple: true
-      - name: Shodný npm integrity a inventory na macOS, Linuxu a Windows
+      - name: Shodný source commit a unpacked npm inventory na macOS, Linuxu a Windows
         run: bun run npm-package:parity -- dist/npm-evidence/*.json

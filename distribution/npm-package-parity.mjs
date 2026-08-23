@@ -3,6 +3,8 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
+import { packageContentForParity } from "./npm-package-lib.mjs";
+
 const paths = Bun.argv.slice(2).map((path) => resolve(path));
 if (paths.length < 2) throw new Error("npm package parity requires at least two evidence files");
 const evidence = await Promise.all(paths.map(async (path) => ({
@@ -17,22 +19,25 @@ for (const candidate of evidence.slice(1)) {
   }
 }
 const runners = evidence.map(({ value }) => `${value.runner?.os}-${value.runner?.arch}`).sort();
-console.log(`ok - npm package parity: ${runners.join(", ")} share ${baseline.package.integrity}`);
+console.log(
+  `ok - npm package content parity: ${runners.join(", ")} share ${baseline.source.commit}, `
+  + `${baseline.package.file_count} files and ${baseline.package.unpacked_size} unpacked bytes`,
+);
 
 function canonicalPackageEvidence(value) {
   if (value?.schema_version !== "lazurio.cli.npm-package-evidence.v1") {
     throw new Error("unsupported npm package evidence");
   }
-  if (!value.package || !value.source || !value.packer) {
+  if (!value.package || !value.transport || !value.source || !value.packer) {
     throw new Error("npm package evidence is incomplete");
   }
   for (const result of Object.values(value.smoke ?? {})) {
     if (result !== "passed") throw new Error("npm package smoke evidence is not green");
   }
-  return {
-    schema_version: value.schema_version,
-    package: value.package,
-    source: value.source,
-    packer: value.packer,
-  };
+  // npm owns each archive's integrity. npm pack does not promise byte-identical
+  // gzip/tar output across operating systems, so transport fields remain in the
+  // audit evidence but are not a cross-OS content identity. Content identity is
+  // the exact Git object plus deterministic generated metadata and npm's
+  // unpacked file inventory.
+  return packageContentForParity(value);
 }
