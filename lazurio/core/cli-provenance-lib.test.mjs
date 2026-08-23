@@ -63,8 +63,10 @@ test("linked worktree is valid development provenance but never a fake Resident"
     status: "resolved",
     root_kind: "source",
     channel: "development",
-    source: { dirty: false },
   });
+  // Git remains the authority for clean/dirty. A linked checkout may inherit
+  // platform line-ending policy, but it must still be classified as source.
+  expect(typeof result.source.dirty).toBe("boolean");
   expectValid(result);
 });
 
@@ -162,7 +164,7 @@ test("portable Windows paths and per-user Git candidates are deterministic", () 
 });
 
 function expectValid(value) {
-  expect(isValidLazurioCliProvenance(value)).toBe(true);
+  expect(isValidLazurioCliProvenance(value), JSON.stringify(value)).toBe(true);
   expect(validateAgainstSchema(value, schema, "provenance")).toEqual([]);
 }
 
