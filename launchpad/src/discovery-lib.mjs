@@ -504,13 +504,13 @@ export function runtimeScriptPortAuthorityIssues({ packageJson, packagePath, mod
     const inlinePort = command.match(/(?:^|\s)--port(?:=|\s+)["']?(\d{4,5})(?=["'\s]|$)/);
     if (inlinePort) {
       issues.push(
-        `${packagePath}: scripts.${scriptName} obsahuje číselný port ${inlinePort[1]}; použij Launchpadem injektované PORT nebo LAZURIO_RUNTIME_LISTENER_<ID>_PORT`,
+        `${packagePath}: scripts.${scriptName} obsahuje číselný port ${inlinePort[1]}; načti lease z lazurio.module.json a přijmi jen přesně shodnou Lazurio runtime injekci`,
       );
     }
     for (const lease of (module?.port_leases ?? []).filter((entry) => Number.isInteger(entry?.port))) {
       if (new RegExp(`(^|\\D)${lease.port}(?=\\D|$)`).test(command)) {
         issues.push(
-          `${packagePath}: scripts.${scriptName} kopíruje module lease port ${lease.port}; použij Launchpadem injektované PORT nebo LAZURIO_RUNTIME_LISTENER_<ID>_PORT`,
+          `${packagePath}: scripts.${scriptName} kopíruje module lease port ${lease.port}; načti lease z lazurio.module.json a přijmi jen přesně shodnou Lazurio runtime injekci`,
         );
       }
     }
@@ -774,7 +774,7 @@ export async function runtimeSourcePortAuthorityIssues({
       const fallbackPatterns = [
         /(?:process\.env|Bun\.env)(?:\.(?:PORT|LAZURIO_RUNTIME_LISTENER_[A-Z0-9_]+_PORT)|\[["'](?:PORT|LAZURIO_RUNTIME_LISTENER_[A-Z0-9_]+_PORT)["']\])\s*(?:\?\?|\|\|)\s*["']?(\d{4,5})["']?/g,
         /(?:Number|parseInt)\([^;\n)]*(?:PORT|_PORT)[^;\n)]*\)\s*(?:\?\?|\|\|)\s*["']?(\d{4,5})["']?/g,
-        /\b(?:const|let|var)\s+(?:[A-Z0-9]+_)*PORT(?:_[A-Z0-9]+)*\s*=\s*["']?(\d{4,5})["']?/g,
+        /\b(?:const|let|var)\s+(?:PORT|DEFAULT_PORT|SERVER_PORT|LISTEN_PORT|HTTP_PORT)\s*=\s*["']?(\d{4,5})["']?/g,
       ];
       for (const pattern of fallbackPatterns) {
         for (const match of source.matchAll(pattern)) {
@@ -786,7 +786,7 @@ export async function runtimeSourcePortAuthorityIssues({
       for (const lease of leases) {
         if (new RegExp(`(^|\\D)${lease.port}(?=\\D|$)`).test(source)) {
           issues.push(
-            `${sourcePath}: runtime source kopíruje module lease port ${lease.port}; použij Launchpadem injektované PORT nebo LAZURIO_RUNTIME_LISTENER_<ID>_PORT`,
+            `${sourcePath}: runtime source kopíruje module lease port ${lease.port}; načti lease z lazurio.module.json a přijmi jen přesně shodnou Lazurio runtime injekci`,
           );
         }
       }

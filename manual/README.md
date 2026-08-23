@@ -109,9 +109,11 @@ runtime/cache cesty, ne custody source of truth.
 - Pokud je otevřená otázka bez rozhodnutého řešení, patří do `ISSUES.open.json`, ne do ad-hoc Markdown poznámky.
 - Shared Launchpad nesmí držet hardcodované porty jedné Organizace. Přesný
   port vlastní verzovaný module-root `lazurio.module.json`; `package.json`
-  pouze odkazuje na lease jejím ID. `PORT`, `HOST` a
-  `LAZURIO_RUNTIME_LISTENER_<ID>_PORT/HOST` jsou Launchpadem materializované
-  procesní rozhraní, ne hodnoty, které má Principál nastavovat v `.env`.
+  pouze odkazuje na lease jejím ID. Přímý start čte lease z manifestu.
+  `LAZURIO_RUNTIME_PORT/HOST` a
+  `LAZURIO_RUNTIME_LISTENER_<ID>_PORT/HOST` jsou volitelný procesní vstup,
+  který musí přesně souhlasit s manifestem. Obecné `PORT` a `HOST` nejsou
+  konfigurace listeneru ani druhá autorita a tyto hodnoty nepatří do `.env`.
 - Doctor je read-only. Když hlásí problém v Git stavu, submodulech nebo `.gitignore` ochraně runtime/private/archive cest, oprav source-of-truth soubor nebo mountpoint.
 - Secret hodnoty, OAuth URL/kódy, tokeny, hesla a obsah JSON credential souborů
   se nesmí posílat chatem ani commitovat; closeout používej jen metadata-only
