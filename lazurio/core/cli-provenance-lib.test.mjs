@@ -18,6 +18,7 @@ import {
   isValidLazurioCliProvenance,
   normalizeComparableCliPath,
   trustedGitCandidates,
+  trustedGitHubCliCandidates,
 } from "./cli-provenance-lib.mjs";
 
 const cleanup = [];
@@ -225,6 +226,19 @@ test("portable Windows paths and per-user Git candidates are deterministic", () 
     .toContain("C:\\Users\\Matous\\AppData\\Local\\Programs\\Git\\cmd\\git.exe");
   expect(trustedGitCandidates("win32", { LOCALAPPDATA: "relative" }))
     .not.toContain("relative\\Programs\\Git\\cmd\\git.exe");
+  expect(trustedGitHubCliCandidates("darwin", { PATH: "/tmp/shadow" }))
+    .toEqual(["/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/usr/bin/gh"]);
+  expect(trustedGitHubCliCandidates("linux", { PATH: "/tmp/shadow" }))
+    .toContain("/usr/bin/gh");
+  expect(trustedGitHubCliCandidates("win32", {
+    PATH: "C:\\Shadow",
+    LOCALAPPDATA: "C:\\Users\\Matous\\AppData\\Local",
+  })).toEqual([
+    "C:\\Program Files\\GitHub CLI\\gh.exe",
+    "C:\\Program Files (x86)\\GitHub CLI\\gh.exe",
+    "C:\\Users\\Matous\\AppData\\Local\\Programs\\GitHub CLI\\bin\\gh.exe",
+    "C:\\Users\\Matous\\AppData\\Local\\Programs\\GitHub CLI\\gh.exe",
+  ]);
 });
 
 function expectValid(value) {

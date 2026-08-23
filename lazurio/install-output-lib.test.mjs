@@ -43,8 +43,7 @@ function fixtureReport() {
     architecture: "arm64",
     bunVersion: "1.3.14",
     resolveGit: () => "/usr/bin/git",
-    runCommand: ({ executable }) => executable === "gh"
-      ? { status: null, error: { code: "ENOENT" } }
-      : { status: 0 },
+    resolveGitHubCli: () => null,
+    runCommand: () => ({ status: 0 }),
   });
 }
