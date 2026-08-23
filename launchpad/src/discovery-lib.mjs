@@ -532,6 +532,35 @@ function commandValues(command, expression) {
     .filter(Boolean);
 }
 
+function runtimeScriptGlobExpression(pattern) {
+  const source = pattern
+    .split("*")
+    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join(".*");
+  return new RegExp(`^${source}$`);
+}
+
+function runtimeReferencedScriptNames({ command, scripts }) {
+  const names = new Set(commandValues(
+    command,
+    /(?:^|[\s"';&|()])(?:(?:bun|npm|pnpm|yarn)\s+(?:run\s+)?|node\s+--run\s+|deno\s+task\s+)([A-Za-z0-9][A-Za-z0-9:_-]*)(?=$|[\s"';&|()])/g,
+  ));
+  for (const shorthand of commandValues(
+    command,
+    /(?:^|[\s"';&|()])(?:npm|pnpm|yarn|bun|node|deno):([A-Za-z0-9][A-Za-z0-9:_*-]*)(?=$|[\s"';&|()])/g,
+  )) {
+    if (!shorthand.includes("*")) {
+      names.add(shorthand);
+      continue;
+    }
+    const matches = runtimeScriptGlobExpression(shorthand);
+    for (const scriptName of Object.keys(scripts)) {
+      if (matches.test(scriptName)) names.add(scriptName);
+    }
+  }
+  return names;
+}
+
 function runtimeDevScriptCommands({ packageJson, runtime }) {
   const scripts = packageJson?.scripts ?? {};
   const pending = [runtime?.dev_script];
@@ -544,10 +573,7 @@ function runtimeDevScriptCommands({ packageJson, runtime }) {
     const command = scripts[scriptName];
     if (typeof command !== "string") continue;
     commands.push(command);
-    for (const referencedScript of commandValues(
-      command,
-      /(?:^|[\s"';&|()])(?:bun|npm|pnpm|yarn)\s+(?:run\s+)?([A-Za-z0-9][A-Za-z0-9:_-]*)/g,
-    )) {
+    for (const referencedScript of runtimeReferencedScriptNames({ command, scripts })) {
       if (typeof scripts[referencedScript] === "string") pending.push(referencedScript);
     }
   }
