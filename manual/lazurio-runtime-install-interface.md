@@ -47,6 +47,7 @@ Supervisor ve stejném workspace kontejneru nastaví:
 
 ```sh
 export LAZURIO_RUNTIME_ROOT=/opt/lazurio-runtime
+export LAZURIO_LAUNCHPAD_STATE_ROOT=/home/builder/.local/state/lazurio/launchpad
 export WORKSPACE_ROOT=/home/builder/Lazurio
 exec bun "$LAZURIO_RUNTIME_ROOT/launchpad/src/server.mjs" \
   --root "$WORKSPACE_ROOT"
@@ -57,6 +58,12 @@ exec bun "$LAZURIO_RUNTIME_ROOT/launchpad/src/server.mjs" \
 první Git mutací ověří, že runtime neleží uvnitř working rootu. Překryv vrátí
 `blocked/runtime_not_isolated`; detached working checkout se proto nesmí
 odpinovat, dokud není tento runtime artefakt skutečně nasazený.
+
+Hosted profil navíc vyžaduje absolutní `LAZURIO_LAUNCHPAD_STATE_ROOT` mimo
+immutable runtime i mutable working root. Launchpad do této perzistentní
+builder-owned cesty ukládá pouze svůj provozní stav, desired module source,
+lease a aplikační logy. Lokální profil bez této proměnné zachovává dosavadní
+umístění pod source Launchpadu, takže localhost workflow se nemění.
 
 Lokální krátký příkaz `lazurio update` si pro jeden běh vytvoří úplný dočasný
 bundle enginu mimo working root a po skončení jej odstraní. Dlouho běžící

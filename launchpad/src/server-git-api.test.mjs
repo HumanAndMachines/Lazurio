@@ -313,13 +313,15 @@ test("identity endpoint is local-only and a foreign root cannot reuse the port",
 
 test("hosted Launchpad rejects forged gateway headers without a TLS-authenticated OAuth session", async () => {
   const root = await createLaunchpadGitFixture();
-  tempRoots.push(root);
+  const stateRoot = `${root}-launchpad-state`;
+  tempRoots.push(root, stateRoot);
   const externalOrigin = "https://launchpad.management.example.test";
   const authPort = await findFreePort();
   const { port } = await startLaunchpadServer(root, {
     env: {
       LAZURIO_WORKSPACE_PROFILE: "hosted",
       LAZURIO_TEAM_ID: "management",
+      LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot,
       LAZURIO_TEAM_SERVICE_CATALOG_JSON: JSON.stringify({
         schema_version: "lazurio.team_service_catalog.v1",
         team_id: "management",

@@ -177,6 +177,7 @@ export class RuntimeActionError extends Error {
 export function createRuntimeManager({
   companiesRoot,
   launchpadRoot,
+  stateRoot = launchpadRoot,
   instanceId = randomUUID(),
   discover = discoverLaunchpadApps,
   resolvePortOwnerFn = resolvePortOwner,
@@ -207,13 +208,14 @@ export function createRuntimeManager({
   const managedProcesses = new Map();
   const moduleLeaseLocks = new Map();
   const desiredRestartTrackers = new Map();
-  const runtimeRoot = join(launchpadRoot, "runtime");
+  const runtimeStateRoot = resolve(stateRoot);
+  const runtimeRoot = join(runtimeStateRoot, "runtime");
   const appStateRoot = join(runtimeRoot, "apps");
   const desiredStateRoot = join(runtimeRoot, "desired-modules");
   const moduleLockRoot = join(runtimeRoot, "module-locks");
   const takeoverAuditRoot = join(runtimeRoot, "audit");
   const takeoverAuditPath = join(takeoverAuditRoot, "takeovers.jsonl");
-  const logsRoot = join(launchpadRoot, "logs", "apps");
+  const logsRoot = join(runtimeStateRoot, "logs", "apps");
   const processIdentityResolver = resolveProcessIdentityFn
     ?? ((pid) => resolveProcessIdentity(pid, {
       platform,
@@ -3414,7 +3416,7 @@ export function createRuntimeManager({
   function relativeRuntimePath(path) {
     // API/state cesty jsou přenositelné identifikátory, ne nativní filesystem
     // cesty. Na Windows proto nikdy nepropouštějí zpětná lomítka.
-    return relative(launchpadRoot, path).replace(/\\/g, "/");
+    return relative(runtimeStateRoot, path).replace(/\\/g, "/");
   }
 
   return {
