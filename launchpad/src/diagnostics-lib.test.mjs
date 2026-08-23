@@ -1603,6 +1603,18 @@ test("app sekci určí fyzická cesta, manifest doplní N:M Team intent a sdíle
       launchpad_section: "organization",
     }),
   );
+  const hostedResponse = await buildLaunchpadAppsResponse({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    runtimeManager: { appsWithRuntime: async (apps) => apps },
+    activeTeamId: "sidebrand",
+  });
+  expect(hostedResponse.organizations[0].teams.map((team) => team.slug)).toEqual(["sidebrand"]);
+  expect(hostedResponse.organizations[0].workspaces.map((team) => team.slug)).toEqual(["sidebrand"]);
+  expect(hostedResponse.apps.find((app) => app.id === "sidebrand-shop-v1")?.teams).toEqual([
+    "sidebrand",
+    "workspace",
+  ]);
   const report = await buildLaunchpadDoctorReport({
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),

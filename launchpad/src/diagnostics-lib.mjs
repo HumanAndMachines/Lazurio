@@ -80,6 +80,7 @@ export async function buildLaunchpadAppsResponse({
   allowMissingOrganizations = false,
   includeGit = true,
   organization = null,
+  activeTeamId = null,
   includePrivateDiagnostics = false,
 } = {}) {
   const discovery = await discoverLaunchpadApps(companiesRoot, {
@@ -98,9 +99,10 @@ export async function buildLaunchpadAppsResponse({
   const organizations = organizationSpaces.map(({ organization, spaces }) => {
     // module_declarations je interní resolver plumbing, ne API kontrakt.
     const { module_declarations, ...allSpaces } = spaces;
-    const publicSpaces = includePrivateDiagnostics
+    const diagnosticSpaces = includePrivateDiagnostics
       ? allSpaces
       : projectOrganizationDiagnostics(allSpaces, module_declarations);
+    const publicSpaces = projectActiveTeamSpaces(diagnosticSpaces, activeTeamId);
     const publicOrganization = {
       slug: organization.slug,
       display_name: organization.display_name,
@@ -258,6 +260,17 @@ export async function buildLaunchpadAppsResponse({
     port_registry_issues: discovery.port_registry_issues ?? [],
     failures: discoveryFailures,
     warnings: [...discoveryWarnings, ...gitContext.warnings],
+  };
+}
+
+function projectActiveTeamSpaces(spaces, activeTeamId) {
+  if (typeof activeTeamId !== "string" || activeTeamId.length === 0) return spaces;
+  const teams = (spaces.teams ?? []).filter((team) => team.slug === activeTeamId);
+  return {
+    ...spaces,
+    teams,
+    // Deprecated alias zůstává přesnou projekcí stejného aktivního Teamu.
+    workspaces: teams,
   };
 }
 

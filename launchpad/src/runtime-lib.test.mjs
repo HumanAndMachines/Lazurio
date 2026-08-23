@@ -1,4 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
+import { existsSync } from "fs";
 import { createServer } from "net";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -207,6 +208,28 @@ test("runtime manager spustí, změří a zastaví managed aplikaci", async () =
   expect(logs.log_path).toBe("logs/apps/test-company-demo-v1.log");
   expect(logs.content).toContain("stop test-company-demo-v1");
   expect((await runtime.health("test-company-demo-v1")).status).toBe("stopped");
+}, platformTestTimeout(10_000));
+
+test("runtime manager ukládá mutable stav mimo read-only Launchpad source", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port });
+  const launchpadRoot = join(root, "immutable-runtime", "launchpad");
+  const stateRoot = join(root, "state", "launchpad");
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot,
+    stateRoot,
+    instanceId: "external-state-test",
+  });
+
+  await runtime.start("test-company-demo-v1");
+  await waitForStatus(() => runtime.health("test-company-demo-v1"), "healthy");
+  await runtime.stop("test-company-demo-v1");
+  const logs = await runtime.logs("test-company-demo-v1");
+  expect(logs.log_path).toBe("logs/apps/test-company-demo-v1.log");
+  expect(existsSync(join(stateRoot, "logs", "apps", "test-company-demo-v1.log"))).toBe(true);
+  expect(existsSync(join(launchpadRoot, "logs"))).toBe(false);
+  expect(existsSync(join(launchpadRoot, "runtime"))).toBe(false);
 }, platformTestTimeout(10_000));
 
 test("runtime reclaims an occupied declared auxiliary listener before spawn", async () => {

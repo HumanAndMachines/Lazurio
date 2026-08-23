@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { constants, existsSync, lstatSync, realpathSync } from "fs";
 import { open, readFile } from "fs/promises";
-import { isAbsolute, join, normalize, relative, resolve } from "path";
+import { isAbsolute, join, normalize, relative, resolve, sep } from "path";
 import {
   buildDoctorReportFromAppsResponse,
   buildLaunchpadAppsResponse,
@@ -88,13 +88,23 @@ const hostedAppUrls = createHostedAppUrlAdapter({
   serviceCatalogJson: process.env.LAZURIO_TEAM_SERVICE_CATALOG_JSON,
   compatibilityUrlsJson: process.env.LAUNCHPAD_HOSTED_APP_URLS_JSON,
 });
+const launchpadStateRoot = resolveLaunchpadStateRoot({
+  configuredStateRoot: process.env.LAZURIO_LAUNCHPAD_STATE_ROOT,
+  hosted: hostedAppUrls.profile === "hosted",
+  runtimeRoot: configuredRuntimeRoot,
+  workspaceRoot: canonicalCompaniesRoot,
+});
 const requestTrust = createRequestTrustPolicy({
   profile: hostedAppUrls.profile,
   hostedExternalOrigin: process.env.LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN,
   hostedAuthCheckUrl: process.env.LAZURIO_LAUNCHPAD_AUTH_CHECK_URL,
   hostedAuthCookieName: process.env.LAZURIO_LAUNCHPAD_AUTH_COOKIE_NAME,
 });
-const runtimeManager = createRuntimeManager({ companiesRoot, launchpadRoot });
+const runtimeManager = createRuntimeManager({
+  companiesRoot,
+  launchpadRoot,
+  stateRoot: launchpadStateRoot,
+});
 const moduleFolderOpener = createModuleFolderOpener({ companiesRoot, getAppsResponse: buildAppsResponse });
 const gitStatusService = createGitStatusService();
 // Delší než jeden render burst (sync + notifications + usage), kratší než
@@ -189,6 +199,7 @@ async function buildAppsResponseUncached({ includeGit = false } = {}) {
     runtimeManager,
     gitStatusService,
     includeGit,
+    activeTeamId: hostedAppUrls.profile === "hosted" ? process.env.LAZURIO_TEAM_ID : null,
   });
   response.apps = response.apps.map((app) => projectHostedAppUrl(app, hostedAppUrls));
   const nextLogoPaths = new Map();
@@ -435,6 +446,33 @@ function contentType(path) {
   if (path.endsWith(".png")) return "image/png";
   if (path.endsWith(".ico")) return "image/x-icon";
   return "application/octet-stream";
+}
+
+function resolveLaunchpadStateRoot({ configuredStateRoot, hosted, runtimeRoot, workspaceRoot }) {
+  if (configuredStateRoot === undefined || configuredStateRoot === "") {
+    if (hosted) {
+      throw new Error("LAZURIO_LAUNCHPAD_STATE_ROOT is required for the hosted Workspace profile.");
+    }
+    return launchpadRoot;
+  }
+  if (!isAbsolute(configuredStateRoot)) {
+    throw new Error("LAZURIO_LAUNCHPAD_STATE_ROOT must be an absolute path.");
+  }
+  const stateRoot = resolve(configuredStateRoot);
+  if (hosted && [runtimeRoot, workspaceRoot].some((protectedRoot) => pathsOverlap(protectedRoot, stateRoot))) {
+    throw new Error("LAZURIO_LAUNCHPAD_STATE_ROOT must not overlap the immutable runtime or mutable Workspace root.");
+  }
+  return stateRoot;
+}
+
+function pathsOverlap(left, right) {
+  return pathContains(left, right) || pathContains(right, left);
+}
+
+function pathContains(parent, candidate) {
+  const relativePath = relative(resolve(parent), resolve(candidate));
+  return relativePath === ""
+    || (relativePath !== ".." && !relativePath.startsWith(`..${sep}`) && !isAbsolute(relativePath));
 }
 
 function parseArgs(args) {
