@@ -812,6 +812,13 @@ async function handleRuntimeRoute(request, route) {
     hostedProjectionApp = hostedAppUrls.profile === "hosted"
       ? (await buildAppsResponse()).apps.find((app) => app.id === route.appId) ?? null
       : { id: route.appId };
+    if (hostedAppUrls.profile === "hosted" && !hostedProjectionApp) {
+      throw new RuntimeActionError(
+        404,
+        "app_not_found",
+        "Aplikace není dostupná v aktivním Team Workspace.",
+      );
+    }
     if (route.action === "health" && (request.method === "GET" || request.method === "POST")) {
       return jsonResponse(projectHostedRuntimePayload(
         await runtimeManager.health(route.appId, runtimeOptions),

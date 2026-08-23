@@ -1615,6 +1615,8 @@ test("app sekci určí fyzická cesta, manifest doplní N:M Team intent a sdíle
     teams: ["sidebrand"],
     workspace: "sidebrand",
   });
+  expect(hostedResponse.apps.map((app) => app.id)).not.toContain("alfaco-wiki-v1");
+  expect(hostedResponse.apps.map((app) => app.id)).toContain("alfaco-knowledgebase-v1");
   const report = await buildLaunchpadDoctorReport({
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
