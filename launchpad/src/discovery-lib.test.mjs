@@ -739,6 +739,19 @@ test("lazurio.runtime.v1 discovers one entrypoint and auxiliary listeners", asyn
   );
   await rm(dottedModeEnvPath);
 
+  const shorthandModeEnvPath = join(envDirectory, ".env.shortcut");
+  await writeFile(shorthandModeEnvPath, envSource, "utf8");
+  packageJson.scripts.dev = 'concurrently "npm:dev:web"';
+  packageJson.scripts["dev:web"] = "vite --mode shortcut";
+  await writeJson(packagePath, packageJson);
+  const shorthandModeAuthority = await discoverLaunchpadApps(root);
+  expect(shorthandModeAuthority.invalid_apps).toHaveLength(1);
+  expect(shorthandModeAuthority.failures.join("\n")).toContain(
+    ".env.shortcut: PORT nesmí být per-machine port autorita",
+  );
+  await rm(shorthandModeEnvPath);
+  delete packageJson.scripts["dev:web"];
+
   const nestedEnvDirectory = join(envDirectory, "config");
   const nestedEnvPath = join(nestedEnvDirectory, "runtime.env");
   await mkdir(nestedEnvDirectory, { recursive: true });
@@ -818,6 +831,22 @@ test("runtime env gate follows the declared dev script closure and exact selecte
   expect(selection.paths.has("runtime.env")).toBe(false);
   expect(selection.paths.has(".env.test")).toBe(false);
   expect(selection.issues).toEqual([]);
+
+  const shorthandSelection = runtimeLoadedEnvFileSelection({
+    packageJson: {
+      scripts: {
+        dev: 'concurrently "npm:dev:web" "bun:worker:*"',
+        "dev:web": "vite --mode shortcut",
+        "worker:api": "NODE_ENV=worker.api bun server.ts",
+        "worker:web": "vite --env-file=config/worker.env",
+      },
+    },
+    runtime: { dev_script: "dev" },
+  });
+  expect(shorthandSelection.paths.has(".env.shortcut")).toBe(true);
+  expect(shorthandSelection.paths.has(".env.worker.api")).toBe(true);
+  expect(shorthandSelection.paths.has("config/worker.env")).toBe(true);
+  expect(shorthandSelection.issues).toEqual([]);
 
   const unsafe = runtimeLoadedEnvFileSelection({
     packageJson: {
