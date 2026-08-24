@@ -69,7 +69,9 @@ export async function acquireModuleRuntimeLock({
       const ownerLabel = current
         ? `pid=${current.pid ?? "unknown"}, instance=${current.instance_id ?? "unknown"}`
         : "owner metadata unavailable";
-      throw new Error(`Module runtime lock ${key} nebyl získán do ${timeoutMs} ms (${ownerLabel})`);
+      const error = new Error(`Module runtime lock ${key} nebyl získán do ${timeoutMs} ms (${ownerLabel})`);
+      error.code = "LAZURIO_MODULE_RUNTIME_LOCK_TIMEOUT";
+      throw error;
     }
     await sleep(pollMs);
   }

@@ -56,9 +56,9 @@ export async function resolveSpaceGbrainVault({ companiesRoot, spaceDirName }) {
 
 // Adaptér: discovery ve tvaru, který runtime-lib očekává
 // ({ apps, invalid_apps, failures }). Apps mají id = personal runtime id.
-function personalspaceDiscoveryAdapter(companiesRoot) {
+function personalspaceDiscoveryAdapter(companiesRoot, rootSourceRoot) {
   return async () => {
-    const discovery = await discoverPersonalspace(companiesRoot);
+    const discovery = await discoverPersonalspace(companiesRoot, { rootSourceRoot });
     return {
       apps: discovery.apps,
       invalid_apps: discovery.invalid_apps,
@@ -73,6 +73,7 @@ function personalspaceDiscoveryAdapter(companiesRoot) {
 // (personal--…) se stav/logy nekříží. Resident runtime tak zůstává read-only.
 export function createPersonalspaceRuntimeManager({
   companiesRoot,
+  rootSourceRoot = companiesRoot,
   launchpadRoot,
   stateRoot = launchpadRoot,
   createRuntimeManagerFn = createRuntimeManager,
@@ -81,7 +82,7 @@ export function createPersonalspaceRuntimeManager({
     companiesRoot,
     launchpadRoot,
     stateRoot,
-    discover: personalspaceDiscoveryAdapter(companiesRoot),
+    discover: personalspaceDiscoveryAdapter(companiesRoot, rootSourceRoot),
   });
 }
 
@@ -100,7 +101,7 @@ export async function buildPersonalspaceResponse({
   companiesRoot = join(import.meta.dirname, "..", ".."),
   rootSourceRoot = companiesRoot,
   launchpadRoot = join(import.meta.dirname, ".."),
-  runtimeManager = createPersonalspaceRuntimeManager({ companiesRoot, launchpadRoot }),
+  runtimeManager = createPersonalspaceRuntimeManager({ companiesRoot, rootSourceRoot, launchpadRoot }),
   profileEmail = null,
   verifyRepositoryPrivacy = false,
   inspectRepository = inspectGitHubRepository,

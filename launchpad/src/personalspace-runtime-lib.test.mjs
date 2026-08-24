@@ -42,6 +42,54 @@ test("personalspace runtime uses the explicit mutable Launchpad state root", () 
   expect(typeof received.discover).toBe("function");
 });
 
+test("personalspace runtime discovery reads tracked config from the selected Root source", async () => {
+  const { root, dir } = await createFixture({ withGbrain: false });
+  const selectedRoot = await mkdtemp(join(tmpdir(), "ps-selected-root-"));
+  tempRoots.push(selectedRoot);
+  await writeJson(join(root, "launchpad.gen3.json"), {
+    workspace_generation: "gen3",
+    personalspace_mountpoint: "missing-personalspace",
+  });
+  await writeJson(join(selectedRoot, "launchpad.gen3.json"), {
+    workspace_generation: "gen3",
+    personalspace_mountpoint: "personalspace",
+  });
+  await writeJson(join(dir, "workspace", "notes", "app", "v1", "package.json"), {
+    name: "exampleuser-notes-v1",
+    private: true,
+    scripts: { dev: "bun server.mjs" },
+    companyascode: {
+      app: {
+        schema_version: "companyascode.launchpad_app.v1",
+        id: "notes-v1",
+        title: "Notes",
+        company: "exampleuser",
+        module: "notes",
+        surface: "internal",
+        port: 41_100,
+        host: "127.0.0.1",
+        health_path: "/health",
+        dev_script: "dev",
+        tags: ["personal"],
+      },
+    },
+  });
+
+  let discover;
+  createPersonalspaceRuntimeManager({
+    companiesRoot: root,
+    rootSourceRoot: selectedRoot,
+    launchpadRoot: join(root, "launchpad"),
+    createRuntimeManagerFn: (options) => {
+      discover = options.discover;
+      return {};
+    },
+  });
+  const result = await discover();
+  expect(result.apps).toHaveLength(1);
+  expect(result.apps[0].id).toContain("notes-v1");
+});
+
 test("personalspace runtime URLs preserve HTTPS and bracket IPv6 loopback", () => {
   expect(personalspaceRuntimeUrls({
     host: "::1",

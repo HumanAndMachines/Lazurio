@@ -21,6 +21,7 @@ export async function startLaunchpadWithPortPolicy({
   inspectRunningLaunchpad = async () => ({ status: "unrecognized" }),
   shutdownStaleLaunchpad = async () => false,
   openExisting = async () => {},
+  acquireServerLease = async () => {},
   waitBeforeStaleRebind = () => new Promise((resolve) => setTimeout(resolve, staleRebindDelayMs)),
 }) {
   let locatedObservation = null;
@@ -75,6 +76,7 @@ export async function startLaunchpadWithPortPolicy({
     }
   }
 
+  await acquireServerLease();
   let candidatePort = requestedPort;
 
   for (let attempt = 0; attempt < maxFallbackAttempts; attempt += 1) {
@@ -112,6 +114,13 @@ export async function startLaunchpadWithPortPolicy({
           waitBeforeStaleRebind,
           originalError: error,
         });
+      }
+      if (observation?.status === "foreign_root") {
+        throw serverConflict(
+          "LAZURIO_SERVER_OTHER_ROOT_RUNNING",
+          `Na této Mašině už běží Lazurio Server pro jiný Root na ${candidateUrl}. Nejdřív jej zastav.`,
+          error,
+        );
       }
       if (observation?.status === "legacy_same_root" || observation?.status === "protocol_incompatible") {
         throw serverConflict(

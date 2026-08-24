@@ -94,7 +94,7 @@ test("agent serve reuses a same-root instance on a fallback port", async () => {
     },
     inspectRunningLaunchpad: async (url) => {
       calls.push(["probe", url]);
-      return { status: url === "http://127.0.0.1:4175" ? "compatible" : "foreign_root" };
+      return { status: url === "http://127.0.0.1:4175" ? "compatible" : "unrecognized" };
     },
     openExisting: async (url) => calls.push(["open", url]),
   });
@@ -225,10 +225,10 @@ test("indeterminate machine locator never starts a second Server", async () => {
   }
 });
 
-test("launch falls forward when the requested implicit port belongs to a foreign root", async () => {
+test("requested implicit port owned by another Lazurio Root is terminal", async () => {
   const attempts = [];
   const calls = [];
-  const result = await startLaunchpadWithPortPolicy({
+  await expect(startLaunchpadWithPortPolicy({
     requestedPort: 4174,
     explicitPort: false,
     shouldOpen: true,
@@ -244,11 +244,27 @@ test("launch falls forward when the requested implicit port belongs to a foreign
     openExisting: async () => {
       throw new Error("must not open foreign root");
     },
+  })).rejects.toMatchObject({ code: "LAZURIO_SERVER_OTHER_ROOT_RUNNING" });
+
+  expect(attempts).toEqual([4174]);
+  expect(calls).toEqual([["probe", "http://127.0.0.1:4174"]]);
+});
+
+test("a new Server acquires its machine lifetime lease before binding", async () => {
+  const calls = [];
+  const result = await startLaunchpadWithPortPolicy({
+    requestedPort: 4174,
+    explicitPort: false,
+    shouldOpen: false,
+    acquireServerLease: async () => calls.push("lease"),
+    startServer(port) {
+      calls.push(`bind:${port}`);
+      return { port };
+    },
   });
 
-  expect(attempts).toEqual([4174, 4175]);
-  expect(calls).toEqual([["probe", "http://127.0.0.1:4174"]]);
-  expect(result).toEqual({ mode: "started", server: { port: 4175 } });
+  expect(result).toEqual({ mode: "started", server: { port: 4174 } });
+  expect(calls).toEqual(["lease", "bind:4174"]);
 });
 
 test("explicit port with --open stays fail-closed for a foreign root", async () => {
@@ -260,7 +276,7 @@ test("explicit port with --open stays fail-closed for a foreign root", async () 
       throw addressInUse();
     },
     inspectRunningLaunchpad: async () => ({ status: "foreign_root" }),
-  })).rejects.toMatchObject({ code: "EADDRINUSE" });
+  })).rejects.toMatchObject({ code: "LAZURIO_SERVER_OTHER_ROOT_RUNNING" });
 });
 
 test("dev mode refuses a second compatible Server for the same root", async () => {

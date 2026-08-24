@@ -14,8 +14,8 @@ import {
   launchpadFallbackUrls,
   startLaunchpadWithPortPolicy,
 } from "./server-startup-lib.mjs";
-import { acquireServerStartupLock } from "./server-startup-lock-lib.mjs";
-import { discoverLaunchpadApps } from "./discovery-lib.mjs";
+import { acquireServerLifetimeLock } from "./server-lifetime-lock-lib.mjs";
+import { APP_FILESYSTEM_ROOT, discoverLaunchpadApps } from "./discovery-lib.mjs";
 import {
   GitApiError,
   buildGitApiResponse,
@@ -159,10 +159,11 @@ const appsResponseCache = createGenerationSafeResponseCache({
 // nepropisují do org /api/apps ani /api/doctor shared výstupu.
 const personalspaceRuntimeManager = createPersonalspaceRuntimeManager({
   companiesRoot,
+  rootSourceRoot,
   launchpadRoot,
   stateRoot: launchpadStateRoot,
 });
-let serverShutdownState = "running";
+let serverShutdownState = "starting";
 let activeMutatingRequests = 0;
 
 if (!Number.isInteger(port) || port < 1024 || port > 65535) {
@@ -178,13 +179,9 @@ if (!allowedHosts.has(host)) {
 let startResult;
 let serverLocator;
 let bootReconcile;
-let startupLock;
+let serverLifetimeLock;
 let startupError;
 try {
-  startupLock = await acquireServerStartupLock({
-    stateDirectory: serverStateDirectory,
-    instanceId: launchpadServerIdentity.instance_id,
-  });
   const existingLocator = await readServerLocatorIfPresent({
     stateDirectory: serverStateDirectory,
   });
@@ -207,6 +204,12 @@ try {
     }),
     shutdownStaleLaunchpad: requestStaleLaunchpadShutdown,
     openExisting: openBrowser,
+    acquireServerLease: async () => {
+      serverLifetimeLock ??= await acquireServerLifetimeLock({
+        stateDirectory: serverStateDirectory,
+        instanceId: launchpadServerIdentity.instance_id,
+      });
+    },
   });
   if (startResult.mode === "reused") {
     const observation = await inspectRunningLaunchpad(startResult.url, {
@@ -223,9 +226,9 @@ try {
       identity: observation.identity,
     });
   } else {
-    // Keep the machine-wide startup lock until boot reconciliation is done.
-    // A competing control root must never be able to drain this Server while
-    // it is still restoring desired module runtimes or their durable state.
+    // The machine-wide lifetime lease is already held. Locator publication is
+    // delayed until boot reconciliation completes, so no launcher can observe
+    // this Server as ready while it is restoring durable module runtimes.
     bootReconcile = worktreeMountContextReadOnly
       ? { active: 0, disabled: 0, degraded: 0, results: [] }
       : await runtimeManager.reconcileDesiredState();
@@ -235,14 +238,14 @@ try {
       origin: serverUrl,
       identity: launchpadServerIdentity,
     });
+    serverShutdownState = "running";
   }
 } catch (error) {
   if (startResult?.mode === "started") await startResult.server.stop(true);
   startupError = error;
-} finally {
-  await startupLock?.release();
 }
 if (startupError) {
+  await serverLifetimeLock?.release();
   if (String(startupError?.code ?? "").startsWith("LAZURIO_")) {
     console.error(startupError.message);
     process.exit(1);
@@ -363,6 +366,14 @@ async function serveOrganizationLogo(request, url, slug) {
 
 function isMutatingApiRequest(request, url) {
   return url.pathname.startsWith("/api/") && !safeApiMethods.has(request.method);
+}
+
+async function worktreeMutationTouchesCanonicalMount(url) {
+  if (!worktreeMountContextReadOnly) return false;
+  const route = appRuntimeRoute(url.pathname);
+  if (!route) return true;
+  const app = (await buildAppsResponse()).apps.find((item) => item.id === route.appId);
+  return app?.[APP_FILESYSTEM_ROOT] !== rootSourceRoot;
 }
 
 async function buildDoctorReport() {
@@ -1083,7 +1094,7 @@ function startServer(startPort) {
             console.warn(`[lazurio] mutating request rejected: ${trustDecision.reason}`);
             return jsonResponse({ error: "mutating_request_forbidden" }, 403);
           }
-          if (worktreeMountContextReadOnly) {
+          if (await worktreeMutationTouchesCanonicalMount(url)) {
             return jsonResponse({
               error: "worktree_mount_context_read_only",
               message: "Linked worktree smí canonical Lazurio Root používat jen jako read-only mount context.",

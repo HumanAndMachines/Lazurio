@@ -166,7 +166,9 @@ aktuální lokální adresu, obsluhovaný machine `root_id` a právě vybraný
 standardním per-user state prostoru operačního systému (`Application Support`,
 `XDG_STATE_HOME` nebo `LocalAppData`). Jde o ukazatel na Server, ne o registr
 modulových portů; změna control rootu nahradí tutéž sdílenou instanci, nevytvoří
-druhý Server.
+druhý Server. Singleton nevynucuje hledání portů: Server po celou dobu života
+drží per-user lifetime lease ve stejném state prostoru. Chybějící locator proto
+nezruší důkaz, že Server stále běží, a další proces zůstane fail-closed.
 
 Z toho plynou tato pravidla:
 

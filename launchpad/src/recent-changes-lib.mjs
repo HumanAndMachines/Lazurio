@@ -13,6 +13,7 @@ import {
   runGit,
   safeGitRemoteEnv,
 } from "./git-lib.mjs";
+import { APP_FILESYSTEM_ROOT } from "./discovery-lib.mjs";
 
 const DEFAULT_MODULE_LIMIT = 8;
 const DEFAULT_COMMIT_LIMIT = 15;
@@ -34,7 +35,10 @@ export function moduleReposFromApps(apps, companiesRoot) {
   for (const app of apps) {
     const cwd = app.cwd;
     if (!cwd) continue;
-    const absolute = join(companiesRoot, cwd);
+    const filesystemRoot = typeof app[APP_FILESYSTEM_ROOT] === "string"
+      ? app[APP_FILESYSTEM_ROOT]
+      : companiesRoot;
+    const absolute = join(filesystemRoot, cwd);
     const moduleId = app.module ? `${app.company}::${app.module}` : app.id;
     if (byModule.has(moduleId)) continue;
     byModule.set(moduleId, {
