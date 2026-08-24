@@ -84,6 +84,31 @@ test("standard gh OAuth limitation stays an explicit selected-scope action", () 
   expect(renderHumanOrganizationActivation(report)).toContain("selected");
 });
 
+test("GitHub App lookup follows installation pagination", () => {
+  const calls = [];
+  const report = checkOrganizationActivation({
+    githubOrganizationId: "314957563",
+    resolveGitHubCli: () => "/usr/bin/gh",
+    runGitHubCli: fixtureRunner({
+      calls,
+      root: "legacy",
+      appSelection: "all",
+      appInstallationPage: 2,
+    }),
+  });
+
+  expect(report).toMatchObject({
+    execution: { status: "ok" },
+    outcome: "active",
+    observations: {
+      github_app: { status: "installed", repository_selection: "all" },
+    },
+  });
+  expect(calls.map((call) => call.args[1])).toContain(
+    "orgs/Example/installations?per_page=100&page=2",
+  );
+});
+
 test("transport failure returns an error envelope without an outcome", () => {
   const report = checkOrganizationActivation({
     githubOrganizationId: "314957563",
@@ -167,6 +192,7 @@ function fixtureRunner({
   calls = [],
   root,
   appSelection,
+  appInstallationPage = 1,
   selectedAccess = "included",
   malformedCanonical = false,
 }) {
@@ -234,9 +260,23 @@ function fixtureRunner({
         ? ok({ encoding: "base64", content: Buffer.from("{broken", "utf8").toString("base64") })
         : httpError(404);
     }
-    if (endpoint === "orgs/Example/installations?per_page=100") {
+    const installationPage = endpoint?.match(/^orgs\/Example\/installations\?per_page=100&page=(\d+)$/u);
+    if (installationPage) {
+      const page = Number.parseInt(installationPage[1], 10);
+      if (page < appInstallationPage) {
+        return ok({
+          total_count: 100 * appInstallationPage,
+          installations: Array.from({ length: 100 }, (_, index) => ({
+            id: page * 1000 + index,
+            app_slug: `unrelated-app-${page}-${index}`,
+            repository_selection: "all",
+            target_id: 314957563,
+            target_type: "Organization",
+          })),
+        });
+      }
       return ok({
-        total_count: 1,
+        total_count: (appInstallationPage - 1) * 100 + 1,
         installations: [{
           id: 155781771,
           app_slug: "lazurio-for-github",
