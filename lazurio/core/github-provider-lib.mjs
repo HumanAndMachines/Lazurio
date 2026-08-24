@@ -42,7 +42,18 @@ export function createTrustedGitHubProvider({
       );
     }
 
-    const status = Number.isInteger(result?.status) ? result.status : 1;
+    if (!Number.isInteger(result?.status)) {
+      const transportMessage = result?.error instanceof Error
+        ? result.error.message
+        : String(result?.error?.message ?? result?.stderr ?? "").trim();
+      return providerFailure(
+        "transport",
+        transportMessage || "GitHub provider nelze spustit.",
+        { status: null, stderr: result?.stderr },
+      );
+    }
+
+    const status = result.status;
     const stdout = String(result?.stdout ?? "");
     const stderr = String(result?.stderr ?? "");
     let value = null;
@@ -141,6 +152,7 @@ export function runTrustedGitHubCliSync({
     status: result.status,
     stdout: String(result.stdout ?? ""),
     stderr: String(result.stderr ?? result.error?.message ?? ""),
+    error: result.error ?? null,
   };
 }
 

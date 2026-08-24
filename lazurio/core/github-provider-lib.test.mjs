@@ -61,6 +61,21 @@ test("trusted GitHub provider returns structured HTTP and response failures", ()
     ok: false,
     error: { kind: "invalid_response" },
   });
+
+  const transport = createTrustedGitHubProvider({
+    resolveExecutable: () => "/usr/bin/gh",
+    runCommand: () => ({
+      status: null,
+      stdout: "",
+      stderr: "spawnSync /usr/bin/gh ETIMEDOUT",
+      error: { message: "spawnSync /usr/bin/gh ETIMEDOUT" },
+    }),
+  }).json(["api", "user"]);
+  expect(transport).toMatchObject({
+    ok: false,
+    status: null,
+    error: { kind: "transport", message: "spawnSync /usr/bin/gh ETIMEDOUT" },
+  });
 });
 
 test("GitHub environment keeps credential custody inputs but drops ambient loaders", () => {
