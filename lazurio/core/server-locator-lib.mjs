@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, lstatSync } from "node:fs";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, isAbsolute, join, resolve, win32 } from "node:path";
+import { basename, dirname, join, posix, resolve, win32 } from "node:path";
 
 export const LAZURIO_SERVER_LOCATOR_SCHEMA = "lazurio.server.locator.v1";
 
@@ -22,17 +22,17 @@ export function resolveServerStateDirectory({
     return win32.join(win32.normalize(localAppData), "Lazurio");
   }
 
-  if (!isAbsolute(homeDirectory)) {
+  if (!posix.isAbsolute(homeDirectory)) {
     throw new TypeError("Lazurio Server state requires an absolute user home directory.");
   }
   if (platform === "darwin") {
-    return join(resolve(homeDirectory), "Library", "Application Support", "Lazurio");
+    return posix.join(homeDirectory, "Library", "Application Support", "Lazurio");
   }
   const xdgStateHome = typeof environment?.XDG_STATE_HOME === "string"
-    && isAbsolute(environment.XDG_STATE_HOME)
+    && posix.isAbsolute(environment.XDG_STATE_HOME)
     ? environment.XDG_STATE_HOME
-    : join(resolve(homeDirectory), ".local", "state");
-  return join(resolve(xdgStateHome), "lazurio");
+    : posix.join(homeDirectory, ".local", "state");
+  return posix.join(xdgStateHome, "lazurio");
 }
 
 export function serverLocatorPath(stateDirectory) {
