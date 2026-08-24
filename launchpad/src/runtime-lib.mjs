@@ -2486,6 +2486,46 @@ export function createRuntimeManager({
     };
   }
 
+  // Startup is not committed until the Server locator is durably published.
+  // If that publication fails, stop only children owned by this fresh Runtime
+  // Manager instance and preserve desired intent for the next safe retry.
+  async function rollbackUnpublishedStartup() {
+    const records = [...managedProcesses.values()];
+    const results = [];
+    for (const record of records) {
+      const app = record.runtimeApp;
+      resetDesiredRestartTracker(app);
+      try {
+        const result = await withModuleLeaseLock(app, async () => {
+          if (managedProcesses.get(record.runtimeKey) !== record) {
+            return { status: "already_stopped" };
+          }
+          await stopRuntimeAppUnlocked(app);
+          return { status: "stopped" };
+        });
+        results.push({
+          app_id: record.appId,
+          runtime_key: record.runtimeKey,
+          status: result.status,
+        });
+      } catch (error) {
+        results.push({
+          app_id: record.appId,
+          runtime_key: record.runtimeKey,
+          status: "failed",
+          error: error.message,
+        });
+      }
+    }
+    return {
+      attempted: records.length,
+      stopped: results.filter((result) => result.status === "stopped").length,
+      already_stopped: results.filter((result) => result.status === "already_stopped").length,
+      failed: results.filter((result) => result.status === "failed").length,
+      results,
+    };
+  }
+
   function runtimeSourceForApp(app) {
     return app.runtime_source ?? { type: "main" };
   }
@@ -3602,6 +3642,7 @@ export function createRuntimeManager({
     restart,
     logs,
     reconcileDesiredState,
+    rollbackUnpublishedStartup,
   };
 }
 

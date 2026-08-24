@@ -259,17 +259,29 @@ try {
     serverShutdownState = "running";
   }
 } catch (error) {
-  if (startResult?.mode === "started") await startResult.server.stop(true);
-  startupError = error;
+  startupError = await abortUnpublishedStartup(error);
 } finally {
   try {
     await serverStartupLock?.release();
   } catch (error) {
     if (!startupError) {
-      if (startResult?.mode === "started") await startResult.server.stop(true);
-      startupError = error;
+      startupError = await abortUnpublishedStartup(error);
     }
   }
+}
+
+async function abortUnpublishedStartup(originalError) {
+  if (startResult?.mode !== "started") return originalError;
+  const rollback = await runtimeManager.rollbackUnpublishedStartup();
+  await startResult.server.stop(true);
+  if (rollback.failed === 0) return originalError;
+  const error = new Error(
+    `LAZURIO_SERVER_STARTUP_ROLLBACK_FAILED: Server startup failed and ${rollback.failed} managed runtime(s) could not be stopped.`,
+    { cause: originalError },
+  );
+  error.code = "LAZURIO_SERVER_STARTUP_ROLLBACK_FAILED";
+  error.rollback = rollback;
+  return error;
 }
 
 async function selectedControlRootDesiredStateKeys() {
