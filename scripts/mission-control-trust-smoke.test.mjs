@@ -10,6 +10,8 @@ import {
   evaluateEffectiveRules,
   evaluateProtection,
   evaluateTrustedProcessCircle,
+  missionControlDataPrivacyProblem,
+  organizationOwnerAbsenceProof,
   resolveDataRepositoryLocator,
   runSmoke,
 } from "./mission-control-trust-smoke.mjs";
@@ -18,6 +20,7 @@ test("classifies active, planned and deliberately staged repositories separately
   expect(classifyDataState({ status: "active" }, true)).toBe("active");
   expect(classifyDataState({ status: "planned_slot" }, false)).toBe("planned");
   expect(classifyDataState({ status: "planned_slot" }, true)).toBe("staged");
+  expect(classifyDataState({ materialization: "unplanned" }, false)).toBe("incomplete");
   expect(classifyDataState(undefined, true)).toBe("incomplete");
 });
 
@@ -234,6 +237,68 @@ test("repository probe requires immutable Owner proof before 404 means absent", 
       value: { message: "Forbidden" },
     }),
   ).toEqual({ exists: null, error: "Forbidden" });
+});
+
+test("404 absence proof is scoped to the verified Organization Owner", () => {
+  let calls = 0;
+  const provider = {
+    json() {
+      calls += 1;
+      return {
+        ok: true,
+        value: {
+          state: "active",
+          role: "admin",
+          organization: { id: 42 },
+        },
+      };
+    },
+  };
+  expect(
+    organizationOwnerAbsenceProof(
+      provider,
+      { id: 42, login: "Verified-Org" },
+      "Other-Org/mission-control-data",
+    ),
+  ).toMatchObject({ confirmed: false });
+  expect(calls).toBe(0);
+  expect(
+    organizationOwnerAbsenceProof(
+      provider,
+      { id: 42, login: "Verified-Org" },
+      "verified-org/mission-control-data",
+    ),
+  ).toEqual({ confirmed: true, message: null });
+  expect(calls).toBe(1);
+
+  const memberProvider = {
+    json() {
+      return {
+        ok: true,
+        value: {
+          state: "active",
+          role: "member",
+          organization: { id: 42 },
+        },
+      };
+    },
+  };
+  expect(
+    organizationOwnerAbsenceProof(
+      memberProvider,
+      { id: 42, login: "Verified-Org" },
+      "Verified-Org/mission-control-data",
+    ),
+  ).toEqual({
+    confirmed: false,
+    message: "přihlášený gh účet nemá aktivní Organization Owner roli",
+  });
+});
+
+test("Mission Control data repository visibility fails closed", () => {
+  expect(missionControlDataPrivacyProblem({ private: true })).toBeNull();
+  expect(missionControlDataPrivacyProblem({ private: false })).toContain("privátní");
+  expect(missionControlDataPrivacyProblem({})).toContain("privátní");
 });
 
 test("live identity binding joins root and data repositories through immutable IDs", () => {
