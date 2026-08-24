@@ -3135,6 +3135,18 @@ export function createRuntimeManager({
           message: "Managed proces odpovídá na health endpoint.",
         };
       }
+      if (
+        probe.reachable
+        && probe.status_code === 404
+        && startedAt !== null
+        && now - startedAt < startGraceMs
+      ) {
+        return {
+          ...base,
+          status: "starting",
+          message: `Managed proces už poslouchá, health endpoint během startu odpověděl HTTP ${probe.status_code}.`,
+        };
+      }
       if (probe.reachable && !probe.ok) {
         return {
           ...base,
