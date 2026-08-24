@@ -954,7 +954,7 @@ export function createRuntimeManager({
     // Lokální usage tracking pro panel „Nejčastější" (step-007) — best-effort,
     // nikdy neblokuje otevření a nezapisuje žádnou PII (jen app id + agregát).
     try {
-      await recordAppOpen({ launchpadRoot, appId: app.id });
+      await recordAppOpen({ launchpadRoot: runtimeStateRoot, appId: app.id });
     } catch {}
 
     // URL vydáme jen když port poslouchá (healthy). Pokud po openHealthyWaitMs
