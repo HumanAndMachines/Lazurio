@@ -17,6 +17,7 @@ import {
   buildLazurioCliProvenance,
   isValidLazurioCliProvenance,
   normalizeComparableCliPath,
+  normalizeGitHubRepository,
   trustedGitCandidates,
   trustedGitHubCliCandidates,
 } from "./cli-provenance-lib.mjs";
@@ -215,6 +216,21 @@ test("GitHub repository normalization never echoes a credential-bearing origin",
   expect(result.source.repository).toBeNull();
   expect(JSON.stringify(result)).not.toContain("secret");
   expectValid(result);
+});
+
+test("GitHub repository normalization anchors the exact GitHub host", () => {
+  expect(normalizeGitHubRepository("git@github.com:HumanAndMachines/Lazurio.git"))
+    .toBe("HumanAndMachines/Lazurio");
+  expect(normalizeGitHubRepository("https://github.com/HumanAndMachines/Lazurio"))
+    .toBe("HumanAndMachines/Lazurio");
+  for (const origin of [
+    "git@corp-github.com:HumanAndMachines/Lazurio.git",
+    "https://mirror-notgithub.com/HumanAndMachines/Lazurio",
+    "https://gitlab.example/x/github.com/HumanAndMachines/Lazurio",
+    "HumanAndMachines/Lazurio",
+  ]) {
+    expect(normalizeGitHubRepository(origin)).toBeNull();
+  }
 });
 
 test("portable Windows paths and trusted executable candidates are deterministic", () => {

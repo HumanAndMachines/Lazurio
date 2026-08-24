@@ -46,6 +46,20 @@ test("planned slots use the standard repo name only as a locator", () => {
       "Renamed-Org",
     ).error,
   ).toContain("neplatný");
+  for (const url of [
+    "git@corp-github.com:Old-Org/mission-control-data.git",
+    "https://mirror-notgithub.com/Old-Org/mission-control-data",
+    "https://gitlab.example/x/github.com/Old-Org/mission-control-data",
+    "Old-Org/.",
+    "Old-Org/..",
+  ]) {
+    expect(
+      resolveDataRepositoryLocator(
+        { repository_db: { repo: url } },
+        "Renamed-Org",
+      ).error,
+    ).toContain("neplatný");
+  }
 });
 
 test("accepts provider enforcement that preserves direct fast-forward pushes", () => {
@@ -188,6 +202,17 @@ test("repository probe requires immutable Owner proof before 404 means absent", 
   expect(classifyRepositoryProbe({ ok: true, value: {} })).toEqual({
     exists: true,
     error: null,
+  });
+  expect(
+    classifyRepositoryProbe({
+      ok: false,
+      status: 0,
+      value: null,
+      error: { message: "GitHub provider nevrátil validní JSON." },
+    }),
+  ).toEqual({
+    exists: null,
+    error: "GitHub provider nevrátil validní JSON.",
   });
   expect(
     classifyRepositoryProbe({

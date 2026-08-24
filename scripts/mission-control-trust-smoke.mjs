@@ -5,13 +5,14 @@ import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  normalizeGitHubRepository,
   resolveTrustedGitExecutable,
   runTrustedGitCommandSync,
 } from "../lazurio/core/cli-provenance-lib.mjs";
 import { createTrustedGitHubProvider } from "../lazurio/core/github-provider-lib.mjs";
 
 const GITHUB_REPOSITORY_PATTERN =
-  /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/[A-Za-z0-9._-]{1,100}$/u;
+  /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/(?!(?:\.{1,2})$)[A-Za-z0-9._-]{1,100}$/u;
 const GITHUB_LOGIN_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/u;
 const POSITIVE_ID_PATTERN = /^[1-9][0-9]{0,19}$/u;
 const HISTORY_RULE_TYPES = new Set(["deletion", "non_fast_forward"]);
@@ -54,7 +55,7 @@ export function resolveDataRepositoryLocator(slot, liveOrganizationLogin) {
     slot?.repository_db?.url,
     slot?.git?.url,
   ].filter((value) => typeof value === "string" && value.trim() !== "");
-  const parsed = declared.map(parseRepo);
+  const parsed = declared.map(parseRepoLocator);
   if (parsed.some((coordinate) => coordinate === null)) {
     return {
       coordinate: null,
@@ -257,7 +258,7 @@ export function classifyRepositoryProbe(
     message: "chybí aktivní Organization Owner proof přihlášeného gh účtu",
   },
 ) {
-  if (response?.ok === true || response?.status === 0) {
+  if (response?.ok === true) {
     return { exists: true, error: null };
   }
   const message = providerMessage(response);
@@ -312,13 +313,10 @@ export function bindLiveOrganizationIdentity({
   };
 }
 
-function parseRepo(value) {
+function parseRepoLocator(value) {
   const text = String(value ?? "").trim().replace(/\.git$/u, "");
-  const ssh = text.match(/github\.com:([^/]+\/[^/]+)$/u);
-  const https = text.match(/github\.com\/([^/]+\/[^/]+)$/u);
-  const identity = ssh?.[1] ?? https?.[1]
-    ?? (text.includes("/") && !text.includes(":") ? text : null);
-  return identity && GITHUB_REPOSITORY_PATTERN.test(identity) ? identity : null;
+  if (GITHUB_REPOSITORY_PATTERN.test(text)) return text;
+  return normalizeGitHubRepository(String(value ?? ""));
 }
 
 function positiveId(value) {
@@ -489,7 +487,7 @@ function createTrustedGitReader({
 
 function checkoutRepositoryCoordinate(root, gitReader) {
   const result = gitReader.text(root, ["config", "--get", "remote.origin.url"]);
-  return result.ok ? parseRepo(result.value) : null;
+  return result.ok ? normalizeGitHubRepository(result.value) : null;
 }
 
 function liveRootBinding(organizationRoot, provider, gitReader) {

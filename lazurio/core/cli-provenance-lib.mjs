@@ -347,7 +347,7 @@ function validArtifact(artifact) {
   );
 }
 
-function normalizeGitHubRepository(value) {
+export function normalizeGitHubRepository(value) {
   const trimmed = value.trim();
   const match = trimmed.match(
     /^(?:https?:\/\/github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)([A-Za-z0-9][A-Za-z0-9_.-]{0,38})\/([A-Za-z0-9][A-Za-z0-9_.-]{0,99}?)(?:\.git)?\/?$/u,
