@@ -350,7 +350,23 @@ test("linked worktree gets only a read-only canonical Root mount context", async
   const primaryConfigPath = join(root, "launchpad.gen3.json");
   const primaryConfig = JSON.parse(await readFile(primaryConfigPath, "utf8"));
   primaryConfig.personalspace_mountpoint = "ignored-personalspace";
+  primaryConfig.local_surfaces = [{ path: "guide", kind: "shared-guide" }];
   await writeJson(primaryConfigPath, primaryConfig);
+  await createPackageApp({
+    root,
+    packagePath: "guide/app/v1",
+    app: {
+      id: "test-root-guide-v1",
+      title: "Fixture Guide",
+      company: "test-root",
+      module: "guide",
+      port: await findFreePort(),
+    },
+  });
+  const guidePackagePath = join(root, "guide", "app", "v1", "package.json");
+  const guidePackage = JSON.parse(await readFile(guidePackagePath, "utf8"));
+  guidePackage.dependencies = { "worktree-only-fixture": "1.0.0" };
+  await writeJson(guidePackagePath, guidePackage);
   await initGitRepo(root);
   runGit(["add", "."], root);
   runGit(["commit", "-m", "track fixture Root"], root);
@@ -395,6 +411,7 @@ test("linked worktree gets only a read-only canonical Root mount context", async
   worktreeConfig.launchpad_root.display_name = "Linked Root";
   worktreeConfig.personalspace_mountpoint = "personalspace";
   await writeJson(worktreeConfigPath, worktreeConfig);
+  await mkdir(join(worktreeRoot, "guide", "app", "v1", "node_modules"), { recursive: true });
   await rm(join(worktreeRoot, "organizations"), { recursive: true, force: true });
   await mkdir(join(worktreeRoot, "organizations"), { recursive: true });
 
@@ -409,6 +426,7 @@ test("linked worktree gets only a read-only canonical Root mount context", async
   expect(apps.root).toBe(realpathSync.native(root));
   expect(apps.control_root).toBe(realpathSync.native(worktreeRoot));
   expect(apps.organizations.length).toBeGreaterThan(0);
+  expect(apps.apps.find((app) => app.id === "test-root-guide-v1")?.dependency_status).toBe("ready");
   const personalspace = await getJson(port, "/api/personalspace");
   expect(personalspace.primary_owner).toBe("fixtureowner");
   expect(personalspace.summary.space_count).toBe(1);
