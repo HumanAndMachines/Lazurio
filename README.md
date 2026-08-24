@@ -30,8 +30,8 @@ zkontrolovat a upravit — ne pomocí neviditelné agentní magie.
 > kteří Lazurio spouštějí přímo ze zdrojového kódu. Jednoduchá instalace a
 > automaticky vytvořené pracovní prostředí ve zvoleném jazyce jsou cílový
 > směr, nikoli už vydaná distribuce. Zdrojový kód je nyní dostupný pod FSL,
-> která ještě není finální open-source licencí projektu; volba OSS licence je
-> bezprostřední navazující krok.
+> která ještě není finální open-source licencí projektu. Cílovou licencí je
+> Apache-2.0; její právně potvrzené zavedení je bezprostřední navazující krok.
 
 ## Společný slovník Lazuria
 
