@@ -943,6 +943,32 @@ test("runtime source gate ignores outbound dependency port objects", async () =>
   expect(issues.join("\n")).not.toContain("5432");
 });
 
+test("runtime source gate keeps same-named outbound constants separate from imported listeners", async () => {
+  const packageDirectory = await mkdtemp(join(tmpdir(), "lazurio-runtime-listener-provenance-"));
+  tempRoots.push(packageDirectory);
+  await writeFile(join(packageDirectory, "config.mjs"), "export const API_PORT = 6000;\n", "utf8");
+  await writeFile(
+    join(packageDirectory, "server.mjs"),
+    'import * as config from "./config.mjs";\nBun.serve({ port: config.API_PORT });\n',
+    "utf8",
+  );
+  await writeFile(
+    join(packageDirectory, "client.mjs"),
+    'const API_PORT = 8443;\nfetch("https://dependency.example.test:" + API_PORT);\n',
+    "utf8",
+  );
+
+  const issues = await runtimeSourcePortAuthorityIssues({
+    packageDirectory,
+    packagePath: "app/v1/package.json",
+    module: { port_leases: [{ id: "main", host: "127.0.0.1", port: 4174 }] },
+  });
+
+  expect(issues.join("\n")).toContain("config.mjs: runtime source obsahuje číselný port fallback 6000");
+  expect(issues.join("\n")).not.toContain("8443");
+  expect(issues.join("\n")).not.toContain("client.mjs");
+});
+
 test("runtime source gate follows a listener port constant across package files", async () => {
   const packageDirectory = await mkdtemp(join(tmpdir(), "lazurio-runtime-source-import-"));
   tempRoots.push(packageDirectory);
@@ -1407,6 +1433,48 @@ test("per-machine local_surfaces se načtou z launchpad.gen3.local.json", async 
 
   expect(failures).toEqual([]);
   expect(apps.map((app) => app.id)).toContain("local-machine-guide");
+});
+
+test("per-machine local_surfaces stay rooted in canonical machine context for a selected worktree", async () => {
+  const selectedRoot = await createCompaniesWorkspaceFixture({
+    plugin: { schema_version: "companyascode.launchpad_plugin.v1", title: "Selected root" },
+  });
+  const machineRoot = await createCompaniesWorkspaceFixture({
+    plugin: { schema_version: "companyascode.launchpad_plugin.v1", title: "Machine root" },
+  });
+  const machineGuideRoot = join(machineRoot, "machine-guide");
+  await mkdir(machineGuideRoot, { recursive: true });
+  await writeJson(join(machineRoot, "launchpad.gen3.local.json"), {
+    local_surfaces: [{ path: "machine-guide", kind: "shared-guide", authority: "local-machine" }],
+  });
+  await writeJson(join(machineGuideRoot, "package.json"), {
+    name: "canonical-machine-guide",
+    private: true,
+    type: "module",
+    scripts: { dev: "bun server.mjs" },
+    companyascode: {
+      app: {
+        schema_version: "companyascode.launchpad_app.v1",
+        id: "canonical-machine-guide",
+        title: "Canonical Machine Guide",
+        company: "test-companies",
+        module: "machine-guide",
+        surface: "manual",
+        port: 5300,
+        host: "127.0.0.1",
+        health_path: "/",
+        dev_script: "dev",
+        tags: ["guide", "local"],
+      },
+    },
+  });
+
+  const { apps, failures } = await discoverLaunchpadApps(selectedRoot, {
+    machine_context_root: machineRoot,
+  });
+
+  expect(failures).toEqual([]);
+  expect(apps.map((app) => app.id)).toContain("canonical-machine-guide");
 });
 
 test("planned sloty se čtou z per-machine launchpad.gen3.local.json, namountovaný slug vyhrává (scan-first)", async () => {

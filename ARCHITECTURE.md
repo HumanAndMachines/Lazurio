@@ -161,10 +161,12 @@ Při přímém vývojářském startu načte aplikace lease sama z
 procesní vstup a odmítne je, pokud s manifestem nesouhlasí.
 
 Na jedné Mašině běží pro daného uživatele jeden sdílený Lazurio Server. Jeho
-aktuální lokální adresu a obsluhovaný `root_id` drží jediný locator ve
+aktuální lokální adresu, obsluhovaný machine `root_id` a právě vybraný
+`control_root_id` (main nebo konkrétní worktree) drží jediný locator ve
 standardním per-user state prostoru operačního systému (`Application Support`,
 `XDG_STATE_HOME` nebo `LocalAppData`). Jde o ukazatel na Server, ne o registr
-modulových portů; checkouty ani worktrees si proto nevytvářejí vlastní Server.
+modulových portů; změna control rootu nahradí tutéž sdílenou instanci, nevytvoří
+druhý Server.
 
 Z toho plynou tato pravidla:
 

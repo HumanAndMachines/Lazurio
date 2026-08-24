@@ -279,6 +279,7 @@ test("identity endpoint is local-only and a foreign root cannot reuse the port",
     schema_version: "lazurio.server.identity.v1",
     product: "lazurio-launchpad-server",
     root_id: legacyIdentity.root_id,
+    control_root_id: legacyIdentity.root_id,
     pid: server.pid,
   });
   expect(identity.install_generation).toMatch(/^[a-f0-9]{64}$/);
@@ -288,6 +289,7 @@ test("identity endpoint is local-only and a foreign root cannot reuse the port",
     schema_version: "lazurio.server.locator.v1",
     origin: `http://127.0.0.1:${port}`,
     root_id: identity.root_id,
+    control_root_id: identity.control_root_id,
     instance_id: identity.instance_id,
     install_generation: identity.install_generation,
   });
@@ -344,6 +346,39 @@ test("linked worktree gets only a read-only canonical Root mount context", async
   await initGitRepo(root);
   runGit(["add", "."], root);
   runGit(["commit", "-m", "track fixture Root"], root);
+  await writeJson(join(root, "launchpad.gen3.local.json"), { personalspace_owner: "fixtureowner" });
+  const personalspaceRoot = join(root, "personalspace", "fixtureowner_GEN3");
+  await mkdir(join(personalspaceRoot, "workspace"), { recursive: true });
+  await writeJson(join(personalspaceRoot, "personal.gen3.json"), {
+    personal_generation: "gen3",
+    owner: { github_username: "fixtureowner", display_name: "Fixture Owner", type: "human" },
+    repository: {
+      github_repo: "fixtureowner/fixtureowner_GEN3",
+      mount_path: "personalspace/fixtureowner_GEN3",
+      visibility: "private",
+    },
+    privacy: {
+      default_share: "private",
+      agent_boundary: "personal-context-only",
+      shared_outputs: "metadata-only",
+    },
+    modules_manifest_path: "modules.manifest.json",
+    workspace_path: "workspace",
+    gbrain: { path: "gbrain", default_shared: false, human_editor: "obsidian", agent_access: "mcp-only" },
+    secrets: {
+      path: "secrets",
+      custody_pattern: "personalspace/<owner>_GEN3/secrets/<provider>/<scope>/<purpose>",
+      git: "ignored",
+    },
+    shared_spaces: [],
+  });
+  await writeJson(join(personalspaceRoot, "modules.manifest.json"), {
+    personal_generation: "gen3",
+    owner: "fixtureowner",
+    module_slots: [],
+  });
+  const primaryStatusBefore = runGit(["status", "--short"], root);
+  const primary = await startLaunchpadServer(root);
   const worktreeRoot = `${root}-linked-worktree`;
   runGit(["worktree", "add", "-b", "linked-launchpad", worktreeRoot], root);
   tempRoots.push(worktreeRoot, root);
@@ -354,10 +389,18 @@ test("linked worktree gets only a read-only canonical Root mount context", async
   await rm(join(worktreeRoot, "organizations"), { recursive: true, force: true });
   await mkdir(join(worktreeRoot, "organizations"), { recursive: true });
 
-  const { port } = await startLaunchpadServer(worktreeRoot);
+  const { port } = await startLaunchpadServer(worktreeRoot, { env: primary.environment });
+  expect(await primary.server.exited).toBe(0);
+  const identity = await getJson(port, "/api/lazurio/server-identity");
+  expect(identity.root_id).toBe(computeServerRootId(realpathSync.native(root)));
+  expect(identity.control_root_id).toBe(computeServerRootId(realpathSync.native(worktreeRoot)));
+  expect(identity.control_root_id).not.toBe(identity.root_id);
   const apps = await getJson(port, "/api/apps");
   expect(apps.launchpad_root.display_name).toBe("Linked Root");
   expect(apps.organizations.length).toBeGreaterThan(0);
+  const personalspace = await getJson(port, "/api/personalspace");
+  expect(personalspace.primary_owner).toBe("fixtureowner");
+  expect(personalspace.summary.space_count).toBe(1);
 
   const mutation = await fetch(`http://127.0.0.1:${port}/api/sync`, { method: "POST" });
   expect(mutation.status).toBe(409);
@@ -365,7 +408,7 @@ test("linked worktree gets only a read-only canonical Root mount context", async
     error: "worktree_mount_context_read_only",
     message: "Linked worktree smí canonical Lazurio Root používat jen jako read-only mount context.",
   });
-  expect(runGit(["status", "--short"], root)).toBe("");
+  expect(runGit(["status", "--short"], root)).toBe(primaryStatusBefore);
 });
 
 test("hosted Launchpad rejects forged gateway headers without a TLS-authenticated OAuth session", async () => {
@@ -537,6 +580,7 @@ test("launcher replaces a stale same-root Server on the same port", async () => 
       ...process.env,
       PORT: String(port),
       ROOT_ID: rootId,
+      CONTROL_ROOT_ID: rootId,
       INSTANCE_ID: instanceId,
     },
     stdout: "ignore",
@@ -550,6 +594,7 @@ test("launcher replaces a stale same-root Server on the same port", async () => 
       schema_version: "lazurio.server.identity.v1",
       product: "lazurio-launchpad-server",
       root_id: rootId,
+      control_root_id: rootId,
       install_generation: "0".repeat(64),
       instance_id: instanceId,
       pid: blocker.pid,
@@ -1101,6 +1146,7 @@ function staleServerFixtureSource() {
     "        schema_version: 'lazurio.server.identity.v1',",
     "        product: 'lazurio-launchpad-server',",
     "        root_id: process.env.ROOT_ID,",
+    "        control_root_id: process.env.CONTROL_ROOT_ID,",
     "        install_generation: '0'.repeat(64),",
     "        instance_id: process.env.INSTANCE_ID,",
     "        pid: process.pid,",

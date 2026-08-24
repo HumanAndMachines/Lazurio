@@ -83,9 +83,11 @@ if (realpathSync.native(configuredRuntimeRoot) !== realpathSync.native(lazurioCo
   throw new Error("LAZURIO_RUNTIME_ROOT musí přesně označovat Lazurio runtime, ze kterého běží Launchpad server.");
 }
 const launchpadRootId = computeServerRootId(canonicalCompaniesRoot);
+const launchpadControlRootId = computeServerRootId(rootSourceRoot);
 const launchpadInstallGeneration = computeServerInstallGeneration(lazurioCodeRoot);
 const launchpadServerIdentity = buildServerIdentity({
   rootId: launchpadRootId,
+  controlRootId: launchpadControlRootId,
   installGeneration: launchpadInstallGeneration,
   instanceId: randomUUID(),
   pid: process.pid,
@@ -147,7 +149,7 @@ const appsResponseCache = createGenerationSafeResponseCache({
 // aplikace. Local-only (server běží jen na 127.0.0.1). Osobní data se nikdy
 // nepropisují do org /api/apps ani /api/doctor shared výstupu.
 const personalspaceRuntimeManager = createPersonalspaceRuntimeManager({
-  companiesRoot: rootSourceRoot,
+  companiesRoot,
   launchpadRoot,
   stateRoot: launchpadStateRoot,
 });
@@ -186,6 +188,7 @@ try {
     startServer,
     inspectRunningLaunchpad: (url) => inspectRunningLaunchpad(url, {
       rootId: launchpadRootId,
+      controlRootId: launchpadControlRootId,
       installGeneration: launchpadInstallGeneration,
     }),
     shutdownStaleLaunchpad: requestStaleLaunchpadShutdown,
@@ -194,6 +197,7 @@ try {
   if (startResult.mode === "reused") {
     const observation = await inspectRunningLaunchpad(startResult.url, {
       rootId: launchpadRootId,
+      controlRootId: launchpadControlRootId,
       installGeneration: launchpadInstallGeneration,
     });
     if (observation.status !== "compatible") {
@@ -392,7 +396,7 @@ async function readLaunchpadRootConfig() {
 
 async function buildPersonalspace({ verifyRepositoryPrivacy = false } = {}) {
   return buildPersonalspaceResponse({
-    companiesRoot: rootSourceRoot,
+    companiesRoot,
     launchpadRoot,
     runtimeManager: personalspaceRuntimeManager,
     profileEmail: principalEmail,
@@ -715,7 +719,7 @@ function gbrainErrorResponse(error) {
 async function handleGbrainRoute(request, url, route) {
   if (request.method !== "GET") return jsonResponse({ error: "method_not_allowed" }, 405);
   try {
-    const vault = await resolveSpaceGbrainVault({ companiesRoot: rootSourceRoot, spaceDirName: route.space });
+    const vault = await resolveSpaceGbrainVault({ companiesRoot, spaceDirName: route.space });
     if (route.resource === "tree") {
       return jsonResponse({ space: route.space, source_rel: vault.source_rel, mode: vault.mode, ...(await gbrainTree(vault.vaultRoot)) });
     }
