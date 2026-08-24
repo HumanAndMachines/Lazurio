@@ -12,7 +12,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join, resolve } from "node:path";
+import { delimiter, dirname, join, relative, resolve, sep } from "node:path";
 
 import { buildLazurioCliIdentity } from "./cli-install-lib.mjs";
 import { buildLazurioCliProvenance } from "./core/cli-provenance-lib.mjs";
@@ -30,9 +30,14 @@ beforeAll(() => {
   mkdirSync(fixtureRoot, { recursive: true });
   mkdirSync(outsideCwd, { recursive: true });
   for (const path of ["lazurio", "launchpad"]) {
-    cpSync(join(sourceRoot, path), join(fixtureRoot, path), {
+    const sourcePath = join(sourceRoot, path);
+    cpSync(sourcePath, join(fixtureRoot, path), {
       recursive: true,
       preserveTimestamps: true,
+      filter(candidatePath) {
+        const candidateRelative = relative(sourcePath, candidatePath);
+        return candidateRelative !== ".local" && !candidateRelative.startsWith(`.local${sep}`);
+      },
     });
   }
   mkdirSync(join(fixtureRoot, "scripts"), { recursive: true });
