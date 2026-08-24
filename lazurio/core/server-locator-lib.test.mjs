@@ -36,6 +36,7 @@ test("server locator publishes the exact active loopback origin atomically", asy
     schema_version: "lazurio.server.locator.v1",
     origin: "http://127.0.0.1:4175",
     root_id: identity.root_id,
+    control_root_id: identity.control_root_id,
     instance_id: identity.instance_id,
   });
 });
@@ -107,6 +108,7 @@ test("machine coordination uses each platform's standard per-user state location
 function fixtureIdentity() {
   return buildServerIdentity({
     rootId: "1".repeat(64),
+    controlRootId: "3".repeat(64),
     installGeneration: "2".repeat(64),
     instanceId: "2a6db6d3-ad60-42b7-b6a8-e522ac838284",
     pid: 1234,

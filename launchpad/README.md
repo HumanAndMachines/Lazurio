@@ -145,8 +145,9 @@ kolizi zvolí jiný port. Tento Organization/Personalspace slice je první čás
 širšího Builder Bridge kontraktu pro stabilní odkazy na moduly, Doctor a
 worktrees.
 
-Po spuštění Server zapíše svou aktuální lokální adresu, identitu a `root_id` do
-jediného locatoru ve standardním per-user state prostoru operačního systému:
+Po spuštění Server zapíše svou aktuální lokální adresu, identitu, machine
+`root_id` a selected `control_root_id` do jediného locatoru ve standardním
+per-user state prostoru operačního systému:
 `~/Library/Application Support/Lazurio/server.json` na macOS,
 `${XDG_STATE_HOME:-~/.local/state}/lazurio/server.json` na Linuxu a
 `%LOCALAPPDATA%\\Lazurio\\server.json` na Windows. CLI a organizační Launchpady
@@ -155,12 +156,11 @@ Start, Open nebo Stop. Pokud chybí, je starý nebo patří jinému Rootu, akci
 bezpečně odmítnou. Locator jen ukazuje na lokální Server; porty Modulů dál
 vlastní jejich `lazurio.module.json`. Obnoví jej `bun run launchpad:serve`.
 
-Launcher reusuje existující lokální instanci jen když sedí jak hash kanonického
-rootu, tak hash skutečných runtime/public source bytes. Po pullu nebo editaci
-Launchpadu proto stará instance nepředstírá aktuální manifestové a UI chování:
-na implicitním portu se spustí nový proces na prvním volném portu a launcher
-ohlásí jeho skutečný origin. Explicitně obsazený port dál failuje místo tichého
-přesměrování.
+Launcher reusuje existující lokální instanci jen když sedí hash kanonického
+machine rootu, hash selected control rootu i hash skutečných runtime/public
+source bytes. Přechod main ↔ worktree nebo změna Server generace proto bezpečně
+nahradí tutéž sdílenou instanci a launcher ohlásí její skutečný origin;
+nekompatibilní ani cizí listener se nikdy nepřevezme.
 
 ## Discovery model
 

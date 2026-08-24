@@ -778,53 +778,46 @@ export async function runtimeSourcePortAuthorityIssues({
 
   await visit(packageDirectory);
   const sourceListenerBindings = new Map();
-  const sharedListenerBindings = new Set();
   for (const { sourcePath, source } of sources) {
     const bindings = runtimeDirectListenerBindings(source);
-    const importAliases = runtimeNamedImportAliases(source);
     for (const name of runtimeForwardedListenerBindings(source)) bindings.add(name);
-    for (const name of bindings) {
-      // Generic local names such as `port` are lexical. Port-labelled
-      // bindings are safe to follow across the small package source graph,
-      // including namespace imports such as config.API_PORT.
-      if (name.split("_").includes("PORT")) sharedListenerBindings.add(name);
-      const importedName = importAliases.get(name);
-      if (importedName?.split("_").includes("PORT")) sharedListenerBindings.add(importedName);
-    }
     sourceListenerBindings.set(sourcePath, bindings);
   }
+  const listenerDeclarationBindings = runtimeListenerDeclarationBindings({
+    sources,
+    sourceListenerBindings,
+  });
 
   for (const { sourcePath, source } of sources) {
-      const fallbackPatterns = [
-        /(?:process\.env|Bun\.env)(?:\.(?:PORT|LAZURIO_RUNTIME_LISTENER_[A-Z0-9_]+_PORT)|\[["'](?:PORT|LAZURIO_RUNTIME_LISTENER_[A-Z0-9_]+_PORT)["']\])\s*(?:\?\?|\|\|)\s*["']?(\d{4,5})["']?/g,
-        /(?:Number|parseInt)\([^;\n)]*(?:PORT|_PORT)[^;\n)]*\)\s*(?:\?\?|\|\|)\s*["']?(\d{4,5})["']?/g,
-      ];
-      for (const pattern of fallbackPatterns) {
-        for (const match of source.matchAll(pattern)) {
-          issues.push(
-            `${sourcePath}: runtime source obsahuje číselný port fallback ${match[1]}; port smí materializovat jen module lease`,
-          );
-        }
-      }
-      const declaredPortPattern = /\b(?:const|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*["']?(\d{4,5})["']?/g;
-      const alwaysOwnedPortConstants = new Set(["PORT", "DEFAULT_PORT", "SERVER_PORT", "LISTEN_PORT", "HTTP_PORT"]);
-      for (const match of source.matchAll(declaredPortPattern)) {
-        if (
-          !alwaysOwnedPortConstants.has(match[1])
-          && !sourceListenerBindings.get(sourcePath)?.has(match[1])
-          && !sharedListenerBindings.has(match[1])
-        ) continue;
+    const fallbackPatterns = [
+      /(?:process\.env|Bun\.env)(?:\.(?:PORT|LAZURIO_RUNTIME_LISTENER_[A-Z0-9_]+_PORT)|\[["'](?:PORT|LAZURIO_RUNTIME_LISTENER_[A-Z0-9_]+_PORT)["']\])\s*(?:\?\?|\|\|)\s*["']?(\d{4,5})["']?/g,
+      /(?:Number|parseInt)\([^;\n)]*(?:PORT|_PORT)[^;\n)]*\)\s*(?:\?\?|\|\|)\s*["']?(\d{4,5})["']?/g,
+    ];
+    for (const pattern of fallbackPatterns) {
+      for (const match of source.matchAll(pattern)) {
         issues.push(
-          `${sourcePath}: runtime source obsahuje číselný port fallback ${match[2]}; port smí materializovat jen module lease`,
+          `${sourcePath}: runtime source obsahuje číselný port fallback ${match[1]}; port smí materializovat jen module lease`,
         );
       }
-      for (const lease of leases) {
-        if (new RegExp(`(^|\\D)${lease.port}(?=\\D|$)`).test(source)) {
-          issues.push(
-            `${sourcePath}: runtime source kopíruje module lease port ${lease.port}; načti lease z lazurio.module.json a přijmi jen přesně shodnou Lazurio runtime injekci`,
-          );
-        }
+    }
+    const declaredPortPattern = /\b(?:const|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*["']?(\d{4,5})["']?/g;
+    const alwaysOwnedPortConstants = new Set(["PORT", "DEFAULT_PORT", "SERVER_PORT", "LISTEN_PORT", "HTTP_PORT"]);
+    for (const match of source.matchAll(declaredPortPattern)) {
+      if (
+        !alwaysOwnedPortConstants.has(match[1])
+        && !listenerDeclarationBindings.get(sourcePath)?.has(match[1])
+      ) continue;
+      issues.push(
+        `${sourcePath}: runtime source obsahuje číselný port fallback ${match[2]}; port smí materializovat jen module lease`,
+      );
+    }
+    for (const lease of leases) {
+      if (new RegExp(`(^|\\D)${lease.port}(?=\\D|$)`).test(source)) {
+        issues.push(
+          `${sourcePath}: runtime source kopíruje module lease port ${lease.port}; načti lease z lazurio.module.json a přijmi jen přesně shodnou Lazurio runtime injekci`,
+        );
       }
+    }
   }
 
   return issues;
@@ -840,7 +833,7 @@ function runtimeDirectListenerBindings(source) {
     /\blisten(?:Sync)?\s*\(\s*(?:(?:Number|parseInt|Number\.parseInt)\s*\(\s*)?((?:[A-Za-z_$][A-Za-z0-9_$]*\s*\.\s*)*[A-Za-z_$][A-Za-z0-9_$]*)\b/g,
   ]) {
     for (const match of source.matchAll(pattern)) {
-      bindings.add(match[1].split(".").at(-1).trim());
+      bindings.add(match[1].replace(/\s+/g, ""));
     }
   }
   return bindings;
@@ -885,16 +878,60 @@ function runtimeRegExpEscape(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function runtimeNamedImportAliases(source) {
-  const aliases = new Map();
-  for (const match of source.matchAll(/\bimport\s*{([^}]+)}\s*from\s*["'][^"'\r\n]+["']/g)) {
+function runtimeListenerDeclarationBindings({ sources, sourceListenerBindings }) {
+  const sourcePaths = new Set(sources.map(({ sourcePath }) => sourcePath));
+  const declarations = new Map(sources.map(({ sourcePath }) => [sourcePath, new Set()]));
+  for (const { sourcePath, source } of sources) {
+    const imports = runtimeImportBindings(source);
+    for (const binding of sourceListenerBindings.get(sourcePath) ?? []) {
+      const namespace = binding.match(/^([A-Za-z_$][A-Za-z0-9_$]*)\.([A-Za-z_$][A-Za-z0-9_$]*)$/u);
+      if (namespace) {
+        const target = runtimeResolvedImportSourcePath({
+          sourcePath,
+          specifier: imports.namespaces.get(namespace[1]),
+          sourcePaths,
+        });
+        if (target) declarations.get(target)?.add(namespace[2]);
+        continue;
+      }
+      declarations.get(sourcePath)?.add(binding);
+      const imported = imports.named.get(binding);
+      const target = runtimeResolvedImportSourcePath({
+        sourcePath,
+        specifier: imported?.specifier,
+        sourcePaths,
+      });
+      if (target && imported) declarations.get(target)?.add(imported.imported);
+    }
+  }
+  return declarations;
+}
+
+function runtimeImportBindings(source) {
+  const named = new Map();
+  const namespaces = new Map();
+  for (const match of source.matchAll(/\bimport\s*{([^}]+)}\s*from\s*["']([^"'\r\n]+)["']/g)) {
     for (const entry of match[1].split(",")) {
       const binding = entry.trim().match(/^(?:type\s+)?([A-Za-z_$][A-Za-z0-9_$]*)(?:\s+as\s+([A-Za-z_$][A-Za-z0-9_$]*))?$/);
       if (!binding) continue;
-      aliases.set(binding[2] ?? binding[1], binding[1]);
+      named.set(binding[2] ?? binding[1], { imported: binding[1], specifier: match[2] });
     }
   }
-  return aliases;
+  for (const match of source.matchAll(/\bimport\s*\*\s*as\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*from\s*["']([^"'\r\n]+)["']/g)) {
+    namespaces.set(match[1], match[2]);
+  }
+  return { named, namespaces };
+}
+
+function runtimeResolvedImportSourcePath({ sourcePath, specifier, sourcePaths }) {
+  if (typeof specifier !== "string" || !specifier.startsWith(".")) return null;
+  const base = posix.normalize(posix.join(posix.dirname(sourcePath), specifier));
+  const candidates = [
+    base,
+    ...[...runtimeSourceExtensions].map((extension) => `${base}${extension}`),
+    ...[...runtimeSourceExtensions].map((extension) => posix.join(base, `index${extension}`)),
+  ];
+  return candidates.find((candidate) => sourcePaths.has(candidate)) ?? null;
 }
 
 // Cesty vracené v discovery/API modelu jsou přenositelné identifikátory
@@ -1123,10 +1160,16 @@ function nonPlaceholderString(value) {
   return trimmed;
 }
 
-function configuredLocalSurfaces(companiesConfig, localConfig = null, warnings = null) {
+function configuredLocalSurfaceEntries({
+  companiesRoot,
+  machineContextRoot,
+  companiesConfig,
+  localConfig = null,
+  warnings = null,
+}) {
   const shared = Array.isArray(companiesConfig.local_surfaces) ? companiesConfig.local_surfaces : [];
   const machineLocal = Array.isArray(localConfig?.local_surfaces) ? localConfig.local_surfaces : [];
-  const surfaces = [...shared];
+  const entries = shared.map((surface) => ({ surface, sourceRoot: companiesRoot }));
   const seenPaths = new Set(shared.map((surface) => surface?.path).filter((path) => typeof path === "string"));
 
   for (const surface of machineLocal) {
@@ -1136,10 +1179,10 @@ function configuredLocalSurfaces(companiesConfig, localConfig = null, warnings =
       );
       continue;
     }
-    surfaces.push(surface);
+    entries.push({ surface, sourceRoot: machineContextRoot });
     if (typeof surface?.path === "string") seenPaths.add(surface.path);
   }
-  return surfaces;
+  return entries;
 }
 
 function launchpadRootSurfaceCompany(companiesConfig, surface) {
@@ -1156,13 +1199,21 @@ function launchpadRootSurfaceCompany(companiesConfig, surface) {
 
 async function discoverLocalSurfacePackages({
   companiesRoot,
+  machineContextRoot = companiesRoot,
   companiesConfig,
   localConfig,
   packageEntries,
   failures,
   warnings,
 }) {
-  for (const surface of configuredLocalSurfaces(companiesConfig, localConfig, warnings)) {
+  const entries = configuredLocalSurfaceEntries({
+    companiesRoot,
+    machineContextRoot,
+    companiesConfig,
+    localConfig,
+    warnings,
+  });
+  for (const { surface, sourceRoot } of entries) {
     if (!surface || typeof surface !== "object" || surface.kind !== "shared-guide") continue;
     if (typeof surface.path !== "string" || surface.path.trim() === "") {
       failures.push("launchpad.gen3.json: local_surfaces shared-guide musí mít path");
@@ -1172,13 +1223,13 @@ async function discoverLocalSurfacePackages({
       failures.push(`launchpad.gen3.json: local_surfaces ${surface.path} musí být relativní cesta uvnitř Launchpad rootu`);
       continue;
     }
-    const surfaceRoot = join(companiesRoot, surface.path);
+    const surfaceRoot = join(sourceRoot, surface.path);
     if (!existsSync(surfaceRoot)) {
       failures.push(`launchpad.gen3.json: local surface ${surface.path} neexistuje`);
       continue;
     }
     await walkPackageJson(
-      companiesRoot,
+      sourceRoot,
       surfaceRoot,
       packageEntries,
       launchpadRootSurfaceCompany(companiesConfig, surface),
@@ -1793,6 +1844,7 @@ export async function discoverLaunchpadApps(
   if (!organizationSelector) {
     await discoverLocalSurfacePackages({
       companiesRoot,
+      machineContextRoot,
       companiesConfig,
       localConfig,
       packageEntries,

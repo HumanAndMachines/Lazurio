@@ -156,6 +156,7 @@ function collectGenerationTreeFiles({ root, directory, inputs }) {
 
 export function buildServerIdentity({
   rootId,
+  controlRootId,
   installGeneration,
   instanceId,
   pid,
@@ -165,6 +166,7 @@ export function buildServerIdentity({
     schema_version: LAZURIO_SERVER_IDENTITY_SCHEMA,
     product: LAZURIO_SERVER_PRODUCT,
     root_id: rootId,
+    control_root_id: controlRootId,
     install_generation: installGeneration,
     instance_id: instanceId,
     pid,
@@ -185,6 +187,7 @@ export function classifyServerIdentity({ observed = null, legacyObserved = null,
     if (observed?.root_id !== expected.rootId) return "unrecognized";
     if (observed?.schema_version !== LAZURIO_SERVER_IDENTITY_SCHEMA) return "protocol_incompatible";
     if (!isValidServerIdentity(observed)) return "protocol_incompatible";
+    if (observed.control_root_id !== expected.controlRootId) return "stale_install";
     if (observed.install_generation !== expected.installGeneration) return "stale_install";
     return "compatible";
   }
@@ -207,6 +210,7 @@ export function isValidServerIdentity(identity) {
     && identity.schema_version === LAZURIO_SERVER_IDENTITY_SCHEMA
     && identity.product === LAZURIO_SERVER_PRODUCT
     && isSha256(identity.root_id)
+    && isSha256(identity.control_root_id)
     && isSha256(identity.install_generation)
     && typeof identity.instance_id === "string"
     && uuidPattern.test(identity.instance_id)
@@ -218,8 +222,13 @@ export function isValidServerIdentity(identity) {
 }
 
 function assertExpectedIdentity(expected) {
-  if (!expected || !isSha256(expected.rootId) || !isSha256(expected.installGeneration)) {
-    throw new TypeError("Server identity classification requires exact root and install generations.");
+  if (
+    !expected
+    || !isSha256(expected.rootId)
+    || !isSha256(expected.controlRootId)
+    || !isSha256(expected.installGeneration)
+  ) {
+    throw new TypeError("Server identity classification requires exact operated Root, control Root, and install generations.");
   }
 }
 

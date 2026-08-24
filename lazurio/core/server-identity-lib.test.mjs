@@ -27,6 +27,7 @@ test("server identity separates root, install generation, and process instance",
   const instanceId = randomUUID();
   const identity = buildServerIdentity({
     rootId,
+    controlRootId: rootId,
     installGeneration,
     instanceId,
     pid: 42,
@@ -37,6 +38,7 @@ test("server identity separates root, install generation, and process instance",
     schema_version: LAZURIO_SERVER_IDENTITY_SCHEMA,
     product: LAZURIO_SERVER_PRODUCT,
     root_id: rootId,
+    control_root_id: rootId,
     install_generation: installGeneration,
     instance_id: instanceId,
     pid: 42,
@@ -119,6 +121,7 @@ test("installed runtime generation comes from the immutable artifact digest", as
 test("classifier never reuses stale, foreign, malformed, or legacy same-root servers", () => {
   const expected = {
     rootId: "1".repeat(64),
+    controlRootId: "5".repeat(64),
     installGeneration: "2".repeat(64),
   };
   const compatible = identity({
@@ -127,6 +130,10 @@ test("classifier never reuses stale, foreign, malformed, or legacy same-root ser
   });
 
   expect(classifyServerIdentity({ observed: compatible, expected })).toBe("compatible");
+  expect(classifyServerIdentity({
+    observed: { ...compatible, control_root_id: "6".repeat(64) },
+    expected,
+  })).toBe("stale_install");
   expect(classifyServerIdentity({
     observed: { ...compatible, install_generation: "3".repeat(64) },
     expected,
@@ -182,6 +189,7 @@ function identity(overrides = {}) {
     schema_version: LAZURIO_SERVER_IDENTITY_SCHEMA,
     product: LAZURIO_SERVER_PRODUCT,
     root_id: "1".repeat(64),
+    control_root_id: "5".repeat(64),
     install_generation: "2".repeat(64),
     instance_id: "2a6db6d3-ad60-42b7-b6a8-e522ac838284",
     pid: 42,

@@ -47,6 +47,7 @@ export function buildServerLocator({ origin, identity, writtenAt = new Date().to
     schema_version: LAZURIO_SERVER_LOCATOR_SCHEMA,
     origin: normalizeLoopbackOrigin(origin),
     root_id: identity?.root_id,
+    control_root_id: identity?.control_root_id,
     instance_id: identity?.instance_id,
     install_generation: identity?.install_generation,
     written_at: writtenAt,
@@ -69,6 +70,7 @@ export function validateServerLocator(locator) {
     "schema_version",
     "origin",
     "root_id",
+    "control_root_id",
     "instance_id",
     "install_generation",
     "written_at",
@@ -86,7 +88,7 @@ export function validateServerLocator(locator) {
   } catch (error) {
     errors.push(error.message);
   }
-  for (const key of ["root_id", "install_generation"]) {
+  for (const key of ["root_id", "control_root_id", "install_generation"]) {
     if (!/^[a-f0-9]{64}$/.test(locator[key] ?? "")) errors.push(`${key} must be a SHA-256 digest`);
   }
   if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(locator.instance_id ?? "")) {
