@@ -3,9 +3,11 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import {
+  assertRootlessInstallBoundary,
   packageContentForParity,
   packageEvidenceForReport,
 } from "./npm-package-lib.mjs";
+import { inspectLazurioInstallation, installExitCode } from "../lazurio/core/install-core-lib.mjs";
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
 
@@ -103,4 +105,63 @@ test("content parity ignores OS-specific npm archive encoding and stat mode", ()
     transport: { integrity: "sha512-windows", shasum: "b".repeat(40), size: 101 },
   };
   expect(packageContentForParity(linux)).toEqual(packageContentForParity(windows));
+});
+
+test("package smoke keeps Root selection deterministic across host prerequisite states", () => {
+  const actionRequired = inspectLazurioInstallation({
+    root: null,
+    platform: "linux",
+    architecture: "x64",
+    bunVersion: "1.3.14",
+    resolveGit: () => null,
+    resolveGitHubCli: () => null,
+  });
+  const failedHostProbe = inspectLazurioInstallation({
+    root: null,
+    platform: "win32",
+    architecture: "x64",
+    bunVersion: "1.3.14",
+    resolveGit: () => "C:\\Program Files\\Git\\cmd\\git.exe",
+    resolveGitHubCli: () => "C:\\Program Files\\GitHub CLI\\gh.exe",
+    runCommand: ({ executable }) => ({
+      status: executable.endsWith("gh.exe") ? 1 : 0,
+    }),
+  });
+
+  expect(actionRequired.status).toBe("action_required");
+  expect(failedHostProbe.status).toBe("failed");
+  expect(() => assertRootlessInstallBoundary({
+    report: actionRequired,
+    exitStatus: installExitCode(actionRequired),
+  })).not.toThrow();
+  expect(() => assertRootlessInstallBoundary({
+    report: failedHostProbe,
+    exitStatus: installExitCode(failedHostProbe),
+  })).not.toThrow();
+  expect(() => assertRootlessInstallBoundary({
+    report: failedHostProbe,
+    exitStatus: 1,
+  })).toThrow("does not match report status failed");
+});
+
+test("package smoke rejects a selected Root", () => {
+  const report = inspectLazurioInstallation({
+    root: "/fixture/root",
+    platform: "linux",
+    architecture: "x64",
+    bunVersion: "1.3.14",
+    resolveGit: () => null,
+    resolveGitHubCli: () => null,
+    inspectRoot: () => ({
+      path: "/fixture/root",
+      layout: "generated_root",
+      status: "completed",
+      reason: "generated_root_ready",
+    }),
+  });
+
+  expect(() => assertRootlessInstallBoundary({
+    report,
+    exitStatus: installExitCode(report),
+  })).toThrow("did not require an explicit Root");
 });

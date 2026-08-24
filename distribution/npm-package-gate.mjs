@@ -7,6 +7,7 @@ import { delimiter, dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 import {
+  assertRootlessInstallBoundary,
   buildLazurioNpmPackage,
   packageEvidenceForReport,
 } from "./npm-package-lib.mjs";
@@ -117,24 +118,16 @@ function smokeInstalledArchive(build) {
     throw new Error(`installed package provenance mismatch: ${JSON.stringify(provenance)}`);
   }
   const installReport = runInstalledShim(globalBin, ["install", "--json"], environment);
-  if (installReport.status !== 1) {
-    throw new Error(`installed lazurio install must request a Root: ${failure(installReport)}`);
-  }
   let parsedInstallReport;
   try {
     parsedInstallReport = JSON.parse(installReport.stdout);
   } catch {
     throw new Error("installed lazurio install did not return JSON");
   }
-  if (
-    parsedInstallReport.schema_version !== "lazurio.install.report.v0"
-    || parsedInstallReport.mode !== "report"
-    || parsedInstallReport.status !== "action_required"
-    || parsedInstallReport.root?.selected !== false
-    || parsedInstallReport.steps?.find((step) => step.id === "root")?.reason !== "root_selection_required"
-  ) {
-    throw new Error(`installed package install report mismatch: ${JSON.stringify(parsedInstallReport)}`);
-  }
+  assertRootlessInstallBoundary({
+    report: parsedInstallReport,
+    exitStatus: installReport.status,
+  });
   const rootless = runInstalledShim(globalBin, ["context", "--json"], environment);
   if (rootless.status !== 1 || !rootless.stderr.includes("--root <cesta>")) {
     throw new Error("package-managed Root command must fail closed until --root is explicit");
