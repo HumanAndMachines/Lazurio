@@ -287,7 +287,10 @@ function inspectGitHubApp({ invoke, organization, appSlug, rootRepository }) {
       "api",
       `orgs/${organization.login}/installations?per_page=100&page=${page}`,
     ]);
-    if (response.httpStatus === 403) return unavailableApp();
+    if (response.httpStatus === 403) {
+      if (page === 1) return unavailableApp();
+      throw new ActivationProbeError("github_transport_failed", true, "retry");
+    }
     requireSuccess(response, {
       missingCode: "github_transport_failed",
       missingNextAction: "retry",
