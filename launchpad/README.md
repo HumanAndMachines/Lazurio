@@ -155,6 +155,9 @@ locator načtou, ověří proti běžícímu Serveru a teprve potom mu předají
 Start, Open nebo Stop. Pokud chybí, je starý nebo patří jinému Rootu, akci
 bezpečně odmítnou. Locator jen ukazuje na lokální Server; porty Modulů dál
 vlastní jejich `lazurio.module.json`. Obnoví jej `bun run launchpad:serve`.
+Samotný singleton drží po celou dobu procesu per-user lifetime lease ve stejném
+state prostoru, takže ani smazaný locator nepovolí spuštění druhého Serveru a
+není potřeba prohledávat všechny možné custom porty.
 
 Launcher reusuje existující lokální instanci jen když sedí hash kanonického
 machine rootu, hash selected control rootu i hash skutečných runtime/public

@@ -2,7 +2,8 @@ import { afterAll, expect, test } from "bun:test";
 import { tmpdir } from "os";
 import { join } from "path";
 import { mkdir, mkdtemp, rm, writeFile } from "fs/promises";
-import { buildRecentModuleChanges } from "./recent-changes-lib.mjs";
+import { buildRecentModuleChanges, moduleReposFromApps } from "./recent-changes-lib.mjs";
+import { APP_FILESYSTEM_ROOT } from "./discovery-lib.mjs";
 
 const tempRoots = [];
 
@@ -37,6 +38,19 @@ async function makeModuleRepo(companiesRoot, relativePath, commitSubjects) {
     await git(["commit", "-m", subject], abs);
   }
 }
+
+test("recent-change and notification readers preserve a selected app source root", () => {
+  const repos = moduleReposFromApps([{
+    [APP_FILESYSTEM_ROOT]: "/selected/lazurio-worktree",
+    id: "lazurio-guide-v1",
+    company: "lazurio",
+    module: "guide",
+    cwd: "guide/app/v1",
+  }], "/canonical/lazurio-main");
+
+  expect(repos).toHaveLength(1);
+  expect(repos[0].absolute_path).toBe(join("/selected/lazurio-worktree", "guide/app/v1"));
+});
 
 test("recent changes vrátí per-modul commity seřazené podle poslední změny", async () => {
   const root = await mkdtemp(join(tmpdir(), "launchpad-recent-"));

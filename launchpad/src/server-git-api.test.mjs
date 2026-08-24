@@ -345,8 +345,32 @@ test("identity endpoint is local-only and a foreign root cannot reuse the port",
   expect(await new Response(otherRootLauncher.stderr).text()).toContain("jiný Root");
 });
 
+test("the lifetime lease blocks a second Server even when its locator was removed", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const primary = await startLaunchpadServer(root);
+  await rm(join(primary.serverStateDirectory, "server.json"));
+  let candidatePort = await findFreePort();
+  while (Math.abs(candidatePort - primary.port) < 25) candidatePort = await findFreePort();
+
+  const contender = Bun.spawn(
+    ["bun", "src/server.mjs", "--root", root, "--port", String(candidatePort), "--reuse"],
+    {
+      cwd: join(import.meta.dirname, ".."),
+      env: primary.environment,
+      stdout: "ignore",
+      stderr: "pipe",
+    },
+  );
+  servers.push(contender);
+  expect(await contender.exited).not.toBe(0);
+  expect(await new Response(contender.stderr).text()).toContain("per-user lifetime lease");
+  expect((await getJson(primary.port, "/health")).status).toBe("ok");
+});
+
 test("linked worktree gets only a read-only canonical Root mount context", async () => {
   const root = await createLaunchpadGitFixture();
+  const guidePort = await findFreePort();
   const primaryConfigPath = join(root, "launchpad.gen3.json");
   const primaryConfig = JSON.parse(await readFile(primaryConfigPath, "utf8"));
   primaryConfig.personalspace_mountpoint = "ignored-personalspace";
@@ -360,13 +384,16 @@ test("linked worktree gets only a read-only canonical Root mount context", async
       title: "Fixture Guide",
       company: "test-root",
       module: "guide",
-      port: await findFreePort(),
+      port: guidePort,
     },
   });
   const guidePackagePath = join(root, "guide", "app", "v1", "package.json");
   const guidePackage = JSON.parse(await readFile(guidePackagePath, "utf8"));
   guidePackage.dependencies = { "worktree-only-fixture": "1.0.0" };
   await writeJson(guidePackagePath, guidePackage);
+  await mkdir(join(root, "manual"), { recursive: true });
+  await writeFile(join(root, "launchpad", ".fixture"), "tracked fixture\n");
+  await writeFile(join(root, "manual", ".fixture"), "tracked fixture\n");
   await initGitRepo(root);
   runGit(["add", "."], root);
   runGit(["commit", "-m", "track fixture Root"], root);
@@ -411,6 +438,15 @@ test("linked worktree gets only a read-only canonical Root mount context", async
   worktreeConfig.launchpad_root.display_name = "Linked Root";
   worktreeConfig.personalspace_mountpoint = "personalspace";
   await writeJson(worktreeConfigPath, worktreeConfig);
+  await writeFile(join(worktreeRoot, "guide", "app", "v1", "server.mjs"), [
+    "const server = Bun.serve({",
+    '  hostname: process.env.HOST ?? "127.0.0.1",',
+    "  port: Number(process.env.PORT),",
+    '  fetch: () => Response.json({ status: "ok" }),',
+    "});",
+    "setInterval(() => {}, 2_147_483_647);",
+    "",
+  ].join("\n"));
   await mkdir(join(worktreeRoot, "guide", "app", "v1", "node_modules"), { recursive: true });
   await rm(join(worktreeRoot, "organizations"), { recursive: true, force: true });
   await mkdir(join(worktreeRoot, "organizations"), { recursive: true });
@@ -430,6 +466,19 @@ test("linked worktree gets only a read-only canonical Root mount context", async
   const personalspace = await getJson(port, "/api/personalspace");
   expect(personalspace.primary_owner).toBe("fixtureowner");
   expect(personalspace.summary.space_count).toBe(1);
+
+  const startResponse = await fetch(`http://127.0.0.1:${port}/api/apps/test-root-guide-v1/start`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{}",
+  });
+  const started = await startResponse.json();
+  expect({ status: startResponse.status, payload: started }).toEqual({
+    status: 200,
+    payload: expect.objectContaining({ action: "start" }),
+  });
+  expect((await getJson(port, "/api/apps/test-root-guide-v1/health")).status).toBe("healthy");
+  expect((await postJson(port, "/api/apps/test-root-guide-v1/stop", {})).action).toBe("stop");
 
   const mutation = await fetch(`http://127.0.0.1:${port}/api/sync`, { method: "POST" });
   expect(mutation.status).toBe(409);
@@ -504,7 +553,7 @@ test("control-root replacement waits for an in-flight runtime mutation", async (
   expect((await getJson(primary.port, "/health")).status).toBe("ok");
 });
 
-test("control-root replacement waits for boot reconciliation before draining the Server", async () => {
+test("control-root replacement fails closed while boot reconciliation is in progress", async () => {
   const root = await createLaunchpadGitFixture();
   const appPort = await findFreePort();
   const appRoot = join(root, "organizations", "BetaCo_GEN3", "workspace", "deals", "app", "v1");
@@ -570,17 +619,15 @@ test("control-root replacement waits for boot reconciliation before draining the
     },
   );
   servers.push(replacement);
-  await Bun.sleep(200);
-  expect(replacement.exitCode).toBeNull();
+  expect(await replacement.exited).not.toBe(0);
+  expect(await new Response(replacement.stderr).text()).toContain("per-user lifetime lease");
   expect(primary.server.exitCode).toBeNull();
 
   for (let attempt = 0; attempt < 150 && !(await Bun.file(completedMarker).exists()); attempt += 1) {
     await Bun.sleep(20);
   }
   expect(await Bun.file(completedMarker).exists()).toBe(true);
-  await waitForHealth(replacementPort, replacement);
-  expect(await primary.server.exited).toBe(0);
-  await Bun.sleep(2200);
+  expect((await getJson(primary.port, "/health")).status).toBe("ok");
 }, platformTestTimeout(15_000));
 
 test("hosted Launchpad rejects forged gateway headers without a TLS-authenticated OAuth session", async () => {
