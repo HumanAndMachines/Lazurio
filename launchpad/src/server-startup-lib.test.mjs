@@ -225,6 +225,28 @@ test("indeterminate machine locator never starts a second Server", async () => {
   }
 });
 
+test("a compatible Server is not reusable until its boot is ready", async () => {
+  let started = false;
+  let opened = false;
+  await expect(startLaunchpadWithPortPolicy({
+    requestedPort: 4174,
+    explicitPort: false,
+    shouldOpen: true,
+    shouldReuse: true,
+    locatedUrl: "http://127.0.0.1:4175",
+    startServer() {
+      started = true;
+      return { port: 4174 };
+    },
+    inspectRunningLaunchpad: async () => ({ status: "not_ready" }),
+    openExisting: async () => {
+      opened = true;
+    },
+  })).rejects.toMatchObject({ code: "LAZURIO_SERVER_NOT_READY" });
+  expect(started).toBe(false);
+  expect(opened).toBe(false);
+});
+
 test("requested implicit port owned by another Lazurio Root is terminal", async () => {
   const attempts = [];
   const calls = [];

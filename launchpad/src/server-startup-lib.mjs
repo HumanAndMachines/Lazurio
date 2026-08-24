@@ -68,6 +68,11 @@ export async function startLaunchpadWithPortPolicy({
         "LAZURIO_SERVER_UPGRADE_REQUIRED",
         `Na ${locatedUrl} běží nekompatibilní Lazurio Server stejného rootu. Zastav ho a spusť Launchpad znovu.`,
       );
+    } else if (located?.status === "not_ready") {
+      throw serverConflict(
+        "LAZURIO_SERVER_NOT_READY",
+        `Lazurio Server pro tento root na ${locatedUrl} ještě dokončuje start nebo se zastavuje.`,
+      );
     } else if (located?.status === "probe_failed" || located?.status === "unrecognized") {
       throw serverConflict(
         "LAZURIO_SERVER_PROBE_FAILED",
@@ -129,6 +134,13 @@ export async function startLaunchpadWithPortPolicy({
           error,
         );
       }
+      if (observation?.status === "not_ready") {
+        throw serverConflict(
+          "LAZURIO_SERVER_NOT_READY",
+          `Lazurio Server pro tento root na ${candidateUrl} ještě dokončuje start nebo se zastavuje.`,
+          error,
+        );
+      }
       if (observation?.status === "probe_failed") {
         throw serverConflict(
           "LAZURIO_SERVER_PROBE_FAILED",
@@ -159,6 +171,7 @@ async function findKnownServer({ urls, inspectRunningLaunchpad }) {
       "foreign_root",
       "legacy_same_root",
       "protocol_incompatible",
+      "not_ready",
     ].includes(observation?.status)) {
       return { url, observation };
     }
