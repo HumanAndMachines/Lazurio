@@ -38,7 +38,9 @@ function normalizedSlotStatus(slot) {
   if (["planned", "planned_slot"].includes(explicit)) return "planned";
   if (explicit === "active") return "active";
   const materialization = String(slot?.materialization ?? "").toLowerCase();
-  return materialization.includes("planned") ? "planned" : "active";
+  return ["planned", "planned_slot"].includes(materialization)
+    ? "planned"
+    : "active";
 }
 
 export function classifyDataState(slot, repositoryExists) {
@@ -391,11 +393,38 @@ function organizationOwnerProof(provider, organization) {
   ) {
     return { confirmed: true, message: null };
   }
+  if (response.ok) {
+    return {
+      confirmed: false,
+      message: "přihlášený gh účet nemá aktivní Organization Owner roli",
+    };
+  }
   return {
     confirmed: false,
-    message: providerMessage(response)
-      || "přihlášený gh účet nemá aktivní Organization Owner roli",
+    message: providerMessage(response),
   };
+}
+
+export function organizationOwnerAbsenceProof(provider, organization, coordinate) {
+  const liveLogin = String(organization?.login ?? "");
+  const coordinateOwner = String(coordinate ?? "").split("/", 1)[0];
+  if (
+    !GITHUB_LOGIN_PATTERN.test(liveLogin)
+    || coordinateOwner.toLowerCase() !== liveLogin.toLowerCase()
+  ) {
+    return {
+      confirmed: false,
+      message:
+        `repo locator ${coordinate} neleží v ověřené GitHub Organization ${liveLogin}`,
+    };
+  }
+  return organizationOwnerProof(provider, organization);
+}
+
+export function missionControlDataPrivacyProblem(repository) {
+  return repository?.private === true
+    ? null
+    : "Mission Control data repo musí být privátní";
 }
 
 function branchProtection(provider, repo) {
@@ -585,7 +614,11 @@ function inspectOrganization(organizationRoot, { provider, gitReader }) {
 
   const repositoryResponse = githubApi(provider, `repos/${dataRepo}`);
   const absenceProof = repositoryResponse.httpStatus === 404
-    ? organizationOwnerProof(provider, rootBinding.organization)
+    ? organizationOwnerAbsenceProof(
+        provider,
+        rootBinding.organization,
+        dataRepo,
+      )
     : undefined;
   const repositoryProbe = classifyRepositoryProbe(repositoryResponse, absenceProof);
   const repositoryExists = repositoryProbe.exists === true;
@@ -613,6 +646,11 @@ function inspectOrganization(organizationRoot, { provider, gitReader }) {
   result.errors.push(...identity.problems);
   result.data_repository_id = identity.dataRepositoryId;
   if (!identity.ok) return result;
+  const privacyProblem = missionControlDataPrivacyProblem(repositoryResponse.value);
+  if (privacyProblem) {
+    result.errors.push(privacyProblem);
+    return result;
+  }
   const liveDataRepo = String(repositoryResponse.value?.full_name ?? dataRepo);
   result.data_repo = liveDataRepo;
 
