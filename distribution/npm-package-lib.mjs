@@ -12,6 +12,10 @@ import {
   selectSourceEntries,
   sortedEntries,
 } from "./build-lib.mjs";
+import {
+  installExitCode,
+  isValidLazurioInstallReport,
+} from "../lazurio/core/install-core-lib.mjs";
 
 const CONTRACT_PATH = "distribution/npm-package-contract.v1.json";
 const packageVersionPattern = /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;
@@ -244,4 +248,25 @@ export function packageContentForParity(evidence) {
     source: evidence.source,
     packer: evidence.packer,
   };
+}
+
+export function assertRootlessInstallBoundary({ report, exitStatus }) {
+  if (!isValidLazurioInstallReport(report)) {
+    throw new Error("installed lazurio install returned an invalid report");
+  }
+  if (exitStatus !== installExitCode(report)) {
+    throw new Error(
+      `installed lazurio install exit ${exitStatus} does not match report status ${report.status}`,
+    );
+  }
+  const rootStep = report.steps.find((step) => step.id === "root");
+  if (
+    report.root.selected !== false
+    || report.root.path !== null
+    || report.root.layout !== "not_selected"
+    || rootStep?.status !== "action_required"
+    || rootStep.reason !== "root_selection_required"
+  ) {
+    throw new Error(`installed package did not require an explicit Root: ${JSON.stringify(report)}`);
+  }
 }
