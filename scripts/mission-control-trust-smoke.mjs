@@ -85,6 +85,38 @@ export function resolveDataRepositoryLocator(slot, liveOrganizationLogin) {
   };
 }
 
+export function resolveDataPublishBranch(slot, repository) {
+  const declared = [
+    slot?.repository_db?.branch,
+    slot?.git?.branch,
+  ]
+    .filter((value) => typeof value === "string" && value.trim() !== "")
+    .map((value) => value.trim());
+  const branches = [...new Set(declared)];
+  if (branches.length !== 1) {
+    return {
+      branch: null,
+      error: "Mission Control data slot musí deklarovat jednu shodnou publish branch",
+    };
+  }
+  const branch = branches[0];
+  if (branch !== "v3") {
+    return {
+      branch: null,
+      error: `Mission Control data publish branch musí být v3, nalezeno ${branch}`,
+    };
+  }
+  if (repository?.default_branch !== branch) {
+    return {
+      branch: null,
+      error:
+        `Mission Control data repo má default branch ${repository?.default_branch ?? "neznámou"}, `
+        + `slot deklaruje ${branch}`,
+    };
+  }
+  return { branch, error: null };
+}
+
 function evaluateClassicProtection(response) {
   if (response.kind === "unsupported") {
     return {
@@ -498,8 +530,11 @@ export function missionControlDataPrivacyProblem(repository) {
     : "Mission Control data repo musí být privátní";
 }
 
-function branchProtection(provider, repo) {
-  const response = githubApi(provider, `repos/${repo}/branches/v3/protection`);
+function branchProtection(provider, repo, branch) {
+  const response = githubApi(
+    provider,
+    `repos/${repo}/branches/${encodeURIComponent(branch)}/protection`,
+  );
   if (response.ok) return { kind: "configured", value: response.value };
   const message = providerMessage(response);
   if (response.httpStatus === 404) return { kind: "unconfigured", message };
@@ -513,8 +548,11 @@ function branchProtection(provider, repo) {
   return { kind: "blocked", message };
 }
 
-function effectiveBranchRules(provider, repo) {
-  const response = githubApi(provider, `repos/${repo}/rules/branches/v3`);
+function effectiveBranchRules(provider, repo, branch) {
+  const response = githubApi(
+    provider,
+    `repos/${repo}/rules/branches/${encodeURIComponent(branch)}`,
+  );
   if (response.ok && Array.isArray(response.value)) {
     const details = {};
     const historyRules = response.value.filter((rule) =>
@@ -764,10 +802,17 @@ function inspectOrganization(organizationRoot, { provider, gitReader }) {
       }
     }
   }
+  if (result.data_state !== "active") return result;
+
+  const publishBranch = resolveDataPublishBranch(dataSlot, repositoryResponse.value);
+  if (publishBranch.error) {
+    result.errors.push(publishBranch.error);
+    return result;
+  }
 
   const protection = evaluateProtection(
-    branchProtection(provider, liveDataRepo),
-    effectiveBranchRules(provider, liveDataRepo),
+    branchProtection(provider, liveDataRepo, publishBranch.branch),
+    effectiveBranchRules(provider, liveDataRepo, publishBranch.branch),
   );
   result.enforcement_mode = protection.mode;
   result.publication_policy = protection.policy;
