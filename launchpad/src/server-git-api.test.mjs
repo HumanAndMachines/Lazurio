@@ -1,4 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
+import { randomUUID } from "node:crypto";
 import { existsSync, realpathSync } from "fs";
 import { cp, mkdir, readFile, rm, symlink, writeFile } from "fs/promises";
 import { createServer } from "net";
@@ -18,12 +19,18 @@ import {
   readServerLocator,
   readServerLocatorIfPresent,
   resolveServerStateDirectory,
+  serverLocatorPath,
   writeServerLocator,
 } from "../../lazurio/core/server-locator-lib.mjs";
 import {
   buildDesiredModuleState,
+  readDesiredModuleState,
   writeDesiredModuleState,
 } from "./desired-module-state-lib.mjs";
+import {
+  acquireServerLifetimeLock,
+  acquireServerStartupLock,
+} from "./server-lifetime-lock-lib.mjs";
 
 const tempRoots = [];
 const servers = [];
@@ -689,6 +696,96 @@ test("control-root replacement waits until boot reconciliation publishes one rea
   expect(await readServerLocator({ stateDirectory: serverStateDirectory })).toMatchObject({
     origin: `http://127.0.0.1:${replacementPort}`,
   });
+}, platformTestTimeout(15_000));
+
+test("locator publication failure rolls back boot runtimes and releases Server leases for retry", async () => {
+  const root = await createLaunchpadGitFixture();
+  const stateRoot = `${root}-launchpad-state`;
+  const appPort = await findFreePort();
+  let serverPort = await findFreePort();
+  while (serverPort === appPort) serverPort = await findFreePort();
+  const appRoot = join(root, "organizations", "BetaCo_GEN3", "workspace", "deals", "app", "v1");
+  const app = {
+    id: "betaco-locator-rollback-v1",
+    title: "Locator rollback",
+    company: "BetaCo",
+    module: "deals",
+    port: appPort,
+  };
+  await createPackageApp({
+    root,
+    packagePath: "organizations/BetaCo_GEN3/workspace/deals/app/v1",
+    app,
+  });
+  await writeFile(
+    join(appRoot, "server.mjs"),
+    [
+      'import { mkdir } from "node:fs/promises";',
+      "await mkdir(process.env.LAZURIO_TEST_LOCATOR_COLLISION_PATH);",
+      "const server = Bun.serve({",
+      '  hostname: process.env.HOST ?? "127.0.0.1",',
+      "  port: Number(process.env.PORT),",
+      "  fetch(request) {",
+      "    const url = new URL(request.url);",
+      "    if (url.pathname === '/health') return Response.json({ status: 'ok' });",
+      "    return new Response('ok');",
+      "  },",
+      "});",
+      'await Bun.write("locator-rollback.started", `${process.pid}\\n`);',
+      "setInterval(() => {}, 2_147_483_647);",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+  tempRoots.push(root, stateRoot);
+  await writeDesiredModuleState({
+    root: join(stateRoot, "runtime", "desired-modules"),
+    state: buildDesiredModuleState({ app, source: { type: "main" } }),
+  });
+
+  const { environment, serverStateDirectory } = serverTestEnvironment(root, {
+    LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot,
+  });
+  environment.LAZURIO_TEST_LOCATOR_COLLISION_PATH = serverLocatorPath(serverStateDirectory);
+  const server = Bun.spawn(
+    ["bun", "src/server.mjs", "--root", root, "--port", String(serverPort)],
+    {
+      cwd: join(import.meta.dirname, ".."),
+      env: environment,
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+  servers.push(server);
+
+  const exitCode = await waitForProcessExit(server, 10_000);
+  const stderr = await new Response(server.stderr).text();
+  expect(exitCode).not.toBe(0);
+  expect(stderr).toContain("server.json");
+  expect(await Bun.file(join(appRoot, "locator-rollback.started")).exists()).toBe(true);
+  await waitForPortVacancy(appPort);
+  await waitForPortVacancy(serverPort);
+  expect(await readDesiredModuleState({
+    root: join(stateRoot, "runtime", "desired-modules"),
+    company: app.company,
+    module: app.module,
+  })).toMatchObject({
+    app_id: app.id,
+    enabled: true,
+    status: "active",
+    source: { type: "main" },
+  });
+
+  const startupProbe = await acquireServerStartupLock({
+    stateDirectory: serverStateDirectory,
+    instanceId: randomUUID(),
+  });
+  await startupProbe.release();
+  const lifetimeProbe = await acquireServerLifetimeLock({
+    stateDirectory: serverStateDirectory,
+    instanceId: randomUUID(),
+  });
+  await lifetimeProbe.release();
 }, platformTestTimeout(15_000));
 
 test("hosted Launchpad rejects forged gateway headers without a TLS-authenticated OAuth session", async () => {
@@ -1361,6 +1458,35 @@ async function waitForHealth(port, server) {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`server on ${port} did not become healthy`);
+}
+
+async function waitForProcessExit(server, timeoutMs) {
+  const result = await Promise.race([
+    server.exited.then((exitCode) => ({ exitCode })),
+    Bun.sleep(timeoutMs).then(() => null),
+  ]);
+  if (result) return result.exitCode;
+  server.kill();
+  await server.exited;
+  throw new Error(`server process did not exit within ${timeoutMs} ms`);
+}
+
+async function waitForPortVacancy(port) {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    if (await canBindPort(port)) return;
+    await Bun.sleep(50);
+  }
+  throw new Error(`port ${port} remained occupied after startup rollback`);
+}
+
+async function canBindPort(port) {
+  return new Promise((resolve) => {
+    const probe = createServer();
+    probe.unref();
+    probe.once("error", () => resolve(false));
+    probe.listen(port, "127.0.0.1", () => probe.close(() => resolve(true)));
+  });
 }
 
 async function getJson(port, path) {

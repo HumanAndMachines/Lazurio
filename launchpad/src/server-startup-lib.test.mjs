@@ -1,12 +1,44 @@
 import { expect, test } from "bun:test";
 import {
   launchpadFallbackUrls,
+  rollbackUnpublishedServerStartup,
   startLaunchpadWithPortPolicy,
 } from "./server-startup-lib.mjs";
 
 function addressInUse() {
   return Object.assign(new Error("EADDRINUSE"), { code: "EADDRINUSE" });
 }
+
+test("startup rollback preserves the original error and runtime report when HTTP stop also fails", async () => {
+  const originalError = new Error("locator publication failed");
+  const stopError = new Error("HTTP stop failed");
+  const rollback = {
+    attempted: 1,
+    stopped: 1,
+    already_stopped: 0,
+    failed: 0,
+    results: [{ app_id: "fixture", status: "stopped" }],
+  };
+
+  const result = await rollbackUnpublishedServerStartup({
+    originalError,
+    runtimeManager: {
+      rollbackUnpublishedStartup: async () => rollback,
+    },
+    server: {
+      stop() {
+        throw stopError;
+      },
+    },
+  });
+
+  expect(result).toMatchObject({
+    code: "LAZURIO_SERVER_STARTUP_ROLLBACK_FAILED",
+    rollback,
+    server_stop_error: stopError,
+  });
+  expect(result.cause).toBe(originalError);
+});
 
 test("default dev port falls forward to the next free port", async () => {
   const attempts = [];
