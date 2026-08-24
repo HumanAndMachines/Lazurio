@@ -90,6 +90,7 @@ test("repository origin is anchored to the exact Organization checkout", () => {
   const calls = [];
   const root = mkdtempSync(join(tmpdir(), "mc-root-anchor-"));
   try {
+    mkdirSync(join(root, "nested"));
     const gitReader = {
       text(cwd, args) {
         calls.push({ cwd, args });
@@ -513,10 +514,13 @@ function smokeFixture(
     totalPrivateRepos,
     slot = { path: "mission-control/db", status: "planned_slot" },
     extraResponses = {},
+    mountedCoordinate = null,
   },
 ) {
   const organizationRoot = join(root, "organizations", "Verified_GEN3");
+  const dataCheckout = join(organizationRoot, "mission-control", "db");
   mkdirSync(organizationRoot, { recursive: true });
+  if (mountedCoordinate) mkdirSync(dataCheckout, { recursive: true });
   writeFileSync(
     join(organizationRoot, "company.gen3.json"),
     `${JSON.stringify({ company: { github_org: "Verified-Org" } }, null, 2)}\n`,
@@ -578,10 +582,13 @@ function smokeFixture(
     available: true,
     text(cwd, args) {
       if (args[0] === "rev-parse") return { ok: true, value: cwd };
-      return { ok: true, value: "git@github.com:Verified-Org/Root.git" };
+      const coordinate = cwd === dataCheckout && mountedCoordinate
+        ? mountedCoordinate
+        : "Verified-Org/Root";
+      return { ok: true, value: `git@github.com:${coordinate}.git` };
     },
   };
-  return { calls, gitReader, provider };
+  return { calls, dataCheckout, gitReader, provider };
 }
 
 test("runSmoke accepts a private-repo 404 only through complete Owner visibility proof", () => {
@@ -729,6 +736,51 @@ test("runSmoke drives the active v3 trusted-process enforcement path end to end"
     expect(fixture.calls).not.toContain("orgs/Verified-Org/members/read-only-user");
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("runSmoke binds a local Mission Control data mount by immutable repository ID", () => {
+  for (const mountedRepositoryId of [200, 201]) {
+    const root = mkdtempSync(join(tmpdir(), "mc-mounted-smoke-"));
+    const mountedCoordinate = `Verified-Org/mounted-data-${mountedRepositoryId}`;
+    try {
+      const fixture = smokeFixture(root, {
+        dataResponse: {
+          ok: true,
+          value: {
+            id: 200,
+            full_name: "Verified-Org/mission-control-data",
+            private: true,
+            owner: { id: 42, type: "Organization" },
+          },
+        },
+        totalPrivateRepos: 2,
+        mountedCoordinate,
+        extraResponses: {
+          [`repos/${mountedCoordinate}`]: {
+            ok: true,
+            value: {
+              id: mountedRepositoryId,
+              full_name: mountedCoordinate,
+              owner: { id: 42, type: "Organization" },
+            },
+          },
+        },
+      });
+      const [result] = runSmoke(root, fixture);
+      expect(result.data_state).toBe("staged");
+      expect(result.data_repository_id).toBe("200");
+      expect(fixture.calls).toContain(`repos/${mountedCoordinate}`);
+      if (mountedRepositoryId === 200) {
+        expect(result.errors).toHaveLength(0);
+      } else {
+        expect(result.errors.join(" ")).toContain(
+          "není svázaný se stejným immutable repository ID",
+        );
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   }
 });
 
