@@ -234,6 +234,43 @@ test("runtime manager spustí, změří a zastaví managed aplikaci", async () =
   expect((await runtime.health("test-company-demo-v1")).status).toBe("stopped");
 }, platformTestTimeout(10_000));
 
+test("Open počká na přechodný HTTP 404 během start grace", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({
+    port,
+    serverSource: [
+      "const startedAt = Date.now();",
+      "const server = Bun.serve({",
+      "  hostname: process.env.LAZURIO_RUNTIME_HOST,",
+      "  port: Number(process.env.LAZURIO_RUNTIME_PORT),",
+      "  fetch(request) {",
+      "    const url = new URL(request.url);",
+      "    if (url.pathname === '/health' && Date.now() - startedAt < 1400) return new Response('building', { status: 404 });",
+      "    if (url.pathname === '/health') return Response.json({ status: 'ok' });",
+      "    return new Response('ok');",
+      "  },",
+      "});",
+      "setInterval(() => {}, 2147483647);",
+      "",
+    ].join("\n"),
+  });
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "transient-health-status",
+  });
+
+  try {
+    const opened = await runtime.open("test-company-demo-v1");
+    expect(opened).toMatchObject({
+      status: "healthy",
+      url: `http://127.0.0.1:${port}`,
+    });
+  } finally {
+    await runtime.stop("test-company-demo-v1").catch(() => {});
+  }
+}, platformTestTimeout(10_000));
+
 test("runtime manager ukládá mutable stav mimo read-only Launchpad source", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({ port });
