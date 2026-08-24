@@ -741,6 +741,7 @@ export async function runtimeSourcePortAuthorityIssues({
   const leases = (module?.port_leases ?? []).filter((lease) => Number.isInteger(lease.port));
   if (leases.length === 0) return [];
   const issues = [];
+  const sources = [];
 
   async function visit(directory) {
     let entries;
@@ -771,13 +772,22 @@ export async function runtimeSourcePortAuthorityIssues({
         posix.dirname(packagePath),
         relative(packageDirectory, absolutePath).replace(/\\/g, "/"),
       );
-      const listenerPortConstants = new Set();
-      for (const pattern of [
-        /(?:\bport|["']port["'])\s*:\s*(PORT|[A-Z][A-Z0-9_]*_PORT)\b/g,
-        /\blisten(?:Sync)?\s*\(\s*(PORT|[A-Z][A-Z0-9_]*_PORT)\b/g,
-      ]) {
-        for (const match of source.matchAll(pattern)) listenerPortConstants.add(match[1]);
-      }
+      sources.push({ sourcePath, source });
+    }
+  }
+
+  await visit(packageDirectory);
+  const listenerPortConstants = new Set();
+  for (const { source } of sources) {
+    for (const pattern of [
+      /(?:\bport|["']port["'])\s*:\s*(?:Number\s*\(\s*)?(PORT|[A-Z][A-Z0-9_]*_PORT)\b/g,
+      /\blisten(?:Sync)?\s*\(\s*(?:Number\s*\(\s*)?(PORT|[A-Z][A-Z0-9_]*_PORT)\b/g,
+    ]) {
+      for (const match of source.matchAll(pattern)) listenerPortConstants.add(match[1]);
+    }
+  }
+
+  for (const { sourcePath, source } of sources) {
       const fallbackPatterns = [
         /(?:process\.env|Bun\.env)(?:\.(?:PORT|LAZURIO_RUNTIME_LISTENER_[A-Z0-9_]+_PORT)|\[["'](?:PORT|LAZURIO_RUNTIME_LISTENER_[A-Z0-9_]+_PORT)["']\])\s*(?:\?\?|\|\|)\s*["']?(\d{4,5})["']?/g,
         /(?:Number|parseInt)\([^;\n)]*(?:PORT|_PORT)[^;\n)]*\)\s*(?:\?\?|\|\|)\s*["']?(\d{4,5})["']?/g,
@@ -804,10 +814,8 @@ export async function runtimeSourcePortAuthorityIssues({
           );
         }
       }
-    }
   }
 
-  await visit(packageDirectory);
   return issues;
 }
 
