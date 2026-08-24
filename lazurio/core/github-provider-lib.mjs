@@ -56,11 +56,22 @@ export function createTrustedGitHubProvider({
     const status = result.status;
     const stdout = String(result?.stdout ?? "");
     const stderr = String(result?.stderr ?? "");
+    const stderrHttpStatus = stderr.match(
+      /(?:\(|\b)HTTP\s+([1-5][0-9]{2})(?:\)|\b)/u,
+    )?.[1];
     let value = null;
     if (json && stdout.trim() !== "") {
       try {
         value = JSON.parse(stdout);
       } catch {
+        const httpStatus = Number(stderrHttpStatus ?? 0) || null;
+        if (status !== 0) {
+          return providerFailure(
+            httpStatus ? "http" : "command",
+            providerMessage(null, stderr),
+            { status, httpStatus, value: null, stderr },
+          );
+        }
         return providerFailure(
           "invalid_response",
           "GitHub provider nevrátil validní JSON.",
@@ -69,9 +80,6 @@ export function createTrustedGitHubProvider({
       }
     }
 
-    const stderrHttpStatus = stderr.match(
-      /(?:\(|\b)HTTP\s+([1-5][0-9]{2})(?:\)|\b)/u,
-    )?.[1];
     const httpStatus = Number(value?.status ?? stderrHttpStatus ?? 0) || null;
     if (status !== 0) {
       return providerFailure(

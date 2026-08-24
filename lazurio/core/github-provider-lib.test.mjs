@@ -62,6 +62,20 @@ test("trusted GitHub provider returns structured HTTP and response failures", ()
     error: { kind: "invalid_response" },
   });
 
+  const malformedUnauthorized = createTrustedGitHubProvider({
+    resolveExecutable: () => "/usr/bin/gh",
+    runCommand: () => ({
+      status: 1,
+      stdout: "<html>upstream error</html>",
+      stderr: "gh: authentication failed (HTTP 401)",
+    }),
+  }).json(["api", "user"]);
+  expect(malformedUnauthorized).toMatchObject({
+    ok: false,
+    httpStatus: 401,
+    error: { kind: "http", message: "gh: authentication failed (HTTP 401)" },
+  });
+
   const transport = createTrustedGitHubProvider({
     resolveExecutable: () => "/usr/bin/gh",
     runCommand: () => ({

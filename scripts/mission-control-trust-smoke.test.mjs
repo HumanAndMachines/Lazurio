@@ -7,6 +7,7 @@ import {
   bindLiveOrganizationIdentity,
   classifyDataState,
   classifyRepositoryProbe,
+  checkoutRepositoryCoordinate,
   evaluateEffectiveRules,
   evaluateProtection,
   evaluateTrustedProcessCircle,
@@ -62,6 +63,33 @@ test("planned slots use the standard repo name only as a locator", () => {
         "Renamed-Org",
       ).error,
     ).toContain("neplatný");
+  }
+});
+
+test("repository origin is anchored to the exact Organization checkout", () => {
+  const calls = [];
+  const root = mkdtempSync(join(tmpdir(), "mc-root-anchor-"));
+  try {
+    const gitReader = {
+      text(cwd, args) {
+        calls.push({ cwd, args });
+        if (args[0] === "rev-parse") {
+          return { ok: true, value: join(root, "nested") };
+        }
+        return { ok: true, value: "git@github.com:Wrong/Root.git" };
+      },
+    };
+    expect(checkoutRepositoryCoordinate(root, gitReader)).toBeNull();
+    expect(calls).toEqual([
+      { cwd: root, args: ["rev-parse", "--show-toplevel"] },
+    ]);
+
+    gitReader.text = (_cwd, args) => args[0] === "rev-parse"
+      ? { ok: true, value: root }
+      : { ok: true, value: "git@github.com:Example/Root.git" };
+    expect(checkoutRepositoryCoordinate(root, gitReader)).toBe("Example/Root");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });
 
