@@ -10,6 +10,7 @@ import {
 import { runChildDoctorLane } from "./doctor-children-lib.mjs";
 import { openBrowser } from "./browser-open-lib.mjs";
 import { startLaunchpadWithPortPolicy } from "./server-startup-lib.mjs";
+import { acquireServerStartupLock } from "./server-startup-lock-lib.mjs";
 import {
   GitApiError,
   buildGitApiResponse,
@@ -153,7 +154,14 @@ if (!allowedHosts.has(host)) {
 }
 
 let startResult;
+let serverLocator;
+let startupLock;
+let startupError;
 try {
+  startupLock = await acquireServerStartupLock({
+    workspaceRoot: canonicalCompaniesRoot,
+    instanceId: launchpadServerIdentity.instance_id,
+  });
   const existingLocator = await readServerLocatorIfPresent({
     workspaceRoot: canonicalCompaniesRoot,
   });
@@ -172,37 +180,47 @@ try {
     shutdownStaleLaunchpad: requestStaleLaunchpadShutdown,
     openExisting: openBrowser,
   });
+  if (startResult.mode === "reused") {
+    const observation = await inspectRunningLaunchpad(startResult.url, {
+      rootId: launchpadRootId,
+      installGeneration: launchpadInstallGeneration,
+    });
+    if (observation.status !== "compatible") {
+      throw new Error("Reused Lazurio Server no longer has the expected identity.");
+    }
+    serverLocator = await writeServerLocator({
+      workspaceRoot: canonicalCompaniesRoot,
+      origin: startResult.url,
+      identity: observation.identity,
+    });
+  } else {
+    const serverUrl = `http://${host}:${startResult.server.port}`;
+    serverLocator = await writeServerLocator({
+      workspaceRoot: canonicalCompaniesRoot,
+      origin: serverUrl,
+      identity: launchpadServerIdentity,
+    });
+  }
 } catch (error) {
-  if (String(error?.code ?? "").startsWith("LAZURIO_")) {
-    console.error(error.message);
+  if (startResult?.mode === "started") await startResult.server.stop(true);
+  startupError = error;
+} finally {
+  await startupLock?.release();
+}
+if (startupError) {
+  if (String(startupError?.code ?? "").startsWith("LAZURIO_")) {
+    console.error(startupError.message);
     process.exit(1);
   }
-  throw error;
+  throw startupError;
 }
 if (startResult.mode === "reused") {
-  const observation = await inspectRunningLaunchpad(startResult.url, {
-    rootId: launchpadRootId,
-    installGeneration: launchpadInstallGeneration,
-  });
-  if (observation.status !== "compatible") {
-    throw new Error("Reused Lazurio Server no longer has the expected identity.");
-  }
-  await writeServerLocator({
-    workspaceRoot: canonicalCompaniesRoot,
-    origin: startResult.url,
-    identity: observation.identity,
-  });
   const action = options.open ? "otevírám existující instanci" : "používám existující instanci bez otevření systémového browseru";
   console.log(`Launchpad GEN3 už běží na ${startResult.url}; ${action}.`);
   process.exit(0);
 }
 const server = startResult.server;
 const serverUrl = `http://${host}:${server.port}`;
-const serverLocator = await writeServerLocator({
-  workspaceRoot: canonicalCompaniesRoot,
-  origin: serverUrl,
-  identity: launchpadServerIdentity,
-});
 const bootReconcile = await runtimeManager.reconcileDesiredState();
 
 console.log(`Launchpad GEN3 běží na ${serverUrl}`);
