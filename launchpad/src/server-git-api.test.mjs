@@ -16,6 +16,7 @@ import { platformTestTimeout } from "./test-platform-setup.mjs";
 import { computeServerRootId } from "../../lazurio/core/server-identity-lib.mjs";
 import {
   readServerLocator,
+  readServerLocatorIfPresent,
   resolveServerStateDirectory,
   writeServerLocator,
 } from "../../lazurio/core/server-locator-lib.mjs";
@@ -600,20 +601,38 @@ test("control-root replacement fails closed while boot reconciliation is in prog
     state: buildDesiredModuleState({ app, source: { type: "main" } }),
   });
 
-  const primary = await startLaunchpadServer(root, {
-    env: { LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot },
+  const primaryPort = await findFreePort();
+  const {
+    environment: primaryEnvironment,
+    serverStateDirectory,
+  } = serverTestEnvironment(root, {
+    LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot,
   });
+  const primaryServer = Bun.spawn(
+    ["bun", "src/server.mjs", "--root", root, "--port", String(primaryPort)],
+    {
+      cwd: join(import.meta.dirname, ".."),
+      env: primaryEnvironment,
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+  servers.push(primaryServer);
   for (let attempt = 0; attempt < 100 && !(await Bun.file(startedMarker).exists()); attempt += 1) {
     await Bun.sleep(20);
   }
   expect(await Bun.file(startedMarker).exists()).toBe(true);
+  const startingHealth = await fetch(`http://127.0.0.1:${primaryPort}/health`);
+  expect(startingHealth.status).toBe(503);
+  expect(await startingHealth.json()).toEqual({ status: "starting" });
+  expect(await readServerLocatorIfPresent({ stateDirectory: serverStateDirectory })).toBeNull();
 
   const replacementPort = await findFreePort();
   const replacement = Bun.spawn(
     ["bun", "src/server.mjs", "--root", worktreeRoot, "--port", String(replacementPort), "--reuse"],
     {
       cwd: join(import.meta.dirname, ".."),
-      env: primary.environment,
+      env: primaryEnvironment,
       stdout: "ignore",
       stderr: "pipe",
     },
@@ -621,13 +640,17 @@ test("control-root replacement fails closed while boot reconciliation is in prog
   servers.push(replacement);
   expect(await replacement.exited).not.toBe(0);
   expect(await new Response(replacement.stderr).text()).toContain("per-user lifetime lease");
-  expect(primary.server.exitCode).toBeNull();
+  expect(primaryServer.exitCode).toBeNull();
 
   for (let attempt = 0; attempt < 150 && !(await Bun.file(completedMarker).exists()); attempt += 1) {
     await Bun.sleep(20);
   }
   expect(await Bun.file(completedMarker).exists()).toBe(true);
-  expect((await getJson(primary.port, "/health")).status).toBe("ok");
+  await waitForHealth(primaryPort, primaryServer);
+  expect((await getJson(primaryPort, "/health")).status).toBe("ok");
+  expect(await readServerLocator({ stateDirectory: serverStateDirectory })).toMatchObject({
+    origin: `http://127.0.0.1:${primaryPort}`,
+  });
 }, platformTestTimeout(15_000));
 
 test("hosted Launchpad rejects forged gateway headers without a TLS-authenticated OAuth session", async () => {

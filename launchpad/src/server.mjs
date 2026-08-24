@@ -616,6 +616,9 @@ async function inspectRunningLaunchpad(url, expected) {
   if (current.status === "unrecognized") return current;
   if (current.status === "found") {
     const status = classifyServerIdentity({ observed: current.identity, expected });
+    if (status === "compatible" && await probeServerReadiness(url) !== "ready") {
+      return { status: "not_ready", identity: current.identity };
+    }
     return { status, identity: current.identity };
   }
 
@@ -626,6 +629,17 @@ async function inspectRunningLaunchpad(url, expected) {
     return { status, identity: legacy.identity };
   }
   return { status: "unrecognized" };
+}
+
+async function probeServerReadiness(url) {
+  try {
+    const response = await fetch(new URL("/health", url), { signal: AbortSignal.timeout(1_500) });
+    if (!response.ok) return "not_ready";
+    const health = await response.json().catch(() => null);
+    return health?.status === "ok" ? "ready" : "not_ready";
+  } catch {
+    return "not_ready";
+  }
 }
 
 async function probeServerIdentity(url, pathname) {
@@ -1196,7 +1210,11 @@ function startServer(startPort) {
         if (url.pathname === "/api/recent-changes") return jsonResponse(await buildRecentChangesResponse(url.searchParams.get("company")));
         if (url.pathname === "/api/notifications") return jsonResponse(await buildNotificationsResponse(url.searchParams.get("company")));
         if (url.pathname === "/api/most-used") return jsonResponse(await buildMostUsedResponse(url.searchParams.get("company")));
-        if (url.pathname === "/health") return jsonResponse({ status: "ok" });
+        if (url.pathname === "/health") {
+          return serverShutdownState === "running"
+            ? jsonResponse({ status: "ok" })
+            : jsonResponse({ status: serverShutdownState }, 503);
+        }
         return await serveStatic(url.pathname);
       } catch (error) {
         return jsonResponse({ error: "launchpad_error", message: error.message }, 500);
