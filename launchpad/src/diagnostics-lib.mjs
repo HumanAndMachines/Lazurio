@@ -325,6 +325,7 @@ export async function buildLaunchpadDoctorReport(options = {}) {
   const worktreeChecks = await buildWorktreeDoctorChecks({ companiesRoot: appsResponse.root });
   const personalspaceChecks = await buildPersonalspaceDoctorChecks({
     companiesRoot: appsResponse.root,
+    rootSourceRoot: options.rootSourceRoot ?? appsResponse.control_root ?? appsResponse.root,
     launchpadRoot: options.launchpadRoot,
   });
   const agentSkillsChecks = [
@@ -345,7 +346,9 @@ export async function buildLaunchpadDoctorReport(options = {}) {
   const schema = loadRootDoctorSchema();
   const childLane = await runChildDoctorLane({
     companiesRoot: appsResponse.root,
-    companiesConfig: await readCompaniesConfig(appsResponse.root),
+    companiesConfig: await readCompaniesConfig(
+      options.rootSourceRoot ?? appsResponse.control_root ?? appsResponse.root,
+    ),
     schema,
     enabled: options.runChildDoctors !== false,
   });
@@ -375,11 +378,12 @@ export function loadRootDoctorSchema() {
 // Oddělený od org appsResponse: personalspace má vlastní lane. Dynamický import,
 // aby se personalspace runtime moduly nenatahovaly, když se doctor volá jen na
 // org kontrolu, a aby případná chyba lane zůstala izolovaná.
-async function buildPersonalspaceDoctorChecks({ companiesRoot, launchpadRoot }) {
+async function buildPersonalspaceDoctorChecks({ companiesRoot, rootSourceRoot = companiesRoot, launchpadRoot }) {
   try {
     const { buildPersonalspaceResponse, personalspaceDoctorCheck } = await import("./personalspace-runtime-lib.mjs");
     const personalspaceResponse = await buildPersonalspaceResponse({
       companiesRoot,
+      rootSourceRoot,
       launchpadRoot: launchpadRoot ?? join(companiesRoot, "launchpad"),
       verifyRepositoryPrivacy: true,
     });

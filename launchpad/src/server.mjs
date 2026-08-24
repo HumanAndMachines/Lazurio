@@ -168,6 +168,7 @@ if (!allowedHosts.has(host)) {
 
 let startResult;
 let serverLocator;
+let bootReconcile;
 let startupLock;
 let startupError;
 try {
@@ -209,6 +210,12 @@ try {
       identity: observation.identity,
     });
   } else {
+    // Keep the machine-wide startup lock until boot reconciliation is done.
+    // A competing control root must never be able to drain this Server while
+    // it is still restoring desired module runtimes or their durable state.
+    bootReconcile = worktreeMountContextReadOnly
+      ? { active: 0, disabled: 0, degraded: 0, results: [] }
+      : await runtimeManager.reconcileDesiredState();
     const serverUrl = `http://${host}:${startResult.server.port}`;
     serverLocator = await writeServerLocator({
       stateDirectory: serverStateDirectory,
@@ -236,9 +243,6 @@ if (startResult.mode === "reused") {
 }
 const server = startResult.server;
 const serverUrl = `http://${host}:${server.port}`;
-const bootReconcile = worktreeMountContextReadOnly
-  ? { active: 0, disabled: 0, degraded: 0, results: [] }
-  : await runtimeManager.reconcileDesiredState();
 
 console.log(`Launchpad GEN3 běží na ${serverUrl}`);
 console.log(`Launchpad GEN3 root: ${rootSourceRoot}`);
@@ -397,6 +401,7 @@ async function readLaunchpadRootConfig() {
 async function buildPersonalspace({ verifyRepositoryPrivacy = false } = {}) {
   return buildPersonalspaceResponse({
     companiesRoot,
+    rootSourceRoot,
     launchpadRoot,
     runtimeManager: personalspaceRuntimeManager,
     profileEmail: principalEmail,
