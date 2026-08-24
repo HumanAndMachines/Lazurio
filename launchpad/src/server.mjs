@@ -115,7 +115,10 @@ const launchpadStateRoot = resolveLaunchpadStateRoot({
   hosted: hostedAppUrls.profile === "hosted",
   runtimeRoot: configuredRuntimeRoot,
   workspaceRoot: canonicalCompaniesRoot,
-  fallbackRoot: launchpadRoot,
+  // The one per-user Server keeps one operational store while its selected
+  // control root moves between main and linked worktrees. A worktree-local
+  // fallback would orphan desired state and ownership on every replacement.
+  fallbackRoot: join(canonicalCompaniesRoot, "launchpad"),
 });
 // Machine coordination is deliberately independent from the supervisor's
 // operational Launchpad state. Every supported entrypoint therefore resolves

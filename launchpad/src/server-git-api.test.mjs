@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
-import { realpathSync } from "fs";
+import { existsSync, realpathSync } from "fs";
 import { cp, mkdir, readFile, rm, symlink, writeFile } from "fs/promises";
 import { createServer } from "net";
 import { join } from "path";
@@ -372,7 +372,7 @@ test("the lifetime lease blocks a second Server even when its locator was remove
 test("a reuse launcher restores a deleted locator for the requested-port Server", async () => {
   const root = await createLaunchpadGitFixture();
   tempRoots.push(root);
-  const primary = await startLaunchpadServer(root);
+  const primary = await startLaunchpadServer(root, { useDefaultStateRoot: true });
   const identity = await getJson(primary.port, "/api/lazurio/server-identity");
   await rm(join(primary.serverStateDirectory, "server.json"));
 
@@ -477,7 +477,10 @@ test("linked worktree gets only a read-only canonical Root mount context", async
   await rm(join(worktreeRoot, "organizations"), { recursive: true, force: true });
   await mkdir(join(worktreeRoot, "organizations"), { recursive: true });
 
-  const { port } = await startLaunchpadServer(worktreeRoot, { env: primary.environment });
+  const { port } = await startLaunchpadServer(worktreeRoot, {
+    env: primary.environment,
+    useDefaultStateRoot: true,
+  });
   expect(await primary.server.exited).toBe(0);
   const identity = await getJson(port, "/api/lazurio/server-identity");
   expect(identity.root_id).toBe(computeServerRootId(realpathSync.native(root)));
@@ -503,6 +506,8 @@ test("linked worktree gets only a read-only canonical Root mount context", async
     status: 200,
     payload: expect.objectContaining({ action: "start" }),
   });
+  expect(existsSync(join(root, "launchpad", "logs", "apps", "test-root-guide-v1.log"))).toBe(true);
+  expect(existsSync(join(worktreeRoot, "launchpad", "logs", "apps", "test-root-guide-v1.log"))).toBe(false);
   expect((await getJson(port, "/api/apps/test-root-guide-v1/health")).status).toBe("healthy");
   expect((await postJson(port, "/api/apps/test-root-guide-v1/stop", {})).action).toBe("stop");
 
@@ -512,6 +517,8 @@ test("linked worktree gets only a read-only canonical Root mount context", async
     error: "worktree_mount_context_read_only",
     message: "Linked worktree smí canonical Lazurio Root používat jen jako read-only mount context.",
   });
+  await rm(join(root, "launchpad", "logs"), { recursive: true, force: true });
+  await rm(join(root, "launchpad", "runtime"), { recursive: true, force: true });
   expect(runGit(["status", "--short"], root)).toBe(primaryStatusBefore);
 });
 
@@ -1279,14 +1286,16 @@ async function readLaunchpadPort(server) {
 // vlastní Bun.serve se nenabindoval, waitForHealth dostal 200 z /health cizího
 // serveru a /api/git/repos pak vrátilo 404. OS přidělený port je garantovaně
 // volný, takže health probe i git routy trefí vždy NÁŠ server.
-async function startLaunchpadServer(root, { env = {} } = {}) {
+async function startLaunchpadServer(root, { env = {}, useDefaultStateRoot = false } = {}) {
   const port = await findFreePort();
-  const stateRoot = env.LAZURIO_LAUNCHPAD_STATE_ROOT ?? `${root}-launchpad-state`;
-  if (!tempRoots.includes(stateRoot)) tempRoots.push(stateRoot);
-  const { environment, serverStateDirectory } = serverTestEnvironment(root, {
-    ...env,
-    LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot,
-  });
+  const stateRoot = useDefaultStateRoot
+    ? null
+    : (env.LAZURIO_LAUNCHPAD_STATE_ROOT ?? `${root}-launchpad-state`);
+  if (stateRoot && !tempRoots.includes(stateRoot)) tempRoots.push(stateRoot);
+  const launchpadEnvironment = { ...env };
+  if (stateRoot) launchpadEnvironment.LAZURIO_LAUNCHPAD_STATE_ROOT = stateRoot;
+  else delete launchpadEnvironment.LAZURIO_LAUNCHPAD_STATE_ROOT;
+  const { environment, serverStateDirectory } = serverTestEnvironment(root, launchpadEnvironment);
   const server = Bun.spawn(["bun", "src/server.mjs", "--root", root, "--port", String(port)], {
     cwd: join(import.meta.dirname, ".."),
     env: environment,
