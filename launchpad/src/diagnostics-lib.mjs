@@ -240,7 +240,12 @@ export async function buildLaunchpadAppsResponse({
     generated_at: new Date().toISOString(),
     launchpad_root: workspaceSummary(companiesConfig),
     companies_workspace: workspaceSummary(companiesConfig),
-    root: rootSourceRoot,
+    // `root` remains the base for every Organization, Personalspace and
+    // package path in this response. A selected linked worktree controls only
+    // tracked Root source/config and is exposed separately, so consumers never
+    // resolve canonical mount paths against an empty worktree mount folder.
+    root: companiesRoot,
+    control_root: rootSourceRoot,
     ok: discoveryFailures.length === 0,
     summary: {
       app_count: apps.length,

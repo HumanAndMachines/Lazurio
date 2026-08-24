@@ -741,7 +741,6 @@ export async function runtimeSourcePortAuthorityIssues({
   const leases = (module?.port_leases ?? []).filter((lease) => Number.isInteger(lease.port));
   if (leases.length === 0) return [];
   const issues = [];
-  const sources = [];
 
   async function visit(directory) {
     let entries;
@@ -772,166 +771,30 @@ export async function runtimeSourcePortAuthorityIssues({
         posix.dirname(packagePath),
         relative(packageDirectory, absolutePath).replace(/\\/g, "/"),
       );
-      sources.push({ sourcePath, source });
+      const fallbackPatterns = [
+        /(?:process\.env|Bun\.env)(?:\.(?:PORT|LAZURIO_RUNTIME_LISTENER_[A-Z0-9_]+_PORT)|\[["'](?:PORT|LAZURIO_RUNTIME_LISTENER_[A-Z0-9_]+_PORT)["']\])\s*(?:\?\?|\|\|)\s*["']?(\d{4,5})["']?/g,
+        /(?:Number|parseInt)\([^;\n)]*(?:PORT|_PORT)[^;\n)]*\)\s*(?:\?\?|\|\|)\s*["']?(\d{4,5})["']?/g,
+        /\b(?:const|let|var)\s+(?:[A-Z0-9]+_)*PORT(?:_[A-Z0-9]+)*\s*=\s*["']?(\d{4,5})["']?/g,
+      ];
+      for (const pattern of fallbackPatterns) {
+        for (const match of source.matchAll(pattern)) {
+          issues.push(
+            `${sourcePath}: runtime source obsahuje číselný port fallback ${match[1]}; port smí materializovat jen module lease`,
+          );
+        }
+      }
+      for (const lease of leases) {
+        if (new RegExp(`(^|\\D)${lease.port}(?=\\D|$)`).test(source)) {
+          issues.push(
+            `${sourcePath}: runtime source kopíruje module lease port ${lease.port}; načti lease z lazurio.module.json a přijmi jen přesně shodnou Lazurio runtime injekci`,
+          );
+        }
+      }
     }
   }
 
   await visit(packageDirectory);
-  const sourceListenerBindings = new Map();
-  for (const { sourcePath, source } of sources) {
-    const bindings = runtimeDirectListenerBindings(source);
-    for (const name of runtimeForwardedListenerBindings(source)) bindings.add(name);
-    sourceListenerBindings.set(sourcePath, bindings);
-  }
-  const listenerDeclarationBindings = runtimeListenerDeclarationBindings({
-    sources,
-    sourceListenerBindings,
-  });
-
-  for (const { sourcePath, source } of sources) {
-    const fallbackPatterns = [
-      /(?:process\.env|Bun\.env)(?:\.(?:PORT|LAZURIO_RUNTIME_LISTENER_[A-Z0-9_]+_PORT)|\[["'](?:PORT|LAZURIO_RUNTIME_LISTENER_[A-Z0-9_]+_PORT)["']\])\s*(?:\?\?|\|\|)\s*["']?(\d{4,5})["']?/g,
-      /(?:Number|parseInt)\([^;\n)]*(?:PORT|_PORT)[^;\n)]*\)\s*(?:\?\?|\|\|)\s*["']?(\d{4,5})["']?/g,
-    ];
-    for (const pattern of fallbackPatterns) {
-      for (const match of source.matchAll(pattern)) {
-        issues.push(
-          `${sourcePath}: runtime source obsahuje číselný port fallback ${match[1]}; port smí materializovat jen module lease`,
-        );
-      }
-    }
-    const declaredPortPattern = /\b(?:const|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*["']?(\d{4,5})["']?/g;
-    const alwaysOwnedPortConstants = new Set(["PORT", "DEFAULT_PORT", "SERVER_PORT", "LISTEN_PORT", "HTTP_PORT"]);
-    for (const match of source.matchAll(declaredPortPattern)) {
-      if (
-        !alwaysOwnedPortConstants.has(match[1])
-        && !listenerDeclarationBindings.get(sourcePath)?.has(match[1])
-      ) continue;
-      issues.push(
-        `${sourcePath}: runtime source obsahuje číselný port fallback ${match[2]}; port smí materializovat jen module lease`,
-      );
-    }
-    for (const lease of leases) {
-      if (new RegExp(`(^|\\D)${lease.port}(?=\\D|$)`).test(source)) {
-        issues.push(
-          `${sourcePath}: runtime source kopíruje module lease port ${lease.port}; načti lease z lazurio.module.json a přijmi jen přesně shodnou Lazurio runtime injekci`,
-        );
-      }
-    }
-  }
-
   return issues;
-}
-
-function runtimeDirectListenerBindings(source) {
-  const bindings = new Set();
-  if (/\bBun\.serve\s*\(\s*\{[^}]*?\bport\s*(?=,|\}|$)/u.test(source)) {
-    bindings.add("port");
-  }
-  for (const pattern of [
-    /\bBun\.serve\s*\(\s*\{[^}]*?(?:\bport|["']port["'])\s*:\s*(?:(?:Number|parseInt|Number\.parseInt)\s*\(\s*)?((?:[A-Za-z_$][A-Za-z0-9_$]*\s*\.\s*)*[A-Za-z_$][A-Za-z0-9_$]*)\b/g,
-    /\blisten(?:Sync)?\s*\(\s*(?:(?:Number|parseInt|Number\.parseInt)\s*\(\s*)?((?:[A-Za-z_$][A-Za-z0-9_$]*\s*\.\s*)*[A-Za-z_$][A-Za-z0-9_$]*)\b/g,
-  ]) {
-    for (const match of source.matchAll(pattern)) {
-      bindings.add(match[1].replace(/\s+/g, ""));
-    }
-  }
-  return bindings;
-}
-
-function runtimeForwardedListenerBindings(source) {
-  const forwarded = new Set();
-  const wrappers = [];
-  for (const match of source.matchAll(/\bfunction\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*\(([^)]*)\)\s*\{([\s\S]*?)\}/g)) {
-    wrappers.push({ name: match[1], parameters: runtimeParameterNames(match[2]), body: match[3] });
-  }
-  for (const match of source.matchAll(/\b(?:const|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*(?:\(([^)]*)\)|([A-Za-z_$][A-Za-z0-9_$]*))\s*=>\s*([^;\n]+)/g)) {
-    wrappers.push({ name: match[1], parameters: runtimeParameterNames(match[2] ?? match[3]), body: match[4] });
-  }
-
-  for (const wrapper of wrappers) {
-    const bodyBindings = runtimeDirectListenerBindings(wrapper.body);
-    const forwardedIndexes = wrapper.parameters
-      .map((parameter, index) => bodyBindings.has(parameter) ? index : -1)
-      .filter((index) => index >= 0);
-    if (forwardedIndexes.length === 0) continue;
-    const callPattern = new RegExp(`\\b${runtimeRegExpEscape(wrapper.name)}\\s*\\(([^)]*)\\)`, "g");
-    for (const call of source.matchAll(callPattern)) {
-      const argumentsList = call[1].split(",").map((argument) => argument.trim());
-      for (const index of forwardedIndexes) {
-        const identifier = argumentsList[index]?.match(/^(?:(?:Number|parseInt|Number\.parseInt)\s*\(\s*)?([A-Za-z_$][A-Za-z0-9_$]*)/u)?.[1];
-        if (identifier) forwarded.add(identifier);
-      }
-    }
-  }
-  return forwarded;
-}
-
-function runtimeParameterNames(parameters) {
-  return String(parameters ?? "")
-    .split(",")
-    .map((parameter) => parameter.trim().match(/^([A-Za-z_$][A-Za-z0-9_$]*)/)?.[1] ?? null)
-    .filter(Boolean);
-}
-
-function runtimeRegExpEscape(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function runtimeListenerDeclarationBindings({ sources, sourceListenerBindings }) {
-  const sourcePaths = new Set(sources.map(({ sourcePath }) => sourcePath));
-  const declarations = new Map(sources.map(({ sourcePath }) => [sourcePath, new Set()]));
-  for (const { sourcePath, source } of sources) {
-    const imports = runtimeImportBindings(source);
-    for (const binding of sourceListenerBindings.get(sourcePath) ?? []) {
-      const namespace = binding.match(/^([A-Za-z_$][A-Za-z0-9_$]*)\.([A-Za-z_$][A-Za-z0-9_$]*)$/u);
-      if (namespace) {
-        const target = runtimeResolvedImportSourcePath({
-          sourcePath,
-          specifier: imports.namespaces.get(namespace[1]),
-          sourcePaths,
-        });
-        if (target) declarations.get(target)?.add(namespace[2]);
-        continue;
-      }
-      declarations.get(sourcePath)?.add(binding);
-      const imported = imports.named.get(binding);
-      const target = runtimeResolvedImportSourcePath({
-        sourcePath,
-        specifier: imported?.specifier,
-        sourcePaths,
-      });
-      if (target && imported) declarations.get(target)?.add(imported.imported);
-    }
-  }
-  return declarations;
-}
-
-function runtimeImportBindings(source) {
-  const named = new Map();
-  const namespaces = new Map();
-  for (const match of source.matchAll(/\bimport\s*{([^}]+)}\s*from\s*["']([^"'\r\n]+)["']/g)) {
-    for (const entry of match[1].split(",")) {
-      const binding = entry.trim().match(/^(?:type\s+)?([A-Za-z_$][A-Za-z0-9_$]*)(?:\s+as\s+([A-Za-z_$][A-Za-z0-9_$]*))?$/);
-      if (!binding) continue;
-      named.set(binding[2] ?? binding[1], { imported: binding[1], specifier: match[2] });
-    }
-  }
-  for (const match of source.matchAll(/\bimport\s*\*\s*as\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*from\s*["']([^"'\r\n]+)["']/g)) {
-    namespaces.set(match[1], match[2]);
-  }
-  return { named, namespaces };
-}
-
-function runtimeResolvedImportSourcePath({ sourcePath, specifier, sourcePaths }) {
-  if (typeof specifier !== "string" || !specifier.startsWith(".")) return null;
-  const base = posix.normalize(posix.join(posix.dirname(sourcePath), specifier));
-  const candidates = [
-    base,
-    ...[...runtimeSourceExtensions].map((extension) => `${base}${extension}`),
-    ...[...runtimeSourceExtensions].map((extension) => posix.join(base, `index${extension}`)),
-  ];
-  return candidates.find((candidate) => sourcePaths.has(candidate)) ?? null;
 }
 
 // Cesty vracené v discovery/API modelu jsou přenositelné identifikátory
