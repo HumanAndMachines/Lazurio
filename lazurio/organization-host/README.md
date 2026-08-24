@@ -19,9 +19,11 @@ an existing infra repository to be a template.
 - **Hosted Team Workspace** is a private non-root development workload of one
   Team. It is not a separate Machine Profile and does not host production
   applications or provider credentials.
-- **Lazurio Host** is a separate infrastructure Machine Profile for Lazurio
-  networking and shared services. It is not a synonym for any Machine with a
-  Lazurio Resident and is outside this Organization Host contract.
+- **Conglomerate Host** is a separate provider- or enterprise-operated Machine
+  Profile for shared infrastructure services used by multiple isolated
+  Organizations. It holds none of their checkouts, Hosted Team Workspaces or
+  Personalspace, has no mutation or access authority over them, creates no
+  shared access boundary and is outside this Organization Host contract.
 
 ## Files
 
