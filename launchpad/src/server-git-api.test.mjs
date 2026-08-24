@@ -19,6 +19,10 @@ import {
   resolveServerStateDirectory,
   writeServerLocator,
 } from "../../lazurio/core/server-locator-lib.mjs";
+import {
+  buildDesiredModuleState,
+  writeDesiredModuleState,
+} from "./desired-module-state-lib.mjs";
 
 const tempRoots = [];
 const servers = [];
@@ -343,6 +347,10 @@ test("identity endpoint is local-only and a foreign root cannot reuse the port",
 
 test("linked worktree gets only a read-only canonical Root mount context", async () => {
   const root = await createLaunchpadGitFixture();
+  const primaryConfigPath = join(root, "launchpad.gen3.json");
+  const primaryConfig = JSON.parse(await readFile(primaryConfigPath, "utf8"));
+  primaryConfig.personalspace_mountpoint = "ignored-personalspace";
+  await writeJson(primaryConfigPath, primaryConfig);
   await initGitRepo(root);
   runGit(["add", "."], root);
   runGit(["commit", "-m", "track fixture Root"], root);
@@ -385,6 +393,7 @@ test("linked worktree gets only a read-only canonical Root mount context", async
   const worktreeConfigPath = join(worktreeRoot, "launchpad.gen3.json");
   const worktreeConfig = JSON.parse(await readFile(worktreeConfigPath, "utf8"));
   worktreeConfig.launchpad_root.display_name = "Linked Root";
+  worktreeConfig.personalspace_mountpoint = "personalspace";
   await writeJson(worktreeConfigPath, worktreeConfig);
   await rm(join(worktreeRoot, "organizations"), { recursive: true, force: true });
   await mkdir(join(worktreeRoot, "organizations"), { recursive: true });
@@ -476,6 +485,85 @@ test("control-root replacement waits for an in-flight runtime mutation", async (
   expect(installResponse.status).toBe(200);
   expect((await getJson(primary.port, "/health")).status).toBe("ok");
 });
+
+test("control-root replacement waits for boot reconciliation before draining the Server", async () => {
+  const root = await createLaunchpadGitFixture();
+  const appPort = await findFreePort();
+  const appRoot = join(root, "organizations", "BetaCo_GEN3", "workspace", "deals", "app", "v1");
+  const app = {
+    id: "betaco-boot-reconcile-v1",
+    title: "Boot reconcile",
+    company: "BetaCo",
+    module: "deals",
+    port: appPort,
+  };
+  await createPackageApp({
+    root,
+    packagePath: "organizations/BetaCo_GEN3/workspace/deals/app/v1",
+    app,
+  });
+  const startedMarker = join(appRoot, "boot-reconcile.started");
+  const completedMarker = join(appRoot, "boot-reconcile.completed");
+  await writeFile(
+    join(appRoot, "server.mjs"),
+    [
+      'await Bun.write("boot-reconcile.started", `${process.pid}\\n`);',
+      "await Bun.sleep(1200);",
+      "const server = Bun.serve({",
+      '  hostname: process.env.HOST ?? "127.0.0.1",',
+      "  port: Number(process.env.PORT),",
+      '  fetch: () => new Response("ok"),',
+      "});",
+      'await Bun.write("boot-reconcile.completed", `${process.pid}\\n`);',
+      "setTimeout(() => { server.stop(true); process.exit(0); }, 2000);",
+      "setInterval(() => {}, 2_147_483_647);",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+  await initGitRepo(root);
+  runGit(["add", "."], root);
+  runGit(["commit", "-m", "track boot reconcile fixture"], root);
+  const worktreeRoot = `${root}-boot-worktree`;
+  runGit(["worktree", "add", "-b", "linked-boot-reconcile", worktreeRoot], root);
+  const stateRoot = `${root}-launchpad-state`;
+  tempRoots.push(worktreeRoot, root, stateRoot);
+  await writeDesiredModuleState({
+    root: join(stateRoot, "runtime", "desired-modules"),
+    state: buildDesiredModuleState({ app, source: { type: "main" } }),
+  });
+
+  const primary = await startLaunchpadServer(root, {
+    env: { LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot },
+  });
+  for (let attempt = 0; attempt < 100 && !(await Bun.file(startedMarker).exists()); attempt += 1) {
+    await Bun.sleep(20);
+  }
+  expect(await Bun.file(startedMarker).exists()).toBe(true);
+
+  const replacementPort = await findFreePort();
+  const replacement = Bun.spawn(
+    ["bun", "src/server.mjs", "--root", worktreeRoot, "--port", String(replacementPort), "--reuse"],
+    {
+      cwd: join(import.meta.dirname, ".."),
+      env: primary.environment,
+      stdout: "ignore",
+      stderr: "pipe",
+    },
+  );
+  servers.push(replacement);
+  await Bun.sleep(200);
+  expect(replacement.exitCode).toBeNull();
+  expect(primary.server.exitCode).toBeNull();
+
+  for (let attempt = 0; attempt < 150 && !(await Bun.file(completedMarker).exists()); attempt += 1) {
+    await Bun.sleep(20);
+  }
+  expect(await Bun.file(completedMarker).exists()).toBe(true);
+  await waitForHealth(replacementPort, replacement);
+  expect(await primary.server.exited).toBe(0);
+  await Bun.sleep(2200);
+}, platformTestTimeout(15_000));
 
 test("hosted Launchpad rejects forged gateway headers without a TLS-authenticated OAuth session", async () => {
   const root = await createLaunchpadGitFixture();

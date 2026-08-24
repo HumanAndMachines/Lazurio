@@ -711,7 +711,11 @@ export async function discoverPersonalspace(
   const apps = [];
   const invalidApps = [];
 
-  const companiesConfigPath = join(companiesRoot, "launchpad.gen3.json");
+  // Tracked Root configuration follows the selected main/worktree control
+  // source. Physical Personalspace data and the gitignored per-machine owner
+  // override remain rooted in the canonical machine Root.
+  const rootSourceRoot = options.rootSourceRoot ?? companiesRoot;
+  const companiesConfigPath = join(rootSourceRoot, "launchpad.gen3.json");
   const companiesConfig = existsSync(companiesConfigPath) ? await readJson(companiesConfigPath) : {};
   const mountpoint = companiesConfig?.personalspace_mountpoint ?? defaultPersonalspaceMountpoint;
   const personalspaceRoot = join(companiesRoot, mountpoint);

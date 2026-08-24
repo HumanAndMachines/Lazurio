@@ -98,13 +98,14 @@ export function personalspaceRuntimeUrls(app) {
 
 export async function buildPersonalspaceResponse({
   companiesRoot = join(import.meta.dirname, "..", ".."),
+  rootSourceRoot = companiesRoot,
   launchpadRoot = join(import.meta.dirname, ".."),
   runtimeManager = createPersonalspaceRuntimeManager({ companiesRoot, launchpadRoot }),
   profileEmail = null,
   verifyRepositoryPrivacy = false,
   inspectRepository = inspectGitHubRepository,
 } = {}) {
-  const discovery = await discoverPersonalspace(companiesRoot);
+  const discovery = await discoverPersonalspace(companiesRoot, { rootSourceRoot });
 
   const appsWithRuntime = await runtimeManager.appsWithRuntime(
     discovery.apps.map((app) => ({
