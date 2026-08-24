@@ -39,15 +39,14 @@ test("planned slots use the standard repo name only as a locator", () => {
   expect(
     resolveDataRepositoryLocator(
       {
-        repository_db: { repo: "Old-Org/mission-control-data" },
         git: { url: "git@github.com:Other-Org/mission-control-data.git" },
       },
       "Renamed-Org",
-    ).error,
-  ).toContain("rozporné");
+    ).coordinate,
+  ).toBe("Other-Org/mission-control-data");
   expect(
     resolveDataRepositoryLocator(
-      { repository_db: { repo: "not a repository" } },
+      { git: { url: "not a repository" } },
       "Renamed-Org",
     ).error,
   ).toContain("neplatný");
@@ -60,7 +59,7 @@ test("planned slots use the standard repo name only as a locator", () => {
   ]) {
     expect(
       resolveDataRepositoryLocator(
-        { repository_db: { repo: url } },
+        { git: { url } },
         "Renamed-Org",
       ).error,
     ).toContain("neplatný");
@@ -68,23 +67,17 @@ test("planned slots use the standard repo name only as a locator", () => {
 });
 
 test("active Mission Control data binds the declared canonical v3 publish branch", () => {
-  const slot = {
-    git: { branch: "v3" },
-    repository_db: { branch: "v3" },
-  };
+  const slot = { git: { branch: "v3" } };
   expect(resolveDataPublishBranch(slot, { default_branch: "v3" })).toEqual({
     branch: "v3",
     error: null,
   });
   expect(
-    resolveDataPublishBranch(
-      { ...slot, repository_db: { branch: "main" } },
-      { default_branch: "v3" },
-    ).error,
-  ).toContain("jednu shodnou");
+    resolveDataPublishBranch({}, { default_branch: "v3" }).error,
+  ).toContain("git.branch");
   expect(
     resolveDataPublishBranch(
-      { git: { branch: "main" }, repository_db: { branch: "main" } },
+      { git: { branch: "main" } },
       { default_branch: "main" },
     ).error,
   ).toContain("musí být v3");
@@ -205,6 +198,45 @@ test("accepts native rulesets only when both history rules have no bypass", () =
   expect(evaluateProtection(classic, rules)).toMatchObject({
     mode: "capable-unprotected",
     ok: false,
+  });
+
+  rules.details[9] = { enforcement: "active" };
+  expect(evaluateEffectiveRules(rules)).toMatchObject({
+    kind: "blocked",
+    policy: "unobservable",
+    problems: [expect.stringContaining("skrývá bypass actors")],
+  });
+});
+
+test("one proven history-protection source is sufficient when the other is unreadable", () => {
+  const protectedClassic = {
+    kind: "configured",
+    value: {
+      allow_force_pushes: { enabled: false },
+      allow_deletions: { enabled: false },
+      enforce_admins: { enabled: true },
+    },
+  };
+  expect(
+    evaluateProtection(protectedClassic, {
+      kind: "blocked",
+      message: "Organization ruleset detail is forbidden",
+    }),
+  ).toMatchObject({
+    mode: "provider-enforced",
+    ok: true,
+    problems: [],
+    notes: [expect.stringContaining("sekundární zdroj nepozorovatelný")],
+  });
+  expect(
+    evaluateProtection(
+      { kind: "unconfigured" },
+      { kind: "blocked", message: "Ruleset detail is forbidden" },
+    ),
+  ).toMatchObject({
+    mode: "blocked",
+    ok: false,
+    problems: ["Ruleset detail is forbidden"],
   });
 });
 
@@ -474,7 +506,15 @@ test("live smoke fails closed instead of passing an empty checkout", () => {
   }
 });
 
-function plannedSmokeFixture(root, { dataResponse, totalPrivateRepos }) {
+function smokeFixture(
+  root,
+  {
+    dataResponse,
+    totalPrivateRepos,
+    slot = { path: "mission-control/db", status: "planned_slot" },
+    extraResponses = {},
+  },
+) {
   const organizationRoot = join(root, "organizations", "Verified_GEN3");
   mkdirSync(organizationRoot, { recursive: true });
   writeFileSync(
@@ -483,9 +523,7 @@ function plannedSmokeFixture(root, { dataResponse, totalPrivateRepos }) {
   );
   writeFileSync(
     join(organizationRoot, "modules.manifest.json"),
-    `${JSON.stringify({
-      modules: [{ path: "mission-control/db", status: "planned_slot" }],
-    }, null, 2)}\n`,
+    `${JSON.stringify({ modules: [slot] }, null, 2)}\n`,
   );
   const rootRepository = {
     id: 100,
@@ -500,6 +538,9 @@ function plannedSmokeFixture(root, { dataResponse, totalPrivateRepos }) {
     json(args) {
       const endpoint = String(args.at(-1));
       calls.push(endpoint);
+      if (Object.prototype.hasOwnProperty.call(extraResponses, endpoint)) {
+        return extraResponses[endpoint];
+      }
       if (endpoint === "repos/Verified-Org/Root") {
         return { ok: true, value: rootRepository };
       }
@@ -550,7 +591,7 @@ test("runSmoke accepts a private-repo 404 only through complete Owner visibility
   ]) {
     const root = mkdtempSync(join(tmpdir(), "mc-planned-smoke-"));
     try {
-      const fixture = plannedSmokeFixture(root, {
+      const fixture = smokeFixture(root, {
         dataResponse: {
           ok: false,
           httpStatus: 404,
@@ -575,7 +616,7 @@ test("runSmoke accepts a private-repo 404 only through complete Owner visibility
 
   const forbiddenRoot = mkdtempSync(join(tmpdir(), "mc-forbidden-smoke-"));
   try {
-    const fixture = plannedSmokeFixture(forbiddenRoot, {
+    const fixture = smokeFixture(forbiddenRoot, {
       dataResponse: {
         ok: false,
         httpStatus: 403,
@@ -592,7 +633,7 @@ test("runSmoke accepts a private-repo 404 only through complete Owner visibility
 
   const stagedRoot = mkdtempSync(join(tmpdir(), "mc-staged-smoke-"));
   try {
-    const fixture = plannedSmokeFixture(stagedRoot, {
+    const fixture = smokeFixture(stagedRoot, {
       dataResponse: {
         ok: true,
         value: {
@@ -611,6 +652,83 @@ test("runSmoke accepts a private-repo 404 only through complete Owner visibility
     expect(fixture.calls.some((endpoint) => endpoint.includes("/rules/branches/"))).toBeFalse();
   } finally {
     rmSync(stagedRoot, { recursive: true, force: true });
+  }
+});
+
+test("runSmoke drives the active v3 trusted-process enforcement path end to end", () => {
+  const root = mkdtempSync(join(tmpdir(), "mc-active-smoke-"));
+  const dataRepository = {
+    id: 200,
+    full_name: "Verified-Org/mission-control-data",
+    default_branch: "v3",
+    private: true,
+    owner: { id: 42, type: "Organization" },
+  };
+  try {
+    const fixture = smokeFixture(root, {
+      dataResponse: { ok: true, value: dataRepository },
+      totalPrivateRepos: 2,
+      slot: {
+        path: "mission-control/db",
+        space: "root",
+        status: "active",
+        git: {
+          url: "git@github.com:Verified-Org/mission-control-data.git",
+          branch: "v3",
+        },
+      },
+      extraResponses: {
+        "repos/Verified-Org/mission-control-data/branches/v3/protection": {
+          ok: false,
+          httpStatus: 403,
+          value: { message: "Upgrade to GitHub Pro to use branch protection" },
+        },
+        "repos/Verified-Org/mission-control-data/rules/branches/v3": {
+          ok: true,
+          value: [],
+        },
+        "repos/Verified-Org/mission-control-data/collaborators?affiliation=all&per_page=100": {
+          ok: true,
+          value: [[
+            {
+              login: "trusted-builder",
+              type: "User",
+              permissions: { push: true },
+            },
+            {
+              login: "read-only-user",
+              type: "User",
+              permissions: { pull: true },
+            },
+          ]],
+        },
+        "orgs/Verified-Org/members/trusted-builder": {
+          ok: true,
+          value: {},
+        },
+      },
+    });
+    const [result] = runSmoke(root, fixture);
+    expect(result).toMatchObject({
+      data_state: "active",
+      enforcement_mode: "trusted-process",
+      publication_policy: "direct-fast-forward",
+      writers: 1,
+      errors: [],
+    });
+    expect(fixture.calls).toContain(
+      "repos/Verified-Org/mission-control-data/branches/v3/protection",
+    );
+    expect(fixture.calls).toContain(
+      "repos/Verified-Org/mission-control-data/rules/branches/v3",
+    );
+    expect(fixture.calls).toContain(
+      "repos/Verified-Org/mission-control-data/collaborators?affiliation=all&per_page=100",
+    );
+    expect(fixture.calls).toContain("orgs/Verified-Org/members/trusted-builder");
+    expect(fixture.calls).not.toContain("orgs/Verified-Org/members/read-only-user");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });
 

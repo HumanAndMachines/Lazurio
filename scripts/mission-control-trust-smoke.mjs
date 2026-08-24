@@ -53,26 +53,15 @@ export function classifyDataState(slot, repositoryExists) {
 
 export function resolveDataRepositoryLocator(slot, liveOrganizationLogin) {
   if (!slot) return { coordinate: null, error: null };
-  const declared = [
-    slot?.repository_db?.repo,
-    slot?.repository_db?.url,
-    slot?.git?.url,
-  ].filter((value) => typeof value === "string" && value.trim() !== "");
-  const parsed = declared.map(parseRepoLocator);
-  if (parsed.some((coordinate) => coordinate === null)) {
+  const declared = slot?.git?.url;
+  if (typeof declared === "string" && declared.trim() !== "") {
+    const coordinate = parseRepoLocator(declared);
+    if (coordinate) return { coordinate, error: null };
     return {
       coordinate: null,
       error: "Mission Control data slot obsahuje neplatný GitHub repo locator",
     };
   }
-  const coordinates = [...new Set(parsed)];
-  if (coordinates.length > 1) {
-    return {
-      coordinate: null,
-      error: "Mission Control data slot obsahuje rozporné GitHub repo locatory",
-    };
-  }
-  if (coordinates.length === 1) return { coordinate: coordinates[0], error: null };
   if (!GITHUB_LOGIN_PATTERN.test(String(liveOrganizationLogin ?? ""))) {
     return {
       coordinate: null,
@@ -86,20 +75,15 @@ export function resolveDataRepositoryLocator(slot, liveOrganizationLogin) {
 }
 
 export function resolveDataPublishBranch(slot, repository) {
-  const declared = [
-    slot?.repository_db?.branch,
-    slot?.git?.branch,
-  ]
-    .filter((value) => typeof value === "string" && value.trim() !== "")
-    .map((value) => value.trim());
-  const branches = [...new Set(declared)];
-  if (branches.length !== 1) {
+  const branch = typeof slot?.git?.branch === "string"
+    ? slot.git.branch.trim()
+    : "";
+  if (branch === "") {
     return {
       branch: null,
-      error: "Mission Control data slot musí deklarovat jednu shodnou publish branch",
+      error: "Aktivní Mission Control data slot musí deklarovat git.branch",
     };
   }
-  const branch = branches[0];
   if (branch !== "v3") {
     return {
       branch: null,
@@ -189,11 +173,18 @@ export function evaluateEffectiveRules(response) {
   for (const rule of rules) {
     if (!HISTORY_RULE_TYPES.has(rule?.type)) continue;
     const detail = details[String(rule.ruleset_id)];
-    if (
-      detail?.enforcement === "active"
-      && Array.isArray(detail.bypass_actors)
-      && detail.bypass_actors.length === 0
-    ) {
+    if (detail?.enforcement === "active" && !Array.isArray(detail.bypass_actors)) {
+      return {
+        kind: "blocked",
+        historyProtected: false,
+        policy: "unobservable",
+        notes: [],
+        problems: [
+          `GitHub ruleset ${rule.ruleset_id} skrývá bypass actors; ochranu nelze ověřit`,
+        ],
+      };
+    }
+    if (detail?.enforcement === "active" && detail.bypass_actors.length === 0) {
       protectedTypes.add(rule.type);
     }
   }
@@ -220,14 +211,29 @@ export function evaluateProtection(
 ) {
   const classic = evaluateClassicProtection(classicResponse);
   const rules = evaluateEffectiveRules(effectiveRulesResponse);
-  const problems = [...classic.problems, ...rules.problems];
-  if (classic.kind === "blocked" || rules.kind === "blocked") {
+  const observationProblems = [...classic.problems, ...rules.problems];
+  const historyProtected = classic.historyProtected || rules.historyProtected;
+  const policyNotes = [...new Set([...classic.notes, ...rules.notes])];
+  const protectionSourceBlocked = classic.kind === "blocked" || rules.kind === "blocked";
+  if (protectionSourceBlocked && !historyProtected) {
     return {
       mode: "blocked",
       policy: "unobservable",
       ok: false,
       notes: [],
-      problems,
+      problems: observationProblems,
+    };
+  }
+  if (historyProtected) {
+    const observationNotes = protectionSourceBlocked
+      ? observationProblems.map((problem) => `sekundární zdroj nepozorovatelný: ${problem}`)
+      : [];
+    return {
+      mode: "provider-enforced",
+      policy: policyNotes.length > 0 ? "native-gated" : "direct-fast-forward",
+      ok: true,
+      notes: [...policyNotes, ...observationNotes],
+      problems: [],
     };
   }
   const noEffectiveRules =
@@ -246,18 +252,15 @@ export function evaluateProtection(
       problems: [],
     };
   }
-  const historyProtected = classic.historyProtected || rules.historyProtected;
-  if (!historyProtected) {
-    problems.push(
-      "v3 nemá provider ochranu bez bypassu proti force pushi a smazání větve",
-    );
-  }
-  const notes = [...new Set([...classic.notes, ...rules.notes])];
+  const problems = [...observationProblems];
+  problems.push(
+    "v3 nemá provider ochranu bez bypassu proti force pushi a smazání větve",
+  );
   return {
-    mode: historyProtected ? "provider-enforced" : "capable-unprotected",
-    policy: notes.length > 0 ? "native-gated" : "direct-fast-forward",
-    ok: historyProtected && problems.length === 0,
-    notes,
+    mode: "capable-unprotected",
+    policy: policyNotes.length > 0 ? "native-gated" : "direct-fast-forward",
+    ok: false,
+    notes: policyNotes,
     problems,
   };
 }
@@ -816,10 +819,10 @@ function inspectOrganization(organizationRoot, { provider, gitReader }) {
   );
   result.enforcement_mode = protection.mode;
   result.publication_policy = protection.policy;
-  if (result.data_state === "active") result.errors.push(...protection.problems);
+  result.errors.push(...protection.problems);
   if (protection.notes.length > 0) {
     result.notes.push(
-      `GitHub používá silnější nativní policy: ${protection.notes.join(", ")}`,
+      `GitHub branch policy poznámky: ${protection.notes.join(", ")}`,
     );
   }
 
@@ -840,7 +843,7 @@ function inspectOrganization(organizationRoot, { provider, gitReader }) {
       || entry?.permissions?.admin,
   );
   result.writers = writers.length;
-  if (result.data_state === "active" && protection.mode === "trusted-process") {
+  if (protection.mode === "trusted-process") {
     const unconfirmedMemberships = [];
     for (const writer of writers.filter((entry) => entry?.type === "User")) {
       const membership = organizationMembership(
