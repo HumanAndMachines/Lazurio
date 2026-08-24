@@ -455,7 +455,7 @@ test("linked worktree gets only a read-only canonical Root mount context", async
     module_slots: [],
   });
   const primaryStatusBefore = runGit(["status", "--short"], root);
-  const primary = await startLaunchpadServer(root);
+  const primary = await startLaunchpadServer(root, { useDefaultStateRoot: true });
   const worktreeRoot = `${root}-linked-worktree`;
   runGit(["worktree", "add", "-b", "linked-launchpad", worktreeRoot], root);
   tempRoots.push(worktreeRoot, root);
