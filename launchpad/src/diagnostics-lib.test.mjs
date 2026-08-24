@@ -1436,7 +1436,7 @@ test("Doctor vynucuje root slot contract a Mission Control app/data pár", async
   );
 });
 
-test("planned root slot nemá git a smí zůstat planned jen dokud není materializovaný", async () => {
+test("planned root slot rozliší in-tree compatibility adresář od nested checkoutu", async () => {
   const root = await createCompaniesWorkspaceFixture();
   const companyRoot = join(root, "organizations", "OmegaCo_GEN3");
   await mkdir(join(companyRoot, "manual"), { recursive: true });
@@ -1495,7 +1495,24 @@ test("planned root slot nemá git a smí zůstat planned jen dokud není materia
     "planned root slot design-system nesmí deklarovat git",
   );
 
+  delete manifest.module_slots[0].git;
+  await writeJson(manifestPath, manifest);
   await mkdir(join(companyRoot, "design-system"), { recursive: true });
+  const inTreeCompatibilityCheck = await doctor();
+  expect(inTreeCompatibilityCheck?.status).toBe("ok");
+
+  await mkdir(join(companyRoot, "design-system", ".git"), { recursive: true });
+  const materializedWithoutCoordinatesCheck = await doctor();
+  expect(materializedWithoutCoordinatesCheck?.status).toBe("fail");
+  expect(materializedWithoutCoordinatesCheck?.details.join("\n")).toContain(
+    'materializovaný root slot design-system nesmí zůstat status: "planned_slot"',
+  );
+
+  manifest.module_slots[0].git = {
+    url: "git@github.com:OmegaCo/design-system.git",
+    branch: "main",
+  };
+  await writeJson(manifestPath, manifest);
   const materializedWithCoordinatesCheck = await doctor();
   expect(materializedWithCoordinatesCheck?.status).toBe("fail");
   expect(materializedWithCoordinatesCheck?.details.join("\n")).toContain(
@@ -1503,14 +1520,6 @@ test("planned root slot nemá git a smí zůstat planned jen dokud není materia
   );
   expect(materializedWithCoordinatesCheck?.details.join("\n")).not.toContain(
     "planned root slot design-system nesmí deklarovat git",
-  );
-
-  delete manifest.module_slots[0].git;
-  await writeJson(manifestPath, manifest);
-  const materializedWithoutCoordinatesCheck = await doctor();
-  expect(materializedWithoutCoordinatesCheck?.status).toBe("fail");
-  expect(materializedWithoutCoordinatesCheck?.details.join("\n")).toContain(
-    'materializovaný root slot design-system nesmí zůstat status: "planned_slot"',
   );
 });
 

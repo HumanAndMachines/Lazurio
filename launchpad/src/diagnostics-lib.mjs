@@ -1361,9 +1361,12 @@ function rootSlotContractIssues(manifest, config, organizationRoot) {
 
     const gitUrl = typeof slot.git?.url === "string" ? slot.git.url.trim() : "";
     const gitBranch = typeof slot.git?.branch === "string" ? slot.git.branch.trim() : "";
-    const checkoutExists = existsSync(join(organizationRoot, path));
+    // A tracked compatibility directory inside the Organization root is not a
+    // materialized root-slot checkout. Doctor-managed nested repos and Git
+    // worktrees both expose their own .git entry (directory or file).
+    const nestedCheckoutExists = existsSync(join(organizationRoot, path, ".git"));
     const checkoutCoordinatesStarted = slot.git !== undefined;
-    if (slot.status === "planned_slot" && checkoutExists) {
+    if (slot.status === "planned_slot" && nestedCheckoutExists) {
       issues.push(
         `modules.manifest.json: materializovaný root slot ${path} nesmí zůstat status: "planned_slot"; odstraň status a ponech nebo doplň celé git.url i git.branch`,
       );
