@@ -192,6 +192,7 @@ test("runtime manager spustí, změří a zastaví managed aplikaci", async () =
       ...process.env,
       HOST: "stale-parent-host",
       PORT: "49999",
+      NODE_PATH: join(root, "stale-parent-node-modules"),
       LAZURIO_RUNTIME_PORT: "49998",
       LAZURIO_RUNTIME_LISTENER_WEB_PORT: "49997",
     },
@@ -220,6 +221,7 @@ test("runtime manager spustí, změří a zastaví managed aplikaci", async () =
   const listenerEnvKey = String(entrypoint.id).toUpperCase().replace(/[^A-Z0-9]/g, "_");
   expect(childEnv.HOST).toBeUndefined();
   expect(childEnv.PORT).toBeUndefined();
+  expect(childEnv.NODE_PATH).toBe(join(root, "organizations", "TestCompany", "modules", "demo", "app", "v1", "node_modules"));
   expect(childEnv.LAZURIO_RUNTIME_PORT).toBe(String(port));
   expect(childEnv[`LAZURIO_RUNTIME_LISTENER_${listenerEnvKey}_HOST`]).toBe("127.0.0.1");
   expect(childEnv[`LAZURIO_RUNTIME_LISTENER_${listenerEnvKey}_PORT`]).toBe(String(port));
@@ -266,6 +268,58 @@ test("Open počká na přechodný HTTP 404 během start grace", async () => {
       status: "healthy",
       url: `http://127.0.0.1:${port}`,
     });
+  } finally {
+    await runtime.stop("test-company-demo-v1").catch(() => {});
+  }
+}, platformTestTimeout(10_000));
+
+test("runtime process resolves module-root source from app-local dependencies", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({
+    port,
+    serverSource: [
+      'import { dependencyValue } from "../../shared-config.mjs";',
+      "const server = Bun.serve({",
+      "  hostname: process.env.LAZURIO_RUNTIME_HOST,",
+      "  port: Number(process.env.LAZURIO_RUNTIME_PORT),",
+      "  fetch(request) {",
+      "    const url = new URL(request.url);",
+      "    if (url.pathname === '/health') return Response.json({ status: 'ok' });",
+      "    return new Response(dependencyValue);",
+      "  },",
+      "});",
+      "setInterval(() => {}, 2147483647);",
+      "",
+    ].join("\n"),
+  });
+  const moduleRoot = join(root, "organizations", "TestCompany", "modules", "demo");
+  const dependencyRoot = join(moduleRoot, "app", "v1", "node_modules", "@fixture", "app-local-dependency");
+  await mkdir(dependencyRoot, { recursive: true });
+  await writeJson(join(dependencyRoot, "package.json"), {
+    name: "@fixture/app-local-dependency",
+    type: "module",
+    exports: "./index.mjs",
+  });
+  await writeFile(join(dependencyRoot, "index.mjs"), 'export const value = "app-local dependency";\n', "utf8");
+  await writeFile(
+    join(moduleRoot, "shared-config.mjs"),
+    [
+      'import { value } from "@fixture/app-local-dependency";',
+      "export const dependencyValue = value;",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "app-local-resolution",
+  });
+
+  try {
+    const opened = await runtime.open("test-company-demo-v1");
+    expect(opened.status).toBe("healthy");
+    expect(await (await fetch(opened.url)).text()).toBe("app-local dependency");
   } finally {
     await runtime.stop("test-company-demo-v1").catch(() => {});
   }
@@ -2720,7 +2774,7 @@ test("runtime manager předá absolutní Organization root i install lifecycle p
     [
       "await Bun.write(",
       "  'install-env.json',",
-      "  JSON.stringify({ organizationRoot: process.env.COMPANYASCODE_ORGANIZATION_ROOT ?? null }),",
+      "  JSON.stringify({ organizationRoot: process.env.COMPANYASCODE_ORGANIZATION_ROOT ?? null, nodePath: process.env.NODE_PATH ?? null }),",
       ");",
       "",
     ].join("\n"),
@@ -2735,6 +2789,7 @@ test("runtime manager předá absolutní Organization root i install lifecycle p
   await runtime.install("test-company-demo-v1");
   const captured = JSON.parse(await readFile(join(appRoot, "install-env.json"), "utf8"));
   expect(captured.organizationRoot).toBe(join(root, "organizations", "TestCompany"));
+  expect(captured.nodePath).toBe(join(appRoot, "node_modules"));
 });
 
 test("runtime manager classifyuje selhaný Install/Repair s failure_kind", async () => {
@@ -3173,6 +3228,7 @@ test("runtime manager replaces main with one worktree instance on the same decla
   expect(worktree.runtime.dependencies.cwd).toContain(`.worktrees/workspace/demo/${worktreeSlug}/app/v1`);
   const worktreeEnv = await (await fetch(`${worktree.url}/runtime-env`)).json();
   expect(worktreeEnv.organizationRoot).toBe(orgRoot);
+  expect(worktreeEnv.nodePath).toBe(join(worktreeRoot, "app", "v1", "node_modules"));
   expect(worktreeEnv.listeners.map((listener) => listener.port).sort()).toEqual(
     worktree.runtime.listeners.map((listener) => listener.port).sort(),
   );
@@ -4082,7 +4138,7 @@ async function createCompaniesWorkspaceFixture({
       "  fetch(request) {",
       "    const url = new URL(request.url);",
       "    if (url.pathname === '/health') return Response.json({ status: 'ok' });",
-      "    if (url.pathname === '/runtime-env') return Response.json({ organizationRoot: process.env.COMPANYASCODE_ORGANIZATION_ROOT ?? null, nodeEnv: process.env.NODE_ENV ?? null, runtimeHost: process.env.LAZURIO_RUNTIME_HOST ?? null, runtimePort: process.env.LAZURIO_RUNTIME_PORT ?? null, listeners: JSON.parse(process.env.LAZURIO_RUNTIME_LISTENERS_JSON ?? '[]'), astroDevBackground: process.env.ASTRO_DEV_BACKGROUND ?? null, astroPreviewBackground: process.env.ASTRO_PREVIEW_BACKGROUND ?? null });",
+      "    if (url.pathname === '/runtime-env') return Response.json({ organizationRoot: process.env.COMPANYASCODE_ORGANIZATION_ROOT ?? null, nodeEnv: process.env.NODE_ENV ?? null, nodePath: process.env.NODE_PATH ?? null, runtimeHost: process.env.LAZURIO_RUNTIME_HOST ?? null, runtimePort: process.env.LAZURIO_RUNTIME_PORT ?? null, listeners: JSON.parse(process.env.LAZURIO_RUNTIME_LISTENERS_JSON ?? '[]'), astroDevBackground: process.env.ASTRO_DEV_BACKGROUND ?? null, astroPreviewBackground: process.env.ASTRO_PREVIEW_BACKGROUND ?? null });",
       "    return new Response('ok');",
       "  },",
       "});",

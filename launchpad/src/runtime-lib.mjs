@@ -1762,6 +1762,7 @@ export function createRuntimeManager({
     // kontraktu odvozeného z module-root lazurio.module.json.
     delete env.HOST;
     delete env.PORT;
+    delete env.NODE_PATH;
     for (const name of Object.keys(env)) {
       if (name.startsWith("LAZURIO_RUNTIME_")) delete env[name];
     }
@@ -1769,6 +1770,10 @@ export function createRuntimeManager({
       ...env,
       ...organizationRuntimeEnv(app),
       ...listenerRuntimeEnv(app),
+      // GEN3 keeps some module-root and sibling config source outside the app
+      // package. Give those importers the launched app's declared dependencies
+      // as Bun's standard fallback without inheriting a Machine-wide search path.
+      NODE_PATH: join(companiesRoot, app.cwd, "node_modules"),
       ...overrides,
     };
   }

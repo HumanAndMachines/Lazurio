@@ -389,6 +389,15 @@ development `.env` soubory i statický mode nebo `--env-file`, který skutečně
 načte `dev_script`. Explicitní cesta musí zůstat uvnitř Modulu. Neaktivní test
 nebo build env aplikaci neblokuje.
 
+Core nastavuje procesu Install/Repair/Start app-local `node_modules` jako
+jediný `NODE_PATH` fallback. GEN3 tím dovoluje module-root a sibling config
+source používat deklarované závislosti právě obsluhované aplikace, aniž by
+proces zdědil Machine-wide resolution cestu. Běžné package resolution má dál
+přednost a chybějící závislost se automaticky nevymýšlí ani nedoinstaluje.
+Worktree dostává svou vlastní app-local cestu. Je to přechodová kompatibilita
+GEN3 layoutu; modul ji při budoucím přechodu na samostatně builděné package
+nebo standardní workspace topologii nepotřebuje.
+
 `apps` je explicitní inventář runnable package souborů relativně ke kořeni
 Modulu. Neprázdný seznam má právě jeden `default_app`; `apps: []` pravdivě říká,
 že Modul vlastní data nebo know-how, ale nemá aplikaci, a proto současně
