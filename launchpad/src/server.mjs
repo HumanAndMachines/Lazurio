@@ -102,11 +102,10 @@ const launchpadStateRoot = resolveLaunchpadStateRoot({
   workspaceRoot: canonicalCompaniesRoot,
   fallbackRoot: launchpadRoot,
 });
-const serverStateDirectory = resolveServerStateDirectory({
-  configuredStateRoot: process.env.LAZURIO_LAUNCHPAD_STATE_ROOT
-    ? launchpadStateRoot
-    : undefined,
-});
+// Machine coordination is deliberately independent from the supervisor's
+// operational Launchpad state. Every supported entrypoint therefore resolves
+// the same OS-standard per-user locator directory.
+const serverStateDirectory = resolveServerStateDirectory();
 const requestTrust = createRequestTrustPolicy({
   profile: hostedAppUrls.profile,
   hostedExternalOrigin: process.env.LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN,
@@ -551,6 +550,7 @@ function parseArgs(args) {
 
 async function inspectRunningLaunchpad(url, expected) {
   const current = await probeServerIdentity(url, "/api/lazurio/server-identity");
+  if (current.status === "absent") return current;
   if (current.status === "probe_failed") return current;
   if (current.status === "unrecognized") return current;
   if (current.status === "found") {
@@ -575,11 +575,23 @@ async function probeServerIdentity(url, pathname) {
       if (!response.ok) return { status: "probe_failed" };
       const identity = await response.json().catch(() => null);
       return identity ? { status: "found", identity } : { status: "unrecognized" };
-    } catch {
+    } catch (error) {
+      if (isConnectionRefused(error)) return { status: "absent" };
       if (attempt === 1) return { status: "unrecognized" };
     }
   }
   return { status: "unrecognized" };
+}
+
+function isConnectionRefused(error) {
+  let candidate = error;
+  const visited = new Set();
+  while (candidate && typeof candidate === "object" && !visited.has(candidate)) {
+    visited.add(candidate);
+    if (candidate.code === "ECONNREFUSED") return true;
+    candidate = candidate.cause;
+  }
+  return false;
 }
 
 async function requestStaleLaunchpadShutdown(url, observation) {

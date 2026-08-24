@@ -14,7 +14,10 @@ import {
 } from "./git-fixture-helpers.test.mjs";
 import { platformTestTimeout } from "./test-platform-setup.mjs";
 import { computeServerRootId } from "../../lazurio/core/server-identity-lib.mjs";
-import { readServerLocator } from "../../lazurio/core/server-locator-lib.mjs";
+import {
+  readServerLocator,
+  resolveServerStateDirectory,
+} from "../../lazurio/core/server-locator-lib.mjs";
 
 const tempRoots = [];
 const servers = [];
@@ -256,7 +259,12 @@ test("identity endpoint is local-only and a foreign root cannot reuse the port",
   const root = await createLaunchpadGitFixture();
   const otherRoot = await createLaunchpadGitFixture();
   tempRoots.push(root, otherRoot);
-  const { server, port } = await startLaunchpadServer(root);
+  const {
+    server,
+    port,
+    environment: serverEnvironment,
+    serverStateDirectory,
+  } = await startLaunchpadServer(root);
 
   const legacyIdentity = await getJson(port, "/api/launchpad/identity");
   expect(legacyIdentity).toEqual({
@@ -275,7 +283,6 @@ test("identity endpoint is local-only and a foreign root cannot reuse the port",
   expect(identity.install_generation).toMatch(/^[a-f0-9]{64}$/);
   expect(identity.instance_id).toMatch(/^[a-f0-9-]{36}$/);
   expect(Number.isFinite(Date.parse(identity.started_at))).toBe(true);
-  const serverStateDirectory = `${root}-launchpad-state`;
   expect(await readServerLocator({ stateDirectory: serverStateDirectory })).toMatchObject({
     schema_version: "lazurio.server.locator.v1",
     origin: `http://127.0.0.1:${port}`,
@@ -308,7 +315,7 @@ test("identity endpoint is local-only and a foreign root cannot reuse the port",
     ["bun", "src/server.mjs", "--root", root, "--port", String(port), "--reuse"],
     {
       cwd: join(import.meta.dirname, ".."),
-      env: { ...process.env, LAZURIO_LAUNCHPAD_STATE_ROOT: serverStateDirectory },
+      env: serverEnvironment,
       stdout: "pipe",
       stderr: "pipe",
     },
@@ -322,7 +329,7 @@ test("identity endpoint is local-only and a foreign root cannot reuse the port",
     ["bun", "src/server.mjs", "--root", otherRoot, "--port", String(port), "--open"],
     {
       cwd: join(import.meta.dirname, ".."),
-      env: { ...process.env, LAZURIO_LAUNCHPAD_STATE_ROOT: serverStateDirectory },
+      env: serverEnvironment,
       stdout: "pipe",
       stderr: "pipe",
     },
@@ -487,6 +494,9 @@ test("launcher replaces a stale same-root Server on the same port", async () => 
   const instanceId = "2a6db6d3-ad60-42b7-b6a8-e522ac838284";
   const rootId = computeServerRootId(realpathSync.native(root));
   const blockerPath = join(root, "stale-server.mjs");
+  const { environment: serverEnvironment } = serverTestEnvironment(root, {
+    LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot,
+  });
   await writeFile(blockerPath, staleServerFixtureSource());
   const blocker = Bun.spawn(["bun", blockerPath], {
     cwd: root,
@@ -505,7 +515,7 @@ test("launcher replaces a stale same-root Server on the same port", async () => 
     ["bun", "src/server.mjs", "--root", root, "--port", String(port), "--reuse"],
     {
       cwd: join(import.meta.dirname, ".."),
-      env: { ...process.env, LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot },
+      env: serverEnvironment,
       stdout: "pipe",
       stderr: "pipe",
     },
@@ -619,14 +629,14 @@ test("PORT environment configuration is implicit and falls forward to a free por
     blocker.listen(0, "127.0.0.1", resolve);
   });
   const { port } = blocker.address();
+  const { environment: serverEnvironment } = serverTestEnvironment(root, {
+    LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot,
+    PORT: String(port),
+  });
 
   const launcher = Bun.spawn(["bun", "src/server.mjs", "--root", root], {
     cwd: join(import.meta.dirname, ".."),
-    env: {
-      ...process.env,
-      PORT: String(port),
-      LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot,
-    },
+    env: serverEnvironment,
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -649,8 +659,10 @@ test("PORT environment configuration is implicit and falls forward to a free por
 test("explicit --port without a value fails during argument parsing", async () => {
   const root = await createLaunchpadGitFixture();
   tempRoots.push(root);
+  const { environment: serverEnvironment } = serverTestEnvironment(root);
   const launcher = Bun.spawn(["bun", "src/server.mjs", "--root", root, "--port"], {
     cwd: join(import.meta.dirname, ".."),
+    env: serverEnvironment,
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -929,15 +941,39 @@ async function startLaunchpadServer(root, { env = {} } = {}) {
   const port = await findFreePort();
   const stateRoot = env.LAZURIO_LAUNCHPAD_STATE_ROOT ?? `${root}-launchpad-state`;
   if (!tempRoots.includes(stateRoot)) tempRoots.push(stateRoot);
+  const { environment, serverStateDirectory } = serverTestEnvironment(root, {
+    ...env,
+    LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot,
+  });
   const server = Bun.spawn(["bun", "src/server.mjs", "--root", root, "--port", String(port)], {
     cwd: join(import.meta.dirname, ".."),
-    env: { ...process.env, ...env, LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot },
+    env: environment,
     stdout: "pipe",
     stderr: "pipe",
   });
   servers.push(server);
   await waitForHealth(port, server);
-  return { server, port };
+  return { server, port, environment, serverStateDirectory };
+}
+
+function serverTestEnvironment(root, env = {}) {
+  const homeDirectory = `${root}-server-home`;
+  if (!tempRoots.includes(homeDirectory)) tempRoots.push(homeDirectory);
+  const environment = {
+    ...process.env,
+    HOME: homeDirectory,
+    USERPROFILE: homeDirectory,
+    XDG_STATE_HOME: join(homeDirectory, ".local", "state"),
+    LOCALAPPDATA: join(homeDirectory, "AppData", "Local"),
+    ...env,
+  };
+  return {
+    environment,
+    serverStateDirectory: resolveServerStateDirectory({
+      environment,
+      homeDirectory,
+    }),
+  };
 }
 
 async function findFreePort() {

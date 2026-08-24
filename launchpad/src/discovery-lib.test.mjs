@@ -933,6 +933,32 @@ test("runtime source gate follows a listener port constant across package files"
   expect(issues.join("\n")).not.toContain("číselný port fallback 5691");
 });
 
+test("runtime source gate follows a namespace-qualified listener binding without matching unrelated local names", async () => {
+  const packageDirectory = await mkdtemp(join(tmpdir(), "lazurio-runtime-source-namespace-"));
+  tempRoots.push(packageDirectory);
+  await writeFile(join(packageDirectory, "config.mjs"), "export const API_PORT = 6000;\n", "utf8");
+  await writeFile(
+    join(packageDirectory, "server.mjs"),
+    'import * as config from "./config.mjs";\nBun.serve({ port: config.API_PORT });\n',
+    "utf8",
+  );
+  await writeFile(
+    join(packageDirectory, "url.mjs"),
+    "export function parseUrl(value) { const port = 6001; return { value, port }; }\n",
+    "utf8",
+  );
+
+  const issues = await runtimeSourcePortAuthorityIssues({
+    packageDirectory,
+    packagePath: "app/v1/package.json",
+    module: { port_leases: [{ id: "main", host: "127.0.0.1", port: 4174 }] },
+  });
+
+  expect(issues.join("\n")).toContain("config.mjs: runtime source obsahuje číselný port fallback 6000");
+  expect(issues.join("\n")).not.toContain("url.mjs");
+  expect(issues.join("\n")).not.toContain("číselný port fallback 6001");
+});
+
 test("duplicitní app id izoluje druhý manifest, první zůstává platný (decision 0043)", async () => {
   const root = await createCompaniesWorkspaceFixture({
     plugin: {
