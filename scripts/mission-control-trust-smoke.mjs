@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  normalizeComparableCliPath,
   normalizeGitHubRepository,
   resolveTrustedGitExecutable,
   runTrustedGitCommandSync,
@@ -514,7 +515,29 @@ function createTrustedGitReader({
   };
 }
 
-function checkoutRepositoryCoordinate(root, gitReader) {
+export function checkoutRepositoryCoordinate(root, gitReader) {
+  let canonicalRoot;
+  try {
+    canonicalRoot = realpathSync.native(resolve(root));
+  } catch {
+    return null;
+  }
+  const topLevel = gitReader.text(root, ["rev-parse", "--show-toplevel"]);
+  let canonicalTopLevel;
+  try {
+    canonicalTopLevel = topLevel.ok
+      ? realpathSync.native(resolve(topLevel.value))
+      : null;
+  } catch {
+    return null;
+  }
+  if (
+    canonicalTopLevel === null
+    || normalizeComparableCliPath(canonicalTopLevel)
+      !== normalizeComparableCliPath(canonicalRoot)
+  ) {
+    return null;
+  }
   const result = gitReader.text(root, ["config", "--get", "remote.origin.url"]);
   return result.ok ? normalizeGitHubRepository(result.value) : null;
 }
