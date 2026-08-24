@@ -907,6 +907,24 @@ test("runtime source gate distinguishes its own listener fallback from a named l
   expect(issues.join("\n")).not.toContain("číselný port fallback 5691");
 });
 
+test("runtime source gate follows a named port through a listener wrapper", async () => {
+  const packageDirectory = await mkdtemp(join(tmpdir(), "lazurio-runtime-wrapper-source-"));
+  tempRoots.push(packageDirectory);
+  await writeFile(
+    join(packageDirectory, "server.mjs"),
+    "const APP_PORT = 6000;\nfunction startServer(port) { return Bun.serve({ port }); }\nstartServer(APP_PORT);\n",
+    "utf8",
+  );
+
+  const issues = await runtimeSourcePortAuthorityIssues({
+    packageDirectory,
+    packagePath: "app/v1/package.json",
+    module: { port_leases: [{ id: "main", host: "127.0.0.1", port: 4174 }] },
+  });
+
+  expect(issues.join("\n")).toContain("server.mjs: runtime source obsahuje číselný port fallback 6000");
+});
+
 test("runtime source gate follows a listener port constant across package files", async () => {
   const packageDirectory = await mkdtemp(join(tmpdir(), "lazurio-runtime-source-import-"));
   tempRoots.push(packageDirectory);
