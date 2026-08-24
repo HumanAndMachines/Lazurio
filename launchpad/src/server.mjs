@@ -529,7 +529,7 @@ async function buildNotificationsResponse(company = null) {
 async function buildMostUsedResponse(company = null) {
   const appsResponse = await buildAppsResponse();
   const apps = company ? appsResponse.apps.filter((app) => app.company === company) : appsResponse.apps;
-  return buildMostUsedApps({ launchpadRoot, apps });
+  return buildMostUsedApps({ launchpadRoot: launchpadStateRoot, apps });
 }
 
 async function serveStatic(pathname) {

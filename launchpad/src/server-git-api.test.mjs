@@ -509,6 +509,9 @@ test("linked worktree gets only a read-only canonical Root mount context", async
   expect(existsSync(join(root, "launchpad", "logs", "apps", "test-root-guide-v1.log"))).toBe(true);
   expect(existsSync(join(worktreeRoot, "launchpad", "logs", "apps", "test-root-guide-v1.log"))).toBe(false);
   expect((await getJson(port, "/api/apps/test-root-guide-v1/health")).status).toBe("healthy");
+  expect((await postJson(port, "/api/apps/test-root-guide-v1/open", {})).action).toBe("open");
+  expect(existsSync(join(root, "launchpad", "runtime", "usage.json"))).toBe(true);
+  expect(existsSync(join(worktreeRoot, "launchpad", "runtime", "usage.json"))).toBe(false);
   expect((await postJson(port, "/api/apps/test-root-guide-v1/stop", {})).action).toBe("stop");
 
   const mutation = await fetch(`http://127.0.0.1:${port}/api/sync`, { method: "POST" });
