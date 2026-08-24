@@ -12,6 +12,7 @@ import { runChildDoctorLane } from "./doctor-children-lib.mjs";
 import { openBrowser } from "./browser-open-lib.mjs";
 import {
   launchpadFallbackUrls,
+  rollbackUnpublishedServerStartup,
   startLaunchpadWithPortPolicy,
 } from "./server-startup-lib.mjs";
 import {
@@ -272,16 +273,11 @@ try {
 
 async function abortUnpublishedStartup(originalError) {
   if (startResult?.mode !== "started") return originalError;
-  const rollback = await runtimeManager.rollbackUnpublishedStartup();
-  await startResult.server.stop(true);
-  if (rollback.failed === 0) return originalError;
-  const error = new Error(
-    `LAZURIO_SERVER_STARTUP_ROLLBACK_FAILED: Server startup failed and ${rollback.failed} managed runtime(s) could not be stopped.`,
-    { cause: originalError },
-  );
-  error.code = "LAZURIO_SERVER_STARTUP_ROLLBACK_FAILED";
-  error.rollback = rollback;
-  return error;
+  return rollbackUnpublishedServerStartup({
+    originalError,
+    runtimeManager,
+    server: startResult.server,
+  });
 }
 
 async function selectedControlRootDesiredStateKeys() {

@@ -159,6 +159,45 @@ export async function startLaunchpadWithPortPolicy({
   throw error;
 }
 
+export async function rollbackUnpublishedServerStartup({
+  originalError,
+  runtimeManager,
+  server,
+}) {
+  let rollback = null;
+  let rollbackError = null;
+  try {
+    rollback = await runtimeManager.rollbackUnpublishedStartup();
+  } catch (error) {
+    rollbackError = error;
+  }
+
+  let serverStopError = null;
+  try {
+    await server.stop(true);
+  } catch (error) {
+    serverStopError = error;
+  }
+
+  if (!rollbackError && rollback?.failed === 0 && !serverStopError) {
+    return originalError;
+  }
+
+  const failures = [];
+  if (rollbackError) failures.push("managed runtime rollback failed");
+  else if (rollback?.failed > 0) failures.push(`${rollback.failed} managed runtime(s) could not be stopped`);
+  if (serverStopError) failures.push("HTTP Server stop failed");
+  const error = new Error(
+    `LAZURIO_SERVER_STARTUP_ROLLBACK_FAILED: Server startup failed; ${failures.join("; ")}.`,
+    { cause: originalError },
+  );
+  error.code = "LAZURIO_SERVER_STARTUP_ROLLBACK_FAILED";
+  error.rollback = rollback;
+  if (rollbackError) error.rollback_error = rollbackError;
+  if (serverStopError) error.server_stop_error = serverStopError;
+  return error;
+}
+
 async function findKnownServer({ urls, inspectRunningLaunchpad }) {
   const seen = new Set();
   for (const url of urls) {
