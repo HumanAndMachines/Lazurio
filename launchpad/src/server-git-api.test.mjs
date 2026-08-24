@@ -778,7 +778,7 @@ test("instance-bound local shutdown rejects stale callers and releases the exact
   await expect(fetch(`http://127.0.0.1:${port}/health`)).rejects.toThrow();
 });
 
-test("launcher replaces a stale same-root Server on the same port", async () => {
+test("launcher replaces the immediately preceding pre-control-root Server on the same port", async () => {
   const root = await createLaunchpadGitFixture();
   const stateRoot = `${root}-launchpad-state`;
   tempRoots.push(root, stateRoot);
@@ -786,10 +786,7 @@ test("launcher replaces a stale same-root Server on the same port", async () => 
   const instanceId = "2a6db6d3-ad60-42b7-b6a8-e522ac838284";
   const rootId = computeServerRootId(realpathSync.native(root));
   const blockerPath = join(root, "stale-server.mjs");
-  const {
-    environment: serverEnvironment,
-    serverStateDirectory,
-  } = serverTestEnvironment(root, {
+  const { environment: serverEnvironment } = serverTestEnvironment(root, {
     LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot,
   });
   await writeFile(blockerPath, staleServerFixtureSource());
@@ -799,28 +796,12 @@ test("launcher replaces a stale same-root Server on the same port", async () => 
       ...process.env,
       PORT: String(port),
       ROOT_ID: rootId,
-      CONTROL_ROOT_ID: rootId,
       INSTANCE_ID: instanceId,
     },
     stdout: "ignore",
     stderr: "pipe",
   });
   await waitForHealth(port, blocker);
-  await writeServerLocator({
-    stateDirectory: serverStateDirectory,
-    origin: `http://127.0.0.1:${port}`,
-    identity: {
-      schema_version: "lazurio.server.identity.v1",
-      product: "lazurio-launchpad-server",
-      root_id: rootId,
-      control_root_id: rootId,
-      install_generation: "0".repeat(64),
-      instance_id: instanceId,
-      pid: blocker.pid,
-      started_at: "2026-08-18T19:00:00.000Z",
-    },
-  });
-
   const launcher = Bun.spawn(
     ["bun", "src/server.mjs", "--root", root, "--port", String(port), "--reuse"],
     {
@@ -1365,7 +1346,7 @@ function staleServerFixtureSource() {
     "        schema_version: 'lazurio.server.identity.v1',",
     "        product: 'lazurio-launchpad-server',",
     "        root_id: process.env.ROOT_ID,",
-    "        control_root_id: process.env.CONTROL_ROOT_ID,",
+    "        ...(process.env.CONTROL_ROOT_ID ? { control_root_id: process.env.CONTROL_ROOT_ID } : {}),",
     "        install_generation: '0'.repeat(64),",
     "        instance_id: process.env.INSTANCE_ID,",
     "        pid: process.pid,",

@@ -2359,7 +2359,7 @@ export function createRuntimeManager({
       && (left?.type !== "worktree" || left.slug === right?.slug);
   }
 
-  async function reconcileDesiredState() {
+  async function reconcileDesiredState({ moduleLeaseKeys = null } = {}) {
     const entries = await listDesiredModuleStates({ root: desiredStateRoot });
     const results = [];
     for (const entry of entries) {
@@ -2368,6 +2368,15 @@ export function createRuntimeManager({
         continue;
       }
       const desired = entry.state;
+      if (moduleLeaseKeys && !moduleLeaseKeys.has(desired.module_lease_key)) {
+        results.push({
+          status: "deferred",
+          module_lease_key: desired.module_lease_key,
+          app_id: desired.app_id,
+          source: desired.source,
+        });
+        continue;
+      }
       if (!desired.enabled) {
         results.push({
           status: "disabled",
@@ -2471,6 +2480,7 @@ export function createRuntimeManager({
       total: results.length,
       active: results.filter((result) => result.status === "active").length,
       disabled: results.filter((result) => result.status === "disabled").length,
+      deferred: results.filter((result) => result.status === "deferred").length,
       degraded: results.filter((result) => result.status === "degraded").length,
       results,
     };

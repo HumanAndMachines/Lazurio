@@ -229,9 +229,12 @@ try {
     // The machine-wide lifetime lease is already held. Locator publication is
     // delayed until boot reconciliation completes, so no launcher can observe
     // this Server as ready while it is restoring durable module runtimes.
-    bootReconcile = worktreeMountContextReadOnly
-      ? { active: 0, disabled: 0, degraded: 0, results: [] }
-      : await runtimeManager.reconcileDesiredState();
+    const selectedDesiredStateKeys = worktreeMountContextReadOnly
+      ? await selectedControlRootDesiredStateKeys()
+      : null;
+    bootReconcile = await runtimeManager.reconcileDesiredState({
+      moduleLeaseKeys: selectedDesiredStateKeys,
+    });
     const serverUrl = `http://${host}:${startResult.server.port}`;
     serverLocator = await writeServerLocator({
       stateDirectory: serverStateDirectory,
@@ -243,6 +246,19 @@ try {
 } catch (error) {
   if (startResult?.mode === "started") await startResult.server.stop(true);
   startupError = error;
+}
+
+async function selectedControlRootDesiredStateKeys() {
+  const discovery = await discoverLaunchpadApps(rootSourceRoot, {
+    organization_mount_root: companiesRoot,
+    machine_context_root: companiesRoot,
+  });
+  return new Set(
+    [...(discovery.apps ?? []), ...(discovery.invalid_apps ?? [])]
+      .filter((app) => app?.[APP_FILESYSTEM_ROOT] === rootSourceRoot)
+      .filter((app) => typeof app.company === "string" && typeof app.module === "string")
+      .map((app) => `${app.company}/${app.module}`),
+  );
 }
 if (startupError) {
   await serverLifetimeLock?.release();
@@ -266,7 +282,7 @@ console.log(`Launchpad GEN3 locator: ${serverLocator.path}`);
 if (worktreeMountContextReadOnly) {
   console.warn("[launchpad] linked worktree používá canonical Root pouze jako read-only mount context");
 }
-console.log(`[launchpad] desired reconcile active=${bootReconcile.active} disabled=${bootReconcile.disabled} degraded=${bootReconcile.degraded}`);
+console.log(`[launchpad] desired reconcile active=${bootReconcile.active} disabled=${bootReconcile.disabled} deferred=${bootReconcile.deferred} degraded=${bootReconcile.degraded}`);
 for (const result of bootReconcile.results.filter((item) => item.status === "degraded")) {
   console.warn(`[launchpad] desired reconcile degraded ${result.module_lease_key ?? result.file}: ${result.error}`);
 }

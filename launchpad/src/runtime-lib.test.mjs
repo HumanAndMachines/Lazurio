@@ -3477,6 +3477,47 @@ test("boot reconcile restores exact main and owned worktree desired sources", as
   await worktreeRuntime.stop(app.id, { source: { type: "worktree", slug } });
 }, platformTestTimeout(20_000));
 
+test("boot reconcile can restore only the selected control-root Module set", async () => {
+  const selectedPort = await findFreePort();
+  let deferredPort = await findFreePort();
+  while (deferredPort === selectedPort) deferredPort = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port: selectedPort });
+  const selectedApp = withStaticEntrypoint(fixtureDiscoveryApp({ port: selectedPort }));
+  const deferredApp = withStaticEntrypoint(fixtureDiscoveryApp({
+    port: deferredPort,
+    overrides: {
+      id: "other-company-other-v1",
+      company: "other-company",
+      module: "other",
+    },
+  }));
+  const desiredRoot = join(root, "launchpad", "runtime", "desired-modules");
+  await writeDesiredModuleState({
+    root: desiredRoot,
+    state: buildDesiredModuleState({ app: selectedApp, source: { type: "main" } }),
+  });
+  await writeDesiredModuleState({
+    root: desiredRoot,
+    state: buildDesiredModuleState({ app: deferredApp, source: { type: "main" } }),
+  });
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "boot-selected-root-only",
+    discover: discoveryWithApps(selectedApp, deferredApp),
+  });
+
+  expect(await runtime.reconcileDesiredState({
+    moduleLeaseKeys: new Set(["test-company/demo"]),
+  })).toMatchObject({ active: 1, deferred: 1, degraded: 0 });
+  expect(await runtime.health(selectedApp.id)).toMatchObject({ status: "healthy" });
+  expect(await runtime.health(deferredApp.id)).toMatchObject({
+    managed: false,
+    desired: { enabled: true },
+  });
+  await runtime.stop(selectedApp.id);
+}, platformTestTimeout(20_000));
+
 test("reloaded main selector stops the sole reconciled worktree and boot cannot resurrect it", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({ port });

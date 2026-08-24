@@ -186,6 +186,11 @@ export function classifyServerIdentity({ observed = null, legacyObserved = null,
     if (isSha256(observed?.root_id) && observed.root_id !== expected.rootId) return "foreign_root";
     if (observed?.root_id !== expected.rootId) return "unrecognized";
     if (observed?.schema_version !== LAZURIO_SERVER_IDENTITY_SCHEMA) return "protocol_incompatible";
+    // The immediately preceding v1 Server did not publish control_root_id.
+    // Its exact instance id is still sufficient for the existing guarded
+    // shutdown handshake, so treat that verified shape as a replaceable old
+    // generation instead of forcing every user to kill it manually once.
+    if (isPreControlRootServerIdentity(observed)) return "stale_install";
     if (!isValidServerIdentity(observed)) return "protocol_incompatible";
     if (observed.control_root_id !== expected.controlRootId) return "stale_install";
     if (observed.install_generation !== expected.installGeneration) return "stale_install";
@@ -200,6 +205,25 @@ export function classifyServerIdentity({ observed = null, legacyObserved = null,
   }
 
   return "unrecognized";
+}
+
+function isPreControlRootServerIdentity(identity) {
+  return Boolean(
+    identity
+    && typeof identity === "object"
+    && !Array.isArray(identity)
+    && !("control_root_id" in identity)
+    && identity.schema_version === LAZURIO_SERVER_IDENTITY_SCHEMA
+    && identity.product === LAZURIO_SERVER_PRODUCT
+    && isSha256(identity.root_id)
+    && isSha256(identity.install_generation)
+    && typeof identity.instance_id === "string"
+    && uuidPattern.test(identity.instance_id)
+    && Number.isSafeInteger(identity.pid)
+    && identity.pid > 0
+    && typeof identity.started_at === "string"
+    && Number.isFinite(Date.parse(identity.started_at))
+  );
 }
 
 export function isValidServerIdentity(identity) {
