@@ -3451,7 +3451,16 @@ test("boot reconcile restores exact main and owned worktree desired sources", as
     status: "healthy",
     desired: { source: { type: "main" }, status: "active" },
   });
-  await mainRuntime.stop(app.id);
+  expect(await mainRuntime.rollbackUnpublishedStartup()).toMatchObject({
+    attempted: 1,
+    stopped: 1,
+    failed: 0,
+  });
+  expect(await mainRuntime.health(app.id)).toMatchObject({
+    status: "stopped",
+    managed: false,
+    desired: { enabled: true, source: { type: "main" }, status: "active" },
+  });
 
   const { slug } = await createOwnedWorktreeFixture({ root });
   await writeDesiredModuleState({
