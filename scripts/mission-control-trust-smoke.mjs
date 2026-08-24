@@ -327,6 +327,11 @@ function positiveId(value) {
   return POSITIVE_ID_PATTERN.test(id) ? id : null;
 }
 
+function nonNegativeCount(value) {
+  const count = Number(value);
+  return Number.isSafeInteger(count) && count >= 0 ? count : null;
+}
+
 function providerMessage(response) {
   return response?.value?.message
     ?? response?.error?.message
@@ -408,9 +413,11 @@ function organizationOwnerProof(provider, organization) {
 
 export function organizationOwnerAbsenceProof(provider, organization, coordinate) {
   const liveLogin = String(organization?.login ?? "");
+  const organizationId = positiveId(organization?.id);
   const coordinateOwner = String(coordinate ?? "").split("/", 1)[0];
   if (
-    !GITHUB_LOGIN_PATTERN.test(liveLogin)
+    !organizationId
+    || !GITHUB_LOGIN_PATTERN.test(liveLogin)
     || coordinateOwner.toLowerCase() !== liveLogin.toLowerCase()
   ) {
     return {
@@ -419,7 +426,70 @@ export function organizationOwnerAbsenceProof(provider, organization, coordinate
         `repo locator ${coordinate} neleží v ověřené GitHub Organization ${liveLogin}`,
     };
   }
-  return organizationOwnerProof(provider, organization);
+  const ownerProof = organizationOwnerProof(provider, organization);
+  if (!ownerProof.confirmed) return ownerProof;
+
+  const publicRepositoryCount = nonNegativeCount(organization?.public_repos);
+  const privateRepositoryCount = nonNegativeCount(organization?.total_private_repos);
+  if (publicRepositoryCount === null || privateRepositoryCount === null) {
+    return {
+      confirmed: false,
+      message:
+        "GitHub Organization metadata neobsahují úplné public/private repo počty",
+    };
+  }
+
+  const repositories = githubPaginatedArray(
+    provider,
+    `orgs/${liveLogin}/repos?type=all&per_page=100`,
+  );
+  if (!repositories.ok) {
+    return {
+      confirmed: false,
+      message: `nelze vyjmenovat Organization repozitáře: ${providerMessage(repositories)}`,
+    };
+  }
+
+  const seenIds = new Set();
+  let targetListed = false;
+  for (const repository of repositories.value) {
+    const repositoryId = positiveId(repository?.id);
+    const ownerId = positiveId(repository?.owner?.id);
+    const repositoryCoordinate = String(repository?.full_name ?? "");
+    if (
+      !repositoryId
+      || seenIds.has(repositoryId)
+      || repository?.owner?.type !== "Organization"
+      || ownerId !== organizationId
+      || !GITHUB_REPOSITORY_PATTERN.test(repositoryCoordinate)
+    ) {
+      return {
+        confirmed: false,
+        message: "GitHub Organization repo enumeration nemá konzistentní immutable identity",
+      };
+    }
+    seenIds.add(repositoryId);
+    if (repositoryCoordinate.toLowerCase() === String(coordinate).toLowerCase()) {
+      targetListed = true;
+    }
+  }
+
+  const expectedRepositoryCount = publicRepositoryCount + privateRepositoryCount;
+  if (repositories.value.length !== expectedRepositoryCount) {
+    return {
+      confirmed: false,
+      message:
+        `GitHub token neprokázal úplnou viditelnost Organization repozitářů `
+        + `(vidí ${repositories.value.length}, Organization hlásí ${expectedRepositoryCount})`,
+    };
+  }
+  if (targetListed) {
+    return {
+      confirmed: false,
+      message: `Organization repo enumeration ${coordinate} obsahuje navzdory přímému 404`,
+    };
+  }
+  return { confirmed: true, message: null };
 }
 
 export function missionControlDataPrivacyProblem(repository) {
