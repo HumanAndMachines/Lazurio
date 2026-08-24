@@ -267,59 +267,134 @@ test("repository probe requires immutable Owner proof before 404 means absent", 
   ).toEqual({ exists: null, error: "Forbidden" });
 });
 
-test("404 absence proof is scoped to the verified Organization Owner", () => {
-  let calls = 0;
+function ownerAbsenceProvider(repositories, { role = "admin" } = {}) {
   const provider = {
-    json() {
-      calls += 1;
+    calls: [],
+    json(args) {
+      this.calls.push(args);
+      if (String(args.at(-1)).startsWith("user/memberships/orgs/")) {
+        return {
+          ok: true,
+          value: {
+            state: "active",
+            role,
+            organization: { id: 42 },
+          },
+        };
+      }
       return {
         ok: true,
-        value: {
-          state: "active",
-          role: "admin",
-          organization: { id: 42 },
-        },
+        value: [repositories],
       };
     },
+  };
+  return provider;
+}
+
+test("404 absence proof requires a complete repository view from the verified Owner", () => {
+  const repositories = [
+    {
+      id: 100,
+      full_name: "Verified-Org/root",
+      owner: { id: 42, type: "Organization" },
+      visibility: "public",
+    },
+    {
+      id: 101,
+      full_name: "Verified-Org/another-private-repo",
+      owner: { id: 42, type: "Organization" },
+      visibility: "private",
+    },
+  ];
+  const provider = ownerAbsenceProvider(repositories);
+  const organization = {
+    id: 42,
+    login: "Verified-Org",
+    public_repos: 1,
+    total_private_repos: 1,
   };
   expect(
     organizationOwnerAbsenceProof(
       provider,
-      { id: 42, login: "Verified-Org" },
+      organization,
       "Other-Org/mission-control-data",
     ),
   ).toMatchObject({ confirmed: false });
-  expect(calls).toBe(0);
+  expect(provider.calls).toHaveLength(0);
   expect(
     organizationOwnerAbsenceProof(
       provider,
-      { id: 42, login: "Verified-Org" },
+      organization,
       "verified-org/mission-control-data",
     ),
   ).toEqual({ confirmed: true, message: null });
-  expect(calls).toBe(1);
+  expect(provider.calls).toHaveLength(2);
+});
 
-  const memberProvider = {
-    json() {
-      return {
-        ok: true,
-        value: {
-          state: "active",
-          role: "member",
-          organization: { id: 42 },
-        },
-      };
-    },
+test("404 absence proof fails closed for scoped, incomplete or contradictory views", () => {
+  const organization = {
+    id: 42,
+    login: "Verified-Org",
+    public_repos: 0,
+    total_private_repos: 2,
   };
+  const visiblePrivate = {
+    id: 101,
+    full_name: "Verified-Org/visible-private",
+    owner: { id: 42, type: "Organization" },
+    visibility: "private",
+  };
+  const memberProvider = ownerAbsenceProvider([visiblePrivate], { role: "member" });
   expect(
     organizationOwnerAbsenceProof(
       memberProvider,
-      { id: 42, login: "Verified-Org" },
+      organization,
       "Verified-Org/mission-control-data",
     ),
   ).toEqual({
     confirmed: false,
     message: "přihlášený gh účet nemá aktivní Organization Owner roli",
+  });
+
+  const scopedProvider = ownerAbsenceProvider([visiblePrivate]);
+  expect(
+    organizationOwnerAbsenceProof(
+      scopedProvider,
+      organization,
+      "Verified-Org/mission-control-data",
+    ),
+  ).toMatchObject({
+    confirmed: false,
+    message: expect.stringContaining("neprokázal úplnou viditelnost"),
+  });
+
+  const targetProvider = ownerAbsenceProvider([
+    {
+      ...visiblePrivate,
+      full_name: "Verified-Org/mission-control-data",
+    },
+  ]);
+  expect(
+    organizationOwnerAbsenceProof(
+      targetProvider,
+      { ...organization, total_private_repos: 1 },
+      "Verified-Org/mission-control-data",
+    ),
+  ).toMatchObject({
+    confirmed: false,
+    message: expect.stringContaining("obsahuje navzdory přímému 404"),
+  });
+
+  const missingCountsProvider = ownerAbsenceProvider([]);
+  expect(
+    organizationOwnerAbsenceProof(
+      missingCountsProvider,
+      { id: 42, login: "Verified-Org" },
+      "Verified-Org/mission-control-data",
+    ),
+  ).toMatchObject({
+    confirmed: false,
+    message: expect.stringContaining("neobsahují úplné"),
   });
 });
 
