@@ -116,7 +116,11 @@ async function readServerLocatorFile({ stateDirectory, allowMissing }) {
     locator = JSON.parse(await readFile(path, "utf8"));
   } catch (error) {
     if (allowMissing && error?.code === "ENOENT") return null;
-    throw new Error(`Lazurio Server locator ${path} cannot be read: ${error.message}`);
+    const failure = new Error(`Lazurio Server locator ${path} cannot be read: ${error.message}`, {
+      cause: error,
+    });
+    failure.code = error?.code;
+    throw failure;
   }
   const errors = validateServerLocator(locator);
   if (errors.length > 0) throw new Error(`Lazurio Server locator is invalid: ${errors.join("; ")}`);
