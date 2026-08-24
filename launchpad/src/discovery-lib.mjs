@@ -777,14 +777,24 @@ export async function runtimeSourcePortAuthorityIssues({
   }
 
   await visit(packageDirectory);
-  const listenerPortConstants = new Set();
-  for (const { source } of sources) {
+  const sourceListenerBindings = new Map();
+  const sharedListenerBindings = new Set();
+  for (const { sourcePath, source } of sources) {
+    const bindings = new Set();
     for (const pattern of [
-      /(?:\bport|["']port["'])\s*:\s*(?:Number\s*\(\s*)?([A-Za-z_$][A-Za-z0-9_$]*)\b/g,
-      /\blisten(?:Sync)?\s*\(\s*(?:Number\s*\(\s*)?([A-Za-z_$][A-Za-z0-9_$]*)\b/g,
+      /(?:\bport|["']port["'])\s*:\s*(?:Number\s*\(\s*)?((?:[A-Za-z_$][A-Za-z0-9_$]*\s*\.\s*)*[A-Za-z_$][A-Za-z0-9_$]*)\b/g,
+      /\blisten(?:Sync)?\s*\(\s*(?:Number\s*\(\s*)?((?:[A-Za-z_$][A-Za-z0-9_$]*\s*\.\s*)*[A-Za-z_$][A-Za-z0-9_$]*)\b/g,
     ]) {
-      for (const match of source.matchAll(pattern)) listenerPortConstants.add(match[1]);
+      for (const match of source.matchAll(pattern)) {
+        const name = match[1].split(".").at(-1).trim();
+        bindings.add(name);
+        // Generic local names such as `port` are lexical. Port-labelled
+        // bindings are safe to follow across the small package source graph,
+        // including namespace imports such as config.API_PORT.
+        if (name.split("_").includes("PORT")) sharedListenerBindings.add(name);
+      }
     }
+    sourceListenerBindings.set(sourcePath, bindings);
   }
 
   for (const { sourcePath, source } of sources) {
@@ -802,7 +812,11 @@ export async function runtimeSourcePortAuthorityIssues({
       const declaredPortPattern = /\b(?:const|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*["']?(\d{4,5})["']?/g;
       const alwaysOwnedPortConstants = new Set(["PORT", "DEFAULT_PORT", "SERVER_PORT", "LISTEN_PORT", "HTTP_PORT"]);
       for (const match of source.matchAll(declaredPortPattern)) {
-        if (!alwaysOwnedPortConstants.has(match[1]) && !listenerPortConstants.has(match[1])) continue;
+        if (
+          !alwaysOwnedPortConstants.has(match[1])
+          && !sourceListenerBindings.get(sourcePath)?.has(match[1])
+          && !sharedListenerBindings.has(match[1])
+        ) continue;
         issues.push(
           `${sourcePath}: runtime source obsahuje číselný port fallback ${match[2]}; port smí materializovat jen module lease`,
         );

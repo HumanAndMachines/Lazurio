@@ -7,18 +7,10 @@ import { basename, dirname, isAbsolute, join, resolve, win32 } from "node:path";
 export const LAZURIO_SERVER_LOCATOR_SCHEMA = "lazurio.server.locator.v1";
 
 export function resolveServerStateDirectory({
-  configuredStateRoot,
   platform = process.platform,
   environment = process.env,
   homeDirectory = homedir(),
 } = {}) {
-  if (typeof configuredStateRoot === "string" && configuredStateRoot.trim() !== "") {
-    if (!isAbsoluteForPlatform(configuredStateRoot, platform)) {
-      throw new TypeError("Configured Lazurio Server state root must be absolute.");
-    }
-    return normalizeForPlatform(configuredStateRoot, platform);
-  }
-
   if (platform === "win32") {
     const localAppData = typeof environment?.LOCALAPPDATA === "string"
       && win32.isAbsolute(environment.LOCALAPPDATA)
@@ -184,14 +176,6 @@ function assertPhysicalDirectory(path, label) {
   if (!stat.isDirectory() || stat.isSymbolicLink()) {
     throw new Error(`${label} must be a physical directory: ${path}`);
   }
-}
-
-function isAbsoluteForPlatform(path, platform) {
-  return platform === "win32" ? win32.isAbsolute(path) : isAbsolute(path);
-}
-
-function normalizeForPlatform(path, platform) {
-  return platform === "win32" ? win32.normalize(path) : resolve(path);
 }
 
 function joinForStateDirectory(directory, basename) {

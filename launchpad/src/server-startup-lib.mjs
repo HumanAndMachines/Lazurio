@@ -50,7 +50,7 @@ export async function startLaunchpadWithPortPolicy({
         "LAZURIO_SERVER_UPGRADE_REQUIRED",
         `Na ${locatedUrl} běží nekompatibilní Lazurio Server stejného rootu. Zastav ho a spusť Launchpad znovu.`,
       );
-    } else if (located?.status === "probe_failed") {
+    } else if (located?.status === "probe_failed" || located?.status === "unrecognized") {
       throw serverConflict(
         "LAZURIO_SERVER_PROBE_FAILED",
         `Server zapsaný pro tento root na ${locatedUrl} nešlo bezpečně identifikovat; další Server se nespustí.`,
@@ -129,7 +129,7 @@ async function waitForLocatedServerDrain({
   for (let attempt = 0; attempt < maxStaleRebindAttempts; attempt += 1) {
     await waitBeforeStaleRebind();
     const observation = await inspectRunningLaunchpad(locatedUrl);
-    if (!["compatible", "stale_install", "probe_failed"].includes(observation?.status)) return;
+    if (observation?.status === "absent") return;
   }
   throw serverConflict(
     "LAZURIO_STALE_SERVER_DRAIN_TIMEOUT",

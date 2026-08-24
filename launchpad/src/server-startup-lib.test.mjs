@@ -158,7 +158,7 @@ test("machine locator blocks a second Lazurio Root instead of falling forward", 
 });
 
 test("locator drains a stale fallback Server before binding a new generation", async () => {
-  const observations = ["stale_install", "probe_failed", "unrecognized"];
+  const observations = ["stale_install", "probe_failed", "absent"];
   const shutdowns = [];
   const result = await startLaunchpadWithPortPolicy({
     requestedPort: 4174,
@@ -177,6 +177,25 @@ test("locator drains a stale fallback Server before binding a new generation", a
 
   expect(shutdowns).toEqual(["http://127.0.0.1:4175"]);
   expect(result).toEqual({ mode: "started", server: { port: 4174 } });
+});
+
+test("indeterminate machine locator never starts a second Server", async () => {
+  for (const status of ["probe_failed", "unrecognized"]) {
+    let started = false;
+    await expect(startLaunchpadWithPortPolicy({
+      requestedPort: 4174,
+      explicitPort: false,
+      shouldOpen: false,
+      shouldReuse: true,
+      locatedUrl: "http://127.0.0.1:4175",
+      startServer() {
+        started = true;
+        return { port: 4174 };
+      },
+      inspectRunningLaunchpad: async () => ({ status }),
+    })).rejects.toMatchObject({ code: "LAZURIO_SERVER_PROBE_FAILED" });
+    expect(started).toBe(false);
+  }
 });
 
 test("launch falls forward when the requested implicit port belongs to a foreign root", async () => {
