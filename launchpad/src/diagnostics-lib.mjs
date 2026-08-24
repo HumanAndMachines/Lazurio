@@ -1312,6 +1312,19 @@ function slotScopeContractIssues(manifest, config) {
   return issues;
 }
 
+function organizationOwnsRootLayer(organizationRoot, path) {
+  const absolutePath = join(organizationRoot, path);
+  if (!existsSync(absolutePath) || existsSync(join(absolutePath, ".git"))) return false;
+
+  const indexEntries = runGit(["ls-files", "--stage", "--", path], organizationRoot);
+  if (!indexEntries.ok || indexEntries.stdout.trim().length === 0) return false;
+
+  return indexEntries.stdout
+    .split("\n")
+    .filter(Boolean)
+    .every((entry) => !entry.startsWith("160000 "));
+}
+
 // Organization root checkout boundaries mají přísnější kontrakt než běžné
 // Team moduly: scope musí být explicitní, aktivní slot musí nést přesné checkout
 // souřadnice a Mission Control app/data deklarace tvoří jeden pár.
@@ -1425,10 +1438,7 @@ function rootSlotContractIssues(manifest, config, organizationRoot) {
     );
   }
   for (const path of declaredLayerPaths) {
-    const trackedByOrganization = runGit(
-      ["ls-files", "--error-unmatch", "--", path],
-      organizationRoot,
-    ).ok;
+    const trackedByOrganization = organizationOwnsRootLayer(organizationRoot, path);
     if (!declaredPaths.has(path) && !trackedByOrganization) {
       issues.push(
         `company.gen3.json: root vrstva ${path} nemá odpovídající modules.manifest.json slot`,

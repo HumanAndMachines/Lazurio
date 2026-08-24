@@ -1566,6 +1566,77 @@ test("trackovaná Organization root vrstva není samostatný repository slot", a
   expect(declarationCheck?.details.join("\n") ?? "").not.toContain(
     "root vrstva design-system nemá odpovídající modules.manifest.json slot",
   );
+
+  await mkdir(join(companyRoot, "design-system", ".git"), { recursive: true });
+  const nestedCheckoutReport = await buildLaunchpadDoctorReport({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    runtimeManager: { appsWithRuntime: async (apps) => apps },
+  });
+  const nestedCheckoutCheck = nestedCheckoutReport.checks.find(
+    (check) => check.id === "launchpad.workspace_declarations",
+  );
+  expect(nestedCheckoutCheck?.details.join("\n") ?? "").toContain(
+    "root vrstva design-system nemá odpovídající modules.manifest.json slot",
+  );
+});
+
+test("Gitlink Organization root vrstvy vyžaduje samostatný repository slot", async () => {
+  const root = await createCompaniesWorkspaceFixture();
+  const companyRoot = join(root, "organizations", "OmegaCo_GEN3");
+  const designSystemRoot = join(companyRoot, "design-system");
+  await mkdir(join(companyRoot, "manual"), { recursive: true });
+  await mkdir(join(companyRoot, "company", "colleagues"), { recursive: true });
+  await mkdir(designSystemRoot, { recursive: true });
+  await writeFile(join(designSystemRoot, "README.md"), "# Nested Design System\n");
+  await writeJson(join(companyRoot, "company.gen3.json"), {
+    organization_generation: "gen3",
+    company: { slug: "OmegaCo", display_name: "OmegaCo" },
+    layers: [{ path: "design-system", kind: "design-system", ownership: "override" }],
+  });
+  await writeJson(join(companyRoot, "modules.manifest.json"), {
+    organization_generation: "gen3",
+    module_slots: [],
+  });
+  await writeJson(join(companyRoot, "TODO.tasks.json"), {});
+  await writeJson(join(companyRoot, "DONE.tasks.json"), {});
+  await writeJson(join(companyRoot, "ISSUES.open.json"), {});
+  run(["git", "init"], designSystemRoot);
+  run(["git", "add", "."], designSystemRoot);
+  run([
+    "git",
+    "-c",
+    "user.name=Test",
+    "-c",
+    "user.email=test@example.com",
+    "commit",
+    "-m",
+    "Nested Design System",
+  ], designSystemRoot);
+  run(["git", "init"], companyRoot);
+  run(["git", "add", "."], companyRoot);
+  run([
+    "git",
+    "-c",
+    "user.name=Test",
+    "-c",
+    "user.email=test@example.com",
+    "commit",
+    "-m",
+    "Organization root",
+  ], companyRoot);
+
+  const report = await buildLaunchpadDoctorReport({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    runtimeManager: { appsWithRuntime: async (apps) => apps },
+  });
+  const declarationCheck = report.checks.find(
+    (check) => check.id === "launchpad.workspace_declarations",
+  );
+  expect(declarationCheck?.details.join("\n") ?? "").toContain(
+    "root vrstva design-system nemá odpovídající modules.manifest.json slot",
+  );
 });
 
 test("app sekci určí fyzická cesta, manifest doplní N:M Team intent a sdílený modul může být jednou v Organizaci", async () => {
