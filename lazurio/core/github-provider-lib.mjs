@@ -13,7 +13,7 @@ export function createTrustedGitHubProvider({
   runCommand = runTrustedGitHubCliSync,
 } = {}) {
   const executable = resolveExecutable({ platform, environment });
-  const providerEnvironment = sanitizedGitHubEnvironment(environment, platform);
+  const providerEnvironment = sanitizedGitHubEnvironment(environment);
 
   const command = (args, { json = true } = {}) => {
     if (!executable) {
@@ -105,10 +105,7 @@ export function createTrustedGitHubProvider({
   });
 }
 
-export function sanitizedGitHubEnvironment(
-  environment,
-  platform = process.platform,
-) {
+export function sanitizedGitHubEnvironment(environment) {
   const result = {};
   for (const key of [
     "PATH",
@@ -135,9 +132,6 @@ export function sanitizedGitHubEnvironment(
   result.GH_NO_UPDATE_NOTIFIER = "1";
   result.NO_COLOR = "1";
   result.LC_ALL = "C";
-  if (platform === "win32" && typeof result.SystemRoot !== "string") {
-    delete result.SystemRoot;
-  }
   return result;
 }
 

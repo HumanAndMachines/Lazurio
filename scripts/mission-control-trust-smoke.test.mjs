@@ -13,6 +13,7 @@ import {
   evaluateTrustedProcessCircle,
   missionControlDataPrivacyProblem,
   organizationOwnerAbsenceProof,
+  resolveDataPublishBranch,
   resolveDataRepositoryLocator,
   runSmoke,
 } from "./mission-control-trust-smoke.mjs";
@@ -64,6 +65,32 @@ test("planned slots use the standard repo name only as a locator", () => {
       ).error,
     ).toContain("neplatný");
   }
+});
+
+test("active Mission Control data binds the declared canonical v3 publish branch", () => {
+  const slot = {
+    git: { branch: "v3" },
+    repository_db: { branch: "v3" },
+  };
+  expect(resolveDataPublishBranch(slot, { default_branch: "v3" })).toEqual({
+    branch: "v3",
+    error: null,
+  });
+  expect(
+    resolveDataPublishBranch(
+      { ...slot, repository_db: { branch: "main" } },
+      { default_branch: "v3" },
+    ).error,
+  ).toContain("jednu shodnou");
+  expect(
+    resolveDataPublishBranch(
+      { git: { branch: "main" }, repository_db: { branch: "main" } },
+      { default_branch: "main" },
+    ).error,
+  ).toContain("musí být v3");
+  expect(resolveDataPublishBranch(slot, { default_branch: "main" }).error).toContain(
+    "default branch main",
+  );
 });
 
 test("repository origin is anchored to the exact Organization checkout", () => {
@@ -444,6 +471,146 @@ test("live smoke fails closed instead of passing an empty checkout", () => {
     expect(() => runSmoke(root)).toThrow("odmítá false-green běh bez Organizací");
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+function plannedSmokeFixture(root, { dataResponse, totalPrivateRepos }) {
+  const organizationRoot = join(root, "organizations", "Verified_GEN3");
+  mkdirSync(organizationRoot, { recursive: true });
+  writeFileSync(
+    join(organizationRoot, "company.gen3.json"),
+    `${JSON.stringify({ company: { github_org: "Verified-Org" } }, null, 2)}\n`,
+  );
+  writeFileSync(
+    join(organizationRoot, "modules.manifest.json"),
+    `${JSON.stringify({
+      modules: [{ path: "mission-control/db", status: "planned_slot" }],
+    }, null, 2)}\n`,
+  );
+  const rootRepository = {
+    id: 100,
+    full_name: "Verified-Org/Root",
+    private: true,
+    visibility: "private",
+    owner: { id: 42, type: "Organization" },
+  };
+  const calls = [];
+  const provider = {
+    available: true,
+    json(args) {
+      const endpoint = String(args.at(-1));
+      calls.push(endpoint);
+      if (endpoint === "repos/Verified-Org/Root") {
+        return { ok: true, value: rootRepository };
+      }
+      if (endpoint === "organizations/42") {
+        return {
+          ok: true,
+          value: {
+            id: 42,
+            login: "Verified-Org",
+            public_repos: 0,
+            total_private_repos: totalPrivateRepos,
+          },
+        };
+      }
+      if (endpoint === "repos/Verified-Org/mission-control-data") {
+        return dataResponse;
+      }
+      if (endpoint === "user/memberships/orgs/Verified-Org") {
+        return {
+          ok: true,
+          value: {
+            state: "active",
+            role: "admin",
+            organization: { id: 42 },
+          },
+        };
+      }
+      if (endpoint === "orgs/Verified-Org/repos?type=all&per_page=100") {
+        return { ok: true, value: [[rootRepository]] };
+      }
+      throw new Error(`Unexpected GitHub endpoint: ${endpoint}`);
+    },
+  };
+  const gitReader = {
+    available: true,
+    text(cwd, args) {
+      if (args[0] === "rev-parse") return { ok: true, value: cwd };
+      return { ok: true, value: "git@github.com:Verified-Org/Root.git" };
+    },
+  };
+  return { calls, gitReader, provider };
+}
+
+test("runSmoke accepts a private-repo 404 only through complete Owner visibility proof", () => {
+  for (const scenario of [
+    { totalPrivateRepos: 1, expectedErrors: 0 },
+    { totalPrivateRepos: 2, expectedErrors: 1 },
+  ]) {
+    const root = mkdtempSync(join(tmpdir(), "mc-planned-smoke-"));
+    try {
+      const fixture = plannedSmokeFixture(root, {
+        dataResponse: {
+          ok: false,
+          httpStatus: 404,
+          value: { message: "Not Found" },
+        },
+        totalPrivateRepos: scenario.totalPrivateRepos,
+      });
+      const [result] = runSmoke(root, fixture);
+      expect(result.data_state).toBe("planned");
+      expect(result.errors).toHaveLength(scenario.expectedErrors);
+      expect(fixture.calls).toContain("user/memberships/orgs/Verified-Org");
+      expect(fixture.calls).toContain(
+        "orgs/Verified-Org/repos?type=all&per_page=100",
+      );
+      if (scenario.expectedErrors > 0) {
+        expect(result.errors.join(" ")).toContain("neprokázal úplnou viditelnost");
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+
+  const forbiddenRoot = mkdtempSync(join(tmpdir(), "mc-forbidden-smoke-"));
+  try {
+    const fixture = plannedSmokeFixture(forbiddenRoot, {
+      dataResponse: {
+        ok: false,
+        httpStatus: 403,
+        value: { message: "Forbidden" },
+      },
+      totalPrivateRepos: 1,
+    });
+    const [result] = runSmoke(forbiddenRoot, fixture);
+    expect(result.errors.join(" ")).toContain("Forbidden");
+    expect(fixture.calls).not.toContain("user/memberships/orgs/Verified-Org");
+  } finally {
+    rmSync(forbiddenRoot, { recursive: true, force: true });
+  }
+
+  const stagedRoot = mkdtempSync(join(tmpdir(), "mc-staged-smoke-"));
+  try {
+    const fixture = plannedSmokeFixture(stagedRoot, {
+      dataResponse: {
+        ok: true,
+        value: {
+          id: 200,
+          full_name: "Verified-Org/mission-control-data",
+          private: true,
+          owner: { id: 42, type: "Organization" },
+        },
+      },
+      totalPrivateRepos: 2,
+    });
+    const [result] = runSmoke(stagedRoot, fixture);
+    expect(result.data_state).toBe("staged");
+    expect(result.errors).toHaveLength(0);
+    expect(fixture.calls.some((endpoint) => endpoint.includes("/branches/"))).toBeFalse();
+    expect(fixture.calls.some((endpoint) => endpoint.includes("/rules/branches/"))).toBeFalse();
+  } finally {
+    rmSync(stagedRoot, { recursive: true, force: true });
   }
 });
 
