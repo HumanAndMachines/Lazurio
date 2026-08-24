@@ -144,6 +144,7 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
     expect.objectContaining({ path: "AGENTS.md" }),
   ]);
   expect(first.manifest.payload.files.map((file) => file.path)).toEqual(expect.arrayContaining([
+    "THIRD_PARTY_NOTICES.md",
     "lazurio/core/organization-slot-scope-lib.mjs",
     "lazurio/core/cli-provenance-lib.mjs",
     "lazurio/core/resident-manifest-lib.mjs",

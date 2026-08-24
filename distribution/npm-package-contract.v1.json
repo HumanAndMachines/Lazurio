@@ -10,6 +10,7 @@
   "source_includes": [
     "LICENSE.md",
     "README.md",
+    "THIRD_PARTY_NOTICES.md",
     "lazurio/README.md",
     "lazurio/cli.mjs",
     "lazurio/cli-install-lib.mjs",
@@ -45,6 +46,7 @@
   "required_paths": [
     "LICENSE.md",
     "README.md",
+    "THIRD_PARTY_NOTICES.md",
     "lazurio/cli.mjs",
     "lazurio/context-v0.schema.json",
     "lazurio/install-report.v0.schema.json",

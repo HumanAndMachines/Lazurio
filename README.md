@@ -312,6 +312,13 @@ dnes používá **FSL-1.1-Apache-2.0**. Jde o source-available licenci s budouc�
 přechodem jednotlivých verzí na Apache 2.0; není to zatím finální OSS licenční
 režim, který má Lazurio nabídnout komunitě.
 
-Volba a publikace navazující OSS licence je samostatné explicitní rozhodnutí
-Principála. Dokud není nová licence skutečně publikovaná, nelze ji z plánů ani
-záměru projektu domýšlet a platí přesné znění aktuálního `LICENSE.md`.
+Pro veřejný Lazurio Core byla jako cílová OSS licence zvolena
+**Apache License 2.0**. Přechod bude publikovaný až po dokončení právního
+převodu práv na společnost `Human and Machine s.r.o.` a srovnání NOTICE,
+third-party notices a distribučních metadat. Do té doby platí přesné znění
+aktuálního `LICENSE.md`; samotné oznámení cílové licence dnešní podmínky nemění.
+
+Licence Lazurio Core automaticky nepřelicencovává uživatelská data, obsah
+Personalspace, zdrojové kódy Organizací ani samostatné Moduly. Materiály třetích
+stran se řídí vlastními licencemi uvedenými v
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

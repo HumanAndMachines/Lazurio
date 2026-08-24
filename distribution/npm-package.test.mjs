@@ -21,10 +21,12 @@ test("source package remains private while generated package contract is platfor
     packer: { name: "npm" },
   });
   expect(contract.source_includes).toEqual(expect.arrayContaining([
+    "THIRD_PARTY_NOTICES.md",
     "lazurio/organization-activation-lib.mjs",
     "lazurio/organization-activation-report.v0.schema.json",
   ]));
   expect(contract.required_paths).toEqual(expect.arrayContaining([
+    "THIRD_PARTY_NOTICES.md",
     "lazurio/organization-activation-lib.mjs",
     "lazurio/organization-activation-report.v0.schema.json",
   ]));
