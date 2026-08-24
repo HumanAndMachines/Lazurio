@@ -14,11 +14,11 @@ afterAll(async () => {
 test("same-root Server startups serialize locator discovery, binding, and publication", async () => {
   const root = await mkdtemp(join(tmpdir(), "lazurio-server-startup-lock-"));
   roots.push(root);
-  await mkdir(join(root, "launchpad"));
+  const stateDirectory = join(root, "state");
 
-  const first = await acquireServerStartupLock({ workspaceRoot: root, instanceId: "first" });
+  const first = await acquireServerStartupLock({ stateDirectory, instanceId: "first" });
   let secondAcquired = false;
-  const secondPromise = acquireServerStartupLock({ workspaceRoot: root, instanceId: "second" })
+  const secondPromise = acquireServerStartupLock({ stateDirectory, instanceId: "second" })
     .then((lock) => {
       secondAcquired = true;
       return lock;
@@ -26,7 +26,7 @@ test("same-root Server startups serialize locator discovery, binding, and public
 
   await new Promise((resolve) => setTimeout(resolve, 20));
   expect(secondAcquired).toBe(false);
-  expect(first.path).toContain(join("launchpad", ".local"));
+  expect(first.path).toContain(stateDirectory);
 
   await first.release();
   const second = await secondPromise;
@@ -38,11 +38,11 @@ test("Server startup lock refuses a symlinked locator directory", async () => {
   const root = await mkdtemp(join(tmpdir(), "lazurio-server-startup-lock-symlink-"));
   const external = await mkdtemp(join(tmpdir(), "lazurio-server-startup-lock-external-"));
   roots.push(root, external);
-  await mkdir(join(root, "launchpad"));
-  await symlink(external, join(root, "launchpad", ".local"));
+  const stateDirectory = join(root, "state");
+  await symlink(external, stateDirectory);
 
   await expect(acquireServerStartupLock({
-    workspaceRoot: root,
+    stateDirectory,
     instanceId: "unsafe",
   })).rejects.toThrow("must be a physical directory");
 });

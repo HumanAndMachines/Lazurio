@@ -912,12 +912,12 @@ test("runtime source gate follows a listener port constant across package files"
   tempRoots.push(packageDirectory);
   await writeFile(
     join(packageDirectory, "config.mjs"),
-    "export const API_PORT = 6000;\nexport const WIKI_APP_PORT = 5691;\n",
+    "export const API_PORT = 6000;\nexport const PORT_WORKER = 6002;\nexport const API_PORT_DEFAULT = 6003;\nexport const WIKI_APP_PORT = 5691;\n",
     "utf8",
   );
   await writeFile(
     join(packageDirectory, "server.mjs"),
-    'import { API_PORT } from "./config.mjs";\nBun.serve({ port: API_PORT });\n',
+    'import { API_PORT, API_PORT_DEFAULT, PORT_WORKER } from "./config.mjs";\nBun.serve({ port: API_PORT });\nBun.serve({ port: PORT_WORKER });\nBun.serve({ port: API_PORT_DEFAULT });\n',
     "utf8",
   );
 
@@ -928,6 +928,8 @@ test("runtime source gate follows a listener port constant across package files"
   });
 
   expect(issues.join("\n")).toContain("config.mjs: runtime source obsahuje číselný port fallback 6000");
+  expect(issues.join("\n")).toContain("config.mjs: runtime source obsahuje číselný port fallback 6002");
+  expect(issues.join("\n")).toContain("config.mjs: runtime source obsahuje číselný port fallback 6003");
   expect(issues.join("\n")).not.toContain("číselný port fallback 5691");
 });
 

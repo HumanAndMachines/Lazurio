@@ -780,8 +780,8 @@ export async function runtimeSourcePortAuthorityIssues({
   const listenerPortConstants = new Set();
   for (const { source } of sources) {
     for (const pattern of [
-      /(?:\bport|["']port["'])\s*:\s*(?:Number\s*\(\s*)?(PORT|[A-Z][A-Z0-9_]*_PORT)\b/g,
-      /\blisten(?:Sync)?\s*\(\s*(?:Number\s*\(\s*)?(PORT|[A-Z][A-Z0-9_]*_PORT)\b/g,
+      /(?:\bport|["']port["'])\s*:\s*(?:Number\s*\(\s*)?([A-Za-z_$][A-Za-z0-9_$]*)\b/g,
+      /\blisten(?:Sync)?\s*\(\s*(?:Number\s*\(\s*)?([A-Za-z_$][A-Za-z0-9_$]*)\b/g,
     ]) {
       for (const match of source.matchAll(pattern)) listenerPortConstants.add(match[1]);
     }
@@ -799,7 +799,7 @@ export async function runtimeSourcePortAuthorityIssues({
           );
         }
       }
-      const declaredPortPattern = /\b(?:const|let|var)\s+(PORT|[A-Z][A-Z0-9_]*_PORT)\s*=\s*["']?(\d{4,5})["']?/g;
+      const declaredPortPattern = /\b(?:const|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*["']?(\d{4,5})["']?/g;
       const alwaysOwnedPortConstants = new Set(["PORT", "DEFAULT_PORT", "SERVER_PORT", "LISTEN_PORT", "HTTP_PORT"]);
       for (const match of source.matchAll(declaredPortPattern)) {
         if (!alwaysOwnedPortConstants.has(match[1]) && !listenerPortConstants.has(match[1])) continue;

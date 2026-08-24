@@ -1,19 +1,13 @@
 import { existsSync, lstatSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
-import { dirname } from "node:path";
-
-import { serverLocatorPath } from "../../lazurio/core/server-locator-lib.mjs";
 import { acquireModuleRuntimeLock } from "./module-runtime-lock-lib.mjs";
 
-export async function acquireServerStartupLock({ workspaceRoot, instanceId }) {
-  const localDirectory = dirname(serverLocatorPath(workspaceRoot));
-  const launchpadDirectory = dirname(localDirectory);
-  assertPhysicalDirectory(launchpadDirectory, "Launchpad directory");
-  await mkdir(localDirectory, { recursive: true, mode: 0o700 });
-  assertPhysicalDirectory(localDirectory, "Launchpad local directory");
+export async function acquireServerStartupLock({ stateDirectory, instanceId }) {
+  await mkdir(stateDirectory, { recursive: true, mode: 0o700 });
+  assertPhysicalDirectory(stateDirectory, "Lazurio Server state directory");
 
   return acquireModuleRuntimeLock({
-    root: localDirectory,
+    root: stateDirectory,
     key: "server-startup",
     instanceId,
   });
