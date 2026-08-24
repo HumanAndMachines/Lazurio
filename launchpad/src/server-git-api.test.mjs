@@ -397,6 +397,8 @@ test("linked worktree gets only a read-only canonical Root mount context", async
   expect(identity.control_root_id).not.toBe(identity.root_id);
   const apps = await getJson(port, "/api/apps");
   expect(apps.launchpad_root.display_name).toBe("Linked Root");
+  expect(apps.root).toBe(realpathSync.native(root));
+  expect(apps.control_root).toBe(realpathSync.native(worktreeRoot));
   expect(apps.organizations.length).toBeGreaterThan(0);
   const personalspace = await getJson(port, "/api/personalspace");
   expect(personalspace.primary_owner).toBe("fixtureowner");
@@ -409,6 +411,70 @@ test("linked worktree gets only a read-only canonical Root mount context", async
     message: "Linked worktree smí canonical Lazurio Root používat jen jako read-only mount context.",
   });
   expect(runGit(["status", "--short"], root)).toBe(primaryStatusBefore);
+});
+
+test("control-root replacement waits for an in-flight runtime mutation", async () => {
+  const root = await createLaunchpadGitFixture();
+  const appRoot = join(root, "organizations", "BetaCo_GEN3", "workspace", "deals", "app", "v1");
+  await createPackageApp({
+    root,
+    packagePath: "organizations/BetaCo_GEN3/workspace/deals/app/v1",
+    app: {
+      id: "betaco-slow-install-v1",
+      title: "Slow install",
+      company: "BetaCo",
+      module: "deals",
+      port: 5418,
+    },
+  });
+  const packagePath = join(appRoot, "package.json");
+  const packageJson = JSON.parse(await readFile(packagePath, "utf8"));
+  packageJson.scripts.preinstall = "bun slow-install.mjs";
+  packageJson.dependencies = { "fixture-dependency": "file:./fixture-dependency" };
+  await writeJson(packagePath, packageJson);
+  await writeJson(join(appRoot, "fixture-dependency", "package.json"), {
+    name: "fixture-dependency",
+    version: "1.0.0",
+  });
+  await writeFile(
+    join(appRoot, "slow-install.mjs"),
+    'await Bun.write("install.started", "started\\n");\nawait Bun.sleep(1500);\n',
+    "utf8",
+  );
+
+  await initGitRepo(root);
+  runGit(["add", "."], root);
+  runGit(["commit", "-m", "track slow install fixture"], root);
+  const worktreeRoot = `${root}-linked-worktree`;
+  runGit(["worktree", "add", "-b", "linked-slow-install", worktreeRoot], root);
+  tempRoots.push(worktreeRoot, root);
+
+  const primary = await startLaunchpadServer(root);
+  const installRequest = fetch(`http://127.0.0.1:${primary.port}/api/apps/betaco-slow-install-v1/install`, {
+    method: "POST",
+  });
+  const installMarker = join(appRoot, "install.started");
+  for (let attempt = 0; attempt < 100 && !(await Bun.file(installMarker).exists()); attempt += 1) {
+    await Bun.sleep(20);
+  }
+  expect(await Bun.file(installMarker).exists()).toBe(true);
+
+  const candidatePort = await findFreePort();
+  const replacement = Bun.spawn(
+    ["bun", "src/server.mjs", "--root", worktreeRoot, "--port", String(candidatePort), "--reuse"],
+    {
+      cwd: join(import.meta.dirname, ".."),
+      env: primary.environment,
+      stdout: "ignore",
+      stderr: "pipe",
+    },
+  );
+  expect(await replacement.exited).not.toBe(0);
+  expect(await new Response(replacement.stderr).text()).toContain("nepodařilo bezpečně zastavit");
+
+  const installResponse = await installRequest;
+  expect(installResponse.status).toBe(200);
+  expect((await getJson(primary.port, "/health")).status).toBe("ok");
 });
 
 test("hosted Launchpad rejects forged gateway headers without a TLS-authenticated OAuth session", async () => {

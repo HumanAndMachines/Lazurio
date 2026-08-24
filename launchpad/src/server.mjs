@@ -1085,20 +1085,23 @@ function startServer(startPort) {
         // Personalspace lane (CAC-0048) — kontroluj PŘED generickými /api/apps
         // a /api/... routami, ať se osobní prostor nikdy nesmíchá s org lane.
         const personalRuntimeRoute = personalAppRuntimeRoute(url.pathname);
-        if (personalRuntimeRoute) return handlePersonalRuntimeRoute(request, personalRuntimeRoute);
+        // Keep the response inside this try/finally until the routed operation
+        // actually settles. Returning a bare Promise would run finally early
+        // and let control-root replacement observe a false zero-mutation drain.
+        if (personalRuntimeRoute) return await handlePersonalRuntimeRoute(request, personalRuntimeRoute);
         const gbrainMatch = gbrainRoute(url.pathname);
-        if (gbrainMatch) return handleGbrainRoute(request, url, gbrainMatch);
+        if (gbrainMatch) return await handleGbrainRoute(request, url, gbrainMatch);
         if (url.pathname === "/api/personalspace") return jsonResponse(await buildPersonalspace());
         const organizationLogoMatch = url.pathname.match(/^\/api\/organizations\/([^/]+)\/logo$/);
         if (organizationLogoMatch) {
-          return serveOrganizationLogo(request, url, decodeURIComponent(organizationLogoMatch[1]));
+          return await serveOrganizationLogo(request, url, decodeURIComponent(organizationLogoMatch[1]));
         }
 
         const runtimeRoute = appRuntimeRoute(url.pathname);
-        if (runtimeRoute) return handleRuntimeRoute(request, runtimeRoute);
-        if (moduleFolderRoute(url.pathname)) return handleModuleFolderRoute(request);
+        if (runtimeRoute) return await handleRuntimeRoute(request, runtimeRoute);
+        if (moduleFolderRoute(url.pathname)) return await handleModuleFolderRoute(request);
         const gitRoute = gitApiRoute(url.pathname);
-        if (gitRoute) return handleGitApiRoute(request, url, gitRoute);
+        if (gitRoute) return await handleGitApiRoute(request, url, gitRoute);
         if (url.pathname === "/api/lazurio/server-identity" && request.method === "GET") {
           if (!requestTrust.isTrustedLocalRequest(request, url)) {
             return jsonResponse({ error: "identity_request_forbidden" }, 403);
@@ -1149,7 +1152,7 @@ function startServer(startPort) {
         if (url.pathname === "/api/notifications") return jsonResponse(await buildNotificationsResponse(url.searchParams.get("company")));
         if (url.pathname === "/api/most-used") return jsonResponse(await buildMostUsedResponse(url.searchParams.get("company")));
         if (url.pathname === "/health") return jsonResponse({ status: "ok" });
-        return serveStatic(url.pathname);
+        return await serveStatic(url.pathname);
       } catch (error) {
         return jsonResponse({ error: "launchpad_error", message: error.message }, 500);
       } finally {
