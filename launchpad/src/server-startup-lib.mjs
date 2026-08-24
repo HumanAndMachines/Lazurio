@@ -2,6 +2,13 @@ const maxFallbackAttempts = 20;
 const maxStaleRebindAttempts = 100;
 const staleRebindDelayMs = 100;
 
+export function launchpadFallbackUrls({ host = "127.0.0.1", startPort }) {
+  return Array.from(
+    { length: Math.min(maxFallbackAttempts, 65_536 - startPort) },
+    (_, index) => `http://${host}:${startPort + index}`,
+  );
+}
+
 export async function startLaunchpadWithPortPolicy({
   requestedPort,
   host = "127.0.0.1",
@@ -9,14 +16,24 @@ export async function startLaunchpadWithPortPolicy({
   shouldOpen,
   shouldReuse = shouldOpen,
   locatedUrl = null,
+  knownServerUrls = [],
   startServer,
   inspectRunningLaunchpad = async () => ({ status: "unrecognized" }),
   shutdownStaleLaunchpad = async () => false,
   openExisting = async () => {},
   waitBeforeStaleRebind = () => new Promise((resolve) => setTimeout(resolve, staleRebindDelayMs)),
 }) {
+  let locatedObservation = null;
+  if (!locatedUrl) {
+    const recovered = await findKnownServer({
+      urls: knownServerUrls,
+      inspectRunningLaunchpad,
+    });
+    locatedUrl = recovered?.url ?? null;
+    locatedObservation = recovered?.observation ?? null;
+  }
   if (locatedUrl) {
-    const located = await inspectRunningLaunchpad(locatedUrl);
+    const located = locatedObservation ?? await inspectRunningLaunchpad(locatedUrl);
     if (located?.status === "compatible") {
       if (!shouldReuse) {
         throw serverConflict(
@@ -119,6 +136,25 @@ export async function startLaunchpadWithPortPolicy({
   const error = new Error(`Launchpad nenašel volný port po ${maxFallbackAttempts} pokusech od ${requestedPort}.`);
   error.code = "EADDRINUSE";
   throw error;
+}
+
+async function findKnownServer({ urls, inspectRunningLaunchpad }) {
+  const seen = new Set();
+  for (const url of urls) {
+    if (seen.has(url)) continue;
+    seen.add(url);
+    const observation = await inspectRunningLaunchpad(url);
+    if ([
+      "compatible",
+      "stale_install",
+      "foreign_root",
+      "legacy_same_root",
+      "protocol_incompatible",
+    ].includes(observation?.status)) {
+      return { url, observation };
+    }
+  }
+  return null;
 }
 
 async function waitForLocatedServerDrain({

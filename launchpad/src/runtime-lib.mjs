@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { createConnection } from "net";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep, win32 } from "path";
 import {
+  APP_FILESYSTEM_ROOT,
   discoverLaunchpadApps,
   runtimeScriptPortAuthorityIssues,
   runtimeSourcePortAuthorityIssues,
@@ -282,6 +283,13 @@ export function createRuntimeManager({
     });
   const requireTakeoverIdentity = signalPortOwnerFn == null;
 
+  function filesystemRootForApp(app) {
+    const sourceRoot = app?.[APP_FILESYSTEM_ROOT];
+    return typeof sourceRoot === "string" && isAbsolute(sourceRoot)
+      ? sourceRoot
+      : companiesRoot;
+  }
+
   async function portOwnerIdentity(pid) {
     if (!requireTakeoverIdentity) return "injected-signaler";
     if (platform === "win32") return processIdentityResolver(pid);
@@ -431,6 +439,7 @@ export function createRuntimeManager({
       logPath,
       takeover,
     });
+    const appFilesystemRoot = filesystemRootForApp(app);
     const childEnv = runtimeProcessEnv(app, {
       // Launchpad always starts the declared development task. Do not let the
       // parent process select a different Bun/framework env mode per Machine.
@@ -447,7 +456,7 @@ export function createRuntimeManager({
       LAZURIO_RUNTIME_ENTRYPOINT_ID: app.entrypoint_listener?.id ?? "entrypoint",
       LAZURIO_RUNTIME_PORT: String(app.port),
       LAZURIO_RUNTIME_HOST: app.host,
-      COMPANIES_WORKSPACE_ROOT: companiesRoot,
+      COMPANIES_WORKSPACE_ROOT: appFilesystemRoot,
       COMPANYASCODE_APP_ID: app.id,
       COMPANYASCODE_RUNTIME_KEY: runtimeKey,
       COMPANYASCODE_RUNTIME_SOURCE: runtimeSource.type,
@@ -457,7 +466,7 @@ export function createRuntimeManager({
     let child;
     try {
       child = spawnProcess([runtimeBunExecutable, "run", app.dev_script], {
-        cwd: join(companiesRoot, app.cwd),
+        cwd: join(appFilesystemRoot, app.cwd),
         env: childEnv,
         stdout: "pipe",
         stderr: "pipe",
@@ -465,7 +474,7 @@ export function createRuntimeManager({
         detached: platform !== "win32",
       });
     } catch (error) {
-      const failureKind = existsSync(join(companiesRoot, app.cwd)) ? "start_spawn_failed" : "bad_cwd";
+      const failureKind = existsSync(join(appFilesystemRoot, app.cwd)) ? "start_spawn_failed" : "bad_cwd";
       const message = `${app.title} nejde spustit: ${failureKind === "bad_cwd" ? `cwd ${app.cwd} neexistuje` : error.message}.`;
       await appendLog(logPath, `[launchpad] start spawn failed ${app.id}: ${error.message}\n`);
       await writeState(runtimeKey, {
@@ -482,7 +491,7 @@ export function createRuntimeManager({
       });
       throw new RuntimeActionError(500, "app_start_failed", message, [error.message], {
         failure_kind: failureKind,
-        cwd: join(companiesRoot, app.cwd),
+        cwd: join(appFilesystemRoot, app.cwd),
         log_path: relativeRuntimePath(logPath),
       });
     }
@@ -756,7 +765,8 @@ export function createRuntimeManager({
     await ensureRuntimeDirs();
     const logPath = logPathForApp(runtimeKey);
     const startedAt = new Date().toISOString();
-    const cwd = join(companiesRoot, app.cwd);
+    const appFilesystemRoot = filesystemRootForApp(app);
+    const cwd = join(appFilesystemRoot, app.cwd);
     await appendLog(
       logPath,
       `\n[launchpad] ${startedAt} ${action} ${app.id} command=${dependencies.install_command_display} source=${runtimeSource.type} cwd=${cwd}\n`,
@@ -765,7 +775,7 @@ export function createRuntimeManager({
     const child = spawnProcess(runtimePackageCommand(dependencies.install_command, runtimeBunExecutable), {
       cwd,
       env: runtimeProcessEnv(app, {
-        COMPANIES_WORKSPACE_ROOT: companiesRoot,
+        COMPANIES_WORKSPACE_ROOT: appFilesystemRoot,
         COMPANYASCODE_APP_ID: app.id,
         COMPANYASCODE_RUNTIME_KEY: runtimeKey,
         COMPANYASCODE_RUNTIME_SOURCE: runtimeSource.type,
@@ -1235,7 +1245,7 @@ export function createRuntimeManager({
       // jej následně fail-closed klasifikuje podle port ownership kontraktu.
       try {
         const ownerAfterStop = await resolvePortOwnerFn(app.port, {
-          expectedCwd: join(companiesRoot, app.cwd ?? dirname(app.package_path ?? "package.json")),
+          expectedCwd: join(filesystemRootForApp(app), app.cwd ?? dirname(app.package_path ?? "package.json")),
         });
         if (ownerAfterStop) {
           await appendLog(
@@ -2505,7 +2515,7 @@ export function createRuntimeManager({
   }
 
   async function verifyStartedListenerOwnership(app, record, { timeoutMs }) {
-    const expectedCwd = join(companiesRoot, app.cwd ?? dirname(app.package_path ?? "package.json"));
+    const expectedCwd = join(filesystemRootForApp(app), app.cwd ?? dirname(app.package_path ?? "package.json"));
     const deadline = Date.now() + timeoutMs;
     let evidence = [];
     do {
@@ -2587,7 +2597,7 @@ export function createRuntimeManager({
   }
 
   async function prepareDeclaredListeners(app, { runtimeKey, logPath, takeover = {} }) {
-    const expectedCwd = join(companiesRoot, app.cwd ?? dirname(app.package_path ?? "package.json"));
+    const expectedCwd = join(filesystemRootForApp(app), app.cwd ?? dirname(app.package_path ?? "package.json"));
     const conflicts = [];
     const reclaimed = [];
     const declaredListeners = [...(app.listeners ?? [])];
@@ -3009,7 +3019,7 @@ export function createRuntimeManager({
     app = record?.runtimeApp ?? await materializeRuntimeListeners(app);
     const dependencies = await dependencyForApp(app);
     const probe = await probeHealth(app);
-    const expectedCwd = join(companiesRoot, app.cwd ?? dirname(app.package_path ?? "package.json"));
+    const expectedCwd = join(filesystemRootForApp(app), app.cwd ?? dirname(app.package_path ?? "package.json"));
     const portOwner = record ? null : await resolveVerifiedPortOwner(app, state, expectedCwd);
     const listenerReconciliation = await reconcileRuntimeListeners(app, record, expectedCwd);
     // Pozitivně ověřený canonical cwd zpřesní diagnostickou klasifikaci na
@@ -3228,7 +3238,7 @@ export function createRuntimeManager({
     }
 
     const expectedCwd = join(
-      companiesRoot,
+      filesystemRootForApp(app),
       app.cwd ?? dirname(app.package_path ?? "package.json"),
     );
     const confirmedOwner = await resolveVerifiedPortOwner(app, {
@@ -3261,7 +3271,7 @@ export function createRuntimeManager({
     if (!initialProbe.reachable || !initialProbe.ok) return null;
 
     const expectedCwd = join(
-      companiesRoot,
+      filesystemRootForApp(app),
       app.cwd ?? dirname(app.package_path ?? "package.json"),
     );
     const listeners = [];
@@ -3338,7 +3348,7 @@ export function createRuntimeManager({
     }
 
     const appExpectedCwd = expectedCwd
-      ?? join(companiesRoot, app.cwd ?? dirname(app.package_path ?? "package.json"));
+      ?? join(filesystemRootForApp(app), app.cwd ?? dirname(app.package_path ?? "package.json"));
     const owner = await resolvePortOwnerFn(app.port, {
       expectedCwd: appExpectedCwd,
       host: app.entrypoint_listener?.host ?? app.host,
@@ -3420,8 +3430,9 @@ export function createRuntimeManager({
   async function dependencyForApp(app) {
     const appCwd = app.cwd ?? dirname(app.package_path ?? "package.json");
     const packagePath = app.package_path ?? join(appCwd, "package.json");
-    const appRoot = join(companiesRoot, appCwd);
-    const absolutePackagePath = join(companiesRoot, packagePath);
+    const appFilesystemRoot = filesystemRootForApp(app);
+    const appRoot = join(appFilesystemRoot, appCwd);
+    const absolutePackagePath = join(appFilesystemRoot, packagePath);
     const checkedAt = new Date().toISOString();
 
     if (!existsSync(absolutePackagePath)) {

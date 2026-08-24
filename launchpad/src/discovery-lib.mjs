@@ -20,6 +20,11 @@ import {
   organizationSlotRepositoryMountIssue,
 } from "../../lazurio/core/organization-slot-scope-lib.mjs";
 
+// Internal filesystem provenance for the runtime manager. Symbols survive
+// in-process object spreads but are omitted from JSON, so the public App
+// contract does not gain an absolute-path field.
+export const APP_FILESYSTEM_ROOT = Symbol("lazurio.app.filesystem-root");
+
 const ignoredDirs = new Set([
   ".git",
   ".worktrees",
@@ -1889,6 +1894,7 @@ export async function discoverLaunchpadApps(
     warnings.push(...builderMetadataWarnings.map((issue) => `${issue} (builder metadata)`));
 
     apps.push({
+      [APP_FILESYSTEM_ROOT]: sourceRoot,
       id: app.id,
       title: app.title,
       company: app.company,

@@ -10,8 +10,12 @@ import {
 } from "./diagnostics-lib.mjs";
 import { runChildDoctorLane } from "./doctor-children-lib.mjs";
 import { openBrowser } from "./browser-open-lib.mjs";
-import { startLaunchpadWithPortPolicy } from "./server-startup-lib.mjs";
+import {
+  launchpadFallbackUrls,
+  startLaunchpadWithPortPolicy,
+} from "./server-startup-lib.mjs";
 import { acquireServerStartupLock } from "./server-startup-lock-lib.mjs";
+import { discoverLaunchpadApps } from "./discovery-lib.mjs";
 import {
   GitApiError,
   buildGitApiResponse,
@@ -124,6 +128,11 @@ const runtimeManager = createRuntimeManager({
   companiesRoot,
   launchpadRoot,
   stateRoot: launchpadStateRoot,
+  discover: (_root, discoveryOptions = {}) => discoverLaunchpadApps(rootSourceRoot, {
+    ...discoveryOptions,
+    organization_mount_root: companiesRoot,
+    machine_context_root: companiesRoot,
+  }),
 });
 const moduleFolderOpener = createModuleFolderOpener({ companiesRoot, getAppsResponse: buildAppsResponse });
 const gitStatusService = createGitStatusService();
@@ -186,6 +195,10 @@ try {
     shouldOpen: Boolean(options.open),
     shouldReuse: Boolean(options.open || options.reuse),
     locatedUrl: existingLocator?.origin ?? null,
+    // The requested port is inspected naturally if bind reports EADDRINUSE.
+    // Recovery only needs to search the fallback ports that could otherwise
+    // remain hidden when the requested port has become free again.
+    knownServerUrls: launchpadFallbackUrls({ host, startPort: port }).slice(1),
     startServer,
     inspectRunningLaunchpad: (url) => inspectRunningLaunchpad(url, {
       rootId: launchpadRootId,

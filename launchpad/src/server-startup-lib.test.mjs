@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
-import { startLaunchpadWithPortPolicy } from "./server-startup-lib.mjs";
+import {
+  launchpadFallbackUrls,
+  startLaunchpadWithPortPolicy,
+} from "./server-startup-lib.mjs";
 
 function addressInUse() {
   return Object.assign(new Error("EADDRINUSE"), { code: "EADDRINUSE" });
@@ -121,6 +124,30 @@ test("locator reuses a healthy fallback server before binding the default port",
 
   expect(result).toEqual({ mode: "reused", url: "http://127.0.0.1:4175" });
   expect(attempts).toEqual([]);
+});
+
+test("missing locator recovers a known fallback Server before binding", async () => {
+  const attempts = [];
+  const probes = [];
+  const result = await startLaunchpadWithPortPolicy({
+    requestedPort: 4174,
+    explicitPort: false,
+    shouldOpen: false,
+    shouldReuse: true,
+    knownServerUrls: launchpadFallbackUrls({ startPort: 4174 }).slice(1),
+    startServer(port) {
+      attempts.push(port);
+      return { port };
+    },
+    inspectRunningLaunchpad: async (url) => {
+      probes.push(url);
+      return { status: url.endsWith(":4175") ? "compatible" : "absent" };
+    },
+  });
+
+  expect(result).toEqual({ mode: "reused", url: "http://127.0.0.1:4175" });
+  expect(attempts).toEqual([]);
+  expect(probes).toEqual(["http://127.0.0.1:4175"]);
 });
 
 test("locator blocks a second dev Server even when the requested port is free", async () => {
