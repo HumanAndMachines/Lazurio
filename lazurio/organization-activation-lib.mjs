@@ -281,21 +281,28 @@ function inspectRootRepository({ invoke, organization }) {
 }
 
 function inspectGitHubApp({ invoke, organization, appSlug, rootRepository }) {
-  const response = invoke(["api", `orgs/${organization.login}/installations?per_page=100`]);
-  if (response.httpStatus === 403) return unavailableApp();
-  requireSuccess(response, {
-    missingCode: "github_transport_failed",
-    missingNextAction: "retry",
-  });
-  const installations = Array.isArray(response.value?.installations)
-    ? response.value.installations
-    : null;
-  if (!installations) throw new ActivationProbeError("github_response_invalid", true, "retry");
-  const installation = installations.find((entry) => (
-    normalized(entry?.app_slug).toLowerCase() === appSlug.toLowerCase()
-    && String(entry?.target_id ?? "") === organization.id
-    && entry?.target_type === "Organization"
-  ));
+  let installation = null;
+  for (let page = 1; ; page += 1) {
+    const response = invoke([
+      "api",
+      `orgs/${organization.login}/installations?per_page=100&page=${page}`,
+    ]);
+    if (response.httpStatus === 403) return unavailableApp();
+    requireSuccess(response, {
+      missingCode: "github_transport_failed",
+      missingNextAction: "retry",
+    });
+    const installations = response.value?.installations;
+    if (!Array.isArray(installations)) {
+      throw new ActivationProbeError("github_response_invalid", true, "retry");
+    }
+    installation = installations.find((entry) => (
+      normalized(entry?.app_slug).toLowerCase() === appSlug.toLowerCase()
+      && String(entry?.target_id ?? "") === organization.id
+      && entry?.target_type === "Organization"
+    )) ?? null;
+    if (installation || installations.length < 100) break;
+  }
   if (!installation) {
     return {
       status: "missing",
