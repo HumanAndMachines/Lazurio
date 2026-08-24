@@ -23,7 +23,9 @@ vlastními licenčními podmínkami uvedenými níže.
 ## Manrope
 
 - Copyright 2018 The Manrope Project Authors
-- Původní zdroj: <https://github.com/sharanda/manrope>
+- Zdroj uvedený v copyright notice: <https://github.com/sharanda/manrope>
+  (původní repository je dnes nedostupné)
+- Aktivní veřejný katalog a licence: <https://github.com/google/fonts/tree/main/ofl/manrope>
 - Licence: SIL Open Font License 1.1
 - Soubor: `guide/app/v1/public/fonts/Manrope-Variable.woff2`
 - Úplné znění: `guide/app/v1/public/fonts/LICENSE-manrope.txt`
