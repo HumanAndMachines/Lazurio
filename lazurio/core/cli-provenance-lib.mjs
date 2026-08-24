@@ -32,7 +32,7 @@ export function buildLazurioCliProvenance({
   platform = process.platform,
   environment = process.env,
   gitExecutable,
-  runGit = runGitSync,
+  runGit = runTrustedGitCommandSync,
 } = {}) {
   if (typeof root !== "string" || root === "" || root.includes("\n") || root.includes("\r")) {
     throw new TypeError("CLI provenance requires a valid root path without newlines.");
@@ -369,7 +369,7 @@ function gitText(runGit, executable, cwd, args, environment, { trim = true } = {
   return { ok: true, value: trim ? value.trim() : value };
 }
 
-function runGitSync({ executable, cwd, args, environment }) {
+export function runTrustedGitCommandSync({ executable, cwd, args, environment }) {
   const result = spawnSync(
     executable,
     [

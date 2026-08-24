@@ -1,15 +1,16 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { test, expect } from "bun:test";
+import { expect, test } from "bun:test";
 
 import {
-  classifyRepositoryProbe,
+  bindLiveOrganizationIdentity,
   classifyDataState,
+  classifyRepositoryProbe,
   evaluateEffectiveRules,
   evaluateProtection,
-  evaluateRootLedgers,
   evaluateTrustedProcessCircle,
+  resolveDataRepositoryLocator,
   runSmoke,
 } from "./mission-control-trust-smoke.mjs";
 
@@ -18,6 +19,33 @@ test("classifies active, planned and deliberately staged repositories separately
   expect(classifyDataState({ status: "planned_slot" }, false)).toBe("planned");
   expect(classifyDataState({ status: "planned_slot" }, true)).toBe("staged");
   expect(classifyDataState(undefined, true)).toBe("incomplete");
+});
+
+test("planned slots use the standard repo name only as a locator", () => {
+  expect(
+    resolveDataRepositoryLocator(
+      { path: "mission-control/db", status: "planned_slot" },
+      "Renamed-Org",
+    ),
+  ).toEqual({
+    coordinate: "Renamed-Org/mission-control-data",
+    error: null,
+  });
+  expect(
+    resolveDataRepositoryLocator(
+      {
+        repository_db: { repo: "Old-Org/mission-control-data" },
+        git: { url: "git@github.com:Other-Org/mission-control-data.git" },
+      },
+      "Renamed-Org",
+    ).error,
+  ).toContain("rozporné");
+  expect(
+    resolveDataRepositoryLocator(
+      { repository_db: { repo: "not a repository" } },
+      "Renamed-Org",
+    ).error,
+  ).toContain("neplatný");
 });
 
 test("accepts provider enforcement that preserves direct fast-forward pushes", () => {
@@ -34,14 +62,21 @@ test("accepts provider enforcement that preserves direct fast-forward pushes", (
       required_signatures: { enabled: false },
     },
   });
-  expect(result).toEqual({ mode: "provider-enforced", ok: true, problems: [] });
+  expect(result).toMatchObject({
+    mode: "provider-enforced",
+    policy: "direct-fast-forward",
+    ok: true,
+    problems: [],
+  });
 });
 
-test("rejects provider rules that add PR, status-check or second-roster friction", () => {
-  for (const [field, value, phrase] of [
-    ["required_pull_request_reviews", {}, "pull request"],
-    ["required_status_checks", {}, "status check"],
-    ["restrictions", { users: [] }, "druhým push rosterem"],
+test("accepts stronger native GitHub policy and classifies it without prescribing friction", () => {
+  for (const [field, value, note] of [
+    ["required_pull_request_reviews", {}, "pull-request"],
+    ["required_status_checks", {}, "status-checks"],
+    ["restrictions", { users: [] }, "push-restrictions"],
+    ["lock_branch", { enabled: true }, "locked-branch"],
+    ["required_signatures", { enabled: true }, "signed-commits"],
   ]) {
     const result = evaluateProtection({
       kind: "configured",
@@ -57,49 +92,27 @@ test("rejects provider rules that add PR, status-check or second-roster friction
         [field]: value,
       },
     });
-    expect(result.ok).toBe(false);
-    expect(result.problems.join(" ")).toContain(phrase);
+    expect(result.ok).toBe(true);
+    expect(result.policy).toBe("native-gated");
+    expect(result.notes).toContain(note);
   }
-});
 
-test("rejects a locked branch, required signatures and friction rulesets", () => {
-  for (const field of ["lock_branch", "required_signatures"]) {
-    const result = evaluateProtection({
-      kind: "configured",
-      value: {
-        allow_force_pushes: { enabled: false },
-        allow_deletions: { enabled: false },
-        enforce_admins: { enabled: true },
-        required_pull_request_reviews: null,
-        required_status_checks: null,
-        restrictions: null,
-        lock_branch: { enabled: false },
-        required_signatures: { enabled: false },
-        [field]: { enabled: true },
-      },
-    });
-    expect(result.ok).toBe(false);
-  }
-  const result = evaluateEffectiveRules({
+  const rules = evaluateEffectiveRules({
     kind: "configured",
     value: [
       { type: "non_fast_forward", ruleset_id: 7 },
       { type: "deletion", ruleset_id: 7 },
       { type: "pull_request", ruleset_id: 7 },
       { type: "required_status_checks", ruleset_id: 7 },
-      { type: "update", ruleset_id: 7 },
     ],
-    details: {
-      7: { enforcement: "active", bypass_actors: [] },
-    },
+    details: { 7: { enforcement: "active", bypass_actors: [] } },
   });
-  expect(result.historyProtected).toBe(true);
-  expect(result.problems).toHaveLength(3);
-  expect(evaluateEffectiveRules({ kind: "unsupported" })).toEqual({
-    kind: "unsupported",
-    historyProtected: false,
+  expect(rules).toMatchObject({
+    historyProtected: true,
+    policy: "native-gated",
     problems: [],
   });
+  expect(rules.notes).toEqual(["pull_request", "required_status_checks"]);
 });
 
 test("accepts native rulesets only when both history rules have no bypass", () => {
@@ -110,14 +123,11 @@ test("accepts native rulesets only when both history rules have no bypass", () =
       { type: "non_fast_forward", ruleset_id: 9 },
       { type: "deletion", ruleset_id: 9 },
     ],
-    details: {
-      9: { enforcement: "active", bypass_actors: [] },
-    },
+    details: { 9: { enforcement: "active", bypass_actors: [] } },
   };
-  expect(evaluateProtection(classic, rules)).toEqual({
+  expect(evaluateProtection(classic, rules)).toMatchObject({
     mode: "provider-enforced",
     ok: true,
-    problems: [],
   });
   rules.details[9].bypass_actors = [{ actor_type: "RepositoryRole" }];
   expect(evaluateProtection(classic, rules)).toMatchObject({
@@ -127,21 +137,17 @@ test("accepts native rulesets only when both history rules have no bypass", () =
 });
 
 test("treats an unavailable private-branch feature as trusted-process, not as an access grant", () => {
-  expect(evaluateProtection({ kind: "unsupported" })).toEqual({
+  expect(evaluateProtection({ kind: "unsupported" })).toMatchObject({
     mode: "trusted-process",
+    policy: "direct-fast-forward",
     ok: true,
-    problems: [],
   });
   expect(
     evaluateProtection(
       { kind: "unsupported" },
       { kind: "configured", value: [], details: {} },
     ),
-  ).toEqual({
-    mode: "trusted-process",
-    ok: true,
-    problems: [],
-  });
+  ).toMatchObject({ mode: "trusted-process", ok: true });
   expect(evaluateProtection({ kind: "unconfigured" }).ok).toBe(false);
   expect(evaluateProtection({ kind: "blocked", message: "forbidden" }).mode).toBe("blocked");
 });
@@ -151,12 +157,7 @@ test("trusted-process gates only direct non-human collaborators and unconfirmed 
     login: `builder-${index}`,
     type: "User",
   }));
-  expect(
-    evaluateTrustedProcessCircle({
-      enforcementMode: "trusted-process",
-      writers,
-    }),
-  ).toEqual([]);
+  expect(evaluateTrustedProcessCircle({ enforcementMode: "trusted-process", writers })).toEqual([]);
   expect(
     evaluateTrustedProcessCircle({
       enforcementMode: "trusted-process",
@@ -183,35 +184,64 @@ test("trusted-process gates only direct non-human collaborators and unconfirmed 
   ).toEqual([]);
 });
 
-test("repository probe requires Organization Owner proof before 404 means absent", () => {
-  expect(classifyRepositoryProbe({ status: 0, value: {} })).toEqual({
+test("repository probe requires immutable Owner proof before 404 means absent", () => {
+  expect(classifyRepositoryProbe({ ok: true, value: {} })).toEqual({
     exists: true,
     error: null,
   });
   expect(
     classifyRepositoryProbe({
-      status: 1,
-      value: { status: "404", message: "Not Found" },
+      ok: false,
+      httpStatus: 404,
+      value: { message: "Not Found" },
     }),
   ).toMatchObject({ exists: null });
   expect(
     classifyRepositoryProbe(
-      {
-        status: 1,
-        value: { status: "404", message: "Not Found" },
-      },
+      { ok: false, httpStatus: 404, value: { message: "Not Found" } },
       { confirmed: true, message: null },
     ),
   ).toEqual({ exists: false, error: null });
   expect(
     classifyRepositoryProbe({
-      status: 1,
-      value: { status: "403", message: "Forbidden" },
+      ok: false,
+      httpStatus: 403,
+      value: { message: "Forbidden" },
     }),
   ).toEqual({ exists: null, error: "Forbidden" });
+});
+
+test("live identity binding joins root and data repositories through immutable IDs", () => {
+  const organization = { id: 42, login: "Renamed-Org" };
+  const rootRepository = {
+    id: 100,
+    full_name: "Renamed-Org/Root",
+    owner: { id: 42, type: "Organization" },
+  };
+  const dataRepository = {
+    id: 200,
+    full_name: "Renamed-Org/mission-control-data",
+    owner: { id: 42, type: "Organization" },
+  };
   expect(
-    classifyRepositoryProbe({ status: 1, value: null, stderr: "network failed" }),
-  ).toEqual({ exists: null, error: "network failed" });
+    bindLiveOrganizationIdentity({ organization, rootRepository, dataRepository }),
+  ).toEqual({
+    ok: true,
+    organizationId: "42",
+    rootRepositoryId: "100",
+    dataRepositoryId: "200",
+    problems: [],
+  });
+  expect(
+    bindLiveOrganizationIdentity({
+      organization,
+      rootRepository,
+      dataRepository: {
+        ...dataRepository,
+        owner: { id: 84, type: "Organization" },
+      },
+    }).problems.join(" "),
+  ).toContain("nepatří ověřenému GitHub Organization ID");
 });
 
 test("live smoke fails closed instead of passing an empty checkout", () => {
@@ -237,29 +267,4 @@ test("one malformed Organization is reported with its path instead of aborting t
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
-});
-
-test("active slots require empty typed pointers and canonical task sources", () => {
-  const root = join(tmpdir(), `mc-pointer-${process.pid}-${Date.now()}`);
-  mkdirSync(root, { recursive: true });
-  const taskSources = [];
-  for (const [file, kind, collection] of [
-    ["TODO.tasks.json", "todo-tasks-json", "tasks"],
-    ["DONE.tasks.json", "done-tasks-json", "tasks"],
-    ["ISSUES.open.json", "open-issues-json", "issues"],
-  ]) {
-    const canonical = `mission-control/db/data/mission-control/${file}`;
-    writeFileSync(join(root, file), JSON.stringify({
-      authority: "pointer",
-      status: "read-only",
-      superseded_by: canonical,
-      frozen_snapshot: `history/mission-control-root-snapshots/2026-08-20/${file}`,
-      [collection]: [],
-    }));
-    taskSources.push({ kind, path: canonical, authority: "source-of-truth" });
-  }
-  expect(evaluateRootLedgers(root, "active", taskSources)).toEqual([]);
-  expect(evaluateRootLedgers(root, "planned", taskSources)).toContain(
-    "planned slot nesmí předčasně používat root pointer TODO.tasks.json",
-  );
 });

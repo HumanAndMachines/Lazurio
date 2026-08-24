@@ -1,5 +1,3 @@
-import { spawnSync } from "node:child_process";
-
 import {
   createOrganizationActivationRequest,
   organizationActivationError,
@@ -7,6 +5,10 @@ import {
   resolveOrganizationActivation,
   resolveOrganizationRootDocuments,
 } from "./core/organization-activation-lib.mjs";
+import {
+  createTrustedGitHubProvider,
+  runTrustedGitHubCliSync,
+} from "./core/github-provider-lib.mjs";
 import { resolveTrustedGitHubCliExecutable } from "./core/cli-provenance-lib.mjs";
 
 export const LAZURIO_GITHUB_APP_SLUG = "lazurio-for-github";
@@ -29,11 +31,16 @@ export function checkOrganizationActivation({
   platform = process.platform,
   environment = process.env,
   resolveGitHubCli = resolveTrustedGitHubCliExecutable,
-  runGitHubCli = runGitHubCliSync,
+  runGitHubCli = runTrustedGitHubCliSync,
 } = {}) {
   const request = createOrganizationActivationRequest({ githubOrganizationId });
-  const executable = resolveGitHubCli({ platform });
-  if (!executable) {
+  const provider = createTrustedGitHubProvider({
+    platform,
+    environment,
+    resolveExecutable: resolveGitHubCli,
+    runCommand: runGitHubCli,
+  });
+  if (!provider.available) {
     return organizationActivationError({
       request,
       code: "github_cli_unavailable",
@@ -43,19 +50,11 @@ export function checkOrganizationActivation({
   }
 
   try {
-    assertGitHubAuthenticated({
-      executable,
-      platform,
-      environment,
-      runGitHubCli,
-    });
+    assertGitHubAuthenticated(provider);
     const observations = collectObservations({
       request,
       appSlug,
-      executable,
-      platform,
-      environment,
-      runGitHubCli,
+      provider,
     });
     return resolveOrganizationActivation({ request, observations });
   } catch (error) {
@@ -69,18 +68,15 @@ export function checkOrganizationActivation({
   }
 }
 
-function assertGitHubAuthenticated({ executable, platform, environment, runGitHubCli }) {
-  let result;
-  try {
-    result = runGitHubCli({
-      executable,
-      args: ["auth", "status", "--hostname", "github.com", "--active"],
-      environment: sanitizedGitHubEnvironment(environment, platform),
-    });
-  } catch {
-    throw new ActivationProbeError("github_transport_failed", true, "retry");
-  }
-  if (result?.status !== 0) {
+function assertGitHubAuthenticated(provider) {
+  const result = provider.command(
+    ["auth", "status", "--hostname", "github.com", "--active"],
+    { json: false },
+  );
+  if (!result.ok) {
+    if (result.error?.kind === "transport") {
+      throw new ActivationProbeError("github_transport_failed", true, "retry");
+    }
     throw new ActivationProbeError("github_auth_required", false, "authenticate_github");
   }
 }
@@ -109,14 +105,8 @@ export function renderHumanOrganizationActivation(report) {
 
 export { organizationActivationExitCode };
 
-function collectObservations({ request, appSlug, executable, platform, environment, runGitHubCli }) {
-  const invoke = (args) => githubApi({
-    executable,
-    args,
-    platform,
-    environment,
-    runGitHubCli,
-  });
+function collectObservations({ request, appSlug, provider }) {
+  const invoke = (args) => provider.json(args);
 
   const principalResponse = invoke(["api", "user"]);
   requireSuccess(principalResponse, {
@@ -412,76 +402,6 @@ function readRepositoryJson({ invoke, fullName, path, ref }) {
   } catch {
     return { present: true, value: invalidRepositoryDocument };
   }
-}
-
-function githubApi({ executable, args, platform, environment, runGitHubCli }) {
-  let result;
-  try {
-    result = runGitHubCli({
-      executable,
-      args,
-      environment: sanitizedGitHubEnvironment(environment, platform),
-    });
-  } catch {
-    throw new ActivationProbeError("github_transport_failed", true, "retry");
-  }
-  const status = Number.isInteger(result?.status) ? result.status : 1;
-  const stdout = String(result?.stdout ?? "");
-  const stderr = String(result?.stderr ?? "");
-  let value = null;
-  if (stdout.trim() !== "") {
-    try {
-      value = JSON.parse(stdout);
-    } catch {
-      if (status === 0) throw new ActivationProbeError("github_response_invalid", true, "retry");
-    }
-  }
-  const stderrHttpStatus = stderr.match(/(?:\(|\b)HTTP\s+([1-5][0-9]{2})(?:\)|\b)/u)?.[1];
-  const httpStatus = Number(value?.status ?? stderrHttpStatus ?? 0) || null;
-  return { ok: status === 0, status, httpStatus, value };
-}
-
-function runGitHubCliSync({ executable, args, environment }) {
-  const result = spawnSync(executable, args, {
-    env: environment,
-    encoding: "utf8",
-    shell: false,
-    windowsHide: true,
-    maxBuffer: 16 * 1024 * 1024,
-  });
-  return {
-    status: result.status,
-    stdout: String(result.stdout ?? ""),
-    stderr: String(result.stderr ?? result.error?.message ?? ""),
-  };
-}
-
-function sanitizedGitHubEnvironment(environment, platform) {
-  const result = {};
-  for (const key of [
-    "PATH",
-    "HOME",
-    "XDG_CONFIG_HOME",
-    "GH_CONFIG_DIR",
-    "GH_TOKEN",
-    "GITHUB_TOKEN",
-    "APPDATA",
-    "LOCALAPPDATA",
-    "USERPROFILE",
-    "TMPDIR",
-    "TEMP",
-    "TMP",
-    "SystemRoot",
-    "ComSpec",
-    "PATHEXT",
-  ]) {
-    if (typeof environment[key] === "string") result[key] = environment[key];
-  }
-  result.GH_HOST = "github.com";
-  result.GH_PAGER = "cat";
-  result.NO_COLOR = "1";
-  result.LC_ALL = "C";
-  return result;
 }
 
 function requireSuccess(response, { missingCode, missingNextAction }) {
