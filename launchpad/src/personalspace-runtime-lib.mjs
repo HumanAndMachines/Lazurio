@@ -23,8 +23,12 @@ const githubPrivacyCheckTimeoutMs = 10_000;
 // discovery (žádná cesta z klienta se nedůvěřuje — space se hledá podle
 // dir_name v objevených prostorech). Vrací i metadata o zdroji (mode, name).
 // Fail-closed: neznámý/nevalidní prostor nebo chybějící vault → GbrainAccessError.
-export async function resolveSpaceGbrainVault({ companiesRoot, spaceDirName }) {
-  const discovery = await discoverPersonalspace(companiesRoot);
+export async function resolveSpaceGbrainVault({
+  companiesRoot,
+  rootSourceRoot = companiesRoot,
+  spaceDirName,
+}) {
+  const discovery = await discoverPersonalspace(companiesRoot, { rootSourceRoot });
   const space = discovery.spaces.find((item) => item.dir_name === spaceDirName);
   if (!space) {
     throw new GbrainAccessError(404, "space_not_found", "Osobní prostor nebyl nalezen.");

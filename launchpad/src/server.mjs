@@ -814,7 +814,11 @@ function gbrainErrorResponse(error) {
 async function handleGbrainRoute(request, url, route) {
   if (request.method !== "GET") return jsonResponse({ error: "method_not_allowed" }, 405);
   try {
-    const vault = await resolveSpaceGbrainVault({ companiesRoot, spaceDirName: route.space });
+    const vault = await resolveSpaceGbrainVault({
+      companiesRoot,
+      rootSourceRoot,
+      spaceDirName: route.space,
+    });
     if (route.resource === "tree") {
       return jsonResponse({ space: route.space, source_rel: vault.source_rel, mode: vault.mode, ...(await gbrainTree(vault.vaultRoot)) });
     }
