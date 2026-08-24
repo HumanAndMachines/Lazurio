@@ -130,6 +130,12 @@ test("classifier never reuses stale, foreign, malformed, or legacy same-root ser
   });
 
   expect(classifyServerIdentity({ observed: compatible, expected })).toBe("compatible");
+  const { control_root_id: _controlRootId, ...preControlRoot } = compatible;
+  expect(classifyServerIdentity({ observed: preControlRoot, expected })).toBe("stale_install");
+  expect(classifyServerIdentity({
+    observed: { ...preControlRoot, instance_id: "not-an-instance-id" },
+    expected,
+  })).toBe("protocol_incompatible");
   expect(classifyServerIdentity({
     observed: { ...compatible, control_root_id: "6".repeat(64) },
     expected,

@@ -1390,9 +1390,10 @@ async function walkMountPackages({
 // hard failures níže. App id kolize izoluje dotčený manifest; port musí být
 // unikátní uvnitř jedné Organizace, zatímco cross-Organization overlap je
 // povolená owner-aware runtime informace (founder 2026-07-22 refinement).
-function invalidAppRecord({ app, packagePath, company, issues }) {
+function invalidAppRecord({ app, packagePath, company, sourceRoot, issues }) {
   const id = typeof app.id === "string" && app.id.trim() !== "" ? app.id : `invalid-manifest:${packagePath}`;
   return {
+    [APP_FILESYSTEM_ROOT]: sourceRoot,
     id,
     title: typeof app.title === "string" && app.title.trim() !== "" ? app.title : packagePath,
     company: company.slug,
@@ -1843,13 +1844,14 @@ export async function discoverLaunchpadApps(
         app,
         packagePath,
         company,
+        sourceRoot,
         issues: [...runtimeContractIssues, ...manifestIssues],
       }));
       continue;
     }
     if (manifestIssues.length > 0) {
       const issues = [...manifestIssues];
-      const record = invalidAppRecord({ app, packagePath, company, issues });
+      const record = invalidAppRecord({ app, packagePath, company, sourceRoot, issues });
       // Dvě položky v apps response nikdy nesmí sdílet id (UI i runtime
       // adresují akce podle id): volné id si nevalidní appka rezervuje,
       // obsazené id dostane syntetickou náhradu + kolizní issue.
@@ -1877,7 +1879,7 @@ export async function discoverLaunchpadApps(
         // nenesla dvě položky se stejným id.
         const issue = `${packagePath}: app id ${app.id} koliduje s ${existing}`;
         warnings.push(`${issue} (invalid app manifest)`);
-        const record = invalidAppRecord({ app, packagePath, company, issues: [issue] });
+        const record = invalidAppRecord({ app, packagePath, company, sourceRoot, issues: [issue] });
         record.id = `invalid-manifest:${packagePath}`;
         invalidApps.push(record);
         continue;

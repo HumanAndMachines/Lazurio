@@ -150,11 +150,12 @@ Po spuštění Server zapíše svou aktuální lokální adresu, identitu, machi
 per-user state prostoru operačního systému:
 `~/Library/Application Support/Lazurio/server.json` na macOS,
 `${XDG_STATE_HOME:-~/.local/state}/lazurio/server.json` na Linuxu a
-`%LOCALAPPDATA%\\Lazurio\\server.json` na Windows. CLI a organizační Launchpady
-locator načtou, ověří proti běžícímu Serveru a teprve potom mu předají akci
-Start, Open nebo Stop. Pokud chybí, je starý nebo patří jinému Rootu, akci
-bezpečně odmítnou. Locator jen ukazuje na lokální Server; porty Modulů dál
-vlastní jejich `lazurio.module.json`. Obnoví jej `bun run launchpad:serve`.
+`%LOCALAPPDATA%\\Lazurio\\server.json` na Windows.
+Launcher locator načte a ověří proti běžícímu Serveru; stejný Core kontrakt je
+připravený pro navazující CLI a Organization entrypointy Start, Open a Stop.
+Pokud je locator starý nebo patří jinému Rootu, launcher bezpečně odmítne druhou
+instanci. Locator jen ukazuje na lokální Server; porty Modulů dál vlastní jejich
+`lazurio.module.json`. Obnoví jej `bun run launchpad:serve`.
 Samotný singleton drží po celou dobu procesu per-user lifetime lease ve stejném
 state prostoru, takže ani smazaný locator nepovolí spuštění druhého Serveru a
 není potřeba prohledávat všechny možné custom porty.
