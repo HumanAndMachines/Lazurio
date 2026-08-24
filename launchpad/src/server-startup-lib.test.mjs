@@ -104,6 +104,64 @@ test("agent serve reuses a same-root instance on a fallback port", async () => {
   ]);
 });
 
+test("locator reuses a healthy fallback server before binding the default port", async () => {
+  const attempts = [];
+  const result = await startLaunchpadWithPortPolicy({
+    requestedPort: 4174,
+    explicitPort: false,
+    shouldOpen: false,
+    shouldReuse: true,
+    locatedUrl: "http://127.0.0.1:4175",
+    startServer(port) {
+      attempts.push(port);
+      return { port };
+    },
+    inspectRunningLaunchpad: async () => ({ status: "compatible" }),
+  });
+
+  expect(result).toEqual({ mode: "reused", url: "http://127.0.0.1:4175" });
+  expect(attempts).toEqual([]);
+});
+
+test("locator blocks a second dev Server even when the requested port is free", async () => {
+  let started = false;
+  await expect(startLaunchpadWithPortPolicy({
+    requestedPort: 4174,
+    explicitPort: false,
+    shouldOpen: false,
+    shouldReuse: false,
+    locatedUrl: "http://127.0.0.1:4175",
+    startServer() {
+      started = true;
+      return { port: 4174 };
+    },
+    inspectRunningLaunchpad: async () => ({ status: "compatible" }),
+  })).rejects.toMatchObject({ code: "LAZURIO_SERVER_ALREADY_RUNNING" });
+  expect(started).toBe(false);
+});
+
+test("locator drains a stale fallback Server before binding a new generation", async () => {
+  const observations = ["stale_install", "probe_failed", "unrecognized"];
+  const shutdowns = [];
+  const result = await startLaunchpadWithPortPolicy({
+    requestedPort: 4174,
+    explicitPort: false,
+    shouldOpen: false,
+    shouldReuse: true,
+    locatedUrl: "http://127.0.0.1:4175",
+    startServer: (port) => ({ port }),
+    inspectRunningLaunchpad: async () => ({ status: observations.shift() ?? "unrecognized" }),
+    shutdownStaleLaunchpad: async (url) => {
+      shutdowns.push(url);
+      return true;
+    },
+    waitBeforeStaleRebind: async () => {},
+  });
+
+  expect(shutdowns).toEqual(["http://127.0.0.1:4175"]);
+  expect(result).toEqual({ mode: "started", server: { port: 4174 } });
+});
+
 test("launch falls forward when the requested implicit port belongs to a foreign root", async () => {
   const attempts = [];
   const calls = [];

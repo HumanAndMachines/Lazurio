@@ -69,11 +69,21 @@ export function validateServerLocator(locator) {
 }
 
 export async function readServerLocator({ workspaceRoot }) {
+  const locator = await readServerLocatorFile({ workspaceRoot, allowMissing: false });
+  return locator;
+}
+
+export async function readServerLocatorIfPresent({ workspaceRoot }) {
+  return readServerLocatorFile({ workspaceRoot, allowMissing: true });
+}
+
+async function readServerLocatorFile({ workspaceRoot, allowMissing }) {
   const path = serverLocatorPath(workspaceRoot);
   let locator;
   try {
     locator = JSON.parse(await readFile(path, "utf8"));
   } catch (error) {
+    if (allowMissing && error?.code === "ENOENT") return null;
     throw new Error(`Lazurio Server locator ${path} cannot be read: ${error.message}`);
   }
   const errors = validateServerLocator(locator);
