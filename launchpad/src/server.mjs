@@ -74,6 +74,7 @@ const options = parseArgs(Bun.argv.slice(2));
 const selectedCompaniesRoot = resolve(options.root ?? process.env.WORKSPACE_ROOT ?? join(launchpadRoot, ".."));
 const selectedCompaniesRootPath = realpathSync.native(selectedCompaniesRoot);
 const canonicalCompaniesRoot = resolveCanonicalServerRoot(selectedCompaniesRoot);
+const rootSourceRoot = selectedCompaniesRootPath;
 const companiesRoot = canonicalCompaniesRoot;
 const worktreeMountContextReadOnly = selectedCompaniesRootPath !== canonicalCompaniesRoot;
 const lazurioCodeRoot = resolve(launchpadRoot, "..");
@@ -146,7 +147,7 @@ const appsResponseCache = createGenerationSafeResponseCache({
 // aplikace. Local-only (server běží jen na 127.0.0.1). Osobní data se nikdy
 // nepropisují do org /api/apps ani /api/doctor shared výstupu.
 const personalspaceRuntimeManager = createPersonalspaceRuntimeManager({
-  companiesRoot,
+  companiesRoot: rootSourceRoot,
   launchpadRoot,
   stateRoot: launchpadStateRoot,
 });
@@ -236,7 +237,7 @@ const bootReconcile = worktreeMountContextReadOnly
   : await runtimeManager.reconcileDesiredState();
 
 console.log(`Launchpad GEN3 běží na ${serverUrl}`);
-console.log(`Launchpad GEN3 root: ${companiesRoot}`);
+console.log(`Launchpad GEN3 root: ${rootSourceRoot}`);
 console.log(`Launchpad GEN3 locator: ${serverLocator.path}`);
 if (worktreeMountContextReadOnly) {
   console.warn("[launchpad] linked worktree používá canonical Root pouze jako read-only mount context");
@@ -260,6 +261,7 @@ async function buildAppsResponse({ force = false } = {}) {
 async function buildAppsResponseUncached({ includeGit = false } = {}) {
   const response = await buildLaunchpadAppsResponse({
     companiesRoot,
+    rootSourceRoot,
     launchpadRoot,
     runtimeManager,
     gitStatusService,
@@ -376,7 +378,7 @@ async function buildDoctorReport() {
 }
 
 async function readLaunchpadRootConfig() {
-  const configPath = join(companiesRoot, "launchpad.gen3.json");
+  const configPath = join(rootSourceRoot, "launchpad.gen3.json");
   if (!existsSync(configPath)) return null;
   try {
     return JSON.parse(await readFile(configPath, "utf8"));
@@ -390,7 +392,7 @@ async function readLaunchpadRootConfig() {
 
 async function buildPersonalspace({ verifyRepositoryPrivacy = false } = {}) {
   return buildPersonalspaceResponse({
-    companiesRoot,
+    companiesRoot: rootSourceRoot,
     launchpadRoot,
     runtimeManager: personalspaceRuntimeManager,
     profileEmail: principalEmail,
@@ -403,7 +405,7 @@ function resolvePrincipalEmail() {
     const gitExecutable = resolveGitExecutableSync();
     if (!gitExecutable) return null;
     const result = Bun.spawnSync([gitExecutable, "config", "user.email"], {
-      cwd: companiesRoot,
+      cwd: rootSourceRoot,
       stdout: "pipe",
       stderr: "pipe",
       env: safeGitCommandEnv(),
@@ -713,7 +715,7 @@ function gbrainErrorResponse(error) {
 async function handleGbrainRoute(request, url, route) {
   if (request.method !== "GET") return jsonResponse({ error: "method_not_allowed" }, 405);
   try {
-    const vault = await resolveSpaceGbrainVault({ companiesRoot, spaceDirName: route.space });
+    const vault = await resolveSpaceGbrainVault({ companiesRoot: rootSourceRoot, spaceDirName: route.space });
     if (route.resource === "tree") {
       return jsonResponse({ space: route.space, source_rel: vault.source_rel, mode: vault.mode, ...(await gbrainTree(vault.vaultRoot)) });
     }
@@ -839,20 +841,24 @@ async function handleGitApiRoute(request, url, route) {
     }
     if (request.method !== "GET") return jsonResponse({ error: "method_not_allowed" }, 405);
     if (route.kind === "repos") {
+      const allowRemoteRefresh = !worktreeMountContextReadOnly;
       return jsonResponse(await buildGitApiResponse({
         companiesRoot,
         organization: url.searchParams.get("company"),
-        refresh: url.searchParams.get("refresh") === "1",
+        refresh: allowRemoteRefresh && url.searchParams.get("refresh") === "1",
         statusService: gitStatusService,
+        allowRemoteRefresh,
       }));
     }
     if (route.kind === "repo") {
+      const allowRemoteRefresh = !worktreeMountContextReadOnly;
       return jsonResponse(
         await buildRepoResponse({
           companiesRoot,
           repoKey: route.repoKey,
-          refresh: url.searchParams.get("refresh") === "1",
+          refresh: allowRemoteRefresh && url.searchParams.get("refresh") === "1",
           statusService: gitStatusService,
+          allowRemoteRefresh,
         }),
       );
     }

@@ -925,6 +925,24 @@ test("runtime source gate follows a named port through a listener wrapper", asyn
   expect(issues.join("\n")).toContain("server.mjs: runtime source obsahuje číselný port fallback 6000");
 });
 
+test("runtime source gate ignores outbound dependency port objects", async () => {
+  const packageDirectory = await mkdtemp(join(tmpdir(), "lazurio-runtime-dependency-port-"));
+  tempRoots.push(packageDirectory);
+  await writeFile(
+    join(packageDirectory, "server.mjs"),
+    "const databasePort = 5432;\nconnectDatabase({ port: databasePort });\nconst runtimePort = Number(process.env.LAZURIO_RUNTIME_PORT);\nBun.serve({ port: runtimePort });\n",
+    "utf8",
+  );
+
+  const issues = await runtimeSourcePortAuthorityIssues({
+    packageDirectory,
+    packagePath: "app/v1/package.json",
+    module: { port_leases: [{ id: "main", host: "127.0.0.1", port: 4174 }] },
+  });
+
+  expect(issues.join("\n")).not.toContain("5432");
+});
+
 test("runtime source gate follows a listener port constant across package files", async () => {
   const packageDirectory = await mkdtemp(join(tmpdir(), "lazurio-runtime-source-import-"));
   tempRoots.push(packageDirectory);

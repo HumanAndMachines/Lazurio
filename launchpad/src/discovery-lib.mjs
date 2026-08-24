@@ -836,7 +836,7 @@ function runtimeDirectListenerBindings(source) {
     bindings.add("port");
   }
   for (const pattern of [
-    /(?:\bport|["']port["'])\s*:\s*(?:(?:Number|parseInt|Number\.parseInt)\s*\(\s*)?((?:[A-Za-z_$][A-Za-z0-9_$]*\s*\.\s*)*[A-Za-z_$][A-Za-z0-9_$]*)\b/g,
+    /\bBun\.serve\s*\(\s*\{[^}]*?(?:\bport|["']port["'])\s*:\s*(?:(?:Number|parseInt|Number\.parseInt)\s*\(\s*)?((?:[A-Za-z_$][A-Za-z0-9_$]*\s*\.\s*)*[A-Za-z_$][A-Za-z0-9_$]*)\b/g,
     /\blisten(?:Sync)?\s*\(\s*(?:(?:Number|parseInt|Number\.parseInt)\s*\(\s*)?((?:[A-Za-z_$][A-Za-z0-9_$]*\s*\.\s*)*[A-Za-z_$][A-Za-z0-9_$]*)\b/g,
   ]) {
     for (const match of source.matchAll(pattern)) {
@@ -937,6 +937,7 @@ async function walkPackageJson(root, current, output, company) {
       output.push({
         packagePath: workspaceRelativePath(root, absolutePath),
         company,
+        sourceRoot: root,
       });
     }
   }
@@ -1738,8 +1739,10 @@ export async function discoverLaunchpadApps(
     && options.organization_path.trim() !== ""
     ? options.organization_path.trim()
     : null;
+  const organizationMountRoot = options.organization_mount_root ?? companiesRoot;
+  const machineContextRoot = options.machine_context_root ?? companiesRoot;
   const discovered = await discoverOrganizations({
-    companiesRoot,
+    companiesRoot: organizationMountRoot,
     companiesConfig,
     failures,
     warnings,
@@ -1752,7 +1755,7 @@ export async function discoverLaunchpadApps(
   // ukazovaly jako chybějící přístup (decision 0042, founder 2026-07-12). Planned
   // slot je informační: nemá path, nikdy nevyrábí failure a namountovaná Organizace
   // se stejným slugem vyhrává.
-  const localConfig = await readLocalOverrideConfig(companiesRoot, warnings);
+  const localConfig = await readLocalOverrideConfig(machineContextRoot, warnings);
   appendPlannedOrganizations({ localConfig, organizations, templateMounts, warnings });
   const organizationSelector = typeof options.organization === "string"
     ? options.organization.trim().toLowerCase()
@@ -1769,7 +1772,7 @@ export async function discoverLaunchpadApps(
     : await discoverModuleTemplates({ companiesRoot });
   await walkMountPackages({
     mounts: organizations,
-    companiesRoot,
+    companiesRoot: organizationMountRoot,
     packageEntries,
     failures,
     warnings,
@@ -1780,7 +1783,7 @@ export async function discoverLaunchpadApps(
   if (!organizationSelector) {
     await walkMountPackages({
       mounts: templateMounts,
-      companiesRoot,
+      companiesRoot: organizationMountRoot,
       packageEntries: templatePackageEntries,
       failures,
       warnings,
@@ -1804,8 +1807,8 @@ export async function discoverLaunchpadApps(
   const portOwners = [];
   const moduleContractsByPath = new Map();
   const appIds = new Map();
-  for (const { packagePath, company } of sortedPackageEntries) {
-    const absolutePackagePath = join(companiesRoot, packagePath);
+  for (const { packagePath, company, sourceRoot = companiesRoot } of sortedPackageEntries) {
+    const absolutePackagePath = join(sourceRoot, packagePath);
     const packageJson = await readJson(absolutePackagePath);
     const normalizedRuntime = normalizePackageRuntime({ packageJson, packagePath });
     if (!normalizedRuntime) continue;
@@ -1830,7 +1833,7 @@ export async function discoverLaunchpadApps(
         softWarnings: builderMetadataWarnings,
       });
       const governingModule = await resolveRuntimeModuleContract({
-        companiesRoot,
+        companiesRoot: sourceRoot,
         packagePath,
         company,
         runtime: app,
@@ -1842,7 +1845,7 @@ export async function discoverLaunchpadApps(
       }
     } else {
       const moduleResult = await resolveRuntimeModuleContract({
-        companiesRoot,
+        companiesRoot: sourceRoot,
         packagePath,
         company,
         runtime: app,
@@ -1867,7 +1870,7 @@ export async function discoverLaunchpadApps(
           packagePath,
           packageJson,
           runtime: app,
-          moduleDirectory: resolve(companiesRoot, dirname(moduleResult.module.module_path)),
+          moduleDirectory: resolve(sourceRoot, dirname(moduleResult.module.module_path)),
         }));
         runtimeContractIssues.push(...await runtimeSourcePortAuthorityIssues({
           packageDirectory: dirname(absolutePackagePath),
@@ -1899,7 +1902,7 @@ export async function discoverLaunchpadApps(
     const plugin = typeof app.plugin === "string" && app.plugin.trim() !== ""
       ? await readPluginManifest({
           app,
-          companiesRoot,
+          companiesRoot: sourceRoot,
           packagePath,
           company,
           schema: pluginSchema,
@@ -2051,7 +2054,6 @@ export async function discoverLaunchpadApps(
   failures.push(...portPolicyIssues);
 
   const templateApps = await collectTemplateApps({
-    companiesRoot,
     templatePackageEntries,
     appSchema,
     warnings,
@@ -2085,15 +2087,15 @@ export async function discoverLaunchpadApps(
 // vlastních mapách, takže vadný template NIKDY nezhavaruje runtime reálné firmy
 // (žádný zápis do global failures). Runtime pole (dev_script, health, plugin)
 // se úmyslně nevrací — template appka se nespouští.
-async function collectTemplateApps({ companiesRoot, templatePackageEntries, appSchema, warnings }) {
+async function collectTemplateApps({ templatePackageEntries, appSchema, warnings }) {
   const sorted = [...templatePackageEntries].sort((a, b) => a.packagePath.localeCompare(b.packagePath));
   const templateApps = [];
   const templateAppIds = new Map();
   const templatePorts = new Map();
-  for (const { packagePath, company } of sorted) {
+  for (const { packagePath, company, sourceRoot } of sorted) {
     let packageJson;
     try {
-      packageJson = await readJson(join(companiesRoot, packagePath));
+      packageJson = await readJson(join(sourceRoot, packagePath));
     } catch (error) {
       // Izolace selhání: vadný template package.json NIKDY nesmí shodit discovery
       // reálných firem — konvertuje se na template warning + invalid_manifest záznam.

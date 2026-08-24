@@ -9,6 +9,7 @@ export const LEGACY_LAUNCHPAD_IDENTITY_SCHEMA = "companiesascode.launchpad.ident
 const sha256Pattern = /^[a-f0-9]{64}$/;
 const uuidPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const generationDirectories = ["launchpad/src", "lazurio/core"];
+const generationTreeDirectories = ["launchpad/public"];
 const generationFiles = [
   "launchpad/package.json",
   "scripts/worktree-create-lib.mjs",
@@ -122,6 +123,9 @@ export function serverInstallGenerationInputPaths(codeRoot) {
       inputs.push(join(absoluteDirectory, entry.name));
     }
   }
+  for (const directory of generationTreeDirectories) {
+    collectGenerationTreeFiles({ root, directory, inputs });
+  }
   for (const file of generationFiles) inputs.push(join(root, file));
 
   const normalizedInputs = inputs
@@ -129,6 +133,25 @@ export function serverInstallGenerationInputPaths(codeRoot) {
     .sort();
   if (normalizedInputs.length === 0) throw new Error("Server install generation has no source inputs.");
   return normalizedInputs;
+}
+
+function collectGenerationTreeFiles({ root, directory, inputs }) {
+  const absoluteDirectory = join(root, directory);
+  const directoryStat = lstatSync(absoluteDirectory);
+  if (!directoryStat.isDirectory() || directoryStat.isSymbolicLink()) {
+    throw new Error(`Server generation input is not a physical directory: ${directory}`);
+  }
+  for (const entry of readdirSync(absoluteDirectory, { withFileTypes: true })) {
+    const relativePath = join(directory, entry.name);
+    if (entry.isSymbolicLink()) {
+      throw new Error(`Server generation input must not be a symlink: ${relativePath}`);
+    }
+    if (entry.isDirectory()) {
+      collectGenerationTreeFiles({ root, directory: relativePath, inputs });
+      continue;
+    }
+    if (entry.isFile()) inputs.push(join(root, relativePath));
+  }
 }
 
 export function buildServerIdentity({
