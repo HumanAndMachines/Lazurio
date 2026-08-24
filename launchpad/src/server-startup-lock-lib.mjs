@@ -10,7 +10,24 @@ export async function acquireServerStartupLock({ stateDirectory, instanceId }) {
     root: stateDirectory,
     key: "server-startup",
     instanceId,
+    // Startup holds this lock only across locator discovery, bind and atomic
+    // publication. PID liveness is sufficient and deliberately fail-closed:
+    // a reused live PID may delay stale recovery, but can never let a second
+    // Server through. Unlike Module lifecycle ownership this needs no process
+    // start-time proof and therefore no sandbox-sensitive ps/PowerShell spawn.
+    resolveProcessIdentity: serverStartupProcessIdentity,
   });
+}
+
+async function serverStartupProcessIdentity(pid) {
+  try {
+    process.kill(pid, 0);
+    return `pid:${pid}`;
+  } catch (error) {
+    if (error?.code === "ESRCH") return null;
+    if (error?.code === "EPERM") return `pid:${pid}`;
+    throw error;
+  }
 }
 
 function assertPhysicalDirectory(path, label) {
