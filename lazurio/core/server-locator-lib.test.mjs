@@ -8,6 +8,7 @@ import {
   buildServerLocator,
   readServerLocator,
   readServerLocatorIfPresent,
+  resolveServerStateDirectory,
   serverLocatorPath,
   validateServerLocator,
   writeServerLocator,
@@ -20,18 +21,17 @@ afterAll(async () => {
 });
 
 test("server locator publishes the exact active loopback origin atomically", async () => {
-  const root = await temporaryRoot();
-  await mkdir(join(root, "launchpad"));
+  const stateDirectory = await temporaryRoot();
   const identity = fixtureIdentity();
 
   const published = await writeServerLocator({
-    workspaceRoot: root,
+    stateDirectory,
     origin: "http://127.0.0.1:4175",
     identity,
   });
 
-  expect(published.path).toBe(serverLocatorPath(root));
-  expect(await readServerLocator({ workspaceRoot: root })).toEqual(published.locator);
+  expect(published.path).toBe(serverLocatorPath(stateDirectory));
+  expect(await readServerLocator({ stateDirectory })).toEqual(published.locator);
   expect(JSON.parse(await readFile(published.path, "utf8"))).toMatchObject({
     schema_version: "lazurio.server.locator.v1",
     origin: "http://127.0.0.1:4175",
@@ -41,13 +41,12 @@ test("server locator publishes the exact active loopback origin atomically", asy
 });
 
 test("optional locator read distinguishes a clean first start from invalid state", async () => {
-  const root = await temporaryRoot();
-  await mkdir(join(root, "launchpad"));
-  expect(await readServerLocatorIfPresent({ workspaceRoot: root })).toBeNull();
+  const stateDirectory = join(await temporaryRoot(), "state");
+  expect(await readServerLocatorIfPresent({ stateDirectory })).toBeNull();
 
-  await mkdir(join(root, "launchpad", ".local"));
-  await writeFile(serverLocatorPath(root), "{ malformed", "utf8");
-  await expect(readServerLocatorIfPresent({ workspaceRoot: root })).rejects.toThrow(
+  await mkdir(stateDirectory);
+  await writeFile(serverLocatorPath(stateDirectory), "{ malformed", "utf8");
+  await expect(readServerLocatorIfPresent({ stateDirectory })).rejects.toThrow(
     "cannot be read",
   );
 });
@@ -67,14 +66,42 @@ test("server locator rejects ambient URLs and unknown fields", () => {
 test("server locator refuses to write through a symlinked local directory", async () => {
   const root = await temporaryRoot();
   const external = await temporaryRoot();
-  await mkdir(join(root, "launchpad"));
-  await symlink(external, join(root, "launchpad", ".local"));
+  const stateDirectory = join(root, "state");
+  await symlink(external, stateDirectory);
 
   await expect(writeServerLocator({
-    workspaceRoot: root,
+    stateDirectory,
     origin: "http://127.0.0.1:4174",
     identity: fixtureIdentity(),
   })).rejects.toThrow("must be a physical directory");
+});
+
+test("machine coordination uses each platform's standard per-user state location", () => {
+  expect(resolveServerStateDirectory({
+    platform: "darwin",
+    homeDirectory: "/Users/builder",
+    environment: {},
+  })).toBe("/Users/builder/Library/Application Support/Lazurio");
+  expect(resolveServerStateDirectory({
+    platform: "linux",
+    homeDirectory: "/home/builder",
+    environment: { XDG_STATE_HOME: "/state/builder" },
+  })).toBe("/state/builder/lazurio");
+  expect(resolveServerStateDirectory({
+    platform: "linux",
+    homeDirectory: "/home/builder",
+    environment: { XDG_STATE_HOME: "relative-state" },
+  })).toBe("/home/builder/.local/state/lazurio");
+  expect(resolveServerStateDirectory({
+    platform: "win32",
+    homeDirectory: "C:\\Users\\builder",
+    environment: { LOCALAPPDATA: "C:\\Users\\builder\\AppData\\Local" },
+  })).toBe("C:\\Users\\builder\\AppData\\Local\\Lazurio");
+  expect(() => resolveServerStateDirectory({
+    platform: "win32",
+    homeDirectory: "relative-home",
+    environment: { LOCALAPPDATA: "relative-state" },
+  })).toThrow("absolute Windows user directory");
 });
 
 function fixtureIdentity() {

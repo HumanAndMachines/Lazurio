@@ -58,6 +58,7 @@ import {
 } from "../../lazurio/core/server-identity-lib.mjs";
 import {
   readServerLocatorIfPresent,
+  resolveServerStateDirectory,
   writeServerLocator,
 } from "../../lazurio/core/server-locator-lib.mjs";
 
@@ -100,6 +101,11 @@ const launchpadStateRoot = resolveLaunchpadStateRoot({
   runtimeRoot: configuredRuntimeRoot,
   workspaceRoot: canonicalCompaniesRoot,
   fallbackRoot: launchpadRoot,
+});
+const serverStateDirectory = resolveServerStateDirectory({
+  configuredStateRoot: process.env.LAZURIO_LAUNCHPAD_STATE_ROOT
+    ? launchpadStateRoot
+    : undefined,
 });
 const requestTrust = createRequestTrustPolicy({
   profile: hostedAppUrls.profile,
@@ -159,11 +165,11 @@ let startupLock;
 let startupError;
 try {
   startupLock = await acquireServerStartupLock({
-    workspaceRoot: canonicalCompaniesRoot,
+    stateDirectory: serverStateDirectory,
     instanceId: launchpadServerIdentity.instance_id,
   });
   const existingLocator = await readServerLocatorIfPresent({
-    workspaceRoot: canonicalCompaniesRoot,
+    stateDirectory: serverStateDirectory,
   });
   startResult = await startLaunchpadWithPortPolicy({
     requestedPort: port,
@@ -189,14 +195,14 @@ try {
       throw new Error("Reused Lazurio Server no longer has the expected identity.");
     }
     serverLocator = await writeServerLocator({
-      workspaceRoot: canonicalCompaniesRoot,
+      stateDirectory: serverStateDirectory,
       origin: startResult.url,
       identity: observation.identity,
     });
   } else {
     const serverUrl = `http://${host}:${startResult.server.port}`;
     serverLocator = await writeServerLocator({
-      workspaceRoot: canonicalCompaniesRoot,
+      stateDirectory: serverStateDirectory,
       origin: serverUrl,
       identity: launchpadServerIdentity,
     });

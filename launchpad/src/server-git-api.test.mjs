@@ -275,7 +275,8 @@ test("identity endpoint is local-only and a foreign root cannot reuse the port",
   expect(identity.install_generation).toMatch(/^[a-f0-9]{64}$/);
   expect(identity.instance_id).toMatch(/^[a-f0-9-]{36}$/);
   expect(Number.isFinite(Date.parse(identity.started_at))).toBe(true);
-  expect(await readServerLocator({ workspaceRoot: root })).toMatchObject({
+  const serverStateDirectory = `${root}-launchpad-state`;
+  expect(await readServerLocator({ stateDirectory: serverStateDirectory })).toMatchObject({
     schema_version: "lazurio.server.locator.v1",
     origin: `http://127.0.0.1:${port}`,
     root_id: identity.root_id,
@@ -305,19 +306,29 @@ test("identity endpoint is local-only and a foreign root cannot reuse the port",
 
   const sameRootLauncher = Bun.spawn(
     ["bun", "src/server.mjs", "--root", root, "--port", String(port), "--reuse"],
-    { cwd: join(import.meta.dirname, ".."), stdout: "pipe", stderr: "pipe" },
+    {
+      cwd: join(import.meta.dirname, ".."),
+      env: { ...process.env, LAZURIO_LAUNCHPAD_STATE_ROOT: serverStateDirectory },
+      stdout: "pipe",
+      stderr: "pipe",
+    },
   );
   expect(await sameRootLauncher.exited).toBe(0);
   expect(await new Response(sameRootLauncher.stdout).text()).toContain("používám existující instanci");
   expect((await getJson(port, "/api/lazurio/server-identity")).instance_id).toBe(identity.instance_id);
-  expect((await readServerLocator({ workspaceRoot: root })).instance_id).toBe(identity.instance_id);
+  expect((await readServerLocator({ stateDirectory: serverStateDirectory })).instance_id).toBe(identity.instance_id);
 
   const otherRootLauncher = Bun.spawn(
     ["bun", "src/server.mjs", "--root", otherRoot, "--port", String(port), "--open"],
-    { cwd: join(import.meta.dirname, ".."), stdout: "pipe", stderr: "pipe" },
+    {
+      cwd: join(import.meta.dirname, ".."),
+      env: { ...process.env, LAZURIO_LAUNCHPAD_STATE_ROOT: serverStateDirectory },
+      stdout: "pipe",
+      stderr: "pipe",
+    },
   );
   expect(await otherRootLauncher.exited).not.toBe(0);
-  expect(await new Response(otherRootLauncher.stderr).text()).toContain("EADDRINUSE");
+  expect(await new Response(otherRootLauncher.stderr).text()).toContain("jiný Root");
 });
 
 test("hosted Launchpad rejects forged gateway headers without a TLS-authenticated OAuth session", async () => {
@@ -470,7 +481,8 @@ test("instance-bound local shutdown rejects stale callers and releases the exact
 
 test("launcher replaces a stale same-root Server on the same port", async () => {
   const root = await createLaunchpadGitFixture();
-  tempRoots.push(root);
+  const stateRoot = `${root}-launchpad-state`;
+  tempRoots.push(root, stateRoot);
   const port = await findFreePort();
   const instanceId = "2a6db6d3-ad60-42b7-b6a8-e522ac838284";
   const rootId = computeServerRootId(realpathSync.native(root));
@@ -491,7 +503,12 @@ test("launcher replaces a stale same-root Server on the same port", async () => 
 
   const launcher = Bun.spawn(
     ["bun", "src/server.mjs", "--root", root, "--port", String(port), "--reuse"],
-    { cwd: join(import.meta.dirname, ".."), stdout: "pipe", stderr: "pipe" },
+    {
+      cwd: join(import.meta.dirname, ".."),
+      env: { ...process.env, LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot },
+      stdout: "pipe",
+      stderr: "pipe",
+    },
   );
   servers.push(launcher);
   try {
@@ -594,7 +611,8 @@ test("Launchpad server reports git am and leaves recovery to Codex", async () =>
 
 test("PORT environment configuration is implicit and falls forward to a free port", async () => {
   const root = await createLaunchpadGitFixture();
-  tempRoots.push(root);
+  const stateRoot = `${root}-launchpad-state`;
+  tempRoots.push(root, stateRoot);
   const blocker = createServer();
   await new Promise((resolve, reject) => {
     blocker.once("error", reject);
@@ -604,7 +622,11 @@ test("PORT environment configuration is implicit and falls forward to a free por
 
   const launcher = Bun.spawn(["bun", "src/server.mjs", "--root", root], {
     cwd: join(import.meta.dirname, ".."),
-    env: { ...process.env, PORT: String(port) },
+    env: {
+      ...process.env,
+      PORT: String(port),
+      LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot,
+    },
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -905,9 +927,11 @@ async function readLaunchpadPort(server) {
 // volný, takže health probe i git routy trefí vždy NÁŠ server.
 async function startLaunchpadServer(root, { env = {} } = {}) {
   const port = await findFreePort();
+  const stateRoot = env.LAZURIO_LAUNCHPAD_STATE_ROOT ?? `${root}-launchpad-state`;
+  if (!tempRoots.includes(stateRoot)) tempRoots.push(stateRoot);
   const server = Bun.spawn(["bun", "src/server.mjs", "--root", root, "--port", String(port)], {
     cwd: join(import.meta.dirname, ".."),
-    env: { ...process.env, ...env },
+    env: { ...process.env, ...env, LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot },
     stdout: "pipe",
     stderr: "pipe",
   });

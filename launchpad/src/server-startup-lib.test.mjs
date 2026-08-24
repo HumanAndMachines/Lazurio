@@ -140,6 +140,23 @@ test("locator blocks a second dev Server even when the requested port is free", 
   expect(started).toBe(false);
 });
 
+test("machine locator blocks a second Lazurio Root instead of falling forward", async () => {
+  let started = false;
+  await expect(startLaunchpadWithPortPolicy({
+    requestedPort: 4174,
+    explicitPort: false,
+    shouldOpen: false,
+    shouldReuse: true,
+    locatedUrl: "http://127.0.0.1:4175",
+    startServer() {
+      started = true;
+      return { port: 4174 };
+    },
+    inspectRunningLaunchpad: async () => ({ status: "foreign_root" }),
+  })).rejects.toMatchObject({ code: "LAZURIO_SERVER_OTHER_ROOT_RUNNING" });
+  expect(started).toBe(false);
+});
+
 test("locator drains a stale fallback Server before binding a new generation", async () => {
   const observations = ["stale_install", "probe_failed", "unrecognized"];
   const shutdowns = [];

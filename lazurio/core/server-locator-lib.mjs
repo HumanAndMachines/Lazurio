@@ -1,15 +1,53 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, lstatSync } from "node:fs";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { basename, dirname, join, resolve } from "node:path";
+import { homedir } from "node:os";
+import { basename, dirname, isAbsolute, join, resolve, win32 } from "node:path";
 
 export const LAZURIO_SERVER_LOCATOR_SCHEMA = "lazurio.server.locator.v1";
 
-export function serverLocatorPath(workspaceRoot) {
-  if (typeof workspaceRoot !== "string" || workspaceRoot.trim() === "") {
-    throw new TypeError("Server locator requires a Workspace root.");
+export function resolveServerStateDirectory({
+  configuredStateRoot,
+  platform = process.platform,
+  environment = process.env,
+  homeDirectory = homedir(),
+} = {}) {
+  if (typeof configuredStateRoot === "string" && configuredStateRoot.trim() !== "") {
+    if (!isAbsoluteForPlatform(configuredStateRoot, platform)) {
+      throw new TypeError("Configured Lazurio Server state root must be absolute.");
+    }
+    return normalizeForPlatform(configuredStateRoot, platform);
   }
-  return join(resolve(workspaceRoot), "launchpad", ".local", "server.json");
+
+  if (platform === "win32") {
+    const localAppData = typeof environment?.LOCALAPPDATA === "string"
+      && win32.isAbsolute(environment.LOCALAPPDATA)
+      ? environment.LOCALAPPDATA
+      : win32.join(homeDirectory, "AppData", "Local");
+    if (!win32.isAbsolute(localAppData)) {
+      throw new TypeError("Lazurio Server state requires an absolute Windows user directory.");
+    }
+    return win32.join(win32.normalize(localAppData), "Lazurio");
+  }
+
+  if (!isAbsolute(homeDirectory)) {
+    throw new TypeError("Lazurio Server state requires an absolute user home directory.");
+  }
+  if (platform === "darwin") {
+    return join(resolve(homeDirectory), "Library", "Application Support", "Lazurio");
+  }
+  const xdgStateHome = typeof environment?.XDG_STATE_HOME === "string"
+    && isAbsolute(environment.XDG_STATE_HOME)
+    ? environment.XDG_STATE_HOME
+    : join(resolve(homeDirectory), ".local", "state");
+  return join(resolve(xdgStateHome), "lazurio");
+}
+
+export function serverLocatorPath(stateDirectory) {
+  if (typeof stateDirectory !== "string" || stateDirectory.trim() === "") {
+    throw new TypeError("Server locator requires a per-user state directory.");
+  }
+  return joinForStateDirectory(stateDirectory, "server.json");
 }
 
 export function buildServerLocator({ origin, identity, writtenAt = new Date().toISOString() }) {
@@ -68,17 +106,17 @@ export function validateServerLocator(locator) {
   return errors;
 }
 
-export async function readServerLocator({ workspaceRoot }) {
-  const locator = await readServerLocatorFile({ workspaceRoot, allowMissing: false });
+export async function readServerLocator({ stateDirectory }) {
+  const locator = await readServerLocatorFile({ stateDirectory, allowMissing: false });
   return locator;
 }
 
-export async function readServerLocatorIfPresent({ workspaceRoot }) {
-  return readServerLocatorFile({ workspaceRoot, allowMissing: true });
+export async function readServerLocatorIfPresent({ stateDirectory }) {
+  return readServerLocatorFile({ stateDirectory, allowMissing: true });
 }
 
-async function readServerLocatorFile({ workspaceRoot, allowMissing }) {
-  const path = serverLocatorPath(workspaceRoot);
+async function readServerLocatorFile({ stateDirectory, allowMissing }) {
+  const path = serverLocatorPath(stateDirectory);
   let locator;
   try {
     locator = JSON.parse(await readFile(path, "utf8"));
@@ -92,7 +130,7 @@ async function readServerLocatorFile({ workspaceRoot, allowMissing }) {
 }
 
 export async function writeServerLocator({
-  workspaceRoot,
+  stateDirectory,
   origin,
   identity,
   writeFileFn = writeFile,
@@ -100,11 +138,10 @@ export async function writeServerLocator({
   removeFileFn = rm,
 }) {
   const locator = buildServerLocator({ origin, identity });
-  const target = serverLocatorPath(workspaceRoot);
+  const target = serverLocatorPath(stateDirectory);
   const directory = dirname(target);
-  assertPhysicalDirectory(join(resolve(workspaceRoot), "launchpad"), "Launchpad directory");
   await mkdir(directory, { recursive: true, mode: 0o700 });
-  assertPhysicalDirectory(directory, "Launchpad local directory");
+  assertPhysicalDirectory(directory, "Lazurio Server state directory");
   const temporary = join(directory, `.${basename(target)}.${randomUUID()}.tmp`);
   try {
     await writeFileFn(temporary, `${JSON.stringify(locator, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
@@ -147,4 +184,18 @@ function assertPhysicalDirectory(path, label) {
   if (!stat.isDirectory() || stat.isSymbolicLink()) {
     throw new Error(`${label} must be a physical directory: ${path}`);
   }
+}
+
+function isAbsoluteForPlatform(path, platform) {
+  return platform === "win32" ? win32.isAbsolute(path) : isAbsolute(path);
+}
+
+function normalizeForPlatform(path, platform) {
+  return platform === "win32" ? win32.normalize(path) : resolve(path);
+}
+
+function joinForStateDirectory(directory, basename) {
+  return /^[A-Za-z]:[\\/]/u.test(directory) || directory.startsWith("\\\\")
+    ? win32.join(directory, basename)
+    : join(resolve(directory), basename);
 }

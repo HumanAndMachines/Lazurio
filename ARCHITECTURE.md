@@ -160,9 +160,11 @@ Při přímém vývojářském startu načte aplikace lease sama z
 `lazurio.module.json`. Při startu přes Launchpad dostane stejné hodnoty jako
 procesní vstup a odmítne je, pokud s manifestem nesouhlasí.
 
-Na jedné Mašině běží jeden sdílený Lazurio Server. Jeho aktuální lokální
-adresu drží pouze gitignored `launchpad/.local/server.json`; jde o ukazatel na
-Server, ne o registr modulových portů.
+Na jedné Mašině běží pro daného uživatele jeden sdílený Lazurio Server. Jeho
+aktuální lokální adresu a obsluhovaný `root_id` drží jediný locator ve
+standardním per-user state prostoru operačního systému (`Application Support`,
+`XDG_STATE_HOME` nebo `LocalAppData`). Jde o ukazatel na Server, ne o registr
+modulových portů; checkouty ani worktrees si proto nevytvářejí vlastní Server.
 
 Z toho plynou tato pravidla:
 

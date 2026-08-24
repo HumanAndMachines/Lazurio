@@ -145,13 +145,15 @@ kolizi zvolí jiný port. Tento Organization/Personalspace slice je první čás
 širšího Builder Bridge kontraktu pro stabilní odkazy na moduly, Doctor a
 worktrees.
 
-Po spuštění Server zapíše svou aktuální lokální adresu a identitu do
-gitignored `launchpad/.local/server.json`. Starší organizační Launchpady tento
-soubor načtou, ověří proti běžícímu Serveru a teprve potom mu předají akci
-Start, Open nebo Stop. Pokud soubor chybí, je starý nebo ukazuje na jiný Server,
-akci bezpečně odmítnou. Soubor jen ukazuje na lokální Server; porty Modulů dál
-vlastní jejich `lazurio.module.json`. Locator obnoví
-`bun run launchpad:serve` spuštěný z daného Lazurio rootu.
+Po spuštění Server zapíše svou aktuální lokální adresu, identitu a `root_id` do
+jediného locatoru ve standardním per-user state prostoru operačního systému:
+`~/Library/Application Support/Lazurio/server.json` na macOS,
+`${XDG_STATE_HOME:-~/.local/state}/lazurio/server.json` na Linuxu a
+`%LOCALAPPDATA%\\Lazurio\\server.json` na Windows. CLI a organizační Launchpady
+locator načtou, ověří proti běžícímu Serveru a teprve potom mu předají akci
+Start, Open nebo Stop. Pokud chybí, je starý nebo patří jinému Rootu, akci
+bezpečně odmítnou. Locator jen ukazuje na lokální Server; porty Modulů dál
+vlastní jejich `lazurio.module.json`. Obnoví jej `bun run launchpad:serve`.
 
 Launcher reusuje existující lokální instanci jen když sedí jak hash kanonického
 rootu, tak hash skutečných runtime/public source bytes. Po pullu nebo editaci

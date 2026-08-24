@@ -40,6 +40,11 @@ export async function startLaunchpadWithPortPolicy({
         inspectRunningLaunchpad,
         waitBeforeStaleRebind,
       });
+    } else if (located?.status === "foreign_root") {
+      throw serverConflict(
+        "LAZURIO_SERVER_OTHER_ROOT_RUNNING",
+        `Na této Mašině už běží Lazurio Server pro jiný Root na ${locatedUrl}. Nejdřív jej zastav.`,
+      );
     } else if (located?.status === "legacy_same_root" || located?.status === "protocol_incompatible") {
       throw serverConflict(
         "LAZURIO_SERVER_UPGRADE_REQUIRED",
