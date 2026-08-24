@@ -73,6 +73,23 @@ test("linked worktree resolves to the verified canonical main Root", async () =>
   expect(resolveCanonicalServerRoot(primaryRoot)).toBe(canonicalPrimaryRoot);
 });
 
+test("nested linked worktree resolves a primary Root with a separate Git directory", async () => {
+  const primaryRoot = await mkdtemp(join(tmpdir(), "lazurio-separate-git-primary-"));
+  const commonDirectory = await mkdtemp(join(tmpdir(), "lazurio-separate-git-common-"));
+  const linkedRoot = join(primaryRoot, ".worktrees", "root", "feature");
+  const worktreeGitDirectory = join(commonDirectory, "worktrees", "feature");
+  tempRoots.push(primaryRoot, commonDirectory);
+  await mkdir(linkedRoot, { recursive: true });
+  await mkdir(worktreeGitDirectory, { recursive: true });
+  await writeFile(join(primaryRoot, ".git"), `gitdir: ${commonDirectory}\n`);
+  await writeFile(join(linkedRoot, ".git"), `gitdir: ${worktreeGitDirectory}\n`);
+  await writeFile(join(worktreeGitDirectory, "commondir"), "../..\n");
+
+  const canonicalPrimaryRoot = await realpath(primaryRoot);
+  expect(resolveCanonicalServerRoot(primaryRoot)).toBe(canonicalPrimaryRoot);
+  expect(resolveCanonicalServerRoot(linkedRoot)).toBe(canonicalPrimaryRoot);
+});
+
 test("directory-only Root remains canonical without inventing Git ownership", async () => {
   const root = await mkdtemp(join(tmpdir(), "lazurio-directory-root-"));
   tempRoots.push(root);

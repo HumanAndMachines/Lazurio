@@ -579,7 +579,7 @@ test("control-root replacement waits for an in-flight runtime mutation", async (
   expect((await getJson(primary.port, "/health")).status).toBe("ok");
 });
 
-test("control-root replacement fails closed while boot reconciliation is in progress", async () => {
+test("control-root replacement waits until boot reconciliation publishes one ready locator", async () => {
   const root = await createLaunchpadGitFixture();
   const appPort = await findFreePort();
   const appRoot = join(root, "organizations", "BetaCo_GEN3", "workspace", "deals", "app", "v1");
@@ -658,23 +658,26 @@ test("control-root replacement fails closed while boot reconciliation is in prog
     {
       cwd: join(import.meta.dirname, ".."),
       env: primaryEnvironment,
-      stdout: "ignore",
+      stdout: "pipe",
       stderr: "pipe",
     },
   );
   servers.push(replacement);
-  expect(await replacement.exited).not.toBe(0);
-  expect(await new Response(replacement.stderr).text()).toContain("per-user lifetime lease");
+  await Bun.sleep(100);
+  expect(replacement.exitCode).toBeNull();
   expect(primaryServer.exitCode).toBeNull();
+  expect(await readServerLocatorIfPresent({ stateDirectory: serverStateDirectory })).toBeNull();
 
   for (let attempt = 0; attempt < 150 && !(await Bun.file(completedMarker).exists()); attempt += 1) {
     await Bun.sleep(20);
   }
   expect(await Bun.file(completedMarker).exists()).toBe(true);
-  await waitForHealth(primaryPort, primaryServer);
-  expect((await getJson(primaryPort, "/health")).status).toBe("ok");
+  expect(await readLaunchpadPort(replacement)).toBe(replacementPort);
+  await waitForHealth(replacementPort, replacement);
+  expect(await primaryServer.exited).toBe(0);
+  expect((await getJson(replacementPort, "/health")).status).toBe("ok");
   expect(await readServerLocator({ stateDirectory: serverStateDirectory })).toMatchObject({
-    origin: `http://127.0.0.1:${primaryPort}`,
+    origin: `http://127.0.0.1:${replacementPort}`,
   });
 }, platformTestTimeout(15_000));
 
