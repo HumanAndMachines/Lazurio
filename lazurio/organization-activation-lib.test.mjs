@@ -109,6 +109,29 @@ test("GitHub App lookup follows installation pagination", () => {
   );
 });
 
+test("later-page App lookup failure stays a retryable technical error", () => {
+  const report = checkOrganizationActivation({
+    githubOrganizationId: "314957563",
+    resolveGitHubCli: () => "/usr/bin/gh",
+    runGitHubCli: fixtureRunner({
+      root: "legacy",
+      appSelection: "all",
+      appInstallationPage: 3,
+      appInstallationFailurePage: 2,
+    }),
+  });
+
+  expect(report).toMatchObject({
+    execution: {
+      status: "error",
+      error: { code: "github_transport_failed", retryable: true },
+    },
+    next_action: { kind: "retry" },
+  });
+  expect(report).not.toHaveProperty("outcome");
+  expect(report).not.toHaveProperty("observations");
+});
+
 test("transport failure returns an error envelope without an outcome", () => {
   const report = checkOrganizationActivation({
     githubOrganizationId: "314957563",
@@ -193,6 +216,7 @@ function fixtureRunner({
   root,
   appSelection,
   appInstallationPage = 1,
+  appInstallationFailurePage = null,
   selectedAccess = "included",
   malformedCanonical = false,
 }) {
@@ -263,6 +287,7 @@ function fixtureRunner({
     const installationPage = endpoint?.match(/^orgs\/Example\/installations\?per_page=100&page=(\d+)$/u);
     if (installationPage) {
       const page = Number.parseInt(installationPage[1], 10);
+      if (page === appInstallationFailurePage) return httpError(403);
       if (page < appInstallationPage) {
         return ok({
           total_count: 100 * appInstallationPage,
