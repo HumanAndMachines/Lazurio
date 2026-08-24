@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { lstatSync, readFileSync, readdirSync } from "node:fs";
-import { join, relative, resolve, sep, win32 } from "node:path";
+import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep, win32 } from "node:path";
 
 export const LAZURIO_SERVER_IDENTITY_SCHEMA = "lazurio.server.identity.v1";
 export const LAZURIO_SERVER_PRODUCT = "lazurio-launchpad-server";
@@ -14,6 +14,46 @@ const generationFiles = [
   "scripts/worktree-create-lib.mjs",
   "scripts/worktree-create-lock.mjs",
 ];
+
+export function resolveCanonicalServerRoot(selectedRoot) {
+  if (typeof selectedRoot !== "string" || selectedRoot === "") {
+    throw new TypeError("Server root resolution requires a selected root path.");
+  }
+  const root = realpathSync.native(resolve(selectedRoot));
+  const markerPath = join(root, ".git");
+  if (!existsSync(markerPath)) return root;
+
+  const marker = lstatSync(markerPath);
+  if (marker.isSymbolicLink()) {
+    throw new Error("Lazurio Root Git marker must not be a symlink.");
+  }
+  if (marker.isDirectory()) return root;
+  if (!marker.isFile()) throw new Error("Lazurio Root Git marker has an unsupported type.");
+
+  const gitDirectory = parseGitDirectoryPointer(readFileSync(markerPath, "utf8"), root);
+  const commonDirectoryPointer = join(gitDirectory, "commondir");
+  // A primary checkout with a separate Git directory also uses a .git file,
+  // but has no worktree commondir marker and is already the canonical Root.
+  if (!existsSync(commonDirectoryPointer)) return root;
+
+  const commonDirectory = realpathSync.native(resolveGitPointer(
+    gitDirectory,
+    readSingleGitPath(commonDirectoryPointer, "worktree commondir"),
+  ));
+  if (basename(commonDirectory) !== ".git") {
+    throw new Error("Linked Lazurio worktree does not expose a canonical main Root.");
+  }
+  const primaryRoot = realpathSync.native(dirname(commonDirectory));
+  const primaryMarker = join(primaryRoot, ".git");
+  if (
+    !existsSync(primaryMarker)
+    || !lstatSync(primaryMarker).isDirectory()
+    || realpathSync.native(primaryMarker) !== commonDirectory
+  ) {
+    throw new Error("Linked Lazurio worktree canonical main Root cannot be verified.");
+  }
+  return primaryRoot;
+}
 
 export function computeServerRootId(canonicalRoot, platform = process.platform) {
   if (typeof canonicalRoot !== "string" || canonicalRoot === "") {
@@ -172,4 +212,31 @@ function normalizeWindowsIdentityPath(path) {
     normalized = normalized.slice(4);
   }
   return normalized.toLowerCase();
+}
+
+function parseGitDirectoryPointer(source, root) {
+  const match = source.match(/^gitdir: ([^\0\r\n]+)\r?\n?$/u);
+  if (!match) throw new Error("Lazurio Root .git pointer is malformed.");
+  const gitDirectory = realpathSync.native(resolveGitPointer(root, match[1]));
+  const stat = lstatSync(gitDirectory);
+  if (!stat.isDirectory() || stat.isSymbolicLink()) {
+    throw new Error("Lazurio Root .git pointer does not resolve to a physical directory.");
+  }
+  return gitDirectory;
+}
+
+function readSingleGitPath(path, label) {
+  const value = readFileSync(path, "utf8");
+  if (value.includes("\0") || value.split(/\r?\n/u).filter(Boolean).length !== 1) {
+    throw new Error(`Lazurio Root ${label} pointer is malformed.`);
+  }
+  const normalized = value.trim();
+  if (normalized === "") throw new Error(`Lazurio Root ${label} pointer is empty.`);
+  return normalized;
+}
+
+function resolveGitPointer(base, pointer) {
+  return isAbsolute(pointer) || win32.isAbsolute(pointer)
+    ? pointer
+    : resolve(base, pointer);
 }

@@ -781,6 +781,7 @@ export async function runtimeSourcePortAuthorityIssues({
   const sharedListenerBindings = new Set();
   for (const { sourcePath, source } of sources) {
     const bindings = new Set();
+    const importAliases = runtimeNamedImportAliases(source);
     for (const pattern of [
       /(?:\bport|["']port["'])\s*:\s*(?:Number\s*\(\s*)?((?:[A-Za-z_$][A-Za-z0-9_$]*\s*\.\s*)*[A-Za-z_$][A-Za-z0-9_$]*)\b/g,
       /\blisten(?:Sync)?\s*\(\s*(?:Number\s*\(\s*)?((?:[A-Za-z_$][A-Za-z0-9_$]*\s*\.\s*)*[A-Za-z_$][A-Za-z0-9_$]*)\b/g,
@@ -792,6 +793,8 @@ export async function runtimeSourcePortAuthorityIssues({
         // bindings are safe to follow across the small package source graph,
         // including namespace imports such as config.API_PORT.
         if (name.split("_").includes("PORT")) sharedListenerBindings.add(name);
+        const importedName = importAliases.get(name);
+        if (importedName?.split("_").includes("PORT")) sharedListenerBindings.add(importedName);
       }
     }
     sourceListenerBindings.set(sourcePath, bindings);
@@ -831,6 +834,18 @@ export async function runtimeSourcePortAuthorityIssues({
   }
 
   return issues;
+}
+
+function runtimeNamedImportAliases(source) {
+  const aliases = new Map();
+  for (const match of source.matchAll(/\bimport\s*{([^}]+)}\s*from\s*["'][^"'\r\n]+["']/g)) {
+    for (const entry of match[1].split(",")) {
+      const binding = entry.trim().match(/^(?:type\s+)?([A-Za-z_$][A-Za-z0-9_$]*)(?:\s+as\s+([A-Za-z_$][A-Za-z0-9_$]*))?$/);
+      if (!binding) continue;
+      aliases.set(binding[2] ?? binding[1], binding[1]);
+    }
+  }
+  return aliases;
 }
 
 // Cesty vracené v discovery/API modelu jsou přenositelné identifikátory

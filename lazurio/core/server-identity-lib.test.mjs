@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -11,6 +11,7 @@ import {
   computeServerInstallGeneration,
   computeServerRootId,
   isValidServerIdentity,
+  resolveCanonicalServerRoot,
   serverInstallGenerationInputPaths,
 } from "./server-identity-lib.mjs";
 
@@ -53,6 +54,27 @@ test("Windows root identity normalizes equivalent casing, separators and namespa
 
   const unc = computeServerRootId("\\\\server\\share\\Lazurio", "win32");
   expect(computeServerRootId("\\\\?\\UNC\\SERVER\\SHARE\\LAZURIO\\", "win32")).toBe(unc);
+});
+
+test("linked worktree resolves to the verified canonical main Root", async () => {
+  const primaryRoot = await mkdtemp(join(tmpdir(), "lazurio-primary-root-"));
+  const linkedRoot = await mkdtemp(join(tmpdir(), "lazurio-linked-root-"));
+  tempRoots.push(primaryRoot, linkedRoot);
+  const commonDirectory = join(primaryRoot, ".git");
+  const worktreeGitDirectory = join(commonDirectory, "worktrees", "feature");
+  await mkdir(worktreeGitDirectory, { recursive: true });
+  await writeFile(join(linkedRoot, ".git"), `gitdir: ${worktreeGitDirectory}\n`);
+  await writeFile(join(worktreeGitDirectory, "commondir"), "../..\n");
+
+  const canonicalPrimaryRoot = await realpath(primaryRoot);
+  expect(resolveCanonicalServerRoot(linkedRoot)).toBe(canonicalPrimaryRoot);
+  expect(resolveCanonicalServerRoot(primaryRoot)).toBe(canonicalPrimaryRoot);
+});
+
+test("directory-only Root remains canonical without inventing Git ownership", async () => {
+  const root = await mkdtemp(join(tmpdir(), "lazurio-directory-root-"));
+  tempRoots.push(root);
+  expect(resolveCanonicalServerRoot(root)).toBe(await realpath(root));
 });
 
 test("install generation hashes one deterministic cross-platform source set", async () => {

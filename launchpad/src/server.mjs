@@ -55,6 +55,7 @@ import {
   classifyServerIdentity,
   computeServerInstallGeneration,
   computeServerRootId,
+  resolveCanonicalServerRoot,
 } from "../../lazurio/core/server-identity-lib.mjs";
 import {
   readServerLocatorIfPresent,
@@ -69,8 +70,9 @@ const safeApiMethods = new Set(["GET", "HEAD", "OPTIONS"]);
 const launchpadRoot = join(import.meta.dirname, "..");
 const publicRoot = join(launchpadRoot, "public");
 const options = parseArgs(Bun.argv.slice(2));
-const companiesRoot = resolve(options.root ?? process.env.WORKSPACE_ROOT ?? join(launchpadRoot, ".."));
-const canonicalCompaniesRoot = realpathSync.native(companiesRoot);
+const selectedCompaniesRoot = resolve(options.root ?? process.env.WORKSPACE_ROOT ?? join(launchpadRoot, ".."));
+const canonicalCompaniesRoot = resolveCanonicalServerRoot(selectedCompaniesRoot);
+const companiesRoot = canonicalCompaniesRoot;
 const lazurioCodeRoot = resolve(launchpadRoot, "..");
 const configuredRuntimeRoot = resolve(process.env.LAZURIO_RUNTIME_ROOT ?? lazurioCodeRoot);
 if (realpathSync.native(configuredRuntimeRoot) !== realpathSync.native(lazurioCodeRoot)) {
