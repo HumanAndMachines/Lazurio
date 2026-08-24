@@ -1425,7 +1425,11 @@ function rootSlotContractIssues(manifest, config, organizationRoot) {
     );
   }
   for (const path of declaredLayerPaths) {
-    if (!declaredPaths.has(path)) {
+    const trackedByOrganization = runGit(
+      ["ls-files", "--error-unmatch", "--", path],
+      organizationRoot,
+    ).ok;
+    if (!declaredPaths.has(path) && !trackedByOrganization) {
       issues.push(
         `company.gen3.json: root vrstva ${path} nemá odpovídající modules.manifest.json slot`,
       );
