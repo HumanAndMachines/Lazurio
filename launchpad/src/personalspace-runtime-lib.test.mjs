@@ -524,6 +524,29 @@ test("resolveSpaceGbrainVault vrací vault root jen pro validní prostor s exist
   expect(vault.mode).toBe("canonical");
 });
 
+test("gbrain resolution uses the same selected Root config as Personalspace listing", async () => {
+  const { root } = await createFixture({ withGbrain: true });
+  const selectedRoot = await mkdtemp(join(tmpdir(), "ps-gbrain-selected-root-"));
+  tempRoots.push(selectedRoot);
+  await writeJson(join(root, "launchpad.gen3.json"), {
+    workspace_generation: "gen3",
+    organization_mountpoint: "organizations",
+    personalspace_mountpoint: "missing-personalspace",
+  });
+  await writeJson(join(selectedRoot, "launchpad.gen3.json"), {
+    workspace_generation: "gen3",
+    organization_mountpoint: "organizations",
+    personalspace_mountpoint: "personalspace",
+  });
+
+  const vault = await resolveSpaceGbrainVault({
+    companiesRoot: root,
+    rootSourceRoot: selectedRoot,
+    spaceDirName: "exampleuser_GEN3",
+  });
+  expect(vault.vaultRoot).toBe(join(root, "personalspace", "exampleuser_GEN3", "gbrain"));
+});
+
 test("resolveSpaceGbrainVault odmítne neznámý prostor a chybějící vault", async () => {
   const { root } = await createFixture({ withGbrain: false });
   await expect(resolveSpaceGbrainVault({ companiesRoot: root, spaceDirName: "neexistuje_GEN3" })).rejects.toThrow(GbrainAccessError);
