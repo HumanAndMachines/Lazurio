@@ -237,6 +237,9 @@ spuštěný v Lazurio rootu. Tento agentní launcher zdravou existující
 instanci znovu použije nebo Launchpad spustí, ale nikdy sám neotevře systémový
 browser. Agent nesmí pro tento chat-first krok spouštět `bun run launchpad`,
 `Launchpad.command`, `launchpad.sh` ani jiný human launcher s OS openerem.
+Když launcher vrátí `LAZURIO_SERVER_STATE_PERMISSION_REQUIRED`, Agent vyžádá
+scoped zápis jen do přesně uvedené OS-standard Lazurio state cesty a tentýž
+příkaz zopakuje; nevytváří checkout-local locator ani náhradní Server autoritu.
 Ohlášený origin otevře výhradně browser capability dané App a port nikdy
 nehádá ani nehardcoduje. K originu připojí stabilní hash route:
 

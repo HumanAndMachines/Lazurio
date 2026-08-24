@@ -369,6 +369,31 @@ test("the lifetime lease blocks a second Server even when its locator was remove
   expect((await getJson(primary.port, "/health")).status).toBe("ok");
 });
 
+test("a reuse launcher restores a deleted locator for the requested-port Server", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const primary = await startLaunchpadServer(root);
+  const identity = await getJson(primary.port, "/api/lazurio/server-identity");
+  await rm(join(primary.serverStateDirectory, "server.json"));
+
+  const recovery = Bun.spawn(
+    ["bun", "src/server.mjs", "--root", root, "--port", String(primary.port), "--reuse"],
+    {
+      cwd: join(import.meta.dirname, ".."),
+      env: primary.environment,
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+  expect(await recovery.exited).toBe(0);
+  expect(await new Response(recovery.stdout).text()).toContain("používám existující instanci");
+  expect(await readServerLocator({ stateDirectory: primary.serverStateDirectory })).toMatchObject({
+    origin: `http://127.0.0.1:${primary.port}`,
+    instance_id: identity.instance_id,
+  });
+  expect((await getJson(primary.port, "/health")).status).toBe("ok");
+});
+
 test("linked worktree gets only a read-only canonical Root mount context", async () => {
   const root = await createLaunchpadGitFixture();
   const guidePort = await findFreePort();

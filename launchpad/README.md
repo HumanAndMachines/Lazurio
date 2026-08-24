@@ -159,6 +159,12 @@ instanci. Locator jen ukazuje na lokální Server; porty Modulů dál vlastní j
 Samotný singleton drží po celou dobu procesu per-user lifetime lease ve stejném
 state prostoru, takže ani smazaný locator nepovolí spuštění druhého Serveru a
 není potřeba prohledávat všechny možné custom porty.
+Tato jediná cesta je součástí lokální instalace Lazuria. Task Agent běžící ve
+filesystem sandboxu jí dostane scoped zápis standardním oprávněním svého
+harnessu (v Codexu dodatečný `sandbox_workspace_write.writable_roots`); nesmí si
+kvůli sandboxu vytvořit checkout-local locator ani druhý singleton. Když grant
+chybí, launcher skončí čitelným `LAZURIO_SERVER_STATE_PERMISSION_REQUIRED` a
+Agent vyžádá pouze toto oprávnění. Cílově grant nastavuje `lazurio install`.
 
 Launcher reusuje existující lokální instanci jen když sedí hash kanonického
 machine rootu, hash selected control rootu i hash skutečných runtime/public

@@ -182,9 +182,9 @@ let bootReconcile;
 let serverLifetimeLock;
 let startupError;
 try {
-  const existingLocator = await readServerLocatorIfPresent({
+  const existingLocator = await withServerStateAccess(() => readServerLocatorIfPresent({
     stateDirectory: serverStateDirectory,
-  });
+  }));
   startResult = await startLaunchpadWithPortPolicy({
     requestedPort: port,
     host,
@@ -195,7 +195,8 @@ try {
     // The requested port is inspected naturally if bind reports EADDRINUSE.
     // Recovery only needs to search the fallback ports that could otherwise
     // remain hidden when the requested port has become free again.
-    knownServerUrls: launchpadFallbackUrls({ host, startPort: port }).slice(1),
+    knownServerUrls: launchpadFallbackUrls({ host, startPort: port })
+      .slice(options.open || options.reuse ? 0 : 1),
     startServer,
     inspectRunningLaunchpad: (url) => inspectRunningLaunchpad(url, {
       rootId: launchpadRootId,
@@ -205,10 +206,10 @@ try {
     shutdownStaleLaunchpad: requestStaleLaunchpadShutdown,
     openExisting: openBrowser,
     acquireServerLease: async () => {
-      serverLifetimeLock ??= await acquireServerLifetimeLock({
+      serverLifetimeLock ??= await withServerStateAccess(() => acquireServerLifetimeLock({
         stateDirectory: serverStateDirectory,
         instanceId: launchpadServerIdentity.instance_id,
-      });
+      }));
     },
   });
   if (startResult.mode === "reused") {
@@ -220,11 +221,11 @@ try {
     if (observation.status !== "compatible") {
       throw new Error("Reused Lazurio Server no longer has the expected identity.");
     }
-    serverLocator = await writeServerLocator({
+    serverLocator = await withServerStateAccess(() => writeServerLocator({
       stateDirectory: serverStateDirectory,
       origin: startResult.url,
       identity: observation.identity,
-    });
+    }));
   } else {
     // The machine-wide lifetime lease is already held. Locator publication is
     // delayed until boot reconciliation completes, so no launcher can observe
@@ -236,11 +237,11 @@ try {
       moduleLeaseKeys: selectedDesiredStateKeys,
     });
     const serverUrl = `http://${host}:${startResult.server.port}`;
-    serverLocator = await writeServerLocator({
+    serverLocator = await withServerStateAccess(() => writeServerLocator({
       stateDirectory: serverStateDirectory,
       origin: serverUrl,
       identity: launchpadServerIdentity,
-    });
+    }));
     serverShutdownState = "running";
   }
 } catch (error) {
@@ -259,6 +260,21 @@ async function selectedControlRootDesiredStateKeys() {
       .filter((app) => typeof app.company === "string" && typeof app.module === "string")
       .map((app) => `${app.company}/${app.module}`),
   );
+}
+
+async function withServerStateAccess(action) {
+  try {
+    return await action();
+  } catch (error) {
+    if (!["EACCES", "EPERM"].includes(error?.code)) throw error;
+    const permissionError = new Error(
+      `LAZURIO_SERVER_STATE_PERMISSION_REQUIRED: Lazurio Server potřebuje zápis do ${serverStateDirectory}. `
+      + "Task Agent má pro tuto jedinou OS-standard state cestu vyžádat scoped oprávnění sandboxu a příkaz zopakovat; locator nepřesměrovávej jinam.",
+      { cause: error },
+    );
+    permissionError.code = "LAZURIO_SERVER_STATE_PERMISSION_REQUIRED";
+    throw permissionError;
+  }
 }
 if (startupError) {
   await serverLifetimeLock?.release();
