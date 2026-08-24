@@ -34,6 +34,11 @@ neukládá desired state a nemá workflow engine. Povrchový provider adapter po
 načte read-only fakta a Core nikdy nezamění technické selhání za známý stav
 Organization. Legacy identity-pair resolver je úzká compatibility kontrola;
 canonical manifest parser zůstává u DEV-6488 a activation jej neduplikuje.
+`github-provider-lib.mjs` vlastní jediný read-only GitHub CLI transport pro
+Lazurio Core. Vybere přesnou důvěryhodnou executable, pustí ji bez shellu se
+sanitizovaným prostředím a vrací strukturované transport/HTTP/response chyby.
+Organization activation i cross-Organization audity tento seam konzumují;
+nespouštějí ambientní `gh` ani si nevedou vlastní provider lane.
 `ui_exposure` zůstává pouze prezentační policy; nevytváří identitu resource ani
 access autoritu. Další doménové vrstvy se přesunují samostatnými PR až nad
 zeleným parity baseline; fyzický přesun souboru sám nesmí měnit schéma ani
