@@ -783,8 +783,8 @@ export async function runtimeSourcePortAuthorityIssues({
     const bindings = new Set();
     const importAliases = runtimeNamedImportAliases(source);
     for (const pattern of [
-      /(?:\bport|["']port["'])\s*:\s*(?:Number\s*\(\s*)?((?:[A-Za-z_$][A-Za-z0-9_$]*\s*\.\s*)*[A-Za-z_$][A-Za-z0-9_$]*)\b/g,
-      /\blisten(?:Sync)?\s*\(\s*(?:Number\s*\(\s*)?((?:[A-Za-z_$][A-Za-z0-9_$]*\s*\.\s*)*[A-Za-z_$][A-Za-z0-9_$]*)\b/g,
+      /(?:\bport|["']port["'])\s*:\s*(?:(?:Number|parseInt|Number\.parseInt)\s*\(\s*)?((?:[A-Za-z_$][A-Za-z0-9_$]*\s*\.\s*)*[A-Za-z_$][A-Za-z0-9_$]*)\b/g,
+      /\blisten(?:Sync)?\s*\(\s*(?:(?:Number|parseInt|Number\.parseInt)\s*\(\s*)?((?:[A-Za-z_$][A-Za-z0-9_$]*\s*\.\s*)*[A-Za-z_$][A-Za-z0-9_$]*)\b/g,
     ]) {
       for (const match of source.matchAll(pattern)) {
         const name = match[1].split(".").at(-1).trim();

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { constants, existsSync, lstatSync, realpathSync } from "fs";
 import { open, readFile } from "fs/promises";
+import { createConnection } from "node:net";
 import { isAbsolute, join, normalize, relative, resolve } from "path";
 import {
   buildDoctorReportFromAppsResponse,
@@ -579,6 +580,7 @@ async function probeServerIdentity(url, pathname) {
       return identity ? { status: "found", identity } : { status: "unrecognized" };
     } catch (error) {
       if (isConnectionRefused(error)) return { status: "absent" };
+      if (attempt === 1 && await confirmLoopbackListenerAbsent(url)) return { status: "absent" };
       if (attempt === 1) return { status: "unrecognized" };
     }
   }
@@ -590,10 +592,30 @@ function isConnectionRefused(error) {
   const visited = new Set();
   while (candidate && typeof candidate === "object" && !visited.has(candidate)) {
     visited.add(candidate);
-    if (candidate.code === "ECONNREFUSED") return true;
+    if (["ECONNREFUSED", "ConnectionRefused"].includes(candidate.code)) return true;
     candidate = candidate.cause;
   }
   return false;
+}
+
+async function confirmLoopbackListenerAbsent(origin) {
+  const target = new URL(origin);
+  return new Promise((resolveAbsent) => {
+    const socket = createConnection({
+      host: target.hostname,
+      port: Number(target.port),
+    });
+    let settled = false;
+    const finish = (absent) => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      resolveAbsent(absent);
+    };
+    socket.setTimeout(500, () => finish(false));
+    socket.once("connect", () => finish(false));
+    socket.once("error", (error) => finish(isConnectionRefused(error)));
+  });
 }
 
 async function requestStaleLaunchpadShutdown(url, observation) {

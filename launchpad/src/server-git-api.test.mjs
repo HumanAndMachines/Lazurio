@@ -17,6 +17,7 @@ import { computeServerRootId } from "../../lazurio/core/server-identity-lib.mjs"
 import {
   readServerLocator,
   resolveServerStateDirectory,
+  writeServerLocator,
 } from "../../lazurio/core/server-locator-lib.mjs";
 
 const tempRoots = [];
@@ -494,7 +495,10 @@ test("launcher replaces a stale same-root Server on the same port", async () => 
   const instanceId = "2a6db6d3-ad60-42b7-b6a8-e522ac838284";
   const rootId = computeServerRootId(realpathSync.native(root));
   const blockerPath = join(root, "stale-server.mjs");
-  const { environment: serverEnvironment } = serverTestEnvironment(root, {
+  const {
+    environment: serverEnvironment,
+    serverStateDirectory,
+  } = serverTestEnvironment(root, {
     LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot,
   });
   await writeFile(blockerPath, staleServerFixtureSource());
@@ -510,6 +514,19 @@ test("launcher replaces a stale same-root Server on the same port", async () => 
     stderr: "pipe",
   });
   await waitForHealth(port, blocker);
+  await writeServerLocator({
+    stateDirectory: serverStateDirectory,
+    origin: `http://127.0.0.1:${port}`,
+    identity: {
+      schema_version: "lazurio.server.identity.v1",
+      product: "lazurio-launchpad-server",
+      root_id: rootId,
+      install_generation: "0".repeat(64),
+      instance_id: instanceId,
+      pid: blocker.pid,
+      started_at: "2026-08-18T19:00:00.000Z",
+    },
+  });
 
   const launcher = Bun.spawn(
     ["bun", "src/server.mjs", "--root", root, "--port", String(port), "--reuse"],
