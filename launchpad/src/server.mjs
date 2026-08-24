@@ -72,8 +72,10 @@ const launchpadRoot = join(import.meta.dirname, "..");
 const publicRoot = join(launchpadRoot, "public");
 const options = parseArgs(Bun.argv.slice(2));
 const selectedCompaniesRoot = resolve(options.root ?? process.env.WORKSPACE_ROOT ?? join(launchpadRoot, ".."));
+const selectedCompaniesRootPath = realpathSync.native(selectedCompaniesRoot);
 const canonicalCompaniesRoot = resolveCanonicalServerRoot(selectedCompaniesRoot);
 const companiesRoot = canonicalCompaniesRoot;
+const worktreeMountContextReadOnly = selectedCompaniesRootPath !== canonicalCompaniesRoot;
 const lazurioCodeRoot = resolve(launchpadRoot, "..");
 const configuredRuntimeRoot = resolve(process.env.LAZURIO_RUNTIME_ROOT ?? lazurioCodeRoot);
 if (realpathSync.native(configuredRuntimeRoot) !== realpathSync.native(lazurioCodeRoot)) {
@@ -229,11 +231,16 @@ if (startResult.mode === "reused") {
 }
 const server = startResult.server;
 const serverUrl = `http://${host}:${server.port}`;
-const bootReconcile = await runtimeManager.reconcileDesiredState();
+const bootReconcile = worktreeMountContextReadOnly
+  ? { active: 0, disabled: 0, degraded: 0, results: [] }
+  : await runtimeManager.reconcileDesiredState();
 
 console.log(`Launchpad GEN3 běží na ${serverUrl}`);
 console.log(`Launchpad GEN3 root: ${companiesRoot}`);
 console.log(`Launchpad GEN3 locator: ${serverLocator.path}`);
+if (worktreeMountContextReadOnly) {
+  console.warn("[launchpad] linked worktree používá canonical Root pouze jako read-only mount context");
+}
 console.log(`[launchpad] desired reconcile active=${bootReconcile.active} disabled=${bootReconcile.disabled} degraded=${bootReconcile.degraded}`);
 for (const result of bootReconcile.results.filter((item) => item.status === "degraded")) {
   console.warn(`[launchpad] desired reconcile degraded ${result.module_lease_key ?? result.file}: ${result.error}`);
@@ -1047,6 +1054,12 @@ function startServer(startPort) {
           if (!trustDecision.trusted) {
             console.warn(`[lazurio] mutating request rejected: ${trustDecision.reason}`);
             return jsonResponse({ error: "mutating_request_forbidden" }, 403);
+          }
+          if (worktreeMountContextReadOnly) {
+            return jsonResponse({
+              error: "worktree_mount_context_read_only",
+              message: "Linked worktree smí canonical Lazurio Root používat jen jako read-only mount context.",
+            }, 409);
           }
         }
         if (moduleFolderRoute(url.pathname) && !requestTrust.isTrustedLocalRequest(request, url)) {

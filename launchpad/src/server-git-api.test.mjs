@@ -339,6 +339,27 @@ test("identity endpoint is local-only and a foreign root cannot reuse the port",
   expect(await new Response(otherRootLauncher.stderr).text()).toContain("jiný Root");
 });
 
+test("linked worktree gets only a read-only canonical Root mount context", async () => {
+  const root = await createLaunchpadGitFixture();
+  await initGitRepo(root);
+  runGit(["add", "."], root);
+  runGit(["commit", "-m", "track fixture Root"], root);
+  const worktreeRoot = `${root}-linked-worktree`;
+  runGit(["worktree", "add", "-b", "linked-launchpad", worktreeRoot], root);
+  tempRoots.push(worktreeRoot, root);
+
+  const { port } = await startLaunchpadServer(worktreeRoot);
+  expect((await getJson(port, "/api/apps")).organizations.length).toBeGreaterThan(0);
+
+  const mutation = await fetch(`http://127.0.0.1:${port}/api/sync`, { method: "POST" });
+  expect(mutation.status).toBe(409);
+  expect(await mutation.json()).toEqual({
+    error: "worktree_mount_context_read_only",
+    message: "Linked worktree smí canonical Lazurio Root používat jen jako read-only mount context.",
+  });
+  expect(runGit(["status", "--short"], root)).toBe("");
+});
+
 test("hosted Launchpad rejects forged gateway headers without a TLS-authenticated OAuth session", async () => {
   const root = await createLaunchpadGitFixture();
   const stateRoot = `${root}-launchpad-state`;

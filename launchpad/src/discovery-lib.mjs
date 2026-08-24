@@ -780,22 +780,16 @@ export async function runtimeSourcePortAuthorityIssues({
   const sourceListenerBindings = new Map();
   const sharedListenerBindings = new Set();
   for (const { sourcePath, source } of sources) {
-    const bindings = new Set();
+    const bindings = runtimeDirectListenerBindings(source);
     const importAliases = runtimeNamedImportAliases(source);
-    for (const pattern of [
-      /(?:\bport|["']port["'])\s*:\s*(?:(?:Number|parseInt|Number\.parseInt)\s*\(\s*)?((?:[A-Za-z_$][A-Za-z0-9_$]*\s*\.\s*)*[A-Za-z_$][A-Za-z0-9_$]*)\b/g,
-      /\blisten(?:Sync)?\s*\(\s*(?:(?:Number|parseInt|Number\.parseInt)\s*\(\s*)?((?:[A-Za-z_$][A-Za-z0-9_$]*\s*\.\s*)*[A-Za-z_$][A-Za-z0-9_$]*)\b/g,
-    ]) {
-      for (const match of source.matchAll(pattern)) {
-        const name = match[1].split(".").at(-1).trim();
-        bindings.add(name);
-        // Generic local names such as `port` are lexical. Port-labelled
-        // bindings are safe to follow across the small package source graph,
-        // including namespace imports such as config.API_PORT.
-        if (name.split("_").includes("PORT")) sharedListenerBindings.add(name);
-        const importedName = importAliases.get(name);
-        if (importedName?.split("_").includes("PORT")) sharedListenerBindings.add(importedName);
-      }
+    for (const name of runtimeForwardedListenerBindings(source)) bindings.add(name);
+    for (const name of bindings) {
+      // Generic local names such as `port` are lexical. Port-labelled
+      // bindings are safe to follow across the small package source graph,
+      // including namespace imports such as config.API_PORT.
+      if (name.split("_").includes("PORT")) sharedListenerBindings.add(name);
+      const importedName = importAliases.get(name);
+      if (importedName?.split("_").includes("PORT")) sharedListenerBindings.add(importedName);
     }
     sourceListenerBindings.set(sourcePath, bindings);
   }
@@ -834,6 +828,61 @@ export async function runtimeSourcePortAuthorityIssues({
   }
 
   return issues;
+}
+
+function runtimeDirectListenerBindings(source) {
+  const bindings = new Set();
+  if (/\bBun\.serve\s*\(\s*\{[^}]*?\bport\s*(?=,|\}|$)/u.test(source)) {
+    bindings.add("port");
+  }
+  for (const pattern of [
+    /(?:\bport|["']port["'])\s*:\s*(?:(?:Number|parseInt|Number\.parseInt)\s*\(\s*)?((?:[A-Za-z_$][A-Za-z0-9_$]*\s*\.\s*)*[A-Za-z_$][A-Za-z0-9_$]*)\b/g,
+    /\blisten(?:Sync)?\s*\(\s*(?:(?:Number|parseInt|Number\.parseInt)\s*\(\s*)?((?:[A-Za-z_$][A-Za-z0-9_$]*\s*\.\s*)*[A-Za-z_$][A-Za-z0-9_$]*)\b/g,
+  ]) {
+    for (const match of source.matchAll(pattern)) {
+      bindings.add(match[1].split(".").at(-1).trim());
+    }
+  }
+  return bindings;
+}
+
+function runtimeForwardedListenerBindings(source) {
+  const forwarded = new Set();
+  const wrappers = [];
+  for (const match of source.matchAll(/\bfunction\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*\(([^)]*)\)\s*\{([\s\S]*?)\}/g)) {
+    wrappers.push({ name: match[1], parameters: runtimeParameterNames(match[2]), body: match[3] });
+  }
+  for (const match of source.matchAll(/\b(?:const|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*(?:\(([^)]*)\)|([A-Za-z_$][A-Za-z0-9_$]*))\s*=>\s*([^;\n]+)/g)) {
+    wrappers.push({ name: match[1], parameters: runtimeParameterNames(match[2] ?? match[3]), body: match[4] });
+  }
+
+  for (const wrapper of wrappers) {
+    const bodyBindings = runtimeDirectListenerBindings(wrapper.body);
+    const forwardedIndexes = wrapper.parameters
+      .map((parameter, index) => bodyBindings.has(parameter) ? index : -1)
+      .filter((index) => index >= 0);
+    if (forwardedIndexes.length === 0) continue;
+    const callPattern = new RegExp(`\\b${runtimeRegExpEscape(wrapper.name)}\\s*\\(([^)]*)\\)`, "g");
+    for (const call of source.matchAll(callPattern)) {
+      const argumentsList = call[1].split(",").map((argument) => argument.trim());
+      for (const index of forwardedIndexes) {
+        const identifier = argumentsList[index]?.match(/^(?:(?:Number|parseInt|Number\.parseInt)\s*\(\s*)?([A-Za-z_$][A-Za-z0-9_$]*)/u)?.[1];
+        if (identifier) forwarded.add(identifier);
+      }
+    }
+  }
+  return forwarded;
+}
+
+function runtimeParameterNames(parameters) {
+  return String(parameters ?? "")
+    .split(",")
+    .map((parameter) => parameter.trim().match(/^([A-Za-z_$][A-Za-z0-9_$]*)/)?.[1] ?? null)
+    .filter(Boolean);
+}
+
+function runtimeRegExpEscape(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function runtimeNamedImportAliases(source) {
