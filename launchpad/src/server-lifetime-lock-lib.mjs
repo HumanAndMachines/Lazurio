@@ -30,6 +30,32 @@ export async function acquireServerLifetimeLock({ stateDirectory, instanceId }) 
   }
 }
 
+export async function acquireServerStartupLock({ stateDirectory, instanceId }) {
+  await mkdir(stateDirectory, { recursive: true, mode: 0o700 });
+  assertPhysicalDirectory(stateDirectory, "Lazurio Server state directory");
+
+  try {
+    return await acquireModuleRuntimeLock({
+      root: stateDirectory,
+      key: "server-startup",
+      instanceId,
+      timeoutMs: 30_000,
+      // All launchers hold this short lease from locator read through reuse,
+      // replacement or ready-locator publication. The same fail-closed PID
+      // proof as the lifetime lease is enough for crash recovery.
+      resolveProcessIdentity: serverLifetimeProcessIdentity,
+    });
+  } catch (error) {
+    if (error?.code !== "LAZURIO_MODULE_RUNTIME_LOCK_TIMEOUT") throw error;
+    const conflict = new Error(
+      "Jiný Lazurio launcher stále dokončuje reuse nebo replacement Serveru. Spusť příkaz znovu.",
+      { cause: error },
+    );
+    conflict.code = "LAZURIO_SERVER_STARTUP_LOCKED";
+    throw conflict;
+  }
+}
+
 async function serverLifetimeProcessIdentity(pid) {
   try {
     process.kill(pid, 0);

@@ -41,19 +41,56 @@ export function resolveCanonicalServerRoot(selectedRoot) {
     gitDirectory,
     readSingleGitPath(commonDirectoryPointer, "worktree commondir"),
   ));
-  if (basename(commonDirectory) !== ".git") {
-    throw new Error("Linked Lazurio worktree does not expose a canonical main Root.");
-  }
+  const directPrimaryRoot = resolvePrimaryRootBesideCommonDirectory(commonDirectory);
+  if (directPrimaryRoot) return directPrimaryRoot;
+  const primaryRoot = resolveNestedPrimaryRoot({ linkedRoot: root, commonDirectory });
+  if (primaryRoot) return primaryRoot;
+  throw new Error(
+    "Linked Lazurio worktree canonical main Root cannot be verified inside its Lazurio worktree hierarchy.",
+  );
+}
+
+function resolvePrimaryRootBesideCommonDirectory(commonDirectory) {
+  if (basename(commonDirectory) !== ".git") return null;
   const primaryRoot = realpathSync.native(dirname(commonDirectory));
-  const primaryMarker = join(primaryRoot, ".git");
-  if (
-    !existsSync(primaryMarker)
-    || !lstatSync(primaryMarker).isDirectory()
-    || realpathSync.native(primaryMarker) !== commonDirectory
-  ) {
-    throw new Error("Linked Lazurio worktree canonical main Root cannot be verified.");
+  const markerPath = join(primaryRoot, ".git");
+  if (!existsSync(markerPath)) return null;
+  const marker = lstatSync(markerPath);
+  return marker.isDirectory()
+    && !marker.isSymbolicLink()
+    && realpathSync.native(markerPath) === commonDirectory
+    ? primaryRoot
+    : null;
+}
+
+function resolveNestedPrimaryRoot({ linkedRoot, commonDirectory }) {
+  // Lazurio worktrees are nested under their owning checkout. This lets us
+  // verify the owner without asking Git to invent a filesystem Root: walk only
+  // ancestors and accept the first .git marker that resolves to the exact same
+  // common directory. It works for both an in-tree .git directory and a
+  // supported --separate-git-dir primary checkout.
+  let candidate = dirname(linkedRoot);
+  while (candidate !== dirname(candidate)) {
+    const markerPath = join(candidate, ".git");
+    if (existsSync(markerPath)) {
+      try {
+        const marker = lstatSync(markerPath);
+        const candidateGitDirectory = marker.isDirectory()
+          ? realpathSync.native(markerPath)
+          : marker.isFile() && !marker.isSymbolicLink()
+            ? parseGitDirectoryPointer(readFileSync(markerPath, "utf8"), candidate)
+            : null;
+        if (candidateGitDirectory === commonDirectory) {
+          return realpathSync.native(candidate);
+        }
+      } catch {
+        // An unrelated or malformed ancestor marker is not authority for this
+        // linked worktree; keep looking for the exact common-directory owner.
+      }
+    }
+    candidate = dirname(candidate);
   }
-  return primaryRoot;
+  return null;
 }
 
 export function computeServerRootId(canonicalRoot, platform = process.platform) {

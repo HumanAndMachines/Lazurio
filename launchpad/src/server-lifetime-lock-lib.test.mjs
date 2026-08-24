@@ -3,7 +3,10 @@ import { mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { acquireServerLifetimeLock } from "./server-lifetime-lock-lib.mjs";
+import {
+  acquireServerLifetimeLock,
+  acquireServerStartupLock,
+} from "./server-lifetime-lock-lib.mjs";
 
 const roots = [];
 
@@ -32,6 +35,28 @@ test("the per-user Server lifetime lease stays exclusive until its owner release
   const second = await secondPromise;
   expect(secondAcquired).toBe(true);
   await second.release();
+});
+
+test("the short startup lease serializes locator recovery with Server replacement", async () => {
+  const root = await mkdtemp(join(tmpdir(), "lazurio-server-startup-lock-"));
+  roots.push(root);
+  const stateDirectory = join(root, "state");
+
+  const recovery = await acquireServerStartupLock({ stateDirectory, instanceId: "recovery" });
+  let replacementAcquired = false;
+  const replacementPromise = acquireServerStartupLock({ stateDirectory, instanceId: "replacement" })
+    .then((lock) => {
+      replacementAcquired = true;
+      return lock;
+    });
+
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(replacementAcquired).toBe(false);
+  await recovery.release();
+
+  const replacement = await replacementPromise;
+  expect(replacementAcquired).toBe(true);
+  await replacement.release();
 });
 
 test("Server lifetime lease refuses a symlinked locator directory", async () => {

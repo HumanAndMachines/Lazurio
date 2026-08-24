@@ -14,7 +14,10 @@ import {
   launchpadFallbackUrls,
   startLaunchpadWithPortPolicy,
 } from "./server-startup-lib.mjs";
-import { acquireServerLifetimeLock } from "./server-lifetime-lock-lib.mjs";
+import {
+  acquireServerLifetimeLock,
+  acquireServerStartupLock,
+} from "./server-lifetime-lock-lib.mjs";
 import { APP_FILESYSTEM_ROOT, discoverLaunchpadApps } from "./discovery-lib.mjs";
 import {
   GitApiError,
@@ -180,8 +183,16 @@ let startResult;
 let serverLocator;
 let bootReconcile;
 let serverLifetimeLock;
+let serverStartupLock;
 let startupError;
 try {
+  // Serialize the complete locator decision. Without this short lease, a
+  // launcher recovering Server A's missing locator could overwrite Server B's
+  // locator after a concurrent control-root replacement completed.
+  serverStartupLock = await withServerStateAccess(() => acquireServerStartupLock({
+    stateDirectory: serverStateDirectory,
+    instanceId: launchpadServerIdentity.instance_id,
+  }));
   const existingLocator = await withServerStateAccess(() => readServerLocatorIfPresent({
     stateDirectory: serverStateDirectory,
   }));
@@ -247,6 +258,15 @@ try {
 } catch (error) {
   if (startResult?.mode === "started") await startResult.server.stop(true);
   startupError = error;
+} finally {
+  try {
+    await serverStartupLock?.release();
+  } catch (error) {
+    if (!startupError) {
+      if (startResult?.mode === "started") await startResult.server.stop(true);
+      startupError = error;
+    }
+  }
 }
 
 async function selectedControlRootDesiredStateKeys() {
