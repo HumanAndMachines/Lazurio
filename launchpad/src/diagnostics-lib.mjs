@@ -74,6 +74,7 @@ let cachedDoctorReportSchema = null;
 
 export async function buildLaunchpadAppsResponse({
   companiesRoot = join(import.meta.dirname, "..", ".."),
+  rootSourceRoot = companiesRoot,
   launchpadRoot = join(import.meta.dirname, ".."),
   runtimeManager = createRuntimeManager({ companiesRoot, launchpadRoot }),
   gitStatusService = null,
@@ -83,11 +84,13 @@ export async function buildLaunchpadAppsResponse({
   activeTeamId = null,
   includePrivateDiagnostics = false,
 } = {}) {
-  const discovery = await discoverLaunchpadApps(companiesRoot, {
+  const discovery = await discoverLaunchpadApps(rootSourceRoot, {
     allowMissingOrganizations,
     organization,
+    organization_mount_root: companiesRoot,
+    machine_context_root: companiesRoot,
   });
-  const companiesConfig = await readCompaniesConfig(companiesRoot);
+  const companiesConfig = await readCompaniesConfig(rootSourceRoot);
   const organizationSpaces = Array.isArray(discovery.organizations)
     ? await Promise.all(
         discovery.organizations.map(async (organization) => ({
@@ -237,7 +240,7 @@ export async function buildLaunchpadAppsResponse({
     generated_at: new Date().toISOString(),
     launchpad_root: workspaceSummary(companiesConfig),
     companies_workspace: workspaceSummary(companiesConfig),
-    root: companiesRoot,
+    root: rootSourceRoot,
     ok: discoveryFailures.length === 0,
     summary: {
       app_count: apps.length,

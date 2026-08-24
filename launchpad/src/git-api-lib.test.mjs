@@ -4,6 +4,7 @@ import { join } from "path";
 import {
   buildGitApiResponse,
   buildPlansResponse,
+  buildRepoResponse,
   buildRepoChangesResponse,
   buildWorktreesResponse,
 } from "./git-api-lib.mjs";
@@ -252,6 +253,51 @@ test("git API can limit polling work to the selected organization", async () => 
   expect(response.repos.length).toBeGreaterThan(0);
   expect(response.repos.every((repo) => repo.organization === "BetaCo")).toBe(true);
   expect(response.repos.some((repo) => repo.organization === "OmegaCo")).toBe(false);
+});
+
+test("git API forwards the worktree remote-refresh barrier to list and detail reads", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  await initGitRepo(join(root, "organizations", "BetaCo_GEN3", "workspace", "deals"));
+  const calls = [];
+  const statusService = {
+    async readStatuses(repos, options) {
+      calls.push(options);
+      return repos.map((repo) => ({
+        key: repo.key,
+        branch: "main",
+        head: "fixture-head",
+        upstream: null,
+        operation: null,
+        counts: { incoming: 0, outgoing: 0, changed_files: 0, untracked_files: 0 },
+        status: "up_to_date",
+        severity: "ok",
+        title: "Repo je aktuální",
+        message: "Fixture status.",
+        recommended_action: null,
+        freshness: null,
+      }));
+    },
+  };
+
+  const inventory = await buildGitApiResponse({
+    companiesRoot: root,
+    refresh: true,
+    statusService,
+    allowRemoteRefresh: false,
+  });
+  await buildRepoResponse({
+    companiesRoot: root,
+    repoKey: inventory.repos[0].key,
+    refresh: true,
+    statusService,
+    allowRemoteRefresh: false,
+  });
+
+  expect(calls).toEqual([
+    { refresh: false, allowRemoteRefresh: false },
+    { refresh: false, allowRemoteRefresh: false },
+  ]);
 });
 
 test("git API hides protected repos until their checkout exists on this machine", async () => {

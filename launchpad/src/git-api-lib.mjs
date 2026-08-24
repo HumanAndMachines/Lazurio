@@ -29,8 +29,11 @@ export async function buildGitApiResponse({
   const projection = projectGitInventory(inventory, { organization });
   const [statuses, rawWorktreeIndex] = await Promise.all([
     statusService
-      ? statusService.readStatuses(projection.repos, { refresh, allowRemoteRefresh })
-      : readGitRepoStatuses(projection.repos, { refresh }),
+      ? statusService.readStatuses(projection.repos, {
+          refresh: allowRemoteRefresh && refresh,
+          allowRemoteRefresh,
+        })
+      : readGitRepoStatuses(projection.repos, { refresh: allowRemoteRefresh && refresh }),
     buildWorktreeIndex({ companiesRoot, organization }),
   ]);
   const worktreeIndex = projectPublicWorktreeIndex({
@@ -68,8 +71,14 @@ export async function buildGitApiResponse({
   };
 }
 
-export async function buildRepoResponse({ companiesRoot, repoKey, refresh = false, statusService = null } = {}) {
-  const response = await buildGitApiResponse({ companiesRoot, refresh, statusService });
+export async function buildRepoResponse({
+  companiesRoot,
+  repoKey,
+  refresh = false,
+  statusService = null,
+  allowRemoteRefresh = true,
+} = {}) {
+  const response = await buildGitApiResponse({ companiesRoot, refresh, statusService, allowRemoteRefresh });
   const repo = response.repos.find((item) => item.key === repoKey);
   if (!repo) throw new GitApiError(`Repo ${repoKey} nebylo nalezeno.`, { status: 404, code: "repo_not_found" });
   return {

@@ -347,9 +347,17 @@ test("linked worktree gets only a read-only canonical Root mount context", async
   const worktreeRoot = `${root}-linked-worktree`;
   runGit(["worktree", "add", "-b", "linked-launchpad", worktreeRoot], root);
   tempRoots.push(worktreeRoot, root);
+  const worktreeConfigPath = join(worktreeRoot, "launchpad.gen3.json");
+  const worktreeConfig = JSON.parse(await readFile(worktreeConfigPath, "utf8"));
+  worktreeConfig.launchpad_root.display_name = "Linked Root";
+  await writeJson(worktreeConfigPath, worktreeConfig);
+  await rm(join(worktreeRoot, "organizations"), { recursive: true, force: true });
+  await mkdir(join(worktreeRoot, "organizations"), { recursive: true });
 
   const { port } = await startLaunchpadServer(worktreeRoot);
-  expect((await getJson(port, "/api/apps")).organizations.length).toBeGreaterThan(0);
+  const apps = await getJson(port, "/api/apps");
+  expect(apps.launchpad_root.display_name).toBe("Linked Root");
+  expect(apps.organizations.length).toBeGreaterThan(0);
 
   const mutation = await fetch(`http://127.0.0.1:${port}/api/sync`, { method: "POST" });
   expect(mutation.status).toBe(409);

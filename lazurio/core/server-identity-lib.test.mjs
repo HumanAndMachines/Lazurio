@@ -86,6 +86,9 @@ test("install generation hashes one deterministic cross-platform source set", as
   await writeFile(join(root, "launchpad", "src", "server.test.mjs"), "ignored test change\n");
   expect(computeServerInstallGeneration(root)).toBe(initial);
 
+  await writeFile(join(root, "launchpad", "public", "app.js"), "export const ui = 2;\n");
+  expect(computeServerInstallGeneration(root)).not.toBe(initial);
+
   await writeFile(join(root, "lazurio", "core", "contract.mjs"), "export const value = 2;\n");
   expect(computeServerInstallGeneration(root)).not.toBe(initial);
 
@@ -94,6 +97,7 @@ test("install generation hashes one deterministic cross-platform source set", as
   expect(computeServerInstallGeneration(root)).not.toBe(coreChanged);
   expect(serverInstallGenerationInputPaths(root)).toEqual([
     "launchpad/package.json",
+    "launchpad/public/app.js",
     "launchpad/src/server.mjs",
     "lazurio/core/contract.mjs",
     "scripts/worktree-create-lib.mjs",
@@ -160,11 +164,13 @@ async function sourceFixture() {
   const root = await mkdtemp(join(tmpdir(), "lazurio-server-generation-"));
   tempRoots.push(root);
   await mkdir(join(root, "launchpad", "src"), { recursive: true });
+  await mkdir(join(root, "launchpad", "public"), { recursive: true });
   await mkdir(join(root, "lazurio", "core"), { recursive: true });
   await mkdir(join(root, "scripts"), { recursive: true });
   await writeFile(join(root, "launchpad", "package.json"), '{"name":"launchpad"}\n');
   await writeFile(join(root, "launchpad", "src", "server.mjs"), "export const server = true;\n");
   await writeFile(join(root, "launchpad", "src", "server.test.mjs"), "ignored test\n");
+  await writeFile(join(root, "launchpad", "public", "app.js"), "export const ui = 1;\n");
   await writeFile(join(root, "lazurio", "core", "contract.mjs"), "export const value = 1;\n");
   await writeFile(join(root, "scripts", "worktree-create-lib.mjs"), "export const create = 1;\n");
   await writeFile(join(root, "scripts", "worktree-create-lock.mjs"), "export const lock = 1;\n");
