@@ -771,10 +771,16 @@ export async function runtimeSourcePortAuthorityIssues({
         posix.dirname(packagePath),
         relative(packageDirectory, absolutePath).replace(/\\/g, "/"),
       );
+      const listenerPortConstants = new Set();
+      for (const pattern of [
+        /(?:\bport|["']port["'])\s*:\s*(PORT|[A-Z][A-Z0-9_]*_PORT)\b/g,
+        /\blisten(?:Sync)?\s*\(\s*(PORT|[A-Z][A-Z0-9_]*_PORT)\b/g,
+      ]) {
+        for (const match of source.matchAll(pattern)) listenerPortConstants.add(match[1]);
+      }
       const fallbackPatterns = [
         /(?:process\.env|Bun\.env)(?:\.(?:PORT|LAZURIO_RUNTIME_LISTENER_[A-Z0-9_]+_PORT)|\[["'](?:PORT|LAZURIO_RUNTIME_LISTENER_[A-Z0-9_]+_PORT)["']\])\s*(?:\?\?|\|\|)\s*["']?(\d{4,5})["']?/g,
         /(?:Number|parseInt)\([^;\n)]*(?:PORT|_PORT)[^;\n)]*\)\s*(?:\?\?|\|\|)\s*["']?(\d{4,5})["']?/g,
-        /\b(?:const|let|var)\s+(?:PORT|DEFAULT_PORT|SERVER_PORT|LISTEN_PORT|HTTP_PORT)\s*=\s*["']?(\d{4,5})["']?/g,
       ];
       for (const pattern of fallbackPatterns) {
         for (const match of source.matchAll(pattern)) {
@@ -782,6 +788,14 @@ export async function runtimeSourcePortAuthorityIssues({
             `${sourcePath}: runtime source obsahuje číselný port fallback ${match[1]}; port smí materializovat jen module lease`,
           );
         }
+      }
+      const declaredPortPattern = /\b(?:const|let|var)\s+(PORT|[A-Z][A-Z0-9_]*_PORT)\s*=\s*["']?(\d{4,5})["']?/g;
+      const alwaysOwnedPortConstants = new Set(["PORT", "DEFAULT_PORT", "SERVER_PORT", "LISTEN_PORT", "HTTP_PORT"]);
+      for (const match of source.matchAll(declaredPortPattern)) {
+        if (!alwaysOwnedPortConstants.has(match[1]) && !listenerPortConstants.has(match[1])) continue;
+        issues.push(
+          `${sourcePath}: runtime source obsahuje číselný port fallback ${match[2]}; port smí materializovat jen module lease`,
+        );
       }
       for (const lease of leases) {
         if (new RegExp(`(^|\\D)${lease.port}(?=\\D|$)`).test(source)) {

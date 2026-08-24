@@ -706,6 +706,20 @@ test("lazurio.runtime.v1 discovers one entrypoint and auxiliary listeners", asyn
     "server.mjs: runtime source obsahuje číselný port fallback 5282",
   );
 
+  await writeFile(
+    runtimeSourcePath,
+    "const API_PORT = 6000;\nconst WIKI_APP_PORT = 6001;\nBun.serve({ port: API_PORT });\n",
+    "utf8",
+  );
+  const namedListenerFallback = await discoverLaunchpadApps(root);
+  expect(namedListenerFallback.invalid_apps).toHaveLength(1);
+  expect(namedListenerFallback.invalid_apps[0].manifest_issues.join("\n")).toContain(
+    "server.mjs: runtime source obsahuje číselný port fallback 6000",
+  );
+  expect(namedListenerFallback.invalid_apps[0].manifest_issues.join("\n")).not.toContain(
+    "fallback 6001",
+  );
+
   await writeFile(runtimeSourcePath, "Bun.serve({ port: Number(process.env.PORT) });\n", "utf8");
   const envDirectory = join(root, "organizations", "TestCompany", "modules", "demo", "app", "v1");
   const inactiveEnvPath = join(envDirectory, ".env.test");

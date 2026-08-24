@@ -8,12 +8,51 @@ export async function startLaunchpadWithPortPolicy({
   explicitPort,
   shouldOpen,
   shouldReuse = shouldOpen,
+  locatedUrl = null,
   startServer,
   inspectRunningLaunchpad = async () => ({ status: "unrecognized" }),
   shutdownStaleLaunchpad = async () => false,
   openExisting = async () => {},
   waitBeforeStaleRebind = () => new Promise((resolve) => setTimeout(resolve, staleRebindDelayMs)),
 }) {
+  if (locatedUrl) {
+    const located = await inspectRunningLaunchpad(locatedUrl);
+    if (located?.status === "compatible") {
+      if (!shouldReuse) {
+        throw serverConflict(
+          "LAZURIO_SERVER_ALREADY_RUNNING",
+          `Lazurio Server pro tento root už běží na ${locatedUrl}.`,
+        );
+      }
+      if (shouldOpen) await openExisting(locatedUrl);
+      return { mode: "reused", url: locatedUrl };
+    }
+    if (located?.status === "stale_install") {
+      const shutdownAccepted = await shutdownStaleLaunchpad(locatedUrl, located);
+      if (!shutdownAccepted) {
+        throw serverConflict(
+          "LAZURIO_STALE_SERVER_STOP_FAILED",
+          `Starší Lazurio Server pro tento root na ${locatedUrl} se nepodařilo bezpečně zastavit.`,
+        );
+      }
+      await waitForLocatedServerDrain({
+        locatedUrl,
+        inspectRunningLaunchpad,
+        waitBeforeStaleRebind,
+      });
+    } else if (located?.status === "legacy_same_root" || located?.status === "protocol_incompatible") {
+      throw serverConflict(
+        "LAZURIO_SERVER_UPGRADE_REQUIRED",
+        `Na ${locatedUrl} běží nekompatibilní Lazurio Server stejného rootu. Zastav ho a spusť Launchpad znovu.`,
+      );
+    } else if (located?.status === "probe_failed") {
+      throw serverConflict(
+        "LAZURIO_SERVER_PROBE_FAILED",
+        `Server zapsaný pro tento root na ${locatedUrl} nešlo bezpečně identifikovat; další Server se nespustí.`,
+      );
+    }
+  }
+
   let candidatePort = requestedPort;
 
   for (let attempt = 0; attempt < maxFallbackAttempts; attempt += 1) {
@@ -75,6 +114,22 @@ export async function startLaunchpadWithPortPolicy({
   const error = new Error(`Launchpad nenašel volný port po ${maxFallbackAttempts} pokusech od ${requestedPort}.`);
   error.code = "EADDRINUSE";
   throw error;
+}
+
+async function waitForLocatedServerDrain({
+  locatedUrl,
+  inspectRunningLaunchpad,
+  waitBeforeStaleRebind,
+}) {
+  for (let attempt = 0; attempt < maxStaleRebindAttempts; attempt += 1) {
+    await waitBeforeStaleRebind();
+    const observation = await inspectRunningLaunchpad(locatedUrl);
+    if (!["compatible", "stale_install", "probe_failed"].includes(observation?.status)) return;
+  }
+  throw serverConflict(
+    "LAZURIO_STALE_SERVER_DRAIN_TIMEOUT",
+    `Starší Lazurio Server neuvolnil ${locatedUrl}; další Server se záměrně nespustil.`,
+  );
 }
 
 async function startAfterStaleShutdown({

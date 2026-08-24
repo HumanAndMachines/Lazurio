@@ -55,7 +55,10 @@ import {
   computeServerInstallGeneration,
   computeServerRootId,
 } from "../../lazurio/core/server-identity-lib.mjs";
-import { writeServerLocator } from "../../lazurio/core/server-locator-lib.mjs";
+import {
+  readServerLocatorIfPresent,
+  writeServerLocator,
+} from "../../lazurio/core/server-locator-lib.mjs";
 
 const defaultHost = "127.0.0.1";
 const defaultPort = 4174;
@@ -151,12 +154,16 @@ if (!allowedHosts.has(host)) {
 
 let startResult;
 try {
+  const existingLocator = await readServerLocatorIfPresent({
+    workspaceRoot: canonicalCompaniesRoot,
+  });
   startResult = await startLaunchpadWithPortPolicy({
     requestedPort: port,
     host,
     explicitPort,
     shouldOpen: Boolean(options.open),
     shouldReuse: Boolean(options.open || options.reuse),
+    locatedUrl: existingLocator?.origin ?? null,
     startServer,
     inspectRunningLaunchpad: (url) => inspectRunningLaunchpad(url, {
       rootId: launchpadRootId,

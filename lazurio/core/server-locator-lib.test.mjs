@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, symlink } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -7,6 +7,7 @@ import { buildServerIdentity } from "./server-identity-lib.mjs";
 import {
   buildServerLocator,
   readServerLocator,
+  readServerLocatorIfPresent,
   serverLocatorPath,
   validateServerLocator,
   writeServerLocator,
@@ -37,6 +38,18 @@ test("server locator publishes the exact active loopback origin atomically", asy
     root_id: identity.root_id,
     instance_id: identity.instance_id,
   });
+});
+
+test("optional locator read distinguishes a clean first start from invalid state", async () => {
+  const root = await temporaryRoot();
+  await mkdir(join(root, "launchpad"));
+  expect(await readServerLocatorIfPresent({ workspaceRoot: root })).toBeNull();
+
+  await mkdir(join(root, "launchpad", ".local"));
+  await writeFile(serverLocatorPath(root), "{ malformed", "utf8");
+  await expect(readServerLocatorIfPresent({ workspaceRoot: root })).rejects.toThrow(
+    "cannot be read",
+  );
 });
 
 test("server locator rejects ambient URLs and unknown fields", () => {
