@@ -1,10 +1,15 @@
 #!/usr/bin/env bun
 
 import { existsSync } from "fs";
-import { readdir, rename, writeFile } from "fs/promises";
+import { link, lstat, readFile, readdir, realpath, rename, rm, writeFile } from "fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "path";
-import { normalizeModuleManifest } from "./core/module-contract-lib.mjs";
+import { acquireModuleRuntimeLock } from "../launchpad/src/module-runtime-lock-lib.mjs";
 import {
+  materializeRuntimeFromModule,
+  normalizeModuleManifest,
+} from "./core/module-contract-lib.mjs";
+import {
+  nextFreeModulePort,
   normalizeOrganizationPortPool,
   validateModuleLeasesAgainstOrganizationPools,
 } from "./core/organization-port-policy-lib.mjs";
@@ -350,6 +355,786 @@ export function rewriteRuntimeScriptsFromModule(packageJson, moduleManifest) {
     }
   }
   return { changed, packageJson: next };
+}
+
+export const MODULE_SETUP_EXIT_CODES = Object.freeze({
+  current_or_completed: 0,
+  actionable: 1,
+  action_required: 2,
+  usage_or_environment: 3,
+});
+
+export async function setupModule({
+  lazurioRoot,
+  moduleRoot,
+  apply = false,
+  noApp = false,
+  appPackage = null,
+  appId = null,
+  title = null,
+  devScript = null,
+  healthPath = "/health",
+  surface = "internal",
+  tags = [],
+  adoptPort = null,
+  failAfterWrite = null,
+} = {}) {
+  const options = {
+    lazurioRoot: resolve(lazurioRoot),
+    moduleRoot: resolve(moduleRoot),
+    noApp,
+    appPackage,
+    appId,
+    title,
+    devScript,
+    healthPath,
+    surface,
+    tags,
+    adoptPort,
+  };
+  let plan;
+  try {
+    plan = await buildModuleSetupPlan(options);
+  } catch (error) {
+    if (!(error instanceof ModuleSetupActionRequired)) throw error;
+    return blockedModuleSetupReport(options, error);
+  }
+  if (!apply || plan.report.status !== "actionable") return plan.report;
+
+  const lock = await acquireModuleRuntimeLock({
+    root: join(options.lazurioRoot, "launchpad", "runtime", "creator-locks"),
+    // Module setup and the existing standalone allocator mutate the same
+    // Organization-owned port pool. One shared key prevents both writers from
+    // choosing the same free lease concurrently.
+    key: `port-allocation/${plan.context.company}`,
+    instanceId: `module-setup-${process.pid}`,
+  });
+  try {
+    // The read-only plan is intentionally advisory. Re-derive it under the
+    // existing Organization-scoped creator lock immediately before writing.
+    plan = await buildModuleSetupPlan(options);
+    if (plan.report.status !== "actionable") return plan.report;
+    let completedWrites = 0;
+    for (const write of plan.writes) {
+      if (write.action === "create") {
+        await createJsonFileAtomically(write.path, write.value);
+      } else {
+        await replaceJsonFileAtomically(write.path, write.value, write.expectedText);
+      }
+      completedWrites += 1;
+      if (failAfterWrite === completedWrites) {
+        throw new Error(`Injected module setup failure after write ${completedWrites}`);
+      }
+    }
+    const verified = await buildModuleSetupPlan(options);
+    if (verified.report.status !== "current") {
+      throw new Error(
+        `Module setup apply se po zápisu neověřil jako current (${verified.report.status})`,
+      );
+    }
+    return {
+      ...verified.report,
+      status: "completed",
+      reason: "setup_applied_and_reverified",
+      changes: plan.report.changes,
+      operator_assertions: plan.report.operator_assertions,
+    };
+  } catch (error) {
+    if (error instanceof ModuleSetupActionRequired) return blockedModuleSetupReport(options, error);
+    throw error;
+  } finally {
+    await lock.release();
+  }
+}
+
+export function moduleSetupExitCode(report) {
+  if (["current", "completed"].includes(report?.status)) return MODULE_SETUP_EXIT_CODES.current_or_completed;
+  if (report?.status === "actionable") return MODULE_SETUP_EXIT_CODES.actionable;
+  return MODULE_SETUP_EXIT_CODES.action_required;
+}
+
+export function renderHumanModuleSetup(report) {
+  const lines = [
+    `Lazurio Module setup · ${report.status}`,
+    `Modul: ${report.module.company}/${report.module.id}`,
+    `Cesta: ${report.module.root}`,
+  ];
+  if (report.status === "current") lines.push("Kontrakt je platný a není co měnit.");
+  if (report.status === "completed") lines.push("Změny byly zapsány a celý Module kontrakt byl znovu ověřen.");
+  if (report.status === "actionable") {
+    lines.push("Připravené změny:");
+    for (const change of report.changes) lines.push(`  - ${change.action}: ${change.path}`);
+    lines.push("Pro zápis spusť tentýž příkaz s --apply a potom zkontroluj Git diff.");
+  }
+  if (report.status === "action_required") {
+    lines.push("Je potřeba zásah Agenta nebo vlastníka Organizace:");
+    for (const issue of report.issues) {
+      lines.push(`  - ${issue.message}`);
+      if (issue.action) lines.push(`    Další krok: ${issue.action}`);
+    }
+  }
+  if (report.operator_assertions.length > 0) {
+    lines.push("Tvrzení operátora k review:");
+    for (const assertion of report.operator_assertions) lines.push(`  - ${assertion}`);
+  }
+  return lines.join("\n");
+}
+
+async function buildModuleSetupPlan(options) {
+  const context = await resolveModuleSetupContext(options);
+  const manifestPath = join(options.moduleRoot, "lazurio.module.json");
+  const manifestEntry = await pathEntry(manifestPath);
+  let writes = [];
+  let operatorAssertions = [];
+
+  if (manifestEntry) {
+    if (!manifestEntry.isFile() || manifestEntry.isSymbolicLink()) {
+      throw actionRequired(
+        "module_manifest_not_regular_file",
+        `${relativeForReport(options.lazurioRoot, manifestPath)} není běžný soubor`,
+        "Odstraň cizí filesystem entry až po vědomém review; setup ji nepřepisuje.",
+        context,
+      );
+    }
+    const manifestText = await readFile(manifestPath, "utf8");
+    const manifest = parseJsonForSetup(manifestText, manifestPath, context);
+    const normalized = normalizeModuleManifest({ manifest, modulePath: manifestPath });
+    const identityIssues = [
+      ...normalized.issues,
+      ...(manifest.id === context.module ? [] : [`id ${String(manifest.id)} neodpovídá slotu ${context.module}`]),
+      ...(manifest.company === context.company ? [] : [`company ${String(manifest.company)} neodpovídá Organizaci ${context.company}`]),
+    ];
+    if (identityIssues.length > 0) {
+      throw actionRequired(
+        "module_manifest_invalid",
+        identityIssues.join("; "),
+        "Oprav lazurio.module.json podle Core validátoru; setup neuhodne zamýšlenou identitu ani port.",
+        context,
+      );
+    }
+    const policyIssues = await modulePolicyIssues(options.lazurioRoot, context, normalized.module);
+    if (policyIssues.length > 0) {
+      throw actionRequired(
+        "module_port_policy_invalid",
+        policyIssues.join("; "),
+        "Odstraň duplicitní lease nebo aktivuj Organization module_port_pool; stabilní port neměň.",
+        context,
+      );
+    }
+    ({ writes, operatorAssertions } = await planExistingModule({
+      options,
+      context,
+      manifest,
+      manifestText,
+      manifestPath,
+      normalizedModule: normalized.module,
+    }));
+  } else {
+    ({ writes, operatorAssertions } = await planNewModule({ options, context, manifestPath }));
+  }
+
+  return {
+    context,
+    writes,
+    report: moduleSetupReport({
+      options,
+      context,
+      status: writes.length === 0 ? "current" : "actionable",
+      reason: writes.length === 0 ? "module_contract_current" : "setup_changes_ready",
+      writes,
+      operatorAssertions,
+    }),
+  };
+}
+
+async function planExistingModule({
+  options,
+  context,
+  manifest,
+  manifestText,
+  manifestPath,
+  normalizedModule,
+}) {
+  if (options.noApp && (!Array.isArray(manifest.apps) || manifest.apps.length !== 0)) {
+    throw actionRequired(
+      "no_app_conflicts_with_manifest",
+      "--no-app vyžaduje v existujícím manifestu explicitní apps: []",
+      "Spusť setup bez --no-app nebo vědomě potvrď bezaplikační kontrakt v samostatném review.",
+      context,
+    );
+  }
+  if (manifest.apps?.length === 0) return { writes: [], operatorAssertions: [] };
+
+  let appPaths = manifest.apps;
+  if (appPaths === undefined) {
+    const discovered = await runtimePackagePaths(options.moduleRoot);
+    if (discovered.length !== 1) {
+      throw actionRequired(
+        "apps_declaration_missing",
+        `Module nemá explicitní apps a nalezeno runtime balíčků: ${discovered.length}`,
+        discovered.length === 0
+          ? "Potvrď --no-app, nebo předej --app-package, --app-id, --title a --dev-script."
+          : "Vyber default App ručně v lazurio.module.json; setup neuhodne pořadí více Apps.",
+        context,
+      );
+    }
+    appPaths = [relative(options.moduleRoot, discovered[0]).split(sep).join("/")];
+  }
+
+  const writes = [];
+  let derivedManifest = manifest.apps === undefined
+    ? { ...manifest, apps: appPaths, default_app: appPaths[0] }
+    : manifest;
+  for (const appPath of appPaths) {
+    const packagePath = resolve(options.moduleRoot, ...appPath.split("/"));
+    assertPathWithin(options.moduleRoot, packagePath, context, "app_package_outside_module");
+    const packageEntry = await pathEntry(packagePath);
+    if (!packageEntry?.isFile() || packageEntry.isSymbolicLink()) {
+      throw actionRequired(
+        "app_package_missing",
+        `${appPath} není čitelný běžný package.json`,
+        "Materializuj deklarovanou App nebo oprav apps/default_app v Module manifestu.",
+        context,
+      );
+    }
+    const packageText = await readFile(packagePath, "utf8");
+    const packageJson = parseJsonForSetup(packageText, packagePath, context);
+    const migration = migrateLegacyRuntimePackage(packageJson, {
+      packagePath,
+      organization: context.organization,
+    });
+    if (migration.issues.length > 0) {
+      throw actionRequired(
+        "runtime_migration_blocked",
+        migration.issues.join("; "),
+        "Uprav custom nebo víceprocesový runtime ručně podle Agent manuálu; setup obecný source parser nepřidává.",
+        context,
+      );
+    }
+    if (migration.changed) {
+      if (!moduleManifestsMatchIgnoringMissingApps(derivedManifest, migration.moduleManifest)) {
+        throw actionRequired(
+          "runtime_module_lease_drift",
+          `${appPath} odvozuje jiný Module lease než existující lazurio.module.json`,
+          "Zachovej existující stabilní lease a ručně sjednoť runtime reference.",
+          context,
+        );
+      }
+      derivedManifest = { ...migration.moduleManifest, apps: appPaths, default_app: manifest.default_app ?? appPaths[0] };
+      const rewritten = rewriteRuntimeScriptsFromModule(migration.packageJson, derivedManifest).packageJson;
+      writes.push({ action: "replace", path: packagePath, value: rewritten, expectedText: packageText });
+      continue;
+    }
+    const runtime = packageJson?.lazurio?.runtime;
+    if (!runtime) {
+      const explicitPackagePath = options.appPackage
+        ? resolve(options.moduleRoot, options.appPackage)
+        : null;
+      if (explicitPackagePath !== packagePath) {
+        throw actionRequired(
+          "app_runtime_missing",
+          `${appPath} nemá lazurio.runtime ani podporovanou legacy deklaraci`,
+          "Předej explicitní --app-package, --app-id, --title a --dev-script pro tuto App, nebo doplň reference-only lazurio.runtime podle manuálu.",
+          context,
+        );
+      }
+      const nextPackage = explicitRuntimePackage({ options, context, packageJson, packagePath });
+      const runtimeIssues = validateDeclaredRuntime({
+        runtime: nextPackage.lazurio.runtime,
+        packageJson: nextPackage,
+        packagePath,
+      });
+      const materialized = materializeRuntimeFromModule({
+        runtime: nextPackage.lazurio.runtime,
+        module: { ...normalizedModule, apps: appPaths, default_app: manifest.default_app ?? appPaths[0] },
+        packagePath,
+      });
+      if (runtimeIssues.length > 0 || materialized.issues.length > 0) {
+        throw actionRequired(
+          "app_contract_invalid",
+          [...runtimeIssues, ...materialized.issues].join("; "),
+          "Oprav explicitní App vstupy; existující Module lease zůstává beze změny.",
+          context,
+        );
+      }
+      writes.push({ action: "replace", path: packagePath, value: nextPackage, expectedText: packageText });
+      continue;
+    }
+    const runtimeIssues = validateDeclaredRuntime({ runtime, packageJson, packagePath });
+    const materialized = materializeRuntimeFromModule({
+      runtime,
+      module: { ...normalizedModule, apps: appPaths, default_app: manifest.default_app ?? appPaths[0] },
+      packagePath,
+    });
+    if (runtimeIssues.length > 0 || materialized.issues.length > 0) {
+      throw actionRequired(
+        "runtime_contract_invalid",
+        [...runtimeIssues, ...materialized.issues].join("; "),
+        "Oprav App runtime reference; port zůstává pouze v lazurio.module.json.",
+        context,
+      );
+    }
+  }
+  if (!sameJson(manifest, derivedManifest)) {
+    writes.unshift({ action: "replace", path: manifestPath, value: derivedManifest, expectedText: manifestText });
+  }
+  return { writes, operatorAssertions: [] };
+}
+
+async function planNewModule({ options, context, manifestPath }) {
+  if (options.noApp && options.appPackage) {
+    throw actionRequired(
+      "conflicting_app_mode",
+      "--no-app a --app-package se vzájemně vylučují",
+      "Vyber právě jeden explicitní typ Modulu.",
+      context,
+    );
+  }
+  if (options.noApp) {
+    const manifest = {
+      schema_version: "lazurio.module.v1",
+      id: context.module,
+      company: context.company,
+      tcp_port_policy: { mode: "none" },
+      port_leases: [],
+      apps: [],
+    };
+    assertCandidateModule(manifest, manifestPath, context, []);
+    return {
+      writes: [{ action: "create", path: manifestPath, value: manifest }],
+      operatorAssertions: [],
+    };
+  }
+
+  if (options.appPackage) return planExplicitAppModule({ options, context, manifestPath });
+
+  const discovered = await runtimePackagePaths(options.moduleRoot);
+  if (discovered.length !== 1) {
+    throw actionRequired(
+      "module_kind_required",
+      `Module nemá manifest a nalezeno runtime balíčků: ${discovered.length}`,
+      discovered.length === 0
+        ? "Použij --no-app, nebo předej --app-package, --app-id, --title a --dev-script."
+        : "Přidej explicitní lazurio.module.json s apps/default_app; setup neuhodne default z více Apps.",
+      context,
+    );
+  }
+  const packagePath = discovered[0];
+  const packageText = await readFile(packagePath, "utf8");
+  const packageJson = parseJsonForSetup(packageText, packagePath, context);
+  const migration = migrateLegacyRuntimePackage(packageJson, {
+    packagePath,
+    organization: context.organization,
+  });
+  if (!migration.changed || migration.issues.length > 0 || !migration.moduleManifest) {
+    throw actionRequired(
+      "runtime_migration_blocked",
+      migration.issues.join("; ") || "Runtime nelze jednoznačně převést na Module lease",
+      "Použij explicitní App vstupy nebo proveď bounded ruční migraci podle Agent manuálu.",
+      context,
+    );
+  }
+  assertCandidateIdentity(migration.moduleManifest, context);
+  await assertCandidatePolicy(options.lazurioRoot, context, migration.moduleManifest);
+  const rewritten = rewriteRuntimeScriptsFromModule(migration.packageJson, migration.moduleManifest).packageJson;
+  return {
+    writes: [
+      { action: "create", path: manifestPath, value: migration.moduleManifest },
+      { action: "replace", path: packagePath, value: rewritten, expectedText: packageText },
+    ],
+    operatorAssertions: [],
+  };
+}
+
+async function planExplicitAppModule({ options, context, manifestPath }) {
+  if (!context.organization.module_port_pool) {
+    throw actionRequired(
+      "organization_port_pool_missing",
+      `${context.company} nemá aktivní module_port_pool`,
+      "Organization Admin musí v company.gen3.json aktivovat stabilní module_port_pool.",
+      context,
+    );
+  }
+  const packagePath = resolve(options.moduleRoot, options.appPackage);
+  assertPathWithin(options.moduleRoot, packagePath, context, "app_package_outside_module");
+  const packageEntry = await pathEntry(packagePath);
+  if (!packageEntry?.isFile() || packageEntry.isSymbolicLink()) {
+    throw actionRequired(
+      "app_package_missing",
+      `${options.appPackage} není běžný package.json`,
+      "Nejdřív vytvoř App package a jeho dev script; setup nevytváří aplikační source.",
+      context,
+    );
+  }
+  const packageText = await readFile(packagePath, "utf8");
+  const packageJson = parseJsonForSetup(packageText, packagePath, context);
+  if (packageJson?.lazurio?.runtime || packageJson?.companyascode?.app) {
+    throw actionRequired(
+      "app_runtime_already_declared",
+      `${options.appPackage} už obsahuje runtime deklaraci`,
+      "Spusť setup bez explicitních App vstupů, nebo nejdřív vyřeš drift deklarace.",
+      context,
+    );
+  }
+  const modules = await readAllModuleContracts(options.lazurioRoot);
+  const port = options.adoptPort ?? nextFreeModulePort({
+    pool: context.organization.module_port_pool,
+    company: context.company,
+    modules,
+  });
+  if (!Number.isInteger(port) || port < 1024 || port > 65_535) {
+    throw actionRequired(
+      "adopt_port_invalid",
+      `--adopt-port musí být celé číslo 1024-65535, obdrženo ${String(options.adoptPort)}`,
+      "Použij doložený stabilní localhost port.",
+      context,
+    );
+  }
+  const appPath = relative(options.moduleRoot, packagePath).split(sep).join("/");
+  const manifest = {
+    schema_version: "lazurio.module.v1",
+    id: context.module,
+    company: context.company,
+    tcp_port_policy: { mode: "single" },
+    port_leases: [{ id: "main", host: "127.0.0.1", port }],
+    apps: [appPath],
+    default_app: appPath,
+  };
+  const nextPackage = explicitRuntimePackage({ options, context, packageJson, packagePath });
+  const validation = validateMigration({
+    packageJson: nextPackage,
+    original: packageJson,
+    packagePath,
+    moduleManifest: manifest,
+    organization: context.organization,
+  });
+  if (!validation.changed || validation.issues.length > 0) {
+    throw actionRequired(
+      "app_contract_invalid",
+      validation.issues.join("; "),
+      "Oprav explicitní App vstupy nebo dev script; setup nepublikuje nevalidní kontrakt.",
+      context,
+    );
+  }
+  await assertCandidatePolicy(options.lazurioRoot, context, manifest);
+  return {
+    writes: [
+      { action: "create", path: manifestPath, value: manifest },
+      { action: "replace", path: packagePath, value: nextPackage, expectedText: packageText },
+    ],
+    operatorAssertions: options.adoptPort === null
+      ? []
+      : [`Port ${port} byl převzat z explicitního --adopt-port; Lazurio neověřuje jeho historický původ.`],
+  };
+}
+
+function explicitRuntimePackage({ options, context, packageJson, packagePath }) {
+  const missing = [
+    ["--app-id", options.appId],
+    ["--title", options.title],
+    ["--dev-script", options.devScript],
+  ].filter(([, value]) => typeof value !== "string" || value.trim() === "").map(([name]) => name);
+  if (missing.length > 0) {
+    throw actionRequired(
+      "app_inputs_missing",
+      `Chybí explicitní vstupy: ${missing.join(", ")}`,
+      "Doplň App identitu; setup ji neodvozuje z názvu balíčku ani složky.",
+      context,
+    );
+  }
+  if (typeof packageJson?.scripts?.[options.devScript] !== "string"
+    || packageJson.scripts[options.devScript].trim() === "") {
+    throw actionRequired(
+      "app_dev_script_missing",
+      `${packagePath}: script ${options.devScript} neexistuje nebo je prázdný`,
+      "Vytvoř skutečný App dev script; setup nevytváří aplikační source.",
+      context,
+    );
+  }
+  const nextPackage = structuredClone(packageJson);
+  nextPackage.lazurio = {
+    ...(nextPackage.lazurio ?? {}),
+    runtime: {
+      schema_version: "lazurio.runtime.v1",
+      id: options.appId,
+      title: options.title,
+      company: context.company,
+      module: context.module,
+      surface: options.surface,
+      dev_script: options.devScript,
+      tags: options.tags.length > 0 ? options.tags : [context.module],
+      listeners: [{
+        id: "app",
+        role: "entrypoint",
+        lease: "main",
+        protocol: "http",
+        health: { kind: "http", path: options.healthPath },
+      }],
+    },
+  };
+  return nextPackage;
+}
+
+async function resolveModuleSetupContext(options) {
+  if (!existsSync(join(options.lazurioRoot, "organizations"))) {
+    const error = new Error(`${options.lazurioRoot} není Lazurio Root: chybí organizations/`);
+    error.lazurioExitCode = MODULE_SETUP_EXIT_CODES.usage_or_environment;
+    throw error;
+  }
+  const rootEntry = await pathEntry(options.moduleRoot);
+  if (!rootEntry?.isDirectory() || rootEntry.isSymbolicLink()) {
+    throw new ModuleSetupActionRequired({
+      code: "module_root_unavailable",
+      message: `${relativeForReport(options.lazurioRoot, options.moduleRoot)} není běžná materializovaná složka`,
+      action: "Materializuj přesný Organization Module slot; setup nevytváří Git repo ani nepřepisuje symlink.",
+      context: fallbackContext(options),
+    });
+  }
+  const physicalModuleRoot = await realpath(options.moduleRoot);
+  const matches = [];
+  const organizationsRoot = join(options.lazurioRoot, "organizations");
+  for (const entry of await readdir(organizationsRoot, { withFileTypes: true }).catch(() => [])) {
+    if (!entry.isDirectory() || ignoredDirectories.has(entry.name)) continue;
+    const organizationRoot = join(organizationsRoot, entry.name);
+    const companyPath = join(organizationRoot, "company.gen3.json");
+    const modulesPath = join(organizationRoot, "modules.manifest.json");
+    if (!existsSync(companyPath) || !existsSync(modulesPath)) continue;
+    const organizationEntry = await pathEntry(organizationRoot);
+    if (!organizationEntry?.isDirectory() || organizationEntry.isSymbolicLink()) continue;
+    const physicalOrganizationRoot = await realpath(organizationRoot);
+    const physicalRelative = relative(physicalOrganizationRoot, physicalModuleRoot);
+    if (physicalRelative === "" || physicalRelative === ".." || physicalRelative.startsWith(`..${sep}`) || isAbsolute(physicalRelative)) continue;
+    const companyManifest = parseJsonForSetup(await readFile(companyPath, "utf8"), companyPath, fallbackContext(options));
+    if (companyManifest.organization_kind === "template") continue;
+    const modulesManifest = parseJsonForSetup(await readFile(modulesPath, "utf8"), modulesPath, fallbackContext(options));
+    const exactRelative = relative(resolve(organizationRoot), options.moduleRoot).split(sep).join("/");
+    for (const slot of modulesManifest.module_slots ?? []) {
+      if (typeof slot?.path !== "string" || typeof slot?.slug !== "string") continue;
+      if (slot.path !== exactRelative || resolve(organizationRoot, slot.path) !== options.moduleRoot) continue;
+      const pool = normalizeOrganizationPortPool({ manifest: companyManifest, source: companyPath });
+      if (pool.issues.length > 0) {
+        throw new ModuleSetupActionRequired({
+          code: "organization_port_pool_invalid",
+          message: pool.issues.join("; "),
+          action: "Organization Admin musí opravit company.gen3.json#module_port_pool.",
+          context: fallbackContext(options),
+        });
+      }
+      matches.push({
+        company: companyManifest?.company?.slug,
+        module: slot.slug,
+        organizationRoot,
+        slot,
+        organization: {
+          slug: companyManifest?.company?.slug,
+          path: relative(options.lazurioRoot, organizationRoot),
+          module_port_pool: pool.pool,
+          module_port_pool_source: `${companyPath}#module_port_pool`,
+        },
+      });
+    }
+  }
+  if (matches.length !== 1) {
+    throw new ModuleSetupActionRequired({
+      code: matches.length === 0 ? "module_slot_not_declared" : "module_slot_ambiguous",
+      message: matches.length === 0
+        ? `${relativeForReport(options.lazurioRoot, options.moduleRoot)} není přesný aktivní module_slots.path`
+        : "Module root odpovídá více Organization slotům",
+      action: "Oprav modules.manifest.json; setup nevytváří slot ani nehádá Organization ownership.",
+      context: fallbackContext(options),
+    });
+  }
+  const context = matches[0];
+  if (!context.company || context.slot.status === "planned_slot") {
+    throw new ModuleSetupActionRequired({
+      code: context.slot.status === "planned_slot" ? "module_slot_planned" : "organization_identity_missing",
+      message: context.slot.status === "planned_slot"
+        ? `${context.slot.path} je stále planned_slot`
+        : "Owning Organization nemá platný company.slug",
+      action: "Organization Admin musí reviewovaně aktivovat slot a Git souřadnice před Module setupem.",
+      context,
+    });
+  }
+  return context;
+}
+
+async function runtimePackagePaths(moduleRoot) {
+  const packages = await packagePathsBelow(moduleRoot);
+  const runtimePackages = [];
+  for (const packagePath of packages) {
+    const packageJson = await Bun.file(packagePath).json().catch(() => null);
+    if (packageJson?.lazurio?.runtime || packageJson?.companyascode?.app) runtimePackages.push(packagePath);
+  }
+  return runtimePackages;
+}
+
+async function modulePolicyIssues(lazurioRoot, context, module) {
+  const modules = await readAllModuleContracts(lazurioRoot);
+  return validateModuleLeasesAgainstOrganizationPools({
+    modules: [...modules.filter((candidate) => candidate.module_path !== module.module_path), module],
+    organizations: [context.organization],
+  });
+}
+
+async function assertCandidatePolicy(lazurioRoot, context, manifest) {
+  assertCandidateModule(manifest, join(context.organizationRoot, context.slot.path, "lazurio.module.json"), context, []);
+  const normalized = normalizeModuleManifest({
+    manifest,
+    modulePath: join(context.organizationRoot, context.slot.path, "lazurio.module.json"),
+  });
+  const issues = await modulePolicyIssues(lazurioRoot, context, normalized.module);
+  if (issues.length > 0) {
+    throw actionRequired(
+      "module_port_conflict",
+      issues.join("; "),
+      "Zachovej existující leases; pro nový Module nech Lazurio vybrat další volný port.",
+      context,
+    );
+  }
+}
+
+function assertCandidateModule(manifest, manifestPath, context, extraIssues) {
+  const normalized = normalizeModuleManifest({ manifest, modulePath: manifestPath });
+  const issues = [...normalized.issues, ...extraIssues];
+  if (issues.length > 0) {
+    throw actionRequired(
+      "generated_module_invalid",
+      issues.join("; "),
+      "Oprav explicitní vstupy; setup nikdy nezapisuje schema-nevalidní manifest.",
+      context,
+    );
+  }
+  assertCandidateIdentity(manifest, context);
+}
+
+function assertCandidateIdentity(manifest, context) {
+  if (manifest.company !== context.company || manifest.id !== context.module) {
+    throw actionRequired(
+      "generated_module_identity_mismatch",
+      `Odvozená identita ${String(manifest.company)}/${String(manifest.id)} neodpovídá slotu ${context.company}/${context.module}`,
+      "Oprav Organization slot nebo legacy runtime identitu; setup ji nepřepisuje odhadem.",
+      context,
+    );
+  }
+}
+
+function moduleManifestsMatchIgnoringMissingApps(existing, derived) {
+  if (existing.apps === undefined) {
+    const candidate = { ...existing, apps: derived.apps, default_app: derived.default_app };
+    return sameJson(candidate, derived);
+  }
+  return sameJson(existing, derived);
+}
+
+function moduleSetupReport({ options, context, status, reason, writes = [], operatorAssertions = [], issues = [] }) {
+  return {
+    schema_version: "lazurio.module_setup.report.v1",
+    status,
+    reason,
+    root: relativeForReport(options.lazurioRoot, options.lazurioRoot),
+    module: {
+      company: context.company ?? null,
+      id: context.module ?? basename(options.moduleRoot),
+      root: relativeForReport(options.lazurioRoot, options.moduleRoot),
+      manifest: relativeForReport(options.lazurioRoot, join(options.moduleRoot, "lazurio.module.json")),
+    },
+    changes: writes.map((write) => ({
+      action: write.action,
+      path: relativeForReport(options.lazurioRoot, write.path),
+    })),
+    issues,
+    operator_assertions: operatorAssertions,
+  };
+}
+
+function blockedModuleSetupReport(options, error) {
+  return moduleSetupReport({
+    options,
+    context: error.context ?? fallbackContext(options),
+    status: "action_required",
+    reason: error.code,
+    issues: [{ code: error.code, message: error.message, action: error.action }],
+  });
+}
+
+function fallbackContext(options) {
+  return { company: null, module: basename(options.moduleRoot) };
+}
+
+class ModuleSetupActionRequired extends Error {
+  constructor({ code, message, action, context }) {
+    super(message);
+    this.name = "ModuleSetupActionRequired";
+    this.code = code;
+    this.action = action;
+    this.context = context;
+  }
+}
+
+function actionRequired(code, message, action, context) {
+  return new ModuleSetupActionRequired({ code, message, action, context });
+}
+
+function parseJsonForSetup(text, path, context) {
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw actionRequired(
+      "json_invalid",
+      `${path}: JSON nejde přečíst (${error.message})`,
+      "Oprav JSON ručně; setup neobnovuje poškozený obsah odhadem.",
+      context,
+    );
+  }
+}
+
+function assertPathWithin(root, candidate, context, code) {
+  const rel = relative(resolve(root), resolve(candidate));
+  if (rel === "" || rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
+    throw actionRequired(code, `${candidate} neleží uvnitř Module rootu`, "Použij relativní package.json cestu uvnitř Modulu.", context);
+  }
+}
+
+async function pathEntry(path) {
+  return lstat(path).catch((error) => {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  });
+}
+
+async function createJsonFileAtomically(path, value) {
+  const temporary = `${path}.lazurio-setup-${process.pid}.tmp`;
+  await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
+  try {
+    // A sibling hard-link is an atomic create-only publish on every supported
+    // local filesystem. Unlike rename it cannot replace a concurrent target.
+    await link(temporary, path);
+  } finally {
+    await rm(temporary, { force: true });
+  }
+}
+
+async function replaceJsonFileAtomically(path, value, expectedText) {
+  const entry = await pathEntry(path);
+  if (!entry?.isFile() || entry.isSymbolicLink()) {
+    throw new Error(`${path}: replace precondition selhala; target není běžný soubor`);
+  }
+  const observed = await readFile(path, "utf8");
+  if (observed !== expectedText) throw new Error(`${path}: obsah se po plánu změnil; spusť setup znovu`);
+  const temporary = `${path}.lazurio-setup-${process.pid}.tmp`;
+  await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
+  try {
+    const immediate = await readFile(path, "utf8");
+    if (immediate !== expectedText) throw new Error(`${path}: obsah se před publikací změnil; spusť setup znovu`);
+    await rename(temporary, path);
+  } finally {
+    await rm(temporary, { force: true });
+  }
+}
+
+function relativeForReport(root, path) {
+  const rel = relative(resolve(root), resolve(path)).split(sep).join("/");
+  return rel || ".";
 }
 
 export function parseRuntimeMigrationArgs(argv) {

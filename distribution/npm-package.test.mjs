@@ -25,12 +25,16 @@ test("source package remains private while generated package contract is platfor
   expect(contract.source_includes).toEqual(expect.arrayContaining([
     "lazurio/module-port-lib.mjs",
     "lazurio/module-setup-lib.mjs",
+    "lazurio/module-setup-report.v1.schema.json",
+    "manual/module-setup.md",
     "lazurio/organization-activation-lib.mjs",
     "lazurio/organization-activation-report.v0.schema.json",
   ]));
   expect(contract.required_paths).toEqual(expect.arrayContaining([
     "lazurio/module-port-lib.mjs",
     "lazurio/module-setup-lib.mjs",
+    "lazurio/module-setup-report.v1.schema.json",
+    "manual/module-setup.md",
     "lazurio/organization-activation-lib.mjs",
     "lazurio/organization-activation-report.v0.schema.json",
   ]));

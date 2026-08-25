@@ -63,6 +63,25 @@ technickou chybu. Veřejný tvar drží
 `organization-activation-report.v0.schema.json`; `next_action.kind` je uzavřený
 enum a nikdy nepřenáší shell příkaz.
 
+## Module setup
+
+Agenti nových i privátních Organizací používají jediný konvergentní vstup:
+
+```sh
+lazurio module setup <module-root> --root <lazurio-root>
+lazurio module setup <module-root> --root <lazurio-root> --apply
+```
+
+Read-only běh vrací přesný plán; `--apply` tentýž plán znovu odvodí pod
+Organization lockem, zapíše jej a ověří. Příkaz umí podporovaný legacy runtime,
+explicitní `--no-app`, novou single App a vědomý `--adopt-port`. Nevytváří repo,
+Organization slot ani druhou port registry. Stabilní JSON report
+`lazurio.module_setup.report.v1` rozlišuje `current`, `actionable`, `completed`
+a `action_required`; exit kódy jsou 0/1/2 a syntax/environment používá 3.
+
+Úplný postup pro private Module migraci, nový Modul, rerun a PR handoff drží
+[veřejný Agent manuál](../manual/module-setup.md).
+
 ## Instalace Launchpadu
 
 Nejdřív zpřístupni CLI v uživatelském `PATH`:
