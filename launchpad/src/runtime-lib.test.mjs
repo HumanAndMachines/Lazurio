@@ -219,8 +219,8 @@ test("runtime manager spustí, změří a zastaví managed aplikaci", async () =
   const entrypoint = runtimeEnv.listeners.find((listener) => listener.role === "entrypoint");
   expect(entrypoint).toMatchObject({ host: "127.0.0.1", port });
   const listenerEnvKey = String(entrypoint.id).toUpperCase().replace(/[^A-Z0-9]/g, "_");
-  expect(childEnv.HOST).toBeUndefined();
-  expect(childEnv.PORT).toBeUndefined();
+  expect(childEnv.HOST).toBe("127.0.0.1");
+  expect(childEnv.PORT).toBe(String(port));
   expect(childEnv.NODE_PATH).toBe(join(root, "organizations", "TestCompany", "modules", "demo", "app", "v1", "node_modules"));
   expect(childEnv.LAZURIO_RUNTIME_PORT).toBe(String(port));
   expect(childEnv[`LAZURIO_RUNTIME_LISTENER_${listenerEnvKey}_HOST`]).toBe("127.0.0.1");
@@ -3340,7 +3340,7 @@ test("worktree Start rejects a lease that drifts from an explicit main contract"
   });
 });
 
-test("worktree Start applies discovery port-authority validation before launch", async () => {
+test("worktree Start validates its selected manifest script and proves the actual listener", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({ port });
   const { slug, worktreeRoot } = await createOwnedWorktreeFixture({
@@ -3389,19 +3389,24 @@ test("worktree Start applies discovery port-authority validation before launch",
   await writeJson(packagePath, packageJson);
   await writeFile(
     join(worktreeRoot, "app", "v1", "server.mjs"),
-    `Bun.serve({ hostname: process.env.HOST, port: Number(process.env.PORT ?? ${port}), fetch: () => new Response("ok") });\n`,
+    `Bun.serve({ hostname: "127.0.0.1", port: Number(process.env.PORT ?? ${port}), fetch: () => new Response("ok") });\n`,
     "utf8",
   );
-  const sourceError = await runtime.start("test-company-demo-v1", {
-    source: { type: "worktree", slug },
-  }).catch((error) => error);
-  expect(sourceError).toMatchObject({
-    status: 409,
-    code: "invalid_worktree_runtime_contract",
-  });
-  expect(sourceError.details.join("\n")).toContain(
-    `runtime source obsahuje číselný port fallback ${port}`,
-  );
+  try {
+    const started = await runtime.start("test-company-demo-v1", {
+      source: { type: "worktree", slug },
+    });
+    expect(["starting", "healthy"]).toContain(started.runtime.status);
+    const healthy = await waitForStatus(
+      () => runtime.health("test-company-demo-v1", { source: { type: "worktree", slug } }),
+      "healthy",
+    );
+    expect(healthy.listener_reconciliation?.status ?? "ok").toBe("ok");
+  } finally {
+    await runtime.stop("test-company-demo-v1", {
+      source: { type: "worktree", slug },
+    }).catch(() => {});
+  }
 });
 
 test("durable Stop commits disabled before signaling and cannot be resurrected after either failure boundary", async () => {

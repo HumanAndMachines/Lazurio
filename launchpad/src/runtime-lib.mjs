@@ -7,7 +7,6 @@ import {
   APP_FILESYSTEM_ROOT,
   discoverLaunchpadApps,
   runtimeScriptPortAuthorityIssues,
-  runtimeSourcePortAuthorityIssues,
 } from "./discovery-lib.mjs";
 import { materializeRuntimeFromModule, normalizeModuleManifest } from "../../lazurio/core/module-contract-lib.mjs";
 import { normalizePackageRuntime } from "../../lazurio/core/runtime-contract-lib.mjs";
@@ -1766,9 +1765,15 @@ export function createRuntimeManager({
     for (const name of Object.keys(env)) {
       if (name.startsWith("LAZURIO_RUNTIME_")) delete env[name];
     }
+    const legacyListenerEnv = app.runtime_contract?.legacy === true
+      ? { HOST: app.host, PORT: String(app.port) }
+      : {};
     return {
       ...env,
       ...organizationRuntimeEnv(app),
+      // Legacy apps still receive their declared endpoint, but never inherit
+      // ambient Machine values. Declared runtimes use only namespaced leases.
+      ...legacyListenerEnv,
       ...listenerRuntimeEnv(app),
       // GEN3 keeps some module-root and sibling config source outside the app
       // package. Give those importers the launched app's declared dependencies
@@ -1950,11 +1955,6 @@ export function createRuntimeManager({
         packagePath,
         module: worktreeApp.module_contract,
         runtime: worktreeApp,
-      }));
-      issues.push(...await runtimeSourcePortAuthorityIssues({
-        packageDirectory: dirname(absolutePackagePath),
-        packagePath,
-        module: worktreeApp.module_contract,
       }));
     }
 
