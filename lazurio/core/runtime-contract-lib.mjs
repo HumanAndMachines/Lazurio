@@ -51,6 +51,22 @@ export function normalizePackageRuntime({ packageJson, packagePath = "package.js
   };
 }
 
+export function runtimeListenerEnvironmentNames(listener) {
+  if (listener?.role === "entrypoint") {
+    return {
+      host: "LAZURIO_RUNTIME_HOST",
+      port: "LAZURIO_RUNTIME_PORT",
+    };
+  }
+  const key = String(listener?.id ?? "listener")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "_");
+  return {
+    host: `LAZURIO_RUNTIME_LISTENER_${key}_HOST`,
+    port: `LAZURIO_RUNTIME_LISTENER_${key}_PORT`,
+  };
+}
+
 export function normalizeLegacyApp(app) {
   const listener = {
     id: "entrypoint",

@@ -17,7 +17,10 @@ import {
   normalizeOrganizationPortPool,
   validateModuleLeasesAgainstOrganizationPools,
 } from "./core/organization-port-policy-lib.mjs";
-import { validateDeclaredRuntime } from "./core/runtime-contract-lib.mjs";
+import {
+  runtimeListenerEnvironmentNames,
+  validateDeclaredRuntime,
+} from "./core/runtime-contract-lib.mjs";
 import { organizationSlotRepositoryId } from "./core/organization-slot-scope-lib.mjs";
 import { readAllModuleContracts } from "./module-port-lib.mjs";
 
@@ -354,12 +357,9 @@ export function rewriteRuntimeScriptsFromModule(packageJson, moduleManifest) {
   for (const listener of runtime.listeners ?? []) {
     const lease = leases.get(listener.lease);
     if (!Number.isInteger(lease?.port) || typeof lease.host !== "string") continue;
-    const portEnv = listener.role === "entrypoint"
-      ? "$PORT"
-      : `$LAZURIO_RUNTIME_LISTENER_${String(listener.id).toUpperCase().replace(/[^A-Z0-9]/g, "_")}_PORT`;
-    const hostEnv = listener.role === "entrypoint"
-      ? "$HOST"
-      : `$LAZURIO_RUNTIME_LISTENER_${String(listener.id).toUpperCase().replace(/[^A-Z0-9]/g, "_")}_HOST`;
+    const environment = runtimeListenerEnvironmentNames(listener);
+    const portEnv = `$${environment.port}`;
+    const hostEnv = `$${environment.host}`;
     replacements.push({ port: lease.port, host: lease.host, portEnv, hostEnv });
   }
   const next = structuredClone(packageJson);
@@ -557,6 +557,7 @@ async function buildModuleSetupPlan(options) {
   const manifestEntry = await pathEntry(manifestPath);
   let writes = [];
   let operatorAssertions = [];
+  let runtime = null;
 
   if (manifestEntry) {
     if (!manifestEntry.isFile() || manifestEntry.isSymbolicLink()) {
@@ -600,6 +601,13 @@ async function buildModuleSetupPlan(options) {
       manifestPath,
       normalizedModule: normalized.module,
     }));
+    if (writes.length === 0) {
+      runtime = await materializeModuleSetupRuntime({
+        options,
+        context,
+        manifest,
+      });
+    }
   } else {
     ({ writes, operatorAssertions } = await planNewModule({ options, context, manifestPath }));
   }
@@ -614,8 +622,107 @@ async function buildModuleSetupPlan(options) {
       reason: writes.length === 0 ? "module_contract_current" : "setup_changes_ready",
       writes,
       operatorAssertions,
+      runtime,
     }),
   };
+}
+
+async function materializeModuleSetupRuntime({ options, context, manifest }) {
+  const normalized = normalizeModuleManifest({
+    manifest,
+    modulePath: "lazurio.module.json",
+  });
+  if (normalized.issues.length > 0 || normalized.module.apps === null) {
+    throw actionRequired(
+      "module_runtime_unavailable",
+      normalized.issues.join("; ") || "Module nemá explicitní apps deklaraci",
+      "Nejdřív dokonči lazurio module setup; runtime projekce nikdy nehádá App pořadí.",
+      context,
+    );
+  }
+
+  const apps = [];
+  for (const appPath of normalized.module.apps) {
+    const packagePath = resolve(options.moduleRoot, ...appPath.split("/"));
+    await assertRegularModuleFile({
+      moduleRoot: options.moduleRoot,
+      path: packagePath,
+      displayPath: appPath,
+      context,
+      missingAction: "Materializuj deklarovanou App nebo oprav apps/default_app v Module manifestu.",
+    });
+    const packageJson = parseJsonForSetup(await readFile(packagePath, "utf8"), packagePath, context);
+    const declaredRuntime = packageJson?.lazurio?.runtime;
+    const declaredIssues = validateDeclaredRuntime({
+      runtime: declaredRuntime,
+      packageJson,
+      packagePath: appPath,
+    });
+    const materialized = materializeRuntimeFromModule({
+      runtime: declaredRuntime,
+      module: normalized.module,
+      packagePath: appPath,
+    });
+    const issues = [...declaredIssues, ...materialized.issues];
+    if (issues.length > 0) {
+      throw actionRequired(
+        "runtime_contract_invalid",
+        issues.join("; "),
+        "Oprav App runtime reference; port zůstává pouze v lazurio.module.json.",
+        context,
+      );
+    }
+    apps.push(projectModuleSetupRuntimeApp({
+      appPath,
+      app: materialized.app,
+      defaultApp: normalized.module.default_app,
+    }));
+  }
+
+  return {
+    tcp_port_policy: structuredClone(normalized.module.tcp_port_policy),
+    default_app: normalized.module.default_app,
+    apps,
+  };
+}
+
+function projectModuleSetupRuntimeApp({ appPath, app, defaultApp }) {
+  const projected = {
+    package: appPath,
+    id: app.id,
+    title: app.title,
+    surface: app.surface,
+    dev_script: app.dev_script,
+    default: appPath === defaultApp,
+    tags: structuredClone(app.tags),
+    listeners: app.listeners.map((listener) => {
+      const environment = runtimeListenerEnvironmentNames(listener);
+      return {
+        id: listener.id,
+        role: listener.role,
+        lease: listener.lease,
+        protocol: listener.protocol,
+        host: listener.host,
+        port: listener.port,
+        health: structuredClone(listener.health),
+        host_env: environment.host,
+        port_env: environment.port,
+      };
+    }),
+  };
+  for (const key of [
+    "preview_script",
+    "build_script",
+    "required_module_slots",
+    "plugin",
+    "icon",
+    "description",
+    "group",
+    "production_url",
+  ]) {
+    if (app[key] !== undefined) projected[key] = structuredClone(app[key]);
+  }
+  return projected;
 }
 
 async function planExistingModule({
@@ -1156,7 +1263,16 @@ function moduleManifestsMatchIgnoringMissingApps(existing, derived) {
   return sameJson(existing, derived);
 }
 
-function moduleSetupReport({ options, context, status, reason, writes = [], operatorAssertions = [], issues = [] }) {
+function moduleSetupReport({
+  options,
+  context,
+  status,
+  reason,
+  writes = [],
+  operatorAssertions = [],
+  issues = [],
+  runtime = null,
+}) {
   return {
     schema_version: "lazurio.module_setup.report.v1",
     status,
@@ -1172,6 +1288,7 @@ function moduleSetupReport({ options, context, status, reason, writes = [], oper
       action: write.action,
       path: relativeForReport(options.lazurioRoot, write.path),
     })),
+    runtime,
     issues,
     operator_assertions: operatorAssertions,
   };

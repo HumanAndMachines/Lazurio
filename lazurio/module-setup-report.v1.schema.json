@@ -10,6 +10,7 @@
     "root",
     "module",
     "changes",
+    "runtime",
     "issues",
     "operator_assertions"
   ],
@@ -40,6 +41,101 @@
         },
         "additionalProperties": false
       }
+    },
+    "runtime": {
+      "type": ["object", "null"],
+      "required": ["tcp_port_policy", "default_app", "apps"],
+      "properties": {
+        "tcp_port_policy": {
+          "type": "object",
+          "required": ["mode"],
+          "properties": {
+            "mode": { "enum": ["none", "single", "exception"] },
+            "reason": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        },
+        "default_app": { "type": ["string", "null"] },
+        "apps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "package",
+              "id",
+              "title",
+              "surface",
+              "dev_script",
+              "default",
+              "tags",
+              "listeners"
+            ],
+            "properties": {
+              "package": { "type": "string", "minLength": 1 },
+              "id": { "type": "string", "minLength": 1 },
+              "title": { "type": "string", "minLength": 1 },
+              "surface": { "type": "string", "minLength": 1 },
+              "dev_script": { "type": "string", "minLength": 1 },
+              "preview_script": { "type": "string", "minLength": 1 },
+              "build_script": { "type": "string", "minLength": 1 },
+              "required_module_slots": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 }
+              },
+              "plugin": { "type": "string", "minLength": 1 },
+              "icon": { "type": "string", "minLength": 1 },
+              "description": { "type": "string", "minLength": 1 },
+              "group": { "type": "string", "minLength": 1 },
+              "production_url": { "type": "string", "minLength": 1 },
+              "default": { "type": "boolean" },
+              "tags": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 }
+              },
+              "listeners": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "role",
+                    "lease",
+                    "protocol",
+                    "host",
+                    "port",
+                    "health",
+                    "host_env",
+                    "port_env"
+                  ],
+                  "properties": {
+                    "id": { "type": "string", "minLength": 1 },
+                    "role": { "enum": ["entrypoint", "auxiliary"] },
+                    "lease": { "type": "string", "minLength": 1 },
+                    "protocol": { "enum": ["http", "https", "tcp"] },
+                    "host": { "type": "string", "minLength": 1 },
+                    "port": { "type": "integer", "minimum": 1024, "maximum": 65535 },
+                    "health": {
+                      "type": "object",
+                      "required": ["kind"],
+                      "properties": {
+                        "kind": { "enum": ["http", "tcp"] },
+                        "path": { "type": "string", "minLength": 1 }
+                      },
+                      "additionalProperties": false
+                    },
+                    "host_env": { "type": "string", "minLength": 1 },
+                    "port_env": { "type": "string", "minLength": 1 }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
     },
     "issues": {
       "type": "array",

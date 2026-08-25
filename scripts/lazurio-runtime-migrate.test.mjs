@@ -251,7 +251,7 @@ test("removes copied numeric ports from package scripts in favor of injected lea
   });
   expect(result.changed).toBe(true);
   expect(result.packageJson.scripts["dev:web"]).toBe(
-    'bun -e "process.exit(process.env.PORT ? 0 : 1)" && vite --port "$PORT"',
+    'bun -e "process.exit(process.env.LAZURIO_RUNTIME_PORT ? 0 : 1)" && vite --port "$LAZURIO_RUNTIME_PORT"',
   );
   expect(result.packageJson.scripts["dev:api"]).toBe(
     'bun -e "process.exit(process.env.LAZURIO_RUNTIME_LISTENER_API_PORT ? 0 : 1)" && bun server.ts --port "$LAZURIO_RUNTIME_LISTENER_API_PORT"',

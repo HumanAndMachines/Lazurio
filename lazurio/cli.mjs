@@ -93,7 +93,9 @@ async function run(argv) {
     return organizationActivationExitCode(report);
   }
 
-  options.root ??= defaultOperatedRoot();
+  options.root ??= defaultOperatedRoot({
+    missingRootExitCode: options.command === "module" ? 3 : 1,
+  });
 
   if (options.command === "module") {
     const report = await setupModule({
@@ -486,14 +488,14 @@ function cliCodeRoot() {
   return realpathSync.native(fileURLToPath(new URL("..", import.meta.url)));
 }
 
-function defaultOperatedRoot() {
+function defaultOperatedRoot({ missingRootExitCode = 1 } = {}) {
   const codeRoot = cliCodeRoot();
   const provenance = buildLazurioCliProvenance({ root: codeRoot });
   if (provenance.root_kind !== "package") return codeRoot;
   const error = new Error(
     "Toto package-managed Lazurio CLI zatím nemá zvolený Lazurio Root; použij --root <cesta>. Budoucí `lazurio install` tuto volbu uloží.",
   );
-  error.lazurioExitCode = 1;
+  error.lazurioExitCode = missingRootExitCode;
   throw error;
 }
 
