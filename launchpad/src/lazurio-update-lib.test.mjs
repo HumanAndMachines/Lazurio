@@ -161,7 +161,8 @@ test("dirty tracked, untracked and binary work is verified in a recovery stash a
 
 test("registered canonical task worktrees are locally ignored before recovery stash verification", async () => {
   const fixture = await repositoryFixture("registered-worktree-ignore");
-  const worktreeRoot = join(fixture.working, ".worktrees", "root", "DEV-6505-fixture");
+  const worktreeRelative = ".worktrees/root/DEV-6505-fixture";
+  const worktreeRoot = join(fixture.working, ...worktreeRelative.split("/"));
   await mkdir(join(fixture.working, ".worktrees", "root"), { recursive: true });
   runGit(fixture.working, ["worktree", "add", "-b", "codex/DEV-6505-fixture", worktreeRoot, "HEAD"]);
   await writeFile(`${worktreeRoot}.worktree.json`, "{}\n");
@@ -177,9 +178,27 @@ test("registered canonical task worktrees are locally ignored before recovery st
     recovery_stash: null,
   });
   expect(status(fixture.working)).toBe("");
-  expect(runGitResult(fixture.working, ["check-ignore", "--quiet", "--no-index", "--", ".worktrees/"]).status).toBe(0);
+  expect(runGitResult(fixture.working, ["check-ignore", "--quiet", "--no-index", "--", ".worktrees/"]).status).toBe(1);
+  expect(runGitResult(fixture.working, ["check-ignore", "--quiet", "--no-index", "--", worktreeRelative]).status).toBe(0);
+  expect(runGitResult(fixture.working, ["check-ignore", "--quiet", "--no-index", "--", `${worktreeRelative}.worktree.json`]).status).toBe(0);
   const worktreeList = runGit(fixture.working, ["worktree", "list", "--porcelain"]);
   expect(worktreeList).toContain("branch refs/heads/codex/DEV-6505-fixture");
+  expect(runGit(worktreeRoot, ["rev-parse", "HEAD"]))
+    .toBe(runGit(fixture.working, ["rev-parse", "codex/DEV-6505-fixture"]));
+
+  await writeFile(join(fixture.working, ".worktrees", "notes.txt"), "keep me\n");
+  await writeFile(`${worktreeRoot}.worktree.json.unexpected`, "keep me too\n");
+  const unknownData = await update(fixture);
+  expect(unknownData).toMatchObject({
+    state: "updated",
+    reason: "local_changes_preserved",
+    actions: ["recovery_stash"],
+  });
+  const stashedPaths = runGit(fixture.working, [
+    "stash", "show", "--include-untracked", "--name-only", unknownData.recovery_stash,
+  ]);
+  expect(stashedPaths).toContain(".worktrees/notes.txt");
+  expect(stashedPaths).toContain(".worktrees/root/DEV-6505-fixture.worktree.json.unexpected");
   expect(runGit(worktreeRoot, ["rev-parse", "HEAD"]))
     .toBe(runGit(fixture.working, ["rev-parse", "codex/DEV-6505-fixture"]));
 });
