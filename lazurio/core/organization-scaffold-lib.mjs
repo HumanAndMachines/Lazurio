@@ -66,6 +66,9 @@ scratch material is local-only and ignored; Personalspace never belongs here.
 
 Document Organization-specific operating procedures here. General Lazurio
 runtime and access rules stay in the installed Lazurio source.
+
+Activation creates no Modules and reserves no listener ports. Add one reviewed
+Organization \`module_port_pool\` only with the first concrete Module lease.
 `,
   "productionspace/README.md": `# Productionspace
 
@@ -139,11 +142,11 @@ export function isValidOrganizationScaffold(value) {
   if (!companyFile) return false;
   try {
     const company = JSON.parse(companyFile.content);
-    if (JSON.stringify(company?.forge_binding) !== JSON.stringify(value.forge_binding)) return false;
+    if (!sameForgeBinding(company?.forge_binding, value.forge_binding)) return false;
+    return gitTreeOid(value.files) === value.git_tree_oid;
   } catch {
     return false;
   }
-  return gitTreeOid(value.files) === value.git_tree_oid;
 }
 
 export function isValidOrganizationForgeBinding(value, {
@@ -172,6 +175,9 @@ function normalizeInput({ organization, repository }) {
   const slug = requiredText(organization.slug, "Organization slug");
   if (!organizationSlugPattern.test(slug)) {
     throw new TypeError("Organization slug must be lowercase kebab-case.");
+  }
+  if (slug === "example" || slug.includes("vyplnit")) {
+    throw new TypeError("Organization slug must not be an example or unresolved placeholder.");
   }
   const displayName = safeDisplayText(organization.displayName ?? organizationLogin, "Organization display name");
 
@@ -231,7 +237,6 @@ function companyManifest({ organization, repository }) {
       { slug: "organization-todo", kind: "todo-tasks-json", path: "TODO.tasks.json", authority: "source-of-truth" },
       { slug: "organization-done", kind: "done-tasks-json", path: "DONE.tasks.json", authority: "source-of-truth" },
     ],
-    module_port_pool: { start: 24000, end: 24099 },
   };
 }
 
@@ -270,9 +275,11 @@ function validForgeBinding(value) {
     && value.schema_version === ORGANIZATION_FORGE_BINDING_VERSION
     && value.provider === "github"
     && isRecord(value.organization)
+    && typeof value.organization.id === "string"
     && positiveIdPattern.test(value.organization.id ?? "")
     && githubLoginPattern.test(value.organization.asserted_login ?? "")
     && isRecord(value.repository)
+    && typeof value.repository.id === "string"
     && positiveIdPattern.test(value.repository.id ?? "")
     && typeof value.repository.asserted_full_name === "string"
     && value.repository.asserted_full_name.toLowerCase() === `${value.organization.asserted_login}/${value.organization.asserted_login}_GEN3`.toLowerCase()
@@ -289,12 +296,19 @@ function gitTreeOid(files) {
     const segments = file.path.split("/");
     let current = root;
     for (const segment of segments.slice(0, -1)) {
+      if (current.files.has(segment)) {
+        throw new TypeError(`Organization scaffold path '${file.path}' collides with file '${segment}'.`);
+      }
       if (!current.directories.has(segment)) {
         current.directories.set(segment, { directories: new Map(), files: new Map() });
       }
       current = current.directories.get(segment);
     }
-    current.files.set(segments.at(-1), file.blob_oid);
+    const name = segments.at(-1);
+    if (current.directories.has(name)) {
+      throw new TypeError(`Organization scaffold path '${file.path}' collides with directory '${name}'.`);
+    }
+    current.files.set(name, file.blob_oid);
   }
   return treeObjectId(root);
 }
@@ -343,10 +357,25 @@ function requiredText(value, label) {
 
 function safeDisplayText(value, label) {
   const text = requiredText(value, label);
-  if (text.length > 120 || /[\u0000-\u001f\u007f]/u.test(text) || /[\r\n]/u.test(text)) {
+  if (
+    text.length > 120
+    || /[\u0000-\u001f\u007f\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]/u.test(text)
+  ) {
     throw new TypeError(`${label} contains unsupported characters.`);
   }
   return text;
+}
+
+function sameForgeBinding(left, right) {
+  return validForgeBinding(left)
+    && validForgeBinding(right)
+    && left.schema_version === right.schema_version
+    && left.provider === right.provider
+    && left.organization.id === right.organization.id
+    && left.organization.asserted_login === right.organization.asserted_login
+    && left.repository.id === right.repository.id
+    && left.repository.asserted_full_name === right.repository.asserted_full_name
+    && left.repository.default_branch === right.repository.default_branch;
 }
 
 function json(value) {

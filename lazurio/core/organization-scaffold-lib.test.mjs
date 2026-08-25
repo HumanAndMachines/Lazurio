@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
   createOrganizationScaffold,
+  isValidOrganizationForgeBinding,
   isValidOrganizationScaffold,
   ORGANIZATION_FORGE_BINDING_VERSION,
   ORGANIZATION_SCAFFOLD_CONTRACT_VERSION,
@@ -39,7 +40,7 @@ describe("Organization scaffold", () => {
         default_branch: "main",
       },
     });
-    expect(scaffold.git_tree_oid).toBe("2f2344a3c42d35098f8f1e14c937dbd383a62197");
+    expect(scaffold.git_tree_oid).toBe("11214659e23ffe0bb61df50dcf87df80c8b30bf0");
     expect(scaffold.files.map((file) => file.path)).toEqual([
       ".gitignore",
       "AGENTS.md",
@@ -66,6 +67,7 @@ describe("Organization scaffold", () => {
       github_org: "ExampleOrg",
       root_repository: "ExampleOrg/ExampleOrg_GEN3",
     });
+    expect(company.module_port_pool).toBeUndefined();
     const modules = JSON.parse(scaffold.files.find((file) => file.path === "modules.manifest.json").content);
     expect(modules.module_slots).toEqual([]);
   });
@@ -74,14 +76,15 @@ describe("Organization scaffold", () => {
     const scaffold = createOrganizationScaffold(input);
     const root = await mkdtemp(join(tmpdir(), "lazurio-organization-scaffold-"));
     try {
-      expect(Bun.spawnSync(["git", "init", "--quiet"], { cwd: root }).exitCode).toBe(0);
+      const gitEnv = hermeticGitEnvironment(root);
+      expect(runGit(root, gitEnv, ["init", "--quiet"]).exitCode).toBe(0);
       for (const file of scaffold.files) {
         const target = join(root, file.path);
         await mkdir(dirname(target), { recursive: true });
         await writeFile(target, file.content, "utf8");
       }
-      expect(Bun.spawnSync(["git", "add", "--all"], { cwd: root }).exitCode).toBe(0);
-      const tree = Bun.spawnSync(["git", "write-tree"], { cwd: root });
+      expect(runGit(root, gitEnv, ["add", "--all"]).exitCode).toBe(0);
+      const tree = runGit(root, gitEnv, ["write-tree"]);
       expect(tree.exitCode).toBe(0);
       expect(tree.stdout.toString().trim()).toBe(scaffold.git_tree_oid);
     } finally {
@@ -106,6 +109,18 @@ describe("Organization scaffold", () => {
       ...input,
       repository: { ...input.repository, name: "custom-root" },
     })).toThrow("current 'ExampleOrg_GEN3' naming contract");
+    expect(() => createOrganizationScaffold({
+      ...input,
+      organization: { ...input.organization, slug: "example" },
+    })).toThrow("unresolved placeholder");
+    expect(() => createOrganizationScaffold({
+      ...input,
+      organization: { ...input.organization, slug: "vyplnit-company" },
+    })).toThrow("unresolved placeholder");
+    expect(() => createOrganizationScaffold({
+      ...input,
+      organization: { ...input.organization, displayName: "Safe\u202eexe.txt" },
+    })).toThrow("unsupported characters");
   });
 
   test("detects content or binding drift instead of accepting a second truth", () => {
@@ -121,5 +136,70 @@ describe("Organization scaffold", () => {
         organization: { ...scaffold.forge_binding.organization, id: "999" },
       },
     })).toBe(false);
+
+    const reorderedBinding = {
+      repository: { ...scaffold.forge_binding.repository },
+      organization: { ...scaffold.forge_binding.organization },
+      provider: scaffold.forge_binding.provider,
+      schema_version: scaffold.forge_binding.schema_version,
+    };
+    const company = JSON.parse(scaffold.files.find((file) => file.path === "company.gen3.json").content);
+    company.forge_binding = reorderedBinding;
+    const companyFile = scaffold.files.find((file) => file.path === "company.gen3.json");
+    const reorderedFiles = scaffold.files.map((file) => file.path === "company.gen3.json"
+      ? { ...file, content: `${JSON.stringify(company, null, 2)}\n` }
+      : file);
+    expect(companyFile.content).not.toBe(reorderedFiles.find((file) => file.path === "company.gen3.json").content);
+    expect(isValidOrganizationForgeBinding(reorderedBinding, {
+      organizationId: "12345678",
+      organizationLogin: "ExampleOrg",
+      repositoryId: "87654321",
+      repositoryFullName: "ExampleOrg/ExampleOrg_GEN3",
+    })).toBe(true);
+  });
+
+  test("rejects numeric IDs, malformed bindings and file-directory collisions", () => {
+    const scaffold = createOrganizationScaffold(input);
+    expect(isValidOrganizationForgeBinding({
+      ...scaffold.forge_binding,
+      organization: { ...scaffold.forge_binding.organization, id: 12345678 },
+    })).toBe(false);
+    expect(isValidOrganizationForgeBinding({
+      ...scaffold.forge_binding,
+      repository: { ...scaffold.forge_binding.repository, default_branch: "develop" },
+    })).toBe(false);
+    expect(isValidOrganizationForgeBinding({
+      ...scaffold.forge_binding,
+      repository: { ...scaffold.forge_binding.repository, asserted_full_name: "Other/Other_GEN3" },
+    })).toBe(false);
+    expect(isValidOrganizationForgeBinding(null)).toBe(false);
+
+    const source = scaffold.files.find((file) => file.path === "README.md");
+    const collidingFiles = [...scaffold.files, { ...source, path: "README.md/nested" }]
+      .sort((left, right) => Buffer.compare(Buffer.from(left.path), Buffer.from(right.path)));
+    expect(() => isValidOrganizationScaffold({ ...scaffold, files: collidingFiles })).not.toThrow();
+    expect(isValidOrganizationScaffold({ ...scaffold, files: collidingFiles })).toBe(false);
   });
 });
+
+function runGit(root, env, args) {
+  return Bun.spawnSync([
+    "git",
+    "-c", "core.autocrlf=false",
+    "-c", "core.safecrlf=false",
+    ...args,
+  ], { cwd: root, env });
+}
+
+function hermeticGitEnvironment(root) {
+  const env = {
+    HOME: root,
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_CONFIG_GLOBAL: join(root, ".git", "lazurio-empty-global-config"),
+    LC_ALL: "C",
+  };
+  for (const key of ["PATH", "SystemRoot", "SYSTEMROOT", "PATHEXT", "TMPDIR", "TEMP", "TMP"]) {
+    if (typeof process.env[key] === "string") env[key] = process.env[key];
+  }
+  return env;
+}
