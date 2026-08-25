@@ -323,7 +323,7 @@ export async function updateManagedRepo(repo, context = {}) {
   const run = context.deps?.runGit ?? runGit;
   const inspect = context.deps?.inspectLocalRepo ?? inspectLocalRepo;
   const checkpoint = context.checkpoint ?? (() => {});
-  const local = await inspect(repo, { ...context.deps, runGit: run });
+  let local = await inspect(repo, { ...context.deps, runGit: run });
   if (local.directoryOnly) return currentResult(repo, "directory_only", "Adresář nemá vlastní Git checkout; Lazurio ho přeskočilo.");
   if (!local.ok) {
     return blockedResult(repo, local.reason ?? "git_inspection_failed", {
@@ -345,6 +345,21 @@ export async function updateManagedRepo(repo, context = {}) {
     return blockedResult(repo, "hidden_index_state", {
       detail: "Index používá skip-worktree nebo assume-unchanged a stash nelze úplně ověřit.",
     });
+  }
+
+  const worktreeIgnore = await repairCanonicalWorktreeIgnore({ repo, run, local });
+  if (!worktreeIgnore.ok) {
+    return blockedResult(repo, "worktree_ignore_repair_failed", {
+      detail: worktreeIgnore.detail,
+    });
+  }
+  if (worktreeIgnore.changed) {
+    local = await inspect(repo, { ...context.deps, runGit: run });
+    if (!local.ok || local.directoryOnly || local.operation || local.sparseOrHiddenIndex) {
+      return blockedResult(repo, "worktree_ignore_repair_failed", {
+        detail: "Po opravě lokálního worktree ignore nejde Git stav znovu bezpečně ověřit.",
+      });
+    }
   }
 
   const source = await verifyRemoteSource(repo, run);
@@ -416,7 +431,7 @@ export async function updateManagedRepo(repo, context = {}) {
     });
   }
 
-  const actions = [];
+  const actions = worktreeIgnore.changed ? ["worktree_ignore_repaired"] : [];
   let recoveryStash = null;
   if (local.dirtyPaths.length > 0) {
     const stash = await createVerifiedRecoveryStash({
@@ -503,14 +518,119 @@ export async function updateManagedRepo(repo, context = {}) {
     });
   }
   return updatedResult(repo, {
-    reason: recoveryStash ? "local_changes_preserved" : "checkout_updated",
+    reason: recoveryStash
+      ? "local_changes_preserved"
+      : actions.length === 1 && actions[0] === "worktree_ignore_repaired"
+        ? "worktree_hygiene_repaired"
+        : "checkout_updated",
     message: recoveryStash
       ? "Repo je aktualizované; lokální změny zůstaly bezpečně v recovery stashi."
-      : "Repo je aktualizované a clean na main.",
+      : actions.length === 1 && actions[0] === "worktree_ignore_repaired"
+        ? "Kanonické task worktrees už neznečišťují primární checkout."
+        : "Repo je aktualizované a clean na main.",
     head: final.head,
     actions,
     recoveryStash,
   });
+}
+
+async function repairCanonicalWorktreeIgnore({ repo, run, local }) {
+  const dirtyWorktreePaths = local.dirtyPaths.filter(isWorktreeManagementPath);
+  if (dirtyWorktreePaths.length === 0) return { ok: true, changed: false };
+
+  const registered = await registeredCanonicalWorktreePaths({ repo, run });
+  if (!registered.ok || registered.paths.length === 0) return { ok: true, changed: false };
+  if (!dirtyWorktreePaths.every((path) => registeredPathOwnsDirtyPath(registered.paths, path))) {
+    return { ok: true, changed: false };
+  }
+
+  const ignored = await run(
+    ["check-ignore", "--quiet", "--no-index", "--", ".worktrees/"],
+    { cwd: repo.absolute_path, timeoutMs: GIT_LOCAL_TIMEOUT_MS },
+  );
+  if (ignored.ok) return { ok: true, changed: false };
+  if (ignored.exitCode !== 1) {
+    return { ok: false, changed: false, detail: "Git nedokázal ověřit lokální ignore pro kanonické task worktrees." };
+  }
+
+  const [commonDirResult, excludeResult] = await Promise.all([
+    run(["rev-parse", "--git-common-dir"], { cwd: repo.absolute_path, timeoutMs: GIT_LOCAL_TIMEOUT_MS }),
+    run(["rev-parse", "--git-path", "info/exclude"], { cwd: repo.absolute_path, timeoutMs: GIT_LOCAL_TIMEOUT_MS }),
+  ]);
+  if (!commonDirResult.ok || !excludeResult.ok) {
+    return { ok: false, changed: false, detail: "Git nepotvrdil lokální info/exclude cestu owner repozitáře." };
+  }
+  const commonDir = await canonicalPath(resolveGitPath(repo.absolute_path, commonDirResult.stdout));
+  const excludePath = resolveGitPath(repo.absolute_path, excludeResult.stdout);
+  const canonicalExclude = await canonicalPath(excludePath);
+  if (relative(commonDir, canonicalExclude).replace(/\\/g, "/") !== "info/exclude") {
+    return { ok: false, changed: false, detail: "Git info/exclude neleží v potvrzeném common-dir owner repozitáře." };
+  }
+
+  let contents;
+  try {
+    contents = await readFile(excludePath, "utf8");
+  } catch (error) {
+    return { ok: false, changed: false, detail: `Lokální Git exclude nejde načíst: ${error instanceof Error ? error.message : String(error)}` };
+  }
+  const prefix = contents.length > 0 && !contents.endsWith("\n") ? "\n" : "";
+  let handle;
+  try {
+    handle = await open(excludePath, "a");
+    const stat = await handle.stat();
+    if (!stat.isFile()) throw new Error("info/exclude není běžný soubor");
+    await handle.write(`${prefix}/.worktrees/\n`);
+    await handle.sync();
+  } catch (error) {
+    return { ok: false, changed: false, detail: `Lokální Git exclude nejde bezpečně doplnit: ${error instanceof Error ? error.message : String(error)}` };
+  } finally {
+    await handle?.close().catch(() => {});
+  }
+
+  const verified = await run(
+    ["check-ignore", "--quiet", "--no-index", "--", ".worktrees/"],
+    { cwd: repo.absolute_path, timeoutMs: GIT_LOCAL_TIMEOUT_MS },
+  );
+  return verified.ok
+    ? { ok: true, changed: true }
+    : { ok: false, changed: true, detail: "Git po zápisu nepotvrdil ignore kanonické .worktrees/ cesty." };
+}
+
+async function registeredCanonicalWorktreePaths({ repo, run }) {
+  const listed = await run(
+    ["worktree", "list", "--porcelain", "-z"],
+    { cwd: repo.absolute_path, timeoutMs: GIT_LOCAL_TIMEOUT_MS },
+  );
+  if (!listed.ok) return { ok: false, paths: [] };
+  const ownerRoot = await canonicalPath(repo.absolute_path);
+  const worktreesRoot = resolve(ownerRoot, ".worktrees");
+  const canonicalWorktreesRoot = await canonicalPath(worktreesRoot);
+  if (canonicalWorktreesRoot !== worktreesRoot) return { ok: false, paths: [] };
+
+  const paths = [];
+  for (const token of splitNull(listed.stdout)) {
+    if (!token.startsWith("worktree ")) continue;
+    const candidate = await canonicalPath(token.slice("worktree ".length));
+    const child = relative(canonicalWorktreesRoot, candidate);
+    if (!child || child.startsWith("..") || isAbsolute(child)) continue;
+    paths.push(relative(ownerRoot, candidate).replace(/\\/g, "/"));
+  }
+  return { ok: true, paths };
+}
+
+function isWorktreeManagementPath(path) {
+  const normalized = String(path ?? "").replace(/\\/g, "/").replace(/\/$/u, "");
+  return normalized === ".worktrees" || normalized.startsWith(".worktrees/");
+}
+
+function registeredPathOwnsDirtyPath(registeredPaths, path) {
+  const normalized = String(path ?? "").replace(/\\/g, "/").replace(/\/$/u, "");
+  return registeredPaths.some((registered) =>
+    normalized === registered
+    || normalized.startsWith(`${registered}/`)
+    || normalized === `${registered}.worktree.json`
+    || normalized.startsWith(`${registered}.worktree.json.`)
+  );
 }
 
 export async function inspectLocalRepo(repo, deps = {}) {

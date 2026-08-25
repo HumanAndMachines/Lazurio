@@ -159,6 +159,46 @@ test("dirty tracked, untracked and binary work is verified in a recovery stash a
     .toContain(result.recovery_stash);
 });
 
+test("registered canonical task worktrees are locally ignored before recovery stash verification", async () => {
+  const fixture = await repositoryFixture("registered-worktree-ignore");
+  const worktreeRoot = join(fixture.working, ".worktrees", "root", "DEV-6505-fixture");
+  await mkdir(join(fixture.working, ".worktrees", "root"), { recursive: true });
+  runGit(fixture.working, ["worktree", "add", "-b", "codex/DEV-6505-fixture", worktreeRoot, "HEAD"]);
+  await writeFile(`${worktreeRoot}.worktree.json`, "{}\n");
+  await addRemoteCommit(fixture, "remote.txt", "remote\n");
+
+  expect(status(fixture.working)).toContain(".worktrees/");
+  const result = await update(fixture);
+
+  expect(result).toMatchObject({
+    state: "updated",
+    reason: "checkout_updated",
+    actions: ["worktree_ignore_repaired", "fast_forward"],
+    recovery_stash: null,
+  });
+  expect(status(fixture.working)).toBe("");
+  expect(runGitResult(fixture.working, ["check-ignore", "--quiet", "--no-index", "--", ".worktrees/"]).status).toBe(0);
+  expect(runGit(fixture.working, ["worktree", "list", "--porcelain"])).toContain(worktreeRoot);
+});
+
+test("unregistered files under .worktrees remain user data and are recovery-stashed", async () => {
+  const fixture = await repositoryFixture("unregistered-worktree-data");
+  await mkdir(join(fixture.working, ".worktrees"), { recursive: true });
+  await writeFile(join(fixture.working, ".worktrees", "notes.txt"), "keep me\n");
+  await addRemoteCommit(fixture, "remote.txt", "remote\n");
+
+  const result = await update(fixture);
+
+  expect(result).toMatchObject({
+    state: "updated",
+    reason: "local_changes_preserved",
+    actions: ["recovery_stash", "fast_forward"],
+  });
+  expect(runGit(fixture.working, ["stash", "show", "--include-untracked", "--name-only", result.recovery_stash]))
+    .toContain(".worktrees/notes.txt");
+  expect(runGitResult(fixture.working, ["check-ignore", "--quiet", "--no-index", "--", ".worktrees/"]).status).toBe(1);
+});
+
 test("an unverified recovery stash is labeled truthfully in the Codex handoff", async () => {
   const fixture = await repositoryFixture("unverified-stash-prompt");
   await writeFile(join(fixture.working, "unfinished.txt"), "unfinished\n");
