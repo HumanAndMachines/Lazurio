@@ -15,6 +15,7 @@ import {
   resolveOrganizationActivation,
   resolveOrganizationRootDocuments,
 } from "./organization-activation-lib.mjs";
+import { createOrganizationScaffold } from "./organization-scaffold-lib.mjs";
 
 const request = createOrganizationActivationRequest({ githubOrganizationId: "314957563" });
 
@@ -189,6 +190,34 @@ test("legacy remote resolver requires the identity pair and does not preempt can
     format: null,
     reason: "canonical_resolver_unavailable",
   });
+});
+
+test("generated legacy scaffold binds live immutable Organization and repository IDs", () => {
+  const scaffold = createOrganizationScaffold({
+    organization: { id: "314957563", login: "Example", slug: "example", displayName: "Example" },
+    repository: {
+      id: "42424242",
+      name: "Example_GEN3",
+      fullName: "Example/Example_GEN3",
+      defaultBranch: "main",
+    },
+  });
+  const document = (path) => JSON.parse(scaffold.files.find((file) => file.path === path).content);
+  const input = {
+    companyManifest: document("company.gen3.json"),
+    modulesManifest: document("modules.manifest.json"),
+    canonicalManifest: null,
+    expectedOrganizationId: "314957563",
+    expectedOrganizationLogin: "Example",
+    expectedRepositoryId: "42424242",
+    expectedRepositoryFullName: "Example/Example_GEN3",
+  };
+
+  expect(resolveOrganizationRootDocuments(input)).toMatchObject({ status: "supported", format: "legacy" });
+  expect(resolveOrganizationRootDocuments({ ...input, expectedOrganizationId: "999" }))
+    .toMatchObject({ status: "unsupported", reason: "legacy_identity_pair_invalid" });
+  expect(resolveOrganizationRootDocuments({ ...input, expectedRepositoryId: "999" }))
+    .toMatchObject({ status: "unsupported", reason: "legacy_identity_pair_invalid" });
 });
 
 test("same request and observations produce byte-identical result", () => {

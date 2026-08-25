@@ -255,7 +255,9 @@ function inspectRootRepository({ invoke, organization }) {
     companyManifest: companyDocument.value,
     modulesManifest: modulesDocument.value,
     canonicalManifest: canonicalDocument.present ? canonicalDocument.value : null,
+    expectedOrganizationId: organization.id,
     expectedOrganizationLogin: organization.login,
+    expectedRepositoryId: repositoryId,
     expectedRepositoryFullName: fullName,
   });
   return {
