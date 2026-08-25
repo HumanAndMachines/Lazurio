@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -20,7 +20,18 @@ export async function runIsolatedLazurioUpdate({ rootPath }) {
     if (!build.success || build.outputs.length !== 1) {
       throw new Error(build.logs.map((log) => log.message).join("\n") || "Updater runtime bundle se nepodařilo sestavit.");
     }
-    const runtimePath = join(directory, "lazurio-update-runtime.mjs");
+    // Zachovej stejnou relativní strukturu jako instalovaný Lazurio package.
+    // Bundlované import.meta.dirname pak dál ukazuje na launchpad/src a
+    // discovery čte jedinou kanonickou kopii schemas z launchpad/schemas.
+    const runtimeSourceRoot = join(directory, "launchpad", "src");
+    const runtimeSchemaRoot = join(directory, "launchpad", "schemas");
+    await mkdir(runtimeSourceRoot, { recursive: true });
+    await cp(join(import.meta.dirname, "..", "schemas"), runtimeSchemaRoot, {
+      recursive: true,
+      force: false,
+      errorOnExist: true,
+    });
+    const runtimePath = join(runtimeSourceRoot, "lazurio-update-runtime.mjs");
     await Bun.write(runtimePath, build.outputs[0]);
     const child = Bun.spawn(
       [process.execPath, runtimePath, "--root", rootPath, "--runtime-root", directory],

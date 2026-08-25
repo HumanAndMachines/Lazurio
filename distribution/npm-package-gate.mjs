@@ -11,6 +11,10 @@ import {
   buildLazurioNpmPackage,
   packageEvidenceForReport,
 } from "./npm-package-lib.mjs";
+import {
+  commitRemoteModule,
+  createLazurioUpdateFixture,
+} from "../tests/lazurio-update-fixture.mjs";
 
 const options = parseArgs(Bun.argv.slice(2));
 const repositoryRoot = resolve(import.meta.dirname, "..");
@@ -26,7 +30,7 @@ try {
     outputRoot: temporaryRoot,
   });
   await assertUpdaterBundle(build.paths.staging_root);
-  const smoke = smokeInstalledArchive(build);
+  const smoke = await smokeInstalledArchive(build);
   const evidence = {
     ...packageEvidenceForReport(build),
     smoke,
@@ -79,7 +83,7 @@ async function assertUpdaterBundle(stagingRoot) {
   }
 }
 
-function smokeInstalledArchive(build) {
+async function smokeInstalledArchive(build) {
   const installRoot = join(temporaryRoot, "bun");
   const globalDirectory = join(installRoot, "install", "global");
   const globalBin = join(installRoot, "bin");
@@ -132,6 +136,7 @@ function smokeInstalledArchive(build) {
   if (rootless.status !== 1 || !rootless.stderr.includes("--root <cesta>")) {
     throw new Error("package-managed Root command must fail closed until --root is explicit");
   }
+  await assertInstalledUpdaterRuntime({ globalBin, environment });
   return {
     global_install: "passed",
     installed_shim: "passed",
@@ -140,7 +145,33 @@ function smokeInstalledArchive(build) {
     install_report: "passed",
     operated_root_boundary: "passed",
     updater_source_closure: "passed",
+    updater_runtime_assets: "passed",
   };
+}
+
+async function assertInstalledUpdaterRuntime({ globalBin, environment }) {
+  const fixture = await createLazurioUpdateFixture({
+    sandboxRoot: join(temporaryRoot, "updater-fixture"),
+    withModule: true,
+  });
+  await commitRemoteModule(fixture);
+  const update = runInstalledShim(globalBin, ["update", "--json", "--root", fixture.working], environment);
+  let report;
+  try {
+    report = JSON.parse(update.stdout);
+  } catch {
+    throw new Error(`installed lazurio update did not return JSON: ${failure(update)}`);
+  }
+  const moduleResult = report.results?.find((result) => result.repo_key === "FixtureOrg::sample");
+  if (
+    update.status !== 0
+    || report.ok !== true
+    || moduleResult?.state !== "updated"
+    || moduleResult?.reason !== "checkout_updated"
+    || report.results?.some((result) => result.reason === "dependency_inventory_unavailable")
+  ) {
+    throw new Error(`installed updater runtime asset smoke failed: ${JSON.stringify(report)}`);
+  }
 }
 
 function cleanPathEnvironment(base) {
