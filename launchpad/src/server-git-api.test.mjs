@@ -569,6 +569,16 @@ test("control-root replacement waits for an in-flight runtime mutation", async (
     'await Bun.write("install.started", "started\\n");\nawait Bun.sleep(1500);\n',
     "utf8",
   );
+  const lockfileInstall = Bun.spawn(
+    [process.execPath, "install", "--lockfile-only", "--ignore-scripts"],
+    { cwd: appRoot, stdout: "pipe", stderr: "pipe" },
+  );
+  const [, , lockfileExitCode] = await Promise.all([
+    new Response(lockfileInstall.stdout).text(),
+    new Response(lockfileInstall.stderr).text(),
+    lockfileInstall.exited,
+  ]);
+  expect(lockfileExitCode).toBe(0);
 
   await initGitRepo(root);
   runGit(["add", "."], root);
