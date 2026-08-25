@@ -2576,6 +2576,55 @@ export function createRuntimeManager({
     return app;
   }
 
+  async function observeManagedListenerOwnership(listener, record, expectedCwd) {
+    const owner = await resolvePortOwnerFn(listener.port, {
+      expectedCwd,
+      host: listener.host,
+    });
+    let owned = false;
+    let processGroupId = null;
+    if (Number.isInteger(owner?.pid) && owner.pid > 0) {
+      if (platform === "win32") {
+        if (owner.pid === record.pid) {
+          owned = true;
+        } else {
+          const knownLauncherIdentity = await record.launcherIdentityPromise;
+          owned = Boolean(await captureWindowsProcessAncestry(
+            owner.pid,
+            record.pid,
+            processIdentityResolver,
+            knownLauncherIdentity,
+          ));
+          if (!owned
+            && validWindowsRuntimeOwnerProof(record.ownerProof)
+            && record.ownerProof.listener_pid === owner.pid) {
+            let currentListenerIdentity = null;
+            try {
+              currentListenerIdentity = normalizeWindowsProcessIdentity(
+                await processIdentityResolver(owner.pid),
+              );
+            } catch {}
+            owned = sameWindowsProcessIdentity(
+              record.ownerProof.listener_identity,
+              currentListenerIdentity,
+            );
+          }
+        }
+      } else {
+        processGroupId = await portOwnerProcessGroupResolver(owner.pid);
+        owned = processGroupId === record.processGroupId;
+      }
+    }
+    let observedBindings = [];
+    if (owned) {
+      observedBindings = await observedPortBindingsResolver(listener.port);
+      owned = observedBindings.some((binding) =>
+        observedListenerMatchesDeclaration(binding, listener)
+      );
+    }
+    return { owner, processGroupId, observedBindings, owned };
+  }
+
   async function verifyStartedListenerOwnership(app, record, { timeoutMs }) {
     const expectedCwd = join(filesystemRootForApp(app), app.cwd ?? dirname(app.package_path ?? "package.json"));
     const deadline = Date.now() + timeoutMs;
@@ -2583,51 +2632,8 @@ export function createRuntimeManager({
     do {
       evidence = [];
       for (const listener of app.listeners ?? []) {
-        const owner = await resolvePortOwnerFn(listener.port, {
-          expectedCwd,
-          host: listener.host,
-        });
-        let owned = false;
-        let processGroupId = null;
-        if (Number.isInteger(owner?.pid) && owner.pid > 0) {
-          if (platform === "win32") {
-            if (owner.pid === record.pid) {
-              owned = true;
-            } else {
-              const knownLauncherIdentity = await record.launcherIdentityPromise;
-              owned = Boolean(await captureWindowsProcessAncestry(
-                owner.pid,
-                record.pid,
-                processIdentityResolver,
-                knownLauncherIdentity,
-              ));
-              if (!owned
-                && validWindowsRuntimeOwnerProof(record.ownerProof)
-                && record.ownerProof.listener_pid === owner.pid) {
-                let currentListenerIdentity = null;
-                try {
-                  currentListenerIdentity = normalizeWindowsProcessIdentity(
-                    await processIdentityResolver(owner.pid),
-                  );
-                } catch {}
-                owned = sameWindowsProcessIdentity(
-                  record.ownerProof.listener_identity,
-                  currentListenerIdentity,
-                );
-              }
-            }
-          } else {
-            processGroupId = await portOwnerProcessGroupResolver(owner.pid);
-            owned = processGroupId === record.processGroupId;
-          }
-        }
-        let observedBindings = [];
-        if (owned) {
-          observedBindings = await observedPortBindingsResolver(listener.port);
-          owned = observedBindings.some((binding) =>
-            observedListenerMatchesDeclaration(binding, listener)
-          );
-        }
+        const { owner, processGroupId, observedBindings, owned } =
+          await observeManagedListenerOwnership(listener, record, expectedCwd);
         evidence.push({
           listener_id: listener.id,
           lease_id: listener.lease ?? null,
@@ -3022,13 +3028,23 @@ export function createRuntimeManager({
       const exactObserved = observedOnPort.some((candidate) =>
         observedListenerMatchesDeclaration(candidate, listener)
       );
-      let owner = null;
-      if (!exactObserved && observedOnPort.length === 0) {
+      let managedObservation = null;
+      if (!exactObserved && platform === "win32" && record) {
+        try {
+          managedObservation = await observeManagedListenerOwnership(
+            listener,
+            record,
+            expectedCwd,
+          );
+        } catch {}
+      }
+      let owner = managedObservation?.owner ?? null;
+      if (!exactObserved && !managedObservation?.owned && observedOnPort.length === 0 && !owner) {
         try {
           owner = await resolvePortOwnerFn(listener.port, { expectedCwd });
         } catch {}
       }
-      const ownershipStatus = exactObserved
+      const ownershipStatus = exactObserved || managedObservation?.owned
         ? "observed"
         : observedOnPort.length > 0
           ? "host-mismatch"
@@ -3047,7 +3063,10 @@ export function createRuntimeManager({
         port: listener.port,
         status,
         pid: owner?.pid ?? null,
-        observed_endpoints: observedOnPort.map((candidate) => candidate.endpoint),
+        observed_endpoints: [
+          ...observedOnPort,
+          ...(managedObservation?.observedBindings ?? []),
+        ].map((candidate) => candidate.endpoint),
         health: healthProbe,
       });
     }

@@ -2301,7 +2301,16 @@ test("Windows Lazurio Start accepts a listener owned by the launcher's child pro
   });
 
   try {
-    await runtime.start(app.id);
+    const started = await runtime.start(app.id);
+    expect(started.runtime.listener_reconciliation).toMatchObject({
+      status: "ok",
+      declared: [expect.objectContaining({
+        listener_id: "web",
+        status: "observed",
+        pid: listener.pid,
+        observed_endpoints: expect.arrayContaining([`127.0.0.1:${port}`]),
+      })],
+    });
     const state = JSON.parse(await readFile(
       join(root, "launchpad", "runtime", "apps", `${app.id}.json`),
       "utf8",
