@@ -5,6 +5,7 @@ import { readdir } from "node:fs/promises";
 import { basename, join, relative, resolve, sep } from "node:path";
 import { normalizeModuleManifest } from "../lazurio/core/module-contract-lib.mjs";
 import {
+  isOrganizationRepositoryDbSlot,
   normalizeOrganizationSlotPath,
   organizationSlotScope,
 } from "../lazurio/core/organization-slot-scope-lib.mjs";
@@ -26,17 +27,9 @@ function moduleExclusionReason(slot) {
   if (scope !== "workspace" || !(path.startsWith("workspace/") || path.startsWith("modules/"))) {
     return "not-workspace-module";
   }
-  const classification = String(slot?.classification ?? "").toLowerCase();
-  const materialization = String(slot?.materialization ?? "").toLowerCase();
   const nestedPath = path.split("/").length > 2;
-  if (
-    nestedPath
-    || classification.includes("repository-db-data")
-    || classification.includes("repository_db_data")
-    || materialization.startsWith("repository_db_mount")
-  ) {
-    return "nested-db";
-  }
+  if (isOrganizationRepositoryDbSlot(slot, path)) return "nested-db";
+  if (nestedPath) return "not-workspace-module";
   if (slot?.status === "planned_slot" || !slotRepository(slot)) return "planned-slot";
   return null;
 }

@@ -88,6 +88,51 @@ test("inventory preserves dotted GitHub repository metadata", async () => {
   });
 });
 
+test("inventory keeps a canonical nested repository-db outside every Git action surface", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const manifestPath = `${root}/organizations/OmegaCo_GEN3/modules.manifest.json`;
+  const manifest = await Bun.file(manifestPath).json();
+  manifest.module_slots.push({
+    slug: "studio-data",
+    path: "workspace/studio/db",
+    materialization: "repository_db_mount",
+    source_of_truth: "repository-db:v3",
+    git: { url: "git@github.com:OmegaCo/studio-data.git", branch: "v3" },
+  });
+  await Bun.write(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  const inventory = await buildGitInventory({ companiesRoot: root });
+
+  expect(inventory.warnings).toEqual([]);
+  expect(inventory.repos.find((repo) => repo.key === "OmegaCo::studio")).toMatchObject({
+    repo_kind: "module",
+    expected_branch: "main",
+  });
+  expect(inventory.repos.some((repo) => repo.key === "OmegaCo::studio-data")).toBe(false);
+  expect(inventory.planned.some((repo) => repo.key === "OmegaCo::studio-data")).toBe(false);
+});
+
+test("inventory fails closed instead of hiding a malformed nested repository-db", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const manifestPath = `${root}/organizations/OmegaCo_GEN3/modules.manifest.json`;
+  const manifest = await Bun.file(manifestPath).json();
+  manifest.module_slots.push({
+    slug: "studio-data",
+    path: "workspace/studio/db",
+    source_of_truth: "repository-db:v3",
+    git: { url: "https://git.example.test/OmegaCo/studio-data.git", branch: "v3" },
+  });
+  await Bun.write(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  const inventory = await buildGitInventory({ companiesRoot: root });
+
+  expect(inventory.repos.some((repo) => repo.key === "OmegaCo::studio-data")).toBe(false);
+  expect(inventory.planned.some((repo) => repo.key === "OmegaCo::studio-data")).toBe(false);
+  expect(inventory.warnings.some((warning) => warning.includes("platný GitHub remote"))).toBe(true);
+});
+
 test("inventory fails closed when two repository mounts resolve to the same logical ID", async () => {
   const root = await createLaunchpadGitFixture();
   tempRoots.push(root);

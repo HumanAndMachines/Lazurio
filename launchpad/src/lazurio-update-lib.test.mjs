@@ -486,6 +486,17 @@ test("fresh Organization manifest materializes its new Workspace Module while ex
   const moduleRemote = join(root, "remotes", "new-module.git");
   const excludedSlots = [
     {
+      slug: "warehouse",
+      path: "workspace/warehouse",
+      git: { url: "git@github.com:BetaCo/warehouse.git", branch: "main" },
+    },
+    {
+      slug: "warehouse-data",
+      path: "workspace/warehouse/db",
+      source_of_truth: "repository-db:v3",
+      git: { url: "git@github.com:BetaCo/warehouse-data.git", branch: "v3" },
+    },
+    {
       path: "productionspace/firmware",
       repo: join(root, "remotes", "firmware.git"),
       branch: "main",
@@ -544,15 +555,17 @@ test("fresh Organization manifest materializes its new Workspace Module while ex
   const excludedPaths = [
     join(organizationRoot, "productionspace", "firmware"),
     join(organizationRoot, "mission-control", "db"),
+    join(organizationRoot, "workspace", "warehouse", "db"),
     join(organizationRoot, ".worktrees", "task"),
     join(root, "personalspace", "owner"),
   ];
   await initGitRepo(excludedPaths[0]);
   await initGitRepo(excludedPaths[1], { branch: "v3" });
-  await mkdir(excludedPaths[2], { recursive: true });
+  await initGitRepo(excludedPaths[2], { branch: "v3" });
   await mkdir(excludedPaths[3], { recursive: true });
-  await writeFile(join(excludedPaths[2], "marker.bin"), Buffer.from([0, 7, 255]));
-  await writeFile(join(excludedPaths[3], "marker.bin"), Buffer.from([1, 8, 254]));
+  await mkdir(excludedPaths[4], { recursive: true });
+  await writeFile(join(excludedPaths[3], "marker.bin"), Buffer.from([0, 7, 255]));
+  await writeFile(join(excludedPaths[4], "marker.bin"), Buffer.from([1, 8, 254]));
   const beforeExcluded = await Promise.all(excludedPaths.map(snapshotPath));
 
   const report = await runLazurioUpdate({
@@ -561,7 +574,7 @@ test("fresh Organization manifest materializes its new Workspace Module while ex
     deps: {
       runId: "fresh-manifest",
       acquireLock: async () => ({ release: async () => {} }),
-      updateRepo: async (item, context) => item.key === "lazurio::root"
+      updateRepo: async (item, context) => item.key === "lazurio::root" || item.key === "BetaCo::warehouse"
         ? { ...identity(item), state: "current", reason: "already_current", message: "current" }
         : updateManagedRepo(item, context),
       installDependencies: async () => ({ ok: true }),
@@ -577,6 +590,7 @@ test("fresh Organization manifest materializes its new Workspace Module while ex
   expect(await Promise.all(excludedPaths.map(snapshotPath))).toEqual(beforeExcluded);
   expect(JSON.stringify(report)).not.toContain("mission-control-data");
   expect(JSON.stringify(report)).not.toContain("firmware");
+  expect(JSON.stringify(report)).not.toContain("warehouse-data");
 });
 
 test("blocked parent defers descendants while safe sibling continues", async () => {
