@@ -249,6 +249,60 @@ test("App package behind an intermediate symlink or junction cannot escape the M
   expect(await readFile(outsidePackage, "utf8")).toBe(before);
 });
 
+test("a linked Module task worktree inherits ownership without touching the primary checkout", async () => {
+  const fixture = await moduleFixture({ module: "linked-worktree" });
+  const primaryPackage = join(fixture.moduleRoot, "package.json");
+  await writeJson(primaryPackage, legacyPackage({ company: "Acme", module: "linked-worktree", port: 24_013 }));
+  await writeJson(join(fixture.moduleRoot, "lazurio.module.json"), {
+    schema_version: "lazurio.module.v1",
+    id: "linked-worktree",
+    company: "Acme",
+    tcp_port_policy: { mode: "single" },
+    port_leases: [{ id: "main", host: "127.0.0.1", port: 24_013 }],
+    apps: ["package.json"],
+    default_app: "package.json",
+  });
+  await writeFile(join(fixture.moduleRoot, ".gitignore"), ".worktrees/\n", "utf8");
+  initGitModule(fixture.moduleRoot);
+  const worktreesRoot = join(fixture.moduleRoot, ".worktrees", "root");
+  const worktreeRoot = join(worktreesRoot, "linked-worktree");
+  await mkdir(worktreesRoot, { recursive: true });
+  runGit(fixture.moduleRoot, ["worktree", "add", "-b", "codex/module-setup-test", worktreeRoot]);
+
+  const planned = await setupModule({ ...fixture, moduleRoot: worktreeRoot });
+  expect(planned).toMatchObject({ status: "actionable", module: { company: "Acme", id: "linked-worktree" } });
+  const applied = await setupModule({ ...fixture, moduleRoot: worktreeRoot, apply: true });
+
+  expect(applied.status).toBe("completed");
+  expect((await readJson(primaryPackage)).companyascode.app.port).toBe(24_013);
+  expect((await readJson(join(worktreeRoot, "package.json"))).companyascode).toBeUndefined();
+  expect((await readJson(join(worktreeRoot, "lazurio.module.json"))).port_leases[0].port).toBe(24_013);
+});
+
+test("an unrelated checkout with the same remote URL cannot claim a Module slot", async () => {
+  const fixture = await moduleFixture({ module: "foreign-checkout" });
+  await writeJson(
+    join(fixture.moduleRoot, "package.json"),
+    legacyPackage({ company: "Acme", module: "foreign-checkout", port: 24_014 }),
+  );
+  initGitModule(fixture.moduleRoot);
+  const foreignRoot = join(fixture.organizationRoot, ".foreign", "foreign-checkout");
+  await mkdir(foreignRoot, { recursive: true });
+  await writeJson(
+    join(foreignRoot, "package.json"),
+    legacyPackage({ company: "Acme", module: "foreign-checkout", port: 24_014 }),
+  );
+  initGitModule(foreignRoot);
+  runGit(foreignRoot, ["remote", "add", "origin", "git@github.com:Acme/foreign-checkout.git"]);
+
+  const report = await setupModule({ ...fixture, moduleRoot: foreignRoot, apply: true });
+
+  expect(report).toMatchObject({ status: "action_required", reason: "module_root_not_linked_to_slot" });
+  expect(validateAgainstSchema(report, reportSchema, "module-setup")).toEqual([]);
+  expect(await Bun.file(join(foreignRoot, "lazurio.module.json")).exists()).toBe(false);
+  expect((await readJson(join(foreignRoot, "package.json"))).companyascode.app.port).toBe(24_014);
+});
+
 test("concurrent Module setup serializes on the existing Organization port allocator lock", async () => {
   const first = await moduleFixture({ module: "parallel-one" });
   const second = await addModuleSlot(first, { module: "parallel-two" });
@@ -365,6 +419,33 @@ function declaredPackage({ company, module }) {
       },
     },
   };
+}
+
+function initGitModule(root) {
+  runGit(root, ["init"]);
+  runGit(root, ["config", "user.name", "Lazurio Test"]);
+  runGit(root, ["config", "user.email", "lazurio-test@example.invalid"]);
+  runGit(root, ["add", "."]);
+  runGit(root, ["commit", "-m", "fixture"]);
+}
+
+function runGit(cwd, args) {
+  const executable = Bun.which("git");
+  if (!executable) throw new Error("Git is required for Module setup worktree tests");
+  const result = Bun.spawnSync([executable, ...args], {
+    cwd,
+    stdout: "pipe",
+    stderr: "pipe",
+    env: {
+      ...process.env,
+      GIT_CONFIG_NOSYSTEM: "1",
+      GIT_TERMINAL_PROMPT: "0",
+    },
+  });
+  if (result.exitCode !== 0) {
+    throw new Error(`git ${args.join(" ")} failed: ${result.stderr.toString()}`);
+  }
+  return result.stdout.toString().trim();
 }
 
 async function readJson(path) {

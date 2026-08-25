@@ -16,6 +16,12 @@ příkaz:
 lazurio module setup <module-root> --root <lazurio-root>
 ```
 
+`<module-root>` smí být přesný kanonický slot pro read-only kontrolu nebo
+task worktree téhož lokálního Git repozitáře pro Draft a `--apply`. Lazurio
+worktree přijme jen podle shodného Git common-dir s checkoutem deklarovaným
+v Organization slotu. Shodný název nebo remote URL nestačí a cizí kopie se
+nikdy nevydá za Modul.
+
 První běh je vždy read-only. Výsledek je právě jeden ze čtyř stavů:
 
 - `current` — kontrakt je platný, nic se nemění;
@@ -116,7 +122,8 @@ Existující platný lease se automaticky nemění.
 
 - slot je stále `planned_slot` nebo chybí v `modules.manifest.json`;
 - App Modul potřebuje port, ale Organizace nemá aktivní `module_port_pool`;
-- cesta je worktree, symlink nebo neleží přesně v owning Organization;
+- cesta není přesný slot ani prokazatelný Git worktree jeho kanonického
+  Module checkoutu, případně vede přes symlink;
 - port už vlastní jiný Modul;
 - manifest nebo runtime mají cizí identitu či nejednoznačný custom stav.
 
@@ -135,3 +142,7 @@ Stabilní porty jiných Modulů se kvůli pohodlnější alokaci neposouvají.
 Automatizace rozhoduje podle `status`, `reason` a `issues[].code` v `--json`,
 nikoli podle lokalizované věty. Na macOS, Linuxu i Windows se používá stejný
 argumentový kontrakt; PowerShell nevyžaduje separátní migrátor.
+
+Paralelní Drafty nejsou port registry. Lock serializuje okamžik alokace na
+jedné Mašině, ale nepředstírá, že vidí nepublikované worktrees jiných Agentů.
+Kolizi proto musí před merge znovu zachytit Organization Doctor a review.

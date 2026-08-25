@@ -2,8 +2,9 @@
 
 import { existsSync } from "fs";
 import { link, lstat, readFile, readdir, realpath, rename, rm, writeFile } from "fs/promises";
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep, win32 } from "path";
 import { acquireModuleRuntimeLock } from "../launchpad/src/module-runtime-lock-lib.mjs";
+import { GIT_LOCAL_TIMEOUT_MS, runGit } from "../launchpad/src/git-lib.mjs";
 import {
   materializeRuntimeFromModule,
   normalizeModuleManifest,
@@ -43,12 +44,13 @@ const ignoredDirectories = new Set([
 export function migrateLegacyRuntimePackage(packageJson, {
   packagePath = "package.json",
   organization = undefined,
+  moduleRoot = undefined,
 } = {}) {
   if (packageJson?.lazurio?.runtime && packageJson?.companyascode?.app) {
     return blocked(packageJson, `${packagePath}: package deklaruje nový i legacy runtime`);
   }
   if (packageJson?.lazurio?.runtime) {
-    return migrateInlineRuntimePackage(packageJson, { packagePath, organization });
+    return migrateInlineRuntimePackage(packageJson, { packagePath, organization, moduleRoot });
   }
   const legacy = packageJson?.companyascode?.app;
   if (!legacy) return unchanged(packageJson);
@@ -113,14 +115,17 @@ export function migrateLegacyRuntimePackage(packageJson, {
       host,
       port,
       packagePath,
+      moduleRoot,
     }),
     organization,
+    moduleRoot,
   });
 }
 
 export function migrateInlineRuntimePackage(packageJson, {
   packagePath = "package.json",
   organization = undefined,
+  moduleRoot = undefined,
 } = {}) {
   const runtime = packageJson?.lazurio?.runtime;
   if (!runtime) return unchanged(packageJson);
@@ -175,17 +180,31 @@ export function migrateInlineRuntimePackage(packageJson, {
           reason: "Existing split TCP runtime retained during migration; consolidate behind one listener or local IPC in a follow-up.",
         },
     port_leases: inlineLeases,
-    apps: [appPackagePathForModule(packagePath, runtime.module)],
-    default_app: appPackagePathForModule(packagePath, runtime.module),
+    apps: [appPackagePathForModule(packagePath, runtime.module, moduleRoot)],
+    default_app: appPackagePathForModule(packagePath, runtime.module, moduleRoot),
   };
-  return validateMigration({ packageJson: next, original: packageJson, packagePath, moduleManifest, organization });
+  return validateMigration({
+    packageJson: next,
+    original: packageJson,
+    packagePath,
+    moduleManifest,
+    organization,
+    moduleRoot,
+  });
 }
 
-function validateMigration({ packageJson, original, packagePath, moduleManifest, organization = undefined }) {
+function validateMigration({
+  packageJson,
+  original,
+  packagePath,
+  moduleManifest,
+  organization = undefined,
+  moduleRoot = undefined,
+}) {
   const runtimeIssues = validateDeclaredRuntime({ runtime: packageJson.lazurio.runtime, packageJson, packagePath });
   const normalizedModule = normalizeModuleManifest({
     manifest: moduleManifest,
-    modulePath: `${moduleRootForPackage(packagePath, moduleManifest.id)}/lazurio.module.json`,
+    modulePath: `${moduleRoot ?? moduleRootForPackage(packagePath, moduleManifest.id)}/lazurio.module.json`,
   });
   const policyIssues = [];
   if (normalizedModule.module && organization === null) {
@@ -215,8 +234,8 @@ function validateMigration({ packageJson, original, packagePath, moduleManifest,
   return { changed: true, packageJson, moduleManifest, issues: [] };
 }
 
-function singleModuleManifest({ company, module, host, port, packagePath }) {
-  const appPackage = appPackagePathForModule(packagePath, module);
+function singleModuleManifest({ company, module, host, port, packagePath, moduleRoot = undefined }) {
+  const appPackage = appPackagePathForModule(packagePath, module, moduleRoot);
   return {
     schema_version: "lazurio.module.v1",
     id: module,
@@ -228,8 +247,8 @@ function singleModuleManifest({ company, module, host, port, packagePath }) {
   };
 }
 
-function appPackagePathForModule(packagePath, moduleId) {
-  return relative(moduleRootForPackage(packagePath, moduleId), resolve(packagePath)).split(sep).join("/");
+function appPackagePathForModule(packagePath, moduleId, moduleRoot = undefined) {
+  return relative(moduleRoot ?? moduleRootForPackage(packagePath, moduleId), resolve(packagePath)).split(sep).join("/");
 }
 
 function unchanged(packageJson) {
@@ -608,6 +627,7 @@ async function planExistingModule({
     const migration = migrateLegacyRuntimePackage(packageJson, {
       packagePath,
       organization: context.organization,
+      moduleRoot: options.moduleRoot,
     });
     if (migration.issues.length > 0) {
       throw actionRequired(
@@ -743,6 +763,7 @@ async function planNewModule({ options, context, manifestPath }) {
   const migration = migrateLegacyRuntimePackage(packageJson, {
     packagePath,
     organization: context.organization,
+    moduleRoot: options.moduleRoot,
   });
   if (!migration.changed || migration.issues.length > 0 || !migration.moduleManifest) {
     throw actionRequired(
@@ -828,6 +849,7 @@ async function planExplicitAppModule({ options, context, manifestPath }) {
     packagePath,
     moduleManifest: manifest,
     organization: context.organization,
+    moduleRoot: options.moduleRoot,
   });
   if (!validation.changed || validation.issues.length > 0) {
     throw actionRequired(
@@ -918,6 +940,7 @@ async function resolveModuleSetupContext(options) {
     });
   }
   const physicalModuleRoot = await realpath(options.moduleRoot);
+  const targetCheckout = await gitCheckoutIdentity(options.moduleRoot);
   const matches = [];
   const organizationsRoot = join(options.lazurioRoot, "organizations");
   for (const entry of await readdir(organizationsRoot, { withFileTypes: true }).catch(() => [])) {
@@ -929,15 +952,27 @@ async function resolveModuleSetupContext(options) {
     const organizationEntry = await pathEntry(organizationRoot);
     if (!organizationEntry?.isDirectory() || organizationEntry.isSymbolicLink()) continue;
     const physicalOrganizationRoot = await realpath(organizationRoot);
-    const physicalRelative = relative(physicalOrganizationRoot, physicalModuleRoot);
-    if (physicalRelative === "" || physicalRelative === ".." || physicalRelative.startsWith(`..${sep}`) || isAbsolute(physicalRelative)) continue;
+    if (!pathIsStrictlyInside(physicalOrganizationRoot, physicalModuleRoot)) continue;
     const companyManifest = parseJsonForSetup(await readFile(companyPath, "utf8"), companyPath, fallbackContext(options));
     if (companyManifest.organization_kind === "template") continue;
     const modulesManifest = parseJsonForSetup(await readFile(modulesPath, "utf8"), modulesPath, fallbackContext(options));
     const exactRelative = relative(resolve(organizationRoot), options.moduleRoot).split(sep).join("/");
     for (const slot of modulesManifest.module_slots ?? []) {
       if (typeof slot?.path !== "string" || typeof slot?.slug !== "string") continue;
-      if (slot.path !== exactRelative || resolve(organizationRoot, slot.path) !== options.moduleRoot) continue;
+      const canonicalModuleRoot = resolve(organizationRoot, slot.path);
+      const physicalCanonicalRoot = await realpath(canonicalModuleRoot).catch(() => null);
+      if (!physicalCanonicalRoot || !pathIsStrictlyInside(physicalOrganizationRoot, physicalCanonicalRoot)) continue;
+      const exact = slot.path === exactRelative
+        && samePhysicalPath(physicalCanonicalRoot, physicalModuleRoot);
+      const canonicalCheckout = exact || !targetCheckout
+        ? null
+        : await gitCheckoutIdentity(canonicalModuleRoot);
+      const linkedWorktree = Boolean(
+        targetCheckout
+        && canonicalCheckout
+        && samePhysicalPath(targetCheckout.commonDirectory, canonicalCheckout.commonDirectory),
+      );
+      if (!exact && !linkedWorktree) continue;
       const pool = normalizeOrganizationPortPool({ manifest: companyManifest, source: companyPath });
       if (pool.issues.length > 0) {
         throw new ModuleSetupActionRequired({
@@ -952,6 +987,7 @@ async function resolveModuleSetupContext(options) {
         module: slot.slug,
         organizationRoot,
         slot,
+        source_kind: exact ? "slot" : "worktree",
         organization: {
           slug: companyManifest?.company?.slug,
           path: relative(options.lazurioRoot, organizationRoot),
@@ -962,12 +998,17 @@ async function resolveModuleSetupContext(options) {
     }
   }
   if (matches.length !== 1) {
+    const unlinked = matches.length === 0 && targetCheckout !== null;
     throw new ModuleSetupActionRequired({
-      code: matches.length === 0 ? "module_slot_not_declared" : "module_slot_ambiguous",
+      code: matches.length === 0
+        ? (unlinked ? "module_root_not_linked_to_slot" : "module_slot_not_declared")
+        : "module_slot_ambiguous",
       message: matches.length === 0
-        ? `${relativeForReport(options.lazurioRoot, options.moduleRoot)} není přesný aktivní module_slots.path`
+        ? `${relativeForReport(options.lazurioRoot, options.moduleRoot)} není přesný slot ani Git worktree jeho kanonického checkoutu`
         : "Module root odpovídá více Organization slotům",
-      action: "Oprav modules.manifest.json; setup nevytváří slot ani nehádá Organization ownership.",
+      action: matches.length === 0 && unlinked
+        ? "Vytvoř task worktree z přesného Module checkoutu deklarovaného v modules.manifest.json; shodný remote URL není důkaz ownershipu."
+        : "Oprav modules.manifest.json; setup nevytváří slot ani nehádá Organization ownership.",
       context: fallbackContext(options),
     });
   }
@@ -998,7 +1039,10 @@ async function runtimePackagePaths(moduleRoot) {
 async function modulePolicyIssues(lazurioRoot, context, module) {
   const modules = await readAllModuleContracts(lazurioRoot);
   return validateModuleLeasesAgainstOrganizationPools({
-    modules: [...modules.filter((candidate) => candidate.module_path !== module.module_path), module],
+    modules: [
+      ...modules.filter((candidate) => candidate.company !== module.company || candidate.id !== module.id),
+      module,
+    ],
     organizations: [context.organization],
   });
 }
@@ -1120,6 +1164,51 @@ function assertPathWithin(root, candidate, context, code) {
   if (rel === "" || rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
     throw actionRequired(code, `${candidate} neleží uvnitř Module rootu`, "Použij relativní package.json cestu uvnitř Modulu.", context);
   }
+}
+
+function pathIsStrictlyInside(root, candidate) {
+  const rel = relative(root, candidate);
+  return rel !== ""
+    && rel !== ".."
+    && !rel.startsWith(`..${sep}`)
+    && !isAbsolute(rel);
+}
+
+function samePhysicalPath(left, right) {
+  return process.platform === "win32"
+    ? left.toLowerCase() === right.toLowerCase()
+    : left === right;
+}
+
+async function gitCheckoutIdentity(root) {
+  const marker = await pathEntry(join(root, ".git"));
+  if (!marker || marker.isSymbolicLink() || (!marker.isDirectory() && !marker.isFile())) return null;
+  const [topLevel, commonDirectory] = await Promise.all([
+    runGit(["rev-parse", "--path-format=absolute", "--show-toplevel"], {
+      cwd: root,
+      timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+    }),
+    runGit(["rev-parse", "--path-format=absolute", "--git-common-dir"], {
+      cwd: root,
+      timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+    }),
+  ]);
+  if (!topLevel.ok || !commonDirectory.ok) return null;
+  const [physicalRoot, physicalTopLevel, physicalCommonDirectory] = await Promise.all([
+    realpath(root),
+    realpath(topLevel.stdout).catch(() => null),
+    realpath(
+      isAbsolute(commonDirectory.stdout) || win32.isAbsolute(commonDirectory.stdout)
+        ? commonDirectory.stdout
+        : resolve(root, commonDirectory.stdout),
+    ).catch(() => null),
+  ]);
+  if (!physicalTopLevel
+    || !physicalCommonDirectory
+    || !samePhysicalPath(physicalRoot, physicalTopLevel)) return null;
+  const commonEntry = await pathEntry(physicalCommonDirectory);
+  if (!commonEntry?.isDirectory() || commonEntry.isSymbolicLink()) return null;
+  return { root: physicalRoot, commonDirectory: physicalCommonDirectory };
 }
 
 async function assertRegularModuleFile({ moduleRoot, path, displayPath, context, missingAction }) {
