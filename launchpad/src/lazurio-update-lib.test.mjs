@@ -203,6 +203,33 @@ test("registered canonical task worktrees are locally ignored before recovery st
     .toBe(runGit(fixture.working, ["rev-parse", "codex/DEV-6505-fixture"]));
 });
 
+test("registered worktree paths are literal Git exclusions rather than wildcard patterns", async () => {
+  const fixture = await repositoryFixture("registered-worktree-glob-literal");
+  const worktreeRelative = ".worktrees/root/DEV-6505-[fixture]";
+  const worktreeRoot = join(fixture.working, ...worktreeRelative.split("/"));
+  const siblingData = join(fixture.working, ".worktrees", "root", "DEV-6505-f", "notes.txt");
+  await mkdir(join(fixture.working, ".worktrees", "root"), { recursive: true });
+  runGit(fixture.working, ["worktree", "add", "-b", "codex/DEV-6505-glob-fixture", worktreeRoot, "HEAD"]);
+  await writeFile(`${worktreeRoot}.worktree.json`, "{}\n");
+  await mkdir(join(fixture.working, ".worktrees", "root", "DEV-6505-f"), { recursive: true });
+  await writeFile(siblingData, "keep me\n");
+
+  const result = await update(fixture);
+
+  expect(result).toMatchObject({
+    state: "updated",
+    reason: "local_changes_preserved",
+    actions: ["worktree_ignore_repaired", "recovery_stash"],
+  });
+  const exclude = await readPortableText(join(fixture.working, ".git", "info", "exclude"));
+  expect(exclude).toContain("/.worktrees/root/DEV-6505-\\[fixture\\]/");
+  expect(runGit(fixture.working, [
+    "stash", "show", "--include-untracked", "--name-only", result.recovery_stash,
+  ])).toContain(".worktrees/root/DEV-6505-f/notes.txt");
+  expect(runGit(worktreeRoot, ["rev-parse", "HEAD"]))
+    .toBe(runGit(fixture.working, ["rev-parse", "codex/DEV-6505-glob-fixture"]));
+});
+
 test("legacy blanket worktree ignore narrows before unknown data is recovery-stashed", async () => {
   const fixture = await repositoryFixture("legacy-blanket-worktree-ignore");
   const worktreeRelative = ".worktrees/root/DEV-6505-fixture";
