@@ -1973,7 +1973,10 @@ test("cross-Organization listener takeover requires the exact peer confirmation"
     });
     expect(opened).toMatchObject({ action: "open", app_id: targetApp.id, status: "healthy" });
     expect(await runtime.health(sourceApp.id, sourceSelector)).toMatchObject({
-      owner: "foreign-port",
+      // Windows cannot inspect another process CWD with the built-in resolver,
+      // so the same safe post-takeover state is classified fail-closed as
+      // unknown-port instead of foreign-port.
+      owner: process.platform === "win32" ? "unknown-port" : "foreign-port",
       runtime_source: { type: "worktree", slug: sourceWorktreeSlug },
       desired: { enabled: false, status: "disabled" },
     });
