@@ -493,10 +493,10 @@ Kontrolní pravidla:
 - Na portu modulu běží nejvýše jedna jeho verze. Start/Open jinou verzi stejného
   Modulu nahradí automaticky. Známý vlastník jiné Organizace vyžaduje potvrzení
   konkrétní aplikace a vypnutí jejího desired runtime; port se nepřemapuje.
-- Po přejmenování package nebo změně `lazurio.runtime` metadat spusť
-  `bun install`/Repair v app cwd a zkontroluj lockfile diff. Bun 1.3 může
-  ponechat původní workspace name v `bun.lock`; ruční lockfile diff je pak
-  validní součást opravy, ne důvod měnit template architekturu.
+- Po změně dependencies nebo package identity aktualizuj `bun.lock` vědomě ve
+  stejném modulovém PR a ověř frozen install. Launchpad `Repair` lockfile nikdy
+  nepřepisuje; opravuje pouze lokální `node_modules`. Nesoulad package a
+  lockfilu je source chyba pro Agenta, ne lokální krok uživatele.
 - Productionspace systémy nesmí získat hosted/public exposure jen tím, že existuje manifest. Sdílený Launchpad defaultně `productionspace/` app package discovery neprochází.
 
 ### 4. Discovery + support-loop gate
@@ -579,11 +579,17 @@ nepoužívej ho jako záminku k velkému refactoru bootstrapu.
 
 Pro každou viditelnou aplikaci ověř:
 
-1. dependency state je `ready`, `needs_install`, `stale_lockfile`, `missing_package_json`, `unknown_package_manager` nebo jiný vysvětlitelný stav;
-2. `Install`/`Repair` akce běží jen v app cwd a loguje command, cwd, exit code a excerpt;
-3. `Start` nikdy neselže tiše — musí dát runtime status nebo log/next action.
+1. dependency state je `ready`, `needs_install`, `missing_package`,
+   `unknown_package_manager` nebo jiný vysvětlitelný stav;
+2. `Install` běží frozen jen v app cwd a nesmaže existující strom;
+3. `Repair` čistě nahradí jen přesný app `node_modules`, při selhání obnoví
+   původní strom a loguje command, cwd, exit code i rollback;
+4. `Start` nikdy neselže tiše — musí dát runtime status nebo log/next action.
 
-Po změně `package.json` metadat v klientském modulu může Launchpad oprávněně hlásit `stale_lockfile`, i když dependency tree zůstává stejný. Standardní krok je `Repair` / `bun install` v app cwd, zkontrolovat lockfile diff a teprve potom `Start`.
+Po pullu provede `lazurio update` stejnou kontrolu automaticky pro Apps
+skutečně změněných Modulů. Nejdřív zkusí frozen instalaci bez mazání a při
+selhání právě jednu čistou opravu. Pokud je verzovaný lockfile neplatný,
+zachová původní dependencies a předá opravu Agentovi.
 
 U Knowledgebase ověř, že se port nemůže rozcházet: přesné číslo vlastní
 `lazurio.module.json`, `lazurio.runtime.listeners[]` odkazuje na jeho lease a

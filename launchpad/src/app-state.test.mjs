@@ -27,7 +27,7 @@ import {
 
 const apps = [
   app("democo-app-1", "DemoCo", "ready"),
-  app("omegaco-app-1", "OmegaCo", "stale_lockfile"),
+  app("omegaco-app-1", "OmegaCo", "needs_install"),
   app("omegaco-app-2", "OmegaCo", "ready"),
   app("betaco-app-1", "BetaCo", "needs_install"),
 ];
@@ -76,6 +76,7 @@ test("běžné update stavy mají pouze stabilní uživatelskou copy", () => {
     visible: true,
     tone: "current",
     message: "Lazurio je připravené k synchronizaci.",
+    action: { kind: "sync", label: "Synchronizovat" },
   });
   expect(updateBannerPresentation({ state: "updated" }, { updatePending: true })).toMatchObject({
     visible: true,
@@ -270,7 +271,7 @@ test("Launchpad search query narrows apps by title, id, company, module and tags
 });
 
 test("runtime filtr a kontrolní toggle jsou nezávislé osy a skládají průnik", () => {
-  const runningAttention = app("running-attention", "OmegaCo", "stale_lockfile");
+  const runningAttention = app("running-attention", "OmegaCo", "needs_install");
   runningAttention.runtime_status = "healthy";
   const runningClean = app("running-clean", "OmegaCo", "ready");
   runningClean.runtime_status = "healthy";

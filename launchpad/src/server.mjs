@@ -142,6 +142,17 @@ const runtimeManager = createRuntimeManager({
     machine_context_root: companiesRoot,
   }),
 });
+function runWorkspaceUpdate() {
+  return runLazurioUpdate({
+    rootPath: companiesRoot,
+    runtimeRoot: configuredRuntimeRoot,
+    deps: {
+      // Server je jediný vlastník app lifecycle. Dependency refresh po pullu
+      // proto zastaví a obnoví přesně managed modul místo mutace živého procesu.
+      refreshAppDependencies: ({ appId }) => runtimeManager.refreshDependencies(appId),
+    },
+  });
+}
 const moduleFolderOpener = createModuleFolderOpener({ companiesRoot, getAppsResponse: buildAppsResponse });
 const gitStatusService = createGitStatusService();
 // Delší než jeden render burst (sync + notifications + usage), kratší než
@@ -940,19 +951,19 @@ async function handleGitApiRoute(request, url, route) {
       if (request.method !== "POST") return jsonResponse({ error: "method_not_allowed" }, 405);
       return jsonResponse(await appsResponseCache.runMutation(() =>
         gitStatusService.withRemoteRefreshPaused(() =>
-          runLazurioUpdate({ rootPath: companiesRoot, runtimeRoot: configuredRuntimeRoot }))));
+          runWorkspaceUpdate())));
     }
     if (route.kind === "repo_autostash_pull") {
       if (request.method !== "POST") return jsonResponse({ error: "method_not_allowed" }, 405);
       return jsonResponse(await appsResponseCache.runMutation(() =>
         gitStatusService.withRemoteRefreshPaused(() =>
-          runLazurioUpdate({ rootPath: companiesRoot, runtimeRoot: configuredRuntimeRoot }))));
+          runWorkspaceUpdate())));
     }
     if (route.kind === "pull_all") {
       if (request.method !== "POST") return jsonResponse({ error: "method_not_allowed" }, 405);
       return jsonResponse(await appsResponseCache.runMutation(() =>
         gitStatusService.withRemoteRefreshPaused(() =>
-          runLazurioUpdate({ rootPath: companiesRoot, runtimeRoot: configuredRuntimeRoot }))));
+          runWorkspaceUpdate())));
     }
     if (request.method !== "GET") return jsonResponse({ error: "method_not_allowed" }, 405);
     if (route.kind === "repos") {
@@ -1262,7 +1273,7 @@ function startServer(startPort) {
         if (url.pathname === "/api/update" && request.method === "POST") {
           const result = await appsResponseCache.runMutation(() =>
             gitStatusService.withRemoteRefreshPaused(() =>
-              runLazurioUpdate({ rootPath: companiesRoot, runtimeRoot: configuredRuntimeRoot })));
+              runWorkspaceUpdate()));
           return jsonResponse(result);
         }
         if (url.pathname === "/api/apps") return jsonResponse(await buildAppsResponse());
@@ -1272,7 +1283,7 @@ function startServer(startPort) {
         if (url.pathname === "/api/sync" && request.method === "POST") {
           const update = await appsResponseCache.runMutation(() =>
             gitStatusService.withRemoteRefreshPaused(() =>
-              runLazurioUpdate({ rootPath: companiesRoot, runtimeRoot: configuredRuntimeRoot })));
+              runWorkspaceUpdate()));
           const response = await buildAppsResponse({ force: true });
           return jsonResponse({
             ...response,

@@ -51,7 +51,7 @@ test("Doctor warns for reclaimable module occupancy but fails legacy foreign por
   })).toBe("fail");
   const modulePath = "organizations/TestCompany/workspace/demo/lazurio.module.json";
   const moduleApp = {
-    dependencies: { state: "stale_lockfile" },
+    dependencies: { state: "ready" },
     runtime: {
       owner: "unknown-port",
       status: "unhealthy",

@@ -155,7 +155,7 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(js).toContain("window.scrollBy({ top: delta, behavior: \"smooth\" })");
   expect(js).toContain("function primaryNextAction");
   expect(js).toContain("technical-problems");
-  expect(js).toContain("stale_lockfile");
+  expect(js).not.toContain("stale_lockfile");
   expect(js).toContain("missing_access");
   expect(js).toContain("planned_slot");
   expect(js).toContain('app.runtime?.owner === "current-instance"');
@@ -485,7 +485,7 @@ test("Launchpad quiet refresh is lightweight and non-overlapping", async () => {
   expect(js).not.toContain("setInterval(() => loadData");
   expect(js).toContain("fetchJsonSafe(`/api/git/repos${companyQuery}`)");
   expect(js).toContain("function gitFreshnessLabel");
-  expect(js).toContain('["Vzdálená verze", gitFreshnessLabel(git.freshness)]');
+  expect(js).toContain('["Kontrola sdílené verze", gitFreshnessLabel(git.freshness)]');
 });
 
 test("Launchpad icon registry is initialized before the first async data render", async () => {
@@ -796,7 +796,7 @@ test("Launchpad používá jednu explicitní Synchronizovat akci místo dílčí
   expect(css).toContain(".recent-changes-sidebar > .update-banner-group .update-banner");
 });
 
-test("CAC-0042: detail panel vysvětluje Mission Control ownership worktrees", async () => {
+test("CAC-0042: detail panel vysvětluje verzi a Mission Control pracovní návrhy", async () => {
   const [js, css] = await Promise.all([
     readFile(join(publicRoot, "app.js"), "utf8"),
     readFile(join(publicRoot, "styles.css"), "utf8"),
@@ -811,9 +811,10 @@ test("CAC-0042: detail panel vysvětluje Mission Control ownership worktrees", a
   expect(js).toContain("git.outgoingCommitCount");
   expect(js).toContain("git.changedFiles");
   expect(js).toContain('app.runtime_status === "unhealthy"');
-  expect(js).toContain('["needs_install", "stale_lockfile"].includes(dependencyState)');
+  expect(js).toContain('dependencyState === "needs_install"');
   expect(js).toContain("button.disabled = pendingKey ? state.pendingAction === pendingKey : false");
-  expect(js).toContain("Mission Control ownership");
+  expect(js).toContain("Verze a rozpracovaná práce");
+  expect(js).toContain("Aktualizovat Lazurio");
   expect(js).toContain("Owned by");
   expect(js).toContain("Orphan worktree");
   expect(js).toContain("Pokračovat v plánu");
@@ -1203,6 +1204,8 @@ test("Owner 2026-07-05: karta modulu je GEN2-minimal dlaždice bez velkých tla�
   // Příprava balíčků zůstává kontextovou akcí karty; update checkoutů má
   // právě jednu explicitní globální akci Synchronizovat.
   expect(js).toContain("runRuntimeAction(app, installAction(app))");
+  expect(js).toContain('label: "Opravit balíčky"');
+  expect(js).toContain('run: () => runRuntimeAction(app, "repair")');
   expect(js).not.toContain("pullLatestRepoVersion");
 
   // „Další možnosti" (varianty + zastavit/restart + detail/logy) žijí pod ⋯,
@@ -1346,7 +1349,7 @@ test("DEV-6493: banner používá GET-first Lazurio stav a pouze current|updated
   expect(js).toContain("elements.updateBannerText.textContent = presentation.message");
   expect(js).toContain("elements.updateBannerAction.hidden = !action");
   expect(js).toContain('banner.classList.toggle("is-blocked", presentation.tone === "blocked")');
-  expect(js).toContain("openCodexUpdateDialog(prompt)");
+  expect(js).toContain("openCodexUpdateDialog(action.prompt)");
   expect(js).toContain("loadData({ sync: true })");
 
   // Update status se neobnovuje jen jednou při startu: quiet poll ho drží

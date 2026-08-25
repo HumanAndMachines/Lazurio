@@ -201,6 +201,14 @@ Když aktuální GitHub identita repo nebo branch nedokáže načíst, výsledek
 Productionspace, Personalspace, worktrees a root-space repository-db jsou mimo
 obecný update engine.
 
+Když Git skutečně změní checkout, stejný engine ověří jeho root package a
+package rooty validních Apps deklarovaných v manifestu. Použije pouze frozen
+instalaci z verzovaného Bun lockfilu. První pokus zachová existující
+`node_modules`; při selhání následuje jedna čistá oprava s rollbackem. Běžící
+managed aplikaci Server před změnou balíčků zastaví a po úspěchu nebo po
+bezpečném návratu původního stromu znovu spustí. Balíčky jiných Modulů se
+neskenují ani nemění.
+
 Launchpad čte Launchpad GEN3 root a Organization GEN3 manifesty:
 
 ```text
@@ -641,8 +649,8 @@ Web shell v1 je pracovní dashboard nad discovery a runtime daty. Poskytuje:
   portu a spuštění cílové aplikace
 - `/api/apps/:id/install` pro lokální app-scoped dependency install v app package
   cwd
-- `/api/apps/:id/repair` pro stejný app-scoped install mechanismus v repair
-  intentu, typicky pro `stale_lockfile` nebo opakované ověření dependencies
+- `/api/apps/:id/repair` pro transakční čistou reinstalaci přesného app
+  `node_modules` z verzovaného lockfilu
 - `/api/apps/:id/stop` pro zastavení managed procesu na module-owned lease
 - `/api/apps/:id/restart` pro bezpečný restart procesu na module-owned lease
 - `/api/apps/:id/logs` pro log tail z lokálních runtime logů
@@ -655,14 +663,11 @@ SIGTERM, po timeoutu SIGKILL, ověří volný port a teprve potom spustí cílov
 main/worktree source. `Stop` zůstává užší a signalizuje pouze managed aktivní
 instanci této Launchpad instance. Port ani hostname se při takeoveru nemění.
 
-Web shell nemění konfiguraci a nezapisuje business data. Runtime stav drží
-mimo Git v `launchpad/runtime/` a `launchpad/logs/`. Výjimka k riziku side
-effectů je `Install`: spouští package-manager command v cílovém app checkoutu,
-takže může stáhnout lokální dependency artefakty a v budoucích lockfile repair
-scénářích i odhalit app-local package/lockfile drift. První GEN3 slice používá
-`bun install`, loguje command/cwd/exit/output a očekává čistý Git stav, pokud
-jsou dependencies už aktuální; případný package/lockfile diff po installu je
-vědomý app-local side effect k review, ne Launchpad business-data zápis.
+Web shell nemění konfiguraci ani business data. Runtime stav drží mimo Git v
+`launchpad/runtime/` a `launchpad/logs/`. `Install` a `Repair` smějí změnit
+pouze odvozený `node_modules` přesného app package rootu. Vždy používají
+`bun install --frozen-lockfile`, takže verzovaný `package.json` ani lockfile
+nemění. Příkaz, cwd, exit code a výstup zapisují do app logu.
 
 `/api/apps` a `/api/apps/:id/health` vrací sdílený dependency stav
 `dependencies.state`, který používá stejné labely v UI i Doctor detailech:
@@ -670,8 +675,6 @@ vědomý app-local side effect k review, ne Launchpad business-data zápis.
 - `ready` — package je čitelný a Start je povolený;
 - `needs_install` — chybí `node_modules` pro appku s lockfilem/dependency
   deklarací; UI nabízí `Install`, Start je blokovaný;
-- `stale_lockfile` — `package.json` je novější než lockfile; Install/Repair je
-  povolený, ale případný lockfile diff patří do explicitního review;
 - `missing_package` — manifest ukazuje na chybějící nebo nečitelný package;
 - `unknown_package_manager` — Launchpad neumí bezpečně spustit package manager,
   takže Install/Start patří přes Doctor nebo terminál;
@@ -705,15 +708,14 @@ jasný mechanismus:
   `dev_script`.
 - `Install`/`Repair` je lokální dependency repair pro objevenou aplikaci. Source
   of truth je app manifest + package cwd; precondition je validní app checkout s
-  `package.json` a podporovaným package managerem. První slice spouští
-  `bun install` v app package cwd, zapisuje do `launchpad/logs/apps/<app-id>.log`
-  a vrací action, command, cwd, exit code, log path a output excerpt. Failure mode
-  je `app_install_failed` nebo `app_install_unavailable` s `failure_kind` a log
-  excerptem; tlačítko nesmí grantovat GitHub access, klonovat repozitáře,
-  zapisovat business data ani obcházet Organization nebo Productionspace
-  guardrails. Ověření: install/repair na již připravené appce má skončit
-  `exit_code=0` a nezanechat package/lockfile diff; pokud diff vznikne, je to
-  app-local dependency side effect k explicitnímu review.
+  `package.json` a Bun lockfilem. `Install` provede frozen instalaci bez mazání.
+  `Repair` nejdřív přesune přesný `node_modules` do app-local recovery složky,
+  provede frozen instalaci a původní strom smaže až po úspěchu. Při selhání ho
+  vrátí; při opakování umí dokončit i opravu přerušenou pádem procesu. Běžící
+  managed App po dobu mutace zastaví a po úspěchu nebo úspěšném rollbacku znovu
+  spustí. Výsledek loguje do `launchpad/logs/apps/<app-id>.log`. Tlačítko nesmí
+  měnit lockfile, grantovat GitHub access, klonovat repo, zapisovat business
+  data ani obcházet Organization nebo Productionspace guardrails.
 - `Stop` zastaví pouze current-instance managed proces na module-owned lease;
   proces přeživší restart ani proces jiné instance pro samotný Stop neadoptuje
   a nesignalizuje. Nejdřív atomicky uloží disabled desired stav, potom nad
@@ -754,9 +756,12 @@ jasný mechanismus:
   znovu zjistí; nevzniká plan/apply/resume ani skrytý update journal.
 - Nový commit v Organization rootu může změnit manifest. Engine ho proto po
   root update načte znovu a teprve pak sekvenčně aktualizuje nebo atomicky
-  materializuje Workspace Moduly. Klonování ani update nikdy nespouští
-  libovolné package skripty; `bun install --frozen-lockfile --ignore-scripts`
-  je povolený jen tam, kde repo deklaruje `package.json` a Bun lockfile.
+  materializuje Workspace Moduly. Po skutečné změně repa obnoví jeho root
+  package a pouze package rooty validních Apps z čerstvého manifestu. Každý
+  přesný root zpracuje nejvýše jednou. Instalace používá
+  `bun install --frozen-lockfile`; neúspěšný první pokus jednou zopakuje čistě
+  a při selhání obnoví předchozí `node_modules`. Neplatný lockfile update
+  zablokuje pro Agenta místo lokálního vygenerování jiné dependency verze.
 
 Pokud Git read model zjistí rozpracovaný rebase nebo `git am`, Launchpad stav
 jen klasifikuje a nabídne přesný handoff do Codexu. Obecný algoritmus žádnou

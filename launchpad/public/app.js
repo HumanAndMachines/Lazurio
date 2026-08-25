@@ -391,10 +391,14 @@ elements.reloadButton.addEventListener("click", () => {
   loadData({ sync: true });
 });
 elements.updateBannerAction?.addEventListener("click", () => {
-  const prompt = updateBannerPresentation(state.updateStatus, {
+  const action = updateBannerPresentation(state.updateStatus, {
     updatePending: state.updatePending,
-  }).action?.prompt;
-  if (prompt) openCodexUpdateDialog(prompt);
+  }).action;
+  if (action?.kind === "sync") {
+    loadData({ sync: true });
+    return;
+  }
+  if (action?.prompt) openCodexUpdateDialog(action.prompt);
 });
 elements.heroCta.addEventListener("click", () => runHeroAction());
 elements.doctorStatus.addEventListener("click", () => {
@@ -3178,11 +3182,12 @@ function cardWarningModel(app, gitRepo) {
     };
   }
 
-  // Chybí nebo jsou zastaralé balíčky: nainstaluj/oprav před prvním spuštěním.
-  if ((dependencyState === "needs_install" || dependencyState === "stale_lockfile") && canInstall(app)) {
+  // Chybějící balíčky připrav před prvním spuštěním. Filesystem mtime není
+  // dependency autorita; explicitní Repair zůstává skutečná clean reinstalace.
+  if (dependencyState === "needs_install" && canInstall(app)) {
     return {
       tone: "warn",
-      title: dependencyState === "needs_install" ? "Chybí balíčky" : "Balíčky k opravě",
+      title: "Chybí balíčky",
       actionLabel: installLabel(app),
       run: () => runRuntimeAction(app, installAction(app)),
       pending: `${app.id}:${installAction(app)}`,
@@ -3376,6 +3381,13 @@ function cardMenuActions(app) {
   }
   if (canRestart(app)) {
     actions.push({ label: "Restart", run: () => runRuntimeAction(app, "restart"), pending: `${app.id}:restart` });
+  }
+  if (canInstall(app) && app.dependencies?.state === "ready") {
+    actions.push({
+      label: "Opravit balíčky",
+      run: () => runRuntimeAction(app, "repair"),
+      pending: `${app.id}:repair`,
+    });
   }
   // Detail/logy nabídni, jen když je co zkoumat — běžící, spadlá nebo vlastněná
   // instance.
@@ -3774,7 +3786,7 @@ function appCardTone(app, warning) {
   if (["missing_package", "unknown_package_manager", "invalid_manifest", "missing_access", "restricted", "runtime_failed"].includes(dependencyState)) {
     return "blocked";
   }
-  if (["needs_install", "stale_lockfile", "planned_slot"].includes(dependencyState)) {
+  if (["needs_install", "planned_slot"].includes(dependencyState)) {
     return "attention";
   }
   if (app.runtime_status === "unhealthy") return "blocked";
@@ -3797,7 +3809,7 @@ function dependencyChip(app) {
   const dependencyState = app.dependencies?.state;
   let tone = "chip-muted";
   if (dependencyState === "ready") tone = "chip-success";
-  else if (["needs_install", "stale_lockfile", "planned_slot"].includes(dependencyState)) tone = "chip-warn";
+  else if (["needs_install", "planned_slot"].includes(dependencyState)) tone = "chip-warn";
   else if (["missing_package", "unknown_package_manager", "missing_access", "restricted", "invalid_manifest", "runtime_failed"].includes(dependencyState)) tone = "chip-danger";
   return chip(humanDependencyLabel(dependencyState), tone);
 }
@@ -3912,9 +3924,6 @@ function primaryNextAction(app, moduleApps = app.module_apps ?? null) {
   }
   if (dependencyState === "needs_install") {
     return { type: "runtime", action: "install", label: "Instalovat" };
-  }
-  if (dependencyState === "stale_lockfile") {
-    return { type: "runtime", action: "repair", label: "Opravit balíčky" };
   }
   if (["missing_access", "planned_slot", "restricted", "invalid_manifest", "missing_package", "unknown_package_manager"].includes(dependencyState)) {
     return { type: "disabled", label: humanDependencyLabel(dependencyState) };
@@ -4282,13 +4291,11 @@ function detailSummaryModel(app, git) {
     };
   }
 
-  if (["needs_install", "stale_lockfile"].includes(dependencyState)) {
+  if (dependencyState === "needs_install") {
     return {
       tone: "warn",
-      title: dependencyState === "needs_install" ? "Aplikaci je potřeba připravit" : "Aplikaci je potřeba opravit",
-      message: dependencyState === "needs_install"
-        ? "Než ji otevřete, je potřeba doplnit potřebné součásti."
-        : "Než ji otevřete, je potřeba opravit její součásti.",
+      title: "Aplikaci je potřeba připravit",
+      message: "Než ji otevřete, je potřeba doplnit potřebné součásti.",
       action: primaryActionNode(app, nextAction),
     };
   }
@@ -4438,29 +4445,31 @@ function renderDetailStatus(app) {
 function renderDetailMissionControlOwnership(app) {
   const git = gitDetailForApp(app);
   if (!git) return null;
-  const section = detailSection("Mission Control ownership");
+  const section = detailSection("Verze a rozpracovaná práce");
   const chipModel = gitChipModel(git);
   const badges = document.createElement("div");
   badges.className = "detail-badges";
   if (chipModel) badges.append(gitChipNode(chipModel));
   const worktrees = normalizedGitWorktrees(git);
-  badges.append(chip(`${worktrees.length} worktree`, worktrees.some((item) => item.isOrphan) ? "chip-warn" : "chip-muted"));
+  badges.append(chip(
+    `${worktrees.length} ${worktrees.length === 1 ? "pracovní návrh" : "pracovní návrhy"}`,
+    worktrees.some((item) => item.isOrphan) ? "chip-warn" : "chip-muted",
+  ));
   section.append(badges);
 
   const ownership = normalizedMissionControlOwnership(git);
   section.append(
     detailList([
-      ["Main checkout", git.title ?? git.status ?? "-"],
-      ["Vzdálená verze", gitFreshnessLabel(git.freshness)],
-      ["Doporučená akce", git.recommendedAction ?? git.recommended_action ?? git.message ?? "-"],
-      ["Owner plan", ownership.ownerPlanCode ? `${ownership.ownerPlanCode} — ${ownership.ownerPlanTitle ?? "bez názvu"}` : "žádný aktivní owner plan"],
+      ["Stav verze", chipModel?.message ?? "Stav verze zatím není ověřený."],
+      ["Kontrola sdílené verze", gitFreshnessLabel(git.freshness)],
+      ["Pracovní plán", ownership.ownerPlanCode ? `${ownership.ownerPlanCode} — ${ownership.ownerPlanTitle ?? "bez názvu"}` : "žádný otevřený plán"],
     ]),
   );
 
   if (worktrees.length === 0) {
     const note = document.createElement("p");
     note.className = "detail-note";
-    note.textContent = "Žádný Mission Control worktree pro tenhle modul. DEV runtime může zatím běžet jen z main checkoutu.";
+    note.textContent = "Pro tento modul není otevřený žádný pracovní návrh. Aplikace proto běží z aktuální hlavní verze.";
     section.append(note);
     return section;
   }
@@ -4572,6 +4581,15 @@ function renderGitBuilderActions(app) {
   const section = detailSection("Git kontrola");
   const actions = document.createElement("div");
   actions.className = "git-builder-actions";
+
+  if (["pull_available", "update_available"].includes(git.status)) {
+    const syncCard = builderActionCard(
+      "Je dostupná novější verze",
+      "Synchronizace aktualizuje Lazurio i všechny spravované moduly a potom ověří jejich balíčky.",
+    );
+    syncCard.append(builderActionButton("Aktualizovat Lazurio", () => loadData({ sync: true })));
+    actions.append(syncCard);
+  }
 
   const changesCard = builderActionCard(
     "Ukázat změny",
@@ -4893,7 +4911,7 @@ function nextActionReason(app, nextAction) {
   if (nextAction.type === "open") return "Aplikace běží — otevře se v novém panelu, nic se nespouští.";
   if (nextAction.type === "folder") return "Otevře lokální checkout ve správci souborů; nic v něm nemění.";
   if (nextAction.action === "install") return "Doplní chybějící balíčky v rozsahu cwd aplikace.";
-  if (nextAction.action === "repair") return "Přeinstaluje balíčky kvůli drift mezi package a lockfile.";
+  if (nextAction.action === "repair") return "Provede čistou reinstalaci podle uzamčených verzí a při neúspěchu obnoví předchozí balíčky.";
   if (nextAction.action === "start") return "Spustí lokální dev proces, pokud nejsou runtime konflikty.";
   if (nextAction.type === "logs") return "Otevři logy a zjisti, proč runtime spadl.";
   return "";
@@ -5137,7 +5155,6 @@ function dependencyLabel(status) {
     {
       ready: "ready",
       needs_install: "needs install",
-      stale_lockfile: "stale lockfile",
       missing_package: "missing package",
       unknown_package_manager: "unknown manager",
       missing_access: "missing access",
@@ -5167,7 +5184,6 @@ function humanDependencyLabel(status) {
     {
       ready: "Připraveno",
       needs_install: "Instalovat",
-      stale_lockfile: "Opravit balíčky",
       missing_package: "Chybí balíček",
       unknown_package_manager: "Neznámý správce",
       missing_access: "Chybí přístup",
@@ -5181,7 +5197,7 @@ function humanDependencyLabel(status) {
 
 function dependencyClass(status) {
   if (status === "ready") return "runtime-healthy";
-  if (["needs_install", "stale_lockfile", "planned_slot"].includes(status)) return "runtime-starting";
+  if (["needs_install", "planned_slot"].includes(status)) return "runtime-starting";
   if (["missing_package", "unknown_package_manager", "missing_access", "restricted", "invalid_manifest", "runtime_failed"].includes(status)) return "runtime-unhealthy";
   return "runtime-unknown";
 }

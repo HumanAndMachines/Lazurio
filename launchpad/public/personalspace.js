@@ -893,7 +893,7 @@ function personalCardWarningModel(app) {
   }
 
   // Chybí nebo jsou zastaralé balíčky: nainstaluj/oprav před prvním spuštěním.
-  if ((dependencyState === "needs_install" || dependencyState === "stale_lockfile") && (app.dependencies?.can_install ?? false)) {
+  if (dependencyState === "needs_install" && (app.dependencies?.can_install ?? false)) {
     const action = dependencyState === "needs_install" ? "install" : "repair";
     return {
       tone: "warn",
@@ -1317,7 +1317,7 @@ function appTone(app, warning) {
   if (warning?.tone === "warn") return "attention";
   const dependencyState = app.dependencies?.state;
   if (["missing_package", "unknown_package_manager", "invalid_manifest"].includes(dependencyState)) return "blocked";
-  if (["needs_install", "stale_lockfile"].includes(dependencyState)) return "attention";
+  if (dependencyState === "needs_install") return "attention";
   if (app.runtime_status === "unhealthy") return "blocked";
   return "idle";
 }
@@ -1337,7 +1337,6 @@ function dependencyLabel(stateName) {
   return (
     {
       needs_install: "Chybí balíčky",
-      stale_lockfile: "Lockfile k opravě",
       missing_package: "Chybí package.json",
       unknown_package_manager: "Nepodporovaný manažer",
       invalid_manifest: "Nevalidní manifest",
