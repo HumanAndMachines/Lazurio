@@ -564,6 +564,13 @@ async function repairCanonicalWorktreeIgnore({ repo, run, local }) {
 
   const registered = await registeredCanonicalWorktreePaths({ repo, run });
   if (!registered.ok) {
+    if (registered.reason === "unsafe_worktree_path") {
+      return {
+        ok: false,
+        changed: false,
+        detail: "Git worktree cesta obsahuje odřádkování, které nelze bezpečně zapsat do info/exclude.",
+      };
+    }
     return legacyBlanketPattern
       ? { ok: false, changed: false, detail: "Git nepotvrdil registrované worktrees před zúžením starého lokálního ignore." }
       : { ok: true, changed: false };
@@ -654,7 +661,11 @@ async function registeredCanonicalWorktreePaths({ repo, run }) {
     const candidate = await canonicalPath(token.slice("worktree ".length));
     const child = relative(canonicalWorktreesRoot, candidate);
     if (!child || child.startsWith("..") || isAbsolute(child)) continue;
-    paths.push(relative(ownerRoot, candidate).replace(/\\/g, "/"));
+    const registeredPath = relative(ownerRoot, candidate).replace(/\\/g, "/");
+    if (/[\r\n]/u.test(registeredPath)) {
+      return { ok: false, paths: [], reason: "unsafe_worktree_path" };
+    }
+    paths.push(registeredPath);
   }
   return { ok: true, paths };
 }

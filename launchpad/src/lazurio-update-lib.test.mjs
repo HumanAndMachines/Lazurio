@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -228,6 +228,47 @@ test("registered worktree paths are literal Git exclusions rather than wildcard 
   ])).toContain(".worktrees/root/DEV-6505-f/notes.txt");
   expect(runGit(worktreeRoot, ["rev-parse", "HEAD"]))
     .toBe(runGit(fixture.working, ["rev-parse", "codex/DEV-6505-glob-fixture"]));
+});
+
+test("registered worktree paths with line breaks fail closed before info/exclude mutation", async () => {
+  const fixture = await repositoryFixture("registered-worktree-line-break");
+  await mkdir(join(fixture.working, ".worktrees"), { recursive: true });
+  await writeFile(join(fixture.working, ".worktrees", "notes.txt"), "keep me\n");
+  const unsafePath = join(
+    await realpath(fixture.working),
+    ".worktrees",
+    "root",
+    "DEV-6505-fixture\ninjected",
+  );
+
+  const result = await updateManagedRepo(descriptor(fixture), {
+    runId: "line-break-worktree",
+    deps: {
+      installDependencies: async () => ({ ok: true }),
+      inspectLocalRepo: async () => ({
+        ok: true,
+        directoryOnly: false,
+        branch: "main",
+        head: "a".repeat(40),
+        operation: null,
+        dirtyPaths: [".worktrees/notes.txt"],
+        sparseOrHiddenIndex: false,
+      }),
+      runGit: async (args, options) => args[0] === "worktree" && args[1] === "list"
+        ? { ok: true, stdout: `worktree ${unsafePath}\0`, stderr: "", exitCode: 0 }
+        : runGitAsync(args, options),
+    },
+  });
+
+  expect(result).toMatchObject({
+    state: "blocked",
+    reason: "worktree_ignore_repair_failed",
+  });
+  expect(result.message).toContain("odřádkování");
+  expect(await readPortableText(join(fixture.working, ".git", "info", "exclude")))
+    .not.toContain("injected");
+  expect(runGit(fixture.working, ["stash", "list", "--format=%H"])).toBe("");
+  expect(status(fixture.working)).toContain(".worktrees/");
 });
 
 test("legacy blanket worktree ignore narrows before unknown data is recovery-stashed", async () => {
