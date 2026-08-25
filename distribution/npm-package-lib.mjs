@@ -150,7 +150,14 @@ function packageJson({ contract, version, sourceCommit, commitEpoch }) {
     imports: {
       "#lazurio-core/resident-manifest": "./lazurio/core/resident-manifest-lib.mjs",
     },
-    files: ["LICENSE.md", "README.md", "lazurio", "launchpad/schemas", "launchpad/src"],
+    files: [
+      "LICENSE.md",
+      "README.md",
+      "lazurio",
+      "launchpad/schemas",
+      "launchpad/src",
+      "manual/module-setup.md",
+    ],
     engines: { bun: `>=${contract.minimum_bun_version}` },
     repository: {
       type: "git",
