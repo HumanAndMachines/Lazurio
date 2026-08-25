@@ -90,6 +90,14 @@ oddělené operace:
 3. Productionspace, Personalspace, worktrees a root-space repository-db
    zůstávají mimo obecný update engine.
 
+Kanonické task worktrees mohou fyzicky ležet v `.worktrees/` svého owner repa,
+ale nejsou jeho zdrojová změna. Když `lazurio update` prokáže, že jde o skutečně
+registrovaný Git worktree tohoto repa, automaticky doplní lokální
+`/.worktrees/` pravidlo do Git `info/exclude`. Uživatel nic nenastavuje a
+primární checkout zůstane čistý. Neznámé soubory pouze schované pod názvem
+`.worktrees/` se takto nikdy neignorují; dál se zachovají recovery stashem nebo
+update bezpečně zablokují.
+
 Instalace desktopového Launchpadu není implicitní čtvrtý krok tohoto update
 pořadí; uživatel nebo rollout ji spouští explicitně příkazem
 `lazurio launchpad install`.
