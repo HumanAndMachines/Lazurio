@@ -1903,7 +1903,7 @@ testWithInspectableProcessCwd("runtime manager při Open nahradí jen předchoz�
   }
 }, platformTestTimeout(15_000));
 
-testWithInspectableProcessCwd("cross-Organization listener takeover requires the exact peer confirmation", async () => {
+test("cross-Organization listener takeover requires the exact peer confirmation", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({ port });
   const { slug: sourceWorktreeSlug } = await createOwnedWorktreeFixture({
@@ -1981,6 +1981,29 @@ testWithInspectableProcessCwd("cross-Organization listener takeover requires the
       status: "healthy",
       owner: "current-instance",
       desired: { enabled: true },
+    });
+    const takeoverAudit = JSON.parse((await readFile(
+      join(root, "launchpad", "runtime", "audit", "takeovers.jsonl"),
+      "utf8",
+    )).trim());
+    expect(takeoverAudit).toMatchObject({
+      schema_version: "lazurio.runtime_takeover_audit.v1",
+      company: "Beta",
+      module: "control",
+      app_id: targetApp.id,
+      reclaimed_listeners: [{
+        port,
+        method: "managed-stop",
+        previous_pid: expect.any(Number),
+      }],
+    });
+    expect(takeoverAudit.listeners.every((listener) => listener.owned)).toBe(true);
+
+    await runtime.stop(targetApp.id);
+    expect(await runtime.health(targetApp.id)).toMatchObject({
+      status: "stopped",
+      owner: "none",
+      desired: { enabled: false, status: "disabled" },
     });
   } finally {
     const health = await runtime.health(targetApp.id);
