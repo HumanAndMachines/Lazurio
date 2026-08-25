@@ -245,13 +245,17 @@ test("removes copied numeric ports from package scripts in favor of injected lea
   };
   const result = rewriteRuntimeScriptsFromModule(packageJson, {
     port_leases: [
-      { id: "web", port: 5392 },
-      { id: "api", port: 5393 },
+      { id: "web", host: "127.0.0.1", port: 5392 },
+      { id: "api", host: "127.0.0.1", port: 5393 },
     ],
   });
   expect(result.changed).toBe(true);
-  expect(result.packageJson.scripts["dev:web"]).toBe('vite --port "$PORT"');
-  expect(result.packageJson.scripts["dev:api"]).toBe('bun server.ts --port "$LAZURIO_RUNTIME_LISTENER_API_PORT"');
+  expect(result.packageJson.scripts["dev:web"]).toBe(
+    'bun -e "process.exit(process.env.PORT ? 0 : 1)" && vite --port "$PORT"',
+  );
+  expect(result.packageJson.scripts["dev:api"]).toBe(
+    'bun -e "process.exit(process.env.LAZURIO_RUNTIME_LISTENER_API_PORT ? 0 : 1)" && bun server.ts --port "$LAZURIO_RUNTIME_LISTENER_API_PORT"',
+  );
 });
 
 test("root migration excludes Personalspace and worktrees unless directly targeted", async () => {

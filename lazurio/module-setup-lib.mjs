@@ -15,6 +15,7 @@ import {
   validateModuleLeasesAgainstOrganizationPools,
 } from "./core/organization-port-policy-lib.mjs";
 import { validateDeclaredRuntime } from "./core/runtime-contract-lib.mjs";
+import { organizationSlotRepositoryId } from "./core/organization-slot-scope-lib.mjs";
 import { readAllModuleContracts } from "./module-port-lib.mjs";
 
 const ignoredDirectories = new Set([
@@ -347,26 +348,52 @@ export function rewriteRuntimeScriptsFromModule(packageJson, moduleManifest) {
   const replacements = [];
   for (const listener of runtime.listeners ?? []) {
     const lease = leases.get(listener.lease);
-    if (!Number.isInteger(lease?.port)) continue;
-    const env = listener.role === "entrypoint"
+    if (!Number.isInteger(lease?.port) || typeof lease.host !== "string") continue;
+    const portEnv = listener.role === "entrypoint"
       ? "$PORT"
       : `$LAZURIO_RUNTIME_LISTENER_${String(listener.id).toUpperCase().replace(/[^A-Z0-9]/g, "_")}_PORT`;
-    replacements.push([lease.port, env]);
+    const hostEnv = listener.role === "entrypoint"
+      ? "$HOST"
+      : `$LAZURIO_RUNTIME_LISTENER_${String(listener.id).toUpperCase().replace(/[^A-Z0-9]/g, "_")}_HOST`;
+    replacements.push({ port: lease.port, host: lease.host, portEnv, hostEnv });
   }
   const next = structuredClone(packageJson);
   let changed = false;
   for (const [name, command] of Object.entries(next.scripts)) {
     if (typeof command !== "string") continue;
     let rewritten = command;
-    for (const [port, env] of replacements) {
+    for (const { port, host, portEnv, hostEnv } of replacements) {
       rewritten = rewritten.replace(
         new RegExp(`(--port(?:=|\\s+))(?:\")?${port}(?:\")?`, "g"),
-        `$1\"${env}\"`,
+        `$1\"${portEnv}\"`,
       );
       rewritten = rewritten.replace(
         new RegExp(`((?:^|\\s)(?:PORT|[A-Za-z][A-Za-z0-9_]*_PORT)=)(?:\")?${port}(?:\")?`, "g"),
-        `$1\"${env}\"`,
+        `$1\"${portEnv}\"`,
       );
+      const escapedHost = host.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      rewritten = rewritten.replace(
+        new RegExp(`(--host(?:=|\\s+))(?:\")?${escapedHost}(?:\")?`, "g"),
+        `$1\"${hostEnv}\"`,
+      );
+      rewritten = rewritten.replace(
+        new RegExp(`((?:^|\\s)(?:HOST|[A-Za-z][A-Za-z0-9_]*_HOST)=)(?:\")?${escapedHost}(?:\")?`, "g"),
+        `$1\"${hostEnv}\"`,
+      );
+    }
+    const requiredVariables = [...new Set(
+      replacements
+        .flatMap(({ portEnv, hostEnv }) => [portEnv, hostEnv])
+        .map((variable) => variable.slice(1))
+        .filter((variable) => rewritten.includes(`$${variable}`)),
+    )];
+    if (
+      rewritten !== command
+      && requiredVariables.length > 0
+      && !requiredVariables.every((variable) => rewritten.includes(`process.env.${variable}`))
+    ) {
+      const injected = requiredVariables.map((variable) => `process.env.${variable}`).join(" && ");
+      rewritten = `bun -e \"process.exit(${injected} ? 0 : 1)\" && ${rewritten}`;
     }
     if (rewritten !== command) {
       next.scripts[name] = rewritten;
@@ -842,7 +869,21 @@ async function planExplicitAppModule({ options, context, manifestPath }) {
     apps: [appPath],
     default_app: appPath,
   };
-  const nextPackage = explicitRuntimePackage({ options, context, packageJson, packagePath });
+  const nextPackage = rewriteRuntimeScriptsFromModule(
+    explicitRuntimePackage({ options, context, packageJson, packagePath }),
+    manifest,
+  ).packageJson;
+  const remainingPorts = [...new Set(
+    selectedScriptCommands(nextPackage.scripts, options.devScript).flatMap(commandPorts),
+  )];
+  if (remainingPorts.length > 0) {
+    throw actionRequired(
+      "app_runtime_port_authority",
+      `${options.appPackage}: dev script stále deklaruje číselný port ${remainingPorts.join("/")}`,
+      "Odstraň hardcoded port nebo jej převeď na Launchpadem injektovaný PORT; setup nepřidává druhou portovou autoritu.",
+      context,
+    );
+  }
   const validation = validateMigration({
     packageJson: nextPackage,
     original: packageJson,
@@ -958,7 +999,9 @@ async function resolveModuleSetupContext(options) {
     const modulesManifest = parseJsonForSetup(await readFile(modulesPath, "utf8"), modulesPath, fallbackContext(options));
     const exactRelative = relative(resolve(organizationRoot), options.moduleRoot).split(sep).join("/");
     for (const slot of modulesManifest.module_slots ?? []) {
-      if (typeof slot?.path !== "string" || typeof slot?.slug !== "string") continue;
+      if (typeof slot?.path !== "string") continue;
+      const moduleId = organizationSlotRepositoryId(slot, slot.path);
+      if (moduleId === null) continue;
       const canonicalModuleRoot = resolve(organizationRoot, slot.path);
       const physicalCanonicalRoot = await realpath(canonicalModuleRoot).catch(() => null);
       if (!physicalCanonicalRoot || !pathIsStrictlyInside(physicalOrganizationRoot, physicalCanonicalRoot)) continue;
@@ -984,7 +1027,7 @@ async function resolveModuleSetupContext(options) {
       }
       matches.push({
         company: companyManifest?.company?.slug,
-        module: slot.slug,
+        module: moduleId,
         organizationRoot,
         slot,
         source_kind: exact ? "slot" : "worktree",
