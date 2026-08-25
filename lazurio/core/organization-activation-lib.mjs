@@ -1,3 +1,5 @@
+import { isValidOrganizationForgeBinding } from "./organization-scaffold-lib.mjs";
+
 export const ORGANIZATION_ACTIVATION_CONTRACT_VERSION = "lazurio.organization.activation.v0";
 export const ORGANIZATION_ACTIVATION_REQUEST_SCHEMA = "lazurio.organization.activation.request.v0";
 export const ORGANIZATION_ACTIVATION_REPORT_SCHEMA = "lazurio.organization.activation.report.v0";
@@ -180,7 +182,9 @@ export function resolveOrganizationRootDocuments({
   companyManifest,
   modulesManifest,
   canonicalManifest,
+  expectedOrganizationId,
   expectedOrganizationLogin,
+  expectedRepositoryId,
   expectedRepositoryFullName,
 }) {
   if (canonicalManifest !== null && canonicalManifest !== undefined) {
@@ -202,6 +206,14 @@ export function resolveOrganizationRootDocuments({
   const companySlug = normalizedText(company?.slug);
   const modulesCompany = normalizedText(modulesManifest.company);
   const declaredRepository = normalizedText(company?.root_repository);
+  const declaredForgeBinding = companyManifest.forge_binding;
+  const forgeBindingSupported = declaredForgeBinding === undefined
+    || isValidOrganizationForgeBinding(declaredForgeBinding, {
+      organizationId: expectedOrganizationId,
+      organizationLogin,
+      repositoryId: expectedRepositoryId,
+      repositoryFullName,
+    });
   const modulesGenerationSupported = modulesManifest.organization_generation === "gen3"
     || modulesManifest.schema_version === "companiesascode.modules.v1";
   const supported = companyManifest.organization_generation === "gen3"
@@ -212,6 +224,7 @@ export function resolveOrganizationRootDocuments({
     && modulesLogin.toLowerCase() === organizationLogin.toLowerCase()
     && companySlug !== ""
     && companySlug === modulesCompany
+    && forgeBindingSupported
     && (declaredRepository === "" || declaredRepository.toLowerCase() === repositoryFullName.toLowerCase());
 
   return freeze(supported

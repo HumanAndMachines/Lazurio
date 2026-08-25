@@ -34,6 +34,11 @@ neukládá desired state a nemá workflow engine. Povrchový provider adapter po
 načte read-only fakta a Core nikdy nezamění technické selhání za známý stav
 Organization. Legacy identity-pair resolver je úzká compatibility kontrola;
 canonical manifest parser zůstává u DEV-6488 a activation jej neduplikuje.
+`organization-scaffold-lib.mjs` vlastní jediný čistý GEN3-compatible baseline
+generátor pro budoucí explicitní activation writer. Přijímá až živě ověřené
+immutable Organization/repository ID, zapisuje je do kořenového Forge bindingu
+a vrací předem validovatelný, deterministický Git tree. Nevolá provider, Git ani
+filesystem a nevytváří activation profil, registry nebo druhý manifest reader.
 `github-provider-lib.mjs` vlastní jediný read-only GitHub CLI transport pro
 Lazurio Core. Vybere přesnou důvěryhodnou executable, pustí ji bez shellu se
 sanitizovaným prostředím a vrací strukturované transport/HTTP/response chyby.
