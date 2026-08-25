@@ -107,7 +107,7 @@ test("runtime declaration validation has one physical Core owner", async () => {
     "launchpad/src/discovery-lib.mjs",
     "launchpad/src/personalspace-lib.mjs",
     "launchpad/src/runtime-lib.mjs",
-    "scripts/lazurio-runtime-migrate.mjs",
+    "lazurio/module-setup-lib.mjs",
   ]);
 });
 
@@ -131,9 +131,9 @@ test("Module declaration validation has one physical Core owner", async () => {
     "launchpad/src/discovery-lib.mjs",
     "launchpad/src/personalspace-lib.mjs",
     "launchpad/src/runtime-lib.mjs",
+    "lazurio/module-port-lib.mjs",
+    "lazurio/module-setup-lib.mjs",
     "scripts/lazurio-module-inventory.mjs",
-    "scripts/lazurio-module-port.mjs",
-    "scripts/lazurio-runtime-migrate.mjs",
   ]);
 });
 
@@ -154,9 +154,21 @@ test("Organization port allocation policy has one physical Core owner", async ()
 
   expect(consumers).toEqual([
     "launchpad/src/discovery-lib.mjs",
-    "scripts/lazurio-module-port.mjs",
-    "scripts/lazurio-runtime-migrate.mjs",
+    "lazurio/module-port-lib.mjs",
+    "lazurio/module-setup-lib.mjs",
   ]);
+});
+
+test("Module setup orchestration is package-owned and development scripts are thin wrappers", async () => {
+  for (const moduleName of ["module-port-lib.mjs", "module-setup-lib.mjs"]) {
+    expect(existsSync(join(repositoryRoot, "lazurio", moduleName))).toBe(true);
+  }
+  for (const scriptName of ["lazurio-module-port.mjs", "lazurio-runtime-migrate.mjs"]) {
+    const source = await readFile(join(repositoryRoot, "scripts", scriptName), "utf8");
+    expect(source).toContain("../lazurio/");
+    expect(source).not.toContain("../lazurio/core/");
+    expect(source.split("\n").length).toBeLessThan(20);
+  }
 });
 
 test("Server identity and install-generation compatibility have one Core owner", async () => {
