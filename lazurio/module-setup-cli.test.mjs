@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -296,6 +296,46 @@ test("App package behind an intermediate symlink or junction cannot escape the M
   expect(report).toMatchObject({ status: "action_required", reason: "app_package_outside_module" });
   expect(report.issues[0].message).toContain("symlink nebo junction");
   expect(await readFile(outsidePackage, "utf8")).toBe(before);
+});
+
+test("replacing an App directory after validation cannot redirect atomic publication", async () => {
+  const fixture = await moduleFixture({ module: "raced-app" });
+  const appRoot = join(fixture.moduleRoot, "app");
+  const displacedAppRoot = join(fixture.moduleRoot, "app-before-race");
+  const packagePath = join(appRoot, "package.json");
+  await mkdir(appRoot);
+  await writeJson(packagePath, legacyPackage({ company: "Acme", module: "raced-app", port: 24_016 }));
+  await writeJson(join(fixture.moduleRoot, "lazurio.module.json"), {
+    schema_version: "lazurio.module.v1",
+    id: "raced-app",
+    company: "Acme",
+    tcp_port_policy: { mode: "single" },
+    port_leases: [{ id: "main", host: "127.0.0.1", port: 24_016 }],
+    apps: ["app/package.json"],
+    default_app: "app/package.json",
+  });
+  const expectedInside = await readFile(packagePath, "utf8");
+  const outside = await mkdtemp(join(tmpdir(), "lazurio-module-setup-raced-outside-"));
+  roots.push(outside);
+  const outsidePackage = join(outside, "package.json");
+  await writeFile(outsidePackage, expectedInside, "utf8");
+
+  let swapped = false;
+  const report = await setupModule({
+    ...fixture,
+    apply: true,
+    beforePublish: async ({ action, path }) => {
+      if (swapped || action !== "replace" || path !== packagePath) return;
+      swapped = true;
+      await rename(appRoot, displacedAppRoot);
+      await symlink(outside, appRoot, process.platform === "win32" ? "junction" : "dir");
+    },
+  });
+
+  expect(swapped).toBe(true);
+  expect(report).toMatchObject({ status: "action_required", reason: "app_package_outside_module" });
+  expect(await readFile(outsidePackage, "utf8")).toBe(expectedInside);
+  expect(await readFile(join(displacedAppRoot, "package.json"), "utf8")).toBe(expectedInside);
 });
 
 test("a linked Module task worktree inherits ownership without touching the primary checkout", async () => {

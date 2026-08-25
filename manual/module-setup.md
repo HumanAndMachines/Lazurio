@@ -43,6 +43,8 @@ git diff --check
 Příkaz je konvergentní: když jej přeruší pád Mašiny mezi vytvořením
 `lazurio.module.json` a úpravou App package, tentýž příkaz znovu odvodí
 zbývající krok. Lazurio kvůli tomu nemá vlastní workflow databázi ani daemon.
+Každý zápis je připnutý k ověřené fyzické složce. Když se checkout během
+`--apply` změní, příkaz skončí `action_required` a cizí cestu nepřepíše.
 
 ## Migrace existující App
 
