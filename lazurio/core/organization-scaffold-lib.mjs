@@ -83,6 +83,16 @@ not encoded in directory names.
 `,
 });
 
+const scaffoldFilePaths = Object.freeze([
+  ...Object.keys(staticFiles),
+  "README.md",
+  "company.gen3.json",
+  "modules.manifest.json",
+  "TODO.tasks.json",
+  "DONE.tasks.json",
+  "ISSUES.open.json",
+].sort(compareGitNames));
+
 export function createOrganizationScaffold({ organization, repository }) {
   const normalized = normalizeInput({ organization, repository });
   const scope = {
@@ -137,7 +147,10 @@ export function isValidOrganizationScaffold(value) {
     || gitObjectId("blob", Buffer.from(file.content)) !== file.blob_oid
   ))) return false;
   const paths = value.files.map((file) => file.path);
-  if (new Set(paths).size !== paths.length || paths.join("\0") !== [...paths].sort(compareGitNames).join("\0")) return false;
+  if (
+    new Set(paths).size !== paths.length
+    || paths.join("\0") !== scaffoldFilePaths.join("\0")
+  ) return false;
   const companyFile = value.files.find((file) => file.path === "company.gen3.json");
   if (!companyFile) return false;
   try {
@@ -277,6 +290,7 @@ function validForgeBinding(value) {
     && isRecord(value.organization)
     && typeof value.organization.id === "string"
     && positiveIdPattern.test(value.organization.id ?? "")
+    && typeof value.organization.asserted_login === "string"
     && githubLoginPattern.test(value.organization.asserted_login ?? "")
     && isRecord(value.repository)
     && typeof value.repository.id === "string"
@@ -340,7 +354,17 @@ function validRelativePath(path) {
   return path !== ""
     && !path.startsWith("/")
     && !path.includes("\\")
-    && path.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..");
+    && path.split("/").every((segment) => (
+      segment !== ""
+      && segment !== "."
+      && segment !== ".."
+      && !isReservedGitSegment(segment)
+    ));
+}
+
+function isReservedGitSegment(segment) {
+  const windowsCanonical = segment.replace(/[. ]+$/u, "");
+  return /^\.?git(?:~[1-9][0-9]*)?$/iu.test(windowsCanonical);
 }
 
 function positiveId(value, label) {
@@ -359,7 +383,7 @@ function safeDisplayText(value, label) {
   const text = requiredText(value, label);
   if (
     text.length > 120
-    || /[\u0000-\u001f\u007f\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]/u.test(text)
+    || /[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]/u.test(text)
   ) {
     throw new TypeError(`${label} contains unsupported characters.`);
   }

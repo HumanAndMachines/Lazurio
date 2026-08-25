@@ -121,6 +121,10 @@ describe("Organization scaffold", () => {
       ...input,
       organization: { ...input.organization, displayName: "Safe\u202eexe.txt" },
     })).toThrow("unsupported characters");
+    expect(() => createOrganizationScaffold({
+      ...input,
+      organization: { ...input.organization, displayName: "Safe\u061cname" },
+    })).toThrow("unsupported characters");
   });
 
   test("detects content or binding drift instead of accepting a second truth", () => {
@@ -164,6 +168,17 @@ describe("Organization scaffold", () => {
       ...scaffold.forge_binding,
       organization: { ...scaffold.forge_binding.organization, id: 12345678 },
     })).toBe(false);
+    const numericLogin = {
+      ...scaffold.forge_binding,
+      organization: { ...scaffold.forge_binding.organization, asserted_login: 5 },
+      repository: { ...scaffold.forge_binding.repository, asserted_full_name: "5/5_GEN3" },
+    };
+    expect(() => isValidOrganizationForgeBinding(numericLogin, {
+      organizationLogin: "ExampleOrg",
+    })).not.toThrow();
+    expect(isValidOrganizationForgeBinding(numericLogin, {
+      organizationLogin: "ExampleOrg",
+    })).toBe(false);
     expect(isValidOrganizationForgeBinding({
       ...scaffold.forge_binding,
       repository: { ...scaffold.forge_binding.repository, default_branch: "develop" },
@@ -179,6 +194,13 @@ describe("Organization scaffold", () => {
       .sort((left, right) => Buffer.compare(Buffer.from(left.path), Buffer.from(right.path)));
     expect(() => isValidOrganizationScaffold({ ...scaffold, files: collidingFiles })).not.toThrow();
     expect(isValidOrganizationScaffold({ ...scaffold, files: collidingFiles })).toBe(false);
+
+    for (const path of [".git/hooks/pre-commit", ".GIT./config", "GIT~1/config", ".github/workflows/activate.yml"]) {
+      const extraFiles = [...scaffold.files, { ...source, path }]
+        .sort((left, right) => Buffer.compare(Buffer.from(left.path), Buffer.from(right.path)));
+      expect(() => isValidOrganizationScaffold({ ...scaffold, files: extraFiles })).not.toThrow();
+      expect(isValidOrganizationScaffold({ ...scaffold, files: extraFiles })).toBe(false);
+    }
   });
 });
 
