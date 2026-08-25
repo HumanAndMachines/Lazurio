@@ -31,6 +31,7 @@ import {
   acquireServerLifetimeLock,
   acquireServerStartupLock,
 } from "./server-lifetime-lock-lib.mjs";
+import { moduleRuntimeLockName } from "./module-runtime-lock-lib.mjs";
 
 const tempRoots = [];
 const servers = [];
@@ -921,8 +922,9 @@ test("hosted Launchpad omits another Team app and rejects its runtime route befo
 test("instance-bound local shutdown rejects stale callers and releases the exact port", async () => {
   const root = await createLaunchpadGitFixture();
   tempRoots.push(root);
-  const { server, port } = await startLaunchpadServer(root);
+  const { server, port, serverStateDirectory } = await startLaunchpadServer(root);
   const identity = await getJson(port, "/api/lazurio/server-identity");
+  expect((await readServerLocator({ stateDirectory: serverStateDirectory })).instance_id).toBe(identity.instance_id);
 
   const mismatch = await postJson(port, "/api/lazurio/server-shutdown", {
     instance_id: "00000000-0000-4000-8000-000000000000",
@@ -940,6 +942,8 @@ test("instance-bound local shutdown rejects stale callers and releases the exact
   });
   expect(await server.exited).toBe(0);
   await expect(fetch(`http://127.0.0.1:${port}/health`)).rejects.toThrow();
+  expect(await readServerLocatorIfPresent({ stateDirectory: serverStateDirectory })).toBeNull();
+  expect(existsSync(join(serverStateDirectory, moduleRuntimeLockName("server-lifetime")))).toBe(false);
 });
 
 test("launcher replaces the immediately preceding pre-control-root Server on the same port", async () => {

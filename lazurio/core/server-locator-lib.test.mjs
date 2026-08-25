@@ -8,6 +8,7 @@ import {
   buildServerLocator,
   readServerLocator,
   readServerLocatorIfPresent,
+  removeServerLocatorIfOwned,
   resolveServerStateDirectory,
   serverLocatorPath,
   validateServerLocator,
@@ -50,6 +51,28 @@ test("optional locator read distinguishes a clean first start from invalid state
   await expect(readServerLocatorIfPresent({ stateDirectory })).rejects.toThrow(
     "cannot be read",
   );
+});
+
+test("graceful shutdown removes only the exact instance locator", async () => {
+  const stateDirectory = await temporaryRoot();
+  const identity = fixtureIdentity();
+  await writeServerLocator({
+    stateDirectory,
+    origin: "http://127.0.0.1:4175",
+    identity,
+  });
+
+  expect(await removeServerLocatorIfOwned({
+    stateDirectory,
+    instanceId: "00000000-0000-4000-8000-000000000000",
+  })).toBe(false);
+  expect((await readServerLocator({ stateDirectory })).instance_id).toBe(identity.instance_id);
+
+  expect(await removeServerLocatorIfOwned({
+    stateDirectory,
+    instanceId: identity.instance_id,
+  })).toBe(true);
+  expect(await readServerLocatorIfPresent({ stateDirectory })).toBeNull();
 });
 
 test("server locator rejects ambient URLs and unknown fields", () => {
