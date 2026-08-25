@@ -28,6 +28,7 @@ test("legacy Module converges through dry-run, apply and idempotent rerun", asyn
     status: "actionable",
     reason: "setup_changes_ready",
     module: { company: "Acme", id: "legacy" },
+    runtime: null,
   });
   expect(dryRun.changes.map((change) => change.action)).toEqual(["create", "replace"]);
   expect(dryRun.changes[0].path.endsWith("workspace/legacy/lazurio.module.json")).toBe(true);
@@ -37,6 +38,32 @@ test("legacy Module converges through dry-run, apply and idempotent rerun", asyn
 
   const applied = await setupModule({ ...fixture, apply: true });
   expect(applied.status).toBe("completed");
+  expect(applied.runtime).toEqual({
+    tcp_port_policy: { mode: "single" },
+    default_app: "package.json",
+    apps: [{
+      package: "package.json",
+      id: "acme-legacy-v1",
+      title: "legacy",
+      surface: "internal",
+      dev_script: "dev",
+      default: true,
+      tags: ["legacy"],
+      listeners: [{
+        id: "app",
+        role: "entrypoint",
+        lease: "main",
+        protocol: "http",
+        host: "127.0.0.1",
+        port: 23_999,
+        health: { kind: "http", path: "/health" },
+        host_env: "LAZURIO_RUNTIME_HOST",
+        port_env: "LAZURIO_RUNTIME_PORT",
+      }],
+    }],
+  });
+  expect(JSON.stringify(applied.runtime)).not.toContain(fixture.lazurioRoot);
+  expect(JSON.stringify(applied.runtime)).not.toContain("\\\\");
   expect(validateAgainstSchema(applied, reportSchema, "module-setup")).toEqual([]);
   expect(moduleSetupExitCode(applied)).toBe(0);
   const manifest = await readJson(join(fixture.moduleRoot, "lazurio.module.json"));
@@ -54,7 +81,11 @@ test("legacy Module converges through dry-run, apply and idempotent rerun", asyn
   ]);
 
   const rerun = await setupModule(fixture);
-  expect(rerun).toMatchObject({ status: "current", changes: [] });
+  expect(rerun).toMatchObject({
+    status: "current",
+    changes: [],
+    runtime: applied.runtime,
+  });
 });
 
 test("interruption after create-only manifest is recoverable by the same setup command", async () => {
@@ -114,6 +145,11 @@ test("new no-app Module gets an explicit zero-listener contract", async () => {
   expect(dryRun.changes[0].path.endsWith("lazurio.module.json")).toBe(true);
   const applied = await setupModule({ ...fixture, noApp: true, apply: true });
   expect(applied.status).toBe("completed");
+  expect(applied.runtime).toEqual({
+    tcp_port_policy: { mode: "none" },
+    default_app: null,
+    apps: [],
+  });
   expect(await readJson(join(fixture.moduleRoot, "lazurio.module.json"))).toEqual({
     schema_version: "lazurio.module.v1",
     id: "data-only",
@@ -122,6 +158,55 @@ test("new no-app Module gets an explicit zero-listener contract", async () => {
     port_leases: [],
     apps: [],
   });
+});
+
+test("current multi-listener Module projects canonical entrypoint and auxiliary env names", async () => {
+  const fixture = await moduleFixture({ module: "multi-listener" });
+  await writeJson(join(fixture.moduleRoot, "lazurio.module.json"), {
+    schema_version: "lazurio.module.v1",
+    id: "multi-listener",
+    company: "Acme",
+    tcp_port_policy: {
+      mode: "exception",
+      reason: "Existing bounded two-listener runtime pending consolidation.",
+    },
+    port_leases: [
+      { id: "main", host: "127.0.0.1", port: 24_010 },
+      { id: "api", host: "::1", port: 24_011 },
+    ],
+    apps: ["package.json"],
+    default_app: "package.json",
+  });
+  const packageJson = declaredPackage({ company: "Acme", module: "multi-listener" });
+  packageJson.lazurio.runtime.listeners.push({
+    id: "api",
+    role: "auxiliary",
+    lease: "api",
+    protocol: "tcp",
+    health: { kind: "tcp" },
+  });
+  await writeJson(join(fixture.moduleRoot, "package.json"), packageJson);
+
+  const report = await setupModule(fixture);
+
+  expect(report).toMatchObject({ status: "current", reason: "module_contract_current" });
+  expect(report.runtime.apps[0].listeners).toEqual([
+    expect.objectContaining({
+      id: "app",
+      host: "127.0.0.1",
+      port: 24_010,
+      host_env: "LAZURIO_RUNTIME_HOST",
+      port_env: "LAZURIO_RUNTIME_PORT",
+    }),
+    expect.objectContaining({
+      id: "api",
+      host: "::1",
+      port: 24_011,
+      host_env: "LAZURIO_RUNTIME_LISTENER_API_HOST",
+      port_env: "LAZURIO_RUNTIME_LISTENER_API_PORT",
+    }),
+  ]);
+  expect(validateAgainstSchema(report, reportSchema, "module-setup")).toEqual([]);
 });
 
 test("new App Module allocates from the Organization pool and explicit adoption stays review-visible", async () => {
@@ -182,7 +267,7 @@ test("explicit App setup rewrites its adopted host and port to injected runtime 
 
   expect(report).toMatchObject({ status: "completed" });
   expect((await readJson(packagePath)).scripts.dev).toBe(
-    'bun -e "process.exit(process.env.PORT && process.env.HOST ? 0 : 1)" && bun server.mjs --host "$HOST" --port "$PORT"',
+    'bun -e "process.exit(process.env.LAZURIO_RUNTIME_PORT && process.env.LAZURIO_RUNTIME_HOST ? 0 : 1)" && bun server.mjs --host "$LAZURIO_RUNTIME_HOST" --port "$LAZURIO_RUNTIME_PORT"',
   );
 });
 
@@ -217,6 +302,7 @@ test("planned slot blocks before write and CLI exposes stable JSON status and ex
     status: "action_required",
     reason: "module_slot_planned",
     changes: [],
+    runtime: null,
   });
   expect(validateAgainstSchema(report, reportSchema, "module-setup")).toEqual([]);
   expect(moduleSetupExitCode(report)).toBe(2);

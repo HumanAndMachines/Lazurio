@@ -136,6 +136,20 @@ async function smokeInstalledArchive(build) {
   if (rootless.status !== 1 || !rootless.stderr.includes("--root <cesta>")) {
     throw new Error("package-managed Root command must fail closed until --root is explicit");
   }
+  const rootlessModule = runInstalledShim(
+    globalBin,
+    ["module", "setup", ".", "--json"],
+    environment,
+  );
+  if (
+    rootlessModule.status !== 3
+    || rootlessModule.stdout.trim() !== ""
+    || !rootlessModule.stderr.includes("--root <cesta>")
+  ) {
+    throw new Error(
+      `package-managed module setup without --root must return usage/environment exit 3: ${failure(rootlessModule)}`,
+    );
+  }
   await assertInstalledUpdaterRuntime({ globalBin, environment });
   return {
     global_install: "passed",
@@ -144,6 +158,7 @@ async function smokeInstalledArchive(build) {
     package_provenance: "passed",
     install_report: "passed",
     operated_root_boundary: "passed",
+    module_setup_root_boundary: "passed",
     updater_source_closure: "passed",
     updater_runtime_assets: "passed",
   };

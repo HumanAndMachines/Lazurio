@@ -78,6 +78,12 @@ explicitní `--no-app`, novou single App a vědomý `--adopt-port`. Nevytváří
 Organization slot ani druhou port registry. Stabilní JSON report
 `lazurio.module_setup.report.v1` rozlišuje `current`, `actionable`, `completed`
 a `action_required`; exit kódy jsou 0/1/2 a syntax/environment používá 3.
+U `current` a post-apply `completed` obsahuje report také `runtime`: minimální
+module-relative projekci Apps a materializovaných listenerů. Tenké legacy
+adaptery smějí konzumovat pouze tento výstup package-managed CLI; manifest,
+port lease ani názvy runtime proměnných samy neparsují. U neaplikovaného nebo
+blokovaného stavu je `runtime: null`, takže jej nelze omylem spustit jako
+platný stav.
 
 Úplný postup pro private Module migraci, nový Modul, rerun a PR handoff drží
 [veřejný Agent manuál](../manual/module-setup.md).
