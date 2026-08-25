@@ -195,6 +195,11 @@ per-module download button, restore overlay, update journal, or second daemon.
   root-space repository-db checkouts are excluded. A freshly declared missing
   Workspace Module is cloned into a sibling staging path, verified, and
   atomically renamed.
+- **Dependencies:** after an actual source change, only the changed repository
+  package and valid manifest-declared App package roots are refreshed. The
+  versioned Bun lockfile is authoritative. A failed frozen ensure gets one
+  transactional clean retry; failure restores the previous `node_modules`.
+  The Server owns stop/restart of an affected managed App.
 - **Runtime boundary:** the long-running Launchpad executes from an immutable
   exact-digest Workspace runtime outside the mutable working root. The local
   short CLI bundles the same engine into a temporary external runtime for its
@@ -363,7 +368,6 @@ Use one vocabulary across cards, detail panel and Doctor.
 | `running` | app health probe is OK | Open / Logs / Stop / Restart | n/a | green live badge |
 | `ready` | dependencies and package are usable; app can start | Start / Open / Repair | yes | neutral/ready |
 | `needs_install` | app is visible but `node_modules` or install artifacts are missing | Install | no | orange attention |
-| `stale_lockfile` | app has packages and can start, but package/lockfile timestamps suggest drift | Repair / Start | yes | orange repair warning |
 | `missing_package` | manifest points to missing/unreadable package | Doctor sync / fix manifest | no | red blocked |
 | `unknown_package_manager` | safe install command cannot be inferred | Doctor / terminal | no | red blocked |
 | `missing_access` | Organization/module exists in plan but local machine lacks checkout/access | request/access/sync | no | lock/access badge |
@@ -385,14 +389,12 @@ precondition is false.
 | --- | --- | --- | --- |
 | Open | Ensure install/start for the selected main/worktree source, prove health and accept desired state; local returns loopback, hosted returns the exact catalog origin | Allowed as read-only | target URL, runtime, desired source |
 | Install | Allowed only when `dependencies.can_install=true`; app-cwd scoped | Disabled until explicit production policy exists | action, command, cwd, exit_code, log_path, log_excerpt |
-| Repair | Same mechanism as Install for `ready`/`stale_lockfile` states | Disabled until explicit production policy exists | action, command, cwd, exit_code, log_path, log_excerpt |
+| Repair | Transactional clean frozen reinstall of the exact App `node_modules`; rollback on failure | Disabled until explicit production policy exists | action, command, cwd, exit_code, rollback/restart evidence, log_path, log_excerpt |
 | Start | Allowed when `dependencies.can_start=true`; a valid static module lease replaces its current occupant under the module mutex | Disabled or confirmation-gated until policy exists | runtime, pid, health, desired source, failure_kind on error |
 | Stop | Allowed only for the active current-instance managed process; persist disabled desired state before signaling | confirmation-gated | desired state, pid/owner/result |
 | Restart | Stop + Start; never bypasses dependency/policy guards | confirmation-gated | both action results |
 | Logs | Always allowed for visible app | Always allowed | log_path and tail |
-| Pull | Organization root or Workspace module; clean expected branch; fresh remote check; `--ff-only` | Read-only / disabled | before/after status, new head |
-| Pull + autostash | Explicit confirmation; incoming > 0, outgoing = 0; stash tracked + untracked; restore staged state; preserve stash on conflict | Disabled | before/after, conflict or preserved-stash state |
-| Pull all | All mounted Organization roots + Workspace modules; clean pull or guarded autostash per repo; isolated result | Productionspace skipped | per-repo outcome + aggregate counts |
+| Synchronize | One hierarchy-wide `lazurio update`: verified recovery stash for dirty primary checkouts, `main` fast-forward, fresh module rediscovery, then changed-App dependency refresh | Productionspace skipped | per-repo outcome, recovery stash reference, dependency strategy, aggregate counts |
 
 For legacy runtimes, the manifest-owned port is only a discovery key and never
 grants destructive authority. For a valid static `lazurio.module.v1` lease,
@@ -551,7 +553,7 @@ These layer on Phases A–D and reuse the 'keep the `/api/apps` contract' framin
 - [x] Header space dropdown is derived from live discovery, not hardcoded copy.
 - [ ] Workspace and Productionspace have different action policies and visuals.
 - [ ] Cards/detail use the same dependency labels as Doctor.
-- [ ] `needs_install`, `stale_lockfile`, `runtime_failed`, `missing_access`,
+- [ ] `needs_install`, `runtime_failed`, `missing_access`,
       `restricted`, `planned_slot` and `invalid_manifest` are represented in UI copy.
 - [ ] Productionspace Install/Start/Restart is disabled or confirmation-gated.
 - [ ] Runtime source (`main` vs `worktree` + plan code/branch) is visible on cards,

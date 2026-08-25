@@ -22,7 +22,7 @@ export function runtimeRecoveryModel(error = {}) {
     };
   }
 
-  if (["missing_dependencies", "needs_install", "stale_lockfile", "install_script_failed", "missing_package"].includes(failureKind)
+  if (["missing_dependencies", "needs_install", "install_script_failed", "missing_package"].includes(failureKind)
     || ["app_install_failed", "app_repair_failed"].includes(code)) {
     return {
       title: "Aplikaci je potřeba opravit",

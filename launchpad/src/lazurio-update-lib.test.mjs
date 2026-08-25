@@ -68,15 +68,14 @@ test("clean behind checkout fast-forwards and rerun is idempotent", async () => 
   expect(second).toMatchObject({ state: "current", reason: "already_current" });
 });
 
-test("frozen Bun install runs only for an updated repo with package and lockfile", async () => {
+test("dependency refresh runs only for an updated package root", async () => {
   const plain = await repositoryFixture("plain-no-install");
   await addRemoteCommit(plain, "remote.txt", "remote\n");
   let plainInstalls = 0;
-  const plainResult = await updateManagedRepo(descriptor(plain), {
-    runId: "plain-install-check",
-    deps: { installDependencies: async () => { plainInstalls += 1; return { ok: true }; } },
+  const plainReport = await runRootUpdate(plain, {
+    installDependencies: async () => { plainInstalls += 1; return { ok: true }; },
   });
-  expect(plainResult.state).toBe("updated");
+  expect(plainReport.state).toBe("updated");
   expect(plainInstalls).toBe(0);
 
   const locked = await repositoryFixture("locked-install");
@@ -85,48 +84,56 @@ test("frozen Bun install runs only for an updated repo with package and lockfile
     "bun.lock": "# fixture\n",
   }, "add frozen package");
   let lockedInstalls = 0;
-  const lockedResult = await updateManagedRepo(descriptor(locked), {
-    runId: "locked-install-check",
-    deps: {
-      installDependencies: async () => {
+  let installEnvironment = null;
+  const previousWorkspaceRoot = process.env.COMPANIES_WORKSPACE_ROOT;
+  process.env.COMPANIES_WORKSPACE_ROOT = "/stale/working/root";
+  let lockedReport;
+  try {
+    lockedReport = await runRootUpdate(locked, {
+      installDependencies: async ({ env }) => {
         lockedInstalls += 1;
+        installEnvironment = env;
         return { ok: false, detail: "simulated frozen install failure" };
       },
-    },
-  });
+    });
+  } finally {
+    if (previousWorkspaceRoot === undefined) delete process.env.COMPANIES_WORKSPACE_ROOT;
+    else process.env.COMPANIES_WORKSPACE_ROOT = previousWorkspaceRoot;
+  }
   expect(lockedInstalls).toBe(1);
-  expect(lockedResult).toMatchObject({
+  expect(installEnvironment.COMPANIES_WORKSPACE_ROOT).toBe(locked.working);
+  expect(lockedReport.results[0]).toMatchObject({
     state: "blocked",
-    reason: "dependency_install_failed",
+    reason: "dependency_refresh_failed",
     actions: ["fast_forward"],
-    message: "simulated frozen install failure",
+    dependencies: [{ ok: false, detail: "simulated frozen install failure" }],
   });
   expect(status(locked.working)).toBe("");
   expect(runGit(locked.working, ["rev-parse", "HEAD"]))
     .toBe(runGit(locked.working, ["rev-parse", "refs/remotes/origin/main"]));
 });
 
-test("successful frozen install may not leave the checkout dirty", async () => {
+test("successful dependency refresh may not leave the checkout dirty", async () => {
   const fixture = await repositoryFixture("install-dirties-checkout");
   await addRemoteFiles(fixture, {
     "package.json": "{\"name\":\"fixture\",\"private\":true}\n",
     "bun.lock": "# fixture\n",
   }, "add package");
 
-  const result = await updateManagedRepo(descriptor(fixture), {
-    runId: "dirty-install-check",
-    deps: {
-      installDependencies: async ({ cwd }) => {
-        await writeFile(join(cwd, "tracked.txt"), "postinstall mutation\n");
-        return { ok: true };
-      },
+  const report = await runRootUpdate(fixture, {
+    installDependencies: async ({ cwd }) => {
+      await writeFile(join(cwd, "tracked.txt"), "postinstall mutation\n");
+      return { ok: true };
     },
   });
 
-  expect(result).toMatchObject({
+  expect(report.results[0]).toMatchObject({
     state: "blocked",
-    reason: "dependency_install_changed_checkout",
-    actions: ["fast_forward", "frozen_bun_install"],
+    reason: "dependency_refresh_failed",
+    actions: ["fast_forward", "dependencies_refreshed"],
+    dependencies: expect.arrayContaining([
+      expect.objectContaining({ ok: false, reason: "dependency_refresh_changed_checkout" }),
+    ]),
   });
   expect(status(fixture.working)).toContain("tracked.txt");
 });
@@ -477,6 +484,155 @@ test("hierarchy is sequential and excludes root-space db and productionspace", a
   expect(JSON.stringify(report)).not.toContain("alpha::production");
 });
 
+test("updated Module refreshes each manifest-declared app package once through the Server lifecycle seam", async () => {
+  const root = await mkdtemp(join(tmpdir(), "lazurio-update-app-dependencies-"));
+  cleanup.push(root);
+  const organizationRoot = join(root, "organizations", "TestCo");
+  const moduleRoot = join(organizationRoot, "workspace", "mission-control");
+  const appRoot = join(moduleRoot, "app", "v3");
+  await mkdir(appRoot, { recursive: true });
+  await writeJson(join(appRoot, "package.json"), {
+    name: "test-mission-control",
+    dependencies: { fixture: "1.0.0" },
+  });
+  await writeFile(join(appRoot, "bun.lock"), "# fixture\n");
+  const organization = repo("TestCo::root", "organization_root", "TestCo", "root");
+  organization.absolute_path = organizationRoot;
+  const module = repo("TestCo::mission-control", "module", "TestCo", "mission-control", "workspace");
+  module.absolute_path = moduleRoot;
+  const inventory = { repos: [organization, module], warnings: [] };
+  const calls = [];
+  const head = "a".repeat(40);
+
+  const report = await runLazurioUpdate({
+    rootPath: root,
+    runtimeRoot: join(root, "..", "runtime"),
+    deps: {
+      runId: "app-package-refresh",
+      acquireLock: async () => ({ release: async () => {} }),
+      buildInventory: async () => inventory,
+      updateRepo: async (item) => ({
+        ...identity(item),
+        state: item.key === module.key ? "updated" : "current",
+        reason: item.key === module.key ? "checkout_updated" : "already_current",
+        message: "fixture",
+        head,
+        actions: item.key === module.key ? ["fast_forward"] : [],
+      }),
+      discoverApps: async () => ({
+        apps: [
+          { id: "test-mc-ui", package_path: "organizations/TestCo/workspace/mission-control/app/v3/package.json" },
+          { id: "test-mc-api", package_path: "organizations/TestCo/workspace/mission-control/app/v3/package.json" },
+        ],
+        failures: [],
+      }),
+      refreshAppDependencies: async ({ appId, cwd, repo: owner }) => {
+        calls.push({ appId, cwd, repoKey: owner.key });
+        return { refresh_strategy: "clean_repair", mode: "clean" };
+      },
+      inspectLocalRepo: async () => ({ ok: true, branch: "main", dirtyPaths: [], head }),
+      runGit: async (args) => args[0] === "rev-parse"
+        ? { ok: true, stdout: head, stderr: "", exitCode: 0 }
+        : { ok: false, stdout: "", stderr: "unexpected", exitCode: 1 },
+    },
+  });
+
+  expect(calls).toHaveLength(1);
+  expect(calls[0]).toMatchObject({ appId: "test-mc-api", repoKey: module.key });
+  expect(calls[0].cwd.endsWith(join("organizations", "TestCo", "workspace", "mission-control", "app", "v3"))).toBe(true);
+  expect(report.results.find((result) => result.repo_key === module.key)).toMatchObject({
+    state: "updated",
+    actions: ["fast_forward", "dependencies_clean_repaired"],
+    dependencies: [{
+      ok: true,
+      package_path: "app/v3",
+      app_id: "test-mc-api",
+      strategy: "clean_repair",
+    }],
+  });
+});
+
+test("invalid App blocks only its changed Module while a valid sibling still refreshes", async () => {
+  const root = await mkdtemp(join(tmpdir(), "lazurio-update-invalid-app-"));
+  cleanup.push(root);
+  const organizationRoot = join(root, "organizations", "TestCo");
+  const invalidModuleRoot = join(organizationRoot, "workspace", "invalid-module");
+  const validModuleRoot = join(organizationRoot, "workspace", "valid-module");
+  const invalidAppRoot = join(invalidModuleRoot, "app", "v1");
+  const validAppRoot = join(validModuleRoot, "app", "v1");
+  await mkdir(invalidAppRoot, { recursive: true });
+  await mkdir(validAppRoot, { recursive: true });
+  await writeJson(join(invalidAppRoot, "package.json"), { name: "invalid-app" });
+  await writeJson(join(validAppRoot, "package.json"), {
+    name: "valid-app",
+    dependencies: { fixture: "1.0.0" },
+  });
+  await writeFile(join(validAppRoot, "bun.lock"), "# fixture\n");
+
+  const organization = repo("TestCo::root", "organization_root", "TestCo", "root");
+  organization.absolute_path = organizationRoot;
+  const invalidModule = repo("TestCo::invalid-module", "module", "TestCo", "invalid-module", "workspace");
+  invalidModule.absolute_path = invalidModuleRoot;
+  const validModule = repo("TestCo::valid-module", "module", "TestCo", "valid-module", "workspace");
+  validModule.absolute_path = validModuleRoot;
+  const head = "b".repeat(40);
+  const refreshed = [];
+
+  const report = await runLazurioUpdate({
+    rootPath: root,
+    runtimeRoot: join(root, "..", "runtime"),
+    deps: {
+      runId: "invalid-app-isolation",
+      acquireLock: async () => ({ release: async () => {} }),
+      buildInventory: async () => ({ repos: [organization, invalidModule, validModule], warnings: [] }),
+      updateRepo: async (item) => ({
+        ...identity(item),
+        state: item.repo_kind === "module" ? "updated" : "current",
+        reason: item.repo_kind === "module" ? "checkout_updated" : "already_current",
+        message: "fixture",
+        head,
+        actions: item.repo_kind === "module" ? ["fast_forward"] : [],
+      }),
+      discoverApps: async () => ({
+        apps: [{
+          id: "valid-app-v1",
+          package_path: "organizations/TestCo/workspace/valid-module/app/v1/package.json",
+        }],
+        invalid_apps: [{
+          id: "invalid-app-v1",
+          package_path: "organizations/TestCo/workspace/invalid-module/app/v1/package.json",
+          manifest_issues: ["lazurio.runtime.listeners chybí"],
+        }],
+        failures: [],
+      }),
+      refreshPackageDependencies: async ({ cwd }) => {
+        refreshed.push(cwd);
+        return { ok: true, refresh_strategy: "ensure" };
+      },
+      inspectLocalRepo: async () => ({ ok: true, branch: "main", dirtyPaths: [], head }),
+      runGit: async (args) => args[0] === "rev-parse"
+        ? { ok: true, stdout: head, stderr: "", exitCode: 0 }
+        : { ok: false, stdout: "", stderr: "unexpected", exitCode: 1 },
+    },
+  });
+
+  expect(refreshed).toHaveLength(1);
+  expect(refreshed[0].endsWith(join("organizations", "TestCo", "workspace", "valid-module", "app", "v1"))).toBe(true);
+  expect(report.results.find((result) => result.repo_key === invalidModule.key)).toMatchObject({
+    state: "blocked",
+    reason: "dependency_refresh_failed",
+    dependencies: [{
+      ok: false,
+      app_id: "invalid-app-v1",
+      reason: "invalid_app_manifest",
+    }],
+  });
+  expect(report.results.find((result) => result.repo_key === validModule.key)).toMatchObject({
+    state: "updated",
+    dependencies: [{ ok: true, app_id: "valid-app-v1" }],
+  });
+});
+
 test("fresh Organization manifest materializes its new Workspace Module while excluded scopes stay byte-identical", async () => {
   const root = await createLaunchpadGitFixture();
   cleanup.push(root);
@@ -748,6 +904,19 @@ async function addRemoteFiles(fixture, files, message) {
 
 async function update(fixture) {
   return updateManagedRepo(descriptor(fixture), { runId: "test-run", deps: { installDependencies: async () => ({ ok: true }) } });
+}
+
+async function runRootUpdate(fixture, deps = {}) {
+  return runLazurioUpdate({
+    rootPath: fixture.working,
+    runtimeRoot: join(fixture.sandbox, "runtime"),
+    deps: {
+      runId: "root-update-test",
+      acquireLock: async () => ({ release: async () => {} }),
+      buildInventory: async () => ({ repos: [], warnings: [] }),
+      ...deps,
+    },
+  });
 }
 
 function descriptor(fixture) {

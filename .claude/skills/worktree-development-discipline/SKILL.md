@@ -19,14 +19,17 @@ autoritu.
 1. Primární checkout `<Lazurio>` je reference pro Launchpad/Doctor.
    Neměň v něm trackovaný obsah, nezakládej v něm feature branch a drž ho na
    `main`, pokud tomu nebrání už existující zachovaná práce. Před převzetím
-   každého tasku v něm spusť `bun run doctor:task`. Jediný `lazurio update`
-   provede bounded fetch a sekvenčně srovná spravovanou hierarchii na clean
-   `main` jen fast-forwardem. Náhodné dirty změny uloží do ověřeného recovery
-   stashe bez automatického obnovení, cizí branch přepne na `main` a její
-   commity zachová. Ahead/diverged main, nebezpečný detached stav a
-   rozpracovaný merge/rebase/am zůstanou blocked s promptem pro Codex; Agent je
-   nikdy neopravuje resetem ani přepisem historie. Productionspace,
-   Personalspace, worktrees a root-space repository-db update nepřekračuje.
+   každého tasku v něm spusť nejdřív `lazurio update` a po jeho úspěchu
+   `bun run doctor:task`. Update sekvenčně srovná spravovanou hierarchii na
+   clean `main` jen fast-forwardem. Náhodné dirty změny uloží do ověřeného
+   recovery stashe bez automatického obnovení, cizí branch přepne na `main` a
+   její commity zachová. U skutečně změněného source ověří package rooty
+   deklarovaných Apps a neúspěšné ověření jednou zopakuje jako čistou frozen
+   instalaci s rollbackem. Ahead/diverged main, nebezpečný detached stav,
+   rozpracovaný merge/rebase/am a neplatný lockfile zůstanou blocked s promptem
+   pro Codex; Agent je nikdy neopravuje resetem, přepisem historie ani
+   generováním jiného dependency stromu. Productionspace, Personalspace,
+   worktrees a root-space repository-db update nepřekračuje.
 2. Než něco vytvoříš, spusť `bun run worktrees:status`. Audit čte Git registry,
    takže ukáže i linked worktrees mimo root. Je to informativní inventura;
    `bun run worktrees:check` je fail-closed kontrola umístění, metadat a Git
@@ -122,8 +125,8 @@ autoritu.
    `gh pr view <číslo> --json mergeable,mergeStateStatus,reviewDecision`.
    Po explicitním „Publikuj" v threadu PR mergni metodou, kterou repozitář
    povoluje (při více povolených je default rebase, pokud Organizace ve svém
-   `AGENTS.md` nedeklaruje jinak), v primárním checkoutu stáhni main
-   (`bun run doctor:task`, `git pull --ff-only`) a pokračuj cleanup guardy
+   `AGENTS.md` nedeklaruje jinak), v primárním checkoutu spusť
+   `lazurio update`, potom `bun run doctor:task` a pokračuj cleanup guardy
    v kroku 13. Když Principál zvolí předání, nebo mu GitHub merge
    nedovoluje, vyžádej review Kolegy, kterého Principál zvolil
    (`gh pr edit --add-reviewer <login>` + @zmínka v komentáři PR); pokud
@@ -149,6 +152,7 @@ MISSION_CONTROL_AUTHORITY_ROOT=<organization-root-or-db> bun run worktrees:creat
 bun run worktrees:status
 bun run worktrees:check
 # pouze před taskem z primárního main checkoutu
+lazurio update
 bun run doctor:task
 # před každým PR pushem z edit worktree
 # pokud vlastní root package.json deklaruje pr:preflight:

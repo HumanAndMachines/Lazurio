@@ -1,5 +1,5 @@
 import { existsSync } from "fs";
-import { appendFile, mkdir, readFile, realpath, stat, utimes, writeFile } from "fs/promises";
+import { appendFile, mkdir, readFile, realpath, writeFile } from "fs/promises";
 import { randomUUID } from "crypto";
 import { createConnection } from "net";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep, win32 } from "path";
@@ -14,6 +14,10 @@ import { recordAppOpen } from "./usage-lib.mjs";
 import { buildWorktreeIndex } from "./worktree-lib.mjs";
 import { acquireModuleRuntimeLock } from "./module-runtime-lock-lib.mjs";
 import { trustedWindowsSystemExecutable } from "./windows-system-path-lib.mjs";
+import {
+  refreshFrozenBunDependencies,
+  runFrozenBunInstall,
+} from "./dependency-install-lib.mjs";
 import {
   buildDesiredModuleState,
   listDesiredModuleStates,
@@ -745,6 +749,15 @@ export function createRuntimeManager({
 
   async function install(appId, { action = "install", source = null } = {}) {
     const app = await runtimeAppForAction(appId, { source });
+    return withModuleLeaseLock(app, () => installRuntimeDependenciesUnlocked(app, { action }));
+  }
+
+  async function refreshDependencies(appId, { source = null } = {}) {
+    const app = await runtimeAppForAction(appId, { source });
+    return withModuleLeaseLock(app, () => installRuntimeDependenciesUnlocked(app, { action: "refresh" }));
+  }
+
+  async function installRuntimeDependenciesUnlocked(app, { action = "install" } = {}) {
     const runtimeKey = runtimeKeyForApp(app);
     const runtimeSource = runtimeSourceForApp(app);
     const dependencies = await dependencyForApp(app);
@@ -764,13 +777,25 @@ export function createRuntimeManager({
     const startedAt = new Date().toISOString();
     const appFilesystemRoot = filesystemRootForApp(app);
     const cwd = join(appFilesystemRoot, app.cwd);
+    const activeRecord = selectManagedModuleStopRecord(managedProcesses.values(), app);
+    const activeApp = activeRecord?.runtimeApp ?? null;
+    if (activeApp) {
+      await appendLog(logPath, `\n[launchpad] ${startedAt} ${action} ${app.id} stopping managed runtime before dependency mutation\n`);
+      await stopRuntimeAppUnlocked(activeApp);
+    }
     await appendLog(
       logPath,
       `\n[launchpad] ${startedAt} ${action} ${app.id} command=${dependencies.install_command_display} source=${runtimeSource.type} cwd=${cwd}\n`,
     );
 
-    const child = spawnProcess(runtimePackageCommand(dependencies.install_command, runtimeBunExecutable), {
+    const installOptions = {
       cwd,
+      // Dependency mutation je app-package scoped. Užší boundary než celý
+      // checkout zaručí, že clean Repair může sáhnout pouze na jeho odvozené
+      // node_modules.
+      boundaryRoot: cwd,
+      command: runtimePackageCommand(dependencies.install_command, runtimeBunExecutable),
+      spawnProcess,
       env: runtimeProcessEnv(app, {
         COMPANIES_WORKSPACE_ROOT: appFilesystemRoot,
         COMPANYASCODE_APP_ID: app.id,
@@ -778,24 +803,21 @@ export function createRuntimeManager({
         COMPANYASCODE_RUNTIME_SOURCE: runtimeSource.type,
         ...(runtimeSource.slug ? { COMPANYASCODE_WORKTREE_SLUG: runtimeSource.slug } : {}),
       }),
-      stdout: "pipe",
-      stderr: "pipe",
-      windowsHide: true,
-    });
-    const outputPipes = [
-      pipeOutput(child.stdout, logPath, "stdout"),
-      pipeOutput(child.stderr, logPath, "stderr"),
-    ];
-    const exitCode = await child.exited;
-    await Promise.allSettled(outputPipes);
+    };
+    const installed = action === "refresh"
+      ? await refreshFrozenBunDependencies(installOptions)
+      : await runFrozenBunInstall({
+          ...installOptions,
+          mode: action === "repair" ? "clean" : "ensure",
+        });
+    if (installed.stdout) await appendLog(logPath, `[stdout] ${installed.stdout}`);
+    if (installed.stderr) await appendLog(logPath, `[stderr] ${installed.stderr}`);
+    const exitCode = installed.exit_code ?? 1;
     await appendLog(logPath, `[launchpad] ${new Date().toISOString()} ${action} ${app.id} code=${exitCode} source=${runtimeSource.type}\n`);
-    if (exitCode === 0) {
-      await refreshVerifiedStaleLockfile({ app, action, dependencies, cwd, logPath });
-    }
     const log_excerpt = await logTail(logPath, errorTailBytes);
-    const failureKind = exitCode === 0 ? null : classifyInstallFailure(log_excerpt);
+    const failureKind = installed.ok ? null : classifyInstallFailure(log_excerpt);
     await writeState(runtimeKey, {
-      status: exitCode === 0 ? "stopped" : "unhealthy",
+      status: installed.ok ? "stopped" : "unhealthy",
       app_id: app.id,
       runtime_key: runtimeKey,
       runtime_source: runtimeSource,
@@ -810,25 +832,55 @@ export function createRuntimeManager({
         started_at: startedAt,
         completed_at: new Date().toISOString(),
         exit_code: exitCode,
+        mode: installed.mode,
+        refresh_strategy: installed.refresh_strategy ?? null,
+        removed_node_modules: installed.removed_node_modules === true,
         log_excerpt,
       },
       log_path: relativeRuntimePath(logPath),
-      ...(exitCode === 0 ? {} : { last_error: installFailureMessage(app, exitCode, log_excerpt), failure_kind: failureKind, log_excerpt }),
+      ...(installed.ok ? {} : { last_error: installFailureMessage(app, exitCode, log_excerpt), failure_kind: failureKind, log_excerpt }),
     });
 
-    if (exitCode !== 0) {
-      throw new RuntimeActionError(500, "app_install_failed", installFailureMessage(app, exitCode, log_excerpt), [
+    if (!installed.ok) {
+      let rollbackRestarted = null;
+      let rollbackRestartError = null;
+      if (activeApp && installed.runtime_tree_usable === true) {
+        await appendLog(
+          logPath,
+          `[launchpad] ${new Date().toISOString()} ${action} ${app.id} dependency repair failed; restarting the previous managed runtime\n`,
+        );
+        try {
+          rollbackRestarted = await startRuntimeAppUnlocked(activeApp, { trigger: "dependency-repair-rollback" });
+        } catch (error) {
+          rollbackRestartError = error instanceof Error ? error.message : String(error);
+          await appendLog(
+            logPath,
+            `[launchpad] ${new Date().toISOString()} ${action} ${app.id} previous runtime restart failed: ${rollbackRestartError}\n`,
+          );
+        }
+      }
+      throw new RuntimeActionError(500, "app_install_failed", installed.detail ?? installFailureMessage(app, exitCode, log_excerpt), [
+        installed.detail,
         log_excerpt,
       ].filter(Boolean), {
         action,
-        failure_kind: failureKind,
+        failure_kind: installed.reason === "dependency_install_failed"
+          ? failureKind
+          : installed.reason ?? failureKind,
         command: dependencies.install_command,
         command_display: dependencies.install_command_display,
         cwd,
         exit_code: exitCode,
         log_path: relativeRuntimePath(logPath),
         log_excerpt,
+        rollback_restarted: rollbackRestarted !== null,
+        ...(rollbackRestartError ? { rollback_restart_error: rollbackRestartError } : {}),
       });
+    }
+
+    let restarted = null;
+    if (activeApp) {
+      restarted = await startRuntimeAppUnlocked(activeApp, { trigger: "dependency-repair" });
     }
 
     return {
@@ -840,6 +892,10 @@ export function createRuntimeManager({
       command_display: dependencies.install_command_display,
       cwd,
       exit_code: exitCode,
+      mode: installed.mode,
+      refresh_strategy: installed.refresh_strategy ?? null,
+      removed_node_modules: installed.removed_node_modules === true,
+      restarted,
       log_path: relativeRuntimePath(logPath),
       log_excerpt,
       runtime: await healthForApp(app),
@@ -867,9 +923,9 @@ export function createRuntimeManager({
     //    bezpečně provést. Ostatní blokující dependency stavy (missing_access,
     //    restricted, invalid_manifest…) skončí srozumitelnou chybou.
     let dependencies = await dependencyForApp(app);
-    if (["needs_install", "stale_lockfile"].includes(dependencies.state)) {
-      const action = dependencies.state === "needs_install" ? "install" : "repair";
-      const installResult = await install(app.id, { action, source: runtimeSource });
+    if (dependencies.state === "needs_install") {
+      const action = "install";
+      const installResult = await installRuntimeDependenciesUnlocked(app, { action });
       steps.push({ step: action, exit_code: installResult.exit_code });
       dependencies = await dependencyForApp(app);
     }
@@ -3571,7 +3627,10 @@ export function createRuntimeManager({
     const lockfile = await firstExistingLockfile(appRoot);
     const manager = detectPackageManager({ packageJson, lockfile });
     const declaredDependencyCount = countDeclaredDependencies(packageJson);
-    const packageNeedsInstall = declaredDependencyCount > 0 || Boolean(lockfile);
+    // Lockfile s prázdným grafem nevyžaduje prázdnou node_modules složku.
+    // Odvozený strom je potřeba jen tehdy, když package skutečně deklaruje
+    // alespoň jednu závislost.
+    const packageNeedsInstall = declaredDependencyCount > 0;
     const requiredSlot = await requiredModuleSlotState({ companiesRoot, app });
 
     if (requiredSlot) {
@@ -3615,9 +3674,6 @@ export function createRuntimeManager({
     if (packageNeedsInstall && !nodeModulesPresent) {
       state = "needs_install";
       message = `${app.title}: chybí node_modules. Použij Install (${manager.installCommand.join(" ")}) v ${appCwd}.`;
-    } else if (lockfile && nodeModulesPresent && await isPackageJsonNewerThanLockfile(absolutePackagePath, lockfile.absolute_path)) {
-      state = "stale_lockfile";
-      message = `${app.title}: package.json je novější než ${lockfile.path}. Spusť Install/Repair a zkontroluj případný lockfile diff.`;
     }
 
     return dependencyResult({
@@ -3680,6 +3736,7 @@ export function createRuntimeManager({
     start,
     switchApp,
     install,
+    refreshDependencies,
     open,
     stop,
     restart,
@@ -3756,7 +3813,10 @@ function dependencyResult({
   checkedAt,
   message,
 }) {
-  const canInstall = packageJsonPresent && Boolean(installCommand) && ["ready", "needs_install", "stale_lockfile"].includes(state);
+  const canInstall = packageJsonPresent
+    && Boolean(lockfile)
+    && Boolean(installCommand)
+    && ["ready", "needs_install"].includes(state);
   return {
     schema_version: "companiesascode.launchpad.dependencies.v1",
     app_id: app.id,
@@ -3777,7 +3837,7 @@ function dependencyResult({
       : null,
     declared_dependency_count: declaredDependencyCount,
     can_install: canInstall,
-    can_start: state === "ready" || state === "stale_lockfile",
+    can_start: state === "ready",
     checked_at: checkedAt,
     cache: {
       status: "fresh",
@@ -3785,26 +3845,6 @@ function dependencyResult({
     },
     message,
   };
-}
-
-async function refreshVerifiedStaleLockfile({ app, action, dependencies, cwd, logPath }) {
-  if (dependencies.state !== "stale_lockfile") return;
-  const lockfilePath = dependencies.lockfile?.path;
-  if (!lockfilePath) return;
-  const absoluteLockfilePath = join(cwd, lockfilePath);
-  const verifiedAt = new Date();
-  try {
-    await utimes(absoluteLockfilePath, verifiedAt, verifiedAt);
-    await appendLog(
-      logPath,
-      `[launchpad] ${verifiedAt.toISOString()} ${action} ${app.id} verified ${lockfilePath}; refreshed lockfile mtime after successful install\n`,
-    );
-  } catch (error) {
-    await appendLog(
-      logPath,
-      `[launchpad] ${new Date().toISOString()} ${action} ${app.id} could not refresh ${lockfilePath} mtime: ${error.message}\n`,
-    );
-  }
 }
 
 async function firstExistingLockfile(appRoot) {
@@ -3828,7 +3868,7 @@ function detectPackageManager({ packageJson, lockfile }) {
       name,
       source: "packageManager",
       supported: supportedInstallManagers.has(name),
-      installCommand: supportedInstallManagers.has(name) ? [name, "install"] : null,
+      installCommand: supportedInstallManagers.has(name) ? [name, "install", "--frozen-lockfile"] : null,
     };
   }
 
@@ -3837,7 +3877,7 @@ function detectPackageManager({ packageJson, lockfile }) {
       name: lockfile.package_manager,
       source: `lockfile:${lockfile.path}`,
       supported: supportedInstallManagers.has(lockfile.package_manager),
-      installCommand: supportedInstallManagers.has(lockfile.package_manager) ? [lockfile.package_manager, "install"] : null,
+      installCommand: supportedInstallManagers.has(lockfile.package_manager) ? [lockfile.package_manager, "install", "--frozen-lockfile"] : null,
     };
   }
 
@@ -3845,7 +3885,7 @@ function detectPackageManager({ packageJson, lockfile }) {
     name: "bun",
     source: "default",
     supported: true,
-    installCommand: ["bun", "install"],
+    installCommand: ["bun", "install", "--frozen-lockfile"],
   };
 }
 
@@ -3875,15 +3915,6 @@ function countDeclaredDependencies(packageJson) {
     .map((key) => packageJson[key])
     .filter((value) => value && typeof value === "object" && !Array.isArray(value))
     .reduce((count, value) => count + Object.keys(value).length, 0);
-}
-
-async function isPackageJsonNewerThanLockfile(packagePath, lockfilePath) {
-  try {
-    const [packageStat, lockStat] = await Promise.all([stat(packagePath), stat(lockfilePath)]);
-    return packageStat.mtimeMs > lockStat.mtimeMs + 1_000;
-  } catch {
-    return false;
-  }
 }
 
 async function waitForEarlyExit(child, timeoutMs) {

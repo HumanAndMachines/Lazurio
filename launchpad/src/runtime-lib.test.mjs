@@ -3,7 +3,7 @@ import { existsSync } from "fs";
 import { createServer } from "net";
 import { tmpdir } from "os";
 import { dirname, join } from "path";
-import { cp, mkdir, mkdtemp, readFile, rm, utimes, writeFile } from "fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, symlink, utimes, writeFile } from "fs/promises";
 import {
   RuntimeActionError,
   bunExecutableCandidates,
@@ -206,7 +206,7 @@ test("runtime manager spustí, změří a zastaví managed aplikaci", async () =
   const initialHealth = await runtime.health("test-company-demo-v1");
   expect(initialHealth.status).toBe("stopped");
   expect(initialHealth.dependencies.state).toBe("ready");
-  expect(initialHealth.dependencies.install_command_display).toBe("bun install");
+  expect(initialHealth.dependencies.install_command_display).toBe("bun install --frozen-lockfile");
   await runtime.start("test-company-demo-v1");
   const healthy = await waitForStatus(() => runtime.health("test-company-demo-v1"), "healthy");
   expect(healthy.managed).toBe(true);
@@ -327,7 +327,7 @@ test("runtime process resolves module-root source from app-local dependencies", 
 
 test("runtime manager ukládá mutable stav mimo read-only Launchpad source", async () => {
   const port = await findFreePort();
-  const root = await createCompaniesWorkspaceFixture({ port });
+  const root = await createCompaniesWorkspaceFixture({ port, writeLockfile: true });
   const launchpadRoot = join(root, "immutable-runtime", "launchpad");
   const stateRoot = join(root, "state", "launchpad");
   const runtime = createRuntimeManager({
@@ -2750,31 +2750,189 @@ testWithInspectableProcessCwd("runtime manager neukončí ani stubborn adopted v
 
 test("runtime manager umí nainstalovat balíčky aplikace a zapsat install log", async () => {
   const port = await findFreePort();
-  const root = await createCompaniesWorkspaceFixture({ port });
+  const root = await createCompaniesWorkspaceFixture({
+    port,
+    dependencies: { fixture: "1.0.0" },
+    writeLockfile: true,
+  });
   const runtime = createRuntimeManager({
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
     instanceId: "test-instance",
+    spawnProcess: (command, options) => command.slice(1).includes("install")
+      ? Bun.spawn([process.execPath, "-e", "await Bun.write('node_modules/fixture.txt', 'ready\\n')"], options)
+      : spawnFixtureChild(root, command, options),
   });
 
   const result = await runtime.install("test-company-demo-v1");
   expect(result.action).toBe("install");
   expect(result.exit_code).toBe(0);
-  expect(result.command_display).toBe("bun install");
+  expect(result.command_display).toBe("bun install --frozen-lockfile");
   expect(result.cwd.endsWith(join("organizations", "TestCompany", "modules", "demo", "app", "v1"))).toBe(true);
   expect(result.log_path).toBe("logs/apps/test-company-demo-v1.log");
   const repair = await runtime.install("test-company-demo-v1", { action: "repair" });
   expect(repair.action).toBe("repair");
   const logs = await runtime.logs("test-company-demo-v1");
-  expect(logs.content).toContain("install test-company-demo-v1 command=bun install");
-  expect(logs.content).toContain("repair test-company-demo-v1 command=bun install");
+  expect(logs.content).toContain("install test-company-demo-v1 command=bun install --frozen-lockfile");
+  expect(logs.content).toContain("repair test-company-demo-v1 command=bun install --frozen-lockfile");
   expect(logs.content).toContain("code=0");
 });
+
+test("clean Repair zastaví a znovu spustí přesně managed aplikaci", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({
+    port,
+    dependencies: { fixture: "1.0.0" },
+    writeLockfile: true,
+    withNodeModules: true,
+  });
+  const appRoot = join(root, "organizations", "TestCompany", "modules", "demo", "app", "v1");
+  await writeFile(join(appRoot, "node_modules", "old.txt"), "old\n");
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "test-instance",
+    spawnProcess: (command, options) => command.slice(1).includes("install")
+      ? Bun.spawn([process.execPath, "-e", "await Bun.write('node_modules/new.txt', 'new\\n')"], options)
+      : spawnFixtureChild(root, command, options),
+  });
+
+  const opened = await runtime.open("test-company-demo-v1");
+  const oldPid = opened.runtime.pid;
+  expect(opened.runtime.status).toBe("healthy");
+
+  const repaired = await runtime.install("test-company-demo-v1", { action: "repair" });
+  const healthy = await waitForStatus(() => runtime.health("test-company-demo-v1"), "healthy");
+
+  expect(repaired).toMatchObject({
+    action: "repair",
+    mode: "clean",
+    removed_node_modules: true,
+    restarted: { action: "start" },
+  });
+  expect(healthy.pid).not.toBe(oldPid);
+  expect(existsSync(join(appRoot, "node_modules", "old.txt"))).toBe(false);
+  expect(await readFile(join(appRoot, "node_modules", "new.txt"), "utf8")).toBe("new\n");
+  await runtime.stop("test-company-demo-v1");
+}, platformTestTimeout(15_000));
+
+test("update refresh retries a failed ensure cleanly and restores the managed app", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({
+    port,
+    dependencies: { fixture: "1.0.0" },
+    writeLockfile: true,
+    withNodeModules: true,
+  });
+  const appRoot = join(root, "organizations", "TestCompany", "modules", "demo", "app", "v1");
+  await writeFile(join(appRoot, "node_modules", "old.txt"), "old\n");
+  let installAttempts = 0;
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "refresh-test-instance",
+    spawnProcess: (command, options) => {
+      if (!command.slice(1).includes("install")) return spawnFixtureChild(root, command, options);
+      installAttempts += 1;
+      return installAttempts === 1
+        ? Bun.spawn([process.execPath, "-e", "process.exit(2)"], options)
+        : Bun.spawn([process.execPath, "-e", "await Bun.write('node_modules/new.txt', 'new\\n')"], options);
+    },
+  });
+
+  const opened = await runtime.open("test-company-demo-v1");
+  const refreshed = await runtime.refreshDependencies("test-company-demo-v1");
+  const healthy = await waitForStatus(() => runtime.health("test-company-demo-v1"), "healthy");
+
+  expect(refreshed).toMatchObject({
+    action: "refresh",
+    mode: "clean",
+    refresh_strategy: "clean_repair",
+    removed_node_modules: true,
+    restarted: { action: "start" },
+  });
+  expect(installAttempts).toBe(2);
+  expect(healthy.pid).not.toBe(opened.runtime.pid);
+  expect(existsSync(join(appRoot, "node_modules", "old.txt"))).toBe(false);
+  expect(await readFile(join(appRoot, "node_modules", "new.txt"), "utf8")).toBe("new\n");
+  await runtime.stop("test-company-demo-v1");
+}, platformTestTimeout(15_000));
+
+test("failed clean Repair rolls back dependencies and restarts the previous managed app", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({
+    port,
+    dependencies: { fixture: "1.0.0" },
+    writeLockfile: true,
+    withNodeModules: true,
+  });
+  const appRoot = join(root, "organizations", "TestCompany", "modules", "demo", "app", "v1");
+  await writeFile(join(appRoot, "node_modules", "previous.txt"), "previous\n");
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "repair-rollback-test-instance",
+    spawnProcess: (command, options) => command.slice(1).includes("install")
+      ? Bun.spawn([
+          process.execPath,
+          "-e",
+          "await Bun.write('node_modules/partial.txt', 'partial\\n'); process.exit(23)",
+        ], options)
+      : spawnFixtureChild(root, command, options),
+  });
+
+  const opened = await runtime.open("test-company-demo-v1");
+  await expect(runtime.install("test-company-demo-v1", { action: "repair" })).rejects.toMatchObject({
+    code: "app_install_failed",
+    metadata: { rollback_restarted: true },
+  });
+  const healthy = await waitForStatus(() => runtime.health("test-company-demo-v1"), "healthy");
+
+  expect(healthy.pid).not.toBe(opened.runtime.pid);
+  expect(await readFile(join(appRoot, "node_modules", "previous.txt"), "utf8")).toBe("previous\n");
+  expect(existsSync(join(appRoot, "node_modules", "partial.txt"))).toBe(false);
+  await runtime.stop("test-company-demo-v1");
+}, platformTestTimeout(15_000));
+
+test("refused clean Repair leaves an unchanged dependency boundary running", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({
+    port,
+    dependencies: { fixture: "1.0.0" },
+    writeLockfile: true,
+  });
+  const appRoot = join(root, "organizations", "TestCompany", "modules", "demo", "app", "v1");
+  const externalDependencies = join(root, "external-dependencies");
+  await mkdir(externalDependencies);
+  await writeFile(join(externalDependencies, "marker.txt"), "untouched\n");
+  await symlink(externalDependencies, join(appRoot, "node_modules"), "dir");
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "repair-boundary-test-instance",
+  });
+
+  const opened = await runtime.open("test-company-demo-v1");
+  await expect(runtime.install("test-company-demo-v1", { action: "repair" })).rejects.toMatchObject({
+    code: "app_install_failed",
+    metadata: {
+      failure_kind: "node_modules_boundary_invalid",
+      rollback_restarted: true,
+    },
+  });
+  const healthy = await waitForStatus(() => runtime.health("test-company-demo-v1"), "healthy");
+
+  expect(healthy.pid).not.toBe(opened.runtime.pid);
+  expect(await readFile(join(externalDependencies, "marker.txt"), "utf8")).toBe("untouched\n");
+  await runtime.stop("test-company-demo-v1");
+}, platformTestTimeout(15_000));
 
 test("runtime manager předá absolutní Organization root i install lifecycle procesu", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({
     port,
+    dependencies: { fixture: "1.0.0" },
+    writeLockfile: true,
     installScripts: { preinstall: "bun capture-install-env.mjs" },
   });
   const appRoot = join(root, "organizations", "TestCompany", "modules", "demo", "app", "v1");
@@ -2793,6 +2951,13 @@ test("runtime manager předá absolutní Organization root i install lifecycle p
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
     instanceId: "test-instance",
+    spawnProcess: (command, options) => command.slice(1).includes("install")
+      ? Bun.spawn([
+          process.execPath,
+          "-e",
+          "await Bun.write('node_modules/fixture.txt', 'ready\\n'); await Bun.write('install-env.json', JSON.stringify({ organizationRoot: process.env.COMPANYASCODE_ORGANIZATION_ROOT ?? null, nodePath: process.env.NODE_PATH ?? null }))",
+        ], options)
+      : spawnFixtureChild(root, command, options),
   });
 
   await runtime.install("test-company-demo-v1");
@@ -2805,6 +2970,7 @@ test("runtime manager classifyuje selhaný Install/Repair s failure_kind", async
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({
     port,
+    writeLockfile: true,
     installScripts: {
       preinstall: "node -e \"console.error('fixture install script failed: lifecycle script'); process.exit(13)\"",
     },
@@ -2867,7 +3033,7 @@ test("runtime manager rozlišuje missing dependency state a blokuje Start před 
   expect(startError.metadata.failure_kind).toBe("missing_dependencies");
 });
 
-test("runtime manager dependency model hlásí stale lockfile", async () => {
+test("runtime manager dependency model nepoužívá filesystem mtime jako package drift autoritu", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({
     port,
@@ -2883,12 +3049,12 @@ test("runtime manager dependency model hlásí stale lockfile", async () => {
   });
 
   const health = await runtime.health("test-company-demo-v1");
-  expect(health.dependencies.state).toBe("stale_lockfile");
+  expect(health.dependencies.state).toBe("ready");
   expect(health.dependencies.lockfile.path).toBe("bun.lock");
   expect(health.dependencies.can_start).toBe(true);
 });
 
-test("runtime manager Repair pro stale lockfile obnoví dependency state na ready i po no-op installu", async () => {
+test("runtime manager Repair vždy odstraní node_modules a provede čistý frozen install", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({
     port,
@@ -2900,23 +3066,30 @@ test("runtime manager Repair pro stale lockfile obnoví dependency state na read
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
     instanceId: "test-instance",
-    spawnProcess: (command, options) => spawnFixtureChild(root,
-      command.slice(1).includes("install")
-        ? [process.execPath, "-e", "console.log('fake bun install no changes')"]
-        : command,
-      options,
-    ),
+    spawnProcess: (command, options) => command.slice(1).includes("install")
+      ? Bun.spawn([
+          process.execPath,
+          "-e",
+          "if (await Bun.file('node_modules/old.txt').exists()) process.exit(91); await Bun.write('node_modules/new.txt', 'fresh\\n')",
+        ], options)
+      : spawnFixtureChild(root, command, options),
   });
 
-  expect((await runtimeWithNoopInstall.health("test-company-demo-v1")).dependencies.state).toBe("stale_lockfile");
+  const appRoot = join(root, "organizations", "TestCompany", "modules", "demo", "app", "v1");
+  await writeFile(join(appRoot, "node_modules", "old.txt"), "stale\n");
+  expect((await runtimeWithNoopInstall.health("test-company-demo-v1")).dependencies.state).toBe("ready");
 
   const result = await runtimeWithNoopInstall.install("test-company-demo-v1", { action: "repair" });
 
   expect(result.action).toBe("repair");
+  expect(result.mode).toBe("clean");
+  expect(result.removed_node_modules).toBe(true);
   expect(result.exit_code).toBe(0);
   expect(result.log_excerpt).toContain("repair test-company-demo-v1 code=0");
   expect(result.runtime.dependencies.state).toBe("ready");
   expect((await runtimeWithNoopInstall.health("test-company-demo-v1")).dependencies.state).toBe("ready");
+  expect(existsSync(join(appRoot, "node_modules", "old.txt"))).toBe(false);
+  expect(await readFile(join(appRoot, "node_modules", "new.txt"), "utf8")).toBe("fresh\n");
 });
 
 test("runtime manager dependency model hlásí missing package a unknown package manager", async () => {
@@ -3996,11 +4169,19 @@ test("runtime manager open chain nejdřív nainstaluje chybějící balíčky", 
   const root = await createCompaniesWorkspaceFixture({
     port,
     dependencies: { "left-pad": "^1.0.0" },
+    writeLockfile: true,
   });
   const runtime = createRuntimeManager({
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
     instanceId: "test-instance",
+    spawnProcess: (command, options) => command.slice(1).includes("install")
+      ? Bun.spawn([
+          process.execPath,
+          "-e",
+          "await Bun.write('node_modules/left-pad/index.js', 'export default {}\\n')",
+        ], options)
+      : spawnFixtureChild(root, command, options),
   });
 
   const health = await runtime.health("test-company-demo-v1");
@@ -4149,7 +4330,15 @@ async function createCompaniesWorkspaceFixture({
   };
   await writeJson(join(appRoot, "package.json"), packageJson);
   if (writeLockfile) {
-    await writeFile(join(appRoot, "bun.lock"), "# fixture lockfile\n", "utf8");
+    await writeFile(join(appRoot, "bun.lock"), [
+      "{",
+      '  "lockfileVersion": 1,',
+      '  "configVersion": 1,',
+      '  "workspaces": { "": { "name": "test-company-demo-v1" } },',
+      '  "packages": {},',
+      "}",
+      "",
+    ].join("\n"), "utf8");
   }
   if (withNodeModules) {
     await mkdir(join(appRoot, "node_modules"), { recursive: true });

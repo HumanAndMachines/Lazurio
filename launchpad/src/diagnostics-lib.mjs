@@ -1,5 +1,5 @@
 import { existsSync } from "fs";
-import { readFile, readdir, stat } from "fs/promises";
+import { readFile, readdir } from "fs/promises";
 import { basename, join, posix } from "path";
 import {
   discoverLaunchpadApps,
@@ -530,14 +530,13 @@ async function worktreeDependencyCheck({ companiesRoot, index }) {
 
   const counts = countBy(records.map((record) => record.state));
   const packageRecords = records.filter((record) => record.state !== "no_package");
-  const warningStates = new Set(["needs_install", "stale_lockfile", "unknown_package_manager", "invalid_package_json"]);
+  const warningStates = new Set(["needs_install", "unknown_package_manager", "invalid_package_json"]);
   const warnings = records.filter((record) => warningStates.has(record.state));
   const details = [
     `checked_worktrees: ${ownedWorktrees.length}`,
     `checked_packages: ${packageRecords.length}`,
     `ready: ${counts.ready ?? 0}`,
     `needs_install: ${counts.needs_install ?? 0}`,
-    `stale_lockfile: ${counts.stale_lockfile ?? 0}`,
     `unknown_package_manager: ${counts.unknown_package_manager ?? 0}`,
     `invalid_package_json: ${counts.invalid_package_json ?? 0}`,
     `no_package: ${counts.no_package ?? 0}`,
@@ -599,7 +598,7 @@ async function worktreePackageReadiness({ worktree, packageRoot }) {
   const lockfile = await firstExistingWorktreeLockfile(packageRoot.absolute_dir);
   const manager = detectWorktreePackageManager({ packageJson, lockfile });
   const declaredDependencyCount = countWorktreeDeclaredDependencies(packageJson);
-  const packageNeedsInstall = declaredDependencyCount > 0 || Boolean(lockfile);
+  const packageNeedsInstall = declaredDependencyCount > 0;
   const nodeModulesPresent = existsSync(join(packageRoot.absolute_dir, "node_modules"));
   let state = "ready";
   let action = "ready";
@@ -608,9 +607,6 @@ async function worktreePackageReadiness({ worktree, packageRoot }) {
     action = `unsupported package manager ${manager.name ?? "unknown"}`;
   } else if (packageNeedsInstall && !nodeModulesPresent) {
     state = "needs_install";
-    action = manager.install_command.join(" ");
-  } else if (lockfile && nodeModulesPresent && await packageJsonNewerThanLockfile(packagePath, lockfile.absolute_path)) {
-    state = "stale_lockfile";
     action = manager.install_command.join(" ");
   }
 
@@ -643,7 +639,7 @@ function detectWorktreePackageManager({ packageJson, lockfile }) {
       name,
       source: "packageManager",
       supported: worktreeSupportedPackageManagers.has(name),
-      install_command: worktreeSupportedPackageManagers.has(name) ? [name, "install"] : null,
+      install_command: worktreeSupportedPackageManagers.has(name) ? [name, "install", "--frozen-lockfile"] : null,
     };
   }
   if (lockfile) {
@@ -651,14 +647,14 @@ function detectWorktreePackageManager({ packageJson, lockfile }) {
       name: lockfile.package_manager,
       source: `lockfile:${lockfile.path}`,
       supported: worktreeSupportedPackageManagers.has(lockfile.package_manager),
-      install_command: worktreeSupportedPackageManagers.has(lockfile.package_manager) ? [lockfile.package_manager, "install"] : null,
+      install_command: worktreeSupportedPackageManagers.has(lockfile.package_manager) ? [lockfile.package_manager, "install", "--frozen-lockfile"] : null,
     };
   }
   return {
     name: "bun",
     source: "default",
     supported: true,
-    install_command: ["bun", "install"],
+    install_command: ["bun", "install", "--frozen-lockfile"],
   };
 }
 
@@ -688,15 +684,6 @@ function countWorktreeDeclaredDependencies(packageJson) {
     .map((key) => packageJson[key])
     .filter((value) => value && typeof value === "object" && !Array.isArray(value))
     .reduce((count, value) => count + Object.keys(value).length, 0);
-}
-
-async function packageJsonNewerThanLockfile(packagePath, lockfilePath) {
-  try {
-    const [packageStat, lockStat] = await Promise.all([stat(packagePath), stat(lockfilePath)]);
-    return packageStat.mtimeMs > lockStat.mtimeMs + 1_000;
-  } catch {
-    return false;
-  }
 }
 
 async function safeReadDir(path) {
@@ -2346,7 +2333,7 @@ export function runtimeAppStatus(app) {
   }
   // Nevalidní manifest je scoped attention stav (decision 0043), ne root fail.
   if (dependencyState === "invalid_manifest") return "warn";
-  if (dependencyState === "needs_install" || dependencyState === "stale_lockfile") return "warn";
+  if (dependencyState === "needs_install") return "warn";
   if (runtime.status === "unhealthy") return "warn";
   if (runtime.status === "starting" || runtime.status === "unknown") return "warn";
   return "ok";

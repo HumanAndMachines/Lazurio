@@ -111,22 +111,23 @@ dlouhodobý action layer.
 Před převzetím každého tasku agent spustí v primárním Lazurio checkoutu:
 
 ```sh
+lazurio update
 bun run doctor:task
 ```
 
-Lane provede `git fetch origin main --prune` s vypnutým interaktivním promptem
-a fail-closed rozliší clean/up-to-date, clean/behind, dirty, ahead, diverged a
-wrong-branch stav. Jen clean/behind má jednoduchou nápravu:
+`lazurio update` je jediná opravná lane: dirty tracked i untracked obsah uloží
+do ověřeného pojmenovaného recovery stashe, který nikdy sám neobnoví ani
+nesmaže. Wrong branch vrátí na `main` se zachováním commitů a zaostávající
+checkout stáhne pouze fast-forwardem. Po skutečné změně source obnoví package
+rooty deklarovaných Apps z verzovaného lockfilu; neúspěšné běžné ověření jednou
+zopakuje čistou instalací s rollbackem. Doctor potom read-only potvrdí výsledný
+stav.
 
-```sh
-git pull --ff-only
-bun run doctor:task
-```
-
-Na dirty primary se automaticky nepoužívá `git pull --rebase --autostash`.
-Autostash by skryl cizí nebo nedokončenou práci a rebase primárního mainu by
-maskoval porušení reference-checkout kontraktu. Agent zachová práci v
-plan-owned worktree a primary opraví bez ztráty historie.
+Ahead/diverged historie, lokální commit na `main`, nebezpečný detached HEAD,
+rozpracovaná Git operace nebo neplatný lockfile zůstávají fail-closed pro
+Codex. Agent je neřeší resetem, rebasem primárního checkoutu ani změnou
+dependency verze. Rozdělaná source práce patří výhradně do plan-owned
+worktree; recovery stash je důkaz předchozí chyby, ne druhý pracovní prostor.
 
 Bezprostředně před každým pushem PR branche agent spustí v edit worktree:
 

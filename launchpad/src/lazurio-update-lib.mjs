@@ -2,8 +2,10 @@ import { createHash, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { open, readFile, realpath, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
+import { discoverLaunchpadApps } from "./discovery-lib.mjs";
+import { refreshFrozenBunDependencies } from "./dependency-install-lib.mjs";
 import { buildGitInventory } from "./git-inventory-lib.mjs";
 import { materializeRepoCheckout } from "./git-materialization-lib.mjs";
 import {
@@ -90,6 +92,11 @@ export async function runLazurioUpdate({
   const buildInventory = deps.buildInventory ?? buildGitInventory;
   const updateRepo = deps.updateRepo ?? updateManagedRepo;
   const materializeRepo = deps.materializeRepo ?? materializeRepoCheckout;
+  const discoverApps = deps.discoverApps ?? discoverLaunchpadApps;
+  const refreshPackageDependencies = deps.refreshPackageDependencies
+    ?? deps.installDependencies
+    ?? refreshFrozenBunDependencies;
+  const refreshAppDependencies = deps.refreshAppDependencies ?? null;
   const checkpoint = deps.checkpoint ?? (() => {});
   let lock;
 
@@ -110,8 +117,10 @@ export async function runLazurioUpdate({
 
   const results = [];
   const warnings = [];
+  const repoDescriptors = new Map();
   try {
     const rootRepo = rootDescriptor(absoluteRoot);
+    repoDescriptors.set(rootRepo.key, rootRepo);
     const rootResult = await safeUpdateRepo(rootRepo, {
       runId,
       updateRepo,
@@ -134,6 +143,7 @@ export async function runLazurioUpdate({
     }
 
     for (const organizationRoot of organizationRoots) {
+      repoDescriptors.set(organizationRoot.key, organizationRoot);
       const organizationResult = await safeUpdateRepo(organizationRoot, {
         runId,
         updateRepo,
@@ -158,6 +168,7 @@ export async function runLazurioUpdate({
       }
       const modules = managedWorkspaceModules(refreshed, organizationRoot.organization);
       for (const moduleRepo of modules) {
+        repoDescriptors.set(moduleRepo.key, moduleRepo);
         if (!existsSync(moduleRepo.absolute_path)) {
           const materialized = await safeMaterializeModule({
             rootPath: absoluteRoot,
@@ -178,6 +189,20 @@ export async function runLazurioUpdate({
         }));
       }
     }
+
+    const dependencyPhase = await reconcileUpdatedDependencies({
+      rootPath: absoluteRoot,
+      results,
+      repos: [...repoDescriptors.values()],
+      discoverApps,
+      refreshPackageDependencies,
+      refreshAppDependencies,
+      checkpoint,
+      runId,
+      deps,
+    });
+    if (dependencyPhase.blocked) results.push(dependencyPhase.blocked);
+    applyDependencyOutcomes(results, dependencyPhase.outcomes, repoDescriptors);
 
     return updateReport({ rootPath: absoluteRoot, runId, now, results, warnings });
   } finally {
@@ -295,7 +320,6 @@ async function safeUpdateRepo(repo, context) {
 export async function updateManagedRepo(repo, context = {}) {
   const run = context.deps?.runGit ?? runGit;
   const inspect = context.deps?.inspectLocalRepo ?? inspectLocalRepo;
-  const installDependencies = context.deps?.installDependencies ?? installFrozenBunDependencies;
   const checkpoint = context.checkpoint ?? (() => {});
   const local = await inspect(repo, { ...context.deps, runGit: run });
   if (local.directoryOnly) return currentResult(repo, "directory_only", "Adresář nemá vlastní Git checkout; Lazurio ho přeskočilo.");
@@ -469,32 +493,6 @@ export async function updateManagedRepo(repo, context = {}) {
       detail: "Repo po update není prokazatelně clean main na origin/main.",
       recoveryStash,
     });
-  }
-
-  if (actions.length > 0 && await declaresFrozenBunInstall(repo.absolute_path)) {
-    const installed = await installDependencies({ cwd: repo.absolute_path });
-    if (!installed.ok) {
-      return blockedResult(repo, "dependency_install_failed", {
-        detail: installed.detail ?? "bun install --frozen-lockfile selhal.",
-        recoveryStash,
-        actions,
-      });
-    }
-    actions.push("frozen_bun_install");
-    await checkpoint("after_dependency_install", { repo, runId: context.runId });
-    const afterInstall = await inspect(repo, { ...context.deps, runGit: run });
-    if (
-      !afterInstall.ok
-      || afterInstall.branch !== "main"
-      || afterInstall.dirtyPaths.length > 0
-      || afterInstall.head !== finalTarget
-    ) {
-      return blockedResult(repo, "dependency_install_changed_checkout", {
-        detail: "Frozen Bun install dokončil běh, ale checkout po něm není prokazatelně clean main na origin/main.",
-        recoveryStash,
-        actions,
-      });
-    }
   }
 
   if (actions.length === 0) {
@@ -697,18 +695,7 @@ async function safeMaterializeModule({
       });
     }
     await checkpoint("after_materialization", { repo, runId });
-    let actions = ["materialize"];
-    if (await declaresFrozenBunInstall(repo.absolute_path)) {
-      const install = deps?.installDependencies ?? installFrozenBunDependencies;
-      const installed = await install({ cwd: repo.absolute_path });
-      if (!installed.ok) {
-        return blockedResult(repo, "dependency_install_failed", {
-          detail: installed.detail ?? "bun install --frozen-lockfile selhal.",
-          actions,
-        });
-      }
-      actions = [...actions, "frozen_bun_install"];
-    }
+    const actions = ["materialize"];
     return updatedResult(repo, {
       reason: "module_materialized",
       message: "Workspace Modul byl bezpečně naklonovaný na clean main.",
@@ -720,6 +707,294 @@ async function safeMaterializeModule({
       detail: error instanceof Error ? error.message : String(error),
     });
   }
+}
+
+async function reconcileUpdatedDependencies({
+  rootPath,
+  results,
+  repos,
+  discoverApps,
+  refreshPackageDependencies,
+  refreshAppDependencies,
+  checkpoint,
+  runId,
+  deps,
+}) {
+  const changedRepoKeys = new Set(
+    results
+      .filter((result) => result.state === "updated" && sourceCheckoutChanged(result.actions))
+      .map((result) => result.repo_key),
+  );
+  if (changedRepoKeys.size === 0) return { outcomes: new Map(), blocked: null };
+
+  const canonicalRepos = await Promise.all(repos.map(async (repo) => ({
+    repo,
+    root: await canonicalPath(repo.absolute_path),
+  })));
+  const targetsByPath = new Map();
+  const inventoryOutcomes = new Map();
+
+  // Zachovej podporu package rootu samotného repozitáře (Lazurio root,
+  // Organization root nebo Modul). Manifestem deklarovaná App ve stejné cestě
+  // jej níže nahradí přesnějším lifecycle-aware targetem.
+  for (const { repo, root } of canonicalRepos) {
+    if (!changedRepoKeys.has(repo.key)) continue;
+    const target = await dependencyTarget({ repo, repoRoot: root, cwd: root });
+    if (target) targetsByPath.set(target.cwd, target);
+  }
+
+  const changedModules = canonicalRepos.filter(({ repo }) =>
+    repo.repo_kind === "module" && changedRepoKeys.has(repo.key)
+  );
+  if (changedModules.length > 0) {
+    let discovery;
+    try {
+      discovery = await discoverApps(rootPath);
+    } catch (error) {
+      return {
+        outcomes: new Map(),
+        blocked: blockedResult(inventoryDescriptor(rootPath), "dependency_inventory_unavailable", {
+          detail: `Po aktualizaci zdrojů nešlo bezpečně určit balíčky aplikací: ${error instanceof Error ? error.message : String(error)}`,
+        }),
+      };
+    }
+    // Discovery izoluje vadné manifesty do invalid_apps/failures. Platné Apps
+    // z ostatních Modulů lze bezpečně připravit dál; jejich package targety se
+    // nesmějí zablokovat jednou nesouvisející chybnou aplikací.
+    for (const app of discovery.apps ?? []) {
+      const packagePath = typeof app.package_path === "string" ? app.package_path : null;
+      if (!packagePath) continue;
+      const cwd = await canonicalPath(resolve(rootPath, dirname(packagePath)));
+      const owner = owningManagedRepo(canonicalRepos, cwd);
+      if (!owner || !changedRepoKeys.has(owner.repo.key)) continue;
+      const target = await dependencyTarget({ repo: owner.repo, repoRoot: owner.root, cwd, app });
+      if (target) targetsByPath.set(target.cwd, target);
+    }
+    const invalidPackages = new Set();
+    for (const app of discovery.invalid_apps ?? []) {
+      const packagePath = typeof app.package_path === "string" ? app.package_path : null;
+      if (!packagePath) continue;
+      const cwd = await canonicalPath(resolve(rootPath, dirname(packagePath)));
+      const owner = owningManagedRepo(canonicalRepos, cwd);
+      if (!owner || !changedRepoKeys.has(owner.repo.key)) continue;
+      const identity = `${owner.repo.key}\0${cwd}`;
+      if (invalidPackages.has(identity)) continue;
+      invalidPackages.add(identity);
+      if (!inventoryOutcomes.has(owner.repo.key)) inventoryOutcomes.set(owner.repo.key, []);
+      inventoryOutcomes.get(owner.repo.key).push({
+        ok: false,
+        package_path: relative(owner.root, cwd).replace(/\\/g, "/") || ".",
+        app_id: app.id ?? null,
+        strategy: null,
+        reason: "invalid_app_manifest",
+        detail: Array.isArray(app.manifest_issues) && app.manifest_issues.length > 0
+          ? app.manifest_issues.join("; ")
+          : "Manifest aplikace není validní.",
+      });
+    }
+  }
+
+  const outcomes = new Map(
+    [...inventoryOutcomes].map(([repoKey, repoOutcomes]) => [repoKey, [...repoOutcomes]]),
+  );
+  for (const target of [...targetsByPath.values()].sort((left, right) => left.cwd.localeCompare(right.cwd))) {
+    const outcome = await refreshDependencyTarget({
+      target,
+      rootPath,
+      refreshPackageDependencies,
+      refreshAppDependencies,
+    });
+    if (!outcomes.has(target.repo.key)) outcomes.set(target.repo.key, []);
+    outcomes.get(target.repo.key).push(outcome);
+    await checkpoint("after_dependency_refresh", {
+      repo: target.repo,
+      runId,
+      appId: target.app?.id ?? null,
+      packageRoot: target.cwd,
+      outcome,
+    });
+  }
+
+  const inspect = deps?.inspectLocalRepo ?? inspectLocalRepo;
+  const run = deps?.runGit ?? runGit;
+  for (const [repoKey, repoOutcomes] of outcomes) {
+    const repo = repos.find((candidate) => candidate.key === repoKey);
+    if (!repo || repoOutcomes.some((outcome) => !outcome.ok)) continue;
+    const local = await inspect(repo, { ...deps, runGit: run });
+    const target = await commitOid(run, repo.absolute_path, "refs/remotes/origin/main");
+    if (!local.ok || local.branch !== "main" || local.dirtyPaths.length > 0 || !target || local.head !== target) {
+      repoOutcomes.push({
+        ok: false,
+        package_path: null,
+        app_id: null,
+        reason: "dependency_refresh_changed_checkout",
+        detail: "Po obnově balíčků už checkout není prokazatelně clean main na origin/main.",
+      });
+    }
+  }
+
+  return { outcomes, blocked: null };
+}
+
+function sourceCheckoutChanged(actions = []) {
+  return actions.some((action) => ["fast_forward", "materialize", "switch_main"].includes(action));
+}
+
+async function dependencyTarget({ repo, repoRoot, cwd, app = null }) {
+  const packagePath = join(cwd, "package.json");
+  if (!existsSync(packagePath)) return null;
+  let packageJson;
+  try {
+    packageJson = JSON.parse(await readFile(packagePath, "utf8"));
+  } catch {
+    // Nečitelný deklarovaný package musí skončit pravdivým blockerem ve
+    // sdíleném installeru; nesmí se tiše přeskočit.
+    return { repo, repo_root: repoRoot, cwd, app };
+  }
+  const hasBunLock = existsSync(join(cwd, "bun.lock")) || existsSync(join(cwd, "bun.lockb"));
+  if (!hasBunLock && declaredDependencyCount(packageJson) === 0) return null;
+  return { repo, repo_root: repoRoot, cwd, app };
+}
+
+function owningManagedRepo(canonicalRepos, cwd) {
+  return canonicalRepos
+    .filter(({ root }) => pathWithin(root, cwd))
+    .sort((left, right) => right.root.length - left.root.length)[0] ?? null;
+}
+
+function pathWithin(parent, child) {
+  const pathFromParent = relative(parent, child);
+  return pathFromParent === ""
+    || (!pathFromParent.startsWith(`..${sep}`) && pathFromParent !== ".." && !isAbsolute(pathFromParent));
+}
+
+async function refreshDependencyTarget({ target, rootPath, refreshPackageDependencies, refreshAppDependencies }) {
+  try {
+    const result = target.app && refreshAppDependencies
+      ? await refreshAppDependencies({
+          appId: target.app.id,
+          app: target.app,
+          cwd: target.cwd,
+          repo: target.repo,
+        })
+      : await refreshPackageDependencies({
+          cwd: target.cwd,
+          boundaryRoot: target.cwd,
+          env: dependencyInstallEnvironment({ target, rootPath }),
+        });
+    if (result?.ok === false) {
+      return dependencyOutcome(target, {
+        ok: false,
+        reason: result.reason ?? "dependency_refresh_failed",
+        detail: result.detail ?? "Balíčky se nepodařilo připravit.",
+        strategy: result.refresh_strategy ?? null,
+      });
+    }
+    return dependencyOutcome(target, {
+      ok: true,
+      reason: null,
+      detail: null,
+      strategy: result?.refresh_strategy ?? (result?.mode === "clean" ? "clean_repair" : "ensure"),
+    });
+  } catch (error) {
+    return dependencyOutcome(target, {
+      ok: false,
+      reason: error?.code ?? error?.metadata?.failure_kind ?? "dependency_refresh_failed",
+      detail: error instanceof Error ? error.message : String(error),
+      strategy: null,
+    });
+  }
+}
+
+function dependencyInstallEnvironment({ target, rootPath }) {
+  const env = { ...process.env };
+  delete env.COMPANYASCODE_ORGANIZATION_ROOT;
+  delete env.COMPANIES_WORKSPACE_ROOT;
+  delete env.COMPANYASCODE_APP_ID;
+  delete env.COMPANYASCODE_RUNTIME_KEY;
+  delete env.COMPANYASCODE_RUNTIME_SOURCE;
+  delete env.COMPANYASCODE_WORKTREE_SLUG;
+  delete env.HOST;
+  delete env.PORT;
+  delete env.NODE_PATH;
+  for (const name of Object.keys(env)) {
+    if (name.startsWith("LAZURIO_RUNTIME_")) delete env[name];
+  }
+  env.COMPANIES_WORKSPACE_ROOT = rootPath;
+  if (!target.app) return env;
+
+  env.COMPANYASCODE_APP_ID = target.app.id;
+  env.COMPANYASCODE_RUNTIME_SOURCE = "main";
+  env.NODE_PATH = join(target.cwd, "node_modules");
+  const organizationPath = typeof target.app.organization_path === "string"
+    ? target.app.organization_path.trim()
+    : "";
+  if (target.app.organization_kind === "organization" && organizationPath) {
+    const organizationRoot = resolve(rootPath, organizationPath);
+    if (organizationRoot !== rootPath && pathWithin(rootPath, organizationRoot)) {
+      env.COMPANYASCODE_ORGANIZATION_ROOT = organizationRoot;
+    }
+  }
+  return env;
+}
+
+function dependencyOutcome(target, { ok, reason, detail, strategy }) {
+  return {
+    ok,
+    package_path: relative(target.repo_root, target.cwd).replace(/\\/g, "/") || ".",
+    app_id: target.app?.id ?? null,
+    strategy,
+    reason,
+    detail,
+  };
+}
+
+function applyDependencyOutcomes(results, outcomes, repoDescriptors) {
+  for (let index = 0; index < results.length; index += 1) {
+    const result = results[index];
+    const packages = outcomes.get(result.repo_key);
+    if (!packages?.length) continue;
+    const failed = packages.find((item) => !item.ok);
+    const actions = [
+      ...(result.actions ?? []),
+      ...new Set(packages.filter((item) => item.ok).map((item) =>
+        item.strategy === "clean_repair" ? "dependencies_clean_repaired" : "dependencies_refreshed"
+      )),
+    ];
+    if (!failed) {
+      results[index] = { ...result, actions, dependencies: packages };
+      continue;
+    }
+    const descriptor = repoDescriptors.get(result.repo_key) ?? {
+      key: result.repo_key,
+      repo_kind: result.repo_kind,
+      organization: result.organization,
+      module: result.module,
+      repo_path: result.path,
+      absolute_path: result.path,
+    };
+    const blocked = blockedResult(descriptor, "dependency_refresh_failed", {
+      detail: `${failed.package_path ?? "Balíčky"}: ${failed.detail ?? "obnova balíčků selhala"}`,
+      recoveryStash: result.recovery_stash ?? null,
+      actions,
+    });
+    results[index] = {
+      ...result,
+      state: "blocked",
+      reason: blocked.reason,
+      message: "Zdrojové změny jsou stažené, ale jedna aplikace ještě potřebuje opravit balíčky.",
+      actions,
+      dependencies: packages,
+      next_action: blocked.next_action,
+    };
+  }
+}
+
+function declaredDependencyCount(packageJson) {
+  return ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]
+    .map((key) => packageJson?.[key])
+    .filter((value) => value && typeof value === "object" && !Array.isArray(value))
+    .reduce((count, value) => count + Object.keys(value).length, 0);
 }
 
 async function safeInventory(buildInventory, rootPath, warnings) {
@@ -983,33 +1258,6 @@ async function compareCommits(run, cwd, local, target) {
   const targetAncestor = await run(["merge-base", "--is-ancestor", target, local], { cwd, timeoutMs: GIT_LOCAL_TIMEOUT_MS });
   if (targetAncestor.ok) return "ahead";
   return "diverged";
-}
-
-async function declaresFrozenBunInstall(cwd) {
-  return existsSync(join(cwd, "package.json"))
-    && (existsSync(join(cwd, "bun.lock")) || existsSync(join(cwd, "bun.lockb")));
-}
-
-async function installFrozenBunDependencies({ cwd }) {
-  try {
-    const child = Bun.spawn([process.execPath, "install", "--frozen-lockfile", "--ignore-scripts"], {
-      cwd,
-      stdin: "ignore",
-      stdout: "pipe",
-      stderr: "pipe",
-      env: process.env,
-    });
-    const [stdout, stderr, exitCode] = await Promise.all([
-      new Response(child.stdout).text(),
-      new Response(child.stderr).text(),
-      child.exited,
-    ]);
-    return exitCode === 0
-      ? { ok: true }
-      : { ok: false, detail: stderr.trim() || stdout.trim() || `bun install skončil kódem ${exitCode}.` };
-  } catch (error) {
-    return { ok: false, detail: error instanceof Error ? error.message : String(error) };
-  }
 }
 
 function relationDetail(relation, local, target) {

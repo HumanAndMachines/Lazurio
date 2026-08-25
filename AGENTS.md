@@ -271,19 +271,21 @@ neinteraktivní běhy bez přímého App chatu s Kolegou.
    `personalspace/<owner>_GEN3/buddy/` drží jen Git konfiguraci profilu
    (`local_execution: forbidden`). Hranici i zjištění, jestli Principál
    Buddyho má, drží [`manual/hosted-buddy-vps.md`](manual/hosted-buddy-vps.md).
-2. **Ověř Git stav.** Před taskem spusť v primárním checkoutu
-   `bun run doctor:task`; jednotný `lazurio update` pak sekvenčně srovná
-   Lazurio Root → Organization Rooty → Workspace Moduly na clean `main` a
-   použije výhradně fast-forward. Náhodné tracked i untracked změny v primárním
-   checkoutu uloží do ověřeného recovery stashe a neobnovuje je; cizí branch
-   přepne zpět na `main`, její commity ale zachová. Lokální commity na `main`,
-   diverged historii, detached stav bez bezpečné vazby a rozpracovaný
-   merge/rebase/am neopravuje algoritmem: vrátí přesný prompt „Vyřešit s
-   Codexem“. Productionspace, Personalspace, worktrees a root-space
-   repository-db jsou z obecného update/doctor mechanismu vyloučené. Agent
-   přesto nikdy nezačíná práci v primárním checkoutu; pro všechny změny používá
-   task/PR worktree. Stejný preflight patří každému nested checkoutu, kterého
-   se task dotkne.
+2. **Synchronizuj a ověř primární checkouty.** Před taskem spusť v primárním
+   Lazurio checkoutu nejdřív `lazurio update` a po jeho úspěchu
+   `bun run doctor:task`. Update sekvenčně srovná Lazurio Root → Organization
+   Rooty → Workspace Moduly na clean `main` výhradně fast-forwardem. Náhodné
+   tracked i untracked změny uloží do ověřeného recovery stashe a neobnovuje
+   je; cizí branch přepne zpět na `main`, její commity ale zachová. Po skutečné
+   změně source ověří přesné package rooty deklarovaných Apps; při problému
+   jednou provede čistou instalaci z verzovaného lockfilu s návratem původních
+   balíčků při selhání. Lokální commity na `main`, diverged historii, detached
+   stav bez bezpečné vazby, rozpracovaný merge/rebase/am ani neplatný lockfile
+   neopravuje odhadem: vrátí přesný prompt „Vyřešit s Codexem“. Productionspace,
+   Personalspace, worktrees a root-space repository-db jsou z obecného update
+   mechanismu vyloučené. Agent nikdy nezačíná práci v primárním checkoutu; pro
+   všechny změny používá task/PR worktree. Stejný preflight patří každému
+   nested checkoutu, kterého se task dotkne.
 3. **Drž worktree disciplínu.** Primární checkout zůstává na `main` a nemění
    se v něm trackovaný obsah. Postup, kanonickou cestu
    `.worktrees/root/<canonical-plan-basename>/` se sidecarem, PR lifecycle

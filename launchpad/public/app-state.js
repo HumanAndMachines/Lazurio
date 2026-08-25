@@ -146,6 +146,15 @@ export function updateBannerPresentation(status, { updatePending = false } = {})
     };
   }
 
+  if (updatePending) {
+    return {
+      visible: true,
+      tone: "updating",
+      message: "Synchronizuji Lazurio…",
+      action: null,
+    };
+  }
+
   if (status.state === "blocked") {
     const prompt = typeof status.next_action?.prompt === "string"
       ? status.next_action.prompt.trim()
@@ -172,22 +181,23 @@ export function updateBannerPresentation(status, { updatePending = false } = {})
   }
 
   if (status.state === "current") {
+    const readyToSync = status.checked_remote === false;
     return {
       visible: true,
       tone: "current",
-      message: status.checked_remote === false
+      message: readyToSync
         ? "Lazurio je připravené k synchronizaci."
         : "Lazurio je aktuální.",
-      action: null,
+      action: readyToSync
+        ? { kind: "sync", label: "Synchronizovat" }
+        : null,
     };
   }
 
   return {
     visible: true,
-    tone: updatePending ? "updating" : "updated",
-    message: updatePending
-      ? "Synchronizuji Lazurio…"
-      : "Lazurio bylo při poslední synchronizaci aktualizované.",
+    tone: "updated",
+    message: "Lazurio bylo při poslední synchronizaci aktualizované.",
     action: null,
   };
 }
@@ -765,7 +775,6 @@ export function runtimeStagesForApp(app, { openable = false, worktreeCount = 0 }
 export function isAttentionState(app, { ignoreRuntimeUnhealthy = false } = {}) {
   return [
     "needs_install",
-    "stale_lockfile",
     "missing_access",
     "planned_slot",
     "restricted",
