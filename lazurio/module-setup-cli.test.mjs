@@ -161,6 +161,55 @@ test("new App Module allocates from the Organization pool and explicit adoption 
   expect(adoptPlan.operator_assertions[0]).toContain("5306");
 });
 
+test("explicit App setup rewrites its adopted host and port to injected runtime variables", async () => {
+  const fixture = await moduleFixture({ module: "portable-app" });
+  const packagePath = join(fixture.moduleRoot, "package.json");
+  await writeJson(packagePath, {
+    name: "portable-app",
+    private: true,
+    scripts: { dev: "bun server.mjs --host 127.0.0.1 --port 5306" },
+  });
+
+  const report = await setupModule({
+    ...fixture,
+    apply: true,
+    appPackage: "package.json",
+    appId: "acme-portable-app-v1",
+    title: "Portable App",
+    devScript: "dev",
+    adoptPort: 5306,
+  });
+
+  expect(report).toMatchObject({ status: "completed" });
+  expect((await readJson(packagePath)).scripts.dev).toBe(
+    'bun -e "process.exit(process.env.PORT && process.env.HOST ? 0 : 1)" && bun server.mjs --host "$HOST" --port "$PORT"',
+  );
+});
+
+test("explicit App setup rejects a different hardcoded port after bounded rewrite", async () => {
+  const fixture = await moduleFixture({ module: "drifted-app" });
+  const packagePath = join(fixture.moduleRoot, "package.json");
+  await writeJson(packagePath, {
+    name: "drifted-app",
+    private: true,
+    scripts: { dev: "bun server.mjs --port 5307" },
+  });
+
+  const report = await setupModule({
+    ...fixture,
+    apply: true,
+    appPackage: "package.json",
+    appId: "acme-drifted-app-v1",
+    title: "Drifted App",
+    devScript: "dev",
+    adoptPort: 5306,
+  });
+
+  expect(report).toMatchObject({ status: "action_required", reason: "app_runtime_port_authority" });
+  expect(await Bun.file(join(fixture.moduleRoot, "lazurio.module.json")).exists()).toBe(false);
+  expect((await readJson(packagePath)).lazurio).toBeUndefined();
+});
+
 test("planned slot blocks before write and CLI exposes stable JSON status and exit code", async () => {
   const fixture = await moduleFixture({ module: "planned", status: "planned_slot" });
   const report = await setupModule({ ...fixture, noApp: true });
@@ -277,6 +326,22 @@ test("a linked Module task worktree inherits ownership without touching the prim
   expect((await readJson(primaryPackage)).companyascode.app.port).toBe(24_013);
   expect((await readJson(join(worktreeRoot, "package.json"))).companyascode).toBeUndefined();
   expect((await readJson(join(worktreeRoot, "lazurio.module.json"))).port_leases[0].port).toBe(24_013);
+});
+
+test("Module setup uses the canonical slot identity helper when slug is omitted", async () => {
+  const fixture = await moduleFixture({ module: "path-owned" });
+  const manifestPath = join(fixture.organizationRoot, "modules.manifest.json");
+  const manifest = await readJson(manifestPath);
+  delete manifest.module_slots[0].slug;
+  await writeJson(manifestPath, manifest);
+
+  const report = await setupModule({ ...fixture, noApp: true });
+
+  expect(report).toMatchObject({
+    status: "actionable",
+    module: { company: "Acme", id: "path-owned" },
+  });
+  expect(report.issues).toEqual([]);
 });
 
 test("an unrelated checkout with the same remote URL cannot claim a Module slot", async () => {
