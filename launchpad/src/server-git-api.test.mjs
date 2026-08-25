@@ -1101,9 +1101,10 @@ test("PORT environment configuration is implicit and falls forward to a free por
   const stateRoot = `${root}-launchpad-state`;
   tempRoots.push(root, stateRoot);
   const blocker = createServer();
+  const blockedPort = await findFreePort();
   await new Promise((resolve, reject) => {
     blocker.once("error", reject);
-    blocker.listen(0, "127.0.0.1", resolve);
+    blocker.listen(blockedPort, "127.0.0.1", resolve);
   });
   const { port } = blocker.address();
   const { environment: serverEnvironment } = serverTestEnvironment(root, {
