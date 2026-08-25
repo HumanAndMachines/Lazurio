@@ -203,6 +203,58 @@ test("registered canonical task worktrees are locally ignored before recovery st
     .toBe(runGit(fixture.working, ["rev-parse", "codex/DEV-6505-fixture"]));
 });
 
+test("legacy blanket worktree ignore narrows before unknown data is recovery-stashed", async () => {
+  const fixture = await repositoryFixture("legacy-blanket-worktree-ignore");
+  const worktreeRelative = ".worktrees/root/DEV-6505-fixture";
+  const worktreeRoot = join(fixture.working, ...worktreeRelative.split("/"));
+  await mkdir(join(fixture.working, ".worktrees", "root"), { recursive: true });
+  runGit(fixture.working, ["worktree", "add", "-b", "codex/DEV-6505-fixture", worktreeRoot, "HEAD"]);
+  await writeFile(`${worktreeRoot}.worktree.json`, "{}\n");
+  await writeFile(join(fixture.working, ".git", "info", "exclude"), "/.worktrees/\n");
+  await writeFile(join(fixture.working, ".worktrees", "notes.txt"), "keep me\n");
+  await writeFile(`${worktreeRoot}.worktree.json.unexpected`, "keep me too\n");
+
+  expect(status(fixture.working)).toBe("");
+  const result = await update(fixture);
+
+  expect(result).toMatchObject({
+    state: "updated",
+    reason: "local_changes_preserved",
+    actions: ["worktree_ignore_repaired", "recovery_stash"],
+  });
+  const exclude = await readPortableText(join(fixture.working, ".git", "info", "exclude"));
+  expect(exclude.split("\n")).not.toContain("/.worktrees/");
+  expect(exclude.split("\n")).toContain(`/${worktreeRelative}/`);
+  expect(exclude.split("\n")).toContain(`/${worktreeRelative}.worktree.json`);
+  const stashedPaths = runGit(fixture.working, [
+    "stash", "show", "--include-untracked", "--name-only", result.recovery_stash,
+  ]);
+  expect(stashedPaths).toContain(".worktrees/notes.txt");
+  expect(stashedPaths).toContain(".worktrees/root/DEV-6505-fixture.worktree.json.unexpected");
+  expect(runGit(worktreeRoot, ["rev-parse", "HEAD"]))
+    .toBe(runGit(fixture.working, ["rev-parse", "codex/DEV-6505-fixture"]));
+});
+
+test("legacy blanket worktree ignore is removed after its registered worktree is gone", async () => {
+  const fixture = await repositoryFixture("legacy-blanket-without-worktree");
+  await mkdir(join(fixture.working, ".worktrees"), { recursive: true });
+  await writeFile(join(fixture.working, ".git", "info", "exclude"), "/.worktrees/\n");
+  await writeFile(join(fixture.working, ".worktrees", "notes.txt"), "keep me\n");
+
+  expect(status(fixture.working)).toBe("");
+  const result = await update(fixture);
+
+  expect(result).toMatchObject({
+    state: "updated",
+    reason: "local_changes_preserved",
+    actions: ["worktree_ignore_repaired", "recovery_stash"],
+  });
+  expect(await readPortableText(join(fixture.working, ".git", "info", "exclude"))).toBe("");
+  expect(runGit(fixture.working, [
+    "stash", "show", "--include-untracked", "--name-only", result.recovery_stash,
+  ])).toContain(".worktrees/notes.txt");
+});
+
 test("unregistered files under .worktrees remain user data and are recovery-stashed", async () => {
   const fixture = await repositoryFixture("unregistered-worktree-data");
   await mkdir(join(fixture.working, ".worktrees"), { recursive: true });

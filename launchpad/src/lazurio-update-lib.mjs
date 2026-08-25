@@ -536,26 +536,6 @@ export async function updateManagedRepo(repo, context = {}) {
 
 async function repairCanonicalWorktreeIgnore({ repo, run, local }) {
   const dirtyWorktreePaths = local.dirtyPaths.filter(isWorktreeManagementPath);
-  if (dirtyWorktreePaths.length === 0) return { ok: true, changed: false };
-
-  const registered = await registeredCanonicalWorktreePaths({ repo, run });
-  if (!registered.ok || registered.paths.length === 0) return { ok: true, changed: false };
-  const ownedRegisteredPaths = registered.paths.filter((registeredPath) =>
-    dirtyWorktreePaths.some((path) => registeredPathOwnsDirtyPath([registeredPath], path))
-  );
-  if (ownedRegisteredPaths.length === 0) return { ok: true, changed: false };
-
-  const ignoreTargets = [...new Set(ownedRegisteredPaths.flatMap((path) => [path, `${path}.worktree.json`]))];
-  const existingIgnore = await Promise.all(ignoreTargets.map((path) => run(
-    ["check-ignore", "--quiet", "--no-index", "--", path],
-    { cwd: repo.absolute_path, timeoutMs: GIT_LOCAL_TIMEOUT_MS },
-  )));
-  if (existingIgnore.some((result) => !result.ok && result.exitCode !== 1)) {
-    return { ok: false, changed: false, detail: "Git nedokázal ověřit lokální ignore pro kanonické task worktrees." };
-  }
-  const targetsToAdd = ignoreTargets.filter((_, index) => !existingIgnore[index].ok);
-  if (targetsToAdd.length === 0) return { ok: true, changed: false };
-
   const [commonDirResult, excludeResult] = await Promise.all([
     run(["rev-parse", "--git-common-dir"], { cwd: repo.absolute_path, timeoutMs: GIT_LOCAL_TIMEOUT_MS }),
     run(["rev-parse", "--git-path", "info/exclude"], { cwd: repo.absolute_path, timeoutMs: GIT_LOCAL_TIMEOUT_MS }),
@@ -576,28 +556,76 @@ async function repairCanonicalWorktreeIgnore({ repo, run, local }) {
   } catch (error) {
     return { ok: false, changed: false, detail: `Lokální Git exclude nejde načíst: ${error instanceof Error ? error.message : String(error)}` };
   }
-  const prefix = contents.length > 0 && !contents.endsWith("\n") ? "\n" : "";
+
+  const legacyBlanketPattern = contents.split(/\r?\n/).includes("/.worktrees/");
+  if (dirtyWorktreePaths.length === 0 && !legacyBlanketPattern) {
+    return { ok: true, changed: false };
+  }
+
+  const registered = await registeredCanonicalWorktreePaths({ repo, run });
+  if (!registered.ok) {
+    return legacyBlanketPattern
+      ? { ok: false, changed: false, detail: "Git nepotvrdil registrované worktrees před zúžením starého lokálního ignore." }
+      : { ok: true, changed: false };
+  }
+  const ownedRegisteredPaths = legacyBlanketPattern
+    ? registered.paths
+    : registered.paths.filter((registeredPath) =>
+      dirtyWorktreePaths.some((path) => registeredPathOwnsDirtyPath([registeredPath], path))
+    );
+  if (ownedRegisteredPaths.length === 0 && !legacyBlanketPattern) {
+    return { ok: true, changed: false };
+  }
+
+  const ignoreTargets = [...new Set(ownedRegisteredPaths.flatMap((path) => [path, `${path}.worktree.json`]))];
+  let targetsToAdd = ignoreTargets;
+  if (!legacyBlanketPattern) {
+    const existingIgnore = await Promise.all(ignoreTargets.map((path) => run(
+      ["check-ignore", "--quiet", "--no-index", "--", path],
+      { cwd: repo.absolute_path, timeoutMs: GIT_LOCAL_TIMEOUT_MS },
+    )));
+    if (existingIgnore.some((result) => !result.ok && result.exitCode !== 1)) {
+      return { ok: false, changed: false, detail: "Git nedokázal ověřit lokální ignore pro kanonické task worktrees." };
+    }
+    targetsToAdd = ignoreTargets.filter((_, index) => !existingIgnore[index].ok);
+    if (targetsToAdd.length === 0) return { ok: true, changed: false };
+  }
+
+  const newline = contents.includes("\r\n") ? "\r\n" : "\n";
+  const lines = contents.split(/\r?\n/);
+  if (contents.endsWith("\n")) lines.pop();
+  const nextLines = lines.filter((line) => line !== "/.worktrees/");
+  const patterns = targetsToAdd.map((path) => path.endsWith(".worktree.json") ? `/${path}` : `/${path}/`);
+  for (const pattern of patterns) {
+    if (!nextLines.includes(pattern)) nextLines.push(pattern);
+  }
+  const nextContents = nextLines.length > 0 ? `${nextLines.join(newline)}${newline}` : "";
+  if (nextContents === contents) return { ok: true, changed: false };
+
   let handle;
   try {
-    handle = await open(excludePath, "a");
+    handle = await open(excludePath, "r+");
     const stat = await handle.stat();
     if (!stat.isFile()) throw new Error("info/exclude není běžný soubor");
-    const patterns = targetsToAdd.map((path) => path.endsWith(".worktree.json") ? `/${path}` : `/${path}/`);
-    await handle.write(`${prefix}${patterns.join("\n")}\n`);
+    await handle.writeFile(nextContents, { encoding: "utf8" });
+    await handle.truncate(Buffer.byteLength(nextContents));
     await handle.sync();
   } catch (error) {
-    return { ok: false, changed: false, detail: `Lokální Git exclude nejde bezpečně doplnit: ${error instanceof Error ? error.message : String(error)}` };
+    return { ok: false, changed: false, detail: `Lokální Git exclude nejde bezpečně zúžit: ${error instanceof Error ? error.message : String(error)}` };
   } finally {
     await handle?.close().catch(() => {});
   }
 
-  const verified = await Promise.all(ignoreTargets.map((path) => run(
+  const [persisted, verified] = await Promise.all([
+    readFile(excludePath, "utf8"),
+    Promise.all(ignoreTargets.map((path) => run(
     ["check-ignore", "--quiet", "--no-index", "--", path],
     { cwd: repo.absolute_path, timeoutMs: GIT_LOCAL_TIMEOUT_MS },
-  )));
-  return verified.every((result) => result.ok)
+    ))),
+  ]);
+  return !persisted.split(/\r?\n/).includes("/.worktrees/") && verified.every((result) => result.ok)
     ? { ok: true, changed: true }
-    : { ok: false, changed: true, detail: "Git po zápisu nepotvrdil přesný ignore kanonické worktree cesty." };
+    : { ok: false, changed: true, detail: "Git po zápisu nepotvrdil zúžený ignore kanonické worktree cesty." };
 }
 
 async function registeredCanonicalWorktreePaths({ repo, run }) {
