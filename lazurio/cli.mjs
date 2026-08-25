@@ -27,6 +27,11 @@ import {
 } from "./install-output-lib.mjs";
 import { runLaunchpadInstall } from "./launchpad-install-lib.mjs";
 import {
+  moduleSetupExitCode,
+  renderHumanModuleSetup,
+  setupModule,
+} from "./module-setup-lib.mjs";
+import {
   checkOrganizationActivation,
   organizationActivationExitCode,
   renderHumanOrganizationActivation,
@@ -43,7 +48,7 @@ if (import.meta.main) {
     process.exitCode = await run(Bun.argv.slice(2));
   } catch (error) {
     console.error(`lazurio: ${error.message}`);
-    process.exitCode = error.lazurioExitCode ?? 2;
+    process.exitCode = error.lazurioExitCode ?? (Bun.argv[2] === "module" ? 3 : 2);
   }
 }
 
@@ -89,6 +94,25 @@ async function run(argv) {
   }
 
   options.root ??= defaultOperatedRoot();
+
+  if (options.command === "module") {
+    const report = await setupModule({
+      lazurioRoot: options.root,
+      moduleRoot: options.moduleRoot,
+      apply: options.apply,
+      noApp: options.noApp,
+      appPackage: options.appPackage,
+      appId: options.appId,
+      title: options.title,
+      devScript: options.devScript,
+      healthPath: options.healthPath,
+      surface: options.surface,
+      tags: options.tags,
+      adoptPort: options.adoptPort,
+    });
+    console.log(options.json ? JSON.stringify(report, null, 2) : renderHumanModuleSetup(report));
+    return moduleSetupExitCode(report);
+  }
 
   if (options.command === "context") {
     const context = await buildLazurioContext({
@@ -193,6 +217,17 @@ function parseArgs(argv) {
     update: false,
     check: false,
     githubOrganizationId: null,
+    apply: false,
+    noApp: false,
+    appPackage: null,
+    appId: null,
+    title: null,
+    devScript: null,
+    healthPath: "/health",
+    surface: "internal",
+    tags: [],
+    adoptPort: null,
+    moduleFlags: new Set(),
     operands: [],
     searchFlags: new Set(),
   };
@@ -202,7 +237,7 @@ function parseArgs(argv) {
       parsed.command = arg;
       continue;
     }
-    if (["search", "launchpad", "cli", "organization"].includes(parsed.command) && !arg.startsWith("-")) {
+    if (["search", "launchpad", "cli", "organization", "module"].includes(parsed.command) && !arg.startsWith("-")) {
       parsed.operands.push(arg);
       continue;
     }
@@ -225,6 +260,27 @@ function parseArgs(argv) {
     }
     if (arg === "--check") {
       parsed.check = true;
+      continue;
+    }
+    if (arg === "--apply" || arg === "--no-app") {
+      if (arg === "--apply") parsed.apply = true;
+      else parsed.noApp = true;
+      parsed.moduleFlags.add(arg);
+      continue;
+    }
+    if (["--app-package", "--app-id", "--title", "--dev-script", "--health-path", "--surface", "--tags", "--adopt-port"].includes(arg)) {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("-")) throw new Error(`${arg} vyžaduje hodnotu.`);
+      assignModuleOption(parsed, arg, value);
+      parsed.moduleFlags.add(arg);
+      index += 1;
+      continue;
+    }
+    const inlineModuleFlag = ["--app-package", "--app-id", "--title", "--dev-script", "--health-path", "--surface", "--tags", "--adopt-port"]
+      .find((name) => arg.startsWith(`${name}=`));
+    if (inlineModuleFlag) {
+      assignModuleOption(parsed, inlineModuleFlag, requiredInlineValue(arg, inlineModuleFlag));
+      parsed.moduleFlags.add(inlineModuleFlag);
       continue;
     }
     if (arg === "--github-id") {
@@ -328,6 +384,21 @@ function parseArgs(argv) {
     if (parsed.searchAction !== "query" && ["--mode", "--limit"].some((flag) => parsed.searchFlags.has(flag))) {
       throw new Error("--mode a --limit lze použít pouze se search dotazem.");
     }
+  } else if (parsed.command === "module") {
+    if (parsed.searchFlags.size > 0) {
+      throw new Error(`${[...parsed.searchFlags].join(", ")} lze použít pouze s příkazem search.`);
+    }
+    if (parsed.operands[0] !== "setup" || (!parsed.help && parsed.operands.length !== 2) || (parsed.help && parsed.operands.length > 2)) {
+      throw new Error("module vyžaduje `setup <module-root>`.");
+    }
+    parsed.moduleAction = "setup";
+    parsed.moduleRoot = parsed.operands[1] ? resolve(parsed.operands[1]) : null;
+    if (parsed.surface && !new Set(["internal", "manual", "admin", "public-preview"]).has(parsed.surface)) {
+      throw new Error("--surface musí být internal, manual, admin nebo public-preview.");
+    }
+    if (parsed.adoptPort !== null && !Number.isInteger(parsed.adoptPort)) {
+      throw new Error("--adopt-port musí být celé číslo.");
+    }
   } else if (parsed.command === "launchpad") {
     if (parsed.searchFlags.size > 0) {
       throw new Error(`${[...parsed.searchFlags].join(", ")} lze použít pouze s příkazem search.`);
@@ -370,6 +441,9 @@ function parseArgs(argv) {
   } else if (parsed.searchFlags.size > 0) {
     throw new Error(`${[...parsed.searchFlags].join(", ")} lze použít pouze s příkazem search.`);
   }
+  if (parsed.moduleFlags.size > 0 && parsed.command !== "module") {
+    throw new Error(`${[...parsed.moduleFlags].join(", ")} lze použít pouze s \`lazurio module setup\`.`);
+  }
   if (parsed.organization !== null && parsed.command !== "context") {
     throw new Error("--organization lze použít pouze s příkazem context.");
   }
@@ -395,6 +469,17 @@ function requiredInlineValue(arg, name) {
   const value = arg.slice(name.length + 1);
   if (!value) throw new Error(`${name} vyžaduje hodnotu.`);
   return value;
+}
+
+function assignModuleOption(parsed, name, value) {
+  if (name === "--app-package") parsed.appPackage = value;
+  if (name === "--app-id") parsed.appId = value;
+  if (name === "--title") parsed.title = value;
+  if (name === "--dev-script") parsed.devScript = value;
+  if (name === "--health-path") parsed.healthPath = value;
+  if (name === "--surface") parsed.surface = value;
+  if (name === "--tags") parsed.tags = value.split(",").map((tag) => tag.trim()).filter(Boolean);
+  if (name === "--adopt-port") parsed.adoptPort = Number(value);
 }
 
 function cliCodeRoot() {
@@ -423,6 +508,10 @@ function usage() {
     "  lazurio context [--organization <slug>] [--json] [--root <cesta>]",
     "  lazurio doctor [--json] [--root <cesta>]",
     "  lazurio update [--json] [--root <cesta>]",
+    "  lazurio module setup <module-root> [--apply] [--json] [--root <cesta>]",
+    "    nový no-app Module: --no-app",
+    "    nová App: --app-package <package.json> --app-id <id> --title <název> --dev-script <script>",
+    "    volitelně: --health-path </health> --surface <typ> --tags <a,b> --adopt-port <N>",
     "  lazurio cli install [--json] [--root <cesta>]",
     "  lazurio cli status [--json] [--root <cesta>]",
     "  lazurio launchpad install [--root <cesta>]",

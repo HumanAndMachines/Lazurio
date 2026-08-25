@@ -1,0 +1,351 @@
+import { afterAll, expect, test } from "bun:test";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import {
+  moduleSetupExitCode,
+  setupModule,
+} from "./module-setup-lib.mjs";
+import { validateAgainstSchema } from "../launchpad/src/json-schema-mini.mjs";
+
+const roots = [];
+const cliPath = join(import.meta.dirname, "cli.mjs");
+const reportSchema = await Bun.file(join(import.meta.dirname, "module-setup-report.v1.schema.json")).json();
+
+afterAll(async () => {
+  await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })));
+});
+
+test("legacy Module converges through dry-run, apply and idempotent rerun", async () => {
+  const fixture = await moduleFixture({ module: "legacy" });
+  const packagePath = join(fixture.moduleRoot, "package.json");
+  await writeJson(packagePath, legacyPackage({ company: "Acme", module: "legacy", port: 23_999 }));
+
+  const dryRun = await setupModule(fixture);
+  expect(dryRun).toMatchObject({
+    schema_version: "lazurio.module_setup.report.v1",
+    status: "actionable",
+    reason: "setup_changes_ready",
+    module: { company: "Acme", id: "legacy" },
+  });
+  expect(dryRun.changes.map((change) => change.action)).toEqual(["create", "replace"]);
+  expect(dryRun.changes[0].path.endsWith("workspace/legacy/lazurio.module.json")).toBe(true);
+  expect(dryRun.changes[1].path.endsWith("workspace/legacy/package.json")).toBe(true);
+  expect(validateAgainstSchema(dryRun, reportSchema, "module-setup")).toEqual([]);
+  expect(moduleSetupExitCode(dryRun)).toBe(1);
+
+  const applied = await setupModule({ ...fixture, apply: true });
+  expect(applied.status).toBe("completed");
+  expect(validateAgainstSchema(applied, reportSchema, "module-setup")).toEqual([]);
+  expect(moduleSetupExitCode(applied)).toBe(0);
+  const manifest = await readJson(join(fixture.moduleRoot, "lazurio.module.json"));
+  expect(manifest).toMatchObject({
+    id: "legacy",
+    company: "Acme",
+    port_leases: [{ id: "main", port: 23_999 }],
+    apps: ["package.json"],
+    default_app: "package.json",
+  });
+  const packageJson = await readJson(packagePath);
+  expect(packageJson.companyascode).toBeUndefined();
+  expect(packageJson.lazurio.runtime.listeners).toEqual([
+    expect.objectContaining({ lease: "main" }),
+  ]);
+
+  const rerun = await setupModule(fixture);
+  expect(rerun).toMatchObject({ status: "current", changes: [] });
+});
+
+test("interruption after create-only manifest is recoverable by the same setup command", async () => {
+  const fixture = await moduleFixture({ module: "interrupted" });
+  const packagePath = join(fixture.moduleRoot, "package.json");
+  await writeJson(packagePath, legacyPackage({ company: "Acme", module: "interrupted", port: 23_998 }));
+
+  await expect(setupModule({ ...fixture, apply: true, failAfterWrite: 1 })).rejects.toThrow(
+    "Injected module setup failure after write 1",
+  );
+  expect((await readJson(join(fixture.moduleRoot, "lazurio.module.json"))).id).toBe("interrupted");
+  expect((await readJson(packagePath)).companyascode.app.port).toBe(23_998);
+
+  const resumed = await setupModule({ ...fixture, apply: true });
+  expect(resumed.status).toBe("completed");
+  expect((await readJson(packagePath)).companyascode).toBeUndefined();
+  expect((await setupModule(fixture)).status).toBe("current");
+});
+
+test("new explicit App setup resumes after the manifest was published first", async () => {
+  const fixture = await moduleFixture({ module: "new-interrupted" });
+  const packagePath = join(fixture.moduleRoot, "package.json");
+  await writeJson(packagePath, {
+    name: "new-interrupted",
+    private: true,
+    scripts: { dev: "bun server.mjs" },
+  });
+  const options = {
+    ...fixture,
+    appPackage: "package.json",
+    appId: "acme-new-interrupted-v1",
+    title: "New Interrupted",
+    devScript: "dev",
+  };
+
+  await expect(setupModule({ ...options, apply: true, failAfterWrite: 1 })).rejects.toThrow(
+    "Injected module setup failure after write 1",
+  );
+  expect((await readJson(join(fixture.moduleRoot, "lazurio.module.json"))).port_leases).toHaveLength(1);
+  expect((await readJson(packagePath)).lazurio).toBeUndefined();
+
+  const resumed = await setupModule({ ...options, apply: true });
+  expect(resumed.status).toBe("completed");
+  expect((await readJson(packagePath)).lazurio.runtime.listeners).toEqual([
+    expect.objectContaining({ lease: "main" }),
+  ]);
+  expect((await setupModule(options)).status).toBe("current");
+});
+
+test("new no-app Module gets an explicit zero-listener contract", async () => {
+  const fixture = await moduleFixture({ module: "data-only" });
+  const dryRun = await setupModule({ ...fixture, noApp: true });
+  expect(dryRun).toMatchObject({
+    status: "actionable",
+  });
+  expect(dryRun.changes.map((change) => change.action)).toEqual(["create"]);
+  expect(dryRun.changes[0].path.endsWith("lazurio.module.json")).toBe(true);
+  const applied = await setupModule({ ...fixture, noApp: true, apply: true });
+  expect(applied.status).toBe("completed");
+  expect(await readJson(join(fixture.moduleRoot, "lazurio.module.json"))).toEqual({
+    schema_version: "lazurio.module.v1",
+    id: "data-only",
+    company: "Acme",
+    tcp_port_policy: { mode: "none" },
+    port_leases: [],
+    apps: [],
+  });
+});
+
+test("new App Module allocates from the Organization pool and explicit adoption stays review-visible", async () => {
+  const allocated = await moduleFixture({ module: "new-app" });
+  await writeJson(join(allocated.moduleRoot, "package.json"), {
+    name: "new-app",
+    private: true,
+    scripts: { dev: "bun server.mjs" },
+  });
+  const appOptions = {
+    ...allocated,
+    appPackage: "package.json",
+    appId: "acme-new-app-v1",
+    title: "New App",
+    devScript: "dev",
+  };
+  const planned = await setupModule(appOptions);
+  expect(planned.status).toBe("actionable");
+  await setupModule({ ...appOptions, apply: true });
+  expect((await readJson(join(allocated.moduleRoot, "lazurio.module.json"))).port_leases[0].port).toBe(24_000);
+
+  const adopted = await moduleFixture({ module: "hotfix" });
+  await writeJson(join(adopted.moduleRoot, "package.json"), {
+    name: "hotfix",
+    private: true,
+    scripts: { dev: "bun server.mjs" },
+  });
+  const adoptPlan = await setupModule({
+    ...adopted,
+    appPackage: "package.json",
+    appId: "acme-hotfix-v1",
+    title: "Hotfix",
+    devScript: "dev",
+    adoptPort: 53_06,
+  });
+  expect(adoptPlan.operator_assertions[0]).toContain("explicitního --adopt-port");
+  expect(adoptPlan.operator_assertions[0]).toContain("5306");
+});
+
+test("planned slot blocks before write and CLI exposes stable JSON status and exit code", async () => {
+  const fixture = await moduleFixture({ module: "planned", status: "planned_slot" });
+  const report = await setupModule({ ...fixture, noApp: true });
+  expect(report).toMatchObject({
+    status: "action_required",
+    reason: "module_slot_planned",
+    changes: [],
+  });
+  expect(validateAgainstSchema(report, reportSchema, "module-setup")).toEqual([]);
+  expect(moduleSetupExitCode(report)).toBe(2);
+
+  const cli = Bun.spawnSync([
+    process.execPath,
+    "run",
+    cliPath,
+    "module",
+    "setup",
+    fixture.moduleRoot,
+    "--no-app",
+    "--json",
+    "--root",
+    fixture.lazurioRoot,
+  ], { cwd: fixture.lazurioRoot, stdout: "pipe", stderr: "pipe" });
+  expect(cli.exitCode).toBe(2);
+  expect(cli.stderr.toString()).toBe("");
+  expect(JSON.parse(cli.stdout.toString())).toMatchObject({
+    schema_version: "lazurio.module_setup.report.v1",
+    reason: "module_slot_planned",
+  });
+});
+
+test("duplicate explicit adopted port fails closed without creating either file", async () => {
+  const existing = await moduleFixture({ module: "owner" });
+  await writeJson(join(existing.moduleRoot, "lazurio.module.json"), {
+    schema_version: "lazurio.module.v1",
+    id: "owner",
+    company: "Acme",
+    tcp_port_policy: { mode: "single" },
+    port_leases: [{ id: "main", host: "127.0.0.1", port: 24_055 }],
+    apps: ["package.json"],
+    default_app: "package.json",
+  });
+  await writeJson(join(existing.moduleRoot, "package.json"), declaredPackage({ company: "Acme", module: "owner" }));
+
+  const target = await addModuleSlot(existing, { module: "duplicate" });
+  await writeJson(join(target.moduleRoot, "package.json"), {
+    name: "duplicate",
+    private: true,
+    scripts: { dev: "bun server.mjs" },
+  });
+  const report = await setupModule({
+    ...target,
+    appPackage: "package.json",
+    appId: "acme-duplicate-v1",
+    title: "Duplicate",
+    devScript: "dev",
+    adoptPort: 24_055,
+  });
+  expect(report).toMatchObject({ status: "action_required", reason: "module_port_conflict" });
+  expect(await readFile(join(target.moduleRoot, "package.json"), "utf8")).not.toContain("lazurio");
+  expect(await Bun.file(join(target.moduleRoot, "lazurio.module.json")).exists()).toBe(false);
+});
+
+test("concurrent Module setup serializes on the existing Organization port allocator lock", async () => {
+  const first = await moduleFixture({ module: "parallel-one" });
+  const second = await addModuleSlot(first, { module: "parallel-two" });
+  for (const fixture of [first, second]) {
+    await writeJson(join(fixture.moduleRoot, "package.json"), {
+      name: fixture.module,
+      private: true,
+      scripts: { dev: "bun server.mjs" },
+    });
+  }
+  const appOptions = (fixture) => ({
+    ...fixture,
+    apply: true,
+    appPackage: "package.json",
+    appId: `acme-${fixture.module}-v1`,
+    title: fixture.module,
+    devScript: "dev",
+  });
+
+  const reports = await Promise.all([
+    setupModule(appOptions(first)),
+    setupModule(appOptions(second)),
+  ]);
+  expect(reports.map((report) => report.status)).toEqual(["completed", "completed"]);
+  const ports = await Promise.all([first, second].map(async (fixture) =>
+    (await readJson(join(fixture.moduleRoot, "lazurio.module.json"))).port_leases[0].port
+  ));
+  expect(ports.sort((left, right) => left - right)).toEqual([24_000, 24_001]);
+});
+
+async function moduleFixture({ module, status = null }) {
+  const root = await mkdtemp(join(tmpdir(), "lazurio-module-setup-"));
+  roots.push(root);
+  const organizationRoot = join(root, "organizations", "Acme_GEN3");
+  const moduleRoot = join(organizationRoot, "workspace", module);
+  await mkdir(moduleRoot, { recursive: true });
+  await writeJson(join(organizationRoot, "company.gen3.json"), {
+    organization_generation: "gen3",
+    company: { slug: "Acme", display_name: "Acme" },
+    module_port_pool: { start: 24_000, end: 24_099 },
+  });
+  await writeJson(join(organizationRoot, "modules.manifest.json"), {
+    organization_generation: "gen3",
+    company: "Acme",
+    module_slots: [{
+      path: `workspace/${module}`,
+      slug: module,
+      ...(status ? { status } : {}),
+      git: { url: `git@github.com:Acme/${module}.git`, branch: "main" },
+    }],
+  });
+  return { lazurioRoot: root, moduleRoot, organizationRoot, module };
+}
+
+async function addModuleSlot(fixture, { module }) {
+  const manifestPath = join(fixture.organizationRoot, "modules.manifest.json");
+  const manifest = await readJson(manifestPath);
+  manifest.module_slots.push({
+    path: `workspace/${module}`,
+    slug: module,
+    git: { url: `git@github.com:Acme/${module}.git`, branch: "main" },
+  });
+  await writeJson(manifestPath, manifest);
+  const moduleRoot = join(fixture.organizationRoot, "workspace", module);
+  await mkdir(moduleRoot, { recursive: true });
+  return { ...fixture, moduleRoot, module };
+}
+
+function legacyPackage({ company, module, port }) {
+  return {
+    name: module,
+    private: true,
+    scripts: { dev: "bun server.mjs" },
+    companyascode: {
+      app: {
+        schema_version: "companyascode.launchpad_app.v1",
+        id: `${company.toLowerCase()}-${module}-v1`,
+        title: module,
+        company,
+        module,
+        surface: "internal",
+        port,
+        host: "127.0.0.1",
+        health_path: "/health",
+        dev_script: "dev",
+        tags: [module],
+      },
+    },
+  };
+}
+
+function declaredPackage({ company, module }) {
+  return {
+    name: module,
+    private: true,
+    scripts: { dev: "bun server.mjs" },
+    lazurio: {
+      runtime: {
+        schema_version: "lazurio.runtime.v1",
+        id: `${company.toLowerCase()}-${module}-v1`,
+        title: module,
+        company,
+        module,
+        surface: "internal",
+        dev_script: "dev",
+        tags: [module],
+        listeners: [{
+          id: "app",
+          role: "entrypoint",
+          lease: "main",
+          protocol: "http",
+          health: { kind: "http", path: "/health" },
+        }],
+      },
+    },
+  };
+}
+
+async function readJson(path) {
+  return JSON.parse(await readFile(path, "utf8"));
+}
+
+async function writeJson(path, value) {
+  await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}

@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lazurio.ai/schemas/module-setup-report.v1.json",
+  "title": "Lazurio Module setup report",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "status",
+    "reason",
+    "root",
+    "module",
+    "changes",
+    "issues",
+    "operator_assertions"
+  ],
+  "properties": {
+    "schema_version": { "const": "lazurio.module_setup.report.v1" },
+    "status": { "enum": ["current", "actionable", "completed", "action_required"] },
+    "reason": { "type": "string", "minLength": 1 },
+    "root": { "type": "string", "minLength": 1 },
+    "module": {
+      "type": "object",
+      "required": ["company", "id", "root", "manifest"],
+      "properties": {
+        "company": { "type": ["string", "null"] },
+        "id": { "type": "string", "minLength": 1 },
+        "root": { "type": "string", "minLength": 1 },
+        "manifest": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "changes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["action", "path"],
+        "properties": {
+          "action": { "enum": ["create", "replace"] },
+          "path": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "message", "action"],
+        "properties": {
+          "code": { "type": "string", "minLength": 1 },
+          "message": { "type": "string", "minLength": 1 },
+          "action": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "operator_assertions": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "additionalProperties": false
+}
