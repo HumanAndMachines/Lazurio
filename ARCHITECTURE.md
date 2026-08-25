@@ -222,6 +222,11 @@ musí zůstat fyzicky oddělené:
 - poslední zdravá verze zůstává dostupná pro rollback;
 - běžící runtime se neaktualizuje přepisem vlastního source checkoutu.
 
+Přesný technický důvod selhání aktualizace patří do API, CLI a Doctoru pro
+Agenty. Běžný Launchpad jej nikdy nevypisuje přímo: stabilní reason kódy
+promítá do vlastní lidské copy a stav bez smysluplné uživatelské akce na
+denní ploše nezobrazuje.
+
 Přesné rozhraní drží
 [manuál immutable runtime](manual/lazurio-runtime-install-interface.md) a
 [manuál aktualizace Residenta](manual/update-installed-resident.md).

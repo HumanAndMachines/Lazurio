@@ -136,6 +136,62 @@ export function replacePersonalspaceResponse(_previous, incoming) {
   return incoming;
 }
 
+export function updateBannerPresentation(status, { updatePending = false } = {}) {
+  if (!status) {
+    return {
+      visible: true,
+      tone: "loading",
+      message: "Načítám lokální stav Lazurio…",
+      action: null,
+    };
+  }
+
+  if (status.state === "blocked") {
+    const prompt = typeof status.next_action?.prompt === "string"
+      ? status.next_action.prompt.trim()
+      : "";
+    // API a CLI drží přesnou technickou diagnostiku. Denní plocha ji nikdy
+    // nepřebírá: bez vědomého Agent handoffu nemá uživatel žádnou akci.
+    if (!prompt) {
+      return {
+        visible: false,
+        tone: "blocked",
+        message: null,
+        action: null,
+      };
+    }
+    return {
+      visible: true,
+      tone: "blocked",
+      message: "Lazurio potřebuje údržbu.",
+      action: {
+        label: "Vyřešit s Codexem",
+        prompt,
+      },
+    };
+  }
+
+  if (status.state === "current") {
+    return {
+      visible: true,
+      tone: "current",
+      message: status.checked_remote === false
+        ? "Lazurio je připravené k synchronizaci."
+        : "Lazurio je aktuální.",
+      action: null,
+    };
+  }
+
+  return {
+    visible: true,
+    tone: updatePending ? "updating" : "updated",
+    message: updatePending
+      ? "Synchronizuji Lazurio…"
+      : "Lazurio bylo při poslední synchronizaci aktualizované.",
+    action: null,
+  };
+}
+
 export function matchesStatusFilter(app, filter) {
   if (filter === "all") return true;
   return app.runtime_status === filter;
