@@ -99,6 +99,40 @@ test("requires exactly one entrypoint", () => {
   expect(issues.some((issue) => issue.includes("právě jeden entrypoint"))).toBe(true);
 });
 
+test("validates every optional runtime field from the published schema", () => {
+  const value = runtime({
+    required_module_slots: ["workspace/wiki", "workspace/wiki", "../outside"],
+    icon: " ",
+    description: "x".repeat(241),
+    group: "x".repeat(81),
+    production_url: "ftp://example.test",
+  });
+  const issues = validateDeclaredRuntime({
+    runtime: value,
+    packageJson: { scripts: { dev: "run" } },
+  });
+  expect(issues.join("\n")).toContain("required_module_slots[1] workspace/wiki je duplicitní");
+  expect(issues.join("\n")).toContain("required_module_slots[2] není validní");
+  expect(issues.join("\n")).toContain("icon musí být neprázdný string");
+  expect(issues.join("\n")).toContain("description smí mít nejvýše 240 znaků");
+  expect(issues.join("\n")).toContain("group smí mít nejvýše 80 znaků");
+  expect(issues.join("\n")).toContain("production_url musí začínat http:// nebo https://");
+});
+
+test("accepts schema-valid optional runtime metadata", () => {
+  const issues = validateDeclaredRuntime({
+    runtime: runtime({
+      required_module_slots: ["workspace/wiki", "productionspace/Repository.v2"],
+      icon: "book-open",
+      description: "Knowledgebase",
+      group: "Knowledge",
+      production_url: "https://example.test/knowledgebase",
+    }),
+    packageJson: { scripts: { dev: "run" } },
+  });
+  expect(issues).toEqual([]);
+});
+
 test("requires a stable module identity for the single-instance lease", () => {
   const value = runtime();
   delete value.module;

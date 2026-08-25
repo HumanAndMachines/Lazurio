@@ -2,6 +2,7 @@ const APP_ID = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const COMPANY_ID = /^[A-Za-z0-9][A-Za-z0-9-]*$/;
 const MODULE_ID = /^[a-z0-9][a-z0-9-]*$/;
 const LISTENER_ID = /^[a-z][a-z0-9-]*$/;
+const MODULE_SLOT = /^[A-Za-z0-9][A-Za-z0-9._-]*(\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
 const SURFACES = new Set(["internal", "manual", "admin", "public-preview"]);
 const PROTOCOLS = new Set(["http", "https", "tcp"]);
 const RUNTIME_KEYS = new Set([
@@ -142,6 +143,35 @@ export function validateDeclaredRuntime({ runtime, packageJson, packagePath = "p
     if (typeof runtime.plugin === "string" && !runtime.plugin.endsWith(".json")) {
       issues.push(`${label}.plugin musí končit .json`);
     }
+  }
+  if (runtime.required_module_slots !== undefined) {
+    if (!Array.isArray(runtime.required_module_slots) || runtime.required_module_slots.length === 0) {
+      issues.push(`${label}.required_module_slots musí být neprázdné pole`);
+    } else {
+      const slots = new Set();
+      runtime.required_module_slots.forEach((slot, index) => {
+        validatePattern(slot, MODULE_SLOT, `${label}.required_module_slots[${index}]`, issues);
+        if (typeof slot === "string") {
+          if (slots.has(slot)) issues.push(`${label}.required_module_slots[${index}] ${slot} je duplicitní`);
+          slots.add(slot);
+        }
+      });
+    }
+  }
+  for (const key of ["icon", "description", "group"]) {
+    if (runtime[key] !== undefined) validateNonEmpty(runtime[key], `${label}.${key}`, issues);
+  }
+  if (typeof runtime.description === "string" && runtime.description.length > 240) {
+    issues.push(`${label}.description smí mít nejvýše 240 znaků`);
+  }
+  if (typeof runtime.group === "string" && runtime.group.length > 80) {
+    issues.push(`${label}.group smí mít nejvýše 80 znaků`);
+  }
+  if (
+    runtime.production_url !== undefined
+    && (typeof runtime.production_url !== "string" || !/^https?:\/\//.test(runtime.production_url))
+  ) {
+    issues.push(`${label}.production_url musí začínat http:// nebo https://`);
   }
   if (!Array.isArray(runtime.tags)) issues.push(`${label}.tags musí být pole`);
   else runtime.tags.forEach((tag, index) => validatePattern(tag, MODULE_ID, `${label}.tags[${index}]`, issues));
