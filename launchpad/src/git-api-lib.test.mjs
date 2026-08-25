@@ -13,6 +13,7 @@ import {
   createLaunchpadGitFixture,
   createPackageApp,
   initGitRepo,
+  runGit,
   writeJson,
 } from "./git-fixture-helpers.test.mjs";
 
@@ -253,6 +254,75 @@ test("git API can limit polling work to the selected organization", async () => 
   expect(response.repos.length).toBeGreaterThan(0);
   expect(response.repos.every((repo) => repo.organization === "BetaCo")).toBe(true);
   expect(response.repos.some((repo) => repo.organization === "OmegaCo")).toBe(false);
+});
+
+test("git API never projects or refreshes a nested repository-db", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const organizationRoot = join(root, "organizations", "OmegaCo_GEN3");
+  const manifestPath = join(organizationRoot, "modules.manifest.json");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  manifest.module_slots.push({
+    slug: "studio-data",
+    path: "workspace/studio/db",
+    source_of_truth: "repository-db:v3",
+    git: { url: "git@github.com:OmegaCo/studio-data.git", branch: "v3" },
+  });
+  await writeJson(manifestPath, manifest);
+  const databasePath = join(organizationRoot, "workspace", "studio", "db");
+  await initGitRepo(databasePath, { branch: "v3" });
+  const before = {
+    head: runGit(["rev-parse", "HEAD"], databasePath),
+    status: runGit(["status", "--porcelain=v1", "--untracked-files=all"], databasePath),
+    ref: await readFile(join(databasePath, ".git", "refs", "heads", "v3"), "utf8"),
+  };
+  const statusCalls = [];
+  const statusService = {
+    async readStatuses(repos, options) {
+      statusCalls.push({ keys: repos.map((repo) => repo.key), options });
+      return repos.map((repo) => ({
+        key: repo.key,
+        branch: "main",
+        head: "fixture-head",
+        upstream: null,
+        operation: null,
+        counts: { incoming: 0, outgoing: 0, changed_files: 0, untracked_files: 0 },
+        status: "up_to_date",
+        severity: "ok",
+        title: "Repo je aktuální",
+        message: "Fixture status.",
+        recommended_action: null,
+        freshness: null,
+      }));
+    },
+  };
+
+  const response = await buildGitApiResponse({
+    companiesRoot: root,
+    organization: "OmegaCo",
+    refresh: true,
+    statusService,
+  });
+
+  expect(statusCalls).toHaveLength(1);
+  expect(statusCalls[0].options.refresh).toBe(true);
+  expect(statusCalls[0].keys).not.toContain("OmegaCo::studio-data");
+  expect(response.repos.some((repo) => repo.key === "OmegaCo::studio-data")).toBe(false);
+  expect(response.planned.some((repo) => repo.key === "OmegaCo::studio-data")).toBe(false);
+  await expect(buildRepoResponse({
+    companiesRoot: root,
+    repoKey: "OmegaCo::studio-data",
+    statusService,
+  })).rejects.toMatchObject({ code: "repo_not_found" });
+  await expect(buildRepoChangesResponse({
+    companiesRoot: root,
+    repoKey: "OmegaCo::studio-data",
+  })).rejects.toMatchObject({ code: "repo_not_found" });
+  expect({
+    head: runGit(["rev-parse", "HEAD"], databasePath),
+    status: runGit(["status", "--porcelain=v1", "--untracked-files=all"], databasePath),
+    ref: await readFile(join(databasePath, ".git", "refs", "heads", "v3"), "utf8"),
+  }).toEqual(before);
 });
 
 test("git API forwards the worktree remote-refresh barrier to list and detail reads", async () => {

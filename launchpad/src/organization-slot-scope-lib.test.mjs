@@ -11,6 +11,7 @@ describe("case-preserving Organization repository mount paths", () => {
   test.each([
     "workspace/knowledgebase",
     "workspace/Knowledgebase.v2",
+    "workspace/warehouse/db",
     "productionspace/Buddy_GEN2",
     "productionspace/Dashboard",
     "modules/Legacy_Module-2",
@@ -25,6 +26,7 @@ describe("case-preserving Organization repository mount paths", () => {
     "productionspace/Nested/Buddy_GEN2",
     "workspace/..",
     "workspace/../../etc/passwd",
+    "workspace/warehouse/cache",
     "/workspace/repo",
     "productionspace/Buddy_GEN2/",
     "productionspace\\Buddy_GEN2",
@@ -60,6 +62,18 @@ describe("case-preserving Organization repository mount paths", () => {
       repo: "git@github.com:HumanAndMachine-ai/Other.git",
       git: { url: "git@github.com:HumanAndMachine-ai/Buddy_GEN2.git" },
     })).toContain('"Buddy_GEN2" neodpovídá přesnému názvu GitHub repozitáře "Other"');
+  });
+
+  test("uses the explicit repository-db slug instead of the fixed db mount basename", () => {
+    const slot = {
+      slug: "warehouse-data",
+      path: "workspace/warehouse/db",
+      materialization: "repository_db_mount",
+      source_of_truth: "repository-db:v3",
+      git: { url: "git@github.com:Example/warehouse-data.git", branch: "v3" },
+    };
+    expect(organizationSlotRepositoryId(slot)).toBe("warehouse-data");
+    expect(organizationSlotRepositoryMountIssue(slot)).toBeNull();
   });
 
   test("parses dotted GitHub repository names without dropping their suffix", () => {

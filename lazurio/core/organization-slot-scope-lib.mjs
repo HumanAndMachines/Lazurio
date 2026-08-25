@@ -16,6 +16,36 @@ const organizationDiagnosticsOnlySlotPaths = new Set([
   "mission-control/db",
 ]);
 const organizationSlotUiExposures = new Set(["module", "diagnostics-only"]);
+const organizationRepositoryDbSourceOfTruthPattern =
+  /^repository-db:[a-z0-9]+(?:[._-][a-z0-9]+)*$/;
+
+function canonicalRepositoryMountBasenamePattern() {
+  return "[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?";
+}
+
+export function isNestedOrganizationRepositoryDbSlotPath(path) {
+  if (
+    typeof path !== "string"
+    || path.includes("\\")
+    || path.includes("\0")
+  ) {
+    return false;
+  }
+  const normalizedPath = normalizeOrganizationSlotPath(path);
+  if (normalizedPath === null || path !== normalizedPath) return false;
+  return new RegExp(
+    `^(?:workspace|modules)/${canonicalRepositoryMountBasenamePattern()}/db$`,
+  ).test(normalizedPath);
+}
+
+export function isOrganizationRepositoryDbSlot(slot, normalizedPath = null) {
+  const path = normalizeOrganizationSlotPath(normalizedPath ?? slot?.path);
+  const sourceOfTruth = typeof slot?.source_of_truth === "string"
+    ? slot.source_of_truth.trim().toLowerCase()
+    : "";
+  return isNestedOrganizationRepositoryDbSlotPath(path)
+    && organizationRepositoryDbSourceOfTruthPattern.test(sourceOfTruth);
+}
 
 export function isOrganizationRootSlotPath(path) {
   const normalizedPath = normalizeOrganizationSlotPath(path);
@@ -51,9 +81,12 @@ export function isCanonicalOrganizationRepositorySlotPath(path) {
   if (normalizedPath === null || path !== normalizedPath) return false;
   return (
     organizationRootSlotPaths.has(normalizedPath)
+    || isNestedOrganizationRepositoryDbSlotPath(normalizedPath)
     // Fyzický basename mountu přesně zachovává jméno repozitáře včetně
     // case, `_` a `.`; oddělené stabilní ID vrací helper níže (decision 0125).
-    || /^(workspace|modules|productionspace)\/[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?$/.test(normalizedPath)
+    || new RegExp(
+      `^(?:workspace|modules|productionspace)/${canonicalRepositoryMountBasenamePattern()}$`,
+    ).test(normalizedPath)
   );
 }
 
@@ -61,6 +94,7 @@ export function organizationSlotRepositoryId(slot, normalizedPath = null) {
   const path = normalizeOrganizationSlotPath(normalizedPath ?? slot?.path);
   if (!path || !isCanonicalOrganizationRepositorySlotPath(path)) return null;
   const declared = slot?.slug;
+  if (isNestedOrganizationRepositoryDbSlotPath(path) && declared === undefined) return null;
   const candidate = declared === undefined ? posix.basename(path) : declared;
   if (typeof candidate !== "string" || candidate.trim() !== candidate) return null;
   // `root` už vlastní implicitní Organization root záznam v Git inventáři.
@@ -88,10 +122,23 @@ export function githubRepositoryCoordinate(remote) {
 export function organizationSlotRepositoryMountIssue(slot, normalizedPath = null) {
   const path = normalizeOrganizationSlotPath(normalizedPath ?? slot?.path);
   if (!path || isOrganizationRootSlotPath(path)) return null;
+  if (
+    isNestedOrganizationRepositoryDbSlotPath(path)
+    && !isOrganizationRepositoryDbSlot(slot, path)
+  ) {
+    return "nested workspace/<module>/db je povolené jen pro source_of_truth repository-db:<version>";
+  }
   // Stejné pořadí jako normalizeModuleSlot: validujeme přesně remote, který
   // následně vstoupí do Git action surface.
   const remote = slot?.repo ?? slot?.git?.url ?? slot?.repository;
   const coordinate = githubRepositoryCoordinate(remote);
+  if (isNestedOrganizationRepositoryDbSlotPath(path)) {
+    if (!coordinate) {
+      return "repository-db slot musí deklarovat konkrétní platný GitHub remote v git.url/repo/repository";
+    }
+    if (coordinate.repository === slot?.slug) return null;
+    return `repository-db slug ${JSON.stringify(slot?.slug ?? null)} neodpovídá přesnému názvu GitHub repozitáře ${JSON.stringify(coordinate.repository)}`;
+  }
   if (!coordinate) return null;
   const mountBasename = posix.basename(path);
   if (mountBasename === coordinate.repository) return null;
@@ -141,6 +188,17 @@ export function organizationRepositorySlotCollectionIssues(
       }
     } else {
       ids.set(id, path);
+    }
+  }
+  for (const slot of Array.isArray(slots) ? slots : []) {
+    const path = normalizeOrganizationSlotPath(slot?.path);
+    if (!isNestedOrganizationRepositoryDbSlotPath(path)) continue;
+    const parentPath = path.split("/").slice(0, -1).join("/");
+    const declaredParent = paths.get(parentPath.toLowerCase());
+    if (!declaredParent || declaredParent.path !== parentPath) {
+      issues.push(
+        `repository-db slot ${JSON.stringify(path)} nemá deklarovaný parent Workspace Modul ${JSON.stringify(parentPath)}`,
+      );
     }
   }
   return issues;
@@ -206,6 +264,9 @@ export function organizationSlotTeams(slot, normalizedPath = null) {
 
 export function organizationSlotUiExposure(slot, normalizedPath = null) {
   const path = normalizeOrganizationSlotPath(normalizedPath ?? slot?.path);
+  // Nested repository-db je technická databáze parent Modulu. Prezentační
+  // override z něj nikdy nesmí udělat druhý Modul ani kartu.
+  if (isOrganizationRepositoryDbSlot(slot, path)) return "diagnostics-only";
   const declaredExposure = typeof slot?.ui_exposure === "string"
     ? slot.ui_exposure.trim().toLowerCase()
     : "";

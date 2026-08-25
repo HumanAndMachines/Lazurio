@@ -5,6 +5,7 @@ import { organizationMountStructureIssues, organizationRelativePathIssue } from 
 import {
   githubRepositoryCoordinate,
   isCanonicalOrganizationRepositorySlotPath,
+  isOrganizationRepositoryDbSlot,
   isOrganizationRootSlotDescendantPath,
   isOrganizationSlotContainerPath,
   normalizeOrganizationSlotPath,
@@ -139,6 +140,10 @@ export async function buildGitInventory({ companiesRoot, organizations = null } 
         );
         continue;
       }
+      // Module-owned repository-db checkout je deklarativní/read-only resource,
+      // ne obecný Git action target. Nezařazujeme jej do repos ani planned,
+      // takže update, commit/push ani worktree surfaces nad ním nevzniknou.
+      if (isOrganizationRepositoryDbSlot(rawSlot, slot.path)) continue;
       if (!slot.repo) {
         planned.push(slotRecord({ organization: normalized, slot, companiesRoot }));
         continue;
