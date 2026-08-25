@@ -455,12 +455,18 @@ test("actual rebase and git am operations stay blocked and untouched", async () 
 
 test("hierarchy is sequential and excludes root-space db and productionspace", async () => {
   const calls = [];
+  const missionControl = repo("alpha::mission-control", "root_repo", "alpha", "mission-control", null);
+  missionControl.slot_path = "mission-control";
+  const database = repo("alpha::db", "root_repo", "alpha", "db", null);
+  database.slot_path = "mission-control/db";
+  database.expected_branch = "v3";
   const inventory = {
     repos: [
       repo("beta::root", "organization_root", "beta", "root"),
       repo("alpha::root", "organization_root", "alpha", "root"),
       repo("alpha::module", "module", "alpha", "module", "workspace"),
-      repo("alpha::db", "root_repo", "alpha", "db", null),
+      missionControl,
+      database,
       repo("alpha::production", "module", "alpha", "production", "productionspace"),
     ],
     warnings: [],
@@ -479,7 +485,7 @@ test("hierarchy is sequential and excludes root-space db and productionspace", a
     },
   });
   expect(report.state).toBe("current");
-  expect(calls).toEqual(["lazurio::root", "alpha::root", "alpha::module", "beta::root"]);
+  expect(calls).toEqual(["lazurio::root", "alpha::root", "alpha::mission-control", "alpha::module", "beta::root"]);
   expect(JSON.stringify(report)).not.toContain("alpha::db");
   expect(JSON.stringify(report)).not.toContain("alpha::production");
 });
@@ -547,6 +553,75 @@ test("updated Module refreshes each manifest-declared app package once through t
       ok: true,
       package_path: "app/v3",
       app_id: "test-mc-api",
+      strategy: "clean_repair",
+    }],
+  });
+});
+
+test("updated Organization-level repository refreshes its manifest-declared App package", async () => {
+  const root = await mkdtemp(join(tmpdir(), "lazurio-update-root-repo-app-dependencies-"));
+  cleanup.push(root);
+  const organizationRoot = join(root, "organizations", "TestCo");
+  const missionControlRoot = join(organizationRoot, "mission-control");
+  const appRoot = join(missionControlRoot, "app", "v3");
+  await mkdir(appRoot, { recursive: true });
+  await writeJson(join(appRoot, "package.json"), {
+    name: "test-root-mission-control",
+    dependencies: { fixture: "1.0.0" },
+  });
+  await writeFile(join(appRoot, "bun.lock"), "# fixture\n");
+  const organization = repo("TestCo::root", "organization_root", "TestCo", "root");
+  organization.absolute_path = organizationRoot;
+  const missionControl = repo("TestCo::mission-control", "root_repo", "TestCo", "mission-control");
+  missionControl.absolute_path = missionControlRoot;
+  missionControl.slot_path = "mission-control";
+  const inventory = { repos: [organization, missionControl], warnings: [] };
+  const calls = [];
+  const head = "b".repeat(40);
+
+  const report = await runLazurioUpdate({
+    rootPath: root,
+    runtimeRoot: join(root, "..", "runtime"),
+    deps: {
+      runId: "root-repo-app-package-refresh",
+      acquireLock: async () => ({ release: async () => {} }),
+      buildInventory: async () => inventory,
+      updateRepo: async (item) => ({
+        ...identity(item),
+        state: item.key === missionControl.key ? "updated" : "current",
+        reason: item.key === missionControl.key ? "checkout_updated" : "already_current",
+        message: "fixture",
+        head,
+        actions: item.key === missionControl.key ? ["fast_forward"] : [],
+      }),
+      discoverApps: async () => ({
+        apps: [
+          { id: "test-root-mc-ui", package_path: "organizations/TestCo/mission-control/app/v3/package.json" },
+          { id: "test-root-mc-api", package_path: "organizations/TestCo/mission-control/app/v3/package.json" },
+        ],
+        failures: [],
+      }),
+      refreshAppDependencies: async ({ appId, cwd, repo: owner }) => {
+        calls.push({ appId, cwd, repoKey: owner.key });
+        return { refresh_strategy: "clean_repair", mode: "clean" };
+      },
+      inspectLocalRepo: async () => ({ ok: true, branch: "main", dirtyPaths: [], head }),
+      runGit: async (args) => args[0] === "rev-parse"
+        ? { ok: true, stdout: head, stderr: "", exitCode: 0 }
+        : { ok: false, stdout: "", stderr: "unexpected", exitCode: 1 },
+    },
+  });
+
+  expect(calls).toHaveLength(1);
+  expect(calls[0]).toMatchObject({ appId: "test-root-mc-api", repoKey: missionControl.key });
+  expect(calls[0].cwd.endsWith(join("organizations", "TestCo", "mission-control", "app", "v3"))).toBe(true);
+  expect(report.results.find((result) => result.repo_key === missionControl.key)).toMatchObject({
+    state: "updated",
+    actions: ["fast_forward", "dependencies_clean_repaired"],
+    dependencies: [{
+      ok: true,
+      package_path: "app/v3",
+      app_id: "test-root-mc-api",
       strategy: "clean_repair",
     }],
   });
@@ -750,11 +825,17 @@ test("fresh Organization manifest materializes its new Workspace Module while ex
 });
 
 test("blocked parent defers descendants while safe sibling continues", async () => {
+  const alphaMissionControl = repo("alpha::mission-control", "root_repo", "alpha", "mission-control");
+  alphaMissionControl.slot_path = "mission-control";
+  const betaMissionControl = repo("beta::mission-control", "root_repo", "beta", "mission-control");
+  betaMissionControl.slot_path = "mission-control";
   const inventory = {
     repos: [
       repo("alpha::root", "organization_root", "alpha", "root"),
+      alphaMissionControl,
       repo("alpha::module", "module", "alpha", "module", "workspace"),
       repo("beta::root", "organization_root", "beta", "root"),
+      betaMissionControl,
       repo("beta::module", "module", "beta", "module", "workspace"),
     ],
     warnings: [],
@@ -774,9 +855,12 @@ test("blocked parent defers descendants while safe sibling continues", async () 
       },
     },
   });
-  expect(calls).toEqual(["lazurio::root", "alpha::root", "beta::root", "beta::module"]);
+  expect(calls).toEqual(["lazurio::root", "alpha::root", "beta::root", "beta::mission-control", "beta::module"]);
+  expect(report.results.find((item) => item.repo_key === "alpha::mission-control"))
+    .toMatchObject({ state: "blocked", reason: "parent_blocked" });
   expect(report.results.find((item) => item.repo_key === "alpha::module"))
     .toMatchObject({ state: "blocked", reason: "parent_blocked" });
+  expect(report.results.find((item) => item.repo_key === "beta::mission-control").state).toBe("updated");
   expect(report.results.find((item) => item.repo_key === "beta::module").state).toBe("updated");
   expect(report.state).toBe("blocked");
 });
@@ -861,6 +945,36 @@ test("GET-first status is no-fetch and exposes a Codex prompt for cached ahead m
     next_action: { kind: "codex", prompt: expect.stringContaining(fixture.working) },
   });
   expect(commands.some(([command]) => ["fetch", "pull", "push"].includes(command))).toBe(false);
+});
+
+test("GET-first status includes a mounted Organization-level repository", async () => {
+  const root = await mkdtemp(join(tmpdir(), "lazurio-update-root-repo-status-"));
+  cleanup.push(root);
+  const organizationRoot = join(root, "organizations", "TestCo");
+  const missionControlRoot = join(organizationRoot, "mission-control");
+  await mkdir(missionControlRoot, { recursive: true });
+  const organization = repo("TestCo::root", "organization_root", "TestCo", "root");
+  organization.absolute_path = organizationRoot;
+  const missionControl = repo("TestCo::mission-control", "root_repo", "TestCo", "mission-control");
+  missionControl.absolute_path = missionControlRoot;
+  missionControl.slot_path = "mission-control";
+
+  const report = await readLazurioUpdateStatus({
+    rootPath: root,
+    deps: {
+      buildInventory: async () => ({ repos: [organization, missionControl], warnings: [] }),
+      inspectLocalRepo: async (item) => item.key === missionControl.key
+        ? { ok: false, reason: "local_main_commits", detail: "fixture" }
+        : { ok: true, directoryOnly: true, dirtyPaths: [] },
+    },
+  });
+
+  expect(report).toMatchObject({
+    state: "blocked",
+    checked_remote: false,
+    reason: "local_main_commits",
+    repo_key: missionControl.key,
+  });
 });
 
 async function repositoryFixture(name) {

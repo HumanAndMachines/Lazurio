@@ -132,7 +132,7 @@ export async function runLazurioUpdate({
     const initialInventory = await safeInventory(buildInventory, absoluteRoot, warnings);
     if (initialInventory.failed) {
       results.push(blockedResult(inventoryDescriptor(absoluteRoot), "inventory_unavailable", {
-        detail: "Lazurio nedokázalo bezpečně určit Organization rooty a Workspace Moduly; žádný další checkout nezměnilo.",
+        detail: "Lazurio nedokázalo bezpečně určit Organizace a jejich spravované repozitáře; žádný další checkout nezměnilo.",
       }));
       return updateReport({ rootPath: absoluteRoot, runId, now, results, warnings });
     }
@@ -153,26 +153,30 @@ export async function runLazurioUpdate({
       results.push(organizationResult);
 
       if (organizationResult.state === "blocked") {
-        results.push(...deferredModuleResults(initialInventory, organizationRoot.organization));
+        results.push(...deferredOrganizationChildResults(initialInventory, organizationRoot.organization));
         continue;
       }
 
       // The Organization root owns the manifest. Re-read after its update so
-      // a module added on GitHub is materialized during this same run.
+      // a newly declared Workspace Modul can be materialized and every mounted
+      // Organization-level repository can be updated during this same run.
       const refreshed = await safeInventory(buildInventory, absoluteRoot, warnings);
       if (refreshed.failed) {
         results.push(blockedResult(inventoryDescriptor(absoluteRoot, organizationRoot.organization), "inventory_unavailable", {
-          detail: `Po aktualizaci Organization rootu ${organizationRoot.organization} nešel znovu načíst manifest; Workspace Moduly zůstaly nedotčené.`,
+          detail: `Po aktualizaci Organization rootu ${organizationRoot.organization} nešel znovu načíst manifest; jeho repozitáře zůstaly nedotčené.`,
         }));
         continue;
       }
-      const modules = managedWorkspaceModules(refreshed, organizationRoot.organization);
-      for (const moduleRepo of modules) {
-        repoDescriptors.set(moduleRepo.key, moduleRepo);
-        if (!existsSync(moduleRepo.absolute_path)) {
+      const children = managedOrganizationChildren(refreshed, organizationRoot.organization);
+      for (const childRepo of children) {
+        repoDescriptors.set(childRepo.key, childRepo);
+        if (!existsSync(childRepo.absolute_path)) {
+          // Sync materializes declared Workspace Moduly. Organization-level
+          // repositories are managed only once they are mounted locally.
+          if (childRepo.repo_kind !== "module") continue;
           const materialized = await safeMaterializeModule({
             rootPath: absoluteRoot,
-            repo: moduleRepo,
+            repo: childRepo,
             runId,
             materializeRepo,
             checkpoint,
@@ -181,7 +185,7 @@ export async function runLazurioUpdate({
           results.push(materialized);
           continue;
         }
-        results.push(await safeUpdateRepo(moduleRepo, {
+        results.push(await safeUpdateRepo(childRepo, {
           runId,
           updateRepo,
           checkpoint,
@@ -236,9 +240,7 @@ export async function readLazurioUpdateStatus({ rootPath, deps = {} } = {}) {
   const repos = [
     rootRepo,
     ...managedOrganizationRoots(inventory),
-    ...(inventory.repos ?? [])
-      .filter((repo) => repo.repo_kind === "module" && repo.workspace !== "productionspace")
-      .sort(compareRepoIdentity),
+    ...managedOrganizationChildren(inventory),
   ];
   for (const repo of repos) {
     // Chybějící Workspace Modul je legitimní materialization kandidát pro
@@ -743,10 +745,10 @@ async function reconcileUpdatedDependencies({
     if (target) targetsByPath.set(target.cwd, target);
   }
 
-  const changedModules = canonicalRepos.filter(({ repo }) =>
-    repo.repo_kind === "module" && changedRepoKeys.has(repo.key)
+  const changedOrganizationChildren = canonicalRepos.filter(({ repo }) =>
+    isManagedOrganizationChild(repo) && changedRepoKeys.has(repo.key)
   );
-  if (changedModules.length > 0) {
+  if (changedOrganizationChildren.length > 0) {
     let discovery;
     try {
       discovery = await discoverApps(rootPath);
@@ -1015,21 +1017,32 @@ function managedOrganizationRoots(inventory) {
     .sort(compareRepoIdentity);
 }
 
-function managedWorkspaceModules(inventory, organization) {
+function managedOrganizationChildren(inventory, organization = null) {
   return (inventory.repos ?? [])
-    .filter((repo) => repo.organization === organization && repo.repo_kind === "module" && repo.workspace !== "productionspace")
+    .filter((repo) => (organization === null || repo.organization === organization) && isManagedOrganizationChild(repo))
     .sort(compareRepoIdentity);
+}
+
+function isManagedOrganizationChild(repo) {
+  if (repo.repo_kind === "module") return repo.workspace !== "productionspace";
+  if (repo.repo_kind !== "root_repo") return false;
+  // Organization-level checkouts such as Mission Control or Design System
+  // participate once mounted and only on main. Repository-db mounts keep
+  // their own publish lifecycle and are never mutated by general Sync.
+  return repo.expected_branch === "main"
+    && repo.slot_path !== "mission-control/db"
+    && existsSync(repo.absolute_path);
 }
 
 function deferredHierarchyResults(inventory, parentKey) {
   return (inventory.repos ?? [])
-    .filter((repo) => repo.repo_kind === "organization_root" || (repo.repo_kind === "module" && repo.workspace !== "productionspace"))
+    .filter((repo) => repo.repo_kind === "organization_root" || isManagedOrganizationChild(repo))
     .sort(compareRepoIdentity)
     .map((repo) => deferredResult(repo, parentKey));
 }
 
-function deferredModuleResults(inventory, organization) {
-  return managedWorkspaceModules(inventory, organization)
+function deferredOrganizationChildResults(inventory, organization) {
+  return managedOrganizationChildren(inventory, organization)
     .map((repo) => deferredResult(repo, `${organization}::root`));
 }
 
