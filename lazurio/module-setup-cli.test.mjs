@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -222,6 +222,31 @@ test("duplicate explicit adopted port fails closed without creating either file"
   expect(report).toMatchObject({ status: "action_required", reason: "module_port_conflict" });
   expect(await readFile(join(target.moduleRoot, "package.json"), "utf8")).not.toContain("lazurio");
   expect(await Bun.file(join(target.moduleRoot, "lazurio.module.json")).exists()).toBe(false);
+});
+
+test("App package behind an intermediate symlink or junction cannot escape the Module", async () => {
+  const fixture = await moduleFixture({ module: "linked-app" });
+  const outside = await mkdtemp(join(tmpdir(), "lazurio-module-setup-outside-"));
+  roots.push(outside);
+  const outsidePackage = join(outside, "package.json");
+  await writeJson(outsidePackage, legacyPackage({ company: "Acme", module: "linked-app", port: 24_012 }));
+  await symlink(outside, join(fixture.moduleRoot, "app"), process.platform === "win32" ? "junction" : "dir");
+  await writeJson(join(fixture.moduleRoot, "lazurio.module.json"), {
+    schema_version: "lazurio.module.v1",
+    id: "linked-app",
+    company: "Acme",
+    tcp_port_policy: { mode: "single" },
+    port_leases: [{ id: "main", host: "127.0.0.1", port: 24_012 }],
+    apps: ["app/package.json"],
+    default_app: "app/package.json",
+  });
+  const before = await readFile(outsidePackage, "utf8");
+
+  const report = await setupModule({ ...fixture, apply: true });
+
+  expect(report).toMatchObject({ status: "action_required", reason: "app_package_outside_module" });
+  expect(report.issues[0].message).toContain("symlink nebo junction");
+  expect(await readFile(outsidePackage, "utf8")).toBe(before);
 });
 
 test("concurrent Module setup serializes on the existing Organization port allocator lock", async () => {
