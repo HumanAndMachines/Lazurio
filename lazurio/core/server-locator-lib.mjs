@@ -150,6 +150,17 @@ export async function writeServerLocator({
   return { path: target, locator };
 }
 
+export async function removeServerLocatorIfOwned({
+  stateDirectory,
+  instanceId,
+  removeFileFn = rm,
+}) {
+  const locator = await readServerLocatorIfPresent({ stateDirectory });
+  if (!locator || locator.instance_id !== instanceId) return false;
+  await removeFileFn(serverLocatorPath(stateDirectory), { force: true });
+  return true;
+}
+
 function normalizeLoopbackOrigin(value) {
   let url;
   try {

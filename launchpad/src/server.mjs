@@ -68,6 +68,7 @@ import {
 } from "../../lazurio/core/server-identity-lib.mjs";
 import {
   readServerLocatorIfPresent,
+  removeServerLocatorIfOwned,
   resolveServerStateDirectory,
   writeServerLocator,
 } from "../../lazurio/core/server-locator-lib.mjs";
@@ -1134,16 +1135,39 @@ async function handleServerShutdown(request) {
   }
 
   serverShutdownState = "stopping";
-  setTimeout(() => {
-    console.error(`[lazurio] stopping Server instance ${launchpadServerIdentity.instance_id}\n`);
-    server.stop(true);
-    process.exit(0);
-  }, 50);
+  setTimeout(() => void completeServerShutdown(), 50);
   return jsonResponse({
     schema_version: "lazurio.server.shutdown.v1",
     instance_id: launchpadServerIdentity.instance_id,
     stopping: true,
   });
+}
+
+async function completeServerShutdown() {
+  console.error(`[lazurio] stopping Server instance ${launchpadServerIdentity.instance_id}\n`);
+  let failed = false;
+  try {
+    await server.stop(true);
+  } catch (error) {
+    failed = true;
+    console.error(`[lazurio] Server listener cleanup failed: ${error.message}`);
+  }
+  try {
+    await withServerStateAccess(() => removeServerLocatorIfOwned({
+      stateDirectory: serverStateDirectory,
+      instanceId: launchpadServerIdentity.instance_id,
+    }));
+  } catch (error) {
+    failed = true;
+    console.error(`[lazurio] Server locator cleanup failed: ${error.message}`);
+  }
+  try {
+    await serverLifetimeLock?.release();
+  } catch (error) {
+    failed = true;
+    console.error(`[lazurio] Server lifetime lease cleanup failed: ${error.message}`);
+  }
+  process.exit(failed ? 1 : 0);
 }
 
 function startServer(startPort) {
