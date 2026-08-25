@@ -194,7 +194,7 @@ test("legacy remote resolver requires the identity pair and does not preempt can
 
 test("generated legacy scaffold binds live immutable Organization and repository IDs", () => {
   const scaffold = createOrganizationScaffold({
-    organization: { id: "314957563", login: "Example", slug: "example", displayName: "Example" },
+    organization: { id: "314957563", login: "Example", slug: "example-org", displayName: "Example" },
     repository: {
       id: "42424242",
       name: "Example_GEN3",
