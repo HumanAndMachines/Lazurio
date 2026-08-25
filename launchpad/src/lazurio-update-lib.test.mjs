@@ -178,7 +178,10 @@ test("registered canonical task worktrees are locally ignored before recovery st
   });
   expect(status(fixture.working)).toBe("");
   expect(runGitResult(fixture.working, ["check-ignore", "--quiet", "--no-index", "--", ".worktrees/"]).status).toBe(0);
-  expect(runGit(fixture.working, ["worktree", "list", "--porcelain"])).toContain(worktreeRoot);
+  const worktreeList = runGit(fixture.working, ["worktree", "list", "--porcelain"]);
+  expect(worktreeList).toContain("branch refs/heads/codex/DEV-6505-fixture");
+  expect(runGit(worktreeRoot, ["rev-parse", "HEAD"]))
+    .toBe(runGit(fixture.working, ["rev-parse", "codex/DEV-6505-fixture"]));
 });
 
 test("unregistered files under .worktrees remain user data and are recovery-stashed", async () => {
