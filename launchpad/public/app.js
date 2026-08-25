@@ -18,6 +18,7 @@ import {
   runtimeStagesForApp,
   sidePanelResponseIsCurrent,
   summarizeOrganizationSpaceHealth,
+  updateBannerPresentation,
   variantMenuLabel,
   variantTag,
 } from "./app-state.js";
@@ -390,7 +391,9 @@ elements.reloadButton.addEventListener("click", () => {
   loadData({ sync: true });
 });
 elements.updateBannerAction?.addEventListener("click", () => {
-  const prompt = state.updateStatus?.next_action?.prompt;
+  const prompt = updateBannerPresentation(state.updateStatus, {
+    updatePending: state.updatePending,
+  }).action?.prompt;
   if (prompt) openCodexUpdateDialog(prompt);
 });
 elements.heroCta.addEventListener("click", () => runHeroAction());
@@ -4646,50 +4649,19 @@ async function loadUpdateStatus() {
 function renderUpdateBanner() {
   const banner = elements.updateBanner;
   if (!banner) return;
-  const status = state.updateStatus;
+  const presentation = updateBannerPresentation(state.updateStatus, {
+    updatePending: state.updatePending,
+  });
+  const action = presentation.action;
 
-  if (!status) {
-    elements.updateBannerText.textContent = "Načítám lokální stav Lazurio…";
-    elements.updateBannerAction.hidden = true;
-    elements.updateBannerAction.disabled = true;
-    banner.classList.remove("is-blocked", "is-updating", "is-current");
-    banner.hidden = false;
-    return;
-  }
-
-  if (status.state === "blocked") {
-    elements.updateBannerText.textContent = status.message ?? "Stav aktualizace se nepodařilo ověřit.";
-    elements.updateBannerAction.hidden = !status.next_action?.prompt;
-    elements.updateBannerAction.disabled = !status.next_action?.prompt;
-    elements.updateBannerAction.textContent = "Vyřešit s Codexem";
-    banner.classList.remove("is-updating", "is-current");
-    banner.classList.add("is-blocked");
-    banner.hidden = false;
-    return;
-  }
-
-  if (status.state === "current") {
-    banner.classList.remove("is-blocked", "is-updating");
-    banner.classList.add("is-current");
-    elements.updateBannerText.textContent = status.checked_remote === false
-      ? "Lazurio je připravené k synchronizaci."
-      : "Lazurio je aktuální.";
-    elements.updateBannerAction.hidden = true;
-    elements.updateBannerAction.disabled = true;
-    banner.hidden = false;
-    return;
-  }
-  elements.updateBannerAction.hidden = true;
-  banner.classList.remove("is-blocked", "is-current");
-  elements.updateBannerText.textContent = state.updatePending
-    ? "Synchronizuji Lazurio…"
-    : "Lazurio bylo při poslední synchronizaci aktualizované.";
-  elements.updateBannerAction.textContent = state.updatePending
-    ? "Aktualizuju…"
-    : "Synchronizovat";
-  elements.updateBannerAction.disabled = Boolean(state.updatePending);
-  banner.classList.toggle("is-updating", Boolean(state.updatePending));
-  banner.hidden = false;
+  elements.updateBannerText.textContent = presentation.message ?? "";
+  elements.updateBannerAction.hidden = !action;
+  elements.updateBannerAction.disabled = !action;
+  elements.updateBannerAction.textContent = action?.label ?? "";
+  banner.classList.toggle("is-blocked", presentation.tone === "blocked");
+  banner.classList.toggle("is-updating", presentation.tone === "updating");
+  banner.classList.toggle("is-current", presentation.tone === "current");
+  banner.hidden = !presentation.visible;
 }
 
 function renderUpdatePill() {

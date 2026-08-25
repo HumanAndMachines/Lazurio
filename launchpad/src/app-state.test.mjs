@@ -20,6 +20,7 @@ import {
   runtimeStagesForApp,
   sidePanelResponseIsCurrent,
   summarizeOrganizationSpaceHealth,
+  updateBannerPresentation,
   variantMenuLabel,
   variantTag,
 } from "../public/app-state.js";
@@ -30,6 +31,58 @@ const apps = [
   app("omegaco-app-2", "OmegaCo", "ready"),
   app("betaco-app-1", "BetaCo", "needs_install"),
 ];
+
+test("technická update diagnostika zůstává mimo denní uživatelskou plochu", () => {
+  const technicalMessage = "Launchpad/CLI runtime běží z pracovního checkoutu se SECRET_PATH";
+  const presentation = updateBannerPresentation({
+    state: "blocked",
+    reason: "runtime_not_isolated",
+    message: technicalMessage,
+    next_action: { kind: "retry", prompt: null },
+  });
+
+  expect(presentation).toEqual({
+    visible: false,
+    tone: "blocked",
+    message: null,
+    action: null,
+  });
+  expect(JSON.stringify(presentation)).not.toContain(technicalMessage);
+  expect(JSON.stringify(presentation)).not.toContain("SECRET_PATH");
+});
+
+test("vědomý Agent handoff používá lidskou copy a zachová prompt jen v akci", () => {
+  const presentation = updateBannerPresentation({
+    state: "blocked",
+    reason: "local_main_commits",
+    message: "repo /Users/private/Lazurio je ahead o 2 commity",
+    next_action: { kind: "codex", prompt: "Bezpečně oprav exact repo." },
+  });
+
+  expect(presentation).toEqual({
+    visible: true,
+    tone: "blocked",
+    message: "Lazurio potřebuje údržbu.",
+    action: {
+      label: "Vyřešit s Codexem",
+      prompt: "Bezpečně oprav exact repo.",
+    },
+  });
+  expect(presentation.message).not.toContain("/Users/private");
+});
+
+test("běžné update stavy mají pouze stabilní uživatelskou copy", () => {
+  expect(updateBannerPresentation({ state: "current", checked_remote: false })).toMatchObject({
+    visible: true,
+    tone: "current",
+    message: "Lazurio je připravené k synchronizaci.",
+  });
+  expect(updateBannerPresentation({ state: "updated" }, { updatePending: true })).toMatchObject({
+    visible: true,
+    tone: "updating",
+    message: "Synchronizuji Lazurio…",
+  });
+});
 
 test("Launchpad drží jen explicitní výběr, první aplikaci rozcestníku nevybírá", () => {
   const filters = baseFilters({ company: "OmegaCo" });

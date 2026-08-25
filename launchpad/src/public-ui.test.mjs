@@ -1308,10 +1308,11 @@ test("Organization workspace má kompaktní uvítání s dynamickým názvem fir
 });
 
 test("DEV-6493: banner používá GET-first Lazurio stav a pouze current|updated|blocked", async () => {
-  const [html, js, css] = await Promise.all([
+  const [html, js, css, stateLib] = await Promise.all([
     readFile(join(publicRoot, "index.html"), "utf8"),
     readFile(join(publicRoot, "app.js"), "utf8"),
     readFile(join(publicRoot, "styles.css"), "utf8"),
+    readFile(join(publicRoot, "app-state.js"), "utf8"),
   ]);
 
   // Banner je první blok trvalého pravého sloupce pod sticky hlavičkou.
@@ -1330,19 +1331,21 @@ test("DEV-6493: banner používá GET-first Lazurio stav a pouze current|updated
   // GET status je metadata-only; vzdálený GitHub se kontroluje až explicitním
   // Synchronizovat. Blokace nese připravený Codex prompt.
   expect(js).toContain("function renderUpdateBanner");
+  expect(js).toContain("updateBannerPresentation(state.updateStatus");
   expect(js).toContain("function mountUpdateBannerGroup");
   expect(js).toContain('mobilePanelQuery.matches || state.filters.scope === "personal"');
   expect(js).toContain("if (global) target.append(group)");
   expect(js).toContain("else target.prepend(group)");
-  expect(js).toContain('status.state === "blocked"');
-  expect(js).toContain('status.state === "current"');
-  expect(js).toContain('"Lazurio bylo při poslední synchronizaci aktualizované."');
-  expect(js).toContain('"Lazurio je aktuální."');
+  expect(js).not.toContain("elements.updateBannerText.textContent = status.message");
+  expect(stateLib).toContain('status.state === "blocked"');
+  expect(stateLib).toContain('status.state === "current"');
+  expect(stateLib).toContain('"Lazurio bylo při poslední synchronizaci aktualizované."');
+  expect(stateLib).toContain('"Lazurio je aktuální."');
+  expect(stateLib).not.toContain("status.message");
   expect(js).not.toContain("Všechny aplikace jsou aktuální");
-  expect(js).toContain('state: "blocked"');
-  expect(js).toContain('elements.updateBannerText.textContent = "Načítám lokální stav Lazurio…"');
-  expect(js).toContain('elements.updateBannerAction.hidden = true');
-  expect(js).toContain('banner.classList.add("is-blocked")');
+  expect(js).toContain("elements.updateBannerText.textContent = presentation.message");
+  expect(js).toContain("elements.updateBannerAction.hidden = !action");
+  expect(js).toContain('banner.classList.toggle("is-blocked", presentation.tone === "blocked")');
   expect(js).toContain("openCodexUpdateDialog(prompt)");
   expect(js).toContain("loadData({ sync: true })");
 
@@ -1361,17 +1364,18 @@ test("DEV-6493: banner používá GET-first Lazurio stav a pouze current|updated
 });
 
 test("DEV-6493: explicitní Sync ukazuje spinner a po dokončení zůstává na serverem vráceném stavu", async () => {
-  const [html, js, css] = await Promise.all([
+  const [html, js, css, stateLib] = await Promise.all([
     readFile(join(publicRoot, "index.html"), "utf8"),
     readFile(join(publicRoot, "app.js"), "utf8"),
     readFile(join(publicRoot, "styles.css"), "utf8"),
+    readFile(join(publicRoot, "app-state.js"), "utf8"),
   ]);
 
   // Během aktualizace banner ukazuje spinner a stavový text; akce je disabled.
   expect(html).toContain('class="update-banner-spinner"');
   expect(html).toContain('class="update-banner-icon"');
-  expect(js).toContain('banner.classList.toggle("is-updating", Boolean(state.updatePending))');
-  expect(js).toContain("Synchronizuji Lazurio…");
+  expect(js).toContain('banner.classList.toggle("is-updating", presentation.tone === "updating")');
+  expect(stateLib).toContain("Synchronizuji Lazurio…");
   expect(css).toContain(".update-banner.is-updating .update-banner-spinner");
   expect(css).toContain("@keyframes update-spin");
 
