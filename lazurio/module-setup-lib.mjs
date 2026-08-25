@@ -416,6 +416,15 @@ export async function setupModule({
     if (plan.report.status !== "actionable") return plan.report;
     let completedWrites = 0;
     for (const write of plan.writes) {
+      if (write.containmentRoot) {
+        await assertRegularModuleFile({
+          moduleRoot: write.containmentRoot,
+          path: write.path,
+          displayPath: relative(write.containmentRoot, write.path).split(sep).join("/"),
+          context: plan.context,
+          missingAction: "Filesystem App se po plánu změnil; spusť setup znovu až po jeho kontrole.",
+        });
+      }
       if (write.action === "create") {
         await createJsonFileAtomically(write.path, write.value);
       } else {
@@ -587,16 +596,13 @@ async function planExistingModule({
     : manifest;
   for (const appPath of appPaths) {
     const packagePath = resolve(options.moduleRoot, ...appPath.split("/"));
-    assertPathWithin(options.moduleRoot, packagePath, context, "app_package_outside_module");
-    const packageEntry = await pathEntry(packagePath);
-    if (!packageEntry?.isFile() || packageEntry.isSymbolicLink()) {
-      throw actionRequired(
-        "app_package_missing",
-        `${appPath} není čitelný běžný package.json`,
-        "Materializuj deklarovanou App nebo oprav apps/default_app v Module manifestu.",
-        context,
-      );
-    }
+    await assertRegularModuleFile({
+      moduleRoot: options.moduleRoot,
+      path: packagePath,
+      displayPath: appPath,
+      context,
+      missingAction: "Materializuj deklarovanou App nebo oprav apps/default_app v Module manifestu.",
+    });
     const packageText = await readFile(packagePath, "utf8");
     const packageJson = parseJsonForSetup(packageText, packagePath, context);
     const migration = migrateLegacyRuntimePackage(packageJson, {
@@ -622,7 +628,13 @@ async function planExistingModule({
       }
       derivedManifest = { ...migration.moduleManifest, apps: appPaths, default_app: manifest.default_app ?? appPaths[0] };
       const rewritten = rewriteRuntimeScriptsFromModule(migration.packageJson, derivedManifest).packageJson;
-      writes.push({ action: "replace", path: packagePath, value: rewritten, expectedText: packageText });
+      writes.push({
+        action: "replace",
+        path: packagePath,
+        value: rewritten,
+        expectedText: packageText,
+        containmentRoot: options.moduleRoot,
+      });
       continue;
     }
     const runtime = packageJson?.lazurio?.runtime;
@@ -657,7 +669,13 @@ async function planExistingModule({
           context,
         );
       }
-      writes.push({ action: "replace", path: packagePath, value: nextPackage, expectedText: packageText });
+      writes.push({
+        action: "replace",
+        path: packagePath,
+        value: nextPackage,
+        expectedText: packageText,
+        containmentRoot: options.moduleRoot,
+      });
       continue;
     }
     const runtimeIssues = validateDeclaredRuntime({ runtime, packageJson, packagePath });
@@ -740,7 +758,13 @@ async function planNewModule({ options, context, manifestPath }) {
   return {
     writes: [
       { action: "create", path: manifestPath, value: migration.moduleManifest },
-      { action: "replace", path: packagePath, value: rewritten, expectedText: packageText },
+      {
+        action: "replace",
+        path: packagePath,
+        value: rewritten,
+        expectedText: packageText,
+        containmentRoot: options.moduleRoot,
+      },
     ],
     operatorAssertions: [],
   };
@@ -756,16 +780,13 @@ async function planExplicitAppModule({ options, context, manifestPath }) {
     );
   }
   const packagePath = resolve(options.moduleRoot, options.appPackage);
-  assertPathWithin(options.moduleRoot, packagePath, context, "app_package_outside_module");
-  const packageEntry = await pathEntry(packagePath);
-  if (!packageEntry?.isFile() || packageEntry.isSymbolicLink()) {
-    throw actionRequired(
-      "app_package_missing",
-      `${options.appPackage} není běžný package.json`,
-      "Nejdřív vytvoř App package a jeho dev script; setup nevytváří aplikační source.",
-      context,
-    );
-  }
+  await assertRegularModuleFile({
+    moduleRoot: options.moduleRoot,
+    path: packagePath,
+    displayPath: options.appPackage,
+    context,
+    missingAction: "Nejdřív vytvoř App package a jeho dev script; setup nevytváří aplikační source.",
+  });
   const packageText = await readFile(packagePath, "utf8");
   const packageJson = parseJsonForSetup(packageText, packagePath, context);
   if (packageJson?.lazurio?.runtime || packageJson?.companyascode?.app) {
@@ -820,7 +841,13 @@ async function planExplicitAppModule({ options, context, manifestPath }) {
   return {
     writes: [
       { action: "create", path: manifestPath, value: manifest },
-      { action: "replace", path: packagePath, value: nextPackage, expectedText: packageText },
+      {
+        action: "replace",
+        path: packagePath,
+        value: nextPackage,
+        expectedText: packageText,
+        containmentRoot: options.moduleRoot,
+      },
     ],
     operatorAssertions: options.adoptPort === null
       ? []
@@ -1093,6 +1120,37 @@ function assertPathWithin(root, candidate, context, code) {
   if (rel === "" || rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
     throw actionRequired(code, `${candidate} neleží uvnitř Module rootu`, "Použij relativní package.json cestu uvnitř Modulu.", context);
   }
+}
+
+async function assertRegularModuleFile({ moduleRoot, path, displayPath, context, missingAction }) {
+  assertPathWithin(moduleRoot, path, context, "app_package_outside_module");
+  const root = resolve(moduleRoot);
+  const segments = relative(root, resolve(path)).split(sep);
+  let cursor = root;
+  for (let index = 0; index < segments.length; index += 1) {
+    cursor = join(cursor, segments[index]);
+    const entry = await pathEntry(cursor);
+    const final = index === segments.length - 1;
+    if (entry?.isSymbolicLink()) {
+      throw actionRequired(
+        "app_package_outside_module",
+        `${displayPath} prochází přes symlink nebo junction ${relative(root, cursor).split(sep).join("/")}`,
+        "Použij běžnou App složku fyzicky uvnitř Modulu; setup odkazy nepřepisuje.",
+        context,
+      );
+    }
+    if (!entry || (final ? !entry.isFile() : !entry.isDirectory())) {
+      throw actionRequired(
+        "app_package_missing",
+        `${displayPath} není čitelný běžný package.json`,
+        missingAction,
+        context,
+      );
+    }
+  }
+  const physicalRoot = await realpath(root);
+  const physicalPath = await realpath(path);
+  assertPathWithin(physicalRoot, physicalPath, context, "app_package_outside_module");
 }
 
 async function pathEntry(path) {
