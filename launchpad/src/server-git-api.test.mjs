@@ -32,9 +32,12 @@ import {
   acquireServerStartupLock,
 } from "./server-lifetime-lock-lib.mjs";
 import { moduleRuntimeLockName } from "./module-runtime-lock-lib.mjs";
+import { launchpadFallbackUrls } from "./server-startup-lib.mjs";
 
 const tempRoots = [];
 const servers = [];
+const allocatedFixturePorts = new Set();
+const serverFallbackPortSpan = launchpadFallbackUrls({ startPort: 1 }).length;
 
 afterAll(async () => {
   // Počkej, až servery opravdu skončí — kill() jen pošle SIGTERM a nečeká na
@@ -98,6 +101,11 @@ test("Launchpad server exposes read-only git and Mission Control routes", async 
   expect(plans.schema_version).toBe("companiesascode.launchpad.mission_control_plans.v1");
   expect(moduleFolderGet.status).toBe(405);
   expect(invalidModuleFolderPost.status).toBe(400);
+});
+
+test("fixture ports cannot overlap another Server fallback window", () => {
+  expect(fixturePortsOverlap(39_019, 39_019 + serverFallbackPortSpan - 1)).toBe(true);
+  expect(fixturePortsOverlap(39_019, 39_019 + serverFallbackPortSpan)).toBe(false);
 });
 
 test("public read routes do not expose an unmaterialized protected repo through changes or worktrees", async () => {
@@ -1438,6 +1446,20 @@ function serverTestEnvironment(root, env = {}) {
 }
 
 async function findFreePort() {
+  for (let attempt = 0; attempt < 1_000; attempt += 1) {
+    const port = await probeFreePort();
+    if ([...allocatedFixturePorts].some((allocated) => fixturePortsOverlap(port, allocated))) continue;
+    allocatedFixturePorts.add(port);
+    return port;
+  }
+  throw new Error("Could not allocate an isolated fixture port outside every Server fallback window.");
+}
+
+function fixturePortsOverlap(left, right) {
+  return Math.abs(left - right) < serverFallbackPortSpan;
+}
+
+function probeFreePort() {
   return new Promise((resolve, reject) => {
     const probe = createServer();
     probe.unref();
