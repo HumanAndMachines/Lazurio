@@ -1949,6 +1949,7 @@ export function createRuntimeManager({
         packageJson,
         packagePath,
         module: worktreeApp.module_contract,
+        runtime: worktreeApp,
       }));
       issues.push(...await runtimeSourcePortAuthorityIssues({
         packageDirectory: dirname(absolutePackagePath),

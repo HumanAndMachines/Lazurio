@@ -3369,6 +3369,23 @@ test("worktree Start applies discovery port-authority validation before launch",
   );
 
   packageJson.scripts.dev = "bun server.mjs";
+  packageJson.scripts.serve = "bun server.mjs --port $PORT";
+  packageJson.lazurio.runtime.dev_script = "serve";
+  await writeJson(packagePath, packageJson);
+  const customScriptError = await runtime.start("test-company-demo-v1", {
+    source: { type: "worktree", slug },
+  }).catch((error) => error);
+  expect(customScriptError).toMatchObject({
+    status: 409,
+    code: "invalid_worktree_runtime_contract",
+  });
+  expect(customScriptError.details.join("\n")).toContain(
+    "scripts.serve používá obecné HOST/PORT",
+  );
+
+  packageJson.scripts.dev = "bun server.mjs";
+  packageJson.lazurio.runtime.dev_script = "dev";
+  delete packageJson.scripts.serve;
   await writeJson(packagePath, packageJson);
   await writeFile(
     join(worktreeRoot, "app", "v1", "server.mjs"),
