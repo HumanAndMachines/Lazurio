@@ -2,7 +2,10 @@
 
 import { existsSync } from "fs";
 import { link, lstat, readFile, readdir, realpath, rename, rm, writeFile } from "fs/promises";
+import { spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep, win32 } from "path";
+import { fileURLToPath } from "node:url";
 import { acquireModuleRuntimeLock } from "../launchpad/src/module-runtime-lock-lib.mjs";
 import { GIT_LOCAL_TIMEOUT_MS, runGit } from "../launchpad/src/git-lib.mjs";
 import {
@@ -41,6 +44,8 @@ const ignoredDirectories = new Set([
   "test-data",
   "testdata",
 ]);
+
+const PINNED_JSON_PUBLISH_MODE = "__lazurio_pinned_json_publish_v1";
 
 export function migrateLegacyRuntimePackage(packageJson, {
   packagePath = "package.json",
@@ -424,6 +429,7 @@ export async function setupModule({
   tags = [],
   adoptPort = null,
   failAfterWrite = null,
+  beforePublish = null,
 } = {}) {
   const options = {
     lazurioRoot: resolve(lazurioRoot),
@@ -462,20 +468,30 @@ export async function setupModule({
     if (plan.report.status !== "actionable") return plan.report;
     let completedWrites = 0;
     for (const write of plan.writes) {
-      if (write.containmentRoot) {
-        await assertRegularModuleFile({
-          moduleRoot: write.containmentRoot,
+      const containmentRoot = write.containmentRoot ?? options.moduleRoot;
+      const expectedParentRealPath = write.action === "create"
+        ? await assertModuleWriteParent({
+          moduleRoot: containmentRoot,
           path: write.path,
-          displayPath: relative(write.containmentRoot, write.path).split(sep).join("/"),
+          context: plan.context,
+        })
+        : await assertRegularModuleFile({
+          moduleRoot: containmentRoot,
+          path: write.path,
+          displayPath: relative(containmentRoot, write.path).split(sep).join("/"),
           context: plan.context,
           missingAction: "Filesystem App se po plánu změnil; spusť setup znovu až po jeho kontrole.",
         });
-      }
-      if (write.action === "create") {
-        await createJsonFileAtomically(write.path, write.value);
-      } else {
-        await replaceJsonFileAtomically(write.path, write.value, write.expectedText);
-      }
+      await beforePublish?.({ action: write.action, path: write.path });
+      publishJsonFileAtomically({
+        action: write.action,
+        path: write.path,
+        displayPath: relative(containmentRoot, write.path).split(sep).join("/"),
+        value: write.value,
+        expectedText: write.expectedText,
+        expectedParentRealPath,
+        context: plan.context,
+      });
       completedWrites += 1;
       if (failAfterWrite === completedWrites) {
         throw new Error(`Injected module setup failure after write ${completedWrites}`);
@@ -1283,6 +1299,7 @@ async function assertRegularModuleFile({ moduleRoot, path, displayPath, context,
   const physicalRoot = await realpath(root);
   const physicalPath = await realpath(path);
   assertPathWithin(physicalRoot, physicalPath, context, "app_package_outside_module");
+  return dirname(physicalPath);
 }
 
 async function pathEntry(path) {
@@ -1292,34 +1309,151 @@ async function pathEntry(path) {
   });
 }
 
-async function createJsonFileAtomically(path, value) {
-  const temporary = `${path}.lazurio-setup-${process.pid}.tmp`;
-  await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
+async function assertModuleWriteParent({ moduleRoot, path, context }) {
+  assertPathWithin(moduleRoot, path, context, "app_package_outside_module");
+  const root = resolve(moduleRoot);
+  const parent = dirname(resolve(path));
+  const rootEntry = await pathEntry(root);
+  const parentSegments = relative(root, parent) === "" ? [] : relative(root, parent).split(sep);
+  let cursor = root;
+  let unsafeParent = !rootEntry?.isDirectory() || rootEntry.isSymbolicLink();
+  for (const segment of parentSegments) {
+    cursor = join(cursor, segment);
+    const entry = await pathEntry(cursor);
+    if (!entry?.isDirectory() || entry.isSymbolicLink()) {
+      unsafeParent = true;
+      break;
+    }
+  }
+  if (unsafeParent) {
+    throw actionRequired(
+      "app_package_outside_module",
+      `${relative(root, path).split(sep).join("/")} nemá běžnou rodičovskou složku uvnitř Modulu`,
+      "Obnov běžný Module checkout; setup nezapisuje přes symlink nebo junction.",
+      context,
+    );
+  }
+  const [physicalRoot, physicalParent] = await Promise.all([realpath(root), realpath(parent)]);
+  if (!samePhysicalPath(physicalRoot, physicalParent)) {
+    assertPathWithin(physicalRoot, physicalParent, context, "app_package_outside_module");
+  }
+  return physicalParent;
+}
+
+function publishJsonFileAtomically({
+  action,
+  path,
+  displayPath,
+  value,
+  expectedText,
+  expectedParentRealPath,
+  context,
+}) {
+  const payload = JSON.stringify({
+    action,
+    target_name: basename(path),
+    expected_parent_real_path: expectedParentRealPath,
+    expected_text: expectedText ?? null,
+    next_text: `${JSON.stringify(value, null, 2)}\n`,
+  });
+  const child = spawnSync(
+    process.execPath,
+    [fileURLToPath(import.meta.url), PINNED_JSON_PUBLISH_MODE],
+    {
+      // The child is born inside the validated parent. Its cwd is an
+      // OS-pinned directory capability, so every relative mutation below
+      // keeps targeting that directory even if the lexical path is replaced.
+      cwd: dirname(path),
+      input: payload,
+      encoding: "utf8",
+      maxBuffer: Math.max(1_048_576, Buffer.byteLength(payload) * 2),
+      windowsHide: true,
+    },
+  );
+  if (child.error) throw child.error;
+  let result = null;
   try {
-    // A sibling hard-link is an atomic create-only publish on every supported
-    // local filesystem. Unlike rename it cannot replace a concurrent target.
-    await link(temporary, path);
-  } finally {
-    await rm(temporary, { force: true });
+    result = JSON.parse(child.stdout.trim());
+  } catch {
+    throw new Error(`${path}: izolovaný atomický zápis nevrátil platný výsledek`);
+  }
+  if (child.status === 0 && result?.ok === true) return;
+  if (result?.code === "parent_identity_changed") {
+    throw actionRequired(
+      "app_package_outside_module",
+      `${displayPath} změnil rodičovskou složku během apply`,
+      "Zkontroluj souběžný zásah do Module checkoutu a spusť setup znovu; mimo Modul nebylo nic změněno.",
+      context,
+    );
+  }
+  if (result?.code === "target_changed") {
+    throw actionRequired(
+      "app_package_changed_during_apply",
+      `${path}: obsah se během apply změnil`,
+      "Zkontroluj souběžné změny a spusť setup znovu; setup cizí obsah nepřepsal.",
+      context,
+    );
+  }
+  throw new Error(`${path}: izolovaný atomický zápis selhal (${result?.code ?? `exit_${child.status}`})`);
+}
+
+async function runPinnedJsonPublisher() {
+  let payload;
+  try {
+    payload = JSON.parse(await Bun.stdin.text());
+    assertPinnedPublisherPayload(payload);
+    const actualParentRealPath = await realpath(".");
+    if (!samePhysicalPath(actualParentRealPath, payload.expected_parent_real_path)) {
+      throw pinnedPublisherError("parent_identity_changed");
+    }
+    const temporary = `.${payload.target_name}.lazurio-setup-${process.pid}-${randomUUID()}.tmp`;
+    await writeFile(temporary, payload.next_text, { encoding: "utf8", flag: "wx" });
+    try {
+      if (payload.action === "create") {
+        // The hard-link publishes only if the target is still absent. Both
+        // names resolve relative to the already pinned working directory.
+        await link(temporary, payload.target_name);
+      } else {
+        const entry = await pathEntry(payload.target_name);
+        if (!entry?.isFile() || entry.isSymbolicLink()) {
+          throw pinnedPublisherError("target_changed");
+        }
+        const observed = await readFile(payload.target_name, "utf8");
+        if (observed !== payload.expected_text) throw pinnedPublisherError("target_changed");
+        await rename(temporary, payload.target_name);
+      }
+    } finally {
+      await rm(temporary, { force: true });
+    }
+    process.stdout.write(`${JSON.stringify({ ok: true })}\n`);
+  } catch (error) {
+    process.stdout.write(`${JSON.stringify({
+      ok: false,
+      code: error?.pinnedPublisherCode ?? "publisher_failed",
+    })}\n`);
+    process.exitCode = 1;
   }
 }
 
-async function replaceJsonFileAtomically(path, value, expectedText) {
-  const entry = await pathEntry(path);
-  if (!entry?.isFile() || entry.isSymbolicLink()) {
-    throw new Error(`${path}: replace precondition selhala; target není běžný soubor`);
+function assertPinnedPublisherPayload(payload) {
+  if (!["create", "replace"].includes(payload?.action)
+    || typeof payload?.target_name !== "string"
+    || payload.target_name === ""
+    || payload.target_name === "."
+    || payload.target_name === ".."
+    || basename(payload.target_name) !== payload.target_name
+    || typeof payload?.expected_parent_real_path !== "string"
+    || !isAbsolute(payload.expected_parent_real_path)
+    || typeof payload?.next_text !== "string"
+    || (payload.action === "replace" && typeof payload?.expected_text !== "string")) {
+    throw pinnedPublisherError("invalid_request");
   }
-  const observed = await readFile(path, "utf8");
-  if (observed !== expectedText) throw new Error(`${path}: obsah se po plánu změnil; spusť setup znovu`);
-  const temporary = `${path}.lazurio-setup-${process.pid}.tmp`;
-  await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
-  try {
-    const immediate = await readFile(path, "utf8");
-    if (immediate !== expectedText) throw new Error(`${path}: obsah se před publikací změnil; spusť setup znovu`);
-    await rename(temporary, path);
-  } finally {
-    await rm(temporary, { force: true });
-  }
+}
+
+function pinnedPublisherError(code) {
+  const error = new Error(code);
+  error.pinnedPublisherCode = code;
+  return error;
 }
 
 function relativeForReport(root, path) {
@@ -1555,4 +1689,11 @@ async function atomicJsonWrite(path, value) {
   const temporary = `${path}.lazurio-migrate-${process.pid}.tmp`;
   await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
   await rename(temporary, path);
+}
+
+if (import.meta.main) {
+  if (process.argv[2] !== PINNED_JSON_PUBLISH_MODE) {
+    throw new Error("module-setup-lib.mjs je interní knihovna; použij `lazurio module setup`");
+  }
+  await runPinnedJsonPublisher();
 }
