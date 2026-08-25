@@ -149,7 +149,8 @@ export function isValidOrganizationScaffold(value) {
   const paths = value.files.map((file) => file.path);
   if (
     new Set(paths).size !== paths.length
-    || paths.join("\0") !== scaffoldFilePaths.join("\0")
+    || paths.length !== scaffoldFilePaths.length
+    || paths.some((path, index) => path !== scaffoldFilePaths[index])
   ) return false;
   const companyFile = value.files.find((file) => file.path === "company.gen3.json");
   if (!companyFile) return false;
@@ -354,6 +355,7 @@ function validRelativePath(path) {
   return path !== ""
     && !path.startsWith("/")
     && !path.includes("\\")
+    && !/[\u0000-\u001f\u007f-\u009f]/u.test(path)
     && path.split("/").every((segment) => (
       segment !== ""
       && segment !== "."

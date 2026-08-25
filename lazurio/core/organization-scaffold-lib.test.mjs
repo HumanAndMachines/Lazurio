@@ -201,6 +201,13 @@ describe("Organization scaffold", () => {
       expect(() => isValidOrganizationScaffold({ ...scaffold, files: extraFiles })).not.toThrow();
       expect(isValidOrganizationScaffold({ ...scaffold, files: extraFiles })).toBe(false);
     }
+
+    const nulJoinedFiles = scaffold.files
+      .filter((file) => file.path !== ".gitignore" && file.path !== "AGENTS.md")
+      .concat({ ...source, path: ".gitignore\0AGENTS.md" })
+      .sort((left, right) => Buffer.compare(Buffer.from(left.path), Buffer.from(right.path)));
+    expect(() => isValidOrganizationScaffold({ ...scaffold, files: nulJoinedFiles })).not.toThrow();
+    expect(isValidOrganizationScaffold({ ...scaffold, files: nulJoinedFiles })).toBe(false);
   });
 });
 
