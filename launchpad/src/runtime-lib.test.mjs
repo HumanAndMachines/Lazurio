@@ -1941,9 +1941,9 @@ test("cross-Organization listener takeover requires the exact peer confirmation"
     instanceId: "cross-organization-takeover",
     discover: discoveryWithApps(sourceApp, targetApp),
   });
+  const sourceSelector = { source: { type: "worktree", slug: sourceWorktreeSlug } };
 
   try {
-    const sourceSelector = { source: { type: "worktree", slug: sourceWorktreeSlug } };
     await runtime.start(sourceApp.id, sourceSelector);
     await waitForStatus(() => runtime.health(sourceApp.id, sourceSelector), "healthy");
 
@@ -2009,8 +2009,15 @@ test("cross-Organization listener takeover requires the exact peer confirmation"
       desired: { enabled: false, status: "disabled" },
     });
   } finally {
-    const health = await runtime.health(targetApp.id);
-    if (health.owner === "current-instance") await runtime.stop(targetApp.id);
+    try {
+      const targetHealth = await runtime.health(targetApp.id);
+      if (targetHealth.owner === "current-instance") await runtime.stop(targetApp.id);
+    } finally {
+      const sourceHealth = await runtime.health(sourceApp.id, sourceSelector);
+      if (sourceHealth.owner === "current-instance") {
+        await runtime.stop(sourceApp.id, sourceSelector);
+      }
+    }
   }
 }, platformTestTimeout(20_000));
 
