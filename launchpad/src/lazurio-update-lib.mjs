@@ -595,7 +595,10 @@ async function repairCanonicalWorktreeIgnore({ repo, run, local }) {
   const lines = contents.split(/\r?\n/);
   if (contents.endsWith("\n")) lines.pop();
   const nextLines = lines.filter((line) => line !== "/.worktrees/");
-  const patterns = targetsToAdd.map((path) => path.endsWith(".worktree.json") ? `/${path}` : `/${path}/`);
+  const patterns = targetsToAdd.map((path) => {
+    const literalPath = escapeGitIgnoreLiteralPath(path);
+    return path.endsWith(".worktree.json") ? `/${literalPath}` : `/${literalPath}/`;
+  });
   for (const pattern of patterns) {
     if (!nextLines.includes(pattern)) nextLines.push(pattern);
   }
@@ -626,6 +629,12 @@ async function repairCanonicalWorktreeIgnore({ repo, run, local }) {
   return !persisted.split(/\r?\n/).includes("/.worktrees/") && verified.every((result) => result.ok)
     ? { ok: true, changed: true }
     : { ok: false, changed: true, detail: "Git po zápisu nepotvrdil zúžený ignore kanonické worktree cesty." };
+}
+
+function escapeGitIgnoreLiteralPath(path) {
+  return [...path].map((character) =>
+    ["\\", "*", "?", "[", "]"].includes(character) ? `\\${character}` : character
+  ).join("");
 }
 
 async function registeredCanonicalWorktreePaths({ repo, run }) {
