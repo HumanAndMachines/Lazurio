@@ -177,7 +177,7 @@ while `lazurio update` independently fast-forwards working checkouts.
 
 One explicit action and one library engine update the managed hierarchy in a
 deterministic order: Lazurio Root → Organization Roots → freshly rediscovered
-Workspace Modules. There is no stable/nightly channel, plan/apply mode,
+mounted Organization-level repositories and Workspace Modules. There is no stable/nightly channel, plan/apply mode,
 per-module download button, restore overlay, update journal, or second daemon.
 
 - **Source of truth:** verified `origin/main` for every managed Git checkout.
@@ -776,7 +776,8 @@ vracet data — viz handoff CAC-0044.
 
 Organization Git stav je first-class položka read modelu, ale denní povrch
 nenabízí per-repo pull. Jediná akce **Synchronizovat** projde celou spravovanou
-hierarchii Lazurio Root → Organization Rooty → Workspace Moduly. Dílčí karty
+hierarchii Lazurio Root → Organization Rooty → namountovaná org-level repa a
+Workspace Moduly. Dílčí karty
 smějí ukázat lokální změny a recovery detail, ne spustit jiný update postup.
 Productionspace a nested repository-db zůstávají mimo mechanismus; všechny
 mutace jsou pod jedním lockem a background fetch je během nich pozastavený.

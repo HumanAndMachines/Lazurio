@@ -274,7 +274,8 @@ neinteraktivní běhy bez přímého App chatu s Kolegou.
 2. **Synchronizuj a ověř primární checkouty.** Před taskem spusť v primárním
    Lazurio checkoutu nejdřív `lazurio update` a po jeho úspěchu
    `bun run doctor:task`. Update sekvenčně srovná Lazurio Root → Organization
-   Rooty → Workspace Moduly na clean `main` výhradně fast-forwardem. Náhodné
+   Rooty → jejich namountovaná org-level repa a Workspace Moduly na clean
+   `main` výhradně fast-forwardem. Náhodné
    tracked i untracked změny uloží do ověřeného recovery stashe a neobnovuje
    je; cizí branch přepne zpět na `main`, její commity ale zachová. Po skutečné
    změně source ověří přesné package rooty deklarovaných Apps; při problému

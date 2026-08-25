@@ -50,7 +50,7 @@ se nejmenují `AGENTS.md`, takže v development checkoutu omylem nepřebírají
 Workspace profil je immutable runtime pro Launchpad a Lazurio CLI v pracovním
 prostoru Kolegy nebo AI Kolegy. Není druhým datovým modelem hosted prostředí:
 lokální i vzdálený pracovní prostor používají stejný Lazurio Root,
-Organization Rooty a Workspace Moduly. Liší se jen transportem, custody,
+Organization Rooty, org-level repa a Workspace Moduly. Liší se jen transportem, custody,
 aktivní Team projekcí a způsobem provozního nasazení runtime.
 
 Runtime artefakt běží mimo mutable working root. V hosted kontejneru je

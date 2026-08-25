@@ -86,7 +86,7 @@ oddělené operace:
 
 1. image/release pipeline instaluje nový immutable runtime artefakt;
 2. `lazurio update` fast-forwarduje mutable Lazurio Root → Organization Rooty
-   → Workspace Moduly;
+   → namountovaná org-level repa a Workspace Moduly;
 3. Productionspace, Personalspace, worktrees a root-space repository-db
    zůstávají mimo obecný update engine.
 

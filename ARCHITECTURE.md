@@ -224,13 +224,15 @@ musí zůstat fyzicky oddělené:
 
 Pracovní checkouty aktualizuje jediná explicitní akce `lazurio update`, kterou
 volá CLI i tlačítko **Synchronizovat**. Postupuje shora dolů přes Lazurio,
-Organizace a jejich Workspace Moduly. Dirty obsah primárního checkoutu nejdřív
+Organization rooty a všechny namountované modulové checkouty na `main` — jak
+org-level repa typu Mission Control, tak Workspace Moduly. Dirty obsah
+primárního checkoutu nejdřív
 uloží do ověřeného recovery stashe, který nikdy automaticky nevrací, a potom
 použije jen fast-forward. Historii s lokálními commity nebo konfliktem
 nepřepisuje — předá ji Agentovi.
 
-Po skutečné změně source se obnovují pouze package rooty deklarované Apps v
-dotčeném Modulu. Autoritou je verzovaný lockfile, ne stáří souborů. První
+Po skutečné změně source se obnovují pouze package rooty deklarovaných Apps v
+dotčeném repozitáři. Autoritou je verzovaný lockfile, ne stáří souborů. První
 pokus zachová existující `node_modules`; pokud selže, následuje jedna čistá
 instalace s původním stromem odloženým pro rollback. Běžící managed aplikaci
 Launchpad po dobu opravy zastaví a po úspěchu, nebo po návratu původních

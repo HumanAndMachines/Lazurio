@@ -193,8 +193,9 @@ Organization rootu. Každý aktivní modul pak deklaruje vlastní `git.url`,
 První render a quiet refresh jsou GET-only: čtou lokální snapshot bez fetch a
 bez Git mutace. **Synchronizovat** a CLI `lazurio update` volají tentýž jediný
 sekvenční engine. Ten provede Lazurio Root → Organization Rooty → z čerstvého
-manifestu sestavené Workspace Moduly. Existující checkouty převádí výhradně na
-clean `main` přes ff-only; chybějící aktivní Workspace Modul naklonuje atomicky
+manifestu sestavená namountovaná org-level repa a Workspace Moduly. Existující
+checkouty převádí výhradně na clean `main` přes ff-only; chybějící aktivní
+Workspace Modul naklonuje atomicky
 na deklarovaný `main`. `planned_slot` bez Git souřadnic se nikdy neklonuje.
 Když aktuální GitHub identita repo nebo branch nedokáže načíst, výsledek je
 `blocked` s access handoffem; Launchpad žádný paralelní ACL ani grant nevytváří.
@@ -206,7 +207,7 @@ package rooty validních Apps deklarovaných v manifestu. Použije pouze frozen
 instalaci z verzovaného Bun lockfilu. První pokus zachová existující
 `node_modules`; při selhání následuje jedna čistá oprava s rollbackem. Běžící
 managed aplikaci Server před změnou balíčků zastaví a po úspěchu nebo po
-bezpečném návratu původního stromu znovu spustí. Balíčky jiných Modulů se
+bezpečném návratu původního stromu znovu spustí. Balíčky jiných repozitářů se
 neskenují ani nemění.
 
 Launchpad čte Launchpad GEN3 root a Organization GEN3 manifesty:
@@ -755,8 +756,9 @@ jasný mechanismus:
   s přesným tlačítkem/promptem **Vyřešit s Codexem**. Každé nové spuštění stav
   znovu zjistí; nevzniká plan/apply/resume ani skrytý update journal.
 - Nový commit v Organization rootu může změnit manifest. Engine ho proto po
-  root update načte znovu a teprve pak sekvenčně aktualizuje nebo atomicky
-  materializuje Workspace Moduly. Po skutečné změně repa obnoví jeho root
+  root update načte znovu a teprve pak sekvenčně aktualizuje namountovaná
+  org-level repa a aktualizuje nebo atomicky materializuje Workspace Moduly.
+  Po skutečné změně repa obnoví jeho root
   package a pouze package rooty validních Apps z čerstvého manifestu. Každý
   přesný root zpracuje nejvýše jednou. Instalace používá
   `bun install --frozen-lockfile`; neúspěšný první pokus jednou zopakuje čistě
