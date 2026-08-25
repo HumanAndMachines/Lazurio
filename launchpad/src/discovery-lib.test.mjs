@@ -677,13 +677,12 @@ test("lazurio.runtime.v1 discovers one entrypoint and auxiliary listeners", asyn
   const runtimeSourcePath = join(root, "organizations", "TestCompany", "modules", "demo", "app", "v1", "server.mjs");
   await writeFile(runtimeSourcePath, "Bun.serve({ port: 4351 });\n", "utf8");
   const sourceDrift = await discoverLaunchpadApps(root);
-  expect(sourceDrift.invalid_apps).toHaveLength(1);
-  expect(sourceDrift.failures.join("\n")).toContain(
+  expect(sourceDrift.invalid_apps).toHaveLength(0);
+  expect(sourceDrift.failures).toEqual([]);
+  expect(sourceDrift.warnings.join("\n")).toContain(
     "server.mjs: runtime source kopíruje module lease port 4351",
   );
-  expect(sourceDrift.invalid_apps[0].manifest_issues.join("\n")).toContain(
-    "server.mjs: runtime source kopíruje module lease port 4351",
-  );
+  expect(sourceDrift.warnings.join("\n")).toContain("bounded legacy source diagnostic");
 
   await writeFile(
     runtimeSourcePath,
@@ -691,8 +690,8 @@ test("lazurio.runtime.v1 discovers one entrypoint and auxiliary listeners", asyn
     "utf8",
   );
   const staleFallback = await discoverLaunchpadApps(root);
-  expect(staleFallback.invalid_apps).toHaveLength(1);
-  expect(staleFallback.invalid_apps[0].manifest_issues.join("\n")).toContain(
+  expect(staleFallback.invalid_apps).toHaveLength(0);
+  expect(staleFallback.warnings.join("\n")).toContain(
     "server.mjs: runtime source obsahuje číselný port fallback 5281",
   );
 
@@ -702,17 +701,11 @@ test("lazurio.runtime.v1 discovers one entrypoint and auxiliary listeners", asyn
     "utf8",
   );
   const coercedFallback = await discoverLaunchpadApps(root);
-  expect(coercedFallback.invalid_apps).toHaveLength(1);
-  expect(coercedFallback.invalid_apps[0].manifest_issues.join("\n")).toContain(
+  expect(coercedFallback.invalid_apps).toHaveLength(0);
+  expect(coercedFallback.warnings.join("\n")).toContain(
     "server.mjs: runtime source obsahuje číselný port fallback 5282",
   );
 
-  await writeFile(runtimeSourcePath, "Bun.serve({ port: Number(process.env.PORT) });\n", "utf8");
-  const genericSourceAuthority = await discoverLaunchpadApps(root);
-  expect(genericSourceAuthority.invalid_apps).toHaveLength(1);
-  expect(genericSourceAuthority.invalid_apps[0].manifest_issues.join("\n")).toContain(
-    "runtime source používá obecné HOST/PORT jako listener konfiguraci",
-  );
   await writeFile(
     runtimeSourcePath,
     'const manifest = await Bun.file("../../lazurio.module.json").json();\nconst listener = manifest.port_leases.find(({ id }) => id === "web");\nBun.serve({ port: listener.port, hostname: listener.host });\n',
@@ -885,7 +878,7 @@ test("runtime env gate follows the declared dev script closure and exact selecte
   expect(unsafeModes.issues.join("\n")).toContain('--mode "staging..prod"');
 });
 
-test("runtime script gate rejects generic listener env only in runnable lifecycle closure", () => {
+test("runtime script gate checks only the selected dev script closure", () => {
   const packageJson = {
     scripts: {
       dev: 'concurrently "bun run dev:web" "bun run worker"',
@@ -904,8 +897,8 @@ test("runtime script gate rejects generic listener env only in runnable lifecycl
   });
 
   expect(issues.join("\n")).toContain("scripts.dev:web používá obecné HOST/PORT");
-  expect(issues.join("\n")).toContain("scripts.preview používá obecné HOST/PORT");
-  expect(issues.join("\n")).toContain("scripts.start:windows používá obecné HOST/PORT");
+  expect(issues.join("\n")).not.toContain("scripts.preview používá obecné HOST/PORT");
+  expect(issues.join("\n")).not.toContain("scripts.start:windows používá obecné HOST/PORT");
   expect(issues.join("\n")).not.toContain("scripts.test používá obecné HOST/PORT");
 });
 
@@ -928,51 +921,6 @@ test("runtime source gate distinguishes its own listener fallback from a named l
   expect(issues.join("\n")).not.toContain("číselný port fallback 5691");
 });
 
-test("runtime source gate rejects generic HOST/PORT but allows namespaced dependency env", async () => {
-  const packageDirectory = await mkdtemp(join(tmpdir(), "lazurio-runtime-generic-env-"));
-  tempRoots.push(packageDirectory);
-  await writeFile(
-    join(packageDirectory, "server.mjs"),
-    [
-      "const ownPort = process.env.PORT;",
-      "const ownHost = Bun.env['HOST'];",
-      "const { PORT: destructuredPort } = process.env;",
-      "const indirectHost = env.HOST;",
-      "const indirectPort = env['PORT'];",
-      "const dependencyPort = process.env.WIKI_APP_PORT;",
-      "const injectedPort = process.env.LAZURIO_RUNTIME_LISTENER_WEB_PORT;",
-    ].join("\n"),
-    "utf8",
-  );
-
-  const issues = await runtimeSourcePortAuthorityIssues({
-    packageDirectory,
-    packagePath: "app/v1/package.json",
-    module: { port_leases: [{ id: "main", host: "127.0.0.1", port: 5693 }] },
-  });
-
-  expect(issues.filter((issue) => issue.includes("používá obecné HOST/PORT"))).toHaveLength(1);
-  expect(issues.join("\n")).not.toContain("WIKI_APP_PORT");
-  expect(issues.join("\n")).not.toContain("LAZURIO_RUNTIME_LISTENER_WEB_PORT");
-});
-
-test("runtime source gate rejects generic listener aliases passed as env", async () => {
-  const packageDirectory = await mkdtemp(join(tmpdir(), "lazurio-runtime-indirect-env-"));
-  tempRoots.push(packageDirectory);
-  await writeFile(
-    join(packageDirectory, "server.mjs"),
-    "export function listener(env) { return { hostname: env.HOST, port: env['PORT'] }; }\n",
-    "utf8",
-  );
-
-  const issues = await runtimeSourcePortAuthorityIssues({
-    packageDirectory,
-    packagePath: "app/v1/package.json",
-    module: { port_leases: [{ id: "main", host: "127.0.0.1", port: 5693 }] },
-  });
-
-  expect(issues.filter((issue) => issue.includes("používá obecné HOST/PORT"))).toHaveLength(1);
-});
 test("duplicitní app id izoluje druhý manifest, první zůstává platný (decision 0043)", async () => {
   const root = await createCompaniesWorkspaceFixture({
     plugin: {

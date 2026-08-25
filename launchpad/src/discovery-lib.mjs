@@ -58,12 +58,6 @@ const runtimeSourceIgnoredDirs = new Set([
   "vendor",
 ]);
 const runtimeSourceExtensions = new Set([".cjs", ".js", ".jsx", ".mjs", ".ts", ".tsx"]);
-const genericListenerEnvSourcePatterns = [
-  /(?:process\.env|Bun\.env)(?:\.(?:HOST|PORT)\b|\[\s*["'](?:HOST|PORT)["']\s*\])/,
-  /\benv(?:\.(?:HOST|PORT)\b|\[\s*["'](?:HOST|PORT)["']\s*\])/,
-  /\b(?:const|let|var)\s*\{[^}\n]*\b(?:HOST|PORT)\b[^}\n]*\}\s*=\s*(?:process\.env|Bun\.env)\b/,
-  /\bDeno\.env\.get\(\s*["'](?:HOST|PORT)["']\s*\)/,
-];
 const launchpadRoot = join(import.meta.dirname, "..");
 const appSchemaPath = join(launchpadRoot, "schemas", "launchpad-app.schema.json");
 const runtimeSchemaPath = join(launchpadRoot, "schemas", "lazurio-runtime.schema.json");
@@ -570,20 +564,15 @@ function runtimeScriptCommands({ packageJson, entryScriptNames }) {
   return commands;
 }
 
-function runtimeDevScriptCommands({ packageJson, runtime }) {
+function runtimeDevScriptEntries({ packageJson, runtime }) {
   return runtimeScriptCommands({
     packageJson,
     entryScriptNames: [runtime?.dev_script],
-  }).map(({ command }) => command);
+  });
 }
 
-function runtimeListenerLifecycleCommands({ packageJson, runtime }) {
-  const scripts = packageJson?.scripts ?? {};
-  const entryScriptNames = [
-    runtime?.dev_script,
-    ...Object.keys(scripts).filter((scriptName) => /^(?:dev|start|preview)(?::|$)/.test(scriptName)),
-  ];
-  return runtimeScriptCommands({ packageJson, entryScriptNames });
+function runtimeDevScriptCommands({ packageJson, runtime }) {
+  return runtimeDevScriptEntries({ packageJson, runtime }).map(({ command }) => command);
 }
 
 const genericListenerEnvCommandPattern = new RegExp([
@@ -596,12 +585,7 @@ const genericListenerEnvCommandPattern = new RegExp([
 
 export function runtimeScriptPortAuthorityIssues({ packageJson, packagePath, module, runtime }) {
   const issues = [];
-  const lifecycleScripts = new Map(
-    runtimeListenerLifecycleCommands({ packageJson, runtime })
-      .map(({ scriptName, command }) => [scriptName, command]),
-  );
-  for (const [scriptName, command] of Object.entries(packageJson?.scripts ?? {})) {
-    if (typeof command !== "string") continue;
+  for (const { scriptName, command } of runtimeDevScriptEntries({ packageJson, runtime })) {
     const inlinePort = command.match(/(?:^|\s)--port(?:=|\s+)["']?(\d{4,5})(?=["'\s]|$)/);
     if (inlinePort) {
       issues.push(
@@ -615,12 +599,11 @@ export function runtimeScriptPortAuthorityIssues({ packageJson, packagePath, mod
         );
       }
     }
-  }
-  for (const [scriptName, command] of lifecycleScripts) {
-    if (!genericListenerEnvCommandPattern.test(command)) continue;
-    issues.push(
-      `${packagePath}: scripts.${scriptName} používá obecné HOST/PORT jako listener konfiguraci; přímý start musí načíst lazurio.module.json a volitelná Lazurio runtime injekce musí přesně souhlasit`,
-    );
+    if (genericListenerEnvCommandPattern.test(command)) {
+      issues.push(
+        `${packagePath}: scripts.${scriptName} používá obecné HOST/PORT jako listener konfiguraci; přímý start musí načíst lazurio.module.json a volitelná Lazurio runtime injekce musí přesně souhlasit`,
+      );
+    }
   }
   return issues;
 }
@@ -778,6 +761,9 @@ function splitRuntimeValidationIssues(issues) {
   return { authority, appLocal };
 }
 
+// Bounded GEN3 migration diagnostic only. It intentionally recognizes a few
+// literal legacy port patterns and is not a JavaScript/TypeScript authority.
+// The manifest plus Start/health/listener reconciliation/Stop own enforcement.
 export async function runtimeSourcePortAuthorityIssues({
   packageDirectory,
   packagePath,
@@ -816,15 +802,10 @@ export async function runtimeSourcePortAuthorityIssues({
         posix.dirname(packagePath),
         relative(packageDirectory, absolutePath).replace(/\\/g, "/"),
       );
-      if (genericListenerEnvSourcePatterns.some((pattern) => pattern.test(source))) {
-        issues.push(
-          `${sourcePath}: runtime source používá obecné HOST/PORT jako listener konfiguraci; načti lease z lazurio.module.json a volitelnou Lazurio runtime injekci přijmi jen při přesné shodě`,
-        );
-      }
       const fallbackPatterns = [
         /(?:process\.env|Bun\.env)(?:\.(?:PORT|LAZURIO_RUNTIME_LISTENER_[A-Z0-9_]+_PORT)|\[["'](?:PORT|LAZURIO_RUNTIME_LISTENER_[A-Z0-9_]+_PORT)["']\])\s*(?:\?\?|\|\|)\s*["']?(\d{4,5})["']?/g,
         /(?:Number|parseInt)\([^;\n)]*(?:PORT|_PORT)[^;\n)]*\)\s*(?:\?\?|\|\|)\s*["']?(\d{4,5})["']?/g,
-        /\b(?:const|let|var)\s+(?:[A-Z0-9]+_)*PORT(?:_[A-Z0-9]+)*\s*=\s*["']?(\d{4,5})["']?/g,
+        /\b(?:const|let|var)\s+(?:PORT|DEFAULT_PORT|SERVER_PORT|LISTEN_PORT|HTTP_PORT)\s*=\s*["']?(\d{4,5})["']?/g,
       ];
       for (const pattern of fallbackPatterns) {
         for (const match of source.matchAll(pattern)) {
@@ -1839,11 +1820,14 @@ export async function discoverLaunchpadApps(
           runtime: app,
           moduleDirectory: resolve(sourceRoot, dirname(moduleResult.module.module_path)),
         }));
-        runtimeContractIssues.push(...await runtimeSourcePortAuthorityIssues({
+        const sourceDiagnostics = await runtimeSourcePortAuthorityIssues({
           packageDirectory: dirname(absolutePackagePath),
           packagePath,
           module: moduleResult.module,
-        }));
+        });
+        warnings.push(...sourceDiagnostics.map(
+          (issue) => `${issue} (bounded legacy source diagnostic)`,
+        ));
       }
       validateBuilderMetadata({ app, packagePath, softWarnings: builderMetadataWarnings, sourceLabel });
     }
