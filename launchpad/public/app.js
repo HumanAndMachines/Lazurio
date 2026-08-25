@@ -2617,19 +2617,19 @@ function workspaceModuleDetail(module, companySlug, { kind = "workspace-module",
 
 function moduleApplicationMessage(moduleApps, moduleStatus = "available") {
   if (!moduleApps && moduleStatus === "missing_access") {
-    return "Stav Apps nelze ověřit, protože modul na tomto počítači není dostupný.";
+    return "Modul na tomto počítači není dostupný.";
   }
   if (!moduleApps && moduleStatus === "planned_slot") {
-    return "Stav Apps nelze ověřit, protože modul zatím není lokálně připravený.";
+    return "Modul zatím není na tomto počítači připravený.";
   }
-  if (!moduleApps) return "Stav Apps modulu zatím není k dispozici.";
-  if (moduleApps.state === "explicit-none") return "Modul výslovně deklaruje, že nemá žádnou App.";
-  if (moduleApps.state === "unresolved-invalid") return "Deklarace Apps v lazurio.module.json není platná.";
+  if (!moduleApps) return "Tento modul zatím nemá připravenou aplikaci.";
+  if (moduleApps.state === "explicit-none") return "Tento modul nemá samostatnou aplikaci.";
+  if (moduleApps.state === "unresolved-invalid") return "Aplikaci tohoto modulu je potřeba opravit.";
   if (moduleApps.state === "declared" && !moduleApps.open_target_app_id) {
-    return "Výchozí App deklarovaná v modulu není dostupná jako platná aplikace.";
+    return "Aplikaci tohoto modulu je potřeba opravit.";
   }
-  if (moduleApps.state === "legacy-missing") return "Modul zatím nemá explicitní deklaraci Apps.";
-  return "Modul má deklarovanou výchozí App.";
+  if (moduleApps.state === "legacy-missing") return "Tento modul zatím nemá připravenou aplikaci.";
+  return "Modul má připravenou aplikaci.";
 }
 
 function workspaceModuleCard(module, companySlug, options = {}) {
@@ -2637,7 +2637,7 @@ function workspaceModuleCard(module, companySlug, options = {}) {
   const selected = state.selectedReadonlyDetail?.id === detail.id;
   const opensApp = Boolean(detail.default_app);
   const openable = opensApp || detail.can_open_folder;
-  const availabilityClass = opensApp ? "is-available" : "is-unavailable";
+  const availabilityClass = module.status === "available" ? "is-available" : "is-unavailable";
   const interactionClass = openable ? "is-openable" : "is-readonly";
   const card = document.createElement("article");
   card.className = `app-card system-card manifest-module-card ${availabilityClass} ${interactionClass} ${selected ? "selected" : ""}`.trim();

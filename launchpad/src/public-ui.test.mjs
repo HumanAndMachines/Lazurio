@@ -967,7 +967,7 @@ test("UI separates physical Organization/Workspace/Productionspace and prepares 
   expect(js).toContain("function workspaceModuleCard");
   expect(js).toContain("function workspaceModulesInView");
   expect(js).toContain("Otevřít složku");
-  expect(js).toContain('const availabilityClass = opensApp ? "is-available" : "is-unavailable"');
+  expect(js).toContain('const availabilityClass = module.status === "available" ? "is-available" : "is-unavailable"');
   expect(js).toContain('folderAction.classList.add("btn", "btn-ghost", "btn-sm", "manifest-module-folder-action")');
   expect(css).toContain(".apps-grid > .manifest-module-card.is-unavailable");
   const unavailableModuleCss = css.slice(
@@ -1028,8 +1028,11 @@ test("manifest-only module cards keep semantic icon precedence over a broad cate
   expect(detailBlock).toContain("icon: null");
   expect(detailBlock).toContain("tags: module.category ? [module.category] : []");
   expect(detailBlock).toContain("moduleApplicationMessage(moduleApps, module.status)");
-  expect(detailBlock).toContain("Stav Apps nelze ověřit, protože modul na tomto počítači není dostupný.");
-  expect(detailBlock).toContain("Stav Apps nelze ověřit, protože modul zatím není lokálně připravený.");
+  expect(detailBlock).toContain("Modul na tomto počítači není dostupný.");
+  expect(detailBlock).toContain("Modul zatím není na tomto počítači připravený.");
+  expect(detailBlock).toContain("Tento modul zatím nemá připravenou aplikaci.");
+  expect(detailBlock).not.toContain("explicitní deklaraci Apps");
+  expect(detailBlock).not.toContain("lazurio.module.json");
   expect(cardBlock).toContain("appIconNode(detail)");
   expect(cardBlock).not.toContain('appIconSvg("module")');
   expect(cardBlock).toContain('desc.className = "app-card-desc"');
@@ -1092,7 +1095,7 @@ test("read-only app and system detail selection opens the right drawer", async (
   expect(workspaceModuleCard).toContain("openWorkspaceModuleFolder(detail)");
   expect(workspaceModuleCard).toContain("openAppChain(detail.default_app)");
   expect(workspaceModuleCard).not.toContain("if (openable) void openWorkspaceModuleFolder(detail)");
-  expect(js).toContain("Výchozí App deklarovaná v modulu není dostupná jako platná aplikace.");
+  expect(js).toContain("Aplikaci tohoto modulu je potřeba opravit.");
   const primaryNextAction = js.slice(js.indexOf("function primaryNextAction"), js.indexOf("function hasReclaimableStaticLease"));
   expect(primaryNextAction).toContain('moduleApps?.state === "declared" && !moduleApps.open_target_app_id');
   expect(primaryNextAction).not.toContain('app.kind === "workspace-module" && app.can_open_folder');
