@@ -2,7 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { tmpdir } from "os";
 import { join } from "path";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "fs/promises";
-import { appPlacementResolverForOrganization, buildDoctorReportFromAppsResponse, buildEnvironmentChecks, buildLaunchpadAppsResponse, buildLaunchpadDoctorReport, lazurioUpdateCheck, runtimeAppStatus } from "./diagnostics-lib.mjs";
+import { appPlacementResolverForOrganization, buildDoctorReportFromAppsResponse, buildEnvironmentChecks, buildLaunchpadAppsResponse, buildLaunchpadDoctorReport, bunRuntimeCheck, lazurioUpdateCheck, runtimeAppStatus } from "./diagnostics-lib.mjs";
 import { createLaunchpadGitFixture, initGitRepo, runGit } from "./git-fixture-helpers.test.mjs";
 import { buildGitInventory } from "./git-inventory-lib.mjs";
 
@@ -10,6 +10,26 @@ const tempRoots = [];
 
 afterAll(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })));
+});
+
+test("Bun Doctor check enforces the exact authority and gives an Agent handoff", () => {
+  const current = bunRuntimeCheck({
+    companiesRoot: "/fixture",
+    bunExecutable: "/trusted/bun",
+    requiredVersion: "1.4.0",
+    run: () => ({ ok: true, stdout: "1.4.0", stderr: "" }),
+  });
+  const mismatch = bunRuntimeCheck({
+    companiesRoot: "/fixture",
+    bunExecutable: "/trusted/bun",
+    requiredVersion: "1.4.0",
+    run: () => ({ ok: true, stdout: "1.4.1", stderr: "" }),
+  });
+
+  expect(current).toMatchObject({ id: "platform.bun", status: "ok" });
+  expect(mismatch).toMatchObject({ id: "platform.bun", status: "fail" });
+  expect(mismatch.message).toContain("Agentem");
+  expect(mismatch.details).toEqual(expect.arrayContaining(["current: 1.4.1", "required: 1.4.0"]));
 });
 
 test("Lazurio update Doctor check je read-only a nemá stable/nightly kanály", async () => {

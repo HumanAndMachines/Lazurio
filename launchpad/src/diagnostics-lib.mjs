@@ -48,6 +48,10 @@ import {
   normalizeModuleManifest,
   resolveModuleApplications,
 } from "../../lazurio/core/module-contract-lib.mjs";
+import {
+  classifyBunRuntime,
+  readRequiredBunVersion,
+} from "../../lazurio/core/toolchain-lib.mjs";
 
 const supportedPlatforms = {
   darwin: "macOS",
@@ -1686,15 +1690,7 @@ function platformChecks(companiesRoot) {
       links: [],
       details: [`platform: ${process.platform}`, `arch: ${process.arch}`],
     },
-    commandCheck({
-      id: "platform.bun",
-      title: "Bun runtime",
-      command: bunExecutable,
-      args: ["--version"],
-      cwd: companiesRoot,
-      okMessage: (result) => `Bun ${result.stdout} je dostupný jako ${bunExecutable}.`,
-      failMessage: "Bun nebyl nalezen ani neprošel validací executable kandidáta.",
-    }),
+    bunRuntimeCheck({ companiesRoot, bunExecutable }),
     commandCheck({
       id: "platform.git",
       title: "Git",
@@ -1706,6 +1702,51 @@ function platformChecks(companiesRoot) {
       env: safeGitCommandEnv(),
     }),
   ];
+}
+
+export function bunRuntimeCheck({
+  companiesRoot,
+  bunExecutable = resolveBunExecutable(),
+  requiredVersion = readRequiredBunVersion({ root: join(import.meta.dirname, "..", "..") }),
+  run = runCommand,
+} = {}) {
+  const result = bunExecutable
+    ? run(bunExecutable, ["--version"], { cwd: companiesRoot })
+    : { ok: false, stdout: "", error: "Bun executable nebyl nalezen." };
+  if (!result.ok) {
+    return {
+      id: "platform.bun",
+      status: "fail",
+      severity: "required",
+      title: "Bun runtime",
+      message: "Bun nebyl nalezen ani neprošel validací executable kandidáta.",
+      paths: ["package.json"],
+      links: [],
+      details: [`required: ${requiredVersion}`, result.error ?? result.stderr ?? "unknown failure"],
+    };
+  }
+
+  const runtime = classifyBunRuntime({
+    currentVersion: result.stdout.trim(),
+    requiredVersion,
+  });
+  const current = runtime.status === "current";
+  return {
+    id: "platform.bun",
+    status: current ? "ok" : "fail",
+    severity: "required",
+    title: "Bun runtime",
+    message: current
+      ? `Bun ${runtime.current_version} odpovídá Lazurio toolchain autoritě.`
+      : `Bun ${runtime.current_version} neodpovídá požadované verzi ${runtime.required_version}; upgrade proveď s Agentem standardním postupem pro tuto instalaci.`,
+    paths: ["package.json"],
+    links: [],
+    details: [
+      `command: ${bunExecutable} --version`,
+      `current: ${runtime.current_version}`,
+      `required: ${runtime.required_version}`,
+    ],
+  };
 }
 
 function commandCheck({ id, title, command, args, cwd, okMessage, failMessage, env }) {

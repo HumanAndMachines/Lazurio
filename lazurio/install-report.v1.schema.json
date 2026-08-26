@@ -1,18 +1,33 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://lazurio.ai/schemas/install-report.v0.schema.json",
+  "$id": "https://lazurio.ai/schemas/install-report.v1.schema.json",
   "type": "object",
   "required": ["schema_version", "mode", "status", "machine", "root", "steps", "summary"],
   "properties": {
-    "schema_version": { "const": "lazurio.install.report.v0" },
+    "schema_version": { "const": "lazurio.install.report.v1" },
     "mode": { "const": "report" },
     "status": { "enum": ["completed", "action_required", "failed"] },
     "machine": {
       "type": "object",
-      "required": ["platform", "architecture"],
+      "required": ["platform", "architecture", "bun"],
       "properties": {
         "platform": { "type": "string", "minLength": 1 },
-        "architecture": { "type": "string", "minLength": 1 }
+        "architecture": { "type": "string", "minLength": 1 },
+        "bun": {
+          "type": "object",
+          "required": ["status", "current_version", "required_version"],
+          "properties": {
+            "status": { "enum": ["current", "mismatch", "unavailable"] },
+            "current_version": {
+              "anyOf": [
+                { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+                { "enum": [null] }
+              ]
+            },
+            "required_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+          },
+          "additionalProperties": false
+        }
       },
       "additionalProperties": false
     },
@@ -64,7 +79,7 @@
           "properties": {
             "id": { "const": "bun" },
             "status": { "enum": ["completed", "skipped", "action_required", "failed"] },
-            "reason": { "enum": ["bun_runtime_available", "bun_runtime_unavailable", "probe_failed"] }
+            "reason": { "enum": ["bun_runtime_current", "bun_runtime_mismatch", "bun_runtime_unavailable", "probe_failed"] }
           },
           "additionalProperties": false
         },
@@ -132,7 +147,8 @@
             "enum": [
               "platform_supported",
               "platform_unsupported",
-              "bun_runtime_available",
+              "bun_runtime_current",
+              "bun_runtime_mismatch",
               "bun_runtime_unavailable",
               "git_available",
               "git_missing",

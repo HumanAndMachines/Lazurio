@@ -1,6 +1,7 @@
 {
   "name": "lazurio",
   "private": true,
+  "packageManager": "bun@1.4.0",
   "type": "module",
   "bin": {
     "lazurio": "lazurio/cli.mjs"
@@ -18,7 +19,7 @@
     "launchpad:serve": "bun run --cwd launchpad serve",
     "launchpad:dev": "bun run --cwd launchpad dev",
     "lazurio": "bun lazurio/cli.mjs",
-    "lazurio:test": "bun test --cwd lazurio --timeout 30000 lazurio.test.mjs module-setup-cli.test.mjs module-lifecycle-cli.test.mjs search.test.mjs parity.test.mjs launchpad-install.test.mjs cli-install.test.mjs install-output-lib.test.mjs organization-activation-cli.test.mjs organization-activation-lib.test.mjs core/import-boundary.test.mjs core/cli-provenance-lib.test.mjs core/github-provider-lib.test.mjs core/install-core-lib.test.mjs core/organization-activation-lib.test.mjs core/organization-scaffold-lib.test.mjs core/resident-manifest-lib.test.mjs core/module-contract-lib.test.mjs core/module-lifecycle-client-lib.test.mjs core/organization-port-policy-lib.test.mjs core/server-identity-lib.test.mjs core/task-agent-locator.test.mjs core/server-locator-lib.test.mjs organization-host/contract.test.mjs",
+    "lazurio:test": "bun test --cwd lazurio --timeout 30000 lazurio.test.mjs module-setup-cli.test.mjs module-lifecycle-cli.test.mjs search.test.mjs parity.test.mjs launchpad-install.test.mjs cli-install.test.mjs install-output-lib.test.mjs organization-activation-cli.test.mjs organization-activation-lib.test.mjs core/import-boundary.test.mjs core/cli-provenance-lib.test.mjs core/github-provider-lib.test.mjs core/install-core-lib.test.mjs core/toolchain-lib.test.mjs core/organization-activation-lib.test.mjs core/organization-scaffold-lib.test.mjs core/resident-manifest-lib.test.mjs core/module-contract-lib.test.mjs core/module-lifecycle-client-lib.test.mjs core/organization-port-policy-lib.test.mjs core/server-identity-lib.test.mjs core/task-agent-locator.test.mjs core/server-locator-lib.test.mjs organization-host/contract.test.mjs",
     "resident:build": "bun distribution/build.mjs",
     "workspace-runtime:build": "bun distribution/build.mjs --profile workspace",
     "resident:test": "bun test --timeout 60000 distribution/build.test.mjs distribution/npm-package.test.mjs distribution/updater.test.mjs distribution/buddy-service.test.mjs distribution/buddy-rollout.test.mjs provisioning/ansible-contract.test.mjs tests/bridge",

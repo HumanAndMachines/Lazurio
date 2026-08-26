@@ -15,6 +15,7 @@ test("source package remains private while generated package contract is platfor
   const sourcePackage = JSON.parse(readFileSync(resolve(repositoryRoot, "package.json"), "utf8"));
   const contract = JSON.parse(readFileSync(resolve(import.meta.dirname, "npm-package-contract.v1.json"), "utf8"));
   expect(sourcePackage).toMatchObject({ name: "lazurio", private: true });
+  expect(sourcePackage.packageManager).toBe("bun@1.4.0");
   expect(sourcePackage.version).toBeUndefined();
   expect(contract).toMatchObject({
     schema_version: "lazurio.cli.npm-package-contract.v1",
@@ -124,7 +125,7 @@ test("package smoke keeps Root selection deterministic across host prerequisite 
     root: null,
     platform: "linux",
     architecture: "x64",
-    bunVersion: "1.3.14",
+    bunVersion: "1.4.0",
     resolveGit: () => null,
     resolveGitHubCli: () => null,
   });
@@ -132,7 +133,7 @@ test("package smoke keeps Root selection deterministic across host prerequisite 
     root: null,
     platform: "win32",
     architecture: "x64",
-    bunVersion: "1.3.14",
+    bunVersion: "1.4.0",
     resolveGit: () => "C:\\Program Files\\Git\\cmd\\git.exe",
     resolveGitHubCli: () => "C:\\Program Files\\GitHub CLI\\gh.exe",
     runCommand: ({ executable }) => ({
@@ -161,7 +162,7 @@ test("package smoke rejects a selected Root", () => {
     root: "/fixture/root",
     platform: "linux",
     architecture: "x64",
-    bunVersion: "1.3.14",
+    bunVersion: "1.4.0",
     resolveGit: () => null,
     resolveGitHubCli: () => null,
     inspectRoot: () => ({

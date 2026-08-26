@@ -16,6 +16,7 @@ import {
   installExitCode,
   isValidLazurioInstallReport,
 } from "../lazurio/core/install-core-lib.mjs";
+import { bunVersionFromPackageManager } from "../lazurio/core/toolchain-lib.mjs";
 
 const CONTRACT_PATH = "distribution/npm-package-contract.v1.json";
 const packageVersionPattern = /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;
@@ -41,7 +42,9 @@ export async function buildLazurioNpmPackage({
 
   const tree = readGitTree(repositoryRoot, sourceCommit);
   const contract = readJsonBlob(repositoryRoot, tree, CONTRACT_PATH);
+  const sourcePackage = readJsonBlob(repositoryRoot, tree, "package.json");
   validateContract(contract);
+  const requiredBunVersion = bunVersionFromPackageManager(sourcePackage.packageManager);
   const version = packageVersion ?? `0.0.0-dev.${sourceCommit.slice(0, 12)}`;
   if (!packageVersionPattern.test(version)) throw new Error(`invalid npm package version ${version}`);
   const commitEpoch = Number(gitText(repositoryRoot, ["show", "-s", "--format=%ct", sourceCommit]));
@@ -50,7 +53,12 @@ export async function buildLazurioNpmPackage({
   }
 
   const entries = selectSourceEntries(repositoryRoot, tree, contract);
-  addGeneratedEntry(entries, "package.json", packageJson({ contract, version, sourceCommit, commitEpoch }), "0644");
+  addGeneratedEntry(
+    entries,
+    "package.json",
+    packageJson({ contract, version, sourceCommit, commitEpoch, requiredBunVersion }),
+    "0644",
+  );
   const scan = scanArtifactEntries(entries, {
     forbiddenPathSegments: contract.forbidden_path_segments,
     forbiddenTerms: [repositoryRoot],
@@ -139,13 +147,14 @@ function validateContract(contract) {
   }
 }
 
-function packageJson({ contract, version, sourceCommit, commitEpoch }) {
+function packageJson({ contract, version, sourceCommit, commitEpoch, requiredBunVersion }) {
   return `${JSON.stringify({
     name: contract.package_name,
     version,
     description: "Local-first workspace for people and AI collaborators",
     license: "SEE LICENSE IN LICENSE.md",
     type: "module",
+    packageManager: `bun@${requiredBunVersion}`,
     bin: { lazurio: "lazurio/cli.mjs" },
     imports: {
       "#lazurio-core/resident-manifest": "./lazurio/core/resident-manifest-lib.mjs",

@@ -43,13 +43,13 @@ export function renderHumanInstallReport(report, { language = "cs" } = {}) {
 
   for (const step of report.steps) {
     lines.push(
-      `${symbol(step.status)} ${catalog[`step.${step.id}`]} — ${catalog[`reason.${step.reason}`]}`,
+      `${symbol(step.status)} ${catalog[`step.${step.id}`]} — ${renderInstallText(catalog[`reason.${step.reason}`], report)}`,
     );
   }
 
   const actions = report.steps
     .filter((step) => step.status === "action_required" || step.status === "failed")
-    .map((step) => catalog[`action.${step.reason}`])
+    .map((step) => renderInstallText(catalog[`action.${step.reason}`], report))
     .filter(Boolean);
   if (actions.length > 0) {
     lines.push("", catalog["report.next_actions"]);
@@ -57,6 +57,13 @@ export function renderHumanInstallReport(report, { language = "cs" } = {}) {
   }
   lines.push("", catalog["report.footer"]);
   return lines.join("\n");
+}
+
+function renderInstallText(template, report) {
+  if (typeof template !== "string") return template;
+  return template
+    .replaceAll("{current}", report.machine.bun.current_version ?? "unknown")
+    .replaceAll("{required}", report.machine.bun.required_version);
 }
 
 export function installCatalogIssues() {

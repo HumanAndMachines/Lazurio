@@ -21,10 +21,19 @@ lazurio install --root <cesta> --json
 
 Source CLI bez explicitního `--root` kontroluje svůj source Root. Immutable npm
 CLI bez uložené volby místo pádu vrátí `root_selection_required`. Společné Core
-postupně ověří platformu, Bun runtime, Git, GitHub CLI, přihlášení ke github.com
+postupně ověří platformu, exact Bun runtime z
+`package.json#packageManager`, Git, GitHub CLI, přihlášení ke github.com
 a tvar Rootu; chyba jednoho probe nezastaví nezávislé kontroly a výstup nikdy
 neobsahuje stdout ani stderr externího nástroje. JSON zůstává locale-neutral,
 český a anglický terminálový report jsou jen dva rendery stejného výsledku.
+
+Install report `lazurio.install.report.v1` i `lazurio doctor` uvádějí
+aktuální a požadovanou Bun verzi. Odlišný patch, včetně novějšího dosud
+nepromovaného vydání, je `action_required`/Doctor failure: Kolega tak
+nedostane neotestovaný runtime jen proto, že vyšel. První read-only installer
+Bun sám nemění. Agent nejdřív zjistí způsob instalace, vyžádá souhlas
+s externí změnou a použije standardní upstream postup; `lazurio update`
+runtime nikdy potichu nepřepisuje.
 
 Exit code `0` znamená připravený stav, `1` konkrétní akci uživatele a `2`
 selhání kontroly. Tento slice nic neinstaluje, nevolá `lazurio cli install` ani
