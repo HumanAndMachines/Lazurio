@@ -88,6 +88,35 @@ test("inventory preserves dotted GitHub repository metadata", async () => {
   });
 });
 
+test("inventory quarantines one renamed slot without hiding healthy siblings or another Organization", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const manifestPath = `${root}/organizations/OmegaCo_GEN3/modules.manifest.json`;
+  const manifest = await Bun.file(manifestPath).json();
+  manifest.module_slots.push({
+    slug: "website",
+    path: "workspace/website",
+    git: { url: "git@github.com:OmegaCo/website-v2.git", branch: "main" },
+  });
+  await Bun.write(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  const inventory = await buildGitInventory({ companiesRoot: root });
+
+  expect(inventory.repos.some((repo) => repo.key === "OmegaCo::website")).toBe(false);
+  expect(inventory.repos.some((repo) => repo.key === "OmegaCo::studio")).toBe(true);
+  expect(inventory.repos.some((repo) => repo.key === "BetaCo::deals")).toBe(true);
+  expect(inventory.inventory_issues).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      code: "repository_location_mismatch",
+      organization: "OmegaCo",
+      module: "website",
+      path: "workspace/website",
+      expected_path: "workspace/website-v2",
+      next_action: expect.objectContaining({ kind: "repair_module_location" }),
+    }),
+  ]));
+});
+
 test("inventory keeps a canonical nested repository-db outside every Git action surface", async () => {
   const root = await createLaunchpadGitFixture();
   tempRoots.push(root);

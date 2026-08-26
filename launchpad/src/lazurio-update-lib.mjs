@@ -8,6 +8,7 @@ import { discoverLaunchpadApps } from "./discovery-lib.mjs";
 import { refreshFrozenBunDependencies } from "./dependency-install-lib.mjs";
 import { buildGitInventory } from "./git-inventory-lib.mjs";
 import { materializeRepoCheckout } from "./git-materialization-lib.mjs";
+import { buildModuleLocationRepairAction } from "../../lazurio/core/module-location-repair-contract-lib.mjs";
 import {
   GIT_FETCH_TIMEOUT_MS,
   GIT_LOCAL_TIMEOUT_MS,
@@ -118,6 +119,7 @@ export async function runLazurioUpdate({
   const results = [];
   const warnings = [];
   const repoDescriptors = new Map();
+  const refreshedOrganizations = new Set();
   try {
     const rootRepo = rootDescriptor(absoluteRoot);
     repoDescriptors.set(rootRepo.key, rootRepo);
@@ -138,6 +140,7 @@ export async function runLazurioUpdate({
     }
     const organizationRoots = managedOrganizationRoots(initialInventory);
     if (rootResult.state === "blocked") {
+      results.push(...inventoryIssueResults({ rootPath: absoluteRoot, inventory: initialInventory }));
       results.push(...deferredHierarchyResults(initialInventory, "lazurio::root"));
       return updateReport({ rootPath: absoluteRoot, runId, now, results, warnings });
     }
@@ -167,6 +170,12 @@ export async function runLazurioUpdate({
         }));
         continue;
       }
+      refreshedOrganizations.add(organizationRoot.organization);
+      results.push(...inventoryIssueResults({
+        rootPath: absoluteRoot,
+        inventory: refreshed,
+        organization: organizationRoot.organization,
+      }));
       const children = managedOrganizationChildren(refreshed, organizationRoot.organization);
       for (const childRepo of children) {
         repoDescriptors.set(childRepo.key, childRepo);
@@ -192,6 +201,22 @@ export async function runLazurioUpdate({
           deps,
         }));
       }
+    }
+
+    // Organizace, které nebylo možné refreshnout (například kvůli nevalidnímu
+    // root mountu), si ponechají diagnostiku z počátečního snapshotu. U
+    // úspěšně refreshnutých Organizací je autorita čerstvý manifest výše.
+    results.push(...inventoryIssueResults({
+      rootPath: absoluteRoot,
+      inventory: initialInventory,
+      excludeOrganizations: refreshedOrganizations,
+    }));
+
+    const unmatchedWarnings = inventoryWarningsWithoutIssues(initialInventory);
+    if (unmatchedWarnings.length > 0) {
+      results.push(blockedResult(inventoryDescriptor(absoluteRoot), "inventory_invalid", {
+        detail: `Lokální inventář obsahuje neklasifikovaný problém: ${unmatchedWarnings[0]}`,
+      }));
     }
 
     const dependencyPhase = await reconcileUpdatedDependencies({
@@ -230,9 +255,14 @@ export async function readLazurioUpdateStatus({ rootPath, deps = {} } = {}) {
     });
     return localStatusReport(blocked);
   }
-  if ((inventory.warnings ?? []).length > 0) {
+  const inventoryIssues = inventoryIssueResults({ rootPath: absoluteRoot, inventory });
+  if (inventoryIssues.length > 0) {
+    return localStatusReport(inventoryIssues[0]);
+  }
+  const unmatchedWarnings = inventoryWarningsWithoutIssues(inventory);
+  if (unmatchedWarnings.length > 0) {
     const blocked = blockedResult(inventoryDescriptor(absoluteRoot), "inventory_invalid", {
-      detail: `Lokální inventář není úplný: ${inventory.warnings[0]}`,
+      detail: `Lokální inventář není úplný: ${unmatchedWarnings[0]}`,
     });
     return localStatusReport(blocked);
   }
@@ -364,10 +394,19 @@ export async function updateManagedRepo(repo, context = {}) {
 
   const source = await verifyRemoteSource(repo, run);
   if (!source.ok) {
+    const repairAction = source.reason === "origin_mismatch" && repo.repo_kind === "module"
+      ? buildModuleLocationRepairAction({
+          organization: repo.organization,
+          module: repo.module,
+          reason: source.reason,
+          detail: source.detail,
+        })
+      : null;
     return blockedResult(repo, source.reason, {
       detail: source.detail,
       nextAction: source.nextAction,
       codex: source.nextAction !== "github_access",
+      action: repairAction,
     });
   }
   const fetched = await run(
@@ -1175,11 +1214,60 @@ async function safeInventory(buildInventory, rootPath, warnings) {
     const inventory = await buildInventory({ companiesRoot: rootPath });
     const inventoryWarnings = inventory.warnings ?? [];
     warnings.push(...inventoryWarnings);
-    return { ...inventory, failed: inventoryWarnings.length > 0 };
+    // Validní snapshot může obsahovat izolované Organization/slot issues.
+    // Ty nejsou globální inventory failure: zdravé sourozence smíme dál
+    // aktualizovat a problém vracíme jako vlastní blocked result.
+    return { ...inventory, failed: false };
   } catch (error) {
     warnings.push(`Git inventář nejde načíst: ${error instanceof Error ? error.message : String(error)}`);
     return { repos: [], warnings: [], failed: true };
   }
+}
+
+function inventoryIssueResults({
+  rootPath,
+  inventory,
+  organization = null,
+  excludeOrganizations = new Set(),
+}) {
+  return (inventory.inventory_issues ?? [])
+    .filter((issue) => organization === null || issue.organization === organization)
+    .filter((issue) => !excludeOrganizations.has(issue.organization))
+    .map((issue) => inventoryIssueResult(rootPath, issue));
+}
+
+function inventoryIssueResult(rootPath, issue) {
+  const organizationPath = typeof issue.organization_path === "string"
+    ? issue.organization_path
+    : issue.organization
+      ? `organizations/${issue.organization}`
+      : ".";
+  const repoPath = issue.path ? join(organizationPath, issue.path) : organizationPath;
+  const descriptor = {
+    key: issue.module
+      ? `${issue.organization}::${issue.module}::inventory`
+      : issue.organization
+        ? `${issue.organization}::inventory`
+        : "lazurio::inventory",
+    repo_kind: issue.scope === "module_slot" ? "module_slot" : "inventory",
+    organization: issue.organization ?? null,
+    module: issue.module ?? null,
+    repo_path: repoPath,
+    absolute_path: join(rootPath, repoPath),
+  };
+  return blockedResult(descriptor, issue.code ?? "inventory_invalid", {
+    detail: issue.message ?? "Lokální inventář obsahuje izolovaný problém.",
+    action: issue.next_action ?? null,
+  });
+}
+
+function inventoryWarningsWithoutIssues(inventory) {
+  const issueMessages = new Set(
+    (inventory.inventory_issues ?? [])
+      .map((issue) => issue.message)
+      .filter((message) => typeof message === "string"),
+  );
+  return (inventory.warnings ?? []).filter((warning) => !issueMessages.has(warning));
 }
 
 function managedOrganizationRoots(inventory) {
@@ -1309,9 +1397,14 @@ function blockedResult(repo, reason, {
   actions = [],
   codex = true,
   nextAction = null,
+  action = null,
 } = {}) {
-  const kind = nextAction ?? (codex ? "codex" : "retry");
-  const prompt = kind === "codex" ? codexRepairPrompt(repo, reason, detail, recoveryStash) : null;
+  const kind = action?.kind ?? nextAction ?? (codex ? "codex" : "retry");
+  const prompt = typeof action?.prompt === "string"
+    ? action.prompt
+    : kind === "codex"
+      ? codexRepairPrompt(repo, reason, detail, recoveryStash)
+      : null;
   return resultIdentity(repo, {
     state: "blocked",
     reason,
@@ -1320,11 +1413,12 @@ function blockedResult(repo, reason, {
     recovery_stash: recoveryStash,
     next_action: {
       kind,
-      label: kind === "codex"
+      label: action?.label ?? (kind === "codex"
         ? "Vyřešit s Codexem"
         : kind === "github_access"
           ? "Ověřit přístup na GitHub"
-          : "Spustit lazurio update znovu",
+          : "Spustit lazurio update znovu"),
+      ...(action?.command ? { command: action.command } : {}),
       prompt,
     },
   });

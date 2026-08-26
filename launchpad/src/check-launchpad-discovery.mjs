@@ -10,11 +10,13 @@ const {
   organizations = [],
   port_overlaps: portOverlaps = [],
   module_listener_drifts: moduleListenerDrifts = [],
+  organization_issues: organizationIssues = [],
 } = await discoverLaunchpadApps(rootArg, { allowMissingOrganizations });
 
 const contractFailures = discoveryContractFailures({
   portOverlaps,
   moduleListenerDrifts,
+  organizationIssues,
 });
 const hardFailures = [...failures, ...contractFailures];
 

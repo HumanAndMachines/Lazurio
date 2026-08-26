@@ -395,11 +395,22 @@ function appBlockerModel(app) {
 
 function slotBlockerModel(slot) {
   const label = humanizePathTail(slot.path);
+  if (slot.reason === "repository_location_mismatch") {
+    return {
+      severity: "danger",
+      title: `${label} potřebuje sladit s repozitářem`,
+      impact: "Lazurio bezpečně pozastavilo jen tento modul. Ostatní moduly prostoru mohou dál fungovat.",
+      nextStep: "Předejte připravený postup Codexu; nejdřív ověří Git data a potom provede guardovanou opravu.",
+      action: slot.next_action ?? null,
+      technical: [slot.message, slot.reason, slot.path, slot.expected_path].filter(Boolean),
+    };
+  }
   return {
     severity: "danger",
     title: `${label} není připravený`,
     impact: "Tato část prostoru chybí nebo k ní nemáte očekávaný přístup.",
     nextStep: "Doplňte modul nebo potřebné oprávnění a potom obnovte stav.",
+    action: slot.next_action ?? null,
     technical: [slot.message, slot.reason, slot.path].filter(Boolean),
   };
 }

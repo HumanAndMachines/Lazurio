@@ -19,6 +19,7 @@ import {
   inspectCanonicalPathBoundary,
   isSamePath,
 } from "../../lazurio/core/path-boundary-lib.mjs";
+import { buildRepositoryLocationIssue } from "../../lazurio/core/module-location-repair-contract-lib.mjs";
 
 export async function buildGitInventory({ companiesRoot, organizations = null } = {}) {
   if (!companiesRoot) throw new Error("buildGitInventory requires companiesRoot");
@@ -28,6 +29,7 @@ export async function buildGitInventory({ companiesRoot, organizations = null } 
   const repos = [];
   const planned = [];
   const warnings = [];
+  const inventoryIssues = [];
   const orgs = organizations ?? (await discoverMountedOrganizations(companiesRoot, warnings));
   let realCompaniesRoot = null;
 
@@ -63,9 +65,13 @@ export async function buildGitInventory({ companiesRoot, organizations = null } 
         || !expectedRealOrganizationRoot
         || !isSamePath(expectedRealOrganizationRoot, rootBoundary.targetRealPath)
       ) {
-        warnings.push(
-          `${normalized.path}: mount vynechán z git inventáře — kanonická cesta se přes symlink/junction dostává mimo Lazurio root nebo ji nejde bezpečně ověřit`,
-        );
+        recordInventoryIssue({
+          inventoryIssues,
+          warnings,
+          organization: normalized,
+          code: "organization_mount_boundary_invalid",
+          message: `${normalized.path}: mount vynechán z git inventáře — kanonická cesta se přes symlink/junction dostává mimo Lazurio root nebo ji nejde bezpečně ověřit`,
+        });
         continue;
       }
       realOrganizationRoot = rootBoundary.targetRealPath;
@@ -74,18 +80,36 @@ export async function buildGitInventory({ companiesRoot, organizations = null } 
         label: normalized.path,
       });
       if (structureIssues.length > 0) {
-        warnings.push(`${normalized.path}: mount vynechán z git inventáře — chybí povinná GEN3 struktura (${structureIssues.join("; ")})`);
+        recordInventoryIssue({
+          inventoryIssues,
+          warnings,
+          organization: normalized,
+          code: "organization_structure_invalid",
+          message: `${normalized.path}: mount vynechán z git inventáře — chybí povinná GEN3 struktura (${structureIssues.join("; ")})`,
+        });
         continue;
       }
     }
     addOrganizationRootRepo(repos, normalized, companiesRoot);
     if (!existsSync(organizationRoot)) {
-      warnings.push(`${normalized.path}: organization mount chybí`);
+      recordInventoryIssue({
+        inventoryIssues,
+        warnings,
+        organization: normalized,
+        code: "organization_mount_missing",
+        message: `${normalized.path}: organization mount chybí`,
+      });
       continue;
     }
     const manifest = await readOrganizationModuleManifest(organizationRoot);
     if (!manifest) {
-      warnings.push(`${normalized.path}: modules.manifest.json chybí nebo nejde přečíst`);
+      recordInventoryIssue({
+        inventoryIssues,
+        warnings,
+        organization: normalized,
+        code: "organization_manifest_unreadable",
+        message: `${normalized.path}: modules.manifest.json chybí nebo nejde přečíst`,
+      });
       continue;
     }
     const manifestSlots = Array.isArray(manifest.module_slots) ? manifest.module_slots : [];
@@ -93,7 +117,13 @@ export async function buildGitInventory({ companiesRoot, organizations = null } 
     try {
       companyConfig = await readJson(join(organizationRoot, "company.gen3.json"));
     } catch (error) {
-      warnings.push(`${normalized.path}: company.gen3.json nejde přečíst; module sloty vynechány z git/worktree inventáře — ${error.message}`);
+      recordInventoryIssue({
+        inventoryIssues,
+        warnings,
+        organization: normalized,
+        code: "organization_config_unreadable",
+        message: `${normalized.path}: company.gen3.json nejde přečíst; module sloty vynechány z git/worktree inventáře — ${error.message}`,
+      });
       continue;
     }
     const companyModules = Array.isArray(companyConfig?.modules) ? companyConfig.modules : [];
@@ -106,11 +136,15 @@ export async function buildGitInventory({ companiesRoot, organizations = null } 
       ),
     ];
     if (collectionIssues.length > 0) {
-      warnings.push(
-        ...collectionIssues.map(
-          (issue) => `${normalized.path}: module sloty vynechány z git/worktree inventáře — ${issue}`,
-        ),
-      );
+      for (const issue of collectionIssues) {
+        recordInventoryIssue({
+          inventoryIssues,
+          warnings,
+          organization: normalized,
+          code: "organization_slot_collection_ambiguous",
+          message: `${normalized.path}: module sloty vynechány z git/worktree inventáře — ${issue}`,
+        });
+      }
       continue;
     }
     for (const rawSlot of manifestSlots) {
@@ -120,24 +154,61 @@ export async function buildGitInventory({ companiesRoot, organizations = null } 
       });
       const pathBoundaryIssue = slotPathBoundaryInventoryIssue(rawSlot);
       if (pathBoundaryIssue) {
-        warnings.push(
-          `${normalized.path}: slot ${String(rawSlot?.path ?? "<missing>")} vynechán z git/worktree inventáře — ${pathBoundaryIssue}${
-            containmentIssue ? `; module_slots[].path ${containmentIssue}` : ""
-          }`,
-        );
+        const message = `${normalized.path}: slot ${String(rawSlot?.path ?? "<missing>")} vynechán z git/worktree inventáře — ${pathBoundaryIssue}${
+          containmentIssue ? `; module_slots[].path ${containmentIssue}` : ""
+        }`;
+        if (pathBoundaryIssue.startsWith("repository mount basename ") && !containmentIssue) {
+          const path = normalizeOrganizationSlotPath(rawSlot.path);
+          const module = organizationSlotRepositoryId(rawSlot, path);
+          const coordinate = githubRepositoryCoordinate(rawSlot?.repo ?? rawSlot?.git?.url ?? rawSlot?.repository);
+          warnings.push(message);
+          inventoryIssues.push(buildRepositoryLocationIssue({
+            organization: normalized.slug,
+            organizationPath: normalized.path,
+            module,
+            path,
+            expectedPath: coordinate
+              ? `${path.split("/").slice(0, -1).join("/")}/${coordinate.repository}`
+              : null,
+            message,
+            sources: ["modules.manifest.json#module_slots"],
+            repairable: Boolean(module && (path.startsWith("workspace/") || path.startsWith("modules/"))),
+          }));
+        } else {
+          recordInventoryIssue({
+            inventoryIssues,
+            warnings,
+            organization: normalized,
+            code: "slot_contract_invalid",
+            message,
+            slot: rawSlot,
+          });
+        }
         continue;
       }
       if (containmentIssue) {
-        warnings.push(`${normalized.path}: module_slots[].path ${containmentIssue}; slot vynechán z akčního Git inventáře`);
+        recordInventoryIssue({
+          inventoryIssues,
+          warnings,
+          organization: normalized,
+          code: "slot_path_boundary_invalid",
+          message: `${normalized.path}: module_slots[].path ${containmentIssue}; slot vynechán z akčního Git inventáře`,
+          slot: rawSlot,
+        });
         continue;
       }
       const slot = normalizeModuleSlot(rawSlot, normalized);
       if (!slot) continue;
       const rootInventoryIssue = rootSlotInventoryIssue(rawSlot, slot);
       if (rootInventoryIssue) {
-        warnings.push(
-          `${normalized.path}: root slot ${slot.path} vynechán z git/worktree inventáře — ${rootInventoryIssue}`,
-        );
+        recordInventoryIssue({
+          inventoryIssues,
+          warnings,
+          organization: normalized,
+          code: "root_slot_contract_invalid",
+          message: `${normalized.path}: root slot ${slot.path} vynechán z git/worktree inventáře — ${rootInventoryIssue}`,
+          slot: rawSlot,
+        });
         continue;
       }
       // Module-owned repository-db checkout je deklarativní/read-only resource,
@@ -157,9 +228,14 @@ export async function buildGitInventory({ companiesRoot, organizations = null } 
         });
         realOrganizationRoot = slotBoundary.rootRealPath;
         if (!slotBoundary.ok) {
-          warnings.push(
-            `${normalized.path}: slot ${slot.path} vynechán z git/worktree inventáře — existující checkout se přes symlink/junction dostává mimo root Organizace nebo jeho kanonickou cestu nejde bezpečně ověřit`,
-          );
+          recordInventoryIssue({
+            inventoryIssues,
+            warnings,
+            organization: normalized,
+            code: "slot_mount_boundary_invalid",
+            message: `${normalized.path}: slot ${slot.path} vynechán z git/worktree inventáře — existující checkout se přes symlink/junction dostává mimo root Organizace nebo jeho kanonickou cestu nejde bezpečně ověřit`,
+            slot: rawSlot,
+          });
           continue;
         }
       }
@@ -173,7 +249,47 @@ export async function buildGitInventory({ companiesRoot, organizations = null } 
     repos,
     planned,
     warnings,
+    inventory_issues: deduplicateInventoryIssues(inventoryIssues),
   };
+}
+
+function recordInventoryIssue({
+  inventoryIssues,
+  warnings,
+  organization,
+  code,
+  message,
+  slot = null,
+}) {
+  warnings.push(message);
+  const path = typeof slot?.path === "string" ? normalizeOrganizationSlotPath(slot.path) : null;
+  const module = path && isCanonicalOrganizationRepositorySlotPath(slot.path)
+    ? organizationSlotRepositoryId(slot, path)
+    : null;
+  inventoryIssues.push({
+    schema_version: "lazurio.organization_issue.v1",
+    severity: "blocking",
+    scope: slot ? "module_slot" : "organization",
+    status: "quarantined",
+    code,
+    organization: organization.slug,
+    organization_path: organization.path,
+    module,
+    path,
+    expected_path: null,
+    message,
+    sources: ["git_inventory"],
+    next_action: null,
+  });
+}
+
+function deduplicateInventoryIssues(issues) {
+  const unique = new Map();
+  for (const issue of issues) {
+    const key = `${issue.organization}\0${issue.module ?? ""}\0${issue.path ?? ""}\0${issue.code}\0${issue.message}`;
+    if (!unique.has(key)) unique.set(key, issue);
+  }
+  return [...unique.values()];
 }
 
 export async function readLaunchpadConfig(companiesRoot) {

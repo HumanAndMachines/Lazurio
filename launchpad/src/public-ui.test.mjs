@@ -152,7 +152,10 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(js).toContain("reconcileSelectedAppId");
   expect(js).not.toContain("state.selectedAppId = state.apps[0].id");
   expect(js).toContain("function scrollBelowStickyTopbar");
-  expect(js).toContain("window.scrollBy({ top: delta, behavior: \"smooth\" })");
+  expect(js).toContain("window.scrollBy({ top: delta, behavior: \"auto\" })");
+  expect(js).toContain("if (previousTechnical) state.problemsExpanded = previousTechnical.open");
+  expect(js).toContain("window.scrollTo({ top: previousScrollY, behavior: \"auto\" })");
+  expect(js).toContain('focus({ preventScroll: true })');
   expect(js).toContain("function primaryNextAction");
   expect(js).toContain("technical-problems");
   expect(js).not.toContain("stale_lockfile");

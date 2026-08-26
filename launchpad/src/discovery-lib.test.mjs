@@ -1765,23 +1765,38 @@ test("invalid case-preserving mount ID blocks package discovery for the whole Or
   expect(result.failures.join("\n")).toContain("explicitní stabilní lowercase slug");
 });
 
-test("repository mount basename must match the declared GitHub repository", async () => {
-  const root = await createCompaniesWorkspaceFixture({});
+test("repository rename drift quarantines only its slot and keeps a healthy sibling discoverable", async () => {
+  const root = await createCompaniesWorkspaceFixture({
+    plugin: { schema_version: "companyascode.launchpad_plugin.v1", title: "Demo kontext" },
+  });
   const organizationRoot = join(root, "organizations", "TestCompany");
   await writeJson(join(organizationRoot, "modules.manifest.json"), {
     company: "test-company",
     github_org: "TestCompany",
     module_slots: [
-      { slug: "buddy-gen2", path: "productionspace/Buddy_GEN2", git: { url: "git@github.com:TestCompany/Other.git" } },
+      { slug: "demo", path: "modules/demo", git: { url: "git@github.com:TestCompany/demo.git" } },
+      { slug: "buddy-gen2", path: "workspace/Buddy_GEN2", git: { url: "git@github.com:TestCompany/Other.git" } },
     ],
   });
 
   const result = await discoverLaunchpadApps(root);
 
-  expect(result.apps).toEqual([]);
-  expect(result.failures.join("\n")).toContain(
-    'repository mount basename "Buddy_GEN2" neodpovídá přesnému názvu GitHub repozitáře "Other"',
-  );
+  expect(result.failures).toEqual([]);
+  expect(result.apps.map((app) => app.id)).toEqual(["test-company-demo-v1"]);
+  expect(result.organization_issues).toEqual([
+    expect.objectContaining({
+      status: "quarantined",
+      code: "repository_location_mismatch",
+      organization: "test-company",
+      module: "buddy-gen2",
+      path: "workspace/Buddy_GEN2",
+      expected_path: "workspace/Other",
+      next_action: expect.objectContaining({
+        kind: "repair_module_location",
+        command: "lazurio repair module-location --org test-company --module buddy-gen2",
+      }),
+    }),
+  ]);
 });
 
 test("raw non-canonical repository path blocks package discovery before separator cleanup", async () => {

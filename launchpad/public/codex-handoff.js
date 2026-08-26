@@ -90,11 +90,23 @@ export function openCodexRuntimeIssueDialog(app, issue) {
 }
 
 export function openCodexUpdateDialog(prompt) {
-  if (typeof document === "undefined" || typeof prompt !== "string" || !prompt.trim()) return false;
-  return openCodexHandoffDialog({
-    app: { id: "lazurio-update" },
+  return openCodexRepairDialog({
+    prompt,
     title: "Vyřešit Lazurio update s Codexem",
     intro: "Lazurio zachovalo bezpečný stav a připravilo přesný kontext blokace. Codex opraví Git historii nebo operaci bez ztráty práce.",
+  });
+}
+
+export function openCodexRepairDialog(action = {}) {
+  const prompt = action?.prompt;
+  if (typeof document === "undefined" || typeof prompt !== "string" || !prompt.trim()) return false;
+  return openCodexHandoffDialog({
+    app: { id: "lazurio-repair" },
+    title: cleanValue(action.title, "Vyřešit údržbu Lazuria s Codexem"),
+    intro: cleanValue(
+      action.intro,
+      "Lazurio izolovalo jen dotčenou část a připravilo bezpečný postup. Codex nejdřív ověří Git data a teprve potom použije guardovanou opravu.",
+    ),
     prompt,
   });
 }
