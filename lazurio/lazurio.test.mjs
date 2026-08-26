@@ -957,6 +957,63 @@ test("Lazurio doctor předá explicitní tool-update opt-in jedinému Doctor cor
   });
 });
 
+test("Lazurio doctor přidá explicitní tool-update lane i k Personalspace reportu", async () => {
+  const root = await tempRoot("lazurio-personal-tool-updates-");
+  await writeJson(join(root, "personal.gen3.json"), personalConfig("owner-login", {
+    doctor: {
+      schema_version: "humanandmachines.doctor.declaration.v1",
+      command: [process.execPath, "run", "fixture-doctor.mjs"],
+      scope_type: "personalspace",
+      timeout_ms: 5_000,
+    },
+  }));
+  const childReport = buildAggregateReport({
+    scope: { type: "personalspace", path: ".", name: "Fixture Personalspace" },
+    checks: [{
+      id: "fixture.ready",
+      status: "ok",
+      severity: "required",
+      title: "Fixture",
+      message: "Fixture ready",
+      paths: [],
+      links: [],
+      details: [],
+    }],
+  });
+  let inspectionCount = 0;
+
+  const lazurio = await buildLazurioDoctorReport({
+    root,
+    checkToolUpdates: true,
+    runBoundDoctor: () => ({
+      outcome: "report",
+      report: childReport,
+      exit_code: 0,
+    }),
+    inspectDeveloperToolUpdates: async () => {
+      inspectionCount += 1;
+      return [{
+        id: "github_cli",
+        title: "GitHub CLI",
+        required: true,
+        status: "update_available",
+        current_version: "2.97.0",
+        latest_version: "2.98.0",
+        release_url: "https://github.com/cli/cli/releases/tag/v2.98.0",
+      }];
+    },
+  });
+
+  expect(inspectionCount).toBe(1);
+  expect(lazurio.report.checks.map((check) => check.id)).toEqual([
+    "fixture.ready",
+    "platform.github_cli_update",
+  ]);
+  expect(lazurio.report.summary.status).toBe("warn");
+  expect(lazurio.report.summary.warn).toBe(1);
+  expect(lazurio.exit_code).toBe(0);
+});
+
 test("CLI context --json funguje z čisté Agent session bez privátního obsahu", async () => {
   const root = await tempRoot("lazurio-cli-context-");
   await writeJson(join(root, "personal.gen3.json"), personalConfig("owner-login", {
