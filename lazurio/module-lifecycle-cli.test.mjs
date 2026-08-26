@@ -34,7 +34,7 @@ test("Module lifecycle CLI rejects a second Root authority and unsafe confirmati
   const rootOverride = runCli([
     "module",
     "open",
-    "Spectoda/invoices",
+    "ExampleOrganization/website",
     "--root",
     home,
     "--json",
@@ -45,9 +45,9 @@ test("Module lifecycle CLI rejects a second Root authority and unsafe confirmati
   const stopConfirmation = runCli([
     "module",
     "stop",
-    "Spectoda/invoices",
+    "ExampleOrganization/website",
     "--confirm-replace",
-    "macano-website-v1",
+    "other-organization-portal-v1",
   ], home);
   expect(stopConfirmation.status).toBe(3);
   expect(stopConfirmation.stderr).toContain("pouze s module start nebo module open");

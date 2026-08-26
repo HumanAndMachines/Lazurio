@@ -94,8 +94,8 @@ CLI obsluhuje explicitně deklarované Apps přes jediný aktivní Lazurio Serve
 
 ```sh
 lazurio module status --json
-lazurio module open Spectoda/invoices --json
-lazurio module stop Spectoda/invoices --app-package app/v2/package.json --json
+lazurio module open ExampleOrganization/website --json
+lazurio module stop ExampleOrganization/website --app-package app/v2/package.json --json
 ```
 
 Snapshot všech Apps vzniká jedním Server readbackem. Jednotlivá akce vybírá
