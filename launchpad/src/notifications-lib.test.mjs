@@ -179,7 +179,7 @@ test("commit Agenta se pozná, člověk se skrytým e-mailem ne", () => {
   // Skrytý GitHub e-mail z člověka Agenta nedělá — to je ta záměna, která by
   // notifikaci udělala nedůvěryhodnou.
   expect(classifyActor("Anna Veselá", "12345+anna@users.noreply.github.com")).toBe("human");
-  expect(classifyActor("Matěj Suchánek", "matej@spectoda.com")).toBe("human");
+  expect(classifyActor("Example User", "user@example.com")).toBe("human");
 });
 
 test("iniciály zvládnou jedno slovo, dvě slova i prázdno", () => {

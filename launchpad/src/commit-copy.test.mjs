@@ -54,7 +54,7 @@ test("anglická věta autora se nepřekládá ani nepřepisuje", () => {
 test("druh změny se pozná i z anglického slovesa za oblastí", () => {
   // Tohle je ten podíl, který slovník sloves opravdu pokryje: 215 ze 410
   // skutečných commitů tohohle workspace.
-  const add = humanCommitCopy({ subject: "Knowledgebase: Add Spectoda reference guidance" });
+  const add = humanCommitCopy({ subject: "Knowledgebase: Add Example Organization reference guidance" });
   expect(changeKindLabel({}, add)).toBe("Přidání");
 
   const fix = humanCommitCopy({ subject: "Website: Fix IZOLAS reference image format" });

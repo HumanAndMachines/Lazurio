@@ -89,9 +89,9 @@ schvaluje, **co** se smí připojovat:
 Přidání nebo změna integrace v katalogu = PR ze worktree ke Stewardovi.
 Tím je „manuálně kurátorované" vynucené procesně, ne jen konvencí.
 
-Pojmenování: server `<org_slug>_<provider>` (např. `spectoda_slack`),
+Pojmenování: server `<org_slug>_<provider>` (např. `example_organization_slack`),
 env proměnné `<ORG_SLUG>_<PROVIDER>_<PURPOSE>` (např.
-`SPECTODA_GOOGLE_CLIENT_SECRET_PATH`). Jeden provider = jeden server;
+`EXAMPLE_ORGANIZATION_GOOGLE_CLIENT_SECRET_PATH`). Jeden provider = jeden server;
 Google Workspace pokrývá Gmail/Drive/Docs/Sheets/Slides jedním serverem.
 
 ### Per-machine aktivace

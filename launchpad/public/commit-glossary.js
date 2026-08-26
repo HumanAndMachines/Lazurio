@@ -10,7 +10,7 @@
 // Slovník celých frází („official logo usage" → „pravidel pro používání
 // loga") jsme zkusili a na 410 skutečných commitech tohohle workspace trefil
 // 9 z nich. Objekty jsou totiž skoro vždy vlastní jména produktů, značek
-// a zákazníků („Spectoda T-Mobile reference guidance", „Acebeam portable
+// a zákazníků („Example Organization mobile app guidance", „Example Customer portable
 // lamps supplier baseline"), a ta se nepřekládají ani přeložit nemají.
 // Sloveso naproti tomu sedí u 215 ze 410 — a nese to podstatné: *co se
 // stalo*. Ukazuje se proto jako štítek nad původní větou autora, ne jako
