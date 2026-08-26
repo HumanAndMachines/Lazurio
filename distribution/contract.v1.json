@@ -53,7 +53,7 @@
     "lazurio/context-v0.schema.json",
     "lazurio/core/",
     "lazurio/install-output-lib.mjs",
-    "lazurio/install-report.v0.schema.json",
+    "lazurio/install-report.v1.schema.json",
     "lazurio/launchpad-install-lib.mjs",
     "lazurio/lib.mjs",
     "lazurio/locales/",

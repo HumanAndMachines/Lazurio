@@ -1,10 +1,15 @@
 {
-  "schema_version": "lazurio.install.report.v0",
+  "schema_version": "lazurio.install.report.v1",
   "mode": "report",
   "status": "action_required",
   "machine": {
     "platform": "darwin",
-    "architecture": "arm64"
+    "architecture": "arm64",
+    "bun": {
+      "status": "current",
+      "current_version": "1.4.0",
+      "required_version": "1.4.0"
+    }
   },
   "root": {
     "selected": false,
@@ -20,7 +25,7 @@
     {
       "id": "bun",
       "status": "completed",
-      "reason": "bun_runtime_available"
+      "reason": "bun_runtime_current"
     },
     {
       "id": "git",

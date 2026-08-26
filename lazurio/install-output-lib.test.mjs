@@ -41,7 +41,7 @@ function fixtureReport() {
     root: null,
     platform: "darwin",
     architecture: "arm64",
-    bunVersion: "1.3.14",
+    bunVersion: "1.4.0",
     resolveGit: () => "/usr/bin/git",
     resolveGitHubCli: () => null,
     runCommand: () => ({ status: 0 }),

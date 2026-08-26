@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { validateAgainstSchema } from "../../launchpad/src/json-schema-mini.mjs";
-import schema from "../install-report.v0.schema.json";
+import schema from "../install-report.v1.schema.json";
 import {
   INSTALL_STEP_IDS,
   inspectLazurioInstallation,
@@ -58,7 +58,7 @@ test("independent probes continue after a bounded failure", () => {
     root: null,
     platform: "linux",
     architecture: "x64",
-    bunVersion: "1.3.14",
+    bunVersion: "1.4.0",
     resolveGit: () => {
       throw new Error("CANARY_GIT_FAILURE");
     },
@@ -91,7 +91,7 @@ test("supported complete fixture exits zero with all probes completed", () => {
     root: "/fixture/root",
     platform: "win32",
     architecture: "x64",
-    bunVersion: "1.3.14",
+    bunVersion: "1.4.0",
     resolveGit: () => "C:\\Program Files\\Git\\cmd\\git.exe",
     resolveGitHubCli: () => "C:\\Program Files\\GitHub CLI\\gh.exe",
     environment: { SystemRoot: "C:\\Windows" },
@@ -123,12 +123,61 @@ test("supported complete fixture exits zero with all probes completed", () => {
   ]);
 });
 
+test("Bun probe requires the exact packageManager version and reports both versions", () => {
+  const report = inspectLazurioInstallation({
+    root: null,
+    platform: "darwin",
+    architecture: "arm64",
+    bunVersion: "1.4.1",
+    requiredBunVersion: "1.4.0",
+    resolveGit: () => "/usr/bin/git",
+    resolveGitHubCli: () => null,
+    runCommand: () => ({ status: 0 }),
+  });
+
+  expect(report.machine.bun).toEqual({
+    status: "mismatch",
+    current_version: "1.4.1",
+    required_version: "1.4.0",
+  });
+  expect(report.steps.find((step) => step.id === "bun")).toEqual({
+    id: "bun",
+    status: "action_required",
+    reason: "bun_runtime_mismatch",
+  });
+  expect(report.status).toBe("action_required");
+  expect(validateAgainstSchema(report, schema, "install")).toEqual([]);
+});
+
+test("missing Bun runtime is a failed probe with an explicit required version", () => {
+  const report = inspectLazurioInstallation({
+    root: null,
+    platform: "linux",
+    architecture: "x64",
+    bunVersion: null,
+    requiredBunVersion: "1.4.0",
+    resolveGit: () => null,
+    resolveGitHubCli: () => null,
+  });
+
+  expect(report.machine.bun).toEqual({
+    status: "unavailable",
+    current_version: null,
+    required_version: "1.4.0",
+  });
+  expect(report.steps.find((step) => step.id === "bun")).toMatchObject({
+    status: "failed",
+    reason: "bun_runtime_unavailable",
+  });
+  expect(report.status).toBe("failed");
+});
+
 test("unsupported architecture requires action even on a supported OS", () => {
   const report = inspectLazurioInstallation({
     root: "/fixture/root",
     platform: "linux",
     architecture: "mips64",
-    bunVersion: "1.3.14",
+    bunVersion: "1.4.0",
     resolveGit: () => "/usr/bin/git",
     resolveGitHubCli: () => "/usr/bin/gh",
     runCommand: () => ({ status: 0 }),
@@ -355,7 +404,7 @@ function fixtureReport() {
     root: null,
     platform: "darwin",
     architecture: "arm64",
-    bunVersion: "1.3.14",
+    bunVersion: "1.4.0",
     resolveGit: () => "/usr/bin/git",
     resolveGitHubCli: () => null,
     runCommand: () => ({ status: 0, stdout: "CANARY_STDOUT", stderr: "CANARY_STDERR" }),

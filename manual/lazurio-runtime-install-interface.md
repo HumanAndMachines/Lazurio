@@ -49,6 +49,15 @@ link na symlinkovaný `active` není update-safe: Bun připne fyzický version
 realpath. Budoucí Resident activation proto musí active switch, relink,
 identity verification a rollback provést jako jednu samostatnou transakci.
 
+Pro localhost source, npm CLI a jeho CI je jedinou autoritou exact testovaného
+Bun runtime `package.json#packageManager`. `setup-bun`, Install Core i Doctor
+čtou stejnou hodnotu; novější patch se nestává podporovaným automaticky.
+Nesoulad pouze vrátí strojově čitelný nález a návod pro Agenta. Změna
+externího Bunu vyžaduje explicitní souhlas a standardní postup zjištěného
+instalačního mechanismu; není součástí Git-only `lazurio update`.
+Immutable Resident/Buddy artefakty mají oddělené profilové toolchain piny,
+protože jejich upgrade a rollback patří vlastnímu artefaktovému lifecycle.
+
 ## Launchpad process interface
 
 Supervisor ve stejném workspace kontejneru nastaví:

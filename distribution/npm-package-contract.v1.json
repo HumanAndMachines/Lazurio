@@ -6,7 +6,7 @@
     "name": "npm",
     "version": "11.17.0"
   },
-  "minimum_bun_version": "1.3.14",
+  "minimum_bun_version": "1.4.0",
   "source_includes": [
     "LICENSE.md",
     "README.md",
@@ -17,7 +17,7 @@
     "lazurio/context-v0.schema.json",
     "lazurio/core/",
     "lazurio/install-output-lib.mjs",
-    "lazurio/install-report.v0.schema.json",
+    "lazurio/install-report.v1.schema.json",
     "lazurio/launchpad-install-lib.mjs",
     "lazurio/lib.mjs",
     "lazurio/locales/",
@@ -53,7 +53,7 @@
     "README.md",
     "lazurio/cli.mjs",
     "lazurio/context-v0.schema.json",
-    "lazurio/install-report.v0.schema.json",
+    "lazurio/install-report.v1.schema.json",
     "lazurio/module-port-lib.mjs",
     "lazurio/module-lifecycle-report.v1.schema.json",
     "lazurio/module-setup-lib.mjs",

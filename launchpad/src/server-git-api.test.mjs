@@ -1188,7 +1188,11 @@ test("PORT environment configuration is implicit and falls forward to a free por
   const root = await createLaunchpadGitFixture();
   const stateRoot = `${root}-launchpad-state`;
   tempRoots.push(root, stateRoot);
-  const blocker = createServer();
+  const blockerConnections = new Set();
+  const blocker = createServer((connection) => {
+    blockerConnections.add(connection);
+    connection.once("close", () => blockerConnections.delete(connection));
+  });
   const blockedPort = await findFreePort();
   await new Promise((resolve, reject) => {
     blocker.once("error", reject);
@@ -1216,9 +1220,14 @@ test("PORT environment configuration is implicit and falls forward to a free por
       }),
     ]);
     expect(actualPort).not.toBe(port);
+    for (const connection of blockerConnections) connection.destroy();
+    await new Promise((resolve) => blocker.close(resolve));
     await waitForHealth(actualPort, launcher);
   } finally {
-    await new Promise((resolve) => blocker.close(resolve));
+    if (blocker.listening) {
+      for (const connection of blockerConnections) connection.destroy();
+      await new Promise((resolve) => blocker.close(resolve));
+    }
   }
 });
 

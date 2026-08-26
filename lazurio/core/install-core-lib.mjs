@@ -9,8 +9,12 @@ import {
   resolveTrustedGitHubCliExecutable,
   sanitizedGitEnvironment,
 } from "./cli-provenance-lib.mjs";
+import {
+  classifyBunRuntime,
+  readRequiredBunVersion,
+} from "./toolchain-lib.mjs";
 
-export const LAZURIO_INSTALL_REPORT_SCHEMA = "lazurio.install.report.v0";
+export const LAZURIO_INSTALL_REPORT_SCHEMA = "lazurio.install.report.v1";
 export const INSTALL_MODE = "report";
 export const INSTALL_STEP_IDS = Object.freeze([
   "platform",
@@ -43,7 +47,7 @@ const rootLayouts = new Set([
 ]);
 const reasonsByStep = Object.freeze({
   platform: new Set(["platform_supported", "platform_unsupported", "probe_failed"]),
-  bun: new Set(["bun_runtime_available", "bun_runtime_unavailable", "probe_failed"]),
+  bun: new Set(["bun_runtime_current", "bun_runtime_mismatch", "bun_runtime_unavailable", "probe_failed"]),
   git: new Set(["git_available", "git_missing", "git_unusable", "probe_failed"]),
   github_cli: new Set(["github_cli_available", "github_cli_missing", "github_cli_unusable", "probe_failed"]),
   github_auth: new Set(["github_authenticated", "github_login_required", "github_cli_unavailable", "probe_failed"]),
@@ -66,6 +70,7 @@ export function inspectLazurioInstallation({
   platform = process.platform,
   architecture = process.arch,
   bunVersion = process.versions.bun ?? null,
+  requiredBunVersion = readRequiredBunVersion(),
   environment = process.env,
   resolveGit = resolveTrustedGitExecutable,
   resolveGitHubCli = resolveTrustedGitHubCliExecutable,
@@ -81,11 +86,15 @@ export function inspectLazurioInstallation({
       : actionRequired("platform_unsupported")
   )));
 
-  steps.push(boundedProbe("bun", () => (
-    typeof bunVersion === "string" && bunVersion.length > 0
-      ? completed("bun_runtime_available")
-      : failed("bun_runtime_unavailable")
-  )));
+  const bunRuntime = classifyBunRuntime({
+    currentVersion: bunVersion,
+    requiredVersion: requiredBunVersion,
+  });
+  steps.push(boundedProbe("bun", () => {
+    if (bunRuntime.status === "current") return completed("bun_runtime_current");
+    if (bunRuntime.status === "mismatch") return actionRequired("bun_runtime_mismatch");
+    return failed("bun_runtime_unavailable");
+  }));
 
   let gitExecutable = null;
   steps.push(boundedProbe("git", () => {
@@ -138,6 +147,7 @@ export function inspectLazurioInstallation({
     machine: {
       platform,
       architecture,
+      bun: bunRuntime,
     },
     root: rootObservation.root,
     steps,
@@ -156,6 +166,7 @@ export function isValidLazurioInstallReport(value) {
   if (!plainObject(value.machine)) return false;
   if (typeof value.machine.platform !== "string" || value.machine.platform === "") return false;
   if (typeof value.machine.architecture !== "string" || value.machine.architecture === "") return false;
+  if (!validBunRuntime(value.machine.bun)) return false;
   if (!validRoot(value.root)) return false;
   if (!Array.isArray(value.steps) || value.steps.length !== INSTALL_STEP_IDS.length) return false;
   for (let index = 0; index < INSTALL_STEP_IDS.length; index += 1) {
@@ -168,6 +179,15 @@ export function isValidLazurioInstallReport(value) {
   }
   if (!validSummary(value.summary, value.steps)) return false;
   return value.status === value.summary.status;
+}
+
+function validBunRuntime(value) {
+  if (!plainObject(value)) return false;
+  if (!new Set(["current", "mismatch", "unavailable"]).has(value.status)) return false;
+  if (!/^\d+\.\d+\.\d+$/u.test(value.required_version ?? "")) return false;
+  if (value.status === "unavailable") return value.current_version === null;
+  if (!/^\d+\.\d+\.\d+$/u.test(value.current_version ?? "")) return false;
+  return value.status === (value.current_version === value.required_version ? "current" : "mismatch");
 }
 
 export function installExitCode(report) {

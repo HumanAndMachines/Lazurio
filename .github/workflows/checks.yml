@@ -36,10 +36,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          # Držet v paritě s vývojovými mašinami; při bumpu ověřit i macOS
-          # codesign regresi (Bun >= 1.3.12) v budoucí release pipeline.
-          bun-version: 1.3.14
+        # Exact verzi čte z package.json#packageManager, stejné autority jako CLI a Doctor.
       - name: Instalace deklarované Lazurio exact-search závislosti
         if: runner.os == 'Linux'
         run: |
@@ -71,8 +68,6 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: 1.3.14
       - name: Instalace závislostí Guide
         working-directory: guide/app/v1
         run: bun install --frozen-lockfile
@@ -90,8 +85,6 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: 1.3.14
       - name: Pack + globální instalace + smoke přes skutečný npm tarball
         run: bun run npm-package:gate -- --evidence dist/npm-evidence/${{ runner.os }}-${{ runner.arch }}.json
       # Actions artifact zde nese jen malé cross-runner JSON evidence. Není to
@@ -111,8 +104,6 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: 1.3.14
       - name: Stažení pouze package evidence
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
