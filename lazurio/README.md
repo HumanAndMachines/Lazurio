@@ -105,6 +105,8 @@ uživatelského potvrzení failne; potvrzený retry používá
 `--confirm-replace <app-id>`. Chybějící Server je odlišný
 `server_unavailable`, ne stojící App. Úplný verzovaný kontrakt a pravidla pro
 tenké GEN2 klienty drží [Module lifecycle manuál](../manual/module-lifecycle.md).
+CLI mutace jsou záměrně jen pro local profil; hosted lifecycle zůstává za
+jeho přihlášeným Dashboard/Launchpad surface.
 
 ## Instalace Launchpadu
 

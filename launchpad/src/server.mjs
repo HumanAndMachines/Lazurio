@@ -94,6 +94,12 @@ if (realpathSync.native(configuredRuntimeRoot) !== realpathSync.native(lazurioCo
 const launchpadRootId = computeServerRootId(canonicalCompaniesRoot);
 const launchpadControlRootId = computeServerRootId(rootSourceRoot);
 const launchpadInstallGeneration = computeServerInstallGeneration(lazurioCodeRoot);
+const hostedAppUrls = createHostedAppUrlAdapter({
+  profile: process.env.LAZURIO_WORKSPACE_PROFILE,
+  expectedTeamId: process.env.LAZURIO_TEAM_ID,
+  serviceCatalogJson: process.env.LAZURIO_TEAM_SERVICE_CATALOG_JSON,
+  compatibilityUrlsJson: process.env.LAUNCHPAD_HOSTED_APP_URLS_JSON,
+});
 const launchpadServerIdentity = buildServerIdentity({
   rootId: launchpadRootId,
   controlRootId: launchpadControlRootId,
@@ -101,17 +107,12 @@ const launchpadServerIdentity = buildServerIdentity({
   instanceId: randomUUID(),
   pid: process.pid,
   startedAt: new Date().toISOString(),
+  requestTrustProfile: hostedAppUrls.profile,
 });
 const host = options.host ?? defaultHost;
 const port = Number(options.port ?? process.env.PORT ?? defaultPort);
 const explicitPort = options.port !== undefined;
 const principalEmail = resolvePrincipalEmail();
-const hostedAppUrls = createHostedAppUrlAdapter({
-  profile: process.env.LAZURIO_WORKSPACE_PROFILE,
-  expectedTeamId: process.env.LAZURIO_TEAM_ID,
-  serviceCatalogJson: process.env.LAZURIO_TEAM_SERVICE_CATALOG_JSON,
-  compatibilityUrlsJson: process.env.LAUNCHPAD_HOSTED_APP_URLS_JSON,
-});
 const launchpadStateRoot = resolveLaunchpadStateRoot({
   configuredStateRoot: process.env.LAZURIO_LAUNCHPAD_STATE_ROOT,
   hosted: hostedAppUrls.profile === "hosted",
