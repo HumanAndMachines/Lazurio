@@ -184,6 +184,26 @@ describe("Core-owned Module lifecycle client", () => {
     ]);
   });
 
+  test("legacy identity defers mutation trust to the authoritative Server", async () => {
+    const requests = [];
+    const { request_trust_profile: _omitted, ...legacyIdentity } = identity;
+    const report = await runModuleLifecycle({
+      action: "open",
+      selector: "Spectoda/invoices",
+      readLocator: async () => locator,
+      fetchFn: fixtureFetch({ requests, identityOverride: legacyIdentity }),
+    });
+
+    expect(report.status).toBe("completed");
+    expect(report.server.request_trust_profile).toBe("unknown");
+    expect(validateAgainstSchema(report, reportSchema, "report")).toEqual([]);
+    expect(requests.map((request) => request.pathname)).toEqual([
+      "/api/lazurio/server-identity",
+      "/api/apps",
+      "/api/apps/spectoda-invoices-v2/open",
+    ]);
+  });
+
   test("selectors and package paths reject traversal or ambient URL shapes", () => {
     expect(() => parseModuleSelector("Spectoda/invoices")).not.toThrow();
     expect(() => parseModuleSelector("Spectoda/../invoices")).toThrow();

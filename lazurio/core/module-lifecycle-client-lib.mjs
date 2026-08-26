@@ -56,7 +56,7 @@ export async function runModuleLifecycle({
 
   const server = await verifyLocatedServer({ locator, fetchFn });
   if (!server.ok) return actionRequired(base, server.reason, server.message);
-  if (action !== "status" && server.identity.request_trust_profile !== "local") {
+  if (action !== "status" && server.identity.request_trust_profile === "hosted") {
     return actionRequired(
       base,
       "hosted_lifecycle_requires_authenticated_surface",
