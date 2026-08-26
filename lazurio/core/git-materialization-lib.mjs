@@ -1,6 +1,8 @@
+import { spawnSync } from "node:child_process";
 import { lstat, mkdir, mkdtemp, readdir, realpath, rename, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   inspectCanonicalPathBoundary,
@@ -14,6 +16,7 @@ export const GIT_CHECKOUT_MATERIALIZATION_MODES = Object.freeze([
 export const GIT_CLONE_TIMEOUT_MS = 10 * 60_000;
 export const GIT_FETCH_TIMEOUT_MS = 20_000;
 export const GIT_LOCAL_TIMEOUT_MS = 10_000;
+const PINNED_CHECKOUT_PUBLISH_MODE = "--lazurio-pinned-checkout-publisher";
 
 // One checkout publication primitive is shared by Organization install and
 // Launchpad Sync. Callers own policy (manifest/root identity); Core owns the
@@ -54,10 +57,11 @@ export async function materializeGitCheckout({
   const {
     makeDirectory = mkdir,
     makeTempDirectory = mkdtemp,
-    move = rename,
     remove = rm,
     readDirectory = readdir,
     pathEntry = lstatOrNull,
+    publish = publishCheckoutWithPinnedParent,
+    beforePublish = async () => {},
   } = deps;
   if (await pathEntry(absoluteTargetPath)) return targetExists();
 
@@ -88,6 +92,7 @@ export async function materializeGitCheckout({
     if (!parentBoundary.ok) {
       return boundaryFailure("Rodič cílového checkoutu vede mimo kanonickou hranici vlastníka.");
     }
+    const expectedParentRealPath = parentBoundary.targetRealPath;
     if (await caseInsensitiveCollision({ targetParent, targetName, readDirectory })) {
       return targetCollision();
     }
@@ -96,6 +101,14 @@ export async function materializeGitCheckout({
     // The final path is never observable before Git and caller-owned identity
     // verification both succeed.
     stagingPath = await makeTempDirectory(join(targetParent, `.${targetName}.lazurio-materialize-`));
+    const stagingBoundary = await inspectCanonicalPathBoundary({
+      rootPath: targetParent,
+      rootRealPath: expectedParentRealPath,
+      targetPath: stagingPath,
+    });
+    if (!stagingBoundary.ok) {
+      return boundaryFailure("Dočasný checkout nevznikl ve fyzicky ověřeném rodiči targetu.");
+    }
     const clone = await run(
       [
         "clone",
@@ -138,19 +151,22 @@ export async function materializeGitCheckout({
       );
     }
 
-    // Repeat both checks immediately before publication. This catches a
-    // concurrent writer and a case-folding collision on every supported OS.
-    if (await pathEntry(absoluteTargetPath)) return targetExists();
-    if (await caseInsensitiveCollision({ targetParent, targetName, readDirectory })) {
-      return targetCollision();
-    }
-    try {
-      await move(stagingPath, absoluteTargetPath);
-      materialized = true;
-    } catch (error) {
-      if (["EEXIST", "ENOTEMPTY"].includes(error?.code)) return targetExists();
+    await beforePublish();
+    const publication = await publish({
+      targetParent,
+      expectedParentRealPath,
+      stagingName: basename(stagingPath),
+      targetName,
+    });
+    if (!publication?.ok) {
+      if (publication?.code === "target_exists") return targetExists();
+      if (publication?.code === "target_case_collision") return targetCollision();
+      if (["parent_identity_changed", "staging_identity_changed"].includes(publication?.code)) {
+        return boundaryFailure("Rodič cílového checkoutu se během publikace fyzicky změnil.");
+      }
       return cloneFailure();
     }
+    materialized = true;
 
     return {
       ok: true,
@@ -172,6 +188,105 @@ export async function materializeGitCheckout({
       await remove(stagingPath, { recursive: true, force: true }).catch(() => {});
     }
   }
+}
+
+function publishCheckoutWithPinnedParent({
+  targetParent,
+  expectedParentRealPath,
+  stagingName,
+  targetName,
+}) {
+  const payload = JSON.stringify({
+    expected_parent_real_path: expectedParentRealPath,
+    staging_name: stagingName,
+    target_name: targetName,
+  });
+  const child = spawnSync(
+    process.execPath,
+    [fileURLToPath(import.meta.url), PINNED_CHECKOUT_PUBLISH_MODE],
+    {
+      // The child is born inside the validated parent. Its cwd is an
+      // OS-pinned directory capability, so relative checks and rename keep
+      // targeting that physical directory even if its lexical path changes.
+      cwd: targetParent,
+      input: payload,
+      encoding: "utf8",
+      maxBuffer: 1_048_576,
+      windowsHide: true,
+    },
+  );
+  if (child.error) return { ok: false, code: "publisher_failed" };
+  try {
+    const result = JSON.parse(child.stdout.trim());
+    if (child.status === 0 && result?.ok === true) return result;
+    return { ok: false, code: result?.code ?? "publisher_failed" };
+  } catch {
+    return { ok: false, code: "publisher_failed" };
+  }
+}
+
+async function runPinnedCheckoutPublisher() {
+  try {
+    const payload = JSON.parse(await Bun.stdin.text());
+    assertPinnedPublisherPayload(payload);
+    const actualParentRealPath = await realpath(".");
+    if (!isSamePath(actualParentRealPath, payload.expected_parent_real_path)) {
+      throw pinnedPublisherError("parent_identity_changed");
+    }
+
+    const stagingEntry = await lstatOrNull(payload.staging_name);
+    if (!stagingEntry?.isDirectory() || stagingEntry.isSymbolicLink()) {
+      throw pinnedPublisherError("staging_identity_changed");
+    }
+    const stagingRealPath = await realpath(payload.staging_name);
+    if (!isSamePath(dirname(stagingRealPath), actualParentRealPath)) {
+      throw pinnedPublisherError("staging_identity_changed");
+    }
+    if (await lstatOrNull(payload.target_name)) {
+      throw pinnedPublisherError("target_exists");
+    }
+    if (await caseInsensitiveCollision({
+      targetParent: ".",
+      targetName: payload.target_name,
+      readDirectory: readdir,
+    })) {
+      throw pinnedPublisherError("target_case_collision");
+    }
+
+    await rename(payload.staging_name, payload.target_name);
+    process.stdout.write(`${JSON.stringify({ ok: true })}\n`);
+  } catch (error) {
+    process.stdout.write(`${JSON.stringify({
+      ok: false,
+      code: error?.pinnedPublisherCode ?? "publisher_failed",
+    })}\n`);
+    process.exitCode = 1;
+  }
+}
+
+function assertPinnedPublisherPayload(payload) {
+  if (
+    typeof payload?.expected_parent_real_path !== "string"
+    || payload.expected_parent_real_path === ""
+    || !isPortableChildName(payload.staging_name)
+    || !isPortableChildName(payload.target_name)
+  ) {
+    throw pinnedPublisherError("invalid_request");
+  }
+}
+
+function isPortableChildName(value) {
+  return typeof value === "string"
+    && value !== ""
+    && value !== "."
+    && value !== ".."
+    && basename(value) === value;
+}
+
+function pinnedPublisherError(code) {
+  const error = new Error(code);
+  error.pinnedPublisherCode = code;
+  return error;
 }
 
 function materializationRequestIssue({
@@ -285,4 +400,11 @@ async function lstatOrNull(path) {
     if (error?.code === "ENOENT") return null;
     throw error;
   }
+}
+
+if (import.meta.main) {
+  if (process.argv[2] !== PINNED_CHECKOUT_PUBLISH_MODE) {
+    throw new Error("git-materialization-lib.mjs je interní Core knihovna");
+  }
+  await runPinnedCheckoutPublisher();
 }

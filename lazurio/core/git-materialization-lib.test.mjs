@@ -1,6 +1,6 @@
 import { afterAll, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { lstat, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readdir, rename, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -90,6 +90,75 @@ test("case-folded sibling blocks publication on case-sensitive hosts too", async
     code: "materialization_target_case_collision",
   });
   expect(await readdir(join(fixture.root, "organizations"))).toEqual(["exampleorganization_gen3"]);
+});
+
+test("pinned publication rejects a parent replaced after staged verification", async () => {
+  const fixture = await fixtureRemote();
+  const organizations = join(fixture.root, "organizations");
+  const displaced = join(fixture.root, "organizations-displaced");
+  const outside = join(fixture.root, "outside");
+  const target = join(organizations, "ExampleOrganization_GEN3");
+  await mkdir(outside);
+
+  const result = await materializeGitCheckout({
+    mode: "organization-root",
+    boundaryRoot: fixture.root,
+    targetPath: target,
+    remote: fixture.remote,
+    branch: "main",
+    run: runGit,
+    remoteEnvironment: safeGitRemoteEnv(),
+    deps: {
+      beforePublish: async () => {
+        await rename(organizations, displaced);
+        await symlink(outside, organizations, process.platform === "win32" ? "junction" : "dir");
+      },
+    },
+  });
+
+  expect(result).toMatchObject({
+    ok: false,
+    code: "materialization_path_forbidden",
+  });
+  expect(existsSync(join(outside, "ExampleOrganization_GEN3"))).toBe(false);
+  expect(existsSync(join(displaced, "ExampleOrganization_GEN3"))).toBe(false);
+});
+
+test("staging verification rejects a parent replaced immediately before mkdtemp", async () => {
+  const fixture = await fixtureRemote();
+  const organizations = join(fixture.root, "organizations");
+  const displaced = join(fixture.root, "organizations-displaced-before-staging");
+  const outside = join(fixture.root, "outside-before-staging");
+  const target = join(organizations, "ExampleOrganization_GEN3");
+  await mkdir(outside);
+  let tempDirectoryCalls = 0;
+
+  const result = await materializeGitCheckout({
+    mode: "organization-root",
+    boundaryRoot: fixture.root,
+    targetPath: target,
+    remote: fixture.remote,
+    branch: "main",
+    run: runGit,
+    remoteEnvironment: safeGitRemoteEnv(),
+    deps: {
+      makeTempDirectory: async (prefix) => {
+        tempDirectoryCalls += 1;
+        if (tempDirectoryCalls === 2) {
+          await rename(organizations, displaced);
+          await symlink(outside, organizations, process.platform === "win32" ? "junction" : "dir");
+        }
+        return mkdtemp(prefix);
+      },
+    },
+  });
+
+  expect(result).toMatchObject({
+    ok: false,
+    code: "materialization_path_forbidden",
+  });
+  expect(await readdir(outside)).toEqual([]);
+  expect(existsSync(join(displaced, "ExampleOrganization_GEN3"))).toBe(false);
 });
 
 async function fixtureRemote() {
