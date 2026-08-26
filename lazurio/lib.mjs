@@ -99,6 +99,7 @@ export async function validateLazurioContext(value) {
 
 export async function buildLazurioDoctorReport({
   root = process.cwd(),
+  checkToolUpdates = false,
   buildLaunchpadReport = buildLaunchpadDoctorReport,
   runBoundDoctor = runBoundChildDoctor,
 } = {}) {
@@ -113,6 +114,7 @@ export async function buildLazurioDoctorReport({
     const report = await buildLaunchpadReport({
       companiesRoot: detected.absolutePath,
       launchpadRoot: join(detected.absolutePath, "launchpad"),
+      checkToolUpdates,
     });
     return {
       root_kind: detected.kind,

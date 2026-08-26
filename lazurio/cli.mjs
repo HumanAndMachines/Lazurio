@@ -162,7 +162,10 @@ async function run(argv) {
 
   if (options.command === "doctor") {
     try {
-      const result = await buildLazurioDoctorReport({ root: options.root });
+      const result = await buildLazurioDoctorReport({
+        root: options.root,
+        checkToolUpdates: options.toolUpdates,
+      });
       console.log(options.json
         ? JSON.stringify(result.report, null, 2)
         : renderHumanDoctorReport(result.report));
@@ -253,6 +256,7 @@ function parseArgs(argv) {
     status: false,
     update: false,
     check: false,
+    toolUpdates: false,
     githubOrganizationId: null,
     apply: false,
     applyPresent: false,
@@ -302,6 +306,10 @@ function parseArgs(argv) {
     }
     if (arg === "--check") {
       parsed.check = true;
+      continue;
+    }
+    if (arg === "--tool-updates") {
+      parsed.toolUpdates = true;
       continue;
     }
     if (arg === "--apply" || arg === "--no-app") {
@@ -575,6 +583,9 @@ function parseArgs(argv) {
   if (parsed.check && parsed.command !== "organization") {
     throw new Error("--check lze použít pouze s `lazurio organization activate`.");
   }
+  if (parsed.toolUpdates && parsed.command !== "doctor") {
+    throw new Error("--tool-updates lze použít pouze s `lazurio doctor`.");
+  }
   if (parsed.githubOrganizationId !== null && parsed.command !== "organization") {
     throw new Error("--github-id lze použít pouze s `lazurio organization activate`.");
   }
@@ -634,7 +645,7 @@ function usage() {
     "  lazurio install [--language cs|en] [--json] [--root <cesta>]",
     "  lazurio organization activate --check --github-id <id> [--json]",
     "  lazurio context [--organization <slug>] [--json] [--root <cesta>]",
-    "  lazurio doctor [--json] [--root <cesta>]",
+    "  lazurio doctor [--tool-updates] [--json] [--root <cesta>]",
     "  lazurio update [--json] [--root <cesta>]",
     "  lazurio repair module-location --org <slug> --module <slug> [--json] [--root <cesta>]",
     "  lazurio repair module-location --org <slug> --module <slug> --apply --expect <fingerprint> [--json] [--root <cesta>]",

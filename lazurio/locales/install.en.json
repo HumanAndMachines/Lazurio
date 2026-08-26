@@ -42,7 +42,7 @@
   "reason.root_probe_failed": "the Lazurio Root could not be read safely",
   "reason.probe_failed": "the inspection ended with an unexpected error",
   "action.platform_unsupported": "Use macOS, Linux, or Windows.",
-  "action.bun_runtime_mismatch": "With an Agent, install exactly Bun {required} using the standard procedure for the detected installation method, then run the check again.",
+  "action.bun_runtime_mismatch": "The Agent must first ask the Principal for approval; then install exactly Bun {required} using the standard procedure for the detected installation method and run the check again.",
   "action.bun_runtime_unavailable": "Install exactly Bun {required} and run Lazurio CLI again.",
   "action.git_missing": "Install Git using your platform's standard procedure.",
   "action.git_unusable": "Repair Git and run the inspection again.",

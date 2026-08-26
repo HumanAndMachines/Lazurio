@@ -54,6 +54,10 @@ import {
   classifyBunRuntime,
   readRequiredBunVersion,
 } from "../../lazurio/core/toolchain-lib.mjs";
+import {
+  DEVELOPER_TOOL_UPDATE_POLICY,
+  inspectDeveloperToolUpdates,
+} from "../../lazurio/core/tool-update-lib.mjs";
 
 const supportedPlatforms = {
   darwin: "macOS",
@@ -331,6 +335,11 @@ export async function buildLaunchpadDoctorReport(options = {}) {
     // Organizace, ale drží stejné strukturální Git mount gates (řádný Git checkout).
     templateMounts: appsResponse.template_mounts,
   });
+  const toolUpdateChecks = options.checkToolUpdates
+    ? await developerToolUpdateChecks({
+        inspectUpdates: options.inspectDeveloperToolUpdates ?? inspectDeveloperToolUpdates,
+      })
+    : [];
   // Personalspace doctor check (CAC-0048) — METADATA ONLY (počty, validita,
   // gbrain mount stav). Nikdy nečte obsah osobních modulů ani gbrain zápisů a
   // osobní aplikace se NIKDY nemíchají do org appsResponse. Selhání personalspace
@@ -367,7 +376,12 @@ export async function buildLaunchpadDoctorReport(options = {}) {
   });
   return buildDoctorReportFromAppsResponse(appsResponse, {
     environmentChecks,
-    extraChecks: [...worktreeChecks, ...personalspaceChecks, ...agentSkillsChecks],
+    extraChecks: [
+      ...toolUpdateChecks,
+      ...worktreeChecks,
+      ...personalspaceChecks,
+      ...agentSkillsChecks,
+    ],
     childLane,
     schema,
   });
@@ -1899,13 +1913,104 @@ export function bunRuntimeCheck({
     title: "Bun runtime",
     message: current
       ? `Bun ${runtime.current_version} odpovídá Lazurio toolchain autoritě.`
-      : `Bun ${runtime.current_version} neodpovídá požadované verzi ${runtime.required_version}; upgrade proveď s Agentem standardním postupem pro tuto instalaci.`,
+      : `Bun ${runtime.current_version} neodpovídá požadované verzi ${runtime.required_version}; Agent musí nejdřív požádat Principála o souhlas s aktualizací.`,
     paths: ["package.json"],
     links: [],
     details: [
       `command: ${bunExecutable} --version`,
       `current: ${runtime.current_version}`,
       `required: ${runtime.required_version}`,
+    ],
+  };
+}
+
+export async function developerToolUpdateChecks({
+  inspectUpdates = inspectDeveloperToolUpdates,
+} = {}) {
+  let observations;
+  try {
+    observations = await inspectUpdates();
+  } catch {
+    return [toolCurrencyUnknownCheck({
+      id: "developer_tools",
+      title: "Vývojové nástroje",
+      currentVersion: null,
+      reason: "tool_update_probe_failed",
+    })];
+  }
+  return observations
+    .filter((observation) => observation.required || observation.status !== "not_installed")
+    .map(toolUpdateDoctorCheck);
+}
+
+function toolUpdateDoctorCheck(observation) {
+  const id = `platform.${observation.id}_update`;
+  const details = [
+    `installed: ${observation.current_version ?? "unresolved"}`,
+    `latest: ${observation.latest_version ?? "unresolved"}`,
+    `update_policy: ${DEVELOPER_TOOL_UPDATE_POLICY}`,
+  ];
+  const links = observation.release_url
+    ? [{ label: "Oficiální release", kind: "external", url: observation.release_url }]
+    : [];
+  if (observation.status === "update_available") {
+    return {
+      id,
+      status: "warn",
+      severity: "recommended",
+      title: `${observation.title} · aktualizace`,
+      message: `${observation.title} ${observation.current_version} má novější oficiální verzi ${observation.latest_version}. Agent ji nesmí instalovat automaticky; musí nejdřív požádat Principála o souhlas.`,
+      paths: [],
+      links,
+      details: [...details, "next_action: ask_principal_before_update"],
+    };
+  }
+  if (observation.status === "current") {
+    return {
+      id,
+      status: "ok",
+      severity: "recommended",
+      title: `${observation.title} · aktualizace`,
+      message: `${observation.title} ${observation.current_version} nemá podle oficiálního release zdroje novější stabilní verzi.`,
+      paths: [],
+      links,
+      details,
+    };
+  }
+  if (observation.status === "not_installed") {
+    return {
+      id,
+      status: "warn",
+      severity: "recommended",
+      title: `${observation.title} · dostupnost`,
+      message: `${observation.title} nebyl nalezen. Pokud je pro troubleshooting potřeba, Agent musí nejdřív požádat Principála o souhlas s instalací.`,
+      paths: [],
+      links: [],
+      details: [...details, "next_action: ask_principal_before_install"],
+    };
+  }
+  return toolCurrencyUnknownCheck({
+    id: observation.id,
+    title: observation.title,
+    currentVersion: observation.current_version,
+    reason: observation.reason,
+  });
+}
+
+function toolCurrencyUnknownCheck({ id, title, currentVersion, reason }) {
+  return {
+    id: `platform.${id}_update`,
+    status: "warn",
+    severity: "recommended",
+    title: `${title} · aktualizace`,
+    message: `Aktuálnost ${title} se nepodařilo spolehlivě ověřit; Doctor nebude stav hádat ani nic měnit.`,
+    paths: [],
+    links: [],
+    details: [
+      `installed: ${currentVersion ?? "unresolved"}`,
+      "latest: unresolved",
+      `reason: ${reason}`,
+      `update_policy: ${DEVELOPER_TOOL_UPDATE_POLICY}`,
     ],
   };
 }

@@ -42,7 +42,7 @@
   "reason.root_probe_failed": "Lazurio Root se nepodařilo bezpečně přečíst",
   "reason.probe_failed": "kontrola skončila neočekávanou chybou",
   "action.platform_unsupported": "Použij macOS, Linux nebo Windows.",
-  "action.bun_runtime_mismatch": "S Agentem nainstaluj přesně Bun {required} standardním postupem pro zjištěný způsob instalace; potom spusť kontrolu znovu.",
+  "action.bun_runtime_mismatch": "Agent musí nejdřív požádat Principála o souhlas; potom nainstalujte přesně Bun {required} standardním postupem pro zjištěný způsob instalace a spusťte kontrolu znovu.",
   "action.bun_runtime_unavailable": "Nainstaluj přesně Bun {required} a spusť Lazurio CLI znovu.",
   "action.git_missing": "Nainstaluj Git standardním postupem pro svou platformu.",
   "action.git_unusable": "Oprav instalaci Gitu a spusť kontrolu znovu.",
