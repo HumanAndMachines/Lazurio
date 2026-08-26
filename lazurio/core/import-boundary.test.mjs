@@ -81,6 +81,7 @@ test("canonical path containment has one physical Core owner", async () => {
 
   expect(consumers).toEqual([
     "launchpad/src/git-inventory-lib.mjs",
+    "launchpad/src/git-lib.mjs",
     "launchpad/src/git-materialization-lib.mjs",
     "launchpad/src/mission-control-plan-lib.mjs",
     "launchpad/src/module-location-repair-lib.mjs",

@@ -196,10 +196,11 @@ test("clone failure leaves no partial final target or staging directory", async 
     companiesRoot: root,
     repo,
     deps: {
-      run: fixtureRemoteRunner({
-        declaredRemote,
-        actualRemote: remote,
-        failClone: true,
+      runPinnedChild: async () => ({
+        ok: false,
+        code: "git_command_failed",
+        stdout: "",
+        stderr: "simulated clone failure",
       }),
     },
   });

@@ -9,14 +9,19 @@ import {
   inspectCanonicalPathBoundary,
   isSamePath,
 } from "../../lazurio/core/path-boundary-lib.mjs";
-import { runGit, safeGitRemoteEnv } from "./git-lib.mjs";
+import { runGit, runGitInPinnedTemporaryChild, safeGitRemoteEnv } from "./git-lib.mjs";
 
 // Launchpad owns only the nested manifest policy. Core owns the one physical
 // clone/verify/atomic-publication mechanism shared with Organization install.
 export async function materializeRepoCheckout({ companiesRoot, repo, deps = {} } = {}) {
   if (!companiesRoot) throw new Error("materializeRepoCheckout requires companiesRoot");
-  const { run: injectedRun, ...materializationDeps } = deps;
+  const {
+    run: injectedRun,
+    runPinnedChild: injectedPinnedChild,
+    ...materializationDeps
+  } = deps;
   const run = injectedRun ?? runGit;
+  const runPinnedChild = injectedPinnedChild ?? runGitInPinnedTemporaryChild;
   const validation = await validateNestedRepoTarget({ companiesRoot, repo, run });
   if (!validation.ok) return validation;
 
@@ -27,6 +32,7 @@ export async function materializeRepoCheckout({ companiesRoot, repo, deps = {} }
     branch: validation.branch,
     remote: validation.remote,
     run,
+    runPinnedChild,
     remoteEnvironment: safeGitRemoteEnv(),
     deps: materializationDeps,
   });

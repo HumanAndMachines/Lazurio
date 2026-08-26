@@ -1,4 +1,3 @@
-import { spawnSync } from "node:child_process";
 import { lstat, mkdir, mkdtemp, readdir, realpath, rename, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
@@ -17,6 +16,8 @@ export const GIT_CLONE_TIMEOUT_MS = 10 * 60_000;
 export const GIT_FETCH_TIMEOUT_MS = 20_000;
 export const GIT_LOCAL_TIMEOUT_MS = 10_000;
 const PINNED_CHECKOUT_PUBLISH_MODE = "--lazurio-pinned-checkout-publisher";
+const PINNED_CHECKOUT_DISCARD_MODE = "--lazurio-pinned-checkout-discarder";
+const PINNED_CHECKOUT_OPERATION_TIMEOUT_MS = 60_000;
 
 // One checkout publication primitive is shared by Organization install and
 // Launchpad Sync. Callers own policy (manifest/root identity); Core owns the
@@ -28,6 +29,7 @@ export async function materializeGitCheckout({
   remote,
   branch,
   run,
+  runPinnedChild,
   remoteEnvironment = {},
   verifyStaged = async () => ({ ok: true }),
   deps = {},
@@ -39,6 +41,7 @@ export async function materializeGitCheckout({
     remote,
     branch,
     run,
+    runPinnedChild,
     verifyStaged,
   });
   if (requestIssue) return invalidTarget(requestIssue);
@@ -61,6 +64,8 @@ export async function materializeGitCheckout({
     readDirectory = readdir,
     pathEntry = lstatOrNull,
     publish = publishCheckoutWithPinnedParent,
+    discard = discardCheckoutWithPinnedParent,
+    beforeStage = async () => {},
     beforePublish = async () => {},
   } = deps;
   if (await pathEntry(absoluteTargetPath)) return targetExists();
@@ -69,6 +74,8 @@ export async function materializeGitCheckout({
   const targetName = basename(absoluteTargetPath);
   let transportCwd = null;
   let stagingPath = null;
+  let stagingName = null;
+  let expectedParentRealPath = null;
   let materialized = false;
   try {
     transportCwd = await makeTempDirectory(join(tmpdir(), "lazurio-git-transport-"));
@@ -92,24 +99,16 @@ export async function materializeGitCheckout({
     if (!parentBoundary.ok) {
       return boundaryFailure("Rodič cílového checkoutu vede mimo kanonickou hranici vlastníka.");
     }
-    const expectedParentRealPath = parentBoundary.targetRealPath;
+    expectedParentRealPath = parentBoundary.targetRealPath;
     if (await caseInsensitiveCollision({ targetParent, targetName, readDirectory })) {
       return targetCollision();
     }
 
-    // A sibling staging directory guarantees one same-volume atomic rename.
-    // The final path is never observable before Git and caller-owned identity
-    // verification both succeed.
-    stagingPath = await makeTempDirectory(join(targetParent, `.${targetName}.lazurio-materialize-`));
-    const stagingBoundary = await inspectCanonicalPathBoundary({
-      rootPath: targetParent,
-      rootRealPath: expectedParentRealPath,
-      targetPath: stagingPath,
-    });
-    if (!stagingBoundary.ok) {
-      return boundaryFailure("Dočasný checkout nevznikl ve fyzicky ověřeném rodiči targetu.");
-    }
-    const clone = await run(
+    // The temporary sibling and the mutating Git clone are one OS-pinned cwd
+    // operation. A concurrent lexical parent swap cannot redirect either
+    // write outside the validated physical owner boundary.
+    await beforeStage();
+    const clone = await runPinnedChild(
       [
         "clone",
         "--branch",
@@ -119,16 +118,34 @@ export async function materializeGitCheckout({
         "origin",
         "--",
         remote,
-        stagingPath,
       ],
       {
-        cwd: transportCwd,
+        cwd: targetParent,
+        expectedCwdRealPath: expectedParentRealPath,
+        childPrefix: `.${targetName}.lazurio-materialize-`,
         timeoutMs: GIT_CLONE_TIMEOUT_MS,
         env: remoteEnvironment,
       },
     );
-    if (!clone.ok) return cloneFailure();
-
+    if (!clone.ok) {
+      if (["parent_identity_changed", "child_identity_changed"].includes(clone.code)) {
+        return boundaryFailure("Rodič cílového checkoutu se před klonováním fyzicky změnil.");
+      }
+      return cloneFailure();
+    }
+    stagingName = clone.child_name;
+    if (!isPortableChildName(stagingName)) return cloneFailure();
+    // Verification follows the captured physical parent identity, not the
+    // lexical targetParent name that another process could replace.
+    stagingPath = join(expectedParentRealPath, stagingName);
+    const stagingBoundary = await inspectCanonicalPathBoundary({
+      rootPath: expectedParentRealPath,
+      rootRealPath: expectedParentRealPath,
+      targetPath: stagingPath,
+    });
+    if (!stagingBoundary.ok) {
+      return boundaryFailure("Dočasný checkout nevznikl ve fyzicky ověřeném rodiči targetu.");
+    }
     const gitVerification = await verifyClonedCheckout({
       path: stagingPath,
       branch,
@@ -151,11 +168,16 @@ export async function materializeGitCheckout({
       );
     }
 
-    await beforePublish();
+    await beforePublish({
+      targetParent,
+      expectedParentRealPath,
+      stagingName,
+      targetName,
+    });
     const publication = await publish({
       targetParent,
       expectedParentRealPath,
-      stagingName: basename(stagingPath),
+      stagingName,
       targetName,
     });
     if (!publication?.ok) {
@@ -184,44 +206,94 @@ export async function materializeGitCheckout({
     if (transportCwd) {
       await remove(transportCwd, { recursive: true, force: true }).catch(() => {});
     }
-    if (stagingPath && !materialized) {
-      await remove(stagingPath, { recursive: true, force: true }).catch(() => {});
+    if (stagingName && expectedParentRealPath && !materialized) {
+      try {
+        await discard({
+          targetParent,
+          expectedParentRealPath,
+          stagingName,
+        });
+      } catch {}
     }
   }
 }
 
-function publishCheckoutWithPinnedParent({
+async function discardCheckoutWithPinnedParent({
+  targetParent,
+  expectedParentRealPath,
+  stagingName,
+}) {
+  return runPinnedCheckoutOperation({
+    mode: PINNED_CHECKOUT_DISCARD_MODE,
+    targetParent,
+    payload: {
+      expected_parent_real_path: expectedParentRealPath,
+      staging_name: stagingName,
+    },
+    failureCode: "discarder_failed",
+  });
+}
+
+async function publishCheckoutWithPinnedParent({
   targetParent,
   expectedParentRealPath,
   stagingName,
   targetName,
 }) {
-  const payload = JSON.stringify({
-    expected_parent_real_path: expectedParentRealPath,
-    staging_name: stagingName,
-    target_name: targetName,
-  });
-  const child = spawnSync(
-    process.execPath,
-    [fileURLToPath(import.meta.url), PINNED_CHECKOUT_PUBLISH_MODE],
-    {
-      // The child is born inside the validated parent. Its cwd is an
-      // OS-pinned directory capability, so relative checks and rename keep
-      // targeting that physical directory even if its lexical path changes.
-      cwd: targetParent,
-      input: payload,
-      encoding: "utf8",
-      maxBuffer: 1_048_576,
-      windowsHide: true,
+  return runPinnedCheckoutOperation({
+    mode: PINNED_CHECKOUT_PUBLISH_MODE,
+    targetParent,
+    payload: {
+      expected_parent_real_path: expectedParentRealPath,
+      staging_name: stagingName,
+      target_name: targetName,
     },
-  );
-  if (child.error) return { ok: false, code: "publisher_failed" };
+    failureCode: "publisher_failed",
+  });
+}
+
+async function runPinnedCheckoutOperation({ mode, targetParent, payload, failureCode }) {
+  let child;
+  let timeout;
   try {
-    const result = JSON.parse(child.stdout.trim());
-    if (child.status === 0 && result?.ok === true) return result;
-    return { ok: false, code: result?.code ?? "publisher_failed" };
+    child = Bun.spawn(
+      [process.execPath, fileURLToPath(import.meta.url), mode],
+      {
+        // The child is born inside the validated parent. Its cwd is an
+        // OS-pinned directory capability, so relative checks and mutation
+        // keep targeting that physical directory even if its name changes.
+        cwd: targetParent,
+        stdin: "pipe",
+        stdout: "pipe",
+        stderr: "pipe",
+        windowsHide: true,
+      },
+    );
+    child.stdin.write(JSON.stringify(payload));
+    child.stdin.end();
+    const completed = Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    const expired = new Promise((resolveTimeout) => {
+      timeout = setTimeout(() => {
+        try {
+          child.kill("SIGKILL");
+        } catch {}
+        resolveTimeout(null);
+      }, PINNED_CHECKOUT_OPERATION_TIMEOUT_MS);
+    });
+    const completion = await Promise.race([completed, expired]);
+    if (!completion) return { ok: false, code: failureCode };
+    const [stdout, , exitCode] = completion;
+    const result = JSON.parse(stdout.trim());
+    if (exitCode === 0 && result?.ok === true) return result;
+    return { ok: false, code: result?.code ?? failureCode };
   } catch {
-    return { ok: false, code: "publisher_failed" };
+    return { ok: false, code: failureCode };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -264,6 +336,43 @@ async function runPinnedCheckoutPublisher() {
   }
 }
 
+async function runPinnedCheckoutDiscarder() {
+  try {
+    const payload = JSON.parse(await Bun.stdin.text());
+    if (
+      typeof payload?.expected_parent_real_path !== "string"
+      || payload.expected_parent_real_path === ""
+      || !isPortableChildName(payload.staging_name)
+    ) {
+      throw pinnedPublisherError("invalid_request");
+    }
+    const actualParentRealPath = await realpath(".");
+    if (!isSamePath(actualParentRealPath, payload.expected_parent_real_path)) {
+      throw pinnedPublisherError("parent_identity_changed");
+    }
+    const stagingEntry = await lstatOrNull(payload.staging_name);
+    if (!stagingEntry) {
+      process.stdout.write(`${JSON.stringify({ ok: true })}\n`);
+      return;
+    }
+    if (!stagingEntry.isDirectory() || stagingEntry.isSymbolicLink()) {
+      throw pinnedPublisherError("staging_identity_changed");
+    }
+    const stagingRealPath = await realpath(payload.staging_name);
+    if (!isSamePath(dirname(stagingRealPath), actualParentRealPath)) {
+      throw pinnedPublisherError("staging_identity_changed");
+    }
+    await rm(payload.staging_name, { recursive: true, force: true });
+    process.stdout.write(`${JSON.stringify({ ok: true })}\n`);
+  } catch (error) {
+    process.stdout.write(`${JSON.stringify({
+      ok: false,
+      code: error?.pinnedPublisherCode ?? "discarder_failed",
+    })}\n`);
+    process.exitCode = 1;
+  }
+}
+
 function assertPinnedPublisherPayload(payload) {
   if (
     typeof payload?.expected_parent_real_path !== "string"
@@ -296,6 +405,7 @@ function materializationRequestIssue({
   remote,
   branch,
   run,
+  runPinnedChild,
   verifyStaged,
 }) {
   if (!GIT_CHECKOUT_MATERIALIZATION_MODES.includes(mode)) return "Checkout materialization mode není podporovaný.";
@@ -303,6 +413,9 @@ function materializationRequestIssue({
     return "Checkout materialization vyžaduje úplné root, target, remote a branch souřadnice.";
   }
   if (typeof run !== "function") return "Checkout materialization vyžaduje explicitní Git runner.";
+  if (typeof runPinnedChild !== "function") {
+    return "Checkout materialization vyžaduje OS-pinned Git runner pro mutující clone.";
+  }
   if (typeof verifyStaged !== "function") return "Checkout materialization vyžaduje ověřovací callback.";
   return null;
 }
@@ -403,8 +516,11 @@ async function lstatOrNull(path) {
 }
 
 if (import.meta.main) {
-  if (process.argv[2] !== PINNED_CHECKOUT_PUBLISH_MODE) {
+  if (process.argv[2] === PINNED_CHECKOUT_PUBLISH_MODE) {
+    await runPinnedCheckoutPublisher();
+  } else if (process.argv[2] === PINNED_CHECKOUT_DISCARD_MODE) {
+    await runPinnedCheckoutDiscarder();
+  } else {
     throw new Error("git-materialization-lib.mjs je interní Core knihovna");
   }
-  await runPinnedCheckoutPublisher();
 }

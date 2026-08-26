@@ -1,11 +1,16 @@
 import { existsSync } from "fs";
-import { win32 } from "path";
+import { lstat, mkdtemp, realpath, rm } from "fs/promises";
+import { basename, dirname, win32 } from "path";
+import { fileURLToPath } from "url";
+
+import { isSamePath } from "../../lazurio/core/path-boundary-lib.mjs";
 
 export const GIT_LOCAL_TIMEOUT_MS = 10_000;
 export const GIT_FETCH_TIMEOUT_MS = 20_000;
 export const GIT_COMMAND_CONCURRENCY = 4;
 export const GIT_FETCH_CONCURRENCY = 4;
 const GIT_TIMEOUT_DRAIN_GRACE_MS = 2_000;
+const PINNED_TEMPORARY_CHILD_MODE = "--lazurio-pinned-temporary-git-child";
 
 let cachedGitExecutablePromise = null;
 let cachedGitExecutableSync;
@@ -76,6 +81,41 @@ export async function runGit(args, { cwd, timeoutMs = GIT_LOCAL_TIMEOUT_MS, env 
     timeoutMs,
     env,
   });
+}
+
+// Creates the temporary child and runs Git inside one OS-pinned parent cwd.
+// The caller supplies Git arguments without the final child path; this
+// capability appends the verified relative child name. A lexical parent swap
+// therefore cannot redirect either staging creation or the mutating command.
+export async function runGitInPinnedTemporaryChild(args, {
+  cwd,
+  expectedCwdRealPath,
+  childPrefix,
+  timeoutMs = GIT_LOCAL_TIMEOUT_MS,
+  env = {},
+} = {}) {
+  const payload = JSON.stringify({
+    args,
+    expected_cwd_real_path: expectedCwdRealPath,
+    child_prefix: childPrefix,
+    timeout_ms: timeoutMs,
+    env,
+  });
+  const child = await runCommand(
+    [process.execPath, fileURLToPath(import.meta.url), PINNED_TEMPORARY_CHILD_MODE],
+    {
+      cwd,
+      input: payload,
+      timeoutMs: timeoutMs + GIT_TIMEOUT_DRAIN_GRACE_MS + 5_000,
+    },
+  );
+  try {
+    const result = JSON.parse(child.stdout.trim());
+    if (child.ok && result?.ok === true) return result;
+    return pinnedGitChildFailure(result?.code ?? "pinned_runner_failed", result);
+  } catch {
+    return pinnedGitChildFailure("pinned_runner_failed");
+  }
 }
 
 export function safeGitRemoteEnv(platform = process.platform) {
@@ -154,7 +194,7 @@ export async function mapWithConcurrency(items, limit, fn) {
   return output;
 }
 
-async function runCommand(command, { cwd, timeoutMs, env = {} } = {}) {
+async function runCommand(command, { cwd, timeoutMs, env = {}, input } = {}) {
   let child;
   let timedOut = false;
   let timeout;
@@ -162,13 +202,17 @@ async function runCommand(command, { cwd, timeoutMs, env = {} } = {}) {
   try {
     child = Bun.spawn(command, {
       cwd,
-      stdin: "ignore",
+      stdin: input === undefined ? "ignore" : "pipe",
       stdout: "pipe",
       stderr: "pipe",
       env: commandEnvironment(processEnv(), env),
       detached: globalThis.process.platform !== "win32",
       windowsHide: true,
     });
+    if (input !== undefined) {
+      child.stdin.write(input);
+      child.stdin.end();
+    }
     const stdout = collectStreamText(child.stdout);
     const stderr = collectStreamText(child.stderr);
     const completed = Promise.all([stdout.promise, stderr.promise, child.exited]);
@@ -393,4 +437,107 @@ function collectStreamText(stream) {
       } catch {}
     },
   };
+}
+
+async function runPinnedTemporaryGitChild() {
+  let childName = null;
+  try {
+    const payload = JSON.parse(await Bun.stdin.text());
+    assertPinnedTemporaryGitChildPayload(payload);
+    const actualParentRealPath = await realpath(".");
+    if (!isSamePath(actualParentRealPath, payload.expected_cwd_real_path)) {
+      throw pinnedGitChildError("parent_identity_changed");
+    }
+
+    const childPath = await mkdtemp(payload.child_prefix);
+    childName = basename(childPath);
+    const entry = await lstat(childName);
+    const childRealPath = await realpath(childName);
+    if (
+      !entry.isDirectory()
+      || entry.isSymbolicLink()
+      || !isSamePath(dirname(childRealPath), actualParentRealPath)
+    ) {
+      throw pinnedGitChildError("child_identity_changed");
+    }
+
+    const result = await runGit([...payload.args, childName], {
+      cwd: ".",
+      timeoutMs: payload.timeout_ms,
+      env: payload.env,
+    });
+    if (!result.ok) {
+      await rm(childName, { recursive: true, force: true }).catch(() => {});
+      childName = null;
+      writePinnedGitChildResult({ ...result, ok: false, code: "git_command_failed" });
+      return;
+    }
+    writePinnedGitChildResult({ ...result, child_name: childName });
+  } catch (error) {
+    if (childName) await rm(childName, { recursive: true, force: true }).catch(() => {});
+    writePinnedGitChildResult({
+      ok: false,
+      code: error?.pinnedGitChildCode ?? "pinned_runner_failed",
+      exitCode: null,
+      timedOut: false,
+      stdout: "",
+      stderr: "",
+    });
+  }
+}
+
+function assertPinnedTemporaryGitChildPayload(payload) {
+  if (
+    !Array.isArray(payload?.args)
+    || payload.args.length === 0
+    || payload.args.some((value) => typeof value !== "string")
+    || typeof payload.expected_cwd_real_path !== "string"
+    || payload.expected_cwd_real_path === ""
+    || !isPortableTemporaryChildPrefix(payload.child_prefix)
+    || !Number.isFinite(payload.timeout_ms)
+    || payload.timeout_ms <= 0
+    || !payload.env
+    || typeof payload.env !== "object"
+    || Array.isArray(payload.env)
+  ) {
+    throw pinnedGitChildError("invalid_request");
+  }
+}
+
+function isPortableTemporaryChildPrefix(value) {
+  return typeof value === "string"
+    && value.startsWith(".")
+    && value.endsWith("-")
+    && basename(value) === value
+    && !value.includes("/")
+    && !value.includes("\\");
+}
+
+function pinnedGitChildError(code) {
+  const error = new Error(code);
+  error.pinnedGitChildCode = code;
+  return error;
+}
+
+function pinnedGitChildFailure(code, result = {}) {
+  return {
+    ok: false,
+    code,
+    exitCode: result.exitCode ?? null,
+    timedOut: result.timedOut ?? false,
+    stdout: result.stdout ?? "",
+    stderr: result.stderr ?? "",
+  };
+}
+
+function writePinnedGitChildResult(result) {
+  process.stdout.write(`${JSON.stringify(result)}\n`);
+  if (!result.ok) process.exitCode = 1;
+}
+
+if (import.meta.main) {
+  if (process.argv[2] !== PINNED_TEMPORARY_CHILD_MODE) {
+    throw new Error("git-lib.mjs je interní Git knihovna");
+  }
+  await runPinnedTemporaryGitChild();
 }
