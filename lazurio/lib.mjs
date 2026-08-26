@@ -23,9 +23,8 @@ import {
 } from "../launchpad/src/doctor-children-lib.mjs";
 import {
   DOCTOR_EXIT_CODES,
-  buildSummary,
+  buildAggregateReport,
   exitCodeForSummaryStatus,
-  flattenChecks,
   readDoctorDeclaration,
 } from "../launchpad/src/doctor-surface-lib.mjs";
 import { validateAgainstSchema } from "../launchpad/src/json-schema-mini.mjs";
@@ -176,29 +175,18 @@ export async function buildLazurioDoctorReport({
     throw error;
   }
   const report = checkToolUpdates
-    ? withAdditionalDoctorChecks(
-        child.report,
-        await developerToolUpdateChecks({
+    ? buildAggregateReport({
+        scope: child.report.scope,
+        checks: await developerToolUpdateChecks({
           inspectUpdates: inspectDeveloperToolUpdates,
         }),
-      )
+        children: [child],
+      })
     : child.report;
   return {
     root_kind: detected.kind,
     report,
     exit_code: exitCodeForSummaryStatus(report.summary.status),
-  };
-}
-
-function withAdditionalDoctorChecks(report, additionalChecks) {
-  const checks = [...report.checks, ...additionalChecks];
-  const nestedChecks = (report.children ?? []).flatMap(
-    (child) => (child.report ? flattenChecks(child.report) : []),
-  );
-  return {
-    ...report,
-    summary: buildSummary([...checks, ...nestedChecks]),
-    checks,
   };
 }
 

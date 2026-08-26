@@ -4,8 +4,14 @@ import { chmod, mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { buildLaunchpadDoctorReport } from "../launchpad/src/diagnostics-lib.mjs";
-import { buildAggregateReport } from "../launchpad/src/doctor-surface-lib.mjs";
+import {
+  buildLaunchpadDoctorReport,
+  loadRootDoctorSchema,
+} from "../launchpad/src/diagnostics-lib.mjs";
+import {
+  buildAggregateReport,
+  validateDoctorReport,
+} from "../launchpad/src/doctor-surface-lib.mjs";
 import { platformTestTimeout } from "../launchpad/src/test-platform-setup.mjs";
 import {
   buildLazurioContext,
@@ -986,7 +992,11 @@ test("Lazurio doctor přidá explicitní tool-update lane i k Personalspace repo
     root,
     checkToolUpdates: true,
     runBoundDoctor: () => ({
+      declaration_path: "personal.gen3.json",
+      mount_path: ".",
+      invoked_command: [process.execPath, "run", "fixture-doctor.mjs"],
       outcome: "report",
+      failures: [],
       report: childReport,
       exit_code: 0,
     }),
@@ -1006,12 +1016,82 @@ test("Lazurio doctor přidá explicitní tool-update lane i k Personalspace repo
 
   expect(inspectionCount).toBe(1);
   expect(lazurio.report.checks.map((check) => check.id)).toEqual([
-    "fixture.ready",
     "platform.github_cli_update",
   ]);
+  expect(lazurio.report.children).toHaveLength(1);
+  expect(lazurio.report.children[0].report).toEqual(childReport);
   expect(lazurio.report.summary.status).toBe("warn");
   expect(lazurio.report.summary.warn).toBe(1);
+  expect(lazurio.report.summary.ok).toBe(1);
   expect(lazurio.exit_code).toBe(0);
+  expect(validateDoctorReport(lazurio.report, {
+    schema: loadRootDoctorSchema(),
+    label: "lazurio",
+  })).toEqual([]);
+});
+
+test("Lazurio doctor zachová legacy Personalspace report uvnitř validního v3 wrapperu", async () => {
+  const root = await tempRoot("lazurio-personal-legacy-tool-updates-");
+  await writeJson(join(root, "personal.gen3.json"), personalConfig("owner-login", {
+    doctor: {
+      schema_version: "humanandmachines.doctor.declaration.v1",
+      command: [process.execPath, "run", "fixture-doctor.mjs"],
+      scope_type: "personalspace",
+      timeout_ms: 5_000,
+    },
+  }));
+  const legacyReport = {
+    schema_version: "companiesascode.doctor.report.v1",
+    scope: { type: "personalspace", path: ".", name: "Legacy Personalspace" },
+    summary: { status: "ok", ok: 0, warn: 0, fail: 0, skip: 1 },
+    checks: [{
+      id: "fixture.legacy",
+      status: "skip",
+      severity: "required",
+      title: "Legacy fixture",
+      message: "Skipped by legacy Doctor.",
+      paths: [],
+      links: [],
+      details: [],
+    }],
+  };
+
+  const lazurio = await buildLazurioDoctorReport({
+    root,
+    checkToolUpdates: true,
+    runBoundDoctor: () => ({
+      declaration_path: "personal.gen3.json",
+      mount_path: ".",
+      invoked_command: [process.execPath, "run", "fixture-doctor.mjs"],
+      outcome: "report",
+      failures: [],
+      report: legacyReport,
+      exit_code: 0,
+    }),
+    inspectDeveloperToolUpdates: async () => [{
+      id: "github_cli",
+      title: "GitHub CLI",
+      required: true,
+      status: "current",
+      current_version: "2.98.0",
+      latest_version: "2.98.0",
+      release_url: "https://github.com/cli/cli/releases/tag/v2.98.0",
+    }],
+  });
+
+  expect(lazurio.report.schema_version).toBe("companiesascode.doctor.report.v3");
+  expect(lazurio.report.children[0].report).toEqual(legacyReport);
+  expect(lazurio.report.checks.map((check) => check.id)).toEqual([
+    "platform.github_cli_update",
+    "doctor.child.0.legacy_schema",
+  ]);
+  expect(lazurio.report.summary.status).toBe("incomplete");
+  expect(lazurio.report.summary.blocked).toBe(1);
+  expect(lazurio.exit_code).toBe(2);
+  expect(validateDoctorReport(lazurio.report, {
+    schema: loadRootDoctorSchema(),
+    label: "lazurio",
+  })).toEqual([]);
 });
 
 test("CLI context --json funguje z čisté Agent session bez privátního obsahu", async () => {
