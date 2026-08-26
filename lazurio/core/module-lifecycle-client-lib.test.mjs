@@ -21,6 +21,7 @@ const identity = Object.freeze({
   instance_id: "11111111-1111-4111-8111-111111111111",
   pid: 1234,
   started_at: "2026-08-26T08:00:00.000Z",
+  request_trust_profile: "local",
 });
 const locator = Object.freeze({
   schema_version: "lazurio.server.locator.v1",
@@ -160,6 +161,27 @@ describe("Core-owned Module lifecycle client", () => {
     expect(mismatch.reason).toBe("server_identity_mismatch");
     expect(validateAgainstSchema(mismatch, reportSchema, "report")).toEqual([]);
     expect(mismatch.server.state).toBe("unavailable");
+  });
+
+  test("hosted lifecycle stays on its authenticated surface instead of forging browser trust", async () => {
+    const requests = [];
+    const report = await runModuleLifecycle({
+      action: "open",
+      selector: "Spectoda/invoices",
+      readLocator: async () => locator,
+      fetchFn: fixtureFetch({
+        requests,
+        identityOverride: { ...identity, request_trust_profile: "hosted" },
+      }),
+    });
+
+    expect(report.status).toBe("action_required");
+    expect(report.reason).toBe("hosted_lifecycle_requires_authenticated_surface");
+    expect(report.server.request_trust_profile).toBe("hosted");
+    expect(validateAgainstSchema(report, reportSchema, "report")).toEqual([]);
+    expect(requests.map((request) => request.pathname)).toEqual([
+      "/api/lazurio/server-identity",
+    ]);
   });
 
   test("selectors and package paths reject traversal or ambient URL shapes", () => {

@@ -33,13 +33,14 @@
     },
     "server": {
       "type": "object",
-      "required": ["state", "origin", "instance_id", "root_id", "install_generation"],
+      "required": ["state", "origin", "instance_id", "root_id", "install_generation", "request_trust_profile"],
       "properties": {
         "state": { "enum": ["ready", "unavailable"] },
         "origin": { "type": ["string", "null"] },
         "instance_id": { "type": ["string", "null"] },
         "root_id": { "type": ["string", "null"] },
-        "install_generation": { "type": ["string", "null"] }
+        "install_generation": { "type": ["string", "null"] },
+        "request_trust_profile": { "enum": ["local", "hosted", "unknown"] }
       },
       "additionalProperties": false
     },

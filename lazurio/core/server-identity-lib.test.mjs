@@ -32,6 +32,7 @@ test("server identity separates root, install generation, and process instance",
     instanceId,
     pid: 42,
     startedAt: "2026-08-18T19:00:00.000Z",
+    requestTrustProfile: "local",
   });
 
   expect(identity).toEqual({
@@ -43,10 +44,20 @@ test("server identity separates root, install generation, and process instance",
     instance_id: instanceId,
     pid: 42,
     started_at: "2026-08-18T19:00:00.000Z",
+    request_trust_profile: "local",
   });
   expect(isValidServerIdentity(identity)).toBe(true);
   expect(Object.isFrozen(identity)).toBe(true);
   expect(() => buildServerIdentity({ ...identity, rootId: "not-a-hash" })).toThrow();
+  expect(() => buildServerIdentity({
+    rootId,
+    controlRootId: rootId,
+    installGeneration,
+    instanceId,
+    pid: 42,
+    startedAt: "2026-08-18T19:00:00.000Z",
+    requestTrustProfile: "foreign",
+  })).toThrow();
 });
 
 test("Windows root identity normalizes equivalent casing, separators and namespace prefixes", () => {

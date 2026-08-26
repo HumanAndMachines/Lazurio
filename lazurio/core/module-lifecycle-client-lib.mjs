@@ -56,6 +56,14 @@ export async function runModuleLifecycle({
 
   const server = await verifyLocatedServer({ locator, fetchFn });
   if (!server.ok) return actionRequired(base, server.reason, server.message);
+  if (action !== "status" && server.identity.request_trust_profile !== "local") {
+    return actionRequired(
+      base,
+      "hosted_lifecycle_requires_authenticated_surface",
+      "Hosted Workspace lifecycle vyžaduje přihlášený Dashboard/Launchpad surface; lokální CLI nepřenáší browser session ani gateway identitu.",
+      { server: serverSummary(locator, server.identity) },
+    );
+  }
 
   const inventory = await requestJson(fetchFn, new URL("/api/apps", locator.origin), {
     method: "GET",
@@ -347,18 +355,28 @@ function serverSummary(locator, identity) {
     instance_id: identity.instance_id,
     root_id: identity.root_id,
     install_generation: identity.install_generation,
+    request_trust_profile: identity.request_trust_profile ?? "unknown",
   };
 }
 
 function actionRequired(base, reason, message, extra = {}) {
   const action = reason === "server_unavailable"
     ? "Spusť nainstalovaný Lazurio Launchpad a zopakuj stejný příkaz."
-    : "Spusť diagnostiku Lazurio a zopakuj stejný příkaz.";
+    : reason === "hosted_lifecycle_requires_authenticated_surface"
+      ? "Proveď lifecycle akci v přihlášeném Dashboardu nebo hosted Launchpadu."
+      : "Spusť diagnostiku Lazurio a zopakuj stejný příkaz.";
   return {
     ...base,
     status: "action_required",
     reason,
-    server: extra.server ?? { state: "unavailable", origin: null, instance_id: null, root_id: null, install_generation: null },
+    server: extra.server ?? {
+      state: "unavailable",
+      origin: null,
+      instance_id: null,
+      root_id: null,
+      install_generation: null,
+      request_trust_profile: "unknown",
+    },
     apps: extra.apps ?? [],
     app: null,
     http_status: 0,

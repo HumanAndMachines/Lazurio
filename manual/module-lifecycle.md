@@ -14,6 +14,14 @@ nekompatibilní nebo identity-mismatched Server skončí fail-closed. CLI
 nezkouší jiný port a nepřijímá `--root`, protože by tím vznikla druhá volba
 Server autority.
 
+Server identity zároveň publikuje svůj `request_trust_profile`. CLI smí
+mutovat pouze lokální per-user Server. Hosted Workspace vyžaduje browserovou
+OAuth session a gateway identitu, proto jeho `start`/`open`/`stop` z CLI
+skončí před POST stabilním stavem
+`hosted_lifecycle_requires_authenticated_surface`; akci provede přihlášený
+Dashboard nebo hosted Launchpad. CLI nikdy nekopíruje cookies ani nepředstírá
+gateway request. Read-only `status` zůstává dostupný pro oba profily.
+
 ## Stav všech explicitně deklarovaných Module Apps
 
 ```sh

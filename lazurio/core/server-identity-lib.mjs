@@ -198,6 +198,7 @@ export function buildServerIdentity({
   instanceId,
   pid,
   startedAt,
+  requestTrustProfile = "local",
 }) {
   const identity = {
     schema_version: LAZURIO_SERVER_IDENTITY_SCHEMA,
@@ -208,6 +209,7 @@ export function buildServerIdentity({
     instance_id: instanceId,
     pid,
     started_at: startedAt,
+    request_trust_profile: requestTrustProfile,
   };
   if (!isValidServerIdentity(identity)) {
     throw new TypeError("Cannot build an invalid Lazurio Server identity.");
@@ -260,6 +262,11 @@ function isPreControlRootServerIdentity(identity) {
     && identity.pid > 0
     && typeof identity.started_at === "string"
     && Number.isFinite(Date.parse(identity.started_at))
+    && (
+      identity.request_trust_profile === undefined
+      || identity.request_trust_profile === "local"
+      || identity.request_trust_profile === "hosted"
+    )
   );
 }
 
@@ -279,6 +286,11 @@ export function isValidServerIdentity(identity) {
     && identity.pid > 0
     && typeof identity.started_at === "string"
     && Number.isFinite(Date.parse(identity.started_at))
+    && (
+      identity.request_trust_profile === undefined
+      || identity.request_trust_profile === "local"
+      || identity.request_trust_profile === "hosted"
+    )
   );
 }
 

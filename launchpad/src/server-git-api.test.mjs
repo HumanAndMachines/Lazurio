@@ -928,6 +928,9 @@ test("hosted Launchpad rejects forged gateway headers without a TLS-authenticate
     "x-lazurio-github-login": "annavesela",
   };
 
+  const directServerIdentity = await getJson(port, "/api/lazurio/server-identity");
+  expect(directServerIdentity.request_trust_profile).toBe("hosted");
+
   const forgedGatewayHeaders = await fetch(`http://127.0.0.1:${port}/api/sync`, {
     method: "POST",
     headers: gatewayHeaders,
