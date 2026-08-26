@@ -86,6 +86,7 @@ export function classifyLazurioRepoUpdate({
 export async function runLazurioUpdate({
   rootPath,
   runtimeRoot = resolve(import.meta.dirname, "..", ".."),
+  organizations = null,
   deps = {},
 } = {}) {
   if (!rootPath) throw new Error("runLazurioUpdate requires rootPath");
@@ -136,7 +137,7 @@ export async function runLazurioUpdate({
     });
     results.push(rootResult);
 
-    const initialInventory = await safeInventory(buildInventory, absoluteRoot, warnings);
+    const initialInventory = await safeInventory(buildInventory, absoluteRoot, warnings, organizations);
     if (initialInventory.failed) {
       results.push(blockedResult(inventoryDescriptor(absoluteRoot), "inventory_unavailable", {
         detail: "Lazurio nedokázalo bezpečně určit Organizace a jejich spravované repozitáře; žádný další checkout nezměnilo.",
@@ -180,7 +181,7 @@ export async function runLazurioUpdate({
       // The Organization root owns the manifest. Re-read after its update so
       // a newly declared Workspace Modul can be materialized and every mounted
       // Organization-level repository can be updated during this same run.
-      const refreshed = await safeInventory(buildInventory, absoluteRoot, warnings);
+      const refreshed = await safeInventory(buildInventory, absoluteRoot, warnings, organizations);
       if (refreshed.failed) {
         results.push(blockedResult(inventoryDescriptor(absoluteRoot, organizationRoot.organization), "inventory_unavailable", {
           detail: `Po aktualizaci Organization rootu ${organizationRoot.organization} nešel znovu načíst manifest; jeho repozitáře zůstaly nedotčené.`,
@@ -1261,9 +1262,9 @@ function declaredDependencyCount(packageJson) {
     .reduce((count, value) => count + Object.keys(value).length, 0);
 }
 
-async function safeInventory(buildInventory, rootPath, warnings) {
+async function safeInventory(buildInventory, rootPath, warnings, organizations = null) {
   try {
-    const inventory = await buildInventory({ companiesRoot: rootPath });
+    const inventory = await buildInventory({ companiesRoot: rootPath, organizations });
     // Validní snapshot může obsahovat izolované Organization/slot issues.
     // Ty nejsou globální inventory failure: zdravé sourozence smíme dál
     // aktualizovat a problém vracíme jako vlastní blocked result.

@@ -48,6 +48,11 @@ import {
   renderHumanOrganizationActivation,
 } from "./organization-activation-lib.mjs";
 import {
+  installOrganization,
+  organizationInstallExitCode,
+  renderHumanOrganizationInstall,
+} from "./organization-install-lib.mjs";
+import {
   buildLazurioSearchStatus,
   searchLazurioExact,
   searchLazurioQmd,
@@ -91,13 +96,24 @@ async function run(argv) {
   }
 
   if (options.command === "organization") {
-    const report = checkOrganizationActivation({
-      githubOrganizationId: options.githubOrganizationId,
+    if (options.organizationAction === "activate") {
+      const report = checkOrganizationActivation({
+        githubOrganizationId: options.githubOrganizationId,
+      });
+      console.log(options.json
+        ? JSON.stringify(report, null, 2)
+        : renderHumanOrganizationActivation(report));
+      return organizationActivationExitCode(report);
+    }
+    options.root ??= defaultOperatedRoot();
+    const report = await installOrganization({
+      rootPath: options.root,
+      githubLogin: options.organizationLogin,
     });
     console.log(options.json
       ? JSON.stringify(report, null, 2)
-      : renderHumanOrganizationActivation(report));
-    return organizationActivationExitCode(report);
+      : renderHumanOrganizationInstall(report));
+    return organizationInstallExitCode(report);
   }
 
   if (options.command === "module" && options.moduleAction !== "setup") {
@@ -538,19 +554,31 @@ function parseArgs(argv) {
     if (parsed.searchFlags.size > 0) {
       throw new Error(`${[...parsed.searchFlags].join(", ")} lze použít pouze s příkazem search.`);
     }
-    if (parsed.operands.length !== 1 || parsed.operands[0] !== "activate") {
-      throw new Error("organization vyžaduje jedinou akci `activate`.");
+    const action = parsed.operands[0];
+    if (!new Set(["activate", "install"]).has(action)) {
+      throw new Error("organization vyžaduje `activate` nebo `install`.");
     }
-    if (!parsed.check) {
-      throw new Error("Remote writer zatím není veřejný; použij `lazurio organization activate --check --github-id <id>`.");
+    parsed.organizationAction = action;
+    if (action === "activate") {
+      if (parsed.operands.length !== 1) throw new Error("organization activate nepřijímá GitHub login.");
+      if (!parsed.check) {
+        throw new Error("Remote writer zatím není veřejný; použij `lazurio organization activate --check --github-id <id>`.");
+      }
+      if (parsed.githubOrganizationId === null) {
+        throw new Error("organization activate --check vyžaduje --github-id <immutable GitHub Organization ID>.");
+      }
+      if (parsed.rootExplicit) {
+        throw new Error("organization activate --check pracuje s GitHubem a nepřijímá --root.");
+      }
+    } else {
+      if (parsed.operands.length !== 2) {
+        throw new Error("organization install vyžaduje <github-login>.");
+      }
+      if (parsed.check || parsed.githubOrganizationId !== null) {
+        throw new Error("organization install přijímá GitHub login, ne --check nebo --github-id.");
+      }
+      parsed.organizationLogin = parsed.operands[1];
     }
-    if (parsed.githubOrganizationId === null) {
-      throw new Error("organization activate --check vyžaduje --github-id <immutable GitHub Organization ID>.");
-    }
-    if (parsed.rootExplicit) {
-      throw new Error("organization activate --check pracuje s GitHubem a nepřijímá --root.");
-    }
-    parsed.organizationAction = "activate";
   } else if (parsed.searchFlags.size > 0) {
     throw new Error(`${[...parsed.searchFlags].join(", ")} lze použít pouze s příkazem search.`);
   }
@@ -644,6 +672,7 @@ function usage() {
     "  lazurio --version [--json]",
     "  lazurio install [--language cs|en] [--json]",
     "  lazurio organization activate --check --github-id <id> [--json]",
+    "  lazurio organization install <github-login> [--json] [--root <cesta>]",
     "  lazurio context [--organization <slug>] [--json] [--root <cesta>]",
     "  lazurio doctor [--tool-updates] [--json] [--root <cesta>]",
     "  lazurio update [--json] [--root <cesta>]",

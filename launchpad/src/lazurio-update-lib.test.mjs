@@ -55,6 +55,36 @@ test("pure classifier has only current, updated and blocked outcomes", () => {
   }
 });
 
+test("internal Organization scope is forwarded to the same inventory reconciler", async () => {
+  const fixture = await repositoryFixture("organization-scope");
+  const organizations = [{
+    slug: "example-organization",
+    display_name: "Example Organization",
+    path: "organizations/ExampleOrganization_GEN3",
+    status: "active",
+    default_branch: "main",
+    repository: "git@github.com:ExampleOrganization/ExampleOrganization_GEN3.git",
+  }];
+  const observedScopes = [];
+
+  const report = await runLazurioUpdate({
+    rootPath: fixture.working,
+    runtimeRoot: join(fixture.sandbox, "runtime"),
+    organizations,
+    deps: {
+      runId: "organization-scope",
+      acquireLock: async () => ({ release: async () => {} }),
+      buildInventory: async ({ organizations: scoped }) => {
+        observedScopes.push(scoped);
+        return { repos: [], warnings: [] };
+      },
+    },
+  });
+
+  expect(report.state).toBe("current");
+  expect(observedScopes).toEqual([organizations]);
+});
+
 test("clean behind checkout fast-forwards and rerun is idempotent", async () => {
   const fixture = await repositoryFixture("behind");
   await addRemoteCommit(fixture, "remote.txt", "remote\n");
@@ -701,6 +731,61 @@ test("hierarchy is sequential and excludes root-space db and productionspace", a
   expect(calls).toEqual(["lazurio::root", "alpha::root", "alpha::mission-control", "alpha::module", "beta::root"]);
   expect(JSON.stringify(report)).not.toContain("alpha::db");
   expect(JSON.stringify(report)).not.toContain("alpha::production");
+});
+
+test("scoped convergence materializes accessible Modules and reports inaccessible siblings", async () => {
+  const root = await mkdtemp(join(tmpdir(), "lazurio-update-partial-access-"));
+  cleanup.push(root);
+  const organization = repo("Example::root", "organization_root", "Example", "root");
+  organization.absolute_path = join(root, "organizations", "Example_GEN3");
+  const available = repo("Example::available", "module", "Example", "available", "workspace");
+  available.absolute_path = join(organization.absolute_path, "workspace", "available");
+  available.slot_path = "workspace/available";
+  const privateModule = repo("Example::private", "module", "Example", "private", "workspace");
+  privateModule.absolute_path = join(organization.absolute_path, "workspace", "private");
+  privateModule.slot_path = "workspace/private";
+  const calls = [];
+
+  const report = await runLazurioUpdate({
+    rootPath: root,
+    runtimeRoot: join(root, "..", "runtime"),
+    organizations: [{ slug: "Example", path: "organizations/Example_GEN3" }],
+    deps: {
+      runId: "partial-access",
+      acquireLock: async () => ({ release: async () => {} }),
+      buildInventory: async () => ({ repos: [organization, available, privateModule], warnings: [] }),
+      updateRepo: async (item) => ({
+        ...identity(item),
+        state: "current",
+        reason: "already_current",
+        message: "current",
+      }),
+      materializeRepo: async ({ repo: item }) => {
+        calls.push(item.key);
+        return item.key === available.key
+          ? { ok: true, outcome: "materialized", head: "a".repeat(40) }
+          : {
+              ok: false,
+              outcome: "missing_access",
+              code: "materialization_source_unavailable",
+              message: "private",
+            };
+      },
+      discoverApps: async () => ({ apps: [], failures: [] }),
+    },
+  });
+
+  expect(calls).toEqual([available.key, privateModule.key]);
+  expect(report.state).toBe("blocked");
+  expect(report.results.find((result) => result.repo_key === available.key)).toMatchObject({
+    state: "updated",
+    reason: "module_materialized",
+  });
+  expect(report.results.find((result) => result.repo_key === privateModule.key)).toMatchObject({
+    state: "blocked",
+    reason: "materialization_source_unavailable",
+    next_action: { kind: "github_access" },
+  });
 });
 
 test("updated Module refreshes each manifest-declared app package once through the Server lifecycle seam", async () => {

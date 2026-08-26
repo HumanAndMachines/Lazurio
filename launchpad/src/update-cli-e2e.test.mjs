@@ -39,6 +39,27 @@ test("isolated CLI runtime carries schema assets into post-update app discovery"
   expect(report.results.some((result) => result.reason === "dependency_inventory_unavailable")).toBe(false);
 });
 
+test("isolated runtime accepts one internal Organization scope without a second updater", async () => {
+  const fixture = await createLazurioUpdateFixture({ withModule: true });
+  cleanup.push(fixture.sandbox);
+  const report = await runIsolatedLazurioUpdate({
+    rootPath: fixture.working,
+    organizations: [{
+      slug: "FixtureOrg",
+      display_name: "Fixture Organization",
+      path: "organizations/FixtureOrg_GEN3",
+      status: "active",
+      default_branch: "main",
+    }],
+  });
+
+  expect(report).toMatchObject({ state: "current", ok: true });
+  expect(report.results.some((result) => result.repo_key === "FixtureOrg::root")).toBe(true);
+  expect(report.results.every((result) => (
+    result.organization === null || result.organization === "FixtureOrg"
+  ))).toBe(true);
+});
+
 test("bun update entrypoint and lazurio update expose the same report contract", async () => {
   const fixture = await createLazurioUpdateFixture();
   cleanup.push(fixture.sandbox);

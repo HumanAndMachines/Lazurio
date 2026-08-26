@@ -27,12 +27,15 @@
     "lazurio/module-setup-report.v1.schema.json",
     "lazurio/organization-activation-lib.mjs",
     "lazurio/organization-activation-report.v0.schema.json",
+    "lazurio/organization-install-lib.mjs",
+    "lazurio/organization-install-report.v0.schema.json",
     "lazurio/search-lib.mjs",
     "lazurio/search-scopes.v1.json",
     "launchpad/schemas/",
     "launchpad/src/",
     "manual/module-setup.md",
-    "manual/module-lifecycle.md"
+    "manual/module-lifecycle.md",
+    "manual/organization-install.md"
   ],
   "source_excludes": {
     "basenames": [
@@ -60,12 +63,15 @@
     "lazurio/module-setup-report.v1.schema.json",
     "lazurio/organization-activation-lib.mjs",
     "lazurio/organization-activation-report.v0.schema.json",
+    "lazurio/organization-install-lib.mjs",
+    "lazurio/organization-install-report.v0.schema.json",
     "lazurio/search-scopes.v1.json",
     "launchpad/schemas/doctor-report.schema.json",
     "launchpad/schemas/personal.gen3.schema.json",
     "launchpad/src/lazurio-update-runtime.mjs",
     "manual/module-setup.md",
-    "manual/module-lifecycle.md"
+    "manual/module-lifecycle.md",
+    "manual/organization-install.md"
   ],
   "forbidden_path_segments": [
     ".git",

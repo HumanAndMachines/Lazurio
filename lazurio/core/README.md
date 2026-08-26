@@ -44,6 +44,13 @@ Lazurio Core. Vybere přesnou důvěryhodnou executable, pustí ji bez shellu se
 sanitizovaným prostředím a vrací strukturované transport/HTTP/response chyby.
 Organization activation i cross-Organization audity tento seam konzumují;
 nespouštějí ambientní `gh` ani si nevedou vlastní provider lane.
+`git-materialization-lib.mjs` vlastní jediný fyzický clone → verify → atomic
+publication mechanismus pro Organization root i nested repo. Povrchy mu
+předávají explicitní režim, Git runner a vlastní identity policy; Launchpad
+adapter proto validuje manifestovaný nested slot, ale nedrží druhou clone
+implementaci. Staging je vždy sibling targetu na stejném filesystemu a
+case-folded kolize, cizí cesta nebo neúspěšná owner verifikace failnou před
+publikací.
 `ui_exposure` zůstává pouze prezentační policy; nevytváří identitu resource ani
 access autoritu. Další doménové vrstvy se přesunují samostatnými PR až nad
 zeleným parity baseline; fyzický přesun souboru sám nesmí měnit schéma ani
