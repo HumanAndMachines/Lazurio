@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lazurio.ai/schemas/module-lifecycle-report.v1.json",
+  "title": "Lazurio Module lifecycle report",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "status",
+    "reason",
+    "action",
+    "selector",
+    "server",
+    "apps",
+    "app",
+    "http_status",
+    "result",
+    "issues"
+  ],
+  "properties": {
+    "schema_version": { "const": "lazurio.module_lifecycle.report.v1" },
+    "status": { "enum": ["current", "completed", "action_required", "failed"] },
+    "reason": { "type": "string", "minLength": 1 },
+    "action": { "enum": ["status", "start", "open", "stop"] },
+    "selector": {
+      "type": ["object", "null"],
+      "required": ["organization", "module", "app_package"],
+      "properties": {
+        "organization": { "type": "string", "minLength": 1 },
+        "module": { "type": "string", "minLength": 1 },
+        "app_package": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "server": {
+      "type": "object",
+      "required": ["state", "origin", "instance_id", "root_id", "install_generation"],
+      "properties": {
+        "state": { "enum": ["ready", "unavailable"] },
+        "origin": { "type": ["string", "null"] },
+        "instance_id": { "type": ["string", "null"] },
+        "root_id": { "type": ["string", "null"] },
+        "install_generation": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "apps": { "type": "array", "items": { "$ref": "#/$defs/app" } },
+    "app": { "anyOf": [{ "$ref": "#/$defs/app" }, { "type": "null" }] },
+    "http_status": { "type": "integer", "minimum": 0, "maximum": 599 },
+    "result": { "type": ["object", "null"] },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "message", "action"],
+        "properties": {
+          "code": { "type": "string", "minLength": 1 },
+          "message": { "type": "string", "minLength": 1 },
+          "action": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "$defs": {
+    "app": {
+      "type": "object",
+      "required": [
+        "app_id",
+        "title",
+        "organization",
+        "module",
+        "app_package",
+        "default",
+        "host",
+        "port",
+        "url",
+        "dependencies",
+        "runtime",
+        "shared_port_owners"
+      ],
+      "properties": {
+        "app_id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "organization": { "type": "string", "minLength": 1 },
+        "module": { "type": "string", "minLength": 1 },
+        "app_package": { "type": "string", "minLength": 1 },
+        "default": { "type": "boolean" },
+        "host": { "type": ["string", "null"] },
+        "port": { "type": ["integer", "null"], "minimum": 1, "maximum": 65535 },
+        "url": { "type": ["string", "null"] },
+        "dependencies": {
+          "type": "object",
+          "required": ["state", "can_start", "message"],
+          "properties": {
+            "state": { "type": "string", "minLength": 1 },
+            "can_start": { "type": "boolean" },
+            "message": { "type": ["string", "null"] }
+          },
+          "additionalProperties": false
+        },
+        "runtime": {
+          "type": "object",
+          "required": ["status", "owner", "controllable", "pid", "url"],
+          "properties": {
+            "status": { "type": "string", "minLength": 1 },
+            "owner": { "type": ["string", "null"] },
+            "controllable": { "type": "boolean" },
+            "pid": { "type": ["integer", "null"], "minimum": 1 },
+            "url": { "type": ["string", "null"] }
+          },
+          "additionalProperties": false
+        },
+        "shared_port_owners": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["app_id", "organization", "host", "port"],
+            "properties": {
+              "app_id": { "type": ["string", "null"] },
+              "organization": { "type": ["string", "null"] },
+              "host": { "type": ["string", "null"] },
+              "port": { "type": ["integer", "null"], "minimum": 1, "maximum": 65535 }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

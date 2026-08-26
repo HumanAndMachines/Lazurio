@@ -18,6 +18,11 @@ import {
 } from "./cli-install-lib.mjs";
 import { buildLazurioCliProvenance } from "./core/cli-provenance-lib.mjs";
 import {
+  moduleLifecycleExitCode,
+  renderHumanModuleLifecycle,
+  runModuleLifecycle,
+} from "./core/module-lifecycle-client-lib.mjs";
+import {
   inspectLazurioInstallation,
   installExitCode,
 } from "./core/install-core-lib.mjs";
@@ -91,6 +96,17 @@ async function run(argv) {
       ? JSON.stringify(report, null, 2)
       : renderHumanOrganizationActivation(report));
     return organizationActivationExitCode(report);
+  }
+
+  if (options.command === "module" && options.moduleAction !== "setup") {
+    const report = await runModuleLifecycle({
+      action: options.moduleAction,
+      selector: options.moduleSelector,
+      appPackage: options.appPackage,
+      confirmReplaceAppId: options.confirmReplaceAppId,
+    });
+    console.log(options.json ? JSON.stringify(report, null, 2) : renderHumanModuleLifecycle(report));
+    return moduleLifecycleExitCode(report);
   }
 
   options.root ??= defaultOperatedRoot({
@@ -229,6 +245,7 @@ function parseArgs(argv) {
     surface: "internal",
     tags: [],
     adoptPort: null,
+    confirmReplaceAppId: null,
     moduleFlags: new Set(),
     operands: [],
     searchFlags: new Set(),
@@ -270,11 +287,14 @@ function parseArgs(argv) {
       parsed.moduleFlags.add(arg);
       continue;
     }
-    if (["--app-package", "--app-id", "--title", "--dev-script", "--health-path", "--surface", "--tags", "--adopt-port"].includes(arg)) {
+    if (["--app-package", "--app-id", "--title", "--dev-script", "--health-path", "--surface", "--tags", "--adopt-port", "--confirm-replace"].includes(arg)) {
       const value = argv[index + 1];
       if (!value || value.startsWith("-")) throw new Error(`${arg} vyžaduje hodnotu.`);
-      assignModuleOption(parsed, arg, value);
-      parsed.moduleFlags.add(arg);
+      if (arg === "--confirm-replace") parsed.confirmReplaceAppId = value;
+      else {
+        assignModuleOption(parsed, arg, value);
+        parsed.moduleFlags.add(arg);
+      }
       index += 1;
       continue;
     }
@@ -283,6 +303,10 @@ function parseArgs(argv) {
     if (inlineModuleFlag) {
       assignModuleOption(parsed, inlineModuleFlag, requiredInlineValue(arg, inlineModuleFlag));
       parsed.moduleFlags.add(inlineModuleFlag);
+      continue;
+    }
+    if (arg.startsWith("--confirm-replace=")) {
+      parsed.confirmReplaceAppId = requiredInlineValue(arg, "--confirm-replace");
       continue;
     }
     if (arg === "--github-id") {
@@ -390,16 +414,42 @@ function parseArgs(argv) {
     if (parsed.searchFlags.size > 0) {
       throw new Error(`${[...parsed.searchFlags].join(", ")} lze použít pouze s příkazem search.`);
     }
-    if (parsed.operands[0] !== "setup" || (!parsed.help && parsed.operands.length !== 2) || (parsed.help && parsed.operands.length > 2)) {
-      throw new Error("module vyžaduje `setup <module-root>`.");
+    const action = parsed.operands[0];
+    if (!new Set(["setup", "status", "start", "open", "stop"]).has(action)) {
+      throw new Error("module vyžaduje `setup`, `status`, `start`, `open` nebo `stop`.");
     }
-    parsed.moduleAction = "setup";
-    parsed.moduleRoot = parsed.operands[1] ? resolve(parsed.operands[1]) : null;
-    if (parsed.surface && !new Set(["internal", "manual", "admin", "public-preview"]).has(parsed.surface)) {
-      throw new Error("--surface musí být internal, manual, admin nebo public-preview.");
-    }
-    if (parsed.adoptPort !== null && !Number.isInteger(parsed.adoptPort)) {
-      throw new Error("--adopt-port musí být celé číslo.");
+    parsed.moduleAction = action;
+    if (action === "setup") {
+      if ((!parsed.help && parsed.operands.length !== 2) || (parsed.help && parsed.operands.length > 2)) {
+        throw new Error("module setup vyžaduje <module-root>.");
+      }
+      parsed.moduleRoot = parsed.operands[1] ? resolve(parsed.operands[1]) : null;
+      if (parsed.surface && !new Set(["internal", "manual", "admin", "public-preview"]).has(parsed.surface)) {
+        throw new Error("--surface musí být internal, manual, admin nebo public-preview.");
+      }
+      if (parsed.adoptPort !== null && !Number.isInteger(parsed.adoptPort)) {
+        throw new Error("--adopt-port musí být celé číslo.");
+      }
+      if (parsed.confirmReplaceAppId !== null) {
+        throw new Error("--confirm-replace lze použít pouze s module start nebo module open.");
+      }
+    } else {
+      const selectorOptional = action === "status";
+      const expectedLengths = selectorOptional ? new Set([1, 2]) : new Set([2]);
+      if (!expectedLengths.has(parsed.operands.length)) {
+        throw new Error(`module ${action} ${selectorOptional ? "přijímá volitelný" : "vyžaduje"} selector Organization/Module.`);
+      }
+      parsed.moduleSelector = parsed.operands[1] ?? null;
+      const setupOnlyFlags = [...parsed.moduleFlags].filter((flag) => flag !== "--app-package");
+      if (setupOnlyFlags.length > 0) {
+        throw new Error(`${setupOnlyFlags.join(", ")} lze použít pouze s \`lazurio module setup\`.`);
+      }
+      if (parsed.rootExplicit) {
+        throw new Error(`module ${action} ovládá přesnou instanci z per-user Server locatoru a nepřijímá --root.`);
+      }
+      if (parsed.confirmReplaceAppId !== null && !["start", "open"].includes(action)) {
+        throw new Error("--confirm-replace lze použít pouze s module start nebo module open.");
+      }
     }
   } else if (parsed.command === "launchpad") {
     if (parsed.searchFlags.size > 0) {
@@ -444,7 +494,10 @@ function parseArgs(argv) {
     throw new Error(`${[...parsed.searchFlags].join(", ")} lze použít pouze s příkazem search.`);
   }
   if (parsed.moduleFlags.size > 0 && parsed.command !== "module") {
-    throw new Error(`${[...parsed.moduleFlags].join(", ")} lze použít pouze s \`lazurio module setup\`.`);
+    throw new Error(`${[...parsed.moduleFlags].join(", ")} lze použít pouze s příkazem \`lazurio module\`.`);
+  }
+  if (parsed.confirmReplaceAppId !== null && parsed.command !== "module") {
+    throw new Error("--confirm-replace lze použít pouze s module start nebo module open.");
   }
   if (parsed.organization !== null && parsed.command !== "context") {
     throw new Error("--organization lze použít pouze s příkazem context.");
@@ -514,6 +567,9 @@ function usage() {
     "    nový no-app Module: --no-app",
     "    nová App: --app-package <package.json> --app-id <id> --title <název> --dev-script <script>",
     "    volitelně: --health-path </health> --surface <typ> --tags <a,b> --adopt-port <N>",
+    "  lazurio module status [Organization/Module] [--app-package <package.json>] [--json]",
+    "  lazurio module start|open <Organization/Module> [--app-package <package.json>] [--confirm-replace <app-id>] [--json]",
+    "  lazurio module stop <Organization/Module> [--app-package <package.json>] [--json]",
     "  lazurio cli install [--json] [--root <cesta>]",
     "  lazurio cli status [--json] [--root <cesta>]",
     "  lazurio launchpad install [--root <cesta>]",
