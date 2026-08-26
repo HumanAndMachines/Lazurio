@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lazurio.ai/schemas/organization-install-report.v0.schema.json",
+  "title": "Lazurio Organization install report v0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "state", "ok", "root", "organization", "target", "convergence"],
+  "properties": {
+    "schema_version": { "const": "lazurio.organization.install.v0" },
+    "state": { "enum": ["current", "updated", "blocked"] },
+    "ok": { "type": "boolean" },
+    "root": { "type": "string", "minLength": 1 },
+    "organization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["locator", "id", "login", "repository_id", "repository"],
+      "properties": {
+        "locator": { "type": "string", "minLength": 1 },
+        "id": { "type": ["string", "null"] },
+        "login": { "type": ["string", "null"] },
+        "repository_id": { "type": ["string", "null"] },
+        "repository": { "type": ["string", "null"] }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "reason", "path", "message"],
+      "properties": {
+        "state": { "enum": ["current", "updated", "blocked"] },
+        "reason": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "message": { "type": ["string", "null"] }
+      }
+    },
+    "convergence": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["schema_version", "state", "ok"],
+          "properties": {
+            "schema_version": { "const": "lazurio.update.v1" },
+            "state": { "enum": ["current", "updated", "blocked"] },
+            "ok": { "type": "boolean" }
+          }
+        }
+      ]
+    }
+  }
+}

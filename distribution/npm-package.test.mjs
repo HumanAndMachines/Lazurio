@@ -32,6 +32,9 @@ test("source package remains private while generated package contract is platfor
     "manual/module-lifecycle.md",
     "lazurio/organization-activation-lib.mjs",
     "lazurio/organization-activation-report.v0.schema.json",
+    "lazurio/organization-install-lib.mjs",
+    "lazurio/organization-install-report.v0.schema.json",
+    "manual/organization-install.md",
   ]));
   expect(contract.required_paths).toEqual(expect.arrayContaining([
     "lazurio/module-port-lib.mjs",
@@ -42,6 +45,9 @@ test("source package remains private while generated package contract is platfor
     "manual/module-lifecycle.md",
     "lazurio/organization-activation-lib.mjs",
     "lazurio/organization-activation-report.v0.schema.json",
+    "lazurio/organization-install-lib.mjs",
+    "lazurio/organization-install-report.v0.schema.json",
+    "manual/organization-install.md",
   ]));
   expect(JSON.stringify(contract)).not.toMatch(/darwin|linux|windows|x64|arm64/u);
 });

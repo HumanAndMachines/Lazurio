@@ -99,6 +99,29 @@ technickou chybu. Veřejný tvar drží
 `organization-activation-report.v0.schema.json`; `next_action.kind` je uzavřený
 enum a nikdy nepřenáší shell příkaz.
 
+## Lokální instalace existující Organization
+
+Už aktivní a čitelnou Organization přidá Agent jedním opakovatelným příkazem:
+
+```sh
+lazurio organization install <github-login> --root <lazurio-root>
+lazurio organization install <github-login> --root <lazurio-root> --json
+```
+
+Login je pouze locator. Trusted `gh` provider jej před checkoutem sváže s
+immutable Organization a repository ID; root Forge binding ověří stejné ID ve
+staging checkoutu a provider je těsně před atomickým přesunem zkontroluje
+znovu. Potom se nad jedinou zvolenou Organization spustí běžný Lazurio update
+reconciler, který materializuje dostupné deklarované Moduly. Příkaz nevytváří
+GitHub repo, App grant, Team, port ani commit a neobsahuje Organization-specific
+výjimku.
+
+Report používá stejné veřejné stavy `current`, `updated`, `blocked` jako
+update. Nedostupný private Modul nezruší už bezpečně dokončené checkouty, ale
+celkový výsledek zůstane `blocked` s přesným GitHub access reasonem. Dirty,
+foreign, diverged nebo symlink target se nepřebírá. Úplný bezpečný postup drží
+[Organization install manuál](../manual/organization-install.md).
+
 ## Module setup
 
 Agenti nových i privátních Organizací používají jediný konvergentní vstup:

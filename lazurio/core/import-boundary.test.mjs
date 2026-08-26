@@ -86,7 +86,22 @@ test("canonical path containment has one physical Core owner", async () => {
     "launchpad/src/module-location-repair-lib.mjs",
     "launchpad/src/worktree-actions-lib.mjs",
     "launchpad/src/worktree-lib.mjs",
+    "lazurio/core/git-materialization-lib.mjs",
+    "lazurio/organization-install-lib.mjs",
   ]);
+});
+
+test("Git checkout publication has one physical Core owner", async () => {
+  const moduleName = "git-materialization-lib.mjs";
+  expect(existsSync(join(coreRoot, moduleName))).toBe(true);
+
+  const launchpadAdapter = await readFile(
+    join(repositoryRoot, "launchpad", "src", moduleName),
+    "utf8",
+  );
+  expect(launchpadAdapter).toContain("../../lazurio/core/git-materialization-lib.mjs");
+  expect(launchpadAdapter).not.toContain('"clone"');
+  expect(launchpadAdapter).not.toContain("makeTempDirectory");
 });
 
 test("runtime declaration validation has one physical Core owner", async () => {
