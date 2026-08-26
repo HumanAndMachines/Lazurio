@@ -189,6 +189,7 @@ test("Server identity and install-generation compatibility have one Core owner",
   expect(consumers).toEqual([
     "launchpad/src/server.mjs",
     "lazurio/cli-install-lib.mjs",
+    "lazurio/core/module-lifecycle-client-lib.mjs",
   ]);
 });
 

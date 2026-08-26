@@ -157,6 +157,7 @@ function packageJson({ contract, version, sourceCommit, commitEpoch }) {
       "launchpad/schemas",
       "launchpad/src",
       "manual/module-setup.md",
+      "manual/module-lifecycle.md",
     ],
     engines: { bun: `>=${contract.minimum_bun_version}` },
     repository: {

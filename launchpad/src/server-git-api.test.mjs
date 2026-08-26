@@ -15,6 +15,7 @@ import {
 } from "./git-fixture-helpers.test.mjs";
 import { platformTestTimeout } from "./test-platform-setup.mjs";
 import { computeServerRootId } from "../../lazurio/core/server-identity-lib.mjs";
+import { runModuleLifecycle } from "../../lazurio/core/module-lifecycle-client-lib.mjs";
 import {
   readServerLocator,
   readServerLocatorIfPresent,
@@ -107,6 +108,90 @@ test("fixture ports cannot overlap another Server fallback window", () => {
   expect(fixturePortsOverlap(39_019, 39_019 + serverFallbackPortSpan - 1)).toBe(true);
   expect(fixturePortsOverlap(39_019, 39_019 + serverFallbackPortSpan)).toBe(false);
 });
+
+test("public Module lifecycle client drives one physical Server-owned App", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const appPort = await findFreePort();
+  const moduleRoot = join(root, "organizations", "BetaCo_GEN3", "workspace", "deals");
+  const appRoot = join(moduleRoot, "app", "v1");
+  const organizationManifestPath = join(root, "organizations", "BetaCo_GEN3", "company.gen3.json");
+  const organizationManifest = JSON.parse(await readFile(organizationManifestPath, "utf8"));
+  organizationManifest.module_port_pool = { start: appPort, end: appPort };
+  await writeJson(organizationManifestPath, organizationManifest);
+  await writeJson(join(moduleRoot, "lazurio.module.json"), {
+    schema_version: "lazurio.module.v1",
+    id: "deals",
+    company: "BetaCo",
+    tcp_port_policy: { mode: "single" },
+    apps: ["app/v1/package.json"],
+    default_app: "app/v1/package.json",
+    port_leases: [{ id: "main", host: "127.0.0.1", port: appPort }],
+  });
+  await writeJson(join(appRoot, "package.json"), {
+    name: "betaco-deals",
+    private: true,
+    type: "module",
+    scripts: { dev: "bun server.mjs" },
+    lazurio: {
+      runtime: {
+        schema_version: "lazurio.runtime.v1",
+        id: "betaco-deals-v1",
+        title: "BetaCo Deals",
+        company: "BetaCo",
+        module: "deals",
+        surface: "internal",
+        dev_script: "dev",
+        tags: [],
+        listeners: [{
+          id: "app",
+          role: "entrypoint",
+          lease: "main",
+          protocol: "http",
+          health: { kind: "http", path: "/health" },
+        }],
+      },
+    },
+  });
+  await writeFile(join(appRoot, "server.mjs"), [
+    "const server = Bun.serve({",
+    "  hostname: process.env.LAZURIO_RUNTIME_HOST,",
+    "  port: Number(process.env.LAZURIO_RUNTIME_PORT),",
+    "  fetch: (request) => new URL(request.url).pathname === '/health'",
+    "    ? Response.json({ status: 'ok' })",
+    "    : new Response('fixture'),",
+    "});",
+    "setInterval(() => {}, 2_147_483_647);",
+    "",
+  ].join("\n"));
+  await mkdir(join(appRoot, "node_modules"), { recursive: true });
+
+  const { serverStateDirectory } = await startLaunchpadServer(root);
+  const run = (action) => runModuleLifecycle({
+    action,
+    selector: "BetaCo/deals",
+    stateDirectory: serverStateDirectory,
+  });
+
+  const status = await run("status");
+  expect(status).toMatchObject({
+    status: "current",
+    app: { app_id: "betaco-deals-v1", port: appPort, default: true },
+  });
+  const opened = await run("open");
+  expect(opened).toMatchObject({
+    status: "completed",
+    result: { action: "open", url: `http://127.0.0.1:${appPort}` },
+  });
+  const firstPid = opened.result.runtime.pid;
+  expect(Number.isInteger(firstPid)).toBe(true);
+  expect((await fetch(`http://127.0.0.1:${appPort}/health`)).status).toBe(200);
+  const repeated = await run("open");
+  expect(repeated.result.runtime.pid).toBe(firstPid);
+  const stopped = await run("stop");
+  expect(stopped).toMatchObject({ status: "completed", result: { action: "stop" } });
+  await waitForPortVacancy(appPort);
+}, platformTestTimeout(20_000));
 
 test("public read routes do not expose an unmaterialized protected repo through changes or worktrees", async () => {
   const root = await createLaunchpadGitFixture();

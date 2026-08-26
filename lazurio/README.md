@@ -88,6 +88,24 @@ platný stav.
 Úplný postup pro private Module migraci, nový Modul, rerun a PR handoff drží
 [veřejný Agent manuál](../manual/module-setup.md).
 
+## Module lifecycle
+
+CLI obsluhuje explicitně deklarované Apps přes jediný aktivní Lazurio Server:
+
+```sh
+lazurio module status --json
+lazurio module open Spectoda/invoices --json
+lazurio module stop Spectoda/invoices --app-package app/v2/package.json --json
+```
+
+Snapshot všech Apps vzniká jedním Server readbackem. Jednotlivá akce vybírá
+výhradně Core-projektovanou default App nebo explicitní `--app-package` a
+nikdy nečte legacy port registry. Cross-Organization takeover bez přesného
+uživatelského potvrzení failne; potvrzený retry používá
+`--confirm-replace <app-id>`. Chybějící Server je odlišný
+`server_unavailable`, ne stojící App. Úplný verzovaný kontrakt a pravidla pro
+tenké GEN2 klienty drží [Module lifecycle manuál](../manual/module-lifecycle.md).
+
 ## Instalace Launchpadu
 
 Nejdřív zpřístupni CLI v uživatelském `PATH`:
