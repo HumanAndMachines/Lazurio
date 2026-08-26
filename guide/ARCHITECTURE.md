@@ -32,6 +32,13 @@ Obsah nesmí obsahovat klientská data, secrets ani organization-specific realit
 - používá localStorage pro běžný progres v browseru;
 - zachovává SSR shell z GEN2 guide, aby šel později bezpečně rozšířit o root/agent profile integraci.
 
+Mattyčus je v Guide vendored consumer asset. Design System vlastní schválený
+spritesheet a digest, zatímco Guide drží vlastní deployment kopii a při buildu
+ověřuje její receipt v `public/assets/mattycus/pet.json`. Nevzniká runtime
+závislost na jiném repozitáři, Personalspace ani lokální Codex pet cestě.
+Postava má jen prezentační význam a nikdy nevyjadřuje health, lifecycle,
+readiness, oprávnění nebo dostupnost Buddy runtime.
+
 Port je `5281` a manifest žije v `guide/app/v1/package.json` pod `companyascode.app`.
 
 ## Vztah k Organizacím

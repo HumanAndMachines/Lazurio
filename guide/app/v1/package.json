@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "astro dev",
-    "build": "astro check && astro build",
+    "check:mattycus": "bun run scripts/check-mattycus-asset.mjs",
+    "build": "bun run check:mattycus && astro check && astro build",
     "preview": "astro preview"
   },
   "dependencies": {

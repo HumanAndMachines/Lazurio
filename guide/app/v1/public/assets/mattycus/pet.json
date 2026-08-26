@@ -2,5 +2,32 @@
   "id": "mattycus",
   "displayName": "Mattyčus",
   "description": "A calm, smart, mildly ironic red-haired pixel-art Codex companion with workspace architect energy.",
-  "spritesheetPath": "spritesheet.webp"
+  "spritesheetPath": "spritesheet.webp",
+  "identityContract": {
+    "role": "default_buddy_mascot",
+    "allowedSurfaces": [
+      "buddy",
+      "guide"
+    ],
+    "emptyState": "neutral_placeholder",
+    "semanticAuthority": "presentation_only"
+  },
+  "canonicalSource": {
+    "repository": "Rozjedeme-ai/design-system-lazurio",
+    "manifestPath": "content/brand/buddy/assets.json",
+    "assetKey": "spritesheet"
+  },
+  "spritesheet": {
+    "mediaType": "image/webp",
+    "width": 1536,
+    "height": 1872,
+    "bytes": 1959990,
+    "sha256": "7bbe0d629ea1e3e65cf24955372b4295f0b25d79afa51242d4cdd5b931e01f0a",
+    "grid": {
+      "columns": 8,
+      "rows": 9,
+      "frameWidth": 192,
+      "frameHeight": 208
+    }
+  }
 }

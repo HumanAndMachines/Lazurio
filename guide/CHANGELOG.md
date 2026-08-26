@@ -1,5 +1,12 @@
 # Guide GEN3 changelog
 
+## 2026-08-26
+
+- DEV-6507 sjednotil existujícího Guide průvodce s výchozí vizuální identitou
+  Buddyho. Spritesheet zůstává vendored a runtime nezískává cross-repository
+  závislost; nový build gate hlídá Design System digest, rozměry, frame grid a
+  čistě prezentační sémantiku.
+
 ## 2026-07-02
 
 - Revize meta-dokumentů podle interního auditu (2026-07-02) a draftu 0040 (Guide = odvozený povrch bez vlastní autority); lekce 04 opravena podle founder kánonu Digitální kancelář = Workspace (draft 0041; veřejné shrnutí dnes drží `../manual/decision-register.md`):
