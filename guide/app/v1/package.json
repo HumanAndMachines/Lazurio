@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "astro dev",
-    "check:mattycus": "bun run scripts/check-mattycus-asset.mjs",
+    "check:mattycus": "bun test scripts/check-mattycus-asset.test.mjs && bun run scripts/check-mattycus-asset.mjs",
     "build": "bun run check:mattycus && astro check && astro build",
     "preview": "astro preview"
   },
