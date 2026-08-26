@@ -34,6 +34,7 @@ import { focusMenuTriggerAfterRender } from "./focus-restoration.js";
 import {
   isCodexPortConflict,
   openCodexPortConflictDialog,
+  openCodexRepairDialog,
   openCodexRuntimeIssueDialog,
   openCodexUpdateDialog,
 } from "./codex-handoff.js";
@@ -1233,12 +1234,10 @@ function revealProblems({ includeSystem = false } = {}) {
 
 function scrollBelowStickyTopbar(target) {
   if (!target) return;
-  requestAnimationFrame(() => {
-    const topbarBottom = elements.topbar?.getBoundingClientRect().bottom ?? 0;
-    const breathingRoom = 12;
-    const delta = target.getBoundingClientRect().top - topbarBottom - breathingRoom;
-    window.scrollBy({ top: delta, behavior: "smooth" });
-  });
+  const topbarBottom = elements.topbar?.getBoundingClientRect().bottom ?? 0;
+  const breathingRoom = 12;
+  const delta = target.getBoundingClientRect().top - topbarBottom - breathingRoom;
+  window.scrollBy({ top: delta, behavior: "auto" });
 }
 
 /* =========================================================
@@ -1273,6 +1272,11 @@ function renderDoctorStatus(spaceHealth = {}) {
 }
 
 function renderProblems(spaceHealth) {
+  const previousTechnical = elements.problemsPanel.querySelector(".technical-problems");
+  const preserveTechnicalViewport = Boolean(previousTechnical);
+  const previousScrollY = preserveTechnicalViewport ? window.scrollY : null;
+  const technicalSummaryHadFocus = previousTechnical?.querySelector("summary") === document.activeElement;
+  if (previousTechnical) state.problemsExpanded = previousTechnical.open;
   const model = buildSpaceProblemModel(spaceHealth);
   const systemIssue = systemProblemIssue();
   const spaceIssues = model.blockers > 0
@@ -1333,6 +1337,12 @@ function renderProblems(spaceHealth) {
   elements.doctorStatus.setAttribute("aria-expanded", String(panelDisclosed));
   elements.problemsPanel.className = `problems-panel ${visibleHasDanger ? "is-danger" : "is-warn"}${panelDisclosed ? "" : " hidden"}`;
   elements.problemsPanel.replaceChildren(heading, list, technical);
+  if (preserveTechnicalViewport && previousScrollY !== null) {
+    window.scrollTo({ top: previousScrollY, behavior: "auto" });
+    if (technicalSummaryHadFocus) {
+      technical.querySelector("summary")?.focus({ preventScroll: true });
+    }
+  }
 }
 
 function hideProblems() {
@@ -1423,6 +1433,14 @@ function spaceProblemNode(issue) {
       action.addEventListener("click", () => revealAppDetail(app));
       node.append(action);
     }
+  }
+  if (!issue.appId && issue.action?.prompt) {
+    const action = document.createElement("button");
+    action.type = "button";
+    action.className = "btn btn-secondary btn-sm space-problem-action";
+    action.textContent = issue.action.label ?? "Vyřešit s Codexem";
+    action.addEventListener("click", () => openCodexRepairDialog(issue.action));
+    node.append(action);
   }
   return node;
 }
@@ -2610,12 +2628,16 @@ function workspaceModuleDetail(module, companySlug, { kind = "workspace-module",
     can_open_folder: module.status === "available",
     default_app: defaultApp,
     module_apps: moduleApps,
+    repair_action: module.readiness?.next_action ?? null,
     is_readonly_system: !defaultApp,
     readonly_reason: moduleApplicationMessage(moduleApps, module.status),
   };
 }
 
 function moduleApplicationMessage(moduleApps, moduleStatus = "available") {
+  if (moduleStatus === "quarantined") {
+    return "Umístění repozitáře tohoto modulu je potřeba bezpečně sladit.";
+  }
   if (!moduleApps && moduleStatus === "missing_access") {
     return "Modul na tomto počítači není dostupný.";
   }
@@ -2664,7 +2686,9 @@ function workspaceModuleCard(module, companySlug, options = {}) {
   desc.className = "app-card-desc";
   desc.textContent = opensApp
     ? appDescription(detail.default_app)
-    : module.status === "missing_access"
+    : module.status === "quarantined"
+      ? "Lazurio pozastavilo jen tento modul, protože se změnila cesta nebo remote jeho repozitáře."
+      : module.status === "missing_access"
       ? "Modul není na tomto počítači dostupný."
       : module.status === "available"
         ? moduleApplicationMessage(detail.module_apps)
@@ -2681,6 +2705,15 @@ function workspaceModuleCard(module, companySlug, options = {}) {
     );
     folderAction.classList.add("btn", "btn-ghost", "btn-sm", "manifest-module-folder-action");
     card.append(folderAction);
+  }
+  if (detail.repair_action?.prompt) {
+    const repairAction = cardActionButton(
+      detail.repair_action.label ?? "Vyřešit s Codexem",
+      () => openCodexRepairDialog(detail.repair_action),
+      false,
+    );
+    repairAction.classList.add("btn", "btn-secondary", "btn-sm", "manifest-module-repair-action");
+    card.append(repairAction);
   }
   card.addEventListener("click", (event) => {
     if (!shouldOpenFromCardSurface(event.target)) return;
@@ -3874,6 +3907,12 @@ function primaryActionNode(app, nextAction) {
       () => runRuntimeAction(app, nextAction.action),
       state.pendingAction === `${app.id}:${nextAction.action}`,
     );
+  } else if (nextAction.type === "codex") {
+    node = cardActionButton(
+      nextAction.label,
+      () => openCodexRepairDialog(nextAction.repairAction),
+      false,
+    );
   } else {
     node = cardActionButton(nextAction.label, null, true);
   }
@@ -3898,6 +3937,13 @@ function cardActionButton(label, onClick, disabled) {
 
 function primaryNextAction(app, moduleApps = app.module_apps ?? null) {
   const dependencyState = app.dependencies?.state;
+  if (app.repair_action?.prompt) {
+    return {
+      type: "codex",
+      label: app.repair_action.label ?? "Vyřešit s Codexem",
+      repairAction: app.repair_action,
+    };
+  }
   if (isProductionspace(app) || app.is_readonly_system) {
     return { type: "disabled", label: "Jen pro čtení" };
   }

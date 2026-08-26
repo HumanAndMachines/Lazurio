@@ -99,7 +99,14 @@ export async function buildLaunchpadAppsResponse({
     ? await Promise.all(
         discovery.organizations.map(async (organization) => ({
           organization,
-          spaces: await readOrganizationSpaces(companiesRoot, organization, discovery.local_config),
+          spaces: await readOrganizationSpaces(
+            companiesRoot,
+            organization,
+            discovery.local_config,
+            (discovery.organization_issues ?? []).filter(
+              (issue) => issue.organization === organization.slug,
+            ),
+          ),
         })),
       )
     : [];
@@ -955,7 +962,12 @@ async function attachModuleApplicationProjections({ companiesRoot, organizations
 // modules are additionally projected into N:M Teams. GitHub is the access
 // authority; until a live membership adapter exists, the API says explicitly
 // that Builder Team membership was not evaluated.
-async function readOrganizationSpaces(companiesRoot, organization, localConfig = null) {
+async function readOrganizationSpaces(
+  companiesRoot,
+  organization,
+  localConfig = null,
+  organizationIssues = [],
+) {
   const empty = {
     organization_modules: [],
     teams: [],
@@ -987,6 +999,10 @@ async function readOrganizationSpaces(companiesRoot, organization, localConfig =
   const manifestSlots = Array.isArray(manifest?.module_slots) ? manifest.module_slots : [];
   const companyModules = Array.isArray(config?.modules) ? config.modules : [];
   const ambiguousSlots = ambiguousOrganizationRepositorySlots(manifestSlots, companyModules);
+  const issueForSlot = (slot) => organizationIssues.find((issue) =>
+    (issue.module && issue.module === slot.slug)
+    || (issue.path && issue.path === slot.path)
+  ) ?? null;
   const readModelEligible = (slot) =>
     !ambiguousSlots.has(slot)
     && typeof slot?.path === "string"
@@ -995,7 +1011,12 @@ async function readOrganizationSpaces(companiesRoot, organization, localConfig =
     .filter(readModelEligible)
     .map(normalizeModuleSlot)
     .filter(Boolean)
-    .map((slot) => moduleSlotWithReadiness(organizationRoot, slot, principalRoles));
+    .map((slot) => moduleSlotWithReadiness(
+      organizationRoot,
+      slot,
+      principalRoles,
+      issueForSlot(slot),
+    ));
   // Decision 0041: deklarace modules[].workspace v company.gen3.json je druhý
   // deklarativní povrch; manifest module_slots[] má přednost při konfliktu.
   // Config-only sloty (bez manifest protějšku) se počítají do tiles i
@@ -1006,7 +1027,12 @@ async function readOrganizationSpaces(companiesRoot, organization, localConfig =
     .map(normalizeModuleSlot)
     .filter(Boolean)
     .filter((slot) => !manifestPaths.has(slot.path))
-    .map((slot) => moduleSlotWithReadiness(organizationRoot, slot, principalRoles));
+    .map((slot) => moduleSlotWithReadiness(
+      organizationRoot,
+      slot,
+      principalRoles,
+      issueForSlot(slot),
+    ));
   const moduleDeclarations = [...moduleSlots, ...configOnlyModules];
   // Manifest je inventory/sync autorita, ne access grant. Chráněný slot bez
   // lokálního checkoutu proto zůstává dostupný Doctoru a explicitní sync lane,
@@ -1085,7 +1111,15 @@ async function readOrganizationSpaces(companiesRoot, organization, localConfig =
     space_readiness: {
       blocking_slots: projectedModuleDeclarations
         .filter((slot) => slot.readiness?.severity === "blocking")
-        .map((slot) => ({ path: slot.path, message: slot.readiness.message, reason: slot.readiness.reason })),
+        .map((slot) => ({
+          slug: slot.slug,
+          path: slot.path,
+          status: slot.status,
+          message: slot.readiness.message,
+          reason: slot.readiness.reason,
+          expected_path: slot.repository_issue?.expected_path ?? null,
+          next_action: slot.readiness.next_action ?? null,
+        })),
     },
     workspace_conformance_issues: workspaceConformanceIssues({
       declared,
@@ -1455,7 +1489,25 @@ function moduleSlotStatus(organizationRoot, slot) {
   return slot.repo ? "missing_access" : "planned_slot";
 }
 
-function moduleSlotWithReadiness(organizationRoot, slot, principalRoles = null) {
+function moduleSlotWithReadiness(
+  organizationRoot,
+  slot,
+  principalRoles = null,
+  organizationIssue = null,
+) {
+  if (organizationIssue) {
+    return {
+      ...slot,
+      status: "quarantined",
+      repository_issue: organizationIssue,
+      readiness: {
+        severity: "blocking",
+        reason: organizationIssue.code,
+        message: organizationIssue.message,
+        next_action: organizationIssue.next_action ?? null,
+      },
+    };
+  }
   const status = moduleSlotStatus(organizationRoot, slot);
   return {
     ...slot,

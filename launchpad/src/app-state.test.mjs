@@ -586,6 +586,49 @@ test("hero započítá i blokující vnořený slot z Doctor agregace", () => {
   expect(computeSpaceHeroState(health).tone).toBe("danger");
 });
 
+test("rename quarantine degraduje jen svou Organizaci a zachová přesný Codex handoff", () => {
+  const repairAction = {
+    kind: "repair_module_location",
+    label: "Vyřešit s Codexem",
+    prompt: "Spusť guardovaný repair pro OmegaCo/website.",
+  };
+  const organization = {
+    slug: "OmegaCo",
+    space_readiness: {
+      blocking_slots: [{
+        slug: "website",
+        path: "workspace/website",
+        status: "quarantined",
+        reason: "repository_location_mismatch",
+        expected_path: "workspace/website-v2",
+        message: "Repozitář byl přejmenován.",
+        next_action: repairAction,
+      }],
+    },
+  };
+  const health = summarizeOrganizationSpaceHealth({
+    organization,
+    apps: [app("omegaco-healthy", "OmegaCo", "ready")],
+  });
+  const problem = buildSpaceProblemModel(health);
+
+  expect(health).toMatchObject({ blockers: 1, blocking_slots: [{ slug: "website" }] });
+  expect(computeSpaceHeroState(health).tone).toBe("danger");
+  expect(problem.issues).toEqual([
+    expect.objectContaining({
+      severity: "danger",
+      title: "Website potřebuje sladit s repozitářem",
+      action: repairAction,
+    }),
+  ]);
+
+  const other = summarizeOrganizationSpaceHealth({
+    organization: { slug: "OtherCo", space_readiness: { blocking_slots: [] } },
+    apps: [app("other-healthy", "OtherCo", "ready")],
+  });
+  expect(computeSpaceHeroState(other).tone).toBe("ok");
+});
+
 test("nezdravý runtime je prostorový blokátor i s ready dependencies", () => {
   const unhealthy = app("broken-runtime", "OmegaCo", "ready");
   unhealthy.runtime_status = "unhealthy";

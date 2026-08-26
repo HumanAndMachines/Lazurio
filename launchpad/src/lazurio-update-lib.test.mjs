@@ -20,6 +20,7 @@ import {
   setOrganizationRepository,
   writeJson,
 } from "./git-fixture-helpers.test.mjs";
+import { buildRepositoryLocationIssue } from "../../lazurio/core/module-location-repair-contract-lib.mjs";
 
 const cleanup = [];
 
@@ -1047,6 +1048,66 @@ test("blocked parent defers descendants while safe sibling continues", async () 
   expect(report.state).toBe("blocked");
 });
 
+test("one renamed module is quarantined while Sync still updates its healthy sibling", async () => {
+  const organization = repo("alpha::root", "organization_root", "alpha", "root");
+  organization.organization_path = "organizations/Alpha_GEN3";
+  const healthy = repo("alpha::healthy", "module", "alpha", "healthy", "workspace");
+  const message = "workspace/legacy: repository mount basename legacy must exactly match GitHub repository canonical";
+  const issue = buildRepositoryLocationIssue({
+    organization: "alpha",
+    organizationPath: "organizations/Alpha_GEN3",
+    module: "renamed",
+    path: "workspace/legacy",
+    expectedPath: "workspace/canonical",
+    message,
+    sources: ["modules.manifest.json#module_slots"],
+  });
+  const inventory = {
+    repos: [organization, healthy],
+    warnings: [message],
+    inventory_issues: [issue],
+  };
+  const calls = [];
+
+  const report = await runLazurioUpdate({
+    rootPath: "/working",
+    runtimeRoot: "/runtime",
+    deps: {
+      runId: "slot-quarantine",
+      acquireLock: async () => ({ release: async () => {} }),
+      buildInventory: async () => inventory,
+      updateRepo: async (item) => {
+        calls.push(item.key);
+        return {
+          ...identity(item),
+          state: item.key === healthy.key ? "updated" : "current",
+          reason: item.key === healthy.key ? "checkout_updated" : "already_current",
+          message: "fixture",
+          actions: [],
+        };
+      },
+      discoverApps: async () => ({ apps: [], failures: [] }),
+    },
+  });
+
+  expect(calls).toEqual(["lazurio::root", organization.key, healthy.key]);
+  expect(report.results.find((item) => item.repo_key === healthy.key)).toMatchObject({ state: "updated" });
+  expect(report.results.filter((item) => item.reason === "repository_location_mismatch")).toHaveLength(1);
+  expect(report.results.find((item) => item.reason === "repository_location_mismatch")).toMatchObject({
+    repo_key: "alpha::renamed::inventory",
+    organization: "alpha",
+    module: "renamed",
+    state: "blocked",
+    next_action: {
+      kind: "repair_module_location",
+      command: "lazurio repair module-location --org alpha --module renamed",
+      prompt: expect.stringContaining("--apply --expect <fingerprint>"),
+    },
+  });
+  expect(report.results.some((item) => item.reason === "inventory_unavailable")).toBe(false);
+  expect(report.state).toBe("blocked");
+});
+
 test("inventory failure blocks instead of silently reporting current", async () => {
   const calls = [];
   const report = await runLazurioUpdate({
@@ -1156,6 +1217,35 @@ test("GET-first status includes a mounted Organization-level repository", async 
     checked_remote: false,
     reason: "local_main_commits",
     repo_key: missionControl.key,
+  });
+});
+
+test("GET-first status exposes the exact isolated module repair instead of inventory_invalid", async () => {
+  const message = "workspace/legacy must move to workspace/canonical";
+  const issue = buildRepositoryLocationIssue({
+    organization: "alpha",
+    organizationPath: "organizations/Alpha_GEN3",
+    module: "renamed",
+    path: "workspace/legacy",
+    expectedPath: "workspace/canonical",
+    message,
+  });
+
+  const report = await readLazurioUpdateStatus({
+    rootPath: "/working",
+    deps: {
+      buildInventory: async () => ({ repos: [], warnings: [message], inventory_issues: [issue] }),
+    },
+  });
+
+  expect(report).toMatchObject({
+    state: "blocked",
+    reason: "repository_location_mismatch",
+    repo_key: "alpha::renamed::inventory",
+    next_action: {
+      kind: "repair_module_location",
+      command: "lazurio repair module-location --org alpha --module renamed",
+    },
   });
 });
 
