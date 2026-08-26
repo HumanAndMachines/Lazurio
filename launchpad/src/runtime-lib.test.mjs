@@ -1942,6 +1942,7 @@ test("cross-Organization listener takeover requires the exact peer confirmation"
     discover: discoveryWithApps(sourceApp, targetApp),
   });
   const sourceSelector = { source: { type: "worktree", slug: sourceWorktreeSlug } };
+  let testFailure = null;
 
   try {
     await runtime.start(sourceApp.id, sourceSelector);
@@ -2008,14 +2009,38 @@ test("cross-Organization listener takeover requires the exact peer confirmation"
       owner: "none",
       desired: { enabled: false, status: "disabled" },
     });
+  } catch (error) {
+    testFailure = error;
+    throw error;
   } finally {
+    const cleanupFailures = [];
     try {
       const targetHealth = await runtime.health(targetApp.id);
       if (targetHealth.owner === "current-instance") await runtime.stop(targetApp.id);
-    } finally {
+    } catch (error) {
+      cleanupFailures.push(error);
+    }
+    try {
       const sourceHealth = await runtime.health(sourceApp.id, sourceSelector);
       if (sourceHealth.owner === "current-instance") {
         await runtime.stop(sourceApp.id, sourceSelector);
+      }
+    } catch (error) {
+      cleanupFailures.push(error);
+    }
+
+    if (cleanupFailures.length > 0) {
+      const fixture = tempRoots.find((candidate) => candidate.root === root);
+      for (const trackedChild of fixture?.children ?? []) {
+        if (trackedChild.exitConfirmed) continue;
+        try {
+          await killFixtureProcess(trackedChild.child, root);
+        } catch (error) {
+          cleanupFailures.push(error);
+        }
+      }
+      if (!testFailure) {
+        throw new AggregateError(cleanupFailures, "Cross-Organization takeover fixture cleanup failed");
       }
     }
   }
