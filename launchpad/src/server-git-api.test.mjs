@@ -764,11 +764,8 @@ test("control-root replacement waits until boot reconciliation publishes one rea
     },
   );
   servers.push(primaryServer);
-  for (
-    let waitedMs = 0;
-    waitedMs < platformTestTimeout(2_000) && !(await Bun.file(startedMarker).exists());
-    waitedMs += 20
-  ) {
+  const startedDeadline = Date.now() + platformTestTimeout(2_000);
+  while (Date.now() < startedDeadline && !(await Bun.file(startedMarker).exists())) {
     await Bun.sleep(20);
   }
   expect(await Bun.file(startedMarker).exists()).toBe(true);
@@ -793,11 +790,8 @@ test("control-root replacement waits until boot reconciliation publishes one rea
   expect(primaryServer.exitCode).toBeNull();
   expect(await readServerLocatorIfPresent({ stateDirectory: serverStateDirectory })).toBeNull();
 
-  for (
-    let waitedMs = 0;
-    waitedMs < platformTestTimeout(3_000) && !(await Bun.file(completedMarker).exists());
-    waitedMs += 20
-  ) {
+  const completedDeadline = Date.now() + platformTestTimeout(3_000);
+  while (Date.now() < completedDeadline && !(await Bun.file(completedMarker).exists())) {
     await Bun.sleep(20);
   }
   expect(await Bun.file(completedMarker).exists()).toBe(true);
@@ -1628,7 +1622,7 @@ async function waitForHealth(port, server) {
   const deadline = Date.now() + platformTestTimeout(5_000);
   while (Date.now() < deadline) {
     // Pokud server spadl při startu (např. port si mezi findFreePort a bindem
-    // stihl vzít někdo jiný), neplýtvej 5 s timeoutem ani nepokračuj proti
+    // stihl vzít někdo jiný), neplýtvej celým readiness timeoutem ani nepokračuj proti
     // cizímu serveru — vypíš rovnou proč.
     if (server && server.exitCode !== null) {
       const stderr = server.stderr ? await new Response(server.stderr).text() : "";
