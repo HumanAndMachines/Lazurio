@@ -2,7 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { tmpdir } from "os";
 import { join } from "path";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "fs/promises";
-import { appPlacementResolverForOrganization, buildDoctorReportFromAppsResponse, buildEnvironmentChecks, buildLaunchpadAppsResponse, buildLaunchpadDoctorReport, bunRuntimeCheck, lazurioUpdateCheck, runtimeAppStatus } from "./diagnostics-lib.mjs";
+import { appPlacementResolverForOrganization, buildDoctorReportFromAppsResponse, buildEnvironmentChecks, buildLaunchpadAppsResponse, buildLaunchpadDoctorReport, bunRuntimeCheck, developerToolUpdateChecks, lazurioUpdateCheck, runtimeAppStatus } from "./diagnostics-lib.mjs";
 import { createLaunchpadGitFixture, initGitRepo, runGit } from "./git-fixture-helpers.test.mjs";
 import { buildGitInventory } from "./git-inventory-lib.mjs";
 
@@ -28,8 +28,57 @@ test("Bun Doctor check enforces the exact authority and gives an Agent handoff",
 
   expect(current).toMatchObject({ id: "platform.bun", status: "ok" });
   expect(mismatch).toMatchObject({ id: "platform.bun", status: "fail" });
-  expect(mismatch.message).toContain("Agentem");
+  expect(mismatch.message).toContain("Principála");
   expect(mismatch.details).toEqual(expect.arrayContaining(["current: 1.4.1", "required: 1.4.0"]));
+});
+
+test("tool update Doctor checks warn the Agent without running an updater", async () => {
+  const checks = await developerToolUpdateChecks({
+    inspectUpdates: async () => [
+      {
+        id: "github_cli",
+        title: "GitHub CLI",
+        required: true,
+        update_policy: "principal_consent_required",
+        status: "update_available",
+        reason: "newer_official_release",
+        current_version: "2.97.0",
+        latest_version: "2.98.0",
+        release_url: "https://github.com/cli/cli/releases/tag/v2.98.0",
+      },
+      {
+        id: "codex",
+        title: "Codex CLI",
+        required: false,
+        update_policy: "principal_consent_required",
+        status: "not_installed",
+        reason: "executable_not_found",
+        current_version: null,
+        latest_version: null,
+        release_url: null,
+      },
+      {
+        id: "claude",
+        title: "Claude Code",
+        required: false,
+        update_policy: "principal_consent_required",
+        status: "currency_unknown",
+        reason: "release_lookup_timeout",
+        current_version: "2.1.246",
+        latest_version: null,
+        release_url: null,
+      },
+    ],
+  });
+
+  expect(checks.map((check) => check.id)).toEqual([
+    "platform.github_cli_update",
+    "platform.claude_update",
+  ]);
+  expect(checks[0]).toMatchObject({ status: "warn", severity: "recommended" });
+  expect(checks[0].message).toContain("požádat Principála o souhlas");
+  expect(checks[0].details).toContain("next_action: ask_principal_before_update");
+  expect(checks[1].message).toContain("nebude stav hádat ani nic měnit");
 });
 
 test("Lazurio update Doctor check je read-only a nemá stable/nightly kanály", async () => {

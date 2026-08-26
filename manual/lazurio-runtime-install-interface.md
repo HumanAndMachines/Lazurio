@@ -58,6 +58,15 @@ instalačního mechanismu; není součástí Git-only `lazurio update`.
 Immutable Resident/Buddy artefakty mají oddělené profilové toolchain piny,
 protože jejich upgrade a rollback patří vlastnímu artefaktovému lifecycle.
 
+Troubleshooting vývojové mašiny používá explicitní
+`lazurio doctor --tool-updates`. Běžný Doctor tím nezískává skrytou síťovou
+závislost: teprve přepínač načte oficiální stabilní release metadata pro Git,
+GitHub CLI a skutečně nainstalované Codex CLI / Claude Code. Výsledek je pouze
+advisory. `update_available` instruuje Agenta, aby požádal Principála o souhlas;
+samotný Doctor nikdy nespouští updater ani package manager. Neověřitelná
+aktuálnost zůstává `warn`, ne falešné `ok`. Bun do obecného latest-release
+porovnání nevstupuje — jeho localhost autoritou zůstává exact pin výše.
+
 ## Launchpad process interface
 
 Supervisor ve stejném workspace kontejneru nastaví:

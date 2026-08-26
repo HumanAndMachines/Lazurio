@@ -35,6 +35,23 @@ Bun sám nemění. Agent nejdřív zjistí způsob instalace, vyžádá souhlas
 s externí změnou a použije standardní upstream postup; `lazurio update`
 runtime nikdy potichu nepřepisuje.
 
+Při troubleshootingu může Agent výslovně přidat síťovou kontrolu aktuálnosti
+vývojových nástrojů:
+
+```sh
+lazurio doctor --tool-updates
+lazurio doctor --tool-updates --json
+```
+
+Git, GitHub CLI a nainstalované Codex CLI / Claude Code se porovnají
+s oficiálním stabilním release zdrojem. Kontrola je pouze advisory: novější
+verze je `warn` s `next_action: ask_principal_before_update`; Lazurio nikdy
+nespustí updater, package manager ani instalační příkaz. Nedostupná síť vrátí
+výslovné `currency_unknown` místo zeleného odhadu. Volitelný přepínač drží
+běžný `lazurio doctor` rychlý a deterministický. Bun se dál posuzuje výhradně
+proti `package.json#packageManager`, protože novější nepromovaná verze není
+automaticky podporovaným Lazurio runtime.
+
 Exit code `0` znamená připravený stav, `1` konkrétní akci uživatele a `2`
 selhání kontroly. Tento slice nic neinstaluje, nevolá `lazurio cli install` ani
 `lazurio launchpad install` a legacy Git Root nepřesouvá. Interaktivní consent a

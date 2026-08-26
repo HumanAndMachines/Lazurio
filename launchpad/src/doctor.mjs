@@ -11,6 +11,7 @@ const report = await buildLaunchpadDoctorReport({
   launchpadRoot,
   allowMissingOrganizations: options.allowMissingOrganizations,
   runChildDoctors: !options.skipChildren,
+  checkToolUpdates: options.toolUpdates,
 });
 
 if (options.json) {
@@ -32,6 +33,7 @@ function parseArgs(args) {
     json: false,
     allowMissingOrganizations: false,
     skipChildren: false,
+    toolUpdates: false,
   };
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -47,6 +49,10 @@ function parseArgs(args) {
     // ohlásí jako `blocked` a souhrn skončí `incomplete`, který bránu nesplní.
     if (arg === "--skip-children") {
       parsed.skipChildren = true;
+      continue;
+    }
+    if (arg === "--tool-updates") {
+      parsed.toolUpdates = true;
       continue;
     }
     if (arg.startsWith("--root=")) {

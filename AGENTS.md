@@ -287,6 +287,10 @@ neinteraktivní běhy bez přímého App chatu s Kolegou.
    mechanismu vyloučené. Agent nikdy nezačíná práci v primárním checkoutu; pro
    všechny změny používá task/PR worktree. Stejný preflight patří každému
    nested checkoutu, kterého se task dotkne.
+   Když Agent troubleshootuje nástrojové prostředí mašiny, přidá explicitní
+   `lazurio doctor --tool-updates`. Warning o novější verzi Git, GitHub CLI,
+   Codex CLI, Claude Code nebo o nesouladu Bunu nejdřív předá Principálovi;
+   updater ani package manager nespustí bez jeho souhlasu s přesnou změnou.
 3. **Drž worktree disciplínu.** Primární checkout zůstává na `main` a nemění
    se v něm trackovaný obsah. Postup, kanonickou cestu
    `.worktrees/root/<canonical-plan-basename>/` se sidecarem, PR lifecycle

@@ -933,6 +933,30 @@ test("Lazurio doctor drží identity a výsledky existujícího root Doctor core
   );
 }, platformTestTimeout(15_000));
 
+test("Lazurio doctor předá explicitní tool-update opt-in jedinému Doctor core", async () => {
+  const root = await launchpadFixture();
+  let received = null;
+  const fixtureReport = buildAggregateReport({
+    scope: { type: "launchpad_root", path: ".", name: "Fixture" },
+    checks: [],
+  });
+
+  await buildLazurioDoctorReport({
+    root,
+    checkToolUpdates: true,
+    buildLaunchpadReport: async (options) => {
+      received = options;
+      return fixtureReport;
+    },
+  });
+
+  expect(received).toMatchObject({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    checkToolUpdates: true,
+  });
+});
+
 test("CLI context --json funguje z čisté Agent session bez privátního obsahu", async () => {
   const root = await tempRoot("lazurio-cli-context-");
   await writeJson(join(root, "personal.gen3.json"), personalConfig("owner-login", {
