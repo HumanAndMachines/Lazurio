@@ -12,7 +12,11 @@ import { isValidOrganizationForgeBinding } from "./core/organization-scaffold-li
 import { githubRepositoryCoordinate } from "./core/organization-slot-scope-lib.mjs";
 import { isSamePath } from "./core/path-boundary-lib.mjs";
 import { runIsolatedLazurioUpdate } from "../launchpad/src/lazurio-update-runner-lib.mjs";
-import { runGit, safeGitRemoteEnv } from "../launchpad/src/git-lib.mjs";
+import {
+  runGit,
+  runGitInPinnedTemporaryChild,
+  safeGitRemoteEnv,
+} from "../launchpad/src/git-lib.mjs";
 
 export const ORGANIZATION_INSTALL_REPORT_SCHEMA = "lazurio.organization.install.v0";
 export const ORGANIZATION_INSTALL_STATES = Object.freeze(["current", "updated", "blocked"]);
@@ -32,6 +36,7 @@ export async function installOrganization({
   const observe = deps.observe ?? observeOrganizationInstallSource;
   const reobserve = deps.reobserve ?? observeOrganizationInstallIdentity;
   const run = deps.runGit ?? runGit;
+  const runPinnedChild = deps.runPinnedChild ?? runGitInPinnedTemporaryChild;
   const runUpdate = deps.runUpdate ?? runIsolatedLazurioUpdate;
 
   const localRoot = await verifyInstallRootBoundary(absoluteRoot);
@@ -121,6 +126,7 @@ export async function installOrganization({
       remote: source.repository.ssh_url,
       branch: source.repository.default_branch,
       run,
+      runPinnedChild,
       remoteEnvironment: safeGitRemoteEnv(platform),
       verifyStaged: async ({ path }) => {
         const checkout = await verifyOrganizationRootCheckout({ path, source, run });

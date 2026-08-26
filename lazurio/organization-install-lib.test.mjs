@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 import { initGitRepo } from "../launchpad/src/git-fixture-helpers.test.mjs";
-import { runGit } from "../launchpad/src/git-lib.mjs";
+import { runGit, runGitInPinnedTemporaryChild } from "../launchpad/src/git-lib.mjs";
 import { createOrganizationScaffold } from "./core/organization-scaffold-lib.mjs";
 import {
   installOrganization,
@@ -101,6 +101,7 @@ test("missing Organization root converges once and a second install is a no-op",
     observe: async () => source,
     reobserve: async () => ({ ok: true }),
     runGit: translatedGitRunner(fixture.remote),
+    runPinnedChild: translatedPinnedGitRunner(fixture.remote),
     runUpdate: async ({ organizations }) => {
       updates.push(organizations);
       return updateReport("current");
@@ -156,6 +157,7 @@ test("provider identity change after clone leaves no final Organization target",
         message: "renamed",
       }),
       runGit: translatedGitRunner(fixture.remote),
+      runPinnedChild: translatedPinnedGitRunner(fixture.remote),
       runUpdate: async () => {
         updateCalled = true;
         return updateReport("current");
@@ -184,6 +186,7 @@ test("foreign staged Forge binding never reaches the Organization target", async
         return { ok: true };
       },
       runGit: translatedGitRunner(fixture.remote),
+      runPinnedChild: translatedPinnedGitRunner(fixture.remote),
       runUpdate: async () => updateReport("current"),
     },
   });
@@ -202,6 +205,7 @@ test("dirty existing root fails closed before scoped update", async () => {
     observe: async () => sourceObservation(),
     reobserve: async () => ({ ok: true }),
     runGit: translatedGitRunner(fixture.remote),
+    runPinnedChild: translatedPinnedGitRunner(fixture.remote),
     runUpdate: async () => updateReport("current"),
   };
   const first = await installOrganization({ rootPath: fixture.root, githubLogin: login, deps });
@@ -331,6 +335,19 @@ function translatedGitRunner(localRemote) {
     const result = await runGit(translated, options);
     if (args[0] === "clone" && result.ok) {
       const staging = args.at(-1);
+      const setRemote = await runGit(["remote", "set-url", "origin", fakeRemote], { cwd: staging });
+      if (!setRemote.ok) return setRemote;
+    }
+    return result;
+  };
+}
+
+function translatedPinnedGitRunner(localRemote) {
+  return async (args, options) => {
+    const translated = args.map((arg) => arg === fakeRemote ? localRemote : arg);
+    const result = await runGitInPinnedTemporaryChild(translated, options);
+    if (args[0] === "clone" && result.ok) {
+      const staging = join(options.cwd, result.child_name);
       const setRemote = await runGit(["remote", "set-url", "origin", fakeRemote], { cwd: staging });
       if (!setRemote.ok) return setRemote;
     }

@@ -4,7 +4,11 @@ import { lstat, mkdir, mkdtemp, readdir, rename, rm, symlink } from "node:fs/pro
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { runGit, safeGitRemoteEnv } from "../../launchpad/src/git-lib.mjs";
+import {
+  runGit,
+  runGitInPinnedTemporaryChild,
+  safeGitRemoteEnv,
+} from "../../launchpad/src/git-lib.mjs";
 import { initGitRepo } from "../../launchpad/src/git-fixture-helpers.test.mjs";
 import { materializeGitCheckout } from "./git-materialization-lib.mjs";
 
@@ -26,6 +30,7 @@ test("one Core primitive publishes an Organization root only after owner verific
     remote: fixture.remote,
     branch: "main",
     run: runGit,
+    runPinnedChild: runGitInPinnedTemporaryChild,
     remoteEnvironment: safeGitRemoteEnv(),
     verifyStaged: async ({ path }) => {
       verifiedPath = path;
@@ -49,6 +54,7 @@ test("failed staged identity verification never publishes the target", async () 
     remote: fixture.remote,
     branch: "main",
     run: runGit,
+    runPinnedChild: runGitInPinnedTemporaryChild,
     remoteEnvironment: safeGitRemoteEnv(),
     verifyStaged: async () => ({
       ok: false,
@@ -76,6 +82,7 @@ test("case-folded sibling blocks publication on case-sensitive hosts too", async
     remote: fixture.remote,
     branch: "main",
     run: runGit,
+    runPinnedChild: runGitInPinnedTemporaryChild,
     remoteEnvironment: safeGitRemoteEnv(),
     deps: {
       // macOS commonly resolves the differently-cased sibling from lstat;
@@ -107,9 +114,12 @@ test("pinned publication rejects a parent replaced after staged verification", a
     remote: fixture.remote,
     branch: "main",
     run: runGit,
+    runPinnedChild: runGitInPinnedTemporaryChild,
     remoteEnvironment: safeGitRemoteEnv(),
     deps: {
-      beforePublish: async () => {
+      beforePublish: async ({ stagingName }) => {
+        await mkdir(join(outside, stagingName));
+        await Bun.write(join(outside, stagingName, "keep.txt"), "keep\n");
         await rename(organizations, displaced);
         await symlink(outside, organizations, process.platform === "win32" ? "junction" : "dir");
       },
@@ -121,17 +131,19 @@ test("pinned publication rejects a parent replaced after staged verification", a
     code: "materialization_path_forbidden",
   });
   expect(existsSync(join(outside, "ExampleOrganization_GEN3"))).toBe(false);
+  const outsideStaging = (await readdir(outside)).find((entry) => entry.includes(".lazurio-materialize-"));
+  expect(outsideStaging).toBeTruthy();
+  expect(await Bun.file(join(outside, outsideStaging, "keep.txt")).text()).toBe("keep\n");
   expect(existsSync(join(displaced, "ExampleOrganization_GEN3"))).toBe(false);
 });
 
-test("staging verification rejects a parent replaced immediately before mkdtemp", async () => {
+test("pinned staging and clone reject a parent replaced at the pre-clone race", async () => {
   const fixture = await fixtureRemote();
   const organizations = join(fixture.root, "organizations");
   const displaced = join(fixture.root, "organizations-displaced-before-staging");
   const outside = join(fixture.root, "outside-before-staging");
   const target = join(organizations, "ExampleOrganization_GEN3");
   await mkdir(outside);
-  let tempDirectoryCalls = 0;
 
   const result = await materializeGitCheckout({
     mode: "organization-root",
@@ -140,15 +152,12 @@ test("staging verification rejects a parent replaced immediately before mkdtemp"
     remote: fixture.remote,
     branch: "main",
     run: runGit,
+    runPinnedChild: runGitInPinnedTemporaryChild,
     remoteEnvironment: safeGitRemoteEnv(),
     deps: {
-      makeTempDirectory: async (prefix) => {
-        tempDirectoryCalls += 1;
-        if (tempDirectoryCalls === 2) {
-          await rename(organizations, displaced);
-          await symlink(outside, organizations, process.platform === "win32" ? "junction" : "dir");
-        }
-        return mkdtemp(prefix);
+      beforeStage: async () => {
+        await rename(organizations, displaced);
+        await symlink(outside, organizations, process.platform === "win32" ? "junction" : "dir");
       },
     },
   });
