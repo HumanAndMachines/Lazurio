@@ -40,10 +40,10 @@ Snapshot obsahuje pouze Apps, které Core projektuje z explicitních
 ## Jedna výchozí nebo explicitní App
 
 ```sh
-lazurio module status Spectoda/invoices --json
-lazurio module open Spectoda/invoices --json
-lazurio module start Spectoda/invoices --app-package app/v2/package.json --json
-lazurio module stop Spectoda/invoices --app-package app/v2/package.json --json
+lazurio module status ExampleOrganization/website --json
+lazurio module open ExampleOrganization/website --json
+lazurio module start ExampleOrganization/website --app-package app/v2/package.json --json
+lazurio module stop ExampleOrganization/website --app-package app/v2/package.json --json
 ```
 
 Bez `--app-package` CLI přijme pouze právě jednu App označenou Core jako
@@ -60,8 +60,8 @@ Když stejný stabilní lease právě používá známá App jiné Organizace, p
 Organizaci. Teprve po jeho výslovném potvrzení smí zopakovat přesně tutéž akci:
 
 ```sh
-lazurio module open Spectoda/invoices \
-  --confirm-replace macano-tech-website-v1 \
+lazurio module open ExampleOrganization/website \
+  --confirm-replace other-organization-portal-v1 \
   --json
 ```
 
