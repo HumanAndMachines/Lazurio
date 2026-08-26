@@ -23,8 +23,10 @@ import {
 } from "../launchpad/src/doctor-children-lib.mjs";
 import {
   DOCTOR_EXIT_CODES,
-  buildAggregateReport,
+  DOCTOR_REPORT_SCHEMA_VERSION_V3,
+  buildSummary,
   exitCodeForSummaryStatus,
+  flattenChecks,
   readDoctorDeclaration,
 } from "../launchpad/src/doctor-surface-lib.mjs";
 import { validateAgainstSchema } from "../launchpad/src/json-schema-mini.mjs";
@@ -175,18 +177,43 @@ export async function buildLazurioDoctorReport({
     throw error;
   }
   const report = checkToolUpdates
-    ? buildAggregateReport({
-        scope: child.report.scope,
-        checks: await developerToolUpdateChecks({
+    ? withAdditionalDoctorChecks(
+        child.report,
+        await developerToolUpdateChecks({
           inspectUpdates: inspectDeveloperToolUpdates,
         }),
-        children: [child],
-      })
+      )
     : child.report;
   return {
     root_kind: detected.kind,
     report,
     exit_code: exitCodeForSummaryStatus(report.summary.status),
+  };
+}
+
+function withAdditionalDoctorChecks(report, additionalChecks) {
+  const checks = [...report.checks, ...additionalChecks];
+  if (report.schema_version !== DOCTOR_REPORT_SCHEMA_VERSION_V3) {
+    const counts = { ok: 0, warn: 0, fail: 0, skip: 0 };
+    for (const check of checks) {
+      if (Object.hasOwn(counts, check?.status)) counts[check.status] += 1;
+    }
+    return {
+      ...report,
+      summary: {
+        status: counts.fail > 0 ? "fail" : counts.warn > 0 ? "warn" : "ok",
+        ...counts,
+      },
+      checks,
+    };
+  }
+  const nestedChecks = (report.children ?? []).flatMap(
+    (child) => (child.report ? flattenChecks(child.report) : []),
+  );
+  return {
+    ...report,
+    summary: buildSummary([...checks, ...nestedChecks]),
+    checks,
   };
 }
 
