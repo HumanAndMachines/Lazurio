@@ -5,6 +5,7 @@ import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
   buildLaunchpadAppsResponse,
   buildLaunchpadDoctorReport,
+  developerToolUpdateChecks,
   loadRootDoctorSchema,
 } from "../launchpad/src/diagnostics-lib.mjs";
 import { buildGitInventory } from "../launchpad/src/git-inventory-lib.mjs";
@@ -22,7 +23,9 @@ import {
 } from "../launchpad/src/doctor-children-lib.mjs";
 import {
   DOCTOR_EXIT_CODES,
+  buildSummary,
   exitCodeForSummaryStatus,
+  flattenChecks,
   readDoctorDeclaration,
 } from "../launchpad/src/doctor-surface-lib.mjs";
 import { validateAgainstSchema } from "../launchpad/src/json-schema-mini.mjs";
@@ -101,6 +104,7 @@ export async function buildLazurioDoctorReport({
   root = process.cwd(),
   checkToolUpdates = false,
   buildLaunchpadReport = buildLaunchpadDoctorReport,
+  inspectDeveloperToolUpdates,
   runBoundDoctor = runBoundChildDoctor,
 } = {}) {
   const detected = detectLazurioRoot(root);
@@ -115,6 +119,7 @@ export async function buildLazurioDoctorReport({
       companiesRoot: detected.absolutePath,
       launchpadRoot: join(detected.absolutePath, "launchpad"),
       checkToolUpdates,
+      inspectDeveloperToolUpdates,
     });
     return {
       root_kind: detected.kind,
@@ -170,10 +175,30 @@ export async function buildLazurioDoctorReport({
     error.lazurioExitCode = DOCTOR_EXIT_CODES.incomplete;
     throw error;
   }
+  const report = checkToolUpdates
+    ? withAdditionalDoctorChecks(
+        child.report,
+        await developerToolUpdateChecks({
+          inspectUpdates: inspectDeveloperToolUpdates,
+        }),
+      )
+    : child.report;
   return {
     root_kind: detected.kind,
-    report: child.report,
-    exit_code: child.exit_code,
+    report,
+    exit_code: exitCodeForSummaryStatus(report.summary.status),
+  };
+}
+
+function withAdditionalDoctorChecks(report, additionalChecks) {
+  const checks = [...report.checks, ...additionalChecks];
+  const nestedChecks = (report.children ?? []).flatMap(
+    (child) => (child.report ? flattenChecks(child.report) : []),
+  );
+  return {
+    ...report,
+    summary: buildSummary([...checks, ...nestedChecks]),
+    checks,
   };
 }
 
