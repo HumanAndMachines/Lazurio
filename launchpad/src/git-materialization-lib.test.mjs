@@ -152,12 +152,10 @@ test("does not overwrite a target claimed by a concurrent materialization", asyn
     repo,
     deps: {
       run: fixtureRemoteRunner({ declaredRemote, actualRemote: remote }),
-      move: async () => {
+      publish: async () => {
         await mkdir(target);
         await writeFile(join(target, "owned-by-other-update"), "keep\n");
-        const error = new Error("target already claimed");
-        error.code = "EEXIST";
-        throw error;
+        return { ok: false, code: "target_exists" };
       },
     },
   });
