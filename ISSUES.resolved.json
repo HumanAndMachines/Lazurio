@@ -83,7 +83,7 @@
         "Při prvním pozorování 2026-08-07 byl host silně zatížený a pozdější běh tehdy prošel; tato korelace vysvětluje původní hypotézu, ale novější bare-operand versus `./` A/B identifikuje stabilní source seam."
       ],
       "decision": "Explicitní souborové operandy root package skriptů `bun test` používají jednoznačné `./` cesty relativní ke skutečnému cwd. Stabilní terminology test tento invariant kontroluje, takže se filter-mode regresní cesta nemůže vrátit bez selhání běžného gate.",
-      "implementation": "Lazurio PR #195 zrootoval 55 dosud nejednoznačných operandů, zachoval dva už správně rootované operandy i `--cwd lazurio` semantiku a přidal regresní parserový kontrakt. PR byl rebase-mergem publikován jako main commit `ed409e748a83128d2c8bd4ea923817eb3ca3bdaf`.",
+      "implementation": "Lazurio PR #195 zrootoval 55 dosud nejednoznačných operandů, zachoval dva už správně rootované operandy i `--cwd lazurio` semantiku a přidal regresní parserový kontrakt v commitu `3b2d354290a39e5f1ae9c37619b89c412f1a4a2d`. Post-merge ověření proběhlo na exact main commitu `ed409e748a83128d2c8bd4ea923817eb3ca3bdaf`.",
       "acceptance_criteria": [
         "Každý explicitní operand root package skriptů `bun test` je jednoznačná `./` cesta relativní k jeho skutečnému cwd; existující `--cwd lazurio` semantics zůstávají beze změny.",
         "Stabilní existující root test obsahuje regresní kontrakt, který selže při přidání ne-rootovaného explicitního Bun test operandu.",
