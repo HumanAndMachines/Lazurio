@@ -3571,10 +3571,10 @@ async function waitForOpenRuntime(app, { reservedTab, feedback } = {}) {
   const deadline = Date.now() + OPEN_STARTING_WAIT_MS;
   let lastRuntime = null;
   while (Date.now() < deadline) {
-    writeCardProgress(feedback, "Aplikace ještě startuje", { loading: true });
+    writeCardProgress(feedback, "Aplikace startuje", { loading: true });
     writeReservedTabStatus(reservedTab, {
       title: appBaseTitle(app),
-      message: "Aplikace ještě startuje...",
+      message: "Aplikace startuje...",
     });
     await sleep(OPEN_STARTING_POLL_MS);
     const runtime = await fetchJson(`/api/apps/${encodeURIComponent(app.id)}/health`, {

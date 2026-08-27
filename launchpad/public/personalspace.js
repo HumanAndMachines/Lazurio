@@ -1218,10 +1218,10 @@ async function waitForPersonalRuntime(app, reservedTab) {
   const deadline = Date.now() + PERSONAL_OPEN_STARTING_WAIT_MS;
   let lastRuntime = null;
   while (Date.now() < deadline) {
-    state.openingMessages.set(app.id, "Aplikace ještě startuje");
+    state.openingMessages.set(app.id, "Aplikace startuje");
     writeReservedTabStatus(reservedTab, {
       title: app.title,
-      message: "Osobní aplikace ještě startuje...",
+      message: "Osobní aplikace startuje...",
     });
     rerender();
     await sleep(PERSONAL_OPEN_STARTING_POLL_MS);
