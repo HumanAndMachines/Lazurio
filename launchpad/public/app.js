@@ -45,6 +45,7 @@ import {
 } from "./codex-handoff.js";
 import { runtimeRecoveryForApp } from "./runtime-recovery.js";
 import { launchpadFetch } from "./session-aware-fetch.js";
+import { writeReservedTabStatus } from "./reserved-tab-status.js";
 import {
   organizationHash,
   personalspaceHash,
@@ -3492,7 +3493,10 @@ async function openAppChain(app, { feedback } = {}) {
   // asynchronní window.open po fetchi).
   const reservedTab = reserveResultTab(app);
   writeCardProgress(feedback, "Otevírám", { loading: true });
-  writeReservedTabStatus(reservedTab, app, "Spouštím aplikaci...");
+  writeReservedTabStatus(reservedTab, {
+    title: appBaseTitle(app),
+    message: "Spouštím aplikaci...",
+  });
   render();
   try {
     const payload = await fetchJson(`/api/apps/${encodeURIComponent(app.id)}/open`, {
@@ -3574,42 +3578,15 @@ function reserveResultTab(app) {
   return tab;
 }
 
-function writeReservedTabStatus(tab, app, message) {
-  if (!tab || tab.closed) return;
-  try {
-    tab.document.open();
-    tab.document.write(`<!doctype html>
-<html lang="cs">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Spouštím ${escapeHtml(appBaseTitle(app))}</title>
-  <style>
-    body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#17133f;background:#f8f7ff}
-    main{max-width:28rem;padding:2rem;text-align:center}
-    .mark{width:3rem;height:3rem;margin:0 auto 1rem;border-radius:1rem;background:#ebe7ff;color:#6d5dfc;display:grid;place-items:center;font-size:1.5rem}
-    h1{margin:0 0 .5rem;font-size:1.25rem}
-    p{margin:0;color:#6b668a;line-height:1.5}
-  </style>
-</head>
-<body>
-  <main>
-    <div class="mark">↗</div>
-    <h1>${escapeHtml(message)}</h1>
-    <p>${escapeHtml(appBaseTitle(app))} se otevře v tomhle panelu, jakmile odpoví health endpoint.</p>
-  </main>
-</body>
-</html>`);
-    tab.document.close();
-  } catch {}
-}
-
 async function waitForOpenRuntime(app, { reservedTab, feedback } = {}) {
   const deadline = Date.now() + OPEN_STARTING_WAIT_MS;
   let lastRuntime = null;
   while (Date.now() < deadline) {
     writeCardProgress(feedback, "Aplikace ještě startuje", { loading: true });
-    writeReservedTabStatus(reservedTab, app, "Aplikace ještě startuje...");
+    writeReservedTabStatus(reservedTab, {
+      title: appBaseTitle(app),
+      message: "Aplikace ještě startuje...",
+    });
     await sleep(OPEN_STARTING_POLL_MS);
     const runtime = await fetchJson(`/api/apps/${encodeURIComponent(app.id)}/health`, {
       method: "POST",
