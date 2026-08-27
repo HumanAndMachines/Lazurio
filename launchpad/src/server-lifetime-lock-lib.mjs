@@ -1,8 +1,14 @@
 import { existsSync, lstatSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { acquireModuleRuntimeLock } from "./module-runtime-lock-lib.mjs";
 
-export async function acquireServerLifetimeLock({ stateDirectory, instanceId }) {
+export async function acquireServerLifetimeLock({
+  stateDirectory,
+  instanceId,
+  pid = process.pid,
+  resolveProcessIdentity = serverLifetimeProcessIdentity,
+  timeoutMs = 2_000,
+}) {
   await mkdir(stateDirectory, { recursive: true, mode: 0o700 });
   assertPhysicalDirectory(stateDirectory, "Lazurio Server state directory");
 
@@ -11,13 +17,15 @@ export async function acquireServerLifetimeLock({ stateDirectory, instanceId }) 
       root: stateDirectory,
       key: "server-lifetime",
       instanceId,
-      timeoutMs: 2_000,
-      // The Server holds this lock for its whole process lifetime. PID liveness
-      // is sufficient and deliberately fail-closed: a reused live PID may delay
-      // stale recovery, but can never let a second Server through. Unlike Module
-      // lifecycle ownership this needs no process start-time proof and therefore
-      // no sandbox-sensitive ps/PowerShell spawn.
-      resolveProcessIdentity: serverLifetimeProcessIdentity,
+      pid,
+      timeoutMs,
+      // The Server holds this lock for its whole process lifetime. Linux hosted
+      // workspaces persist this record across container recreation, where the
+      // same namespace PID can immediately belong to a different process.
+      // /proc supplies a spawn-free boot + process-start identity so that reuse
+      // cannot wedge the next container. Other platforms retain the deliberately
+      // fail-closed PID proof until they have an equally local identity source.
+      resolveProcessIdentity,
     });
   } catch (error) {
     if (error?.code !== "LAZURIO_MODULE_RUNTIME_LOCK_TIMEOUT") throw error;
@@ -56,15 +64,56 @@ export async function acquireServerStartupLock({ stateDirectory, instanceId }) {
   }
 }
 
-async function serverLifetimeProcessIdentity(pid) {
+export async function serverLifetimeProcessIdentity(pid, {
+  platform = process.platform,
+  readFileFn = readFile,
+  signalProcess = (candidatePid) => process.kill(candidatePid, 0),
+} = {}) {
+  if (platform === "linux") {
+    try {
+      const [stat, bootId] = await Promise.all([
+        readFileFn(`/proc/${pid}/stat`, "utf8"),
+        readFileFn("/proc/sys/kernel/random/boot_id", "utf8"),
+      ]);
+      const startTicks = linuxProcessStartTicks(stat, pid);
+      const normalizedBootId = bootId.trim().toLowerCase();
+      if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/u.test(normalizedBootId)) {
+        throw new Error("Linux boot identity is invalid");
+      }
+      return `linux:${normalizedBootId}:pid:${pid}:start:${startTicks}`;
+    } catch (error) {
+      // Any incomplete Linux identity is unknown, never a different identity.
+      // The lock owner check then falls back to PID liveness and stays closed;
+      // a first acquisition fails because it cannot publish unverifiable owner
+      // metadata. Returning the older `pid:` format here would make a transient
+      // /proc failure look like PID reuse and could quarantine a live rich lock.
+      return null;
+    }
+  }
+
   try {
-    process.kill(pid, 0);
+    signalProcess(pid);
     return `pid:${pid}`;
   } catch (error) {
     if (error?.code === "ESRCH") return null;
     if (error?.code === "EPERM") return `pid:${pid}`;
     throw error;
   }
+}
+
+function linuxProcessStartTicks(stat, pid) {
+  const prefix = `${pid} (`;
+  const commandEnd = stat.lastIndexOf(") ");
+  if (!stat.startsWith(prefix) || commandEnd < prefix.length) {
+    throw new Error("Linux process stat identity is invalid");
+  }
+  // The suffix begins at field 3 (`state`); process start time is field 22.
+  const suffix = stat.slice(commandEnd + 2).trim().split(/\s+/u);
+  const startTicks = suffix[19];
+  if (!/^[0-9]+$/u.test(startTicks ?? "")) {
+    throw new Error("Linux process start time is invalid");
+  }
+  return startTicks;
 }
 
 function assertPhysicalDirectory(path, label) {
