@@ -21,7 +21,8 @@ test("reserved app tab uses the canonical Lazurio visual identity", () => {
   expect(html).toContain("@keyframes lazurio-facets");
   expect(html).toContain('mask:url("http://127.0.0.1:4174/vendor/lazurio/symbol-color.svg")');
   expect(html).toContain('aria-live="polite"');
-  expect(html).toContain("Knowledgebase</strong> se otevře v tomto panelu, jakmile bude připravená.");
+  expect(html).not.toContain("se otevře v tomto panelu");
+  expect(html).not.toContain("<p>");
   expect(html).not.toContain("health endpoint");
   expect(html).not.toContain("#6d5dfc");
   expect(html).not.toContain(">↗<");
@@ -41,7 +42,8 @@ test("reserved app tab keeps the canonical symbol and a non-layout loading motio
   expect(html).toContain(".brand-symbol{position:relative;width:80px;height:80px");
   expect(html).toContain("background-size:250% 100%");
   expect(html).toContain("mix-blend-mode:screen");
-  expect(html).toContain("@keyframes lazurio-facets{0%,14%{background-position:130% 0;opacity:.42}48%{opacity:1}86%,100%{background-position:-130% 0;opacity:.42}}");
+  expect(html).toContain("animation:lazurio-facets 3.2s cubic-bezier(.45,0,.55,1) infinite alternate");
+  expect(html).toContain("@keyframes lazurio-facets{0%{background-position:130% 0;opacity:.42}50%{opacity:1}100%{background-position:-130% 0;opacity:.42}}");
   expect(html).toContain("@media (prefers-reduced-motion:reduce){.brand-symbol::after{display:none}}");
   expect(html).not.toContain("@keyframes lazurio-facets{0%{width:");
   expect(html).not.toContain("@keyframes lazurio-facets{0%{height:");
