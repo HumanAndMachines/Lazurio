@@ -678,6 +678,14 @@ logu. Před spuštěním si instalátor připne canonical identitu a přesný ob
 nepřijme; při čisté opravě obnoví původní `node_modules`, ale změněná Git data
 nepřepisuje odhadem.
 
+Organization App může relativním `file:` specem deklarovat read-only package
+cíl v jiném checkoutu téže Organizace. Write a ancestor-resolution hranicí
+zůstává owning checkout; Lazurio přijme jen přesný canonical cíl a Bun
+link-farm, jehož všechny symlinky zůstávají uvnitř tohoto cíle. Změna owning
+repozitáře cíle zahrne do post-update obnovy i jinak nezměněného App consumera.
+Personalspace, template, absolutní/UNC cíle a cross-Organization odkazy tuto
+výjimku nezískávají.
+
 `/api/apps` a `/api/apps/:id/health` vrací sdílený dependency stav
 `dependencies.state`, který používá stejné labely v UI i Doctor detailech:
 
@@ -691,8 +699,10 @@ nepřepisuje odhadem.
   handoff k vědomému vytvoření a commitnutí lockfilu;
 - `dependency_boundary_invalid` — package, lockfile, `node_modules` root nebo
   dependency symlink překračuje owning Module/Personalspace/main/worktree
-  checkout; Launchpad strom nepoužije ani nezmění, prostor jej započítá jako
-  blokátor a připraví scoped handoff do Codexu;
+  checkout bez přesné Organization-local `file:` autority, případně tato
+  autorita míří mimo svůj deklarovaný package cíl; Launchpad strom nepoužije
+  ani nezmění, prostor jej započítá jako blokátor a připraví scoped handoff do
+  Codexu;
 - `missing_package` — manifest ukazuje na skutečně chybějící package;
 - `unknown_package_manager` — Launchpad neumí bezpečně spustit package manager
   nebo deklarovaný `packageManager` neodpovídá vybranému lockfilu; automatický

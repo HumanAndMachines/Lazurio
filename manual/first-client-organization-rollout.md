@@ -497,6 +497,13 @@ Kontrolní pravidla:
   stejném modulovém PR a ověř frozen install. Launchpad `Repair` lockfile nikdy
   nepřepisuje; opravuje pouze lokální `node_modules`. Nesoulad package a
   lockfilu je source chyba pro Agenta, ne lokální krok uživatele.
+- Organization-local sdílený balíček deklaruj pouze relativním `file:` specem.
+  Launchpad smí read-only ověřit přesně tento kanonický cíl uvnitř stejné
+  Organizace, ale instalaci i rollback stále omezuje na owning checkout. Jiný
+  symlink cíl v package zdroji nebo instalovaném link-farmu, absolutní/UNC cesta
+  či přesah do jiné Organizace je blokující diagnostika pro Agenta, ne důvod
+  rozšířit write hranici. Sync po změně owning repozitáře cíle znovu připraví i
+  jinak nezměněné App consumery.
 - Productionspace systémy nesmí získat hosted/public exposure jen tím, že existuje manifest. Sdílený Launchpad defaultně `productionspace/` app package discovery neprochází.
 
 ### 4. Discovery + support-loop gate

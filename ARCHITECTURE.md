@@ -264,6 +264,16 @@ Launchpad po dobu opravy zastaví a po úspěchu, nebo po návratu původních
 balíčků, znovu spustí. Neplatný lockfile je source chyba pro Agenta, ne důvod
 vytvořit lokálně jinou verzi dependencies.
 
+Hranice mutace a hledání balíčků je vždy přesný owning checkout. Relativní
+`file:` dependency smí jako read-only zdroj ukázat i do jiného checkoutu uvnitř
+téže Organizace (například na sdílené kontrakty), ale jen na přesně deklarovaný
+kanonický adresář. Jeho package identita se připne spolu s manifestem a
+lockfilem; každý symlink v cíli i instalovaném link-farmu musí zůstat uvnitř
+přesného package cíle. Změna repozitáře, který tento cíl vlastní, zahrne do
+post-update obnovy i jinak nezměněné App consumery. Cíl mimo Organizaci nebo
+změna autority během instalace jsou fail-closed. Personalspace, template a
+obecné repo package rooty tuto Organization výjimku nezískávají.
+
 Přesný technický důvod selhání aktualizace patří do API, CLI a Doctoru pro
 Agenty. Běžný Launchpad jej nikdy nevypisuje přímo: stabilní reason kódy
 promítá do vlastní lidské copy a stav bez smysluplné uživatelské akce na
