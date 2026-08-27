@@ -6,6 +6,7 @@ import { createServer } from "net";
 import { join } from "path";
 import {
   createLaunchpadGitFixture,
+  createOrganization,
   createPackageApp,
   initGitRepo,
   runGit,
@@ -1145,6 +1146,47 @@ test("apps cache keeps first paint Git-free and invalidates on force sync and fa
   expect((await getJson(port, "/api/apps")).apps.map((app) => app.id)).toContain("omegaco-cache-studio-v1");
 });
 
+test("reused agent entry refreshes the active Server inventory before printing its Organization URL", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const primary = await startLaunchpadServer(root);
+
+  const stale = await getJson(primary.port, "/api/apps");
+  expect(stale.organizations.map((organization) => organization.slug)).not.toContain("FreshCo");
+  await createOrganization({
+    root,
+    orgPath: "organizations/FreshCo_GEN3",
+    slug: "FreshCo",
+    moduleSlots: [],
+  });
+
+  const reuse = Bun.spawn([
+    "bun",
+    "src/server.mjs",
+    "--root",
+    root,
+    "--port",
+    String(primary.port),
+    "--reuse",
+    "--agent-entry",
+    "--organization",
+    "FreshCo",
+  ], {
+    cwd: join(import.meta.dirname, ".."),
+    env: primary.environment,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
+  expect(await reuse.exited).toBe(0);
+  expect(await new Response(reuse.stdout).text()).toContain(
+    `LAZURIO_LAUNCHPAD_URL=http://127.0.0.1:${primary.port}/#/org/FreshCo`,
+  );
+  expect((await getJson(primary.port, "/api/apps")).organizations.map(
+    (organization) => organization.slug,
+  )).toContain("FreshCo");
+});
+
 test("Launchpad server reports a live rebase and routes recovery through the shared update handoff", async () => {
   const root = await createLaunchpadGitFixture();
   tempRoots.push(root);
@@ -1375,6 +1417,22 @@ test("mutating APIs reject cross-origin and DNS-rebinding requests before routin
   });
   expect(rebound.status).toBe(403);
   expect(await rebound.json()).toEqual({ error: "mutating_request_forbidden" });
+});
+
+test("agent entry inventory refresh is local-only", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const { port } = await startLaunchpadServer(root);
+
+  const crossOrigin = await fetch(`http://127.0.0.1:${port}/api/lazurio/agent-entry-refresh`, {
+    method: "POST",
+    headers: { origin: "https://evil.invalid", "sec-fetch-site": "cross-site" },
+  });
+  expect(crossOrigin.status).toBe(403);
+  expect(await crossOrigin.json()).toEqual({ error: "agent_entry_refresh_forbidden" });
+
+  const wrongMethod = await fetch(`http://127.0.0.1:${port}/api/lazurio/agent-entry-refresh`);
+  expect(wrongMethod.status).toBe(405);
 });
 
 test("Launchpad server forwards runtime source from POST body to worktree open", async () => {

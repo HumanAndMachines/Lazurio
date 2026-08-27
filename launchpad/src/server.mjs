@@ -262,6 +262,7 @@ try {
     if (observation.status !== "compatible") {
       throw new Error("Reused Lazurio Server no longer has the expected identity.");
     }
+    await refreshReusedAgentEntryInventory(startResult.url);
     serverLocator = await withServerStateAccess(() => writeServerLocator({
       stateDirectory: serverStateDirectory,
       origin: startResult.url,
@@ -327,6 +328,43 @@ async function validateAgentEntryOrganization() {
     machine_context_root: companiesRoot,
   });
   assertAvailableAgentEntryOrganization(options, discovery.organizations ?? []);
+}
+
+async function refreshReusedAgentEntryInventory(origin) {
+  if (!options.agentEntry || options.organization === undefined) return;
+  let response;
+  try {
+    response = await fetch(new URL("/api/lazurio/agent-entry-refresh", origin), {
+      method: "POST",
+      signal: AbortSignal.timeout(5_000),
+    });
+  } catch (cause) {
+    const error = new Error(
+      "LAZURIO_LAUNCHPAD_AGENT_ENTRY_REFRESH_FAILED: Reused Lazurio Server neobnovil Organization inventory.",
+      { cause },
+    );
+    error.code = "LAZURIO_LAUNCHPAD_AGENT_ENTRY_REFRESH_FAILED";
+    throw error;
+  }
+  if (!response.ok) {
+    const error = new Error(
+      `LAZURIO_LAUNCHPAD_AGENT_ENTRY_REFRESH_FAILED: Reused Lazurio Server neobnovil Organization inventory (HTTP ${response.status}).`,
+    );
+    error.code = "LAZURIO_LAUNCHPAD_AGENT_ENTRY_REFRESH_FAILED";
+    throw error;
+  }
+  const result = await response.json().catch(() => null);
+  if (
+    result?.schema_version !== "lazurio.launchpad.agent_entry_inventory.v1"
+    || !Array.isArray(result.organizations)
+  ) {
+    const error = new Error(
+      "LAZURIO_LAUNCHPAD_AGENT_ENTRY_REFRESH_FAILED: Reused Lazurio Server vrátil neplatný Organization inventory.",
+    );
+    error.code = "LAZURIO_LAUNCHPAD_AGENT_ENTRY_REFRESH_FAILED";
+    throw error;
+  }
+  assertAvailableAgentEntryOrganization(options, result.organizations ?? []);
 }
 
 async function withServerStateAccess(action) {
@@ -1187,6 +1225,17 @@ function startServer(startPort) {
       try {
         if (url.pathname.startsWith("/api/personalspace") && !requestTrust.isTrustedLocalRequest(request, url)) {
           return jsonResponse({ error: "personalspace_request_forbidden" }, 403);
+        }
+        if (url.pathname === "/api/lazurio/agent-entry-refresh") {
+          if (!requestTrust.isTrustedLocalRequest(request, url)) {
+            return jsonResponse({ error: "agent_entry_refresh_forbidden" }, 403);
+          }
+          if (request.method !== "POST") return jsonResponse({ error: "method_not_allowed" }, 405);
+          const response = await buildAppsResponse({ force: true });
+          return jsonResponse({
+            schema_version: "lazurio.launchpad.agent_entry_inventory.v1",
+            organizations: (response.organizations ?? []).map(({ slug }) => ({ slug })),
+          });
         }
         if (url.pathname === "/api/lazurio/server-shutdown" && request.method === "POST") {
           if (!requestTrust.isTrustedLocalRequest(request, url)) {
