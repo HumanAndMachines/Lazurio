@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -175,6 +175,69 @@ test("dependency refresh runs only for an updated package root", async () => {
   expect(status(locked.working)).toBe("");
   expect(runGit(locked.working, ["rev-parse", "HEAD"]))
     .toBe(runGit(locked.working, ["rev-parse", "refs/remotes/origin/main"]));
+});
+
+test.skipIf(process.platform === "win32")("dependency refresh inspects package authority before reading or running lifecycle code", async () => {
+  const fixture = await repositoryFixture("external-package-authority");
+  await writeFile(join(fixture.sandbox, "foreign-package.json"), JSON.stringify({
+    name: "foreign",
+    private: true,
+    dependencies: { leaked: "1.0.0" },
+  }));
+  await symlink("../foreign-package.json", join(fixture.contributor, "package.json"), "file");
+  await writeFile(join(fixture.contributor, "bun.lock"), "# fixture\n");
+  runGit(fixture.contributor, ["add", "package.json", "bun.lock"]);
+  runGit(fixture.contributor, ["commit", "-m", "add escaped package authority"]);
+  runGit(fixture.contributor, ["push", "origin", "main"]);
+  let installs = 0;
+
+  const report = await runRootUpdate(fixture, {
+    installDependencies: async () => {
+      installs += 1;
+      return { ok: true };
+    },
+  });
+
+  expect(installs).toBe(0);
+  expect(report.results[0]).toMatchObject({
+    state: "blocked",
+    reason: "dependency_refresh_failed",
+    dependencies: [{
+      ok: false,
+      reason: "dependency_tree_boundary_invalid",
+    }],
+  });
+});
+
+test.skipIf(process.platform === "win32")("dependency refresh rejects a broken Bun lockfile symlink instead of treating it as absent", async () => {
+  const fixture = await repositoryFixture("broken-lockfile-authority");
+  await writeFile(join(fixture.contributor, "package.json"), JSON.stringify({
+    name: "fixture",
+    private: true,
+    dependencies: { fixture: "1.0.0" },
+  }));
+  await symlink("missing-bun.lock", join(fixture.contributor, "bun.lock"), "file");
+  runGit(fixture.contributor, ["add", "package.json", "bun.lock"]);
+  runGit(fixture.contributor, ["commit", "-m", "add broken Bun lockfile authority"]);
+  runGit(fixture.contributor, ["push", "origin", "main"]);
+  let installs = 0;
+
+  const report = await runRootUpdate(fixture, {
+    installDependencies: async () => {
+      installs += 1;
+      return { ok: true };
+    },
+  });
+
+  expect(installs).toBe(0);
+  expect(report.results[0]).toMatchObject({
+    state: "blocked",
+    reason: "dependency_refresh_failed",
+    dependencies: [{
+      ok: false,
+      reason: "dependency_tree_boundary_invalid",
+    }],
+  });
 });
 
 test("successful dependency refresh may not leave the checkout dirty", async () => {
@@ -981,8 +1044,8 @@ test("invalid App blocks only its changed Module while a valid sibling still ref
         }],
         failures: [],
       }),
-      refreshPackageDependencies: async ({ cwd }) => {
-        refreshed.push(cwd);
+      refreshPackageDependencies: async ({ cwd, boundaryRoot }) => {
+        refreshed.push({ cwd, boundaryRoot });
         return { ok: true, refresh_strategy: "ensure" };
       },
       inspectLocalRepo: async () => ({ ok: true, branch: "main", dirtyPaths: [], head }),
@@ -993,7 +1056,8 @@ test("invalid App blocks only its changed Module while a valid sibling still ref
   });
 
   expect(refreshed).toHaveLength(1);
-  expect(refreshed[0].endsWith(join("organizations", "TestCo", "workspace", "valid-module", "app", "v1"))).toBe(true);
+  expect(refreshed[0].cwd.endsWith(join("organizations", "TestCo", "workspace", "valid-module", "app", "v1"))).toBe(true);
+  expect(refreshed[0].boundaryRoot).toBe(await realpath(validModuleRoot));
   expect(report.results.find((result) => result.repo_key === invalidModule.key)).toMatchObject({
     state: "blocked",
     reason: "dependency_refresh_failed",

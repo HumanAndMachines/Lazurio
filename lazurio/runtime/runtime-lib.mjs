@@ -1,9 +1,10 @@
 import { existsSync } from "fs";
-import { appendFile, mkdir, readFile, realpath, writeFile } from "fs/promises";
+import { appendFile, lstat, mkdir, readFile, realpath, writeFile } from "fs/promises";
 import { randomUUID } from "crypto";
 import { createConnection } from "net";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep, win32 } from "path";
 import {
+  APP_CHECKOUT_ROOT,
   APP_FILESYSTEM_ROOT,
   discoverLaunchpadApps,
   runtimeScriptPortAuthorityIssues,
@@ -15,9 +16,15 @@ import { buildWorktreeIndex } from "./worktree-lib.mjs";
 import { acquireModuleRuntimeLock } from "./module-runtime-lock-lib.mjs";
 import { trustedWindowsSystemExecutable } from "./windows-system-path-lib.mjs";
 import {
+  declaredDependencyCount,
+  inspectRequiredDependencies,
   refreshFrozenBunDependencies,
   runFrozenBunInstall,
 } from "./dependency-install-lib.mjs";
+import {
+  inspectCanonicalPathBoundary,
+  readJsonWithinCanonicalBoundary,
+} from "../../lazurio/core/path-boundary-lib.mjs";
 import {
   buildDesiredModuleState,
   listDesiredModuleStates,
@@ -48,6 +55,10 @@ const logTailBytes = 40_000;
 const errorTailBytes = 4_000;
 const packageLockfileNames = ["bun.lock", "bun.lockb", "package-lock.json", "pnpm-lock.yaml", "yarn.lock"];
 const supportedInstallManagers = new Set(["bun"]);
+const APP_RUNTIME_CWD = Symbol("lazurio.app.runtime-cwd");
+const APP_RUNTIME_PACKAGE_PATH = Symbol("lazurio.app.runtime-package-path");
+const APP_RUNTIME_OWNER_ROOT = Symbol("lazurio.app.runtime-owner-root");
+const DEPENDENCY_RUNTIME_AUTHORITY = Symbol("lazurio.dependencies.runtime-authority");
 
 export function runtimeHostsShareListener(left, right) {
   return canonicalRuntimeListenerHost(left) === canonicalRuntimeListenerHost(right);
@@ -206,6 +217,7 @@ export function createRuntimeManager({
   desiredRestartStableMs = 30_000,
   sleepFn = sleep,
   writeDesiredModuleStateFn = writeDesiredModuleState,
+  buildWorktreeIndexFn = buildWorktreeIndex,
 }) {
   const runtimeBunExecutable = bunExecutable
     ?? (platform === process.platform ? resolveBunExecutable() : resolveBunExecutable({ platform }));
@@ -291,6 +303,201 @@ export function createRuntimeManager({
     return typeof sourceRoot === "string" && isAbsolute(sourceRoot)
       ? sourceRoot
       : companiesRoot;
+  }
+
+  function checkoutRootForApp(app) {
+    const checkoutRoot = app?.[APP_CHECKOUT_ROOT];
+    if (typeof checkoutRoot === "string" && isAbsolute(checkoutRoot)) return checkoutRoot;
+    const sourceRoot = filesystemRootForApp(app);
+    const modulePath = app?.module_contract?.module_path;
+    if (typeof modulePath === "string" && modulePath.trim() !== "") {
+      const candidate = resolve(sourceRoot, dirname(modulePath));
+      const pathFromSource = relative(sourceRoot, candidate);
+      if (pathFromSource === "" || (
+        pathFromSource !== ".."
+        && !pathFromSource.startsWith(`..${sep}`)
+        && !isAbsolute(pathFromSource)
+      )) return candidate;
+    }
+    return sourceRoot;
+  }
+
+  function runtimeCwdForApp(app) {
+    const selected = app?.[APP_RUNTIME_CWD];
+    return typeof selected === "string" && isAbsolute(selected)
+      ? selected
+      : join(filesystemRootForApp(app), app.cwd ?? dirname(app.package_path ?? "package.json"));
+  }
+
+  function runtimePackagePathForApp(app) {
+    const selected = app?.[APP_RUNTIME_PACKAGE_PATH];
+    return typeof selected === "string" && isAbsolute(selected)
+      ? selected
+      : join(filesystemRootForApp(app), app.package_path ?? join(app.cwd ?? ".", "package.json"));
+  }
+
+  function lexicalPathForBoundary({ lexicalRoot, canonicalRoot, targetPath }) {
+    const lexicalRelative = relative(lexicalRoot, targetPath);
+    if (
+      lexicalRelative === ""
+      || (
+        lexicalRelative !== ".."
+        && !lexicalRelative.startsWith(`..${sep}`)
+        && !isAbsolute(lexicalRelative)
+        && !win32.isAbsolute(lexicalRelative)
+      )
+    ) return targetPath;
+
+    const canonicalRelative = relative(canonicalRoot, targetPath);
+    if (
+      canonicalRelative === ""
+      || (
+        canonicalRelative !== ".."
+        && !canonicalRelative.startsWith(`..${sep}`)
+        && !isAbsolute(canonicalRelative)
+        && !win32.isAbsolute(canonicalRelative)
+      )
+    ) return resolve(lexicalRoot, canonicalRelative);
+    return targetPath;
+  }
+
+  async function runtimePathAuthorityForApp(app) {
+    const sourceRoot = filesystemRootForApp(app);
+    let sourceRealPath;
+    try {
+      sourceRealPath = await realpath(sourceRoot);
+    } catch (error) {
+      return {
+        ok: false,
+        reason: "package_root_unavailable",
+        detail: `Lazurio source root nejde bezpečně otevřít: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+
+    const declaredOwnerPath = app?.personal === true
+      ? app?.space_mount_path
+      : ["organization", "template"].includes(app?.organization_kind)
+        ? app?.organization_path
+        : null;
+    let ownerLexicalPath = sourceRoot;
+    let ownerRoot = sourceRealPath;
+    if (typeof declaredOwnerPath === "string" && declaredOwnerPath.trim() !== "") {
+      ownerLexicalPath = resolve(sourceRoot, declaredOwnerPath);
+      const ownerBoundary = await inspectCanonicalPathBoundary({
+        rootPath: sourceRoot,
+        rootRealPath: sourceRealPath,
+        targetPath: ownerLexicalPath,
+      });
+      if (!ownerBoundary.ok || !ownerBoundary.targetRealPath) {
+        return {
+          ok: false,
+          reason: "dependency_tree_boundary_invalid",
+          detail: `${app?.personal === true ? "Personalspace" : "Organization"} mount po discovery neleží uvnitř canonical Lazurio rootu. Obnov stav a oprav přesun nebo přejmenování mountu.`,
+        };
+      }
+      ownerRoot = ownerBoundary.targetRealPath;
+    }
+
+    const checkoutLexicalPath = lexicalPathForBoundary({
+      lexicalRoot: ownerLexicalPath,
+      canonicalRoot: ownerRoot,
+      targetPath: checkoutRootForApp(app),
+    });
+    const checkoutBoundary = await inspectCanonicalPathBoundary({
+      rootPath: ownerLexicalPath,
+      rootRealPath: ownerRoot,
+      targetPath: checkoutLexicalPath,
+      allowTargetEqual: true,
+    });
+    if (!checkoutBoundary.ok || !checkoutBoundary.targetRealPath) {
+      return {
+        ok: false,
+        reason: "dependency_tree_boundary_invalid",
+        detail: "Owning checkout po discovery neleží uvnitř canonical owner rootu. Lazurio z něj nic nespustí ani nezmění.",
+      };
+    }
+
+    const runtimeCwd = lexicalPathForBoundary({
+      lexicalRoot: checkoutLexicalPath,
+      canonicalRoot: checkoutBoundary.targetRealPath,
+      targetPath: runtimeCwdForApp(app),
+    });
+    try {
+      await lstat(runtimeCwd);
+    } catch (error) {
+      const missing = ["ENOENT", "ENOTDIR"].includes(error?.code);
+      return {
+        ok: false,
+        reason: missing ? "package_root_unavailable" : "package_root_inspection_failed",
+        detail: missing
+          ? "Deklarovaný package root na této mašině neexistuje."
+          : `Deklarovaný package root nejde bezpečně ověřit: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+    const cwdBoundary = await inspectCanonicalPathBoundary({
+      rootPath: checkoutLexicalPath,
+      rootRealPath: checkoutBoundary.targetRealPath,
+      targetPath: runtimeCwd,
+      allowTargetEqual: true,
+    });
+    if (!cwdBoundary.ok || !cwdBoundary.targetRealPath) {
+      return {
+        ok: false,
+        reason: "dependency_tree_boundary_invalid",
+        detail: "Package root po discovery neleží uvnitř canonical owning checkoutu.",
+      };
+    }
+
+    const runtimePackagePath = lexicalPathForBoundary({
+      lexicalRoot: runtimeCwd,
+      canonicalRoot: cwdBoundary.targetRealPath,
+      targetPath: runtimePackagePathForApp(app),
+    });
+    try {
+      await lstat(runtimePackagePath);
+    } catch (error) {
+      const missing = ["ENOENT", "ENOTDIR"].includes(error?.code);
+      return {
+        ok: false,
+        reason: missing ? "package_json_missing" : "dependency_tree_inspection_failed",
+        detail: missing
+          ? "V deklarovaném package rootu chybí package.json."
+          : `package.json nejde bezpečně ověřit: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+    const packageBoundary = await inspectCanonicalPathBoundary({
+      rootPath: runtimeCwd,
+      rootRealPath: cwdBoundary.targetRealPath,
+      targetPath: runtimePackagePath,
+    });
+    if (!packageBoundary.ok || !packageBoundary.targetRealPath) {
+      return {
+        ok: false,
+        reason: "dependency_tree_boundary_invalid",
+        detail: "package.json po discovery neleží uvnitř canonical package rootu.",
+      };
+    }
+
+    return {
+      ok: true,
+      source_root: sourceRealPath,
+      owner_root: ownerRoot,
+      checkout_root: checkoutBoundary.targetRealPath,
+      cwd: cwdBoundary.targetRealPath,
+      package_path: packageBoundary.targetRealPath,
+    };
+  }
+
+  function appWithRuntimeAuthority(app, dependencies) {
+    const authority = dependencies?.[DEPENDENCY_RUNTIME_AUTHORITY];
+    if (!authority?.ok) return app;
+    return {
+      ...app,
+      [APP_CHECKOUT_ROOT]: authority.checkout_root,
+      [APP_RUNTIME_CWD]: authority.cwd,
+      [APP_RUNTIME_PACKAGE_PATH]: authority.package_path,
+      [APP_RUNTIME_OWNER_ROOT]: authority.owner_root,
+    };
   }
 
   async function portOwnerIdentity(pid) {
@@ -435,6 +642,7 @@ export function createRuntimeManager({
         dependencies,
       });
     }
+    app = appWithRuntimeAuthority(app, dependencies);
 
     await ensureRuntimeDirs();
     const logPath = logPathForApp(runtimeKey);
@@ -470,7 +678,7 @@ export function createRuntimeManager({
     let child;
     try {
       child = spawnProcess([runtimeBunExecutable, "run", app.dev_script], {
-        cwd: join(appFilesystemRoot, app.cwd),
+        cwd: runtimeCwdForApp(app),
         env: childEnv,
         stdout: "pipe",
         stderr: "pipe",
@@ -478,7 +686,7 @@ export function createRuntimeManager({
         detached: platform !== "win32",
       });
     } catch (error) {
-      const failureKind = existsSync(join(appFilesystemRoot, app.cwd)) ? "start_spawn_failed" : "bad_cwd";
+      const failureKind = existsSync(runtimeCwdForApp(app)) ? "start_spawn_failed" : "bad_cwd";
       const message = `${app.title} nejde spustit: ${failureKind === "bad_cwd" ? `cwd ${app.cwd} neexistuje` : error.message}.`;
       await appendLog(logPath, `[launchpad] start spawn failed ${app.id}: ${error.message}\n`);
       await writeState(runtimeKey, {
@@ -495,7 +703,7 @@ export function createRuntimeManager({
       });
       throw new RuntimeActionError(500, "app_start_failed", message, [error.message], {
         failure_kind: failureKind,
-        cwd: join(appFilesystemRoot, app.cwd),
+        cwd: runtimeCwdForApp(app),
         log_path: relativeRuntimePath(logPath),
       });
     }
@@ -775,11 +983,12 @@ export function createRuntimeManager({
         dependencies,
       });
     }
+    app = appWithRuntimeAuthority(app, dependencies);
     await ensureRuntimeDirs();
     const logPath = logPathForApp(runtimeKey);
     const startedAt = new Date().toISOString();
     const appFilesystemRoot = filesystemRootForApp(app);
-    const cwd = join(appFilesystemRoot, app.cwd);
+    const cwd = runtimeCwdForApp(app);
     const activeRecord = selectManagedModuleStopRecord(managedProcesses.values(), app);
     const activeApp = activeRecord?.runtimeApp ?? null;
     if (activeApp) {
@@ -793,10 +1002,10 @@ export function createRuntimeManager({
 
     const installOptions = {
       cwd,
-      // Dependency mutation je app-package scoped. Užší boundary než celý
-      // checkout zaručí, že clean Repair může sáhnout pouze na jeho odvozené
-      // node_modules.
-      boundaryRoot: cwd,
+      // Mutace zůstává přesně na app-local node_modules; boundary zároveň
+      // dokazuje, že package i případné dependency symlinky patří do právě
+      // zvoleného main/worktree checkoutu.
+      boundaryRoot: dependencies[DEPENDENCY_RUNTIME_AUTHORITY].checkout_root,
       command: runtimePackageCommand(dependencies.install_command, runtimeBunExecutable),
       spawnProcess,
       env: runtimeProcessEnv(app, {
@@ -818,7 +1027,11 @@ export function createRuntimeManager({
     const exitCode = installed.exit_code ?? 1;
     await appendLog(logPath, `[launchpad] ${new Date().toISOString()} ${action} ${app.id} code=${exitCode} source=${runtimeSource.type}\n`);
     const log_excerpt = await logTail(logPath, errorTailBytes);
-    const failureKind = installed.ok ? null : classifyInstallFailure(log_excerpt);
+    const failureKind = installed.ok
+      ? null
+      : installed.reason === "dependency_install_failed"
+        ? classifyInstallFailure(log_excerpt)
+        : installed.reason ?? classifyInstallFailure(log_excerpt);
     await writeState(runtimeKey, {
       status: installed.ok ? "stopped" : "unhealthy",
       app_id: app.id,
@@ -841,7 +1054,11 @@ export function createRuntimeManager({
         log_excerpt,
       },
       log_path: relativeRuntimePath(logPath),
-      ...(installed.ok ? {} : { last_error: installFailureMessage(app, exitCode, log_excerpt), failure_kind: failureKind, log_excerpt }),
+      ...(installed.ok ? {} : {
+        last_error: installed.detail ?? installFailureMessage(app, exitCode, log_excerpt),
+        failure_kind: failureKind,
+        log_excerpt,
+      }),
     });
 
     if (!installed.ok) {
@@ -867,9 +1084,7 @@ export function createRuntimeManager({
         log_excerpt,
       ].filter(Boolean), {
         action,
-        failure_kind: installed.reason === "dependency_install_failed"
-          ? failureKind
-          : installed.reason ?? failureKind,
+        failure_kind: failureKind,
         command: dependencies.install_command,
         command_display: dependencies.install_command_display,
         cwd,
@@ -877,6 +1092,7 @@ export function createRuntimeManager({
         log_path: relativeRuntimePath(logPath),
         log_excerpt,
         rollback_restarted: rollbackRestarted !== null,
+        missing_required_dependencies: installed.missing_required_dependencies ?? [],
         ...(rollbackRestartError ? { rollback_restart_error: rollbackRestartError } : {}),
       });
     }
@@ -1311,7 +1527,7 @@ export function createRuntimeManager({
       // jej následně fail-closed klasifikuje podle port ownership kontraktu.
       try {
         const ownerAfterStop = await resolvePortOwnerFn(app.port, {
-          expectedCwd: join(filesystemRootForApp(app), app.cwd ?? dirname(app.package_path ?? "package.json")),
+          expectedCwd: runtimeCwdForApp(app),
         });
         if (ownerAfterStop) {
           await appendLog(
@@ -1747,6 +1963,10 @@ export function createRuntimeManager({
         runtime_source: { type: "main" },
       }
       : await worktreeRuntimeApp(app, runtimeSource);
+    // Zachovej přesný veřejný action error pro syntakticky nebezpečnou
+    // Organization cestu; kanonické symlink/junction hranice pak fail-closed
+    // ověří dependency autorita těsně před čtením nebo lifecycle akcí.
+    organizationRuntimeEnv(runtimeApp);
     if (enforcePortContract) {
       assertValidRuntimePortContract(runtimeApp, discovery, { discoveryApp: app });
     }
@@ -1847,7 +2067,7 @@ export function createRuntimeManager({
       // GEN3 keeps some module-root and sibling config source outside the app
       // package. Give those importers the launched app's declared dependencies
       // as Bun's standard fallback without inheriting a Machine-wide search path.
-      NODE_PATH: join(companiesRoot, app.cwd, "node_modules"),
+      NODE_PATH: join(runtimeCwdForApp(app), "node_modules"),
       ...overrides,
     };
   }
@@ -1880,6 +2100,10 @@ export function createRuntimeManager({
       );
     }
 
+    const selectedOwnerRoot = app?.[APP_RUNTIME_OWNER_ROOT];
+    if (typeof selectedOwnerRoot === "string" && isAbsolute(selectedOwnerRoot)) {
+      return { COMPANYASCODE_ORGANIZATION_ROOT: selectedOwnerRoot };
+    }
     const organizationRoot = resolve(companiesRoot, declaredPath);
     const organizationBoundary = relative(companiesRoot, organizationRoot);
     if (
@@ -1906,7 +2130,7 @@ export function createRuntimeManager({
         `app_id: ${app.id}`,
       ]);
     }
-    const index = await buildWorktreeIndex({ companiesRoot, organization: app.company, module: app.module });
+    const index = await buildWorktreeIndexFn({ companiesRoot, organization: app.company, module: app.module });
     const worktree = index.worktrees.find((item) => item.slug === source.slug && item.module === app.module);
     if (!worktree) {
       throw new RuntimeActionError(404, "worktree_not_found", `Worktree ${source.slug} pro ${app.company}/${app.module} nebyl nalezen.`);
@@ -1923,6 +2147,17 @@ export function createRuntimeManager({
     const modulePath = normalizeRelativePath(worktree.metadata?.module_path ?? `modules/${app.module}`);
     const mainModulePath = normalizeRelativePath(`${app.organization_path}/${modulePath}`);
     const worktreePath = normalizeRelativePath(worktree.path);
+    const organizationRoot = resolve(companiesRoot, app.organization_path);
+    const selectedWorktree = await inspectCanonicalPathBoundary({
+      rootPath: organizationRoot,
+      targetPath: resolve(companiesRoot, worktreePath),
+    });
+    if (!selectedWorktree.ok || !selectedWorktree.targetRealPath) {
+      throw invalidWorktreeRuntimeContract(app, worktree, [
+        `${worktreePath}: vybraný worktree po indexaci odkazuje mimo canonical Organization root`,
+      ]);
+    }
+    const absoluteWorktreeRoot = selectedWorktree.targetRealPath;
     const cwd = replacePathPrefix(app.cwd, mainModulePath, worktreePath);
     const packagePath = replacePathPrefix(app.package_path, mainModulePath, worktreePath);
     const worktreeContract = await materializeWorktreeRuntimeContract({
@@ -1930,11 +2165,28 @@ export function createRuntimeManager({
       worktree,
       worktreePath,
       packagePath,
+      absoluteWorktreeRoot,
     });
+
+    const lexicalWorktreeRoot = resolve(companiesRoot, worktreePath);
+    const lexicalCwd = resolve(companiesRoot, cwd);
+    const cwdFromWorktree = relative(lexicalWorktreeRoot, lexicalCwd);
+    if (
+      cwdFromWorktree === ".."
+      || cwdFromWorktree.startsWith(`..${sep}`)
+      || isAbsolute(cwdFromWorktree)
+      || win32.isAbsolute(cwdFromWorktree)
+    ) {
+      throw invalidWorktreeRuntimeContract(app, worktree, [
+        `${cwd}: runtime cwd neleží uvnitř canonical worktree ${worktreePath}`,
+      ]);
+    }
 
     return {
       ...app,
       ...worktreeContract,
+      [APP_CHECKOUT_ROOT]: absoluteWorktreeRoot,
+      [APP_RUNTIME_CWD]: resolve(absoluteWorktreeRoot, cwdFromWorktree),
       // Plugin paths/capabilities are validated only by main discovery. A
       // worktree may change its Module App runtime, but it cannot smuggle a
       // different plugin boundary into a lifecycle action.
@@ -1960,10 +2212,11 @@ export function createRuntimeManager({
     worktree,
     worktreePath,
     packagePath,
+    absoluteWorktreeRoot,
   }) {
-    const absoluteWorktreeRoot = resolve(companiesRoot, worktreePath);
-    const absolutePackagePath = resolve(companiesRoot, packagePath);
-    const packageBoundary = relative(absoluteWorktreeRoot, absolutePackagePath);
+    const lexicalWorktreeRoot = resolve(companiesRoot, worktreePath);
+    const lexicalPackagePath = resolve(companiesRoot, packagePath);
+    const packageBoundary = relative(lexicalWorktreeRoot, lexicalPackagePath);
     if (
       !packageBoundary
       || isAbsolute(packageBoundary)
@@ -1975,15 +2228,21 @@ export function createRuntimeManager({
         `${packagePath}: runtime package neleží uvnitř canonical worktree ${worktreePath}`,
       ]);
     }
+    const absolutePackagePath = resolve(absoluteWorktreeRoot, packageBoundary);
 
-    let packageJson;
-    try {
-      packageJson = JSON.parse(await readFile(absolutePackagePath, "utf8"));
-    } catch (error) {
+    const packageRoot = dirname(absolutePackagePath);
+    const selectedLockfile = await firstExistingLockfile(packageRoot);
+    const packageInspection = await inspectRequiredDependencies({
+      cwd: packageRoot,
+      boundaryRoot: absoluteWorktreeRoot,
+      lockfile: selectedLockfile?.path ?? null,
+    });
+    if (!packageInspection.ok) {
       throw invalidWorktreeRuntimeContract(app, worktree, [
-        `${packagePath}: package.json nejde přečíst: ${error.message}`,
+        `${packagePath}: package autoritu nelze bezpečně načíst: ${packageInspection.detail}`,
       ]);
     }
+    const packageJson = packageInspection.package_json;
     const normalizedRuntime = normalizePackageRuntime({ packageJson, packagePath });
     if (!normalizedRuntime) {
       throw invalidWorktreeRuntimeContract(app, worktree, [
@@ -1997,7 +2256,11 @@ export function createRuntimeManager({
       const moduleManifestPath = `${worktreePath}/lazurio.module.json`;
       let moduleManifest;
       try {
-        moduleManifest = JSON.parse(await readFile(resolve(companiesRoot, moduleManifestPath), "utf8"));
+        moduleManifest = (await readJsonWithinCanonicalBoundary({
+          targetPath: resolve(absoluteWorktreeRoot, "lazurio.module.json"),
+          rootPath: absoluteWorktreeRoot,
+          label: moduleManifestPath,
+        })).value;
       } catch (error) {
         issues.push(`${moduleManifestPath}: lazurio.module.json nejde přečíst: ${error.message}`);
       }
@@ -2047,6 +2310,7 @@ export function createRuntimeManager({
     if (issues.length > 0) throw invalidWorktreeRuntimeContract(app, worktree, issues);
 
     return {
+      [APP_RUNTIME_PACKAGE_PATH]: absolutePackagePath,
       title: worktreeApp.title,
       company: worktreeApp.company,
       module: worktreeApp.module,
@@ -2745,7 +3009,7 @@ export function createRuntimeManager({
   }
 
   async function verifyStartedListenerOwnership(app, record, { timeoutMs }) {
-    const expectedCwd = join(filesystemRootForApp(app), app.cwd ?? dirname(app.package_path ?? "package.json"));
+    const expectedCwd = runtimeCwdForApp(app);
     const deadline = Date.now() + timeoutMs;
     let evidence = [];
     do {
@@ -2784,7 +3048,7 @@ export function createRuntimeManager({
   }
 
   async function prepareDeclaredListeners(app, { runtimeKey, logPath, takeover = {} }) {
-    const expectedCwd = join(filesystemRootForApp(app), app.cwd ?? dirname(app.package_path ?? "package.json"));
+    const expectedCwd = runtimeCwdForApp(app);
     const conflicts = [];
     const reclaimed = [];
     const declaredListeners = [...(app.listeners ?? [])];
@@ -3218,8 +3482,10 @@ export function createRuntimeManager({
     const record = managedProcesses.get(runtimeKey);
     app = record?.runtimeApp ?? await materializeRuntimeListeners(app);
     const dependencies = await dependencyForApp(app);
+    app = appWithRuntimeAuthority(app, dependencies);
     const probe = await probeHealth(app);
-    const expectedCwd = join(filesystemRootForApp(app), app.cwd ?? dirname(app.package_path ?? "package.json"));
+    const expectedCwd = dependencies[DEPENDENCY_RUNTIME_AUTHORITY]?.cwd
+      ?? (record ? runtimeCwdForApp(app) : null);
     const portOwner = record ? null : await resolveVerifiedPortOwner(app, state, expectedCwd);
     const listenerReconciliation = await reconcileRuntimeListeners(app, record, expectedCwd);
     // Pozitivně ověřený canonical cwd zpřesní diagnostickou klasifikaci na
@@ -3449,10 +3715,7 @@ export function createRuntimeManager({
       return null;
     }
 
-    const expectedCwd = join(
-      filesystemRootForApp(app),
-      app.cwd ?? dirname(app.package_path ?? "package.json"),
-    );
+    const expectedCwd = runtimeCwdForApp(app);
     const confirmedOwner = await resolveVerifiedPortOwner(app, {
       status: "healthy",
       app_id: app.id,
@@ -3560,7 +3823,7 @@ export function createRuntimeManager({
     }
 
     const appExpectedCwd = expectedCwd
-      ?? join(filesystemRootForApp(app), app.cwd ?? dirname(app.package_path ?? "package.json"));
+      ?? runtimeCwdForApp(app);
     const owner = await resolvePortOwnerFn(app.port, {
       expectedCwd: appExpectedCwd,
       host: app.entrypoint_listener?.host ?? app.host,
@@ -3642,62 +3905,83 @@ export function createRuntimeManager({
   async function dependencyForApp(app) {
     const appCwd = app.cwd ?? dirname(app.package_path ?? "package.json");
     const packagePath = app.package_path ?? join(appCwd, "package.json");
-    const appFilesystemRoot = filesystemRootForApp(app);
-    const appRoot = join(appFilesystemRoot, appCwd);
-    const absolutePackagePath = join(appFilesystemRoot, packagePath);
     const checkedAt = new Date().toISOString();
+    const authority = await runtimePathAuthorityForApp(app);
 
-    if (!existsSync(absolutePackagePath)) {
+    if (!authority.ok) {
+      const packageFailure = ["package_root_unavailable", "package_json_missing", "package_json_invalid"].includes(authority.reason);
       return dependencyResult({
         app,
-        state: "missing_package",
+        state: packageFailure ? "missing_package" : "dependency_boundary_invalid",
         appCwd,
         packagePath,
         packageJsonPresent: false,
         nodeModulesPresent: false,
         lockfile: null,
         declaredDependencyCount: 0,
+        requiredDependencyCount: 0,
+        missingDependencyNames: [],
         packageManager: null,
-        packageManagerSource: "missing_package",
+        packageManagerSource: packageFailure ? authority.reason : "authority_invalid",
         installCommand: null,
         checkedAt,
-        message: `Chybí package.json pro ${app.title}. Spusť Doctor sync nebo oprav manifest package_path.`,
+        message: packageFailure
+          ? `${app.title}: package.json nejde bezpečně načíst. ${authority.detail}`
+          : `${app.title}: dependency strom nejde bezpečně použít. ${authority.detail}`,
       });
     }
 
-    let packageJson;
-    try {
-      packageJson = JSON.parse(await readFile(absolutePackagePath, "utf8"));
-    } catch (error) {
-      return dependencyResult({
-        app,
-        state: "missing_package",
-        appCwd,
-        packagePath,
-        packageJsonPresent: true,
-        nodeModulesPresent: false,
-        lockfile: null,
-        declaredDependencyCount: 0,
-        packageManager: null,
-        packageManagerSource: "invalid_package_json",
-        installCommand: null,
-        checkedAt,
-        message: `package.json pro ${app.title} nejde přečíst: ${error.message}`,
-      });
-    }
+    const appRoot = authority.cwd;
+    const absolutePackagePath = authority.package_path;
+    const withAuthority = (result) => ({
+      ...result,
+      [DEPENDENCY_RUNTIME_AUTHORITY]: authority,
+    });
 
+    const packageJsonPresent = existsSync(absolutePackagePath);
     const nodeModulesPresent = existsSync(join(appRoot, "node_modules"));
     const lockfile = await firstExistingLockfile(appRoot);
+    const dependencyInspection = await inspectRequiredDependencies({
+      cwd: appRoot,
+      boundaryRoot: authority.checkout_root,
+      lockfile: lockfile?.path ?? null,
+    });
+
+    if (!dependencyInspection.ok) {
+      const packageFailure = ["package_root_unavailable", "package_json_missing", "package_json_invalid"].includes(dependencyInspection.reason);
+      return withAuthority(dependencyResult({
+        app,
+        state: packageFailure ? "missing_package" : "dependency_boundary_invalid",
+        appCwd,
+        packagePath,
+        packageJsonPresent,
+        nodeModulesPresent,
+        lockfile,
+        declaredDependencyCount: 0,
+        requiredDependencyCount: dependencyInspection.required_dependency_count,
+        missingDependencyNames: dependencyInspection.missing_required_dependencies,
+        packageManager: null,
+        packageManagerSource: packageFailure ? dependencyInspection.reason : "authority_invalid",
+        installCommand: null,
+        checkedAt,
+        message: packageFailure
+          ? `${app.title}: package.json nejde bezpečně načíst. ${dependencyInspection.detail}`
+          : `${app.title}: dependency strom nejde bezpečně použít. ${dependencyInspection.detail}`,
+      }));
+    }
+
+    const packageJson = dependencyInspection.package_json;
     const manager = detectPackageManager({ packageJson, lockfile });
-    const declaredDependencyCount = countDeclaredDependencies(packageJson);
-    // Lockfile s prázdným grafem nevyžaduje prázdnou node_modules složku.
-    // Odvozený strom je potřeba jen tehdy, když package skutečně deklaruje
-    // alespoň jednu závislost.
-    const packageNeedsInstall = declaredDependencyCount > 0;
-    const requiredSlot = await requiredModuleSlotState({ companiesRoot, app });
+    const declaredDependencies = declaredDependencyCount(packageJson);
+    const requiredDependencyCount = dependencyInspection.required_dependency_count;
+    const missingDependencyNames = dependencyInspection.missing_required_dependencies;
+    const requiredSlot = await requiredModuleSlotState({
+      organizationRoot: authority.owner_root,
+      app,
+    });
 
     if (requiredSlot) {
-      return dependencyResult({
+      return withAuthority(dependencyResult({
         app,
         state: requiredSlot.state,
         appCwd,
@@ -3705,17 +3989,42 @@ export function createRuntimeManager({
         packageJsonPresent: true,
         nodeModulesPresent,
         lockfile,
-        declaredDependencyCount,
+        declaredDependencyCount: declaredDependencies,
+        requiredDependencyCount,
+        missingDependencyNames,
         packageManager: manager.name,
         packageManagerSource: manager.source,
         installCommand: null,
         checkedAt,
         message: requiredSlot.message,
-      });
+      }));
+    }
+
+    if (!lockfile && (manager.supported || manager.lockfile_missing === true)) {
+      const missingLockfileState = missingDependencyNames.length > 0 ? "missing_lockfile" : "ready";
+      return withAuthority(dependencyResult({
+        app,
+        state: missingLockfileState,
+        appCwd,
+        packagePath,
+        packageJsonPresent: true,
+        nodeModulesPresent,
+        lockfile: null,
+        declaredDependencyCount: declaredDependencies,
+        requiredDependencyCount,
+        missingDependencyNames,
+        packageManager: manager.name,
+        packageManagerSource: "missing_lockfile",
+        installCommand: null,
+        checkedAt,
+        message: missingLockfileState === "missing_lockfile"
+          ? `${app.title}: chybí podporovaný lockfile v package rootu. Vytvoř a commitni lockfile odpovídající packageManager; Lazurio bez něj nic neinstaluje odhadem.`
+          : `${app.title}: aktuální dependency strom je úplný; bez podporovaného lockfilu ale Lazurio nenabídne Install ani Repair.`,
+      }));
     }
 
     if (!manager.supported) {
-      return dependencyResult({
+      return withAuthority(dependencyResult({
         app,
         state: "unknown_package_manager",
         appCwd,
@@ -3723,23 +4032,30 @@ export function createRuntimeManager({
         packageJsonPresent: true,
         nodeModulesPresent,
         lockfile,
-        declaredDependencyCount,
+        declaredDependencyCount: declaredDependencies,
+        requiredDependencyCount,
+        missingDependencyNames,
         packageManager: manager.name,
         packageManagerSource: manager.source,
         installCommand: null,
         checkedAt,
-        message: `Package manager ${manager.name ?? "unknown"} není zatím podporovaný Launchpad Install akcí. Použij Doctor nebo terminál.`,
-      });
+        message: manager.lockfile_mismatch
+          ? `Package manager ${manager.name ?? "unknown"} neodpovídá vybranému ${lockfile?.path ?? "lockfilu"} (${lockfile?.package_manager ?? "unknown"}). Sjednoť packageManager a lockfile; Lazurio odhadem nic neinstaluje.`
+          : `Package manager ${manager.name ?? "unknown"} není zatím podporovaný Launchpad Install akcí. Použij Doctor nebo terminál.`,
+      }));
     }
 
     let state = "ready";
     let message = `${app.title}: dependency state je ready.`;
-    if (packageNeedsInstall && !nodeModulesPresent) {
+    if (missingDependencyNames.length > 0) {
       state = "needs_install";
-      message = `${app.title}: chybí node_modules. Použij Install (${manager.installCommand.join(" ")}) v ${appCwd}.`;
+      const visibleNames = missingDependencyNames.slice(0, 5).join(", ");
+      const remainingCount = missingDependencyNames.length - 5;
+      const suffix = remainingCount > 0 ? ` a ${remainingCount} dalších` : "";
+      message = `${app.title}: v node_modules chybí deklarované balíčky ${visibleNames}${suffix}. Použij Install (${manager.installCommand.join(" ")}) v ${appCwd}.`;
     }
 
-    return dependencyResult({
+    return withAuthority(dependencyResult({
       app,
       state,
       appCwd,
@@ -3747,13 +4063,15 @@ export function createRuntimeManager({
       packageJsonPresent: true,
       nodeModulesPresent,
       lockfile,
-      declaredDependencyCount,
+      declaredDependencyCount: declaredDependencies,
+      requiredDependencyCount,
+      missingDependencyNames,
       packageManager: manager.name,
       packageManagerSource: manager.source,
       installCommand: manager.installCommand,
       checkedAt,
       message,
-    });
+    }));
   }
 
   async function readState(appId) {
@@ -3809,7 +4127,7 @@ export function createRuntimeManager({
   };
 }
 
-async function requiredModuleSlotState({ companiesRoot, app }) {
+async function requiredModuleSlotState({ organizationRoot, app }) {
   const requiredSlots = Array.isArray(app?.required_module_slots)
     ? app.required_module_slots
     : [];
@@ -3825,10 +4143,14 @@ async function requiredModuleSlotState({ companiesRoot, app }) {
     };
   }
 
-  const organizationRoot = join(companiesRoot, organizationPath);
   let manifest;
   try {
-    manifest = JSON.parse(await readFile(join(organizationRoot, "modules.manifest.json"), "utf8"));
+    manifest = (await readJsonWithinCanonicalBoundary({
+      rootPath: organizationRoot,
+      rootRealPath: organizationRoot,
+      targetPath: join(organizationRoot, "modules.manifest.json"),
+      label: "modules.manifest.json",
+    })).value;
   } catch (error) {
     return {
       state: "required_slot_unavailable",
@@ -3851,10 +4173,15 @@ async function requiredModuleSlotState({ companiesRoot, app }) {
         message: `${app.title} zatím nejde spustit: datový slot ${requiredPath} je plánovaný. Dokonči jeho schválenou manifestem řízenou aktivaci; repozitář ručně neklonuj.`,
       };
     }
-    if (!existsSync(join(organizationRoot, requiredPath))) {
+    const requiredSlotBoundary = await inspectCanonicalPathBoundary({
+      rootPath: organizationRoot,
+      rootRealPath: organizationRoot,
+      targetPath: resolve(organizationRoot, requiredPath),
+    });
+    if (!requiredSlotBoundary.ok || !requiredSlotBoundary.targetRealPath) {
       return {
         state: "required_slot_unavailable",
-        message: `${app.title} nejde spustit, protože povinný slot ${requiredPath} není na této mašině dostupný. Spusť Synchronizovat a Doctor.`,
+        message: `${app.title} nejde spustit, protože povinný slot ${requiredPath} není bezpečně dostupný uvnitř canonical Organizace. Spusť Synchronizovat a Doctor.`,
       };
     }
   }
@@ -3870,6 +4197,8 @@ function dependencyResult({
   nodeModulesPresent,
   lockfile,
   declaredDependencyCount,
+  requiredDependencyCount = 0,
+  missingDependencyNames = [],
   packageManager,
   packageManagerSource,
   installCommand,
@@ -3899,6 +4228,8 @@ function dependencyResult({
         }
       : null,
     declared_dependency_count: declaredDependencyCount,
+    required_dependency_count: requiredDependencyCount,
+    missing_required_dependencies: [...missingDependencyNames],
     can_install: canInstall,
     can_start: state === "ready",
     checked_at: checkedAt,
@@ -3927,11 +4258,14 @@ function detectPackageManager({ packageJson, lockfile }) {
   const declared = typeof packageJson.packageManager === "string" ? packageJson.packageManager.trim() : "";
   if (declared) {
     const name = packageManagerName(declared);
+    const lockfileMismatch = Boolean(lockfile) && lockfile.package_manager !== name;
+    const supported = supportedInstallManagers.has(name) && !lockfileMismatch;
     return {
       name,
       source: "packageManager",
-      supported: supportedInstallManagers.has(name),
-      installCommand: supportedInstallManagers.has(name) ? [name, "install", "--frozen-lockfile"] : null,
+      supported,
+      lockfile_mismatch: lockfileMismatch,
+      installCommand: supported ? [name, "install", "--frozen-lockfile"] : null,
     };
   }
 
@@ -3946,9 +4280,10 @@ function detectPackageManager({ packageJson, lockfile }) {
 
   return {
     name: "bun",
-    source: "default",
-    supported: true,
-    installCommand: ["bun", "install", "--frozen-lockfile"],
+    source: "missing_lockfile",
+    supported: false,
+    lockfile_missing: true,
+    installCommand: null,
   };
 }
 
@@ -3971,13 +4306,6 @@ function packageManagerForLockfile(name) {
       "yarn.lock": "yarn",
     }[name] ?? "unknown"
   );
-}
-
-function countDeclaredDependencies(packageJson) {
-  return ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]
-    .map((key) => packageJson[key])
-    .filter((value) => value && typeof value === "object" && !Array.isArray(value))
-    .reduce((count, value) => count + Object.keys(value).length, 0);
 }
 
 async function waitForEarlyExit(child, timeoutMs) {

@@ -668,24 +668,43 @@ Web shell nemění konfiguraci ani business data. Runtime stav drží mimo Git v
 `launchpad/runtime/` a `launchpad/logs/`. `Install` a `Repair` smějí změnit
 pouze odvozený `node_modules` přesného app package rootu. Vždy používají
 `bun install --frozen-lockfile`, takže verzovaný `package.json` ani lockfile
-nemění. Příkaz, cwd, exit code a výstup zapisují do app logu.
+nemění. Readiness nejdřív ověří canonical `package.json`, přesně vybraný známý
+lockfile (`bun.lock[b]`, npm, pnpm nebo Yarn) i každý existující `node_modules`
+resolution root uvnitř přesného owning Module/Personalspace/main/worktree
+checkoutu; soubor teprve potom načte. Mutující lifecycle zůstává užší a
+vyžaduje ověřený Bun lockfile. Příkaz, cwd, exit code a výstup zapisují do app
+logu. Před spuštěním si instalátor připne canonical identitu a přesný obsah
+`package.json` i zvoleného Bun lockfilu. Změní-li se během procesu, výsledek
+nepřijme; při čisté opravě obnoví původní `node_modules`, ale změněná Git data
+nepřepisuje odhadem.
 
 `/api/apps` a `/api/apps/:id/health` vrací sdílený dependency stav
 `dependencies.state`, který používá stejné labely v UI i Doctor detailech:
 
 - `ready` — package je čitelný a Start je povolený;
-- `needs_install` — chybí `node_modules` pro appku s lockfilem/dependency
-  deklarací; UI nabízí `Install`, Start je blokovaný;
-- `missing_package` — manifest ukazuje na chybějící nebo nečitelný package;
-- `unknown_package_manager` — Launchpad neumí bezpečně spustit package manager,
-  takže Install/Start patří přes Doctor nebo terminál;
+- `needs_install` — v app-local až checkout-local `node_modules` chybí metadata
+  alespoň jednoho přímého `dependency` nebo `devDependency`; UI nabízí
+  `Install` jen s podporovaným Bun lockfilem a Start je blokovaný. Samotné
+  `peerDependencies` a `optionalDependencies` readiness neblokují;
+- `missing_lockfile` — povinný balíček chybí, ale package root nemá přesný
+  podporovaný lockfile; Install ani Repair se nenabídne a UI připraví Codex
+  handoff k vědomému vytvoření a commitnutí lockfilu;
+- `dependency_boundary_invalid` — package, lockfile, `node_modules` root nebo
+  dependency symlink překračuje owning Module/Personalspace/main/worktree
+  checkout; Launchpad strom nepoužije ani nezmění, prostor jej započítá jako
+  blokátor a připraví scoped handoff do Codexu;
+- `missing_package` — manifest ukazuje na skutečně chybějící package;
+- `unknown_package_manager` — Launchpad neumí bezpečně spustit package manager
+  nebo deklarovaný `packageManager` neodpovídá vybranému lockfilu; automatický
+  Install se nenabídne a diagnostika vyžádá jejich vědomé sjednocení;
 - `invalid_manifest` — `lazurio.runtime` (nebo čtený legacy
   `companyascode.app`) manifest není validní; appka je
   viditelná, runtime akce jsou zamčené, oprava patří do app manifestu
   (decision 0043).
 
 Dependency objekt zároveň nese `package_manager`, `install_command`, `cwd`,
-`package_path`, `node_modules_present`, lockfile metadata a `checked_at`.
+`package_path`, `node_modules_present`, `required_dependency_count`, seřazené
+`missing_required_dependencies`, lockfile metadata a `checked_at`.
 
 Runtime akční chyby z `Start`/`Install` vrací kromě `error`, `message` a
 `details` také `failure_kind`, když ho Launchpad umí určit. Aktuální hodnoty jsou
@@ -711,8 +730,11 @@ jasný mechanismus:
   of truth je app manifest + package cwd; precondition je validní app checkout s
   `package.json` a Bun lockfilem. `Install` provede frozen instalaci bez mazání.
   `Repair` nejdřív přesune přesný `node_modules` do app-local recovery složky,
-  provede frozen instalaci a původní strom smaže až po úspěchu. Při selhání ho
-  vrátí; při opakování umí dokončit i opravu přerušenou pádem procesu. Běžící
+  provede frozen instalaci a původní strom smaže až poté, co sdílená
+  postcondition znovu najde všechny přímé runtime/dev balíčky s čitelnými a
+  odpovídajícími package metadaty uvnitř owning checkoutu. Exit code 0 s
+  neúplným nebo neplatným stromem je selhání; původní strom se vrátí.
+  Při opakování umí dokončit i opravu přerušenou pádem procesu. Běžící
   managed App po dobu mutace zastaví a po úspěchu nebo úspěšném rollbacku znovu
   spustí. Výsledek loguje do `launchpad/logs/apps/<app-id>.log`. Tlačítko nesmí
   měnit lockfile, grantovat GitHub access, klonovat repo, zapisovat business

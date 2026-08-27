@@ -248,9 +248,17 @@ test("Personalspace dlaždice je GEN2-minimal (port GEN2-minimal karty): tile-fi
   expect(js).toContain("function cardWarningNode");
   expect(js).toContain("if (warning) card.append(cardWarningNode(app, warning))");
   expect(js).toContain("appTone(app, warning)");
-  // Přímé akce warning panelu: nainstalovat/opravit balíčky; spadlé spuštění → logy.
-  expect(js).toContain("runAction(app, action)");
-  expect(js).toContain("Spuštění selhalo");
+  // Stejný recovery model jako Organization: přímý Install/Repair jen s
+  // capability, jinak konkrétní Codex handoff. Boundary blokuje i healthy URL.
+  expect(js).toContain('import { runtimeRecoveryForApp } from "./runtime-recovery.js"');
+  expect(js).toContain("function personalRuntimeRecovery");
+  expect(js).toContain("runtimeRecoveryForApp(app)");
+  expect(js).toContain("openCodexRuntimeIssueDialog(app, recovery)");
+  expect(js).toContain('["install", "repair"].includes(recovery.action)');
+  const openable = js.slice(js.indexOf("function isOpenable"), js.indexOf("function personalAppDescription"));
+  expect(openable).toContain("personalRuntimeRecovery(app)");
+  const tone = js.slice(js.indexOf("function appTone"), js.indexOf("function runtimeChip"));
+  expect(tone.indexOf('warning?.tone === "danger"')).toBeLessThan(tone.indexOf('app.runtime_status === "healthy"'));
 
   // Sekundární akce (zastavit/restart/logy) žijí pod ⋯ menu, které se ukáže jen
   // když má obsah — reuse .app-version-menu / .app-menu-action z GEN2-minimal karty.
@@ -263,6 +271,10 @@ test("Personalspace dlaždice je GEN2-minimal (port GEN2-minimal karty): tile-fi
   expect(js).toContain("focusMenuTriggerAfterRender(document, app.id)");
   expect(js).toContain('if (menu?.panel) card.append(menu.panel)');
   expect(js).toContain('button.className = "app-menu-action";');
+  const personalMenuActions = js.slice(js.indexOf("function personalMenuActions"), js.indexOf("function menuActionRow"));
+  expect(personalMenuActions).toContain('["healthy", "unhealthy"].includes(app.runtime_status)');
+  expect(personalMenuActions).toContain('label: "Logy"');
+  expect(js).toContain("openCodexRuntimeIssueDialog(app, recovery)");
 
   // Ikona aplikace zůstává; duplicitní ↗ cue už karta nepotřebuje.
   expect(js).toContain("function personalAppIconNode");

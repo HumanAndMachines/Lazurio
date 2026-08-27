@@ -581,7 +581,19 @@ test("linked worktree gets only a read-only canonical Root mount context", async
     "setInterval(() => {}, 2_147_483_647);",
     "",
   ].join("\n"));
-  await mkdir(join(worktreeRoot, "guide", "app", "v1", "node_modules"), { recursive: true });
+  const worktreeDependencyRoot = join(
+    worktreeRoot,
+    "guide",
+    "app",
+    "v1",
+    "node_modules",
+    "worktree-only-fixture",
+  );
+  await mkdir(worktreeDependencyRoot, { recursive: true });
+  await writeJson(join(worktreeDependencyRoot, "package.json"), {
+    name: "worktree-only-fixture",
+    version: "1.0.0",
+  });
   await rm(join(worktreeRoot, "organizations"), { recursive: true, force: true });
   await mkdir(join(worktreeRoot, "organizations"), { recursive: true });
 

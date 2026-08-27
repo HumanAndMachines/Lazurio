@@ -23,9 +23,19 @@
 import { existsSync } from "fs";
 import { readdir } from "fs/promises";
 import { dirname, join, relative, resolve, sep } from "path";
-import { readJson, readLocalOverrideConfig, validateAppManifest } from "./discovery-lib.mjs";
+import {
+  APP_CHECKOUT_ROOT,
+  APP_FILESYSTEM_ROOT,
+  readJson,
+  readLocalOverrideConfig,
+  validateAppManifest,
+} from "./discovery-lib.mjs";
 import { normalizePackageRuntime } from "../core/runtime-contract-lib.mjs";
 import { materializeRuntimeFromModule, normalizeModuleManifest } from "../core/module-contract-lib.mjs";
+import {
+  inspectCanonicalPathBoundary,
+  readJsonWithinCanonicalBoundary,
+} from "../core/path-boundary-lib.mjs";
 
 const lazurioPackageRoot = join(import.meta.dirname, "..");
 const appSchemaPath = join(lazurioPackageRoot, "schemas", "launchpad-app.schema.json");
@@ -469,11 +479,19 @@ function personalModuleStatus(spaceRoot, slot) {
   return slot.repo ? "missing_access" : "planned_slot";
 }
 
-async function readPersonalManifest(spaceRoot) {
+async function readPersonalManifest(spaceRoot, spaceRealPath) {
   const manifestPath = join(spaceRoot, "modules.manifest.json");
   if (!existsSync(manifestPath)) return { manifest: null, error: null };
   try {
-    return { manifest: await readJson(manifestPath), error: null };
+    return {
+      manifest: (await readJsonWithinCanonicalBoundary({
+        rootPath: spaceRoot,
+        rootRealPath: spaceRealPath,
+        targetPath: manifestPath,
+        label: "modules.manifest.json",
+      })).value,
+      error: null,
+    };
   } catch (error) {
     return { manifest: null, error: error.message };
   }
@@ -662,7 +680,18 @@ async function scanPersonalspaceOwners(personalspaceRoot) {
     if (!existsSync(personalPath)) continue;
     let personal;
     try {
-      personal = await readJson(personalPath);
+      const spaceRoot = join(personalspaceRoot, entry.name);
+      const spaceBoundary = await inspectCanonicalPathBoundary({
+        rootPath: personalspaceRoot,
+        targetPath: spaceRoot,
+      });
+      if (!spaceBoundary.ok || !spaceBoundary.targetRealPath) continue;
+      personal = (await readJsonWithinCanonicalBoundary({
+        rootPath: spaceRoot,
+        rootRealPath: spaceBoundary.targetRealPath,
+        targetPath: personalPath,
+        label: `${entry.name}/personal.gen3.json`,
+      })).value;
     } catch {
       continue;
     }
@@ -778,9 +807,23 @@ export async function discoverPersonalspace(
       continue;
     }
 
+    const spaceBoundary = await inspectCanonicalPathBoundary({
+      rootPath: personalspaceRoot,
+      targetPath: spaceRoot,
+    });
+    if (!spaceBoundary.ok || !spaceBoundary.targetRealPath) {
+      failures.push(`${mountPath}: Personalspace mount překračuje canonical personalspace boundary`);
+      continue;
+    }
+
     let personal;
     try {
-      personal = await readJson(personalPath);
+      personal = (await readJsonWithinCanonicalBoundary({
+        rootPath: spaceRoot,
+        rootRealPath: spaceBoundary.targetRealPath,
+        targetPath: personalPath,
+        label: `${mountPath}/personal.gen3.json`,
+      })).value;
     } catch (error) {
       failures.push(`${mountPath}: personal.gen3.json nejde přečíst: ${error.message}`);
       continue;
@@ -849,7 +892,10 @@ export async function discoverPersonalspace(
     const presentationValid = Boolean(personal.buddy) && isPrimary && presentationIssues.length === 0;
 
     // modules.manifest.json — identický kontrakt jako org.
-    const { manifest, error: manifestError } = await readPersonalManifest(spaceRoot);
+    const { manifest, error: manifestError } = await readPersonalManifest(
+      spaceRoot,
+      spaceBoundary.targetRealPath,
+    );
     if (manifestError) {
       warnings.push(`${mountPath}: modules.manifest.json nejde přečíst: ${manifestError}`);
     }
@@ -871,14 +917,40 @@ export async function discoverPersonalspace(
     if (gbrainSource.transitional_rejected) warnings.push(`${mountPath}: ${gbrainSource.transitional_rejected}`);
 
     // Osobní aplikace: sken workspace/<modul>/**/package.json.
-    const workspaceRoot = join(spaceRoot, personal.workspace_path ?? "workspace");
+    const declaredWorkspaceRoot = join(spaceRoot, personal.workspace_path ?? "workspace");
+    let workspaceRoot = declaredWorkspaceRoot;
+    if (existsSync(declaredWorkspaceRoot)) {
+      const workspaceBoundary = await inspectCanonicalPathBoundary({
+        rootPath: spaceRoot,
+        rootRealPath: spaceBoundary.targetRealPath,
+        targetPath: declaredWorkspaceRoot,
+      });
+      if (!workspaceBoundary.ok || !workspaceBoundary.targetRealPath) {
+        failures.push(
+          `${relative(companiesRoot, declaredWorkspaceRoot)}: workspace odkazuje přes symlink/junction mimo Personalspace; osobní aplikace se nematerializují`,
+        );
+        workspaceRoot = null;
+      } else {
+        workspaceRoot = workspaceBoundary.targetRealPath;
+      }
+    }
     const packagePaths = [];
-    await walkPersonalPackageJson(spaceRoot, workspaceRoot, packagePaths);
+    if (workspaceRoot) await walkPersonalPackageJson(spaceRoot, workspaceRoot, packagePaths);
     const spaceAppIds = [];
     for (const absolutePackagePath of packagePaths.sort((a, b) => a.localeCompare(b))) {
+      const relativePackagePath = relative(workspaceRoot, absolutePackagePath);
+      const moduleFolder = relativePackagePath.split(sep)[0];
+      const moduleRoot = join(workspaceRoot, moduleFolder);
       let packageJson;
+      let canonicalModuleRoot = moduleRoot;
       try {
-        packageJson = await readJson(absolutePackagePath);
+        const packageAuthority = await readJsonWithinCanonicalBoundary({
+          rootPath: moduleRoot,
+          targetPath: absolutePackagePath,
+          label: relative(companiesRoot, absolutePackagePath),
+        });
+        packageJson = packageAuthority.value;
+        canonicalModuleRoot = packageAuthority.rootRealPath;
       } catch (error) {
         warnings.push(`${relative(companiesRoot, absolutePackagePath)}: package.json nejde přečíst: ${error.message}`);
         continue;
@@ -897,8 +969,6 @@ export async function discoverPersonalspace(
           failures: manifestIssues,
         });
       } else if (app.runtime_contract?.schema_version === "lazurio.runtime.v1") {
-        const relativePackagePath = relative(workspaceRoot, absolutePackagePath);
-        const moduleFolder = relativePackagePath.split(sep)[0];
         const moduleManifestPath = join(workspaceRoot, moduleFolder, "lazurio.module.json");
         const modulePath = relative(companiesRoot, moduleManifestPath).split("\\").join("/");
         if (!existsSync(moduleManifestPath)) {
@@ -906,7 +976,11 @@ export async function discoverPersonalspace(
         } else {
           try {
             const normalizedModule = normalizeModuleManifest({
-              manifest: await readJson(moduleManifestPath),
+              manifest: (await readJsonWithinCanonicalBoundary({
+                rootPath: canonicalModuleRoot,
+                targetPath: moduleManifestPath,
+                label: modulePath,
+              })).value,
               modulePath,
             });
             manifestIssues.push(...normalizedModule.issues);
@@ -928,6 +1002,8 @@ export async function discoverPersonalspace(
       }
       const runtimeId = personalAppRuntimeId(dirName, typeof app.id === "string" ? app.id : `invalid:${packagePath}`);
       const base = {
+        [APP_FILESYSTEM_ROOT]: companiesRoot,
+        [APP_CHECKOUT_ROOT]: canonicalModuleRoot,
         id: runtimeId,
         app_id: typeof app.id === "string" ? app.id : null,
         title: typeof app.title === "string" && app.title.trim() !== "" ? app.title : packagePath,

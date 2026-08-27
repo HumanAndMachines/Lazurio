@@ -58,6 +58,106 @@ export function runtimeRecoveryModel(error = {}) {
   };
 }
 
+export function runtimeRecoveryForApp(app = {}, error = null) {
+  const runtime = app?.runtime && typeof app.runtime === "object" ? app.runtime : {};
+  const details = uniqueStrings([
+    ...(Array.isArray(app?.dependencies?.missing_required_dependencies)
+      ? app.dependencies.missing_required_dependencies.map((name) => `Chybí balíček: ${name}`)
+      : []),
+    runtime.last_error,
+    runtime.message,
+    Number.isInteger(runtime?.probe?.status_code) ? `Health odpověděl HTTP ${runtime.probe.status_code}.` : null,
+    runtime?.probe?.error,
+    app?.dependencies?.message,
+    app?.health_url ? `Health endpoint: ${app.health_url}` : null,
+  ]);
+
+  if (error) {
+    return clampRecoveryToAppCapabilities(app, runtimeRecoveryModel(error), details);
+  }
+
+  if (app?.dependencies?.state === "needs_install") {
+    if (app.dependencies?.can_install === true) {
+      return {
+        title: "Aplikaci je potřeba připravit",
+        message: "Než ji otevřete, je potřeba bezpečně doplnit chybějící balíčky podle uzamčených verzí.",
+        action: "install",
+        actionLabel: "Instalovat",
+        code: "dependencies_incomplete",
+        failureKind: "missing_dependencies",
+        technical: details,
+      };
+    }
+    return runtimeRecoveryModel({
+      code: "app_install_unavailable",
+      message: app.dependencies?.message ?? "Chybějící balíčky nelze bezpečně nainstalovat z verzovaného lockfilu.",
+      payload: {
+        error: "app_install_unavailable",
+        failure_kind: "dependency_install_unavailable",
+        details,
+      },
+    });
+  }
+
+  if (app?.dependencies?.state === "dependency_boundary_invalid") {
+    return runtimeRecoveryModel({
+      code: "app_dependency_boundary_invalid",
+      message: app.dependencies?.message ?? "Dependency strom aplikace překračuje owning checkout.",
+      payload: {
+        error: "app_dependency_boundary_invalid",
+        failure_kind: "dependency_boundary_invalid",
+        details,
+      },
+    });
+  }
+
+  if (["missing_lockfile", "missing_package", "unknown_package_manager"].includes(app?.dependencies?.state)) {
+    const dependencyState = app.dependencies.state;
+    return clampRecoveryToAppCapabilities(app, runtimeRecoveryModel({
+      code: `app_${dependencyState}`,
+      message: app.dependencies?.message ?? "Dependency kontrakt aplikace je potřeba opravit.",
+      payload: {
+        error: `app_${dependencyState}`,
+        failure_kind: dependencyState,
+        details,
+      },
+    }), details);
+  }
+
+  if (app?.runtime_status !== "unhealthy") return null;
+  return clampRecoveryToAppCapabilities(app, runtimeRecoveryModel({
+    code: "app_unhealthy",
+    message: runtime.last_error ?? runtime.message ?? "Aplikace neprošla kontrolou health endpointu.",
+    payload: {
+      error: "app_unhealthy",
+      failure_kind: runtime.failure_kind ?? "health_failed",
+      message: runtime.last_error ?? runtime.message,
+      details,
+    },
+  }), details);
+}
+
+function clampRecoveryToAppCapabilities(app, recovery, technical = []) {
+  const mergedTechnical = uniqueStrings([...(recovery.technical ?? []), ...technical]);
+  if (!["install", "repair"].includes(recovery.action) || app?.dependencies?.can_install === true) {
+    return { ...recovery, technical: mergedTechnical };
+  }
+  const preservedCause = uniqueStrings([
+    `Původní kód chyby: ${recovery.code}`,
+    `Původní druh selhání: ${recovery.failureKind}`,
+    ...mergedTechnical,
+  ]);
+  return runtimeRecoveryModel({
+    code: "app_install_unavailable",
+    message: app?.dependencies?.message ?? recovery.message,
+    payload: {
+      error: "app_install_unavailable",
+      failure_kind: "dependency_install_unavailable",
+      details: preservedCause,
+    },
+  });
+}
+
 function cleanToken(value) {
   return typeof value === "string" && value.trim() ? value.trim() : "runtime_action_failed";
 }
