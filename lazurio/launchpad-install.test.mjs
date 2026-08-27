@@ -66,7 +66,7 @@ test("CLI fasáda dědí stdio a vrací exit code adapteru beze změny", async (
   });
 });
 
-test("launchpad parser přijímá pouze přesný install kontrakt bez JSON protokolu", async () => {
+test("launchpad install parser zachová přesný kontrakt bez JSON protokolu", async () => {
   const cli = join(import.meta.dirname, "cli.mjs");
   const help = Bun.spawnSync([process.execPath, "run", cli, "launchpad", "install", "--help"]);
   const missing = Bun.spawnSync([process.execPath, "run", cli, "launchpad"]);
@@ -77,9 +77,9 @@ test("launchpad parser přijímá pouze přesný install kontrakt bez JSON proto
   expect(help.exitCode).toBe(0);
   expect(help.stdout.toString()).toContain("lazurio launchpad install [--root <cesta>]");
   expect(missing.exitCode).toBe(2);
-  expect(missing.stderr.toString()).toContain("launchpad vyžaduje jedinou akci `install`");
+  expect(missing.stderr.toString()).toContain("launchpad vyžaduje jedinou akci `install` nebo `serve`");
   expect(unknown.exitCode).toBe(2);
-  expect(unknown.stderr.toString()).toContain("launchpad vyžaduje jedinou akci `install`");
+  expect(unknown.stderr.toString()).toContain("launchpad vyžaduje jedinou akci `install` nebo `serve`");
   expect(json.exitCode).toBe(2);
   expect(json.stderr.toString()).toContain("nepodporuje --json");
   expect(searchFlag.exitCode).toBe(2);

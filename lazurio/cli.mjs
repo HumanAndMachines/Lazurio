@@ -32,6 +32,7 @@ import {
   selectInstallLanguage,
 } from "./install-output-lib.mjs";
 import { runLaunchpadInstall } from "./launchpad-install-lib.mjs";
+import { runLaunchpadServe } from "./launchpad-serve-lib.mjs";
 import {
   moduleLocationRepairExitCode,
   renderHumanModuleLocationRepair,
@@ -194,7 +195,13 @@ async function run(argv) {
   }
 
   if (options.command === "launchpad") {
-    return runLaunchpadInstall({ root: options.root });
+    return options.launchpadAction === "serve"
+      ? runLaunchpadServe({
+          root: options.root,
+          organization: options.organization,
+          personalspace: options.personalspace,
+        })
+      : runLaunchpadInstall({ root: options.root });
   }
 
   if (options.command === "cli") {
@@ -256,6 +263,7 @@ function parseArgs(argv) {
     root: null,
     rootExplicit: false,
     organization: null,
+    personalspace: false,
     language: null,
     json: false,
     help: false,
@@ -431,6 +439,10 @@ function parseArgs(argv) {
       index += 1;
       continue;
     }
+    if (arg === "--personalspace") {
+      parsed.personalspace = true;
+      continue;
+    }
     if (arg === "--language") {
       const value = argv[index + 1];
       if (!value || value.startsWith("-")) throw new Error("--language vyžaduje cs nebo en.");
@@ -532,13 +544,19 @@ function parseArgs(argv) {
     if (parsed.searchFlags.size > 0) {
       throw new Error(`${[...parsed.searchFlags].join(", ")} lze použít pouze s příkazem search.`);
     }
-    if (parsed.operands.length !== 1 || parsed.operands[0] !== "install") {
-      throw new Error("launchpad vyžaduje jedinou akci `install`.");
+    if (parsed.operands.length !== 1 || !new Set(["install", "serve"]).has(parsed.operands[0])) {
+      throw new Error("launchpad vyžaduje jedinou akci `install` nebo `serve`.");
     }
     if (parsed.json) {
-      throw new Error("`lazurio launchpad install` nepodporuje --json; předává přímo výstup platformního instalátoru.");
+      throw new Error(`\`lazurio launchpad ${parsed.operands[0]}\` nepodporuje --json; předává živý výstup procesu.`);
     }
-    parsed.launchpadAction = "install";
+    parsed.launchpadAction = parsed.operands[0];
+    if (parsed.launchpadAction === "install" && (parsed.organization !== null || parsed.personalspace)) {
+      throw new Error("--organization a --personalspace lze použít pouze s `lazurio launchpad serve`.");
+    }
+    if (parsed.organization !== null && parsed.personalspace) {
+      throw new Error("--organization a --personalspace se vzájemně vylučují.");
+    }
   } else if (parsed.command === "cli") {
     if (parsed.searchFlags.size > 0) {
       throw new Error(`${[...parsed.searchFlags].join(", ")} lze použít pouze s příkazem search.`);
@@ -600,8 +618,15 @@ function parseArgs(argv) {
   if (parsed.confirmReplaceAppId !== null && parsed.command !== "module") {
     throw new Error("--confirm-replace lze použít pouze s module start nebo module open.");
   }
-  if (parsed.organization !== null && parsed.command !== "context") {
-    throw new Error("--organization lze použít pouze s příkazem context.");
+  if (
+    parsed.organization !== null
+    && parsed.command !== "context"
+    && !(parsed.command === "launchpad" && parsed.launchpadAction === "serve")
+  ) {
+    throw new Error("--organization lze použít pouze s příkazem context nebo launchpad serve.");
+  }
+  if (parsed.personalspace && !(parsed.command === "launchpad" && parsed.launchpadAction === "serve")) {
+    throw new Error("--personalspace lze použít pouze s příkazem launchpad serve.");
   }
   if (parsed.language !== null && parsed.command !== "install") {
     throw new Error("--language lze použít pouze s příkazem install.");
@@ -691,6 +716,7 @@ function usage() {
     "  lazurio cli install [--json] [--root <cesta>]",
     "  lazurio cli status [--json] [--root <cesta>]",
     "  lazurio launchpad install [--root <cesta>]",
+    "  lazurio launchpad serve [--organization <slug> | --personalspace] [--root <cesta>]",
     "  lazurio search <dotaz> [--mode exact|lexical|semantic|hybrid] [--scope lazurio] [--limit N] [--json] [--root <cesta>]",
     "  lazurio search --status [--scope lazurio] [--json] [--root <cesta>]",
     "  lazurio search --update [--embed] [--scope lazurio] [--json] [--root <cesta>]",
