@@ -17,7 +17,8 @@ const roots = [];
 const ids = Object.freeze({ organization: "314957563", repository: "42424242" });
 const login = "ExampleOrganization";
 const fullName = `${login}/${login}_GEN3`;
-const fakeRemote = `git@github.com:${fullName}.git`;
+const fakeHttpsRemote = `https://github.com/${fullName}.git`;
+const fakeSshRemote = `git@github.com:${fullName}.git`;
 
 afterAll(async () => {
   await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })));
@@ -37,7 +38,14 @@ test("provider resolves a human login to immutable root identity using read-only
   expect(source).toMatchObject({
     ok: true,
     organization: { id: ids.organization, login },
-    repository: { id: ids.repository, full_name: fullName, ssh_url: fakeRemote },
+    repository: {
+      id: ids.repository,
+      full_name: fullName,
+      private: false,
+      clone_url: fakeHttpsRemote,
+      ssh_url: fakeSshRemote,
+      read_url: fakeHttpsRemote,
+    },
   });
   expect(calls.length).toBe(6);
   for (const call of calls) {
@@ -46,6 +54,74 @@ test("provider resolves a human login to immutable root identity using read-only
     expect(call.args).not.toContain("--input");
     expect(call.args).not.toContain("-X");
   }
+});
+
+test("private Organization install keeps SSH while public read-only install uses HTTPS", () => {
+  const documents = scaffoldDocuments();
+  const source = observeOrganizationInstallSource({
+    githubLogin: login,
+    resolveGitHubCli: () => "/usr/bin/gh",
+    runGitHubCli: providerFixture({ calls: [], documents, privateRepository: true }),
+  });
+
+  expect(source).toMatchObject({
+    ok: true,
+    repository: {
+      private: true,
+      clone_url: fakeHttpsRemote,
+      ssh_url: fakeSshRemote,
+      read_url: fakeSshRemote,
+    },
+  });
+});
+
+test("provider observation verifies the expected immutable Organization before reading its root", () => {
+  const calls = [];
+  const source = observeOrganizationInstallSource({
+    githubLogin: login,
+    expectedOrganizationId: "99999999",
+    resolveGitHubCli: () => "/usr/bin/gh",
+    runGitHubCli: providerFixture({ calls, documents: scaffoldDocuments() }),
+  });
+
+  expect(source).toMatchObject({ ok: false, code: "organization_identity_mismatch" });
+  expect(calls.filter((call) => call.args[0] === "api").map((call) => call.args[1])).toEqual([
+    `orgs/${login}`,
+  ]);
+});
+
+test("immutable Organization expectation blocks a renamed or reused login before materialization", async () => {
+  const fixture = await organizationRemoteFixture();
+  let materialized = false;
+  let updated = false;
+  const source = sourceObservation();
+  const report = await installOrganization({
+    rootPath: fixture.root,
+    githubLogin: login,
+    expectedOrganizationId: ids.organization,
+    deps: {
+      observe: async () => ({
+        ...source,
+        organization: { ...source.organization, id: "99999999" },
+      }),
+      runPinnedChild: async () => {
+        materialized = true;
+        throw new Error("must not materialize");
+      },
+      runUpdate: async () => {
+        updated = true;
+        return updateReport("current");
+      },
+    },
+  });
+
+  expect(report).toMatchObject({
+    state: "blocked",
+    target: { reason: "organization_identity_mismatch" },
+  });
+  expect(materialized).toBe(false);
+  expect(updated).toBe(false);
+  expect(existsSync(join(fixture.root, "organizations", `${login}_GEN3`))).toBe(false);
 });
 
 test("Organization install requires an already prepared real Lazurio Root before provider access", async () => {
@@ -138,7 +214,7 @@ test("missing Organization root converges once and a second install is a no-op",
     path: `organizations/${login}_GEN3`,
     status: "active",
     default_branch: "main",
-    repository: fakeRemote,
+    repository: fakeHttpsRemote,
   }]);
   expect(existsSync(join(fixture.root, "organizations", `${login}_GEN3`, "company.gen3.json"))).toBe(true);
 });
@@ -285,7 +361,10 @@ function sourceObservation() {
       name: `${login}_GEN3`,
       full_name: fullName,
       default_branch: "main",
-      ssh_url: fakeRemote,
+      private: false,
+      clone_url: fakeHttpsRemote,
+      ssh_url: fakeSshRemote,
+      read_url: fakeHttpsRemote,
     },
     documents: scaffoldDocuments(),
   };
@@ -348,11 +427,11 @@ async function organizationRemoteFixture({ repositoryId = ids.repository } = {})
 
 function translatedGitRunner(localRemote) {
   return async (args, options) => {
-    const translated = args.map((arg) => arg === fakeRemote ? localRemote : arg);
+    const translated = args.map((arg) => arg === fakeHttpsRemote ? localRemote : arg);
     const result = await runGit(translated, options);
     if (args[0] === "clone" && result.ok) {
       const staging = args.at(-1);
-      const setRemote = await runGit(["remote", "set-url", "origin", fakeRemote], { cwd: staging });
+      const setRemote = await runGit(["remote", "set-url", "origin", fakeHttpsRemote], { cwd: staging });
       if (!setRemote.ok) return setRemote;
     }
     return result;
@@ -361,11 +440,11 @@ function translatedGitRunner(localRemote) {
 
 function translatedPinnedGitRunner(localRemote) {
   return async (args, options) => {
-    const translated = args.map((arg) => arg === fakeRemote ? localRemote : arg);
+    const translated = args.map((arg) => arg === fakeHttpsRemote ? localRemote : arg);
     const result = await runGitInPinnedTemporaryChild(translated, options);
     if (args[0] === "clone" && result.ok) {
       const staging = join(options.cwd, result.child_name);
-      const setRemote = await runGit(["remote", "set-url", "origin", fakeRemote], { cwd: staging });
+      const setRemote = await runGit(["remote", "set-url", "origin", fakeHttpsRemote], { cwd: staging });
       if (!setRemote.ok) return setRemote;
     }
     return result;
@@ -386,7 +465,7 @@ function updateReport(state) {
   };
 }
 
-function providerFixture({ calls, documents }) {
+function providerFixture({ calls, documents, privateRepository = false }) {
   const encoded = (value) => Buffer.from(`${JSON.stringify(value)}\n`).toString("base64");
   return (call) => {
     calls.push(call);
@@ -399,7 +478,9 @@ function providerFixture({ calls, documents }) {
         name: `${login}_GEN3`,
         full_name: fullName,
         default_branch: "main",
-        ssh_url: fakeRemote,
+        private: privateRepository,
+        clone_url: fakeHttpsRemote,
+        ssh_url: fakeSshRemote,
         owner: { id: Number(ids.organization), login },
       });
     }

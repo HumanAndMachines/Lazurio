@@ -7,6 +7,7 @@ import {
 } from "./core/organization-activation-lib.mjs";
 import {
   createTrustedGitHubProvider,
+  readGitHubRepositoryJsonDocument,
   runTrustedGitHubCliSync,
 } from "./core/github-provider-lib.mjs";
 import { resolveTrustedGitHubCliExecutable } from "./core/cli-provenance-lib.mjs";
@@ -388,22 +389,17 @@ function selectedRootAccess({ invoke, installationId, repositoryId }) {
 }
 
 function readRepositoryJson({ invoke, fullName, path, ref }) {
-  const suffix = ref ? `?ref=${encodeURIComponent(ref)}` : "";
-  const response = invoke(["api", `repos/${fullName}/contents/${path}${suffix}`]);
-  if (response.httpStatus === 404) return { present: false, value: null };
-  requireSuccess(response, {
+  const document = readGitHubRepositoryJsonDocument({ invoke, fullName, path, ref });
+  requireSuccess(document, {
     missingCode: "github_repository_inspection_failed",
     missingNextAction: "retry",
   });
-  if (response.value?.encoding !== "base64" || typeof response.value?.content !== "string") {
-    return { present: true, value: invalidRepositoryDocument };
-  }
-  try {
-    const value = JSON.parse(Buffer.from(response.value.content.replace(/\s/gu, ""), "base64").toString("utf8"));
-    return { present: true, value: value ?? invalidRepositoryDocument };
-  } catch {
-    return { present: true, value: invalidRepositoryDocument };
-  }
+  return {
+    present: document.present,
+    value: document.present
+      ? document.valid ? document.value : invalidRepositoryDocument
+      : null,
+  };
 }
 
 function requireSuccess(response, { missingCode, missingNextAction }) {

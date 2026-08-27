@@ -5,7 +5,11 @@ import {
   GIT_LOCAL_TIMEOUT_MS,
   materializeGitCheckout,
 } from "./core/git-materialization-lib.mjs";
-import { createTrustedGitHubProvider, runTrustedGitHubCliSync } from "./core/github-provider-lib.mjs";
+import {
+  createTrustedGitHubProvider,
+  readGitHubRepositoryJsonDocument,
+  runTrustedGitHubCliSync,
+} from "./core/github-provider-lib.mjs";
 import { resolveTrustedGitHubCliExecutable } from "./core/cli-provenance-lib.mjs";
 import { resolveOrganizationRootDocuments } from "./core/organization-activation-lib.mjs";
 import { isValidOrganizationForgeBinding } from "./core/organization-scaffold-lib.mjs";
@@ -26,12 +30,14 @@ const githubLoginPattern = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/u;
 export async function installOrganization({
   rootPath,
   githubLogin,
+  expectedOrganizationId = null,
   platform = process.platform,
   environment = process.env,
   deps = {},
 } = {}) {
   if (!rootPath) throw new TypeError("Organization install requires a Lazurio Root.");
   const locator = normalizeGitHubLogin(githubLogin);
+  const expectedId = normalizeOptionalOrganizationId(expectedOrganizationId);
   const absoluteRoot = resolve(rootPath);
   const observe = deps.observe ?? observeOrganizationInstallSource;
   const reobserve = deps.reobserve ?? observeOrganizationInstallIdentity;
@@ -50,12 +56,26 @@ export async function installOrganization({
 
   const source = await observe({
     githubLogin: locator,
+    expectedOrganizationId: expectedId,
     platform,
     environment,
     resolveGitHubCli: deps.resolveGitHubCli,
     runGitHubCli: deps.runGitHubCli,
   });
   if (!source.ok) return blockedReport({ rootPath: absoluteRoot, locator, source });
+  if (expectedId !== null && source.organization.id !== expectedId) {
+    return blockedReport({
+      rootPath: absoluteRoot,
+      locator,
+      source,
+      root: rootOutcome(
+        "blocked",
+        "organization_identity_mismatch",
+        `organizations/${source.organization.login}_GEN3`,
+        "GitHub Organization login už neodpovídá očekávané immutable identitě.",
+      ),
+    });
+  }
 
   const organizationPath = `organizations/${source.organization.login}_GEN3`;
   const targetPath = join(absoluteRoot, organizationPath);
@@ -123,7 +143,7 @@ export async function installOrganization({
       mode: "organization-root",
       boundaryRoot: absoluteRoot,
       targetPath,
-      remote: source.repository.ssh_url,
+      remote: source.repository.read_url,
       branch: source.repository.default_branch,
       run,
       runPinnedChild,
@@ -181,12 +201,14 @@ export async function installOrganization({
 
 export function observeOrganizationInstallSource({
   githubLogin,
+  expectedOrganizationId = null,
   platform = process.platform,
   environment = process.env,
   resolveGitHubCli = resolveTrustedGitHubCliExecutable,
   runGitHubCli = runTrustedGitHubCliSync,
 } = {}) {
   const locator = normalizeGitHubLogin(githubLogin);
+  const expectedId = normalizeOptionalOrganizationId(expectedOrganizationId);
   const provider = createTrustedGitHubProvider({
     platform,
     environment,
@@ -205,6 +227,12 @@ export function observeOrganizationInstallSource({
   const organization = providerIdentity(organizationResponse.value, "GitHub Organization");
   if (!organization || organization.login.toLowerCase() !== locator.toLowerCase()) {
     return providerFailure("organization_identity_mismatch", "GitHub Organization locator změnil identitu během ověření.");
+  }
+  if (expectedId !== null && organization.id !== expectedId) {
+    return providerFailure(
+      "organization_identity_mismatch",
+      "GitHub Organization login už neodpovídá očekávané immutable identitě.",
+    );
   }
 
   const repositoryName = `${organization.login}_GEN3`;
@@ -278,7 +306,7 @@ export async function verifyOrganizationRootCheckout({ path, source, run = runGi
   if (status.stdout !== "") {
     return providerFailure("root_local_changes", "Lokální Organization root obsahuje změny; Organization install je nepřepisuje.");
   }
-  const expectedCoordinate = githubRepositoryCoordinate(source.repository.ssh_url);
+  const expectedCoordinate = githubRepositoryCoordinate(source.repository.read_url);
   const actualCoordinate = githubRepositoryCoordinate(origin.stdout);
   if (
     !expectedCoordinate
@@ -398,20 +426,18 @@ function readProviderRootDocuments({ provider, repository }) {
 }
 
 function readProviderJson(provider, fullName, path, ref, { optional = false } = {}) {
-  const response = provider.json(["api", `repos/${fullName}/contents/${path}?ref=${encodeURIComponent(ref)}`]);
-  if (optional && response.httpStatus === 404) return { ok: true, value: null };
-  if (!response.ok) return responseFailure(response, "root_manifest_unavailable");
-  if (response.value?.encoding !== "base64" || typeof response.value?.content !== "string") {
+  const document = readGitHubRepositoryJsonDocument({
+    invoke: (args) => provider.json(args),
+    fullName,
+    path,
+    ref,
+  });
+  if (optional && !document.present) return { ok: true, value: null };
+  if (!document.ok || !document.present) return responseFailure(document, "root_manifest_unavailable");
+  if (!document.valid) {
     return providerFailure("root_manifest_invalid", `${path} nemá podporovaný GitHub content formát.`);
   }
-  try {
-    return {
-      ok: true,
-      value: JSON.parse(Buffer.from(response.value.content.replace(/\s/gu, ""), "base64").toString("utf8")),
-    };
-  } catch {
-    return providerFailure("root_manifest_invalid", `${path} není validní JSON.`);
-  }
+  return { ok: true, value: document.value };
 }
 
 async function readLocalRootDocuments(path) {
@@ -462,7 +488,7 @@ function organizationInventoryDescriptor({ source, organizationPath }) {
     path: organizationPath,
     status: "active",
     default_branch: source.repository.default_branch,
-    repository: source.repository.ssh_url,
+    repository: source.repository.read_url,
   };
 }
 
@@ -508,6 +534,9 @@ function providerIdentity(value, label) {
 function providerRepository(value, { organization, repositoryName, fullName }) {
   const id = String(value?.id ?? "");
   const sshUrl = typeof value?.ssh_url === "string" ? value.ssh_url.trim() : "";
+  const cloneUrl = typeof value?.clone_url === "string" ? value.clone_url.trim() : "";
+  const isPrivate = value?.private;
+  const readUrl = isPrivate === false ? cloneUrl : sshUrl;
   if (
     !/^[1-9][0-9]{0,19}$/u.test(id)
     || value?.name !== repositoryName
@@ -515,14 +544,18 @@ function providerRepository(value, { organization, repositoryName, fullName }) {
     || value?.default_branch !== "main"
     || String(value?.owner?.id ?? "") !== organization.id
     || value?.owner?.login !== organization.login
-    || githubRepositoryCoordinate(sshUrl)?.ownerRepo.toLowerCase() !== fullName.toLowerCase()
+    || typeof isPrivate !== "boolean"
+    || githubRepositoryCoordinate(readUrl)?.ownerRepo.toLowerCase() !== fullName.toLowerCase()
   ) return null;
   return {
     id,
     name: repositoryName,
     full_name: fullName,
     default_branch: "main",
+    private: isPrivate,
+    clone_url: cloneUrl,
     ssh_url: sshUrl,
+    read_url: readUrl,
   };
 }
 
@@ -541,6 +574,15 @@ function normalizeGitHubLogin(value) {
   const login = typeof value === "string" ? value.trim() : "";
   if (!githubLoginPattern.test(login)) throw new TypeError("Organization install vyžaduje validní GitHub Organization login.");
   return login;
+}
+
+function normalizeOptionalOrganizationId(value) {
+  if (value === null || value === undefined) return null;
+  const id = String(value).trim();
+  if (!/^[1-9][0-9]{0,19}$/u.test(id)) {
+    throw new TypeError("Organization install expected immutable GitHub Organization ID must be positive.");
+  }
+  return id;
 }
 
 async function readJson(path, { optional = false } = {}) {

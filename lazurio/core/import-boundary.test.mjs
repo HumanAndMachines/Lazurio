@@ -105,6 +105,31 @@ test("Git checkout publication has one physical Core owner", async () => {
   expect(launchpadAdapter).not.toContain("makeTempDirectory");
 });
 
+test("GitHub repository JSON decoding has one Core owner shared by activation and install", async () => {
+  const moduleName = "github-provider-lib.mjs";
+  const imports = await repositoryImports([
+    join(repositoryRoot, "lazurio"),
+  ]);
+  const consumers = imports
+    .filter(({ target }) => target === join(coreRoot, moduleName))
+    .map(({ importer }) => importer)
+    .filter((importer) => [
+      "lazurio/organization-activation-lib.mjs",
+      "lazurio/organization-install-lib.mjs",
+    ].includes(importer))
+    .sort();
+
+  expect(consumers).toEqual([
+    "lazurio/organization-activation-lib.mjs",
+    "lazurio/organization-install-lib.mjs",
+  ]);
+  for (const consumer of consumers) {
+    const source = await readFile(join(repositoryRoot, consumer), "utf8");
+    expect(source).toContain("readGitHubRepositoryJsonDocument");
+    expect(source).not.toContain('response.value?.encoding !== "base64"');
+  }
+});
+
 test("runtime declaration validation has one physical Core owner", async () => {
   const moduleName = "runtime-contract-lib.mjs";
   expect(existsSync(join(coreRoot, moduleName))).toBe(true);

@@ -105,6 +105,73 @@ export function createTrustedGitHubProvider({
   });
 }
 
+// GitHub's repository-contents envelope is provider plumbing, not an
+// Organization-domain concern. Callers still own whether a missing or malformed
+// document means unsupported, blocked, or optional.
+export function readGitHubRepositoryJsonDocument({
+  invoke,
+  fullName,
+  path,
+  ref = null,
+} = {}) {
+  if (
+    typeof invoke !== "function"
+    || typeof fullName !== "string"
+    || fullName.trim() === ""
+    || typeof path !== "string"
+    || path.trim() === ""
+    || (ref !== null && (typeof ref !== "string" || ref.trim() === ""))
+  ) {
+    throw new TypeError("GitHub repository JSON read requires invoke, repository, path, and an optional ref.");
+  }
+  const suffix = ref ? `?ref=${encodeURIComponent(ref)}` : "";
+  const response = invoke(["api", `repos/${fullName}/contents/${path}${suffix}`]);
+  if (response?.httpStatus === 404) {
+    return Object.freeze({
+      ...response,
+      ok: true,
+      present: false,
+      valid: false,
+      value: null,
+    });
+  }
+  if (!response?.ok) {
+    return Object.freeze({
+      ...response,
+      ok: false,
+      present: false,
+      valid: false,
+      value: null,
+    });
+  }
+  if (response.value?.encoding !== "base64" || typeof response.value?.content !== "string") {
+    return Object.freeze({
+      ...response,
+      present: true,
+      valid: false,
+      value: null,
+    });
+  }
+  try {
+    const value = JSON.parse(
+      Buffer.from(response.value.content.replace(/\s/gu, ""), "base64").toString("utf8"),
+    );
+    return Object.freeze({
+      ...response,
+      present: true,
+      valid: value !== null,
+      value,
+    });
+  } catch {
+    return Object.freeze({
+      ...response,
+      present: true,
+      valid: false,
+      value: null,
+    });
+  }
+}
+
 export function sanitizedGitHubEnvironment(environment) {
   const result = {};
   for (const key of [
