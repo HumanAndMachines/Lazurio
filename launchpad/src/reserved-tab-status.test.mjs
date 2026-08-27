@@ -29,7 +29,10 @@ test("reserved app tab uses the canonical Lazurio visual identity", () => {
   expect(html).toContain("Aplikace startuje...");
   expect(html).not.toContain("Aplikace ještě startuje");
   expect(html).not.toContain("se otevře v tomto panelu");
-  expect(html).toContain('<p class="tip"><span class="tip-label">Tip:</span> Commit je uložený krok historie, ke kterému se lze vrátit.</p>');
+  expect(html).toContain('<p class="hint">Commit je uložený krok historie, ke kterému se lze vrátit.</p>');
+  expect(html).toContain(".hint{width:min(100%,28rem)");
+  expect(html).toContain("text-wrap:balance");
+  expect(html).not.toContain("Tip:");
   expect(html).not.toContain("health endpoint");
   expect(html).not.toContain("#6d5dfc");
   expect(html).not.toContain(">↗<");
