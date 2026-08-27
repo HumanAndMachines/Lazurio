@@ -43,6 +43,7 @@ import {
 } from "./personalspace-runtime-lib.mjs";
 import { GbrainAccessError, gbrainFile, gbrainSearch, gbrainTree } from "./gbrain-lib.mjs";
 import { createGenerationSafeResponseCache } from "./apps-response-cache-lib.mjs";
+import { createServerShutdownStateAuthority } from "./server-shutdown-state-lib.mjs";
 import { LAZURIO_LAUNCHPAD_NAME } from "./launchpad-identity-lib.mjs";
 import { readOrganizationLaunchpadTheme } from "./organization-theme-lib.mjs";
 import { ModuleFolderActionError, createModuleFolderOpener } from "./module-folder-lib.mjs";
@@ -195,8 +196,7 @@ const personalspaceRuntimeManager = createPersonalspaceRuntimeManager({
   launchpadRoot,
   stateRoot: launchpadStateRoot,
 });
-let serverShutdownState = "starting";
-let activeMutatingRequests = 0;
+const serverShutdownState = createServerShutdownStateAuthority();
 
 if (!Number.isInteger(port) || port < 1024 || port > 65535) {
   console.error(`Neplatný port: ${options.port ?? process.env.PORT}`);
@@ -284,7 +284,7 @@ try {
       origin: serverUrl,
       identity: launchpadServerIdentity,
     }));
-    serverShutdownState = "running";
+    serverShutdownState.markRunning();
   }
 } catch (error) {
   startupError = await abortUnpublishedStartup(error);
@@ -517,6 +517,7 @@ function isMutatingApiRequest(request, url) {
 }
 
 async function worktreeMutationTouchesCanonicalMount(url) {
+  if (url.pathname === "/api/lazurio/agent-entry-refresh") return false;
   if (!worktreeMountContextReadOnly) return false;
   const route = appRuntimeRoute(url.pathname);
   if (!route) return true;
@@ -1160,20 +1161,20 @@ async function handleServerShutdown(request) {
       message: "Server shutdown musí potvrdit přesnou běžící instanci.",
     }, 409);
   }
-  if (serverShutdownState !== "running") {
+  const shutdown = serverShutdownState.requestShutdown();
+  if (!shutdown.accepted && shutdown.reason === "shutdown_in_progress") {
     return jsonResponse({
       error: "server_shutdown_in_progress",
       message: "Lazurio Server už se zastavuje.",
     }, 409);
   }
-  if (activeMutatingRequests > 0) {
+  if (!shutdown.accepted) {
     return jsonResponse({
       error: "server_busy",
       message: "Lazurio Server právě dokončuje mutující operaci; shutdown opakuj po jejím skončení.",
     }, 409);
   }
 
-  serverShutdownState = "stopping";
   setTimeout(() => void completeServerShutdown(), 50);
   return jsonResponse({
     schema_version: "lazurio.server.shutdown.v1",
@@ -1221,21 +1222,10 @@ function startServer(startPort) {
         workspaceTrustDecision ??= requestTrust.evaluateWorkspaceRequest(request, url);
         return workspaceTrustDecision;
       };
-      let trackedMutation = false;
+      let mutationAdmission = null;
       try {
         if (url.pathname.startsWith("/api/personalspace") && !requestTrust.isTrustedLocalRequest(request, url)) {
           return jsonResponse({ error: "personalspace_request_forbidden" }, 403);
-        }
-        if (url.pathname === "/api/lazurio/agent-entry-refresh") {
-          if (!requestTrust.isTrustedLocalRequest(request, url)) {
-            return jsonResponse({ error: "agent_entry_refresh_forbidden" }, 403);
-          }
-          if (request.method !== "POST") return jsonResponse({ error: "method_not_allowed" }, 405);
-          const { response } = await appsResponseCache.refreshPublished();
-          return jsonResponse({
-            schema_version: "lazurio.launchpad.agent_entry_inventory.v1",
-            organizations: (response.organizations ?? []).map(({ slug }) => ({ slug })),
-          });
         }
         if (url.pathname === "/api/lazurio/server-shutdown" && request.method === "POST") {
           if (!requestTrust.isTrustedLocalRequest(request, url)) {
@@ -1260,11 +1250,21 @@ function startServer(startPort) {
           return jsonResponse({ error: "module_folder_request_forbidden" }, 403);
         }
         if (isMutatingApiRequest(request, url)) {
-          if (serverShutdownState !== "running") {
+          mutationAdmission = serverShutdownState.enterMutation();
+          if (!mutationAdmission.accepted) {
             return jsonResponse({ error: "server_shutdown_in_progress" }, 503);
           }
-          activeMutatingRequests += 1;
-          trackedMutation = true;
+        }
+        if (url.pathname === "/api/lazurio/agent-entry-refresh") {
+          if (!requestTrust.isTrustedLocalRequest(request, url)) {
+            return jsonResponse({ error: "agent_entry_refresh_forbidden" }, 403);
+          }
+          if (request.method !== "POST") return jsonResponse({ error: "method_not_allowed" }, 405);
+          const { response } = await appsResponseCache.refreshPublished();
+          return jsonResponse({
+            schema_version: "lazurio.launchpad.agent_entry_inventory.v1",
+            organizations: (response.organizations ?? []).map(({ slug }) => ({ slug })),
+          });
         }
         // Personalspace lane (CAC-0048) — kontroluj PŘED generickými /api/apps
         // a /api/... routami, ať se osobní prostor nikdy nesmíchá s org lane.
@@ -1336,15 +1336,15 @@ function startServer(startPort) {
         if (url.pathname === "/api/notifications") return jsonResponse(await buildNotificationsResponse(url.searchParams.get("company")));
         if (url.pathname === "/api/most-used") return jsonResponse(await buildMostUsedResponse(url.searchParams.get("company")));
         if (url.pathname === "/health") {
-          return serverShutdownState === "running"
+          return serverShutdownState.state === "running"
             ? jsonResponse({ status: "ok" })
-            : jsonResponse({ status: serverShutdownState }, 503);
+            : jsonResponse({ status: serverShutdownState.state }, 503);
         }
         return await serveStatic(url.pathname);
       } catch (error) {
         return jsonResponse({ error: "launchpad_error", message: error.message }, 500);
       } finally {
-        if (trackedMutation) activeMutatingRequests -= 1;
+        mutationAdmission?.release?.();
       }
     },
   });
