@@ -1,7 +1,11 @@
 import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { buildReservedTabStatusDocument } from "../public/reserved-tab-status.js";
+import {
+  buildReservedTabStatusDocument,
+  LAZURIO_LOADING_HINTS,
+  loadingHintForTab,
+} from "../public/reserved-tab-status.js";
 
 const canonicalSymbolSha256 = "6334e2b815cd83c8be7e601aa7bfab740a34d74848f522803065026a6f18609b";
 
@@ -10,6 +14,7 @@ test("reserved app tab uses the canonical Lazurio visual identity", () => {
     title: "Knowledgebase",
     message: "Aplikace startuje...",
     origin: "http://127.0.0.1:4174",
+    tip: "Commit je uložený krok historie, ke kterému se lze vrátit.",
   });
 
   expect(html).toContain('href="http://127.0.0.1:4174/fonts/fonts.css"');
@@ -24,11 +29,34 @@ test("reserved app tab uses the canonical Lazurio visual identity", () => {
   expect(html).toContain("Aplikace startuje...");
   expect(html).not.toContain("Aplikace ještě startuje");
   expect(html).not.toContain("se otevře v tomto panelu");
-  expect(html).not.toContain("<p>");
+  expect(html).toContain('<p class="tip"><span class="tip-label">Tip:</span> Commit je uložený krok historie, ke kterému se lze vrátit.</p>');
   expect(html).not.toContain("health endpoint");
   expect(html).not.toContain("#6d5dfc");
   expect(html).not.toContain(">↗<");
   expect(html).not.toContain('class="progress"');
+});
+
+test("reserved app tab uses only the curated hint set and keeps one hint per tab", () => {
+  const excludedHints = [
+    "Doctor kontroluje zdraví Workspace a upozorní na problémy.",
+    "Dirty repozitář nemusí znamenat chybu. Často jen obsahuje rozdělanou práci.",
+    "Synchronizace aktualizuje jen repozitáře, u kterých je to bezpečné.",
+    "Worktree drží jeden úkol odděleně, zatímco hlavní checkout zůstává na main.",
+    "Každý pracovní úkol má mít jasný scope a vlastní předání.",
+    "Agent pracuje pro svého Principála a nemá vlastní oprávnění.",
+    "Poslední slovo má vždy Principál.",
+    "Admin rozhoduje o směru, přístupech a změnách s velkým dopadem.",
+    "Builder převádí schválený plán do ověřené změny a PR.",
+  ];
+  const tab = {};
+
+  expect(LAZURIO_LOADING_HINTS).toHaveLength(29);
+  for (const excludedHint of excludedHints) {
+    expect(LAZURIO_LOADING_HINTS).not.toContain(excludedHint);
+  }
+  expect(loadingHintForTab(tab, () => 0)).toBe(LAZURIO_LOADING_HINTS[0]);
+  expect(loadingHintForTab(tab, () => 0.999)).toBe(LAZURIO_LOADING_HINTS[0]);
+  expect(loadingHintForTab({}, () => 0.999)).toBe(LAZURIO_LOADING_HINTS.at(-1));
 });
 
 test("reserved app tab keeps the canonical symbol and a non-layout loading motion", async () => {
@@ -57,9 +85,11 @@ test("reserved app tab escapes dynamic copy", () => {
     title: '<Deals & "Quotes">',
     message: "Spouštím <aplikaci>",
     origin: "http://127.0.0.1:4174",
+    tip: "Tip s <tagem> & znakem",
   });
 
   expect(html).toContain("&lt;Deals &amp; &quot;Quotes&quot;&gt;");
   expect(html).toContain("Spouštím &lt;aplikaci&gt;");
+  expect(html).toContain("Tip s &lt;tagem&gt; &amp; znakem");
   expect(html).not.toContain('<Deals & "Quotes">');
 });
