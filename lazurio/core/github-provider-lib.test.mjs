@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 
 import {
   createTrustedGitHubProvider,
+  readGitHubRepositoryJsonDocument,
   sanitizedGitHubEnvironment,
 } from "./github-provider-lib.mjs";
 
@@ -106,4 +107,54 @@ test("GitHub environment keeps credential custody inputs but drops ambient loade
     sanitizedGitHubEnvironment({ DYLD_INSERT_LIBRARIES: "/tmp/inject.dylib" })
       .DYLD_INSERT_LIBRARIES,
   ).toBeUndefined();
+});
+
+test("repository JSON document reader normalizes present, missing, malformed, and provider failures", () => {
+  const encoded = Buffer.from('{"schema_version":"example.v1"}\n', "utf8").toString("base64");
+  const present = readGitHubRepositoryJsonDocument({
+    invoke: () => ({
+      ok: true,
+      status: 0,
+      httpStatus: null,
+      value: { encoding: "base64", content: encoded },
+      error: null,
+    }),
+    fullName: "Example/Example_GEN3",
+    path: "company.gen3.json",
+    ref: "main",
+  });
+  expect(present).toMatchObject({
+    ok: true,
+    present: true,
+    valid: true,
+    value: { schema_version: "example.v1" },
+  });
+
+  const missing = readGitHubRepositoryJsonDocument({
+    invoke: () => ({ ok: false, status: 1, httpStatus: 404, value: null, error: { kind: "http" } }),
+    fullName: "Example/Example_GEN3",
+    path: "lazurio.organization.json",
+    ref: "main",
+  });
+  expect(missing).toMatchObject({ ok: true, present: false, valid: false, value: null });
+
+  const malformed = readGitHubRepositoryJsonDocument({
+    invoke: () => ({
+      ok: true,
+      status: 0,
+      httpStatus: null,
+      value: { encoding: "base64", content: Buffer.from("{broken", "utf8").toString("base64") },
+      error: null,
+    }),
+    fullName: "Example/Example_GEN3",
+    path: "company.gen3.json",
+  });
+  expect(malformed).toMatchObject({ ok: true, present: true, valid: false, value: null });
+
+  const denied = readGitHubRepositoryJsonDocument({
+    invoke: () => ({ ok: false, status: 1, httpStatus: 403, value: null, error: { kind: "http" } }),
+    fullName: "Example/Example_GEN3",
+    path: "company.gen3.json",
+  });
+  expect(denied).toMatchObject({ ok: false, present: false, valid: false, httpStatus: 403 });
 });
