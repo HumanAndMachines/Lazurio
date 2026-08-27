@@ -1270,16 +1270,6 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function escapeHtml(value) {
-  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;",
-  }[char]));
-}
-
 /* ---- helpers ------------------------------------------------------------- */
 
 // Barevný tón dlaždice — warning model je autorita pro zastavené karty (port
