@@ -163,6 +163,7 @@ function packageJson({ contract, version, sourceCommit, commitEpoch, requiredBun
       "LICENSE.md",
       "README.md",
       "lazurio",
+      "launchpad/public/deep-link.js",
       "launchpad/schemas",
       "launchpad/src",
       "manual/module-setup.md",
