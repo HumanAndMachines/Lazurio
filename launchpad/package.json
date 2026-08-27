@@ -9,11 +9,11 @@
     "doctor:task": "bun src/task-doctor.mjs",
     "doctor:json": "bun src/doctor.mjs --json",
     "update": "bun src/update-cli.mjs",
-    "dev": "bun src/server.mjs",
+    "dev": "bun src/server-launcher.mjs",
     "discover": "bun src/discover-apps.mjs --allow-missing-organizations",
     "parity:workspace": "bun src/workspace-parity-runner.mjs",
-    "launch": "bun src/server.mjs --open",
-    "serve": "bun src/server.mjs --reuse",
+    "launch": "bun src/server-launcher.mjs --open",
+    "serve": "bun src/server-launcher.mjs --reuse",
     "test": "bun src/run-tests.mjs"
   }
 }

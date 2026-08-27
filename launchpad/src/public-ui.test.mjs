@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFile as readRawFile, readdir } from "fs/promises";
 import { join } from "path";
+import { LAZURIO_LAUNCHPAD_NAME } from "./launchpad-identity-lib.mjs";
 
 const publicRoot = join(import.meta.dirname, "..", "public");
 
@@ -21,6 +22,9 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   ]);
 
   // Shell regions jsou přítomné; interní debug tabulka se do denního UI neposílá.
+  expect(html).toContain(`<title>${LAZURIO_LAUNCHPAD_NAME}</title>`);
+  expect(html).toContain(`<meta name="application-name" content="${LAZURIO_LAUNCHPAD_NAME}" />`);
+  expect(html).toContain(`<meta name="apple-mobile-web-app-title" content="${LAZURIO_LAUNCHPAD_NAME}" />`);
   expect(html).toContain('id="spaceSwitcherButton"');
   expect(html).toContain('id="spaceSwitcherMenu"');
   expect(html).toContain('id="appsGrid"');

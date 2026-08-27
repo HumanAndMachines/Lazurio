@@ -1,8 +1,8 @@
-# Launchpad GEN3
+# Lazurio Launchpad
 
-Launchpad GEN3 je sdílený control plane pro Launchpad GEN3 root. Patří do
-Launchpad GEN3 rootu, protože má obsluhovat více firem a má se
-updatovat přes jeden template upstream.
+Lazurio Launchpad je sdílený builder-first vstup do jednoho Lazurio Rootu.
+Patří do Lazurio Rootu, protože má obsluhovat více Organizací a aktualizovat se
+z jednoho společného upstreamu.
 
 Není to místo pro business pravdu konkrétní firmy.
 
@@ -210,7 +210,7 @@ managed aplikaci Server před změnou balíčků zastaví a po úspěchu nebo po
 bezpečném návratu původního stromu znovu spustí. Balíčky jiných repozitářů se
 neskenují ani nemění.
 
-Launchpad čte Launchpad GEN3 root a Organization GEN3 manifesty:
+Lazurio Launchpad čte Lazurio Root a Organization GEN3 manifesty:
 
 ```text
 launchpad.gen3.json
@@ -574,7 +574,7 @@ nebo port z environment `PORT` obsazený, použije další volný port. Pouze
 explicitní CLI `--port` je fail-closed a zůstává na zadaném portu; chybějící
 hodnota explicitního flagu skončí okamžitou chybou. `launch`
 spustí server a pokusí se otevřít prohlížeč. Když na stejném portu už běží
-Launchpad GEN3 ze stejného kanonického rootu, druhé spuštění ověří hash identity
+Lazurio Launchpad ze stejného kanonického rootu, druhé spuštění ověří hash identity
 rootu a pouze otevře existující instanci. Launchpad z jiného rootu ani cizí HTTP
 server se nepřevezme.
 `discover` vypíše nalezené aplikace. Discovery nejdřív načte root metadata
@@ -594,7 +594,7 @@ hostu pak skutečně kolidující aplikace běží po jedné a takeover vyžaduj
 potvrzení konkrétní nahrazované aplikace.
 
 V template repozitáři `check` toleruje chybějící ukázkové organizace. V
-reálném Launchpad GEN3 root používej `check:strict`, aby chybějící organization
+reálném Lazurio Rootu používej `check:strict`, aby chybějící Organization
 neprošel potichu.
 
 `doctor` vrací read-only diagnostiku pro Launchpad discovery i runtime
@@ -605,7 +605,7 @@ nikdy aplikace nespouští ani nezastavuje.
 Doctor report zároveň obsahuje platform, Git a `.gitignore` checks:
 
 - podporovaný OS, Bun a Git v PATH
-- Git root a working tree stav Launchpad GEN3 root
+- Git root a working tree stav Lazurio Rootu
 - použitelnost submodulů a organization mountpointů
 - ochranu runtime/log cest v rootu a `private/`/`archive/` cest v Company
   Workspace repozitářích
@@ -613,7 +613,7 @@ Doctor report zároveň obsahuje platform, Git a `.gitignore` checks:
 Tyto checks jsou součást stejného JSON reportu, který čte Launchpad přes
 `/api/doctor`.
 
-Z Launchpad GEN3 rootu existují stejné spouštěče pro lidi:
+Z Lazurio Rootu existují stejné spouštěče pro lidi:
 
 - macOS: `Launchpad.command`
 - Windows: `Launchpad.cmd` nebo `Launchpad.ps1`
@@ -833,7 +833,7 @@ v `launchpad/plugins/README.md`.
 
 Doctor musí hlídat:
 
-- povinné Launchpad GEN3 root složky
+- povinné složky Lazurio Rootu
 - existenci firem uvedených v `launchpad.gen3.json`
 - validitu `lazurio.runtime.v1` a read-compatible legacy manifestů jako warnings pro jednotlivé stale appky
   a jako hard failure jen pro root/security/konfliktní validní runtime případy

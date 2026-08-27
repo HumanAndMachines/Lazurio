@@ -1859,7 +1859,7 @@ function platformChecks(companiesRoot) {
       severity: "required",
       title: "Operační systém",
       message: platformName
-        ? `${platformName} je podporovaný Launchpad GEN3 root OS.`
+        ? `${platformName} je podporovaný OS pro Lazurio Root.`
         : `Nepodporovaný OS ${process.platform}.`,
       paths: [],
       links: [],
@@ -2046,7 +2046,7 @@ function gitRootCheck(companiesRoot) {
     status: result.ok ? "ok" : "fail",
     severity: "required",
     title: "Git root",
-    message: result.ok ? `Git root: ${result.stdout}` : "Launchpad GEN3 root není použitelný Git repo.",
+    message: result.ok ? `Git root: ${result.stdout}` : "Lazurio Root není použitelný Git repo.",
     paths: ["."],
     links: [],
     details: result.ok ? [] : [result.stderr || result.error || "git rev-parse selhal"],
@@ -2406,7 +2406,7 @@ function workspaceSummary(companiesConfig) {
   const workspace = companiesConfig?.launchpad_root ?? companiesConfig?.companies_workspace ?? {};
   return {
     slug: workspace.slug ?? "unknown",
-    display_name: workspace.display_name ?? "Launchpad GEN3 root",
+    display_name: workspace.display_name ?? "Lazurio Root",
     root_role: workspace.root_role ?? "launchpad-root",
   };
 }
