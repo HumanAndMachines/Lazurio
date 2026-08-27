@@ -29,21 +29,31 @@ vendor/generated klon vedle package nebo source linku.
 ## Každý Agent začíná read-only readbackem
 
 ```sh
-lazurio --version
 lazurio --version --json
-lazurio install --json
+lazurio doctor
 ```
 
 `--version` popisuje spuštěné CLI, včetně `root_kind` a ověřené source/package
-provenience. `install` používá kanonický Root automaticky a lze jej bezpečně
-zavolat opakovaně; top-level `lazurio install` nepřijímá `--root`.
+provenience. Doctor pouze pozoruje současný stav a vrátí konkrétní důvody,
+které je potřeba řešit.
 
-Potom ověř běžný stav přes package-managed příkazy:
+## Install a běžná údržba jsou explicitní mutace
 
 ```sh
-lazurio update
+lazurio install --json
 lazurio doctor
 ```
+
+`install` používá kanonický Root automaticky, nepřijímá `--root` a lze jej
+bezpečně zavolat opakovaně. Je to ale konvergenční instalační operace: podle
+verze CLI může po plánu a potřebném potvrzení měnit stav Mašiny. Nevydávej ji
+za read-only diagnostiku.
+
+`lazurio update` je samostatná vědomá údržba. Může fetchovat, uložit lokální
+změny do recovery stashe, vrátit primary checkout na `main`, fast-forwardnout
+repa, materializovat dostupné Moduly a reconciliovat dependencies. Agent jej
+spustí až podle pravidel aktivního Rootu a po přečtení scoped reportu; nikdy
+jím pouze „nezjišťuje stav“.
 
 Když package-only instalace source checkout nemá, není to závada. Agent použije
 package-managed CLI a neklonuje veřejný repozitář bez výslovného development

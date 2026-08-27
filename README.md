@@ -170,13 +170,12 @@ rozložení repozitářů [MAP.md](MAP.md).
 ## Rychlý start pro vývojáře
 
 Aktuální podporovaná vývojová cesta vede přes source checkout. Potřebuješ
-[Git](https://git-scm.com/) a [Bun](https://bun.sh/). Nový vývojový checkout
-patří na kanonickou cestu uvnitř pracovního Rootu:
+[Git](https://git-scm.com/) a [Bun](https://bun.sh/). Dokud package installer
+není vydaný, nevytvářej ručně neúplný `~/Lazurio` jen kvůli cílové cestě:
 
 ```sh
-mkdir -p "$HOME/Lazurio/development"
-git clone https://github.com/HumanAndMachines/Lazurio.git "$HOME/Lazurio/development/Lazurio"
-cd "$HOME/Lazurio/development/Lazurio"
+git clone https://github.com/HumanAndMachines/Lazurio.git
+cd Lazurio
 
 # Bezpečná projekce lokálního kontextu
 bun run lazurio -- context --json
@@ -187,6 +186,11 @@ bun run lazurio -- doctor
 # Spuštění Launchpadu v prohlížeči
 bun run launchpad
 ```
+
+Po vydání package instalace nejdřív spusť `lazurio install`. Teprve její
+úspěšný report materializuje platný `<home>/Lazurio`; volitelný development
+checkout pak založ do `<home>/Lazurio/development/Lazurio`. Tím nevznikne
+poloviční Root, který by Doctor musel správně odmítnout.
 
 Stejný primární checkout můžeš bezpečně a opakovaně zpřístupnit v `PATH`:
 
