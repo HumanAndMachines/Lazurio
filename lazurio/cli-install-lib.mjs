@@ -169,7 +169,13 @@ export function inspectLazurioCliInstallation({
   let observedIdentity = null;
   let identityError = null;
   if (state === "installed" && probeIdentity) {
-    const probe = runProcess(commandPath, ["cli", "identity", "--json"], {
+    const probe = runProcess(commandPath, [
+      "cli",
+      "identity",
+      "--json",
+      "--root",
+      canonicalRoot,
+    ], {
       cwd: homeDirectory,
       environment: bunEnvironment,
     });
