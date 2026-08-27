@@ -22,5 +22,9 @@ stejného kanonického repozitáře, z commitu
 - `assets/launchpad.ico` je platformní balení kanonického
   `profile-light-1024.png` pro Windows zástupce na světlé ploše.
 
+Stínovaný symbol `vendor/lazurio/symbol-color.svg` je obsahově shodná kopie
+kanonického čtyřfasetového `symbol-color.svg` z commitu
+`186f2940927a896ab7a1f164fae4eea8c3ce188a` design systému Lazurio.
+
 Ani ikonové kopie se neupravují ručně. Změna kresby patří nejdřív do
 generátoru design systému Lazurio a potom se znovu vyexportuje celá sada.
