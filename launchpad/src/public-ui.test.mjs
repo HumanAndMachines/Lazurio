@@ -617,7 +617,7 @@ test("CAC-0044: karty jsou celé klikatelné a spouští one-click open s guarde
   expect(personalspace).toContain('from "./reserved-tab-status.js"');
   expect(reservedTabStatus).toContain("function writeReservedTabStatus");
   expect(reservedTabStatus).toContain("/vendor/lazurio/tokens.css");
-  expect(reservedTabStatus).toContain("/favicon.svg");
+  expect(reservedTabStatus).toContain("/vendor/lazurio/symbol-color.svg");
   expect(js).toContain("function waitForOpenRuntime");
   expect(js).toContain('payload.status === "starting"');
   expect(js).toContain("Launchpad nedostal URL běžící aplikace");

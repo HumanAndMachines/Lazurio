@@ -12,7 +12,7 @@ export function buildReservedTabStatusDocument({ title, message, origin }) {
   const launchpadOrigin = new URL(origin).origin;
   const fontUrl = new URL("/fonts/fonts.css", launchpadOrigin).href;
   const tokensUrl = new URL("/vendor/lazurio/tokens.css", launchpadOrigin).href;
-  const symbolUrl = new URL("/favicon.svg", launchpadOrigin).href;
+  const symbolUrl = new URL("/vendor/lazurio/symbol-color.svg", launchpadOrigin).href;
   const safeTitle = escapeHtml(title);
 
   return `<!doctype html>
@@ -27,22 +27,23 @@ export function buildReservedTabStatusDocument({ title, message, origin }) {
     *{box-sizing:border-box}
     body{margin:0;min-height:100vh;display:grid;place-items:center;padding:var(--lz-space-32,32px);font-family:var(--lz-font-sans,"Inter Tight Variable","Inter Tight",Inter,system-ui,sans-serif);color:var(--lz-ink,#090909);background:var(--lz-paper,#fbfaf9)}
     main{width:min(100%,32rem);text-align:center}
-    .brand-symbol{display:block;width:64px;height:64px;margin:0 auto var(--lz-space-24,24px);border-radius:var(--lz-radius-md,10px)}
+    .brand-symbol{position:relative;width:80px;height:80px;margin:0 auto var(--lz-space-24,24px)}
+    .brand-symbol__image{display:block;width:100%;height:100%}
+    .brand-symbol::after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 20%,rgba(255,255,255,.72) 44%,rgba(255,255,255,.16) 58%,transparent 78%);background-size:240% 100%;mask:url("${escapeHtml(symbolUrl)}") center/contain no-repeat;-webkit-mask:url("${escapeHtml(symbolUrl)}") center/contain no-repeat;mix-blend-mode:soft-light;animation:lazurio-facets 2.4s cubic-bezier(.45,0,.55,1) infinite}
     h1{margin:0 0 var(--lz-space-8,8px);font-size:var(--lz-size-title,20px);font-weight:var(--lz-weight-title,600);line-height:var(--lz-leading-title,1.3);letter-spacing:var(--lz-track-title,-.02em);text-wrap:balance}
     p{margin:0;color:var(--lz-ink-muted,#707070);font-size:var(--lz-size-body,16.5px);font-weight:var(--lz-weight-body,400);line-height:var(--lz-leading-body,1.6);letter-spacing:var(--lz-track-body,-.005em);text-wrap:pretty}
     strong{color:var(--lz-ink,#090909);font-weight:var(--lz-weight-akce,600)}
-    .progress{position:relative;width:128px;height:2px;margin:var(--lz-space-24,24px) auto 0;overflow:hidden;background:var(--lz-line,#dddcdb)}
-    .progress::after{content:"";position:absolute;inset:0 auto 0 0;width:42%;background:var(--lz-accent,#0d12db);animation:lazurio-loading 1.4s ease-in-out infinite}
-    @keyframes lazurio-loading{0%{transform:translateX(-110%)}50%{transform:translateX(80%)}100%{transform:translateX(245%)}}
-    @media (prefers-reduced-motion:reduce){.progress::after{width:100%;opacity:.55;animation:none}}
+    @keyframes lazurio-facets{0%,14%{background-position:130% 0;opacity:.28}48%{opacity:.9}86%,100%{background-position:-130% 0;opacity:.28}}
+    @media (prefers-reduced-motion:reduce){.brand-symbol::after{display:none}}
   </style>
 </head>
 <body>
   <main aria-live="polite" aria-busy="true">
-    <img class="brand-symbol" src="${escapeHtml(symbolUrl)}" width="64" height="64" alt="">
+    <div class="brand-symbol" aria-hidden="true">
+      <img class="brand-symbol__image" src="${escapeHtml(symbolUrl)}" width="80" height="80" alt="">
+    </div>
     <h1>${escapeHtml(message)}</h1>
     <p><strong>${safeTitle}</strong> se otevře v tomto panelu, jakmile bude připravená.</p>
-    <div class="progress" aria-hidden="true"></div>
   </main>
 </body>
 </html>`;
