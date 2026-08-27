@@ -29,11 +29,11 @@ export function buildReservedTabStatusDocument({ title, message, origin }) {
     main{width:min(100%,32rem);text-align:center}
     .brand-symbol{position:relative;width:80px;height:80px;margin:0 auto var(--lz-space-24,24px)}
     .brand-symbol__image{display:block;width:100%;height:100%}
-    .brand-symbol::after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 20%,rgba(255,255,255,.72) 44%,rgba(255,255,255,.16) 58%,transparent 78%);background-size:240% 100%;mask:url("${escapeHtml(symbolUrl)}") center/contain no-repeat;-webkit-mask:url("${escapeHtml(symbolUrl)}") center/contain no-repeat;mix-blend-mode:soft-light;animation:lazurio-facets 2.4s cubic-bezier(.45,0,.55,1) infinite}
+    .brand-symbol::after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 16%,rgba(168,185,251,.28) 32%,rgba(255,255,255,.98) 46%,rgba(210,221,253,.62) 56%,transparent 76%);background-size:250% 100%;mask:url("${escapeHtml(symbolUrl)}") center/contain no-repeat;-webkit-mask:url("${escapeHtml(symbolUrl)}") center/contain no-repeat;mix-blend-mode:screen;animation:lazurio-facets 2.4s cubic-bezier(.45,0,.55,1) infinite}
     h1{margin:0 0 var(--lz-space-8,8px);font-size:var(--lz-size-title,20px);font-weight:var(--lz-weight-title,600);line-height:var(--lz-leading-title,1.3);letter-spacing:var(--lz-track-title,-.02em);text-wrap:balance}
     p{margin:0;color:var(--lz-ink-muted,#707070);font-size:var(--lz-size-body,16.5px);font-weight:var(--lz-weight-body,400);line-height:var(--lz-leading-body,1.6);letter-spacing:var(--lz-track-body,-.005em);text-wrap:pretty}
     strong{color:var(--lz-ink,#090909);font-weight:var(--lz-weight-akce,600)}
-    @keyframes lazurio-facets{0%,14%{background-position:130% 0;opacity:.28}48%{opacity:.9}86%,100%{background-position:-130% 0;opacity:.28}}
+    @keyframes lazurio-facets{0%,14%{background-position:130% 0;opacity:.42}48%{opacity:1}86%,100%{background-position:-130% 0;opacity:.42}}
     @media (prefers-reduced-motion:reduce){.brand-symbol::after{display:none}}
   </style>
 </head>

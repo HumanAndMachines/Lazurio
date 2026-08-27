@@ -39,8 +39,9 @@ test("reserved app tab keeps the canonical symbol and a non-layout loading motio
 
   expect(symbolSha256).toBe(canonicalSymbolSha256);
   expect(html).toContain(".brand-symbol{position:relative;width:80px;height:80px");
-  expect(html).toContain("background-size:240% 100%");
-  expect(html).toContain("@keyframes lazurio-facets{0%,14%{background-position:130% 0;opacity:.28}48%{opacity:.9}86%,100%{background-position:-130% 0;opacity:.28}}");
+  expect(html).toContain("background-size:250% 100%");
+  expect(html).toContain("mix-blend-mode:screen");
+  expect(html).toContain("@keyframes lazurio-facets{0%,14%{background-position:130% 0;opacity:.42}48%{opacity:1}86%,100%{background-position:-130% 0;opacity:.42}}");
   expect(html).toContain("@media (prefers-reduced-motion:reduce){.brand-symbol::after{display:none}}");
   expect(html).not.toContain("@keyframes lazurio-facets{0%{width:");
   expect(html).not.toContain("@keyframes lazurio-facets{0%{height:");
