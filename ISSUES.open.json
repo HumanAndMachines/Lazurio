@@ -201,7 +201,7 @@
       ],
       "evidence": [
         "Aktuální host: Bun 1.4.0 (`34cbb9a40`), Darwin 25.6.0 arm64, Lazurio main `2bc6784226ffc629df2ecf16dbd0693994c3a970`.",
-        "Regresní package-script kontrakt před opravou vypsal 57 explicitních ne-rootovaných Bun test operandů.",
+        "Regresní package-script kontrakt před opravou vypsal 55 ne-rootovaných z 57 explicitních Bun test operandů.",
         "Přímý `spawnSync` stejného Git child procesu mimo `bun test` prošel přes Node i Bun; selhání patří test-resolution/spawn interakci, ne preservation implementaci.",
         "GitHub Actions run 31203983028 prošel na exact headu `3580eb36673f1554431d192b7fde2296f5c5eae8` s Bun 1.3.14 na Ubuntu a Windows.",
         "Při prvním pozorování 2026-08-07 byl host silně zatížený a pozdější běh tehdy prošel; tato korelace vysvětluje původní hypotézu, ale novější bare-operand versus `./` A/B identifikuje stabilní source seam."
