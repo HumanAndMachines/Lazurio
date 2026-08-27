@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -898,6 +898,7 @@ test("fresh Organization manifest materializes its new Workspace Module while ex
   const organizationRoot = join(root, "organizations", "BetaCo_GEN3");
   const organizationRemote = join(root, "remotes", "beta-root.git");
   const moduleRemote = join(root, "remotes", "new-module.git");
+  const declaredModuleRemote = "git@github.com:BetaCo/new-module.git";
   const excludedSlots = [
     {
       slug: "warehouse",
@@ -957,8 +958,8 @@ test("fresh Organization manifest materializes its new Workspace Module while ex
       ...excludedSlots,
       {
         path: "workspace/new-module",
-        teams: ["builders"],
-        git: { url: moduleRemote, branch: "main" },
+        teams: ["workspace"],
+        git: { url: declaredModuleRemote, branch: "main" },
       },
     ],
   });
@@ -992,6 +993,19 @@ test("fresh Organization manifest materializes its new Workspace Module while ex
         ? { ...identity(item), state: "current", reason: "already_current", message: "current" }
         : updateManagedRepo(item, context),
       installDependencies: async () => ({ ok: true }),
+      materializationDeps: {
+        run: async (args, options) => {
+          const mappedArgs = args.map((value) =>
+            value === declaredModuleRemote ? moduleRemote : value
+          );
+          const result = await runGitAsync(mappedArgs, options);
+          if (result.ok && args[0] === "clone") {
+            const stagingPath = args.at(-1);
+            runGit(stagingPath, ["remote", "set-url", "origin", declaredModuleRemote]);
+          }
+          return result;
+        },
+      },
     },
   });
 
@@ -1108,6 +1122,505 @@ test("one renamed module is quarantined while Sync still updates its healthy sib
   expect(report.state).toBe("blocked");
 });
 
+test("slot collection conflicts never block healthy modules in the same or another Organization", async () => {
+  const alphaRoot = repo("alpha::root", "organization_root", "alpha", "root");
+  const alphaHealthy = repo("alpha::healthy", "module", "alpha", "healthy", "workspace");
+  const betaRoot = repo("beta::root", "organization_root", "beta", "root");
+  const betaHealthy = repo("beta::healthy", "module", "beta", "healthy", "workspace");
+  const conflictIssues = ["workspace/a", "workspace/b"].map((path) => ({
+    schema_version: "lazurio.organization_issue.v1",
+    severity: "blocking",
+    scope: "module_slot",
+    status: "quarantined",
+    code: "slot_collection_ambiguous",
+    organization: "alpha",
+    organization_path: "organizations/Alpha_GEN3",
+    module: "shared",
+    path,
+    expected_path: null,
+    message: `alpha shared identity conflicts at ${path}`,
+    sources: ["git_inventory"],
+    next_action: {
+      kind: "agent_review",
+      label: "Vyřešit s Codexem",
+      prompt: `Review ${path} without guessing.`,
+    },
+  }));
+  const inventory = {
+    repos: [alphaRoot, alphaHealthy, betaRoot, betaHealthy],
+    warnings: conflictIssues.map((issue) => issue.message),
+    inventory_issues: conflictIssues,
+  };
+  const calls = [];
+
+  const report = await runLazurioUpdate({
+    rootPath: "/working",
+    runtimeRoot: "/runtime",
+    deps: {
+      runId: "collection-conflict-isolation",
+      acquireLock: async () => ({ release: async () => {} }),
+      buildInventory: async () => inventory,
+      updateRepo: async (item) => {
+        calls.push(item.key);
+        return {
+          ...identity(item),
+          state: item.repo_kind === "module" ? "updated" : "current",
+          reason: item.repo_kind === "module" ? "checkout_updated" : "already_current",
+          message: "fixture",
+          actions: [],
+        };
+      },
+      discoverApps: async () => ({ apps: [], failures: [] }),
+    },
+  });
+
+  expect(calls).toEqual([
+    "lazurio::root",
+    alphaRoot.key,
+    alphaHealthy.key,
+    betaRoot.key,
+    betaHealthy.key,
+  ]);
+  expect(calls.some((key) => key.includes("shared"))).toBe(false);
+  expect(report.results.filter((item) => item.reason === "slot_collection_ambiguous"))
+    .toHaveLength(2);
+  expect(report.results.find((item) => item.repo_key === alphaHealthy.key)?.state).toBe("updated");
+  expect(report.results.find((item) => item.repo_key === betaHealthy.key)?.state).toBe("updated");
+  expect(report.results.some((item) => item.reason === "inventory_unavailable")).toBe(false);
+});
+
+test("Sync replaces pre-cutover slot diagnostics with the final inventory snapshot", async () => {
+  const organization = repo("alpha::root", "organization_root", "alpha", "root");
+  organization.organization_path = "organizations/Alpha_GEN3";
+  const initialMessage = "workspace/legacy still follows the old declaration";
+  const finalMessage = "workspace/legacy was observed after the canonical manifest cutover";
+  const initialIssue = buildRepositoryLocationIssue({
+    organization: "alpha",
+    organizationPath: "organizations/Alpha_GEN3",
+    module: "renamed",
+    path: "workspace/legacy",
+    expectedPath: "workspace/canonical",
+    message: initialMessage,
+  });
+  const finalIssue = buildRepositoryLocationIssue({
+    organization: "alpha",
+    organizationPath: "organizations/Alpha_GEN3",
+    module: "renamed",
+    path: "workspace/legacy-after-cutover",
+    expectedPath: "workspace/canonical",
+    message: finalMessage,
+  });
+  const snapshots = [
+    { repos: [organization], warnings: [initialMessage], inventory_issues: [initialIssue] },
+    { repos: [organization], warnings: [finalMessage], inventory_issues: [finalIssue] },
+  ];
+  let inventoryRead = 0;
+
+  const report = await runLazurioUpdate({
+    rootPath: "/working",
+    runtimeRoot: "/runtime",
+    deps: {
+      runId: "slot-cutover-snapshots",
+      acquireLock: async () => ({ release: async () => {} }),
+      buildInventory: async () => snapshots[Math.min(inventoryRead++, snapshots.length - 1)],
+      updateRepo: async (item) => ({
+        ...identity(item),
+        state: "current",
+        reason: "already_current",
+        message: "fixture",
+        actions: [],
+      }),
+      discoverApps: async () => ({ apps: [], failures: [] }),
+    },
+  });
+
+  const slotIssues = report.results.filter((item) => item.reason === "repository_location_mismatch");
+  expect(slotIssues).toHaveLength(1);
+  expect(slotIssues[0]).toMatchObject({
+    path: "organizations/Alpha_GEN3/workspace/legacy-after-cutover",
+    next_action: { prompt: expect.stringContaining(finalMessage) },
+  });
+  expect(JSON.stringify(slotIssues[0])).not.toContain(initialMessage);
+  expect(report.warnings).toEqual([]);
+});
+
+test("manifest cutover never clones over an unverified legacy checkout from the initial snapshot", async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "lazurio-cutover-no-clone-"));
+  cleanup.push(sandbox);
+  const legacyPath = join(sandbox, "organizations", "Alpha_GEN3", "workspace", "legacy");
+  const canonicalPath = join(sandbox, "organizations", "Alpha_GEN3", "workspace", "canonical");
+  await mkdir(legacyPath, { recursive: true });
+  await writeFile(join(legacyPath, "local-data.txt"), "preserve me\n");
+  const organization = repo("alpha::root", "organization_root", "alpha", "root");
+  organization.organization_path = "organizations/Alpha_GEN3";
+  const legacy = repo("alpha::renamed", "module", "alpha", "renamed", "workspace");
+  Object.assign(legacy, {
+    absolute_path: legacyPath,
+    repo_path: "organizations/Alpha_GEN3/workspace/legacy",
+    slot_path: "workspace/legacy",
+  });
+  const canonical = { ...legacy,
+    absolute_path: canonicalPath,
+    repo_path: "organizations/Alpha_GEN3/workspace/canonical",
+    slot_path: "workspace/canonical",
+  };
+  const snapshots = [
+    { repos: [organization, legacy], warnings: [], inventory_issues: [] },
+    { repos: [organization, canonical], warnings: [], inventory_issues: [] },
+  ];
+  let inventoryRead = 0;
+  let materializations = 0;
+
+  const report = await runLazurioUpdate({
+    rootPath: sandbox,
+    runtimeRoot: "/runtime",
+    deps: {
+      runId: "cutover-no-clone",
+      acquireLock: async () => ({ release: async () => {} }),
+      buildInventory: async () => snapshots[Math.min(inventoryRead++, snapshots.length - 1)],
+      updateRepo: async (item) => ({
+        ...identity(item),
+        state: item.key === organization.key ? "updated" : "current",
+        reason: item.key === organization.key ? "checkout_updated" : "already_current",
+        message: "fixture",
+        actions: [],
+      }),
+      materializeRepo: async () => {
+        materializations += 1;
+        throw new Error("must not clone");
+      },
+      discoverApps: async () => ({ apps: [], failures: [] }),
+    },
+  });
+
+  expect(materializations).toBe(0);
+  expect(existsSync(canonicalPath)).toBe(false);
+  expect(await readFile(join(legacyPath, "local-data.txt"), "utf8")).toBe("preserve me\n");
+  expect(report.results).toContainEqual(expect.objectContaining({
+    repo_key: "alpha::renamed",
+    reason: "repository_transition_unverified",
+    next_action: expect.objectContaining({
+      kind: "repair_module_location",
+      prompt: expect.stringContaining("Sync nevytvořil druhý clone"),
+    }),
+  }));
+});
+
+test("pre-cutover structured location issue also blocks clone when the stable marker becomes unreadable", async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "lazurio-cutover-issue-no-clone-"));
+  cleanup.push(sandbox);
+  const legacyPath = join(sandbox, "organizations", "Alpha_GEN3", "workspace", "legacy");
+  const canonicalPath = join(sandbox, "organizations", "Alpha_GEN3", "workspace", "canonical");
+  await mkdir(legacyPath, { recursive: true });
+  await writeFile(join(legacyPath, "local-data.txt"), "preserve issue evidence\n");
+  const organization = repo("alpha::root", "organization_root", "alpha", "root");
+  organization.organization_path = "organizations/Alpha_GEN3";
+  const canonical = repo("alpha::renamed", "module", "alpha", "renamed", "workspace");
+  Object.assign(canonical, {
+    absolute_path: canonicalPath,
+    repo_path: "organizations/Alpha_GEN3/workspace/canonical",
+    slot_path: "workspace/canonical",
+  });
+  const message = "old manifest already expects canonical remote while checkout remains in legacy";
+  const issue = buildRepositoryLocationIssue({
+    organization: "alpha",
+    organizationPath: "organizations/Alpha_GEN3",
+    module: "renamed",
+    path: "workspace/legacy",
+    expectedPath: "workspace/canonical",
+    message,
+  });
+  const snapshots = [
+    { repos: [organization], warnings: [message], inventory_issues: [issue] },
+    { repos: [organization, canonical], warnings: [], inventory_issues: [] },
+  ];
+  let inventoryRead = 0;
+  let materializations = 0;
+
+  const report = await runLazurioUpdate({
+    rootPath: sandbox,
+    runtimeRoot: "/runtime",
+    deps: {
+      runId: "cutover-issue-no-clone",
+      acquireLock: async () => ({ release: async () => {} }),
+      buildInventory: async () => snapshots[Math.min(inventoryRead++, snapshots.length - 1)],
+      updateRepo: async (item) => ({
+        ...identity(item),
+        state: item.key === organization.key ? "updated" : "current",
+        reason: item.key === organization.key ? "checkout_updated" : "already_current",
+        message: "fixture",
+        actions: [],
+      }),
+      materializeRepo: async () => {
+        materializations += 1;
+        throw new Error("must not clone");
+      },
+      discoverApps: async () => ({ apps: [], failures: [] }),
+    },
+  });
+
+  expect(materializations).toBe(0);
+  expect(existsSync(canonicalPath)).toBe(false);
+  expect(await readFile(join(legacyPath, "local-data.txt"), "utf8")).toBe("preserve issue evidence\n");
+  expect(report.results).toContainEqual(expect.objectContaining({
+    repo_key: "alpha::renamed",
+    reason: "repository_transition_unverified",
+  }));
+});
+
+test("any contained pre-cutover module issue blocks a duplicate clone after manifest repair", async () => {
+  const sandbox = await mkdtemp(join(tmpdir(), "lazurio-cutover-slot-issue-no-clone-"));
+  cleanup.push(sandbox);
+  const organizationRoot = join(sandbox, "organizations", "Alpha_GEN3");
+  const legacyPath = join(organizationRoot, "workspace", "legacy");
+  const canonicalPath = join(organizationRoot, "workspace", "canonical");
+  await mkdir(legacyPath, { recursive: true });
+  await writeFile(join(legacyPath, "local-data.txt"), "preserve non-location evidence\n");
+  const organization = repo("alpha::root", "organization_root", "alpha", "root");
+  Object.assign(organization, {
+    organization_path: "organizations/Alpha_GEN3",
+    absolute_path: organizationRoot,
+  });
+  const canonical = repo("alpha::renamed", "module", "alpha", "renamed", "workspace");
+  Object.assign(canonical, {
+    organization_path: "organizations/Alpha_GEN3",
+    absolute_path: canonicalPath,
+    repo_path: "organizations/Alpha_GEN3/workspace/canonical",
+    slot_path: "workspace/canonical",
+  });
+  const initialIssue = {
+    schema_version: "lazurio.organization_issue.v1",
+    severity: "blocking",
+    scope: "module_slot",
+    status: "quarantined",
+    code: "slot_branch_invalid",
+    organization: "alpha",
+    organization_path: "organizations/Alpha_GEN3",
+    module: "renamed",
+    path: "workspace/legacy",
+    expected_path: null,
+    message: "legacy slot declared a non-main branch before the manifest repair",
+  };
+  const snapshots = [
+    { repos: [organization], warnings: [], inventory_issues: [initialIssue] },
+    { repos: [organization, canonical], warnings: [], inventory_issues: [] },
+  ];
+  let inventoryRead = 0;
+  let materializations = 0;
+
+  const report = await runLazurioUpdate({
+    rootPath: sandbox,
+    runtimeRoot: "/runtime",
+    deps: {
+      runId: "cutover-slot-issue-no-clone",
+      acquireLock: async () => ({ release: async () => {} }),
+      buildInventory: async () => snapshots[Math.min(inventoryRead++, snapshots.length - 1)],
+      updateRepo: async (item) => ({
+        ...identity(item),
+        state: item.key === organization.key ? "updated" : "current",
+        reason: item.key === organization.key ? "checkout_updated" : "already_current",
+        message: "fixture",
+        actions: [],
+      }),
+      materializeRepo: async () => {
+        materializations += 1;
+        throw new Error("must not clone");
+      },
+      discoverApps: async () => ({ apps: [], failures: [] }),
+    },
+  });
+
+  expect(materializations).toBe(0);
+  expect(existsSync(canonicalPath)).toBe(false);
+  expect(await readFile(join(legacyPath, "local-data.txt"), "utf8"))
+    .toBe("preserve non-location evidence\n");
+  expect(report.results).toContainEqual(expect.objectContaining({
+    repo_key: "alpha::renamed",
+    reason: "repository_transition_unverified",
+    next_action: expect.objectContaining({
+      kind: "repair_module_location",
+      prompt: expect.stringContaining("Sync nevytvořil druhý clone"),
+    }),
+  }));
+});
+
+test("case-only and unreadable pre-cutover evidence both block a duplicate clone", async () => {
+  for (const variant of ["case-only", "unreadable"]) {
+    const sandbox = await mkdtemp(join(tmpdir(), `lazurio-cutover-${variant}-no-clone-`));
+    cleanup.push(sandbox);
+    const organizationRoot = join(sandbox, "organizations", "Alpha_GEN3");
+    const legacyPath = join(organizationRoot, "workspace", "legacy");
+    const canonicalPath = join(organizationRoot, "workspace", "canonical");
+    await mkdir(legacyPath, { recursive: true });
+    await writeFile(join(legacyPath, "local-data.txt"), `preserve ${variant} evidence\n`);
+    const organization = repo("alpha::root", "organization_root", "alpha", "root");
+    Object.assign(organization, {
+      organization_path: "organizations/Alpha_GEN3",
+      absolute_path: organizationRoot,
+    });
+    const canonical = repo("alpha::renamed", "module", "alpha", "renamed", "workspace");
+    Object.assign(canonical, {
+      organization_path: "organizations/Alpha_GEN3",
+      absolute_path: canonicalPath,
+      repo_path: "organizations/Alpha_GEN3/workspace/canonical",
+      slot_path: "workspace/canonical",
+    });
+    const initialIssue = {
+      schema_version: "lazurio.organization_issue.v1",
+      severity: "blocking",
+      scope: "module_slot",
+      status: "quarantined",
+      code: variant === "case-only" ? "slot_path_casing_mismatch" : "slot_branch_invalid",
+      organization: "alpha",
+      organization_path: "organizations/Alpha_GEN3",
+      module: "renamed",
+      path: variant === "case-only" ? "workspace/Legacy" : "workspace/legacy",
+      expected_path: null,
+      message: `${variant} legacy evidence before manifest repair`,
+    };
+    const snapshots = [
+      { repos: [organization], warnings: [], inventory_issues: [initialIssue] },
+      { repos: [organization, canonical], warnings: [], inventory_issues: [] },
+    ];
+    let inventoryRead = 0;
+    let materializations = 0;
+    const lstatPath = async (path) => {
+      if (variant === "unreadable" && path === legacyPath) {
+        throw Object.assign(new Error("simulated EACCES"), { code: "EACCES" });
+      }
+      return lstat(path);
+    };
+
+    const report = await runLazurioUpdate({
+      rootPath: sandbox,
+      runtimeRoot: "/runtime",
+      deps: {
+        runId: `cutover-${variant}-no-clone`,
+        acquireLock: async () => ({ release: async () => {} }),
+        buildInventory: async () => snapshots[Math.min(inventoryRead++, snapshots.length - 1)],
+        lstatPath,
+        updateRepo: async (item) => ({
+          ...identity(item),
+          state: item.key === organization.key ? "updated" : "current",
+          reason: item.key === organization.key ? "checkout_updated" : "already_current",
+          message: "fixture",
+          actions: [],
+        }),
+        materializeRepo: async () => {
+          materializations += 1;
+          throw new Error("must not clone");
+        },
+        discoverApps: async () => ({ apps: [], failures: [] }),
+      },
+    });
+
+    expect(materializations).toBe(0);
+    expect(existsSync(canonicalPath)).toBe(false);
+    expect(await readFile(join(legacyPath, "local-data.txt"), "utf8"))
+      .toBe(`preserve ${variant} evidence\n`);
+    expect(report.results).toContainEqual(expect.objectContaining({
+      repo_key: "alpha::renamed",
+      reason: "repository_transition_unverified",
+    }));
+  }
+});
+
+test("two real inventory Sync runs never clone beside an unassigned legacy checkout after restart", async () => {
+  const root = await createLaunchpadGitFixture();
+  cleanup.push(root);
+  const organizationRoot = join(root, "organizations", "OmegaCo_GEN3");
+  const legacyPath = join(organizationRoot, "workspace", "legacy");
+  const canonicalPath = join(organizationRoot, "workspace", "canonical");
+  await mkdir(join(legacyPath, ".git"), { recursive: true });
+  await writeFile(join(legacyPath, "local-data.txt"), "keep across syncs\n");
+  const manifestPath = join(organizationRoot, "modules.manifest.json");
+  const manifest = await Bun.file(manifestPath).json();
+  manifest.module_slots.push({
+    slug: "renamed",
+    path: "workspace/canonical",
+    teams: ["workspace"],
+    git: { url: "git@github.com:OmegaCo/canonical.git", branch: "main" },
+  });
+  await writeJson(manifestPath, manifest);
+  const materializationAttempts = [];
+  const updateRepo = async (item) => ({
+    ...identity(item),
+    state: "current",
+    reason: "already_current",
+    message: "fixture",
+    actions: [],
+  });
+
+  for (const runId of ["persistent-suspect-1", "persistent-suspect-2"]) {
+    const report = await runLazurioUpdate({
+      rootPath: root,
+      runtimeRoot: "/runtime",
+      deps: {
+        runId,
+        acquireLock: async () => ({ release: async () => {} }),
+        updateRepo,
+        materializeRepo: async ({ repo }) => {
+          materializationAttempts.push(repo.key);
+          return { ok: true, head: null };
+        },
+        discoverApps: async () => ({ apps: [], failures: [] }),
+      },
+    });
+    expect(report.results).toContainEqual(expect.objectContaining({
+      repo_key: "OmegaCo::renamed::inventory",
+      reason: "repository_transition_unverified",
+    }));
+    expect(existsSync(canonicalPath)).toBe(false);
+    expect(await readFile(join(legacyPath, "local-data.txt"), "utf8")).toBe("keep across syncs\n");
+  }
+  expect(materializationAttempts).not.toContain("OmegaCo::renamed");
+});
+
+test("updated Organization with failed refresh never replays its stale pre-cutover slot issue", async () => {
+  const organization = repo("alpha::root", "organization_root", "alpha", "root");
+  organization.organization_path = "organizations/Alpha_GEN3";
+  const staleMessage = "old manifest points at workspace/legacy";
+  const staleIssue = buildRepositoryLocationIssue({
+    organization: "alpha",
+    organizationPath: "organizations/Alpha_GEN3",
+    module: "renamed",
+    path: "workspace/legacy",
+    expectedPath: "workspace/canonical",
+    message: staleMessage,
+  });
+  let inventoryRead = 0;
+
+  const report = await runLazurioUpdate({
+    rootPath: "/working",
+    runtimeRoot: "/runtime",
+    deps: {
+      runId: "failed-post-cutover-refresh",
+      acquireLock: async () => ({ release: async () => {} }),
+      buildInventory: async () => {
+        if (inventoryRead++ === 0) {
+          return { repos: [organization], warnings: [staleMessage], inventory_issues: [staleIssue] };
+        }
+        throw new Error("fresh manifest temporarily unreadable");
+      },
+      updateRepo: async (item) => ({
+        ...identity(item),
+        state: item.key === organization.key ? "updated" : "current",
+        reason: item.key === organization.key ? "checkout_updated" : "already_current",
+        message: "fixture",
+        actions: [],
+      }),
+      discoverApps: async () => ({ apps: [], failures: [] }),
+    },
+  });
+
+  expect(report.results.filter((item) => item.reason === "repository_location_mismatch")).toEqual([]);
+  expect(report.results).toContainEqual(expect.objectContaining({
+    repo_key: "alpha::inventory",
+    reason: "inventory_unavailable",
+  }));
+  expect(JSON.stringify(report)).not.toContain(staleMessage);
+});
+
 test("inventory failure blocks instead of silently reporting current", async () => {
   const calls = [];
   const report = await runLazurioUpdate({
@@ -1220,7 +1733,7 @@ test("GET-first status includes a mounted Organization-level repository", async 
   });
 });
 
-test("GET-first status exposes the exact isolated module repair instead of inventory_invalid", async () => {
+test("GET-first status keeps Sync available when one module has an isolated repair", async () => {
   const message = "workspace/legacy must move to workspace/canonical";
   const issue = buildRepositoryLocationIssue({
     organization: "alpha",
@@ -1235,17 +1748,15 @@ test("GET-first status exposes the exact isolated module repair instead of inven
     rootPath: "/working",
     deps: {
       buildInventory: async () => ({ repos: [], warnings: [message], inventory_issues: [issue] }),
+      inspectLocalRepo: async () => ({ ok: true, directoryOnly: true, dirtyPaths: [] }),
     },
   });
 
   expect(report).toMatchObject({
-    state: "blocked",
-    reason: "repository_location_mismatch",
-    repo_key: "alpha::renamed::inventory",
-    next_action: {
-      kind: "repair_module_location",
-      command: "lazurio repair module-location --org alpha --module renamed",
-    },
+    state: "current",
+    checked_remote: false,
+    reason: "explicit_sync_required",
+    isolated_issue_count: 1,
   });
 });
 

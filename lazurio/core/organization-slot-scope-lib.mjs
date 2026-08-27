@@ -1,5 +1,7 @@
 import { posix } from "node:path";
 
+import { isValidOrganizationForgeBinding } from "./organization-scaffold-lib.mjs";
+
 const organizationSlotScopes = new Set(["root", "workspace", "productionspace"]);
 const protectedOrganizationSlotAccessModes = new Set([
   "private",
@@ -119,6 +121,160 @@ export function githubRepositoryCoordinate(remote) {
   };
 }
 
+// The Organization root has carried canonical fields under `company` plus
+// older aliases during GEN3 rollout. Git actions may use the canonical value
+// only after every populated alias agrees on the same repository/branch.
+// This mirrors the slot-level rule below and prevents a validator from
+// approving one source while Sync acts on another.
+export function organizationRootRepositoryRemote(companyConfig) {
+  if (hasInvalidRootRepositoryAuthority(companyConfig)) return null;
+  return selectRepositoryRemote(rootRemoteAliasEntries(companyConfig));
+}
+
+export function organizationRootRepositoryBranch(companyConfig) {
+  if (hasInvalidRootRepositoryAuthority(companyConfig)) return null;
+  return selectRepositoryBranch(rootBranchAliasEntries(companyConfig));
+}
+
+export function organizationRootRepositoryAliasIssues(companyConfig) {
+  const issues = [];
+  if (hasInvalidActiveForgeBinding(companyConfig)) {
+    issues.push({
+      code: "organization_root_forge_binding_invalid",
+      detail: "má neplatný forge_binding; provider, immutable Organization/repository ID, asserted GitHub locator a main musí odpovídat scaffold kontraktu, jinak Git akce nemají bezpečnou autoritu",
+    });
+  }
+  const governanceIssue = activeGovernanceIssue(companyConfig);
+  if (governanceIssue) issues.push(governanceIssue);
+  const remoteAliases = rootRemoteAliasEntries(companyConfig);
+  const invalidRemoteAliases = invalidAliasNames(remoteAliases);
+  if (invalidRemoteAliases.length > 0) {
+    issues.push({
+      code: "organization_root_remote_alias_invalid",
+      detail: `má explicitní Organization root repository alias s neplatnou hodnotou (${invalidRemoteAliases.join(", ")}); alias musí být přesný neprázdný string a Sync nesmí spadnout na jiné pole`,
+    });
+  }
+  const validRemoteAliases = validAliasEntries(remoteAliases);
+  const remoteIdentities = new Set(validRemoteAliases.map(([, value]) => {
+    const coordinate = githubRepositoryCoordinate(value);
+    return coordinate
+      ? `github:${coordinate.ownerRepo.toLowerCase()}`
+      : `raw:${value}`;
+  }));
+  if (remoteIdentities.size > 1) {
+    issues.push({
+      code: "organization_root_remote_conflict",
+      detail: `deklaruje rozdílné Organization root repository aliasy (${validRemoteAliases.map(([name]) => name).join(", ")}); před Git akcí musí ukazovat na stejný GitHub owner/repo`,
+    });
+  }
+  const selectedRemote = selectRepositoryRemote(remoteAliases);
+  const selectedCoordinate = githubRepositoryCoordinate(selectedRemote);
+  const githubOrg = exactNonEmptyString(companyConfig?.company?.github_org);
+  const forgeLogin = validActiveForgeBinding(companyConfig)
+    ? companyConfig.forge_binding.organization.asserted_login
+    : null;
+  if (githubOrg && forgeLogin && githubOrg.toLowerCase() !== forgeLogin.toLowerCase()) {
+    issues.push({
+      code: "organization_root_owner_conflict",
+      detail: `company.github_org "${githubOrg}" odporuje forge_binding.organization.asserted_login "${forgeLogin}"; immutable binding a lokátor musí před Git akcí souhlasit`,
+    });
+  }
+  const expectedOwner = forgeLogin ?? githubOrg;
+  if (
+    selectedCoordinate
+    && expectedOwner
+    && selectedCoordinate.owner.toLowerCase() !== expectedOwner.toLowerCase()
+  ) {
+    issues.push({
+      code: "organization_root_remote_owner_mismatch",
+      detail: `Organization root remote vlastní GitHub owner "${selectedCoordinate.owner}", ale Organization autorita deklaruje "${expectedOwner}"; cizí Organization source nesmí autorizovat root ani child Git akce`,
+    });
+  }
+
+  const branchAliases = rootBranchAliasEntries(companyConfig);
+  const invalidBranchAliases = invalidAliasNames(branchAliases);
+  if (invalidBranchAliases.length > 0) {
+    issues.push({
+      code: "organization_root_branch_alias_invalid",
+      detail: `má explicitní Organization root branch alias s neplatnou hodnotou (${invalidBranchAliases.join(", ")}); alias musí být přesný neprázdný string a Sync nesmí spadnout na jiné pole`,
+    });
+  }
+  const validBranchAliases = validAliasEntries(branchAliases);
+  if (new Set(validBranchAliases.map(([, value]) => value)).size > 1) {
+    issues.push({
+      code: "organization_root_branch_conflict",
+      detail: `deklaruje rozdílné Organization root branch aliasy (${validBranchAliases.map(([name]) => name).join(", ")}); Sync nesmí vybírat autoritu podle pořadí polí`,
+    });
+  }
+  const selectedBranch = selectRepositoryBranch(branchAliases);
+  if (selectedBranch !== null && selectedBranch !== "main") {
+    issues.push({
+      code: "organization_root_branch_invalid",
+      detail: `Organization root deklaruje branch "${selectedBranch}", ale spravovaný Organization source musí používat main`,
+    });
+  }
+  return issues;
+}
+
+// Workspace slot manifests have carried three remote spellings and two branch
+// spellings during incremental GEN3 migration. Every action surface must read
+// the same value, otherwise validation can approve one remote while Sync or a
+// repair command acts on another. `git.*` is the canonical spelling; legacy
+// aliases remain readable only when they agree.
+export function organizationSlotRepositoryRemote(slot, normalizedPath = null) {
+  const path = normalizeOrganizationSlotPath(normalizedPath ?? slot?.path);
+  return selectRepositoryRemote(slotRemoteAliasEntries(slot, path));
+}
+
+export function organizationSlotRepositoryBranch(slot, normalizedPath = null) {
+  const path = normalizeOrganizationSlotPath(normalizedPath ?? slot?.path);
+  return selectRepositoryBranch(slotBranchAliasEntries(slot, path));
+}
+
+export function organizationSlotRepositoryAliasIssues(slot, normalizedPath = null) {
+  const path = normalizeOrganizationSlotPath(normalizedPath ?? slot?.path);
+  if (!path || isOrganizationRootSlotPath(path)) return [];
+  const issues = [];
+  const remoteAliases = slotRemoteAliasEntries(slot, path);
+  const invalidRemoteAliases = invalidAliasNames(remoteAliases);
+  if (invalidRemoteAliases.length > 0) {
+    issues.push({
+      code: "slot_remote_alias_invalid",
+      detail: `má explicitní repository remote alias s neplatnou hodnotou (${invalidRemoteAliases.join(", ")}); alias musí být přesný neprázdný string a Git akce nesmí spadnout na jiné pole`,
+    });
+  }
+  const validRemoteAliases = validAliasEntries(remoteAliases);
+  const remoteIdentities = new Set(validRemoteAliases.map(([, value]) => {
+    const coordinate = githubRepositoryCoordinate(value);
+    return coordinate
+      ? `github:${coordinate.ownerRepo.toLowerCase()}`
+      : `raw:${value}`;
+  }));
+  if (remoteIdentities.size > 1) {
+    issues.push({
+      code: "slot_remote_conflict",
+      detail: `deklaruje rozdílné repository remote aliasy (${validRemoteAliases.map(([name]) => name).join(", ")}); před Git akcí musí ukazovat na stejný GitHub owner/repo`,
+    });
+  }
+
+  const branchAliases = slotBranchAliasEntries(slot, path);
+  const invalidBranchAliases = invalidAliasNames(branchAliases);
+  if (invalidBranchAliases.length > 0) {
+    issues.push({
+      code: "slot_branch_alias_invalid",
+      detail: `má explicitní branch alias s neplatnou hodnotou (${invalidBranchAliases.join(", ")}); alias musí být přesný neprázdný string a Git akce nesmí spadnout na jiné pole`,
+    });
+  }
+  const validBranchAliases = validAliasEntries(branchAliases);
+  if (new Set(validBranchAliases.map(([, value]) => value)).size > 1) {
+    issues.push({
+      code: "slot_branch_conflict",
+      detail: `deklaruje rozdílné branch aliasy (${validBranchAliases.map(([name]) => name).join(", ")}); Sync ani oprava nesmí vybírat autoritu podle pořadí polí`,
+    });
+  }
+  return issues;
+}
+
 export function organizationSlotRepositoryMountIssue(slot, normalizedPath = null) {
   const path = normalizeOrganizationSlotPath(normalizedPath ?? slot?.path);
   if (!path || isOrganizationRootSlotPath(path)) return null;
@@ -128,9 +284,7 @@ export function organizationSlotRepositoryMountIssue(slot, normalizedPath = null
   ) {
     return "nested workspace/<module>/db je povolené jen pro source_of_truth repository-db:<version>";
   }
-  // Stejné pořadí jako normalizeModuleSlot: validujeme přesně remote, který
-  // následně vstoupí do Git action surface.
-  const remote = slot?.repo ?? slot?.git?.url ?? slot?.repository;
+  const remote = organizationSlotRepositoryRemote(slot, path);
   const coordinate = githubRepositoryCoordinate(remote);
   if (isNestedOrganizationRepositoryDbSlotPath(path)) {
     if (!coordinate) {
@@ -153,7 +307,18 @@ export function organizationRepositorySlotCollectionIssues(
   slots,
   { allowEquivalentDuplicates = false } = {},
 ) {
-  const issues = [];
+  return organizationRepositorySlotCollectionConflicts(slots, { allowEquivalentDuplicates })
+    .map((conflict) => conflict.detail);
+}
+
+// Structured counterpart for fail-soft consumers. Each conflict carries the
+// exact implicated declaration objects, allowing Launchpad and update to
+// quarantine only that slot group while preserving healthy siblings.
+export function organizationRepositorySlotCollectionConflicts(
+  slots,
+  { allowEquivalentDuplicates = false } = {},
+) {
+  const conflicts = [];
   const paths = new Map();
   const ids = new Map();
   for (const slot of Array.isArray(slots) ? slots : []) {
@@ -166,28 +331,36 @@ export function organizationRepositorySlotCollectionIssues(
     if (previousPath) {
       const equivalent = previousPath.path === path && previousPath.id === id;
       if (!(allowEquivalentDuplicates && equivalent)) {
-        issues.push(
-          previousPath.path === path
+        conflicts.push({
+          code: previousPath.path === path
+            ? previousPath.id === id
+              ? "duplicate_path"
+              : "path_identity_conflict"
+            : "path_case_collision",
+          detail: previousPath.path === path
             ? previousPath.id === id
               ? `repo cesta ${JSON.stringify(path)} je deklarovaná vícekrát`
               : `repo cesta ${JSON.stringify(path)} nese rozdílné repository slugs ${JSON.stringify(previousPath.id)} a ${JSON.stringify(id)}`
             : `repo cesty ${JSON.stringify(previousPath.path)} a ${JSON.stringify(path)} se liší jen velikostí písmen`,
-        );
+          slots: [previousPath.slot, slot],
+        });
       }
     } else {
-      paths.set(foldedPath, { path, id });
+      paths.set(foldedPath, { path, id, slot });
     }
 
     if (id === null) continue;
     const previousIdPath = ids.get(id);
     if (previousIdPath) {
-      if (!(allowEquivalentDuplicates && previousIdPath === path)) {
-        issues.push(
-          `repository slug ${JSON.stringify(id)} používají zároveň ${JSON.stringify(previousIdPath)} a ${JSON.stringify(path)}`,
-        );
+      if (!(allowEquivalentDuplicates && previousIdPath.path === path)) {
+        conflicts.push({
+          code: "repository_id_collision",
+          detail: `repository slug ${JSON.stringify(id)} používají zároveň ${JSON.stringify(previousIdPath.path)} a ${JSON.stringify(path)}`,
+          slots: [previousIdPath.slot, slot],
+        });
       }
     } else {
-      ids.set(id, path);
+      ids.set(id, { path, slot });
     }
   }
   for (const slot of Array.isArray(slots) ? slots : []) {
@@ -196,12 +369,14 @@ export function organizationRepositorySlotCollectionIssues(
     const parentPath = path.split("/").slice(0, -1).join("/");
     const declaredParent = paths.get(parentPath.toLowerCase());
     if (!declaredParent || declaredParent.path !== parentPath) {
-      issues.push(
-        `repository-db slot ${JSON.stringify(path)} nemá deklarovaný parent Workspace Modul ${JSON.stringify(parentPath)}`,
-      );
+      conflicts.push({
+        code: "repository_db_parent_missing",
+        detail: `repository-db slot ${JSON.stringify(path)} nemá deklarovaný parent Workspace Modul ${JSON.stringify(parentPath)}`,
+        slots: [slot],
+      });
     }
   }
-  return issues;
+  return conflicts;
 }
 
 export function organizationSlotPathScope(path) {
@@ -316,4 +491,143 @@ export function normalizeOrganizationSlotPath(path) {
   const normalized = posix.normalize(path.replace(/\\/g, "/"));
   if (normalized === ".") return "";
   return normalized.length > 1 ? normalized.replace(/\/+$/, "") : normalized;
+}
+
+function rootRemoteAliasEntries(companyConfig) {
+  const company = companyConfig?.company;
+  const entries = [
+    ["company.repository", company, "repository"],
+    ["company.git_url", company, "git_url"],
+    ["company.root_repository", company, "root_repository"],
+  ];
+  if (validActiveForgeBinding(companyConfig)) {
+    entries.push([
+      "forge_binding.repository.asserted_full_name",
+      companyConfig.forge_binding.repository,
+      "asserted_full_name",
+    ]);
+  }
+  return presentAliasEntries(entries);
+}
+
+function rootBranchAliasEntries(companyConfig) {
+  const company = companyConfig?.company;
+  const entries = [
+    ["company.default_branch", company, "default_branch"],
+    ["default_branch", companyConfig, "default_branch"],
+    ["governance.default_branch", companyConfig?.governance, "default_branch"],
+  ];
+  if (validActiveForgeBinding(companyConfig)) {
+    entries.push([
+      "forge_binding.repository.default_branch",
+      companyConfig.forge_binding.repository,
+      "default_branch",
+    ]);
+  }
+  // Existing GEN3 manifests use top-level null as a reviewed legacy absence
+  // while governance.default_branch owns the actual value.
+  return presentAliasEntries(entries).filter(([name, value]) =>
+    !(name === "default_branch" && value === null)
+  );
+}
+
+function validActiveForgeBinding(companyConfig) {
+  return companyConfig?.forge_binding !== null
+    && companyConfig?.forge_binding !== undefined
+    && isValidOrganizationForgeBinding(companyConfig.forge_binding);
+}
+
+function hasInvalidActiveForgeBinding(companyConfig) {
+  return companyConfig?.forge_binding !== null
+    && companyConfig?.forge_binding !== undefined
+    && !isValidOrganizationForgeBinding(companyConfig.forge_binding);
+}
+
+function activeGovernanceIssue(companyConfig) {
+  const governance = companyConfig?.governance;
+  if (governance === null || governance === undefined) return null;
+  if (typeof governance !== "object" || Array.isArray(governance)) {
+    return {
+      code: "organization_root_governance_invalid",
+      detail: "má neplatný governance blok; aktivní governance musí být objekt a nesmí vytvářet druhou Git autoritu",
+    };
+  }
+  if (
+    Object.hasOwn(governance, "access_authority")
+    && governance.access_authority !== "github"
+  ) {
+    return {
+      code: "organization_root_access_authority_invalid",
+      detail: "deklaruje governance.access_authority jinou než přesné \"github\"; GitHub je jediná autorita přístupů a root ani child Git akce nesmí pokračovat",
+    };
+  }
+  return null;
+}
+
+function hasInvalidRootRepositoryAuthority(companyConfig) {
+  return hasInvalidActiveForgeBinding(companyConfig)
+    || activeGovernanceIssue(companyConfig) !== null;
+}
+
+function slotRemoteAliasEntries(slot, path) {
+  const aliases = [["git.url", slot?.git, "url"]];
+  if (!isOrganizationRootSlotPath(path)) {
+    aliases.push(["repo", slot, "repo"], ["repository", slot, "repository"]);
+  }
+  return presentAliasEntries(aliases);
+}
+
+function slotBranchAliasEntries(slot, path) {
+  const aliases = [["git.branch", slot?.git, "branch"]];
+  if (!isOrganizationRootSlotPath(path)) aliases.push(["branch", slot, "branch"]);
+  return presentAliasEntries(aliases);
+}
+
+function presentAliasEntries(specifications) {
+  return specifications.flatMap(([name, owner, key]) =>
+    owner !== null
+      && (typeof owner === "object" || typeof owner === "function")
+      && Object.hasOwn(owner, key)
+      ? [[name, owner[key]]]
+      : []
+  );
+}
+
+function exactNonEmptyString(value) {
+  return typeof value === "string" && value !== "" && value.trim() === value
+    ? value
+    : null;
+}
+
+function validAliasEntries(entries) {
+  return entries.flatMap(([name, value]) => {
+    const valid = exactNonEmptyString(value);
+    return valid === null ? [] : [[name, valid]];
+  });
+}
+
+function invalidAliasNames(entries) {
+  return entries
+    .filter(([, value]) => exactNonEmptyString(value) === null)
+    .map(([name]) => name);
+}
+
+function selectRepositoryRemote(entries) {
+  const valid = validAliasEntries(entries);
+  if (valid.length !== entries.length) return null;
+  const identities = new Set(valid.map(([, value]) => {
+    const coordinate = githubRepositoryCoordinate(value);
+    return coordinate
+      ? `github:${coordinate.ownerRepo.toLowerCase()}`
+      : `raw:${value}`;
+  }));
+  return identities.size <= 1 ? valid[0]?.[1] ?? null : null;
+}
+
+function selectRepositoryBranch(entries) {
+  const valid = validAliasEntries(entries);
+  if (valid.length !== entries.length) return null;
+  return new Set(valid.map(([, value]) => value)).size <= 1
+    ? valid[0]?.[1] ?? null
+    : null;
 }

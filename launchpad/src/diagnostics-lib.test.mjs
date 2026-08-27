@@ -640,6 +640,203 @@ test("public apps projection hides unmaterialized protected slots while Doctor r
   expect(declarationCheck?.details.some((detail) => detail.includes("decision 0041"))).toBe(true);
 });
 
+test("unmaterialized protected slot issues stay Doctor-only and cannot redden or leak through public readiness", async () => {
+  const root = await createCompaniesWorkspaceFixture();
+  const companyRoot = join(root, "organizations", "PrivateCo_GEN3");
+  await mkdir(join(companyRoot, "manual"), { recursive: true });
+  await mkdir(join(companyRoot, "company", "colleagues"), { recursive: true });
+  await writeJson(join(root, "launchpad.gen3.json"), {
+    launchpad_root: { slug: "test-companies", display_name: "Test Companies", root_role: "companies-root" },
+  });
+  const protectedSlot = {
+    slug: "private-studio",
+    path: "workspace/private-legacy",
+    workspace: "workspace",
+    default_access: "role_based",
+    required_roles: ["private-builders"],
+    repo: "git@github.com:PrivateCo/private-canonical.git",
+    branch: "main",
+  };
+  await writeJson(join(companyRoot, "company.gen3.json"), {
+    organization_generation: "gen3",
+    company: { slug: "PrivateCo", display_name: "PrivateCo", github_org: "PrivateCo" },
+    workspaces: [{ slug: "workspace", path: "workspace" }],
+    modules: [protectedSlot],
+  });
+  await writeJson(join(companyRoot, "modules.manifest.json"), {
+    organization_generation: "gen3",
+    company: "PrivateCo",
+    github_org: "PrivateCo",
+    module_slots: [protectedSlot],
+  });
+  await writeJson(join(companyRoot, "TODO.tasks.json"), {});
+  await writeJson(join(companyRoot, "DONE.tasks.json"), {});
+  await writeJson(join(companyRoot, "ISSUES.open.json"), {});
+
+  const response = await buildLaunchpadAppsResponse({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    runtimeManager: { appsWithRuntime: async (apps) => apps },
+  });
+  const org = response.organizations.find((item) => item.slug === "PrivateCo");
+  const publicPayload = JSON.stringify(org);
+
+  expect(org?.space_readiness?.blocking_slots).toEqual([]);
+  expect((org?.workspaces ?? []).flatMap((workspace) => workspace.modules)).toEqual([]);
+  for (const privateValue of [
+    "private-studio",
+    "workspace/private-legacy",
+    "workspace/private-canonical",
+    "private-builders",
+    "lazurio repair module-location",
+  ]) {
+    expect(publicPayload).not.toContain(privateValue);
+  }
+
+  const report = await buildLaunchpadDoctorReport({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    runtimeManager: { appsWithRuntime: async (apps) => apps },
+  });
+  const declarationCheck = report.checks.find((check) => check.id === "launchpad.workspace_declarations");
+  expect(declarationCheck?.details.join("\n")).toContain("workspace/private-legacy");
+  expect(declarationCheck?.details.join("\n")).toContain("private-canonical");
+});
+
+test("materialized protected rename drift stays as one quarantined tile and makes the summary blocking", async () => {
+  const root = await createCompaniesWorkspaceFixture();
+  const companyRoot = join(root, "organizations", "OmegaCo_GEN3");
+  const legacyPath = join(companyRoot, "workspace", "legacy");
+  await mkdir(join(companyRoot, "manual"), { recursive: true });
+  await mkdir(join(companyRoot, "company", "colleagues"), { recursive: true });
+  await mkdir(legacyPath, { recursive: true });
+  await writeJson(join(legacyPath, "lazurio.module.json"), {
+    schema_version: "lazurio.module.v1",
+    id: "studio",
+    company: "OmegaCo",
+  });
+  const slot = {
+    slug: "studio",
+    path: "workspace/canonical",
+    workspace: "workspace",
+    default_access: "role_based",
+    repo: "git@github.com:OmegaCo/canonical.git",
+    branch: "main",
+  };
+  await writeJson(join(companyRoot, "company.gen3.json"), {
+    organization_generation: "gen3",
+    company: { slug: "OmegaCo", display_name: "OmegaCo" },
+    workspaces: [{ slug: "workspace", path: "workspace" }],
+    modules: [slot],
+  });
+  await writeJson(join(companyRoot, "modules.manifest.json"), {
+    organization_generation: "gen3",
+    company: "OmegaCo",
+    module_slots: [slot],
+  });
+  await writeJson(join(companyRoot, "TODO.tasks.json"), {});
+  await writeJson(join(companyRoot, "DONE.tasks.json"), {});
+  await writeJson(join(companyRoot, "ISSUES.open.json"), {});
+
+  const response = await buildLaunchpadAppsResponse({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    runtimeManager: { appsWithRuntime: async (apps) => apps },
+  });
+
+  const org = response.organizations.find((item) => item.slug === "OmegaCo");
+  const tiles = (org?.workspaces ?? []).flatMap((workspace) => workspace.modules);
+  expect(tiles).toHaveLength(1);
+  expect(tiles[0]).toMatchObject({
+    slug: "studio",
+    path: "workspace/canonical",
+    status: "quarantined",
+    readiness: {
+      severity: "blocking",
+      reason: "repository_location_mismatch",
+      next_action: {
+        kind: "repair_module_location",
+        command: "lazurio repair module-location --org OmegaCo --module studio",
+      },
+    },
+  });
+  expect(org?.space_readiness?.blocking_slots).toEqual([
+    expect.objectContaining({
+      slug: "studio",
+      found_path: "workspace/legacy",
+      expected_path: "workspace/canonical",
+    }),
+  ]);
+  expect(org?.space_readiness?.blocking_slots).toHaveLength(1);
+  expect(response.ok).toBe(true);
+});
+
+test("an Organization-fatal contract blocks only that Organization readiness while a sibling stays healthy", async () => {
+  const root = await createCompaniesWorkspaceFixture();
+  for (const [directory, slug] of [["BrokenCo_GEN3", "BrokenCo"], ["HealthyCo_GEN3", "HealthyCo"]]) {
+    const organizationRoot = join(root, "organizations", directory);
+    await mkdir(join(organizationRoot, "manual"), { recursive: true });
+    await mkdir(join(organizationRoot, "company", "colleagues"), { recursive: true });
+    await writeJson(join(organizationRoot, "company.gen3.json"), {
+      organization_generation: "gen3",
+      company: { slug, display_name: slug, github_org: slug },
+      workspaces: [{ slug: "workspace", path: "workspace", default: true }],
+    });
+    await writeJson(join(organizationRoot, "modules.manifest.json"), {
+      organization_generation: "gen3",
+      company: slug === "BrokenCo" ? "DifferentCo" : slug,
+      github_org: slug,
+      module_slots: slug === "HealthyCo"
+        ? [{ slug: "studio", path: "workspace/studio", git: { url: "git@github.com:HealthyCo/studio.git", branch: "main" } }]
+        : [{ slug: "untrusted", path: "workspace/untrusted", git: { url: "git@github.com:BrokenCo/untrusted.git", branch: "main" } }],
+    });
+    await writeJson(join(organizationRoot, "TODO.tasks.json"), {});
+    await writeJson(join(organizationRoot, "DONE.tasks.json"), {});
+    await writeJson(join(organizationRoot, "ISSUES.open.json"), {});
+  }
+  const healthyApp = join(root, "organizations", "HealthyCo_GEN3", "workspace", "studio", "app", "v1");
+  await mkdir(healthyApp, { recursive: true });
+  await writeJson(join(healthyApp, "package.json"), {
+    name: "healthyco-studio-v1",
+    private: true,
+    scripts: { dev: "bun server.mjs" },
+    companyascode: {
+      app: {
+        schema_version: "companyascode.launchpad_app.v1",
+        id: "healthyco-studio-v1",
+        title: "Healthy Studio",
+        company: "HealthyCo",
+        module: "studio",
+        surface: "internal",
+        port: 5521,
+        host: "127.0.0.1",
+        health_path: "/health",
+        dev_script: "dev",
+      },
+    },
+  });
+
+  const response = await buildLaunchpadAppsResponse({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    runtimeManager: { appsWithRuntime: async (apps) => apps },
+  });
+  const broken = response.organizations.find((organization) => organization.slug === "BrokenCo");
+  const healthy = response.organizations.find((organization) => organization.slug === "HealthyCo");
+
+  expect(response.apps.map((app) => app.id)).toEqual(["healthyco-studio-v1"]);
+  expect(broken?.space_readiness?.blocking_slots).toEqual([
+    expect.objectContaining({
+      scope: "organization",
+      slug: "BrokenCo",
+      reason: "organization_contract_invalid",
+    }),
+  ]);
+  expect(broken?.workspaces).toEqual([]);
+  expect(broken?.organization_modules).toEqual([]);
+  expect(healthy?.space_readiness?.blocking_slots).toEqual([]);
+});
+
 test("case-preserving productionspace mount uses explicit lowercase ID and fails closed without it", async () => {
   const root = await createCompaniesWorkspaceFixture();
   const companyRoot = join(root, "organizations", "HumanAndMachine-ai_GEN3");
@@ -694,7 +891,14 @@ test("case-preserving productionspace mount uses explicit lowercase ID and fails
     runtimeManager: { appsWithRuntime: async (apps) => apps },
   });
   expect(invalid.organizations[0]?.productionspace?.systems ?? []).toEqual([]);
-  expect(invalid.failures.join("\n")).toContain("explicitní stabilní lowercase slug");
+  expect(invalid.failures).toEqual([]);
+  expect(invalid.organizations[0]?.space_readiness?.blocking_slots).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      scope: "module_slot",
+      path: "productionspace/Buddy_GEN2",
+      next_action: expect.objectContaining({ kind: "agent_review" }),
+    }),
+  ]));
 });
 
 test("apps read model omits only cross-file ambiguous repository identities", async () => {
@@ -731,7 +935,13 @@ test("apps read model omits only cross-file ambiguous repository identities", as
     "healthy-config",
     "healthy-manifest",
   ]);
-  expect(response.failures.join("\n")).toContain('repository slug "shared"');
+  expect(response.failures).toEqual([]);
+  expect(response.organizations[0]?.space_readiness?.blocking_slots).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      scope: "module_slot",
+      reason: "slot_collection_ambiguous",
+    }),
+  ]));
 });
 
 test("apps read model rejects live casing drift and treats productionspace candidates as ordering only", async () => {

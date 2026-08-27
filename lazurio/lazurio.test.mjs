@@ -186,7 +186,7 @@ test("Organization selector vrátí deterministickou lokální projekci bez pře
     },
     git: {
       status: "present",
-      expected_branch: "trunk",
+      expected_branch: "main",
       origin: {
         status: "present",
         repository: "HumanAndMachine-ai/HumanAndMachine-ai_GEN3",
@@ -1007,7 +1007,7 @@ async function organizationContextFixture() {
     slug: "HumanAndMachine-ai",
     displayName: "Human and Machine",
     repository: "git@github.com:HumanAndMachine-ai/HumanAndMachine-ai_GEN3.git",
-    defaultBranch: "trunk",
+    defaultBranch: "main",
     moduleSlots: [
       {
         path: "mission-control",
@@ -1095,23 +1095,37 @@ async function organizationContextFixture() {
     private: true,
     type: "module",
     scripts: { dev: "bun server.mjs" },
-    companyascode: {
-      app: {
-        schema_version: "companyascode.launchpad_app.v1",
+    lazurio: {
+      runtime: {
+        schema_version: "lazurio.runtime.v1",
         id: "humanandmachine-ai-lazurio-website",
         title: "Lazurio website",
         company: "HumanAndMachine-ai",
         module: "website-lazurio",
         surface: "internal",
-        port: 4310,
-        host: "127.0.0.1",
-        health_path: "/health",
         dev_script: "dev",
         tags: ["lazurio"],
+        listeners: [{
+          id: "web",
+          role: "entrypoint",
+          lease: "main",
+          protocol: "http",
+          health: { kind: "http", path: "/health" },
+        }],
       },
     },
   });
-  const modulelessApp = join(websiteRoot, "moduleless-app");
+  const websitePackagePath = "app/package.json";
+  await writeJson(join(websiteRoot, "lazurio.module.json"), {
+    schema_version: "lazurio.module.v1",
+    id: "website-lazurio",
+    company: "HumanAndMachine-ai",
+    tcp_port_policy: { mode: "single" },
+    port_leases: [{ id: "main", host: "127.0.0.1", port: 4310 }],
+    apps: [websitePackagePath],
+    default_app: websitePackagePath,
+  });
+  const modulelessApp = join(organizationRoot, "root-tool");
   await mkdir(modulelessApp, { recursive: true });
   await writeJson(join(modulelessApp, "package.json"), {
     name: "humanandmachine-ai-root-tool",
@@ -1227,6 +1241,7 @@ async function createContextOrganization({
       default_branch: defaultBranch,
     },
     teams,
+    module_port_pool: { start: 4300, end: 4399 },
   });
   await writeJson(join(organizationRoot, "modules.manifest.json"), {
     organization_generation: "gen3",

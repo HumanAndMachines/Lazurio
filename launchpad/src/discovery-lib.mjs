@@ -15,12 +15,34 @@ import {
 import {
   githubRepositoryCoordinate,
   isCanonicalOrganizationRepositorySlotPath,
+  isNestedOrganizationRepositoryDbSlotPath,
+  isOrganizationRepositoryDbSlot,
+  isOrganizationRootSlotDescendantPath,
+  isOrganizationSlotContainerPath,
   normalizeOrganizationSlotPath,
-  organizationRepositorySlotCollectionIssues,
+  organizationRepositorySlotCollectionConflicts,
+  organizationRootRepositoryAliasIssues,
+  organizationRootRepositoryBranch,
+  organizationRootRepositoryRemote,
+  organizationSlotRepositoryAliasIssues,
+  organizationSlotRepositoryBranch,
   organizationSlotRepositoryId,
   organizationSlotRepositoryMountIssue,
+  organizationSlotRepositoryRemote,
 } from "../../lazurio/core/organization-slot-scope-lib.mjs";
-import { buildRepositoryLocationIssue } from "../../lazurio/core/module-location-repair-contract-lib.mjs";
+import {
+  buildOrganizationAgentReviewAction,
+  buildModuleLocationRepairAction,
+  buildModuleSlotAgentReviewAction,
+  buildRepositoryLocationIssue,
+  buildSlotPathAgentReviewAction,
+} from "../../lazurio/core/module-location-repair-contract-lib.mjs";
+import {
+  classifyOrganizationModuleCheckoutLocation,
+  findOrganizationModuleCheckoutCandidates,
+  inspectOrganizationModuleCheckoutCandidates,
+  organizationModuleDeclarationClaims,
+} from "./module-location-candidates-lib.mjs";
 
 // Internal filesystem provenance for the runtime manager. Symbols survive
 // in-process object spreads but are omitted from JSON, so the public App
@@ -146,10 +168,10 @@ function observedCasePreservingPath({ organizationRoot, declaredPath }) {
 // Kontroluje lexical formu i kanonický nejbližší existující předek, takže
 // traversal, absolute/drive/UNC formy a symlink do jiné Organization nikdy
 // nevstoupí do discovery, Doctoru ani akčních Git/worktree povrchů.
-export function organizationRelativePathIssue({ organizationRoot, path }) {
-  if (typeof path !== "string" || path.trim() === "") return "je prázdná";
+function inspectOrganizationRelativePath({ organizationRoot, path }) {
+  if (typeof path !== "string" || path.trim() === "") return { issue: "je prázdná" };
   if (path !== path.trim()) {
-    return `"${path}" uniká mimo Organization root (okolní whitespace mění identitu cesty)`;
+    return { issue: `"${path}" uniká mimo Organization root (okolní whitespace mění identitu cesty)` };
   }
   const normalized = path.trim().replace(/\\/g, "/");
   const segments = normalized.split("/");
@@ -159,40 +181,149 @@ export function organizationRelativePathIssue({ organizationRoot, path }) {
     /^[A-Za-z]:/.test(normalized);
   const ambiguousSegments = segments.some((segment) => segment === "" || segment === "." || segment === "..");
   if (absoluteLike || ambiguousSegments || normalized.includes("\0")) {
-    return `"${path}" uniká mimo Organization root (neplatná lexical cesta)`;
+    return { issue: `"${path}" uniká mimo Organization root (neplatná lexical cesta)` };
   }
 
   try {
     const lexicalRoot = resolve(organizationRoot);
     const lexicalTarget = resolve(lexicalRoot, normalized);
     if (!pathIsWithin(lexicalRoot, lexicalTarget)) {
-      return `"${path}" uniká mimo Organization root (lexical containment)`;
+      return { issue: `"${path}" uniká mimo Organization root (lexical containment)` };
     }
     const canonicalRoot = realpathSync(organizationRoot);
     const canonicalTarget = canonicalProspectivePath(lexicalTarget);
     if (!pathIsWithin(canonicalRoot, canonicalTarget)) {
-      return `"${path}" uniká mimo Organization root (canonical containment; existující cesta se přes symlink/junction dostává mimo root Organizace)`;
+      return { issue: `"${path}" uniká mimo Organization root (canonical containment; existující cesta se přes symlink/junction dostává mimo root Organizace)` };
     }
     const observedPath = observedCasePreservingPath({
       organizationRoot: lexicalRoot,
       declaredPath: normalized,
     });
-    if (observedPath !== null) {
-      const casingIssue = organizationRepositoryPathCasingIssue({
-        declaredPath: normalized,
-        observedPath,
-      });
-      if (casingIssue) return casingIssue;
+    const resolvedPath = observedPath ?? normalized;
+    const resolvedTarget = resolve(lexicalRoot, resolvedPath);
+    const canonicalResolvedTarget = canonicalProspectivePath(resolvedTarget);
+    if (!pathIsWithin(canonicalRoot, canonicalResolvedTarget)) {
+      return { issue: `"${path}" uniká mimo Organization root (canonical containment; existující cesta se přes symlink/junction dostává mimo root Organizace)` };
     }
+    return {
+      issue: null,
+      normalizedPath: normalized,
+      observedPath,
+      relativePath: resolvedPath,
+      absolutePath: resolvedTarget,
+    };
   } catch (error) {
-    return `"${path}" uniká mimo Organization root (kanonickou cestu nelze bezpečně ověřit: ${error.message})`;
+    return { issue: `"${path}" uniká mimo Organization root (kanonickou cestu nelze bezpečně ověřit: ${error.message})` };
+  }
+}
+
+// Přechodové/no-clone guardy potřebují oddělit bezpečnou containment autoritu
+// od přesného casing kontraktu. Vrací skutečně pozorovanou contained cestu,
+// ale traversal, symlink/junction escape a neověřitelný předek nikdy nepustí.
+export function organizationContainedRelativePath({ organizationRoot, path }) {
+  const inspected = inspectOrganizationRelativePath({ organizationRoot, path });
+  if (inspected.issue !== null) return null;
+  return {
+    relative_path: inspected.relativePath,
+    absolute_path: inspected.absolutePath,
+  };
+}
+
+export function organizationRelativePathIssue({ organizationRoot, path }) {
+  const inspected = inspectOrganizationRelativePath({ organizationRoot, path });
+  if (inspected.issue !== null) return inspected.issue;
+  if (inspected.observedPath !== null) {
+    const casingIssue = organizationRepositoryPathCasingIssue({
+      declaredPath: inspected.normalizedPath,
+      observedPath: inspected.observedPath,
+    });
+    if (casingIssue) return casingIssue;
   }
   return null;
+}
+
+// Casing and contained separator cleanup can be isolated to one declared slot.
+// Traversal, absolute paths, symlink/junction escapes and unverifiable
+// canonical boundaries invalidate the Organization as an authority for all
+// subordinate scans and Git actions.
+export function organizationSlotBoundaryIssueIsFatal({ path, issue }) {
+  if (typeof issue !== "string" || issue === "") return false;
+  if (
+    issue.includes("canonical containment")
+    || issue.includes("kanonickou cestu nelze bezpečně ověřit")
+  ) return true;
+  if (typeof path !== "string") return false;
+  const normalized = path.replace(/\\/g, "/");
+  return (
+    path !== path.trim()
+    || normalized.includes("\0")
+    || isAbsolute(normalized)
+    || normalized.startsWith("//")
+    || /^[A-Za-z]:/.test(normalized)
+    || normalized.split("/").includes("..")
+  );
 }
 
 export function organizationRepositoryPathCasingIssue({ declaredPath, observedPath }) {
   if (declaredPath === observedPath) return null;
   return `"${declaredPath}" neodpovídá přesnému psaní existující cesty "${observedPath}"`;
+}
+
+// One read-only identity gate is shared by app discovery and Git inventory.
+// A hard mismatch means the Organization manifest is not a trustworthy owner
+// for child repositories; a case-only rollout mismatch stays visible as a
+// warning so a safe incremental rename can converge.
+export function organizationManifestIdentityIssues({ companyConfig, manifest, label }) {
+  const fatalIssues = [];
+  const warnings = [];
+  const company = companyConfig?.company ?? {};
+  const organizationKind = organizationKindFromCompanyJson(companyConfig);
+  const exactIdentityRequired =
+    companyConfig?.schema_version === "company.gen3.v3"
+    || manifest?.schema_version === "modules.manifest.v3";
+  for (const issue of organizationRootRepositoryAliasIssues(companyConfig)) {
+    fatalIssues.push(`${label}: company.gen3.json ${issue.detail}`);
+  }
+  const comparePair = ({ companyValue, manifestValue, companyField, manifestField }) => {
+    const left = trimmedString(companyValue);
+    const right = trimmedString(manifestValue);
+    if (left && !right) {
+      if (exactIdentityRequired) {
+        fatalIssues.push(`${label}: modules.manifest.json ${manifestField} je povinné, když company.gen3.json deklaruje ${companyField}`);
+      }
+      return;
+    }
+    if (!left && right) {
+      if (exactIdentityRequired) {
+        fatalIssues.push(`${label}: company.gen3.json ${companyField} je povinné, když modules.manifest.json deklaruje ${manifestField}`);
+      }
+      return;
+    }
+    if (!left || !right || left === right) return;
+    const tolerableIncrementalMismatch =
+      left.toLowerCase() === right.toLowerCase()
+      || (organizationKind === "template"
+        && isPlaceholderOrganization({ slug: left })
+        && isPlaceholderOrganization({ slug: right }));
+    (tolerableIncrementalMismatch ? warnings : fatalIssues).push(
+      `${label}: company.gen3.json ${companyField} "${left}" neodpovídá modules.manifest.json ${manifestField} "${right}"${
+        tolerableIncrementalMismatch ? "; během incremental rollout zůstává načtený, sjednoť canonical casing/placeholder" : ""
+      }`,
+    );
+  };
+  comparePair({
+    companyValue: company.slug,
+    manifestValue: manifest?.company,
+    companyField: "company.slug",
+    manifestField: "company",
+  });
+  comparePair({
+    companyValue: company.github_org,
+    manifestValue: manifest?.github_org,
+    companyField: "company.github_org",
+    manifestField: "github_org",
+  });
+  return { fatalIssues, warnings };
 }
 
 // Lokální cross-file gate Organization mountu. Plný manifestový kontrakt žije
@@ -219,64 +350,69 @@ async function organizationMountContract({ organizationRoot, organization, label
     return { fatalIssues: [`${label}: modules.manifest.json nejde přečíst: ${error.message}`], slotIssues: [], quarantinedPaths: [] };
   }
 
-  const company = companyConfig?.company ?? {};
-  const organizationKind = organizationKindFromCompanyJson(companyConfig);
-  const companySlug = trimmedString(company.slug);
-  const manifestCompany = trimmedString(manifest?.company);
-  if (companySlug && !manifestCompany) {
-    fatalIssues.push(`${label}: modules.manifest.json company je povinné, když company.gen3.json deklaruje company.slug`);
-  }
-  if (!companySlug && manifestCompany) {
-    fatalIssues.push(`${label}: company.gen3.json company.slug je povinné, když modules.manifest.json deklaruje company`);
-  }
-  if (companySlug && manifestCompany && companySlug !== manifestCompany) {
-    const tolerableIncrementalMismatch =
-      companySlug.toLowerCase() === manifestCompany.toLowerCase() ||
-      (organizationKind === "template" &&
-        isPlaceholderOrganization({ slug: companySlug }) &&
-        isPlaceholderOrganization({ slug: manifestCompany }));
-    (tolerableIncrementalMismatch ? warnings : fatalIssues).push(
-      `${label}: company.gen3.json company.slug "${companySlug}" neodpovídá modules.manifest.json company "${manifestCompany}"${
-        tolerableIncrementalMismatch ? "; během incremental rollout zůstává načtený, sjednoť canonical casing/placeholder" : ""
-      }`,
-    );
-  }
-
-  const companyGithubOrg = trimmedString(company.github_org);
-  const manifestGithubOrg = trimmedString(manifest?.github_org);
-  if (companyGithubOrg && !manifestGithubOrg) {
-    fatalIssues.push(`${label}: modules.manifest.json github_org je povinné, když company.gen3.json deklaruje company.github_org`);
-  }
-  if (!companyGithubOrg && manifestGithubOrg) {
-    fatalIssues.push(`${label}: company.gen3.json company.github_org je povinné, když modules.manifest.json deklaruje github_org`);
-  }
-  if (companyGithubOrg && manifestGithubOrg && companyGithubOrg !== manifestGithubOrg) {
-    const tolerableIncrementalMismatch =
-      companyGithubOrg.toLowerCase() === manifestGithubOrg.toLowerCase() ||
-      (organizationKind === "template" &&
-        isPlaceholderOrganization({ slug: companyGithubOrg }) &&
-        isPlaceholderOrganization({ slug: manifestGithubOrg }));
-    (tolerableIncrementalMismatch ? warnings : fatalIssues).push(
-      `${label}: company.gen3.json company.github_org "${companyGithubOrg}" neodpovídá modules.manifest.json github_org "${manifestGithubOrg}"${
-        tolerableIncrementalMismatch ? "; během incremental rollout zůstává načtený, sjednoť canonical casing/placeholder" : ""
-      }`,
-    );
-  }
+  const identity = organizationManifestIdentityIssues({ companyConfig, manifest, label });
+  fatalIssues.push(...identity.fatalIssues);
+  warnings.push(...identity.warnings);
 
   const teamSlugs = declaredOrganizationTeamSlugs(companyConfig);
+  const githubOrg = trimmedString(companyConfig?.company?.github_org);
   const manifestSlots = Array.isArray(manifest?.module_slots) ? manifest.module_slots : [];
-  fatalIssues.push(
-    ...organizationRepositorySlotCollectionIssues(manifestSlots).map(
-      (issue) => `${label}: modules.manifest.json module_slots ${issue}`,
-    ),
-  );
+  const companyModules = Array.isArray(companyConfig?.modules) ? companyConfig.modules : [];
+  const unsafeBoundarySlots = new Set();
+  for (const { slots, source } of [
+    { slots: manifestSlots, source: "modules.manifest.json module_slots" },
+    { slots: companyModules, source: "company.gen3.json modules" },
+  ]) {
+    for (const [index, slot] of slots.entries()) {
+      const issue = organizationRelativePathIssue({ organizationRoot, path: slot?.path });
+      if (!organizationSlotBoundaryIssueIsFatal({ path: slot?.path, issue })) continue;
+      unsafeBoundarySlots.add(slot);
+      fatalIssues.push(`${label}: ${source}[${index}].path ${issue}`);
+    }
+  }
+  const ambiguousSlots = new Set();
+  for (const { conflicts, source } of [
+    {
+      conflicts: organizationRepositorySlotCollectionConflicts(manifestSlots),
+      source: "modules.manifest.json module_slots",
+    },
+    {
+      conflicts: organizationRepositorySlotCollectionConflicts(companyModules),
+      source: "company.gen3.json modules",
+    },
+    {
+      conflicts: organizationRepositorySlotCollectionConflicts(
+        [...manifestSlots, ...companyModules],
+        { allowEquivalentDuplicates: true },
+      ),
+      source: "modules.manifest.json + company.gen3.json",
+    },
+  ]) {
+    for (const conflict of conflicts) {
+      if (conflict.slots.some((slot) => unsafeBoundarySlots.has(slot))) continue;
+      for (const slot of conflict.slots) {
+        ambiguousSlots.add(slot);
+        recordOrganizationSlotIssue(slotIssues, {
+          organization,
+          label,
+          slot,
+          source,
+          code: "slot_collection_ambiguous",
+          detail: `má nejednoznačnou repo projekci — ${conflict.detail}`,
+        });
+      }
+    }
+  }
   for (const [index, slot] of manifestSlots.entries()) {
-    validateDeclaredModule({
+    if (ambiguousSlots.has(slot) || unsafeBoundarySlots.has(slot)) continue;
+    await validateDeclaredModule({
       slot,
       source: `modules.manifest.json module_slots[${index}]`,
       organizationRoot,
+      organizationSlug: organization.slug,
       label,
       teamSlugs,
+      githubOrg,
       checkMaterializedGit: true,
       recordIssue: (issue) => recordDeclaredModuleIssue({
         fatalIssues,
@@ -294,27 +430,16 @@ async function organizationMountContract({ organizationRoot, organization, label
   // company.gen3.json#modules je druhý deklarativní povrch. Git/readiness je
   // kanonicky v modules.manifest.json, ale deprecated filesystem cesta nesmí
   // zůstat zelená jen proto, že ji drží pouze tento paralelní seznam.
-  const companyModules = Array.isArray(companyConfig?.modules) ? companyConfig.modules : [];
-  fatalIssues.push(
-    ...organizationRepositorySlotCollectionIssues(companyModules).map(
-      (issue) => `${label}: company.gen3.json modules ${issue}`,
-    ),
-  );
-  fatalIssues.push(
-    ...organizationRepositorySlotCollectionIssues(
-      [...manifestSlots, ...companyModules],
-      { allowEquivalentDuplicates: true },
-    ).map(
-      (issue) => `${label}: modules.manifest.json a company.gen3.json mají nejednoznačnou repo projekci — ${issue}`,
-    ),
-  );
   for (const [index, slot] of companyModules.entries()) {
-    validateDeclaredModule({
+    if (ambiguousSlots.has(slot) || unsafeBoundarySlots.has(slot)) continue;
+    await validateDeclaredModule({
       slot,
       source: `company.gen3.json modules[${index}]`,
       organizationRoot,
+      organizationSlug: organization.slug,
       label,
       teamSlugs,
+      githubOrg,
       checkMaterializedGit: false,
       recordIssue: (issue) => recordDeclaredModuleIssue({
         fatalIssues,
@@ -329,14 +454,208 @@ async function organizationMountContract({ organizationRoot, organization, label
     });
   }
 
+  // A fatal identity/boundary state means the Organization is not a safe scan
+  // authority. Do not continue into candidate markers after that decision.
+  if (fatalIssues.length === 0) {
+    await recordObservedModuleLocationIssues({
+      organizationRoot,
+      organization,
+      label,
+      manifestSlots: manifestSlots.filter((slot) =>
+        !ambiguousSlots.has(slot) && !unsafeBoundarySlots.has(slot)
+      ),
+      declaredModuleClaims: organizationModuleDeclarationClaims([
+        ...manifestSlots.filter((slot) => !unsafeBoundarySlots.has(slot)),
+        ...companyModules.filter((slot) => !unsafeBoundarySlots.has(slot)),
+      ]),
+      slotIssues,
+      fatalIssues,
+    });
+  }
+
   const structuredSlotIssues = [...slotIssues.values()];
   return {
     fatalIssues,
     slotIssues: structuredSlotIssues,
-    quarantinedPaths: structuredSlotIssues
-      .filter((issue) => issue.quarantine_path === true)
-      .map((issue) => join(organizationRoot, issue.path)),
+    quarantinedPaths: structuredSlotIssues.flatMap((issue) =>
+      Array.isArray(issue.quarantine_paths)
+        ? issue.quarantine_paths.map((path) => join(organizationRoot, path))
+        : issue.quarantine_path === true
+          ? [join(organizationRoot, issue.path)]
+          : []
+    ),
   };
+}
+
+async function recordObservedModuleLocationIssues({
+  organizationRoot,
+  organization,
+  label,
+  manifestSlots,
+  declaredModuleClaims,
+  slotIssues,
+  fatalIssues,
+}) {
+  for (const slot of manifestSlots) {
+    const declaredPath = typeof slot?.path === "string"
+      ? normalizeOrganizationSlotPath(slot.path)
+      : null;
+    const repositoryMountIssue = declaredPath
+      ? organizationSlotRepositoryMountIssue(slot, declaredPath)
+      : null;
+    if (
+      !declaredPath
+      || !isCanonicalOrganizationRepositorySlotPath(slot.path)
+      || (repositoryMountIssue && !repositoryMountIssue.startsWith("repository mount basename "))
+      || !(declaredPath.startsWith("workspace/") || declaredPath.startsWith("modules/"))
+    ) continue;
+    const module = organizationSlotRepositoryId(slot, declaredPath);
+    if (!module) continue;
+    if ([...slotIssues.values()].some((issue) =>
+      (issue.module === module || issue.path === declaredPath)
+      && issue.code !== "repository_location_mismatch"
+    )) continue;
+    const coordinate = githubRepositoryCoordinate(
+      organizationSlotRepositoryRemote(slot, declaredPath),
+    );
+    const expectedPath = repositoryMountIssue && coordinate
+      ? `${declaredPath.split("/").slice(0, -1).join("/")}/${coordinate.repository}`
+      : declaredPath;
+    const inspection = await inspectOrganizationModuleCheckoutCandidates({
+      organizationRoot,
+      organizationSlug: organization.slug,
+      moduleSlug: module,
+    });
+    if (inspection.boundary_errors.length > 0) {
+      fatalIssues.push(...inspection.boundary_errors.map(
+        (error) => `${label}: module mount kandidáty nelze bezpečně procházet — ${error.message}`,
+      ));
+      return;
+    }
+    const classification = await classifyOrganizationModuleCheckoutLocation({
+      organizationRoot,
+      expectedPath,
+      inspection,
+      moduleSlug: module,
+      declaredModuleClaims,
+    });
+    if (["healthy", "vacant"].includes(classification.status)) continue;
+    const issue = discoveryLocationIssueFromClassification({
+      classification,
+      organization,
+      label,
+      module,
+      expectedPath,
+    });
+    const quarantinePaths = classification.observed_paths;
+    setDominantModuleLocationIssue(slotIssues, {
+      ...issue,
+      quarantine_paths: quarantinePaths,
+      quarantine_path: false,
+    });
+  }
+}
+
+function discoveryLocationIssueFromClassification({
+  classification,
+  organization,
+  label,
+  module,
+  expectedPath,
+}) {
+  const foundPaths = classification.observed_paths;
+  const foundPath = classification.found_path ?? expectedPath;
+  if (classification.status === "ambiguous" || classification.status === "boundary_invalid") {
+    const boundary = classification.status === "boundary_invalid";
+    const message = boundary
+      ? `${label}: mount boundary kandidátních checkoutů nejde bezpečně ověřit`
+      : `${label}: modul "${module}" má nejednoznačné checkouty nebo obsazený cíl (${foundPaths.join(", ")}); žádný z nich se nesmí spustit ani přepsat odhadem`;
+    return {
+      schema_version: "lazurio.organization_issue.v1",
+      severity: "blocking",
+      scope: boundary ? "organization" : "module_slot",
+      status: "quarantined",
+      code: boundary ? "organization_module_mount_boundary_invalid" : "repository_location_ambiguous",
+      organization: organization.slug,
+      organization_path: organization.path,
+      module: boundary ? null : module,
+      path: foundPath,
+      expected_path: expectedPath,
+      observed_paths: foundPaths,
+      message,
+      sources: ["lazurio.module.json"],
+      next_action: boundary
+        ? buildOrganizationAgentReviewAction({
+            organization: organization.slug,
+            reason: "organization_module_mount_boundary_invalid",
+            path: organization.path,
+            detail: message,
+          })
+        : buildModuleSlotAgentReviewAction({
+            organization: organization.slug,
+            module,
+            reason: "repository_location_ambiguous",
+            path: foundPaths.join(", "),
+            detail: `${message}; očekávaná cesta: ${expectedPath}`,
+          }),
+    };
+  }
+  if (classification.status === "unverified") {
+    const reason = classification.reason ?? "checkout_unverified";
+    const message = `${label}: modul "${module}" má checkout "${foundPath}", jehož identitu nelze ověřit (${reason}); Lazurio nevytvoří druhý clone ani jej nespustí`;
+    return {
+      schema_version: "lazurio.organization_issue.v1",
+      severity: "blocking",
+      scope: "module_slot",
+      status: "quarantined",
+      code: "repository_transition_unverified",
+      organization: organization.slug,
+      organization_path: organization.path,
+      module,
+      path: foundPath,
+      expected_path: expectedPath,
+      observed_paths: foundPaths,
+      message,
+      sources: ["lazurio.module.json"],
+      next_action: buildModuleLocationRepairAction({
+        organization: organization.slug,
+        module,
+        reason: `repository_transition_unverified:${reason}`,
+        foundPath,
+        expectedPath,
+        detail: message,
+      }),
+    };
+  }
+  const message = `${label}: modul "${module}" je lokálně v "${foundPath}", ale manifest po transferu/přejmenování očekává "${expectedPath}"; izolovaný checkout je nutné bezpečně relokovat`;
+  return buildRepositoryLocationIssue({
+    organization: organization.slug,
+    organizationPath: organization.path,
+    module,
+    path: foundPath,
+    expectedPath,
+    message,
+    sources: ["lazurio.module.json"],
+    repairable: organization.organization_kind !== "template",
+  });
+}
+
+function setDominantModuleLocationIssue(store, issue) {
+  const priority = {
+    repository_location_mismatch: 1,
+    repository_transition_unverified: 2,
+    repository_location_ambiguous: 3,
+    organization_module_mount_boundary_invalid: 4,
+  };
+  let existingPriority = 0;
+  for (const [key, existing] of store.entries()) {
+    if (existing.module !== issue.module) continue;
+    if (!(existing.code in priority)) continue;
+    existingPriority = Math.max(existingPriority, priority[existing.code]);
+    if (priority[existing.code] <= priority[issue.code]) store.delete(key);
+  }
+  if (existingPriority > priority[issue.code]) return;
+  store.set(`${issue.module ?? ""}\0${issue.expected_path ?? issue.path}\0${issue.code}`, issue);
 }
 
 function recordDeclaredModuleIssue({
@@ -348,11 +667,24 @@ function recordDeclaredModuleIssue({
   source,
   issue,
 }) {
-  // A verified repository rename/transfer drift has one stable module owner and
-  // one exact subtree that can be quarantined. Identity, containment, Team and
-  // other declaration failures remain mount-fatal because scanning past them
-  // would require guessing which boundary or authority is valid.
-  if (issue.code === "repository_location_mismatch") {
+  // These failures still have one stable module owner and one contained exact
+  // subtree, so quarantine that slot only. Identity, path/boundary and
+  // cross-file ambiguity remain Organization-fatal because isolation would
+  // require guessing which owner or repository boundary is valid.
+  if (new Set([
+    "repository_location_mismatch",
+    "slot_identity_invalid",
+    "slot_path_casing_mismatch",
+    "slot_path_noncanonical",
+    "slot_repository_contract_invalid",
+    "slot_team_invalid",
+    "slot_remote_missing",
+    "slot_remote_invalid",
+    "slot_remote_owner_mismatch",
+    "slot_remote_conflict",
+    "slot_branch_conflict",
+    "slot_branch_invalid",
+  ]).has(issue.code)) {
     recordOrganizationSlotIssue(slotIssues, {
       organization,
       label,
@@ -390,43 +722,109 @@ function recordOrganizationSlotIssue(store, {
     && module
     && organization.organization_kind !== "template"
     && (path?.startsWith("workspace/") || path?.startsWith("modules/"));
-  const coordinate = githubRepositoryCoordinate(slot?.repo ?? slot?.git?.url ?? slot?.repository);
+  const coordinate = githubRepositoryCoordinate(
+    organizationSlotRepositoryRemote(slot, path),
+  );
+  const genericAction = repairableLocation
+    ? null
+    : module
+      ? buildModuleSlotAgentReviewAction({
+          organization: organization.slug,
+          module,
+          reason: code,
+          path: path ?? rawPath,
+          detail: message,
+        })
+      : buildSlotPathAgentReviewAction({
+          organization: organization.slug,
+          reason: code,
+          path: path ?? rawPath,
+          detail: message,
+        });
+  const locationIssue = buildRepositoryLocationIssue({
+    organization: organization.slug,
+    organizationPath: organization.path,
+    module,
+    path: path ?? rawPath,
+    expectedPath: coordinate && path
+      ? `${path.split("/").slice(0, -1).join("/")}/${coordinate.repository}`
+      : null,
+    message,
+    sources: [source],
+    repairable: Boolean(repairableLocation),
+  });
   store.set(key, {
-    ...buildRepositoryLocationIssue({
-      organization: organization.slug,
-      organizationPath: organization.path,
-      module,
-      path: path ?? rawPath,
-      expectedPath: coordinate && path
-        ? `${path.split("/").slice(0, -1).join("/")}/${coordinate.repository}`
-        : null,
-      message,
-      sources: [source],
-      repairable: Boolean(repairableLocation),
-    }),
+    ...locationIssue,
+    code,
+    expected_path: repairableLocation ? locationIssue.expected_path : null,
+    next_action: locationIssue.next_action ?? genericAction,
     organization: organization.slug,
     quarantine_path: Boolean(quarantinePath && path && isCanonicalOrganizationRepositorySlotPath(rawPath)),
   });
 }
 
-function validateDeclaredModule({
+async function validateDeclaredModule({
   slot,
   source,
   organizationRoot,
+  organizationSlug,
   label,
   teamSlugs,
+  githubOrg,
   checkMaterializedGit,
   recordIssue,
   warnings,
 }) {
-  if (!slot || typeof slot !== "object") return;
-  if (typeof slot.path !== "string" || slot.path === "") return;
+  if (!slot || typeof slot !== "object" || Array.isArray(slot)) {
+    recordIssue({
+      code: "slot_declaration_invalid",
+      detail: "musí být objekt s jednoznačnou stabilní identitou a cestou",
+      quarantinePath: false,
+    });
+    return;
+  }
+  if (typeof slot.path !== "string" || slot.path === "") {
+    recordIssue({
+      code: "slot_declaration_incomplete",
+      detail: `.path je povinná neprázdná Organization-relative cesta pro slot ${JSON.stringify(slot.slug ?? null)}`,
+      quarantinePath: false,
+    });
+    return;
+  }
   const path = slot.path;
+
+  if (!isCanonicalOrganizationRepositorySlotPath(path) && safelyLocalNoncanonicalSlotPath(path)) {
+    recordIssue({
+      code: "slot_path_noncanonical",
+      detail: `.path "${path}" není kanonická podporovaná Organization-relative repo boundary`,
+      quarantinePath: false,
+    });
+    return;
+  }
 
   const containmentIssue = organizationRelativePathIssue({ organizationRoot, path });
   if (containmentIssue) {
-    recordIssue({ code: "slot_path_boundary_invalid", detail: `.path ${containmentIssue}`, quarantinePath: false });
-    return;
+    // An exact container plus one differently-cased leaf with one stable marker
+    // is a recoverable repository rename, not an Organization boundary failure.
+    // Prefix casing, symlinks/escapes and case-fold collisions stay fatal.
+    const leafCaseDrift = await verifiedLeafCaseDrift({
+      organizationRoot,
+      organizationSlug,
+      slot,
+      containmentIssue,
+    });
+    if (!leafCaseDrift) {
+      if (isExactPathCasingIssue(containmentIssue)) {
+        recordIssue({
+          code: "slot_path_casing_mismatch",
+          detail: `.path ${containmentIssue}`,
+          quarantinePath: false,
+        });
+        return;
+      }
+      recordIssue({ code: "slot_path_boundary_invalid", detail: `.path ${containmentIssue}`, quarantinePath: false });
+      return;
+    }
   }
 
   if (!isCanonicalOrganizationRepositorySlotPath(path)) {
@@ -436,6 +834,22 @@ function validateDeclaredModule({
   const canonicalPath = normalizeOrganizationSlotPath(path);
   if (organizationSlotRepositoryId(slot, canonicalPath) === null) {
     recordIssue({ code: "slot_identity_invalid", detail: `pro "${path}" potřebuje explicitní stabilní lowercase slug` });
+    return;
+  }
+  if (path.startsWith("modules/")) {
+    warnings.push(
+      `${label}: ${source}.path "${path}" používá deprecated modules/*; během incremental rollout zůstává načtený, ale migruj na workspace/<modul>`,
+    );
+  }
+  const scopedContractIssues = organizationModuleSlotScopedContractIssues({
+    slot,
+    teamSlugs,
+    githubOrg,
+    checkRemote: checkMaterializedGit,
+    materialized: existsSync(join(organizationRoot, path)),
+  });
+  if (scopedContractIssues.length > 0) {
+    for (const issue of scopedContractIssues) recordIssue(issue);
     return;
   }
   const repositoryMountIssue = organizationSlotRepositoryMountIssue(slot, canonicalPath);
@@ -449,32 +863,151 @@ function validateDeclaredModule({
     return;
   }
 
-  if (path.startsWith("modules/")) {
-    warnings.push(
-      `${label}: ${source}.path "${path}" používá deprecated modules/*; během incremental rollout zůstává načtený, ale migruj na workspace/<modul>`,
-    );
-  }
+}
 
+export function organizationModuleSlotScopedContractIssues({
+  slot,
+  teamSlugs,
+  githubOrg = null,
+  checkRemote = true,
+  materialized = false,
+}) {
+  const issues = [];
+  const path = normalizeOrganizationSlotPath(slot?.path);
+  if (!(path?.startsWith("workspace/") || path?.startsWith("modules/"))) return issues;
+  if (isNestedOrganizationRepositoryDbSlotPath(path)) return issues;
+  const aliasIssues = organizationSlotRepositoryAliasIssues(slot, path);
+  issues.push(...aliasIssues);
+  const remoteConflict = aliasIssues.some((issue) => issue.code === "slot_remote_conflict");
+  const branchConflict = aliasIssues.some((issue) => issue.code === "slot_branch_conflict");
   for (const team of declaredSlotTeams(slot)) {
     if (!teamSlugs.has(team)) {
-      recordIssue({
+      issues.push({
         code: "slot_team_invalid",
         detail: `.teams odkazuje na neexistující Team "${team}" v company.gen3.json teams[]`,
       });
     }
   }
-
-  if (!checkMaterializedGit || !isActiveModuleSlot(slot) || !existsSync(join(organizationRoot, path))) return;
-  const gitUrl = slot.git?.url ?? slot.repo ?? slot.repository ?? null;
-  if (isMissingOrPlaceholderGitUrl(gitUrl)) {
-    recordIssue({
+  const gitUrl = organizationSlotRepositoryRemote(slot, path);
+  const missingRemote = isMissingOrPlaceholderGitUrl(gitUrl);
+  if (!remoteConflict && checkRemote && moduleSlotRequiresRemote(slot, { materialized }) && missingRemote) {
+    issues.push({
       code: "slot_remote_missing",
-      detail: `je materializovaný aktivní modul "${path}", ale nemá konkrétní git URL v git.url/repo/repository`,
+      detail: `je aktivní modul "${path}", ale nemá konkrétní git URL v git.url/repo/repository; remote smí chybět jen u explicitně planned slotu`,
     });
+  }
+  const coordinate = missingRemote || remoteConflict ? null : githubRepositoryCoordinate(gitUrl);
+  if (!remoteConflict && checkRemote && !missingRemote && !coordinate) {
+    issues.push({
+      code: "slot_remote_invalid",
+      detail: `má neplatný nebo nepodporovaný remote "${gitUrl}"; aktivní Organization modul musí používat konkrétní GitHub remote`,
+    });
+  }
+  if (
+    coordinate
+    && typeof githubOrg === "string"
+    && githubOrg.trim() !== ""
+    && coordinate.owner.toLowerCase() !== githubOrg.trim().toLowerCase()
+  ) {
+    issues.push({
+      code: "slot_remote_owner_mismatch",
+      detail: `má GitHub remote vlastníka "${coordinate.owner}", ale Organization deklaruje github_org "${githubOrg}"; modul zůstává izolovaný, dokud nebude přiřazen ke správné Organization access hranici`,
+    });
+  }
+  const branch = organizationSlotRepositoryBranch(slot, path);
+  if (!branchConflict && branch !== null && branch !== "main") {
+    issues.push({
+      code: "slot_branch_invalid",
+      detail: `deklaruje branch "${branch}", ale spravovaný Workspace Modul musí používat main`,
+    });
+  }
+  return issues;
+}
+
+function safelyLocalNoncanonicalSlotPath(path) {
+  if (
+    typeof path !== "string"
+    || path !== path.trim()
+    || path.includes("\\")
+    || path.includes("\0")
+    || isAbsolute(path)
+    || path.startsWith("//")
+    || /^[A-Za-z]:/.test(path)
+    || path.split("/").includes("..")
+  ) return false;
+  const normalized = normalizeOrganizationSlotPath(path);
+  return Boolean(
+    normalized
+    && (
+      isCanonicalOrganizationRepositorySlotPath(normalized)
+      || isOrganizationSlotContainerPath(normalized)
+      || isOrganizationRootSlotDescendantPath(normalized)
+    )
+  );
+}
+
+async function verifiedLeafCaseDrift({
+  organizationRoot,
+  organizationSlug,
+  slot,
+  containmentIssue,
+}) {
+  const declaredPath = normalizeOrganizationSlotPath(slot?.path);
+  if (
+    !isExactPathCasingIssue(containmentIssue)
+    || !declaredPath
+    || !isCanonicalOrganizationRepositorySlotPath(slot.path)
+    || !["workspace", "modules"].includes(declaredPath.split("/")[0])
+  ) {
+    return null;
+  }
+  const [container] = declaredPath.split("/");
+  if (organizationRelativePathIssue({ organizationRoot, path: container }) !== null) return null;
+  let observedPath;
+  try {
+    observedPath = observedCasePreservingPath({ organizationRoot, declaredPath });
+  } catch {
+    return null;
+  }
+  if (!isLeafOnlyCaseDrift(declaredPath, observedPath)) return null;
+  const moduleSlug = organizationSlotRepositoryId(slot, declaredPath);
+  if (!moduleSlug) return null;
+  const candidates = await findOrganizationModuleCheckoutCandidates({
+    organizationRoot,
+    organizationSlug,
+    moduleSlug,
+  });
+  return candidates.length === 1 && candidates[0].relative_path === observedPath
+    ? candidates[0]
+    : null;
+}
+
+function isExactPathCasingIssue(issue) {
+  return typeof issue === "string"
+    && !issue.includes("uniká mimo Organization root")
+    && /^".+" neodpovídá přesnému psaní existující cesty ".+"$/u.test(issue);
+}
+
+function isLeafOnlyCaseDrift(declaredPath, observedPath) {
+  if (typeof declaredPath !== "string" || typeof observedPath !== "string") return false;
+  const declared = declaredPath.split("/");
+  const observed = observedPath.split("/");
+  return declared.length === 2
+    && observed.length === 2
+    && declared[0] === observed[0]
+    && declared[1] !== observed[1]
+    && declared[1].toLowerCase() === observed[1].toLowerCase();
+}
+
+function sameCanonicalEntry(left, right) {
+  try {
+    return realpathSync(left) === realpathSync(right);
+  } catch {
+    return false;
   }
 }
 
-function declaredOrganizationTeamSlugs(companyConfig) {
+export function declaredOrganizationTeamSlugs(companyConfig) {
   const canonical = Array.isArray(companyConfig?.teams) ? companyConfig.teams : null;
   const legacy = Array.isArray(companyConfig?.workspaces) ? companyConfig.workspaces : null;
   const roster = canonical ?? legacy ?? [];
@@ -491,9 +1024,10 @@ function declaredSlotTeams(slot) {
   return legacy ? [legacy] : [];
 }
 
-function isActiveModuleSlot(slot) {
-  const status = trimmedString(slot.status)?.toLowerCase() ?? "active";
-  return !new Set(["planned", "planned_slot", "inactive", "archived", "disabled"]).has(status);
+function moduleSlotRequiresRemote(slot, { materialized = false } = {}) {
+  const rawStatus = trimmedString(slot?.status)?.toLowerCase() ?? null;
+  if (rawStatus === null) return materialized;
+  return !new Set(["planned", "planned_slot", "inactive", "archived", "disabled"]).has(rawStatus);
 }
 
 function isMissingOrPlaceholderGitUrl(value) {
@@ -588,19 +1122,34 @@ async function resolveRuntimeModuleContract({
 }
 
 async function declaredOrganizationModuleRoots(organizationRoot) {
+  const companyPath = join(organizationRoot, "company.gen3.json");
+  const manifestPath = join(organizationRoot, "modules.manifest.json");
+  const companyConfig = existsSync(companyPath) ? await readJson(companyPath) : {};
+  const manifest = existsSync(manifestPath) ? await readJson(manifestPath) : {};
+  const manifestSlots = Array.isArray(manifest?.module_slots) ? manifest.module_slots : [];
+  const companyModules = Array.isArray(companyConfig?.modules) ? companyConfig.modules : [];
+  const ambiguous = new Set([
+    ...organizationRepositorySlotCollectionConflicts(manifestSlots),
+    ...organizationRepositorySlotCollectionConflicts(companyModules),
+    ...organizationRepositorySlotCollectionConflicts(
+      [...manifestSlots, ...companyModules],
+      { allowEquivalentDuplicates: true },
+    ),
+  ].flatMap((conflict) => conflict.slots));
   const paths = [];
-  for (const [fileName, collection] of [
-    ["modules.manifest.json", "module_slots"],
-    ["company.gen3.json", "modules"],
-  ]) {
-    const manifestPath = join(organizationRoot, fileName);
-    if (!existsSync(manifestPath)) continue;
-    const manifest = await readJson(manifestPath);
-    for (const slot of manifest?.[collection] ?? []) {
-      if (typeof slot?.path !== "string" || slot.path === "" || isAbsolute(slot.path)) continue;
-      const root = resolve(organizationRoot, slot.path);
-      if (pathIsWithin(organizationRoot, root)) paths.push(root);
-    }
+  for (const slot of [...manifestSlots, ...companyModules]) {
+    if (ambiguous.has(slot) || typeof slot?.path !== "string") continue;
+    const normalizedPath = normalizeOrganizationSlotPath(slot.path);
+    if (
+      !normalizedPath
+      || !isCanonicalOrganizationRepositorySlotPath(slot.path)
+      || organizationRelativePathIssue({ organizationRoot, path: slot.path }) !== null
+      || organizationSlotRepositoryId(slot, normalizedPath) === null
+      || organizationSlotRepositoryMountIssue(slot, normalizedPath) !== null
+      || isOrganizationRepositoryDbSlot(slot, normalizedPath)
+    ) continue;
+    const root = resolve(organizationRoot, normalizedPath);
+    if (pathIsWithin(organizationRoot, root)) paths.push(root);
   }
   return [...new Set(paths)];
 }
@@ -1287,10 +1836,10 @@ function autoOrganizationFromCompanyJson({ companyJson, path, directoryName, mod
     slug,
     display_name: nonPlaceholderString(company.display_name) ?? (kind === "template" ? directoryName : slug),
     path,
-    repository: company.repository ?? null,
+    repository: organizationRootRepositoryRemote(companyJson),
     git_url: company.git_url ?? null,
     github_org: company.github_org ?? null,
-    default_branch: company.default_branch ?? companyJson.default_branch ?? "main",
+    default_branch: organizationRootRepositoryBranch(companyJson) ?? "main",
     generation: companyJson.organization_generation ?? "gen3",
     migration_marker: directoryName.endsWith("_GEN3") ? "_GEN3" : null,
     materialization: "local-auto",
@@ -1514,6 +2063,33 @@ async function walkMountPackages({
     // z nezvalidované hranice se nesmí stát spustitelnou.
     if (mountContract.fatalIssues.length > 0) {
       failures.push(...mountContract.fatalIssues);
+      if (company.organization_kind !== "template") {
+        organizationIssues.push(...mountContract.fatalIssues.map((message) => ({
+          schema_version: "lazurio.organization_issue.v1",
+          severity: "blocking",
+          scope: "organization",
+          status: "quarantined",
+          code: message.includes("boundary") || message.includes("symlink/junction")
+            ? "organization_mount_boundary_invalid"
+            : "organization_contract_invalid",
+          organization: company.slug,
+          organization_path: company.path,
+          module: null,
+          path: company.path,
+          expected_path: null,
+          message,
+          sources: ["organization_mount_contract"],
+          next_action: buildOrganizationAgentReviewAction({
+            organization: company.slug,
+            reason: message.includes("boundary") || message.includes("symlink/junction")
+              ? "organization_mount_boundary_invalid"
+              : "organization_contract_invalid",
+            path: company.path,
+            detail: message,
+          }),
+          blocks_subordinate_projection: true,
+        })));
+      }
       continue;
     }
     organizationIssues.push(...mountContract.slotIssues);
@@ -2136,7 +2712,7 @@ export async function discoverLaunchpadApps(
     organizations,
     template_mounts: templateMounts,
     module_templates: moduleTemplates,
-    organization_issues: organizationIssues.map(({ quarantine_path, ...issue }) => issue),
+    organization_issues: organizationIssues.map(({ quarantine_path, quarantine_paths, ...issue }) => issue),
     port_overlaps: portOverlaps,
     listener_overlaps: portOverlaps,
     listener_owners: listenerIndex.owners,

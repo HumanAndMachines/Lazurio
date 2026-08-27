@@ -83,6 +83,7 @@ test("canonical path containment has one physical Core owner", async () => {
     "launchpad/src/git-inventory-lib.mjs",
     "launchpad/src/git-materialization-lib.mjs",
     "launchpad/src/mission-control-plan-lib.mjs",
+    "launchpad/src/module-location-repair-lib.mjs",
     "launchpad/src/worktree-actions-lib.mjs",
     "launchpad/src/worktree-lib.mjs",
   ]);

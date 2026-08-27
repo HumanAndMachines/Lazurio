@@ -1414,7 +1414,7 @@ test("namountovaná Organizace bez povinné GEN3 struktury je hard failure a jej
   expect(apps).toEqual([]);
 });
 
-test("Organization cross-file gate failuje identity/Team/Git, ale modules/* hlásí jako incremental warning", async () => {
+test("Organization identity remains fatal without promoting slot-local Team/Git errors to more org failures", async () => {
   const root = await createCompaniesWorkspaceFixture({
     plugin: { schema_version: "companyascode.launchpad_plugin.v1", title: "Demo kontext" },
   });
@@ -1446,9 +1446,8 @@ test("Organization cross-file gate failuje identity/Team/Git, ale modules/* hlá
   expect(failures.some((failure) => failure.includes("company.slug") && failure.includes("WrongCompany"))).toBe(true);
   expect(failures.some((failure) => failure.includes("company.github_org") && failure.includes("WrongGithubOrg"))).toBe(true);
   expect(warnings.some((warning) => warning.includes('path "modules/demo"') && warning.includes("deprecated modules/*"))).toBe(true);
-  expect(failures.some((failure) => failure.includes('neexistující Team "missing-team"'))).toBe(true);
-  expect(failures.some((failure) => failure.includes('aktivní modul "modules/demo"') && failure.includes("git URL"))).toBe(true);
-  expect(failures.some((failure) => failure.includes('aktivní modul "workspace/no-git"') && failure.includes("git URL"))).toBe(true);
+  expect(failures.some((failure) => failure.includes('neexistující Team "missing-team"'))).toBe(false);
+  expect(failures.some((failure) => failure.includes("git URL"))).toBe(false);
   // Mount s rozbitým Organization kontraktem nesmí dodat spustitelnou appku.
   expect(apps).toEqual([]);
 });
@@ -1502,8 +1501,12 @@ test("Organization cross-file identity gate failuje i při chybějícím poli na
   });
   const missingManifestCompanyRoot = join(missingManifestRoot, "organizations", "TestCompany");
   const manifest = await Bun.file(join(missingManifestCompanyRoot, "modules.manifest.json")).json();
+  manifest.schema_version = "modules.manifest.v3";
   delete manifest.company;
   await writeJson(join(missingManifestCompanyRoot, "modules.manifest.json"), manifest);
+  const strictCompany = await Bun.file(join(missingManifestCompanyRoot, "company.gen3.json")).json();
+  strictCompany.schema_version = "company.gen3.v3";
+  await writeJson(join(missingManifestCompanyRoot, "company.gen3.json"), strictCompany);
 
   const missingManifestResult = await discoverLaunchpadApps(missingManifestRoot);
   expect(
@@ -1518,8 +1521,12 @@ test("Organization cross-file identity gate failuje i při chybějícím poli na
   });
   const missingCompanyConfigRoot = join(missingCompanyRoot, "organizations", "TestCompany");
   const companyConfig = await Bun.file(join(missingCompanyConfigRoot, "company.gen3.json")).json();
+  companyConfig.schema_version = "company.gen3.v3";
   delete companyConfig.company.github_org;
   await writeJson(join(missingCompanyConfigRoot, "company.gen3.json"), companyConfig);
+  const strictManifest = await Bun.file(join(missingCompanyConfigRoot, "modules.manifest.json")).json();
+  strictManifest.schema_version = "modules.manifest.v3";
+  await writeJson(join(missingCompanyConfigRoot, "modules.manifest.json"), strictManifest);
 
   const missingCompanyResult = await discoverLaunchpadApps(missingCompanyRoot);
   expect(
@@ -1528,6 +1535,99 @@ test("Organization cross-file identity gate failuje i při chybějícím poli na
     ),
   ).toBe(true);
   expect(missingCompanyResult.apps).toEqual([]);
+});
+
+test("conflicting Organization root remote and branch aliases block only that Organization", async () => {
+  const root = await createCompaniesWorkspaceFixture({
+    plugin: { schema_version: "companyascode.launchpad_plugin.v1", title: "Demo" },
+  });
+  const companyPath = join(root, "organizations", "TestCompany", "company.gen3.json");
+  const company = JSON.parse(await Bun.file(companyPath).text());
+  company.company.repository = "git@github.com:TestCompany/TestCompany_GEN3.git";
+  company.company.git_url = "git@github.com:ForeignCo/Shadow_GEN3.git";
+  company.company.default_branch = "main";
+  company.default_branch = "develop";
+  await writeJson(companyPath, company);
+
+  const { apps, failures, organization_issues: organizationIssues } = await discoverLaunchpadApps(root);
+
+  expect(apps).toEqual([]);
+  expect(failures.some((failure) => failure.includes("rozdílné Organization root repository aliasy"))).toBe(true);
+  expect(failures.some((failure) => failure.includes("rozdílné Organization root branch aliasy"))).toBe(true);
+  expect(organizationIssues).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      organization: "test-company",
+      scope: "organization",
+      blocks_subordinate_projection: true,
+    }),
+  ]));
+});
+
+test("scaffold forge binding and governance participate in Organization discovery authority", async () => {
+  const root = await createCompaniesWorkspaceFixture({
+    plugin: { schema_version: "companyascode.launchpad_plugin.v1", title: "Demo" },
+  });
+  const companyPath = join(root, "organizations", "TestCompany", "company.gen3.json");
+  const company = JSON.parse(await Bun.file(companyPath).text());
+  company.company.repository = "git@github.com:LegacyCo/LegacyCo_GEN3.git";
+  company.company.root_repository = "LegacyCo/LegacyCo_GEN3";
+  company.company.github_org = "TestCompany";
+  company.company.default_branch = "main";
+  company.forge_binding = {
+    schema_version: "lazurio.forge-binding.github.v0",
+    provider: "github",
+    organization: { id: "123", asserted_login: "TestCompany" },
+    repository: {
+      id: "456",
+      asserted_full_name: "TestCompany/TestCompany_GEN3",
+      default_branch: "main",
+    },
+  };
+  company.governance = { default_branch: "develop" };
+  await writeJson(companyPath, company);
+
+  const { apps, failures, organization_issues: organizationIssues } = await discoverLaunchpadApps(root);
+
+  expect(apps).toEqual([]);
+  expect(failures.some((failure) => failure.includes("rozdílné Organization root repository aliasy")))
+    .toBe(true);
+  expect(failures.some((failure) => failure.includes("rozdílné Organization root branch aliasy")))
+    .toBe(true);
+  expect(organizationIssues).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      organization: "test-company",
+      scope: "organization",
+      blocks_subordinate_projection: true,
+    }),
+  ]));
+});
+
+test("foreign governance access authority is Organization-fatal while sibling discovery remains usable", async () => {
+  const root = await createGenerationMountFixture();
+  await writeGenerationOrg({
+    root,
+    path: "organizations/BlockedCo_GEN3",
+    company: "blocked-co",
+    appDir: "mission-control/app/v1",
+    appId: "blocked-demo-v1",
+    port: 5990,
+  });
+  const companyPath = join(root, "organizations", "BlockedCo_GEN3", "company.gen3.json");
+  const company = JSON.parse(await Bun.file(companyPath).text());
+  company.governance = { default_branch: "main", access_authority: "not-github" };
+  await writeJson(companyPath, company);
+
+  const { apps, organization_issues: organizationIssues } = await discoverLaunchpadApps(root);
+
+  expect(apps.some((app) => app.company === "DemoCo")).toBe(true);
+  expect(apps.some((app) => app.company === "blocked-co")).toBe(false);
+  expect(organizationIssues).toContainEqual(expect.objectContaining({
+    organization: "blocked-co",
+    scope: "organization",
+    blocks_subordinate_projection: true,
+    code: "organization_contract_invalid",
+    message: expect.stringContaining("governance.access_authority"),
+  }));
 });
 
 test("template placeholder varianty jsou incremental warning, ne runtime blocker", async () => {
@@ -1715,9 +1815,13 @@ test("Organization path gate finds a differently-cased existing checkout on case
   const result = await discoverLaunchpadApps(root);
 
   expect(result.apps).toEqual([]);
-  expect(result.failures.join("\n")).toContain(
-    '"productionspace/buddy_gen2" neodpovídá přesnému psaní existující cesty "productionspace/Buddy_GEN2"',
-  );
+  expect(result.failures).toEqual([]);
+  expect(result.organization_issues).toContainEqual(expect.objectContaining({
+    scope: "module_slot",
+    code: "slot_path_casing_mismatch",
+    module: "buddy-gen2",
+    next_action: expect.objectContaining({ kind: "agent_review" }),
+  }));
 });
 
 test("Organization path gate rejects a differently-cased existing prefix for a planned checkout", async () => {
@@ -1748,7 +1852,7 @@ test("Organization path gate rejects two case-folded siblings on case-sensitive 
   })).toContain("více case-insensitive protějšků");
 });
 
-test("invalid case-preserving mount ID blocks package discovery for the whole Organization", async () => {
+test("invalid case-preserving mount ID quarantines only that declared slot", async () => {
   const root = await createCompaniesWorkspaceFixture({});
   const organizationRoot = join(root, "organizations", "TestCompany");
   await writeJson(join(organizationRoot, "modules.manifest.json"), {
@@ -1762,7 +1866,13 @@ test("invalid case-preserving mount ID blocks package discovery for the whole Or
   const result = await discoverLaunchpadApps(root);
 
   expect(result.apps).toEqual([]);
-  expect(result.failures.join("\n")).toContain("explicitní stabilní lowercase slug");
+  expect(result.failures).toEqual([]);
+  expect(result.organization_issues).toContainEqual(expect.objectContaining({
+    scope: "module_slot",
+    code: "slot_identity_invalid",
+    path: "productionspace/Buddy_GEN2",
+    next_action: expect.objectContaining({ kind: "agent_review" }),
+  }));
 });
 
 test("repository rename drift quarantines only its slot and keeps a healthy sibling discoverable", async () => {
@@ -1799,6 +1909,374 @@ test("repository rename drift quarantines only its slot and keeps a healthy sibl
   ]);
 });
 
+test("stable Team and missing-remote errors quarantine only their modules with an Agent review", async () => {
+  const root = await createCompaniesWorkspaceFixture({
+    plugin: { schema_version: "companyascode.launchpad_plugin.v1", title: "Demo kontext" },
+  });
+  const organizationRoot = join(root, "organizations", "TestCompany");
+  const company = await Bun.file(join(organizationRoot, "company.gen3.json")).json();
+  company.teams = [{ slug: "workspace", path: "workspace", default: true }];
+  await writeJson(join(organizationRoot, "company.gen3.json"), company);
+  for (const module of ["bad-team", "no-git"]) {
+    const moduleRoot = join(organizationRoot, "workspace", module);
+    await mkdir(moduleRoot, { recursive: true });
+    await writeJson(join(moduleRoot, "lazurio.module.json"), {
+      schema_version: "lazurio.module.v1",
+      id: module,
+      company: "test-company",
+    });
+  }
+  await writeJson(join(organizationRoot, "modules.manifest.json"), {
+    company: "test-company",
+    github_org: "TestCompany",
+    module_slots: [
+      { slug: "demo", path: "modules/demo", teams: ["workspace"], git: { url: "git@github.com:TestCompany/demo.git", branch: "main" } },
+      { slug: "bad-team", path: "workspace/bad-team", teams: ["missing"], git: { url: "git@github.com:TestCompany/bad-team.git", branch: "main" } },
+      { slug: "no-git", path: "workspace/no-git", teams: ["workspace"] },
+    ],
+  });
+
+  const result = await discoverLaunchpadApps(root);
+
+  expect(result.failures).toEqual([]);
+  expect(result.apps.map((app) => app.id)).toEqual(["test-company-demo-v1"]);
+  expect(result.organization_issues).toHaveLength(2);
+  expect(result.organization_issues).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      code: "slot_team_invalid",
+      module: "bad-team",
+      status: "quarantined",
+      next_action: expect.objectContaining({ kind: "agent_review" }),
+    }),
+    expect.objectContaining({
+      code: "slot_remote_missing",
+      module: "no-git",
+      status: "quarantined",
+      next_action: expect.objectContaining({ kind: "agent_review" }),
+    }),
+  ]));
+  expect(result.organization_issues.every((issue) =>
+    issue.next_action.prompt.includes("ostatní zdravé moduly zůstávají použitelné")
+  )).toBe(true);
+});
+
+test("a foreign GitHub remote quarantines only its module access boundary", async () => {
+  const root = await createCompaniesWorkspaceFixture({
+    plugin: { schema_version: "companyascode.launchpad_plugin.v1", title: "Demo kontext" },
+  });
+  const organizationRoot = join(root, "organizations", "TestCompany");
+  await writeJson(join(organizationRoot, "modules.manifest.json"), {
+    company: "test-company",
+    github_org: "TestCompany",
+    module_slots: [
+      { slug: "demo", path: "modules/demo", git: { url: "git@github.com:TestCompany/demo.git", branch: "main" } },
+      { slug: "foreign", path: "workspace/foreign", git: { url: "git@github.com:ForeignCo/foreign.git", branch: "main" } },
+    ],
+  });
+
+  const result = await discoverLaunchpadApps(root);
+
+  expect(result.failures).toEqual([]);
+  expect(result.apps.map((app) => app.id)).toEqual(["test-company-demo-v1"]);
+  expect(result.organization_issues).toContainEqual(expect.objectContaining({
+    scope: "module_slot",
+    code: "slot_remote_owner_mismatch",
+    module: "foreign",
+    next_action: expect.objectContaining({ kind: "agent_review" }),
+  }));
+});
+
+test("a cross-Organization remote dominates a simultaneous repository rename", async () => {
+  const root = await createCompaniesWorkspaceFixture({
+    plugin: { schema_version: "companyascode.launchpad_plugin.v1", title: "Demo kontext" },
+  });
+  const organizationRoot = join(root, "organizations", "TestCompany");
+  await writeJson(join(organizationRoot, "modules.manifest.json"), {
+    company: "test-company",
+    github_org: "TestCompany",
+    module_slots: [
+      { slug: "demo", path: "modules/demo", git: { url: "git@github.com:TestCompany/demo.git", branch: "main" } },
+      { slug: "transferred", path: "workspace/old-name", git: { url: "git@github.com:OtherCompany/new-name.git", branch: "main" } },
+    ],
+  });
+
+  const result = await discoverLaunchpadApps(root);
+  const transferred = result.organization_issues.filter((issue) => issue.module === "transferred");
+
+  expect(result.failures).toEqual([]);
+  expect(result.apps.map((app) => app.id)).toEqual(["test-company-demo-v1"]);
+  expect(transferred).toEqual([
+    expect.objectContaining({
+      code: "slot_remote_owner_mismatch",
+      expected_path: null,
+      next_action: expect.objectContaining({
+        kind: "agent_review",
+        prompt: expect.stringContaining("správné Organization access hranici"),
+      }),
+    }),
+  ]);
+  expect(JSON.stringify(transferred)).not.toContain("repair_module_location");
+});
+
+test("conflicting remote and branch aliases quarantine one slot without choosing an action authority", async () => {
+  const root = await createCompaniesWorkspaceFixture({
+    plugin: { schema_version: "companyascode.launchpad_plugin.v1", title: "Demo kontext" },
+  });
+  const organizationRoot = join(root, "organizations", "TestCompany");
+  await writeJson(join(organizationRoot, "modules.manifest.json"), {
+    company: "test-company",
+    github_org: "TestCompany",
+    module_slots: [
+      { slug: "demo", path: "modules/demo", git: { url: "git@github.com:TestCompany/demo.git", branch: "main" } },
+      {
+        slug: "conflicted",
+        path: "workspace/conflicted",
+        repo: "git@github.com:ForeignCo/conflicted.git",
+        branch: "feature",
+        git: { url: "git@github.com:TestCompany/conflicted.git", branch: "main" },
+      },
+    ],
+  });
+
+  const result = await discoverLaunchpadApps(root);
+  const conflicts = result.organization_issues.filter((issue) => issue.module === "conflicted");
+
+  expect(result.failures).toEqual([]);
+  expect(result.apps.map((app) => app.id)).toEqual(["test-company-demo-v1"]);
+  expect(conflicts.map((issue) => issue.code).sort()).toEqual([
+    "slot_branch_conflict",
+    "slot_remote_conflict",
+  ]);
+  expect(conflicts.every((issue) => issue.next_action?.kind === "agent_review")).toBe(true);
+  expect(JSON.stringify(conflicts)).not.toContain("repair_module_location");
+});
+
+test("published canonical path discovers the old stable-slug checkout, prevents duplicate discovery and offers relocation", async () => {
+  const root = await createCompaniesWorkspaceFixture({
+    plugin: { schema_version: "companyascode.launchpad_plugin.v1", title: "Demo kontext" },
+  });
+  const organizationRoot = join(root, "organizations", "TestCompany");
+  const legacyRoot = join(organizationRoot, "workspace", "legacy-name");
+  await mkdir(legacyRoot, { recursive: true });
+  await writeJson(join(legacyRoot, "lazurio.module.json"), {
+    schema_version: "lazurio.module.v1",
+    id: "renamed",
+    company: "test-company",
+  });
+  await writeJson(join(legacyRoot, "package.json"), {
+    name: "test-company-renamed-v1",
+    private: true,
+    scripts: { dev: "bun server.mjs" },
+    companyascode: {
+      app: {
+        schema_version: "companyascode.launchpad_app.v1",
+        id: "test-company-renamed-v1",
+        title: "Renamed",
+        company: "test-company",
+        module: "renamed",
+        surface: "internal",
+        port: 4243,
+        host: "127.0.0.1",
+        health_path: "/health",
+        dev_script: "dev",
+      },
+    },
+  });
+  await writeJson(join(organizationRoot, "modules.manifest.json"), {
+    company: "test-company",
+    github_org: "TestCompany",
+    module_slots: [
+      { slug: "demo", path: "modules/demo", git: { url: "git@github.com:TestCompany/demo.git", branch: "main" } },
+      { slug: "renamed", path: "workspace/canonical-name", git: { url: "git@github.com:TestCompany/canonical-name.git", branch: "main" } },
+    ],
+  });
+  const company = await Bun.file(join(organizationRoot, "company.gen3.json")).json();
+  company.modules = [
+    { slug: "demo", path: "modules/demo", repo: "git@github.com:TestCompany/demo.git" },
+    { slug: "renamed", path: "workspace/canonical-name", repo: "git@github.com:TestCompany/canonical-name.git" },
+  ];
+  await writeJson(join(organizationRoot, "company.gen3.json"), company);
+
+  const result = await discoverLaunchpadApps(root);
+
+  expect(result.failures).toEqual([]);
+  expect(result.apps.map((app) => app.id)).toEqual(["test-company-demo-v1"]);
+  expect(result.organization_issues).toEqual([
+    expect.objectContaining({
+      code: "repository_location_mismatch",
+      module: "renamed",
+      path: "workspace/legacy-name",
+      expected_path: "workspace/canonical-name",
+      next_action: expect.objectContaining({
+        command: "lazurio repair module-location --org test-company --module renamed",
+      }),
+    }),
+  ]);
+});
+
+test("a stable-slug Git checkout with an unverifiable marker remains quarantined on every discovery", async () => {
+  const root = await createCompaniesWorkspaceFixture({
+    plugin: { schema_version: "companyascode.launchpad_plugin.v1", title: "Demo kontext" },
+  });
+  const organizationRoot = join(root, "organizations", "TestCompany");
+  await mkdir(join(organizationRoot, "workspace", "renamed", ".git"), { recursive: true });
+  await writeJson(join(organizationRoot, "modules.manifest.json"), {
+    company: "test-company",
+    github_org: "TestCompany",
+    module_slots: [
+      { slug: "demo", path: "modules/demo", git: { url: "git@github.com:TestCompany/demo.git", branch: "main" } },
+      { slug: "renamed", path: "workspace/canonical-name", git: { url: "git@github.com:TestCompany/canonical-name.git", branch: "main" } },
+    ],
+  });
+
+  for (const result of [await discoverLaunchpadApps(root), await discoverLaunchpadApps(root)]) {
+    expect(result.failures).toEqual([]);
+    expect(result.apps.map((app) => app.id)).toEqual(["test-company-demo-v1"]);
+    expect(result.organization_issues.filter((issue) => issue.module === "renamed")).toEqual([
+      expect.objectContaining({
+        code: "repository_transition_unverified",
+        path: "workspace/renamed",
+        expected_path: "workspace/canonical-name",
+        next_action: expect.objectContaining({
+          kind: "repair_module_location",
+          prompt: expect.stringContaining("marker_missing"),
+        }),
+      }),
+    ]);
+  }
+});
+
+test("two authorized checkout paths collapse to one non-repairable ambiguity blocker", async () => {
+  const root = await createCompaniesWorkspaceFixture({
+    plugin: { schema_version: "companyascode.launchpad_plugin.v1", title: "Demo kontext" },
+  });
+  const organizationRoot = join(root, "organizations", "TestCompany");
+  for (const basename of ["renamed", "canonical-name"]) {
+    const checkout = join(organizationRoot, "workspace", basename);
+    await mkdir(checkout, { recursive: true });
+    await writeJson(join(checkout, "lazurio.module.json"), {
+      schema_version: "lazurio.module.v1",
+      id: "renamed",
+      company: "test-company",
+    });
+  }
+  await writeJson(join(organizationRoot, "modules.manifest.json"), {
+    company: "test-company",
+    github_org: "TestCompany",
+    module_slots: [
+      { slug: "demo", path: "modules/demo", git: { url: "git@github.com:TestCompany/demo.git", branch: "main" } },
+      { slug: "renamed", path: "workspace/renamed", git: { url: "git@github.com:TestCompany/canonical-name.git", branch: "main" } },
+    ],
+  });
+
+  const result = await discoverLaunchpadApps(root);
+  const issues = result.organization_issues.filter((issue) => issue.module === "renamed");
+
+  expect(result.failures).toEqual([]);
+  expect(result.apps.map((app) => app.id)).toEqual(["test-company-demo-v1"]);
+  expect(issues).toEqual([
+    expect.objectContaining({
+      code: "repository_location_ambiguous",
+      expected_path: "workspace/canonical-name",
+      observed_paths: ["workspace/canonical-name", "workspace/renamed"],
+      next_action: expect.objectContaining({
+        kind: "agent_review",
+        prompt: expect.stringContaining("workspace/canonical-name"),
+      }),
+    }),
+  ]);
+});
+
+test("leaf-only case rename quarantines one stable module while its healthy sibling stays discoverable", async () => {
+  const root = await createCompaniesWorkspaceFixture({
+    plugin: { schema_version: "companyascode.launchpad_plugin.v1", title: "Demo kontext" },
+  });
+  const organizationRoot = join(root, "organizations", "TestCompany");
+  const observedRoot = join(organizationRoot, "workspace", "CanonicalName");
+  await mkdir(observedRoot, { recursive: true });
+  await writeJson(join(observedRoot, "lazurio.module.json"), {
+    schema_version: "lazurio.module.v1",
+    id: "renamed",
+    company: "test-company",
+  });
+  await writeJson(join(observedRoot, "package.json"), {
+    name: "test-company-renamed-v1",
+    private: true,
+    scripts: { dev: "bun server.mjs" },
+    companyascode: {
+      app: {
+        schema_version: "companyascode.launchpad_app.v1",
+        id: "test-company-renamed-v1",
+        title: "Renamed",
+        company: "test-company",
+        module: "renamed",
+        surface: "internal",
+        port: 4243,
+        host: "127.0.0.1",
+        health_path: "/health",
+        dev_script: "dev",
+      },
+    },
+  });
+  await writeJson(join(organizationRoot, "modules.manifest.json"), {
+    company: "test-company",
+    github_org: "TestCompany",
+    module_slots: [
+      { slug: "demo", path: "modules/demo", git: { url: "git@github.com:TestCompany/demo.git", branch: "main" } },
+      { slug: "renamed", path: "workspace/canonicalname", git: { url: "git@github.com:TestCompany/canonicalname.git", branch: "main" } },
+    ],
+  });
+
+  const result = await discoverLaunchpadApps(root);
+
+  expect(result.failures).toEqual([]);
+  expect(result.apps.map((app) => app.id)).toEqual(["test-company-demo-v1"]);
+  expect(result.organization_issues).toEqual([
+    expect.objectContaining({
+      code: "repository_location_mismatch",
+      module: "renamed",
+      path: "workspace/CanonicalName",
+      expected_path: "workspace/canonicalname",
+    }),
+  ]);
+});
+
+test("case-like leaf behind a workspace symlink remains an Organization boundary failure", async () => {
+  const root = await createCompaniesWorkspaceFixture({
+    plugin: { schema_version: "companyascode.launchpad_plugin.v1", title: "Demo kontext" },
+  });
+  const organizationRoot = join(root, "organizations", "TestCompany");
+  const foreignRoot = join(root, "organizations", "ForeignCompany", "CanonicalName");
+  await mkdir(foreignRoot, { recursive: true });
+  await writeJson(join(foreignRoot, "lazurio.module.json"), {
+    schema_version: "lazurio.module.v1",
+    id: "renamed",
+    company: "test-company",
+  });
+  await symlink(join(root, "organizations", "ForeignCompany"), join(organizationRoot, "workspace"));
+  await writeJson(join(organizationRoot, "modules.manifest.json"), {
+    company: "test-company",
+    github_org: "TestCompany",
+    module_slots: [
+      { slug: "demo", path: "modules/demo", git: { url: "git@github.com:TestCompany/demo.git", branch: "main" } },
+      { slug: "renamed", path: "workspace/canonicalname", git: { url: "git@github.com:TestCompany/canonicalname.git", branch: "main" } },
+    ],
+  });
+
+  const result = await discoverLaunchpadApps(root);
+
+  expect(result.apps).toEqual([]);
+  expect(result.failures.join("\n")).toContain("canonical containment");
+  expect(result.organization_issues).toEqual([
+    expect.objectContaining({
+      scope: "organization",
+      code: "organization_mount_boundary_invalid",
+      organization: "test-company",
+    }),
+  ]);
+  expect(JSON.stringify(result)).not.toContain("repair module-location");
+});
+
 test("raw non-canonical repository path blocks package discovery before separator cleanup", async () => {
   const root = await createCompaniesWorkspaceFixture({});
   const organizationRoot = join(root, "organizations", "TestCompany");
@@ -1813,10 +2291,34 @@ test("raw non-canonical repository path blocks package discovery before separato
   const result = await discoverLaunchpadApps(root);
 
   expect(result.apps).toEqual([]);
-  expect(result.failures.join("\n")).toContain("není kanonická podporovaná");
+  expect(result.failures).toEqual([]);
+  expect(result.organization_issues).toContainEqual(expect.objectContaining({
+    scope: "module_slot",
+    code: "slot_path_noncanonical",
+    path: "modules/demo",
+    next_action: expect.objectContaining({ kind: "agent_review" }),
+  }));
 });
 
-test("cross-file logical ID mismatch blocks package discovery", async () => {
+test("incomplete slot declaration is an honest fatal contract error instead of disappearing", async () => {
+  const root = await createCompaniesWorkspaceFixture({
+    plugin: { schema_version: "companyascode.launchpad_plugin.v1", title: "Demo kontext" },
+  });
+  const organizationRoot = join(root, "organizations", "TestCompany");
+  await writeJson(join(organizationRoot, "modules.manifest.json"), {
+    company: "test-company",
+    github_org: "TestCompany",
+    module_slots: [{ slug: "broken" }],
+  });
+
+  const result = await discoverLaunchpadApps(root);
+
+  expect(result.apps).toEqual([]);
+  expect(result.failures.join("\n")).toContain(".path je povinná");
+  expect(result.failures.join("\n")).toContain('slot "broken"');
+});
+
+test("cross-file logical ID mismatch quarantines only the conflicting slot group", async () => {
   const root = await createCompaniesWorkspaceFixture({});
   const organizationRoot = join(root, "organizations", "TestCompany");
   await writeJson(join(organizationRoot, "modules.manifest.json"), {
@@ -1833,7 +2335,47 @@ test("cross-file logical ID mismatch blocks package discovery", async () => {
   const result = await discoverLaunchpadApps(root);
 
   expect(result.apps).toEqual([]);
-  expect(result.failures.join("\n")).toContain('repository slug "demo"');
+  expect(result.failures).toEqual([]);
+  expect(result.organization_issues).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      scope: "module_slot",
+      code: "slot_collection_ambiguous",
+      module: "demo",
+      next_action: expect.objectContaining({ kind: "agent_review" }),
+    }),
+  ]));
+});
+
+test("an ambiguous markerless path stays reserved without contaminating a vacant sibling", async () => {
+  const root = await createCompaniesWorkspaceFixture({});
+  const organizationRoot = join(root, "organizations", "TestCompany");
+  const slots = [
+    { slug: "a", path: "workspace/shared", git: { url: "git@github.com:TestCompany/shared.git", branch: "main" } },
+    { slug: "b", path: "workspace/shared", git: { url: "git@github.com:TestCompany/shared.git", branch: "main" } },
+    { slug: "c", path: "workspace/c", git: { url: "git@github.com:TestCompany/c.git", branch: "main" } },
+  ];
+  await mkdir(join(organizationRoot, "workspace", "shared", ".git"), { recursive: true });
+  await writeJson(join(organizationRoot, "modules.manifest.json"), {
+    company: "test-company",
+    github_org: "TestCompany",
+    module_slots: slots,
+  });
+  const company = await Bun.file(join(organizationRoot, "company.gen3.json")).json();
+  company.modules = slots.map((slot) => ({
+    slug: slot.slug,
+    path: slot.path,
+    repo: slot.git.url,
+  }));
+  await writeJson(join(organizationRoot, "company.gen3.json"), company);
+
+  const result = await discoverLaunchpadApps(root);
+  const blockedModules = new Set(result.organization_issues.map((issue) => issue.module));
+
+  expect(result.failures).toEqual([]);
+  expect(blockedModules.has("a")).toBe(true);
+  expect(blockedModules.has("b")).toBe(true);
+  expect(blockedModules.has("c")).toBe(false);
+  expect(JSON.stringify(result.organization_issues)).not.toContain('"module":"c"');
 });
 
 test("Organization module paths fail closed on traversal and canonical symlink escapes", async () => {

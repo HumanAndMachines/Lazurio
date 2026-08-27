@@ -1135,7 +1135,7 @@ function renderHeroIssues(verdict, diagnostics) {
 
   const issueCount = relevantIssues.length;
   elements.heroSummary.textContent = verdict.tone === "danger"
-    ? `${issueCount} ${issueCount === 1 ? "věc brání" : "věci brání"} spolehlivému používání prostoru. Vyberte, co chcete vyřešit.`
+    ? `${issueCount} ${issueCount === 1 ? "věc" : issueCount >= 2 && issueCount <= 4 ? "věci" : "věcí"} brání spolehlivému používání prostoru. Vyberte, co chcete vyřešit.`
     : `${issueCount} ${issueCount === 1 ? "věc potřebuje" : "věci potřebují"} kontrolu. Vyberte doporučený další krok.`;
 
   // Stav prostoru žije na jednom místě v pravém panelu. Zobrazení stejného

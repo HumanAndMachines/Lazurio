@@ -23,6 +23,7 @@ test("materializes an active manifest slot on its exact repository and branch", 
   const organizationRoot = join(root, "organizations", "BetaCo_GEN3");
   await prepareOrganizationRoot(organizationRoot);
   const remote = join(root, "remotes", "lazurio.git");
+  const declaredRemote = "git@github.com:BetaCo/lazurio.git";
   await mkdir(join(root, "sources"), { recursive: true });
   await initGitRepo(join(root, "sources", "lazurio"), { remotePath: remote });
   await writeJson(join(organizationRoot, "modules.manifest.json"), {
@@ -33,20 +34,24 @@ test("materializes an active manifest slot on its exact repository and branch", 
       {
         path: "workspace/lazurio",
         teams: ["lazurio"],
-        git: { url: remote, branch: "main" },
+        git: { url: declaredRemote, branch: "main" },
       },
     ],
   });
   const inventory = await buildGitInventory({ companiesRoot: root });
   const repo = inventory.repos.find((entry) => entry.key === "BetaCo::lazurio");
 
-  const result = await materializeRepoCheckout({ companiesRoot: root, repo });
+  const result = await materializeRepoCheckout({
+    companiesRoot: root,
+    repo,
+    deps: { run: fixtureRemoteRunner({ declaredRemote, actualRemote: remote }) },
+  });
 
   expect(result).toMatchObject({
     ok: true,
     outcome: "materialized",
     branch: "main",
-    remote,
+    remote: declaredRemote,
   });
   expect(result.head).toMatch(/^[0-9a-f]{40}$/);
   expect(await readFile(join(organizationRoot, "workspace", "lazurio", "README.md"), "utf8"))
@@ -59,6 +64,8 @@ test("treats an inaccessible manifest repository as missing_access and leaves no
   const organizationRoot = join(root, "organizations", "BetaCo_GEN3");
   await prepareOrganizationRoot(organizationRoot);
   const target = join(organizationRoot, "workspace", "private-module");
+  const declaredRemote = "git@github.com:BetaCo/private-module.git";
+  const actualRemote = join(root, "remotes", "not-accessible.git");
   await writeJson(join(organizationRoot, "modules.manifest.json"), {
     organization_generation: "gen3",
     company: "BetaCo",
@@ -66,14 +73,18 @@ test("treats an inaccessible manifest repository as missing_access and leaves no
     module_slots: [
       {
         path: "workspace/private-module",
-        git: { url: join(root, "remotes", "not-accessible.git"), branch: "main" },
+        git: { url: declaredRemote, branch: "main" },
       },
     ],
   });
   const inventory = await buildGitInventory({ companiesRoot: root });
   const repo = inventory.repos.find((entry) => entry.key === "BetaCo::private-module");
 
-  const result = await materializeRepoCheckout({ companiesRoot: root, repo });
+  const result = await materializeRepoCheckout({
+    companiesRoot: root,
+    repo,
+    deps: { run: fixtureRemoteRunner({ declaredRemote, actualRemote }) },
+  });
 
   expect(result).toMatchObject({
     ok: false,
@@ -118,6 +129,7 @@ test("does not overwrite a target claimed by a concurrent materialization", asyn
   const organizationRoot = join(root, "organizations", "BetaCo_GEN3");
   await prepareOrganizationRoot(organizationRoot);
   const remote = join(root, "remotes", "shared.git");
+  const declaredRemote = "git@github.com:BetaCo/shared.git";
   await mkdir(join(root, "sources"), { recursive: true });
   await initGitRepo(join(root, "sources", "shared"), { remotePath: remote });
   await writeJson(join(organizationRoot, "modules.manifest.json"), {
@@ -127,7 +139,7 @@ test("does not overwrite a target claimed by a concurrent materialization", asyn
     module_slots: [
       {
         path: "workspace/shared",
-        git: { url: remote, branch: "main" },
+        git: { url: declaredRemote, branch: "main" },
       },
     ],
   });
@@ -139,6 +151,7 @@ test("does not overwrite a target claimed by a concurrent materialization", asyn
     companiesRoot: root,
     repo,
     deps: {
+      run: fixtureRemoteRunner({ declaredRemote, actualRemote: remote }),
       move: async () => {
         await mkdir(target);
         await writeFile(join(target, "owned-by-other-update"), "keep\n");
@@ -163,6 +176,7 @@ test("clone failure leaves no partial final target or staging directory", async 
   const organizationRoot = join(root, "organizations", "BetaCo_GEN3");
   await prepareOrganizationRoot(organizationRoot);
   const remote = join(root, "remotes", "broken-clone.git");
+  const declaredRemote = "git@github.com:BetaCo/broken-clone.git";
   await mkdir(join(root, "sources"), { recursive: true });
   await initGitRepo(join(root, "sources", "broken-clone"), { remotePath: remote });
   await writeJson(join(organizationRoot, "modules.manifest.json"), {
@@ -172,7 +186,7 @@ test("clone failure leaves no partial final target or staging directory", async 
     module_slots: [
       {
         path: "workspace/broken-clone",
-        git: { url: remote, branch: "main" },
+        git: { url: declaredRemote, branch: "main" },
       },
     ],
   });
@@ -184,11 +198,11 @@ test("clone failure leaves no partial final target or staging directory", async 
     companiesRoot: root,
     repo,
     deps: {
-      run: async (args, options) => (
-        args[0] === "clone"
-          ? { ok: false, stdout: "", stderr: "simulated clone failure" }
-          : runGit(args, options)
-      ),
+      run: fixtureRemoteRunner({
+        declaredRemote,
+        actualRemote: remote,
+        failClone: true,
+      }),
     },
   });
 
@@ -204,4 +218,22 @@ test("clone failure leaves no partial final target or staging directory", async 
 async function prepareOrganizationRoot(organizationRoot) {
   await writeFile(join(organizationRoot, ".gitignore"), "/workspace/*/\n");
   await initGitRepo(organizationRoot);
+}
+
+function fixtureRemoteRunner({ declaredRemote, actualRemote, failClone = false }) {
+  return async (args, options) => {
+    if (failClone && args[0] === "clone") {
+      return { ok: false, exitCode: 1, timedOut: false, stdout: "", stderr: "simulated clone failure" };
+    }
+    const mappedArgs = args.map((value) => value === declaredRemote ? actualRemote : value);
+    const result = await runGit(mappedArgs, options);
+    if (result.ok && args[0] === "clone") {
+      const stagingPath = args.at(-1);
+      const restored = await runGit(["remote", "set-url", "origin", declaredRemote], {
+        cwd: stagingPath,
+      });
+      if (!restored.ok) return restored;
+    }
+    return result;
+  };
 }

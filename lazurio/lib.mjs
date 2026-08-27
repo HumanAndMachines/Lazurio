@@ -632,7 +632,11 @@ function selectedOrganizationProjection({
         teams: [...(declaration.teams ?? [])].sort((left, right) => left.localeCompare(right)),
         ...(repository ? { repository } : {}),
         ...(declaration.branch ? { declared_branch: declaration.branch } : {}),
-        materialization: moduleMaterialization(declaration),
+        materialization: moduleMaterialization({
+          companiesRoot,
+          organizationPath: selected.path,
+          declaration,
+        }),
         access: providerAccessNotEvaluated(),
         ...(declaration.apps ? { apps: structuredClone(declaration.apps) } : {}),
         git: gitProjection({
@@ -800,14 +804,41 @@ function gitProjection({
   };
 }
 
-function moduleMaterialization(declaration) {
+function moduleMaterialization({ companiesRoot, organizationPath, declaration }) {
   if (declaration.status === "available") {
     return state("present", "checkout_present");
   }
   if (declaration.status === "planned_slot") {
     return state("absent", "repository_not_declared");
   }
+  // Git inventory quarantine removes mutation authority, not physical
+  // evidence. Keep local context truthful when an exact regular checkout is
+  // present but its marker/source contract still needs Agent review.
+  const observedPath = declaration.status === "quarantined"
+    ? declaration.repository_issue?.path ?? declaration.path
+    : declaration.path;
+  if (safeModuleDirectoryExists({ companiesRoot, organizationPath, modulePath: observedPath })) {
+    return state("present", "checkout_present");
+  }
   return state("absent", "checkout_absent");
+}
+
+function safeModuleDirectoryExists({ companiesRoot, organizationPath, modulePath }) {
+  if (
+    typeof organizationPath !== "string"
+    || typeof modulePath !== "string"
+    || modulePath.trim() === ""
+  ) return false;
+  const organizationRoot = resolve(companiesRoot, organizationPath);
+  const candidate = resolve(organizationRoot, modulePath);
+  const lexical = relative(organizationRoot, candidate);
+  if (!lexical || lexical.startsWith("..") || isAbsolute(lexical)) return false;
+  try {
+    const stat = lstatSync(candidate);
+    return stat.isDirectory() && !stat.isSymbolicLink();
+  } catch {
+    return false;
+  }
 }
 
 function moduleEntrypointState(module) {

@@ -394,15 +394,37 @@ function appBlockerModel(app) {
 }
 
 function slotBlockerModel(slot) {
-  const label = humanizePathTail(slot.path);
-  if (slot.reason === "repository_location_mismatch") {
+  const label = humanizePathTail(slot.slug ?? slot.path);
+  if (slot.scope === "organization") {
     return {
       severity: "danger",
-      title: `${label} potřebuje sladit s repozitářem`,
+      title: `${label} potřebuje opravit základní nastavení`,
+      impact: "Lazurio nemůže této Organizaci bezpečně důvěřovat, proto pozastavilo její moduly. Jiné Organizace zůstávají použitelné.",
+      nextStep: "Opravte uvedený Organization kontrakt a potom obnovte stav.",
+      action: slot.next_action ?? null,
+      technical: [slot.message, slot.reason, slot.path].filter(Boolean),
+    };
+  }
+  if (["repository_location_mismatch", "repository_transition_unverified"].includes(slot.reason)) {
+    return {
+      severity: "danger",
+      title: slot.reason === "repository_transition_unverified"
+        ? `${label} potřebuje bezpečně ověřit checkout`
+        : `${label} potřebuje sladit s repozitářem`,
       impact: "Lazurio bezpečně pozastavilo jen tento modul. Ostatní moduly prostoru mohou dál fungovat.",
       nextStep: "Předejte připravený postup Codexu; nejdřív ověří Git data a potom provede guardovanou opravu.",
       action: slot.next_action ?? null,
-      technical: [slot.message, slot.reason, slot.path, slot.expected_path].filter(Boolean),
+      technical: [slot.message, slot.reason, slot.found_path, slot.expected_path].filter(Boolean),
+    };
+  }
+  if (slot.next_action?.prompt) {
+    return {
+      severity: "danger",
+      title: `${label} potřebuje opravit nastavení`,
+      impact: "Lazurio bezpečně pozastavilo jen tento modul. Ostatní moduly prostoru mohou dál fungovat.",
+      nextStep: "Předejte přesnou diagnostiku Codexu; opraví zdrojový kontrakt bez odhadu nad lokálními daty.",
+      action: slot.next_action,
+      technical: [slot.message, slot.reason, slot.path].filter(Boolean),
     };
   }
   return {

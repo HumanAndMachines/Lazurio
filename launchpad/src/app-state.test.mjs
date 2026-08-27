@@ -78,6 +78,14 @@ test("běžné update stavy mají pouze stabilní uživatelskou copy", () => {
     message: "Lazurio je připravené k synchronizaci.",
     action: { kind: "sync", label: "Synchronizovat" },
   });
+  expect(updateBannerPresentation({
+    state: "current",
+    checked_remote: false,
+    isolated_issue_count: 1,
+  })).toMatchObject({
+    visible: true,
+    action: { kind: "sync", label: "Synchronizovat" },
+  });
   expect(updateBannerPresentation({ state: "updated" }, { updatePending: true })).toMatchObject({
     visible: true,
     tone: "updating",
@@ -586,6 +594,37 @@ test("hero započítá i blokující vnořený slot z Doctor agregace", () => {
   expect(computeSpaceHeroState(health).tone).toBe("danger");
 });
 
+test("Organization-fatal blocker nikdy nevytvoří zelený hero ani falešnou copy o jediném modulu", () => {
+  const health = summarizeOrganizationSpaceHealth({
+    organization: {
+      slug: "BrokenCo",
+      space_readiness: {
+        blocking_slots: [{
+          slug: "BrokenCo",
+          path: "organizations/BrokenCo_GEN3",
+          scope: "organization",
+          status: "quarantined",
+          reason: "organization_contract_invalid",
+          message: "Company identity neodpovídá manifestu.",
+        }],
+      },
+    },
+    apps: [],
+  });
+  const problem = buildSpaceProblemModel(health).issues[0];
+
+  expect(health.blockers).toBe(1);
+  expect(computeSpaceHeroState(health)).toMatchObject({
+    tone: "danger",
+    title: "Prostor vyžaduje nastavení · 1 blokátor",
+  });
+  expect(problem).toMatchObject({
+    title: "BrokenCo potřebuje opravit základní nastavení",
+    impact: expect.stringContaining("Jiné Organizace zůstávají použitelné"),
+  });
+  expect(JSON.stringify(problem.impact).includes("jen tento modul")).toBe(false);
+});
+
 test("rename quarantine degraduje jen svou Organizaci a zachová přesný Codex handoff", () => {
   const repairAction = {
     kind: "repair_module_location",
@@ -627,6 +666,37 @@ test("rename quarantine degraduje jen svou Organizaci a zachová přesný Codex 
     apps: [app("other-healthy", "OtherCo", "ready")],
   });
   expect(computeSpaceHeroState(other).tone).toBe("ok");
+});
+
+test("jiná jednoznačná slotová chyba zůstane izolovaná a nabídne Agent review", () => {
+  const action = {
+    kind: "agent_review",
+    label: "Vyřešit s Codexem",
+    prompt: "Oprav pouze source kontrakt modulu.",
+  };
+  const health = summarizeOrganizationSpaceHealth({
+    organization: {
+      slug: "OmegaCo",
+      space_readiness: {
+        blocking_slots: [{
+          slug: "content",
+          path: "workspace/content",
+          status: "quarantined",
+          reason: "slot_team_invalid",
+          message: "Team missing neexistuje.",
+          next_action: action,
+        }],
+      },
+    },
+    apps: [app("omegaco-healthy", "OmegaCo", "ready")],
+  });
+  const issue = buildSpaceProblemModel(health).issues[0];
+  expect(health.blockers).toBe(1);
+  expect(issue).toMatchObject({
+    title: "Content potřebuje opravit nastavení",
+    impact: expect.stringContaining("jen tento modul"),
+    action,
+  });
 });
 
 test("nezdravý runtime je prostorový blokátor i s ready dependencies", () => {

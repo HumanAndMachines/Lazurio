@@ -1382,6 +1382,10 @@ test("Launchpad server forwards runtime source from POST body to worktree open",
   const dealsRepo = join(orgRoot, "workspace", "deals");
   await initGitRepo(dealsRepo);
   const mainPort = await findFreePort();
+  const companyPath = join(orgRoot, "company.gen3.json");
+  const company = JSON.parse(await readFile(companyPath, "utf8"));
+  company.module_port_pool = { start: mainPort, end: mainPort };
+  await writeJson(companyPath, company);
   await createPackageApp({
     root,
     packagePath: "organizations/BetaCo_GEN3/workspace/deals/app/v1",
@@ -1392,6 +1396,39 @@ test("Launchpad server forwards runtime source from POST body to worktree open",
       module: "deals",
       port: mainPort,
     },
+  });
+  const packagePath = join(dealsRepo, "app", "v1", "package.json");
+  const packageJson = JSON.parse(await readFile(packagePath, "utf8"));
+  const legacyApp = packageJson.companyascode.app;
+  delete packageJson.companyascode;
+  packageJson.lazurio = {
+    runtime: {
+      schema_version: "lazurio.runtime.v1",
+      id: legacyApp.id,
+      title: legacyApp.title,
+      company: legacyApp.company,
+      module: legacyApp.module,
+      surface: legacyApp.surface,
+      dev_script: legacyApp.dev_script,
+      tags: legacyApp.tags,
+      listeners: [{
+        id: "web",
+        role: "entrypoint",
+        lease: "main",
+        protocol: "http",
+        health: { kind: "http", path: legacyApp.health_path },
+      }],
+    },
+  };
+  await writeJson(packagePath, packageJson);
+  await writeJson(join(dealsRepo, "lazurio.module.json"), {
+    schema_version: "lazurio.module.v1",
+    id: "deals",
+    company: "BetaCo",
+    tcp_port_policy: { mode: "single" },
+    port_leases: [{ id: "main", host: "127.0.0.1", port: mainPort }],
+    apps: ["app/v1/package.json"],
+    default_app: "app/v1/package.json",
   });
   await writeFile(join(dealsRepo, "app", "v1", "server.mjs"), fixtureServerSource(), "utf8");
 
@@ -1641,7 +1678,9 @@ async function postJson(port, path, body, expectedStatus = 200) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
-  expect(response.status).toBe(expectedStatus);
+  expect({ status: response.status, payload: await response.clone().json() }).toMatchObject({
+    status: expectedStatus,
+  });
   return response.json();
 }
 

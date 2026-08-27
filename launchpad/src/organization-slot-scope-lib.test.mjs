@@ -4,6 +4,7 @@ import {
   isCanonicalOrganizationRepositorySlotPath,
   organizationRepositorySlotCollectionIssues,
   organizationSlotRepositoryId,
+  organizationSlotRepositoryAliasIssues,
   organizationSlotRepositoryMountIssue,
 } from "../../lazurio/core/organization-slot-scope-lib.mjs";
 
@@ -56,12 +57,16 @@ describe("case-preserving Organization repository mount paths", () => {
       path: "productionspace/Buddy_GEN2",
       git: { url: "git@github.com:HumanAndMachine-ai/Other.git" },
     })).toContain('"Buddy_GEN2" neodpovídá přesnému názvu GitHub repozitáře "Other"');
-    expect(organizationSlotRepositoryMountIssue({
+    const conflicting = {
       slug: "buddy-gen2",
       path: "productionspace/Buddy_GEN2",
       repo: "git@github.com:HumanAndMachine-ai/Other.git",
       git: { url: "git@github.com:HumanAndMachine-ai/Buddy_GEN2.git" },
-    })).toContain('"Buddy_GEN2" neodpovídá přesnému názvu GitHub repozitáře "Other"');
+    };
+    expect(organizationSlotRepositoryAliasIssues(conflicting)).toContainEqual(
+      expect.objectContaining({ code: "slot_remote_conflict" }),
+    );
+    expect(organizationSlotRepositoryMountIssue(conflicting)).toBeNull();
   });
 
   test("uses the explicit repository-db slug instead of the fixed db mount basename", () => {
