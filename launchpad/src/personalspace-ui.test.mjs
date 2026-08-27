@@ -81,7 +81,8 @@ test("personalspace.js renderuje Principálův prostor, český privacy badge a 
   expect(js).toContain("/api/personalspace/apps/");
   expect(js).toContain("function openPersonalApp");
   expect(js).toContain('/open`, { method: "POST" }');
-  expect(js).toContain("function writePersonalTabStatus");
+  expect(js).toContain('from "./reserved-tab-status.js"');
+  expect(js).toContain("writeReservedTabStatus(reservedTab");
   expect(js).toContain("function waitForPersonalRuntime");
   expect(js).toContain("/health");
   expect(js).toContain("Launchpad nedostal URL běžící osobní aplikace");

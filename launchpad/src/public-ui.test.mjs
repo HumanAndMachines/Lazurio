@@ -564,11 +564,13 @@ test("Version families render as one card with a default version and a more-menu
 });
 
 test("CAC-0044: karty jsou celé klikatelné a spouští one-click open s guardem", async () => {
-  const [html, js, css, recovery] = await Promise.all([
+  const [html, js, css, recovery, reservedTabStatus, personalspace] = await Promise.all([
     readFile(join(publicRoot, "index.html"), "utf8"),
     readFile(join(publicRoot, "app.js"), "utf8"),
     readFile(join(publicRoot, "styles.css"), "utf8"),
     readFile(join(publicRoot, "runtime-recovery.js"), "utf8"),
+    readFile(join(publicRoot, "reserved-tab-status.js"), "utf8"),
+    readFile(join(publicRoot, "personalspace.js"), "utf8"),
   ]);
 
   // Guard na vnitřní ovládací prvky + one-click open chain (port GEN2).
@@ -581,7 +583,11 @@ test("CAC-0044: karty jsou celé klikatelné a spouští one-click open s guarde
   // Rezervace tabu před akcí + průběh + klasifikace chyb.
   expect(js).toContain("function reserveResultTab");
   expect(js).toContain('window.open("about:blank"');
-  expect(js).toContain("function writeReservedTabStatus");
+  expect(js).toContain('from "./reserved-tab-status.js"');
+  expect(personalspace).toContain('from "./reserved-tab-status.js"');
+  expect(reservedTabStatus).toContain("function writeReservedTabStatus");
+  expect(reservedTabStatus).toContain("/vendor/lazurio/tokens.css");
+  expect(reservedTabStatus).toContain("/favicon.svg");
   expect(js).toContain("function waitForOpenRuntime");
   expect(js).toContain('payload.status === "starting"');
   expect(js).toContain("Launchpad nedostal URL běžící aplikace");

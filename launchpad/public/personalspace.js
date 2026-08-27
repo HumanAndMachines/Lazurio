@@ -18,6 +18,7 @@
 //   listování zápisů (strom, markdown render, fulltext) jako fallback.
 
 import { focusMenuTriggerAfterRender } from "./focus-restoration.js";
+import { writeReservedTabStatus } from "./reserved-tab-status.js";
 
 const state = {
   data: null,
@@ -1160,7 +1161,10 @@ async function openPersonalApp(app) {
   state.openingApps.add(app.id);
   state.openingMessages.set(app.id, "Otevírám");
   const reservedTab = reservePersonalTab(app);
-  writePersonalTabStatus(reservedTab, app, "Spouštím osobní aplikaci...");
+  writeReservedTabStatus(reservedTab, {
+    title: app.title,
+    message: "Spouštím osobní aplikaci...",
+  });
   rerender();
   try {
     const payload = await fetchJson(`/api/personalspace/apps/${encodeURIComponent(app.id)}/open`, { method: "POST" });
@@ -1210,45 +1214,15 @@ function reservePersonalTab(app) {
   return tab;
 }
 
-function writePersonalTabStatus(tab, app, message) {
-  if (!tab || tab.closed) return;
-  try {
-    tab.document.open();
-    tab.document.write(`<!doctype html>
-<html lang="cs">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Spouštím ${escapeHtml(app.title)}</title>
-  <style>
-    @import url("/fonts/fonts.css");
-    body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:"Inter Tight Variable","Inter Tight",Inter,system-ui,sans-serif;color:#090909;background:#fbfaf9}
-    main{max-width:28rem;padding:2rem;text-align:center}
-    .mark{width:3rem;height:3rem;margin:0 auto 1rem;border:1px solid #dddcdb;border-radius:0;background:#fbfaf9;color:#090909;display:grid;place-items:center;font-size:1.5rem}
-    h1{margin:0 0 .5rem;font-size:20px;line-height:1.3;font-weight:600;letter-spacing:-.02em}
-    p{margin:0;color:#707070;font-size:16.5px;line-height:1.6}
-  </style>
-</head>
-<body>
-  <main>
-    <div class="mark">↗</div>
-    <h1>${escapeHtml(message)}</h1>
-    <p>${escapeHtml(app.title)} se otevře v tomhle panelu, jakmile odpoví health endpoint.</p>
-  </main>
-</body>
-</html>`);
-    tab.document.close();
-  } catch {
-    // Reserved about:blank tab je best-effort.
-  }
-}
-
 async function waitForPersonalRuntime(app, reservedTab) {
   const deadline = Date.now() + PERSONAL_OPEN_STARTING_WAIT_MS;
   let lastRuntime = null;
   while (Date.now() < deadline) {
     state.openingMessages.set(app.id, "Aplikace ještě startuje");
-    writePersonalTabStatus(reservedTab, app, "Osobní aplikace ještě startuje...");
+    writeReservedTabStatus(reservedTab, {
+      title: app.title,
+      message: "Osobní aplikace ještě startuje...",
+    });
     rerender();
     await sleep(PERSONAL_OPEN_STARTING_POLL_MS);
     const runtime = await fetchJson(`/api/personalspace/apps/${encodeURIComponent(app.id)}/health`, { method: "POST" });
