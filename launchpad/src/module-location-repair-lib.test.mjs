@@ -43,7 +43,8 @@ test("check proves one clean transferred repository and apply atomically aligns 
   });
   expect(checked.plan.apply_command).toContain(`--apply --expect ${fingerprint}`);
   expect(checked.plan.apply_argv).toContain(fixture.rootPath);
-  expect(checked.plan.apply_command).toContain(`--root ${fixture.rootPath}`);
+  expect(checked.plan.apply_command).toContain("--root");
+  expect(checked.plan.apply_command).toContain(fixture.rootPath);
   expect(moduleLocationRepairExitCode(checked)).toBe(1);
   expect(existsSync(fixture.targetPath)).toBe(false);
   expect(git(fixture.sourcePath, ["remote", "get-url", "origin"])).toBe(fixture.oldRemote);

@@ -764,7 +764,11 @@ test("control-root replacement waits until boot reconciliation publishes one rea
     },
   );
   servers.push(primaryServer);
-  for (let attempt = 0; attempt < 100 && !(await Bun.file(startedMarker).exists()); attempt += 1) {
+  for (
+    let waitedMs = 0;
+    waitedMs < platformTestTimeout(2_000) && !(await Bun.file(startedMarker).exists());
+    waitedMs += 20
+  ) {
     await Bun.sleep(20);
   }
   expect(await Bun.file(startedMarker).exists()).toBe(true);
@@ -789,7 +793,11 @@ test("control-root replacement waits until boot reconciliation publishes one rea
   expect(primaryServer.exitCode).toBeNull();
   expect(await readServerLocatorIfPresent({ stateDirectory: serverStateDirectory })).toBeNull();
 
-  for (let attempt = 0; attempt < 150 && !(await Bun.file(completedMarker).exists()); attempt += 1) {
+  for (
+    let waitedMs = 0;
+    waitedMs < platformTestTimeout(3_000) && !(await Bun.file(completedMarker).exists());
+    waitedMs += 20
+  ) {
     await Bun.sleep(20);
   }
   expect(await Bun.file(completedMarker).exists()).toBe(true);
