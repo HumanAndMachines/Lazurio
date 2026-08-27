@@ -40,6 +40,11 @@ Volitelné opakované `--forbid-term <text>` dovoluje rollout gate doplnit
 jmenovité termy, které se nesmějí objevit v public artefaktu, aniž by je
 ukládalo do source nebo manifestu.
 
+Package-managed localhost CLI používá oddělený npm package kontrakt a stejný
+princip čistého exact Git tree. Běžný cross-platform gate nic nepublikuje;
+release-ready variantu a provider-native postup drží
+[npm CLI release runbook](../manual/npm-cli-release.md).
+
 ## Hranice manifestu
 
 `lazurio.resident.json` inventarizuje a hashuje každý immutable payload soubor.

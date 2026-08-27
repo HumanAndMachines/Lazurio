@@ -11,13 +11,17 @@ import {
   buildLazurioNpmPackage,
   packageEvidenceForReport,
 } from "./npm-package-lib.mjs";
+import {
+  parseNpmPackageGateArgs,
+  retainVerifiedNpmPackage,
+} from "./npm-package-gate-lib.mjs";
 import { canonicalLazurioRoot } from "../lazurio/core/install-core-lib.mjs";
 import {
   commitRemoteModule,
   createLazurioUpdateFixture,
 } from "../tests/lazurio-update-fixture.mjs";
 
-const options = parseArgs(Bun.argv.slice(2));
+const options = parseNpmPackageGateArgs(Bun.argv.slice(2));
 const repositoryRoot = resolve(import.meta.dirname, "..");
 const sourcePackage = JSON.parse(readFileSync(join(repositoryRoot, "package.json"), "utf8"));
 if (sourcePackage.private !== true) {
@@ -29,6 +33,7 @@ try {
   const build = await buildLazurioNpmPackage({
     cwd: repositoryRoot,
     outputRoot: temporaryRoot,
+    packageVersion: options.releaseVersion ?? undefined,
   });
   await assertUpdaterBundle(build.paths.staging_root);
   const smoke = await smokeInstalledArchive(build);
@@ -45,6 +50,14 @@ try {
     await mkdir(dirname(options.evidence), { recursive: true });
     await writeFile(options.evidence, `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
   }
+  if (options.archiveDirectory) {
+    const retained = await retainVerifiedNpmPackage({
+      build,
+      evidence,
+      archiveDirectory: options.archiveDirectory,
+    });
+    console.error(`ok - verified release candidate: ${retained.directory}`);
+  }
   console.log(JSON.stringify(evidence, null, 2));
 } finally {
   await rm(temporaryRoot, {
@@ -53,18 +66,6 @@ try {
     maxRetries: 3,
     retryDelay: 100,
   });
-}
-
-function parseArgs(argv) {
-  const parsed = { evidence: null };
-  for (let index = 0; index < argv.length; index += 1) {
-    if (argv[index] !== "--evidence" || !argv[index + 1]) {
-      throw new Error("usage: npm-package-gate.mjs [--evidence <path>]");
-    }
-    parsed.evidence = resolve(argv[index + 1]);
-    index += 1;
-  }
-  return parsed;
 }
 
 async function assertUpdaterBundle(stagingRoot) {
