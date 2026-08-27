@@ -48,6 +48,62 @@
       ],
       "resolved_at": "2026-07-24",
       "resolution": "Implementováno a mergnuto na founder greenlight 2026-07-24: Conglomerate PR #40 (standard, runbooky, skill, AGENTS.md, de-broker) a #43 (upřesnění konektorů — preference a zákaz zřizování, ne zákaz použití), OrganizationTemplate PR #24 (tracked katalog + mirror skillu) a #25 (tracked byte-for-byte mirror .claude/skills), PersonalspaceTemplate PR #5 (osobní scope). Follow-up QA fix indexového vynucení mirroru běží jako OrganizationTemplate PR #27. Zbylé follow-upy (HnM decision record, adopce ve Spectodě, org-side admin kroky) nese Mission Control plán CAC-0082."
+    },
+    {
+      "id": "issue-2026-08-07-002",
+      "title": "Zpevnit macOS Bun subprocess test gate pro GEN2 preservation",
+      "status": "resolved",
+      "severity": "high",
+      "owner": "Conglomerate root testing agent",
+      "created_at": "2026-08-07",
+      "updated_at": "2026-08-27",
+      "tags": [
+        "bun",
+        "macos",
+        "tests",
+        "subprocess",
+        "gen2-gen3",
+        "preservation",
+        "CAC-0035"
+      ],
+      "question": "Jak zajistit, aby explicitní root testovací operandy pod Bun 1.4.0 na macOS nespouštěly filter-mode scan vedoucí k `posix_spawn` EBADF?",
+      "impact": "Přímý `bun run check` z velkého Lazurio rootu selhával ještě před ověřením preservation a dalších subprocessových kontraktů, přestože jejich vlastní logika byla zdravá. Standardní lokální macOS gate proto nedával rozhodnutelný výsledek.",
+      "diagnosis": "Bun 1.4.0 chápal ne-rootovaný explicitní operand `bun test scripts/...` jako filtr a rekurzivně skenoval velký root. Na macOS tím ponechal dost otevřených directory file descriptorů, aby následný child `posix_spawn` selhal s EBADF. Stejný test s jednoznačnou root-relative cestou `./scripts/...` prošel a zachoval původní test discovery.",
+      "decision": "Explicitní souborové operandy root package skriptů `bun test` používají jednoznačné `./` cesty relativní ke skutečnému cwd. Stabilní terminology test tento invariant kontroluje, takže se filter-mode regresní cesta nemůže vrátit bez selhání běžného gate.",
+      "implementation": "Lazurio PR #195 zrootoval 55 dosud nejednoznačných operandů, zachoval dva už správně rootované operandy i `--cwd lazurio` semantiku a přidal regresní parserový kontrakt. PR byl rebase-mergem publikován jako main commit `ed409e748a83128d2c8bd4ea923817eb3ca3bdaf`.",
+      "acceptance_criteria": [
+        "Každý explicitní operand root package skriptů `bun test` je jednoznačná `./` cesta relativní k jeho skutečnému cwd; existující `--cwd lazurio` semantics zůstávají beze změny.",
+        "Stabilní existující root test obsahuje regresní kontrakt, který selže při přidání ne-rootovaného explicitního Bun test operandu.",
+        "Preservation, worktrees, runtime migration a agent-skills sady projdou na macOS s Bun 1.4.0 bez prázdného stdio nebo EBADF.",
+        "Celý `bun run check` projde na čistém exact HEADu a skutečný preservation verifier stále failuje zavřeně při identitním nebo datovém driftu."
+      ],
+      "verification": [
+        "PR #195 exact-head CI: Ubuntu, Windows, Guide, npm package gates a cross-OS parity green",
+        "Post-merge macOS Bun 1.4.0 `bun run check` na exact main `ed409e748a83128d2c8bd4ea923817eb3ca3bdaf`: 937 pass / 14 skip / 0 fail v Launchpad sadě",
+        "Rooted package-script kontrakt: všech 57 explicitních Bun test operandů jednoznačných",
+        "Preservation 34/34, worktrees 95/95, runtime migration 21/21 a agent-skills 32/32 green"
+      ],
+      "next_action": "Žádná další akce pro tento incident.",
+      "links": [
+        {
+          "label": "Publikovaný Lazurio PR #195",
+          "url": "https://github.com/HumanAndMachines/Lazurio/pull/195"
+        },
+        {
+          "label": "Current CI matrix",
+          "path": ".github/workflows/checks.yml"
+        },
+        {
+          "label": "GEN2 local preservation verifier",
+          "path": "scripts/gen2-local-preservation.mjs"
+        },
+        {
+          "label": "GEN2 to GEN3 sync inventory",
+          "path": "scripts/gen2-gen3-sync-inventory.mjs"
+        }
+      ],
+      "resolved_at": "2026-08-27",
+      "resolution": "Publikováno v Lazurio PR #195 a po merge ověřeno na přesném main commitu macOS Bun 1.4.0 gate. Root package skripty už nevstupují do Bun filter-mode skenu, regresní kontrakt chrání všechny explicitní operandy a původní preservation fail-closed chování zůstává aktivní."
     }
   ]
 }
