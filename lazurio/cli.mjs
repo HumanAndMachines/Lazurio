@@ -79,9 +79,7 @@ async function run(argv) {
   if (options.command === "install") {
     const codeRoot = cliCodeRoot();
     const provenance = buildLazurioCliProvenance({ root: codeRoot });
-    const root = provenance.root_kind === "source"
-      ? codeRoot
-      : canonicalLazurioRoot();
+    const root = operatedRootForCliProvenance({ codeRoot, provenance });
     const report = inspectLazurioInstallation({ root });
     const language = selectInstallLanguage({ requested: options.language });
     if (options.json) {
@@ -628,8 +626,14 @@ function cliCodeRoot() {
 function defaultOperatedRoot() {
   const codeRoot = cliCodeRoot();
   const provenance = buildLazurioCliProvenance({ root: codeRoot });
-  if (provenance.root_kind === "source") return codeRoot;
-  return canonicalLazurioRoot();
+  return operatedRootForCliProvenance({ codeRoot, provenance });
+}
+
+function operatedRootForCliProvenance({ codeRoot, provenance }) {
+  if (["package", "resident"].includes(provenance.root_kind)) {
+    return canonicalLazurioRoot();
+  }
+  return codeRoot;
 }
 
 function usage() {
