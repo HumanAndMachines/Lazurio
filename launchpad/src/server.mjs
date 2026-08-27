@@ -44,7 +44,7 @@ import {
 import { GbrainAccessError, gbrainFile, gbrainSearch, gbrainTree } from "../../lazurio/runtime/gbrain-lib.mjs";
 import { createGenerationSafeResponseCache } from "./apps-response-cache-lib.mjs";
 import { createServerShutdownStateAuthority } from "./server-shutdown-state-lib.mjs";
-import { LAZURIO_LAUNCHPAD_NAME } from "./launchpad-identity-lib.mjs";
+import { LAZURIO_LAUNCHPAD_NAME } from "../../lazurio/runtime/launchpad-identity-lib.mjs";
 import { readOrganizationLaunchpadTheme } from "./organization-theme-lib.mjs";
 import { ModuleFolderActionError, createModuleFolderOpener } from "./module-folder-lib.mjs";
 import {
@@ -60,7 +60,7 @@ import {
   safeGitCommandEnv,
 } from "../../lazurio/runtime/git-lib.mjs";
 import { createRequestTrustPolicy } from "./request-trust-lib.mjs";
-import { launchpadEntryHash, launchpadEntryUrl } from "../public/deep-link.js";
+import { launchpadEntryHash, launchpadEntryUrl } from "../../lazurio/runtime/deep-link-lib.mjs";
 import {
   assertAvailableAgentEntryOrganization,
   parseLaunchpadServerArgs,
@@ -627,6 +627,16 @@ async function buildMostUsedResponse(company = null) {
 }
 
 async function serveStatic(pathname) {
+  if (pathname === "/lazurio-runtime/deep-link-lib.mjs") {
+    const runtimeAsset = join(lazurioCodeRoot, "lazurio", "runtime", "deep-link-lib.mjs");
+    if (!existsSync(runtimeAsset)) return notFound();
+    return new Response(await readFile(runtimeAsset), {
+      headers: {
+        "content-type": contentType(runtimeAsset),
+        "cache-control": "no-store",
+      },
+    });
+  }
   const requestedPath = pathname === "/" ? "index.html" : pathname.slice(1);
   const absolutePath = resolve(publicRoot, requestedPath);
   const relativePath = relative(publicRoot, absolutePath);
@@ -689,7 +699,7 @@ function apiErrorResponse(error) {
 function contentType(path) {
   if (path.endsWith(".html")) return "text/html; charset=utf-8";
   if (path.endsWith(".css")) return "text/css; charset=utf-8";
-  if (path.endsWith(".js")) return "text/javascript; charset=utf-8";
+  if (path.endsWith(".js") || path.endsWith(".mjs")) return "text/javascript; charset=utf-8";
   if (path.endsWith(".json")) return "application/json; charset=utf-8";
   if (path.endsWith(".svg")) return "image/svg+xml";
   if (path.endsWith(".png")) return "image/png";

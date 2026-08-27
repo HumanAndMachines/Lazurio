@@ -1,13 +1,13 @@
 import { resolve } from "node:path";
 
-import { launchpadEntryHash } from "../launchpad/public/deep-link.js";
-import { launchLazurioLaunchpadServer } from "../launchpad/src/server-launcher-lib.mjs";
+import { launchpadEntryHash } from "./runtime/deep-link-lib.mjs";
+import { launchLazurioLaunchpadServer } from "./runtime/server-launcher-lib.mjs";
 
 export function buildLaunchpadServeInvocation({
   root,
   organization = null,
   personalspace = false,
-  codeRoot = resolve(import.meta.dirname, ".."),
+  codeRoot = root,
 } = {}) {
   if (typeof root !== "string" || root === "") {
     throw new TypeError("Lazurio Launchpad serve requires a Root path.");

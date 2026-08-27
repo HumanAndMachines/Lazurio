@@ -6,7 +6,7 @@ import {
   parseLaunchpadHash,
   personalspaceHash,
   resolveLaunchpadHash,
-} from "../public/deep-link.js";
+} from "../../lazurio/runtime/deep-link-lib.mjs";
 
 const companies = [
   { slug: "Macano-Tech", display_name: "Macano-Tech" },
