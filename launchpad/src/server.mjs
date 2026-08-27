@@ -1231,7 +1231,7 @@ function startServer(startPort) {
             return jsonResponse({ error: "agent_entry_refresh_forbidden" }, 403);
           }
           if (request.method !== "POST") return jsonResponse({ error: "method_not_allowed" }, 405);
-          const response = await buildAppsResponse({ force: true });
+          const { response } = await appsResponseCache.refreshPublished();
           return jsonResponse({
             schema_version: "lazurio.launchpad.agent_entry_inventory.v1",
             organizations: (response.organizations ?? []).map(({ slug }) => ({ slug })),
