@@ -229,37 +229,24 @@ Nepracuj v konkrétní firmě z rootu. Nejdřív vyber organizaci v `organizatio
 ## Chat-first vstup do Launchpadu pro App Agenty
 
 Když **Kolega přímo zahájí nový chat s Task Agentem v Codex/ChatGPT App nebo
-Claude App**, Agent po minimálním určení scope otevře jako svůj první viditelný
-pracovní krok Lazurio Launchpad ve vestavěném browser povrchu dané App. Otevření
-provede jednou pro nový chat/task, ne znovu při každé zprávě, a pokud už správná
-karta existuje, znovu ji použije. Launchpad je grafické rozhraní ke stejnému
-lokálnímu kontextu, který Agent čte a ve kterém Kolegovi pomáhá; produktový
-vstup pro Kolegu proto začíná v chatu, ne ručním hledáním URL.
+Claude App**, Agent po minimálním určení scope jednou pro nový chat/task spustí
+jako první viditelný pracovní krok právě jeden z těchto příkazů:
 
-Agent používá skutečný zdravý origin, který ohlásí `bun run launchpad:serve`
-spuštěný v Lazurio rootu. Tento agentní launcher zdravou existující
-instanci znovu použije nebo Launchpad spustí, ale nikdy sám neotevře systémový
-browser. Agent nesmí pro tento chat-first krok spouštět `bun run launchpad`,
-`Launchpad.command`, `launchpad.sh` ani jiný human launcher s OS openerem.
-Když launcher vrátí `LAZURIO_SERVER_STATE_PERMISSION_REQUIRED`, Agent vyžádá
-scoped zápis jen do přesně uvedené OS-standard Lazurio state cesty a tentýž
-příkaz zopakuje; nevytváří checkout-local locator ani náhradní Server autoritu.
-Ohlášený origin otevře výhradně browser capability dané App a port nikdy
-nehádá ani nehardcoduje. K originu připojí stabilní hash route:
+- Organizace: `lazurio launchpad serve --organization <přesný company.slug>`;
+- lokální Personalspace Principála: `lazurio launchpad serve --personalspace`;
+- nejasný nebo cross-organization scope: `lazurio launchpad serve` a nevymýšlej
+  scope ani nemíchej data Organizací.
 
-- Organizace: `/#/org/<URL-encoded company.slug>`;
-- lokální Personalspace Principála: `/#/personalspace` — URL nikdy nenese
-  username, jméno ani osobní obsah;
-- nejasný nebo skutečně cross-organization chat: kořen Launchpadu bez
-  vymyšleného scope; Agent nejdřív nechá Kolegu scope určit a nikdy nemíchá
-  data Organizací.
+Příkaz zdravou instanci znovu použije nebo Launchpad spustí a až po readiness
+vypíše `LAZURIO_LAUNCHPAD_URL=...`; port ani route nedopočítávej. Ohlášenou URL
+otevři nebo znovu použij výhradně ve vestavěném browseru dané App. Neotevírej
+systémový ani externí browser a nepoužívej human launchery. Při
+`LAZURIO_SERVER_STATE_PERMISSION_REQUIRED` vyžádej scoped zápis jen do uvedené
+OS-standard state cesty a tentýž příkaz zopakuj; nevytvářej druhý locator.
 
-Použij pouze browser capability, kterou App Agentovi skutečně poskytuje.
-Nesimuluj klávesové zkratky ani ovládání OS a při chybějícím vestavěném browseru
-potichu nepřepínej požadavek do externího Chrome/Safari; omezení stručně oznam
-Kolegovi a pokračuj v chatu. Toto pravidlo se **nevztahuje** na AI Kolegy ani
-Buddyho a neplatí pro CLI agenty, background automations, review boty a jiné
-neinteraktivní běhy bez přímého App chatu s Kolegou.
+Chybí-li vestavěný browser, omezení stručně oznam a pokračuj v chatu. Pravidlo
+neplatí pro AI Kolegy, Buddyho, CLI agenty ani jiné neinteraktivní běhy bez
+přímého App chatu s Kolegou.
 
 ## Agentní orientace před prací
 
