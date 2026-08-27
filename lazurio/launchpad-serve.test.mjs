@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 import {
   buildLaunchpadServeInvocation,
@@ -21,7 +21,7 @@ test("serve fasáda deleguje lifecycle Serveru přes --reuse, nikdy přes OS ope
 
   expect(exitCode).toBe(37);
   expect(captured).toEqual({
-    serverPath: "/runtime/lazurio/launchpad/src/server.mjs",
+    serverPath: resolve("/runtime/lazurio", "launchpad/src/server.mjs"),
     args: [
       "--reuse",
       "--root",
