@@ -999,14 +999,6 @@ function isLeafOnlyCaseDrift(declaredPath, observedPath) {
     && declared[1].toLowerCase() === observed[1].toLowerCase();
 }
 
-function sameCanonicalEntry(left, right) {
-  try {
-    return realpathSync(left) === realpathSync(right);
-  } catch {
-    return false;
-  }
-}
-
 export function declaredOrganizationTeamSlugs(companyConfig) {
   const canonical = Array.isArray(companyConfig?.teams) ? companyConfig.teams : null;
   const legacy = Array.isArray(companyConfig?.workspaces) ? companyConfig.workspaces : null;

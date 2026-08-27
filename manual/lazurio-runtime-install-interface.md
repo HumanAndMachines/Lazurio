@@ -110,6 +110,14 @@ jakýkoli počáteční scoped issue stejného stabilního modulu; case-only sta
 cesta se bezpečně sváže se skutečným contained entry a nečitelná známá cesta
 se nikdy neinterpretuje jako absence.
 
+Jediná compatibility výjimka odděluje in-place Git update od runtime a
+relokační autority: běžný Git checkout přesně na deklarované canonical cestě,
+kterému pouze chybí `lazurio.module.json`, zůstane v Git inventáři. Standardní
+origin/main/history/dirty guardy jej tak mohou fast-forwardnout na reviewovaný
+commit, který marker publikuje. Bez markeru se dál nespouští jako App a nesmí
+autorizovat přesun; markerless checkout na jiné cestě zůstává v karanténě a
+blokuje duplicitní clone.
+
 Rename/transfer oprava nepatří do obecného `Synchronizovat`. Agent spustí
 check-only `lazurio repair module-location --org <org> --module <slug>`, zkontroluje
 vrácený plán a teprve `--apply --expect <fingerprint>` dovolí CLI pod update
@@ -130,6 +138,12 @@ změnou `origin` i filesystem relokací. Root autorita zahrnuje i
 lokátory, GitHub owner a main se nesmějí rozcházet. Aktivní `governance` musí
 být objekt a explicitní `governance.access_authority` musí být přesně
 `github`; nepřítomné legacy pole se neinterpretuje jako druhá autorita.
+Nasazené Organization rooty používají přesné
+`organization_generation: "gen3"`; budoucí explicitní `schema_version` má
+přednost a musí odpovídat podporované verzi. V obou případech repair navíc
+vyžaduje právě jednu shodnou stable-slug deklaraci v obou publikovaných
+manifestech, takže compatibility vstup neoslabuje path, remote, owner ani
+branch důkaz.
 
 No-clone důkaz je odvozený z každého přímého Git checkoutu s neověřitelným
 markerem, ne pouze z adresáře shodného se stable slugem. Proto přežije čerstvý

@@ -69,6 +69,36 @@ test("clean behind checkout fast-forwards and rerun is idempotent", async () => 
   expect(second).toMatchObject({ state: "current", reason: "already_current" });
 });
 
+test("an exact markerless checkout fast-forwards to the reviewed commit that publishes its Module marker", async () => {
+  const fixture = await repositoryFixture("marker-publication");
+  await addRemoteFiles(fixture, {
+    "lazurio.module.json": `${JSON.stringify({
+      schema_version: "lazurio.module.v1",
+      id: "studio",
+      company: "TestCo",
+    }, null, 2)}\n`,
+  }, "publish Module marker");
+
+  const result = await updateManagedRepo({
+    ...descriptor(fixture),
+    key: "TestCo::studio",
+    repo_kind: "module",
+    organization: "TestCo",
+    module: "studio",
+    repo_path: "organizations/TestCo_GEN3/workspace/studio",
+  }, {
+    runId: "marker-publication",
+    deps: { installDependencies: async () => ({ ok: true }) },
+  });
+
+  expect(result).toMatchObject({ state: "updated", actions: expect.arrayContaining(["fast_forward"]) });
+  expect(await Bun.file(join(fixture.working, "lazurio.module.json")).json()).toEqual({
+    schema_version: "lazurio.module.v1",
+    id: "studio",
+    company: "TestCo",
+  });
+});
+
 test("dependency refresh runs only for an updated package root", async () => {
   const plain = await repositoryFixture("plain-no-install");
   await addRemoteCommit(plain, "remote.txt", "remote\n");

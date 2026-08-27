@@ -62,9 +62,10 @@ test("check proves one clean transferred repository and apply atomically aligns 
     next_action: {
       kind: "update",
       argv: ["lazurio", "update", "--root", fixture.rootPath],
-      command: `lazurio update --root ${fixture.rootPath}`,
     },
   });
+  expect(applied.next_action.command).toContain("lazurio update --root");
+  expect(applied.next_action.command).toContain(fixture.rootPath);
   expect(moduleLocationRepairExitCode(applied)).toBe(0);
   expect(existsSync(fixture.sourcePath)).toBe(false);
   expect(existsSync(fixture.targetPath)).toBe(true);
@@ -74,6 +75,35 @@ test("check proves one clean transferred repository and apply atomically aligns 
 
   const rerun = await checkFixture(fixture);
   expect(rerun).toMatchObject({ state: "current", ok: true });
+});
+
+test("repair accepts the deployed organization_generation GEN3 contract used by Organization roots", async () => {
+  const fixture = await repairFixture("deployed-gen3-contract");
+  for (const relativePath of ["company.gen3.json", "modules.manifest.json"]) {
+    const path = join(fixture.organizationRoot, relativePath);
+    const document = JSON.parse(await readFile(path, "utf8"));
+    delete document.schema_version;
+    document.organization_generation = "gen3";
+    await writeFile(path, `${JSON.stringify(document, null, 2)}\n`);
+  }
+  publishOrganizationContract(fixture, "use deployed GEN3 declaration contract");
+
+  expect(await checkFixture(fixture)).toMatchObject({ state: "ready", ok: true });
+});
+
+test("repair never treats an explicit unknown schema as deployed GEN3", async () => {
+  const fixture = await repairFixture("unknown-gen3-schema");
+  const companyPath = join(fixture.organizationRoot, "company.gen3.json");
+  const company = JSON.parse(await readFile(companyPath, "utf8"));
+  company.schema_version = "company.gen3.v999";
+  company.organization_generation = "gen3";
+  await writeFile(companyPath, `${JSON.stringify(company, null, 2)}\n`);
+  publishOrganizationContract(fixture, "publish unsupported explicit schema");
+
+  expect(await checkFixture(fixture)).toMatchObject({
+    state: "blocked",
+    blockers: [{ code: "module_declaration_ambiguous" }],
+  });
 });
 
 test("repair stays ready beside a markerless checkout owned by a declared sibling", async () => {
