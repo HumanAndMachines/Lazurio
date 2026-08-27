@@ -2,17 +2,17 @@ Lazurio install · stav této mašiny
 Tento první instalační řez pouze kontroluje a nic nemění.
 Výsledek: vyžaduje akci
 Mašina: darwin/arm64
-Lazurio Root: není zvolený
+Lazurio Root: "/Users/example/Lazurio"
 
 ✓ Platforma — podporovaná platforma
 ✓ Bun — Bun 1.4.0 odpovídá požadované verzi
 ✓ Git — Git je dostupný
 ! GitHub CLI — GitHub CLI nebylo nalezeno
 – Přihlášení ke GitHubu — bez GitHub CLI nelze přihlášení ověřit
-! Lazurio Root — je potřeba zvolit Lazurio Root
+! Lazurio Root — Lazurio Root je potřeba vygenerovat
 
 Co je potřeba udělat
 - Nainstaluj GitHub CLI (`gh`) standardním postupem pro svou platformu.
-- Spusť příkaz s `--root <cesta>`; pozdější interaktivní instalátor nabídne výběr.
+- Počkej na navazující instalační slice; tento read-only řez složku záměrně nemění.
 
 Příkaz můžeš spustit znovu kdykoli; vždy znovu odvodí aktuální stav.

@@ -267,7 +267,7 @@ export function packageContentForParity(evidence) {
   };
 }
 
-export function assertRootlessInstallBoundary({ report, exitStatus }) {
+export function assertCanonicalInstallBoundary({ report, exitStatus, canonicalRoot }) {
   if (!isValidLazurioInstallReport(report)) {
     throw new Error("installed lazurio install returned an invalid report");
   }
@@ -276,14 +276,12 @@ export function assertRootlessInstallBoundary({ report, exitStatus }) {
       `installed lazurio install exit ${exitStatus} does not match report status ${report.status}`,
     );
   }
-  const rootStep = report.steps.find((step) => step.id === "root");
   if (
-    report.root.selected !== false
-    || report.root.path !== null
-    || report.root.layout !== "not_selected"
-    || rootStep?.status !== "action_required"
-    || rootStep.reason !== "root_selection_required"
+    typeof canonicalRoot !== "string"
+    || canonicalRoot === ""
+    || report.root.selected !== true
+    || report.root.path !== canonicalRoot
   ) {
-    throw new Error(`installed package did not require an explicit Root: ${JSON.stringify(report)}`);
+    throw new Error(`installed package did not use the canonical home Root: ${JSON.stringify(report)}`);
   }
 }

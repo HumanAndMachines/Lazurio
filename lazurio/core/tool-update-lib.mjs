@@ -37,7 +37,7 @@ export const DEVELOPER_TOOL_DEFINITIONS = Object.freeze([
     id: "codex",
     title: "Codex CLI",
     executable: "codex",
-    required: false,
+    required: true,
     version_args: ["--version"],
     version_pattern: /codex-cli (\d+\.\d+\.\d+)/u,
     release_source: Object.freeze({
@@ -74,7 +74,7 @@ export async function inspectDeveloperToolUpdates({
   }));
 
   return Promise.all(installed.map(async (observation) => {
-    if (observation.status === "not_installed" || observation.status === "probe_failed") {
+    if (observation.status === "not_available" || observation.status === "probe_failed") {
       return observation;
     }
     let release;
@@ -126,8 +126,8 @@ function inspectInstalledVersion({ definition, resolveExecutable, runCommand }) 
       title: definition.title,
       required: definition.required,
       update_policy: DEVELOPER_TOOL_UPDATE_POLICY,
-      status: "not_installed",
-      reason: "executable_not_found",
+      status: "not_available",
+      reason: "executable_not_found_on_path",
       current_version: null,
       latest_version: null,
       release_url: null,

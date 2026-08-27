@@ -23,6 +23,7 @@ import {
   runModuleLifecycle,
 } from "./core/module-lifecycle-client-lib.mjs";
 import {
+  canonicalLazurioRoot,
   inspectLazurioInstallation,
   installExitCode,
 } from "./core/install-core-lib.mjs";
@@ -78,11 +79,9 @@ async function run(argv) {
   if (options.command === "install") {
     const codeRoot = cliCodeRoot();
     const provenance = buildLazurioCliProvenance({ root: codeRoot });
-    const root = options.rootExplicit
-      ? options.root
-      : provenance.root_kind === "package"
-        ? null
-        : codeRoot;
+    const root = provenance.root_kind === "source"
+      ? codeRoot
+      : canonicalLazurioRoot();
     const report = inspectLazurioInstallation({ root });
     const language = selectInstallLanguage({ requested: options.language });
     if (options.json) {
@@ -114,9 +113,7 @@ async function run(argv) {
     return moduleLifecycleExitCode(report);
   }
 
-  options.root ??= defaultOperatedRoot({
-    missingRootExitCode: options.command === "module" ? 3 : 1,
-  });
+  options.root ??= defaultOperatedRoot();
 
   if (options.command === "module") {
     const report = await setupModule({
@@ -580,6 +577,9 @@ function parseArgs(argv) {
   if (parsed.language !== null && parsed.command !== "install") {
     throw new Error("--language lze použít pouze s příkazem install.");
   }
+  if (parsed.command === "install" && parsed.rootExplicit) {
+    throw new Error("`lazurio install` používá vždy canonical Lazurio Root v domovské složce a nepřijímá --root.");
+  }
   if (parsed.check && parsed.command !== "organization") {
     throw new Error("--check lze použít pouze s `lazurio organization activate`.");
   }
@@ -625,15 +625,11 @@ function cliCodeRoot() {
   return realpathSync.native(fileURLToPath(new URL("..", import.meta.url)));
 }
 
-function defaultOperatedRoot({ missingRootExitCode = 1 } = {}) {
+function defaultOperatedRoot() {
   const codeRoot = cliCodeRoot();
   const provenance = buildLazurioCliProvenance({ root: codeRoot });
-  if (provenance.root_kind !== "package") return codeRoot;
-  const error = new Error(
-    "Toto package-managed Lazurio CLI zatím nemá zvolený Lazurio Root; použij --root <cesta>. Budoucí `lazurio install` tuto volbu uloží.",
-  );
-  error.lazurioExitCode = missingRootExitCode;
-  throw error;
+  if (provenance.root_kind === "source") return codeRoot;
+  return canonicalLazurioRoot();
 }
 
 function usage() {
@@ -642,7 +638,7 @@ function usage() {
     "",
     "Použití:",
     "  lazurio --version [--json]",
-    "  lazurio install [--language cs|en] [--json] [--root <cesta>]",
+    "  lazurio install [--language cs|en] [--json]",
     "  lazurio organization activate --check --github-id <id> [--json]",
     "  lazurio context [--organization <slug>] [--json] [--root <cesta>]",
     "  lazurio doctor [--tool-updates] [--json] [--root <cesta>]",

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import {
-  assertRootlessInstallBoundary,
+  assertCanonicalInstallBoundary,
   packageContentForParity,
   packageEvidenceForReport,
 } from "./npm-package-lib.mjs";
@@ -120,44 +120,53 @@ test("content parity ignores OS-specific npm archive encoding and stat mode", ()
   expect(packageContentForParity(linux)).toEqual(packageContentForParity(windows));
 });
 
-test("package smoke keeps Root selection deterministic across host prerequisite states", () => {
+test("package smoke keeps canonical home Root deterministic across host prerequisite states", () => {
   const actionRequired = inspectLazurioInstallation({
     root: null,
     platform: "linux",
     architecture: "x64",
     bunVersion: "1.4.0",
+    environment: { HOME: "/home/example" },
+    homeDirectory: "/home/example",
     resolveGit: () => null,
     resolveGitHubCli: () => null,
+    inspectRoot: missingRootObservation,
   });
   const failedHostProbe = inspectLazurioInstallation({
     root: null,
     platform: "win32",
     architecture: "x64",
     bunVersion: "1.4.0",
+    environment: { USERPROFILE: "C:\\Users\\Example", SystemRoot: "C:\\Windows" },
+    homeDirectory: "C:\\Users\\Example",
     resolveGit: () => "C:\\Program Files\\Git\\cmd\\git.exe",
     resolveGitHubCli: () => "C:\\Program Files\\GitHub CLI\\gh.exe",
     runCommand: ({ executable }) => ({
       status: executable.endsWith("gh.exe") ? 1 : 0,
     }),
+    inspectRoot: missingRootObservation,
   });
 
   expect(actionRequired.status).toBe("action_required");
   expect(failedHostProbe.status).toBe("failed");
-  expect(() => assertRootlessInstallBoundary({
+  expect(() => assertCanonicalInstallBoundary({
     report: actionRequired,
     exitStatus: installExitCode(actionRequired),
+    canonicalRoot: "/home/example/Lazurio",
   })).not.toThrow();
-  expect(() => assertRootlessInstallBoundary({
+  expect(() => assertCanonicalInstallBoundary({
     report: failedHostProbe,
     exitStatus: installExitCode(failedHostProbe),
+    canonicalRoot: "C:\\Users\\Example\\Lazurio",
   })).not.toThrow();
-  expect(() => assertRootlessInstallBoundary({
+  expect(() => assertCanonicalInstallBoundary({
     report: failedHostProbe,
     exitStatus: 1,
+    canonicalRoot: "C:\\Users\\Example\\Lazurio",
   })).toThrow("does not match report status failed");
 });
 
-test("package smoke rejects a selected Root", () => {
+test("package smoke rejects a non-canonical Root", () => {
   const report = inspectLazurioInstallation({
     root: "/fixture/root",
     platform: "linux",
@@ -173,8 +182,18 @@ test("package smoke rejects a selected Root", () => {
     }),
   });
 
-  expect(() => assertRootlessInstallBoundary({
+  expect(() => assertCanonicalInstallBoundary({
     report,
     exitStatus: installExitCode(report),
-  })).toThrow("did not require an explicit Root");
+    canonicalRoot: "/home/example/Lazurio",
+  })).toThrow("did not use the canonical home Root");
 });
+
+function missingRootObservation(path) {
+  return {
+    path,
+    layout: "missing",
+    status: "action_required",
+    reason: "root_creation_required",
+  };
+}

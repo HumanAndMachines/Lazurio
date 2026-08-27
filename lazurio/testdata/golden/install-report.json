@@ -12,9 +12,9 @@
     }
   },
   "root": {
-    "selected": false,
-    "path": null,
-    "layout": "not_selected"
+    "selected": true,
+    "path": "/Users/example/Lazurio",
+    "layout": "missing"
   },
   "steps": [
     {
@@ -45,7 +45,7 @@
     {
       "id": "root",
       "status": "action_required",
-      "reason": "root_selection_required"
+      "reason": "root_creation_required"
     }
   ],
   "summary": {

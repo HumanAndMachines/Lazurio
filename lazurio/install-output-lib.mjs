@@ -37,7 +37,7 @@ export function renderHumanInstallReport(report, { language = "cs" } = {}) {
     catalog["report.read_only"],
     `${catalog["report.status"]}: ${catalog[`status.${report.status}`]}`,
     `${catalog["report.machine"]}: ${report.machine.platform}/${report.machine.architecture}`,
-    `${catalog["report.root"]}: ${report.root.selected ? printablePath(report.root.path) : catalog["root.not_selected"]}`,
+    `${catalog["report.root"]}: ${printablePath(report.root.path)}`,
     "",
   ];
 
@@ -75,7 +75,6 @@ export function installCatalogIssues() {
     "report.root",
     "report.next_actions",
     "report.footer",
-    "root.not_selected",
     ...INSTALL_STEP_IDS.map((id) => `step.${id}`),
     ...INSTALL_STEP_STATUSES.map((status) => `status.${status}`),
     ...installReasonCodes().map((reason) => `reason.${reason}`),

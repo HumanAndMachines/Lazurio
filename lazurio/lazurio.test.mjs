@@ -27,6 +27,22 @@ afterAll(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })));
 });
 
+test("top-level install rejects a selectable Root", () => {
+  const result = run([
+    process.execPath,
+    "run",
+    cliPath,
+    "install",
+    "--root",
+    "/tmp/alternative-lazurio-root",
+  ], import.meta.dirname);
+
+  expect(result.exitCode).toBe(2);
+  expect(result.stdout).toBe("");
+  expect(result.stderr).toContain("canonical Lazurio Root");
+  expect(result.stderr).toContain("nepřijímá --root");
+});
+
 test("rootless context je deterministický allowlist bez Residentova obsahu", async () => {
   const root = await tempRoot("lazurio-personalspace-");
   await writeJson(join(root, "personal.gen3.json"), personalConfig("owner-login", {

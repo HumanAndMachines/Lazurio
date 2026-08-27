@@ -8,7 +8,11 @@ nesmí pocházet z Git checkoutu, který má update změnit.
 - `LAZURIO_RUNTIME_ROOT` je read-only, non-Git obsah exact-digest Lazurio
   artefaktu. Hosted doporučená cesta je `/opt/lazurio-runtime`.
 - `WORKSPACE_ROOT` je mutable pracovní Lazurio checkout. Hosted doporučená
-  cesta je `/home/builder/Lazurio`; na běžné mašině je to lokální Lazurio Root.
+  cesta je `/home/builder/Lazurio`; na běžné mašině je produkční Root vždy
+  přesně `<home>/Lazurio` (`~/Lazurio` na macOS/Linuxu,
+  `%USERPROFILE%\Lazurio` na Windows). Picker ani persisted root selection
+  nevzniká. Source-linked development CLI je vědomá výjimka a používá svůj
+  ověřený source checkout.
 
 Runtime verze se odvozuje z `lazurio.resident.json` a identity instalovaného
 artefaktu. Stav working rootu se odvozuje samostatně z Gitu. Checkout HEAD se
@@ -61,7 +65,8 @@ protože jejich upgrade a rollback patří vlastnímu artefaktovému lifecycle.
 Troubleshooting vývojové mašiny používá explicitní
 `lazurio doctor --tool-updates`. Běžný Doctor tím nezískává skrytou síťovou
 závislost: teprve přepínač načte oficiální stabilní release metadata pro Git,
-GitHub CLI a skutečně nainstalované Codex CLI / Claude Code. Výsledek je pouze
+GitHub CLI, Codex dostupný v `PATH` a volitelně nainstalovaný Claude Code.
+Nedostupný Codex je warning; chybějící Claude je neutrální. Výsledek je pouze
 advisory. `update_available` instruuje Agenta, aby požádal Principála o souhlas;
 samotný Doctor nikdy nespouští updater ani package manager. Neověřitelná
 aktuálnost zůstává `warn`, ne falešné `ok`. Bun do obecného latest-release
