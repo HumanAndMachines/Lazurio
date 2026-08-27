@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, readFile, writeFile } from "fs/promises";
 import { tmpdir } from "os";
-import { dirname, join } from "path";
+import { basename, dirname, join } from "path";
 
 export async function createLaunchpadGitFixture() {
   const root = await mkdtemp(join(tmpdir(), "launchpad-git-fixture-"));
@@ -40,6 +40,7 @@ export async function createLaunchpadGitFixture() {
         path: "workspace/future-module",
         workspace: "workspace",
         category: "planned",
+        status: "planned",
       },
     ],
   });
@@ -66,6 +67,7 @@ export async function createLaunchpadGitFixture() {
         path: "workspace/brainstorm",
         workspace: "workspace",
         category: "planned",
+        status: "planned",
       },
     ],
   });
@@ -82,6 +84,12 @@ export async function createOrganization({ root, orgPath, slug, moduleSlots }) {
     organization_generation: "gen3",
     company: { slug, display_name: `${slug} GEN3`, github_org: slug },
     workspaces: [{ slug: "workspace", display_name: `${slug} Workspace`, default: true }],
+    teams: [
+      { slug: "workspace", display_name: `${slug} Workspace`, default: true },
+      { slug: "sales", display_name: "Sales" },
+      { slug: "knowledge", display_name: "Knowledge" },
+      { slug: "lazurio", display_name: "Lazurio" },
+    ],
   });
   await writeJson(join(orgRoot, "modules.manifest.json"), {
     organization_generation: "gen3",
@@ -117,11 +125,12 @@ export async function createPackageApp({ root, packagePath, app }) {
 
 export async function initGitRepo(path, { branch = "main", remotePath = null } = {}) {
   await mkdir(path, { recursive: true });
+  const moduleMarkerPath = await ensureCanonicalFixtureModuleMarker(path);
   runGit(["init", "-b", branch], path);
   runGit(["config", "user.email", "fixture@example.com"], path);
   runGit(["config", "user.name", "Fixture"], path);
   await writeFile(join(path, "README.md"), `# ${branch}\n`);
-  runGit(["add", "README.md"], path);
+  runGit(["add", "README.md", ...(moduleMarkerPath ? ["lazurio.module.json"] : [])], path);
   runGit(["commit", "-m", "initial"], path);
   if (remotePath) {
     await mkdir(dirname(remotePath), { recursive: true });
@@ -129,6 +138,43 @@ export async function initGitRepo(path, { branch = "main", remotePath = null } =
     runGit(["remote", "add", "origin", remotePath], path);
     runGit(["push", "-u", "origin", branch], path);
   }
+}
+
+async function ensureCanonicalFixtureModuleMarker(path) {
+  const container = basename(dirname(path));
+  if (!new Set(["workspace", "modules"]).has(container)) return null;
+  const organizationRoot = dirname(dirname(path));
+  let companyConfig;
+  let manifest;
+  try {
+    [companyConfig, manifest] = await Promise.all([
+      readFile(join(organizationRoot, "company.gen3.json"), "utf8").then(JSON.parse),
+      readFile(join(organizationRoot, "modules.manifest.json"), "utf8").then(JSON.parse),
+    ]);
+  } catch {
+    return null;
+  }
+  const relativePath = `${container}/${basename(path)}`;
+  const declarations = [
+    ...(Array.isArray(manifest?.module_slots) ? manifest.module_slots : []),
+    ...(Array.isArray(companyConfig?.modules) ? companyConfig.modules : []),
+  ];
+  const slot = declarations.find((candidate) => candidate?.path === relativePath);
+  const company = companyConfig?.company?.slug;
+  const id = slot?.slug ?? basename(path);
+  if (typeof company !== "string" || typeof id !== "string") return null;
+  const markerPath = join(path, "lazurio.module.json");
+  try {
+    await readFile(markerPath, "utf8");
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+    await writeJson(markerPath, {
+      schema_version: "lazurio.module.v1",
+      id,
+      company,
+    });
+  }
+  return markerPath;
 }
 
 export async function writeJson(path, value) {

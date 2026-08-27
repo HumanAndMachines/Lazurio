@@ -39,7 +39,9 @@ import {
   organizationSlotCatalogPresentation,
   organizationSlotPathScope,
   organizationSlotProjectsToLocalMachine,
+  organizationSlotRepositoryBranch,
   organizationSlotRepositoryId,
+  organizationSlotRepositoryRemote,
   organizationSlotScope,
   organizationSlotTeams,
   organizationSlotWorkspace,
@@ -968,6 +970,19 @@ async function readOrganizationSpaces(
   localConfig = null,
   organizationIssues = [],
 ) {
+  const organizationReadinessBlockers = organizationIssues
+    .filter((issue) => issue.scope === "organization")
+    .map((issue) => ({
+      slug: organization.slug,
+      path: issue.path ?? organization.path,
+      status: issue.status ?? "quarantined",
+      scope: "organization",
+      message: issue.message,
+      reason: issue.code ?? "organization_contract_invalid",
+      found_path: issue.path ?? null,
+      expected_path: issue.expected_path ?? null,
+      next_action: issue.next_action ?? null,
+    }));
   const empty = {
     organization_modules: [],
     teams: [],
@@ -975,7 +990,16 @@ async function readOrganizationSpaces(
     productionspace: null,
     team_access: unevaluatedTeamAccess(),
     module_declarations: [],
+    space_readiness: { blocking_slots: organizationReadinessBlockers },
   };
+  const invalidatesSubordinateProjection = organizationIssues.some((issue) =>
+    issue.scope === "organization" && issue.blocks_subordinate_projection === true
+  );
+  // Organization-fatal identity/boundary/config issue means its manifest is
+  // not a trustworthy owner for subordinate slot state. Keep exactly the
+  // scoped Organization blocker; do not manufacture additional missing-access
+  // tiles from the same rejected declaration.
+  if (invalidatesSubordinateProjection) return empty;
   if (organization.status === "planned" || !organization.path) return empty;
   const configPath = join(companiesRoot, organization.path, "company.gen3.json");
   if (!existsSync(configPath)) return empty;
@@ -1040,9 +1064,44 @@ async function readOrganizationSpaces(
   // UI copy. Materializovaný checkout je poslední známý offline stav této
   // mašiny a bez TTL zůstává viditelný; úspěšný online sync chybějící checkout
   // nejdřív materializuje a tím jej v dalším readu přirozeně zpřístupní.
-  const projectedModuleDeclarations = moduleDeclarations.filter(
-    organizationSlotProjectsToLocalMachine,
+  const projectedModuleDeclarations = moduleDeclarations.filter((slot) =>
+    organizationSlotProjectsToLocalMachine(slot, {
+      // A quarantined rename/transfer slot is still materialized on this
+      // machine, only at its observed legacy path. Keep that one tile and its
+      // blocker visible even for role-based modules; hiding it would make the
+      // organization summary falsely green while the checkout still exists.
+      materialized: moduleSlotIsMaterializedHere(organizationRoot, slot),
+    })
   );
+  const attachedProjectedIssues = new Set(
+    projectedModuleDeclarations
+      .map((slot) => slot.repository_issue)
+      .filter(Boolean),
+  );
+  const rawModuleDeclarations = [...manifestSlots, ...companyModules];
+  const slotIssueReadinessBlockers = organizationIssues
+    .filter((issue) => issue.scope === "module_slot" && !attachedProjectedIssues.has(issue))
+    .flatMap((issue) => {
+      const matchingSlots = rawDeclarationsForIssue(rawModuleDeclarations, issue);
+      if (matchingSlots.length === 0) return [];
+      const materialized = issueIsMaterializedHere(organizationRoot, issue, matchingSlots);
+      // Multiple declarations for one issue are privacy-sensitive ambiguity:
+      // every candidate must independently project to this machine.
+      if (!matchingSlots.every((slot) =>
+        organizationSlotProjectsToLocalMachine(slot, { materialized })
+      )) return [];
+      return [{
+        slug: issue.module ?? issue.path ?? "invalid-slot",
+        path: issue.path ?? null,
+        status: issue.status ?? "quarantined",
+        scope: "module_slot",
+        message: issue.message,
+        reason: issue.code ?? "module_slot_invalid",
+        found_path: issue.path ?? null,
+        expected_path: issue.expected_path ?? null,
+        next_action: issue.next_action ?? null,
+      }];
+    });
   // Vnořený child slot i explicitní repository-db slot jsou technické mounty
   // pro Doctor/search/publish flow, ne samostatné Launchpad module dlaždice.
   // Diagnostics-only klasifikace je záměrně nezávislá na přítomnosti parent
@@ -1109,17 +1168,23 @@ async function readOrganizationSpaces(
     team_access: unevaluatedTeamAccess(),
     module_declarations: moduleDeclarations,
     space_readiness: {
-      blocking_slots: projectedModuleDeclarations
-        .filter((slot) => slot.readiness?.severity === "blocking")
-        .map((slot) => ({
-          slug: slot.slug,
-          path: slot.path,
-          status: slot.status,
-          message: slot.readiness.message,
-          reason: slot.readiness.reason,
-          expected_path: slot.repository_issue?.expected_path ?? null,
-          next_action: slot.readiness.next_action ?? null,
-        })),
+      blocking_slots: deduplicateReadinessBlockers([
+        ...organizationReadinessBlockers,
+        ...projectedModuleDeclarations
+          .filter((slot) => slot.readiness?.severity === "blocking")
+          .map((slot) => ({
+            slug: slot.slug,
+            path: slot.path,
+            status: slot.status,
+            scope: "module_slot",
+            message: slot.readiness.message,
+            reason: slot.readiness.reason,
+            found_path: slot.repository_issue?.path ?? null,
+            expected_path: slot.repository_issue?.expected_path ?? null,
+            next_action: slot.readiness.next_action ?? null,
+          })),
+        ...slotIssueReadinessBlockers,
+      ]),
     },
     workspace_conformance_issues: workspaceConformanceIssues({
       declared,
@@ -1134,6 +1199,52 @@ async function readOrganizationSpaces(
     ),
     slot_scope_contract_issues: slotScopeContractIssues(manifest, config),
   };
+}
+
+function deduplicateReadinessBlockers(blockers) {
+  const unique = new Map();
+  for (const blocker of blockers) {
+    const key = [
+      blocker.scope,
+      blocker.scope === "module_slot" ? blocker.slug ?? blocker.path : blocker.path ?? blocker.slug,
+      blocker.reason,
+    ].join("\0");
+    if (!unique.has(key)) unique.set(key, blocker);
+  }
+  return [...unique.values()];
+}
+
+function moduleSlotIsMaterializedHere(organizationRoot, slot) {
+  if (slot?.status === "available") return true;
+  if (slot?.status !== "quarantined") return false;
+  return issueIsMaterializedHere(organizationRoot, slot?.repository_issue, [slot]);
+}
+
+function rawDeclarationsForIssue(rawSlots, issue) {
+  const normalizedIssuePath = normalizeOrganizationSlotPath(issue?.path);
+  const exact = rawSlots.filter((slot) =>
+    normalizedIssuePath
+    && normalizeOrganizationSlotPath(slot?.path) === normalizedIssuePath
+  );
+  if (exact.length > 0) return exact;
+  if (typeof issue?.module !== "string") return [];
+  return rawSlots.filter((slot) => {
+    const path = normalizeOrganizationSlotPath(slot?.path);
+    return path && organizationSlotRepositoryId(slot, path) === issue.module;
+  });
+}
+
+function issueIsMaterializedHere(organizationRoot, issue, matchingSlots = []) {
+  const candidatePaths = [
+    issue?.path,
+    ...(Array.isArray(issue?.observed_paths) ? issue.observed_paths : []),
+    ...matchingSlots.map((slot) => slot?.path),
+  ];
+  return [...new Set(candidatePaths.filter((path) => typeof path === "string"))]
+    .some((path) =>
+      organizationRelativePathIssue({ organizationRoot, path }) === null
+      && existsSync(join(organizationRoot, path))
+    );
 }
 
 function ambiguousOrganizationRepositorySlots(manifestSlots, companyModules) {
@@ -1674,10 +1785,8 @@ function normalizeModuleSlot(slot) {
   const launchpadSection = slot.launchpad_section === "organization" ? "organization" : null;
   const catalogPresentation = organizationSlotCatalogPresentation(slot, path);
   if (space !== "root" && !workspace) return null;
-  const repo =
-    space === "root" ? slot.git?.url ?? null : slot.repo ?? slot.git?.url ?? null;
-  const branch =
-    space === "root" ? slot.git?.branch ?? null : slot.branch ?? slot.git?.branch ?? null;
+  const repo = organizationSlotRepositoryRemote(slot, path);
+  const branch = organizationSlotRepositoryBranch(slot, path);
   return {
     slug,
     name: slot.name ?? humanizeSlug(

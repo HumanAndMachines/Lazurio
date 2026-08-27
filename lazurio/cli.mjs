@@ -32,6 +32,11 @@ import {
 } from "./install-output-lib.mjs";
 import { runLaunchpadInstall } from "./launchpad-install-lib.mjs";
 import {
+  moduleLocationRepairExitCode,
+  renderHumanModuleLocationRepair,
+  runModuleLocationRepair,
+} from "../launchpad/src/module-location-repair-lib.mjs";
+import {
   moduleSetupExitCode,
   renderHumanModuleSetup,
   setupModule,
@@ -130,6 +135,20 @@ async function run(argv) {
     });
     console.log(options.json ? JSON.stringify(report, null, 2) : renderHumanModuleSetup(report));
     return moduleSetupExitCode(report);
+  }
+
+  if (options.command === "repair") {
+    const report = await runModuleLocationRepair({
+      rootPath: options.root,
+      organizationSlug: options.repairOrganization,
+      moduleSlug: options.repairModule,
+      apply: options.apply,
+      expectedFingerprint: options.expectedFingerprint,
+    });
+    console.log(options.json
+      ? JSON.stringify(report, null, 2)
+      : renderHumanModuleLocationRepair(report));
+    return moduleLocationRepairExitCode(report);
   }
 
   if (options.command === "context") {
@@ -236,6 +255,7 @@ function parseArgs(argv) {
     check: false,
     githubOrganizationId: null,
     apply: false,
+    applyPresent: false,
     noApp: false,
     appPackage: null,
     appId: null,
@@ -246,6 +266,9 @@ function parseArgs(argv) {
     tags: [],
     adoptPort: null,
     confirmReplaceAppId: null,
+    repairOrganization: null,
+    repairModule: null,
+    expectedFingerprint: null,
     moduleFlags: new Set(),
     operands: [],
     searchFlags: new Set(),
@@ -256,7 +279,7 @@ function parseArgs(argv) {
       parsed.command = arg;
       continue;
     }
-    if (["search", "launchpad", "cli", "organization", "module"].includes(parsed.command) && !arg.startsWith("-")) {
+    if (["search", "launchpad", "cli", "organization", "module", "repair"].includes(parsed.command) && !arg.startsWith("-")) {
       parsed.operands.push(arg);
       continue;
     }
@@ -282,9 +305,26 @@ function parseArgs(argv) {
       continue;
     }
     if (arg === "--apply" || arg === "--no-app") {
-      if (arg === "--apply") parsed.apply = true;
-      else parsed.noApp = true;
-      parsed.moduleFlags.add(arg);
+      if (arg === "--apply") {
+        parsed.apply = true;
+        parsed.applyPresent = true;
+      } else {
+        parsed.noApp = true;
+        parsed.moduleFlags.add(arg);
+      }
+      continue;
+    }
+    if (["--org", "--module", "--expect"].includes(arg)) {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("-")) throw new Error(`${arg} vyžaduje hodnotu.`);
+      assignRepairOption(parsed, arg, value);
+      index += 1;
+      continue;
+    }
+    const inlineRepairFlag = ["--org", "--module", "--expect"]
+      .find((name) => arg.startsWith(`${name}=`));
+    if (inlineRepairFlag) {
+      assignRepairOption(parsed, inlineRepairFlag, requiredInlineValue(arg, inlineRepairFlag));
       continue;
     }
     if (["--app-package", "--app-id", "--title", "--dev-script", "--health-path", "--surface", "--tags", "--adopt-port", "--confirm-replace"].includes(arg)) {
@@ -441,6 +481,7 @@ function parseArgs(argv) {
       }
       parsed.moduleSelector = parsed.operands[1] ?? null;
       const setupOnlyFlags = [...parsed.moduleFlags].filter((flag) => flag !== "--app-package");
+      if (parsed.applyPresent) setupOnlyFlags.push("--apply");
       if (setupOnlyFlags.length > 0) {
         throw new Error(`${setupOnlyFlags.join(", ")} lze použít pouze s \`lazurio module setup\`.`);
       }
@@ -451,6 +492,23 @@ function parseArgs(argv) {
         throw new Error("--confirm-replace lze použít pouze s module start nebo module open.");
       }
     }
+  } else if (parsed.command === "repair") {
+    if (parsed.searchFlags.size > 0) {
+      throw new Error(`${[...parsed.searchFlags].join(", ")} lze použít pouze s příkazem search.`);
+    }
+    if ((!parsed.help && parsed.operands.length !== 1) || parsed.operands[0] !== "module-location") {
+      throw new Error("repair vyžaduje jedinou akci `module-location`.");
+    }
+    if (!parsed.help && (!parsed.repairOrganization || !parsed.repairModule)) {
+      throw new Error("repair module-location vyžaduje --org <slug> a --module <slug>.");
+    }
+    if (parsed.apply && !parsed.expectedFingerprint) {
+      throw new Error("--apply vyžaduje fingerprint z check-only kroku přes --expect <fingerprint>.");
+    }
+    if (!parsed.apply && parsed.expectedFingerprint) {
+      throw new Error("--expect lze použít pouze společně s --apply.");
+    }
+    parsed.repairAction = "module-location";
   } else if (parsed.command === "launchpad") {
     if (parsed.searchFlags.size > 0) {
       throw new Error(`${[...parsed.searchFlags].join(", ")} lze použít pouze s příkazem search.`);
@@ -496,6 +554,15 @@ function parseArgs(argv) {
   if (parsed.moduleFlags.size > 0 && parsed.command !== "module") {
     throw new Error(`${[...parsed.moduleFlags].join(", ")} lze použít pouze s příkazem \`lazurio module\`.`);
   }
+  if (parsed.applyPresent && !new Set(["module", "repair"]).has(parsed.command)) {
+    throw new Error("--apply lze použít pouze s module setup nebo repair module-location.");
+  }
+  if (
+    (parsed.repairOrganization !== null || parsed.repairModule !== null || parsed.expectedFingerprint !== null)
+    && parsed.command !== "repair"
+  ) {
+    throw new Error("--org, --module a --expect lze použít pouze s repair module-location.");
+  }
   if (parsed.confirmReplaceAppId !== null && parsed.command !== "module") {
     throw new Error("--confirm-replace lze použít pouze s module start nebo module open.");
   }
@@ -537,6 +604,12 @@ function assignModuleOption(parsed, name, value) {
   if (name === "--adopt-port") parsed.adoptPort = Number(value);
 }
 
+function assignRepairOption(parsed, name, value) {
+  if (name === "--org") parsed.repairOrganization = value;
+  if (name === "--module") parsed.repairModule = value;
+  if (name === "--expect") parsed.expectedFingerprint = value;
+}
+
 function cliCodeRoot() {
   return realpathSync.native(fileURLToPath(new URL("..", import.meta.url)));
 }
@@ -563,6 +636,8 @@ function usage() {
     "  lazurio context [--organization <slug>] [--json] [--root <cesta>]",
     "  lazurio doctor [--json] [--root <cesta>]",
     "  lazurio update [--json] [--root <cesta>]",
+    "  lazurio repair module-location --org <slug> --module <slug> [--json] [--root <cesta>]",
+    "  lazurio repair module-location --org <slug> --module <slug> --apply --expect <fingerprint> [--json] [--root <cesta>]",
     "  lazurio module setup <module-root> [--apply] [--json] [--root <cesta>]",
     "    nový no-app Module: --no-app",
     "    nová App: --app-package <package.json> --app-id <id> --title <název> --dev-script <script>",

@@ -99,6 +99,54 @@ oddělené operace:
 3. Productionspace, Personalspace, worktrees a root-space repository-db
    zůstávají mimo obecný update engine.
 
+Nevalidní Organization nebo module slot není totéž co nedostupný inventář.
+Engine vrací strukturovaný scoped issue, vadný slot vyřadí z discovery i Git
+akcí a pokračuje se zdravými Organizacemi a moduly. Po změně Organization
+manifestu navíc před materializací hledá přes stabilní `lazurio.module.json`
+identitu starý checkout: jedna shoda se stane karanténou s Agent repair akcí,
+více shod nebo současná stará a cílová cesta je ambiguity. Ani jeden stav
+nesmí vytvořit duplicitní clone. Stejný přechodový no-clone guard zachová
+jakýkoli počáteční scoped issue stejného stabilního modulu; case-only stará
+cesta se bezpečně sváže se skutečným contained entry a nečitelná známá cesta
+se nikdy neinterpretuje jako absence.
+
+Rename/transfer oprava nepatří do obecného `Synchronizovat`. Agent spustí
+check-only `lazurio repair module-location --org <org> --module <slug>`, zkontroluje
+vrácený plán a teprve `--apply --expect <fingerprint>` dovolí CLI pod update
+lockem změnit origin a parent directory. Nejasné identity a Git práce zůstávají
+Agentovu úsudku; bezpečnou mechaniku, readback a rollback vlastní CLI. Úspěch
+dokončí další idempotentní `lazurio update`.
+
+Repair plán přijímá oba Organization manifesty jako mutační autoritu jen z
+Organization rootu, který je samostatný clean `main` s přesnou shodou `HEAD`,
+lokálního `main` a cached `origin/main`. Právě jeden root `origin` musí
+odpovídat canonical repository a `company.gen3.json` i
+`modules.manifest.json` musí být běžné trackované bloby stejného `HEAD`;
+stejný published-blob důkaz platí pro Module `lazurio.module.json`. Lokální
+Draft, ignored/untracked autoritativní JSON, stale root nebo konfliktní či
+malformed repository/branch aliasy zůstanou fail-closed před target fetchem,
+změnou `origin` i filesystem relokací. Root autorita zahrnuje i
+`forge_binding` a `governance.default_branch`; immutable binding, legacy
+lokátory, GitHub owner a main se nesmějí rozcházet. Aktivní `governance` musí
+být objekt a explicitní `governance.access_authority` musí být přesně
+`github`; nepřítomné legacy pole se neinterpretuje jako druhá autorita.
+
+No-clone důkaz je odvozený z každého přímého Git checkoutu s neověřitelným
+markerem, ne pouze z adresáře shodného se stable slugem. Proto přežije čerstvý
+inventory scan i restart po manifest cutoveru a skutečně volný canonical
+target zůstane blokovaný. Přesný markerovaný checkout nebo existující běžný
+legacy target zdravého sourozence má před generickým nepřiřazeným suspectem
+přednost, takže jedna nejasná složka neshodí ostatní použitelné moduly.
+
+Guarded repair je omezený na rename/změnu GitHub souřadnic uvnitř jedné
+Lazurio Organization access hranice. `github_org`, remote a cesta se musí
+shodnout v obou jejích manifestech. Přesun mezi dvěma Lazurio Organizacemi je
+source/access migrace, ne location repair: Organization-scoped slug není
+globální identita, foreign owner dostane `slot_remote_owner_mismatch` a Agent
+musí nejprve reviewovaně ustanovit cílovou deklaraci a přístup. Automatický
+cross-Organization přesun by vyžadoval nový explicitní neměnný migration token;
+současný mechanismus jej z názvu, remote redirectu ani lokálního markeru nehádá.
+
 Kanonické task worktrees mohou fyzicky ležet v `.worktrees/` svého owner repa,
 ale nejsou jeho zdrojová změna. Když `lazurio update` prokáže, že jde o skutečně
 registrovaný Git worktree tohoto repa, automaticky doplní lokální

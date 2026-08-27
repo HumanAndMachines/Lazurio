@@ -45,6 +45,207 @@ test("inventory reads repo paths from Organization manifests and does not infer 
   expect(inventory.planned.map((slot) => `${slot.organization}::${slot.module}`)).toContain("BetaCo::brainstorm");
 });
 
+test("an Organization identity mismatch keeps its root updateable but excludes only its child repositories", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const manifestPath = join(root, "organizations", "OmegaCo_GEN3", "modules.manifest.json");
+  const manifest = await Bun.file(manifestPath).json();
+  manifest.github_org = "ForeignCo";
+  await Bun.write(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  const inventory = await buildGitInventory({ companiesRoot: root });
+
+  expect(inventory.repos.some((repo) => repo.key === "OmegaCo::root")).toBe(true);
+  expect(inventory.repos.some((repo) => repo.organization === "OmegaCo" && repo.repo_kind !== "organization_root")).toBe(false);
+  expect(inventory.repos.some((repo) => repo.key === "BetaCo::deals")).toBe(true);
+  expect(inventory.inventory_issues).toContainEqual(expect.objectContaining({
+    scope: "organization",
+    code: "organization_identity_invalid",
+    organization: "OmegaCo",
+    next_action: expect.objectContaining({ kind: "agent_review" }),
+  }));
+});
+
+test("conflicting Organization root aliases block that Organization before any Git action", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const companyPath = join(root, "organizations", "OmegaCo_GEN3", "company.gen3.json");
+  const company = await Bun.file(companyPath).json();
+  company.company.repository = "git@github.com:OmegaCo/OmegaCo_GEN3.git";
+  company.company.git_url = "git@github.com:ForeignCo/Shadow_GEN3.git";
+  company.company.default_branch = "main";
+  company.default_branch = "develop";
+  await Bun.write(companyPath, `${JSON.stringify(company, null, 2)}\n`);
+
+  const inventory = await buildGitInventory({ companiesRoot: root });
+  const omegaIssues = inventory.inventory_issues.filter((issue) => issue.organization === "OmegaCo");
+
+  expect(inventory.repos.some((repo) => repo.organization === "OmegaCo")).toBe(false);
+  expect(inventory.repos.some((repo) => repo.key === "BetaCo::deals")).toBe(true);
+  expect(omegaIssues.map((issue) => issue.code).sort()).toEqual([
+    "organization_root_branch_conflict",
+    "organization_root_remote_conflict",
+  ]);
+  expect(omegaIssues.every((issue) => issue.scope === "organization")).toBe(true);
+});
+
+test("malformed canonical root aliases and non-main branch fail closed for one Organization", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const companyPath = join(root, "organizations", "OmegaCo_GEN3", "company.gen3.json");
+  const company = await Bun.file(companyPath).json();
+  company.company.repository = { owner: "OmegaCo" };
+  company.company.git_url = "git@github.com:OmegaCo/OmegaCo_GEN3.git";
+  company.company.default_branch = "develop";
+  company.default_branch = "develop";
+  await Bun.write(companyPath, `${JSON.stringify(company, null, 2)}\n`);
+
+  const inventory = await buildGitInventory({ companiesRoot: root });
+  const omegaIssues = inventory.inventory_issues.filter((issue) => issue.organization === "OmegaCo");
+
+  expect(inventory.repos.some((repo) => repo.organization === "OmegaCo")).toBe(false);
+  expect(inventory.repos.some((repo) => repo.key === "BetaCo::deals")).toBe(true);
+  expect(omegaIssues.map((issue) => issue.code)).toEqual(expect.arrayContaining([
+    "organization_root_remote_alias_invalid",
+    "organization_root_branch_invalid",
+  ]));
+});
+
+test("a foreign Organization root owner is isolated while a healthy Organization remains actionable", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const companyPath = join(root, "organizations", "OmegaCo_GEN3", "company.gen3.json");
+  const company = await Bun.file(companyPath).json();
+  company.company.repository = "git@github.com:ForeignCo/Shadow_GEN3.git";
+  company.company.root_repository = "ForeignCo/Shadow_GEN3";
+  company.company.default_branch = "main";
+  await Bun.write(companyPath, `${JSON.stringify(company, null, 2)}\n`);
+
+  const inventory = await buildGitInventory({ companiesRoot: root });
+
+  expect(inventory.repos.some((repo) => repo.organization === "OmegaCo")).toBe(false);
+  expect(inventory.repos.some((repo) => repo.key === "BetaCo::deals")).toBe(true);
+  expect(inventory.inventory_issues).toContainEqual(expect.objectContaining({
+    organization: "OmegaCo",
+    scope: "organization",
+    code: "organization_root_remote_owner_mismatch",
+  }));
+});
+
+test("scaffold forge binding conflicts isolate root and children before Git inventory actions", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const companyPath = join(root, "organizations", "OmegaCo_GEN3", "company.gen3.json");
+  const company = await Bun.file(companyPath).json();
+  company.company.repository = "git@github.com:OmegaCo/OmegaCo_GEN3.git";
+  company.company.root_repository = "OmegaCo/OmegaCo_GEN3";
+  company.company.default_branch = "main";
+  company.forge_binding = {
+    schema_version: "lazurio.forge-binding.github.v0",
+    provider: "github",
+    organization: { id: "123", asserted_login: "BoundCo" },
+    repository: {
+      id: "456",
+      asserted_full_name: "BoundCo/BoundCo_GEN3",
+      default_branch: "main",
+    },
+  };
+  company.governance = { default_branch: "develop" };
+  await Bun.write(companyPath, `${JSON.stringify(company, null, 2)}\n`);
+
+  const inventory = await buildGitInventory({ companiesRoot: root });
+  const omegaCodes = inventory.inventory_issues
+    .filter((issue) => issue.organization === "OmegaCo")
+    .map((issue) => issue.code);
+
+  expect(inventory.repos.some((repo) => repo.organization === "OmegaCo")).toBe(false);
+  expect(inventory.repos.some((repo) => repo.key === "BetaCo::deals")).toBe(true);
+  expect(omegaCodes).toEqual(expect.arrayContaining([
+    "organization_root_remote_conflict",
+    "organization_root_owner_conflict",
+    "organization_root_branch_conflict",
+  ]));
+});
+
+test("a foreign governance access authority isolates one Organization before Git inventory actions", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const companyPath = join(root, "organizations", "OmegaCo_GEN3", "company.gen3.json");
+  const company = await Bun.file(companyPath).json();
+  company.company.repository = "git@github.com:OmegaCo/OmegaCo_GEN3.git";
+  company.company.default_branch = "main";
+  company.governance = { default_branch: "main", access_authority: "not-github" };
+  await Bun.write(companyPath, `${JSON.stringify(company, null, 2)}\n`);
+
+  const inventory = await buildGitInventory({ companiesRoot: root });
+
+  expect(inventory.repos.some((repo) => repo.organization === "OmegaCo")).toBe(false);
+  expect(inventory.repos.some((repo) => repo.key === "BetaCo::deals")).toBe(true);
+  expect(inventory.inventory_issues).toContainEqual(expect.objectContaining({
+    organization: "OmegaCo",
+    scope: "organization",
+    code: "organization_root_access_authority_invalid",
+  }));
+});
+
+test("a cross-Organization remote dominates a simultaneous repository rename", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const manifestPath = join(root, "organizations", "OmegaCo_GEN3", "modules.manifest.json");
+  const manifest = await Bun.file(manifestPath).json();
+  manifest.module_slots[0].slug = "studio";
+  manifest.module_slots[0].path = "workspace/old-studio";
+  manifest.module_slots[0].git = {
+    url: "git@github.com:ForeignCo/new-studio.git",
+    branch: "main",
+  };
+  delete manifest.module_slots[0].repo;
+  await Bun.write(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  const inventory = await buildGitInventory({ companiesRoot: root });
+
+  expect(inventory.repos.some((repo) => repo.key === "OmegaCo::studio")).toBe(false);
+  expect(inventory.repos.some((repo) => repo.key === "OmegaCo::infra")).toBe(true);
+  expect(inventory.repos.some((repo) => repo.key === "BetaCo::deals")).toBe(true);
+  expect(inventory.inventory_issues).toContainEqual(expect.objectContaining({
+    scope: "module_slot",
+    code: "slot_remote_owner_mismatch",
+    module: "studio",
+    next_action: expect.objectContaining({ kind: "agent_review" }),
+  }));
+  expect(inventory.inventory_issues.some((issue) =>
+    issue.module === "studio" && issue.code === "repository_location_mismatch"
+  )).toBe(false);
+  expect(JSON.stringify(inventory.inventory_issues.filter((issue) => issue.module === "studio")))
+    .not.toContain("repair_module_location");
+});
+
+test("conflicting remote and branch aliases quarantine one slot without choosing an action authority", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const manifestPath = join(root, "organizations", "OmegaCo_GEN3", "modules.manifest.json");
+  const manifest = await Bun.file(manifestPath).json();
+  manifest.module_slots[0] = {
+    ...manifest.module_slots[0],
+    repo: "git@github.com:ForeignCo/studio.git",
+    branch: "feature",
+    git: { url: "git@github.com:OmegaCo/studio.git", branch: "main" },
+  };
+  await Bun.write(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  const inventory = await buildGitInventory({ companiesRoot: root });
+  const conflicts = inventory.inventory_issues.filter((issue) => issue.module === "studio");
+
+  expect(inventory.repos.some((repo) => repo.key === "OmegaCo::studio")).toBe(false);
+  expect(inventory.repos.some((repo) => repo.key === "OmegaCo::infra")).toBe(true);
+  expect(inventory.repos.some((repo) => repo.key === "BetaCo::deals")).toBe(true);
+  expect(conflicts.map((issue) => issue.code).sort()).toEqual([
+    "slot_branch_conflict",
+    "slot_remote_conflict",
+  ]);
+  expect(conflicts.every((issue) => issue.next_action?.kind === "agent_review")).toBe(true);
+});
+
 test("inventory keeps lowercase module ID separate from a case-preserving repository mount", async () => {
   const root = await createLaunchpadGitFixture();
   tempRoots.push(root);
@@ -117,6 +318,264 @@ test("inventory quarantines one renamed slot without hiding healthy siblings or 
   ]));
 });
 
+test("inventory detects a stable-slug checkout at its old path and never materializes a duplicate target", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const organizationRoot = join(root, "organizations", "OmegaCo_GEN3");
+  const legacyRoot = join(organizationRoot, "workspace", "website");
+  await mkdir(legacyRoot, { recursive: true });
+  await Bun.write(join(legacyRoot, "lazurio.module.json"), `${JSON.stringify({
+    schema_version: "lazurio.module.v1",
+    id: "website",
+    company: "OmegaCo",
+  }, null, 2)}\n`);
+  const manifestPath = join(organizationRoot, "modules.manifest.json");
+  const manifest = await Bun.file(manifestPath).json();
+  manifest.module_slots.push({
+    slug: "website",
+    path: "workspace/website-v2",
+    git: { url: "git@github.com:OmegaCo/website-v2.git", branch: "main" },
+  });
+  await Bun.write(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  const companyPath = join(organizationRoot, "company.gen3.json");
+  const company = await Bun.file(companyPath).json();
+  company.modules = [{
+    slug: "website",
+    path: "workspace/website-v2",
+    repo: "git@github.com:OmegaCo/website-v2.git",
+  }];
+  await Bun.write(companyPath, `${JSON.stringify(company, null, 2)}\n`);
+
+  const inventory = await buildGitInventory({ companiesRoot: root });
+
+  expect(inventory.repos.some((repo) => repo.key === "OmegaCo::website")).toBe(false);
+  expect(inventory.planned.some((repo) => repo.key === "OmegaCo::website")).toBe(false);
+  expect(inventory.repos.some((repo) => repo.key === "OmegaCo::studio")).toBe(true);
+  expect(inventory.inventory_issues).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      code: "repository_location_mismatch",
+      module: "website",
+      path: "workspace/website",
+      expected_path: "workspace/website-v2",
+      next_action: expect.objectContaining({ kind: "repair_module_location" }),
+    }),
+  ]));
+});
+
+test("inventory treats a case-only checkout path as one repairable module mismatch", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const organizationRoot = join(root, "organizations", "OmegaCo_GEN3");
+  const observedRoot = join(organizationRoot, "workspace", "Website");
+  await mkdir(observedRoot, { recursive: true });
+  await Bun.write(join(observedRoot, "lazurio.module.json"), `${JSON.stringify({
+    schema_version: "lazurio.module.v1",
+    id: "website",
+    company: "OmegaCo",
+  }, null, 2)}\n`);
+  const manifestPath = join(organizationRoot, "modules.manifest.json");
+  const manifest = await Bun.file(manifestPath).json();
+  manifest.module_slots.push({
+    slug: "website",
+    path: "workspace/website",
+    git: { url: "git@github.com:OmegaCo/website.git", branch: "main" },
+  });
+  await Bun.write(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  const inventory = await buildGitInventory({ companiesRoot: root });
+  const issues = inventory.inventory_issues.filter((issue) => issue.module === "website");
+
+  expect(inventory.repos.some((repo) => repo.key === "OmegaCo::website")).toBe(false);
+  expect(inventory.repos.some((repo) => repo.key === "OmegaCo::studio")).toBe(true);
+  expect(issues).toEqual([
+    expect.objectContaining({
+      code: "repository_location_mismatch",
+      path: "workspace/Website",
+      expected_path: "workspace/website",
+      next_action: expect.objectContaining({ kind: "repair_module_location" }),
+    }),
+  ]);
+});
+
+test("inventory persistently quarantines a stable-slug Git suspect with an unverifiable marker", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const organizationRoot = join(root, "organizations", "OmegaCo_GEN3");
+  const legacyRoot = join(organizationRoot, "workspace", "website");
+  await mkdir(join(legacyRoot, ".git"), { recursive: true });
+  const manifestPath = join(organizationRoot, "modules.manifest.json");
+  const manifest = await Bun.file(manifestPath).json();
+  manifest.module_slots.push({
+    slug: "website",
+    path: "workspace/website-v2",
+    git: { url: "git@github.com:OmegaCo/website-v2.git", branch: "main" },
+  });
+  await Bun.write(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  const first = await buildGitInventory({ companiesRoot: root });
+  const second = await buildGitInventory({ companiesRoot: root });
+  for (const inventory of [first, second]) {
+    expect(inventory.repos.some((repo) => repo.key === "OmegaCo::website")).toBe(false);
+    expect(inventory.planned.some((repo) => repo.key === "OmegaCo::website")).toBe(false);
+    expect(inventory.inventory_issues.filter((issue) => issue.module === "website")).toEqual([
+      expect.objectContaining({
+        code: "repository_transition_unverified",
+        path: "workspace/website",
+        expected_path: "workspace/website-v2",
+        next_action: expect.objectContaining({
+          kind: "repair_module_location",
+          prompt: expect.stringContaining("marker_missing"),
+        }),
+      }),
+    ]);
+  }
+});
+
+test("inventory lets ambiguity dominate a repairable manifest mismatch", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const organizationRoot = join(root, "organizations", "OmegaCo_GEN3");
+  for (const basename of ["website", "website-v2"]) {
+    const checkout = join(organizationRoot, "workspace", basename);
+    await mkdir(checkout, { recursive: true });
+    await Bun.write(join(checkout, "lazurio.module.json"), `${JSON.stringify({
+      schema_version: "lazurio.module.v1",
+      id: "website",
+      company: "OmegaCo",
+    }, null, 2)}\n`);
+  }
+  const manifestPath = join(organizationRoot, "modules.manifest.json");
+  const manifest = await Bun.file(manifestPath).json();
+  manifest.module_slots.push({
+    slug: "website",
+    path: "workspace/website",
+    git: { url: "git@github.com:OmegaCo/website-v2.git", branch: "main" },
+  });
+  await Bun.write(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  const inventory = await buildGitInventory({ companiesRoot: root });
+  const issues = inventory.inventory_issues.filter((issue) => issue.module === "website");
+
+  expect(inventory.repos.some((repo) => repo.key === "OmegaCo::website")).toBe(false);
+  expect(inventory.repos.some((repo) => repo.key === "OmegaCo::studio")).toBe(true);
+  expect(issues).toEqual([
+    expect.objectContaining({
+      code: "repository_location_ambiguous",
+      expected_path: "workspace/website-v2",
+      observed_paths: ["workspace/website", "workspace/website-v2"],
+      next_action: expect.objectContaining({
+        kind: "agent_review",
+        prompt: expect.stringContaining("workspace/website-v2"),
+      }),
+    }),
+  ]);
+});
+
+test("inventory excludes only active slots with a bad Team, remote or managed branch", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const organizationRoot = join(root, "organizations", "OmegaCo_GEN3");
+  const companyPath = join(organizationRoot, "company.gen3.json");
+  const company = await Bun.file(companyPath).json();
+  company.teams = [{ slug: "workspace", default: true }];
+  await Bun.write(companyPath, `${JSON.stringify(company, null, 2)}\n`);
+  const manifestPath = join(organizationRoot, "modules.manifest.json");
+  const manifest = await Bun.file(manifestPath).json();
+  manifest.module_slots.push(
+    {
+      slug: "bad-team",
+      path: "workspace/bad-team",
+      teams: ["missing"],
+      git: { url: "git@github.com:OmegaCo/bad-team.git", branch: "main" },
+    },
+    {
+      slug: "no-remote",
+      path: "workspace/no-remote",
+      teams: ["workspace"],
+      status: "active",
+    },
+    {
+      slug: "placeholder-remote",
+      path: "workspace/placeholder-remote",
+      teams: ["workspace"],
+      status: "active",
+      git: { url: "git@github.com:<owner>/placeholder-remote.git", branch: "main" },
+    },
+    {
+      slug: "feature-branch",
+      path: "workspace/feature-branch",
+      teams: ["workspace"],
+      git: { url: "git@github.com:OmegaCo/feature-branch.git", branch: "feature" },
+    },
+    {
+      slug: "invalid-remote",
+      path: "workspace/invalid-remote",
+      teams: ["workspace"],
+      git: { url: "https://git.example.test/OmegaCo/invalid-remote.git", branch: "main" },
+    },
+  );
+  await Bun.write(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  const inventory = await buildGitInventory({ companiesRoot: root });
+
+  for (const module of ["bad-team", "no-remote", "placeholder-remote", "feature-branch", "invalid-remote"]) {
+    expect(inventory.repos.some((repo) => repo.key === `OmegaCo::${module}`)).toBe(false);
+    expect(inventory.planned.some((repo) => repo.key === `OmegaCo::${module}`)).toBe(false);
+  }
+  expect(inventory.repos.some((repo) => repo.key === "OmegaCo::studio")).toBe(true);
+  expect(inventory.repos.some((repo) => repo.key === "BetaCo::deals")).toBe(true);
+  expect(inventory.inventory_issues).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      code: "slot_team_invalid",
+      module: "bad-team",
+      next_action: expect.objectContaining({ kind: "agent_review" }),
+    }),
+    expect.objectContaining({ code: "slot_remote_missing", module: "no-remote" }),
+    expect.objectContaining({ code: "slot_remote_missing", module: "placeholder-remote" }),
+    expect.objectContaining({ code: "slot_branch_invalid", module: "feature-branch" }),
+    expect.objectContaining({ code: "slot_remote_invalid", module: "invalid-remote" }),
+  ]));
+});
+
+test("inventory never authorizes a target occupied by another stable Module identity", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const organizationRoot = join(root, "organizations", "OmegaCo_GEN3");
+  const occupied = join(organizationRoot, "workspace", "victim");
+  await mkdir(join(occupied, ".git"), { recursive: true });
+  await Bun.write(join(occupied, "lazurio.module.json"), `${JSON.stringify({
+    schema_version: "lazurio.module.v1",
+    id: "other",
+    company: "OmegaCo",
+  }, null, 2)}\n`);
+  const manifestPath = join(organizationRoot, "modules.manifest.json");
+  const manifest = await Bun.file(manifestPath).json();
+  manifest.module_slots.push(
+    {
+      slug: "victim",
+      path: "workspace/victim",
+      git: { url: "git@github.com:OmegaCo/victim.git", branch: "main" },
+    },
+    {
+      slug: "other",
+      path: "workspace/other",
+      git: { url: "git@github.com:OmegaCo/other.git", branch: "main" },
+    },
+  );
+  await Bun.write(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  const inventory = await buildGitInventory({ companiesRoot: root });
+
+  expect(inventory.repos.some((repo) => repo.key === "OmegaCo::victim")).toBe(false);
+  expect(inventory.inventory_issues).toContainEqual(expect.objectContaining({
+    code: "repository_location_ambiguous",
+    module: "victim",
+    expected_path: "workspace/victim",
+    observed_paths: ["workspace/victim"],
+    next_action: expect.objectContaining({ kind: "agent_review" }),
+  }));
+});
+
 test("inventory keeps a canonical nested repository-db outside every Git action surface", async () => {
   const root = await createLaunchpadGitFixture();
   tempRoots.push(root);
@@ -183,8 +642,16 @@ test("inventory fails closed when two repository mounts resolve to the same logi
 
   const inventory = await buildGitInventory({ companiesRoot: root });
 
-  expect(inventory.repos.some((repo) => repo.organization === "OmegaCo" && repo.module !== "root")).toBe(false);
+  expect(inventory.repos.some((repo) => repo.key === "OmegaCo::buddy-gen2")).toBe(false);
+  expect(inventory.repos.some((repo) => repo.key === "OmegaCo::studio")).toBe(true);
+  expect(inventory.repos.some((repo) => repo.key === "OmegaCo::infra")).toBe(true);
+  expect(inventory.repos.some((repo) => repo.key === "BetaCo::deals")).toBe(true);
   expect(inventory.warnings.join("\n")).toContain('repository slug "buddy-gen2"');
+  expect(inventory.inventory_issues).toContainEqual(expect.objectContaining({
+    code: "slot_collection_ambiguous",
+    module: "buddy-gen2",
+    next_action: expect.objectContaining({ kind: "agent_review" }),
+  }));
 });
 
 test("inventory applies cross-file logical identity collisions to the action surface", async () => {
@@ -207,7 +674,10 @@ test("inventory applies cross-file logical identity collisions to the action sur
 
   const inventory = await buildGitInventory({ companiesRoot: root });
 
-  expect(inventory.repos.some((repo) => repo.organization === "OmegaCo" && repo.module !== "root")).toBe(false);
+  expect(inventory.repos.some((repo) => repo.key === "OmegaCo::shared")).toBe(false);
+  expect(inventory.repos.some((repo) => repo.key === "OmegaCo::studio")).toBe(true);
+  expect(inventory.repos.some((repo) => repo.key === "OmegaCo::infra")).toBe(true);
+  expect(inventory.repos.some((repo) => repo.key === "BetaCo::deals")).toBe(true);
   expect(inventory.warnings.join("\n")).toContain('repository slug "shared"');
 });
 
@@ -363,8 +833,6 @@ test("Organization kontejnery a descendants rezervovaných root slotů nevstoup�
     "infra/state",
     "mission-control/cache",
     "mission-control/db/archive",
-    "../Victim_GEN3",
-    "/tmp/evil",
     "workspace/deep/repo",
     "workspace\\evil",
   ];
@@ -396,11 +864,6 @@ test("Organization kontejnery a descendants rezervovaných root slotů nevstoup�
   expect(inventory.warnings.join("\n")).toContain(
     "cesta není kanonická podporovaná Organization-relative repo boundary",
   );
-  expect(
-    inventory.repos.some((repo) =>
-      repo.absolute_path.includes("Victim_GEN3"),
-    ),
-  ).toBe(false);
 });
 
 test("productionspace path cannot masquerade as an actionable Team module", async () => {
@@ -592,16 +1055,28 @@ test("git action inventory rejects traversal and symlink module paths that escap
   const manifestPath = join(betaRoot, "modules.manifest.json");
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
   manifest.module_slots.push(
-    { path: "../OmegaCo_GEN3/workspace/studio", git: { url: "git@github.com:OmegaCo/studio.git", branch: "main" } },
-    { path: "workspace/foreign-link", git: { url: "git@github.com:OmegaCo/studio.git", branch: "main" } },
+    { slug: "shared", path: "../OmegaCo_GEN3/workspace/studio", git: { url: "git@github.com:OmegaCo/studio.git", branch: "main" } },
+    { slug: "shared", path: "workspace/foreign-link", git: { url: "git@github.com:OmegaCo/studio.git", branch: "main" } },
   );
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 
   const inventory = await buildGitInventory({ companiesRoot: root });
 
-  expect(inventory.repos.some((repo) => repo.organization === "BetaCo" && repo.slot_path?.includes("Foreign"))).toBe(false);
-  expect(inventory.repos.some((repo) => repo.organization === "BetaCo" && repo.slot_path === "workspace/foreign-link")).toBe(false);
+  expect(inventory.repos.some((repo) =>
+    repo.organization === "BetaCo" && repo.repo_kind !== "organization_root"
+  )).toBe(false);
+  expect(inventory.repos.some((repo) => repo.key === "OmegaCo::studio")).toBe(true);
   expect(inventory.warnings.filter((warning) => warning.includes("uniká mimo Organization root"))).toHaveLength(2);
+  expect(inventory.inventory_issues).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      scope: "organization",
+      code: "organization_module_mount_boundary_invalid",
+      organization: "BetaCo",
+    }),
+  ]));
+  expect(inventory.inventory_issues.some((issue) =>
+    issue.organization === "BetaCo" && issue.code === "slot_collection_ambiguous"
+  )).toBe(false);
 });
 
 test("inventory includes Organization roots and warns about missing mounts instead of crashing", async () => {

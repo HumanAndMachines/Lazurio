@@ -1,10 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { open, readFile, realpath, unlink } from "node:fs/promises";
+import { lstat, open, readFile, realpath, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
-import { discoverLaunchpadApps } from "./discovery-lib.mjs";
+import {
+  discoverLaunchpadApps,
+  organizationContainedRelativePath,
+} from "./discovery-lib.mjs";
 import { refreshFrozenBunDependencies } from "./dependency-install-lib.mjs";
 import { buildGitInventory } from "./git-inventory-lib.mjs";
 import { materializeRepoCheckout } from "./git-materialization-lib.mjs";
@@ -120,6 +123,8 @@ export async function runLazurioUpdate({
   const warnings = [];
   const repoDescriptors = new Map();
   const refreshedOrganizations = new Set();
+  const invalidatedInitialOrganizations = new Set();
+  let finalInventory = null;
   try {
     const rootRepo = rootDescriptor(absoluteRoot);
     repoDescriptors.set(rootRepo.key, rootRepo);
@@ -138,11 +143,18 @@ export async function runLazurioUpdate({
       }));
       return updateReport({ rootPath: absoluteRoot, runId, now, results, warnings });
     }
+    finalInventory = initialInventory;
     const organizationRoots = managedOrganizationRoots(initialInventory);
     if (rootResult.state === "blocked") {
       results.push(...inventoryIssueResults({ rootPath: absoluteRoot, inventory: initialInventory }));
       results.push(...deferredHierarchyResults(initialInventory, "lazurio::root"));
-      return updateReport({ rootPath: absoluteRoot, runId, now, results, warnings });
+      return updateReport({
+        rootPath: absoluteRoot,
+        runId,
+        now,
+        results,
+        warnings: inventoryReportWarnings(initialInventory, warnings),
+      });
     }
 
     for (const organizationRoot of organizationRoots) {
@@ -159,6 +171,11 @@ export async function runLazurioUpdate({
         results.push(...deferredOrganizationChildResults(initialInventory, organizationRoot.organization));
         continue;
       }
+      if (organizationResult.state === "updated") {
+        // Once the manifest owner moved, its pre-update slot diagnostics are no
+        // longer authoritative even if the mandatory refresh itself fails.
+        invalidatedInitialOrganizations.add(organizationRoot.organization);
+      }
 
       // The Organization root owns the manifest. Re-read after its update so
       // a newly declared Workspace Modul can be materialized and every mounted
@@ -170,6 +187,10 @@ export async function runLazurioUpdate({
         }));
         continue;
       }
+      // buildInventory always returns a complete machine snapshot. The newest
+      // successful read therefore replaces (rather than appends to) all older
+      // diagnostics, including the pre-cutover view of a renamed slot.
+      finalInventory = refreshed;
       refreshedOrganizations.add(organizationRoot.organization);
       results.push(...inventoryIssueResults({
         rootPath: absoluteRoot,
@@ -179,10 +200,29 @@ export async function runLazurioUpdate({
       const children = managedOrganizationChildren(refreshed, organizationRoot.organization);
       for (const childRepo of children) {
         repoDescriptors.set(childRepo.key, childRepo);
-        if (!existsSync(childRepo.absolute_path)) {
+        const childPresence = await inspectPathPresence(
+          childRepo.absolute_path,
+          deps.lstatPath ?? lstat,
+        );
+        if (childPresence.state === "unreadable") {
+          results.push(blockedResult(childRepo, "checkout_unreadable", {
+            detail: `Deklarovanou cestu nelze bezpečně ověřit (${childPresence.detail}); Sync ji nepovažuje za prázdnou a nic neklonuje ani nemutuje.`,
+          }));
+          continue;
+        }
+        if (childPresence.state === "absent") {
           // Sync materializes declared Workspace Moduly. Organization-level
           // repositories are managed only once they are mounted locally.
           if (childRepo.repo_kind !== "module") continue;
+          const transitionBlocker = await moduleCheckoutTransitionBlocker({
+            initialInventory,
+            repo: childRepo,
+            lstatPath: deps.lstatPath ?? lstat,
+          });
+          if (transitionBlocker) {
+            results.push(transitionBlocker);
+            continue;
+          }
           const materialized = await safeMaterializeModule({
             rootPath: absoluteRoot,
             repo: childRepo,
@@ -209,10 +249,13 @@ export async function runLazurioUpdate({
     results.push(...inventoryIssueResults({
       rootPath: absoluteRoot,
       inventory: initialInventory,
-      excludeOrganizations: refreshedOrganizations,
+      excludeOrganizations: new Set([
+        ...refreshedOrganizations,
+        ...invalidatedInitialOrganizations,
+      ]),
     }));
 
-    const unmatchedWarnings = inventoryWarningsWithoutIssues(initialInventory);
+    const unmatchedWarnings = inventoryWarningsWithoutIssues(finalInventory);
     if (unmatchedWarnings.length > 0) {
       results.push(blockedResult(inventoryDescriptor(absoluteRoot), "inventory_invalid", {
         detail: `Lokální inventář obsahuje neklasifikovaný problém: ${unmatchedWarnings[0]}`,
@@ -233,7 +276,13 @@ export async function runLazurioUpdate({
     if (dependencyPhase.blocked) results.push(dependencyPhase.blocked);
     applyDependencyOutcomes(results, dependencyPhase.outcomes, repoDescriptors);
 
-    return updateReport({ rootPath: absoluteRoot, runId, now, results, warnings });
+    return updateReport({
+      rootPath: absoluteRoot,
+      runId,
+      now,
+      results,
+      warnings: inventoryReportWarnings(finalInventory, warnings),
+    });
   } finally {
     await lock.release().catch(() => {});
   }
@@ -256,9 +305,11 @@ export async function readLazurioUpdateStatus({ rootPath, deps = {} } = {}) {
     return localStatusReport(blocked);
   }
   const inventoryIssues = inventoryIssueResults({ rootPath: absoluteRoot, inventory });
-  if (inventoryIssues.length > 0) {
-    return localStatusReport(inventoryIssues[0]);
-  }
+  // Structured Organization/module issues are partial inventory results, not a
+  // global Sync blocker. Their exact Agent action lives on the affected
+  // Organization/slot; GET-first must keep Synchronizovat available for every
+  // healthy repo. Only an inventory throw or an unsafe actionable checkout
+  // below blocks this global control.
   const unmatchedWarnings = inventoryWarningsWithoutIssues(inventory);
   if (unmatchedWarnings.length > 0) {
     const blocked = blockedResult(inventoryDescriptor(absoluteRoot), "inventory_invalid", {
@@ -324,6 +375,7 @@ export async function readLazurioUpdateStatus({ rootPath, deps = {} } = {}) {
     checked_remote: false,
     message: "Lazurio je připravené k explicitní synchronizaci; GitHub se na prvním renderu nekontroluje.",
     reason: "explicit_sync_required",
+    isolated_issue_count: inventoryIssues.length,
   };
 }
 
@@ -1212,8 +1264,6 @@ function declaredDependencyCount(packageJson) {
 async function safeInventory(buildInventory, rootPath, warnings) {
   try {
     const inventory = await buildInventory({ companiesRoot: rootPath });
-    const inventoryWarnings = inventory.warnings ?? [];
-    warnings.push(...inventoryWarnings);
     // Validní snapshot může obsahovat izolované Organization/slot issues.
     // Ty nejsou globální inventory failure: zdravé sourozence smíme dál
     // aktualizovat a problém vracíme jako vlastní blocked result.
@@ -1222,6 +1272,13 @@ async function safeInventory(buildInventory, rootPath, warnings) {
     warnings.push(`Git inventář nejde načíst: ${error instanceof Error ? error.message : String(error)}`);
     return { repos: [], warnings: [], failed: true };
   }
+}
+
+function inventoryReportWarnings(inventory, operationalWarnings = []) {
+  return [
+    ...operationalWarnings,
+    ...inventoryWarningsWithoutIssues(inventory ?? { warnings: [], inventory_issues: [] }),
+  ];
 }
 
 function inventoryIssueResults({
@@ -1259,6 +1316,107 @@ function inventoryIssueResult(rootPath, issue) {
     detail: issue.message ?? "Lokální inventář obsahuje izolovaný problém.",
     action: issue.next_action ?? null,
   });
+}
+
+async function moduleCheckoutTransitionBlocker({ initialInventory, repo, lstatPath = lstat }) {
+  const slotSegments = String(repo.slot_path ?? "").split("/").filter(Boolean);
+  const organizationRoot = slotSegments.reduce((path) => dirname(path), repo.absolute_path);
+  const initialCandidates = [
+    ...(initialInventory.repos ?? [])
+      .filter((candidate) =>
+        candidate.repo_kind === "module"
+        && candidate.organization === repo.organization
+        && candidate.module === repo.module
+      )
+      .map((candidate) => ({
+        slot_path: candidate.slot_path
+          ?? relative(organizationRoot, candidate.absolute_path).replace(/\\/g, "/"),
+      })),
+    ...(initialInventory.inventory_issues ?? [])
+      .filter((issue) =>
+        issue.scope === "module_slot"
+        && issue.organization === repo.organization
+        && issue.module === repo.module
+        && typeof issue.path === "string"
+      )
+      .map((issue) => ({ slot_path: issue.path.replace(/\\/g, "/") })),
+  ];
+  const inspectedCandidates = await Promise.all(initialCandidates.map(async (candidate) => {
+    if (candidate.slot_path === repo.slot_path) return null;
+    const contained = organizationContainedRelativePath({
+      organizationRoot,
+      path: candidate.slot_path,
+    });
+    if (!contained) {
+      // The initial inventory already knew this stable slot, but its old path
+      // can no longer be re-proven. Treat the evidence as present for this run
+      // without joining or touching the unsafe path; the next Sync may
+      // converge from a fresh clean snapshot.
+      return {
+        repo_kind: "module",
+        organization: repo.organization,
+        module: repo.module,
+        slot_path: candidate.slot_path,
+        absolute_path: null,
+        presence: "unverifiable",
+      };
+    }
+    if (contained.absolute_path === repo.absolute_path) return null;
+    const presence = await inspectPathPresence(contained.absolute_path, lstatPath);
+    if (presence.state === "absent") return null;
+    return {
+      repo_kind: "module",
+      organization: repo.organization,
+      module: repo.module,
+      slot_path: contained.relative_path,
+      absolute_path: contained.absolute_path,
+      presence: presence.state,
+    };
+  }));
+  const previous = [...new Map(
+    inspectedCandidates
+      .filter(Boolean)
+      .map((candidate) => [candidate.absolute_path ?? `unverified:${candidate.slot_path}`, candidate]),
+  ).values()];
+  if (previous.length === 0) return null;
+  const foundPaths = previous.map((candidate) =>
+    candidate.slot_path ?? candidate.repo_path ?? candidate.absolute_path
+  );
+  const expectedPath = repo.slot_path ?? repo.repo_path ?? repo.absolute_path;
+  const unambiguous = previous.length === 1;
+  const action = unambiguous
+    ? buildModuleLocationRepairAction({
+        organization: repo.organization,
+        module: repo.module,
+        reason: "repository_transition_unverified",
+        foundPath: foundPaths[0],
+        expectedPath,
+        detail: `Před aktualizací Organization manifestu byl stejný stabilní modul v ${foundPaths[0]}; po cutoveru je cílová cesta ${expectedPath}. Marker nyní nestačí k automatickému ověření, proto Sync nevytvořil druhý clone.`,
+      })
+    : null;
+  return blockedResult(
+    repo,
+    unambiguous ? "repository_transition_unverified" : "repository_location_ambiguous",
+    {
+      detail: unambiguous
+        ? `Původní checkout ${foundPaths[0]} zůstal na disku po změně manifestu; cílový clone ${expectedPath} nebyl vytvořen.`
+        : `Po změně manifestu zůstalo více možných checkoutů (${foundPaths.join(", ")}); žádný target nebyl klonován ani vybrán odhadem.`,
+      action,
+    },
+  );
+}
+
+async function inspectPathPresence(path, lstatPath = lstat) {
+  try {
+    await lstatPath(path);
+    return { state: "present", detail: null };
+  } catch (error) {
+    if (error?.code === "ENOENT") return { state: "absent", detail: null };
+    return {
+      state: "unreadable",
+      detail: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 function inventoryWarningsWithoutIssues(inventory) {

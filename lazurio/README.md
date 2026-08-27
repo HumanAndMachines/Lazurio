@@ -118,6 +118,70 @@ CLI explicitně blokuje hosted mutace před POST; local a kompatibilní starší
 Server zůstávají obslužné přes vlastní Server request-trust gate. Hosted
 lifecycle zůstává za přihlášeným Dashboard/Launchpad surface.
 
+## Oprava umístění Modulu po rename/transferu
+
+`Synchronizovat` nejprve stáhne Organization manifest a zdravé checkouty dál
+aktualizuje. Když stabilní module slug ukazuje na nový repository basename, ale
+checkout podle `lazurio.module.json` zůstal ve staré složce, Lazurio pozastaví
+jen tento slot. Nevytvoří druhý clone a starou složku samo v obecném update
+flow nepřejmenuje.
+
+Stejný no-clone guard přežije i další Sync nebo restart. Přímý Git checkout
+bez čitelného autoritativního markeru zůstává konzervativním suspectem pro
+každý skutečně volný nový target, i když se jeho basename liší od stabilního
+slugu. Lazurio jej nikdy nepřiřadí ani nepřesune odhadem; současně tím
+nekaranténuje zdravý sourozenec, který už má svůj přesný markerovaný checkout
+nebo zavedený legacy adresář v deklarovaném targetu.
+
+Agent používá dvoufázový repair:
+
+```sh
+lazurio repair module-location --org <organization> --module <stable-slug>
+lazurio repair module-location --org <organization> --module <stable-slug> \
+  --apply --expect <fingerprint-z-prvního-kroku>
+lazurio update
+```
+
+První příkaz nic v pracovním stromu nemění. Najde checkout jen přes stabilní
+marker identity, zkontroluje oba Organization manifesty, přesnou cílovou
+cestu/remote, clean `main`, Git operace a skrytý index, shallow stav, linked
+worktrees, target kolizi a shodu historie původního a nového remote. Vrátí
+`ready` s přesným plánem a fingerprintem, `current`, nebo konkrétní `blocked`.
+Manifesty smějí autorizovat mutaci pouze z Organization root checkoutu, který
+je sám clean `main` a jeho `HEAD`, lokální `main` i cached `origin/main` jsou
+shodné, jeho jediný `origin` odpovídá deklarovanému root repository a oba
+manifesty jsou běžné trackované bloby právě tohoto `HEAD`. Stabilní Module
+marker musí být stejně publikovaný blob Module `HEAD`; ignored/untracked nebo
+symlinkovaný JSON nikdy není mutační autorita. Lokální Draft nebo stale root
+nejdřív vyžaduje review/publikaci a `Synchronizovat`. Konfliktní či malformed
+legacy/canonical remote a branch aliasy, non-main governance, foreign GitHub
+owner i rozpor s `forge_binding` jsou Organization-scoped blocker, nikdy
+implicitní volba podle pořadí polí. Přítomný `governance` musí být objekt a
+je-li v něm `access_authority`, jediná platná hodnota je přesně `github`;
+legacy absence pole zůstává kompatibilní.
+
+`--apply` celý stav znovu odvodí pod stejným lockem jako update a přijme pouze
+exact fingerprint. Jeho jediná mutace je změna `origin` a parent directory
+rename s readbackem a rollbackem; nedělá clone, stash, reset, merge, rebase,
+push ani delete. CLI tedy vlastní mechaniku a guardy. Agent vlastní úsudek:
+ověří, že plán odpovídá záměru Organizace, a při dirty, ahead/diverged,
+nejednoznačné identitě, cizím remote, worktrees nebo kolizi nic neobchází —
+zachová data, vysvětlí blocker a vyřeší jej jako běžnou reviewovanou Git práci.
+Po úspěchu spustí `lazurio update` a ověří postižený i zdravé sousední moduly
+v Launchpadu. Opakovaný check/update je idempotentní.
+
+Tento repair pokrývá přejmenování repozitáře nebo změnu GitHub owner/repo
+souřadnic uvnitř téže Lazurio Organizace, pokud oba její manifesty už
+reviewovaně deklarují nový `github_org`, remote a přesnou cestu. Přesun Modulu
+mezi dvěma Lazurio Organizacemi automaticky nedetekuje ani neprovádí: stabilní
+slug je jedinečný jen uvnitř Organization access hranice a není důkazem
+cross-Organization identity. Remote s ownerem jiné Organization proto dostane
+`slot_remote_owner_mismatch`, zůstane v karanténě a UI nabídne Agent review,
+nikoli fingerprintovaný location repair. Agent musí nejprve reviewovaně
+ustanovit cílovou Organization deklaraci a přístup a konkrétní lokální práci
+vyřešit bez hádání; budoucí automatizace by potřebovala explicitní neměnnou
+migrační identitu/token, ne shodu názvu nebo slugu.
+
 ## Instalace Launchpadu
 
 Nejdřív zpřístupni CLI v uživatelském `PATH`:
