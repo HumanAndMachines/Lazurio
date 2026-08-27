@@ -1429,7 +1429,7 @@ test("agent entry inventory refresh is local-only", async () => {
     headers: { origin: "https://evil.invalid", "sec-fetch-site": "cross-site" },
   });
   expect(crossOrigin.status).toBe(403);
-  expect(await crossOrigin.json()).toEqual({ error: "agent_entry_refresh_forbidden" });
+  expect(await crossOrigin.json()).toEqual({ error: "mutating_request_forbidden" });
 
   const wrongMethod = await fetch(`http://127.0.0.1:${port}/api/lazurio/agent-entry-refresh`);
   expect(wrongMethod.status).toBe(405);
