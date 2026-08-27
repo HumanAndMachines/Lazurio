@@ -226,27 +226,25 @@ platí odpověď „nemá".**
 
 Nepracuj v konkrétní firmě z rootu. Nejdřív vyber organizaci v `organizations/<org>/`, přečti její `AGENTS.md` a až potom měň její obsah.
 
-## Chat-first vstup do Launchpadu pro App Agenty
+## Otevírání Launchpadu pro App Agenty
 
-Když **Kolega přímo zahájí nový chat s Task Agentem v Codex/ChatGPT App nebo
-Claude App**, Agent po minimálním určení scope jednou pro nový chat/task spustí
-jako první viditelný pracovní krok právě jeden z těchto příkazů:
+Launchpad ani aplikaci neotevírej automaticky při zahájení chatu. Vestavěný
+browser použij jen když aktuální úkol vyžaduje práci v jejich UI nebo vizuální
+ověření výsledku.
+
+Potřebuje-li úkol Launchpad, spusť podle scope právě jeden příkaz:
 
 - Organizace: `lazurio launchpad serve --organization <přesný company.slug>`;
 - lokální Personalspace Principála: `lazurio launchpad serve --personalspace`;
 - nejasný nebo cross-organization scope: `lazurio launchpad serve` a nevymýšlej
   scope ani nemíchej data Organizací.
 
-Příkaz zdravou instanci znovu použije nebo Launchpad spustí a až po readiness
-vypíše `LAZURIO_LAUNCHPAD_URL=...`; port ani route nedopočítávej. Ohlášenou URL
-otevři nebo znovu použij výhradně ve vestavěném browseru dané App. Neotevírej
-systémový ani externí browser a nepoužívej human launchery. Při
+Příkaz znovu použije zdravou instanci nebo Launchpad spustí a vypíše
+`LAZURIO_LAUNCHPAD_URL=...`; port ani route nedopočítávej. URL otevři jen ve
+vestavěném browseru dané App, nikdy human launcherem ani v externím browseru. Při
 `LAZURIO_SERVER_STATE_PERMISSION_REQUIRED` vyžádej scoped zápis jen do uvedené
 OS-standard state cesty a tentýž příkaz zopakuj; nevytvářej druhý locator.
-
-Chybí-li vestavěný browser, omezení stručně oznam a pokračuj v chatu. Pravidlo
-neplatí pro AI Kolegy, Buddyho, CLI agenty ani jiné neinteraktivní běhy bez
-přímého App chatu s Kolegou.
+Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
 
 ## Agentní orientace před prací
 
