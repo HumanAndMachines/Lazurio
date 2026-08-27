@@ -14,7 +14,7 @@ credentials.
 | Pojem | Co znamená |
 | --- | --- |
 | Principál | Ten, pro koho Agent pracuje a kdo má poslední slovo. |
-| Kolega | Lidský Principál. Na své Mašině dnes zpravidla používá Lazurio jako source checkout. |
+| Kolega | Lidský Principál. Jeho pracovní Root je `<home>/Lazurio`; source checkout potřebuje jen pro vývoj Lazuria. |
 | Buddy | Osobní zástupce jednoho lidského Principála uvnitř jeho Personalspace. Jedná jen v mezích jeho práv a mandátů. |
 | AI Kolega | AI Principál s vlastní identitou, Mašinou, Personalspace a pracovními právy. Není Buddy. |
 | Task Agent | Nástrojová pracovní relace, například Codex nebo Claude Code. Sama žádná práva nevlastní. |
@@ -23,22 +23,31 @@ credentials.
 | Personalspace | Privátní prostor právě jednoho Principála a případného Buddyho. |
 | Organizace | Jedna firma, jeden GitHub Organization scope a jedna access hranice. |
 
-## Source checkout a rezidentní root nejsou totéž
+## Source, pracovní Root a runtime nejsou totéž
 
 Kanonický Lazurio source je Git repozitář, ve kterém se vyvíjí společný
-Launchpad, Doctor, Guide, manuály a profilový build. Z něj vzniká
-**rezidentní Lazurio Root**: celý instalovatelný strom pro jeden profil,
-platformu a architekturu.
+Launchpad, CLI/Core, Doctor, Guide, manuály, generátor a profilové buildy.
+Pracovní Root každé Mašiny je naproti tomu jediný generovaný non-Git adresář
+`<home>/Lazurio`. Drží instrukce, konfiguraci, data a mounty; package-only
+profil kvůli němu source checkout nepotřebuje.
 
-Rezidentní root:
+Pracovní Root:
 
 - není Git repozitář a nemá personu ukrytou v branchi;
 - má právě jeden vygenerovaný root `AGENTS.md`;
-- nese manifest `lazurio.resident.json` s exact source SHA, profilem,
-  platformou, Hermes/GBrain/toolchain piny a hashi payloadu;
-- neobsahuje Personalspace, Organization checkouty, secrets ani runtime data;
-- může po instalaci připojit perzistentní `personalspace/` a `organizations/`
-  jako oddělené mutable mounty.
+- obsahuje `personalspace/` a `organizations/` jen jako oddělené mutable Git
+  mounty s vlastními access hranicemi;
+- nenese druhou vendored kopii CLI ani Launchpadu;
+- může v development profilu obsahovat jediný source checkout
+  `<home>/Lazurio/development/Lazurio`.
+
+Běžná workstation instalace spouští package-managed `lazurio` mimo pracovní
+Root. Development profil může tuto právě jednu aktivní CLI/Core provenance
+explicitně přelinkovat na kanonický source checkout. Hosted Resident může
+stejný reviewovaný source zabalit do immutable artefaktu s manifestem
+`lazurio.resident.json`, exact source SHA, profilem, platformou a payload
+hashi. Artefakt je runtime vrstva, nikoli druhý pracovní Root ani datová
+autorita.
 
 V source není umělý adresář `common/`. Sdílený produkt zůstává běžným Lazurio
 stromem a build k němu přidá pouze úzký profilový fragment. Zdrojové fragmenty
@@ -47,7 +56,7 @@ se nejmenují `AGENTS.md`, takže v development checkoutu omylem nepřebírají
 
 ## Profil Workspace
 
-Workspace profil je immutable runtime pro Launchpad a Lazurio CLI v pracovním
+Workspace profil je immutable runtime pro Launchpad a Lazurio CLI v hostovaném pracovním
 prostoru Kolegy nebo AI Kolegy. Není druhým datovým modelem hosted prostředí:
 lokální i vzdálený pracovní prostor používají stejný Lazurio Root,
 Organization Rooty, org-level repa a Workspace Moduly. Liší se jen transportem, custody,
@@ -189,11 +198,12 @@ je atomicky měněný odkaz na jednu zdravou verzi. Po assisted bootstrapu
 se update, status a rollback spouští z `active/resident/updater.mjs`; živý root
 se kvůli tomu nestává source checkoutem.
 
-Lifecycle adapter v1 je záměrně pouze POSIX (Linux a macOS). Windows
-rezidentní instalace se nezapne, dokud nebude mít vlastní atomický pointer
-adapter a stejné failure testy. To neomezuje dnešní Windows Kolegy: jejich
-Lazurio zůstává Git checkout, ve kterém mohou připravit platformní opravu přes
-branch a PR.
+Lifecycle adapter immutable hosted artefaktu v1 je záměrně pouze POSIX (Linux
+a macOS). Windows hosted Resident se nezapne, dokud nebude mít vlastní atomický
+pointer adapter a stejné failure testy. To neomezuje localhost Windows profil:
+pracovní Root zůstává `%USERPROFILE%\\Lazurio` a package-managed CLI má vlastní
+Windows kompatibilní brány. Source oprava patří do
+`%USERPROFILE%\\Lazurio\\development\\Lazurio` a task worktree.
 
 Konkrétní offline postup pro status, update, rollback a zachování lokálního
 hotfixu je v `manual/update-installed-resident.md` a je součástí resident
@@ -201,16 +211,16 @@ artefaktu.
 
 ## Když je potřeba vlastní oprava Launchpadu
 
-Principál může nainstalovaný Lazurio Root na své Mašině upravit, například kvůli
-urgentní platformní chybě. Resident mu v tom nestaví vlastnický ani permission
-zámek. Taková oprava pouze přestává být kanonickým release: Doctor ji ukáže
-jako lokální drift a updater se zastaví, aby ji další verzí potichu nepřepsal.
+Principál může na své Mašině připravit urgentní platformní opravu. Resident mu
+v tom nestaví vlastnický ani permission zámek, ale package ani immutable
+artefakt se ručně nepatchují. Oprava patří do kanonického development checkoutu
+a task worktree; Doctor současně hlídá, aby runtime nepocházel ze skryté nebo
+neověřitelné kopie.
 
-Má-li oprava zůstat, nejčistší další krok je přenést ji do odděleného Lazurio
-source checkoutu, nechat projít PR a postavit nový artefakt. Do té doby může
-lokální hotfix dál sloužit svému účelu; operátor jen vědomě rozhodne, zda jej
-před příštím update zachová, přenese do release, nebo vrátí na kanonickou
-verzi. Systém zde Principálovi pomáhá odchylku vidět, nepředpokládá proti němu
+Má-li oprava zůstat, projde přes PR a nový package nebo hosted artefakt. Do té
+doby může development source link vědomě držet přesný hotfix commit; provenance
+musí zůstat viditelná a permanentním link targetem nikdy není task worktree.
+Systém zde Principálovi pomáhá odchylku vidět, nepředpokládá proti němu
 nepřátelský model.
 
 ## Když něco nefunguje

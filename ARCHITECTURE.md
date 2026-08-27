@@ -211,16 +211,28 @@ Podrobný aktuální kontrakt CLI je v [`lazurio/README.md`](lazurio/README.md).
 
 ## Source, instalace a aktualizace
 
-Kanonický source checkout slouží vývoji. Z reviewovaného commitu se sestaví
-verzovaný non-Git Resident artefakt. Běžící runtime a měnitelná pracovní data
-musí zůstat fyzicky oddělené:
+Na localhost workstation existuje právě jeden pracovní Root odvozený z home
+uživatele Mašiny: `~/Lazurio` na macOS/Linuxu a
+`%USERPROFILE%\Lazurio` na Windows. Je non-Git, jazykově generovaný a drží
+instrukce, konfiguraci, data a mounty. Výběr jazyka nemění jeho strojové cesty
+ani identity.
 
-- neměnný artefakt obsahuje Launchpad, CLI, kontrakty a profil;
-- Organization checkouty, Personalspace a runtime data jsou samostatné
-  měnitelné mounty;
-- update nejdřív ověří nový artefakt, potom jej atomicky aktivuje;
-- poslední zdravá verze zůstává dostupná pro rollback;
-- běžící runtime se neaktualizuje přepisem vlastního source checkoutu.
+Runtime a pracovní Root jsou dvě odlišné vrstvy:
+
+- běžná instalace používá immutable package-managed `lazurio` mimo pracovní
+  Root;
+- development profil může právě tuto jednu aktivní CLI/Core provenance
+  přelinkovat na ověřený Git checkout
+  `<home>/Lazurio/development/Lazurio`;
+- package-only profil source checkout nepotřebuje a instalátor jej implicitně
+  neklonuje;
+- generátor nevytváří uvnitř Rootu další vendored kopii CLI nebo Launchpadu;
+- Organization checkouty, Personalspace a runtime data zůstávají samostatné
+  měnitelné mounty.
+
+Hosted Resident profily mohou dál používat verzovaný immutable artefakt s
+atomickou aktivací a rollbackem. Ani tam se běžící runtime neaktualizuje
+přepisem source checkoutu a artefakt nesmí vytvořit druhou datovou autoritu.
 
 Pracovní checkouty aktualizuje jediná explicitní akce `lazurio update`, kterou
 volá CLI i tlačítko **Synchronizovat**. Postupuje shora dolů přes Lazurio,
@@ -246,7 +258,9 @@ denní ploše nezobrazuje.
 
 Přesné rozhraní drží
 [manuál immutable runtime](manual/lazurio-runtime-install-interface.md) a
-[manuál aktualizace Residenta](manual/update-installed-resident.md).
+[manuál aktualizace Residenta](manual/update-installed-resident.md). Praktický
+workstation postup pro Task Agenty drží
+[manuál Lazurio Rootu](manual/lazurio-root-for-agents.md).
 
 ## Produkce je oddělený systém
 
