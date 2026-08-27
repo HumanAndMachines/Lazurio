@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { validateAgainstSchema } from "../../launchpad/src/json-schema-mini.mjs";
 import schema from "../install-report.v1.schema.json";
 import {
+  canonicalLazurioRoot,
   INSTALL_STEP_IDS,
   inspectLazurioInstallation,
   installExitCode,
@@ -52,6 +53,25 @@ test("public schema pins the same ordered steps and reason-code vocabulary", () 
   );
 });
 
+test("production Root is derived from the platform home without a selectable override", () => {
+  expect(canonicalLazurioRoot({
+    platform: "darwin",
+    homeDirectory: "/Users/example",
+  })).toBe("/Users/example/Lazurio");
+  expect(canonicalLazurioRoot({
+    platform: "linux",
+    homeDirectory: "/home/example",
+  })).toBe("/home/example/Lazurio");
+  expect(canonicalLazurioRoot({
+    platform: "win32",
+    homeDirectory: "C:\\Users\\Example",
+  })).toBe("C:\\Users\\Example\\Lazurio");
+  expect(() => canonicalLazurioRoot({
+    platform: "linux",
+    homeDirectory: "relative/home",
+  })).toThrow("absolute machine home");
+});
+
 test("independent probes continue after a bounded failure", () => {
   const invoked = [];
   const report = inspectLazurioInstallation({
@@ -59,6 +79,14 @@ test("independent probes continue after a bounded failure", () => {
     platform: "linux",
     architecture: "x64",
     bunVersion: "1.4.0",
+    environment: { HOME: "/home/example" },
+    homeDirectory: "/home/example",
+    inspectRoot: (path) => ({
+      path,
+      layout: "missing",
+      status: "action_required",
+      reason: "root_creation_required",
+    }),
     resolveGit: () => {
       throw new Error("CANARY_GIT_FAILURE");
     },
@@ -130,9 +158,12 @@ test("Bun probe requires the exact packageManager version and reports both versi
     architecture: "arm64",
     bunVersion: "1.4.1",
     requiredBunVersion: "1.4.0",
+    environment: { HOME: "/Users/example" },
+    homeDirectory: "/Users/example",
     resolveGit: () => "/usr/bin/git",
     resolveGitHubCli: () => null,
     runCommand: () => ({ status: 0 }),
+    inspectRoot: missingRootObservation,
   });
 
   expect(report.machine.bun).toEqual({
@@ -156,8 +187,11 @@ test("missing Bun runtime is a failed probe with an explicit required version", 
     architecture: "x64",
     bunVersion: null,
     requiredBunVersion: "1.4.0",
+    environment: { HOME: "/home/example" },
+    homeDirectory: "/home/example",
     resolveGit: () => null,
     resolveGitHubCli: () => null,
+    inspectRoot: missingRootObservation,
   });
 
   expect(report.machine.bun).toEqual({
@@ -203,13 +237,15 @@ test("GitHub probes never execute an ambient PATH shadow", () => {
   const report = inspectLazurioInstallation({
     root: null,
     platform: "linux",
-    environment: { PATH: "/tmp/untrusted-shadow" },
+    environment: { HOME: "/home/example", PATH: "/tmp/untrusted-shadow" },
+    homeDirectory: "/home/example",
     resolveGit: () => "/usr/bin/git",
     resolveGitHubCli: () => "/usr/bin/gh",
     runCommand: ({ executable }) => {
       executables.push(executable);
       return { status: 0 };
     },
+    inspectRoot: missingRootObservation,
   });
 
   expect(report.steps.find((step) => step.id === "github_cli")).toMatchObject({
@@ -405,10 +441,27 @@ function fixtureReport() {
     platform: "darwin",
     architecture: "arm64",
     bunVersion: "1.4.0",
+    environment: { HOME: "/Users/example" },
+    homeDirectory: "/Users/example",
     resolveGit: () => "/usr/bin/git",
     resolveGitHubCli: () => null,
     runCommand: () => ({ status: 0, stdout: "CANARY_STDOUT", stderr: "CANARY_STDERR" }),
+    inspectRoot: (path) => ({
+      path,
+      layout: "missing",
+      status: "action_required",
+      reason: "root_creation_required",
+    }),
   });
+}
+
+function missingRootObservation(path) {
+  return {
+    path,
+    layout: "missing",
+    status: "action_required",
+    reason: "root_creation_required",
+  };
 }
 
 function rootStep(root, { gitExecutable = resolveTrustedGitExecutable() } = {}) {

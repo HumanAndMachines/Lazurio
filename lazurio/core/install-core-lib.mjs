@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
-import { join, resolve, win32 } from "node:path";
+import { homedir } from "node:os";
+import { join, posix, resolve, win32 } from "node:path";
 
 import {
   buildLazurioCliProvenance,
@@ -35,7 +36,6 @@ const supportedPlatforms = new Set(["darwin", "linux", "win32"]);
 const supportedArchitectures = new Set(["x64", "arm64"]);
 const ignoredEmptyRootEntries = new Set([".DS_Store", "Thumbs.db", "desktop.ini"]);
 const rootLayouts = new Set([
-  "not_selected",
   "missing",
   "empty",
   "legacy_git_root",
@@ -52,7 +52,6 @@ const reasonsByStep = Object.freeze({
   github_cli: new Set(["github_cli_available", "github_cli_missing", "github_cli_unusable", "probe_failed"]),
   github_auth: new Set(["github_authenticated", "github_login_required", "github_cli_unavailable", "probe_failed"]),
   root: new Set([
-    "root_selection_required",
     "root_creation_required",
     "legacy_git_root_detected",
     "generated_root_ready",
@@ -72,6 +71,7 @@ export function inspectLazurioInstallation({
   bunVersion = process.versions.bun ?? null,
   requiredBunVersion = readRequiredBunVersion(),
   environment = process.env,
+  homeDirectory = homedir(),
   resolveGit = resolveTrustedGitExecutable,
   resolveGitHubCli = resolveTrustedGitHubCliExecutable,
   runCommand = runCommandSync,
@@ -132,7 +132,11 @@ export function inspectLazurioInstallation({
       : actionRequired("github_login_required");
   }));
 
-  const rootObservation = boundedRootProbe(root, inspectRoot, {
+  const effectiveRoot = root ?? canonicalLazurioRoot({
+    platform,
+    homeDirectory,
+  });
+  const rootObservation = boundedRootProbe(effectiveRoot, inspectRoot, {
     platform,
     environment,
     gitExecutable,
@@ -157,6 +161,23 @@ export function inspectLazurioInstallation({
     throw new Error("Install Core produced an invalid report.");
   }
   return report;
+}
+
+export function canonicalLazurioRoot({
+  platform = process.platform,
+  homeDirectory = homedir(),
+} = {}) {
+  const pathApi = platform === "win32" ? win32 : posix;
+  if (
+    typeof homeDirectory !== "string"
+    || homeDirectory === ""
+    || homeDirectory.includes("\n")
+    || homeDirectory.includes("\r")
+    || !pathApi.isAbsolute(homeDirectory)
+  ) {
+    throw new Error("Lazurio canonical Root requires an absolute machine home directory.");
+  }
+  return pathApi.join(pathApi.normalize(homeDirectory), "Lazurio");
 }
 
 export function isValidLazurioInstallReport(value) {
@@ -210,12 +231,6 @@ function boundedProbe(id, probe) {
 }
 
 function boundedRootProbe(root, inspectRoot, context) {
-  if (root === null) {
-    return {
-      step: { id: "root", status: "action_required", reason: "root_selection_required" },
-      root: { selected: false, path: null, layout: "not_selected" },
-    };
-  }
   try {
     const observation = inspectRoot(root, context);
     return {
@@ -323,10 +338,7 @@ function validSummary(summary, steps) {
 
 function validRoot(root) {
   if (!plainObject(root) || typeof root.selected !== "boolean" || !rootLayouts.has(root.layout)) return false;
-  if (root.selected) {
-    return typeof root.path === "string" && root.path !== "" && root.layout !== "not_selected";
-  }
-  return root.path === null && root.layout === "not_selected";
+  return root.selected === true && typeof root.path === "string" && root.path !== "";
 }
 
 function rootResult(path, layout, status, reason) {

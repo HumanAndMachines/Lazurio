@@ -7,10 +7,11 @@ import { delimiter, dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 import {
-  assertRootlessInstallBoundary,
+  assertCanonicalInstallBoundary,
   buildLazurioNpmPackage,
   packageEvidenceForReport,
 } from "./npm-package-lib.mjs";
+import { canonicalLazurioRoot } from "../lazurio/core/install-core-lib.mjs";
 import {
   commitRemoteModule,
   createLazurioUpdateFixture,
@@ -87,11 +88,15 @@ async function smokeInstalledArchive(build) {
   const installRoot = join(temporaryRoot, "bun");
   const globalDirectory = join(installRoot, "install", "global");
   const globalBin = join(installRoot, "bin");
+  const machineHome = join(temporaryRoot, "home");
+  await mkdir(machineHome, { recursive: true });
   const environment = cleanPathEnvironment({
     ...process.env,
     BUN_INSTALL: installRoot,
     BUN_INSTALL_GLOBAL_DIR: globalDirectory,
     BUN_INSTALL_BIN: globalBin,
+    HOME: machineHome,
+    USERPROFILE: machineHome,
   });
   environment.PATH = `${globalBin}${delimiter}${dirname(process.execPath)}${delimiter}${environment.PATH}`;
   const install = run(process.execPath, ["add", "--global", build.paths.archive], {
@@ -128,26 +133,31 @@ async function smokeInstalledArchive(build) {
   } catch {
     throw new Error("installed lazurio install did not return JSON");
   }
-  assertRootlessInstallBoundary({
+  const canonicalRoot = canonicalLazurioRoot({
+    platform: process.platform,
+    homeDirectory: machineHome,
+  });
+  assertCanonicalInstallBoundary({
     report: parsedInstallReport,
     exitStatus: installReport.status,
+    canonicalRoot,
   });
-  const rootless = runInstalledShim(globalBin, ["context", "--json"], environment);
-  if (rootless.status !== 1 || !rootless.stderr.includes("--root <cesta>")) {
-    throw new Error("package-managed Root command must fail closed until --root is explicit");
+  const canonicalContext = runInstalledShim(globalBin, ["context", "--json"], environment);
+  if (canonicalContext.status === 0 || canonicalContext.stderr.includes("--root <cesta>")) {
+    throw new Error("package-managed Root command must resolve canonical home without requesting a Root selection");
   }
-  const rootlessModule = runInstalledShim(
+  const canonicalModule = runInstalledShim(
     globalBin,
     ["module", "setup", ".", "--json"],
     environment,
   );
   if (
-    rootlessModule.status !== 3
-    || rootlessModule.stdout.trim() !== ""
-    || !rootlessModule.stderr.includes("--root <cesta>")
+    canonicalModule.status !== 3
+    || canonicalModule.stdout.trim() !== ""
+    || canonicalModule.stderr.includes("--root <cesta>")
   ) {
     throw new Error(
-      `package-managed module setup without --root must return usage/environment exit 3: ${failure(rootlessModule)}`,
+      `package-managed module setup must use canonical home without requesting a Root selection: ${failure(canonicalModule)}`,
     );
   }
   await assertInstalledUpdaterRuntime({ globalBin, environment });

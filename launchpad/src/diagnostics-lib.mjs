@@ -1939,7 +1939,7 @@ export async function developerToolUpdateChecks({
     })];
   }
   return observations
-    .filter((observation) => observation.required || observation.status !== "not_installed")
+    .filter((observation) => observation.required || observation.status !== "not_available")
     .map(toolUpdateDoctorCheck);
 }
 
@@ -1977,13 +1977,13 @@ function toolUpdateDoctorCheck(observation) {
       details,
     };
   }
-  if (observation.status === "not_installed") {
+  if (observation.status === "not_available") {
     return {
       id,
       status: "warn",
       severity: "recommended",
       title: `${observation.title} · dostupnost`,
-      message: `${observation.title} nebyl nalezen. Pokud je pro troubleshooting potřeba, Agent musí nejdřív požádat Principála o souhlas s instalací.`,
+      message: `${observation.title} není dostupný v PATH. Může chybět nebo být nainstalovaný mimo PATH; Agent musí před instalací nebo změnou PATH nejdřív požádat Principála o souhlas.`,
       paths: [],
       links: [],
       details: [...details, "next_action: ask_principal_before_install"],

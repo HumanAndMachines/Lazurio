@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import {
+  DEVELOPER_TOOL_DEFINITIONS,
   DEVELOPER_TOOL_UPDATE_POLICY,
   compareStableVersions,
   inspectDeveloperToolUpdates,
@@ -68,7 +69,7 @@ test("offline release lookup stays explicit instead of guessing currency", async
   });
 });
 
-test("optional missing tools do not trigger release requests", async () => {
+test("optional missing tools stay neutral and do not trigger release requests", async () => {
   let fetched = false;
   const [observation] = await inspectDeveloperToolUpdates({
     definitions: [{ ...definitions[0], required: false }],
@@ -79,8 +80,19 @@ test("optional missing tools do not trigger release requests", async () => {
     },
   });
 
-  expect(observation.status).toBe("not_installed");
+  expect(observation).toMatchObject({
+    status: "not_available",
+    reason: "executable_not_found_on_path",
+  });
   expect(fetched).toBe(false);
+});
+
+test("Codex is required in PATH while Claude remains optional", () => {
+  const codex = DEVELOPER_TOOL_DEFINITIONS.find((definition) => definition.id === "codex");
+  const claude = DEVELOPER_TOOL_DEFINITIONS.find((definition) => definition.id === "claude");
+
+  expect(codex?.required).toBe(true);
+  expect(claude?.required).toBe(false);
 });
 
 test("stable version comparison and Git tags ignore release candidates", () => {

@@ -49,10 +49,10 @@ test("tool update Doctor checks warn the Agent without running an updater", asyn
       {
         id: "codex",
         title: "Codex CLI",
-        required: false,
+        required: true,
         update_policy: "principal_consent_required",
-        status: "not_installed",
-        reason: "executable_not_found",
+        status: "not_available",
+        reason: "executable_not_found_on_path",
         current_version: null,
         latest_version: null,
         release_url: null,
@@ -62,9 +62,9 @@ test("tool update Doctor checks warn the Agent without running an updater", asyn
         title: "Claude Code",
         required: false,
         update_policy: "principal_consent_required",
-        status: "currency_unknown",
-        reason: "release_lookup_timeout",
-        current_version: "2.1.246",
+        status: "not_available",
+        reason: "executable_not_found_on_path",
+        current_version: null,
         latest_version: null,
         release_url: null,
       },
@@ -73,12 +73,14 @@ test("tool update Doctor checks warn the Agent without running an updater", asyn
 
   expect(checks.map((check) => check.id)).toEqual([
     "platform.github_cli_update",
-    "platform.claude_update",
+    "platform.codex_update",
   ]);
   expect(checks[0]).toMatchObject({ status: "warn", severity: "recommended" });
   expect(checks[0].message).toContain("požádat Principála o souhlas");
   expect(checks[0].details).toContain("next_action: ask_principal_before_update");
-  expect(checks[1].message).toContain("nebude stav hádat ani nic měnit");
+  expect(checks[1].message).toContain("není dostupný v PATH");
+  expect(checks[1].message).toContain("Principála");
+  expect(checks[1].details).toContain("next_action: ask_principal_before_install");
 });
 
 test("Lazurio update Doctor check je read-only a nemá stable/nightly kanály", async () => {

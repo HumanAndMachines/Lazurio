@@ -14,13 +14,19 @@ mašiny, doplnit jen odsouhlasené chybějící části a vždy skončit reporte
 slice je záměrně pouze read-only:
 
 ```sh
-lazurio install --root <cesta>
-lazurio install --root <cesta> --language en
-lazurio install --root <cesta> --json
+lazurio install
+lazurio install --language en
+lazurio install --json
 ```
 
-Source CLI bez explicitního `--root` kontroluje svůj source Root. Immutable npm
-CLI bez uložené volby místo pádu vrátí `root_selection_required`. Společné Core
+Produkční Root není uživatelská volba: package-managed nebo Resident CLI vždy
+použije přesně `<home>/Lazurio` (`~/Lazurio` na macOS/Linuxu a
+`%USERPROFILE%\Lazurio` na Windows). Top-level `lazurio install` proto
+nepřijímá `--root`, nic nepersistuje a nenabízí picker. Source-linked
+development CLI dál kontroluje svůj ověřený source Root, aby Agenti mohli
+dogfoodovat tutéž fasádu z worktree/source checkoutu. Legacy Root v jiné cestě
+se tiše neadoptuje ani nepřesouvá; je vstupem samostatné detekované migrace do
+canonical targetu. Společné Core
 postupně ověří platformu, exact Bun runtime z
 `package.json#packageManager`, Git, GitHub CLI, přihlášení ke github.com
 a tvar Rootu; chyba jednoho probe nezastaví nezávislé kontroly a výstup nikdy
@@ -43,8 +49,12 @@ lazurio doctor --tool-updates
 lazurio doctor --tool-updates --json
 ```
 
-Git, GitHub CLI a nainstalované Codex CLI / Claude Code se porovnají
-s oficiálním stabilním release zdrojem. Kontrola je pouze advisory: novější
+Git, GitHub CLI a Codex CLI dostupné v `PATH` se porovnají
+s oficiálním stabilním release zdrojem; Claude Code se kontroluje pouze tehdy,
+je-li na dané mašině nainstalovaný a dostupný v `PATH`. Chybějící Claude je
+neutrální, zatímco nedostupný příkaz `codex` je warning: Doctor nemůže poznat,
+zda Codex chybí úplně, nebo leží mimo `PATH`, a navede Agenta k ověření se
+souhlasem Principála. Kontrola je pouze advisory: novější
 verze je `warn` s `next_action: ask_principal_before_update`; Lazurio nikdy
 nespustí updater, package manager ani instalační příkaz. Nedostupná síť vrátí
 výslovné `currency_unknown` místo zeleného odhadu. Volitelný přepínač drží
@@ -218,10 +228,11 @@ takže vlastní `.exe` nelze synchronně přesně odstranit bez druhého cleanup
 mechanismu. Exact Bun unlink proto patří pozdějšímu machine updateru, který
 neběží přes tento launcher.
 
-Development link a Resident bez `--root` použijí Root vlastního entrypointu,
-takže fungují z libovolného pracovního adresáře. Platformně neutrální npm
-balíček je naopak pouze CLI code origin: dokud pozdější writer `lazurio install`
-neuloží zvolený pracovní Root, rootové příkazy vyžadují explicitní `--root`.
+Development link bez `--root` používá ověřený source Root vlastního entrypointu,
+takže funguje z libovolného pracovního adresáře. Resident a platformně neutrální
+npm balíček jsou pouze CLI code origin: rootové příkazy bez explicitního
+diagnostického override používají canonical `<home>/Lazurio`; nic se
+nepersistuje a žádný pracovní Root se nevybírá.
 `lazurio --version` vždy popisuje samotné spuštěné CLI a `--root` proto
 nepřijímá. Linked task/PR worktree se permanentním PATH targetem stát nesmí.
 

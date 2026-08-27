@@ -42,8 +42,16 @@ function fixtureReport() {
     platform: "darwin",
     architecture: "arm64",
     bunVersion: "1.4.0",
+    environment: { HOME: "/Users/example" },
+    homeDirectory: "/Users/example",
     resolveGit: () => "/usr/bin/git",
     resolveGitHubCli: () => null,
     runCommand: () => ({ status: 0 }),
+    inspectRoot: (path) => ({
+      path,
+      layout: "missing",
+      status: "action_required",
+      reason: "root_creation_required",
+    }),
   });
 }
