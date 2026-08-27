@@ -1,9 +1,9 @@
 import { afterAll, expect, test } from "bun:test";
 import { tmpdir } from "os";
 import { join } from "path";
-import { mkdir, mkdtemp, rm, writeFile } from "fs/promises";
+import { mkdir, mkdtemp, realpath, rename, rm, symlink, writeFile } from "fs/promises";
 import { buddyPresentationProjection, discoverPersonalspace, personalAppRuntimeId } from "../../lazurio/runtime/personalspace-lib.mjs";
-import { discoverLaunchpadApps } from "../../lazurio/runtime/discovery-lib.mjs";
+import { APP_CHECKOUT_ROOT, APP_FILESYSTEM_ROOT, discoverLaunchpadApps } from "../../lazurio/runtime/discovery-lib.mjs";
 
 const tempRoots = [];
 
@@ -259,6 +259,8 @@ test("personalspace lane objeví validní osobní prostor s aplikací a Private 
   expect(app.surface_scope).toBe("private");
   expect(app.space).toBe("exampleuser_GEN3");
   expect(app.id).toBe(personalAppRuntimeId("exampleuser_GEN3", "notes-v1"));
+  expect(app[APP_FILESYSTEM_ROOT]).toBe(root);
+  expect(app[APP_CHECKOUT_ROOT]).toBe(await realpath(join(root, "personalspace", "exampleuser_GEN3", "workspace", "notes")));
 });
 
 test("Personalspace materializes lazurio.runtime.v1 from the module-owned lease", async () => {
@@ -291,6 +293,92 @@ test("Personalspace materializes lazurio.runtime.v1 from the module-owned lease"
     module_contract: { schema_version: "lazurio.module.v1", id: "notes" },
     listeners: [{ lease: "main", allocation: "static", port: 41_120 }],
   });
+});
+
+test("Personalspace odmítne workspace junction mimo owner checkout a neuniknou z něj aplikace", async () => {
+  const root = await createPersonalspaceFixture({
+    localOwner: "exampleuser",
+    spaces: [{
+      dirName: "exampleuser_GEN3",
+      owner: "exampleuser",
+      config: personalConfig("exampleuser"),
+      apps: [{ module: "notes", manifest: personalAppManifest("exampleuser", { id: "notes-v1", port: 41_121 }) }],
+    }],
+  });
+  const workspaceRoot = join(root, "personalspace", "exampleuser_GEN3", "workspace");
+  const foreignWorkspace = join(root, "foreign-personal-workspace");
+  await rename(workspaceRoot, foreignWorkspace);
+  await symlink(foreignWorkspace, workspaceRoot, process.platform === "win32" ? "junction" : "dir");
+
+  const result = await discoverPersonalspace(root);
+  expect(result.apps).toHaveLength(0);
+  expect(result.failures.join("\n")).toContain("workspace odkazuje přes symlink/junction mimo Personalspace");
+});
+
+test.skipIf(process.platform === "win32")("Personalspace izoluje Module manifest odkazující mimo přesný modul", async () => {
+  const root = await createPersonalspaceFixture({
+    localOwner: "exampleuser",
+    spaces: [{
+      dirName: "exampleuser_GEN3",
+      owner: "exampleuser",
+      config: personalConfig("exampleuser"),
+      apps: [{
+        module: "notes",
+        manifest: lazurioPersonalAppManifest("exampleuser", { id: "notes-v2" }),
+        moduleManifest: {
+          schema_version: "lazurio.module.v1",
+          id: "notes",
+          company: "exampleuser",
+          tcp_port_policy: { mode: "single" },
+          port_leases: [{ id: "main", host: "127.0.0.1", port: 41_122 }],
+        },
+      }],
+    }],
+  });
+  const manifestPath = join(root, "personalspace", "exampleuser_GEN3", "workspace", "notes", "lazurio.module.json");
+  const foreignManifest = join(root, "foreign-personal-module.json");
+  await rename(manifestPath, foreignManifest);
+  await symlink(foreignManifest, manifestPath, "file");
+
+  const result = await discoverPersonalspace(root);
+  expect(result.apps).toHaveLength(0);
+  expect(result.invalid_apps).toHaveLength(1);
+  expect(result.invalid_apps[0].manifest_issues.join("\n")).toContain("odkazuje mimo vybraný checkout");
+});
+
+test.skipIf(process.platform === "win32")("Personalspace root authority JSON nesmí odkazovat mimo přesný owner mount", async () => {
+  const personalRoot = await createPersonalspaceFixture({
+    localOwner: "exampleuser",
+    spaces: [{
+      dirName: "exampleuser_GEN3",
+      owner: "exampleuser",
+      config: personalConfig("exampleuser"),
+    }],
+  });
+  const spaceRoot = join(personalRoot, "personalspace", "exampleuser_GEN3");
+  const personalPath = join(spaceRoot, "personal.gen3.json");
+  const foreignPersonal = join(personalRoot, "foreign-personal.gen3.json");
+  await rename(personalPath, foreignPersonal);
+  await symlink(foreignPersonal, personalPath, "file");
+  const personalResult = await discoverPersonalspace(personalRoot);
+  expect(personalResult.apps).toHaveLength(0);
+  expect(personalResult.failures.join("\n")).toContain("odkazuje mimo vybraný checkout");
+
+  const manifestRoot = await createPersonalspaceFixture({
+    localOwner: "exampleuser",
+    spaces: [{
+      dirName: "exampleuser_GEN3",
+      owner: "exampleuser",
+      config: personalConfig("exampleuser"),
+    }],
+  });
+  const manifestSpaceRoot = join(manifestRoot, "personalspace", "exampleuser_GEN3");
+  const manifestPath = join(manifestSpaceRoot, "modules.manifest.json");
+  const foreignManifest = join(manifestRoot, "foreign-modules.manifest.json");
+  await rename(manifestPath, foreignManifest);
+  await symlink(foreignManifest, manifestPath, "file");
+  const manifestResult = await discoverPersonalspace(manifestRoot);
+  expect(manifestResult.warnings.join("\n")).toContain("odkazuje mimo vybraný checkout");
 });
 
 test("Personalspace exact leases are not governed by a mounted Organization pool", async () => {

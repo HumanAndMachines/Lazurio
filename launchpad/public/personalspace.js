@@ -18,6 +18,8 @@
 //   listování zápisů (strom, markdown render, fulltext) jako fallback.
 
 import { focusMenuTriggerAfterRender } from "./focus-restoration.js";
+import { openCodexRepairDialog, openCodexRuntimeIssueDialog } from "./codex-handoff.js";
+import { runtimeRecoveryForApp } from "./runtime-recovery.js";
 
 const state = {
   data: null,
@@ -863,6 +865,7 @@ async function runGbrainSearch(space) {
 // s URL, nebo zastavená s připravenými balíčky. needs_install / blokující
 // manifest / spadlé spuštění vede přes warning panel, ne přes klik na dlaždici.
 function isOpenable(app) {
+  if (app.repair_action?.prompt || personalRuntimeRecovery(app)) return false;
   if (app.runtime_status === "healthy") return Boolean(app.url);
   return canStart(app);
 }
@@ -877,50 +880,55 @@ function personalAppDescription(app) {
 
 // Warning model dlaždice (port cardWarningModel z GEN2-minimal karty, ořezaný na personalspace
 // lane — bez git/pull a bez detail panelu): v čistém stavu vrací null, jinak
-// popíše, co je potřeba vyřešit. Priorita: blokující manifest > chybějící/
-// zastaralé balíčky > spadlé spuštění. Jen instalace/oprava nese přímou akci.
+// popíše, co je potřeba vyřešit. Stejný recovery model jako Organization vždy
+// nabídne konkrétní Install/Repair/Retry nebo připravený Codex handoff.
 function personalCardWarningModel(app) {
-  const dependencyState = app.dependencies?.state;
-
-  // Blokující stavy: aplikace teď nejde spustit — vysvětli proč (bez one-click
-  // akce, řešení patří do manifestu / logů).
-  if (["invalid_manifest", "missing_package", "unknown_package_manager"].includes(dependencyState)) {
+  if (app.repair_action?.prompt) {
     return {
       tone: "danger",
-      title: dependencyLabel(dependencyState),
-      detail: app.dependencies?.message || "Osobní aplikace teď nejde spustit. Oprav manifest a balíčky.",
+      title: "Aplikaci je potřeba opravit",
+      detail: app.dependencies?.message || "Lazurio připravilo bezpečný postup pro opravu této osobní aplikace.",
+      actionLabel: app.repair_action.label ?? "Vyřešit s Codexem",
+      run: () => openCodexRepairDialog(app.repair_action),
     };
   }
 
-  // Chybí nebo jsou zastaralé balíčky: nainstaluj/oprav před prvním spuštěním.
-  if (dependencyState === "needs_install" && (app.dependencies?.can_install ?? false)) {
-    const action = dependencyState === "needs_install" ? "install" : "repair";
+  const recovery = personalRuntimeRecovery(app);
+  if (recovery) {
+    const directAction = ["install", "repair"].includes(recovery.action)
+      ? () => runAction(app, recovery.action)
+      : recovery.action === "retry"
+        ? () => openPersonalApp(app)
+        : () => openCodexRuntimeIssueDialog(app, recovery);
     return {
-      tone: "warn",
-      title: dependencyState === "needs_install" ? "Chybí balíčky" : "Balíčky k opravě",
-      detail:
-        dependencyState === "needs_install"
-          ? "Osobní aplikace ještě nemá nainstalované balíčky. Nainstaluj je před prvním spuštěním."
-          : "Zámek balíčků je zastaralý. Oprav balíčky, ať start proběhne čistě.",
-      actionLabel: dependencyState === "needs_install" ? "Instalovat" : "Opravit balíčky",
-      run: () => runAction(app, action),
-      pending: `${app.id}:${action}`,
-    };
-  }
-
-  // Poslední spuštění spadlo: pošli do logů (toast).
-  if (app.runtime_status === "unhealthy") {
-    return {
-      tone: "danger",
-      title: "Spuštění selhalo",
-      detail: "Poslední spuštění spadlo. Otevři logy a podívej se proč.",
-      actionLabel: "Logy",
-      run: () => loadLogs(app),
-      pending: `${app.id}:logs`,
+      tone: recovery.action === "codex" ? "danger" : "warn",
+      title: recovery.title,
+      detail: recovery.message,
+      actionLabel: recovery.actionLabel,
+      run: directAction,
+      pending: ["install", "repair"].includes(recovery.action)
+        ? `${app.id}:${recovery.action}`
+        : null,
     };
   }
 
   return null;
+}
+
+function personalRuntimeRecovery(app) {
+  const dependencyState = app.dependencies?.state;
+  if (["invalid_manifest", "missing_package", "missing_lockfile", "unknown_package_manager"].includes(dependencyState)) {
+    return runtimeRecoveryForApp(app, {
+      code: `app_${dependencyState}`,
+      message: app.dependencies?.message ?? dependencyLabel(dependencyState),
+      payload: {
+        error: `app_${dependencyState}`,
+        failure_kind: dependencyState,
+        details: [app.dependencies?.message].filter(Boolean),
+      },
+    });
+  }
+  return runtimeRecoveryForApp(app);
 }
 
 // Inline warning panel na dlaždici (reuse .card-warning* vzoru): ikona +
@@ -1015,8 +1023,9 @@ function personalMenuNode(app) {
   return { trigger: menu, panel: isOpen ? panel : null };
 }
 
-// „Další možnosti" pod ⋯: zastavit/restart vlastněné instance a logy běžící
-// aplikace. Spadlá aplikace má logy už ve warning panelu — v menu je nezdvojíme.
+// „Další možnosti" pod ⋯: zastavit/restart vlastněné instance a diagnostické
+// logy. U spadlé aplikace zůstává recovery primární, Logy jsou sekundární
+// důkazní stopa a nesmí kvůli nové recovery akci zmizet.
 function personalMenuActions(app) {
   const actions = [];
   if (canStop(app)) {
@@ -1025,7 +1034,7 @@ function personalMenuActions(app) {
   if (canRestart(app)) {
     actions.push({ label: "Restart", run: () => runAction(app, "restart"), pending: `${app.id}:restart` });
   }
-  if (app.runtime_status === "healthy") {
+  if (["healthy", "unhealthy"].includes(app.runtime_status)) {
     actions.push({ label: "Logy", run: () => loadLogs(app), pending: `${app.id}:logs` });
   }
   return actions;
@@ -1103,7 +1112,7 @@ function canStop(app) {
   return app.runtime?.owner === "current-instance";
 }
 function canRestart(app) {
-  return app.runtime?.owner === "current-instance";
+  return app.runtime?.owner === "current-instance" && !personalRuntimeRecovery(app);
 }
 
 async function runAction(app, action) {
@@ -1312,11 +1321,11 @@ function escapeHtml(value) {
 // appCardTone z GEN2-minimal karty). Běžící má vždy „running", pak danger → blocked,
 // warn → attention; fallback pro edge-case bez warningu.
 function appTone(app, warning) {
-  if (app.runtime_status === "healthy") return "running";
   if (warning?.tone === "danger") return "blocked";
   if (warning?.tone === "warn") return "attention";
+  if (app.runtime_status === "healthy") return "running";
   const dependencyState = app.dependencies?.state;
-  if (["missing_package", "unknown_package_manager", "invalid_manifest"].includes(dependencyState)) return "blocked";
+  if (["dependency_boundary_invalid", "missing_package", "missing_lockfile", "unknown_package_manager", "invalid_manifest"].includes(dependencyState)) return "blocked";
   if (dependencyState === "needs_install") return "attention";
   if (app.runtime_status === "unhealthy") return "blocked";
   return "idle";
@@ -1337,7 +1346,9 @@ function dependencyLabel(stateName) {
   return (
     {
       needs_install: "Chybí balíčky",
+      dependency_boundary_invalid: "Neplatná hranice balíčků",
       missing_package: "Chybí package.json",
+      missing_lockfile: "Chybí lockfile",
       unknown_package_manager: "Nepodporovaný manažer",
       invalid_manifest: "Nevalidní manifest",
     }[stateName] ?? stateName

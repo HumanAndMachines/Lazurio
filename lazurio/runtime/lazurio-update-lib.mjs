@@ -8,7 +8,7 @@ import {
   discoverLaunchpadApps,
   organizationContainedRelativePath,
 } from "./discovery-lib.mjs";
-import { refreshFrozenBunDependencies } from "./dependency-install-lib.mjs";
+import { inspectRequiredDependencies, refreshFrozenBunDependencies } from "./dependency-install-lib.mjs";
 import { buildGitInventory } from "./git-inventory-lib.mjs";
 import { materializeRepoCheckout } from "./git-materialization-lib.mjs";
 import { buildModuleLocationRepairAction } from "../core/module-location-repair-contract-lib.mjs";
@@ -1107,18 +1107,60 @@ function sourceCheckoutChanged(actions = []) {
 
 async function dependencyTarget({ repo, repoRoot, cwd, app = null }) {
   const packagePath = join(cwd, "package.json");
-  if (!existsSync(packagePath)) return null;
-  let packageJson;
   try {
-    packageJson = JSON.parse(await readFile(packagePath, "utf8"));
-  } catch {
-    // Nečitelný deklarovaný package musí skončit pravdivým blockerem ve
-    // sdíleném installeru; nesmí se tiše přeskočit.
-    return { repo, repo_root: repoRoot, cwd, app };
+    await lstat(packagePath);
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    return {
+      repo,
+      repo_root: repoRoot,
+      cwd,
+      app,
+      dependency_inspection: {
+        ok: false,
+        reason: "package_json_inspection_failed",
+        detail: `package.json nejde bezpečně ověřit: ${error instanceof Error ? error.message : String(error)}`,
+      },
+    };
   }
-  const hasBunLock = existsSync(join(cwd, "bun.lock")) || existsSync(join(cwd, "bun.lockb"));
-  if (!hasBunLock && declaredDependencyCount(packageJson) === 0) return null;
-  return { repo, repo_root: repoRoot, cwd, app };
+  const bunLockfileState = await firstPresentBunLockfile(cwd);
+  if (!bunLockfileState.ok) {
+    return {
+      repo,
+      repo_root: repoRoot,
+      cwd,
+      app,
+      dependency_inspection: bunLockfileState,
+    };
+  }
+  const bunLockfile = bunLockfileState.name;
+  const dependencyInspection = await inspectRequiredDependencies({
+    cwd,
+    boundaryRoot: repoRoot,
+    lockfile: bunLockfile,
+  });
+  if (dependencyInspection.ok && !bunLockfile && dependencyInspection.required_dependency_count === 0) return null;
+  return { repo, repo_root: repoRoot, cwd, app, dependency_inspection: dependencyInspection };
+}
+
+async function firstPresentBunLockfile(cwd) {
+  for (const name of ["bun.lock", "bun.lockb"]) {
+    try {
+      // lstat intentionally treats a broken symlink as a present authority
+      // entry. The shared inspector can then reject it explicitly instead of
+      // silently degrading it to "no lockfile" via existsSync().
+      await lstat(join(cwd, name));
+      return { ok: true, name };
+    } catch (error) {
+      if (error?.code === "ENOENT") continue;
+      return {
+        ok: false,
+        reason: "dependency_tree_inspection_failed",
+        detail: `${name} nejde bezpečně ověřit: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+  }
+  return { ok: true, name: null };
 }
 
 function owningManagedRepo(canonicalRepos, cwd) {
@@ -1135,6 +1177,14 @@ function pathWithin(parent, child) {
 
 async function refreshDependencyTarget({ target, rootPath, refreshPackageDependencies, refreshAppDependencies }) {
   try {
+    if (target.dependency_inspection?.ok === false) {
+      return dependencyOutcome(target, {
+        ok: false,
+        reason: target.dependency_inspection.reason ?? "dependency_tree_inspection_failed",
+        detail: target.dependency_inspection.detail ?? "Dependency autoritu se nepodařilo bezpečně ověřit.",
+        strategy: null,
+      });
+    }
     const result = target.app && refreshAppDependencies
       ? await refreshAppDependencies({
           appId: target.app.id,
@@ -1144,7 +1194,7 @@ async function refreshDependencyTarget({ target, rootPath, refreshPackageDepende
         })
       : await refreshPackageDependencies({
           cwd: target.cwd,
-          boundaryRoot: target.cwd,
+          boundaryRoot: target.repo_root,
           env: dependencyInstallEnvironment({ target, rootPath }),
         });
     if (result?.ok === false) {
@@ -1253,13 +1303,6 @@ function applyDependencyOutcomes(results, outcomes, repoDescriptors) {
       next_action: blocked.next_action,
     };
   }
-}
-
-function declaredDependencyCount(packageJson) {
-  return ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]
-    .map((key) => packageJson?.[key])
-    .filter((value) => value && typeof value === "object" && !Array.isArray(value))
-    .reduce((count, value) => count + Object.keys(value).length, 0);
 }
 
 async function safeInventory(buildInventory, rootPath, warnings, organizations = null) {

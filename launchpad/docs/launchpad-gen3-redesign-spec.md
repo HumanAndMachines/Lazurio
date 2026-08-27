@@ -351,8 +351,9 @@ Every visible app card must be derived from one app object with these groups:
   `external` / `stale`; worktree runs carry plan code + branch), `runtime.owner`,
   `runtime.pid`, `runtime.log_path`, `runtime.failure_kind`, `runtime.last_install`
 - dependencies: `dependencies.state`, `package_manager`, `install_command_display`,
-  `cwd`, `package_path`, `node_modules_present`, `lockfile`, `can_install`,
-  `can_start`, `checked_at`
+  `cwd`, `package_path`, `node_modules_present`, `required_dependency_count`,
+  `missing_required_dependencies`, `lockfile`, `can_install`, `can_start`,
+  `checked_at`
 - policy: `is_productionspace`, `action_policy`, `risk_level`
 
 The current implementation already ships identity/navigation/runtime/dependency
@@ -367,13 +368,22 @@ Use one vocabulary across cards, detail panel and Doctor.
 | --- | --- | --- | --- | --- |
 | `running` | app health probe is OK | Open / Logs / Stop / Restart | n/a | green live badge |
 | `ready` | dependencies and package are usable; app can start | Start / Open / Repair | yes | neutral/ready |
-| `needs_install` | app is visible but `node_modules` or install artifacts are missing | Install | no | orange attention |
-| `missing_package` | manifest points to missing/unreadable package | Doctor sync / fix manifest | no | red blocked |
-| `unknown_package_manager` | safe install command cannot be inferred | Doctor / terminal | no | red blocked |
+| `needs_install` | app is visible but at least one direct runtime/dev package is missing; peer/optional-only declarations do not block | Install when a frozen Bun lockfile is available | no | orange attention |
+| `missing_lockfile` | a required package is missing but no exact supported lockfile authorizes a deterministic install | prepared Codex handoff to create and commit the matching lockfile; no guessed install | no | red blocked |
+| `dependency_boundary_invalid` | package, lockfile, `node_modules` root or dependency path escapes the exact owning Module/Personalspace/main/worktree checkout | prepared Codex handoff; do not mutate the tree | no | red blocked |
+| `missing_package` | manifest points to a genuinely missing package root or package.json | Doctor sync / fix manifest | no | red blocked |
+| `unknown_package_manager` | safe install command cannot be inferred, including a declared manager/selected-lockfile mismatch | align manager + lockfile through Doctor / terminal | no | red blocked |
 | `missing_access` | Organization/module exists in plan but local machine lacks checkout/access | request/access/sync | no | lock/access badge |
 | `restricted` | code exists but current profile/role may not act | request approval | depends on policy | lock/risk badge |
 | `planned_slot` | planned app/space not locally installed yet | follow roadmap/Doctor | no | ghost/planned |
 | `runtime_failed` | last start/install exited or health is failing | read logs, install/repair/fix script | no until resolved | red log-linked badge |
+
+Readiness validates and only then reads the exact selected Bun/npm/pnpm/Yarn
+lockfile. This wider read-only recognition does not widen mutation authority:
+Launchpad Install/Repair remains frozen-Bun-only and is offered only with an
+exact Bun lockfile. The installer pins package/lockfile identity and bytes
+across the child process; authority drift rejects the result and clean repair
+restores the previous dependency tree without overwriting changed Git files.
 
 Runtime readiness is Organization-scoped. A hard discovery failure in one
 mounted Organization must remain visible in the global Doctor, but it must not
@@ -446,11 +456,28 @@ diagnostic payload. Examples:
 
 - `missing_dependencies` → Install/Repair
 - `missing_script` → fix `dev_script` or package scripts
+
+Runtime recovery has one dispatcher across the whole tile, Quick Apps, detail
+and DEV-local stage. A surface may never bypass a Repair/Codex decision by
+calling the open chain directly. Quick Apps describe such records as requiring
+attention and cold-start suggestions contain only Apps that can actually open.
+Logs remain secondary evidence: Organization detail keeps them inside
+**Technical details**, while Personalspace keeps them under the `⋯` menu even
+for an unhealthy runtime. Their first arrival may open the Organization
+section once; later quiet refreshes preserve the user's open/closed state,
+drawer scroll and summary focus.
 - `bad_cwd` → Doctor sync / fix package path
 - `reserved_port_owner_unresolvable` → inspect PID/process-group lookup; a
   valid `lazurio.module.v1` lease otherwise reclaims the occupied port
   automatically
 - `unknown_early_exit` → prepared Codex handoff with log path and error excerpt
+
+The same required-package inspector is used by runtime readiness, Doctor and
+the frozen installer postcondition. A successful process exit is not enough:
+clean Repair discards its recovery tree only after every required direct/dev
+package has safe package metadata inside the owning checkout. Logs remain a
+secondary action inside Technical details; Repair/Retry/Codex is the primary
+recovery path.
 
 ## 8. Přepínač prostorů v záhlaví
 
@@ -657,12 +684,16 @@ prvku přednost před souhrnem dostupných modulových aktualizací. Na mobilu s
 klidový a načítací root/module stav skládají do jedné kompaktní dvousloupcové
 řady; chyba nebo stav se skutečnou akcí zůstává přes celou šířku.
 
-Celá karta je klikatelná a spouští **one-click open** (install → start → otevřít
-URL) s guardem na vnitřní ovládací prvky (`shouldOpenFromCardSurface`). Ikona,
+Celá karta je klikatelná a spouští svou autoritativní hlavní akci: v čistém
+stavu **one-click open** (install → start → otevřít URL), při známém problému
+Repair/Retry nebo připravený Codex handoff. Vše má guard na vnitřní ovládací
+prvky (`shouldOpenFromCardSurface`). Ikona,
 popis a git chip jdou z modelu, ne z hardcode copy. ⋯ menu nese vysvětlující
-note (co spouští hlavní akce) a položky variant „Otevřít &lt;varianta&gt; — port ·
-popis · stav"; každá varianta se otevře stejným jedním klikem. Productionspace
-a blokující dependency stavy zůstávají read-only (jen selekce do detailu).
+note (co spouští hlavní akce) a položky variant s jejich skutečnou hlavní akcí
+(`Otevřít`, `Instalovat`, `Zkusit znovu` nebo Codex handoff) a kontextem port ·
+popis · stav. Productionspace
+a neakční blokující dependency stavy zůstávají read-only (jen selekce do
+detailu); recovery stav nesmí žádný vedlejší surface obejít přímým Open.
 
 Modulové karty tvoří samostatné dlaždice s 16px mezerou a kanonickým Lazurio
 radius tokenem. Na teplém papírovém podkladu mají čistý bílý povrch, jemnou

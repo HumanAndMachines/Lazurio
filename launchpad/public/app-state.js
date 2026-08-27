@@ -222,8 +222,10 @@ export function matchesStatusFilter(app, filter) {
 }
 
 const BLOCKING_APP_STATES = new Set([
+  "dependency_boundary_invalid",
   "invalid_manifest",
   "missing_package",
+  "missing_lockfile",
   "unknown_package_manager",
   "missing_access",
   "restricted",
@@ -386,7 +388,7 @@ function appBlockerModel(app) {
       technical,
     };
   }
-  if (["missing_package", "unknown_package_manager", "invalid_manifest"].includes(dependencyState)) {
+  if (["dependency_boundary_invalid", "missing_package", "missing_lockfile", "unknown_package_manager", "invalid_manifest"].includes(dependencyState)) {
     return {
       severity: "danger",
       title: `${title} potřebuje opravit nastavení`,
@@ -774,6 +776,96 @@ export function offersMoreThanLocalRun(app) {
   return false;
 }
 
+export function primaryActionSurfaceState(nextAction = {}) {
+  const type = nextAction?.type ?? "disabled";
+  const cleanOpen = ["open", "open_chain", "runtime"].includes(type);
+  return {
+    needs_attention: ["codex", "recovery", "logs"].includes(type),
+    opens_local: cleanOpen || (type === "recovery" && nextAction?.recovery?.action === "retry"),
+    cold_start_candidate: cleanOpen,
+  };
+}
+
+export function primaryActionControlDisabled(nextAction = {}, {
+  opening = false,
+  pendingAction = null,
+  logsPendingKey = null,
+  folderPendingKey = null,
+  recoveryPendingKey = null,
+} = {}) {
+  if (nextAction.type === "disabled") return true;
+  if (["open", "open_chain", "runtime"].includes(nextAction.type)) return opening;
+  if (nextAction.type === "logs") return Boolean(logsPendingKey) && pendingAction === logsPendingKey;
+  if (nextAction.type === "folder") return Boolean(folderPendingKey) && pendingAction === folderPendingKey;
+  if (nextAction.type === "recovery") {
+    return Boolean(recoveryPendingKey) && pendingAction === recoveryPendingKey;
+  }
+  return false;
+}
+
+export function primaryAppActionModel(app = {}, {
+  moduleApps = app.module_apps ?? null,
+  projectedOpenTarget = true,
+  productionspace = false,
+  sharedPortPeer = null,
+  legacyForeignViewer = false,
+  untrustedPortOwner = false,
+  reclaimableStaticLease = false,
+  needsStaticLeaseReclaim = false,
+  canStart = false,
+  recovery = null,
+  dependencyLabel = app.dependencies?.state ?? "Aplikace není připravená",
+} = {}) {
+  const dependencyState = app.dependencies?.state;
+  if (app.repair_action?.prompt) {
+    return {
+      type: "codex",
+      label: app.repair_action.label ?? "Vyřešit s Codexem",
+      repairAction: app.repair_action,
+    };
+  }
+  if (productionspace || app.is_readonly_system) {
+    return { type: "disabled", label: "Jen pro čtení" };
+  }
+  if (moduleApps?.state === "declared" && !moduleApps.open_target_app_id) {
+    return { type: "disabled", label: "Výchozí App není připravená" };
+  }
+  if (!projectedOpenTarget) {
+    return { type: "disabled", label: "Výchozí App je jiná varianta" };
+  }
+  if (["missing_access", "planned_slot", "restricted", "invalid_manifest"].includes(dependencyState)) {
+    return { type: "disabled", label: dependencyLabel };
+  }
+  if (["needs_install", "dependency_boundary_invalid", "missing_package", "missing_lockfile", "unknown_package_manager"].includes(dependencyState)) {
+    return recovery
+      ? { type: "recovery", label: recovery.actionLabel, recovery }
+      : { type: "disabled", label: dependencyLabel };
+  }
+  if (recovery) return { type: "recovery", label: recovery.actionLabel, recovery };
+  if (sharedPortPeer) {
+    return { type: "open_chain", label: "Otevřít a převzít port", peer: sharedPortPeer };
+  }
+  if (legacyForeignViewer) {
+    return { type: "open", label: "Otevřít běžící checkout" };
+  }
+  if (untrustedPortOwner) {
+    return { type: "disabled", label: "Checkout procesu nelze ověřit" };
+  }
+  if (needsStaticLeaseReclaim) {
+    return { type: "open_chain", label: "Otevřít a převzít port" };
+  }
+  if (app.runtime_status === "healthy" && app.url) {
+    return {
+      type: "open",
+      label: reclaimableStaticLease && app.runtime?.owner !== "current-instance"
+        ? "Otevřít a převzít port"
+        : "Otevřít",
+    };
+  }
+  if (canStart) return { type: "runtime", action: "start", label: "Spustit a otevřít" };
+  return { type: "logs", label: "Logy" };
+}
+
 export function runtimeStagesForApp(app, { openable = false, worktreeCount = 0 } = {}) {
   const prodUrl = productionUrl(app);
   return [
@@ -821,12 +913,14 @@ export function runtimeStagesForApp(app, { openable = false, worktreeCount = 0 }
 
 export function isAttentionState(app, { ignoreRuntimeUnhealthy = false } = {}) {
   return [
+    "dependency_boundary_invalid",
     "needs_install",
     "missing_access",
     "planned_slot",
     "restricted",
     "invalid_manifest",
     "missing_package",
+    "missing_lockfile",
     "unknown_package_manager",
   ].includes(app.dependencies?.state)
     || [

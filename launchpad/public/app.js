@@ -13,6 +13,9 @@ import {
   isAttentionState,
   isProjectedModuleOpenTarget,
   offersMoreThanLocalRun,
+  primaryAppActionModel,
+  primaryActionControlDisabled,
+  primaryActionSurfaceState,
   reconcileDetailDrawerState,
   replacePersonalspaceResponse,
   reconcileSelectedAppId,
@@ -39,7 +42,7 @@ import {
   openCodexRuntimeIssueDialog,
   openCodexUpdateDialog,
 } from "./codex-handoff.js";
-import { runtimeRecoveryModel } from "./runtime-recovery.js";
+import { runtimeRecoveryForApp } from "./runtime-recovery.js";
 import {
   organizationHash,
   personalspaceHash,
@@ -64,6 +67,7 @@ const state = {
   doctorRunState: "idle",
   selectedAppId: null,
   selectedLogs: null,
+  autoOpenTechnicalAppId: null,
   selectedReadonlyDetail: null,
   actionMessage: null,
   pendingAction: null,
@@ -573,11 +577,15 @@ function applyDrawerState() {
   if (elements.drawerBackdrop) elements.drawerBackdrop.hidden = !open;
 }
 
-function selectAppDetail(appId) {
+function selectAppDetail(appId, { autoOpenTechnical = false } = {}) {
   state.selectedReadonlyDetail = null;
   state.selectedAppId = appId;
   state.drawerView = "detail";
-  if (state.selectedLogs?.app_id !== appId) state.selectedLogs = null;
+  if (state.selectedLogs?.app_id !== appId) {
+    state.selectedLogs = null;
+    state.autoOpenTechnicalAppId = null;
+  }
+  if (autoOpenTechnical) state.autoOpenTechnicalAppId = appId;
   setDrawer(true);
   render();
 }
@@ -587,6 +595,7 @@ function selectReadonlyDetail(detail) {
   state.selectedAppId = null;
   state.drawerView = "detail";
   state.selectedLogs = null;
+  state.autoOpenTechnicalAppId = null;
   setDrawer(true);
   render();
 }
@@ -1022,13 +1031,16 @@ function render() {
   if (state.filters.scope === "personal") {
     state.selectedAppId = null;
     state.selectedLogs = null;
+    state.autoOpenTechnicalAppId = null;
   } else if (state.selectedReadonlyDetail) {
     state.selectedAppId = null;
     state.selectedLogs = null;
+    state.autoOpenTechnicalAppId = null;
   } else {
     state.selectedAppId = reconcileSelectedAppId(state.apps, state.filters, state.selectedAppId);
     if (previousSelectedAppId !== state.selectedAppId && state.selectedLogs?.app_id !== state.selectedAppId) {
       state.selectedLogs = null;
+      state.autoOpenTechnicalAppId = null;
     }
     // Výběr appky (detail) otevře drawer s panely, ať je detail vidět.
     if (state.selectedAppId && previousSelectedAppId !== state.selectedAppId && !suppressDrawerOpen) {
@@ -1759,6 +1771,7 @@ function resetSpaceSelection() {
   state.selectedReadonlyDetail = null;
   state.selectedAppId = null;
   state.selectedLogs = null;
+  state.autoOpenTechnicalAppId = null;
   state.problemsRequested = false;
   state.problemsExpanded = false;
   state.problemsIncludeSystem = false;
@@ -2234,16 +2247,22 @@ function renderMostUsed() {
     const small = document.createElement("small");
     const nextAction = app ? primaryNextAction(app) : null;
     const blocked = nextAction?.type === "disabled";
-    small.textContent = blocked ? "blokovaná" : app?.runtime_status === "healthy" ? "otevřená" : "připravená";
+    const needsAttention = primaryActionSurfaceState(nextAction).needs_attention;
+    small.textContent = blocked
+      ? "blokovaná"
+      : needsAttention ? "vyžaduje pozornost"
+        : app?.runtime_status === "healthy" ? "otevřená" : "připravená";
     text.append(strong, small);
     const action = document.createElement("span");
     action.className = "quick-app-action";
     action.textContent = blocked
       ? (isCodexPortConflict(app) ? "Vyřešit s Codexem" : "Zobrazit detail")
-      : app ? openActionLabel(app) : "Otevřít";
+      : nextAction?.label ?? (app ? openActionLabel(app) : "Otevřít");
     button.append(mark, text, action);
     if (app && !isProductionspace(app)) {
-      button.addEventListener("click", () => blocked ? revealAppDetail(app) : void openAppChain(app, {}));
+      button.addEventListener("click", () => {
+        runPrimaryNextAction(app, nextAction, {});
+      });
     } else {
       button.disabled = true;
     }
@@ -2267,7 +2286,7 @@ function visibleMostUsed() {
 function coldStartMostUsed() {
   return filtered(state.apps)
     .filter((app) => !isProductionspace(app))
-    .filter((app) => primaryNextAction(app).type !== "disabled")
+    .filter((app) => primaryActionSurfaceState(primaryNextAction(app)).cold_start_candidate)
     .slice(0, 6)
     .map((app) => ({ id: app.id, name: appBaseTitle(app), icon: app.icon ?? null }));
 }
@@ -2665,8 +2684,10 @@ function moduleApplicationMessage(moduleApps, moduleStatus = "available") {
 function workspaceModuleCard(module, companySlug, options = {}) {
   const detail = workspaceModuleDetail(module, companySlug, options);
   const selected = state.selectedReadonlyDetail?.id === detail.id;
-  const opensApp = Boolean(detail.default_app);
-  const openable = opensApp || detail.can_open_folder;
+  const defaultAction = detail.default_app ? primaryNextAction(detail.default_app, null) : null;
+  const moduleRepair = detail.repair_action?.prompt ? detail.repair_action : null;
+  const actsOnApp = Boolean(detail.default_app && defaultAction?.type !== "disabled" && !moduleRepair);
+  const openable = Boolean(moduleRepair || actsOnApp || detail.can_open_folder);
   const availabilityClass = module.status === "available" ? "is-available" : "is-unavailable";
   const interactionClass = openable ? "is-openable" : "is-readonly";
   const card = document.createElement("article");
@@ -2675,7 +2696,9 @@ function workspaceModuleCard(module, companySlug, options = {}) {
   card.style.setProperty("--app-focus-accent", appIconFocusAccent(appIconKey(detail)));
   card.dataset.readonlyDetailId = detail.id;
   card.tabIndex = 0;
-  card.setAttribute("aria-label", opensApp ? `Otevřít aplikaci ${detail.title}` : `${detail.title} — detail`);
+  card.setAttribute("aria-label", moduleRepair
+    ? `${moduleRepair.label ?? "Vyřešit s Codexem"}: ${detail.title}`
+    : actsOnApp ? `${defaultAction.label}: ${detail.title}` : `${detail.title} — detail`);
 
   const head = document.createElement("div");
   head.className = "app-card-head";
@@ -2692,8 +2715,10 @@ function workspaceModuleCard(module, companySlug, options = {}) {
   titleRow.append(title);
   const desc = document.createElement("p");
   desc.className = "app-card-desc";
-  desc.textContent = opensApp
-    ? appDescription(detail.default_app)
+  desc.textContent = detail.default_app
+    ? defaultAction?.type === "recovery" ? defaultAction.recovery.title
+      : defaultAction?.type === "codex" ? "Aplikaci je potřeba opravit."
+        : appDescription(detail.default_app)
     : module.status === "quarantined"
       ? detail.readonly_reason
       : module.status === "missing_access"
@@ -2705,6 +2730,12 @@ function workspaceModuleCard(module, companySlug, options = {}) {
   titleBlock.append(titleBody);
   head.append(titleBlock);
   card.append(head);
+  const defaultWarning = detail.default_app && !moduleRepair
+    ? cardWarningModel(detail.default_app, gitRepoForApp(detail.default_app))
+    : null;
+  if (defaultWarning && defaultWarning.kind !== "fact") {
+    card.append(cardWarningNode(defaultWarning));
+  }
   if (detail.can_open_folder) {
     const folderAction = cardActionButton(
       "Otevřít složku",
@@ -2725,14 +2756,16 @@ function workspaceModuleCard(module, companySlug, options = {}) {
   }
   card.addEventListener("click", (event) => {
     if (!shouldOpenFromCardSurface(event.target)) return;
-    if (opensApp) void openAppChain(detail.default_app);
+    if (moduleRepair) openCodexRepairDialog(moduleRepair);
+    else if (actsOnApp) runPrimaryNextAction(detail.default_app, defaultAction, {});
     else selectReadonlyDetail(detail);
   });
   card.addEventListener("keydown", (event) => {
     if (event.target !== card) return;
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
-    if (opensApp) void openAppChain(detail.default_app);
+    if (moduleRepair) openCodexRepairDialog(moduleRepair);
+    else if (actsOnApp) runPrimaryNextAction(detail.default_app, defaultAction, {});
     else selectReadonlyDetail(detail);
   });
   return card;
@@ -2897,10 +2930,6 @@ function appCard(app, family = { key: app.id, members: [app], primary: app, appl
   const selected = members.some((member) => member.id === state.selectedAppId);
   const nextAction = primaryNextAction(app, family.applications);
   const readOnly = isProductionspace(app) || nextAction.type === "disabled";
-  const opensForeignViewer = nextAction.type === "open"
-    && app.runtime?.owner === "foreign-port"
-    && !hasReclaimableStaticLease(app)
-    && Boolean(app.url);
   const warning = cardWarningModel(app, gitRepoForApp(app));
 
   const card = document.createElement("article");
@@ -2909,7 +2938,9 @@ function appCard(app, family = { key: app.id, members: [app], primary: app, appl
   card.style.setProperty("--app-focus-accent", appIconFocusAccent(appIconKey(app)));
   card.dataset.appId = app.id;
   card.tabIndex = 0;
-  card.setAttribute("aria-label", readOnly ? `${appBaseTitle(app)} — detail` : `Otevřít ${appBaseTitle(app)}`);
+  card.setAttribute("aria-label", readOnly
+    ? `${appBaseTitle(app)} — detail`
+    : `${nextAction.label}: ${appBaseTitle(app)}`);
 
   // GEN2-minimal dlaždice (port web/app.js:2875–2896 zjednodušený per owner
   // request 2026-07-05): ikona nad názvem (+ verze) a popisem. Žádný
@@ -2998,7 +3029,7 @@ function appCard(app, family = { key: app.id, members: [app], primary: app, appl
   // znovu používá stejný one-click open, není to druhý běhový mechanismus.
   // Progressive disclosure (founder 2026-07-16): řádek se ukáže, jen když modul
   // nabízí víc než výchozí DEV local (= klik na dlaždici) — jinak žádná tlačítka.
-  const stagesRow = renderRuntimeStages(app, readOnly, feedback);
+  const stagesRow = renderRuntimeStages(app, readOnly, feedback, nextAction);
   if (stagesRow) card.append(stagesRow);
   card.append(feedback);
 
@@ -3018,11 +3049,7 @@ function appCard(app, family = { key: app.id, members: [app], primary: app, appl
     // Cizí běžící checkout se otevře přímo jako read-only viewer. Ostatní
     // karty používají one-click open chain, který smí spravovat jejich runtime.
     const openFromCard = () => {
-      if (opensForeignViewer) {
-        openResultUrl(app.url, null, app);
-        return;
-      }
-      void openAppChain(app, { feedback });
+      runPrimaryNextAction(app, nextAction, { feedback });
     };
     card.addEventListener("click", (event) => {
       if (!shouldOpenFromCardSurface(event.target)) return;
@@ -3053,10 +3080,10 @@ function appCard(app, family = { key: app.id, members: [app], primary: app, appl
 // řádek se NErenderuje — DEV local zůstává implicitní výchozí (klik na dlaždici).
 // Jakmile modul nabízí víc (production_url / Workspace-Host run), ukáže se
 // PLNÝ řádek všech čtyř runů, nedostupné dimmed jako dřív.
-function renderRuntimeStages(app, readOnly, feedback) {
+function renderRuntimeStages(app, readOnly, feedback, nextAction) {
   if (!offersMoreThanLocalRun(app)) return null;
   const stages = runtimeStagesForApp(app, {
-    openable: !readOnly,
+    openable: !readOnly && primaryActionOpensLocal(nextAction),
     worktreeCount: ownedRuntimeWorktrees(app).length,
   });
   const row = document.createElement("div");
@@ -3064,7 +3091,7 @@ function renderRuntimeStages(app, readOnly, feedback) {
   row.setAttribute("role", "group");
   row.setAttribute("aria-label", "Kde modul spustit");
   for (const stage of stages) {
-    row.append(runtimeStageNode(app, stage, feedback));
+    row.append(runtimeStageNode(app, stage, feedback, nextAction));
   }
   return row;
 }
@@ -3083,7 +3110,7 @@ function runtimeStageAriaLabel(stage) {
   return `${stage.label} — ${stage.reason || stage.caption}`;
 }
 
-function runtimeStageNode(app, stage, feedback) {
+function runtimeStageNode(app, stage, feedback, nextAction) {
   const stateClass = stage.available ? "is-available" : "is-disabled";
   const tooltip = runtimeStageTooltip(stage);
   const ariaLabel = runtimeStageAriaLabel(stage);
@@ -3113,7 +3140,7 @@ function runtimeStageNode(app, stage, feedback) {
     button.textContent = stage.label;
     button.addEventListener("click", (event) => {
       event.stopPropagation();
-      void openAppChain(app, { feedback });
+      runPrimaryNextAction(app, nextAction, { feedback });
     });
     return button;
   }
@@ -3182,6 +3209,7 @@ function cardWarningModel(app, gitRepo) {
   if (isProductionspace(app)) return null;
   const dependencyState = app.dependencies?.state;
   const sharedPortPeer = runningSharedPortPeer(app);
+  const nextAction = primaryNextAction(app);
   if (["rebase_in_progress", "git_am_in_progress"].includes(gitRepo?.status)) {
     return {
       tone: "danger",
@@ -3193,12 +3221,44 @@ function cardWarningModel(app, gitRepo) {
     };
   }
 
-  if (sharedPortPeer) {
+  if (nextAction.type === "codex") {
+    return {
+      tone: "danger",
+      title: "Aplikaci je potřeba opravit",
+      actionLabel: nextAction.label,
+      run: () => openCodexRepairDialog(nextAction.repairAction),
+      placement: "top-action",
+    };
+  }
+
+  // Source/dependency autorita má vždy přednost před routingem portu. App se
+  // nesmí otevřít ani převzít listener, dokud její vlastní checkout není ready.
+  if (["missing_access", "planned_slot", "restricted", "invalid_manifest"].includes(dependencyState)) {
+    return {
+      tone: "danger",
+      title: dependencyState === "invalid_manifest" ? "Chyba v nastavení" : humanDependencyLabel(dependencyState),
+      actionLabel: "Zobrazit detail",
+      run: () => revealAppDetail(app),
+    };
+  }
+
+  if (nextAction.type === "recovery") {
+    const recovery = nextAction.recovery;
+    return {
+      tone: recovery.action === "install" ? "warn" : "danger",
+      title: recovery.title,
+      actionLabel: recovery.actionLabel,
+      run: () => runRuntimeRecoveryAction(app, recovery),
+      pending: runtimeRecoveryPendingKey(app, recovery),
+    };
+  }
+
+  if (sharedPortPeer && nextAction.type === "open_chain") {
     return {
       tone: "warn",
       title: `Port používá ${appBaseTitle(sharedPortPeer)}`,
       actionLabel: "Otevřít a převzít port",
-      run: () => openAppChain(app),
+      run: () => runPrimaryNextAction(app, nextAction, {}),
     };
   }
 
@@ -3209,39 +3269,6 @@ function cardWarningModel(app, gitRepo) {
       actionLabel: isCodexPortConflict(app) ? "Vyřešit s Codexem" : "Zobrazit detail",
       run: () => revealAppDetail(app),
       placement: "top-action",
-    };
-  }
-
-  // Blokující dependency stavy: modul teď nejde spustit — vysvětli proč (bez
-  // one-click akce, řešení patří do detailu / doctora).
-  if (["missing_access", "planned_slot", "restricted", "invalid_manifest", "missing_package", "unknown_package_manager"].includes(dependencyState)) {
-    return {
-      tone: "danger",
-      title: dependencyState === "invalid_manifest" ? "Chyba v nastavení" : humanDependencyLabel(dependencyState),
-      actionLabel: "Zobrazit detail",
-      run: () => revealAppDetail(app),
-    };
-  }
-
-  // Chybějící balíčky připrav před prvním spuštěním. Filesystem mtime není
-  // dependency autorita; explicitní Repair zůstává skutečná clean reinstalace.
-  if (dependencyState === "needs_install" && canInstall(app)) {
-    return {
-      tone: "warn",
-      title: "Chybí balíčky",
-      actionLabel: installLabel(app),
-      run: () => runRuntimeAction(app, installAction(app)),
-      pending: `${app.id}:${installAction(app)}`,
-    };
-  }
-
-  // Poslední spuštění spadlo: pošli do detailu k logům.
-  if (app.runtime_status === "unhealthy") {
-    return {
-      tone: "danger",
-      title: "Spuštění selhalo",
-      actionLabel: "Zobrazit logy",
-      run: () => revealAppDetail(app),
     };
   }
 
@@ -3410,20 +3437,22 @@ function cardHasMenu(app, others) {
 // detailu/logů. Čistá zastavená dlaždice nevrací nic (žádné ⋯).
 function cardMenuActions(app) {
   const actions = [];
+  const nextAction = primaryNextAction(app);
+  const actionSurface = primaryActionSurfaceState(nextAction);
   const sharedPortPeer = runningSharedPortPeer(app);
-  if (sharedPortPeer) {
+  if (sharedPortPeer && nextAction.type === "open_chain") {
     actions.push({
       label: `Otevřít místo ${appBaseTitle(sharedPortPeer)}`,
-      run: () => openAppChain(app),
+      run: () => runPrimaryNextAction(app, nextAction, {}),
     });
   }
   if (canStop(app)) {
     actions.push({ label: "Zastavit", run: () => runRuntimeAction(app, "stop"), pending: `${app.id}:stop` });
   }
-  if (canRestart(app)) {
+  if (canRestart(app) && actionSurface.cold_start_candidate) {
     actions.push({ label: "Restart", run: () => runRuntimeAction(app, "restart"), pending: `${app.id}:restart` });
   }
-  if (canInstall(app) && app.dependencies?.state === "ready") {
+  if (canInstall(app) && app.dependencies?.state === "ready" && !["recovery", "codex", "disabled"].includes(nextAction.type)) {
     actions.push({
       label: "Opravit balíčky",
       run: () => runRuntimeAction(app, "repair"),
@@ -3433,7 +3462,7 @@ function cardMenuActions(app) {
   // Detail/logy nabídni, jen když je co zkoumat — běžící, spadlá nebo vlastněná
   // instance.
   if (actions.length > 0 || app.runtime_status === "healthy" || app.runtime_status === "unhealthy") {
-    actions.push({ label: "Zobrazit detail a logy", run: () => revealAppDetail(app) });
+    actions.push({ label: "Zobrazit detail a logy", run: () => loadLogs(app) });
   }
   return actions;
 }
@@ -3513,13 +3542,13 @@ async function openAppChain(app, { feedback } = {}) {
     }
   } catch (error) {
     closeReservedTab(reservedTab);
-    const recovery = runtimeRecoveryModel(error);
+    const recovery = runtimeRecoveryForApp(app, error);
     state.runtimeActionErrors.set(app.id, recovery);
     state.selectedReadonlyDetail = null;
     state.selectedAppId = app.id;
     state.drawerView = "detail";
     setDrawer(true, { restoreFocus: false });
-    writeCardProgress(feedback, classifyOpenError(error));
+    writeCardProgress(feedback, classifyOpenError(app, error));
     toast(`${appBaseTitle(app)}: ${recovery.title}. Nabízím rovnou další krok.`, "error", 8000);
   } finally {
     await loadData({ quiet: true, fresh: true });
@@ -3677,8 +3706,8 @@ function translateOpenStatus(payload) {
 
 // Klasifikace chyb one-click chainu do lidského jazyka (port GEN2 vzoru).
 // Port kolize je blokující stav — žádný tichý fallback (decision 0049).
-function classifyOpenError(error) {
-  return runtimeRecoveryModel(error).message;
+function classifyOpenError(app, error) {
+  return runtimeRecoveryForApp(app, error).message;
 }
 
 function badgeNode(label) {
@@ -3729,8 +3758,8 @@ function versionMenuNode(primary, others, familyKey, moduleName) {
     note.className = "app-version-menu-note";
     const defaultTag = variantTag(primary, moduleName);
     note.textContent = defaultTag
-      ? `Klik na dlaždici otevře výchozí verzi ${defaultTag}. Ostatní verze modulu se otevřou stejným jedním klikem.`
-      : "Klik na dlaždici otevře tenhle modul. Vedlejší verze se otevřou stejným jedním klikem.";
+      ? `Dlaždice použije bezpečný další krok pro výchozí verzi ${defaultTag}. U každé další verze je její vlastní bezpečný další krok.`
+      : "Dlaždice použije bezpečný další krok tohoto modulu. U každé vedlejší verze je její vlastní bezpečný další krok.";
     panel.append(note, ...others.map((app) => versionOptionNode(app, moduleName)));
   }
 
@@ -3755,17 +3784,21 @@ function versionMenuNode(primary, others, familyKey, moduleName) {
 // (port GEN2). Jeden klik = one-click open té varianty.
 function versionOptionNode(app, moduleName) {
   const opening = state.openingApps.has(app.id);
+  const nextAction = primaryNextAction(app, null);
+  const actionLabel = nextAction.type === "disabled" ? "Zobrazit detail" : nextAction.label;
   const button = document.createElement("button");
   button.type = "button";
   button.className = "app-version-option";
   const label = document.createElement("strong");
-  label.textContent = `${opening ? "Otevírám" : "Otevřít"} ${variantMenuLabel(app, moduleName)}`;
+  label.textContent = `${opening ? "Otevírám" : actionLabel} ${variantMenuLabel(app, moduleName)}`;
   const meta = document.createElement("small");
   meta.textContent = variantOptionDescription(app);
   const cue = document.createElement("span");
   cue.className = "app-version-option-cue";
   cue.setAttribute("aria-hidden", "true");
-  cue.innerHTML = iconOpenGlyph();
+  cue.innerHTML = primaryActionSurfaceState(nextAction).cold_start_candidate
+    ? iconOpenGlyph()
+    : warningGlyph(nextAction.type === "codex" ? "danger" : "warn");
   const text = document.createElement("span");
   text.className = "app-version-option-text";
   text.append(label, meta);
@@ -3773,7 +3806,7 @@ function versionOptionNode(app, moduleName) {
   button.addEventListener("click", (event) => {
     event.stopPropagation();
     state.openVersionMenu = null;
-    void openAppChain(app, {});
+    runPrimaryNextAction(app, nextAction, {});
   });
   return button;
 }
@@ -3812,19 +3845,18 @@ function lazurioAppIcon(key) {
 }
 
 function appCardTone(app, warning) {
-  // Běžící modul má vždy „running" tón (zelený proužek) i s dostupnou novější
-  // verzí — pull banner uvnitř karty už attention signalizuje.
-  if (app.runtime_status === "healthy") return "running";
-  // Warning model je autorita tónu pro zastavené karty; danger → blocked,
-  // warn → attention.
+  // Blokující source/runtime hranice mají přednost i před zdravým listenerem:
+  // zelená nesmí tvrdit, že je App připravená, když ji Launchpad nesmí otevřít.
   if (warning?.tone === "danger") return "blocked";
   // Fakt hranu nedostane. Hrana je značka „něco se tu má řešit"; u faktu
   // se řešit nemá nic, a šest žlutých hran z deseti karet znamená, že
   // žlutá přestala být signál.
   if (warning?.tone === "warn" && warning?.kind !== "fact") return "attention";
+  // Neakční fact (např. dostupná verze) zdravý runtime neznečistí.
+  if (app.runtime_status === "healthy") return "running";
   // Fallback pro edge-case bez warningu (např. needs_install bez can_install).
   const dependencyState = app.dependencies?.state;
-  if (["missing_package", "unknown_package_manager", "invalid_manifest", "missing_access", "restricted", "runtime_failed"].includes(dependencyState)) {
+  if (["missing_package", "missing_lockfile", "dependency_boundary_invalid", "unknown_package_manager", "invalid_manifest", "missing_access", "restricted", "runtime_failed"].includes(dependencyState)) {
     return "blocked";
   }
   if (["needs_install", "planned_slot"].includes(dependencyState)) {
@@ -3851,7 +3883,7 @@ function dependencyChip(app) {
   let tone = "chip-muted";
   if (dependencyState === "ready") tone = "chip-success";
   else if (["needs_install", "planned_slot"].includes(dependencyState)) tone = "chip-warn";
-  else if (["missing_package", "unknown_package_manager", "missing_access", "restricted", "invalid_manifest", "runtime_failed"].includes(dependencyState)) tone = "chip-danger";
+  else if (["missing_package", "missing_lockfile", "dependency_boundary_invalid", "unknown_package_manager", "missing_access", "restricted", "invalid_manifest", "runtime_failed"].includes(dependencyState)) tone = "chip-danger";
   return chip(humanDependencyLabel(dependencyState), tone);
 }
 
@@ -3891,41 +3923,23 @@ function statusChipIcon(toneClass) {
 }
 
 function primaryActionNode(app, nextAction) {
-  let node;
-  if (nextAction.type === "open_chain") {
-    node = cardActionButton(
-      nextAction.label,
-      () => openAppChain(app),
-      state.openingApps.has(app.id),
-    );
-  } else if (nextAction.type === "folder") {
-    node = cardActionButton(
-      nextAction.label,
-      () => openWorkspaceModuleFolder(app),
-      state.pendingAction === `${app.id}:open-folder`,
-    );
-  } else if (nextAction.type === "open" && app.url) {
-    node = openLink(app.url);
-    node.textContent = nextAction.label;
-  } else if (nextAction.type === "logs") {
-    node = cardActionButton(nextAction.label, () => loadLogs(app), state.pendingAction === `${app.id}:logs`);
-  } else if (nextAction.type === "runtime") {
-    node = cardActionButton(
-      nextAction.label,
-      () => runRuntimeAction(app, nextAction.action),
-      state.pendingAction === `${app.id}:${nextAction.action}`,
-    );
-  } else if (nextAction.type === "codex") {
-    node = cardActionButton(
-      nextAction.label,
-      () => openCodexRepairDialog(nextAction.repairAction),
-      false,
-    );
-  } else {
-    node = cardActionButton(nextAction.label, null, true);
-  }
+  const recoveryPendingKey = nextAction.type === "recovery"
+    ? runtimeRecoveryPendingKey(app, nextAction.recovery)
+    : null;
+  const disabled = primaryActionControlDisabled(nextAction, {
+    opening: state.openingApps.has(app.id),
+    pendingAction: state.pendingAction,
+    logsPendingKey: `${app.id}:logs`,
+    folderPendingKey: `${app.id}:open-folder`,
+    recoveryPendingKey,
+  });
+  const node = cardActionButton(
+    nextAction.label,
+    nextAction.type === "disabled" ? null : () => runPrimaryNextAction(app, nextAction, {}),
+    disabled,
+  );
   node.classList.add("primary-action");
-  if (node.tagName === "BUTTON") node.classList.add("btn", "btn-primary");
+  node.classList.add("btn", "btn-primary");
   return node;
 }
 
@@ -3945,61 +3959,60 @@ function cardActionButton(label, onClick, disabled) {
 
 function primaryNextAction(app, moduleApps = app.module_apps ?? null) {
   const dependencyState = app.dependencies?.state;
-  if (app.repair_action?.prompt) {
-    return {
-      type: "codex",
-      label: app.repair_action.label ?? "Vyřešit s Codexem",
-      repairAction: app.repair_action,
-    };
-  }
-  if (isProductionspace(app) || app.is_readonly_system) {
-    return { type: "disabled", label: "Jen pro čtení" };
-  }
-  if (moduleApps?.state === "declared" && !moduleApps.open_target_app_id) {
-    return { type: "disabled", label: "Výchozí App není připravená" };
-  }
-  if (!isProjectedModuleOpenTarget(app, moduleApps)) {
-    return { type: "disabled", label: "Výchozí App je jiná varianta" };
-  }
   const sharedPortPeer = runningSharedPortPeer(app);
-  if (sharedPortPeer) {
-    return { type: "open_chain", label: "Otevřít a převzít port", peer: sharedPortPeer };
+  const recovery = runtimeRecoveryForApp(app);
+  const reclaimableStaticLease = hasReclaimableStaticLease(app);
+  return primaryAppActionModel(app, {
+    moduleApps,
+    projectedOpenTarget: isProjectedModuleOpenTarget(app, moduleApps),
+    productionspace: isProductionspace(app),
+    sharedPortPeer,
+    // Jen legacy manifest bez static lease otevírá cizí viewer read-only.
+    legacyForeignViewer: app.runtime?.owner === "foreign-port" && Boolean(app.url) && !reclaimableStaticLease,
+    untrustedPortOwner: isUntrustedPortOwner(app) && !reclaimableStaticLease,
+    reclaimableStaticLease,
+    needsStaticLeaseReclaim: staticLeaseNeedsReclaim(app),
+    canStart: canStart(app),
+    recovery,
+    dependencyLabel: humanDependencyLabel(dependencyState),
+  });
+}
+
+function primaryActionOpensLocal(nextAction) {
+  return primaryActionSurfaceState(nextAction).opens_local;
+}
+
+function runPrimaryNextAction(app, nextAction, { feedback = null } = {}) {
+  if (!nextAction || nextAction.type === "disabled") {
+    revealAppDetail(app);
+    return;
   }
-  // Jen legacy manifest bez static lease otevírá cizí viewer read-only.
-  // Lazurio static lease při Open cizího vlastníka ukončí a spustí modul.
-  if (app.runtime?.owner === "foreign-port" && app.url && !hasReclaimableStaticLease(app)) {
-    return { type: "open", label: "Otevřít běžící checkout" };
+  if (nextAction.type === "codex") {
+    openCodexRepairDialog(nextAction.repairAction);
+    return;
   }
-  if (isUntrustedPortOwner(app) && !hasReclaimableStaticLease(app)) {
-    return {
-      type: "disabled",
-      label: "Checkout procesu nelze ověřit",
-    };
+  if (nextAction.type === "recovery") {
+    runRuntimeRecoveryAction(app, nextAction.recovery);
+    return;
   }
-  if (dependencyState === "needs_install") {
-    return { type: "runtime", action: "install", label: "Instalovat" };
+  if (nextAction.type === "logs") {
+    void loadLogs(app);
+    return;
   }
-  if (["missing_access", "planned_slot", "restricted", "invalid_manifest", "missing_package", "unknown_package_manager"].includes(dependencyState)) {
-    return { type: "disabled", label: humanDependencyLabel(dependencyState) };
+  if (nextAction.type === "folder") {
+    void openWorkspaceModuleFolder(app);
+    return;
   }
-  if (staticLeaseNeedsReclaim(app)) {
-    return { type: "open_chain", label: "Otevřít a převzít port" };
+  if (
+    nextAction.type === "open"
+    && app.url
+    && app.runtime?.owner === "foreign-port"
+    && !hasReclaimableStaticLease(app)
+  ) {
+    openResultUrl(app.url, null, app);
+    return;
   }
-  if (app.runtime_status === "healthy" && app.url) {
-    return {
-      type: "open",
-      label: hasReclaimableStaticLease(app) && app.runtime?.owner !== "current-instance"
-        ? "Otevřít a převzít port"
-        : "Otevřít",
-    };
-  }
-  if (app.runtime_status === "unhealthy") {
-    return { type: "logs", label: "Logy" };
-  }
-  if (canStart(app)) {
-    return { type: "runtime", action: "start", label: "Spustit" };
-  }
-  return { type: "logs", label: "Logy" };
+  void openAppChain(app, { feedback });
 }
 
 function hasReclaimableStaticLease(app) {
@@ -4110,45 +4123,18 @@ function tagsNode(tags) {
   return wrapper;
 }
 
-function openLink(url) {
-  const link = document.createElement("a");
-  link.className = "open-link";
-  link.href = url;
-  link.target = "_blank";
-  link.rel = "noreferrer";
-  link.textContent = "Otevřít";
-  link.addEventListener("click", (event) => event.stopPropagation());
-  return link;
-}
-
 function actionButtons(app) {
   const wrapper = document.createElement("div");
   wrapper.className = "action-buttons";
-  // Appka s nevalidním manifestem nemá URL — odkaz se nenabízí.
-  if (app.url) wrapper.append(openLink(app.url));
-  const sharedPortPeer = runningSharedPortPeer(app);
+  const nextAction = primaryNextAction(app);
+  const surface = primaryActionSurfaceState(nextAction);
   wrapper.append(
-    runtimeButton(app, installAction(app), installLabel(app), !canInstall(app)),
-    runtimeButton(app, "start", "Spustit", !canStart(app)),
-    switchRuntimeButton(app, sharedPortPeer),
+    primaryActionNode(app, nextAction),
     runtimeButton(app, "stop", "Zastavit", !canStop(app)),
-    runtimeButton(app, "restart", "Restart", !canRestart(app)),
+    runtimeButton(app, "restart", "Restart", !surface.cold_start_candidate || !canRestart(app)),
     logsButton(app),
   );
   return wrapper;
-}
-
-function switchRuntimeButton(app, peer) {
-  const button = document.createElement("button");
-  button.className = "small-button";
-  button.type = "button";
-  button.textContent = "Přepnout";
-  button.disabled = !peer || state.pendingAction === `${app.id}:switch`;
-  button.addEventListener("click", (event) => {
-    event.stopPropagation();
-    if (peer) void switchRuntimeApp(app, peer);
-  });
-  return button;
 }
 
 function runtimeButton(app, action, label, disabled) {
@@ -4251,10 +4237,20 @@ function renderDetail(apps) {
 
   const app = state.selectedReadonlyDetail ?? apps.find((item) => item.id === state.selectedAppId);
   if (!app) {
+    delete elements.appDetail.dataset.appId;
     elements.appDetail.className = "empty-detail";
     elements.appDetail.textContent = "Vyber aplikaci";
     return;
   }
+
+  const previousAppId = elements.appDetail.dataset.appId ?? null;
+  const previousTechnical = elements.appDetail.querySelector(".detail-tech");
+  const preserveTechnicalState = previousAppId === app.id;
+  const technicalWasOpen = preserveTechnicalState && previousTechnical?.open === true;
+  const technicalHadFocus = preserveTechnicalState
+    && previousTechnical?.querySelector("summary") === document.activeElement;
+  const previousDrawerScrollTop = preserveTechnicalState ? elements.drawerBody?.scrollTop ?? 0 : 0;
+  const shouldAutoOpenTechnical = state.autoOpenTechnicalAppId === app.id;
 
   const wrapper = document.createElement("div");
   wrapper.className = "detail-block";
@@ -4262,14 +4258,24 @@ function renderDetail(apps) {
   // může uživatel udělat. Git/worktree diagnostika zůstává níže pod technickým
   // rozbalením.
   wrapper.append(renderDetailHeader(app), renderDetailSummary(app));
-  // Logs are user-initiated (the "Logy" button), so show them when present.
-  const logs = renderDetailLogs(app);
-  if (logs) wrapper.append(logs);
   // Everything technical is collapsed away from everyday use.
   wrapper.append(renderDetailTech(app));
 
   elements.appDetail.className = "";
+  elements.appDetail.dataset.appId = app.id;
   elements.appDetail.replaceChildren(wrapper);
+  const currentTechnical = elements.appDetail.querySelector(".detail-tech");
+  if (currentTechnical) {
+    currentTechnical.open = shouldAutoOpenTechnical || (preserveTechnicalState && technicalWasOpen);
+  }
+  if (shouldAutoOpenTechnical) state.autoOpenTechnicalAppId = null;
+  if (preserveTechnicalState) {
+    requestAnimationFrame(() => {
+      if (elements.appDetail.dataset.appId !== app.id) return;
+      if (elements.drawerBody) elements.drawerBody.scrollTop = previousDrawerScrollTop;
+      if (technicalHadFocus) currentTechnical?.querySelector("summary")?.focus({ preventScroll: true });
+    });
+  }
 }
 
 function renderDetailSummary(app) {
@@ -4306,7 +4312,6 @@ function detailSummaryModel(app, git) {
   const outgoing = Number(git?.counts?.outgoing) || 0;
   const changedFiles = Number(git?.counts?.changed_files) || 0;
   const nextAction = primaryNextAction(app);
-  const dependencyState = app.dependencies?.state;
   const runtimeActionError = state.runtimeActionErrors.get(app.id);
 
   if (runtimeActionError) {
@@ -4325,6 +4330,15 @@ function detailSummaryModel(app, git) {
     };
   }
 
+  if (nextAction.type === "recovery") {
+    return {
+      tone: nextAction.recovery.action === "install" ? "warn" : "danger",
+      title: nextAction.recovery.title,
+      message: nextAction.recovery.message,
+      action: runtimeRecoveryActionNode(app, nextAction.recovery),
+    };
+  }
+
   if (nextAction.type === "disabled") {
     return {
       tone: "danger",
@@ -4339,24 +4353,6 @@ function detailSummaryModel(app, git) {
       tone: "warn",
       title: "Aplikace už běží z jiné kopie",
       message: "Můžete ji bezpečně otevřít. Launchpad ji ale nebude spouštět ani zastavovat, aby nepoškodil práci otevřenou jinde.",
-      action: primaryActionNode(app, nextAction),
-    };
-  }
-
-  if (app.runtime_status === "unhealthy") {
-    return {
-      tone: "danger",
-      title: "Spuštění se nepovedlo",
-      message: "Podívejte se, co se při spuštění stalo.",
-      action: primaryActionNode(app, nextAction),
-    };
-  }
-
-  if (dependencyState === "needs_install") {
-    return {
-      tone: "warn",
-      title: "Aplikaci je potřeba připravit",
-      message: "Než ji otevřete, je potřeba doplnit potřebné součásti.",
       action: primaryActionNode(app, nextAction),
     };
   }
@@ -4449,6 +4445,8 @@ function renderDetailTech(app) {
   const builderActions = renderWorktreeBuilderActions(app);
   if (builderActions) body.append(builderActions);
   body.append(renderDetailNextAction(app), renderDetailEndpoint(app), renderDetailPaths(app));
+  const logs = renderDetailLogs(app);
+  if (logs) body.append(logs);
   const failure = renderDetailFailure(app);
   if (failure) body.append(failure);
   body.append(pluginNode(app.plugin), renderDebugPayload(app));
@@ -4813,6 +4811,7 @@ function runtimeSourceOptionNode(app, source) {
     event.stopPropagation();
     state.runtimeSourcesByApp.set(app.id, source.type === "worktree" ? { type: "worktree", slug: source.slug } : { type: "main" });
     state.selectedLogs = null;
+    state.autoOpenTechnicalAppId = null;
     render();
   });
   return button;
@@ -4939,7 +4938,7 @@ function renderDetailNextAction(app) {
   const next = document.createElement("div");
   next.className = "detail-next";
   const nextAction = primaryNextAction(app);
-  next.append(primaryActionNode(app, nextAction));
+  next.append(nextAction.type === "recovery" ? logsButton(app) : primaryActionNode(app, nextAction));
   const reason = nextActionReason(app, nextAction);
   if (reason) {
     const text = document.createElement("p");
@@ -4971,6 +4970,7 @@ function nextActionReason(app, nextAction) {
   }
   if (nextAction.type === "open") return "Aplikace běží — otevře se v novém panelu, nic se nespouští.";
   if (nextAction.type === "folder") return "Otevře lokální checkout ve správci souborů; nic v něm nemění.";
+  if (nextAction.type === "recovery") return "Hlavní bezpečný krok je nahoře. Tady můžete načíst technický log pro diagnostiku.";
   if (nextAction.action === "install") return "Doplní chybějící balíčky v rozsahu cwd aplikace.";
   if (nextAction.action === "repair") return "Provede čistou reinstalaci podle uzamčených verzí a při neúspěchu obnoví předchozí balíčky.";
   if (nextAction.action === "start") return "Spustí lokální dev proces, pokud nejsou runtime konflikty.";
@@ -5217,6 +5217,8 @@ function dependencyLabel(status) {
       ready: "ready",
       needs_install: "needs install",
       missing_package: "missing package",
+      missing_lockfile: "missing lockfile",
+      dependency_boundary_invalid: "invalid dependency boundary",
       unknown_package_manager: "unknown manager",
       missing_access: "missing access",
       restricted: "restricted",
@@ -5246,6 +5248,8 @@ function humanDependencyLabel(status) {
       ready: "Připraveno",
       needs_install: "Instalovat",
       missing_package: "Chybí balíček",
+      missing_lockfile: "Chybí lockfile",
+      dependency_boundary_invalid: "Neplatná hranice balíčků",
       unknown_package_manager: "Neznámý správce",
       missing_access: "Chybí přístup",
       restricted: "Omezeno",
@@ -5259,7 +5263,7 @@ function humanDependencyLabel(status) {
 function dependencyClass(status) {
   if (status === "ready") return "runtime-healthy";
   if (["needs_install", "planned_slot"].includes(status)) return "runtime-starting";
-  if (["missing_package", "unknown_package_manager", "missing_access", "restricted", "invalid_manifest", "runtime_failed"].includes(status)) return "runtime-unhealthy";
+  if (["missing_package", "missing_lockfile", "dependency_boundary_invalid", "unknown_package_manager", "missing_access", "restricted", "invalid_manifest", "runtime_failed"].includes(status)) return "runtime-unhealthy";
   return "runtime-unknown";
 }
 
@@ -5401,7 +5405,7 @@ async function runRuntimeAction(app, action) {
     toast(`${app.title}: ${completedAction}.`, "ok");
   } catch (error) {
     state.actionMessage = null;
-    state.runtimeActionErrors.set(app.id, humanRuntimeActionError(error));
+    state.runtimeActionErrors.set(app.id, humanRuntimeActionError(app, error));
     state.selectedReadonlyDetail = null;
     state.selectedAppId = app.id;
     state.drawerView = "detail";
@@ -5413,30 +5417,34 @@ async function runRuntimeAction(app, action) {
   }
 }
 
-function humanRuntimeActionError(error) {
-  return runtimeRecoveryModel(error);
+function humanRuntimeActionError(app, error) {
+  return runtimeRecoveryForApp(app, error);
 }
 
 function runtimeRecoveryActionNode(app, recovery) {
-  if (recovery.action === "repair") {
-    return summaryButton(
-      recovery.actionLabel,
-      () => runRuntimeAction(app, "repair"),
-      `${app.id}:repair`,
-    );
+  return summaryButton(
+    recovery.actionLabel,
+    () => runRuntimeRecoveryAction(app, recovery),
+    runtimeRecoveryPendingKey(app, recovery),
+  );
+}
+
+function runRuntimeRecoveryAction(app, recovery) {
+  if (["install", "repair"].includes(recovery.action) && canInstall(app)) {
+    runRuntimeAction(app, recovery.action);
+    return;
   }
   if (recovery.action === "retry") {
-    return summaryButton(
-      recovery.actionLabel,
-      () => openAppChain(app),
-      `${app.id}:open`,
-    );
+    openAppChain(app);
+    return;
   }
-  return summaryButton(
-    recovery.actionLabel ?? "Vyřešit s Codexem",
-    () => openCodexRuntimeIssueDialog(app, recovery),
-    `${app.id}:codex-runtime-handoff`,
-  );
+  openCodexRuntimeIssueDialog(app, recovery);
+}
+
+function runtimeRecoveryPendingKey(app, recovery) {
+  if (["install", "repair"].includes(recovery.action)) return `${app.id}:${recovery.action}`;
+  if (recovery.action === "retry") return `${app.id}:open`;
+  return null;
 }
 
 async function refreshRuntimeActionState(appId) {
@@ -5506,7 +5514,9 @@ async function switchRuntimeApp(app, peer) {
 
 async function loadLogs(app) {
   state.pendingAction = `${app.id}:logs`;
-  selectAppDetail(app.id);
+  // Uživatelský klik na Logy otevře techniku jednou hned na začátku. Pokud ji
+  // během fetch ručně zavře, dokončení requestu tento záměr už nepřepíše.
+  selectAppDetail(app.id, { autoOpenTechnical: true });
   try {
     state.selectedLogs = await fetchJson(`/api/apps/${encodeURIComponent(app.id)}/logs`);
   } catch (error) {

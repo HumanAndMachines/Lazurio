@@ -1,7 +1,7 @@
 import { afterAll, expect, test } from "bun:test";
 import { tmpdir } from "os";
 import { join } from "path";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "fs/promises";
+import { mkdir, mkdtemp, rename, rm, symlink, writeFile } from "fs/promises";
 import { appPlacementResolverForOrganization, buildDoctorReportFromAppsResponse, buildEnvironmentChecks, buildLaunchpadAppsResponse, buildLaunchpadDoctorReport, bunRuntimeCheck, developerToolUpdateChecks, lazurioUpdateCheck, runtimeAppStatus } from "../../lazurio/runtime/diagnostics-lib.mjs";
 import { createLaunchpadGitFixture, initGitRepo, runGit } from "./git-fixture-helpers.test.mjs";
 import { buildGitInventory } from "../../lazurio/runtime/git-inventory-lib.mjs";
@@ -2158,7 +2158,7 @@ test("invalid_manifest appka je viditelná v apps response a doctor ji hlásí j
   expect(goodCheck).toBeDefined();
 });
 
-test("CAC-0042: doctor reportuje worktree inventory, contract violations a cleanup candidates", async () => {
+test.skipIf(process.platform === "win32")("CAC-0042: doctor reportuje worktree inventory, contract violations a cleanup candidates", async () => {
   const root = await createLaunchpadGitFixture();
   tempRoots.push(root);
   const orgRoot = join(root, "organizations", "BetaCo_GEN3");
@@ -2197,6 +2197,48 @@ test("CAC-0042: doctor reportuje worktree inventory, contract violations a clean
     dependencies: { demo: "1.0.0" },
   });
   await writeFile(join(activePath, "app", "v1", "bun.lock"), "", "utf8");
+  await mkdir(join(activePath, "app", "v1", "node_modules", "other"), { recursive: true });
+  await writeJson(join(activePath, "app", "v1", "node_modules", "other", "package.json"), {
+    name: "other",
+    version: "1.0.0",
+  });
+  const foreignAuthorityRoot = join(root, "foreign-worktree-authority");
+  await mkdir(foreignAuthorityRoot, { recursive: true });
+  await writeJson(join(foreignAuthorityRoot, "package.json"), {
+    private: true,
+    dependencies: { leaked: "1.0.0" },
+  });
+  await writeFile(join(foreignAuthorityRoot, "package-lock.json"), "{}\n", "utf8");
+  await mkdir(join(foreignAuthorityRoot, "secret-customer-project"));
+  await symlink(foreignAuthorityRoot, join(stalePath, "app"), "dir");
+  run(["git", "add", "app"], stalePath);
+  run(["git", "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "add escaped app fixture"], stalePath);
+  await mkdir(join(activePath, "app", "v2"), { recursive: true });
+  await symlink(
+    join(foreignAuthorityRoot, "package.json"),
+    join(activePath, "app", "v2", "package.json"),
+    "file",
+  );
+  await mkdir(join(activePath, "app", "v3"), { recursive: true });
+  await writeJson(join(activePath, "app", "v3", "package.json"), {
+    private: true,
+    packageManager: "bun@1.3.14",
+  });
+  await symlink(
+    join(foreignAuthorityRoot, "package-lock.json"),
+    join(activePath, "app", "v3", "package-lock.json"),
+    "file",
+  );
+  await mkdir(join(activePath, "app", "v4"), { recursive: true });
+  await writeJson(join(activePath, "app", "v4", "package.json"), {
+    private: true,
+    packageManager: "bun@1.3.14",
+  });
+  await writeFile(join(activePath, "app", "v4", "package-lock.json"), "{}\n", "utf8");
+  await mkdir(join(activePath, "app", "v5"), { recursive: true });
+  await writeJson(join(activePath, "app", "v5", "package.json"), {
+    private: true,
+  });
   await writeJson(join(orgRoot, ".worktrees", "workspace", "deals", "CAC-0042-doctor-stale.worktree.json"), {
     schema_version: "companiesascode.worktree.v1",
     branch: "CAC-0042-doctor-stale",
@@ -2240,11 +2282,69 @@ test("CAC-0042: doctor reportuje worktree inventory, contract violations a clean
   expect(checks.get("git.worktrees.contract")?.details.join("\n")).toContain("cleanup_candidate: CAC-0042-doctor-stale");
   expect(checks.get("git.worktrees.dependencies")?.status).toBe("warn");
   expect(checks.get("git.worktrees.dependencies")?.details).toEqual(expect.arrayContaining([
-    "checked_packages: 1",
+    "checked_packages: 6",
+    "ready: 1",
     "needs_install: 1",
+    "dependency_boundary_invalid: 3",
+    "unknown_package_manager: 1",
   ]));
   expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("CAC-0042-doctor-active/app/v1");
   expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("bun install");
+  expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("missing: demo");
+  expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("CAC-0042-doctor-active/app/v2");
+  expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("CAC-0042-doctor-active/app/v3");
+  expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("CAC-0042-doctor-active/app/v4");
+  expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("mismatches package-lock.json (npm)");
+  expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("CAC-0042-doctor-stale");
+  expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).not.toContain("secret-customer-project");
+});
+
+test("worktree dependency Doctor follows the configured Organization mountpoint", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  await rename(join(root, "organizations"), join(root, "orgs"));
+  await writeJson(join(root, "launchpad.gen3.json"), {
+    workspace_generation: "gen3",
+    organization_mountpoint: "orgs",
+    launchpad_root: { slug: "test-root", display_name: "Test Root", root_role: "launchpad-root" },
+  });
+  const orgRoot = join(root, "orgs", "BetaCo_GEN3");
+  const worktreeSlug = "CAC-0042-custom-mountpoint";
+  const worktreePath = join(orgRoot, ".worktrees", "workspace", "deals", worktreeSlug);
+  await initGitRepo(worktreePath, { branch: worktreeSlug });
+  await writeJson(join(worktreePath, "package.json"), {
+    name: "custom-mountpoint-fixture",
+    private: true,
+  });
+  await writeFile(
+    join(orgRoot, "mission-control", "plans", "2026", "07", `${worktreeSlug}.yaml`),
+    `dev_code: CAC-0042\ntitle: Custom mountpoint worktree\nstatus: in_progress\n`,
+  );
+  await writeJson(join(orgRoot, ".worktrees", "workspace", "deals", `${worktreeSlug}.worktree.json`), {
+    schema_version: "companiesascode.worktree.v1",
+    branch: worktreeSlug,
+    mission_control_plan_code: "CAC-0042",
+    mission_control_plan_path: `mission-control/plans/2026/07/${worktreeSlug}.yaml`,
+    worktree_path: `.worktrees/workspace/deals/${worktreeSlug}`,
+    created_at: new Date().toISOString(),
+    created_by: "fixture-agent",
+    status: "active",
+  });
+
+  const report = await buildLaunchpadDoctorReport({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    runtimeManager: { appsWithRuntime: async (apps) => apps },
+    runChildDoctors: false,
+  });
+  const dependencies = report.checks.find((check) => check.id === "git.worktrees.dependencies");
+
+  expect(dependencies?.status).toBe("ok");
+  expect(dependencies?.details).toEqual(expect.arrayContaining([
+    "checked_worktrees: 1",
+    "checked_packages: 1",
+    "ready: 1",
+  ]));
 });
 
 async function createCompaniesWorkspaceFixture() {

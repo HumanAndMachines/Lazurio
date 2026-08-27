@@ -1,7 +1,7 @@
 import { afterAll, expect, test } from "bun:test";
 import { tmpdir } from "os";
 import { join } from "path";
-import { mkdir, mkdtemp, readdir, rm, symlink, writeFile } from "fs/promises";
+import { mkdir, mkdtemp, readdir, rename, rm, symlink, writeFile } from "fs/promises";
 import {
   discoverLaunchpadApps,
   organizationRelativePathIssue,
@@ -72,6 +72,77 @@ test("discovery přenese builder metadata icon/description/group z manifestu", a
   expect(apps[0].icon).toBe("control");
   expect(apps[0].description).toBe("Denní přehled a spuštění firemních aplikací.");
   expect(apps[0].group).toBe("Denní práce");
+});
+
+test.skipIf(process.platform === "win32")("Organization discovery izoluje Module manifest odkazující mimo přesný checkout", async () => {
+  const root = await createCompaniesWorkspaceFixture({ plugin: null });
+  const companyRoot = join(root, "organizations", "TestCompany");
+  const moduleRoot = join(companyRoot, "modules", "demo");
+  const packagePath = join(moduleRoot, "app", "v1", "package.json");
+  await writeJson(join(companyRoot, "modules.manifest.json"), {
+    company: "test-company",
+    github_org: "TestCompany",
+    module_slots: [{
+      path: "modules/demo",
+      slug: "demo",
+      git: { url: "git@github.com:TestCompany/demo.git", branch: "main" },
+    }],
+  });
+  await writeJson(packagePath, {
+    name: "test-company-demo-v1",
+    private: true,
+    scripts: { dev: "bun server.mjs" },
+    lazurio: {
+      runtime: {
+        schema_version: "lazurio.runtime.v1",
+        id: "test-company-demo-v1",
+        title: "Demo v1",
+        company: "test-company",
+        module: "demo",
+        surface: "internal",
+        dev_script: "dev",
+        listeners: [{
+          id: "web",
+          role: "entrypoint",
+          lease: "main",
+          protocol: "http",
+          health: { kind: "http", path: "/health" },
+        }],
+      },
+    },
+  });
+  const manifestPath = join(moduleRoot, "lazurio.module.json");
+  await writeJson(manifestPath, {
+    schema_version: "lazurio.module.v1",
+    id: "demo",
+    company: "test-company",
+    tcp_port_policy: { mode: "single" },
+    port_leases: [{ id: "main", host: "127.0.0.1", port: 4242 }],
+  });
+  const foreignManifest = join(companyRoot, "foreign-module.json");
+  await rename(manifestPath, foreignManifest);
+  await symlink(foreignManifest, manifestPath, "file");
+
+  const result = await discoverLaunchpadApps(root);
+  expect(result.apps).toHaveLength(0);
+  expect(result.invalid_apps).toHaveLength(1);
+  expect(result.invalid_apps[0].manifest_issues.join("\n")).toContain("odkazuje mimo vybraný checkout");
+});
+
+test.skipIf(process.platform === "win32")("Organization root authority JSON nesmí odkazovat mimo přesný mount", async () => {
+  for (const fileName of ["company.gen3.json", "modules.manifest.json"]) {
+    const root = await createCompaniesWorkspaceFixture({ plugin: null });
+    const companyRoot = join(root, "organizations", "TestCompany");
+    const targetPath = join(companyRoot, fileName);
+    const foreignPath = join(root, `foreign-${fileName}`);
+    await rename(targetPath, foreignPath);
+    await symlink(foreignPath, targetPath, "file");
+
+    const result = await discoverLaunchpadApps(root);
+    expect(result.apps).toHaveLength(0);
+    expect(result.failures.join("\n")).toContain(fileName);
+    expect(result.failures.join("\n")).toContain("odkazuje mimo vybraný checkout");
+  }
 });
 
 test("discovery bez builder metadata dá null fallback bez failure", async () => {

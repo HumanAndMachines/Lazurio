@@ -218,7 +218,7 @@ function ensureDialog() {
       const focusTarget = previousFocus?.isConnected && previousFocus !== document.body
         ? previousFocus
         : findAppTrigger(appId);
-      focusTarget?.focus();
+      focusTarget?.focus({ preventScroll: true });
     });
   });
   document.body.append(dialog);

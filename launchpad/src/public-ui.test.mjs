@@ -14,11 +14,12 @@ async function readFile(path, encoding) {
 }
 
 test("Launchpad public shell exposes a header space switcher and app cards", async () => {
-  const [html, js, css, server] = await Promise.all([
+  const [html, js, css, server, appState] = await Promise.all([
     readFile(join(publicRoot, "index.html"), "utf8"),
     readFile(join(publicRoot, "app.js"), "utf8"),
     readFile(join(publicRoot, "styles.css"), "utf8"),
     readFile(join(import.meta.dirname, "server.mjs"), "utf8"),
+    readFile(join(publicRoot, "app-state.js"), "utf8"),
   ]);
 
   // Shell regions jsou přítomné; interní debug tabulka se do denního UI neposílá.
@@ -183,16 +184,20 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(js).toContain('title: app.runtime?.owner === "foreign-port" ? "Cizí checkout na portu" : "Checkout procesu nelze ověřit"');
   expect(js).toContain('actionLabel: "Zobrazit detail"');
   expect(js).toContain('app.runtime?.owner === "foreign-port" && app.url');
-  expect(js).toContain('label: "Otevřít běžící checkout"');
-  expect(js).toContain('if (opensForeignViewer)');
+  expect(appState).toContain('label: "Otevřít běžící checkout"');
+  const primaryDispatcher = js.slice(js.indexOf("function runPrimaryNextAction"), js.indexOf("function hasReclaimableStaticLease"));
+  expect(primaryDispatcher).toContain('nextAction.type === "open"');
+  expect(primaryDispatcher).toContain('app.runtime?.owner === "foreign-port"');
+  expect(primaryDispatcher).toContain("!hasReclaimableStaticLease(app)");
   expect(js).toContain('openResultUrl(app.url, null, app)');
   const openChainBlock = js.slice(js.indexOf("async function openAppChain"), js.indexOf("function reserveResultTab"));
   expect(openChainBlock).toContain('app.runtime?.owner === "foreign-port" && app.url');
   expect(openChainBlock).toContain('openResultUrl(app.url, null, app)');
-  expect(js).toContain('label: "Checkout procesu nelze ověřit"');
-  expect(js).toContain('small.textContent = blocked ? "blokovaná"');
+  expect(appState).toContain('label: "Checkout procesu nelze ověřit"');
+  expect(js).toContain("const needsAttention = primaryActionSurfaceState(nextAction).needs_attention");
+  expect(js).toContain('? "blokovaná"');
   expect(js).toContain('? (isCodexPortConflict(app) ? "Vyřešit s Codexem" : "Zobrazit detail")');
-  expect(js).toContain('primaryNextAction(app).type !== "disabled"');
+  expect(js).toContain("primaryActionSurfaceState(primaryNextAction(app)).cold_start_candidate");
 
   expect(css).toContain(".space-switcher-menu");
   expect(css).toContain(".space-switcher-option");
@@ -437,6 +442,18 @@ test("Daily surface hides diagnostics until the hero action requests them", asyn
   expect(detailRender).not.toContain("renderDetailNextAction");
   expect(detailRender).not.toContain("renderDetailEndpoint");
   expect(detailRender).not.toContain("renderDetailPaths");
+  expect(detailRender).not.toContain("renderDetailLogs");
+  expect(detailRender).toContain("previousTechnical?.open === true");
+  expect(detailRender).toContain("previousDrawerScrollTop");
+  expect(detailRender).toContain("focus({ preventScroll: true })");
+  expect(detailRender).toContain("state.autoOpenTechnicalAppId === app.id");
+  expect(detailRender).toContain("shouldAutoOpenTechnical || (preserveTechnicalState && technicalWasOpen)");
+  const detailTech = js.slice(js.indexOf("function renderDetailTech"), js.indexOf("function renderDetailHeader"));
+  expect(detailTech).toContain("renderDetailLogs(app)");
+  expect(detailTech).not.toContain("state.selectedLogs");
+  const loadLogs = js.slice(js.indexOf("async function loadLogs"));
+  expect(loadLogs).toContain("selectAppDetail(app.id, { autoOpenTechnical: true })");
+  expect(loadLogs).not.toContain("state.autoOpenTechnicalAppId = app.id");
 });
 
 test("Launchpad quiet refresh is lightweight and non-overlapping", async () => {
@@ -557,6 +574,10 @@ test("Version families render as one card with a default version and a more-menu
   expect(js).toContain('trigger.dataset.menuFocusKey = familyKey');
   expect(js).toContain("focusMenuTriggerAfterRender(document, familyKey)");
   expect(js).toContain('if (inlineMenuPanel) card.append(inlineMenuPanel)');
+  const versionOption = js.slice(js.indexOf("function versionOptionNode"), js.indexOf("function variantOptionDescription"));
+  expect(versionOption).toContain("primaryNextAction(app, null)");
+  expect(versionOption).toContain("runPrimaryNextAction(app, nextAction, {})");
+  expect(versionOption).not.toContain("openAppChain(app");
   expect(css).toContain(".app-version-menu");
   expect(css).toContain(".app-version-badge");
   expect(css).toContain(".app-version-option");
@@ -577,7 +598,7 @@ test("CAC-0044: karty jsou celé klikatelné a spouští one-click open s guarde
   expect(js).toContain('target.closest("button, a, summary, details, input, select, textarea")');
   expect(js).toContain("function openAppChain");
   expect(js).toContain("isProjectedModuleOpenTarget(app, moduleApps)");
-  expect(js).toContain("Výchozí App je jiná varianta");
+  expect(js).toContain("primaryAppActionModel");
   expect(js).toContain("/open");
   // Rezervace tabu před akcí + průběh + klasifikace chyb.
   expect(js).toContain("function reserveResultTab");
@@ -588,9 +609,14 @@ test("CAC-0044: karty jsou celé klikatelné a spouští one-click open s guarde
   expect(js).toContain("Launchpad nedostal URL běžící aplikace");
   expect(js).toContain(`/health`);
   expect(js).toContain("function classifyOpenError");
-  expect(js).toContain("runtimeRecoveryModel(error)");
+  expect(js).toContain("runtimeRecoveryForApp(app, error)");
   expect(recovery).toContain("Aplikace startuje příliš dlouho");
   expect(recovery).toContain('actionLabel: "Vyřešit s Codexem"');
+  expect(js).toContain("runtimeRecoveryForApp(app)");
+  expect(js).toContain("openCodexRuntimeIssueDialog(app, recovery)");
+  expect(js).toContain("function runRuntimeRecoveryAction");
+  expect(js).toContain('["install", "repair"].includes(recovery.action) && canInstall(app)');
+  expect(js).toContain('nextAction.type === "recovery"');
   expect(js).toContain("function writeCardProgress");
   expect(js).toContain("function completedRuntimeActionLabel");
   expect(js).toContain('repair: "oprava dokončena"');
@@ -651,6 +677,13 @@ test("CAC-0044/0095: pravé panely, notifikace pod zvonečkem a git chip", async
   expect(js).toContain("/api/most-used");
   // Nejčastější má cold-start fallback.
   expect(js).toContain("function coldStartMostUsed");
+  expect(js).toContain('needsAttention ? "vyžaduje pozornost"');
+  expect(js).toContain("primaryActionSurfaceState(primaryNextAction(app)).cold_start_candidate");
+  expect(js).toContain("runPrimaryNextAction(app, nextAction, {})");
+  expect(js).toContain('if (nextAction.type === "logs")');
+  expect(js).toContain("void loadLogs(app)");
+  expect(js).toContain('if (nextAction.type === "folder")');
+  expect(js).toContain("void openWorkspaceModuleFolder(app)");
   // Git read model se čte graceful a kontrolní toggle zahrne git stavy.
   expect(js).toContain("/api/git/repos");
   expect(js).toContain("function annotateGitAttention");
@@ -814,9 +847,12 @@ test("CAC-0042: detail panel vysvětluje verzi a Mission Control pracovní návr
   expect(js).toContain("function renderDetailSummary");
   const summaryModel = js.slice(js.indexOf("function detailSummaryModel"), js.indexOf("function simpleChangeSubject"));
   const codexRepairBranch = summaryModel.indexOf('nextAction.type === "codex"');
+  const recoveryBranch = summaryModel.indexOf('nextAction.type === "recovery"');
   const disabledBranch = summaryModel.indexOf('nextAction.type === "disabled"');
   expect(codexRepairBranch).toBeGreaterThan(-1);
   expect(codexRepairBranch).toBeLessThan(disabledBranch);
+  expect(recoveryBranch).toBeGreaterThan(-1);
+  expect(recoveryBranch).toBeLessThan(disabledBranch);
   expect(summaryModel).toContain("agentRepairDetailSummary(app)");
   expect(summaryModel).toContain("action: primaryActionNode(app, nextAction)");
   expect(js).toContain('"Je uložená na tomto počítači. Ostatní ji zatím nevidí."');
@@ -826,7 +862,7 @@ test("CAC-0042: detail panel vysvětluje verzi a Mission Control pracovní návr
   expect(js).toContain("git.outgoingCommitCount");
   expect(js).toContain("git.changedFiles");
   expect(js).toContain('app.runtime_status === "unhealthy"');
-  expect(js).toContain('dependencyState === "needs_install"');
+  expect(js).toContain("runtimeRecoveryForApp(app)");
   expect(js).toContain("button.disabled = pendingKey ? state.pendingAction === pendingKey : false");
   expect(js).toContain("Verze a rozpracovaná práce");
   expect(js).toContain("Aktualizovat Lazurio");
@@ -1110,11 +1146,14 @@ test("read-only app and system detail selection opens the right drawer", async (
   expect(workspaceModuleCard).toContain("workspaceModuleDetail");
   expect(workspaceModuleCard).toContain("selectReadonlyDetail(detail)");
   expect(workspaceModuleCard).toContain("openWorkspaceModuleFolder(detail)");
-  expect(workspaceModuleCard).toContain("openAppChain(detail.default_app)");
+  expect(workspaceModuleCard).toContain("runPrimaryNextAction(detail.default_app, defaultAction, {})");
+  expect(workspaceModuleCard).toContain("cardWarningNode(defaultWarning)");
+  expect(workspaceModuleCard).not.toContain("cardWarningNode(detail.default_app, defaultWarning)");
+  expect(workspaceModuleCard).not.toContain("openAppChain(detail.default_app)");
   expect(workspaceModuleCard).not.toContain("if (openable) void openWorkspaceModuleFolder(detail)");
   expect(js).toContain("Aplikaci tohoto modulu je potřeba opravit.");
   const primaryNextAction = js.slice(js.indexOf("function primaryNextAction"), js.indexOf("function hasReclaimableStaticLease"));
-  expect(primaryNextAction).toContain('moduleApps?.state === "declared" && !moduleApps.open_target_app_id');
+  expect(primaryNextAction).toContain("primaryAppActionModel(app");
   expect(primaryNextAction).not.toContain('app.kind === "workspace-module" && app.can_open_folder');
   const productionspaceCard = js.slice(js.indexOf("function productionspaceCard"), js.indexOf("function productionspaceDetail"));
   expect(productionspaceCard).toContain("productionspaceDetail");
@@ -1143,7 +1182,7 @@ test("Runtime stages (founder 2026-07-15/16): karta nabízí čtyři runy jednoh
   // dostane plný čtyřpilulkový řádek.
   expect(appState).toContain("export function offersMoreThanLocalRun");
   expect(js).toContain("if (!offersMoreThanLocalRun(app)) return null");
-  expect(js).toContain("const stagesRow = renderRuntimeStages(app, readOnly, feedback)");
+  expect(js).toContain("const stagesRow = renderRuntimeStages(app, readOnly, feedback, nextAction)");
   expect(js).toContain("if (stagesRow) card.append(stagesRow)");
 
   // Řádek se vykresluje POD kartou (mezi warning panelem a feedbackem), ne jako
@@ -1173,9 +1212,11 @@ test("Runtime stages (founder 2026-07-15/16): karta nabízí čtyři runy jednoh
   expect(js).toContain('link.rel = "noreferrer"');
   expect(js).toContain("link.addEventListener(\"click\", (event) => event.stopPropagation())");
 
-  // DEV local znovu používá stejný one-click open (openAppChain), ne druhý běh.
+  // DEV local používá stejný centrální dispatcher jako karta a nesmí obejít
+  // recovery/Codex stav přímým openAppChain.
   expect(js).toContain('stage.action === "open_local"');
-  expect(js).toContain("void openAppChain(app, { feedback })");
+  expect(js).toContain("runPrimaryNextAction(app, nextAction, { feedback })");
+  expect(js).toContain("openable: !readOnly && primaryActionOpensLocal(nextAction)");
 
   // Disabled runy (MAIN, DEV remote, nedostupný PROD/DEV local) jsou dimmed
   // pilulky s aria-disabled a důvodem v tooltipu — žádné mrtvé tlačítko.
@@ -1221,9 +1262,11 @@ test("Owner 2026-07-05: karta modulu je GEN2-minimal dlaždice bez velkých tla�
   expect(js).toContain('placement: "top-action"');
   expect(js).toContain("function cardWarningActionIcon");
   expect(js).toContain("appCardTone(app, warning)");
+  const cardTone = js.slice(js.indexOf("function appCardTone"), js.indexOf("function runtimeChip"));
+  expect(cardTone.indexOf('warning?.tone === "danger"')).toBeLessThan(cardTone.indexOf('app.runtime_status === "healthy"'));
   // Příprava balíčků zůstává kontextovou akcí karty; update checkoutů má
   // právě jednu explicitní globální akci Synchronizovat.
-  expect(js).toContain("runRuntimeAction(app, installAction(app))");
+  expect(js).toContain("runRuntimeRecoveryAction(app, recovery)");
   expect(js).toContain('label: "Opravit balíčky"');
   expect(js).toContain('run: () => runRuntimeAction(app, "repair")');
   expect(js).not.toContain("pullLatestRepoVersion");

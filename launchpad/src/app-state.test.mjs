@@ -11,9 +11,13 @@ import {
   groupAppFamilies,
   groupFamiliesBySpace,
   groupWorkspaceFamiliesByTeam,
+  isAttentionState,
   isProjectedModuleOpenTarget,
   matchesQuery,
   offersMoreThanLocalRun,
+  primaryAppActionModel,
+  primaryActionControlDisabled,
+  primaryActionSurfaceState,
   productionUrl,
   reconcileDetailDrawerState,
   replacePersonalspaceResponse,
@@ -25,6 +29,93 @@ import {
   variantMenuLabel,
   variantTag,
 } from "../public/app-state.js";
+
+test("primary action surface keeps attention, DEV-local and cold-start semantics distinct", () => {
+  const matrix = [
+    [{ type: "open" }, [false, true, true]],
+    [{ type: "open_chain" }, [false, true, true]],
+    [{ type: "runtime" }, [false, true, true]],
+    [{ type: "recovery", recovery: { action: "retry" } }, [true, true, false]],
+    [{ type: "recovery", recovery: { action: "repair" } }, [true, false, false]],
+    [{ type: "codex" }, [true, false, false]],
+    [{ type: "logs" }, [true, false, false]],
+    [{ type: "disabled" }, [false, false, false]],
+  ];
+  for (const [action, expected] of matrix) {
+    const state = primaryActionSurfaceState(action);
+    expect([state.needs_attention, state.opens_local, state.cold_start_candidate]).toEqual(expected);
+  }
+});
+
+test("Codex recovery bez pending klíče zůstává klikatelné", () => {
+  const codexRecovery = { type: "recovery", recovery: { action: "codex" } };
+  expect(primaryActionControlDisabled(codexRecovery, {
+    pendingAction: null,
+    recoveryPendingKey: null,
+  })).toBe(false);
+  expect(primaryActionControlDisabled(
+    { type: "recovery", recovery: { action: "repair" } },
+    { pendingAction: "demo:repair", recoveryPendingKey: "demo:repair" },
+  )).toBe(true);
+});
+
+test("primary action model drží recovery před port takeover a legacy open", () => {
+  const sharedPortPeer = { id: "running-peer" };
+  for (const dependencyState of ["needs_install", "dependency_boundary_invalid"]) {
+    for (const action of ["install", "repair", "retry"]) {
+      const recovery = { action, actionLabel: `Recover ${action}` };
+      const result = primaryAppActionModel({
+        dependencies: { state: dependencyState },
+        runtime_status: "unhealthy",
+        url: "http://127.0.0.1:4174",
+      }, {
+        recovery,
+        sharedPortPeer,
+        legacyForeignViewer: true,
+        canStart: true,
+      });
+      expect(result).toEqual({ type: "recovery", label: recovery.actionLabel, recovery });
+    }
+  }
+
+  for (const action of ["repair", "retry", "codex"]) {
+    const recovery = { action, actionLabel: `Recover ${action}` };
+    expect(primaryAppActionModel({
+      dependencies: { state: "ready" },
+      runtime_status: "unhealthy",
+      url: "http://127.0.0.1:4174",
+    }, {
+      recovery,
+      sharedPortPeer,
+      legacyForeignViewer: true,
+      canStart: true,
+    })).toEqual({ type: "recovery", label: recovery.actionLabel, recovery });
+  }
+
+  const repairAction = { prompt: "Inspect exact module", label: "Vyřešit s Codexem" };
+  expect(primaryAppActionModel({
+    dependencies: { state: "ready" },
+    repair_action: repairAction,
+  }, {
+    sharedPortPeer,
+    legacyForeignViewer: true,
+  })).toEqual({ type: "codex", label: "Vyřešit s Codexem", repairAction });
+
+  expect(primaryAppActionModel({ dependencies: { state: "missing_package" } }, {
+    recovery: { action: "retry", actionLabel: "Zkusit znovu" },
+    sharedPortPeer,
+    legacyForeignViewer: true,
+  })).toMatchObject({ type: "recovery", label: "Zkusit znovu" });
+
+  expect(primaryAppActionModel({
+    dependencies: { state: "ready" },
+    runtime_status: "stopped",
+  }, { canStart: true })).toEqual({
+    type: "runtime",
+    action: "start",
+    label: "Spustit a otevřít",
+  });
+});
 
 const apps = [
   app("democo-app-1", "DemoCo", "ready"),
@@ -741,6 +832,23 @@ test("nezdravý runtime je prostorový blokátor i s ready dependencies", () => 
   });
 
   expect(health).toMatchObject({ blockers: 1, warnings: 0 });
+  expect(computeSpaceHeroState(health).tone).toBe("danger");
+});
+
+test("neplatná dependency boundary je blokátor prostoru i položka Ke kontrole", () => {
+  const unsafe = app("unsafe-dependencies", "OmegaCo", "dependency_boundary_invalid");
+  unsafe.runtime_status = "stopped";
+  const health = summarizeOrganizationSpaceHealth({
+    organization: { slug: "OmegaCo", workspaces: [] },
+    apps: [unsafe],
+  });
+
+  expect(health).toMatchObject({
+    blockers: 1,
+    warnings: 0,
+    blocking_apps: [unsafe],
+  });
+  expect(isAttentionState(unsafe)).toBe(true);
   expect(computeSpaceHeroState(health).tone).toBe("danger");
 });
 

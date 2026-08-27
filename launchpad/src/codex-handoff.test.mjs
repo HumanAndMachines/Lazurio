@@ -4,6 +4,7 @@ import {
   buildCodexRuntimeIssuePrompt,
   isCodexPortConflict,
 } from "../public/codex-handoff.js";
+import { runtimeRecoveryForApp } from "../public/runtime-recovery.js";
 
 const blockedApp = {
   id: "rozjedeme-ai-mission-control-v3",
@@ -65,4 +66,33 @@ test("obecný runtime handoff nese chybu, scope a publikační hranici", () => {
   expect(prompt).toContain("správný root / Organizaci / modul");
   expect(prompt).toContain("Nic nemerguj ani nepublikuj");
   expect(prompt).toContain("ověř její health");
+});
+
+test("passive HTTP failure prompt carries exact scoped diagnostics without null placeholders", () => {
+  const app = {
+    id: "humanandmachine-ai-website-lazurio-v1",
+    title: "Website Lazurio",
+    company: "HumanAndMachine-ai",
+    runtime_status: "unhealthy",
+    health_url: "http://127.0.0.1:24215/",
+    dependencies: {
+      state: "ready",
+      can_install: true,
+      cwd: "organizations/HumanAndMachine-ai_GEN3/workspace/website-lazurio/app",
+    },
+    runtime: {
+      message: "Managed proces odpověděl HTTP 500.",
+      log_path: "logs/apps/humanandmachine-ai-website-lazurio-v1.log",
+      probe: { status_code: 500 },
+    },
+  };
+
+  const prompt = buildCodexRuntimeIssuePrompt(app, runtimeRecoveryForApp(app));
+  expect(prompt).toContain("HumanAndMachine-ai");
+  expect(prompt).toContain("humanandmachine-ai-website-lazurio-v1");
+  expect(prompt).toContain("workspace/website-lazurio/app");
+  expect(prompt).toContain("logs/apps/humanandmachine-ai-website-lazurio-v1.log");
+  expect(prompt).toContain("HTTP 500");
+  expect(prompt).not.toContain("undefined");
+  expect(prompt).not.toContain("null");
 });

@@ -1,12 +1,13 @@
 import { existsSync } from "fs";
 import { readFile, readdir } from "fs/promises";
-import { basename, join, posix } from "path";
+import { basename, dirname, join, posix } from "path";
 import {
   discoverLaunchpadApps,
   organizationRelativePathIssue,
   readJson,
 } from "./discovery-lib.mjs";
 import { buildGitApiResponse, compactGitSummaryForApp } from "./git-api-lib.mjs";
+import { inspectRequiredDependencies } from "./dependency-install-lib.mjs";
 import {
   createRuntimeManager,
   resolveBunExecutable,
@@ -58,6 +59,7 @@ import {
   DEVELOPER_TOOL_UPDATE_POLICY,
   inspectDeveloperToolUpdates,
 } from "../core/tool-update-lib.mjs";
+import { inspectDirectoryWithinCanonicalBoundary } from "../core/path-boundary-lib.mjs";
 
 const supportedPlatforms = {
   darwin: "macOS",
@@ -541,7 +543,21 @@ async function worktreeDependencyCheck({ companiesRoot, index }) {
   const ownedWorktrees = (index.worktrees ?? []).filter((worktree) => worktree.ownership_status === "owned");
   const records = [];
   for (const worktree of ownedWorktrees) {
-    const packageRoots = await worktreePackageRoots(join(companiesRoot, worktree.path));
+    const absoluteWorktreePath = join(companiesRoot, worktree.path);
+    const packageDiscovery = await worktreePackageRoots({
+      companiesRoot,
+      worktree,
+      absoluteWorktreePath,
+    });
+    if (!packageDiscovery.ok) {
+      records.push({
+        state: "dependency_boundary_invalid",
+        worktree,
+        detail: `dependency_boundary_invalid: ${worktree.slug} (${worktree.path}) — ${packageDiscovery.detail}`,
+      });
+      continue;
+    }
+    const packageRoots = packageDiscovery.roots;
     if (packageRoots.length === 0) {
       records.push({
         state: "no_package",
@@ -551,19 +567,25 @@ async function worktreeDependencyCheck({ companiesRoot, index }) {
       continue;
     }
     for (const packageRoot of packageRoots) {
-      records.push(await worktreePackageReadiness({ worktree, packageRoot }));
+      records.push(await worktreePackageReadiness({
+        worktree,
+        packageRoot,
+        absoluteWorktreePath: packageDiscovery.worktree_root,
+      }));
     }
   }
 
   const counts = countBy(records.map((record) => record.state));
   const packageRecords = records.filter((record) => record.state !== "no_package");
-  const warningStates = new Set(["needs_install", "unknown_package_manager", "invalid_package_json"]);
+  const warningStates = new Set(["needs_install", "dependency_boundary_invalid", "missing_lockfile", "unknown_package_manager", "invalid_package_json"]);
   const warnings = records.filter((record) => warningStates.has(record.state));
   const details = [
     `checked_worktrees: ${ownedWorktrees.length}`,
     `checked_packages: ${packageRecords.length}`,
     `ready: ${counts.ready ?? 0}`,
     `needs_install: ${counts.needs_install ?? 0}`,
+    `dependency_boundary_invalid: ${counts.dependency_boundary_invalid ?? 0}`,
+    `missing_lockfile: ${counts.missing_lockfile ?? 0}`,
     `unknown_package_manager: ${counts.unknown_package_manager ?? 0}`,
     `invalid_package_json: ${counts.invalid_package_json ?? 0}`,
     `no_package: ${counts.no_package ?? 0}`,
@@ -585,56 +607,126 @@ async function worktreeDependencyCheck({ companiesRoot, index }) {
   };
 }
 
-async function worktreePackageRoots(absoluteWorktreePath) {
+async function worktreePackageRoots({ companiesRoot, worktree, absoluteWorktreePath }) {
+  if (typeof worktree.organization_path !== "string" || worktree.organization_path === "") {
+    return { ok: false, detail: "Worktree nemá přesný owning Organization path." };
+  }
+  const organizationRoot = join(companiesRoot, worktree.organization_path);
+  const organizationBoundary = await inspectDirectoryWithinCanonicalBoundary({
+    // Inventory already carries the exact auto-discovered Organization path.
+    // Anchor it to its actual configured mountpoint instead of assuming the
+    // historical `organizations/` basename.
+    rootPath: dirname(organizationRoot),
+    targetPath: organizationRoot,
+  });
+  if (!organizationBoundary.ok || !organizationBoundary.targetRealPath) {
+    return { ok: false, detail: "Organization owner root nelze bezpečně ukotvit." };
+  }
+  const worktreeBoundary = await inspectDirectoryWithinCanonicalBoundary({
+    rootPath: organizationRoot,
+    rootRealPath: organizationBoundary.targetRealPath,
+    targetPath: absoluteWorktreePath,
+  });
+  if (!worktreeBoundary.ok || !worktreeBoundary.targetRealPath) {
+    return { ok: false, detail: "Worktree odkazuje mimo owning Organization." };
+  }
+  const canonicalWorktreePath = worktreeBoundary.targetRealPath;
   const roots = [];
-  if (existsSync(join(absoluteWorktreePath, "package.json"))) {
-    roots.push({ absolute_dir: absoluteWorktreePath, relative_dir: "." });
+  if (existsSync(join(canonicalWorktreePath, "package.json"))) {
+    roots.push({ absolute_dir: canonicalWorktreePath, relative_dir: "." });
   }
-  const appRoot = join(absoluteWorktreePath, "app");
-  if (existsSync(join(appRoot, "package.json"))) {
-    roots.push({ absolute_dir: appRoot, relative_dir: "app" });
+  const appRoot = join(canonicalWorktreePath, "app");
+  if (!existsSync(appRoot)) {
+    return { ok: true, roots, worktree_root: canonicalWorktreePath };
   }
-  if (existsSync(appRoot)) {
-    for (const entry of await safeReadDir(appRoot)) {
-      if (!entry.isDirectory()) continue;
-      const absoluteDir = join(appRoot, entry.name);
-      if (existsSync(join(absoluteDir, "package.json"))) {
-        roots.push({ absolute_dir: absoluteDir, relative_dir: `app/${entry.name}` });
-      }
+  const appBoundary = await inspectDirectoryWithinCanonicalBoundary({
+    rootPath: canonicalWorktreePath,
+    rootRealPath: canonicalWorktreePath,
+    targetPath: appRoot,
+  });
+  if (!appBoundary.ok || !appBoundary.targetRealPath) {
+    return { ok: false, detail: "app/ odkazuje mimo přesný worktree; Doctor jej neprošel." };
+  }
+  const canonicalAppRoot = appBoundary.targetRealPath;
+  if (existsSync(join(canonicalAppRoot, "package.json"))) {
+    roots.push({ absolute_dir: canonicalAppRoot, relative_dir: "app" });
+  }
+  let entries;
+  try {
+    entries = await readdir(canonicalAppRoot, { withFileTypes: true });
+  } catch (error) {
+    return { ok: false, detail: `app/ nejde bezpečně vypsat: ${error instanceof Error ? error.message : String(error)}` };
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const absoluteDir = join(canonicalAppRoot, entry.name);
+    const childBoundary = await inspectDirectoryWithinCanonicalBoundary({
+      rootPath: canonicalWorktreePath,
+      rootRealPath: canonicalWorktreePath,
+      targetPath: absoluteDir,
+    });
+    if (!childBoundary.ok || !childBoundary.targetRealPath) {
+      return { ok: false, detail: `app/${entry.name} odkazuje mimo přesný worktree; Doctor jej neprošel.` };
+    }
+    if (existsSync(join(childBoundary.targetRealPath, "package.json"))) {
+      roots.push({ absolute_dir: childBoundary.targetRealPath, relative_dir: `app/${entry.name}` });
     }
   }
-  return roots;
+  return { ok: true, roots, worktree_root: canonicalWorktreePath };
 }
 
-async function worktreePackageReadiness({ worktree, packageRoot }) {
-  const packagePath = join(packageRoot.absolute_dir, "package.json");
+async function worktreePackageReadiness({ worktree, packageRoot, absoluteWorktreePath }) {
   const packageRelativePath = packageRoot.relative_dir === "." ? "package.json" : `${packageRoot.relative_dir}/package.json`;
   const label = packageRoot.relative_dir === "." ? worktree.slug : `${worktree.slug}/${packageRoot.relative_dir}`;
-  let packageJson;
-  try {
-    packageJson = JSON.parse(await readFile(packagePath, "utf8"));
-  } catch (error) {
+  const packageBoundary = await inspectDirectoryWithinCanonicalBoundary({
+    rootPath: absoluteWorktreePath,
+    rootRealPath: absoluteWorktreePath,
+    targetPath: packageRoot.absolute_dir,
+    allowTargetEqual: true,
+  });
+  if (!packageBoundary.ok || !packageBoundary.targetRealPath) {
     return {
-      state: "invalid_package_json",
+      state: "dependency_boundary_invalid",
       worktree,
       package_path: packageRelativePath,
-      detail: `invalid_package_json: ${label} (${worktree.path}/${packageRelativePath}) — ${error.message}`,
+      detail: `dependency_boundary_invalid: ${label} (${worktree.path}/${packageRelativePath}) — package root změnil owner boundary před čtením.`,
+    };
+  }
+  const lockfile = await firstExistingWorktreeLockfile(packageBoundary.targetRealPath);
+  const dependencyInspection = await inspectRequiredDependencies({
+    cwd: packageBoundary.targetRealPath,
+    boundaryRoot: absoluteWorktreePath,
+    lockfile: lockfile?.path ?? null,
+  });
+  if (!dependencyInspection.ok) {
+    const invalidPackage = ["package_json_missing", "package_json_invalid"].includes(dependencyInspection.reason);
+    return {
+      state: invalidPackage ? "invalid_package_json" : "dependency_boundary_invalid",
+      worktree,
+      package_path: packageRelativePath,
+      detail: `${invalidPackage ? "invalid_package_json" : "dependency_boundary_invalid"}: ${label} (${worktree.path}/${packageRelativePath}) — ${dependencyInspection.detail}`,
     };
   }
 
-  const lockfile = await firstExistingWorktreeLockfile(packageRoot.absolute_dir);
+  const packageJson = dependencyInspection.package_json;
   const manager = detectWorktreePackageManager({ packageJson, lockfile });
-  const declaredDependencyCount = countWorktreeDeclaredDependencies(packageJson);
-  const packageNeedsInstall = declaredDependencyCount > 0;
-  const nodeModulesPresent = existsSync(join(packageRoot.absolute_dir, "node_modules"));
   let state = "ready";
   let action = "ready";
-  if (!manager.supported) {
+  if (!lockfile && (manager.supported || manager.lockfile_missing === true)) {
+    if (dependencyInspection.missing_required_dependencies.length > 0) {
+      state = "missing_lockfile";
+      action = "commitni lockfile odpovídající packageManager; Doctor bez něj nenabízí Install";
+    } else {
+      action = "ready; bez podporovaného lockfilu Doctor nenabízí Install ani Repair";
+    }
+  } else if (!manager.supported) {
     state = "unknown_package_manager";
-    action = `unsupported package manager ${manager.name ?? "unknown"}`;
-  } else if (packageNeedsInstall && !nodeModulesPresent) {
+    action = manager.lockfile_mismatch
+      ? `packageManager ${manager.name ?? "unknown"} mismatches ${lockfile?.path ?? "lockfile"} (${lockfile?.package_manager ?? "unknown"})`
+      : `unsupported package manager ${manager.name ?? "unknown"}`;
+  } else if (dependencyInspection.missing_required_dependencies.length > 0) {
     state = "needs_install";
-    action = manager.install_command.join(" ");
+    action = `${manager.install_command.join(" ")} (missing: ${dependencyInspection.missing_required_dependencies.join(", ")})`;
   }
 
   return {
@@ -662,11 +754,14 @@ function detectWorktreePackageManager({ packageJson, lockfile }) {
   const declared = typeof packageJson.packageManager === "string" ? packageJson.packageManager.trim() : "";
   if (declared) {
     const name = worktreePackageManagerName(declared);
+    const lockfileMismatch = Boolean(lockfile) && lockfile.package_manager !== name;
+    const supported = worktreeSupportedPackageManagers.has(name) && !lockfileMismatch;
     return {
       name,
       source: "packageManager",
-      supported: worktreeSupportedPackageManagers.has(name),
-      install_command: worktreeSupportedPackageManagers.has(name) ? [name, "install", "--frozen-lockfile"] : null,
+      supported,
+      lockfile_mismatch: lockfileMismatch,
+      install_command: supported ? [name, "install", "--frozen-lockfile"] : null,
     };
   }
   if (lockfile) {
@@ -679,9 +774,10 @@ function detectWorktreePackageManager({ packageJson, lockfile }) {
   }
   return {
     name: "bun",
-    source: "default",
-    supported: true,
-    install_command: ["bun", "install", "--frozen-lockfile"],
+    source: "missing_lockfile",
+    supported: false,
+    lockfile_missing: true,
+    install_command: null,
   };
 }
 
@@ -704,13 +800,6 @@ function worktreePackageManagerForLockfile(name) {
       "yarn.lock": "yarn",
     }[name] ?? "unknown"
   );
-}
-
-function countWorktreeDeclaredDependencies(packageJson) {
-  return ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]
-    .map((key) => packageJson[key])
-    .filter((value) => value && typeof value === "object" && !Array.isArray(value))
-    .reduce((count, value) => count + Object.keys(value).length, 0);
 }
 
 async function safeReadDir(path) {
@@ -2627,7 +2716,7 @@ function runtimeAppCheck(app) {
 export function runtimeAppStatus(app) {
   const runtime = app.runtime ?? {};
   const dependencyState = app.dependencies?.state ?? runtime.dependencies?.state;
-  if (dependencyState === "missing_package" || dependencyState === "unknown_package_manager") return "fail";
+  if (["missing_package", "dependency_boundary_invalid", "missing_lockfile", "unknown_package_manager"].includes(dependencyState)) return "fail";
   // Live occupancy of a valid module-owned static lease is diagnostic only:
   // Start/Open reclaims it under the OS-level module mutex. Legacy or otherwise
   // non-authoritative apps still fail because they have no takeover authority.

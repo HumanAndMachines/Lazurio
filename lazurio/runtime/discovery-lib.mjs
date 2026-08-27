@@ -43,11 +43,16 @@ import {
   inspectOrganizationModuleCheckoutCandidates,
   organizationModuleDeclarationClaims,
 } from "./module-location-candidates-lib.mjs";
+import {
+  inspectCanonicalPathBoundary,
+  readJsonWithinCanonicalBoundary,
+} from "../../lazurio/core/path-boundary-lib.mjs";
 
 // Internal filesystem provenance for the runtime manager. Symbols survive
 // in-process object spreads but are omitted from JSON, so the public App
 // contract does not gain an absolute-path field.
 export const APP_FILESYSTEM_ROOT = Symbol("lazurio.app.filesystem-root");
+export const APP_CHECKOUT_ROOT = Symbol("lazurio.app.checkout-root");
 
 const ignoredDirs = new Set([
   ".git",
@@ -332,20 +337,42 @@ export function organizationManifestIdentityIssues({ companyConfig, manifest, la
 // importu. Proto zde držíme malou read-only kontrolu identity, kanonických cest,
 // Team referencí a Git materializace. Platí shodně pro běžnou Organizaci i
 // marker template mount.
-async function organizationMountContract({ organizationRoot, organization, label, warnings }) {
+async function organizationMountContract({ organizationRoot, mountRoot, organization, label, warnings }) {
   const fatalIssues = organizationMountStructureIssues({ organizationRoot, label });
   const slotIssues = new Map();
   if (fatalIssues.length > 0) return { fatalIssues, slotIssues: [], quarantinedPaths: [] };
 
+  const organizationBoundary = await inspectCanonicalPathBoundary({
+    rootPath: mountRoot,
+    targetPath: organizationRoot,
+  });
+  if (!organizationBoundary.ok || !organizationBoundary.targetRealPath) {
+    return {
+      fatalIssues: [`${label}: Organization mount překračuje canonical root boundary`],
+      slotIssues: [],
+      quarantinedPaths: [],
+    };
+  }
+
   let companyConfig;
   let manifest;
   try {
-    companyConfig = await readJson(join(organizationRoot, "company.gen3.json"));
+    companyConfig = (await readJsonWithinCanonicalBoundary({
+      rootPath: organizationRoot,
+      rootRealPath: organizationBoundary.targetRealPath,
+      targetPath: join(organizationRoot, "company.gen3.json"),
+      label: `${label}/company.gen3.json`,
+    })).value;
   } catch (error) {
     return { fatalIssues: [`${label}: company.gen3.json nejde přečíst: ${error.message}`], slotIssues: [], quarantinedPaths: [] };
   }
   try {
-    manifest = await readJson(join(organizationRoot, "modules.manifest.json"));
+    manifest = (await readJsonWithinCanonicalBoundary({
+      rootPath: organizationRoot,
+      rootRealPath: organizationBoundary.targetRealPath,
+      targetPath: join(organizationRoot, "modules.manifest.json"),
+      label: `${label}/modules.manifest.json`,
+    })).value;
   } catch (error) {
     return { fatalIssues: [`${label}: modules.manifest.json nejde přečíst: ${error.message}`], slotIssues: [], quarantinedPaths: [] };
   }
@@ -1040,6 +1067,17 @@ export async function readJson(path) {
   return JSON.parse(await readFile(path, "utf8"));
 }
 
+async function runtimePackageBoundary({ sourceRoot, company, absolutePackagePath }) {
+  const organizationRoot = resolve(sourceRoot, company.path ?? ".");
+  if (company.discovery_source === "local_surface") return organizationRoot;
+  const packageDirectory = dirname(absolutePackagePath);
+  const declaredRoots = await declaredOrganizationModuleRoots(organizationRoot);
+  return declaredRoots
+    .filter((root) => root === packageDirectory || pathIsWithin(root, packageDirectory))
+    .sort((left, right) => right.length - left.length)[0]
+    ?? organizationRoot;
+}
+
 async function resolveRuntimeModuleContract({
   companiesRoot,
   packagePath,
@@ -1094,7 +1132,11 @@ async function resolveRuntimeModuleContract({
   }
   let manifest;
   try {
-    manifest = await readJson(manifestPath);
+    manifest = (await readJsonWithinCanonicalBoundary({
+      rootPath: moduleRoot,
+      targetPath: manifestPath,
+      label: relativeManifestPath,
+    })).value;
   } catch (error) {
     return {
       module: null,
@@ -1116,8 +1158,20 @@ async function resolveRuntimeModuleContract({
 async function declaredOrganizationModuleRoots(organizationRoot) {
   const companyPath = join(organizationRoot, "company.gen3.json");
   const manifestPath = join(organizationRoot, "modules.manifest.json");
-  const companyConfig = existsSync(companyPath) ? await readJson(companyPath) : {};
-  const manifest = existsSync(manifestPath) ? await readJson(manifestPath) : {};
+  const companyConfig = existsSync(companyPath)
+    ? (await readJsonWithinCanonicalBoundary({
+        rootPath: organizationRoot,
+        targetPath: companyPath,
+        label: "company.gen3.json",
+      })).value
+    : {};
+  const manifest = existsSync(manifestPath)
+    ? (await readJsonWithinCanonicalBoundary({
+        rootPath: organizationRoot,
+        targetPath: manifestPath,
+        label: "modules.manifest.json",
+      })).value
+    : {};
   const manifestSlots = Array.isArray(manifest?.module_slots) ? manifest.module_slots : [];
   const companyModules = Array.isArray(companyConfig?.modules) ? companyConfig.modules : [];
   const ambiguous = new Set([
@@ -1479,6 +1533,44 @@ function workspaceRelativePath(root, target) {
   return relative(root, target).replace(/\\/g, "/");
 }
 
+// Filesystem root answers where a portable app path is resolved. Checkout root
+// answers which single Git owner may provide dependencies and lifecycle code.
+// Keeping these identities separate prevents an app in one nested Module from
+// resolving packages through a sibling Organization or Personalspace checkout.
+function owningCheckoutRoot({ app, packagePath, company, sourceRoot }) {
+  const modulePath = app?.module_contract?.module_path;
+  if (typeof modulePath === "string" && modulePath.trim() !== "") {
+    const candidate = resolve(sourceRoot, dirname(modulePath));
+    if (candidate === resolve(sourceRoot) || pathIsWithin(resolve(sourceRoot), candidate)) {
+      return candidate;
+    }
+  }
+
+  const organizationScoped = ["organization", "template"].includes(company?.organization_kind)
+    && typeof company?.path === "string";
+  const lexicalBoundary = organizationScoped
+    ? resolve(sourceRoot, company.path)
+    : resolve(sourceRoot);
+  const lexicalPackageRoot = resolve(sourceRoot, dirname(packagePath));
+  let boundary;
+  let cursor;
+  try {
+    boundary = realpathSync(lexicalBoundary);
+    cursor = realpathSync(lexicalPackageRoot);
+  } catch {
+    return lexicalBoundary;
+  }
+  if (cursor !== boundary && !pathIsWithin(boundary, cursor)) return boundary;
+  while (cursor === boundary || pathIsWithin(boundary, cursor)) {
+    if (existsSync(join(cursor, ".git"))) return cursor;
+    if (cursor === boundary) break;
+    const parent = dirname(cursor);
+    if (parent === cursor) break;
+    cursor = parent;
+  }
+  return boundary;
+}
+
 // Per-machine override soubor launchpad.gen3.local.json (gitignored, nikdy
 // trackovaný). Nese jen stroj-specifická data: personalspace_owner, extra local
 // surfaces a planned_organizations. Rozbitý JSON override neshazuje discovery —
@@ -1487,7 +1579,11 @@ export async function readLocalOverrideConfig(companiesRoot, warnings) {
   const path = join(companiesRoot, "launchpad.gen3.local.json");
   if (!existsSync(path)) return null;
   try {
-    return await readJson(path);
+    return (await readJsonWithinCanonicalBoundary({
+      rootPath: companiesRoot,
+      targetPath: path,
+      label: "launchpad.gen3.local.json",
+    })).value;
   } catch (error) {
     warnings?.push(`launchpad.gen3.local.json: nejde přečíst, per-machine override se ignoruje: ${error.message}`);
     return null;
@@ -1892,7 +1988,11 @@ async function discoverOrganizations({
 
     let companyJson;
     try {
-      companyJson = await readJson(companyJsonPath);
+      companyJson = (await readJsonWithinCanonicalBoundary({
+        rootPath: companiesRoot,
+        targetPath: companyJsonPath,
+        label: `${path}/company.gen3.json`,
+      })).value;
     } catch (error) {
       // Marker existuje, ale nejde přečíst = přítomný mount s rozbitou hranicí.
       // Po zrušení registry je marker jediná stopa, že tu Organizace je — tichý
@@ -2045,6 +2145,7 @@ async function walkMountPackages({
     if (!existsSync(companyRoot)) continue;
     const mountContract = await organizationMountContract({
       organizationRoot: companyRoot,
+      mountRoot: companiesRoot,
       organization: company,
       label: company.path,
       warnings,
@@ -2101,6 +2202,7 @@ function invalidAppRecord({ app, packagePath, company, sourceRoot, issues }) {
   const id = typeof app.id === "string" && app.id.trim() !== "" ? app.id : `invalid-manifest:${packagePath}`;
   return {
     [APP_FILESYSTEM_ROOT]: sourceRoot,
+    [APP_CHECKOUT_ROOT]: owningCheckoutRoot({ app, packagePath, company, sourceRoot }),
     id,
     title: typeof app.title === "string" && app.title.trim() !== "" ? app.title : packagePath,
     company: company.slug,
@@ -2441,7 +2543,31 @@ export async function discoverLaunchpadApps(
   const appIds = new Map();
   for (const { packagePath, company, sourceRoot = companiesRoot } of sortedPackageEntries) {
     const absolutePackagePath = join(sourceRoot, packagePath);
-    const packageJson = await readJson(absolutePackagePath);
+    const packageBoundary = await runtimePackageBoundary({
+      sourceRoot,
+      company,
+      absolutePackagePath,
+    });
+    let packageJson;
+    try {
+      packageJson = (await readJsonWithinCanonicalBoundary({
+        rootPath: packageBoundary,
+        targetPath: absolutePackagePath,
+        label: packagePath,
+      })).value;
+    } catch (error) {
+      const issue = `${packagePath}: package.json nejde bezpečně přečíst: ${error.message}`;
+      failures.push(issue);
+      warnings.push(`${issue} (invalid app manifest)`);
+      invalidApps.push(invalidAppRecord({
+        app: {},
+        packagePath,
+        company,
+        sourceRoot,
+        issues: [issue],
+      }));
+      continue;
+    }
     const normalizedRuntime = normalizePackageRuntime({ packageJson, packagePath });
     if (!normalizedRuntime) continue;
     let app = normalizedRuntime.app;
@@ -2612,6 +2738,7 @@ export async function discoverLaunchpadApps(
 
     apps.push({
       [APP_FILESYSTEM_ROOT]: sourceRoot,
+      [APP_CHECKOUT_ROOT]: owningCheckoutRoot({ app, packagePath, company, sourceRoot }),
       id: app.id,
       title: app.title,
       company: app.company,
@@ -2734,7 +2861,12 @@ async function collectTemplateApps({ templatePackageEntries, appSchema, warnings
   for (const { packagePath, company, sourceRoot } of sorted) {
     let packageJson;
     try {
-      packageJson = await readJson(join(sourceRoot, packagePath));
+      const templateRoot = join(sourceRoot, company.path);
+      packageJson = (await readJsonWithinCanonicalBoundary({
+        rootPath: templateRoot,
+        targetPath: join(sourceRoot, packagePath),
+        label: packagePath,
+      })).value;
     } catch (error) {
       // Izolace selhání: vadný template package.json NIKDY nesmí shodit discovery
       // reálných firem — konvertuje se na template warning + invalid_manifest záznam.

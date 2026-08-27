@@ -83,11 +83,16 @@ test("canonical path containment has one physical Core owner", async () => {
     "launchpad/src/worktree-actions-lib.mjs",
     "lazurio/core/git-materialization-lib.mjs",
     "lazurio/organization-install-lib.mjs",
+    "lazurio/runtime/dependency-install-lib.mjs",
+    "lazurio/runtime/diagnostics-lib.mjs",
+    "lazurio/runtime/discovery-lib.mjs",
     "lazurio/runtime/git-inventory-lib.mjs",
     "lazurio/runtime/git-lib.mjs",
     "lazurio/runtime/git-materialization-lib.mjs",
     "lazurio/runtime/mission-control-plan-lib.mjs",
     "lazurio/runtime/module-location-repair-lib.mjs",
+    "lazurio/runtime/personalspace-lib.mjs",
+    "lazurio/runtime/runtime-lib.mjs",
     "lazurio/runtime/worktree-lib.mjs",
   ]);
 });
