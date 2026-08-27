@@ -11,6 +11,7 @@ import {
 
 const tempRoots = [];
 const macTest = process.platform === "darwin" ? test : test.skip;
+const linuxTest = process.platform === "linux" ? test : test.skip;
 
 afterEach(async () => {
   await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
@@ -29,9 +30,9 @@ test("all supported Launchpad package entrypoints use the process-identity launc
   });
 });
 
-test("non-macOS Launchpad startup preserves the canonical Bun executable", async () => {
+test("Windows Launchpad startup preserves the canonical Bun executable", async () => {
   const prepared = await prepareLaunchpadServerExecutable({
-    platform: "linux",
+    platform: "win32",
     executablePath: "/opt/bun/bin/bun",
   });
 
@@ -42,6 +43,29 @@ test("non-macOS Launchpad startup preserves the canonical Bun executable", async
     warning: null,
   });
   await prepared.cleanup();
+});
+
+test("Linux Launchpad startup creates an exact temporary Bun symlink with the product name", async () => {
+  const root = await temporaryRoot("lazurio-launchpad-linux-process-name-");
+  const executable = join(root, "bun-runtime");
+  await writeFile(executable, "fixture Bun bytes\n");
+  await chmod(executable, 0o755);
+
+  const prepared = await prepareLaunchpadServerExecutable({
+    platform: "linux",
+    executablePath: executable,
+    temporaryRoot: root,
+  });
+
+  expect(prepared.branded).toBe(true);
+  expect(prepared.warning).toBeNull();
+  expect(basename(prepared.executablePath)).toBe(LAZURIO_LAUNCHPAD_NAME);
+  expect((await lstat(prepared.executablePath)).isSymbolicLink()).toBe(true);
+  expect(await Bun.file(prepared.executablePath).text()).toBe("fixture Bun bytes\n");
+  expect(existsSync(prepared.temporaryDirectory)).toBe(true);
+
+  await prepared.cleanup();
+  expect(existsSync(prepared.temporaryDirectory)).toBe(false);
 });
 
 test("macOS Launchpad startup creates an exact temporary Bun hardlink with the product name", async () => {
@@ -96,6 +120,32 @@ test("macOS process-name failure falls back to Bun and removes partial temporary
   });
   expect(prepared.warning).toContain("Lazurio Launchpad");
   expect(prepared.warning).toContain("EXDEV");
+  expect(await readdir(root)).toEqual(["bun-runtime"]);
+});
+
+test("Linux process-name failure falls back to Bun and removes partial temporary state", async () => {
+  const root = await temporaryRoot("lazurio-launchpad-linux-process-fallback-");
+  const executable = join(root, "bun-runtime");
+  await writeFile(executable, "fixture Bun bytes\n");
+  const symlinkError = Object.assign(new Error("symlink denied"), { code: "EACCES" });
+
+  const prepared = await prepareLaunchpadServerExecutable({
+    platform: "linux",
+    executablePath: executable,
+    temporaryRoot: root,
+    createSymbolicLink: async () => {
+      throw symlinkError;
+    },
+  });
+
+  expect(prepared).toMatchObject({
+    executablePath: executable,
+    canonicalExecutablePath: executable,
+    branded: false,
+  });
+  expect(prepared.warning).toContain("Lazurio Launchpad");
+  expect(prepared.warning).toContain("Linux");
+  expect(prepared.warning).toContain("EACCES");
   expect(await readdir(root)).toEqual(["bun-runtime"]);
 });
 
@@ -213,6 +263,55 @@ setInterval(() => {}, 2_147_483_647);
     ]);
     expect(lsof.exitCode).toBe(0);
     expect(lsof.stdout.toString()).toContain(`c${LAZURIO_LAUNCHPAD_NAME}\n`);
+  } finally {
+    child?.kill("SIGTERM");
+    await child?.exited;
+    await prepared.cleanup();
+  }
+}, 10_000);
+
+linuxTest("Linux lsof reports the accepted Lazurio Launchp listener command", async () => {
+  const root = await temporaryRoot("lazurio-launchpad-linux-lsof-");
+  const fixture = join(root, "listener.mjs");
+  await writeFile(fixture, `
+const server = Bun.serve({
+  hostname: "127.0.0.1",
+  port: 0,
+  fetch() { return new Response("ok"); },
+});
+console.log(server.port);
+process.on("SIGTERM", async () => {
+  await server.stop(true);
+  process.exit(0);
+});
+setInterval(() => {}, 2_147_483_647);
+`);
+  const prepared = await prepareLaunchpadServerExecutable({
+    platform: "linux",
+    executablePath: process.execPath,
+    temporaryRoot: root,
+  });
+  let child = null;
+  try {
+    child = Bun.spawn([prepared.executablePath, fixture], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const port = Number(await firstOutputLine(child.stdout));
+    expect(port).toBeGreaterThan(0);
+    const lsofPath = Bun.which("lsof");
+    expect(lsofPath).not.toBeNull();
+    const lsof = Bun.spawnSync([
+      lsofPath,
+      `-iTCP:${port}`,
+      "-sTCP:LISTEN",
+      "-P",
+      "-n",
+      "-F",
+      "pcn",
+    ]);
+    expect(lsof.exitCode).toBe(0);
+    expect(lsof.stdout.toString()).toContain("cLazurio Launchp\n");
   } finally {
     child?.kill("SIGTERM");
     await child?.exited;

@@ -1,4 +1,4 @@
-import { link, lstat, mkdtemp, realpath, rm } from "node:fs/promises";
+import { link, lstat, mkdtemp, realpath, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LAZURIO_LAUNCHPAD_NAME } from "./launchpad-identity-lib.mjs";
@@ -11,11 +11,12 @@ export async function prepareLaunchpadServerExecutable({
   temporaryRoot = tmpdir(),
   createTemporaryDirectory = mkdtemp,
   createHardLink = link,
+  createSymbolicLink = symlink,
   readPathStat = lstat,
   resolveRealPath = realpath,
   removePath = rm,
 } = {}) {
-  if (platform !== "darwin") {
+  if (platform !== "darwin" && platform !== "linux") {
     return {
       executablePath,
       canonicalExecutablePath: executablePath,
@@ -35,15 +36,24 @@ export async function prepareLaunchpadServerExecutable({
 
     temporaryDirectory = await createTemporaryDirectory(join(temporaryRoot, "lazurio-launchpad-"));
     const namedExecutablePath = join(temporaryDirectory, LAZURIO_LAUNCHPAD_NAME);
-    await createHardLink(canonicalExecutablePath, namedExecutablePath);
-    const namedStat = await readPathStat(namedExecutablePath);
-    if (
-      !namedStat.isFile()
-      || namedStat.isSymbolicLink()
-      || namedStat.dev !== sourceStat.dev
-      || namedStat.ino !== sourceStat.ino
-    ) {
-      throw processIdentityError("named executable is not the exact Bun hardlink");
+    if (platform === "darwin") {
+      await createHardLink(canonicalExecutablePath, namedExecutablePath);
+      const namedStat = await readPathStat(namedExecutablePath);
+      if (
+        !namedStat.isFile()
+        || namedStat.isSymbolicLink()
+        || namedStat.dev !== sourceStat.dev
+        || namedStat.ino !== sourceStat.ino
+      ) {
+        throw processIdentityError("named executable is not the exact Bun hardlink");
+      }
+    } else {
+      await createSymbolicLink(canonicalExecutablePath, namedExecutablePath, "file");
+      const namedStat = await readPathStat(namedExecutablePath);
+      const resolvedTarget = await resolveRealPath(namedExecutablePath);
+      if (!namedStat.isSymbolicLink() || resolvedTarget !== canonicalExecutablePath) {
+        throw processIdentityError("named executable is not an exact Bun symlink");
+      }
     }
 
     let cleanupPromise = null;
@@ -67,7 +77,7 @@ export async function prepareLaunchpadServerExecutable({
       canonicalExecutablePath: executablePath,
       branded: false,
       warning:
-        `${LAZURIO_LAUNCHPAD_NAME}: pojmenování macOS procesu není dostupné `
+        `${LAZURIO_LAUNCHPAD_NAME}: pojmenování ${platformName(platform)} procesu není dostupné `
         + `(${failureReason(error)}); spouštím kanonický Bun runtime.`,
       cleanup: async () => {},
     };
@@ -140,6 +150,10 @@ function processIdentityError(message) {
   const error = new Error(message);
   error.code = "LAZURIO_LAUNCHPAD_PROCESS_IDENTITY_INVALID";
   return error;
+}
+
+function platformName(platform) {
+  return platform === "darwin" ? "macOS" : platform === "linux" ? "Linux" : platform;
 }
 
 function failureReason(error) {
