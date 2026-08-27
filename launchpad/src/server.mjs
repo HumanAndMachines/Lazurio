@@ -60,7 +60,10 @@ import {
 } from "./git-lib.mjs";
 import { createRequestTrustPolicy } from "./request-trust-lib.mjs";
 import { launchpadEntryHash, launchpadEntryUrl } from "../public/deep-link.js";
-import { parseLaunchpadServerArgs } from "./server-args-lib.mjs";
+import {
+  assertAvailableAgentEntryOrganization,
+  parseLaunchpadServerArgs,
+} from "./server-args-lib.mjs";
 import { resolveLaunchpadStateRoot } from "./state-root-lib.mjs";
 import {
   buildServerIdentity,
@@ -212,6 +215,7 @@ let serverLifetimeLock;
 let serverStartupLock;
 let startupError;
 try {
+  await validateAgentEntryOrganization();
   // Serialize the complete locator decision. Without this short lease, a
   // launcher recovering Server A's missing locator could overwrite Server B's
   // locator after a concurrent control-root replacement completed.
@@ -313,6 +317,16 @@ async function selectedControlRootDesiredStateKeys() {
       .filter((app) => typeof app.company === "string" && typeof app.module === "string")
       .map((app) => `${app.company}/${app.module}`),
   );
+}
+
+async function validateAgentEntryOrganization() {
+  if (!options.agentEntry || options.organization === undefined) return;
+  const discovery = await discoverLaunchpadApps(rootSourceRoot, {
+    organization: options.organization,
+    organization_mount_root: companiesRoot,
+    machine_context_root: companiesRoot,
+  });
+  assertAvailableAgentEntryOrganization(options, discovery.organizations ?? []);
 }
 
 async function withServerStateAccess(action) {

@@ -63,6 +63,27 @@ export function parseLaunchpadServerArgs(args) {
   return parsed;
 }
 
+export function assertAvailableAgentEntryOrganization(options, organizations) {
+  if (!options?.agentEntry || options.organization === undefined) return;
+
+  const exact = organizations.find(
+    (organization) => organization?.slug === options.organization,
+  );
+  if (exact) return;
+
+  const caseInsensitive = organizations.find(
+    (organization) => typeof organization?.slug === "string"
+      && organization.slug.toLowerCase() === options.organization.toLowerCase(),
+  );
+  const error = new Error(
+    caseInsensitive
+      ? `LAZURIO_LAUNCHPAD_ORGANIZATION_NOT_FOUND: Organization slug "${options.organization}" nemá přesný casing; použij "${caseInsensitive.slug}".`
+      : `LAZURIO_LAUNCHPAD_ORGANIZATION_NOT_FOUND: Organization "${options.organization}" není v tomto Lazurio rootu dostupná.`,
+  );
+  error.code = "LAZURIO_LAUNCHPAD_ORGANIZATION_NOT_FOUND";
+  throw error;
+}
+
 function requiredFollowingValue(args, index, name) {
   const value = args[index + 1];
   if (value === undefined || value.startsWith("--")) {
