@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 import {
+  launchpadEntryHash,
+  launchpadEntryUrl,
   organizationHash,
   parseLaunchpadHash,
   personalspaceHash,
@@ -48,4 +50,14 @@ test("Deep-link builder odmítne prázdné a path-like Organization slugy", () =
   expect(() => organizationHash("")).toThrow(TypeError);
   expect(() => organizationHash("../OtherOrg")).toThrow(TypeError);
   expect(() => organizationHash("Org\\Other")).toThrow(TypeError);
+});
+
+test("Agentní entry URL skládá až skutečný origin se stabilním root, Organization a Personalspace hashem", () => {
+  expect(launchpadEntryUrl("http://127.0.0.1:4199", {})).toBe("http://127.0.0.1:4199/#/");
+  expect(launchpadEntryUrl("http://127.0.0.1:4199", { organization: "Agent Mint" }))
+    .toBe("http://127.0.0.1:4199/#/org/Agent%20Mint");
+  expect(launchpadEntryUrl("http://127.0.0.1:4199", { personalspace: true }))
+    .toBe("http://127.0.0.1:4199/#/personalspace");
+  expect(() => launchpadEntryHash({ organization: "AgentMint", personalspace: true })).toThrow(TypeError);
+  expect(() => launchpadEntryUrl("file:///tmp/launchpad", {})).toThrow(TypeError);
 });

@@ -11,6 +11,24 @@ export function personalspaceHash() {
   return PERSONALSPACE_HASH;
 }
 
+export function launchpadEntryHash({ organization = null, personalspace = false } = {}) {
+  if (organization !== null && personalspace) {
+    throw new TypeError("Launchpad entry accepts either Organization or Personalspace, not both.");
+  }
+  if (organization !== null) return organizationHash(organization);
+  if (personalspace) return personalspaceHash();
+  return ROOT_HASH;
+}
+
+export function launchpadEntryUrl(origin, scope = {}) {
+  const url = new URL(origin);
+  if (!new Set(["http:", "https:"]).has(url.protocol)) {
+    throw new TypeError("Launchpad origin must use HTTP or HTTPS.");
+  }
+  url.hash = launchpadEntryHash(scope).slice(1);
+  return url.href;
+}
+
 export function parseLaunchpadHash(hash) {
   const serialized = String(hash ?? "").trim();
   if (serialized === "" || serialized === "#" || serialized === ROOT_HASH) {

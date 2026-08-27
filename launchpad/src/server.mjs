@@ -59,6 +59,8 @@ import {
   safeGitCommandEnv,
 } from "./git-lib.mjs";
 import { createRequestTrustPolicy } from "./request-trust-lib.mjs";
+import { launchpadEntryUrl } from "../public/deep-link.js";
+import { parseLaunchpadServerArgs } from "./server-args-lib.mjs";
 import { resolveLaunchpadStateRoot } from "./state-root-lib.mjs";
 import {
   buildServerIdentity,
@@ -80,7 +82,7 @@ const allowedHosts = new Set(["127.0.0.1", "localhost"]);
 const safeApiMethods = new Set(["GET", "HEAD", "OPTIONS"]);
 const launchpadRoot = join(import.meta.dirname, "..");
 const publicRoot = join(launchpadRoot, "public");
-const options = parseArgs(Bun.argv.slice(2));
+const options = parseLaunchpadServerArgs(Bun.argv.slice(2));
 const selectedCompaniesRoot = resolve(options.root ?? process.env.WORKSPACE_ROOT ?? join(launchpadRoot, ".."));
 const selectedCompaniesRootPath = realpathSync.native(selectedCompaniesRoot);
 const canonicalCompaniesRoot = resolveCanonicalServerRoot(selectedCompaniesRoot);
@@ -332,6 +334,7 @@ if (startupError) {
 if (startResult.mode === "reused") {
   const action = options.open ? "otevírám existující instanci" : "používám existující instanci bez otevření systémového browseru";
   console.log(`${LAZURIO_LAUNCHPAD_NAME} už běží na ${startResult.url}; ${action}.`);
+  printAgentEntryUrl(startResult.url);
   process.exit(0);
 }
 const server = startResult.server;
@@ -347,12 +350,22 @@ console.log(`[launchpad] desired reconcile active=${bootReconcile.active} disabl
 for (const result of bootReconcile.results.filter((item) => item.status === "degraded")) {
   console.warn(`[launchpad] desired reconcile degraded ${result.module_lease_key ?? result.file}: ${result.error}`);
 }
+printAgentEntryUrl(serverUrl);
 
 if (options.open) {
   await openBrowser(serverUrl);
 }
 
 setInterval(() => {}, 2_147_483_647);
+
+function printAgentEntryUrl(origin) {
+  if (!options.agentEntry) return;
+  const url = launchpadEntryUrl(origin, {
+    organization: options.organization ?? null,
+    personalspace: Boolean(options.personalspace),
+  });
+  console.log(`LAZURIO_LAUNCHPAD_URL=${url}`);
+}
 
 async function buildAppsResponse({ force = false } = {}) {
   const { response } = await appsResponseCache.get({ force });
@@ -623,51 +636,6 @@ function contentType(path) {
   if (path.endsWith(".png")) return "image/png";
   if (path.endsWith(".ico")) return "image/x-icon";
   return "application/octet-stream";
-}
-
-function parseArgs(args) {
-  const parsed = {};
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (arg === "--open") {
-      parsed.open = true;
-      continue;
-    }
-    if (arg === "--reuse") {
-      parsed.reuse = true;
-      continue;
-    }
-    if (arg.startsWith("--port=")) {
-      parsed.port = arg.slice("--port=".length);
-      continue;
-    }
-    if (arg === "--port") {
-      if (args[index + 1] === undefined || args[index + 1].startsWith("--")) {
-        throw new Error("Chybí hodnota pro --port.");
-      }
-      parsed.port = args[index + 1];
-      index += 1;
-      continue;
-    }
-    if (arg.startsWith("--host=")) {
-      parsed.host = arg.slice("--host=".length);
-      continue;
-    }
-    if (arg === "--host") {
-      parsed.host = args[index + 1];
-      index += 1;
-      continue;
-    }
-    if (arg.startsWith("--root=")) {
-      parsed.root = arg.slice("--root=".length);
-      continue;
-    }
-    if (arg === "--root") {
-      parsed.root = args[index + 1];
-      index += 1;
-    }
-  }
-  return parsed;
 }
 
 async function inspectRunningLaunchpad(url, expected) {
