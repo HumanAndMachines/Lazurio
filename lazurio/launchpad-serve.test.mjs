@@ -44,6 +44,10 @@ test("serve invocation drží root a Personalspace jako vzájemně výlučné re
     organization: "AgentMint",
     personalspace: true,
   })).toThrow(TypeError);
+  expect(() => buildLaunchpadServeInvocation({
+    root: "/srv/lazurio",
+    organization: "../OtherOrg",
+  })).toThrow(TypeError);
 });
 
 test("CLI parser přijme serve help a odmítne konflikty i JSON", () => {
@@ -53,6 +57,9 @@ test("CLI parser přijme serve help a odmítne konflikty i JSON", () => {
     process.execPath, "run", cli, "launchpad", "serve", "--organization", "AgentMint", "--personalspace",
   ]);
   const json = Bun.spawnSync([process.execPath, "run", cli, "launchpad", "serve", "--json"]);
+  const unsafe = Bun.spawnSync([
+    process.execPath, "run", cli, "launchpad", "serve", "--organization", "../OtherOrg",
+  ]);
 
   expect(help.exitCode).toBe(0);
   expect(help.stdout.toString()).toContain("lazurio launchpad serve [--organization <slug> | --personalspace]");
@@ -60,4 +67,7 @@ test("CLI parser přijme serve help a odmítne konflikty i JSON", () => {
   expect(conflict.stderr.toString()).toContain("se vzájemně vylučují");
   expect(json.exitCode).toBe(2);
   expect(json.stderr.toString()).toContain("nepodporuje --json");
+  expect(unsafe.exitCode).toBe(2);
+  expect(unsafe.stderr.toString()).toContain("Organization slug is required");
+  expect(unsafe.stderr.toString()).not.toContain("at organizationHash");
 });
