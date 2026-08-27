@@ -44,7 +44,7 @@ import {
   organizationHash,
   personalspaceHash,
   resolveLaunchpadHash,
-} from "./deep-link.js";
+} from "/lazurio-runtime/deep-link-lib.mjs";
 // Personalspace (CAC-0048) je samostatný privátní povrch v odděleném modulu —
 // čte jen z lokálního /api/personalspace, nikdy se nemíchá do org discovery ani
 // filtrů aplikací. Renderuje se jako vlastní vizuálně odlišená sekce v hlavní

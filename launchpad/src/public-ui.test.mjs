@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFile as readRawFile, readdir } from "fs/promises";
 import { join } from "path";
-import { LAZURIO_LAUNCHPAD_NAME } from "./launchpad-identity-lib.mjs";
+import { LAZURIO_LAUNCHPAD_NAME } from "../../lazurio/runtime/launchpad-identity-lib.mjs";
 
 const publicRoot = join(import.meta.dirname, "..", "public");
 

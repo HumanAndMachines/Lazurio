@@ -3,11 +3,11 @@ import { existsSync } from "node:fs";
 import { chmod, lstat, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { LAZURIO_LAUNCHPAD_NAME } from "./launchpad-identity-lib.mjs";
+import { LAZURIO_LAUNCHPAD_NAME } from "../../lazurio/runtime/launchpad-identity-lib.mjs";
 import {
   launchLazurioLaunchpadServer,
   prepareLaunchpadServerExecutable,
-} from "./server-launcher-lib.mjs";
+} from "../../lazurio/runtime/server-launcher-lib.mjs";
 
 const tempRoots = [];
 const macTest = process.platform === "darwin" ? test : test.skip;

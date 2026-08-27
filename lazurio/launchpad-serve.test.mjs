@@ -36,8 +36,10 @@ test("serve fasáda deleguje lifecycle Serveru přes --reuse, nikdy přes OS ope
 });
 
 test("serve invocation drží root a Personalspace jako vzájemně výlučné request-local scope", () => {
-  expect(buildLaunchpadServeInvocation({ root: "/srv/lazurio", codeRoot: "/runtime" }).args)
-    .toEqual(["--reuse", "--root", "/srv/lazurio", "--agent-entry"]);
+  expect(buildLaunchpadServeInvocation({ root: "/srv/lazurio" })).toMatchObject({
+    serverPath: resolve("/srv/lazurio", "launchpad/src/server.mjs"),
+    args: ["--reuse", "--root", "/srv/lazurio", "--agent-entry"],
+  });
   expect(buildLaunchpadServeInvocation({ root: "/srv/lazurio", personalspace: true, codeRoot: "/runtime" }).args)
     .toEqual(["--reuse", "--root", "/srv/lazurio", "--agent-entry", "--personalspace"]);
   expect(() => buildLaunchpadServeInvocation({

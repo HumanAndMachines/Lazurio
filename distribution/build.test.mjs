@@ -265,7 +265,7 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
   expect(await verifyArtifactTree(workspace.artifact_root)).toMatchObject({ ok: true, failures: [] });
   expect(workspacePaths).toContain("launchpad/src/server.mjs");
   expect(workspacePaths).toContain("launchpad/src/server-launcher.mjs");
-  expect(workspacePaths).toContain("launchpad/src/server-launcher-lib.mjs");
+  expect(workspacePaths).toContain("lazurio/runtime/server-launcher-lib.mjs");
   expect(workspacePaths).toContain("scripts/worktree-create-lib.mjs");
   expect(workspacePaths).toContain("scripts/worktree-create-lock.mjs");
   expect(workspacePaths.some((path) => path.startsWith("bridge/"))).toBe(false);

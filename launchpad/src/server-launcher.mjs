@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { launchLazurioLaunchpadServer } from "./server-launcher-lib.mjs";
+import { launchLazurioLaunchpadServer } from "../../lazurio/runtime/server-launcher-lib.mjs";
 
 const serverPath = fileURLToPath(new URL("./server.mjs", import.meta.url));
 process.exitCode = await launchLazurioLaunchpadServer({
