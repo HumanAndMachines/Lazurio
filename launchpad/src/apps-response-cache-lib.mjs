@@ -60,6 +60,25 @@ export function createGenerationSafeResponseCache({
     }
   }
 
+  async function refreshPublished({ maxAttempts = 3 } = {}) {
+    if (!Number.isInteger(maxAttempts) || maxAttempts < 1) {
+      throw new TypeError("apps response cache published refresh requires a positive maxAttempts");
+    }
+    invalidate();
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const requestGeneration = generation;
+      const value = await get();
+      // No await may cross this check: success is the linearization point at
+      // which the returned snapshot is provably the cache's published value.
+      if (
+        generation === requestGeneration
+        && cached?.generation === requestGeneration
+        && cached.value === value
+      ) return value;
+    }
+    throw new Error("apps response cache could not publish a stable refresh generation");
+  }
+
   async function runMutation(action) {
     if (typeof action !== "function") throw new TypeError("apps response cache mutation requires an action");
     // Invalidate on both sides: a failed action may have changed part of the
@@ -73,5 +92,5 @@ export function createGenerationSafeResponseCache({
     }
   }
 
-  return { get, invalidate, runMutation };
+  return { get, invalidate, refreshPublished, runMutation };
 }

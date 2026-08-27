@@ -104,6 +104,50 @@ test("a force build supersedes an older in-flight request even when it resolves 
   expect(builds).toHaveLength(2);
 });
 
+test("a published refresh retries instead of returning a generation invalidated while building", async () => {
+  const builds = [];
+  const commits = [];
+  const cache = createGenerationSafeResponseCache({
+    build: () => {
+      const pending = deferred();
+      builds.push(pending);
+      return pending.promise;
+    },
+    onCommit: (value) => commits.push(value.value),
+  });
+
+  const refresh = cache.refreshPublished();
+  expect(builds).toHaveLength(1);
+  cache.invalidate();
+  builds[0].resolve({ value: "invalidated" });
+  await waitFor(() => builds.length === 2);
+  builds[1].resolve({ value: "published" });
+
+  expect(await refresh).toEqual({ value: "published" });
+  expect(await cache.get()).toEqual({ value: "published" });
+  expect(commits).toEqual(["published"]);
+});
+
+test("a published refresh fails closed after bounded generation churn", async () => {
+  const builds = [];
+  const cache = createGenerationSafeResponseCache({
+    build: () => {
+      const pending = deferred();
+      builds.push(pending);
+      return pending.promise;
+    },
+  });
+
+  const refresh = cache.refreshPublished({ maxAttempts: 2 });
+  cache.invalidate();
+  builds[0].resolve({ value: "first-invalidated" });
+  await waitFor(() => builds.length === 2);
+  cache.invalidate();
+  builds[1].resolve({ value: "second-invalidated" });
+
+  await expect(refresh).rejects.toThrow("could not publish a stable refresh generation");
+});
+
 test("a failed mutation invalidates both the prior cache and any mid-mutation read", async () => {
   const snapshots = ["before", "during", "after"];
   let builds = 0;
@@ -129,4 +173,12 @@ function deferred() {
     reject = rejectPromise;
   });
   return { promise, resolve, reject };
+}
+
+async function waitFor(predicate) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (predicate()) return;
+    await Bun.sleep(1);
+  }
+  throw new Error("timed out waiting for cache test state");
 }
