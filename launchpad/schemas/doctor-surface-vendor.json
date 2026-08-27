@@ -34,11 +34,15 @@
       "path": "schemas/doctor-report.schema.json",
       "baseline_path": "launchpad/schemas/doctor-report.schema.json",
       "baseline_sha256": "0bdf0184dcb7fb1a95e312c01cec448d0deaaebf0acc7bd09c3afa5ec4380036",
-      "current_sha256": "a7e171b3b4665cf0d9b3d2fd326abca0a0c2aa06b2a03bd5f100e4d63a705699",
+      "current_sha256": "f59f5dd737165e9a1497fb9b3e84542343c458e6409008f6510d8465687a5ebf",
       "declared_delta": [
         {
           "summary": "Zobrazovaný titul schématu používá značku Lazurio; validační kontrakt se nemění.",
           "anchor": "Lazurio Doctor Report"
+        },
+        {
+          "summary": "Popis consumeru používá aktuální produktový název Lazurio Launchpad; validační kontrakt se nemění.",
+          "anchor": "orchestrace Lazurio Launchpadu"
         }
       ]
     }
