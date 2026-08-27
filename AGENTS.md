@@ -177,6 +177,10 @@ rollout či migrační dopad, rizika a otevřené otázky. Není to seznam soubo
 commitů ani testů; je to podklad pro informované rozhodnutí Principála.
 Technické detaily a důkazy zůstávají v PR.
 
+**Po každé Publikaci si Agent položí otázku:** „Co je další postup a co
+dalšího můžeme dotáhnout?“ Odpověď stručně předloží Principálovi jako
+doporučené navazující kroky.
+
 **Popis PR nese kontext k rozhodnutí.** Kdo o merge rozhoduje, nesmí „proč"
 odvozovat z diffu: popis pravdivě vysvětlí motivaci, cílový stav a přínos,
 co se mění i záměrně nemění, jak je to ověřené a jaká zůstávají rizika,
