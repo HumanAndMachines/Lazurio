@@ -1004,14 +1004,17 @@ async function reconcileUpdatedDependencies({
   // jej níže nahradí přesnějším lifecycle-aware targetem.
   for (const { repo, root } of canonicalRepos) {
     if (!changedRepoKeys.has(repo.key)) continue;
-    const target = await dependencyTarget({ repo, repoRoot: root, cwd: root });
+    const target = await dependencyTarget({ rootPath, repo, repoRoot: root, cwd: root });
     if (target) targetsByPath.set(target.cwd, target);
   }
 
-  const changedOrganizationChildren = canonicalRepos.filter(({ repo }) =>
-    isManagedOrganizationChild(repo) && changedRepoKeys.has(repo.key)
+  const changedOrganizations = new Set(
+    canonicalRepos
+      .filter(({ repo }) => changedRepoKeys.has(repo.key))
+      .map(({ repo }) => repo.organization)
+      .filter((organization) => typeof organization === "string" && organization !== ""),
   );
-  if (changedOrganizationChildren.length > 0) {
+  if (changedOrganizations.size > 0) {
     let discovery;
     try {
       discovery = await discoverApps(rootPath);
@@ -1031,8 +1034,12 @@ async function reconcileUpdatedDependencies({
       if (!packagePath) continue;
       const cwd = await canonicalPath(resolve(rootPath, dirname(packagePath)));
       const owner = owningManagedRepo(canonicalRepos, cwd);
-      if (!owner || !changedRepoKeys.has(owner.repo.key)) continue;
-      const target = await dependencyTarget({ repo: owner.repo, repoRoot: owner.root, cwd, app });
+      if (!owner) continue;
+      const target = await dependencyTarget({ rootPath, repo: owner.repo, repoRoot: owner.root, cwd, app });
+      if (
+        !changedRepoKeys.has(owner.repo.key)
+        && !dependencyTargetUsesChangedRepo(target, canonicalRepos, changedRepoKeys)
+      ) continue;
       if (target) targetsByPath.set(target.cwd, target);
     }
     const invalidPackages = new Set();
@@ -1105,7 +1112,7 @@ function sourceCheckoutChanged(actions = []) {
   return actions.some((action) => ["fast_forward", "materialize", "switch_main"].includes(action));
 }
 
-async function dependencyTarget({ repo, repoRoot, cwd, app = null }) {
+async function dependencyTarget({ rootPath, repo, repoRoot, cwd, app = null }) {
   const packagePath = join(cwd, "package.json");
   try {
     await lstat(packagePath);
@@ -1134,13 +1141,60 @@ async function dependencyTarget({ repo, repoRoot, cwd, app = null }) {
     };
   }
   const bunLockfile = bunLockfileState.name;
+  let organizationDependencyRoot = null;
+  if (
+    app?.organization_kind === "organization"
+    && typeof app.organization_path === "string"
+    && app.organization_path.trim() !== ""
+  ) {
+    try {
+      const canonicalRoot = await canonicalPath(rootPath);
+      const canonicalOrganizationRoot = await canonicalPath(resolve(rootPath, app.organization_path));
+      if (!pathWithin(canonicalRoot, canonicalOrganizationRoot) || canonicalOrganizationRoot === canonicalRoot) {
+        return {
+          repo,
+          repo_root: repoRoot,
+          cwd,
+          app,
+          organization_dependency_root: null,
+          dependency_inspection: {
+            ok: false,
+            reason: "dependency_tree_boundary_invalid",
+            detail: "Organization dependency hranice neleží uvnitř canonical Lazurio rootu.",
+          },
+        };
+      }
+      organizationDependencyRoot = canonicalOrganizationRoot;
+    } catch (error) {
+      return {
+        repo,
+        repo_root: repoRoot,
+        cwd,
+        app,
+        organization_dependency_root: null,
+        dependency_inspection: {
+          ok: false,
+          reason: "dependency_tree_inspection_failed",
+          detail: `Organization dependency hranici nejde bezpečně otevřít: ${error instanceof Error ? error.message : String(error)}`,
+        },
+      };
+    }
+  }
   const dependencyInspection = await inspectRequiredDependencies({
     cwd,
     boundaryRoot: repoRoot,
+    organizationDependencyRoot,
     lockfile: bunLockfile,
   });
   if (dependencyInspection.ok && !bunLockfile && dependencyInspection.required_dependency_count === 0) return null;
-  return { repo, repo_root: repoRoot, cwd, app, dependency_inspection: dependencyInspection };
+  return {
+    repo,
+    repo_root: repoRoot,
+    cwd,
+    app,
+    organization_dependency_root: organizationDependencyRoot,
+    dependency_inspection: dependencyInspection,
+  };
 }
 
 async function firstPresentBunLockfile(cwd) {
@@ -1169,6 +1223,17 @@ function owningManagedRepo(canonicalRepos, cwd) {
     .sort((left, right) => right.root.length - left.root.length)[0] ?? null;
 }
 
+function dependencyTargetUsesChangedRepo(target, canonicalRepos, changedRepoKeys) {
+  return (target?.dependency_inspection?.local_dependency_targets ?? []).some((dependencyTarget) => {
+    const targetPath = dependencyTarget.canonical_root
+      ?? dependencyTarget.attribution_path
+      ?? dependencyTarget.path;
+    if (typeof targetPath !== "string" || targetPath === "") return false;
+    const owner = owningManagedRepo(canonicalRepos, targetPath);
+    return owner ? changedRepoKeys.has(owner.repo.key) : false;
+  });
+}
+
 function pathWithin(parent, child) {
   const pathFromParent = relative(parent, child);
   return pathFromParent === ""
@@ -1195,6 +1260,7 @@ async function refreshDependencyTarget({ target, rootPath, refreshPackageDepende
       : await refreshPackageDependencies({
           cwd: target.cwd,
           boundaryRoot: target.repo_root,
+          organizationDependencyRoot: target.organization_dependency_root,
           env: dependencyInstallEnvironment({ target, rootPath }),
         });
     if (result?.ok === false) {

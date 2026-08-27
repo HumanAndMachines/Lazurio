@@ -1002,10 +1002,14 @@ export function createRuntimeManager({
 
     const installOptions = {
       cwd,
-      // Mutace zůstává přesně na app-local node_modules; boundary zároveň
-      // dokazuje, že package i případné dependency symlinky patří do právě
-      // zvoleného main/worktree checkoutu.
+      // Mutace a ancestor lookup zůstávají přesně uvnitř vybraného checkoutu.
+      // Organization root je jen read-only autorita pro přesný relativní
+      // file: target deklarovaný v package.json; nikdy se z něj neodvozuje
+      // node_modules ani jiná write cesta.
       boundaryRoot: dependencies[DEPENDENCY_RUNTIME_AUTHORITY].checkout_root,
+      organizationDependencyRoot: app.organization_kind === "organization" && app.personal !== true
+        ? dependencies[DEPENDENCY_RUNTIME_AUTHORITY].owner_root
+        : null,
       command: runtimePackageCommand(dependencies.install_command, runtimeBunExecutable),
       spawnProcess,
       env: runtimeProcessEnv(app, {
@@ -3944,6 +3948,9 @@ export function createRuntimeManager({
     const dependencyInspection = await inspectRequiredDependencies({
       cwd: appRoot,
       boundaryRoot: authority.checkout_root,
+      organizationDependencyRoot: app.organization_kind === "organization" && app.personal !== true
+        ? authority.owner_root
+        : null,
       lockfile: lockfile?.path ?? null,
     });
 

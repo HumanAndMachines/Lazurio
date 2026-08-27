@@ -3256,6 +3256,77 @@ test("runtime dependency boundary izoluje Module checkout od jiné Organizace", 
   });
 });
 
+test("runtime accepts an exact declared file dependency from the same Organization", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({
+    port,
+    dependencies: { "@workspace-contracts/v1": "file:../../../../launchpad/contracts/v1" },
+    writeLockfile: true,
+  });
+  const organizationRoot = join(root, "organizations", "TestCompany");
+  const appRoot = join(organizationRoot, "modules", "demo", "app", "v1");
+  const targetRoot = join(organizationRoot, "launchpad", "contracts", "v1");
+  const installedRoot = join(appRoot, "node_modules", "@workspace-contracts", "v1");
+  await mkdir(targetRoot, { recursive: true });
+  await writeJson(join(targetRoot, "package.json"), {
+    name: "@test-company-contracts/v1",
+    private: true,
+  });
+  await writeFile(join(targetRoot, "index.ts"), "export const fixture = true;\n");
+  await mkdir(join(appRoot, "node_modules", "@workspace-contracts"), { recursive: true });
+  await symlink(targetRoot, installedRoot, process.platform === "win32" ? "junction" : "dir");
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "organization-local-file-dependency",
+  });
+
+  expect((await runtime.health("test-company-demo-v1")).dependencies).toMatchObject({
+    state: "ready",
+    required_dependency_count: 1,
+    missing_required_dependencies: [],
+    can_start: true,
+  });
+});
+
+test.skipIf(process.platform === "win32")("runtime blocks a local link farm whose executable payload escapes the Organization", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({
+    port,
+    dependencies: { "@workspace-contracts/v1": "file:../../../../launchpad/contracts/v1" },
+    writeLockfile: true,
+  });
+  const organizationRoot = join(root, "organizations", "TestCompany");
+  const appRoot = join(organizationRoot, "modules", "demo", "app", "v1");
+  const targetRoot = join(organizationRoot, "launchpad", "contracts", "v1");
+  const installedRoot = join(appRoot, "node_modules", "@workspace-contracts", "v1");
+  const foreignRoot = join(root, "organizations", "OtherCompany", "payload");
+  await mkdir(targetRoot, { recursive: true });
+  await mkdir(installedRoot, { recursive: true });
+  await mkdir(foreignRoot, { recursive: true });
+  await writeJson(join(targetRoot, "package.json"), { name: "@test-company-contracts/v1" });
+  await writeFile(join(targetRoot, "index.ts"), "export const local = true;\n");
+  await writeFile(join(foreignRoot, "index.ts"), "export const foreign = true;\n");
+  await symlink(join(targetRoot, "package.json"), join(installedRoot, "package.json"), "file");
+  await symlink(join(foreignRoot, "index.ts"), join(installedRoot, "index.ts"), "file");
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "organization-local-link-farm-escape",
+  });
+
+  expect((await runtime.health("test-company-demo-v1")).dependencies).toMatchObject({
+    state: "dependency_boundary_invalid",
+    can_start: false,
+    can_install: false,
+  });
+  await expect(runtime.start("test-company-demo-v1")).rejects.toMatchObject({
+    status: 409,
+    code: "app_not_ready",
+    metadata: { failure_kind: "dependency_boundary_invalid" },
+  });
+});
+
 test.skipIf(process.platform === "win32")("runtime reads package and selected lockfile only after exact checkout authority", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({ port, writeLockfile: true });

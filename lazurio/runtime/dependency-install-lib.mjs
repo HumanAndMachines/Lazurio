@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
-import { lstat, readFile, realpath, rename, rm } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, resolve, sep, win32 } from "node:path";
+import { lstat, opendir, realpath, rename, rm, stat } from "node:fs/promises";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep, win32 } from "node:path";
 import {
   inspectDirectoryWithinCanonicalBoundary,
   readFileWithinCanonicalBoundary,
@@ -14,6 +14,7 @@ const PACKAGE_LOCKFILES = Object.freeze([
   "yarn.lock",
 ]);
 const NODE_MODULES_RECOVERY = ".lazurio-node_modules-recovery";
+const LOCAL_DEPENDENCY_TREE_ENTRY_LIMIT = 20_000;
 
 export function frozenBunInstallCommand(bunExecutable = process.execPath) {
   return [bunExecutable, "install", "--frozen-lockfile"];
@@ -22,13 +23,14 @@ export function frozenBunInstallCommand(bunExecutable = process.execPath) {
 export async function runFrozenBunInstall({
   cwd,
   boundaryRoot,
+  organizationDependencyRoot = null,
   mode = "ensure",
   command = frozenBunInstallCommand(),
   spawnProcess = Bun.spawn,
   env = process.env,
   beforeFinalReadback = null,
 } = {}) {
-  const packageRoot = await validatePackageRoot({ cwd, boundaryRoot });
+  const packageRoot = await validatePackageRoot({ cwd, boundaryRoot, organizationDependencyRoot });
   if (!packageRoot.ok) return unchangedFailure(packageRoot, mode);
   if (!Array.isArray(command) || command.length === 0) {
     return unchangedFailure({ ok: false, reason: "install_command_missing", detail: "Chybí příkaz pro instalaci balíčků." }, mode);
@@ -135,7 +137,9 @@ export async function runFrozenBunInstall({
         const dependencyState = await inspectCanonicalRequiredDependencies({
           cwd: packageRoot.cwd,
           boundaryRoot: packageRoot.boundary_root,
+          organizationDependencyRoot: packageRoot.organization_dependency_root,
           packageJson: packageRoot.package_json,
+          localDependencyAuthorities: packageRoot.local_dependency_authorities,
         });
         if (!dependencyState.ok) {
           installResult = {
@@ -316,14 +320,25 @@ export async function refreshFrozenBunDependencies(options = {}) {
   };
 }
 
-async function validatePackageRoot({ cwd, boundaryRoot }) {
-  if (!cwd || !boundaryRoot || !isAbsolute(cwd) || !isAbsolute(boundaryRoot)) {
+async function validatePackageRoot({ cwd, boundaryRoot, organizationDependencyRoot = null }) {
+  if (
+    !cwd
+    || !boundaryRoot
+    || !isAbsolute(cwd)
+    || !isAbsolute(boundaryRoot)
+    || (organizationDependencyRoot !== null && !isAbsolute(organizationDependencyRoot))
+  ) {
     return { ok: false, reason: "package_root_invalid", detail: "Dependency install vyžaduje absolutní package a boundary cestu." };
   }
   let canonicalBoundary;
   let canonicalCwd;
+  let canonicalOrganizationDependencyRoot;
   try {
-    [canonicalBoundary, canonicalCwd] = await Promise.all([realpath(boundaryRoot), realpath(cwd)]);
+    [canonicalBoundary, canonicalCwd, canonicalOrganizationDependencyRoot] = await Promise.all([
+      realpath(boundaryRoot),
+      realpath(cwd),
+      realpath(organizationDependencyRoot ?? boundaryRoot),
+    ]);
   } catch (error) {
     const missing = ["ENOENT", "ENOTDIR"].includes(error?.code);
     return {
@@ -336,6 +351,13 @@ async function validatePackageRoot({ cwd, boundaryRoot }) {
   if (pathFromBoundary === ".." || pathFromBoundary.startsWith(`..${sep}`) || isAbsolute(pathFromBoundary)) {
     return { ok: false, reason: "package_root_outside_boundary", detail: "Package root leží mimo owning checkout." };
   }
+  if (!pathInsideBoundary(canonicalOrganizationDependencyRoot, canonicalBoundary)) {
+    return {
+      ok: false,
+      reason: "dependency_tree_boundary_invalid",
+      detail: "Owning checkout neleží uvnitř zvolené Organization dependency hranice.",
+    };
+  }
   const packagePath = join(canonicalCwd, "package.json");
   if (!existsSync(packagePath)) {
     return { ok: false, reason: "package_json_missing", detail: "V package rootu chybí package.json." };
@@ -347,6 +369,7 @@ async function validatePackageRoot({ cwd, boundaryRoot }) {
   const authoritySnapshot = await captureInstallAuthority({
     cwd: canonicalCwd,
     boundaryRoot: canonicalBoundary,
+    organizationDependencyRoot: canonicalOrganizationDependencyRoot,
     lockfile,
   });
   if (!authoritySnapshot.ok) return authoritySnapshot;
@@ -361,13 +384,16 @@ async function validatePackageRoot({ cwd, boundaryRoot }) {
   const dependencyState = await inspectCanonicalRequiredDependencies({
     cwd: canonicalCwd,
     boundaryRoot: canonicalBoundary,
+    organizationDependencyRoot: canonicalOrganizationDependencyRoot,
     packageJson: authoritySnapshot.package_json,
+    localDependencyAuthorities: authoritySnapshot.local_dependency_authorities,
   });
   if (!dependencyState.ok) return dependencyState;
   return {
     ok: true,
     cwd: canonicalCwd,
     boundary_root: canonicalBoundary,
+    organization_dependency_root: canonicalOrganizationDependencyRoot,
     lockfile,
     package_json: authoritySnapshot.package_json,
     required_dependency_count: dependencyState.required_dependency_count,
@@ -388,7 +414,7 @@ function declaredPackageManagerName(packageJson) {
   return value.split("@")[0];
 }
 
-async function captureInstallAuthority({ cwd, boundaryRoot, lockfile }) {
+async function captureInstallAuthority({ cwd, boundaryRoot, organizationDependencyRoot, lockfile }) {
   const packageAuthority = await readAuthorityFile({
     path: join(cwd, "package.json"),
     boundaryRoot: cwd,
@@ -415,10 +441,18 @@ async function captureInstallAuthority({ cwd, boundaryRoot, lockfile }) {
   if (declarationIssue) {
     return { ok: false, reason: "package_json_invalid", detail: declarationIssue };
   }
+  const localDependencyState = await inspectDeclaredFileDependencyAuthorities({
+    cwd,
+    boundaryRoot,
+    organizationDependencyRoot,
+    packageJson,
+  });
+  if (!localDependencyState.ok) return localDependencyState;
   return {
     ok: true,
     cwd,
     boundary_root: boundaryRoot,
+    organization_dependency_root: organizationDependencyRoot,
     package_path: packageAuthority.canonical_path,
     package_bytes: packageAuthority.bytes,
     lockfile,
@@ -426,6 +460,7 @@ async function captureInstallAuthority({ cwd, boundaryRoot, lockfile }) {
     lockfile_bytes: lockAuthority.bytes,
     package_json: packageJson,
     required_dependency_names: requiredDependencyNames(packageJson),
+    local_dependency_authorities: localDependencyState.authorities,
   };
 }
 
@@ -441,6 +476,7 @@ async function verifyInstallAuthority(snapshot) {
   const current = await captureInstallAuthority({
     cwd: snapshot.cwd,
     boundaryRoot: snapshot.boundary_root,
+    organizationDependencyRoot: snapshot.organization_dependency_root,
     lockfile: snapshot.lockfile,
   });
   if (!current.ok) {
@@ -455,6 +491,10 @@ async function verifyInstallAuthority(snapshot) {
     || current.lockfile_path !== snapshot.lockfile_path
     || !sameBytes(current.package_bytes, snapshot.package_bytes)
     || !sameBytes(current.lockfile_bytes, snapshot.lockfile_bytes)
+    || !sameLocalDependencyAuthorities(
+      current.local_dependency_authorities,
+      snapshot.local_dependency_authorities,
+    )
   ) {
     return {
       ok: false,
@@ -481,7 +521,9 @@ async function pinnedRuntimeTreeState(packageRoot) {
   const dependencyState = await inspectCanonicalRequiredDependencies({
     cwd: packageRoot.cwd,
     boundaryRoot: packageRoot.boundary_root,
+    organizationDependencyRoot: packageRoot.organization_dependency_root,
     packageJson: packageRoot.package_json,
+    localDependencyAuthorities: packageRoot.local_dependency_authorities,
   });
   const authorityState = await verifyInstallAuthority(packageRoot.authority_snapshot);
   return {
@@ -640,15 +682,423 @@ function requiredDependencyDeclarationIssue(packageJson) {
   return null;
 }
 
+async function inspectDeclaredFileDependencyAuthorities({
+  cwd,
+  boundaryRoot,
+  organizationDependencyRoot,
+  packageJson,
+}) {
+  const authorities = [];
+  const localDependencyTargets = [];
+  const failure = (result) => ({
+    ...result,
+    local_dependency_targets: localDependencyTargets.map((target) => ({ ...target })),
+  });
+  for (const dependencyName of requiredDependencyNames(packageJson)) {
+    const spec = requiredDependencySpec(packageJson, dependencyName);
+    if (typeof spec !== "string" || !spec.startsWith("file:")) continue;
+    const relativeTarget = spec.slice("file:".length);
+    if (
+      !relativeTarget
+      || relativeTarget.includes("\0")
+      || relativeTarget.startsWith("//")
+      || isAbsolute(relativeTarget)
+      || win32.isAbsolute(relativeTarget)
+    ) {
+      return failure({
+        ok: false,
+        reason: "dependency_tree_boundary_invalid",
+        detail: `Lokální balíček ${dependencyName} musí používat relativní file: cestu bez URL, drive nebo UNC autority.`,
+        dependency_name: dependencyName,
+      });
+    }
+
+    const lexicalTarget = resolve(cwd, relativeTarget);
+    const declaredTarget = {
+      dependency_name: dependencyName,
+      path: lexicalTarget,
+      canonical_root: null,
+      attribution_path: lexicalTarget,
+    };
+    localDependencyTargets.push(declaredTarget);
+    if (!pathInsideBoundary(organizationDependencyRoot, lexicalTarget)) {
+      return failure({
+        ok: false,
+        reason: "dependency_tree_boundary_invalid",
+        detail: `Deklarovaný lokální cíl balíčku ${dependencyName} leží lexikálně mimo stejnou Organization hranici.`,
+        dependency_name: dependencyName,
+      });
+    }
+    let targetEntry;
+    try {
+      targetEntry = await lstat(lexicalTarget);
+    } catch (error) {
+      declaredTarget.attribution_path = await canonicalMissingTargetAttribution({
+        targetPath: lexicalTarget,
+        organizationDependencyRoot,
+      }) ?? lexicalTarget;
+      return failure({
+        ok: false,
+        reason: "dependency_tree_inspection_failed",
+        detail: `Deklarovaný lokální cíl balíčku ${dependencyName} nejde otevřít (${lexicalTarget}): ${error instanceof Error ? error.message : String(error)}`,
+        dependency_name: dependencyName,
+      });
+    }
+
+    // A file: archive inside the selected checkout remains a regular package
+    // manager input. The Organization exception is deliberately directory-only
+    // so it never turns an arbitrary sibling file into executable authority.
+    if (targetEntry.isFile()) {
+      let canonicalFile;
+      try {
+        canonicalFile = await realpath(lexicalTarget);
+      } catch (error) {
+        return failure({
+          ok: false,
+          reason: "dependency_tree_inspection_failed",
+          detail: `Lokální archive cíl balíčku ${dependencyName} nejde bezpečně ověřit: ${error instanceof Error ? error.message : String(error)}`,
+          dependency_name: dependencyName,
+        });
+      }
+      declaredTarget.canonical_root = canonicalFile;
+      declaredTarget.attribution_path = canonicalFile;
+      if (pathInsideBoundary(boundaryRoot, canonicalFile)) continue;
+      return failure({
+        ok: false,
+        reason: "dependency_tree_boundary_invalid",
+        detail: `Lokální cíl balíčku ${dependencyName} mimo owning checkout musí být adresář uvnitř stejné Organizace.`,
+        dependency_name: dependencyName,
+      });
+    }
+    if (!targetEntry.isDirectory() && !targetEntry.isSymbolicLink()) {
+      declaredTarget.attribution_path = await canonicalMissingTargetAttribution({
+        targetPath: lexicalTarget,
+        organizationDependencyRoot,
+      }) ?? lexicalTarget;
+      return failure({
+        ok: false,
+        reason: "dependency_tree_boundary_invalid",
+        detail: `Lokální cíl balíčku ${dependencyName} není bezpečný adresář package zdroje.`,
+        dependency_name: dependencyName,
+      });
+    }
+
+    const targetBoundary = await inspectDirectoryWithinCanonicalBoundary({
+      rootPath: organizationDependencyRoot,
+      rootRealPath: organizationDependencyRoot,
+      targetPath: lexicalTarget,
+    });
+    if (!targetBoundary.ok || !targetBoundary.targetRealPath) {
+      declaredTarget.attribution_path = targetBoundary.targetRealPath
+        && pathInsideBoundary(organizationDependencyRoot, targetBoundary.targetRealPath)
+        ? targetBoundary.targetRealPath
+        : await canonicalMissingTargetAttribution({
+            targetPath: lexicalTarget,
+            organizationDependencyRoot,
+          }) ?? lexicalTarget;
+      return failure({
+        ok: false,
+        reason: "dependency_tree_boundary_invalid",
+        detail: `Deklarovaný lokální cíl balíčku ${dependencyName} neleží uvnitř stejné Organization hranice.`,
+        dependency_name: dependencyName,
+      });
+    }
+    declaredTarget.canonical_root = targetBoundary.targetRealPath;
+    declaredTarget.attribution_path = targetBoundary.targetRealPath;
+
+    const targetTree = await inspectLocalDependencyTree({
+      treeRoot: targetBoundary.targetRealPath,
+      allowedTargetRoot: targetBoundary.targetRealPath,
+      requireFileSymlinks: false,
+      dependencyName,
+      label: "Deklarovaný lokální balíček",
+    });
+    if (!targetTree.ok) return failure(targetTree);
+
+    const targetPackagePath = join(targetBoundary.targetRealPath, "package.json");
+    let targetPackage;
+    try {
+      targetPackage = await readFileWithinCanonicalBoundary({
+        rootPath: targetBoundary.targetRealPath,
+        rootRealPath: targetBoundary.targetRealPath,
+        targetPath: targetPackagePath,
+        label: `package.json deklarovaného lokálního balíčku ${dependencyName}`,
+      });
+    } catch (error) {
+      return failure({
+        ok: false,
+        reason: isCanonicalBoundaryError(error)
+          ? "dependency_tree_boundary_invalid"
+          : "dependency_tree_inspection_failed",
+        detail: `Deklarovaný lokální balíček ${dependencyName} nemá bezpečně čitelný package.json: ${error instanceof Error ? error.message : String(error)}`,
+        dependency_name: dependencyName,
+      });
+    }
+    let metadata;
+    try {
+      metadata = JSON.parse(targetPackage.value.toString("utf8"));
+    } catch (error) {
+      return failure({
+        ok: false,
+        reason: "dependency_tree_inspection_failed",
+        detail: `package.json deklarovaného lokálního balíčku ${dependencyName} není platný JSON: ${error instanceof Error ? error.message : String(error)}`,
+        dependency_name: dependencyName,
+      });
+    }
+    const targetPackageName = typeof metadata?.name === "string" ? metadata.name.trim() : "";
+    if (!dependencyPathParts(targetPackageName)) {
+      return failure({
+        ok: false,
+        reason: "dependency_tree_inspection_failed",
+        detail: `package.json deklarovaného lokálního balíčku ${dependencyName} nemá bezpečnou package identitu.`,
+        dependency_name: dependencyName,
+      });
+    }
+    authorities.push({
+      dependency_name: dependencyName,
+      spec,
+      target_root: targetBoundary.targetRealPath,
+      target_outside_checkout: !pathInsideBoundary(boundaryRoot, targetBoundary.targetRealPath),
+      target_package_path: targetPackage.targetRealPath,
+      target_package_bytes: targetPackage.value,
+      target_package_name: targetPackageName,
+      target_tree_authority: targetTree.authority,
+    });
+  }
+  return { ok: true, authorities, local_dependency_targets: localDependencyTargets };
+}
+
+async function canonicalMissingTargetAttribution({ targetPath, organizationDependencyRoot }) {
+  let cursor = targetPath;
+  const missingSuffix = [];
+  while (pathInsideBoundary(organizationDependencyRoot, cursor)) {
+    try {
+      const canonicalParent = await realpath(cursor);
+      if (!pathInsideBoundary(organizationDependencyRoot, canonicalParent)) return null;
+      return resolve(canonicalParent, ...missingSuffix);
+    } catch (error) {
+      if (!["ENOENT", "ENOTDIR"].includes(error?.code)) return null;
+    }
+    if (samePath(cursor, organizationDependencyRoot)) break;
+    missingSuffix.unshift(basename(cursor));
+    const parent = dirname(cursor);
+    if (parent === cursor) break;
+    cursor = parent;
+  }
+  return null;
+}
+
+async function inspectLocalDependencyTree({
+  treeRoot,
+  allowedTargetRoot,
+  requireFileSymlinks,
+  dependencyName,
+  label,
+}) {
+  let canonicalTreeRoot;
+  try {
+    canonicalTreeRoot = await realpath(treeRoot);
+  } catch (error) {
+    return {
+      ok: false,
+      reason: "dependency_tree_inspection_failed",
+      detail: `${label} ${dependencyName} nemá ověřitelný kořen: ${error instanceof Error ? error.message : String(error)}`,
+      dependency_name: dependencyName,
+    };
+  }
+  const pending = [treeRoot];
+  const authority = [];
+  let inspectedEntries = 0;
+  while (pending.length > 0) {
+    const currentDirectory = pending.pop();
+    let directory;
+    let beforeDirectoryTarget;
+    let beforeDirectoryState;
+    try {
+      beforeDirectoryTarget = await realpath(currentDirectory);
+      beforeDirectoryState = await stat(beforeDirectoryTarget);
+      if (
+        !pathInsideBoundary(canonicalTreeRoot, beforeDirectoryTarget)
+        || !beforeDirectoryState.isDirectory()
+      ) {
+        return {
+          ok: false,
+          reason: "dependency_tree_boundary_invalid",
+          detail: `${label} ${dependencyName} obsahuje adresář mimo svůj přesný package strom.`,
+          dependency_name: dependencyName,
+        };
+      }
+      directory = await opendir(currentDirectory);
+    } catch (error) {
+      return {
+        ok: false,
+        reason: "dependency_tree_inspection_failed",
+        detail: `${label} ${dependencyName} nejde bezpečně projít: ${error instanceof Error ? error.message : String(error)}`,
+        dependency_name: dependencyName,
+      };
+    }
+    authority.push([
+      "walk-directory",
+      relative(treeRoot, currentDirectory).replace(/\\/g, "/") || ".",
+      String(beforeDirectoryState.dev),
+      String(beforeDirectoryState.ino),
+    ].join("\0"));
+    try {
+      for await (const entry of directory) {
+        inspectedEntries += 1;
+        if (inspectedEntries > LOCAL_DEPENDENCY_TREE_ENTRY_LIMIT) {
+          return {
+            ok: false,
+            reason: "dependency_tree_inspection_failed",
+            detail: `${label} ${dependencyName} přesahuje bezpečný limit ${LOCAL_DEPENDENCY_TREE_ENTRY_LIMIT} položek.`,
+            dependency_name: dependencyName,
+          };
+        }
+        const entryPath = join(currentDirectory, entry.name);
+        let entryState;
+        try {
+          entryState = await lstat(entryPath);
+        } catch (error) {
+          return {
+            ok: false,
+            reason: "dependency_tree_inspection_failed",
+            detail: `${label} ${dependencyName} se během ověření změnil: ${error instanceof Error ? error.message : String(error)}`,
+            dependency_name: dependencyName,
+          };
+        }
+        const entryRelativePath = relative(treeRoot, entryPath).replace(/\\/g, "/");
+        if (entryState.isSymbolicLink()) {
+          let beforeTarget;
+          let afterTarget;
+          let targetState;
+          try {
+            beforeTarget = await realpath(entryPath);
+            targetState = await stat(beforeTarget);
+            afterTarget = await realpath(entryPath);
+          } catch (error) {
+            return {
+              ok: false,
+              reason: "dependency_tree_inspection_failed",
+              detail: `${label} ${dependencyName} obsahuje neověřitelný symlink ${entryRelativePath}: ${error instanceof Error ? error.message : String(error)}`,
+              dependency_name: dependencyName,
+            };
+          }
+          if (
+            !pathInsideBoundary(allowedTargetRoot, beforeTarget)
+            || !samePath(beforeTarget, afterTarget)
+            || (!targetState.isFile() && !targetState.isDirectory())
+          ) {
+            return {
+              ok: false,
+              reason: "dependency_tree_boundary_invalid",
+              detail: `${label} ${dependencyName} obsahuje symlink ${entryRelativePath} mimo přesný deklarovaný package cíl.`,
+              dependency_name: dependencyName,
+            };
+          }
+          authority.push([
+            "link",
+            entryRelativePath,
+            beforeTarget,
+            String(entryState.dev),
+            String(entryState.ino),
+            String(targetState.dev),
+            String(targetState.ino),
+          ].join("\0"));
+          continue;
+        }
+        if (entryState.isDirectory()) {
+          authority.push(`directory\0${entryRelativePath}`);
+          pending.push(entryPath);
+          continue;
+        }
+        if (entryState.isFile() && !requireFileSymlinks) {
+          authority.push(`file\0${entryRelativePath}`);
+          continue;
+        }
+        return {
+          ok: false,
+          reason: "dependency_tree_boundary_invalid",
+          detail: requireFileSymlinks
+            ? `${label} ${dependencyName} obsahuje nepřipnutý soubor ${entryRelativePath}; link-farm smí odkazovat jen do přesného deklarovaného cíle.`
+            : `${label} ${dependencyName} obsahuje nepodporovaný filesystem objekt ${entryRelativePath}.`,
+          dependency_name: dependencyName,
+        };
+      }
+    } finally {
+      await directory.close().catch(() => {});
+    }
+    let afterDirectoryTarget;
+    let afterDirectoryState;
+    try {
+      afterDirectoryTarget = await realpath(currentDirectory);
+      afterDirectoryState = await stat(afterDirectoryTarget);
+    } catch (error) {
+      return {
+        ok: false,
+        reason: "dependency_authority_changed",
+        detail: `${label} ${dependencyName} změnil adresář během ověření: ${error instanceof Error ? error.message : String(error)}`,
+        dependency_name: dependencyName,
+      };
+    }
+    if (
+      !samePath(beforeDirectoryTarget, afterDirectoryTarget)
+      || beforeDirectoryState.dev !== afterDirectoryState.dev
+      || beforeDirectoryState.ino !== afterDirectoryState.ino
+    ) {
+      return {
+        ok: false,
+        reason: "dependency_authority_changed",
+        detail: `${label} ${dependencyName} změnil adresář během ověření.`,
+        dependency_name: dependencyName,
+      };
+    }
+  }
+  return { ok: true, authority: authority.sort().join("\n") };
+}
+
+function requiredDependencySpec(packageJson, dependencyName) {
+  return packageJson?.dependencies?.[dependencyName]
+    ?? packageJson?.devDependencies?.[dependencyName]
+    ?? null;
+}
+
+function sameLocalDependencyAuthorities(left = [], right = []) {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    const current = left[index];
+    const expected = right[index];
+    if (
+      current.dependency_name !== expected.dependency_name
+      || current.spec !== expected.spec
+      || !samePath(current.target_root, expected.target_root)
+      || current.target_outside_checkout !== expected.target_outside_checkout
+      || !samePath(current.target_package_path, expected.target_package_path)
+      || current.target_package_name !== expected.target_package_name
+      || !sameBytes(current.target_package_bytes, expected.target_package_bytes)
+      || current.target_tree_authority !== expected.target_tree_authority
+    ) return false;
+  }
+  return true;
+}
+
 export async function inspectRequiredDependencies({
   cwd,
   boundaryRoot,
+  organizationDependencyRoot = null,
   packageJson: fallbackPackageJson,
   lockfile = null,
   beforeDependencyMetadataFailureInspection = null,
+  beforeLocalDependencyAuthorityRecheck = null,
+  beforeLocalDependencyTreeRecheck = null,
 } = {}) {
   const fallbackNames = requiredDependencyNames(fallbackPackageJson);
-  if (!cwd || !boundaryRoot || !isAbsolute(cwd) || !isAbsolute(boundaryRoot)) {
+  if (
+    !cwd
+    || !boundaryRoot
+    || !isAbsolute(cwd)
+    || !isAbsolute(boundaryRoot)
+    || (organizationDependencyRoot !== null && !isAbsolute(organizationDependencyRoot))
+  ) {
     return {
       ok: false,
       reason: "package_root_invalid",
@@ -660,8 +1110,13 @@ export async function inspectRequiredDependencies({
   }
   let canonicalBoundary;
   let canonicalCwd;
+  let canonicalOrganizationDependencyRoot;
   try {
-    [canonicalBoundary, canonicalCwd] = await Promise.all([realpath(boundaryRoot), realpath(cwd)]);
+    [canonicalBoundary, canonicalCwd, canonicalOrganizationDependencyRoot] = await Promise.all([
+      realpath(boundaryRoot),
+      realpath(cwd),
+      realpath(organizationDependencyRoot ?? boundaryRoot),
+    ]);
   } catch (error) {
     const missing = ["ENOENT", "ENOTDIR"].includes(error?.code);
     return {
@@ -679,6 +1134,16 @@ export async function inspectRequiredDependencies({
       ok: false,
       reason: "package_root_outside_boundary",
       detail: "Package root leží mimo owning checkout.",
+      required_dependency_names: fallbackNames,
+      required_dependency_count: fallbackNames.length,
+      missing_required_dependencies: fallbackNames,
+    };
+  }
+  if (!pathInsideBoundary(canonicalOrganizationDependencyRoot, canonicalBoundary)) {
+    return {
+      ok: false,
+      reason: "dependency_tree_boundary_invalid",
+      detail: "Owning checkout neleží uvnitř zvolené Organization dependency hranice.",
       required_dependency_names: fallbackNames,
       required_dependency_count: fallbackNames.length,
       missing_required_dependencies: fallbackNames,
@@ -723,22 +1188,86 @@ export async function inspectRequiredDependencies({
       missing_required_dependencies: [],
     };
   }
+  const localDependencyState = await inspectDeclaredFileDependencyAuthorities({
+    cwd: canonicalCwd,
+    boundaryRoot: canonicalBoundary,
+    organizationDependencyRoot: canonicalOrganizationDependencyRoot,
+    packageJson,
+  });
+  if (!localDependencyState.ok) {
+    return {
+      ...localDependencyState,
+      required_dependency_names: requiredDependencyNames(packageJson),
+      required_dependency_count: requiredDependencyNames(packageJson).length,
+      missing_required_dependencies: localDependencyState.dependency_name
+        ? [localDependencyState.dependency_name]
+        : requiredDependencyNames(packageJson),
+    };
+  }
   const dependencyState = await inspectCanonicalRequiredDependencies({
     cwd: canonicalCwd,
     boundaryRoot: canonicalBoundary,
+    organizationDependencyRoot: canonicalOrganizationDependencyRoot,
     packageJson,
+    localDependencyAuthorities: localDependencyState.authorities,
     beforeDependencyMetadataFailureInspection,
+    beforeLocalDependencyTreeRecheck,
   });
-  return { ...dependencyState, package_json: packageJson };
+  if (!dependencyState.ok) {
+    return {
+      ...dependencyState,
+      package_json: packageJson,
+      local_dependency_targets: localDependencyState.local_dependency_targets,
+    };
+  }
+  if (beforeLocalDependencyAuthorityRecheck) await beforeLocalDependencyAuthorityRecheck();
+  const recheckedLocalDependencies = await inspectDeclaredFileDependencyAuthorities({
+    cwd: canonicalCwd,
+    boundaryRoot: canonicalBoundary,
+    organizationDependencyRoot: canonicalOrganizationDependencyRoot,
+    packageJson,
+  });
+  if (
+    !recheckedLocalDependencies.ok
+    || !sameLocalDependencyAuthorities(
+      recheckedLocalDependencies.authorities,
+      localDependencyState.authorities,
+    )
+  ) {
+    return {
+      ok: false,
+      reason: "dependency_authority_changed",
+      detail: recheckedLocalDependencies.ok
+        ? "Deklarovaný lokální dependency cíl se během ověření změnil."
+        : recheckedLocalDependencies.detail,
+      required_dependency_names: dependencyState.required_dependency_names,
+      required_dependency_count: dependencyState.required_dependency_count,
+      missing_required_dependencies: dependencyState.required_dependency_names,
+      package_json: packageJson,
+      local_dependency_targets: recheckedLocalDependencies.local_dependency_targets
+        ?? localDependencyState.local_dependency_targets,
+    };
+  }
+  return {
+    ...dependencyState,
+    package_json: packageJson,
+    local_dependency_targets: localDependencyState.local_dependency_targets,
+  };
 }
 
 async function inspectCanonicalRequiredDependencies({
   cwd,
   boundaryRoot,
+  organizationDependencyRoot,
   packageJson,
+  localDependencyAuthorities = [],
   beforeDependencyMetadataFailureInspection = null,
+  beforeLocalDependencyTreeRecheck = null,
 }) {
   const requiredNames = requiredDependencyNames(packageJson);
+  const localAuthoritiesByName = new Map(
+    localDependencyAuthorities.map((authority) => [authority.dependency_name, authority]),
+  );
   const nodeModulesRoots = await inspectNodeModulesRoots({ cwd, boundaryRoot });
   if (!nodeModulesRoots.ok) {
     return {
@@ -755,7 +1284,10 @@ async function inspectCanonicalRequiredDependencies({
       boundaryRoot,
       dependencyName,
       packageJson,
+      localDependencyAuthority: localAuthoritiesByName.get(dependencyName) ?? null,
+      organizationDependencyRoot,
       beforeDependencyMetadataFailureInspection,
+      beforeLocalDependencyTreeRecheck,
     });
     if (!inspection.ok) {
       return {
@@ -782,7 +1314,9 @@ async function requiredDependencyPackageJsonPath({
   boundaryRoot,
   dependencyName,
   packageJson,
+  localDependencyAuthority = null,
   beforeDependencyMetadataFailureInspection = null,
+  beforeLocalDependencyTreeRecheck = null,
 }) {
   const parts = dependencyPathParts(dependencyName);
   if (!parts) {
@@ -797,104 +1331,20 @@ async function requiredDependencyPackageJsonPath({
   const boundary = resolve(boundaryRoot);
   while (pathInsideBoundary(boundary, cursor)) {
     const candidateRoot = join(cursor, "node_modules", ...parts);
-    const candidatePackage = join(candidateRoot, "package.json");
     try {
       // Missing roots simply mean this dependency is not installed at this
-      // resolution level. A present symlink/junction must pass the stronger
-      // canonical directory identity check below.
+      // resolution level. A present but invalid nearer package is terminal:
+      // it may never reopen fallback to a different ancestor package.
       await lstat(candidateRoot);
-      const candidateBoundary = await inspectDirectoryWithinCanonicalBoundary({
-        rootPath: boundary,
-        rootRealPath: boundary,
-        targetPath: candidateRoot,
+      return await inspectInstalledDependencyCandidate({
+        candidateRoot,
+        boundary,
+        dependencyName,
+        packageJson,
+        localDependencyAuthority,
+        beforeDependencyMetadataFailureInspection,
+        beforeLocalDependencyTreeRecheck,
       });
-      if (!candidateBoundary.ok || !candidateBoundary.targetRealPath) {
-        return {
-          ok: false,
-          reason: "dependency_tree_boundary_invalid",
-          detail: `Balíček ${dependencyName} odkazuje mimo owning checkout; Lazurio ho nepoužije ani nezmění.`,
-          path: null,
-        };
-      }
-      const canonicalCandidateRoot = candidateBoundary.targetRealPath;
-      const canonicalCandidatePackage = join(canonicalCandidateRoot, "package.json");
-      let packageSnapshot;
-      try {
-        packageSnapshot = await readFileWithinCanonicalBoundary({
-          rootPath: canonicalCandidateRoot,
-          rootRealPath: canonicalCandidateRoot,
-          targetPath: canonicalCandidatePackage,
-          label: `package.json balíčku ${dependencyName}`,
-        });
-      } catch (error) {
-        // Deterministic race-test seam. Production callers omit it; the
-        // subsequent lstat must never turn an earlier failed read into
-        // permission to resolve a different ancestor package.
-        if (beforeDependencyMetadataFailureInspection) {
-          await beforeDependencyMetadataFailureInspection({
-            dependencyName,
-            packagePath: canonicalCandidatePackage,
-          });
-        }
-        let packageEntryExists = true;
-        try {
-          await lstat(canonicalCandidatePackage);
-        } catch (inspectionError) {
-          if (!["ENOENT", "ENOTDIR"].includes(inspectionError?.code)) {
-            return {
-              ok: false,
-              reason: "dependency_tree_inspection_failed",
-              detail: `package.json balíčku ${dependencyName} nejde po chybě čtení bezpečně ověřit: ${inspectionError instanceof Error ? inspectionError.message : String(inspectionError)}`,
-              path: null,
-            };
-          }
-          packageEntryExists = false;
-        }
-        if (!packageEntryExists) {
-          return {
-            ok: false,
-            reason: "dependency_tree_inspection_failed",
-            detail: `Adresář balíčku ${dependencyName} existuje, ale chybí v něm package.json; Lazurio tento neúplný strom automaticky nepřepíše.`,
-            path: null,
-          };
-        }
-        return {
-          ok: false,
-          reason: isCanonicalBoundaryError(error)
-            ? "dependency_tree_boundary_invalid"
-            : "dependency_tree_inspection_failed",
-          detail: ["ENOENT", "ENOTDIR"].includes(error?.code)
-            ? `package.json balíčku ${dependencyName} změnil existenci během bezpečného ověření; Lazurio nepoužije jiný ancestor balíček.`
-            : `package.json balíčku ${dependencyName} nejde bezpečně přečíst: ${error instanceof Error ? error.message : String(error)}`,
-          path: null,
-        };
-      }
-      let metadata;
-      try {
-        metadata = JSON.parse(packageSnapshot.value.toString("utf8"));
-      } catch (error) {
-        return {
-          ok: false,
-          reason: "dependency_tree_inspection_failed",
-          detail: `package.json balíčku ${dependencyName} není platný JSON: ${error instanceof Error ? error.message : String(error)}`,
-          path: null,
-        };
-      }
-      const allowedNames = dependencyMetadataNames(packageJson, dependencyName);
-      if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)
-        || typeof metadata.name !== "string" || !allowedNames.has(metadata.name.trim())) {
-        const actualName = metadata && typeof metadata === "object" && !Array.isArray(metadata)
-          && typeof metadata.name === "string"
-          ? metadata.name.trim()
-          : null;
-        return {
-          ok: false,
-          reason: "dependency_tree_inspection_failed",
-          detail: `package.json balíčku ${dependencyName} má neplatnou identitu (očekáváno ${[...allowedNames].join(" nebo ")}, nalezeno ${actualName || "chybějící name"}); Lazurio nepoužije jiný ancestor balíček.`,
-          path: null,
-        };
-      }
-      return { ok: true, path: packageSnapshot.targetRealPath };
     } catch (error) {
       if (!["ENOENT", "ENOTDIR"].includes(error?.code)) {
         return {
@@ -913,6 +1363,318 @@ async function requiredDependencyPackageJsonPath({
     cursor = parent;
   }
   return { ok: true, path: null };
+}
+
+async function inspectInstalledDependencyCandidate({
+  candidateRoot,
+  boundary,
+  dependencyName,
+  packageJson,
+  localDependencyAuthority,
+  beforeDependencyMetadataFailureInspection,
+  beforeLocalDependencyTreeRecheck,
+}) {
+  const candidateBoundary = await inspectDirectoryWithinCanonicalBoundary({
+    rootPath: boundary,
+    rootRealPath: boundary,
+    targetPath: candidateRoot,
+  });
+  let canonicalCandidateRoot = candidateBoundary.targetRealPath;
+  let directLocalAlias = false;
+  if (!candidateBoundary.ok || !canonicalCandidateRoot) {
+    if (
+      !localDependencyAuthority
+      || !canonicalCandidateRoot
+      || !samePath(canonicalCandidateRoot, localDependencyAuthority.target_root)
+    ) {
+      return {
+        ok: false,
+        reason: "dependency_tree_boundary_invalid",
+        detail: `Balíček ${dependencyName} odkazuje mimo owning checkout a neodpovídá přesně deklarovanému Organization-local file: cíli.`,
+        path: null,
+      };
+    }
+    const exactAlias = await inspectExactDirectoryAlias({
+      aliasPath: candidateRoot,
+      expectedTarget: localDependencyAuthority.target_root,
+    });
+    if (!exactAlias.ok) return exactAlias;
+    canonicalCandidateRoot = localDependencyAuthority.target_root;
+    directLocalAlias = true;
+  } else if (
+    localDependencyAuthority
+    && samePath(canonicalCandidateRoot, localDependencyAuthority.target_root)
+  ) {
+    directLocalAlias = true;
+  }
+
+  const canonicalCandidatePackage = join(canonicalCandidateRoot, "package.json");
+  let packageSnapshot;
+  let localLinkFarm = false;
+  let linkFarmTreeAuthority = null;
+  try {
+    packageSnapshot = await readFileWithinCanonicalBoundary({
+      rootPath: canonicalCandidateRoot,
+      rootRealPath: canonicalCandidateRoot,
+      targetPath: canonicalCandidatePackage,
+      label: `package.json balíčku ${dependencyName}`,
+    });
+  } catch (error) {
+    if (localDependencyAuthority && isCanonicalBoundaryError(error) && !directLocalAlias) {
+      const linkedMetadata = await readExactDeclaredLocalPackageLink({
+        candidatePackage: join(candidateRoot, "package.json"),
+        authority: localDependencyAuthority,
+        dependencyName,
+      });
+      if (linkedMetadata.ok) {
+        packageSnapshot = linkedMetadata.snapshot;
+        localLinkFarm = true;
+      } else {
+        return linkedMetadata;
+      }
+    } else {
+      return dependencyMetadataReadFailure({
+        error,
+        dependencyName,
+        packagePath: canonicalCandidatePackage,
+        beforeDependencyMetadataFailureInspection,
+      });
+    }
+  }
+
+  if (localDependencyAuthority) {
+    if (
+      localDependencyAuthority.target_outside_checkout
+      && !directLocalAlias
+      && !localLinkFarm
+    ) {
+      return {
+        ok: false,
+        reason: "dependency_tree_inspection_failed",
+        detail: `Instalovaný balíček ${dependencyName} není propojený s přesně deklarovaným file: cílem; Lazurio jej nepoužije jako aktuální lokální dependency.`,
+        path: null,
+      };
+    }
+    if (
+      (directLocalAlias || localLinkFarm)
+      && (
+        !samePath(packageSnapshot.targetRealPath, localDependencyAuthority.target_package_path)
+        || !sameBytes(packageSnapshot.value, localDependencyAuthority.target_package_bytes)
+      )
+    ) {
+      return {
+        ok: false,
+        reason: "dependency_authority_changed",
+        detail: `Deklarovaný lokální balíček ${dependencyName} změnil package identitu během ověření.`,
+        path: null,
+      };
+    }
+    if (localLinkFarm) {
+      const linkFarmTree = await inspectLocalDependencyTree({
+        treeRoot: candidateRoot,
+        allowedTargetRoot: localDependencyAuthority.target_root,
+        requireFileSymlinks: true,
+        dependencyName,
+        label: "Instalovaný Organization-local link-farm balíček",
+      });
+      if (!linkFarmTree.ok) return linkFarmTree;
+      linkFarmTreeAuthority = linkFarmTree.authority;
+    }
+    const rootRecheck = directLocalAlias
+      ? await inspectExactDirectoryAlias({
+          aliasPath: candidateRoot,
+          expectedTarget: localDependencyAuthority.target_root,
+        })
+      : await inspectDirectoryWithinCanonicalBoundary({
+          rootPath: boundary,
+          rootRealPath: boundary,
+          targetPath: candidateRoot,
+        });
+    if (!rootRecheck.ok || (rootRecheck.targetRealPath && !samePath(rootRecheck.targetRealPath, canonicalCandidateRoot))) {
+      return {
+        ok: false,
+        reason: "dependency_authority_changed",
+        detail: `Adresář lokálního balíčku ${dependencyName} se během ověření změnil.`,
+        path: null,
+      };
+    }
+    if (localLinkFarm) {
+      if (beforeLocalDependencyTreeRecheck) {
+        await beforeLocalDependencyTreeRecheck({ dependencyName, candidateRoot });
+      }
+      const recheckedLinkFarmTree = await inspectLocalDependencyTree({
+        treeRoot: candidateRoot,
+        allowedTargetRoot: localDependencyAuthority.target_root,
+        requireFileSymlinks: true,
+        dependencyName,
+        label: "Instalovaný Organization-local link-farm balíček",
+      });
+      if (!recheckedLinkFarmTree.ok || recheckedLinkFarmTree.authority !== linkFarmTreeAuthority) {
+        return {
+          ok: false,
+          reason: "dependency_authority_changed",
+          detail: recheckedLinkFarmTree.ok
+            ? `Instalovaný link-farm balíček ${dependencyName} se během ověření změnil.`
+            : recheckedLinkFarmTree.detail,
+          path: null,
+        };
+      }
+    }
+  }
+
+  let metadata;
+  try {
+    metadata = JSON.parse(packageSnapshot.value.toString("utf8"));
+  } catch (error) {
+    return {
+      ok: false,
+      reason: "dependency_tree_inspection_failed",
+      detail: `package.json balíčku ${dependencyName} není platný JSON: ${error instanceof Error ? error.message : String(error)}`,
+      path: null,
+    };
+  }
+  const allowedNames = localDependencyAuthority
+    ? new Set([localDependencyAuthority.target_package_name])
+    : dependencyMetadataNames(packageJson, dependencyName);
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)
+    || typeof metadata.name !== "string" || !allowedNames.has(metadata.name.trim())) {
+    const actualName = metadata && typeof metadata === "object" && !Array.isArray(metadata)
+      && typeof metadata.name === "string"
+      ? metadata.name.trim()
+      : null;
+    return {
+      ok: false,
+      reason: "dependency_tree_inspection_failed",
+      detail: `package.json balíčku ${dependencyName} má neplatnou identitu (očekáváno ${[...allowedNames].join(" nebo ")}, nalezeno ${actualName || "chybějící name"}); Lazurio nepoužije jiný ancestor balíček.`,
+      path: null,
+    };
+  }
+  return { ok: true, path: packageSnapshot.targetRealPath };
+}
+
+async function dependencyMetadataReadFailure({
+  error,
+  dependencyName,
+  packagePath,
+  beforeDependencyMetadataFailureInspection,
+}) {
+  // Deterministic race-test seam. Production callers omit it; the subsequent
+  // lstat must never turn an earlier failed read into permission to resolve a
+  // different ancestor package.
+  if (beforeDependencyMetadataFailureInspection) {
+    await beforeDependencyMetadataFailureInspection({ dependencyName, packagePath });
+  }
+  let packageEntryExists = true;
+  try {
+    await lstat(packagePath);
+  } catch (inspectionError) {
+    if (!["ENOENT", "ENOTDIR"].includes(inspectionError?.code)) {
+      return {
+        ok: false,
+        reason: "dependency_tree_inspection_failed",
+        detail: `package.json balíčku ${dependencyName} nejde po chybě čtení bezpečně ověřit: ${inspectionError instanceof Error ? inspectionError.message : String(inspectionError)}`,
+        path: null,
+      };
+    }
+    packageEntryExists = false;
+  }
+  if (!packageEntryExists) {
+    return {
+      ok: false,
+      reason: "dependency_tree_inspection_failed",
+      detail: ["ENOENT", "ENOTDIR"].includes(error?.code)
+        ? `package.json balíčku ${dependencyName} změnil existenci během bezpečného ověření; Lazurio nepoužije jiný ancestor balíček.`
+        : `Adresář balíčku ${dependencyName} existuje, ale chybí v něm package.json; Lazurio tento neúplný strom automaticky nepřepíše.`,
+      path: null,
+    };
+  }
+  return {
+    ok: false,
+    reason: isCanonicalBoundaryError(error)
+      ? "dependency_tree_boundary_invalid"
+      : "dependency_tree_inspection_failed",
+    detail: ["ENOENT", "ENOTDIR"].includes(error?.code)
+      ? `package.json balíčku ${dependencyName} změnil existenci během bezpečného ověření; Lazurio nepoužije jiný ancestor balíček.`
+      : `package.json balíčku ${dependencyName} nejde bezpečně přečíst: ${error instanceof Error ? error.message : String(error)}`,
+    path: null,
+  };
+}
+
+async function readExactDeclaredLocalPackageLink({ candidatePackage, authority, dependencyName }) {
+  try {
+    const beforeTarget = await realpath(candidatePackage);
+    if (!samePath(beforeTarget, authority.target_package_path)) {
+      return {
+        ok: false,
+        reason: "dependency_tree_boundary_invalid",
+        detail: `package.json balíčku ${dependencyName} neodkazuje na přesně deklarovaný file: cíl.`,
+        path: null,
+      };
+    }
+    const snapshot = await readFileWithinCanonicalBoundary({
+      rootPath: authority.target_root,
+      rootRealPath: authority.target_root,
+      targetPath: authority.target_package_path,
+      label: `package.json deklarovaného lokálního balíčku ${dependencyName}`,
+    });
+    const afterTarget = await realpath(candidatePackage);
+    if (!samePath(beforeTarget, afterTarget)) {
+      return {
+        ok: false,
+        reason: "dependency_authority_changed",
+        detail: `package.json balíčku ${dependencyName} změnil cíl během ověření.`,
+        path: null,
+      };
+    }
+    return { ok: true, snapshot };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: isCanonicalBoundaryError(error)
+        ? "dependency_tree_boundary_invalid"
+        : "dependency_tree_inspection_failed",
+      detail: `Organization-local package.json balíčku ${dependencyName} nejde bezpečně ověřit: ${error instanceof Error ? error.message : String(error)}`,
+      path: null,
+    };
+  }
+}
+
+async function inspectExactDirectoryAlias({ aliasPath, expectedTarget }) {
+  try {
+    const aliasEntry = await lstat(aliasPath);
+    const beforeTarget = await realpath(aliasPath);
+    const beforeEntry = await stat(beforeTarget);
+    if (!aliasEntry.isSymbolicLink() || !beforeEntry.isDirectory() || !samePath(beforeTarget, expectedTarget)) {
+      return {
+        ok: false,
+        reason: "dependency_tree_boundary_invalid",
+        detail: "Lokální dependency adresář není přesný symlink/junction na deklarovaný file: cíl.",
+        path: null,
+      };
+    }
+    const afterTarget = await realpath(aliasPath);
+    const afterEntry = await stat(afterTarget);
+    if (
+      !samePath(beforeTarget, afterTarget)
+      || beforeEntry.dev !== afterEntry.dev
+      || beforeEntry.ino !== afterEntry.ino
+    ) {
+      return {
+        ok: false,
+        reason: "dependency_authority_changed",
+        detail: "Lokální dependency adresář změnil cíl během ověření.",
+        path: null,
+      };
+    }
+    return { ok: true, targetRealPath: beforeTarget };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: "dependency_tree_inspection_failed",
+      detail: `Lokální dependency adresář nejde bezpečně ověřit: ${error instanceof Error ? error.message : String(error)}`,
+      path: null,
+    };
+  }
 }
 
 async function inspectPackageAuthorityFiles({ cwd, boundaryRoot, requiredLockfile = null }) {
@@ -1080,6 +1842,10 @@ function pathInsideBoundary(boundary, candidate) {
   const pathFromBoundary = relative(boundary, candidate);
   return pathFromBoundary === ""
     || (pathFromBoundary !== ".." && !pathFromBoundary.startsWith(`..${sep}`) && !isAbsolute(pathFromBoundary));
+}
+
+function samePath(left, right) {
+  return relative(resolve(left), resolve(right)) === "";
 }
 
 function unchangedFailure(result, mode) {

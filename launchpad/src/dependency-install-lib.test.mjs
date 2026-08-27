@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 
 import {
   frozenBunInstallCommand,
@@ -539,6 +539,289 @@ test("a package symlink inside the owning checkout remains usable", async () => 
   expect(state).toMatchObject({ ok: true, missing_required_dependencies: [] });
 });
 
+test("a declared link dependency uses the ordinary checkout-scoped metadata contract", async () => {
+  const root = await packageFixture({ dependencies: { linked: "link:../workspace-packages/linked" } });
+  const packageRoot = join(root, "app");
+  const linkedRoot = join(root, "workspace-packages", "linked");
+  await mkdir(linkedRoot, { recursive: true });
+  await writeFile(join(linkedRoot, "package.json"), JSON.stringify({ name: "linked", version: "1.0.0" }));
+  await mkdir(join(packageRoot, "node_modules"), { recursive: true });
+  await symlink(linkedRoot, join(packageRoot, "node_modules", "linked"), process.platform === "win32" ? "junction" : "dir");
+
+  expect(await inspectRequiredDependencies({ cwd: packageRoot, boundaryRoot: root })).toMatchObject({
+    ok: true,
+    missing_required_dependencies: [],
+  });
+});
+
+test.skipIf(process.platform === "win32")("an exact declared Organization-local file dependency accepts Bun's link-farm layout", async () => {
+  const fixture = await organizationFileDependencyFixture();
+  await mkdir(fixture.installedRoot, { recursive: true });
+  await symlink(join(fixture.targetRoot, "package.json"), join(fixture.installedRoot, "package.json"), "file");
+  await symlink(join(fixture.targetRoot, "index.ts"), join(fixture.installedRoot, "index.ts"), "file");
+
+  const state = await inspectRequiredDependencies({
+    cwd: fixture.packageRoot,
+    boundaryRoot: fixture.checkoutRoot,
+    organizationDependencyRoot: fixture.organizationRoot,
+  });
+
+  expect(state).toMatchObject({
+    ok: true,
+    required_dependency_count: 1,
+    missing_required_dependencies: [],
+  });
+});
+
+test.skipIf(process.platform === "win32")("an Organization-local link farm rejects an executable symlink outside its exact target", async () => {
+  const fixture = await organizationFileDependencyFixture();
+  const foreignRoot = join(fixture.root, "organizations", "OtherCo", "payload");
+  await mkdir(foreignRoot, { recursive: true });
+  await writeFile(join(foreignRoot, "index.ts"), "export const foreign = true;\n");
+  await mkdir(fixture.installedRoot, { recursive: true });
+  await symlink(join(fixture.targetRoot, "package.json"), join(fixture.installedRoot, "package.json"), "file");
+  await symlink(join(foreignRoot, "index.ts"), join(fixture.installedRoot, "index.ts"), "file");
+
+  expect(await inspectRequiredDependencies({
+    cwd: fixture.packageRoot,
+    boundaryRoot: fixture.checkoutRoot,
+    organizationDependencyRoot: fixture.organizationRoot,
+  })).toMatchObject({ ok: false, reason: "dependency_tree_boundary_invalid" });
+});
+
+test.skipIf(process.platform === "win32")("a local link-farm leaf swap during readiness is rejected", async () => {
+  const fixture = await organizationFileDependencyFixture();
+  const foreignRoot = join(fixture.root, "organizations", "OtherCo", "payload");
+  await mkdir(foreignRoot, { recursive: true });
+  await writeFile(join(foreignRoot, "index.ts"), "export const foreign = true;\n");
+  await mkdir(fixture.installedRoot, { recursive: true });
+  await symlink(join(fixture.targetRoot, "package.json"), join(fixture.installedRoot, "package.json"), "file");
+  await symlink(join(fixture.targetRoot, "index.ts"), join(fixture.installedRoot, "index.ts"), "file");
+
+  const state = await inspectRequiredDependencies({
+    cwd: fixture.packageRoot,
+    boundaryRoot: fixture.checkoutRoot,
+    organizationDependencyRoot: fixture.organizationRoot,
+    async beforeLocalDependencyTreeRecheck() {
+      await rm(join(fixture.installedRoot, "index.ts"));
+      await symlink(join(foreignRoot, "index.ts"), join(fixture.installedRoot, "index.ts"), "file");
+    },
+  });
+
+  expect(state).toMatchObject({ ok: false, reason: "dependency_authority_changed" });
+});
+
+test.skipIf(process.platform === "win32")("a local link-farm directory swap during readiness is rejected", async () => {
+  const fixture = await organizationFileDependencyFixture();
+  const targetSchemas = join(fixture.targetRoot, "schemas");
+  const installedSchemas = join(fixture.installedRoot, "schemas");
+  const foreignSchemas = join(fixture.root, "organizations", "OtherCo", "schemas");
+  await mkdir(targetSchemas, { recursive: true });
+  await mkdir(installedSchemas, { recursive: true });
+  await mkdir(foreignSchemas, { recursive: true });
+  await writeFile(join(targetSchemas, "value.ts"), "export const local = true;\n");
+  await writeFile(join(foreignSchemas, "value.ts"), "export const foreign = true;\n");
+  await symlink(join(fixture.targetRoot, "package.json"), join(fixture.installedRoot, "package.json"), "file");
+  await symlink(join(targetSchemas, "value.ts"), join(installedSchemas, "value.ts"), "file");
+
+  const state = await inspectRequiredDependencies({
+    cwd: fixture.packageRoot,
+    boundaryRoot: fixture.checkoutRoot,
+    organizationDependencyRoot: fixture.organizationRoot,
+    async beforeLocalDependencyTreeRecheck() {
+      await rm(installedSchemas, { recursive: true });
+      await symlink(foreignSchemas, installedSchemas, "dir");
+    },
+  });
+
+  expect(state).toMatchObject({ ok: false, reason: "dependency_authority_changed" });
+});
+
+test.skipIf(process.platform === "win32")("a declared local package rejects a nested symlink outside its exact target", async () => {
+  const fixture = await organizationFileDependencyFixture();
+  const foreignRoot = join(fixture.root, "organizations", "OtherCo", "payload");
+  await mkdir(foreignRoot, { recursive: true });
+  await writeFile(join(foreignRoot, "payload.ts"), "export const foreign = true;\n");
+  await symlink(join(foreignRoot, "payload.ts"), join(fixture.targetRoot, "payload.ts"), "file");
+  await mkdir(join(fixture.packageRoot, "node_modules", "@workspace-contracts"), { recursive: true });
+  await symlink(
+    fixture.targetRoot,
+    fixture.installedRoot,
+    process.platform === "win32" ? "junction" : "dir",
+  );
+
+  expect(await inspectRequiredDependencies({
+    cwd: fixture.packageRoot,
+    boundaryRoot: fixture.checkoutRoot,
+    organizationDependencyRoot: fixture.organizationRoot,
+  })).toMatchObject({ ok: false, reason: "dependency_tree_boundary_invalid" });
+});
+
+test("an exact declared Organization-local file dependency accepts a direct directory link", async () => {
+  const fixture = await organizationFileDependencyFixture();
+  await mkdir(join(fixture.packageRoot, "node_modules", "@workspace-contracts"), { recursive: true });
+  await symlink(
+    fixture.targetRoot,
+    fixture.installedRoot,
+    process.platform === "win32" ? "junction" : "dir",
+  );
+
+  expect(await inspectRequiredDependencies({
+    cwd: fixture.packageRoot,
+    boundaryRoot: fixture.checkoutRoot,
+    organizationDependencyRoot: fixture.organizationRoot,
+  })).toMatchObject({ ok: true, missing_required_dependencies: [] });
+});
+
+test("a file dependency copied inside its owning checkout remains usable", async () => {
+  const root = await packageFixture({ dependencies: { "local-schema": "file:./packages/local-schema" } });
+  const packageRoot = join(root, "app");
+  const targetRoot = join(packageRoot, "packages", "local-schema");
+  await mkdir(targetRoot, { recursive: true });
+  await writeFile(join(targetRoot, "package.json"), JSON.stringify({ name: "local-schema", version: "1.0.0" }));
+  await materializeDependency(packageRoot, "local-schema");
+
+  expect(await inspectRequiredDependencies({ cwd: packageRoot, boundaryRoot: root })).toMatchObject({
+    ok: true,
+    missing_required_dependencies: [],
+  });
+});
+
+test("a same-Organization package link must match the exact declared file target", async () => {
+  const fixture = await organizationFileDependencyFixture();
+  const differentTarget = join(fixture.organizationRoot, "launchpad", "contracts", "different");
+  await mkdir(differentTarget, { recursive: true });
+  await writeFile(join(differentTarget, "package.json"), JSON.stringify({ name: "@rozjedeme-contracts/v1" }));
+  await mkdir(join(fixture.packageRoot, "node_modules", "@workspace-contracts"), { recursive: true });
+  await symlink(
+    differentTarget,
+    fixture.installedRoot,
+    process.platform === "win32" ? "junction" : "dir",
+  );
+
+  expect(await inspectRequiredDependencies({
+    cwd: fixture.packageRoot,
+    boundaryRoot: fixture.checkoutRoot,
+    organizationDependencyRoot: fixture.organizationRoot,
+  })).toMatchObject({ ok: false, reason: "dependency_tree_boundary_invalid" });
+});
+
+test("a declared file target outside the Organization remains fail-closed", async () => {
+  const fixture = await organizationFileDependencyFixture();
+  const foreign = await mkdtemp(join(tmpdir(), "lazurio-file-dependency-foreign-"));
+  cleanup.push(foreign);
+  await writeFile(join(foreign, "package.json"), JSON.stringify({ name: "@rozjedeme-contracts/v1" }));
+  await writeFile(join(fixture.packageRoot, "package.json"), JSON.stringify({
+    name: "consumer",
+    dependencies: {
+      "@workspace-contracts/v1": `file:${relative(fixture.packageRoot, foreign)}`,
+    },
+  }));
+
+  expect(await inspectRequiredDependencies({
+    cwd: fixture.packageRoot,
+    boundaryRoot: fixture.checkoutRoot,
+    organizationDependencyRoot: fixture.organizationRoot,
+  })).toMatchObject({ ok: false, reason: "dependency_tree_boundary_invalid" });
+});
+
+test("absolute, drive, UNC, URL and missing file targets never become Install candidates", async () => {
+  for (const spec of [
+    "file:/tmp/foreign",
+    "file:C:\\foreign",
+    "file://server/share",
+    "file:../../../../launchpad/contracts/missing",
+  ]) {
+    const fixture = await organizationFileDependencyFixture();
+    await writeFile(join(fixture.packageRoot, "package.json"), JSON.stringify({
+      name: "consumer",
+      dependencies: { "@workspace-contracts/v1": spec },
+    }));
+    const state = await inspectRequiredDependencies({
+      cwd: fixture.packageRoot,
+      boundaryRoot: fixture.checkoutRoot,
+      organizationDependencyRoot: fixture.organizationRoot,
+    });
+    expect(state.ok).toBe(false);
+    expect(["dependency_tree_boundary_invalid", "dependency_tree_inspection_failed"]).toContain(state.reason);
+  }
+});
+
+test("a worktree-relative file target is never rebound to the main Organization checkout", async () => {
+  const fixture = await organizationFileDependencyFixture();
+  const worktreeRoot = join(
+    fixture.organizationRoot,
+    ".worktrees",
+    "workspace",
+    "consumer",
+    "DEV-6439-file-boundary",
+  );
+  const worktreePackageRoot = join(worktreeRoot, "app", "v2");
+  await mkdir(worktreePackageRoot, { recursive: true });
+  await writeFile(
+    join(worktreePackageRoot, "package.json"),
+    await readFile(join(fixture.packageRoot, "package.json"), "utf8"),
+  );
+  await writeFile(join(worktreePackageRoot, "bun.lock"), "# fixture\n");
+
+  expect(await inspectRequiredDependencies({
+    cwd: worktreePackageRoot,
+    boundaryRoot: worktreeRoot,
+    organizationDependencyRoot: fixture.organizationRoot,
+  })).toMatchObject({
+    ok: false,
+    reason: "dependency_tree_inspection_failed",
+  });
+});
+
+test.skipIf(process.platform === "win32")("a declared local target package change during readiness inspection is rejected", async () => {
+  const fixture = await organizationFileDependencyFixture();
+  await mkdir(fixture.installedRoot, { recursive: true });
+  await symlink(join(fixture.targetRoot, "package.json"), join(fixture.installedRoot, "package.json"), "file");
+  await symlink(join(fixture.targetRoot, "index.ts"), join(fixture.installedRoot, "index.ts"), "file");
+
+  const state = await inspectRequiredDependencies({
+    cwd: fixture.packageRoot,
+    boundaryRoot: fixture.checkoutRoot,
+    organizationDependencyRoot: fixture.organizationRoot,
+    async beforeLocalDependencyAuthorityRecheck() {
+      await writeFile(join(fixture.targetRoot, "package.json"), JSON.stringify({
+        name: "@rozjedeme-contracts/v1",
+        changed: true,
+      }));
+    },
+  });
+
+  expect(state).toMatchObject({ ok: false, reason: "dependency_authority_changed" });
+});
+
+test.skipIf(process.platform === "win32")("a frozen install pins the declared local target package authority", async () => {
+  const fixture = await organizationFileDependencyFixture();
+  await mkdir(fixture.installedRoot, { recursive: true });
+  await symlink(join(fixture.targetRoot, "package.json"), join(fixture.installedRoot, "package.json"), "file");
+  await symlink(join(fixture.targetRoot, "index.ts"), join(fixture.installedRoot, "index.ts"), "file");
+
+  const result = await runFrozenBunInstall({
+    cwd: fixture.packageRoot,
+    boundaryRoot: fixture.checkoutRoot,
+    organizationDependencyRoot: fixture.organizationRoot,
+    command: [process.execPath, "fixture-install"],
+    spawnProcess(_command, options) {
+      return Bun.spawn([
+        process.execPath,
+        "-e",
+        `await Bun.write(${JSON.stringify(join(fixture.targetRoot, "package.json"))}, JSON.stringify({ name: "@rozjedeme-contracts/v1", changed: true }));`,
+      ], options);
+    },
+  });
+
+  expect(result).toMatchObject({
+    ok: false,
+    reason: "dependency_authority_changed",
+    runtime_tree_usable: false,
+  });
+});
+
 test("package metadata must be parseable and match the declared dependency or npm alias", async () => {
   const root = await packageFixture({
     dependencies: {
@@ -904,4 +1187,30 @@ async function materializeDependency(packageRoot, dependencyName, tree = "node_m
     join(dependencyRoot, "package.json"),
     JSON.stringify({ name: dependencyName, version: "1.0.0" }),
   );
+}
+
+async function organizationFileDependencyFixture() {
+  const root = await mkdtemp(join(tmpdir(), "lazurio-organization-file-dependency-"));
+  cleanup.push(root);
+  const organizationRoot = join(root, "organizations", "TestCo");
+  const checkoutRoot = join(organizationRoot, "workspace", "consumer");
+  const packageRoot = join(checkoutRoot, "app", "v2");
+  const targetRoot = join(organizationRoot, "launchpad", "contracts", "v1");
+  const installedRoot = join(packageRoot, "node_modules", "@workspace-contracts", "v1");
+  await mkdir(packageRoot, { recursive: true });
+  await mkdir(targetRoot, { recursive: true });
+  await writeFile(join(packageRoot, "package.json"), JSON.stringify({
+    name: "consumer",
+    private: true,
+    dependencies: {
+      "@workspace-contracts/v1": "file:../../../../launchpad/contracts/v1",
+    },
+  }));
+  await writeFile(join(packageRoot, "bun.lock"), "# fixture\n");
+  await writeFile(join(targetRoot, "package.json"), JSON.stringify({
+    name: "@rozjedeme-contracts/v1",
+    private: true,
+  }));
+  await writeFile(join(targetRoot, "index.ts"), "export const fixture = true;\n");
+  return { root, organizationRoot, checkoutRoot, packageRoot, targetRoot, installedRoot };
 }

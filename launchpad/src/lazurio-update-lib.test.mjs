@@ -991,6 +991,161 @@ test("updated Organization-level repository refreshes its manifest-declared App 
   });
 });
 
+test("an updated Organization root refreshes an unchanged App that consumes its local contract", async () => {
+  const root = await mkdtemp(join(tmpdir(), "lazurio-update-organization-contract-consumer-"));
+  cleanup.push(root);
+  const organizationRoot = join(root, "organizations", "TestCo");
+  const moduleRoot = join(organizationRoot, "workspace", "pricebook");
+  const appRoot = join(moduleRoot, "app", "v2");
+  const targetRoot = join(organizationRoot, "launchpad", "contracts", "v1");
+  const installedRoot = join(appRoot, "node_modules", "@workspace-contracts", "v1");
+  await mkdir(targetRoot, { recursive: true });
+  await mkdir(join(appRoot, "node_modules", "@workspace-contracts"), { recursive: true });
+  await writeJson(join(appRoot, "package.json"), {
+    name: "test-pricebook",
+    dependencies: { "@workspace-contracts/v1": "file:../../../../launchpad/contracts/v1" },
+  });
+  await writeFile(join(appRoot, "bun.lock"), "# fixture\n");
+  await writeJson(join(targetRoot, "package.json"), { name: "@test-contracts/v1" });
+  await writeFile(join(targetRoot, "index.ts"), "export const fixture = true;\n");
+  await symlink(targetRoot, installedRoot, process.platform === "win32" ? "junction" : "dir");
+
+  const organization = repo("TestCo::root", "organization_root", "TestCo", "root");
+  organization.absolute_path = organizationRoot;
+  organization.organization_path = "organizations/TestCo";
+  const module = repo("TestCo::pricebook", "module", "TestCo", "pricebook", "workspace");
+  module.absolute_path = moduleRoot;
+  module.organization_path = "organizations/TestCo";
+  const inventory = { repos: [organization, module], warnings: [] };
+  const calls = [];
+  const head = "c".repeat(40);
+
+  const report = await runLazurioUpdate({
+    rootPath: root,
+    runtimeRoot: join(root, "..", "runtime"),
+    deps: {
+      runId: "organization-contract-consumer-refresh",
+      acquireLock: async () => ({ release: async () => {} }),
+      buildInventory: async () => inventory,
+      updateRepo: async (item) => ({
+        ...identity(item),
+        state: item.key === organization.key ? "updated" : "current",
+        reason: item.key === organization.key ? "checkout_updated" : "already_current",
+        message: "fixture",
+        head,
+        actions: item.key === organization.key ? ["fast_forward"] : [],
+      }),
+      discoverApps: async () => ({
+        apps: [{
+          id: "test-pricebook-v2",
+          package_path: "organizations/TestCo/workspace/pricebook/app/v2/package.json",
+          organization_kind: "organization",
+          organization_path: "organizations/TestCo",
+        }],
+        invalid_apps: [],
+        failures: [],
+      }),
+      refreshAppDependencies: async ({ appId, cwd, repo: owner }) => {
+        calls.push({ appId, cwd, repoKey: owner.key });
+        return { refresh_strategy: "ensure", mode: "ensure" };
+      },
+      inspectLocalRepo: async () => ({ ok: true, branch: "main", dirtyPaths: [], head }),
+      runGit: async (args) => args[0] === "rev-parse"
+        ? { ok: true, stdout: head, stderr: "", exitCode: 0 }
+        : { ok: false, stdout: "", stderr: "unexpected", exitCode: 1 },
+    },
+  });
+
+  expect(calls).toEqual([{
+    appId: "test-pricebook-v2",
+    cwd: await realpath(appRoot),
+    repoKey: module.key,
+  }]);
+  expect(report.results.find((result) => result.repo_key === module.key)).toMatchObject({
+    dependencies: [{ ok: true, app_id: "test-pricebook-v2", strategy: "ensure" }],
+  });
+});
+
+test.skipIf(process.platform === "win32")("a changed nested repo invalidates a broken local target behind its symlinked parent", async () => {
+  const root = await mkdtemp(join(tmpdir(), "lazurio-update-missing-symlink-parent-target-"));
+  cleanup.push(root);
+  const organizationRoot = join(root, "organizations", "TestCo");
+  const moduleRoot = join(organizationRoot, "workspace", "pricebook");
+  const appRoot = join(moduleRoot, "app", "v2");
+  const sharedRoot = join(organizationRoot, "shared-contracts");
+  await mkdir(appRoot, { recursive: true });
+  await mkdir(join(organizationRoot, "launchpad"), { recursive: true });
+  await mkdir(sharedRoot, { recursive: true });
+  await symlink(sharedRoot, join(organizationRoot, "launchpad", "contracts"), "dir");
+  await symlink(join(sharedRoot, "removed-v1"), join(sharedRoot, "v1"), "dir");
+  await writeJson(join(appRoot, "package.json"), {
+    name: "test-pricebook",
+    dependencies: { "@workspace-contracts/v1": "file:../../../../launchpad/contracts/v1" },
+  });
+  await writeFile(join(appRoot, "bun.lock"), "# fixture\n");
+
+  const organization = repo("TestCo::root", "organization_root", "TestCo", "root");
+  organization.absolute_path = organizationRoot;
+  organization.organization_path = "organizations/TestCo";
+  const module = repo("TestCo::pricebook", "module", "TestCo", "pricebook", "workspace");
+  module.absolute_path = moduleRoot;
+  module.organization_path = "organizations/TestCo";
+  const shared = repo("TestCo::shared-contracts", "root_repo", "TestCo", "shared-contracts");
+  shared.absolute_path = sharedRoot;
+  shared.organization_path = "organizations/TestCo";
+  shared.slot_path = "shared-contracts";
+  const inventory = { repos: [organization, module, shared], warnings: [] };
+  const head = "d".repeat(40);
+  let refreshCalls = 0;
+
+  const report = await runLazurioUpdate({
+    rootPath: root,
+    runtimeRoot: join(root, "..", "runtime"),
+    deps: {
+      runId: "missing-symlink-parent-target",
+      acquireLock: async () => ({ release: async () => {} }),
+      buildInventory: async () => inventory,
+      updateRepo: async (item) => ({
+        ...identity(item),
+        state: item.key === shared.key ? "updated" : "current",
+        reason: item.key === shared.key ? "checkout_updated" : "already_current",
+        message: "fixture",
+        head,
+        actions: item.key === shared.key ? ["fast_forward"] : [],
+      }),
+      discoverApps: async () => ({
+        apps: [{
+          id: "test-pricebook-v2",
+          package_path: "organizations/TestCo/workspace/pricebook/app/v2/package.json",
+          organization_kind: "organization",
+          organization_path: "organizations/TestCo",
+        }],
+        invalid_apps: [],
+        failures: [],
+      }),
+      refreshAppDependencies: async () => {
+        refreshCalls += 1;
+        return { refresh_strategy: "ensure", mode: "ensure" };
+      },
+      inspectLocalRepo: async () => ({ ok: true, branch: "main", dirtyPaths: [], head }),
+      runGit: async (args) => args[0] === "rev-parse"
+        ? { ok: true, stdout: head, stderr: "", exitCode: 0 }
+        : { ok: false, stdout: "", stderr: "unexpected", exitCode: 1 },
+    },
+  });
+
+  expect(refreshCalls).toBe(0);
+  expect(report.results.find((result) => result.repo_key === module.key)).toMatchObject({
+    state: "blocked",
+    reason: "dependency_refresh_failed",
+    dependencies: [{
+      ok: false,
+      app_id: "test-pricebook-v2",
+      reason: "dependency_tree_boundary_invalid",
+    }],
+  });
+});
+
 test("invalid App blocks only its changed Module while a valid sibling still refreshes", async () => {
   const root = await mkdtemp(join(tmpdir(), "lazurio-update-invalid-app-"));
   cleanup.push(root);
@@ -999,13 +1154,16 @@ test("invalid App blocks only its changed Module while a valid sibling still ref
   const validModuleRoot = join(organizationRoot, "workspace", "valid-module");
   const invalidAppRoot = join(invalidModuleRoot, "app", "v1");
   const validAppRoot = join(validModuleRoot, "app", "v1");
+  const organizationContractsRoot = join(organizationRoot, "launchpad", "contracts", "v1");
   await mkdir(invalidAppRoot, { recursive: true });
   await mkdir(validAppRoot, { recursive: true });
+  await mkdir(organizationContractsRoot, { recursive: true });
   await writeJson(join(invalidAppRoot, "package.json"), { name: "invalid-app" });
   await writeJson(join(validAppRoot, "package.json"), {
     name: "valid-app",
-    dependencies: { fixture: "1.0.0" },
+    dependencies: { "@workspace-contracts/v1": "file:../../../../launchpad/contracts/v1" },
   });
+  await writeJson(join(organizationContractsRoot, "package.json"), { name: "@test-contracts/v1" });
   await writeFile(join(validAppRoot, "bun.lock"), "# fixture\n");
 
   const organization = repo("TestCo::root", "organization_root", "TestCo", "root");
@@ -1036,6 +1194,8 @@ test("invalid App blocks only its changed Module while a valid sibling still ref
         apps: [{
           id: "valid-app-v1",
           package_path: "organizations/TestCo/workspace/valid-module/app/v1/package.json",
+          organization_kind: "organization",
+          organization_path: "organizations/TestCo",
         }],
         invalid_apps: [{
           id: "invalid-app-v1",
@@ -1044,8 +1204,8 @@ test("invalid App blocks only its changed Module while a valid sibling still ref
         }],
         failures: [],
       }),
-      refreshPackageDependencies: async ({ cwd, boundaryRoot }) => {
-        refreshed.push({ cwd, boundaryRoot });
+      refreshPackageDependencies: async ({ cwd, boundaryRoot, organizationDependencyRoot }) => {
+        refreshed.push({ cwd, boundaryRoot, organizationDependencyRoot });
         return { ok: true, refresh_strategy: "ensure" };
       },
       inspectLocalRepo: async () => ({ ok: true, branch: "main", dirtyPaths: [], head }),
@@ -1058,6 +1218,7 @@ test("invalid App blocks only its changed Module while a valid sibling still ref
   expect(refreshed).toHaveLength(1);
   expect(refreshed[0].cwd.endsWith(join("organizations", "TestCo", "workspace", "valid-module", "app", "v1"))).toBe(true);
   expect(refreshed[0].boundaryRoot).toBe(await realpath(validModuleRoot));
+  expect(refreshed[0].organizationDependencyRoot).toBe(await realpath(organizationRoot));
   expect(report.results.find((result) => result.repo_key === invalidModule.key)).toMatchObject({
     state: "blocked",
     reason: "dependency_refresh_failed",
