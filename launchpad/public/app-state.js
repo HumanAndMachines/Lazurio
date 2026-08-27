@@ -202,6 +202,20 @@ export function updateBannerPresentation(status, { updatePending = false } = {})
   };
 }
 
+export function agentRepairDetailSummary(app) {
+  const quarantined = app?.dependencies?.state === "quarantined";
+  const explicitMessage = [app?.readonly_reason, app?.dependencies?.message]
+    .find((value) => typeof value === "string" && value.trim())
+    ?.trim();
+  return {
+    tone: "danger",
+    title: quarantined ? "Modul je bezpečně pozastavený" : "Aplikaci je potřeba opravit",
+    message: explicitMessage ?? (quarantined
+      ? "Lazurio pozastavilo jen tento modul. Ostatní zdravé moduly mohou dál fungovat."
+      : "Lazurio tuto aplikaci nepovažuje za připravenou. Předejte připravenou diagnostiku Codexu."),
+  };
+}
+
 export function matchesStatusFilter(app, filter) {
   if (filter === "all") return true;
   return app.runtime_status === filter;

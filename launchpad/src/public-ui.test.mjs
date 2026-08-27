@@ -807,6 +807,13 @@ test("CAC-0042: detail panel vysvětluje verzi a Mission Control pracovní návr
 
   expect(js).toContain("function renderDetailMissionControlOwnership");
   expect(js).toContain("function renderDetailSummary");
+  const summaryModel = js.slice(js.indexOf("function detailSummaryModel"), js.indexOf("function simpleChangeSubject"));
+  const codexRepairBranch = summaryModel.indexOf('nextAction.type === "codex"');
+  const disabledBranch = summaryModel.indexOf('nextAction.type === "disabled"');
+  expect(codexRepairBranch).toBeGreaterThan(-1);
+  expect(codexRepairBranch).toBeLessThan(disabledBranch);
+  expect(summaryModel).toContain("agentRepairDetailSummary(app)");
+  expect(summaryModel).toContain("action: primaryActionNode(app, nextAction)");
   expect(js).toContain('"Je uložená na tomto počítači. Ostatní ji zatím nevidí."');
   expect(js).toContain('summary.textContent = "Technické detaily"');
   expect(js).toContain("git.repo_key");
@@ -1030,7 +1037,8 @@ test("manifest-only module cards keep semantic icon precedence over a broad cate
 
   expect(detailBlock).toContain("icon: null");
   expect(detailBlock).toContain("tags: module.category ? [module.category] : []");
-  expect(detailBlock).toContain("moduleApplicationMessage(moduleApps, module.status)");
+  expect(detailBlock).toContain("moduleApplicationMessage(moduleApps, module?.status)");
+  expect(detailBlock).toContain("workspaceModuleMessage(module, moduleApps)");
   expect(detailBlock).toContain("Modul na tomto počítači není dostupný.");
   expect(detailBlock).toContain("Modul zatím není na tomto počítači připravený.");
   expect(detailBlock).toContain("Tento modul zatím nemá připravenou aplikaci.");
@@ -1040,6 +1048,7 @@ test("manifest-only module cards keep semantic icon precedence over a broad cate
   expect(cardBlock).not.toContain('appIconSvg("module")');
   expect(cardBlock).toContain('desc.className = "app-card-desc"');
   expect(cardBlock).toContain("appDescription(detail.default_app)");
+  expect(cardBlock).toContain("? detail.readonly_reason");
   expect(js).toContain("description: module.description ?? null");
   expect(cardBlock).not.toContain('badges.append(chip("Workspace modul"');
   expect(cardBlock).not.toContain('path.className = "app-card-endpoint"');

@@ -449,6 +449,42 @@ test("inventory keeps an exact canonical markerless checkout updateable so Sync 
   expect(inventory.inventory_issues.some((issue) => issue.module === "studio")).toBe(false);
 });
 
+test("inventory quarantines exact markerless checkouts whose Git metadata can redirect outside the Module", async () => {
+  for (const metadataKind of ["file", "symlink"]) {
+    const root = await createLaunchpadGitFixture();
+    tempRoots.push(root);
+    const checkout = join(root, "organizations", "OmegaCo_GEN3", "workspace", "studio");
+    await initGitRepo(checkout);
+    await rm(join(checkout, "lazurio.module.json"));
+    const metadataPath = join(checkout, ".git");
+
+    if (metadataKind === "file") {
+      await rm(metadataPath, { recursive: true });
+      await writeFile(metadataPath, "gitdir: ../../../../outside-module-git\n");
+    } else {
+      const externalMetadata = join(root, "outside-module-git");
+      await rename(metadataPath, externalMetadata);
+      await symlink(
+        externalMetadata,
+        metadataPath,
+        process.platform === "win32" ? "junction" : "dir",
+      );
+    }
+
+    const inventory = await buildGitInventory({ companiesRoot: root });
+
+    expect(inventory.repos.some((repo) => repo.key === "OmegaCo::studio")).toBe(false);
+    expect(inventory.repos.some((repo) => repo.key === "OmegaCo::infra")).toBe(true);
+    expect(inventory.repos.some((repo) => repo.key === "BetaCo::deals")).toBe(true);
+    expect(inventory.inventory_issues).toContainEqual(expect.objectContaining({
+      code: "repository_transition_unverified",
+      module: "studio",
+      path: "workspace/studio",
+      expected_path: "workspace/studio",
+    }));
+  }
+});
+
 test("inventory lets ambiguity dominate a repairable manifest mismatch", async () => {
   const root = await createLaunchpadGitFixture();
   tempRoots.push(root);

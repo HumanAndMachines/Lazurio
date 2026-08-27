@@ -1,4 +1,5 @@
 import {
+  agentRepairDetailSummary,
   appBaseTitle,
   appVersionLabel,
   buildSpaceProblemModel,
@@ -2606,6 +2607,7 @@ function workspaceModuleDetail(module, companySlug, { kind = "workspace-module",
   const defaultApp = moduleApps?.open_target_app_id
     ? state.apps.find((app) => app.id === moduleApps.open_target_app_id) ?? null
     : null;
+  const moduleMessage = workspaceModuleMessage(module, moduleApps);
   return {
     id: readonlyDetailKey(kind, companySlug, workspaceSlug, module.slug ?? module.path ?? module.name),
     kind,
@@ -2620,7 +2622,7 @@ function workspaceModuleDetail(module, companySlug, { kind = "workspace-module",
     runtime_status: "unknown",
     dependencies: {
       state: dependencyState,
-      message: moduleApplicationMessage(moduleApps, module.status),
+      message: moduleMessage,
       can_start: false,
     },
     package_path: module.path ?? "-",
@@ -2630,8 +2632,14 @@ function workspaceModuleDetail(module, companySlug, { kind = "workspace-module",
     module_apps: moduleApps,
     repair_action: module.readiness?.next_action ?? null,
     is_readonly_system: !defaultApp,
-    readonly_reason: moduleApplicationMessage(moduleApps, module.status),
+    readonly_reason: moduleMessage,
   };
+}
+
+function workspaceModuleMessage(module, moduleApps) {
+  const readinessMessage = module?.readiness?.message;
+  if (typeof readinessMessage === "string" && readinessMessage.trim()) return readinessMessage.trim();
+  return moduleApplicationMessage(moduleApps, module?.status);
 }
 
 function moduleApplicationMessage(moduleApps, moduleStatus = "available") {
@@ -2687,7 +2695,7 @@ function workspaceModuleCard(module, companySlug, options = {}) {
   desc.textContent = opensApp
     ? appDescription(detail.default_app)
     : module.status === "quarantined"
-      ? "Lazurio pozastavilo jen tento modul, protože se změnila cesta nebo remote jeho repozitáře."
+      ? detail.readonly_reason
       : module.status === "missing_access"
       ? "Modul není na tomto počítači dostupný."
       : module.status === "available"
@@ -4307,6 +4315,13 @@ function detailSummaryModel(app, git) {
       title: runtimeActionError.title,
       message: runtimeActionError.message,
       action: runtimeRecoveryActionNode(app, runtimeActionError),
+    };
+  }
+
+  if (nextAction.type === "codex") {
+    return {
+      ...agentRepairDetailSummary(app),
+      action: primaryActionNode(app, nextAction),
     };
   }
 

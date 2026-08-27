@@ -467,12 +467,21 @@ async function observedModuleLocationIssue({ organization, slot, classification 
 // Any path mismatch, ambiguity, boundary issue or non-missing marker failure
 // remains quarantined and cannot create a duplicate clone.
 function exactCanonicalMarkerlessCheckoutCanUpdate({ slot, classification }) {
+  const exactCandidate = classification.unverified?.find((candidate) =>
+    candidate.relative_path === slot.path
+  ) ?? null;
   return classification.status === "unverified"
     && classification.reason === "marker_missing"
     && classification.target_occupied === true
     && classification.found_path === slot.path
     && classification.observed_paths?.length === 1
-    && classification.observed_paths[0] === slot.path;
+    && classification.observed_paths[0] === slot.path
+    // A regular primary-checkout .git directory is the only metadata boundary
+    // this compatibility lane may update. A .git file can redirect to a linked
+    // worktree and a symlink/junction can redirect outside the Organization;
+    // both remain slot-local quarantine evidence instead of Git action input.
+    && exactCandidate?.reason === "marker_missing"
+    && exactCandidate.git_metadata_kind === "directory";
 }
 
 function locationIssueFromClassification({

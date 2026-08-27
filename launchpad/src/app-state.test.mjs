@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+  agentRepairDetailSummary,
   appBaseTitle,
   appVersionLabel,
   buildSpaceProblemModel,
@@ -31,6 +32,38 @@ const apps = [
   app("omegaco-app-2", "OmegaCo", "ready"),
   app("betaco-app-1", "BetaCo", "needs_install"),
 ];
+
+test("Codex repair detail never presents a quarantined Module as ready", () => {
+  const summary = agentRepairDetailSummary({
+    dependencies: {
+      state: "quarantined",
+      message: "Fallback diagnostika.",
+    },
+    readonly_reason: "Repozitář je na workspace/legacy místo workspace/canonical.",
+    repair_action: {
+      label: "Vyřešit s Codexem",
+      prompt: "Nejdřív ověř Git data a potom spusť guardovaný repair.",
+    },
+  });
+
+  expect(summary).toEqual({
+    tone: "danger",
+    title: "Modul je bezpečně pozastavený",
+    message: "Repozitář je na workspace/legacy místo workspace/canonical.",
+  });
+  expect(JSON.stringify(summary)).not.toContain("připravená");
+});
+
+test("Codex repair detail keeps a truthful fallback for other repairable Apps", () => {
+  expect(agentRepairDetailSummary({
+    dependencies: { state: "invalid_manifest" },
+    repair_action: { prompt: "Oprav source kontrakt." },
+  })).toEqual({
+    tone: "danger",
+    title: "Aplikaci je potřeba opravit",
+    message: "Lazurio tuto aplikaci nepovažuje za připravenou. Předejte připravenou diagnostiku Codexu.",
+  });
+});
 
 test("technická update diagnostika zůstává mimo denní uživatelskou plochu", () => {
   const technicalMessage = "Launchpad/CLI runtime běží z pracovního checkoutu se SECRET_PATH";
