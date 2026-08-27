@@ -102,29 +102,33 @@ Git repozitář Lazurio
         └── lokálně připojený Personalspace
 ```
 
-Source checkout je dnes současně vývojovým pracovním rootem. Příkazy se
+Source checkout je dnes ještě současně vývojovým pracovním rootem. Příkazy se
 spouštějí přes Bun; primární checkout lze také zpřístupnit jako uživatelský
-příkaz `lazurio` v `PATH`. Některé instalační a distribuční části jsou stále
-experimentální.
+příkaz `lazurio` v `PATH`. Jde o přechodový vývojový stav, ne cílový filesystem
+nové instalace.
 
 ### Cílová distribuce
 
 ```text
-                         Lazurio source repo
-                         /                  \
-             lokální vývojový build      package-managed CLI
-                         \                  /
-                    jazykově generovaný non-Git Root
-                                   │
-              ┌────────────────────┼────────────────────┐
-          Launchpad            Personalspace       Organizace
-        a sdílené UI         jednoho vlastníka    oddělené Git scope
+<home>/Lazurio                         jediný pracovní Root, non-Git
+├── generované instrukce a konfigurace
+├── organizations/                     oddělené Git scope
+├── personalspace/                     privátní mount
+└── development/
+    └── Lazurio/                       volitelný kanonický source checkout
+
+package-managed lazurio ─┐
+source-linked lazurio ───┴─ právě jedna aktivní CLI/Core provenance
 ```
 
-Repozitář zůstane zdrojem produktu. Vývojář sestaví Root z přesného lokálního
-source commitu; produkční instalaci bude materializovat jedno verzované
-`lazurio` CLI. Lokalizuje se lidský obsah výsledného Rootu, nikoli názvy cest,
-manifestové klíče, identifikátory nebo strojová schémata.
+Repozitář zůstane zdrojem produktu. Produkční instalaci obsluhuje jedno
+verzované package-managed `lazurio`; vývojář může tutéž CLI/Core implementaci
+explicitně přelinkovat na jediný checkout
+`<home>/Lazurio/development/Lazurio`. Package-only instalace tento checkout
+nepotřebuje a `lazurio install` jej samo neklonuje. Generátor do pracovního
+Rootu nevkládá další skrytou kopii CLI ani Launchpadu. Lokalizuje se lidský
+obsah výsledného Rootu, nikoli názvy cest, manifestové klíče, identifikátory
+nebo strojová schémata.
 
 Cílově CLI/Core vlastní stavová pravidla, instalaci, validaci, lifecycle a
 výsledný report. Dnešní Launchpad vedle grafického UI ještě přímo řídí start,
@@ -165,12 +169,14 @@ rozložení repozitářů [MAP.md](MAP.md).
 
 ## Rychlý start pro vývojáře
 
-Aktuální podporovaná cesta vede přes source checkout. Potřebuješ [Git](https://git-scm.com/)
-a [Bun](https://bun.sh/).
+Aktuální podporovaná vývojová cesta vede přes source checkout. Potřebuješ
+[Git](https://git-scm.com/) a [Bun](https://bun.sh/). Nový vývojový checkout
+patří na kanonickou cestu uvnitř pracovního Rootu:
 
 ```sh
-git clone https://github.com/HumanAndMachines/Lazurio.git
-cd Lazurio
+mkdir -p "$HOME/Lazurio/development"
+git clone https://github.com/HumanAndMachines/Lazurio.git "$HOME/Lazurio/development/Lazurio"
+cd "$HOME/Lazurio/development/Lazurio"
 
 # Bezpečná projekce lokálního kontextu
 bun run lazurio -- context --json
@@ -237,12 +243,13 @@ read-only podoba opakovatelného příkazu už umí podat český, anglický neb
 report bez změny mašiny:
 
 ```sh
-lazurio install --root <cesta>
-lazurio install --root <cesta> --language en
-lazurio install --root <cesta> --json
+lazurio install
+lazurio install --language en
+lazurio install --json
 ```
 
-Kontroluje platformu, Bun, Git, GitHub CLI a přihlášení i tvar zvoleného Rootu.
+Používá vždy `<home>/Lazurio`; root picker ani `--root` nepřijímá. Kontroluje
+platformu, Bun, Git, GitHub CLI a přihlášení i tvar kanonického Rootu.
 Chybějící součásti zatím pouze pojmenuje; nic neinstaluje a legacy Git Root
 nepřesouvá. Navazující řezy nad stejným Core doplní consent, generovaný Root a
 bezpečnou reconciliaci. Aktuální build rezidentních artefaktů popisuje
@@ -278,6 +285,7 @@ nejdřív odstraň secrets a zákaznický či osobní obsah z reprodukce.
 | --- | --- |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Cílový systémový model, pojmy a trust hranice. |
 | [MAP.md](MAP.md) | Lidská mapa fyzického rootu a jednotlivých scope. |
+| [manual/lazurio-root-for-agents.md](manual/lazurio-root-for-agents.md) | Stručný postup pro Agenty: canonical Root, package/source provenance a bezpečný development override. |
 | [lazurio/](lazurio/README.md) | Aktuální interní CLI v0 a jeho bezpečnostní kontrakty. |
 | [launchpad/](launchpad/README.md) | Builder-first Launchpad, discovery, runtime a UI kontrakty. |
 | [distribution/](distribution/README.md) | Deterministický build non-Git Resident rootů, updater a rollback. |

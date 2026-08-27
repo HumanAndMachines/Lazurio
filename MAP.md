@@ -1,17 +1,35 @@
 # Mapa Lazurio rootu
 
-Lazurio je současný název systému a sdíleného frameworku. Tento repo root
-(`HumanAndMachines/Lazurio`) je sdílený
-framework pro Launchpad, Guide, templates, manuály a dynamické načítání
-Organizací; není to klientské Organization repo.
+Lazurio je současný název systému a sdíleného frameworku. Tento dokument žije
+v source repozitáři `HumanAndMachines/Lazurio`; source repo není totéž jako
+výsledný pracovní Root a není klientské Organization repo.
 
-Launchpad root drží více oddělených Organizací pod jedním Lazurio rootem na
-jedné mašině. `launchpad.gen3.json` drží pouze root metadata; dostupné
-Organizace Launchpad automaticky skenuje z lokálních mountů
+Pracovní Root drží více oddělených Organizací pod jedním `Lazurio` adresářem
+v home uživatele Mašiny. `launchpad.gen3.json` drží pouze root metadata;
+dostupné Organizace Launchpad automaticky skenuje z lokálních mountů
 `organizations/*/company.gen3.json`.
 
+## Kanonický pracovní Root
+
 ```text
-Lazurio/
+<home>/Lazurio/                        # vždy non-Git pracovní Root
+├── AGENTS.md                          # generované instrukce profilu a jazyka
+├── launchpad.gen3.json                # stabilní root metadata
+├── organizations/                     # oddělené Organization Git checkouty
+├── personalspace/                     # privátní mount jednoho Principála
+└── development/
+    └── Lazurio/                       # volitelný canonical source checkout
+```
+
+`development/Lazurio` existuje pouze v development profilu. Package-only
+instalace je platná bez něj. Runtime je buď package-managed, nebo explicitně
+source-linked na tento checkout; nikdy neběží ze skryté třetí kopie uvnitř
+Rootu.
+
+## Source repozitář
+
+```text
+development/Lazurio/
 ├── launchpad.gen3.json
 ├── package.json
 ├── README.md
@@ -45,6 +63,9 @@ Lazurio/
 
 - `ARCHITECTURE.md` — krátká mapa cílového systému: Owner, Machine,
   Resident, Agent, pracovní prostory, runtime Modulů a bezpečnostní hranice.
+- `manual/lazurio-root-for-agents.md` — kanonická stručná procedura pro
+  Agenty: jak rozeznat package/source CLI, kde smí být development checkout a
+  jak předat legacy Root migraci bez ručního přesouvání.
 - `lazurio/` — interní CLI pro bezpečný kontext, Doctor a ohraničené
   vyhledávání. Explicitní mutace jsou oddělené: Bun-managed PATH registrace,
   Git-only update a desktop Launchpad install. CLI není MCP ani veřejné Core
