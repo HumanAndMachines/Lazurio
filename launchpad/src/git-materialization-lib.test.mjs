@@ -2,7 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { runGit } from "./git-lib.mjs";
+import { runGit, runGitInPinnedTemporaryChild } from "./git-lib.mjs";
 import { materializeRepoCheckout } from "./git-materialization-lib.mjs";
 import { buildGitInventory } from "./git-inventory-lib.mjs";
 import {
@@ -44,7 +44,10 @@ test("materializes an active manifest slot on its exact repository and branch", 
   const result = await materializeRepoCheckout({
     companiesRoot: root,
     repo,
-    deps: { run: fixtureRemoteRunner({ declaredRemote, actualRemote: remote }) },
+    deps: {
+      run: fixtureRemoteRunner({ declaredRemote, actualRemote: remote }),
+      runPinnedChild: fixturePinnedRemoteRunner({ declaredRemote, actualRemote: remote }),
+    },
   });
 
   expect(result).toMatchObject({
@@ -152,6 +155,7 @@ test("does not overwrite a target claimed by a concurrent materialization", asyn
     repo,
     deps: {
       run: fixtureRemoteRunner({ declaredRemote, actualRemote: remote }),
+      runPinnedChild: fixturePinnedRemoteRunner({ declaredRemote, actualRemote: remote }),
       publish: async () => {
         await mkdir(target);
         await writeFile(join(target, "owned-by-other-update"), "keep\n");
@@ -196,6 +200,7 @@ test("clone failure leaves no partial final target or staging directory", async 
     companiesRoot: root,
     repo,
     deps: {
+      run: fixtureRemoteRunner({ declaredRemote, actualRemote: remote }),
       runPinnedChild: async () => ({
         ok: false,
         code: "git_command_failed",
@@ -228,6 +233,21 @@ function fixtureRemoteRunner({ declaredRemote, actualRemote, failClone = false }
     const result = await runGit(mappedArgs, options);
     if (result.ok && args[0] === "clone") {
       const stagingPath = args.at(-1);
+      const restored = await runGit(["remote", "set-url", "origin", declaredRemote], {
+        cwd: stagingPath,
+      });
+      if (!restored.ok) return restored;
+    }
+    return result;
+  };
+}
+
+function fixturePinnedRemoteRunner({ declaredRemote, actualRemote }) {
+  return async (args, options) => {
+    const mappedArgs = args.map((value) => value === declaredRemote ? actualRemote : value);
+    const result = await runGitInPinnedTemporaryChild(mappedArgs, options);
+    if (result.ok && args[0] === "clone") {
+      const stagingPath = join(options.cwd, result.child_name);
       const restored = await runGit(["remote", "set-url", "origin", declaredRemote], {
         cwd: stagingPath,
       });

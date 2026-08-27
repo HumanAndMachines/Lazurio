@@ -104,9 +104,16 @@ enum a nikdy nepřenáší shell příkaz.
 Už aktivní a čitelnou Organization přidá Agent jedním opakovatelným příkazem:
 
 ```sh
-lazurio organization install <github-login> --root <lazurio-root>
-lazurio organization install <github-login> --root <lazurio-root> --json
+lazurio organization install <github-login>
+lazurio organization install <github-login> --json
 ```
+
+Nainstalované CLI vždy pracuje s jediným kanonickým Rootem
+`<home>/Lazurio` (`~/Lazurio` na macOS/Linuxu,
+`%USERPROFILE%\\Lazurio` na Windows). Cesta není uživatelská konfigurace:
+udržuje pro Agenty stabilní filesystem souřadnici a v absolutní cestě
+zachovává identitu uživatele Mašiny. Source-linked vývojové CLI dál používá
+svůj source Root; explicitní cesty zůstávají jen interní testovací capability.
 
 Login je pouze locator. Trusted `gh` provider jej před checkoutem sváže s
 immutable Organization a repository ID; root Forge binding ověří stejné ID ve

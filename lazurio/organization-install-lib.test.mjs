@@ -241,7 +241,8 @@ test("CLI exposes install without weakening activation flags", () => {
     stderr: "pipe",
   });
   expect(help.exitCode).toBe(0);
-  expect(help.stdout.toString()).toContain("lazurio organization install <github-login>");
+  expect(help.stdout.toString()).toContain("lazurio organization install <github-login> [--json]");
+  expect(help.stdout.toString()).not.toContain("lazurio organization install <github-login> [--json] [--root");
 
   const invalid = Bun.spawnSync([
     process.execPath,
@@ -257,6 +258,22 @@ test("CLI exposes install without weakening activation flags", () => {
   });
   expect(invalid.exitCode).toBe(2);
   expect(invalid.stderr.toString()).toContain("přijímá GitHub login, ne --check");
+
+  const alternateRoot = Bun.spawnSync([
+    process.execPath,
+    "lazurio/cli.mjs",
+    "organization",
+    "install",
+    login,
+    "--root",
+    join(tmpdir(), "alternate-root"),
+  ], {
+    cwd: join(import.meta.dirname, ".."),
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  expect(alternateRoot.exitCode).toBe(2);
+  expect(alternateRoot.stderr.toString()).toContain("vždy používá kanonický Lazurio Root v home");
 });
 
 function sourceObservation() {
