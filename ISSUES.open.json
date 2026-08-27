@@ -176,11 +176,11 @@
     {
       "id": "issue-2026-08-07-002",
       "title": "Zpevnit macOS Bun subprocess test gate pro GEN2 preservation",
-      "status": "investigation_required",
+      "status": "implementation_ready_for_review",
       "severity": "high",
       "owner": "Conglomerate root testing agent",
       "created_at": "2026-08-07",
-      "updated_at": "2026-08-07",
+      "updated_at": "2026-08-27",
       "tags": [
         "bun",
         "macos",
@@ -190,37 +190,35 @@
         "preservation",
         "CAC-0035"
       ],
-      "question": "Proč Bun 1.3.14 na aktuálním macOS hostu uvnitř `bun test` intermitentně vrací podprocesům prázdné stdout/stderr a občas EFAULT, přestože stejné příkazy mimo test runner a stejný commit v Linux/Windows CI procházejí?",
-      "impact": "Jednotlivý červený `bun run check` z původně silně zatíženého founder Macu není sám o sobě věrohodný důkaz regrese Spectoda GEN2 -> GEN3 nástrojů. Read-only inventory a forward-port klasifikace mohou pokračovat, protože skutečné CLI cesty fungují, ale final migration/cutover/archive gate vyžaduje opakovatelný zelený běh na zklidněném Macu nebo opravu macOS Bun test runneru. GitHub CI intermitentní macOS problém neodhalí, protože současná matrix pokrývá Ubuntu a Windows, ne macOS.",
-      "diagnosis": "Na čistém Conglomerate mainu `3580eb36673f1554431d192b7fde2296f5c5eae8` se chyba reprodukovala ve více nezávislých subprocessových testech, nejen v preservation kódu. Stejný podproces mimo `bun test` prošel 50/50 přes Node i 50/50 přes Bun; skutečný Node preservation verifier vyřešil exact Git head a přímý Spectoda sync inventory prošel. Dva souběžné cizí validační běhy a silný tlak na prostředky byly při prvním měření přítomné, cílený test selhal ještě krátce po jejich skončení, ale pozdější celý `bun run check` prošel se 481 pass, 3 skip a 0 fail. Dosavadní důkazy proto ukazují na intermitentní lokální stav Bun test runneru nebo macOS hostu, ne na potvrzenou regresi migračních skriptů; resource pressure je vedoucí hypotéza, nikoli prokázaná příčina, a přesný spouštěč zůstává k reprodukci v řízené zátěži.",
+      "question": "Jak zajistit, aby explicitní root testovací operandy pod Bun 1.4.0 na macOS nespouštěly filter-mode scan vedoucí k `posix_spawn` EBADF?",
+      "impact": "Přímý `bun run check` z velkého Lazurio rootu selhává ještě před ověřením preservation a dalších subprocessových kontraktů, přestože jejich vlastní logika je zdravá. Bez opravy proto standardní lokální macOS gate nedává rozhodnutelný výsledek; Ubuntu a Windows CI tento Darwin file-descriptor failure mode nepokrývají.",
+      "diagnosis": "Na čistém Lazurio mainu `2bc6784226ffc629df2ecf16dbd0693994c3a970` s Bun 1.4.0 přesně reprodukuje EBADF ne-rootovaný operand `bun test scripts/...`, zatímco tentýž test ze stejného checkoutu s operandem `bun test ./scripts/...` prochází. Bun chápe ne-rootovaný pattern jako filtr, při rozlišení testů rekurzivně skenuje velký root a ponechá otevřené directory file descriptory; na macOS pak file descriptor pro child stdio překročí Darwin `OPEN_MAX` a `posix_spawn` vrátí EBADF. Stejné latentní selhání bylo ověřeno v preservation, worktrees, runtime migration a agent-skills sadách; přímé child procesy mimo test runner procházejí. Vysoká zátěž hostu zaznamenaná 2026-08-07 zůstává historickou proveniencí prvního pozorování, nikoli prokázanou příčinou.",
       "reproduction": [
-        "`bun test scripts/gen2-gen3-sync-inventory.test.mjs` -> 0 pass, 2 fail; child stdout/stderr jsou prázdné.",
-        "`bun test scripts/gen2-local-preservation.test.mjs` -> 2 pass, 30 fail; mezi symptomy jsou prázdné stdout/stderr, `cannot resolve exact verifier Git head` a `fs.rm` EFAULT.",
-        "`bun test scripts/worktree-inventory.contract.test.mjs --test-name-pattern 'accepts an authority' --max-concurrency 1` a subprocessová část agent-skills testu selžou také.",
-        "`bun test scripts/gen2-gen3-sync-inventory.test.mjs --test-name-pattern 'refuses implicit' --max-concurrency 1` selhal znovu po skončení dvou souběžných cizích `bun run check` běhů."
+        "`bun run preservation:test` na mainu s bare operandy -> 1 pass, 33 fail; child status je undefined, stderr null a explicitní chyba obsahuje `EBADF: bad file descriptor, posix_spawn`.",
+        "`bun test scripts/gen2-gen3-sync-inventory.test.mjs scripts/gen2-local-preservation.test.mjs` ze stejného rootu reprodukuje 1 pass, 33 fail.",
+        "`bun test ./scripts/gen2-gen3-sync-inventory.test.mjs ./scripts/gen2-local-preservation.test.mjs` ze stejného rootu -> 34 pass, 0 fail a stejný výsledek se zopakoval třikrát.",
+        "Bare package skripty `worktrees:test`, `runtime:migrate:test` a `agent-skills:test` reprodukovaly tentýž subprocess failure; jejich `./` varianty prošly 95/95, 21/21 a 32/32."
       ],
       "evidence": [
-        "Host: Bun 1.3.14 (`0d9b296a`), Darwin 25.6.0 arm64.",
+        "Aktuální host: Bun 1.4.0 (`34cbb9a40`), Darwin 25.6.0 arm64, Lazurio main `2bc6784226ffc629df2ecf16dbd0693994c3a970`.",
+        "Regresní package-script kontrakt před opravou vypsal 57 explicitních ne-rootovaných Bun test operandů.",
+        "Přímý `spawnSync` stejného Git child procesu mimo `bun test` prošel přes Node i Bun; selhání patří test-resolution/spawn interakci, ne preservation implementaci.",
         "GitHub Actions run 31203983028 prošel na exact headu `3580eb36673f1554431d192b7fde2296f5c5eae8` s Bun 1.3.14 na Ubuntu a Windows.",
-        "Padesát přímých `spawnSync` běhů stejného inventory child procesu prošlo přes Node bez chyby a dalších padesát přes Bun bez chyby.",
-        "`node --input-type=module -e` nad `committedVerifierIdentity()` vrátil Git head `3580eb36673f1554431d192b7fde2296f5c5eae8` a verifier SHA-256 `1ee3b7b1eee7b683fd6c132c7b3b5de98344715b8f525756214c47add7c0d1e8`.",
-        "Přímý Spectoda GEN2 -> GEN3 inventory dokončil read-only běh se summary: 38 manual-review, 161 port-candidate, 471 gen3-only a 28 same.",
-        "Při nejvyšší zátěži měl host přibližně 795 procesů, 7860 vláken, load average 47.7, 142 MB fyzicky volné paměti a přibližně 8 GB komprimované paměti; Data volume mělo 4.7 GiB volného místa.",
-        "Pozdější celý `bun run check` po dalším poklesu zátěže prošel: 481 pass, 3 skip, 0 fail; preservation 34/34, worktree-inventory 12/12 a agent-skills 14/14."
+        "Při prvním pozorování 2026-08-07 byl host silně zatížený a pozdější běh tehdy prošel; tato korelace vysvětluje původní hypotézu, ale novější bare-operand versus `./` A/B identifikuje stabilní source seam."
       ],
       "acceptance_criteria": [
-        "Zopakovat minimální child-process reprodukci na zklidněném macOS hostu a zaznamenat `status`, `signal` a `error` dřív, než test začne parsovat stdout nebo stderr.",
-        "Porovnat Bun 1.3.14 s aktuální stabilní a canary verzí na stejném hostu; pokud zůstane minimální reprodukce, založit upstream Bun issue s redigovaným samostatným fixturem.",
-        "Doplnit macOS CI lane minimálně pro subprocessové inventory/preservation testy, nebo zdokumentovat ekvivalentní povinný macOS release gate s dohledatelným výsledkem.",
-        "Cílené inventory, preservation, worktree-inventory a agent-skills subprocess testy projdou třikrát po sobě na macOS bez prázdného stdio, EFAULT nebo visícího workeru.",
-        "Celý `bun run check` projde na macOS a skutečný preservation verifier stále failuje zavřeně při identitním nebo datovém driftu."
+        "Každý explicitní operand root package skriptů `bun test` je jednoznačná `./` cesta relativní k jeho skutečnému cwd; existující `--cwd lazurio` semantics zůstávají beze změny.",
+        "Stabilní existující root test obsahuje regresní kontrakt, který selže při přidání ne-rootovaného explicitního Bun test operandu.",
+        "Preservation, worktrees, runtime migration a agent-skills sady projdou na macOS s Bun 1.4.0 bez prázdného stdio nebo EBADF.",
+        "Celý `bun run check` projde na čistém exact HEADu a skutečný preservation verifier stále failuje zavřeně při identitním nebo datovém driftu."
       ],
-      "next_action": "V úzkém diagnostickém worktree pod CAC-0035 reprodukovat závadu v řízené zátěži, získat přesný `spawnSync`/`Bun.spawnSync` error objekt, porovnat Bun verze a teprve podle výsledku navrhnout test-runner fix nebo upstream hlášení. Do té doby nepoužívat izolovaný lokální červený běh jako důkaz regrese GEN2 nástrojů ani jeden pozdější zelený běh jako dostatečný cutover gate.",
+      "next_action": "Zkontrolovat DEV-6498 Draft PR s rooted Bun test operandy a regresním package-script kontraktem; issue ponechat otevřený do merge a zeleného post-merge macOS `bun run check`.",
       "verification": [
-        "bun test scripts/gen2-gen3-sync-inventory.test.mjs --max-concurrency 1",
-        "bun test scripts/gen2-local-preservation.test.mjs --max-concurrency 1",
-        "bun test scripts/worktree-inventory.contract.test.mjs --max-concurrency 1",
-        "bun test scripts/agent-skills-entrypoint.test.mjs --max-concurrency 1",
+        "bun run terminology:test",
+        "bun run preservation:test",
+        "bun run worktrees:test",
+        "bun run runtime:migrate:test",
+        "bun run agent-skills:test",
         "bun run check"
       ],
       "links": [
