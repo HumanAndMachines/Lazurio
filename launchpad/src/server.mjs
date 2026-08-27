@@ -59,7 +59,7 @@ import {
   safeGitCommandEnv,
 } from "./git-lib.mjs";
 import { createRequestTrustPolicy } from "./request-trust-lib.mjs";
-import { launchpadEntryUrl } from "../public/deep-link.js";
+import { launchpadEntryHash, launchpadEntryUrl } from "../public/deep-link.js";
 import { parseLaunchpadServerArgs } from "./server-args-lib.mjs";
 import { resolveLaunchpadStateRoot } from "./state-root-lib.mjs";
 import {
@@ -83,6 +83,12 @@ const safeApiMethods = new Set(["GET", "HEAD", "OPTIONS"]);
 const launchpadRoot = join(import.meta.dirname, "..");
 const publicRoot = join(launchpadRoot, "public");
 const options = parseLaunchpadServerArgs(Bun.argv.slice(2));
+if (options.agentEntry) {
+  launchpadEntryHash({
+    organization: options.organization ?? null,
+    personalspace: Boolean(options.personalspace),
+  });
+}
 const selectedCompaniesRoot = resolve(options.root ?? process.env.WORKSPACE_ROOT ?? join(launchpadRoot, ".."));
 const selectedCompaniesRootPath = realpathSync.native(selectedCompaniesRoot);
 const canonicalCompaniesRoot = resolveCanonicalServerRoot(selectedCompaniesRoot);

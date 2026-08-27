@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 
+import { launchpadEntryHash } from "../launchpad/public/deep-link.js";
 import { launchLazurioLaunchpadServer } from "../launchpad/src/server-launcher-lib.mjs";
 
 export function buildLaunchpadServeInvocation({
@@ -14,6 +15,7 @@ export function buildLaunchpadServeInvocation({
   if (organization !== null && personalspace) {
     throw new TypeError("Launchpad serve accepts either Organization or Personalspace, not both.");
   }
+  launchpadEntryHash({ organization, personalspace });
   const args = ["--reuse", "--root", root, "--agent-entry"];
   if (organization !== null) args.push("--organization", organization);
   if (personalspace) args.push("--personalspace");
