@@ -1299,7 +1299,11 @@ function inventoryIssueResult(rootPath, issue) {
     : issue.organization
       ? `organizations/${issue.organization}`
       : ".";
-  const repoPath = issue.path ? join(organizationPath, issue.path) : organizationPath;
+  // Public update reports are portable machine-to-machine data. Keep their
+  // repo paths POSIX-shaped even when node:path.join uses Windows separators;
+  // absolute_path below still resolves correctly from that portable value.
+  const repoPath = (issue.path ? join(organizationPath, issue.path) : organizationPath)
+    .replace(/\\/g, "/");
   const descriptor = {
     key: issue.module
       ? `${issue.organization}::${issue.module}::inventory`
