@@ -199,6 +199,7 @@ async function run(argv) {
           root: options.root,
           organization: options.organization,
           personalspace: options.personalspace,
+          codeRoot: cliCodeRoot(),
         })
       : runLaunchpadInstall({ root: options.root });
   }

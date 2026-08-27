@@ -97,6 +97,7 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(js).toContain("function spaceOption");
   expect(js).toContain("function selectSpace");
   expect(js).toContain("function applyLaunchpadHash");
+  expect(js).toContain('from "/lazurio-runtime/deep-link-lib.mjs"');
   expect(js).toContain("function syncActiveSpaceHash");
   expect(js).toContain("let launchpadScopeDataReady = false");
   expect(js).toContain("launchpadScopeDataReady = true");

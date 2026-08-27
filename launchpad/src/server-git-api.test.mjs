@@ -88,6 +88,8 @@ test("Launchpad server exposes read-only git and Mission Control routes", async 
   const plans = await getJson(port, "/api/mission-control/plans?organization=BetaCo&module=deals");
   const moduleFolderGet = await fetch(`http://127.0.0.1:${port}/api/modules/open-folder`);
   const invalidModuleFolderPost = await fetch(`http://127.0.0.1:${port}/api/modules/open-folder`, { method: "POST" });
+  const deepLinkModule = await fetch(`http://127.0.0.1:${port}/lazurio-runtime/deep-link-lib.mjs`);
+  const missingRuntimeAsset = await fetch(`http://127.0.0.1:${port}/lazurio-runtime/missing.mjs`);
 
   expect(repos.schema_version).toBe("companiesascode.launchpad.git.v1");
   expect(deals.repo.key).toBe("BetaCo::deals");
@@ -103,6 +105,10 @@ test("Launchpad server exposes read-only git and Mission Control routes", async 
   expect(plans.schema_version).toBe("companiesascode.launchpad.mission_control_plans.v1");
   expect(moduleFolderGet.status).toBe(405);
   expect(invalidModuleFolderPost.status).toBe(400);
+  expect(deepLinkModule.status).toBe(200);
+  expect(deepLinkModule.headers.get("content-type")).toBe("text/javascript; charset=utf-8");
+  expect(await deepLinkModule.text()).toContain("export function launchpadEntryHash");
+  expect(missingRuntimeAsset.status).toBe(404);
 });
 
 test("fixture ports cannot overlap another Server fallback window", () => {

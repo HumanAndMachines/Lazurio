@@ -185,6 +185,16 @@ async function smokeInstalledArchive({ archivePath, packageVersion }) {
       `package-managed module setup must use canonical home without requesting a Root selection: ${failure(canonicalModule)}`,
     );
   }
+  const launchpadServe = runInstalledShim(globalBin, ["launchpad", "serve"], environment);
+  if (
+    launchpadServe.status !== 2
+    || launchpadServe.stdout.trim() !== ""
+    || !launchpadServe.stderr.includes("LAZURIO_LAUNCHPAD_RUNTIME_UNAVAILABLE")
+  ) {
+    throw new Error(
+      `package-only Launchpad serve must fail before spawn with the stable capability error: ${failure(launchpadServe)}`,
+    );
+  }
   const organizationInstall = runInstalledShim(
     globalBin,
     ["organization", "install", "ExampleOrganization", "--json"],
@@ -215,6 +225,7 @@ async function smokeInstalledArchive({ archivePath, packageVersion }) {
     install_report: "passed",
     operated_root_boundary: "passed",
     module_setup_root_boundary: "passed",
+    launchpad_code_origin_boundary: "passed",
     organization_home_root: "passed",
     updater_source_closure: "passed",
     updater_runtime_assets: "passed",
