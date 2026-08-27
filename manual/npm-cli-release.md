@@ -43,7 +43,11 @@ bun run doctor
 skutečného packlistu, nad fyzickými soubory provede privacy a production-closure
 kontrolu a skutečný `npm pack` nainstaluje do izolovaného Bun global prefixu.
 Smoke spouští nainstalovaný `lazurio`, top-level install, Organization install
-i updater assets. Gate nic nepublikuje a tarball po ověření smaže.
+i updater assets. Současně dokládá dnešní package code-origin hranici:
+`lazurio launchpad serve` z npm package, který ještě neobsahuje celý Launchpad
+Server/UI, musí před spawnem skončit stabilní chybou
+`LAZURIO_LAUNCHPAD_RUNTIME_UNAVAILABLE` a nesmí použít měnitelný Launchpad
+z instalovaného Rootu. Gate nic nepublikuje a tarball po ověření smaže.
 
 Stejný package nemá OS/arch varianty. GitHub checks spouštějí tentýž gate na
 macOS, Linuxu a Windows; nevyrábějí vlastní manifest, retained candidate,

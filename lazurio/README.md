@@ -293,10 +293,19 @@ vlastnost payload bytes; historický Resident channel je proto pouze explicitní
 
 Root `package.json` je privátní workspace orchestrátor. Skutečný publishable
 package žije celý pod `lazurio/` a vlastní CLI, Core, locales, schemas i
-production runtime; Launchpad je jeho consumer, ne zdroj skrytých sourozeneckých
-souborů. Dnešní `@lazurio/runtime` je pouze nepublikovaný fallback před live npm
-provider gatem, který jednou zmrazí preferované `lazurio`, nebo tento scoped
-fallback. Dvě veřejné identity nevznikají.
+CLI runtime včetně sdílených Launchpad primitives; Launchpad je jeho consumer,
+ne zdroj skrytých sourozeneckých souborů. Dnešní `@lazurio/runtime` je pouze
+nepublikovaný fallback před live npm provider gatem, který jednou zmrazí
+preferované `lazurio`, nebo tento scoped fallback. Dvě veřejné identity
+nevznikají.
+
+Současný npm package ještě neobsahuje celý Launchpad Server ani jeho UI.
+`lazurio launchpad serve` proto v source a Resident režimu spouští Server jen
+z ověřeného code originu aktuálního CLI. V package režimu skončí před spuštěním
+procesu stabilní chybou `LAZURIO_LAUNCHPAD_RUNTIME_UNAVAILABLE`; nikdy
+nepřepne na měnitelný `<home>/Lazurio/launchpad`. Přidání Serveru/UI do package
+patří do navazujícího slice, který je doloží skutečným package-only Root
+consumerem.
 
 Package gate používá standardní `npm pack --dry-run --json` jako jedinou
 packlist autoritu, kontroluje fyzické package soubory a jeden skutečný tarball

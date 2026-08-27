@@ -213,6 +213,33 @@ test("Module setup orchestration is package-owned and development scripts are th
   }
 });
 
+test("Launchpad entry primitives have one package owner and one-way consumers", async () => {
+  const runtimeRoot = join(repositoryRoot, "lazurio", "runtime");
+  for (const moduleName of [
+    "deep-link-lib.mjs",
+    "launchpad-identity-lib.mjs",
+    "server-launcher-lib.mjs",
+  ]) {
+    expect(existsSync(join(runtimeRoot, moduleName))).toBe(true);
+  }
+  expect(existsSync(join(repositoryRoot, "launchpad", "public", "deep-link.js"))).toBe(false);
+  expect(existsSync(join(repositoryRoot, "launchpad", "src", "launchpad-identity-lib.mjs"))).toBe(false);
+  expect(existsSync(join(repositoryRoot, "launchpad", "src", "server-launcher-lib.mjs"))).toBe(false);
+
+  const [server, launcher, cliServe, browser] = await Promise.all([
+    readFile(join(repositoryRoot, "launchpad", "src", "server.mjs"), "utf8"),
+    readFile(join(repositoryRoot, "launchpad", "src", "server-launcher.mjs"), "utf8"),
+    readFile(join(repositoryRoot, "lazurio", "launchpad-serve-lib.mjs"), "utf8"),
+    readFile(join(repositoryRoot, "launchpad", "public", "app.js"), "utf8"),
+  ]);
+  expect(server).toContain("../../lazurio/runtime/deep-link-lib.mjs");
+  expect(server).toContain("../../lazurio/runtime/launchpad-identity-lib.mjs");
+  expect(launcher).toContain("../../lazurio/runtime/server-launcher-lib.mjs");
+  expect(cliServe).toContain("./runtime/deep-link-lib.mjs");
+  expect(cliServe).toContain("./runtime/server-launcher-lib.mjs");
+  expect(browser).toContain('/lazurio-runtime/deep-link-lib.mjs');
+});
+
 test("Server identity and install-generation compatibility have one Core owner", async () => {
   const moduleName = "server-identity-lib.mjs";
   expect(existsSync(join(coreRoot, moduleName))).toBe(true);
