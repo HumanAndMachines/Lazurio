@@ -8,7 +8,7 @@ const canonicalSymbolSha256 = "6334e2b815cd83c8be7e601aa7bfab740a34d74848f522803
 test("reserved app tab uses the canonical Lazurio visual identity", () => {
   const html = buildReservedTabStatusDocument({
     title: "Knowledgebase",
-    message: "Aplikace ještě startuje...",
+    message: "Aplikace startuje...",
     origin: "http://127.0.0.1:4174",
   });
 
@@ -21,6 +21,8 @@ test("reserved app tab uses the canonical Lazurio visual identity", () => {
   expect(html).toContain("@keyframes lazurio-facets");
   expect(html).toContain('mask:url("http://127.0.0.1:4174/vendor/lazurio/symbol-color.svg")');
   expect(html).toContain('aria-live="polite"');
+  expect(html).toContain("Aplikace startuje...");
+  expect(html).not.toContain("Aplikace ještě startuje");
   expect(html).not.toContain("se otevře v tomto panelu");
   expect(html).not.toContain("<p>");
   expect(html).not.toContain("health endpoint");
@@ -34,7 +36,7 @@ test("reserved app tab keeps the canonical symbol and a non-layout loading motio
   const symbolSha256 = createHash("sha256").update(symbol).digest("hex");
   const html = buildReservedTabStatusDocument({
     title: "Knowledgebase",
-    message: "Aplikace ještě startuje...",
+    message: "Aplikace startuje...",
     origin: "http://127.0.0.1:4174",
   });
 
