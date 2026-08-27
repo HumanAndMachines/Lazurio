@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { delimiter, isAbsolute, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
-import { validateAgainstSchema } from "../launchpad/src/json-schema-mini.mjs";
+import { validateAgainstSchema } from "../lazurio/runtime/json-schema-mini.mjs";
 import { trustedGitExecutable } from "../scripts/agent-skills-entrypoint.mjs";
 import {
   buildResidentArtifact,

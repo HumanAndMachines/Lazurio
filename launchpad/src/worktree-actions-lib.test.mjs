@@ -2,7 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { existsSync } from "fs";
 import { mkdir, rm, symlink, writeFile, readFile } from "fs/promises";
 import { basename, dirname, join } from "path";
-import { buildWorktreeIndex } from "./worktree-lib.mjs";
+import { buildWorktreeIndex } from "../../lazurio/runtime/worktree-lib.mjs";
 import { createWorktreeFromPlan, publishWorktreeDraft, WorktreeActionError } from "./worktree-actions-lib.mjs";
 import { createLaunchpadGitFixture, initGitRepo, runGit } from "./git-fixture-helpers.test.mjs";
 
@@ -101,7 +101,10 @@ test("guarded create writes a sidecar satisfying every worktree.schema.json requ
     environment: {},
   });
 
-  const schema = JSON.parse(await readFile(join(import.meta.dir, "..", "schemas", "worktree.schema.json"), "utf8"));
+  const schema = JSON.parse(await readFile(
+    join(import.meta.dir, "..", "..", "lazurio", "schemas", "worktree.schema.json"),
+    "utf8",
+  ));
   const sidecar = JSON.parse(
     await readFile(join(orgRoot, ".worktrees", "workspace", "deals", "CAC-0042-deals-publish.worktree.json"), "utf8"),
   );

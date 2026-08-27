@@ -10,7 +10,7 @@ import {
   gbrainVaultName,
   obsidianDeepLink,
   resolveInsideVault,
-} from "./gbrain-lib.mjs";
+} from "../../lazurio/runtime/gbrain-lib.mjs";
 
 const tempRoots = [];
 

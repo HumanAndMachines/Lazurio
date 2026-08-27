@@ -1,6 +1,6 @@
 // Integrity baseline sdíleného surfacu doctorů (decision 0118).
 //
-// PROČ. `src/doctor-surface-lib.mjs`, `src/json-schema-mini.mjs` a
+// PROČ. `runtime/doctor-surface-lib.mjs`, `runtime/json-schema-mini.mjs` a
 // `schemas/doctor-report.schema.json` tvoří veřejný Lazurio kontrakt. Tichá změna
 // jednoho z nich by mohla rozpojit producenty a konzumenty, proto každý soubor má
 // v historicky pojmenovaném `schemas/doctor-surface-vendor.json` otisk a každá
@@ -20,8 +20,8 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const launchpadRoot = join(import.meta.dirname, "..");
-const recordPath = join(launchpadRoot, "schemas", "doctor-surface-vendor.json");
+const lazurioPackageRoot = join(import.meta.dirname, "..", "..", "lazurio");
+const recordPath = join(lazurioPackageRoot, "schemas", "doctor-surface-vendor.json");
 const record = JSON.parse(readFileSync(recordPath, "utf8"));
 
 function sha256(text) {
@@ -78,7 +78,7 @@ export function vendorFindings(vendorRecord, readFile) {
   return findings;
 }
 
-const readVendored = (relativePath) => readFileSync(join(launchpadRoot, relativePath), "utf8");
+const readVendored = (relativePath) => readFileSync(join(lazurioPackageRoot, relativePath), "utf8");
 
 test("sdílený surface doctorů sedí se svým integrity záznamem", () => {
   expect(vendorFindings(record, readVendored)).toEqual([]);

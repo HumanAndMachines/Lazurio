@@ -3,7 +3,7 @@ import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
-import { runIsolatedLazurioUpdate } from "./lazurio-update-runner-lib.mjs";
+import { runIsolatedLazurioUpdate } from "../../lazurio/runtime/lazurio-update-runner-lib.mjs";
 import {
   commitRemoteModule,
   commitRemoteRoot,

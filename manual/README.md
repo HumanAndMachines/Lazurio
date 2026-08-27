@@ -134,9 +134,9 @@ runtime/cache cesty, ne custody source of truth.
 - [Doctor worktree management](worktree-management.md) — shaping manuál a
   implementační řezy CAC-0065 pro jeden Organization environment se skutečnými
   nested Git worktrees, dependencies a bezpečným uvolněním disku po PR.
-- [Vydání Lazurio CLI přes npm](npm-cli-release.md) — exact-byte release
-  kandidát, jednorázový package claim, provider-native trusted publishing a
-  promotion stejné immutable verze z `nightly` na `latest`.
+- [Vydání Lazurio CLI přes npm](npm-cli-release.md) — provider gate a
+  jednorázový package claim, standardní `npm pack`, staged/trusted publishing
+  a promotion stejné immutable verze z `next` na `latest`.
 
 ## Migrační roadmapa a inventáře
 

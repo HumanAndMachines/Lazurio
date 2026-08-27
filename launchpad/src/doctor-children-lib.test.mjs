@@ -20,14 +20,14 @@ import {
   runChildDoctor,
   summarizeStatus,
   validateDoctorReport,
-} from "./doctor-surface-lib.mjs";
+} from "../../lazurio/runtime/doctor-surface-lib.mjs";
 import {
   discoverChildDoctors,
   runBoundChildDoctor,
   runChildDoctorLane,
-} from "./doctor-children-lib.mjs";
+} from "../../lazurio/runtime/doctor-children-lib.mjs";
 
-const schema = loadDoctorReportSchema(join(import.meta.dirname, ".."));
+const schema = loadDoctorReportSchema(join(import.meta.dirname, "..", "..", "lazurio"));
 const bun = process.execPath;
 const fixtures = [];
 

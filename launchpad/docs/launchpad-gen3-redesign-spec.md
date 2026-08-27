@@ -508,10 +508,10 @@ mechanismus, ne provozní čísla konkrétní mašiny.
 Personalspace part **implemented by CAC-0048** (decision 0051):
 
 - [x] Optional `personalspace` mount support via a **separate discovery lane**
-      (`launchpad/src/personalspace-lib.mjs`) that scans
+      (`lazurio/runtime/personalspace-lib.mjs`) that scans
       `personalspace/*/personal.gen3.json` and NEVER mixes into `organizations/*`
       auto-discovery. Canonical local schema
-      `launchpad/schemas/personal.gen3.schema.json`. Identity invariant is
+      `lazurio/schemas/personal.gen3.schema.json`. Identity invariant is
       fail-closed
       (`owner.github_username` ↔ mount ↔ repo).
 - [x] Personalspace private-module discovery: Principálovy apps carry

@@ -2,9 +2,9 @@ import { afterAll, expect, test } from "bun:test";
 import { tmpdir } from "os";
 import { join } from "path";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "fs/promises";
-import { appPlacementResolverForOrganization, buildDoctorReportFromAppsResponse, buildEnvironmentChecks, buildLaunchpadAppsResponse, buildLaunchpadDoctorReport, bunRuntimeCheck, developerToolUpdateChecks, lazurioUpdateCheck, runtimeAppStatus } from "./diagnostics-lib.mjs";
+import { appPlacementResolverForOrganization, buildDoctorReportFromAppsResponse, buildEnvironmentChecks, buildLaunchpadAppsResponse, buildLaunchpadDoctorReport, bunRuntimeCheck, developerToolUpdateChecks, lazurioUpdateCheck, runtimeAppStatus } from "../../lazurio/runtime/diagnostics-lib.mjs";
 import { createLaunchpadGitFixture, initGitRepo, runGit } from "./git-fixture-helpers.test.mjs";
-import { buildGitInventory } from "./git-inventory-lib.mjs";
+import { buildGitInventory } from "../../lazurio/runtime/git-inventory-lib.mjs";
 
 const tempRoots = [];
 

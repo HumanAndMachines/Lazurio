@@ -2,16 +2,16 @@ import { existsSync, lstatSync, readdirSync, realpathSync } from "fs";
 import { readdir, readFile } from "fs/promises";
 import { basename, dirname, extname, isAbsolute, join, posix, relative, resolve, sep } from "path";
 import { buildPortOwner, buildPortOwnershipIndex, canonicalListenerHost } from "./port-ownership-lib.mjs";
-import { normalizePackageRuntime } from "../../lazurio/core/runtime-contract-lib.mjs";
+import { normalizePackageRuntime } from "../core/runtime-contract-lib.mjs";
 import {
   materializeRuntimeFromModule,
   normalizeModuleManifest,
-} from "../../lazurio/core/module-contract-lib.mjs";
+} from "../core/module-contract-lib.mjs";
 import {
   findLocalOrganizationPortPoolOverlaps,
   normalizeOrganizationPortPool,
   validateModuleLeasesAgainstOrganizationPools,
-} from "../../lazurio/core/organization-port-policy-lib.mjs";
+} from "../core/organization-port-policy-lib.mjs";
 import {
   githubRepositoryCoordinate,
   isCanonicalOrganizationRepositorySlotPath,
@@ -29,14 +29,14 @@ import {
   organizationSlotRepositoryId,
   organizationSlotRepositoryMountIssue,
   organizationSlotRepositoryRemote,
-} from "../../lazurio/core/organization-slot-scope-lib.mjs";
+} from "../core/organization-slot-scope-lib.mjs";
 import {
   buildOrganizationAgentReviewAction,
   buildModuleLocationRepairAction,
   buildModuleSlotAgentReviewAction,
   buildRepositoryLocationIssue,
   buildSlotPathAgentReviewAction,
-} from "../../lazurio/core/module-location-repair-contract-lib.mjs";
+} from "../core/module-location-repair-contract-lib.mjs";
 import {
   classifyOrganizationModuleCheckoutLocation,
   findOrganizationModuleCheckoutCandidates,
@@ -82,11 +82,11 @@ const runtimeSourceIgnoredDirs = new Set([
   "vendor",
 ]);
 const runtimeSourceExtensions = new Set([".cjs", ".js", ".jsx", ".mjs", ".ts", ".tsx"]);
-const launchpadRoot = join(import.meta.dirname, "..");
-const appSchemaPath = join(launchpadRoot, "schemas", "launchpad-app.schema.json");
-const runtimeSchemaPath = join(launchpadRoot, "schemas", "lazurio-runtime.schema.json");
-const moduleSchemaPath = join(launchpadRoot, "schemas", "lazurio-module.schema.json");
-const pluginSchemaPath = join(launchpadRoot, "schemas", "launchpad-plugin.schema.json");
+const lazurioPackageRoot = join(import.meta.dirname, "..");
+const appSchemaPath = join(lazurioPackageRoot, "schemas", "launchpad-app.schema.json");
+const runtimeSchemaPath = join(lazurioPackageRoot, "schemas", "lazurio-runtime.schema.json");
+const moduleSchemaPath = join(lazurioPackageRoot, "schemas", "lazurio-module.schema.json");
+const pluginSchemaPath = join(lazurioPackageRoot, "schemas", "launchpad-plugin.schema.json");
 const defaultOrganizationMountpoint = "organizations";
 const defaultModuleTemplateMountpoint = "templates";
 const requiredLaunchpadRootPaths = ["launchpad.gen3.json", "launchpad", "guide", "organizations", "manual"];
@@ -2355,11 +2355,11 @@ export async function discoverLaunchpadApps(
   const appSchema = await readJson(appSchemaPath);
   const runtimeSchema = await readJson(runtimeSchemaPath);
   if (runtimeSchema?.properties?.schema_version?.const !== "lazurio.runtime.v1") {
-    failures.push("launchpad/schemas/lazurio-runtime.schema.json nemá canonical lazurio.runtime.v1 schema_version");
+    failures.push("lazurio/schemas/lazurio-runtime.schema.json nemá canonical lazurio.runtime.v1 schema_version");
   }
   const moduleSchema = await readJson(moduleSchemaPath);
   if (moduleSchema?.properties?.schema_version?.const !== "lazurio.module.v1") {
-    failures.push("launchpad/schemas/lazurio-module.schema.json nemá canonical lazurio.module.v1 schema_version");
+    failures.push("lazurio/schemas/lazurio-module.schema.json nemá canonical lazurio.module.v1 schema_version");
   }
   const pluginSchema = await readJson(pluginSchemaPath);
   const packageEntries = [];

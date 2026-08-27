@@ -6,8 +6,8 @@ import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep, win32 } from "path";
 import { fileURLToPath } from "node:url";
-import { acquireModuleRuntimeLock } from "../launchpad/src/module-runtime-lock-lib.mjs";
-import { GIT_LOCAL_TIMEOUT_MS, runGit } from "../launchpad/src/git-lib.mjs";
+import { acquireModuleRuntimeLock } from "./runtime/module-runtime-lock-lib.mjs";
+import { GIT_LOCAL_TIMEOUT_MS, runGit } from "./runtime/git-lib.mjs";
 import {
   materializeRuntimeFromModule,
   normalizeModuleManifest,

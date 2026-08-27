@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { validateAgainstSchema } from "../../launchpad/src/json-schema-mini.mjs";
+import { validateAgainstSchema } from "../runtime/json-schema-mini.mjs";
 import schema from "../install-report.v1.schema.json";
 import {
   canonicalLazurioRoot,

@@ -6,7 +6,7 @@ import {
   AGENT_CAPABILITY_MODES,
   agentSkillsEntrypointsDoctorCheck,
   inspectAgentSkillsEntrypoint,
-} from "./agent-skills-entrypoint-lib.mjs";
+} from "../../lazurio/runtime/agent-skills-entrypoint-lib.mjs";
 
 const tempRoots = [];
 

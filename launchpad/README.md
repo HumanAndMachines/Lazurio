@@ -493,7 +493,7 @@ personalspace/*/gbrain/                        (Obsidian-compatible markdown vau
 ```
 
 - `personal.gen3.json` má vlastní lokální schema
-  (`launchpad/schemas/personal.gen3.schema.json`),
+  (`lazurio/schemas/personal.gen3.schema.json`),
   aby se osobní prostor NIKDY nesmíchal do org auto-discovery.
 - **Identity invariant** (fail-closed): `owner.github_username` ↔ mount
   `personalspace/<username>_GEN3` ↔ repo `<username>/<username>_GEN3` musí
@@ -580,7 +580,7 @@ server se nepřevezme.
 `discover` vypíše nalezené aplikace. Discovery nejdřív načte root metadata
 z `launchpad.gen3.json`, potom automaticky proskenuje lokální
 `organizations/*/company.gen3.json`. `check` validuje `lazurio.runtime.v1`
-podle `launchpad/schemas/lazurio-runtime.schema.json`; legacy
+podle `lazurio/schemas/lazurio-runtime.schema.json`; legacy
 `companyascode.app` zůstává jen čtecí migrační fallback. Nevalidní app manifest
 uvnitř konkrétní Organization se přeskočí a reportuje jako warning, aby jeden
 stale modul neshodil celý Launchpad. `check` dál selže, pokud chybí Lazurio

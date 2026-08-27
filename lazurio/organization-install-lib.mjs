@@ -15,12 +15,12 @@ import { resolveOrganizationRootDocuments } from "./core/organization-activation
 import { isValidOrganizationForgeBinding } from "./core/organization-scaffold-lib.mjs";
 import { githubRepositoryCoordinate } from "./core/organization-slot-scope-lib.mjs";
 import { isSamePath } from "./core/path-boundary-lib.mjs";
-import { runIsolatedLazurioUpdate } from "../launchpad/src/lazurio-update-runner-lib.mjs";
+import { runIsolatedLazurioUpdate } from "./runtime/lazurio-update-runner-lib.mjs";
 import {
   runGit,
   runGitInPinnedTemporaryChild,
   safeGitRemoteEnv,
-} from "../launchpad/src/git-lib.mjs";
+} from "./runtime/git-lib.mjs";
 
 export const ORGANIZATION_INSTALL_REPORT_SCHEMA = "lazurio.organization.install.v0";
 export const ORGANIZATION_INSTALL_STATES = Object.freeze(["current", "updated", "blocked"]);

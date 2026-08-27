@@ -1,13 +1,12 @@
 #!/usr/bin/env bun
 
-import { realpathSync } from "node:fs";
-import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { existsSync, realpathSync } from "node:fs";
+import { join, resolve } from "node:path";
 
-import { renderHumanDoctorReport } from "../launchpad/src/doctor-output-lib.mjs";
-import { DOCTOR_EXIT_CODES } from "../launchpad/src/doctor-surface-lib.mjs";
-import { formatUpdateLaneReport } from "../launchpad/src/update-cli-lib.mjs";
-import { runIsolatedLazurioUpdate } from "../launchpad/src/lazurio-update-runner-lib.mjs";
+import { renderHumanDoctorReport } from "./runtime/doctor-output-lib.mjs";
+import { DOCTOR_EXIT_CODES } from "./runtime/doctor-surface-lib.mjs";
+import { formatUpdateLaneReport } from "./runtime/update-cli-lib.mjs";
+import { runIsolatedLazurioUpdate } from "./runtime/lazurio-update-runner-lib.mjs";
 import { buildLazurioContext, buildLazurioDoctorReport } from "./lib.mjs";
 import {
   buildLazurioCliIdentity,
@@ -37,7 +36,7 @@ import {
   moduleLocationRepairExitCode,
   renderHumanModuleLocationRepair,
   runModuleLocationRepair,
-} from "../launchpad/src/module-location-repair-lib.mjs";
+} from "./runtime/module-location-repair-lib.mjs";
 import {
   moduleSetupExitCode,
   renderHumanModuleSetup,
@@ -676,7 +675,14 @@ function assignRepairOption(parsed, name, value) {
 }
 
 function cliCodeRoot() {
-  return realpathSync.native(fileURLToPath(new URL("..", import.meta.url)));
+  const packageRoot = realpathSync.native(import.meta.dirname);
+  const sourceOrResidentRoot = realpathSync.native(resolve(packageRoot, ".."));
+  if ([".git", "lazurio.resident.json", "launchpad.gen3.json"].some(
+    (marker) => existsSync(join(sourceOrResidentRoot, marker)),
+  )) {
+    return sourceOrResidentRoot;
+  }
+  return packageRoot;
 }
 
 function defaultOperatedRoot() {
@@ -727,13 +733,13 @@ function renderHumanVersion(provenance) {
   if (provenance.status !== "resolved") {
     return `Lazurio CLI · verzi nelze určit (${provenance.reason})`;
   }
-  const commit = provenance.source.commit.slice(0, 12);
   if (provenance.root_kind === "source") {
     return `Lazurio CLI ${provenance.version} · development · ${provenance.source.dirty ? "dirty" : "clean"}`;
   }
   if (provenance.root_kind === "package") {
-    return `Lazurio CLI ${provenance.version} · package · ${commit}`;
+    return `Lazurio CLI ${provenance.version} · package · npm provenance`;
   }
+  const commit = provenance.source.commit.slice(0, 12);
   return `Lazurio CLI ${provenance.version} · ${commit} · ${provenance.artifact.target}`;
 }
 

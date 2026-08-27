@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
-import { validateAgainstSchema } from "../../launchpad/src/json-schema-mini.mjs";
+import { validateAgainstSchema } from "../runtime/json-schema-mini.mjs";
 
 import {
   MODULE_LIFECYCLE_REPORT_SCHEMA,

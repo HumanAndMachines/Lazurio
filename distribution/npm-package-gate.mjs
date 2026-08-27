@@ -1,64 +1,80 @@
 #!/usr/bin/env bun
 
 import { existsSync, readFileSync } from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 import {
+  LAZURIO_PACKAGE_DIRECTORY,
   assertCanonicalInstallBoundary,
-  buildLazurioNpmPackage,
-  packageEvidenceForReport,
+  inspectNpmPacklist,
+  parseNpmPackDescriptor,
+  validateLazurioPackageManifest,
 } from "./npm-package-lib.mjs";
-import {
-  parseNpmPackageGateArgs,
-  retainVerifiedNpmPackage,
-} from "./npm-package-gate-lib.mjs";
 import { canonicalLazurioRoot } from "../lazurio/core/install-core-lib.mjs";
 import {
   commitRemoteModule,
   createLazurioUpdateFixture,
 } from "../tests/lazurio-update-fixture.mjs";
 
-const options = parseNpmPackageGateArgs(Bun.argv.slice(2));
+if (Bun.argv.length > 2) throw new Error("usage: npm-package-gate.mjs");
 const repositoryRoot = resolve(import.meta.dirname, "..");
+const packageRoot = join(repositoryRoot, LAZURIO_PACKAGE_DIRECTORY);
 const sourcePackage = JSON.parse(readFileSync(join(repositoryRoot, "package.json"), "utf8"));
-if (sourcePackage.private !== true) {
-  throw new Error("source package.json must remain private; only generated staging is publishable");
+if (sourcePackage.private !== true || !sourcePackage.workspaces?.includes(LAZURIO_PACKAGE_DIRECTORY)) {
+  throw new Error("source package.json must remain a private workspace root");
 }
+const packageManifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
+validateLazurioPackageManifest(packageManifest);
 
 const temporaryRoot = await mkdtemp(join(tmpdir(), "lazurio-npm-package-gate-"));
 try {
-  const build = await buildLazurioNpmPackage({
-    cwd: repositoryRoot,
-    outputRoot: temporaryRoot,
-    packageVersion: options.releaseVersion ?? undefined,
+  const dryRun = run("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], {
+    cwd: packageRoot,
+    environment: process.env,
   });
-  await assertUpdaterBundle(build.paths.staging_root);
-  const smoke = await smokeInstalledArchive(build);
-  const evidence = {
-    ...packageEvidenceForReport(build),
+  if (dryRun.status !== 0) throw new Error(`npm pack --dry-run failed: ${failure(dryRun)}`);
+  const dryRunDescriptor = parseNpmPackDescriptor(dryRun.stdout);
+  const packlist = inspectNpmPacklist({
+    packageRoot,
+    repositoryRoot,
+    descriptor: dryRunDescriptor,
+  });
+  const packed = run("npm", [
+    "pack",
+    "--json",
+    "--ignore-scripts",
+    "--pack-destination",
+    temporaryRoot,
+  ], {
+    cwd: packageRoot,
+    environment: process.env,
+  });
+  if (packed.status !== 0) throw new Error(`npm pack failed: ${failure(packed)}`);
+  const descriptor = parseNpmPackDescriptor(packed.stdout);
+  const archivePath = join(temporaryRoot, descriptor.filename);
+  if (!existsSync(archivePath)) throw new Error(`npm pack did not create ${archivePath}`);
+  await assertUpdaterBundle(packageRoot);
+  const smoke = await smokeInstalledArchive({
+    archivePath,
+    packageVersion: descriptor.version,
+  });
+  console.log(JSON.stringify({
+    schema_version: "lazurio.cli.npm-package-gate.v1",
+    package: {
+      name: descriptor.name,
+      version: descriptor.version,
+      file_count: packlist.fileCount,
+    },
     smoke,
     runner: {
       os: process.platform,
       arch: process.arch,
       bun_version: Bun.version,
     },
-  };
-  if (options.evidence) {
-    await mkdir(dirname(options.evidence), { recursive: true });
-    await writeFile(options.evidence, `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
-  }
-  if (options.archiveDirectory) {
-    const retained = await retainVerifiedNpmPackage({
-      build,
-      evidence,
-      archiveDirectory: options.archiveDirectory,
-    });
-    console.error(`ok - verified release candidate: ${retained.directory}`);
-  }
-  console.log(JSON.stringify(evidence, null, 2));
+  }, null, 2));
 } finally {
   await rm(temporaryRoot, {
     recursive: true,
@@ -68,8 +84,8 @@ try {
   });
 }
 
-async function assertUpdaterBundle(stagingRoot) {
-  const entrypoint = join(stagingRoot, "launchpad", "src", "lazurio-update-runtime.mjs");
+async function assertUpdaterBundle(packageRoot) {
+  const entrypoint = join(packageRoot, "runtime", "lazurio-update-runtime.mjs");
   const build = await Bun.build({
     entrypoints: [entrypoint],
     target: "bun",
@@ -85,7 +101,7 @@ async function assertUpdaterBundle(stagingRoot) {
   }
 }
 
-async function smokeInstalledArchive(build) {
+async function smokeInstalledArchive({ archivePath, packageVersion }) {
   const installRoot = join(temporaryRoot, "bun");
   const globalDirectory = join(installRoot, "install", "global");
   const globalBin = join(installRoot, "bin");
@@ -100,7 +116,7 @@ async function smokeInstalledArchive(build) {
     USERPROFILE: machineHome,
   });
   environment.PATH = `${globalBin}${delimiter}${dirname(process.execPath)}${delimiter}${environment.PATH}`;
-  const install = run(process.execPath, ["add", "--global", build.paths.archive], {
+  const install = run(process.execPath, ["add", "--global", archivePath], {
     cwd: temporaryRoot,
     environment,
   });
@@ -121,11 +137,19 @@ async function smokeInstalledArchive(build) {
   if (
     provenance.status !== "resolved"
     || provenance.root_kind !== "package"
-    || provenance.version !== build.package.version
-    || provenance.source?.commit !== build.source.commit
+    || provenance.version !== packageVersion
+    || provenance.source?.repository !== "HumanAndMachines/Lazurio"
+    || provenance.source?.commit !== null
     || provenance.artifact !== null
   ) {
     throw new Error(`installed package provenance mismatch: ${JSON.stringify(provenance)}`);
+  }
+  const humanVersion = runInstalledShim(globalBin, ["--version"], environment);
+  if (
+    humanVersion.status !== 0
+    || !humanVersion.stdout.includes(`Lazurio CLI ${packageVersion} · package · npm provenance`)
+  ) {
+    throw new Error(`installed lazurio --version failed: ${failure(humanVersion)}`);
   }
   const installReport = runInstalledShim(globalBin, ["install", "--json"], environment);
   let parsedInstallReport;
@@ -187,6 +211,7 @@ async function smokeInstalledArchive(build) {
     installed_shim: "passed",
     help: "passed",
     package_provenance: "passed",
+    human_package_version: "passed",
     install_report: "passed",
     operated_root_boundary: "passed",
     module_setup_root_boundary: "passed",

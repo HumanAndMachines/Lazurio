@@ -24,11 +24,11 @@ existovat nebude.
 
 ## Kontrakt
 
-Surface je `launchpad/schemas/doctor-report.schema.json` (verze **v3**; v1 a v2
+Surface je `lazurio/schemas/doctor-report.schema.json` (verze **v3**; v1 a v2
 zůstávají čitelné). Jeho veřejnou autoritou je tento Lazurio source spolu s
-`launchpad/src/doctor-surface-lib.mjs` a `launchpad/src/json-schema-mini.mjs`.
+`lazurio/runtime/doctor-surface-lib.mjs` a `lazurio/runtime/json-schema-mini.mjs`.
 Změna vzniká přímo tady reviewovaným PR. Historický název
-`launchpad/schemas/doctor-surface-vendor.json` dnes drží immutable adoption
+`lazurio/schemas/doctor-surface-vendor.json` dnes drží immutable adoption
 baseline a otisky těchto tří souborů; není pointerem na jiný checkout. Co
 potřebuje pouze root navíc, patří do `doctor-children-lib.mjs`, ne do sdíleného
 surfacu.
@@ -112,13 +112,13 @@ nespuštěný doctor není zelený doctor.
 
 | Soubor | Co drží |
 | --- | --- |
-| `launchpad/schemas/doctor-report.schema.json` | kanonický veřejný surface v3 |
-| `launchpad/src/doctor-surface-lib.mjs` | kanonický slovník stavů, odvození souhrnu, exit kódy, validace, invokace a agregace |
-| `launchpad/src/json-schema-mini.mjs` | lokální draft-07 subset validátor surfacu |
-| `launchpad/src/doctor-children-lib.mjs` | root-side lane: discovery deklarací, spuštění, **svázání identity dítěte s mountem**, kontrola `doctor.children` |
+| `lazurio/schemas/doctor-report.schema.json` | kanonický veřejný surface v3 |
+| `lazurio/runtime/doctor-surface-lib.mjs` | kanonický slovník stavů, odvození souhrnu, exit kódy, validace, invokace a agregace |
+| `lazurio/runtime/json-schema-mini.mjs` | lokální draft-07 subset validátor surfacu |
+| `lazurio/runtime/doctor-children-lib.mjs` | root-side lane: discovery deklarací, spuštění, **svázání identity dítěte s mountem**, kontrola `doctor.children` |
 | `launchpad/src/doctor-children-lib.test.mjs` | root-side test: rozbitý potomek shodí agregát |
 | `launchpad/src/doctor-surface-conformance.test.mjs` | konformní test producenta: root doctor je sám na surfacu |
-| `launchpad/schemas/doctor-surface-vendor.json` | adoption baseline veřejného Lazuria: repo/ref/commit, otisky a **pojmenované** odchylky |
+| `lazurio/schemas/doctor-surface-vendor.json` | adoption baseline veřejného Lazuria: repo/ref/commit, otisky a **pojmenované** odchylky |
 | `launchpad/src/doctor-surface-vendor.test.mjs` | integrity test: tichá editace souboru i nepřiznaná odchylka od baseline spadnou |
 
 ## Jak se váže identita dítěte
@@ -138,7 +138,7 @@ zdraví úplně jiné mašiny. Dnes je to `scope_mismatch`, vlastní `doctor.chi
 s `fail` a exit 1.
 
 Kde ta vazba **žije**, je vlastnická otázka, ne stylová. Povinné svázání dělá
-`launchpad/src/doctor-children-lib.mjs` (`runBoundChildDoctor`), ne sdílený
+`lazurio/runtime/doctor-children-lib.mjs` (`runBoundChildDoctor`), ne sdílený
 surface. Surface povinně porovnává jen to, co dítě samo nabídlo — a pro
 samostatně běžícího doctora je to správně, protože na Buddy VPS nad ním žádný
 rodič není a nemá koho přesvědčovat. Root si tu povinnost přidává, protože dítě
@@ -195,7 +195,7 @@ Rozhodnutí, které se tím neudělalo, drží dál: kdyby se app id s velkými 
 vrátila, root je přejmenovat nemůže — jsou z manifestů Organizací, které leží
 v gitignorovaném mountu `organizations/` a patří jiným repům. Druhá cesta —
 párovat blokátory v UI přes odvozený slug — znamená tutéž funkci na dvou místech
-(`launchpad/src/diagnostics-lib.mjs` produkuje id, `launchpad/public/app.js` je
+(`lazurio/runtime/diagnostics-lib.mjs` produkuje id, `launchpad/public/app.js` je
 páruje) a `checks[].id` má `additionalProperties: false`, takže se app id nedá
 poslat vedle jako pole. Dokud o tom nerozhodne vlastník, je správný stav hlasitá
 vada, ne uvolněný pattern.

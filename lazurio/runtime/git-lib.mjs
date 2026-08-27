@@ -3,7 +3,7 @@ import { lstat, mkdtemp, realpath, rm } from "fs/promises";
 import { basename, dirname, win32 } from "path";
 import { fileURLToPath } from "url";
 
-import { isSamePath } from "../../lazurio/core/path-boundary-lib.mjs";
+import { isSamePath } from "../core/path-boundary-lib.mjs";
 
 export const GIT_LOCAL_TIMEOUT_MS = 10_000;
 export const GIT_FETCH_TIMEOUT_MS = 20_000;

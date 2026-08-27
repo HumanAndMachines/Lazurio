@@ -12,8 +12,8 @@ import {
   personalspaceRuntimeUrls,
   personalspaceDoctorCheck,
   resolveSpaceGbrainVault,
-} from "./personalspace-runtime-lib.mjs";
-import { GbrainAccessError } from "./gbrain-lib.mjs";
+} from "../../lazurio/runtime/personalspace-runtime-lib.mjs";
+import { GbrainAccessError } from "../../lazurio/runtime/gbrain-lib.mjs";
 
 const tempRoots = [];
 const privateRepoInspector = async (repo) => ({
@@ -174,7 +174,7 @@ async function createFixture({ withGbrain = true, sharedSpace = false } = {}) {
   const root = await mkdtemp(join(tmpdir(), "ps-runtime-"));
   tempRoots.push(root);
   await mkdir(join(root, "launchpad", "schemas"), { recursive: true });
-  const realSchemas = join(import.meta.dirname, "..", "schemas");
+  const realSchemas = join(import.meta.dirname, "..", "..", "lazurio", "schemas");
   for (const name of ["personal.gen3.schema.json", "launchpad-app.schema.json"]) {
     await writeFile(join(root, "launchpad", "schemas", name), await Bun.file(join(realSchemas, name)).text(), "utf8");
   }
@@ -257,7 +257,7 @@ test("personalspaceDoctorCheck = not_applicable, když není žádný osobní pr
   tempRoots.push(root);
   await writeJson(join(root, "launchpad.gen3.json"), { workspace_generation: "gen3", personalspace_mountpoint: "personalspace" });
   await mkdir(join(root, "launchpad", "schemas"), { recursive: true });
-  const realSchemas = join(import.meta.dirname, "..", "schemas");
+  const realSchemas = join(import.meta.dirname, "..", "..", "lazurio", "schemas");
   for (const name of ["personal.gen3.schema.json", "launchpad-app.schema.json"]) {
     await writeFile(join(root, "launchpad", "schemas", name), await Bun.file(join(realSchemas, name)).text(), "utf8");
   }

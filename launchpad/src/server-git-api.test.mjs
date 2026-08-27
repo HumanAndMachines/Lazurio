@@ -28,12 +28,12 @@ import {
   buildDesiredModuleState,
   readDesiredModuleState,
   writeDesiredModuleState,
-} from "./desired-module-state-lib.mjs";
+} from "../../lazurio/runtime/desired-module-state-lib.mjs";
 import {
   acquireServerLifetimeLock,
   acquireServerStartupLock,
 } from "./server-lifetime-lock-lib.mjs";
-import { moduleRuntimeLockName } from "./module-runtime-lock-lib.mjs";
+import { moduleRuntimeLockName } from "../../lazurio/runtime/module-runtime-lock-lib.mjs";
 import { launchpadFallbackUrls } from "./server-startup-lib.mjs";
 
 const tempRoots = [];

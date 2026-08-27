@@ -4,7 +4,7 @@ import {
   formatUpdateLaneReport,
   parseUpdateCliArgs,
   runUpdateLane,
-} from "./update-cli-lib.mjs";
+} from "../../lazurio/runtime/update-cli-lib.mjs";
 
 test("CLI keeps one command with only output and root options", () => {
   expect(parseUpdateCliArgs(["--json", "--root", "/tmp/Lazurio"])).toEqual({

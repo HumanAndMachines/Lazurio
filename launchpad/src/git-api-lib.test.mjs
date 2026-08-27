@@ -7,8 +7,8 @@ import {
   buildRepoResponse,
   buildRepoChangesResponse,
   buildWorktreesResponse,
-} from "./git-api-lib.mjs";
-import { buildLaunchpadAppsResponse } from "./diagnostics-lib.mjs";
+} from "../../lazurio/runtime/git-api-lib.mjs";
+import { buildLaunchpadAppsResponse } from "../../lazurio/runtime/diagnostics-lib.mjs";
 import {
   createLaunchpadGitFixture,
   createPackageApp,

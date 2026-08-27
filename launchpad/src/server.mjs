@@ -7,8 +7,8 @@ import {
   buildDoctorReportFromAppsResponse,
   buildLaunchpadAppsResponse,
   loadRootDoctorSchema,
-} from "./diagnostics-lib.mjs";
-import { runChildDoctorLane } from "./doctor-children-lib.mjs";
+} from "../../lazurio/runtime/diagnostics-lib.mjs";
+import { runChildDoctorLane } from "../../lazurio/runtime/doctor-children-lib.mjs";
 import { openBrowser } from "./browser-open-lib.mjs";
 import {
   launchpadFallbackUrls,
@@ -19,7 +19,7 @@ import {
   acquireServerLifetimeLock,
   acquireServerStartupLock,
 } from "./server-lifetime-lock-lib.mjs";
-import { APP_FILESYSTEM_ROOT, discoverLaunchpadApps } from "./discovery-lib.mjs";
+import { APP_FILESYSTEM_ROOT, discoverLaunchpadApps } from "../../lazurio/runtime/discovery-lib.mjs";
 import {
   GitApiError,
   buildGitApiResponse,
@@ -27,21 +27,21 @@ import {
   buildRepoChangesResponse,
   buildRepoResponse,
   buildWorktreesResponse,
-} from "./git-api-lib.mjs";
-import { RuntimeActionError, createRuntimeManager } from "./runtime-lib.mjs";
-import { createGitStatusService } from "./git-status-lib.mjs";
-import { readLazurioUpdateStatus, runLazurioUpdate } from "./lazurio-update-lib.mjs";
+} from "../../lazurio/runtime/git-api-lib.mjs";
+import { RuntimeActionError, createRuntimeManager } from "../../lazurio/runtime/runtime-lib.mjs";
+import { createGitStatusService } from "../../lazurio/runtime/git-status-lib.mjs";
+import { readLazurioUpdateStatus, runLazurioUpdate } from "../../lazurio/runtime/lazurio-update-lib.mjs";
 import { WorktreeActionError, createWorktreeFromPlan, publishWorktreeDraft } from "./worktree-actions-lib.mjs";
 import { buildRecentModuleChanges } from "./recent-changes-lib.mjs";
 import { buildNotifications } from "./notifications-lib.mjs";
-import { buildMostUsedApps } from "./usage-lib.mjs";
+import { buildMostUsedApps } from "../../lazurio/runtime/usage-lib.mjs";
 import {
   buildPersonalspaceResponse,
   createPersonalspaceRuntimeManager,
   personalspaceDoctorCheck,
   resolveSpaceGbrainVault,
-} from "./personalspace-runtime-lib.mjs";
-import { GbrainAccessError, gbrainFile, gbrainSearch, gbrainTree } from "./gbrain-lib.mjs";
+} from "../../lazurio/runtime/personalspace-runtime-lib.mjs";
+import { GbrainAccessError, gbrainFile, gbrainSearch, gbrainTree } from "../../lazurio/runtime/gbrain-lib.mjs";
 import { createGenerationSafeResponseCache } from "./apps-response-cache-lib.mjs";
 import { createServerShutdownStateAuthority } from "./server-shutdown-state-lib.mjs";
 import { LAZURIO_LAUNCHPAD_NAME } from "./launchpad-identity-lib.mjs";
@@ -58,7 +58,7 @@ import {
   GIT_LOCAL_TIMEOUT_MS,
   resolveGitExecutableSync,
   safeGitCommandEnv,
-} from "./git-lib.mjs";
+} from "../../lazurio/runtime/git-lib.mjs";
 import { createRequestTrustPolicy } from "./request-trust-lib.mjs";
 import { launchpadEntryHash, launchpadEntryUrl } from "../public/deep-link.js";
 import {

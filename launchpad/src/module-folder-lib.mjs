@@ -1,7 +1,7 @@
 import { constants } from "fs";
 import { access, realpath, stat } from "fs/promises";
 import { isAbsolute, relative, resolve } from "path";
-import { trustedWindowsSystemExecutable } from "./windows-system-path-lib.mjs";
+import { trustedWindowsSystemExecutable } from "../../lazurio/runtime/windows-system-path-lib.mjs";
 
 export class ModuleFolderActionError extends Error {
   constructor(status, code, message) {

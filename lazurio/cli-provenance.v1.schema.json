@@ -63,8 +63,13 @@
               ]
             },
             "commit": {
-              "type": "string",
-              "pattern": "^[0-9a-f]{40,64}$"
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40,64}$"
+                },
+                { "enum": [null] }
+              ]
             },
             "commit_epoch": {
               "type": "integer",

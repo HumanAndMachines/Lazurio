@@ -123,13 +123,23 @@ test("install generation hashes one deterministic cross-platform source set", as
   expect(computeServerInstallGeneration(root)).not.toBe(initial);
 
   const coreChanged = computeServerInstallGeneration(root);
-  await writeFile(join(root, "scripts", "worktree-create-lib.mjs"), "export const create = 2;\n");
+  await writeFile(join(root, "lazurio", "runtime", "runtime.mjs"), "export const runtime = 2;\n");
   expect(computeServerInstallGeneration(root)).not.toBe(coreChanged);
+
+  const runtimeChanged = computeServerInstallGeneration(root);
+  await writeFile(join(root, "lazurio", "schemas", "runtime.json"), "{\"version\":2}\n");
+  expect(computeServerInstallGeneration(root)).not.toBe(runtimeChanged);
+
+  const schemaChanged = computeServerInstallGeneration(root);
+  await writeFile(join(root, "scripts", "worktree-create-lib.mjs"), "export const create = 2;\n");
+  expect(computeServerInstallGeneration(root)).not.toBe(schemaChanged);
   expect(serverInstallGenerationInputPaths(root)).toEqual([
     "launchpad/package.json",
     "launchpad/public/app.js",
     "launchpad/src/server.mjs",
     "lazurio/core/contract.mjs",
+    "lazurio/runtime/runtime.mjs",
+    "lazurio/schemas/runtime.json",
     "scripts/worktree-create-lib.mjs",
     "scripts/worktree-create-lock.mjs",
   ]);
@@ -207,12 +217,16 @@ async function sourceFixture() {
   await mkdir(join(root, "launchpad", "src"), { recursive: true });
   await mkdir(join(root, "launchpad", "public"), { recursive: true });
   await mkdir(join(root, "lazurio", "core"), { recursive: true });
+  await mkdir(join(root, "lazurio", "runtime"), { recursive: true });
+  await mkdir(join(root, "lazurio", "schemas"), { recursive: true });
   await mkdir(join(root, "scripts"), { recursive: true });
   await writeFile(join(root, "launchpad", "package.json"), '{"name":"launchpad"}\n');
   await writeFile(join(root, "launchpad", "src", "server.mjs"), "export const server = true;\n");
   await writeFile(join(root, "launchpad", "src", "server.test.mjs"), "ignored test\n");
   await writeFile(join(root, "launchpad", "public", "app.js"), "export const ui = 1;\n");
   await writeFile(join(root, "lazurio", "core", "contract.mjs"), "export const value = 1;\n");
+  await writeFile(join(root, "lazurio", "runtime", "runtime.mjs"), "export const runtime = 1;\n");
+  await writeFile(join(root, "lazurio", "schemas", "runtime.json"), "{\"version\":1}\n");
   await writeFile(join(root, "scripts", "worktree-create-lib.mjs"), "export const create = 1;\n");
   await writeFile(join(root, "scripts", "worktree-create-lock.mjs"), "export const lock = 1;\n");
   return root;

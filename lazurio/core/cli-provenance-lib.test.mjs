@@ -11,7 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { validateAgainstSchema } from "../../launchpad/src/json-schema-mini.mjs";
+import { validateAgainstSchema } from "../runtime/json-schema-mini.mjs";
 import schema from "../cli-provenance.v1.schema.json";
 import {
   buildLazurioCliProvenance,
@@ -102,17 +102,15 @@ test("Resident provenance reads immutable manifest metadata without claiming pay
   expectValid(result);
 });
 
-test("package provenance uses generated package.json metadata without pretending to be a Resident", () => {
+test("package provenance uses the tracked package identity without inventing offline Git provenance", () => {
   const root = temporaryDirectory("package");
   writeFileSync(join(root, "package.json"), `${JSON.stringify({
-    name: "lazurio",
+    name: "@lazurio/runtime",
     version: "0.0.0-dev.abc123",
     lazurio: {
       schema_version: "lazurio.cli.package.v1",
       source: {
         repository: "HumanAndMachines/Lazurio",
-        commit: "a".repeat(40),
-        commit_epoch: 1_700_000_000,
       },
     },
   }, null, 2)}\n`);
@@ -129,8 +127,7 @@ test("package provenance uses generated package.json metadata without pretending
     version: "0.0.0-dev.abc123",
     source: {
       repository: "HumanAndMachines/Lazurio",
-      commit: "a".repeat(40),
-      commit_epoch: 1_700_000_000,
+      commit: null,
       dirty: null,
     },
     artifact: null,
@@ -141,7 +138,7 @@ test("package provenance uses generated package.json metadata without pretending
 test("package provenance fails closed for invalid Lazurio package metadata", () => {
   const root = temporaryDirectory("invalid-package");
   writeFileSync(join(root, "package.json"), `${JSON.stringify({
-    name: "lazurio",
+    name: "@lazurio/runtime",
     version: "0.0.0-dev.test",
     lazurio: { schema_version: "lazurio.cli.package.v1" },
   })}\n`);

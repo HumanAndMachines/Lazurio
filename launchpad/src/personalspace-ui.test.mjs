@@ -3,7 +3,7 @@ import { readFile } from "fs/promises";
 import { join } from "path";
 
 const publicRoot = join(import.meta.dirname, "..", "public");
-const schemasRoot = join(import.meta.dirname, "..", "schemas");
+const schemasRoot = join(import.meta.dirname, "..", "..", "lazurio", "schemas");
 
 test("Launchpad renderuje personalspace jako vlastní sekci v hlavní ploše (ne rail) přes oddělenou lane", async () => {
   const [html, appJs, appStateJs] = await Promise.all([

@@ -13,7 +13,7 @@ test("packageManager is the exact Bun version authority", () => {
   expect(() => bunVersionFromPackageManager(null)).toThrow("exact stable Bun version");
 });
 
-test("source and generated packages expose the same consumable authority", () => {
+test("tracked workstation package exposes the single consumable Bun authority", () => {
   expect(readRequiredBunVersion({
     root: "/fixture",
     readText: () => JSON.stringify({ packageManager: "bun@1.4.0" }),

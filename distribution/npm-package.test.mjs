@@ -1,201 +1,65 @@
 import { expect, test } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { createHash } from "node:crypto";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 import {
   assertCanonicalInstallBoundary,
-  packageContentForParity,
-  packageEvidenceForReport,
+  assertProductionClosure,
+  parseNpmPackDescriptor,
+  validateLazurioPackageManifest,
 } from "./npm-package-lib.mjs";
-import {
-  parseNpmPackageGateArgs,
-  retainVerifiedNpmPackage,
-} from "./npm-package-gate-lib.mjs";
 import { inspectLazurioInstallation, installExitCode } from "../lazurio/core/install-core-lib.mjs";
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
 
-test("source package remains private while generated package contract is platform-neutral", () => {
+test("private workspace root delegates every publishable field to @lazurio/runtime", () => {
   const sourcePackage = JSON.parse(readFileSync(resolve(repositoryRoot, "package.json"), "utf8"));
-  const contract = JSON.parse(readFileSync(resolve(import.meta.dirname, "npm-package-contract.v1.json"), "utf8"));
+  const cliPackage = JSON.parse(readFileSync(resolve(repositoryRoot, "lazurio", "package.json"), "utf8"));
   expect(sourcePackage).toMatchObject({ name: "lazurio", private: true });
-  expect(sourcePackage.packageManager).toBe("bun@1.4.0");
-  expect(sourcePackage.version).toBeUndefined();
-  expect(contract).toMatchObject({
-    schema_version: "lazurio.cli.npm-package-contract.v1",
-    package_name: "lazurio",
-    source_repository: "HumanAndMachines/Lazurio",
-    packer: { name: "npm" },
-  });
-  expect(contract.source_includes).toEqual(expect.arrayContaining([
-    "lazurio/module-port-lib.mjs",
-    "lazurio/module-lifecycle-report.v1.schema.json",
-    "lazurio/module-setup-lib.mjs",
-    "lazurio/module-setup-report.v1.schema.json",
-    "manual/module-setup.md",
-    "manual/module-lifecycle.md",
-    "lazurio/organization-activation-lib.mjs",
-    "lazurio/organization-activation-report.v0.schema.json",
-    "lazurio/organization-install-lib.mjs",
-    "lazurio/organization-install-report.v0.schema.json",
-    "manual/organization-install.md",
-  ]));
-  expect(contract.required_paths).toEqual(expect.arrayContaining([
-    "lazurio/module-port-lib.mjs",
-    "lazurio/module-lifecycle-report.v1.schema.json",
-    "lazurio/module-setup-lib.mjs",
-    "lazurio/module-setup-report.v1.schema.json",
-    "manual/module-setup.md",
-    "manual/module-lifecycle.md",
-    "lazurio/organization-activation-lib.mjs",
-    "lazurio/organization-activation-report.v0.schema.json",
-    "lazurio/organization-install-lib.mjs",
-    "lazurio/organization-install-report.v0.schema.json",
-    "manual/organization-install.md",
-  ]));
-  expect(JSON.stringify(contract)).not.toMatch(/darwin|linux|windows|x64|arm64/u);
-});
-
-test("package evidence separates deterministic content from npm tarball transport", () => {
-  const evidence = {
-    schema_version: "lazurio.cli.npm-package-evidence.v1",
-    package: {
-      name: "lazurio",
-      version: "1.0.0",
-      filename: "lazurio-1.0.0.tgz",
-      integrity: "sha512-test",
-      shasum: "a".repeat(40),
-      size: 100,
-      unpacked_size: 200,
-      file_count: 1,
-      files: [{ path: "package.json", size: 200, mode: 420 }],
-    },
-    source: { repository: "HumanAndMachines/Lazurio", commit: "a".repeat(40) },
-    packer: { name: "npm", version: "11.17.0" },
-    paths: { archive: "/machine-specific/path" },
-  };
-  const report = packageEvidenceForReport(evidence);
-  expect(report).toEqual({
-    schema_version: evidence.schema_version,
-    package: {
-      name: evidence.package.name,
-      version: evidence.package.version,
-      filename: evidence.package.filename,
-      unpacked_size: evidence.package.unpacked_size,
-      file_count: evidence.package.file_count,
-      files: evidence.package.files,
-    },
-    transport: {
-      integrity: evidence.package.integrity,
-      shasum: evidence.package.shasum,
-      size: evidence.package.size,
-    },
-    source: evidence.source,
-    packer: evidence.packer,
-  });
-  expect(packageContentForParity(report)).toEqual({
-    schema_version: report.schema_version,
-    package: {
-      ...report.package,
-      files: [{ path: "package.json", size: 200 }],
-    },
-    source: report.source,
-    packer: report.packer,
+  expect(sourcePackage.workspaces).toEqual(expect.arrayContaining(["lazurio", "launchpad"]));
+  expect(sourcePackage.packageManager).toBeUndefined();
+  expect(sourcePackage.bin).toBeUndefined();
+  expect(validateLazurioPackageManifest(cliPackage)).toEqual({
+    bunVersion: "1.4.0",
+    version: "0.0.0-development",
   });
 });
 
-test("content parity ignores OS-specific npm archive encoding and stat mode", () => {
-  const content = {
-    schema_version: "lazurio.cli.npm-package-evidence.v1",
-    package: {
-      name: "lazurio",
-      version: "1.0.0",
-      filename: "lazurio-1.0.0.tgz",
-      unpacked_size: 200,
-      file_count: 1,
-      files: [{ path: "package.json", size: 200, mode: 420 }],
-    },
-    source: { repository: "HumanAndMachines/Lazurio", commit: "a".repeat(40) },
-    packer: { name: "npm", version: "11.17.0" },
-  };
-  const linux = { ...content, transport: { integrity: "sha512-linux", shasum: "a".repeat(40), size: 100 } };
-  const windows = {
-    ...content,
-    package: {
-      ...content.package,
-      files: [{ path: "package.json", size: 200, mode: 493 }],
-    },
-    transport: { integrity: "sha512-windows", shasum: "b".repeat(40), size: 101 },
-  };
-  expect(packageContentForParity(linux)).toEqual(packageContentForParity(windows));
+test("npm pack descriptor accepts the scoped package identity", () => {
+  expect(parseNpmPackDescriptor(JSON.stringify([{
+    name: "@lazurio/runtime",
+    version: "0.1.0",
+    filename: "lazurio-cli-0.1.0.tgz",
+    files: [{ path: "package.json", size: 100, mode: 420 }],
+  }]))).toMatchObject({ name: "@lazurio/runtime", version: "0.1.0" });
+  expect(() => parseNpmPackDescriptor(JSON.stringify([{
+    name: "lazurio",
+    version: "0.1.0",
+    filename: "lazurio-0.1.0.tgz",
+    files: [{ path: "package.json" }],
+  }]))).toThrow("incomplete @lazurio/runtime descriptor");
 });
 
-test("release candidate mode requires one explicit version and one new output directory", () => {
-  expect(parseNpmPackageGateArgs([
-    "--release-version", "0.1.0-nightly.0",
-    "--archive-dir", "dist/npm-release/0.1.0-nightly.0",
-  ], { cwd: "/fixture" })).toEqual({
-    evidence: null,
-    releaseVersion: "0.1.0-nightly.0",
-    archiveDirectory: resolve("/fixture", "dist/npm-release/0.1.0-nightly.0"),
-  });
-  expect(() => parseNpmPackageGateArgs(["--release-version", "0.1.0"])).toThrow("usage:");
-  expect(() => parseNpmPackageGateArgs([
-    "--release-version", "latest",
-    "--archive-dir", "dist/npm-release/latest",
-  ])).toThrow("invalid npm package version");
-  expect(() => parseNpmPackageGateArgs([
-    "--evidence", "evidence.json",
-    "--release-version", "0.1.0",
-    "--archive-dir", "dist/npm-release/0.1.0",
-  ])).toThrow("evidence is written inside --archive-dir");
-});
-
-test("release candidate retention preserves exact verified bytes and evidence", async () => {
-  const fixtureRoot = await mkdtemp(join(tmpdir(), "lazurio-npm-retention-test-"));
-  try {
-    const sourceArchive = join(fixtureRoot, "source.tgz");
-    const outputDirectory = join(fixtureRoot, "release", "0.1.0-nightly.0");
-    const archiveBytes = Buffer.from("exact verified npm archive");
-    await writeFile(sourceArchive, archiveBytes);
-    const fixture = packageRetentionFixture(sourceArchive, archiveBytes);
-    const retained = await retainVerifiedNpmPackage({
-      ...fixture,
-      archiveDirectory: outputDirectory,
-    });
-
-    expect(await readFile(retained.archive)).toEqual(archiveBytes);
-    expect(JSON.parse(await readFile(retained.evidence, "utf8"))).toEqual(fixture.evidence);
-    expect(retained.directory).toBe(outputDirectory);
-    await expect(retainVerifiedNpmPackage({
-      ...fixture,
-      archiveDirectory: outputDirectory,
-    })).rejects.toThrow("release candidate path already exists");
-  } finally {
-    await rm(fixtureRoot, { recursive: true, force: true });
-  }
-});
-
-test("release candidate retention removes its new directory when byte verification fails", async () => {
-  const fixtureRoot = await mkdtemp(join(tmpdir(), "lazurio-npm-retention-failure-test-"));
-  try {
-    const sourceArchive = join(fixtureRoot, "source.tgz");
-    const outputDirectory = join(fixtureRoot, "candidate");
-    const archiveBytes = Buffer.from("changed npm archive");
-    await writeFile(sourceArchive, archiveBytes);
-    const fixture = packageRetentionFixture(sourceArchive, Buffer.from("expected npm archive"));
-
-    await expect(retainVerifiedNpmPackage({
-      ...fixture,
-      archiveDirectory: outputDirectory,
-    })).rejects.toThrow("differs from the verified package bytes");
-    expect(existsSync(outputDirectory)).toBe(false);
-  } finally {
-    await rm(fixtureRoot, { recursive: true, force: true });
-  }
+test("production closure rejects source imports outside the publishable package", () => {
+  expect(() => assertProductionClosure({
+    packageRoot: "/fixture/lazurio",
+    entries: new Map([
+      ["cli.mjs", { bytes: Buffer.from('import "../launchpad/src/runtime-lib.mjs";\n') }],
+    ]),
+  })).toThrow("outside @lazurio/runtime");
+  expect(() => assertProductionClosure({
+    packageRoot: "/fixture/lazurio",
+    entries: new Map([
+      ["cli.mjs", { bytes: Buffer.from('import "./runtime/missing.mjs";\n') }],
+    ]),
+  })).toThrow("unpacked production content");
+  expect(() => assertProductionClosure({
+    packageRoot: "/fixture/lazurio",
+    entries: new Map([
+      ["cli.mjs", { bytes: Buffer.from('import "./runtime/current.mjs";\n') }],
+      ["runtime/current.mjs", { bytes: Buffer.from("export const current = true;\n") }],
+    ]),
+  })).not.toThrow();
 });
 
 test("package smoke keeps canonical home Root deterministic across host prerequisite states", () => {
@@ -237,11 +101,6 @@ test("package smoke keeps canonical home Root deterministic across host prerequi
     exitStatus: installExitCode(failedHostProbe),
     canonicalRoot: "C:\\Users\\Example\\Lazurio",
   })).not.toThrow();
-  expect(() => assertCanonicalInstallBoundary({
-    report: failedHostProbe,
-    exitStatus: 1,
-    canonicalRoot: "C:\\Users\\Example\\Lazurio",
-  })).toThrow("does not match report status failed");
 });
 
 test("package smoke rejects a non-canonical Root", () => {
@@ -274,32 +133,4 @@ function missingRootObservation(path) {
     status: "action_required",
     reason: "root_creation_required",
   };
-}
-
-function packageRetentionFixture(archive, expectedBytes) {
-  const filename = "lazurio-0.1.0-nightly.0.tgz";
-  const integrity = `sha512-${createHash("sha512").update(expectedBytes).digest("base64")}`;
-  const shasum = createHash("sha1").update(expectedBytes).digest("hex");
-  const build = {
-    package: {
-      name: "lazurio",
-      version: "0.1.0-nightly.0",
-      filename,
-      integrity,
-      shasum,
-    },
-    paths: { archive },
-  };
-  const evidence = {
-    schema_version: "lazurio.cli.npm-package-evidence.v1",
-    package: {
-      name: build.package.name,
-      version: build.package.version,
-      filename,
-    },
-    transport: { integrity, shasum },
-    source: { repository: "HumanAndMachines/Lazurio", commit: "a".repeat(40) },
-    smoke: { global_install: "passed" },
-  };
-  return { build, evidence };
 }

@@ -10,8 +10,8 @@ import {
   moduleLocationRepairExitCode,
   renderHumanModuleLocationRepair,
   runModuleLocationRepair,
-} from "./module-location-repair-lib.mjs";
-import { runGit } from "./git-lib.mjs";
+} from "../../lazurio/runtime/module-location-repair-lib.mjs";
+import { runGit } from "../../lazurio/runtime/git-lib.mjs";
 import { githubRepositoryCoordinate } from "../../lazurio/core/organization-slot-scope-lib.mjs";
 
 const cleanup = [];

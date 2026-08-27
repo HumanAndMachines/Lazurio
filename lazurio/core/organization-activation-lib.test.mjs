@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { validateAgainstSchema } from "../../launchpad/src/json-schema-mini.mjs";
+import { validateAgainstSchema } from "../runtime/json-schema-mini.mjs";
 import schema from "../organization-activation-report.v0.schema.json";
 import {
   ORGANIZATION_ACTIVATION_ERROR_CODES,

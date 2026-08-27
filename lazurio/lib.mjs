@@ -7,20 +7,20 @@ import {
   buildLaunchpadDoctorReport,
   developerToolUpdateChecks,
   loadRootDoctorSchema,
-} from "../launchpad/src/diagnostics-lib.mjs";
-import { buildGitInventory } from "../launchpad/src/git-inventory-lib.mjs";
-import { readGitRepoStatuses } from "../launchpad/src/git-status-lib.mjs";
+} from "./runtime/diagnostics-lib.mjs";
+import { buildGitInventory } from "./runtime/git-inventory-lib.mjs";
+import { readGitRepoStatuses } from "./runtime/git-status-lib.mjs";
 import {
   GIT_LOCAL_TIMEOUT_MS,
   mapWithConcurrency,
   runGit,
-} from "../launchpad/src/git-lib.mjs";
+} from "./runtime/git-lib.mjs";
 import { githubRepositoryCoordinate } from "./core/organization-slot-scope-lib.mjs";
-import { buildWorktreeIndex } from "../launchpad/src/worktree-lib.mjs";
+import { buildWorktreeIndex } from "./runtime/worktree-lib.mjs";
 import {
   declarationIssues,
   runBoundChildDoctor,
-} from "../launchpad/src/doctor-children-lib.mjs";
+} from "./runtime/doctor-children-lib.mjs";
 import {
   DOCTOR_EXIT_CODES,
   DOCTOR_REPORT_SCHEMA_VERSION_V3,
@@ -28,19 +28,19 @@ import {
   exitCodeForSummaryStatus,
   flattenChecks,
   readDoctorDeclaration,
-} from "../launchpad/src/doctor-surface-lib.mjs";
-import { validateAgainstSchema } from "../launchpad/src/json-schema-mini.mjs";
+} from "./runtime/doctor-surface-lib.mjs";
+import { validateAgainstSchema } from "./runtime/json-schema-mini.mjs";
 import {
   identityInvariantIssues,
   isLegacyPersonalCustodyConfig,
   validatePersonalConfig,
-} from "../launchpad/src/personalspace-lib.mjs";
+} from "./runtime/personalspace-lib.mjs";
 
 export const LAZURIO_CONTEXT_SCHEMA_VERSION = "lazurio.context.v0";
 
 const contextSchemaUrl = new URL("./context-v0.schema.json", import.meta.url);
 const personalSchemaUrl = new URL(
-  "../launchpad/schemas/personal.gen3.schema.json",
+  "./schemas/personal.gen3.schema.json",
   import.meta.url,
 );
 const githubUsernamePattern = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/;

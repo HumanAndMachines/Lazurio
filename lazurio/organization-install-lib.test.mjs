@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 import { initGitRepo } from "../launchpad/src/git-fixture-helpers.test.mjs";
-import { runGit, runGitInPinnedTemporaryChild } from "../launchpad/src/git-lib.mjs";
+import { runGit, runGitInPinnedTemporaryChild } from "./runtime/git-lib.mjs";
 import { createOrganizationScaffold } from "./core/organization-scaffold-lib.mjs";
 import {
   installOrganization,

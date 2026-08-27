@@ -1,0 +1,49 @@
+{
+  "name": "@lazurio/runtime",
+  "version": "0.0.0-development",
+  "description": "Local-first workstation CLI for people and AI collaborators",
+  "license": "FSL-1.1-ALv2",
+  "type": "module",
+  "packageManager": "bun@1.4.0",
+  "bin": {
+    "lazurio": "cli.mjs"
+  },
+  "imports": {
+    "#lazurio-core/resident-manifest": "./core/resident-manifest-lib.mjs"
+  },
+  "files": [
+    "*.mjs",
+    "*.json",
+    "core/*.mjs",
+    "core/*.json",
+    "locales/*.json",
+    "organization-host/*.mjs",
+    "organization-host/*.json",
+    "runtime/*.mjs",
+    "schemas/*.json",
+    "!**/*.test.mjs"
+  ],
+  "engines": {
+    "bun": "1.4.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HumanAndMachines/Lazurio.git",
+    "directory": "lazurio"
+  },
+  "bugs": {
+    "url": "https://github.com/HumanAndMachines/Lazurio/issues"
+  },
+  "homepage": "https://github.com/HumanAndMachines/Lazurio/tree/main/lazurio#readme",
+  "publishConfig": {
+    "access": "public",
+    "tag": "next",
+    "provenance": true
+  },
+  "lazurio": {
+    "schema_version": "lazurio.cli.package.v1",
+    "source": {
+      "repository": "HumanAndMachines/Lazurio"
+    }
+  }
+}

@@ -26,18 +26,18 @@ import {
   organizationSlotRepositoryRemote,
   organizationSlotScope,
   organizationSlotWorkspace,
-} from "../../lazurio/core/organization-slot-scope-lib.mjs";
+} from "../core/organization-slot-scope-lib.mjs";
 import {
   inspectCanonicalPathBoundary,
   isSamePath,
-} from "../../lazurio/core/path-boundary-lib.mjs";
+} from "../core/path-boundary-lib.mjs";
 import {
   buildOrganizationAgentReviewAction,
   buildModuleLocationRepairAction,
   buildModuleSlotAgentReviewAction,
   buildRepositoryLocationIssue,
   buildSlotPathAgentReviewAction,
-} from "../../lazurio/core/module-location-repair-contract-lib.mjs";
+} from "../core/module-location-repair-contract-lib.mjs";
 import {
   classifyOrganizationModuleCheckoutLocation,
   inspectOrganizationModuleCheckoutCandidates,

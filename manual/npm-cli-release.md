@@ -1,95 +1,139 @@
 # Vydání Lazurio CLI přes npm
 
 Tento runbook drží jedinou veřejnou distribuční cestu příkazu `lazurio`.
-Nevytváří vlastní registr ani release server: immutable package verzi vlastní
-npm a GitHub Release na ni pouze odkazuje. `nightly` a `latest` jsou npm
-dist-tagy nad stejnou verzí, nikoli dvě různá sestavení.
+Využívá standardní npm package, dist-tagy, staged publishing a trusted
+publishing; Lazurio nestaví vlastní registr, packer, release manifest ani
+paralelní důkazní archiv.
 
-Publikace npm package i změna stabilního dist-tagu jsou **Release**. Agent je
-smí provést jen po explicitním pokynu oprávněného Principála pro přesnou verzi.
+Publikace nové npm verze, schválení staged package i přesun `latest` jsou
+**Release**. Agent je smí provést jen po explicitním pokynu oprávněného
+Principála pro přesnou verzi nebo tagovou operaci.
 
-## 1. Připrav exact kandidáta
+## 0. Zmraz package coordinate
 
-Začni na clean, reviewovaném commitu, jehož běžný GitHub `checks` workflow je
-zelený na Ubuntu a Windows a jeho npm package gate + content parity jsou zelené
-na macOS, Linuxu a Windows. Zvol novou SemVer verzi a spusť:
+Tracked package žije v `lazurio/package.json`; root `package.json` zůstává
+privátní workspace orchestrátor. Dnešní `@lazurio/runtime` je pouze
+nepublikovaný fallback, aby šlo package shape a instalaci ověřit před live
+provider gatem. Před prvním npm publish ověř dostupnost, správu a dlouhodobou
+custody jména přímo u npm:
 
-```sh
-bun run npm-package:gate -- \
-  --release-version <version> \
-  --archive-dir dist/npm-release/<version>
-```
+- preferuj unscoped `lazurio`, pokud je claimnutelné a Lazurio má jeho trvalou
+  správu;
+- jinak zmraz `@lazurio/runtime` pod spravovaným npm scope;
+- po zmrazení změň package name, install dokumentaci a workflow v jednom PR;
+  dvě veřejné package identity ani alias package nevznikají.
 
-Gate sestaví package výhradně z exact Git tree, nainstaluje skutečný tarball do
-izolovaného Bun home, spustí CLI smoke a teprve potom uloží stejné ověřené bytes
-spolu s JSON evidence. Cílový adresář nesmí existovat; gate nikdy nepřepisuje
-staršího kandidáta. `dist/` je lokální ignored výstup a nesmí se commitovat ani
-přenášet přes GitHub Actions artifact.
+Dokud tento gate neproběhne, žádný obsah současného manifestu se na npm
+nepublikuje.
 
-Cross-platform CI ověřuje stejný builder, source commit, package obsah a
-instalovaný CLI kontrakt. Explicitní release verze se vybírá až v tomto
-release gate; není uložená v source `package.json`, samostatném `VERSION`
-souboru ani v runtime konfiguraci.
+## 1. Připrav verzi v source
 
-## 2. Jednorázově založ npm package
-
-Trusted publishing lze u npm nastavit až pro existující package. Proto pouze
-první claim jména `lazurio` proběhne z lokálního ověřeného tarballu přes
-standardní npm CLI a interaktivní 2FA:
+Na reviewovaném clean commitu nastav v `lazurio/package.json` novou SemVer
+verzi. Package manifest je jediná autorita verze i standardního npm packlistu.
+Potom spusť:
 
 ```sh
-npm publish dist/npm-release/<version>/lazurio-<version>.tgz \
-  --access public \
-  --tag nightly
+bun install --frozen-lockfile
+bun run npm-package:gate
+bun run check
+bun run doctor
 ```
 
-Po publish ověř přes npm, že publikovaná verze má očekávaný digest, source
-commit a funkční `lazurio --version --json`. První nightly záměrně nevytváří
-`latest`; uživatelé stabilní package ještě nedostanou.
+`npm-package:gate` nejprve použije `npm pack --dry-run --json` jako autoritu
+skutečného packlistu, nad fyzickými soubory provede privacy a production-closure
+kontrolu a skutečný `npm pack` nainstaluje do izolovaného Bun global prefixu.
+Smoke spouští nainstalovaný `lazurio`, top-level install, Organization install
+i updater assets. Gate nic nepublikuje a tarball po ověření smaže.
 
-## 3. Zapni provider-native trusted publishing
+Stejný package nemá OS/arch varianty. GitHub checks spouštějí tentýž gate na
+macOS, Linuxu a Windows; nevyrábějí vlastní manifest, retained candidate,
+cross-job JSON parity ani release artefakt.
 
-Po založení package nastav v npm právě jeden GitHub Actions trusted publisher
-pro public repo `HumanAndMachines/Lazurio` a samostatný release workflow.
-Workflow musí používat GitHub-hosted runner, npm alespoň 11.5.1, Node alespoň
-22.14 a oprávnění `id-token: write`. Dlouhodobý `NPM_TOKEN` se nezavádí.
+## 2. Jednorázově založ package
 
-Release workflow dostane explicitní verzi, znovu použije tentýž package gate,
-publikuje ověřený tarball přes `npm publish --tag nightly` a uloží jen evidence
-a GitHub Release metadata. Tarball se mezi joby nepřenáší jako neautoritativní
-Actions artifact. Workflow se přidá až po provider-side trusted publisher
-setup; do té doby by nešlo jeho publish větev pravdivě otestovat.
-
-Npm trusted publishing nepodporuje změnu dist-tagu. Ta proto zůstává krátkým
-interaktivním krokem oprávněného release operátora, nikoli důvodem pro trvalý
-token.
-
-## 4. Promuj stejnou verzi na stable
-
-Po nightly dogfoodu a explicitním Release pokynu nepřestavuj package. Ověř
-publikovaný digest a přesuň pouze standardní npm tag:
+Staged publishing vyžaduje už existující npm package. Pouze první claim proto
+proběhne standardním `npm publish` z adresáře `lazurio/`, s interaktivním npm
+přihlášením a 2FA oprávněného release operátora:
 
 ```sh
-npm dist-tag add lazurio@<version> latest
+cd lazurio
+npm publish --access public --tag next --provenance=false
 ```
 
-Operace používá interaktivní npm přihlášení a 2FA. GitHub Release označí stejný
-source commit a stejnou npm verzi. Rollback stabilního kanálu je obdobně pouze
-vědomý přesun `latest` na dříve ověřenou immutable verzi; žádné bytes se
-nepřepisují ani nemažou.
+První release zůstane pod `next`; `latest` se tímto krokem neposouvá. Explicitní
+override vypíná provenance pouze pro tento lokální bootstrap, protože npm ji
+umí vytvořit až v podporovaném CI. Po publish ověř package name, verzi,
+packlist, registry integrity a funkční instalaci přes veřejný registr. Jméno a
+verzi nelze po publikaci znovu použít, proto při jakémkoli rozporu vydej novou
+opravenou SemVer verzi. Všechny další verze už používají trusted publisher a
+automatickou provenance.
+
+## 3. Zapni trusted a staged publishing
+
+Po založení package nastav na npm právě jeden GitHub Actions trusted publisher
+pro public repo `HumanAndMachines/Lazurio` a konkrétní release workflow.
+Workflow používá GitHub-hosted runner, `id-token: write`, Node alespoň 22.14 a
+npm alespoň 11.15. Dlouhodobý write token se nezavádí.
+
+Trust relationship povol pouze `npm stage publish`, ne přímý `npm publish`.
+Package access nastav na vyžadovanou 2FA a zakázané tokeny. Trusted publish z
+public GitHub repa automaticky přidá npm provenance, která váže package na
+source commit a workflow; Lazurio proto nevkládá commit ani vlastní digest do
+`package.json`.
+
+Workflow po zelených gates běží z `lazurio/`:
+
+```sh
+npm stage publish --tag next
+```
+
+Staging není Release navenek: package ještě není veřejně dostupný. Oprávněný
+Principál zkontroluje metadata a přesně staged bytes přes npm:
+
+```sh
+npm stage list <package-name>
+npm stage view <stage-id>
+npm stage download <stage-id>
+```
+
+Teprve explicitně schválený kandidát publikuje s proof-of-presence a 2FA:
+
+```sh
+npm stage approve <stage-id>
+```
+
+Špatný kandidát se neschvaluje; po kontrole jej oprávněný operátor odmítne a
+source dostane novou verzi. Tag zvolený při stagingu je součástí kandidáta a
+později se v něm nepřepisuje.
+
+## 4. Promuj ověřenou verzi na stable
+
+Po dogfoodu verze pod `next` a explicitním Release pokynu nepřestavuj package.
+Ověř registry integrity a provenance a přesuň pouze standardní npm dist-tag:
+
+```sh
+npm dist-tag add <package-name>@<version> latest
+```
+
+GitHub Release označí tentýž source commit a changelog stejné npm verze; package
+bytes znovu nehostuje jako druhý distribuční kanál. Rollback stabilního kanálu
+je vědomý přesun `latest` na dříve ověřenou immutable verzi, ne přepis nebo
+mazání již vydaných bytes.
 
 ## Failure modes
 
-- Dirty checkout, neplatná verze, neúspěšný install/smoke nebo rozdílný digest
-  kandidáta blokuje ještě před npm.
-- Existující output adresář se nikdy nepřepíše. Po přerušeném běhu jej Agent
-  nejdřív zkontroluje a teprve potom vědomě odstraní nebo zvolí nový adresář.
-- Existující npm verzi znovu nepublikuj. Oprav zdroj, zvol novou verzi a projdi
-  celý gate znovu.
-- Selhání trusted publisheru neobcházej tokenem. Oprav provider setup nebo
-  workflow a zopakuj Release stejné dosud nepublikované verze.
-- `latest` nikdy neposouvej na verzi, která neprošla nightly dogfoodem a
-  explicitním schválením.
+- Dirty checkout, neplatná SemVer, neúspěšný pack/install/smoke, privacy nález
+  nebo production import mimo package blokuje před npm.
+- Provider gate bez prokázané custody jména blokuje první publish.
+- Existující nebo staged npm verzi znovu nepoužívej; oprav source a zvol novou
+  verzi.
+- Selhání trusted publisheru neobcházej write tokenem. Oprav provider setup
+  nebo workflow.
+- Staged package bez přesného lidského review a explicitního Release pokynu
+  neschvaluj.
+- `latest` neposouvej na verzi, která neprošla `next` dogfoodem a explicitním
+  schválením.
 
-Provider požadavky: [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/)
-a [npm dist-tags](https://docs.npmjs.com/adding-dist-tags-to-packages/).
+Provider autority: [npm staged publishing](https://docs.npmjs.com/staged-publishing/),
+[npm trusted publishing](https://docs.npmjs.com/trusted-publishers/) a
+[npm dist-tags](https://docs.npmjs.com/adding-dist-tags-to-packages/).

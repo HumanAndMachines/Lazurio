@@ -3,8 +3,8 @@ import {
   UPDATE_CLI_USAGE,
   formatUpdateLaneReport,
   parseUpdateCliArgs,
-} from "./update-cli-lib.mjs";
-import { runIsolatedLazurioUpdate } from "./lazurio-update-runner-lib.mjs";
+} from "../../lazurio/runtime/update-cli-lib.mjs";
+import { runIsolatedLazurioUpdate } from "../../lazurio/runtime/lazurio-update-runner-lib.mjs";
 
 const parsed = parseUpdateCliArgs(Bun.argv.slice(2));
 if (!parsed.ok) {

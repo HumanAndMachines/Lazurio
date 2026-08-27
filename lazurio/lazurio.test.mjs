@@ -7,11 +7,11 @@ import { join } from "node:path";
 import {
   buildLaunchpadDoctorReport,
   loadRootDoctorSchema,
-} from "../launchpad/src/diagnostics-lib.mjs";
+} from "./runtime/diagnostics-lib.mjs";
 import {
   buildAggregateReport,
   validateDoctorReport,
-} from "../launchpad/src/doctor-surface-lib.mjs";
+} from "./runtime/doctor-surface-lib.mjs";
 import { platformTestTimeout } from "../launchpad/src/test-platform-setup.mjs";
 import {
   buildLazurioContext,
