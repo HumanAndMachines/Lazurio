@@ -17,7 +17,8 @@
 // a ne až v reportu o generaci dál.
 
 import { expect, test } from "bun:test";
-import { readFile, readdir, stat } from "fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "fs/promises";
+import { tmpdir } from "os";
 import { dirname, join, relative, resolve } from "path";
 import { fileURLToPath } from "url";
 import { organizationAppIdPrefix, validateAppManifest } from "./discovery-lib.mjs";
@@ -220,25 +221,14 @@ test("žádný app manifest v pracovním stromu nenese app.id mimo pattern", asy
       offenders.push(`${relative(repoRoot, organizationPath)}: chybí company.slug`);
       continue;
     }
-    const expectedPrefix = organizationAppIdPrefix(companySlug);
-    for await (const packagePath of walkPackageJson(organizationPath)) {
-      const packageJson = await readJson(packagePath).catch(() => null);
-      const app = packageJson?.companyascode?.app;
-      if (!app || app.schema_version !== "companyascode.launchpad_app.v1") continue;
-      scanned += 1;
-      const id = app.id;
-      if (typeof id !== "string" || !appIdPattern.test(id) || !checkIdPattern.test(`launchpad.runtime.${id}`)) {
-        offenders.push(`${relative(repoRoot, packagePath)}: ${JSON.stringify(id)}`);
-      } else if (app.company !== companySlug) {
-        offenders.push(
-          `${relative(repoRoot, packagePath)}: company ${JSON.stringify(app.company)} != ${JSON.stringify(companySlug)}`,
-        );
-      } else if (!id.startsWith(expectedPrefix)) {
-        offenders.push(
-          `${relative(repoRoot, packagePath)}: id ${JSON.stringify(id)} nezačíná ${JSON.stringify(expectedPrefix)}`,
-        );
-      }
-    }
+    const result = await scanOrganizationAppIdentities({
+      organizationPath,
+      companySlug,
+      appIdPattern,
+      checkIdPattern,
+    });
+    scanned += result.scanned;
+    offenders.push(...result.offenders);
   }
 
   if (offenders.length > 0) {
@@ -249,11 +239,90 @@ test("žádný app manifest v pracovním stromu nenese app.id mimo pattern", asy
   }
 });
 
-// Sken je záměrně nezávislý na discovery: discovery umí manifest odfiltrovat
-// dřív, než se na jeho id kdokoli podívá (mount contract, chybějící
-// modules.manifest.json). Tenhle test má vidět i takový manifest, protože i ten
-// se dřív nebo později stane namountovanou aplikací.
-async function* walkPackageJson(root) {
+test("observační scan ignoruje jen top-level productionspace a dál hlídá workspace i legacy modules", async () => {
+  const organizationPath = await mkdtemp(join(tmpdir(), "lazurio-app-id-contract-"));
+  const appIdPattern = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+  const checkIdPattern = new RegExp(DOCTOR_CHECK_ID_PATTERN);
+  const appManifest = (id) => ({
+    companyascode: {
+      app: {
+        schema_version: "companyascode.launchpad_app.v1",
+        id,
+        company: "DifferentCompany",
+      },
+    },
+  });
+
+  try {
+    const packages = [
+      ["productionspace/template/app/package.json", appManifest("exampleorg-production-v1")],
+      ["workspace/website/app/package.json", appManifest("exampleorg-workspace-v1")],
+      ["modules/legacy/app/package.json", appManifest("exampleorg-legacy-v1")],
+      ["other/productionspace/app/package.json", appManifest("exampleorg-nested-v1")],
+    ];
+    for (const [relativePath, packageJson] of packages) {
+      const packagePath = join(organizationPath, relativePath);
+      await mkdir(dirname(packagePath), { recursive: true });
+      await writeFile(packagePath, `${JSON.stringify(packageJson)}\n`);
+    }
+
+    const result = await scanOrganizationAppIdentities({
+      organizationPath,
+      companySlug: "ExampleOrg",
+      appIdPattern,
+      checkIdPattern,
+      reportRoot: organizationPath,
+    });
+    const portableOffenders = result.offenders.map((offender) => offender.replaceAll("\\", "/"));
+
+    expect(result.scanned).toBe(3);
+    expect(portableOffenders).toHaveLength(3);
+    expect(portableOffenders.some((offender) => offender.startsWith("workspace/website/"))).toBe(true);
+    expect(portableOffenders.some((offender) => offender.startsWith("modules/legacy/"))).toBe(true);
+    expect(portableOffenders.some((offender) => offender.startsWith("other/productionspace/"))).toBe(true);
+    expect(portableOffenders.some((offender) => offender.startsWith("productionspace/"))).toBe(false);
+  } finally {
+    await rm(organizationPath, { recursive: true, force: true });
+  }
+});
+
+async function scanOrganizationAppIdentities({
+  organizationPath,
+  companySlug,
+  appIdPattern,
+  checkIdPattern,
+  reportRoot = repoRoot,
+}) {
+  const offenders = [];
+  let scanned = 0;
+  const expectedPrefix = organizationAppIdPrefix(companySlug);
+  for await (const packagePath of walkPackageJson(organizationPath, { skipTopLevelProductionspace: true })) {
+    const packageJson = await readJson(packagePath).catch(() => null);
+    const app = packageJson?.companyascode?.app;
+    if (!app || app.schema_version !== "companyascode.launchpad_app.v1") continue;
+    scanned += 1;
+    const id = app.id;
+    if (typeof id !== "string" || !appIdPattern.test(id) || !checkIdPattern.test(`launchpad.runtime.${id}`)) {
+      offenders.push(`${relative(reportRoot, packagePath)}: ${JSON.stringify(id)}`);
+    } else if (app.company !== companySlug) {
+      offenders.push(
+        `${relative(reportRoot, packagePath)}: company ${JSON.stringify(app.company)} != ${JSON.stringify(companySlug)}`,
+      );
+    } else if (!id.startsWith(expectedPrefix)) {
+      offenders.push(
+        `${relative(reportRoot, packagePath)}: id ${JSON.stringify(id)} nezačíná ${JSON.stringify(expectedPrefix)}`,
+      );
+    }
+  }
+  return { offenders, scanned };
+}
+
+// Sken je záměrně nezávislý na discovery: discovery umí Workspace manifest
+// odfiltrovat dřív, než se na jeho id kdokoli podívá (mount contract, chybějící
+// modules.manifest.json). Tenhle test má takový manifest pořád vidět. Pouze
+// top-level productionspace je jiná hranice: jeho repa mají vlastní identitu a
+// nejsou Organization Workspace aplikace (decision 0041).
+async function* walkPackageJson(root, { skipTopLevelProductionspace = false, depth = 0 } = {}) {
   const skip = new Set(["node_modules", ".git", ".worktrees", "dist", "build", ".next", "target", "generated"]);
   let entries;
   try {
@@ -265,7 +334,8 @@ async function* walkPackageJson(root) {
     const path = join(root, entry.name);
     if (entry.isDirectory()) {
       if (skip.has(entry.name)) continue;
-      yield* walkPackageJson(path);
+      if (skipTopLevelProductionspace && depth === 0 && entry.name === "productionspace") continue;
+      yield* walkPackageJson(path, { skipTopLevelProductionspace, depth: depth + 1 });
       continue;
     }
     if (entry.name === "package.json") {
