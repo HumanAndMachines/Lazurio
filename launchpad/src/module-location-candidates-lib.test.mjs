@@ -148,6 +148,30 @@ test("location classification persists one unverifiable direct Git suspect", asy
   });
 });
 
+test("an exact markerless checkout stays unverified for runtime identity and relocation", async () => {
+  const organizationRoot = await fixtureRoot("exact-markerless");
+  await mkdir(join(organizationRoot, "workspace", "studio", ".git"), { recursive: true });
+  const inspection = await inspectOrganizationModuleCheckoutCandidates({
+    organizationRoot,
+    organizationSlug: "TestCo",
+    moduleSlug: "studio",
+  });
+
+  expect(await classifyOrganizationModuleCheckoutLocation({
+    organizationRoot,
+    expectedPath: "workspace/studio",
+    moduleSlug: "studio",
+    declaredModuleClaims: [{ path: "workspace/studio", module: "studio" }],
+    inspection,
+  })).toMatchObject({
+    status: "unverified",
+    reason: "marker_missing",
+    found_path: "workspace/studio",
+    expected_path: "workspace/studio",
+    target_occupied: true,
+  });
+});
+
 test("an unassigned legacy Git checkout blocks a vacant renamed target across fresh scans", async () => {
   const organizationRoot = await fixtureRoot("unassigned-legacy");
   await mkdir(join(organizationRoot, "workspace", "legacy", ".git"), { recursive: true });

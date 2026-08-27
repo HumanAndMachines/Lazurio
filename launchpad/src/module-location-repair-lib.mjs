@@ -233,8 +233,8 @@ export async function checkModuleLocationRepair({
     ),
   ];
   if (
-    companyConfig?.schema_version !== "company.gen3.v3"
-    || manifestRead.value?.schema_version !== "modules.manifest.v3"
+    !isSupportedGen3Declaration(companyConfig, "company.gen3.v3")
+    || !isSupportedGen3Declaration(manifestRead.value, "modules.manifest.v3")
     || manifestSlots.length !== 1
     || companySlots.length !== 1
     || unsafeDeclarationPaths.length > 0
@@ -707,6 +707,18 @@ export async function checkModuleLocationRepair({
       command: plan.apply_command,
     },
   };
+}
+
+function isSupportedGen3Declaration(document, canonicalSchemaVersion) {
+  if (!document || typeof document !== "object" || Array.isArray(document)) return false;
+  if (Object.hasOwn(document, "schema_version")) {
+    return document.schema_version === canonicalSchemaVersion;
+  }
+  // Deployed GEN3 Organization roots predate the explicit schema_version
+  // field. Their reviewed, tracked contract is `organization_generation`,
+  // while all mutation-critical shape and identity invariants are checked
+  // independently below. An explicit unknown schema never falls back here.
+  return document.organization_generation === "gen3";
 }
 
 async function inspectReviewPublishedOrganizationRoot({

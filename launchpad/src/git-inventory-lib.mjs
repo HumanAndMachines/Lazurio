@@ -447,6 +447,7 @@ async function observedModuleLocationIssue({ organization, slot, classification 
     !(slot.path.startsWith("workspace/") || slot.path.startsWith("modules/"))
     || !classification
     || ["healthy", "vacant"].includes(classification.status)
+    || exactCanonicalMarkerlessCheckoutCanUpdate({ slot, classification })
   ) return null;
   return locationIssueFromClassification({
     classification,
@@ -457,6 +458,21 @@ async function observedModuleLocationIssue({ organization, slot, classification 
     fallbackMessage: `${organization.path}: module ${slot.module} má neplatné nebo nejednoznačné lokální umístění`,
     sources: ["lazurio.module.json"],
   });
+}
+
+// A missing Module marker cannot authorize relocation or app execution, but
+// the exact declared mount is still safe to inspect through the ordinary Git
+// update gates. Keeping it in inventory lets Sync fast-forward to a reviewed
+// commit that publishes the marker instead of permanently wedging the checkout.
+// Any path mismatch, ambiguity, boundary issue or non-missing marker failure
+// remains quarantined and cannot create a duplicate clone.
+function exactCanonicalMarkerlessCheckoutCanUpdate({ slot, classification }) {
+  return classification.status === "unverified"
+    && classification.reason === "marker_missing"
+    && classification.target_occupied === true
+    && classification.found_path === slot.path
+    && classification.observed_paths?.length === 1
+    && classification.observed_paths[0] === slot.path;
 }
 
 function locationIssueFromClassification({

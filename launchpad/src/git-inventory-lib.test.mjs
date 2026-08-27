@@ -2,7 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { mkdir, readFile, rename, rm, symlink, writeFile } from "fs/promises";
 import { join } from "path";
 import { buildGitInventory } from "./git-inventory-lib.mjs";
-import { createLaunchpadGitFixture } from "./git-fixture-helpers.test.mjs";
+import { createLaunchpadGitFixture, initGitRepo, runGit } from "./git-fixture-helpers.test.mjs";
 
 const tempRoots = [];
 
@@ -429,6 +429,24 @@ test("inventory persistently quarantines a stable-slug Git suspect with an unver
       }),
     ]);
   }
+});
+
+test("inventory keeps an exact canonical markerless checkout updateable so Sync can publish its marker", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const checkout = join(root, "organizations", "OmegaCo_GEN3", "workspace", "studio");
+  await initGitRepo(checkout);
+  await rm(join(checkout, "lazurio.module.json"));
+  runGit(["add", "-u"], checkout);
+  runGit(["commit", "-m", "legacy checkout without Module marker"], checkout);
+
+  const inventory = await buildGitInventory({ companiesRoot: root });
+
+  expect(inventory.repos).toContainEqual(expect.objectContaining({
+    key: "OmegaCo::studio",
+    absolute_path: checkout,
+  }));
+  expect(inventory.inventory_issues.some((issue) => issue.module === "studio")).toBe(false);
 });
 
 test("inventory lets ambiguity dominate a repairable manifest mismatch", async () => {

@@ -1625,7 +1625,7 @@ function probeFreePort() {
 }
 
 async function waitForHealth(port, server) {
-  const deadline = Date.now() + 5_000;
+  const deadline = Date.now() + platformTestTimeout(5_000);
   while (Date.now() < deadline) {
     // Pokud server spadl při startu (např. port si mezi findFreePort a bindem
     // stihl vzít někdo jiný), neplýtvej 5 s timeoutem ani nepokračuj proti
