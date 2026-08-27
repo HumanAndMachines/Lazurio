@@ -160,6 +160,26 @@ async function smokeInstalledArchive(build) {
       `package-managed module setup must use canonical home without requesting a Root selection: ${failure(canonicalModule)}`,
     );
   }
+  const organizationInstall = runInstalledShim(
+    globalBin,
+    ["organization", "install", "ExampleOrganization", "--json"],
+    environment,
+  );
+  let organizationReport;
+  try {
+    organizationReport = JSON.parse(organizationInstall.stdout);
+  } catch {
+    throw new Error(`installed lazurio organization install did not return JSON: ${failure(organizationInstall)}`);
+  }
+  if (
+    organizationInstall.status !== 1
+    || organizationReport.root !== canonicalRoot
+    || organizationReport.target?.reason !== "lazurio_root_not_ready"
+  ) {
+    throw new Error(
+      `package-managed Organization install did not bind to the canonical home Root: ${JSON.stringify(organizationReport)}`,
+    );
+  }
   await assertInstalledUpdaterRuntime({ globalBin, environment });
   return {
     global_install: "passed",
@@ -169,6 +189,7 @@ async function smokeInstalledArchive(build) {
     install_report: "passed",
     operated_root_boundary: "passed",
     module_setup_root_boundary: "passed",
+    organization_home_root: "passed",
     updater_source_closure: "passed",
     updater_runtime_assets: "passed",
   };

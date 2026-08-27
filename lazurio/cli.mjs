@@ -577,6 +577,9 @@ function parseArgs(argv) {
       if (parsed.check || parsed.githubOrganizationId !== null) {
         throw new Error("organization install přijímá GitHub login, ne --check nebo --github-id.");
       }
+      if (parsed.rootExplicit) {
+        throw new Error("organization install vždy používá kanonický Lazurio Root v home a nepřijímá --root.");
+      }
       parsed.organizationLogin = parsed.operands[1];
     }
   } else if (parsed.searchFlags.size > 0) {
@@ -672,7 +675,7 @@ function usage() {
     "  lazurio --version [--json]",
     "  lazurio install [--language cs|en] [--json]",
     "  lazurio organization activate --check --github-id <id> [--json]",
-    "  lazurio organization install <github-login> [--json] [--root <cesta>]",
+    "  lazurio organization install <github-login> [--json]",
     "  lazurio context [--organization <slug>] [--json] [--root <cesta>]",
     "  lazurio doctor [--tool-updates] [--json] [--root <cesta>]",
     "  lazurio update [--json] [--root <cesta>]",

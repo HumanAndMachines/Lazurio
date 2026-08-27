@@ -9,8 +9,8 @@ privátní klientskou i vlastní Organization; CLI nezná žádnou jmennou výji
 - produkční nebo development-linked příkaz `lazurio` je v `PATH`;
 - Git, Bun a GitHub CLI jsou dostupné;
 - `gh auth status --hostname github.com` potvrzuje správný účet;
-- Lazurio Root už prošel `lazurio install` a má skutečnou složku
-  `organizations/`;
+- kanonický Lazurio Root `<home>/Lazurio` už prošel `lazurio install` a má
+  skutečnou složku `organizations/`;
 - Organization root repo `<login>/<login>_GEN3` existuje na `main`, obsahuje
   validní Forge binding a uživatel jej může číst.
 
@@ -21,10 +21,15 @@ Organization slouží oddělený explicitní activation postup.
 ## Konvergentní postup
 
 ```sh
-lazurio organization install <github-login> --root <lazurio-root> --json
-lazurio organization install <github-login> --root <lazurio-root> --json
-lazurio doctor --root <lazurio-root>
+lazurio organization install <github-login> --json
+lazurio organization install <github-login> --json
+lazurio doctor
 ```
+
+CLI Root nevybírá ani neukládá jako další konfiguraci. Produkční instalace
+vždy používá `~/Lazurio` na macOS/Linuxu a `%USERPROFILE%\\Lazurio` na
+Windows. Tím mají lidé i Agenti jednu předvídatelnou cestu a absolutní cesta
+současně nese uživatele Mašiny. `--root` proto tato operace nepřijímá.
 
 První běh materializuje exact Organization root do
 `organizations/<CanonicalLogin>_GEN3` a přes běžný update reconciler doplní

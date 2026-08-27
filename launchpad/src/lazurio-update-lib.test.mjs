@@ -13,7 +13,10 @@ import {
   runLazurioUpdate,
   updateManagedRepo,
 } from "./lazurio-update-lib.mjs";
-import { runGit as runGitAsync } from "./git-lib.mjs";
+import {
+  runGit as runGitAsync,
+  runGitInPinnedTemporaryChild,
+} from "./git-lib.mjs";
 import {
   createLaunchpadGitFixture,
   initGitRepo,
@@ -1113,12 +1116,19 @@ test("fresh Organization manifest materializes its new Workspace Module while ex
           const mappedArgs = args.map((value) =>
             value === declaredModuleRemote ? moduleRemote : value
           );
-          const result = await runGitAsync(mappedArgs, options);
-          if (result.ok && args[0] === "clone") {
-            const stagingPath = args.at(-1);
-            runGit(stagingPath, ["remote", "set-url", "origin", declaredModuleRemote]);
-          }
-          return result;
+          return runGitAsync(mappedArgs, options);
+        },
+        runPinnedChild: async (args, options) => {
+          const mappedArgs = args.map((value) =>
+            value === declaredModuleRemote ? moduleRemote : value
+          );
+          const result = await runGitInPinnedTemporaryChild(mappedArgs, options);
+          if (!result.ok || args[0] !== "clone") return result;
+          const stagingPath = join(options.cwd, result.child_name);
+          const restored = await runGitAsync(["remote", "set-url", "origin", declaredModuleRemote], {
+            cwd: stagingPath,
+          });
+          return restored.ok ? result : restored;
         },
       },
     },
