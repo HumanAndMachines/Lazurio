@@ -1,12 +1,19 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 
 import {
   assertCanonicalInstallBoundary,
   packageContentForParity,
   packageEvidenceForReport,
 } from "./npm-package-lib.mjs";
+import {
+  parseNpmPackageGateArgs,
+  retainVerifiedNpmPackage,
+} from "./npm-package-gate-lib.mjs";
 import { inspectLazurioInstallation, installExitCode } from "../lazurio/core/install-core-lib.mjs";
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
@@ -126,6 +133,71 @@ test("content parity ignores OS-specific npm archive encoding and stat mode", ()
   expect(packageContentForParity(linux)).toEqual(packageContentForParity(windows));
 });
 
+test("release candidate mode requires one explicit version and one new output directory", () => {
+  expect(parseNpmPackageGateArgs([
+    "--release-version", "0.1.0-nightly.0",
+    "--archive-dir", "dist/npm-release/0.1.0-nightly.0",
+  ], { cwd: "/fixture" })).toEqual({
+    evidence: null,
+    releaseVersion: "0.1.0-nightly.0",
+    archiveDirectory: resolve("/fixture", "dist/npm-release/0.1.0-nightly.0"),
+  });
+  expect(() => parseNpmPackageGateArgs(["--release-version", "0.1.0"])).toThrow("usage:");
+  expect(() => parseNpmPackageGateArgs([
+    "--release-version", "latest",
+    "--archive-dir", "dist/npm-release/latest",
+  ])).toThrow("invalid npm package version");
+  expect(() => parseNpmPackageGateArgs([
+    "--evidence", "evidence.json",
+    "--release-version", "0.1.0",
+    "--archive-dir", "dist/npm-release/0.1.0",
+  ])).toThrow("evidence is written inside --archive-dir");
+});
+
+test("release candidate retention preserves exact verified bytes and evidence", async () => {
+  const fixtureRoot = await mkdtemp(join(tmpdir(), "lazurio-npm-retention-test-"));
+  try {
+    const sourceArchive = join(fixtureRoot, "source.tgz");
+    const outputDirectory = join(fixtureRoot, "release", "0.1.0-nightly.0");
+    const archiveBytes = Buffer.from("exact verified npm archive");
+    await writeFile(sourceArchive, archiveBytes);
+    const fixture = packageRetentionFixture(sourceArchive, archiveBytes);
+    const retained = await retainVerifiedNpmPackage({
+      ...fixture,
+      archiveDirectory: outputDirectory,
+    });
+
+    expect(await readFile(retained.archive)).toEqual(archiveBytes);
+    expect(JSON.parse(await readFile(retained.evidence, "utf8"))).toEqual(fixture.evidence);
+    expect(retained.directory).toBe(outputDirectory);
+    await expect(retainVerifiedNpmPackage({
+      ...fixture,
+      archiveDirectory: outputDirectory,
+    })).rejects.toThrow("release candidate path already exists");
+  } finally {
+    await rm(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test("release candidate retention removes its new directory when byte verification fails", async () => {
+  const fixtureRoot = await mkdtemp(join(tmpdir(), "lazurio-npm-retention-failure-test-"));
+  try {
+    const sourceArchive = join(fixtureRoot, "source.tgz");
+    const outputDirectory = join(fixtureRoot, "candidate");
+    const archiveBytes = Buffer.from("changed npm archive");
+    await writeFile(sourceArchive, archiveBytes);
+    const fixture = packageRetentionFixture(sourceArchive, Buffer.from("expected npm archive"));
+
+    await expect(retainVerifiedNpmPackage({
+      ...fixture,
+      archiveDirectory: outputDirectory,
+    })).rejects.toThrow("differs from the verified package bytes");
+    expect(existsSync(outputDirectory)).toBe(false);
+  } finally {
+    await rm(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
 test("package smoke keeps canonical home Root deterministic across host prerequisite states", () => {
   const actionRequired = inspectLazurioInstallation({
     root: null,
@@ -202,4 +274,32 @@ function missingRootObservation(path) {
     status: "action_required",
     reason: "root_creation_required",
   };
+}
+
+function packageRetentionFixture(archive, expectedBytes) {
+  const filename = "lazurio-0.1.0-nightly.0.tgz";
+  const integrity = `sha512-${createHash("sha512").update(expectedBytes).digest("base64")}`;
+  const shasum = createHash("sha1").update(expectedBytes).digest("hex");
+  const build = {
+    package: {
+      name: "lazurio",
+      version: "0.1.0-nightly.0",
+      filename,
+      integrity,
+      shasum,
+    },
+    paths: { archive },
+  };
+  const evidence = {
+    schema_version: "lazurio.cli.npm-package-evidence.v1",
+    package: {
+      name: build.package.name,
+      version: build.package.version,
+      filename,
+    },
+    transport: { integrity, shasum },
+    source: { repository: "HumanAndMachines/Lazurio", commit: "a".repeat(40) },
+    smoke: { global_install: "passed" },
+  };
+  return { build, evidence };
 }

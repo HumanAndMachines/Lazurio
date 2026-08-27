@@ -21,6 +21,10 @@ import { bunVersionFromPackageManager } from "../lazurio/core/toolchain-lib.mjs"
 const CONTRACT_PATH = "distribution/npm-package-contract.v1.json";
 const packageVersionPattern = /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;
 
+export function isValidNpmPackageVersion(version) {
+  return typeof version === "string" && packageVersionPattern.test(version);
+}
+
 export async function buildLazurioNpmPackage({
   cwd = process.cwd(),
   packageVersion,
@@ -46,7 +50,7 @@ export async function buildLazurioNpmPackage({
   validateContract(contract);
   const requiredBunVersion = bunVersionFromPackageManager(sourcePackage.packageManager);
   const version = packageVersion ?? `0.0.0-dev.${sourceCommit.slice(0, 12)}`;
-  if (!packageVersionPattern.test(version)) throw new Error(`invalid npm package version ${version}`);
+  if (!isValidNpmPackageVersion(version)) throw new Error(`invalid npm package version ${version}`);
   const commitEpoch = Number(gitText(repositoryRoot, ["show", "-s", "--format=%ct", sourceCommit]));
   if (!Number.isSafeInteger(commitEpoch) || commitEpoch < 0) {
     throw new Error("npm package source commit timestamp is invalid");
@@ -209,7 +213,7 @@ function parsePackDescriptor(stdout) {
   if (
     !descriptor
     || descriptor.name !== "lazurio"
-    || !packageVersionPattern.test(descriptor.version ?? "")
+    || !isValidNpmPackageVersion(descriptor.version)
     || typeof descriptor.filename !== "string"
     || !/^sha512-[A-Za-z0-9+/]+={0,2}$/u.test(descriptor.integrity ?? "")
     || !/^[0-9a-f]{40}$/u.test(descriptor.shasum ?? "")
