@@ -1,11 +1,11 @@
 {
   "name": "lazurio",
   "private": true,
-  "packageManager": "bun@1.4.0",
   "type": "module",
-  "bin": {
-    "lazurio": "lazurio/cli.mjs"
-  },
+  "workspaces": [
+    "lazurio",
+    "launchpad"
+  ],
   "imports": {
     "#lazurio-core/resident-manifest": "./lazurio/core/resident-manifest-lib.mjs"
   },
@@ -24,7 +24,6 @@
     "workspace-runtime:build": "bun distribution/build.mjs --profile workspace",
     "resident:test": "bun test --timeout 60000 ./distribution/build.test.mjs ./distribution/npm-package.test.mjs ./distribution/updater.test.mjs ./distribution/buddy-service.test.mjs ./distribution/buddy-rollout.test.mjs ./provisioning/ansible-contract.test.mjs ./tests/bridge",
     "npm-package:gate": "bun distribution/npm-package-gate.mjs",
-    "npm-package:parity": "bun distribution/npm-package-parity.mjs",
     "resident:operator:test": "bun test ./provisioning/ansible-contract.test.mjs",
     "resident:install": "bun distribution/runtime/updater.mjs install",
     "resident:update": "bun distribution/runtime/updater.mjs update",

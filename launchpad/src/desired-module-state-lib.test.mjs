@@ -10,7 +10,7 @@ import {
   readDesiredModuleState,
   validateDesiredModuleState,
   writeDesiredModuleState,
-} from "./desired-module-state-lib.mjs";
+} from "../../lazurio/runtime/desired-module-state-lib.mjs";
 
 const roots = [];
 const app = { id: "acme-demo-v1", company: "acme", module: "demo" };

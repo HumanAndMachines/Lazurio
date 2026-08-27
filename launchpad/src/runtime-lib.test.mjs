@@ -25,13 +25,13 @@ import {
   windowsProcessIdentityCommand,
   windowsPowerShellExecutable,
   windowsTaskkillCommand,
-} from "./runtime-lib.mjs";
+} from "../../lazurio/runtime/runtime-lib.mjs";
 import { platformTestTimeout } from "./test-platform-setup.mjs";
 import {
   buildDesiredModuleState,
   readDesiredModuleState,
   writeDesiredModuleState,
-} from "./desired-module-state-lib.mjs";
+} from "../../lazurio/runtime/desired-module-state-lib.mjs";
 
 const tempRoots = [];
 // Windows záměrně neumí z vestavěného resolveru ověřit CWD cizího procesu,
@@ -4120,9 +4120,10 @@ test("unexpected desired child exit restarts exact source and bounded crash loop
   const recoveringPort = await findFreePort();
   const recoveringRoot = await createCompaniesWorkspaceFixture({
     port: recoveringPort,
-    serverSource: crashOnceServerSource(),
+    serverSource: controlledExitServerSource(),
   });
   const recoveringApp = withStaticEntrypoint(fixtureDiscoveryApp({ port: recoveringPort }));
+  const recoveringExitMarker = controlledExitMarker(recoveringRoot);
   const recoveringRuntime = createRuntimeManager({
     companiesRoot: recoveringRoot,
     launchpadRoot: join(recoveringRoot, "launchpad"),
@@ -4132,9 +4133,13 @@ test("unexpected desired child exit restarts exact source and bounded crash loop
     desiredRestartStableMs: 10_000,
   });
   const initial = await recoveringRuntime.start(recoveringApp.id);
+  await writeFile(recoveringExitMarker, "exit initial\n", "utf8");
   const recovered = await waitForRuntime(
     () => recoveringRuntime.health(recoveringApp.id),
-    (runtime) => runtime.status === "healthy" && runtime.pid !== initial.pid,
+    (runtime) => runtime.status === "healthy"
+      && runtime.pid !== initial.pid
+      && runtime.desired?.revision !== initial.desired.revision
+      && runtime.desired?.last_reconciled_at !== null,
   );
   expect(recovered).toMatchObject({
     desired: { enabled: true, source: { type: "main" }, status: "active" },
@@ -4144,9 +4149,10 @@ test("unexpected desired child exit restarts exact source and bounded crash loop
   const crashingPort = await findFreePort();
   const crashingRoot = await createCompaniesWorkspaceFixture({
     port: crashingPort,
-    serverSource: alwaysCrashServerSource(),
+    serverSource: controlledExitServerSource(),
   });
   const crashingApp = withStaticEntrypoint(fixtureDiscoveryApp({ port: crashingPort }));
+  const crashingExitMarker = controlledExitMarker(crashingRoot);
   const crashingRuntime = createRuntimeManager({
     companiesRoot: crashingRoot,
     launchpadRoot: join(crashingRoot, "launchpad"),
@@ -4155,7 +4161,22 @@ test("unexpected desired child exit restarts exact source and bounded crash loop
     desiredRestartDelaysMs: [10, 20],
     desiredRestartStableMs: 10_000,
   });
-  await crashingRuntime.start(crashingApp.id);
+  const crashingInitial = await crashingRuntime.start(crashingApp.id);
+  let previousPid = crashingInitial.pid;
+  let previousRevision = crashingInitial.desired.revision;
+  for (const attempt of [1, 2]) {
+    await writeFile(crashingExitMarker, `exit attempt ${attempt}\n`, "utf8");
+    const replacement = await waitForRuntime(
+      () => crashingRuntime.health(crashingApp.id),
+      (runtime) => runtime.status === "healthy"
+        && runtime.pid !== previousPid
+        && runtime.desired?.revision !== previousRevision
+        && runtime.desired?.last_reconciled_at !== null,
+    );
+    previousPid = replacement.pid;
+    previousRevision = replacement.desired.revision;
+  }
+  await writeFile(crashingExitMarker, "exit exhausted replacement\n", "utf8");
   const degraded = await waitForRuntime(
     () => crashingRuntime.health(crashingApp.id),
     (runtime) => runtime.desired?.failure_kind === "desired_restart_exhausted",
@@ -4175,6 +4196,108 @@ test("unexpected desired child exit restarts exact source and bounded crash loop
   expect(logs.content.match(/restart_attempt=/g)?.length).toBe(2);
   expect(logs.content).toContain("no further restart scheduled");
 }, platformTestTimeout(20_000));
+
+test("desired replacement exit during active reconciliation consumes the next bounded attempt", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({
+    port,
+    serverSource: controlledExitServerSource(),
+  });
+  const app = withStaticEntrypoint(fixtureDiscoveryApp({ port }));
+  const exitMarker = join(
+    root,
+    "organizations",
+    "TestCompany",
+    "modules",
+    "demo",
+    "app",
+    "v1",
+    ".launchpad-exit-now",
+  );
+  let blockNextActiveReconciliation = false;
+  let reportActiveReconciliation;
+  let releaseActiveReconciliation;
+  const activeReconciliationStarted = new Promise((resolve) => {
+    reportActiveReconciliation = resolve;
+  });
+  const activeReconciliationRelease = new Promise((resolve) => {
+    releaseActiveReconciliation = resolve;
+  });
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "pending-exit-during-reconciliation",
+    discover: discoveryWithApp(app),
+    desiredRestartDelaysMs: [0, 0],
+    desiredRestartStableMs: 10_000,
+    writeDesiredModuleStateFn: async (options) => {
+      if (
+        blockNextActiveReconciliation
+        && options.state.status === "active"
+        && options.state.last_reconciled_at !== null
+      ) {
+        blockNextActiveReconciliation = false;
+        reportActiveReconciliation();
+        await activeReconciliationRelease;
+      }
+      return writeDesiredModuleState(options);
+    },
+  });
+
+  try {
+    const initial = await runtime.start(app.id);
+    await waitForRuntime(
+      () => runtime.health(app.id),
+      (state) => state.status === "healthy" && state.pid === initial.pid,
+    );
+
+    blockNextActiveReconciliation = true;
+    await writeFile(exitMarker, "exit initial\n", "utf8");
+    await activeReconciliationStarted;
+    const blockedReplacement = await waitForRuntime(
+      () => runtime.health(app.id),
+      (state) => state.status === "healthy" && state.managed === true && state.pid !== initial.pid,
+    );
+
+    await writeFile(exitMarker, "exit blocked replacement\n", "utf8");
+    await waitForRuntime(
+      () => runtime.health(app.id),
+      (state) => state.managed === false && state.pid === blockedReplacement.pid,
+    );
+    releaseActiveReconciliation();
+
+    const finalReplacement = await waitForRuntime(
+      () => runtime.health(app.id),
+      (state) => state.status === "healthy"
+        && state.managed === true
+        && state.pid !== blockedReplacement.pid,
+    );
+    await writeFile(exitMarker, "exit final replacement\n", "utf8");
+    const degraded = await waitForRuntime(
+      () => runtime.health(app.id),
+      (state) => state.desired?.failure_kind === "desired_restart_exhausted",
+      100,
+    );
+
+    expect(finalReplacement.pid).not.toBe(initial.pid);
+    expect(degraded).toMatchObject({
+      status: "degraded",
+      managed: false,
+      desired_alignment: "matches",
+      desired: {
+        enabled: true,
+        status: "degraded",
+        failure_kind: "desired_restart_exhausted",
+      },
+    });
+    const logs = await runtime.logs(app.id);
+    expect(logs.content.match(/restart_attempt=/g)?.length).toBe(2);
+    expect(logs.content).toContain("no further restart scheduled");
+  } finally {
+    releaseActiveReconciliation();
+    await runtime.stop(app.id).catch(() => {});
+  }
+}, platformTestTimeout(30_000));
 
 test("desired restart never treats an unhealthy surviving replacement as recovered", async () => {
   const port = await findFreePort();
@@ -4633,13 +4756,11 @@ async function declareFixtureLazurioRuntime(moduleRoot) {
   });
 }
 
-function crashOnceServerSource() {
+function controlledExitServerSource() {
   return [
-    "import { existsSync, writeFileSync } from 'node:fs';",
+    "import { existsSync, unlinkSync } from 'node:fs';",
     "import { join } from 'node:path';",
-    "const marker = join(process.cwd(), '.launchpad-crashed-once');",
-    "const shouldCrash = !existsSync(marker);",
-    "if (shouldCrash) writeFileSync(marker, 'crashed\\n');",
+    "const marker = join(process.cwd(), '.launchpad-exit-now');",
     "const server = Bun.serve({",
     "  hostname: process.env.LAZURIO_RUNTIME_HOST,",
     "  port: Number(process.env.LAZURIO_RUNTIME_PORT),",
@@ -4649,27 +4770,28 @@ function crashOnceServerSource() {
     "    return new Response('ok');",
     "  },",
     "});",
-    "if (shouldCrash) setTimeout(() => { server.stop(true); process.exit(7); }, process.platform === 'win32' ? 5000 : 1200);",
-    "setInterval(() => {}, 2147483647);",
+    "const watcher = setInterval(() => {",
+    "  if (!existsSync(marker)) return;",
+    "  unlinkSync(marker);",
+    "  clearInterval(watcher);",
+    "  server.stop(true);",
+    "  process.exit(7);",
+    "}, 10);",
     "",
   ].join("\n");
 }
 
-function alwaysCrashServerSource() {
-  return [
-    "const server = Bun.serve({",
-    "  hostname: process.env.LAZURIO_RUNTIME_HOST,",
-    "  port: Number(process.env.LAZURIO_RUNTIME_PORT),",
-    "  fetch(request) {",
-    "    const url = new URL(request.url);",
-    "    if (url.pathname === '/health') return Response.json({ status: 'ok' });",
-    "    return new Response('ok');",
-    "  },",
-    "});",
-    "setTimeout(() => { server.stop(true); process.exit(7); }, process.platform === 'win32' ? 5000 : 1200);",
-    "setInterval(() => {}, 2147483647);",
-    "",
-  ].join("\n");
+function controlledExitMarker(root) {
+  return join(
+    root,
+    "organizations",
+    "TestCompany",
+    "modules",
+    "demo",
+    "app",
+    "v1",
+    ".launchpad-exit-now",
+  );
 }
 
 function crashThenStayUnhealthyServerSource() {

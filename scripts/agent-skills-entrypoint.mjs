@@ -20,7 +20,7 @@ import {
   CLAUDE_SKILLS_MATERIALIZATION,
   inspectAgentSkillsEntrypoint,
   listSkillFiles,
-} from "../launchpad/src/agent-skills-entrypoint-lib.mjs";
+} from "../lazurio/runtime/agent-skills-entrypoint-lib.mjs";
 
 export const CANONICAL_SKILLS_PATH = ".agents/skills";
 export const CLAUDE_SKILLS_PATH = ".claude/skills";

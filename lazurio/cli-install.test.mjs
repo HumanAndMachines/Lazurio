@@ -168,12 +168,13 @@ test("real Bun link projde install, direct status a idempotent reinstall", () =>
   // Machine updater removes the exact owned link from outside the Windows
   // launcher. A public self-uninstall would need a second deferred cleaner
   // because the running .exe is locked until its Bun child exits.
-  const unlink = runExecutable(process.execPath, ["unlink", "--cwd", fixtureRoot], {
-    cwd: fixtureRoot,
+  const fixturePackageRoot = join(fixtureRoot, "lazurio");
+  const unlink = runExecutable(process.execPath, ["unlink", "--cwd", fixturePackageRoot], {
+    cwd: fixturePackageRoot,
     environment: isolated.environment,
   });
   expect(unlink.status, unlink.stderr).toBe(0);
-  expect(existsSync(join(isolated.globalDirectory, "node_modules", "lazurio"))).toBe(false);
+  expect(existsSync(registrationPath(isolated.globalDirectory))).toBe(false);
   expect(resolveInstalledCommand(isolated.globalBin)).toBeNull();
   expect(existsSync(join(isolated.globalBin, "lazurio.bunx"))).toBe(false);
 });
@@ -211,7 +212,7 @@ test("foreign PATH command se nikdy nespustí ani nepřepíše", () => {
   expect(result.status).toBe(1);
   expect(result.stderr).toContain("PATH už obsahuje jiný příkaz lazurio");
   expect(existsSync(marker)).toBe(false);
-  expect(existsSync(join(isolated.globalDirectory, "node_modules", "lazurio"))).toBe(false);
+  expect(existsSync(registrationPath(isolated.globalDirectory))).toBe(false);
 });
 
 test("foreign Bun registrace se nepřepíše a neodinstaluje", () => {
@@ -220,7 +221,7 @@ test("foreign Bun registrace se nepřepíše a neodinstaluje", () => {
   mkdirSync(foreignRoot, { recursive: true });
   writeFileSync(
     join(foreignRoot, "package.json"),
-    `${JSON.stringify({ name: "lazurio", private: true, bin: { lazurio: "foreign.mjs" } }, null, 2)}\n`,
+    `${JSON.stringify({ name: "@lazurio/runtime", private: true, bin: { lazurio: "foreign.mjs" } }, null, 2)}\n`,
   );
   writeFileSync(join(foreignRoot, "foreign.mjs"), "#!/usr/bin/env bun\n", { mode: 0o755 });
   const link = runExecutable(process.execPath, ["link", "--cwd", foreignRoot], {
@@ -237,7 +238,7 @@ test("foreign Bun registrace se nepřepíše a neodinstaluje", () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("patří jinému rootu");
   }
-  expect(existsSync(join(isolated.globalDirectory, "node_modules", "lazurio"))).toBe(true);
+  expect(existsSync(registrationPath(isolated.globalDirectory))).toBe(true);
 });
 
 test("chybějící Bun global bin v PATH skončí před mutací", () => {
@@ -252,7 +253,7 @@ test("chybějící Bun global bin v PATH skončí před mutací", () => {
   });
   expect(result.status).toBe(1);
   expect(result.stderr).toContain("Bun global bin není v PATH");
-  expect(existsSync(join(isolated.globalDirectory, "node_modules", "lazurio"))).toBe(false);
+  expect(existsSync(registrationPath(isolated.globalDirectory))).toBe(false);
 });
 
 test("linked task worktree se nestane permanentním PATH targetem", () => {
@@ -264,7 +265,7 @@ test("linked task worktree se nestane permanentním PATH targetem", () => {
   });
   expect(result.status).toBe(1);
   expect(result.stderr).toContain("linked worktree");
-  expect(existsSync(join(isolated.globalDirectory, "node_modules", "lazurio"))).toBe(false);
+  expect(existsSync(registrationPath(isolated.globalDirectory))).toBe(false);
 });
 
 function isolatedBunEnvironment(label) {
@@ -314,6 +315,10 @@ function directoryContainsLazurioCommand(directory) {
     ? ["lazurio.exe", "lazurio.cmd", "lazurio.bat", "lazurio.com"]
     : ["lazurio"];
   return names.some((name) => existsSync(join(directory.replace(/^"|"$/gu, ""), name)));
+}
+
+function registrationPath(globalDirectory) {
+  return join(globalDirectory, "node_modules", "@lazurio", "runtime");
 }
 
 function resolveInstalledCommand(globalBin) {

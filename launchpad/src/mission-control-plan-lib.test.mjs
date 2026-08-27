@@ -1,7 +1,7 @@
 import { afterAll, expect, test } from "bun:test";
 import { mkdir, rename, rm, symlink, writeFile } from "fs/promises";
 import { join } from "path";
-import { buildMissionControlPlanIndex, readMissionControlPlanAt } from "./mission-control-plan-lib.mjs";
+import { buildMissionControlPlanIndex, readMissionControlPlanAt } from "../../lazurio/runtime/mission-control-plan-lib.mjs";
 import { createLaunchpadGitFixture } from "./git-fixture-helpers.test.mjs";
 
 const tempRoots = [];

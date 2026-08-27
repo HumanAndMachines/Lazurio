@@ -24,13 +24,17 @@ import { existsSync } from "fs";
 import { readdir } from "fs/promises";
 import { dirname, join, relative, resolve, sep } from "path";
 import { readJson, readLocalOverrideConfig, validateAppManifest } from "./discovery-lib.mjs";
-import { normalizePackageRuntime } from "../../lazurio/core/runtime-contract-lib.mjs";
-import { materializeRuntimeFromModule, normalizeModuleManifest } from "../../lazurio/core/module-contract-lib.mjs";
+import { normalizePackageRuntime } from "../core/runtime-contract-lib.mjs";
+import { materializeRuntimeFromModule, normalizeModuleManifest } from "../core/module-contract-lib.mjs";
 
-const launchpadRoot = join(import.meta.dirname, "..");
-const appSchemaPath = join(launchpadRoot, "schemas", "launchpad-app.schema.json");
-const personalSchemaPath = join(launchpadRoot, "schemas", "personal.gen3.schema.json");
-const buddyPresentationSchemaPath = join(launchpadRoot, "schemas", "personal-buddy-presentation.draft.schema.json");
+const lazurioPackageRoot = join(import.meta.dirname, "..");
+const appSchemaPath = join(lazurioPackageRoot, "schemas", "launchpad-app.schema.json");
+const personalSchemaPath = join(lazurioPackageRoot, "schemas", "personal.gen3.schema.json");
+const buddyPresentationSchemaPath = join(
+  lazurioPackageRoot,
+  "schemas",
+  "personal-buddy-presentation.draft.schema.json",
+);
 const defaultPersonalspaceMountpoint = "personalspace";
 const gitMarker = "_GEN3";
 const ignoredSpaceDirs = new Set([".git", ".worktrees", "node_modules", "secrets"]);

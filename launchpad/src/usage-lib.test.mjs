@@ -2,7 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { tmpdir } from "os";
 import { join } from "path";
 import { mkdtemp, rm } from "fs/promises";
-import { buildMostUsedApps, recordAppOpen } from "./usage-lib.mjs";
+import { buildMostUsedApps, recordAppOpen } from "../../lazurio/runtime/usage-lib.mjs";
 
 const tempRoots = [];
 

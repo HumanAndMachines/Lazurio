@@ -12,8 +12,8 @@ import {
   resolveGitExecutable,
   runGit,
   safeGitRemoteEnv,
-} from "./git-lib.mjs";
-import { APP_FILESYSTEM_ROOT } from "./discovery-lib.mjs";
+} from "../../lazurio/runtime/git-lib.mjs";
+import { APP_FILESYSTEM_ROOT } from "../../lazurio/runtime/discovery-lib.mjs";
 
 const DEFAULT_MODULE_LIMIT = 8;
 const DEFAULT_COMMIT_LIMIT = 15;

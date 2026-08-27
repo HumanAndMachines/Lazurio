@@ -3,7 +3,7 @@
 import { existsSync } from "fs";
 import { readdir, writeFile } from "fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "path";
-import { acquireModuleRuntimeLock } from "../launchpad/src/module-runtime-lock-lib.mjs";
+import { acquireModuleRuntimeLock } from "./runtime/module-runtime-lock-lib.mjs";
 import { normalizeModuleManifest } from "./core/module-contract-lib.mjs";
 import {
   nextFreeModulePort,

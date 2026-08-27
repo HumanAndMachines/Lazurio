@@ -20,11 +20,11 @@ import {
   satisfiesGate,
   summarizeStatus,
   validateDoctorReport,
-} from "./doctor-surface-lib.mjs";
-import { buildDoctorReportFromAppsResponse } from "./diagnostics-lib.mjs";
+} from "../../lazurio/runtime/doctor-surface-lib.mjs";
+import { buildDoctorReportFromAppsResponse } from "../../lazurio/runtime/diagnostics-lib.mjs";
 
-const launchpadRoot = join(import.meta.dirname, "..");
-const schema = loadDoctorReportSchema(launchpadRoot);
+const lazurioPackageRoot = join(import.meta.dirname, "..", "..", "lazurio");
+const schema = loadDoctorReportSchema(lazurioPackageRoot);
 
 function appsResponseFixture(overrides = {}) {
   return {
@@ -40,7 +40,7 @@ function appsResponseFixture(overrides = {}) {
 }
 
 test("vendorovaná kopie schématu nese v3 a obě polarity verzní brány", () => {
-  const raw = JSON.parse(readFileSync(join(launchpadRoot, "schemas", "doctor-report.schema.json"), "utf8"));
+  const raw = JSON.parse(readFileSync(join(lazurioPackageRoot, "schemas", "doctor-report.schema.json"), "utf8"));
 
   expect(raw.properties.schema_version.enum).toContain(DOCTOR_REPORT_SCHEMA_VERSION_V3);
   expect(raw.properties.checks.items.properties.status.enum).toContain("not_applicable");

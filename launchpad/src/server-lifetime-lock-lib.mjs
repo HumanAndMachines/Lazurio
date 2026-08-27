@@ -1,6 +1,6 @@
 import { existsSync, lstatSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
-import { acquireModuleRuntimeLock } from "./module-runtime-lock-lib.mjs";
+import { acquireModuleRuntimeLock } from "../../lazurio/runtime/module-runtime-lock-lib.mjs";
 
 export async function acquireServerLifetimeLock({
   stateDirectory,

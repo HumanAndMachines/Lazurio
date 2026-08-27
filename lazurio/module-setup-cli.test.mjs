@@ -7,7 +7,7 @@ import {
   moduleSetupExitCode,
   setupModule,
 } from "./module-setup-lib.mjs";
-import { validateAgainstSchema } from "../launchpad/src/json-schema-mini.mjs";
+import { validateAgainstSchema } from "./runtime/json-schema-mini.mjs";
 
 const roots = [];
 const cliPath = join(import.meta.dirname, "cli.mjs");

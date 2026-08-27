@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } f
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { validateAgainstSchema } from "../../launchpad/src/json-schema-mini.mjs";
+import { validateAgainstSchema } from "../runtime/json-schema-mini.mjs";
 import {
   buildOrganizationHostAdapterInvocation,
   validateOrganizationHostAdapter,

@@ -3,8 +3,8 @@ import { readFile, readlink, realpath } from "node:fs/promises";
 import { createConnection } from "node:net";
 import { isAbsolute, join, relative, resolve } from "node:path";
 
-import { buildLaunchpadDoctorReport } from "./diagnostics-lib.mjs";
-import { discoverLaunchpadApps } from "./discovery-lib.mjs";
+import { buildLaunchpadDoctorReport } from "../../lazurio/runtime/diagnostics-lib.mjs";
+import { discoverLaunchpadApps } from "../../lazurio/runtime/discovery-lib.mjs";
 
 const schemaVersion = "lazurio.workspace_machine_parity.v1";
 export const externalAssertions = Object.freeze([

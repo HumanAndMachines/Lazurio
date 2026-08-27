@@ -3,7 +3,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { mkdir, mkdtemp, rm, writeFile } from "fs/promises";
 import { buildRecentModuleChanges, moduleReposFromApps } from "./recent-changes-lib.mjs";
-import { APP_FILESYSTEM_ROOT } from "./discovery-lib.mjs";
+import { APP_FILESYSTEM_ROOT } from "../../lazurio/runtime/discovery-lib.mjs";
 
 const tempRoots = [];
 

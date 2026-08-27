@@ -104,7 +104,7 @@ export function personalspaceRuntimeUrls(app) {
 export async function buildPersonalspaceResponse({
   companiesRoot = join(import.meta.dirname, "..", ".."),
   rootSourceRoot = companiesRoot,
-  launchpadRoot = join(import.meta.dirname, ".."),
+  launchpadRoot = join(companiesRoot, "launchpad"),
   runtimeManager = createPersonalspaceRuntimeManager({ companiesRoot, rootSourceRoot, launchpadRoot }),
   profileEmail = null,
   verifyRepositoryPrivacy = false,

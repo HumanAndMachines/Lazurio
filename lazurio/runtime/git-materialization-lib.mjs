@@ -4,11 +4,11 @@ import { resolve } from "node:path";
 import {
   GIT_LOCAL_TIMEOUT_MS,
   materializeGitCheckout,
-} from "../../lazurio/core/git-materialization-lib.mjs";
+} from "../core/git-materialization-lib.mjs";
 import {
   inspectCanonicalPathBoundary,
   isSamePath,
-} from "../../lazurio/core/path-boundary-lib.mjs";
+} from "../core/path-boundary-lib.mjs";
 import { runGit, runGitInPinnedTemporaryChild, safeGitRemoteEnv } from "./git-lib.mjs";
 
 // Launchpad owns only the nested manifest policy. Core owns the one physical

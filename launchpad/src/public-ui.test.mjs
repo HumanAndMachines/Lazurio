@@ -945,7 +945,7 @@ test("UI separates physical Organization/Workspace/Productionspace and prepares 
   const [js, css, diag] = await Promise.all([
     readFile(join(publicRoot, "app.js"), "utf8"),
     readFile(join(publicRoot, "styles.css"), "utf8"),
-    readFile(join(import.meta.dirname, "diagnostics-lib.mjs"), "utf8"),
+    readFile(join(import.meta.dirname, "..", "..", "lazurio", "runtime", "diagnostics-lib.mjs"), "utf8"),
   ]);
 
   // Physical placement defines runtime/Git ownership. Workspace modules are

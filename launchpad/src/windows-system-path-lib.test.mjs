@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import {
   trustedWindowsSystemExecutable,
   trustedWindowsSystemRoot,
-} from "./windows-system-path-lib.mjs";
+} from "../../lazurio/runtime/windows-system-path-lib.mjs";
 
 test("trusted Windows root accepts a local drive and WINDIR fallback", () => {
   expect(trustedWindowsSystemRoot({ SystemRoot: "C:/Windows/" })).toBe("C:\\Windows\\");

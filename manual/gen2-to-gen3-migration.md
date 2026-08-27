@@ -366,7 +366,7 @@ git -C "$GEN3" worktree add "$WT" -b "$BRANCH" origin/main
 ```
 
 Sidecar je sibling worktree, ne soubor uvnitř něj. Musí projít aktuálním
-`launchpad/schemas/worktree.schema.json`; minimální root příklad:
+`lazurio/schemas/worktree.schema.json`; minimální root příklad:
 
 ```json
 {

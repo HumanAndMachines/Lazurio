@@ -13,9 +13,9 @@ import {
   organizationSlotRepositoryAliasIssues,
   organizationSlotRepositoryBranch,
   organizationSlotRepositoryRemote,
-} from "../../lazurio/core/organization-slot-scope-lib.mjs";
-import { isSamePath } from "../../lazurio/core/path-boundary-lib.mjs";
-import { moduleLocationRepairCommand } from "../../lazurio/core/module-location-repair-contract-lib.mjs";
+} from "../core/organization-slot-scope-lib.mjs";
+import { isSamePath } from "../core/path-boundary-lib.mjs";
+import { moduleLocationRepairCommand } from "../core/module-location-repair-contract-lib.mjs";
 import {
   acquireUpdateLock,
   inspectLocalRepo,

@@ -8,8 +8,8 @@ import {
   discoverLaunchpadApps,
   runtimeScriptPortAuthorityIssues,
 } from "./discovery-lib.mjs";
-import { materializeRuntimeFromModule, normalizeModuleManifest } from "../../lazurio/core/module-contract-lib.mjs";
-import { normalizePackageRuntime } from "../../lazurio/core/runtime-contract-lib.mjs";
+import { materializeRuntimeFromModule, normalizeModuleManifest } from "../core/module-contract-lib.mjs";
+import { normalizePackageRuntime } from "../core/runtime-contract-lib.mjs";
 import { recordAppOpen } from "./usage-lib.mjs";
 import { buildWorktreeIndex } from "./worktree-lib.mjs";
 import { acquireModuleRuntimeLock } from "./module-runtime-lock-lib.mjs";
@@ -400,6 +400,10 @@ export function createRuntimeManager({
 
   async function startRuntimeApp(app, takeover = {}) {
     return withModuleLeaseLock(app, async () => {
+      // The explicit user action starts a fresh restart generation before the
+      // child exists. Resetting after spawn can erase the new child's exit
+      // tracker when it dies in the desired-state commit window.
+      resetDesiredRestartTracker(app);
       const result = await startRuntimeAppUnlocked(app, { trigger: "user", takeover });
       let desired;
       try {
@@ -408,7 +412,6 @@ export function createRuntimeManager({
         await stopRuntimeAppUnlocked(app).catch(() => {});
         throw desiredPersistenceError(app, error);
       }
-      resetDesiredRestartTracker(app);
       return { ...result, desired };
     });
   }
@@ -918,6 +921,7 @@ export function createRuntimeManager({
     const runtimeSource = runtimeSourceForApp(app);
     const steps = [];
     let shouldConfirmStability = false;
+    resetDesiredRestartTracker(app);
 
     // 1) Ensure install — jen když dependency stav vyžaduje instalaci a jde
     //    bezpečně provést. Ostatní blokující dependency stavy (missing_access,
@@ -1002,8 +1006,6 @@ export function createRuntimeManager({
       }
       throw desiredPersistenceError(app, error);
     }
-    resetDesiredRestartTracker(app);
-
     // Lokální usage tracking pro panel „Nejčastější" (step-007) — best-effort,
     // nikdy neblokuje otevření a nezapisuje žádnou PII (jen app id + agregát).
     try {
@@ -1033,7 +1035,18 @@ export function createRuntimeManager({
     const deadline = Date.now() + openHealthyWaitMs;
     let runtime = initialRuntime;
     while (runtime.status === "starting" && Date.now() < deadline) {
-      await sleep(openHealthyPollMs);
+      const record = managedProcesses.get(runtimeKeyForApp(app));
+      if (record && !record.stopping) {
+        const event = await Promise.race([
+          record.child.exited.then(() => "exited"),
+          sleep(openHealthyPollMs).then(() => "poll"),
+        ]);
+        if (event === "exited" && record.exitFinalizationPromise) {
+          await record.exitFinalizationPromise;
+        }
+      } else {
+        await sleep(openHealthyPollMs);
+      }
       runtime = await healthForApp(app);
     }
     return runtime;
@@ -1596,6 +1609,7 @@ export function createRuntimeManager({
     const app = await runtimeAppForAction(appId, { source, enforcePortContract: true });
     const runtimeSource = runtimeSourceForApp(app);
     return withModuleLeaseLock(app, async () => {
+      resetDesiredRestartTracker(app);
       try {
         await stopRuntimeAppUnlocked(app);
       } catch (error) {
@@ -1612,7 +1626,6 @@ export function createRuntimeManager({
         await stopRuntimeAppUnlocked(app).catch(() => {});
         throw desiredPersistenceError(app, error);
       }
-      resetDesiredRestartTracker(app);
       return {
         action: "restart",
         app_id: app.id,
@@ -2268,6 +2281,8 @@ export function createRuntimeManager({
     if (tracker) {
       tracker.generation += 1;
       tracker.running = false;
+      tracker.pendingExit = null;
+      tracker.exhaustionQueued = false;
     }
     desiredRestartTrackers.delete(key);
   }
@@ -2276,8 +2291,33 @@ export function createRuntimeManager({
     if (!supportsDurableDesiredRuntime(app)) return;
     const key = moduleLeaseKeyForApp(app);
     const existing = desiredRestartTrackers.get(key);
-    if (existing?.running) return;
-    const tracker = existing ?? { attempts: 0, generation: 0, running: false };
+    if (existing?.running) {
+      // Exit during a live coordinator belongs to that exact series. Let the
+      // coordinator finish its in-lock reconciliation before replaying it;
+      // otherwise a concurrent exhaustion writer can be overwritten by the
+      // active attempt's failure reconciliation.
+      existing.pendingExit = { app, record, exitCode };
+      return;
+    }
+    if (existing?.attempts >= desiredRestartDelaysMs.length) {
+      if (existing.exhaustionQueued) return;
+      existing.exhaustionQueued = true;
+      existing.generation += 1;
+      void markDesiredRestartExhausted(app, record, existing).catch(async (error) => {
+        existing.running = false;
+        try {
+          await appendLog(record.logPath, `[launchpad] desired restart exhaustion failed ${app.id}: ${error.message}\n`);
+        } catch {}
+      });
+      return;
+    }
+    const tracker = existing ?? {
+      attempts: 0,
+      generation: 0,
+      running: false,
+      pendingExit: null,
+      exhaustionQueued: false,
+    };
     tracker.running = true;
     tracker.generation += 1;
     desiredRestartTrackers.set(key, tracker);
@@ -2354,6 +2394,9 @@ export function createRuntimeManager({
         });
       } catch (error) {
         outcome = { state: "retry", error };
+        // The failed attempt's exit is already represented by this retry.
+        // Keeping the queued event would count the same crash twice.
+        tracker.pendingExit = null;
         try {
           await withModuleLeaseLock(app, async () => {
             const desired = await readDesiredRuntime(app);
@@ -2372,17 +2415,34 @@ export function createRuntimeManager({
 
       if (["cancelled", "superseded", "permanent-failure"].includes(outcome.state)) {
         tracker.running = false;
+        tracker.pendingExit = null;
         return;
       }
       if (["started", "already-running"].includes(outcome.state)) {
         tracker.running = false;
+        const pendingExit = tracker.pendingExit;
+        tracker.pendingExit = null;
+        if (pendingExit) {
+          queueDesiredRuntimeRestart(
+            pendingExit.app,
+            pendingExit.record,
+            pendingExit.exitCode,
+          );
+          return;
+        }
         scheduleDesiredRestartReset(outcome.app, tracker, generation);
         return;
       }
     }
 
     if (tracker.generation !== generation) return;
-    tracker.running = false;
+    tracker.exhaustionQueued = true;
+    await markDesiredRestartExhausted(app, record, tracker).catch(() => {});
+  }
+
+  async function markDesiredRestartExhausted(app, record, tracker) {
+    const expectedAppId = app.id;
+    const expectedSource = runtimeSourceForApp(app);
     try {
       await withModuleLeaseLock(app, async () => {
         const desired = await readDesiredRuntime(app);
@@ -2400,7 +2460,10 @@ export function createRuntimeManager({
           );
         }
       });
-    } catch {}
+    } finally {
+      tracker.running = false;
+      tracker.pendingExit = null;
+    }
   }
 
   function scheduleDesiredRestartReset(app, tracker, generation) {

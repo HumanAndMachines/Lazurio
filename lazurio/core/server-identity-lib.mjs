@@ -8,8 +8,8 @@ export const LEGACY_LAUNCHPAD_IDENTITY_SCHEMA = "companiesascode.launchpad.ident
 
 const sha256Pattern = /^[a-f0-9]{64}$/;
 const uuidPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
-const generationDirectories = ["launchpad/src", "lazurio/core"];
-const generationTreeDirectories = ["launchpad/public"];
+const generationDirectories = ["launchpad/src", "lazurio/core", "lazurio/runtime"];
+const generationTreeDirectories = ["launchpad/public", "lazurio/schemas"];
 const generationFiles = [
   "launchpad/package.json",
   "scripts/worktree-create-lib.mjs",

@@ -8,7 +8,7 @@ import {
   runGit,
   runGitInPinnedTemporaryChild,
   safeGitRemoteEnv,
-} from "../../launchpad/src/git-lib.mjs";
+} from "../runtime/git-lib.mjs";
 import { initGitRepo } from "../../launchpad/src/git-fixture-helpers.test.mjs";
 import { materializeGitCheckout } from "./git-materialization-lib.mjs";
 

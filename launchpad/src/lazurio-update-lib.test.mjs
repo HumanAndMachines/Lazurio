@@ -12,11 +12,11 @@ import {
   readLazurioUpdateStatus,
   runLazurioUpdate,
   updateManagedRepo,
-} from "./lazurio-update-lib.mjs";
+} from "../../lazurio/runtime/lazurio-update-lib.mjs";
 import {
   runGit as runGitAsync,
   runGitInPinnedTemporaryChild,
-} from "./git-lib.mjs";
+} from "../../lazurio/runtime/git-lib.mjs";
 import {
   createLaunchpadGitFixture,
   initGitRepo,

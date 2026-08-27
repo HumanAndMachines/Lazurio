@@ -12,7 +12,7 @@ export function bunVersionFromPackageManager(packageManager) {
 }
 
 export function readRequiredBunVersion({
-  root = resolve(import.meta.dirname, "..", ".."),
+  root = resolve(import.meta.dirname, ".."),
   readText = (path) => readFileSync(path, "utf8"),
 } = {}) {
   let sourcePackage;

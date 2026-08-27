@@ -6,7 +6,7 @@ import {
   acquireModuleRuntimeLock,
   moduleRuntimeLockName,
   windowsModuleLockProcessIdentityCommand,
-} from "./module-runtime-lock-lib.mjs";
+} from "../../lazurio/runtime/module-runtime-lock-lib.mjs";
 
 const roots = [];
 afterAll(async () => Promise.all(roots.map((root) => rm(root, { recursive: true, force: true }))));

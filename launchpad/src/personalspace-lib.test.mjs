@@ -2,8 +2,8 @@ import { afterAll, expect, test } from "bun:test";
 import { tmpdir } from "os";
 import { join } from "path";
 import { mkdir, mkdtemp, rm, writeFile } from "fs/promises";
-import { buddyPresentationProjection, discoverPersonalspace, personalAppRuntimeId } from "./personalspace-lib.mjs";
-import { discoverLaunchpadApps } from "./discovery-lib.mjs";
+import { buddyPresentationProjection, discoverPersonalspace, personalAppRuntimeId } from "../../lazurio/runtime/personalspace-lib.mjs";
+import { discoverLaunchpadApps } from "../../lazurio/runtime/discovery-lib.mjs";
 
 const tempRoots = [];
 
@@ -185,10 +185,10 @@ function lazurioPersonalAppManifest(username, { id, module = "notes", title = "O
 async function createPersonalspaceFixture({ spaces = [], localOwner = null } = {}) {
   const root = await mkdtemp(join(tmpdir(), "personalspace-"));
   tempRoots.push(root);
-  // Kopie personal + app schema z reálného launchpad/schemas do fixture rootu,
+  // Kopie personal + app schema z reálného lazurio/schemas do fixture rootu,
   // aby discovery lane měla schémata k dispozici.
   await mkdir(join(root, "launchpad", "schemas"), { recursive: true });
-  const realSchemas = join(import.meta.dirname, "..", "schemas");
+  const realSchemas = join(import.meta.dirname, "..", "..", "lazurio", "schemas");
   for (const name of ["personal.gen3.schema.json", "launchpad-app.schema.json"]) {
     const content = await Bun.file(join(realSchemas, name)).text();
     await writeFile(join(root, "launchpad", "schemas", name), content, "utf8");

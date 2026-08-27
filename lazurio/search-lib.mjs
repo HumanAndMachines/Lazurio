@@ -8,7 +8,7 @@ import {
   discoverLaunchpadApps,
   organizationRelativePathIssue,
   readJson,
-} from "../launchpad/src/discovery-lib.mjs";
+} from "./runtime/discovery-lib.mjs";
 import {
   normalizeOrganizationSlotPath,
   organizationSlotTeams,

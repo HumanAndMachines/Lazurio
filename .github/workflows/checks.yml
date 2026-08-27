@@ -36,7 +36,9 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        # Exact verzi čte z package.json#packageManager, stejné autority jako CLI a Doctor.
+        with:
+          # Exact verzi čte ze stejné package autority jako CLI a Doctor.
+          bun-version-file: lazurio/package.json
       - name: Instalace deklarované Lazurio exact-search závislosti
         if: runner.os == 'Linux'
         run: |
@@ -68,6 +70,8 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: lazurio/package.json
       - name: Instalace závislostí Guide
         working-directory: guide/app/v1
         run: bun install --frozen-lockfile
@@ -85,30 +89,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: lazurio/package.json
       - name: Pack + globální instalace + smoke přes skutečný npm tarball
-        run: bun run npm-package:gate -- --evidence dist/npm-evidence/${{ runner.os }}-${{ runner.arch }}.json
-      # Actions artifact zde nese jen malé cross-runner JSON evidence. Není to
-      # distribuční kanál CLI; npm tarball zůstává uvnitř krátkého gate procesu.
-      - name: Předání package evidence parity bráně
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: lazurio-npm-package-evidence-${{ runner.os }}-${{ runner.arch }}
-          path: dist/npm-evidence/*.json
-          if-no-files-found: error
-          retention-days: 1
-
-  npm-package-parity:
-    name: npm package cross-OS parity
-    needs: npm-package
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-      - name: Stažení pouze package evidence
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          pattern: lazurio-npm-package-evidence-*
-          path: dist/npm-evidence
-          merge-multiple: true
-      - name: Shodný source commit a unpacked npm inventory na macOS, Linuxu a Windows
-        run: bun run npm-package:parity -- dist/npm-evidence/*.json
+        run: bun run npm-package:gate

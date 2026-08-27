@@ -87,19 +87,21 @@ export function isValidLazurioCliProvenance(value) {
     if (!validSource(value.source)) return false;
     if (value.root_kind === "source") {
       return value.verification === "git"
+        && commitPattern.test(value.source.commit ?? "")
         && typeof value.source.dirty === "boolean"
         && value.artifact === null;
     }
     if (value.root_kind === "resident") {
       return value.verification === "manifest"
+        && commitPattern.test(value.source.commit ?? "")
         && value.source.dirty === null
         && validArtifact(value.artifact);
     }
     if (value.root_kind === "package") {
       return value.verification === "package"
         && value.source.dirty === null
-        && Number.isSafeInteger(value.source.commit_epoch)
-        && value.source.commit_epoch >= 0
+        && value.source.commit === null
+        && value.source.commit_epoch === undefined
         && value.artifact === null;
     }
     return false;
@@ -275,7 +277,7 @@ function packageProvenance(root, marker) {
   } catch {
     return unresolved(root, "package_manifest_invalid_json", "package");
   }
-  if (manifest?.name !== "lazurio" || !("lazurio" in manifest)) {
+  if (manifest?.name !== "@lazurio/runtime" || !("lazurio" in manifest)) {
     return unresolved(root, "metadata_missing");
   }
   const metadata = manifest.lazurio;
@@ -295,8 +297,7 @@ function packageProvenance(root, marker) {
     version: manifest.version,
     source: {
       repository: metadata.source.repository,
-      commit: metadata.source.commit,
-      commit_epoch: metadata.source.commit_epoch,
+      commit: null,
       dirty: null,
     },
   });
@@ -312,7 +313,7 @@ function validSource(source) {
     && typeof source === "object"
     && !Array.isArray(source)
     && (source.repository === null || repositoryPattern.test(source.repository))
-    && commitPattern.test(source.commit ?? "")
+    && (source.commit === null || commitPattern.test(source.commit ?? ""))
     && (
       source.commit_epoch === undefined
       || (Number.isSafeInteger(source.commit_epoch) && source.commit_epoch >= 0)
@@ -327,10 +328,8 @@ function validPackageSource(source) {
     && typeof source === "object"
     && !Array.isArray(source)
     && repositoryPattern.test(source.repository ?? "")
-    && commitPattern.test(source.commit ?? "")
-    && Number.isSafeInteger(source.commit_epoch)
-    && source.commit_epoch >= 0
-    && Object.keys(source).every((key) => ["repository", "commit", "commit_epoch"].includes(key)),
+    && Object.keys(source).length === 1
+    && Object.keys(source).every((key) => key === "repository"),
   );
 }
 

@@ -6,12 +6,12 @@ import { basename, dirname, join, posix, relative, resolve, win32 } from "path";
 import { writeSidecarAtomically } from "../../scripts/worktree-create-lib.mjs";
 import { acquireCreateLock, releaseCreateLock } from "../../scripts/worktree-create-lock.mjs";
 import { resolveTaskAgentLocator } from "../../lazurio/core/task-agent-locator.mjs";
-import { buildGitInventory } from "./git-inventory-lib.mjs";
-import { GIT_LOCAL_TIMEOUT_MS, runGit, safeGitRemoteEnv } from "./git-lib.mjs";
-import { readGitRepoStatus } from "./git-status-lib.mjs";
-import { isMissionControlPlanPath, readMissionControlPlanAt } from "./mission-control-plan-lib.mjs";
+import { buildGitInventory } from "../../lazurio/runtime/git-inventory-lib.mjs";
+import { GIT_LOCAL_TIMEOUT_MS, runGit, safeGitRemoteEnv } from "../../lazurio/runtime/git-lib.mjs";
+import { readGitRepoStatus } from "../../lazurio/runtime/git-status-lib.mjs";
+import { isMissionControlPlanPath, readMissionControlPlanAt } from "../../lazurio/runtime/mission-control-plan-lib.mjs";
 import { inspectCanonicalPathBoundary } from "../../lazurio/core/path-boundary-lib.mjs";
-import { buildWorktreeIndex } from "./worktree-lib.mjs";
+import { buildWorktreeIndex } from "../../lazurio/runtime/worktree-lib.mjs";
 
 export class WorktreeActionError extends Error {
   constructor(message, { status = 500, code = "worktree_action_error", details = [] } = {}) {

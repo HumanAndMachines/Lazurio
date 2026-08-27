@@ -9,7 +9,7 @@ import {
   runtimeLoadedEnvFileSelection,
   runtimeScriptPortAuthorityIssues,
   runtimeSourcePortAuthorityIssues,
-} from "./discovery-lib.mjs";
+} from "../../lazurio/runtime/discovery-lib.mjs";
 
 const tempRoots = [];
 

@@ -424,7 +424,7 @@ function childrenLaneCheck({ discovered, children }) {
       details: [
         ...details,
         "Deklarace se píše do bloku 'doctor' v company.gen3.json / personal.gen3.json.",
-        "Kontrakt: launchpad/schemas/doctor-report.schema.json",
+        "Kontrakt: lazurio/schemas/doctor-report.schema.json",
       ],
       not_applicable_reason: "not_declared",
       owner: "namountovaná repa (vlastní doctor deklaruje jejich manifest, ne root)",

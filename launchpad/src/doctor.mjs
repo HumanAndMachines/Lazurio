@@ -1,7 +1,7 @@
 import { join, resolve } from "path";
-import { buildLaunchpadDoctorReport } from "./diagnostics-lib.mjs";
-import { renderHumanDoctorReport } from "./doctor-output-lib.mjs";
-import { exitCodeForSummaryStatus } from "./doctor-surface-lib.mjs";
+import { buildLaunchpadDoctorReport } from "../../lazurio/runtime/diagnostics-lib.mjs";
+import { renderHumanDoctorReport } from "../../lazurio/runtime/doctor-output-lib.mjs";
+import { exitCodeForSummaryStatus } from "../../lazurio/runtime/doctor-surface-lib.mjs";
 
 const options = parseArgs(Bun.argv.slice(2));
 const companiesRoot = resolve(options.root ?? join(import.meta.dirname, "..", ".."));

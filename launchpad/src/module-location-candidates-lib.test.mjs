@@ -7,7 +7,7 @@ import {
   classifyOrganizationModuleCheckoutLocation,
   inspectOrganizationModuleCheckoutCandidates,
   organizationModuleDeclarationClaims,
-} from "./module-location-candidates-lib.mjs";
+} from "../../lazurio/runtime/module-location-candidates-lib.mjs";
 
 const cleanup = [];
 

@@ -1,7 +1,7 @@
 import { afterAll, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "fs/promises";
 import { join } from "path";
-import { buildWorktreeIndex, detectNonCanonicalSidecarFields } from "./worktree-lib.mjs";
+import { buildWorktreeIndex, detectNonCanonicalSidecarFields } from "../../lazurio/runtime/worktree-lib.mjs";
 import { createLaunchpadGitFixture, initGitRepo, writeJson } from "./git-fixture-helpers.test.mjs";
 
 const tempRoots = [];

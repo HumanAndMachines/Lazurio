@@ -1,0 +1,24 @@
+{
+  "lockfileVersion": 2,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "lazurio",
+    },
+    "launchpad": {
+      "name": "companies-workspace-launchpad",
+    },
+    "lazurio": {
+      "name": "@lazurio/runtime",
+      "version": "0.0.0-development",
+      "bin": {
+        "lazurio": "cli.mjs",
+      },
+    },
+  },
+  "packages": {
+    "@lazurio/runtime": ["@lazurio/runtime@workspace:lazurio"],
+
+    "companies-workspace-launchpad": ["companies-workspace-launchpad@workspace:launchpad"],
+  }
+}

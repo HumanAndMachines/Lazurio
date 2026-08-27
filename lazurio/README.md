@@ -259,8 +259,10 @@ mechanismu. Exact Bun unlink proto patří pozdějšímu machine updateru, kter�
 neběží přes tento launcher.
 
 Development link bez `--root` používá ověřený source Root vlastního entrypointu,
-takže funguje z libovolného pracovního adresáře. Resident a platformně neutrální
-npm balíček jsou pouze CLI code origin: rootové příkazy bez explicitního
+takže funguje z libovolného pracovního adresáře. Canonical volitelný checkout
+pro vývojáře je `~/Lazurio/development/Lazurio`; běžná package instalace jej
+neklonuje ani jej nepotřebuje. Resident a platformně neutrální npm balíček jsou
+pouze CLI code origin: rootové příkazy bez explicitního
 diagnostického override používají canonical `<home>/Lazurio`; nic se
 nepersistuje a žádný pracovní Root se nevybírá.
 `lazurio --version` vždy popisuje samotné spuštěné CLI a `--root` proto
@@ -276,24 +278,32 @@ lazurio --version --json
 
 Development verze se odvozuje přímo z aktuálního Git HEADu a pravdivě ukazuje
 `clean`/`dirty`; nevytváří generovaný version soubor, který by mohl zestárnout.
-Resident verze se čte z immutable `lazurio.resident.json`. Npm verze a exact
-source commit se čtou z generovaného standardního `package.json`; tarball
-integrity vlastní npm a Lazurio nevytváří druhý payload digest. Root s Git i
+Resident verze se čte z immutable `lazurio.resident.json`. Npm verze a source
+repository se čtou ze standardního `lazurio/package.json`; exact source commit,
+workflow a registry integrity dokládá npm provenance a registry metadata.
+Lazurio nevytváří generovaný version manifest ani druhý payload digest. Root s Git i
 Resident markerem je explicitní konflikt a directory-only root bez manifestu
 zůstává nerozpoznaný. `lazurio cli status --json` skládá stejnou provenance
 vedle stávající instalační identity; její schéma `lazurio.cli.identity.v1` se
 nemění.
 Immutable provenance záměrně neobsahuje uživatelův distribuční track. Budoucí
-`nightly`/`latest` je package-manager preference nad již vydanou verzí, ne
+`next`/`latest` je package-manager preference nad již vydanou verzí, ne
 vlastnost payload bytes; historický Resident channel je proto pouze explicitní
 `artifact.build_channel`.
 
-Package gate sestavuje z čistého exact Git HEADu jeden source balíček bez
-OS/arch variant, balí ho připnutým standardním npm packerem a instaluje
-skutečný tarball přes Bun do izolovaného globálního prefixu. CI porovnává npm
-integrity a inventory na macOS, Linuxu a Windows. Krátkodobé Actions artifacts
-přenášejí mezi joby pouze malé JSON evidence; nejsou distribučním kanálem.
-Tento gate nic nepublikuje na npm a source `package.json` zůstává `private`.
+Root `package.json` je privátní workspace orchestrátor. Skutečný publishable
+package žije celý pod `lazurio/` a vlastní CLI, Core, locales, schemas i
+production runtime; Launchpad je jeho consumer, ne zdroj skrytých sourozeneckých
+souborů. Dnešní `@lazurio/runtime` je pouze nepublikovaný fallback před live npm
+provider gatem, který jednou zmrazí preferované `lazurio`, nebo tento scoped
+fallback. Dvě veřejné identity nevznikají.
+
+Package gate používá standardní `npm pack --dry-run --json` jako jedinou
+packlist autoritu, kontroluje fyzické package soubory a jeden skutečný tarball
+instaluje přes Bun do izolovaného globálního prefixu. CI spouští stejný
+pack/install/smoke na macOS, Linuxu a Windows. Nevzniká generovaný package
+manifest, retained candidate, cross-job parity evidence ani vlastní release
+archiv. Gate nic nepublikuje na npm.
 
 Potom lze samostatně nainstalovat desktop Launchpad:
 

@@ -8,7 +8,7 @@ import {
   frozenBunInstallCommand,
   refreshFrozenBunDependencies,
   runFrozenBunInstall,
-} from "./dependency-install-lib.mjs";
+} from "../../lazurio/runtime/dependency-install-lib.mjs";
 
 const cleanup = [];
 

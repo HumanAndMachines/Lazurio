@@ -26,8 +26,10 @@ export const LAZURIO_CLI_IDENTITY_SCHEMA = "lazurio.cli.identity.v1";
 export const LAZURIO_CLI_INSTALLATION_SCHEMA = "lazurio.cli.installation.v1";
 export const LAZURIO_CLI_PRODUCT = "lazurio-cli";
 
-const packageName = "lazurio";
-const cliRelativePath = "lazurio/cli.mjs";
+const packageName = "@lazurio/runtime";
+const commandName = "lazurio";
+const packageRelativePath = "lazurio";
+const cliRelativePath = "cli.mjs";
 const sha256Pattern = /^[a-f0-9]{64}$/;
 
 export class LazurioCliInstallError extends Error {
@@ -88,7 +90,7 @@ export function resolveBunGlobalLayout({
     install_root: installRoot,
     global_directory: globalDirectory,
     global_bin: globalBin,
-    registration_path: join(globalDirectory, "node_modules", packageName),
+    registration_path: join(globalDirectory, "node_modules", ...packageName.split("/")),
   });
 }
 
@@ -103,10 +105,11 @@ export function inspectLazurioCliInstallation({
   probeIdentity = true,
 } = {}) {
   const canonicalRoot = assertInstallableLazurioRoot(root);
+  const packageRoot = join(canonicalRoot, packageRelativePath);
   const expectedIdentity = buildLazurioCliIdentity({ root: canonicalRoot });
   const layout = resolveBunGlobalLayout({ environment, homeDirectory });
   const bunEnvironment = bunGlobalEnvironment(environment, layout);
-  const registration = inspectRegistration(layout.registration_path, canonicalRoot, platform);
+  const registration = inspectRegistration(layout.registration_path, packageRoot, platform);
   const layoutReadback = inspectBunGlobalBin({
     bunExecutable,
     canonicalRoot,
@@ -121,7 +124,7 @@ export function inspectLazurioCliInstallation({
     layout.global_bin,
     platform,
   );
-  const commandPath = resolveCommand(packageName, {
+  const commandPath = resolveCommand(commandName, {
     environment,
     platform,
     cwd: canonicalRoot,
@@ -129,7 +132,7 @@ export function inspectLazurioCliInstallation({
   const commandInGlobalBin = commandPath
     ? samePath(dirname(commandPath), layout.global_bin, platform)
     : false;
-  const expectedEntrypoint = join(canonicalRoot, ...cliRelativePath.split("/"));
+  const expectedEntrypoint = join(packageRoot, cliRelativePath);
   let commandTargetMatches = null;
   if (commandPath && commandInGlobalBin && platform !== "win32") {
     commandTargetMatches = safeSameRealPath(commandPath, expectedEntrypoint, platform);
@@ -244,6 +247,7 @@ export function installLazurioCli(options = {}) {
   }
 
   const canonicalRoot = assertInstallableLazurioRoot(options.root);
+  const packageRoot = join(canonicalRoot, packageRelativePath);
   const layout = resolveBunGlobalLayout({
     environment: options.environment,
     homeDirectory: options.homeDirectory,
@@ -252,8 +256,8 @@ export function installLazurioCli(options = {}) {
   const runProcess = options.runProcess ?? runProcessSync;
   const link = runProcess(
     options.bunExecutable ?? process.execPath,
-    ["link", "--cwd", canonicalRoot],
-    { cwd: canonicalRoot, environment },
+    ["link", "--cwd", packageRoot],
+    { cwd: packageRoot, environment },
   );
   if (link.status !== 0) {
     throw new LazurioCliInstallError(
@@ -267,8 +271,8 @@ export function installLazurioCli(options = {}) {
     if (before.registration.state === "absent" && after.registration.state === "owned") {
       const rollback = runProcess(
         options.bunExecutable ?? process.execPath,
-        ["unlink", "--cwd", canonicalRoot],
-        { cwd: canonicalRoot, environment },
+        ["unlink", "--cwd", packageRoot],
+        { cwd: packageRoot, environment },
       );
       if (rollback.status !== 0) {
         throw new LazurioCliInstallError(
@@ -321,7 +325,9 @@ export function renderHumanCliInstallation(report) {
 export function assertInstallableLazurioRoot(root) {
   const canonicalRoot = canonicalizeInstallRoot(root);
   assertPhysicalFile(join(canonicalRoot, "package.json"), "Lazurio package manifest");
-  assertPhysicalFile(join(canonicalRoot, ...cliRelativePath.split("/")), "Lazurio CLI entrypoint");
+  const packageRoot = join(canonicalRoot, packageRelativePath);
+  assertPhysicalFile(join(packageRoot, "package.json"), "@lazurio/runtime package manifest");
+  assertPhysicalFile(join(packageRoot, cliRelativePath), "Lazurio CLI entrypoint");
   assertPhysicalFile(join(canonicalRoot, "launchpad.gen3.json"), "Lazurio source root marker");
   if (existsSync(join(canonicalRoot, "lazurio.resident.json"))) {
     throw new LazurioCliInstallError(
@@ -329,15 +335,19 @@ export function assertInstallableLazurioRoot(root) {
       "Immutable Resident CLI se aktivuje updater transakcí, ne source PATH instalací.",
     );
   }
-  const packageManifest = JSON.parse(readFileSync(join(canonicalRoot, "package.json"), "utf8"));
+  const rootManifest = JSON.parse(readFileSync(join(canonicalRoot, "package.json"), "utf8"));
+  const packageManifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
   if (
-    packageManifest.name !== packageName
-    || packageManifest.bin?.[packageName] !== cliRelativePath
+    rootManifest.private !== true
+    || !rootManifest.workspaces?.includes(packageRelativePath)
+    || packageManifest.private === true
+    || packageManifest.name !== packageName
+    || packageManifest.bin?.[commandName] !== cliRelativePath
     || Object.keys(packageManifest.bin ?? {}).length !== 1
   ) {
     throw new LazurioCliInstallError(
       "invalid_package_contract",
-      "Lazurio root musí deklarovat package name lazurio a jediný bin lazurio/cli.mjs.",
+      "Lazurio root musí být private workspace s jediným publishable @lazurio/runtime binem lazurio.",
     );
   }
   assertNotLinkedWorktree(canonicalRoot);

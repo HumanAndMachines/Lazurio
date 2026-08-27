@@ -5,7 +5,7 @@ import { join } from "path";
 import {
   createGitStatusService,
   readGitRepoStatus,
-} from "./git-status-lib.mjs";
+} from "../../lazurio/runtime/git-status-lib.mjs";
 import {
   initGitRepo,
   runGit,

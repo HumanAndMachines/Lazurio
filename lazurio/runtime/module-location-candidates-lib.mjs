@@ -4,7 +4,7 @@ import { isAbsolute, join, relative } from "node:path";
 import {
   normalizeOrganizationSlotPath,
   organizationSlotRepositoryId,
-} from "../../lazurio/core/organization-slot-scope-lib.mjs";
+} from "../core/organization-slot-scope-lib.mjs";
 
 export const MODULE_MOUNT_CONTAINERS = Object.freeze(["workspace", "modules"]);
 const UNKNOWN_MODULE_DECLARATION_OWNER = "__lazurio_unknown_module_owner__";

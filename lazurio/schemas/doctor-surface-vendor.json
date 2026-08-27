@@ -12,8 +12,8 @@
   "baseline_reconciliation_required": false,
   "files": [
     {
-      "path": "src/doctor-surface-lib.mjs",
-      "baseline_path": "launchpad/src/doctor-surface-lib.mjs",
+      "path": "runtime/doctor-surface-lib.mjs",
+      "baseline_path": "lazurio/runtime/doctor-surface-lib.mjs",
       "baseline_sha256": "0e5dd714e7506c28f5f4f62322a18b3ea7771bd41b4e32abbf0d8ce76a5c9b82",
       "current_sha256": "6409f45284100bd64a92a2843b4f7e9b6ba5c820db6c6058744d666af9d8ecd3",
       "declared_delta": [
@@ -24,15 +24,15 @@
       ]
     },
     {
-      "path": "src/json-schema-mini.mjs",
-      "baseline_path": "launchpad/src/json-schema-mini.mjs",
+      "path": "runtime/json-schema-mini.mjs",
+      "baseline_path": "lazurio/runtime/json-schema-mini.mjs",
       "baseline_sha256": "c08dc53c7ed945af5621ca2e102160f1c4a29bd8fd8e85c5440d39152e694dd6",
       "current_sha256": "c08dc53c7ed945af5621ca2e102160f1c4a29bd8fd8e85c5440d39152e694dd6",
       "declared_delta": []
     },
     {
       "path": "schemas/doctor-report.schema.json",
-      "baseline_path": "launchpad/schemas/doctor-report.schema.json",
+      "baseline_path": "lazurio/schemas/doctor-report.schema.json",
       "baseline_sha256": "0bdf0184dcb7fb1a95e312c01cec448d0deaaebf0acc7bd09c3afa5ec4380036",
       "current_sha256": "f59f5dd737165e9a1497fb9b3e84542343c458e6409008f6510d8465687a5ebf",
       "declared_delta": [
@@ -47,5 +47,5 @@
       ]
     }
   ],
-  "root_side_policy": "Co root potřebuje navíc, NENÍ v těchhle souborech — je to v `src/doctor-children-lib.mjs` (`runBoundChildDoctor`): povinné svázání reportu s mountem, druh scope určený lane, do které mount patří, a přepočet očekávaného exit kódu z celého reportu včetně vnuků. Je to politika rootu, ne kontrakt všech doctorů; kdyby seděla ve sdíleném surfacu, byl by to consumer-specific fork."
+  "root_side_policy": "Co root potřebuje navíc, NENÍ v těchhle souborech — je to v `runtime/doctor-children-lib.mjs` (`runBoundChildDoctor`): povinné svázání reportu s mountem, druh scope určený lane, do které mount patří, a přepočet očekávaného exit kódu z celého reportu včetně vnuků. Je to politika rootu, ne kontrakt všech doctorů; kdyby seděla ve sdíleném surfacu, byl by to consumer-specific fork."
 }

@@ -46,7 +46,7 @@ test("complete Resident manifest validation has one Core source owner", async ()
   expect(integritySource).not.toContain("function validateResidentManifest");
 });
 
-test("slot classification has one physical owner shared by CLI and Launchpad", async () => {
+test("slot classification has one physical owner consumed through package runtime", async () => {
   const moduleName = "organization-slot-scope-lib.mjs";
   expect(existsSync(join(coreRoot, moduleName))).toBe(true);
   expect(existsSync(join(repositoryRoot, "launchpad", "src", moduleName))).toBe(false);
@@ -61,7 +61,7 @@ test("slot classification has one physical owner shared by CLI and Launchpad", a
     .map(({ importer }) => importer);
 
   expect(consumers.some((importer) => importer.startsWith("lazurio/"))).toBe(true);
-  expect(consumers.some((importer) => importer.startsWith("launchpad/src/"))).toBe(true);
+  expect(consumers.some((importer) => importer.startsWith("lazurio/runtime/"))).toBe(true);
 });
 
 test("canonical path containment has one physical Core owner", async () => {
@@ -80,15 +80,15 @@ test("canonical path containment has one physical Core owner", async () => {
     .sort();
 
   expect(consumers).toEqual([
-    "launchpad/src/git-inventory-lib.mjs",
-    "launchpad/src/git-lib.mjs",
-    "launchpad/src/git-materialization-lib.mjs",
-    "launchpad/src/mission-control-plan-lib.mjs",
-    "launchpad/src/module-location-repair-lib.mjs",
     "launchpad/src/worktree-actions-lib.mjs",
-    "launchpad/src/worktree-lib.mjs",
     "lazurio/core/git-materialization-lib.mjs",
     "lazurio/organization-install-lib.mjs",
+    "lazurio/runtime/git-inventory-lib.mjs",
+    "lazurio/runtime/git-lib.mjs",
+    "lazurio/runtime/git-materialization-lib.mjs",
+    "lazurio/runtime/mission-control-plan-lib.mjs",
+    "lazurio/runtime/module-location-repair-lib.mjs",
+    "lazurio/runtime/worktree-lib.mjs",
   ]);
 });
 
@@ -96,13 +96,13 @@ test("Git checkout publication has one physical Core owner", async () => {
   const moduleName = "git-materialization-lib.mjs";
   expect(existsSync(join(coreRoot, moduleName))).toBe(true);
 
-  const launchpadAdapter = await readFile(
-    join(repositoryRoot, "launchpad", "src", moduleName),
+  const runtimeAdapter = await readFile(
+    join(repositoryRoot, "lazurio", "runtime", moduleName),
     "utf8",
   );
-  expect(launchpadAdapter).toContain("../../lazurio/core/git-materialization-lib.mjs");
-  expect(launchpadAdapter).not.toContain('"clone"');
-  expect(launchpadAdapter).not.toContain("makeTempDirectory");
+  expect(runtimeAdapter).toContain("../core/git-materialization-lib.mjs");
+  expect(runtimeAdapter).not.toContain('"clone"');
+  expect(runtimeAdapter).not.toContain("makeTempDirectory");
 });
 
 test("GitHub repository JSON decoding has one Core owner shared by activation and install", async () => {
@@ -146,10 +146,10 @@ test("runtime declaration validation has one physical Core owner", async () => {
     .sort();
 
   expect(consumers).toEqual([
-    "launchpad/src/discovery-lib.mjs",
-    "launchpad/src/personalspace-lib.mjs",
-    "launchpad/src/runtime-lib.mjs",
     "lazurio/module-setup-lib.mjs",
+    "lazurio/runtime/discovery-lib.mjs",
+    "lazurio/runtime/personalspace-lib.mjs",
+    "lazurio/runtime/runtime-lib.mjs",
   ]);
 });
 
@@ -169,12 +169,12 @@ test("Module declaration validation has one physical Core owner", async () => {
     .sort();
 
   expect(consumers).toEqual([
-    "launchpad/src/diagnostics-lib.mjs",
-    "launchpad/src/discovery-lib.mjs",
-    "launchpad/src/personalspace-lib.mjs",
-    "launchpad/src/runtime-lib.mjs",
     "lazurio/module-port-lib.mjs",
     "lazurio/module-setup-lib.mjs",
+    "lazurio/runtime/diagnostics-lib.mjs",
+    "lazurio/runtime/discovery-lib.mjs",
+    "lazurio/runtime/personalspace-lib.mjs",
+    "lazurio/runtime/runtime-lib.mjs",
     "scripts/lazurio-module-inventory.mjs",
   ]);
 });
@@ -195,9 +195,9 @@ test("Organization port allocation policy has one physical Core owner", async ()
     .sort();
 
   expect(consumers).toEqual([
-    "launchpad/src/discovery-lib.mjs",
     "lazurio/module-port-lib.mjs",
     "lazurio/module-setup-lib.mjs",
+    "lazurio/runtime/discovery-lib.mjs",
   ]);
 });
 

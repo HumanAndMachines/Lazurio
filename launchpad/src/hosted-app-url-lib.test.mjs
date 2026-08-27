@@ -9,12 +9,12 @@ import {
   projectHostedRuntimePayload,
   requireHostedAppUrl,
 } from "./hosted-app-url-lib.mjs";
-import { validateAgainstSchema } from "./json-schema-mini.mjs";
+import { validateAgainstSchema } from "../../lazurio/runtime/json-schema-mini.mjs";
 
 const appId = "iotor-knowledgebase-v2";
 const externalOrigin = "https://knowledgebase.management.example.test/";
 const catalogSchema = JSON.parse(await readFile(
-  new URL("../schemas/lazurio-team-service-catalog.schema.json", import.meta.url),
+  new URL("../../lazurio/schemas/lazurio-team-service-catalog.schema.json", import.meta.url),
   "utf8",
 ));
 

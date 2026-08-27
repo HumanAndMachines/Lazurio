@@ -11,7 +11,7 @@ import {
 import { refreshFrozenBunDependencies } from "./dependency-install-lib.mjs";
 import { buildGitInventory } from "./git-inventory-lib.mjs";
 import { materializeRepoCheckout } from "./git-materialization-lib.mjs";
-import { buildModuleLocationRepairAction } from "../../lazurio/core/module-location-repair-contract-lib.mjs";
+import { buildModuleLocationRepairAction } from "../core/module-location-repair-contract-lib.mjs";
 import {
   GIT_FETCH_TIMEOUT_MS,
   GIT_LOCAL_TIMEOUT_MS,

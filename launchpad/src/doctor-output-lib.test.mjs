@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { renderHumanDoctorReport } from "./doctor-output-lib.mjs";
+import { renderHumanDoctorReport } from "../../lazurio/runtime/doctor-output-lib.mjs";
 
 test("lidský Doctor renderer zachová blocked, not_applicable i child důkazy", () => {
   const output = renderHumanDoctorReport({

@@ -45,19 +45,19 @@ import {
   organizationSlotScope,
   organizationSlotTeams,
   organizationSlotWorkspace,
-} from "../../lazurio/core/organization-slot-scope-lib.mjs";
+} from "../core/organization-slot-scope-lib.mjs";
 import {
   normalizeModuleManifest,
   resolveModuleApplications,
-} from "../../lazurio/core/module-contract-lib.mjs";
+} from "../core/module-contract-lib.mjs";
 import {
   classifyBunRuntime,
   readRequiredBunVersion,
-} from "../../lazurio/core/toolchain-lib.mjs";
+} from "../core/toolchain-lib.mjs";
 import {
   DEVELOPER_TOOL_UPDATE_POLICY,
   inspectDeveloperToolUpdates,
-} from "../../lazurio/core/tool-update-lib.mjs";
+} from "../core/tool-update-lib.mjs";
 
 const supportedPlatforms = {
   darwin: "macOS",
@@ -85,7 +85,7 @@ let cachedDoctorReportSchema = null;
 export async function buildLaunchpadAppsResponse({
   companiesRoot = join(import.meta.dirname, "..", ".."),
   rootSourceRoot = companiesRoot,
-  launchpadRoot = join(import.meta.dirname, ".."),
+  launchpadRoot = join(companiesRoot, "launchpad"),
   runtimeManager = createRuntimeManager({ companiesRoot, launchpadRoot }),
   gitStatusService = null,
   allowMissingOrganizations = false,
@@ -389,7 +389,7 @@ export async function buildLaunchpadDoctorReport(options = {}) {
 
 /**
  * Schéma surfacu je KONTRAKT DODANÝ S KÓDEM, ne per-root konfigurace: čte se ze
- * zdrojového `launchpad/schemas/`, stejně jako runtime schémata v
+ * zdrojového `lazurio/schemas/`, stejně jako runtime schémata v
  * `discovery-lib.mjs` — nikdy z diagnostikovaného rootu, protože ten může být
  * fixture nebo cizí checkout, a schéma přinesené kontrolovaným stromem by
  * znamenalo, že se subjekt kontroly měří vlastním metrem. Když chybí, root nemá
@@ -836,7 +836,7 @@ function withSelfConformanceCheck(report, schema) {
       severity: "required",
       title: "Konformita reportu",
       message: `Report odpovídá ${DOCTOR_REPORT_SCHEMA_VERSION_V3}.`,
-      paths: ["launchpad/schemas/doctor-report.schema.json"],
+      paths: ["lazurio/schemas/doctor-report.schema.json"],
       links: [],
       details: [],
     }
@@ -848,7 +848,7 @@ function withSelfConformanceCheck(report, schema) {
       message:
         `Report root doctora neodpovídá společnému surfacu doctorů `
         + `(${failures.length} porušení schématu).`,
-      paths: ["launchpad/schemas/doctor-report.schema.json"],
+      paths: ["lazurio/schemas/doctor-report.schema.json"],
       links: [],
       details: failures.slice(0, 25),
     };
@@ -1882,7 +1882,7 @@ function platformChecks(companiesRoot) {
 export function bunRuntimeCheck({
   companiesRoot,
   bunExecutable = resolveBunExecutable(),
-  requiredVersion = readRequiredBunVersion({ root: join(import.meta.dirname, "..", "..") }),
+  requiredVersion = readRequiredBunVersion({ root: join(import.meta.dirname, "..") }),
   run = runCommand,
 } = {}) {
   const result = bunExecutable
