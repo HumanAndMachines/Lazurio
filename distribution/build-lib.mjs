@@ -416,9 +416,9 @@ function residentPackageJson(profile) {
     scripts: {
       doctor: "bun resident/doctor.mjs",
       "doctor:json": "bun resident/doctor.mjs --json",
-      launchpad: "bun launchpad/src/server.mjs --open",
-      "launchpad:serve": "bun launchpad/src/server.mjs --reuse",
-      "launchpad:dev": "bun launchpad/src/server.mjs",
+      launchpad: "bun launchpad/src/server-launcher.mjs --open",
+      "launchpad:serve": "bun launchpad/src/server-launcher.mjs --reuse",
+      "launchpad:dev": "bun launchpad/src/server-launcher.mjs",
       lazurio: "bun lazurio/cli.mjs",
       "resident:doctor": "bun resident/doctor.mjs",
       ...(!workspace ? {

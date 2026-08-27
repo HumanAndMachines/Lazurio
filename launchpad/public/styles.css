@@ -1,7 +1,7 @@
 @import url("/fonts/fonts.css");
 @import url("/vendor/lazurio/components.css");
 
-/* Launchpad GEN3 používá kanonické runtime tokeny a komponentové základy
+/* Lazurio Launchpad používá kanonické runtime tokeny a komponentové základy
    design systému Lazurio. Lokální proměnné níže jsou pouze kompatibilní
    adaptér pro existující selektory Launchpadu. */
 

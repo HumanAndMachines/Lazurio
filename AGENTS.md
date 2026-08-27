@@ -226,7 +226,7 @@ Nepracuj v konkrétní firmě z rootu. Nejdřív vyber organizaci v `organizatio
 
 Když **Kolega přímo zahájí nový chat s Task Agentem v Codex/ChatGPT App nebo
 Claude App**, Agent po minimálním určení scope otevře jako svůj první viditelný
-pracovní krok Launchpad GEN3 ve vestavěném browser povrchu dané App. Otevření
+pracovní krok Lazurio Launchpad ve vestavěném browser povrchu dané App. Otevření
 provede jednou pro nový chat/task, ne znovu při každé zprávě, a pokud už správná
 karta existuje, znovu ji použije. Launchpad je grafické rozhraní ke stejnému
 lokálnímu kontextu, který Agent čte a ve kterém Kolegovi pomáhá; produktový

@@ -1,7 +1,7 @@
 # Launchpad pluginy
 
 Plugin je kontrolovaný způsob, jak konkrétní firma nebo modul rozšiřuje
-sdílený Launchpad GEN3 bez forkování jeho core runtime.
+sdílený Lazurio Launchpad bez forkování jeho core runtime.
 
 ## Povolené role pluginu
 

@@ -263,6 +263,8 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
   expect(workspace.manifest.profile).toBe("workspace");
   expect(await verifyArtifactTree(workspace.artifact_root)).toMatchObject({ ok: true, failures: [] });
   expect(workspacePaths).toContain("launchpad/src/server.mjs");
+  expect(workspacePaths).toContain("launchpad/src/server-launcher.mjs");
+  expect(workspacePaths).toContain("launchpad/src/server-launcher-lib.mjs");
   expect(workspacePaths).toContain("scripts/worktree-create-lib.mjs");
   expect(workspacePaths).toContain("scripts/worktree-create-lock.mjs");
   expect(workspacePaths.some((path) => path.startsWith("bridge/"))).toBe(false);
@@ -276,7 +278,7 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
     name: "lazurio",
     bin: { lazurio: "lazurio/cli.mjs" },
   });
-  expect(workspacePackage.scripts["launchpad:serve"]).toBe("bun launchpad/src/server.mjs --reuse");
+  expect(workspacePackage.scripts["launchpad:serve"]).toBe("bun launchpad/src/server-launcher.mjs --reuse");
   expect(workspacePackage.scripts["resident:update"]).toBeUndefined();
   expect(workspacePackage.scripts["buddy:service"]).toBeUndefined();
   const workspaceWorktreeActions = await import(pathToFileURL(

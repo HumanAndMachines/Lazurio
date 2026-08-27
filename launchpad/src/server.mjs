@@ -43,6 +43,7 @@ import {
 } from "./personalspace-runtime-lib.mjs";
 import { GbrainAccessError, gbrainFile, gbrainSearch, gbrainTree } from "./gbrain-lib.mjs";
 import { createGenerationSafeResponseCache } from "./apps-response-cache-lib.mjs";
+import { LAZURIO_LAUNCHPAD_NAME } from "./launchpad-identity-lib.mjs";
 import { readOrganizationLaunchpadTheme } from "./organization-theme-lib.mjs";
 import { ModuleFolderActionError, createModuleFolderOpener } from "./module-folder-lib.mjs";
 import {
@@ -330,15 +331,15 @@ if (startupError) {
 }
 if (startResult.mode === "reused") {
   const action = options.open ? "otevírám existující instanci" : "používám existující instanci bez otevření systémového browseru";
-  console.log(`Launchpad GEN3 už běží na ${startResult.url}; ${action}.`);
+  console.log(`${LAZURIO_LAUNCHPAD_NAME} už běží na ${startResult.url}; ${action}.`);
   process.exit(0);
 }
 const server = startResult.server;
 const serverUrl = `http://${host}:${server.port}`;
 
-console.log(`Launchpad GEN3 běží na ${serverUrl}`);
-console.log(`Launchpad GEN3 root: ${rootSourceRoot}`);
-console.log(`Launchpad GEN3 locator: ${serverLocator.path}`);
+console.log(`${LAZURIO_LAUNCHPAD_NAME} běží na ${serverUrl}`);
+console.log(`Lazurio Root: ${rootSourceRoot}`);
+console.log(`${LAZURIO_LAUNCHPAD_NAME} locator: ${serverLocator.path}`);
 if (worktreeMountContextReadOnly) {
   console.warn("[launchpad] linked worktree používá canonical Root pouze jako read-only mount context");
 }

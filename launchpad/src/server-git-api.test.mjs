@@ -1533,7 +1533,7 @@ async function readLaunchpadPort(server) {
     while (true) {
       const { value, done } = await reader.read();
       if (value) output += decoder.decode(value, { stream: true });
-      const match = output.match(/Launchpad GEN3 běží na http:\/\/127\.0\.0\.1:(\d+)/);
+      const match = output.match(/Lazurio Launchpad běží na http:\/\/127\.0\.0\.1:(\d+)/);
       if (match) return Number(match[1]);
       if (done) {
         const stderr = server.stderr ? await new Response(server.stderr).text() : "";

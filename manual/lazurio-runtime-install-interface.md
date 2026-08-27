@@ -80,9 +80,15 @@ Supervisor ve stejném workspace kontejneru nastaví:
 export LAZURIO_RUNTIME_ROOT=/opt/lazurio-runtime
 export LAZURIO_LAUNCHPAD_STATE_ROOT=/home/builder/.local/state/lazurio/launchpad
 export WORKSPACE_ROOT=/home/builder/Lazurio
-exec bun "$LAZURIO_RUNTIME_ROOT/launchpad/src/server.mjs" \
+exec bun "$LAZURIO_RUNTIME_ROOT/launchpad/src/server-launcher.mjs" \
   --root "$WORKSPACE_ROOT"
 ```
+
+Launcher zachová exact Bun runtime a všechny argumenty Serveru. Na macOS jej
+spustí přes dočasný hardlink pojmenovaný `Lazurio Launchpad`, aby standardní
+listener discovery zobrazila produktový název; na ostatních platformách nebo
+při nedostupném hardlinku bezpečně použije kanonický Bun executable. Locator,
+lifetime lease a samotný Server dál vlastní stávající runtime kontrakt.
 
 `--root` má přednost před `WORKSPACE_ROOT`. Server při startu ověří, že
 `LAZURIO_RUNTIME_ROOT` přesně odpovídá cestě, ze které byl načten. Update před
