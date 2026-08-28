@@ -16,9 +16,9 @@ frameworku se sem nepřenášejí).
 | 0021 | Team je pojmenovaná skupina uvnitř Organizace; hosted vzor aplikací je `<modul>.<team>.<doména>`. |
 | 0023 | Team může být tým lidí i značka/venture; příslušnost modulů deklaruje manifest. |
 | 0024 | Historický CEO-first koncept Launchpadu; revidováno decision 0047 (builder-first). |
-| 0026 | Kanonický layout Organizace GEN3 (company.gen3.json, plochý workspace, manifesty). |
+| 0026 | Kanonický layout Organizace GEN3 používá `lazurio.organization.json` jako jedinou authoring autoritu Organization manifestu, plochý `workspace/` a samostatný `modules.manifest.json`; `company.gen3.json` je během kompatibilitního okna pouze deterministická legacy compatibility projection. |
 | 0030 | Lazurio root je direct-pull klon jediného sdíleného upstreamu; vylepšení jdou zpět PR-em, ne fork-syncem. |
-| 0031 | Org mounty `organizations/<org>/` jsou gitignored Doctor-managed vnořená repa, ne git submoduly; root config je folder-driven. |
+| 0031 | Org mounty `organizations/<org>/` jsou gitignored Doctor-managed vnořená repa, ne git submoduly; root config je folder-driven a každý mount se klasifikuje právě jedním normalizovaným Lazurio Core výsledkem, ne samostatnou volbou filename. |
 | 0033 | Migrace GEN2 → GEN3 je fork-based a paralelní; stará generace zůstává rollback linkou. |
 | 0034 | Mission Control ↔ template roadmap loop: plánovací vrstva se propaguje template cestou. |
 | 0035 | Datové v3 aplikace rozlišují Draft a Publikaci dat nad repository-db; chráněné cesty jdou flow draft → approve → publish. Rozsah approval sleduje progresivní zamykání (viz 0102). |
@@ -27,7 +27,7 @@ frameworku se sem nepřenášejí).
 | 0039 | Historické produktové názvosloví; uživatelskou komunikaci a jméno sdíleného systému superseduje decision 0128. |
 | 0040 | Pyramida přednosti source of truth: decision records > schémata/configy > GLOSSARY > AGENTS.md scope > kontrakty > Guide. |
 | 0041 | (1) `workspace/` je plochá složka všech modulů; (2–5) Team je manifestová N:M deklarace, ne adresář — chybějící deklarace = default Team `workspace`; (6) `productionspace` je rezervovaný org-level slug mimo Teamy; (7) každé productionspace repo má vlastní branch/release pravidla a doctor vynucuje jen bezpečné minimum. |
-| 0042 | Launchpad je auto-discovery first: Organizace objevuje skenem mountů; root config není allowlist; bezpečnostní kontroly platí pro všechny mounty stejně. |
+| 0042 | Launchpad je auto-discovery first: skenuje kandidátní Organization mounty a jejich `lazurio.organization.json` / legacy compatibility projection vyhodnotí jediný Core resolver s one-resource-per-mount deduplikací a fail-closed konfliktem; root config není allowlist a bezpečnostní kontroly platí pro všechny mounty stejně. |
 | 0043 | Neplatný manifest Organizaci izoluje: Launchpad vadný mount bezpečně odstaví, nikdy kvůli němu nepadá celé UI. |
 | 0044 | Noví klienti nastupují rovnou na GEN3 (žádný GEN2 onboarding). |
 | 0045 | `_GENn` je trvalý generační marker názvu repa/mountu; interní brand identita zůstává čistá. |
@@ -35,7 +35,7 @@ frameworku se sem nepřenášejí).
 | 0047 | Dvě surfaces: Launchpad = builder-first lokální; Lazurio Dashboard = hosted admin/user vstup. |
 | 0048 | Produktové plány Free/Solo/Team/Enterprise a hosting režimy (localhost/hosted/selfhosted). |
 | 0049 | Worktree runtime kontrakt: plan-owned worktrees v `.worktrees/`, sidecar metadata, Launchpad spouští aplikace z worktrees. |
-| 0051 | Struktura Personalspace: privátní repo `<login>/<login>_GEN3` mimo firemní organizace, `personal.gen3.json`, plochá `workspace/`, gbrain jako root vrstva. |
+| 0051 | Struktura Personalspace: privátní repo `<login>/<login>_GEN3` mimo firemní organizace, `personal.gen3.json`, plochá `workspace/`, gbrain jako root vrstva. Organization manifest amendment 0026/0031/0042 tento Personalspace filename ani jeho soukromý rollout nemění. |
 | 0052 | AI Architekt je placená platformní služba admin vrstvy: navrhuje změny výhradně přes Dashboard apply plány se schválením Organization Admin, nikdy nezapisuje přímo do zákaznického Gitu a nenahrazuje BYOS builder agenty. |
 | 0059 | Historický root-only kanálový update; pracovní checkout pravidla superseduje decision 0129. Pravomoc vytvořit Release dál určují živá GitHub práva. |
 | 0060 | Role určuje footprint na mašině: Organization User je zero-install (žádný lokální root, přístup přes produkční aplikace a MCP). |

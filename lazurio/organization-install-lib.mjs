@@ -454,7 +454,7 @@ async function readLocalRootDocuments(path) {
 }
 
 function verifyOrganizationRootDocuments({ documents, organization, repository }) {
-  const resolver = resolveOrganizationRootDocuments({
+  const resolution = resolveOrganizationRootDocuments({
     companyManifest: documents.company,
     modulesManifest: documents.modules,
     canonicalManifest: documents.canonical,
@@ -465,7 +465,7 @@ function verifyOrganizationRootDocuments({ documents, organization, repository }
   });
   const forgeBinding = documents.company?.forge_binding;
   if (
-    resolver.status !== "supported"
+    resolution.activation.status !== "supported"
     || !isValidOrganizationForgeBinding(forgeBinding, {
       organizationId: organization.id,
       organizationLogin: organization.login,

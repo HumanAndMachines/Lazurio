@@ -2,16 +2,23 @@ import { expect, test } from "bun:test";
 
 import { validateAgainstSchema } from "../runtime/json-schema-mini.mjs";
 import schema from "../organization-activation-report.v0.schema.json";
+import organizationManifestSchema from "../lazurio.organization.v1.schema.json";
 import {
   ORGANIZATION_ACTIVATION_ERROR_CODES,
   ORGANIZATION_ACTIVATION_NEXT_ACTIONS,
   ORGANIZATION_ACTIVATION_OUTCOMES,
   ORGANIZATION_ACTIVATION_REASON_CODES,
+  ORGANIZATION_LEGACY_PROJECTION_HASH_ALGORITHM,
+  ORGANIZATION_MANIFEST_SCHEMA_VERSION,
+  ORGANIZATION_MANIFEST_STATES,
+  ORGANIZATION_RESOURCE_SCHEMA_VERSION,
   createOrganizationActivationRequest,
   isValidOrganizationActivationObservations,
   isValidOrganizationActivationReport,
   organizationActivationError,
   organizationActivationExitCode,
+  organizationLegacyProjectionHash,
+  projectLegacyOrganizationManifest,
   resolveOrganizationActivation,
   resolveOrganizationRootDocuments,
 } from "./organization-activation-lib.mjs";
@@ -173,7 +180,7 @@ test("legacy remote resolver requires the identity pair and does not preempt can
     expectedRepositoryFullName: "Example/Example_GEN3",
   };
 
-  expect(resolveOrganizationRootDocuments(input)).toEqual({
+  expect(resolveOrganizationRootDocuments(input).activation).toEqual({
     status: "supported",
     format: "legacy",
     reason: "legacy_identity_pair_supported",
@@ -181,11 +188,11 @@ test("legacy remote resolver requires the identity pair and does not preempt can
   expect(resolveOrganizationRootDocuments({
     ...input,
     expectedOrganizationLogin: "RenamedExample",
-  })).toMatchObject({ status: "unsupported", reason: "legacy_identity_pair_invalid" });
+  }).activation).toMatchObject({ status: "unsupported", reason: "legacy_identity_pair_invalid" });
   expect(resolveOrganizationRootDocuments({
     ...input,
     canonicalManifest: { schema_version: "lazurio.organization.v1" },
-  })).toEqual({
+  }).activation).toEqual({
     status: "unsupported",
     format: null,
     reason: "canonical_resolver_unavailable",
@@ -213,11 +220,233 @@ test("generated legacy scaffold binds live immutable Organization and repository
     expectedRepositoryFullName: "Example/Example_GEN3",
   };
 
-  expect(resolveOrganizationRootDocuments(input)).toMatchObject({ status: "supported", format: "legacy" });
-  expect(resolveOrganizationRootDocuments({ ...input, expectedOrganizationId: "999" }))
+  expect(resolveOrganizationRootDocuments(input).activation).toMatchObject({ status: "supported", format: "legacy" });
+  expect(resolveOrganizationRootDocuments({ ...input, expectedOrganizationId: "999" }).activation)
     .toMatchObject({ status: "unsupported", reason: "legacy_identity_pair_invalid" });
-  expect(resolveOrganizationRootDocuments({ ...input, expectedRepositoryId: "999" }))
+  expect(resolveOrganizationRootDocuments({ ...input, expectedRepositoryId: "999" }).activation)
     .toMatchObject({ status: "unsupported", reason: "legacy_identity_pair_invalid" });
+  const conflictingAliases = structuredClone(input.companyManifest);
+  conflictingAliases.company.root_repository = "Example/Wrong";
+  expect(resolveOrganizationRootDocuments({ ...input, companyManifest: conflictingAliases })).toMatchObject({
+    state: "conflict",
+    activation: { status: "unsupported", reason: "legacy_identity_pair_invalid" },
+    issues: expect.arrayContaining(["organization_root_remote_conflict"]),
+  });
+});
+
+test("Organization root resolver returns the six compatibility states through one normalized resource seam", () => {
+  const modulesManifest = organizationModules();
+  const legacy = legacyOrganization();
+  const canonical = canonicalOrganization(modulesManifest);
+  const projected = projectLegacyOrganizationManifest(canonical, modulesManifest);
+  const drifted = structuredClone(projected);
+  delete drifted.organization_kind;
+  const inputs = {
+    legacy: { companyManifest: legacy, canonicalManifest: null },
+    transition: { companyManifest: projected, canonicalManifest: canonical },
+    projection_drift: {
+      companyManifest: drifted,
+      canonicalManifest: canonical,
+    },
+    conflict: {
+      companyManifest: { ...projected, company: { ...projected.company, slug: "different" } },
+      canonicalManifest: canonical,
+    },
+    current: { companyManifest: null, canonicalManifest: canonical },
+    missing: { companyManifest: null, canonicalManifest: null },
+  };
+
+  expect(Object.keys(inputs).sort()).toEqual([...ORGANIZATION_MANIFEST_STATES].sort());
+  for (const [state, documents] of Object.entries(inputs)) {
+    const resolution = resolveOrganizationRootDocuments({ ...documents, modulesManifest });
+    expect(resolution.state).toBe(state);
+    expect(resolution.resource_count).toBe(["legacy", "transition", "projection_drift", "current"].includes(state) ? 1 : 0);
+    expect(Array.isArray(resolution.resource)).toBe(false);
+    expect(resolution.resource?.doctor ? 1 : 0).toBe(resolution.resource_count);
+  }
+});
+
+test("canonical schema, semantic parity and projection hash are deterministic across key order and formatting", () => {
+  const modulesManifest = organizationModules();
+  const canonical = canonicalOrganization(modulesManifest);
+  const projected = projectLegacyOrganizationManifest(canonical, modulesManifest);
+  const reordered = Object.fromEntries(Object.entries(projected).reverse());
+  const resolution = resolveOrganizationRootDocuments({
+    companyManifest: reordered,
+    modulesManifest,
+    canonicalManifest: canonical,
+  });
+
+  expect(validateAgainstSchema(canonical, organizationManifestSchema, "organization")).toEqual([]);
+  expect(resolution.state).toBe("transition");
+  expect(resolution.resource.schema_version).toBe(ORGANIZATION_RESOURCE_SCHEMA_VERSION);
+  expect(resolution.resource.schema_version).not.toBe(ORGANIZATION_MANIFEST_SCHEMA_VERSION);
+  expect(resolution.semantic_hash).toMatch(/^sha256:[0-9a-f]{64}$/);
+  expect(resolution.projection).toEqual({
+    algorithm: ORGANIZATION_LEGACY_PROJECTION_HASH_ALGORITHM,
+    expected_hash: canonical.compatibility.legacy_projection.sha256,
+    declared_hash: canonical.compatibility.legacy_projection.sha256,
+    actual_hash: canonical.compatibility.legacy_projection.sha256,
+  });
+});
+
+test("template kind remains one non-actionable normalized resource", () => {
+  const modulesManifest = organizationModules();
+  const canonical = canonicalOrganization(modulesManifest, { kind: "template" });
+  const projected = projectLegacyOrganizationManifest(canonical, modulesManifest);
+  const resolution = resolveOrganizationRootDocuments({
+    companyManifest: projected,
+    modulesManifest,
+    canonicalManifest: canonical,
+  });
+
+  expect(resolution).toMatchObject({
+    state: "transition",
+    resource_count: 1,
+    resource: { kind: "template" },
+    activation: { status: "unsupported", reason: "canonical_resolver_unavailable" },
+  });
+});
+
+test("canonical resolver rejects schema-shape drift and invalid Organization port policy", () => {
+  const modulesManifest = organizationModules();
+  const unknownField = canonicalOrganization(modulesManifest);
+  unknownField.shadow_authority = true;
+  const invalidPortPool = canonicalOrganization(modulesManifest);
+  invalidPortPool.module_port_pool.end = 70_000;
+  const nullPortPool = canonicalOrganization(modulesManifest);
+  nullPortPool.module_port_pool = null;
+
+  expect(validateAgainstSchema(unknownField, organizationManifestSchema, "organization").length).toBeGreaterThan(0);
+  expect(resolveOrganizationRootDocuments({
+    companyManifest: null,
+    modulesManifest,
+    canonicalManifest: unknownField,
+  })).toMatchObject({
+    state: "conflict",
+    resource_count: 0,
+    issues: expect.arrayContaining(["canonical_manifest_fields_invalid"]),
+  });
+  expect(resolveOrganizationRootDocuments({
+    companyManifest: null,
+    modulesManifest,
+    canonicalManifest: invalidPortPool,
+  })).toMatchObject({
+    state: "conflict",
+    resource_count: 0,
+    issues: expect.arrayContaining(["canonical_module_port_pool_invalid"]),
+  });
+  expect(validateAgainstSchema(nullPortPool, organizationManifestSchema, "organization").length).toBeGreaterThan(0);
+  expect(resolveOrganizationRootDocuments({
+    companyManifest: null,
+    modulesManifest,
+    canonicalManifest: nullPortPool,
+  })).toMatchObject({
+    state: "conflict",
+    resource_count: 0,
+    issues: expect.arrayContaining(["canonical_module_port_pool_invalid"]),
+  });
+});
+
+test("malformed repository slots stay inside the conflict state instead of throwing", () => {
+  const validModules = organizationModules();
+  const canonical = canonicalOrganization(validModules);
+  const projected = projectLegacyOrganizationManifest(canonical, validModules);
+  const malformedModules = { ...validModules, module_slots: [{}] };
+
+  expect(() => resolveOrganizationRootDocuments({
+    companyManifest: projected,
+    modulesManifest: malformedModules,
+    canonicalManifest: canonical,
+  })).not.toThrow();
+  expect(resolveOrganizationRootDocuments({
+    companyManifest: projected,
+    modulesManifest: malformedModules,
+    canonicalManifest: canonical,
+  })).toMatchObject({
+    state: "conflict",
+    resource_count: 0,
+    issues: expect.arrayContaining(["modules_manifest_slot_0_path_invalid"]),
+  });
+});
+
+test("canonical compatibility window admits only manifests with a lossless legacy projection", () => {
+  const modulesManifest = organizationModules();
+  const metadataCollision = canonicalOrganization(modulesManifest);
+  metadataCollision.organization.metadata.repository = "shadow";
+  const nonMain = canonicalOrganization(modulesManifest);
+  nonMain.root_repository.default_branch = "develop";
+  const partialVerification = canonicalOrganization(modulesManifest);
+  partialVerification.organization.forge_binding = {
+    ...partialVerification.organization.forge_binding,
+    binding_state: "verified",
+    organization_id: "314957563",
+  };
+  const invalidRootLocator = canonicalOrganization(modulesManifest);
+  invalidRootLocator.root_repository.locator = "not-a-coordinate";
+  const gitSuffixedRootLocator = canonicalOrganization(modulesManifest);
+  gitSuffixedRootLocator.root_repository.locator = "Example/Example_GEN3.git";
+  const conflictingGovernance = canonicalOrganization(modulesManifest);
+  conflictingGovernance.governance.default_branch = "develop";
+  const invalidAccessAuthority = canonicalOrganization(modulesManifest);
+  invalidAccessAuthority.governance.access_authority = "shadow-acl";
+  const extensionBranchAlias = canonicalOrganization(modulesManifest);
+  extensionBranchAlias.extensions.legacy.default_branch = "develop";
+  const invalidOrganizationLocator = canonicalOrganization(modulesManifest);
+  invalidOrganizationLocator.organization.forge_binding.locator = "My_Org";
+
+  for (const [manifest, issue] of [
+    [metadataCollision, "canonical_organization_metadata_reserved_field"],
+    [nonMain, "canonical_compatibility_binding_invalid"],
+    [partialVerification, "canonical_compatibility_binding_invalid"],
+    [invalidRootLocator, "canonical_compatibility_binding_invalid"],
+    [gitSuffixedRootLocator, "canonical_compatibility_binding_invalid"],
+    [conflictingGovernance, "canonical_governance_authority_invalid"],
+    [invalidAccessAuthority, "canonical_governance_authority_invalid"],
+    [extensionBranchAlias, "canonical_extensions_reserved_field"],
+    [invalidOrganizationLocator, "canonical_organization_binding_invalid"],
+  ]) {
+    expect(resolveOrganizationRootDocuments({
+      companyManifest: null,
+      modulesManifest,
+      canonicalManifest: manifest,
+    })).toMatchObject({
+      state: "conflict",
+      resource_count: 0,
+      issues: expect.arrayContaining([issue]),
+    });
+  }
+
+  const verified = canonicalOrganization(modulesManifest);
+  verified.organization.forge_binding = {
+    forge: "github",
+    locator: "Example",
+    binding_state: "verified",
+    organization_id: "314957563",
+  };
+  verified.root_repository = {
+    forge: "github",
+    locator: "Example/Example_GEN3",
+    default_branch: "main",
+    binding_state: "verified",
+    repository_id: "42424242",
+  };
+  verified.compatibility.legacy_projection.sha256 = organizationLegacyProjectionHash(verified, modulesManifest);
+  const verifiedProjection = projectLegacyOrganizationManifest(verified, modulesManifest);
+  expect(resolveOrganizationRootDocuments({
+    companyManifest: verifiedProjection,
+    modulesManifest,
+    canonicalManifest: verified,
+  })).toMatchObject({ state: "transition", resource_count: 1 });
+
+  const localFirst = canonicalOrganization(modulesManifest);
+  localFirst.root_repository = null;
+  localFirst.compatibility.legacy_projection.sha256 = organizationLegacyProjectionHash(localFirst, modulesManifest);
+  expect(resolveOrganizationRootDocuments({
+    companyManifest: projectLegacyOrganizationManifest(localFirst, modulesManifest),
+    modulesManifest,
+    canonicalManifest: localFirst,
+  })).toMatchObject({ state: "transition", resource_count: 1 });
 });
 
 test("same request and observations produce byte-identical result", () => {
@@ -228,6 +457,87 @@ test("same request and observations produce byte-identical result", () => {
     JSON.stringify(resolveOrganizationActivation({ request, observations: structuredClone(observations) })),
   );
 });
+
+function organizationModules() {
+  return {
+    organization_generation: "gen3",
+    company: "example-org",
+    github_org: "Example",
+    module_slots: [{
+      path: "workspace/knowledgebase",
+      slug: "knowledgebase",
+      teams: ["workspace"],
+      default_access: "expected",
+      required_roles: ["*"],
+      source_of_truth: "git-native",
+      git: { url: "git@github.com:Example/knowledgebase.git", branch: "main" },
+    }],
+  };
+}
+
+function legacyOrganization({ kind = "organization" } = {}) {
+  return {
+    organization_generation: "gen3",
+    organization_kind: kind,
+    company: {
+      slug: "example-org",
+      display_name: "Example Organization",
+      github_org: "Example",
+      root_repository: "Example/Example_GEN3",
+      repository: "git@github.com:Example/Example_GEN3.git",
+      legal_name: "Example Organization Ltd.",
+    },
+    governance: { default_branch: "main", access_authority: "github" },
+    module_port_pool: { start: 24000, end: 24099 },
+    teams: [{ slug: "workspace", display_name: "Workspace", default: true }],
+    layers: [{ path: "workspace", kind: "workspace", ownership: "manual" }],
+    task_sources: [{ slug: "todo", kind: "todo-tasks-json", path: "TODO.tasks.json" }],
+    doctor: { command: ["bun", "run", "doctor"], timeout_ms: 30_000 },
+    business_context: { purpose: "fixture" },
+    modules: [],
+  };
+}
+
+function canonicalOrganization(modulesManifest, { kind = "organization" } = {}) {
+  const legacy = legacyOrganization({ kind });
+  const canonical = {
+    schema_version: ORGANIZATION_MANIFEST_SCHEMA_VERSION,
+    kind,
+    organization: {
+      slug: legacy.company.slug,
+      display_name: legacy.company.display_name,
+      forge_binding: {
+        forge: "github",
+        locator: legacy.company.github_org,
+        binding_state: "unverified",
+      },
+      metadata: { legal_name: legacy.company.legal_name },
+    },
+    root_repository: {
+      forge: "github",
+      locator: legacy.company.root_repository,
+      default_branch: "main",
+      binding_state: "unverified",
+    },
+    manifests: { modules: "modules.manifest.json" },
+    governance: legacy.governance,
+    module_port_pool: legacy.module_port_pool,
+    teams: legacy.teams,
+    layers: legacy.layers,
+    task_sources: legacy.task_sources,
+    doctor: legacy.doctor,
+    extensions: { legacy: { business_context: legacy.business_context } },
+    compatibility: {
+      legacy_projection: {
+        path: "company.gen3.json",
+        algorithm: ORGANIZATION_LEGACY_PROJECTION_HASH_ALGORITHM,
+        sha256: `sha256:${"0".repeat(64)}`,
+      },
+    },
+  };
+  canonical.compatibility.legacy_projection.sha256 = organizationLegacyProjectionHash(canonical, modulesManifest);
+  return canonical;
+}
 
 function report(options) {
   return resolveOrganizationActivation({ request, observations: fixture(options) });
