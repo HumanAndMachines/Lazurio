@@ -24,7 +24,7 @@ import {
 import {
   inspectCanonicalPathBoundary,
   readJsonWithinCanonicalBoundary,
-} from "../../lazurio/core/path-boundary-lib.mjs";
+} from "../core/path-boundary-lib.mjs";
 import {
   buildDesiredModuleState,
   listDesiredModuleStates,

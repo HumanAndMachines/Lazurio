@@ -46,7 +46,7 @@ import {
 import {
   inspectCanonicalPathBoundary,
   readJsonWithinCanonicalBoundary,
-} from "../../lazurio/core/path-boundary-lib.mjs";
+} from "../core/path-boundary-lib.mjs";
 
 // Internal filesystem provenance for the runtime manager. Symbols survive
 // in-process object spreads but are omitted from JSON, so the public App
