@@ -211,24 +211,37 @@ Podrobný aktuální kontrakt CLI je v [`lazurio/README.md`](lazurio/README.md).
 
 ## Source, instalace a aktualizace
 
-Na localhost workstation existuje právě jeden pracovní Root odvozený z home
-uživatele Mašiny: `~/Lazurio` na macOS/Linuxu a
-`%USERPROFILE%\Lazurio` na Windows. Je non-Git, jazykově generovaný a drží
-instrukce, konfiguraci, data a mounty. Výběr jazyka nemění jeho strojové cesty
-ani identity.
+Na localhost workstation existuje právě jeden pracovní Root přímo v home
+uživatele Mašiny. Fresh a Managed target je `~/Lazurio` na macOS/Linuxu a
+`%USERPROFILE%\Lazurio` na Windows. Lazurio podporuje dvě jeho podoby:
 
-Runtime a pracovní Root jsou dvě odlišné vrstvy:
+- **Source Root** je dnešní nasazený a podporovaný profil. Ověřený Lazurio Git
+  checkout přímo v home je současně pracovní Root a může do řízené migrace
+  zachovat svůj existující historický název složky.
+- **Managed Root** je budoucí cílový profil. Canonical cesta je jazykově
+  generovaný non-Git Root pro instrukce, konfiguraci, data a mounty; runtime
+  vlastní immutable package mimo Root.
 
-- běžná instalace používá immutable package-managed `lazurio` mimo pracovní
-  Root;
-- development profil může právě tuto jednu aktivní CLI/Core provenance
-  přelinkovat na ověřený Git checkout
-  `<home>/Lazurio/development/Lazurio`;
-- package-only profil source checkout nepotřebuje a instalátor jej implicitně
-  neklonuje;
-- generátor nevytváří uvnitř Rootu další vendored kopii CLI nebo Launchpadu;
-- Organization checkouty, Personalspace a runtime data zůstávají samostatné
-  měnitelné mounty.
+Výběr jazyka nemění strojové cesty ani identity. Top-level installer nemá root
+picker a žádný profil nevytváří druhý aktivní Root. Přechodové rozpoznání
+existujícího source entrypointu není uložená volba jiné cesty.
+
+Root profil a provenance spuštěného CLI jsou dvě odlišné osy. Dnešní Source
+Root používá source-linked `lazurio`. Budoucí Managed Root běžně používá
+package-managed `lazurio`, ale developer smí stejnou CLI/Core implementaci
+vědomě přelinkovat na jediný ověřený checkout
+`<home>/Lazurio/development/Lazurio`. Package-only Managed profil source
+checkout nepotřebuje a instalátor jej implicitně neklonuje. Generátor
+nevytváří uvnitř Rootu další vendored kopii CLI nebo Launchpadu;
+Organization checkouty, Personalspace a runtime data zůstávají samostatné
+měnitelné mounty.
+
+`lazurio install` je jediný konvergenční vstup pro oba profily. Nad Source
+Rootem jej defaultně zachová a opraví jen podporovaný stav. Source → Managed
+migrace bude explicitní volba Principála a zůstane nedostupná, dokud není
+complete package-owned Launchpad/runtime, generátor a schema compatibility,
+exact rollback i fyzický macOS/Linux/Windows acceptance. Ruční přesun Source
+Rootu není podporovaný postup.
 
 Hosted Resident profily mohou dál používat verzovaný immutable artefakt s
 atomickou aktivací a rollbackem. Ani tam se běžící runtime neaktualizuje

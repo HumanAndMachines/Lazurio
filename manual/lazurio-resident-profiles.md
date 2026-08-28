@@ -14,7 +14,7 @@ credentials.
 | Pojem | Co znamená |
 | --- | --- |
 | Principál | Ten, pro koho Agent pracuje a kdo má poslední slovo. |
-| Kolega | Lidský Principál. Jeho pracovní Root je `<home>/Lazurio`; source checkout potřebuje jen pro vývoj Lazuria. |
+| Kolega | Lidský Principál. Jeho pracovní Root leží přímo v home; dnešní Source Root může do migrace nést historický název složky, fresh/Managed target je `<home>/Lazurio`. Managed profil potřebuje source checkout jen pro vývoj Lazuria. |
 | Buddy | Osobní zástupce jednoho lidského Principála uvnitř jeho Personalspace. Jedná jen v mezích jeho práv a mandátů. |
 | AI Kolega | AI Principál s vlastní identitou, Mašinou, Personalspace a pracovními právy. Není Buddy. |
 | Task Agent | Nástrojová pracovní relace, například Codex nebo Claude Code. Sama žádná práva nevlastní. |
@@ -27,23 +27,26 @@ credentials.
 
 Kanonický Lazurio source je Git repozitář, ve kterém se vyvíjí společný
 Launchpad, CLI/Core, Doctor, Guide, manuály, generátor a profilové buildy.
-Pracovní Root každé Mašiny je naproti tomu jediný generovaný non-Git adresář
-`<home>/Lazurio`. Drží instrukce, konfiguraci, data a mounty; package-only
-profil kvůli němu source checkout nepotřebuje.
+Pracovní Root každé Mašiny žije přímo v home a má dva veřejné profily: dnešní
+podporovaný Source Root je ověřený Git checkout, který může do migrace nést
+historický název složky; fresh/Managed target je přesně `<home>/Lazurio` a je
+generovaným non-Git adresářem pro instrukce, konfiguraci, data a mounty.
+Package-only Managed profil source checkout nepotřebuje.
 
-Pracovní Root:
+Každý pracovní Root:
 
-- není Git repozitář a nemá personu ukrytou v branchi;
-- má právě jeden vygenerovaný root `AGENTS.md`;
+- má právě jeden aktivní root `AGENTS.md`; v Source profilu je trackovaný,
+  v Managed profilu generovaný profile buildem;
 - obsahuje `personalspace/` a `organizations/` jen jako oddělené mutable Git
   mounty s vlastními access hranicemi;
 - nenese druhou vendored kopii CLI ani Launchpadu;
-- může v development profilu obsahovat jediný source checkout
-  `<home>/Lazurio/development/Lazurio`.
+- po Managed migraci může v development profilu obsahovat jediný source
+  checkout `<home>/Lazurio/development/Lazurio`.
 
-Běžná workstation instalace spouští package-managed `lazurio` mimo pracovní
-Root. Development profil může tuto právě jednu aktivní CLI/Core provenance
-explicitně přelinkovat na kanonický source checkout. Hosted Resident může
+Běžná budoucí Managed workstation instalace spouští package-managed `lazurio`
+mimo pracovní Root. Dnešní Source Root používá source-linked CLI; Managed
+development profil může tuto právě jednu aktivní CLI/Core provenance
+explicitně přelinkovat na kanonický nested source checkout. Hosted Resident může
 stejný reviewovaný source zabalit do immutable artefaktu s manifestem
 `lazurio.resident.json`, exact source SHA, profilem, platformou a payload
 hashi. Artefakt je runtime vrstva, nikoli druhý pracovní Root ani datová
@@ -58,7 +61,7 @@ se nejmenují `AGENTS.md`, takže v development checkoutu omylem nepřebírají
 
 Workspace profil je immutable runtime pro Launchpad a Lazurio CLI v hostovaném pracovním
 prostoru Kolegy nebo AI Kolegy. Není druhým datovým modelem hosted prostředí:
-lokální i vzdálený pracovní prostor používají stejný Lazurio Root,
+lokální i vzdálený pracovní prostor používají stejný Lazurio Root kontrakt,
 Organization Rooty, org-level repa a Workspace Moduly. Liší se jen transportem, custody,
 aktivní Team projekcí a způsobem provozního nasazení runtime.
 
@@ -202,7 +205,8 @@ Lifecycle adapter immutable hosted artefaktu v1 je záměrně pouze POSIX (Linux
 a macOS). Windows hosted Resident se nezapne, dokud nebude mít vlastní atomický
 pointer adapter a stejné failure testy. To neomezuje localhost Windows profil:
 pracovní Root zůstává `%USERPROFILE%\\Lazurio` a package-managed CLI má vlastní
-Windows kompatibilní brány. Source oprava patří do
+Windows kompatibilní brány. V dnešním Source profilu je source samotný Root;
+po Managed migraci patří source oprava do
 `%USERPROFILE%\\Lazurio\\development\\Lazurio` a task worktree.
 
 Konkrétní offline postup pro status, update, rollback a zachování lokálního
