@@ -19,14 +19,15 @@ rovnocenné architektury.
 
 ## Model v jedné větě
 
-> **Owner vlastní Mašinu, na Mašině žije Resident, Agenti na ní vykonávají
-> práci a Lazurio systém distribuuje a koordinuje, aniž musí stát mezi Ownerem
-> a jeho Residentem.**
+> **Owner vlastní Mašinu jako jednu runtime, bezpečnostní a recovery hranici.
+> Resident na ní může dlouhodobě žít, Agenti na ní dočasně vykonávají práci a
+> Lazurio systém distribuuje a koordinuje, aniž musí stát mezi Ownerem a jeho
+> prostředím.**
 
 ```text
 Owner
 └── Machine                         jedna bezpečnostní hranice
-    ├── Resident                    dlouhodobá identita a mandát
+    ├── Resident (volitelně)        dlouhodobá identita a mandát
     └── Agent sessions              dočasní vykonavatelé práce
 
 Lazurio                             distribuce, životní cyklus a koordinace
@@ -37,7 +38,7 @@ Lazurio                             distribuce, životní cyklus a koordinace
 | Pojem | Význam |
 | --- | --- |
 | **Owner** | Člověk nebo Organizace, která vlastní Mašinu, její data, přístupy a poslední cestu obnovy. |
-| **Machine (Mašina)** | Počítač, VPS nebo hostovaný pracovní prostor, který tvoří jednu bezpečnostní hranici. |
+| **Machine (Mašina)** | Fyzické zařízení, virtuální server nebo providerem izolovaný hostovaný pracovní prostor, který Lazurio chápe jako jednu sdílenou runtime, bezpečnostní a recovery hranici se známým Ownerem. Není to třída hardwaru ani registrovaná identita. |
 | **Resident** | Dlouhodobá digitální identita s kontinuitou, pamětí a mandátem. Buddy a AI Kolega jsou dva profily Residenta. |
 | **Task Agent** | Dočasná pracovní relace pro konkrétní úkol, například Codex, Claude Code nebo Cursor. V běžné řeči se může zkrátit na „Agent“. |
 | **Organizace** | Jedna firma, jedna GitHub Organization a jedna access hranice. |
@@ -45,20 +46,46 @@ Lazurio                             distribuce, životní cyklus a koordinace
 | **Modul** | Verzovaná pracovní schopnost uvnitř Organizace nebo Personalspace. Může, ale nemusí obsahovat spustitelnou aplikaci. |
 
 Principál je ten, pro koho Agent právě pracuje. V osobním prostředí bývá
-Principál současně Ownerem. V Organizaci rozhodují jeho skutečná oprávnění u
-poskytovatelů, ne textový název role.
+Principál současně Ownerem Mašiny. Ve sdíleném Hosted Team Workspace je
+Ownerem Organizace a jednotliví Principálové jsou jeho oprávnění uživatelé;
+používáním Mašiny její vlastnictví ani org-wide pravomoci nezískávají. V
+Organizaci rozhodují jejich skutečná oprávnění u poskytovatelů, ne textový
+název role.
 
 ## Pevná pravidla systému
 
 ### 1. Jedna Mašina je jedna bezpečnostní hranice
 
+Mašinu určuje společný podporovaný rozsah dopadu, lokální runtime stav a cesta
+obnovy, ne počet fyzických serverů. Lokální workstation, dedikovaný Buddy VPS
+a celý Hosted Team Workspace proto mohou být třemi konkrétními druhy Mašiny.
+Samotný proces, Modul, aplikace, worktree, browser, Unixový účet nebo libovolný
+kontejner Mašinou nejsou.
+
 Procesy s root nebo srovnatelnou autoritou mohou kompromitovat celou Mašinu.
 Unixový účet, kontejner nebo aplikační profil uvnitř ní proto nejsou samy o
-sobě tvrdou bezpečnostní hranicí. Pomáhají s pořádkem, obnovou a dohledatelností.
+sobě tvrdou bezpečnostní hranicí. Hostovaný pracovní prostor se počítá jako
+Mašina pouze tehdy, když jeho celý podporovaný infrastrukturní obal vymezuje
+vlastní soubory, procesy, síť, credentials, lifecycle a obnovu a provider
+vynucuje oddělení od sourozeneckých prostorů.
 
 Více Residentů může sdílet Mašinu jen tehdy, když Owner vědomě přijímá společný
 rozsah rizika. Pokud mají být skutečně oddělení, potřebují oddělené Mašiny nebo
 rovnocenně silnou infrastrukturní izolaci.
+
+Hranice mohou být vrstevnaté. Organization Host může být providerovou Mašinou
+a současně hostit několik Mašin typu Hosted Team Workspace na tenantní vrstvě.
+Pro Buildera a Agenta je nejbližší hranicí jeho Team Workspace; root nebo
+srovnatelná autorita hostu ale zůstává vyšší doménou kompromitace a obnovy a
+může ovlivnit všechny Workspaces na hostu. Izolace sourozeneckých Teamů proto
+není tvrzením, že jsou izolované od oprávněného host operatora nebo provideru.
+
+V komunikaci vždy používej konkrétní druh hranice: například „lokální Mašina
+Kolegy“, „Buddy VPS“, „Hosted Team Workspace Mašina“ nebo „Organization Host
+Mašina“. „Team Machine“ je nanejvýš hovorová zkratka pro Hosted Team Workspace,
+ne další systémový objekt. Lazurio pro Mašiny nezavádí centrální registr,
+vlastní IAM ani nový manifest; konkrétní hranici dokazují její podporovaný
+profil a infrastruktura daného Ownera a provideru.
 
 ### 2. Přístup drží existující poskytovatelé
 
@@ -119,15 +146,22 @@ procesy Modulů. Liší se infrastrukturním a síťovým obalem.
 
 ### Hosted Team Workspace
 
-Každý Hosted Team Workspace se v tomto modelu počítá jako samostatná Machine.
-Je to jedna sdílená vývojová dílna pro konkrétní Team:
+Každý Hosted Team Workspace se na tenantní vrstvě počítá jako samostatná
+Machine. Ne proto, že obsahuje kontejner, ale proto, že celý podporovaný obal
+Workspace vymezuje jednu sdílenou vývojovou dílnu pro konkrétní Team:
 
 - členové Teamu sdílejí soubory, procesy a síťový prostor;
-- různé Team Workspaces jsou od sebe oddělené;
+- různé Team Workspaces jsou od sebe oddělené na tenantní vrstvě;
 - individuální izolaci poskytne jednočlenný Team Workspace;
 - uvnitř běží T3 Code, nástroje Agentů, Launchpad, checkouty a worktrees;
 - řídicí infrastruktura, klíče poskytovatele, Tailscale/VPN sidecar a HTTPS ingress
   zůstávají mimo pracovní prostředí.
+
+Ownerem je Organizace; členové Teamu jsou oprávnění uživatelé sdílené Mašiny.
+Workspace nepřebírá ani nemountuje jejich Personalspace. Organization Host
+operator zůstává vyšší doménou obnovy a kompromitace, ale běžný Team ani jeho
+Agent tím nezískává přístup k host OS, jinému Workspace nebo org-wide
+credentials.
 
 Supervisor udržuje pouze T3 Code a Launchpad. Vývojové procesy Modulů spouští a
 zastavuje Launchpad. Dashboard pouze zpřístupňuje vstupy pracovního prostoru;

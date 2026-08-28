@@ -13,17 +13,28 @@ an existing infra repository to be a template.
 
 ## Three distinct concepts
 
-- **Organization Host** is the Organization-owned provider Machine and
-  administrative boundary that carries mutually isolated Hosted Team Workspace
-  runtimes.
-- **Hosted Team Workspace** is a private non-root development workload of one
-  Team. It is not a separate Machine Profile and does not host production
-  applications or provider credentials.
+- **Organization Host** is the Organization-owned provider host and the
+  higher-trust administrative, recovery and compromise domain that carries
+  mutually isolated Hosted Team Workspace runtimes. At the provider/operator
+  layer it is a Machine.
+- **Hosted Team Workspace** is the entire provider-isolated private development
+  envelope of one Team. At the tenant layer it counts as the Team's Machine;
+  this follows from its complete filesystem, process, network, credential and
+  recovery boundary, not merely from being a container. It is not a separate
+  provider Machine Profile and does not host production applications, member
+  Personalspace or provider credentials.
 - **Conglomerate Host** is a separate provider- or enterprise-operated Machine
   Profile for shared infrastructure services used by multiple isolated
   Organizations. It holds none of their checkouts, Hosted Team Workspaces or
   Personalspace, has no mutation or access authority over them, creates no
   shared access boundary and is outside this Organization Host contract.
+
+These layers are intentionally explicit rather than peers. Sibling Team
+Workspaces are isolated from each other under the supported contract, while
+Organization Host root or equivalent operator authority can recover or
+compromise all of them. Calling a Workspace a Machine therefore does not claim
+isolation from its authorized host operator and does not create a Machine
+registry, IAM role or new authorization source.
 
 ## Files
 

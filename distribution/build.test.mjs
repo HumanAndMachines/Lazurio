@@ -275,6 +275,8 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
   expect(workspacePaths).toContain(".agents/skills/architecture-shaping/SKILL.md");
   const workspaceInstructions = await readFile(join(workspace.artifact_root, "AGENTS.md"), "utf8");
   expect(workspaceInstructions).toContain(".agents/skills/architecture-shaping/SKILL.md");
+  expect(workspaceInstructions).toContain("Mašina je jedna sdílená runtime, bezpečnostní a recovery hranice");
+  expect(workspaceInstructions).toContain("Organization Hostu zůstává vyšší");
   const workspacePackage = JSON.parse(await readFile(join(workspace.artifact_root, "package.json"), "utf8"));
   expect(workspacePackage).toMatchObject({
     name: "lazurio",

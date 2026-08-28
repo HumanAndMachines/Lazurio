@@ -10,6 +10,22 @@ Pracovní prostor Kolegy nebo AI Kolegy žije v odděleném mutable Lazurio Root
 Lokálně i hosted používá stejný model a stejné mechanismy; lišit se smí pouze
 transport, custody, aktivní Team projekce a provozní nasazení runtime.
 
+## Mašina tohoto profilu
+
+Mašina je jedna sdílená runtime, bezpečnostní a recovery hranice se známým
+Ownerem, ne typ hardwaru. Lokální workstation může být Mašinou jednoho
+Principála. Celý Hosted Team Workspace se na tenantní vrstvě počítá jako
+Mašina Teamu jen díky podporovanému infrastrukturnímu obalu se samostatnými
+soubory, procesy, sítí, credentials, lifecycle a obnovou; samotný kontejner,
+Unixový účet, proces, Modul ani worktree Mašinou nejsou.
+
+Ownerem Hosted Team Workspace je Organizace a členové Teamu jsou jeho
+oprávnění uživatelé. Workspace nepřebírá jejich Personalspace ani org-wide
+pravomoci. Root nebo srovnatelná autorita Organization Hostu zůstává vyšší
+doménou kompromitace a obnovy, i když jsou sourozenecké Team Workspaces na
+tenantní vrstvě oddělené. Pojem Mašina nevytváří vlastní IAM, roli, manifest
+ani centrální registr; access dál dokazují živá provider oprávnění.
+
 Launchpad se spouští z tohoto runtime rootu a pracovní checkout dostává jako
 explicitní `WORKSPACE_ROOT`/`--root`. `LAZURIO_RUNTIME_ROOT` musí přesně
 ukazovat na tento adresář. Pokud se runtime a working root překrývají, update
