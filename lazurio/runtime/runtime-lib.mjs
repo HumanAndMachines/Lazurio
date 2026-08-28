@@ -3164,7 +3164,10 @@ export function createRuntimeManager({
   // Manager instance and preserve desired intent for the next safe retry.
   async function stopManagedRuntimes() {
     stopping = true;
-    teamServiceController?.stop();
+    // Invalidate future catalog scheduling, then drain active ensure calls
+    // before taking the one cleanup snapshot. An ensure may already be past
+    // its accepting-starts guard and register a child while shutdown begins.
+    await teamServiceController?.stop();
     const records = [...managedProcesses.values()];
     const results = [];
     for (const record of records) {

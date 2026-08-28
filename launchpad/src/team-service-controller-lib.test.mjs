@@ -153,6 +153,32 @@ test("explicit Retry replaces an older queued generation", async () => {
   });
 });
 
+test("controller stop drains an active ensure before resolving", async () => {
+  let releaseEnsure;
+  let stopResolved = false;
+  const ensureGate = new Promise((resolve) => { releaseEnsure = resolve; });
+  const controller = createTeamServiceController({
+    services: serviceMap("demo"),
+    catalogRevision: "rev-shutdown-drain",
+    ensureService: async () => {
+      await ensureGate;
+      return { runtime: { status: "healthy" } };
+    },
+    sleep: () => new Promise(() => {}),
+  });
+
+  controller.start();
+  await flush();
+  const stopped = controller.stop().then(() => { stopResolved = true; });
+  await flush();
+  expect(stopResolved).toBe(false);
+
+  releaseEnsure();
+  await stopped;
+  expect(stopResolved).toBe(true);
+  expect(controller.snapshot("demo").status).toBe("starting");
+});
+
 test("a catalog child exit re-enters capped backoff and keeps the immutable source", async () => {
   const sleeps = [];
   const controller = createTeamServiceController({

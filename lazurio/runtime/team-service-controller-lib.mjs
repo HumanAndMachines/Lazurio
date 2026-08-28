@@ -37,6 +37,7 @@ export function createTeamServiceController({
     }),
   }]));
   const queue = [];
+  const stopWaiters = new Set();
   let active = 0;
   let stopped = false;
 
@@ -101,6 +102,8 @@ export function createTeamServiceController({
       entry.queued = false;
       entry.requestedTrigger = null;
     }
+    if (active === 0) return Promise.resolve();
+    return new Promise((resolve) => stopWaiters.add(resolve));
   }
 
   function enqueue(entry, trigger) {
@@ -132,6 +135,10 @@ export function createTeamServiceController({
         const requestedTrigger = item.entry.requestedTrigger;
         item.entry.requestedTrigger = null;
         if (requestedTrigger) enqueue(item.entry, requestedTrigger);
+        if (active === 0) {
+          for (const resolve of stopWaiters) resolve();
+          stopWaiters.clear();
+        }
         drain();
       });
     }
