@@ -1223,12 +1223,18 @@ async function handleServerShutdown(request) {
     }, 409);
   }
 
-  setTimeout(() => void completeServerShutdown(), 50);
+  setTimeout(() => void beginServerShutdownCleanup(), 50);
   return jsonResponse({
     schema_version: "lazurio.server.shutdown.v1",
     instance_id: launchpadServerIdentity.instance_id,
     stopping: true,
   });
+}
+
+let serverShutdownCleanupPromise = null;
+function beginServerShutdownCleanup() {
+  serverShutdownCleanupPromise ??= completeServerShutdown();
+  return serverShutdownCleanupPromise;
 }
 
 async function completeServerShutdown() {
@@ -1275,13 +1281,25 @@ async function completeServerShutdown() {
 
 let processSignalShutdownPending = false;
 function requestProcessSignalShutdown(signal) {
-  if (processSignalShutdownPending || serverShutdownState.state === "stopping") return;
+  if (processSignalShutdownPending) {
+    if (serverShutdownState.state !== "stopping") {
+      const forced = serverShutdownState.forceShutdown();
+      console.error(`[lazurio] second ${signal} forced Server shutdown with ${forced.interruptedMutations ?? 0} active mutation(s)`);
+      void beginServerShutdownCleanup();
+    }
+    return;
+  }
+  if (serverShutdownState.state === "stopping") return;
   processSignalShutdownPending = true;
+  const drain = serverShutdownState.beginShutdownDrain();
+  if (!drain.accepted) return;
+  console.error(`[lazurio] ${signal} requested Server shutdown; draining ${drain.activeMutations} active mutation(s)`);
   const requestWhenIdle = () => {
-    const shutdown = serverShutdownState.requestShutdown();
+    if (serverShutdownState.state === "stopping") return;
+    const shutdown = serverShutdownState.finishShutdownDrain();
     if (shutdown.accepted) {
-      console.error(`[lazurio] ${signal} requested graceful Server shutdown`);
-      void completeServerShutdown();
+      console.error(`[lazurio] ${signal} drain complete; stopping Server`);
+      void beginServerShutdownCleanup();
       return;
     }
     if (shutdown.reason === "server_busy") {

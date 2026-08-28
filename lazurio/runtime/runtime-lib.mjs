@@ -229,6 +229,7 @@ export function createRuntimeManager({
   const managedProcesses = new Map();
   const moduleLeaseLocks = new Map();
   const desiredRestartTrackers = new Map();
+  let stopping = false;
   const runtimeStateRoot = resolve(stateRoot);
   const runtimeRoot = join(runtimeStateRoot, "runtime");
   const appStateRoot = join(runtimeRoot, "apps");
@@ -629,6 +630,7 @@ export function createRuntimeManager({
   }
 
   async function startRuntimeAppUnlocked(app, { trigger = "user", takeover = {} } = {}) {
+    assertRuntimeManagerAcceptingStarts();
     const runtimeKey = runtimeKeyForApp(app);
     const runtimeSource = runtimeSourceForApp(app);
     app = await materializeRuntimeListeners(app);
@@ -648,6 +650,7 @@ export function createRuntimeManager({
       });
     }
     app = appWithRuntimeAuthority(app, dependencies);
+    assertRuntimeManagerAcceptingStarts();
 
     await ensureRuntimeDirs();
     const logPath = logPathForApp(runtimeKey);
@@ -1290,7 +1293,13 @@ export function createRuntimeManager({
 
   async function stop(appId, { source = null } = {}) {
     const app = await runtimeAppForAction(appId, { source });
-    if (!supportsDurableDesiredRuntime(app)) return stopRuntimeAppUnlocked(app);
+    if (!supportsDurableDesiredRuntime(app)) {
+      return withModuleLeaseLock(app, async () => {
+        const record = selectManagedModuleStopRecord(managedProcesses.values(), app);
+        if (!record) throw appNotManagedError(app, await healthForApp(app));
+        return stopRuntimeAppUnlocked(record.runtimeApp ?? app);
+      });
+    }
     const recordsAtRequest = managedRecordsForModule(app);
     // Capture the exact active source before waiting for the cross-process
     // mutex. An unexpected child exit may remove the managed record while Stop
@@ -2548,7 +2557,7 @@ export function createRuntimeManager({
   }
 
   function queueDesiredRuntimeRestart(app, record, exitCode) {
-    if (!supportsDurableDesiredRuntime(app)) return;
+    if (stopping || !supportsDurableDesiredRuntime(app)) return;
     const key = moduleLeaseKeyForApp(app);
     const existing = desiredRestartTrackers.get(key);
     if (existing?.running) {
@@ -2593,7 +2602,7 @@ export function createRuntimeManager({
   async function runDesiredRestartSeries(app, record, exitCode, tracker, generation) {
     const expectedAppId = app.id;
     const expectedSource = runtimeSourceForApp(app);
-    while (tracker.attempts < desiredRestartDelaysMs.length && tracker.generation === generation) {
+    while (!stopping && tracker.attempts < desiredRestartDelaysMs.length && tracker.generation === generation) {
       const delayMs = desiredRestartDelaysMs[tracker.attempts];
       tracker.attempts += 1;
       await appendLog(
@@ -2601,9 +2610,11 @@ export function createRuntimeManager({
         `[launchpad] desired child exit ${app.id} code=${exitCode} restart_attempt=${tracker.attempts} backoff_ms=${delayMs}\n`,
       );
       await sleepFn(delayMs);
+      if (stopping || tracker.generation !== generation) return;
       let outcome;
       try {
         outcome = await withModuleLeaseLock(app, async () => {
+          if (stopping || tracker.generation !== generation) return { state: "cancelled" };
           const desired = await readDesiredRuntime(app);
           if (!desired?.enabled || desired.status === "disabled") return { state: "cancelled" };
           if (desired.app_id !== expectedAppId || !runtimeSourcesEqual(desired.source, expectedSource)) {
@@ -2895,6 +2906,7 @@ export function createRuntimeManager({
   // If that publication fails, stop only children owned by this fresh Runtime
   // Manager instance and preserve desired intent for the next safe retry.
   async function stopManagedRuntimes() {
+    stopping = true;
     const records = [...managedProcesses.values()];
     const results = [];
     for (const record of records) {
@@ -2929,6 +2941,15 @@ export function createRuntimeManager({
       failed: results.filter((result) => result.status === "failed").length,
       results,
     };
+  }
+
+  function assertRuntimeManagerAcceptingStarts() {
+    if (!stopping) return;
+    throw new RuntimeActionError(
+      503,
+      "runtime_manager_stopping",
+      "Launchpad runtime manager se zastavuje a nepřijímá nový start.",
+    );
   }
 
   async function shutdown() {

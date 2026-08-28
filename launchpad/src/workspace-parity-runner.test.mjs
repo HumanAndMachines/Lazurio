@@ -13,7 +13,7 @@ import {
 const canonicalIotorOrganization = "IotorLazurio_GEN3";
 const expectedCreator = "t3-code/iotor-builder";
 
-test("workspace parity runner uses the same versioned phases for local and hosted profiles", () => {
+test("workspace parity runner keeps local session and hosted compatibility phases explicit", () => {
   expect(parseArgs([
     "--profile", "local",
     "--phase", "live",
@@ -22,6 +22,14 @@ test("workspace parity runner uses the same versioned phases for local and hoste
     "--worktree-slug", "DEV-6439-parity",
     "--expected-worktree-created-by", expectedCreator,
   ])).toMatchObject({ profile: "local", phase: "live" });
+  expect(parseArgs([
+    "--profile", "local",
+    "--phase", "post-restart",
+    "--organization", canonicalIotorOrganization,
+    "--app-id", "iotor-knowledgebase-v2",
+    "--worktree-slug", "DEV-6439-parity",
+    "--expected-worktree-created-by", expectedCreator,
+  ])).toMatchObject({ profile: "local", phase: "post-restart" });
   expect(parseArgs([
     "--profile", "hosted",
     "--phase", "post-restart",
@@ -101,6 +109,15 @@ test("expect-disabled is a separate phase after a recorded Stop", () => {
     "--worktree-slug", "DEV-6439-parity",
     "--expected-worktree-created-by", expectedCreator,
   ])).toThrow("--stop-after is not valid");
+  expect(() => parseArgs([
+    "--profile", "local",
+    "--phase", "post-restart",
+    "--stop-after",
+    "--organization", canonicalIotorOrganization,
+    "--app-id", "iotor-knowledgebase-v2",
+    "--worktree-slug", "DEV-6439-parity",
+    "--expected-worktree-created-by", expectedCreator,
+  ])).toThrow("no session child should exist");
 });
 
 test("runtime takeover requires one integer module lease port and exact equality", () => {
@@ -115,14 +132,22 @@ test("disabled vacancy probes every loopback spelling for the numeric module lea
   expect(parityLoopbackProbeHosts("[::1]")).toEqual(["::1", "127.0.0.1"]);
 });
 
-test("Stop and post-stop restart evidence prove disabled desired state without resurrection", () => {
+test("Stop and restart evidence distinguish local session absence from hosted desired disablement", () => {
   const stopped = {
     action: "stop",
     desired: { enabled: false, status: "disabled", source: { type: "worktree", slug: "DEV-6439-parity" } },
     runtime: { managed: false, status: "stopped" },
   };
-  expect(explicitStopResponseAccepted(stopped)).toBe(true);
-  expect(explicitStopResponseAccepted({ ...stopped, desired: { enabled: true, status: "active" } })).toBe(false);
+  expect(explicitStopResponseAccepted(stopped, { profile: "hosted" })).toBe(true);
+  expect(explicitStopResponseAccepted(
+    { action: "stop", runtime: { managed: false, status: "stopped" } },
+    { profile: "local" },
+  )).toBe(true);
+  expect(explicitStopResponseAccepted(stopped, { profile: "local" })).toBe(false);
+  expect(explicitStopResponseAccepted(
+    { ...stopped, desired: { enabled: true, status: "active" } },
+    { profile: "hosted" },
+  )).toBe(false);
 
   const afterRestart = {
     managed: false,
@@ -134,17 +159,45 @@ test("Stop and post-stop restart evidence prove disabled desired state without r
     runtime_source: { type: "worktree", slug: "DEV-6439-parity" },
   };
   const noListener = { rawTcpReachable: false };
-  expect(noResurrectionProofAccepted(afterRestart, "DEV-6439-parity", noListener)).toBe(true);
-  expect(noResurrectionProofAccepted(afterRestart, "DEV-6439-parity", { rawTcpReachable: true })).toBe(false);
-  expect(noResurrectionProofAccepted({ ...afterRestart, managed: true }, "DEV-6439-parity", noListener)).toBe(false);
+  expect(noResurrectionProofAccepted(
+    afterRestart,
+    "DEV-6439-parity",
+    { profile: "hosted", ...noListener },
+  )).toBe(true);
+  const localAfterRestart = { ...afterRestart };
+  delete localAfterRestart.desired;
+  expect(noResurrectionProofAccepted(
+    localAfterRestart,
+    "DEV-6439-parity",
+    { profile: "local", ...noListener },
+  )).toBe(true);
+  expect(noResurrectionProofAccepted(
+    afterRestart,
+    "DEV-6439-parity",
+    { profile: "local", ...noListener },
+  )).toBe(false);
+  expect(noResurrectionProofAccepted(
+    afterRestart,
+    "DEV-6439-parity",
+    { profile: "hosted", rawTcpReachable: true },
+  )).toBe(false);
+  expect(noResurrectionProofAccepted(
+    { ...afterRestart, managed: true },
+    "DEV-6439-parity",
+    { profile: "hosted", ...noListener },
+  )).toBe(false);
   expect(noResurrectionProofAccepted({
     ...afterRestart,
     status: "healthy",
     owner: "adopted-port",
     port_owner: { pid: 404 },
     probe: { reachable: true },
-  }, "DEV-6439-parity", noListener)).toBe(false);
-  expect(noResurrectionProofAccepted(afterRestart, "another-worktree", noListener)).toBe(false);
+  }, "DEV-6439-parity", { profile: "hosted", ...noListener })).toBe(false);
+  expect(noResurrectionProofAccepted(
+    afterRestart,
+    "another-worktree",
+    { profile: "hosted", ...noListener },
+  )).toBe(false);
 });
 
 test("worktree provenance and boot reconcile use the exact API and desired-state shapes", () => {
@@ -165,13 +218,14 @@ test("worktree provenance and boot reconcile use the exact API and desired-state
       source: { type: "worktree", slug: "DEV-6439-parity" },
     },
   };
-  expect(bootReconcileProofAccepted(health, "DEV-6439-parity")).toBe(true);
+  expect(bootReconcileProofAccepted(health, "DEV-6439-parity", { profile: "hosted" })).toBe(true);
+  expect(bootReconcileProofAccepted(health, "DEV-6439-parity", { profile: "local" })).toBe(false);
   expect(bootReconcileProofAccepted({
     ...health,
     desired: { ...health.desired, source: { type: "main" } },
-  }, "DEV-6439-parity")).toBe(false);
+  }, "DEV-6439-parity", { profile: "hosted" })).toBe(false);
   expect(bootReconcileProofAccepted({
     ...health,
     desired: { ...health.desired, enabled: false },
-  }, "DEV-6439-parity")).toBe(false);
+  }, "DEV-6439-parity", { profile: "hosted" })).toBe(false);
 });

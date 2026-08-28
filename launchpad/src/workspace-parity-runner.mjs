@@ -148,25 +148,16 @@ async function appendRuntimeChecks({ add, app, options }) {
   if (options.phase === "expect-disabled") {
     try {
       const health = await runtimeRequest(base, app.id, "health", worktreeSource(options.worktreeSlug));
-      const listenerHost = app.entrypoint_listener?.host ?? app.host;
-      const listenerPort = app.entrypoint_listener?.port ?? app.port;
-      const probeHosts = parityLoopbackProbeHosts(listenerHost);
-      const probeResults = Number.isInteger(listenerPort)
-        ? await Promise.all(probeHosts.map(async (host) => ({
-            host,
-            reachable: await tcpReachable(host, listenerPort),
-          })))
-        : [{ host: listenerHost, reachable: true }];
-      const rawTcpReachable = probeResults.some((result) => result.reachable);
-      add("runtime.module_port_vacant", rawTcpReachable === false, {
-        port: listenerPort,
-        probes: probeResults,
-        raw_tcp_reachable: rawTcpReachable,
+      const vacancy = await runtimeVacancyEvidence(app);
+      add("runtime.module_port_vacant", vacancy.rawTcpReachable === false, {
+        port: vacancy.listenerPort,
+        probes: vacancy.probeResults,
+        raw_tcp_reachable: vacancy.rawTcpReachable,
       });
       add("runtime.no_resurrection", noResurrectionProofAccepted(
         health,
         options.worktreeSlug,
-        { rawTcpReachable },
+        { profile: options.profile, rawTcpReachable: vacancy.rawTcpReachable },
       ), {
         runtime_status: health.status,
         managed: health.managed,
@@ -186,25 +177,52 @@ async function appendRuntimeChecks({ add, app, options }) {
   if (options.phase === "post-restart") {
     try {
       const health = await runtimeRequest(base, app.id, "health", worktreeSource(options.worktreeSlug));
-      add("runtime.boot_reconcile", bootReconcileProofAccepted(health, options.worktreeSlug), {
-        runtime_status: health.status,
-        managed: health.managed,
-        runtime_source: health.runtime_source,
-        desired: health.desired,
-      });
+      if (options.profile === "local") {
+        const vacancy = await runtimeVacancyEvidence(app);
+        add("runtime.module_port_vacant", vacancy.rawTcpReachable === false, {
+          port: vacancy.listenerPort,
+          probes: vacancy.probeResults,
+          raw_tcp_reachable: vacancy.rawTcpReachable,
+        });
+        add("runtime.session_not_restored", noResurrectionProofAccepted(
+          health,
+          options.worktreeSlug,
+          { profile: "local", rawTcpReachable: vacancy.rawTcpReachable },
+        ), {
+          runtime_status: health.status,
+          managed: health.managed,
+          runtime_source: health.runtime_source,
+          desired: health.desired,
+        });
+      } else {
+        add("runtime.boot_reconcile", bootReconcileProofAccepted(
+          health,
+          options.worktreeSlug,
+          { profile: "hosted" },
+        ), {
+          runtime_status: health.status,
+          managed: health.managed,
+          runtime_source: health.runtime_source,
+          desired: health.desired,
+        });
+      }
       add("runtime.external_url", navigationMatchesProfile(health.url, options), {
         observed: health.url,
         expected: options.profile === "hosted" ? options.expectedOrigin : "loopback",
       });
-      moduleProcess = await captureModuleProcessEvidence(health, options);
+      moduleProcess = options.profile === "hosted"
+        ? await captureModuleProcessEvidence(health, options)
+        : null;
       if (options.stopAfter) {
         const stopped = await runtimeRequest(base, app.id, "stop", worktreeSource(options.worktreeSlug));
-        appendExplicitStopCheck(add, stopped);
+        appendExplicitStopCheck(add, stopped, options.profile);
       }
     } catch (error) {
-      add("runtime.boot_reconcile", false, { error: error.message });
+      add(options.profile === "local" ? "runtime.session_not_restored" : "runtime.boot_reconcile", false, {
+        error: error.message,
+      });
     }
-    return { moduleProcess, moduleExpected: true };
+    return { moduleProcess, moduleExpected: options.profile === "hosted" };
   }
 
   try {
@@ -229,7 +247,7 @@ async function appendRuntimeChecks({ add, app, options }) {
     moduleProcess = await captureModuleProcessEvidence(worktreeTwo.runtime, options);
     if (options.stopAfter) {
       const stopped = await runtimeRequest(base, app.id, "stop", worktreeSource(options.worktreeSlug));
-      appendExplicitStopCheck(add, stopped);
+      appendExplicitStopCheck(add, stopped, options.profile);
     }
   } catch (error) {
     add("runtime.main_worktree_takeover", false, { error: error.message });
@@ -249,8 +267,9 @@ export function worktreeProvenanceMatches(worktree, expectedCreatedBy) {
     && worktree.metadata?.created_by === expectedCreatedBy;
 }
 
-export function bootReconcileProofAccepted(health, worktreeSlug) {
-  return health?.status === "healthy"
+export function bootReconcileProofAccepted(health, worktreeSlug, { profile = "hosted" } = {}) {
+  return profile === "hosted"
+    && health?.status === "healthy"
     && health.managed === true
     && health.runtime_source?.type === "worktree"
     && health.runtime_source?.slug === worktreeSlug
@@ -260,30 +279,58 @@ export function bootReconcileProofAccepted(health, worktreeSlug) {
     && health.desired?.source?.slug === worktreeSlug;
 }
 
-function appendExplicitStopCheck(add, stopped) {
-  add("runtime.explicit_stop", explicitStopResponseAccepted(stopped), {
+function appendExplicitStopCheck(add, stopped, profile) {
+  add("runtime.explicit_stop", explicitStopResponseAccepted(stopped, { profile }), {
     response: stopped,
   });
 }
 
-export function explicitStopResponseAccepted(stopped) {
-  return stopped?.action === "stop"
+export function explicitStopResponseAccepted(stopped, { profile = "hosted" } = {}) {
+  const stoppedRuntime = stopped?.action === "stop" && stopped.runtime?.managed === false;
+  if (!stoppedRuntime) return false;
+  if (profile === "local") return stopped.desired === undefined;
+  return profile === "hosted"
     && stopped.desired?.enabled === false
-    && stopped.desired?.status === "disabled"
-    && stopped.runtime?.managed === false;
+    && stopped.desired?.status === "disabled";
 }
 
-export function noResurrectionProofAccepted(health, worktreeSlug, { rawTcpReachable = true } = {}) {
-  return health?.managed === false
+export function noResurrectionProofAccepted(
+  health,
+  worktreeSlug,
+  { profile = "hosted", rawTcpReachable = true } = {},
+) {
+  const stopped = health?.managed === false
     && health.status === "stopped"
     && health.owner === "none"
     && health.port_owner == null
     && health.probe?.reachable === false
     && rawTcpReachable === false
+    && health.runtime_source?.type === "worktree"
+    && health.runtime_source?.slug === worktreeSlug;
+  if (!stopped) return false;
+  if (profile === "local") return health.desired === undefined;
+  return profile === "hosted"
     && health.desired?.enabled === false
     && health.desired?.status === "disabled"
     && health.desired?.source?.type === "worktree"
     && health.desired?.source?.slug === worktreeSlug;
+}
+
+async function runtimeVacancyEvidence(app) {
+  const listenerHost = app.entrypoint_listener?.host ?? app.host;
+  const listenerPort = app.entrypoint_listener?.port ?? app.port;
+  const probeHosts = parityLoopbackProbeHosts(listenerHost);
+  const probeResults = Number.isInteger(listenerPort)
+    ? await Promise.all(probeHosts.map(async (host) => ({
+        host,
+        reachable: await tcpReachable(host, listenerPort),
+      })))
+    : [{ host: listenerHost, reachable: true }];
+  return {
+    listenerPort,
+    probeResults,
+    rawTcpReachable: probeResults.some((result) => result.reachable),
+  };
 }
 
 async function captureModuleProcessEvidence(runtime, options) {
@@ -492,6 +539,9 @@ export function parseArgs(args) {
   if (options.phase === "expect-disabled" && options.stopAfter) {
     throw new Error("--stop-after is not valid with --phase expect-disabled");
   }
+  if (options.profile === "local" && options.phase === "post-restart" && options.stopAfter) {
+    throw new Error("--stop-after is not valid for local post-restart; no session child should exist");
+  }
   if (options.profile === "hosted" && !options.expectedOrigin) throw new Error("--expected-origin is required for hosted profile");
   if (options.profile === "hosted") {
     for (const key of ["t3Pid", "codexPid", "launchpadPid"]) {
@@ -509,9 +559,10 @@ function helpText() {
   --expected-worktree-created-by <t3-creation-identity> [options]
 
 Hosted additionally requires --expected-origin, --t3-pid, --codex-pid and --launchpad-pid.
-Run live, restart the work container (and separately reboot the host), then run
-post-restart with the same arguments. After continuity evidence, run post-restart
-with --stop-after, restart the container and finish with expect-disabled. The
-report lists infra-owned external assertions that the Iotor lane must prove
-outside the work container.`;
+Local: run live, restart Launchpad, then use post-restart to prove no session
+child was restored. Hosted v1 compatibility: run live, restart the work
+container (and separately reboot the host), then run post-restart; after
+continuity evidence, repeat with --stop-after, restart and finish with
+expect-disabled. The report lists infra-owned external assertions that the Iotor
+lane must prove outside the work container.`;
 }

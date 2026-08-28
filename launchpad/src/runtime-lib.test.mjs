@@ -1543,16 +1543,23 @@ test("Windows Stop drží managed slot až do finálního zápisu a blokuje soub
   const stopPromise = runtime.stop("test-company-demo-v1");
   await ownerProbeStarted;
 
-  await expect(runtime.start("test-company-demo-v1")).rejects.toMatchObject({
-    status: 409,
-    code: "already_managed",
+  let startSettled = false;
+  const startPromise = runtime.start("test-company-demo-v1").finally(() => {
+    startSettled = true;
   });
+  await Bun.sleep(50);
+  expect(startSettled).toBe(false);
   expect(spawnCount).toBe(1);
 
   releaseOwnerProbe();
   const stopped = await stopPromise;
   expect(stopped.runtime.status).toBe("stopped");
-  expect((await runtime.health("test-company-demo-v1")).status).toBe("stopped");
+  const started = await startPromise;
+  expect(started.runtime.status).toBe("healthy");
+  expect(spawnCount).toBe(2);
+
+  const finalStop = await runtime.stop("test-company-demo-v1");
+  expect(finalStop.runtime.status).toBe("stopped");
 }, platformTestTimeout(10_000));
 
 test("Windows post-stop diagnostika je best-effort a neblokuje finalizaci", async () => {
@@ -2662,14 +2669,14 @@ test("Windows owner proof přežije restart Launchpadu mezi stopping zápisem a 
       port_owner: { verified_by: "runtime-owner-proof" },
     });
 
-    await expect(restartedRuntime.stop("test-company-demo-v1")).rejects.toMatchObject({
-      code: "app_not_managed",
-      metadata: { owner: "adopted-port" },
-    });
     // Dokončení původního managed Stopu potvrdí jen jeho child handle; nová
     // instance proces ani s platným owner proof neovládá.
     releaseManagedSignal();
     await firstStop;
+    await expect(restartedRuntime.stop("test-company-demo-v1")).rejects.toMatchObject({
+      code: "app_not_managed",
+      metadata: { owner: "none" },
+    });
   } finally {
     releaseManagedSignal();
     await killFixtureProcess(child, root);
@@ -3917,7 +3924,13 @@ test("runtime manager replaces main with one worktree instance on the same decla
   );
   expect((await runtime.health("test-company-demo-v1")).owner).not.toBe("current-instance");
 
-  await runtime.stop("test-company-demo-v1", { source: { type: "worktree", slug: worktreeSlug } });
+  const stoppedAfterClientReload = await runtime.stop("test-company-demo-v1", {
+    source: { type: "main" },
+  });
+  expect(stoppedAfterClientReload).toMatchObject({
+    action: "stop",
+    runtime_source: { type: "worktree", slug: worktreeSlug },
+  });
 }, platformTestTimeout(15_000));
 
 test("worktree Start materializes its explicit contract while main is still legacy", async () => {
@@ -4668,6 +4681,31 @@ test("concurrent Start Open and Stop serialize to the last accepted disabled int
   });
 }, platformTestTimeout(15_000));
 
+test("local Restart and Stop serialize on the module lease without desired state", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port });
+  const app = withStaticEntrypoint(fixtureDiscoveryApp({ port }));
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "concurrent-local-session-lifecycle",
+    discover: discoveryWithApp(app),
+  });
+
+  await runtime.start(app.id, { source: { type: "main" } });
+  const [restarted, stopped] = await Promise.all([
+    runtime.restart(app.id, { source: { type: "main" } }),
+    runtime.stop(app.id, { source: { type: "main" } }),
+  ]);
+  expect(restarted.action).toBe("restart");
+  expect(stopped.action).toBe("stop");
+  expect(stopped).not.toHaveProperty("desired");
+  expect(await runtime.health(app.id)).toMatchObject({
+    status: "stopped",
+    managed: false,
+  });
+}, platformTestTimeout(15_000));
+
 test("unexpected desired child exit restarts exact source and bounded crash loops become degraded", async () => {
   const recoveringPort = await findFreePort();
   const recoveringRoot = await createCompaniesWorkspaceFixture({
@@ -4750,6 +4788,62 @@ test("unexpected desired child exit restarts exact source and bounded crash loop
   expect(logs.content.match(/restart_attempt=/g)?.length).toBe(2);
   expect(logs.content).toContain("no further restart scheduled");
 }, platformTestTimeout(45_000));
+
+test("hosted shutdown cancels a desired restart already waiting in backoff", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({
+    port,
+    serverSource: controlledExitServerSource(),
+  });
+  const app = withStaticEntrypoint(fixtureDiscoveryApp({ port }));
+  const exitMarker = controlledExitMarker(root);
+  let announceBackoff;
+  const backoffStarted = new Promise((resolve) => {
+    announceBackoff = resolve;
+  });
+  let releaseBackoff;
+  const backoffRelease = new Promise((resolve) => {
+    releaseBackoff = resolve;
+  });
+  let spawnCount = 0;
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "hosted-shutdown-during-restart-backoff",
+    lifecycleProfile: "hosted",
+    discover: discoveryWithApp(app),
+    desiredRestartDelaysMs: [1],
+    desiredRestartStableMs: 10_000,
+    sleepFn: async () => {
+      announceBackoff();
+      await backoffRelease;
+    },
+    spawnProcess(command, options) {
+      spawnCount += 1;
+      return Bun.spawn(command, options);
+    },
+    spawnProcessIsNative: true,
+  });
+
+  await runtime.start(app.id);
+  expect(spawnCount).toBe(1);
+  await writeFile(exitMarker, "exit before shutdown\n", "utf8");
+  await Promise.race([
+    backoffStarted,
+    Bun.sleep(5_000).then(() => {
+      throw new Error("desired restart never entered backoff");
+    }),
+  ]);
+  await runtime.shutdown();
+  releaseBackoff();
+  await Bun.sleep(100);
+
+  expect(spawnCount).toBe(1);
+  expect(await runtime.health(app.id)).toMatchObject({
+    managed: false,
+    desired: { enabled: true, source: { type: "main" } },
+  });
+}, platformTestTimeout(15_000));
 
 test("desired replacement exit during active reconciliation consumes the next bounded attempt", async () => {
   const port = await findFreePort();
