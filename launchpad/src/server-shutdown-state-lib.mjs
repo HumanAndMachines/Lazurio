@@ -38,5 +38,33 @@ export function createServerShutdownStateAuthority() {
       state = "stopping";
       return { accepted: true };
     },
+
+    beginShutdownDrain() {
+      if (state !== "running") {
+        return { accepted: false, reason: "shutdown_in_progress", state };
+      }
+      state = "draining";
+      return { accepted: true, activeMutations };
+    },
+
+    finishShutdownDrain() {
+      if (state !== "draining") {
+        return { accepted: false, reason: "shutdown_in_progress", state };
+      }
+      if (activeMutations > 0) {
+        return { accepted: false, reason: "server_busy", activeMutations };
+      }
+      state = "stopping";
+      return { accepted: true };
+    },
+
+    forceShutdown() {
+      if (state === "stopping") {
+        return { accepted: false, reason: "shutdown_in_progress", state };
+      }
+      const interruptedMutations = activeMutations;
+      state = "stopping";
+      return { accepted: true, interruptedMutations };
+    },
   };
 }
