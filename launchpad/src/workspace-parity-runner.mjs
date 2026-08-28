@@ -5,6 +5,7 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 
 import { buildLaunchpadDoctorReport } from "../../lazurio/runtime/diagnostics-lib.mjs";
 import { discoverLaunchpadApps } from "../../lazurio/runtime/discovery-lib.mjs";
+import { readOrganizationRoot } from "../../lazurio/core/organization-root-reader-lib.mjs";
 
 const schemaVersion = "lazurio.workspace_machine_parity.v1";
 export const externalAssertions = Object.freeze([
@@ -49,9 +50,17 @@ export async function runWorkspaceParity(options) {
     && organizationBoundary !== ""
     && !organizationBoundary.startsWith("..")
     && !isAbsolute(organizationBoundary), { organization_root: organizationRoot });
-  for (const file of ["company.gen3.json", "modules.manifest.json"]) {
-    add(`manifest.${file}`, existsSync(join(organizationRoot, file)), { path: join(organizationRoot, file) });
-  }
+  const organizationResolution = readOrganizationRoot({ organizationRoot });
+  add(
+    "manifest.organization",
+    ["legacy", "transition"].includes(organizationResolution.state)
+      && organizationResolution.resource_count === 1,
+    {
+      state: organizationResolution.state,
+      declaration_source: organizationResolution.declaration_source,
+      issues: organizationResolution.issues,
+    },
+  );
 
   const commands = {
     bun: Bun.which("bun"),

@@ -16,6 +16,10 @@ import {
   runGit,
 } from "./runtime/git-lib.mjs";
 import { githubRepositoryCoordinate } from "./core/organization-slot-scope-lib.mjs";
+import {
+  ORGANIZATION_DOCUMENT_PATHS,
+  readOrganizationRoot,
+} from "./core/organization-root-reader-lib.mjs";
 import { buildWorktreeIndex } from "./runtime/worktree-lib.mjs";
 import {
   declarationIssues,
@@ -763,16 +767,18 @@ function selectedOrganizationProjection({
 }
 
 function observedOrganizationManifestPaths({ companiesRoot, organizationPath }) {
-  const paths = [`${organizationPath}/company.gen3.json`];
-  for (const candidate of [
-    "modules.manifest.json",
-    "company/scripts/modules.manifest.json",
-  ]) {
-    if (inspectRootManifest(join(companiesRoot, organizationPath, candidate)) !== "present") {
-      continue;
-    }
-    paths.push(`${organizationPath}/${candidate}`);
-    break;
+  const resolution = readOrganizationRoot({
+    organizationRoot: join(companiesRoot, organizationPath),
+  });
+  const paths = [];
+  if (resolution.document_presence?.canonical) {
+    paths.push(`${organizationPath}/${ORGANIZATION_DOCUMENT_PATHS.canonical}`);
+  }
+  if (resolution.document_presence?.legacy_projection) {
+    paths.push(`${organizationPath}/${ORGANIZATION_DOCUMENT_PATHS.legacy_projection}`);
+  }
+  if (resolution.document_presence?.modules) {
+    paths.push(`${organizationPath}/${ORGANIZATION_DOCUMENT_PATHS.modules}`);
   }
   return paths;
 }

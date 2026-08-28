@@ -60,6 +60,7 @@ import {
   inspectDeveloperToolUpdates,
 } from "../core/tool-update-lib.mjs";
 import { inspectDirectoryWithinCanonicalBoundary } from "../core/path-boundary-lib.mjs";
+import { readOrganizationRoot } from "../core/organization-root-reader-lib.mjs";
 
 const supportedPlatforms = {
   darwin: "macOS",
@@ -1062,7 +1063,7 @@ async function attachModuleApplicationProjections({ companiesRoot, organizations
   }
 }
 
-// Reads an organization's company.gen3.json to expose the three physical
+// Reads the normalized Organization resource to expose the three physical
 // boundaries: Organization root, flat Workspace, and Productionspace. Workspace
 // modules are additionally projected into N:M Teams. GitHub is the access
 // authority; until a live membership adapter exists, the API says explicitly
@@ -1104,16 +1105,25 @@ async function readOrganizationSpaces(
   // tiles from the same rejected declaration.
   if (invalidatesSubordinateProjection) return empty;
   if (organization.status === "planned" || !organization.path) return empty;
-  const configPath = join(companiesRoot, organization.path, "company.gen3.json");
-  if (!existsSync(configPath)) return empty;
-  let config;
-  try {
-    config = await readJson(configPath);
-  } catch {
-    return empty;
-  }
-
   const organizationRoot = join(companiesRoot, organization.path);
+  const resolution = readOrganizationRoot({ organizationRoot });
+  if (
+    resolution.state === "conflict"
+    || resolution.resource_count !== 1
+  ) return empty;
+  const resource = resolution.resource;
+  const legacyExtensions = resource.extensions?.legacy ?? {};
+  const config = {
+    governance: resource.governance,
+    teams: resource.teams,
+    layers: resource.layers,
+    task_sources: resource.task_sources,
+    doctor: resource.doctor,
+    module_port_pool: resource.module_port_pool,
+    workspaces: legacyExtensions.workspaces,
+    productionspace: legacyExtensions.productionspace,
+    modules: [],
+  };
   const principalRoles = localConfig?.organization_roles?.[organization.slug];
   const canonicalTeams = Array.isArray(config?.teams) ? config.teams : null;
   const legacyWorkspaces = Array.isArray(config?.workspaces) ? config.workspaces : [];
@@ -1122,9 +1132,9 @@ async function readOrganizationSpaces(
   const productionBoundary = legacyWorkspaces.find(
     (workspace) => workspace.slug === "productionspace" || workspace.path === "productionspace",
   );
-  const manifest = await readOrganizationModuleManifest(companiesRoot, organization);
-  const manifestSlots = Array.isArray(manifest?.module_slots) ? manifest.module_slots : [];
-  const companyModules = Array.isArray(config?.modules) ? config.modules : [];
+  const manifest = { module_slots: resource.repository_inventory ?? [] };
+  const manifestSlots = manifest.module_slots;
+  const companyModules = [];
   const ambiguousSlots = ambiguousOrganizationRepositorySlots(manifestSlots, companyModules);
   const issueForSlot = (slot) => organizationIssues.find((issue) =>
     (issue.module && issue.module === slot.slug)
@@ -1144,10 +1154,8 @@ async function readOrganizationSpaces(
       principalRoles,
       issueForSlot(slot),
     ));
-  // Decision 0041: deklarace modules[].workspace v company.gen3.json je druhý
-  // deklarativní povrch; manifest module_slots[] má přednost při konfliktu.
-  // Config-only sloty (bez manifest protějšku) se počítají do tiles i
-  // readiness stejně jako manifest sloty.
+  // Legacy compatibility fields live only in the normalized extension bag;
+  // repository inventory remains modules.manifest.json-owned.
   const manifestPaths = new Set(moduleSlots.map((slot) => slot.path));
   const configOnlyModules = companyModules
     .filter(readModelEligible)
@@ -1412,12 +1420,12 @@ function workspaceConformanceIssues({ declared, productionBoundary, manifest, co
   const issues = [];
   if (productionBoundary) {
     issues.push(
-      "company.gen3.json: workspaces[] obsahuje productionspace — rezervovaný slug nesmí být Workspace (decision 0041 bod 6)",
+      "legacy compatibility projection company.gen3.json: workspaces[] obsahuje productionspace — rezervovaný slug nesmí být Workspace (decision 0041 bod 6)",
     );
   }
   const defaults = declared.filter((workspace) => workspace !== productionBoundary && workspace.default === true);
   if (defaults.length > 1) {
-    issues.push("company.gen3.json: workspaces[] deklaruje víc než jeden default Workspace");
+    issues.push("legacy compatibility projection company.gen3.json: workspaces[] deklaruje víc než jeden default Workspace");
   }
   const rawSlots = [
     ...(Array.isArray(manifest?.module_slots) ? manifest.module_slots : []).map((slot) => ({
@@ -1425,7 +1433,7 @@ function workspaceConformanceIssues({ declared, productionBoundary, manifest, co
       slot,
     })),
     ...(Array.isArray(config?.modules) ? config.modules : []).map((slot) => ({
-      source: "company.gen3.json",
+      source: "legacy compatibility projection company.gen3.json",
       slot,
     })),
   ];
@@ -1470,7 +1478,7 @@ function workspaceConformanceIssues({ declared, productionBoundary, manifest, co
     ? config.productionspace.candidate_modules
     : []) {
     if (typeof candidate !== "string") {
-      issues.push("company.gen3.json: productionspace.candidate_modules[] musí být cesta deklarovaného productionspace slotu");
+      issues.push("legacy compatibility projection company.gen3.json: productionspace.candidate_modules[] musí být cesta deklarovaného productionspace slotu");
       continue;
     }
     if (productionSlotPaths.includes(candidate)) continue;
@@ -1479,8 +1487,8 @@ function workspaceConformanceIssues({ declared, productionBoundary, manifest, co
     );
     issues.push(
       caseMatch
-        ? `company.gen3.json: productionspace candidate "${candidate}" neodpovídá přesnému psaní deklarovaného slotu "${caseMatch}"`
-        : `company.gen3.json: productionspace candidate "${candidate}" nemá odpovídající deklarovaný productionspace slot`,
+        ? `legacy compatibility projection company.gen3.json: productionspace candidate "${candidate}" neodpovídá přesnému psaní deklarovaného slotu "${caseMatch}"`
+        : `legacy compatibility projection company.gen3.json: productionspace candidate "${candidate}" nemá odpovídající deklarovaný productionspace slot`,
     );
   }
   return issues;
@@ -1495,13 +1503,13 @@ function slotScopeContractIssues(manifest, config) {
       (issue) => `modules.manifest.json: module_slots ${issue}`,
     ),
     ...organizationRepositorySlotCollectionIssues(companyModules).map(
-      (issue) => `company.gen3.json: modules ${issue}`,
+      (issue) => `legacy compatibility projection company.gen3.json: modules ${issue}`,
     ),
     ...organizationRepositorySlotCollectionIssues(
       [...manifestSlots, ...companyModules],
       { allowEquivalentDuplicates: true },
     ).map(
-      (issue) => `modules.manifest.json + company.gen3.json: nejednoznačná repo projekce — ${issue}`,
+      (issue) => `modules.manifest.json + legacy compatibility projection company.gen3.json: nejednoznačná repo projekce — ${issue}`,
     ),
   );
   const rawSlots = [
@@ -1510,7 +1518,7 @@ function slotScopeContractIssues(manifest, config) {
       slot,
     })),
     ...companyModules.map((slot) => ({
-      source: "company.gen3.json",
+      source: "legacy compatibility projection company.gen3.json",
       slot,
     })),
   ];
@@ -1658,7 +1666,7 @@ function rootSlotContractIssues(manifest, config, organizationRoot) {
     const path = normalizeOrganizationSlotPath(slot.path);
     if (!isOrganizationRootSlotPath(path)) continue;
     issues.push(
-      `company.gen3.json: root slot ${path} nesmí být v modules[]; deklaruj ho v modules.manifest.json/module_slots[]`,
+      `legacy compatibility projection company.gen3.json: root slot ${path} nesmí být v modules[]; deklaruj ho v modules.manifest.json/module_slots[]`,
     );
   }
 
@@ -1673,21 +1681,21 @@ function rootSlotContractIssues(manifest, config, organizationRoot) {
   for (const { rawPath, path } of rootLayers) {
     if (rawPath === path) continue;
     issues.push(
-      `company.gen3.json: root layer path "${rawPath}" není kanonický; použij "${path}"`,
+      `legacy compatibility projection company.gen3.json: root layer path "${rawPath}" není kanonický; použij "${path}"`,
     );
   }
   for (const path of declaredLayerPaths) {
     const trackedByOrganization = organizationOwnsRootLayer(organizationRoot, path);
     if (!declaredPaths.has(path) && !trackedByOrganization) {
       issues.push(
-        `company.gen3.json: root vrstva ${path} nemá odpovídající modules.manifest.json slot`,
+        `legacy compatibility projection company.gen3.json: root vrstva ${path} nemá odpovídající modules.manifest.json slot`,
       );
     }
   }
   for (const path of declaredPaths) {
     if (!rootLayerPaths.has(path) || declaredLayerPaths.has(path)) continue;
     issues.push(
-      `modules.manifest.json: root slot ${path} nemá odpovídající company.gen3.json vrstvu`,
+      `modules.manifest.json: root slot ${path} nemá odpovídající vrstvu v legacy compatibility projection company.gen3.json`,
     );
   }
 
@@ -1852,19 +1860,6 @@ function appPlacementFor(placementResolvers, app) {
   return resolver
     ? resolver(app)
     : { space: "workspace", teams: ["workspace"], workspace: "workspace" };
-}
-
-async function readOrganizationModuleManifest(companiesRoot, organization) {
-  for (const relativePath of ["modules.manifest.json", "company/scripts/modules.manifest.json"]) {
-    const manifestPath = join(companiesRoot, organization.path, relativePath);
-    if (!existsSync(manifestPath)) continue;
-    try {
-      return await readJson(manifestPath);
-    } catch {
-      return null;
-    }
-  }
-  return null;
 }
 
 function normalizeModuleSlot(slot) {

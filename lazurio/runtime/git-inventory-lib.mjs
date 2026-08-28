@@ -3,7 +3,6 @@ import { readFile, readdir } from "fs/promises";
 import { basename, dirname, join } from "path";
 import {
   declaredOrganizationTeamSlugs,
-  organizationManifestIdentityIssues,
   organizationModuleSlotScopedContractIssues,
   organizationMountStructureIssues,
   organizationRelativePathIssue,
@@ -16,9 +15,6 @@ import {
   isOrganizationRootSlotDescendantPath,
   isOrganizationSlotContainerPath,
   normalizeOrganizationSlotPath,
-  organizationRootRepositoryAliasIssues,
-  organizationRootRepositoryBranch,
-  organizationRootRepositoryRemote,
   organizationRepositorySlotCollectionConflicts,
   organizationSlotRepositoryBranch,
   organizationSlotRepositoryId,
@@ -31,6 +27,7 @@ import {
   inspectCanonicalPathBoundary,
   isSamePath,
 } from "../core/path-boundary-lib.mjs";
+import { readOrganizationRoot } from "../core/organization-root-reader-lib.mjs";
 import {
   buildOrganizationAgentReviewAction,
   buildModuleLocationRepairAction,
@@ -47,7 +44,7 @@ import {
 export async function buildGitInventory({ companiesRoot, organizations = null } = {}) {
   if (!companiesRoot) throw new Error("buildGitInventory requires companiesRoot");
   // Scan-first (decision 0042): default seznam Organizací je sken namountovaných
-  // organizations/*/company.gen3.json, ne registry v launchpad.gen3.json. Explicitní
+  // normalized Organization resource, ne registry v launchpad.gen3.json. Explicitní
   // `organizations` (např. z discovery výstupu nebo z testu) má přednost.
   const repos = [];
   const planned = [];
@@ -61,7 +58,7 @@ export async function buildGitInventory({ companiesRoot, organizations = null } 
     if (!normalized) continue;
     const organizationRoot = join(companiesRoot, normalized.path);
     let realOrganizationRoot = null;
-    let companyConfig = null;
+    let organizationResource = null;
     // Strukturální gate platí i pro explicitně předané organizations (např.
     // discovery výstup): přítomný mount, který app discovery hard-failuje, se
     // nesmí objevit jako akční repo. Chybějící mount si nechává původní chování
@@ -99,6 +96,7 @@ export async function buildGitInventory({ companiesRoot, organizations = null } 
         continue;
       }
       realOrganizationRoot = rootBoundary.targetRealPath;
+      const resolution = readOrganizationRoot({ organizationRoot });
       const structureIssues = organizationMountStructureIssues({
         organizationRoot,
         label: normalized.path,
@@ -113,34 +111,39 @@ export async function buildGitInventory({ companiesRoot, organizations = null } 
         });
         continue;
       }
-      try {
-        companyConfig = await readJson(join(organizationRoot, "company.gen3.json"));
-      } catch (error) {
+      if (resolution.state === "conflict" || resolution.state === "missing" || resolution.resource_count !== 1) {
         recordInventoryIssue({
           inventoryIssues,
           warnings,
           organization: normalized,
-          code: "organization_config_unreadable",
-          message: `${normalized.path}: company.gen3.json nejde přečíst; Organization root ani child Git akce nejsou bezpečné — ${error.message}`,
+          code: "organization_manifest_conflict",
+          message: `${normalized.path}: Organization manifest není bezpečná autorita (${resolution.issues.join(", ") || resolution.state}); root ani child Git akce byly zastavené`,
         });
         continue;
       }
-      const rootAliasIssues = organizationRootRepositoryAliasIssues(companyConfig);
-      if (rootAliasIssues.length > 0) {
-        for (const issue of rootAliasIssues) {
-          recordInventoryIssue({
-            inventoryIssues,
-            warnings,
-            organization: normalized,
-            code: issue.code,
-            message: `${normalized.path}: company.gen3.json ${issue.detail}; Organization root ani child Git akce byly zastavené`,
-          });
-        }
+      if (resolution.state === "projection_drift") {
+        recordInventoryIssue({
+          inventoryIssues,
+          warnings,
+          organization: normalized,
+          code: "organization_legacy_projection_drift",
+          message: `${normalized.path}: legacy compatibility projection je v driftu; povolený je jen exact root update, child Git akce byly zastavené`,
+        });
+        normalized.repository = null;
+        normalized.git_url = null;
+        normalized.default_branch = "main";
+        normalized.organization_manifest_state = resolution.state;
+        addOrganizationRootRepo(repos, normalized, companiesRoot);
         continue;
       }
-      normalized.repository = organizationRootRepositoryRemote(companyConfig);
+      organizationResource = resolution.resource;
+      normalized.slug = organizationResource.organization.slug;
+      normalized.display_name = organizationResource.organization.display_name;
+      normalized.repository = organizationResource.root_repository?.locator ?? null;
       normalized.git_url = null;
-      normalized.default_branch = organizationRootRepositoryBranch(companyConfig) ?? "main";
+      normalized.default_branch = organizationResource.root_repository?.default_branch ?? "main";
+      normalized.declaration_source = resolution.declaration_source;
+      normalized.organization_manifest_state = resolution.state;
     }
     addOrganizationRootRepo(repos, normalized, companiesRoot);
     if (!existsSync(organizationRoot)) {
@@ -153,48 +156,17 @@ export async function buildGitInventory({ companiesRoot, organizations = null } 
       });
       continue;
     }
-    const manifest = await readOrganizationModuleManifest(organizationRoot);
-    if (!manifest) {
-      recordInventoryIssue({
-        inventoryIssues,
-        warnings,
-        organization: normalized,
-        code: "organization_manifest_unreadable",
-        message: `${normalized.path}: modules.manifest.json chybí nebo nejde přečíst`,
-      });
-      continue;
-    }
-    const manifestSlots = Array.isArray(manifest.module_slots) ? manifest.module_slots : [];
-    const identity = organizationManifestIdentityIssues({
-      companyConfig,
-      manifest,
-      label: normalized.path,
-    });
-    warnings.push(...identity.warnings);
-    if (identity.fatalIssues.length > 0) {
-      for (const message of identity.fatalIssues) {
-        recordInventoryIssue({
-          inventoryIssues,
-          warnings,
-          organization: normalized,
-          code: "organization_identity_invalid",
-          message: `${message}; child repozitáře byly vynechány z Git akcí`,
-        });
-      }
-      continue;
-    }
-    const companyModules = Array.isArray(companyConfig?.modules) ? companyConfig.modules : [];
-    const declaredModuleClaims = organizationModuleDeclarationClaims([
-      ...manifestSlots,
-      ...companyModules,
-    ]);
-    const teamSlugs = declaredOrganizationTeamSlugs(companyConfig);
-    const githubOrg = companyConfig?.company?.github_org ?? manifest?.github_org ?? null;
+    const manifestSlots = Array.isArray(organizationResource?.repository_inventory)
+      ? organizationResource.repository_inventory
+      : [];
+    const declaredModuleClaims = organizationModuleDeclarationClaims(manifestSlots);
+    const teamSlugs = declaredOrganizationTeamSlugs(organizationResource);
+    const githubOrg = organizationResource?.organization?.forge_binding?.locator ?? null;
     const unsafeSlotBoundaries = [];
-    for (const { slots, source } of [
-      { slots: manifestSlots, source: "modules.manifest.json module_slots" },
-      { slots: companyModules, source: "company.gen3.json modules" },
-    ]) {
+    for (const { slots, source } of [{
+      slots: manifestSlots,
+      source: "modules.manifest.json module_slots",
+    }]) {
       for (const [index, slot] of slots.entries()) {
         const issue = organizationRelativePathIssue({ organizationRoot, path: slot?.path });
         if (!organizationSlotBoundaryIssueIsFatal({ path: slot?.path, issue })) continue;
@@ -214,23 +186,10 @@ export async function buildGitInventory({ companiesRoot, organizations = null } 
       continue;
     }
     const ambiguousSlots = new Set();
-    for (const { conflicts, source } of [
-      {
-        conflicts: organizationRepositorySlotCollectionConflicts(manifestSlots),
-        source: "modules.manifest.json module_slots",
-      },
-      {
-        conflicts: organizationRepositorySlotCollectionConflicts(companyModules),
-        source: "company.gen3.json modules",
-      },
-      {
-        conflicts: organizationRepositorySlotCollectionConflicts(
-          [...manifestSlots, ...companyModules],
-          { allowEquivalentDuplicates: true },
-        ),
-        source: "modules.manifest.json + company.gen3.json",
-      },
-    ]) {
+    for (const { conflicts, source } of [{
+      conflicts: organizationRepositorySlotCollectionConflicts(manifestSlots),
+      source: "modules.manifest.json module_slots",
+    }]) {
       for (const conflict of conflicts) {
         for (const slot of conflict.slots) {
           ambiguousSlots.add(slot);
@@ -712,10 +671,9 @@ export async function readLaunchpadConfig(companiesRoot) {
 
 const ignoredMountDirs = new Set([".git", ".worktrees", "node_modules"]);
 
-// Scan-first (decision 0042): jediná autorita jsou namountované
-// organizations/*/company.gen3.json, ne registry v launchpad.gen3.json. Slug,
-// display_name a Git metadata (repository/git_url/default_branch) čteme z
-// company.gen3.json. Mount s markerem organization_kind=template je z inventáře
+// Scan-first (decision 0042): jediná autorita jsou namountované Organization
+// resources, ne registry v launchpad.gen3.json. Slug, display_name a Git metadata
+// čteme z normalizovaného resource. OrganizationTemplate mount je z inventáře
 // vyloučený úplně (decision 0077): git inventory krmí /api/git/repos, mission
 // control plan indexing a worktree create/publish — template mount se nesmí
 // stát akčním repozitářem Organizace na builder surfaces.
@@ -725,45 +683,81 @@ export async function discoverMountedOrganizations(companiesRoot, warnings = nul
   const mountRoot = join(companiesRoot, mountpoint);
   if (!existsSync(mountRoot)) return [];
   const organizations = [];
+  const blockedOrganizations = [];
   const seen = new Set();
   for (const entry of (await readdir(mountRoot, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
     if (!entry.isDirectory()) continue;
     if (entry.name.startsWith(".") || ignoredMountDirs.has(entry.name)) continue;
     const path = `${mountpoint}/${entry.name}`;
-    const companyConfigPath = join(companiesRoot, path, "company.gen3.json");
-    if (!existsSync(companyConfigPath)) continue;
-    let companyConfig;
-    try {
-      companyConfig = await readJson(companyConfigPath);
-    } catch (error) {
-      warnings?.push(`${path}: company.gen3.json nejde přečíst; Organization byla vynechána z Git inventáře — ${error.message}`);
+    const organizationRoot = join(companiesRoot, path);
+    const resolution = readOrganizationRoot({ organizationRoot });
+    if (resolution.state === "missing") continue;
+    if (
+      resolution.state === "conflict"
+      || resolution.state === "projection_drift"
+      || resolution.resource_count !== 1
+    ) {
+      const recoveryIdentity = resolution.recovery_identity;
+      if (recoveryIdentity?.kind === "template") continue;
+      const fallbackSlug = recoveryIdentity?.slug ?? entry.name.replace(/_GEN3$/, "");
+      if (!isPlaceholderSlug(fallbackSlug)) {
+        blockedOrganizations.push(normalizeOrganization({
+          slug: fallbackSlug,
+          display_name: recoveryIdentity?.display_name ?? fallbackSlug,
+          path,
+          default_branch: "main",
+          repository: null,
+          git_url: null,
+          manifest_blocked: true,
+        }));
+      }
       continue;
     }
     // Stejný strojový marker jako discovery-lib (organizationKind): template mount
     // zůstává mimo git/worktree akční plochy.
-    if (companyConfig?.organization_kind === "template") continue;
+    if (resolution.resource.kind === "template") continue;
+    const organization = mountedOrganizationFromResource({
+      resource: resolution.resource,
+      resolution,
+      path,
+      directoryName: entry.name,
+    });
+    if (!organization) continue;
     // Stejný strukturální gate jako app discovery: mount, který tam hard-failuje,
     // nesmí zůstat akční v git/worktree APIs.
     const structureIssues = organizationMountStructureIssues({
-      organizationRoot: join(companiesRoot, path),
+      organizationRoot,
       label: path,
     });
     if (structureIssues.length > 0) {
-      warnings?.push(`${path}: mount vynechán z git inventáře — chybí povinná GEN3 struktura (${structureIssues.join("; ")})`);
+      blockedOrganizations.push({
+        ...organization,
+        repository: null,
+        git_url: null,
+        default_branch: "main",
+        manifest_blocked: true,
+      });
       continue;
     }
-    const organization = mountedOrganizationFromCompanyConfig({ companyConfig, path, directoryName: entry.name });
-    if (!organization || seen.has(organization.slug)) continue;
+    if (seen.has(organization.slug)) continue;
+    organizations.push(organization);
+    seen.add(organization.slug);
+  }
+  // A broken directory-derived identity may never claim a declared slug from
+  // a later healthy mount. Keep the recovery placeholder only when no healthy
+  // Organization resource owns that slug after the complete scan.
+  for (const organization of blockedOrganizations) {
+    if (seen.has(organization.slug)) continue;
     organizations.push(organization);
     seen.add(organization.slug);
   }
   return organizations;
 }
 
-function mountedOrganizationFromCompanyConfig({ companyConfig, path, directoryName }) {
-  const company = companyConfig.company ?? {};
+function mountedOrganizationFromResource({ resource, resolution, path, directoryName }) {
+  const organizationIdentity = resource.organization ?? {};
   const directorySlug = directoryName.replace(/_GEN3$/, "");
-  const declaredSlug = typeof company.slug === "string" ? company.slug : null;
+  const declaredSlug = typeof organizationIdentity.slug === "string" ? organizationIdentity.slug : null;
   // Zrcadlí placeholder guard discovery-lib (autoOrganizationFromCompanyJson):
   // placeholder slug = nedokončený scaffold, nesmí se stát akční Organizací na
   // git/worktree plochách. Fallback na jméno adresáře platí jen pro CHYBĚJÍCÍ slug.
@@ -771,11 +765,12 @@ function mountedOrganizationFromCompanyConfig({ companyConfig, path, directoryNa
   const slug = declaredSlug ?? directorySlug;
   return normalizeOrganization({
     slug,
-    display_name: nonPlaceholderText(company.display_name) ?? slug,
+    display_name: nonPlaceholderText(organizationIdentity.display_name) ?? slug,
     path,
-    default_branch: organizationRootRepositoryBranch(companyConfig),
-    repository: organizationRootRepositoryRemote(companyConfig),
-    git_url: company.git_url ?? null,
+    default_branch: resource.root_repository?.default_branch ?? "main",
+    repository: resource.root_repository?.locator ?? null,
+    git_url: null,
+    declaration_source: resolution.declaration_source,
   });
 }
 
@@ -788,19 +783,6 @@ function nonPlaceholderText(value) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed === "" || trimmed.includes("<") ? null : trimmed;
-}
-
-async function readOrganizationModuleManifest(organizationRoot) {
-  for (const relativePath of ["modules.manifest.json", "company/scripts/modules.manifest.json"]) {
-    const path = join(organizationRoot, relativePath);
-    if (!existsSync(path)) continue;
-    try {
-      return await readJson(path);
-    } catch {
-      return null;
-    }
-  }
-  return null;
 }
 
 function addOrganizationRootRepo(repos, organization, companiesRoot) {
@@ -818,6 +800,7 @@ function addOrganizationRootRepo(repos, organization, companiesRoot) {
     expected_branch: organization.default_branch ?? "main",
     repo: organization.repository ?? organization.git_url ?? null,
     remote: sanitizeRemote(organization.repository ?? organization.git_url),
+    organization_manifest_state: organization.organization_manifest_state ?? null,
   });
 }
 

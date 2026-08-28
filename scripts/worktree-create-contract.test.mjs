@@ -302,7 +302,25 @@ async function createLaneFixture({ plans, legacyPlans = [], authorityFormat = "l
   await writeFile(join(root, "launchpad.gen3.json"), "{}\n", "utf8");
   await writeFile(
     join(organizationRoot, "company.gen3.json"),
-    '{"organization_kind":"organization"}\n',
+    `${JSON.stringify({
+      organization_generation: "gen3",
+      organization_kind: "organization",
+      company: {
+        slug: "TestOrganization",
+        display_name: "Test Organization",
+        github_org: "TestOrganization",
+      },
+    }, null, 2)}\n`,
+    "utf8",
+  );
+  await writeFile(
+    join(organizationRoot, "modules.manifest.json"),
+    `${JSON.stringify({
+      organization_generation: "gen3",
+      company: "TestOrganization",
+      github_org: "TestOrganization",
+      module_slots: [],
+    }, null, 2)}\n`,
     "utf8",
   );
   if (authorityFormat === "config") {

@@ -333,6 +333,7 @@ function publicRepo({ repo, status, worktrees }) {
     repo_kind: repo.repo_kind,
     repo_path: repo.repo_path,
     expected_branch: repo.expected_branch,
+    organization_manifest_state: repo.organization_manifest_state ?? null,
     branch: status.branch,
     head: status.head,
     remote: repo.remote,

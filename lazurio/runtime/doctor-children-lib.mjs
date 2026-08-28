@@ -27,19 +27,20 @@
 // doctorů; kdyby seděla ve sdíleném kontraktu, byl by z něj consumer-specific
 // fork.
 //
-// KONKRÉTNÍ SCÉNÁŘ. Organizace si do `company.gen3.json` napíše vlastní doctor,
+// KONKRÉTNÍ SCÉNÁŘ. Organizace si do Organization manifestu napíše vlastní doctor,
 // který hlídá její vlastní datový repozitář. Za měsíc někdo přejmenuje skript a
 // deklaraci zapomene. Bez téhle lane by `bun run doctor` v rootu doběhl zeleně —
 // root o té kontrole nikdy nevěděl, takže by nemohl ani zmlknout. S ní vznikne
 // `doctor.child.0` s `fail`, konec stderru dítěte a přesné argv, kterým to root
 // zkusil: „Podřízený doctor deklarovaný v organizations/ExampleOrg_GEN3/
-// company.gen3.json nevrátil žádný report."
+// Organization manifest nevrátil žádný report."
 
 import { existsSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 
 import { readJson } from "./discovery-lib.mjs";
+import { readOrganizationRoot } from "../core/organization-root-reader-lib.mjs";
 import {
   DOCTOR_DECLARATION_SCHEMA_VERSION,
   DOCTOR_REPORT_SCHEMA_VERSION_V3,
@@ -66,7 +67,7 @@ const IGNORED_MOUNT_DIRS = new Set([
 export const CHILDREN_CHECK_ID = "doctor.children";
 
 // Shodné s `doctor.timeout_ms.minimum` v `schemas/personal.gen3.schema.json`.
-// `company.gen3.json` se v tomhle repu proti plnému Organization schématu
+// Organization manifest se v tomhle repu proti plnému Organization schématu
 // nevaliduje (vlastní ho Organization/template kontrakt), takže pro org mounty
 // je tahle mez JEDINÝ vynucený zdroj — proto se kontroluje tady, ne jen
 // v manifestovém schématu.
@@ -89,7 +90,7 @@ export async function discoverChildDoctors({ companiesRoot, companiesConfig = nu
   let scannedMounts = 0;
 
   const lanes = [
-    { mountpoint: organizationMountpoint, manifest: "company.gen3.json", scopeKind: "organization" },
+    { mountpoint: organizationMountpoint, manifest: null, scopeKind: "organization" },
     { mountpoint: personalspaceMountpoint, manifest: "personal.gen3.json", scopeKind: "personalspace" },
   ];
 
@@ -109,17 +110,41 @@ export async function discoverChildDoctors({ companiesRoot, companiesConfig = nu
       .sort();
     for (const dirName of dirNames) {
       const mountPath = join(laneRoot, dirName);
-      const declarationPath = join(mountPath, lane.manifest);
-      if (!existsSync(declarationPath)) continue;
-      scannedMounts += 1;
+      let declarationPath;
+      let relativeDeclarationPath;
       let manifest;
-      try {
-        manifest = await readJson(declarationPath);
-      } catch (error) {
-        unreadableManifests.push(
-          `${lane.mountpoint}/${dirName}/${lane.manifest}: nejde přečíst (${error.message})`,
-        );
-        continue;
+      if (lane.scopeKind === "organization") {
+        const resolution = readOrganizationRoot({ organizationRoot: mountPath });
+        if (resolution.state === "missing") continue;
+        scannedMounts += 1;
+        if (
+          resolution.state === "conflict"
+          || resolution.resource_count !== 1
+        ) {
+          unreadableManifests.push(
+            `${lane.mountpoint}/${dirName}/Organization manifest: nejde bezpečně vyřešit (${resolution.issues.join(", ") || resolution.state})`,
+          );
+          continue;
+        }
+        const manifestName = resolution.declaration_source === "lazurio.organization.json"
+          ? "lazurio.organization.json"
+          : "company.gen3.json";
+        declarationPath = join(mountPath, manifestName);
+        relativeDeclarationPath = `${lane.mountpoint}/${dirName}/${manifestName}`;
+        manifest = { doctor: resolution.resource.doctor };
+      } else {
+        declarationPath = join(mountPath, lane.manifest);
+        if (!existsSync(declarationPath)) continue;
+        scannedMounts += 1;
+        relativeDeclarationPath = `${lane.mountpoint}/${dirName}/${lane.manifest}`;
+        try {
+          manifest = await readJson(declarationPath);
+        } catch (error) {
+          unreadableManifests.push(
+            `${relativeDeclarationPath}: nejde přečíst (${error.message})`,
+          );
+          continue;
+        }
       }
       const declaration = readDoctorDeclaration(manifest);
       if (!declaration) continue;
@@ -128,7 +153,7 @@ export async function discoverChildDoctors({ companiesRoot, companiesConfig = nu
         invalidDeclarations.push({
           declarationPath,
           mountPath,
-          relativeDeclarationPath: `${lane.mountpoint}/${dirName}/${lane.manifest}`,
+          relativeDeclarationPath,
           relativeMountPath: `${lane.mountpoint}/${dirName}`,
           issues,
         });
@@ -137,7 +162,7 @@ export async function discoverChildDoctors({ companiesRoot, companiesConfig = nu
       declarations.push({
         declarationPath,
         mountPath,
-        relativeDeclarationPath: `${lane.mountpoint}/${dirName}/${lane.manifest}`,
+        relativeDeclarationPath,
         relativeMountPath: `${lane.mountpoint}/${dirName}`,
         scopeKind: lane.scopeKind,
         declaration,
@@ -423,7 +448,7 @@ function childrenLaneCheck({ discovered, children }) {
       links: [],
       details: [
         ...details,
-        "Deklarace se píše do bloku 'doctor' v company.gen3.json / personal.gen3.json.",
+        "Deklarace se píše do bloku 'doctor' v Organization manifestu / personal.gen3.json.",
         "Kontrakt: lazurio/schemas/doctor-report.schema.json",
       ],
       not_applicable_reason: "not_declared",

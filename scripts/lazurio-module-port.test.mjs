@@ -17,14 +17,17 @@ test("creator allocates once from the tracked Organization pool", async () => {
   await mkdir(targetRoot, { recursive: true });
   await mkdir(guideRoot, { recursive: true });
   await writeFile(join(root, "organizations", "Acme", "modules.manifest.json"), JSON.stringify({
+    organization_generation: "gen3",
     company: "Acme",
+    github_org: "Acme",
     module_slots: [
       { path: "workspace/alpha", slug: "alpha" },
       { path: "workspace/beta", slug: "beta" },
     ],
   }));
   await writeFile(join(root, "organizations", "Acme", "company.gen3.json"), JSON.stringify({
-    company: { slug: "Acme" },
+    organization_generation: "gen3",
+    company: { slug: "Acme", display_name: "Acme", github_org: "Acme" },
     module_port_pool: { start: 24000, end: 24099 },
     modules: [{ path: "workspace/company-only", slug: "company-only" }],
   }));

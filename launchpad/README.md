@@ -140,8 +140,8 @@ Launchpad přijímá a při přepnutí prostoru sám udržuje stabilní hash rou
 
 Neznámý Organization slug, nedostupný Personalspace nebo neplatná route se
 nepoužijí jako nový scope: Launchpad zůstane v dostupném bezpečném prostoru,
-adresu kanonizuje a zobrazí varování. Slug je přesná hodnota `company.slug`
-z `company.gen3.json`, ne display name.
+adresu kanonizuje a zobrazí varování. Slug je přesná hodnota normalizované
+Organization identity, ne display name.
 
 Odkaz vždy stav na originu, který ohlásila skutečně běžící instance. Port
 nehádej ani nehardcoduj; výchozí `127.0.0.1:4174` je jen příklad a Launchpad při
@@ -182,21 +182,24 @@ Launchpad skládá dostupné Organizace scan-first:
 
 1. `launchpad.gen3.json` drží jen sdílená root metadata a mountpointy; není to
    allowlist ani authored business registry.
-2. `organizations/*/company.gen3.json` je autorita lokálních Organization
-   mountů (decision 0042). Když checkout přibude pod `organizations/`, objeví
+2. Core resolver načte Organization manifest (`lazurio.organization.json`,
+   během kompatibilitního okna také legacy compatibility projection
+   `company.gen3.json`) a vrátí nejvýše jeden lokální Organization resource
+   na mount (decision 0042). Když checkout přibude pod `organizations/`, objeví
    se po explicitní akci **Synchronizovat** (`POST /api/sync`) nebo po restartu
    Launchpadu.
 3. Uvnitř každé namountované Organizace je
    `modules.manifest.json#module_slots[]` autorita dostupných, omezených a
    plánovaných modulových repozitářů.
 
-Pro aktualizaci musí `company.gen3.json#company.repository` deklarovat Git URL
+Pro aktualizaci musí normalizovaný Organization resource deklarovat Git locator
 Organization rootu. Každý aktivní modul pak deklaruje vlastní `git.url`,
 `git.branch` a cílovou `path` v `modules.manifest.json#module_slots[]`.
 
 První render a quiet refresh jsou GET-only: čtou lokální snapshot bez fetch a
 bez Git mutace. **Synchronizovat** a CLI `lazurio update` volají tentýž jediný
-sekvenční engine. Ten provede Lazurio Root → Organization Rooty → z čerstvého
+sekvenční engine. Ten provede Lazurio
+Root → Organization Rooty → z čerstvého
 manifestu sestavená namountovaná org-level repa a Workspace Moduly. Existující
 checkouty převádí výhradně na clean `main` přes ff-only; chybějící aktivní
 Workspace Modul naklonuje atomicky
@@ -220,6 +223,7 @@ Lazurio Launchpad čte Lazurio Root a Organization GEN3 manifesty:
 ```text
 launchpad.gen3.json
 organizations/*/company.gen3.json
+organizations/*/lazurio.organization.json
 organizations/*/modules.manifest.json
 organizations/*/workspace/*/package.json
 organizations/*/workspace/*/app/*/package.json
@@ -234,8 +238,8 @@ Fyzická vrstva se jmenuje Workspace a zůstává plochá. Team je logická
 deklarace v manifestu:
 
 - Modul se zobrazí ve všech Teamech z `module_slots[].teams` v
-  `modules.manifest.json` (má přednost) nebo `modules[].teams` v
-  `company.gen3.json`.
+  `modules.manifest.json`; legacy compatibility projection nesmí založit
+  druhý repository inventory.
 - Starší Organizace mohou během migrace používat `workspaces` nebo singulární
   `workspace`; čtenář je převádí na stejný Team model.
 - Chybějící deklarace znamená výchozí Team `workspace`.
@@ -423,8 +427,9 @@ Jakmile `apps` existuje, nový `lazurio.runtime` mimo tento seznam je nevalidní
 
 Existující číselný port je stabilní vlastnictví Modulu. Organization manifest
 drží pouze `module_port_pool` pro deterministické přidělování nových lease a
-kontrolu uvnitř své access hranice. Dnes pole nese `company.gen3.json`; budoucí
-`lazurio.organization.json` převezme stejný normalizovaný význam. Root-wide
+kontrolu uvnitř své access hranice. Pole nese canonical Organization manifest;
+legacy compatibility projection `company.gen3.json` po dobu přechodu zachovává
+stejný význam. Root-wide
 registr neexistuje. Změna portu je koordinovaná migrace všech návazností,
 nikoli náhradní hodnota nebo automatické přečíslování.
 
@@ -584,8 +589,8 @@ Lazurio Launchpad ze stejného kanonického rootu, druhé spuštění ověří h
 rootu a pouze otevře existující instanci. Launchpad z jiného rootu ani cizí HTTP
 server se nepřevezme.
 `discover` vypíše nalezené aplikace. Discovery nejdřív načte root metadata
-z `launchpad.gen3.json`, potom automaticky proskenuje lokální
-`organizations/*/company.gen3.json`. `check` validuje `lazurio.runtime.v1`
+z `launchpad.gen3.json`, potom automaticky proskenuje lokální Organization
+mounty přes jediný Core resolver. `check` validuje `lazurio.runtime.v1`
 podle `lazurio/schemas/lazurio-runtime.schema.json`; legacy
 `companyascode.app` zůstává jen čtecí migrační fallback. Nevalidní app manifest
 uvnitř konkrétní Organization se přeskočí a reportuje jako warning, aby jeden

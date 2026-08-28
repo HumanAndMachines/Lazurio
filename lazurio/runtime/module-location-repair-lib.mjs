@@ -6,9 +6,6 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from "node:pat
 import {
   githubRepositoryCoordinate,
   normalizeOrganizationSlotPath,
-  organizationRootRepositoryAliasIssues,
-  organizationRootRepositoryBranch,
-  organizationRootRepositoryRemote,
   organizationRepositorySlotCollectionConflicts,
   organizationSlotRepositoryAliasIssues,
   organizationSlotRepositoryBranch,
@@ -16,6 +13,10 @@ import {
 } from "../core/organization-slot-scope-lib.mjs";
 import { isSamePath } from "../core/path-boundary-lib.mjs";
 import { moduleLocationRepairCommand } from "../core/module-location-repair-contract-lib.mjs";
+import {
+  ORGANIZATION_DOCUMENT_PATHS,
+  readOrganizationRoot,
+} from "../core/organization-root-reader-lib.mjs";
 import {
   acquireUpdateLock,
   inspectLocalRepo,
@@ -141,44 +142,34 @@ export async function checkModuleLocationRepair({
     });
   }
 
-  const { organizationRoot, companySource, companyConfig } = organizationMatch;
-  const manifestPath = join(organizationRoot, "modules.manifest.json");
-  const manifestRead = await readJsonSource(manifestPath);
-  if (!manifestRead.ok) {
-    return blockedRepairReport({
-      rootPath: absoluteRoot,
-      organizationSlug,
-      moduleSlug,
-      code: "module_manifest_unreadable",
-      message: `Kanonický modules.manifest.json nejde přečíst: ${manifestRead.message}`,
-    });
-  }
-
-  const rootAliasIssues = organizationRootRepositoryAliasIssues(companyConfig);
-  if (rootAliasIssues.length > 0) {
-    const conflict = rootAliasIssues.some((issue) => issue.code.endsWith("_conflict"));
-    return blockedRepairReport({
-      rootPath: absoluteRoot,
-      organizationSlug,
-      moduleSlug,
-      code: conflict ? "organization_source_ambiguous" : "organization_source_invalid",
-      message: "Organization root nemá jednoznačný bezpečný main Git source kontrakt. Sync ani repair nesmí spadnout na legacy pole, použít cizího GitHub ownera nebo jednat podle neplatné branch; oprav a publikuj kontrakt v Organization PR.",
-      plan: {
-        organization_root: organizationRoot,
-        issues: rootAliasIssues,
-      },
-    });
+  const { organizationRoot, resolution } = organizationMatch;
+  const organizationResource = resolution.resource;
+  const sourceFiles = [];
+  for (const [presenceKey, path] of [
+    ["canonical", ORGANIZATION_DOCUMENT_PATHS.canonical],
+    ["legacy_projection", ORGANIZATION_DOCUMENT_PATHS.legacy_projection],
+    ["modules", ORGANIZATION_DOCUMENT_PATHS.modules],
+  ]) {
+    if (!resolution.document_presence?.[presenceKey]) continue;
+    const source = await readFileSource(join(organizationRoot, path));
+    if (!source.ok) {
+      return blockedRepairReport({
+        rootPath: absoluteRoot,
+        organizationSlug,
+        moduleSlug,
+        code: "organization_source_unreadable",
+        message: `${path} nejde přečíst jako reviewovaný Organization source: ${source.message}`,
+      });
+    }
+    sourceFiles.push({ path, source: source.source });
   }
   const organizationSource = await inspectReviewPublishedOrganizationRoot({
     organizationRoot,
     organizationSlug,
-    expectedRemote: organizationRootRepositoryRemote(companyConfig),
-    expectedBranch: organizationRootRepositoryBranch(companyConfig) ?? "main",
+    expectedRemote: organizationResource.root_repository?.locator ?? null,
+    expectedBranch: organizationResource.root_repository?.default_branch ?? "main",
     repositoryCoordinate,
-    sourceFiles: [
-      { path: "company.gen3.json", source: companySource },
-      { path: "modules.manifest.json", source: manifestRead.source },
-    ],
+    sourceFiles,
     run,
     inspect,
     deps,
@@ -194,26 +185,16 @@ export async function checkModuleLocationRepair({
     });
   }
 
-  const manifestSlots = Array.isArray(manifestRead.value?.module_slots)
-    ? manifestRead.value.module_slots.filter((slot) => slot?.slug === moduleSlug)
+  const manifestSlots = Array.isArray(organizationResource.repository_inventory)
+    ? organizationResource.repository_inventory.filter((slot) => slot?.slug === moduleSlug)
     : [];
-  const companySlots = Array.isArray(companyConfig?.modules)
-    ? companyConfig.modules.filter((slot) => slot?.slug === moduleSlug)
-    : [];
-  const allManifestSlots = Array.isArray(manifestRead.value?.module_slots)
-    ? manifestRead.value.module_slots
-    : [];
-  const allCompanySlots = Array.isArray(companyConfig?.modules)
-    ? companyConfig.modules
-    : [];
+  const companySlots = manifestSlots;
+  const allManifestSlots = organizationResource.repository_inventory ?? [];
+  const allCompanySlots = [];
   const unsafeDeclarationPaths = [
     ...allManifestSlots.map((slot, index) => ({
       slot,
       source: `modules.manifest.json module_slots[${index}]`,
-    })),
-    ...allCompanySlots.map((slot, index) => ({
-      slot,
-      source: `company.gen3.json modules[${index}]`,
     })),
   ].flatMap(({ slot: candidate, source }) => {
     const issue = organizationRelativePathIssue({
@@ -226,17 +207,9 @@ export async function checkModuleLocationRepair({
   });
   const declarationConflicts = [
     ...organizationRepositorySlotCollectionConflicts(allManifestSlots),
-    ...organizationRepositorySlotCollectionConflicts(allCompanySlots),
-    ...organizationRepositorySlotCollectionConflicts(
-      [...allManifestSlots, ...allCompanySlots],
-      { allowEquivalentDuplicates: true },
-    ),
   ];
   if (
-    !isSupportedGen3Declaration(companyConfig, "company.gen3.v3")
-    || !isSupportedGen3Declaration(manifestRead.value, "modules.manifest.v3")
-    || manifestSlots.length !== 1
-    || companySlots.length !== 1
+    manifestSlots.length !== 1
     || unsafeDeclarationPaths.length > 0
     || declarationConflicts.length > 0
   ) {
@@ -245,7 +218,7 @@ export async function checkModuleLocationRepair({
       organizationSlug,
       moduleSlug,
       code: "module_declaration_ambiguous",
-      message: "Oprava vyžaduje právě jednu explicitní deklaraci se stabilním slugem v modules.manifest.json i company.gen3.json. Nejdřív synchronizuj Organization root nebo oprav source kontrakt v PR.",
+      message: "Oprava vyžaduje právě jednu explicitní deklaraci se stabilním slugem v normalizovaném Organization repository inventory. Nejdřív synchronizuj Organization root nebo oprav source kontrakt v PR.",
       plan: {
         ...(unsafeDeclarationPaths.length > 0
           ? { unsafe_declaration_paths: unsafeDeclarationPaths }
@@ -263,10 +236,10 @@ export async function checkModuleLocationRepair({
   const targetRelativePath = normalizeOrganizationSlotPath(declaredPath);
   const targetRemote = organizationSlotRepositoryRemote(slot, targetRelativePath) ?? "";
   const targetCoordinate = repositoryCoordinate(targetRemote);
-  const companySlug = String(companyConfig?.company?.slug ?? "").trim();
-  const manifestCompany = String(manifestRead.value?.company ?? "").trim();
-  const companyGithubOrg = String(companyConfig?.company?.github_org ?? "").trim();
-  const manifestGithubOrg = String(manifestRead.value?.github_org ?? "").trim();
+  const companySlug = String(organizationResource.organization?.slug ?? "").trim();
+  const manifestCompany = companySlug;
+  const companyGithubOrg = String(organizationResource.organization?.forge_binding?.locator ?? "").trim();
+  const manifestGithubOrg = companyGithubOrg;
   const pathParts = targetRelativePath ? targetRelativePath.split("/") : [];
   const branch = organizationSlotRepositoryBranch(slot, targetRelativePath);
   const companyRemote = organizationSlotRepositoryRemote(companySlot, companySlot?.path) ?? "";
@@ -633,8 +606,10 @@ export async function checkModuleLocationRepair({
     organization_root_origin: organizationSource.origin,
     organization_root_origin_identity: organizationSource.originIdentity,
     module: moduleSlug,
-    company_sha256: sha256(companySource),
-    manifest_sha256: sha256(manifestRead.source),
+    organization_sources: sourceFiles.map(({ path, source: documentSource }) => ({
+      path,
+      sha256: sha256(documentSource),
+    })),
     marker_sha256: sha256(source.marker_source),
     source_path: sourcePath,
     source_real_path: await realpath(sourcePath),
@@ -707,18 +682,6 @@ export async function checkModuleLocationRepair({
       command: plan.apply_command,
     },
   };
-}
-
-function isSupportedGen3Declaration(document, canonicalSchemaVersion) {
-  if (!document || typeof document !== "object" || Array.isArray(document)) return false;
-  if (Object.hasOwn(document, "schema_version")) {
-    return document.schema_version === canonicalSchemaVersion;
-  }
-  // Deployed GEN3 Organization roots predate the explicit schema_version
-  // field. Their reviewed, tracked contract is `organization_generation`,
-  // while all mutation-critical shape and identity invariants are checked
-  // independently below. An explicit unknown schema never falls back here.
-  return document.organization_generation === "gen3";
 }
 
 async function inspectReviewPublishedOrganizationRoot({
@@ -1278,17 +1241,27 @@ async function findOrganization({ rootPath, organizationSlug }) {
   for (const entry of entries) {
     if (!entry.isDirectory() || entry.isSymbolicLink() || entry.name.startsWith(".")) continue;
     const organizationRoot = join(organizationsRoot, entry.name);
-    const companyPath = join(organizationRoot, "company.gen3.json");
-    if (!existsSync(companyPath)) continue;
-    const read = await readJsonSource(companyPath);
-    if (!read.ok || read.value?.company?.slug !== organizationSlug) continue;
+    const resolution = readOrganizationRoot({ organizationRoot });
+    if (resolution.state === "missing") continue;
+    const matchesRequestedMount = resolution.resource?.organization?.slug === organizationSlug
+      || entry.name === organizationSlug
+      || entry.name === `${organizationSlug}_GEN3`;
+    if (!matchesRequestedMount) continue;
+    if (
+      !["legacy", "transition"].includes(resolution.state)
+      || resolution.resource_count !== 1
+    ) {
+      return {
+        ok: false,
+        code: "organization_manifest_not_mutation_safe",
+        message: `Organization manifest není bezpečný pro repair (${resolution.state}; ${resolution.issues.join(", ") || "no stable resource"}).`,
+      };
+    }
     const match = {
       organizationRoot,
-      companyPath,
-      companySource: read.source,
-      companyConfig: read.value,
+      resolution,
     };
-    if (read.value?.organization_kind === "template") templateMatches.push(match);
+    if (resolution.resource.kind === "template") templateMatches.push(match);
     else matches.push(match);
   }
   if (templateMatches.length > 0) {
@@ -1410,14 +1383,13 @@ async function sameExistingPath(left, right) {
   return isSamePath(realLeft, realRight);
 }
 
-async function readJsonSource(path) {
+async function readFileSource(path) {
   try {
     const stat = await lstat(path);
     if (!stat.isFile() || stat.isSymbolicLink()) {
       throw new Error("source musí být běžný soubor bez symlinku");
     }
-    const source = await readFile(path, "utf8");
-    return { ok: true, source, value: JSON.parse(source) };
+    return { ok: true, source: await readFile(path, "utf8") };
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : String(error) };
   }

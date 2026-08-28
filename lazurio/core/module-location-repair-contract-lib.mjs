@@ -117,7 +117,7 @@ Diagnostika Lazuria:
 - Cesta Organizace: ${path ?? "neuvedena"}
 - Detail: ${detail}
 
-Postupuj jako Task Agent fail-closed: nejdřív ověř company.gen3.json, modules.manifest.json a skutečnou Organization boundary. Zachovej všechna lokální Git data a oprav přirozený source kontrakt v odpovídajícím Organization PR. Nehádej identitu, nepřesouvej cizí checkout, nevytvářej duplicitní clone, nemaž adresáře a nepřepisuj dirty práci. Jakmile je Organization kontrakt jednoznačný, spusť \`lazurio update\` a znovu ověř Launchpad; konkrétní module-location opravu řeš až z jeho vlastní jednoznačné diagnostiky.`,
+Postupuj jako Task Agent fail-closed: nejdřív ověř Organization manifest, jeho legacy compatibility projection, modules.manifest.json a skutečnou Organization boundary. Zachovej všechna lokální Git data a oprav přirozený source kontrakt v odpovídajícím Organization PR. Nehádej identitu, nepřesouvej cizí checkout, nevytvářej duplicitní clone, nemaž adresáře a nepřepisuj dirty práci. Jakmile je Organization kontrakt jednoznačný, spusť \`lazurio update\` a znovu ověř Launchpad; konkrétní module-location opravu řeš až z jeho vlastní jednoznačné diagnostiky.`,
   };
 }
 

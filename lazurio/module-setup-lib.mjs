@@ -22,6 +22,7 @@ import {
   validateDeclaredRuntime,
 } from "./core/runtime-contract-lib.mjs";
 import { organizationSlotRepositoryId } from "./core/organization-slot-scope-lib.mjs";
+import { readOrganizationRoot } from "./core/organization-root-reader-lib.mjs";
 import { readAllModuleContracts } from "./module-port-lib.mjs";
 
 const ignoredDirectories = new Set([
@@ -946,7 +947,7 @@ async function planExplicitAppModule({ options, context, manifestPath }) {
     throw actionRequired(
       "organization_port_pool_missing",
       `${context.company} nemá aktivní module_port_pool`,
-      "Organization Admin musí v company.gen3.json aktivovat stabilní module_port_pool.",
+      "Organization Admin musí v Organization manifestu aktivovat stabilní module_port_pool.",
       context,
     );
   }
@@ -1110,18 +1111,27 @@ async function resolveModuleSetupContext(options) {
   for (const entry of await readdir(organizationsRoot, { withFileTypes: true }).catch(() => [])) {
     if (!entry.isDirectory() || ignoredDirectories.has(entry.name)) continue;
     const organizationRoot = join(organizationsRoot, entry.name);
-    const companyPath = join(organizationRoot, "company.gen3.json");
-    const modulesPath = join(organizationRoot, "modules.manifest.json");
-    if (!existsSync(companyPath) || !existsSync(modulesPath)) continue;
     const organizationEntry = await pathEntry(organizationRoot);
     if (!organizationEntry?.isDirectory() || organizationEntry.isSymbolicLink()) continue;
     const physicalOrganizationRoot = await realpath(organizationRoot);
     if (!pathIsStrictlyInside(physicalOrganizationRoot, physicalModuleRoot)) continue;
-    const companyManifest = parseJsonForSetup(await readFile(companyPath, "utf8"), companyPath, fallbackContext(options));
-    if (companyManifest.organization_kind === "template") continue;
-    const modulesManifest = parseJsonForSetup(await readFile(modulesPath, "utf8"), modulesPath, fallbackContext(options));
+    const resolution = readOrganizationRoot({ organizationRoot });
+    if (resolution.state === "missing") continue;
+    if (
+      !["legacy", "transition"].includes(resolution.state)
+      || resolution.resource_count !== 1
+    ) {
+      throw new ModuleSetupActionRequired({
+        code: "organization_manifest_not_mutation_safe",
+        message: `Organization manifest není bezpečný pro setup (${resolution.state}; ${resolution.issues.join(", ") || "no stable resource"})`,
+        action: "Oprav Organization manifest a jeho legacy compatibility projection.",
+        context: fallbackContext(options),
+      });
+    }
+    const organizationResource = resolution.resource;
+    if (organizationResource.kind === "template") continue;
     const exactRelative = relative(resolve(organizationRoot), options.moduleRoot).split(sep).join("/");
-    for (const slot of modulesManifest.module_slots ?? []) {
+    for (const slot of organizationResource.repository_inventory ?? []) {
       if (typeof slot?.path !== "string") continue;
       const moduleId = organizationSlotRepositoryId(slot, slot.path);
       if (moduleId === null) continue;
@@ -1139,26 +1149,27 @@ async function resolveModuleSetupContext(options) {
         && samePhysicalPath(targetCheckout.commonDirectory, canonicalCheckout.commonDirectory),
       );
       if (!exact && !linkedWorktree) continue;
-      const pool = normalizeOrganizationPortPool({ manifest: companyManifest, source: companyPath });
+      const policySource = `${organizationRoot}/Organization manifest`;
+      const pool = normalizeOrganizationPortPool({ manifest: organizationResource, source: policySource });
       if (pool.issues.length > 0) {
         throw new ModuleSetupActionRequired({
           code: "organization_port_pool_invalid",
           message: pool.issues.join("; "),
-          action: "Organization Admin musí opravit company.gen3.json#module_port_pool.",
+          action: "Organization Admin musí opravit Organization manifest#module_port_pool.",
           context: fallbackContext(options),
         });
       }
       matches.push({
-        company: companyManifest?.company?.slug,
+        company: organizationResource.organization.slug,
         module: moduleId,
         organizationRoot,
         slot,
         source_kind: exact ? "slot" : "worktree",
         organization: {
-          slug: companyManifest?.company?.slug,
+          slug: organizationResource.organization.slug,
           path: relative(options.lazurioRoot, organizationRoot),
           module_port_pool: pool.pool,
-          module_port_pool_source: `${companyPath}#module_port_pool`,
+          module_port_pool_source: `${policySource}#module_port_pool`,
         },
       });
     }
@@ -1752,33 +1763,36 @@ async function readOrganizationPolicies(lazurioRoot) {
   const root = join(lazurioRoot, "organizations");
   for (const entry of await readdir(root, { withFileTypes: true }).catch(() => [])) {
     if (!entry.isDirectory() || ignoredDirectories.has(entry.name)) continue;
-    const manifestPath = join(root, entry.name, "company.gen3.json");
-    if (!existsSync(manifestPath)) continue;
-    let manifest;
-    try {
-      manifest = await Bun.file(manifestPath).json();
-    } catch (error) {
-      issues.push(`${manifestPath}: nejde přečíst: ${error.message}`);
+    const organizationRoot = join(root, entry.name);
+    const resolution = readOrganizationRoot({ organizationRoot });
+    if (resolution.state === "missing") continue;
+    if (
+      !["legacy", "transition"].includes(resolution.state)
+      || resolution.resource_count !== 1
+    ) {
+      issues.push(`${organizationRoot}: Organization manifest není bezpečný pro mutaci (${resolution.state}; ${resolution.issues.join(", ") || "no stable resource"})`);
       continue;
     }
-    if (manifest?.organization_kind === "template") continue;
-    const slug = manifest?.company?.slug;
+    const resource = resolution.resource;
+    if (resource.kind === "template") continue;
+    const slug = resource.organization.slug;
     if (typeof slug !== "string" || slug === "") {
-      issues.push(`${manifestPath}: company.slug chybí`);
+      issues.push(`${organizationRoot}: Organization manifest slug chybí`);
       continue;
     }
     if (slugs.has(slug)) {
-      issues.push(`${manifestPath}: Organization slug ${slug} je namountovaný vícekrát`);
+      issues.push(`${organizationRoot}: Organization slug ${slug} je namountovaný vícekrát`);
       continue;
     }
     slugs.add(slug);
-    const result = normalizeOrganizationPortPool({ manifest, source: manifestPath });
+    const policySource = `${organizationRoot}/Organization manifest`;
+    const result = normalizeOrganizationPortPool({ manifest: resource, source: policySource });
     issues.push(...result.issues);
     const organization = {
       slug,
-      path: relative(lazurioRoot, join(root, entry.name)),
+      path: relative(lazurioRoot, organizationRoot),
       module_port_pool: result.pool,
-      module_port_pool_source: `${manifestPath}#module_port_pool`,
+      module_port_pool_source: `${policySource}#module_port_pool`,
     };
     organizations.push(organization);
   }

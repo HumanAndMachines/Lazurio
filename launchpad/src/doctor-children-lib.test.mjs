@@ -26,6 +26,10 @@ import {
   runBoundChildDoctor,
   runChildDoctorLane,
 } from "../../lazurio/runtime/doctor-children-lib.mjs";
+import {
+  organizationLegacyProjectionHash,
+  projectLegacyOrganizationManifest,
+} from "../../lazurio/core/organization-activation-lib.mjs";
 
 const schema = loadDoctorReportSchema(join(import.meta.dirname, "..", "..", "lazurio"));
 const bun = process.execPath;
@@ -55,6 +59,7 @@ async function createRoot() {
  */
 async function mountOrganization(root, slug, { script, declaration } = {}) {
   const mountPath = join(root, "organizations", slug);
+  const organizationSlug = slug.replace(/_GEN3$/u, "");
   await mkdir(mountPath, { recursive: true });
   if (script !== null && script !== undefined) {
     await writeFile(join(mountPath, "doctor.mjs"), script);
@@ -62,8 +67,9 @@ async function mountOrganization(root, slug, { script, declaration } = {}) {
   await writeFile(
     join(mountPath, "company.gen3.json"),
     JSON.stringify({
-      schema_version: "companiesascode.company.gen3.v1",
-      organization: { slug },
+      organization_generation: "gen3",
+      organization_kind: "organization",
+      company: { slug: organizationSlug, github_org: organizationSlug },
       doctor: declaration ?? {
         schema_version: "humanandmachines.doctor.declaration.v1",
         command: [bun, "doctor.mjs"],
@@ -71,7 +77,52 @@ async function mountOrganization(root, slug, { script, declaration } = {}) {
       },
     }),
   );
+  await writeFile(
+    join(mountPath, "modules.manifest.json"),
+    JSON.stringify({
+      organization_generation: "gen3",
+      company: organizationSlug,
+      github_org: organizationSlug,
+      module_slots: [],
+    }),
+  );
   return mountPath;
+}
+
+async function convertMountToTransition(mountPath) {
+  const legacy = await Bun.file(join(mountPath, "company.gen3.json")).json();
+  const modules = await Bun.file(join(mountPath, "modules.manifest.json")).json();
+  const canonical = {
+    schema_version: "lazurio.organization.v1",
+    kind: legacy.organization_kind,
+    organization: {
+      slug: legacy.company.slug,
+      display_name: legacy.company.display_name ?? legacy.company.slug,
+      forge_binding: {
+        forge: "github",
+        locator: legacy.company.github_org,
+        binding_state: "unverified",
+      },
+      metadata: {},
+    },
+    root_repository: null,
+    manifests: { modules: "modules.manifest.json" },
+    ...(legacy.doctor ? { doctor: legacy.doctor } : {}),
+    extensions: { legacy: {} },
+    compatibility: {
+      legacy_projection: {
+        path: "company.gen3.json",
+        algorithm: "sha256-canonical-json-v1",
+        sha256: "sha256:" + "0".repeat(64),
+      },
+    },
+  };
+  canonical.compatibility.legacy_projection.sha256 = organizationLegacyProjectionHash(canonical, modules);
+  await Bun.write(join(mountPath, "lazurio.organization.json"), `${JSON.stringify(canonical, null, 2)}\n`);
+  await Bun.write(
+    join(mountPath, "company.gen3.json"),
+    `${JSON.stringify(projectLegacyOrganizationManifest(canonical, modules), null, 2)}\n`,
+  );
 }
 
 function childScript({ checks, summary, scopeType = "organization", exitCode = null, schemaVersion = "companiesascode.doctor.report.v3", absolutePath = "process.cwd()" }) {
@@ -588,7 +639,20 @@ test("root bez deklarovaných doctorů je not_applicable — fakt, ne nezměřen
   await mkdir(join(root, "organizations", "ExampleOrg_GEN3"), { recursive: true });
   await writeFile(
     join(root, "organizations", "ExampleOrg_GEN3", "company.gen3.json"),
-    JSON.stringify({ schema_version: "companiesascode.company.gen3.v1" }),
+    JSON.stringify({
+      organization_generation: "gen3",
+      organization_kind: "organization",
+      company: { slug: "ExampleOrg", github_org: "ExampleOrg" },
+    }),
+  );
+  await writeFile(
+    join(root, "organizations", "ExampleOrg_GEN3", "modules.manifest.json"),
+    JSON.stringify({
+      organization_generation: "gen3",
+      company: "ExampleOrg",
+      github_org: "ExampleOrg",
+      module_slots: [],
+    }),
   );
 
   const { report } = await runLane(root);
@@ -640,6 +704,25 @@ test("discovery čte deklaraci z manifestu, ne z konvenční cesty", async () =>
 
   expect(discovered.declarations).toEqual([]);
   expect(discovered.scannedMounts).toBe(1);
+});
+
+test("transition pair produces exactly one Organization child Doctor from canonical declaration", async () => {
+  const root = await createRoot();
+  const mountPath = await mountOrganization(root, "ExampleOrg_GEN3", {
+    script: childScript({
+      checks: [okCheck("example.transition")],
+      summary: { status: "ok", ok: 1, warn: 0, fail: 0, not_applicable: 0, blocked: 0 },
+    }),
+  });
+  await convertMountToTransition(mountPath);
+
+  const discovered = await discoverChildDoctors({ companiesRoot: root });
+
+  expect(discovered.scannedMounts).toBe(1);
+  expect(discovered.declarations).toHaveLength(1);
+  expect(discovered.declarations[0].relativeDeclarationPath).toBe(
+    "organizations/ExampleOrg_GEN3/lazurio.organization.json",
+  );
 });
 
 test("KONTROLNÍ TEST: bez agregace by chybějící podřízený doctor byl zelený", async () => {

@@ -523,11 +523,23 @@ function smokeFixture(
   if (mountedCoordinate) mkdirSync(dataCheckout, { recursive: true });
   writeFileSync(
     join(organizationRoot, "company.gen3.json"),
-    `${JSON.stringify({ company: { github_org: "Verified-Org" } }, null, 2)}\n`,
+    `${JSON.stringify({
+      organization_generation: "gen3",
+      company: {
+        slug: "Verified-Org",
+        display_name: "Verified Org",
+        github_org: "Verified-Org",
+      },
+    }, null, 2)}\n`,
   );
   writeFileSync(
     join(organizationRoot, "modules.manifest.json"),
-    `${JSON.stringify({ modules: [slot] }, null, 2)}\n`,
+    `${JSON.stringify({
+      organization_generation: "gen3",
+      company: "Verified-Org",
+      github_org: "Verified-Org",
+      module_slots: [slot],
+    }, null, 2)}\n`,
   );
   const rootRepository = {
     id: 100,
@@ -793,7 +805,7 @@ test("one malformed Organization is reported with its path instead of aborting t
     const results = runSmoke(root);
     expect(results).toHaveLength(1);
     expect(results[0].data_state).toBe("invalid");
-    expect(results[0].errors.join(" ")).toContain("company.gen3.json");
+    expect(results[0].errors.join(" ")).toContain("Organization manifest");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

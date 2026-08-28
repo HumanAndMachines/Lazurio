@@ -9,6 +9,7 @@ import { spawnSync } from "node:child_process";
 import {
   acquireUpdateLock,
   classifyLazurioRepoUpdate,
+  inspectLocalRepo,
   readLazurioUpdateStatus,
   runLazurioUpdate,
   updateManagedRepo,
@@ -24,6 +25,11 @@ import {
   writeJson,
 } from "./git-fixture-helpers.test.mjs";
 import { buildRepositoryLocationIssue } from "../../lazurio/core/module-location-repair-contract-lib.mjs";
+import {
+  organizationLegacyProjectionHash,
+  projectLegacyOrganizationManifest,
+} from "../../lazurio/core/organization-activation-lib.mjs";
+import { readOrganizationRoot } from "../../lazurio/core/organization-root-reader-lib.mjs";
 
 const cleanup = [];
 
@@ -100,6 +106,263 @@ test("clean behind checkout fast-forwards and rerun is idempotent", async () => 
 
   const second = await update(fixture);
   expect(second).toMatchObject({ state: "current", reason: "already_current" });
+});
+
+test("Organization update fast-forwards only a parity-verified transition target", async () => {
+  const fixture = await organizationActivationFixture("transition-target");
+  const transition = transitionOrganizationDocuments();
+  await addRemoteFiles(fixture, transition, "publish transition pair");
+  const checkpoints = [];
+
+  const result = await updateManagedRepo(descriptor(fixture), {
+    runId: "transition-target",
+    checkpoint: async (name) => checkpoints.push(name),
+  });
+
+  expect(result).toMatchObject({ state: "updated", actions: expect.arrayContaining(["fast_forward"]) });
+  expect(checkpoints).toEqual(expect.arrayContaining(["after_fetch", "after_fast_forward"]));
+  expect(readOrganizationRoot({ organizationRoot: fixture.working }).state).toBe("transition");
+  expect(status(fixture.working)).toBe("");
+});
+
+test("Organization update blocks a projection-drift target before stashing or checkout mutation", async () => {
+  const fixture = await organizationActivationFixture("projection-drift-target");
+  await addRemoteFiles(fixture, driftedTransitionOrganizationDocuments(), "publish drifted transition pair");
+  await writeFile(join(fixture.working, "tracked.txt"), "local draft\n");
+  const before = runGit(fixture.working, ["rev-parse", "HEAD"]);
+
+  const result = await updateManagedRepo(descriptor(fixture), { runId: "projection-drift-target" });
+
+  expect(result).toMatchObject({
+    state: "blocked",
+    reason: "organization_target_incompatible",
+    next_action: { kind: "codex" },
+  });
+  expect(runGit(fixture.working, ["rev-parse", "HEAD"])).toBe(before);
+  expect(runGit(fixture.working, ["stash", "list", "--format=%H"])).toBe("");
+  expect(status(fixture.working)).toContain("tracked.txt");
+});
+
+test("Organization update repairs local projection drift from a verified transition target", async () => {
+  const fixture = await organizationActivationFixture("projection-drift-repair");
+  const transition = transitionOrganizationDocuments();
+  await addRemoteFiles(fixture, transition, "publish repaired transition pair");
+  const localDrift = driftedTransitionOrganizationDocuments();
+  await writeFile(join(fixture.working, "lazurio.organization.json"), localDrift["lazurio.organization.json"]);
+  await writeFile(join(fixture.working, "company.gen3.json"), localDrift["company.gen3.json"]);
+  expect(readOrganizationRoot({ organizationRoot: fixture.working }).state).toBe("projection_drift");
+
+  const result = await updateManagedRepo(descriptor(fixture), { runId: "projection-drift-repair" });
+
+  expect(result).toMatchObject({
+    state: "updated",
+    actions: expect.arrayContaining(["recovery_stash", "fast_forward"]),
+    recovery_stash: expect.stringMatching(/^[0-9a-f]{40}$/),
+  });
+  expect(readOrganizationRoot({ organizationRoot: fixture.working }).state).toBe("transition");
+  expect(status(fixture.working)).toBe("");
+});
+
+test("Organization update leaves an incompatible canonical-only target inactive", async () => {
+  const fixture = await organizationActivationFixture("canonical-only-target");
+  const transition = transitionOrganizationDocuments();
+  await writeFile(join(fixture.contributor, "lazurio.organization.json"), transition["lazurio.organization.json"]);
+  await rm(join(fixture.contributor, "company.gen3.json"));
+  runGit(fixture.contributor, ["add", "-A"]);
+  runGit(fixture.contributor, ["commit", "-m", "publish incompatible canonical-only target"]);
+  runGit(fixture.contributor, ["push", "origin", "main"]);
+  const before = runGit(fixture.working, ["rev-parse", "HEAD"]);
+
+  const result = await updateManagedRepo(descriptor(fixture), { runId: "canonical-only-target" });
+
+  expect(result).toMatchObject({
+    state: "blocked",
+    reason: "organization_target_incompatible",
+    next_action: { kind: "codex" },
+  });
+  expect(runGit(fixture.working, ["rev-parse", "HEAD"])).toBe(before);
+  expect(readOrganizationRoot({ organizationRoot: fixture.working }).state).toBe("legacy");
+});
+
+test("Organization update treats a present null target document as invalid, not absent", async () => {
+  const fixture = await organizationActivationFixture("null-target-document");
+  await addRemoteFiles(fixture, { "lazurio.organization.json": "null\n" }, "publish invalid null document");
+  const before = runGit(fixture.working, ["rev-parse", "HEAD"]);
+
+  const result = await updateManagedRepo(descriptor(fixture), { runId: "null-target-document" });
+
+  expect(result).toMatchObject({
+    state: "blocked",
+    reason: "organization_target_incompatible",
+  });
+  expect(runGit(fixture.working, ["rev-parse", "HEAD"])).toBe(before);
+});
+
+test("Organization target document read failure blocks instead of masquerading as absence", async () => {
+  const fixture = await organizationActivationFixture("target-document-read-failure");
+  await addRemoteFiles(fixture, transitionOrganizationDocuments(), "publish transition pair");
+  const before = runGit(fixture.working, ["rev-parse", "HEAD"]);
+
+  const result = await updateManagedRepo(descriptor(fixture), {
+    runId: "target-document-read-failure",
+    deps: {
+      runGit: async (args, options) => (
+        args[0] === "show" && String(args[1]).endsWith(":lazurio.organization.json")
+          ? { ok: false, exitCode: null, timedOut: true, stdout: "", stderr: "", error: "fixture timeout" }
+          : runGitAsync(args, options)
+      ),
+    },
+  });
+
+  expect(result).toMatchObject({
+    state: "blocked",
+    reason: "organization_target_inspection_failed",
+    next_action: { kind: "codex" },
+  });
+  expect(runGit(fixture.working, ["rev-parse", "HEAD"])).toBe(before);
+  expect(readOrganizationRoot({ organizationRoot: fixture.working }).state).toBe("legacy");
+});
+
+test("Organization target identity mismatch blocks before stashing or checkout mutation", async () => {
+  const fixture = await organizationActivationFixture("target-identity-mismatch");
+  await addRemoteFiles(fixture, {
+    "company.gen3.json": `${JSON.stringify({
+      organization_generation: "gen3",
+      organization_kind: "organization",
+      company: {
+        slug: "foreign",
+        display_name: "Foreign Organization",
+        github_org: "foreign",
+      },
+    }, null, 2)}\n`,
+    "modules.manifest.json": `${JSON.stringify({
+      organization_generation: "gen3",
+      company: "foreign",
+      github_org: "foreign",
+      module_slots: [],
+    }, null, 2)}\n`,
+  }, "replace Organization identity");
+  await writeFile(join(fixture.working, "tracked.txt"), "local draft\n");
+  const before = runGit(fixture.working, ["rev-parse", "HEAD"]);
+
+  const result = await updateManagedRepo(descriptor(fixture), { runId: "target-identity-mismatch" });
+
+  expect(result).toMatchObject({
+    state: "blocked",
+    reason: "organization_target_identity_mismatch",
+    next_action: { kind: "codex" },
+  });
+  expect(runGit(fixture.working, ["rev-parse", "HEAD"])).toBe(before);
+  expect(runGit(fixture.working, ["stash", "list", "--format=%H"])).toBe("");
+  expect(status(fixture.working)).toContain("tracked.txt");
+});
+
+test("Organization target binds its declared root repository to the verified GitHub origin", async () => {
+  const fixture = await organizationActivationFixture("target-github-binding");
+  const githubSource = "git@github.com:test/root.git";
+  const runGitAgainstFixture = async (args, options) => {
+    if (args[0] === "remote" && args[1] === "get-url") {
+      return { ok: true, exitCode: 0, stdout: githubSource, stderr: "", error: null };
+    }
+    if (args[0] === "fetch") {
+      return runGitAsync([
+        "fetch",
+        "--no-tags",
+        "--prune",
+        "--force",
+        "--",
+        fixture.remote,
+        args.at(-1),
+      ], options);
+    }
+    return runGitAsync(args, options);
+  };
+  const publishTransition = async (repositoryLocator, message) => {
+    const transition = transitionOrganizationDocuments();
+    const modules = JSON.parse(transition["modules.manifest.json"]);
+    const canonical = JSON.parse(transition["lazurio.organization.json"]);
+    canonical.root_repository = {
+      forge: "github",
+      locator: repositoryLocator,
+      default_branch: "main",
+      binding_state: "unverified",
+    };
+    canonical.compatibility.legacy_projection.sha256 = organizationLegacyProjectionHash(canonical, modules);
+    await addRemoteFiles(fixture, {
+      "lazurio.organization.json": `${JSON.stringify(canonical, null, 2)}\n`,
+      "company.gen3.json": `${JSON.stringify(projectLegacyOrganizationManifest(canonical, modules), null, 2)}\n`,
+      "modules.manifest.json": `${JSON.stringify(modules, null, 2)}\n`,
+    }, message);
+  };
+  const repo = { ...descriptor(fixture), repo: githubSource };
+
+  await publishTransition("test/root", "publish bound transition");
+  const accepted = await updateManagedRepo(repo, {
+    runId: "target-github-binding-accepted",
+    deps: { runGit: runGitAgainstFixture },
+  });
+  expect(accepted).toMatchObject({ state: "updated" });
+
+  await publishTransition("test/foreign", "publish foreign root binding");
+  const before = runGit(fixture.working, ["rev-parse", "HEAD"]);
+  const blocked = await updateManagedRepo(repo, {
+    runId: "target-github-binding-blocked",
+    deps: { runGit: runGitAgainstFixture },
+  });
+
+  expect(blocked).toMatchObject({
+    state: "blocked",
+    reason: "organization_target_identity_mismatch",
+  });
+  expect(runGit(fixture.working, ["rev-parse", "HEAD"])).toBe(before);
+});
+
+test("Organization target blocks when a non-GitHub network origin has no explicit source binding", async () => {
+  const fixture = await organizationActivationFixture("target-unbound-network-origin");
+  const networkSource = "ssh://git@gitlab.example/test/root.git";
+  await addRemoteFiles(fixture, transitionOrganizationDocuments(), "publish transition on unbound source");
+  const before = runGit(fixture.working, ["rev-parse", "HEAD"]);
+
+  const result = await updateManagedRepo({ ...descriptor(fixture), repo: null }, {
+    runId: "target-unbound-network-origin",
+    deps: {
+      runGit: async (args, options) => {
+        if (args[0] === "remote" && args[1] === "get-url") {
+          return { ok: true, exitCode: 0, stdout: networkSource, stderr: "", error: null };
+        }
+        if (args[0] === "fetch") {
+          return runGitAsync(args.map((value) => value === networkSource ? fixture.remote : value), options);
+        }
+        return runGitAsync(args, options);
+      },
+    },
+  });
+
+  expect(result).toMatchObject({
+    state: "blocked",
+    reason: "organization_target_identity_mismatch",
+  });
+  expect(runGit(fixture.working, ["rev-parse", "HEAD"])).toBe(before);
+});
+
+test("Organization target cannot delete its manifest family", async () => {
+  const fixture = await organizationActivationFixture("target-manifest-deletion");
+  await rm(join(fixture.contributor, "company.gen3.json"));
+  await rm(join(fixture.contributor, "modules.manifest.json"));
+  runGit(fixture.contributor, ["add", "-A"]);
+  runGit(fixture.contributor, ["commit", "-m", "remove Organization manifest family"]);
+  runGit(fixture.contributor, ["push", "origin", "main"]);
+  const before = runGit(fixture.working, ["rev-parse", "HEAD"]);
+
+  const result = await updateManagedRepo(descriptor(fixture), { runId: "target-manifest-deletion" });
+
+  expect(result).toMatchObject({
+    state: "blocked",
+    reason: "organization_target_incompatible",
+    next_action: { kind: "codex" },
+  });
+  expect(runGit(fixture.working, ["rev-parse", "HEAD"])).toBe(before);
+  expect(readOrganizationRoot({ organizationRoot: fixture.working }).state).toBe("legacy");
 });
 
 test("an exact markerless checkout fast-forwards to the reviewed commit that publishes its Module marker", async () => {
@@ -590,6 +853,49 @@ test("a remote advance after fetch waits for the next run instead of changing th
   expect(await readPortableText(join(fixture.working, "later.txt"))).toBe("later\n");
 });
 
+test("a missing local main is created at the pinned target even if origin/main moves", async () => {
+  const fixture = await repositoryFixture("missing-main-pinned-target");
+  await addRemoteCommit(fixture, "verified.txt", "verified\n");
+  const verifiedTarget = runGit(fixture.contributor, ["rev-parse", "HEAD"]);
+  await writeFile(join(fixture.contributor, "later.txt"), "later\n");
+  runGit(fixture.contributor, ["add", "later.txt"]);
+  runGit(fixture.contributor, ["commit", "-m", "later unverified target"]);
+  const laterTarget = runGit(fixture.contributor, ["rev-parse", "HEAD"]);
+  runGit(fixture.working, ["switch", "-c", "agent/task"]);
+  runGit(fixture.working, ["branch", "-D", "main"]);
+  let moved = false;
+
+  const result = await updateManagedRepo({
+    ...descriptor(fixture),
+    repo_kind: "module",
+    module: "module",
+  }, {
+    runId: "missing-main-pinned-target",
+    deps: {
+      runGit: async (args, options) => {
+        if (!moved && args[0] === "branch" && args[1] === "main") {
+          moved = true;
+          runGit(fixture.contributor, ["push", "origin", "main"]);
+          runGit(fixture.working, [
+            "fetch",
+            fixture.remote,
+            "+refs/heads/main:refs/remotes/origin/main",
+          ]);
+        }
+        return runGitAsync(args, options);
+      },
+      installDependencies: async () => ({ ok: true }),
+    },
+  });
+
+  expect(result).toMatchObject({ state: "blocked", reason: "post_update_verification_failed" });
+  expect(runGit(fixture.working, ["rev-parse", "refs/heads/main"])).toBe(verifiedTarget);
+  expect(runGit(fixture.working, ["rev-parse", "HEAD"])).toBe(verifiedTarget);
+  expect(runGit(fixture.working, ["rev-parse", "refs/remotes/origin/main"])).toBe(laterTarget);
+  expect(existsSync(join(fixture.working, "verified.txt"))).toBe(true);
+  expect(existsSync(join(fixture.working, "later.txt"))).toBe(false);
+});
+
 test("crash after verified stash preserves recovery and a rerun completes", async () => {
   const fixture = await repositoryFixture("crash-after-stash");
   await addRemoteCommit(fixture, "remote.txt", "remote\n");
@@ -676,6 +982,58 @@ test("wrong primary branch returns to main without losing its commit", async () 
   expect(result).toMatchObject({ state: "updated", actions: expect.arrayContaining(["switch_main"]) });
   expect(await branch(fixture.working)).toBe("main");
   expect(runGit(fixture.working, ["rev-parse", "agent/task"])).toBe(featureHead);
+  expect(status(fixture.working)).toBe("");
+});
+
+test("non-Organization history blocker keeps the documented return to main", async () => {
+  const fixture = await repositoryFixture("module-ahead-branch");
+  await writeFile(join(fixture.working, "local-main.txt"), "local main\n");
+  runGit(fixture.working, ["add", "local-main.txt"]);
+  runGit(fixture.working, ["commit", "-m", "local main commit"]);
+  const localMain = runGit(fixture.working, ["rev-parse", "HEAD"]);
+  runGit(fixture.working, ["switch", "-c", "agent/task"]);
+
+  const result = await updateManagedRepo({
+    ...descriptor(fixture),
+    key: "test::module",
+    repo_kind: "module",
+    module: "module",
+  }, { runId: "module-ahead-branch" });
+
+  expect(result).toMatchObject({
+    state: "blocked",
+    reason: "local_main_commits",
+    actions: ["switch_main"],
+  });
+  expect(await branch(fixture.working)).toBe("main");
+  expect(runGit(fixture.working, ["rev-parse", "HEAD"])).toBe(localMain);
+  expect(runGit(fixture.working, ["rev-parse", "agent/task"])).toBe(localMain);
+  expect(status(fixture.working)).toBe("");
+});
+
+test("Organization history blocker without activation risk still returns to main", async () => {
+  const fixture = await organizationActivationFixture("organization-ahead-branch");
+  await writeFile(join(fixture.working, "local-main.txt"), "local main\n");
+  runGit(fixture.working, ["add", "local-main.txt"]);
+  runGit(fixture.working, ["commit", "-m", "local main commit"]);
+  const localMain = runGit(fixture.working, ["rev-parse", "HEAD"]);
+  runGit(fixture.working, ["switch", "-c", "agent/task"]);
+
+  const result = await updateManagedRepo(descriptor(fixture), {
+    runId: "organization-ahead-branch",
+  });
+
+  expect(result).toMatchObject({
+    state: "blocked",
+    reason: "local_main_commits",
+    actions: ["switch_main"],
+  });
+  expect(await branch(fixture.working)).toBe("main");
+  expect(runGit(fixture.working, ["rev-parse", "HEAD"])).toBe(localMain);
+  expect(runGit(fixture.working, ["rev-parse", "agent/task"])).toBe(localMain);
+  expect(readOrganizationRoot({ organizationRoot: fixture.working })).toMatchObject({
+    state: "legacy",
+  });
   expect(status(fixture.working)).toBe("");
 });
 
@@ -1240,6 +1598,7 @@ test("fresh Organization manifest materializes its new Workspace Module while ex
   await rm(join(root, "organizations", "OmegaCo_GEN3"), { recursive: true, force: true });
   const organizationRoot = join(root, "organizations", "BetaCo_GEN3");
   const organizationRemote = join(root, "remotes", "beta-root.git");
+  const declaredOrganizationRemote = "git@github.com:BetaCo/BetaCo_GEN3.git";
   const moduleRemote = join(root, "remotes", "new-module.git");
   const declaredModuleRemote = "git@github.com:BetaCo/new-module.git";
   const excludedSlots = [
@@ -1279,7 +1638,7 @@ test("fresh Organization manifest materializes its new Workspace Module while ex
   await setOrganizationRepository({
     root,
     orgPath: "organizations/BetaCo_GEN3",
-    repo: organizationRemote,
+    repo: declaredOrganizationRemote,
   });
   runGit(organizationRoot, ["add", "."]);
   runGit(organizationRoot, ["commit", "-m", "organization baseline"]);
@@ -1332,6 +1691,19 @@ test("fresh Organization manifest materializes its new Workspace Module while ex
     deps: {
       runId: "fresh-manifest",
       acquireLock: async () => ({ release: async () => {} }),
+      runGit: async (args, options) => {
+        if (
+          options.cwd === organizationRoot
+          && args[0] === "remote"
+          && args[1] === "get-url"
+        ) {
+          return { ok: true, exitCode: 0, stdout: declaredOrganizationRemote, stderr: "", error: null };
+        }
+        return runGitAsync(
+          args.map((value) => value === declaredOrganizationRemote ? organizationRemote : value),
+          options,
+        );
+      },
       updateRepo: async (item, context) => item.key === "lazurio::root" || item.key === "BetaCo::warehouse"
         ? { ...identity(item), state: "current", reason: "already_current", message: "current" }
         : updateManagedRepo(item, context),
@@ -2131,6 +2503,77 @@ async function repositoryFixture(name) {
   configure(working);
   configure(contributor);
   return { sandbox, remote, seed, working, contributor };
+}
+
+async function organizationActivationFixture(name) {
+  const fixture = await repositoryFixture(name);
+  await addRemoteFiles(fixture, {
+    "company.gen3.json": `${JSON.stringify({
+      organization_generation: "gen3",
+      organization_kind: "organization",
+      company: {
+        slug: "test",
+        display_name: "Test Organization",
+        github_org: "test",
+      },
+    }, null, 2)}\n`,
+    "modules.manifest.json": `${JSON.stringify({
+      organization_generation: "gen3",
+      company: "test",
+      github_org: "test",
+      module_slots: [],
+    }, null, 2)}\n`,
+  }, "publish legacy Organization baseline");
+  const activated = await updateManagedRepo(descriptor(fixture), { runId: `${name}-baseline` });
+  if (activated.state !== "updated") {
+    throw new Error(`Could not activate Organization fixture baseline: ${activated.reason}`);
+  }
+  return fixture;
+}
+
+function transitionOrganizationDocuments() {
+  const modules = {
+    organization_generation: "gen3",
+    company: "test",
+    github_org: "test",
+    module_slots: [],
+  };
+  const canonical = {
+    schema_version: "lazurio.organization.v1",
+    kind: "organization",
+    organization: {
+      slug: "test",
+      display_name: "Test Organization",
+      forge_binding: { forge: "github", locator: "test", binding_state: "unverified" },
+      metadata: {},
+    },
+    root_repository: null,
+    manifests: { modules: "modules.manifest.json" },
+    extensions: { legacy: {} },
+    compatibility: {
+      legacy_projection: {
+        path: "company.gen3.json",
+        algorithm: "sha256-canonical-json-v1",
+        sha256: "sha256:" + "0".repeat(64),
+      },
+    },
+  };
+  canonical.compatibility.legacy_projection.sha256 = organizationLegacyProjectionHash(canonical, modules);
+  return {
+    "lazurio.organization.json": `${JSON.stringify(canonical, null, 2)}\n`,
+    "company.gen3.json": `${JSON.stringify(projectLegacyOrganizationManifest(canonical, modules), null, 2)}\n`,
+    "modules.manifest.json": `${JSON.stringify(modules, null, 2)}\n`,
+  };
+}
+
+function driftedTransitionOrganizationDocuments() {
+  const transition = transitionOrganizationDocuments();
+  const legacy = JSON.parse(transition["company.gen3.json"]);
+  delete legacy.organization_kind;
+  return {
+    ...transition,
+    "company.gen3.json": `${JSON.stringify(legacy, null, 2)}\n`,
+  };
 }
 
 async function addRemoteCommit(fixture, path, content) {

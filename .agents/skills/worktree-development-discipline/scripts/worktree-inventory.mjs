@@ -8,6 +8,7 @@ import {
   hasRepositoryDbAuthorityMarker,
   readMissionControlRepositoryDbAuthority,
 } from "../../../../scripts/repository-db-authority-contract.mjs";
+import { readOrganizationRoot } from "../../../../lazurio/core/organization-root-reader-lib.mjs";
 
 const GIT_TIMEOUT_MS = 10_000;
 const SEMANTIC_VALIDATOR_TIMEOUT_MS = 30_000;
@@ -641,13 +642,15 @@ async function resolveSidecarAuthority(primaryRoot, defaultAuthorityRoot, declar
     }
 
     const organizationRoot = join(primaryRoot, segments[0], segments[1]);
-    const markerPath = join(organizationRoot, "company.gen3.json");
-    const markerStat = await lstat(markerPath);
-    if (!markerStat.isFile() || markerStat.isSymbolicLink()) {
-      throw new Error("Organization marker is not a regular file");
+    const resolution = readOrganizationRoot({ organizationRoot });
+    if (
+      resolution.operation_status === "migration_in_progress"
+      || !["legacy", "transition"].includes(resolution.state)
+      || resolution.resource_count !== 1
+    ) {
+      throw new Error(`Organization manifest is not mutation-safe (${resolution.operation_status ?? resolution.state})`);
     }
-    const marker = JSON.parse(await readFile(markerPath, "utf8"));
-    if (marker?.organization_kind !== "organization") {
+    if (resolution.resource.kind !== "organization") {
       throw new Error("authority owner is not a runtime Organization");
     }
 

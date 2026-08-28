@@ -10,6 +10,10 @@ import {
   runtimeScriptPortAuthorityIssues,
   runtimeSourcePortAuthorityIssues,
 } from "../../lazurio/runtime/discovery-lib.mjs";
+import {
+  organizationLegacyProjectionHash,
+  projectLegacyOrganizationManifest,
+} from "../../lazurio/core/organization-activation-lib.mjs";
 
 const tempRoots = [];
 
@@ -1446,7 +1450,7 @@ test("nečitelný company.gen3.json marker přítomného mountu je hard failure,
 
   const { apps, failures } = await discoverLaunchpadApps(root);
 
-  expect(failures.some((failure) => failure.includes("company.gen3.json nejde přečíst"))).toBe(true);
+  expect(failures.some((failure) => failure.includes("legacy_projection_unreadable"))).toBe(true);
   expect(apps).toEqual([]);
 });
 
@@ -1464,7 +1468,7 @@ test("scoped runtime discovery neparsuje rozbitý marker jiné Organizace", asyn
     organization_path: "organizations/TestCompany",
   });
 
-  expect(global.failures.some((failure) => failure.includes("BrokenCompany") && failure.includes("nejde přečíst"))).toBe(true);
+  expect(global.failures.some((failure) => failure.includes("BrokenCompany") && failure.includes("legacy_projection_unreadable"))).toBe(true);
   expect(scoped.failures).toEqual([]);
   expect(scoped.apps.map((app) => app.id)).toEqual(["test-company-demo-v1"]);
 });
@@ -1479,8 +1483,7 @@ test("namountovaná Organizace bez povinné GEN3 struktury je hard failure a jej
 
   const { apps, failures } = await discoverLaunchpadApps(root);
 
-  expect(failures.some((failure) => failure.includes("chybí modules.manifest.json"))).toBe(true);
-  expect(failures.some((failure) => failure.includes("chybí company/colleagues"))).toBe(true);
+  expect(failures.some((failure) => failure.includes("modules_manifest_missing"))).toBe(true);
   // Appka z nezvalidované hranice se nesmí stát spustitelnou.
   expect(apps).toEqual([]);
 });
@@ -1514,9 +1517,8 @@ test("Organization identity remains fatal without promoting slot-local Team/Git 
 
   const { apps, failures, warnings } = await discoverLaunchpadApps(root);
 
-  expect(failures.some((failure) => failure.includes("company.slug") && failure.includes("WrongCompany"))).toBe(true);
-  expect(failures.some((failure) => failure.includes("company.github_org") && failure.includes("WrongGithubOrg"))).toBe(true);
-  expect(warnings.some((warning) => warning.includes('path "modules/demo"') && warning.includes("deprecated modules/*"))).toBe(true);
+  expect(failures.some((failure) => failure.includes("organization_modules_identity_conflict"))).toBe(true);
+  expect(warnings).toEqual([]);
   expect(failures.some((failure) => failure.includes('neexistující Team "missing-team"'))).toBe(false);
   expect(failures.some((failure) => failure.includes("git URL"))).toBe(false);
   // Mount s rozbitým Organization kontraktem nesmí dodat spustitelnou appku.
@@ -1566,6 +1568,23 @@ test("case-only Organization identity drift je incremental warning, ne mount blo
   expect(warnings.filter((warning) => warning.includes("canonical casing")).length).toBe(2);
 });
 
+test("legacy-only Module warning popisuje ignorovaný compatibility vstup, ne casing", async () => {
+  const root = await createCompaniesWorkspaceFixture({
+    plugin: { schema_version: "companyascode.launchpad_plugin.v1", title: "Demo kontext" },
+  });
+  const companyPath = join(root, "organizations", "TestCompany", "company.gen3.json");
+  const company = await Bun.file(companyPath).json();
+  company.modules = [...(company.modules ?? []), { slug: "orphan", path: "workspace/orphan" }];
+  await writeJson(companyPath, company);
+
+  const { failures, warnings } = await discoverLaunchpadApps(root);
+
+  expect(failures).toEqual([]);
+  expect(warnings).toContainEqual(expect.stringContaining("z normalizovaného inventáře byl ignorován"));
+  expect(warnings.some((warning) => warning.includes("legacy_modules_block_ignored") && warning.includes("canonical casing")))
+    .toBe(false);
+});
+
 test("Organization cross-file identity gate failuje i při chybějícím poli na kterékoli straně", async () => {
   const missingManifestRoot = await createCompaniesWorkspaceFixture({
     plugin: { schema_version: "companyascode.launchpad_plugin.v1", title: "Demo kontext" },
@@ -1582,7 +1601,7 @@ test("Organization cross-file identity gate failuje i při chybějícím poli na
   const missingManifestResult = await discoverLaunchpadApps(missingManifestRoot);
   expect(
     missingManifestResult.failures.some(
-      (failure) => failure.includes("modules.manifest.json company") && failure.includes("povinné"),
+      (failure) => failure.includes("modules_manifest_company_missing"),
     ),
   ).toBe(true);
   expect(missingManifestResult.apps).toEqual([]);
@@ -1602,7 +1621,7 @@ test("Organization cross-file identity gate failuje i při chybějícím poli na
   const missingCompanyResult = await discoverLaunchpadApps(missingCompanyRoot);
   expect(
     missingCompanyResult.failures.some(
-      (failure) => failure.includes("company.gen3.json company.github_org") && failure.includes("povinné"),
+      (failure) => failure.includes("legacy_organization_identity_invalid"),
     ),
   ).toBe(true);
   expect(missingCompanyResult.apps).toEqual([]);
@@ -1623,11 +1642,11 @@ test("conflicting Organization root remote and branch aliases block only that Or
   const { apps, failures, organization_issues: organizationIssues } = await discoverLaunchpadApps(root);
 
   expect(apps).toEqual([]);
-  expect(failures.some((failure) => failure.includes("rozdílné Organization root repository aliasy"))).toBe(true);
-  expect(failures.some((failure) => failure.includes("rozdílné Organization root branch aliasy"))).toBe(true);
+  expect(failures.some((failure) => failure.includes("organization_root_remote_conflict"))).toBe(true);
+  expect(failures.some((failure) => failure.includes("organization_root_branch_conflict"))).toBe(true);
   expect(organizationIssues).toEqual(expect.arrayContaining([
     expect.objectContaining({
-      organization: "test-company",
+      organization: "TestCompany",
       scope: "organization",
       blocks_subordinate_projection: true,
     }),
@@ -1660,13 +1679,13 @@ test("scaffold forge binding and governance participate in Organization discover
   const { apps, failures, organization_issues: organizationIssues } = await discoverLaunchpadApps(root);
 
   expect(apps).toEqual([]);
-  expect(failures.some((failure) => failure.includes("rozdílné Organization root repository aliasy")))
+  expect(failures.some((failure) => failure.includes("organization_root_remote_conflict")))
     .toBe(true);
-  expect(failures.some((failure) => failure.includes("rozdílné Organization root branch aliasy")))
+  expect(failures.some((failure) => failure.includes("organization_root_branch_conflict")))
     .toBe(true);
   expect(organizationIssues).toEqual(expect.arrayContaining([
     expect.objectContaining({
-      organization: "test-company",
+      organization: "TestCompany",
       scope: "organization",
       blocks_subordinate_projection: true,
     }),
@@ -1693,11 +1712,11 @@ test("foreign governance access authority is Organization-fatal while sibling di
   expect(apps.some((app) => app.company === "DemoCo")).toBe(true);
   expect(apps.some((app) => app.company === "blocked-co")).toBe(false);
   expect(organizationIssues).toContainEqual(expect.objectContaining({
-    organization: "blocked-co",
+    organization: "BlockedCo",
     scope: "organization",
     blocks_subordinate_projection: true,
-    code: "organization_contract_invalid",
-    message: expect.stringContaining("governance.access_authority"),
+    code: "organization_manifest_conflict",
+    message: expect.stringContaining("organization_root_access_authority_invalid"),
   }));
 });
 
@@ -1732,9 +1751,9 @@ test("template placeholder varianty jsou incremental warning, ne runtime blocker
   const { template_apps, failures, warnings } = await discoverLaunchpadApps(root);
 
   expect(failures.some((failure) => failure.includes("OrganizationTemplate_GEN3") && failure.includes("company.slug"))).toBe(false);
-  expect(warnings.some((warning) => warning.includes("OrganizationTemplate_GEN3") && warning.includes("company.slug"))).toBe(true);
+  expect(warnings.some((warning) => warning.includes("OrganizationTemplate_GEN3") && warning.includes("organization.slug"))).toBe(true);
   expect(failures.some((failure) => failure.includes("OrganizationTemplate_GEN3") && failure.includes("company.github_org"))).toBe(false);
-  expect(warnings.some((warning) => warning.includes("OrganizationTemplate_GEN3") && warning.includes("company.github_org"))).toBe(true);
+  expect(warnings.some((warning) => warning.includes("OrganizationTemplate_GEN3") && warning.includes("organization.forge_binding.locator"))).toBe(true);
   expect(
     warnings.some(
       (warning) =>
@@ -1759,7 +1778,7 @@ test("placeholder Organization identita bez markeru template je hard failure", a
 
   const { organizations, failures } = await discoverLaunchpadApps(root);
 
-  expect(failures.some((failure) => failure.includes("Scaffold_GEN3") && failure.includes("povolená jen") && failure.includes("organization_kind"))).toBe(true);
+  expect(failures.some((failure) => failure.includes("Scaffold_GEN3") && failure.includes("placeholder") && failure.includes("organization.slug"))).toBe(true);
   expect(organizations.some((organization) => organization.path === "organizations/Scaffold_GEN3")).toBe(false);
 });
 
@@ -1777,6 +1796,9 @@ test("placeholder company.github_org bez markeru template je hard failure", asyn
   const companyConfig = await Bun.file(join(companyRoot, "company.gen3.json")).json();
   companyConfig.company.github_org = "vyplnit-github-org";
   await writeJson(join(companyRoot, "company.gen3.json"), companyConfig);
+  const modulesManifest = await Bun.file(join(companyRoot, "modules.manifest.json")).json();
+  modulesManifest.github_org = "vyplnit-github-org";
+  await writeJson(join(companyRoot, "modules.manifest.json"), modulesManifest);
 
   const { organizations, failures } = await discoverLaunchpadApps(root);
 
@@ -1784,8 +1806,8 @@ test("placeholder company.github_org bez markeru template je hard failure", asyn
     failures.some(
       (failure) =>
         failure.includes("Scaffold_GEN3") &&
-        failure.includes("company.github_org") &&
-        failure.includes("organization_kind"),
+        failure.includes("organization.forge_binding.locator") &&
+        failure.includes("placeholder"),
     ),
   ).toBe(true);
   expect(organizations.some((organization) => organization.path === "organizations/Scaffold_GEN3")).toBe(false);
@@ -2362,11 +2384,10 @@ test("raw non-canonical repository path blocks package discovery before separato
   const result = await discoverLaunchpadApps(root);
 
   expect(result.apps).toEqual([]);
-  expect(result.failures).toEqual([]);
+  expect(result.failures.join("\n")).toContain("modules_manifest_slot_0_path_invalid");
   expect(result.organization_issues).toContainEqual(expect.objectContaining({
-    scope: "module_slot",
-    code: "slot_path_noncanonical",
-    path: "modules/demo",
+    scope: "organization",
+    code: "organization_manifest_conflict",
     next_action: expect.objectContaining({ kind: "agent_review" }),
   }));
 });
@@ -2385,11 +2406,10 @@ test("incomplete slot declaration is an honest fatal contract error instead of d
   const result = await discoverLaunchpadApps(root);
 
   expect(result.apps).toEqual([]);
-  expect(result.failures.join("\n")).toContain(".path je povinná");
-  expect(result.failures.join("\n")).toContain('slot "broken"');
+  expect(result.failures.join("\n")).toContain("modules_manifest_slot_0_path_invalid");
 });
 
-test("cross-file logical ID mismatch quarantines only the conflicting slot group", async () => {
+test("legacy compatibility projection cannot create a shadow repository identity conflict", async () => {
   const root = await createCompaniesWorkspaceFixture({});
   const organizationRoot = join(root, "organizations", "TestCompany");
   await writeJson(join(organizationRoot, "modules.manifest.json"), {
@@ -2407,14 +2427,7 @@ test("cross-file logical ID mismatch quarantines only the conflicting slot group
 
   expect(result.apps).toEqual([]);
   expect(result.failures).toEqual([]);
-  expect(result.organization_issues).toEqual(expect.arrayContaining([
-    expect.objectContaining({
-      scope: "module_slot",
-      code: "slot_collection_ambiguous",
-      module: "demo",
-      next_action: expect.objectContaining({ kind: "agent_review" }),
-    }),
-  ]));
+  expect(result.organization_issues).toEqual([]);
 });
 
 test("an ambiguous markerless path stays reserved without contaminating a vacant sibling", async () => {
@@ -2467,7 +2480,30 @@ test("Organization module paths fail closed on traversal and canonical symlink e
 
   const result = await discoverLaunchpadApps(root);
 
-  expect(result.failures.filter((failure) => failure.includes("uniká mimo Organization root"))).toHaveLength(2);
+  expect(result.failures.filter((failure) => failure.includes("modules_manifest_slot_0_path_invalid"))).toHaveLength(1);
+  expect(result.organization_issues).toContainEqual(expect.objectContaining({
+    scope: "organization",
+    code: "organization_manifest_conflict",
+  }));
+});
+
+test("a transition pair discovers one normalized Organization and one app", async () => {
+  const root = await createCompaniesWorkspaceFixture({
+    plugin: { schema_version: "companyascode.launchpad_plugin.v1", title: "Transition" },
+  });
+  const organizationRoot = join(root, "organizations", "TestCompany");
+  await convertOrganizationFixtureToTransition(organizationRoot);
+
+  const result = await discoverLaunchpadApps(root);
+
+  expect(result.failures).toEqual([]);
+  expect(result.organizations).toHaveLength(1);
+  expect(result.organizations[0]).toMatchObject({
+    slug: "test-company",
+    manifest_state: "transition",
+    declaration_source: "lazurio.organization.json",
+  });
+  expect(result.apps.map((app) => app.id)).toEqual(["test-company-demo-v1"]);
 });
 
 async function createCompaniesWorkspaceFixture({ plugin, appOverrides = {} }) {
@@ -2530,6 +2566,41 @@ async function createCompaniesWorkspaceFixture({ plugin, appOverrides = {} }) {
   });
   await writeJson(join(appRoot, "launchpad.plugin.json"), plugin);
   return root;
+}
+
+async function convertOrganizationFixtureToTransition(organizationRoot) {
+  const legacy = await Bun.file(join(organizationRoot, "company.gen3.json")).json();
+  const modules = await Bun.file(join(organizationRoot, "modules.manifest.json")).json();
+  const canonical = {
+    schema_version: "lazurio.organization.v1",
+    kind: legacy.organization_kind ?? "organization",
+    organization: {
+      slug: legacy.company.slug,
+      display_name: legacy.company.display_name ?? legacy.company.slug,
+      forge_binding: {
+        forge: "github",
+        locator: legacy.company.github_org,
+        binding_state: "unverified",
+      },
+      metadata: {},
+    },
+    root_repository: null,
+    manifests: { modules: "modules.manifest.json" },
+    extensions: { legacy: {} },
+    compatibility: {
+      legacy_projection: {
+        path: "company.gen3.json",
+        algorithm: "sha256-canonical-json-v1",
+        sha256: "sha256:" + "0".repeat(64),
+      },
+    },
+  };
+  canonical.compatibility.legacy_projection.sha256 = organizationLegacyProjectionHash(canonical, modules);
+  await writeJson(join(organizationRoot, "lazurio.organization.json"), canonical);
+  await writeJson(
+    join(organizationRoot, "company.gen3.json"),
+    projectLegacyOrganizationManifest(canonical, modules),
+  );
 }
 
 

@@ -20,10 +20,13 @@ test("inventory separates Modules, empty Apps and nested repository-db slots", a
   await mkdir(join(organization, "workspace", "notes", ".git"), { recursive: true });
   await mkdir(join(organization, "workspace", "warehouse-data", ".git"), { recursive: true });
   await writeJson(join(organization, "company.gen3.json"), {
-    company: { slug: "Example" },
+    organization_generation: "gen3",
+    company: { slug: "Example", display_name: "Example", github_org: "Example" },
   });
   await writeJson(join(organization, "modules.manifest.json"), {
+    organization_generation: "gen3",
     company: "Example",
+    github_org: "Example",
     module_slots: [
       { slug: "website", path: "workspace/website", git: { url: "git@github.com:Example/website.git", branch: "main" } },
       { slug: "notes", path: "workspace/notes", git: { url: "git@github.com:Example/notes.git", branch: "main" } },
@@ -58,7 +61,7 @@ test("inventory separates Modules, empty Apps and nested repository-db slots", a
   const website = inventory.modules.find((module) => module.module === "website");
   expect(website).toMatchObject({
     repository: "git@github.com:Example/website.git",
-    declaration_source: "modules.manifest.json",
+    declaration_source: "Organization resource#repository_inventory",
   });
   expect(website.proposal).toMatchObject({
     apps: ["app/v2/package.json"],
@@ -73,23 +76,18 @@ test("inventory separates Modules, empty Apps and nested repository-db slots", a
   ]);
 });
 
-test("inventory keeps company.gen3.json modules as a compatibility fallback", async () => {
+test("inventory does not revive the legacy compatibility projection as a shadow repository registry", async () => {
   const root = await mkdtemp(join(tmpdir(), "lazurio-module-inventory-legacy-"));
   roots.push(root);
   const organization = join(root, "organizations", "Legacy_GEN3");
   await mkdir(join(organization, "workspace", "website", ".git"), { recursive: true });
   await writeJson(join(organization, "company.gen3.json"), {
-    company: { slug: "Legacy" },
+    organization_generation: "gen3",
+    company: { slug: "Legacy", display_name: "Legacy", github_org: "Legacy" },
     modules: [
       { slug: "website", path: "workspace/website", repo: "git@github.com:Legacy/website.git" },
     ],
   });
 
-  const inventory = await inventoryLazurioModules(root);
-  expect(inventory.summary).toMatchObject({ declared_modules: 1, materialized_modules: 1 });
-  expect(inventory.modules[0]).toMatchObject({
-    module: "website",
-    repository: "git@github.com:Legacy/website.git",
-    declaration_source: "company.gen3.json#modules",
-  });
+  await expect(inventoryLazurioModules(root)).rejects.toThrow("modules_manifest_missing");
 });
