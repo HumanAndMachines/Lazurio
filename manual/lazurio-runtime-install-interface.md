@@ -105,9 +105,11 @@ odpinovat, dokud není tento runtime artefakt skutečně nasazený.
 
 Hosted profil navíc vyžaduje absolutní `LAZURIO_LAUNCHPAD_STATE_ROOT` mimo
 immutable runtime i mutable working root. Launchpad do této perzistentní
-builder-owned cesty ukládá pouze svůj provozní stav, desired module source,
-lease a aplikační logy. Lokální profil bez této proměnné zachovává dosavadní
-umístění pod source Launchpadu, takže localhost workflow se nemění.
+builder-owned cesty ukládá pouze svůj provozní stav, ownership a source evidence
+právě managed procesů, lease a aplikační logy. Tento záznam není lifecycle
+intent: požadovaná hosted množina se po každém startu znovu odvodí z Teamu a
+manifestů Modulů. Lokální profil bez této proměnné zachovává dosavadní umístění
+pod source Launchpadu, takže localhost workflow se nemění.
 
 Lokální krátký příkaz `lazurio update` si pro jeden běh vytvoří úplný dočasný
 bundle enginu mimo working root a po skončení jej odstraní. Dlouho běžící
