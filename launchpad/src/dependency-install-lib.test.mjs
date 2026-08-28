@@ -687,6 +687,49 @@ test("a file dependency copied inside its owning checkout remains usable", async
   });
 });
 
+test("a real Bun frozen install satisfies the shared Organization-local file dependency postcondition", async () => {
+  const fixture = await organizationFileDependencyFixture();
+  const lockfilePath = join(fixture.packageRoot, "bun.lock");
+  await rm(lockfilePath, { force: true });
+
+  const lockfileInstall = Bun.spawn(
+    [process.execPath, "install", "--lockfile-only", "--ignore-scripts"],
+    {
+      cwd: fixture.packageRoot,
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+      windowsHide: true,
+    },
+  );
+  const [lockfileStdout, lockfileStderr, lockfileExitCode] = await Promise.all([
+    new Response(lockfileInstall.stdout).text(),
+    new Response(lockfileInstall.stderr).text(),
+    lockfileInstall.exited,
+  ]);
+  expect({
+    exit_code: lockfileExitCode,
+    stdout: lockfileStdout,
+    stderr: lockfileStderr,
+  }).toMatchObject({ exit_code: 0 });
+  await rm(join(fixture.packageRoot, "node_modules"), { recursive: true, force: true });
+
+  const result = await runFrozenBunInstall({
+    cwd: fixture.packageRoot,
+    boundaryRoot: fixture.checkoutRoot,
+    organizationDependencyRoot: fixture.organizationRoot,
+    command: frozenBunInstallCommand(process.execPath),
+  });
+
+  expect(result).toMatchObject({
+    ok: true,
+    exit_code: 0,
+    mode: "ensure",
+    runtime_tree_usable: true,
+    missing_required_dependencies: [],
+  });
+});
+
 test("a same-Organization package link must match the exact declared file target", async () => {
   const fixture = await organizationFileDependencyFixture();
   const differentTarget = join(fixture.organizationRoot, "launchpad", "contracts", "different");

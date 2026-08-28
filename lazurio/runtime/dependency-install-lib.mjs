@@ -396,6 +396,7 @@ async function validatePackageRoot({ cwd, boundaryRoot, organizationDependencyRo
     organization_dependency_root: canonicalOrganizationDependencyRoot,
     lockfile,
     package_json: authoritySnapshot.package_json,
+    local_dependency_authorities: authoritySnapshot.local_dependency_authorities,
     required_dependency_count: dependencyState.required_dependency_count,
     authority_snapshot: authoritySnapshot,
   };
