@@ -8,6 +8,53 @@
   },
   "issues": [
     {
+      "id": "issue-2026-08-28-001",
+      "title": "Rozhodnout právní a distribuční brány případného Apache-2.0 cutoveru Lazuria",
+      "status": "decision_needed",
+      "severity": "high",
+      "owner": "founder",
+      "created_at": "2026-08-28",
+      "updated_at": "2026-08-28",
+      "tags": [
+        "licensing",
+        "apache-2.0",
+        "legal",
+        "distribution",
+        "npm"
+      ],
+      "question": "Má se veřejný Lazurio source a budoucí npm package přelicencovat ze současné FSL-1.1-Apache-2.0 na Apache-2.0, a pokud ano, po jakém právním a distribučním readbacku?",
+      "impact": "PR #175 smíchal užitečné odstranění nepoužívaného fontu a doplnění third-party notices s dosud neschváleným Apache-2.0 cutoverem. Mechanické převzetí jeho README copy nebo package metadata by změnilo práva příjemců bez doložené autority. Do rozhodnutí proto zůstává jedinou autoritou `LICENSE.md` a odpovídající FSL metadata; Organization repozitáře ani Personalspace tato volba automaticky nepřelicencuje.",
+      "decision_needed_for": [
+        "změnu root LICENSE.md a veřejného README copy",
+        "změnu SPDX licence v lazurio/package.json před prvním npm releasem",
+        "případný Apache NOTICE a copyright kontrakt",
+        "pravidla pro historické third-party blob objekty v Git historii"
+      ],
+      "next_action": "Founder s právním vlastníkem potvrdí přesnou právní entitu `HumanAndMachine s.r.o.`, chain-of-title všech významných příspěvků a požadované zacházení s historií; teprve potom vznikne samostatný úzký licenční PR s exact packlist readbackem.",
+      "acceptance_criteria": [
+        "Existuje explicitní rozhodnutí Principála pro přesný Apache-2.0 cutover a jeho účinný rozsah.",
+        "Je doložen chain-of-title a oprávnění právní entity `HumanAndMachine s.r.o.` přelicencovat všechny dotčené příspěvky.",
+        "Je rozhodnuto, zda odstraněný Baste blob v dosažitelné Git historii vyžaduje přepis, zvláštní notice nebo žádnou další akci.",
+        "Root LICENSE, README, Apache NOTICE, npm SPDX metadata a skutečný npm packlist si navzájem neodporují.",
+        "Non-goals výslovně potvrzují, že změna sama nepřelicencuje Organization repozitáře, Personalspace ani samostatné productionspace projekty.",
+        "Cross-platform npm package gate ověří immutable obsah stejného artefaktu před prvním veřejným releasem."
+      ],
+      "links": [
+        {
+          "label": "Původní smíšený PR #175",
+          "url": "https://github.com/HumanAndMachines/Lazurio/pull/175"
+        },
+        {
+          "label": "Současná licenční autorita",
+          "path": "LICENSE.md"
+        },
+        {
+          "label": "Publishable package metadata",
+          "path": "lazurio/package.json"
+        }
+      ]
+    },
+    {
       "id": "issue-2026-07-20-001",
       "title": "Dodefinovat Launchpad převzetí app-owned portu místo fallback portů",
       "status": "implementation_ready_for_review",
