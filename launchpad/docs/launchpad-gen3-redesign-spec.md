@@ -136,8 +136,11 @@ While the Team Workspace is enabled, T3 Code and Launchpad are
 `desired-running`, and the thin supervisor watches only those two stable
 processes. Dashboard Development projects only their entry points and never
 owns module lifecycle; builders Start, Stop and Open module dev previews in
-Launchpad. Production applications appear only from a later verified deployment
-catalog, never from the Workspace service catalog or dev desired state.
+Launchpad only in the local profile. In a hosted Team Workspace, Launchpad keeps
+the immutable Team service catalog running; builders observe, open and explicitly
+repair those services, while a new catalog revision controls their membership.
+Production applications appear only from a later verified deployment catalog,
+never from the Workspace service catalog or development lifecycle state.
 
 Production delivery is a separate follow-up contract: protected source/tag →
 reproducible immutable artifact → isolated production runtime with explicit
@@ -400,11 +403,11 @@ precondition is false.
 
 | Action | Workspace app policy | Productionspace policy | Response must show |
 | --- | --- | --- | --- |
-| Open | Ensure install/start for the selected main/worktree source, prove health and accept desired state; local returns loopback, hosted returns the exact catalog origin | Allowed as read-only | target URL, runtime, desired source |
+| Open | Local: ensure install/start for the explicitly selected session source. Hosted v2: ensure/open the immutable catalog source. Prove health; never persist click-derived intent | Allowed as read-only | target URL, runtime, exact source |
 | Install | Allowed only when `dependencies.can_install=true`; app-cwd scoped | Disabled until explicit production policy exists | action, command, cwd, exit_code, log_path, log_excerpt |
 | Repair | Idempotent clean frozen reinstall of the exact App `node_modules`; failure leaves only that App blocked and the next retry starts cleanly | Disabled until explicit production policy exists | action, command, cwd, exit_code, dependency state, log_path, log_excerpt |
-| Start | Allowed when `dependencies.can_start=true`; a valid static module lease replaces its current occupant under the module mutex | Disabled or confirmation-gated until policy exists | runtime, pid, health, desired source, failure_kind on error |
-| Stop | Allowed only for the active current-instance managed process; persist disabled desired state before signaling | confirmation-gated | desired state, pid/owner/result |
+| Start | Local: start an exact session source when `dependencies.can_start=true`; hosted catalog Start is idempotent ensure of the same source. A valid static module lease replaces its current occupant under the module mutex | Disabled or confirmation-gated until policy exists | runtime, pid, health, exact source, failure_kind on error |
+| Stop | Local: allowed only for the active current-instance managed process. Hosted v2 catalog service: denied; remove the record in a new catalog revision | confirmation-gated | pid/owner/result or stable denial |
 | Restart | Stop + Start; never bypasses dependency/policy guards | confirmation-gated | both action results |
 | Logs | Always allowed for visible app | Always allowed | log_path and tail |
 | Synchronize | One hierarchy-wide `lazurio update`: verified recovery stash for dirty primary checkouts, `main` fast-forward, fresh module rediscovery, then changed-App dependency refresh | Productionspace skipped | per-repo outcome, recovery stash reference, dependency strategy, aggregate counts |
@@ -412,10 +415,10 @@ precondition is false.
 For legacy runtimes, the manifest-owned port is only a discovery key and never
 grants destructive authority. For a valid static `lazurio.module.v1` lease,
 Start/Open may reclaim any safely signalable occupant under the module mutex and
-immediately replace it with the declared module. Explicit Stop is intentionally
-narrower: it first persists disabled desired state and then signals only the
-active record managed by the current Launchpad instance. It never adopts or
-kills an unrelated process without performing that replacement lifecycle.
+immediately replace it with the declared module. Localhost Stop is intentionally
+narrower: it signals only the current-session managed process. It never adopts
+or kills an unrelated process without performing that replacement lifecycle;
+a hosted v2 catalog service cannot be disabled by Stop at all.
 
 Productionspace systems use the same canonical card anatomy as Workspace, so
 the grid keeps one Lazurio rhythm. Their behavior remains distinct: the tile

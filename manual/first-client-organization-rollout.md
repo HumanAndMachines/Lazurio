@@ -492,7 +492,8 @@ Kontrolní pravidla:
   povolené a nevytváří globální registr.
 - Na portu modulu běží nejvýše jedna jeho verze. Start/Open jinou verzi stejného
   Modulu nahradí automaticky. Známý vlastník jiné Organizace vyžaduje potvrzení
-  konkrétní aplikace a vypnutí jejího desired runtime; port se nepřemapuje.
+  konkrétní aplikace; port se nepřemapuje. Localhost spravuje jen procesy
+  aktuální Launchpad session a kliknutí nevytváří persistentní desired stav.
 - Po změně dependencies nebo package identity aktualizuj `bun.lock` vědomě ve
   stejném modulovém PR a ověř frozen install. Launchpad `Repair` lockfile nikdy
   nepřepisuje; opravuje pouze lokální `node_modules`. Nesoulad package a

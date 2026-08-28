@@ -95,9 +95,10 @@ deployment, ingress, identity ani MCP.
 Když je Team Workspace zapnutý, T3 Code a Launchpad jsou `desired-running`;
 tenký supervisor hlídá pouze je. Dashboard Development smí projektovat jen
 tyto dva stabilní vstupy a žádný modulový lifecycle nevlastní. Modulové dev
-preview se spouští a otevírá přes Launchpad. Produkční aplikace smí Dashboard
-zobrazit až z pozdějšího ověřeného deployment katalogu, nikdy z Workspace
-service katalogu nebo dev desired state.
+preview udržuje Launchpad podle Team service katalogu; Builder je v Launchpadu
+otevírá, pozoruje a explicitně opravuje, ale jejich přítomnost nemění kliknutím.
+Produkční aplikace smí Dashboard zobrazit až z pozdějšího ověřeného deployment
+katalogu, nikdy z Workspace service katalogu ani vývojového lifecycle stavu.
 
 Produkční release patří do samostatného follow-upu: protected source/tag →
 reproducible immutable artifact → isolated production runtime s explicitním
@@ -106,22 +107,25 @@ daty, backupem, rollbackem, observability a stateless remote MCP. Produkční
 runtime neobsahuje T3, Codex, Launchpad, dev checkouty ani worktrees. Tento
 Launchpad kontrakt proto nezavádí per-module produkční kontejnery.
 
-## Durable desired runtime
+## Lifecycle profily
 
-Úspěšný `Start` nebo `Open` atomicky přijme přesný module-owned desired source
-`main` nebo `worktree/<canonical slug>` do
-`launchpad/runtime/desired-modules/`. Zápis je schema-validní, bez secrets a
-publikuje se atomickým rename pod stejným module mutexem jako takeover.
-Explicitní `Stop` nejdřív commitne `enabled=false` a až potom signalizuje známý
-managed proces: selhání persistence neposílá signál, selhání signálu už nikdy
-nezpůsobí boot resurrection.
+Výchozí localhost profil je session-scoped. `Start` a `Open` vždy pracují s
+explicitním exact `main` nebo `worktree/<canonical slug>` source, ale nic
+nezapisují do `runtime/desired-modules/`. Graceful Server shutdown ukončí
+všechny Organization i Personalspace process trees spravované touto instancí;
+další cold start ignoruje libovolně naplněný legacy desired adresář a publikuje
+locator bez per-Module reconcile.
 
-Po startu Launchpadu proběhne jednorázový idempotentní boot reconcile. Přesný
-desired source znovu projde discovery, takeoverem, listener proof a health;
-chybějící nebo již nevlastněný worktree skončí `degraded` bez fallbacku na
-main. Neočekávaný child exit spouští event-driven bounded restart/backoff v
-tomtéž runtime manageru. Není zde externí `/open` polling loop ani druhý
-supervisor modulových aplikací.
+Hosted Team Workspace cílově používá `lazurio.team_service_catalog.v2` jako
+jedinou autoritu stabilní URL, exact source i keep-running intentu. Controller
+se rozbíhá až po publikaci readiness Launchpadu a chyba jedné služby neblokuje
+ostatní. Kliknutí katalog nikdy nemění. Dnešní hosted v1 boot reconcile je
+výslovně dočasná read-compatible migrační lane; nové systémy jej nesmějí
+rozšiřovat a odstraní se až po inventuře, v2 canary a převodu všech hosted
+Workspace katalogů podle DEV-6513.
+
+Produkční Buildy používají samostatný immutable build/runtime kontrakt bez
+Launchpadu, Team service katalogu a worktrees.
 
 ## Stabilní odkazy na prostor
 
@@ -456,9 +460,10 @@ V Lazurio rootu s více Organizacemi platí:
   explicitní změna portu musí zahrnout všechny ingress/VPN/hosting návaznosti.
 - Start/Open preflightuje všechny listenery. Jinou verzi nebo worktree stejného
   Modulu nahradí automaticky. U známého lease jiné Organizace vyžádá potvrzení
-  konkrétní nahrazované aplikace, vypne její desired runtime a teprve potom ji
-  ukončí. Port se nikdy nepřemapuje. Samotný Stop dál ukončuje jen proces
-  spravovaný aktuální instancí Launchpadu.
+  konkrétní nahrazované aplikace a teprve potom ukončí managed proces aktuální
+  session. Port se nikdy nepřemapuje. Samotný Stop dál ukončuje jen proces
+  spravovaný aktuální instancí Launchpadu; localhost žádný persistentní intent
+  nevytváří ani nevypíná.
 - Start/Open je pod OS-level Module i listener mutexem napříč instancemi
   Launchpadu. Před převzetím znovu ověří vlastníka a uvolnění listenerů a
   zapíše source/PID/takeover audit. Stop cílí jen managed instanci.
@@ -752,8 +757,8 @@ jasný mechanismus:
   data ani obcházet Organization nebo Productionspace guardrails.
 - `Stop` zastaví pouze current-instance managed proces na module-owned lease;
   proces přeživší restart ani proces jiné instance pro samotný Stop neadoptuje
-  a nesignalizuje. Nejdřív atomicky uloží disabled desired stav, potom nad
-  známým recordem ověří PID a pošle signál. Na Windows používá managed proces cílený
+  a nesignalizuje. Nad známým session recordem ověří PID a pošle signál. Na
+  Windows používá managed proces cílený
   `taskkill /PID <pid> /T /F` nad PID uloženým v runtime recordu a po ukončení
   čeká na potvrzení původního child handle. Pokud handle exit nepotvrdí,
   Launchpad ponechá managed ownership a selže bezpečně bez druhého signálu;

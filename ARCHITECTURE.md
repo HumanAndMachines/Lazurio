@@ -140,6 +140,25 @@ port Modulu se veřejně nevystavuje. Produkční aplikace se v Dashboardu mohou
 objevit jen z ověřeného katalogu produkčních nasazení, nikdy ze seznamu
 vývojových služeb Workspace.
 
+Launchpad proto používá tři oddělené lifecycle profily:
+
+- **localhost** je úsporná dílna. `Start` a `Open` spouštějí přesný `main` nebo
+  worktree jen pro život aktuální Server instance. Kliknutí nevytváří trvalý
+  intent; graceful shutdown ukončí celý spravovaný process tree a další start
+  Launchpadu nic neobnovuje;
+- **Hosted Team Workspace** je always-on dílna. Přítomnost služby v immutable
+  Team service catalogu v2 je jediný společný keep-running intent, stabilní URL
+  i přesný `main` nebo Mission Control-owned worktree source. Launchpad publikuje
+  vlastní readiness dřív a jednotlivé služby udržuje asynchronně a izolovaně;
+- **production** přijímá jen reprodukovatelný Build a běží na samostatném
+  produkčním runtime. Team katalog, Launchpad proces ani worktree nejsou
+  deployment input.
+
+Historická machine-wide evidence odvozená ze Start/Open kliknutí není
+konfigurace žádného z těchto profilů. Při migraci může zůstat inertně
+archivovaná, ale localhost ji nečte ani nepřepisuje a hosted ji po přechodu na
+v2 nepoužívá.
+
 ## Runtime Modulu a porty
 
 Port je součást verzovaného kontraktu Modulu. „Lease“ v tomto kontextu znamená

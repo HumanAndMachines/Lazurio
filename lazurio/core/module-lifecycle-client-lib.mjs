@@ -116,9 +116,12 @@ export async function runModuleLifecycle({
     };
   }
 
-  const body = confirmReplaceAppId === null
-    ? {}
-    : { confirmed: true, replace_app_id: normalizeAppId(confirmReplaceAppId) };
+  const body = {
+    source: { type: "main" },
+    ...(confirmReplaceAppId === null
+      ? {}
+      : { confirmed: true, replace_app_id: normalizeAppId(confirmReplaceAppId) }),
+  };
   const response = await requestJson(
     fetchFn,
     new URL(`/api/apps/${encodeURIComponent(selected.app.app_id)}/${action}`, locator.origin),

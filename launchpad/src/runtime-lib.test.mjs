@@ -250,6 +250,57 @@ test("runtime manager spustí, změří a zastaví managed aplikaci", async () =
   expect((await runtime.health("test-company-demo-v1")).status).toBe("stopped");
 }, platformTestTimeout(10_000));
 
+test("local profile keeps legacy desired evidence inert across start, shutdown and restart", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port });
+  const app = withStaticEntrypoint(fixtureDiscoveryApp({ port }));
+  const desiredRoot = join(root, "launchpad", "runtime", "desired-modules");
+  const evidence = buildDesiredModuleState({ app, source: { type: "main" } });
+  await writeDesiredModuleState({ root: desiredRoot, state: evidence });
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "local-session-owner",
+    discover: discoveryWithApp(app),
+  });
+
+  expect(await runtime.reconcileDesiredState()).toMatchObject({
+    profile: "local",
+    skipped: true,
+    total: 0,
+    active: 0,
+  });
+  const beforeStart = await runtime.health(app.id);
+  expect(beforeStart).toMatchObject({ status: "stopped", owner: "none" });
+  expect(beforeStart).not.toHaveProperty("desired");
+
+  const started = await runtime.start(app.id);
+  expect(started).not.toHaveProperty("desired");
+  const healthy = await waitForStatus(() => runtime.health(app.id), "healthy");
+  expect(healthy).not.toHaveProperty("desired");
+  expect(await readDesiredModuleState({
+    root: desiredRoot,
+    company: app.company,
+    module: app.module,
+  })).toEqual(evidence);
+
+  expect(await runtime.shutdown()).toMatchObject({ attempted: 1, stopped: 1, failed: 0 });
+  const afterRestart = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "local-session-after-restart",
+    discover: discoveryWithApp(app),
+  });
+  expect(await afterRestart.reconcileDesiredState()).toMatchObject({
+    profile: "local",
+    skipped: true,
+    total: 0,
+  });
+  const stopped = await afterRestart.health(app.id);
+  expect(stopped).toMatchObject({ status: "stopped", owner: "none" });
+  expect(stopped).not.toHaveProperty("desired");
+}, platformTestTimeout(15_000));
+
 test("Open počká na přechodný HTTP 404 během start grace", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({
@@ -1970,12 +2021,13 @@ test("cross-Organization listener takeover requires the exact peer confirmation"
         replace_organization: "test-company",
       },
     });
-    expect(await runtime.health(sourceApp.id, sourceSelector)).toMatchObject({
+    const sourceHealthBeforeTakeover = await runtime.health(sourceApp.id, sourceSelector);
+    expect(sourceHealthBeforeTakeover).toMatchObject({
       status: "healthy",
       owner: "current-instance",
       runtime_source: { type: "worktree", slug: sourceWorktreeSlug },
-      desired: { enabled: true },
     });
+    expect(sourceHealthBeforeTakeover).not.toHaveProperty("desired");
 
     await expect(runtime.open(targetApp.id, {
       confirmed: true,
@@ -1987,19 +2039,21 @@ test("cross-Organization listener takeover requires the exact peer confirmation"
       replace_app_id: sourceApp.id,
     });
     expect(opened).toMatchObject({ action: "open", app_id: targetApp.id, status: "healthy" });
-    expect(await runtime.health(sourceApp.id, sourceSelector)).toMatchObject({
+    const sourceHealthAfterTakeover = await runtime.health(sourceApp.id, sourceSelector);
+    expect(sourceHealthAfterTakeover).toMatchObject({
       // Windows cannot inspect another process CWD with the built-in resolver,
       // so the same safe post-takeover state is classified fail-closed as
       // unknown-port instead of foreign-port.
       owner: process.platform === "win32" ? "unknown-port" : "foreign-port",
       runtime_source: { type: "worktree", slug: sourceWorktreeSlug },
-      desired: { enabled: false, status: "disabled" },
     });
-    expect(await runtime.health(targetApp.id)).toMatchObject({
+    expect(sourceHealthAfterTakeover).not.toHaveProperty("desired");
+    const targetHealthAfterTakeover = await runtime.health(targetApp.id);
+    expect(targetHealthAfterTakeover).toMatchObject({
       status: "healthy",
       owner: "current-instance",
-      desired: { enabled: true },
     });
+    expect(targetHealthAfterTakeover).not.toHaveProperty("desired");
     const takeoverAudit = JSON.parse((await readFile(
       join(root, "launchpad", "runtime", "audit", "takeovers.jsonl"),
       "utf8",
@@ -2018,11 +2072,12 @@ test("cross-Organization listener takeover requires the exact peer confirmation"
     expect(takeoverAudit.listeners.every((listener) => listener.owned)).toBe(true);
 
     await runtime.stop(targetApp.id);
-    expect(await runtime.health(targetApp.id)).toMatchObject({
+    const targetHealthAfterStop = await runtime.health(targetApp.id);
+    expect(targetHealthAfterStop).toMatchObject({
       status: "stopped",
       owner: "none",
-      desired: { enabled: false, status: "disabled" },
     });
+    expect(targetHealthAfterStop).not.toHaveProperty("desired");
   } catch (error) {
     testFailure = error;
     throw error;
@@ -4142,6 +4197,7 @@ test("durable Stop commits disabled before signaling and cannot be resurrected a
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
     instanceId: "stop-transaction",
+    lifecycleProfile: "hosted",
     discover: discoveryWithApp(app),
     writeDesiredModuleStateFn: async (options) => {
       if (failDesiredWrite && options.state.enabled === false) {
@@ -4189,6 +4245,7 @@ test("durable Stop commits disabled before signaling and cannot be resurrected a
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
     instanceId: "stop-transaction-after-restart",
+    lifecycleProfile: "hosted",
     discover: discoveryWithApp(app),
   });
   expect(await afterRestart.reconcileDesiredState()).toMatchObject({
@@ -4209,12 +4266,14 @@ test("failed Stop from a non-owning Launchpad cannot disable another instance's 
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
     instanceId: "desired-owner",
+    lifecycleProfile: "hosted",
     discover: discoveryWithApp(app),
   });
   const outsider = createRuntimeManager({
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
     instanceId: "desired-outsider",
+    lifecycleProfile: "hosted",
     discover: discoveryWithApp(app),
   });
 
@@ -4253,6 +4312,7 @@ test("Stop waits past the former lock timeout and disables an ownerless exact de
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
     instanceId: "contended-stop-intent",
+    lifecycleProfile: "hosted",
     discover: discoveryWithApp(app),
     acquireModuleLockFn: async ({ timeoutMs }) => {
       reportLockWait(timeoutMs);
@@ -4299,6 +4359,7 @@ test("boot reconcile restores exact main and owned worktree desired sources", as
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
     instanceId: "boot-main",
+    lifecycleProfile: "hosted",
     discover: discoveryWithApp(app),
     acquireModuleLockFn: async ({ key }) => {
       reconcileLockKeys.push(key);
@@ -4332,6 +4393,7 @@ test("boot reconcile restores exact main and owned worktree desired sources", as
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
     instanceId: "boot-worktree",
+    lifecycleProfile: "hosted",
     discover: discoveryWithApp(app),
   });
   expect(await worktreeRuntime.reconcileDesiredState()).toMatchObject({ active: 1, degraded: 0 });
@@ -4374,6 +4436,7 @@ test("boot reconcile can restore only the selected control-root Module set", asy
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
     instanceId: "boot-selected-root-only",
+    lifecycleProfile: "hosted",
     discover: discoveryWithApps(selectedApp, deferredApp),
   });
 
@@ -4405,6 +4468,7 @@ test("reloaded main selector stops the sole reconciled worktree and boot cannot 
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
     instanceId: "reconciled-worktree-owner",
+    lifecycleProfile: "hosted",
     discover: discoveryWithApp(app),
   });
 
@@ -4438,6 +4502,7 @@ test("reloaded main selector stops the sole reconciled worktree and boot cannot 
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
     instanceId: "after-explicit-stop-reboot",
+    lifecycleProfile: "hosted",
     discover: discoveryWithApp(app),
   });
   expect(await afterReboot.reconcileDesiredState()).toMatchObject({
@@ -4472,6 +4537,7 @@ test("Stop disables the captured worktree when its child exits while waiting for
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
     instanceId: "stop-exit-race",
+    lifecycleProfile: "hosted",
     discover: discoveryWithApp(app),
     desiredRestartDelaysMs: [0],
     spawnProcess: (command, options) => {
@@ -4529,6 +4595,7 @@ test("Stop disables the captured worktree when its child exits while waiting for
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
     instanceId: "stop-exit-race-after-reboot",
+    lifecycleProfile: "hosted",
     discover: discoveryWithApp(app),
   });
   expect(await afterReboot.reconcileDesiredState()).toMatchObject({
@@ -4552,6 +4619,7 @@ test("missing desired worktree becomes degraded without falling back to main", a
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
     instanceId: "boot-missing-worktree",
+    lifecycleProfile: "hosted",
     discover: discoveryWithApp(app),
   });
 
@@ -4581,6 +4649,7 @@ test("concurrent Start Open and Stop serialize to the last accepted disabled int
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
     instanceId: "concurrent-lifecycle",
+    lifecycleProfile: "hosted",
     discover: discoveryWithApp(app),
   });
 
@@ -4611,6 +4680,7 @@ test("unexpected desired child exit restarts exact source and bounded crash loop
     companiesRoot: recoveringRoot,
     launchpadRoot: join(recoveringRoot, "launchpad"),
     instanceId: "event-restart",
+    lifecycleProfile: "hosted",
     discover: discoveryWithApp(recoveringApp),
     desiredRestartDelaysMs: [10, 20],
     desiredRestartStableMs: 10_000,
@@ -4640,6 +4710,7 @@ test("unexpected desired child exit restarts exact source and bounded crash loop
     companiesRoot: crashingRoot,
     launchpadRoot: join(crashingRoot, "launchpad"),
     instanceId: "bounded-event-restart",
+    lifecycleProfile: "hosted",
     discover: discoveryWithApp(crashingApp),
     desiredRestartDelaysMs: [10, 20],
     desiredRestartStableMs: 10_000,
@@ -4710,6 +4781,7 @@ test("desired replacement exit during active reconciliation consumes the next bo
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
     instanceId: "pending-exit-during-reconciliation",
+    lifecycleProfile: "hosted",
     discover: discoveryWithApp(app),
     desiredRestartDelaysMs: [0, 0],
     desiredRestartStableMs: 10_000,
@@ -4794,6 +4866,7 @@ test("desired restart never treats an unhealthy surviving replacement as recover
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
     instanceId: "unhealthy-event-restart",
+    lifecycleProfile: "hosted",
     discover: discoveryWithApp(app),
     desiredRestartDelaysMs: [10, 20],
     desiredRestartStableMs: 10_000,

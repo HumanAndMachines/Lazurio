@@ -1120,7 +1120,7 @@ async function runAction(app, action) {
   rerender();
   try {
     const response = await fetch(`/api/personalspace/apps/${encodeURIComponent(app.id)}/${action}`, {
-      method: "POST",
+      ...personalRuntimeMutationOptions(),
       cache: "no-store",
     });
     const payload = await response.json();
@@ -1172,7 +1172,10 @@ async function openPersonalApp(app) {
   writePersonalTabStatus(reservedTab, app, "Spouštím osobní aplikaci...");
   rerender();
   try {
-    const payload = await fetchJson(`/api/personalspace/apps/${encodeURIComponent(app.id)}/open`, { method: "POST" });
+    const payload = await fetchJson(
+      `/api/personalspace/apps/${encodeURIComponent(app.id)}/open`,
+      personalRuntimeMutationOptions(),
+    );
     if (payload.url) {
       openPersonalResultUrl(payload.url, reservedTab, app);
       deps.onToast(`${app.title}: běží, otevírám.`, "ok");
@@ -1303,6 +1306,14 @@ function classifyPersonalOpenError(message) {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function personalRuntimeMutationOptions() {
+  return {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ source: { type: "main" } }),
+  };
 }
 
 function escapeHtml(value) {
