@@ -1,6 +1,7 @@
-// Minimální draft-07 subset validátor (repo nemá ajv; validace je hand-rolled).
+// Minimální JSON Schema subset validátor (repo nemá ajv; validace je hand-rolled).
 // Podporuje: type, required, enum, const, properties, additionalProperties:false,
-// items, pattern, minimum, minItems, maxItems, uniqueItems, $ref (#/definitions/... i
+// items, pattern, minimum, maximum, propertyNames, minItems, maxItems,
+// uniqueItems, lokální JSON Pointer $ref (#/definitions/..., #/$defs/... i
 // rekurzivní kořenové "#"), allOf, anyOf, contains, minLength, if/then/else, not
 // a dependentRequired.
 // Vrací pole chybových hlášek (prázdné = validní).
@@ -32,6 +33,10 @@ function validateNode(value, node, path, failures, rootSchema) {
       return;
     }
     validateNode(value, target, path, failures, rootSchema);
+    return;
+  }
+  if (node.type === "null") {
+    if (value !== null) failures.push(`${path}: očekáván null`);
     return;
   }
   if (
@@ -95,6 +100,11 @@ function validateNode(value, node, path, failures, rootSchema) {
           );
         }
       }
+    }
+  }
+  if (objectValue && node.propertyNames && typeof node.propertyNames === "object") {
+    for (const key of Object.keys(value)) {
+      validateNode(key, node.propertyNames, `${path}.${key}#propertyName`, failures, rootSchema);
     }
   }
   // JSON Schema object keywords platí i bez explicitního node.type. To je
@@ -191,6 +201,9 @@ function validateNode(value, node, path, failures, rootSchema) {
     }
     if (typeof node.minimum === "number" && value < node.minimum) {
       failures.push(`${path}: ${value} < minimum ${node.minimum}`);
+    }
+    if (typeof node.maximum === "number" && value > node.maximum) {
+      failures.push(`${path}: ${value} > maximum ${node.maximum}`);
     }
     return;
   }
