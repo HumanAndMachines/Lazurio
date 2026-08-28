@@ -1,8 +1,9 @@
 import { expect, test } from "bun:test";
 import {
-  bootReconcileProofAccepted,
+  catalogRemovalProofAccepted,
   externalAssertions,
   explicitStopResponseAccepted,
+  hostedCatalogProofAccepted,
   noResurrectionProofAccepted,
   parityLoopbackProbeHosts,
   parseArgs,
@@ -13,7 +14,7 @@ import {
 const canonicalIotorOrganization = "IotorLazurio_GEN3";
 const expectedCreator = "t3-code/iotor-builder";
 
-test("workspace parity runner keeps local session and hosted compatibility phases explicit", () => {
+test("workspace parity runner keeps local session and hosted catalog phases explicit", () => {
   expect(parseArgs([
     "--profile", "local",
     "--phase", "live",
@@ -38,6 +39,7 @@ test("workspace parity runner keeps local session and hosted compatibility phase
     "--worktree-slug", "DEV-6439-parity",
     "--expected-worktree-created-by", expectedCreator,
     "--expected-origin", "https://knowledgebase.iotor.example/",
+    "--expected-catalog-revision", "catalog-revision-7",
     "--t3-pid", "101",
     "--codex-pid", "151",
     "--launchpad-pid", "202",
@@ -51,16 +53,17 @@ test("workspace parity runner keeps local session and hosted compatibility phase
   });
   expect(parseArgs([
     "--profile", "hosted",
-    "--phase", "expect-disabled",
+    "--phase", "expect-removed",
     "--organization", canonicalIotorOrganization,
     "--app-id", "iotor-knowledgebase-v2",
     "--worktree-slug", "DEV-6439-parity",
     "--expected-worktree-created-by", expectedCreator,
     "--expected-origin", "https://knowledgebase.iotor.example/",
+    "--expected-catalog-revision", "catalog-revision-8",
     "--t3-pid", "101",
     "--codex-pid", "151",
     "--launchpad-pid", "202",
-  ])).toMatchObject({ phase: "expect-disabled" });
+  ])).toMatchObject({ phase: "expect-removed", expectedCatalogRevision: "catalog-revision-8" });
 });
 
 test("hosted parity runner fails closed without exact external origin", () => {
@@ -87,6 +90,7 @@ test("hosted parity runner requires T3, Codex and Launchpad process identities",
     "--worktree-slug", "DEV-6439-parity",
     "--expected-worktree-created-by", expectedCreator,
     "--expected-origin", "https://knowledgebase.iotor.example/",
+    "--expected-catalog-revision", "catalog-revision-7",
     "--t3-pid", "101",
     "--launchpad-pid", "202",
   ])).toThrow("--codex-pid is required for hosted profile");
@@ -100,24 +104,25 @@ test("workspace parity runner requires an exact T3 creation identity", () => {
   ])).toThrow("--expected-worktree-created-by is required");
 });
 
-test("expect-disabled is a separate phase after a recorded Stop", () => {
-  expect(() => parseArgs([
-    "--phase", "expect-disabled",
-    "--stop-after",
-    "--organization", canonicalIotorOrganization,
-    "--app-id", "iotor-knowledgebase-v2",
-    "--worktree-slug", "DEV-6439-parity",
-    "--expected-worktree-created-by", expectedCreator,
-  ])).toThrow("--stop-after is not valid");
+test("hosted removal is a catalog revision phase and hosted Stop is forbidden", () => {
   expect(() => parseArgs([
     "--profile", "local",
-    "--phase", "post-restart",
+    "--phase", "expect-removed",
+    "--organization", canonicalIotorOrganization,
+    "--app-id", "iotor-knowledgebase-v2",
+    "--worktree-slug", "DEV-6439-parity",
+    "--expected-worktree-created-by", expectedCreator,
+  ])).toThrow("valid only for the hosted catalog profile");
+  expect(() => parseArgs([
+    "--profile", "hosted",
     "--stop-after",
     "--organization", canonicalIotorOrganization,
     "--app-id", "iotor-knowledgebase-v2",
     "--worktree-slug", "DEV-6439-parity",
     "--expected-worktree-created-by", expectedCreator,
-  ])).toThrow("no session child should exist");
+    "--expected-origin", "https://knowledgebase.iotor.example/",
+    "--expected-catalog-revision", "catalog-revision-7",
+  ])).toThrow("forbidden for hosted catalog services");
 });
 
 test("runtime takeover requires one integer module lease port and exact equality", () => {
@@ -132,22 +137,14 @@ test("disabled vacancy probes every loopback spelling for the numeric module lea
   expect(parityLoopbackProbeHosts("[::1]")).toEqual(["::1", "127.0.0.1"]);
 });
 
-test("Stop and restart evidence distinguish local session absence from hosted desired disablement", () => {
+test("local Stop stays session-scoped and hosted removal requires a new catalog revision", () => {
   const stopped = {
     action: "stop",
-    desired: { enabled: false, status: "disabled", source: { type: "worktree", slug: "DEV-6439-parity" } },
     runtime: { managed: false, status: "stopped" },
   };
-  expect(explicitStopResponseAccepted(stopped, { profile: "hosted" })).toBe(true);
-  expect(explicitStopResponseAccepted(
-    { action: "stop", runtime: { managed: false, status: "stopped" } },
-    { profile: "local" },
-  )).toBe(true);
-  expect(explicitStopResponseAccepted(stopped, { profile: "local" })).toBe(false);
-  expect(explicitStopResponseAccepted(
-    { ...stopped, desired: { enabled: true, status: "active" } },
-    { profile: "hosted" },
-  )).toBe(false);
+  expect(explicitStopResponseAccepted(stopped, { profile: "local" })).toBe(true);
+  expect(explicitStopResponseAccepted(stopped, { profile: "hosted" })).toBe(false);
+  expect(explicitStopResponseAccepted({ ...stopped, desired: {} }, { profile: "local" })).toBe(false);
 
   const afterRestart = {
     managed: false,
@@ -155,36 +152,28 @@ test("Stop and restart evidence distinguish local session absence from hosted de
     owner: "none",
     port_owner: null,
     probe: { reachable: false },
-    desired: stopped.desired,
     runtime_source: { type: "worktree", slug: "DEV-6439-parity" },
   };
   const noListener = { rawTcpReachable: false };
   expect(noResurrectionProofAccepted(
     afterRestart,
     "DEV-6439-parity",
-    { profile: "hosted", ...noListener },
-  )).toBe(true);
-  const localAfterRestart = { ...afterRestart };
-  delete localAfterRestart.desired;
-  expect(noResurrectionProofAccepted(
-    localAfterRestart,
-    "DEV-6439-parity",
     { profile: "local", ...noListener },
   )).toBe(true);
   expect(noResurrectionProofAccepted(
     afterRestart,
     "DEV-6439-parity",
-    { profile: "local", ...noListener },
+    { profile: "hosted", ...noListener },
   )).toBe(false);
   expect(noResurrectionProofAccepted(
     afterRestart,
     "DEV-6439-parity",
-    { profile: "hosted", rawTcpReachable: true },
+    { profile: "local", rawTcpReachable: true },
   )).toBe(false);
   expect(noResurrectionProofAccepted(
     { ...afterRestart, managed: true },
     "DEV-6439-parity",
-    { profile: "hosted", ...noListener },
+    { profile: "local", ...noListener },
   )).toBe(false);
   expect(noResurrectionProofAccepted({
     ...afterRestart,
@@ -192,15 +181,33 @@ test("Stop and restart evidence distinguish local session absence from hosted de
     owner: "adopted-port",
     port_owner: { pid: 404 },
     probe: { reachable: true },
-  }, "DEV-6439-parity", { profile: "hosted", ...noListener })).toBe(false);
+  }, "DEV-6439-parity", { profile: "local", ...noListener })).toBe(false);
   expect(noResurrectionProofAccepted(
     afterRestart,
     "another-worktree",
-    { profile: "hosted", ...noListener },
+    { profile: "local", ...noListener },
+  )).toBe(false);
+
+  const removedCatalog = { catalog_revision: "catalog-revision-8", services: [] };
+  expect(catalogRemovalProofAccepted(
+    removedCatalog,
+    afterRestart,
+    "iotor-knowledgebase-v2",
+    "DEV-6439-parity",
+    "catalog-revision-8",
+    noListener,
+  )).toBe(true);
+  expect(catalogRemovalProofAccepted(
+    { ...removedCatalog, services: [{ app_id: "iotor-knowledgebase-v2" }] },
+    afterRestart,
+    "iotor-knowledgebase-v2",
+    "DEV-6439-parity",
+    "catalog-revision-8",
+    noListener,
   )).toBe(false);
 });
 
-test("worktree provenance and boot reconcile use the exact API and desired-state shapes", () => {
+test("worktree provenance and hosted catalog readiness use exact immutable identities", () => {
   const worktree = {
     ownership_status: "owned",
     metadata: { created_by: expectedCreator },
@@ -208,24 +215,28 @@ test("worktree provenance and boot reconcile use the exact API and desired-state
   expect(worktreeProvenanceMatches(worktree, expectedCreator)).toBe(true);
   expect(worktreeProvenanceMatches({ ...worktree, created_by: expectedCreator, metadata: {} }, expectedCreator)).toBe(false);
 
-  const health = {
-    status: "healthy",
-    managed: true,
-    runtime_source: { type: "worktree", slug: "DEV-6439-parity" },
-    desired: {
-      enabled: true,
-      status: "active",
+  const readiness = {
+    ready: true,
+    catalog_revision: "catalog-revision-7",
+    observed: {
+      status: "healthy",
       source: { type: "worktree", slug: "DEV-6439-parity" },
     },
+    runtime: {
+      status: "healthy",
+      managed: true,
+      owner: "current-instance",
+      runtime_source: { type: "worktree", slug: "DEV-6439-parity" },
+    },
   };
-  expect(bootReconcileProofAccepted(health, "DEV-6439-parity", { profile: "hosted" })).toBe(true);
-  expect(bootReconcileProofAccepted(health, "DEV-6439-parity", { profile: "local" })).toBe(false);
-  expect(bootReconcileProofAccepted({
-    ...health,
-    desired: { ...health.desired, source: { type: "main" } },
-  }, "DEV-6439-parity", { profile: "hosted" })).toBe(false);
-  expect(bootReconcileProofAccepted({
-    ...health,
-    desired: { ...health.desired, enabled: false },
-  }, "DEV-6439-parity", { profile: "hosted" })).toBe(false);
+  expect(hostedCatalogProofAccepted(readiness, "DEV-6439-parity", "catalog-revision-7")).toBe(true);
+  expect(hostedCatalogProofAccepted(readiness, "DEV-6439-parity", "catalog-revision-8")).toBe(false);
+  expect(hostedCatalogProofAccepted({
+    ...readiness,
+    observed: { ...readiness.observed, source: { type: "main" } },
+  }, "DEV-6439-parity", "catalog-revision-7")).toBe(false);
+  expect(hostedCatalogProofAccepted({
+    ...readiness,
+    runtime: { ...readiness.runtime, owner: "adopted-port" },
+  }, "DEV-6439-parity", "catalog-revision-7")).toBe(false);
 });

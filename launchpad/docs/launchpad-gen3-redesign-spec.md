@@ -120,8 +120,11 @@ mounted into the Workspace. SSH may remain an operator/recovery transport, but
 it is not the canonical hosted agent topology and must not create a second
 filesystem or runtime procedure. Local and hosted profiles expose the same
 builder-visible `~/Lazurio` structure, discovery/manifests, module-owned leases,
-worktree lifecycle and Doctor/Install/Start/Stop/Open operations; only the
-hosted authentication, ingress and network envelope differs.
+worktree lifecycle and Doctor surface. Lifecycle semantics are profile-owned:
+local `Start`/`Open`/`Stop` are session-scoped, while hosted v2 locks
+`Start`/`Open`/`Restart` to the immutable catalog source and denies catalog
+`Stop`/`Switch`. The hosted profile additionally adds authentication, ingress
+and the network envelope.
 
 This Hosted Team Workspace is a shared development workshop, not a production
 deployment. Module source remains editable while no app is running; Launchpad
@@ -408,7 +411,7 @@ precondition is false.
 | Repair | Idempotent clean frozen reinstall of the exact App `node_modules`; failure leaves only that App blocked and the next retry starts cleanly | Disabled until explicit production policy exists | action, command, cwd, exit_code, dependency state, log_path, log_excerpt |
 | Start | Local: start an exact session source when `dependencies.can_start=true`; hosted catalog Start is idempotent ensure of the same source. A valid static module lease replaces its current occupant under the module mutex | Disabled or confirmation-gated until policy exists | runtime, pid, health, exact source, failure_kind on error |
 | Stop | Local: allowed only for the active current-instance managed process. Hosted v2 catalog service: denied; remove the record in a new catalog revision | confirmation-gated | pid/owner/result or stable denial |
-| Restart | Stop + Start; never bypasses dependency/policy guards | confirmation-gated | both action results |
+| Restart | Controlled restart of the exact active source; for hosted v2 it does not grant catalog `Stop` or source change and never bypasses dependency/policy guards | confirmation-gated | both action results |
 | Logs | Always allowed for visible app | Always allowed | log_path and tail |
 | Synchronize | One hierarchy-wide `lazurio update`: verified recovery stash for dirty primary checkouts, `main` fast-forward, fresh module rediscovery, then changed-App dependency refresh | Productionspace skipped | per-repo outcome, recovery stash reference, dependency strategy, aggregate counts |
 

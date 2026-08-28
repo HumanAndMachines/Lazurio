@@ -50,9 +50,11 @@ import { ModuleFolderActionError, createModuleFolderOpener } from "./module-fold
 import {
   HostedAppUrlError,
   createHostedAppUrlAdapter,
+  hostedLifecycleConfigurationId,
   projectHostedAppUrl,
   projectHostedRuntimePayload,
   requireHostedAppUrl,
+  validateTeamServiceCatalogBindings,
 } from "./hosted-app-url-lib.mjs";
 import {
   GIT_LOCAL_TIMEOUT_MS,
@@ -114,10 +116,12 @@ const hostedAppUrls = createHostedAppUrlAdapter({
   serviceCatalogJson: process.env.LAZURIO_TEAM_SERVICE_CATALOG_JSON,
   compatibilityUrlsJson: process.env.LAUNCHPAD_HOSTED_APP_URLS_JSON,
 });
+const launchpadLifecycleConfigurationId = hostedLifecycleConfigurationId(hostedAppUrls);
 const launchpadServerIdentity = buildServerIdentity({
   rootId: launchpadRootId,
   controlRootId: launchpadControlRootId,
   installGeneration: launchpadInstallGeneration,
+  lifecycleConfigurationId: launchpadLifecycleConfigurationId,
   instanceId: randomUUID(),
   pid: process.pid,
   startedAt: new Date().toISOString(),
@@ -153,6 +157,7 @@ const runtimeManager = createRuntimeManager({
   launchpadRoot,
   stateRoot: launchpadStateRoot,
   lifecycleProfile: hostedAppUrls.profile,
+  teamServiceCatalog: hostedAppUrls,
   discover: (_root, discoveryOptions = {}) => discoverLaunchpadApps(rootSourceRoot, {
     ...discoveryOptions,
     organization_mount_root: companiesRoot,
@@ -218,6 +223,7 @@ let serverLifetimeLock;
 let serverStartupLock;
 let startupError;
 try {
+  await validateHostedTeamServiceCatalog();
   await validateAgentEntryOrganization();
   // Serialize the complete locator decision. Without this short lease, a
   // launcher recovering Server A's missing locator could overwrite Server B's
@@ -246,6 +252,7 @@ try {
       rootId: launchpadRootId,
       controlRootId: launchpadControlRootId,
       installGeneration: launchpadInstallGeneration,
+      lifecycleConfigurationId: launchpadLifecycleConfigurationId,
     }),
     shutdownStaleLaunchpad: requestStaleLaunchpadShutdown,
     openExisting: openBrowser,
@@ -261,6 +268,7 @@ try {
       rootId: launchpadRootId,
       controlRootId: launchpadControlRootId,
       installGeneration: launchpadInstallGeneration,
+      lifecycleConfigurationId: launchpadLifecycleConfigurationId,
     });
     if (observation.status !== "compatible") {
       throw new Error("Reused Lazurio Server no longer has the expected identity.");
@@ -276,12 +284,16 @@ try {
     // desired evidence is therefore ignored without filesystem enumeration.
     // Hosted v1 reconciliation remains a temporary compatibility lane until
     // the Team service catalog v2 canary and migration in DEV-6513 land.
-    const selectedDesiredStateKeys = hostedAppUrls.profile === "hosted" && worktreeMountContextReadOnly
-      ? await selectedControlRootDesiredStateKeys()
-      : null;
-    bootReconcile = await runtimeManager.reconcileDesiredState({
-      moduleLeaseKeys: selectedDesiredStateKeys,
-    });
+    if (hostedAppUrls.schema_version === "lazurio.team_service_catalog.v2") {
+      bootReconcile = null;
+    } else {
+      const selectedDesiredStateKeys = hostedAppUrls.profile === "hosted" && worktreeMountContextReadOnly
+        ? await selectedControlRootDesiredStateKeys()
+        : null;
+      bootReconcile = await runtimeManager.reconcileDesiredState({
+        moduleLeaseKeys: selectedDesiredStateKeys,
+      });
+    }
     const serverUrl = `http://${host}:${startResult.server.port}`;
     serverLocator = await withServerStateAccess(() => writeServerLocator({
       stateDirectory: serverStateDirectory,
@@ -289,6 +301,12 @@ try {
       identity: launchpadServerIdentity,
     }));
     serverShutdownState.markRunning();
+    if (hostedAppUrls.schema_version === "lazurio.team_service_catalog.v2") {
+      // Control-plane readiness and the durable locator are already committed.
+      // Per-service controllers now reconcile independently without delaying
+      // LAZURIO_LAUNCHPAD_URL or another catalog service.
+      bootReconcile = runtimeManager.startTeamServiceCatalog();
+    }
   }
 } catch (error) {
   startupError = await abortUnpublishedStartup(error);
@@ -300,6 +318,18 @@ try {
       startupError = await abortUnpublishedStartup(error);
     }
   }
+}
+
+async function validateHostedTeamServiceCatalog() {
+  if (hostedAppUrls.schema_version !== "lazurio.team_service_catalog.v2") return;
+  const inventory = await buildLaunchpadAppsResponse({
+    companiesRoot,
+    rootSourceRoot,
+    launchpadRoot,
+    runtimeManager: { appsWithRuntime: async (apps) => apps },
+    includeGit: false,
+  });
+  validateTeamServiceCatalogBindings(hostedAppUrls, inventory);
 }
 
 async function abortUnpublishedStartup(originalError) {
@@ -408,7 +438,11 @@ console.log(`${LAZURIO_LAUNCHPAD_NAME} locator: ${serverLocator.path}`);
 if (worktreeMountContextReadOnly) {
   console.warn("[launchpad] linked worktree používá canonical Root pouze jako read-only mount context");
 }
-if (bootReconcile.skipped) {
+if (hostedAppUrls.schema_version === "lazurio.team_service_catalog.v2") {
+  console.log(
+    `[launchpad] hosted catalog ${bootReconcile.catalog_revision} scheduled total=${bootReconcile.total}; control plane is ready`,
+  );
+} else if (bootReconcile.skipped) {
   console.log("[launchpad] local session profile ready; persisted desired evidence ignored");
 } else {
   console.log(`[launchpad] hosted compatibility reconcile active=${bootReconcile.active} disabled=${bootReconcile.disabled} deferred=${bootReconcile.deferred} degraded=${bootReconcile.degraded}`);
@@ -665,12 +699,13 @@ async function serveStatic(pathname) {
   });
 }
 
-function jsonResponse(data, status = 200) {
+function jsonResponse(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data, null, 2), {
     status,
     headers: {
       "content-type": "application/json; charset=utf-8",
       "cache-control": "no-store",
+      ...extraHeaders,
     },
   });
 }
@@ -825,6 +860,34 @@ function appRuntimeRoute(pathname) {
     appId: decodeURIComponent(match[1]),
     action: match[2],
   };
+}
+
+function hostedServiceRoute(pathname) {
+  if (pathname === "/api/hosted/services") return { action: "summary", appId: null };
+  const match = pathname.match(/^\/api\/hosted\/services\/([^/]+)\/(readiness|retry)$/);
+  if (!match) return null;
+  return { appId: decodeURIComponent(match[1]), action: match[2] };
+}
+
+async function handleHostedServiceRoute(request, route) {
+  if (hostedAppUrls.schema_version !== "lazurio.team_service_catalog.v2") {
+    return jsonResponse({ error: "team_service_catalog_v2_inactive" }, 404);
+  }
+  if (route.action === "summary" && request.method === "GET") {
+    return jsonResponse(runtimeManager.teamServiceCatalogSummary());
+  }
+  if (route.action === "readiness" && request.method === "GET") {
+    const readiness = await runtimeManager.teamServiceReadiness(route.appId);
+    const app = (await buildAppsResponse()).apps.find((candidate) => candidate.id === route.appId) ?? { id: route.appId };
+    const projectedReadiness = projectHostedRuntimePayload(readiness, app, hostedAppUrls);
+    return readiness.ready
+      ? jsonResponse(projectedReadiness)
+      : jsonResponse(projectedReadiness, 503, { "retry-after": String(readiness.retry_after_seconds ?? 5) });
+  }
+  if (route.action === "retry" && request.method === "POST") {
+    return jsonResponse(runtimeManager.retryTeamService(route.appId), 202);
+  }
+  return jsonResponse({ error: "method_not_allowed" }, 405);
 }
 
 function moduleFolderRoute(pathname) {
@@ -1089,11 +1152,15 @@ async function jsonRequestPayload(request, code) {
 async function handleRuntimeRoute(request, route) {
   let hostedProjectionApp = null;
   try {
-    const runtimeOptions = request.method === "POST"
+    let runtimeOptions = request.method === "POST"
       ? await runtimeRequestOptions(request, {
           requireSource: hostedAppUrls.profile === "local" && explicitRuntimeSourceActions.has(route.action),
         })
       : {};
+    const catalogSource = runtimeManager.teamServiceCatalogSource(route.appId);
+    if (catalogSource && !runtimeOptions.source) {
+      runtimeOptions = { ...runtimeOptions, source: catalogSource };
+    }
     hostedProjectionApp = hostedAppUrls.profile === "hosted"
       ? (await buildAppsResponse()).apps.find((app) => app.id === route.appId) ?? null
       : { id: route.appId };
@@ -1112,7 +1179,7 @@ async function handleRuntimeRoute(request, route) {
       ));
     }
     if (route.action === "logs" && request.method === "GET") {
-      return jsonResponse(await runtimeManager.logs(route.appId));
+      return jsonResponse(await runtimeManager.logs(route.appId, runtimeOptions));
     }
     if ((route.action === "install" || route.action === "repair") && request.method === "POST") {
       return jsonResponse(projectHostedRuntimePayload(
@@ -1380,6 +1447,8 @@ function startServer(startPort) {
           return await serveOrganizationLogo(request, url, decodeURIComponent(organizationLogoMatch[1]));
         }
 
+        const hostedRoute = hostedServiceRoute(url.pathname);
+        if (hostedRoute) return await handleHostedServiceRoute(request, hostedRoute);
         const runtimeRoute = appRuntimeRoute(url.pathname);
         if (runtimeRoute) return await handleRuntimeRoute(request, runtimeRoute);
         if (moduleFolderRoute(url.pathname)) return await handleModuleFolderRoute(request);

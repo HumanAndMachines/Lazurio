@@ -33,6 +33,7 @@ import {
   readDesiredModuleState,
   writeDesiredModuleState,
 } from "./desired-module-state-lib.mjs";
+import { createTeamServiceController } from "./team-service-controller-lib.mjs";
 
 const healthTimeoutMs = 1_200;
 const startGraceMs = 30_000;
@@ -196,6 +197,7 @@ export function createRuntimeManager({
   launchpadRoot,
   stateRoot = launchpadRoot,
   lifecycleProfile = "local",
+  teamServiceCatalog = null,
   instanceId = randomUUID(),
   discover = discoverLaunchpadApps,
   resolvePortOwnerFn = resolvePortOwner,
@@ -218,6 +220,12 @@ export function createRuntimeManager({
   bunExecutable = null,
   desiredRestartDelaysMs = [250, 1_000, 5_000],
   desiredRestartStableMs = 30_000,
+  teamServiceControllerFactory = createTeamServiceController,
+  teamServiceConcurrency = 4,
+  teamServiceRetryDelaysMs = [1_000, 5_000, 30_000, 120_000],
+  teamServiceRetryJitterRatio = 0.2,
+  teamServiceStableHealthyMs = 30_000,
+  teamServiceRandom = Math.random,
   sleepFn = sleep,
   writeDesiredModuleStateFn = writeDesiredModuleState,
   buildWorktreeIndexFn = buildWorktreeIndex,
@@ -230,6 +238,12 @@ export function createRuntimeManager({
   const managedProcesses = new Map();
   const moduleLeaseLocks = new Map();
   const desiredRestartTrackers = new Map();
+  const v2TeamServiceCatalog = teamServiceCatalog?.schema_version === "lazurio.team_service_catalog.v2"
+    ? teamServiceCatalog
+    : null;
+  const catalogServices = v2TeamServiceCatalog?.services instanceof Map
+    ? v2TeamServiceCatalog.services
+    : new Map();
   let stopping = false;
   const runtimeStateRoot = resolve(stateRoot);
   const runtimeRoot = join(runtimeStateRoot, "runtime");
@@ -304,6 +318,20 @@ export function createRuntimeManager({
       return { process_group_id: processGroupId, method: "posix-process-group" };
     });
   const requireTakeoverIdentity = signalPortOwnerFn == null;
+  const teamServiceController = v2TeamServiceCatalog
+    ? teamServiceControllerFactory({
+        services: catalogServices,
+        catalogRevision: v2TeamServiceCatalog.catalog_revision,
+        concurrency: teamServiceConcurrency,
+        retryDelaysMs: teamServiceRetryDelaysMs,
+        retryJitterRatio: teamServiceRetryJitterRatio,
+        stableHealthyMs: teamServiceStableHealthyMs,
+        random: teamServiceRandom,
+        sleep: sleepFn,
+        ensureService: ensureCatalogService,
+        classifyError: classifyCatalogServiceError,
+      })
+    : null;
 
   function filesystemRootForApp(app) {
     const sourceRoot = app?.[APP_FILESYSTEM_ROOT];
@@ -552,6 +580,7 @@ export function createRuntimeManager({
 
   async function start(appId, options = {}) {
     const app = await runtimeAppForAction(appId, { ...options, enforcePortContract: true });
+    assertCatalogServiceSource(app, "Start");
     return startRuntimeApp(app, takeoverConfirmation(options));
   }
 
@@ -560,6 +589,8 @@ export function createRuntimeManager({
   // version of the same Module and the uncommon local cross-Organization
   // collision; ports are never remapped.
   async function switchApp(appId, { replace_app_id: replaceAppId = null, confirmed = false, source = null } = {}) {
+    catalogActionForbidden(appId, "switch");
+    if (typeof replaceAppId === "string") catalogActionForbidden(replaceAppId.trim(), "switch");
     if (confirmed !== true) {
       throw new RuntimeActionError(
         400,
@@ -861,7 +892,11 @@ export function createRuntimeManager({
         record.stopExitCode = exitCode;
         record.exitFinalizing = false;
       } else {
-        queueDesiredRuntimeRestart(app, record, exitCode);
+        if (catalogServiceForApp(app.id)) {
+          teamServiceController.notifyExit(app.id, { exitCode });
+        } else {
+          queueDesiredRuntimeRestart(app, record, exitCode);
+        }
       }
       return { survivingListenerProof, failure, log_excerpt };
     };
@@ -969,12 +1004,18 @@ export function createRuntimeManager({
 
   async function install(appId, { action = "install", source = null } = {}) {
     const app = await runtimeAppForAction(appId, { source });
-    return withModuleLeaseLock(app, () => installRuntimeDependenciesUnlocked(app, { action }));
+    assertCatalogServiceSource(app, action);
+    const result = await withModuleLeaseLock(app, () => installRuntimeDependenciesUnlocked(app, { action }));
+    if (catalogServiceForApp(appId)) teamServiceController.retry(appId);
+    return result;
   }
 
   async function refreshDependencies(appId, { source = null } = {}) {
     const app = await runtimeAppForAction(appId, { source });
-    return withModuleLeaseLock(app, () => installRuntimeDependenciesUnlocked(app, { action: "refresh" }));
+    assertCatalogServiceSource(app, "refresh");
+    const result = await withModuleLeaseLock(app, () => installRuntimeDependenciesUnlocked(app, { action: "refresh" }));
+    if (catalogServiceForApp(appId)) teamServiceController.retry(appId);
+    return result;
   }
 
   async function installRuntimeDependenciesUnlocked(app, { action = "install" } = {}) {
@@ -1124,10 +1165,13 @@ export function createRuntimeManager({
   async function open(appId, options = {}) {
     const { source = null } = options;
     const app = await runtimeAppForAction(appId, { source, enforcePortContract: true });
-    return withModuleLeaseLock(app, () => openRuntimeAppUnlocked(app, takeoverConfirmation(options)));
+    const catalogService = assertCatalogServiceSource(app, "Open");
+    return withModuleLeaseLock(app, () => openRuntimeAppUnlocked(app, takeoverConfirmation(options), {
+      allowInstall: !catalogService,
+    }));
   }
 
-  async function openRuntimeAppUnlocked(app, takeover = {}) {
+  async function openRuntimeAppUnlocked(app, takeover = {}, { allowInstall = true } = {}) {
     const runtimeKey = runtimeKeyForApp(app);
     const runtimeSource = runtimeSourceForApp(app);
     const steps = [];
@@ -1138,7 +1182,7 @@ export function createRuntimeManager({
     //    bezpečně provést. Ostatní blokující dependency stavy (missing_access,
     //    restricted, invalid_manifest…) skončí srozumitelnou chybou.
     let dependencies = await dependencyForApp(app);
-    if (dependencies.state === "needs_install") {
+    if (dependencies.state === "needs_install" && allowInstall) {
       const action = "install";
       const installResult = await installRuntimeDependenciesUnlocked(app, { action });
       steps.push({ step: action, exit_code: installResult.exit_code });
@@ -1293,6 +1337,7 @@ export function createRuntimeManager({
   }
 
   async function stop(appId, { source = null } = {}) {
+    catalogActionForbidden(appId, "stop");
     const app = await runtimeAppForAction(appId, { source });
     if (!supportsDurableDesiredRuntime(app)) {
       return withModuleLeaseLock(app, async () => {
@@ -1824,6 +1869,7 @@ export function createRuntimeManager({
   async function restart(appId, options = {}) {
     const { source = null } = options;
     const app = await runtimeAppForAction(appId, { source, enforcePortContract: true });
+    assertCatalogServiceSource(app, "Restart");
     const runtimeSource = runtimeSourceForApp(app);
     return withModuleLeaseLock(app, async () => {
       resetDesiredRestartTracker(app);
@@ -2438,12 +2484,81 @@ export function createRuntimeManager({
     );
   }
 
+  function catalogServiceForApp(appId) {
+    return catalogServices.get(appId) ?? null;
+  }
+
+  function assertCatalogServiceSource(app, action) {
+    const service = catalogServiceForApp(app.id);
+    if (!service) return null;
+    if (app?.personal === true || app?.module_contract?.schema_version !== "lazurio.module.v1") {
+      throw new RuntimeActionError(
+        409,
+        "catalog_service_module_contract_invalid",
+        `${app.title}: hosted catalog services require a canonical lazurio.module.v1 lease.`,
+        [],
+        { failure_kind: "catalog_service_module_contract_invalid" },
+      );
+    }
+    const runtimeSource = runtimeSourceForApp(app);
+    const sourceMatches = runtimeSourcesEqual(runtimeSource, service.source);
+    const worktreeIdentityMatches = service.source.type !== "worktree" || (
+      runtimeSource.branch === service.source.branch
+      && runtimeSource.plan_code === service.source.mission_control_plan_code
+    );
+    if (!sourceMatches || !worktreeIdentityMatches) {
+      throw new RuntimeActionError(
+        409,
+        "catalog_service_source_locked",
+        `${app.title}: ${action} is restricted to the immutable Team service catalog source.`,
+        [
+          `catalog_source: ${JSON.stringify(service.source)}`,
+          `requested_source: ${JSON.stringify(runtimeSource)}`,
+        ],
+        {
+          failure_kind: "catalog_service_source_mismatch",
+          catalog_revision: v2TeamServiceCatalog.catalog_revision,
+          catalog_source: service.source,
+        },
+      );
+    }
+    if (service.module_lease_key !== moduleLeaseKeyForApp(app)) {
+      throw new RuntimeActionError(
+        409,
+        "catalog_service_lease_mismatch",
+        `${app.title}: catalog module lease does not match runtime discovery.`,
+        [
+          `catalog_lease: ${service.module_lease_key}`,
+          `discovered_lease: ${moduleLeaseKeyForApp(app)}`,
+        ],
+        { failure_kind: "catalog_service_lease_mismatch" },
+      );
+    }
+    return service;
+  }
+
+  function catalogActionForbidden(appId, action) {
+    const service = catalogServiceForApp(appId);
+    if (!service) return;
+    throw new RuntimeActionError(
+      409,
+      `catalog_service_${action}_forbidden`,
+      `Catalog service ${appId} cannot be ${action}ed by a runtime click; publish a new catalog revision instead.`,
+      [
+        `catalog_revision: ${v2TeamServiceCatalog.catalog_revision}`,
+        `catalog_source: ${JSON.stringify(service.source)}`,
+      ],
+      { failure_kind: `catalog_service_${action}_forbidden` },
+    );
+  }
+
   function supportsDurableDesiredRuntime(app) {
     // Temporary v1 compatibility for already-hosted Workspaces only. Local
     // Start/Open is session-scoped and must never turn a click into durable
     // machine-wide intent. DEV-6513 removes this adapter after the hosted v2
     // catalog canary and migration are complete.
     return lifecycleProfile === "hosted"
+      && !v2TeamServiceCatalog
       && app?.personal !== true
       && app?.module_contract?.schema_version === "lazurio.module.v1"
       && typeof app?.company === "string"
@@ -2762,11 +2877,152 @@ export function createRuntimeManager({
       && (left?.type !== "worktree" || left.slug === right?.slug);
   }
 
+  async function ensureCatalogService(service) {
+    const app = await runtimeAppForAction(service.app_id, {
+      source: service.source,
+      enforcePortContract: true,
+    });
+    assertCatalogServiceSource(app, "catalog reconcile");
+    return withModuleLeaseLock(app, async () => {
+      assertRuntimeManagerAcceptingStarts();
+      const activeRecord = managedRecordForModule(app);
+      let runtime = null;
+      if (activeRecord
+        && activeRecord.appId === app.id
+        && runtimeSourcesEqual(activeRecord.runtimeSource, runtimeSourceForApp(app))) {
+        runtime = await healthForApp(app);
+        if (runtime.status === "starting") runtime = await waitForHealthy(app, runtime);
+        if (runtime.status === "healthy") return { runtime, reused: true };
+        await stopRuntimeAppUnlocked(activeRecord.runtimeApp ?? app).catch((error) => {
+          if (error?.code !== "app_not_managed") throw error;
+        });
+      }
+
+      const started = await startRuntimeAppUnlocked(app, { trigger: "catalog-reconcile" });
+      runtime = started.runtime ?? await healthForApp(app);
+      if (runtime.status === "starting") runtime = await waitForHealthy(app, runtime);
+      if (runtime.status !== "healthy") {
+        await stopRuntimeAppUnlocked(app).catch(() => {});
+        throw new RuntimeActionError(
+          500,
+          "catalog_service_unhealthy",
+          `${app.title}: catalog reconcile did not establish a healthy listener.`,
+          [runtime.message].filter(Boolean),
+          { failure_kind: runtime.failure_kind ?? "catalog_service_unhealthy", runtime },
+        );
+      }
+      return { runtime, reused: false };
+    });
+  }
+
+  function classifyCatalogServiceError(error) {
+    const permanentCodes = new Set([
+      "app_not_found",
+      "invalid_manifest",
+      "invalid_discovery",
+      "invalid_runtime_port_contract",
+      "missing_module_lease",
+      "worktree_not_found",
+      "worktree_not_owned",
+      "invalid_worktree_runtime_contract",
+      "app_not_ready",
+      "catalog_service_source_locked",
+      "catalog_service_lease_mismatch",
+      "catalog_service_module_contract_invalid",
+    ]);
+    return {
+      permanent: permanentCodes.has(error?.code)
+        || (Number(error?.status) >= 400 && Number(error?.status) < 500),
+      failure_kind: error?.code ?? error?.metadata?.failure_kind ?? "catalog_service_failed",
+    };
+  }
+
+  function startTeamServiceCatalog() {
+    return teamServiceController
+      ? teamServiceController.start()
+      : {
+          schema_version: "lazurio.team_service_controller.v1",
+          catalog_revision: null,
+          total: 0,
+          pending: 0,
+          starting: 0,
+          healthy: 0,
+          backoff: 0,
+          blocked: 0,
+          services: [],
+          skipped: true,
+        };
+  }
+
+  function teamServiceCatalogSummary() {
+    return teamServiceController ? teamServiceController.summary() : null;
+  }
+
+  function teamServiceCatalogSource(appId) {
+    const source = catalogServiceForApp(appId)?.source;
+    return source ? structuredClone(source) : null;
+  }
+
+  function retryTeamService(appId) {
+    if (!catalogServiceForApp(appId)) {
+      throw new RuntimeActionError(404, "catalog_service_not_found", `App ${appId} is not a catalog service.`);
+    }
+    return teamServiceController.retry(appId);
+  }
+
+  async function teamServiceReadiness(appId) {
+    const service = catalogServiceForApp(appId);
+    if (!service) {
+      throw new RuntimeActionError(404, "catalog_service_not_found", `App ${appId} is not a catalog service.`);
+    }
+    const observed = teamServiceController.snapshot(appId);
+    try {
+      const app = await runtimeAppForAction(appId, {
+        source: service.source,
+        requireValidDiscovery: false,
+      });
+      assertCatalogServiceSource(app, "readiness");
+      const runtime = await healthForApp(app);
+      const ready = observed?.status === "healthy"
+        && runtime.status === "healthy"
+        && runtime.owner === "current-instance"
+        && runtimeSourcesEqual(runtime.runtime_source, service.source);
+      return {
+        schema_version: "lazurio.team_service_readiness.v1",
+        ready,
+        app_id: appId,
+        catalog_revision: v2TeamServiceCatalog.catalog_revision,
+        observed,
+        runtime,
+        retry_after_seconds: ready ? null : retryAfterSeconds(observed),
+      };
+    } catch (error) {
+      return {
+        schema_version: "lazurio.team_service_readiness.v1",
+        ready: false,
+        app_id: appId,
+        catalog_revision: v2TeamServiceCatalog.catalog_revision,
+        observed,
+        runtime: null,
+        failure_kind: error?.code ?? error?.metadata?.failure_kind ?? "catalog_service_readiness_failed",
+        message: error?.message ?? String(error),
+        retry_after_seconds: retryAfterSeconds(observed),
+      };
+    }
+  }
+
+  function retryAfterSeconds(observed) {
+    const nextRetryAt = Date.parse(observed?.next_retry_at ?? "");
+    if (!Number.isFinite(nextRetryAt)) return 5;
+    return Math.max(1, Math.ceil((nextRetryAt - Date.now()) / 1_000));
+  }
+
   async function reconcileDesiredState({ moduleLeaseKeys = null } = {}) {
-    if (lifecycleProfile !== "hosted") {
+    if (lifecycleProfile !== "hosted" || v2TeamServiceCatalog) {
       return {
         schema_version: "lazurio.launchpad.boot_reconcile.v1",
         profile: lifecycleProfile,
+        ...(v2TeamServiceCatalog ? { reason: "team_service_catalog_v2_is_authoritative" } : {}),
         skipped: true,
         reconciled_at: new Date().toISOString(),
         total: 0,
@@ -2908,6 +3164,7 @@ export function createRuntimeManager({
   // Manager instance and preserve desired intent for the next safe retry.
   async function stopManagedRuntimes() {
     stopping = true;
+    teamServiceController?.stop();
     const records = [...managedProcesses.values()];
     const results = [];
     for (const record of records) {
@@ -3519,6 +3776,7 @@ export function createRuntimeManager({
     const runtimeSource = runtimeSourceForApp(app);
     const state = await readState(runtimeKey);
     const desired = await readDesiredRuntimeForHealth(app);
+    const catalogService = teamServiceController?.snapshot(app.id) ?? null;
     const record = managedProcesses.get(runtimeKey);
     app = record?.runtimeApp ?? await materializeRuntimeListeners(app);
     const dependencies = await dependencyForApp(app);
@@ -3577,6 +3835,7 @@ export function createRuntimeManager({
                 : "different-source",
           }
         : {}),
+      ...(catalogService ? { catalog_service: catalogService } : {}),
     };
 
     if (record) {
@@ -3677,6 +3936,26 @@ export function createRuntimeManager({
         status: "degraded",
         failure_kind: desired.failure_kind ?? "desired_reconcile_failed",
         message: desired.last_error ?? "Desired module runtime is degraded and was not replaced with main.",
+      };
+    }
+
+    if (catalogService?.status === "blocked") {
+      return {
+        ...base,
+        status: "degraded",
+        failure_kind: catalogService.failure_kind ?? "catalog_service_blocked",
+        message: catalogService.last_error ?? "Catalog service is blocked until Retry or Install/Repair.",
+      };
+    }
+
+    if (["pending", "starting", "backoff"].includes(catalogService?.status)) {
+      return {
+        ...base,
+        status: "starting",
+        failure_kind: catalogService.failure_kind,
+        message: catalogService.status === "backoff"
+          ? "Catalog service is waiting for its next bounded retry."
+          : "Catalog service is being reconciled asynchronously.",
       };
     }
 
@@ -4170,6 +4449,11 @@ export function createRuntimeManager({
     restart,
     logs,
     reconcileDesiredState,
+    startTeamServiceCatalog,
+    teamServiceCatalogSummary,
+    teamServiceCatalogSource,
+    retryTeamService,
+    teamServiceReadiness,
     shutdown,
     rollbackUnpublishedStartup,
   };

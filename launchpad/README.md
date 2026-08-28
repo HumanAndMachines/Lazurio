@@ -35,31 +35,43 @@ Lokální profil je výchozí a zachovává loopback URL. Hosted profil se zapí
 `LAZURIO_WORKSPACE_PROFILE=hosted`, vyžaduje exact Team binding v
 `LAZURIO_TEAM_ID` a přijímá jedinou generovanou autoritu:
 `LAZURIO_TEAM_SERVICE_CATALOG_JSON` se schématem
-`lazurio.team_service_catalog.v1`, například:
+`lazurio.team_service_catalog.v2`, například:
 
 ```json
 {
-  "schema_version": "lazurio.team_service_catalog.v1",
+  "schema_version": "lazurio.team_service_catalog.v2",
+  "organization_slug": "ExampleOrg",
   "team_id": "example-builders",
-  "generated_at": "2026-08-13T10:00:00Z",
+  "catalog_revision": "2026-08-28T18:00:00Z",
+  "generated_at": "2026-08-28T18:00:00Z",
   "services": [
     {
       "app_id": "exampleorg-knowledgebase-v2",
-      "module_lease_key": "exampleorg/knowledgebase",
-      "external_origin": "https://knowledgebase.team.example.com/"
+      "module_lease_key": "ExampleOrg/knowledgebase",
+      "external_origin": "https://knowledgebase.team.example.com/",
+      "source": {
+        "type": "worktree",
+        "slug": "DEV-6513-hosted-preview",
+        "mission_control_plan_code": "DEV-6513",
+        "branch": "agent/DEV-6513-hosted-preview"
+      }
     }
   ]
 }
 ```
 
-`team_id` musí přesně odpovídat `LAZURIO_TEAM_ID` a každý
-`module_lease_key` discovery identitě `company/module` dané aplikace. Hosted
+`organization_slug` musí označovat namountovanou Organizaci, `team_id` přesně
+odpovídat `LAZURIO_TEAM_ID` a každý `module_lease_key` discovery identitě
+`company/module` aplikace, která je členem daného Teamu. `source` je buď exact
+`main`, nebo worktree připnutý současně canonical slugem, Mission Control
+plánem a branchí; rozpor nikdy nepadá zpět na main. Hosted
 origin musí být čisté HTTPS origin bez credentials, cesty, query, fragmentu
 nebo loopback hostname/adresy. Chybějící app id je fail-closed: `Open` vrátí
 `hosted_app_url_missing` a nikdy nepropustí `127.0.0.1` vzdálenému klientovi.
-`LAUNCHPAD_HOSTED_APP_URLS_JSON` z PR #104 zůstává pouze dočasný injected
-compatibility seam, použije se jen když katalog chybí; přítomnost obou vstupů
-je chyba. Katalog je navigační projekce, nikoli ACL ani portová autorita:
+`lazurio.team_service_catalog.v1` a `LAUNCHPAD_HOSTED_APP_URLS_JSON` zůstávají
+pouze dočasné read-compatible vstupy pro existující Workspace migraci;
+přítomnost canonical katalogu a compatibility mapy současně je chyba. Katalog
+není ACL ani portová autorita:
 generátor ingressu a brokeru jej spojuje s module lease registry a síťový
 obal dál vynucuje autentizaci i Team boundary.
 
@@ -119,10 +131,22 @@ locator bez per-Module reconcile.
 Hosted Team Workspace cílově používá `lazurio.team_service_catalog.v2` jako
 jedinou autoritu stabilní URL, exact source i keep-running intentu. Controller
 se rozbíhá až po publikaci readiness Launchpadu a chyba jedné služby neblokuje
-ostatní. Kliknutí katalog nikdy nemění. Dnešní hosted v1 boot reconcile je
-výslovně dočasná read-compatible migrační lane; nové systémy jej nesmějí
-rozšiřovat a odstraní se až po inventuře, v2 canary a převodu všech hosted
-Workspace katalogů podle DEV-6513.
+ostatní. Přechodné chyby opakuje neomezeně s capped backoffem a jitterem;
+trvalý contract nebo dependency problém zůstane čitelně `blocked`. Boot nikdy
+nespouští instalaci balíčků: Builder použije explicitní `Install`/`Repair` nebo
+`POST /api/hosted/services/<app-id>/retry`. Ingress čte per-service readiness
+z `GET /api/hosted/services/<app-id>/readiness`; do zdraví vrací `200`, během
+startu či backoffu řízené `503` s `Retry-After`, nikdy náhodný raw proxy `502`.
+
+Katalogové `Start` a `Open` mohou pouze znovu použít exact deklarovaný source,
+`Restart` jej smí restartovat. `Stop`, `Switch` ani kliknutí nemění persistentní
+intent. Služba se vypne až novou immutable revizí katalogu, ve které chybí;
+změna efektivní revize je součástí Server identity, takže stará instance se
+nemůže tiše reuseovat. Graceful replacement ukončí staré managed process trees
+a nový Server rozběhne pouze služby nové revize. Dnešní hosted v1 boot
+reconcile je výslovně dočasná read-compatible migrační lane; nové systémy jej
+nesmějí rozšiřovat a odstraní se až po inventuře, v2 canary a převodu všech
+hosted Workspace katalogů podle DEV-6513.
 
 Produkční Buildy používají samostatný immutable build/runtime kontrakt bez
 Launchpadu, Team service katalogu a worktrees.
@@ -171,8 +195,9 @@ chybí, launcher skončí čitelným `LAZURIO_SERVER_STATE_PERMISSION_REQUIRED` 
 Agent vyžádá pouze toto oprávnění. Cílově grant nastavuje `lazurio install`.
 
 Launcher reusuje existující lokální instanci jen když sedí hash kanonického
-machine rootu, hash selected control rootu i hash skutečných runtime/public
-source bytes. Přechod main ↔ worktree nebo změna Server generace proto bezpečně
+machine rootu, hash selected control rootu, hash skutečných runtime/public
+source bytes a v hosted v2 také hash efektivní lifecycle konfigurace. Přechod
+main ↔ worktree, změna Server generace nebo katalogové revize proto bezpečně
 nahradí tutéž sdílenou instanci a launcher ohlásí její skutečný origin;
 nekompatibilní ani cizí listener se nikdy nepřevezme.
 

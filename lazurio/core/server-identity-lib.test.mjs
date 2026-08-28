@@ -58,6 +58,15 @@ test("server identity separates root, install generation, and process instance",
     startedAt: "2026-08-18T19:00:00.000Z",
     requestTrustProfile: "foreign",
   })).toThrow();
+  expect(() => buildServerIdentity({
+    rootId,
+    controlRootId: rootId,
+    installGeneration,
+    lifecycleConfigurationId: "invalid",
+    instanceId,
+    pid: 42,
+    startedAt: "2026-08-18T19:00:00.000Z",
+  })).toThrow();
 });
 
 test("Windows root identity normalizes equivalent casing, separators and namespace prefixes", () => {
@@ -209,6 +218,36 @@ test("classifier never reuses stale, foreign, malformed, or legacy same-root ser
     expected,
   })).toBe("foreign_root");
   expect(classifyServerIdentity({ observed: { status: "ok" }, expected })).toBe("unrecognized");
+});
+
+test("hosted lifecycle configuration participates in Server reuse identity", () => {
+  const expected = {
+    rootId: "1".repeat(64),
+    controlRootId: "5".repeat(64),
+    installGeneration: "2".repeat(64),
+    lifecycleConfigurationId: "7".repeat(64),
+  };
+  const compatible = identity({
+    lifecycle_configuration_id: expected.lifecycleConfigurationId,
+  });
+
+  expect(classifyServerIdentity({ observed: compatible, expected })).toBe("compatible");
+  expect(classifyServerIdentity({
+    observed: { ...compatible, lifecycle_configuration_id: "8".repeat(64) },
+    expected,
+  })).toBe("stale_install");
+  expect(classifyServerIdentity({
+    observed: identity(),
+    expected,
+  })).toBe("stale_install");
+  expect(classifyServerIdentity({
+    observed: compatible,
+    expected: { ...expected, lifecycleConfigurationId: null },
+  })).toBe("stale_install");
+  expect(() => classifyServerIdentity({
+    observed: compatible,
+    expected: { ...expected, lifecycleConfigurationId: "invalid" },
+  })).toThrow("exact operated Root");
 });
 
 async function sourceFixture() {
