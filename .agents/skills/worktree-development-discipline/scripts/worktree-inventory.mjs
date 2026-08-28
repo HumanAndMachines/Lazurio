@@ -4,6 +4,10 @@ import { access, lstat, opendir, readFile, readdir, realpath } from "node:fs/pro
 import { constants, existsSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { homedir, tmpdir } from "node:os";
+import {
+  hasRepositoryDbAuthorityMarker,
+  readMissionControlRepositoryDbAuthority,
+} from "../../../../scripts/repository-db-authority-contract.mjs";
 
 const GIT_TIMEOUT_MS = 10_000;
 const SEMANTIC_VALIDATOR_TIMEOUT_MS = 30_000;
@@ -647,19 +651,7 @@ async function resolveSidecarAuthority(primaryRoot, defaultAuthorityRoot, declar
       throw new Error("authority owner is not a runtime Organization");
     }
 
-    const manifestPath = join(cursor, "repository-db.manifest.json");
-    const manifestStat = await lstat(manifestPath);
-    if (!manifestStat.isFile() || manifestStat.isSymbolicLink()) {
-      throw new Error("repository-db manifest is not a regular file");
-    }
-    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
-    if (
-      manifest?.schema_version !== "companiesascode.repository_db.manifest.v1"
-      || manifest?.data_mode !== "repository-db"
-      || manifest?.data_root !== "data/mission-control"
-    ) {
-      throw new Error("repository-db manifest is not a canonical Mission Control authority");
-    }
+    readMissionControlRepositoryDbAuthority(cursor);
     return { valid: true, error: null, root: cursor };
   } catch (error) {
     return {
@@ -798,7 +790,8 @@ export async function validateCanonicalMissionControlPlan(
     };
   }
 
-  const manifestPath = join(repositoryDbRoot, "repository-db.manifest.json");
+  const authorityContract = readMissionControlRepositoryDbAuthority(repositoryDbRoot);
+  const manifestPath = authorityContract.markerPath;
   const schemaPath = join(repositoryDbRoot, "schemas", "mission-control-plan.schema.json");
   const semanticValidatorPath = join(
     repositoryDbRoot,
@@ -822,7 +815,7 @@ export async function validateCanonicalMissionControlPlan(
     const expectedRealPaths = new Map([
       [
         manifestPath,
-        join(realRepositoryDbRoot, "repository-db.manifest.json"),
+        join(realRepositoryDbRoot, authorityContract.markerName),
       ],
       [
         planPath,
@@ -861,14 +854,7 @@ export async function validateCanonicalMissionControlPlan(
       throw new Error("validated plan source does not match the authority checkout");
     }
 
-    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
-    if (
-      manifest?.schema_version !== "companiesascode.repository_db.manifest.v1"
-      || manifest?.data_mode !== "repository-db"
-      || manifest?.data_root !== "data/mission-control"
-    ) {
-      throw new Error("repository-db manifest contract is invalid");
-    }
+    readMissionControlRepositoryDbAuthority(repositoryDbRoot);
 
     const schema = JSON.parse(await readFile(schemaPath, "utf8"));
     const failures = validateAgainstSchema(plan, schema, "Mission Control plan");
@@ -1374,7 +1360,7 @@ function isWithin(parent, child) {
 
 function repositoryDbRootFromAuthority(authorityRoot) {
   const candidate = resolve(authorityRoot);
-  if (existsSync(join(candidate, "repository-db.manifest.json"))) return candidate;
+  if (hasRepositoryDbAuthorityMarker(candidate)) return candidate;
   return join(candidate, "mission-control", "db");
 }
 
@@ -1382,7 +1368,7 @@ export function resolveAuthorityRoot(primaryRoot) {
   if (process.env.MISSION_CONTROL_AUTHORITY_ROOT) {
     const candidate = resolve(process.env.MISSION_CONTROL_AUTHORITY_ROOT);
     const repositoryDbRoot = repositoryDbRootFromAuthority(candidate);
-    if (existsSync(join(repositoryDbRoot, "repository-db.manifest.json"))) {
+    if (hasRepositoryDbAuthorityMarker(repositoryDbRoot)) {
       return repositoryDbRoot;
     }
     return candidate;

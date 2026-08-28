@@ -74,6 +74,15 @@ test("dry-run accepts a unique exact-code plan only after canonical validation",
   expect(result.stdout).toContain("ok - dry-run: plán data/mission-control/plans/CAC-0007.yaml");
 });
 
+test("dry-run accepts the canonical repository-db.yaml authority", async () => {
+  const fixture = await createLaneFixture({
+    plans: [["CAC-0007.yaml", validPlan]],
+    authorityFormat: "config",
+  });
+  const result = runCreateLane(fixture);
+  expect({ status: result.status, stderr: result.stderr }).toMatchObject({ status: 0 });
+});
+
 test("dry-run fails closed when a Task Agent task/thread/session ID cannot be captured", async () => {
   const fixture = await createLaneFixture({
     plans: [["CAC-0007.yaml", validPlan]],
@@ -272,7 +281,7 @@ test("dry-run rejects a selected plan whose id does not match dev_code", async (
   expect(result.stderr).toContain("Mission Control plan id must match dev_code");
 });
 
-async function createLaneFixture({ plans, legacyPlans = [] }) {
+async function createLaneFixture({ plans, legacyPlans = [], authorityFormat = "legacy" }) {
   const fixtureRoot = await mkdtemp(join(tmpdir(), "worktree-create-contract-"));
   cleanupPaths.push(fixtureRoot);
   const root = join(fixtureRoot, "Conglomerate_GEN3");
@@ -296,15 +305,34 @@ async function createLaneFixture({ plans, legacyPlans = [] }) {
     '{"organization_kind":"organization"}\n',
     "utf8",
   );
-  await writeFile(
-    join(authorityRoot, "repository-db.manifest.json"),
-    `${JSON.stringify({
-      schema_version: "companiesascode.repository_db.manifest.v1",
-      data_mode: "repository-db",
-      data_root: "data/mission-control",
-    }, null, 2)}\n`,
-    "utf8",
-  );
+  if (authorityFormat === "config") {
+    await writeFile(
+      join(authorityRoot, "repository-db.yaml"),
+      `schema_version: repository-db.config.v1
+app: mission-control
+data_repo:
+  remote: https://github.com/TestOrganization/mission-control-data.git
+  branch: v3
+schema:
+  name: mission-control-data
+  version: 3.0.0-alpha.0
+layout:
+  data: data
+  generated: generated
+`,
+      "utf8",
+    );
+  } else {
+    await writeFile(
+      join(authorityRoot, "repository-db.manifest.json"),
+      `${JSON.stringify({
+        schema_version: "companiesascode.repository_db.manifest.v1",
+        data_mode: "repository-db",
+        data_root: "data/mission-control",
+      }, null, 2)}\n`,
+      "utf8",
+    );
+  }
   for (const [relativePath, contents] of plans) {
     const planPath = join(plansRoot, relativePath);
     await mkdir(join(planPath, ".."), { recursive: true });

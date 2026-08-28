@@ -44,6 +44,7 @@ import {
   openCodexUpdateDialog,
 } from "./codex-handoff.js";
 import { runtimeRecoveryForApp } from "./runtime-recovery.js";
+import { launchpadFetch } from "./session-aware-fetch.js";
 import {
   organizationHash,
   personalspaceHash,
@@ -877,7 +878,7 @@ async function runLoadData({ quiet = false, sync = false, isCurrent = () => true
 }
 
 async function fetchJson(path, { method = "GET", headers = undefined, body = undefined } = {}) {
-  const response = await fetch(path, { method, headers, body, cache: "no-store" });
+  const response = await launchpadFetch(path, { method, headers, body, cache: "no-store" });
   if (!response.ok) {
     let message = `${path} ${response.status}`;
     let payload = null;
@@ -5363,7 +5364,7 @@ async function runRuntimeAction(app, action) {
   state.runtimeActionErrors.delete(app.id);
   render();
   try {
-    const response = await fetch(`/api/apps/${encodeURIComponent(app.id)}/${action}`, {
+    const response = await launchpadFetch(`/api/apps/${encodeURIComponent(app.id)}/${action}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ source: sourcePayloadForApp(app), ...takeover }),
