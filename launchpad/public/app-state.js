@@ -863,10 +863,10 @@ export function primaryAppActionModel(app = {}, {
       ? { type: "recovery", label: recovery.actionLabel, recovery }
       : { type: "disabled", label: dependencyLabel };
   }
-  if (recovery) return { type: "recovery", label: recovery.actionLabel, recovery };
-  if (sharedPortPeer) {
+  if (dependencyState === "ready" && sharedPortPeer) {
     return { type: "open_chain", label: "Otevřít a převzít port", peer: sharedPortPeer };
   }
+  if (recovery) return { type: "recovery", label: recovery.actionLabel, recovery };
   if (legacyForeignViewer) {
     return { type: "open", label: "Otevřít běžící checkout" };
   }

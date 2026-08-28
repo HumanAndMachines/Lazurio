@@ -104,7 +104,7 @@ test("Codex recovery bez pending klíče zůstává klikatelné", () => {
   )).toBe(true);
 });
 
-test("primary action model drží recovery před port takeover a legacy open", () => {
+test("primary action model převezme deklarovaný port jen pro připravenou aplikaci", () => {
   const sharedPortPeer = { id: "running-peer" };
   for (const dependencyState of ["needs_install", "dependency_boundary_invalid"]) {
     for (const action of ["install", "repair", "retry"]) {
@@ -134,8 +134,17 @@ test("primary action model drží recovery před port takeover a legacy open", (
       sharedPortPeer,
       legacyForeignViewer: true,
       canStart: true,
-    })).toEqual({ type: "recovery", label: recovery.actionLabel, recovery });
+    })).toEqual({ type: "open_chain", label: "Otevřít a převzít port", peer: sharedPortPeer });
   }
+
+  const recovery = { action: "codex", actionLabel: "Recover codex" };
+  expect(primaryAppActionModel({
+    dependencies: { state: "ready" },
+    runtime_status: "unhealthy",
+  }, {
+    recovery,
+    canStart: true,
+  })).toEqual({ type: "recovery", label: recovery.actionLabel, recovery });
 
   const repairAction = { prompt: "Inspect exact module", label: "Vyřešit s Codexem" };
   expect(primaryAppActionModel({
