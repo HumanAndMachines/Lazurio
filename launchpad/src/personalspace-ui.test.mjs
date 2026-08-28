@@ -80,7 +80,8 @@ test("personalspace.js renderuje Principálův prostor, český privacy badge a 
   // otevři) klikem na dlaždici + zastavit/restart pod ⋯ menu.
   expect(js).toContain("/api/personalspace/apps/");
   expect(js).toContain("function openPersonalApp");
-  expect(js).toContain('/open`, { method: "POST" }');
+  expect(js).toContain("personalRuntimeMutationOptions()");
+  expect(js).toContain('body: JSON.stringify({ source: { type: "main" } })');
   expect(js).toContain("function writePersonalTabStatus");
   expect(js).toContain("function waitForPersonalRuntime");
   expect(js).toContain("/health");
@@ -295,7 +296,7 @@ test("Personalspace dlaždice je GEN2-minimal (port GEN2-minimal karty): tile-fi
 
   // Server: personalspace lane má /open chain (ensure install → start → wait
   // healthy → URL) oddělený od firemního manageru.
-  expect(server).toContain("personalspaceRuntimeManager.open(route.appId)");
+  expect(server).toContain("personalspaceRuntimeManager.open(route.appId, runtimeOptions)");
   expect(server).toContain('route.action === "health" && (request.method === "GET" || request.method === "POST")');
   expect(server).toContain("restart|logs|open");
 });

@@ -55,6 +55,7 @@ const logTailBytes = 40_000;
 const errorTailBytes = 4_000;
 const packageLockfileNames = ["bun.lock", "bun.lockb", "package-lock.json", "pnpm-lock.yaml", "yarn.lock"];
 const supportedInstallManagers = new Set(["bun"]);
+const supportedLifecycleProfiles = new Set(["local", "hosted"]);
 const APP_RUNTIME_CWD = Symbol("lazurio.app.runtime-cwd");
 const APP_RUNTIME_PACKAGE_PATH = Symbol("lazurio.app.runtime-package-path");
 const APP_RUNTIME_OWNER_ROOT = Symbol("lazurio.app.runtime-owner-root");
@@ -193,6 +194,7 @@ export function createRuntimeManager({
   companiesRoot,
   launchpadRoot,
   stateRoot = launchpadRoot,
+  lifecycleProfile = "local",
   instanceId = randomUUID(),
   discover = discoverLaunchpadApps,
   resolvePortOwnerFn = resolvePortOwner,
@@ -219,6 +221,9 @@ export function createRuntimeManager({
   writeDesiredModuleStateFn = writeDesiredModuleState,
   buildWorktreeIndexFn = buildWorktreeIndex,
 }) {
+  if (!supportedLifecycleProfiles.has(lifecycleProfile)) {
+    throw new Error(`Unsupported Launchpad lifecycle profile: ${String(lifecycleProfile)}.`);
+  }
   const runtimeBunExecutable = bunExecutable
     ?? (platform === process.platform ? resolveBunExecutable() : resolveBunExecutable({ platform }));
   const managedProcesses = new Map();
@@ -619,7 +624,7 @@ export function createRuntimeManager({
         await stopRuntimeAppUnlocked(app).catch(() => {});
         throw desiredPersistenceError(app, error);
       }
-      return { ...result, desired };
+      return { ...result, ...(desired ? { desired } : {}) };
     });
   }
 
@@ -1227,7 +1232,7 @@ export function createRuntimeManager({
       status: runtime.status,
       steps,
       runtime,
-      desired,
+      ...(desired ? { desired } : {}),
     };
   }
 
@@ -1834,7 +1839,7 @@ export function createRuntimeManager({
         runtime_key: runtimeKeyForApp(app),
         runtime_source: runtimeSource,
         start: startResult,
-        desired,
+        ...(desired ? { desired } : {}),
       };
     });
   }
@@ -2424,7 +2429,12 @@ export function createRuntimeManager({
   }
 
   function supportsDurableDesiredRuntime(app) {
-    return app?.personal !== true
+    // Temporary v1 compatibility for already-hosted Workspaces only. Local
+    // Start/Open is session-scoped and must never turn a click into durable
+    // machine-wide intent. DEV-6513 removes this adapter after the hosted v2
+    // catalog canary and migration are complete.
+    return lifecycleProfile === "hosted"
+      && app?.personal !== true
       && app?.module_contract?.schema_version === "lazurio.module.v1"
       && typeof app?.company === "string"
       && typeof app?.module === "string";
@@ -2741,6 +2751,20 @@ export function createRuntimeManager({
   }
 
   async function reconcileDesiredState({ moduleLeaseKeys = null } = {}) {
+    if (lifecycleProfile !== "hosted") {
+      return {
+        schema_version: "lazurio.launchpad.boot_reconcile.v1",
+        profile: lifecycleProfile,
+        skipped: true,
+        reconciled_at: new Date().toISOString(),
+        total: 0,
+        active: 0,
+        disabled: 0,
+        deferred: 0,
+        degraded: 0,
+        results: [],
+      };
+    }
     const entries = await listDesiredModuleStates({ root: desiredStateRoot });
     const results = [];
     for (const entry of entries) {
@@ -2870,7 +2894,7 @@ export function createRuntimeManager({
   // Startup is not committed until the Server locator is durably published.
   // If that publication fails, stop only children owned by this fresh Runtime
   // Manager instance and preserve desired intent for the next safe retry.
-  async function rollbackUnpublishedStartup() {
+  async function stopManagedRuntimes() {
     const records = [...managedProcesses.values()];
     const results = [];
     for (const record of records) {
@@ -2905,6 +2929,14 @@ export function createRuntimeManager({
       failed: results.filter((result) => result.status === "failed").length,
       results,
     };
+  }
+
+  async function shutdown() {
+    return stopManagedRuntimes();
+  }
+
+  async function rollbackUnpublishedStartup() {
+    return stopManagedRuntimes();
   }
 
   function runtimeSourceForApp(app) {
@@ -3513,14 +3545,16 @@ export function createRuntimeManager({
       port_owner: portOwner,
       listeners: runtimeListenerState(app),
       listener_reconciliation: listenerReconciliation,
-      desired,
-      desired_alignment: record && desired?.enabled === false
-        ? "managed-but-disabled"
-        : desired?.enabled === true && desired.app_id === app.id && runtimeSourcesEqual(desired.source, runtimeSource)
-          ? "matches"
-          : desired
-            ? "different-source"
-            : "not-declared",
+      ...(desired
+        ? {
+            desired,
+            desired_alignment: record && desired.enabled === false
+              ? "managed-but-disabled"
+              : desired.enabled === true && desired.app_id === app.id && runtimeSourcesEqual(desired.source, runtimeSource)
+                ? "matches"
+                : "different-source",
+          }
+        : {}),
     };
 
     if (record) {
@@ -4080,7 +4114,9 @@ export function createRuntimeManager({
 
   async function ensureRuntimeDirs() {
     await mkdir(appStateRoot, { recursive: true });
-    await mkdir(desiredStateRoot, { recursive: true });
+    if (lifecycleProfile === "hosted") {
+      await mkdir(desiredStateRoot, { recursive: true });
+    }
     await mkdir(logsRoot, { recursive: true });
     await mkdir(takeoverAuditRoot, { recursive: true });
   }
@@ -4112,6 +4148,7 @@ export function createRuntimeManager({
     restart,
     logs,
     reconcileDesiredState,
+    shutdown,
     rollbackUnpublishedStartup,
   };
 }

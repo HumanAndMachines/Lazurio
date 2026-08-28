@@ -102,7 +102,7 @@ describe("Core-owned Module lifecycle client", () => {
     expect(requests.at(-1)).toEqual({
       pathname: "/api/apps/example-organization-website-v3/open",
       method: "POST",
-      body: {},
+      body: { source: { type: "main" } },
     });
   });
 
@@ -119,7 +119,7 @@ describe("Core-owned Module lifecycle client", () => {
     expect(validateAgainstSchema(report, reportSchema, "report")).toEqual([]);
     expect(report.reason).toBe("cross_organization_takeover_confirmation_required");
     expect(report.result.replace_app_id).toBe("other-organization-portal-v1");
-    expect(requests.at(-1).body).toEqual({});
+    expect(requests.at(-1).body).toEqual({ source: { type: "main" } });
     expect(moduleLifecycleExitCode(report)).toBe(3);
   });
 
@@ -136,6 +136,7 @@ describe("Core-owned Module lifecycle client", () => {
     expect(report.status).toBe("completed");
     expect(validateAgainstSchema(report, reportSchema, "report")).toEqual([]);
     expect(requests.at(-1).body).toEqual({
+      source: { type: "main" },
       confirmed: true,
       replace_app_id: "other-organization-portal-v1",
     });

@@ -84,6 +84,7 @@ const defaultHost = "127.0.0.1";
 const defaultPort = 4174;
 const allowedHosts = new Set(["127.0.0.1", "localhost"]);
 const safeApiMethods = new Set(["GET", "HEAD", "OPTIONS"]);
+const explicitRuntimeSourceActions = new Set(["install", "repair", "start", "open", "stop", "restart", "switch"]);
 const launchpadRoot = join(import.meta.dirname, "..");
 const publicRoot = join(launchpadRoot, "public");
 const options = parseLaunchpadServerArgs(Bun.argv.slice(2));
@@ -133,7 +134,8 @@ const launchpadStateRoot = resolveLaunchpadStateRoot({
   workspaceRoot: canonicalCompaniesRoot,
   // The one per-user Server keeps one operational store while its selected
   // control root moves between main and linked worktrees. A worktree-local
-  // fallback would orphan desired state and ownership on every replacement.
+  // fallback would orphan runtime ownership; during the hosted v1 migration it
+  // would also split the compatibility desired evidence.
   fallbackRoot: join(canonicalCompaniesRoot, "launchpad"),
 });
 // Machine coordination is deliberately independent from the supervisor's
@@ -150,6 +152,7 @@ const runtimeManager = createRuntimeManager({
   companiesRoot,
   launchpadRoot,
   stateRoot: launchpadStateRoot,
+  lifecycleProfile: hostedAppUrls.profile,
   discover: (_root, discoveryOptions = {}) => discoverLaunchpadApps(rootSourceRoot, {
     ...discoveryOptions,
     organization_mount_root: companiesRoot,
@@ -269,10 +272,11 @@ try {
       identity: observation.identity,
     }));
   } else {
-    // The machine-wide lifetime lease is already held. Locator publication is
-    // delayed until boot reconciliation completes, so no launcher can observe
-    // this Server as ready while it is restoring durable module runtimes.
-    const selectedDesiredStateKeys = worktreeMountContextReadOnly
+    // Local module processes belong only to this Server session. Legacy
+    // desired evidence is therefore ignored without filesystem enumeration.
+    // Hosted v1 reconciliation remains a temporary compatibility lane until
+    // the Team service catalog v2 canary and migration in DEV-6513 land.
+    const selectedDesiredStateKeys = hostedAppUrls.profile === "hosted" && worktreeMountContextReadOnly
       ? await selectedControlRootDesiredStateKeys()
       : null;
     bootReconcile = await runtimeManager.reconcileDesiredState({
@@ -404,14 +408,22 @@ console.log(`${LAZURIO_LAUNCHPAD_NAME} locator: ${serverLocator.path}`);
 if (worktreeMountContextReadOnly) {
   console.warn("[launchpad] linked worktree používá canonical Root pouze jako read-only mount context");
 }
-console.log(`[launchpad] desired reconcile active=${bootReconcile.active} disabled=${bootReconcile.disabled} deferred=${bootReconcile.deferred} degraded=${bootReconcile.degraded}`);
-for (const result of bootReconcile.results.filter((item) => item.status === "degraded")) {
-  console.warn(`[launchpad] desired reconcile degraded ${result.module_lease_key ?? result.file}: ${result.error}`);
+if (bootReconcile.skipped) {
+  console.log("[launchpad] local session profile ready; persisted desired evidence ignored");
+} else {
+  console.log(`[launchpad] hosted compatibility reconcile active=${bootReconcile.active} disabled=${bootReconcile.disabled} deferred=${bootReconcile.deferred} degraded=${bootReconcile.degraded}`);
+  for (const result of bootReconcile.results.filter((item) => item.status === "degraded")) {
+    console.warn(`[launchpad] hosted compatibility reconcile degraded ${result.module_lease_key ?? result.file}: ${result.error}`);
+  }
 }
 printAgentEntryUrl(serverUrl);
 
 if (options.open) {
   await openBrowser(serverUrl);
+}
+
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.on(signal, () => requestProcessSignalShutdown(signal));
 }
 
 setInterval(() => {}, 2_147_483_647);
@@ -901,29 +913,34 @@ async function handleGbrainRoute(request, url, route) {
 
 async function handlePersonalRuntimeRoute(request, route) {
   try {
+    const runtimeOptions = request.method === "POST"
+      ? await runtimeRequestOptions(request, {
+          requireSource: explicitRuntimeSourceActions.has(route.action),
+        })
+      : {};
     if (route.action === "health" && (request.method === "GET" || request.method === "POST")) {
-      return jsonResponse(await personalspaceRuntimeManager.health(route.appId));
+      return jsonResponse(await personalspaceRuntimeManager.health(route.appId, runtimeOptions));
     }
     if (route.action === "logs" && request.method === "GET") {
       return jsonResponse(await personalspaceRuntimeManager.logs(route.appId));
     }
     if ((route.action === "install" || route.action === "repair") && request.method === "POST") {
-      return jsonResponse(await personalspaceRuntimeManager.install(route.appId, { action: route.action }));
+      return jsonResponse(await personalspaceRuntimeManager.install(route.appId, { action: route.action, ...runtimeOptions }));
     }
     if (route.action === "start" && request.method === "POST") {
-      return jsonResponse(await personalspaceRuntimeManager.start(route.appId));
+      return jsonResponse(await personalspaceRuntimeManager.start(route.appId, runtimeOptions));
     }
     // One-click open chain (ensure install → ensure start → wait healthy → URL)
     // v oddělené personalspace lane — GEN2-minimal dlaždice ho volá klikem na
     // celou kartu (stejný kontrakt jako firemní /api/apps/<id>/open).
     if (route.action === "open" && request.method === "POST") {
-      return jsonResponse(await personalspaceRuntimeManager.open(route.appId));
+      return jsonResponse(await personalspaceRuntimeManager.open(route.appId, runtimeOptions));
     }
     if (route.action === "stop" && request.method === "POST") {
-      return jsonResponse(await personalspaceRuntimeManager.stop(route.appId));
+      return jsonResponse(await personalspaceRuntimeManager.stop(route.appId, runtimeOptions));
     }
     if (route.action === "restart" && request.method === "POST") {
-      return jsonResponse(await personalspaceRuntimeManager.restart(route.appId));
+      return jsonResponse(await personalspaceRuntimeManager.restart(route.appId, runtimeOptions));
     }
     return jsonResponse({ error: "method_not_allowed" }, 405);
   } catch (error) {
@@ -1072,7 +1089,11 @@ async function jsonRequestPayload(request, code) {
 async function handleRuntimeRoute(request, route) {
   let hostedProjectionApp = null;
   try {
-    const runtimeOptions = request.method === "POST" ? await runtimeRequestOptions(request) : {};
+    const runtimeOptions = request.method === "POST"
+      ? await runtimeRequestOptions(request, {
+          requireSource: hostedAppUrls.profile === "local" && explicitRuntimeSourceActions.has(route.action),
+        })
+      : {};
     hostedProjectionApp = hostedAppUrls.profile === "hosted"
       ? (await buildAppsResponse()).apps.find((app) => app.id === route.appId) ?? null
       : { id: route.appId };
@@ -1144,23 +1165,40 @@ async function handleRuntimeRoute(request, route) {
   }
 }
 
-async function runtimeRequestOptions(request) {
+async function runtimeRequestOptions(request, { requireSource = false } = {}) {
   const contentType = request.headers.get("content-type") ?? "";
-  if (!contentType.includes("application/json")) return {};
+  if (!contentType.includes("application/json")) {
+    if (requireSource) throw runtimeSourceRequiredError();
+    return {};
+  }
   const text = await request.text();
-  if (!text.trim()) return {};
+  if (!text.trim()) {
+    if (requireSource) throw runtimeSourceRequiredError();
+    return {};
+  }
   let payload;
   try {
     payload = JSON.parse(text);
   } catch {
     throw new RuntimeActionError(400, "invalid_runtime_request", "Runtime request body musí být validní JSON.");
   }
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return {};
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new RuntimeActionError(400, "invalid_runtime_request", "Runtime request body musí být JSON object.");
+  }
+  if (requireSource && !payload.source) throw runtimeSourceRequiredError();
   return {
     ...(payload.source ? { source: payload.source } : {}),
     ...(typeof payload.replace_app_id === "string" ? { replace_app_id: payload.replace_app_id } : {}),
     ...(payload.confirmed === true ? { confirmed: true } : {}),
   };
+}
+
+function runtimeSourceRequiredError() {
+  return new RuntimeActionError(
+    400,
+    "runtime_source_required",
+    "Lokální runtime akce musí explicitně určit zdroj main nebo konkrétní worktree.",
+  );
 }
 
 async function handleServerShutdown(request) {
@@ -1202,6 +1240,21 @@ async function completeServerShutdown() {
     failed = true;
     console.error(`[lazurio] Server listener cleanup failed: ${error.message}`);
   }
+  for (const [label, manager] of [
+    ["Organization", runtimeManager],
+    ["Personalspace", personalspaceRuntimeManager],
+  ]) {
+    try {
+      const stopped = await manager.shutdown();
+      if (stopped.failed > 0) {
+        failed = true;
+        console.error(`[lazurio] ${label} child cleanup failed for ${stopped.failed} runtime(s)`);
+      }
+    } catch (error) {
+      failed = true;
+      console.error(`[lazurio] ${label} child cleanup failed: ${error.message}`);
+    }
+  }
   try {
     await withServerStateAccess(() => removeServerLocatorIfOwned({
       stateDirectory: serverStateDirectory,
@@ -1218,6 +1271,24 @@ async function completeServerShutdown() {
     console.error(`[lazurio] Server lifetime lease cleanup failed: ${error.message}`);
   }
   process.exit(failed ? 1 : 0);
+}
+
+let processSignalShutdownPending = false;
+function requestProcessSignalShutdown(signal) {
+  if (processSignalShutdownPending || serverShutdownState.state === "stopping") return;
+  processSignalShutdownPending = true;
+  const requestWhenIdle = () => {
+    const shutdown = serverShutdownState.requestShutdown();
+    if (shutdown.accepted) {
+      console.error(`[lazurio] ${signal} requested graceful Server shutdown`);
+      void completeServerShutdown();
+      return;
+    }
+    if (shutdown.reason === "server_busy") {
+      setTimeout(requestWhenIdle, 50);
+    }
+  };
+  requestWhenIdle();
 }
 
 function startServer(startPort) {

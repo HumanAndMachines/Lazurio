@@ -616,10 +616,20 @@ test("linked worktree gets only a read-only canonical Root mount context", async
   expect(personalspace.primary_owner).toBe("fixtureowner");
   expect(personalspace.summary.space_count).toBe(1);
 
-  const startResponse = await fetch(`http://127.0.0.1:${port}/api/apps/test-root-guide-v1/start`, {
+  const missingSourceResponse = await fetch(`http://127.0.0.1:${port}/api/apps/test-root-guide-v1/start`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: "{}",
+  });
+  expect({ status: missingSourceResponse.status, payload: await missingSourceResponse.json() }).toEqual({
+    status: 400,
+    payload: expect.objectContaining({ error: "runtime_source_required" }),
+  });
+
+  const startResponse = await fetch(`http://127.0.0.1:${port}/api/apps/test-root-guide-v1/start`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ source: { type: "main" } }),
   });
   const started = await startResponse.json();
   expect({ status: startResponse.status, payload: started }).toEqual({
@@ -629,10 +639,10 @@ test("linked worktree gets only a read-only canonical Root mount context", async
   expect(existsSync(join(root, "launchpad", "logs", "apps", "test-root-guide-v1.log"))).toBe(true);
   expect(existsSync(join(worktreeRoot, "launchpad", "logs", "apps", "test-root-guide-v1.log"))).toBe(false);
   expect((await getJson(port, "/api/apps/test-root-guide-v1/health")).status).toBe("healthy");
-  expect((await postJson(port, "/api/apps/test-root-guide-v1/open", {})).action).toBe("open");
+  expect((await postJson(port, "/api/apps/test-root-guide-v1/open", { source: { type: "main" } })).action).toBe("open");
   expect(existsSync(join(root, "launchpad", "runtime", "usage.json"))).toBe(true);
   expect(existsSync(join(worktreeRoot, "launchpad", "runtime", "usage.json"))).toBe(false);
-  expect((await postJson(port, "/api/apps/test-root-guide-v1/stop", {})).action).toBe("stop");
+  expect((await postJson(port, "/api/apps/test-root-guide-v1/stop", { source: { type: "main" } })).action).toBe("stop");
 
   const mutation = await fetch(`http://127.0.0.1:${port}/api/sync`, { method: "POST" });
   expect(mutation.status).toBe(409);
@@ -694,6 +704,8 @@ test("control-root replacement waits for an in-flight runtime mutation", async (
   const primary = await startLaunchpadServer(root);
   const installRequest = fetch(`http://127.0.0.1:${primary.port}/api/apps/betaco-slow-install-v1/install`, {
     method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ source: { type: "main" } }),
   });
   const installMarker = join(appRoot, "install.started");
   for (let attempt = 0; attempt < 100 && !(await Bun.file(installMarker).exists()); attempt += 1) {
@@ -723,7 +735,7 @@ test("control-root replacement waits for an in-flight runtime mutation", async (
   expect((await getJson(primary.port, "/health")).status).toBe("ok");
 });
 
-test("control-root replacement waits until boot reconciliation publishes one ready locator", async () => {
+test("local cold start ignores populated desired evidence and publishes one ready locator immediately", async () => {
   const root = await createLaunchpadGitFixture();
   const appPort = await findFreePort();
   const appRoot = join(root, "organizations", "BetaCo_GEN3", "workspace", "deals", "app", "v1");
@@ -758,13 +770,8 @@ test("control-root replacement waits until boot reconciliation publishes one rea
     ].join("\n"),
     "utf8",
   );
-  await initGitRepo(root);
-  runGit(["add", "."], root);
-  runGit(["commit", "-m", "track boot reconcile fixture"], root);
-  const worktreeRoot = `${root}-boot-worktree`;
-  runGit(["worktree", "add", "-b", "linked-boot-reconcile", worktreeRoot], root);
   const stateRoot = `${root}-launchpad-state`;
-  tempRoots.push(worktreeRoot, root, stateRoot);
+  tempRoots.push(root, stateRoot);
   await writeDesiredModuleState({
     root: join(stateRoot, "runtime", "desired-modules"),
     state: buildDesiredModuleState({ app, source: { type: "main" } }),
@@ -777,6 +784,7 @@ test("control-root replacement waits until boot reconciliation publishes one rea
   } = serverTestEnvironment(root, {
     LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot,
   });
+  const coldStartedAt = performance.now();
   const primaryServer = Bun.spawn(
     ["bun", "src/server.mjs", "--root", root, "--port", String(primaryPort)],
     {
@@ -787,47 +795,26 @@ test("control-root replacement waits until boot reconciliation publishes one rea
     },
   );
   servers.push(primaryServer);
-  const startedDeadline = Date.now() + platformTestTimeout(2_000);
-  while (Date.now() < startedDeadline && !(await Bun.file(startedMarker).exists())) {
-    await Bun.sleep(20);
-  }
-  expect(await Bun.file(startedMarker).exists()).toBe(true);
-  const startingHealth = await fetch(`http://127.0.0.1:${primaryPort}/health`);
-  expect(startingHealth.status).toBe(503);
-  expect(await startingHealth.json()).toEqual({ status: "starting" });
-  expect(await readServerLocatorIfPresent({ stateDirectory: serverStateDirectory })).toBeNull();
-
-  const replacementPort = await findFreePort();
-  const replacement = Bun.spawn(
-    ["bun", "src/server.mjs", "--root", worktreeRoot, "--port", String(replacementPort), "--reuse"],
-    {
-      cwd: join(import.meta.dirname, ".."),
-      env: primaryEnvironment,
-      stdout: "pipe",
-      stderr: "pipe",
-    },
-  );
-  servers.push(replacement);
-  await Bun.sleep(100);
-  expect(replacement.exitCode).toBeNull();
-  expect(primaryServer.exitCode).toBeNull();
-  expect(await readServerLocatorIfPresent({ stateDirectory: serverStateDirectory })).toBeNull();
-
-  const completedDeadline = Date.now() + platformTestTimeout(3_000);
-  while (Date.now() < completedDeadline && !(await Bun.file(completedMarker).exists())) {
-    await Bun.sleep(20);
-  }
-  expect(await Bun.file(completedMarker).exists()).toBe(true);
-  expect(await readLaunchpadPort(replacement)).toBe(replacementPort);
-  await waitForHealth(replacementPort, replacement);
-  expect(await primaryServer.exited).toBe(0);
-  expect((await getJson(replacementPort, "/health")).status).toBe("ok");
+  await waitForHealth(primaryPort, primaryServer);
+  expect(performance.now() - coldStartedAt).toBeLessThan(platformTestTimeout(3_000));
+  expect(await Bun.file(startedMarker).exists()).toBe(false);
+  expect(await Bun.file(completedMarker).exists()).toBe(false);
+  expect((await getJson(primaryPort, "/health")).status).toBe("ok");
   expect(await readServerLocator({ stateDirectory: serverStateDirectory })).toMatchObject({
-    origin: `http://127.0.0.1:${replacementPort}`,
+    origin: `http://127.0.0.1:${primaryPort}`,
+  });
+  expect(await readDesiredModuleState({
+    root: join(stateRoot, "runtime", "desired-modules"),
+    company: app.company,
+    module: app.module,
+  })).toMatchObject({
+    app_id: app.id,
+    enabled: true,
+    source: { type: "main" },
   });
 }, platformTestTimeout(15_000));
 
-test("locator publication failure rolls back boot runtimes and releases Server leases for retry", async () => {
+test("locator publication failure leaves local desired evidence inert and releases Server leases for retry", async () => {
   const root = await createLaunchpadGitFixture();
   const stateRoot = `${root}-launchpad-state`;
   const appPort = await findFreePort();
@@ -875,7 +862,7 @@ test("locator publication failure rolls back boot runtimes and releases Server l
   const { environment, serverStateDirectory } = serverTestEnvironment(root, {
     LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot,
   });
-  environment.LAZURIO_TEST_LOCATOR_COLLISION_PATH = serverLocatorPath(serverStateDirectory);
+  await mkdir(serverLocatorPath(serverStateDirectory), { recursive: true });
   const server = Bun.spawn(
     ["bun", "src/server.mjs", "--root", root, "--port", String(serverPort)],
     {
@@ -897,7 +884,7 @@ test("locator publication failure rolls back boot runtimes and releases Server l
   } else {
     expect(stderr.trim()).not.toBe("");
   }
-  expect(await Bun.file(join(appRoot, "locator-rollback.started")).exists()).toBe(true);
+  expect(await Bun.file(join(appRoot, "locator-rollback.started")).exists()).toBe(false);
   await waitForPortVacancy(appPort);
   await waitForPortVacancy(serverPort);
   expect(await readDesiredModuleState({
@@ -973,7 +960,7 @@ test("hosted Launchpad rejects forged gateway headers without a TLS-authenticate
   const directLoopbackPull = await fetch(`http://127.0.0.1:${port}/api/git/pull-all?company=BetaCo`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: "{}",
+    body: JSON.stringify({ source: { type: "main" } }),
   });
   expect(directLoopbackPull.status).toBe(403);
   expect((await directLoopbackPull.json()).error).toBe("mutating_request_forbidden");
@@ -1050,10 +1037,47 @@ test("hosted Launchpad omits another Team app and rejects its runtime route befo
   });
 });
 
-test("instance-bound local shutdown rejects stale callers and releases the exact port", async () => {
+test("instance-bound local shutdown rejects stale callers and stops the managed module process tree", async () => {
   const root = await createLaunchpadGitFixture();
+  const appPort = await findFreePort();
+  const app = {
+    id: "betaco-session-shutdown-v1",
+    title: "Session shutdown",
+    company: "BetaCo",
+    module: "deals",
+    port: appPort,
+  };
+  await createPackageApp({
+    root,
+    packagePath: "organizations/BetaCo_GEN3/workspace/deals/app/v1",
+    app,
+  });
+  await writeFile(
+    join(root, "organizations", "BetaCo_GEN3", "workspace", "deals", "app", "v1", "server.mjs"),
+    fixtureServerSource(),
+    "utf8",
+  );
   tempRoots.push(root);
-  const { server, port, serverStateDirectory } = await startLaunchpadServer(root);
+  const { server, port, serverStateDirectory, environment } = await startLaunchpadServer(root);
+  const personalMissingSourceResponse = await fetch(
+    `http://127.0.0.1:${port}/api/personalspace/apps/not-an-app/start`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    },
+  );
+  expect({ status: personalMissingSourceResponse.status, payload: await personalMissingSourceResponse.json() }).toEqual({
+    status: 400,
+    payload: expect.objectContaining({ error: "runtime_source_required" }),
+  });
+  await postJson(port, `/api/apps/${app.id}/start`, { source: { type: "main" } });
+  await waitForHealth(appPort, server);
+  expect(existsSync(join(
+    environment.LAZURIO_LAUNCHPAD_STATE_ROOT,
+    "runtime",
+    "desired-modules",
+  ))).toBe(false);
   const identity = await getJson(port, "/api/lazurio/server-identity");
   expect((await readServerLocator({ stateDirectory: serverStateDirectory })).instance_id).toBe(identity.instance_id);
 
@@ -1072,6 +1096,7 @@ test("instance-bound local shutdown rejects stale callers and releases the exact
     stopping: true,
   });
   expect(await server.exited).toBe(0);
+  await waitForPortVacancy(appPort);
   await expect(fetch(`http://127.0.0.1:${port}/health`)).rejects.toThrow();
   expect(await readServerLocatorIfPresent({ stateDirectory: serverStateDirectory })).toBeNull();
   expect(existsSync(join(serverStateDirectory, moduleRuntimeLockName("server-lifetime")))).toBe(false);
@@ -1162,7 +1187,7 @@ test("apps cache keeps first paint Git-free and invalidates on force sync and fa
   const failedMutation = await fetch(`http://127.0.0.1:${port}/api/apps/not-an-app/start`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: "{}",
+    body: JSON.stringify({ source: { type: "main" } }),
   });
   expect(failedMutation.ok).toBe(false);
   expect((await getJson(port, "/api/apps")).apps.map((app) => app.id)).toContain("omegaco-cache-studio-v1");

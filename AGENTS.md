@@ -430,8 +430,13 @@ nedrží root-wide port registry ani hardcodovaný port map jedné Organizace.
 Platný static module lease dává `Start`/`Open` autoritu bezpečně převzít
 rezervovaný listener. Verzi/worktree stejného Modulu nahradí automaticky;
 známý lease jiné Organizace vyžaduje výslovné potvrzení konkrétní nahrazované
-aplikace a vypnutí jejího desired runtime. Explicitní `Stop` ukončuje jen
-managed aktivní instanci. Legacy nebo nevalidní lease takovou autoritu nedává.
+aplikace. Na localhostu jsou Modulové procesy session-scoped: graceful restart
+Launchpadu ukončí všechny jeho managed process trees, nic neobnoví a nový
+`Start`/`Open` znovu explicitně zvolí exact `main` nebo worktree source. Hosted
+Team Workspace drží always-on DEV preview pouze Team service catalogem v2;
+kliknutí persistentní intent nevytváří. Explicitní `Stop` ukončuje jen local
+managed aktivní instanci, zatímco katalogovou hosted službu vypne až nová
+revize katalogu. Legacy nebo nevalidní lease takovou autoritu nedává.
 Productionspace
 repozitáře z rootu nespouštěj ani nereleasuj bez explicitní org policy.
 
