@@ -18,7 +18,6 @@ describe("Mission Control repository-db authority", () => {
 
     expect(readMissionControlRepositoryDbAuthority(root)).toMatchObject({
       markerName: "repository-db.yaml",
-      dataRoot: "data/mission-control",
     });
   });
 
@@ -32,7 +31,6 @@ describe("Mission Control repository-db authority", () => {
 
     expect(readMissionControlRepositoryDbAuthority(root)).toMatchObject({
       markerName: "repository-db.manifest.json",
-      dataRoot: "data/mission-control",
     });
   });
 

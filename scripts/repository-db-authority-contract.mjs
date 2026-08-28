@@ -50,7 +50,6 @@ export function readMissionControlRepositoryDbAuthority(repositoryDbRoot) {
     return {
       markerName,
       markerPath,
-      dataRoot: manifest.data_root,
     };
   }
 
@@ -66,6 +65,5 @@ export function readMissionControlRepositoryDbAuthority(repositoryDbRoot) {
   return {
     markerName,
     markerPath,
-    dataRoot: "data/mission-control",
   };
 }
