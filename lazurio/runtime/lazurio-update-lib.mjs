@@ -729,7 +729,12 @@ async function verifyOrganizationUpdateTarget({
       detail: `Stažený Organization target zůstává neaktivní: stav ${resolution.state}, issues ${resolution.issues.join(", ") || "none"}.`,
     };
   }
-  const identityIssue = organizationTargetIdentityIssue({ repo, sourceUrl, resource: resolution.resource });
+  const identityIssue = organizationTargetIdentityIssue({
+    repo,
+    sourceUrl,
+    state: resolution.state,
+    resource: resolution.resource,
+  });
   if (identityIssue) {
     return {
       ok: false,
@@ -740,7 +745,7 @@ async function verifyOrganizationUpdateTarget({
   return { ok: true };
 }
 
-function organizationTargetIdentityIssue({ repo, sourceUrl, resource }) {
+function organizationTargetIdentityIssue({ repo, sourceUrl, state, resource }) {
   if (resource?.kind !== "organization" || resource.organization?.slug !== repo.organization) {
     return "Exact target neodpovídá ověřené identitě Organization mountu.";
   }
@@ -753,10 +758,16 @@ function organizationTargetIdentityIssue({ repo, sourceUrl, resource }) {
       : "Organization target nejde svázat s ověřenou GitHub repository identitou.";
   }
   const forgeLocator = resource.organization?.forge_binding?.locator;
-  if (typeof forgeLocator === "string" && forgeLocator.toLowerCase() !== remote.owner.toLowerCase()) {
+  if (typeof forgeLocator !== "string" || forgeLocator.toLowerCase() !== remote.owner.toLowerCase()) {
     return "Organization forge binding v exact targetu neodpovídá ověřenému GitHub originu.";
   }
   const repositoryLocator = resource.root_repository?.locator;
+  if (state === "legacy" && resource.root_repository === null) {
+    const owner = remote.owner.toLowerCase();
+    const repository = remote.repository.toLowerCase();
+    if (repository === owner || repository === `${owner}_gen3`) return null;
+    return "Legacy Organization target bez explicitního root repository bindingu neodpovídá kanonickému GitHub root repository názvu.";
+  }
   if (typeof repositoryLocator !== "string") {
     return "Exact target postrádá Organization root repository binding k ověřenému GitHub originu.";
   }

@@ -257,26 +257,117 @@ test("Organization target identity mismatch blocks before stashing or checkout m
   expect(status(fixture.working)).toContain("tracked.txt");
 });
 
+test("legacy Organization target accepts the historical owner-named root repository convention", async () => {
+  const fixture = await organizationActivationFixture("legacy-target-optional-root-binding");
+  const githubSource = "git@github.com:test/test.git";
+  await addRemoteCommit(fixture, "legacy-update.txt", "legacy update\n");
+
+  const result = await updateManagedRepo({ ...descriptor(fixture), repo: githubSource }, {
+    runId: "legacy-target-optional-root-binding",
+    deps: { runGit: runGitThroughFixtureSource(fixture, githubSource) },
+  });
+
+  expect(result).toMatchObject({ state: "updated" });
+  expect(readOrganizationRoot({ organizationRoot: fixture.working }).state).toBe("legacy");
+  expect(status(fixture.working)).toBe("");
+});
+
+test("legacy Organization target accepts the canonical owner_GEN3 root repository convention", async () => {
+  const fixture = await organizationActivationFixture("legacy-target-canonical-gen3-root");
+  const githubSource = "git@github.com:test/test_GEN3.git";
+  await addRemoteCommit(fixture, "legacy-update.txt", "legacy update\n");
+
+  const result = await updateManagedRepo({ ...descriptor(fixture), repo: githubSource }, {
+    runId: "legacy-target-canonical-gen3-root",
+    deps: { runGit: runGitThroughFixtureSource(fixture, githubSource) },
+  });
+
+  expect(result).toMatchObject({ state: "updated" });
+  expect(readOrganizationRoot({ organizationRoot: fixture.working }).state).toBe("legacy");
+  expect(status(fixture.working)).toBe("");
+});
+
+test("legacy Organization target without a binding rejects another repository under the same owner", async () => {
+  const fixture = await organizationActivationFixture("legacy-target-same-owner-shadow");
+  const githubSource = "git@github.com:test/shadow.git";
+  await addRemoteCommit(fixture, "legacy-update.txt", "legacy update\n");
+  const before = runGit(fixture.working, ["rev-parse", "HEAD"]);
+
+  const result = await updateManagedRepo({ ...descriptor(fixture), repo: githubSource }, {
+    runId: "legacy-target-same-owner-shadow",
+    deps: { runGit: runGitThroughFixtureSource(fixture, githubSource) },
+  });
+
+  expect(result).toMatchObject({
+    state: "blocked",
+    reason: "organization_target_identity_mismatch",
+  });
+  expect(runGit(fixture.working, ["rev-parse", "HEAD"])).toBe(before);
+  expect(runGit(fixture.working, ["stash", "list", "--format=%H"])).toBe("");
+});
+
+test("legacy Organization target still binds its forge owner to the verified GitHub origin", async () => {
+  const fixture = await organizationActivationFixture("legacy-target-forge-mismatch");
+  const githubSource = "git@github.com:test/root.git";
+  await addRemoteFiles(fixture, {
+    "company.gen3.json": `${JSON.stringify({
+      organization_generation: "gen3",
+      organization_kind: "organization",
+      company: {
+        slug: "test",
+        display_name: "Test Organization",
+        github_org: "foreign",
+      },
+    }, null, 2)}\n`,
+    "modules.manifest.json": `${JSON.stringify({
+      organization_generation: "gen3",
+      company: "test",
+      github_org: "foreign",
+      module_slots: [],
+    }, null, 2)}\n`,
+  }, "publish foreign legacy forge binding");
+  const before = runGit(fixture.working, ["rev-parse", "HEAD"]);
+
+  const result = await updateManagedRepo({ ...descriptor(fixture), repo: githubSource }, {
+    runId: "legacy-target-forge-mismatch",
+    deps: { runGit: runGitThroughFixtureSource(fixture, githubSource) },
+  });
+
+  expect(result).toMatchObject({
+    state: "blocked",
+    reason: "organization_target_identity_mismatch",
+  });
+  expect(runGit(fixture.working, ["rev-parse", "HEAD"])).toBe(before);
+  expect(runGit(fixture.working, ["stash", "list", "--format=%H"])).toBe("");
+});
+
+test("transition target still requires a root repository binding on a verified GitHub origin", async () => {
+  const fixture = await organizationActivationFixture("transition-target-missing-root-binding");
+  const githubSource = "git@github.com:test/root.git";
+  await addRemoteFiles(
+    fixture,
+    transitionOrganizationDocuments(),
+    "publish transition without root repository binding",
+  );
+  const before = runGit(fixture.working, ["rev-parse", "HEAD"]);
+
+  const result = await updateManagedRepo({ ...descriptor(fixture), repo: githubSource }, {
+    runId: "transition-target-missing-root-binding",
+    deps: { runGit: runGitThroughFixtureSource(fixture, githubSource) },
+  });
+
+  expect(result).toMatchObject({
+    state: "blocked",
+    reason: "organization_target_identity_mismatch",
+  });
+  expect(runGit(fixture.working, ["rev-parse", "HEAD"])).toBe(before);
+  expect(runGit(fixture.working, ["stash", "list", "--format=%H"])).toBe("");
+});
+
 test("Organization target binds its declared root repository to the verified GitHub origin", async () => {
   const fixture = await organizationActivationFixture("target-github-binding");
   const githubSource = "git@github.com:test/root.git";
-  const runGitAgainstFixture = async (args, options) => {
-    if (args[0] === "remote" && args[1] === "get-url") {
-      return { ok: true, exitCode: 0, stdout: githubSource, stderr: "", error: null };
-    }
-    if (args[0] === "fetch") {
-      return runGitAsync([
-        "fetch",
-        "--no-tags",
-        "--prune",
-        "--force",
-        "--",
-        fixture.remote,
-        args.at(-1),
-      ], options);
-    }
-    return runGitAsync(args, options);
-  };
+  const runGitAgainstFixture = runGitThroughFixtureSource(fixture, githubSource);
   const publishTransition = async (repositoryLocator, message) => {
     const transition = transitionOrganizationDocuments();
     const modules = JSON.parse(transition["modules.manifest.json"]);
@@ -325,17 +416,7 @@ test("Organization target blocks when a non-GitHub network origin has no explici
 
   const result = await updateManagedRepo({ ...descriptor(fixture), repo: null }, {
     runId: "target-unbound-network-origin",
-    deps: {
-      runGit: async (args, options) => {
-        if (args[0] === "remote" && args[1] === "get-url") {
-          return { ok: true, exitCode: 0, stdout: networkSource, stderr: "", error: null };
-        }
-        if (args[0] === "fetch") {
-          return runGitAsync(args.map((value) => value === networkSource ? fixture.remote : value), options);
-        }
-        return runGitAsync(args, options);
-      },
-    },
+    deps: { runGit: runGitThroughFixtureSource(fixture, networkSource) },
   });
 
   expect(result).toMatchObject({
@@ -2619,6 +2700,26 @@ function descriptor(fixture) {
     absolute_path: fixture.working,
     expected_branch: "main",
     repo: fixture.remote,
+  };
+}
+
+function runGitThroughFixtureSource(fixture, sourceUrl) {
+  return async (args, options) => {
+    if (args[0] === "remote" && args[1] === "get-url") {
+      return { ok: true, exitCode: 0, stdout: sourceUrl, stderr: "", error: null };
+    }
+    if (args[0] === "fetch") {
+      return runGitAsync([
+        "fetch",
+        "--no-tags",
+        "--prune",
+        "--force",
+        "--",
+        fixture.remote,
+        args.at(-1),
+      ], options);
+    }
+    return runGitAsync(args, options);
   };
 }
 
