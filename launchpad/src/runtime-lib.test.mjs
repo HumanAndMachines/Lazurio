@@ -2930,7 +2930,7 @@ test("update refresh retries a failed ensure cleanly and restores the managed ap
   await runtime.stop("test-company-demo-v1");
 }, platformTestTimeout(15_000));
 
-test("failed clean Repair rolls back dependencies and restarts the previous managed app", async () => {
+test("failed clean Repair discards derived dependencies and leaves the app blocked", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({
     port,
@@ -2943,7 +2943,7 @@ test("failed clean Repair rolls back dependencies and restarts the previous mana
   const runtime = createRuntimeManager({
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
-    instanceId: "repair-rollback-test-instance",
+    instanceId: "repair-failure-test-instance",
     spawnProcess: (command, options) => command.slice(1).includes("install")
       ? Bun.spawn([
           process.execPath,
@@ -2956,17 +2956,22 @@ test("failed clean Repair rolls back dependencies and restarts the previous mana
   const opened = await runtime.open("test-company-demo-v1");
   await expect(runtime.install("test-company-demo-v1", { action: "repair" })).rejects.toMatchObject({
     code: "app_install_failed",
-    metadata: { rollback_restarted: true },
+    metadata: { runtime_tree_usable: false },
   });
-  const healthy = await waitForStatus(() => runtime.health("test-company-demo-v1"), "healthy");
+  const blocked = await runtime.health("test-company-demo-v1");
 
-  expect(healthy.pid).not.toBe(opened.runtime.pid);
-  expect(await readFile(join(appRoot, "node_modules", "previous.txt"), "utf8")).toBe("previous\n");
+  expect(blocked).toMatchObject({
+    owner: "none",
+    status: "stopped",
+    managed: false,
+    dependencies: { state: "needs_install" },
+  });
+  expect(blocked.pid).not.toBe(opened.runtime.pid);
+  expect(existsSync(join(appRoot, "node_modules"))).toBe(false);
   expect(existsSync(join(appRoot, "node_modules", "partial.txt"))).toBe(false);
-  await runtime.stop("test-company-demo-v1");
 }, platformTestTimeout(15_000));
 
-test("authority drift rolls dependencies back but never restarts the previously managed app", async () => {
+test("authority drift discards dependencies and never restarts the previously managed app", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({
     port,
@@ -2994,11 +2999,11 @@ test("authority drift rolls dependencies back but never restarts the previously 
     code: "app_install_failed",
     metadata: {
       failure_kind: "dependency_authority_changed",
-      rollback_restarted: false,
+      runtime_tree_usable: false,
     },
   });
 
-  expect(await readFile(join(appRoot, "node_modules", "previous.txt"), "utf8")).toBe("previous\n");
+  expect(existsSync(join(appRoot, "node_modules"))).toBe(false);
   expect(JSON.parse(await readFile(
     join(root, "launchpad", "runtime", "apps", "test-company-demo-v1.json"),
     "utf8",
@@ -3008,7 +3013,7 @@ test("authority drift rolls dependencies back but never restarts the previously 
   });
 }, platformTestTimeout(15_000));
 
-test("refused clean Repair leaves an unchanged dependency boundary running", async () => {
+test("refused clean Repair leaves the dependency boundary untouched and the app stopped", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({
     port,
@@ -3036,14 +3041,14 @@ test("refused clean Repair leaves an unchanged dependency boundary running", asy
     code: "app_install_failed",
     metadata: {
       failure_kind: "node_modules_boundary_invalid",
-      rollback_restarted: true,
+      runtime_tree_usable: true,
     },
   });
-  const healthy = await waitForStatus(() => runtime.health("test-company-demo-v1"), "healthy");
+  const blocked = await runtime.health("test-company-demo-v1");
 
-  expect(healthy.pid).not.toBe(opened.runtime.pid);
+  expect(blocked).toMatchObject({ owner: "none", status: "stopped", managed: false });
+  expect(blocked.pid).not.toBe(opened.runtime.pid);
   expect(await readFile(join(externalDependencies, "marker.txt"), "utf8")).toBe("untouched\n");
-  await runtime.stop("test-company-demo-v1");
 }, platformTestTimeout(15_000));
 
 test("runtime manager předá absolutní Organization root i install lifecycle procesu", async () => {

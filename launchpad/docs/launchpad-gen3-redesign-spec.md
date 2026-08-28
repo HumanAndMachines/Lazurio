@@ -198,8 +198,9 @@ per-module download button, restore overlay, update journal, or second daemon.
 - **Dependencies:** after an actual source change, only the changed repository
   package and valid manifest-declared App package roots are refreshed. The
   versioned Bun lockfile is authoritative. A failed frozen ensure gets one
-  transactional clean retry; failure restores the previous `node_modules`.
-  The Server owns stop/restart of an affected managed App.
+  clean retry after deleting the exact derived `node_modules`; failure leaves
+  only that App blocked and the next Repair starts cleanly. The Server owns
+  stop/restart of an affected managed App and restarts it only after success.
 - **Runtime boundary:** the long-running Launchpad executes from an immutable
   exact-digest Workspace runtime outside the mutable working root. The local
   short CLI bundles the same engine into a temporary external runtime for its
@@ -382,8 +383,10 @@ Readiness validates and only then reads the exact selected Bun/npm/pnpm/Yarn
 lockfile. This wider read-only recognition does not widen mutation authority:
 Launchpad Install/Repair remains frozen-Bun-only and is offered only with an
 exact Bun lockfile. The installer pins package/lockfile identity and bytes
-across the child process; authority drift rejects the result and clean repair
-restores the previous dependency tree without overwriting changed Git files.
+across the child process; authority drift rejects the result. Clean Repair
+deletes only the exact derived `node_modules`, never source or changed Git
+files, and a failed or interrupted attempt converges through the same clean
+retry instead of restoring stale cache.
 
 Runtime readiness is Organization-scoped. A hard discovery failure in one
 mounted Organization must remain visible in the global Doctor, but it must not
@@ -399,7 +402,7 @@ precondition is false.
 | --- | --- | --- | --- |
 | Open | Ensure install/start for the selected main/worktree source, prove health and accept desired state; local returns loopback, hosted returns the exact catalog origin | Allowed as read-only | target URL, runtime, desired source |
 | Install | Allowed only when `dependencies.can_install=true`; app-cwd scoped | Disabled until explicit production policy exists | action, command, cwd, exit_code, log_path, log_excerpt |
-| Repair | Transactional clean frozen reinstall of the exact App `node_modules`; rollback on failure | Disabled until explicit production policy exists | action, command, cwd, exit_code, rollback/restart evidence, log_path, log_excerpt |
+| Repair | Idempotent clean frozen reinstall of the exact App `node_modules`; failure leaves only that App blocked and the next retry starts cleanly | Disabled until explicit production policy exists | action, command, cwd, exit_code, dependency state, log_path, log_excerpt |
 | Start | Allowed when `dependencies.can_start=true`; a valid static module lease replaces its current occupant under the module mutex | Disabled or confirmation-gated until policy exists | runtime, pid, health, desired source, failure_kind on error |
 | Stop | Allowed only for the active current-instance managed process; persist disabled desired state before signaling | confirmation-gated | desired state, pid/owner/result |
 | Restart | Stop + Start; never bypasses dependency/policy guards | confirmation-gated | both action results |
@@ -474,10 +477,11 @@ drawer scroll and summary focus.
 
 The same required-package inspector is used by runtime readiness, Doctor and
 the frozen installer postcondition. A successful process exit is not enough:
-clean Repair discards its recovery tree only after every required direct/dev
-package has safe package metadata inside the owning checkout. Logs remain a
-secondary action inside Technical details; Repair/Retry/Codex is the primary
-recovery path.
+clean Repair accepts the new derived tree only after every required direct/dev
+package has safe package metadata inside the owning checkout. A failed or
+interrupted clean attempt is discarded by the next retry; no second dependency
+authority or rollback tree exists. Logs remain a secondary action inside
+Technical details; Repair/Retry/Codex is the primary recovery path.
 
 ## 8. Přepínač prostorů v záhlaví
 

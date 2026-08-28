@@ -95,7 +95,7 @@ test("clean repair refuses a symlinked node_modules boundary", async () => {
   expect(await readFile(join(foreign, "keep"), "utf8")).toBe("safe\n");
 });
 
-test("failed clean repair restores the previous dependency tree", async () => {
+test("failed clean repair removes both the stale and partial dependency trees", async () => {
   const root = await packageFixture();
   const packageRoot = join(root, "app");
   await mkdir(join(packageRoot, "node_modules"), { recursive: true });
@@ -119,13 +119,55 @@ test("failed clean repair restores the previous dependency tree", async () => {
   expect(result).toMatchObject({
     ok: false,
     reason: "dependency_install_failed",
-    rollback_ok: true,
     removed_node_modules: true,
-    runtime_tree_usable: true,
+    runtime_tree_usable: false,
   });
-  expect(await readFile(join(packageRoot, "node_modules", "previous.txt"), "utf8")).toBe("previous\n");
+  expect(existsSync(join(packageRoot, "node_modules"))).toBe(false);
   expect(existsSync(join(packageRoot, "node_modules", "partial.txt"))).toBe(false);
   expect(existsSync(join(packageRoot, ".lazurio-node_modules-recovery"))).toBe(false);
+});
+
+test("failed clean repair never follows a replacement node_modules link during cleanup", async () => {
+  const root = await packageFixture();
+  const packageRoot = join(root, "app");
+  const foreign = join(root, "foreign-dependencies");
+  await mkdir(join(foreign, "fixture"), { recursive: true });
+  await writeFile(join(foreign, "keep.txt"), "safe\n");
+  await writeFile(
+    join(foreign, "fixture", "package.json"),
+    JSON.stringify({ name: "fixture", version: "1.0.0" }),
+  );
+
+  const result = await runFrozenBunInstall({
+    cwd: packageRoot,
+    boundaryRoot: root,
+    mode: "clean",
+    command: [process.execPath, "fixture-install"],
+    env: {
+      ...process.env,
+      LAZURIO_TEST_FOREIGN_DEPENDENCIES: foreign,
+    },
+    spawnProcess(_command, options) {
+      return Bun.spawn([
+        process.execPath,
+        "-e",
+        [
+          'const { symlink } = await import("node:fs/promises")',
+          'await symlink(process.env.LAZURIO_TEST_FOREIGN_DEPENDENCIES, "node_modules", process.platform === "win32" ? "junction" : "dir")',
+          "process.exit(7)",
+        ].join("; "),
+      ], options);
+    },
+  });
+
+  expect(result).toMatchObject({
+    ok: false,
+    reason: "node_modules_cleanup_failed",
+    runtime_tree_usable: false,
+  });
+  expect(result.detail).toContain("node_modules není běžná složka");
+  expect(await readFile(join(foreign, "keep.txt"), "utf8")).toBe("safe\n");
+  expect(existsSync(join(packageRoot, "node_modules"))).toBe(true);
 });
 
 test("refresh retries one failed ensure as a clean repair", async () => {
@@ -163,29 +205,32 @@ test("refresh retries one failed ensure as a clean repair", async () => {
   expect(await readFile(join(packageRoot, "node_modules", "fresh.txt"), "utf8")).toBe("fresh\n");
 });
 
-test("clean retry recovers a quarantined tree left by an interrupted repair", async () => {
+test("clean retry discards a partial tree left by an interrupted repair", async () => {
   const root = await packageFixture();
   const packageRoot = join(root, "app");
-  await mkdir(join(packageRoot, ".lazurio-node_modules-recovery"), { recursive: true });
-  await materializeDependency(packageRoot, "fixture", ".lazurio-node_modules-recovery");
-  await writeFile(join(packageRoot, ".lazurio-node_modules-recovery", "previous.txt"), "previous\n");
+  await mkdir(join(packageRoot, "node_modules"), { recursive: true });
+  await writeFile(join(packageRoot, "node_modules", "partial.txt"), "partial\n");
+  let attempts = 0;
 
   const result = await refreshFrozenBunDependencies({
     cwd: packageRoot,
     boundaryRoot: root,
     command: [process.execPath, "fixture-install"],
     spawnProcess(_command, options) {
-      return Bun.spawn([
-        process.execPath,
-        "-e",
-        fixtureDependencyInstallScript("await Bun.write('node_modules/fresh.txt', 'fresh\\n')"),
-      ], options);
+      attempts += 1;
+      return attempts === 1
+        ? Bun.spawn([process.execPath, "-e", "process.exit(2)"], options)
+        : Bun.spawn([
+            process.execPath,
+            "-e",
+            fixtureDependencyInstallScript("await Bun.write('node_modules/fresh.txt', 'fresh\\n')"),
+          ], options);
     },
   });
 
   expect(result).toMatchObject({ ok: true, refresh_strategy: "clean_repair" });
-  expect(existsSync(join(packageRoot, ".lazurio-node_modules-recovery"))).toBe(false);
-  expect(existsSync(join(packageRoot, "node_modules", "previous.txt"))).toBe(false);
+  expect(attempts).toBe(2);
+  expect(existsSync(join(packageRoot, "node_modules", "partial.txt"))).toBe(false);
   expect(await readFile(join(packageRoot, "node_modules", "fresh.txt"), "utf8")).toBe("fresh\n");
 });
 
@@ -273,7 +318,7 @@ test("shared inspection rejects an empty or non-string packageManager", async ()
   }
 });
 
-test("clean repair rejects package authority drift and restores the original dependency tree", async () => {
+test("clean repair rejects package authority drift and discards the derived tree", async () => {
   const root = await packageFixture();
   const packageRoot = join(root, "app");
   await mkdir(join(packageRoot, "node_modules"), { recursive: true });
@@ -297,14 +342,13 @@ test("clean repair rejects package authority drift and restores the original dep
   expect(result).toMatchObject({
     ok: false,
     reason: "dependency_authority_changed",
-    rollback_ok: true,
     runtime_tree_usable: false,
   });
-  expect(await readFile(join(packageRoot, "node_modules", "previous.txt"), "utf8")).toBe("previous\n");
+  expect(existsSync(join(packageRoot, "node_modules"))).toBe(false);
   expect(JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8")).dependencies).toEqual({});
 });
 
-test("clean repair rejects lockfile drift and restores the original dependency tree", async () => {
+test("clean repair rejects lockfile drift and discards the derived tree", async () => {
   const root = await packageFixture();
   const packageRoot = join(root, "app");
   await mkdir(join(packageRoot, "node_modules"), { recursive: true });
@@ -328,19 +372,16 @@ test("clean repair rejects lockfile drift and restores the original dependency t
   expect(result).toMatchObject({
     ok: false,
     reason: "dependency_authority_changed",
-    rollback_ok: true,
     runtime_tree_usable: false,
   });
-  expect(await readFile(join(packageRoot, "node_modules", "previous.txt"), "utf8")).toBe("previous\n");
+  expect(existsSync(join(packageRoot, "node_modules"))).toBe(false);
 });
 
-test("clean repair fails closed when package authority drifts after final cleanup", async () => {
+test("clean repair fails closed when package authority drifts before final readback", async () => {
   const root = await packageFixture();
   const packageRoot = join(root, "app");
   await materializeDependency(packageRoot, "fixture");
   await writeFile(join(packageRoot, "node_modules", "previous.txt"), "previous\n");
-  let cleanupCompleted = false;
-
   const result = await runFrozenBunInstall({
     cwd: packageRoot,
     boundaryRoot: root,
@@ -354,7 +395,6 @@ test("clean repair fails closed when package authority drifts after final cleanu
       ], options);
     },
     async beforeFinalReadback() {
-      cleanupCompleted = !existsSync(join(packageRoot, ".lazurio-node_modules-recovery"));
       await writeFile(join(packageRoot, "package.json"), JSON.stringify({
         name: "fixture",
         private: true,
@@ -363,13 +403,12 @@ test("clean repair fails closed when package authority drifts after final cleanu
     },
   });
 
-  expect(cleanupCompleted).toBe(true);
   expect(result).toMatchObject({
     ok: false,
     reason: "dependency_authority_changed",
-    rollback_ok: null,
     runtime_tree_usable: false,
   });
+  expect(existsSync(join(packageRoot, "node_modules"))).toBe(false);
 });
 
 test("clean repair rejects a higher-priority Bun lockfile introduced before final readback", async () => {
@@ -398,9 +437,9 @@ test("clean repair rejects a higher-priority Bun lockfile introduced before fina
   expect(result).toMatchObject({
     ok: false,
     reason: "dependency_authority_changed",
-    rollback_ok: null,
     runtime_tree_usable: false,
   });
+  expect(existsSync(join(packageRoot, "node_modules"))).toBe(false);
 });
 
 test("refresh never retries authority drift as a newly authorized clean repair", async () => {
@@ -1053,7 +1092,7 @@ test.skipIf(process.platform === "win32")("package.json and Bun lockfile authori
   })).toMatchObject({ ok: false, reason: "dependency_tree_boundary_invalid" });
 });
 
-test("successful exit with a missing required package is incomplete and clean mode rolls back", async () => {
+test("successful exit with a missing required package is incomplete and leaves no derived tree", async () => {
   const root = await packageFixture();
   const packageRoot = join(root, "app");
   await materializeDependency(packageRoot, "fixture");
@@ -1076,15 +1115,14 @@ test("successful exit with a missing required package is incomplete and clean mo
   expect(result).toMatchObject({
     ok: false,
     reason: "dependency_install_incomplete",
-    rollback_ok: true,
-    runtime_tree_usable: true,
+    runtime_tree_usable: false,
     missing_required_dependencies: ["fixture"],
   });
-  expect(await readFile(join(packageRoot, "node_modules", "previous.txt"), "utf8")).toBe("previous\n");
+  expect(existsSync(join(packageRoot, "node_modules"))).toBe(false);
   expect(existsSync(join(packageRoot, ".lazurio-node_modules-recovery"))).toBe(false);
 });
 
-test("successful clean repair with malformed package metadata rolls back", async () => {
+test("successful clean repair with malformed package metadata discards the derived tree", async () => {
   const root = await packageFixture();
   const packageRoot = join(root, "app");
   await materializeDependency(packageRoot, "fixture");
@@ -1107,13 +1145,12 @@ test("successful clean repair with malformed package metadata rolls back", async
   expect(result).toMatchObject({
     ok: false,
     reason: "dependency_tree_inspection_failed",
-    rollback_ok: true,
-    runtime_tree_usable: true,
+    runtime_tree_usable: false,
   });
-  expect(await readFile(join(packageRoot, "node_modules", "previous.txt"), "utf8")).toBe("previous\n");
+  expect(existsSync(join(packageRoot, "node_modules"))).toBe(false);
 });
 
-test("successful clean repair with alias-key metadata rolls back", async () => {
+test("successful clean repair with alias-key metadata discards the derived tree", async () => {
   const root = await packageFixture({ dependencies: { alias: "npm:real-package@1.0.0" } });
   const packageRoot = join(root, "app");
   await materializeDependency(packageRoot, "alias");
@@ -1140,35 +1177,10 @@ test("successful clean repair with alias-key metadata rolls back", async () => {
   expect(result).toMatchObject({
     ok: false,
     reason: "dependency_tree_inspection_failed",
-    rollback_ok: true,
-    runtime_tree_usable: true,
+    runtime_tree_usable: false,
     missing_required_dependencies: ["alias"],
   });
-  expect(JSON.parse(await readFile(join(packageRoot, "node_modules", "alias", "package.json"), "utf8"))).toMatchObject({
-    name: "real-package",
-  });
-  expect(await readFile(join(packageRoot, "node_modules", "previous.txt"), "utf8")).toBe("previous\n");
-});
-
-test("pending recovery reports a complete current tree as usable without discarding quarantine", async () => {
-  const root = await packageFixture();
-  const packageRoot = join(root, "app");
-  await materializeDependency(packageRoot, "fixture");
-  await mkdir(join(packageRoot, ".lazurio-node_modules-recovery"), { recursive: true });
-
-  const result = await runFrozenBunInstall({
-    cwd: packageRoot,
-    boundaryRoot: root,
-    mode: "ensure",
-    command: [process.execPath, "-e", "process.exit(0)"],
-  });
-
-  expect(result).toMatchObject({
-    ok: false,
-    reason: "node_modules_recovery_pending",
-    runtime_tree_usable: true,
-  });
-  expect(existsSync(join(packageRoot, ".lazurio-node_modules-recovery"))).toBe(true);
+  expect(existsSync(join(packageRoot, "node_modules"))).toBe(false);
 });
 
 test("incomplete clean install without a previous tree removes the partial result", async () => {
@@ -1192,7 +1204,6 @@ test("incomplete clean install without a previous tree removes the partial resul
   expect(result).toMatchObject({
     ok: false,
     reason: "dependency_install_incomplete",
-    rollback_ok: true,
     runtime_tree_usable: false,
   });
   expect(existsSync(join(packageRoot, "node_modules"))).toBe(false);

@@ -499,7 +499,7 @@ Kontrolní pravidla:
   lockfilu je source chyba pro Agenta, ne lokální krok uživatele.
 - Organization-local sdílený balíček deklaruj pouze relativním `file:` specem.
   Launchpad smí read-only ověřit přesně tento kanonický cíl uvnitř stejné
-  Organizace, ale instalaci i rollback stále omezuje na owning checkout. Jiný
+  Organizace, ale veškerou dependency mutaci stále omezuje na owning checkout. Jiný
   symlink cíl v package zdroji nebo instalovaném link-farmu, absolutní/UNC cesta
   či přesah do jiné Organizace je blokující diagnostika pro Agenta, ne důvod
   rozšířit write hranici. Sync po změně owning repozitáře cíle znovu připraví i
@@ -589,14 +589,15 @@ Pro každou viditelnou aplikaci ověř:
 1. dependency state je `ready`, `needs_install`, `missing_package`,
    `unknown_package_manager` nebo jiný vysvětlitelný stav;
 2. `Install` běží frozen jen v app cwd a nesmaže existující strom;
-3. `Repair` čistě nahradí jen přesný app `node_modules`, při selhání obnoví
-   původní strom a loguje command, cwd, exit code i rollback;
+3. `Repair` čistě nahradí jen přesný odvozený app `node_modules`; při selhání
+   odstraní částečný strom, nechá App blokovanou a loguje command, cwd i exit
+   code, takže další Repair začne ze stejného prázdného stavu;
 4. `Start` nikdy neselže tiše — musí dát runtime status nebo log/next action.
 
 Po pullu provede `lazurio update` stejnou kontrolu automaticky pro Apps
 skutečně změněných Modulů. Nejdřív zkusí frozen instalaci bez mazání a při
 selhání právě jednu čistou opravu. Pokud je verzovaný lockfile neplatný,
-zachová původní dependencies a předá opravu Agentovi.
+žádnou čistou instalaci odhadem nespustí a předá opravu Agentovi.
 
 U Knowledgebase ověř, že se port nemůže rozcházet: přesné číslo vlastní
 `lazurio.module.json`, `lazurio.runtime.listeners[]` odkazuje na jeho lease a

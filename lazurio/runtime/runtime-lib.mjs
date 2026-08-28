@@ -1066,23 +1066,6 @@ export function createRuntimeManager({
     });
 
     if (!installed.ok) {
-      let rollbackRestarted = null;
-      let rollbackRestartError = null;
-      if (activeApp && installed.runtime_tree_usable === true) {
-        await appendLog(
-          logPath,
-          `[launchpad] ${new Date().toISOString()} ${action} ${app.id} dependency repair failed; restarting the previous managed runtime\n`,
-        );
-        try {
-          rollbackRestarted = await startRuntimeAppUnlocked(activeApp, { trigger: "dependency-repair-rollback" });
-        } catch (error) {
-          rollbackRestartError = error instanceof Error ? error.message : String(error);
-          await appendLog(
-            logPath,
-            `[launchpad] ${new Date().toISOString()} ${action} ${app.id} previous runtime restart failed: ${rollbackRestartError}\n`,
-          );
-        }
-      }
       throw new RuntimeActionError(500, "app_install_failed", installed.detail ?? installFailureMessage(app, exitCode, log_excerpt), [
         installed.detail,
         log_excerpt,
@@ -1095,9 +1078,8 @@ export function createRuntimeManager({
         exit_code: exitCode,
         log_path: relativeRuntimePath(logPath),
         log_excerpt,
-        rollback_restarted: rollbackRestarted !== null,
+        runtime_tree_usable: installed.runtime_tree_usable === true,
         missing_required_dependencies: installed.missing_required_dependencies ?? [],
-        ...(rollbackRestartError ? { rollback_restart_error: rollbackRestartError } : {}),
       });
     }
 
