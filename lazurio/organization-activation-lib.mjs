@@ -252,7 +252,7 @@ function inspectRootRepository({ invoke, organization }) {
   const companyDocument = readRepositoryJson({ invoke, fullName, path: "company.gen3.json", ref: defaultBranch });
   const modulesDocument = readRepositoryJson({ invoke, fullName, path: "modules.manifest.json", ref: defaultBranch });
   const canonicalDocument = readRepositoryJson({ invoke, fullName, path: "lazurio.organization.json", ref: defaultBranch });
-  const resolver = resolveOrganizationRootDocuments({
+  const resolution = resolveOrganizationRootDocuments({
     companyManifest: companyDocument.value,
     modulesManifest: modulesDocument.value,
     canonicalManifest: canonicalDocument.present ? canonicalDocument.value : null,
@@ -269,7 +269,7 @@ function inspectRootRepository({ invoke, organization }) {
     default_branch: defaultBranch,
     viewer_can_push: viewerCanPush,
     candidate_count: 0,
-    resolver,
+    resolver: resolution.activation,
   };
 }
 

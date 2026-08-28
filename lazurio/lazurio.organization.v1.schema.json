@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lazurio.local/schema/lazurio.organization.v1.schema.json",
+  "title": "Lazurio Organization manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "organization",
+    "manifests",
+    "extensions",
+    "compatibility"
+  ],
+  "properties": {
+    "schema_version": { "const": "lazurio.organization.v1" },
+    "kind": { "enum": ["organization", "template"] },
+    "organization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slug", "display_name", "forge_binding", "metadata"],
+      "properties": {
+        "slug": { "type": "string", "minLength": 1, "pattern": "^(?:\\S|\\S.*\\S)$" },
+        "display_name": { "type": "string", "minLength": 1, "pattern": "^(?:\\S|\\S.*\\S)$" },
+        "forge_binding": { "$ref": "#/$defs/organizationForgeBinding" },
+        "metadata": {
+          "type": "object",
+          "propertyNames": {
+            "not": {
+              "enum": ["slug", "display_name", "github_org", "repository", "git_url", "root_repository", "default_branch"]
+            }
+          }
+        }
+      }
+    },
+    "root_repository": {
+      "anyOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/repositoryForgeBinding" }
+      ]
+    },
+    "manifests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["modules"],
+      "properties": {
+        "modules": { "const": "modules.manifest.json" }
+      }
+    },
+    "module_port_pool": {
+      "type": "object",
+      "$comment": "Core additionally requires start <= end; standard JSON Schema cannot express this cross-field comparison without a non-portable extension.",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": { "type": "integer", "minimum": 1024, "maximum": 65535 },
+        "end": { "type": "integer", "minimum": 1024, "maximum": 65535 }
+      }
+    },
+    "governance": {
+      "type": "object",
+      "properties": {
+        "default_branch": { "const": "main" },
+        "access_authority": { "const": "github" }
+      }
+    },
+    "teams": { "type": "array" },
+    "layers": { "type": "array" },
+    "task_sources": { "type": "array" },
+    "doctor": { "type": "object" },
+    "extensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["legacy"],
+      "properties": {
+        "legacy": {
+          "type": "object",
+          "description": "Losslessly preserved Organization-owned legacy fields without canonical-field collisions.",
+          "propertyNames": {
+            "not": {
+              "enum": ["organization_generation", "organization_kind", "company", "forge_binding", "governance", "teams", "layers", "task_sources", "doctor", "module_port_pool", "modules", "default_branch"]
+            }
+          }
+        }
+      }
+    },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["legacy_projection"],
+      "properties": {
+        "legacy_projection": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "algorithm", "sha256"],
+          "properties": {
+            "path": { "const": "company.gen3.json" },
+            "algorithm": { "const": "sha256-canonical-json-v1" },
+            "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "bindingState": { "enum": ["unverified", "verified"] },
+    "organizationForgeBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["forge", "locator", "binding_state"],
+      "properties": {
+        "forge": { "const": "github" },
+        "locator": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$" },
+        "binding_state": { "$ref": "#/$defs/bindingState" },
+        "organization_id": { "type": "string", "pattern": "^[1-9][0-9]{0,19}$" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "binding_state": { "const": "verified" } } },
+          "then": { "required": ["organization_id"] },
+          "else": { "not": { "required": ["organization_id"] } }
+        }
+      ]
+    },
+    "repositoryForgeBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["forge", "locator", "default_branch", "binding_state"],
+      "properties": {
+        "forge": { "const": "github" },
+        "locator": { "type": "string", "minLength": 3, "pattern": "^(?!.*\\.git$)[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" },
+        "default_branch": { "const": "main" },
+        "binding_state": { "$ref": "#/$defs/bindingState" },
+        "repository_id": { "type": "string", "pattern": "^[1-9][0-9]{0,19}$" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "binding_state": { "const": "verified" } } },
+          "then": { "required": ["repository_id"] },
+          "else": { "not": { "required": ["repository_id"] } }
+        }
+      ]
+    }
+  }
+}

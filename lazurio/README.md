@@ -93,9 +93,12 @@ není a bez `--check` CLI skončí před provider voláním. Instalaci se scope
 `all` lze ověřit přímo. U `selected` se CLI pokusí o standardní read endpoint;
 pokud jej aktuální `gh` token nemůže číst, vrátí přesný
 `verify_root_repository_access` místo broad App grantu, dalšího credential
-store nebo falešného úspěchu. Současný remote resolver podporuje dnešní GEN3
-identity pair. Canonical `lazurio.organization.json` zůstává fail-closed do
-publikace společného DEV-6488 resolveru; activation si jeho parser nevymýšlí.
+store nebo falešného úspěchu. Společný Core resolver normalizuje dnešní GEN3
+identity pair i přijatý `lazurio.organization.v1` kontrakt a vrací šest
+kompatibilitních stavů. Remote activation ale canonical a dual-file stav
+zůstává v prvním DEV-6512 řezu fail-closed, dokud navazující
+reader/activation gate nepřesune všechny consumery na tentýž normalizovaný
+výsledek; activation si vlastní parser nevymýšlí.
 
 Exit code `0` znamená `active`, `1` znamená bezpečný další krok a `2`
 technickou chybu. Veřejný tvar drží

@@ -1,6 +1,7 @@
 # Proposal: Lazurio manifest family
 
-Status: **architectural proposal; not an accepted decision; no runtime change**
+Status: **Organization contract accepted by decision amendments 0026, 0031 and
+0042; Personalspace naming remains a separate proposal and rollout**
 Decision owner: Lazurio maintainers
 Tracking: `DEV-6488`
 
@@ -23,8 +24,10 @@ lazurio.module.v1
 lazurio.personalspace.v1
 ```
 
-`company.gen3.json` and `personal.gen3.json` become temporary compatibility
-formats. This proposal does not rename either file.
+`company.gen3.json` is the temporary Organization legacy compatibility
+projection. The `personal.gen3.json` proposal remains unaccepted by this
+Organization-only implementation slice. This contract does not rename or
+remove either deployed file by itself.
 
 ## Why
 
@@ -103,6 +106,15 @@ The first schema must contain or preserve:
 The current `humanandmachines.doctor.declaration.v1` remains unchanged during
 this migration. Renaming the Doctor declaration schema is a separate decision.
 
+During the legacy compatibility window, a declared root binding uses the
+existing managed-root invariant: its GitHub owner matches the Organization
+locator and its default branch is `main`. Verified Organization and repository
+IDs appear as one complete pair and must satisfy the existing Forge-binding
+contract; a partial verified pair cannot be represented losslessly to an old
+reader and therefore fails closed. Canonical `organization.metadata` cannot
+reuse legacy `company` authority-field names; such values belong in their
+canonical fields or in a reviewed non-reserved extension.
+
 An opaque cross-Forge Organization ID is deliberately deferred. It has no
 current minting authority or consumer. V1 uses the existing Organization slug
 and, when connected, the provider-stable repository ID. Cross-Forge identity
@@ -138,6 +150,11 @@ Lazurio Core owns:
 - semantic parity and conflict detection;
 - deterministic migration planning and legacy projection;
 - machine-readable states, errors and receipts.
+
+The authored document uses `lazurio.organization.v1`. The resolver envelope
+uses `lazurio.organization.root-resolution.v1`, and its normalized resource
+uses the distinct `lazurio.organization.resource.v1`; consumers must not
+validate the normalized read model as if it were the authored manifest.
 
 Consumers use that Core result:
 
@@ -299,11 +316,12 @@ tracked state store.
 
 ## Rollout
 
-### 0. Accept the proposal
+### 0. Accept the Organization contract
 
-This PR changes no runtime behavior. Before implementation, amend decisions
-0026, 0031, 0042 and 0051 where they pin legacy filenames or discovery
-mechanics.
+DEV-6512 amended decisions 0026, 0031 and 0042 for the Organization contract.
+Decision 0051 remains the Personalspace authority and is explicitly unchanged.
+The resolver slice introduces no Organization writer, migration or Machine
+activation by itself.
 
 The proposal and later rollout use a new Mission Control plan and DEV code.
 They are independent of DEV-6439 and PR #129: DEV-6439 keeps its current Iotor
@@ -325,6 +343,29 @@ No resource may enter `transition` until all mutation-capable consumers use the
 Core resolver and every supported Machine is covered by the activation rollout
 gate. Each slice keeps existing files canonical and carries golden parity,
 real-Organization smoke and Windows CI.
+
+#### Consumer impact map at the resolver baseline
+
+The map below is the exact direct-reader inventory at Lazurio `main`
+`5859fe524a2042053c781641810527db04407d38`. It is an implementation gate, not
+a second registry: each follow-up removes a direct document read by consuming
+`resolveOrganizationRootDocuments` and its normalized resource instead.
+
+| Follow-up owner | Direct consumers at this baseline | Required convergence |
+| --- | --- | --- |
+| Core compatibility adapters | `lazurio/organization-activation-lib.mjs`, `lazurio/organization-install-lib.mjs` | Already call the single resolver; they intentionally retain the legacy-only activation projection until the reader/activation gate. |
+| Launchpad discovery and diagnostics | `launchpad/src/discovery-lib.mjs`, `launchpad/src/diagnostics-lib.mjs`, `launchpad/src/git-inventory-lib.mjs`, `launchpad/src/doctor-children-lib.mjs`, `launchpad/src/module-location-repair-lib.mjs`, `launchpad/src/workspace-parity-runner.mjs` | Consume one normalized Organization resource, preserve fail-closed conflict, and compose exactly one Organization child Doctor per mount. |
+| Lazurio CLI, update and Module policy | `lazurio/lib.mjs`, `lazurio/module-port-lib.mjs`, `lazurio/module-setup-lib.mjs` | Stop opening the legacy projection as authority; use the same normalized identity, policy and repository inventory. |
+| Root scripts and worktree inventory | `scripts/worktree-create.mjs`, `scripts/lazurio-module-inventory.mjs`, `scripts/mission-control-trust-smoke.mjs`, `scripts/gen2-gen3-sync-inventory.mjs`, `.agents/skills/worktree-development-discipline/scripts/worktree-inventory.mjs`, `.claude/skills/worktree-development-discipline/scripts/worktree-inventory.mjs` | Resolve the mount once through Core; keep the two tracked skill mirrors byte-identical. |
+| Bootstrap follow-up | `lazurio/core/organization-scaffold-lib.mjs` | Emit the canonical manifest plus its deterministic legacy compatibility projection only after reader and Machine-activation gates. |
+
+`launchpad/src/doctor-surface-lib.mjs`, `launchpad/src/module-folder-lib.mjs` and
+`lazurio/core/module-location-repair-contract-lib.mjs` mention the legacy
+filename only in user guidance or interface documentation; they are copy
+follow-ups, not independent readers. `lazurio/lazurio.organization.v1.schema.json`
+and `lazurio/core/organization-activation-lib.mjs` are the schema and resolver
+authorities introduced by the first slice and therefore are not migration
+consumers.
 
 ### 2. Distribute migration capability
 

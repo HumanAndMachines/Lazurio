@@ -200,6 +200,7 @@ test("Organization port allocation policy has one physical Core owner", async ()
     .sort();
 
   expect(consumers).toEqual([
+    "lazurio/core/organization-activation-lib.mjs",
     "lazurio/module-port-lib.mjs",
     "lazurio/module-setup-lib.mjs",
     "lazurio/runtime/discovery-lib.mjs",

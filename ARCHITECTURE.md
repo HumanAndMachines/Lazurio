@@ -169,7 +169,7 @@ listenery a health check. Není to kontrakt produkčního nasazení.
 
 | Vrstva | Co vlastní |
 | --- | --- |
-| Organization manifest | Rozsah `module_port_pool` pro přidělení **nových** portů. Dnes jej nese `company.gen3.json`, cílově `lazurio.organization.json`. |
+| Organization manifest | Rozsah `module_port_pool` pro přidělení **nových** portů. Kanonická authoring autorita je `lazurio.organization.json`; dosud nemigrovaný mount zůstává ve stavu `legacy` a `company.gen3.json` je po migraci jen parity-ověřená legacy compatibility projection. |
 | `lazurio.module.json` | Přesný port, jeho název a seznam aplikací Modulu. Je jedinou autoritou konkrétního čísla. |
 | `package.json#lazurio.runtime` | Příkaz, protokol, health check a odkaz na pojmenovaný lease. Číslo portu znovu neurčuje. |
 | Launchpad | Při startu načte lease, předá host a port procesu a řídí jeho životní cyklus. Port nevymýšlí ani trvale neukládá. |
