@@ -751,8 +751,6 @@ function projectLegacyModules(slots) {
       delete projected.space;
       delete projected.default_access;
       delete projected.required_roles;
-      delete projected.ui_exposure;
-      delete projected.description;
       projected.slug ??= slot.path.split("/").at(-1);
       if (remote !== undefined) projected.repo = remote;
       if (branch !== undefined) projected.branch = branch;

@@ -288,6 +288,13 @@ test("canonical schema, semantic parity and projection hash are deterministic ac
     declared_hash: canonical.compatibility.legacy_projection.sha256,
     actual_hash: canonical.compatibility.legacy_projection.sha256,
   });
+  expect(projected.modules).toEqual([
+    expect.objectContaining({
+      path: "workspace/knowledgebase",
+      description: "Organization knowledge and operating truth.",
+      ui_exposure: "diagnostics-only",
+    }),
+  ]);
 });
 
 test("template kind remains one non-actionable normalized resource", () => {
@@ -467,6 +474,8 @@ function organizationModules() {
       path: "workspace/knowledgebase",
       slug: "knowledgebase",
       teams: ["workspace"],
+      description: "Organization knowledge and operating truth.",
+      ui_exposure: "diagnostics-only",
       default_access: "expected",
       required_roles: ["*"],
       source_of_truth: "git-native",
