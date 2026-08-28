@@ -259,9 +259,11 @@ nepřepisuje — předá ji Agentovi.
 Po skutečné změně source se obnovují pouze package rooty deklarovaných Apps v
 dotčeném repozitáři. Autoritou je verzovaný lockfile, ne stáří souborů. První
 pokus zachová existující `node_modules`; pokud selže, následuje jedna čistá
-instalace s původním stromem odloženým pro rollback. Běžící managed aplikaci
-Launchpad po dobu opravy zastaví a po úspěchu, nebo po návratu původních
-balíčků, znovu spustí. Neplatný lockfile je source chyba pro Agenta, ne důvod
+instalace po odstranění tohoto přesného odvozeného stromu. Selhání ani pád
+procesu neobnovují starý cache: aplikace zůstane blokovaná, neúplný strom se
+při dalším Repair znovu odstraní a frozen instalace se bezpečně zopakuje.
+Běžící managed aplikaci Launchpad po dobu opravy zastaví a znovu spustí pouze
+po ověřeném úspěchu. Neplatný lockfile je source chyba pro Agenta, ne důvod
 vytvořit lokálně jinou verzi dependencies.
 
 Hranice mutace a hledání balíčků je vždy přesný owning checkout. Relativní

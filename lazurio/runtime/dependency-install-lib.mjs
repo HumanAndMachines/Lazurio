@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { lstat, opendir, realpath, rename, rm, stat } from "node:fs/promises";
+import { lstat, opendir, realpath, rm, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep, win32 } from "node:path";
 import {
   inspectDirectoryWithinCanonicalBoundary,
@@ -13,7 +13,6 @@ const PACKAGE_LOCKFILES = Object.freeze([
   "pnpm-lock.yaml",
   "yarn.lock",
 ]);
-const NODE_MODULES_RECOVERY = ".lazurio-node_modules-recovery";
 const LOCAL_DEPENDENCY_TREE_ENTRY_LIMIT = 20_000;
 
 export function frozenBunInstallCommand(bunExecutable = process.execPath) {
@@ -39,24 +38,9 @@ export async function runFrozenBunInstall({
     return unchangedFailure({ ok: false, reason: "install_mode_invalid", detail: `Neplatný dependency install režim ${JSON.stringify(mode)}.` }, mode);
   }
 
-  const recoveryPath = join(packageRoot.cwd, NODE_MODULES_RECOVERY);
-  if (mode === "ensure" && existsSync(recoveryPath)) {
-    const recovery = await regularDirectory(recoveryPath, "node_modules recovery");
-    if (!recovery.ok) return recovery;
-    const currentState = await pinnedRuntimeTreeState(packageRoot);
-    return {
-      ok: false,
-      reason: "node_modules_recovery_pending",
-      detail: "Předchozí čistá oprava zůstala nedokončená; Lazurio ji musí bezpečně obnovit a zopakovat.",
-      mode,
-      removed_node_modules: false,
-      runtime_tree_usable: currentState.runtime_tree_usable,
-    };
-  }
-
   let removedNodeModules = false;
   if (mode === "clean") {
-    const prepared = await prepareCleanInstall(packageRoot.cwd);
+    const prepared = await removeExactNodeModules(packageRoot.cwd);
     if (!prepared.ok) {
       const currentState = await pinnedRuntimeTreeState(packageRoot);
       return {
@@ -71,7 +55,7 @@ export async function runFrozenBunInstall({
 
   let installResult;
   try {
-    // Clean mode may have moved node_modules since the initial validation.
+    // Clean mode may have removed node_modules since the initial validation.
     // Reconfirm the exact manifest + lock bytes immediately before handing
     // lifecycle authority to Bun; a concurrent checkout refresh must not turn
     // an earlier validation into permission to execute different source.
@@ -215,46 +199,17 @@ export async function runFrozenBunInstall({
   }
 
   if (mode !== "clean") return installResult;
-  if (installResult.ok) {
-    // This is the commit point for a clean repair: keep the quarantined tree
-    // until the original authority is still exact immediately before discard.
-    const commitAuthority = await verifyInstallAuthority(packageRoot.authority_snapshot);
-    if (!commitAuthority.ok) {
-      installResult = {
-        ...installResult,
-        ok: false,
-        reason: commitAuthority.reason,
-        detail: commitAuthority.detail,
-        runtime_tree_usable: null,
-      };
-    }
-  }
-  const finalized = installResult.ok
-    ? await discardPreviousTree(packageRoot.cwd)
-    : await restorePreviousTree(packageRoot.cwd);
-  if (!finalized.ok) {
-    const currentState = await pinnedRuntimeTreeState(packageRoot);
-    return {
-      ...installResult,
-      ok: false,
-      reason: finalized.reason,
-      detail: `${installResult.detail ? `${installResult.detail} ` : ""}${finalized.detail}`.trim(),
-      rollback_ok: false,
-      runtime_tree_usable: currentState.runtime_tree_usable,
-    };
-  }
   // Deterministic race-test seam. Production callers omit it; it deliberately
-  // sits after cleanup/rollback and before the last authority + tree readback.
+  // sits before the last authority + tree readback.
   if (beforeFinalReadback) await beforeFinalReadback();
   const finalState = await pinnedRuntimeTreeState(packageRoot);
   if (installResult.ok && !finalState.runtime_tree_usable) {
     const finalFailure = finalRuntimeTreeFailure(finalState);
-    return {
+    installResult = {
       ...installResult,
       ok: false,
       reason: finalFailure.reason,
       detail: finalFailure.detail,
-      rollback_ok: null,
       runtime_tree_usable: false,
       missing_required_dependencies:
         finalState.dependency_state.missing_required_dependencies
@@ -262,12 +217,23 @@ export async function runFrozenBunInstall({
         ?? [],
     };
   }
-  return {
-    ...installResult,
-    rollback_ok: installResult.ok ? null : true,
-    runtime_tree_usable: finalState.runtime_tree_usable
-      && (installResult.ok || installResult.reason !== "dependency_authority_changed"),
-  };
+  if (installResult.ok) return { ...installResult, runtime_tree_usable: true };
+
+  // node_modules je odvozený cache, nikoli rollback autorita. Neúspěšný clean
+  // install po sobě nenechá částečný strom, který by mohl po restartu vypadat
+  // připraveně. Další Repair začíná ze stejného prázdného stavu a je přirozeně
+  // idempotentní; source, lockfile ani jiná Git data se zde nemění.
+  const cleaned = await removeExactNodeModules(packageRoot.cwd);
+  if (!cleaned.ok) {
+    return {
+      ...installResult,
+      ok: false,
+      reason: "node_modules_cleanup_failed",
+      detail: `${installResult.detail ? `${installResult.detail} ` : ""}${cleaned.detail}`.trim(),
+      runtime_tree_usable: false,
+    };
+  }
+  return { ...installResult, runtime_tree_usable: false };
 }
 
 function finalRuntimeTreeFailure(finalState) {
@@ -297,7 +263,7 @@ export async function refreshFrozenBunDependencies(options = {}) {
   if (ensured.ok) {
     return { ...ensured, refresh_strategy: "ensure" };
   }
-  if (!["dependency_install_failed", "dependency_install_incomplete", "node_modules_recovery_pending"].includes(ensured.reason)) {
+  if (!["dependency_install_failed", "dependency_install_incomplete"].includes(ensured.reason)) {
     return {
       ...ensured,
       refresh_strategy: "ensure_failed",
@@ -544,85 +510,19 @@ function sameBytes(left, right) {
   return true;
 }
 
-async function prepareCleanInstall(cwd) {
+async function removeExactNodeModules(cwd) {
   const nodeModulesPath = join(cwd, "node_modules");
-  const recoveryPath = join(cwd, NODE_MODULES_RECOVERY);
+  if (!existsSync(nodeModulesPath)) return { ok: true, had_previous_tree: false };
   try {
-    // Crash-safe retry: pokud předchozí běh nechal quarantine vedle nového nebo
-    // chybějícího stromu, vrať nejdřív původní strom a až potom začni znovu.
-    if (existsSync(recoveryPath)) {
-      const recovery = await regularDirectory(recoveryPath, "node_modules recovery");
-      if (!recovery.ok) return { ...recovery, runtime_tree_usable: existsSync(nodeModulesPath) };
-      if (existsSync(nodeModulesPath)) {
-        const partial = await regularDirectory(nodeModulesPath, "node_modules");
-        if (!partial.ok) return { ...partial, runtime_tree_usable: true };
-        await rm(nodeModulesPath, { recursive: true, force: false });
-      }
-      await rename(recoveryPath, nodeModulesPath);
-    }
-
-    if (!existsSync(nodeModulesPath)) return { ok: true, had_previous_tree: false };
     const current = await regularDirectory(nodeModulesPath, "node_modules");
-    if (!current.ok) return { ...current, runtime_tree_usable: true };
-    await rename(nodeModulesPath, recoveryPath);
+    if (!current.ok) return current;
+    await rm(nodeModulesPath, { recursive: true, force: false });
     return { ok: true, had_previous_tree: true };
-  } catch (error) {
-    // Pokud rename vůbec nezačal, recovery neexistuje a původní strom se nesmí
-    // „obnovovat“ odstraněním sebe sama. Rollback je potřeba jen tehdy, když
-    // quarantine skutečně vznikla nebo už existovala po dřívějším pádu.
-    const rollback = existsSync(recoveryPath)
-      ? await restorePreviousTree(cwd)
-      : { ok: true };
-    return {
-      ok: false,
-      reason: "node_modules_prepare_failed",
-      detail: [
-        `Čistou opravu node_modules se nepodařilo bezpečně připravit: ${error instanceof Error ? error.message : String(error)}`,
-        rollback.ok ? null : rollback.detail,
-      ].filter(Boolean).join(" "),
-      rollback_ok: rollback.ok,
-      runtime_tree_usable: rollback.ok && existsSync(nodeModulesPath),
-    };
-  }
-}
-
-async function discardPreviousTree(cwd) {
-  const recoveryPath = join(cwd, NODE_MODULES_RECOVERY);
-  if (!existsSync(recoveryPath)) return { ok: true };
-  try {
-    const recovery = await regularDirectory(recoveryPath, "node_modules recovery");
-    if (!recovery.ok) return recovery;
-    await rm(recoveryPath, { recursive: true, force: false });
-    return { ok: true };
   } catch (error) {
     return {
       ok: false,
       reason: "node_modules_cleanup_failed",
-      detail: `Předchozí dependency strom se po úspěšné instalaci nepodařilo uklidit: ${error instanceof Error ? error.message : String(error)}`,
-    };
-  }
-}
-
-async function restorePreviousTree(cwd) {
-  const nodeModulesPath = join(cwd, "node_modules");
-  const recoveryPath = join(cwd, NODE_MODULES_RECOVERY);
-  try {
-    if (existsSync(nodeModulesPath)) {
-      const partial = await regularDirectory(nodeModulesPath, "node_modules");
-      if (!partial.ok) return partial;
-      await rm(nodeModulesPath, { recursive: true, force: false });
-    }
-    if (existsSync(recoveryPath)) {
-      const recovery = await regularDirectory(recoveryPath, "node_modules recovery");
-      if (!recovery.ok) return recovery;
-      await rename(recoveryPath, nodeModulesPath);
-    }
-    return { ok: true };
-  } catch (error) {
-    return {
-      ok: false,
-      reason: "node_modules_rollback_failed",
-      detail: `Původní node_modules se po neúspěšné instalaci nepodařilo obnovit: ${error instanceof Error ? error.message : String(error)}`,
+      detail: `Přesný node_modules se nepodařilo bezpečně odstranit: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
 }

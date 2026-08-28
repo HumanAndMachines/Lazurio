@@ -205,10 +205,11 @@ obecný update engine.
 Když Git skutečně změní checkout, stejný engine ověří jeho root package a
 package rooty validních Apps deklarovaných v manifestu. Použije pouze frozen
 instalaci z verzovaného Bun lockfilu. První pokus zachová existující
-`node_modules`; při selhání následuje jedna čistá oprava s rollbackem. Běžící
-managed aplikaci Server před změnou balíčků zastaví a po úspěchu nebo po
-bezpečném návratu původního stromu znovu spustí. Balíčky jiných repozitářů se
-neskenují ani nemění.
+`node_modules`; při selhání následuje jedna čistá oprava, která tento přesný
+odvozený strom smaže a vytvoří znovu. Běžící managed aplikaci Server před
+změnou balíčků zastaví a znovu spustí pouze po ověřeném úspěchu. Selhání nechá
+danou aplikaci blokovanou; další Repair začne opět čistě. Balíčky jiných
+repozitářů se neskenují ani nemění.
 
 Lazurio Launchpad čte Lazurio Root a Organization GEN3 manifesty:
 
@@ -650,7 +651,7 @@ Web shell v1 je pracovní dashboard nad discovery a runtime daty. Poskytuje:
   portu a spuštění cílové aplikace
 - `/api/apps/:id/install` pro lokální app-scoped dependency install v app package
   cwd
-- `/api/apps/:id/repair` pro transakční čistou reinstalaci přesného app
+- `/api/apps/:id/repair` pro idempotentní čistou reinstalaci přesného app
   `node_modules` z verzovaného lockfilu
 - `/api/apps/:id/stop` pro zastavení managed procesu na module-owned lease
 - `/api/apps/:id/restart` pro bezpečný restart procesu na module-owned lease
@@ -675,7 +676,8 @@ checkoutu; soubor teprve potom načte. Mutující lifecycle zůstává užší a
 vyžaduje ověřený Bun lockfile. Příkaz, cwd, exit code a výstup zapisují do app
 logu. Před spuštěním si instalátor připne canonical identitu a přesný obsah
 `package.json` i zvoleného Bun lockfilu. Změní-li se během procesu, výsledek
-nepřijme; při čisté opravě obnoví původní `node_modules`, ale změněná Git data
+nepřijme. Čistá oprava starý `node_modules` neuchovává: je to odvozený cache,
+který lze z autoritativního lockfilu znovu vytvořit. Source ani jiná Git data
 nepřepisuje odhadem.
 
 Organization App může relativním `file:` specem deklarovat read-only package
@@ -739,14 +741,13 @@ jasný mechanismus:
 - `Install`/`Repair` je lokální dependency repair pro objevenou aplikaci. Source
   of truth je app manifest + package cwd; precondition je validní app checkout s
   `package.json` a Bun lockfilem. `Install` provede frozen instalaci bez mazání.
-  `Repair` nejdřív přesune přesný `node_modules` do app-local recovery složky,
-  provede frozen instalaci a původní strom smaže až poté, co sdílená
-  postcondition znovu najde všechny přímé runtime/dev balíčky s čitelnými a
-  odpovídajícími package metadaty uvnitř owning checkoutu. Exit code 0 s
-  neúplným nebo neplatným stromem je selhání; původní strom se vrátí.
-  Při opakování umí dokončit i opravu přerušenou pádem procesu. Běžící
-  managed App po dobu mutace zastaví a po úspěchu nebo úspěšném rollbacku znovu
-  spustí. Výsledek loguje do `launchpad/logs/apps/<app-id>.log`. Tlačítko nesmí
+  `Repair` odstraní přesný odvozený `node_modules` a provede frozen instalaci.
+  Sdílená postcondition musí znovu najít všechny přímé runtime/dev balíčky s
+  čitelnými a odpovídajícími package metadaty uvnitř owning checkoutu. Exit
+  code 0 s neúplným nebo neplatným stromem je selhání; částečný strom se
+  odstraní a další Repair začne znovu čistě. Běžící managed App po dobu mutace
+  zastaví a znovu spustí pouze po ověřeném úspěchu. Výsledek loguje do
+  `launchpad/logs/apps/<app-id>.log`. Tlačítko nesmí
   měnit lockfile, grantovat GitHub access, klonovat repo, zapisovat business
   data ani obcházet Organization nebo Productionspace guardrails.
 - `Stop` zastaví pouze current-instance managed proces na module-owned lease;
@@ -794,8 +795,10 @@ jasný mechanismus:
   package a pouze package rooty validních Apps z čerstvého manifestu. Každý
   přesný root zpracuje nejvýše jednou. Instalace používá
   `bun install --frozen-lockfile`; neúspěšný první pokus jednou zopakuje čistě
-  a při selhání obnoví předchozí `node_modules`. Neplatný lockfile update
-  zablokuje pro Agenta místo lokálního vygenerování jiné dependency verze.
+  po odstranění přesného `node_modules`. Další selhání izoluje danou aplikaci a
+  nechá další Repair znovu konvergovat z prázdného odvozeného stromu. Neplatný
+  lockfile update zablokuje pro Agenta místo lokálního vygenerování jiné
+  dependency verze.
 
 Pokud Git read model zjistí rozpracovaný rebase nebo `git am`, Launchpad stav
 jen klasifikuje a nabídne přesný handoff do Codexu. Obecný algoritmus žádnou
