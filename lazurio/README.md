@@ -19,14 +19,17 @@ lazurio install --language en
 lazurio install --json
 ```
 
-Produkční Root není uživatelská volba: package-managed nebo Resident CLI vždy
-použije přesně `<home>/Lazurio` (`~/Lazurio` na macOS/Linuxu a
-`%USERPROFILE%\Lazurio` na Windows). Top-level `lazurio install` proto
-nepřijímá `--root`, nic nepersistuje a nenabízí picker. Source-linked
-development CLI dál kontroluje svůj ověřený source Root, aby Agenti mohli
-dogfoodovat tutéž fasádu z worktree/source checkoutu. Legacy Root v jiné cestě
-se tiše neadoptuje ani nepřesouvá; je vstupem samostatné detekované migrace do
-canonical targetu. Společné Core
+Fresh a Managed Root není uživatelská volba: vždy používá přesně
+`<home>/Lazurio` (`~/Lazurio` na macOS/Linuxu a
+`%USERPROFILE%\Lazurio` na Windows). Dnešní podporovaný profil `source`
+používá ověřený existující Lazurio checkout přímo v home a do řízené migrace
+smí zachovat historický název složky. Budoucí `managed` profil použije
+canonical target jako generovaný non-Git Root. Top-level
+`lazurio install` proto nepřijímá `--root`, nic nepersistuje a nenabízí picker.
+Source-linked CLI dál kontroluje svůj ověřený Source Root, aby Agenti mohli
+dogfoodovat tutéž fasádu. Dnešní read-only slice Source Root nemigruje;
+budoucí Source → Managed přechod bude explicitní, samostatně gated operace
+stejného Install Core. Jiná cesta se tiše neadoptuje ani nepřesouvá. Společné Core
 postupně ověří platformu, exact Bun runtime z
 `package.json#packageManager`, Git, GitHub CLI, přihlášení ke github.com
 a tvar Rootu; chyba jednoho probe nezastaví nezávislé kontroly a výstup nikdy
@@ -64,9 +67,9 @@ automaticky podporovaným Lazurio runtime.
 
 Exit code `0` znamená připravený stav, `1` konkrétní akci uživatele a `2`
 selhání kontroly. Tento slice nic neinstaluje, nevolá `lazurio cli install` ani
-`lazurio launchpad install` a legacy Git Root nepřesouvá. Interaktivní consent a
-writer kroky přijdou jako samostatné řezy nad stejným kontraktem; žádná workflow
-databáze ani obecný provisioning engine nevzniká.
+`lazurio launchpad install` a podporovaný Source Root nepřesouvá. Interaktivní
+consent a writer kroky přijdou jako samostatné řezy nad stejným kontraktem;
+žádná workflow databáze ani obecný provisioning engine nevzniká.
 
 ## Read-only aktivace Organization
 
@@ -259,8 +262,10 @@ mechanismu. Exact Bun unlink proto patří pozdějšímu machine updateru, kter�
 neběží přes tento launcher.
 
 Development link bez `--root` používá ověřený source Root vlastního entrypointu,
-takže funguje z libovolného pracovního adresáře. Canonical volitelný checkout
-pro vývojáře je `~/Lazurio/development/Lazurio`; běžná package instalace jej
+takže funguje z libovolného pracovního adresáře. V dnešním Source profilu je
+source samotný ověřený Root přímo v home, včetně existujícího historického
+názvu do migrace; po Managed migraci je jediný volitelný checkout
+`~/Lazurio/development/Lazurio`. Běžná package instalace jej
 neklonuje ani jej nepotřebuje. Resident a platformně neutrální npm balíček jsou
 pouze CLI code origin: rootové příkazy bez explicitního
 diagnostického override používají canonical `<home>/Lazurio`; nic se
