@@ -68,19 +68,21 @@ jeho volitelná canonical cesta:
 ├── Launchpad.ps1
 ├── launchpad.sh
 ├── guide/
-├── personalspace/              # private/gitignored personal repo mount
-│   └── secrets/                 # local ignored secret custody; see manual/security/local-secret-custody.md
+├── personalspace/
+│   └── README.md               # trackovaný kontrakt mountpointu, ne aktivní osobní data
 ├── organizations/
-│   ├── README.md               # jediný soubor trackovaný v root repu
-│   ├── ExampleOrg_GEN3/        # lokální gitignored Organization repo checkout
-│   ├── OtherOrg_GEN3/          # lokální gitignored Organization repo checkout
-│   └── <another-github-org>_GEN3/
-│       ├── workspace/          # plochá složka všech workspace modulů
-│       │   └── <modul>/        # Team příslušnost deklaruje manifest
-│       └── productionspace/    # org-level repa mimo workspace moduly
+│   └── README.md               # trackovaný kontrakt mountpointu, ne Organization checkouty
 ├── templates/
 └── drafts/
 ```
+
+V Source profilu jsou gitignored Organization a Personalspace checkouty v
+těchto source adresářích zároveň aktivními mounty, protože source checkout je
+pracovní Root. V Managed profilu obsahuje volitelný
+`development/Lazurio/{organizations,personalspace}` pouze trackované README
+kontrakty source repozitáře. Aktivní checkouty a privátní data zůstávají
+výhradně v `<home>/Lazurio/organizations` a `<home>/Lazurio/personalspace`;
+nikdy se neduplikují pod `development/Lazurio`.
 
 ## Kam jít
 
