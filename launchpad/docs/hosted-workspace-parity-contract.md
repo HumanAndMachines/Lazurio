@@ -1,9 +1,9 @@
 # Hosted Workspace machine parity contract
 
-Tento kontrakt je acceptance vstup pro Iotor a další Hosted Team Workspace
-lane. Ověřuje, že localhost i hosted používají stejný builder-visible Lazurio
-filesystem, discovery, module lease a Launchpad runtime. Nemění provider, DNS,
-ingress ani access policy.
+Tento kontrakt je acceptance vstup pro Hosted Team Workspace lane. Ověřuje, že
+localhost i hosted používají stejný builder-visible Lazurio filesystem,
+discovery, module lease a Launchpad runtime. Nemění provider, DNS, ingress ani
+access policy.
 
 Jde o vývojovou dílnu, ne produkční deployment. `lazurio.runtime.v1` popisuje
 runnable listenery pro Launchpad a Doctor, nikoli produkční kontrakt. Produkce
@@ -12,15 +12,22 @@ začíná chráněným source commitem nebo tagem, vytváří reprodukovatelný 
 `public | authenticated | internal` ingressem. Neobsahuje T3, Codex, Launchpad,
 dev checkouty ani worktrees.
 
-## Jedna runtime topologie
+## Jedna logická Builder mašina
 
-Team Workspace obsahuje jeden non-root pracovní kontejner se společným `$HOME`,
-filesystemem, PID a network namespace pro T3 Code, Codex CLI, Launchpad a jeho
-modulové child procesy. Tenký init/supervisor udržuje pouze T3 Code a Launchpad.
-App ids, source selection, URL mapping ani module reconcile do něj nepatří.
-Dashboard Development projektuje pouze stabilní vstupy T3 a Launchpadu a
-modulový lifecycle nevlastní. Produkční aplikace projektuje jen z ověřeného
-deployment katalogu, nikdy z vývojového lifecycle stavu Workspace.
+Hosted Team Workspace je jedna izolovaná logická Builder mašina pro jeden Team.
+Sdílí jeden pracovní filesystem a procesovou i síťovou hranici mezi T3 Code,
+Codex CLI, Launchpadem a jeho modulovými child procesy. Nemá napodobovat celý
+fyzický localhost Kolegy a není to produkční jednotka; poskytuje jen stejné
+vlastnosti vývojové dílny, na které Launchpad a Builder nástroje spoléhají.
+
+Aktuální infra může tuto logickou mašinu realizovat jedním non-root pracovním
+kontejnerem se společným `$HOME`, PID a network namespace. Kontejner je ale
+implementační detail, ne druhá produktová autorita. Tenký init/supervisor
+udržuje pouze T3 Code a Launchpad; App ids, source selection, URL mapping
+ani module reconcile do něj nepatří. Dashboard Development projektuje pouze
+stabilní vstupy do dílny a modulový lifecycle nevlastní. Produkční aplikace
+projektuje jen z ověřeného deployment katalogu, nikdy z vývojového lifecycle
+stavu Workspace.
 
 Launchpad je jediný owner modulových procesů. Po vlastní readiness z Organization
 manifestů odvodí všechny workspace moduly exact Teamu a výchozí App každého z
@@ -49,7 +56,7 @@ lokálně i hosted:
 bun run parity:workspace -- \
   --profile hosted \
   --phase live \
-  --organization IotorLazurio_GEN3 \
+  --organization <exact-company-slug> \
   --app-id <default-team-app-id> \
   --worktree-slug <t3-created-canonical-slug> \
   --expected-worktree-created-by <t3-creation-identity> \
@@ -73,10 +80,15 @@ source. Starý worktree se po restartu obnovit nesmí.
 
 ## Security a infra důkaz
 
-Runner uvnitř kontejneru vyžaduje společný UID/HOME/PID/network namespace pro
-T3, Codex, Launchpad a zdravý module child. Současně odmítá Docker/Tailscale
-LocalAPI/Caddy admin socket, GitHub App private key, host mount, efektivní Linux
-capabilities a passwordless sudo.
+Parity důkaz nevyžaduje kontejner jako produktovou identitu. Vyžaduje, aby T3,
+Codex, Launchpad a zdravý module child skutečně sdílely jednu logickou Builder
+mašinu: stejný pracovní filesystem, identitu vlastníka a procesovou i síťovou
+hranici. V současné kontejnerové implementaci to runner dokládá společným
+UID/HOME/PID/network namespace. Jiná budoucí implementace, například VM, musí
+prokázat stejné vlastnosti bez změny Launchpad kontraktu.
+
+Runner současně odmítá Docker/Tailscale LocalAPI/Caddy admin socket, GitHub App
+private key, host mount, efektivní Linux capabilities a passwordless sudo.
 
 Infra lane samostatně dokládá:
 
