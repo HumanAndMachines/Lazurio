@@ -262,6 +262,7 @@ test("real Root probe distinguishes supported Source, unverified Source, and gen
   expect(gitExecutable).not.toBeNull();
   const missing = join(parent, "missing");
   const source = join(parent, "source");
+  const legacySource = join(parent, "legacy-source");
   const unverifiedSource = join(parent, "unverified-source");
   const generated = join(parent, "generated");
   const finderEmpty = join(parent, "finder-empty");
@@ -269,6 +270,16 @@ test("real Root probe distinguishes supported Source, unverified Source, and gen
   const invalidManifest = join(parent, "invalid-manifest");
   const staleSource = join(parent, "stale-source");
   await createSourceRoot(source, gitExecutable);
+  await createSourceRoot(legacySource, gitExecutable);
+  await writeFile(join(legacySource, "package.json"), `${JSON.stringify({
+    name: "lazurio",
+    private: true,
+    type: "module",
+    bin: { lazurio: "lazurio/cli.mjs" },
+  })}\n`, "utf8");
+  await rm(join(legacySource, "lazurio", "package.json"));
+  runGit(gitExecutable, legacySource, ["add", "--all"]);
+  runGit(gitExecutable, legacySource, ["commit", "-m", "restore legacy root bin contract"]);
   await mkdir(join(unverifiedSource, ".git"), { recursive: true });
   await writeLaunchpadManifest(unverifiedSource);
   await createSourceCheckout(generated, gitExecutable);
@@ -290,6 +301,10 @@ test("real Root probe distinguishes supported Source, unverified Source, and gen
   expect(rootStep(source, { gitExecutable })).toMatchObject({
     status: "completed",
     reason: "source_root_ready",
+  });
+  expect(rootStep(legacySource, { gitExecutable })).toMatchObject({
+    status: "action_required",
+    reason: "source_root_unverified",
   });
 
   await writeFile(join(source, "local-draft.txt"), "draft\n", "utf8");
@@ -415,7 +430,13 @@ test("generated Root requires the canonical Lazurio source repository", async ()
   });
 
   await writeSourceContract(sourceRoot);
-  runGit(gitExecutable, sourceRoot, ["add", "package.json", "lazurio/cli.mjs", "launchpad/package.json"]);
+  runGit(gitExecutable, sourceRoot, [
+    "add",
+    "package.json",
+    "lazurio/package.json",
+    "lazurio/cli.mjs",
+    "launchpad/package.json",
+  ]);
   runGit(gitExecutable, sourceRoot, ["commit", "-m", "add Lazurio source contract"]);
   expect(rootStep(generated, { gitExecutable })).toMatchObject({
     status: "completed",
@@ -545,7 +566,13 @@ async function createSourceCheckout(root, gitExecutable) {
   runGit(gitExecutable, sourceRoot, ["config", "user.name", "Lazurio Test"]);
   runGit(gitExecutable, sourceRoot, ["config", "user.email", "lazurio-test@example.invalid"]);
   await writeSourceContract(sourceRoot);
-  runGit(gitExecutable, sourceRoot, ["add", "package.json", "lazurio/cli.mjs", "launchpad/package.json"]);
+  runGit(gitExecutable, sourceRoot, [
+    "add",
+    "package.json",
+    "lazurio/package.json",
+    "lazurio/cli.mjs",
+    "launchpad/package.json",
+  ]);
   runGit(gitExecutable, sourceRoot, ["commit", "-m", "fixture"]);
   runGit(gitExecutable, sourceRoot, [
     "remote",
@@ -565,6 +592,7 @@ async function createSourceRoot(sourceRoot, gitExecutable) {
   runGit(gitExecutable, sourceRoot, [
     "add",
     "package.json",
+    "lazurio/package.json",
     "lazurio/cli.mjs",
     "launchpad/package.json",
     "launchpad.gen3.json",
@@ -583,8 +611,19 @@ async function writeSourceContract(sourceRoot) {
   await mkdir(join(sourceRoot, "launchpad"), { recursive: true });
   await writeFile(join(sourceRoot, "package.json"), `${JSON.stringify({
     name: "lazurio",
+    private: true,
     type: "module",
-    bin: { lazurio: "lazurio/cli.mjs" },
+    workspaces: ["lazurio", "launchpad"],
+  })}\n`, "utf8");
+  await writeFile(join(sourceRoot, "lazurio", "package.json"), `${JSON.stringify({
+    name: "@lazurio/runtime",
+    type: "module",
+    bin: { lazurio: "cli.mjs" },
+    repository: {
+      type: "git",
+      url: "git+https://github.com/HumanAndMachines/Lazurio.git",
+      directory: "lazurio",
+    },
   })}\n`, "utf8");
   await writeFile(join(sourceRoot, "lazurio", "cli.mjs"), "export {};\n", "utf8");
   await writeFile(join(sourceRoot, "launchpad", "package.json"), "{}\n", "utf8");
