@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, posix, resolve, win32 } from "node:path";
+import { dirname, join, posix, resolve, win32 } from "node:path";
 
 import {
   buildLazurioCliProvenance,
@@ -38,7 +38,7 @@ const ignoredEmptyRootEntries = new Set([".DS_Store", "Thumbs.db", "desktop.ini"
 const rootLayouts = new Set([
   "missing",
   "empty",
-  "legacy_git_root",
+  "source_root",
   "generated_root",
   "incomplete_generated_root",
   "personalspace",
@@ -53,7 +53,8 @@ const reasonsByStep = Object.freeze({
   github_auth: new Set(["github_authenticated", "github_login_required", "github_cli_unavailable", "probe_failed"]),
   root: new Set([
     "root_creation_required",
-    "legacy_git_root_detected",
+    "source_root_ready",
+    "source_root_unverified",
     "generated_root_ready",
     "development_source_missing",
     "personalspace_root_not_supported",
@@ -139,6 +140,7 @@ export function inspectLazurioInstallation({
   const rootObservation = boundedRootProbe(effectiveRoot, inspectRoot, {
     platform,
     environment,
+    homeDirectory,
     gitExecutable,
   });
   steps.push(rootObservation.step);
@@ -252,6 +254,7 @@ function boundedRootProbe(root, inspectRoot, context) {
 function inspectRootLayout(rawRoot, {
   platform = process.platform,
   environment = process.env,
+  homeDirectory = homedir(),
   gitExecutable = null,
 } = {}) {
   const selectedPath = resolve(rawRoot);
@@ -290,7 +293,18 @@ function inspectRootLayout(rawRoot, {
     if (!safeEntry(join(canonicalRoot, ".git"))) {
       return rootResult(canonicalRoot, "unsafe", "failed", "root_path_unsafe");
     }
-    return rootResult(canonicalRoot, "legacy_git_root", "action_required", "legacy_git_root_detected");
+    if (!isDirectChildOfHome(canonicalRoot, homeDirectory, platform)) {
+      return rootResult(canonicalRoot, "source_root", "action_required", "source_root_unverified");
+    }
+    if (!validGitCheckout({
+      sourceRoot: canonicalRoot,
+      platform,
+      environment,
+      gitExecutable,
+    })) {
+      return rootResult(canonicalRoot, "source_root", "action_required", "source_root_unverified");
+    }
+    return rootResult(canonicalRoot, "source_root", "completed", "source_root_ready");
   }
 
   const developmentRoot = join(canonicalRoot, "development");
@@ -314,6 +328,19 @@ function inspectRootLayout(rawRoot, {
     );
   }
   return rootResult(canonicalRoot, "generated_root", "completed", "generated_root_ready");
+}
+
+function isDirectChildOfHome(root, homeDirectory, platform) {
+  let canonicalHome;
+  try {
+    canonicalHome = realpathSync.native(homeDirectory);
+  } catch {
+    return false;
+  }
+  const parent = dirname(root);
+  return platform === "win32"
+    ? win32.normalize(parent).toLowerCase() === win32.normalize(canonicalHome).toLowerCase()
+    : posix.normalize(parent) === posix.normalize(canonicalHome);
 }
 
 function summarizeSteps(steps) {

@@ -41,7 +41,7 @@
           "enum": [
             "missing",
             "empty",
-            "legacy_git_root",
+            "source_root",
             "generated_root",
             "incomplete_generated_root",
             "personalspace",
@@ -116,7 +116,8 @@
             "reason": {
               "enum": [
                 "root_creation_required",
-                "legacy_git_root_detected",
+                "source_root_ready",
+                "source_root_unverified",
                 "generated_root_ready",
                 "development_source_missing",
                 "personalspace_root_not_supported",
@@ -153,7 +154,8 @@
               "github_login_required",
               "github_cli_unavailable",
               "root_creation_required",
-              "legacy_git_root_detected",
+              "source_root_ready",
+              "source_root_unverified",
               "generated_root_ready",
               "development_source_missing",
               "personalspace_root_not_supported",

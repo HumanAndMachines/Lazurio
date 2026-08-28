@@ -2,7 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { validateAgainstSchema } from "../runtime/json-schema-mini.mjs";
 import schema from "../install-report.v1.schema.json";
@@ -256,19 +256,21 @@ test("GitHub probes never execute an ambient PATH shadow", () => {
   expect(executables).not.toContain("gh");
 });
 
-test("real Root probe distinguishes missing, legacy and generated layouts", async () => {
+test("real Root probe distinguishes supported Source, unverified Source, and generated layouts", async () => {
   const parent = await trackedTempRoot("lazurio-install-root-");
   const gitExecutable = resolveTrustedGitExecutable();
   expect(gitExecutable).not.toBeNull();
   const missing = join(parent, "missing");
-  const legacy = join(parent, "legacy");
+  const source = join(parent, "source");
+  const unverifiedSource = join(parent, "unverified-source");
   const generated = join(parent, "generated");
   const finderEmpty = join(parent, "finder-empty");
   const ambiguous = join(parent, "ambiguous");
   const invalidManifest = join(parent, "invalid-manifest");
   const staleSource = join(parent, "stale-source");
-  await mkdir(join(legacy, ".git"), { recursive: true });
-  await writeLaunchpadManifest(legacy);
+  await createSourceRoot(source, gitExecutable);
+  await mkdir(join(unverifiedSource, ".git"), { recursive: true });
+  await writeLaunchpadManifest(unverifiedSource);
   await createSourceCheckout(generated, gitExecutable);
   await writeLaunchpadManifest(generated);
   await mkdir(finderEmpty, { recursive: true });
@@ -285,9 +287,21 @@ test("real Root probe distinguishes missing, legacy and generated layouts", asyn
     status: "action_required",
     reason: "root_creation_required",
   });
-  expect(rootStep(legacy, { gitExecutable })).toMatchObject({
+  expect(rootStep(source, { gitExecutable })).toMatchObject({
+    status: "completed",
+    reason: "source_root_ready",
+  });
+
+  await writeFile(join(source, "local-draft.txt"), "draft\n", "utf8");
+  expect(rootStep(source, { gitExecutable })).toMatchObject({
     status: "action_required",
-    reason: "legacy_git_root_detected",
+    reason: "source_root_unverified",
+  });
+  await rm(join(source, "local-draft.txt"));
+
+  expect(rootStep(unverifiedSource, { gitExecutable })).toMatchObject({
+    status: "action_required",
+    reason: "source_root_unverified",
   });
   expect(rootStep(generated, { gitExecutable })).toMatchObject({
     status: "completed",
@@ -308,6 +322,20 @@ test("real Root probe distinguishes missing, legacy and generated layouts", asyn
   expect(rootStep(staleSource, { gitExecutable })).toMatchObject({
     status: "action_required",
     reason: "development_source_missing",
+  });
+
+  await rm(join(source, "lazurio", "cli.mjs"));
+  expect(rootStep(source, { gitExecutable })).toMatchObject({
+    status: "action_required",
+    reason: "source_root_unverified",
+  });
+
+  const nestedHome = join(parent, "nested-home");
+  const nestedSource = join(nestedHome, "development", "Lazurio");
+  await createSourceRoot(nestedSource, gitExecutable);
+  expect(rootStep(nestedSource, { gitExecutable, homeDirectory: nestedHome })).toMatchObject({
+    status: "action_required",
+    reason: "source_root_unverified",
   });
 });
 
@@ -464,9 +492,13 @@ function missingRootObservation(path) {
   };
 }
 
-function rootStep(root, { gitExecutable = resolveTrustedGitExecutable() } = {}) {
+function rootStep(root, {
+  gitExecutable = resolveTrustedGitExecutable(),
+  homeDirectory = dirname(root),
+} = {}) {
   return inspectLazurioInstallation({
     root,
+    homeDirectory,
     environment: environmentWithoutGitOverrides(),
     resolveGit: () => gitExecutable,
     resolveGitHubCli: () => null,
@@ -514,6 +546,29 @@ async function createSourceCheckout(root, gitExecutable) {
   runGit(gitExecutable, sourceRoot, ["config", "user.email", "lazurio-test@example.invalid"]);
   await writeSourceContract(sourceRoot);
   runGit(gitExecutable, sourceRoot, ["add", "package.json", "lazurio/cli.mjs", "launchpad/package.json"]);
+  runGit(gitExecutable, sourceRoot, ["commit", "-m", "fixture"]);
+  runGit(gitExecutable, sourceRoot, [
+    "remote",
+    "add",
+    "origin",
+    "git@github.com:HumanAndMachines/Lazurio.git",
+  ]);
+}
+
+async function createSourceRoot(sourceRoot, gitExecutable) {
+  await mkdir(sourceRoot, { recursive: true });
+  runGit(gitExecutable, sourceRoot, ["init"]);
+  runGit(gitExecutable, sourceRoot, ["config", "user.name", "Lazurio Test"]);
+  runGit(gitExecutable, sourceRoot, ["config", "user.email", "lazurio-test@example.invalid"]);
+  await writeSourceContract(sourceRoot);
+  await writeLaunchpadManifest(sourceRoot);
+  runGit(gitExecutable, sourceRoot, [
+    "add",
+    "package.json",
+    "lazurio/cli.mjs",
+    "launchpad/package.json",
+    "launchpad.gen3.json",
+  ]);
   runGit(gitExecutable, sourceRoot, ["commit", "-m", "fixture"]);
   runGit(gitExecutable, sourceRoot, [
     "remote",
