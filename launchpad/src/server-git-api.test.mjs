@@ -25,11 +25,6 @@ import {
   writeServerLocator,
 } from "../../lazurio/core/server-locator-lib.mjs";
 import {
-  buildDesiredModuleState,
-  readDesiredModuleState,
-  writeDesiredModuleState,
-} from "../../lazurio/runtime/desired-module-state-lib.mjs";
-import {
   acquireServerLifetimeLock,
   acquireServerStartupLock,
 } from "./server-lifetime-lock-lib.mjs";
@@ -735,86 +730,7 @@ test("control-root replacement waits for an in-flight runtime mutation", async (
   expect((await getJson(primary.port, "/health")).status).toBe("ok");
 });
 
-test("local cold start ignores populated desired evidence and publishes one ready locator immediately", async () => {
-  const root = await createLaunchpadGitFixture();
-  const appPort = await findFreePort();
-  const appRoot = join(root, "organizations", "BetaCo_GEN3", "workspace", "deals", "app", "v1");
-  const app = {
-    id: "betaco-boot-reconcile-v1",
-    title: "Boot reconcile",
-    company: "BetaCo",
-    module: "deals",
-    port: appPort,
-  };
-  await createPackageApp({
-    root,
-    packagePath: "organizations/BetaCo_GEN3/workspace/deals/app/v1",
-    app,
-  });
-  const startedMarker = join(appRoot, "boot-reconcile.started");
-  const completedMarker = join(appRoot, "boot-reconcile.completed");
-  await writeFile(
-    join(appRoot, "server.mjs"),
-    [
-      'await Bun.write("boot-reconcile.started", `${process.pid}\\n`);',
-      "await Bun.sleep(1200);",
-      "const server = Bun.serve({",
-      '  hostname: process.env.HOST ?? "127.0.0.1",',
-      "  port: Number(process.env.PORT),",
-      '  fetch: () => new Response("ok"),',
-      "});",
-      'await Bun.write("boot-reconcile.completed", `${process.pid}\\n`);',
-      "setTimeout(() => { server.stop(true); process.exit(0); }, 2000);",
-      "setInterval(() => {}, 2_147_483_647);",
-      "",
-    ].join("\n"),
-    "utf8",
-  );
-  const stateRoot = `${root}-launchpad-state`;
-  tempRoots.push(root, stateRoot);
-  await writeDesiredModuleState({
-    root: join(stateRoot, "runtime", "desired-modules"),
-    state: buildDesiredModuleState({ app, source: { type: "main" } }),
-  });
-
-  const primaryPort = await findFreePort();
-  const {
-    environment: primaryEnvironment,
-    serverStateDirectory,
-  } = serverTestEnvironment(root, {
-    LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot,
-  });
-  const coldStartedAt = performance.now();
-  const primaryServer = Bun.spawn(
-    ["bun", "src/server.mjs", "--root", root, "--port", String(primaryPort)],
-    {
-      cwd: join(import.meta.dirname, ".."),
-      env: primaryEnvironment,
-      stdout: "pipe",
-      stderr: "pipe",
-    },
-  );
-  servers.push(primaryServer);
-  await waitForHealth(primaryPort, primaryServer);
-  expect(performance.now() - coldStartedAt).toBeLessThan(platformTestTimeout(3_000));
-  expect(await Bun.file(startedMarker).exists()).toBe(false);
-  expect(await Bun.file(completedMarker).exists()).toBe(false);
-  expect((await getJson(primaryPort, "/health")).status).toBe("ok");
-  expect(await readServerLocator({ stateDirectory: serverStateDirectory })).toMatchObject({
-    origin: `http://127.0.0.1:${primaryPort}`,
-  });
-  expect(await readDesiredModuleState({
-    root: join(stateRoot, "runtime", "desired-modules"),
-    company: app.company,
-    module: app.module,
-  })).toMatchObject({
-    app_id: app.id,
-    enabled: true,
-    source: { type: "main" },
-  });
-}, platformTestTimeout(15_000));
-
-test("locator publication failure leaves local desired evidence inert and releases Server leases for retry", async () => {
+test("locator publication failure releases Server leases for retry", async () => {
   const root = await createLaunchpadGitFixture();
   const stateRoot = `${root}-launchpad-state`;
   const appPort = await findFreePort();
@@ -852,11 +768,6 @@ test("locator publication failure leaves local desired evidence inert and releas
     "utf8",
   );
   tempRoots.push(root, stateRoot);
-  await writeDesiredModuleState({
-    root: join(stateRoot, "runtime", "desired-modules"),
-    state: buildDesiredModuleState({ app, source: { type: "main" } }),
-  });
-
   const { environment, serverStateDirectory } = serverTestEnvironment(root, {
     LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot,
   });
@@ -883,17 +794,6 @@ test("locator publication failure leaves local desired evidence inert and releas
   expect(await Bun.file(join(appRoot, "locator-rollback.started")).exists()).toBe(false);
   await waitForPortVacancy(appPort);
   await waitForPortVacancy(serverPort);
-  expect(await readDesiredModuleState({
-    root: join(stateRoot, "runtime", "desired-modules"),
-    company: app.company,
-    module: app.module,
-  })).toMatchObject({
-    app_id: app.id,
-    enabled: true,
-    status: "active",
-    source: { type: "main" },
-  });
-
   const startupProbe = await acquireServerStartupLock({
     stateDirectory: serverStateDirectory,
     instanceId: randomUUID(),
@@ -910,21 +810,17 @@ test("hosted Launchpad rejects forged gateway headers without a TLS-authenticate
   const root = await createLaunchpadGitFixture();
   const stateRoot = `${root}-launchpad-state`;
   tempRoots.push(root, stateRoot);
-  const externalOrigin = "https://launchpad.management.example.test";
+  const externalOrigin = "https://launchpad.sales.example.test";
   const authPort = await findFreePort();
   const { port } = await startLaunchpadServer(root, {
     env: {
       LAZURIO_WORKSPACE_PROFILE: "hosted",
-      LAZURIO_TEAM_ID: "management",
+      LAZURIO_ORGANIZATION_SLUG: "BetaCo",
+      LAZURIO_TEAM_ID: "sales",
+      LAZURIO_HOSTED_DOMAIN: "workspace.example.test",
       LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot,
-      LAZURIO_TEAM_SERVICE_CATALOG_JSON: JSON.stringify({
-        schema_version: "lazurio.team_service_catalog.v1",
-        team_id: "management",
-        generated_at: "2026-08-18T19:45:00Z",
-        services: [],
-      }),
       LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN: externalOrigin,
-      LAZURIO_LAUNCHPAD_AUTH_COOKIE_NAME: "__Secure-lazurio-management-workspace",
+      LAZURIO_LAUNCHPAD_AUTH_COOKIE_NAME: "__Secure-lazurio-sales-workspace",
       // Nothing listens on this HTTPS endpoint. A local caller cannot replace
       // the authenticated gateway with plain spoofed request headers.
       LAZURIO_LAUNCHPAD_AUTH_CHECK_URL: `https://127.0.0.1:${authPort}/oauth2/auth`,
@@ -992,7 +888,7 @@ test("hosted Launchpad omits another Team app and rejects its runtime route befo
   const root = await createLaunchpadGitFixture();
   const stateRoot = `${root}-launchpad-state`;
   tempRoots.push(root, stateRoot);
-  const externalOrigin = "https://launchpad.management.example.test";
+  const externalOrigin = "https://launchpad.sales.example.test";
   const authPort = await findFreePort();
   await createPackageApp({
     root,
@@ -1008,17 +904,13 @@ test("hosted Launchpad omits another Team app and rejects its runtime route befo
   const { port } = await startLaunchpadServer(root, {
     env: {
       LAZURIO_WORKSPACE_PROFILE: "hosted",
-      LAZURIO_TEAM_ID: "management",
+      LAZURIO_ORGANIZATION_SLUG: "BetaCo",
+      LAZURIO_TEAM_ID: "sales",
+      LAZURIO_HOSTED_DOMAIN: "workspace.example.test",
       LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot,
       LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN: externalOrigin,
-      LAZURIO_LAUNCHPAD_AUTH_COOKIE_NAME: "__Secure-lazurio-management-workspace",
+      LAZURIO_LAUNCHPAD_AUTH_COOKIE_NAME: "__Secure-lazurio-sales-workspace",
       LAZURIO_LAUNCHPAD_AUTH_CHECK_URL: `https://127.0.0.1:${authPort}/oauth2/auth`,
-      LAZURIO_TEAM_SERVICE_CATALOG_JSON: JSON.stringify({
-        schema_version: "lazurio.team_service_catalog.v1",
-        team_id: "management",
-        generated_at: "2026-08-23T00:00:00Z",
-        services: [],
-      }),
     },
   });
 
@@ -1033,123 +925,64 @@ test("hosted Launchpad omits another Team app and rejects its runtime route befo
   });
 });
 
-test("hosted v2 publishes Launchpad readiness before asynchronously restoring exact catalog services", async () => {
+test("hosted Launchpad starts every Team module default App and derives its external URL", async () => {
   const root = await createLaunchpadGitFixture();
   const stateRoot = `${root}-launchpad-state`;
-  tempRoots.push(root, stateRoot);
   const appPort = await findFreePort();
-  const appId = "betaco-catalog-preview-v1";
-  const moduleRoot = join(root, "organizations", "BetaCo_GEN3", "workspace", "deals");
-  const appRoot = join(moduleRoot, "app", "v1");
-  const organizationManifestPath = join(root, "organizations", "BetaCo_GEN3", "company.gen3.json");
-  const organizationManifest = JSON.parse(await readFile(organizationManifestPath, "utf8"));
-  organizationManifest.module_port_pool = { start: appPort, end: appPort };
-  await writeJson(organizationManifestPath, organizationManifest);
-  await writeJson(join(moduleRoot, "lazurio.module.json"), {
-    schema_version: "lazurio.module.v1",
-    id: "deals",
+  const manifestPath = join(root, "organizations", "BetaCo_GEN3", "modules.manifest.json");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  manifest.module_slots.find((slot) => slot.path === "workspace/deals").teams = ["sales"];
+  manifest.module_slots.find((slot) => slot.path === "workspace/knowledgebase").teams = ["sales"];
+  await writeJson(manifestPath, manifest);
+  await mkdir(join(root, "organizations", "BetaCo_GEN3", "workspace", "knowledgebase"), { recursive: true });
+  const app = {
+    id: "betaco-hosted-deals-v1",
+    title: "Hosted Deals",
     company: "BetaCo",
-    tcp_port_policy: { mode: "single" },
-    apps: ["app/v1/package.json"],
-    default_app: "app/v1/package.json",
-    port_leases: [{ id: "main", host: "127.0.0.1", port: appPort }],
+    module: "deals",
+    port: appPort,
+  };
+  const appRoot = join(root, "organizations", "BetaCo_GEN3", "workspace", "deals", "app", "v1");
+  await createPackageApp({
+    root,
+    packagePath: "organizations/BetaCo_GEN3/workspace/deals/app/v1",
+    app,
   });
-  await writeJson(join(appRoot, "package.json"), {
-    name: appId,
-    private: true,
-    type: "module",
-    scripts: { dev: "bun server.mjs" },
-    lazurio: {
-      runtime: {
-        schema_version: "lazurio.runtime.v1",
-        id: appId,
-        title: "Catalog preview",
-        company: "BetaCo",
-        module: "deals",
-        surface: "internal",
-        dev_script: "dev",
-        tags: [],
-        listeners: [{
-          id: "app",
-          role: "entrypoint",
-          lease: "main",
-          protocol: "http",
-          health: { kind: "http", path: "/health" },
-        }],
-      },
-    },
-  });
-  await writeFile(join(appRoot, "server.mjs"), [
-    "await Bun.sleep(2000);",
-    "const server = Bun.serve({",
-    "  hostname: process.env.LAZURIO_RUNTIME_HOST,",
-    "  port: Number(process.env.LAZURIO_RUNTIME_PORT),",
-    "  fetch: (request) => new URL(request.url).pathname === '/health'",
-    "    ? Response.json({ status: 'ok' })",
-    "    : new Response('catalog preview'),",
-    "});",
-    "setInterval(() => {}, 2_147_483_647);",
-    "",
-  ].join("\n"));
-  await mkdir(join(appRoot, "node_modules"), { recursive: true });
+  await writeFile(join(appRoot, "server.mjs"), fixtureServerSource(), "utf8");
+  tempRoots.push(root, stateRoot);
 
-  const launchpadStartedAt = performance.now();
-  const { port } = await startLaunchpadServer(root, {
+  const { port, server } = await startLaunchpadServer(root, {
     env: {
       LAZURIO_WORKSPACE_PROFILE: "hosted",
-      LAZURIO_TEAM_ID: "workspace",
+      LAZURIO_ORGANIZATION_SLUG: "BetaCo",
+      LAZURIO_TEAM_ID: "sales",
+      LAZURIO_HOSTED_DOMAIN: "workspace.example.test",
       LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot,
-      LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN: "https://launchpad.workspace.example.test",
-      LAZURIO_LAUNCHPAD_AUTH_COOKIE_NAME: "__Secure-lazurio-workspace",
-      LAZURIO_LAUNCHPAD_AUTH_CHECK_URL: "https://auth.workspace.example.test/oauth2/auth",
-      LAZURIO_TEAM_SERVICE_CATALOG_JSON: JSON.stringify({
-        schema_version: "lazurio.team_service_catalog.v2",
-        organization_slug: "BetaCo",
-        team_id: "workspace",
-        catalog_revision: "fixture-revision-1",
-        generated_at: "2026-08-28T18:00:00Z",
-        services: [{
-          app_id: appId,
-          module_lease_key: "BetaCo/deals",
-          external_origin: "https://deals.workspace.example.test/",
-          source: { type: "main" },
-        }],
-      }),
+      LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN: "https://launchpad.sales.example.test",
+      LAZURIO_LAUNCHPAD_AUTH_COOKIE_NAME: "__Secure-lazurio-sales-workspace",
+      LAZURIO_LAUNCHPAD_AUTH_CHECK_URL: `https://127.0.0.1:${await findFreePort()}/oauth2/auth`,
     },
   });
-  expect(performance.now() - launchpadStartedAt).toBeLessThan(platformTestTimeout(2_000));
+  await waitForHealth(appPort, server);
 
-  const pending = await fetch(`http://127.0.0.1:${port}/api/hosted/services/${appId}/readiness`);
-  expect(pending.status).toBe(503);
-  expect(pending.headers.get("retry-after")).toBeTruthy();
-  expect(await pending.json()).toMatchObject({
-    ready: false,
-    app_id: appId,
-    catalog_revision: "fixture-revision-1",
-  });
-  const ready = await waitForHttpStatus(
-    `http://127.0.0.1:${port}/api/hosted/services/${appId}/readiness`,
-    200,
-  );
-  expect(await ready.json()).toMatchObject({
-    ready: true,
-    observed: { status: "healthy", source: { type: "main" } },
-    runtime: {
-      status: "healthy",
-      owner: "current-instance",
-      runtime_source: { type: "main" },
-      url: "https://deals.workspace.example.test/",
-    },
-  });
-  const identity = await getJson(port, "/api/lazurio/server-identity");
-  expect(identity.lifecycle_configuration_id).toMatch(/^[a-f0-9]{64}$/);
-  expect((await getJson(port, "/api/hosted/services"))).toMatchObject({
-    catalog_revision: "fixture-revision-1",
+  const apps = await getJson(port, "/api/apps");
+  expect(apps.apps).toEqual([
+    expect.objectContaining({
+      id: app.id,
+      url: "https://deals.sales.workspace.example.test/",
+      runtime: expect.objectContaining({ status: "healthy" }),
+    }),
+  ]);
+  expect((await getJson(port, "/health")).maintenance).toMatchObject({
+    total: 1,
     healthy: 1,
-    blocked: 0,
+    degraded: 0,
+    skipped: [{
+      module: "knowledgebase",
+      failure_kind: "hosted_module_open_target_missing",
+    }],
   });
-  expect(existsSync(join(stateRoot, "runtime", "desired-modules", "BetaCo--deals.json"))).toBe(false);
-});
+}, platformTestTimeout(15_000));
 
 test("instance-bound local shutdown rejects stale callers and stops the managed module process tree", async () => {
   const root = await createLaunchpadGitFixture();
@@ -1172,7 +1005,7 @@ test("instance-bound local shutdown rejects stale callers and stops the managed 
     "utf8",
   );
   tempRoots.push(root);
-  const { server, port, serverStateDirectory, environment } = await startLaunchpadServer(root);
+  const { server, port, serverStateDirectory } = await startLaunchpadServer(root);
   const personalMissingSourceResponse = await fetch(
     `http://127.0.0.1:${port}/api/personalspace/apps/not-an-app/start`,
     {
@@ -1187,11 +1020,6 @@ test("instance-bound local shutdown rejects stale callers and stops the managed 
   });
   await postJson(port, `/api/apps/${app.id}/start`, { source: { type: "main" } });
   await waitForHealth(appPort, server);
-  expect(existsSync(join(
-    environment.LAZURIO_LAUNCHPAD_STATE_ROOT,
-    "runtime",
-    "desired-modules",
-  ))).toBe(false);
   const identity = await getJson(port, "/api/lazurio/server-identity");
   expect((await readServerLocator({ stateDirectory: serverStateDirectory })).instance_id).toBe(identity.instance_id);
 
@@ -1856,18 +1684,6 @@ async function waitForHealth(port, server) {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`server on ${port} did not become healthy`);
-}
-
-async function waitForHttpStatus(url, expectedStatus) {
-  const deadline = Date.now() + platformTestTimeout(10_000);
-  let lastStatus = null;
-  while (Date.now() < deadline) {
-    const response = await fetch(url);
-    lastStatus = response.status;
-    if (response.status === expectedStatus) return response;
-    await Bun.sleep(100);
-  }
-  throw new Error(`Expected ${expectedStatus} from ${url}, last status was ${lastStatus}.`);
 }
 
 async function waitForProcessExit(server, timeoutMs) {

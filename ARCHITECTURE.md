@@ -180,18 +180,17 @@ Launchpad proto používá tři oddělené lifecycle profily:
   worktree jen pro život aktuální Server instance. Kliknutí nevytváří trvalý
   intent; graceful shutdown ukončí celý spravovaný process tree a další start
   Launchpadu nic neobnovuje;
-- **Hosted Team Workspace** je always-on dílna. Přítomnost služby v immutable
-  Team service catalogu v2 je jediný společný keep-running intent, stabilní URL
-  i přesný `main` nebo Mission Control-owned worktree source. Launchpad publikuje
-  vlastní readiness dřív a jednotlivé služby udržuje asynchronně a izolovaně;
+- **Hosted Team Workspace** je always-on dílna. Manifesty Organizace určují
+  Team moduly a jejich výchozí Apps; Launchpad tuto množinu odvodí a po vlastní
+  readiness ji udržuje asynchronně a izolovaně. Cold start vždy začíná z
+  `main`; Builder smí v aktuální session přepnout Modul na Mission
+  Control-owned worktree, ale kliknutí ani přepnutí nevytváří persistentní stav;
 - **production** přijímá jen reprodukovatelný Build a běží na samostatném
   produkčním runtime. Team katalog, Launchpad proces ani worktree nejsou
   deployment input.
 
-Historická machine-wide evidence odvozená ze Start/Open kliknutí není
-konfigurace žádného z těchto profilů. Při migraci může zůstat inertně
-archivovaná, ale localhost ji nečte ani nepřepisuje a hosted ji po přechodu na
-v2 nepoužívá.
+Machine-wide evidence odvozená ze Start/Open kliknutí není konfigurace žádného
+z těchto profilů. Launchpad ji nevytváří ani nečte.
 
 ## Runtime Modulu a porty
 

@@ -220,7 +220,7 @@ test("classifier never reuses stale, foreign, malformed, or legacy same-root ser
   expect(classifyServerIdentity({ observed: { status: "ok" }, expected })).toBe("unrecognized");
 });
 
-test("hosted lifecycle configuration participates in Server reuse identity", () => {
+test("hosted workspace identity participates in Server reuse", () => {
   const expected = {
     rootId: "1".repeat(64),
     controlRootId: "5".repeat(64),
@@ -236,18 +236,11 @@ test("hosted lifecycle configuration participates in Server reuse identity", () 
     observed: { ...compatible, lifecycle_configuration_id: "8".repeat(64) },
     expected,
   })).toBe("stale_install");
-  expect(classifyServerIdentity({
-    observed: identity(),
-    expected,
-  })).toBe("stale_install");
+  expect(classifyServerIdentity({ observed: identity(), expected })).toBe("stale_install");
   expect(classifyServerIdentity({
     observed: compatible,
     expected: { ...expected, lifecycleConfigurationId: null },
   })).toBe("stale_install");
-  expect(() => classifyServerIdentity({
-    observed: compatible,
-    expected: { ...expected, lifecycleConfigurationId: "invalid" },
-  })).toThrow("exact operated Root");
 });
 
 async function sourceFixture() {

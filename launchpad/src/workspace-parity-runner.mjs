@@ -10,7 +10,7 @@ import { readOrganizationRoot } from "../../lazurio/core/organization-root-reade
 const schemaVersion = "lazurio.workspace_machine_parity.v1";
 export const externalAssertions = Object.freeze([
   "authenticated Team HTTPS/WSS ingress on 443 reaches only the expected app origin",
-  "generated Team service-catalog origin is a private development preview reachable only through the approved Tailscale/VPN access plane, never a public production endpoint",
+  "derived Team module origin is a private development preview reachable only through the approved Tailscale/VPN access plane, never a public production endpoint",
   "internal module-owned ports are unreachable directly from Tailnet/VPN clients",
   "another Team Workspace cannot reach this Workspace filesystem, processes or ingress",
   "server-side broker denies repositories outside the generated Team allowlist",
@@ -154,38 +154,52 @@ async function appendRuntimeChecks({ add, app, options }) {
     add("worktree.t3_provenance", false, { error: error.message });
   }
 
-  if (options.profile === "hosted") {
-    return options.phase === "expect-removed"
-      ? appendHostedCatalogRemovalChecks({ add, app, options, base })
-      : appendHostedCatalogChecks({ add, app, options, base });
-  }
-
   if (options.phase === "post-restart") {
     try {
-      const health = await runtimeRequest(base, app.id, "health", worktreeSource(options.worktreeSlug));
-      const vacancy = await runtimeVacancyEvidence(app);
-      add("runtime.module_port_vacant", vacancy.rawTcpReachable === false, {
-        port: vacancy.listenerPort,
-        probes: vacancy.probeResults,
-        raw_tcp_reachable: vacancy.rawTcpReachable,
-      });
-      add("runtime.session_not_restored", noResurrectionProofAccepted(
-        health,
-        options.worktreeSlug,
-        { profile: "local", rawTcpReachable: vacancy.rawTcpReachable },
-      ), {
-        runtime_status: health.status,
-        managed: health.managed,
-        runtime_source: health.runtime_source,
-      });
+      const health = await runtimeRequest(
+        base,
+        app.id,
+        "health",
+        options.profile === "hosted" ? { source: { type: "main" } } : worktreeSource(options.worktreeSlug),
+      );
+      if (options.profile === "local") {
+        const vacancy = await runtimeVacancyEvidence(app);
+        add("runtime.module_port_vacant", vacancy.rawTcpReachable === false, {
+          port: vacancy.listenerPort,
+          probes: vacancy.probeResults,
+          raw_tcp_reachable: vacancy.rawTcpReachable,
+        });
+        add("runtime.session_not_restored", noResurrectionProofAccepted(
+          health,
+          options.worktreeSlug,
+          { profile: "local", rawTcpReachable: vacancy.rawTcpReachable },
+        ), {
+          runtime_status: health.status,
+          managed: health.managed,
+          runtime_source: health.runtime_source,
+        });
+      } else {
+        add("runtime.hosted_main_maintained", hostedMainMaintenanceProofAccepted(health), {
+          runtime_status: health.status,
+          managed: health.managed,
+          runtime_source: health.runtime_source,
+          maintenance: health.maintenance,
+          maintenance_alignment: health.maintenance_alignment,
+        });
+      }
       add("runtime.external_url", navigationMatchesProfile(health.url, options), {
         observed: health.url,
-        expected: "loopback",
+        expected: options.profile === "hosted" ? options.expectedOrigin : "loopback",
       });
+      moduleProcess = options.profile === "hosted"
+        ? await captureModuleProcessEvidence(health, options)
+        : null;
     } catch (error) {
-      add("runtime.session_not_restored", false, { error: error.message });
+      add(options.profile === "local" ? "runtime.session_not_restored" : "runtime.hosted_main_maintained", false, {
+        error: error.message,
+      });
     }
-    return { moduleProcess: null, moduleExpected: false };
+    return { moduleProcess, moduleExpected: options.profile === "hosted" };
   }
 
   try {
@@ -201,82 +215,23 @@ async function appendRuntimeChecks({ add, app, options }) {
       && worktreeTwo.runtime_source?.slug === options.worktreeSlug, {
       ports,
       final_source: worktreeTwo.runtime_source,
-      desired: worktreeTwo.desired,
     });
     add("runtime.external_url", navigationMatchesProfile(worktreeTwo.url, options), {
       observed: worktreeTwo.url,
       expected: options.profile === "hosted" ? options.expectedOrigin : "loopback",
     });
     moduleProcess = await captureModuleProcessEvidence(worktreeTwo.runtime, options);
-    if (options.stopAfter) {
+    if (options.profile === "hosted") {
+      const stop = await runtimeRequestOutcome(base, app.id, "stop", worktreeSource(options.worktreeSlug));
+      add("runtime.hosted_stop_forbidden", hostedStopForbidden(stop), { response: stop });
+    } else if (options.stopAfter) {
       const stopped = await runtimeRequest(base, app.id, "stop", worktreeSource(options.worktreeSlug));
-      appendExplicitStopCheck(add, stopped, "local");
+      appendExplicitStopCheck(add, stopped);
     }
   } catch (error) {
     add("runtime.main_worktree_takeover", false, { error: error.message });
   }
   return { moduleProcess, moduleExpected: true };
-}
-
-async function appendHostedCatalogChecks({ add, app, options, base }) {
-  try {
-    const readiness = await fetchJson(new URL(
-      `/api/hosted/services/${encodeURIComponent(app.id)}/readiness`,
-      base,
-    ));
-    add("runtime.catalog_service_ready", hostedCatalogProofAccepted(
-      readiness,
-      options.worktreeSlug,
-      options.expectedCatalogRevision,
-    ), {
-      catalog_revision: readiness.catalog_revision,
-      observed: readiness.observed,
-      runtime: readiness.runtime,
-    });
-    add("runtime.external_url", navigationMatchesProfile(readiness.runtime?.url, options), {
-      observed: readiness.runtime?.url ?? null,
-      expected: options.expectedOrigin,
-    });
-    return {
-      moduleProcess: await captureModuleProcessEvidence(readiness.runtime, options),
-      moduleExpected: true,
-    };
-  } catch (error) {
-    add("runtime.catalog_service_ready", false, { error: error.message });
-    return { moduleProcess: null, moduleExpected: true };
-  }
-}
-
-async function appendHostedCatalogRemovalChecks({ add, app, options, base }) {
-  try {
-    const [summary, health] = await Promise.all([
-      fetchJson(new URL("/api/hosted/services", base)),
-      runtimeRequest(base, app.id, "health", worktreeSource(options.worktreeSlug)),
-    ]);
-    const vacancy = await runtimeVacancyEvidence(app);
-    add("runtime.module_port_vacant", vacancy.rawTcpReachable === false, {
-      port: vacancy.listenerPort,
-      probes: vacancy.probeResults,
-      raw_tcp_reachable: vacancy.rawTcpReachable,
-    });
-    add("runtime.catalog_service_removed", catalogRemovalProofAccepted(
-      summary,
-      health,
-      app.id,
-      options.worktreeSlug,
-      options.expectedCatalogRevision,
-      { rawTcpReachable: vacancy.rawTcpReachable },
-    ), {
-      catalog_revision: summary.catalog_revision,
-      services: summary.services,
-      runtime_status: health.status,
-      managed: health.managed,
-      runtime_source: health.runtime_source,
-    });
-  } catch (error) {
-    add("runtime.catalog_service_removed", false, { error: error.message });
-  }
-  return { moduleProcess: null, moduleExpected: false };
 }
 
 export function parityLoopbackProbeHosts(declaredHost) {
@@ -291,35 +246,36 @@ export function worktreeProvenanceMatches(worktree, expectedCreatedBy) {
     && worktree.metadata?.created_by === expectedCreatedBy;
 }
 
-export function hostedCatalogProofAccepted(readiness, worktreeSlug, catalogRevision) {
-  return readiness?.ready === true
-    && readiness.catalog_revision === catalogRevision
-    && readiness.observed?.status === "healthy"
-    && readiness.observed?.source?.type === "worktree"
-    && readiness.observed?.source?.slug === worktreeSlug
-    && readiness.runtime?.status === "healthy"
-    && readiness.runtime?.managed === true
-    && readiness.runtime?.owner === "current-instance"
-    && readiness.runtime?.runtime_source?.type === "worktree"
-    && readiness.runtime?.runtime_source?.slug === worktreeSlug;
+export function hostedMainMaintenanceProofAccepted(health) {
+  return health?.status === "healthy"
+    && health.managed === true
+    && health.runtime_source?.type === "main"
+    && health.maintenance?.status === "healthy"
+    && health.maintenance?.source?.type === "main"
+    && health.maintenance_alignment === "matches";
 }
 
-function appendExplicitStopCheck(add, stopped, profile) {
-  add("runtime.explicit_stop", explicitStopResponseAccepted(stopped, { profile }), {
+function appendExplicitStopCheck(add, stopped) {
+  add("runtime.explicit_stop", explicitStopResponseAccepted(stopped), {
     response: stopped,
   });
 }
 
-export function explicitStopResponseAccepted(stopped, { profile = "hosted" } = {}) {
-  const stoppedRuntime = stopped?.action === "stop" && stopped.runtime?.managed === false;
-  if (!stoppedRuntime) return false;
-  return profile === "local" && stopped.desired === undefined;
+export function explicitStopResponseAccepted(stopped) {
+  return stopped?.action === "stop"
+    && stopped.runtime?.managed === false
+    && stopped.desired === undefined;
+}
+
+export function hostedStopForbidden(response) {
+  return response?.status === 409
+    && response.payload?.error === "hosted_module_always_on";
 }
 
 export function noResurrectionProofAccepted(
   health,
   worktreeSlug,
-  { profile = "hosted", rawTcpReachable = true } = {},
+  { profile = "local", rawTcpReachable = true } = {},
 ) {
   const stopped = health?.managed === false
     && health.status === "stopped"
@@ -329,28 +285,7 @@ export function noResurrectionProofAccepted(
     && rawTcpReachable === false
     && health.runtime_source?.type === "worktree"
     && health.runtime_source?.slug === worktreeSlug;
-  if (!stopped) return false;
-  return profile === "local" && health.desired === undefined;
-}
-
-export function catalogRemovalProofAccepted(
-  summary,
-  health,
-  appId,
-  worktreeSlug,
-  catalogRevision,
-  { rawTcpReachable = true } = {},
-) {
-  return summary?.catalog_revision === catalogRevision
-    && !(summary?.services ?? []).some((service) => service?.app_id === appId)
-    && health?.managed === false
-    && health.status === "stopped"
-    && health.owner === "none"
-    && health.port_owner == null
-    && health.probe?.reachable === false
-    && rawTcpReachable === false
-    && health.runtime_source?.type === "worktree"
-    && health.runtime_source?.slug === worktreeSlug;
+  return profile === "local" && stopped && health.desired === undefined;
 }
 
 async function runtimeVacancyEvidence(app) {
@@ -494,6 +429,19 @@ async function runtimeRequest(base, appId, action, payload) {
   });
 }
 
+async function runtimeRequestOutcome(base, appId, action, payload) {
+  const response = await fetch(new URL(`/api/apps/${encodeURIComponent(appId)}/${action}`, base), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(30_000),
+  });
+  return {
+    status: response.status,
+    payload: await response.json().catch(() => ({})),
+  };
+}
+
 async function fetchJson(url, init = {}) {
   const response = await fetch(url, { ...init, signal: AbortSignal.timeout(30_000) });
   const payload = await response.json().catch(() => ({}));
@@ -555,7 +503,6 @@ export function parseArgs(args) {
         "worktree-slug": "worktreeSlug",
         "launchpad-url": "launchpadUrl",
         "expected-origin": "expectedOrigin",
-        "expected-catalog-revision": "expectedCatalogRevision",
         "expected-worktree-created-by": "expectedWorktreeCreatedBy",
         "t3-command": "t3Command",
         "t3-pid": "t3Pid",
@@ -571,23 +518,17 @@ export function parseArgs(args) {
     if (!options[key]) throw new Error(`--${key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)} is required`);
   }
   if (!["local", "hosted"].includes(options.profile)) throw new Error("--profile must be local or hosted");
-  if (!["live", "post-restart", "expect-removed"].includes(options.phase)) {
-    throw new Error("--phase must be live, post-restart or expect-removed");
-  }
-  if (options.profile === "local" && options.phase === "expect-removed") {
-    throw new Error("--phase expect-removed is valid only for the hosted catalog profile");
+  if (!["live", "post-restart"].includes(options.phase)) {
+    throw new Error("--phase must be live or post-restart");
   }
   if (options.profile === "local" && options.phase === "post-restart" && options.stopAfter) {
     throw new Error("--stop-after is not valid for local post-restart; no session child should exist");
   }
+  if (options.profile === "hosted" && options.stopAfter) {
+    throw new Error("--stop-after is not valid for hosted profile; Team modules are always on");
+  }
   if (options.profile === "hosted" && !options.expectedOrigin) throw new Error("--expected-origin is required for hosted profile");
   if (options.profile === "hosted") {
-    if (!options.expectedCatalogRevision) {
-      throw new Error("--expected-catalog-revision is required for hosted profile");
-    }
-    if (options.stopAfter) {
-      throw new Error("--stop-after is forbidden for hosted catalog services; publish a new catalog revision");
-    }
     for (const key of ["t3Pid", "codexPid", "launchpadPid"]) {
       if (!Number.isInteger(options[key]) || options[key] <= 0) {
         throw new Error(`--${key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)} is required for hosted profile`);
@@ -598,16 +539,14 @@ export function parseArgs(args) {
 }
 
 function helpText() {
-  return `Usage: bun run parity:workspace -- --profile local|hosted --phase live|post-restart|expect-removed \\
+  return `Usage: bun run parity:workspace -- --profile local|hosted --phase live|post-restart \\
   --organization <filesystem-dir> --app-id <id> --worktree-slug <slug> \\
   --expected-worktree-created-by <t3-creation-identity> [options]
 
-Hosted additionally requires --expected-origin, --expected-catalog-revision,
---t3-pid, --codex-pid and --launchpad-pid.
+Hosted additionally requires --expected-origin, --t3-pid, --codex-pid and --launchpad-pid.
 Local: run live, restart Launchpad, then use post-restart to prove no session
-child was restored. Hosted v2: run live, restart the work container (and
-separately reboot the host), then run post-restart against the same immutable
-catalog revision. To prove removal, publish a new revision without the service,
-restart Launchpad and run expect-removed. The report lists infra-owned external
-assertions that the Iotor lane must prove outside the work container.`;
+child was restored. Hosted: run live, restart the work container (and separately
+reboot the host), then use post-restart to prove every Team module returned on
+main without a click. The report lists infra-owned external assertions that the
+Iotor lane must prove outside the work container.`;
 }

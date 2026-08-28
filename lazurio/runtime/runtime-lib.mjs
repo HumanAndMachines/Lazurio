@@ -26,14 +26,7 @@ import {
   inspectCanonicalPathBoundary,
   readJsonWithinCanonicalBoundary,
 } from "../core/path-boundary-lib.mjs";
-import {
-  buildDesiredModuleState,
-  listDesiredModuleStates,
-  normalizeDesiredSource,
-  readDesiredModuleState,
-  writeDesiredModuleState,
-} from "./desired-module-state-lib.mjs";
-import { createTeamServiceController } from "./team-service-controller-lib.mjs";
+import { normalizeRuntimeSource } from "./runtime-source-lib.mjs";
 
 const healthTimeoutMs = 1_200;
 const startGraceMs = 30_000;
@@ -197,7 +190,6 @@ export function createRuntimeManager({
   launchpadRoot,
   stateRoot = launchpadRoot,
   lifecycleProfile = "local",
-  teamServiceCatalog = null,
   instanceId = randomUUID(),
   discover = discoverLaunchpadApps,
   resolvePortOwnerFn = resolvePortOwner,
@@ -218,37 +210,35 @@ export function createRuntimeManager({
   startedListenerOwnershipTimeoutMs = startGraceMs,
   writeRuntimeStateFile = writeFile,
   bunExecutable = null,
-  desiredRestartDelaysMs = [250, 1_000, 5_000],
-  desiredRestartStableMs = 30_000,
-  teamServiceControllerFactory = createTeamServiceController,
-  teamServiceConcurrency = 4,
-  teamServiceRetryDelaysMs = [1_000, 5_000, 30_000, 120_000],
-  teamServiceRetryJitterRatio = 0.2,
-  teamServiceStableHealthyMs = 30_000,
-  teamServiceRandom = Math.random,
+  maintenanceIntervalMs = 5_000,
+  maintenanceConcurrency = 4,
+  maintenanceRetryDelaysMs = [1_000, 5_000, 30_000],
+  nowFn = Date.now,
   sleepFn = sleep,
-  writeDesiredModuleStateFn = writeDesiredModuleState,
   buildWorktreeIndexFn = buildWorktreeIndex,
 }) {
   if (!supportedLifecycleProfiles.has(lifecycleProfile)) {
     throw new Error(`Unsupported Launchpad lifecycle profile: ${String(lifecycleProfile)}.`);
   }
+  const maintenanceRetrySchedule = (Array.isArray(maintenanceRetryDelaysMs) ? maintenanceRetryDelaysMs : [])
+    .filter((delay) => Number.isFinite(delay) && delay >= 0);
+  if (maintenanceRetrySchedule.length === 0) {
+    maintenanceRetrySchedule.push(Math.max(1, Number(maintenanceIntervalMs) || 5_000));
+  }
   const runtimeBunExecutable = bunExecutable
     ?? (platform === process.platform ? resolveBunExecutable() : resolveBunExecutable({ platform }));
   const managedProcesses = new Map();
   const moduleLeaseLocks = new Map();
-  const desiredRestartTrackers = new Map();
-  const v2TeamServiceCatalog = teamServiceCatalog?.schema_version === "lazurio.team_service_catalog.v2"
-    ? teamServiceCatalog
-    : null;
-  const catalogServices = v2TeamServiceCatalog?.services instanceof Map
-    ? v2TeamServiceCatalog.services
-    : new Map();
+  const maintainedApps = new Map();
+  const retiredMaintainedApps = [];
+  let maintenanceLoopPromise = null;
+  let maintenanceWake = null;
+  let maintenanceWakePending = false;
+  let maintenanceRevision = 0;
   let stopping = false;
   const runtimeStateRoot = resolve(stateRoot);
   const runtimeRoot = join(runtimeStateRoot, "runtime");
   const appStateRoot = join(runtimeRoot, "apps");
-  const desiredStateRoot = join(runtimeRoot, "desired-modules");
   const moduleLockRoot = join(runtimeRoot, "module-locks");
   const takeoverAuditRoot = join(runtimeRoot, "audit");
   const takeoverAuditPath = join(takeoverAuditRoot, "takeovers.jsonl");
@@ -318,20 +308,6 @@ export function createRuntimeManager({
       return { process_group_id: processGroupId, method: "posix-process-group" };
     });
   const requireTakeoverIdentity = signalPortOwnerFn == null;
-  const teamServiceController = v2TeamServiceCatalog
-    ? teamServiceControllerFactory({
-        services: catalogServices,
-        catalogRevision: v2TeamServiceCatalog.catalog_revision,
-        concurrency: teamServiceConcurrency,
-        retryDelaysMs: teamServiceRetryDelaysMs,
-        retryJitterRatio: teamServiceRetryJitterRatio,
-        stableHealthyMs: teamServiceStableHealthyMs,
-        random: teamServiceRandom,
-        sleep: sleepFn,
-        ensureService: ensureCatalogService,
-        classifyError: classifyCatalogServiceError,
-      })
-    : null;
 
   function filesystemRootForApp(app) {
     const sourceRoot = app?.[APP_FILESYSTEM_ROOT];
@@ -550,7 +526,15 @@ export function createRuntimeManager({
   async function appsWithRuntime(apps) {
     return Promise.all(
       apps.map(async (app) => {
-        const runtime = await healthForApp(app);
+        const maintenance = maintainedEntryForApp(app);
+        const observedApp = maintenance
+          && !runtimeSourcesEqual(maintenance.source, runtimeSourceForApp(app))
+          ? await runtimeAppForAction(app.id, {
+              source: maintenance.source,
+              requireValidDiscovery: false,
+            }).catch(() => app)
+          : app;
+        const runtime = await healthForApp(observedApp);
         const dependencies = runtime.dependencies;
         const portsById = new Map(
           (runtime.listeners ?? [])
@@ -580,7 +564,6 @@ export function createRuntimeManager({
 
   async function start(appId, options = {}) {
     const app = await runtimeAppForAction(appId, { ...options, enforcePortContract: true });
-    assertCatalogServiceSource(app, "Start");
     return startRuntimeApp(app, takeoverConfirmation(options));
   }
 
@@ -589,8 +572,6 @@ export function createRuntimeManager({
   // version of the same Module and the uncommon local cross-Organization
   // collision; ports are never remapped.
   async function switchApp(appId, { replace_app_id: replaceAppId = null, confirmed = false, source = null } = {}) {
-    catalogActionForbidden(appId, "switch");
-    if (typeof replaceAppId === "string") catalogActionForbidden(replaceAppId.trim(), "switch");
     if (confirmed !== true) {
       throw new RuntimeActionError(
         400,
@@ -645,19 +626,9 @@ export function createRuntimeManager({
 
   async function startRuntimeApp(app, takeover = {}) {
     return withModuleLeaseLock(app, async () => {
-      // The explicit user action starts a fresh restart generation before the
-      // child exists. Resetting after spawn can erase the new child's exit
-      // tracker when it dies in the desired-state commit window.
-      resetDesiredRestartTracker(app);
       const result = await startRuntimeAppUnlocked(app, { trigger: "user", takeover });
-      let desired;
-      try {
-        desired = await acceptDesiredRuntime(app);
-      } catch (error) {
-        await stopRuntimeAppUnlocked(app).catch(() => {});
-        throw desiredPersistenceError(app, error);
-      }
-      return { ...result, ...(desired ? { desired } : {}) };
+      const maintenance = acceptMaintainedRuntime(app);
+      return { ...result, ...(maintenance ? { maintenance } : {}) };
     });
   }
 
@@ -892,11 +863,7 @@ export function createRuntimeManager({
         record.stopExitCode = exitCode;
         record.exitFinalizing = false;
       } else {
-        if (catalogServiceForApp(app.id)) {
-          teamServiceController.notifyExit(app.id, { exitCode });
-        } else {
-          queueDesiredRuntimeRestart(app, record, exitCode);
-        }
+        wakeHostedMaintenance();
       }
       return { survivingListenerProof, failure, log_excerpt };
     };
@@ -1004,18 +971,12 @@ export function createRuntimeManager({
 
   async function install(appId, { action = "install", source = null } = {}) {
     const app = await runtimeAppForAction(appId, { source });
-    assertCatalogServiceSource(app, action);
-    const result = await withModuleLeaseLock(app, () => installRuntimeDependenciesUnlocked(app, { action }));
-    if (catalogServiceForApp(appId)) teamServiceController.retry(appId);
-    return result;
+    return withModuleLeaseLock(app, () => installRuntimeDependenciesUnlocked(app, { action }));
   }
 
   async function refreshDependencies(appId, { source = null } = {}) {
     const app = await runtimeAppForAction(appId, { source });
-    assertCatalogServiceSource(app, "refresh");
-    const result = await withModuleLeaseLock(app, () => installRuntimeDependenciesUnlocked(app, { action: "refresh" }));
-    if (catalogServiceForApp(appId)) teamServiceController.retry(appId);
-    return result;
+    return withModuleLeaseLock(app, () => installRuntimeDependenciesUnlocked(app, { action: "refresh" }));
   }
 
   async function installRuntimeDependenciesUnlocked(app, { action = "install" } = {}) {
@@ -1165,24 +1126,20 @@ export function createRuntimeManager({
   async function open(appId, options = {}) {
     const { source = null } = options;
     const app = await runtimeAppForAction(appId, { source, enforcePortContract: true });
-    const catalogService = assertCatalogServiceSource(app, "Open");
-    return withModuleLeaseLock(app, () => openRuntimeAppUnlocked(app, takeoverConfirmation(options), {
-      allowInstall: !catalogService,
-    }));
+    return withModuleLeaseLock(app, () => openRuntimeAppUnlocked(app, takeoverConfirmation(options)));
   }
 
-  async function openRuntimeAppUnlocked(app, takeover = {}, { allowInstall = true } = {}) {
+  async function openRuntimeAppUnlocked(app, takeover = {}) {
     const runtimeKey = runtimeKeyForApp(app);
     const runtimeSource = runtimeSourceForApp(app);
     const steps = [];
     let shouldConfirmStability = false;
-    resetDesiredRestartTracker(app);
 
     // 1) Ensure install — jen když dependency stav vyžaduje instalaci a jde
     //    bezpečně provést. Ostatní blokující dependency stavy (missing_access,
     //    restricted, invalid_manifest…) skončí srozumitelnou chybou.
     let dependencies = await dependencyForApp(app);
-    if (dependencies.state === "needs_install" && allowInstall) {
+    if (dependencies.state === "needs_install") {
       const action = "install";
       const installResult = await installRuntimeDependenciesUnlocked(app, { action });
       steps.push({ step: action, exit_code: installResult.exit_code });
@@ -1252,15 +1209,7 @@ export function createRuntimeManager({
       );
     }
 
-    let desired;
-    try {
-      desired = await acceptDesiredRuntime(app);
-    } catch (error) {
-      if (steps.some((step) => step.step === "start")) {
-        await stopRuntimeAppUnlocked(app).catch(() => {});
-      }
-      throw desiredPersistenceError(app, error);
-    }
+    const maintenance = acceptMaintainedRuntime(app);
     // Lokální usage tracking pro panel „Nejčastější" (step-007) — best-effort,
     // nikdy neblokuje otevření a nezapisuje žádnou PII (jen app id + agregát).
     try {
@@ -1280,7 +1229,7 @@ export function createRuntimeManager({
       status: runtime.status,
       steps,
       runtime,
-      ...(desired ? { desired } : {}),
+      ...(maintenance ? { maintenance } : {}),
     };
   }
 
@@ -1337,98 +1286,20 @@ export function createRuntimeManager({
   }
 
   async function stop(appId, { source = null } = {}) {
-    catalogActionForbidden(appId, "stop");
     const app = await runtimeAppForAction(appId, { source });
-    if (!supportsDurableDesiredRuntime(app)) {
-      return withModuleLeaseLock(app, async () => {
-        const record = selectManagedModuleStopRecord(managedProcesses.values(), app);
-        if (!record) throw appNotManagedError(app, await healthForApp(app));
-        return stopRuntimeAppUnlocked(record.runtimeApp ?? app);
-      });
+    if (maintainedEntryForApp(app)) {
+      throw new RuntimeActionError(
+        409,
+        "hosted_module_always_on",
+        `${app.title}: Hosted Team Workspace keeps every Team Module active; switch source or restart it instead of stopping it.`,
+        [`module_lease_key: ${moduleLeaseKeyForApp(app)}`],
+        { failure_kind: "hosted_module_always_on" },
+      );
     }
-    const recordsAtRequest = managedRecordsForModule(app);
-    // Capture the exact active source before waiting for the cross-process
-    // mutex. An unexpected child exit may remove the managed record while Stop
-    // waits, but it must not erase the user's intent or fall back to `main`.
-    const requestedRecord = selectManagedModuleStopRecord(recordsAtRequest, app);
     return withModuleLeaseLock(app, async () => {
-      const currentRecord = selectManagedModuleStopRecord(managedProcesses.values(), app);
-      const record = currentRecord ?? requestedRecord;
-      if (!record) {
-        const current = await healthForApp(app);
-        // A restart coordinator may have removed the exited record before
-        // this request and then held the cross-process lease while it tried
-        // to restore the durable runtime. Once Stop owns that lease, an
-        // ownerless but still-enabled desired state is safe to disable. A
-        // visible process owned by another Launchpad remains fail-closed.
-        if (current.owner !== "none" || current.desired?.enabled !== true) {
-          throw appNotManagedError(app, current);
-        }
-        const desired = await disableDesiredRuntime(app, { acceptStoredSource: true });
-        resetDesiredRestartTracker(app);
-        const desiredApp = {
-          ...app,
-          id: desired.app_id,
-          runtime_source: desired.source,
-        };
-        return {
-          action: "stop",
-          app_id: desired.app_id,
-          runtime_key: desired.source.type === "worktree"
-            ? worktreeRuntimeKey(desiredApp, desired.source.slug)
-            : desired.app_id,
-          runtime_source: desired.source,
-          pid: null,
-          forced: false,
-          already_stopped: true,
-          runtime: await healthForApp(app),
-          desired,
-        };
-      }
-      const activeApp = record.runtimeApp ?? app;
-      // Stop is fail-safe: persistence is the commit point. If this atomic
-      // write fails no signal is sent. Once it succeeds, every later stop
-      // failure leaves desired disabled, so boot reconcile cannot resurrect
-      // a process the user explicitly stopped. The active runtime is selected
-      // by module lease rather than the reloaded UI selector: main, app/vN and
-      // worktree variants are one durable module process. Ambiguity fails
-      // before this commit point and therefore before any process is signaled.
-      const desired = await disableDesiredRuntime(activeApp);
-      resetDesiredRestartTracker(activeApp);
-      if (!currentRecord) {
-        return {
-          ...await stopActionResult(
-            activeApp,
-            record,
-            record.runtimeKey,
-            record.runtimeSource,
-            { forced: false },
-          ),
-          already_stopped: true,
-          desired,
-        };
-      }
-      let result;
-      try {
-        result = await stopRuntimeAppUnlocked(activeApp);
-      } catch (error) {
-        // Exit finalization is intentionally independent of the module lock.
-        // If it wins after the in-lock selection, disabled intent is already
-        // committed; report the exact captured runtime as stopped instead of
-        // turning a successful no-resurrection transaction into an error.
-        if (error?.code !== "app_not_managed") throw error;
-        result = {
-          ...await stopActionResult(
-            activeApp,
-            record,
-            record.runtimeKey,
-            record.runtimeSource,
-            { forced: false },
-          ),
-          already_stopped: true,
-        };
-      }
-      return { ...result, desired };
+      const record = selectManagedModuleStopRecord(managedProcesses.values(), app);
+      if (!record) throw appNotManagedError(app, await healthForApp(app));
+      return stopRuntimeAppUnlocked(record.runtimeApp ?? app);
     });
   }
 
@@ -1869,10 +1740,8 @@ export function createRuntimeManager({
   async function restart(appId, options = {}) {
     const { source = null } = options;
     const app = await runtimeAppForAction(appId, { source, enforcePortContract: true });
-    assertCatalogServiceSource(app, "Restart");
     const runtimeSource = runtimeSourceForApp(app);
     return withModuleLeaseLock(app, async () => {
-      resetDesiredRestartTracker(app);
       try {
         await stopRuntimeAppUnlocked(app);
       } catch (error) {
@@ -1882,20 +1751,14 @@ export function createRuntimeManager({
         trigger: "user",
         takeover: takeoverConfirmation(options),
       });
-      let desired;
-      try {
-        desired = await acceptDesiredRuntime(app);
-      } catch (error) {
-        await stopRuntimeAppUnlocked(app).catch(() => {});
-        throw desiredPersistenceError(app, error);
-      }
+      const maintenance = acceptMaintainedRuntime(app);
       return {
         action: "restart",
         app_id: app.id,
         runtime_key: runtimeKeyForApp(app),
         runtime_source: runtimeSource,
         start: startResult,
-        ...(desired ? { desired } : {}),
+        ...(maintenance ? { maintenance } : {}),
       };
     });
   }
@@ -2002,7 +1865,12 @@ export function createRuntimeManager({
     { source = null, requireValidDiscovery = true, enforcePortContract = false } = {},
   ) {
     const { app, discovery } = await findApp(appId, { requireValidDiscovery });
-    const runtimeSource = normalizeRuntimeSource(source);
+    let runtimeSource;
+    try {
+      runtimeSource = normalizeRuntimeSource(source);
+    } catch (error) {
+      throw new RuntimeActionError(400, "invalid_runtime_source", error.message);
+    }
     const runtimeApp = runtimeSource.type === "main"
       ? {
         ...app,
@@ -2076,14 +1944,6 @@ export function createRuntimeManager({
         port_policy_issue_count: discovery.port_policy_issues?.length ?? 0,
       },
     );
-  }
-
-  function normalizeRuntimeSource(source) {
-    try {
-      return normalizeDesiredSource(source);
-    } catch (error) {
-      throw new RuntimeActionError(400, "invalid_runtime_source", error.message);
-    }
   }
 
   function runtimeProcessEnv(app, overrides) {
@@ -2417,8 +2277,7 @@ export function createRuntimeManager({
       .filter(Number.isInteger))]
       .sort((left, right) => left - right);
     return [
-      // Preserve the durable per-Module lifecycle lock: Start/Open/Stop must
-      // still serialize desired state across main and worktrees.
+      // Main and worktree variants share one per-Module lifecycle lock.
       moduleLeaseKeyForApp(app),
       // Listener locks add the missing cross-Organization serialization.
       // Sorted acquisition gives multi-listener Modules a stable lock order.
@@ -2474,392 +2333,223 @@ export function createRuntimeManager({
     });
   }
 
-  function desiredPersistenceError(app, error) {
-    return new RuntimeActionError(
-      500,
-      "desired_state_persist_failed",
-      `${app.title}: lifecycle transition was not accepted because desired state could not be persisted.`,
-      [error?.message ?? String(error)],
-      { failure_kind: "desired_state_persist_failed" },
+  function maintainApps(appIds) {
+    if (lifecycleProfile !== "hosted") {
+      throw new RuntimeActionError(
+        409,
+        "hosted_maintenance_unavailable",
+        "Automatic App maintenance is available only in a Hosted Team Workspace.",
+      );
+    }
+    assertRuntimeManagerAcceptingStarts();
+    const requested = new Set(
+      [...appIds]
+        .filter((appId) => typeof appId === "string" && appId.trim() !== "")
+        .map((appId) => appId.trim()),
     );
-  }
-
-  function catalogServiceForApp(appId) {
-    return catalogServices.get(appId) ?? null;
-  }
-
-  function assertCatalogServiceSource(app, action) {
-    const service = catalogServiceForApp(app.id);
-    if (!service) return null;
-    if (app?.personal === true || app?.module_contract?.schema_version !== "lazurio.module.v1") {
-      throw new RuntimeActionError(
-        409,
-        "catalog_service_module_contract_invalid",
-        `${app.title}: hosted catalog services require a canonical lazurio.module.v1 lease.`,
-        [],
-        { failure_kind: "catalog_service_module_contract_invalid" },
-      );
+    let changed = false;
+    for (const [configuredAppId, entry] of maintainedApps) {
+      if (requested.has(configuredAppId)) continue;
+      maintainedApps.delete(configuredAppId);
+      retiredMaintainedApps.push(entry);
+      changed = true;
     }
-    const runtimeSource = runtimeSourceForApp(app);
-    const sourceMatches = runtimeSourcesEqual(runtimeSource, service.source);
-    const worktreeIdentityMatches = service.source.type !== "worktree" || (
-      runtimeSource.branch === service.source.branch
-      && runtimeSource.plan_code === service.source.mission_control_plan_code
-    );
-    if (!sourceMatches || !worktreeIdentityMatches) {
-      throw new RuntimeActionError(
-        409,
-        "catalog_service_source_locked",
-        `${app.title}: ${action} is restricted to the immutable Team service catalog source.`,
-        [
-          `catalog_source: ${JSON.stringify(service.source)}`,
-          `requested_source: ${JSON.stringify(runtimeSource)}`,
-        ],
-        {
-          failure_kind: "catalog_service_source_mismatch",
-          catalog_revision: v2TeamServiceCatalog.catalog_revision,
-          catalog_source: service.source,
-        },
-      );
-    }
-    if (service.module_lease_key !== moduleLeaseKeyForApp(app)) {
-      throw new RuntimeActionError(
-        409,
-        "catalog_service_lease_mismatch",
-        `${app.title}: catalog module lease does not match runtime discovery.`,
-        [
-          `catalog_lease: ${service.module_lease_key}`,
-          `discovered_lease: ${moduleLeaseKeyForApp(app)}`,
-        ],
-        { failure_kind: "catalog_service_lease_mismatch" },
-      );
-    }
-    return service;
-  }
-
-  function catalogActionForbidden(appId, action) {
-    const service = catalogServiceForApp(appId);
-    if (!service) return;
-    throw new RuntimeActionError(
-      409,
-      `catalog_service_${action}_forbidden`,
-      `Catalog service ${appId} cannot be ${action}ed by a runtime click; publish a new catalog revision instead.`,
-      [
-        `catalog_revision: ${v2TeamServiceCatalog.catalog_revision}`,
-        `catalog_source: ${JSON.stringify(service.source)}`,
-      ],
-      { failure_kind: `catalog_service_${action}_forbidden` },
-    );
-  }
-
-  function supportsDurableDesiredRuntime(app) {
-    // Temporary v1 compatibility for already-hosted Workspaces only. Local
-    // Start/Open is session-scoped and must never turn a click into durable
-    // machine-wide intent. DEV-6513 removes this adapter after the hosted v2
-    // catalog canary and migration are complete.
-    return lifecycleProfile === "hosted"
-      && !v2TeamServiceCatalog
-      && app?.personal !== true
-      && app?.module_contract?.schema_version === "lazurio.module.v1"
-      && typeof app?.company === "string"
-      && typeof app?.module === "string";
-  }
-
-  async function readDesiredRuntime(app) {
-    if (!supportsDurableDesiredRuntime(app)) return null;
-    return readDesiredModuleState({
-      root: desiredStateRoot,
-      company: app.company,
-      module: app.module,
-    });
-  }
-
-  async function readDesiredRuntimeForHealth(app) {
-    try {
-      return await readDesiredRuntime(app);
-    } catch (error) {
-      return {
-        schema_version: "lazurio.launchpad.desired_module.v1",
-        company: app.company,
-        module: app.module,
-        module_lease_key: moduleLeaseKeyForApp(app),
-        app_id: app.id,
-        enabled: true,
-        source: runtimeSourceForApp(app),
-        status: "degraded",
-        last_error: error.message,
-        failure_kind: "invalid_desired_state",
-      };
-    }
-  }
-
-  async function acceptDesiredRuntime(app, { reconciled = false } = {}) {
-    if (!supportsDurableDesiredRuntime(app)) return null;
-    const state = buildDesiredModuleState({
-      app,
-      source: runtimeSourceForApp(app),
-      enabled: true,
-      status: "active",
-      reconciled,
-    });
-    await writeDesiredModuleStateFn({ root: desiredStateRoot, state });
-    return state;
-  }
-
-  async function disableDesiredRuntime(app, { acceptStoredSource = false } = {}) {
-    if (!supportsDurableDesiredRuntime(app)) return null;
-    let previous = null;
-    try {
-      previous = await readDesiredRuntime(app);
-    } catch {}
-    const expectedSource = runtimeSourceForApp(app);
-    if (!acceptStoredSource && previous && (
-      previous.app_id !== app.id
-      || !runtimeSourcesEqual(previous.source, expectedSource)
-    )) {
-      throw new RuntimeActionError(
-        409,
-        "app_stop_superseded",
-        `${app.title}: Stop did not disable a desired runtime accepted for a different source.`,
-        [
-          `expected_app_id: ${app.id}`,
-          `actual_app_id: ${previous.app_id}`,
-          `expected_source: ${JSON.stringify(expectedSource)}`,
-          `actual_source: ${JSON.stringify(previous.source)}`,
-        ],
-        { failure_kind: "desired_runtime_superseded" },
-      );
-    }
-    const state = buildDesiredModuleState({
-      app: previous ? { ...app, id: previous.app_id } : app,
-      source: previous?.source ?? expectedSource,
-      enabled: false,
-      status: "disabled",
-      previous,
-    });
-    await writeDesiredModuleStateFn({ root: desiredStateRoot, state });
-    return state;
-  }
-
-  async function updateDesiredRuntimeReconciliation(state, {
-    status,
-    error = null,
-    failureKind = null,
-  }) {
-    const next = buildDesiredModuleState({
-      app: { id: state.app_id, company: state.company, module: state.module },
-      source: state.source,
-      enabled: state.enabled,
-      status,
-      previous: state,
-      reconciled: true,
-      error,
-      failureKind,
-    });
-    await writeDesiredModuleStateFn({ root: desiredStateRoot, state: next });
-    return next;
-  }
-
-  function resetDesiredRestartTracker(app) {
-    const key = moduleLeaseKeyForApp(app);
-    const tracker = desiredRestartTrackers.get(key);
-    if (tracker) {
-      tracker.generation += 1;
-      tracker.running = false;
-      tracker.pendingExit = null;
-      tracker.exhaustionQueued = false;
-    }
-    desiredRestartTrackers.delete(key);
-  }
-
-  function queueDesiredRuntimeRestart(app, record, exitCode) {
-    if (stopping || !supportsDurableDesiredRuntime(app)) return;
-    const key = moduleLeaseKeyForApp(app);
-    const existing = desiredRestartTrackers.get(key);
-    if (existing?.running) {
-      // Exit during a live coordinator belongs to that exact series. Let the
-      // coordinator finish its in-lock reconciliation before replaying it;
-      // otherwise a concurrent exhaustion writer can be overwritten by the
-      // active attempt's failure reconciliation.
-      existing.pendingExit = { app, record, exitCode };
-      return;
-    }
-    if (existing?.attempts >= desiredRestartDelaysMs.length) {
-      if (existing.exhaustionQueued) return;
-      existing.exhaustionQueued = true;
-      existing.generation += 1;
-      void markDesiredRestartExhausted(app, record, existing).catch(async (error) => {
-        existing.running = false;
-        try {
-          await appendLog(record.logPath, `[launchpad] desired restart exhaustion failed ${app.id}: ${error.message}\n`);
-        } catch {}
+    for (const appId of requested) {
+      if (maintainedApps.has(appId)) continue;
+      maintainedApps.set(appId, {
+        configured_app_id: appId,
+        app_id: appId,
+        company: null,
+        module: null,
+        source: { type: "main" },
+        status: "pending",
+        attempts: 0,
+        failure_kind: null,
+        last_error: null,
+        next_attempt_at_ms: 0,
       });
-      return;
+      changed = true;
     }
-    const tracker = existing ?? {
-      attempts: 0,
-      generation: 0,
-      running: false,
-      pendingExit: null,
-      exhaustionQueued: false,
+    if (changed) {
+      maintenanceRevision += 1;
+      wakeHostedMaintenance();
+      maintenanceLoopPromise ??= runHostedMaintenanceLoop();
+    }
+    return maintenanceSummary();
+  }
+
+  function maintenanceSummary() {
+    const apps = [...maintainedApps.values()]
+      .sort((left, right) => left.configured_app_id.localeCompare(right.configured_app_id))
+      .map(maintenanceSnapshot);
+    return {
+      schema_version: "lazurio.hosted_workspace_maintenance.v1",
+      total: apps.length,
+      healthy: apps.filter((entry) => entry.status === "healthy").length,
+      starting: apps.filter((entry) => ["pending", "starting"].includes(entry.status)).length,
+      degraded: apps.filter((entry) => entry.status === "degraded").length,
+      apps,
     };
-    tracker.running = true;
-    tracker.generation += 1;
-    desiredRestartTrackers.set(key, tracker);
-    const generation = tracker.generation;
-    void runDesiredRestartSeries(app, record, exitCode, tracker, generation).catch(async (error) => {
-      tracker.running = false;
-      try {
-        await appendLog(record.logPath, `[launchpad] desired restart coordinator failed ${app.id}: ${error.message}\n`);
-      } catch {}
-    });
   }
 
-  async function runDesiredRestartSeries(app, record, exitCode, tracker, generation) {
-    const expectedAppId = app.id;
-    const expectedSource = runtimeSourceForApp(app);
-    while (!stopping && tracker.attempts < desiredRestartDelaysMs.length && tracker.generation === generation) {
-      const delayMs = desiredRestartDelaysMs[tracker.attempts];
-      tracker.attempts += 1;
-      await appendLog(
-        record.logPath,
-        `[launchpad] desired child exit ${app.id} code=${exitCode} restart_attempt=${tracker.attempts} backoff_ms=${delayMs}\n`,
-      );
-      await sleepFn(delayMs);
-      if (stopping || tracker.generation !== generation) return;
-      let outcome;
-      try {
-        outcome = await withModuleLeaseLock(app, async () => {
-          if (stopping || tracker.generation !== generation) return { state: "cancelled" };
-          const desired = await readDesiredRuntime(app);
-          if (!desired?.enabled || desired.status === "disabled") return { state: "cancelled" };
-          if (desired.app_id !== expectedAppId || !runtimeSourcesEqual(desired.source, expectedSource)) {
-            return { state: "superseded" };
-          }
-          let desiredApp;
-          try {
-            desiredApp = await runtimeAppForAction(desired.app_id, {
-              source: desired.source,
-              enforcePortContract: true,
-            });
-          } catch (error) {
-            await updateDesiredRuntimeReconciliation(desired, {
-              status: "degraded",
-              error: error.message,
-              failureKind: error.code ?? "desired_source_invalid",
-            });
-            return { state: "permanent-failure" };
-          }
-          const activeRecord = managedRecordForModule(desiredApp);
-          if (activeRecord
-            && activeRecord.appId === desiredApp.id
-            && runtimeSourcesEqual(activeRecord.runtimeSource, runtimeSourceForApp(desiredApp))) {
-            let activeRuntime = await healthForApp(desiredApp);
-            if (activeRuntime.status === "starting") {
-              activeRuntime = await waitForHealthy(desiredApp, activeRuntime);
-            }
-            if (activeRuntime.status === "healthy") {
-              return { state: "already-running", app: desiredApp };
-            }
-            await stopRuntimeAppUnlocked(desiredApp);
-          }
-          const started = await startRuntimeAppUnlocked(desiredApp, { trigger: "desired-restart" });
-          let runtime = started.runtime ?? await healthForApp(desiredApp);
-          if (runtime.status === "starting") runtime = await waitForHealthy(desiredApp, runtime);
-          if (runtime.status !== "healthy") {
-            await stopRuntimeAppUnlocked(desiredApp).catch(() => {});
-            throw new RuntimeActionError(
-              500,
-              "desired_restart_unhealthy",
-              `${desiredApp.title}: desired restart did not become healthy.`,
-              [],
-              { failure_kind: runtime.failure_kind ?? "desired_restart_unhealthy", runtime },
-            );
-          }
-          await updateDesiredRuntimeReconciliation(desired, { status: "active" });
-          return { state: "started", app: desiredApp };
-        });
-      } catch (error) {
-        outcome = { state: "retry", error };
-        // The failed attempt's exit is already represented by this retry.
-        // Keeping the queued event would count the same crash twice.
-        tracker.pendingExit = null;
-        try {
-          await withModuleLeaseLock(app, async () => {
-            const desired = await readDesiredRuntime(app);
-            if (desired?.enabled
-              && desired.app_id === expectedAppId
-              && runtimeSourcesEqual(desired.source, expectedSource)) {
-              await updateDesiredRuntimeReconciliation(desired, {
-                status: "degraded",
-                error: error.message,
-                failureKind: error.code ?? error.metadata?.failure_kind ?? "desired_restart_failed",
-              });
-            }
-          });
-        } catch {}
-      }
+  function maintenanceSnapshot(entry) {
+    return {
+      configured_app_id: entry.configured_app_id,
+      app_id: entry.app_id,
+      module_lease_key: entry.company && entry.module ? `${entry.company}/${entry.module}` : null,
+      source: structuredClone(entry.source),
+      status: entry.status,
+      attempts: entry.attempts,
+      failure_kind: entry.failure_kind,
+      last_error: entry.last_error,
+      next_attempt_at: entry.next_attempt_at_ms > 0
+        ? new Date(entry.next_attempt_at_ms).toISOString()
+        : null,
+    };
+  }
 
-      if (["cancelled", "superseded", "permanent-failure"].includes(outcome.state)) {
-        tracker.running = false;
-        tracker.pendingExit = null;
-        return;
+  function maintainedEntryForApp(app) {
+    return [...maintainedApps.values()].find((entry) =>
+      entry.app_id === app?.id
+      || entry.configured_app_id === app?.id
+      || (
+        entry.company
+        && entry.module
+        && entry.company === app?.company
+        && entry.module === app?.module
+      )
+    ) ?? null;
+  }
+
+  function acceptMaintainedRuntime(app) {
+    const entry = maintainedEntryForApp(app);
+    if (!entry) return null;
+    entry.app_id = app.id;
+    entry.company = app.company;
+    entry.module = app.module;
+    entry.source = runtimeSourceSelectorForApp(app);
+    entry.status = "healthy";
+    entry.attempts = 0;
+    entry.failure_kind = null;
+    entry.last_error = null;
+    entry.next_attempt_at_ms = 0;
+    maintenanceRevision += 1;
+    wakeHostedMaintenance();
+    return maintenanceSnapshot(entry);
+  }
+
+  async function runHostedMaintenanceLoop() {
+    while (!stopping) {
+      const observedRevision = maintenanceRevision;
+      const retired = retiredMaintainedApps.splice(0);
+      await mapWithConcurrency(retired, maintenanceConcurrency, stopRetiredMaintainedApp);
+      const now = nowFn();
+      const due = [...maintainedApps.values()].filter((entry) => entry.next_attempt_at_ms <= now);
+      await mapWithConcurrency(due, maintenanceConcurrency, ensureMaintainedApp);
+      if (stopping) break;
+      if (observedRevision !== maintenanceRevision || maintenanceWakePending) {
+        maintenanceWakePending = false;
+        continue;
       }
-      if (["started", "already-running"].includes(outcome.state)) {
-        tracker.running = false;
-        const pendingExit = tracker.pendingExit;
-        tracker.pendingExit = null;
-        if (pendingExit) {
-          queueDesiredRuntimeRestart(
-            pendingExit.app,
-            pendingExit.record,
-            pendingExit.exitCode,
-          );
-          return;
-        }
-        scheduleDesiredRestartReset(outcome.app, tracker, generation);
-        return;
-      }
+      await waitForHostedMaintenanceWake();
     }
-
-    if (tracker.generation !== generation) return;
-    tracker.exhaustionQueued = true;
-    await markDesiredRestartExhausted(app, record, tracker).catch(() => {});
   }
 
-  async function markDesiredRestartExhausted(app, record, tracker) {
-    const expectedAppId = app.id;
-    const expectedSource = runtimeSourceForApp(app);
+  async function ensureMaintainedApp(entry) {
+    if (stopping || maintainedApps.get(entry.configured_app_id) !== entry) return;
+    entry.status = "starting";
     try {
-      await withModuleLeaseLock(app, async () => {
-        const desired = await readDesiredRuntime(app);
-        if (desired?.enabled
-          && desired.app_id === expectedAppId
-          && runtimeSourcesEqual(desired.source, expectedSource)) {
-          await updateDesiredRuntimeReconciliation(desired, {
-            status: "degraded",
-            error: `Desired child exited repeatedly; ${tracker.attempts} bounded restart attempts were exhausted.`,
-            failureKind: "desired_restart_exhausted",
-          });
-          await appendLog(
-            record.logPath,
-            `[launchpad] desired restart exhausted ${app.id} attempts=${tracker.attempts}; no further restart scheduled\n`,
-          );
-        }
+      const app = await runtimeAppForAction(entry.configured_app_id, {
+        source: entry.source,
+        enforcePortContract: true,
       });
-    } finally {
-      tracker.running = false;
-      tracker.pendingExit = null;
+      entry.company = app.company;
+      entry.module = app.module;
+      const outcome = await withModuleLeaseLock(app, async () => {
+        assertRuntimeManagerAcceptingStarts();
+        if (maintainedApps.get(entry.configured_app_id) !== entry) return { status: "retired" };
+        const active = managedRecordForModule(app);
+        if (
+          active
+          && active.appId === app.id
+          && runtimeSourcesEqual(active.runtimeSource, runtimeSourceForApp(app))
+        ) {
+          const runtime = await healthForApp(app);
+          if (["healthy", "starting"].includes(runtime.status)) return { status: runtime.status };
+          await stopRuntimeAppUnlocked(active.runtimeApp ?? app).catch((error) => {
+            if (error?.code !== "app_not_managed") throw error;
+          });
+        }
+        const started = await startRuntimeAppUnlocked(app, { trigger: "hosted-maintenance" });
+        return { status: started.runtime?.status ?? "starting" };
+      });
+      if (outcome.status === "retired") return;
+      entry.status = outcome.status === "healthy" ? "healthy" : "starting";
+      entry.attempts = 0;
+      entry.failure_kind = null;
+      entry.last_error = null;
+      entry.next_attempt_at_ms = nowFn() + maintenanceIntervalMs;
+    } catch (error) {
+      if (stopping || maintainedApps.get(entry.configured_app_id) !== entry) return;
+      entry.status = "degraded";
+      entry.attempts += 1;
+      entry.failure_kind = error?.code ?? error?.metadata?.failure_kind ?? "hosted_maintenance_failed";
+      entry.last_error = error?.message ?? String(error);
+      const retryIndex = Math.min(entry.attempts - 1, maintenanceRetrySchedule.length - 1);
+      entry.next_attempt_at_ms = nowFn() + maintenanceRetrySchedule[Math.max(0, retryIndex)];
     }
   }
 
-  function scheduleDesiredRestartReset(app, tracker, generation) {
-    void sleepFn(desiredRestartStableMs).then(() => {
-      if (tracker.generation !== generation || tracker.running) return;
-      const active = managedRecordForModule(app);
-      if (!active || active.appId !== app.id || !runtimeSourcesEqual(active.runtimeSource, runtimeSourceForApp(app))) return;
-      desiredRestartTrackers.delete(moduleLeaseKeyForApp(app));
+  async function stopRetiredMaintainedApp(entry) {
+    if (!entry.company || !entry.module) return;
+    const active = [...managedProcesses.values()].find((record) =>
+      record.runtimeApp?.company === entry.company && record.runtimeApp?.module === entry.module
+    );
+    if (!active) return;
+    await withModuleLeaseLock(active.runtimeApp, async () => {
+      if (managedProcesses.get(active.runtimeKey) !== active) return;
+      await stopRuntimeAppUnlocked(active.runtimeApp);
+    }).catch((error) => {
+      if (error?.code !== "app_not_managed") {
+        console.warn(
+          `[launchpad] retired hosted Module ${entry.company}/${entry.module} could not stop cleanly: ${error?.message ?? error}`,
+        );
+      }
     });
+  }
+
+  async function mapWithConcurrency(items, requestedConcurrency, task) {
+    if (items.length === 0) return;
+    const concurrency = Math.max(1, Math.min(items.length, Number(requestedConcurrency) || 1));
+    let index = 0;
+    await Promise.all(Array.from({ length: concurrency }, async () => {
+      while (index < items.length) {
+        const current = items[index];
+        index += 1;
+        await task(current);
+      }
+    }));
+  }
+
+  function wakeHostedMaintenance() {
+    if (lifecycleProfile !== "hosted") return;
+    maintenanceWakePending = true;
+    maintenanceWake?.();
+  }
+
+  async function waitForHostedMaintenanceWake() {
+    if (maintenanceWakePending) {
+      maintenanceWakePending = false;
+      return;
+    }
+    await Promise.race([
+      sleepFn(maintenanceIntervalMs),
+      new Promise((resolveWake) => {
+        maintenanceWake = resolveWake;
+      }),
+    ]);
+    maintenanceWake = null;
+    maintenanceWakePending = false;
   }
 
   function managedRecordForModule(app) {
@@ -2877,302 +2567,17 @@ export function createRuntimeManager({
       && (left?.type !== "worktree" || left.slug === right?.slug);
   }
 
-  async function ensureCatalogService(service) {
-    const app = await runtimeAppForAction(service.app_id, {
-      source: service.source,
-      enforcePortContract: true,
-    });
-    assertCatalogServiceSource(app, "catalog reconcile");
-    return withModuleLeaseLock(app, async () => {
-      assertRuntimeManagerAcceptingStarts();
-      const activeRecord = managedRecordForModule(app);
-      let runtime = null;
-      if (activeRecord
-        && activeRecord.appId === app.id
-        && runtimeSourcesEqual(activeRecord.runtimeSource, runtimeSourceForApp(app))) {
-        runtime = await healthForApp(app);
-        if (runtime.status === "starting") runtime = await waitForHealthy(app, runtime);
-        if (runtime.status === "healthy") return { runtime, reused: true };
-        await stopRuntimeAppUnlocked(activeRecord.runtimeApp ?? app).catch((error) => {
-          if (error?.code !== "app_not_managed") throw error;
-        });
-      }
-
-      const started = await startRuntimeAppUnlocked(app, { trigger: "catalog-reconcile" });
-      runtime = started.runtime ?? await healthForApp(app);
-      if (runtime.status === "starting") runtime = await waitForHealthy(app, runtime);
-      if (runtime.status !== "healthy") {
-        await stopRuntimeAppUnlocked(app).catch(() => {});
-        throw new RuntimeActionError(
-          500,
-          "catalog_service_unhealthy",
-          `${app.title}: catalog reconcile did not establish a healthy listener.`,
-          [runtime.message].filter(Boolean),
-          { failure_kind: runtime.failure_kind ?? "catalog_service_unhealthy", runtime },
-        );
-      }
-      return { runtime, reused: false };
-    });
-  }
-
-  function classifyCatalogServiceError(error) {
-    const permanentCodes = new Set([
-      "app_not_found",
-      "invalid_manifest",
-      "invalid_discovery",
-      "invalid_runtime_port_contract",
-      "missing_module_lease",
-      "worktree_not_found",
-      "worktree_not_owned",
-      "invalid_worktree_runtime_contract",
-      "app_not_ready",
-      "catalog_service_source_locked",
-      "catalog_service_lease_mismatch",
-      "catalog_service_module_contract_invalid",
-    ]);
-    return {
-      permanent: permanentCodes.has(error?.code)
-        || (Number(error?.status) >= 400 && Number(error?.status) < 500),
-      failure_kind: error?.code ?? error?.metadata?.failure_kind ?? "catalog_service_failed",
-    };
-  }
-
-  function startTeamServiceCatalog() {
-    return teamServiceController
-      ? teamServiceController.start()
-      : {
-          schema_version: "lazurio.team_service_controller.v1",
-          catalog_revision: null,
-          total: 0,
-          pending: 0,
-          starting: 0,
-          healthy: 0,
-          backoff: 0,
-          blocked: 0,
-          services: [],
-          skipped: true,
-        };
-  }
-
-  function teamServiceCatalogSummary() {
-    return teamServiceController ? teamServiceController.summary() : null;
-  }
-
-  function teamServiceCatalogSource(appId) {
-    const source = catalogServiceForApp(appId)?.source;
-    return source ? structuredClone(source) : null;
-  }
-
-  function retryTeamService(appId) {
-    if (!catalogServiceForApp(appId)) {
-      throw new RuntimeActionError(404, "catalog_service_not_found", `App ${appId} is not a catalog service.`);
-    }
-    return teamServiceController.retry(appId);
-  }
-
-  async function teamServiceReadiness(appId) {
-    const service = catalogServiceForApp(appId);
-    if (!service) {
-      throw new RuntimeActionError(404, "catalog_service_not_found", `App ${appId} is not a catalog service.`);
-    }
-    const observed = teamServiceController.snapshot(appId);
-    try {
-      const app = await runtimeAppForAction(appId, {
-        source: service.source,
-        requireValidDiscovery: false,
-      });
-      assertCatalogServiceSource(app, "readiness");
-      const runtime = await healthForApp(app);
-      const ready = observed?.status === "healthy"
-        && runtime.status === "healthy"
-        && runtime.owner === "current-instance"
-        && runtimeSourcesEqual(runtime.runtime_source, service.source);
-      return {
-        schema_version: "lazurio.team_service_readiness.v1",
-        ready,
-        app_id: appId,
-        catalog_revision: v2TeamServiceCatalog.catalog_revision,
-        observed,
-        runtime,
-        retry_after_seconds: ready ? null : retryAfterSeconds(observed),
-      };
-    } catch (error) {
-      return {
-        schema_version: "lazurio.team_service_readiness.v1",
-        ready: false,
-        app_id: appId,
-        catalog_revision: v2TeamServiceCatalog.catalog_revision,
-        observed,
-        runtime: null,
-        failure_kind: error?.code ?? error?.metadata?.failure_kind ?? "catalog_service_readiness_failed",
-        message: error?.message ?? String(error),
-        retry_after_seconds: retryAfterSeconds(observed),
-      };
-    }
-  }
-
-  function retryAfterSeconds(observed) {
-    const nextRetryAt = Date.parse(observed?.next_retry_at ?? "");
-    if (!Number.isFinite(nextRetryAt)) return 5;
-    return Math.max(1, Math.ceil((nextRetryAt - Date.now()) / 1_000));
-  }
-
-  async function reconcileDesiredState({ moduleLeaseKeys = null } = {}) {
-    if (lifecycleProfile !== "hosted" || v2TeamServiceCatalog) {
-      return {
-        schema_version: "lazurio.launchpad.boot_reconcile.v1",
-        profile: lifecycleProfile,
-        ...(v2TeamServiceCatalog ? { reason: "team_service_catalog_v2_is_authoritative" } : {}),
-        skipped: true,
-        reconciled_at: new Date().toISOString(),
-        total: 0,
-        active: 0,
-        disabled: 0,
-        deferred: 0,
-        degraded: 0,
-        results: [],
-      };
-    }
-    const entries = await listDesiredModuleStates({ root: desiredStateRoot });
-    const results = [];
-    for (const entry of entries) {
-      if (!entry.ok) {
-        results.push({ status: "degraded", file: entry.file, failure_kind: "invalid_desired_state", error: entry.error });
-        continue;
-      }
-      const desired = entry.state;
-      if (moduleLeaseKeys && !moduleLeaseKeys.has(desired.module_lease_key)) {
-        results.push({
-          status: "deferred",
-          module_lease_key: desired.module_lease_key,
-          app_id: desired.app_id,
-          source: desired.source,
-        });
-        continue;
-      }
-      if (!desired.enabled) {
-        results.push({
-          status: "disabled",
-          module_lease_key: desired.module_lease_key,
-          app_id: desired.app_id,
-          source: desired.source,
-        });
-        continue;
-      }
-      const lockApp = { id: desired.app_id, company: desired.company, module: desired.module };
-      try {
-        // Resolve the exact source before locking so the lock set includes the
-        // Module's concrete listener leases. The desired revision is checked
-        // again under those locks before any runtime mutation.
-        const resolvedApp = await runtimeAppForAction(desired.app_id, {
-          source: desired.source,
-          enforcePortContract: true,
-        });
-        const result = await withModuleLeaseLock(resolvedApp, async () => {
-          const current = await readDesiredModuleState({
-            root: desiredStateRoot,
-            company: desired.company,
-            module: desired.module,
-          });
-          if (!current?.enabled
-            || current.revision !== desired.revision
-            || current.app_id !== desired.app_id
-            || !runtimeSourcesEqual(current.source, desired.source)) {
-            return { status: "superseded", desired: current };
-          }
-          const app = resolvedApp;
-          if (!moduleRuntimeLeaseMatches(app, lockApp)) {
-            throw new RuntimeActionError(
-              409,
-              "desired_module_mismatch",
-              `Desired app ${current.app_id} no longer belongs to ${current.module_lease_key}.`,
-            );
-          }
-          const activeRecord = managedRecordForModule(app);
-          let runtime;
-          if (activeRecord
-            && activeRecord.appId === app.id
-            && runtimeSourcesEqual(activeRecord.runtimeSource, runtimeSourceForApp(app))) {
-            runtime = await healthForApp(app);
-          } else {
-            const started = await startRuntimeAppUnlocked(app, { trigger: "boot-reconcile" });
-            runtime = started.runtime ?? await healthForApp(app);
-          }
-          if (runtime.status === "starting") runtime = await waitForHealthy(app, runtime);
-          if (runtime.status !== "healthy") {
-            throw new RuntimeActionError(
-              500,
-              "desired_reconcile_unhealthy",
-              `${app.title}: boot reconcile did not establish a healthy listener.`,
-              [],
-              { failure_kind: runtime.failure_kind ?? "desired_reconcile_unhealthy", runtime },
-            );
-          }
-          const reconciled = await updateDesiredRuntimeReconciliation(current, { status: "active" });
-          resetDesiredRestartTracker(app);
-          return { status: "active", desired: reconciled, runtime };
-        });
-        results.push({
-          status: result.status,
-          module_lease_key: desired.module_lease_key,
-          app_id: desired.app_id,
-          source: desired.source,
-          ...(result.runtime ? { runtime_status: result.runtime.status } : {}),
-        });
-      } catch (error) {
-        let degraded = desired;
-        try {
-          await withModuleLeaseLock(lockApp, async () => {
-            const latest = await readDesiredModuleState({
-              root: desiredStateRoot,
-              company: desired.company,
-              module: desired.module,
-            });
-            if (latest?.enabled && latest.revision === desired.revision) {
-              degraded = await updateDesiredRuntimeReconciliation(latest, {
-                status: "degraded",
-                error: error.message,
-                failureKind: error.code ?? error.metadata?.failure_kind ?? "desired_reconcile_failed",
-              });
-            }
-          });
-        } catch {}
-        results.push({
-          status: "degraded",
-          module_lease_key: desired.module_lease_key,
-          app_id: desired.app_id,
-          source: desired.source,
-          failure_kind: degraded.failure_kind ?? error.code ?? "desired_reconcile_failed",
-          error: degraded.last_error ?? error.message,
-        });
-      }
-    }
-    return {
-      schema_version: "lazurio.launchpad.boot_reconcile.v1",
-      reconciled_at: new Date().toISOString(),
-      total: results.length,
-      active: results.filter((result) => result.status === "active").length,
-      disabled: results.filter((result) => result.status === "disabled").length,
-      deferred: results.filter((result) => result.status === "deferred").length,
-      degraded: results.filter((result) => result.status === "degraded").length,
-      results,
-    };
-  }
-
   // Startup is not committed until the Server locator is durably published.
   // If that publication fails, stop only children owned by this fresh Runtime
-  // Manager instance and preserve desired intent for the next safe retry.
+  // Manager instance.
   async function stopManagedRuntimes() {
     stopping = true;
-    // Invalidate future catalog scheduling, then drain active ensure calls
-    // before taking the one cleanup snapshot. An ensure may already be past
-    // its accepting-starts guard and register a child while shutdown begins.
-    await teamServiceController?.stop();
+    wakeHostedMaintenance();
+    await maintenanceLoopPromise;
     const records = [...managedProcesses.values()];
     const results = [];
     for (const record of records) {
       const app = record.runtimeApp;
-      resetDesiredRestartTracker(app);
       try {
         const result = await withModuleLeaseLock(app, async () => {
           if (managedProcesses.get(record.runtimeKey) !== record) {
@@ -3223,6 +2628,13 @@ export function createRuntimeManager({
 
   function runtimeSourceForApp(app) {
     return app.runtime_source ?? { type: "main" };
+  }
+
+  function runtimeSourceSelectorForApp(app) {
+    const source = runtimeSourceForApp(app);
+    return source.type === "worktree"
+      ? { type: "worktree", slug: source.slug }
+      : { type: "main" };
   }
 
   function worktreeRuntimeKey(app, slug) {
@@ -3406,11 +2818,6 @@ export function createRuntimeManager({
             peerTitle: managedPeer.runtimeApp.title,
             peerCompany: managedPeer.runtimeApp.company,
           });
-          // Disable the peer's durable intent before signalling it. Otherwise
-          // its bounded restart coordinator could reclaim the listener in the
-          // gap between Stop and the desired-state write.
-          await disableDesiredRuntime(managedPeer.runtimeApp, { acceptStoredSource: true });
-          resetDesiredRestartTracker(managedPeer.runtimeApp);
         }
         try {
           await stopRuntimeAppUnlocked(managedPeer.runtimeApp);
@@ -3439,22 +2846,10 @@ export function createRuntimeManager({
       // discovery but no longer managed by this process. A declared static
       // lease still authorizes the signal itself; cross-Organization overlap
       // additionally requires a named, user-confirmed peer and disables its
-      // desired runtime before reclaim, so it cannot immediately restart.
+      // another runtime before reclaim.
       const crossOrganizationOwners = declaredCrossOrganizationOwners(app, listener);
       if (owner.cwd_matches !== true && crossOrganizationOwners.length > 0) {
         const confirmedOwner = requireConfirmedCrossOrganizationTakeover(app, listener, takeover);
-        try {
-          const peerApp = await runtimeAppForAction(confirmedOwner.app_id, {
-            source: { type: "main" },
-            requireValidDiscovery: false,
-          });
-          await disableDesiredRuntime(peerApp, { acceptStoredSource: true });
-          resetDesiredRestartTracker(peerApp);
-        } catch (error) {
-          if (!["app_not_found", "worktree_not_found", "worktree_not_owned"].includes(error?.code)) {
-            throw error;
-          }
-        }
       }
 
       const result = await reclaimReservedListener(app, listener, {
@@ -3778,13 +3173,21 @@ export function createRuntimeManager({
     const runtimeKey = runtimeKeyForApp(app);
     const runtimeSource = runtimeSourceForApp(app);
     const state = await readState(runtimeKey);
-    const desired = await readDesiredRuntimeForHealth(app);
-    const catalogService = teamServiceController?.snapshot(app.id) ?? null;
+    const maintenanceEntry = maintainedEntryForApp(app);
+    let maintenance = maintenanceEntry ? maintenanceSnapshot(maintenanceEntry) : null;
     const record = managedProcesses.get(runtimeKey);
     app = record?.runtimeApp ?? await materializeRuntimeListeners(app);
     const dependencies = await dependencyForApp(app);
     app = appWithRuntimeAuthority(app, dependencies);
     const probe = await probeHealth(app);
+    if (maintenanceEntry && record && probe.reachable && probe.ok) {
+      maintenanceEntry.status = "healthy";
+      maintenanceEntry.attempts = 0;
+      maintenanceEntry.failure_kind = null;
+      maintenanceEntry.last_error = null;
+      maintenanceEntry.next_attempt_at_ms = nowFn() + maintenanceIntervalMs;
+      maintenance = maintenanceSnapshot(maintenanceEntry);
+    }
     const expectedCwd = dependencies[DEPENDENCY_RUNTIME_AUTHORITY]?.cwd
       ?? (record ? runtimeCwdForApp(app) : null);
     const portOwner = record ? null : await resolveVerifiedPortOwner(app, state, expectedCwd);
@@ -3828,17 +3231,16 @@ export function createRuntimeManager({
       port_owner: portOwner,
       listeners: runtimeListenerState(app),
       listener_reconciliation: listenerReconciliation,
-      ...(desired
+      ...(maintenance
         ? {
-            desired,
-            desired_alignment: record && desired.enabled === false
-              ? "managed-but-disabled"
-              : desired.enabled === true && desired.app_id === app.id && runtimeSourcesEqual(desired.source, runtimeSource)
+            maintenance,
+            maintenance_alignment: record
+              && maintenance.app_id === app.id
+              && runtimeSourcesEqual(maintenance.source, runtimeSource)
                 ? "matches"
                 : "different-source",
           }
         : {}),
-      ...(catalogService ? { catalog_service: catalogService } : {}),
     };
 
     if (record) {
@@ -3933,32 +3335,20 @@ export function createRuntimeManager({
       };
     }
 
-    if (desired?.enabled && desired.status === "degraded") {
+    if (maintenance?.status === "degraded") {
       return {
         ...base,
         status: "degraded",
-        failure_kind: desired.failure_kind ?? "desired_reconcile_failed",
-        message: desired.last_error ?? "Desired module runtime is degraded and was not replaced with main.",
+        failure_kind: maintenance.failure_kind ?? "hosted_maintenance_failed",
+        message: maintenance.last_error ?? "Hosted Team Workspace could not restore this Module yet.",
       };
     }
 
-    if (catalogService?.status === "blocked") {
-      return {
-        ...base,
-        status: "degraded",
-        failure_kind: catalogService.failure_kind ?? "catalog_service_blocked",
-        message: catalogService.last_error ?? "Catalog service is blocked until Retry or Install/Repair.",
-      };
-    }
-
-    if (["pending", "starting", "backoff"].includes(catalogService?.status)) {
+    if (["pending", "starting"].includes(maintenance?.status)) {
       return {
         ...base,
         status: "starting",
-        failure_kind: catalogService.failure_kind,
-        message: catalogService.status === "backoff"
-          ? "Catalog service is waiting for its next bounded retry."
-          : "Catalog service is being reconciled asynchronously.",
+        message: "Hosted Team Workspace is starting this Module automatically.",
       };
     }
 
@@ -4418,9 +3808,6 @@ export function createRuntimeManager({
 
   async function ensureRuntimeDirs() {
     await mkdir(appStateRoot, { recursive: true });
-    if (lifecycleProfile === "hosted") {
-      await mkdir(desiredStateRoot, { recursive: true });
-    }
     await mkdir(logsRoot, { recursive: true });
     await mkdir(takeoverAuditRoot, { recursive: true });
   }
@@ -4451,12 +3838,8 @@ export function createRuntimeManager({
     stop,
     restart,
     logs,
-    reconcileDesiredState,
-    startTeamServiceCatalog,
-    teamServiceCatalogSummary,
-    teamServiceCatalogSource,
-    retryTeamService,
-    teamServiceReadiness,
+    maintainApps,
+    maintenanceSummary,
     shutdown,
     rollbackUnpublishedStartup,
   };
