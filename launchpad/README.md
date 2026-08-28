@@ -32,48 +32,15 @@ pracují výhradně s lokálním `127.0.0.1:<port>`; přepisuje se pouze URL vr�
 pro otevření nového tabu.
 
 Lokální profil je výchozí a zachovává loopback URL. Hosted profil se zapíná
-`LAZURIO_WORKSPACE_PROFILE=hosted`, vyžaduje exact Team binding v
-`LAZURIO_TEAM_ID` a přijímá jedinou generovanou autoritu:
-`LAZURIO_TEAM_SERVICE_CATALOG_JSON` se schématem
-`lazurio.team_service_catalog.v2`, například:
-
-```json
-{
-  "schema_version": "lazurio.team_service_catalog.v2",
-  "organization_slug": "ExampleOrg",
-  "team_id": "example-builders",
-  "catalog_revision": "2026-08-28T18:00:00Z",
-  "generated_at": "2026-08-28T18:00:00Z",
-  "services": [
-    {
-      "app_id": "exampleorg-knowledgebase-v2",
-      "module_lease_key": "ExampleOrg/knowledgebase",
-      "external_origin": "https://knowledgebase.team.example.com/",
-      "source": {
-        "type": "worktree",
-        "slug": "DEV-6513-hosted-preview",
-        "mission_control_plan_code": "DEV-6513",
-        "branch": "agent/DEV-6513-hosted-preview"
-      }
-    }
-  ]
-}
-```
-
-`organization_slug` musí označovat namountovanou Organizaci, `team_id` přesně
-odpovídat `LAZURIO_TEAM_ID` a každý `module_lease_key` discovery identitě
-`company/module` aplikace, která je členem daného Teamu. `source` je buď exact
-`main`, nebo worktree připnutý současně canonical slugem, Mission Control
-plánem a branchí; rozpor nikdy nepadá zpět na main. Hosted
-origin musí být čisté HTTPS origin bez credentials, cesty, query, fragmentu
-nebo loopback hostname/adresy. Chybějící app id je fail-closed: `Open` vrátí
-`hosted_app_url_missing` a nikdy nepropustí `127.0.0.1` vzdálenému klientovi.
-`lazurio.team_service_catalog.v1` a `LAUNCHPAD_HOSTED_APP_URLS_JSON` zůstávají
-pouze dočasné read-compatible vstupy pro existující Workspace migraci;
-přítomnost canonical katalogu a compatibility mapy současně je chyba. Katalog
-není ACL ani portová autorita:
-generátor ingressu a brokeru jej spojuje s module lease registry a síťový
-obal dál vynucuje autentizaci i Team boundary.
+čtyřmi skaláry: `LAZURIO_WORKSPACE_PROFILE=hosted`, exact
+`LAZURIO_ORGANIZATION_SLUG`, exact lowercase `LAZURIO_TEAM_ID` a společná
+lowercase DNS zóna v `LAZURIO_HOSTED_DOMAIN`. Jiný lifecycle config neexistuje.
+Launchpad z manifestů Organizace odvodí všechny workspace moduly daného Teamu,
+pro každý zvolí jeho deklarovaný výchozí App a URL sestaví jako
+`https://<module>.<team>.<domain>/`. Chybějící nebo nejednoznačný výchozí App
+izoluje jen daný Modul; loopback URL se do hosted odpovědi nikdy nepropíše.
+Manifesty tím vlastní členství a výchozí App, modulový kontrakt vlastní port a
+ingress vlastní autentizaci. Launchpad mezi nimi nevytváří druhý katalog.
 
 Hosted browser akce navíc vyžadují
 `LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN=https://<přesný-launchpad-host>` a interní
@@ -106,11 +73,12 @@ deployment, ingress, identity ani MCP.
 
 Když je Team Workspace zapnutý, T3 Code a Launchpad jsou `desired-running`;
 tenký supervisor hlídá pouze je. Dashboard Development smí projektovat jen
-tyto dva stabilní vstupy a žádný modulový lifecycle nevlastní. Modulové dev
-preview udržuje Launchpad podle Team service katalogu; Builder je v Launchpadu
-otevírá, pozoruje a explicitně opravuje, ale jejich přítomnost nemění kliknutím.
+tyto dva stabilní vstupy a žádný modulový lifecycle nevlastní. Launchpad po
+vlastní readiness automaticky udržuje výchozí App každého Team modulu. Builder
+může v aktuální Launchpad session přepnout Modul z `main` na exact worktree;
+výběr se po restartu neobnovuje a Hosted Workspace znovu konverguje na `main`.
 Produkční aplikace smí Dashboard zobrazit až z pozdějšího ověřeného deployment
-katalogu, nikdy z Workspace service katalogu ani vývojového lifecycle stavu.
+katalogu, nikdy z vývojového lifecycle stavu Workspace.
 
 Produkční release patří do samostatného follow-upu: protected source/tag →
 reproducible immutable artifact → isolated production runtime s explicitním
@@ -122,34 +90,19 @@ Launchpad kontrakt proto nezavádí per-module produkční kontejnery.
 ## Lifecycle profily
 
 Výchozí localhost profil je session-scoped. `Start` a `Open` vždy pracují s
-explicitním exact `main` nebo `worktree/<canonical slug>` source, ale nic
-nezapisují do `runtime/desired-modules/`. Graceful Server shutdown ukončí
-všechny Organization i Personalspace process trees spravované touto instancí;
-další cold start ignoruje libovolně naplněný legacy desired adresář a publikuje
-locator bez per-Module reconcile.
+explicitním exact `main` nebo `worktree/<canonical slug>` source. Graceful
+Server shutdown ukončí všechny Organization i Personalspace process trees
+spravované touto instancí a další cold start nic neobnovuje.
 
-Hosted Team Workspace cílově používá `lazurio.team_service_catalog.v2` jako
-jedinou autoritu stabilní URL, exact source i keep-running intentu. Controller
-se rozbíhá až po publikaci readiness Launchpadu a chyba jedné služby neblokuje
-ostatní. Přechodné chyby opakuje neomezeně s capped backoffem a jitterem;
-trvalý contract nebo dependency problém zůstane čitelně `blocked`. Boot nikdy
-nespouští instalaci balíčků: Builder použije explicitní `Install`/`Repair` nebo
-`POST /api/hosted/services/<app-id>/retry`. Ingress čte per-service readiness
-z `GET /api/hosted/services/<app-id>/readiness`; do zdraví vrací `200`, během
-startu či backoffu řízené `503` s `Retry-After`, nikdy náhodný raw proxy `502`.
-
-Katalogové `Start` a `Open` mohou pouze znovu použít exact deklarovaný source,
-`Restart` jej smí restartovat. `Stop`, `Switch` ani kliknutí nemění persistentní
-intent. Služba se vypne až novou immutable revizí katalogu, ve které chybí;
-změna efektivní revize je součástí Server identity, takže stará instance se
-nemůže tiše reuseovat. Graceful replacement ukončí staré managed process trees
-a nový Server rozběhne pouze služby nové revize. Dnešní hosted v1 boot
-reconcile je výslovně dočasná read-compatible migrační lane; nové systémy jej
-nesmějí rozšiřovat a odstraní se až po inventuře, v2 canary a převodu všech
-hosted Workspace katalogů podle DEV-6513.
+Hosted Team Workspace používá stejný runtime manager. Po publikaci readiness mu
+Launchpad předá aktuálně odvozenou množinu výchozích Team Apps; manager je
+udržuje v paměti, izoluje chybu jednoho Modulu a retryuje ji bez blokování
+ostatních. `Stop` je v hosted profilu odmítnutý, protože Modul z Teamu nelze
+vypnout kliknutím. Persistentní desired state, service catalog, katalogová
+revize ani druhý controller nejsou součástí kontraktu.
 
 Produkční Buildy používají samostatný immutable build/runtime kontrakt bez
-Launchpadu, Team service katalogu a worktrees.
+Launchpadu a worktrees.
 
 ## Stabilní odkazy na prostor
 
@@ -195,9 +148,8 @@ chybí, launcher skončí čitelným `LAZURIO_SERVER_STATE_PERMISSION_REQUIRED` 
 Agent vyžádá pouze toto oprávnění. Cílově grant nastavuje `lazurio install`.
 
 Launcher reusuje existující lokální instanci jen když sedí hash kanonického
-machine rootu, hash selected control rootu, hash skutečných runtime/public
-source bytes a v hosted v2 také hash efektivní lifecycle konfigurace. Přechod
-main ↔ worktree, změna Server generace nebo katalogové revize proto bezpečně
+machine rootu, hash selected control rootu i hash skutečných runtime/public
+source bytes. Přechod main ↔ worktree nebo změna Server generace proto bezpečně
 nahradí tutéž sdílenou instanci a launcher ohlásí její skutečný origin;
 nekompatibilní ani cizí listener se nikdy nepřevezme.
 

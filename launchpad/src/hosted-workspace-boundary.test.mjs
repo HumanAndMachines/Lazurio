@@ -67,8 +67,8 @@ test("hosted workspace docs keep Dashboard and supervisor authority narrow", () 
       /katalogu\s+produkčních\s+nasazení/,
     ]);
     expectAny(document, [
-      /nikdy\s+z\s+Workspace\s+service\s+katalogu/,
-      /never\s+from\s+the\s+Workspace\s+service\s+catalog/,
+      /nikdy\s+z\s+vývojov\S*\s+lifecycle\s+stavu\s+Workspace/,
+      /never\s+from\s+Workspace\s+development\s+lifecycle\s+state/,
       /nikdy\s+ze\s+seznamu\s+vývojových\s+služeb\s+Workspace/,
     ]);
   }

@@ -120,16 +120,13 @@ mounted into the Workspace. SSH may remain an operator/recovery transport, but
 it is not the canonical hosted agent topology and must not create a second
 filesystem or runtime procedure. Local and hosted profiles expose the same
 builder-visible `~/Lazurio` structure, discovery/manifests, module-owned leases,
-worktree lifecycle and Doctor surface. Lifecycle semantics are profile-owned:
-local `Start`/`Open`/`Stop` are session-scoped, while hosted v2 locks
-`Start`/`Open`/`Restart` to the immutable catalog source and denies catalog
-`Stop`/`Switch`. The hosted profile additionally adds authentication, ingress
-and the network envelope.
+worktree lifecycle and Doctor/Install/Start/Stop/Open operations; only the
+hosted authentication, ingress and network envelope differs.
 
 This Hosted Team Workspace is a shared development workshop, not a production
 deployment. Module source remains editable while no app is running; Launchpad
 starts module dev children only for private UI/API/MCP preview, testing and
-debugging. Service-catalog origins are private preview endpoints inside the
+debugging. Derived Team module origins are private preview endpoints inside the
 approved Tailscale/VPN access plane, never public production surfaces.
 `lazurio.runtime.v1` describes runnable listeners and lifecycle for Launchpad
 and Doctor only; it is not a complete production deployment, ingress, identity
@@ -139,11 +136,12 @@ While the Team Workspace is enabled, T3 Code and Launchpad are
 `desired-running`, and the thin supervisor watches only those two stable
 processes. Dashboard Development projects only their entry points and never
 owns module lifecycle; builders Start, Stop and Open module dev previews in
-Launchpad only in the local profile. In a hosted Team Workspace, Launchpad keeps
-the immutable Team service catalog running; builders observe, open and explicitly
-repair those services, while a new catalog revision controls their membership.
+Launchpad only in the local profile. In a hosted Team Workspace, Launchpad
+derives every Team module and its default App from Organization manifests and
+keeps that set running after its own readiness. Builders may switch a Module to
+an exact worktree for the current session; restart returns it to `main`.
 Production applications appear only from a later verified deployment catalog,
-never from the Workspace service catalog or development lifecycle state.
+never from Workspace development lifecycle state.
 
 Production delivery is a separate follow-up contract: protected source/tag →
 reproducible immutable artifact → isolated production runtime with explicit
@@ -260,8 +258,8 @@ module — one module = one card everywhere; surfaces differ only in **which run
 they offer**. The canonical names are the vocabulary (users never see git jargon
 like "worktree" or "branch"):
 
-This future run vocabulary does not turn the current hosted service-catalog
-origin into PROD. In the current Hosted Workspace contract that origin exposes
+This future run vocabulary does not turn the derived Hosted Team module origin
+into PROD. In the current Hosted Workspace contract that origin exposes
 only private MAIN/worktree development preview over the approved access plane;
 `production_url` and the separate production release/runtime contract remain
 independent.
@@ -406,12 +404,12 @@ precondition is false.
 
 | Action | Workspace app policy | Productionspace policy | Response must show |
 | --- | --- | --- | --- |
-| Open | Local: ensure install/start for the explicitly selected session source. Hosted v2: ensure/open the immutable catalog source. Prove health; never persist click-derived intent | Allowed as read-only | target URL, runtime, exact source |
+| Open | Local: ensure install/start for the explicitly selected session source. Hosted: ensure/open the active session source; cold start begins on `main`. Prove health; never persist click-derived intent | Allowed as read-only | target URL, runtime, exact source |
 | Install | Allowed only when `dependencies.can_install=true`; app-cwd scoped | Disabled until explicit production policy exists | action, command, cwd, exit_code, log_path, log_excerpt |
 | Repair | Idempotent clean frozen reinstall of the exact App `node_modules`; failure leaves only that App blocked and the next retry starts cleanly | Disabled until explicit production policy exists | action, command, cwd, exit_code, dependency state, log_path, log_excerpt |
-| Start | Local: start an exact session source when `dependencies.can_start=true`; hosted catalog Start is idempotent ensure of the same source. A valid static module lease replaces its current occupant under the module mutex | Disabled or confirmation-gated until policy exists | runtime, pid, health, exact source, failure_kind on error |
-| Stop | Local: allowed only for the active current-instance managed process. Hosted v2 catalog service: denied; remove the record in a new catalog revision | confirmation-gated | pid/owner/result or stable denial |
-| Restart | Controlled restart of the exact active source; for hosted v2 it does not grant catalog `Stop` or source change and never bypasses dependency/policy guards | confirmation-gated | both action results |
+| Start | Local: start an exact session source when `dependencies.can_start=true`; hosted Start is idempotent ensure of the active session source. A valid static module lease replaces its current occupant under the module mutex | Disabled or confirmation-gated until policy exists | runtime, pid, health, exact source, failure_kind on error |
+| Stop | Local: allowed only for the active current-instance managed process. Hosted: denied because every Team module is always on | confirmation-gated | pid/owner/result or stable denial |
+| Restart | Stop + Start; never bypasses dependency/policy guards | confirmation-gated | both action results |
 | Logs | Always allowed for visible app | Always allowed | log_path and tail |
 | Synchronize | One hierarchy-wide `lazurio update`: verified recovery stash for dirty primary checkouts, `main` fast-forward, fresh module rediscovery, then changed-App dependency refresh | Productionspace skipped | per-repo outcome, recovery stash reference, dependency strategy, aggregate counts |
 
@@ -421,7 +419,7 @@ Start/Open may reclaim any safely signalable occupant under the module mutex and
 immediately replace it with the declared module. Localhost Stop is intentionally
 narrower: it signals only the current-session managed process. It never adopts
 or kills an unrelated process without performing that replacement lifecycle;
-a hosted v2 catalog service cannot be disabled by Stop at all.
+a Hosted Team module cannot be disabled by Stop at all.
 
 Productionspace systems use the same canonical card anatomy as Workspace, so
 the grid keeps one Lazurio rhythm. Their behavior remains distinct: the tile
