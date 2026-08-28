@@ -302,7 +302,7 @@ export function organizationSlotRepositoryMountIssue(slot, normalizedPath = null
 // Jedna Organization nesmí dvě fyzické repo boundary promítnout do stejného
 // logického ID ani deklarovat dvě cesty, které se na case-insensitive hostu
 // sloučí. Kontrola je záměrně jen nad jedním deklarativním seznamem; manifest a
-// company config smějí stejný slot paralelně popisovat během migrace.
+// compatibility projection and canonical inventory may describe the same slot during migration.
 export function organizationRepositorySlotCollectionIssues(
   slots,
   { allowEquivalentDuplicates = false } = {},

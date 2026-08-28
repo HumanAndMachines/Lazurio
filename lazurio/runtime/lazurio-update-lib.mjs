@@ -12,6 +12,12 @@ import { inspectRequiredDependencies, refreshFrozenBunDependencies } from "./dep
 import { buildGitInventory } from "./git-inventory-lib.mjs";
 import { materializeRepoCheckout } from "./git-materialization-lib.mjs";
 import { buildModuleLocationRepairAction } from "../core/module-location-repair-contract-lib.mjs";
+import { resolveOrganizationRootDocuments } from "../core/organization-activation-lib.mjs";
+import {
+  normalizeOrganizationDocumentJson,
+  readOrganizationRoot,
+} from "../core/organization-root-reader-lib.mjs";
+import { githubRepositoryCoordinate } from "../core/organization-slot-scope-lib.mjs";
 import {
   GIT_FETCH_TIMEOUT_MS,
   GIT_LOCAL_TIMEOUT_MS,
@@ -306,6 +312,11 @@ export async function readLazurioUpdateStatus({ rootPath, deps = {} } = {}) {
     return localStatusReport(blocked);
   }
   const inventoryIssues = inventoryIssueResults({ rootPath: absoluteRoot, inventory });
+  const repos = [
+    rootRepo,
+    ...managedOrganizationRoots(inventory),
+    ...managedOrganizationChildren(inventory),
+  ];
   // Structured Organization/module issues are partial inventory results, not a
   // global Sync blocker. Their exact Agent action lives on the affected
   // Organization/slot; GET-first must keep Synchronizovat available for every
@@ -319,11 +330,6 @@ export async function readLazurioUpdateStatus({ rootPath, deps = {} } = {}) {
     return localStatusReport(blocked);
   }
 
-  const repos = [
-    rootRepo,
-    ...managedOrganizationRoots(inventory),
-    ...managedOrganizationChildren(inventory),
-  ];
   for (const repo of repos) {
     // Chybějící Workspace Modul je legitimní materialization kandidát pro
     // explicitní Sync, ne lokální history blocker prvního renderu.
@@ -406,40 +412,41 @@ export async function updateManagedRepo(repo, context = {}) {
   const run = context.deps?.runGit ?? runGit;
   const inspect = context.deps?.inspectLocalRepo ?? inspectLocalRepo;
   const checkpoint = context.checkpoint ?? (() => {});
+  const block = (reason, options = {}) => blockedResult(repo, reason, options);
   let local = await inspect(repo, { ...context.deps, runGit: run });
   if (local.directoryOnly) return currentResult(repo, "directory_only", "Adresář nemá vlastní Git checkout; Lazurio ho přeskočilo.");
   if (!local.ok) {
-    return blockedResult(repo, local.reason ?? "git_inspection_failed", {
+    return block(local.reason ?? "git_inspection_failed", {
       detail: local.detail,
       codex: local.codex !== false,
     });
   }
   if (local.operation) {
-    return blockedResult(repo, `${local.operation}_in_progress`, {
+    return block(`${local.operation}_in_progress`, {
       detail: `V repozitáři probíhá ${local.operation}.`,
     });
   }
   if (repo.expected_branch && repo.expected_branch !== "main") {
-    return blockedResult(repo, "managed_branch_not_main", {
+    return block("managed_branch_not_main", {
       detail: `Spravovaný checkout deklaruje větev ${repo.expected_branch}; Lazurio update spravuje pouze main.`,
     });
   }
   if (local.sparseOrHiddenIndex) {
-    return blockedResult(repo, "hidden_index_state", {
+    return block("hidden_index_state", {
       detail: "Index používá skip-worktree nebo assume-unchanged a stash nelze úplně ověřit.",
     });
   }
 
   const worktreeIgnore = await repairCanonicalWorktreeIgnore({ repo, run, local });
   if (!worktreeIgnore.ok) {
-    return blockedResult(repo, "worktree_ignore_repair_failed", {
+    return block("worktree_ignore_repair_failed", {
       detail: worktreeIgnore.detail,
     });
   }
   if (worktreeIgnore.changed) {
     local = await inspect(repo, { ...context.deps, runGit: run });
     if (!local.ok || local.directoryOnly || local.operation || local.sparseOrHiddenIndex) {
-      return blockedResult(repo, "worktree_ignore_repair_failed", {
+      return block("worktree_ignore_repair_failed", {
         detail: "Po opravě lokálního worktree ignore nejde Git stav znovu bezpečně ověřit.",
       });
     }
@@ -455,7 +462,7 @@ export async function updateManagedRepo(repo, context = {}) {
           detail: source.detail,
         })
       : null;
-    return blockedResult(repo, source.reason, {
+    return block(source.reason, {
       detail: source.detail,
       nextAction: source.nextAction,
       codex: source.nextAction !== "github_access",
@@ -475,7 +482,7 @@ export async function updateManagedRepo(repo, context = {}) {
     { cwd: repo.absolute_path, timeoutMs: GIT_FETCH_TIMEOUT_MS, env: safeGitRemoteEnv() },
   );
   if (!fetched.ok) {
-    return blockedResult(repo, "github_unavailable", {
+    return block("github_unavailable", {
       detail: commandFailure(fetched, "GitHub verzi se nepodařilo stáhnout."),
       nextAction: "github_access",
       codex: false,
@@ -485,14 +492,14 @@ export async function updateManagedRepo(repo, context = {}) {
 
   const verifiedAgain = await verifyRemoteSource(repo, run);
   if (!verifiedAgain.ok || verifiedAgain.fingerprint !== source.fingerprint) {
-    return blockedResult(repo, "remote_changed", {
+    return block("remote_changed", {
       detail: "Origin se během kontroly změnil; update byl zastaven.",
     });
   }
 
   const target = await commitOid(run, repo.absolute_path, "refs/remotes/origin/main");
   if (!target) {
-    return blockedResult(repo, "remote_main_missing", {
+    return block("remote_main_missing", {
       detail: "Git nepotvrdil commit origin/main.",
       nextAction: "github_access",
       codex: false,
@@ -502,6 +509,17 @@ export async function updateManagedRepo(repo, context = {}) {
   const mainRelation = localMain
     ? await compareCommits(run, repo.absolute_path, localMain, target)
     : "missing";
+  const organizationTarget = await verifyOrganizationUpdateTarget({
+    repo,
+    run,
+    target,
+    sourceUrl: source.url,
+  });
+  if (!organizationTarget.ok) {
+    return block(organizationTarget.reason, {
+      detail: organizationTarget.detail,
+    });
+  }
   const detached = !local.branch;
   const decision = classifyLazurioRepoUpdate({
     operation: local.operation,
@@ -518,7 +536,7 @@ export async function updateManagedRepo(repo, context = {}) {
   // smějí nejdřív uložit necommitnutou práci a bezpečně vrátit checkout na
   // main, ale samotnou historii pak algoritmus nemění.
   if (decision.state === "blocked" && decision.reason === "detached_head") {
-    return blockedResult(repo, decision.reason, {
+    return block(decision.reason, {
       detail: relationDetail(mainRelation, local, target),
     });
   }
@@ -533,7 +551,7 @@ export async function updateManagedRepo(repo, context = {}) {
       local,
     });
     if (!stash.ok) {
-      return blockedResult(repo, stash.reason, {
+      return block(stash.reason, {
         detail: stash.detail,
         recoveryStash: stash.stashSha ?? null,
       });
@@ -544,14 +562,24 @@ export async function updateManagedRepo(repo, context = {}) {
   }
 
   if (local.branch !== "main") {
-    const switched = localMain
+    let preparedMain = { ok: true };
+    if (!localMain) {
+      preparedMain = await run(["branch", "main", target], {
+        cwd: repo.absolute_path,
+        timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+      });
+      if (preparedMain.ok) {
+        preparedMain = await run(["branch", "--set-upstream-to=origin/main", "main"], {
+          cwd: repo.absolute_path,
+          timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+        });
+      }
+    }
+    const switched = preparedMain.ok
       ? await run(["switch", "main"], { cwd: repo.absolute_path, timeoutMs: GIT_LOCAL_TIMEOUT_MS })
-      : await run(
-        ["switch", "--track", "-c", "main", "origin/main"],
-        { cwd: repo.absolute_path, timeoutMs: GIT_LOCAL_TIMEOUT_MS },
-      );
+      : preparedMain;
     if (!switched.ok) {
-      return blockedResult(repo, "switch_main_failed", {
+      return block("switch_main_failed", {
         detail: commandFailure(switched, "Checkout nešlo přepnout na main."),
         recoveryStash,
       });
@@ -561,7 +589,7 @@ export async function updateManagedRepo(repo, context = {}) {
   }
 
   if (decision.state === "blocked") {
-    return blockedResult(repo, decision.reason, {
+    return block(decision.reason, {
       detail: relationDetail(mainRelation, local, target),
       recoveryStash,
       actions,
@@ -577,7 +605,7 @@ export async function updateManagedRepo(repo, context = {}) {
       { cwd: repo.absolute_path, timeoutMs: GIT_LOCAL_TIMEOUT_MS },
     );
     if (!pulled.ok) {
-      return blockedResult(repo, "fast_forward_failed", {
+      return block("fast_forward_failed", {
         detail: commandFailure(pulled, "Fast-forward pull selhal."),
         recoveryStash,
       });
@@ -594,12 +622,13 @@ export async function updateManagedRepo(repo, context = {}) {
     || final.branch !== "main"
     || final.dirtyPaths.length > 0
     || !finalTarget
-    || final.head !== finalTarget
+    || finalTarget !== target
+    || final.head !== target
     || !finalSource.ok
     || finalSource.fingerprint !== source.fingerprint
   ) {
-    return blockedResult(repo, "post_update_verification_failed", {
-      detail: "Repo po update není prokazatelně clean main na origin/main.",
+    return block("post_update_verification_failed", {
+      detail: "Repo po update není prokazatelně clean main na připnutém origin/main commitu.",
       recoveryStash,
     });
   }
@@ -624,6 +653,123 @@ export async function updateManagedRepo(repo, context = {}) {
     actions,
     recoveryStash,
   });
+}
+
+async function verifyOrganizationUpdateTarget({
+  repo,
+  run,
+  target,
+  sourceUrl,
+}) {
+  if (repo.repo_kind !== "organization_root") return { ok: true };
+
+  const documents = {};
+  for (const [field, path] of [
+    ["canonicalManifest", "lazurio.organization.json"],
+    ["companyManifest", "company.gen3.json"],
+    ["modulesManifest", "modules.manifest.json"],
+  ]) {
+    const shown = await run(["show", `${target}:${path}`], {
+      cwd: repo.absolute_path,
+      timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+    });
+    const listed = await run(["ls-tree", "--name-only", target, "--", path], {
+      cwd: repo.absolute_path,
+      timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+    });
+    if (!listed.ok) {
+      return {
+        ok: false,
+        reason: "organization_target_inspection_failed",
+        detail: `Git nedokázal bezpečně ověřit přítomnost ${path} v exact Organization targetu.`,
+      };
+    }
+    const listedPaths = listed.stdout.split("\n").filter(Boolean);
+    if (listedPaths.length === 0) {
+      documents[field] = null;
+      continue;
+    }
+    if (listedPaths.length !== 1 || listedPaths[0] !== path) {
+      return {
+        ok: false,
+        reason: "organization_target_inspection_failed",
+        detail: `Git v exact Organization targetu vrátil nejednoznačnou cestu pro ${path}.`,
+      };
+    }
+    if (!shown.ok) {
+      return {
+        ok: false,
+        reason: "organization_target_inspection_failed",
+        detail: `Git nedokázal načíst přítomný dokument ${path} z exact Organization targetu.`,
+      };
+    }
+    try {
+      documents[field] = normalizeOrganizationDocumentJson(JSON.parse(shown.stdout));
+    } catch {
+      documents[field] = { invalid: true };
+    }
+  }
+  const hasOrganizationDocuments = Object.values(documents).some((document) => document !== null);
+  if (!hasOrganizationDocuments) {
+    const current = readOrganizationRoot({ organizationRoot: repo.absolute_path });
+    return current.state === "missing"
+      ? { ok: true }
+      : {
+        ok: false,
+        reason: "organization_target_incompatible",
+        detail: "Exact Organization target odstranil všechny Organization manifest dokumenty.",
+      };
+  }
+
+  const resolution = resolveOrganizationRootDocuments(documents);
+  if (!["legacy", "transition"].includes(resolution.state) || resolution.resource_count !== 1) {
+    return {
+      ok: false,
+      reason: "organization_target_incompatible",
+      detail: `Stažený Organization target zůstává neaktivní: stav ${resolution.state}, issues ${resolution.issues.join(", ") || "none"}.`,
+    };
+  }
+  const identityIssue = organizationTargetIdentityIssue({ repo, sourceUrl, resource: resolution.resource });
+  if (identityIssue) {
+    return {
+      ok: false,
+      reason: "organization_target_identity_mismatch",
+      detail: identityIssue,
+    };
+  }
+  return { ok: true };
+}
+
+function organizationTargetIdentityIssue({ repo, sourceUrl, resource }) {
+  if (resource?.kind !== "organization" || resource.organization?.slug !== repo.organization) {
+    return "Exact target neodpovídá ověřené identitě Organization mountu.";
+  }
+  const remote = githubRepositoryCoordinate(sourceUrl);
+  if (!remote) {
+    if (isLocalGitRemote(sourceUrl)) return null;
+    const expected = String(repo.repo ?? "").trim();
+    return expected && normalizeGitRemote(expected) === normalizeGitRemote(sourceUrl)
+      ? null
+      : "Organization target nejde svázat s ověřenou GitHub repository identitou.";
+  }
+  const forgeLocator = resource.organization?.forge_binding?.locator;
+  if (typeof forgeLocator === "string" && forgeLocator.toLowerCase() !== remote.owner.toLowerCase()) {
+    return "Organization forge binding v exact targetu neodpovídá ověřenému GitHub originu.";
+  }
+  const repositoryLocator = resource.root_repository?.locator;
+  if (typeof repositoryLocator !== "string") {
+    return "Exact target postrádá Organization root repository binding k ověřenému GitHub originu.";
+  }
+  const declared = githubRepositoryCoordinate(repositoryLocator);
+  if (!declared || declared.ownerRepo.toLowerCase() !== remote.ownerRepo.toLowerCase()) {
+    return "Organization root repository binding v exact targetu neodpovídá ověřenému GitHub originu.";
+  }
+  return null;
+}
+
+function isLocalGitRemote(value) {
+  const source = String(value ?? "").trim();
+  return isAbsolute(source) || source.startsWith("file://");
 }
 
 async function repairCanonicalWorktreeIgnore({ repo, run, local }) {
@@ -894,7 +1040,15 @@ async function createVerifiedRecoveryStash({ repo, run, runId, local }) {
   const beforeHead = local.head;
   const message = `lazurio-update:${runId}:${repo.key}:${beforeHead}`;
   const stash = await run(
-    ["stash", "push", "--include-untracked", "--message", message],
+    [
+      "stash",
+      "push",
+      "--include-untracked",
+      "--message",
+      message,
+      "--",
+      ".",
+    ],
     { cwd: repo.absolute_path, timeoutMs: GIT_LOCAL_TIMEOUT_MS },
   );
   if (!stash.ok) {
@@ -1672,7 +1826,8 @@ function blockedResult(repo, reason, {
   action = null,
 } = {}) {
   const kind = action?.kind ?? nextAction ?? (codex ? "codex" : "retry");
-  const prompt = typeof action?.prompt === "string"
+  const actionHasPrompt = typeof action?.prompt === "string";
+  const prompt = actionHasPrompt
     ? action.prompt
     : kind === "codex"
       ? codexRepairPrompt(repo, reason, detail, recoveryStash)
@@ -1790,7 +1945,10 @@ async function readDirtyPaths(run, cwd) {
     run(["ls-files", "--others", "--exclude-standard", "-z"], { cwd, timeoutMs: GIT_LOCAL_TIMEOUT_MS }),
   ]);
   if (!tracked.ok || !untracked.ok) return { ok: false, paths: [] };
-  return { ok: true, paths: [...new Set([...splitNull(tracked.stdout), ...splitNull(untracked.stdout)])].sort() };
+  return {
+    ok: true,
+    paths: [...new Set([...splitNull(tracked.stdout), ...splitNull(untracked.stdout)])].sort(),
+  };
 }
 
 async function commitOid(run, cwd, ref) {

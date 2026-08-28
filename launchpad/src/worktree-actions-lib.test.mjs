@@ -2,6 +2,11 @@ import { afterAll, expect, test } from "bun:test";
 import { existsSync } from "fs";
 import { mkdir, rm, symlink, writeFile, readFile } from "fs/promises";
 import { basename, dirname, join } from "path";
+import {
+  organizationLegacyProjectionHash,
+  projectLegacyOrganizationManifest,
+} from "../../lazurio/core/organization-activation-lib.mjs";
+import { readOrganizationRoot } from "../../lazurio/core/organization-root-reader-lib.mjs";
 import { buildWorktreeIndex } from "../../lazurio/runtime/worktree-lib.mjs";
 import { createWorktreeFromPlan, publishWorktreeDraft, WorktreeActionError } from "./worktree-actions-lib.mjs";
 import { createLaunchpadGitFixture, initGitRepo, runGit } from "./git-fixture-helpers.test.mjs";
@@ -213,6 +218,58 @@ test("guarded create refuses dirty main checkout and leaves no worktree behind",
   });
 
   expect(existsSync(join(orgRoot, ".worktrees", "workspace", "deals", "CAC-0042-deals-publish"))).toBe(false);
+});
+
+test("guarded create rejects an Organization projection drift propagated by inventory", async () => {
+  const { root, orgRoot } = await setupDealsRepoWithPlan();
+  const company = JSON.parse(await readFile(join(orgRoot, "company.gen3.json"), "utf8"));
+  const modules = JSON.parse(await readFile(join(orgRoot, "modules.manifest.json"), "utf8"));
+  const canonical = {
+    schema_version: "lazurio.organization.v1",
+    kind: "organization",
+    organization: {
+      slug: company.company.slug,
+      display_name: company.company.display_name,
+      forge_binding: {
+        forge: "github",
+        locator: company.company.github_org,
+        binding_state: "unverified",
+      },
+      metadata: {},
+    },
+    root_repository: null,
+    manifests: { modules: "modules.manifest.json" },
+    teams: company.teams,
+    extensions: { legacy: { workspaces: company.workspaces } },
+    compatibility: {
+      legacy_projection: {
+        path: "company.gen3.json",
+        algorithm: "sha256-canonical-json-v1",
+        sha256: `sha256:${"0".repeat(64)}`,
+      },
+    },
+  };
+  canonical.compatibility.legacy_projection.sha256 = organizationLegacyProjectionHash(canonical, modules);
+  const drifted = structuredClone(projectLegacyOrganizationManifest(canonical, modules));
+  delete drifted.organization_kind;
+  await writeFile(join(orgRoot, "lazurio.organization.json"), `${JSON.stringify(canonical, null, 2)}\n`);
+  await writeFile(join(orgRoot, "company.gen3.json"), `${JSON.stringify(drifted, null, 2)}\n`);
+  expect(readOrganizationRoot({ organizationRoot: orgRoot }).state).toBe("projection_drift");
+
+  await expect(
+    createWorktreeFromPlan({
+      companiesRoot: root,
+      repoKey: "BetaCo::root",
+      planPath: "mission-control/plans/2026/07/CAC-0042-deals-publish.yaml",
+      branch: "CAC-0042-drift-blocked",
+      createdBy: "test-agent",
+    }),
+  ).rejects.toMatchObject({
+    name: "WorktreeActionError",
+    code: "organization_manifest_projection_drift",
+    status: 409,
+  });
+  expect(existsSync(join(orgRoot, ".worktrees", "workspace", "deals", "CAC-0042-drift-blocked"))).toBe(false);
 });
 
 test("guarded create serializes with the canonical Organization create lock", async () => {

@@ -11,6 +11,7 @@ import {
   runTrustedGitCommandSync,
 } from "../lazurio/core/cli-provenance-lib.mjs";
 import { createTrustedGitHubProvider } from "../lazurio/core/github-provider-lib.mjs";
+import { readOrganizationRoot } from "../lazurio/core/organization-root-reader-lib.mjs";
 
 const GITHUB_REPOSITORY_PATTERN =
   /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/(?!(?:\.{1,2})$)[A-Za-z0-9._-]{1,100}$/u;
@@ -29,6 +30,7 @@ function json(path) {
 }
 
 function slotsOf(manifest) {
+  if (Array.isArray(manifest)) return manifest;
   if (Array.isArray(manifest?.modules)) return manifest.modules;
   if (Array.isArray(manifest?.module_slots)) return manifest.module_slots;
   return [];
@@ -689,12 +691,10 @@ function liveRootBinding(organizationRoot, provider, gitReader) {
   };
 }
 
-function inspectOrganization(organizationRoot, { provider, gitReader }) {
-  const company = json(join(organizationRoot, "company.gen3.json"));
-  const manifestPath = join(organizationRoot, "modules.manifest.json");
-  const manifest = existsSync(manifestPath) ? json(manifestPath) : { modules: [] };
-  const dataSlot = slotsOf(manifest).find((slot) => slot?.path === "mission-control/db");
-  const declaredGithubOrg = company?.company?.github_org ?? company?.github_org;
+function inspectOrganization(organizationRoot, { provider, gitReader, resolution }) {
+  const resource = resolution.resource;
+  const dataSlot = slotsOf(resource.repository_inventory).find((slot) => slot?.path === "mission-control/db");
+  const declaredGithubOrg = resource.organization?.forge_binding?.locator;
   const result = {
     organization: basename(organizationRoot),
     github_org: declaredGithubOrg ?? null,
@@ -925,20 +925,30 @@ export function runSmoke(
   const candidates = readdirSync(organizationsRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => join(organizationsRoot, entry.name))
-    .filter((root) => existsSync(join(root, "company.gen3.json")))
     .sort();
   const results = [];
   for (const root of candidates) {
-    let company;
+    let resolution;
     try {
-      company = json(join(root, "company.gen3.json"));
+      resolution = readOrganizationRoot({ organizationRoot: root });
     } catch (error) {
       results.push(failedOrganizationResult(root, error));
       continue;
     }
-    if (company?.organization_kind === "template") continue;
+    if (resolution.state === "missing") continue;
+    if (
+      resolution.state === "conflict"
+      || resolution.resource_count !== 1
+    ) {
+      results.push(failedOrganizationResult(
+        root,
+        new Error(`Organization manifest nejde bezpečně normalizovat (${resolution.state}; ${resolution.issues.join(", ")})`),
+      ));
+      continue;
+    }
+    if (resolution.resource.kind === "template") continue;
     try {
-      results.push(inspectOrganization(root, { provider, gitReader }));
+      results.push(inspectOrganization(root, { provider, gitReader, resolution }));
     } catch (error) {
       results.push(failedOrganizationResult(root, error));
     }

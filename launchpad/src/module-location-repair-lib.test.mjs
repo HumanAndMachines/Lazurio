@@ -102,7 +102,7 @@ test("repair never treats an explicit unknown schema as deployed GEN3", async ()
 
   expect(await checkFixture(fixture)).toMatchObject({
     state: "blocked",
-    blockers: [{ code: "module_declaration_ambiguous" }],
+    blockers: [{ code: "organization_manifest_not_mutation_safe" }],
   });
 });
 
@@ -191,8 +191,7 @@ test("repair reserves a sibling path with case-only mount container drift", asyn
 
   expect(report).toMatchObject({
     state: "blocked",
-    blockers: [{ code: "checkout_ambiguous" }],
-    plan: { reason: "sibling_declaration_collision" },
+    blockers: [{ code: "organization_manifest_not_mutation_safe" }],
   });
   expect(activity).toEqual({ targetFetches: 0, originMutations: 0, renames: 0 });
   expect(existsSync(fixture.sourcePath)).toBe(true);
@@ -334,7 +333,7 @@ test("published conflicting Organization root aliases cannot authorize a Module 
 
   expect(report).toMatchObject({
     state: "blocked",
-    blockers: [{ code: "organization_source_ambiguous" }],
+    blockers: [{ code: "organization_manifest_not_mutation_safe" }],
   });
   expect(targetFetches).toBe(0);
   expect(originMutations).toBe(0);
@@ -387,7 +386,7 @@ test("published scaffold forge binding conflict blocks repair before target Git 
 
   expect(report).toMatchObject({
     state: "blocked",
-    blockers: [{ code: "organization_source_ambiguous" }],
+    blockers: [{ code: "organization_manifest_not_mutation_safe" }],
   });
   expect(targetFetches).toBe(0);
   expect(originMutations).toBe(0);
@@ -430,7 +429,7 @@ test("published foreign governance access authority blocks repair before target 
 
   expect(report).toMatchObject({
     state: "blocked",
-    blockers: [{ code: "organization_source_invalid" }],
+    blockers: [{ code: "organization_manifest_not_mutation_safe" }],
   });
   expect(targetFetches).toBe(0);
   expect(originMutations).toBe(0);
@@ -473,7 +472,7 @@ test("published Organization manifest cannot authorize repair through a differen
 
   expect(report).toMatchObject({
     state: "blocked",
-    blockers: [{ code: "organization_source_origin_mismatch" }],
+    blockers: [{ code: "organization_manifest_not_mutation_safe" }],
   });
   expect(targetFetches).toBe(0);
   expect(originMutations).toBe(0);
@@ -787,9 +786,9 @@ test("a reviewed remote outside the Organization github_org boundary never autho
 
   expect(report).toMatchObject({
     state: "blocked",
-    blockers: [{ code: "module_declaration_invalid" }],
+    blockers: [{ code: "organization_manifest_not_mutation_safe" }],
   });
-  expect(report.blockers[0].message).toContain("cross-Organization access kontrakt");
+  expect(report.blockers[0].message).toContain("organization_root_remote_owner_mismatch");
   expect(existsSync(fixture.sourcePath)).toBe(true);
   expect(existsSync(fixture.targetPath)).toBe(false);
   expect(git(fixture.sourcePath, ["remote", "get-url", "origin"])).toBe(fixture.oldRemote);
@@ -1100,7 +1099,7 @@ test("cross-file Organization slug drift blocks before fetch, origin mutation or
 
   expect(report).toMatchObject({
     state: "blocked",
-    blockers: [{ code: "module_declaration_invalid" }],
+    blockers: [{ code: "organization_manifest_not_mutation_safe" }],
   });
   expect(targetFetches).toBe(0);
   expect(originMutations).toBe(0);
@@ -1222,13 +1221,16 @@ async function repairFixture(name, {
 
   const targetRelativePath = `${targetContainer}/${targetName}`;
   const targetOwner = githubTransport ? "NewOrg" : "fixture";
+  const organizationRepository = `${targetOwner}/TestCo`;
 
   await writeFile(join(organizationRoot, "company.gen3.json"), `${JSON.stringify({
+    organization_generation: "gen3",
     schema_version: "company.gen3.v3",
     company: {
       slug: "TestCo",
       github_org: targetOwner,
-      repository: organizationBareRemote,
+      repository: `git@github.com:${organizationRepository}.git`,
+      root_repository: organizationRepository,
       default_branch: "main",
     },
     modules: [{ slug: "studio", path: targetRelativePath, repo: manifestRemote }],
@@ -1256,6 +1258,9 @@ async function repairFixture(name, {
   const repositoryCoordinate = (remote) => {
     const github = githubRepositoryCoordinate(remote);
     if (github) return github;
+    if (String(remote) === organizationBareRemote) {
+      return { owner: targetOwner, repository: "TestCo", ownerRepo: organizationRepository };
+    }
     if (String(remote) === newBareRemote) return { owner: "fixture", repository: targetName };
     if (String(remote) === oldBareRemote) return { owner: "fixture", repository: sourceName };
     const repository = basename(String(remote)).replace(/\.git$/u, "");

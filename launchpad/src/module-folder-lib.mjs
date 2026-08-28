@@ -15,7 +15,7 @@ export class ModuleFolderActionError extends Error {
 /**
  * Action contract:
  * - intent: otevřít lokálně dostupný checkout modulu v systémovém správci souborů;
- * - source of truth: organization/module discovery z company.gen3.json a modules.manifest.json;
+ * - source of truth: normalized Organization resource and modules.manifest.json inventory;
  * - preconditions: Organizace i modul existují, modul je available a reálná cesta zůstává uvnitř Organizace;
  * - side effect: spustí pouze lokální Finder/Explorer/xdg-open, soubory ani Git stav nemění;
  * - failure mode: strukturovaná 4xx chyba pro neplatný/nedostupný scope, 500 při selhání systémového openeru;

@@ -149,7 +149,7 @@ Lazurio Core owns:
   `description` and `ui_exposure`;
 - semantic parity and conflict detection;
 - deterministic migration planning and legacy projection;
-- machine-readable states, errors and receipts.
+- machine-readable states, errors and migration evidence.
 
 The authored document uses `lazurio.organization.v1`. The resolver envelope
 uses `lazurio.organization.root-resolution.v1`, and its normalized resource
@@ -185,17 +185,12 @@ runtime/process state, consistent with DEV-6439.
 | both, normalized semantics and canonical projection hash match | `transition` | supported; Lazurio file is canonical and legacy is a generated projection |
 | semantics match but canonical projection hash drifts | `projection_drift` | canonical Lazurio read remains available; mutations block until projection regeneration |
 | normalized semantics differ | `conflict` | fail closed for mutation; never choose silently |
-| only Lazurio | `current` | supported after the finalization gate |
+| only Lazurio | `current` | readable for diagnosis; mutations remain blocked until the finalization gate |
 | neither | `missing` | not a Lazurio resource; fail only when the mount is expected |
 | any present document is invalid or unreadable | `conflict` | fail closed; `issues[]` identifies the malformed or unreadable document even when no second file exists |
 
 One mount always produces at most one resource and at most one child Doctor.
 Two filenames never create two Organizations or two Personalspaces.
-
-An active authoring or Machine-activation receipt takes precedence over the six
-stable content states and returns the orthogonal operation status
-`migration_in_progress`. Core must not misclassify a partially applied
-transaction as `projection_drift` or `conflict`.
 
 The legacy projection is required during the compatibility window because old
 supported Machines have hardcoded legacy structural gates and there is no
@@ -225,9 +220,6 @@ lazurio migrate organization-manifest --finalize --write
 lazurio migrate personalspace-manifest
 lazurio migrate personalspace-manifest --write
 lazurio migrate personalspace-manifest --finalize --write
-
-lazurio migrate <resource>-manifest --recover --write
-lazurio migrate <resource>-manifest --rollback --write
 ```
 
 Contract:
@@ -237,87 +229,61 @@ Contract:
   expected branch; it never edits a primary checkout;
 - Personalspace `--write` uses an owner-private task/worktree contract and
   never depends on an Organization Mission Control;
-- execute the Lazurio manifest and legacy projection change through the
-  recoverable cross-file transaction below; never claim filesystem-level
-  multi-file atomicity;
+- build and validate the complete Lazurio manifest and legacy projection before
+  replacing either file; never claim filesystem-level multi-file atomicity;
 - validate schemas, normalized parity, root Git provenance, template kind and
   subordinate manifest references;
 - never commit, push, merge or mutate Forge/Dashboard state;
 - emit tool version, before/after semantic hashes, deterministic projection
-  hash, changed files and rollback;
+  hash and changed files;
 - preserve supported extension fields; refuse ambiguous roots, dirty
-  worktrees, unpreservable fields, binding mismatch, path traversal and partial
-  writes;
+  worktrees, unpreservable fields, binding mismatch and path traversal;
 - keep `--finalize` blocked until a separate accepted mechanism proves the
   minimum reader version for every supported Machine cohort.
 
-### Authoring cross-file write protocol
+### Authoring worktree protocol
 
-The CLI owns a recoverable transaction, because common filesystems cannot
-atomically replace two paths at once:
+Git is the recovery authority for authoring. The migrator uses a clean,
+plan-owned worktree, computes both complete documents before touching either
+path, validates the staged pair through Core and replaces each file atomically
+on its own path. It then validates the files as read from disk and leaves the
+result as an ordinary reviewable Git diff.
 
-1. Acquire an exclusive resource-scoped write lock. Create a worktree-local,
-   ignored transaction directory under
-   `.lazurio/transactions/<resource>/<transaction-id>/` containing a durable
-   receipt, both before-images, both complete staged after-images and their
-   semantic and canonical projection hashes.
-2. Validate the staged pair before touching either target. The receipt records
-   the expected sequence `prepared` → `canonical_applied` → `legacy_applied` →
-   `verified` and is durably advanced before and after each replacement.
-3. Replace each target from the same filesystem with a platform-proven
-   per-file atomic rename. A finalization transaction represents legacy removal
-   as an atomic move to its before-image, not an unrecorded deletion.
-4. Core checks for an active receipt before opening either manifest. New
-   cross-file readers return `migration_in_progress`, expose the exact recovery
-   action and perform no mutation. Legacy-only readers see either the complete
-   old or complete new legacy file; they never parse a partial file.
-5. Remove the receipt and before-images only after both targets match the
-   after-hashes, normalized parity passes and the transaction reaches
-   `verified`. After interruption, the same CLI version resumes from the
-   recorded phase or restores both before-images; it never guesses from file
-   presence alone.
+An interruption between the two replacements may leave `projection_drift` or
+`conflict`. That state fails closed and remains visible in `git status`; the
+migrator can deterministically regenerate the projection from the canonical
+manifest, or the Task Agent can inspect and restore the worktree with normal Git
+tools. Lazurio does not maintain a hidden transaction registry, receipt or
+second rollback authority. Windows replacement behavior, case-preserving
+repository names and separators remain hard gates alongside macOS and Linux.
 
-All cross-file and mutation-capable consumers must use the Core receipt check
-before any resource enters `transition`. Transaction directories never enter a
-commit, template or another resource boundary.
+### Machine update compatibility gate
 
-Windows atomic replacement, case-preserving repository names, separators and
-rollback are hard gates alongside macOS and Linux.
+The updater transports an already reviewed Git revision. It does not implement
+a manifest-specific activation lifecycle:
 
-### Machine activation protocol
+1. Under the existing global update lock, fetch and pin the exact target OID
+   without moving the checkout; verify the expected remote again after fetch.
+2. Read the exact target documents through Git object inspection and resolve
+   them with the same Core resolver as the live filesystem. Bind the normalized
+   Organization and root-repository identity to the already verified checkout
+   and remote. During the compatibility window only `legacy` and parity-valid
+   `transition` targets may advance; `projection_drift`, `conflict`, `current`,
+   `missing`, malformed, unreadable or mismatched targets block before stash,
+   branch switch or pull.
+3. Apply the existing local-work gates, verified recovery stash and exact
+   pinned fast-forward update. Verify final HEAD and source identity against the
+   pinned OID, then rediscover the Organization inventory and invalidate stale
+   child caches before continuing.
 
-A reviewed migration commit is only the transport for a verified pair. It does
-not make an ordinary multi-path Git checkout an atomic activation. Every
-supported Machine therefore activates a target revision through the updater:
-
-1. Fetch the target revision without moving the active checkout. Inspect its
-   tree and diff before writing. If a manifest pair changes, an updater without
-   the required activation capability leaves the Machine on the previous
-   revision and fails closed; plain `git pull` or direct checkout is not a
-   supported activation path.
-2. Acquire the same resource-scoped lock and create a durable local activation
-   receipt with the previous and target revision, both pair hashes, staged
-   target blobs and rollback data. Put Core readers behind the in-progress
-   barrier and stop, drain or otherwise prove the absence of every supported
-   legacy process that can read or mutate any path in the resource. A read-only
-   legacy process is not exempt: it cannot honor the receipt and could combine
-   paths from different revisions.
-3. Update the checkout metadata and non-pair paths only while the resource is
-   inactive. Apply the two staged target blobs with the platform-proven
-   per-file atomic replacement from the authoring protocol. No supported reader
-   or writer may observe the resource again until the whole target revision is
-   verified; no subset of paths is an active filesystem view.
-4. Verify the target revision, both after-hashes, normalized parity and
-   projection hash before removing the receipt and restarting or exposing the
-   resource. Interruption resumes the recorded phase or restores the complete
-   previous revision; it never exposes a failed target as active.
-
-Before the first migration PR may merge, the rollout gate must prove that every
-supported updater entrypoint either implements this fetch-before-checkout
-activation or is fenced from advancing the resource. An offline or returning
-Machine upgrades the updater first; until then it remains on its last compatible
-revision. This is a Machine-local activation guard, not a content authority or
-tracked state store.
+Git HEAD is the only durable activation authority. A process or OS failure
+during checkout may require ordinary Git recovery on the next run; Lazurio
+detects and blocks unsafe states but does not promise unattended rollback.
+Concurrent readers observing a multi-file Git checkout are a general runtime
+snapshot or quiescence problem. If zero mixed-generation observation becomes a
+hard requirement, it must be solved once for the whole runtime with an
+immutable generation pointer or process quiescence, not with manifest-specific
+shadow state.
 
 ## Rollout
 
@@ -325,8 +291,7 @@ tracked state store.
 
 DEV-6512 amended decisions 0026, 0031 and 0042 for the Organization contract.
 Decision 0051 remains the Personalspace authority and is explicitly unchanged.
-The resolver slice introduces no Organization writer, migration or Machine
-activation by itself.
+The resolver slice introduces no Organization writer or migration by itself.
 
 The proposal and later rollout use a new Mission Control plan and DEV code.
 They are independent of DEV-6439 and PR #129: DEV-6439 keeps its current Iotor
@@ -341,11 +306,11 @@ without becoming part of its implementation sequence.
 3. Move Git inventory, update and worktrees to it.
 4. Move Doctor composition to it and prove one child per mount.
 5. Move CLI to the same normalized model.
-6. Move root, Organization and Personalspace update entrypoints to the
-   fetch-before-checkout Machine activation protocol.
+6. Add the binding-aware exact target-tree gate to the Organization update
+   entrypoint before any checkout mutation.
 
 No resource may enter `transition` until all mutation-capable consumers use the
-Core resolver and every supported Machine is covered by the activation rollout
+Core resolver and every supported Machine is covered by the target-tree update
 gate. Each slice keeps existing files canonical and carries golden parity,
 real-Organization smoke and Windows CI.
 
@@ -358,11 +323,11 @@ a second registry: each follow-up removes a direct document read by consuming
 
 | Follow-up owner | Direct consumers at this baseline | Required convergence |
 | --- | --- | --- |
-| Core compatibility adapters | `lazurio/organization-activation-lib.mjs`, `lazurio/organization-install-lib.mjs` | Already call the single resolver; they intentionally retain the legacy-only activation projection until the reader/activation gate. |
+| Core compatibility adapters | `lazurio/organization-activation-lib.mjs`, `lazurio/organization-install-lib.mjs` | Already call the single resolver; they intentionally retain the legacy-only activation projection until the reader/update gate. |
 | Launchpad discovery and diagnostics | `launchpad/src/discovery-lib.mjs`, `launchpad/src/diagnostics-lib.mjs`, `launchpad/src/git-inventory-lib.mjs`, `launchpad/src/doctor-children-lib.mjs`, `launchpad/src/module-location-repair-lib.mjs`, `launchpad/src/workspace-parity-runner.mjs` | Consume one normalized Organization resource, preserve fail-closed conflict, and compose exactly one Organization child Doctor per mount. |
 | Lazurio CLI, update and Module policy | `lazurio/lib.mjs`, `lazurio/module-port-lib.mjs`, `lazurio/module-setup-lib.mjs` | Stop opening the legacy projection as authority; use the same normalized identity, policy and repository inventory. |
 | Root scripts and worktree inventory | `scripts/worktree-create.mjs`, `scripts/lazurio-module-inventory.mjs`, `scripts/mission-control-trust-smoke.mjs`, `scripts/gen2-gen3-sync-inventory.mjs`, `.agents/skills/worktree-development-discipline/scripts/worktree-inventory.mjs`, `.claude/skills/worktree-development-discipline/scripts/worktree-inventory.mjs` | Resolve the mount once through Core; keep the two tracked skill mirrors byte-identical. |
-| Bootstrap follow-up | `lazurio/core/organization-scaffold-lib.mjs` | Emit the canonical manifest plus its deterministic legacy compatibility projection only after reader and Machine-activation gates. |
+| Bootstrap follow-up | `lazurio/core/organization-scaffold-lib.mjs` | Emit the canonical manifest plus its deterministic legacy compatibility projection only after reader and target-tree update gates. |
 
 `launchpad/src/doctor-surface-lib.mjs`, `launchpad/src/module-folder-lib.mjs` and
 `lazurio/core/module-location-repair-contract-lib.mjs` mention the legacy
@@ -389,7 +354,7 @@ Migrate one canary Organization in a plan-owned worktree. The PR contains the
 new canonical manifest and verified legacy projection. Old and new readers must
 produce the same normalized inventory. Then repeat with one reviewed PR per
 Organization. Pull/sync never authors or regenerates a manifest; it may only
-activate the already reviewed pair through the Machine activation protocol.
+validate and fast-forward to the exact reviewed target revision.
 
 During `transition`, contributors edit the Lazurio file and regenerate the
 legacy projection. Editing the legacy file directly always produces
@@ -403,8 +368,8 @@ and cannot become an actionable Organization.
 
 `--finalize` remains unavailable until a separate accepted design proves
 reader readiness for online, offline and returning Machines. Finalization then
-requires no conflicts, cross-platform finalization/rollback tests and an
-owner-approved PR for the exact Organization or Personalspace.
+requires no conflicts, cross-platform regeneration tests and an owner-approved
+PR for the exact Organization or Personalspace.
 
 Legacy reader removal is a later major compatibility change, never part of the
 first migration PR.
@@ -419,15 +384,13 @@ first migration PR.
 4. One resource and one child Doctor when both files exist.
 5. Old-reader compatibility against generated projections.
 6. Unknown-field and lossy-mapping refusal.
-7. Interruption after every transaction phase, deterministic resume, full
-   rollback and proof that readers never classify mixed generations as stable.
+7. Authoring interruption remains a visible fail-closed Git worktree state and
+   deterministic rerun restores parity without hidden transaction state.
 8. Windows/macOS/Linux per-file atomic replacement, path, case and projection
    behavior.
-9. Interruption after every Machine activation phase, rollback to the complete
-   previous revision, and proof that an incapable/offline Machine cannot advance
-   into the migration commit before its updater is compatible. Exercise a
-   concurrent legacy read-only consumer and prove it is fenced for the complete
-   mixed-revision window.
+9. Exact target OID pinning plus proof that incompatible content, identity or
+   remote drift blocks before stash, switch or pull; interrupted Git updates
+   remain recoverable by the ordinary next-run Git gates.
 10. Read-only smoke over all available Organizations without cross-Organization
    output.
 11. Catalog projection proving that `diagnostics-only` slots remain in Doctor

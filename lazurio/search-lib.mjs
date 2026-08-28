@@ -13,6 +13,7 @@ import {
   normalizeOrganizationSlotPath,
   organizationSlotTeams,
 } from "./core/organization-slot-scope-lib.mjs";
+import { readOrganizationRoot } from "./core/organization-root-reader-lib.mjs";
 import { detectLazurioRoot } from "./lib.mjs";
 
 export const LAZURIO_SEARCH_RESULT_SCHEMA_VERSION = "lazurio.search.results.v1";
@@ -162,15 +163,24 @@ export async function discoverLazurioSearchScope({
   }
 
   const organizationRoot = join(detected.absolutePath, organization.path);
-  const manifest = await readJson(join(organizationRoot, "modules.manifest.json"));
-  if (manifest?.company !== scope.organization_slug) {
+  const resolution = readOrganizationRoot({ organizationRoot });
+  if (
+    resolution.state === "conflict"
+    || resolution.resource_count !== 1
+  ) {
     throw new LazurioSearchError(
-      "Search scope neodpovídá company identitě v modules.manifest.json.",
+      `Organization manifest není bezpečně čitelný: ${resolution.issues.join(", ") || resolution.state}.`,
+      { code: "organization_manifest_unavailable", exitCode: 3 },
+    );
+  }
+  if (resolution.resource.organization.slug !== scope.organization_slug) {
+    throw new LazurioSearchError(
+      "Search scope neodpovídá normalizované Organization identitě.",
       { code: "organization_identity_mismatch", exitCode: 3 },
     );
   }
   const slots = new Map(
-    (Array.isArray(manifest.module_slots) ? manifest.module_slots : [])
+    resolution.resource.repository_inventory
       .map((slot) => [normalizeOrganizationSlotPath(slot?.path), slot]),
   );
 

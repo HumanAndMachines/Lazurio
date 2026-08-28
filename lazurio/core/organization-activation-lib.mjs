@@ -8,6 +8,7 @@ import {
 } from "./organization-scaffold-lib.mjs";
 import {
   githubRepositoryCoordinate,
+  isNestedOrganizationRepositoryDbSlotPath,
   normalizeOrganizationSlotPath,
   organizationRootRepositoryAliasIssues,
   organizationSlotPathScope,
@@ -206,17 +207,19 @@ export function resolveOrganizationRootDocuments({
   companyManifest,
   modulesManifest,
   canonicalManifest,
+  documentIssues = [],
   expectedOrganizationId,
   expectedOrganizationLogin,
   expectedRepositoryId,
   expectedRepositoryFullName,
+  activationFormats = ["legacy"],
 }) {
   const legacyPresent = companyManifest !== null && companyManifest !== undefined;
   const canonicalPresent = canonicalManifest !== null && canonicalManifest !== undefined;
   const modules = normalizeModulesManifest(modulesManifest);
   const legacy = legacyPresent ? normalizeLegacyOrganization(companyManifest, modulesManifest) : invalidNormalization();
   const canonical = canonicalPresent ? normalizeCanonicalOrganization(canonicalManifest, modulesManifest) : invalidNormalization();
-  const issues = [...modules.issues];
+  const issues = [...documentIssues, ...modules.issues];
   if (legacyPresent) issues.push(...legacy.issues);
   if (canonicalPresent) issues.push(...canonical.issues);
 
@@ -278,6 +281,12 @@ export function resolveOrganizationRootDocuments({
     }
   }
 
+  if (documentIssues.length > 0) {
+    state = "conflict";
+    resource = null;
+    projection = null;
+  }
+
   if (resource) semanticHash = organizationSemanticHash(resource);
   const activation = legacyActivationProjection({
     state,
@@ -289,9 +298,20 @@ export function resolveOrganizationRootDocuments({
     expectedOrganizationLogin,
     expectedRepositoryId,
     expectedRepositoryFullName,
+    activationFormats,
   });
   return freeze({
     contract_version: ORGANIZATION_ROOT_RESOLUTION_VERSION,
+    declaration_source: state === "legacy"
+      ? "legacy_compatibility_projection"
+      : ["transition", "projection_drift", "current"].includes(state)
+        ? "lazurio.organization.json"
+        : null,
+    document_presence: {
+      canonical: canonicalPresent,
+      legacy_projection: legacyPresent,
+      modules: modulesManifest !== null && modulesManifest !== undefined,
+    },
     state,
     resource,
     resource_count: resource === null ? 0 : 1,
@@ -299,6 +319,11 @@ export function resolveOrganizationRootDocuments({
     semantic_hash: semanticHash,
     projection,
     issues: [...new Set(issues)].sort(),
+    warnings: organizationIdentityWarnings({
+      companyManifest,
+      canonicalManifest,
+      modulesManifest,
+    }),
     activation,
   });
 }
@@ -343,8 +368,17 @@ export function organizationSemanticHash(resource) {
 function normalizeModulesManifest(value) {
   const issues = [];
   if (!isRecord(value)) issues.push("modules_manifest_missing");
-  const generationSupported = value?.organization_generation === "gen3"
-    || value?.schema_version === "companiesascode.modules.v1";
+  // Deployed GEN3 Organization roots predate an explicit modules schema.
+  // Absence remains the compatibility form; any explicit unknown value is
+  // rejected so the window cannot silently widen into a second contract.
+  const generationSupported = isRecord(value) && (
+    value.organization_generation === undefined
+    || value.organization_generation === "gen3"
+  ) && (
+    value.schema_version === undefined
+    || value.schema_version === "companiesascode.modules.v1"
+    || value.schema_version === "modules.manifest.v3"
+  );
   if (!generationSupported) issues.push("modules_manifest_schema_unsupported");
   if (!Array.isArray(value?.module_slots)) issues.push("modules_manifest_slots_invalid");
   const company = normalizedText(value?.company);
@@ -376,6 +410,9 @@ function normalizeLegacyOrganization(value, modulesManifest) {
   const issues = [];
   if (!isRecord(value)) return invalidNormalization("legacy_manifest_invalid");
   if (value.organization_generation !== "gen3") issues.push("legacy_manifest_schema_unsupported");
+  if (value.schema_version !== undefined && value.schema_version !== "company.gen3.v3") {
+    issues.push("legacy_manifest_schema_unsupported");
+  }
   const kind = value.organization_kind ?? "organization";
   if (!['organization', 'template'].includes(kind)) issues.push("organization_kind_invalid");
   const company = value.company;
@@ -390,7 +427,13 @@ function normalizeLegacyOrganization(value, modulesManifest) {
     || normalizeOrganizationPortPool({ manifest: value }).issues.length > 0
   ) issues.push("legacy_module_port_pool_invalid");
   const modules = normalizeModulesManifest(modulesManifest);
-  if (modules.valid && (modules.company !== slug || !sameText(modules.githubOrganization, forgeLocator))) {
+  const templatePlaceholderPair = kind === "template"
+    && isPlaceholderManifestIdentity(slug)
+    && isPlaceholderManifestIdentity(modules.company)
+    && isPlaceholderManifestIdentity(forgeLocator)
+    && isPlaceholderManifestIdentity(modules.githubOrganization);
+  if (modules.valid && !templatePlaceholderPair
+    && (!sameText(modules.company, slug) || !sameText(modules.githubOrganization, forgeLocator))) {
     issues.push("organization_modules_identity_conflict");
   }
   const repository = legacyRootRepository(value);
@@ -463,7 +506,7 @@ function normalizeCanonicalOrganization(value, modulesManifest) {
   }
   const modules = normalizeModulesManifest(modulesManifest);
   const forgeLocator = organizationForgeBinding.value?.locator ?? "";
-  if (modules.valid && (modules.company !== slug || !sameText(modules.githubOrganization, forgeLocator))) {
+  if (modules.valid && (!sameText(modules.company, slug) || !sameText(modules.githubOrganization, forgeLocator))) {
     issues.push("organization_modules_identity_conflict");
   }
   const resource = issues.length === 0
@@ -514,7 +557,9 @@ function normalizedResource({
     repository_inventory: clone(modules.slots),
     ...(manifest.module_port_pool === undefined ? {} : { module_port_pool: clone(manifest.module_port_pool) }),
     ...(manifest.governance === undefined ? {} : { governance: clone(manifest.governance) }),
-    ...(manifest.teams === undefined ? {} : { teams: clone(manifest.teams) }),
+    ...((manifest.teams ?? manifest.workspaces) === undefined
+      ? {}
+      : { teams: clone(manifest.teams ?? manifest.workspaces) }),
     ...(manifest.layers === undefined ? {} : { layers: clone(manifest.layers) }),
     ...(manifest.task_sources === undefined ? {} : { task_sources: clone(manifest.task_sources) }),
     ...(manifest.doctor === undefined ? {} : { doctor: clone(manifest.doctor) }),
@@ -712,11 +757,18 @@ function legacyActivationProjection({
   expectedOrganizationLogin,
   expectedRepositoryId,
   expectedRepositoryFullName,
+  activationFormats,
 }) {
-  if (canonicalPresent) {
+  const allowedFormats = new Set(Array.isArray(activationFormats) ? activationFormats : []);
+  const eligibleFormat = state === "legacy"
+    ? "legacy"
+    : state === "transition" && canonicalPresent
+      ? "transition"
+      : null;
+  if (canonicalPresent && (eligibleFormat !== "transition" || !allowedFormats.has("transition"))) {
     return { status: "unsupported", format: null, reason: "canonical_resolver_unavailable" };
   }
-  if (state !== "legacy" || resource?.kind !== "organization") {
+  if (eligibleFormat === null || !allowedFormats.has(eligibleFormat) || resource?.kind !== "organization") {
     const reason = state === "missing" || !modulesValid
       ? "legacy_manifest_pair_missing"
       : ["current", "transition", "projection_drift"].includes(state)
@@ -728,8 +780,13 @@ function legacyActivationProjection({
   const repositoryFullName = normalizedText(expectedRepositoryFullName);
   const organizationBinding = resource.organization.forge_binding;
   const repositoryBinding = resource.root_repository;
-  const forgeBinding = companyManifest.forge_binding;
-  const forgeBindingSupported = forgeBinding === undefined
+  const forgeBinding = companyManifest?.forge_binding;
+  const forgeBindingSupported = eligibleFormat === "transition"
+    ? organizationBinding?.binding_state === "verified"
+      && repositoryBinding?.binding_state === "verified"
+      && String(organizationBinding.organization_id ?? "") === String(expectedOrganizationId ?? "")
+      && String(repositoryBinding.repository_id ?? "") === String(expectedRepositoryId ?? "")
+    : forgeBinding === undefined
     || isValidOrganizationForgeBinding(forgeBinding, {
       organizationId: expectedOrganizationId,
       organizationLogin,
@@ -740,7 +797,13 @@ function legacyActivationProjection({
     && (repositoryBinding === null || sameText(repositoryBinding.locator, repositoryFullName))
     && forgeBindingSupported;
   return supported
-    ? { status: "supported", format: "legacy", reason: "legacy_identity_pair_supported" }
+    ? {
+        status: "supported",
+        format: eligibleFormat,
+        reason: eligibleFormat === "transition"
+          ? "transition_identity_pair_supported"
+          : "legacy_identity_pair_supported",
+      }
     : { status: "unsupported", format: null, reason: "legacy_identity_pair_invalid" };
 }
 
@@ -791,7 +854,9 @@ function projectLegacyModules(slots) {
       delete projected.space;
       delete projected.default_access;
       delete projected.required_roles;
-      projected.slug ??= slot.path.split("/").at(-1);
+      if (projected.slug === undefined && !isNestedOrganizationRepositoryDbSlotPath(slot.path)) {
+        projected.slug = slot.path.split("/").at(-1);
+      }
       if (remote !== undefined) projected.repo = remote;
       if (branch !== undefined) projected.branch = branch;
       if (slot.space === "productionspace") projected.workspace = "productionspace";
@@ -809,7 +874,14 @@ function projectLegacyModules(slots) {
 }
 
 function normalizeRepositorySlots(slots) {
-  return slots.map((slot) => sortObject(clone(slot))).sort((left, right) => (
+  return slots.map((slot) => {
+    const normalized = clone(slot);
+    const path = normalizeOrganizationSlotPath(slot?.path);
+    if (normalized.slug === undefined && path && !isNestedOrganizationRepositoryDbSlotPath(path)) {
+      normalized.slug = path.split("/").at(-1);
+    }
+    return sortObject(normalized);
+  }).sort((left, right) => (
     compareCodeUnits(String(left.path ?? ""), String(right.path ?? ""))
   ));
 }
@@ -826,6 +898,37 @@ function sameText(left, right) {
 
 function compareCodeUnits(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function organizationIdentityWarnings({ companyManifest, canonicalManifest, modulesManifest }) {
+  const organization = canonicalManifest?.organization;
+  const company = companyManifest?.company;
+  const slug = normalizedText(organization?.slug) || normalizedText(company?.slug);
+  const forgeLocator = normalizedText(organization?.forge_binding?.locator)
+    || normalizedText(company?.github_org);
+  const warnings = [];
+  for (const [code, left, right] of [
+    ["organization_modules_company_case_drift", slug, normalizedText(modulesManifest?.company)],
+    ["organization_modules_forge_locator_case_drift", forgeLocator, normalizedText(modulesManifest?.github_org)],
+  ]) {
+    if (left && right && left !== right && sameText(left, right)) warnings.push(code);
+  }
+  const declaredPaths = new Set((modulesManifest?.module_slots ?? [])
+    .map((slot) => normalizeOrganizationSlotPath(slot?.path))
+    .filter(Boolean));
+  if (
+    Array.isArray(companyManifest?.modules)
+    && companyManifest.modules.some((slot) => {
+      const path = normalizeOrganizationSlotPath(slot?.path);
+      return path !== null && !declaredPaths.has(path);
+    })
+  ) warnings.push("legacy_modules_block_ignored");
+  return warnings;
+}
+
+function isPlaceholderManifestIdentity(value) {
+  const normalized = normalizedText(value).toLowerCase();
+  return normalized.includes("<") || normalized.includes("vyplnit") || normalized === "example";
 }
 
 function invalidNormalization(issue) {

@@ -5136,7 +5136,11 @@ async function createCompaniesWorkspaceFixture({
   staleLockfile = false,
   installScripts = {},
   appOverrides = {},
-  moduleSlots = [],
+  moduleSlots = [{
+    path: "modules/demo",
+    slug: "demo",
+    git: { url: "git@github.com:TestCompany/demo.git", branch: "main" },
+  }],
 }) {
   const root = await mkdtemp(join(tmpdir(), "companiesascode-launchpad-"));
   registerTempRoot(root, { port });
@@ -5156,13 +5160,18 @@ async function createCompaniesWorkspaceFixture({
       root_role: "companies-root",
     },
   });
-  // Scan-first: slug žije v namountovaném company.gen3.json, ne v registry.
+  // Scan-first: identity comes from the normalized Organization resource.
   await writeJson(join(companyRoot, "company.gen3.json"), {
     organization_generation: "gen3",
-    company: { slug: "test-company", display_name: "Test Company" },
+    company: {
+      slug: "test-company",
+      display_name: "Test Company",
+      github_org: "TestCompany",
+    },
   });
   await writeJson(join(companyRoot, "modules.manifest.json"), {
     company: "test-company",
+    github_org: "TestCompany",
     module_slots: moduleSlots,
   });
   await writeJson(join(companyRoot, "TODO.tasks.json"), {});

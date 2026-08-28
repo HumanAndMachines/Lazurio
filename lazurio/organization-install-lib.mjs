@@ -12,6 +12,7 @@ import {
 } from "./core/github-provider-lib.mjs";
 import { resolveTrustedGitHubCliExecutable } from "./core/cli-provenance-lib.mjs";
 import { resolveOrganizationRootDocuments } from "./core/organization-activation-lib.mjs";
+import { readOrganizationRoot } from "./core/organization-root-reader-lib.mjs";
 import { isValidOrganizationForgeBinding } from "./core/organization-scaffold-lib.mjs";
 import { githubRepositoryCoordinate } from "./core/organization-slot-scope-lib.mjs";
 import { isSamePath } from "./core/path-boundary-lib.mjs";
@@ -442,19 +443,14 @@ function readProviderJson(provider, fullName, path, ref, { optional = false } = 
 
 async function readLocalRootDocuments(path) {
   try {
-    const [company, modules, canonical] = await Promise.all([
-      readJson(join(path, "company.gen3.json")),
-      readJson(join(path, "modules.manifest.json")),
-      readJson(join(path, "lazurio.organization.json"), { optional: true }),
-    ]);
-    return { ok: true, company, modules, canonical };
+    return { ok: true, resolution: readOrganizationRoot({ organizationRoot: path }) };
   } catch {
     return providerFailure("root_manifest_invalid", "Lokální Organization root nemá validní manifesty.");
   }
 }
 
 function verifyOrganizationRootDocuments({ documents, organization, repository }) {
-  const resolution = resolveOrganizationRootDocuments({
+  const resolution = documents.resolution ?? resolveOrganizationRootDocuments({
     companyManifest: documents.company,
     modulesManifest: documents.modules,
     canonicalManifest: documents.canonical,
@@ -462,17 +458,34 @@ function verifyOrganizationRootDocuments({ documents, organization, repository }
     expectedOrganizationLogin: organization.login,
     expectedRepositoryId: repository.id,
     expectedRepositoryFullName: repository.full_name,
+    activationFormats: ["legacy", "transition"],
   });
-  const forgeBinding = documents.company?.forge_binding;
-  if (
-    resolution.activation.status !== "supported"
-    || !isValidOrganizationForgeBinding(forgeBinding, {
+  const identity = resolution.resource;
+  const bindingSupported = identity?.organization?.forge_binding?.binding_state === "verified"
+    && identity?.root_repository?.binding_state === "verified"
+    && isValidOrganizationForgeBinding({
+      schema_version: "lazurio.forge-binding.github.v0",
+      provider: "github",
+      organization: {
+        id: identity.organization.forge_binding.organization_id,
+        asserted_login: identity.organization.forge_binding.locator,
+      },
+      repository: {
+        id: identity.root_repository.repository_id,
+        asserted_full_name: identity.root_repository.locator,
+        default_branch: identity.root_repository.default_branch,
+      },
+    }, {
       organizationId: organization.id,
       organizationLogin: organization.login,
       repositoryId: repository.id,
       repositoryFullName: repository.full_name,
-    })
-  ) {
+    });
+  const compatibleState = ["legacy", "transition"].includes(resolution.state);
+  const resolverSupported = documents.resolution
+    ? compatibleState
+    : resolution.activation.status === "supported";
+  if (!resolverSupported || !bindingSupported) {
     return providerFailure(
       "root_manifest_identity_mismatch",
       "Organization root manifesty neodpovídají immutable GitHub Organization a repository identitě.",

@@ -260,6 +260,7 @@ function inspectRootRepository({ invoke, organization }) {
     expectedOrganizationLogin: organization.login,
     expectedRepositoryId: repositoryId,
     expectedRepositoryFullName: fullName,
+    activationFormats: ["legacy", "transition"],
   });
   return {
     presence: "present",

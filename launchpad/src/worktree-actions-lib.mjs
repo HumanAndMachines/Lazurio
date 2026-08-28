@@ -358,6 +358,12 @@ async function resolveRepo(companiesRoot, repoKey) {
   const inventory = await buildGitInventory({ companiesRoot });
   const repo = inventory.repos.find((item) => item.key === repoKey);
   if (!repo) throw new WorktreeActionError(`Repo ${repoKey} nebylo nalezeno.`, { status: 404, code: "repo_not_found" });
+  if (repo.organization_manifest_state === "projection_drift") {
+    throw new WorktreeActionError("Legacy compatibility projection Organization rootu je v driftu; před worktree akcí ji oprav přes lazurio update.", {
+      status: 409,
+      code: "organization_manifest_projection_drift",
+    });
+  }
   if (
     repo.repo_kind === "productionspace"
     || repo.space === "productionspace"

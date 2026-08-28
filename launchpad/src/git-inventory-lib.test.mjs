@@ -2,6 +2,11 @@ import { afterAll, expect, test } from "bun:test";
 import { mkdir, readFile, rename, rm, symlink, writeFile } from "fs/promises";
 import { join } from "path";
 import { buildGitInventory } from "../../lazurio/runtime/git-inventory-lib.mjs";
+import { readOrganizationRoot } from "../../lazurio/core/organization-root-reader-lib.mjs";
+import {
+  organizationLegacyProjectionHash,
+  projectLegacyOrganizationManifest,
+} from "../../lazurio/core/organization-activation-lib.mjs";
 import { createLaunchpadGitFixture, initGitRepo, runGit } from "./git-fixture-helpers.test.mjs";
 
 const tempRoots = [];
@@ -45,7 +50,7 @@ test("inventory reads repo paths from Organization manifests and does not infer 
   expect(inventory.planned.map((slot) => `${slot.organization}::${slot.module}`)).toContain("BetaCo::brainstorm");
 });
 
-test("an Organization identity mismatch keeps its root updateable but excludes only its child repositories", async () => {
+test("an Organization identity mismatch fences root and child Git actions", async () => {
   const root = await createLaunchpadGitFixture();
   tempRoots.push(root);
   const manifestPath = join(root, "organizations", "OmegaCo_GEN3", "modules.manifest.json");
@@ -55,15 +60,85 @@ test("an Organization identity mismatch keeps its root updateable but excludes o
 
   const inventory = await buildGitInventory({ companiesRoot: root });
 
-  expect(inventory.repos.some((repo) => repo.key === "OmegaCo::root")).toBe(true);
+  expect(inventory.repos.some((repo) => repo.key === "OmegaCo::root")).toBe(false);
   expect(inventory.repos.some((repo) => repo.organization === "OmegaCo" && repo.repo_kind !== "organization_root")).toBe(false);
   expect(inventory.repos.some((repo) => repo.key === "BetaCo::deals")).toBe(true);
   expect(inventory.inventory_issues).toContainEqual(expect.objectContaining({
     scope: "organization",
-    code: "organization_identity_invalid",
+    code: "organization_manifest_conflict",
     organization: "OmegaCo",
     next_action: expect.objectContaining({ kind: "agent_review" }),
   }));
+});
+
+test("projection drift keeps the declared Organization root recovery key across mount renames", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const organizationRoot = join(root, "organizations", "RecoveryMount_GEN3");
+  await rename(join(root, "organizations", "OmegaCo_GEN3"), organizationRoot);
+  const company = await Bun.file(join(organizationRoot, "company.gen3.json")).json();
+  const modules = await Bun.file(join(organizationRoot, "modules.manifest.json")).json();
+  const canonical = {
+    schema_version: "lazurio.organization.v1",
+    kind: "organization",
+    organization: {
+      slug: company.company.slug,
+      display_name: company.company.display_name,
+      forge_binding: { forge: "github", locator: company.company.github_org, binding_state: "unverified" },
+      metadata: {},
+    },
+    root_repository: null,
+    manifests: { modules: "modules.manifest.json" },
+    teams: company.teams,
+    extensions: { legacy: { workspaces: company.workspaces } },
+    compatibility: {
+      legacy_projection: {
+        path: "company.gen3.json",
+        algorithm: "sha256-canonical-json-v1",
+        sha256: `sha256:${"0".repeat(64)}`,
+      },
+    },
+  };
+  canonical.compatibility.legacy_projection.sha256 = organizationLegacyProjectionHash(canonical, modules);
+  const drifted = structuredClone(projectLegacyOrganizationManifest(canonical, modules));
+  delete drifted.organization_kind;
+  await writeFile(join(organizationRoot, "lazurio.organization.json"), `${JSON.stringify(canonical, null, 2)}\n`);
+  await writeFile(join(organizationRoot, "company.gen3.json"), `${JSON.stringify(drifted, null, 2)}\n`);
+
+  expect(readOrganizationRoot({ organizationRoot })).toMatchObject({
+    state: "projection_drift",
+    recovery_identity: { slug: "OmegaCo" },
+  });
+
+  const inventory = await buildGitInventory({ companiesRoot: root });
+
+  expect(inventory.repos).toContainEqual(expect.objectContaining({
+    key: "OmegaCo::root",
+    repo_path: "organizations/RecoveryMount_GEN3",
+    organization_manifest_state: "projection_drift",
+  }));
+  expect(inventory.repos.some((repo) => repo.organization === "OmegaCo" && repo.repo_kind !== "organization_root"))
+    .toBe(false);
+});
+
+test("a blocked directory fallback cannot shadow a later healthy declared Organization slug", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const original = join(root, "organizations", "OmegaCo_GEN3");
+  const healthy = join(root, "organizations", "ZetaMount_GEN3");
+  const blocked = join(root, "organizations", "OmegaCo_GEN3");
+  await rename(original, healthy);
+  await mkdir(blocked, { recursive: true });
+  await writeFile(join(blocked, "lazurio.organization.json"), "{broken\n");
+
+  const inventory = await buildGitInventory({ companiesRoot: root });
+
+  expect(inventory.repos).toContainEqual(expect.objectContaining({
+    key: "OmegaCo::root",
+    repo_path: "organizations/ZetaMount_GEN3",
+    organization_manifest_state: "legacy",
+  }));
+  expect(inventory.repos.filter((repo) => repo.key === "OmegaCo::root")).toHaveLength(1);
 });
 
 test("conflicting Organization root aliases block that Organization before any Git action", async () => {
@@ -82,10 +157,9 @@ test("conflicting Organization root aliases block that Organization before any G
 
   expect(inventory.repos.some((repo) => repo.organization === "OmegaCo")).toBe(false);
   expect(inventory.repos.some((repo) => repo.key === "BetaCo::deals")).toBe(true);
-  expect(omegaIssues.map((issue) => issue.code).sort()).toEqual([
-    "organization_root_branch_conflict",
-    "organization_root_remote_conflict",
-  ]);
+  expect(omegaIssues.map((issue) => issue.code)).toEqual(["organization_manifest_conflict"]);
+  expect(omegaIssues[0].message).toContain("organization_root_branch_conflict");
+  expect(omegaIssues[0].message).toContain("organization_root_remote_conflict");
   expect(omegaIssues.every((issue) => issue.scope === "organization")).toBe(true);
 });
 
@@ -105,10 +179,9 @@ test("malformed canonical root aliases and non-main branch fail closed for one O
 
   expect(inventory.repos.some((repo) => repo.organization === "OmegaCo")).toBe(false);
   expect(inventory.repos.some((repo) => repo.key === "BetaCo::deals")).toBe(true);
-  expect(omegaIssues.map((issue) => issue.code)).toEqual(expect.arrayContaining([
-    "organization_root_remote_alias_invalid",
-    "organization_root_branch_invalid",
-  ]));
+  expect(omegaIssues.map((issue) => issue.code)).toEqual(["organization_manifest_conflict"]);
+  expect(omegaIssues[0].message).toContain("organization_root_branch_invalid");
+  expect(omegaIssues[0].message).toContain("organization_root_remote_alias_invalid");
 });
 
 test("a foreign Organization root owner is isolated while a healthy Organization remains actionable", async () => {
@@ -128,7 +201,8 @@ test("a foreign Organization root owner is isolated while a healthy Organization
   expect(inventory.inventory_issues).toContainEqual(expect.objectContaining({
     organization: "OmegaCo",
     scope: "organization",
-    code: "organization_root_remote_owner_mismatch",
+    code: "organization_manifest_conflict",
+    message: expect.stringContaining("organization_root_remote_owner_mismatch"),
   }));
 });
 
@@ -160,11 +234,8 @@ test("scaffold forge binding conflicts isolate root and children before Git inve
 
   expect(inventory.repos.some((repo) => repo.organization === "OmegaCo")).toBe(false);
   expect(inventory.repos.some((repo) => repo.key === "BetaCo::deals")).toBe(true);
-  expect(omegaCodes).toEqual(expect.arrayContaining([
-    "organization_root_remote_conflict",
-    "organization_root_owner_conflict",
-    "organization_root_branch_conflict",
-  ]));
+  expect(omegaCodes).toEqual(["organization_manifest_conflict"]);
+  expect(inventory.inventory_issues[0].message).toContain("organization_root_owner_conflict");
 });
 
 test("a foreign governance access authority isolates one Organization before Git inventory actions", async () => {
@@ -184,7 +255,8 @@ test("a foreign governance access authority isolates one Organization before Git
   expect(inventory.inventory_issues).toContainEqual(expect.objectContaining({
     organization: "OmegaCo",
     scope: "organization",
-    code: "organization_root_access_authority_invalid",
+    code: "organization_manifest_conflict",
+    message: expect.stringContaining("organization_root_access_authority_invalid"),
   }));
 });
 
@@ -708,7 +780,7 @@ test("inventory fails closed when two repository mounts resolve to the same logi
   }));
 });
 
-test("inventory applies cross-file logical identity collisions to the action surface", async () => {
+test("inventory ignores legacy compatibility projection shadow repository identities", async () => {
   const root = await createLaunchpadGitFixture();
   tempRoots.push(root);
   const organizationRoot = join(root, "organizations", "OmegaCo_GEN3");
@@ -728,11 +800,11 @@ test("inventory applies cross-file logical identity collisions to the action sur
 
   const inventory = await buildGitInventory({ companiesRoot: root });
 
-  expect(inventory.repos.some((repo) => repo.key === "OmegaCo::shared")).toBe(false);
+  expect(inventory.repos.some((repo) => repo.key === "OmegaCo::shared")).toBe(true);
   expect(inventory.repos.some((repo) => repo.key === "OmegaCo::studio")).toBe(true);
   expect(inventory.repos.some((repo) => repo.key === "OmegaCo::infra")).toBe(true);
   expect(inventory.repos.some((repo) => repo.key === "BetaCo::deals")).toBe(true);
-  expect(inventory.warnings.join("\n")).toContain('repository slug "shared"');
+  expect(inventory.warnings.join("\n")).not.toContain('repository slug "shared"');
 });
 
 test("inventory reserves the implicit Organization root ID", async () => {
@@ -909,15 +981,11 @@ test("Organization kontejnery a descendants rezervovaných root slotů nevstoup�
   for (const path of ["workspace", "modules", "productionspace", ...invalidPaths.slice(3)]) {
     expect(inventoriedPaths).not.toContain(path);
   }
-  expect(inventory.warnings.join("\n")).toContain(
-    "Organization kontejner není repozitářový slot",
-  );
-  expect(inventory.warnings.join("\n")).toContain(
-    "cesta je uvnitř rezervované Organization root boundary",
-  );
-  expect(inventory.warnings.join("\n")).toContain(
-    "cesta není kanonická podporovaná Organization-relative repo boundary",
-  );
+  expect(inventory.warnings.join("\n")).toContain("Organization manifest není bezpečná autorita");
+  expect(inventory.inventory_issues).toContainEqual(expect.objectContaining({
+    organization: "OmegaCo",
+    code: "organization_manifest_conflict",
+  }));
 });
 
 test("productionspace path cannot masquerade as an actionable Team module", async () => {
@@ -960,9 +1028,7 @@ test("productionspace path cannot masquerade as an actionable Team module", asyn
         repo.organization === "OmegaCo" && repo.slot_path === "productionspace",
     ),
   ).toBeUndefined();
-  expect(inventoryWithBoundary.warnings.join("\n")).toContain(
-    "slot productionspace/ vynechán z git/worktree inventáře — Organization kontejner není repozitářový slot",
-  );
+  expect(inventoryWithBoundary.warnings.join("\n")).toContain("modules_manifest_slot_4_path_invalid");
 });
 
 test("incomplete active root coordinates never enter actionable inventory", async () => {
@@ -1120,11 +1186,11 @@ test("git action inventory rejects traversal and symlink module paths that escap
     repo.organization === "BetaCo" && repo.repo_kind !== "organization_root"
   )).toBe(false);
   expect(inventory.repos.some((repo) => repo.key === "OmegaCo::studio")).toBe(true);
-  expect(inventory.warnings.filter((warning) => warning.includes("uniká mimo Organization root"))).toHaveLength(2);
+  expect(inventory.warnings.filter((warning) => warning.includes("modules_manifest_slot_") && warning.includes("path_invalid"))).toHaveLength(1);
   expect(inventory.inventory_issues).toEqual(expect.arrayContaining([
     expect.objectContaining({
       scope: "organization",
-      code: "organization_module_mount_boundary_invalid",
+      code: "organization_manifest_conflict",
       organization: "BetaCo",
     }),
   ]));

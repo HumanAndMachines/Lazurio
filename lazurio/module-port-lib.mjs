@@ -10,6 +10,7 @@ import {
   normalizeOrganizationPortPool,
   validateModuleLeasesAgainstOrganizationPools,
 } from "./core/organization-port-policy-lib.mjs";
+import { readOrganizationRoot } from "./core/organization-root-reader-lib.mjs";
 
 const ignored = new Set([".git", ".worktrees", "personalspace", "node_modules", "dist", "build", ".next", "coverage", "generated"]);
 
@@ -78,17 +79,10 @@ export async function readAllModuleContracts(lazurioRoot) {
     if (!entry.isDirectory() || ignored.has(entry.name)) continue;
     const organizationRoot = join(organizationsRoot, entry.name);
     const paths = new Set();
-    for (const [manifestName, collection] of [
-      ["modules.manifest.json", "module_slots"],
-      ["company.gen3.json", "layers"],
-      ["company.gen3.json", "modules"],
-    ]) {
-      const manifestPath = join(organizationRoot, manifestName);
-      if (!existsSync(manifestPath)) continue;
-      const manifest = await Bun.file(manifestPath).json();
-      for (const candidate of manifest?.[collection] ?? []) {
-        if (canonicalModulePath(candidate?.path, organizationRoot)) paths.add(candidate.path);
-      }
+    const resolution = mutationSafeOrganizationResolution(organizationRoot);
+    if (resolution === null) continue;
+    for (const candidate of resolution.resource.repository_inventory ?? []) {
+      if (canonicalModulePath(candidate?.path, organizationRoot)) paths.add(candidate.path);
     }
     for (const modulePath of paths) {
       const path = join(organizationRoot, modulePath, "lazurio.module.json");
@@ -117,24 +111,22 @@ async function organizationPolicyForModule(root, moduleRoot, company) {
       || isAbsolute(withinOrganization)
     ) continue;
 
-    const manifestPath = join(organizationRoot, "company.gen3.json");
-    if (!existsSync(manifestPath)) {
-      throw new Error(`${organizationRoot} nemá Organization manifest company.gen3.json`);
-    }
-    const manifest = await Bun.file(manifestPath).json();
-    const declaredCompany = manifest?.company?.slug;
+    const resolution = mutationSafeOrganizationResolution(organizationRoot);
+    if (resolution === null) throw new Error(`${organizationRoot} nemá Organization manifest`);
+    const declaredCompany = resolution.resource.organization.slug;
     if (declaredCompany !== company) {
       throw new Error(`--company ${company} neodpovídá Organization manifestu ${declaredCompany ?? "missing"}`);
     }
-    const result = normalizeOrganizationPortPool({ manifest, source: manifestPath });
+    const source = `${organizationRoot}/Organization manifest`;
+    const result = normalizeOrganizationPortPool({ manifest: resolution.resource, source });
     if (result.issues.length > 0 || !result.pool) {
-      throw new Error(`Organization module_port_pool je nevalidní:\n${result.issues.join("\n") || `${manifestPath}#module_port_pool chybí`}`);
+      throw new Error(`Organization module_port_pool je nevalidní:\n${result.issues.join("\n") || `${source}#module_port_pool chybí`}`);
     }
     return {
       slug: company,
       path: relative(root, organizationRoot),
       module_port_pool: result.pool,
-      module_port_pool_source: `${manifestPath}#module_port_pool`,
+      module_port_pool_source: `${source}#module_port_pool`,
     };
   }
   throw new Error(`${moduleRoot} neleží v namountované Organizaci; automatická alokace vyžaduje Organization module_port_pool`);
@@ -151,22 +143,29 @@ async function declaredModuleRoots(root) {
   for (const entry of await readdir(organizationsRoot, { withFileTypes: true }).catch(() => [])) {
     if (!entry.isDirectory() || ignored.has(entry.name)) continue;
     const organizationRoot = join(organizationsRoot, entry.name);
-    for (const [manifestName, collection] of [
-      ["modules.manifest.json", "module_slots"],
-      ["company.gen3.json", "layers"],
-      ["company.gen3.json", "modules"],
-    ]) {
-      const manifestPath = join(organizationRoot, manifestName);
-      if (!existsSync(manifestPath)) continue;
-      const manifest = await Bun.file(manifestPath).json();
-      for (const candidate of manifest?.[collection] ?? []) {
-        if (canonicalModulePath(candidate?.path, organizationRoot)) {
-          roots.add(resolve(organizationRoot, candidate.path));
-        }
+    const resolution = mutationSafeOrganizationResolution(organizationRoot);
+    if (resolution === null) continue;
+    for (const candidate of resolution.resource.repository_inventory ?? []) {
+      if (canonicalModulePath(candidate?.path, organizationRoot)) {
+        roots.add(resolve(organizationRoot, candidate.path));
       }
     }
   }
   return roots;
+}
+
+function mutationSafeOrganizationResolution(organizationRoot) {
+  const resolution = readOrganizationRoot({ organizationRoot });
+  if (resolution.state === "missing") return null;
+  if (
+    !["legacy", "transition"].includes(resolution.state)
+    || resolution.resource_count !== 1
+  ) {
+    throw new Error(
+      `${organizationRoot}: Organization manifest není bezpečný pro mutaci (${resolution.state}; ${resolution.issues.join(", ") || "no stable resource"})`,
+    );
+  }
+  return resolution;
 }
 
 function canonicalModulePath(path, organizationRoot) {

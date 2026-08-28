@@ -187,6 +187,7 @@ test("explicit module presentation hides historical owners and keeps human descr
   await writeJson(join(companyRoot, "modules.manifest.json"), {
     organization_generation: "gen3",
     company: "CatalogCo",
+    github_org: "CatalogCo",
     module_slots: [
       {
         path: "workspace/current",
@@ -503,8 +504,7 @@ test("Doctor launchpad.discovery failuje na Organization cross-file identitě", 
   const discoveryCheck = report.checks.find((check) => check.id === "launchpad.discovery");
 
   expect(discoveryCheck?.status).toBe("fail");
-  expect(discoveryCheck?.details.some((detail) => detail.includes("company.slug") && detail.includes("OtherIdentity"))).toBe(true);
-  expect(discoveryCheck?.details.some((detail) => detail.includes("company.github_org") && detail.includes("WrongGithubOrg"))).toBe(true);
+  expect(discoveryCheck?.details.some((detail) => detail.includes("organization_modules_identity_conflict"))).toBe(true);
 });
 
 test("Doctor failuje, když manifestovaný modul kanonicky uniká do jiné Organization", async () => {
@@ -536,7 +536,7 @@ test("Doctor failuje, když manifestovaný modul kanonicky uniká do jiné Organ
   const discoveryCheck = report.checks.find((check) => check.id === "launchpad.discovery");
 
   expect(discoveryCheck?.status).toBe("fail");
-  expect(discoveryCheck?.details.some((detail) => detail.includes("uniká mimo Organization root"))).toBe(true);
+  expect(discoveryCheck?.details.some((detail) => detail.includes("modules_manifest_slot_0_path_invalid"))).toBe(true);
 }, 10_000);
 
 test("template mounty nejsou kontrolované Organization-private gitignore probami", async () => {
@@ -604,7 +604,7 @@ test("public apps projection hides unmaterialized protected slots while Doctor r
   });
   await writeJson(join(companyRoot, "company.gen3.json"), {
     organization_generation: "gen3",
-    company: { slug: "OmegaCo", display_name: "OmegaCo" },
+    company: { slug: "OmegaCo", display_name: "OmegaCo", github_org: "OmegaCo" },
     workspaces: [
       { slug: "workspace", display_name: "OmegaCo Workspace", path: "workspace" },
       { slug: "productionspace", display_name: "OmegaCo Productionspace", path: "productionspace" },
@@ -616,6 +616,7 @@ test("public apps projection hides unmaterialized protected slots while Doctor r
   await writeJson(join(companyRoot, "modules.manifest.json"), {
     organization_generation: "gen3",
     company: "OmegaCo",
+    github_org: "OmegaCo",
     module_slots: [
       {
         path: "modules/knowledgebase",
@@ -776,13 +777,14 @@ test("materialized protected rename drift stays as one quarantined tile and make
   };
   await writeJson(join(companyRoot, "company.gen3.json"), {
     organization_generation: "gen3",
-    company: { slug: "OmegaCo", display_name: "OmegaCo" },
+    company: { slug: "OmegaCo", display_name: "OmegaCo", github_org: "OmegaCo" },
     workspaces: [{ slug: "workspace", path: "workspace" }],
     modules: [slot],
   });
   await writeJson(join(companyRoot, "modules.manifest.json"), {
     organization_generation: "gen3",
     company: "OmegaCo",
+    github_org: "OmegaCo",
     module_slots: [slot],
   });
   await writeJson(join(companyRoot, "TODO.tasks.json"), {});
@@ -876,15 +878,8 @@ test("an Organization-fatal contract blocks only that Organization readiness whi
   const healthy = response.organizations.find((organization) => organization.slug === "HealthyCo");
 
   expect(response.apps.map((app) => app.id)).toEqual(["healthyco-studio-v1"]);
-  expect(broken?.space_readiness?.blocking_slots).toEqual([
-    expect.objectContaining({
-      scope: "organization",
-      slug: "BrokenCo",
-      reason: "organization_contract_invalid",
-    }),
-  ]);
-  expect(broken?.workspaces).toEqual([]);
-  expect(broken?.organization_modules).toEqual([]);
+  expect(broken).toBeUndefined();
+  expect(response.failures.join("\n")).toContain("organization_modules_identity_conflict");
   expect(healthy?.space_readiness?.blocking_slots).toEqual([]);
 });
 
@@ -952,7 +947,7 @@ test("case-preserving productionspace mount uses explicit lowercase ID and fails
   ]));
 });
 
-test("apps read model omits only cross-file ambiguous repository identities", async () => {
+test("apps read model uses modules.manifest.json as the sole normalized repository inventory", async () => {
   const root = await createCompaniesWorkspaceFixture();
   const companyRoot = join(root, "organizations", "ProjectionCo_GEN3");
   await mkdir(join(companyRoot, "manual"), { recursive: true });
@@ -983,16 +978,11 @@ test("apps read model omits only cross-file ambiguous repository identities", as
   const modules = response.organizations[0]?.teams[0]?.modules ?? [];
 
   expect(modules.map((module) => module.slug).sort()).toEqual([
-    "healthy-config",
     "healthy-manifest",
+    "shared",
   ]);
   expect(response.failures).toEqual([]);
-  expect(response.organizations[0]?.space_readiness?.blocking_slots).toEqual(expect.arrayContaining([
-    expect.objectContaining({
-      scope: "module_slot",
-      reason: "slot_collection_ambiguous",
-    }),
-  ]));
+  expect(response.organizations[0]?.space_readiness?.blocking_slots).toEqual([]);
 });
 
 test("apps read model rejects live casing drift and treats productionspace candidates as ordering only", async () => {
@@ -1051,7 +1041,7 @@ test("Doctor blokuje konfliktní space, ale productionspace zůstane read-only",
   });
   await writeJson(join(companyRoot, "company.gen3.json"), {
     organization_generation: "gen3",
-    company: { slug: "OmegaCo", display_name: "OmegaCo" },
+    company: { slug: "OmegaCo", display_name: "OmegaCo", github_org: "OmegaCo" },
     workspaces: [
       {
         slug: "workspace",
@@ -1063,6 +1053,8 @@ test("Doctor blokuje konfliktní space, ale productionspace zůstane read-only",
   });
   await writeJson(join(companyRoot, "modules.manifest.json"), {
     organization_generation: "gen3",
+    company: "OmegaCo",
+    github_org: "OmegaCo",
     module_slots: [
       {
         path: "productionspace/",
@@ -1087,21 +1079,17 @@ test("Doctor blokuje konfliktní space, ale productionspace zůstane read-only",
     runtimeManager: { appsWithRuntime: async (apps) => apps },
   });
   const org = response.organizations.find((item) => item.slug === "OmegaCo");
-  expect(org?.workspaces.flatMap((workspace) => workspace.modules)).toEqual([]);
-  expect(org?.productionspace.systems).toEqual([]);
+  expect(org).toBeUndefined();
+  expect(response.failures.join("\n")).toContain("modules_manifest_slot_0_path_invalid");
 
   const report = await buildLaunchpadDoctorReport({
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
     runtimeManager: { appsWithRuntime: async (apps) => apps },
   });
-  const declarationCheck = report.checks.find(
-    (check) => check.id === "launchpad.workspace_declarations",
-  );
-  expect(declarationCheck?.status).toBe("fail");
-  expect(declarationCheck?.details.join("\n")).toContain(
-    "slot productionspace je Organization kontejner, ne repozitářový slot",
-  );
+  const discoveryCheck = report.checks.find((check) => check.id === "launchpad.discovery");
+  expect(discoveryCheck?.status).toBe("fail");
+  expect(discoveryCheck?.details.join("\n")).toContain("modules_manifest_slot_0_path_invalid");
 });
 
 test("public projection hides protected missing_access while Doctor stays fail-closed", async () => {
@@ -1114,12 +1102,13 @@ test("public projection hides protected missing_access while Doctor stays fail-c
   });
   await writeJson(join(companyRoot, "company.gen3.json"), {
     organization_generation: "gen3",
-    company: { slug: "AccessCo", display_name: "Access Co" },
+    company: { slug: "AccessCo", display_name: "Access Co", github_org: "AccessCo" },
     workspaces: [{ slug: "workspace", display_name: "Workspace", default: true }],
   });
   await writeJson(join(companyRoot, "modules.manifest.json"), {
     organization_generation: "gen3",
     company: "AccessCo",
+    github_org: "AccessCo",
     module_slots: [
       {
         path: "workspace/restricted",
@@ -1197,12 +1186,13 @@ test("materialized-state projection does not turn local role hints into UI acces
   });
   await writeJson(join(companyRoot, "company.gen3.json"), {
     organization_generation: "gen3",
-    company: { slug: "AccessCo", display_name: "Access Co" },
+    company: { slug: "AccessCo", display_name: "Access Co", github_org: "AccessCo" },
     workspaces: [{ slug: "workspace", display_name: "Workspace", default: true }],
   });
   await writeJson(join(companyRoot, "modules.manifest.json"), {
     organization_generation: "gen3",
     company: "AccessCo",
+    github_org: "AccessCo",
     module_slots: [
       {
         path: "workspace/finance",
@@ -1265,13 +1255,14 @@ test("Mission Control app/code a data jsou root sloty mimo Team dlaždice", asyn
   });
   await writeJson(join(companyRoot, "company.gen3.json"), {
     organization_generation: "gen3",
-    company: { slug: "OmegaCo", display_name: "OmegaCo" },
+    company: { slug: "OmegaCo", display_name: "OmegaCo", github_org: "OmegaCo" },
     workspaces: [{ slug: "workspace", display_name: "OmegaCo Workspace", default: true }],
     layers: [{ path: "mission-control", kind: "root-docs", ownership: "manual" }],
   });
   await writeJson(join(companyRoot, "modules.manifest.json"), {
     organization_generation: "gen3",
     company: "OmegaCo",
+    github_org: "OmegaCo",
     module_slots: [
       // Physical root placement is sufficient; manifest need not repeat space.
       { path: "mission-control", git: { url: "git@github.com:OmegaCo/mission-control.git", branch: "main" } },
@@ -1372,7 +1363,7 @@ test("AVALTAR-like standalone Mission Control repository-db zůstává jen v dia
   });
   await writeJson(join(companyRoot, "company.gen3.json"), {
     organization_generation: "gen3",
-    company: { slug: "AVALTAR-HAM", display_name: "AVALTAR" },
+    company: { slug: "AVALTAR-HAM", display_name: "AVALTAR", github_org: "AVALTAR-HAM" },
     workspaces: [{ slug: "workspace", display_name: "Workspace", default: true }],
     layers: [{ path: "mission-control", kind: "root-docs", ownership: "manual" }],
     modules: [{ path: "workspace/knowledgebase", teams: ["workspace"] }],
@@ -1380,6 +1371,7 @@ test("AVALTAR-like standalone Mission Control repository-db zůstává jen v dia
   await writeJson(join(companyRoot, "modules.manifest.json"), {
     organization_generation: "gen3",
     company: "AVALTAR-HAM",
+    github_org: "AVALTAR-HAM",
     module_slots: [
       {
         path: "mission-control/db",
@@ -1479,12 +1471,14 @@ test("root Design System zůstává mimo výchozí Team a Doctor hlídá jeho ch
   });
   await writeJson(join(companyRoot, "company.gen3.json"), {
     organization_generation: "gen3",
-    company: { slug: "OmegaCo", display_name: "OmegaCo" },
+    company: { slug: "OmegaCo", display_name: "OmegaCo", github_org: "OmegaCo" },
     workspaces: [{ slug: "workspace", display_name: "OmegaCo Workspace", default: true }],
     layers: [{ path: "design-system", kind: "design-system", ownership: "manual" }],
   });
   await writeJson(join(companyRoot, "modules.manifest.json"), {
     organization_generation: "gen3",
+    company: "OmegaCo",
+    github_org: "OmegaCo",
     module_slots: [
       {
         path: "design-system",
@@ -1498,8 +1492,6 @@ test("root Design System zůstává mimo výchozí Team a Doctor hlídá jeho ch
         },
       },
       { path: "workspace/wiki", space: "workspace", workspace: "workspace" },
-      { path: "workspace/", space: "workspace", workspace: "workspace" },
-      { path: "design-system/theme", space: "workspace", workspace: "brand" },
     ],
   });
   await writeJson(join(companyRoot, "TODO.tasks.json"), {});
@@ -1521,11 +1513,6 @@ test("root Design System zůstává mimo výchozí Team a Doctor hlídá jeho ch
   );
 
   expect(workspacePaths).toEqual(["workspace/wiki"]);
-  expect(
-    org?.module_declarations.some((slot) =>
-      ["workspace", "design-system/theme"].includes(slot.path),
-    ),
-  ).toBe(false);
   expect(designSystem).toMatchObject({
     path: "design-system",
     space: "root",
@@ -1551,12 +1538,6 @@ test("root Design System zůstává mimo výchozí Team a Doctor hlídá jeho ch
   expect(declarationCheck?.status).toBe("fail");
   const details = declarationCheck?.details.join("\n") ?? "";
   expect(details).toContain("design-system");
-  expect(details).toContain(
-    "slot workspace je Organization kontejner, ne repozitářový slot",
-  );
-  expect(details).toContain(
-    "slot design-system/theme je uvnitř rezervované Organization root boundary",
-  );
 });
 
 test("Doctor vynucuje root slot contract a Mission Control app/data pár", async () => {
@@ -1573,7 +1554,7 @@ test("Doctor vynucuje root slot contract a Mission Control app/data pár", async
   });
   await writeJson(join(companyRoot, "company.gen3.json"), {
     organization_generation: "gen3",
-    company: { slug: "OmegaCo", display_name: "OmegaCo" },
+    company: { slug: "OmegaCo", display_name: "OmegaCo", github_org: "OmegaCo" },
     workspaces: [{ slug: "workspace", display_name: "OmegaCo Workspace", default: true }],
     layers: [
       { path: "design-system", kind: "design-system", ownership: "manual" },
@@ -1594,12 +1575,14 @@ test("Doctor vynucuje root slot contract a Mission Control app/data pár", async
   const manifestPath = join(companyRoot, "modules.manifest.json");
   await writeJson(manifestPath, {
     organization_generation: "gen3",
+    company: "OmegaCo",
+    github_org: "OmegaCo",
     module_slots: [
       // Nevalidní legacy deklarace: Doctor ji bezpečně zobrazí v rootu, ale
       // blokuje ji kvůli chybějícímu explicitnímu scope a checkout údajům.
       { path: "design-system", space: "workspace", workspace: "brand" },
       {
-        path: "./mission-control",
+        path: "mission-control",
         space: "root",
         repo: "git@github.com:WrongOrg/wrong-mission-control.git",
         branch: "legacy",
@@ -1650,9 +1633,6 @@ test("Doctor vynucuje root slot contract a Mission Control app/data pár", async
   );
   expect(details).toContain("design-system musí deklarovat git.url a git.branch");
   expect(details).toContain(
-    'root slot path "./mission-control" není kanonický; použij "mission-control"',
-  );
-  expect(details).toContain(
     "mission-control nesmí deklarovat legacy checkout souřadnice (repo, branch)",
   );
   expect(details).toContain(
@@ -1660,15 +1640,12 @@ test("Doctor vynucuje root slot contract a Mission Control app/data pár", async
   );
   expect(details).toContain("chybí mission-control/db");
   expect(details).toContain(
-    "company.gen3.json: root slot infra nesmí být v modules[]",
-  );
-  expect(details).toContain(
     "company.gen3.json: root vrstva infra nemá odpovídající modules.manifest.json slot",
   );
 
   const manifest = await Bun.file(manifestPath).json();
   manifest.module_slots.splice(2, 0, {
-    path: "mission-control//db",
+    path: "mission-control/db",
     space: "root",
     teams: ["workspace"],
     git: {
@@ -1692,9 +1669,6 @@ test("Doctor vynucuje root slot contract a Mission Control app/data pár", async
     "mission-control/db nesmí deklarovat Team/Workspace membership (teams)",
   );
   expect(dataDetails).toContain(
-    'root slot path "mission-control//db" není kanonický; použij "mission-control/db"',
-  );
-  expect(dataDetails).toContain(
     'mission-control/db musí používat větev "v3", deklarována je "main"',
   );
   expect(dataDetails).not.toContain("chybí mission-control/db");
@@ -1713,7 +1687,7 @@ test("Doctor vynucuje root slot contract a Mission Control app/data pár", async
     (check) => check.id === "launchpad.workspace_declarations",
   );
   expect(missingLayerCheck?.details.join("\n")).toContain(
-    "modules.manifest.json: root slot design-system nemá odpovídající company.gen3.json vrstvu",
+    "modules.manifest.json: root slot design-system nemá odpovídající vrstvu v legacy compatibility projection company.gen3.json",
   );
 });
 
@@ -1731,13 +1705,15 @@ test("planned root slot rozliší in-tree compatibility adresář od nested chec
   });
   await writeJson(join(companyRoot, "company.gen3.json"), {
     organization_generation: "gen3",
-    company: { slug: "OmegaCo", display_name: "OmegaCo" },
+    company: { slug: "OmegaCo", display_name: "OmegaCo", github_org: "OmegaCo" },
     workspaces: [{ slug: "workspace", display_name: "OmegaCo Workspace", default: true }],
     layers: [{ path: "design-system", kind: "design-system", ownership: "manual" }],
   });
   const manifestPath = join(companyRoot, "modules.manifest.json");
   const manifest = {
     organization_generation: "gen3",
+    company: "OmegaCo",
+    github_org: "OmegaCo",
     module_slots: [
       {
         path: "design-system",
@@ -1813,11 +1789,13 @@ test("trackovaná Organization root vrstva není samostatný repository slot", a
   await writeFile(join(companyRoot, "design-system", "README.md"), "# In-tree Design System\n");
   await writeJson(join(companyRoot, "company.gen3.json"), {
     organization_generation: "gen3",
-    company: { slug: "OmegaCo", display_name: "OmegaCo" },
+    company: { slug: "OmegaCo", display_name: "OmegaCo", github_org: "OmegaCo" },
     layers: [{ path: "design-system", kind: "design-system", ownership: "override" }],
   });
   await writeJson(join(companyRoot, "modules.manifest.json"), {
     organization_generation: "gen3",
+    company: "OmegaCo",
+    github_org: "OmegaCo",
     module_slots: [],
   });
   await writeJson(join(companyRoot, "TODO.tasks.json"), {});
@@ -1872,11 +1850,13 @@ test("Gitlink Organization root vrstvy vyžaduje samostatný repository slot", a
   await writeFile(join(designSystemRoot, "README.md"), "# Nested Design System\n");
   await writeJson(join(companyRoot, "company.gen3.json"), {
     organization_generation: "gen3",
-    company: { slug: "OmegaCo", display_name: "OmegaCo" },
+    company: { slug: "OmegaCo", display_name: "OmegaCo", github_org: "OmegaCo" },
     layers: [{ path: "design-system", kind: "design-system", ownership: "override" }],
   });
   await writeJson(join(companyRoot, "modules.manifest.json"), {
     organization_generation: "gen3",
+    company: "OmegaCo",
+    github_org: "OmegaCo",
     module_slots: [],
   });
   await writeJson(join(companyRoot, "TODO.tasks.json"), {});
@@ -1934,7 +1914,7 @@ test("app sekci určí fyzická cesta, manifest doplní N:M Team intent a sdíle
   });
   await writeJson(join(companyRoot, "company.gen3.json"), {
     organization_generation: "gen3",
-    company: { slug: "AlfaCo", display_name: "AlfaCo" },
+    company: { slug: "AlfaCo", display_name: "AlfaCo", github_org: "AlfaCo" },
     workspaces: [
       { slug: "workspace", display_name: "AlfaCo Workspace", default: true },
       { slug: "sidebrand", display_name: "SideBrand" },
@@ -1943,6 +1923,7 @@ test("app sekci určí fyzická cesta, manifest doplní N:M Team intent a sdíle
   await writeJson(join(companyRoot, "modules.manifest.json"), {
     organization_generation: "gen3",
     company: "AlfaCo",
+    github_org: "AlfaCo",
     module_slots: [
       {
         path: "workspace/sidebrand-shop",
@@ -2071,10 +2052,11 @@ test("invalid_manifest appka je viditelná v apps response a doctor ji hlásí j
   });
   await writeJson(join(companyRoot, "company.gen3.json"), {
     organization_generation: "gen3",
-    company: { slug: "BrokenCo", display_name: "Broken Co" },
+    company: { slug: "BrokenCo", display_name: "Broken Co", github_org: "BrokenCo" },
   });
   await writeJson(join(companyRoot, "modules.manifest.json"), {
     company: "BrokenCo",
+    github_org: "BrokenCo",
     module_slots: [],
   });
   await writeJson(join(companyRoot, "TODO.tasks.json"), {});

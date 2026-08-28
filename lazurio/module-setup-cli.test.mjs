@@ -532,12 +532,13 @@ async function moduleFixture({ module, status = null }) {
   await mkdir(moduleRoot, { recursive: true });
   await writeJson(join(organizationRoot, "company.gen3.json"), {
     organization_generation: "gen3",
-    company: { slug: "Acme", display_name: "Acme" },
+    company: { slug: "Acme", display_name: "Acme", github_org: "Acme" },
     module_port_pool: { start: 24_000, end: 24_099 },
   });
   await writeJson(join(organizationRoot, "modules.manifest.json"), {
     organization_generation: "gen3",
     company: "Acme",
+    github_org: "Acme",
     module_slots: [{
       path: `workspace/${module}`,
       slug: module,

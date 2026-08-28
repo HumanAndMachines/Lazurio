@@ -1066,7 +1066,8 @@ test("UI separates physical Organization/Workspace/Productionspace and prepares 
   // Discovery is additively enriched: physical app space + N:M Team intent,
   // Organization-root slots, and productionspace.
   expect(diag).toContain("readOrganizationSpaces");
-  expect(diag).toContain("readOrganizationModuleManifest");
+  expect(diag).toContain("readOrganizationRoot");
+  expect(diag).not.toContain("readOrganizationModuleManifest");
   expect(diag).toContain("appPlacementResolverForOrganization");
   expect(diag).toContain('status: "not_evaluated"');
   expect(diag).not.toContain("deriveWorkspaceSlug");

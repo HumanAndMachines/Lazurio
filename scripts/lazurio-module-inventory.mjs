@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { basename, join, relative, resolve, sep } from "node:path";
 import { normalizeModuleManifest } from "../lazurio/core/module-contract-lib.mjs";
+import { readOrganizationRoot } from "../lazurio/core/organization-root-reader-lib.mjs";
 import {
   isOrganizationRepositoryDbSlot,
   normalizeOrganizationSlotPath,
@@ -41,35 +42,14 @@ function slotRepository(slot) {
   return null;
 }
 
-async function declaredModuleSlots(organizationRoot, companyManifest) {
-  let manifestPath = null;
-  for (const candidate of ["modules.manifest.json", "company/scripts/modules.manifest.json"]) {
-    const path = join(organizationRoot, candidate);
-    if (existsSync(path)) {
-      manifestPath = path;
-      break;
-    }
-  }
-
-  const canonicalManifest = manifestPath ? await Bun.file(manifestPath).json() : null;
+function declaredModuleSlots(resolution) {
   const declarations = new Map();
-  for (const slot of canonicalManifest?.module_slots ?? []) {
+  for (const slot of resolution.resource?.repository_inventory ?? []) {
     const path = normalizeOrganizationSlotPath(slot?.path);
     if (!path) continue;
     declarations.set(path, {
       slot: { ...slot, path },
-      declaration_source: posixRelative(organizationRoot, manifestPath),
-    });
-  }
-
-  // Transitional compatibility only: canonical module_slots owns every path it
-  // declares; company.gen3.json#modules may fill paths not migrated yet.
-  for (const slot of companyManifest?.modules ?? []) {
-    const path = normalizeOrganizationSlotPath(slot?.path);
-    if (!path || declarations.has(path)) continue;
-    declarations.set(path, {
-      slot: { ...slot, path },
-      declaration_source: "company.gen3.json#modules",
+      declaration_source: "Organization resource#repository_inventory",
     });
   }
   return [...declarations.values()];
@@ -137,12 +117,18 @@ export async function inventoryLazurioModules(conglomerateRoot, { organization =
   for (const entry of await readdir(organizationsRoot, { withFileTypes: true }).catch(() => [])) {
     if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
     const organizationRoot = join(organizationsRoot, entry.name);
-    const companyPath = join(organizationRoot, "company.gen3.json");
-    if (!existsSync(companyPath)) continue;
-    const companyManifest = await Bun.file(companyPath).json();
-    const company = companyManifest?.company?.slug;
+    const resolution = readOrganizationRoot({ organizationRoot });
+    if (resolution.state === "missing") continue;
+    if (
+      resolution.state === "conflict"
+      || resolution.resource_count !== 1
+    ) {
+      throw new Error(`${organizationRoot}: Organization manifest nejde bezpečně normalizovat (${resolution.state}; ${resolution.issues.join(", ")})`);
+    }
+    if (resolution.resource.kind === "template") continue;
+    const company = resolution.resource.organization.slug;
     if (organization && ![entry.name, company].includes(organization)) continue;
-    for (const { slot, declaration_source } of await declaredModuleSlots(organizationRoot, companyManifest)) {
+    for (const { slot, declaration_source } of declaredModuleSlots(resolution)) {
       const reason = moduleExclusionReason(slot);
       const record = {
         organization: entry.name,

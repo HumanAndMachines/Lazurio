@@ -376,7 +376,20 @@ test.skipIf(process.platform === "win32")(
     await mkdir(organizationRoot, { recursive: true });
     await writeFile(
       join(organizationRoot, "company.gen3.json"),
-      '{"organization_kind":"organization"}\n',
+      `${JSON.stringify({
+        organization_generation: "gen3",
+        organization_kind: "organization",
+        company: { slug: "HumanAndMachine-ai", github_org: "HumanAndMachine-ai" },
+      }, null, 2)}\n`,
+    );
+    await writeFile(
+      join(organizationRoot, "modules.manifest.json"),
+      `${JSON.stringify({
+        organization_generation: "gen3",
+        company: "HumanAndMachine-ai",
+        github_org: "HumanAndMachine-ai",
+        module_slots: [],
+      }, null, 2)}\n`,
     );
     await symlink(outside, join(organizationRoot, "mission-control"));
 
@@ -772,7 +785,20 @@ async function createOrganizationAuthority(root, { validatorFailures = [] } = {}
   });
   await writeFile(
     join(organizationRoot, "company.gen3.json"),
-    '{"organization_kind":"organization"}\n',
+    `${JSON.stringify({
+      organization_generation: "gen3",
+      organization_kind: "organization",
+      company: { slug: "HumanAndMachine-ai", github_org: "HumanAndMachine-ai" },
+    }, null, 2)}\n`,
+  );
+  await writeFile(
+    join(organizationRoot, "modules.manifest.json"),
+    `${JSON.stringify({
+      organization_generation: "gen3",
+      company: "HumanAndMachine-ai",
+      github_org: "HumanAndMachine-ai",
+      module_slots: [],
+    }, null, 2)}\n`,
   );
   await writeFile(
     join(authorityRoot, "repository-db.manifest.json"),

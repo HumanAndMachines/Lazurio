@@ -350,6 +350,109 @@ test("missing modules document keeps the compatibility reason on the missing-pai
   });
 });
 
+test("normalized inventory preserves the explicit-slug guard for nested repository-db slots", () => {
+  const modulesManifest = organizationModules();
+  modulesManifest.module_slots.push({
+    path: "workspace/studio/db",
+    materialization: "repository_db_mount",
+    source_of_truth: "repository-db:v3",
+  });
+  modulesManifest.module_slots.push(
+    { slug: null, path: "workspace/null-slug" },
+    { slug: "", path: "workspace/empty-slug" },
+  );
+  const canonicalManifest = canonicalOrganization(modulesManifest);
+  const resolution = resolveOrganizationRootDocuments({
+    companyManifest: null,
+    canonicalManifest,
+    modulesManifest,
+  });
+  const normalized = resolution.resource.repository_inventory.find(({ path }) => path === "workspace/studio/db");
+  const projected = projectLegacyOrganizationManifest(canonicalManifest, modulesManifest).modules
+    .find(({ path }) => path === "workspace/studio/db");
+
+  expect(normalized).not.toHaveProperty("slug");
+  expect(projected).not.toHaveProperty("slug");
+  expect(resolution.resource.repository_inventory.find(({ path }) => path === "workspace/null-slug").slug).toBeNull();
+  expect(resolution.resource.repository_inventory.find(({ path }) => path === "workspace/empty-slug").slug).toBe("");
+});
+
+test("legacy-only module entries outside modules.manifest.json stay observable as ignored input", () => {
+  const modulesManifest = organizationModules();
+  const companyManifest = legacyOrganization();
+  companyManifest.modules = [{ slug: "orphan", path: "workspace/orphan" }];
+
+  expect(resolveOrganizationRootDocuments({
+    companyManifest,
+    canonicalManifest: null,
+    modulesManifest,
+  })).toMatchObject({
+    state: "legacy",
+    warnings: expect.arrayContaining(["legacy_modules_block_ignored"]),
+  });
+});
+
+test("filesystem document issues cannot collapse into a safe missing state", () => {
+  expect(resolveOrganizationRootDocuments({
+    canonicalManifest: null,
+    companyManifest: null,
+    modulesManifest: null,
+    documentIssues: ["organization_root_boundary_invalid"],
+  })).toMatchObject({
+    state: "conflict",
+    resource_count: 0,
+    issues: expect.arrayContaining(["organization_root_boundary_invalid"]),
+  });
+});
+
+test("activation admits a parity-verified transition only for an explicit capable reader", () => {
+  const modulesManifest = organizationModules();
+  const canonicalManifest = canonicalOrganization(modulesManifest);
+  canonicalManifest.organization.forge_binding = {
+    ...canonicalManifest.organization.forge_binding,
+    binding_state: "verified",
+    organization_id: "314957563",
+  };
+  canonicalManifest.root_repository = {
+    ...canonicalManifest.root_repository,
+    binding_state: "verified",
+    repository_id: "42424242",
+  };
+  canonicalManifest.compatibility.legacy_projection.sha256 = organizationLegacyProjectionHash(
+    canonicalManifest,
+    modulesManifest,
+  );
+  const companyManifest = projectLegacyOrganizationManifest(canonicalManifest, modulesManifest);
+  const expectations = {
+    expectedOrganizationId: canonicalManifest.organization.forge_binding.organization_id,
+    expectedOrganizationLogin: canonicalManifest.organization.forge_binding.locator,
+    expectedRepositoryId: canonicalManifest.root_repository.repository_id,
+    expectedRepositoryFullName: canonicalManifest.root_repository.locator,
+  };
+
+  expect(resolveOrganizationRootDocuments({
+    companyManifest,
+    modulesManifest,
+    canonicalManifest,
+    ...expectations,
+  }).activation).toEqual({
+    status: "unsupported",
+    format: null,
+    reason: "canonical_resolver_unavailable",
+  });
+  expect(resolveOrganizationRootDocuments({
+    companyManifest,
+    modulesManifest,
+    canonicalManifest,
+    ...expectations,
+    activationFormats: ["legacy", "transition"],
+  }).activation).toEqual({
+    status: "supported",
+    format: "transition",
+    reason: "transition_identity_pair_supported",
+  });
+});
+
 test("canonical schema, semantic parity and projection hash are deterministic across key order and formatting", () => {
   const modulesManifest = organizationModules();
   const canonical = canonicalOrganization(modulesManifest);

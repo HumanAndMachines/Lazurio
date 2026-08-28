@@ -37,6 +37,7 @@ import {
   readMissionControlRepositoryDbAuthority,
 } from "./repository-db-authority-contract.mjs";
 import { resolveTaskAgentLocator } from "../lazurio/core/task-agent-locator.mjs";
+import { readOrganizationRoot } from "../lazurio/core/organization-root-reader-lib.mjs";
 import {
   validateCanonicalMissionControlPlan,
 } from "../.agents/skills/worktree-development-discipline/scripts/worktree-inventory.mjs";
@@ -166,18 +167,14 @@ function organizationAuthorityPath(primaryRoot, authorityRoot) {
     }
   }
   const canonicalOrganizationRoot = join(primaryRoot, "organizations", organizationName);
-  const markerPath = join(canonicalOrganizationRoot, "company.gen3.json");
-  const marker = lstatSync(markerPath);
-  if (!marker.isFile() || marker.isSymbolicLink()) {
-    fail(`Mission Control authority nemá regulární Organization marker: ${markerPath}`);
+  const resolution = readOrganizationRoot({ organizationRoot: canonicalOrganizationRoot });
+  if (
+    !["legacy", "transition"].includes(resolution.state)
+    || resolution.resource_count !== 1
+  ) {
+    fail(`Mission Control authority nemá mutation-safe Organization manifest (${resolution.state}; ${resolution.issues.join(", ") || "no stable resource"}).`);
   }
-  let markerData;
-  try {
-    markerData = JSON.parse(readFileSync(markerPath, "utf8"));
-  } catch (error) {
-    fail(`Organization marker nejde načíst: ${error instanceof Error ? error.message : String(error)}`);
-  }
-  if (markerData?.organization_kind !== "organization") {
+  if (resolution.resource.kind !== "organization") {
     fail("Mission Control authority musí vlastnit runtime Organization.");
   }
   return relativePath;

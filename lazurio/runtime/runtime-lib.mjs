@@ -11,6 +11,7 @@ import {
 } from "./discovery-lib.mjs";
 import { materializeRuntimeFromModule, normalizeModuleManifest } from "../core/module-contract-lib.mjs";
 import { normalizePackageRuntime } from "../core/runtime-contract-lib.mjs";
+import { readOrganizationRoot } from "../core/organization-root-reader-lib.mjs";
 import { recordAppOpen } from "./usage-lib.mjs";
 import { buildWorktreeIndex } from "./worktree-lib.mjs";
 import { acquireModuleRuntimeLock } from "./module-runtime-lock-lib.mjs";
@@ -4190,28 +4191,24 @@ async function requiredModuleSlotState({ organizationRoot, app }) {
     };
   }
 
-  let manifest;
-  try {
-    manifest = (await readJsonWithinCanonicalBoundary({
-      rootPath: organizationRoot,
-      rootRealPath: organizationRoot,
-      targetPath: join(organizationRoot, "modules.manifest.json"),
-      label: "modules.manifest.json",
-    })).value;
-  } catch (error) {
+  const resolution = readOrganizationRoot({ organizationRoot });
+  if (
+    resolution.state === "conflict"
+    || resolution.resource_count !== 1
+  ) {
     return {
       state: "required_slot_unavailable",
-      message: `${app.title} nejde spustit, protože modules.manifest.json nelze přečíst: ${error.message}`,
+      message: `${app.title} nejde spustit, protože Organization manifest není bezpečně čitelný (${resolution.issues.join(", ") || resolution.state}).`,
     };
   }
 
-  const slots = Array.isArray(manifest?.module_slots) ? manifest.module_slots : [];
+  const slots = resolution.resource.repository_inventory;
   for (const requiredPath of requiredSlots) {
     const slot = slots.find((candidate) => candidate?.path === requiredPath);
     if (!slot) {
       return {
         state: "required_slot_unavailable",
-        message: `${app.title} nejde spustit, protože modules.manifest.json nedeklaruje povinný slot ${requiredPath}.`,
+        message: `${app.title} nejde spustit, protože Organization manifest nedeklaruje povinný slot ${requiredPath}.`,
       };
     }
     if (slot.status === "planned_slot") {
