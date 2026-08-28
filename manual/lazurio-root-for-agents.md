@@ -2,103 +2,135 @@
 
 Tento stručný manuál je kanonický vstup pro Task Agenta, který instaluje,
 diagnostikuje nebo vyvíjí localhost Lazurio. Nezavádí další instalační engine;
-vede Agenta přes veřejné `lazurio` CLI a jeho existující Core.
+vede Agenta přes veřejné `lazurio` CLI a jeho jediné Install Core.
 
-## Jeden Root, dvě podporované provenance CLI
+## Jeden Root v home, dva Root profily
 
-Pracovní Root je vždy odvozený z home uživatele Mašiny:
+Fresh a budoucí Managed Root se vždy odvozuje z home uživatele Mašiny:
 
-| Platforma | Kanonický Root | Volitelný source checkout |
-| --- | --- | --- |
-| macOS / Linux | `~/Lazurio` | `~/Lazurio/development/Lazurio` |
-| Windows | `%USERPROFILE%\Lazurio` | `%USERPROFILE%\Lazurio\development\Lazurio` |
+| Platforma | Kanonický Root |
+| --- | --- |
+| macOS / Linux | `~/Lazurio` |
+| Windows | `%USERPROFILE%\Lazurio` |
 
-Root je generovaný non-Git adresář pro instrukce, konfiguraci, data a mounty.
-Repozitáře Organizací, Modulů a Personalspace mají vlastní Git hranice. Samotný
-Root Git repozitářem není.
+Lazurio veřejně rozlišuje právě dva filesystem profily:
 
-Příkaz `lazurio` má vždy právě jednu aktivní code provenance:
+- **Source Root** — dnešní podporovaný stav všech nasazených Mašin. Ověřený
+  Lazurio Git checkout přímo v home je současně Root a drží instrukce,
+  konfiguraci, data i oddělené Organization/Personalspace mounty. Existující
+  instalace smí do migrace zachovat historický název složky, například
+  `~/Conglomerate`.
+- **Managed Root** — budoucí explicitní cíl. Canonical Root je generovaný
+  non-Git adresář; runtime vlastní immutable package a volitelný Lazurio source
+  checkout patří do `development/Lazurio`.
 
-- `package` — běžná immutable instalace; source checkout není potřeba;
-- `source` — vědomý development override z přesné kanonické cesty výše.
+Toto přechodové rozpoznání existujícího source entrypointu není root picker ani
+uložená alternativní cesta. Managed target zůstává přesně `<home>/Lazurio`.
 
-Source checkout není druhý Root ani druhá instalace. Je to jediný volitelný
-vývojový zdroj stejného CLI/Core. Zakázaná „druhá runtime kopie“ znamená skrytý
-vendor/generated klon vedle package nebo source linku.
+Missing, dirty, foreign, partial ani podobné nálezy nejsou další profily. Jsou
+to diagnostické reason kódy, které Agent řeší nad rozpoznaným profilem nebo
+bezpečně předá jako nerozpoznaný vstup.
 
-## Každý Agent začíná read-only readbackem
+## Root profil není CLI provenance
+
+Na localhost workstation má příkaz `lazurio` vždy právě jednu aktivní code
+provenance:
+
+- `source` — příkaz běží z ověřeného Git source;
+- `package` — příkaz běží z immutable package.
+
+Hostovaný Resident artefakt hlásí vlastní `resident` provenance. Je to
+oddělený hosted lifecycle, nikoli třetí workstation Root profil nebo další
+localhost instalace.
+
+To není druhý seznam Root profilů. Dnešní Source Root přirozeně používá source
+provenance. Budoucí Managed Root běžně používá package provenance, ale vývojář
+jej smí vědomě přelinkovat na source checkout v `development/Lazurio`.
+Zakázaná „druhá runtime kopie“ znamená skrytý vendor/generated klon vedle
+aktivní package nebo source link provenance.
+
+## Dnešní práce v Source Rootu
+
+Source Root je podporovaný stav, ne rozbitá nebo zastaralá instalace. Agent
+začne readbackem:
 
 ```sh
 lazurio --version --json
 lazurio doctor
 ```
 
-`--version` popisuje spuštěné CLI, včetně `root_kind` a ověřené source/package
-provenience. Doctor pouze pozoruje současný stav a vrátí konkrétní důvody,
-které je potřeba řešit.
+Dnešní JSON uvádí `root_kind: "source"`, přesnou cestu, exact source commit a
+clean/dirty stav. Před source prací Agent postupuje podle Root `AGENTS.md`: synchronizuje
+primární checkout přes `lazurio update`, ověří `bun run doctor:task` a všechny
+trackované změny připraví v task worktree. Primární Source Root zůstává na
+`main`; není místem pro Draft.
 
-## Install a běžná údržba jsou explicitní mutace
+Opakovaný `lazurio install` smí Source Root inspectovat a reconciliovat, ale
+bez explicitní volby Principála jej nesmí migrovat ani označit za závadu jen
+proto, že je Git checkout.
 
-```sh
-lazurio install --json
-lazurio doctor
+## Budoucí Managed Root
+
+Managed Root se nestane podporovanou volbou jen změnou dokumentace. CLI jej
+smí nabídnout až po kompletním package-owned Launchpadu/runtime, verzovaném
+generatoru a schema compatibility, exact rollbacku a fyzických
+macOS/Linux/Windows branách.
+
+Potom bude `lazurio install` stále jediný konvergenční entrypoint pro fresh
+Managed instalaci, repair, resume i explicitní Source → Managed migraci. TUI a
+Agent JSON použijí tentýž Core; budoucí GUI nebude kopírovat instalační
+pravidla. Přesná syntaxe volby profilu není veřejný kontrakt, dokud ji
+neprokáže implementační slice.
+
+Package-only Managed instalace source checkout nepotřebuje a installer jej
+implicitně neklonuje. Chce-li Principál Lazurio vyvíjet, jediná canonical
+source cesta po migraci je:
+
+```text
+macOS / Linux: ~/Lazurio/development/Lazurio
+Windows:       %USERPROFILE%\Lazurio\development\Lazurio
 ```
 
-`install` používá kanonický Root automaticky, nepřijímá `--root` a lze jej
-bezpečně zavolat opakovaně. Je to ale konvergenční instalační operace: podle
-verze CLI může po plánu a potřebném potvrzení měnit stav Mašiny. Nevydávej ji
-za read-only diagnostiku.
+Task/PR worktree se nikdy nestává permanentním `PATH` targetem. Source link se
+vytváří pouze z canonical source checkoutu a výsledek se ověří přes
+`lazurio --version --json`. Produkční package chování se navíc dokazuje ze
+skutečně zabaleného artefaktu; source link sám není package acceptance.
 
-`lazurio update` je samostatná vědomá údržba. Může fetchovat, uložit lokální
-změny do recovery stashe, vrátit primary checkout na `main`, fast-forwardnout
-repa, materializovat dostupné Moduly a reconciliovat dependencies. Agent jej
-spustí až podle pravidel aktivního Rootu a po přečtení scoped reportu; nikdy
-jím pouze „nezjišťuje stav“.
+## Source → Managed migrace
 
-Když package-only instalace source checkout nemá, není to závada. Agent použije
-package-managed CLI a neklonuje veřejný repozitář bez výslovného development
-záměru. Když development checkout dostupný je a Agent v něm připravuje source
-změnu, přidá repo-specific preflight `bun run doctor:task` podle jeho
-`AGENTS.md`.
+Migraci nedělej ručním přesunem adresářů ani vlastním skriptem. Až bude
+implementovaná a povolená, smí ji spustit jen explicitní volba Managed profilu
+uvnitř `lazurio install`. Stejné Core musí před mutací:
 
-## Development override
+1. inventarizovat Source Root, Git stav, ignored mounty, worktrees a recovery
+   stashe;
+2. zastavit nebo vyřadit všechny Lazurio readery a runtime procesy, které by
+   mohly pozorovat mixed stav;
+3. připravit kompatibilní package a generovaný Root na stejném filesystemu;
+4. zachovat Organization/Personalspace mounty a přesunout samotný Lazurio
+   source do `development/Lazurio`;
+5. opravit Git worktree vazby standardním `git worktree repair`;
+6. ověřit historii, mounty, CLI provenance, Launchpad a Doctor;
+7. při pádu bezpečně pokračovat z lokálního migračního receipt nebo vrátit celý
+   atomický krok.
 
-Development checkout založ pouze tehdy, když Principál chce Lazurio vyvíjet.
-Patří přesně do `<home>/Lazurio/development/Lazurio`; task/PR worktree se nikdy
-nestává permanentním `PATH` targetem.
-
-```sh
-cd "$HOME/Lazurio/development/Lazurio"
-bun run lazurio -- cli install
-lazurio --version --json
-```
-
-Na Windows použij stejnou cestu pod `$env:USERPROFILE` a stejné CLI příkazy.
-Po linku musí `root_kind` odpovídat `source` a provenance musí ukazovat právě
-kanonický development checkout. Produkční chování ověřuj také přes skutečně
-zabalený package gate; source link sám není důkaz nainstalovaného artefaktu.
+Dokud tyto brány nejsou dostupné, Source Root zůstává beze změny. Agent jen
+předá přesný report Principálovi.
 
 ## Co Agent nesmí obcházet
 
 - nevytváří root picker, lokální `root-path` config ani alternativní aktivní
   Root;
 - nepředává top-level `lazurio install --root ...`;
-- neklonuje source automaticky v package-only profilu;
+- nevydává Source Root za chybu jen proto, že je Git;
+- nevolí Managed profil bez explicitního souhlasu Principála a readiness gate;
+- neklonuje source automaticky v package-only Managed profilu;
 - nelinkuje permanentní `lazurio` na task worktree;
-- nekopíruje CLI nebo Launchpad do generovaného Rootu jako druhou runtime
-  autoritu;
+- nekopíruje CLI nebo Launchpad do Managed Rootu jako druhou runtime autoritu;
 - nemění strojové cesty podle jazyka;
-- nepřesouvá legacy Git Root ručně a nestashuje či nemaže jeho worktrees
-  odhadem.
-
-## Legacy nebo částečná instalace
-
-`lazurio install` je konvergenční příkaz: volej jej znovu i po částečném
-selhání a řiď se finálním reportem. Když najde legacy Git Root, foreign obsah,
-neověřitelnou provenance nebo stav vyžadující přihlášení, zachovej data a
-předej přesný report Principálovi. Migraci smí provést pouze verzovaný,
-detekovaný migrační krok Lazuria s inventurou a rollbackem; ruční přesun
-adresářů není podporovaná oprava.
+- nepoužívá `git stash --all`, nemaže worktrees a nepushuje lokální Drafty jako
+  součást migrace;
+- neposílá diagnostiku bez samostatného opt-in consentu.
 
 Pro hlubší diagnostiku použij [`lazurio/README.md`](../lazurio/README.md), pro
 celkový filesystem model [`MAP.md`](../MAP.md) a pro hranice instalace

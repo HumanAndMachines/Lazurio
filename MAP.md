@@ -9,10 +9,27 @@ v home uživatele Mašiny. `launchpad.gen3.json` drží pouze root metadata;
 dostupné Organizace Launchpad automaticky skenuje z lokálních mountů
 `organizations/*/company.gen3.json`.
 
-## Kanonický pracovní Root
+## Kanonický pracovní Root: dva profily
+
+Dnešní podporovaný Source Root:
 
 ```text
-<home>/Lazurio/                        # vždy non-Git pracovní Root
+<home>/<existující-source-složka>/     # Git checkout Lazuria i pracovní Root
+├── .git/
+├── AGENTS.md
+├── launchpad.gen3.json
+├── organizations/                     # oddělené Organization Git checkouty
+└── personalspace/                     # privátní mount jednoho Principála
+```
+
+Dnešní instalace může mít source složku stále pojmenovanou například
+`Conglomerate`; musí ale ležet přímo v home a být ověřeným Lazurio source.
+Nejde o volitelný picker ani cílovou alternativní cestu.
+
+Budoucí Managed Root po explicitní fresh instalaci nebo migraci:
+
+```text
+<home>/Lazurio/                        # generovaný non-Git pracovní Root
 ├── AGENTS.md                          # generované instrukce profilu a jazyka
 ├── launchpad.gen3.json                # stabilní root metadata
 ├── organizations/                     # oddělené Organization Git checkouty
@@ -21,15 +38,21 @@ dostupné Organizace Launchpad automaticky skenuje z lokálních mountů
     └── Lazurio/                       # volitelný canonical source checkout
 ```
 
-`development/Lazurio` existuje pouze v development profilu. Package-only
-instalace je platná bez něj. Runtime je buď package-managed, nebo explicitně
-source-linked na tento checkout; nikdy neběží ze skryté třetí kopie uvnitř
-Rootu.
+Fresh/Managed target je vždy canonical `<home>/Lazurio`; existující Source
+Root si do migrace ponechá svou ověřenou home cestu. Nevzniká root picker ani
+druhý aktivní Root. `development/Lazurio` existuje pouze po Managed migraci
+nebo ve fresh Managed development profilu. Package-only Managed instalace je
+platná bez něj. Package/source popisuje CLI provenance, ne třetí Root profil;
+runtime nikdy neběží ze skryté kopie uvnitř Rootu.
 
 ## Source repozitář
 
+V Source profilu je tímto repozitářem samotný ověřený Root přímo v home,
+včetně jeho existujícího historického názvu do migrace. V Managed profilu je
+jeho volitelná canonical cesta:
+
 ```text
-development/Lazurio/
+<home>/Lazurio/development/Lazurio/
 ├── launchpad.gen3.json
 ├── package.json
 ├── README.md
@@ -64,8 +87,9 @@ development/Lazurio/
 - `ARCHITECTURE.md` — krátká mapa cílového systému: Owner, Machine,
   Resident, Agent, pracovní prostory, runtime Modulů a bezpečnostní hranice.
 - `manual/lazurio-root-for-agents.md` — kanonická stručná procedura pro
-  Agenty: jak rozeznat package/source CLI, kde smí být development checkout a
-  jak předat legacy Root migraci bez ručního přesouvání.
+  Agenty: jak pracovat v dnešním Source Rootu, rozeznat package/source CLI,
+  kde smí být Managed development checkout a jak předat budoucí migraci bez
+  ručního přesouvání.
 - `lazurio/` — interní CLI pro bezpečný kontext, Doctor a ohraničené
   vyhledávání. Explicitní mutace jsou oddělené: Bun-managed PATH registrace,
   Git-only update a desktop Launchpad install. CLI není MCP ani veřejné Core

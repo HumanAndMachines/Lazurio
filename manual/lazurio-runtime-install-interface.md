@@ -7,17 +7,21 @@ nesmí pocházet z Git checkoutu, který má update změnit.
 
 - `LAZURIO_RUNTIME_ROOT` je read-only, non-Git obsah exact-digest Lazurio
   artefaktu. Hosted doporučená cesta je `/opt/lazurio-runtime`.
-- `WORKSPACE_ROOT` je generovaný non-Git pracovní Lazurio Root s mutable
-  mounty. Hosted doporučená cesta je `/home/builder/Lazurio`; na běžné mašině je produkční Root vždy
-  přesně `<home>/Lazurio` (`~/Lazurio` na macOS/Linuxu,
-  `%USERPROFILE%\Lazurio` na Windows). Picker ani persisted root selection
-  nevzniká. Source-linked development CLI je vědomá výjimka a používá jediný
-  ověřený checkout `<home>/Lazurio/development/Lazurio`.
+- `WORKSPACE_ROOT` je pracovní Lazurio Root s mutable mounty. Hosted profil jej
+  generuje jako non-Git a doporučená cesta je `/home/builder/Lazurio`; na běžné
+  mašině je fresh/Managed target vždy přesně `<home>/Lazurio`
+  (`~/Lazurio` na macOS/Linuxu, `%USERPROFILE%\Lazurio` na Windows). Dnešní
+  podporovaný Source profil používá ověřený existující checkout přímo v home a
+  smí do migrace zachovat historický název složky. Budoucí Managed profil
+  používá canonical generovaný non-Git Root. Picker ani persisted
+  root selection nevzniká. Volitelný source checkout po Managed migraci patří
+  do `<home>/Lazurio/development/Lazurio`.
 
 Runtime verze se odvozuje z `lazurio.resident.json` a identity instalovaného
-artefaktu. Stav pracovního Rootu se odvozuje z jeho generovaného manifestu a
-stav jednotlivých Git mountů z jejich vlastních checkoutů. Source checkout
-HEAD se nikdy nevydává za verzi package-managed nebo hosted Launchpad runtime.
+artefaktu. Managed Root se odvozuje z jeho generovaného manifestu; Source Root
+z ověřeného Lazurio Git checkoutu. Stav jednotlivých Git mountů se v obou
+profilech čte z jejich vlastních checkoutů. Source HEAD se nikdy nevydává za
+verzi package-managed nebo hosted Launchpad runtime.
 
 ## Exact artefakt
 
@@ -117,9 +121,11 @@ snapshotu bez fetch/mutace. Runtime release a working checkout update jsou dvě
 oddělené operace:
 
 1. image/release pipeline instaluje nový immutable runtime artefakt;
-2. `lazurio update` v source-linked profilu fast-forwarduje kanonický
-   development checkout a v každém profilu reconciliuje Organization Rooty →
-   namountovaná org-level repa → Workspace Moduly;
+2. `lazurio update` v dnešním Source profilu fast-forwarduje Source Root; po
+   Managed migraci aktualizuje canonical development checkout pouze tehdy,
+   když existuje a je aktivní source provenance. V každém profilu dál
+   reconciliuje Organization Rooty → namountovaná org-level repa → Workspace
+   Moduly;
 3. Productionspace, Personalspace, worktrees a root-space repository-db
    zůstávají mimo obecný update engine.
 
