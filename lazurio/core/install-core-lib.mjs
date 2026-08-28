@@ -434,25 +434,40 @@ function validGitCheckout({
 
 function validLazurioSourceTree(sourceRoot, gitExecutable, environment, platform) {
   const gitEnvironment = sanitizedGitEnvironment(environment, platform);
-  const packageResult = runCommandSync({
+  const rootPackageResult = runCommandSync({
     executable: gitExecutable,
     args: ["show", "HEAD:package.json"],
     environment: gitEnvironment,
     cwd: sourceRoot,
   });
-  if (packageResult.status !== 0) return false;
+  if (rootPackageResult.status !== 0) return false;
 
-  let manifest;
+  const runtimePackageResult = runCommandSync({
+    executable: gitExecutable,
+    args: ["show", "HEAD:lazurio/package.json"],
+    environment: gitEnvironment,
+    cwd: sourceRoot,
+  });
+  if (runtimePackageResult.status !== 0) return false;
+
+  let rootManifest;
+  let runtimeManifest;
   try {
-    manifest = JSON.parse(packageResult.stdout);
+    rootManifest = JSON.parse(rootPackageResult.stdout);
+    runtimeManifest = JSON.parse(runtimePackageResult.stdout);
   } catch {
     return false;
   }
   if (
-    !plainObject(manifest)
-    || manifest.name !== "lazurio"
-    || !plainObject(manifest.bin)
-    || manifest.bin.lazurio !== "lazurio/cli.mjs"
+    !plainObject(rootManifest)
+    || rootManifest.name !== "lazurio"
+    || rootManifest.private !== true
+    || !Array.isArray(rootManifest.workspaces)
+    || !rootManifest.workspaces.includes("lazurio")
+    || !plainObject(runtimeManifest)
+    || !plainObject(runtimeManifest.bin)
+    || runtimeManifest.bin.lazurio !== "cli.mjs"
+    || runtimeManifest.repository?.directory !== "lazurio"
   ) {
     return false;
   }
