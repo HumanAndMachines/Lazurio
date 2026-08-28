@@ -32,6 +32,10 @@ import {
   acquireCreateLock,
   releaseCreateLock,
 } from "./worktree-create-lock.mjs";
+import {
+  hasRepositoryDbAuthorityMarker,
+  readMissionControlRepositoryDbAuthority,
+} from "./repository-db-authority-contract.mjs";
 import { resolveTaskAgentLocator } from "../lazurio/core/task-agent-locator.mjs";
 import {
   validateCanonicalMissionControlPlan,
@@ -74,10 +78,10 @@ function git(cwd, args, { allowFail = false, useSafetyConfig = true } = {}) {
 function normalizeExplicitAuthorityRoot(rawCandidate) {
   const candidate = resolve(rawCandidate);
   const repositoryDb = join(candidate, "mission-control", "db");
-  if (existsSync(join(candidate, "repository-db.manifest.json"))) {
+  if (hasRepositoryDbAuthorityMarker(candidate)) {
     return realpathSync(candidate);
   }
-  if (existsSync(join(repositoryDb, "repository-db.manifest.json"))) {
+  if (hasRepositoryDbAuthorityMarker(repositoryDb)) {
     return realpathSync(repositoryDb);
   }
   return existsSync(candidate) ? realpathSync(candidate) : candidate;
@@ -101,13 +105,11 @@ async function resolveAuthorityRoot(primaryRoot, planCode) {
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
     const candidate = join(organizationsRoot, entry.name, "mission-control", "db");
-    let manifest;
     try {
-      manifest = lstatSync(join(candidate, "repository-db.manifest.json"));
+      readMissionControlRepositoryDbAuthority(candidate);
     } catch {
       continue;
     }
-    if (!manifest.isFile() || manifest.isSymbolicLink()) continue;
     const plan = await findPlanFile(candidate, planCode);
     if (!plan) continue;
     const authorityPath = organizationAuthorityPath(primaryRoot, candidate);
@@ -129,7 +131,11 @@ async function resolveAuthorityRoot(primaryRoot, planCode) {
 }
 
 function organizationAuthorityPath(primaryRoot, authorityRoot) {
-  if (!existsSync(join(authorityRoot, "repository-db.manifest.json"))) return null;
+  try {
+    readMissionControlRepositoryDbAuthority(authorityRoot);
+  } catch {
+    return null;
+  }
   const databaseRoot = resolve(authorityRoot);
   const missionControlRoot = dirname(databaseRoot);
   const organizationRoot = dirname(missionControlRoot);
