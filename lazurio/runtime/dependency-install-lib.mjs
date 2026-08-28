@@ -4,7 +4,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep, win32 } fr
 import {
   inspectDirectoryWithinCanonicalBoundary,
   readFileWithinCanonicalBoundary,
-} from "../../lazurio/core/path-boundary-lib.mjs";
+} from "../core/path-boundary-lib.mjs";
 
 const BUN_LOCKFILES = Object.freeze(["bun.lock", "bun.lockb"]);
 const PACKAGE_LOCKFILES = Object.freeze([
