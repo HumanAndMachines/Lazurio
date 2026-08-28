@@ -4200,6 +4200,159 @@ test("worktree Start validates its selected manifest script and proves the actua
   }
 });
 
+test("hosted v2 reconciles catalog services asynchronously without reading or writing legacy desired state", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port });
+  const app = withStaticEntrypoint(fixtureDiscoveryApp({ port }));
+  const desiredRoot = join(root, "launchpad", "runtime", "desired-modules");
+  await writeDesiredModuleState({
+    root: desiredRoot,
+    state: buildDesiredModuleState({ app, source: { type: "main" } }),
+  });
+  const catalog = fixtureTeamServiceCatalog(app);
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "catalog-v2-main",
+    lifecycleProfile: "hosted",
+    teamServiceCatalog: catalog,
+    discover: discoveryWithApp(app),
+    teamServiceRetryJitterRatio: 0,
+  });
+
+  expect(await runtime.reconcileDesiredState()).toMatchObject({
+    skipped: true,
+    reason: "team_service_catalog_v2_is_authoritative",
+    total: 0,
+  });
+  const initial = runtime.startTeamServiceCatalog();
+  expect(initial.total).toBe(1);
+  expect(["pending", "starting"]).toContain(initial.services[0].status);
+  await waitForStatus(() => runtime.health(app.id, { source: { type: "main" } }), "healthy");
+  await waitForRuntime(
+    async () => runtime.teamServiceCatalogSummary(),
+    (summary) => summary?.healthy === 1,
+  );
+  expect(runtime.teamServiceCatalogSummary()).toMatchObject({ healthy: 1, blocked: 0 });
+  const readiness = await runtime.teamServiceReadiness(app.id);
+  expect(readiness).toMatchObject({ ready: true, observed: { status: "healthy" } });
+
+  const opened = await runtime.open(app.id, { source: { type: "main" } });
+  expect(opened).toMatchObject({ status: "healthy", runtime_source: { type: "main" } });
+  const legacy = await readDesiredModuleState({ root: desiredRoot, company: app.company, module: app.module });
+  expect(legacy).toMatchObject({ enabled: true, status: "active" });
+  await expect(runtime.stop(app.id, { source: { type: "main" } })).rejects.toMatchObject({
+    code: "catalog_service_stop_forbidden",
+  });
+  await runtime.shutdown();
+}, platformTestTimeout(15_000));
+
+test("hosted v2 blocks a worktree whose sidecar identity differs and never falls back to main", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port });
+  const app = withStaticEntrypoint(fixtureDiscoveryApp({ port }));
+  const { slug } = await createOwnedWorktreeFixture({ root, slug: "DEV-6513-catalog-source" });
+  const source = {
+    type: "worktree",
+    slug,
+    mission_control_plan_code: "DEV-6513",
+    branch: `agent/${slug}`,
+  };
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "catalog-v2-worktree-mismatch",
+    lifecycleProfile: "hosted",
+    teamServiceCatalog: fixtureTeamServiceCatalog(app, { source }),
+    discover: discoveryWithApp(app),
+    teamServiceRetryJitterRatio: 0,
+  });
+
+  runtime.startTeamServiceCatalog();
+  await waitForRuntime(
+    async () => runtime.teamServiceCatalogSummary(),
+    (summary) => summary?.blocked === 1,
+  );
+  expect(runtime.teamServiceCatalogSummary().services[0]).toMatchObject({
+    status: "blocked",
+    failure_kind: "catalog_service_source_locked",
+    source,
+  });
+  expect((await probeRuntimeListener({
+    host: "127.0.0.1",
+    port,
+    protocol: "tcp",
+    health: { kind: "tcp" },
+  })).reachable).toBe(false);
+  expect(await runtime.health(app.id, { source: { type: "main" } })).toMatchObject({
+    status: "degraded",
+    managed: false,
+    runtime_source: { type: "main" },
+  });
+  await expect(runtime.open(app.id, { source: { type: "main" } })).rejects.toMatchObject({
+    code: "catalog_service_source_locked",
+  });
+  await runtime.shutdown();
+});
+
+test("hosted v2 boot never installs dependencies and explicit Install unblocks the exact catalog service", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({
+    port,
+    dependencies: { "@fixture/catalog-install": "1.0.0" },
+    writeLockfile: true,
+  });
+  const app = withStaticEntrypoint(fixtureDiscoveryApp({ port }));
+  const appRoot = join(root, "organizations", "TestCompany", "modules", "demo", "app", "v1");
+  let installAttempts = 0;
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "catalog-v2-explicit-install",
+    lifecycleProfile: "hosted",
+    teamServiceCatalog: fixtureTeamServiceCatalog(app),
+    discover: discoveryWithApp(app),
+    teamServiceRetryJitterRatio: 0,
+    spawnProcess: (command, options) => {
+      if (!command.slice(1).includes("install")) return spawnFixtureChild(root, command, options);
+      installAttempts += 1;
+      return Bun.spawn([
+        process.execPath,
+        "-e",
+        fixtureDependencyInstallScript([
+          "await (await import('node:fs/promises')).mkdir('node_modules/@fixture/catalog-install', { recursive: true });",
+          "await Bun.write('node_modules/@fixture/catalog-install/package.json', JSON.stringify({ name: '@fixture/catalog-install', version: '1.0.0' }));",
+        ].join(" ")),
+      ], options);
+    },
+  });
+
+  runtime.startTeamServiceCatalog();
+  await waitForRuntime(
+    async () => runtime.teamServiceCatalogSummary(),
+    (summary) => summary?.blocked === 1,
+  );
+  expect(installAttempts).toBe(0);
+  expect(existsSync(join(appRoot, "node_modules"))).toBe(false);
+  expect(runtime.teamServiceCatalogSummary().services[0]).toMatchObject({
+    status: "blocked",
+    failure_kind: "app_not_ready",
+  });
+
+  const installed = await runtime.install(app.id, { source: { type: "main" } });
+  expect(installed).toMatchObject({ action: "install", exit_code: 0 });
+  expect(installAttempts).toBe(1);
+  await waitForRuntime(
+    async () => runtime.teamServiceCatalogSummary(),
+    (summary) => summary?.healthy === 1,
+  );
+  expect(await runtime.teamServiceReadiness(app.id)).toMatchObject({
+    ready: true,
+    observed: { status: "healthy" },
+  });
+  await runtime.shutdown();
+}, platformTestTimeout(15_000));
+
 test("durable Stop commits disabled before signaling and cannot be resurrected after either failure boundary", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({ port });
@@ -5391,6 +5544,22 @@ function discoveryWithApp(app) {
 
 function discoveryWithApps(...apps) {
   return async () => ({ apps, invalid_apps: [], failures: [], warnings: [] });
+}
+
+function fixtureTeamServiceCatalog(app, { source = { type: "main" } } = {}) {
+  return {
+    schema_version: "lazurio.team_service_catalog.v2",
+    organization_slug: app.company,
+    team_id: "workspace",
+    catalog_revision: "fixture-revision-1",
+    generated_at: "2026-08-28T18:00:00.000Z",
+    services: new Map([[app.id, {
+      app_id: app.id,
+      module_lease_key: `${app.company}/${app.module}`,
+      external_origin: `https://${app.module}.example.test/`,
+      source,
+    }]]),
+  };
 }
 
 async function createOwnedWorktreeFixture({ root, slug = "DEV-6439-hosted-parity" }) {

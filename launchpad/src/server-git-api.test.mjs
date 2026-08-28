@@ -1033,6 +1033,124 @@ test("hosted Launchpad omits another Team app and rejects its runtime route befo
   });
 });
 
+test("hosted v2 publishes Launchpad readiness before asynchronously restoring exact catalog services", async () => {
+  const root = await createLaunchpadGitFixture();
+  const stateRoot = `${root}-launchpad-state`;
+  tempRoots.push(root, stateRoot);
+  const appPort = await findFreePort();
+  const appId = "betaco-catalog-preview-v1";
+  const moduleRoot = join(root, "organizations", "BetaCo_GEN3", "workspace", "deals");
+  const appRoot = join(moduleRoot, "app", "v1");
+  const organizationManifestPath = join(root, "organizations", "BetaCo_GEN3", "company.gen3.json");
+  const organizationManifest = JSON.parse(await readFile(organizationManifestPath, "utf8"));
+  organizationManifest.module_port_pool = { start: appPort, end: appPort };
+  await writeJson(organizationManifestPath, organizationManifest);
+  await writeJson(join(moduleRoot, "lazurio.module.json"), {
+    schema_version: "lazurio.module.v1",
+    id: "deals",
+    company: "BetaCo",
+    tcp_port_policy: { mode: "single" },
+    apps: ["app/v1/package.json"],
+    default_app: "app/v1/package.json",
+    port_leases: [{ id: "main", host: "127.0.0.1", port: appPort }],
+  });
+  await writeJson(join(appRoot, "package.json"), {
+    name: appId,
+    private: true,
+    type: "module",
+    scripts: { dev: "bun server.mjs" },
+    lazurio: {
+      runtime: {
+        schema_version: "lazurio.runtime.v1",
+        id: appId,
+        title: "Catalog preview",
+        company: "BetaCo",
+        module: "deals",
+        surface: "internal",
+        dev_script: "dev",
+        tags: [],
+        listeners: [{
+          id: "app",
+          role: "entrypoint",
+          lease: "main",
+          protocol: "http",
+          health: { kind: "http", path: "/health" },
+        }],
+      },
+    },
+  });
+  await writeFile(join(appRoot, "server.mjs"), [
+    "await Bun.sleep(2000);",
+    "const server = Bun.serve({",
+    "  hostname: process.env.LAZURIO_RUNTIME_HOST,",
+    "  port: Number(process.env.LAZURIO_RUNTIME_PORT),",
+    "  fetch: (request) => new URL(request.url).pathname === '/health'",
+    "    ? Response.json({ status: 'ok' })",
+    "    : new Response('catalog preview'),",
+    "});",
+    "setInterval(() => {}, 2_147_483_647);",
+    "",
+  ].join("\n"));
+  await mkdir(join(appRoot, "node_modules"), { recursive: true });
+
+  const launchpadStartedAt = performance.now();
+  const { port } = await startLaunchpadServer(root, {
+    env: {
+      LAZURIO_WORKSPACE_PROFILE: "hosted",
+      LAZURIO_TEAM_ID: "workspace",
+      LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot,
+      LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN: "https://launchpad.workspace.example.test",
+      LAZURIO_LAUNCHPAD_AUTH_COOKIE_NAME: "__Secure-lazurio-workspace",
+      LAZURIO_LAUNCHPAD_AUTH_CHECK_URL: "https://auth.workspace.example.test/oauth2/auth",
+      LAZURIO_TEAM_SERVICE_CATALOG_JSON: JSON.stringify({
+        schema_version: "lazurio.team_service_catalog.v2",
+        organization_slug: "BetaCo",
+        team_id: "workspace",
+        catalog_revision: "fixture-revision-1",
+        generated_at: "2026-08-28T18:00:00Z",
+        services: [{
+          app_id: appId,
+          module_lease_key: "BetaCo/deals",
+          external_origin: "https://deals.workspace.example.test/",
+          source: { type: "main" },
+        }],
+      }),
+    },
+  });
+  expect(performance.now() - launchpadStartedAt).toBeLessThan(platformTestTimeout(2_000));
+
+  const pending = await fetch(`http://127.0.0.1:${port}/api/hosted/services/${appId}/readiness`);
+  expect(pending.status).toBe(503);
+  expect(pending.headers.get("retry-after")).toBeTruthy();
+  expect(await pending.json()).toMatchObject({
+    ready: false,
+    app_id: appId,
+    catalog_revision: "fixture-revision-1",
+  });
+  const ready = await waitForHttpStatus(
+    `http://127.0.0.1:${port}/api/hosted/services/${appId}/readiness`,
+    200,
+  );
+  expect(await ready.json()).toMatchObject({
+    ready: true,
+    observed: { status: "healthy", source: { type: "main" } },
+    runtime: {
+      status: "healthy",
+      owner: "current-instance",
+      runtime_source: { type: "main" },
+      url: "https://deals.workspace.example.test/",
+    },
+  });
+  const identity = await getJson(port, "/api/lazurio/server-identity");
+  expect(identity.lifecycle_configuration_id).toMatch(/^[a-f0-9]{64}$/);
+  expect((await getJson(port, "/api/hosted/services"))).toMatchObject({
+    catalog_revision: "fixture-revision-1",
+    healthy: 1,
+    blocked: 0,
+  });
+  expect(existsSync(join(stateRoot, "runtime", "desired-modules", "BetaCo--deals.json"))).toBe(false);
+});
+
 test("instance-bound local shutdown rejects stale callers and stops the managed module process tree", async () => {
   const root = await createLaunchpadGitFixture();
   const appPort = await findFreePort();
@@ -1738,6 +1856,18 @@ async function waitForHealth(port, server) {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`server on ${port} did not become healthy`);
+}
+
+async function waitForHttpStatus(url, expectedStatus) {
+  const deadline = Date.now() + platformTestTimeout(10_000);
+  let lastStatus = null;
+  while (Date.now() < deadline) {
+    const response = await fetch(url);
+    lastStatus = response.status;
+    if (response.status === expectedStatus) return response;
+    await Bun.sleep(100);
+  }
+  throw new Error(`Expected ${expectedStatus} from ${url}, last status was ${lastStatus}.`);
 }
 
 async function waitForProcessExit(server, timeoutMs) {

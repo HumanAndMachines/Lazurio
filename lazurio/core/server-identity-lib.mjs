@@ -195,6 +195,7 @@ export function buildServerIdentity({
   rootId,
   controlRootId,
   installGeneration,
+  lifecycleConfigurationId = null,
   instanceId,
   pid,
   startedAt,
@@ -210,6 +211,9 @@ export function buildServerIdentity({
     pid,
     started_at: startedAt,
     request_trust_profile: requestTrustProfile,
+    ...(lifecycleConfigurationId === null
+      ? {}
+      : { lifecycle_configuration_id: lifecycleConfigurationId }),
   };
   if (!isValidServerIdentity(identity)) {
     throw new TypeError("Cannot build an invalid Lazurio Server identity.");
@@ -233,6 +237,9 @@ export function classifyServerIdentity({ observed = null, legacyObserved = null,
     if (!isValidServerIdentity(observed)) return "protocol_incompatible";
     if (observed.control_root_id !== expected.controlRootId) return "stale_install";
     if (observed.install_generation !== expected.installGeneration) return "stale_install";
+    if ((observed.lifecycle_configuration_id ?? null) !== (expected.lifecycleConfigurationId ?? null)) {
+      return "stale_install";
+    }
     return "compatible";
   }
 
@@ -267,6 +274,10 @@ function isPreControlRootServerIdentity(identity) {
       || identity.request_trust_profile === "local"
       || identity.request_trust_profile === "hosted"
     )
+    && (
+      identity.lifecycle_configuration_id === undefined
+      || isSha256(identity.lifecycle_configuration_id)
+    )
   );
 }
 
@@ -291,6 +302,10 @@ export function isValidServerIdentity(identity) {
       || identity.request_trust_profile === "local"
       || identity.request_trust_profile === "hosted"
     )
+    && (
+      identity.lifecycle_configuration_id === undefined
+      || isSha256(identity.lifecycle_configuration_id)
+    )
   );
 }
 
@@ -300,6 +315,11 @@ function assertExpectedIdentity(expected) {
     || !isSha256(expected.rootId)
     || !isSha256(expected.controlRootId)
     || !isSha256(expected.installGeneration)
+    || (
+      expected.lifecycleConfigurationId !== undefined
+      && expected.lifecycleConfigurationId !== null
+      && !isSha256(expected.lifecycleConfigurationId)
+    )
   ) {
     throw new TypeError("Server identity classification requires exact operated Root, control Root, and install generations.");
   }

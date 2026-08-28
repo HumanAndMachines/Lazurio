@@ -30,6 +30,7 @@ export function createTeamServiceController({
     attempts: 0,
     running: false,
     queued: false,
+    requestedTrigger: null,
     observed: observedState(service, catalogRevision, {
       status: "pending",
       updatedAt: now(),
@@ -48,6 +49,7 @@ export function createTeamServiceController({
     const entry = requireEntry(appId);
     entry.generation += 1;
     entry.attempts = 0;
+    entry.queued = false;
     entry.observed = observedState(entry.service, catalogRevision, {
       status: "pending",
       trigger: "explicit-retry",
@@ -61,8 +63,8 @@ export function createTeamServiceController({
     const entry = entries.get(appId);
     if (!entry || stopped) return null;
     entry.generation += 1;
-    entry.running = false;
     entry.queued = false;
+    entry.requestedTrigger = null;
     scheduleBackoff(entry, {
       trigger: "child-exit",
       error: `Catalog child exited${exitCode === null ? "" : ` with code ${exitCode}`}.`,
@@ -97,11 +99,17 @@ export function createTeamServiceController({
     for (const entry of entries.values()) {
       entry.generation += 1;
       entry.queued = false;
+      entry.requestedTrigger = null;
     }
   }
 
   function enqueue(entry, trigger) {
-    if (stopped || entry.running || entry.queued) return;
+    if (stopped) return;
+    if (entry.running) {
+      entry.requestedTrigger = trigger;
+      return;
+    }
+    if (entry.queued) return;
     entry.queued = true;
     queue.push({ entry, trigger, generation: entry.generation });
     drain();
@@ -110,13 +118,20 @@ export function createTeamServiceController({
   function drain() {
     while (!stopped && active < concurrency && queue.length > 0) {
       const item = queue.shift();
+      if (item.generation !== item.entry.generation) continue;
       item.entry.queued = false;
-      if (item.generation !== item.entry.generation || item.entry.running) continue;
+      if (item.entry.running) {
+        item.entry.requestedTrigger = item.trigger;
+        continue;
+      }
       active += 1;
       item.entry.running = true;
       void run(item).finally(() => {
         item.entry.running = false;
         active -= 1;
+        const requestedTrigger = item.entry.requestedTrigger;
+        item.entry.requestedTrigger = null;
+        if (requestedTrigger) enqueue(item.entry, requestedTrigger);
         drain();
       });
     }

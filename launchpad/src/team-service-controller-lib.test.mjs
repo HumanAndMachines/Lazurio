@@ -93,6 +93,66 @@ test("permanent failures block one service until explicit Retry", async () => {
   expect(controller.snapshot("blocked").status).toBe("healthy");
 });
 
+test("explicit Retry overlapping an active attempt is not lost", async () => {
+  let releaseFirst;
+  let attempts = 0;
+  const firstAttempt = new Promise((resolve) => { releaseFirst = resolve; });
+  const controller = createTeamServiceController({
+    services: serviceMap("demo"),
+    catalogRevision: "rev-overlap",
+    ensureService: async () => {
+      attempts += 1;
+      if (attempts === 1) await firstAttempt;
+      return { runtime: { status: "healthy" } };
+    },
+    sleep: () => new Promise(() => {}),
+  });
+
+  controller.start();
+  await flush();
+  expect(controller.snapshot("demo").status).toBe("starting");
+  controller.retry("demo");
+  releaseFirst();
+  await flush();
+  await flush();
+
+  expect(attempts).toBe(2);
+  expect(controller.snapshot("demo")).toMatchObject({
+    status: "healthy",
+    trigger: "explicit-retry",
+  });
+});
+
+test("explicit Retry replaces an older queued generation", async () => {
+  let releaseFirst;
+  const firstAttempt = new Promise((resolve) => { releaseFirst = resolve; });
+  const attempts = [];
+  const controller = createTeamServiceController({
+    services: serviceMap("first", "queued"),
+    catalogRevision: "rev-queued-overlap",
+    concurrency: 1,
+    ensureService: async (service) => {
+      attempts.push(service.app_id);
+      if (service.app_id === "first") await firstAttempt;
+      return { runtime: { status: "healthy" } };
+    },
+    sleep: () => new Promise(() => {}),
+  });
+
+  controller.start();
+  await flush();
+  controller.retry("queued");
+  releaseFirst();
+  await flush();
+  await flush();
+
+  expect(attempts).toEqual(["first", "queued"]);
+  expect(controller.snapshot("queued")).toMatchObject({
+    status: "healthy",
+    trigger: "explicit-retry",
+  });
+});
+
 test("a catalog child exit re-enters capped backoff and keeps the immutable source", async () => {
   const sleeps = [];
   const controller = createTeamServiceController({

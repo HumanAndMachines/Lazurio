@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import {
   HostedAppUrlError,
   createHostedAppUrlAdapter,
+  hostedLifecycleConfigurationId,
   parseHostedAppUrlsJson,
   parseTeamServiceCatalogJson,
   projectHostedAppUrl,
@@ -223,6 +224,29 @@ test("v2 catalog binds one Organization and Team to immutable exact sources", ()
     branch: "agent/DEV-6513-hosted-preview",
   });
   expect(validateAgainstSchema(JSON.parse(teamCatalogV2Json()), catalogSchema)).toEqual([]);
+});
+
+test("v2 effective configuration has a deterministic lifecycle identity", () => {
+  const original = JSON.parse(teamCatalogV2Json());
+  const regenerated = { ...original, generated_at: "2026-08-28T19:00:00Z" };
+  const revised = { ...regenerated, catalog_revision: "2026-08-28T19:00:00Z" };
+  const changedSource = structuredClone(original);
+  changedSource.services[0].source = {
+    type: "worktree",
+    slug: "DEV-6513-hosted-preview",
+    mission_control_plan_code: "DEV-6513",
+    branch: "agent/DEV-6513-hosted-preview",
+  };
+
+  const originalId = hostedLifecycleConfigurationId(parseTeamServiceCatalogJson(JSON.stringify(original)));
+  expect(originalId).toMatch(/^[a-f0-9]{64}$/);
+  expect(hostedLifecycleConfigurationId(parseTeamServiceCatalogJson(JSON.stringify(regenerated))))
+    .toBe(originalId);
+  expect(hostedLifecycleConfigurationId(parseTeamServiceCatalogJson(JSON.stringify(revised))))
+    .not.toBe(originalId);
+  expect(hostedLifecycleConfigurationId(parseTeamServiceCatalogJson(JSON.stringify(changedSource))))
+    .not.toBe(originalId);
+  expect(hostedLifecycleConfigurationId({ schema_version: null })).toBeNull();
 });
 
 test("v2 catalog rejects duplicate app, lease and origin authorities", () => {
