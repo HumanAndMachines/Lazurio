@@ -7,6 +7,7 @@ import {
   computeSpaceHeroState,
   createLatestDataLoadCoordinator,
   familyTitle,
+  findRunningSharedPortPeer,
   filterApps,
   groupAppFamilies,
   groupFamiliesBySpace,
@@ -29,6 +30,50 @@ import {
   variantMenuLabel,
   variantTag,
 } from "../public/app-state.js";
+
+test("declared shared-port peer is matched by endpoint and ownership, not listener PID", () => {
+  const target = {
+    id: "agentmint-knowledgebase-v2",
+    company: "AgentMint",
+    host: "127.0.0.1",
+    port: 5286,
+    runtime: { owner: "foreign-port", pid: 2635 },
+    shared_port_owners: [{ app_id: "macano-knowledgebase-v2" }],
+  };
+  const peer = {
+    id: "macano-knowledgebase-v2",
+    company: "Macano-Tech",
+    host: "localhost",
+    port: 5286,
+    runtime: { owner: "current-instance", pid: 2628 },
+  };
+
+  expect(findRunningSharedPortPeer([target, peer], target)).toBe(peer);
+});
+
+test("shared-port peer selection stays fail-closed for undeclared or unmanaged Apps", () => {
+  const target = {
+    id: "agentmint-knowledgebase-v2",
+    host: "127.0.0.1",
+    port: 5286,
+    runtime: { owner: "foreign-port", pid: 2635 },
+    shared_port_owners: [{ app_id: "declared-peer" }],
+  };
+  const undeclared = {
+    id: "other-peer",
+    host: "127.0.0.1",
+    port: 5286,
+    runtime: { owner: "current-instance", pid: 2635 },
+  };
+  const unmanaged = {
+    id: "declared-peer",
+    host: "127.0.0.1",
+    port: 5286,
+    runtime: { owner: "foreign-port", pid: 2635 },
+  };
+
+  expect(findRunningSharedPortPeer([target, undeclared, unmanaged], target)).toBeNull();
+});
 
 test("primary action surface keeps attention, DEV-local and cold-start semantics distinct", () => {
   const matrix = [

@@ -171,9 +171,11 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(js).toContain("app.runtime?.controllable === true");
   expect(js).toContain('return ["foreign-port", "unknown-port"].includes(app.runtime?.owner)');
   expect(js).toContain("function runningSharedPortPeer");
-  expect(js).toContain("if (declaredOwners.size === 0) return null;");
-  expect(js).toContain("runtimeHostsShareListener(candidate.host, app.host)");
-  expect(js).toContain('host === "localhost" ? "127.0.0.1" : host');
+  expect(js).toContain("findRunningSharedPortPeer(state.apps, app)");
+  expect(appState).toContain("if (declaredOwners.size === 0) return null;");
+  expect(appState).toContain("runtimeHostsShareListener(candidate.host, app.host)");
+  expect(appState).toContain('host === "localhost" ? "127.0.0.1" : host');
+  expect(appState).not.toContain("candidate.runtime?.pid");
   expect(js).toContain('actionLabel: "Otevřít a převzít port"');
   expect(js).not.toContain('candidate.company !== app.company');
   expect(js).toContain("function switchRuntimeApp");
@@ -198,6 +200,7 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(js).toContain('? "blokovaná"');
   expect(js).toContain('? (isCodexPortConflict(app) ? "Vyřešit s Codexem" : "Zobrazit detail")');
   expect(js).toContain("primaryActionSurfaceState(primaryNextAction(app)).cold_start_candidate");
+  expect(js).not.toContain("Nabízím rovnou další krok");
 
   expect(css).toContain(".space-switcher-menu");
   expect(css).toContain(".space-switcher-option");

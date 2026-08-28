@@ -35,6 +35,28 @@ export function reconcileSelectedAppId(apps, filters, selectedAppId) {
   return null;
 }
 
+export function runtimeHostsShareListener(left, right) {
+  const normalize = (host) => host === "localhost" ? "127.0.0.1" : host;
+  return normalize(left) === normalize(right);
+}
+
+export function findRunningSharedPortPeer(apps, app) {
+  if (app?.runtime?.owner !== "foreign-port") return null;
+  if (!Number.isInteger(app.runtime?.pid)) return null;
+  const declaredOwners = new Set((app.shared_port_owners ?? []).map((owner) => owner.app_id));
+  if (declaredOwners.size === 0) return null;
+  // Listener PID a managed process-group leader se mohou legitimně lišit.
+  // Deklarovaný endpoint + aktuální managed/adopted owner určí UI kandidáta;
+  // backend při potvrzeném switchi znovu ověřuje přesnou runtime autoritu.
+  return apps.find((candidate) =>
+    candidate.id !== app.id
+    && candidate.port === app.port
+    && runtimeHostsShareListener(candidate.host, app.host)
+    && declaredOwners.has(candidate.id)
+    && ["current-instance", "adopted-port"].includes(candidate.runtime?.owner)
+  ) ?? null;
+}
+
 export function reconcileDetailDrawerState({
   drawerView,
   drawerOpen,

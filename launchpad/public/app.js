@@ -6,6 +6,7 @@ import {
   computeSpaceHeroState,
   createLatestDataLoadCoordinator,
   familyTitle,
+  findRunningSharedPortPeer,
   filterApps,
   groupAppFamilies,
   groupFamiliesBySpace,
@@ -3167,19 +3168,7 @@ function isUntrustedPortOwner(app) {
 }
 
 function runningSharedPortPeer(app) {
-  if (app.runtime?.owner !== "foreign-port") return null;
-  const targetPid = app.runtime?.pid;
-  if (!Number.isInteger(targetPid)) return null;
-  const declaredOwners = new Set((app.shared_port_owners ?? []).map((owner) => owner.app_id));
-  if (declaredOwners.size === 0) return null;
-  return state.apps.find((candidate) =>
-    candidate.id !== app.id
-    && candidate.port === app.port
-    && runtimeHostsShareListener(candidate.host, app.host)
-    && declaredOwners.has(candidate.id)
-    && candidate.runtime?.pid === targetPid
-    && ["current-instance", "adopted-port"].includes(candidate.runtime?.owner)
-  ) ?? null;
+  return findRunningSharedPortPeer(state.apps, app);
 }
 
 function isSameModulePeer(app, peer) {
@@ -3195,14 +3184,6 @@ function confirmedTakeoverPayload(app) {
   );
   if (!confirmed) return null;
   return { confirmed: true, replace_app_id: peer.id };
-}
-
-// Manifest povoluje dvě ekvivalentní loopback identity. Pro ownership je
-// localhost a 127.0.0.1 tentýž lokální listener endpoint, i když URL zůstává
-// přesně podle manifestu.
-function runtimeHostsShareListener(left, right) {
-  const normalize = (host) => host === "localhost" ? "127.0.0.1" : host;
-  return normalize(left) === normalize(right);
 }
 
 function cardWarningModel(app, gitRepo) {
@@ -3549,7 +3530,7 @@ async function openAppChain(app, { feedback } = {}) {
     state.drawerView = "detail";
     setDrawer(true, { restoreFocus: false });
     writeCardProgress(feedback, classifyOpenError(app, error));
-    toast(`${appBaseTitle(app)}: ${recovery.title}. Nabízím rovnou další krok.`, "error", 8000);
+    toast(`${appBaseTitle(app)}: ${recovery.title}.`, "error", 8000);
   } finally {
     await loadData({ quiet: true, fresh: true });
     state.openingApps.delete(app.id);
