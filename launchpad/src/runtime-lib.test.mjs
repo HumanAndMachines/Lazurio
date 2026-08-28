@@ -4353,6 +4353,47 @@ test("hosted v2 boot never installs dependencies and explicit Install unblocks t
   await runtime.shutdown();
 }, platformTestTimeout(15_000));
 
+test("hosted v2 shutdown drains an in-flight reconcile before snapshotting managed children", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port });
+  const app = withStaticEntrypoint(fixtureDiscoveryApp({ port }));
+  let runtime;
+  let shutdownPromise;
+  let reportSpawn;
+  const spawnObserved = new Promise((resolve) => { reportSpawn = resolve; });
+  runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "catalog-v2-shutdown-overlap",
+    lifecycleProfile: "hosted",
+    teamServiceCatalog: fixtureTeamServiceCatalog(app),
+    discover: discoveryWithApp(app),
+    teamServiceRetryJitterRatio: 0,
+    spawnProcess: (command, options) => {
+      const child = spawnFixtureChild(root, command, options);
+      shutdownPromise = runtime.shutdown();
+      reportSpawn(child.pid);
+      return child;
+    },
+  });
+
+  runtime.startTeamServiceCatalog();
+  await spawnObserved;
+  const shutdown = await shutdownPromise;
+
+  expect(shutdown).toMatchObject({ attempted: 1, stopped: 1, failed: 0 });
+  const stoppedListener = await waitForRuntime(
+    () => probeRuntimeListener({
+      host: "127.0.0.1",
+      port,
+      protocol: "tcp",
+      health: { kind: "tcp" },
+    }),
+    (probe) => probe.reachable === false,
+  );
+  expect(stoppedListener.reachable).toBe(false);
+}, platformTestTimeout(15_000));
+
 test("durable Stop commits disabled before signaling and cannot be resurrected after either failure boundary", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({ port });
