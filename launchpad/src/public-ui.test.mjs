@@ -461,6 +461,7 @@ test("Daily surface hides diagnostics until the hero action requests them", asyn
 
 test("Launchpad quiet refresh is lightweight and non-overlapping", async () => {
   const js = await readFile(join(publicRoot, "app.js"), "utf8");
+  const personalspaceJs = await readFile(join(publicRoot, "personalspace.js"), "utf8");
   const stateLib = await readFile(join(publicRoot, "app-state.js"), "utf8");
   const server = await readFile(join(import.meta.dirname, "server.mjs"), "utf8");
   const loadDataBlock = js.slice(
@@ -492,6 +493,10 @@ test("Launchpad quiet refresh is lightweight and non-overlapping", async () => {
   expect(loadDataBlock).toContain("quiet");
   expect(loadDataBlock).toContain('fetchJson("/api/apps")');
   expect(loadDataBlock).toContain('fetchJson("/api/sync", { method: "POST" })');
+  expect(js).toContain('import { launchpadFetch } from "./session-aware-fetch.js";');
+  expect(personalspaceJs).toContain('import { launchpadFetch } from "./session-aware-fetch.js";');
+  expect(js).not.toMatch(/\bfetch\(/);
+  expect(personalspaceJs).not.toMatch(/\bfetch\(/);
   expect(js).toContain("let doctorLoadInFlight = null;");
   expect(js).toContain("let doctorReloadRequested = false;");
   expect(loadDataBlock).toContain("if (doctorLoadInFlight) {");

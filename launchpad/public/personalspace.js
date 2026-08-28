@@ -20,6 +20,7 @@
 import { focusMenuTriggerAfterRender } from "./focus-restoration.js";
 import { openCodexRepairDialog, openCodexRuntimeIssueDialog } from "./codex-handoff.js";
 import { runtimeRecoveryForApp } from "./runtime-recovery.js";
+import { launchpadFetch } from "./session-aware-fetch.js";
 
 const state = {
   data: null,
@@ -1119,7 +1120,7 @@ async function runAction(app, action) {
   state.pendingAction = `${app.id}:${action}`;
   rerender();
   try {
-    const response = await fetch(`/api/personalspace/apps/${encodeURIComponent(app.id)}/${action}`, {
+    const response = await launchpadFetch(`/api/personalspace/apps/${encodeURIComponent(app.id)}/${action}`, {
       ...personalRuntimeMutationOptions(),
       cache: "no-store",
     });
@@ -1407,7 +1408,7 @@ function obsidianDeepLink(gbrain) {
 }
 
 async function fetchJson(path, init = {}) {
-  const response = await fetch(path, { cache: "no-store", ...init });
+  const response = await launchpadFetch(path, { cache: "no-store", ...init });
   if (!response.ok) {
     let message = `${path} ${response.status}`;
     try {
