@@ -715,7 +715,11 @@ test("control-root replacement waits for an in-flight runtime mutation", async (
   expect(await new Response(replacement.stderr).text()).toContain("nepodařilo bezpečně zastavit");
 
   const installResponse = await installRequest;
-  expect(installResponse.status).toBe(200);
+  const installBody = await installResponse.json();
+  expect({ status: installResponse.status, body: installBody }).toMatchObject({
+    status: 200,
+    body: { action: "install", exit_code: 0 },
+  });
   expect((await getJson(primary.port, "/health")).status).toBe("ok");
 });
 
