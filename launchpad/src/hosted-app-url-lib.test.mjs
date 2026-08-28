@@ -8,6 +8,7 @@ import {
   projectHostedAppUrl,
   projectHostedRuntimePayload,
   requireHostedAppUrl,
+  validateTeamServiceCatalogBindings,
 } from "./hosted-app-url-lib.mjs";
 import { validateAgainstSchema } from "../../lazurio/runtime/json-schema-mini.mjs";
 
@@ -197,6 +198,89 @@ test("published Team catalog schema matches runtime origin and identity constrai
     .toBe("https://100.64.12.34/");
 });
 
+test("v2 catalog binds one Organization and Team to immutable exact sources", () => {
+  const main = parseTeamServiceCatalogJson(teamCatalogV2Json());
+  expect(main).toMatchObject({
+    schema_version: "lazurio.team_service_catalog.v2",
+    organization_slug: "Iotor",
+    team_id: "iotor-builders",
+    catalog_revision: "2026-08-28T18:00:00Z",
+  });
+  expect(main.services.get(appId)?.source).toEqual({ type: "main" });
+
+  const worktree = parseTeamServiceCatalogJson(teamCatalogV2Json({
+    source: {
+      type: "worktree",
+      slug: "DEV-6513-hosted-preview",
+      mission_control_plan_code: "DEV-6513",
+      branch: "agent/DEV-6513-hosted-preview",
+    },
+  }));
+  expect(worktree.services.get(appId)?.source).toEqual({
+    type: "worktree",
+    slug: "DEV-6513-hosted-preview",
+    mission_control_plan_code: "DEV-6513",
+    branch: "agent/DEV-6513-hosted-preview",
+  });
+  expect(validateAgainstSchema(JSON.parse(teamCatalogV2Json()), catalogSchema)).toEqual([]);
+});
+
+test("v2 catalog rejects duplicate app, lease and origin authorities", () => {
+  const first = JSON.parse(teamCatalogV2Json());
+  first.services.push({ ...first.services[0] });
+  expect(() => parseTeamServiceCatalogJson(JSON.stringify(first))).toThrow("duplicates app_id");
+
+  const duplicateLease = JSON.parse(teamCatalogV2Json());
+  duplicateLease.services.push({
+    ...duplicateLease.services[0],
+    app_id: "iotor-editor-v1",
+    external_origin: "https://editor.management.example.test/",
+  });
+  expect(() => parseTeamServiceCatalogJson(JSON.stringify(duplicateLease))).toThrow("duplicates module_lease_key");
+
+  const duplicateOrigin = JSON.parse(teamCatalogV2Json());
+  duplicateOrigin.services.push({
+    ...duplicateOrigin.services[0],
+    app_id: "iotor-editor-v1",
+    module_lease_key: "Iotor/editor",
+  });
+  expect(() => parseTeamServiceCatalogJson(JSON.stringify(duplicateOrigin))).toThrow("duplicates external_origin");
+});
+
+test("v2 catalog rejects non-canonical or under-specified worktree sources", () => {
+  for (const source of [
+    { type: "worktree", slug: "DEV-6513-preview" },
+    { type: "worktree", slug: "../preview", mission_control_plan_code: "DEV-6513", branch: "agent/preview" },
+    { type: "worktree", slug: "DEV-6513-preview", mission_control_plan_code: "dev-6513", branch: "agent/preview" },
+    { type: "worktree", slug: "DEV-6513-preview", mission_control_plan_code: "DEV-6513", branch: "../main" },
+    { type: "main", branch: "main" },
+  ]) {
+    const candidate = JSON.parse(teamCatalogV2Json({ source }));
+    expect(validateAgainstSchema(candidate, catalogSchema).length).toBeGreaterThan(0);
+    expect(() => parseTeamServiceCatalogJson(JSON.stringify(candidate))).toThrow("source");
+  }
+});
+
+test("v2 catalog binding fails closed across Organization, Team and module lease boundaries", () => {
+  const adapter = parseTeamServiceCatalogJson(teamCatalogV2Json());
+  const organizations = [{ slug: "Iotor", teams: [{ slug: "iotor-builders" }] }];
+  const apps = [{ id: appId, company: "Iotor", module: "knowledgebase", teams: ["iotor-builders"] }];
+  expect(validateTeamServiceCatalogBindings(adapter, { organizations, apps })).toBe(adapter);
+  expect(() => validateTeamServiceCatalogBindings(adapter, { organizations: [], apps })).toThrow("not mounted");
+  expect(() => validateTeamServiceCatalogBindings(adapter, {
+    organizations: [{ slug: "Iotor", teams: [{ slug: "other" }] }],
+    apps,
+  })).toThrow("does not belong");
+  expect(() => validateTeamServiceCatalogBindings(adapter, {
+    organizations,
+    apps: [{ ...apps[0], company: "Other" }],
+  })).toThrow("belongs to Other");
+  expect(() => validateTeamServiceCatalogBindings(adapter, {
+    organizations,
+    apps: [{ ...apps[0], teams: ["other"] }],
+  })).toThrow("not a member");
+});
+
 function localApp() {
   return {
     id: appId,
@@ -221,6 +305,23 @@ function teamCatalogJson(overrides = {}) {
       app_id: appId,
       module_lease_key: "iotor/knowledgebase",
       external_origin: externalOrigin,
+      ...overrides,
+    }],
+  });
+}
+
+function teamCatalogV2Json(overrides = {}) {
+  return JSON.stringify({
+    schema_version: "lazurio.team_service_catalog.v2",
+    organization_slug: "Iotor",
+    team_id: "iotor-builders",
+    catalog_revision: "2026-08-28T18:00:00Z",
+    generated_at: "2026-08-28T18:00:00Z",
+    services: [{
+      app_id: appId,
+      module_lease_key: "Iotor/knowledgebase",
+      external_origin: externalOrigin,
+      source: { type: "main" },
       ...overrides,
     }],
   });
