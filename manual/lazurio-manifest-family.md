@@ -155,6 +155,10 @@ The authored document uses `lazurio.organization.v1`. The resolver envelope
 uses `lazurio.organization.root-resolution.v1`, and its normalized resource
 uses the distinct `lazurio.organization.resource.v1`; consumers must not
 validate the normalized read model as if it were the authored manifest.
+The envelope's optional `recovery_identity` is presentation-only metadata for
+one root recovery surface. It never authorizes Organization or child actions
+and is `null` whenever present documents disagree on kind, slug, or display
+name.
 
 Consumers use that Core result:
 
@@ -183,6 +187,7 @@ runtime/process state, consistent with DEV-6439.
 | normalized semantics differ | `conflict` | fail closed for mutation; never choose silently |
 | only Lazurio | `current` | supported after the finalization gate |
 | neither | `missing` | not a Lazurio resource; fail only when the mount is expected |
+| any present document is invalid or unreadable | `conflict` | fail closed; `issues[]` identifies the malformed or unreadable document even when no second file exists |
 
 One mount always produces at most one resource and at most one child Doctor.
 Two filenames never create two Organizations or two Personalspaces.

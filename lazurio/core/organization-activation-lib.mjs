@@ -1,7 +1,11 @@
 import { createHash } from "node:crypto";
 
 import { normalizeOrganizationPortPool } from "./organization-port-policy-lib.mjs";
-import { isValidOrganizationForgeBinding } from "./organization-scaffold-lib.mjs";
+import {
+  isValidOrganizationForgeBinding,
+  ORGANIZATION_GITHUB_LOGIN_PATTERN,
+  ORGANIZATION_POSITIVE_GITHUB_ID_PATTERN,
+} from "./organization-scaffold-lib.mjs";
 import {
   githubRepositoryCoordinate,
   normalizeOrganizationSlotPath,
@@ -75,13 +79,11 @@ export const ORGANIZATION_ACTIVATION_ERROR_CODES = Object.freeze([
   "github_response_invalid",
 ]);
 
-const organizationIdPattern = /^[1-9][0-9]{0,19}$/u;
-const githubLoginPattern = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/u;
 const supportedFormats = new Set(["legacy", "current", "transition"]);
 
 export function createOrganizationActivationRequest({ githubOrganizationId }) {
   const id = String(githubOrganizationId ?? "").trim();
-  if (!organizationIdPattern.test(id)) {
+  if (!ORGANIZATION_POSITIVE_GITHUB_ID_PATTERN.test(id)) {
     throw new TypeError("Organization activation requires a positive immutable GitHub Organization ID.");
   }
   return freeze({
@@ -227,8 +229,25 @@ export function resolveOrganizationRootDocuments({
     state = legacy.valid && modules.valid ? "legacy" : "conflict";
     resource = state === "legacy" ? legacy.resource : null;
   } else if (!legacyPresent && canonicalPresent) {
-    state = canonical.valid && modules.valid ? "current" : "conflict";
-    resource = state === "current" ? canonical.resource : null;
+    if (canonical.valid && modules.valid) {
+      const expectedHash = organizationLegacyProjectionHash(canonicalManifest, modulesManifest);
+      const declaredHash = canonicalManifest.compatibility?.legacy_projection?.sha256 ?? null;
+      projection = {
+        algorithm: ORGANIZATION_LEGACY_PROJECTION_HASH_ALGORITHM,
+        expected_hash: expectedHash,
+        declared_hash: declaredHash,
+        actual_hash: null,
+      };
+      if (declaredHash !== expectedHash) {
+        state = "conflict";
+        issues.push("canonical_projection_hash_invalid");
+      } else {
+        state = "current";
+        resource = canonical.resource;
+      }
+    } else {
+      state = "conflict";
+    }
   } else if (legacyPresent && canonicalPresent) {
     if (!legacy.valid || !canonical.valid || !modules.valid) {
       state = "conflict";
@@ -263,6 +282,7 @@ export function resolveOrganizationRootDocuments({
   const activation = legacyActivationProjection({
     state,
     resource,
+    modulesValid: modules.valid,
     canonicalPresent,
     companyManifest,
     expectedOrganizationId,
@@ -275,6 +295,7 @@ export function resolveOrganizationRootDocuments({
     state,
     resource,
     resource_count: resource === null ? 0 : 1,
+    recovery_identity: normalizedRecoveryIdentity(legacy, canonical),
     semantic_hash: semanticHash,
     projection,
     issues: [...new Set(issues)].sort(),
@@ -364,6 +385,10 @@ function normalizeLegacyOrganization(value, modulesManifest) {
   const forgeLocator = normalizedText(company?.github_org);
   if (!slug || !displayName || !forgeLocator) issues.push("legacy_organization_identity_invalid");
   issues.push(...organizationRootRepositoryAliasIssues(value).map((issue) => issue.code));
+  if (
+    value.module_port_pool === null
+    || normalizeOrganizationPortPool({ manifest: value }).issues.length > 0
+  ) issues.push("legacy_module_port_pool_invalid");
   const modules = normalizeModulesManifest(modulesManifest);
   if (modules.valid && (modules.company !== slug || !sameText(modules.githubOrganization, forgeLocator))) {
     issues.push("organization_modules_identity_conflict");
@@ -386,7 +411,14 @@ function normalizeLegacyOrganization(value, modulesManifest) {
         extensions,
       })
     : null;
-  return { valid: issues.length === 0, issues, resource };
+  return {
+    valid: issues.length === 0,
+    issues,
+    resource,
+    identity: ['organization', 'template'].includes(kind) && slug && displayName
+      ? { kind, slug, display_name: displayName }
+      : null,
+  };
 }
 
 function normalizeCanonicalOrganization(value, modulesManifest) {
@@ -447,7 +479,14 @@ function normalizeCanonicalOrganization(value, modulesManifest) {
         extensions: clone(value.extensions.legacy),
       })
     : null;
-  return { valid: issues.length === 0, issues, resource };
+  return {
+    valid: issues.length === 0,
+    issues,
+    resource,
+    identity: ['organization', 'template'].includes(value.kind) && slug && displayName
+      ? { kind: value.kind, slug, display_name: displayName }
+      : null,
+  };
 }
 
 function normalizedResource({
@@ -488,8 +527,8 @@ function legacyRootRepository(value) {
   const binding = value.forge_binding;
   const locator = normalizedText(binding?.repository?.asserted_full_name)
     || normalizedText(company?.root_repository)
-    || repositoryCoordinate(company?.repository)
-    || repositoryCoordinate(company?.git_url);
+    || githubRepositoryCoordinate(company?.repository)?.ownerRepo
+    || githubRepositoryCoordinate(company?.git_url)?.ownerRepo;
   const defaultBranch = normalizedText(binding?.repository?.default_branch)
     || normalizedText(value.governance?.default_branch)
     || normalizedText(company?.default_branch)
@@ -544,9 +583,9 @@ function canonicalForgeBinding(value, kind, { optional = false } = {}) {
     value.forge !== "github"
     || !locator
     || locator !== value.locator
-    || (kind === "organization" && !githubLoginPattern.test(locator))
+    || (kind === "organization" && !ORGANIZATION_GITHUB_LOGIN_PATTERN.test(locator))
     || !["unverified", "verified"].includes(state)
-    || (state === "verified" && !organizationIdPattern.test(id ?? ""))
+    || (state === "verified" && !ORGANIZATION_POSITIVE_GITHUB_ID_PATTERN.test(id ?? ""))
     || (state === "unverified" && id !== undefined)
     || (kind === "repository" && (
       normalizedText(value.default_branch) === ""
@@ -666,6 +705,7 @@ function canonicalCompatibilityBindingIssue(organization, root) {
 function legacyActivationProjection({
   state,
   resource,
+  modulesValid,
   canonicalPresent,
   companyManifest,
   expectedOrganizationId,
@@ -677,7 +717,7 @@ function legacyActivationProjection({
     return { status: "unsupported", format: null, reason: "canonical_resolver_unavailable" };
   }
   if (state !== "legacy" || resource?.kind !== "organization") {
-    const reason = state === "missing"
+    const reason = state === "missing" || !modulesValid
       ? "legacy_manifest_pair_missing"
       : ["current", "transition", "projection_drift"].includes(state)
         ? "canonical_resolver_unavailable"
@@ -765,12 +805,12 @@ function projectLegacyModules(slots) {
       }
       return sortObject(projected);
     })
-    .sort((left, right) => String(left.path).localeCompare(String(right.path), "en"));
+    .sort((left, right) => compareCodeUnits(String(left.path), String(right.path)));
 }
 
 function normalizeRepositorySlots(slots) {
   return slots.map((slot) => sortObject(clone(slot))).sort((left, right) => (
-    String(left.path ?? "").localeCompare(String(right.path ?? ""), "en")
+    compareCodeUnits(String(left.path ?? ""), String(right.path ?? ""))
   ));
 }
 
@@ -780,18 +820,26 @@ function remainingFields(value, reserved) {
     .map(([key, child]) => [key, clone(child)]));
 }
 
-function repositoryCoordinate(value) {
-  const text = normalizedText(value);
-  const match = text.match(/^(?:git@github\.com:|https?:\/\/github\.com\/)([^/]+\/[^/]+?)(?:\.git)?$/iu);
-  return match?.[1] ?? "";
-}
-
 function sameText(left, right) {
   return normalizedText(left).toLowerCase() === normalizedText(right).toLowerCase();
 }
 
+function compareCodeUnits(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 function invalidNormalization(issue) {
-  return { valid: false, issues: issue ? [issue] : [], resource: null };
+  return { valid: false, issues: issue ? [issue] : [], resource: null, identity: null };
+}
+
+function normalizedRecoveryIdentity(...normalizations) {
+  const candidates = normalizations.map(({ identity }) => identity).filter(Boolean);
+  if (candidates.length === 0) return null;
+  const [first] = candidates;
+  if (candidates.some(({ kind, slug, display_name: displayName }) => (
+    kind !== first.kind || slug !== first.slug || displayName !== first.display_name
+  ))) return null;
+  return clone(first);
 }
 
 function hashCanonicalJson(value) {
@@ -808,7 +856,7 @@ function clone(value) {
   return value === undefined ? undefined : structuredClone(value);
 }
 
-const legacyReservedFields = new Set([
+export const ORGANIZATION_LEGACY_RESERVED_FIELDS = Object.freeze([
   "organization_generation",
   "organization_kind",
   "company",
@@ -822,8 +870,9 @@ const legacyReservedFields = new Set([
   "modules",
   "default_branch",
 ]);
+const legacyReservedFields = new Set(ORGANIZATION_LEGACY_RESERVED_FIELDS);
 
-const legacyCompanyReservedFields = new Set([
+export const ORGANIZATION_LEGACY_COMPANY_RESERVED_FIELDS = Object.freeze([
   "slug",
   "display_name",
   "github_org",
@@ -832,11 +881,12 @@ const legacyCompanyReservedFields = new Set([
   "root_repository",
   "default_branch",
 ]);
+const legacyCompanyReservedFields = new Set(ORGANIZATION_LEGACY_COMPANY_RESERVED_FIELDS);
 
 export function isValidOrganizationActivationRequest(value) {
   return isRecord(value)
     && value.schema_version === ORGANIZATION_ACTIVATION_REQUEST_SCHEMA
-    && organizationIdPattern.test(value.github_organization_id ?? "")
+    && ORGANIZATION_POSITIVE_GITHUB_ID_PATTERN.test(value.github_organization_id ?? "")
     && exactKeys(value, ["schema_version", "github_organization_id"]);
 }
 
@@ -854,7 +904,7 @@ export function isValidOrganizationActivationObservations(value) {
     || !isIdentity(principal)
     || !isRecord(organization)
     || !exactKeys(organization, ["id", "login", "viewer_is_owner", "viewer_can_create_repositories"])
-    || !organizationIdPattern.test(organization.id ?? "")
+    || !ORGANIZATION_POSITIVE_GITHUB_ID_PATTERN.test(organization.id ?? "")
     || normalizedText(organization.login) === ""
     || typeof organization.viewer_is_owner !== "boolean"
     || typeof organization.viewer_can_create_repositories !== "boolean"
@@ -862,7 +912,7 @@ export function isValidOrganizationActivationObservations(value) {
   if (!isRecord(app) || !exactKeys(app, ["status", "installation_id", "repository_selection", "root_access"])) return false;
   if (!["installed", "missing", "unobservable"].includes(app.status)) return false;
   if (app.status === "installed") {
-    if (!organizationIdPattern.test(app.installation_id ?? "")) return false;
+    if (!ORGANIZATION_POSITIVE_GITHUB_ID_PATTERN.test(app.installation_id ?? "")) return false;
     if (!["all", "selected"].includes(app.repository_selection)) return false;
     if (!["included", "missing", "unverified", "not_applicable"].includes(app.root_access)) return false;
     if (app.repository_selection === "all" && app.root_access !== "included") return false;
@@ -876,7 +926,7 @@ export function isValidOrganizationActivationObservations(value) {
   if (root.presence === "absent") {
     if (root.id !== null || root.default_branch !== null || root.viewer_can_push !== null) return false;
   } else {
-    if (!organizationIdPattern.test(root.id ?? "") || typeof root.viewer_can_push !== "boolean") return false;
+    if (!ORGANIZATION_POSITIVE_GITHUB_ID_PATTERN.test(root.id ?? "") || typeof root.viewer_can_push !== "boolean") return false;
     if (root.default_branch !== null && normalizedText(root.default_branch) === "") return false;
   }
   if (!isRecord(resolver) || !exactKeys(resolver, ["status", "format", "reason"])) return false;
@@ -953,7 +1003,7 @@ function okReport(request, observations, outcome, reasons, nextAction) {
 function isIdentity(value) {
   return isRecord(value)
     && exactKeys(value, ["id", "login"])
-    && organizationIdPattern.test(value.id ?? "")
+    && ORGANIZATION_POSITIVE_GITHUB_ID_PATTERN.test(value.id ?? "")
     && normalizedText(value.login) !== "";
 }
 

@@ -3,8 +3,8 @@ import { createHash } from "node:crypto";
 export const ORGANIZATION_SCAFFOLD_CONTRACT_VERSION = "lazurio.organization.scaffold.v0";
 export const ORGANIZATION_FORGE_BINDING_VERSION = "lazurio.forge-binding.github.v0";
 
-const positiveIdPattern = /^[1-9][0-9]{0,19}$/u;
-const githubLoginPattern = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/u;
+export const ORGANIZATION_POSITIVE_GITHUB_ID_PATTERN = /^[1-9][0-9]{0,19}$/u;
+export const ORGANIZATION_GITHUB_LOGIN_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/u;
 const organizationSlugPattern = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/u;
 
 const staticFiles = Object.freeze({
@@ -183,7 +183,7 @@ function normalizeInput({ organization, repository }) {
   }
   const organizationId = positiveId(organization.id, "GitHub Organization");
   const organizationLogin = requiredText(organization.login, "GitHub Organization login");
-  if (!githubLoginPattern.test(organizationLogin)) {
+  if (!ORGANIZATION_GITHUB_LOGIN_PATTERN.test(organizationLogin)) {
     throw new TypeError("GitHub Organization login is invalid.");
   }
   const slug = requiredText(organization.slug, "Organization slug");
@@ -290,12 +290,12 @@ function validForgeBinding(value) {
     && value.provider === "github"
     && isRecord(value.organization)
     && typeof value.organization.id === "string"
-    && positiveIdPattern.test(value.organization.id ?? "")
+    && ORGANIZATION_POSITIVE_GITHUB_ID_PATTERN.test(value.organization.id ?? "")
     && typeof value.organization.asserted_login === "string"
-    && githubLoginPattern.test(value.organization.asserted_login ?? "")
+    && ORGANIZATION_GITHUB_LOGIN_PATTERN.test(value.organization.asserted_login ?? "")
     && isRecord(value.repository)
     && typeof value.repository.id === "string"
-    && positiveIdPattern.test(value.repository.id ?? "")
+    && ORGANIZATION_POSITIVE_GITHUB_ID_PATTERN.test(value.repository.id ?? "")
     && typeof value.repository.asserted_full_name === "string"
     && value.repository.asserted_full_name.toLowerCase() === `${value.organization.asserted_login}/${value.organization.asserted_login}_GEN3`.toLowerCase()
     && value.repository.default_branch === "main";
@@ -371,7 +371,7 @@ function isReservedGitSegment(segment) {
 
 function positiveId(value, label) {
   const id = String(value ?? "").trim();
-  if (!positiveIdPattern.test(id)) throw new TypeError(`${label} ID must be a positive immutable provider ID.`);
+  if (!ORGANIZATION_POSITIVE_GITHUB_ID_PATTERN.test(id)) throw new TypeError(`${label} ID must be a positive immutable provider ID.`);
   return id;
 }
 

@@ -118,6 +118,7 @@ test("KONTROLNÍ TEST: rozešlý otisk i nepřiznaná odchylka musí spadnout", 
   expect(vendorFindings(undeclared, readVendored).join(" ")).toContain("nepřiznaný fork");
 
   const ghostDelta = structuredClone(record);
+  ghostDelta.files[1].current_sha256 = ghostDelta.files[1].baseline_sha256;
   ghostDelta.files[1].declared_delta = [{ summary: "odchylka, která tu není", anchor: "KOTVA-KTERA-V-SOUBORU-NENI" }];
   expect(vendorFindings(ghostDelta, readVendored).join(" ")).toContain("vyjmenovává odchylky");
 });
