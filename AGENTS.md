@@ -67,12 +67,25 @@ ohraničené hranice** a **definované procesy**.
   mladý modul může mít `main` vědomě otevřenou i Builderovi; zamčenou `main`
   merguje ten, komu to branch rules dovolují, typicky Steward nebo Admin
   (decisions 0102/0103).
+- **Mašina je hranice, ne typ hardwaru.** Je to fyzické zařízení, virtuální
+  server nebo providerem izolovaný hostovaný pracovní prostor, který tvoří
+  jednu sdílenou runtime, bezpečnostní a recovery hranici se známým Ownerem. Lokální
+  workstation, Buddy VPS a celý Hosted Team Workspace mohou být Mašiny;
+  proces, Modul, worktree, Unixový účet ani libovolný kontejner jí samy nejsou.
+  Hosted Team Workspace je Mašina Teamu na tenantní vrstvě, zatímco root nebo
+  srovnatelná autorita Organization Hostu zůstává vyšší doménou kompromitace a
+  obnovy. Ownerem sdíleného Workspace je Organizace, ne právě přihlášený
+  Principál. Mašina není IAM, role ani položka centrálního registru. Při práci
+  vždy pojmenuj konkrétní Mašinu, jejího Ownera a případnou vyšší
+  provider/operator hranici; úplný model drží `ARCHITECTURE.md`.
 - **Vlastní mašina, vlastní Personalspace.** Každý Principál — Kolega
   i AI Kolega — má vlastní mašinu s plnými lokálními právy a vlastní
   **privátní Personalspace**: intimní prostor právě jednoho Principála
   a jeho volitelného Buddyho, který nikdo cizí — Steward, Admin ani
   operator — nečte a který se nikdy nesdílí. Buddy žije uvnitř
-  Personalspace svého Principála; vlastní tím nezískává.
+  Personalspace svého Principála; vlastní tím nezískává. Sdílená
+  Organization-owned Mašina může být další pracovní prostředí Principála,
+  ale jeho Personalspace nepřebírá ani nemountuje.
 - **Buddy je osobní.** Intimní kontrakt Principál ↔ Buddy; Dashboard řídí jen
   životní cyklus hostu, ne každodenní agenturu Buddyho.
 - **Opatrovník.** Každý seat AI Kolegy má právě jednoho jmenovaného lidského
@@ -114,8 +127,9 @@ frameworku a k práci v Lazuriu nejsou potřeba.
 
 ### Co se od tebe očekává
 
-**Pracuješ jménem svého Principála** — na jeho mašině, pod jeho přihlášeními,
-v rámci jeho pravomocí. Mezi Kolegy je hierarchie jako v reálné firmě: co je
+**Pracuješ jménem svého Principála** — na Mašině aktuální relace, pod jeho
+přihlášeními a v rámci jeho pravomocí. Vlastnictví sdílené Mašiny ani org-wide
+práva z toho neodvozuj. Mezi Kolegy je hierarchie jako v reálné firmě: co je
 mimo pravomoce tvého Principála, neobcházíš — řekneš mu to a Principál
 deleguje na Kolegu, který pravomoc drží.
 
@@ -209,7 +223,8 @@ volitelného Buddyho (decision 0091 v `manual/decision-register.md`). Cizí
 Personalspace se na
 mašinu nemountuje, Launchpad ho nematerializuje a Task Agent ho nečte.
 Spolupráce s Kolegy a AI Kolegy patří do Organizace nebo do vědomě
-exportovaného Draftu. Principál má na své mašině plná práva; procesní hranici
+exportovaného Draftu. Principál má na své osobní Mašině plná práva; procesní
+hranici
 Task Agentů drží sandbox jejich harnessu a pravidla práce, ne lokální
 per-modulový IAM.
 

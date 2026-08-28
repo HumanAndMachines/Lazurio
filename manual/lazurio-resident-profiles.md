@@ -19,9 +19,14 @@ credentials.
 | AI Kolega | AI Principál s vlastní identitou, Mašinou, Personalspace a pracovními právy. Není Buddy. |
 | Task Agent | Nástrojová pracovní relace, například Codex nebo Claude Code. Sama žádná práva nevlastní. |
 | Steward | Organizační role AI Kolegy nebo Kolegy. Její název nic neautorizuje; rozhodují živá GitHub práva. |
-| Mašina | Počítač nebo dedikovaný host jednoho Principála či jeho Buddyho. |
+| Mašina | Fyzické zařízení, virtuální server nebo providerem izolovaný hostovaný pracovní prostor, který tvoří jednu sdílenou runtime, bezpečnostní a recovery hranici se známým Ownerem. |
 | Personalspace | Privátní prostor právě jednoho Principála a případného Buddyho. |
 | Organizace | Jedna firma, jeden GitHub Organization scope a jedna access hranice. |
+
+Kanonickou cross-profile definici drží root `ARCHITECTURE.md`. Tento manuál dál
+slovem Mašina myslí konkrétně Mašinu hostující Residenta. Hosted Team Workspace
+se v širším modelu také počítá jako Mašina Teamu, ale tento fakt sám z něj
+nedělá Resident profile ani Personalspace.
 
 ## Source, pracovní Root a runtime nejsou totéž
 

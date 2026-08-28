@@ -59,7 +59,7 @@ používá následující pojmy s jejich přesným významem.
 
 | Pojem | Co znamená běžnou řečí |
 | --- | --- |
-| **Mašina** | Počítač nebo dedikovaný server ovládaný jedním Principálem. V Lazuriu tvoří základní lokální bezpečnostní hranici. |
+| **Mašina** | Fyzické zařízení, virtuální server nebo providerem izolovaný hostovaný pracovní prostor, který tvoří jednu sdílenou runtime, bezpečnostní a recovery hranici se známým Ownerem. Není to typ hardwaru ani nový IAM objekt. |
 | **Organizace** | Jedna firma, její GitHub organizace a samostatná hranice repozitářů, dat a přístupů. |
 | **Personalspace** | Soukromý prostor jednoho Principála a jeho případného Buddyho. S firemní Organizací se automaticky nesdílí. |
 | **Root** | Kořenová složka pracovního prostředí, která zastřešuje Lazurio, dostupné Organizace a případný Personalspace. |
@@ -77,7 +77,7 @@ kam patří výsledek, co smí být sdílené a kdo může změnu publikovat.
 
 Lazurio nad tím staví malý počet pevných pravidel:
 
-- **jedna Mašina je jedna trust doména** se známým vlastníkem;
+- **jedna Mašina je jeden deklarovaný společný rozsah dopadu** se známým Ownerem;
 - **GitHub je autorita pracovních přístupů** — Lazurio nevytváří paralelní
   systém oprávnění;
 - **každá Organizace je samostatná hranice** a samostatný Git repozitář;
@@ -287,9 +287,11 @@ bezpečnou reconciliaci. Aktuální build rezidentních artefaktů popisuje
   OAuth soubory nebo obsah soukromé paměti.
 - **Mašina je bezpečnostní jednotka.** Pokud mají dva runtime procesy
   root-equivalent přístup na stejné Mašině, běžný adresář nebo Unix user z nich
-  nedělá dvě nezávislé trust domény.
+  nedělá dvě nezávislé trust domény. Hosted Team Workspace se počítá jako
+  Mašina pouze jako celý podporovaný infrastrukturní obal; root Organization
+  Hostu zůstává vyšší doménou kompromitace a obnovy.
 
-Podrobnosti najdeš v [architektuře](ARCHITECTURE.md#vnější-bezpečnostní-hranice),
+Podrobnosti najdeš v [architektuře](ARCHITECTURE.md#1-jedna-mašina-je-jedna-bezpečnostní-hranice),
 [pravidlech pro Agenty](AGENTS.md#model-spolupráce-principál-a-agenti) a
 [standardu lokálního držení secrets](manual/security/local-secret-custody.md).
 Bezpečnostní problém nepublikuj do veřejného issue spolu s citlivými daty;
