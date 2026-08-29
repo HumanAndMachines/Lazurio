@@ -60,7 +60,8 @@
       "properties": {
         "slug": {
           "type": "string",
-          "minLength": 1
+          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$",
+          "description": "Stabilní osobní identita Buddyho. Není odvozena z názvu private profile repozitáře."
         },
         "gbrain_path": {
           "const": "gbrain"
@@ -99,8 +100,13 @@
           ],
           "properties": {
             "github_repo": {
-              "const": "HumanAndMachines/Lazurio",
-              "description": "Veřejný runtime source; konkrétní instalace musí být resident artefakt s profilem buddy, ne checkout samostatného Buddy repa."
+              "enum": [
+                "HumanAndMachines/Lazurio",
+                "HumanAndMachines/Buddy_GEN2",
+                "HumanAndMachine-ai/Buddy_GEN2",
+                "HumanAndMachines/Buddy"
+              ],
+              "description": "Kanonický runtime source je HumanAndMachines/Lazurio. Známé předchozí Buddy repozitáře zůstávají read-compatible pouze proto, aby Doctor mohl pravdivě hlásit migrační warning místo falešné nevalidity."
             },
             "deployment_target": {
               "const": "owner-dedicated-personalspace-vps",
@@ -122,7 +128,11 @@
           ],
           "properties": {
             "software_repo": {
-              "const": "NousResearch/hermes-agent"
+              "enum": [
+                "Lazurio/hermes-agent",
+                "NousResearch/hermes-agent"
+              ],
+              "description": "Managed Resident používá Lazurio/hermes-agent; přímý upstream zůstává známou přechodovou vazbou."
             },
             "profile_format": {
               "const": "hermes-profile-distribution"
@@ -278,12 +288,40 @@
           ],
           "properties": {
             "github_repo": {
-              "const": "garrytan/gbrain"
+              "enum": [
+                "Lazurio/gbrain",
+                "garrytan/gbrain"
+              ]
             },
             "install_source": {
-              "const": "github:garrytan/gbrain"
+              "enum": [
+                "github:Lazurio/gbrain",
+                "github:garrytan/gbrain"
+              ]
             }
           },
+          "oneOf": [
+            {
+              "properties": {
+                "github_repo": {
+                  "const": "Lazurio/gbrain"
+                },
+                "install_source": {
+                  "const": "github:Lazurio/gbrain"
+                }
+              }
+            },
+            {
+              "properties": {
+                "github_repo": {
+                  "const": "garrytan/gbrain"
+                },
+                "install_source": {
+                  "const": "github:garrytan/gbrain"
+                }
+              }
+            }
+          ],
           "additionalProperties": true
         },
         "default_shared": {

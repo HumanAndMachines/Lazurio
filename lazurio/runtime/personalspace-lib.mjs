@@ -59,6 +59,23 @@ const ignoredWorkspaceDirs = new Set([".git", ".worktrees", "node_modules", "dis
 export const PERSONAL_APP_ID_PREFIX = "personal--";
 export const PERSONAL_SCHEMA_VERSION = "humanandmachines.personal.gen3.v1";
 
+const CURRENT_BUDDY_RUNTIME_REPO = "HumanAndMachines/Lazurio";
+const LEGACY_BUDDY_RUNTIME_REPOS = new Set([
+  "HumanAndMachines/Buddy_GEN2",
+  "HumanAndMachine-ai/Buddy_GEN2",
+  "HumanAndMachines/Buddy",
+]);
+const CURRENT_HERMES_REPO = "Lazurio/hermes-agent";
+const LEGACY_HERMES_REPO = "NousResearch/hermes-agent";
+const CURRENT_GBRAIN_BINDING = Object.freeze({
+  github_repo: "Lazurio/gbrain",
+  install_source: "github:Lazurio/gbrain",
+});
+const LEGACY_GBRAIN_BINDING = Object.freeze({
+  github_repo: "garrytan/gbrain",
+  install_source: "github:garrytan/gbrain",
+});
+
 export function isLegacyPersonalCustodyConfig(personal) {
   return personal?.schema_version === undefined
     && personal?.repository?.mount_strategy === undefined
@@ -149,6 +166,7 @@ export function validatePersonalConfig(personal, schema, label) {
         if (personal.buddy[key] === undefined) failures.push(`${label}: chybí buddy.${key}`);
       }
       checkString(personal.buddy, "slug", "buddy.slug", { required: true });
+      checkPattern(personal.buddy, "slug", buddySpec.properties?.slug, "buddy.slug");
       checkConst(personal.buddy, "gbrain_path", buddySpec.properties?.gbrain_path, "buddy.gbrain_path");
       if (!legacyCustody) {
         checkConst(personal.buddy, "path", buddySpec.properties?.path, "buddy.path");
@@ -186,6 +204,12 @@ export function validatePersonalConfig(personal, schema, label) {
           buddyRuntimeSpec.properties?.github_repo,
           "buddy.runtime.github_repo",
         );
+        checkEnum(
+          personal.buddy.runtime,
+          "github_repo",
+          buddyRuntimeSpec.properties?.github_repo,
+          "buddy.runtime.github_repo",
+        );
         checkConst(
           personal.buddy.runtime,
           "deployment_target",
@@ -203,6 +227,12 @@ export function validatePersonalConfig(personal, schema, label) {
           if (personal.buddy.hermes?.[key] === undefined) failures.push(`${label}: chybí buddy.hermes.${key}`);
         }
         checkConst(
+          personal.buddy.hermes,
+          "software_repo",
+          hermesSpec.properties?.software_repo,
+          "buddy.hermes.software_repo",
+        );
+        checkEnum(
           personal.buddy.hermes,
           "software_repo",
           hermesSpec.properties?.software_repo,
@@ -284,12 +314,32 @@ export function validatePersonalConfig(personal, schema, label) {
       gbrainSoftwareSpec.properties?.github_repo,
       "gbrain.software.github_repo",
     );
+    checkEnum(
+      personal.gbrain?.software,
+      "github_repo",
+      gbrainSoftwareSpec.properties?.github_repo,
+      "gbrain.software.github_repo",
+    );
     checkConst(
       personal.gbrain?.software,
       "install_source",
       gbrainSoftwareSpec.properties?.install_source,
       "gbrain.software.install_source",
     );
+    checkEnum(
+      personal.gbrain?.software,
+      "install_source",
+      gbrainSoftwareSpec.properties?.install_source,
+      "gbrain.software.install_source",
+    );
+    const gbrainSoftware = personal.gbrain?.software;
+    const hasCurrentGbrainBinding = gbrainSoftware?.github_repo === CURRENT_GBRAIN_BINDING.github_repo
+      && gbrainSoftware?.install_source === CURRENT_GBRAIN_BINDING.install_source;
+    const hasLegacyGbrainBinding = gbrainSoftware?.github_repo === LEGACY_GBRAIN_BINDING.github_repo
+      && gbrainSoftware?.install_source === LEGACY_GBRAIN_BINDING.install_source;
+    if (!hasCurrentGbrainBinding && !hasLegacyGbrainBinding) {
+      failures.push(`${label}: gbrain.software github_repo a install_source musí deklarovat stejný známý source`);
+    }
   }
   checkConst(personal.gbrain, "default_shared", gbrainSpec.properties?.default_shared, "gbrain.default_shared");
   checkEnum(personal.gbrain, "human_editor", gbrainSpec.properties?.human_editor, "gbrain.human_editor");
@@ -304,6 +354,36 @@ export function validatePersonalConfig(personal, schema, label) {
   checkConst(personal.secrets, "git", secretsSpec.properties?.git, "secrets.git");
 
   return failures;
+}
+
+export function personalBindingWarnings(personal, label) {
+  if (isLegacyPersonalCustodyConfig(personal)) return [];
+  const warnings = [];
+  const runtimeRepo = personal?.buddy?.runtime?.github_repo;
+  if (LEGACY_BUDDY_RUNTIME_REPOS.has(runtimeRepo)) {
+    warnings.push(
+      `${label}: buddy.runtime.github_repo ${runtimeRepo} je známá nasazená legacy vazba; `
+      + `migrace na ${CURRENT_BUDDY_RUNTIME_REPO} zůstává otevřená v DEV-6438`,
+    );
+  }
+  if (personal?.buddy?.hermes?.software_repo === LEGACY_HERMES_REPO) {
+    warnings.push(
+      `${label}: buddy.hermes.software_repo používá přímý upstream ${LEGACY_HERMES_REPO}; `
+      + `Managed Resident cíl je ${CURRENT_HERMES_REPO}`,
+    );
+  }
+  const gbrainSoftware = personal?.gbrain?.software;
+  if (
+    personal?.buddy !== undefined
+    && gbrainSoftware?.github_repo === LEGACY_GBRAIN_BINDING.github_repo
+    && gbrainSoftware?.install_source === LEGACY_GBRAIN_BINDING.install_source
+  ) {
+    warnings.push(
+      `${label}: gbrain.software používá přímý upstream ${LEGACY_GBRAIN_BINDING.github_repo}; `
+      + `Managed Resident cíl je ${CURRENT_GBRAIN_BINDING.github_repo}`,
+    );
+  }
+  return warnings;
 }
 
 export function validateBuddyPresentation(buddy, schema, label) {
@@ -432,7 +512,7 @@ export function identityInvariantIssues(personal, dirName) {
     }
     if (personal?.buddy !== undefined) {
       const buddyRepo = personal?.buddy?.repository?.github_repo;
-      const [buddyRepoOwner, buddyRepoName] = typeof buddyRepo === "string"
+      const [buddyRepoOwner] = typeof buddyRepo === "string"
         ? buddyRepo.split("/")
         : [];
       if (typeof buddyRepoOwner !== "string" || buddyRepoOwner.toLowerCase() !== owner.toLowerCase()) {
@@ -443,12 +523,6 @@ export function identityInvariantIssues(personal, dirName) {
         || buddyRepo?.toLowerCase() === gbrainRepo?.toLowerCase()
       ) {
         issues.push("buddy.repository.github_repo musí být jiné repo než Personalspace owner a gbrain repo");
-      }
-      if (
-        typeof buddyRepoName !== "string"
-        || personal?.buddy?.slug !== buddyRepoName.toLowerCase()
-      ) {
-        issues.push("buddy.slug musí odpovídat lower-case názvu Buddy profile repa");
       }
     }
   }
@@ -874,6 +948,8 @@ export async function discoverPersonalspace(
         `${mountPath}: legacy neversionovaný Personalspace zůstává dočasně čitelný; `
         + "přejdi na humanandmachines.personal.gen3.v1 podle manual/migrate-personalspace-custody-v1.md",
       );
+    } else {
+      warnings.push(...personalBindingWarnings(personal, mountPath));
     }
 
     const owner = personal.owner.github_username;
