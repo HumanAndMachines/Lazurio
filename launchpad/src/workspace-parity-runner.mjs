@@ -100,6 +100,7 @@ export async function runWorkspaceParity(options) {
         launchpadRoot: join(lazurioRoot, "launchpad"),
         allowMissingOrganizations: false,
         runChildDoctors: true,
+        activeTeamId: options.profile === "hosted" ? options.team : null,
       });
       add("launchpad.doctor", ["ok", "warn"].includes(doctor.summary.status), {
         doctor_status: doctor.summary.status,
@@ -499,6 +500,7 @@ export function parseArgs(args) {
         phase: "phase",
         root: "root",
         organization: "organization",
+        team: "team",
         "app-id": "appId",
         "worktree-slug": "worktreeSlug",
         "launchpad-url": "launchpadUrl",
@@ -529,6 +531,7 @@ export function parseArgs(args) {
   }
   if (options.profile === "hosted" && !options.expectedOrigin) throw new Error("--expected-origin is required for hosted profile");
   if (options.profile === "hosted") {
+    if (!options.team) throw new Error("--team is required for hosted profile");
     for (const key of ["t3Pid", "codexPid", "launchpadPid"]) {
       if (!Number.isInteger(options[key]) || options[key] <= 0) {
         throw new Error(`--${key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)} is required for hosted profile`);
@@ -540,10 +543,10 @@ export function parseArgs(args) {
 
 function helpText() {
   return `Usage: bun run parity:workspace -- --profile local|hosted --phase live|post-restart \\
-  --organization <filesystem-dir> --app-id <id> --worktree-slug <slug> \\
+  --organization <filesystem-dir> --team <team> --app-id <id> --worktree-slug <slug> \\
   --expected-worktree-created-by <t3-creation-identity> [options]
 
-Hosted additionally requires --expected-origin, --t3-pid, --codex-pid and --launchpad-pid.
+Hosted additionally requires --team, --expected-origin, --t3-pid, --codex-pid and --launchpad-pid.
 Local: run live, restart Launchpad, then use post-restart to prove no session
 child was restored. Hosted: run live, restart the work container (and separately
 reboot the host), then use post-restart to prove every Team module returned on

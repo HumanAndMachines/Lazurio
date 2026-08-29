@@ -4158,7 +4158,8 @@ test("hosted maintenance starts the discovered App, rejects Stop and retires rem
   });
 
   try {
-    expect(runtime.maintainApps([app.id])).toMatchObject({ total: 1, starting: 1 });
+    expect(() => runtime.maintainApps([app.id])).toThrow("requires discovered App records");
+    expect(runtime.maintainApps([app])).toMatchObject({ total: 1, starting: 1 });
     const healthy = await waitForStatus(() => runtime.health(app.id), "healthy");
     expect(healthy).toMatchObject({
       managed: true,
@@ -4201,7 +4202,7 @@ test("hosted inventory projects the worktree selected for the current Launchpad 
   });
 
   try {
-    runtime.maintainApps([app.id]);
+    runtime.maintainApps([app]);
     await waitForStatus(() => runtime.health(app.id), "healthy");
     await runtime.open(app.id, { source: { type: "worktree", slug } });
 
@@ -4293,7 +4294,7 @@ test("hosted maintenance never installs dependencies during boot and keeps retry
   });
 
   try {
-    runtime.maintainApps([app.id]);
+    runtime.maintainApps([app]);
     const degraded = await waitForRuntime(
       () => runtime.health(app.id),
       (state) => state.maintenance?.status === "degraded",
@@ -4394,7 +4395,7 @@ test("hosted shutdown drains an overlapping maintenance pass before taking the c
     },
   });
 
-  runtime.maintainApps([app.id]);
+  runtime.maintainApps([app]);
   await firstLockEntered;
   let shutdownSettled = false;
   const shutdown = runtime.shutdown().then((result) => {
@@ -4431,7 +4432,7 @@ test("hosted maintenance restores an unexpectedly exited App from the same sessi
   });
 
   try {
-    runtime.maintainApps([app.id]);
+    runtime.maintainApps([app]);
     await waitForStatus(() => runtime.health(app.id), "healthy");
     await runtime.open(app.id, { source: { type: "worktree", slug } });
     const initial = await waitForStatus(

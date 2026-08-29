@@ -2,16 +2,16 @@ import { join, resolve } from "path";
 import { buildLaunchpadDoctorReport } from "../../lazurio/runtime/diagnostics-lib.mjs";
 import { renderHumanDoctorReport } from "../../lazurio/runtime/doctor-output-lib.mjs";
 import { exitCodeForSummaryStatus } from "../../lazurio/runtime/doctor-surface-lib.mjs";
-import { createHostedAppUrlAdapter } from "./hosted-app-url-lib.mjs";
+import { createHostedWorkspaceConfiguration } from "./hosted-app-url-lib.mjs";
 
 const options = parseArgs(Bun.argv.slice(2));
 const companiesRoot = resolve(options.root ?? join(import.meta.dirname, "..", ".."));
 const launchpadRoot = resolve(options.launchpadRoot ?? join(companiesRoot, "launchpad"));
-const workspaceProfile = createHostedAppUrlAdapter({
+const workspaceProfile = createHostedWorkspaceConfiguration({
   profile: process.env.LAZURIO_WORKSPACE_PROFILE,
-  expectedTeamId: process.env.LAZURIO_TEAM_ID,
-  serviceCatalogJson: process.env.LAZURIO_TEAM_SERVICE_CATALOG_JSON,
-  compatibilityUrlsJson: process.env.LAUNCHPAD_HOSTED_APP_URLS_JSON,
+  organizationSlug: process.env.LAZURIO_ORGANIZATION_SLUG,
+  teamId: process.env.LAZURIO_TEAM_ID,
+  domain: process.env.LAZURIO_HOSTED_DOMAIN,
 });
 const report = await buildLaunchpadDoctorReport({
   companiesRoot,

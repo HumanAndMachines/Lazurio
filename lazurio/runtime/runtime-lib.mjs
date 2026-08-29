@@ -625,8 +625,8 @@ export function createRuntimeManager({
   }
 
   async function startRuntimeApp(app, takeover = {}) {
-    assertMaintainedAppAction(app);
     return withModuleLeaseLock(app, async () => {
+      assertMaintainedAppAction(app);
       const result = await startRuntimeAppUnlocked(app, { trigger: "user", takeover });
       const maintenance = acceptMaintainedRuntime(app);
       return { ...result, ...(maintenance ? { maintenance } : {}) };
@@ -1127,8 +1127,10 @@ export function createRuntimeManager({
   async function open(appId, options = {}) {
     const { source = null } = options;
     const app = await runtimeAppForAction(appId, { source, enforcePortContract: true });
-    assertMaintainedAppAction(app);
-    return withModuleLeaseLock(app, () => openRuntimeAppUnlocked(app, takeoverConfirmation(options)));
+    return withModuleLeaseLock(app, () => {
+      assertMaintainedAppAction(app);
+      return openRuntimeAppUnlocked(app, takeoverConfirmation(options));
+    });
   }
 
   async function openRuntimeAppUnlocked(app, takeover = {}) {
@@ -1289,16 +1291,16 @@ export function createRuntimeManager({
 
   async function stop(appId, { source = null } = {}) {
     const app = await runtimeAppForAction(appId, { source });
-    if (maintainedModuleEntryForApp(app)) {
-      throw new RuntimeActionError(
-        409,
-        "hosted_module_always_on",
-        `${app.title}: Hosted Team Workspace keeps every Team Module active; switch source or restart it instead of stopping it.`,
-        [`module_lease_key: ${moduleLeaseKeyForApp(app)}`],
-        { failure_kind: "hosted_module_always_on" },
-      );
-    }
     return withModuleLeaseLock(app, async () => {
+      if (maintainedModuleEntryForApp(app)) {
+        throw new RuntimeActionError(
+          409,
+          "hosted_module_always_on",
+          `${app.title}: Hosted Team Workspace keeps every Team Module active; switch source or restart it instead of stopping it.`,
+          [`module_lease_key: ${moduleLeaseKeyForApp(app)}`],
+          { failure_kind: "hosted_module_always_on" },
+        );
+      }
       const record = selectManagedModuleStopRecord(managedProcesses.values(), app);
       if (!record) throw appNotManagedError(app, await healthForApp(app));
       return stopRuntimeAppUnlocked(record.runtimeApp ?? app);
@@ -1742,9 +1744,9 @@ export function createRuntimeManager({
   async function restart(appId, options = {}) {
     const { source = null } = options;
     const app = await runtimeAppForAction(appId, { source, enforcePortContract: true });
-    assertMaintainedAppAction(app);
     const runtimeSource = runtimeSourceForApp(app);
     return withModuleLeaseLock(app, async () => {
+      assertMaintainedAppAction(app);
       try {
         await stopRuntimeAppUnlocked(app);
       } catch (error) {
@@ -2345,24 +2347,29 @@ export function createRuntimeManager({
       );
     }
     assertRuntimeManagerAcceptingStarts();
-    const requested = new Map(
-      [...apps].flatMap((candidate) => {
-        const appId = typeof candidate === "string"
-          ? candidate.trim()
-          : typeof candidate?.id === "string"
-            ? candidate.id.trim()
-            : "";
-        if (!appId) return [];
-        return [[appId, {
-          company: typeof candidate?.company === "string" && candidate.company.trim() !== ""
-            ? candidate.company
-            : null,
-          module: typeof candidate?.module === "string" && candidate.module.trim() !== ""
-            ? candidate.module
-            : null,
-        }]];
-      }),
-    );
+    const requested = new Map();
+    for (const app of apps) {
+      if (
+        !app
+        || typeof app !== "object"
+        || typeof app.id !== "string"
+        || app.id.trim() === ""
+        || typeof app.company !== "string"
+        || app.company.trim() === ""
+        || typeof app.module !== "string"
+        || app.module.trim() === ""
+      ) {
+        throw new RuntimeActionError(
+          500,
+          "hosted_maintenance_configuration_invalid",
+          "Hosted maintenance requires discovered App records with exact App, Organization and Module identity.",
+        );
+      }
+      requested.set(app.id.trim(), {
+        company: app.company,
+        module: app.module,
+      });
+    }
     let changed = false;
     for (const [configuredAppId, entry] of maintainedApps) {
       if (requested.has(configuredAppId)) continue;
