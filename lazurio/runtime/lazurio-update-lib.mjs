@@ -1723,14 +1723,18 @@ function managedOrganizationChildren(inventory, organization = null) {
     .sort(compareRepoIdentity);
 }
 
+// Organization-level checkouts participate once mounted. A missing root
+// checkout participates only through the explicit manifest opt-in; general
+// Sync never infers that authority from its path or repository name.
+function isManagedRootRepoSlot(repo) {
+  return repo.repo_kind === "root_repo"
+    && repo.expected_branch === "main"
+    && repo.slot_path !== "mission-control/db";
+}
+
 function isManagedOrganizationChild(repo) {
   if (repo.repo_kind === "module") return repo.workspace !== "productionspace";
-  if (repo.repo_kind !== "root_repo") return false;
-  // Organization-level checkouts participate once mounted. A missing root
-  // checkout participates only through the explicit manifest opt-in; general
-  // Sync never infers that authority from its path or repository name.
-  return repo.expected_branch === "main"
-    && repo.slot_path !== "mission-control/db"
+  return isManagedRootRepoSlot(repo)
     && (
       existsSync(repo.absolute_path)
       || repo.materialization === DOCTOR_MANAGED_NESTED_REPO
@@ -1739,9 +1743,7 @@ function isManagedOrganizationChild(repo) {
 
 function isAutoMaterializationCandidate(repo) {
   if (repo.repo_kind === "module") return repo.workspace !== "productionspace";
-  return repo.repo_kind === "root_repo"
-    && repo.expected_branch === "main"
-    && repo.slot_path !== "mission-control/db"
+  return isManagedRootRepoSlot(repo)
     && repo.materialization === DOCTOR_MANAGED_NESTED_REPO;
 }
 
