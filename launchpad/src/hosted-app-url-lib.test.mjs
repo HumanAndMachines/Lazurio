@@ -21,6 +21,7 @@ const catalogSchema = JSON.parse(await readFile(
 test("local profile preserves loopback navigation and health", () => {
   const adapter = createHostedAppUrlAdapter({
     profile: "local",
+    expectedTeamId: "technical",
     serviceCatalogJson: "malformed input is ignored outside hosted profile",
   });
   const app = localApp();

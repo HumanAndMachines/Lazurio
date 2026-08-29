@@ -1243,6 +1243,64 @@ test("Hosted Doctor requires missing Workspace modules only in their declared Te
   }
 });
 
+test("Hosted Doctor keeps a teamless required Workspace module fail-closed", async () => {
+  const root = await createCompaniesWorkspaceFixture();
+  const companyRoot = join(root, "organizations", "SharedCo_GEN3");
+  await mkdir(join(companyRoot, "manual"), { recursive: true });
+  await mkdir(join(companyRoot, "company", "colleagues"), { recursive: true });
+  await writeJson(join(root, "launchpad.gen3.json"), {
+    launchpad_root: { slug: "test-companies", display_name: "Test Companies", root_role: "companies-root" },
+  });
+  await writeJson(join(companyRoot, "company.gen3.json"), {
+    organization_generation: "gen3",
+    company: { slug: "SharedCo", display_name: "Shared Co", github_org: "SharedCo" },
+    teams: [
+      { slug: "management", display_name: "Management", default: true },
+      { slug: "technical", display_name: "Technical" },
+    ],
+  });
+  await writeJson(join(companyRoot, "modules.manifest.json"), {
+    organization_generation: "gen3",
+    company: "SharedCo",
+    github_org: "SharedCo",
+    module_slots: [
+      {
+        path: "workspace/shared-required",
+        default_access: "expected",
+        required_roles: ["*"],
+        git: { url: "git@github.com:SharedCo/shared-required.git", branch: "main" },
+      },
+    ],
+  });
+  await writeJson(join(companyRoot, "TODO.tasks.json"), {});
+  await writeJson(join(companyRoot, "DONE.tasks.json"), {});
+  await writeJson(join(companyRoot, "ISSUES.open.json"), {});
+
+  const response = await buildLaunchpadAppsResponse({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    runtimeManager: { appsWithRuntime: async (apps) => apps },
+    activeTeamId: "management",
+  });
+  expect(response.organizations[0].module_declarations[0]).toMatchObject({
+    teams: ["workspace"],
+    status: "missing_access",
+    readiness: { severity: "blocking", reason: "unexpected_missing_access" },
+  });
+
+  const report = await buildLaunchpadDoctorReport({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    runtimeManager: { appsWithRuntime: async (apps) => apps },
+    activeTeamId: "management",
+  });
+  const declarationCheck = report.checks.find(
+    (check) => check.id === "launchpad.workspace_declarations",
+  );
+  expect(declarationCheck?.status).toBe("fail");
+  expect(declarationCheck?.details.join("\n")).toContain("workspace/shared-required");
+});
+
 test("materialized-state projection does not turn local role hints into UI access grants", async () => {
   const root = await createCompaniesWorkspaceFixture();
   const companyRoot = join(root, "organizations", "AccessCo_GEN3");
