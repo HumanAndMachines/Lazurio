@@ -989,13 +989,8 @@ test("public lazurio doctor propagates the validated Hosted Team scope", async (
 
   const hostedEnvironment = {
     LAZURIO_WORKSPACE_PROFILE: "hosted",
-    LAZURIO_TEAM_SERVICE_CATALOG_JSON: JSON.stringify({
-      schema_version: "lazurio.team_service_catalog.v1",
-      team_id: "management",
-      generated_at: "2026-08-29T00:00:00.000Z",
-      services: [],
-    }),
-    LAUNCHPAD_HOSTED_APP_URLS_JSON: "",
+    LAZURIO_ORGANIZATION_SLUG: "TeamCo",
+    LAZURIO_HOSTED_DOMAIN: "workspace.example.test",
   };
   const management = run(
     [process.execPath, "run", cliPath, "doctor", "--json", "--root", root],
@@ -1013,10 +1008,6 @@ test("public lazurio doctor propagates the validated Hosted Team scope", async (
     {
       ...hostedEnvironment,
       LAZURIO_TEAM_ID: "technical",
-      LAZURIO_TEAM_SERVICE_CATALOG_JSON: JSON.stringify({
-        ...JSON.parse(hostedEnvironment.LAZURIO_TEAM_SERVICE_CATALOG_JSON),
-        team_id: "technical",
-      }),
     },
   );
   expect(technical.exitCode).toBe(1);

@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 
 import { renderHumanDoctorReport } from "./runtime/doctor-output-lib.mjs";
 import { DOCTOR_EXIT_CODES } from "./runtime/doctor-surface-lib.mjs";
-import { createHostedAppUrlAdapter } from "./runtime/hosted-app-url-lib.mjs";
+import { createHostedWorkspaceConfiguration } from "./runtime/hosted-app-url-lib.mjs";
 import { formatUpdateLaneReport } from "./runtime/update-cli-lib.mjs";
 import { runIsolatedLazurioUpdate } from "./runtime/lazurio-update-runner-lib.mjs";
 import { buildLazurioContext, buildLazurioDoctorReport } from "./lib.mjs";
@@ -174,11 +174,11 @@ async function run(argv) {
 
   if (options.command === "doctor") {
     try {
-      const workspaceProfile = createHostedAppUrlAdapter({
+      const workspaceProfile = createHostedWorkspaceConfiguration({
         profile: process.env.LAZURIO_WORKSPACE_PROFILE,
-        expectedTeamId: process.env.LAZURIO_TEAM_ID,
-        serviceCatalogJson: process.env.LAZURIO_TEAM_SERVICE_CATALOG_JSON,
-        compatibilityUrlsJson: process.env.LAUNCHPAD_HOSTED_APP_URLS_JSON,
+        organizationSlug: process.env.LAZURIO_ORGANIZATION_SLUG,
+        teamId: process.env.LAZURIO_TEAM_ID,
+        domain: process.env.LAZURIO_HOSTED_DOMAIN,
       });
       const result = await buildLazurioDoctorReport({
         root: options.root,
