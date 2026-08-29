@@ -2819,11 +2819,10 @@ function expectedInactiveVersionLeaseMismatch(app, activeVersion) {
   ) return false;
 
   const appOwnerPid = app.runtime?.port_owner?.pid;
-  const activeOwnerPid = activeVersion.runtime?.port_owner?.pid;
   if (
     !Number.isInteger(appOwnerPid)
     || appOwnerPid <= 0
-    || appOwnerPid !== activeOwnerPid
+    || !activeVersionOwnsSharedLeaseListener(activeVersion, appOwnerPid)
   ) return false;
   if (
     !declaresSharedModuleLeasePeer(app, activeVersion)
@@ -2838,6 +2837,33 @@ function expectedInactiveVersionLeaseMismatch(app, activeVersion) {
     && appVersion.family === activeIdentity.family
     && appVersion.baseTitle === activeIdentity.baseTitle
     && appVersion.version < activeIdentity.version
+  );
+}
+
+function activeVersionOwnsSharedLeaseListener(activeVersion, observedOwnerPid) {
+  const runtime = activeVersion.runtime ?? {};
+  if (runtime.owner === "adopted-port") {
+    return runtime.port_owner?.pid === observedOwnerPid;
+  }
+  if (
+    runtime.owner !== "current-instance"
+    || runtime.managed !== true
+    || runtime.controllable !== true
+    || !Number.isInteger(runtime.pid)
+    || runtime.pid <= 0
+    || runtime.listener_reconciliation?.status !== "ok"
+  ) return false;
+
+  const entrypoint = activeVersion.entrypoint_listener;
+  const declared = Array.isArray(runtime.listener_reconciliation.declared)
+    ? runtime.listener_reconciliation.declared
+    : [];
+  return declared.some((listener) =>
+    listener?.listener_id === entrypoint?.id
+    && listener?.status === "observed"
+    && listener?.port === entrypoint?.port
+    && runtimeHostsShareListener(listener?.host, entrypoint?.host)
+    && (listener?.pid == null || listener.pid === observedOwnerPid)
   );
 }
 
