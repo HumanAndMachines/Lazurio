@@ -12,6 +12,7 @@ const report = await buildLaunchpadDoctorReport({
   allowMissingOrganizations: options.allowMissingOrganizations,
   runChildDoctors: !options.skipChildren,
   checkToolUpdates: options.toolUpdates,
+  activeTeamId: process.env.LAZURIO_TEAM_ID ?? null,
 });
 
 if (options.json) {

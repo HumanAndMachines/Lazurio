@@ -115,6 +115,7 @@ export async function buildLaunchpadAppsResponse({
             (discovery.organization_issues ?? []).filter(
               (issue) => issue.organization === organization.slug,
             ),
+            activeTeamId,
           ),
         })),
       )
@@ -1073,6 +1074,7 @@ async function readOrganizationSpaces(
   organization,
   localConfig = null,
   organizationIssues = [],
+  activeTeamId = null,
 ) {
   const organizationReadinessBlockers = organizationIssues
     .filter((issue) => issue.scope === "organization")
@@ -1128,6 +1130,13 @@ async function readOrganizationSpaces(
   const canonicalTeams = Array.isArray(config?.teams) ? config.teams : null;
   const legacyWorkspaces = Array.isArray(config?.workspaces) ? config.workspaces : [];
   const declared = canonicalTeams ?? legacyWorkspaces;
+  // Hosted Team Workspace carries one already-validated Team identity. Scope
+  // readiness to it only when the Organization itself declares that Team;
+  // an unknown value must remain fail-closed instead of hiding every module.
+  const declaredActiveTeamId = typeof activeTeamId === "string"
+    && declared.some((team) => team?.slug === activeTeamId)
+      ? activeTeamId
+      : null;
   const productionspaceConfig = config?.productionspace ?? null;
   const productionBoundary = legacyWorkspaces.find(
     (workspace) => workspace.slug === "productionspace" || workspace.path === "productionspace",
@@ -1153,6 +1162,7 @@ async function readOrganizationSpaces(
       slot,
       principalRoles,
       issueForSlot(slot),
+      declaredActiveTeamId,
     ));
   // Legacy compatibility fields live only in the normalized extension bag;
   // repository inventory remains modules.manifest.json-owned.
@@ -1167,6 +1177,7 @@ async function readOrganizationSpaces(
       slot,
       principalRoles,
       issueForSlot(slot),
+      declaredActiveTeamId,
     ));
   const moduleDeclarations = [...moduleSlots, ...configOnlyModules];
   // Manifest je inventory/sync autorita, ne access grant. Chráněný slot bez
@@ -1716,6 +1727,7 @@ function moduleSlotWithReadiness(
   slot,
   principalRoles = null,
   organizationIssue = null,
+  activeTeamId = null,
 ) {
   if (organizationIssue) {
     return {
@@ -1734,7 +1746,7 @@ function moduleSlotWithReadiness(
   return {
     ...slot,
     status,
-    readiness: classifyModuleSlotReadiness(slot, status, principalRoles),
+    readiness: classifyModuleSlotReadiness(slot, status, principalRoles, activeTeamId),
   };
 }
 
@@ -1771,7 +1783,12 @@ function projectDiagnosticMessages(messages = [], hiddenPaths = []) {
 // prostor. Dokud Doctor nemá autoritativní principal-scoped ACL důkaz, je
 // role-based chybějící checkout fail-closed. UI umí přijmout kanonicky
 // doloženou neutral severity, ale lokální odhad z GitHub tokenu ji nevyrábí.
-function classifyModuleSlotReadiness(slot, status, principalRoles = null) {
+function classifyModuleSlotReadiness(
+  slot,
+  status,
+  principalRoles = null,
+  activeTeamId = null,
+) {
   if (status === "available") {
     return { severity: "ok", reason: "available", message: "Checkout modulu je dostupný." };
   }
@@ -1779,6 +1796,17 @@ function classifyModuleSlotReadiness(slot, status, principalRoles = null) {
     return { severity: "neutral", reason: "planned", message: "Slot je plánovaný a zatím nemá repozitář." };
   }
   if (status === "missing_access") {
+    if (
+      slot.space === "workspace"
+      && typeof activeTeamId === "string"
+      && !(slot.teams ?? []).includes(activeTeamId)
+    ) {
+      return {
+        severity: "neutral",
+        reason: "team_not_assigned",
+        message: "Checkout není deklarovaný pro aktivní Team tohoto Hosted Workspace.",
+      };
+    }
     const accessRestricted = ["role_based", "restricted", "private"].includes(slot.default_access);
     const requiredRoles = Array.isArray(slot.required_roles) ? slot.required_roles : [];
     const hasPrincipalRoleEvidence = Array.isArray(principalRoles);
