@@ -219,7 +219,7 @@ export async function buildLaunchpadAppsResponse({
   });
   const gitContext = includeGit
     ? await buildGitContext({ companiesRoot, gitStatusService })
-    : { reposByKey: new Map(), warnings: [] };
+    : { reposByKey: new Map(), inventoryWarnings: [], worktreeWarnings: [], warnings: [] };
   const appsWithGit = includeGit
     ? visibleApps.map((app) => ({
         ...app,
@@ -294,6 +294,13 @@ export async function buildLaunchpadAppsResponse({
     port_policy_issues: discovery.port_policy_issues ?? [],
     organization_port_pool_overlaps: discovery.organization_port_pool_overlaps ?? [],
     failures: discoveryFailures,
+    // Doctor musí umět oddělit vlastní discovery nálezy od Git/worktree
+    // diagnostiky. Veřejné `warnings` zůstávají kompatibilní kombinovaný stream
+    // pro stávající API konzumenty; discovery check ale nesmí stejný sidecar
+    // vykázat podruhé vedle `git.worktrees.contract`.
+    discovery_warnings: discoveryWarnings,
+    git_inventory_warnings: gitContext.inventoryWarnings,
+    git_worktree_warnings: gitContext.worktreeWarnings,
     warnings: [...discoveryWarnings, ...gitContext.warnings],
   };
 }
@@ -523,7 +530,7 @@ function worktreeContractCheck(index) {
     }
   }
   for (const warning of index.warnings ?? []) {
-    details.push(`warning: ${warning}`);
+    details.push(`warning: ${formatGitWarning(warning)}`);
   }
 
   return {
@@ -823,12 +830,21 @@ async function buildGitContext({ companiesRoot, gitStatusService = null }) {
     });
     return {
       reposByKey: new Map(gitResponse.repos.map((repo) => [repo.key, repo])),
+      inventoryWarnings: (gitResponse.inventory_warnings ?? []).map(
+        (warning) => `git inventory: ${formatGitWarning(warning)}`,
+      ),
+      worktreeWarnings: (gitResponse.worktree_warnings ?? []).map(
+        (warning) => `git worktree: ${formatGitWarning(warning)}`,
+      ),
       warnings: gitResponse.warnings.map((warning) => `git: ${formatGitWarning(warning)}`),
     };
   } catch (error) {
+    const warning = `git inventory: stav repozitářů nejde načíst (${error.message})`;
     return {
       reposByKey: new Map(),
-      warnings: [`git: stav repozitářů nejde načíst (${error.message})`],
+      inventoryWarnings: [warning],
+      worktreeWarnings: [],
+      warnings: [warning],
     };
   }
 }
@@ -2528,7 +2544,14 @@ function workspaceSummary(companiesConfig) {
 }
 
 function discoveryCheck(appsResponse) {
-  const warningCount = appsResponse.warnings?.length ?? 0;
+  // Starší/ručně sestavené fixtures předávají jen `warnings`; nový apps
+  // response drží zvlášť přesné discovery a Git inventory warnings, aby se
+  // worktree nález nepromítl do dvou nezávislých Doctor checks a současně se
+  // žádný jiný Git inventory nález neztratil.
+  const warnings = appsResponse.discovery_warnings
+    ? [...appsResponse.discovery_warnings, ...(appsResponse.git_inventory_warnings ?? [])]
+    : (appsResponse.warnings ?? []);
+  const warningCount = warnings.length;
   const status = appsResponse.failures.length > 0 ? "fail" : warningCount > 0 ? "warn" : "ok";
   // Template mounty jsou validované, ale mimo runtime/business/counts. V Doctor
   // reportu je jen označíme jako template, ať je jasné, že mount existuje a prošel
@@ -2550,7 +2573,7 @@ function discoveryCheck(appsResponse) {
           : "Launchpad discovery kontroly selhaly",
     paths: ["launchpad.gen3.json", "launchpad", "organizations"],
     links: [],
-    details: [...appsResponse.failures, ...(appsResponse.warnings ?? []), ...templateDetails],
+    details: [...appsResponse.failures, ...warnings, ...templateDetails],
   };
 }
 
@@ -2620,15 +2643,15 @@ function workspaceDeclarationCheck(appsResponse) {
   let blockingSlotCount = 0;
   for (const organization of appsResponse.organizations ?? []) {
     for (const issue of organization.workspace_conformance_issues ?? []) {
-      details.push(`${organization.path}: ${issue}`);
+      details.push(`warning: ${organization.path}: ${issue}`);
       conformanceIssueCount += 1;
     }
     for (const issue of organization.root_slot_contract_issues ?? []) {
-      details.push(`${organization.path}: ${issue}`);
+      details.push(`blocker: ${organization.path}: ${issue}`);
       blockingSlotCount += 1;
     }
     for (const issue of organization.slot_scope_contract_issues ?? []) {
-      details.push(`${organization.path}: ${issue}`);
+      details.push(`blocker: ${organization.path}: ${issue}`);
       blockingSlotCount += 1;
     }
     const slots = Array.isArray(organization.module_declarations)
@@ -2641,17 +2664,17 @@ function workspaceDeclarationCheck(appsResponse) {
       if (slot.status && statusCounts[slot.status] !== undefined) statusCounts[slot.status] += 1;
       if (slot.ui_exposure === "diagnostics-only") {
         details.push(
-          `${organization.path}/${slot.path}: diagnostics-only data repo (${slot.status ?? "unknown"})`,
+          `info: ${organization.path}/${slot.path}: diagnostics-only data repo (${slot.status ?? "unknown"})`,
         );
       }
       if (slot.readiness?.severity === "blocking") {
         blockingSlotCount += 1;
-        details.push(`${organization.path}/${slot.path}: ${slot.readiness.message}`);
+        details.push(`blocker: ${organization.path}/${slot.path}: ${slot.readiness.message}`);
       }
     }
   }
   details.push(
-    `module slots: available ${statusCounts.available}, missing_access ${statusCounts.missing_access}, planned_slot ${statusCounts.planned_slot}`,
+    `info: module slots: available ${statusCounts.available}, missing_access ${statusCounts.missing_access}, planned_slot ${statusCounts.planned_slot}`,
   );
   return {
     id: "launchpad.workspace_declarations",
@@ -2660,9 +2683,9 @@ function workspaceDeclarationCheck(appsResponse) {
     title: "Workspace deklarace",
     message:
       blockingSlotCount > 0
-        ? `Manifestované sloty mají ${formatCount(blockingSlotCount, "blokátor", "blokátory", "blokátorů")}.`
+        ? `Manifestované sloty mají ${formatCount(blockingSlotCount, "blokátor", "blokátory", "blokátorů")}; detaily rozlišují blocker, warning a info.`
         : conformanceIssueCount > 0
-        ? `Manifest deklarace mají ${formatCount(conformanceIssueCount, "konflikt", "konflikty", "konfliktů")} s decision 0041.`
+        ? `Manifest deklarace mají ${formatCount(conformanceIssueCount, "konflikt", "konflikty", "konfliktů")} s decision 0041; detaily rozlišují warning a info.`
         : "Fyzické sekce odpovídají cestám; Workspace Team grouping jede z manifest deklarací (decision 0041).",
     paths: ["organizations"],
     links: [],
@@ -2698,14 +2721,12 @@ function runtimeChecks(appsResponse) {
 
 function runtimeSummaryCheck(apps) {
   const counts = countBy(apps.map((app) => app.runtime_status ?? "unknown"));
-  const status = apps.some((app) => runtimeAppStatus(app) === "fail")
-    ? "fail"
-    : apps.some((app) => runtimeAppStatus(app) === "warn")
-      ? "warn"
-      : "ok";
   return {
     id: "launchpad.runtime",
-    status,
+    // Tento check potvrzuje, že runtime inventory šlo změřit. Závažnost každé
+    // aplikace vlastní přesně jeden `launchpad.runtime.<app-id>` check; kopie
+    // nejhoršího child statusu by jednu příčinu započítala do souhrnu dvakrát.
+    status: "ok",
     severity: "runtime",
     title: "Launchpad runtime",
     message: `Runtime: ${runtimeCountMessage(counts)}`,

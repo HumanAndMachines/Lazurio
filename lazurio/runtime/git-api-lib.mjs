@@ -49,6 +49,8 @@ export async function buildGitApiResponse({
     const status = statusByKey.get(repo.key);
     return publicRepo({ repo, status, worktrees });
   });
+  const inventoryWarnings = projectGitDiagnosticMessages(inventory.warnings, projection.hiddenPaths);
+  const worktreeWarnings = worktreeIndex.warnings;
 
   return {
     schema_version: "companiesascode.launchpad.git.v1",
@@ -64,10 +66,11 @@ export async function buildGitApiResponse({
     worktrees: worktreeIndex.worktrees,
     invalid_worktree_locations: worktreeIndex.invalid_locations,
     planned: projection.planned,
-    warnings: [
-      ...projectGitDiagnosticMessages(inventory.warnings, projection.hiddenPaths),
-      ...worktreeIndex.warnings,
-    ],
+    // Additive owner streams let Doctor keep every Git finding visible exactly
+    // once. `warnings` remains the compatible combined API projection.
+    inventory_warnings: inventoryWarnings,
+    worktree_warnings: worktreeWarnings,
+    warnings: [...inventoryWarnings, ...worktreeWarnings],
   };
 }
 

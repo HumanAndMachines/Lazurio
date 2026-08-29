@@ -156,6 +156,67 @@ test("Doctor warns for reclaimable module occupancy but fails legacy foreign por
   })).toBe("fail");
 });
 
+test("runtime inventory does not duplicate per-app warnings and failures", () => {
+  const report = buildDoctorReportFromAppsResponse({
+    launchpad_root: { display_name: "Test root" },
+    root: "/tmp/test-root",
+    failures: [],
+    warnings: [],
+    apps: [
+      {
+        id: "testco-warning-v1",
+        title: "Warning app",
+        package_path: "organizations/TestCo/workspace/warning/app/v1/package.json",
+        runtime_status: "stopped",
+        runtime: { status: "stopped", owner: "none" },
+        dependencies: { state: "needs_install", message: "Dependencies need install." },
+      },
+      {
+        id: "testco-failure-v1",
+        title: "Failure app",
+        package_path: "organizations/TestCo/workspace/failure/app/v1/package.json",
+        runtime_status: "stopped",
+        runtime: { status: "stopped", owner: "none" },
+        dependencies: { state: "missing_lockfile", message: "Lockfile is missing." },
+      },
+    ],
+    organizations: [],
+    port_overlaps: [],
+  }, {
+    childLane: { children: [], checks: [] },
+  });
+  const checks = new Map(report.checks.map((check) => [check.id, check]));
+
+  expect(checks.get("launchpad.runtime")?.status).toBe("ok");
+  expect(checks.get("launchpad.runtime.testco-warning-v1")?.status).toBe("warn");
+  expect(checks.get("launchpad.runtime.testco-failure-v1")?.status).toBe("fail");
+  expect(report.summary.warn).toBe(1);
+  expect(report.summary.fail).toBe(1);
+});
+
+test("discovery preserves Git inventory warnings without duplicating worktree warnings", () => {
+  const report = buildDoctorReportFromAppsResponse({
+    launchpad_root: { display_name: "Test root" },
+    root: "/tmp/test-root",
+    failures: [],
+    warnings: ["discovery warning", "git inventory warning", "worktree warning"],
+    discovery_warnings: ["discovery warning"],
+    git_inventory_warnings: ["git inventory warning"],
+    git_worktree_warnings: ["worktree warning"],
+    apps: [],
+    organizations: [],
+    port_overlaps: [],
+  }, {
+    childLane: { children: [], checks: [] },
+  });
+  const discovery = report.checks.find((check) => check.id === "launchpad.discovery");
+
+  expect(discovery?.status).toBe("warn");
+  expect(discovery?.details).toContain("discovery warning");
+  expect(discovery?.details).toContain("git inventory warning");
+  expect(discovery?.details).not.toContain("worktree warning");
+});
+
 test("first-paint apps response can skip the global Git census", async () => {
   const root = await createCompaniesWorkspaceFixture();
   const response = await buildLaunchpadAppsResponse({
@@ -690,6 +751,9 @@ test("public apps projection hides unmaterialized protected slots while Doctor r
   expect(declarationCheck?.details.join("\n")).toContain("modules/knowledgebase");
   expect(declarationCheck?.details.join("\n")).toContain("productionspace/monorepo");
   expect(declarationCheck?.details.some((detail) => detail.includes("decision 0041"))).toBe(true);
+  expect(declarationCheck?.details.some((detail) => detail.startsWith("blocker: "))).toBe(true);
+  expect(declarationCheck?.details.some((detail) => detail.startsWith("warning: "))).toBe(true);
+  expect(declarationCheck?.details.some((detail) => detail.startsWith("info: "))).toBe(true);
 });
 
 test("unmaterialized protected slot issues stay Doctor-only and cannot redden or leak through public readiness", async () => {
@@ -2391,6 +2455,9 @@ test.skipIf(process.platform === "win32")("CAC-0042: doctor reportuje worktree i
   expect(checks.get("git.worktrees.contract")?.details.join("\n")).toContain("CAC-0042-doctor-orphan");
   expect(checks.get("git.worktrees.contract")?.details.join("\n")).toContain("CAC-0042-doctor-missing-plan");
   expect(checks.get("git.worktrees.contract")?.details.join("\n")).toContain("cleanup_candidate: CAC-0042-doctor-stale");
+  expect(checks.get("git.worktrees.contract")?.details.join("\n")).toContain("Sidecar nemá conversation_origin");
+  expect(checks.get("git.worktrees.contract")?.details.join("\n")).not.toContain("[object Object]");
+  expect(checks.get("launchpad.discovery")?.details.join("\n")).not.toContain("Sidecar nemá conversation_origin");
   expect(checks.get("git.worktrees.dependencies")?.status).toBe("warn");
   expect(checks.get("git.worktrees.dependencies")?.details).toEqual(expect.arrayContaining([
     "checked_packages: 6",
