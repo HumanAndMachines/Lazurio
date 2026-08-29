@@ -1799,6 +1799,10 @@ function classifyModuleSlotReadiness(
     if (
       slot.space === "workspace"
       && typeof activeTeamId === "string"
+      // `organizationSlotTeams` uses `workspace` as the compatibility
+      // fallback for a declaration without Team scope. Such a required slot
+      // stays shared/fail-closed on every concrete Hosted Team Workspace.
+      && !(slot.teams ?? []).includes("workspace")
       && !(slot.teams ?? []).includes(activeTeamId)
     ) {
       return {
