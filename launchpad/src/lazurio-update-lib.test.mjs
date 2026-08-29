@@ -1293,6 +1293,83 @@ test("scoped convergence materializes accessible Modules and reports inaccessibl
   });
 });
 
+test("explicit root-repository materialization is scoped, atomic and access-aware", async () => {
+  const root = await mkdtemp(join(tmpdir(), "lazurio-update-root-materialization-"));
+  cleanup.push(root);
+  const organization = repo("Example::root", "organization_root", "Example", "root");
+  organization.absolute_path = join(root, "organizations", "Example_GEN3");
+  await mkdir(organization.absolute_path, { recursive: true });
+
+  const available = repo("Example::design-system", "root_repo", "Example", "design-system");
+  available.absolute_path = join(organization.absolute_path, "design-system");
+  available.slot_path = "design-system";
+  available.materialization = "doctor_managed_nested_repo";
+
+  const inaccessible = repo("Example::mission-control", "root_repo", "Example", "mission-control");
+  inaccessible.absolute_path = join(organization.absolute_path, "mission-control");
+  inaccessible.slot_path = "mission-control";
+  inaccessible.materialization = "doctor_managed_nested_repo";
+
+  const unmanaged = repo("Example::infra", "root_repo", "Example", "infra");
+  unmanaged.absolute_path = join(organization.absolute_path, "infra");
+  unmanaged.slot_path = "infra";
+
+  const production = repo("Example::firmware", "productionspace", "Example", "firmware", "productionspace");
+  production.absolute_path = join(organization.absolute_path, "productionspace", "firmware");
+  production.slot_path = "productionspace/firmware";
+  production.materialization = "doctor_managed_nested_repo";
+
+  const database = repo("Example::mission-control-data", "root_repo", "Example", "mission-control-data");
+  database.absolute_path = join(organization.absolute_path, "mission-control", "db");
+  database.slot_path = "mission-control/db";
+  database.expected_branch = "v3";
+  database.materialization = "doctor_managed_nested_repo";
+
+  const calls = [];
+  const inventory = { repos: [organization, available, inaccessible, unmanaged, production, database], warnings: [] };
+  const report = await runLazurioUpdate({
+    rootPath: root,
+    runtimeRoot: join(root, "..", "runtime"),
+    deps: {
+      runId: "root-materialization",
+      acquireLock: async () => ({ release: async () => {} }),
+      buildInventory: async () => inventory,
+      updateRepo: async (item) => ({
+        ...identity(item),
+        state: "current",
+        reason: "already_current",
+        message: "current",
+      }),
+      materializeRepo: async ({ repo: item }) => {
+        calls.push(item.key);
+        return item.key === available.key
+          ? { ok: true, outcome: "materialized", head: "a".repeat(40) }
+          : {
+              ok: false,
+              outcome: "missing_access",
+              code: "materialization_source_unavailable",
+              message: "private",
+            };
+      },
+      discoverApps: async () => ({ apps: [], failures: [] }),
+    },
+  });
+
+  expect(calls).toEqual([available.key, inaccessible.key]);
+  expect(report.results.find((result) => result.repo_key === available.key)).toMatchObject({
+    state: "updated",
+    reason: "organization_repository_materialized",
+  });
+  expect(report.results.find((result) => result.repo_key === inaccessible.key)).toMatchObject({
+    state: "blocked",
+    reason: "materialization_source_unavailable",
+    next_action: { kind: "github_access" },
+  });
+  expect(JSON.stringify(report)).not.toContain(unmanaged.key);
+  expect(JSON.stringify(report)).not.toContain(production.key);
+  expect(JSON.stringify(report)).not.toContain(database.key);
+});
+
 test("updated Module refreshes each manifest-declared app package once through the Server lifecycle seam", async () => {
   const root = await mkdtemp(join(tmpdir(), "lazurio-update-app-dependencies-"));
   cleanup.push(root);
@@ -2534,6 +2611,32 @@ test("GET-first status includes a mounted Organization-level repository", async 
     reason: "local_main_commits",
     repo_key: missionControl.key,
   });
+});
+
+test("GET-first status keeps Sync available for an absent opted-in root repository", async () => {
+  const root = await mkdtemp(join(tmpdir(), "lazurio-update-root-repo-candidate-status-"));
+  cleanup.push(root);
+  const organization = repo("TestCo::root", "organization_root", "TestCo", "root");
+  organization.absolute_path = join(root, "organizations", "TestCo");
+  const designSystem = repo("TestCo::design-system", "root_repo", "TestCo", "design-system");
+  designSystem.absolute_path = join(organization.absolute_path, "design-system");
+  designSystem.slot_path = "design-system";
+  designSystem.materialization = "doctor_managed_nested_repo";
+  const inspected = [];
+
+  const report = await readLazurioUpdateStatus({
+    rootPath: root,
+    deps: {
+      buildInventory: async () => ({ repos: [organization, designSystem], warnings: [] }),
+      inspectLocalRepo: async (item) => {
+        inspected.push(item.key);
+        return { ok: true, directoryOnly: true, dirtyPaths: [] };
+      },
+    },
+  });
+
+  expect(report).toMatchObject({ state: "current", checked_remote: false });
+  expect(inspected).not.toContain(designSystem.key);
 });
 
 test("GET-first status keeps Sync available when one module has an isolated repair", async () => {

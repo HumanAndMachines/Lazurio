@@ -29,6 +29,7 @@ export const LAZURIO_UPDATE_STATES = Object.freeze(["current", "updated", "block
 
 const BLOCKING_RELATIONS = new Set(["ahead", "diverged", "unknown"]);
 const BLOCKING_OPERATIONS = new Set(["merge", "rebase", "am", "cherry_pick", "revert"]);
+const DOCTOR_MANAGED_NESTED_REPO = "doctor_managed_nested_repo";
 
 /**
  * The complete public classifier. It intentionally has no intermediate
@@ -218,19 +219,19 @@ export async function runLazurioUpdate({
           continue;
         }
         if (childPresence.state === "absent") {
-          // Sync materializes declared Workspace Moduly. Organization-level
-          // repositories are managed only once they are mounted locally.
-          if (childRepo.repo_kind !== "module") continue;
-          const transitionBlocker = await moduleCheckoutTransitionBlocker({
-            initialInventory,
-            repo: childRepo,
-            lstatPath: deps.lstatPath ?? lstat,
-          });
-          if (transitionBlocker) {
-            results.push(transitionBlocker);
-            continue;
+          if (!isAutoMaterializationCandidate(childRepo)) continue;
+          if (childRepo.repo_kind === "module") {
+            const transitionBlocker = await moduleCheckoutTransitionBlocker({
+              initialInventory,
+              repo: childRepo,
+              lstatPath: deps.lstatPath ?? lstat,
+            });
+            if (transitionBlocker) {
+              results.push(transitionBlocker);
+              continue;
+            }
           }
-          const materialized = await safeMaterializeModule({
+          const materialized = await safeMaterializeCheckout({
             rootPath: absoluteRoot,
             repo: childRepo,
             runId,
@@ -331,9 +332,9 @@ export async function readLazurioUpdateStatus({ rootPath, deps = {} } = {}) {
   }
 
   for (const repo of repos) {
-    // Chybějící Workspace Modul je legitimní materialization kandidát pro
-    // explicitní Sync, ne lokální history blocker prvního renderu.
-    if (repo.repo_kind === "module" && !existsSync(repo.absolute_path)) continue;
+    // Chybějící explicitně materializovatelný checkout je kandidát pro Sync,
+    // ne lokální history blocker prvního GET-only renderu.
+    if (isAutoMaterializationCandidate(repo) && !existsSync(repo.absolute_path)) continue;
     const local = await inspect(repo, { ...deps, runGit: run });
     if (!local.ok) {
       return localStatusReport(blockedResult(repo, local.reason ?? "git_inspection_failed", {
@@ -1102,7 +1103,7 @@ async function createVerifiedRecoveryStash({ repo, run, runId, local }) {
   return { ok: true, stashSha, message };
 }
 
-async function safeMaterializeModule({
+async function safeMaterializeCheckout({
   rootPath,
   repo,
   runId,
@@ -1112,7 +1113,7 @@ async function safeMaterializeModule({
 }) {
   if (repo.expected_branch !== "main") {
     return blockedResult(repo, "managed_branch_not_main", {
-      detail: `Workspace Modul deklaruje ${repo.expected_branch}; Lazurio update spravuje pouze main.`,
+      detail: `Spravovaný checkout deklaruje ${repo.expected_branch}; Lazurio update spravuje pouze main.`,
     });
   }
   try {
@@ -1126,9 +1127,12 @@ async function safeMaterializeModule({
     }
     await checkpoint("after_materialization", { repo, runId });
     const actions = ["materialize"];
+    const moduleCheckout = repo.repo_kind === "module";
     return updatedResult(repo, {
-      reason: "module_materialized",
-      message: "Workspace Modul byl bezpečně naklonovaný na clean main.",
+      reason: moduleCheckout ? "module_materialized" : "organization_repository_materialized",
+      message: moduleCheckout
+        ? "Workspace Modul byl bezpečně naklonovaný na clean main."
+        : "Organization repozitář byl bezpečně naklonovaný na clean main.",
       head: result.head ?? null,
       actions,
     });
@@ -1722,12 +1726,23 @@ function managedOrganizationChildren(inventory, organization = null) {
 function isManagedOrganizationChild(repo) {
   if (repo.repo_kind === "module") return repo.workspace !== "productionspace";
   if (repo.repo_kind !== "root_repo") return false;
-  // Organization-level checkouts such as Mission Control or Design System
-  // participate once mounted and only on main. Repository-db mounts keep
-  // their own publish lifecycle and are never mutated by general Sync.
+  // Organization-level checkouts participate once mounted. A missing root
+  // checkout participates only through the explicit manifest opt-in; general
+  // Sync never infers that authority from its path or repository name.
   return repo.expected_branch === "main"
     && repo.slot_path !== "mission-control/db"
-    && existsSync(repo.absolute_path);
+    && (
+      existsSync(repo.absolute_path)
+      || repo.materialization === DOCTOR_MANAGED_NESTED_REPO
+    );
+}
+
+function isAutoMaterializationCandidate(repo) {
+  if (repo.repo_kind === "module") return repo.workspace !== "productionspace";
+  return repo.repo_kind === "root_repo"
+    && repo.expected_branch === "main"
+    && repo.slot_path !== "mission-control/db"
+    && repo.materialization === DOCTOR_MANAGED_NESTED_REPO;
 }
 
 function deferredHierarchyResults(inventory, parentKey) {
