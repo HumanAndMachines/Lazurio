@@ -4217,6 +4217,62 @@ test("hosted inventory projects the worktree selected for the current Launchpad 
   }
 }, platformTestTimeout(15_000));
 
+test("hosted maintenance rejects a non-default App before changing the maintained Module", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port });
+  const defaultApp = withStaticEntrypoint(fixtureDiscoveryApp({ port }));
+  const siblingApp = withStaticEntrypoint(fixtureDiscoveryApp({
+    port,
+    overrides: {
+      id: "test-company-demo-v2",
+      title: "Demo v2",
+    },
+  }));
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "hosted-default-app",
+    lifecycleProfile: "hosted",
+    discover: discoveryWithApps(defaultApp, siblingApp),
+    maintenanceIntervalMs: 10,
+    maintenanceRetryDelaysMs: [10],
+  });
+
+  try {
+    runtime.maintainApps([defaultApp]);
+    const healthy = await waitForStatus(() => runtime.health(defaultApp.id), "healthy");
+    for (const action of [
+      () => runtime.start(siblingApp.id),
+      () => runtime.open(siblingApp.id),
+      () => runtime.restart(siblingApp.id),
+      () => runtime.switchApp(siblingApp.id, {
+        replace_app_id: defaultApp.id,
+        confirmed: true,
+      }),
+    ]) {
+      await expect(action()).rejects.toMatchObject({
+        code: "hosted_module_default_app_required",
+        metadata: {
+          failure_kind: "hosted_module_default_app_required",
+          configured_app_id: defaultApp.id,
+        },
+      });
+    }
+    expect(await runtime.health(siblingApp.id)).not.toHaveProperty("maintenance");
+    expect(await runtime.health(defaultApp.id)).toMatchObject({
+      pid: healthy.pid,
+      maintenance: {
+        configured_app_id: defaultApp.id,
+        app_id: defaultApp.id,
+        source: { type: "main" },
+        status: "healthy",
+      },
+    });
+  } finally {
+    await runtime.shutdown();
+  }
+}, platformTestTimeout(15_000));
+
 test("hosted maintenance never installs dependencies during boot and keeps retrying the exact source", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({
@@ -4255,6 +4311,53 @@ test("hosted maintenance never installs dependencies during boot and keeps retry
     await runtime.shutdown();
   }
 });
+
+test("hosted maintenance backs off while an exact runtime source is still starting", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({
+    port,
+    serverSource: [
+      "const startedAt = Date.now();",
+      "const server = Bun.serve({",
+      "  hostname: process.env.LAZURIO_RUNTIME_HOST,",
+      "  port: Number(process.env.LAZURIO_RUNTIME_PORT),",
+      "  fetch(request) {",
+      "    const url = new URL(request.url);",
+      "    if (url.pathname === '/health' && Date.now() - startedAt < 2500) return new Response('building', { status: 404 });",
+      "    if (url.pathname === '/health') return Response.json({ status: 'ok' });",
+      "    return new Response('ok');",
+      "  },",
+      "});",
+      "setInterval(() => {}, 2147483647);",
+      "",
+    ].join("\n"),
+  });
+  const app = withStaticEntrypoint(fixtureDiscoveryApp({ port }));
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "hosted-start-backoff",
+    lifecycleProfile: "hosted",
+    discover: discoveryWithApp(app),
+    maintenanceIntervalMs: 10,
+    maintenanceRetryDelaysMs: [500, 1_000, 2_000],
+  });
+
+  try {
+    runtime.maintainApps([app]);
+    const retrying = await waitForRuntime(
+      () => runtime.maintenanceSummary().apps[0],
+      (state) => state?.status === "starting" && state.attempts > 0,
+    );
+    expect(Date.parse(retrying.next_attempt_at)).toBeGreaterThan(Date.now());
+    expect(await waitForStatus(() => runtime.health(app.id), "healthy")).toMatchObject({
+      managed: true,
+      maintenance: { status: "healthy", attempts: 0 },
+    });
+  } finally {
+    await runtime.shutdown();
+  }
+}, platformTestTimeout(15_000));
 
 test("hosted shutdown drains an overlapping maintenance pass before taking the child snapshot", async () => {
   const port = await findFreePort();

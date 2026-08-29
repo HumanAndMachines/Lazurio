@@ -973,14 +973,13 @@ test("hosted Launchpad starts every Team module default App and derives its exte
       runtime: expect.objectContaining({ status: "healthy" }),
     }),
   ]);
-  expect((await getJson(port, "/health")).maintenance).toMatchObject({
+  expect((await getJson(port, "/health")).maintenance).toEqual({
+    schema_version: "lazurio.hosted_workspace_maintenance.v1",
     total: 1,
     healthy: 1,
+    starting: 0,
     degraded: 0,
-    skipped: [{
-      module: "knowledgebase",
-      failure_kind: "hosted_module_open_target_missing",
-    }],
+    skipped: 1,
   });
 }, platformTestTimeout(15_000));
 
