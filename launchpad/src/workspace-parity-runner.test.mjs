@@ -4,14 +4,16 @@ import {
   explicitStopResponseAccepted,
   hostedMainMaintenanceProofAccepted,
   hostedStopForbidden,
+  hostedTeamMaintenanceProofAccepted,
   noResurrectionProofAccepted,
   parityLoopbackProbeHosts,
   parseArgs,
+  resolveParityOrganization,
   runtimePortsMatchModuleLease,
   worktreeProvenanceMatches,
 } from "./workspace-parity-runner.mjs";
 
-const organization = "IotorLazurio_GEN3";
+const organization = "IotorLazurio";
 const creator = "t3-code/iotor-builder";
 const shared = [
   "--organization", organization,
@@ -38,7 +40,7 @@ test("hosted parity requires the derived URL and shared process identities", () 
     "--phase", "post-restart",
     ...shared,
     "--team", "iotor-builders",
-    "--expected-origin", "https://knowledgebase.iotor.example/",
+    "--hosted-domain", "iotor.example",
     "--t3-pid", "101",
     "--codex-pid", "151",
     "--launchpad-pid", "202",
@@ -55,7 +57,7 @@ test("hosted parity requires the derived URL and shared process identities", () 
     "--t3-pid", "101",
     "--codex-pid", "151",
     "--launchpad-pid", "202",
-  ])).toThrow("--expected-origin is required");
+  ])).toThrow("--hosted-domain is required");
 });
 
 test("hosted Stop and persistent disablement are intentionally absent", () => {
@@ -64,7 +66,7 @@ test("hosted Stop and persistent disablement are intentionally absent", () => {
     "--stop-after",
     ...shared,
     "--team", "iotor-builders",
-    "--expected-origin", "https://knowledgebase.iotor.example/",
+    "--hosted-domain", "iotor.example",
     "--t3-pid", "101",
     "--codex-pid", "151",
     "--launchpad-pid", "202",
@@ -132,4 +134,73 @@ test("hosted evidence names the derived private development origin", () => {
   expect(externalAssertions).toContain(
     "derived Team module origin is a private development preview reachable only through the approved Tailscale/VPN access plane, never a public production endpoint",
   );
+});
+
+test("parity resolves an exact Organization slug to its discovered mount path", () => {
+  const discovery = {
+    organizations: [
+      { slug: "IotorLazurio", path: "organizations/IotorLazurio_GEN3" },
+      { slug: "Macano-Tech", path: "organizations/Macano-Tech_GEN3" },
+    ],
+  };
+  expect(resolveParityOrganization(discovery, "Macano-Tech")).toEqual({
+    slug: "Macano-Tech",
+    path: "organizations/Macano-Tech_GEN3",
+  });
+  expect(resolveParityOrganization(discovery, "Macano-Tech_GEN3")).toBeNull();
+  expect(resolveParityOrganization({
+    organizations: [
+      { slug: "Macano-Tech", path: "organizations/one" },
+      { slug: "Macano-Tech", path: "organizations/two" },
+    ],
+  }, "Macano-Tech")).toBeNull();
+});
+
+test("hosted parity accepts the complete derived Team set and exact session sources", () => {
+  const worktreeSlug = "DEV-6513-parity";
+  const health = (source, url) => ({
+    status: "healthy",
+    managed: true,
+    url,
+    runtime_source: source,
+    maintenance: { status: "healthy", source },
+    maintenance_alignment: "matches",
+  });
+  const main = { type: "main" };
+  const worktree = { type: "worktree", slug: worktreeSlug };
+  const evidence = [
+    {
+      app_id: "macano-tech-knowledgebase-v1",
+      expected_url: "https://knowledgebase.technical.macano.example/",
+      health: health(worktree, "https://knowledgebase.technical.macano.example/"),
+    },
+    {
+      app_id: "macano-tech-wiki-v1",
+      expected_url: "https://wiki.technical.macano.example/",
+      health: health(main, "https://wiki.technical.macano.example/"),
+    },
+  ];
+  const input = {
+    healthEvidence: evidence,
+    exercisedAppId: "macano-tech-knowledgebase-v1",
+    phase: "live",
+    worktreeSlug,
+    maintenance: { total: 2, healthy: 2, starting: 0, degraded: 0, skipped: 1 },
+    expectedTotal: 2,
+    expectedSkipped: 1,
+  };
+  expect(hostedTeamMaintenanceProofAccepted(input)).toBe(true);
+  expect(hostedTeamMaintenanceProofAccepted({
+    ...input,
+    healthEvidence: evidence.map((item) => ({ ...item, health: health(main, item.expected_url) })),
+  })).toBe(false);
+  expect(hostedTeamMaintenanceProofAccepted({
+    ...input,
+    maintenance: { ...input.maintenance, skipped: 0 },
+  })).toBe(false);
+  expect(hostedTeamMaintenanceProofAccepted({
+    ...input,
+    phase: "post-restart",
+    healthEvidence: evidence.map((item) => ({ ...item, health: health(main, item.expected_url) })),
+  })).toBe(true);
 });

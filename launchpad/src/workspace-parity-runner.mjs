@@ -3,8 +3,17 @@ import { readFile, readlink, realpath } from "node:fs/promises";
 import { createConnection } from "node:net";
 import { isAbsolute, join, relative, resolve } from "node:path";
 
-import { buildLaunchpadDoctorReport } from "../../lazurio/runtime/diagnostics-lib.mjs";
+import {
+  buildLaunchpadAppsResponse,
+  buildLaunchpadDoctorReport,
+} from "../../lazurio/runtime/diagnostics-lib.mjs";
 import { discoverLaunchpadApps } from "../../lazurio/runtime/discovery-lib.mjs";
+import {
+  createHostedWorkspaceConfiguration,
+  projectHostedAppUrl,
+  selectHostedWorkspaceApps,
+  validateHostedWorkspaceBindings,
+} from "../../lazurio/runtime/hosted-app-url-lib.mjs";
 import { readOrganizationRoot } from "../../lazurio/core/organization-root-reader-lib.mjs";
 
 const schemaVersion = "lazurio.workspace_machine_parity.v1";
@@ -44,24 +53,6 @@ export async function runWorkspaceParity(options) {
   const uid = typeof process.getuid === "function" ? process.getuid() : null;
   add("identity.non_root", options.profile !== "hosted" || (Number.isInteger(uid) && uid !== 0), { uid });
 
-  const organizationRoot = resolve(lazurioRoot, "organizations", options.organization);
-  const organizationBoundary = relative(lazurioRoot, organizationRoot);
-  add("filesystem.organization_mount", existsSync(organizationRoot)
-    && organizationBoundary !== ""
-    && !organizationBoundary.startsWith("..")
-    && !isAbsolute(organizationBoundary), { organization_root: organizationRoot });
-  const organizationResolution = readOrganizationRoot({ organizationRoot });
-  add(
-    "manifest.organization",
-    ["legacy", "transition"].includes(organizationResolution.state)
-      && organizationResolution.resource_count === 1,
-    {
-      state: organizationResolution.state,
-      declaration_source: organizationResolution.declaration_source,
-      issues: organizationResolution.issues,
-    },
-  );
-
   const commands = {
     bun: Bun.which("bun"),
     git: Bun.which("git"),
@@ -72,7 +63,7 @@ export async function runWorkspaceParity(options) {
 
   let discovery = null;
   try {
-    discovery = await discoverLaunchpadApps(lazurioRoot);
+    discovery = await discoverLaunchpadApps(lazurioRoot, { organization: options.organization });
     add("launchpad.discovery", discovery.failures.length === 0, {
       app_count: discovery.apps.length,
       failures: discovery.failures,
@@ -80,8 +71,45 @@ export async function runWorkspaceParity(options) {
   } catch (error) {
     add("launchpad.discovery", false, { error: error.message });
   }
-  const app = discovery?.apps.find((candidate) => candidate.id === options.appId) ?? null;
-  add("launchpad.app_discovered", Boolean(app), { app_id: options.appId });
+  const organization = resolveParityOrganization(discovery, options.organization);
+  const organizationRoot = organization?.path
+    ? resolve(lazurioRoot, organization.path)
+    : resolve(lazurioRoot, "organizations", options.organization);
+  const organizationBoundary = relative(lazurioRoot, organizationRoot);
+  add("filesystem.organization_mount", Boolean(organization)
+    && existsSync(organizationRoot)
+    && organizationBoundary !== ""
+    && !organizationBoundary.startsWith("..")
+    && !isAbsolute(organizationBoundary), {
+    organization_slug: options.organization,
+    organization_path: organization?.path ?? null,
+    organization_root: organizationRoot,
+  });
+  const organizationResolution = organization && existsSync(organizationRoot)
+    ? readOrganizationRoot({ organizationRoot })
+    : null;
+  add(
+    "manifest.organization",
+    ["legacy", "transition"].includes(organizationResolution?.state)
+      && organizationResolution.resource_count === 1
+      && organizationResolution.resource?.organization?.slug === options.organization,
+    {
+      state: organizationResolution?.state ?? "missing",
+      organization_slug: organizationResolution?.resource?.organization?.slug ?? null,
+      declaration_source: organizationResolution?.declaration_source ?? null,
+      issues: organizationResolution?.issues ?? [],
+    },
+  );
+
+  const hostedContext = options.profile === "hosted"
+    ? await buildHostedParityContext({ add, lazurioRoot, discovery, options })
+    : null;
+  const app = options.profile === "hosted"
+    ? hostedContext?.selection.apps.find((candidate) => candidate.id === options.appId) ?? null
+    : discovery?.apps.find((candidate) => candidate.id === options.appId) ?? null;
+  add(options.profile === "hosted" ? "launchpad.app_is_team_default" : "launchpad.app_discovered", Boolean(app), {
+    app_id: options.appId,
+  });
   if (app) {
     const staticListeners = (app.listeners ?? []).length > 0
       && app.listeners.every((listener) => listener.allocation === "static" && Number.isInteger(listener.port));
@@ -112,6 +140,9 @@ export async function runWorkspaceParity(options) {
 
   await appendNegativeSecurityChecks({ add });
   const runtimeEvidence = app ? await appendRuntimeChecks({ add, app, options }) : null;
+  if (hostedContext) {
+    await appendHostedTeamRuntimeChecks({ add, app, context: hostedContext, options });
+  }
   await appendNamespaceChecks({ add, options, home, runtimeEvidence });
 
   const summary = {
@@ -131,6 +162,136 @@ export async function runWorkspaceParity(options) {
     checks,
     external_assertions_required: externalAssertions,
   };
+}
+
+export function resolveParityOrganization(discovery, organizationSlug) {
+  const matches = (discovery?.organizations ?? []).filter(
+    (organization) => organization?.slug === organizationSlug,
+  );
+  return matches.length === 1 ? matches[0] : null;
+}
+
+async function buildHostedParityContext({ add, lazurioRoot, discovery, options }) {
+  try {
+    const configuration = createHostedWorkspaceConfiguration({
+      profile: "hosted",
+      organizationSlug: options.organization,
+      teamId: options.team,
+      domain: options.hostedDomain,
+    });
+    const inventory = await buildLaunchpadAppsResponse({
+      companiesRoot: lazurioRoot,
+      rootSourceRoot: lazurioRoot,
+      launchpadRoot: join(lazurioRoot, "launchpad"),
+      runtimeManager: { appsWithRuntime: async (apps) => apps },
+      includeGit: false,
+      organization: options.organization,
+      activeTeamId: options.team,
+    });
+    validateHostedWorkspaceBindings(configuration, inventory);
+    const selection = selectHostedWorkspaceApps(configuration, inventory);
+    add("hosted.team_defaults_derived", selection.apps.length > 0, {
+      app_ids: selection.apps.map((app) => app.id),
+      skipped: selection.skipped,
+      discovery_failures: discovery?.failures ?? [],
+    });
+    return { configuration, inventory, selection };
+  } catch (error) {
+    add("hosted.team_defaults_derived", false, { error: error.message });
+    return null;
+  }
+}
+
+async function appendHostedTeamRuntimeChecks({ add, app: exercisedApp, context, options }) {
+  const base = new URL(options.launchpadUrl);
+  try {
+    const [publicInventory, serverHealth] = await Promise.all([
+      fetchJson(new URL("/api/apps", base)),
+      fetchJson(new URL("/health", base)),
+    ]);
+    const observedWorkspaceApps = (publicInventory.apps ?? []).filter((app) => app.space === "workspace");
+    const expectedIds = context.selection.apps.map((app) => app.id).sort();
+    const observedIds = observedWorkspaceApps.map((app) => app.id).sort();
+    const visibleIds = new Set(observedIds);
+    add("hosted.team_inventory_scoped", expectedIds.every((id) => visibleIds.has(id))
+      && observedWorkspaceApps.every((app) =>
+        app.company === context.configuration.organization_slug
+        && (app.teams ?? []).length === 1
+        && app.teams[0] === context.configuration.team_id), {
+      expected_default_app_ids: expectedIds,
+      observed_workspace_app_ids: observedIds,
+    });
+
+    const healthEvidence = await Promise.all(context.selection.apps.map(async (selectedApp) => {
+      const health = await runtimeRequest(base, selectedApp.id, "health",
+        selectedApp.id === exercisedApp?.id && options.phase === "live"
+          ? worktreeSource(options.worktreeSlug)
+          : { source: { type: "main" } });
+      return {
+        app_id: selectedApp.id,
+        module: selectedApp.module,
+        expected_url: projectHostedAppUrl(selectedApp, context.configuration).url,
+        health,
+      };
+    }));
+    add("runtime.hosted_team_defaults_maintained", hostedTeamMaintenanceProofAccepted({
+      healthEvidence,
+      exercisedAppId: exercisedApp?.id,
+      phase: options.phase,
+      worktreeSlug: options.worktreeSlug,
+      maintenance: serverHealth.maintenance,
+      expectedTotal: context.selection.apps.length,
+      expectedSkipped: context.selection.skipped.length,
+    }), {
+      maintenance: serverHealth.maintenance,
+      skipped: context.selection.skipped,
+      apps: healthEvidence.map(({ app_id, module, expected_url, health }) => ({
+        app_id,
+        module,
+        expected_url,
+        observed_url: health.url,
+        status: health.status,
+        managed: health.managed,
+        runtime_source: health.runtime_source,
+        maintenance: health.maintenance,
+        maintenance_alignment: health.maintenance_alignment,
+      })),
+    });
+  } catch (error) {
+    add("runtime.hosted_team_defaults_maintained", false, { error: error.message });
+  }
+}
+
+export function hostedTeamMaintenanceProofAccepted({
+  healthEvidence,
+  exercisedAppId,
+  phase,
+  worktreeSlug,
+  maintenance,
+  expectedTotal,
+  expectedSkipped,
+}) {
+  if (!Array.isArray(healthEvidence) || healthEvidence.length !== expectedTotal || expectedTotal < 1) return false;
+  const maintenanceMatches = maintenance?.total === expectedTotal
+    && maintenance.healthy === expectedTotal
+    && maintenance.starting === 0
+    && maintenance.degraded === 0
+    && maintenance.skipped === expectedSkipped;
+  if (!maintenanceMatches) return false;
+  return healthEvidence.every(({ app_id: appId, expected_url: expectedUrl, health }) => {
+    const expectedSource = phase === "live" && appId === exercisedAppId
+      ? { type: "worktree", slug: worktreeSlug }
+      : { type: "main" };
+    return health?.status === "healthy"
+      && health.managed === true
+      && health.url === expectedUrl
+      && health.runtime_source?.type === expectedSource.type
+      && (expectedSource.type !== "worktree" || health.runtime_source?.slug === expectedSource.slug)
+      && health.maintenance?.status === "healthy"
+      && health.maintenance?.source?.type === expectedSource.type
+      && (expectedSource.type !== "worktree" || health.maintenance?.source?.slug === expectedSource.slug)
+      && health.maintenance_alignment === "matches";
+  });
 }
 
 async function appendRuntimeChecks({ add, app, options }) {
@@ -188,9 +349,9 @@ async function appendRuntimeChecks({ add, app, options }) {
           maintenance_alignment: health.maintenance_alignment,
         });
       }
-      add("runtime.external_url", navigationMatchesProfile(health.url, options), {
+      add("runtime.external_url", navigationMatchesProfile(health.url, app, options), {
         observed: health.url,
-        expected: options.profile === "hosted" ? options.expectedOrigin : "loopback",
+        expected: options.profile === "hosted" ? hostedOriginFor(app, options) : "loopback",
       });
       moduleProcess = options.profile === "hosted"
         ? await captureModuleProcessEvidence(health, options)
@@ -217,9 +378,9 @@ async function appendRuntimeChecks({ add, app, options }) {
       ports,
       final_source: worktreeTwo.runtime_source,
     });
-    add("runtime.external_url", navigationMatchesProfile(worktreeTwo.url, options), {
+    add("runtime.external_url", navigationMatchesProfile(worktreeTwo.url, app, options), {
       observed: worktreeTwo.url,
-      expected: options.profile === "hosted" ? options.expectedOrigin : "loopback",
+      expected: options.profile === "hosted" ? hostedOriginFor(app, options) : "loopback",
     });
     moduleProcess = await captureModuleProcessEvidence(worktreeTwo.runtime, options);
     if (options.profile === "hosted") {
@@ -450,14 +611,23 @@ async function fetchJson(url, init = {}) {
   return payload;
 }
 
-function navigationMatchesProfile(value, options) {
-  if (options.profile === "hosted") return value === options.expectedOrigin;
+function navigationMatchesProfile(value, app, options) {
+  if (options.profile === "hosted") return value === hostedOriginFor(app, options);
   try {
     const url = new URL(value);
     return ["127.0.0.1", "localhost", "::1", "[::1]"].includes(url.hostname);
   } catch {
     return false;
   }
+}
+
+function hostedOriginFor(app, options) {
+  return projectHostedAppUrl(app, createHostedWorkspaceConfiguration({
+    profile: "hosted",
+    organizationSlug: options.organization,
+    teamId: options.team,
+    domain: options.hostedDomain,
+  })).url;
 }
 
 function worktreeSource(slug) {
@@ -504,7 +674,7 @@ export function parseArgs(args) {
         "app-id": "appId",
         "worktree-slug": "worktreeSlug",
         "launchpad-url": "launchpadUrl",
-        "expected-origin": "expectedOrigin",
+        "hosted-domain": "hostedDomain",
         "expected-worktree-created-by": "expectedWorktreeCreatedBy",
         "t3-command": "t3Command",
         "t3-pid": "t3Pid",
@@ -529,9 +699,15 @@ export function parseArgs(args) {
   if (options.profile === "hosted" && options.stopAfter) {
     throw new Error("--stop-after is not valid for hosted profile; Team modules are always on");
   }
-  if (options.profile === "hosted" && !options.expectedOrigin) throw new Error("--expected-origin is required for hosted profile");
   if (options.profile === "hosted") {
     if (!options.team) throw new Error("--team is required for hosted profile");
+    if (!options.hostedDomain) throw new Error("--hosted-domain is required for hosted profile");
+    createHostedWorkspaceConfiguration({
+      profile: "hosted",
+      organizationSlug: options.organization,
+      teamId: options.team,
+      domain: options.hostedDomain,
+    });
     for (const key of ["t3Pid", "codexPid", "launchpadPid"]) {
       if (!Number.isInteger(options[key]) || options[key] <= 0) {
         throw new Error(`--${key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)} is required for hosted profile`);
@@ -543,10 +719,10 @@ export function parseArgs(args) {
 
 function helpText() {
   return `Usage: bun run parity:workspace -- --profile local|hosted --phase live|post-restart \\
-  --organization <filesystem-dir> --team <team> --app-id <id> --worktree-slug <slug> \\
+  --organization <exact-company-slug> --team <team> --app-id <id> --worktree-slug <slug> \\
   --expected-worktree-created-by <t3-creation-identity> [options]
 
-Hosted additionally requires --team, --expected-origin, --t3-pid, --codex-pid and --launchpad-pid.
+Hosted additionally requires --team, --hosted-domain, --t3-pid, --codex-pid and --launchpad-pid.
 Local: run live, restart Launchpad, then use post-restart to prove no session
 child was restored. Hosted: run live, restart the work container (and separately
 reboot the host), then use post-restart to prove every Team module returned on
