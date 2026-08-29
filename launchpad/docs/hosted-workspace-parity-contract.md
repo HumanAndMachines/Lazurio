@@ -62,22 +62,35 @@ bun run parity:workspace -- \
   --worktree-slug <t3-created-canonical-slug> \
   --expected-worktree-created-by <t3-creation-identity> \
   --launchpad-url http://127.0.0.1:4174 \
-  --expected-origin https://<module>.<team>.<domain>/ \
+  --hosted-domain <shared-lowercase-dns-domain> \
   --t3-pid <pid> \
   --codex-pid <pid> \
   --launchpad-pid <pid>
 ```
 
+`--organization` je exact `company.slug`, nikoli název mount adresáře. Runner
+jeho cestu získá ze stejné scan-first discovery jako Launchpad, takže například
+slug `Macano-Tech` korektně najde mount `organizations/Macano-Tech_GEN3` bez
+druhého mapování.
+
 `live` ověří discovery, Doctor, static module lease, worktree provenienci,
 `main → worktree → main → worktree` takeover na jediném module portu, odvozenou
-URL a to, že hosted `Stop` vrátí `hosted_module_always_on`. Lokální profil může
+URL a to, že hosted `Stop` vrátí `hosted_module_always_on`. V hosted profilu
+navíc stejný canonical selector jako Server odvodí celý Team: runner vyžaduje,
+aby všechny výchozí Apps byly zdravé a managed, přesně jedna zvolená App držela
+testovaný worktree, ostatní zůstaly na `main`, veřejná Workspace projekce
+neobsahovala jiný Team a maintenance souhrn přesně odpovídal odvozeným i
+izolovaným Modulům. Chybějící či nejednoznačný default se tedy nezamění za
+zdravou App, ale zůstane jmenovitě ve `skipped` evidence. Lokální profil může
 na konci použít `--stop-after`; hosted ne.
 
 Po restartu pracovního kontejneru i po host rebootu se spustí
 `--phase post-restart`. Local profil musí prokázat, že session child nebyl
-obnoven a module port je prázdný. Hosted profil musí bez `/open` prokázat zdravou
-managed instanci z `main`, healthy maintenance a shodu maintenance s runtime
-source. Starý worktree se po restartu obnovit nesmí.
+obnoven a module port je prázdný. Hosted profil musí bez `/open` prokázat, že
+každá odvozená Team App je zdravá managed instance z `main`, její URL odpovídá
+`<module>.<team>.<domain>`, maintenance souhrn sedí na celý Team a každý runtime
+source se shoduje se svou maintenance evidencí. Starý worktree se po restartu
+obnovit nesmí.
 
 ## Security a infra důkaz
 
