@@ -194,6 +194,96 @@ test("runtime inventory does not duplicate per-app warnings and failures", () =>
   expect(report.summary.fail).toBe(1);
 });
 
+test("Doctor treats an older inactive version on the healthy default module lease as expected", () => {
+  const older = doctorSharedVersionApp({
+    id: "testco-deals-v1",
+    title: "Deals v1",
+    packageVersion: "v1",
+    runtimeStatus: "unhealthy",
+    owner: "foreign-port",
+    failureKind: "port_owner_cwd_mismatch",
+  });
+  const current = doctorSharedVersionApp({
+    id: "testco-deals-v2",
+    title: "Deals v2",
+    packageVersion: "v2",
+    runtimeStatus: "healthy",
+    owner: "adopted-port",
+  });
+  const apps = doctorSharedVersionFamily([older, current], current.id);
+  const report = buildDoctorRuntimeReport(apps);
+  const checks = new Map(report.checks.map((check) => [check.id, check]));
+
+  expect(checks.get("launchpad.runtime")?.message).toContain("očekávaně neaktivní verze: 1");
+  expect(checks.get("launchpad.runtime")?.message).not.toContain("unhealthy");
+  expect(checks.get(`launchpad.runtime.${older.id}`)).toMatchObject({
+    status: "ok",
+    message: expect.stringContaining("zdravá výchozí verze Deals v2"),
+  });
+  expect(checks.get(`launchpad.runtime.${older.id}`)?.details).toContain(`active_version: ${current.id}`);
+  expect(report.summary.warn).toBe(0);
+});
+
+test("Doctor keeps real shared-lease conflicts visible", () => {
+  const cases = [
+    {
+      name: "different endpoint",
+      older: { title: "Deals v1", port: 24_102 },
+      current: { title: "Deals v2", port: 24_103 },
+    },
+    {
+      name: "different app lineage",
+      older: { title: "Deals Catalog v1" },
+      current: { title: "Deals Editor v2" },
+    },
+  ];
+
+  for (const fixture of cases) {
+    const older = doctorSharedVersionApp({
+      id: `testco-${fixture.name.replaceAll(" ", "-")}-v1`,
+      title: fixture.older.title,
+      packageVersion: "v1",
+      port: fixture.older.port,
+      runtimeStatus: "unhealthy",
+      owner: "foreign-port",
+      failureKind: "port_owner_cwd_mismatch",
+    });
+    const current = doctorSharedVersionApp({
+      id: `testco-${fixture.name.replaceAll(" ", "-")}-v2`,
+      title: fixture.current.title,
+      packageVersion: "v2",
+      port: fixture.current.port,
+      runtimeStatus: "healthy",
+      owner: "adopted-port",
+    });
+    const report = buildDoctorRuntimeReport(doctorSharedVersionFamily([older, current], current.id));
+    const check = report.checks.find((candidate) => candidate.id === `launchpad.runtime.${older.id}`);
+    expect(check?.status, fixture.name).toBe("warn");
+  }
+
+  const rollback = doctorSharedVersionApp({
+    id: "testco-rollback-v1",
+    title: "Deals v1",
+    packageVersion: "v1",
+    runtimeStatus: "healthy",
+    owner: "adopted-port",
+  });
+  const selected = doctorSharedVersionApp({
+    id: "testco-rollback-v2",
+    title: "Deals v2",
+    packageVersion: "v2",
+    runtimeStatus: "unhealthy",
+    owner: "foreign-port",
+    failureKind: "port_owner_cwd_mismatch",
+  });
+  const rollbackReport = buildDoctorRuntimeReport(
+    doctorSharedVersionFamily([rollback, selected], selected.id),
+  );
+  expect(rollbackReport.checks.find(
+    (candidate) => candidate.id === `launchpad.runtime.${selected.id}`,
+  )?.status).toBe("warn");
+});
+
 test("discovery preserves Git inventory warnings without duplicating worktree warnings", () => {
   const report = buildDoctorReportFromAppsResponse({
     launchpad_root: { display_name: "Test root" },
@@ -2529,6 +2619,83 @@ test("worktree dependency Doctor follows the configured Organization mountpoint"
     "ready: 1",
   ]));
 });
+
+function buildDoctorRuntimeReport(apps) {
+  return buildDoctorReportFromAppsResponse({
+    launchpad_root: { display_name: "Test root" },
+    root: "/tmp/test-root",
+    failures: [],
+    warnings: [],
+    apps,
+    organizations: [],
+    port_overlaps: [],
+  }, {
+    childLane: { children: [], checks: [] },
+  });
+}
+
+function doctorSharedVersionFamily(apps, openTargetAppId) {
+  const sharedPortOwners = apps.map((app) => ({
+    app_id: app.id,
+    company: app.company,
+    module: app.module,
+    host: app.host,
+    port: app.port,
+    lease_id: "main",
+  }));
+  return apps.map((app) => ({
+    ...app,
+    module_apps: {
+      state: "declared",
+      contract_path: app.module_contract.module_path,
+      open_target_app_id: openTargetAppId,
+      open_target_source: "declared-default",
+    },
+    module_open_target: app.id === openTargetAppId,
+    shared_port_owners: sharedPortOwners,
+  }));
+}
+
+function doctorSharedVersionApp({
+  id,
+  title,
+  packageVersion,
+  port = 24_102,
+  runtimeStatus,
+  owner,
+  failureKind = null,
+}) {
+  const modulePath = "organizations/TestCo_GEN3/workspace/deals/lazurio.module.json";
+  return {
+    id,
+    title,
+    company: "TestCo",
+    module: "deals",
+    host: "127.0.0.1",
+    port,
+    package_path: `organizations/TestCo_GEN3/workspace/deals/app/${packageVersion}/package.json`,
+    dependencies: { state: "ready" },
+    runtime_status: runtimeStatus,
+    runtime: {
+      status: runtimeStatus,
+      owner,
+      pid: 42_123,
+      failure_kind: failureKind,
+      port_owner: { pid: 42_123, cwd_matches: owner !== "foreign-port" },
+    },
+    runtime_contract: { schema_version: "lazurio.runtime.v1" },
+    module_contract: { schema_version: "lazurio.module.v1", module_path: modulePath },
+    entrypoint_listener: {
+      id: "web",
+      lease: "main",
+      host: "127.0.0.1",
+      allocation: "static",
+      port,
+      claim: { mode: "exclusive" },
+      module_lease: { id: "main", source: modulePath },
+    },
+  };
+}
 
 async function createCompaniesWorkspaceFixture() {
   const root = await mkdtemp(join(tmpdir(), "companiesascode-diagnostics-"));
