@@ -11,6 +11,7 @@ import { inspectRequiredDependencies } from "./dependency-install-lib.mjs";
 import {
   createRuntimeManager,
   resolveBunExecutable,
+  runtimeHostsShareListener,
   runtimeListenerHasStaticLease,
   runtimeUrlHost,
 } from "./runtime-lib.mjs";
@@ -2713,14 +2714,21 @@ function runtimeChecks(appsResponse) {
     ];
   }
 
+  const expectedInactiveVersions = expectedInactiveVersionLeasePeers(appsResponse.apps);
   return [
-    runtimeSummaryCheck(appsResponse.apps),
-    ...appsResponse.apps.map(runtimeAppCheck),
+    runtimeSummaryCheck(appsResponse.apps, expectedInactiveVersions),
+    ...appsResponse.apps.map((app) => runtimeAppCheck(app, {
+      activeVersion: expectedInactiveVersions.get(app.id) ?? null,
+    })),
   ];
 }
 
-function runtimeSummaryCheck(apps) {
-  const counts = countBy(apps.map((app) => app.runtime_status ?? "unknown"));
+function runtimeSummaryCheck(apps, expectedInactiveVersions = new Map()) {
+  const counts = countBy(apps.map((app) =>
+    expectedInactiveVersions.has(app.id)
+      ? "expected_inactive_version"
+      : (app.runtime_status ?? "unknown")
+  ));
   return {
     id: "launchpad.runtime",
     // Tento check potvrzuje, že runtime inventory šlo změřit. Závažnost každé
@@ -2736,15 +2744,17 @@ function runtimeSummaryCheck(apps) {
   };
 }
 
-function runtimeAppCheck(app) {
+function runtimeAppCheck(app, { activeVersion = null } = {}) {
   const runtime = app.runtime ?? {};
   const dependencies = app.dependencies ?? runtime.dependencies ?? {};
   return {
     id: `launchpad.runtime.${app.id}`,
-    status: runtimeAppStatus(app),
+    status: activeVersion ? "ok" : runtimeAppStatus(app),
     severity: "runtime",
     title: app.title,
-    message: dependencies.state && dependencies.state !== "ready"
+    message: activeVersion
+      ? `Sdílený port ${app.port} používá zdravá výchozí verze ${activeVersion.title}; ${app.title} je očekávaně neaktivní verze stejného Modulu.`
+      : dependencies.state && dependencies.state !== "ready"
       ? dependencies.message
       : (runtime.message ?? runtimeLabel(runtime.status)),
     paths: [app.package_path, runtime.log_path].filter(Boolean),
@@ -2757,7 +2767,104 @@ function runtimeAppCheck(app) {
       `pid: ${runtime.pid ?? "-"}`,
       `port: ${app.port ?? "-"}`,
       `health: ${app.health_url ?? "-"}`,
+      ...(activeVersion ? [`active_version: ${activeVersion.id}`] : []),
     ],
+  };
+}
+
+function expectedInactiveVersionLeasePeers(apps) {
+  const byId = new Map(apps.map((app) => [app.id, app]));
+  const expected = new Map();
+  for (const app of apps) {
+    const activeVersion = byId.get(app.module_apps?.open_target_app_id);
+    if (expectedInactiveVersionLeaseMismatch(app, activeVersion)) {
+      expected.set(app.id, activeVersion);
+    }
+  }
+  return expected;
+}
+
+function expectedInactiveVersionLeaseMismatch(app, activeVersion) {
+  if (!activeVersion || activeVersion.id === app.id) return false;
+  if (app.dependencies?.state !== "ready") return false;
+  if (
+    app.runtime_status !== "unhealthy"
+    || app.runtime?.status !== "unhealthy"
+    || app.runtime?.owner !== "foreign-port"
+    || app.runtime?.failure_kind !== "port_owner_cwd_mismatch"
+  ) return false;
+  if (
+    activeVersion.runtime_status !== "healthy"
+    || activeVersion.runtime?.status !== "healthy"
+    || !["current-instance", "adopted-port"].includes(activeVersion.runtime?.owner)
+    || runtimeAppStatus(activeVersion) !== "ok"
+  ) return false;
+  if (
+    app.module_open_target !== false
+    || activeVersion.module_open_target !== true
+    || activeVersion.module_apps?.open_target_app_id !== activeVersion.id
+    || app.module_apps?.contract_path !== activeVersion.module_apps?.contract_path
+  ) return false;
+  if (
+    app.company !== activeVersion.company
+    || app.module !== activeVersion.module
+    || app.module_contract?.module_path !== activeVersion.module_contract?.module_path
+    || !runtimeHostsShareListener(app.host, activeVersion.host)
+    || app.port !== activeVersion.port
+  ) return false;
+  if (
+    !runtimeListenerHasStaticLease(app, app.entrypoint_listener)
+    || !runtimeListenerHasStaticLease(activeVersion, activeVersion.entrypoint_listener)
+    || app.entrypoint_listener?.lease !== activeVersion.entrypoint_listener?.lease
+  ) return false;
+
+  const appOwnerPid = app.runtime?.port_owner?.pid;
+  const activeOwnerPid = activeVersion.runtime?.port_owner?.pid;
+  if (
+    !Number.isInteger(appOwnerPid)
+    || appOwnerPid <= 0
+    || appOwnerPid !== activeOwnerPid
+  ) return false;
+  if (
+    !declaresSharedModuleLeasePeer(app, activeVersion)
+    || !declaresSharedModuleLeasePeer(activeVersion, app)
+  ) return false;
+
+  const appVersion = versionedPackageIdentity(app);
+  const activeIdentity = versionedPackageIdentity(activeVersion);
+  return Boolean(
+    appVersion
+    && activeIdentity
+    && appVersion.family === activeIdentity.family
+    && appVersion.baseTitle === activeIdentity.baseTitle
+    && appVersion.version < activeIdentity.version
+  );
+}
+
+function declaresSharedModuleLeasePeer(app, peer) {
+  return (app.shared_port_owners ?? []).some((owner) =>
+    owner?.app_id === peer.id
+    && owner?.company === app.company
+    && owner?.module === app.module
+    && owner?.lease_id === app.entrypoint_listener?.lease
+    && owner?.port === app.port
+    && runtimeHostsShareListener(owner?.host, app.host)
+  );
+}
+
+function versionedPackageIdentity(app) {
+  const title = String(app?.title ?? "").match(/^(.*\S)\s+v(\d+)$/i);
+  const packagePath = String(app?.package_path ?? "").replaceAll("\\", "/");
+  const packageDirectory = posix.dirname(packagePath);
+  const packageVersion = posix.basename(packageDirectory).match(/^v(\d+)$/i);
+  if (!title || !packageVersion) return null;
+  const titleVersion = Number(title[2]);
+  const pathVersion = Number(packageVersion[1]);
+  if (titleVersion !== pathVersion) return null;
+  return {
+    baseTitle: title[1].trim(),
+    family: posix.dirname(packageDirectory),
+    version: titleVersion,
   };
 }
 
@@ -2796,10 +2903,13 @@ function countBy(values) {
 }
 
 function runtimeCountMessage(counts) {
-  const order = ["healthy", "starting", "stopped", "unhealthy", "unknown"];
+  const order = ["healthy", "starting", "stopped", "expected_inactive_version", "unhealthy", "unknown"];
+  const labels = {
+    expected_inactive_version: "očekávaně neaktivní verze",
+  };
   return order
     .filter((status) => counts[status] > 0)
-    .map((status) => `${status}: ${counts[status]}`)
+    .map((status) => `${labels[status] ?? status}: ${counts[status]}`)
     .join(", ") || "žádné aplikace";
 }
 
