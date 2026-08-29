@@ -224,6 +224,78 @@ test("Doctor treats an older inactive version on the healthy default module leas
   expect(report.summary.warn).toBe(0);
 });
 
+test("Doctor accepts a managed healthy default with verified listener reconciliation", () => {
+  const older = doctorSharedVersionApp({
+    id: "testco-deals-v1",
+    title: "Deals v1",
+    packageVersion: "v1",
+    runtimeStatus: "unhealthy",
+    owner: "foreign-port",
+    failureKind: "port_owner_cwd_mismatch",
+  });
+  const current = doctorSharedVersionApp({
+    id: "testco-deals-v2",
+    title: "Deals v2",
+    packageVersion: "v2",
+    runtimeStatus: "healthy",
+    owner: "current-instance",
+  });
+  const report = buildDoctorRuntimeReport(
+    doctorSharedVersionFamily([older, current], current.id),
+  );
+  const check = report.checks.find(
+    (candidate) => candidate.id === `launchpad.runtime.${older.id}`,
+  );
+
+  expect(current.runtime.port_owner).toBeNull();
+  expect(current.runtime.pid).not.toBe(older.runtime.port_owner.pid);
+  expect(check).toMatchObject({
+    status: "ok",
+    message: expect.stringContaining("zdravá výchozí verze Deals v2"),
+  });
+});
+
+test("Doctor keeps a managed default fail-closed without exact listener proof", () => {
+  for (const fixture of [
+    {
+      name: "missing reconciliation",
+      mutate: (current) => {
+        current.runtime.listener_reconciliation = null;
+      },
+    },
+    {
+      name: "different listener owner",
+      mutate: (current) => {
+        current.runtime.listener_reconciliation.declared[0].pid = 99_001;
+      },
+    },
+  ]) {
+    const older = doctorSharedVersionApp({
+      id: `testco-${fixture.name.replaceAll(" ", "-")}-v1`,
+      title: "Deals v1",
+      packageVersion: "v1",
+      runtimeStatus: "unhealthy",
+      owner: "foreign-port",
+      failureKind: "port_owner_cwd_mismatch",
+    });
+    const current = doctorSharedVersionApp({
+      id: `testco-${fixture.name.replaceAll(" ", "-")}-v2`,
+      title: "Deals v2",
+      packageVersion: "v2",
+      runtimeStatus: "healthy",
+      owner: "current-instance",
+    });
+    fixture.mutate(current);
+    const report = buildDoctorRuntimeReport(
+      doctorSharedVersionFamily([older, current], current.id),
+    );
+    const check = report.checks.find(
+      (candidate) => candidate.id === `launchpad.runtime.${older.id}`,
+    );
+    expect(check?.status, fixture.name).toBe("warn");
+  }
+});
+
 test("Doctor keeps real shared-lease conflicts visible", () => {
   const cases = [
     {
@@ -2666,6 +2738,8 @@ function doctorSharedVersionApp({
   failureKind = null,
 }) {
   const modulePath = "organizations/TestCo_GEN3/workspace/deals/lazurio.module.json";
+  const listenerPid = 42_123;
+  const managed = owner === "current-instance";
   return {
     id,
     title,
@@ -2679,9 +2753,26 @@ function doctorSharedVersionApp({
     runtime: {
       status: runtimeStatus,
       owner,
-      pid: 42_123,
+      pid: managed ? 42_124 : listenerPid,
+      managed,
+      controllable: managed,
       failure_kind: failureKind,
-      port_owner: { pid: 42_123, cwd_matches: owner !== "foreign-port" },
+      port_owner: managed
+        ? null
+        : { pid: listenerPid, cwd_matches: owner !== "foreign-port" },
+      listener_reconciliation: managed
+        ? {
+            status: "ok",
+            declared: [{
+              listener_id: "web",
+              host: "127.0.0.1",
+              port,
+              status: "observed",
+              pid: null,
+              observed_endpoints: [`127.0.0.1:${port}`],
+            }],
+          }
+        : null,
     },
     runtime_contract: { schema_version: "lazurio.runtime.v1" },
     module_contract: { schema_version: "lazurio.module.v1", module_path: modulePath },
