@@ -1276,7 +1276,7 @@ test("explicit --port without a value fails during argument parsing", async () =
 
   const outcome = await Promise.race([
     launcher.exited,
-    Bun.sleep(3_000).then(() => "timeout"),
+    Bun.sleep(platformTestTimeout(3_000)).then(() => "timeout"),
   ]);
   if (outcome === "timeout") launcher.kill();
 
