@@ -45,6 +45,7 @@ test("inventory reads repo paths from Organization manifests and does not infer 
     module: "infra",
     repo_kind: "root_repo",
     repo_path: "organizations/OmegaCo_GEN3/infra",
+    materialization: "doctor_managed_nested_repo",
   });
   expect(repos.has("BetaCo::brainstorm")).toBe(false);
   expect(inventory.planned.map((slot) => `${slot.organization}::${slot.module}`)).toContain("BetaCo::brainstorm");

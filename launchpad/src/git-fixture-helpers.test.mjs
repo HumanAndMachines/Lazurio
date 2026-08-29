@@ -31,6 +31,7 @@ export async function createLaunchpadGitFixture() {
         path: "infra",
         space: "root",
         category: "engineering",
+        materialization: "doctor_managed_nested_repo",
         git: {
           url: "git@github.com:OmegaCo/infra.git",
           branch: "main",

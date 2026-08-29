@@ -200,10 +200,12 @@ První render a quiet refresh jsou GET-only: čtou lokální snapshot bez fetch 
 bez Git mutace. **Synchronizovat** a CLI `lazurio update` volají tentýž jediný
 sekvenční engine. Ten provede Lazurio
 Root → Organization Rooty → z čerstvého
-manifestu sestavená namountovaná org-level repa a Workspace Moduly. Existující
+manifestu sestavená spravovaná org-level repa a Workspace Moduly. Existující
 checkouty převádí výhradně na clean `main` přes ff-only; chybějící aktivní
-Workspace Modul naklonuje atomicky
-na deklarovaný `main`. `planned_slot` bez Git souřadnic se nikdy neklonuje.
+Workspace Modul a chybějící root repo s explicitním
+`materialization: doctor_managed_nested_repo` naklonuje atomicky na
+deklarovaný `main`. Root repo bez opt-inu, `planned_slot` bez Git souřadnic,
+Productionspace ani `mission-control/db` se nikdy automaticky neklonují.
 Když aktuální GitHub identita repo nebo branch nedokáže načíst, výsledek je
 `blocked` s access handoffem; Launchpad žádný paralelní ACL ani grant nevytváří.
 Productionspace, Personalspace, worktrees a root-space repository-db jsou mimo
@@ -800,7 +802,8 @@ jasný mechanismus:
   znovu zjistí; nevzniká plan/apply/resume ani skrytý update journal.
 - Nový commit v Organization rootu může změnit manifest. Engine ho proto po
   root update načte znovu a teprve pak sekvenčně aktualizuje namountovaná
-  org-level repa a aktualizuje nebo atomicky materializuje Workspace Moduly.
+  org-level repa, atomicky materializuje explicitně opt-in root repa a
+  aktualizuje nebo atomicky materializuje Workspace Moduly.
   Po skutečné změně repa obnoví jeho root
   package a pouze package rooty validních Apps z čerstvého manifestu. Každý
   přesný root zpracuje nejvýše jednou. Instalace používá

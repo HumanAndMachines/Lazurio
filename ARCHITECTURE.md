@@ -302,8 +302,12 @@ přepisem source checkoutu a artefakt nesmí vytvořit druhou datovou autoritu.
 
 Pracovní checkouty aktualizuje jediná explicitní akce `lazurio update`, kterou
 volá CLI i tlačítko **Synchronizovat**. Postupuje shora dolů přes Lazurio,
-Organization rooty a všechny namountované modulové checkouty na `main` — jak
-org-level repa typu Mission Control, tak Workspace Moduly. Dirty obsah
+Organization rooty a všechny spravované modulové checkouty na `main` — jak
+org-level repa typu Mission Control, tak Workspace Moduly. Chybějící Workspace
+Modul se materializuje z úplných Git souřadnic; chybějící root repo jen tehdy,
+když manifest explicitně deklaruje `materialization:
+doctor_managed_nested_repo`. Productionspace a root-space repository-db tím
+autoritu nezískávají. Dirty obsah
 primárního checkoutu nejdřív
 uloží do ověřeného recovery stashe, který nikdy automaticky nevrací, a potom
 použije jen fast-forward. Historii s lokálními commity nebo konfliktem
