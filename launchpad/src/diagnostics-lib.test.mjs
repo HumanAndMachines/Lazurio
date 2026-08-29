@@ -1172,6 +1172,77 @@ test("public projection hides protected missing_access while Doctor stays fail-c
   expect(declarationCheck?.details.join("\n")).toContain("workspace/restricted");
 });
 
+test("Hosted Doctor requires missing Workspace modules only in their declared Team", async () => {
+  const root = await createCompaniesWorkspaceFixture();
+  const companyRoot = join(root, "organizations", "TeamCo_GEN3");
+  await mkdir(join(companyRoot, "manual"), { recursive: true });
+  await mkdir(join(companyRoot, "company", "colleagues"), { recursive: true });
+  await writeJson(join(root, "launchpad.gen3.json"), {
+    launchpad_root: { slug: "test-companies", display_name: "Test Companies", root_role: "companies-root" },
+  });
+  await writeJson(join(companyRoot, "company.gen3.json"), {
+    organization_generation: "gen3",
+    company: { slug: "TeamCo", display_name: "Team Co", github_org: "TeamCo" },
+    teams: [
+      { slug: "management", display_name: "Management", default: true },
+      { slug: "technical", display_name: "Technical" },
+    ],
+  });
+  await writeJson(join(companyRoot, "modules.manifest.json"), {
+    organization_generation: "gen3",
+    company: "TeamCo",
+    github_org: "TeamCo",
+    module_slots: [
+      {
+        path: "workspace/device-catalog",
+        teams: ["technical"],
+        default_access: "expected",
+        required_roles: ["*"],
+        git: { url: "git@github.com:TeamCo/device-catalog.git", branch: "main" },
+      },
+    ],
+  });
+  await writeJson(join(companyRoot, "TODO.tasks.json"), {});
+  await writeJson(join(companyRoot, "DONE.tasks.json"), {});
+  await writeJson(join(companyRoot, "ISSUES.open.json"), {});
+
+  const managementResponse = await buildLaunchpadAppsResponse({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    runtimeManager: { appsWithRuntime: async (apps) => apps },
+    activeTeamId: "management",
+  });
+  expect(managementResponse.organizations[0].module_declarations[0]).toMatchObject({
+    status: "missing_access",
+    readiness: { severity: "neutral", reason: "team_not_assigned" },
+  });
+  expect(managementResponse.organizations[0].space_readiness.blocking_slots).toEqual([]);
+
+  const managementDoctor = await buildLaunchpadDoctorReport({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    runtimeManager: { appsWithRuntime: async (apps) => apps },
+    activeTeamId: "management",
+  });
+  expect(
+    managementDoctor.checks.find((check) => check.id === "launchpad.workspace_declarations")?.status,
+  ).toBe("ok");
+
+  for (const activeTeamId of ["technical", "unknown-team", null]) {
+    const report = await buildLaunchpadDoctorReport({
+      companiesRoot: root,
+      launchpadRoot: join(root, "launchpad"),
+      runtimeManager: { appsWithRuntime: async (apps) => apps },
+      activeTeamId,
+    });
+    const declarationCheck = report.checks.find(
+      (check) => check.id === "launchpad.workspace_declarations",
+    );
+    expect(declarationCheck?.status).toBe("fail");
+    expect(declarationCheck?.details.join("\n")).toContain("workspace/device-catalog");
+  }
+});
+
 test("materialized-state projection does not turn local role hints into UI access grants", async () => {
   const root = await createCompaniesWorkspaceFixture();
   const companyRoot = join(root, "organizations", "AccessCo_GEN3");
