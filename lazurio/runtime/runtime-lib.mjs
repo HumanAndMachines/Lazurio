@@ -625,6 +625,7 @@ export function createRuntimeManager({
   }
 
   async function startRuntimeApp(app, takeover = {}) {
+    assertMaintainedAppAction(app);
     return withModuleLeaseLock(app, async () => {
       const result = await startRuntimeAppUnlocked(app, { trigger: "user", takeover });
       const maintenance = acceptMaintainedRuntime(app);
@@ -1126,6 +1127,7 @@ export function createRuntimeManager({
   async function open(appId, options = {}) {
     const { source = null } = options;
     const app = await runtimeAppForAction(appId, { source, enforcePortContract: true });
+    assertMaintainedAppAction(app);
     return withModuleLeaseLock(app, () => openRuntimeAppUnlocked(app, takeoverConfirmation(options)));
   }
 
@@ -1287,7 +1289,7 @@ export function createRuntimeManager({
 
   async function stop(appId, { source = null } = {}) {
     const app = await runtimeAppForAction(appId, { source });
-    if (maintainedEntryForApp(app)) {
+    if (maintainedModuleEntryForApp(app)) {
       throw new RuntimeActionError(
         409,
         "hosted_module_always_on",
@@ -1740,6 +1742,7 @@ export function createRuntimeManager({
   async function restart(appId, options = {}) {
     const { source = null } = options;
     const app = await runtimeAppForAction(appId, { source, enforcePortContract: true });
+    assertMaintainedAppAction(app);
     const runtimeSource = runtimeSourceForApp(app);
     return withModuleLeaseLock(app, async () => {
       try {
@@ -2333,7 +2336,7 @@ export function createRuntimeManager({
     });
   }
 
-  function maintainApps(appIds) {
+  function maintainApps(apps) {
     if (lifecycleProfile !== "hosted") {
       throw new RuntimeActionError(
         409,
@@ -2342,10 +2345,23 @@ export function createRuntimeManager({
       );
     }
     assertRuntimeManagerAcceptingStarts();
-    const requested = new Set(
-      [...appIds]
-        .filter((appId) => typeof appId === "string" && appId.trim() !== "")
-        .map((appId) => appId.trim()),
+    const requested = new Map(
+      [...apps].flatMap((candidate) => {
+        const appId = typeof candidate === "string"
+          ? candidate.trim()
+          : typeof candidate?.id === "string"
+            ? candidate.id.trim()
+            : "";
+        if (!appId) return [];
+        return [[appId, {
+          company: typeof candidate?.company === "string" && candidate.company.trim() !== ""
+            ? candidate.company
+            : null,
+          module: typeof candidate?.module === "string" && candidate.module.trim() !== ""
+            ? candidate.module
+            : null,
+        }]];
+      }),
     );
     let changed = false;
     for (const [configuredAppId, entry] of maintainedApps) {
@@ -2354,13 +2370,25 @@ export function createRuntimeManager({
       retiredMaintainedApps.push(entry);
       changed = true;
     }
-    for (const appId of requested) {
-      if (maintainedApps.has(appId)) continue;
+    for (const [appId, identity] of requested) {
+      const existing = maintainedApps.get(appId);
+      if (existing) {
+        if (
+          identity.company
+          && identity.module
+          && (existing.company !== identity.company || existing.module !== identity.module)
+        ) {
+          existing.company = identity.company;
+          existing.module = identity.module;
+          changed = true;
+        }
+        continue;
+      }
       maintainedApps.set(appId, {
         configured_app_id: appId,
         app_id: appId,
-        company: null,
-        module: null,
+        company: identity.company,
+        module: identity.module,
         source: { type: "main" },
         status: "pending",
         attempts: 0,
@@ -2410,15 +2438,36 @@ export function createRuntimeManager({
 
   function maintainedEntryForApp(app) {
     return [...maintainedApps.values()].find((entry) =>
-      entry.app_id === app?.id
-      || entry.configured_app_id === app?.id
-      || (
+      entry.app_id === app?.id || entry.configured_app_id === app?.id
+    ) ?? null;
+  }
+
+  function maintainedModuleEntryForApp(app) {
+    return maintainedEntryForApp(app) ?? [...maintainedApps.values()].find((entry) =>
         entry.company
         && entry.module
         && entry.company === app?.company
         && entry.module === app?.module
-      )
     ) ?? null;
+  }
+
+  function assertMaintainedAppAction(app) {
+    const entry = maintainedModuleEntryForApp(app);
+    if (!entry || entry.configured_app_id === app?.id) return;
+    throw new RuntimeActionError(
+      409,
+      "hosted_module_default_app_required",
+      `${app.title}: Hosted Team Workspace runs the Module default App declared by discovery.`,
+      [
+        `configured_app_id: ${entry.configured_app_id}`,
+        `requested_app_id: ${app.id}`,
+        `module_lease_key: ${moduleLeaseKeyForApp(app)}`,
+      ],
+      {
+        failure_kind: "hosted_module_default_app_required",
+        configured_app_id: entry.configured_app_id,
+      },
+    );
   }
 
   function acceptMaintainedRuntime(app) {
@@ -2485,10 +2534,15 @@ export function createRuntimeManager({
       });
       if (outcome.status === "retired") return;
       entry.status = outcome.status === "healthy" ? "healthy" : "starting";
-      entry.attempts = 0;
+      entry.attempts = outcome.status === "healthy" ? 0 : entry.attempts + 1;
       entry.failure_kind = null;
       entry.last_error = null;
-      entry.next_attempt_at_ms = nowFn() + maintenanceIntervalMs;
+      if (outcome.status === "healthy") {
+        entry.next_attempt_at_ms = nowFn() + maintenanceIntervalMs;
+      } else {
+        const retryIndex = Math.min(entry.attempts - 1, maintenanceRetrySchedule.length - 1);
+        entry.next_attempt_at_ms = nowFn() + maintenanceRetrySchedule[Math.max(0, retryIndex)];
+      }
     } catch (error) {
       if (stopping || maintainedApps.get(entry.configured_app_id) !== entry) return;
       entry.status = "degraded";
@@ -2845,11 +2899,10 @@ export function createRuntimeManager({
       // After a Launchpad restart the live peer may be safely identifiable by
       // discovery but no longer managed by this process. A declared static
       // lease still authorizes the signal itself; cross-Organization overlap
-      // additionally requires a named, user-confirmed peer and disables its
-      // another runtime before reclaim.
+      // additionally requires a named, user-confirmed peer before reclaim.
       const crossOrganizationOwners = declaredCrossOrganizationOwners(app, listener);
       if (owner.cwd_matches !== true && crossOrganizationOwners.length > 0) {
-        const confirmedOwner = requireConfirmedCrossOrganizationTakeover(app, listener, takeover);
+        requireConfirmedCrossOrganizationTakeover(app, listener, takeover);
       }
 
       const result = await reclaimReservedListener(app, listener, {

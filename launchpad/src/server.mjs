@@ -493,7 +493,7 @@ async function refreshHostedWorkspaceMaintenance({ warnSkipped = false } = {}) {
 function syncHostedWorkspaceMaintenance(inventory) {
   validateHostedWorkspaceBindings(hostedWorkspace, inventory);
   const selected = selectHostedWorkspaceApps(hostedWorkspace, inventory);
-  const maintenance = runtimeManager.maintainApps(selected.apps.map((app) => app.id));
+  const maintenance = runtimeManager.maintainApps(selected.apps);
   return { ...maintenance, skipped: selected.skipped };
 }
 
@@ -1465,14 +1465,21 @@ function startServer(startPort) {
         if (url.pathname === "/api/notifications") return jsonResponse(await buildNotificationsResponse(url.searchParams.get("company")));
         if (url.pathname === "/api/most-used") return jsonResponse(await buildMostUsedResponse(url.searchParams.get("company")));
         if (url.pathname === "/health") {
+          const maintenance = hostedWorkspace.profile === "hosted"
+            ? runtimeManager.maintenanceSummary()
+            : null;
           return serverShutdownState.state === "running"
             ? jsonResponse({
                 status: "ok",
-                ...(hostedWorkspace.profile === "hosted"
+                ...(maintenance
                   ? {
                       maintenance: {
-                        ...runtimeManager.maintenanceSummary(),
-                        skipped: hostedMaintenance?.skipped ?? [],
+                        schema_version: maintenance.schema_version,
+                        total: maintenance.total,
+                        healthy: maintenance.healthy,
+                        starting: maintenance.starting,
+                        degraded: maintenance.degraded,
+                        skipped: hostedMaintenance?.skipped?.length ?? 0,
                       },
                     }
                   : {}),
