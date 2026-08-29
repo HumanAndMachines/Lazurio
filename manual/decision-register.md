@@ -53,7 +53,7 @@ frameworku se sem nepřenášejí).
 | 0094 | Opatrovník: každý seat AI Kolegy má právě jednoho jmenovaného lidského custodiana s auditovaným, jmenovitým servisním vstupem — jiná osa než organizační role; soukromý Personalspace Kolegy se nečte. |
 | 0095 | Admin smí mergovat i vlastní PR; Steward je běžná merge lane, ne výhradní autorita. |
 | 0102 | Lokální Mission Control writer používá GitHub identitu přihlášeného Principála (žádný druhý IAM); datová lane se zamyká progresivně. |
-| 0103 | Agentní PR disciplína: vždy worktree + PR, průběžný push, Draft PR → Ready, průvodcovský handoff, Publikace řízená živými GitHub právy, progresivní zamykání `main`. |
+| 0103 | Agentní PR disciplína: vždy worktree + PR, průběžný push, Draft PR → Ready, průvodcovský handoff, Publikace řízená živými GitHub právy, progresivní zamykání `main`. Předání jinému Principálovi používá reviewer request pro kontrolu a assignee pro vlastnictví dotažení; Task Agent pod přiřazeným GitHub účtem pracuje přímo na PR branchi včetně bezpečného `--force-with-lease` a nevrací změny autorovi pouhým komentářem. Assignment sám neuděluje GitHub práva ani publikační mandát. |
 | 0104 | `.claude/skills` je Git-tracked byte-for-byte mirror `.agents/skills` (Windows-safe, žádné symlinky); paritu hlídá doctor a opravuje repair lane. |
 | 0112 | Agentní instrukce jsou ústava: vysvětlují hodnoty, hranice a očekávání, nediktují postup; slovník pěti pojmů (Principál, Kolega, AI Kolega, Worker Agent, Buddy); jedno pravidlo = jeden kanonický domov; mechaniku nese skript/skill/doctor. |
 | 0113 | Přejmenovatelné jméno (slug, label, deklarace) není autorizační ani join klíč: vazby a výběr drží stabilní identita a ověřený stav, nikdy samotné jméno. |
