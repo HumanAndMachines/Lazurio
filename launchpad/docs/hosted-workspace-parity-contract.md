@@ -57,6 +57,7 @@ bun run parity:workspace -- \
   --profile hosted \
   --phase live \
   --organization <exact-company-slug> \
+  --team <exact-team-slug> \
   --app-id <default-team-app-id> \
   --worktree-slug <t3-created-canonical-slug> \
   --expected-worktree-created-by <t3-creation-identity> \

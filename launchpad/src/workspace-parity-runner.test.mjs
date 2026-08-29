@@ -37,6 +37,7 @@ test("hosted parity requires the derived URL and shared process identities", () 
     "--profile", "hosted",
     "--phase", "post-restart",
     ...shared,
+    "--team", "iotor-builders",
     "--expected-origin", "https://knowledgebase.iotor.example/",
     "--t3-pid", "101",
     "--codex-pid", "151",
@@ -45,9 +46,12 @@ test("hosted parity requires the derived URL and shared process identities", () 
   expect(parseArgs(args)).toMatchObject({ profile: "hosted", phase: "post-restart" });
   expect(() => parseArgs(args.filter((value) => value !== "151" && value !== "--codex-pid")))
     .toThrow("--codex-pid is required");
+  expect(() => parseArgs(args.filter((value) => value !== "iotor-builders" && value !== "--team")))
+    .toThrow("--team is required");
   expect(() => parseArgs([
     "--profile", "hosted",
     ...shared,
+    "--team", "iotor-builders",
     "--t3-pid", "101",
     "--codex-pid", "151",
     "--launchpad-pid", "202",
@@ -59,6 +63,7 @@ test("hosted Stop and persistent disablement are intentionally absent", () => {
     "--profile", "hosted",
     "--stop-after",
     ...shared,
+    "--team", "iotor-builders",
     "--expected-origin", "https://knowledgebase.iotor.example/",
     "--t3-pid", "101",
     "--codex-pid", "151",
