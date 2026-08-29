@@ -75,6 +75,14 @@ třetí repo a negeneruje VPS handoff. Cílový `CAC-0072` kontrakt bude vyžado
 `buddy.runtime.local_execution: forbidden`; reálný cloud/DNS/access/provider
 krok zůstane explicitním human-action gatem.
 
+Doctor odděluje strukturální platnost od rollout stavu. Známé nasazené vazby
+na předchozí Buddy runtime repozitáře proto zůstávají čitelné jako migrační
+warning pod `DEV-6438`; neznámý runtime source, localhost target nebo povolené
+lokální spuštění dál failují. `buddy.slug` je stabilní osobní identita a nemusí
+kopírovat technický název private profile repozitáře. Managed Resident používá
+reviewované forky `Lazurio/hermes-agent` a `Lazurio/gbrain`; přímé upstream
+vazby jsou po dobu odděleného template rolloutu pouze známý warning.
+
 ## Když owner repo už existuje
 
 Root příkaz jej automaticky nebootstrapuje: kanonický název sám o sobě

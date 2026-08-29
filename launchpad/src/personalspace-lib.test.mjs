@@ -545,6 +545,130 @@ test("versionovaný Buddy binding failuje při localhost runtime nebo povoleném
   expect(result.apps).toHaveLength(0);
 });
 
+test("nasazený legacy Buddy binding je validní migrační warning a osobní slug nezávisí na názvu profilu", async () => {
+  const config = personalConfig("exampleuser", {
+    buddy: {
+      slug: "my-buddy",
+      repository: { github_repo: "exampleuser/private-profile" },
+      runtime: { github_repo: "HumanAndMachines/Buddy_GEN2" },
+      hermes: { software_repo: "Lazurio/hermes-agent" },
+    },
+    gbrain: {
+      software: {
+        github_repo: "Lazurio/gbrain",
+        install_source: "github:Lazurio/gbrain",
+      },
+    },
+  });
+  const root = await createPersonalspaceFixture({
+    localOwner: "exampleuser",
+    spaces: [{
+      dirName: "exampleuser_GEN3",
+      owner: "exampleuser",
+      config,
+      gbrainNotes: {},
+    }],
+  });
+
+  const result = await discoverPersonalspace(root);
+  expect(result.failures).toEqual([]);
+  expect(result.spaces[0].config_valid).toBe(true);
+  expect(result.spaces[0].buddy.slug).toBe("my-buddy");
+  expect(result.warnings).toEqual([
+    expect.stringContaining("HumanAndMachines/Buddy_GEN2 je známá nasazená legacy vazba"),
+  ]);
+});
+
+test("aktuální Resident binding je validní bez rollout warningu", async () => {
+  const config = personalConfig("exampleuser", {
+    buddy: {
+      hermes: { software_repo: "Lazurio/hermes-agent" },
+    },
+    gbrain: {
+      software: {
+        github_repo: "Lazurio/gbrain",
+        install_source: "github:Lazurio/gbrain",
+      },
+    },
+  });
+  const root = await createPersonalspaceFixture({
+    localOwner: "exampleuser",
+    spaces: [{
+      dirName: "exampleuser_GEN3",
+      owner: "exampleuser",
+      config,
+      gbrainNotes: {},
+    }],
+  });
+
+  const result = await discoverPersonalspace(root);
+  expect(result.failures).toEqual([]);
+  expect(result.warnings).toEqual([]);
+  expect(result.spaces[0].config_valid).toBe(true);
+});
+
+test("Personalspace bez Buddyho může používat přímý gbrain upstream bez Resident warningu", async () => {
+  const config = personalConfig("exampleuser");
+  delete config.buddy;
+  const root = await createPersonalspaceFixture({
+    localOwner: "exampleuser",
+    spaces: [{
+      dirName: "exampleuser_GEN3",
+      owner: "exampleuser",
+      config,
+      gbrainNotes: {},
+    }],
+  });
+
+  const result = await discoverPersonalspace(root);
+  expect(result.failures).toEqual([]);
+  expect(result.warnings).toEqual([]);
+  expect(result.spaces[0].config_valid).toBe(true);
+});
+
+test("neznámý Buddy runtime source zůstává fail-closed", async () => {
+  const config = personalConfig("exampleuser", {
+    buddy: { runtime: { github_repo: "exampleuser/unreviewed-runtime" } },
+  });
+  const root = await createPersonalspaceFixture({
+    localOwner: "exampleuser",
+    spaces: [{
+      dirName: "exampleuser_GEN3",
+      owner: "exampleuser",
+      config,
+      gbrainNotes: {},
+    }],
+  });
+
+  const result = await discoverPersonalspace(root);
+  expect(result.failures.some((failure) => failure.includes("buddy.runtime.github_repo"))).toBe(true);
+  expect(result.spaces[0].config_valid).toBe(false);
+});
+
+test("gbrain software binding odmítne smíchaný repo a install source", async () => {
+  const config = personalConfig("exampleuser", {
+    gbrain: {
+      software: {
+        github_repo: "Lazurio/gbrain",
+        install_source: "github:garrytan/gbrain",
+      },
+    },
+  });
+  const root = await createPersonalspaceFixture({
+    localOwner: "exampleuser",
+    spaces: [{
+      dirName: "exampleuser_GEN3",
+      owner: "exampleuser",
+      config,
+      gbrainNotes: {},
+    }],
+  });
+
+  const result = await discoverPersonalspace(root);
+  expect(result.failures.some((failure) => failure.includes("stejný známý source"))).toBe(true);
+  expect(result.spaces[0].config_valid).toBe(false);
+});
+
 test("gbrain data repo nesmí aliasovat owner repo", async () => {
   const config = personalConfig("exampleuser", {
     gbrain: { repository: { github_repo: "exampleuser/exampleuser_GEN3" } },
