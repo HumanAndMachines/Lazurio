@@ -955,6 +955,76 @@ test("Lazurio doctor drží identity a výsledky existujícího root Doctor core
   );
 }, platformTestTimeout(15_000));
 
+test("public lazurio doctor propagates the validated Hosted Team scope", async () => {
+  const root = await launchpadFixture();
+  const companyRoot = join(root, "organizations", "TeamCo_GEN3");
+  await mkdir(join(companyRoot, "manual"), { recursive: true });
+  await mkdir(join(companyRoot, "company", "colleagues"), { recursive: true });
+  await writeJson(join(companyRoot, "company.gen3.json"), {
+    organization_generation: "gen3",
+    company: { slug: "TeamCo", display_name: "Team Co", github_org: "TeamCo" },
+    teams: [
+      { slug: "management", display_name: "Management", default: true },
+      { slug: "technical", display_name: "Technical" },
+    ],
+  });
+  await writeJson(join(companyRoot, "modules.manifest.json"), {
+    organization_generation: "gen3",
+    company: "TeamCo",
+    github_org: "TeamCo",
+    module_slots: [{
+      path: "workspace/device-catalog",
+      teams: ["technical"],
+      default_access: "expected",
+      required_roles: ["*"],
+      git: { url: "git@github.com:TeamCo/device-catalog.git", branch: "main" },
+    }],
+  });
+  for (const ledger of ["TODO.tasks.json", "DONE.tasks.json", "ISSUES.open.json"]) {
+    await writeJson(join(companyRoot, ledger), {});
+  }
+  await writeFile(join(root, ".gitignore"), "launchpad/runtime/\nlaunchpad/logs/\nlogs/\norganizations/*\n", "utf8");
+  run(["git", "add", ".gitignore"], root);
+  run(["git", "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "ignore mounts"], root);
+
+  const hostedEnvironment = {
+    LAZURIO_WORKSPACE_PROFILE: "hosted",
+    LAZURIO_TEAM_SERVICE_CATALOG_JSON: JSON.stringify({
+      schema_version: "lazurio.team_service_catalog.v1",
+      team_id: "management",
+      generated_at: "2026-08-29T00:00:00.000Z",
+      services: [],
+    }),
+    LAUNCHPAD_HOSTED_APP_URLS_JSON: "",
+  };
+  const management = run(
+    [process.execPath, "run", cliPath, "doctor", "--json", "--root", root],
+    root,
+    { ...hostedEnvironment, LAZURIO_TEAM_ID: "management" },
+  );
+  expect(management.exitCode).toBe(0);
+  expect(JSON.parse(management.stdout).checks.find(
+    (check) => check.id === "launchpad.workspace_declarations",
+  )?.status).toBe("ok");
+
+  const technical = run(
+    [process.execPath, "run", cliPath, "doctor", "--json", "--root", root],
+    root,
+    {
+      ...hostedEnvironment,
+      LAZURIO_TEAM_ID: "technical",
+      LAZURIO_TEAM_SERVICE_CATALOG_JSON: JSON.stringify({
+        ...JSON.parse(hostedEnvironment.LAZURIO_TEAM_SERVICE_CATALOG_JSON),
+        team_id: "technical",
+      }),
+    },
+  );
+  expect(technical.exitCode).toBe(1);
+  expect(JSON.parse(technical.stdout).checks.find(
+    (check) => check.id === "launchpad.workspace_declarations",
+  )?.status).toBe("fail");
+}, platformTestTimeout(15_000));
+
 test("Lazurio doctor předá explicitní tool-update opt-in jedinému Doctor core", async () => {
   const root = await launchpadFixture();
   let received = null;
@@ -976,6 +1046,7 @@ test("Lazurio doctor předá explicitní tool-update opt-in jedinému Doctor cor
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
     checkToolUpdates: true,
+    activeTeamId: null,
   });
 });
 
@@ -1547,9 +1618,10 @@ function legacyPersonalConfig(username, overrides = {}) {
   return config;
 }
 
-function run(command, cwd) {
+function run(command, cwd, environment = {}) {
   const result = Bun.spawnSync(command, {
     cwd,
+    env: { ...process.env, ...environment },
     stdout: "pipe",
     stderr: "pipe",
   });
