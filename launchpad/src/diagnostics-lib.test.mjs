@@ -1971,6 +1971,11 @@ test("planned root slot rozliší in-tree compatibility adresář od nested chec
   expect(materializedWithCoordinatesCheck?.details.join("\n")).not.toContain(
     "planned root slot design-system nesmí deklarovat git",
   );
+
+  manifest.module_slots[0].status = "inactive";
+  await writeJson(manifestPath, manifest);
+  const stagedCheckoutCheck = await doctor();
+  expect(stagedCheckoutCheck?.status).toBe("ok");
 });
 
 test("trackovaná Organization root vrstva není samostatný repository slot", async () => {
