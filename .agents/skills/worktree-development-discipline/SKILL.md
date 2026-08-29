@@ -129,11 +129,19 @@ autoritu.
    `AGENTS.md` nedeklaruje jinak), v primárním checkoutu spusť
    `lazurio update`, potom `bun run doctor:task` a pokračuj cleanup guardy
    v kroku 13. Když Principál zvolí předání, nebo mu GitHub merge
-   nedovoluje, vyžádej review Kolegy, kterého Principál zvolil
-   (`gh pr edit --add-reviewer <login>` + @zmínka v komentáři PR); pokud
-   nikoho neurčil, požádej ho o volbu — Stewarda použij bez další otázky
-   jen tehdy, když ho jako výchozí rozhodující osobu určuje politika repa.
-   Předej Principálovi, kdo teď rozhoduje. Merge neobcházej ani na
+   nedovoluje, vyžádej review Kolegy, kterého Principál zvolil, PR mu zároveň
+   přiřaď a @zmínkou mu výslovně předej odpovědnost za dotažení
+   (`gh pr edit --add-reviewer <login> --add-assignee <login>` + komentář PR).
+   Reviewer request znamená kontrolu; assignee je owner další práce. Když
+   Task Agent operuje pod přiřazeným GitHub účtem, pracuje přímo na PR
+   branchi: řeší připomínky a CI, rebasuje a po preflightu smí použít jím
+   vypsaný exact `--force-with-lease`. Nesmí změnu vrátit autorovi pouhým
+   komentářem, pokud ji v rámci živých práv a scope může dotáhnout sám.
+   Assignment sám nevytváří GitHub práva ani nenahrazuje explicitní pokyn
+   Principála k Publikaci. Pokud Principál nikoho neurčil, požádej ho o volbu
+   — Stewarda použij bez další otázky jen tehdy, když ho jako výchozí
+   rozhodující osobu určuje politika repa. Předej Principálovi, kdo teď
+   dotažení vlastní. Merge neobcházej ani na
    opakovanou žádost — GitHub ho fyzicky blokuje. Bez zelené PR zůstává
    otevřený a nic se neděje.
 13. Worktree odstraň jen když je clean včetně untracked souborů, nemá

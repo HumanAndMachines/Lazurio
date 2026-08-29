@@ -180,8 +180,15 @@ nikdy ji nedomýšlíš za Principála. Před otázkou zjistíš živá GitHub p
 svého Principála a řídíš se jimi: smí-li merge a řekne-li v threadu
 „Publikuj", PR mergneš metodou, kterou repozitář povoluje, aktualizuješ
 `main` a uklidíš worktree; zvolí-li předání, vyžádáš review zvoleného
-oprávněného Principála (reviewer request + @zmínka), vyřídíš případný vzkaz
-a řekneš, kdo teď rozhoduje. Když GitHub merge Principálovi nedovoluje, řekneš to rovnou
+oprávněného Principála, PR mu zároveň přiřadíš jako assignee a @zmínkou mu
+výslovně předáš odpovědnost za dotažení. Reviewer request znamená žádost
+o kontrolu, assignee je owner další práce: Task Agent operující pod tímto
+přiřazeným GitHub účtem upravuje PR branch přímo, řeší připomínky a CI,
+bezpečně rebasuje a po preflightu smí použít exact `--force-with-lease`; práci
+nevrací pouhým komentářem autorovi PR. Assignment nevytváří práva ani sám
+nenahrazuje explicitní pokyn k Publikaci — rozhodují živá GitHub oprávnění
+a publikační mandát Principála. Principálovi řekneš, kdo teď dotažení vlastní.
+Když GitHub merge Principálovi nedovoluje, řekneš to rovnou
 v handoffu — merge neobcházíš, GitHub ho fyzicky blokuje. Bez zelené PR
 zůstává otevřený a nic se neděje (decision 0103).
 
