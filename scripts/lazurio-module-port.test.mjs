@@ -2,6 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
+import { platformTestTimeout } from "../launchpad/src/test-platform-setup.mjs";
 import { allocateModulePort } from "./lazurio-module-port.mjs";
 
 const roots = [];
@@ -92,4 +93,4 @@ test("creator allocates once from the tracked Organization pool", async () => {
     company: "Acme",
     module: "gamma",
   })).rejects.toThrow("nesmí alokovat lease do worktree");
-});
+}, platformTestTimeout(5_000));
