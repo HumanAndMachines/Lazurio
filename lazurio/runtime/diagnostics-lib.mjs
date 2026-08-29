@@ -1655,7 +1655,7 @@ function rootSlotContractIssues(manifest, config, organizationRoot) {
     const checkoutCoordinatesStarted = slot.git !== undefined;
     if (slot.status === "planned_slot" && nestedCheckoutExists) {
       issues.push(
-        `modules.manifest.json: materializovaný root slot ${path} nesmí zůstat status: "planned_slot"; odstraň status a ponech nebo doplň celé git.url i git.branch`,
+        `modules.manifest.json: materializovaný root slot ${path} nesmí zůstat status: "planned_slot"; aktivní checkout deklaruj bez statusu, staged checkout jako status: "inactive", a v obou případech doplň celé git.url i git.branch`,
       );
     } else if (slot.status === "planned_slot" && checkoutCoordinatesStarted) {
       issues.push(
