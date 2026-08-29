@@ -241,6 +241,8 @@ test("apps diagnostics render structured Git warnings as human text", async () =
 
   expect(response.warnings.some((warning) => warning.includes("[object Object]"))).toBe(false);
   expect(response.warnings.some((warning) => warning.includes("Nekanonické pole owner"))).toBe(true);
+  expect(response.git_worktree_warnings.some((warning) => warning.includes("Nekanonické pole owner"))).toBe(true);
+  expect(response.git_inventory_warnings.some((warning) => warning.includes("Nekanonické pole owner"))).toBe(false);
 });
 
 test("git API can limit polling work to the selected organization", async () => {

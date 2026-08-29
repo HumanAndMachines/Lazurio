@@ -194,6 +194,29 @@ test("runtime inventory does not duplicate per-app warnings and failures", () =>
   expect(report.summary.fail).toBe(1);
 });
 
+test("discovery preserves Git inventory warnings without duplicating worktree warnings", () => {
+  const report = buildDoctorReportFromAppsResponse({
+    launchpad_root: { display_name: "Test root" },
+    root: "/tmp/test-root",
+    failures: [],
+    warnings: ["discovery warning", "git inventory warning", "worktree warning"],
+    discovery_warnings: ["discovery warning"],
+    git_inventory_warnings: ["git inventory warning"],
+    git_worktree_warnings: ["worktree warning"],
+    apps: [],
+    organizations: [],
+    port_overlaps: [],
+  }, {
+    childLane: { children: [], checks: [] },
+  });
+  const discovery = report.checks.find((check) => check.id === "launchpad.discovery");
+
+  expect(discovery?.status).toBe("warn");
+  expect(discovery?.details).toContain("discovery warning");
+  expect(discovery?.details).toContain("git inventory warning");
+  expect(discovery?.details).not.toContain("worktree warning");
+});
+
 test("first-paint apps response can skip the global Git census", async () => {
   const root = await createCompaniesWorkspaceFixture();
   const response = await buildLaunchpadAppsResponse({

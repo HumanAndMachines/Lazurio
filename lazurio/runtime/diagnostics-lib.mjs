@@ -219,7 +219,7 @@ export async function buildLaunchpadAppsResponse({
   });
   const gitContext = includeGit
     ? await buildGitContext({ companiesRoot, gitStatusService })
-    : { reposByKey: new Map(), warnings: [] };
+    : { reposByKey: new Map(), inventoryWarnings: [], worktreeWarnings: [], warnings: [] };
   const appsWithGit = includeGit
     ? visibleApps.map((app) => ({
         ...app,
@@ -299,6 +299,8 @@ export async function buildLaunchpadAppsResponse({
     // pro stávající API konzumenty; discovery check ale nesmí stejný sidecar
     // vykázat podruhé vedle `git.worktrees.contract`.
     discovery_warnings: discoveryWarnings,
+    git_inventory_warnings: gitContext.inventoryWarnings,
+    git_worktree_warnings: gitContext.worktreeWarnings,
     warnings: [...discoveryWarnings, ...gitContext.warnings],
   };
 }
@@ -828,12 +830,21 @@ async function buildGitContext({ companiesRoot, gitStatusService = null }) {
     });
     return {
       reposByKey: new Map(gitResponse.repos.map((repo) => [repo.key, repo])),
+      inventoryWarnings: (gitResponse.inventory_warnings ?? []).map(
+        (warning) => `git inventory: ${formatGitWarning(warning)}`,
+      ),
+      worktreeWarnings: (gitResponse.worktree_warnings ?? []).map(
+        (warning) => `git worktree: ${formatGitWarning(warning)}`,
+      ),
       warnings: gitResponse.warnings.map((warning) => `git: ${formatGitWarning(warning)}`),
     };
   } catch (error) {
+    const warning = `git inventory: stav repozitářů nejde načíst (${error.message})`;
     return {
       reposByKey: new Map(),
-      warnings: [`git: stav repozitářů nejde načíst (${error.message})`],
+      inventoryWarnings: [warning],
+      worktreeWarnings: [],
+      warnings: [warning],
     };
   }
 }
@@ -2534,9 +2545,12 @@ function workspaceSummary(companiesConfig) {
 
 function discoveryCheck(appsResponse) {
   // Starší/ručně sestavené fixtures předávají jen `warnings`; nový apps
-  // response drží zvlášť přesné discovery warnings, aby se Git/worktree nález
-  // nepromítl do dvou nezávislých Doctor checks.
-  const warnings = appsResponse.discovery_warnings ?? appsResponse.warnings ?? [];
+  // response drží zvlášť přesné discovery a Git inventory warnings, aby se
+  // worktree nález nepromítl do dvou nezávislých Doctor checks a současně se
+  // žádný jiný Git inventory nález neztratil.
+  const warnings = appsResponse.discovery_warnings
+    ? [...appsResponse.discovery_warnings, ...(appsResponse.git_inventory_warnings ?? [])]
+    : (appsResponse.warnings ?? []);
   const warningCount = warnings.length;
   const status = appsResponse.failures.length > 0 ? "fail" : warningCount > 0 ? "warn" : "ok";
   // Template mounty jsou validované, ale mimo runtime/business/counts. V Doctor
