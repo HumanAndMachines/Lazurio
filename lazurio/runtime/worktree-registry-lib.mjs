@@ -116,11 +116,24 @@ async function inspectOwnerRegistry(owner) {
     cwd: owner.absolute_path,
     timeoutMs: GIT_LOCAL_TIMEOUT_MS,
   });
-  if (!topLevel.ok || !samePath(topLevel.stdout, owner.absolute_path)) {
+  const prefix = await runGit(["rev-parse", "--show-prefix"], {
+    cwd: owner.absolute_path,
+    timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+  });
+  // Git owns the repository boundary. Comparing the two path strings is not
+  // portable on Windows, where tmpdir may expose an 8.3 alias while Git emits
+  // the long spelling of the same directory. An empty Git prefix proves that
+  // the inspected directory itself is the checkout root without relying on
+  // either spelling.
+  if (!topLevel.ok || !prefix.ok || prefix.stdout !== "") {
     return {
       ok: false,
       owner,
-      error: topLevel.error || topLevel.stderr || "owner path is not the Git toplevel",
+      error: topLevel.error
+        || topLevel.stderr
+        || prefix.error
+        || prefix.stderr
+        || "owner path is not the Git toplevel",
     };
   }
   const commonDirResult = await runGit(
@@ -169,7 +182,7 @@ async function inspectOwnerRegistry(owner) {
     ok: true,
     owner: {
       ...owner,
-      absolute_path: resolve(owner.absolute_path),
+      absolute_path: canonicalPath(topLevel.stdout),
       github_repository: githubRepository,
     },
     common_dir: commonDir,
