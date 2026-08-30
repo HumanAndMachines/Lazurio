@@ -35,12 +35,13 @@ export async function buildWorktreeIndex({
     if (!existsSync(organizationRoot)) continue;
     for (const invalidLocation of invalidWorktreeLocations) {
       const absolutePath = join(organizationRoot, invalidLocation);
-      if (await invalidWorktreeLocationHasEntries(absolutePath)) {
+      const invalidLocationMessage = await describeInvalidWorktreeLocation(absolutePath);
+      if (invalidLocationMessage) {
         invalid_locations.push({
           organization: org.slug,
           path: relative(companiesRoot, absolutePath).replace(/\\/g, "/"),
           status: "invalid",
-          message: "Neplatné umístění worktree podle decision 0049.",
+          message: invalidLocationMessage,
         });
       }
     }
@@ -73,14 +74,22 @@ export async function buildWorktreeIndex({
   };
 }
 
-async function invalidWorktreeLocationHasEntries(absolutePath) {
+async function describeInvalidWorktreeLocation(absolutePath) {
   try {
     const location = await lstat(absolutePath);
-    if (!location.isDirectory()) return true;
-    return (await readdir(absolutePath)).length > 0;
+    if (location.isSymbolicLink()) {
+      return "Nepovolená legacy worktree cesta je symlink. Neotvírej ani nemaž jeho cíl; po ověření provenance odstraň pouze přesný symlink a spusť Doctor znovu.";
+    }
+    if (!location.isDirectory()) {
+      return "Nepovolená legacy worktree cesta není adresář. Ověř její provenance, odstraň pouze přesnou položku a spusť Doctor znovu.";
+    }
+    if ((await readdir(absolutePath)).length === 0) {
+      return "Prázdná nepovolená legacy worktree složka. Bezpečný cleanup: použij rmdir na přesnou uvedenou cestu (nikdy rekurzivní mazání) a spusť Doctor znovu.";
+    }
+    return "Nepovolené legacy umístění obsahuje data. Nejdřív ověř a bezpečně zachovej případnou práci; teprve potom odstraň přesnou cestu a spusť Doctor znovu.";
   } catch (error) {
-    if (error?.code === "ENOENT") return false;
-    return true;
+    if (error?.code === "ENOENT") return null;
+    return "Nepovolenou legacy worktree cestu nelze bezpečně načíst. Neodstraňuj ji odhadem; oprav přístup nebo provenance a spusť Doctor znovu.";
   }
 }
 
