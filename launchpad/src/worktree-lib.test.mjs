@@ -170,6 +170,25 @@ test("worktree scanner reports legacy worktree locations as invalid contract vio
   );
 });
 
+test("worktree scanner ignores empty forbidden containers until they contain worktree-shaped residue", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const orgRoot = join(root, "organizations", "OmegaCo_GEN3");
+  const invalidContainer = join(orgRoot, ".codex-tmp");
+  await mkdir(invalidContainer, { recursive: true });
+
+  let index = await buildWorktreeIndex({ companiesRoot: root });
+  expect(index.invalid_locations.map((item) => item.path)).not.toContain(
+    "organizations/OmegaCo_GEN3/.codex-tmp",
+  );
+
+  await mkdir(join(invalidContainer, "old-agent-work"));
+  index = await buildWorktreeIndex({ companiesRoot: root });
+  expect(index.invalid_locations.map((item) => item.path)).toContain(
+    "organizations/OmegaCo_GEN3/.codex-tmp",
+  );
+});
+
 test("worktree stale heuristic does not mark old dirty drafts as stale", async () => {
   const root = await createLaunchpadGitFixture();
   tempRoots.push(root);

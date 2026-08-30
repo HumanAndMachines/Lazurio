@@ -35,7 +35,7 @@ export async function buildWorktreeIndex({
     if (!existsSync(organizationRoot)) continue;
     for (const invalidLocation of invalidWorktreeLocations) {
       const absolutePath = join(organizationRoot, invalidLocation);
-      if (existsSync(absolutePath)) {
+      if (await invalidWorktreeLocationHasEntries(absolutePath)) {
         invalid_locations.push({
           organization: org.slug,
           path: relative(companiesRoot, absolutePath).replace(/\\/g, "/"),
@@ -71,6 +71,15 @@ export async function buildWorktreeIndex({
     invalid_locations,
     warnings,
   };
+}
+
+async function invalidWorktreeLocationHasEntries(absolutePath) {
+  try {
+    return (await readdir(absolutePath)).length > 0;
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    return true;
+  }
 }
 
 async function scanCanonicalOrganizationWorktrees({ companiesRoot, organization }) {
