@@ -69,10 +69,10 @@ repo a data repo se nesmějí zaměnit.
 ## Vytvoření vlastního Personalspace
 
 `HumanAndMachines/Lazurio` je direct-pull repo a není GitHub
-template. Pro self-service založení prostoru vlastníka bude po public-readiness
-gate `CAC-0071` sloužit veřejný
-`HumanAndMachines/PersonalspaceTemplate_GEN3`; do té doby zůstává template
-private. Vygenerovaná instance musí být vždy private a pojmenovaná přesně:
+template. Pro self-service založení prostoru vlastníka slouží veřejná GitHub
+template
+[`Lazurio/PersonalspaceTemplate_GEN3`](https://github.com/Lazurio/PersonalspaceTemplate_GEN3).
+Vygenerovaná instance musí být vždy private a pojmenovaná přesně:
 
 ```text
 <github-login>/<github-login>_GEN3
@@ -90,9 +90,9 @@ Cross-platform automatizaci drží root příkaz:
 bun run personalspace:create -- --display-name "<jméno>" --apply --install-gbrain
 ```
 
-Příkaz před zápisem vyžaduje public + `isTemplate=true` upstream. Dokud
-public-readiness audit drží template jako private, fail-closed skončí v
-preflightu a nevytvoří žádný osobní repozitář ani checkout.
+Příkaz před zápisem vyžaduje public + `isTemplate=true` upstream. Při jakémkoli
+driftu fail-closed skončí v preflightu a nevytvoří žádný osobní repozitář ani
+checkout.
 
 Detail a recovery jsou v `manual/create-personalspace.md`; pilot Matouše
 a cross-platform evidence drží `CAC-0071`.

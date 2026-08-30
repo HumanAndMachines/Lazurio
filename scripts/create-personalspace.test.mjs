@@ -27,7 +27,7 @@ test("create parser drží apply a gbrain instalaci explicitní", () => {
   expect(() => parseCreateArgs(["--buddy-repo", "example/example-assistant"])).toThrow(
     "Neznámý argument",
   );
-  expect(PERSONALSPACE_TEMPLATE).toBe("HumanAndMachines/PersonalspaceTemplate_GEN3");
+  expect(PERSONALSPACE_TEMPLATE).toBe("Lazurio/PersonalspaceTemplate_GEN3");
 });
 
 test("cílový mount je deterministický v POSIX i Windows cestě", () => {

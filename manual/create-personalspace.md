@@ -2,9 +2,10 @@
 
 Personalspace je integrální privátní vrstva Lazurio. Lazurio je
 veřejný direct-pull framework a není GitHub template; pro osobní repo je
-připravený `HumanAndMachines/PersonalspaceTemplate_GEN3`. Dokud jeho
-public-readiness audit drží visibility `private`, root příkaz fail-closed nic
-nevytvoří. Public použití začíná až explicitním publication gatem.
+připravená veřejná GitHub template
+[`Lazurio/PersonalspaceTemplate_GEN3`](https://github.com/Lazurio/PersonalspaceTemplate_GEN3).
+Root příkaz její `public` visibility a `isTemplate=true` živě ověřuje a při
+jakémkoli driftu fail-closed nic nevytvoří.
 
 Výstupem jsou dva samostatné private repozitáře na osobním GitHub účtu:
 
@@ -36,8 +37,8 @@ gh auth status
 bun run personalspace:create -- --display-name "<jméno>"
 ```
 
-Preflight musí potvrdit `visibility=public` a `isTemplate=true`. Dnešní
-nepublikovaný template proto očekávaně skončí chybou před jakýmkoli zápisem.
+Preflight musí potvrdit `visibility=public` a `isTemplate=true`; jinak skončí
+chybou před jakýmkoli zápisem.
 
 Po kontrole proveď vytvoření a instalaci:
 

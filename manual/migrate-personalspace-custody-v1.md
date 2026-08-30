@@ -62,6 +62,6 @@ Personalspace.
 
 Chceš-li do staršího repa doplnit i nový bootstrap/Doctor tooling, porovnej
 jej s aktuálním veřejným
-`HumanAndMachines/PersonalspaceTemplate_GEN3` a přenes jej samostatným
-reviewovaným PR. Nespouštěj neověřený lokální `package.json` jen podle názvu
-repa.
+[`Lazurio/PersonalspaceTemplate_GEN3`](https://github.com/Lazurio/PersonalspaceTemplate_GEN3)
+a přenes jej samostatným reviewovaným PR. Nespouštěj neověřený lokální
+`package.json` jen podle názvu repa.
