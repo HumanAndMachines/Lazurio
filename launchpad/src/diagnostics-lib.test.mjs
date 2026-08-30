@@ -2500,7 +2500,7 @@ test("invalid_manifest appka je viditelná v apps response a doctor ji hlásí j
   expect(goodCheck).toBeDefined();
 });
 
-test.skipIf(process.platform === "win32")("CAC-0042: Doctor sjednotí Git registry s filesystem nálezy bez stale-sidecar false positive", async () => {
+test.skipIf(process.platform === "win32")("CAC-0042: Doctor reportuje worktree problémy bez cleanup rozhodování", async () => {
   const root = await createLaunchpadGitFixture();
   tempRoots.push(root);
   const orgRoot = join(root, "organizations", "BetaCo_GEN3");
@@ -2511,11 +2511,8 @@ test.skipIf(process.platform === "win32")("CAC-0042: Doctor sjednotí Git regist
   const stalePath = join(orgRoot, ".worktrees", "workspace", "deals", "CAC-0042-doctor-stale");
   const orphanPath = join(orgRoot, ".worktrees", "workspace", "deals", "CAC-0042-doctor-orphan");
   const missingPlanPath = join(orgRoot, ".worktrees", "workspace", "deals", "CAC-0042-doctor-missing-plan");
-  const ownerRepo = join(orgRoot, "workspace", "deals");
-  await initGitRepo(ownerRepo);
-  await mkdir(join(orgRoot, ".worktrees", "workspace", "deals"), { recursive: true });
-  runGit(["worktree", "add", "-b", "CAC-0042-doctor-active", activePath], ownerRepo);
-  runGit(["worktree", "add", "-b", "CAC-0042-doctor-stale", stalePath], ownerRepo);
+  await initGitRepo(activePath, { branch: "CAC-0042-doctor-active" });
+  await initGitRepo(stalePath, { branch: "CAC-0042-doctor-stale" });
   await initGitRepo(orphanPath, { branch: "CAC-0042-doctor-orphan" });
   await initGitRepo(missingPlanPath, { branch: "CAC-0042-doctor-missing-plan" });
   await writeFile(
@@ -2614,20 +2611,23 @@ test.skipIf(process.platform === "win32")("CAC-0042: Doctor sjednotí Git regist
   const checks = new Map(report.checks.map((check) => [check.id, check]));
 
   expect(checks.get("git.worktrees.inventory")?.status).toBe("ok");
-  expect(checks.get("git.worktrees.inventory")?.message).toContain("4 unique records");
+  expect(checks.get("git.worktrees.inventory")?.message).toContain("4 worktrees");
   expect(checks.get("git.worktrees.inventory")?.details).toEqual(expect.arrayContaining([
-    "owner_git_registries: 1",
-    "registered_worktrees: 2",
-    "filesystem_only: 2",
     "owned: 2",
     "orphan_missing_plan: 1",
     "orphan_missing_file: 1",
-    "stale: 1",
+    "stale: 0",
   ]));
   expect(checks.get("git.worktrees.contract")?.status).toBe("warn");
   expect(checks.get("git.worktrees.contract")?.details.join("\n")).toContain(".claude/worktrees");
   expect(checks.get("git.worktrees.contract")?.details.join("\n")).toContain(
-    "invalid_location: organizations/BetaCo_GEN3/.codex-tmp — Prázdná nepovolená legacy worktree složka. Bezpečný cleanup: použij rmdir na přesnou uvedenou cestu (nikdy rekurzivní mazání) a spusť Doctor znovu.",
+    "invalid_location: organizations/BetaCo_GEN3/.codex-tmp — Prázdná nepovolená legacy worktree složka. Doctor ji nezměnil.",
+  );
+  expect(checks.get("git.worktrees.contract")?.details.join("\n")).toContain(
+    "invalid_location_state: organizations/BetaCo_GEN3/.codex-tmp — agent_action: prázdnou přesnou cestu lze odstranit pomocí rmdir",
+  );
+  expect(checks.get("git.worktrees.contract")?.details.join("\n")).toContain(
+    "invalid_location_state: organizations/BetaCo_GEN3/.claude/worktrees — agent_action:",
   );
   expect(checks.get("git.worktrees.contract")?.details.join("\n")).toContain("CAC-0042-doctor-orphan");
   expect(checks.get("git.worktrees.contract")?.details.join("\n")).toContain("CAC-0042-doctor-missing-plan");
@@ -2638,19 +2638,11 @@ test.skipIf(process.platform === "win32")("CAC-0042: Doctor sjednotí Git regist
   expect(checks.get("git.worktrees.contract")?.details.join("\n")).toContain("Sidecar nemá conversation_origin");
   expect(checks.get("git.worktrees.contract")?.details.join("\n")).not.toContain("[object Object]");
   expect(checks.get("launchpad.discovery")?.details.join("\n")).not.toContain("Sidecar nemá conversation_origin");
-  expect(checks.get("git.worktrees.cleanup")?.status).toBe("warn");
-  expect(checks.get("git.worktrees.cleanup")?.details).toEqual(expect.arrayContaining([
-    "registered_worktrees: 2",
-    "candidates: 0",
-    "needs_attention: 1",
-    "not_refreshed: 1",
-    "network: not requested; běžný Doctor nevolá GitHub",
-  ]));
+  expect(checks.has("git.worktrees.cleanup")).toBe(false);
   expect(checks.get("git.worktrees.dependencies")?.status).toBe("warn");
   expect(checks.get("git.worktrees.dependencies")?.details).toEqual(expect.arrayContaining([
     "checked_worktrees: 2",
-    "skipped_cleanup_worktrees: 0",
-    "skipped_unregistered_worktrees: 0",
+    "skipped_declared_inactive_worktrees: 0",
     "checked_packages: 6",
     "ready: 1",
     "needs_install: 1",
@@ -2680,10 +2672,7 @@ test("worktree dependency Doctor follows the configured Organization mountpoint"
   const orgRoot = join(root, "orgs", "BetaCo_GEN3");
   const worktreeSlug = "CAC-0042-custom-mountpoint";
   const worktreePath = join(orgRoot, ".worktrees", "workspace", "deals", worktreeSlug);
-  const ownerRepo = join(orgRoot, "workspace", "deals");
-  await initGitRepo(ownerRepo);
-  await mkdir(join(worktreePath, ".."), { recursive: true });
-  runGit(["worktree", "add", "-b", worktreeSlug, worktreePath], ownerRepo);
+  await initGitRepo(worktreePath, { branch: worktreeSlug });
   await writeJson(join(worktreePath, "package.json"), {
     name: "custom-mountpoint-fixture",
     private: true,
@@ -2714,8 +2703,7 @@ test("worktree dependency Doctor follows the configured Organization mountpoint"
   expect(dependencies?.status).toBe("ok");
   expect(dependencies?.details).toEqual(expect.arrayContaining([
     "checked_worktrees: 1",
-    "skipped_cleanup_worktrees: 0",
-    "skipped_unregistered_worktrees: 0",
+    "skipped_declared_inactive_worktrees: 0",
     "checked_packages: 1",
     "ready: 1",
   ]));

@@ -44,6 +44,13 @@ Bun sám nemění. Agent nejdřív zjistí způsob instalace, vyžádá souhlas
 s externí změnou a použije standardní upstream postup; `lazurio update`
 runtime nikdy potichu nepřepisuje.
 
+Doctor lokálně upozorní také na nepovolené worktree cesty, například
+`.codex-tmp` nebo `.claude/worktrees`. U neprázdné cesty vypíše Agentovi
+nalezené Git checkouty a jejich branch, HEAD, upstream a počty lokálních
+změn. Stav pouze pozoruje: nevolá kvůli němu GitHub, nerozhoduje o bezpečnosti
+cleanup operace a nic nemaže. Cleanup provede Agent až po guardech z
+`worktree-development-discipline`.
+
 Při troubleshootingu může Agent výslovně přidat síťovou kontrolu aktuálnosti
 vývojových nástrojů:
 
@@ -51,19 +58,6 @@ vývojových nástrojů:
 lazurio doctor --tool-updates
 lazurio doctor --tool-updates --json
 ```
-
-Worktree inventář zůstává v běžném Doctoru čistě lokální a čte všechny
-fyzicky dostupné owner Git registry. Když Agent potřebuje rozhodnout cleanup,
-vyžádá zvlášť živou exact-head PR evidenci:
-
-```sh
-lazurio doctor --refresh-prs
-lazurio doctor --refresh-prs --json
-```
-
-Tento průchod je stále read-only: zobrazí cleanup kandidáty a přesné blokátory,
-ale worktree, sidecar ani branch neodstraní. Smazaná branch sama není důkaz
-bezpečí; změněný HEAD musí být zachovaný v exact-head merged PR.
 
 Git, GitHub CLI a Codex CLI dostupné v `PATH` se porovnají
 s oficiálním stabilním release zdrojem; Claude Code se kontroluje pouze tehdy,

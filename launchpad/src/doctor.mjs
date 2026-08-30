@@ -19,7 +19,6 @@ const report = await buildLaunchpadDoctorReport({
   allowMissingOrganizations: options.allowMissingOrganizations,
   runChildDoctors: !options.skipChildren,
   checkToolUpdates: options.toolUpdates,
-  refreshWorktreePullRequests: options.refreshPrs,
   activeTeamId: workspaceProfile.profile === "hosted" ? workspaceProfile.team_id : null,
 });
 
@@ -43,7 +42,6 @@ function parseArgs(args) {
     allowMissingOrganizations: false,
     skipChildren: false,
     toolUpdates: false,
-    refreshPrs: false,
   };
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -63,10 +61,6 @@ function parseArgs(args) {
     }
     if (arg === "--tool-updates") {
       parsed.toolUpdates = true;
-      continue;
-    }
-    if (arg === "--refresh-prs") {
-      parsed.refreshPrs = true;
       continue;
     }
     if (arg.startsWith("--root=")) {

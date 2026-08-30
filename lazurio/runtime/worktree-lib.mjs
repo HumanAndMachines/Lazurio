@@ -1,16 +1,10 @@
-import { existsSync, realpathSync } from "fs";
+import { existsSync } from "fs";
 import { lstat, readFile, readdir } from "fs/promises";
 import { basename, join, relative } from "path";
 import { buildGitInventory } from "./git-inventory-lib.mjs";
 import { readGitRepoStatus } from "./git-status-lib.mjs";
 import { readMissionControlPlanAt } from "./mission-control-plan-lib.mjs";
 import { inspectCanonicalPathBoundary } from "../core/path-boundary-lib.mjs";
-import {
-  buildRegisteredWorktreeIndex,
-  classifyWorktreeCleanup,
-  normalizeWorktreePathIdentity,
-  readGitWorktreeIdentity,
-} from "./worktree-registry-lib.mjs";
 
 const invalidWorktreeLocations = [
   ".claude/worktrees",
@@ -20,13 +14,14 @@ const invalidWorktreeLocations = [
   ".worktrees/root-repos",
 ];
 
+const invalidLocationScanDepth = 3;
+const invalidLocationEntryBudget = 200;
+
 export async function buildWorktreeIndex({
   companiesRoot,
   organization = null,
   inventoryOrganizations = null,
   module = null,
-  refreshPullRequests = false,
-  githubProvider = null,
 } = {}) {
   if (!companiesRoot) throw new Error("buildWorktreeIndex requires companiesRoot");
   const inventory = await buildGitInventory({
@@ -38,21 +33,24 @@ export async function buildWorktreeIndex({
   const invalid_locations = [];
   const warnings = [];
 
+  if (organization === null) {
+    invalid_locations.push(...await scanInvalidWorktreeLocations({
+      companiesRoot,
+      scopeRoot: companiesRoot,
+      organization: null,
+      scope: "root",
+    }));
+  }
+
   for (const org of organizations) {
     const organizationRoot = join(companiesRoot, org.path);
     if (!existsSync(organizationRoot)) continue;
-    for (const invalidLocation of invalidWorktreeLocations) {
-      const absolutePath = join(organizationRoot, invalidLocation);
-      const invalidLocationMessage = await describeInvalidWorktreeLocation(absolutePath);
-      if (invalidLocationMessage) {
-        invalid_locations.push({
-          organization: org.slug,
-          path: relative(companiesRoot, absolutePath).replace(/\\/g, "/"),
-          status: "invalid",
-          message: invalidLocationMessage,
-        });
-      }
-    }
+    invalid_locations.push(...await scanInvalidWorktreeLocations({
+      companiesRoot,
+      scopeRoot: organizationRoot,
+      organization: org.slug,
+      scope: "organization",
+    }));
     const scanned = await scanCanonicalOrganizationWorktrees({ companiesRoot, organization: org });
     for (const worktree of scanned) {
       if (module && worktree.module !== module) continue;
@@ -73,124 +71,139 @@ export async function buildWorktreeIndex({
     }
   }
 
-  const registered = await buildRegisteredWorktreeIndex({
-    companiesRoot,
-    repos: inventory.repos.filter((repo) => !organization || repo.organization === organization),
-    includeRoot: organization === null,
-    refreshPullRequests,
-    githubProvider,
-  });
-  const byAbsolutePath = new Map(worktrees.map((worktree) => [
-    canonicalPath(join(companiesRoot, worktree.path)),
-    worktree,
-  ]));
-  const byGitIdentity = new Map(worktrees
-    .filter((worktree) => worktree.git_identity)
-    .map((worktree) => [worktree.git_identity, worktree]));
-  for (const registeredWorktree of registered.worktrees) {
-    const scanned = byAbsolutePath.get(canonicalPath(registeredWorktree.absolute_path))
-      ?? (registeredWorktree.git_identity
-        ? byGitIdentity.get(registeredWorktree.git_identity)
-        : null);
-    if (scanned) {
-      scanned.registered = true;
-      scanned.registry = registeredWorktree;
-      scanned.cleanup_dry_run = classifyWorktreeCleanup({
-        ...registeredWorktree,
-        sidecar_exists: registeredWorktree.sidecar_exists || Boolean(scanned.metadata),
-        sidecar_hint_valid:
-          scanned.ownership_status === "owned"
-          || registeredWorktree.sidecar_hint_valid,
-      }, { refreshRequested: refreshPullRequests });
-      continue;
-    }
-    const record = registeredWorktreeRecord(registeredWorktree);
-    if (module && record.module !== module) continue;
-    if (organization && record.organization !== organization) continue;
-    worktrees.push(record);
-    byAbsolutePath.set(canonicalPath(registeredWorktree.absolute_path), record);
-  }
-  for (const worktree of worktrees) {
-    if (worktree.registered === true) continue;
-    worktree.registered = false;
-    worktree.cleanup_dry_run = {
-      classification: "needs_attention",
-      blockers: ["git_registry_missing"],
-      next_action: "verify_owner_repository_and_repair_or_remove_leftover",
-    };
-  }
-
   return {
     schema_version: "companiesascode.launchpad.worktrees.v1",
     generated_at: new Date().toISOString(),
     worktrees,
     invalid_locations,
     warnings,
-    registered,
   };
 }
 
-function canonicalPath(path) {
-  try {
-    return normalizeWorktreePathIdentity(realpathSync(path));
-  } catch {
-    return normalizeWorktreePathIdentity(path);
+async function scanInvalidWorktreeLocations({ companiesRoot, scopeRoot, organization, scope }) {
+  const records = [];
+  for (const invalidLocation of invalidWorktreeLocations) {
+    const absolutePath = join(scopeRoot, invalidLocation);
+    const diagnosis = await describeInvalidWorktreeLocation({ companiesRoot, absolutePath });
+    if (!diagnosis) continue;
+    records.push({
+      organization,
+      scope,
+      path: relative(companiesRoot, absolutePath).replace(/\\/g, "/") || ".",
+      status: "invalid",
+      message: diagnosis.message,
+      details: diagnosis.details,
+    });
   }
+  return records;
 }
 
-function registeredWorktreeRecord(worktree) {
-  const sidecarIssue = !worktree.sidecar_exists
-    ? "Worktree je v Git registru, ale nemá sidecar."
-    : !worktree.sidecar_hint_valid
-    ? `Worktree sidecar neodpovídá Git identitě (${worktree.sidecar_hint_error}).`
-    : null;
-  return {
-    slug: basename(worktree.absolute_path),
-    organization: worktree.organization,
-    organization_path: worktree.organization_path,
-    workspace: worktree.owner_repo_kind === "module"
-      ? "workspace"
-      : worktree.owner_repo_kind === "productionspace"
-      ? "productionspace"
-      : "root",
-    module: worktree.module,
-    repo_kind: worktree.owner_repo_kind,
-    path: worktree.path,
-    sidecar_path: worktree.sidecar_path,
-    branch: worktree.branch,
-    plan_code: worktree.sidecar_metadata?.mission_control_plan_code ?? null,
-    owner_plan: null,
-    metadata: worktree.sidecar_metadata,
-    ownership_status: sidecarIssue ? "registered_needs_attention" : "registered",
-    status: worktree.cleanup_dry_run.classification === "candidate"
-      ? "merged_cleanup_needed"
-      : worktree.cleanup_dry_run.classification === "needs_attention"
-      ? "needs_attention"
-      : "active",
-    message: sidecarIssue ?? "Git owner registry and sidecar identity agree.",
-    registered: true,
-    registry: worktree,
-    cleanup_dry_run: worktree.cleanup_dry_run,
-  };
-}
-
-async function describeInvalidWorktreeLocation(absolutePath) {
+async function describeInvalidWorktreeLocation({ companiesRoot, absolutePath }) {
   try {
     const location = await lstat(absolutePath);
     if (location.isSymbolicLink()) {
-      return "Nepovolená legacy worktree cesta je symlink. Neotvírej ani nemaž jeho cíl; po ověření provenance odstraň pouze přesný symlink a spusť Doctor znovu.";
+      return {
+        message: "Nepovolená legacy worktree cesta je symlink. Doctor jeho cíl neotevřel ani nezměnil.",
+        details: [
+          "state: symlink",
+          "agent_action: ověř provenance a odstraň případně pouze přesný symlink, nikdy jeho cíl",
+        ],
+      };
     }
     if (!location.isDirectory()) {
-      return "Nepovolená legacy worktree cesta není adresář. Ověř její provenance, odstraň pouze přesnou položku a spusť Doctor znovu.";
+      return {
+        message: "Nepovolená legacy worktree cesta není adresář. Doctor ji nezměnil.",
+        details: [
+          `state: ${location.isFile() ? "file" : "other"}`,
+          "agent_action: ověř provenance přesné položky; neodstraňuj ji odhadem",
+        ],
+      };
     }
-    if ((await readdir(absolutePath)).length === 0) {
-      return "Prázdná nepovolená legacy worktree složka. Bezpečný cleanup: použij rmdir na přesnou uvedenou cestu (nikdy rekurzivní mazání) a spusť Doctor znovu.";
+    const entries = await readdir(absolutePath);
+    if (entries.length === 0) {
+      return {
+        message: "Prázdná nepovolená legacy worktree složka. Doctor ji nezměnil.",
+        details: [
+          "state: empty",
+          "entries: 0",
+          "agent_action: prázdnou přesnou cestu lze odstranit pomocí rmdir; nikdy nepoužívej rekurzivní mazání",
+        ],
+      };
     }
-    return "Nepovolené legacy umístění obsahuje data. Nejdřív ověř a bezpečně zachovej případnou práci; teprve potom odstraň přesnou cestu a spusť Doctor znovu.";
+    const inspection = await inspectInvalidLocationGitCheckouts({ companiesRoot, absolutePath });
+    return {
+      message: `Nepovolené legacy umístění obsahuje data (${inspection.git_checkouts.length} Git checkoutů nalezeno). Doctor nic neodstranil.`,
+      details: [
+        "state: non_empty",
+        `entries: ${entries.length}`,
+        `git_checkouts: ${inspection.git_checkouts.length}`,
+        `scan_truncated: ${inspection.scan_truncated}`,
+        ...inspection.git_checkouts.map(formatInvalidLocationCheckout),
+        inspection.git_checkouts.length > 0
+          ? "agent_action: ověř přesný owner Git registry, PR/remote zachování, runtime a active writera podle worktree-development-discipline; teprve potom použij git worktree remove"
+          : "agent_action: ověř provenance všech položek a bezpečně zachovej případnou práci; Doctor tuto cestu neuklízí",
+      ],
+    };
   } catch (error) {
     if (error?.code === "ENOENT") return null;
-    return "Nepovolenou legacy worktree cestu nelze bezpečně načíst. Neodstraňuj ji odhadem; oprav přístup nebo provenance a spusť Doctor znovu.";
+    return {
+      message: "Nepovolenou legacy worktree cestu nelze bezpečně načíst. Doctor ji nezměnil.",
+      details: [
+        "state: unreadable",
+        `error: ${error instanceof Error ? error.message : String(error)}`,
+        "agent_action: oprav přístup nebo provenance a spusť Doctor znovu; neodstraňuj cestu odhadem",
+      ],
+    };
   }
+}
+
+async function inspectInvalidLocationGitCheckouts({ companiesRoot, absolutePath }) {
+  const gitCheckouts = [];
+  const queue = [{ path: absolutePath, depth: 0 }];
+  let visited = 0;
+  let scanTruncated = false;
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (visited >= invalidLocationEntryBudget) {
+      scanTruncated = true;
+      break;
+    }
+    visited += 1;
+    if (current.path !== absolutePath && existsSync(join(current.path, ".git"))) {
+      const status = await readGitRepoStatus({
+        key: relative(companiesRoot, current.path).replace(/\\/g, "/"),
+        absolute_path: current.path,
+      });
+      gitCheckouts.push({
+        path: relative(companiesRoot, current.path).replace(/\\/g, "/"),
+        branch: status.branch,
+        head: status.head?.sha ?? null,
+        upstream: status.upstream,
+        operation: status.operation?.kind ?? null,
+        changed_files: status.counts?.changed_files ?? null,
+        untracked_files: status.counts?.untracked_files ?? null,
+        outgoing: status.counts?.outgoing ?? null,
+      });
+      continue;
+    }
+    if (current.depth >= invalidLocationScanDepth) continue;
+    for (const entry of await safeReaddir(current.path)) {
+      if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
+      queue.push({ path: join(current.path, entry.name), depth: current.depth + 1 });
+    }
+  }
+  return {
+    git_checkouts: gitCheckouts,
+    scan_truncated: scanTruncated,
+  };
+}
+
+function formatInvalidLocationCheckout(checkout) {
+  const branch = checkout.branch ?? "detached-or-unknown";
+  const head = checkout.head ?? "unknown";
+  const upstream = checkout.upstream ?? "none";
+  const operation = checkout.operation ?? "none";
+  return `git_checkout: ${checkout.path} — branch=${branch}; head=${head}; upstream=${upstream}; changed_files=${checkout.changed_files ?? "unknown"}; untracked_files=${checkout.untracked_files ?? "unknown"}; outgoing=${checkout.outgoing ?? "unknown"}; operation=${operation}`;
 }
 
 async function scanCanonicalOrganizationWorktrees({ companiesRoot, organization }) {
@@ -355,7 +368,6 @@ async function buildWorktreeRecord({
   repoKind,
 }) {
   const slug = basename(absolutePath);
-  const gitIdentity = await readGitWorktreeIdentity(absolutePath);
   const base = {
     slug,
     organization: organization.slug,
@@ -368,7 +380,6 @@ async function buildWorktreeRecord({
     branch: null,
     plan_code: null,
     owner_plan: null,
-    git_identity: gitIdentity,
   };
 
   if (!existsSync(sidecarPath)) {
@@ -432,7 +443,7 @@ async function buildWorktreeRecord({
     };
   }
 
-  const lifecycleStatus = await deriveWorktreeLifecycleStatus({ absolutePath, metadata });
+  const lifecycleStatus = deriveWorktreeLifecycleStatus(metadata);
   return {
     ...base,
     metadata,
@@ -554,20 +565,8 @@ function validateWorktreeMetadata(metadata) {
   return errors;
 }
 
-async function deriveWorktreeLifecycleStatus({ absolutePath, metadata }) {
-  const explicitStatus = metadata.status ?? "active";
-  if (explicitStatus && explicitStatus !== "active") return explicitStatus;
-  const touched = Date.parse(metadata.last_touched ?? metadata.created_at ?? "");
-  if (!Number.isFinite(touched) || Date.now() - touched <= 7 * 24 * 60 * 60 * 1000 || metadata.pr_url) {
-    return explicitStatus || "active";
-  }
-  const gitStatus = await readGitRepoStatus({
-    key: metadata.worktree_path ?? absolutePath,
-    absolute_path: absolutePath,
-    expected_branch: metadata.branch,
-  });
-  if (gitStatus.counts?.changed_files > 0 || gitStatus.counts?.outgoing > 0) return explicitStatus || "active";
-  return "stale";
+function deriveWorktreeLifecycleStatus(metadata) {
+  return metadata.status ?? "active";
 }
 
 async function isGitCheckout(path) {

@@ -709,25 +709,9 @@ test("fails closed when the live remote branch was deleted behind a stale tracki
   });
   git(fixture.remote, ["update-ref", "-d", `refs/heads/${fixture.branch}`]);
 
-  const localReport = await auditRepository(fixture.root, {
-    authorityRoot: fixture.authorityRoot,
-    refreshRemote: false,
-  });
-  expect(localReport.remote_refresh_requested).toBe(false);
-  expect(canonicalWorktree(localReport)).toMatchObject({
-    remote_branch_exists: null,
-    remote_head: null,
-    remote_verified: false,
-    remote_error: null,
-  });
-  expect(localReport.violations.join("\n")).not.toContain(
-    "canonical worktree remote state is unknown",
-  );
-
   const report = await auditRepository(fixture.root, {
     authorityRoot: fixture.authorityRoot,
   });
-  expect(report.remote_refresh_requested).toBe(true);
   expect(canonicalWorktree(report)).toMatchObject({
     remote_branch_exists: false,
     remote_head: null,

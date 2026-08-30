@@ -108,7 +108,6 @@ export async function validateLazurioContext(value) {
 export async function buildLazurioDoctorReport({
   root = process.cwd(),
   checkToolUpdates = false,
-  refreshWorktreePullRequests = false,
   activeTeamId = null,
   buildLaunchpadReport = buildLaunchpadDoctorReport,
   inspectDeveloperToolUpdates,
@@ -126,7 +125,6 @@ export async function buildLazurioDoctorReport({
       companiesRoot: detected.absolutePath,
       launchpadRoot: join(detected.absolutePath, "launchpad"),
       checkToolUpdates,
-      refreshWorktreePullRequests,
       activeTeamId,
       inspectDeveloperToolUpdates,
     });
