@@ -183,7 +183,6 @@ async function run(argv) {
       const result = await buildLazurioDoctorReport({
         root: options.root,
         checkToolUpdates: options.toolUpdates,
-        refreshWorktreePullRequests: options.refreshPrs,
         activeTeamId: workspaceProfile.profile === "hosted" ? workspaceProfile.team_id : null,
       });
       console.log(options.json
@@ -285,7 +284,6 @@ function parseArgs(argv) {
     update: false,
     check: false,
     toolUpdates: false,
-    refreshPrs: false,
     githubOrganizationId: null,
     apply: false,
     applyPresent: false,
@@ -339,10 +337,6 @@ function parseArgs(argv) {
     }
     if (arg === "--tool-updates") {
       parsed.toolUpdates = true;
-      continue;
-    }
-    if (arg === "--refresh-prs") {
-      parsed.refreshPrs = true;
       continue;
     }
     if (arg === "--apply" || arg === "--no-app") {
@@ -654,9 +648,6 @@ function parseArgs(argv) {
   if (parsed.toolUpdates && parsed.command !== "doctor") {
     throw new Error("--tool-updates lze použít pouze s `lazurio doctor`.");
   }
-  if (parsed.refreshPrs && parsed.command !== "doctor") {
-    throw new Error("--refresh-prs lze použít pouze s `lazurio doctor`.");
-  }
   if (parsed.githubOrganizationId !== null && parsed.command !== "organization") {
     throw new Error("--github-id lze použít pouze s `lazurio organization activate`.");
   }
@@ -726,7 +717,7 @@ function usage() {
     "  lazurio organization activate --check --github-id <id> [--json]",
     "  lazurio organization install <github-login> [--json]",
     "  lazurio context [--organization <slug>] [--json] [--root <cesta>]",
-    "  lazurio doctor [--tool-updates] [--refresh-prs] [--json] [--root <cesta>]",
+    "  lazurio doctor [--tool-updates] [--json] [--root <cesta>]",
     "  lazurio update [--json] [--root <cesta>]",
     "  lazurio repair module-location --org <slug> --module <slug> [--json] [--root <cesta>]",
     "  lazurio repair module-location --org <slug> --module <slug> --apply --expect <fingerprint> [--json] [--root <cesta>]",

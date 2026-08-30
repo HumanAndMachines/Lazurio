@@ -1,10 +1,10 @@
 # Doctor worktree management
 
 Status: **cílový kontrakt a implementační plán CAC-0065**. Fresh-main task
-preflight, PR push preflight, Git-registry-first inventura a explicitní
-read-only `lazurio doctor --refresh-prs` cleanup dry-run jsou aktivní.
-Plánované `doctor worktrees ...` create/hydrate/cleanup apply příkazy zatím
-aktivním operátorským postupem nejsou.
+preflight a PR push preflight popsané níže jsou aktivní. `lazurio doctor`
+navíc lokálně reportuje nepovolené worktree cesty a jejich pozorovatelný Git
+stav, ale cleanup neklasifikuje ani neprovádí. Plánované `doctor worktrees ...`
+create/hydrate/cleanup příkazy zatím aktivním operátorským postupem nejsou.
 
 Tento dokument přesně definuje, jak má Lazurio vytvářet,
 zobrazovat, kontrolovat a uklízet Git worktrees pro Lazurio root a pro
@@ -330,19 +330,15 @@ dependency. Změna sidecaru je transakční.
 
 ### Status a PR refresh
 
-Aktivní lokální a explicitní síťový průchod:
+Aktivní `lazurio doctor` pouze lokálně pozoruje nepovolené cesty. U neprázdné
+cesty vypíše nalezené Git checkouty, branch, HEAD, upstream a počty změn;
+nevolá GitHub, nevyhlašuje cleanup kandidáty a nic nemaže. Agent naváže
+inventurou `bun run worktrees:status` a cleanup guardy z
+`worktree-development-discipline`.
+Kanonický sidecar status Doctor pouze zobrazí a u výslovně neaktivního stavu
+přeskočí dependency readiness; stav podle stáří sám nikdy neodvozuje.
 
-```sh
-bun run worktrees:status
-lazurio doctor
-lazurio doctor --refresh-prs
-```
-
-První dva příkazy nevolají síť. Poslední explicitně načte živou exact-head PR
-evidenci přes GitHub/`gh`; při chybějícím přístupu je cleanup
-`needs_attention`, nikdy kandidát. Všechny tři průchody jsou read-only.
-
-Níže je stále cílový, dosud neaktivní action-layer tvar:
+Níže je cílový, dosud neaktivní action-layer tvar:
 
 ```sh
 bun run doctor -- worktrees status
@@ -350,10 +346,10 @@ bun run doctor -- worktrees status --json
 bun run doctor -- worktrees status --refresh-prs
 ```
 
-Action-layer local-only status nesmí čekat na síť. Jeho budoucí
-`--refresh-prs` bude používat stejný read model jako dnešní `lazurio doctor
---refresh-prs` a navíc perzistentně cacheovat URL, exact head, state a
-checked-at.
+Local-only status nesmí čekat na síť. `--refresh-prs` je explicitní network
+akce přes GitHub/`gh`, cacheuje URL, exact head, state a checked-at. Když síť
+nebo GitHub access chybí, cleanup state je `needs_attention`, nikdy
+`ready_to_delete`.
 
 ### Cleanup
 
@@ -562,9 +558,8 @@ Environment je `ready_to_delete`, jen když současně platí:
    recovery bundle;
 6. žádný runtime proces nepoužívá environment path;
 7. žádný active/handoff writer environment stále nevlastní;
-8. Mission Control plán a sidecar stále pravdivě dokazují ownera práce; stav
-   širšího plánu je kontext, ne globální cleanup blokátor jednoho memberu —
-   tentýž plán může po merge konkrétního PR pokračovat dalším řezem;
+8. Mission Control plán je terminální (`done` nebo explicitně `archived` /
+   abandoned podle kontraktu);
 9. každý edit member splní právě jednu PR větev: (a) vůbec nevytvořil změnu —
    `HEAD == base_sha`, strom je clean a nemá outgoing commit — takže PR není
    potřeba; (b) jeho exact-head PR je `MERGED`; nebo (c) je `CLOSED` bez merge
@@ -725,12 +720,10 @@ když:
 
 - accepted decision 0049 stále předepisuje direct per-module worktrees;
 - canonical CAC-0042 je hotový a nesmí se znovu otevřít;
-- starší filesystem-only Doctor neindexoval vlastní root worktrees a na disku
-  zůstávaly sidecary již odstraněných stromů i prunable registrace mimo
-  canonical path; aktivní registry-first read model tyto zdroje nyní sjednocuje;
-- root/member Git registry flagship Organizace obsahuje worktrees, které
-  původní sidecar scan neviděl, a `.worktrees` zabírá nezanedbatelné místo na
-  disku; apply cleanup zůstává navazující guarded slice;
+- Lazurio root Doctor neindexuje vlastní root worktrees a na disku jsou
+  sidecary již odstraněných stromů i prunable registrace mimo canonical path;
+- root/member Git registry flagship Organizace obsahuje worktrees, které dnešní sidecar
+  scan nevidí, a `.worktrees` zabírá nezanedbatelné místo na disku;
 - PowerShell Doctor flagship Organizace nemá worktree akce;
 - root manifest nemá dependency profily; pilotní dependency profil drží
   privátní issue ledger;

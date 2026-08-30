@@ -20,7 +20,6 @@ const ORPHAN_SCAN_ENTRY_BUDGET = 20_000;
 
 export async function auditRepository(startPath = process.cwd(), options = {}) {
   const includeDisk = options.includeDisk ?? false;
-  const refreshRemote = options.refreshRemote ?? true;
   const start = resolve(startPath);
   const currentTop = await gitText(start, ["rev-parse", "--show-toplevel"]);
   const commonDirRaw = await gitText(currentTop, [
@@ -74,7 +73,6 @@ export async function auditRepository(startPath = process.cwd(), options = {}) {
       ? await inspectRemoteState(record.path, {
           allowFreshUnpublished: pathClass === "canonical" && sidecar.valid,
           baseRef: "origin/main",
-          refreshRemote,
         })
       : {
           upstream: null,
@@ -129,7 +127,6 @@ export async function auditRepository(startPath = process.cwd(), options = {}) {
         dirty,
         remotePreserved: remote.preserved,
         remoteError: remote.error,
-        remoteRequired: refreshRemote,
       }),
     };
   });
@@ -214,7 +211,6 @@ export async function auditRepository(startPath = process.cwd(), options = {}) {
     repository_root: primaryRoot,
     canonical_root: join(primaryRoot, ".worktrees", "root"),
     generated_at: new Date().toISOString(),
-    remote_refresh_requested: refreshRemote,
     primary,
     worktrees: enriched,
     orphan_entries: orphanEntries,
@@ -320,7 +316,6 @@ function classifyLifecycle({
   dirty,
   remotePreserved,
   remoteError,
-  remoteRequired,
 }) {
   if (pathClass === "primary") return "reference";
   if (!exists) return "missing_path";
@@ -328,7 +323,8 @@ function classifyLifecycle({
     pathClass !== "canonical"
     || !sidecarValid
     || dirty !== false
-    || (remoteRequired && (!remotePreserved || remoteError))
+    || !remotePreserved
+    || remoteError
   ) {
     return "needs_attention";
   }
@@ -1126,7 +1122,7 @@ async function isLinkedToCommonDir(worktreePath, commonDir) {
 
 async function inspectRemoteState(
   worktreePath,
-  { allowFreshUnpublished = false, baseRef = "origin/main", refreshRemote = true } = {},
+  { allowFreshUnpublished = false, baseRef = "origin/main" } = {},
 ) {
   const upstream = await runGit(
     ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"],
@@ -1134,7 +1130,7 @@ async function inspectRemoteState(
   );
   if (!upstream.ok) {
     const fresh = allowFreshUnpublished
-      ? await inspectFreshUnpublishedState(worktreePath, baseRef, { refreshRemote })
+      ? await inspectFreshUnpublishedState(worktreePath, baseRef)
       : null;
     if (fresh) return fresh;
     return {
@@ -1149,9 +1145,7 @@ async function inspectRemoteState(
       verified: false,
       preserved: false,
       freshUnpublished: false,
-      error: !refreshRemote
-        ? null
-        : upstream.timedOut
+      error: upstream.timedOut
         ? "upstream lookup timed out"
         : upstream.stderr.trim() || "upstream lookup failed",
     };
@@ -1252,22 +1246,6 @@ async function inspectRemoteState(
       error: "upstream does not identify a live remote branch",
     };
   }
-  if (!refreshRemote) {
-    return {
-      upstream: upstream.stdout.trim(),
-      ahead,
-      behind,
-      remoteName,
-      remoteRef,
-      remoteBranchExists: null,
-      remoteHead: null,
-      remoteHeadMatches: null,
-      verified: false,
-      preserved: false,
-      freshUnpublished: false,
-      error: null,
-    };
-  }
   const liveRemote = await runGit(
     ["ls-remote", "--exit-code", "--heads", remoteName, remoteRef],
     worktreePath,
@@ -1343,11 +1321,7 @@ async function inspectRemoteState(
   };
 }
 
-async function inspectFreshUnpublishedState(
-  worktreePath,
-  baseRef,
-  { refreshRemote = true } = {},
-) {
+async function inspectFreshUnpublishedState(worktreePath, baseRef) {
   const [branch, localHead, baseHead] = await Promise.all([
     runGit(["symbolic-ref", "--quiet", "--short", "HEAD"], worktreePath),
     runGit(["rev-parse", "HEAD"], worktreePath),
@@ -1360,22 +1334,6 @@ async function inspectFreshUnpublishedState(
   if (slash <= 0 || slash === baseRef.length - 1) return null;
   const remoteName = baseRef.slice(0, slash);
   const branchName = branch.stdout.trim();
-  if (!refreshRemote) {
-    return {
-      upstream: null,
-      ahead: 0,
-      behind: 0,
-      remoteName,
-      remoteRef: null,
-      remoteBranchExists: null,
-      remoteHead: null,
-      remoteHeadMatches: null,
-      verified: false,
-      preserved: false,
-      freshUnpublished: true,
-      error: null,
-    };
-  }
   const liveBranch = await runGit(
     ["ls-remote", "--exit-code", "--heads", remoteName, `refs/heads/${branchName}`],
     worktreePath,
@@ -1788,8 +1746,7 @@ async function main() {
     process.exit(2);
   }
   try {
-    const refreshRemote = check || args.includes("--refresh-remotes");
-    const report = await auditRepository(root, { includeDisk, refreshRemote });
+    const report = await auditRepository(root, { includeDisk });
     console.log(json ? JSON.stringify(report, null, 2) : formatHuman(report));
     if (check && report.violations.length > 0) process.exitCode = 1;
   } catch (error) {

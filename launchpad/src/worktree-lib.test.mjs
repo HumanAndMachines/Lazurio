@@ -182,16 +182,28 @@ test("worktree scanner reports empty forbidden containers with safe cleanup guid
     (item) => item.path === "organizations/OmegaCo_GEN3/.codex-tmp",
   );
   expect(invalidLocation?.message).toContain("Prázdná nepovolená legacy worktree složka");
-  expect(invalidLocation?.message).toContain("rmdir");
-  expect(invalidLocation?.message).toContain("nikdy rekurzivní mazání");
+  expect(invalidLocation?.details.join("\n")).toContain("rmdir");
+  expect(invalidLocation?.details.join("\n")).toContain("nikdy nepoužívej rekurzivní mazání");
 
-  await mkdir(join(invalidContainer, "old-agent-work"));
+  const invalidCheckout = join(invalidContainer, "old-agent-work");
+  await initGitRepo(invalidCheckout, { branch: "legacy-agent-work" });
+  await writeFile(join(invalidCheckout, "draft.md"), "unpublished draft\n");
   index = await buildWorktreeIndex({ companiesRoot: root });
   invalidLocation = index.invalid_locations.find(
     (item) => item.path === "organizations/OmegaCo_GEN3/.codex-tmp",
   );
   expect(invalidLocation?.message).toContain("obsahuje data");
-  expect(invalidLocation?.message).not.toContain("rmdir");
+  expect(invalidLocation?.message).toContain("1 Git checkoutů");
+  expect(invalidLocation?.details).toEqual(expect.arrayContaining([
+    "state: non_empty",
+    "git_checkouts: 1",
+    expect.stringContaining("branch=legacy-agent-work"),
+    expect.stringMatching(/head=[0-9a-f]{40}/),
+    expect.stringContaining("untracked_files=1"),
+    expect.stringContaining("worktree-development-discipline"),
+  ]));
+  expect(invalidLocation?.details.join("\n")).toContain("git worktree remove");
+  expect(invalidLocation?.details.join("\n")).not.toContain("cleanup_candidate");
 
   await rm(invalidContainer, { recursive: true, force: true });
   const emptyTarget = join(orgRoot, "empty-worktree-target");
@@ -202,17 +214,17 @@ test("worktree scanner reports empty forbidden containers with safe cleanup guid
     (item) => item.path === "organizations/OmegaCo_GEN3/.codex-tmp",
   );
   expect(invalidLocation?.message).toContain("je symlink");
-  expect(invalidLocation?.message).toContain("Neotvírej ani nemaž jeho cíl");
+  expect(invalidLocation?.message).toContain("cíl neotevřel ani nezměnil");
+  expect(invalidLocation?.details.join("\n")).toContain("nikdy jeho cíl");
 });
 
-test("worktree stale heuristic does not mark old dirty drafts as stale", async () => {
+test("worktree lifecycle stays declarative and never infers cleanup from age", async () => {
   const root = await createLaunchpadGitFixture();
   tempRoots.push(root);
   const orgRoot = join(root, "organizations", "BetaCo_GEN3");
   const worktreePath = join(orgRoot, ".worktrees", "workspace", "deals", "DEV-7000-old-draft");
   const planPath = join(orgRoot, "mission-control", "plans", "2026", "07", "DEV-7000-old-draft.yaml");
   await initGitRepo(worktreePath, { branch: "DEV-7000-old-draft" });
-  await writeFile(join(worktreePath, "draft.md"), "dirty work should not be stale\n");
   await writeFile(planPath, "dev_code: DEV-7000\ntitle: Old dirty draft\nstatus: in_progress\n");
   await writeJson(join(orgRoot, ".worktrees", "workspace", "deals", "DEV-7000-old-draft.worktree.json"), {
     schema_version: "companiesascode.worktree.v1",
@@ -239,4 +251,21 @@ test("worktree stale heuristic does not mark old dirty drafts as stale", async (
     ownership_status: "owned",
     status: "active",
   });
+});
+
+test("worktree scanner reports forbidden containers in the Lazurio root scope", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  await mkdir(join(root, ".codex-tmp"), { recursive: true });
+
+  const index = await buildWorktreeIndex({ companiesRoot: root });
+  expect(index.invalid_locations).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      organization: null,
+      scope: "root",
+      path: ".codex-tmp",
+      message: expect.stringContaining("Prázdná nepovolená legacy worktree složka"),
+      details: expect.arrayContaining(["state: empty", "entries: 0"]),
+    }),
+  ]));
 });
