@@ -2530,7 +2530,7 @@ test.skipIf(process.platform === "win32")("CAC-0042: doctor reportuje worktree i
     worktree_path: ".worktrees/workspace/deals/CAC-0042-doctor-active",
     created_at: new Date().toISOString(),
     created_by: "examplebuddy-buddy",
-    status: "active",
+    status: "pr_open",
   });
   await mkdir(join(activePath, "app", "v1"), { recursive: true });
   await writeJson(join(activePath, "app", "v1", "package.json"), {
@@ -2622,15 +2622,21 @@ test.skipIf(process.platform === "win32")("CAC-0042: doctor reportuje worktree i
   expect(checks.get("git.worktrees.contract")?.details.join("\n")).toContain("CAC-0042-doctor-orphan");
   expect(checks.get("git.worktrees.contract")?.details.join("\n")).toContain("CAC-0042-doctor-missing-plan");
   expect(checks.get("git.worktrees.contract")?.details.join("\n")).toContain("cleanup_candidate: CAC-0042-doctor-stale");
+  expect(checks.get("git.worktrees.contract")?.details.join("\n")).not.toContain("cleanup_candidate: CAC-0042-doctor-active");
+  expect(checks.get("git.worktrees.contract")?.message).toBe(
+    "Worktree kontrakt: 1 neplatné umístění, 2 problémy vlastnictví, 1 kandidát k úklidu a 6 metadatových upozornění nad 4 worktrees.",
+  );
   expect(checks.get("git.worktrees.contract")?.details.join("\n")).toContain("Sidecar nemá conversation_origin");
   expect(checks.get("git.worktrees.contract")?.details.join("\n")).not.toContain("[object Object]");
   expect(checks.get("launchpad.discovery")?.details.join("\n")).not.toContain("Sidecar nemá conversation_origin");
   expect(checks.get("git.worktrees.dependencies")?.status).toBe("warn");
   expect(checks.get("git.worktrees.dependencies")?.details).toEqual(expect.arrayContaining([
-    "checked_packages: 6",
+    "checked_worktrees: 1",
+    "skipped_cleanup_worktrees: 1",
+    "checked_packages: 5",
     "ready: 1",
     "needs_install: 1",
-    "dependency_boundary_invalid: 3",
+    "dependency_boundary_invalid: 2",
     "unknown_package_manager: 1",
   ]));
   expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("CAC-0042-doctor-active/app/v1");
@@ -2640,7 +2646,7 @@ test.skipIf(process.platform === "win32")("CAC-0042: doctor reportuje worktree i
   expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("CAC-0042-doctor-active/app/v3");
   expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("CAC-0042-doctor-active/app/v4");
   expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("mismatches package-lock.json (npm)");
-  expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("CAC-0042-doctor-stale");
+  expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).not.toContain("CAC-0042-doctor-stale");
   expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).not.toContain("secret-customer-project");
 });
 
@@ -2687,6 +2693,7 @@ test("worktree dependency Doctor follows the configured Organization mountpoint"
   expect(dependencies?.status).toBe("ok");
   expect(dependencies?.details).toEqual(expect.arrayContaining([
     "checked_worktrees: 1",
+    "skipped_cleanup_worktrees: 0",
     "checked_packages: 1",
     "ready: 1",
   ]));
