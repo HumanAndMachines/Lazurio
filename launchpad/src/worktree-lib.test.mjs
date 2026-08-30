@@ -170,7 +170,7 @@ test("worktree scanner reports legacy worktree locations as invalid contract vio
   );
 });
 
-test("worktree scanner ignores only real empty forbidden containers and reports residue or symlinks", async () => {
+test("worktree scanner reports empty forbidden containers with safe cleanup guidance and keeps residue fail-closed", async () => {
   const root = await createLaunchpadGitFixture();
   tempRoots.push(root);
   const orgRoot = join(root, "organizations", "OmegaCo_GEN3");
@@ -178,24 +178,31 @@ test("worktree scanner ignores only real empty forbidden containers and reports 
   await mkdir(invalidContainer, { recursive: true });
 
   let index = await buildWorktreeIndex({ companiesRoot: root });
-  expect(index.invalid_locations.map((item) => item.path)).not.toContain(
-    "organizations/OmegaCo_GEN3/.codex-tmp",
+  let invalidLocation = index.invalid_locations.find(
+    (item) => item.path === "organizations/OmegaCo_GEN3/.codex-tmp",
   );
+  expect(invalidLocation?.message).toContain("Prázdná nepovolená legacy worktree složka");
+  expect(invalidLocation?.message).toContain("rmdir");
+  expect(invalidLocation?.message).toContain("nikdy rekurzivní mazání");
 
   await mkdir(join(invalidContainer, "old-agent-work"));
   index = await buildWorktreeIndex({ companiesRoot: root });
-  expect(index.invalid_locations.map((item) => item.path)).toContain(
-    "organizations/OmegaCo_GEN3/.codex-tmp",
+  invalidLocation = index.invalid_locations.find(
+    (item) => item.path === "organizations/OmegaCo_GEN3/.codex-tmp",
   );
+  expect(invalidLocation?.message).toContain("obsahuje data");
+  expect(invalidLocation?.message).not.toContain("rmdir");
 
   await rm(invalidContainer, { recursive: true, force: true });
   const emptyTarget = join(orgRoot, "empty-worktree-target");
   await mkdir(emptyTarget);
   await symlink(emptyTarget, invalidContainer, "junction");
   index = await buildWorktreeIndex({ companiesRoot: root });
-  expect(index.invalid_locations.map((item) => item.path)).toContain(
-    "organizations/OmegaCo_GEN3/.codex-tmp",
+  invalidLocation = index.invalid_locations.find(
+    (item) => item.path === "organizations/OmegaCo_GEN3/.codex-tmp",
   );
+  expect(invalidLocation?.message).toContain("je symlink");
+  expect(invalidLocation?.message).toContain("Neotvírej ani nemaž jeho cíl");
 });
 
 test("worktree stale heuristic does not mark old dirty drafts as stale", async () => {

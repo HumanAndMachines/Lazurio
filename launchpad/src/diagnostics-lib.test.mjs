@@ -2505,6 +2505,7 @@ test.skipIf(process.platform === "win32")("CAC-0042: doctor reportuje worktree i
   tempRoots.push(root);
   const orgRoot = join(root, "organizations", "BetaCo_GEN3");
   await mkdir(join(orgRoot, ".claude", "worktrees", "legacy-agent"), { recursive: true });
+  await mkdir(join(orgRoot, ".codex-tmp"), { recursive: true });
 
   const activePath = join(orgRoot, ".worktrees", "workspace", "deals", "CAC-0042-doctor-active");
   const stalePath = join(orgRoot, ".worktrees", "workspace", "deals", "CAC-0042-doctor-stale");
@@ -2619,12 +2620,15 @@ test.skipIf(process.platform === "win32")("CAC-0042: doctor reportuje worktree i
   ]));
   expect(checks.get("git.worktrees.contract")?.status).toBe("warn");
   expect(checks.get("git.worktrees.contract")?.details.join("\n")).toContain(".claude/worktrees");
+  expect(checks.get("git.worktrees.contract")?.details.join("\n")).toContain(
+    "invalid_location: organizations/BetaCo_GEN3/.codex-tmp — Prázdná nepovolená legacy worktree složka. Bezpečný cleanup: použij rmdir na přesnou uvedenou cestu (nikdy rekurzivní mazání) a spusť Doctor znovu.",
+  );
   expect(checks.get("git.worktrees.contract")?.details.join("\n")).toContain("CAC-0042-doctor-orphan");
   expect(checks.get("git.worktrees.contract")?.details.join("\n")).toContain("CAC-0042-doctor-missing-plan");
   expect(checks.get("git.worktrees.contract")?.details.join("\n")).toContain("cleanup_candidate: CAC-0042-doctor-stale");
   expect(checks.get("git.worktrees.contract")?.details.join("\n")).not.toContain("cleanup_candidate: CAC-0042-doctor-active");
   expect(checks.get("git.worktrees.contract")?.message).toBe(
-    "Worktree kontrakt: 1 neplatné umístění, 2 problémy vlastnictví, 1 kandidát k úklidu a 6 metadatových upozornění nad 4 worktrees.",
+    "Worktree kontrakt: 2 neplatná umístění, 2 problémy vlastnictví, 1 kandidát k úklidu a 6 metadatových upozornění nad 4 worktrees.",
   );
   expect(checks.get("git.worktrees.contract")?.details.join("\n")).toContain("Sidecar nemá conversation_origin");
   expect(checks.get("git.worktrees.contract")?.details.join("\n")).not.toContain("[object Object]");
