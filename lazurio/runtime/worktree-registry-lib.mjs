@@ -52,15 +52,17 @@ export async function buildRegisteredWorktreeIndex({
       error: owner.error,
     }));
   const uniqueOwners = deduplicateOwnerRegistries(inspectedOwners.filter((owner) => owner.ok));
+  const projectionRoot = uniqueOwners.find((owner) => owner.owner.key === "lazurio::root")
+    ?.primary_path ?? root;
   const registered = uniqueOwners.flatMap((owner) =>
     owner.records
-      .filter((record) => !samePath(record.path, owner.owner.absolute_path))
+      .filter((record) => !samePath(record.path, owner.primary_path))
       .map((record) => ({ owner, record })),
   );
   let worktrees = await mapWithConcurrency(
     registered,
     WORKTREE_INSPECTION_CONCURRENCY,
-    ({ owner, record }) => inspectRegisteredWorktree({ root, owner, record }),
+    ({ owner, record }) => inspectRegisteredWorktree({ root: projectionRoot, owner, record }),
   );
 
   if (refreshPullRequests) {
@@ -154,6 +156,15 @@ async function inspectOwnerRegistry(owner) {
   const githubRepository = owner.remote?.url_kind === "github"
     ? owner.remote.owner_repo
     : githubRepositoryCoordinate(remoteUrlResult.ok ? remoteUrlResult.stdout : null)?.ownerRepo ?? null;
+  const records = parseGitWorktreePorcelain(registryResult.stdout);
+  const primaryPath = records[0]?.path ? canonicalPath(records[0].path) : null;
+  if (!primaryPath) {
+    return {
+      ok: false,
+      owner,
+      error: "Git worktree registry has no primary checkout",
+    };
+  }
   return {
     ok: true,
     owner: {
@@ -162,7 +173,8 @@ async function inspectOwnerRegistry(owner) {
       github_repository: githubRepository,
     },
     common_dir: commonDir,
-    records: parseGitWorktreePorcelain(registryResult.stdout),
+    primary_path: primaryPath,
+    records,
   };
 }
 
@@ -186,13 +198,13 @@ async function inspectRegisteredWorktree({ root, owner, record }) {
   const sidecarPath = join(dirname(absolutePath), `${basename(absolutePath)}.worktree.json`);
   const pathClass = classifyRegisteredWorktreePath({
     companiesRoot: root,
-    ownerRoot: owner.owner.absolute_path,
+    ownerRoot: owner.primary_path,
     worktreePath: absolutePath,
   });
   const sidecarBase = pathClass === "organization_environment"
     && typeof owner.owner.organization_path === "string"
     ? join(root, owner.owner.organization_path)
-    : owner.owner.absolute_path;
+    : owner.primary_path;
   const sidecar = await readSidecarHint({
     path: sidecarPath,
     ownerRoot: sidecarBase,
@@ -226,7 +238,7 @@ async function inspectRegisteredWorktree({ root, owner, record }) {
     registry_id: `${owner.common_dir}\0${absolutePath}`,
     registered: true,
     owner_key: owner.owner.key,
-    owner_path: owner.owner.absolute_path,
+    owner_path: owner.primary_path,
     owner_common_dir: owner.common_dir,
     owner_repo_kind: owner.owner.repo_kind ?? null,
     organization: owner.owner.organization ?? null,

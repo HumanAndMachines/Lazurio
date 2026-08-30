@@ -178,6 +178,22 @@ test("registry inventory excludes primary checkout, stays offline by default and
     cleanup_dry_run: { classification: "not_refreshed" },
   });
 
+  const fromLinkedCheckout = await buildRegisteredWorktreeIndex({
+    companiesRoot: worktreePath,
+    githubProvider: provider,
+  });
+  expect(providerCalls).toBe(0);
+  expect(fromLinkedCheckout.summary).toMatchObject({
+    registered_worktrees: 1,
+    cleanup_not_refreshed: 1,
+  });
+  expect(fromLinkedCheckout.worktrees[0]).toMatchObject({
+    path: `.worktrees/root/${slug}`,
+    owner_path: realpathSync(root),
+    path_class: "canonical_root",
+    sidecar_hint_valid: true,
+  });
+
   const refreshed = await buildRegisteredWorktreeIndex({
     companiesRoot: root,
     refreshPullRequests: true,
