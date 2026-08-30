@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -172,7 +172,7 @@ test("registry inventory excludes primary checkout, stays offline by default and
     summary: { registered_worktrees: 1, cleanup_not_refreshed: 1 },
   });
   expect(local.worktrees[0]).toMatchObject({
-    absolute_path: realpathSync(worktreePath),
+    absolute_path: gitOutput(worktreePath, ["rev-parse", "--show-toplevel"]),
     path_class: "canonical_root",
     sidecar_hint_valid: true,
     cleanup_dry_run: { classification: "not_refreshed" },
@@ -189,7 +189,7 @@ test("registry inventory excludes primary checkout, stays offline by default and
   });
   expect(fromLinkedCheckout.worktrees[0]).toMatchObject({
     path: `.worktrees/root/${slug}`,
-    owner_path: realpathSync(root),
+    owner_path: gitOutput(root, ["rev-parse", "--show-toplevel"]),
     path_class: "canonical_root",
     sidecar_hint_valid: true,
   });
@@ -218,7 +218,9 @@ test("registry inventory excludes primary checkout, stays offline by default and
     },
   });
   expect(existsSync(worktreePath)).toBe(true);
-  expect(gitOutput(root, ["worktree", "list", "--porcelain"])).toContain(worktreePath);
+  expect(gitOutput(root, ["worktree", "list", "--porcelain"])).toContain(
+    gitOutput(worktreePath, ["rev-parse", "--show-toplevel"]),
+  );
 });
 
 function cleanupReadyWorktree(overrides = {}) {
