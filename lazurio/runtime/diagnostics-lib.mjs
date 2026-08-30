@@ -83,6 +83,7 @@ const companyGitignoreProbePaths = [
 
 const worktreePackageLockfileNames = ["bun.lock", "bun.lockb", "package-lock.json", "pnpm-lock.yaml", "yarn.lock"];
 const worktreeSupportedPackageManagers = new Set(["bun"]);
+const worktreeCleanupStatuses = new Set(["stale", "merged_cleanup_needed"]);
 
 let cachedDoctorReportSchema = null;
 
@@ -517,6 +518,9 @@ function worktreeInventoryCheck(index) {
 
 function worktreeContractCheck(index) {
   const details = [];
+  const ownershipIssues = (index.worktrees ?? []).filter((worktree) => worktree.ownership_status !== "owned");
+  const cleanupCandidates = (index.worktrees ?? []).filter((worktree) => worktree.ownership_status === "owned"
+    && worktreeCleanupStatuses.has(worktree.status));
   for (const location of index.invalid_locations ?? []) {
     details.push(`invalid_location: ${location.path} — ${location.message}`);
   }
@@ -524,10 +528,10 @@ function worktreeContractCheck(index) {
     if (worktree.ownership_status !== "owned") {
       details.push(`${worktree.ownership_status}: ${worktree.slug} (${worktree.path}) — ${worktree.message}`);
     }
-    if (worktree.status === "stale") {
+    if (worktree.ownership_status === "owned" && worktree.status === "stale") {
       details.push(`cleanup_candidate: ${worktree.slug} (${worktree.path}) — stale owned worktree without local draft/PR signal`);
-    } else if (worktree.ownership_status === "owned" && worktree.status && !["active"].includes(worktree.status)) {
-      details.push(`cleanup_candidate: ${worktree.slug} (${worktree.path}) — status ${worktree.status}`);
+    } else if (worktree.ownership_status === "owned" && worktree.status === "merged_cleanup_needed") {
+      details.push(`cleanup_candidate: ${worktree.slug} (${worktree.path}) — status merged_cleanup_needed`);
     }
   }
   for (const warning of index.warnings ?? []) {
@@ -541,7 +545,7 @@ function worktreeContractCheck(index) {
     title: "Worktree kontrakt",
     message:
       details.length > 0
-        ? `Worktree kontrakt má ${formatCount(details.length, "varování", "varování", "varování")}: ownership/orphan/stale cleanup.`
+        ? `Worktree kontrakt: ${formatCount((index.invalid_locations ?? []).length, "neplatné umístění", "neplatná umístění", "neplatných umístění")}, ${formatCount(ownershipIssues.length, "problém vlastnictví", "problémy vlastnictví", "problémů vlastnictví")}, ${formatCount(cleanupCandidates.length, "kandidát k úklidu", "kandidáti k úklidu", "kandidátů k úklidu")} a ${formatCount((index.warnings ?? []).length, "metadatové upozornění", "metadatová upozornění", "metadatových upozornění")} nad ${formatCount((index.worktrees ?? []).length, "worktree", "worktrees", "worktrees")}.`
         : "Worktree kontrakt je čistý: žádné orphany, invalid locations ani cleanup kandidáti.",
     paths: ["organizations/*/.worktrees", "organizations/*/.claude/worktrees", "organizations/*/.pr-worktrees"],
     links: [],
@@ -551,8 +555,10 @@ function worktreeContractCheck(index) {
 
 async function worktreeDependencyCheck({ companiesRoot, index }) {
   const ownedWorktrees = (index.worktrees ?? []).filter((worktree) => worktree.ownership_status === "owned");
+  const cleanupWorktrees = ownedWorktrees.filter((worktree) => worktreeCleanupStatuses.has(worktree.status));
+  const runnableWorktrees = ownedWorktrees.filter((worktree) => !worktreeCleanupStatuses.has(worktree.status));
   const records = [];
-  for (const worktree of ownedWorktrees) {
+  for (const worktree of runnableWorktrees) {
     const absoluteWorktreePath = join(companiesRoot, worktree.path);
     const packageDiscovery = await worktreePackageRoots({
       companiesRoot,
@@ -590,7 +596,8 @@ async function worktreeDependencyCheck({ companiesRoot, index }) {
   const warningStates = new Set(["needs_install", "dependency_boundary_invalid", "missing_lockfile", "unknown_package_manager", "invalid_package_json"]);
   const warnings = records.filter((record) => warningStates.has(record.state));
   const details = [
-    `checked_worktrees: ${ownedWorktrees.length}`,
+    `checked_worktrees: ${runnableWorktrees.length}`,
+    `skipped_cleanup_worktrees: ${cleanupWorktrees.length}`,
     `checked_packages: ${packageRecords.length}`,
     `ready: ${counts.ready ?? 0}`,
     `needs_install: ${counts.needs_install ?? 0}`,
