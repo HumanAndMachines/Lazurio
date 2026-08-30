@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 import {
   buildRegisteredWorktreeIndex,
@@ -172,11 +172,13 @@ test("registry inventory excludes primary checkout, stays offline by default and
     summary: { registered_worktrees: 1, cleanup_not_refreshed: 1 },
   });
   expect(local.worktrees[0]).toMatchObject({
-    absolute_path: gitOutput(worktreePath, ["rev-parse", "--show-toplevel"]),
     path_class: "canonical_root",
     sidecar_hint_valid: true,
     cleanup_dry_run: { classification: "not_refreshed" },
   });
+  expect(comparablePath(local.worktrees[0].absolute_path)).toBe(comparablePath(
+    gitOutput(worktreePath, ["rev-parse", "--show-toplevel"]),
+  ));
 
   const fromLinkedCheckout = await buildRegisteredWorktreeIndex({
     companiesRoot: worktreePath,
@@ -189,10 +191,12 @@ test("registry inventory excludes primary checkout, stays offline by default and
   });
   expect(fromLinkedCheckout.worktrees[0]).toMatchObject({
     path: `.worktrees/root/${slug}`,
-    owner_path: gitOutput(root, ["rev-parse", "--show-toplevel"]),
     path_class: "canonical_root",
     sidecar_hint_valid: true,
   });
+  expect(comparablePath(fromLinkedCheckout.worktrees[0].owner_path)).toBe(comparablePath(
+    gitOutput(root, ["rev-parse", "--show-toplevel"]),
+  ));
 
   const refreshed = await buildRegisteredWorktreeIndex({
     companiesRoot: root,
@@ -218,9 +222,12 @@ test("registry inventory excludes primary checkout, stays offline by default and
     },
   });
   expect(existsSync(worktreePath)).toBe(true);
-  expect(gitOutput(root, ["worktree", "list", "--porcelain"])).toContain(
+  const registeredPaths = parseGitWorktreePorcelain(
+    gitOutput(root, ["worktree", "list", "--porcelain"]),
+  ).map((record) => comparablePath(record.path));
+  expect(registeredPaths).toContain(comparablePath(
     gitOutput(worktreePath, ["rev-parse", "--show-toplevel"]),
-  );
+  ));
 });
 
 function cleanupReadyWorktree(overrides = {}) {
@@ -241,6 +248,11 @@ function cleanupReadyWorktree(overrides = {}) {
     github_evidence: null,
     ...overrides,
   };
+}
+
+function comparablePath(path) {
+  const normalized = resolve(path);
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
 }
 
 function freshGitHubEvidence() {
