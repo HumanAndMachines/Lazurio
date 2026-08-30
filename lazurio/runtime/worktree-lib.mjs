@@ -8,6 +8,8 @@ import { inspectCanonicalPathBoundary } from "../core/path-boundary-lib.mjs";
 import {
   buildRegisteredWorktreeIndex,
   classifyWorktreeCleanup,
+  normalizeWorktreePathIdentity,
+  readGitWorktreeIdentity,
 } from "./worktree-registry-lib.mjs";
 
 const invalidWorktreeLocations = [
@@ -82,8 +84,14 @@ export async function buildWorktreeIndex({
     canonicalPath(join(companiesRoot, worktree.path)),
     worktree,
   ]));
+  const byGitIdentity = new Map(worktrees
+    .filter((worktree) => worktree.git_identity)
+    .map((worktree) => [worktree.git_identity, worktree]));
   for (const registeredWorktree of registered.worktrees) {
-    const scanned = byAbsolutePath.get(canonicalPath(registeredWorktree.absolute_path));
+    const scanned = byAbsolutePath.get(canonicalPath(registeredWorktree.absolute_path))
+      ?? (registeredWorktree.git_identity
+        ? byGitIdentity.get(registeredWorktree.git_identity)
+        : null);
     if (scanned) {
       scanned.registered = true;
       scanned.registry = registeredWorktree;
@@ -124,9 +132,9 @@ export async function buildWorktreeIndex({
 
 function canonicalPath(path) {
   try {
-    return realpathSync(path);
+    return normalizeWorktreePathIdentity(realpathSync(path));
   } catch {
-    return path;
+    return normalizeWorktreePathIdentity(path);
   }
 }
 
@@ -347,6 +355,7 @@ async function buildWorktreeRecord({
   repoKind,
 }) {
   const slug = basename(absolutePath);
+  const gitIdentity = await readGitWorktreeIdentity(absolutePath);
   const base = {
     slug,
     organization: organization.slug,
@@ -359,6 +368,7 @@ async function buildWorktreeRecord({
     branch: null,
     plan_code: null,
     owner_plan: null,
+    git_identity: gitIdentity,
   };
 
   if (!existsSync(sidecarPath)) {

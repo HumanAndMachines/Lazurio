@@ -71,6 +71,10 @@ test("git API response combines manifest inventory, repo statuses, worktrees and
       orphan: false,
     },
   });
+  expect(response).not.toHaveProperty("registered");
+  expect(response.worktrees[0]).not.toHaveProperty("git_identity");
+  expect(response.worktrees[0]).not.toHaveProperty("registry");
+  expect(JSON.stringify(response)).not.toContain("owner_common_dir");
 });
 
 test("worktree projection preserves visible Team-scoped modules and root repositories", async () => {

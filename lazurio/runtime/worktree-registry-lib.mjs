@@ -194,9 +194,10 @@ async function inspectOwnerRegistry(owner) {
 function deduplicateOwnerRegistries(owners) {
   const byCommonDir = new Map();
   for (const owner of owners) {
-    const existing = byCommonDir.get(owner.common_dir);
+    const commonDirIdentity = normalizeWorktreePathIdentity(owner.common_dir);
+    const existing = byCommonDir.get(commonDirIdentity);
     if (!existing) {
-      byCommonDir.set(owner.common_dir, owner);
+      byCommonDir.set(commonDirIdentity, owner);
       continue;
     }
     existing.owner_aliases ??= [];
@@ -208,6 +209,7 @@ function deduplicateOwnerRegistries(owners) {
 async function inspectRegisteredWorktree({ root, owner, record }) {
   const absolutePath = resolve(record.path);
   const exists = existsSync(absolutePath);
+  const gitIdentity = exists ? await readGitWorktreeIdentity(absolutePath) : null;
   const sidecarPath = join(dirname(absolutePath), `${basename(absolutePath)}.worktree.json`);
   const pathClass = classifyRegisteredWorktreePath({
     companiesRoot: root,
@@ -249,6 +251,7 @@ async function inspectRegisteredWorktree({ root, owner, record }) {
     && !["repo_missing", "git_unavailable", "check_failed"].includes(localStatus.status);
   return {
     registry_id: `${owner.common_dir}\0${absolutePath}`,
+    git_identity: gitIdentity,
     registered: true,
     owner_key: owner.owner.key,
     owner_path: owner.primary_path,
@@ -615,7 +618,25 @@ function isDirectChild(parent, child) {
 }
 
 function samePath(left, right) {
-  return canonicalPath(left) === canonicalPath(right);
+  return normalizeWorktreePathIdentity(canonicalPath(left))
+    === normalizeWorktreePathIdentity(canonicalPath(right));
+}
+
+export async function readGitWorktreeIdentity(path) {
+  const result = await runGit(["rev-parse", "--absolute-git-dir"], {
+    cwd: path,
+    timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+  });
+  return result.ok && result.stdout
+    ? normalizeWorktreePathIdentity(result.stdout)
+    : null;
+}
+
+export function normalizeWorktreePathIdentity(path, { platform = process.platform } = {}) {
+  const normalized = String(path ?? "")
+    .replaceAll("\\", "/")
+    .replace(/\/+$/u, "");
+  return platform === "win32" ? normalized.toLowerCase() : normalized;
 }
 
 function canonicalPath(path) {

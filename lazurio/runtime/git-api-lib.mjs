@@ -282,9 +282,11 @@ function projectPublicWorktreeIndex({
   module = null,
 }) {
   const projectedRepoKeys = new Set(projectedRepos.map((repo) => repo.key));
-  const worktrees = worktreeIndex.worktrees.filter((worktree) =>
-    projectedRepoKeys.has(findRepoForWorktree(worktree, inventoryRecords)?.key),
-  );
+  const worktrees = worktreeIndex.worktrees
+    .filter((worktree) =>
+      projectedRepoKeys.has(findRepoForWorktree(worktree, inventoryRecords)?.key)
+    )
+    .map(publicWorktreeRecord);
   const visibleSidecars = new Set(worktrees.map((worktree) => worktree.sidecar_path));
   const warnings = (worktreeIndex.warnings ?? []).filter((warning) => {
     if (warning && typeof warning === "object" && typeof warning.path === "string") {
@@ -292,8 +294,9 @@ function projectPublicWorktreeIndex({
     }
     return projectGitDiagnosticMessages([warning], hiddenPaths).length > 0;
   });
+  const { registered: _registered, ...publicIndex } = worktreeIndex;
   return {
-    ...worktreeIndex,
+    ...publicIndex,
     worktrees,
     // Invalid legacy bases belong to the Organization, not to a module. A
     // module-scoped public response therefore must not attach them to a
@@ -301,6 +304,15 @@ function projectPublicWorktreeIndex({
     invalid_locations: module ? [] : projectGitDiagnosticMessages(worktreeIndex.invalid_locations, hiddenPaths),
     warnings,
   };
+}
+
+function publicWorktreeRecord(worktree) {
+  const {
+    git_identity: _gitIdentity,
+    registry: _registry,
+    ...publicRecord
+  } = worktree;
+  return publicRecord;
 }
 
 function projectGitDiagnosticMessages(messages = [], hiddenPaths = []) {
