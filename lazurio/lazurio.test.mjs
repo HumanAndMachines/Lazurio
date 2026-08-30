@@ -1016,7 +1016,7 @@ test("public lazurio doctor propagates the validated Hosted Team scope", async (
   )?.status).toBe("fail");
 }, platformTestTimeout(15_000));
 
-test("Lazurio doctor předá explicitní tool-update opt-in jedinému Doctor core", async () => {
+test("Lazurio doctor předá explicitní network opt-ins jedinému Doctor core", async () => {
   const root = await launchpadFixture();
   let received = null;
   const fixtureReport = buildAggregateReport({
@@ -1027,6 +1027,7 @@ test("Lazurio doctor předá explicitní tool-update opt-in jedinému Doctor cor
   await buildLazurioDoctorReport({
     root,
     checkToolUpdates: true,
+    refreshWorktreePullRequests: true,
     buildLaunchpadReport: async (options) => {
       received = options;
       return fixtureReport;
@@ -1037,6 +1038,7 @@ test("Lazurio doctor předá explicitní tool-update opt-in jedinému Doctor cor
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
     checkToolUpdates: true,
+    refreshWorktreePullRequests: true,
     activeTeamId: null,
   });
 });
