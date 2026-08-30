@@ -7,6 +7,7 @@ import { join, resolve } from "node:path";
 import {
   buildRegisteredWorktreeIndex,
   classifyWorktreeCleanup,
+  normalizeWorktreePathIdentity,
   parseGitWorktreePorcelain,
 } from "./worktree-registry-lib.mjs";
 
@@ -42,6 +43,19 @@ test("parses NUL-delimited Git worktree records without losing spaces", () => {
       prunable: false,
     },
   ]);
+});
+
+test("normalizes Windows Git path identity across casing and separators", () => {
+  expect(normalizeWorktreePathIdentity(
+    "C:\\Users\\RunnerAdmin\\repo\\.git\\worktrees\\Feature\\",
+    { platform: "win32" },
+  )).toBe("c:/users/runneradmin/repo/.git/worktrees/feature");
+  expect(normalizeWorktreePathIdentity(
+    "C:/Users/runneradmin/repo/.git/worktrees/feature",
+    { platform: "win32" },
+  )).toBe("c:/users/runneradmin/repo/.git/worktrees/feature");
+  expect(normalizeWorktreePathIdentity("/tmp/ feature ", { platform: "linux" }))
+    .toBe("/tmp/ feature ");
 });
 
 test("cleanup classifier needs explicit PR refresh and fails closed on unsafe evidence", () => {
@@ -173,6 +187,7 @@ test("registry inventory excludes primary checkout, stays offline by default and
   });
   expect(local.worktrees[0]).toMatchObject({
     path_class: "canonical_root",
+    git_identity: expect.stringContaining("/.git/worktrees/"),
     sidecar_hint_valid: true,
     cleanup_dry_run: { classification: "not_refreshed" },
   });
