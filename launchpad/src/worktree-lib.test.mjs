@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
-import { mkdir, rm, writeFile } from "fs/promises";
+import { mkdir, rm, symlink, writeFile } from "fs/promises";
 import { join } from "path";
 import { buildWorktreeIndex, detectNonCanonicalSidecarFields } from "../../lazurio/runtime/worktree-lib.mjs";
 import { createLaunchpadGitFixture, initGitRepo, writeJson } from "./git-fixture-helpers.test.mjs";
@@ -170,7 +170,7 @@ test("worktree scanner reports legacy worktree locations as invalid contract vio
   );
 });
 
-test("worktree scanner ignores empty forbidden containers until they contain worktree-shaped residue", async () => {
+test("worktree scanner ignores only real empty forbidden containers and reports residue or symlinks", async () => {
   const root = await createLaunchpadGitFixture();
   tempRoots.push(root);
   const orgRoot = join(root, "organizations", "OmegaCo_GEN3");
@@ -183,6 +183,15 @@ test("worktree scanner ignores empty forbidden containers until they contain wor
   );
 
   await mkdir(join(invalidContainer, "old-agent-work"));
+  index = await buildWorktreeIndex({ companiesRoot: root });
+  expect(index.invalid_locations.map((item) => item.path)).toContain(
+    "organizations/OmegaCo_GEN3/.codex-tmp",
+  );
+
+  await rm(invalidContainer, { recursive: true, force: true });
+  const emptyTarget = join(orgRoot, "empty-worktree-target");
+  await mkdir(emptyTarget);
+  await symlink(emptyTarget, invalidContainer, "junction");
   index = await buildWorktreeIndex({ companiesRoot: root });
   expect(index.invalid_locations.map((item) => item.path)).toContain(
     "organizations/OmegaCo_GEN3/.codex-tmp",

@@ -1,5 +1,5 @@
 import { existsSync } from "fs";
-import { readFile, readdir } from "fs/promises";
+import { lstat, readFile, readdir } from "fs/promises";
 import { basename, join, relative } from "path";
 import { buildGitInventory } from "./git-inventory-lib.mjs";
 import { readGitRepoStatus } from "./git-status-lib.mjs";
@@ -75,6 +75,8 @@ export async function buildWorktreeIndex({
 
 async function invalidWorktreeLocationHasEntries(absolutePath) {
   try {
+    const location = await lstat(absolutePath);
+    if (!location.isDirectory()) return true;
     return (await readdir(absolutePath)).length > 0;
   } catch (error) {
     if (error?.code === "ENOENT") return false;
