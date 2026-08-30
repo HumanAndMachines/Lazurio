@@ -3,7 +3,7 @@ import { readFile } from "fs/promises";
 import { join, resolve } from "path";
 import { spawnSync } from "child_process";
 
-export const PERSONALSPACE_TEMPLATE = "HumanAndMachines/PersonalspaceTemplate_GEN3";
+export const PERSONALSPACE_TEMPLATE = "Lazurio/PersonalspaceTemplate_GEN3";
 export const PERSONALSPACE_TEMPLATE_VERSION = "humanandmachines.personalspace-template.v1";
 export const PERSONAL_SCHEMA_VERSION = "humanandmachines.personal.gen3.v1";
 
