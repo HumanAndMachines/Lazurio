@@ -52,6 +52,19 @@ lazurio doctor --tool-updates
 lazurio doctor --tool-updates --json
 ```
 
+Worktree inventář zůstává v běžném Doctoru čistě lokální a čte všechny
+fyzicky dostupné owner Git registry. Když Agent potřebuje rozhodnout cleanup,
+vyžádá zvlášť živou exact-head PR evidenci:
+
+```sh
+lazurio doctor --refresh-prs
+lazurio doctor --refresh-prs --json
+```
+
+Tento průchod je stále read-only: zobrazí cleanup kandidáty a přesné blokátory,
+ale worktree, sidecar ani branch neodstraní. Smazaná branch sama není důkaz
+bezpečí; změněný HEAD musí být zachovaný v exact-head merged PR.
+
 Git, GitHub CLI a Codex CLI dostupné v `PATH` se porovnají
 s oficiálním stabilním release zdrojem; Claude Code se kontroluje pouze tehdy,
 je-li na dané mašině nainstalovaný a dostupný v `PATH`. Chybějící Claude je

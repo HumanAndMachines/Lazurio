@@ -1,10 +1,14 @@
-import { existsSync } from "fs";
+import { existsSync, realpathSync } from "fs";
 import { lstat, readFile, readdir } from "fs/promises";
 import { basename, join, relative } from "path";
 import { buildGitInventory } from "./git-inventory-lib.mjs";
 import { readGitRepoStatus } from "./git-status-lib.mjs";
 import { readMissionControlPlanAt } from "./mission-control-plan-lib.mjs";
 import { inspectCanonicalPathBoundary } from "../core/path-boundary-lib.mjs";
+import {
+  buildRegisteredWorktreeIndex,
+  classifyWorktreeCleanup,
+} from "./worktree-registry-lib.mjs";
 
 const invalidWorktreeLocations = [
   ".claude/worktrees",
@@ -19,6 +23,8 @@ export async function buildWorktreeIndex({
   organization = null,
   inventoryOrganizations = null,
   module = null,
+  refreshPullRequests = false,
+  githubProvider = null,
 } = {}) {
   if (!companiesRoot) throw new Error("buildWorktreeIndex requires companiesRoot");
   const inventory = await buildGitInventory({
@@ -65,12 +71,98 @@ export async function buildWorktreeIndex({
     }
   }
 
+  const registered = await buildRegisteredWorktreeIndex({
+    companiesRoot,
+    repos: inventory.repos.filter((repo) => !organization || repo.organization === organization),
+    includeRoot: organization === null,
+    refreshPullRequests,
+    githubProvider,
+  });
+  const byAbsolutePath = new Map(worktrees.map((worktree) => [
+    canonicalPath(join(companiesRoot, worktree.path)),
+    worktree,
+  ]));
+  for (const registeredWorktree of registered.worktrees) {
+    const scanned = byAbsolutePath.get(canonicalPath(registeredWorktree.absolute_path));
+    if (scanned) {
+      scanned.registered = true;
+      scanned.registry = registeredWorktree;
+      scanned.cleanup_dry_run = classifyWorktreeCleanup({
+        ...registeredWorktree,
+        sidecar_exists: registeredWorktree.sidecar_exists || Boolean(scanned.metadata),
+        sidecar_hint_valid:
+          scanned.ownership_status === "owned"
+          || registeredWorktree.sidecar_hint_valid,
+      }, { refreshRequested: refreshPullRequests });
+      continue;
+    }
+    const record = registeredWorktreeRecord(registeredWorktree);
+    if (module && record.module !== module) continue;
+    if (organization && record.organization !== organization) continue;
+    worktrees.push(record);
+    byAbsolutePath.set(canonicalPath(registeredWorktree.absolute_path), record);
+  }
+  for (const worktree of worktrees) {
+    if (worktree.registered === true) continue;
+    worktree.registered = false;
+    worktree.cleanup_dry_run = {
+      classification: "needs_attention",
+      blockers: ["git_registry_missing"],
+      next_action: "verify_owner_repository_and_repair_or_remove_leftover",
+    };
+  }
+
   return {
     schema_version: "companiesascode.launchpad.worktrees.v1",
     generated_at: new Date().toISOString(),
     worktrees,
     invalid_locations,
     warnings,
+    registered,
+  };
+}
+
+function canonicalPath(path) {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
+}
+
+function registeredWorktreeRecord(worktree) {
+  const sidecarIssue = !worktree.sidecar_exists
+    ? "Worktree je v Git registru, ale nemá sidecar."
+    : !worktree.sidecar_hint_valid
+    ? `Worktree sidecar neodpovídá Git identitě (${worktree.sidecar_hint_error}).`
+    : null;
+  return {
+    slug: basename(worktree.absolute_path),
+    organization: worktree.organization,
+    organization_path: worktree.organization_path,
+    workspace: worktree.owner_repo_kind === "module"
+      ? "workspace"
+      : worktree.owner_repo_kind === "productionspace"
+      ? "productionspace"
+      : "root",
+    module: worktree.module,
+    repo_kind: worktree.owner_repo_kind,
+    path: worktree.path,
+    sidecar_path: worktree.sidecar_path,
+    branch: worktree.branch,
+    plan_code: worktree.sidecar_metadata?.mission_control_plan_code ?? null,
+    owner_plan: null,
+    metadata: worktree.sidecar_metadata,
+    ownership_status: sidecarIssue ? "registered_needs_attention" : "registered",
+    status: worktree.cleanup_dry_run.classification === "candidate"
+      ? "merged_cleanup_needed"
+      : worktree.cleanup_dry_run.classification === "needs_attention"
+      ? "needs_attention"
+      : "active",
+    message: sidecarIssue ?? "Git owner registry and sidecar identity agree.",
+    registered: true,
+    registry: worktree,
+    cleanup_dry_run: worktree.cleanup_dry_run,
   };
 }
 

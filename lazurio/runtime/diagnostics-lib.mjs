@@ -83,8 +83,6 @@ const companyGitignoreProbePaths = [
 
 const worktreePackageLockfileNames = ["bun.lock", "bun.lockb", "package-lock.json", "pnpm-lock.yaml", "yarn.lock"];
 const worktreeSupportedPackageManagers = new Set(["bun"]);
-const worktreeCleanupStatuses = new Set(["stale", "merged_cleanup_needed"]);
-
 let cachedDoctorReportSchema = null;
 
 export async function buildLaunchpadAppsResponse({
@@ -357,7 +355,11 @@ export async function buildLaunchpadDoctorReport(options = {}) {
   // gbrain mount stav). Nikdy nečte obsah osobních modulů ani gbrain zápisů a
   // osobní aplikace se NIKDY nemíchají do org appsResponse. Selhání personalspace
   // discovery nesmí shodit celý org doctor → izolované do skip/warn.
-  const worktreeChecks = await buildWorktreeDoctorChecks({ companiesRoot: appsResponse.root });
+  const worktreeChecks = await buildWorktreeDoctorChecks({
+    companiesRoot: appsResponse.root,
+    refreshPullRequests: options.refreshWorktreePullRequests === true,
+    githubProvider: options.worktreeGitHubProvider ?? null,
+  });
   const personalspaceChecks = await buildPersonalspaceDoctorChecks({
     companiesRoot: appsResponse.root,
     rootSourceRoot: options.rootSourceRoot ?? appsResponse.control_root ?? appsResponse.root,
@@ -449,12 +451,21 @@ async function buildPersonalspaceDoctorChecks({ companiesRoot, rootSourceRoot = 
   }
 }
 
-async function buildWorktreeDoctorChecks({ companiesRoot }) {
+async function buildWorktreeDoctorChecks({
+  companiesRoot,
+  refreshPullRequests = false,
+  githubProvider = null,
+}) {
   try {
-    const index = await buildWorktreeIndex({ companiesRoot });
+    const index = await buildWorktreeIndex({
+      companiesRoot,
+      refreshPullRequests,
+      githubProvider,
+    });
     return [
       worktreeInventoryCheck(index),
       worktreeContractCheck(index),
+      worktreeCleanupDryRunCheck(index),
       await worktreeDependencyCheck({ companiesRoot, index }),
     ];
   } catch (error) {
@@ -478,6 +489,14 @@ async function buildWorktreeDoctorChecks({ companiesRoot }) {
         remedy: "Oprav worktree inventory (sidecary, umístění) a spusť doctor znovu.",
       }),
       blockedCheck({
+        id: "git.worktrees.cleanup",
+        title: "Worktree cleanup dry-run",
+        message: "Cleanup dry-run se nedal provést, protože inventory nejde načíst.",
+        paths: [".worktrees", "organizations/*/.worktrees"],
+        blockedReason: `Worktree inventory nejde načíst: ${error.message}`,
+        remedy: "Oprav worktree inventory a spusť doctor znovu.",
+      }),
+      blockedCheck({
         id: "git.worktrees.dependencies",
         title: "Worktree dependency readiness",
         message: "Worktree dependency kontroly se nedaly provést, protože inventory nejde načíst.",
@@ -493,9 +512,15 @@ function worktreeInventoryCheck(index) {
   const worktrees = index.worktrees ?? [];
   const ownershipCounts = countBy(worktrees.map((worktree) => worktree.ownership_status ?? "unknown"));
   const lifecycleCounts = countBy(worktrees.map((worktree) => worktree.status ?? "unknown"));
+  const registered = index.registered ?? {};
   const details = [
     `total: ${worktrees.length}`,
+    `owner_git_registries: ${registered.owner_registries ?? 0}`,
+    `registered_worktrees: ${registered.summary?.registered_worktrees ?? 0}`,
+    `filesystem_only: ${worktrees.filter((worktree) => worktree.registered !== true).length}`,
     `owned: ${ownershipCounts.owned ?? 0}`,
+    `registered: ${ownershipCounts.registered ?? 0}`,
+    `registered_needs_attention: ${ownershipCounts.registered_needs_attention ?? 0}`,
     `orphan_missing_plan: ${ownershipCounts.orphan_missing_plan ?? 0}`,
     `orphan_missing_file: ${ownershipCounts.orphan_missing_file ?? 0}`,
     `invalid: ${ownershipCounts.invalid ?? 0}`,
@@ -509,8 +534,8 @@ function worktreeInventoryCheck(index) {
     status: "ok",
     severity: "local-state",
     title: "Worktree inventory",
-    message: `Worktree inventory: ${worktrees.length} worktrees, ${(index.invalid_locations ?? []).length} invalid locations.`,
-    paths: ["organizations/*/.worktrees"],
+    message: `Worktree inventory: ${worktrees.length} unique records from ${registered.owner_registries ?? 0} Git owner registries, ${(index.invalid_locations ?? []).length} invalid locations.`,
+    paths: [".worktrees", "organizations/*/.worktrees"],
     links: [],
     details,
   };
@@ -518,20 +543,19 @@ function worktreeInventoryCheck(index) {
 
 function worktreeContractCheck(index) {
   const details = [];
-  const ownershipIssues = (index.worktrees ?? []).filter((worktree) => worktree.ownership_status !== "owned");
-  const cleanupCandidates = (index.worktrees ?? []).filter((worktree) => worktree.ownership_status === "owned"
-    && worktreeCleanupStatuses.has(worktree.status));
+  const acceptedOwnership = new Set(["owned", "registered"]);
+  const ownershipIssues = (index.worktrees ?? []).filter(
+    (worktree) => !acceptedOwnership.has(worktree.ownership_status),
+  );
   for (const location of index.invalid_locations ?? []) {
     details.push(`invalid_location: ${location.path} — ${location.message}`);
   }
   for (const worktree of index.worktrees ?? []) {
-    if (worktree.ownership_status !== "owned") {
+    if (!acceptedOwnership.has(worktree.ownership_status)) {
       details.push(`${worktree.ownership_status}: ${worktree.slug} (${worktree.path}) — ${worktree.message}`);
     }
-    if (worktree.ownership_status === "owned" && worktree.status === "stale") {
-      details.push(`cleanup_candidate: ${worktree.slug} (${worktree.path}) — stale owned worktree without local draft/PR signal`);
-    } else if (worktree.ownership_status === "owned" && worktree.status === "merged_cleanup_needed") {
-      details.push(`cleanup_candidate: ${worktree.slug} (${worktree.path}) — status merged_cleanup_needed`);
+    if (worktree.registered !== true) {
+      details.push(`git_registry_missing: ${worktree.slug} (${worktree.path}) — filesystem záznam není potvrzený owner Git registrem`);
     }
   }
   for (const warning of index.warnings ?? []) {
@@ -545,18 +569,80 @@ function worktreeContractCheck(index) {
     title: "Worktree kontrakt",
     message:
       details.length > 0
-        ? `Worktree kontrakt: ${formatCount((index.invalid_locations ?? []).length, "neplatné umístění", "neplatná umístění", "neplatných umístění")}, ${formatCount(ownershipIssues.length, "problém vlastnictví", "problémy vlastnictví", "problémů vlastnictví")}, ${formatCount(cleanupCandidates.length, "kandidát k úklidu", "kandidáti k úklidu", "kandidátů k úklidu")} a ${formatCount((index.warnings ?? []).length, "metadatové upozornění", "metadatová upozornění", "metadatových upozornění")} nad ${formatCount((index.worktrees ?? []).length, "worktree", "worktrees", "worktrees")}.`
-        : "Worktree kontrakt je čistý: žádné orphany, invalid locations ani cleanup kandidáti.",
-    paths: ["organizations/*/.worktrees", "organizations/*/.claude/worktrees", "organizations/*/.pr-worktrees"],
+        ? `Worktree kontrakt: ${formatCount((index.invalid_locations ?? []).length, "neplatné umístění", "neplatná umístění", "neplatných umístění")}, ${formatCount(ownershipIssues.length, "problém vlastnictví", "problémy vlastnictví", "problémů vlastnictví")} a ${formatCount((index.warnings ?? []).length, "metadatové upozornění", "metadatová upozornění", "metadatových upozornění")} nad ${formatCount((index.worktrees ?? []).length, "worktree", "worktrees", "worktrees")}.`
+        : "Worktree kontrakt je čistý: žádné orphany ani invalid locations.",
+    paths: [".worktrees", "organizations/*/.worktrees", "organizations/*/.claude/worktrees", "organizations/*/.pr-worktrees"],
+    links: [],
+    details,
+  };
+}
+
+function worktreeCleanupDryRunCheck(index) {
+  const worktrees = (index.worktrees ?? []).filter((worktree) => worktree.registered === true);
+  const assessments = worktrees.map((worktree) => ({
+    worktree,
+    assessment: worktree.cleanup_dry_run,
+  }));
+  const candidates = assessments.filter(({ assessment }) => assessment?.classification === "candidate");
+  const needsAttention = assessments.filter(({ assessment }) => assessment?.classification === "needs_attention");
+  const active = assessments.filter(({ assessment }) => assessment?.classification === "active");
+  const notRefreshed = assessments.filter(({ assessment }) => assessment?.classification === "not_refreshed");
+  const refreshRequested = index.registered?.refresh_prs_requested === true;
+  const details = [
+    `registered_worktrees: ${worktrees.length}`,
+    `candidates: ${candidates.length}`,
+    `active: ${active.length}`,
+    `needs_attention: ${needsAttention.length}`,
+    `not_refreshed: ${notRefreshed.length}`,
+  ];
+  if (!refreshRequested) {
+    details.push("network: not requested; běžný Doctor nevolá GitHub");
+    details.push("next_action: lazurio doctor --refresh-prs");
+    for (const { worktree, assessment } of needsAttention) {
+      details.push(
+        `cleanup_blocked: ${worktree.path} — ${assessment.blockers.join(", ")}; next_action=${assessment.next_action}`,
+      );
+    }
+  } else {
+    for (const { worktree } of candidates) {
+      const pr = worktree.registry?.github_evidence?.pull_request?.url;
+      details.push(
+        `cleanup_candidate: ${worktree.path}${pr ? ` — ${pr}` : ""}; před apply znovu ověř runtime a active writer, potom použij owner git worktree remove`,
+      );
+    }
+    for (const { worktree, assessment } of needsAttention) {
+      details.push(
+        `cleanup_blocked: ${worktree.path} — ${assessment.blockers.join(", ")}; next_action=${assessment.next_action}`,
+      );
+    }
+  }
+  return {
+    id: "git.worktrees.cleanup",
+    status: needsAttention.length > 0 || (refreshRequested && candidates.length > 0) ? "warn" : "ok",
+    severity: "local-state",
+    title: "Worktree cleanup dry-run",
+    message: refreshRequested
+      ? `Cleanup dry-run: ${formatCount(candidates.length, "kandidát", "kandidáti", "kandidátů")}, ${formatCount(active.length, "aktivní worktree", "aktivní worktrees", "aktivních worktrees")} a ${formatCount(needsAttention.length, "blokovaný záznam", "blokované záznamy", "blokovaných záznamů")}. Nic nebylo odstraněno.`
+      : `Cleanup dry-run používá lokální Git evidence: ${formatCount(needsAttention.length, "blokovaný záznam", "blokované záznamy", "blokovaných záznamů")}; živý PR stav nebyl vyžádán. Pro rozhodnutelný síťový průchod spusť lazurio doctor --refresh-prs.`,
+    paths: [".worktrees", "organizations/*/.worktrees"],
     links: [],
     details,
   };
 }
 
 async function worktreeDependencyCheck({ companiesRoot, index }) {
-  const ownedWorktrees = (index.worktrees ?? []).filter((worktree) => worktree.ownership_status === "owned");
-  const cleanupWorktrees = ownedWorktrees.filter((worktree) => worktreeCleanupStatuses.has(worktree.status));
-  const runnableWorktrees = ownedWorktrees.filter((worktree) => !worktreeCleanupStatuses.has(worktree.status));
+  const filesystemOnlyWorktrees = (index.worktrees ?? []).filter(
+    (worktree) => worktree.ownership_status === "owned" && worktree.registered !== true,
+  );
+  const ownedWorktrees = (index.worktrees ?? []).filter(
+    (worktree) => worktree.ownership_status === "owned" && worktree.registered === true,
+  );
+  const cleanupWorktrees = ownedWorktrees.filter(
+    (worktree) => worktree.cleanup_dry_run?.classification === "candidate",
+  );
+  const runnableWorktrees = ownedWorktrees.filter(
+    (worktree) => worktree.cleanup_dry_run?.classification !== "candidate",
+  );
   const records = [];
   for (const worktree of runnableWorktrees) {
     const absoluteWorktreePath = join(companiesRoot, worktree.path);
@@ -598,6 +684,7 @@ async function worktreeDependencyCheck({ companiesRoot, index }) {
   const details = [
     `checked_worktrees: ${runnableWorktrees.length}`,
     `skipped_cleanup_worktrees: ${cleanupWorktrees.length}`,
+    `skipped_unregistered_worktrees: ${filesystemOnlyWorktrees.length}`,
     `checked_packages: ${packageRecords.length}`,
     `ready: ${counts.ready ?? 0}`,
     `needs_install: ${counts.needs_install ?? 0}`,
