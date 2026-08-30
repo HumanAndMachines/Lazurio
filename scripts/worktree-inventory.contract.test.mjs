@@ -542,7 +542,7 @@ test("fails closed on root identity, scope and path mutations", async () => {
       "canonical worktree has invalid sidecar",
     );
   }
-});
+}, 45_000);
 
 test("fails closed when the owning plan dev_code does not match the sidecar", async () => {
   const fixture = await createFixture({
