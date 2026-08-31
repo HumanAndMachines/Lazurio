@@ -37,9 +37,10 @@ import type {
   BotIdentity,
   BridgeAsyncReplySender,
   BridgeEventLogger,
+  CommunicationRoutingPolicy,
   ZulipMessage,
 } from "./message.ts";
-import { messageTrigger, toReplyInput } from "./message.ts";
+import { messageTrigger, routingPolicyAllows, toReplyInput } from "./message.ts";
 import { isSessionResetCommand } from "./content.ts";
 import type { SessionRotations } from "./session-rotations.ts";
 import type { FileReplyQueue } from "./reply-queue.ts";
@@ -104,6 +105,10 @@ export interface EventBridgeOptions {
   /** Used only to tell a waiting human that the breaker has tripped. */
   notify: BridgeAsyncReplySender;
   buddyName: string;
+  /** Stable identity of the Communication Binding and its authority scope. */
+  bindingId?: string;
+  /** Omitted only by the explicit pre-managed compatibility lane. */
+  routingPolicy?: CommunicationRoutingPolicy;
   /**
    * Called after every successful (re-)registration. The runtime uses it to
    * write the content-free poller state file that replaced the health port —
@@ -424,7 +429,22 @@ export class EventBridge {
       return;
     }
 
-    const input = toReplyInput(message, trigger, this.options.bot);
+    if (
+      this.options.routingPolicy &&
+      !routingPolicyAllows(message, this.options.routingPolicy, this.options.bot)
+    ) {
+      this.options.logger.warn("[inbound] refused: Communication Binding policy");
+      await this.options.inbox.refuse(messageId, "communication_binding_policy");
+      await this.options.watermark.advanceTo(messageId);
+      return;
+    }
+
+    const input = toReplyInput(
+      message,
+      trigger,
+      this.options.bot,
+      this.options.bindingId,
+    );
     if (!input) {
       this.options.logger.warn("[inbound] refused: reply target is unroutable");
       await this.options.inbox.refuse(messageId, "unroutable");

@@ -180,6 +180,24 @@ export async function verifyArtifactTree(artifactRoot, {
         : "Buddy bridge payload is incomplete or carries a forbidden role overlay",
     );
   }
+  if (["buddy", "ai-colleague"].includes(manifest.profile)) {
+    const managedPayload = new Set(manifest.payload.files.map((file) => file.path));
+    const managedRequired = [
+      "bridge/run.ts",
+      "resident/controller-lib.mjs",
+      "resident/controller.mjs",
+      "resident/updater-lib.mjs",
+      "resident/updater.mjs",
+    ];
+    const managedComplete = managedRequired.every((path) => managedPayload.has(path));
+    check(
+      "managed-resident-controller",
+      managedComplete && manifest.role_overlays.length === 0,
+      managedComplete && manifest.role_overlays.length === 0
+        ? "Managed Resident controller and binding worker are immutable payload with no role overlay"
+        : "Managed Resident controller payload is incomplete or carries a forbidden role overlay",
+    );
+  }
 
   try {
     const profile = JSON.parse(

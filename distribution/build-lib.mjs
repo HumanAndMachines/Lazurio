@@ -174,6 +174,20 @@ export async function buildResidentArtifact({
     );
     addGeneratedEntry(
       entries,
+      "resident/controller-lib.mjs",
+      readBlob(repositoryRoot, tree, "distribution/runtime/controller-lib.mjs"),
+      "0644",
+    );
+    addGeneratedEntry(
+      entries,
+      "resident/controller.mjs",
+      readBlob(repositoryRoot, tree, "distribution/runtime/controller.mjs"),
+      "0755",
+    );
+  }
+  if (profile === "buddy") {
+    addGeneratedEntry(
+      entries,
       "resident/services/buddy-bridge.service.template",
       readBlob(repositoryRoot, tree, "distribution/runtime/buddy-bridge.service.template"),
       "0644",
@@ -403,6 +417,7 @@ export function addGeneratedEntry(entries, path, value, mode) {
 
 function residentPackageJson(profile) {
   const workspace = profile === "workspace";
+  const buddy = profile === "buddy";
   return `${JSON.stringify({
     name: "lazurio",
     private: true,
@@ -426,9 +441,12 @@ function residentPackageJson(profile) {
         "resident:update": "bun resident/updater.mjs update",
         "resident:rollback": "bun resident/updater.mjs rollback",
         "resident:status": "bun resident/updater.mjs status",
-        "buddy:bridge": "bun bridge/run.ts",
-        "buddy:service": "bun resident/buddy-service.mjs",
-        "buddy:rollout": "bun resident/buddy-rollout.mjs",
+        "resident:controller": "bun resident/controller.mjs",
+        ...(buddy ? {
+          "buddy:bridge": "bun bridge/run.ts",
+          "buddy:service": "bun resident/buddy-service.mjs",
+          "buddy:rollout": "bun resident/buddy-rollout.mjs",
+        } : {}),
       } : {}),
     },
   }, null, 2)}\n`;

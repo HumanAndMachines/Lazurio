@@ -92,8 +92,9 @@ test("ustar output is byte-identical for identical entries and epoch", () => {
 test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", async () => {
   const firstOutput = await mkdtemp(join(tmpdir(), "lazurio-resident-build-a-"));
   const secondOutput = await mkdtemp(join(tmpdir(), "lazurio-resident-build-b-"));
+  const aiOutput = await mkdtemp(join(tmpdir(), "lazurio-ai-colleague-build-"));
   const workspaceOutput = await mkdtemp(join(tmpdir(), "lazurio-workspace-runtime-build-"));
-  cleanup.push(firstOutput, secondOutput, workspaceOutput);
+  cleanup.push(firstOutput, secondOutput, aiOutput, workspaceOutput);
   const target = `${process.platform === "win32" ? "windows" : process.platform}-${process.arch}`;
   const options = {
     cwd: import.meta.dir,
@@ -139,7 +140,7 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
   expect(rootInstructions).toContain("generated:lazurio-resident-profile=buddy");
   expect(rootInstructions).toContain("Principál vlastní Mašinu a není protivník");
   expect(rootInstructions).toContain("sandbox agentního runtime");
-  expect(rootInstructions).toContain("sandbox nesmí přepsat sám sebe");
+  expect(rootInstructions).toContain("důvěryhodnou součástí Machine TCB");
   expect(rootInstructions).toContain("textová role žádná práva neudělují");
   expect(rootInstructions).toContain(".agents/skills/architecture-shaping/SKILL.md");
   expect(first.manifest.payload.files.map((file) => file.path)).not.toContain(
@@ -170,6 +171,8 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
     "resident/integrity.mjs",
     "resident/updater-lib.mjs",
     "resident/updater.mjs",
+    "resident/controller-lib.mjs",
+    "resident/controller.mjs",
     "resident/buddy-service-lib.mjs",
     "resident/buddy-service.mjs",
     "resident/buddy-rollout-lib.mjs",
@@ -213,6 +216,7 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
     "resident:update": "bun resident/updater.mjs update",
     "resident:rollback": "bun resident/updater.mjs rollback",
     "resident:status": "bun resident/updater.mjs status",
+    "resident:controller": "bun resident/controller.mjs",
     "buddy:bridge": "bun bridge/run.ts",
     "buddy:service": "bun resident/buddy-service.mjs",
     "buddy:rollout": "bun resident/buddy-rollout.mjs",
@@ -261,6 +265,36 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
   const doctor = runDoctor(first.artifact_root);
   expect(doctor.status).toBe(0);
   expect(JSON.parse(doctor.stdout)).toMatchObject({ status: "pass", profile: "buddy" });
+
+  const aiColleague = await buildResidentArtifact({
+    ...options,
+    profile: "ai-colleague",
+    outputRoot: aiOutput,
+  });
+  const aiPaths = aiColleague.manifest.payload.files.map((file) => file.path);
+  expect(aiColleague.manifest.profile).toBe("ai-colleague");
+  expect(await verifyArtifactTree(aiColleague.artifact_root)).toMatchObject({
+    ok: true,
+    failures: [],
+  });
+  expect(aiPaths).toEqual(expect.arrayContaining([
+    "bridge/run.ts",
+    "resident/controller-lib.mjs",
+    "resident/controller.mjs",
+    "resident/updater-lib.mjs",
+    "resident/updater.mjs",
+  ]));
+  expect(aiPaths.some((path) => path.includes("buddy-service") || path.includes("buddy-rollout")))
+    .toBe(false);
+  const aiInstructions = await readFile(join(aiColleague.artifact_root, "AGENTS.md"), "utf8");
+  expect(aiInstructions).toContain("generated:lazurio-resident-profile=ai-colleague");
+  expect(aiInstructions).toContain("AI Kolega je sám Principál");
+  expect(aiInstructions).toContain("právě jeden Organization Authority Compartment");
+  const aiPackage = JSON.parse(
+    await readFile(join(aiColleague.artifact_root, "package.json"), "utf8"),
+  );
+  expect(aiPackage.scripts["resident:controller"]).toBe("bun resident/controller.mjs");
+  expect(aiPackage.scripts["buddy:bridge"]).toBeUndefined();
 
   const workspace = await buildResidentArtifact({
     ...options,
@@ -414,7 +448,7 @@ test("Buddy profile eval pack covers normal and negative-path cases without role
     machine_owner_is_adversary: false,
     local_payload_edits: "allowed-and-reported-as-drift",
     agent_sandbox: "hermes-runtime",
-    sandbox_substrate_mutability: "principal-controlled-runtime-identities-non-owning-read-only",
+    sandbox_substrate_mutability: "principal-controlled-hermes-supervisor-is-machine-tcb",
     parallel_lazurio_acl: false,
   });
 });

@@ -17,7 +17,8 @@
 //
 // Public operator boundary: `manual/lazurio-resident-profiles.md`.
 
-import { join } from "node:path";
+import { lstatSync, readFileSync, realpathSync } from "node:fs";
+import { isAbsolute, join } from "node:path";
 import {
   createSystemMessageBuilder,
   readAgencyProfile,
@@ -75,6 +76,25 @@ export interface BridgeRuntimeEnvironment extends RuntimeEnvironment {
    * turn (K3). Unset is a REFUSAL, not a default — see identity/profile-mount.ts.
    */
   BUDDY_PROFILE_DIR?: string;
+  LAZURIO_BINDING_ID?: string;
+  LAZURIO_BINDING_ROLE?: string;
+  LAZURIO_RUNTIME_PERSONA?: string;
+  LAZURIO_INSTRUCTION_FILE?: string;
+  LAZURIO_ALLOWED_SENDER_IDS?: string;
+  LAZURIO_ALLOWED_STREAM_IDS?: string;
+  LAZURIO_TOPIC_POLICY?: string;
+}
+
+interface ManagedBindingRuntime {
+  bindingId: string;
+  role: "personal-home" | "organization";
+  persona: "buddy" | "ai-colleague";
+  instructionText: string;
+  routingPolicy: {
+    allowedSenderIds: ReadonlySet<number>;
+    allowedStreamIds: ReadonlySet<number>;
+    topicPolicy: "direct-only" | "any-in-allowed-stream";
+  };
 }
 
 export function createZulipReplySender(
@@ -102,9 +122,10 @@ export function createZulipReplySender(
  */
 export function configuredReplyProvider(
   env: BridgeRuntimeEnvironment,
-  profileDir: string,
+  profileDir: string | undefined,
   logger: BridgeEventLogger = CONSOLE_LOGGER,
   zulip?: ZulipConfig,
+  binding?: ManagedBindingRuntime,
 ): BridgeReplyProvider {
   const seam = readRuntimeSeam(env);
   if (seam.urlFrom !== "AGENT_RUNTIME_URL" || seam.keyFrom !== "AGENT_RUNTIME_KEY") {
@@ -115,20 +136,139 @@ export function configuredReplyProvider(
       `[inbound] runtime seam resolved from legacy names (url=${seam.urlFrom} key=${seam.keyFrom})`,
     );
   }
-  const profile = readAgencyProfile(profileDir);
-  for (const note of profile.notes) logger.info(`[inbound] agency: ${note}`);
-  const build = createSystemMessageBuilder({
-    buddyName: buddyDisplayName(env),
-    profile,
-  });
+  let systemMessage: (input: { senderName: string }) => string;
+  if (binding?.role === "organization") {
+    systemMessage = () => [
+      binding.instructionText,
+      "",
+      `This turn came through Communication Binding ${binding.bindingId} from an immutable-id allowlisted sender.`,
+      `Act only as ${binding.persona === "buddy" ? "the human Principal's Buddy" : "the AI Colleague Principal"} inside the selected Organization Authority Compartment.`,
+      "Do not read, infer, or import Personalspace or another Organization through this turn.",
+    ].join("\n");
+  } else {
+    if (!profileDir) {
+      throw new Error("refusing to start: personal Buddy binding has no private profile directory");
+    }
+    const profile = readAgencyProfile(profileDir);
+    for (const note of profile.notes) logger.info(`[inbound] agency: ${note}`);
+    const build = createSystemMessageBuilder({
+      buddyName: buddyDisplayName(env),
+      profile,
+    });
+    systemMessage = ({ senderName }) => [
+      ...(binding ? [binding.instructionText, ""] : []),
+      build({ senderDisplayName: senderName }),
+    ].join("\n");
+  }
   return createRuntimeReplyProvider({
     endpoint: seam.url,
     apiKey: seam.key,
     model: seam.model,
     sessionHeader: seam.sessionHeader,
     loadImage: zulip ? (url) => downloadRuntimeImage(zulip, url) : undefined,
-    systemMessage: (input) => build({ senderDisplayName: input.senderName }),
+    systemMessage: (input) => systemMessage(input),
   });
+}
+
+function managedBindingFromEnvironment(
+  env: BridgeRuntimeEnvironment,
+): ManagedBindingRuntime | null {
+  const declared = [
+    env.LAZURIO_BINDING_ID,
+    env.LAZURIO_BINDING_ROLE,
+    env.LAZURIO_RUNTIME_PERSONA,
+    env.LAZURIO_INSTRUCTION_FILE,
+    env.LAZURIO_ALLOWED_SENDER_IDS,
+    env.LAZURIO_ALLOWED_STREAM_IDS,
+    env.LAZURIO_TOPIC_POLICY,
+  ];
+  if (declared.every((value) => value === undefined)) return null;
+  if (declared.some((value) => value === undefined)) {
+    throw new Error(
+      "refusing to start: managed Communication Binding contract is incomplete",
+    );
+  }
+  const bindingId = env.LAZURIO_BINDING_ID!.trim();
+  const role = env.LAZURIO_BINDING_ROLE!.trim();
+  const persona = env.LAZURIO_RUNTIME_PERSONA!.trim();
+  const topicPolicy = env.LAZURIO_TOPIC_POLICY!.trim();
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(bindingId)) {
+    throw new Error("refusing to start: LAZURIO_BINDING_ID is not a canonical slug");
+  }
+  if (role !== "personal-home" && role !== "organization") {
+    throw new Error("refusing to start: LAZURIO_BINDING_ROLE is invalid");
+  }
+  if (persona !== "buddy" && persona !== "ai-colleague") {
+    throw new Error("refusing to start: LAZURIO_RUNTIME_PERSONA is invalid");
+  }
+  if (persona === "ai-colleague" && role !== "organization") {
+    throw new Error("refusing to start: an AI Colleague cannot have a personal-home binding");
+  }
+  if (topicPolicy !== "direct-only" && topicPolicy !== "any-in-allowed-stream") {
+    throw new Error("refusing to start: LAZURIO_TOPIC_POLICY is invalid");
+  }
+  const allowedSenderIds = parseImmutableIds(
+    env.LAZURIO_ALLOWED_SENDER_IDS!,
+    "LAZURIO_ALLOWED_SENDER_IDS",
+    false,
+  );
+  const allowedStreamIds = parseImmutableIds(
+    env.LAZURIO_ALLOWED_STREAM_IDS!,
+    "LAZURIO_ALLOWED_STREAM_IDS",
+    true,
+  );
+  if (topicPolicy === "direct-only" && allowedStreamIds.size !== 0) {
+    throw new Error("refusing to start: a direct-only binding cannot expose streams");
+  }
+  return {
+    bindingId,
+    role,
+    persona,
+    instructionText: readManagedInstructionFile(env.LAZURIO_INSTRUCTION_FILE!),
+    routingPolicy: { allowedSenderIds, allowedStreamIds, topicPolicy },
+  };
+}
+
+function parseImmutableIds(
+  value: string,
+  label: string,
+  emptyAllowed: boolean,
+): ReadonlySet<number> {
+  const trimmed = value.trim();
+  if (trimmed === "" && emptyAllowed) return new Set();
+  const raw = trimmed.split(",");
+  const ids = raw.map((item) => Number(item));
+  if (
+    raw.some((item) => !/^[1-9][0-9]*$/.test(item)) ||
+    ids.some((id) => !Number.isSafeInteger(id)) ||
+    new Set(ids).size !== ids.length
+  ) {
+    throw new Error(`refusing to start: ${label} must contain unique positive ids`);
+  }
+  return new Set(ids);
+}
+
+function readManagedInstructionFile(path: string): string {
+  if (!isAbsolute(path) || path.includes("\0")) {
+    throw new Error("refusing to start: LAZURIO_INSTRUCTION_FILE must be absolute");
+  }
+  let bytes: Buffer;
+  try {
+    const stat = lstatSync(path);
+    if (!stat.isFile() || stat.isSymbolicLink() || (stat.mode & 0o022) !== 0) {
+      throw new Error("unsafe");
+    }
+    const resolved = realpathSync(path);
+    bytes = readFileSync(resolved);
+  } catch {
+    throw new Error(
+      "refusing to start: managed binding instructions must be a readable, non-writable regular file",
+    );
+  }
+  if (bytes.length === 0 || bytes.length > 512 * 1024 || bytes.includes(0)) {
+    throw new Error("refusing to start: managed binding instructions are invalid");
+  }
+  return bytes.toString("utf8");
 }
 
 function turnsPerHour(env: BridgeRuntimeEnvironment): number | undefined {
@@ -162,7 +302,11 @@ export async function buildRuntime(
   env: BridgeRuntimeEnvironment = process.env,
   logger: BridgeEventLogger = CONSOLE_LOGGER,
 ): Promise<BridgeRuntime> {
-  const profileDir = assertProfileMountIsSafe(env.BUDDY_PROFILE_DIR);
+  const binding = managedBindingFromEnvironment(env);
+  const profileDir =
+    !binding || binding.role === "personal-home"
+      ? assertProfileMountIsSafe(env.BUDDY_PROFILE_DIR)
+      : undefined;
   const queueDirectory = env.BUDDY_BRIDGE_QUEUE_DIR?.trim();
   if (!queueDirectory) {
     // `refusing to start:` is the classification, not decoration — it is what
@@ -186,7 +330,7 @@ export async function buildRuntime(
     // future turn with the same exhaustion error (see the regression in
     // runtime-adapter/session-recovery.ts).
     replyProvider: withSessionRecovery({
-      provider: configuredReplyProvider(env, profileDir, logger, zulip),
+      provider: configuredReplyProvider(env, profileDir, logger, zulip, binding ?? undefined),
       // The SAME store the /reset command writes (wired to EventBridge below)
       // — one rotation state, two triggers.
       rotations: sessionRotations,
@@ -207,6 +351,8 @@ export async function buildRuntime(
     logger,
     notify: replySender,
     buddyName: buddyDisplayName(env),
+    bindingId: binding?.bindingId,
+    routingPolicy: binding?.routingPolicy,
     sessionRotations,
     onRegistered: ({ registrations }) =>
       writePollerState(pollerStatePath(queueDirectory), registrations),

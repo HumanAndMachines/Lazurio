@@ -114,6 +114,7 @@ export function buddyDisplayName(
 
 interface ZulipPrivateParticipant {
   email?: unknown;
+  id?: unknown;
 }
 
 export function privateRecipientEmails(
@@ -144,6 +145,49 @@ export interface BotIdentity {
   userId: number;
   /** The bot's e-mail. A NAME: asserted beside the id, never a selector. */
   email?: string;
+}
+
+export interface CommunicationRoutingPolicy {
+  /** Immutable Zulip user ids allowed to create work in this binding. */
+  allowedSenderIds: ReadonlySet<number>;
+  /** Immutable Zulip stream ids exposed to this binding. */
+  allowedStreamIds: ReadonlySet<number>;
+  topicPolicy: "direct-only" | "any-in-allowed-stream";
+}
+
+/**
+ * A Communication Binding selects its authority compartment before a message
+ * is allowed to become runtime work. The Zulip bot subscription is deliberately
+ * not treated as authorization: Generic bots can observe more than one route.
+ */
+export function routingPolicyAllows(
+  message: ZulipMessage,
+  policy: CommunicationRoutingPolicy,
+  bot: BotIdentity,
+): boolean {
+  if (
+    typeof message.sender_id !== "number" ||
+    !policy.allowedSenderIds.has(message.sender_id)
+  ) {
+    return false;
+  }
+  if (message.type === "private") {
+    if (!Array.isArray(message.display_recipient)) return false;
+    const participantIds = message.display_recipient.map(
+      (participant: ZulipPrivateParticipant) => participant?.id,
+    );
+    return participantIds.length >= 2 &&
+      participantIds.every((id) =>
+        typeof id === "number" &&
+        (id === bot.userId || policy.allowedSenderIds.has(id))) &&
+      participantIds.includes(bot.userId) &&
+      participantIds.includes(message.sender_id);
+  }
+  return (
+    policy.topicPolicy === "any-in-allowed-stream" &&
+    typeof message.stream_id === "number" &&
+    policy.allowedStreamIds.has(message.stream_id)
+  );
 }
 
 /**
@@ -189,9 +233,32 @@ export function messageTrigger(
 export function sessionIdFor(
   conversationKind: "stream" | "private",
   routeKey: string,
+): string;
+export function sessionIdFor(
+  bindingId: string,
+  conversationKind: "stream" | "private",
+  routeKey: string,
+): string;
+export function sessionIdFor(
+  bindingOrKind: string,
+  kindOrRoute: string,
+  maybeRoute?: string,
 ): string {
-  return `buddy-zulip-${conversationKind}-${createHash("sha256")
-    .update(routeKey)
+  if (maybeRoute === undefined) {
+    // Compatibility lane for pre-Communication-Binding Buddy installations.
+    // Keeping the historical bytes avoids silently abandoning live sessions.
+    return `buddy-zulip-${bindingOrKind}-${createHash("sha256")
+      .update(kindOrRoute)
+      .digest("hex")
+      .slice(0, 20)}`;
+  }
+  const bindingId = bindingOrKind;
+  const conversationKind = kindOrRoute;
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(bindingId)) {
+    throw new Error("Communication Binding id must be a canonical slug");
+  }
+  return `lazurio-zulip-${bindingId}-${conversationKind}-${createHash("sha256")
+    .update(`${bindingId}\0${maybeRoute}`)
     .digest("hex")
     .slice(0, 20)}`;
 }
@@ -207,6 +274,7 @@ export function toReplyInput(
   message: ZulipMessage,
   trigger: BridgeTrigger,
   bot: BotIdentity,
+  bindingId?: string,
 ): BridgeReplyInput | null {
   if (typeof message.id !== "number") return null;
   const senderName = message.sender_full_name ?? "there";
@@ -220,7 +288,9 @@ export function toReplyInput(
       senderName,
       trigger,
       conversationKind: "stream",
-      sessionId: sessionIdFor("stream", `stream:${message.stream_id}:${topic}`),
+      sessionId: bindingId
+        ? sessionIdFor(bindingId, "stream", `stream:${message.stream_id}:${topic}`)
+        : sessionIdFor("stream", `stream:${message.stream_id}:${topic}`),
       messageId: message.id,
       replyTarget: { kind: "stream", streamId: message.stream_id, topic },
     };
@@ -243,7 +313,9 @@ export function toReplyInput(
     senderName,
     trigger,
     conversationKind: "private",
-    sessionId: sessionIdFor("private", routeKey),
+    sessionId: bindingId
+      ? sessionIdFor(bindingId, "private", routeKey)
+      : sessionIdFor("private", routeKey),
     messageId: message.id,
     replyTarget: { kind: "private", recipientEmails },
   };

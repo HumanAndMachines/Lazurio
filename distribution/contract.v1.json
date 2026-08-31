@@ -21,6 +21,11 @@
       "root_instructions": "distribution/profiles/buddy/root-instructions.md",
       "evals": "distribution/profile-evals/buddy.json"
     },
+    "ai-colleague": {
+      "descriptor": "distribution/profiles/ai-colleague/profile.json",
+      "root_instructions": "distribution/profiles/ai-colleague/root-instructions.md",
+      "evals": "distribution/profile-evals/ai-colleague.json"
+    },
     "workspace": {
       "descriptor": "distribution/profiles/workspace/profile.json",
       "root_instructions": "distribution/profiles/workspace/root-instructions.md",
@@ -113,6 +118,8 @@
     "resident/dependencies/toolchain.json",
     "resident/updater-lib.mjs",
     "resident/updater.mjs",
+    "resident/controller-lib.mjs",
+    "resident/controller.mjs",
     "resident/buddy-service-lib.mjs",
     "resident/buddy-service.mjs",
     "resident/buddy-rollout-lib.mjs",

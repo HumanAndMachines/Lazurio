@@ -41,6 +41,61 @@ artifact root. Manifest uvnitř nese exact source commit, target, profil
 `workspace` a digest každého payload souboru. Build odmítne dirty source,
 secrets, `.git`, worktrees, Personalspace, Organization data i `node_modules`.
 
+Stejný builder vytváří Resident artefakty pro Managed Mašiny:
+
+```sh
+bun distribution/build.mjs \
+  --profile buddy \
+  --target linux-x64 \
+  --version <release-version> \
+  --channel candidate
+
+bun distribution/build.mjs \
+  --profile ai-colleague \
+  --target linux-x64 \
+  --version <release-version> \
+  --channel candidate
+```
+
+Oba profily nesou stejný updater a Managed controller, ale jiné generované
+root instrukce a profilové invarianty. Artefakt nese Bun `1.4.0`, exact-pinned
+Hermes a GBrain dependency kontrakty a controller rozhraní pro `runtime`,
+`zulip`, checkpoint, restore, `status` a `verify`. Dependency checkout není
+součást tarballu: Machines jej na hostu materializuje z přesného repozitáře,
+commitu a lock digestu a controller před startem znovu ověří origin, HEAD,
+tracked bytes i lock.
+
+Build je release krok ze skutečně clean commitu. Lokálně pozměněný worktree,
+větev bez commitu nebo artefakt přebalený po buildu nejsou přípustný vstup do
+Machines Plánu. Pin v Deployment Repo obsahuje artifact id, source commit,
+archive SHA-256 a neměnnou URL; žádná operace nesleduje `main`, `latest` ani
+mutable release tag.
+
+## Managed Resident host interface
+
+Machines instaluje Lazurio pod `/opt/lazurio`, exact dependency checkouty pod
+`/opt/lazurio-machines/software` a mutable binding state pod
+`/var/lib/lazurio-resident`. Owner data zůstávají v explicitních
+`/srv/lazurio-resident/personalspace` a `/srv/lazurio-resident/organizations`
+mountech. Tyto cesty jsou součástí verzovaného controller kontraktu, ne
+implicitní discovery.
+
+Controller se nespouští jako obecné administrátorské CLI. Machines role jej
+volají s root-owned bounded JSON kontraktem a zvláštním secret bundlem, jehož
+hodnoty se neobjeví v argumentech ani centrálním evidence. Jediný běžný
+read-only vstup operátora je:
+
+```sh
+sudo lazurio-resident-status
+```
+
+Managed Hermes gateway je binding-scoped a spouští hardened terminal
+kontejnery bez Docker socketu a bez automaticky forwardovaných host
+credentials. Protože gateway v1 ovládá rootful Docker, je důvěryhodnou součástí
+Machine TCB; kompromitace gatewaye znamená kompromitaci celé Mašiny. Bridge
+Docker socket nemá. Process separation bindingů je scope-containment, ne nový
+IAM ani náhrada samostatné Mašiny.
+
 Image/release pipeline před instalací ověří sidecar i manifest a zkopíruje
 obsah artifact rootu do nové immutable vrstvy. Iotor může tuto vrstvu připnout
 exact image digestem a namountovat ji read-only jako `/opt/lazurio-runtime`.

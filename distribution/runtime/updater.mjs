@@ -16,6 +16,7 @@ try {
       installRoot: options.installRoot,
       expectedProfile: options.profile,
       expectedChannel: options.channel,
+      installationMode: options.mode,
       mutableMountSources: options.mountSources,
     });
   } else if (command === "rollback") {
@@ -41,15 +42,15 @@ try {
 function parseArgs(argv) {
   if (argv.length === 0 || argv.includes("--help") || argv.includes("-h")) {
     console.log([
-      "bun resident/updater.mjs install --archive FILE.tar --checksum FILE.tar.sha256 --install-root PATH --profile buddy [--channel candidate|stable] [--mount-source personalspace=/absolute/path]",
-      "bun resident/updater.mjs update  --archive FILE.tar --checksum FILE.tar.sha256 --install-root PATH --profile buddy [--channel candidate|stable] [--mount-source personalspace=/absolute/path]",
-      "bun resident/updater.mjs rollback --install-root PATH --profile buddy [--to ARTIFACT_ID]",
-      "bun resident/updater.mjs status --install-root PATH [--profile buddy]",
+      "bun resident/updater.mjs install --archive FILE.tar --checksum FILE.tar.sha256 --install-root PATH --profile buddy|ai-colleague [--channel candidate|stable] [--mode assisted|managed] [--mount-source personalspace=/absolute/path] [--mount-source organizations=/absolute/path]",
+      "bun resident/updater.mjs update  --archive FILE.tar --checksum FILE.tar.sha256 --install-root PATH --profile buddy|ai-colleague [--channel candidate|stable] [--mode assisted|managed] [--mount-source personalspace=/absolute/path] [--mount-source organizations=/absolute/path]",
+      "bun resident/updater.mjs rollback --install-root PATH --profile buddy|ai-colleague [--to ARTIFACT_ID]",
+      "bun resident/updater.mjs status --install-root PATH [--profile buddy|ai-colleague]",
     ].join("\n"));
     process.exit(0);
   }
   const command = argv[0];
-  const options = { mountSources: {} };
+  const options = { mode: "assisted", mountSources: {} };
   for (let index = 1; index < argv.length; index += 1) {
     const argument = argv[index];
     if (!argument.startsWith("--")) throw new Error(`unexpected argument ${argument}`);
@@ -61,6 +62,7 @@ function parseArgs(argv) {
     else if (argument === "--install-root") options.installRoot = value;
     else if (argument === "--profile") options.profile = value;
     else if (argument === "--channel") options.channel = value;
+    else if (argument === "--mode") options.mode = value;
     else if (argument === "--to") options.to = value;
     else if (argument === "--mount-source") {
       const separator = value.indexOf("=");
@@ -76,8 +78,8 @@ function parseArgs(argv) {
     else throw new Error(`unknown option ${argument}`);
   }
   if (!["install", "update"].includes(command)
-    && Object.keys(options.mountSources).length > 0) {
-    throw new Error("--mount-source is valid only for install or update");
+    && (Object.keys(options.mountSources).length > 0 || options.mode !== "assisted")) {
+    throw new Error("--mount-source and --mode are valid only for install or update");
   }
   return { command, options };
 }

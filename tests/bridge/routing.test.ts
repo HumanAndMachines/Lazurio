@@ -18,6 +18,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   messageTrigger,
+  routingPolicyAllows,
   sessionIdFor,
   toReplyInput,
   privateRecipientEmails,
@@ -135,6 +136,15 @@ describe("SCAR-ID-1 — a channel the Principal renames keeps its conversation",
     );
   });
 
+  test("the same Zulip route cannot share a Hermes session across bindings", () => {
+    expect(sessionIdFor("personal-home", "stream", "stream:101:denik")).not.toBe(
+      sessionIdFor("example-organization", "stream", "stream:101:denik"),
+    );
+    expect(sessionIdFor("personal-home", "stream", "stream:101:denik")).toBe(
+      sessionIdFor("personal-home", "stream", "stream:101:denik"),
+    );
+  });
+
   test("a stream message with no immutable id is REFUSED, never routed by name", () => {
     const message: ZulipMessage = {
       id: 5,
@@ -195,6 +205,66 @@ describe("the self-echo filter, on the immutable sender id", () => {
         BOT,
       ),
     ).toBeNull();
+  });
+});
+
+describe("Communication Binding policy selects authority before queueing", () => {
+  const bot = { userId: 99, email: "buddy@example.invalid" };
+  const policy = {
+    allowedSenderIds: new Set([7]),
+    allowedStreamIds: new Set([101]),
+    topicPolicy: "any-in-allowed-stream" as const,
+  };
+
+  test("only declared immutable senders and streams enter the binding", () => {
+    const message: ZulipMessage = {
+      id: 1,
+      sender_id: 7,
+      type: "stream",
+      stream_id: 101,
+      subject: "work",
+    };
+    expect(routingPolicyAllows(message, policy, bot)).toBe(true);
+    expect(routingPolicyAllows({ ...message, sender_id: 8 }, policy, bot)).toBe(false);
+    expect(routingPolicyAllows({ ...message, stream_id: 102 }, policy, bot)).toBe(false);
+  });
+
+  test("direct-only never turns a subscribed stream into authority", () => {
+    const directOnly = {
+      allowedSenderIds: new Set([7]),
+      allowedStreamIds: new Set<number>(),
+      topicPolicy: "direct-only" as const,
+    };
+    const direct = {
+      id: 1,
+      sender_id: 7,
+      type: "private",
+      display_recipient: [
+        { id: 7, email: "principal@example.invalid" },
+        { id: 99, email: "buddy@example.invalid" },
+      ],
+    };
+    expect(routingPolicyAllows(direct, directOnly, bot)).toBe(true);
+    expect(
+      routingPolicyAllows(
+        {
+          ...direct,
+          display_recipient: [
+            ...direct.display_recipient,
+            { id: 8, email: "outsider@example.invalid" },
+          ],
+        },
+        directOnly,
+        bot,
+      ),
+    ).toBe(false);
+    expect(
+      routingPolicyAllows(
+        { id: 2, sender_id: 7, type: "stream", stream_id: 101 },
+        directOnly,
+        bot,
+      ),
+    ).toBe(false);
   });
 });
 

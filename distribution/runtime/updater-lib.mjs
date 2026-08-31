@@ -47,6 +47,7 @@ export async function installResidentArtifact({
   installRoot,
   expectedProfile,
   expectedChannel,
+  installationMode = "assisted",
   mutableMountSources = {},
   healthRunner = runResidentDoctor,
 } = {}) {
@@ -54,11 +55,18 @@ export async function installResidentArtifact({
   if (!archivePath || !checksumPath || !installRoot || !expectedProfile) {
     throw new Error("install requires archivePath, checksumPath, installRoot and expectedProfile");
   }
-  if (expectedProfile === "buddy"
-    && Object.hasOwn(mutableMountSources ?? {}, "organizations")) {
-    throw new Error("Buddy Personalspace hosts cannot adopt an organizations mount");
+  if (!["assisted", "managed"].includes(installationMode)) {
+    throw new Error("Resident installation mode must be assisted or managed");
   }
-
+  if (installationMode === "assisted" && expectedProfile === "buddy" &&
+      Object.hasOwn(mutableMountSources, "organizations")) {
+    throw new Error("assisted Buddy cannot adopt an organizations mount");
+  }
+  if (installationMode === "managed" &&
+      (!Object.hasOwn(mutableMountSources, "organizations") ||
+       !Object.hasOwn(mutableMountSources, "personalspace"))) {
+    throw new Error("managed Resident requires explicit organizations and personalspace mounts");
+  }
   const archive = await readVerifiedArchive(archivePath, checksumPath);
   const parsed = parseResidentArchive(archive.bytes);
   assertInstallCompatibility(parsed.manifest, {
