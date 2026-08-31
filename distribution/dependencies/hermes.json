@@ -4,7 +4,7 @@
   "repository": "Lazurio/hermes-agent",
   "upstream_repository": "NousResearch/hermes-agent",
   "release_tag": "v2026.8.27",
-  "commit": "6814181b033e3469fdbfb477dc46f4227cd87a71",
+  "commit": "56242cd328ab33b452d69a16a414704d6fab1940",
   "lock_file": "uv.lock",
   "lock_sha256": "5a9276183671e997c2213ede18b9cda4920e1cf57616219a3b08ddebda3281ab",
   "compatibility": {
@@ -18,7 +18,15 @@
     "remote_verification": {
       "fork": true,
       "fork_repository": "Lazurio/hermes-agent",
-      "fork_commit": "6814181b033e3469fdbfb477dc46f4227cd87a71",
+      "fork_commit": "56242cd328ab33b452d69a16a414704d6fab1940",
+      "fork_bridge_commit": "6814181b033e3469fdbfb477dc46f4227cd87a71",
+      "fork_overlay_commit": "56242cd328ab33b452d69a16a414704d6fab1940",
+      "fork_overlay_paths": [
+        ".github/workflows/contributor-check.yml",
+        "contributors/emails/*",
+        "scripts/audit_pr_attribution.py"
+      ],
+      "fork_overlay_runtime_delta": false,
       "fork_previous_default_commit": "a4973c3f11d9cc92da986cbe150d1e79d094626f",
       "fork_bridge_parent_order": [
         "5fc308a70719a83cccdbba4c0e39c23f5a8239d5",
@@ -27,8 +35,9 @@
       "upstream_repository": "NousResearch/hermes-agent",
       "tag_object": "fcebd62163497e77e5de00d26d2ed86cb4ef8761",
       "dereferenced_commit": "5fc308a70719a83cccdbba4c0e39c23f5a8239d5",
-      "tree": "222ec43b5237deb643277bc2f64fa4b873dd7f28",
-      "tree_matches_upstream_release": true,
+      "upstream_tree": "222ec43b5237deb643277bc2f64fa4b873dd7f28",
+      "bridge_tree_matches_upstream_release": true,
+      "fork_tree": "3eb7ff939e7ce4060aca1f85528ccebe33a3f5ad",
       "lock_sha256_observed": "5a9276183671e997c2213ede18b9cda4920e1cf57616219a3b08ddebda3281ab",
       "agrees_with_pin": true
     }
