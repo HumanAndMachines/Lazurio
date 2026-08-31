@@ -926,7 +926,12 @@ async function inspectLocalDependencyTree({
         };
       }
     } finally {
-      await directory.close().catch(() => {});
+      try {
+        await directory.close();
+      } catch {
+        // `for await` may already have closed the handle. Node rejects the
+        // returned Promise, while Bun can throw synchronously or return void.
+      }
     }
     let afterDirectoryTarget;
     let afterDirectoryState;
