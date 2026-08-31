@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -13,6 +13,12 @@ import {
 } from "../../lazurio/runtime/module-location-repair-lib.mjs";
 import { runGit } from "../../lazurio/runtime/git-lib.mjs";
 import { githubRepositoryCoordinate } from "../../lazurio/core/organization-slot-scope-lib.mjs";
+
+// This file exercises real Git repositories and subprocesses. Cold Windows
+// runners can spend more than the shared 15 s Launchpad limit in one complete
+// check/apply/recheck transaction even though each bounded Git operation is
+// healthy. Keep the extra headroom local to this integration suite.
+if (process.platform === "win32") setDefaultTimeout(30_000);
 
 const cleanup = [];
 
