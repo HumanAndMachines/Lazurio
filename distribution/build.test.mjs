@@ -105,6 +105,9 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
   };
   const first = await buildResidentArtifact({ ...options, outputRoot: firstOutput });
   const second = await buildResidentArtifact({ ...options, outputRoot: secondOutput });
+  const hermesPin = JSON.parse(
+    await readFile(join(import.meta.dir, "dependencies", "hermes.json"), "utf8"),
+  );
 
   expect(first.archive_sha256).toBe(second.archive_sha256);
   expect(
@@ -114,8 +117,10 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
   expect(first.manifest.source.repository).toBe("HumanAndMachines/Lazurio");
   expect(first.manifest.role_overlays).toEqual([]);
   expect(first.manifest.dependencies.hermes).toMatchObject({
-    repository: "Lazurio/hermes-agent",
-    commit: "3ef6bbd201263d354fd83ec55b3c306ded2eb72a",
+    repository: hermesPin.repository,
+    release_tag: hermesPin.release_tag,
+    commit: hermesPin.commit,
+    lock_sha256: hermesPin.lock_sha256,
   });
   expect(first.manifest.dependencies.gbrain).toMatchObject({
     repository: "Lazurio/gbrain",
