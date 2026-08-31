@@ -4,11 +4,47 @@ Tento postup přidá do existujícího Lazurio Rootu už aktivní GitHub Organiz
 ke které má přihlášený uživatel read access. Je stejný pro veřejnou referenční,
 privátní klientskou i vlastní Organization; CLI nezná žádnou jmennou výjimku.
 
+## Co z GitHub Organization tvoří Lazurio Organization
+
+Prvním konstitutivním krokem je instalace oficiální GitHub App
+**Lazurio for GitHub** do cílové GitHub Organization. Pro běžný onboarding
+Organization owner v GitHub installeru zvolí **All repositories**. Tím vznikne
+provider-side vazba Organizace na Lazurio a budoucí repozitáře se nestanou
+skrytým partial-access stavem. Dokud App chybí, read-only kontrola vrací
+`github_app_installation_required` a lokální instalace nesmí pokračovat.
+
+`All repositories` je kanonický onboarding standard, ne druhý Lazurio ACL.
+GitHub dál zůstává jedinou autoritou přístupů. Vědomě omezená instalace
+**Only select repositories** je podporovaná scoped výjimka; musí zahrnovat
+canonical Organization root a všechny repozitáře, které má Lazurio skutečně
+obsluhovat, a její partial access se nikdy nesmí vydávat za plný Organization
+scope.
+
+GitHub App sama nenahrazuje source Organizace. Použitelná Lazurio Organization
+má současně:
+
+1. instalovanou `Lazurio for GitHub` App s ověřeným repository scope;
+2. canonical root repo `<login>/<login>_GEN3` na `main` s validním Organization
+   manifestem a immutable Forge bindingem;
+3. lokální mount vytvořený až konvergentním příkazem
+   `lazurio organization install`.
+
+Po instalaci App Agent ověří živý stav přes immutable GitHub Organization ID:
+
+```sh
+lazurio organization activate --check --github-id <immutable-id> --json
+```
+
+Teprve výsledek `outcome: "active"`, odpovídající App installation scope a
+validní root opravňují pokračovat k lokální instalaci. GitHub settings stránka
+nebo textový název Organizace samy nejsou důkaz.
+
 ## Předpoklady
 
 - produkční nebo development-linked příkaz `lazurio` je v `PATH`;
 - Git, Bun a GitHub CLI jsou dostupné;
 - `gh auth status --hostname github.com` potvrzuje správný účet;
+- `Lazurio for GitHub` je nainstalovaná a aktivační kontrola vrací `active`;
 - kanonický Lazurio Root `<home>/Lazurio` už prošel `lazurio install` a má
   skutečnou složku `organizations/`;
 - Organization root repo `<login>/<login>_GEN3` existuje na `main`, obsahuje
