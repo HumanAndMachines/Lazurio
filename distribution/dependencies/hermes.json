@@ -4,7 +4,7 @@
   "repository": "Lazurio/hermes-agent",
   "upstream_repository": "NousResearch/hermes-agent",
   "release_tag": "v2026.8.27",
-  "commit": "c2799f466be326ae5708f46b9cc498d0f2259e6f",
+  "commit": "03bed7d454f3fc11c0050fea0b2702ef4e6020d5",
   "lock_file": "uv.lock",
   "lock_sha256": "5a9276183671e997c2213ede18b9cda4920e1cf57616219a3b08ddebda3281ab",
   "compatibility": {
@@ -18,11 +18,16 @@
     "remote_verification": {
       "fork": true,
       "fork_repository": "Lazurio/hermes-agent",
-      "fork_commit": "c2799f466be326ae5708f46b9cc498d0f2259e6f",
+      "fork_commit": "03bed7d454f3fc11c0050fea0b2702ef4e6020d5",
       "fork_bridge_commit": "6814181b033e3469fdbfb477dc46f4227cd87a71",
-      "fork_overlay_commit": "c2799f466be326ae5708f46b9cc498d0f2259e6f",
+      "fork_overlay_commit": "03bed7d454f3fc11c0050fea0b2702ef4e6020d5",
       "fork_overlay_paths": [
         ".github/workflows/contributor-check.yml",
+        ".github/workflows/js-tests.yml",
+        ".github/workflows/nix.yml",
+        ".github/workflows/rust-tests.yml",
+        ".github/workflows/tests-os.yml",
+        ".github/workflows/tests.yml",
         "FORK_POLICY.md",
         "fork-maintenance/audit_overlay.py",
         "fork-maintenance/patches.v1.json"
@@ -38,7 +43,7 @@
       "dereferenced_commit": "5fc308a70719a83cccdbba4c0e39c23f5a8239d5",
       "upstream_tree": "222ec43b5237deb643277bc2f64fa4b873dd7f28",
       "bridge_tree_matches_upstream_release": true,
-      "fork_tree": "43e6eeb3c25c10f096ceec17ae04c188ad01085f",
+      "fork_tree": "572ea8886751bbf02ec2bd4a8ec772b8d263678f",
       "lock_sha256_observed": "5a9276183671e997c2213ede18b9cda4920e1cf57616219a3b08ddebda3281ab",
       "agrees_with_pin": true
     }
