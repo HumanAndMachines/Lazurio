@@ -4,7 +4,7 @@
   "repository": "Lazurio/hermes-agent",
   "upstream_repository": "NousResearch/hermes-agent",
   "release_tag": "v2026.8.27",
-  "commit": "6d0a32f0808780a2bde4f4b7e755e9c3d1c4da95",
+  "commit": "c2799f466be326ae5708f46b9cc498d0f2259e6f",
   "lock_file": "uv.lock",
   "lock_sha256": "5a9276183671e997c2213ede18b9cda4920e1cf57616219a3b08ddebda3281ab",
   "compatibility": {
@@ -18,9 +18,9 @@
     "remote_verification": {
       "fork": true,
       "fork_repository": "Lazurio/hermes-agent",
-      "fork_commit": "6d0a32f0808780a2bde4f4b7e755e9c3d1c4da95",
+      "fork_commit": "c2799f466be326ae5708f46b9cc498d0f2259e6f",
       "fork_bridge_commit": "6814181b033e3469fdbfb477dc46f4227cd87a71",
-      "fork_overlay_commit": "6d0a32f0808780a2bde4f4b7e755e9c3d1c4da95",
+      "fork_overlay_commit": "c2799f466be326ae5708f46b9cc498d0f2259e6f",
       "fork_overlay_paths": [
         ".github/workflows/contributor-check.yml",
         "FORK_POLICY.md",
