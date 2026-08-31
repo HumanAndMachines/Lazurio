@@ -124,7 +124,7 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
     engine: "pglite",
     transport: "stdio",
   });
-  expect(first.manifest.dependencies.toolchain).toEqual({ bun: "1.3.10", uv: "0.11.32" });
+  expect(first.manifest.dependencies.toolchain).toEqual({ bun: "1.4.0", uv: "0.11.32" });
 
   const schema = JSON.parse(await readFile(join(import.meta.dir, "manifest.schema.json"), "utf8"));
   expect(validateAgainstSchema(first.manifest, schema, "manifest")).toEqual([]);

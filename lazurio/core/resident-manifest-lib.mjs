@@ -67,7 +67,7 @@ export function validateResidentManifest(manifest) {
     || gbrain?.transport !== "stdio") {
     failures.push("invalid GBrain dependency pin");
   }
-  if (manifest.dependencies?.toolchain?.bun !== "1.3.10"
+  if (manifest.dependencies?.toolchain?.bun !== "1.4.0"
     || manifest.dependencies?.toolchain?.uv !== "0.11.32") {
     failures.push("invalid Resident toolchain pin");
   }
