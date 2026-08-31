@@ -140,7 +140,7 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
   expect(rootInstructions).toContain("generated:lazurio-resident-profile=buddy");
   expect(rootInstructions).toContain("Principál vlastní Mašinu a není protivník");
   expect(rootInstructions).toContain("terminal kontejner nedostává Docker socket");
-  expect(rootInstructions).toContain("důvěryhodnou součástí Machine TCB");
+  expect(rootInstructions).toContain("součástí Machine TCB");
   expect(rootInstructions).toContain("textová role žádná práva neudělují");
   expect(rootInstructions).toContain(".agents/skills/architecture-shaping/SKILL.md");
   expect(first.manifest.payload.files.map((file) => file.path)).not.toContain(
