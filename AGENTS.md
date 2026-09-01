@@ -310,7 +310,15 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    v `PATH`; Claude Code je volitelný a kontroluje se jen tam, kde nainstalovaný
    je. Warning o chybějícím Codexu, novější verzi nástroje nebo nesouladu Bunu
    Agent nejdřív předá Principálovi; updater, package manager ani změnu `PATH`
-   nespustí bez jeho souhlasu s přesnou změnou.
+   nespustí bez jeho souhlasu s přesnou změnou. Při nové instalaci Mašiny smí
+   instalační prompt tento souhlas udělit předem pro přesně Git, GitHub CLI,
+   Codex CLI a verzovaný Bun. V takovém případě Agent chybějící povolený nástroj
+   nainstaluje z oficiálního zdroje, doplní pouze jeho skutečnou instalační cestu
+   do uživatelského `PATH` a ověří ji z nového čistého procesu; úspěch v právě
+   běžící zděděné relaci není důkaz. Existující `PATH` nepřepisuje, system-wide
+   `PATH`, systémový package manager ani jiné verze nástrojů bez zvláštního
+   souhlasu nemění. Organization materializace začíná až po tomto machine gate;
+   sama nástroje ani `PATH` nevlastní.
 3. **Drž worktree disciplínu.** Primární checkout zůstává na `main` a nemění
    se v něm trackovaný obsah. Postup, kanonickou cestu
    `.worktrees/root/<canonical-plan-basename>/` se sidecarem, PR lifecycle

@@ -265,7 +265,8 @@ lazurio install --json
 Fresh/Managed target odvozuje vždy jako `<home>/Lazurio`; root picker ani
 `--root` nepřijímá. Když příkaz běží z ověřeného existujícího Source Rootu
 přímo v home, inspectuje tento Root bez vytvoření druhého locatoru. Kontroluje
-platformu, Bun, Git, GitHub CLI a přihlášení i tvar rozpoznaného Rootu.
+platformu, exact Bun a jeho příkaz v `PATH`, Git a GitHub CLI v `PATH`,
+přihlášení i tvar rozpoznaného Rootu.
 Chybějící součásti zatím pouze pojmenuje; nic neinstaluje a dnešní Source Root
 nepřesouvá. Navazující řezy nad stejným Core doplní consent, Managed Root a
 bezpečnou reconciliaci. Aktuální build rezidentních artefaktů popisuje

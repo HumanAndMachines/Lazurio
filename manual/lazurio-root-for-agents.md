@@ -69,6 +69,27 @@ Opakovaný `lazurio install` smí Source Root inspectovat a reconciliovat, ale
 bez explicitní volby Principála jej nesmí migrovat ani označit za závadu jen
 proto, že je Git checkout.
 
+## Toolchain musí přežít instalační relaci
+
+Přítomnost binárky ani `process.execPath` právě běžícího Bunu nedokazují, že je
+Mašina připravená. Install Core proto vedle exact Bun verze ověřuje také příkaz
+`bun` v `PATH`; u Gitu a GitHub CLI rozlišuje nainstalovaný nástroj od
+`git_not_on_path` a `github_cli_not_on_path`. Codex CLI měří troubleshooting
+lane `lazurio doctor --tool-updates`.
+
+Při instalačním mandátu, který výslovně dovoluje přesné nástroje a změnu
+uživatelského `PATH`, Agent chybějící oficiální instalaci i nejmenší PATH
+registraci skutečně dokončí. Existující PATH zachová, task worktree do něj
+nikdy nezapíše a system-wide změnu, nový package manager nebo upgrade jiného
+nástroje předem znovu předloží Principálovi. Výsledek ověří v novém čistém
+procesu, nikoli v shellu s dočasným `export` nebo `$env:Path`.
+
+Organization instalace tuto machine autoritu nepřebírá. Začíná až poté, co
+top-level gate vidí Bun, Git a `gh` v PATH a Doctor vidí Codex; potom se
+registruje `lazurio` a z nového procesu projde `lazurio cli status --json`.
+Přesný Builder postup a doporučený prompt blok drží
+[`manual/organization-install.md`](organization-install.md).
+
 ## GitHub transport při workstation onboardingu
 
 Úspěšné `gh auth status --hostname github.com` dokazuje GitHub API session,
