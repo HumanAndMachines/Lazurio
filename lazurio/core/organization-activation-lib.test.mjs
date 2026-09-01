@@ -61,11 +61,14 @@ test("Core derives only the three public outcomes from observation facts", () =>
 });
 
 test("access facts fail closed without inventing more lifecycle states", () => {
-  expect(report({ owner: false })).toMatchObject({
+  const nonOwner = report({ owner: false, root: { presence: "unobservable" } });
+  expect(nonOwner).toMatchObject({
     outcome: "action_required",
     reasons: ["github_organization_owner_required"],
     next_action: { kind: "request_organization_owner" },
   });
+  expect(isValidOrganizationActivationReport(nonOwner)).toBe(true);
+  expect(validateAgainstSchema(nonOwner, schema, "activation")).toEqual([]);
   expect(report({ app: { status: "missing" } })).toMatchObject({
     outcome: "action_required",
     reasons: ["github_app_installation_required"],
@@ -808,11 +811,11 @@ function fixture({ owner = true, canCreate = true, app = {}, root = {} } = {}) {
         },
     root_repository: {
       presence,
-      id: presence === "absent" ? null : "42424242",
+      id: ["absent", "unobservable"].includes(presence) ? null : "42424242",
       name: "Example_GEN3",
       full_name: "Example/Example_GEN3",
-      default_branch: presence === "absent" ? null : "main",
-      viewer_can_push: presence === "absent" ? null : (root.canPush ?? true),
+      default_branch: ["absent", "unobservable"].includes(presence) ? null : "main",
+      viewer_can_push: ["absent", "unobservable"].includes(presence) ? null : (root.canPush ?? true),
       candidate_count: root.candidateCount ?? 0,
       resolver: {
         status: resolverStatus,

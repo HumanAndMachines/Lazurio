@@ -162,18 +162,15 @@ function collectObservations({ request, appSlug, provider }) {
   const viewerIsOwner = membershipIsOwner && graph.organization.viewerCanAdminister === true;
   const viewerCanCreateRepositories = graph.organization.viewerCanCreateRepositories === true;
 
-  const rootRepository = inspectRootRepository({ invoke, organization });
-  // The Organization installations endpoint is owner/admin-only and GitHub may
-  // conceal that boundary as either HTTP 403 or 404. A non-owner has already
-  // been observed precisely above, so do not turn an expected access boundary
-  // into a retryable transport failure or guess the App state.
+  // Activation is owner-only. Once the live membership proves a non-owner,
+  // do not probe either the private root or the owner-only installations
+  // endpoint: GitHub may conceal both boundaries as 403/404 and neither is
+  // needed to return the stable owner-required action.
+  const rootRepository = viewerIsOwner
+    ? inspectRootRepository({ invoke, organization })
+    : unavailableRoot(organization);
   const githubApp = viewerIsOwner
-    ? inspectGitHubApp({
-      invoke,
-      organization,
-      appSlug,
-      rootRepository,
-    })
+    ? inspectGitHubApp({ invoke, organization, appSlug, rootRepository })
     : unavailableApp();
 
   return {
@@ -454,6 +451,24 @@ function unavailableApp() {
     installation_id: null,
     repository_selection: null,
     root_access: "unverified",
+  };
+}
+
+function unavailableRoot(organization) {
+  const name = `${organization.login}_GEN3`;
+  return {
+    presence: "unobservable",
+    id: null,
+    name,
+    full_name: `${organization.login}/${name}`,
+    default_branch: null,
+    viewer_can_push: null,
+    candidate_count: 0,
+    resolver: {
+      status: "not_applicable",
+      format: null,
+      reason: "root_repository_unobservable",
+    },
   };
 }
 
