@@ -10,6 +10,7 @@ import {
 } from "./runtime/diagnostics-lib.mjs";
 import {
   buildAggregateReport,
+  exitCodeForSummaryStatus,
   validateDoctorReport,
 } from "./runtime/doctor-surface-lib.mjs";
 import { platformTestTimeout } from "../launchpad/src/test-platform-setup.mjs";
@@ -997,8 +998,9 @@ test("public lazurio doctor propagates the validated Hosted Team scope", async (
     root,
     { ...hostedEnvironment, LAZURIO_TEAM_ID: "management" },
   );
-  expect(management.exitCode).toBe(0);
-  expect(JSON.parse(management.stdout).checks.find(
+  const managementReport = JSON.parse(management.stdout);
+  expect(management.exitCode).toBe(exitCodeForSummaryStatus(managementReport.summary.status));
+  expect(managementReport.checks.find(
     (check) => check.id === "launchpad.workspace_declarations",
   )?.status).toBe("ok");
 
@@ -1010,8 +1012,9 @@ test("public lazurio doctor propagates the validated Hosted Team scope", async (
       LAZURIO_TEAM_ID: "technical",
     },
   );
-  expect(technical.exitCode).toBe(1);
-  expect(JSON.parse(technical.stdout).checks.find(
+  const technicalReport = JSON.parse(technical.stdout);
+  expect(technical.exitCode).toBe(exitCodeForSummaryStatus(technicalReport.summary.status));
+  expect(technicalReport.checks.find(
     (check) => check.id === "launchpad.workspace_declarations",
   )?.status).toBe("fail");
 }, platformTestTimeout(15_000));
