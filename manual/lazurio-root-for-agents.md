@@ -69,6 +69,21 @@ Opakovaný `lazurio install` smí Source Root inspectovat a reconciliovat, ale
 bez explicitní volby Principála jej nesmí migrovat ani označit za závadu jen
 proto, že je Git checkout.
 
+## GitHub transport při workstation onboardingu
+
+Úspěšné `gh auth status --hostname github.com` dokazuje GitHub API session,
+nikoli Git transport pro privátní repozitáře. Agent se proto nepřihlašuje
+opakovaně naslepo. Pro jednu cílovou Organizaci nejdřív přečte její install
+postup a ověří exact canonical root remote přes `git ls-remote`; teprve tento
+probe dokazuje, že zvolený HTTPS nebo SSH transport umí repo skutečně číst.
+
+Je-li deklarovaný privátní remote SSH a probe selže při platném `gh` loginu,
+Agent ověří existující SSH klíč a vazbu na tentýž GitHub účet. Vytvoření nebo
+nahrání nového klíče je změna přístupu: vyžaduje explicitní souhlas Principála,
+privátní klíč se nevypisuje a po nápravě se opakuje `git ls-remote`, ne celý
+GitHub login. Podrobný owner/Builder postup drží
+[`manual/organization-install.md`](organization-install.md).
+
 ## Budoucí Managed Root
 
 Managed Root se nestane podporovanou volbou jen změnou dokumentace. CLI jej

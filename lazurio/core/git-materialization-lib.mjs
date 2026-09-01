@@ -493,7 +493,7 @@ function missingAccess() {
     ok: false,
     outcome: "missing_access",
     code: "materialization_source_unavailable",
-    message: "Repo nebo jeho větev nejsou s aktuálními GitHub přístupy dostupné; nic se nenaklonovalo.",
+    message: "Git nedokázal přečíst repo nebo jeho větev přes deklarovaný remote. Ověř repo access i Git transport; u privátního SSH remote musí uspět exact `git ls-remote`. Opakované `gh auth login` bez tohoto testu transport neopraví. Nic se nenaklonovalo.",
   };
 }
 
