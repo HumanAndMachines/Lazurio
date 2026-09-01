@@ -73,7 +73,7 @@
           "properties": {
             "id": { "const": "bun" },
             "status": { "enum": ["completed", "skipped", "action_required", "failed"] },
-            "reason": { "enum": ["bun_runtime_current", "bun_runtime_mismatch", "bun_runtime_unavailable", "probe_failed"] }
+            "reason": { "enum": ["bun_runtime_current", "bun_runtime_mismatch", "bun_runtime_unavailable", "bun_runtime_not_on_path", "probe_failed"] }
           },
           "additionalProperties": false
         },
@@ -83,7 +83,7 @@
           "properties": {
             "id": { "const": "git" },
             "status": { "enum": ["completed", "skipped", "action_required", "failed"] },
-            "reason": { "enum": ["git_available", "git_missing", "git_unusable", "probe_failed"] }
+            "reason": { "enum": ["git_available", "git_missing", "git_not_on_path", "git_unusable", "probe_failed"] }
           },
           "additionalProperties": false
         },
@@ -93,7 +93,7 @@
           "properties": {
             "id": { "const": "github_cli" },
             "status": { "enum": ["completed", "skipped", "action_required", "failed"] },
-            "reason": { "enum": ["github_cli_available", "github_cli_missing", "github_cli_unusable", "probe_failed"] }
+            "reason": { "enum": ["github_cli_available", "github_cli_missing", "github_cli_not_on_path", "github_cli_unusable", "probe_failed"] }
           },
           "additionalProperties": false
         },
@@ -144,11 +144,14 @@
               "bun_runtime_current",
               "bun_runtime_mismatch",
               "bun_runtime_unavailable",
+              "bun_runtime_not_on_path",
               "git_available",
               "git_missing",
+              "git_not_on_path",
               "git_unusable",
               "github_cli_available",
               "github_cli_missing",
+              "github_cli_not_on_path",
               "github_cli_unusable",
               "github_authenticated",
               "github_login_required",

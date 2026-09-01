@@ -91,6 +91,7 @@ test("independent probes continue after a bounded failure", () => {
       throw new Error("CANARY_GIT_FAILURE");
     },
     resolveGitHubCli: () => "/trusted/bin/gh",
+    resolvePathCommand: fixturePathCommand,
     runCommand: ({ executable, args }) => {
       invoked.push([executable, ...args].join(" "));
       if (executable === "/trusted/bin/gh" && args[0] === "--version") return { status: 0 };
@@ -122,6 +123,7 @@ test("supported complete fixture exits zero with all probes completed", () => {
     bunVersion: "1.4.0",
     resolveGit: () => "C:\\Program Files\\Git\\cmd\\git.exe",
     resolveGitHubCli: () => "C:\\Program Files\\GitHub CLI\\gh.exe",
+    resolvePathCommand: fixturePathCommand,
     environment: { SystemRoot: "C:\\Windows" },
     runCommand: ({ executable, cwd }) => {
       commands.push({ executable, cwd });
@@ -162,6 +164,7 @@ test("Bun probe requires the exact packageManager version and reports both versi
     homeDirectory: "/Users/example",
     resolveGit: () => "/usr/bin/git",
     resolveGitHubCli: () => null,
+    resolvePathCommand: fixturePathCommand,
     runCommand: () => ({ status: 0 }),
     inspectRoot: missingRootObservation,
   });
@@ -206,6 +209,33 @@ test("missing Bun runtime is a failed probe with an explicit required version", 
   expect(report.status).toBe("failed");
 });
 
+test("an exact running Bun outside PATH cannot mark the machine ready", () => {
+  const report = inspectLazurioInstallation({
+    root: null,
+    platform: "linux",
+    architecture: "x64",
+    bunVersion: "1.4.0",
+    requiredBunVersion: "1.4.0",
+    environment: { HOME: "/home/example", PATH: "/usr/bin" },
+    homeDirectory: "/home/example",
+    resolveGit: () => "/usr/bin/git",
+    resolveGitHubCli: () => null,
+    resolvePathCommand: (command, context) => (
+      command === "bun" ? null : fixturePathCommand(command, context)
+    ),
+    runCommand: () => ({ status: 0 }),
+    inspectRoot: missingRootObservation,
+  });
+
+  expect(report.machine.bun).toMatchObject({ status: "current", current_version: "1.4.0" });
+  expect(report.steps.find((step) => step.id === "bun")).toEqual({
+    id: "bun",
+    status: "action_required",
+    reason: "bun_runtime_not_on_path",
+  });
+  expect(installExitCode(report)).toBe(1);
+});
+
 test("unsupported architecture requires action even on a supported OS", () => {
   const report = inspectLazurioInstallation({
     root: "/fixture/root",
@@ -214,6 +244,7 @@ test("unsupported architecture requires action even on a supported OS", () => {
     bunVersion: "1.4.0",
     resolveGit: () => "/usr/bin/git",
     resolveGitHubCli: () => "/usr/bin/gh",
+    resolvePathCommand: fixturePathCommand,
     runCommand: () => ({ status: 0 }),
     inspectRoot: () => ({
       path: "/fixture/root",
@@ -232,7 +263,7 @@ test("unsupported architecture requires action even on a supported OS", () => {
   expect(installExitCode(report)).toBe(1);
 });
 
-test("GitHub probes never execute an ambient PATH shadow", () => {
+test("installed tools outside PATH are action-required and ambient shadows never execute", () => {
   const executables = [];
   const report = inspectLazurioInstallation({
     root: null,
@@ -249,10 +280,18 @@ test("GitHub probes never execute an ambient PATH shadow", () => {
   });
 
   expect(report.steps.find((step) => step.id === "github_cli")).toMatchObject({
-    status: "completed",
-    reason: "github_cli_available",
+    status: "action_required",
+    reason: "github_cli_not_on_path",
   });
-  expect(executables).toEqual(["/usr/bin/git", "/usr/bin/gh", "/usr/bin/gh"]);
+  expect(report.steps.find((step) => step.id === "bun")).toMatchObject({
+    status: "action_required",
+    reason: "bun_runtime_not_on_path",
+  });
+  expect(report.steps.find((step) => step.id === "git")).toMatchObject({
+    status: "action_required",
+    reason: "git_not_on_path",
+  });
+  expect(executables).toEqual(["/usr/bin/gh"]);
   expect(executables).not.toContain("gh");
 });
 
@@ -523,6 +562,7 @@ function fixtureReport() {
     homeDirectory: "/Users/example",
     resolveGit: () => "/usr/bin/git",
     resolveGitHubCli: () => null,
+    resolvePathCommand: fixturePathCommand,
     runCommand: () => ({ status: 0, stdout: "CANARY_STDOUT", stderr: "CANARY_STDERR" }),
     inspectRoot: (path) => ({
       path,
@@ -552,7 +592,14 @@ function rootStep(root, {
     environment: environmentWithoutGitOverrides(),
     resolveGit: () => gitExecutable,
     resolveGitHubCli: () => null,
+    resolvePathCommand: fixturePathCommand,
   }).steps.find((step) => step.id === "root");
+}
+
+function fixturePathCommand(command, { platform }) {
+  return platform === "win32"
+    ? `C:\\Tools\\${command}.exe`
+    : `/trusted/bin/${command}`;
 }
 
 async function writeLaunchpadManifest(root) {

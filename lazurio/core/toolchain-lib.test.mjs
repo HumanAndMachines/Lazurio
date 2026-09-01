@@ -1,9 +1,11 @@
 import { expect, test } from "bun:test";
+import { dirname } from "node:path";
 
 import {
   bunVersionFromPackageManager,
   classifyBunRuntime,
   readRequiredBunVersion,
+  resolveExecutableOnPath,
 } from "./toolchain-lib.mjs";
 
 test("packageManager is the exact Bun version authority", () => {
@@ -33,4 +35,21 @@ test("runtime classifier is exact and keeps future patches fail-closed", () => {
     .toBe("unavailable");
   expect(() => classifyBunRuntime({ currentVersion: "1.4.0", requiredVersion: "latest" }))
     .toThrow("exact stable version");
+});
+
+test("PATH resolver proves the executable visible to a fresh command process", () => {
+  const environment = process.platform === "win32"
+    ? { Path: dirname(process.execPath), PATHEXT: ".EXE;.CMD" }
+    : { PATH: dirname(process.execPath) };
+  expect(resolveExecutableOnPath("bun", {
+    environment,
+    platform: process.platform,
+    cwd: dirname(process.execPath),
+  })).not.toBeNull();
+  expect(resolveExecutableOnPath("bun", {
+    environment: process.platform === "win32" ? { Path: "" } : { PATH: "" },
+    platform: process.platform,
+    cwd: dirname(process.execPath),
+  })).toBeNull();
+  expect(resolveExecutableOnPath("../bun", { environment, platform: process.platform })).toBeNull();
 });

@@ -1,5 +1,15 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import {
+  accessSync,
+  constants,
+  lstatSync,
+  readFileSync,
+} from "node:fs";
+import {
+  delimiter,
+  isAbsolute,
+  join,
+  resolve,
+} from "node:path";
 
 const exactStableVersionPattern = /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$/u;
 
@@ -38,4 +48,45 @@ export function classifyBunRuntime({ currentVersion, requiredVersion }) {
     current_version: currentVersion,
     required_version: requiredVersion,
   });
+}
+
+export function resolveExecutableOnPath(command, {
+  environment = process.env,
+  platform = process.platform,
+  cwd = process.cwd(),
+} = {}) {
+  if (typeof command !== "string" || !/^[A-Za-z0-9._-]+$/u.test(command)) return null;
+  const pathValue = environmentPathValue(environment, platform);
+  const pathDelimiter = platform === "win32" ? ";" : delimiter;
+  const extensions = platform === "win32"
+    ? (environment.PATHEXT ?? ".COM;.EXE;.BAT;.CMD")
+      .split(";")
+      .filter(Boolean)
+      .map((extension) => extension.toLowerCase())
+    : [""];
+  for (const rawDirectory of pathValue.split(pathDelimiter)) {
+    const unquoted = rawDirectory.replace(/^"|"$/gu, "");
+    if (!unquoted) continue;
+    const directory = isAbsolute(unquoted) ? unquoted : resolve(cwd, unquoted);
+    const candidates = platform === "win32"
+      ? extensions.map((extension) => join(directory, `${command}${extension}`))
+      : [join(directory, command)];
+    for (const candidate of candidates) {
+      try {
+        const stat = lstatSync(candidate);
+        if (!stat.isFile() && !stat.isSymbolicLink()) continue;
+        if (platform !== "win32") accessSync(candidate, constants.X_OK);
+        return resolve(candidate);
+      } catch {
+        // Continue through PATH just like a shell resolver.
+      }
+    }
+  }
+  return null;
+}
+
+function environmentPathValue(environment, platform) {
+  if (platform !== "win32") return environment.PATH ?? "";
+  const entry = Object.entries(environment).find(([name]) => name.toLowerCase() === "path");
+  return entry?.[1] ?? "";
 }

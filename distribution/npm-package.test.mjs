@@ -83,6 +83,11 @@ test("package smoke keeps canonical home Root deterministic across host prerequi
     homeDirectory: "C:\\Users\\Example",
     resolveGit: () => "C:\\Program Files\\Git\\cmd\\git.exe",
     resolveGitHubCli: () => "C:\\Program Files\\GitHub CLI\\gh.exe",
+    resolvePathCommand: (command) => ({
+      bun: "C:\\Users\\Example\\.bun\\bin\\bun.exe",
+      git: "C:\\Program Files\\Git\\cmd\\git.exe",
+      gh: "C:\\Program Files\\GitHub CLI\\gh.exe",
+    })[command] ?? null,
     runCommand: ({ executable }) => ({
       status: executable.endsWith("gh.exe") ? 1 : 0,
     }),

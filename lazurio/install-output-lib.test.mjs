@@ -15,6 +15,8 @@ test("cs/en catalogs are complete and machine output stays locale-neutral", asyn
   expect(installCatalogIssues()).toEqual([]);
   expect(renderHumanInstallReport(report, { language: "cs" })).toContain("vyžaduje akci");
   expect(renderHumanInstallReport(report, { language: "en" })).toContain("action required");
+  expect(renderHumanInstallReport(fixtureReport({ resolvePathCommand: () => null }), { language: "cs" }))
+    .toContain("uživatelském PATH");
   expect(JSON.stringify(report, null, 2)).toBe(machineBefore);
 });
 
@@ -36,7 +38,7 @@ test("human and JSON golden files derive from the same Core result", async () =>
   expect(`${renderHumanInstallReport(report, { language: "en" })}\n`).toBe(expectedEn);
 });
 
-function fixtureReport() {
+function fixtureReport({ resolvePathCommand = (command) => `/trusted/bin/${command}` } = {}) {
   return inspectLazurioInstallation({
     root: null,
     platform: "darwin",
@@ -46,6 +48,7 @@ function fixtureReport() {
     homeDirectory: "/Users/example",
     resolveGit: () => "/usr/bin/git",
     resolveGitHubCli: () => null,
+    resolvePathCommand,
     runCommand: () => ({ status: 0 }),
     inspectRoot: (path) => ({
       path,
