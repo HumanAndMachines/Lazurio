@@ -16,11 +16,14 @@ import {
 } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { basename, dirname, join, resolve, sep } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 
 const CONTRACT_SCHEMA = "machines.resident-controller-contract.v1";
 const STATUS_SCHEMA = "machines.resident-status.v1";
 const INSTALLED_SCHEMA = "machines.resident-installed.v1";
 const CHECKPOINT_SCHEMA = "machines.resident-checkpoint.v1";
+const CHECKPOINT_COMPATIBILITY_SCHEMA = "machines.resident-checkpoint-compatibility.v1";
+const RESIDENT_STATE_SCHEMA = "lazurio.resident-persistent-state.v1";
 const ZULIP_COMPOSE_COMMIT = "9e1d3cf566f3fb67e168c93f29a642eda989f6b7";
 const ZULIP_COMPOSE_SHA256 = "53ad3b2f0640cc90da5fc5a2d28007b610118465082673a7ed95c56094a143b3";
 const ZULIP_COMPOSE_URL =
@@ -49,6 +52,113 @@ const SHA256 = /^[0-9a-f]{64}$/;
 
 export function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+export function residentCheckpointCompatibility(contractInput) {
+  const contract = validateControllerContract(contractInput);
+  const authorityProjection = {
+    principal: {
+      kind: contract.owner_overlay.principal.kind,
+      principal_id: contract.owner_overlay.principal.principal_id,
+      personalspace_repository:
+        contract.owner_overlay.principal.personalspace_repository.toLowerCase(),
+      ...(contract.owner_overlay.principal.organization_repository
+        ? {
+          organization_repository:
+              contract.owner_overlay.principal.organization_repository.toLowerCase(),
+        }
+        : {}),
+    },
+    compartments: contract.owner_overlay.authority_compartments
+      .map((compartment) => ({
+        compartment_id: compartment.compartment_id,
+        kind: compartment.kind,
+        ...(compartment.organization
+          ? {
+            organization: {
+              github_login: compartment.organization.github_login.toLowerCase(),
+              root_repository: compartment.organization.root_repository.toLowerCase(),
+            },
+          }
+          : {}),
+        repositories: compartment.repositories
+          .map(({ repository }) => repository.toLowerCase())
+          .sort(),
+        tools: [...compartment.tools].sort(),
+      }))
+      .sort(({ compartment_id: left }, { compartment_id: right }) => left.localeCompare(right)),
+    bindings: contract.owner_overlay.communication_bindings
+      .map((binding) => ({
+        binding_id: binding.binding_id,
+        compartment_id: binding.compartment_id,
+        realm_role: binding.realm_role,
+        realm_id: binding.zulip.realm_id,
+        identity_id: binding.zulip.identity_id,
+        site: binding.zulip.site.toLowerCase(),
+        routing: {
+          allowed_sender_ids: [...binding.routing.allowed_sender_ids].sort((left, right) => left - right),
+          allowed_stream_ids: [...binding.routing.allowed_stream_ids].sort((left, right) => left - right),
+          topic_policy: binding.routing.topic_policy,
+        },
+      }))
+      .sort(({ binding_id: left }, { binding_id: right }) => left.localeCompare(right)),
+  };
+  const compatibility = {
+    schema_version: CHECKPOINT_COMPATIBILITY_SCHEMA,
+    machine_id: contract.machine_id,
+    profile: contract.machine_profile,
+    state_schema_version: RESIDENT_STATE_SCHEMA,
+    authority_fingerprint: sha256(Buffer.from(JSON.stringify(authorityProjection), "utf8")),
+    binding_ids: authorityProjection.bindings.map(({ binding_id: bindingId }) => bindingId),
+    ...(contract.machine_profile === "buddy"
+      ? { personal_zulip_state_schema: buddyZulipStateSchema(contract) }
+      : {}),
+  };
+  return Object.freeze({
+    compatibility: Object.freeze(compatibility),
+    fingerprint: sha256(Buffer.from(JSON.stringify(compatibility), "utf8")),
+  });
+}
+
+export function residentCheckpointIsCompatible(checkpoint, contractInput) {
+  const contract = validateControllerContract(contractInput);
+  const expected = residentCheckpointCompatibility(contract);
+  return Boolean(
+    plainObject(checkpoint) &&
+    hasExactKeys(checkpoint, [
+      "schema_version",
+      "machine_id",
+      "profile",
+      "source",
+      "compatibility",
+      "compatibility_fingerprint",
+      "created_at",
+      ...(contract.machine_profile === "buddy" ? ["zulip_database_backup"] : []),
+    ]) &&
+    checkpoint.schema_version === CHECKPOINT_SCHEMA &&
+    checkpoint.machine_id === contract.machine_id &&
+    checkpoint.profile === contract.machine_profile &&
+    plainObject(checkpoint.source) &&
+    hasExactKeys(checkpoint.source, ["artifact_id", "deployment_head", "machines_head"]) &&
+    /^lazurio-resident-(buddy|ai-colleague)-[A-Za-z0-9.+-]+-linux-(x64|arm64)$/.test(
+      checkpoint.source.artifact_id || "",
+    ) &&
+    checkpoint.source.artifact_id.startsWith(`lazurio-resident-${contract.machine_profile}-`) &&
+    /^[0-9a-f]{40,64}$/.test(checkpoint.source.deployment_head || "") &&
+    /^[0-9a-f]{40,64}$/.test(checkpoint.source.machines_head || "") &&
+    isDeepStrictEqual(checkpoint.compatibility, expected.compatibility) &&
+    checkpoint.compatibility_fingerprint === expected.fingerprint &&
+    canonicalTimestamp(checkpoint.created_at) &&
+    (contract.machine_profile !== "buddy" ||
+      /^backup-[A-Za-z0-9_.-]+$/.test(checkpoint.zulip_database_backup || ""))
+  );
+}
+
+function buddyZulipStateSchema(contract) {
+  const image = contract.owner_overlay.home_zulip?.images?.postgresql ?? "";
+  const match = /^zulip\/zulip-postgresql:([0-9]+)@sha256:[0-9a-f]{64}$/.exec(image);
+  if (!match) throw new Error("Buddy Zulip PostgreSQL state schema is invalid");
+  return `zulip-postgresql-${match[1]}`;
 }
 
 export function deriveBindingApiKey(masterKey, bindingId) {
@@ -277,11 +387,39 @@ export function validateControllerContract(contract) {
 }
 
 export function validateSecretBundle(contract, secrets) {
+  const expectedKeys = [
+    "authority_credentials",
+    "bindings",
+    "machine_id",
+    "model",
+    "runtime",
+    "schema_version",
+    ...(contract.machine_profile === "buddy" ? ["home_zulip"] : []),
+  ];
   if (!plainObject(secrets) ||
-      secrets.schema_version !== "machines.resident-secret-bundle.v1" ||
+      !hasExactKeys(secrets, expectedKeys) ||
+      secrets.schema_version !== "machines.resident-runtime-secret-bundle.v1" ||
       secrets.machine_id !== contract.machine_id ||
       !Array.isArray(secrets.authority_credentials) ||
-      !Array.isArray(secrets.bindings)) {
+      !Array.isArray(secrets.bindings) ||
+      secrets.bindings.some(
+        (binding) => !hasExactKeys(binding, ["api_key", "binding_id", "email"]),
+      ) ||
+      secrets.authority_credentials.some(
+        (credential) => !hasExactKeys(credential, ["compartment_id", "purpose", "value"]),
+      ) ||
+      !hasExactKeys(secrets.model, ["api_key", "provider"]) ||
+      !hasExactKeys(secrets.runtime, ["api_server_key"]) ||
+      (contract.machine_profile === "buddy" &&
+        !hasExactKeys(secrets.home_zulip, [
+          "administrator_password",
+          "email_password",
+          "memcached_password",
+          "postgres_password",
+          "rabbitmq_password",
+          "redis_password",
+          "secret_key",
+        ]))) {
     throw new Error("Resident secret bundle identity is invalid");
   }
   const expectedBindings = contract.owner_overlay.communication_bindings.map(
@@ -305,9 +443,6 @@ export function validateSecretBundle(contract, secrets) {
     throw new Error("Resident model credential provider is invalid");
   }
   assertSecret(secrets.runtime?.api_server_key, "runtime API key", 32);
-  for (const key of ["access_key_id", "password", "secret_access_key"]) {
-    assertSecret(secrets.backup?.[key], "backup credential");
-  }
   const expectedAuthority = [];
   for (const compartment of contract.owner_overlay.authority_compartments) {
     for (const purpose of compartment.credential_purposes) {
@@ -1556,16 +1691,18 @@ export function prepareResidentCheckpoint(contractInput, outputPath) {
   }
   stopResidentServices(contract);
   const installed = readJsonStrict(join(RUNTIME_ROOT, "installed.json"), "Resident installation");
+  const compatibility = residentCheckpointCompatibility(contract);
   const checkpoint = {
     schema_version: CHECKPOINT_SCHEMA,
     machine_id: contract.machine_id,
     profile: contract.machine_profile,
-    artifact_id: installed.artifact_id,
-    deployment_head: contract.deployment_head,
-    machines_head: contract.machines_head,
-    binding_ids: contract.owner_overlay.communication_bindings.map(
-      (binding) => binding.binding_id,
-    ),
+    source: {
+      artifact_id: installed.artifact_id,
+      deployment_head: contract.deployment_head,
+      machines_head: contract.machines_head,
+    },
+    compatibility: compatibility.compatibility,
+    compatibility_fingerprint: compatibility.fingerprint,
     created_at: timestamp(),
     ...(databaseBackup ? { zulip_database_backup: databaseBackup } : {}),
   };
@@ -1592,67 +1729,6 @@ export function resumeResidentCheckpoint(contractInput) {
     operation: "checkpoint-resume",
     changed: true,
   };
-}
-
-export function prepareResidentRestore(contractInput, checkpointPath) {
-  requireRoot();
-  const contract = validateControllerContract(contractInput);
-  const checkpoint = readCheckpoint(checkpointPath, contract);
-  stopResidentServices(contract);
-  return {
-    schema_version: "lazurio.resident-controller-result.v1",
-    operation: "restore-prepare",
-    changed: true,
-    checkpoint_artifact_id: checkpoint.artifact_id,
-  };
-}
-
-export function resumeResidentRestore(contractInput, checkpointPath) {
-  requireRoot();
-  const contract = validateControllerContract(contractInput);
-  const checkpoint = checkpointPath
-    ? readCheckpoint(checkpointPath, contract)
-    : null;
-  if (contract.machine_profile === "buddy" && checkpoint) {
-    if (!/^[A-Za-z0-9_.-]+$/.test(checkpoint.zulip_database_backup || "")) {
-      throw new Error("Resident checkpoint has no safe Zulip database backup name");
-    }
-    const zulipRoot = join(RUNTIME_ROOT, "zulip");
-    compose(
-      zulipRoot,
-      [
-        "run",
-        "--rm",
-        "zulip",
-        "app:restore",
-        checkpoint.zulip_database_backup,
-      ],
-    );
-  }
-  startResidentServices(contract);
-  return {
-    schema_version: "lazurio.resident-controller-result.v1",
-    operation: "restore-resume",
-    changed: true,
-  };
-}
-
-function readCheckpoint(path, contract) {
-  const checkpoint = readJsonStrict(path, "Resident checkpoint");
-  const expectedBindings = contract.owner_overlay.communication_bindings.map(
-    (binding) => binding.binding_id,
-  );
-  if (checkpoint.schema_version !== CHECKPOINT_SCHEMA ||
-      checkpoint.machine_id !== contract.machine_id ||
-      checkpoint.profile !== contract.machine_profile ||
-      !Array.isArray(checkpoint.binding_ids) ||
-      checkpoint.binding_ids.join("\u0000") !== expectedBindings.join("\u0000") ||
-      checkpoint.artifact_id !== contract.owner_overlay.runtime.artifact.artifact_id ||
-      checkpoint.deployment_head !== contract.deployment_head ||
-      checkpoint.machines_head !== contract.machines_head) {
-    throw new Error("Resident checkpoint is incompatible with this Machine");
-  }
-  return checkpoint;
 }
 
 function stopResidentServices(contract) {
@@ -1729,7 +1805,8 @@ export function residentStatus(contractInput, now = new Date()) {
   if (backupRecord?.schema_version === "machines.resident-backup-status.v1" &&
       backupRecord.state === "fresh" &&
       backupRecord.encrypted === true &&
-      typeof backupRecord.completed_at === "string") {
+      canonicalTimestamp(backupRecord.completed_at) &&
+      validCheckpointCatalogEntry(backupRecord.latest_checkpoint)) {
     const age = now.getTime() - new Date(backupRecord.completed_at).getTime();
     const maximum =
       contract.owner_overlay.runtime.backup.maximum_age_hours * 60 * 60 * 1000;
@@ -1739,21 +1816,7 @@ export function residentStatus(contractInput, now = new Date()) {
       completed_at: backupRecord.completed_at,
     };
   }
-  const checkpointPath = join(CONTRACT_PATHS.state_root, "checkpoint-manifest.json");
-  let checkpoint = { state: "missing" };
-  if (existsSync(checkpointPath) && SHA256.test(backupRecord?.checkpoint_sha256 || "")) {
-    const digest = sha256(readFileSync(checkpointPath));
-    const record = readJsonOrNull(checkpointPath);
-    if (digest === backupRecord.checkpoint_sha256 &&
-        record?.schema_version === CHECKPOINT_SCHEMA &&
-        record.machine_id === contract.machine_id &&
-        record.deployment_head === contract.deployment_head &&
-        record.machines_head === contract.machines_head) {
-      checkpoint = { state: "ready", artifact_id: record.artifact_id };
-    } else {
-      checkpoint = { state: "failed" };
-    }
-  }
+  const checkpoint = checkpointCatalogStatus(contract, backupRecord);
   const sandboxPresent = commandSucceeds(
     "/usr/bin/docker",
     ["image", "inspect", contract.owner_overlay.runtime.sandbox.terminal_image],
@@ -1761,8 +1824,13 @@ export function residentStatus(contractInput, now = new Date()) {
   const personalZulipActive =
     contract.machine_profile !== "buddy" ||
     composeIsHealthy(join(RUNTIME_ROOT, "zulip"));
+  const checkpointSchedulerActive = systemctlIsActive("lazurio-resident-backup.timer");
   const services = [
     { service_id: "binding-workers", state: bridgesActive ? "active" : "inactive" },
+    {
+      service_id: "checkpoint-scheduler",
+      state: checkpointSchedulerActive ? "active" : "inactive",
+    },
     { service_id: "gateway", state: gatewaysActive ? "active" : "inactive" },
     ...(contract.machine_profile === "buddy"
       ? [{ service_id: "personal-zulip", state: personalZulipActive ? "active" : "inactive" }]
@@ -1813,7 +1881,7 @@ export function verifyResident(contractInput) {
     status.backup.state === "fresh" &&
     status.backup.encrypted === true &&
     status.checkpoint.state === "ready" &&
-    status.checkpoint.artifact_id === desired.artifact_id &&
+    status.checkpoint.entries.at(-1)?.compatible === true &&
     status.communications.healthy_bindings ===
       status.communications.declared_bindings &&
     status.communications.failed_bindings === 0 &&
@@ -1825,6 +1893,69 @@ export function verifyResident(contractInput) {
     operation: "verify",
     changed: false,
   };
+}
+
+function checkpointCatalogStatus(contract, backupRecord) {
+  const catalog = readJsonOrNull(join(CONTRACT_PATHS.state_root, "checkpoint-catalog.json"));
+  if (catalog === null) return { state: "missing", entries: [] };
+  if (!plainObject(catalog) ||
+      !hasExactKeys(catalog, ["schema_version", "entries"]) ||
+      catalog.schema_version !== "machines.resident-checkpoint-catalog.v1" ||
+      !Array.isArray(catalog.entries) ||
+      catalog.entries.length === 0 ||
+      catalog.entries.length > 32 ||
+      catalog.entries.some((entry) => !validCheckpointCatalogEntry(entry))) {
+    return { state: "failed", entries: [] };
+  }
+  const snapshotIds = catalog.entries.map(({ snapshot_id: snapshotId }) => snapshotId);
+  const completedAt = catalog.entries.map(({ completed_at: value }) => value);
+  if (new Set(snapshotIds).size !== snapshotIds.length ||
+      completedAt.join("\u0000") !== [...completedAt].sort().join("\u0000")) {
+    return { state: "failed", entries: [] };
+  }
+  const expected = residentCheckpointCompatibility(contract).fingerprint;
+  const entries = catalog.entries.map((entry) => ({
+    ...entry,
+    compatible: entry.compatibility_fingerprint === expected,
+  }));
+  const latest = catalog.entries.at(-1);
+  const checkpointPath = join(CONTRACT_PATHS.state_root, "checkpoint-manifest.json");
+  const checkpoint = readJsonOrNull(checkpointPath);
+  const latestMatches =
+    existsSync(checkpointPath) &&
+    checkpoint !== null &&
+    plainObject(backupRecord?.latest_checkpoint) &&
+    isDeepStrictEqual(backupRecord.latest_checkpoint, latest) &&
+    backupRecord.completed_at === latest.completed_at &&
+    sha256(readFileSync(checkpointPath)) === latest.manifest_sha256 &&
+    latest.source_artifact_id === checkpoint?.source?.artifact_id &&
+    latest.compatibility_fingerprint === checkpoint?.compatibility_fingerprint &&
+    residentCheckpointIsCompatible(checkpoint, contract);
+  return { state: latestMatches ? "ready" : "failed", entries };
+}
+
+function validCheckpointCatalogEntry(entry) {
+  return Boolean(
+    plainObject(entry) &&
+    hasExactKeys(entry, [
+      "schema_version",
+      "snapshot_id",
+      "manifest_sha256",
+      "compatibility_fingerprint",
+      "source_artifact_id",
+      "completed_at",
+      "encrypted",
+    ]) &&
+    entry.schema_version === "machines.resident-checkpoint-catalog-entry.v1" &&
+    SHA256.test(entry.snapshot_id || "") &&
+    SHA256.test(entry.manifest_sha256 || "") &&
+    SHA256.test(entry.compatibility_fingerprint || "") &&
+    /^lazurio-resident-(buddy|ai-colleague)-[A-Za-z0-9.+-]+-linux-(x64|arm64)$/.test(
+      entry.source_artifact_id || "",
+    ) &&
+    canonicalTimestamp(entry.completed_at) &&
+    entry.encrypted === true
+  );
 }
 
 function composeIsHealthy(root) {
@@ -1891,6 +2022,14 @@ function readUnitRegistry() {
 
 function timestamp() {
   return new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+
+function canonicalTimestamp(value) {
+  if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$/.test(value || "")) {
+    return false;
+  }
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.valueOf()) && parsed.toISOString().replace(".000Z", "Z") === value;
 }
 
 function requireRoot() {

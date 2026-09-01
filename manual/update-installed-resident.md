@@ -58,7 +58,7 @@ Před dalším update Principál nebo jeho operátor vědomě zvolí jednu možn
 2. přenést opravu do odděleného Lazurio source checkoutu a vydat nový artefakt;
 3. vrátit soubor na kanonickou release podobu a znovu spustit status.
 
-## 3. Managed update, rollback a obnova
+## 3. Managed deploy, návrat artefaktu a budoucí obnova
 
 Managed změna začíná v provider-custody Deployment Repo, ne SSH příkazem na
 hostu. Změň exact Lazurio artifact pin nebo jiný desired state jedné Mašiny a
@@ -66,26 +66,41 @@ proveď stejný uzavřený lifecycle jako při první instalaci:
 
 ```text
 fresh readback → canonical Plan → review/merge → one-use Permit
-  → apply|rollback|restore|rebuild včetně checkpointu → fresh readback
+  → apply s pre/post-change checkpoint policy → fresh readback
 ```
 
-Machines Adapter přes SSH předá controlleru uzavřený kontrakt a pouze
-purpose-scoped secret bundle. Controller atomicky aktivuje exact Lazurio Root,
+Machines Adapter přes SSH předá controlleru uzavřený kontrakt a dva oddělené
+purpose-scoped secret bundly: runtime credentials a checkpoint credentials.
+Controller atomicky aktivuje exact Lazurio Root,
 ověří exact Hermes a GBrain checkouty, znovu vygeneruje binding-scoped služby,
 pro Buddyho zkonverguje osobní Zulip a po mutaci vyžaduje čerstvou šifrovanou
 zálohu. Runtime si Permit nevydává a jeho service account nemá dostat
-Deployment Repo ani provider credential.
+Deployment Repo, provider credential ani checkpoint credential.
 
 Machines volá updater s explicitním `--mode managed` a oběma mount source.
 Výchozí `assisted` mode u Buddyho Organizations mount odmítne, aby stará jediná
 osobní bridge služba omylem nezískala společný pohled na více Organizací.
 
-`rollback`, `restore` i `rebuild` jsou nové explicitní operace s novým Plánem a
-Permitem. Restore odmítne checkpoint jiné Mašiny, profilu, binding topology
-nebo artifactu. Rebuild nezachraňuje skrytý lokální drift; sestaví blank
-kompatibilní host z reviewovaného desired state a pak obnoví přesně vybraný
-checkpoint. Konkrétní syntax a custody pravidla vlastní verzovaný Machines
-release a jeho `docs/resident-machines.md`.
+Veřejný Adapter v3 má jen `validate`, `readback`, `plan` a Permit-backed
+`apply`. Návrat kódu proto není druhý protokol: v Machine Recordu se zvolí
+předchozí exact kompatibilní artefakt a projde se stejný Deploy. Selhání
+atomické aktivace vrátí last-known-good artefakt ještě uvnitř této transakce.
+
+Datový recover zatím není spustitelná Machines capability. Checkpoint nese
+metadata-only katalog a compatibility fingerprint Mašiny, Profilu, persistent
+state schématu, authority/binding topology a u Buddyho Zulip PostgreSQL majoru.
+Artifact id a Git HEADy jsou auditní provenience, ne podmínka kompatibility.
+Budoucí recover dostane vlastní aditivní, jednorázový Plan/Permit kontrakt až
+po clean-host restore, revocation a recovery-key drillu. Musí nejdřív
+zkonvergovat aktuální desired state a živou autoritu; ze checkpointu nikdy
+neoživí odvolané bindingy ani credentials.
+
+`rebuild` je orchestrace přes provider boundary: provision blank hostu,
+Resident Deploy a teprve potom autorizovaný recover. Není to Resident verb a
+nesmí schovat nákup, smazání nebo nahrazení VPS za `apply`. Dokud tyto brány
+nejsou doložené, oba Managed Resident Profily zůstávají `shaping`. Konkrétní
+custody pravidla a promotion gates drží verzovaný Machines release v
+`docs/resident-machines.md`.
 
 ## 4. Legacy assisted Buddy update
 

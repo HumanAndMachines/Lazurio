@@ -7,6 +7,8 @@ import {
   renderGatewayUnit,
   renderHermesConfig,
   renderZulipOverride,
+  residentCheckpointCompatibility,
+  residentCheckpointIsCompatible,
   validateControllerContract,
   validateSecretBundle,
 } from "./runtime/controller-lib.mjs";
@@ -107,7 +109,7 @@ const contract = {
   },
 };
 const secrets = {
-  schema_version: "machines.resident-secret-bundle.v1",
+  schema_version: "machines.resident-runtime-secret-bundle.v1",
   machine_id: "example-resident",
   authority_credentials: [
     { compartment_id: "personal", purpose: "personal-github", value: "private-token" },
@@ -119,11 +121,6 @@ const secrets = {
       api_key: "1".repeat(32),
     },
   ],
-  backup: {
-    access_key_id: "backup-access",
-    password: "backup-password",
-    secret_access_key: "backup-secret",
-  },
   model: { provider: "openrouter", api_key: "model-secret" },
   runtime: { api_server_key: "r".repeat(32) },
   home_zulip: {
@@ -149,12 +146,83 @@ test("managed Resident controller rejects widened paths and derives binding-loca
   const sharedHome = structuredClone(contract);
   sharedHome.owner_overlay.communication_bindings[0].routing.allowed_sender_ids.push(2);
   expect(() => validateControllerContract(sharedHome)).toThrow("exactly its Principal");
+  for (const malformedSecrets of [
+    { ...secrets, bindings: [null] },
+    { ...secrets, authority_credentials: [null] },
+    { ...secrets, bindings: [{ ...secrets.bindings[0], widened: "forbidden" }] },
+  ]) {
+    expect(() => validateSecretBundle(contract, malformedSecrets))
+      .toThrow("secret bundle identity");
+  }
   expect(deriveBindingApiKey("r".repeat(32), "personal-home"))
     .not.toBe(deriveBindingApiKey("r".repeat(32), "another-binding"));
   expect(bindingPort(0)).toBe(17650);
   expect(bindingRuntimeIdentity("example-resident", "personal-home")).toEqual(
     bindingRuntimeIdentity("example-resident", "personal-home"),
   );
+});
+
+test("checkpoint compatibility binds identity and authority, not release provenance", () => {
+  const current = residentCheckpointCompatibility(structuredClone(contract));
+  const newerRelease = structuredClone(contract);
+  newerRelease.deployment_head = "f".repeat(40);
+  newerRelease.machines_head = "8".repeat(40);
+  newerRelease.owner_overlay.runtime.artifact.artifact_id =
+    "lazurio-resident-buddy-0.2.0-linux-x64";
+  newerRelease.owner_overlay.runtime.artifact.source_commit = "7".repeat(40);
+  newerRelease.owner_overlay.runtime.artifact.archive_sha256 = "6".repeat(64);
+  expect(residentCheckpointCompatibility(newerRelease).fingerprint).toBe(current.fingerprint);
+
+  const checkpoint = {
+    schema_version: "machines.resident-checkpoint.v1",
+    machine_id: contract.machine_id,
+    profile: contract.machine_profile,
+    source: {
+      artifact_id: contract.owner_overlay.runtime.artifact.artifact_id,
+      deployment_head: contract.deployment_head,
+      machines_head: contract.machines_head,
+    },
+    compatibility: current.compatibility,
+    compatibility_fingerprint: current.fingerprint,
+    created_at: "2026-09-01T08:00:00Z",
+    zulip_database_backup: "backup-2026-09-01",
+  };
+  expect(residentCheckpointIsCompatible(checkpoint, newerRelease)).toBe(true);
+  const reordered = {
+    ...checkpoint,
+    compatibility: Object.fromEntries(
+      Object.entries(current.compatibility).reverse(),
+    ),
+  };
+  expect(residentCheckpointIsCompatible(reordered, newerRelease)).toBe(true);
+  expect(residentCheckpointIsCompatible({
+    ...checkpoint,
+    source: {
+      ...checkpoint.source,
+      artifact_id: "lazurio-resident-ai-colleague-0.1.0-linux-x64",
+    },
+  }, newerRelease)).toBe(false);
+  expect(residentCheckpointIsCompatible({
+    ...checkpoint,
+    zulip_database_backup: "../backup-escape",
+  }, newerRelease)).toBe(false);
+
+  const revoked = structuredClone(contract);
+  revoked.owner_overlay.communication_bindings[0].routing.allowed_sender_ids = [2];
+  expect(residentCheckpointCompatibility(revoked).fingerprint).not.toBe(current.fingerprint);
+  expect(residentCheckpointIsCompatible(checkpoint, revoked)).toBe(false);
+
+  const reassignedPrincipal = structuredClone(contract);
+  reassignedPrincipal.owner_overlay.principal.principal_id = "another-principal";
+  expect(residentCheckpointCompatibility(reassignedPrincipal).fingerprint)
+    .not.toBe(current.fingerprint);
+  expect(residentCheckpointIsCompatible(checkpoint, reassignedPrincipal)).toBe(false);
+
+  const replacedRealmIdentity = structuredClone(contract);
+  replacedRealmIdentity.owner_overlay.communication_bindings[0].zulip.identity_id = "new-buddy";
+  expect(residentCheckpointCompatibility(replacedRealmIdentity).fingerprint)
+    .not.toBe(current.fingerprint);
+  expect(residentCheckpointIsCompatible(checkpoint, replacedRealmIdentity)).toBe(false);
 });
 
 test("Hermes configuration gives one binding one scope, one brain and no forwarded secrets", () => {

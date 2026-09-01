@@ -207,10 +207,12 @@ PGLite/stdio store bez embeddings a s výslovně zvoleným search modem.
 Buddyho osobní Zulip je součást stejné Mašiny: oficiální digest-pinned Compose
 stack poslouchá aplikačně jen na loopbacku, veřejné TLS ukončuje Caddy a jeho
 `/data` vstupuje do stejného quiesced checkpointu jako Resident. První apply
-idempotentně založí realm, lidského ownera a Generic bot identitu; obnova nejdřív
-ověří přesnou Machine/Profile/binding/artifact kompatibilitu. Organization Zulip
-naopak patří jako explicitní Workload na Conglomerate Host a jeho výpadek se
-obnovuje přes provider/SSH, nikdy přes samotný chat.
+idempotentně založí realm, lidského ownera a Generic bot identitu. Budoucí
+obnova nejdřív ověří Machine, Profile, persistent-state schéma,
+authority/binding topology a Zulip PostgreSQL major; exact artefakt a Git HEADy
+zůstávají auditní provenience. Organization Zulip naopak patří jako explicitní
+Workload na Conglomerate Host a jeho výpadek se obnovuje přes provider/SSH,
+nikdy přes samotný chat.
 
 Host přijímá jen deklarované SSH recovery CIDRy a u Buddyho veřejné porty
 80/443. Terminal sandbox má exact image digest, CPU/memory/PID limit,
@@ -233,12 +235,18 @@ nepozorovaná fleet aktualizace a autonomní maintenance window nejsou součást
 základního kontraktu. Přesný stav aktuálního artefaktu ověří
 `bun run resident:doctor`.
 
-Managed Machines operace mají navíc uzavřený sled `readback → plan → review →
-one-use Permit → apply → readback`. Každý úspěšný apply, backup, restore,
-rollback i rebuild vytvoří nový šifrovaný off-host checkpoint a finální gate
+Managed Machines mají jediný podporovaný mutační sled `readback → plan → review
+→ one-use Permit → apply → readback`. Adapter v3 další mutační verb nemá.
+Checkpoint timer i pre/post-change checkpoint jsou desired policy, kterou
+zkonverguje `apply`; checkpoint nepřepisuje `applied.json`. Finální gate
 vyžaduje exact aplikovaný Machines/Lazurio release, aktivní bindingy, sandbox,
-čerstvou zálohu a checkpoint stejného artefaktu. Provider nákup nebo zrušení
-VPS do tohoto lifecycle nepatří a vyžaduje samostatný Provisioning Intent.
+čerstvou šifrovanou zálohu a poslední kompatibilní checkpoint.
+
+Návrat kódu zvolí předchozí exact artefakt jako desired state a použije stejný
+Deploy. Datový recover bude až samostatný aditivní break-glass kontrakt po
+clean-host, revocation a recovery-key drillech. Rebuild skládá provider
+provisioning, čistý Deploy a recover; není Resident primitive. Provider nákup
+nebo zrušení VPS vždy vyžaduje samostatný Provisioning Intent.
 
 Updater v1 drží immutable verze pod `versions/`, content-free lifecycle stav a
 mutable `organizations/` a `personalspace/` pod odděleným `state/`. `active`

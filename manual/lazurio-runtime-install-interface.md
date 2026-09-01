@@ -60,10 +60,12 @@ bun distribution/build.mjs \
 Oba profily nesou stejný updater a Managed controller, ale jiné generované
 root instrukce a profilové invarianty. Artefakt nese Bun `1.4.0`, exact-pinned
 Hermes a GBrain dependency kontrakty a controller rozhraní pro `runtime`,
-`zulip`, checkpoint, restore, `status` a `verify`. Dependency checkout není
-součást tarballu: Machines jej na hostu materializuje z přesného repozitáře,
-commitu a lock digestu a controller před startem znovu ověří origin, HEAD,
-tracked bytes i lock.
+`zulip`, interní checkpoint prepare/resume, `status` a `verify`. Restore
+rozhraní záměrně nemá: datová obnova vznikne až jako samostatný verzovaný
+break-glass kontrakt po clean-host a revocation drillech. Dependency checkout
+není součást tarballu: Machines jej na hostu materializuje z přesného
+repozitáře, commitu a lock digestu a controller před startem znovu ověří
+origin, HEAD, tracked bytes i lock.
 
 Build je release krok ze skutečně clean commitu. Lokálně pozměněný worktree,
 větev bez commitu nebo artefakt přebalený po buildu nejsou přípustný vstup do
@@ -81,8 +83,9 @@ mountech. Tyto cesty jsou součástí verzovaného controller kontraktu, ne
 implicitní discovery.
 
 Controller se nespouští jako obecné administrátorské CLI. Machines role jej
-volají s root-owned bounded JSON kontraktem a zvláštním secret bundlem, jehož
-hodnoty se neobjeví v argumentech ani centrálním evidence. Jediný běžný
+volají s root-owned bounded JSON kontraktem a oddělenými runtime a checkpoint
+secret bundly, jejichž hodnoty se neobjeví v argumentech ani centrální
+evidence. Runtime service checkpoint credential nedostává. Jediný běžný
 read-only vstup operátora je:
 
 ```sh

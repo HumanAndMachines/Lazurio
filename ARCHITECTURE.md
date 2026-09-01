@@ -318,6 +318,24 @@ Hosted Resident profily mohou dál používat verzovaný immutable artefakt s
 atomickou aktivací a rollbackem. Ani tam se běžící runtime neaktualizuje
 přepisem source checkoutu a artefakt nesmí vytvořit druhou datovou autoritu.
 
+Managed Resident drží čtyři oddělené pravdy: persistent desired Machine
+Record/owner overlay, krátkodobý readback, jednorázový Plan plus Permit a
+šifrovaný checkpoint s content-free katalogem. Veřejný Machines Adapter v3 je
+proto pouze `validate/readback/plan/apply`; checkpoint timer a pre/post-change
+checkpoint jsou policy konvergovaná uvnitř `apply`. `applied.json` dokazuje
+jen poslední konvergenci a checkpoint jej nepřepisuje. Návrat kódu vybere
+předchozí exact kompatibilní artefakt jako desired state a použije stejný
+Deploy; rebuild skládá provider provisioning, Deploy a budoucí datový recover,
+není Resident primitive.
+
+Datový recover dostane až aditivní, jednorázový break-glass kontrakt po
+clean-host, revocation a recovery-key drillech. Checkpoint compatibility váže
+Mašinu, Profil, persistent-state schéma, Authority Compartment/Communication
+Binding topology a u Buddyho Zulip PostgreSQL major; artifact id a Git HEADy
+zůstávají auditní provenience. Obnova nejdřív zkonverguje aktuální desired
+state a živou autoritu a nikdy neobnoví credentials ani odvolaný binding:
+restore re-derives, never resurrects.
+
 Pracovní checkouty aktualizuje jediná explicitní akce `lazurio update`, kterou
 volá CLI i tlačítko **Synchronizovat**. Postupuje shora dolů přes Lazurio,
 Organization rooty a všechny spravované modulové checkouty na `main` — jak

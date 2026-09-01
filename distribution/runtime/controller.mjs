@@ -1,12 +1,10 @@
 #!/usr/bin/env bun
 import {
   prepareResidentCheckpoint,
-  prepareResidentRestore,
   reconcileResidentRuntime,
   reconcileResidentZulip,
   residentStatus,
   resumeResidentCheckpoint,
-  resumeResidentRestore,
   verifyResident,
 } from "./controller-lib.mjs";
 import { lstatSync, readFileSync } from "node:fs";
@@ -17,8 +15,6 @@ function usage() {
     "bun resident/controller.mjs zulip --contract PATH --secrets PATH",
     "bun resident/controller.mjs checkpoint-prepare --contract PATH --output PATH",
     "bun resident/controller.mjs checkpoint-resume --contract PATH",
-    "bun resident/controller.mjs restore-prepare --contract PATH --checkpoint PATH",
-    "bun resident/controller.mjs restore-resume --contract PATH [--checkpoint PATH]",
     "bun resident/controller.mjs status --contract PATH",
     "bun resident/controller.mjs verify --contract PATH",
   ].join("\n");
@@ -33,7 +29,7 @@ function parseArguments(argv) {
   for (let index = 0; index < rest.length; index += 2) {
     const flag = rest[index];
     const value = rest[index + 1];
-    if (!/^--(contract|secrets|output|checkpoint)$/.test(flag || "") || !value) {
+    if (!/^--(contract|secrets|output)$/.test(flag || "") || !value) {
       throw new Error("invalid arguments");
     }
     const key = flag.slice(2);
@@ -87,13 +83,6 @@ async function main() {
       break;
     case "checkpoint-resume":
       result = resumeResidentCheckpoint(contract);
-      break;
-    case "restore-prepare":
-      if (!input.checkpoint) throw new Error("restore-prepare requires --checkpoint");
-      result = prepareResidentRestore(contract, input.checkpoint);
-      break;
-    case "restore-resume":
-      result = resumeResidentRestore(contract, input.checkpoint);
       break;
     case "status":
       result = residentStatus(contract);
