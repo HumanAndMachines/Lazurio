@@ -163,12 +163,18 @@ function collectObservations({ request, appSlug, provider }) {
   const viewerCanCreateRepositories = graph.organization.viewerCanCreateRepositories === true;
 
   const rootRepository = inspectRootRepository({ invoke, organization });
-  const githubApp = inspectGitHubApp({
-    invoke,
-    organization,
-    appSlug,
-    rootRepository,
-  });
+  // The Organization installations endpoint is owner/admin-only and GitHub may
+  // conceal that boundary as either HTTP 403 or 404. A non-owner has already
+  // been observed precisely above, so do not turn an expected access boundary
+  // into a retryable transport failure or guess the App state.
+  const githubApp = viewerIsOwner
+    ? inspectGitHubApp({
+      invoke,
+      organization,
+      appSlug,
+      rootRepository,
+    })
+    : unavailableApp();
 
   return {
     github: {

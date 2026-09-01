@@ -10,8 +10,8 @@ Prvním konstitutivním krokem je instalace oficiální GitHub App
 **Lazurio for GitHub** do cílové GitHub Organization. Pro běžný onboarding
 Organization owner v GitHub installeru zvolí **All repositories**. Tím vznikne
 provider-side vazba Organizace na Lazurio a budoucí repozitáře se nestanou
-skrytým partial-access stavem. Dokud App chybí, read-only kontrola vrací
-`github_app_installation_required` a lokální instalace nesmí pokračovat.
+skrytým partial-access stavem. Dokud App chybí, ownerova read-only kontrola
+vrací `github_app_installation_required` a vzdálená aktivace nesmí pokračovat.
 
 `All repositories` je kanonický onboarding standard, ne druhý Lazurio ACL.
 GitHub dál zůstává jedinou autoritou přístupů. Vědomě omezená instalace
@@ -29,22 +29,30 @@ má současně:
 3. lokální mount vytvořený až konvergentním příkazem
    `lazurio organization install`.
 
-Po instalaci App Agent ověří živý stav přes immutable GitHub Organization ID:
+Po instalaci App ji **GitHub Organization owner** jednou ověří přes immutable
+GitHub Organization ID:
 
 ```sh
 lazurio organization activate --check --github-id <immutable-id> --json
 ```
 
-Teprve výsledek `outcome: "active"`, odpovídající App installation scope a
-validní root opravňují pokračovat k lokální instalaci. GitHub settings stránka
-nebo textový název Organizace samy nejsou důkaz.
+Teprve ownerem pozorovaný výsledek `outcome: "active"`, odpovídající App
+installation scope a validní root dokazují vzdálenou aktivaci. GitHub settings
+stránka nebo textový název Organizace samy nejsou důkaz.
+
+Tato aktivace je provider-side owner gate, ne krok na každé pracovní mašině.
+Builder ji neopakuje a nepotřebuje `admin:org`: installations endpoint je pro
+něj záměrně nepozorovatelný a GitHub může hranici vrátit jako HTTP 403 i skryté
+404. Taková odpověď nedokazuje chybějící App ani rozbitý transport. Builder
+materializuje už aktivní Organizaci přes `lazurio organization install`, které
+ověřuje jeho vlastní read access k rootu a Modulům.
 
 ## Předpoklady
 
 - produkční nebo development-linked příkaz `lazurio` je v `PATH`;
 - Git, Bun a GitHub CLI jsou dostupné;
 - `gh auth status --hostname github.com` potvrzuje správný účet;
-- `Lazurio for GitHub` je nainstalovaná a aktivační kontrola vrací `active`;
+- Organization owner už dokončil jednorázovou aktivaci `Lazurio for GitHub`;
 - kanonický Lazurio Root `<home>/Lazurio` už prošel `lazurio install` a má
   skutečnou složku `organizations/`;
 - Organization root repo `<login>/<login>_GEN3` existuje na `main`, obsahuje
@@ -53,6 +61,48 @@ nebo textový název Organizace samy nejsou důkaz.
 Příkaz je local-only. Nikdy nevytváří nebo nemění GitHub repo, GitHub App grant,
 Team membership, branch rules, visibility, port ani commit. K založení remote
 Organization slouží oddělený explicitní activation postup.
+
+## GitHub přihlášení není Git transport
+
+`gh auth status` dokazuje API přihlášení, nikoli schopnost Gitu číst privátní
+SSH remote. Onboarding proto provede přihlášení jen jednou a před
+materializací ověří přesný root remote:
+
+```sh
+gh auth status --hostname github.com
+git ls-remote --exit-code --heads -- \
+  git@github.com:<login>/<login>_GEN3.git refs/heads/main
+```
+
+Pokud první příkaz selže, přihlas správný účet jednou přes oficiální
+interaktivní `gh auth login --hostname github.com --git-protocol ssh --web`.
+Pokud první příkaz uspěje a druhý ne, další `gh auth login` neopakuj: oprav
+jednorázově SSH transport tohoto účtu standardním GitHub postupem. Nejdřív
+ověř existující klíč a jeho vazbu na správný GitHub účet. Vytvoření nového SSH
+klíče a jeho nahrání přes `gh ssh-key add` je změna přístupu a Agent ji smí
+udělat jen s výslovným souhlasem Principála pro tuto mašinu a účet; privátní
+klíč nikdy nevypisuje ani nevkládá do repozitáře. Potom zopakuje přesný
+`git ls-remote`, ne celý login.
+
+Stejný read-only preflight provádí `lazurio organization install` před klonem.
+Reason `materialization_source_unavailable` proto znamená „ověř repo access a
+deklarovaný Git transport“, ne „App zřejmě není nainstalovaná“.
+
+Instalační prompt pro novou Builder Mašinu musí tuto hranici uvést výslovně:
+
+- nepoužívej `organization activate --check` jako Builder gate a z odpovědi
+  vyžadující `admin:org` neodvozuj stav App;
+- při chybějícím SSH klíči smí Agent klíč vytvořit a nahrát **veřejnou** část
+  na právě ověřený GitHub účet jen tehdy, když prompt obsahuje explicitní
+  svolení k této přesné změně přístupu;
+- po přihlášení nebo opravě klíče vždy ověř exact root pomocí `git ls-remote`
+  a teprve potom spusť `lazurio organization install`.
+
+Chce-li Principál bez dalšího přerušení autorizovat SSH bootstrap, prompt má
+říct: „Pokud pro tento účet chybí použitelný SSH klíč, máš svolení vytvořit na
+této Mašině nový ed25519 klíč, nahrát přes `gh ssh-key add` pouze jeho veřejnou
+část na právě ověřený GitHub účet a ověřit exact Organization root. Privátní
+klíč nikdy nevypisuj ani nekopíruj mimo standardní SSH custody této Mašiny.“
 
 ## Konvergentní postup
 
