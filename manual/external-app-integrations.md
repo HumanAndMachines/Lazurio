@@ -263,6 +263,7 @@ onboarding checklistu Organizace, ne do per-machine kroků:
 | Canva | Admin týmu povoluje „AI Connector" v Controls and Permissions |
 | Microsoft 365 | Tenant consent policy může vyžadovat admin souhlas s app registrací |
 | Google Workspace | Organizace vlastní GCP projekt s OAuth clientem; admin řídí povolená API a scopes |
+| ESO9 | Organization owner jmenuje správce nebo implementačního partnera; ten potvrdí API variantu, provider-side oprávnění, audit a samostatnou revokaci před aktivací |
 
 ## Osobní integrace (personalspace scope)
 
@@ -282,6 +283,7 @@ nepoužívají; personalspace izolace má přednost.
 | [integrations/atlassian.md](integrations/atlassian.md) | Jira, Confluence |
 | [integrations/linkedin.md](integrations/linkedin.md) | LinkedIn (post-only + browser fallback) |
 | [integrations/canva.md](integrations/canva.md) | Canva |
+| [integrations/eso9.md](integrations/eso9.md) | ESO9 Web API, omezený JSON API fallback a discovery-first read-only rollout |
 
 Stav každého runbooku odpovídá datu uvedenému v jeho úvodní hlavičce; před
 instalací zkontroluj aktuální dokumentaci poskytovatele.
