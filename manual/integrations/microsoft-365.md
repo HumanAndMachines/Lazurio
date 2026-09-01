@@ -42,7 +42,11 @@ hranice a `--logout` maže všechny účty v právě nakonfigurované cache.
 Pro opakovatelný katalog preferuj jeden Organization-owned launcher sdílený
 Codexem, Claude Code i ruční diagnostikou. Launcher připne package verzi,
 tool surface a scopes a mapuje Organization-prefixed env jména na runtime
-jména serveru. Katalogový zápis v org `.mcp.json` pak vypadá například:
+jména serveru. Launcher není součástí tohoto obecného runbooku: jeho prefix,
+tool surface i custody cesty vlastní konkrétní Organizace a jeho implementace
+musí vzniknout a projít testy ve stejném Organization PR jako katalog.
+Následující zápis je proto tvar consumeru, ne odkaz na soubor dodávaný
+Lazuriem:
 
 ```json
 {
@@ -66,6 +70,30 @@ runtime dostane `MS365_MCP_EXPECTED_USERNAME`,
 launcheru. Obě cache cesty musí být absolutní, různé a ležet v machine-local
 custody dané Organizace. Přihlášení spouštěj přes tentýž launcher s `--login`;
 device-code flow dokončuje Principál.
+
+### Povinný kontrakt launcheru
+
+Organization launcher je připravený k použití teprve tehdy, když:
+
+- spouští přesně reviewovanou verzi balíčku a v kódu drží pevný tool regex,
+  přesný scope allowlist a případný `--org-mode`; read-only varianta vždy
+  přidává `--read-only`;
+- vyžaduje neprázdný Organization-prefixed account pin a dvě absolutní,
+  navzájem různé cache cesty a mapuje je pouze do child-process env
+  `MS365_MCP_EXPECTED_USERNAME`, `MS365_MCP_TOKEN_CACHE_PATH` a
+  `MS365_MCP_SELECTED_ACCOUNT_PATH`;
+- bez argumentů spouští MCP STDIO transport, pro diagnostiku propouští jen
+  jmenovitě podporované management operace dané verze serveru a všechny
+  ostatní argumenty fail-closed odmítne; uživatelský argument nikdy nesmí
+  přepsat připnuté scopes, tools, mód ani package verzi;
+- neloguje hodnoty account pinu, custody cest, device kódu ani child env a
+  vrací exit code nebo ukončovací signál provider procesu;
+- má testy pro běžný start, chybějící nebo relativní cache cestu, shodné
+  cache cesty, zakázaný rozšiřující argument a podporované cílové OS; skutečný
+  `--list-permissions` smoke navíc prokáže efektivní scopes a read-only mód.
+
+Dokud soubor launcheru a tyto důkazy v Organization source neexistují,
+katalogový příklad výše není aktivace a nesmí se nasadit Kolegom.
 
 ## Token storage a persistence
 
