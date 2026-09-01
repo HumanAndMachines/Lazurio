@@ -2982,6 +2982,8 @@ function appCard(app, family = { key: app.id, members: [app], primary: app, appl
   const cardTag = app.module === "mission-control" ? "" : variantTag(app, moduleName);
   const versionBadge = badgeNode(cardTag);
   if (versionBadge) titleRow.append(versionBadge);
+  const editorBadge = badgeNode(app.editor?.status === "read_only" ? "Jen čtení" : "");
+  if (editorBadge) titleRow.append(editorBadge);
 
   const desc = document.createElement("p");
   desc.className = "app-card-desc";
@@ -4442,6 +4444,12 @@ function renderDetailStatus(app) {
   const badges = document.createElement("div");
   badges.className = "detail-badges";
   badges.append(chip(surfaceLabel(app.surface), "chip-surface"), runtimeChip(app), dependencyChip(app));
+  if (app.editor) {
+    badges.append(chip(
+      app.editor.status === "ready" ? "Editor připraven" : "Jen čtení",
+      app.editor.status === "ready" ? "chip-ok" : "chip-warn",
+    ));
+  }
   section.append(badges);
   // Only surface the policy note where it changes what the user may do
   // (productionspace stays read-only). Workspace apps get no extra noise.
@@ -4456,6 +4464,12 @@ function renderDetailStatus(app) {
       ["Stav přístupu", app.productionspace_readiness.message ?? "Bez dalšího vysvětlení."],
       ["Důvod", app.productionspace_readiness.reason ?? "-"],
     ]));
+  }
+  if (app.editor?.message) {
+    const note = document.createElement("p");
+    note.className = "detail-note";
+    note.textContent = app.editor.message;
+    section.append(note);
   }
   return section;
 }

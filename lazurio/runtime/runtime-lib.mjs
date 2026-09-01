@@ -2785,7 +2785,7 @@ export function createRuntimeManager({
     const expectedCwd = runtimeCwdForApp(app);
     const deadline = Date.now() + timeoutMs;
     let evidence = [];
-    do {
+    const observeAllListeners = async () => {
       evidence = [];
       for (const listener of app.listeners ?? []) {
         const { owner, processGroupId, observedBindings, owned } =
@@ -2801,21 +2801,42 @@ export function createRuntimeManager({
           owned,
         });
       }
-      if (evidence.length > 0 && evidence.every((item) => item.owned)) return evidence;
-      await sleep(50);
+      return evidence.length > 0 && evidence.every((item) => item.owned);
+    };
+    do {
+      if (await observeAllListeners()) return evidence;
+      if (Date.now() >= deadline) break;
+      await sleep(Math.min(50, Math.max(0, deadline - Date.now())));
     } while (Date.now() < deadline);
+
+    // A listener can become healthy exactly while the final polling sleep
+    // crosses the deadline (notably on Windows, where PID ownership appears
+    // after a wrapper hands the socket to its child). Reconcile health and
+    // ownership once more before declaring a timeout; do not abandon a late
+    // healthy process that this start transaction actually owns.
+    const finalHealth = await probeHealth(app);
+    if (finalHealth.reachable && finalHealth.ok && await observeAllListeners()) {
+      return evidence;
+    }
+    const logExcerpt = await logTail(record.logPath, errorTailBytes);
     throw new RuntimeActionError(
       500,
       "runtime_listener_ownership_unverified",
       `${app.title}: nový managed proces nepřevzal všechny deklarované module leases.`,
-      evidence.map((item) =>
-        `${item.listener_id}: ${item.host}:${item.port}, owner_pid=${item.owner_pid ?? "none"}, process_group_id=${item.process_group_id ?? "unknown"}`,
-      ),
+      [
+        ...evidence.map((item) =>
+          `${item.listener_id}: ${item.host}:${item.port}, owner_pid=${item.owner_pid ?? "none"}, process_group_id=${item.process_group_id ?? "unknown"}`,
+        ),
+        ...(logExcerpt ? [`startup_log: ${logExcerpt}`] : []),
+      ],
       {
         failure_kind: "started_listener_ownership_unverified",
         launcher_pid: record.pid,
         process_group_id: record.processGroupId,
         listeners: evidence,
+        final_health: finalHealth,
+        log_path: relativeRuntimePath(record.logPath),
+        log_excerpt: logExcerpt,
       },
     );
   }
