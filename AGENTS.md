@@ -211,9 +211,10 @@ rozhodnutí odpovídal skutečnému HEADu.
 **Poznatky patří tam, kde je najdou ostatní.** Aha momenty, rozhodnutí a
 zjištění z konverzace průběžně zapisuješ na správná místa: syntéza poznání →
 Knowledgebase; trvalé rozhodnutí → decision record; plán a jeho stav →
-Mission Control a task ledgery; otevřená nejistota → `ISSUES.open.json`;
-změna pravidel práce → `AGENTS.md` daného scope — vždy jako PR ze svého
-worktree. Chat i soukromá paměť agenta (gbrain) jsou jen cache: poznatek,
+Mission Control a task ledgery; otevřený technický problém nebo nejistota →
+GitHub Issue v přesném owning repu; změna pravidel práce → `AGENTS.md` daného
+scope — vždy jako PR ze svého worktree. Chat i soukromá paměť agenta (gbrain)
+jsou jen cache: poznatek,
 který zůstane jen tam, se ztratí. Zapisuješ jen relevantní, netajné poznatky,
 které tvůj Principál smí do daného store umístit; personalspace a cross-org
 izolace mají před povinností zapisovat vždy přednost — v pochybnosti nech
@@ -320,9 +321,15 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
 4. **Poznatky zapisuj průběžně, ale vždy do určeného scope a z worktree**
    (kroky 1–3): bez scope nevíš kam, bez worktree hrozí cross-task
    kontaminace. Kam který druh poznatku patří, říká kanonický blok výš.
-5. **Nenechávej rozhodnutí v chatu.** Aktivní nejistoty do
-   `ISSUES.open.json`, vyřešené do `ISSUES.resolved.json`; follow-upy a
-   blokery do source of truth.
+5. **Nenechávej rozhodnutí v chatu.** Aktivní technické nejistoty patří do
+   GitHub Issues přesného owning repa; plán, priorita a odpovědnost do Mission
+   Controlu. Vytvoření issue nebo komentáře je Publikace a vyžaduje explicitní
+   mandát Principála. Před Publikací odstraň secrets, Personalspace,
+   Organization-specific obsah mimo jeho access hranici a duplicity; nemáš-li
+   bezpečný repo nebo mandát, vrať sanitizovaný draft. Úplný postup drží
+   `manual/github-issues.md`. Legacy `ISSUES.open.json` a
+   `ISSUES.resolved.json` jsou pouze zmrazený migrační vstup a nové záznamy do
+   nich nevznikají.
 6. **Delegace.** Pro Claude/Codex/Desktop delegaci platí skill
    `.agents/skills/desktop-execution-agent-collaboration/SKILL.md`:
    self-report není důkaz, QA gate drží delegující Kolega.
@@ -362,8 +369,10 @@ Root upravuj jen když se mění:
 - Agentní pravidla: tento soubor
 - Lidská mapa: `MAP.md`
 - Maintenance manuál: `manual/`
-- Aktivní root issues: `ISSUES.open.json`; resolved audit trail:
-  `ISSUES.resolved.json`
+- Aktivní root technické problémy: GitHub Issues owning repa
+  `HumanAndMachines/Lazurio`; routing a publikační pravidla:
+  `manual/github-issues.md`. `ISSUES.open.json` a `ISSUES.resolved.json` jsou
+  pouze legacy migrační vstup.
 - First-client rollout a migrace: `manual/first-client-organization-rollout.md`,
   `manual/gen2-to-gen3-migration.md`
 - Desktop-agent collaboration — kanonický domov je skill
@@ -492,8 +501,8 @@ Před handoffem uveď:
 - lidské a praktické shrnutí toho, co Publikace zavede, jaký má dopad, co
   záměrně nemění a jaká nese podstatná rizika, rollout důsledky nebo otevřené
   otázky;
-- kam je zapsaný případný blocker nebo next action (`ISSUES.open.json`,
-  Organization Mission Control, TODO ledger apod.).
+- kam je zapsaný případný blocker nebo next action (GitHub Issue v přesném
+  owning repu, Organization Mission Control, TODO ledger apod.).
 
 Závěrečná zpráva pracovního chatu, ve kterém vznikl PR, začíná
 standardizovaným handoff blokem (decision 0103
