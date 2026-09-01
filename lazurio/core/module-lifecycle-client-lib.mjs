@@ -307,12 +307,12 @@ function lifecycleAppPackage(app) {
   }
   if (!isLegacyOpenTarget(app)) return null;
   const packagePath = portablePath(app.package_path);
+  const organizationPath = portablePath(app.organization_path);
   const modulePath = portablePath(app.module_catalog_path);
-  if (!packagePath || !modulePath) return null;
-  const marker = `/${modulePath}/`;
-  const markerIndex = `/${packagePath}`.lastIndexOf(marker);
-  if (markerIndex < 0) return null;
-  const relativePackage = `/${packagePath}`.slice(markerIndex + marker.length);
+  if (!packagePath || !organizationPath || !modulePath) return null;
+  const moduleRoot = `${organizationPath}/${modulePath}`;
+  if (!packagePath.startsWith(`${moduleRoot}/`)) return null;
+  const relativePackage = packagePath.slice(moduleRoot.length + 1);
   try {
     return normalizeAppPackage(relativePackage);
   } catch {
@@ -329,7 +329,16 @@ function isLegacyOpenTarget(app) {
 
 function portablePath(value) {
   if (typeof value !== "string" || value.trim() === "") return null;
-  return value.trim().replaceAll("\\", "/").replace(/^\.\//u, "").replace(/\/+$/u, "");
+  const normalized = value.trim().replaceAll("\\", "/").replace(/^\.\//u, "").replace(/\/+$/u, "");
+  if (
+    normalized === ""
+    || normalized.startsWith("/")
+    || /^[A-Za-z]:\//u.test(normalized)
+    || normalized.split("/").some((segment) => segment === "" || segment === "." || segment === "..")
+  ) {
+    return null;
+  }
+  return normalized;
 }
 
 function projectDependencies(value) {
