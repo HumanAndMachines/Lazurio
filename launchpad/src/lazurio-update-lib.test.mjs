@@ -55,7 +55,7 @@ test("pure classifier has only current, updated and blocked outcomes", () => {
     [{ operation: "am" }, ["blocked", "am_in_progress"]],
     [{ detached: true }, ["blocked", "detached_head"]],
     [{ sparseOrHiddenIndex: true }, ["blocked", "hidden_index_state"]],
-    [{ expectedBranch: "v3" }, ["blocked", "managed_branch_not_main"]],
+    [{ expectedBranch: "v3", branch: "v3" }, ["current", "already_current"]],
   ];
   for (const [input, expected] of cases) {
     const result = classifyLazurioRepoUpdate(input);
@@ -106,6 +106,18 @@ test("clean behind checkout fast-forwards and rerun is idempotent", async () => 
 
   const second = await update(fixture);
   expect(second).toMatchObject({ state: "current", reason: "already_current" });
+});
+
+test("manifest v3 checkout fast-forwards without requiring origin/main", async () => {
+  const fixture = await repositoryFixture("v3", { branchName: "v3" });
+  await addRemoteCommit(fixture, "remote.txt", "remote\n");
+
+  const result = await update(fixture);
+  expect(result).toMatchObject({ state: "updated", actions: expect.arrayContaining(["fast_forward"]) });
+  expect(await branch(fixture.working)).toBe("v3");
+  expect(status(fixture.working)).toBe("");
+  expect(runGit(fixture.working, ["rev-parse", "HEAD"]))
+    .toBe(runGit(fixture.working, ["rev-parse", "refs/remotes/origin/v3"]));
 });
 
 test("Organization update fast-forwards only a parity-verified transition target", async () => {
@@ -1201,7 +1213,7 @@ test("actual rebase and git am operations stay blocked and untouched", async () 
   expect(runGit(applying.working, ["rev-parse", "HEAD"])).toBe(amHead);
 });
 
-test("hierarchy is sequential and excludes root-space db and productionspace", async () => {
+test("hierarchy is sequential and excludes root-space db, repository-db mounts and productionspace", async () => {
   const calls = [];
   const missionControl = repo("alpha::mission-control", "root_repo", "alpha", "mission-control", null);
   missionControl.slot_path = "mission-control";
@@ -1213,6 +1225,7 @@ test("hierarchy is sequential and excludes root-space db and productionspace", a
       repo("beta::root", "organization_root", "beta", "root"),
       repo("alpha::root", "organization_root", "alpha", "root"),
       repo("alpha::module", "module", "alpha", "module", "workspace"),
+      { ...repo("alpha::warehouse-data", "module", "alpha", "warehouse-data", "workspace"), materialization: "repository_db_mount", expected_branch: "v3" },
       missionControl,
       database,
       repo("alpha::production", "module", "alpha", "production", "productionspace"),
@@ -1235,6 +1248,7 @@ test("hierarchy is sequential and excludes root-space db and productionspace", a
   expect(report.state).toBe("current");
   expect(calls).toEqual(["lazurio::root", "alpha::root", "alpha::mission-control", "alpha::module", "beta::root"]);
   expect(JSON.stringify(report)).not.toContain("alpha::db");
+  expect(JSON.stringify(report)).not.toContain("alpha::warehouse-data");
   expect(JSON.stringify(report)).not.toContain("alpha::production");
 });
 
@@ -2666,7 +2680,7 @@ test("GET-first status keeps Sync available when one module has an isolated repa
   });
 });
 
-async function repositoryFixture(name) {
+async function repositoryFixture(name, { branchName = "main" } = {}) {
   const sandbox = await mkdtemp(join(tmpdir(), `lazurio-update-${name}-`));
   cleanup.push(sandbox);
   const remote = join(sandbox, "remote.git");
@@ -2676,17 +2690,17 @@ async function repositoryFixture(name) {
   runGit(sandbox, ["init", "--bare", remote]);
   runGit(sandbox, ["clone", remote, seed]);
   configure(seed);
-  runGit(seed, ["switch", "-c", "main"]);
+  runGit(seed, ["switch", "-c", branchName]);
   await writeFile(join(seed, "tracked.txt"), "tracked\n");
   runGit(seed, ["add", "tracked.txt"]);
   runGit(seed, ["commit", "-m", "initial"]);
-  runGit(seed, ["push", "-u", "origin", "main"]);
-  runGit(sandbox, ["--git-dir", remote, "symbolic-ref", "HEAD", "refs/heads/main"]);
+  runGit(seed, ["push", "-u", "origin", branchName]);
+  runGit(sandbox, ["--git-dir", remote, "symbolic-ref", "HEAD", `refs/heads/${branchName}`]);
   runGit(sandbox, ["clone", remote, working]);
   runGit(sandbox, ["clone", remote, contributor]);
   configure(working);
   configure(contributor);
-  return { sandbox, remote, seed, working, contributor };
+  return { sandbox, remote, seed, working, contributor, branchName };
 }
 
 async function organizationActivationFixture(name) {
@@ -2764,7 +2778,7 @@ async function addRemoteCommit(fixture, path, content) {
   await writeFile(join(fixture.contributor, path), content);
   runGit(fixture.contributor, ["add", path]);
   runGit(fixture.contributor, ["commit", "-m", `remote ${path}`]);
-  runGit(fixture.contributor, ["push", "origin", "main"]);
+  runGit(fixture.contributor, ["push", "origin", fixture.branchName]);
 }
 
 async function addRemoteFiles(fixture, files, message) {
@@ -2773,7 +2787,7 @@ async function addRemoteFiles(fixture, files, message) {
   }
   runGit(fixture.contributor, ["add", ...Object.keys(files)]);
   runGit(fixture.contributor, ["commit", "-m", message]);
-  runGit(fixture.contributor, ["push", "origin", "main"]);
+  runGit(fixture.contributor, ["push", "origin", fixture.branchName]);
 }
 
 async function update(fixture) {
@@ -2801,7 +2815,7 @@ function descriptor(fixture) {
     module: "root",
     repo_path: "organizations/Test",
     absolute_path: fixture.working,
-    expected_branch: "main",
+    expected_branch: fixture.branchName,
     repo: fixture.remote,
   };
 }

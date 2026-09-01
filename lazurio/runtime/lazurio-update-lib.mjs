@@ -51,9 +51,7 @@ export function classifyLazurioRepoUpdate({
   if (operation && BLOCKING_OPERATIONS.has(operation)) {
     return { state: "blocked", action: "none", reason: `${operation}_in_progress` };
   }
-  if (expectedBranch !== "main") {
-    return { state: "blocked", action: "none", reason: "managed_branch_not_main" };
-  }
+  const targetBranch = expectedBranch || "main";
   if (sparseOrHiddenIndex) {
     return { state: "blocked", action: "none", reason: "hidden_index_state" };
   }
@@ -67,7 +65,7 @@ export function classifyLazurioRepoUpdate({
   if (detached && !detachedHeadMatchesMain) {
     return { state: "blocked", action: "none", reason: "detached_head" };
   }
-  const needsSwitch = branch !== "main";
+  const needsSwitch = branch !== targetBranch;
   const needsFastForward = mainRelation === "behind";
   if (dirty) {
     return {
@@ -348,22 +346,19 @@ export async function readLazurioUpdateStatus({ rootPath, deps = {} } = {}) {
         detail: `V repozitáři probíhá ${local.operation}.`,
       }));
     }
-    if (repo.expected_branch && repo.expected_branch !== "main") {
-      return localStatusReport(blockedResult(repo, "managed_branch_not_main", {
-        detail: `Spravovaný checkout deklaruje větev ${repo.expected_branch}; Lazurio update spravuje pouze main.`,
-      }));
-    }
+    const targetBranch = repo.expected_branch ?? "main";
     if (local.sparseOrHiddenIndex) {
       return localStatusReport(blockedResult(repo, "hidden_index_state", {
         detail: "Index používá skip-worktree nebo assume-unchanged.",
       }));
     }
-    const localMain = await commitOid(run, repo.absolute_path, "refs/heads/main");
-    const cachedTarget = await commitOid(run, repo.absolute_path, "refs/remotes/origin/main");
+    const localMain = await commitOid(run, repo.absolute_path, `refs/heads/${targetBranch}`);
+    const cachedTarget = await commitOid(run, repo.absolute_path, `refs/remotes/origin/${targetBranch}`);
     const mainRelation = localMain && cachedTarget
       ? await compareCommits(run, repo.absolute_path, localMain, cachedTarget)
       : localMain ? "current" : "missing";
     const decision = classifyLazurioRepoUpdate({
+      expectedBranch: targetBranch,
       mainRelation,
       detached: !local.branch,
       detachedHeadMatchesMain: Boolean(localMain && local.head === localMain),
@@ -372,7 +367,7 @@ export async function readLazurioUpdateStatus({ rootPath, deps = {} } = {}) {
     });
     if (decision.state === "blocked") {
       return localStatusReport(blockedResult(repo, decision.reason, {
-        detail: relationDetail(mainRelation, local, cachedTarget ?? "cached origin/main chybí"),
+        detail: relationDetail(mainRelation, local, cachedTarget ?? `cached origin/${targetBranch} chybí`, targetBranch),
       }));
     }
   }
@@ -427,11 +422,7 @@ export async function updateManagedRepo(repo, context = {}) {
       detail: `V repozitáři probíhá ${local.operation}.`,
     });
   }
-  if (repo.expected_branch && repo.expected_branch !== "main") {
-    return block("managed_branch_not_main", {
-      detail: `Spravovaný checkout deklaruje větev ${repo.expected_branch}; Lazurio update spravuje pouze main.`,
-    });
-  }
+  const targetBranch = repo.expected_branch ?? "main";
   if (local.sparseOrHiddenIndex) {
     return block("hidden_index_state", {
       detail: "Index používá skip-worktree nebo assume-unchanged a stash nelze úplně ověřit.",
@@ -478,7 +469,7 @@ export async function updateManagedRepo(repo, context = {}) {
       "--force",
       "--",
       source.url,
-      "+refs/heads/main:refs/remotes/origin/main",
+      `+refs/heads/${targetBranch}:refs/remotes/origin/${targetBranch}`,
     ],
     { cwd: repo.absolute_path, timeoutMs: GIT_FETCH_TIMEOUT_MS, env: safeGitRemoteEnv() },
   );
@@ -498,15 +489,15 @@ export async function updateManagedRepo(repo, context = {}) {
     });
   }
 
-  const target = await commitOid(run, repo.absolute_path, "refs/remotes/origin/main");
+  const target = await commitOid(run, repo.absolute_path, `refs/remotes/origin/${targetBranch}`);
   if (!target) {
-    return block("remote_main_missing", {
-      detail: "Git nepotvrdil commit origin/main.",
+    return block("remote_branch_missing", {
+      detail: `Git nepotvrdil commit origin/${targetBranch}.`,
       nextAction: "github_access",
       codex: false,
     });
   }
-  const localMain = await commitOid(run, repo.absolute_path, "refs/heads/main");
+  const localMain = await commitOid(run, repo.absolute_path, `refs/heads/${targetBranch}`);
   const mainRelation = localMain
     ? await compareCommits(run, repo.absolute_path, localMain, target)
     : "missing";
@@ -524,7 +515,7 @@ export async function updateManagedRepo(repo, context = {}) {
   const detached = !local.branch;
   const decision = classifyLazurioRepoUpdate({
     operation: local.operation,
-    expectedBranch: repo.expected_branch ?? "main",
+    expectedBranch: targetBranch,
     mainRelation,
     detached,
     detachedHeadMatchesMain: Boolean(localMain && local.head === localMain),
@@ -538,7 +529,7 @@ export async function updateManagedRepo(repo, context = {}) {
   // main, ale samotnou historii pak algoritmus nemění.
   if (decision.state === "blocked" && decision.reason === "detached_head") {
     return block(decision.reason, {
-      detail: relationDetail(mainRelation, local, target),
+      detail: relationDetail(mainRelation, local, target, targetBranch),
     });
   }
 
@@ -562,36 +553,37 @@ export async function updateManagedRepo(repo, context = {}) {
     await checkpoint("after_stash", { repo, runId: context.runId, stash: recoveryStash });
   }
 
-  if (local.branch !== "main") {
+  if (local.branch !== targetBranch) {
+    const switchAction = targetBranch === "main" ? "switch_main" : "switch_branch";
     let preparedMain = { ok: true };
     if (!localMain) {
-      preparedMain = await run(["branch", "main", target], {
+      preparedMain = await run(["branch", targetBranch, target], {
         cwd: repo.absolute_path,
         timeoutMs: GIT_LOCAL_TIMEOUT_MS,
       });
       if (preparedMain.ok) {
-        preparedMain = await run(["branch", "--set-upstream-to=origin/main", "main"], {
+        preparedMain = await run(["branch", `--set-upstream-to=origin/${targetBranch}`, targetBranch], {
           cwd: repo.absolute_path,
           timeoutMs: GIT_LOCAL_TIMEOUT_MS,
         });
       }
     }
     const switched = preparedMain.ok
-      ? await run(["switch", "main"], { cwd: repo.absolute_path, timeoutMs: GIT_LOCAL_TIMEOUT_MS })
+      ? await run(["switch", targetBranch], { cwd: repo.absolute_path, timeoutMs: GIT_LOCAL_TIMEOUT_MS })
       : preparedMain;
     if (!switched.ok) {
-      return block("switch_main_failed", {
-        detail: commandFailure(switched, "Checkout nešlo přepnout na main."),
+      return block("switch_branch_failed", {
+        detail: commandFailure(switched, `Checkout nešlo přepnout na ${targetBranch}.`),
         recoveryStash,
       });
     }
-    actions.push("switch_main");
-    await checkpoint("after_switch_main", { repo, runId: context.runId });
+    actions.push(switchAction);
+    await checkpoint(`after_${switchAction}`, { repo, runId: context.runId });
   }
 
   if (decision.state === "blocked") {
     return block(decision.reason, {
-      detail: relationDetail(mainRelation, local, target),
+      detail: relationDetail(mainRelation, local, target, targetBranch),
       recoveryStash,
       actions,
     });
@@ -616,11 +608,11 @@ export async function updateManagedRepo(repo, context = {}) {
   }
 
   const final = await inspect(repo, { ...context.deps, runGit: run });
-  const finalTarget = await commitOid(run, repo.absolute_path, "refs/remotes/origin/main");
+  const finalTarget = await commitOid(run, repo.absolute_path, `refs/remotes/origin/${targetBranch}`);
   const finalSource = await verifyRemoteSource(repo, run);
   if (
     !final.ok
-    || final.branch !== "main"
+    || final.branch !== targetBranch
     || final.dirtyPaths.length > 0
     || !finalTarget
     || finalTarget !== target
@@ -629,13 +621,13 @@ export async function updateManagedRepo(repo, context = {}) {
     || finalSource.fingerprint !== source.fingerprint
   ) {
     return block("post_update_verification_failed", {
-      detail: "Repo po update není prokazatelně clean main na připnutém origin/main commitu.",
+      detail: `Repo po update není prokazatelně clean ${targetBranch} na připnutém origin/${targetBranch} commitu.`,
       recoveryStash,
     });
   }
 
   if (actions.length === 0) {
-    return currentResult(repo, "already_current", "Repo už je clean main na origin/main.", {
+    return currentResult(repo, "already_current", `Repo už je clean ${targetBranch} na origin/${targetBranch}.`, {
       head: final.head,
     });
   }
@@ -649,7 +641,7 @@ export async function updateManagedRepo(repo, context = {}) {
       ? "Repo je aktualizované; lokální změny zůstaly bezpečně v recovery stashi."
       : actions.length === 1 && actions[0] === "worktree_ignore_repaired"
         ? "Kanonické task worktrees už neznečišťují primární checkout."
-        : "Repo je aktualizované a clean na main.",
+        : `Repo je aktualizované a clean na ${targetBranch}.`,
     head: final.head,
     actions,
     recoveryStash,
@@ -1261,15 +1253,16 @@ async function reconcileUpdatedDependencies({
   for (const [repoKey, repoOutcomes] of outcomes) {
     const repo = repos.find((candidate) => candidate.key === repoKey);
     if (!repo || repoOutcomes.some((outcome) => !outcome.ok)) continue;
+    const targetBranch = repo.expected_branch ?? "main";
     const local = await inspect(repo, { ...deps, runGit: run });
-    const target = await commitOid(run, repo.absolute_path, "refs/remotes/origin/main");
-    if (!local.ok || local.branch !== "main" || local.dirtyPaths.length > 0 || !target || local.head !== target) {
+    const target = await commitOid(run, repo.absolute_path, `refs/remotes/origin/${targetBranch}`);
+    if (!local.ok || local.branch !== targetBranch || local.dirtyPaths.length > 0 || !target || local.head !== target) {
       repoOutcomes.push({
         ok: false,
         package_path: null,
         app_id: null,
         reason: "dependency_refresh_changed_checkout",
-        detail: "Po obnově balíčků už checkout není prokazatelně clean main na origin/main.",
+        detail: `Po obnově balíčků už checkout není prokazatelně clean ${targetBranch} na origin/${targetBranch}.`,
       });
     }
   }
@@ -1278,7 +1271,7 @@ async function reconcileUpdatedDependencies({
 }
 
 function sourceCheckoutChanged(actions = []) {
-  return actions.some((action) => ["fast_forward", "materialize", "switch_main"].includes(action));
+  return actions.some((action) => ["fast_forward", "materialize", "switch_main", "switch_branch"].includes(action));
 }
 
 async function dependencyTarget({ rootPath, repo, repoRoot, cwd, app = null }) {
@@ -1733,7 +1726,10 @@ function isManagedRootRepoSlot(repo) {
 }
 
 function isManagedOrganizationChild(repo) {
-  if (repo.repo_kind === "module") return repo.workspace !== "productionspace";
+  if (repo.repo_kind === "module") {
+    return repo.workspace !== "productionspace"
+      && repo.materialization !== "repository_db_mount";
+  }
   return isManagedRootRepoSlot(repo)
     && (
       existsSync(repo.absolute_path)
@@ -1742,7 +1738,10 @@ function isManagedOrganizationChild(repo) {
 }
 
 function isAutoMaterializationCandidate(repo) {
-  if (repo.repo_kind === "module") return repo.workspace !== "productionspace";
+  if (repo.repo_kind === "module") {
+    return repo.workspace !== "productionspace"
+      && repo.materialization !== "repository_db_mount";
+  }
   return isManagedRootRepoSlot(repo)
     && repo.materialization === DOCTOR_MANAGED_NESTED_REPO;
 }
@@ -1891,6 +1890,7 @@ function resultIdentity(repo, result) {
 }
 
 function codexRepairPrompt(repo, reason, detail, recoveryStash) {
+  const targetBranch = repo.expected_branch ?? "main";
   const recoveryStashLine = !recoveryStash
     ? null
     : reason === "recovery_stash_unverified"
@@ -1900,11 +1900,11 @@ function codexRepairPrompt(repo, reason, detail, recoveryStash) {
     "Lazurio update je zablokovaný a tento Git stav se nesmí opravovat automaticky.",
     `Repo: ${repo.absolute_path}`,
     `Repo key: ${repo.key}`,
-    "Požadovaný invariant: primární checkout je clean main a lze jej fast-forwardnout na origin/main.",
+    `Požadovaný invariant: primární checkout je clean ${targetBranch} a lze jej fast-forwardnout na origin/${targetBranch}.`,
     `Zjištěný problém: ${reason}${detail ? ` — ${detail}` : ""}`,
     recoveryStashLine,
     "Zachovej všechny commity a stashe. Nepoužívej reset --hard ani force push.",
-    "Dohledatelnou práci převeď do task/PR worktree, oprav primární checkout na clean main a potom spusť `lazurio update` znovu.",
+    `Dohledatelnou práci převeď do task/PR worktree, oprav primární checkout na clean ${targetBranch} a potom spusť \`lazurio update\` znovu.`,
   ].filter(Boolean).join("\n");
 }
 
@@ -1996,12 +1996,12 @@ async function compareCommits(run, cwd, local, target) {
   return "diverged";
 }
 
-function relationDetail(relation, local, target) {
-  if (relation === "ahead") return `Lokální main obsahuje commity mimo origin/main (${local.head} proti ${target}).`;
-  if (relation === "diverged") return `Lokální main a origin/main mají diverged historii (${local.head} proti ${target}).`;
-  if (relation === "unknown") return "Vztah main k origin/main nejde bezpečně určit.";
-  if (!local.branch) return "Checkout je detached mimo bezpečně doložený main.";
-  return `Repo nejde bezpečně převést na clean main (${relation}).`;
+function relationDetail(relation, local, target, targetBranch = "main") {
+  if (relation === "ahead") return `Lokální ${targetBranch} obsahuje commity mimo origin/${targetBranch} (${local.head} proti ${target}).`;
+  if (relation === "diverged") return `Lokální ${targetBranch} a origin/${targetBranch} mají diverged historii (${local.head} proti ${target}).`;
+  if (relation === "unknown") return `Vztah ${targetBranch} k origin/${targetBranch} nejde bezpečně určit.`;
+  if (!local.branch) return `Checkout je detached mimo bezpečně doložený ${targetBranch}.`;
+  return `Repo nejde bezpečně převést na clean ${targetBranch} (${relation}).`;
 }
 
 function commandFailure(result, fallback) {
