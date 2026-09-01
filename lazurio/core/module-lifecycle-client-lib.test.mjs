@@ -87,6 +87,23 @@ describe("Core-owned Module lifecycle client", () => {
     });
   });
 
+  test("legacy fallback anchors the package at the exact Organization module root", async () => {
+    const report = await runModuleLifecycle({
+      action: "status",
+      selector: "ExampleOrganization/legacy-design-system",
+      readLocator: async () => locator,
+      fetchFn: fixtureFetch({
+        legacyOverrides: {
+          package_path:
+            "organizations/ExampleOrganization_GEN3/design-system/nested/design-system/app/v1/package.json",
+        },
+      }),
+    });
+
+    expect(report.status).toBe("current");
+    expect(report.app.app_package).toBe("nested/design-system/app/v1/package.json");
+  });
+
   test("missing or ambiguous default fails closed instead of selecting by order", async () => {
     const report = await runModuleLifecycle({
       action: "status",
@@ -239,6 +256,7 @@ function fixtureFetch({
   identityOverride = identity,
   defaultAppIds = ["example-organization-website-v2"],
   takeoverRequired = false,
+  legacyOverrides = {},
 } = {}) {
   return async (input, options = {}) => {
     const url = new URL(input);
@@ -247,7 +265,7 @@ function fixtureFetch({
     requests.push({ pathname: url.pathname, method: options.method ?? "GET", ...(body === null ? {} : { body }) });
     if (url.pathname === "/api/lazurio/server-identity") return Response.json(identityOverride);
     if (url.pathname === "/api/apps") {
-      return Response.json({ apps: fixtureApps(defaultAppIds) });
+      return Response.json({ apps: fixtureApps(defaultAppIds, legacyOverrides) });
     }
     if (/^\/api\/apps\/(?:example-organization-website-v[23]|example-organization-legacy-design-system-v1)\/(?:start|open|stop)$/u.test(url.pathname)) {
       if (takeoverRequired && body?.replace_app_id !== "other-organization-portal-v1") {
@@ -266,7 +284,7 @@ function fixtureFetch({
   };
 }
 
-function fixtureApps(defaultAppIds) {
+function fixtureApps(defaultAppIds, legacyOverrides = {}) {
   const app = (version, explicit = true) => ({
     id: `example-organization-website-${version}`,
     title: `Website ${version}`,
@@ -295,6 +313,7 @@ function fixtureApps(defaultAppIds) {
     title: "Legacy Design System",
     company: "ExampleOrganization",
     module: "legacy-design-system",
+    organization_path: "organizations/ExampleOrganization_GEN3",
     package_path: "organizations/ExampleOrganization_GEN3/design-system/app/v1/package.json",
     module_catalog_path: "design-system",
     module_open_target: true,
@@ -315,6 +334,7 @@ function fixtureApps(defaultAppIds) {
     dependencies: { state: "ready", can_start: true, message: "ready" },
     runtime: { status: "stopped", owner: "none", controllable: false, pid: null, url: null },
     shared_port_owners: [],
+    ...legacyOverrides,
   };
   return [app("v3"), app("v2"), app("v1", false), legacy];
 }
