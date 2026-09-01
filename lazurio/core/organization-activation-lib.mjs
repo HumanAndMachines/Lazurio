@@ -1023,10 +1023,10 @@ export function isValidOrganizationActivationObservations(value) {
     return false;
   }
   if (!isRecord(root) || !exactKeys(root, ["presence", "id", "name", "full_name", "default_branch", "viewer_can_push", "candidate_count", "resolver"])) return false;
-  if (!["absent", "empty", "present"].includes(root.presence)) return false;
+  if (!["absent", "empty", "present", "unobservable"].includes(root.presence)) return false;
   if (normalizedText(root.name) === "" || normalizedText(root.full_name) === "") return false;
   if (!Number.isSafeInteger(root.candidate_count) || root.candidate_count < 0) return false;
-  if (root.presence === "absent") {
+  if (["absent", "unobservable"].includes(root.presence)) {
     if (root.id !== null || root.default_branch !== null || root.viewer_can_push !== null) return false;
   } else {
     if (!ORGANIZATION_POSITIVE_GITHUB_ID_PATTERN.test(root.id ?? "") || typeof root.viewer_can_push !== "boolean") return false;

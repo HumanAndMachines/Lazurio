@@ -108,12 +108,12 @@ zůstává v prvním DEV-6512 řezu fail-closed, dokud navazující
 reader/activation gate nepřesune všechny consumery na tentýž normalizovaný
 výsledek; activation si vlastní parser nevymýšlí.
 
-Builder tento owner gate na pracovní mašině neopakuje. GitHub installations
-endpoint vyžaduje Organization owner/admin přístup a může jeho absenci skrýt
-jako HTTP 403 nebo 404; CLI proto u pozorovaného non-ownera App endpoint vůbec
-nevolá a vrátí stabilní `github_organization_owner_required`. To nevypovídá o
-tom, zda je App nainstalovaná. Lokální Builder onboarding pokračuje níže přes
-jeho vlastní repo read access.
+Builder tento owner gate na pracovní mašině neopakuje. GitHub installations i
+private-root endpoint mohou owner nebo repo access hranici skrýt jako HTTP 403
+nebo 404; CLI proto u pozorovaného non-ownera dál neprobuje root ani App a
+vrátí stabilní `github_organization_owner_required`. To nevypovídá o tom, zda
+je App nainstalovaná nebo zda Builder root čte. Lokální Builder onboarding
+pokračuje níže přes jeho vlastní repo read access.
 
 Exit code `0` znamená `active`, `1` znamená bezpečný další krok a `2`
 technickou chybu. Veřejný tvar drží

@@ -84,7 +84,7 @@ test("standard gh OAuth limitation stays an explicit selected-scope action", () 
   expect(renderHumanOrganizationActivation(report)).toContain("selected");
 });
 
-test("Builder activation check stops at the owner boundary without probing App installations", () => {
+test("Builder activation check stops at the owner boundary without probing private root or App", () => {
   const calls = [];
   const report = checkOrganizationActivation({
     githubOrganizationId: "314957563",
@@ -105,11 +105,13 @@ test("Builder activation check stops at the owner boundary without probing App i
     observations: {
       github: { organization: { viewer_is_owner: false } },
       github_app: { status: "unobservable" },
+      root_repository: { presence: "unobservable" },
     },
   });
-  expect(calls.map((call) => call.args[1]).filter(Boolean)).not.toContain(
-    "orgs/Example/installations?per_page=100&page=1",
-  );
+  const endpoints = calls.map((call) => call.args[1]).filter(Boolean);
+  expect(endpoints.some((endpoint) => endpoint.startsWith("repos/Example/"))).toBe(false);
+  expect(endpoints.some((endpoint) => endpoint.startsWith("orgs/Example/repos?"))).toBe(false);
+  expect(endpoints).not.toContain("orgs/Example/installations?per_page=100&page=1");
 });
 
 test("GitHub App lookup follows installation pagination", () => {
