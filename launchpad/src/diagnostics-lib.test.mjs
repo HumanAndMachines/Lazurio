@@ -78,6 +78,7 @@ test("tool update Doctor checks warn the Agent without running an updater", asyn
   expect(checks[0]).toMatchObject({ status: "warn", severity: "recommended" });
   expect(checks[0].message).toContain("požádat Principála o souhlas");
   expect(checks[0].details).toContain("next_action: ask_principal_before_update");
+  expect(checks[1]).toMatchObject({ status: "fail", severity: "required" });
   expect(checks[1].message).toContain("není dostupný v PATH");
   expect(checks[1].message).toContain("Principála");
   expect(checks[1].details).toContain("next_action: ask_principal_before_install");
@@ -718,7 +719,13 @@ test("doctor report obsahuje platform, git a gitignore checks", async () => {
   const checks = new Map(report.checks.map((check) => [check.id, check]));
 
   expect(checks.get("platform.bun")?.status).toBe("ok");
+  expect(checks.get("platform.bun_path")?.status).toBe("ok");
+  expect(checks.get("platform.bun_package_runner")?.status).toBe("ok");
   expect(checks.get("platform.git")?.status).toBe("ok");
+  expect(checks.has("platform.github_cli")).toBe(true);
+  expect(checks.has("platform.github_auth")).toBe(true);
+  expect(checks.has("platform.node")).toBe(true);
+  expect(checks.has("platform.codex")).toBe(true);
   expect(checks.get("git.root")?.status).toBe("ok");
   expect(checks.get("git.worktree")?.status).toBe("ok");
   expect(checks.get("gitignore.protection")?.status).toBe("ok");

@@ -38,7 +38,13 @@ test("human and JSON golden files derive from the same Core result", async () =>
   expect(`${renderHumanInstallReport(report, { language: "en" })}\n`).toBe(expectedEn);
 });
 
-function fixtureReport({ resolvePathCommand = (command) => `/trusted/bin/${command}` } = {}) {
+function fixtureReport({
+  resolvePathCommand = (command) => {
+    if (command === "bun") return process.execPath;
+    if (command === "git") return "/usr/bin/git";
+    return `/trusted/bin/${command}`;
+  },
+} = {}) {
   return inspectLazurioInstallation({
     root: null,
     platform: "darwin",

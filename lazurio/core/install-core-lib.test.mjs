@@ -94,6 +94,9 @@ test("independent probes continue after a bounded failure", () => {
     resolvePathCommand: fixturePathCommand,
     runCommand: ({ executable, args }) => {
       invoked.push([executable, ...args].join(" "));
+      if (executable === process.execPath && args[0] === "--version") {
+        return { status: 0, stdout: "1.4.0" };
+      }
       if (executable === "/trusted/bin/gh" && args[0] === "--version") return { status: 0 };
       return { status: 1, stdout: "CANARY_STDOUT", stderr: "CANARY_STDERR" };
     },
@@ -107,6 +110,7 @@ test("independent probes continue after a bounded failure", () => {
   expect(report.steps.find((step) => step.id === "github_cli").status).toBe("completed");
   expect(report.steps.find((step) => step.id === "github_auth").reason).toBe("github_login_required");
   expect(invoked).toEqual([
+    `${process.execPath} --version`,
     "/trusted/bin/gh --version",
     "/trusted/bin/gh auth status --hostname github.com",
   ]);
@@ -125,9 +129,16 @@ test("supported complete fixture exits zero with all probes completed", () => {
     resolveGitHubCli: () => "C:\\Program Files\\GitHub CLI\\gh.exe",
     resolvePathCommand: fixturePathCommand,
     environment: { SystemRoot: "C:\\Windows" },
-    runCommand: ({ executable, cwd }) => {
+    runCommand: ({ executable, args, cwd }) => {
       commands.push({ executable, cwd });
-      return { status: 0 };
+      return {
+        status: 0,
+        stdout: executable === process.execPath
+          ? "1.4.0"
+          : args[0] === "config"
+            ? "ssh"
+            : "",
+      };
     },
     inspectRoot: () => ({
       path: "C:\\Lazurio",
@@ -147,10 +158,45 @@ test("supported complete fixture exits zero with all probes completed", () => {
   expect(installExitCode(report)).toBe(0);
   expect(isValidLazurioInstallReport(report)).toBe(true);
   expect(commands).toEqual([
+    { executable: process.execPath, cwd: "C:\\Windows\\System32" },
     { executable: "C:\\Program Files\\Git\\cmd\\git.exe", cwd: "C:\\Windows\\System32" },
     { executable: "C:\\Program Files\\GitHub CLI\\gh.exe", cwd: "C:\\Windows\\System32" },
     { executable: "C:\\Program Files\\GitHub CLI\\gh.exe", cwd: "C:\\Windows\\System32" },
+    { executable: "C:\\Program Files\\GitHub CLI\\gh.exe", cwd: "C:\\Windows\\System32" },
   ]);
+});
+
+test("GitHub auth is not ready until gh config selects SSH", () => {
+  const report = inspectLazurioInstallation({
+    root: "/fixture/root",
+    platform: "linux",
+    architecture: "x64",
+    bunVersion: "1.4.0",
+    resolveGit: () => "/usr/bin/git",
+    resolveGitHubCli: () => "/trusted/bin/gh",
+    resolvePathCommand: fixturePathCommand,
+    runCommand: ({ executable, args }) => ({
+      status: 0,
+      stdout: executable === process.execPath
+        ? "1.4.0"
+        : args[0] === "config"
+          ? "https"
+          : "",
+    }),
+    inspectRoot: () => ({
+      path: "/fixture/root",
+      layout: "generated_root",
+      status: "completed",
+      reason: "generated_root_ready",
+    }),
+  });
+
+  expect(report.steps.find((step) => step.id === "github_auth")).toEqual({
+    id: "github_auth",
+    status: "action_required",
+    reason: "github_ssh_protocol_required",
+  });
+  expect(report.status).toBe("action_required");
 });
 
 test("Bun probe requires the exact packageManager version and reports both versions", () => {
@@ -291,7 +337,7 @@ test("installed tools outside PATH are action-required and ambient shadows never
     status: "action_required",
     reason: "git_not_on_path",
   });
-  expect(executables).toEqual(["/usr/bin/gh"]);
+  expect(executables).toEqual([]);
   expect(executables).not.toContain("gh");
 });
 
@@ -322,6 +368,34 @@ test("GitHub CLI discovery receives the same explicit home as Root discovery", (
     status: "completed",
     reason: "github_cli_available",
   });
+});
+
+test("an earlier PATH shadow cannot be reported ready or executed", () => {
+  const executables = [];
+  const report = inspectLazurioInstallation({
+    root: null,
+    platform: "linux",
+    architecture: "x64",
+    bunVersion: "1.4.0",
+    bunExecutable: "/trusted/bin/bun",
+    environment: { HOME: "/home/example", PATH: "/tmp/shadow:/trusted/bin:/usr/bin" },
+    homeDirectory: "/home/example",
+    resolveGit: () => "/usr/bin/git",
+    resolveGitHubCli: () => "/trusted/bin/gh",
+    resolvePathCommand: (command) => `/tmp/shadow/${command}`,
+    sameExecutable: (pathExecutable, trustedExecutable) => pathExecutable === trustedExecutable,
+    runCommand: ({ executable }) => {
+      executables.push(executable);
+      return { status: 42 };
+    },
+    inspectRoot: missingRootObservation,
+  });
+
+  expect(report.steps.find((step) => step.id === "bun").reason).toBe("bun_path_identity_mismatch");
+  expect(report.steps.find((step) => step.id === "git").reason).toBe("git_path_identity_mismatch");
+  expect(report.steps.find((step) => step.id === "github_cli").reason)
+    .toBe("github_cli_path_identity_mismatch");
+  expect(executables).toEqual([]);
 });
 
 test("real Root probe distinguishes supported Source, unverified Source, and generated layouts", async () => {
@@ -563,7 +637,11 @@ function fixtureReport() {
     resolveGit: () => "/usr/bin/git",
     resolveGitHubCli: () => null,
     resolvePathCommand: fixturePathCommand,
-    runCommand: () => ({ status: 0, stdout: "CANARY_STDOUT", stderr: "CANARY_STDERR" }),
+    runCommand: ({ executable }) => ({
+      status: 0,
+      stdout: executable === process.execPath ? "1.4.0" : "CANARY_STDOUT",
+      stderr: "CANARY_STDERR",
+    }),
     inspectRoot: (path) => ({
       path,
       layout: "missing",
@@ -597,6 +675,13 @@ function rootStep(root, {
 }
 
 function fixturePathCommand(command, { platform }) {
+  if (command === "bun") return process.execPath;
+  if (command === "git") {
+    return platform === "win32" ? "C:\\Program Files\\Git\\cmd\\git.exe" : "/usr/bin/git";
+  }
+  if (command === "gh") {
+    return platform === "win32" ? "C:\\Program Files\\GitHub CLI\\gh.exe" : "/trusted/bin/gh";
+  }
   return platform === "win32"
     ? `C:\\Tools\\${command}.exe`
     : `/trusted/bin/${command}`;

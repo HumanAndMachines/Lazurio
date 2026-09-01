@@ -5,6 +5,7 @@ import {
   bunVersionFromPackageManager,
   classifyBunRuntime,
   readRequiredBunVersion,
+  executablePathsMatch,
   resolveExecutableOnPath,
 } from "./toolchain-lib.mjs";
 
@@ -52,4 +53,19 @@ test("PATH resolver proves the executable visible to a fresh command process", (
     cwd: dirname(process.execPath),
   })).toBeNull();
   expect(resolveExecutableOnPath("../bun", { environment, platform: process.platform })).toBeNull();
+});
+
+test("executable identity follows canonical files but rejects an earlier PATH shadow", () => {
+  expect(executablePathsMatch("/trusted/bin/git", "/trusted/bin/git", {
+    platform: "linux",
+    canonicalize: (path) => path,
+  })).toBe(true);
+  expect(executablePathsMatch("/tmp/shadow/git", "/usr/bin/git", {
+    platform: "linux",
+    canonicalize: (path) => path,
+  })).toBe(false);
+  expect(executablePathsMatch("C:\\TOOLS\\GH.EXE", "c:\\tools\\gh.exe", {
+    platform: "win32",
+    canonicalize: (path) => path,
+  })).toBe(true);
 });

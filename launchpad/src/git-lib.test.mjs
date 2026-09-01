@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readFile, rm } from "fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import {
@@ -50,6 +50,9 @@ test("runGit returns stdout and protects remote probes from interactive credenti
     GCM_INTERACTIVE: "never",
     GIT_ASKPASS: "/bin/false",
     SSH_ASKPASS: "/bin/false",
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_CONFIG_COUNT: "0",
   });
 });
 
@@ -162,8 +165,10 @@ test("Windows remote Git environment never contains a POSIX askpass executable",
     ssh_askpass: "C:\\malicious\\ssh-askpass.exe",
     HOME: "C:\\Users\\builder",
     PATH: "C:\\Windows\\System32",
+    SystemRoot: "C:\\Windows",
   })).toEqual({
     HOME: "C:\\Users\\builder",
+    SystemRoot: "C:\\Windows",
     PATH: "C:\\Windows\\System32",
     GIT_TERMINAL_PROMPT: "0",
     GCM_INTERACTIVE: "never",
@@ -193,7 +198,7 @@ test("Windows Git resolver falls back to standard Git for Windows locations", as
   expect(resolved).toBe(expected);
 });
 
-test("Git resolver přeskočí nefunkční WindowsApps alias a ověří skutečný Git for Windows", async () => {
+test("Git resolver nikdy nezkouší WindowsApps PATH alias a ověří skutečný Git for Windows", async () => {
   const broken = "C:\\Users\\builder\\AppData\\Local\\Microsoft\\WindowsApps\\git.exe";
   const working = "C:\\Program Files\\Git\\cmd\\git.exe";
   const probes = [];
@@ -218,7 +223,51 @@ test("Git resolver přeskočí nefunkční WindowsApps alias a ověří skutečn
 
   expect(asyncResolved).toBe(working);
   expect(syncResolved).toBe(working);
-  expect(probes).toEqual([broken, working]);
+  expect(probes).toEqual([working]);
+});
+
+test("sterile materialization environment disables ambient Git config", () => {
+  const environment = safeGitRemoteEnv("linux");
+
+  expect(environment.GIT_CONFIG_GLOBAL).toBe("/dev/null");
+  expect(environment.GIT_CONFIG_NOSYSTEM).toBe("1");
+  expect(environment.GIT_CONFIG_COUNT).toBe("0");
+  expect(environment.GIT_TERMINAL_PROMPT).toBe("0");
+});
+
+test("remote Git ignores global insteadOf and external-protocol configuration", async () => {
+  const root = await mkdtemp(join(tmpdir(), "launchpad-git-sterile-config-"));
+  const source = join(root, "source");
+  const remote = join(root, "remote.git");
+  const fakeHome = join(root, "home");
+  try {
+    await initGitRepo(source, { remotePath: remote });
+    await mkdir(fakeHome);
+    await Bun.write(join(root, "home", ".gitconfig"), [
+      `[url "file://${join(root, "must-not-be-used.git")}"]`,
+      `\tinsteadOf = ${remote}`,
+      "[protocol \"ext\"]",
+      "\tallow = always",
+      "",
+    ].join("\n"));
+
+    const result = await runGit(["ls-remote", remote, "refs/heads/main"], {
+      cwd: root,
+      env: {
+        ...safeGitRemoteEnv(),
+        HOME: fakeHome,
+        USERPROFILE: fakeHome,
+        LAZURIO_CREDENTIAL_CANARY: "must-not-reach-git",
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.stdout).toContain("refs/heads/main");
+    expect(result.stderr).not.toContain("must-not-be-used");
+    expect(result.stderr).not.toContain("must-not-reach-git");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("local Git probes use the Windows-proven timeout and bounded concurrency", () => {

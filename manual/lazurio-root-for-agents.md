@@ -74,8 +74,13 @@ proto, že je Git checkout.
 Přítomnost binárky ani `process.execPath` právě běžícího Bunu nedokazují, že je
 Mašina připravená. Install Core proto vedle exact Bun verze ověřuje také příkaz
 `bun` v `PATH`; u Gitu a GitHub CLI rozlišuje nainstalovaný nástroj od
-`git_not_on_path` a `github_cli_not_on_path`. Codex CLI měří troubleshooting
-lane `lazurio doctor --tool-updates`.
+`git_not_on_path` a `github_cli_not_on_path`. Běžný Doctor navíc spouští z
+aktuálního PATH ověřený Bun, `bun x`, Git, `gh`, GitHub auth i nastavený SSH
+protokol, Node a `codex`.
+Troubleshooting lane `lazurio doctor --tool-updates` ověří i čitelnou verzi a
+aktuálnost povinných nástrojů; chybějící nebo nečitelný povinný nástroj je
+required failure, zatímco pouhá dostupnost novější verze zůstává warningem a
+vyžaduje rozhodnutí Principála.
 
 Při instalačním mandátu, který výslovně dovoluje přesné nástroje a změnu
 uživatelského `PATH`, Agent chybějící oficiální instalaci i nejmenší PATH
@@ -98,12 +103,24 @@ opakovaně naslepo. Pro jednu cílovou Organizaci nejdřív přečte její insta
 postup a ověří exact canonical root remote přes `git ls-remote`; teprve tento
 probe dokazuje, že zvolený HTTPS nebo SSH transport umí repo skutečně číst.
 
+Nový účet páruj jednou přes
+`gh auth login --hostname github.com --git-protocol ssh --web`. Tentýž flow
+umí vybrat, vytvořit a nahrát veřejnou část SSH klíče; přístupovou změnu ale
+musí instalační prompt výslovně autorizovat. Po pairing flow se vždy zvlášť
+ověří `gh auth status`, nastavený Git protokol a exact `git ls-remote` cílového
+Organization rootu.
+
 Je-li deklarovaný privátní remote SSH a probe selže při platném `gh` loginu,
 Agent ověří existující SSH klíč a vazbu na tentýž GitHub účet. Vytvoření nebo
 nahrání nového klíče je změna přístupu: vyžaduje explicitní souhlas Principála,
 privátní klíč se nevypisuje a po nápravě se opakuje `git ls-remote`, ne celý
 GitHub login. Podrobný owner/Builder postup drží
 [`manual/organization-install.md`](organization-install.md).
+
+Na Windows se kvůli skills nezapíná Developer Mode. `.agents/skills` je source
+a `.claude/skills` jeho Git-tracked exact mirror; žádný symlink, junction ani
+per-worktree lokální materializátor nevzniká. Paritu dokazuje
+`bun run doctor:agent-skills`.
 
 Když onboarding odhalí reprodukovatelný problém, nenechá jej Agent jen v
 chatu. Vybere přesný owning repo a postupuje podle

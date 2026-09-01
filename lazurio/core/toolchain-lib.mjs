@@ -3,6 +3,7 @@ import {
   constants,
   lstatSync,
   readFileSync,
+  realpathSync,
 } from "node:fs";
 import {
   delimiter,
@@ -83,6 +84,25 @@ export function resolveExecutableOnPath(command, {
     }
   }
   return null;
+}
+
+export function executablePathsMatch(first, second, {
+  platform = process.platform,
+  canonicalize = (path) => realpathSync.native(path),
+} = {}) {
+  if (typeof first !== "string" || first === "" || typeof second !== "string" || second === "") {
+    return false;
+  }
+  const comparable = (path) => {
+    const normalized = resolve(path).replace(/[\\/]+$/u, "");
+    return platform === "win32" ? normalized.toLowerCase() : normalized;
+  };
+  if (comparable(first) === comparable(second)) return true;
+  try {
+    return comparable(canonicalize(first)) === comparable(canonicalize(second));
+  } catch {
+    return false;
+  }
 }
 
 function environmentPathValue(environment, platform) {

@@ -54,8 +54,15 @@ import {
 } from "../core/module-contract-lib.mjs";
 import {
   classifyBunRuntime,
+  executablePathsMatch,
   readRequiredBunVersion,
+  resolveExecutableOnPath,
 } from "../core/toolchain-lib.mjs";
+import {
+  resolveTrustedGitHubCliExecutable,
+  trustedGitCandidates,
+} from "../core/cli-provenance-lib.mjs";
+import { sanitizedGitHubEnvironment } from "../core/github-provider-lib.mjs";
 import {
   DEVELOPER_TOOL_UPDATE_POLICY,
   inspectDeveloperToolUpdates,
@@ -2037,6 +2044,12 @@ function platformChecks(companiesRoot) {
   const platformName = supportedPlatforms[process.platform];
   const bunExecutable = resolveBunExecutable();
   const gitExecutable = resolveGitExecutableSync();
+  const githubCliExecutable = resolveTrustedGitHubCliExecutable();
+  const bunOnPath = resolveExecutableOnPath("bun");
+  const gitOnPath = resolveExecutableOnPath("git");
+  const githubCliOnPath = resolveExecutableOnPath("gh");
+  const nodeOnPath = resolveExecutableOnPath("node");
+  const codexOnPath = resolveExecutableOnPath("codex");
   return [
     {
       id: "platform.os",
@@ -2051,17 +2064,152 @@ function platformChecks(companiesRoot) {
       details: [`platform: ${process.platform}`, `arch: ${process.arch}`],
     },
     bunRuntimeCheck({ companiesRoot, bunExecutable }),
-    commandCheck({
+    pathIdentityCheck({
+      id: "platform.bun_path",
+      title: "Bun v PATH",
+      pathExecutable: bunOnPath,
+      trustedExecutable: bunExecutable,
+      args: ["--version"],
+      cwd: companiesRoot,
+      okMessage: (result) => `Příkaz bun v PATH spouští ověřený runtime: ${result.stdout}`,
+      missingMessage: "Příkaz bun není dostupný v PATH nového procesu.",
+      mismatchMessage: "Příkaz bun v PATH míří na jiný soubor než ověřený Bun runtime.",
+    }),
+    bunPackageRunnerCheck({
+      id: "platform.bun_package_runner",
+      title: "Bun package runner",
+      command: bunOnPath && executablePathsMatch(bunOnPath, bunExecutable) ? bunOnPath : null,
+      cwd: companiesRoot,
+    }),
+    pathIdentityCheck({
       id: "platform.git",
       title: "Git",
-      command: gitExecutable,
+      pathExecutable: gitOnPath,
+      trustedExecutable: gitExecutable,
+      trustedCandidates: trustedGitCandidates(),
       args: ["--version"],
       cwd: companiesRoot,
       okMessage: (result) => result.stdout,
-      failMessage: "Git nebyl nalezen ani neprošel validací executable kandidáta.",
+      missingMessage: "Příkaz git není dostupný v PATH nového procesu.",
+      mismatchMessage: "Příkaz git v PATH není ověřená instalace Gitu.",
       env: safeGitCommandEnv(),
     }),
+    pathIdentityCheck({
+      id: "platform.github_cli",
+      title: "GitHub CLI",
+      pathExecutable: githubCliOnPath,
+      trustedExecutable: githubCliExecutable,
+      args: ["--version"],
+      cwd: companiesRoot,
+      okMessage: (result) => result.stdout.split("\n")[0],
+      missingMessage: "Příkaz gh není dostupný v PATH nového procesu.",
+      mismatchMessage: "Příkaz gh v PATH není ověřená instalace GitHub CLI.",
+    }),
+    githubAuthenticationCheck({
+      companiesRoot,
+      executable: githubCliOnPath && executablePathsMatch(githubCliOnPath, githubCliExecutable)
+        ? githubCliOnPath
+        : null,
+    }),
+    commandCheck({
+      id: "platform.node",
+      title: "Node.js",
+      command: nodeOnPath,
+      args: ["--version"],
+      cwd: companiesRoot,
+      okMessage: (result) => `Node.js je dostupný v PATH: ${result.stdout}`,
+      failMessage: "Příkaz node není dostupný nebo jej nelze spustit z PATH nového procesu.",
+    }),
+    commandCheck({
+      id: "platform.codex",
+      title: "Codex CLI",
+      command: codexOnPath,
+      args: ["--version"],
+      cwd: companiesRoot,
+      okMessage: (result) => `Codex CLI je dostupné v PATH: ${result.stdout}`,
+      failMessage: "Příkaz codex není dostupný nebo jej nelze spustit z PATH nového procesu.",
+    }),
   ];
+}
+
+function pathIdentityCheck({
+  id,
+  title,
+  pathExecutable,
+  trustedExecutable,
+  trustedCandidates = [],
+  args,
+  cwd,
+  okMessage,
+  missingMessage,
+  mismatchMessage,
+  env,
+}) {
+  if (!pathExecutable || !trustedExecutable) {
+    return requiredToolFailure({ id, title, message: missingMessage, pathExecutable, trustedExecutable, args });
+  }
+  const matchesTrusted = executablePathsMatch(pathExecutable, trustedExecutable)
+    || trustedCandidates.some((candidate) => executablePathsMatch(pathExecutable, candidate));
+  if (!matchesTrusted) {
+    return requiredToolFailure({ id, title, message: mismatchMessage, pathExecutable, trustedExecutable, args });
+  }
+  return commandCheck({
+    id,
+    title,
+    command: pathExecutable,
+    args,
+    cwd,
+    okMessage,
+    failMessage: `${title} bylo nalezeno, ale ověřovací příkaz selhal.`,
+    env,
+  });
+}
+
+function requiredToolFailure({ id, title, message, pathExecutable, trustedExecutable, args }) {
+  return {
+    id,
+    status: "fail",
+    severity: "required",
+    title,
+    message,
+    paths: [],
+    links: [],
+    details: [
+      `path_command: ${pathExecutable ?? "<missing>"}`,
+      `trusted_command: ${trustedExecutable ?? "<missing>"}`,
+      `probe: ${args.join(" ")}`,
+    ],
+  };
+}
+
+function githubAuthenticationCheck({ companiesRoot, executable }) {
+  const env = sanitizedGitHubEnvironment(process.env);
+  const authArgs = ["auth", "status", "--hostname", "github.com"];
+  const auth = executable
+    ? runCommand(executable, authArgs, { cwd: companiesRoot, env })
+    : { ok: false };
+  const protocolArgs = ["config", "get", "git_protocol", "--host", "github.com"];
+  const protocol = executable && auth.ok
+    ? runCommand(executable, protocolArgs, { cwd: companiesRoot, env })
+    : { ok: false, stdout: "" };
+  const ready = auth.ok && protocol.ok && protocol.stdout.trim().toLowerCase() === "ssh";
+  return {
+    id: "platform.github_auth",
+    status: ready ? "ok" : "fail",
+    severity: "required",
+    title: "GitHub přihlášení a SSH",
+    message: ready
+      ? "GitHub CLI je přihlášené ke github.com a Git operace používají SSH."
+      : auth.ok
+        ? "GitHub CLI je přihlášené, ale git_protocol pro github.com není ověřeně SSH."
+        : "GitHub CLI nemá ověřené přihlášení ke github.com pod aktuálním účtem.",
+    paths: [],
+    links: [],
+    details: [
+      `command: ${executable ?? "<missing>"} ${authArgs.join(" ")}`,
+      `protocol_command: ${executable ?? "<missing>"} ${protocolArgs.join(" ")}`,
+    ],
+  };
 }
 
 export function bunRuntimeCheck({
@@ -2163,12 +2311,13 @@ function toolUpdateDoctorCheck(observation) {
     };
   }
   if (observation.status === "not_available") {
+    const required = observation.required === true;
     return {
       id,
-      status: "warn",
-      severity: "recommended",
+      status: required ? "fail" : "warn",
+      severity: required ? "required" : "recommended",
       title: `${observation.title} · dostupnost`,
-      message: `${observation.title} není dostupný v PATH. Může chybět nebo být nainstalovaný mimo PATH; Agent musí před instalací nebo změnou PATH nejdřív požádat Principála o souhlas.`,
+      message: `${observation.title} není dostupný v PATH. Může chybět nebo být nainstalovaný mimo PATH; instalace není hotová, dokud jej nový čistý proces nespustí. Agent musí před instalací nebo změnou PATH nejdřív požádat Principála o souhlas.`,
       paths: [],
       links: [],
       details: [...details, "next_action: ask_principal_before_install"],
@@ -2179,16 +2328,19 @@ function toolUpdateDoctorCheck(observation) {
     title: observation.title,
     currentVersion: observation.current_version,
     reason: observation.reason,
+    required: observation.required === true && observation.status === "probe_failed",
   });
 }
 
-function toolCurrencyUnknownCheck({ id, title, currentVersion, reason }) {
+function toolCurrencyUnknownCheck({ id, title, currentVersion, reason, required = false }) {
   return {
     id: `platform.${id}_update`,
-    status: "warn",
-    severity: "recommended",
+    status: required ? "fail" : "warn",
+    severity: required ? "required" : "recommended",
     title: `${title} · aktualizace`,
-    message: `Aktuálnost ${title} se nepodařilo spolehlivě ověřit; Doctor nebude stav hádat ani nic měnit.`,
+    message: required
+      ? `${title} je na PATH, ale jeho nainstalovanou verzi se nepodařilo ověřit; Doctor jej nevydá za připravený nástroj.`
+      : `Aktuálnost ${title} se nepodařilo spolehlivě ověřit; Doctor nebude stav hádat ani nic měnit.`,
     paths: [],
     links: [],
     details: [
@@ -2221,6 +2373,41 @@ function commandCheck({ id, title, command, args, cwd, okMessage, failMessage, e
     details: result.ok
       ? [`command: ${command} ${args.join(" ")}`]
       : [`command: ${command ?? "<missing>"} ${args.join(" ")}`, result.stderr || result.error || "Příkaz selhal."],
+  };
+}
+
+function bunPackageRunnerCheck({ id, title, command, cwd }) {
+  const args = ["x", "--help"];
+  const result = command
+    ? runCommand(command, args, { cwd })
+    : {
+        ok: false,
+        exitCode: null,
+        stdout: "",
+        stderr: "",
+        error: "Executable resolver nevrátil ověřený Bun z PATH.",
+      };
+  // Bun 1.4 prints the valid bunx help contract but intentionally exits 1
+  // because no package was supplied. Treat only that exact help sentinel as
+  // capability proof; an arbitrary exit 1 remains a required failure.
+  const helpOutput = `${result.stdout}\n${result.stderr}`;
+  const ready = result.ok || (result.exitCode === 1 && /Usage:\s+bunx\b/u.test(helpOutput));
+  return {
+    id,
+    status: ready ? "ok" : "fail",
+    severity: "required",
+    title,
+    message: ready
+      ? "Bun umí spouštět package binárky přes `bun x`; samostatný příkaz bunx není potřeba."
+      : "Ověřený Bun neumí použít package runner `bun x`.",
+    paths: [],
+    links: [],
+    details: ready
+      ? [`command: ${command} ${args.join(" ")}`, `exit_code: ${result.exitCode}`]
+      : [
+          `command: ${command ?? "<missing>"} ${args.join(" ")}`,
+          result.stderr || result.error || "Příkaz selhal.",
+        ],
   };
 }
 

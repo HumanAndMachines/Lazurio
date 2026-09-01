@@ -12,6 +12,7 @@ import {
 } from "./cli-provenance-lib.mjs";
 import {
   classifyBunRuntime,
+  executablePathsMatch,
   readRequiredBunVersion,
   resolveExecutableOnPath,
 } from "./toolchain-lib.mjs";
@@ -53,17 +54,27 @@ const reasonsByStep = Object.freeze({
     "bun_runtime_mismatch",
     "bun_runtime_unavailable",
     "bun_runtime_not_on_path",
+    "bun_path_identity_mismatch",
+    "bun_path_unusable",
     "probe_failed",
   ]),
-  git: new Set(["git_available", "git_missing", "git_not_on_path", "git_unusable", "probe_failed"]),
+  git: new Set([
+    "git_available",
+    "git_missing",
+    "git_not_on_path",
+    "git_path_identity_mismatch",
+    "git_unusable",
+    "probe_failed",
+  ]),
   github_cli: new Set([
     "github_cli_available",
     "github_cli_missing",
     "github_cli_not_on_path",
+    "github_cli_path_identity_mismatch",
     "github_cli_unusable",
     "probe_failed",
   ]),
-  github_auth: new Set(["github_authenticated", "github_login_required", "github_cli_unavailable", "probe_failed"]),
+  github_auth: new Set(["github_authenticated", "github_login_required", "github_ssh_protocol_required", "github_cli_unavailable", "probe_failed"]),
   root: new Set([
     "root_creation_required",
     "source_root_ready",
@@ -83,12 +94,14 @@ export function inspectLazurioInstallation({
   platform = process.platform,
   architecture = process.arch,
   bunVersion = process.versions.bun ?? null,
+  bunExecutable = process.execPath,
   requiredBunVersion = readRequiredBunVersion(),
   environment = process.env,
   homeDirectory = homedir(),
   resolveGit = resolveTrustedGitExecutable,
   resolveGitHubCli = resolveTrustedGitHubCliExecutable,
   resolvePathCommand = resolveExecutableOnPath,
+  sameExecutable = executablePathsMatch,
   runCommand = runCommandSync,
   inspectRoot = inspectRootLayout,
 } = {}) {
@@ -107,9 +120,21 @@ export function inspectLazurioInstallation({
   });
   steps.push(boundedProbe("bun", () => {
     if (bunRuntime.status === "current") {
-      return resolvePathCommand("bun", { environment, platform, cwd: commandCwd })
+      const pathExecutable = resolvePathCommand("bun", { environment, platform, cwd: commandCwd });
+      if (!pathExecutable) return actionRequired("bun_runtime_not_on_path");
+      if (!sameExecutable(pathExecutable, bunExecutable, { platform })) {
+        return actionRequired("bun_path_identity_mismatch");
+      }
+      const result = runCommand({
+        executable: pathExecutable,
+        args: ["--version"],
+        environment,
+        cwd: commandCwd,
+      });
+      const observedVersion = result?.stdout?.trim() || bunVersion;
+      return result?.status === 0 && observedVersion === requiredBunVersion
         ? completed("bun_runtime_current")
-        : actionRequired("bun_runtime_not_on_path");
+        : failed("bun_path_unusable");
     }
     if (bunRuntime.status === "mismatch") return actionRequired("bun_runtime_mismatch");
     return failed("bun_runtime_unavailable");
@@ -119,10 +144,14 @@ export function inspectLazurioInstallation({
   steps.push(boundedProbe("git", () => {
     gitExecutable = resolveGit({ platform, environment });
     if (!gitExecutable) return actionRequired("git_missing");
-    if (!resolvePathCommand("git", { environment, platform, cwd: commandCwd })) {
+    const pathExecutable = resolvePathCommand("git", { environment, platform, cwd: commandCwd });
+    if (!pathExecutable) {
       return actionRequired("git_not_on_path");
     }
-    return commandSucceeded(runCommand, gitExecutable, ["--version"], environment, commandCwd)
+    if (!sameExecutable(pathExecutable, gitExecutable, { platform })) {
+      return actionRequired("git_path_identity_mismatch");
+    }
+    return commandSucceeded(runCommand, pathExecutable, ["--version"], environment, commandCwd)
       ? completed("git_available")
       : failed("git_unusable");
   }));
@@ -131,30 +160,49 @@ export function inspectLazurioInstallation({
   steps.push(boundedProbe("github_cli", () => {
     githubCliExecutable = resolveGitHubCli({ platform, environment, homeDirectory });
     if (!githubCliExecutable) return actionRequired("github_cli_missing");
-    if (!resolvePathCommand("gh", { environment, platform, cwd: commandCwd })) {
+    const pathExecutable = resolvePathCommand("gh", { environment, platform, cwd: commandCwd });
+    if (!pathExecutable) {
+      githubCliExecutable = null;
       return actionRequired("github_cli_not_on_path");
     }
+    if (!sameExecutable(pathExecutable, githubCliExecutable, { platform })) {
+      githubCliExecutable = null;
+      return actionRequired("github_cli_path_identity_mismatch");
+    }
     const result = runCommand({
-      executable: githubCliExecutable,
+      executable: pathExecutable,
       args: ["--version"],
       environment,
       cwd: commandCwd,
     });
-    if (result?.status !== 0) return failed("github_cli_unusable");
+    if (result?.status !== 0) {
+      githubCliExecutable = null;
+      return failed("github_cli_unusable");
+    }
+    githubCliExecutable = pathExecutable;
     return completed("github_cli_available");
   }));
 
   steps.push(boundedProbe("github_auth", () => {
     if (!githubCliExecutable) return skipped("github_cli_unavailable");
-    return commandSucceeded(
+    if (!commandSucceeded(
       runCommand,
       githubCliExecutable,
       ["auth", "status", "--hostname", "github.com"],
       environment,
       commandCwd,
-    )
+    )) {
+      return actionRequired("github_login_required");
+    }
+    const protocol = runCommand({
+      executable: githubCliExecutable,
+      args: ["config", "get", "git_protocol", "--host", "github.com"],
+      environment,
+      cwd: commandCwd,
+    });
+    return protocol?.status === 0 && protocol.stdout?.trim().toLowerCase() === "ssh"
       ? completed("github_authenticated")
-      : actionRequired("github_login_required");
+      : actionRequired("github_ssh_protocol_required");
   }));
 
   const effectiveRoot = root ?? canonicalLazurioRoot({

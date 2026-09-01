@@ -308,7 +308,7 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    Když Agent troubleshootuje nástrojové prostředí mašiny, přidá explicitní
    `lazurio doctor --tool-updates`. Git, GitHub CLI a Codex musí být dostupné
    v `PATH`; Claude Code je volitelný a kontroluje se jen tam, kde nainstalovaný
-   je. Warning o chybějícím Codexu, novější verzi nástroje nebo nesouladu Bunu
+   je. Nález chybějícího Codexu, novější verze nástroje nebo nesouladu Bunu
    Agent nejdřív předá Principálovi; updater, package manager ani změnu `PATH`
    nespustí bez jeho souhlasu s přesnou změnou. Při nové instalaci Mašiny smí
    instalační prompt tento souhlas udělit předem pro přesně Git, GitHub CLI,
@@ -319,6 +319,17 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    `PATH`, systémový package manager ani jiné verze nástrojů bez zvláštního
    souhlasu nemění. Organization materializace začíná až po tomto machine gate;
    sama nástroje ani `PATH` nevlastní.
+   Instalační práce nekončí předáním nálezů, které jsou bezpečně a v uděleném
+   mandátu opravitelné. Agent opakuje `lazurio install --json`,
+   `lazurio doctor --tool-updates --json`, exact Organization install a finální
+   `lazurio doctor`, dokud nezmizí všechny required `fail`, `blocked` a
+   `incomplete` stavy. Doporučené warningy buď opraví v mandátu, nebo jim v
+   handoffu dá explicitní disposition; required nález nevydává za hotovou
+   instalaci. Nový GitHub účet páruje jednou přes
+   `gh auth login --hostname github.com --git-protocol ssh --web`, po souhlasu
+   nechá tentýž flow vytvořit nebo nahrát veřejnou část SSH klíče a výsledek
+   dokáže exact `git ls-remote` cílového root repa. Device kód, token ani
+   privátní klíč neloguje.
 3. **Drž worktree disciplínu.** Primární checkout zůstává na `main` a nemění
    se v něm trackovaný obsah. Postup, kanonickou cestu
    `.worktrees/root/<canonical-plan-basename>/` se sidecarem, PR lifecycle
