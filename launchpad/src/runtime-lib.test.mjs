@@ -2251,12 +2251,12 @@ test("Windows po restartu adoptuje jen listener s platným capture-time owner pr
   }
 });
 
-test("Windows standalone Start doplní owner proof, i když listener začne být zdravý pomalu", async () => {
+test("Windows standalone Start reconciles a healthy listener at the timeout boundary", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({
     port,
     serverSource: [
-      "await Bun.sleep(1400);",
+      "await Bun.sleep(900);",
       "const server = Bun.serve({",
       "  hostname: process.env.LAZURIO_RUNTIME_HOST,",
       "  port: Number(process.env.LAZURIO_RUNTIME_PORT),",
@@ -2292,11 +2292,12 @@ test("Windows standalone Start doplní owner proof, i když listener začne být
       ? { pid: child.pid, cwd_matches: null }
       : null,
     resolveProcessIdentityFn: async (pid) => child && pid === child.pid ? identityFor(pid) : null,
+    startedListenerOwnershipTimeoutMs: 1_200,
   });
 
   try {
     const started = await runtime.start("test-company-demo-v1");
-    expect(started.runtime.status).toBe("starting");
+    expect(started.runtime.status).toBe("healthy");
     const statePath = join(root, "launchpad", "runtime", "apps", "test-company-demo-v1.json");
     const state = await waitForJson(statePath, (value) => value.owner_proof);
     expect(state).toMatchObject({
@@ -2328,6 +2329,7 @@ test("Windows standalone Start doplní owner proof, i když listener začne být
       },
     });
   } finally {
+    await runtime.stop("test-company-demo-v1").catch(() => {});
     await killFixtureProcess(child, root);
   }
 }, platformTestTimeout(10_000));

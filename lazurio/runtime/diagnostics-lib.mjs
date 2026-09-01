@@ -1,4 +1,4 @@
-import { existsSync } from "fs";
+import { existsSync, lstatSync } from "fs";
 import { readFile, readdir } from "fs/promises";
 import { basename, dirname, join, posix } from "path";
 import {
@@ -218,6 +218,10 @@ export async function buildLaunchpadAppsResponse({
     organizations,
     apps: visibleApps,
   });
+  for (const app of visibleApps) {
+    const editor = editorCapabilityForApp(app, launchpadRoot);
+    if (editor) app.editor = editor;
+  }
   const gitContext = includeGit
     ? await buildGitContext({ companiesRoot, gitStatusService })
     : { reposByKey: new Map(), inventoryWarnings: [], worktreeWarnings: [], warnings: [] };
@@ -304,6 +308,52 @@ export async function buildLaunchpadAppsResponse({
     git_worktree_warnings: gitContext.worktreeWarnings,
     warnings: [...discoveryWarnings, ...gitContext.warnings],
   };
+}
+
+function editorCapabilityForApp(app, launchpadRoot) {
+  const lease = app.module_contract?.port_leases?.find((candidate) => candidate?.id === "editor");
+  if (!lease) return null;
+
+  const editorRoot = join(launchpadRoot, "components", "editor", "v2");
+  const requiredFiles = [
+    join(editorRoot, "lib", "astro-integration.ts"),
+    join(editorRoot, "lib", "create-server.ts"),
+  ];
+  const publicRoot = join(editorRoot, "public");
+  const ready = requiredFiles.every(realRegularFile) && realDirectory(publicRoot);
+  return {
+    schema_version: "lazurio.editor.capability.v1",
+    status: ready ? "ready" : "read_only",
+    label: ready ? "Editor připraven" : "Pouze pro čtení",
+    message: ready
+      ? "Lokální editor je připravený z kanonické komponenty Launchpadu."
+      : "Obsah lze procházet, ale lokální editor není na tomto Lazurio rootu nainstalovaný (známé omezení).",
+    listener: {
+      host: lease.host ?? null,
+      port: Number.isInteger(lease.port) ? lease.port : null,
+    },
+    component_path: "launchpad/components/editor/v2",
+  };
+}
+
+function realRegularFile(targetPath) {
+  try {
+    const stat = lstatSync(targetPath);
+    return stat.isFile() && !stat.isSymbolicLink();
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+function realDirectory(targetPath) {
+  try {
+    const stat = lstatSync(targetPath);
+    return stat.isDirectory() && !stat.isSymbolicLink();
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw error;
+  }
 }
 
 function projectActiveTeamSpaces(spaces, activeTeamId) {
@@ -2749,15 +2799,19 @@ function runtimeSummaryCheck(apps, expectedInactiveVersions = new Map()) {
 function runtimeAppCheck(app, { activeVersion = null } = {}) {
   const runtime = app.runtime ?? {};
   const dependencies = app.dependencies ?? runtime.dependencies ?? {};
+  const runtimeStatus = runtimeAppStatus(app);
+  const editorReadOnly = app.editor?.status === "read_only";
   return {
     id: `launchpad.runtime.${app.id}`,
-    status: activeVersion ? "ok" : runtimeAppStatus(app),
+    status: activeVersion ? "ok" : runtimeStatus === "ok" && editorReadOnly ? "warn" : runtimeStatus,
     severity: "runtime",
     title: app.title,
     message: activeVersion
       ? `Sdílený port ${app.port} používá zdravá výchozí verze ${activeVersion.title}; ${app.title} je očekávaně neaktivní verze stejného Modulu.`
       : dependencies.state && dependencies.state !== "ready"
       ? dependencies.message
+      : editorReadOnly && runtimeStatus === "ok"
+      ? app.editor.message
       : (runtime.message ?? runtimeLabel(runtime.status)),
     paths: [app.package_path, runtime.log_path].filter(Boolean),
     links: [],
@@ -2769,6 +2823,7 @@ function runtimeAppCheck(app, { activeVersion = null } = {}) {
       `pid: ${runtime.pid ?? "-"}`,
       `port: ${app.port ?? "-"}`,
       `health: ${app.health_url ?? "-"}`,
+      ...(app.editor ? [`editor: ${app.editor.status === "ready" ? "ready" : "read-only (known limitation)"}`] : []),
       ...(activeVersion ? [`active_version: ${activeVersion.id}`] : []),
     ],
   };

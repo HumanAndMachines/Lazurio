@@ -264,20 +264,19 @@ async function requestJson(fetchFn, url, options) {
 function canonicalModuleApps(value) {
   if (!Array.isArray(value)) return [];
   return value
-    .filter((app) =>
+    .map((app) => ({ app, appPackage: lifecycleAppPackage(app) }))
+    .filter(({ app, appPackage }) =>
       typeof app?.id === "string"
       && typeof app?.company === "string"
       && typeof app?.module === "string"
-      && app?.module_app?.declared === true
-      && app?.module_app?.state === "explicit"
-      && typeof app?.module_app?.package === "string")
-    .map((app) => ({
+      && appPackage !== null)
+    .map(({ app, appPackage }) => ({
       app_id: app.id,
       title: typeof app.title === "string" ? app.title : app.id,
       organization: app.company,
       module: app.module,
-      app_package: app.module_app.package,
-      default: app.module_app.default === true,
+      app_package: appPackage,
+      default: app.module_app?.default === true || isLegacyOpenTarget(app),
       host: typeof app.host === "string" ? app.host : null,
       port: Number.isInteger(app.port) ? app.port : null,
       url: typeof app.url === "string" ? app.url : null,
@@ -296,6 +295,41 @@ function canonicalModuleApps(value) {
       left.organization.localeCompare(right.organization)
       || left.module.localeCompare(right.module)
       || left.app_package.localeCompare(right.app_package));
+}
+
+function lifecycleAppPackage(app) {
+  if (
+    app?.module_app?.declared === true
+    && app?.module_app?.state === "explicit"
+    && typeof app?.module_app?.package === "string"
+  ) {
+    return app.module_app.package;
+  }
+  if (!isLegacyOpenTarget(app)) return null;
+  const packagePath = portablePath(app.package_path);
+  const modulePath = portablePath(app.module_catalog_path);
+  if (!packagePath || !modulePath) return null;
+  const marker = `/${modulePath}/`;
+  const markerIndex = `/${packagePath}`.lastIndexOf(marker);
+  if (markerIndex < 0) return null;
+  const relativePackage = `/${packagePath}`.slice(markerIndex + marker.length);
+  try {
+    return normalizeAppPackage(relativePackage);
+  } catch {
+    return null;
+  }
+}
+
+function isLegacyOpenTarget(app) {
+  return app?.runtime_contract?.legacy === true
+    && app?.module_open_target === true
+    && app?.module_apps?.open_target_app_id === app?.id
+    && app?.module_apps?.open_target_source === "legacy-fallback";
+}
+
+function portablePath(value) {
+  if (typeof value !== "string" || value.trim() === "") return null;
+  return value.trim().replaceAll("\\", "/").replace(/^\.\//u, "").replace(/\/+$/u, "");
 }
 
 function projectDependencies(value) {
