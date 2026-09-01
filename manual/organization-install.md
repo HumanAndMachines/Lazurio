@@ -118,15 +118,43 @@ git ls-remote --exit-code --heads -- \
   git@github.com:<login>/<login>_GEN3.git refs/heads/main
 ```
 
-Pokud první příkaz selže, přihlas správný účet jednou přes oficiální
-interaktivní `gh auth login --hostname github.com --git-protocol ssh --web`.
-Pokud první příkaz uspěje a druhý ne, další `gh auth login` neopakuj: oprav
-jednorázově SSH transport tohoto účtu standardním GitHub postupem. Nejdřív
-ověř existující klíč a jeho vazbu na správný GitHub účet. Vytvoření nového SSH
-klíče a jeho nahrání přes `gh ssh-key add` je změna přístupu a Agent ji smí
-udělat jen s výslovným souhlasem Principála pro tuto mašinu a účet; privátní
-klíč nikdy nevypisuje ani nevkládá do repozitáře. Potom zopakuje přesný
-`git ls-remote`, ne celý login.
+Pokud první příkaz selže, přihlas správný účet **jednou** přes oficiální
+interaktivní:
+
+```sh
+gh auth login --hostname github.com --git-protocol ssh --web
+```
+
+Volba `--git-protocol ssh` je součást téhož GitHub device/web párování. GitHub
+CLI při loginu vyhledá existující SSH klíče a nabídne nahrání jejich veřejné
+části; pokud žádný nenajde, nabídne vytvoření a nahrání nového. Agent tento
+prompt smí potvrdit jen s níže uvedeným výslovným mandátem. Nespouští paralelně
+druhý login, nevypisuje device kód do issue ani logu a po otevření autorizační
+stránky jasně řekne Principálovi jediný čekající lidský krok. Po dokončení
+stejné relace ověří:
+
+```sh
+gh auth status --hostname github.com
+gh config get git_protocol --host github.com
+git ls-remote --exit-code --heads -- \
+  git@github.com:<login>/<login>_GEN3.git refs/heads/main
+```
+
+Tím jeden pairing založí API session i SSH Git cestu; `gh auth status` sám
+stále není důkaz transportu. Pokud API login uspěje a exact `git ls-remote`
+ne, další `gh auth login` neopakuj: oprav jednorázově SSH transport tohoto účtu
+standardním GitHub postupem. Nejdřív ověř existující klíč a jeho vazbu na
+správný GitHub účet. Samostatné `gh ssh-key add` použij jen jako repair již
+přihlášeného účtu, ne jako druhý výchozí onboarding tok. Vytvoření nového SSH
+klíče a jeho nahrání je změna přístupu a Agent ji smí udělat jen s výslovným
+souhlasem Principála pro tuto mašinu a účet; privátní klíč nikdy nevypisuje ani
+nevkládá do repozitáře. Potom zopakuje přesný `git ls-remote`, ne celý login.
+
+Referenční chování drží oficiální dokumentace
+[`gh auth login`](https://cli.github.com/manual/gh_auth_login). Samostatný
+`ssh -T git@github.com` je jen doplňkový diagnostický probe a na úspěšné GitHub
+autentizaci končí záměrně exit kódem 1; instalační gate proto rozhoduje podle
+exact `git ls-remote`, ne podle samotného exit kódu `ssh -T`.
 
 Stejný read-only preflight provádí `lazurio organization install` před klonem.
 Reason `materialization_source_unavailable` proto znamená „ověř repo access a
@@ -155,6 +183,38 @@ lazurio organization install <github-login> --json
 lazurio organization install <github-login> --json
 lazurio doctor
 ```
+
+Instalační Agent nekončí prvním výpisem. Vždy opakuje nápravu a read-only
+ověření, dokud současně neplatí:
+
+1. `lazurio install --json` má `status: "completed"`;
+2. `lazurio doctor --tool-updates --json` nemá žádný required `fail`,
+   `blocked` ani `incomplete`; chybějící nebo nečitelná verze povinného Gitu,
+   GitHub CLI či Codexu není warning, ale nedokončená instalace;
+3. `lazurio organization install <github-login> --json` je `current` nebo
+   bezpečně `updated` a exact SSH root probe prošel;
+4. finální `lazurio doctor` je zelený včetně všech deklarovaných podřízených
+   doctorů.
+
+Každý doporučený warning má v handoffu explicitní disposition: opraveno,
+vědomě přijato Principálem, nebo blokováno chybějící pravomocí. Required nález
+se pouze „vezme na vědomí“ nikdy. Po změně perzistentního PATH Agent spustí
+nový čistý proces; na Windows nestačí otevřený Explorer, Start menu nebo
+terminál se starým environment snapshotem.
+
+## Windows bez Developer Mode
+
+Lazurio ani OrganizationTemplate nesmějí pro `.claude/skills` vytvářet
+symlink nebo junction. Kanonický source je `.agents/skills`; `.claude/skills`
+je Git-tracked, byte-for-byte odvozený mirror ověřovaný
+`bun run doctor:agent-skills` a regenerovaný pouze
+`bun run repair:agent-skills`. Fresh checkout i každý worktree jej proto už
+obsahuje a Windows **nemusí být přepnutý do Developer Mode**.
+
+Neřeš to gitignored lokální kopií: ta by po každém checkoutu a worktree
+vyžadovala další materializační krok a dovolila by lokální drift. Repair lane
+nepřepisuje neznámý obsah ani symlink/junction odhadem; takový konflikt vrátí
+Agentovi k bezpečné opravě v owning repu.
 
 CLI Root nevybírá ani neukládá jako další konfiguraci. Produkční instalace
 vždy používá `~/Lazurio` na macOS/Linuxu a `%USERPROFILE%\\Lazurio` na

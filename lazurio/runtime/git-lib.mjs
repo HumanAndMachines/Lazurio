@@ -4,6 +4,7 @@ import { basename, dirname, win32 } from "path";
 import { fileURLToPath } from "url";
 
 import { isSamePath } from "../core/path-boundary-lib.mjs";
+import { trustedGitCandidates } from "../core/cli-provenance-lib.mjs";
 
 export const GIT_LOCAL_TIMEOUT_MS = 10_000;
 export const GIT_FETCH_TIMEOUT_MS = 20_000;
@@ -28,11 +29,10 @@ export async function resolveGitExecutable(options = {}) {
 async function resolveGitExecutableUncached({
   platform = process.platform,
   env = processEnv(),
-  which = defaultWhich,
   pathExists = existsSync,
   probe = probeGitExecutable,
 } = {}) {
-  for (const candidate of orderedGitExecutableCandidates({ platform, env, which, pathExists })) {
+  for (const candidate of orderedGitExecutableCandidates({ platform, env, pathExists })) {
     if (await probe(candidate)) return candidate;
   }
   return null;
@@ -53,11 +53,10 @@ export function resolveGitExecutableSync(options = {}) {
 function resolveGitExecutableSyncUncached({
   platform = process.platform,
   env = processEnv(),
-  which = defaultWhich,
   pathExists = existsSync,
   probe = probeGitExecutableSync,
 } = {}) {
-  for (const candidate of orderedGitExecutableCandidates({ platform, env, which, pathExists })) {
+  for (const candidate of orderedGitExecutableCandidates({ platform, env, pathExists })) {
     if (probe(candidate)) return candidate;
   }
   return null;
@@ -123,6 +122,9 @@ export function safeGitRemoteEnv(platform = process.platform) {
     GIT_TERMINAL_PROMPT: "0",
     GCM_INTERACTIVE: "never",
     SSH_ASKPASS_REQUIRE: "never",
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_CONFIG_GLOBAL: platform === "win32" ? "NUL" : "/dev/null",
+    GIT_CONFIG_COUNT: "0",
     // Launchpad spouští Git nad explicitním cwd. Kontext zděděný například
     // z hooku nesmí přesměrovat child proces do jiného repozitáře.
     GIT_ALTERNATE_OBJECT_DIRECTORIES: undefined,
@@ -150,16 +152,22 @@ export function safeGitRemoteEnv(platform = process.platform) {
 }
 
 export function safeGitCommandEnv(platform = process.platform, base = processEnv()) {
-  return commandEnvironment(base, safeGitRemoteEnv(platform));
+  const {
+    GIT_CONFIG_NOSYSTEM: _systemConfig,
+    GIT_CONFIG_GLOBAL: _globalConfig,
+    GIT_CONFIG_COUNT: _configCount,
+    ...nonInteractive
+  } = safeGitRemoteEnv(platform);
+  // General Git operations retain the user's normal credentials, SSH agent
+  // and enterprise proxy, while checkout-context injection variables are
+  // stripped. Materialization passes safeGitRemoteEnv() explicitly and is the
+  // narrower sterile lane that also disables all ambient Git config.
+  return commandEnvironment(base, nonInteractive);
 }
 
 export function gitExecutableCandidates({ platform = process.platform, env = processEnv() } = {}) {
-  if (platform !== "win32") return [];
-  const roots = [
-    env.ProgramW6432,
-    env.ProgramFiles,
-    env["ProgramFiles(x86)"],
-  ].filter(Boolean);
+  if (platform !== "win32") return trustedGitCandidates(platform);
+  const roots = [env.ProgramW6432, env.ProgramFiles, env["ProgramFiles(x86)"]].filter(Boolean);
   const candidates = [];
   for (const root of roots) {
     candidates.push(
@@ -168,7 +176,10 @@ export function gitExecutableCandidates({ platform = process.platform, env = pro
     );
   }
   if (env.LOCALAPPDATA) {
-    candidates.push(win32.join(env.LOCALAPPDATA, "Programs", "Git", "cmd", "git.exe"));
+    candidates.push(
+      win32.join(env.LOCALAPPDATA, "Programs", "Git", "cmd", "git.exe"),
+      win32.join(env.LOCALAPPDATA, "Programs", "Git", "bin", "git.exe"),
+    );
   }
   return [...new Set(candidates)];
 }
@@ -205,7 +216,12 @@ async function runCommand(command, { cwd, timeoutMs, env = {}, input } = {}) {
       stdin: input === undefined ? "ignore" : "pipe",
       stdout: "pipe",
       stderr: "pipe",
-      env: commandEnvironment(processEnv(), env),
+      env: commandEnvironment(
+        isSterileGitEnvironment(env)
+          ? minimalRemoteGitEnvironment(processEnv(), globalThis.process.platform)
+          : processEnv(),
+        env,
+      ),
       detached: globalThis.process.platform !== "win32",
       windowsHide: true,
     });
@@ -320,7 +336,11 @@ function commandEnvironment(base, overrides) {
       const safePosixAskpass =
         ["GIT_ASKPASS", "SSH_ASKPASS"].includes(normalizedKey) &&
         value === "/bin/false";
-      if (safePosixAskpass) merged[normalizedKey] = value;
+      const safeSterileGitConfig =
+        (normalizedKey === "GIT_CONFIG_NOSYSTEM" && value === "1")
+        || (normalizedKey === "GIT_CONFIG_GLOBAL" && ["/dev/null", "NUL"].includes(value))
+        || (normalizedKey === "GIT_CONFIG_COUNT" && value === "0");
+      if (safePosixAskpass || safeSterileGitConfig) merged[normalizedKey] = value;
       continue;
     }
     if (value !== undefined && value !== null) merged[key] = value;
@@ -364,24 +384,66 @@ function unsafeAmbientGitEnvironmentKey(key) {
   );
 }
 
-function defaultWhich(command) {
-  try {
-    return typeof Bun.which === "function" ? Bun.which(command) : null;
-  } catch {
-    return null;
-  }
-}
-
-function orderedGitExecutableCandidates({ platform, env, which, pathExists }) {
-  const pathCommand = platform === "win32" ? "git.exe" : "git";
-  const fromPath = which(pathCommand) ?? which("git");
+function orderedGitExecutableCandidates({ platform, env, pathExists }) {
   const installedCandidates = gitExecutableCandidates({ platform, env })
     .filter((candidate) => pathExists(candidate));
-  return [...new Set([
-    fromPath,
-    ...installedCandidates,
-    pathCommand,
-  ].filter(Boolean))];
+  return [...new Set(installedCandidates)];
+}
+
+function isSterileGitEnvironment(environment) {
+  return environment?.GIT_CONFIG_NOSYSTEM === "1"
+    && environment?.GIT_CONFIG_COUNT === "0"
+    && ["/dev/null", "NUL"].includes(environment?.GIT_CONFIG_GLOBAL);
+}
+
+function minimalRemoteGitEnvironment(base, platform) {
+  const allowed = new Set([
+    "APPDATA",
+    "COMSPEC",
+    "HOMEDRIVE",
+    "HOMEPATH",
+    "HOME",
+    "LANG",
+    "LC_ALL",
+    "LOCALAPPDATA",
+    "PATHEXT",
+    "PROGRAMDATA",
+    "PROGRAMFILES",
+    "PROGRAMFILES(X86)",
+    "PROGRAMW6432",
+    "SSH_AUTH_SOCK",
+    "SYSTEMDRIVE",
+    "SYSTEMROOT",
+    "TEMP",
+    "TMP",
+    "TMPDIR",
+    "USER",
+    "USERNAME",
+    "USERPROFILE",
+    "WINDIR",
+  ]);
+  const clean = {};
+  for (const [key, value] of Object.entries(base)) {
+    if (allowed.has(key.toUpperCase()) && typeof value === "string") clean[key] = value;
+  }
+  clean.PATH = platform === "win32"
+    ? trustedWindowsChildPath(base)
+    : "/usr/bin:/bin:/usr/sbin:/sbin";
+  return clean;
+}
+
+function trustedWindowsChildPath(environment) {
+  const candidates = [];
+  if (environment.SystemRoot) {
+    candidates.push(
+      win32.join(environment.SystemRoot, "System32"),
+      win32.join(environment.SystemRoot, "System32", "OpenSSH"),
+    );
+  }
+  for (const git of gitExecutableCandidates({ platform: "win32", env: environment })) {
+    candidates.push(dirname(git), win32.join(dirname(dirname(git)), "usr", "bin"));
+  }
+  return [...new Set(candidates)].join(";");
 }
 
 async function probeGitExecutable(executable) {
