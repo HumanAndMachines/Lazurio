@@ -258,7 +258,6 @@ Minimální tvar, který má klientské repo směřovat mít:
 ├── modules.manifest.json
 ├── TODO.tasks.json
 ├── DONE.tasks.json
-├── ISSUES.open.json
 ├── manual/
 │   └── README.md
 ├── company/
@@ -561,9 +560,10 @@ Mission Control data repo zakládej jako samostatný Git checkout na větvi `v3`
 Při použití skeletonu z `mission-control/templates/organization-data` ponech
 `repository-db.yaml#schema.name` jako `mission-control-data`, nastav klientský
 `plan_prefix`, odstraň template DEV/RM fixture soubory s cizím prefixem a
-přenes počáteční klientské `TODO.tasks.json`, `DONE.tasks.json` a
-`ISSUES.open.json` do `data/mission-control/`. Root ledgery pak deklaruj jen
-jako mirrors. Validaci dat pusť až po prvním commitu, protože audit kontrola
+přenes počáteční klientské `TODO.tasks.json` a `DONE.tasks.json` do
+`data/mission-control/`; root task ledgery pak deklaruj jen jako mirrors.
+Technické problémy drž v GitHub Issues přesného owning repa a nevytvářej pro
+ně JSON mirror. Validaci dat pusť až po prvním commitu, protože audit kontrola
 počítá s existující Git historií.
 
 Pokud Doctor hlásí warning, nejdřív ho zařaď podle boundary:

@@ -105,7 +105,10 @@ runtime/cache cesty, ne custody source of truth.
 - Citlivá data, zákaznická data a osobní overlaye nesmí přetéct mezi organizacemi.
 - Pokud se mění registry nebo mountpointy, změna musí být propsaná do docs, test fixtures a Launchpad discovery.
 - V `organizations/` root repo nikdy netrackuje konkrétní Organization checkouty ani submodule pointery; na GitHubu tam patří jen `organizations/README.md`.
-- Pokud je otevřená otázka bez rozhodnutého řešení, patří do `ISSUES.open.json`, ne do ad-hoc Markdown poznámky.
+- Otevřený technický problém nebo nejistota patří do GitHub Issues přesného
+  owning repa podle [github-issues.md](github-issues.md), ne do ad-hoc
+  Markdown poznámky ani nového JSON ledgeru. Plán a odpovědnost dál vlastní
+  Mission Control; vytvoření issue nebo komentáře je Publikace.
 - Shared Launchpad nesmí držet hardcodované porty jedné Organizace. Přesný
   port vlastní verzovaný module-root `lazurio.module.json`; `package.json`
   pouze odkazuje na lease jejím ID. Přímý start čte lease z manifestu.

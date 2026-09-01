@@ -84,6 +84,12 @@ privátní klíč se nevypisuje a po nápravě se opakuje `git ls-remote`, ne ce
 GitHub login. Podrobný owner/Builder postup drží
 [`manual/organization-install.md`](organization-install.md).
 
+Když onboarding odhalí reprodukovatelný problém, nenechá jej Agent jen v
+chatu. Vybere přesný owning repo a postupuje podle
+[`manual/github-issues.md`](github-issues.md). Vytvoření issue nebo komentáře
+je Publikace a vyžaduje explicitní mandát v instalačním promptu; bez něj Agent
+vrátí sanitizovaný draft, cílový repo a důvod, proč jej nezveřejnil.
+
 ## Budoucí Managed Root
 
 Managed Root se nestane podporovanou volbou jen změnou dokumentace. CLI jej

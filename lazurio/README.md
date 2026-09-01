@@ -157,6 +157,11 @@ celkový výsledek zůstane `blocked` s přesným GitHub access reasonem. Dirty,
 foreign, diverged nebo symlink target se nepřebírá. Úplný bezpečný postup drží
 [Organization install manuál](../manual/organization-install.md).
 
+Reprodukovatelné instalační problémy patří po kontrole duplicit a sanitizaci
+do GitHub Issues přesného owning repa, nikoli do nového lokálního JSON ledgeru.
+Vytvoření issue nebo komentáře je Publikace; úplný routing, prompt mandát a
+fallback draft drží [GitHub Issues manuál](../manual/github-issues.md).
+
 ## Module setup
 
 Agenti nových i privátních Organizací používají jediný konvergentní vstup:

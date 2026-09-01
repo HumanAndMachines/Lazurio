@@ -175,3 +175,10 @@ ID z JSON reportu, výsledný target, celkový stav a všechny blocked repo reas
 Uveď také stav installer-managed `mission-control/db` mountu; `current` zde
 dokazuje identitu a čistotu, nikoli online aktuálnost jeho datové branche.
 Secrets, provider stderr ani obsah jiné Organization do reportu nekopíruj.
+
+Reprodukovaný obecný problém Lazurio instalátoru reportuj podle
+[`manual/github-issues.md`](github-issues.md) do
+`HumanAndMachines/Lazurio`; Organization-specific problém patří do privátního
+owning repa. Instalační Agent smí issue vytvořit nebo doplnit jen tehdy, když
+prompt obsahuje explicitní publikační mandát pro tento repo. Jinak vrátí
+sanitizovaný issue draft a exact cílový repo v handoffu.
