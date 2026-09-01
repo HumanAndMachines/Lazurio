@@ -108,8 +108,10 @@ Preferuj ručně vytvořená syntetická data.
 ## Katalog a per-machine aktivace
 
 Organization PR schvaluje teprve konkrétní implementaci, pin, tool schema,
-env jména, ownera, API variantu a smoke cíl. Do té doby drž `INTEGRATIONS.md`
-jen v sekci neaktivních návrhů a strojové MCP configy neměň.
+env jména, ownera, API variantu a smoke cíl. Do té doby drž discovery plán a
+admin blocker v Mission Controlu nebo issue dané Organizace; `INTEGRATIONS.md`
+i strojové MCP configy neměň, protože katalog obsahuje jen schválené aktivní
+integrace.
 
 Env naming pro aktivní katalog vychází z obecného standardu, například:
 
