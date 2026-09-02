@@ -2049,7 +2049,6 @@ function platformChecks(companiesRoot) {
   const gitOnPath = resolveExecutableOnPath("git");
   const githubCliOnPath = resolveExecutableOnPath("gh");
   const nodeOnPath = resolveExecutableOnPath("node");
-  const codexOnPath = resolveExecutableOnPath("codex");
   return [
     {
       id: "platform.os",
@@ -2120,16 +2119,86 @@ function platformChecks(companiesRoot) {
       okMessage: (result) => `Node.js je dostupný v PATH: ${result.stdout}`,
       failMessage: "Příkaz node není dostupný nebo jej nelze spustit z PATH nového procesu.",
     }),
-    commandCheck({
+    codexRuntimeCheck({ companiesRoot }),
+  ];
+}
+
+export function codexRuntimeCheck({
+  companiesRoot,
+  platform = process.platform,
+  architecture = process.arch,
+  environment = process.env,
+  resolvePathCommand = resolveExecutableOnPath,
+  run = runCommand,
+} = {}) {
+  const command = resolvePathCommand("codex", {
+    environment,
+    platform,
+    cwd: companiesRoot,
+  });
+  if (command) {
+    return commandCheck({
       id: "platform.codex",
       title: "Codex CLI",
-      command: codexOnPath,
+      command,
       args: ["--version"],
       cwd: companiesRoot,
       okMessage: (result) => `Codex CLI je dostupné v PATH: ${result.stdout}`,
-      failMessage: "Příkaz codex není dostupný nebo jej nelze spustit z PATH nového procesu.",
-    }),
-  ];
+      failMessage:
+        "Příkaz codex je v PATH, ale nejde spustit jako nativní Codex CLI. "
+        + "Nepoužívej neověřený wrapper; s výslovným souhlasem nainstaluj oficiální OpenAI standalone balíček a kontrolu zopakuj z nového procesu.",
+      run,
+    });
+  }
+
+  const targetCommand = platform === "win32"
+    ? architecture === "arm64"
+      ? "codex-aarch64-pc-windows-msvc"
+      : architecture === "x64"
+        ? "codex-x86_64-pc-windows-msvc"
+        : null
+    : null;
+  const targetExecutable = targetCommand
+    ? resolvePathCommand(targetCommand, {
+        environment,
+        platform,
+        cwd: companiesRoot,
+      })
+    : null;
+  if (targetExecutable) {
+    return {
+      id: "platform.codex",
+      status: "fail",
+      severity: "required",
+      title: "Codex CLI",
+      message:
+        `Windows našel pouze target-specific kandidát ${targetCommand}, ale příkaz codex chybí. `
+        + "Tento stav není připravený; s výslovným souhlasem použij oficiální OpenAI standalone Windows instalátor a kontrolu zopakuj z nového procesu.",
+      paths: [],
+      links: [{
+        label: "Oficiální OpenAI Windows instalátor",
+        kind: "external",
+        url: "https://github.com/openai/codex/blob/main/scripts/install/install.ps1",
+      }],
+      details: [
+        "path_command: <missing>",
+        `target_specific_candidate: ${targetExecutable}`,
+        "candidate_probe: not_run_untrusted_candidate",
+        "next_action: ask_principal_before_official_codex_standalone_install",
+      ],
+    };
+  }
+
+  return commandCheck({
+    id: "platform.codex",
+    title: "Codex CLI",
+    command: null,
+    args: ["--version"],
+    cwd: companiesRoot,
+    okMessage: (result) => `Codex CLI je dostupné v PATH: ${result.stdout}`,
+    failMessage: "Příkaz codex není dostupný nebo jej nelze spustit z PATH nového procesu.",
+    run,
+  });
 }
 
 function pathIdentityCheck({
@@ -2352,9 +2421,9 @@ function toolCurrencyUnknownCheck({ id, title, currentVersion, reason, required 
   };
 }
 
-function commandCheck({ id, title, command, args, cwd, okMessage, failMessage, env }) {
+function commandCheck({ id, title, command, args, cwd, okMessage, failMessage, env, run = runCommand }) {
   const result = command
-    ? runCommand(command, args, { cwd, env })
+    ? run(command, args, { cwd, env })
     : {
         ok: false,
         exitCode: null,

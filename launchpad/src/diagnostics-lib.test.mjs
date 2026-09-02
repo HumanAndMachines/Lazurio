@@ -2,7 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { tmpdir } from "os";
 import { join } from "path";
 import { mkdir, mkdtemp, rename, rm, symlink, writeFile } from "fs/promises";
-import { appPlacementResolverForOrganization, buildDoctorReportFromAppsResponse, buildEnvironmentChecks, buildLaunchpadAppsResponse, buildLaunchpadDoctorReport, bunRuntimeCheck, developerToolUpdateChecks, lazurioUpdateCheck, runtimeAppStatus } from "../../lazurio/runtime/diagnostics-lib.mjs";
+import { appPlacementResolverForOrganization, buildDoctorReportFromAppsResponse, buildEnvironmentChecks, buildLaunchpadAppsResponse, buildLaunchpadDoctorReport, bunRuntimeCheck, codexRuntimeCheck, developerToolUpdateChecks, lazurioUpdateCheck, runtimeAppStatus } from "../../lazurio/runtime/diagnostics-lib.mjs";
 import { createLaunchpadGitFixture, initGitRepo, runGit } from "./git-fixture-helpers.test.mjs";
 import { buildGitInventory } from "../../lazurio/runtime/git-inventory-lib.mjs";
 
@@ -30,6 +30,51 @@ test("Bun Doctor check enforces the exact authority and gives an Agent handoff",
   expect(mismatch).toMatchObject({ id: "platform.bun", status: "fail" });
   expect(mismatch.message).toContain("Principála");
   expect(mismatch.details).toEqual(expect.arrayContaining(["current: 1.4.1", "required: 1.4.0"]));
+});
+
+test("Codex Doctor names the broken WinGet alias without accepting its target binary as ready", () => {
+  const check = codexRuntimeCheck({
+    companiesRoot: "C:\\Users\\Builder\\Lazurio",
+    platform: "win32",
+    architecture: "x64",
+    environment: {
+      Path: "C:\\Users\\Builder\\AppData\\Local\\Microsoft\\WinGet\\Packages\\OpenAI.Codex__DefaultSource",
+      PATHEXT: ".EXE;.CMD",
+    },
+    resolvePathCommand: (command) => (
+      command === "codex-x86_64-pc-windows-msvc"
+        ? "C:\\Users\\Builder\\AppData\\Local\\Microsoft\\WinGet\\Packages\\OpenAI.Codex__DefaultSource\\codex-x86_64-pc-windows-msvc.exe"
+        : null
+    ),
+    run: () => {
+      throw new Error("target-specific candidate must not be executed");
+    },
+  });
+
+  expect(check).toMatchObject({
+    id: "platform.codex",
+    status: "fail",
+    severity: "required",
+  });
+  expect(check.message).toContain("target-specific");
+  expect(check.message).toContain("příkaz codex chybí");
+  expect(check.details).toContain("candidate_probe: not_run_untrusted_candidate");
+  expect(check.details).toContain("next_action: ask_principal_before_official_codex_standalone_install");
+  expect(check.links[0]?.url).toContain("openai/codex/blob/main/scripts/install/install.ps1");
+});
+
+test("Codex Doctor accepts only a working codex command as ready", () => {
+  const check = codexRuntimeCheck({
+    companiesRoot: "/fixture",
+    platform: "linux",
+    architecture: "x64",
+    environment: { PATH: "/trusted" },
+    resolvePathCommand: (command) => command === "codex" ? "/trusted/codex" : null,
+    run: () => ({ ok: true, exitCode: 0, stdout: "codex-cli 0.147.0", stderr: "" }),
+  });
+
+  expect(check).toMatchObject({ id: "platform.codex", status: "ok", severity: "required" });
+  expect(check.message).toContain("codex-cli 0.147.0");
 });
 
 test("tool update Doctor checks warn the Agent without running an updater", async () => {

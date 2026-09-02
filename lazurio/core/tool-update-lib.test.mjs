@@ -95,6 +95,26 @@ test("Codex is required in PATH while Claude remains optional", () => {
   expect(claude?.required).toBe(false);
 });
 
+test("official native Codex version output is readable by the update lane", async () => {
+  const codex = DEVELOPER_TOOL_DEFINITIONS.find((definition) => definition.id === "codex");
+  const [observation] = await inspectDeveloperToolUpdates({
+    definitions: [codex],
+    resolveExecutable: () => "C:\\Users\\Builder\\AppData\\Local\\Programs\\OpenAI\\Codex\\bin\\codex.exe",
+    runCommand: () => ({ status: 0, stdout: "codex-cli 0.147.0\r\n" }),
+    fetchRelease: async () => ({
+      version: "0.147.0",
+      url: "https://github.com/openai/codex/releases/tag/rust-v0.147.0",
+    }),
+  });
+
+  expect(observation).toMatchObject({
+    id: "codex",
+    status: "current",
+    current_version: "0.147.0",
+    latest_version: "0.147.0",
+  });
+});
+
 test("stable version comparison and Git tags ignore release candidates", () => {
   expect(compareStableVersions("2.55.0", "2.54.3")).toBeGreaterThan(0);
   expect(compareStableVersions("0.150.0", "0.150.0")).toBe(0);
