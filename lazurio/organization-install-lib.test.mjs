@@ -631,7 +631,7 @@ function translatedGitRunner(localRemote, remoteMap = new Map([[fakeHttpsRemote,
     const declaredRemote = args.find((arg) => remoteMap.has(arg)) ?? null;
     const translated = args.map((arg) => remoteMap.get(arg) ?? arg);
     const result = await runGit(translated, options);
-    if (args[0] === "clone" && result.ok && declaredRemote) {
+    if (args.includes("clone") && result.ok && declaredRemote) {
       const staging = args.at(-1);
       const setRemote = await runGit(["remote", "set-url", "origin", declaredRemote], { cwd: staging });
       if (!setRemote.ok) return setRemote;
@@ -645,7 +645,7 @@ function translatedPinnedGitRunner(localRemote, remoteMap = new Map([[fakeHttpsR
     const declaredRemote = args.find((arg) => remoteMap.has(arg)) ?? null;
     const translated = args.map((arg) => remoteMap.get(arg) ?? arg);
     const result = await runGitInPinnedTemporaryChild(translated, options);
-    if (args[0] === "clone" && result.ok && declaredRemote) {
+    if (args.includes("clone") && result.ok && declaredRemote) {
       const staging = join(options.cwd, result.child_name);
       const setRemote = await runGit(["remote", "set-url", "origin", declaredRemote], { cwd: staging });
       if (!setRemote.ok) return setRemote;
