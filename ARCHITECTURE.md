@@ -306,8 +306,12 @@ org-level repa typu Mission Control, tak Workspace Moduly. Chybějící Workspac
 Modul se materializuje z úplných Git souřadnic; chybějící root repo jen tehdy,
 když manifest explicitně deklaruje `materialization:
 doctor_managed_nested_repo`. Productionspace a root-space repository-db tím
-autoritu nezískávají. Dirty obsah
-primárního checkoutu nejdřív
+autoritu nezískávají. Jedinou úzkou výjimkou je explicitní
+`lazurio organization install`: po materializaci aktivního root-level parent
+repozitáře smí jednorázově atomicky doplnit deklarovaný
+`mission-control/db` `repository_db_mount`. Existující databázi pouze ověří;
+nefetchuje ji, nefast-forwarduje a nezískává commit ani publish autoritu.
+Dirty obsah primárního checkoutu nejdřív
 uloží do ověřeného recovery stashe, který nikdy automaticky nevrací, a potom
 použije jen fast-forward. Historii s lokálními commity nebo konfliktem
 nepřepisuje — předá ji Agentovi.

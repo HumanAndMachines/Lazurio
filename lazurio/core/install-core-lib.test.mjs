@@ -256,6 +256,35 @@ test("GitHub probes never execute an ambient PATH shadow", () => {
   expect(executables).not.toContain("gh");
 });
 
+test("GitHub CLI discovery receives the same explicit home as Root discovery", () => {
+  let received = null;
+  const report = inspectLazurioInstallation({
+    root: null,
+    platform: "darwin",
+    architecture: "arm64",
+    bunVersion: "1.4.0",
+    environment: { HOME: "/Users/fixture", PATH: "/tmp/untrusted-shadow" },
+    homeDirectory: "/Users/fixture",
+    resolveGit: () => "/usr/bin/git",
+    resolveGitHubCli: (options) => {
+      received = options;
+      return "/Users/fixture/.local/bin/gh";
+    },
+    runCommand: () => ({ status: 0 }),
+    inspectRoot: missingRootObservation,
+  });
+
+  expect(received).toEqual({
+    platform: "darwin",
+    environment: { HOME: "/Users/fixture", PATH: "/tmp/untrusted-shadow" },
+    homeDirectory: "/Users/fixture",
+  });
+  expect(report.steps.find((step) => step.id === "github_cli")).toMatchObject({
+    status: "completed",
+    reason: "github_cli_available",
+  });
+});
+
 test("real Root probe distinguishes supported Source, unverified Source, and generated layouts", async () => {
   const parent = await trackedTempRoot("lazurio-install-root-");
   const gitExecutable = resolveTrustedGitExecutable();

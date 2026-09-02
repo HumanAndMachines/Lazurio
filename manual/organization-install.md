@@ -69,9 +69,20 @@ současně nese uživatele Mašiny. `--root` proto tato operace nepřijímá.
 
 První běh materializuje exact Organization root do
 `organizations/<CanonicalLogin>_GEN3` a přes běžný update reconciler doplní
-dostupné deklarované Moduly. Druhý běh musí být `current`, pokud se mezitím
-nezměnil remote nebo lokální stav. Agent rozhoduje podle stabilních polí
-`state`, `target.reason` a vnořeného update reportu, ne podle lokalizované věty.
+dostupné deklarované Moduly. Potom může tentýž explicitní installer atomicky
+doplnit aktivní root-space `mission-control/db` s materializací
+`repository_db_mount`, ale jen pod právě jedním deklarovaným a skutečně
+materializovaným parent Git repozitářem. Ověří Organization-owned remote,
+deklarovanou branch, Git ignore v parent repozitáři a bezpečnou fyzickou cestu.
+Duplicitní legacy `repository_db` projekce není další autorita; rozhodují
+normalizovaná Git pole slotu.
+
+Existující repository-db checkout installer nefetchuje ani nefast-forwarduje:
+ověří pouze čistý exact Git root, remote a deklarovanou branch. Ongoing sync,
+commit a publish zůstávají v repository-db workflow a obecný `lazurio update`
+jej dál vynechává. Druhý běh musí být `current`, pokud se mezitím nezměnil
+lokální stav. Agent rozhoduje podle stabilních polí `state`, `target.reason`
+a vnořeného update reportu, ne podle lokalizované věty.
 
 Veřejné stavy jsou pouze:
 
@@ -100,8 +111,15 @@ cizího checkoutu. Login je jen locator: immutable Organization a repository ID
 se ověřují před klonem, ve stagingu i znovu před atomickým přesunem, takže rename
 race nebo znovupoužitý namespace nemůže tiše nainstalovat cizí root.
 
+Stejně fail-closed zůstane repository-db target, když jeho parent není přesný
+Git root, `db/` není ignorované přímo v tomto parent repozitáři nebo existující
+databáze obsahuje lokální změny či jiný remote/branch. Ignore Organization rootu
+sám o sobě child databázi neautorizuje.
+
 ## Handoff
 
 Do PR nebo instalačního reportu uveď exact CLI verzi, GitHub login, immutable
 ID z JSON reportu, výsledný target, celkový stav a všechny blocked repo reasons.
+Uveď také stav installer-managed `mission-control/db` mountu; `current` zde
+dokazuje identitu a čistotu, nikoli online aktuálnost jeho datové branche.
 Secrets, provider stderr ani obsah jiné Organization do reportu nekopíruj.

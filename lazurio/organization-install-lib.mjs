@@ -1,5 +1,5 @@
 import { lstat, readFile, readdir, realpath } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, posix, resolve } from "node:path";
 
 import {
   GIT_LOCAL_TIMEOUT_MS,
@@ -245,8 +245,25 @@ export async function installOrganizationRepositoryDbMounts({
       message: "Organization root nemá čitelné manifesty pro repository-db instalaci.",
     })];
   }
-  const slots = (resolution.resource?.repository_inventory ?? [])
-    .filter((slot) => slot?.materialization === "repository_db_mount" && slot?.status === "active")
+  if (
+    !["current", "legacy", "transition"].includes(resolution.state)
+    || resolution.resource_count !== 1
+    || !Array.isArray(resolution.resource?.repository_inventory)
+  ) {
+    return [repositoryDbBlockedResult({
+      source,
+      organizationPath,
+      reason: "repository_db_manifest_invalid",
+      message: "Organization root nemá jednoznačný validní repository inventory pro repository-db instalaci.",
+    })];
+  }
+  const repositoryInventory = resolution.resource?.repository_inventory ?? [];
+  const slots = repositoryInventory
+    .filter((slot) => (
+      slot?.path === "mission-control/db"
+      && slot?.materialization === "repository_db_mount"
+      && slot?.status === "active"
+    ))
     .sort((left, right) => String(left.path).localeCompare(String(right.path), "en"));
   const results = [];
   for (const slot of slots) {
@@ -256,6 +273,7 @@ export async function installOrganizationRepositoryDbMounts({
       organizationRoot,
       source,
       slot,
+      repositoryInventory,
       platform,
       run,
       runPinnedChild,
@@ -271,6 +289,7 @@ async function installOrganizationRepositoryDbMount({
   organizationRoot,
   source,
   slot,
+  repositoryInventory,
   platform,
   run,
   runPinnedChild,
@@ -283,6 +302,7 @@ async function installOrganizationRepositoryDbMount({
     organizationRoot,
     source,
     slot,
+    repositoryInventory,
     run,
   });
   if (!validation.ok) {
@@ -316,6 +336,14 @@ async function installOrganizationRepositoryDbMount({
     run,
     runPinnedChild,
     remoteEnvironment: safeGitRemoteEnv(platform),
+    verifyStaged: ({ path: stagingPath }) => (
+      isSamePath(dirname(stagingPath), validation.parentRealPath)
+        ? { ok: true }
+        : providerFailure(
+            "repository_db_parent_identity_changed",
+            "Parent repository-db mountu se během materializace fyzicky změnil.",
+          )
+    ),
     deps: materializationDeps,
   });
   if (!materialized.ok) {
@@ -332,7 +360,7 @@ async function installOrganizationRepositoryDbMount({
     reason: "repository_db_materialized",
     message: "Repository-db checkout byl ověřený a atomicky materializovaný explicitní Organization instalací.",
     head: materialized.head,
-    actions: ["clone"],
+    actions: ["materialize"],
   };
 }
 
@@ -342,6 +370,7 @@ async function validateOrganizationRepositoryDbMount({
   organizationRoot,
   source,
   slot,
+  repositoryInventory,
   run,
 }) {
   const path = normalizeOrganizationSlotPath(slot?.path);
@@ -353,7 +382,7 @@ async function validateOrganizationRepositoryDbMount({
   if (
     !path
     || path !== slot.path
-    || !path.endsWith("/db")
+    || path !== "mission-control/db"
     || organizationSlotScope(slot, path) !== "root"
     || !/^repository-db:[a-z0-9]+(?:[._-][a-z0-9]+)*$/u.test(sourceOfTruth)
     || typeof remote !== "string"
@@ -361,8 +390,6 @@ async function validateOrganizationRepositoryDbMount({
     || !coordinate
     || coordinate.owner.toLowerCase() !== String(organizationLogin).toLowerCase()
     || coordinate.repository !== slot.slug
-    || slot.repository_db?.url !== remote
-    || slot.repository_db?.branch !== branch
   ) {
     return providerFailure(
       "repository_db_manifest_invalid",
@@ -374,16 +401,41 @@ async function validateOrganizationRepositoryDbMount({
   if (!isSamePath(targetPath, expectedTargetPath)) {
     return providerFailure("repository_db_path_forbidden", "Repository-db target neleží v deklarovaném Organization rootu.");
   }
-  const parent = await lstatOrNull(dirname(targetPath));
+  const parentSlotPath = posix.dirname(path);
+  const parentSlots = (Array.isArray(repositoryInventory) ? repositoryInventory : [])
+    .filter((candidate) => normalizeOrganizationSlotPath(candidate?.path) === parentSlotPath);
+  const parentSlot = parentSlots.length === 1 ? parentSlots[0] : null;
+  if (
+    !parentSlot
+    || parentSlot.path !== parentSlotPath
+    || parentSlot.status !== "active"
+    || parentSlot.materialization !== "doctor_managed_nested_repo"
+    || organizationSlotScope(parentSlot, parentSlotPath) !== "root"
+  ) {
+    return providerFailure(
+      "repository_db_parent_invalid",
+      "Repository-db mount nemá právě jeden aktivní deklarovaný a installer-managed parent repozitář.",
+    );
+  }
+  const parentPath = dirname(targetPath);
+  const expectedParentPath = resolve(rootPath, organizationPath, parentSlotPath);
+  if (!isSamePath(parentPath, expectedParentPath)) {
+    return providerFailure("repository_db_parent_forbidden", "Parent repository-db mountu neleží v deklarovaném Organization rootu.");
+  }
+  const parent = await lstatOrNull(parentPath);
   if (!parent?.isDirectory() || parent.isSymbolicLink()) {
     return providerFailure(
       "repository_db_parent_missing",
-      "Repository-db parent Modul ještě není bezpečně materializovaný.",
+      "Repository-db parent repozitář ještě není bezpečně materializovaný.",
     );
   }
-  const [ignore, ref] = await Promise.all([
-    run(["check-ignore", "--quiet", "--no-index", "--", `${targetPath}/`], {
-      cwd: organizationRoot,
+  const [parentRoot, ignore, ref] = await Promise.all([
+    run(["rev-parse", "--show-toplevel"], {
+      cwd: parentPath,
+      timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+    }),
+    run(["check-ignore", "--quiet", "--no-index", "--", `${posix.basename(path)}/`], {
+      cwd: parentPath,
       timeoutMs: GIT_LOCAL_TIMEOUT_MS,
     }),
     run(["check-ref-format", "--branch", branch], {
@@ -391,13 +443,38 @@ async function validateOrganizationRepositoryDbMount({
       timeoutMs: GIT_LOCAL_TIMEOUT_MS,
     }),
   ]);
+  if (!parentRoot.ok) {
+    return providerFailure(
+      "repository_db_parent_not_repository",
+      "Repository-db parent není ověřitelný Git checkout.",
+    );
+  }
+  let parentRealPath;
+  let parentRootRealPath;
+  try {
+    [parentRealPath, parentRootRealPath] = await Promise.all([
+      realpath(parentPath),
+      realpath(parentRoot.stdout),
+    ]);
+  } catch {
+    return providerFailure(
+      "repository_db_parent_unverifiable",
+      "Repository-db parent nemá ověřitelnou kanonickou cestu.",
+    );
+  }
+  if (!isSamePath(parentRealPath, parentRootRealPath)) {
+    return providerFailure(
+      "repository_db_parent_not_repository",
+      "Repository-db parent není kořenem deklarovaného Git checkoutu.",
+    );
+  }
   if (!ignore.ok) {
-    return providerFailure("repository_db_target_not_ignored", "Repository-db target není gitignored v Organization rootu.");
+    return providerFailure("repository_db_target_not_ignored", "Repository-db target není gitignored ve svém parent repozitáři.");
   }
   if (!ref.ok) {
     return providerFailure("repository_db_branch_invalid", "Repository-db manifest deklaruje neplatnou Git branch.");
   }
-  return { ok: true, targetPath, remote, branch };
+  return { ok: true, targetPath, remote, branch, parentRealPath };
 }
 
 async function verifyExistingRepositoryDbCheckout({ targetPath, remote, branch, run }) {

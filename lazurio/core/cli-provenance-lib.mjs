@@ -9,6 +9,7 @@ import { homedir } from "node:os";
 import {
   isAbsolute,
   join,
+  posix,
   resolve,
   win32,
 } from "node:path";
@@ -151,7 +152,9 @@ export function trustedGitHubCliCandidates(platform = process.platform, {
       "/opt/homebrew/bin/gh",
       "/usr/local/bin/gh",
       "/usr/bin/gh",
-      isAbsolute(homeDirectory) ? join(homeDirectory, ".local", "bin", "gh") : null,
+      typeof homeDirectory === "string" && posix.isAbsolute(homeDirectory)
+        ? posix.join(homeDirectory, ".local", "bin", "gh")
+        : null,
     ].filter(Boolean);
   }
   if (platform === "linux") {
