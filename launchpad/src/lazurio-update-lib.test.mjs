@@ -1878,7 +1878,7 @@ test("fresh Organization manifest materializes its new Workspace Module while ex
             value === declaredModuleRemote ? moduleRemote : value
           );
           const result = await runGitInPinnedTemporaryChild(mappedArgs, options);
-          if (!result.ok || args[0] !== "clone") return result;
+          if (!result.ok || !args.includes("clone")) return result;
           const stagingPath = join(options.cwd, result.child_name);
           const restored = await runGitAsync(["remote", "set-url", "origin", declaredModuleRemote], {
             cwd: stagingPath,

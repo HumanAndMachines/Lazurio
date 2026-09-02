@@ -226,12 +226,12 @@ async function prepareOrganizationRoot(organizationRoot) {
 
 function fixtureRemoteRunner({ declaredRemote, actualRemote, failClone = false }) {
   return async (args, options) => {
-    if (failClone && args[0] === "clone") {
+    if (failClone && args.includes("clone")) {
       return { ok: false, exitCode: 1, timedOut: false, stdout: "", stderr: "simulated clone failure" };
     }
     const mappedArgs = args.map((value) => value === declaredRemote ? actualRemote : value);
     const result = await runGit(mappedArgs, options);
-    if (result.ok && args[0] === "clone") {
+    if (result.ok && args.includes("clone")) {
       const stagingPath = args.at(-1);
       const restored = await runGit(["remote", "set-url", "origin", declaredRemote], {
         cwd: stagingPath,
@@ -246,7 +246,7 @@ function fixturePinnedRemoteRunner({ declaredRemote, actualRemote }) {
   return async (args, options) => {
     const mappedArgs = args.map((value) => value === declaredRemote ? actualRemote : value);
     const result = await runGitInPinnedTemporaryChild(mappedArgs, options);
-    if (result.ok && args[0] === "clone") {
+    if (result.ok && args.includes("clone")) {
       const stagingPath = join(options.cwd, result.child_name);
       const restored = await runGit(["remote", "set-url", "origin", declaredRemote], {
         cwd: stagingPath,

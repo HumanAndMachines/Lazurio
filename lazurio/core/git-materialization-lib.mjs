@@ -19,6 +19,19 @@ export const PINNED_CHECKOUT_PUBLISH_MODE = "--lazurio-pinned-checkout-publisher
 export const PINNED_CHECKOUT_DISCARD_MODE = "--lazurio-pinned-checkout-discarder";
 const PINNED_CHECKOUT_OPERATION_TIMEOUT_MS = 60_000;
 
+function materializationGitArgs(args, platform = process.platform) {
+  const nullDevice = platform === "win32" ? "NUL" : "/dev/null";
+  return [
+    "-c",
+    `core.hooksPath=${nullDevice}`,
+    "-c",
+    "core.fsmonitor=false",
+    "-c",
+    "core.useBuiltinFSMonitor=false",
+    ...args,
+  ];
+}
+
 // One checkout publication primitive is shared by Organization install and
 // Launchpad Sync. Callers own policy (manifest/root identity); Core owns the
 // exact clone, verification, path boundary and atomic publication mechanism.
@@ -80,7 +93,14 @@ export async function materializeGitCheckout({
   try {
     transportCwd = await makeTempDirectory(join(tmpdir(), "lazurio-git-transport-"));
     const source = await run(
-      ["ls-remote", "--exit-code", "--heads", "--", remote, `refs/heads/${branch}`],
+      materializationGitArgs([
+        "ls-remote",
+        "--exit-code",
+        "--heads",
+        "--",
+        remote,
+        `refs/heads/${branch}`,
+      ]),
       {
         cwd: transportCwd,
         timeoutMs: GIT_FETCH_TIMEOUT_MS,
@@ -109,7 +129,7 @@ export async function materializeGitCheckout({
     // write outside the validated physical owner boundary.
     await beforeStage();
     const clone = await runPinnedChild(
-      [
+      materializationGitArgs([
         "clone",
         "--branch",
         branch,
@@ -118,7 +138,7 @@ export async function materializeGitCheckout({
         "origin",
         "--",
         remote,
-      ],
+      ]),
       {
         cwd: targetParent,
         expectedCwdRealPath: expectedParentRealPath,
@@ -422,11 +442,26 @@ function materializationRequestIssue({
 
 async function verifyClonedCheckout({ path, branch, remote, run }) {
   const [root, currentBranch, origin, head, status] = await Promise.all([
-    run(["rev-parse", "--show-toplevel"], { cwd: path, timeoutMs: GIT_LOCAL_TIMEOUT_MS }),
-    run(["branch", "--show-current"], { cwd: path, timeoutMs: GIT_LOCAL_TIMEOUT_MS }),
-    run(["remote", "get-url", "origin"], { cwd: path, timeoutMs: GIT_LOCAL_TIMEOUT_MS }),
-    run(["rev-parse", "--verify", "HEAD^{commit}"], { cwd: path, timeoutMs: GIT_LOCAL_TIMEOUT_MS }),
-    run(["status", "--porcelain=v1"], { cwd: path, timeoutMs: GIT_LOCAL_TIMEOUT_MS }),
+    run(materializationGitArgs(["rev-parse", "--show-toplevel"]), {
+      cwd: path,
+      timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+    }),
+    run(materializationGitArgs(["branch", "--show-current"]), {
+      cwd: path,
+      timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+    }),
+    run(materializationGitArgs(["remote", "get-url", "origin"]), {
+      cwd: path,
+      timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+    }),
+    run(materializationGitArgs(["rev-parse", "--verify", "HEAD^{commit}"]), {
+      cwd: path,
+      timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+    }),
+    run(materializationGitArgs(["status", "--porcelain=v1"]), {
+      cwd: path,
+      timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+    }),
   ]);
   if ([root, currentBranch, origin, head, status].some((result) => !result.ok)) {
     return verificationFailure("Naklonovaný checkout nejde spolehlivě ověřit.");
