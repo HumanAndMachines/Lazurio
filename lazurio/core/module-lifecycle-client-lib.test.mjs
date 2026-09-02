@@ -140,6 +140,18 @@ describe("Core-owned Module lifecycle client", () => {
     });
   });
 
+  test("mutating lifecycle actions wait past the short Server-discovery deadline", async () => {
+    const report = await runModuleLifecycle({
+      action: "open",
+      selector: "ExampleOrganization/website",
+      readLocator: async () => locator,
+      fetchFn: fixtureFetch({ actionDelayMs: 5_250 }),
+    });
+
+    expect(report.status).toBe("completed");
+    expect(report.reason).toBe("module_lifecycle_open_completed");
+  }, 10_000);
+
   test("cross-Organization takeover stays blocked without exact confirmation", async () => {
     const requests = [];
     const report = await runModuleLifecycle({
@@ -257,6 +269,7 @@ function fixtureFetch({
   defaultAppIds = ["example-organization-website-v2"],
   takeoverRequired = false,
   legacyOverrides = {},
+  actionDelayMs = 0,
 } = {}) {
   return async (input, options = {}) => {
     const url = new URL(input);
@@ -268,6 +281,7 @@ function fixtureFetch({
       return Response.json({ apps: fixtureApps(defaultAppIds, legacyOverrides) });
     }
     if (/^\/api\/apps\/(?:example-organization-website-v[23]|example-organization-legacy-design-system-v1)\/(?:start|open|stop)$/u.test(url.pathname)) {
+      if (actionDelayMs > 0) await waitForAbortableDelay(actionDelayMs, options.signal);
       if (takeoverRequired && body?.replace_app_id !== "other-organization-portal-v1") {
         return Response.json({
           error: "cross_organization_takeover_confirmation_required",
@@ -282,6 +296,25 @@ function fixtureFetch({
     }
     return Response.json({ error: "not_found" }, { status: 404 });
   };
+}
+
+function waitForAbortableDelay(milliseconds, signal) {
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal.reason instanceof Error ? signal.reason : new Error("Request aborted."));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, milliseconds);
+    if (!signal) return;
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 function fixtureApps(defaultAppIds, legacyOverrides = {}) {
