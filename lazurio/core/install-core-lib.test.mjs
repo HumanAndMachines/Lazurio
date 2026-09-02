@@ -343,25 +343,37 @@ test("installed tools outside PATH are action-required and ambient shadows never
 
 test("GitHub CLI discovery receives the same explicit home as Root discovery", () => {
   let received = null;
+  const environment = {
+    HOME: "/Users/fixture",
+    PATH: "/Users/fixture/.local/bin:/usr/bin",
+  };
   const report = inspectLazurioInstallation({
     root: null,
     platform: "darwin",
     architecture: "arm64",
     bunVersion: "1.4.0",
-    environment: { HOME: "/Users/fixture", PATH: "/tmp/untrusted-shadow" },
+    environment,
     homeDirectory: "/Users/fixture",
     resolveGit: () => "/usr/bin/git",
     resolveGitHubCli: (options) => {
       received = options;
       return "/Users/fixture/.local/bin/gh";
     },
+    resolvePathCommand: (command) => ({
+      bun: process.execPath,
+      git: "/usr/bin/git",
+      gh: "/Users/fixture/.local/bin/gh",
+    })[command] ?? null,
+    sameExecutable: (pathExecutable, trustedExecutable) => (
+      pathExecutable === trustedExecutable
+    ),
     runCommand: () => ({ status: 0 }),
     inspectRoot: missingRootObservation,
   });
 
   expect(received).toEqual({
     platform: "darwin",
-    environment: { HOME: "/Users/fixture", PATH: "/tmp/untrusted-shadow" },
+    environment,
     homeDirectory: "/Users/fixture",
   });
   expect(report.steps.find((step) => step.id === "github_cli")).toMatchObject({
