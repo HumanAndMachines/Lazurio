@@ -439,6 +439,18 @@ do personalspace scope. Postup a standard: skill
 `manual/external-app-integrations.md` + per-provider runbooky. Zaseknutí
 nebo zastaralý postup řeš opravným PR na standard, ne poznámkou v chatu.
 
+### Figma: kanonický Lazurio soubor a Browser Use only
+
+Figma je vědomá provider-specific výjimka z obecného integračního žebříčku
+výše. Kanonický design pro Lazurio je jedině
+<https://www.figma.com/design/o14eNlc08MDmwnrtoeb91M/Lazurio>; bez
+explicitního pokynu Principála nezakládej paralelní Lazurio Figma soubor.
+Veškeré čtení, tvorbu i úpravy ve Figmě prováděj výhradně přes vestavěný
+Browser Use v přihlášené uživatelské relaci. Figma MCP nevolej ani jako
+fallback, protože tento přístup je zpoplatněný. Není-li Browser Use nebo
+přihlášená Figma relace dostupná, práci zastav a transparentně požádej
+Principála o nápravu; na Figma MCP automaticky nepřepínej.
+
 ## Launchpad pravidlo
 
 Launchpad je **builder-first** root surface (decision 0047): spouští
