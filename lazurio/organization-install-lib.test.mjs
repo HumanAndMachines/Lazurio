@@ -233,7 +233,7 @@ test("explicit Organization install materializes an active repository-db mount o
     runGit: translatedGitRunner(fixture.remote, remoteMap),
     runPinnedChild: translatedPinnedGitRunner(fixture.remote, remoteMap),
     runUpdate: async () => {
-      await mkdir(join(fixture.root, "organizations", `${login}_GEN3`, "mission-control"), { recursive: true });
+      await ensureRepositoryDbParentCheckout(fixture);
       return updateReport("current");
     },
   };
@@ -256,6 +256,70 @@ test("explicit Organization install materializes an active repository-db mount o
   expect(existsSync(join(dataPath, "repository-db.yaml"))).toBe(true);
   expect((await runGit(["branch", "--show-current"], { cwd: dataPath })).stdout).toBe("v3");
   expect((await runGit(["remote", "get-url", "origin"], { cwd: dataPath })).stdout).toBe(fakeDataRemote);
+});
+
+test("Organization-level ignore cannot authorize a repository-db clone into a non-repository parent", async () => {
+  const fixture = await organizationRepositoryDbFixture();
+  const source = sourceObservation({ documents: fixture.documents });
+  const remoteMap = new Map([
+    [fakeHttpsRemote, fixture.remote],
+    [fakeDataRemote, fixture.dataRemote],
+  ]);
+  const dataPath = join(fixture.root, "organizations", `${login}_GEN3`, "mission-control", "db");
+  const report = await installOrganization({
+    rootPath: fixture.root,
+    githubLogin: login,
+    deps: {
+      observe: async () => source,
+      reobserve: async () => ({ ok: true }),
+      runGit: translatedGitRunner(fixture.remote, remoteMap),
+      runPinnedChild: translatedPinnedGitRunner(fixture.remote, remoteMap),
+      runUpdate: async () => {
+        await mkdir(dirname(dataPath), { recursive: true });
+        return updateReport("current");
+      },
+    },
+  });
+
+  expect(report).toMatchObject({ state: "blocked", ok: false });
+  expect(report.convergence.results).toContainEqual(expect.objectContaining({
+    state: "blocked",
+    reason: "repository_db_parent_not_repository",
+  }));
+  expect(existsSync(dataPath)).toBe(false);
+});
+
+test("existing dirty repository-db checkout stays untouched and blocks reinstall", async () => {
+  const fixture = await organizationRepositoryDbFixture();
+  const source = sourceObservation({ documents: fixture.documents });
+  const remoteMap = new Map([
+    [fakeHttpsRemote, fixture.remote],
+    [fakeDataRemote, fixture.dataRemote],
+  ]);
+  const deps = {
+    observe: async () => source,
+    reobserve: async () => ({ ok: true }),
+    runGit: translatedGitRunner(fixture.remote, remoteMap),
+    runPinnedChild: translatedPinnedGitRunner(fixture.remote, remoteMap),
+    runUpdate: async () => {
+      await ensureRepositoryDbParentCheckout(fixture);
+      return updateReport("current");
+    },
+  };
+  const first = await installOrganization({ rootPath: fixture.root, githubLogin: login, deps });
+  expect(first.ok).toBe(true);
+  const dataPath = join(fixture.root, "organizations", `${login}_GEN3`, "mission-control", "db");
+  const draftPath = join(dataPath, "local-draft.txt");
+  await writeFile(draftPath, "keep\n");
+
+  const second = await installOrganization({ rootPath: fixture.root, githubLogin: login, deps });
+
+  expect(second).toMatchObject({ state: "blocked", ok: false });
+  expect(second.convergence.results).toContainEqual(expect.objectContaining({
+    state: "blocked",
+    reason: "repository_db_identity_mismatch",
+  }));
+  expect(await Bun.file(draftPath).text()).toBe("keep\n");
 });
 
 test("provider identity change after clone leaves no final Organization target", async () => {
@@ -487,7 +551,6 @@ async function organizationRepositoryDbFixture() {
       status: "active",
       materialization: "repository_db_mount",
       git: { url: fakeDataRemote, branch: "v3" },
-      repository_db: { url: fakeDataRemote, branch: "v3" },
     },
   );
   await writeFile(join(fixture.source, "company.gen3.json"), `${JSON.stringify(documents.company, null, 2)}\n`);
@@ -505,6 +568,18 @@ async function organizationRepositoryDbFixture() {
   await runGit(["commit", "-m", "Add repository-db fixture"], { cwd: dataSource });
   await runGit(["push", "origin", "v3"], { cwd: dataSource });
   return { ...fixture, documents, dataRemote };
+}
+
+async function ensureRepositoryDbParentCheckout(fixture) {
+  const parentPath = join(fixture.root, "organizations", `${login}_GEN3`, "mission-control");
+  if (existsSync(join(parentPath, ".git"))) return parentPath;
+  const parentRemote = join(fixture.root, "mission-control-remote.git");
+  await initGitRepo(parentPath, { remotePath: parentRemote });
+  await writeFile(join(parentPath, ".gitignore"), "db/\n");
+  await runGit(["add", ".gitignore"], { cwd: parentPath });
+  await runGit(["commit", "-m", "Ignore repository-db checkout"], { cwd: parentPath });
+  await runGit(["push", "origin", "main"], { cwd: parentPath });
+  return parentPath;
 }
 
 function translatedGitRunner(localRemote, remoteMap = new Map([[fakeHttpsRemote, localRemote]])) {

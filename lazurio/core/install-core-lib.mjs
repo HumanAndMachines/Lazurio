@@ -108,7 +108,7 @@ export function inspectLazurioInstallation({
 
   let githubCliExecutable = null;
   steps.push(boundedProbe("github_cli", () => {
-    githubCliExecutable = resolveGitHubCli({ platform, environment });
+    githubCliExecutable = resolveGitHubCli({ platform, environment, homeDirectory });
     if (!githubCliExecutable) return actionRequired("github_cli_missing");
     const result = runCommand({
       executable: githubCliExecutable,

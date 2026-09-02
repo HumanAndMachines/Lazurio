@@ -295,8 +295,12 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    stav bez bezpečné vazby, rozpracovaný merge/rebase/am ani neplatný lockfile
    neopravuje odhadem: vrátí přesný prompt „Vyřešit s Codexem“. Productionspace,
    Personalspace, worktrees a root-space repository-db jsou z obecného update
-   mechanismu vyloučené. Agent nikdy nezačíná práci v primárním checkoutu; pro
-   všechny změny používá task/PR worktree. Stejný preflight patří každému
+   mechanismu vyloučené. Explicitní `lazurio organization install` smí jako
+   úzký bootstrap doplnit pouze aktivní deklarovaný root-space
+   `mission-control/db` pod ověřeným parent Git repem; existující repository-db
+   neaktualizuje a nezískává commit/publish autoritu. Agent nikdy nezačíná práci
+   v primárním checkoutu; pro všechny změny používá task/PR worktree. Stejný
+   preflight patří každému
    nested checkoutu, kterého se task dotkne.
    Když Agent troubleshootuje nástrojové prostředí mašiny, přidá explicitní
    `lazurio doctor --tool-updates`. Git, GitHub CLI a Codex musí být dostupné
