@@ -387,8 +387,10 @@ initTheme();
 initScrollOffset();
 initResponsiveChrome();
 initNotifications();
-elements.localeSwitcher?.addEventListener("change", (event) => {
-  setLocale(event.target.value);
+elements.localeSwitcher?.addEventListener("click", (event) => {
+  const option = event.target.closest?.("[data-locale]");
+  if (!option || option.getAttribute("aria-pressed") === "true") return;
+  setLocale(option.dataset.locale);
   window.location.reload();
 });
 // Personalspace rail dostane most k toastům a k Synchronizovat reloadu, ať

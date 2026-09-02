@@ -50,13 +50,11 @@
             </svg>
             <span data-i18n="topbar.private"></span>
           </span>
-          <label class="locale-control">
-            <span class="sr-only" data-i18n="locale.label"></span>
-            <select id="localeSwitcher" class="locale-switcher" data-i18n-aria-label="locale.label">
-              <option value="cs" data-i18n="locale.cs">Čeština</option>
-              <option value="en" data-i18n="locale.en">English</option>
-            </select>
-          </label>
+          <div id="localeSwitcher" class="locale-switcher" role="group" data-i18n-aria-label="locale.label">
+            <button type="button" class="locale-switcher-option" data-locale="en" data-i18n-aria-label="locale.en">EN</button>
+            <span class="locale-switcher-divider" aria-hidden="true">/</span>
+            <button type="button" class="locale-switcher-option" data-locale="cs" data-i18n-aria-label="locale.cs">CS</button>
+          </div>
           <div class="notifications-anchor">
             <button
               id="notificationsToggle"

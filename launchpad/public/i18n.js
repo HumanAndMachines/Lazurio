@@ -99,8 +99,10 @@ export function localizeDocument(documentRef = globalThis.document) {
   for (const node of documentRef.querySelectorAll?.("[data-i18n-title]") ?? []) {
     node.setAttribute("title", t(node.dataset.i18nTitle));
   }
-  const selector = documentRef.querySelector?.("#localeSwitcher");
-  if (selector) selector.value = activeLocale;
+  for (const option of documentRef.querySelectorAll?.("[data-locale]") ?? []) {
+    const isActive = option.dataset.locale === activeLocale;
+    option.setAttribute("aria-pressed", String(isActive));
+  }
   documentRef.title = t("meta.documentTitle");
   documentRef.documentElement?.setAttribute("data-i18n-ready", "true");
 }

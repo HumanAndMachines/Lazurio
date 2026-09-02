@@ -29,7 +29,9 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(html).toContain('id="spaceSwitcherButton"');
   expect(html).toContain('id="spaceSwitcherMenu"');
   expect(html).toContain('id="localeSwitcher"');
-  expect(css).toMatch(/\.locale-switcher\s*{[^}]*color: var\(--lz-gray-100\)/);
+  expect(html).toContain('data-locale="en"');
+  expect(html).toContain('data-locale="cs"');
+  expect(css).toMatch(/\.locale-switcher-option\[aria-pressed="true"\][^{]*\{[^}]*color: var\(--lz-white\)/);
   expect(html).toContain('id="appsGrid"');
   expect(html).toContain('class="marketplace-teaser side-panel"');
   expect(html).toContain('id="marketplaceTeaserTitle" data-i18n="marketplace.title"');
