@@ -19,6 +19,7 @@ const login = "ExampleOrganization";
 const fullName = `${login}/${login}_GEN3`;
 const fakeHttpsRemote = `https://github.com/${fullName}.git`;
 const fakeSshRemote = `git@github.com:${fullName}.git`;
+const fakeDataRemote = `git@github.com:${login}/mission-control-data.git`;
 
 afterAll(async () => {
   await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })));
@@ -219,6 +220,44 @@ test("missing Organization root converges once and a second install is a no-op",
   expect(existsSync(join(fixture.root, "organizations", `${login}_GEN3`, "company.gen3.json"))).toBe(true);
 });
 
+test("explicit Organization install materializes an active repository-db mount once", async () => {
+  const fixture = await organizationRepositoryDbFixture();
+  const source = sourceObservation({ documents: fixture.documents });
+  const remoteMap = new Map([
+    [fakeHttpsRemote, fixture.remote],
+    [fakeDataRemote, fixture.dataRemote],
+  ]);
+  const deps = {
+    observe: async () => source,
+    reobserve: async () => ({ ok: true }),
+    runGit: translatedGitRunner(fixture.remote, remoteMap),
+    runPinnedChild: translatedPinnedGitRunner(fixture.remote, remoteMap),
+    runUpdate: async () => {
+      await mkdir(join(fixture.root, "organizations", `${login}_GEN3`, "mission-control"), { recursive: true });
+      return updateReport("current");
+    },
+  };
+
+  const first = await installOrganization({ rootPath: fixture.root, githubLogin: login, deps });
+  const second = await installOrganization({ rootPath: fixture.root, githubLogin: login, deps });
+  const dataPath = join(fixture.root, "organizations", `${login}_GEN3`, "mission-control", "db");
+
+  expect(first).toMatchObject({ state: "updated", ok: true });
+  expect(first.convergence.results).toContainEqual(expect.objectContaining({
+    state: "updated",
+    reason: "repository_db_materialized",
+    path: `organizations/${login}_GEN3/mission-control/db`,
+  }));
+  expect(second).toMatchObject({ state: "current", ok: true });
+  expect(second.convergence.results).toContainEqual(expect.objectContaining({
+    state: "current",
+    reason: "repository_db_current",
+  }));
+  expect(existsSync(join(dataPath, "repository-db.yaml"))).toBe(true);
+  expect((await runGit(["branch", "--show-current"], { cwd: dataPath })).stdout).toBe("v3");
+  expect((await runGit(["remote", "get-url", "origin"], { cwd: dataPath })).stdout).toBe(fakeDataRemote);
+});
+
 test("provider identity change after clone leaves no final Organization target", async () => {
   const fixture = await organizationRemoteFixture();
   let updateCalled = false;
@@ -352,7 +391,7 @@ test("CLI exposes install without weakening activation flags", () => {
   expect(alternateRoot.stderr.toString()).toContain("vždy používá kanonický Lazurio Root v home");
 });
 
-function sourceObservation() {
+function sourceObservation({ documents = scaffoldDocuments() } = {}) {
   return {
     ok: true,
     organization: { id: ids.organization, login, label: "GitHub Organization" },
@@ -366,7 +405,7 @@ function sourceObservation() {
       ssh_url: fakeSshRemote,
       read_url: fakeHttpsRemote,
     },
-    documents: scaffoldDocuments(),
+    documents,
   };
 }
 
@@ -422,29 +461,74 @@ async function organizationRemoteFixture({ repositoryId = ids.repository } = {})
   await runGit(["add", "--all"], { cwd: source });
   await runGit(["commit", "-m", "Add Organization scaffold"], { cwd: source });
   await runGit(["push", "origin", "main"], { cwd: source });
-  return { root, remote };
+  return { root, remote, source };
 }
 
-function translatedGitRunner(localRemote) {
+async function organizationRepositoryDbFixture() {
+  const fixture = await organizationRemoteFixture();
+  const documents = scaffoldDocuments();
+  documents.company.layers ??= [];
+  documents.company.layers.push({ path: "mission-control", kind: "root-docs", ownership: "manual" });
+  documents.modules.module_slots.push(
+    {
+      path: "mission-control",
+      slug: "mission-control",
+      source_of_truth: "git-native",
+      space: "root",
+      status: "active",
+      materialization: "doctor_managed_nested_repo",
+      git: { url: `git@github.com:${login}/mission-control.git`, branch: "main" },
+    },
+    {
+      path: "mission-control/db",
+      slug: "mission-control-data",
+      source_of_truth: "repository-db:v3",
+      space: "root",
+      status: "active",
+      materialization: "repository_db_mount",
+      git: { url: fakeDataRemote, branch: "v3" },
+      repository_db: { url: fakeDataRemote, branch: "v3" },
+    },
+  );
+  await writeFile(join(fixture.source, "company.gen3.json"), `${JSON.stringify(documents.company, null, 2)}\n`);
+  await writeFile(join(fixture.source, "modules.manifest.json"), `${JSON.stringify(documents.modules, null, 2)}\n`);
+  await runGit(["add", "company.gen3.json", "modules.manifest.json"], { cwd: fixture.source });
+  await runGit(["commit", "-m", "Declare repository-db fixture"], { cwd: fixture.source });
+  await runGit(["push", "origin", "main"], { cwd: fixture.source });
+
+  const dataSource = join(fixture.root, "data-source");
+  const dataRemote = join(fixture.root, "data-remote.git");
+  await initGitRepo(dataSource, { remotePath: dataRemote });
+  await runGit(["switch", "-c", "v3"], { cwd: dataSource });
+  await writeFile(join(dataSource, "repository-db.yaml"), "schema_version: repository-db.config.v1\n");
+  await runGit(["add", "repository-db.yaml"], { cwd: dataSource });
+  await runGit(["commit", "-m", "Add repository-db fixture"], { cwd: dataSource });
+  await runGit(["push", "origin", "v3"], { cwd: dataSource });
+  return { ...fixture, documents, dataRemote };
+}
+
+function translatedGitRunner(localRemote, remoteMap = new Map([[fakeHttpsRemote, localRemote]])) {
   return async (args, options) => {
-    const translated = args.map((arg) => arg === fakeHttpsRemote ? localRemote : arg);
+    const declaredRemote = args.find((arg) => remoteMap.has(arg)) ?? null;
+    const translated = args.map((arg) => remoteMap.get(arg) ?? arg);
     const result = await runGit(translated, options);
-    if (args[0] === "clone" && result.ok) {
+    if (args[0] === "clone" && result.ok && declaredRemote) {
       const staging = args.at(-1);
-      const setRemote = await runGit(["remote", "set-url", "origin", fakeHttpsRemote], { cwd: staging });
+      const setRemote = await runGit(["remote", "set-url", "origin", declaredRemote], { cwd: staging });
       if (!setRemote.ok) return setRemote;
     }
     return result;
   };
 }
 
-function translatedPinnedGitRunner(localRemote) {
+function translatedPinnedGitRunner(localRemote, remoteMap = new Map([[fakeHttpsRemote, localRemote]])) {
   return async (args, options) => {
-    const translated = args.map((arg) => arg === fakeHttpsRemote ? localRemote : arg);
+    const declaredRemote = args.find((arg) => remoteMap.has(arg)) ?? null;
+    const translated = args.map((arg) => remoteMap.get(arg) ?? arg);
     const result = await runGitInPinnedTemporaryChild(translated, options);
-    if (args[0] === "clone" && result.ok) {
+    if (args[0] === "clone" && result.ok && declaredRemote) {
       const staging = join(options.cwd, result.child_name);
-      const setRemote = await runGit(["remote", "set-url", "origin", fakeHttpsRemote], { cwd: staging });
+      const setRemote = await runGit(["remote", "set-url", "origin", declaredRemote], { cwd: staging });
       if (!setRemote.ok) return setRemote;
     }
     return result;
