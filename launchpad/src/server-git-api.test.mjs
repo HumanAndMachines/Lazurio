@@ -1247,7 +1247,7 @@ test("PORT environment configuration is implicit and falls forward to a free por
   try {
     const actualPort = await Promise.race([
       readLaunchpadPort(launcher),
-      Bun.sleep(5_000).then(() => {
+      Bun.sleep(platformTestTimeout(5_000)).then(() => {
         throw new Error("Launchpad s implicitním PORT nenastartoval na fallback portu");
       }),
     ]);
