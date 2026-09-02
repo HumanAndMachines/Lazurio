@@ -28,11 +28,10 @@ export async function resolveGitExecutable(options = {}) {
 
 async function resolveGitExecutableUncached({
   platform = process.platform,
-  env = processEnv(),
   pathExists = existsSync,
   probe = probeGitExecutable,
 } = {}) {
-  for (const candidate of orderedGitExecutableCandidates({ platform, env, pathExists })) {
+  for (const candidate of orderedGitExecutableCandidates({ platform, pathExists })) {
     if (await probe(candidate)) return candidate;
   }
   return null;
@@ -52,11 +51,10 @@ export function resolveGitExecutableSync(options = {}) {
 
 function resolveGitExecutableSyncUncached({
   platform = process.platform,
-  env = processEnv(),
   pathExists = existsSync,
   probe = probeGitExecutableSync,
 } = {}) {
-  for (const candidate of orderedGitExecutableCandidates({ platform, env, pathExists })) {
+  for (const candidate of orderedGitExecutableCandidates({ platform, pathExists })) {
     if (probe(candidate)) return candidate;
   }
   return null;
@@ -165,23 +163,11 @@ export function safeGitCommandEnv(platform = process.platform, base = processEnv
   return commandEnvironment(base, nonInteractive);
 }
 
-export function gitExecutableCandidates({ platform = process.platform, env = processEnv() } = {}) {
-  if (platform !== "win32") return trustedGitCandidates(platform);
-  const roots = [env.ProgramW6432, env.ProgramFiles, env["ProgramFiles(x86)"]].filter(Boolean);
-  const candidates = [];
-  for (const root of roots) {
-    candidates.push(
-      win32.join(root, "Git", "cmd", "git.exe"),
-      win32.join(root, "Git", "bin", "git.exe"),
-    );
-  }
-  if (env.LOCALAPPDATA) {
-    candidates.push(
-      win32.join(env.LOCALAPPDATA, "Programs", "Git", "cmd", "git.exe"),
-      win32.join(env.LOCALAPPDATA, "Programs", "Git", "bin", "git.exe"),
-    );
-  }
-  return [...new Set(candidates)];
+export function gitExecutableCandidates({ platform = process.platform } = {}) {
+  // Executable provenance is platform-owned. Ambient ProgramFiles or
+  // LOCALAPPDATA values may describe the current session, but they are not an
+  // authority from which a pre-identity Git process may be selected.
+  return trustedGitCandidates(platform);
 }
 
 export function resetGitExecutableCacheForTests() {
@@ -384,8 +370,8 @@ function unsafeAmbientGitEnvironmentKey(key) {
   );
 }
 
-function orderedGitExecutableCandidates({ platform, env, pathExists }) {
-  const installedCandidates = gitExecutableCandidates({ platform, env })
+function orderedGitExecutableCandidates({ platform, pathExists }) {
+  const installedCandidates = gitExecutableCandidates({ platform })
     .filter((candidate) => pathExists(candidate));
   return [...new Set(installedCandidates)];
 }
@@ -427,20 +413,14 @@ function minimalRemoteGitEnvironment(base, platform) {
     if (allowed.has(key.toUpperCase()) && typeof value === "string") clean[key] = value;
   }
   clean.PATH = platform === "win32"
-    ? trustedWindowsChildPath(base)
+    ? trustedWindowsChildPath()
     : "/usr/bin:/bin:/usr/sbin:/sbin";
   return clean;
 }
 
-function trustedWindowsChildPath(environment) {
+function trustedWindowsChildPath() {
   const candidates = [];
-  if (environment.SystemRoot) {
-    candidates.push(
-      win32.join(environment.SystemRoot, "System32"),
-      win32.join(environment.SystemRoot, "System32", "OpenSSH"),
-    );
-  }
-  for (const git of gitExecutableCandidates({ platform: "win32", env: environment })) {
+  for (const git of gitExecutableCandidates({ platform: "win32" })) {
     candidates.push(dirname(git), win32.join(dirname(dirname(git)), "usr", "bin"));
   }
   return [...new Set(candidates)].join(";");

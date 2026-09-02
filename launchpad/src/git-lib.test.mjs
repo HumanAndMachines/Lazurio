@@ -176,16 +176,17 @@ test("Windows remote Git environment never contains a POSIX askpass executable",
   });
 });
 
-test("Windows Git resolver falls back to standard Git for Windows locations", async () => {
+test("Windows Git resolver uses only fixed Git for Windows locations", async () => {
   const env = {
-    ProgramFiles: "C:\\Program Files",
-    "ProgramFiles(x86)": "C:\\Program Files (x86)",
-    LOCALAPPDATA: "C:\\Users\\builder\\AppData\\Local",
+    ProgramW6432: "C:\\attacker-w6432",
+    ProgramFiles: "C:\\attacker-program-files",
+    "ProgramFiles(x86)": "C:\\attacker-x86",
+    LOCALAPPDATA: "C:\\attacker-local",
   };
   const candidates = gitExecutableCandidates({ platform: "win32", env });
 
   expect(candidates).toContain("C:\\Program Files\\Git\\cmd\\git.exe");
-  expect(candidates).toContain("C:\\Users\\builder\\AppData\\Local\\Programs\\Git\\cmd\\git.exe");
+  expect(candidates.join("\n")).not.toContain("attacker");
 
   const expected = candidates.at(-1);
   const resolved = await resolveGitExecutable({
@@ -196,6 +197,35 @@ test("Windows Git resolver falls back to standard Git for Windows locations", as
     probe: async (candidate) => candidate === expected,
   });
   expect(resolved).toBe(expected);
+});
+
+test("Windows Git resolver never probes environment-directed executable roots", async () => {
+  const environment = {
+    ProgramW6432: "C:\\attacker-w6432",
+    ProgramFiles: "C:\\attacker-program-files",
+    "ProgramFiles(x86)": "C:\\attacker-x86",
+    LOCALAPPDATA: "C:\\attacker-local",
+  };
+  const attackerCandidates = [
+    "C:\\attacker-w6432\\Git\\cmd\\git.exe",
+    "C:\\attacker-program-files\\Git\\cmd\\git.exe",
+    "C:\\attacker-x86\\Git\\cmd\\git.exe",
+    "C:\\attacker-local\\Programs\\Git\\cmd\\git.exe",
+  ];
+  const probes = [];
+
+  const resolved = await resolveGitExecutable({
+    platform: "win32",
+    env: environment,
+    pathExists: (candidate) => attackerCandidates.includes(candidate),
+    probe: async (candidate) => {
+      probes.push(candidate);
+      return true;
+    },
+  });
+
+  expect(resolved).toBeNull();
+  expect(probes).toEqual([]);
 });
 
 test("Git resolver nikdy nezkouší WindowsApps PATH alias a ověří skutečný Git for Windows", async () => {
