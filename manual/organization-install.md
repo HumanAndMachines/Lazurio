@@ -207,13 +207,15 @@ terminál se starým environment snapshotem.
 Lazurio ani OrganizationTemplate nesmějí pro `.claude/skills` vytvářet
 symlink nebo junction. Kanonický source je `.agents/skills`; `.claude/skills`
 je Git-tracked, byte-for-byte odvozený mirror ověřovaný
-`bun run doctor:agent-skills` a regenerovaný pouze
-`bun run repair:agent-skills`. Fresh checkout i každý worktree jej proto už
-obsahuje a Windows **nemusí být přepnutý do Developer Mode**.
+`bun run doctor:agent-skills`. Fresh checkout i každý worktree jej proto už
+obsahuje a Windows **nemusí být přepnutý do Developer Mode**. Příkaz
+`bun run repair:agent-skills` je záměrně no-write diagnostika: drift ani
+chybějící mirror nepřepisuje, ale vrátí je Agentovi k explicitní
+Git-reviewované opravě v task worktree.
 
 Neřeš to gitignored lokální kopií: ta by po každém checkoutu a worktree
-vyžadovala další materializační krok a dovolila by lokální drift. Repair lane
-nepřepisuje neznámý obsah ani symlink/junction odhadem; takový konflikt vrátí
+vyžadovala další materializační krok a dovolila by lokální drift. Diagnostická
+lane nepřepisuje žádný obsah ani symlink/junction odhadem; každý konflikt vrátí
 Agentovi k bezpečné opravě v owning repu.
 
 CLI Root nevybírá ani neukládá jako další konfiguraci. Produkční instalace
