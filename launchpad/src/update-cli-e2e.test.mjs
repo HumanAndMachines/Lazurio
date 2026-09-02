@@ -51,7 +51,7 @@ test("isolated CLI runtime routes pinned child modes when materializing a missin
     environment: fixture.environment,
   });
 
-  expect(report.ok).toBe(true);
+  expect(report).toMatchObject({ ok: true, state: "updated" });
   expect(report.results.find((result) => result.repo_key === "FixtureOrg::sample"))
     .toMatchObject({ state: "updated", reason: "module_materialized", actions: ["materialize"] });
 });

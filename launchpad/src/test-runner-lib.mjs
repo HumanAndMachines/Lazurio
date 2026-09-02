@@ -1,5 +1,12 @@
 import { join } from "node:path";
 
+export function launchpadTestTimeout(platform) {
+  // Git-heavy filesystem tests regularly need just over 15 seconds on the
+  // shared Windows runner. Keep the per-test bound, but leave enough headroom
+  // that ordinary runner variance does not become a false product failure.
+  return platform === "win32" ? 30_000 : 5_000;
+}
+
 export function launchpadTestGroups({
   platform,
   requestedTests,
