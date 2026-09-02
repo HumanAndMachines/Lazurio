@@ -329,10 +329,19 @@ function Test-LaunchpadShortcut {
     $shell = New-Object -ComObject WScript.Shell
     $shortcut = $shell.CreateShortcut($ShortcutPath)
     $expectedArguments = "-NoProfile -ExecutionPolicy Bypass -File `"$BootstrapPath`" -ConfigPath `"$ConfigPath`""
+    foreach ($requiredField in @(
+        @{ Name = 'TargetPath'; Value = [string]$shortcut.TargetPath },
+        @{ Name = 'Arguments'; Value = [string]$shortcut.Arguments },
+        @{ Name = 'WorkingDirectory'; Value = [string]$shortcut.WorkingDirectory },
+        @{ Name = 'IconLocation'; Value = [string]$shortcut.IconLocation }
+    )) {
+        if ([string]::IsNullOrWhiteSpace($requiredField.Value)) {
+            throw "Launchpad shortcut validation failed for '$ShortcutPath': field '$($requiredField.Name)' is empty."
+        }
+    }
     return (
         (Get-FullPath -Path $shortcut.TargetPath) -eq (Get-FullPath -Path $PowerShellPath) -and
         $shortcut.Arguments -eq $expectedArguments -and
-        -not [string]::IsNullOrWhiteSpace($shortcut.WorkingDirectory) -and
         (Get-FullPath -Path $shortcut.WorkingDirectory) -eq $InstalledRoot -and
         $shortcut.IconLocation -eq "$IconPath,0"
     )
@@ -387,11 +396,14 @@ if ([string]::IsNullOrWhiteSpace($StartMenuRoot)) {
     }
     $StartMenuRoot = Join-Path $programsRoot 'Lazurio'
 }
-if ([string]::IsNullOrWhiteSpace($TaskbarRoot)) {
-    if ([string]::IsNullOrWhiteSpace($env:APPDATA)) {
-        throw 'Windows roaming AppData path could not be resolved. Pass -TaskbarRoot explicitly.'
+if (-not $StartMenuOnly) {
+    if ([string]::IsNullOrWhiteSpace($TaskbarRoot)) {
+        if ([string]::IsNullOrWhiteSpace($env:APPDATA)) {
+            throw 'Windows roaming AppData path could not be resolved. Pass -TaskbarRoot explicitly.'
+        }
+        $TaskbarRoot = Join-Path $env:APPDATA 'Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar'
     }
-    $TaskbarRoot = Join-Path $env:APPDATA 'Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar'
+    $TaskbarRoot = Get-FullPath -Path $TaskbarRoot
 }
 if ([string]::IsNullOrWhiteSpace($InstallRoot)) {
     if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
@@ -401,7 +413,6 @@ if ([string]::IsNullOrWhiteSpace($InstallRoot)) {
 }
 
 $StartMenuRoot = Get-FullPath -Path $StartMenuRoot
-$TaskbarRoot = Get-FullPath -Path $TaskbarRoot
 $InstallRoot = Get-FullPath -Path $InstallRoot
 $assetRoot = Join-Path $InstallRoot 'assets'
 $iconPath = Join-Path $assetRoot 'launchpad.ico'
@@ -409,7 +420,7 @@ $installedBootstrapPath = Join-Path $InstallRoot 'Launchpad-Bootstrap.ps1'
 $installConfigPath = Join-Path $InstallRoot 'install.json'
 $shortcutName = 'Lazurio Launchpad.lnk'
 $startMenuShortcut = Join-Path $StartMenuRoot $shortcutName
-$taskbarShortcut = Join-Path $TaskbarRoot $shortcutName
+$taskbarShortcut = if ($StartMenuOnly) { $null } else { Join-Path $TaskbarRoot $shortcutName }
 $backupBaseRoot = Join-Path $InstallRoot 'shortcut-backups'
 $backups = New-Object System.Collections.Generic.List[string]
 $installApplied = $false

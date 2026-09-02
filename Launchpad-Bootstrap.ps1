@@ -28,6 +28,23 @@ try {
         throw "Configured Launchpad root is not available: $root"
     }
 
+    # Explorer and Start Menu keep the environment snapshot from sign-in. A
+    # WinGet install can therefore persist Bun in User PATH while a newly
+    # created shortcut still inherits the stale process value. Rebuild only
+    # this bootstrap process from the current Windows authorities; do not
+    # mutate Machine/User PATH and do not persist another executable locator.
+    $machinePath = [Environment]::GetEnvironmentVariable(
+        'Path',
+        [System.EnvironmentVariableTarget]::Machine
+    )
+    $userPath = [Environment]::GetEnvironmentVariable(
+        'Path',
+        [System.EnvironmentVariableTarget]::User
+    )
+    $env:Path = (@($machinePath, $userPath) | Where-Object {
+        -not [string]::IsNullOrWhiteSpace([string]$_)
+    }) -join [System.IO.Path]::PathSeparator
+
     Push-Location -LiteralPath $root
     try {
         # The canonical launcher owns its own language-mode contract. The

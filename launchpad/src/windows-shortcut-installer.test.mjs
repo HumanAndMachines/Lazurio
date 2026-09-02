@@ -57,6 +57,10 @@ test("Windows installer drží jediný per-user bootstrap kontrakt bez druhé ru
   expect(contents.split(dualSeparatorSplit)).toHaveLength(3);
   expect(contents).toContain("$shortcut.Arguments -eq $expectedArguments");
   expect(contents).not.toContain("$shortcut.Arguments -like");
+  expect(contents).toContain("field '$($requiredField.Name)' is empty");
+  expect(contents).toContain("@{ Name = 'TargetPath'; Value = [string]$shortcut.TargetPath }");
+  expect(contents).toContain("@{ Name = 'WorkingDirectory'; Value = [string]$shortcut.WorkingDirectory }");
+  expect(contents).toContain("$taskbarShortcut = if ($StartMenuOnly) { $null }");
   expect(contents).not.toContain("ScheduledTask");
   expect(contents).not.toMatch(/\bport\b/i);
   expect(contents.indexOf("Publish-AtomicFile -SourcePath $sourceBootstrapPath"))

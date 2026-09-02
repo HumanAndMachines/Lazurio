@@ -28,6 +28,8 @@ test("Windows dispatchuje přesně existující PowerShell adapter portable cest
       "Bypass",
       "-File",
       "C:\\Users\\Colleague\\Lazurio\\Install-LaunchpadShortcut.ps1",
+      "-StartMenuOnly",
+      "-SkipShellPin",
     ],
     cwd: "C:\\Users\\Colleague\\Lazurio",
   });

@@ -19,6 +19,8 @@ export function buildLaunchpadInstallInvocation({ root, platform = process.platf
         "Bypass",
         "-File",
         win32.join(canonicalRoot, "Install-LaunchpadShortcut.ps1"),
+        "-StartMenuOnly",
+        "-SkipShellPin",
       ],
       cwd: canonicalRoot,
     };
