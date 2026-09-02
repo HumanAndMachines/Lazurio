@@ -49,6 +49,10 @@ Runtime nemá self-update službu a nevytváří druhý kontejner ani druhou slu
 Lokální `lazurio launchpad install` je od toho oddělený desktopový krok: pouze
 dispatchuje existující macOS nebo Windows instalátor uživatelského launcheru,
 nemění Git checkout ani immutable runtime a nezavádí další lifecycle autoritu.
+Na Windows veřejný CLI vstup instaluje jen spolehlivý Start Menu shortcut bez
+Taskbar pinu. Jeho stabilní bootstrap při každém spuštění sestaví process
+`PATH` z právě uložených Machine + User hodnot; neukládá vlastní Bun locator a
+nemění persistentní environment.
 
 Source checkout zpřístupní samotné CLI explicitním `lazurio cli install`
 přes standardní Bun global link. Tento per-user krok neupravuje shell/Windows

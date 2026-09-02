@@ -63,6 +63,9 @@ test("Windows bootstrap čte pouze canonical root config a deleguje na Launchpad
   expect(contents).toContain("Join-Path $root 'Launchpad.ps1'");
   expect(contents).toContain("Push-Location -LiteralPath $root");
   expect(contents).toContain("Set-StrictMode -Off");
+  expect(contents).toContain("[System.EnvironmentVariableTarget]::Machine");
+  expect(contents).toContain("[System.EnvironmentVariableTarget]::User");
+  expect(contents).toContain("$env:Path = (@($machinePath, $userPath)");
   expect(contents).toContain("& $launcher");
   expect(contents).toContain("exit $launchpadExitCode");
   expect(contents).not.toContain("Get-Command bun");
@@ -95,6 +98,39 @@ windowsTest("Windows bootstrap zachová canonical cwd a exit code root launcheru
   }
 }, 30_000);
 
+windowsTest("Windows bootstrap obnoví stale inherited PATH z aktuální Machine a User autority", async () => {
+  const fixtureRoot = await mkdtemp(join(await realpath(tmpdir()), "launchpad-bootstrap-path-"));
+  tempRoots.push(fixtureRoot);
+  const marker = join(fixtureRoot, "path-marker.json");
+  const config = join(fixtureRoot, "install.json");
+  await writeFile(join(fixtureRoot, "Launchpad.ps1"), [
+    "$payload = [pscustomobject]@{",
+    "  actual = $env:Path",
+    "  machine = [Environment]::GetEnvironmentVariable('Path', [System.EnvironmentVariableTarget]::Machine)",
+    "  user = [Environment]::GetEnvironmentVariable('Path', [System.EnvironmentVariableTarget]::User)",
+    "}",
+    "[System.IO.File]::WriteAllText($env:LAZURIO_BOOTSTRAP_MARKER, ($payload | ConvertTo-Json -Compress))",
+    "exit 0",
+  ].join("\r\n"), "utf8");
+  await writeFile(config, JSON.stringify({
+    schema_version: "lazurio.launchpad.windows_install.v1",
+    root: fixtureRoot,
+  }), "utf8");
+
+  const stalePath = "C:\\lazurio-stale-path-marker";
+  const result = runBootstrap(config, {
+    LAZURIO_BOOTSTRAP_MARKER: marker,
+    PATH: stalePath,
+  });
+  expect(result.exitCode).toBe(0);
+  const observed = JSON.parse(await readFile(marker, "utf8"));
+  const expected = [observed.machine, observed.user]
+    .filter((value) => typeof value === "string" && value.trim() !== "")
+    .join(";");
+  expect(observed.actual).toBe(expected);
+  expect(observed.actual).not.toContain(stalePath);
+}, 30_000);
+
 windowsTest("Windows bootstrap fail-closed odmítne chybějící config i root", async () => {
   const fixtureRoot = await mkdtemp(join(await realpath(tmpdir()), "launchpad-bootstrap-invalid-"));
   tempRoots.push(fixtureRoot);
@@ -120,6 +156,15 @@ function runBootstrap(configPath, extraEnv = {}) {
     "v1.0",
     "powershell.exe",
   );
+  const environment = { ...process.env };
+  for (const [key, value] of Object.entries(extraEnv)) {
+    if (key.toLowerCase() === "path") {
+      for (const inheritedKey of Object.keys(environment)) {
+        if (inheritedKey.toLowerCase() === "path") delete environment[inheritedKey];
+      }
+    }
+    environment[key] = value;
+  }
   return Bun.spawnSync([
     powershell,
     "-NoProfile",
@@ -134,6 +179,6 @@ function runBootstrap(configPath, extraEnv = {}) {
     stdin: Buffer.from("\n"),
     stdout: "pipe",
     stderr: "pipe",
-    env: { ...process.env, ...extraEnv },
+    env: environment,
   });
 }
