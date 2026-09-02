@@ -153,6 +153,19 @@ source bytes. Přechod main ↔ worktree nebo změna Server generace proto bezpe
 nahradí tutéž sdílenou instanci a launcher ohlásí její skutečný origin;
 nekompatibilní ani cizí listener se nikdy nepřevezme.
 
+## Jazyk UI
+
+Launchpad-owned UI copy žije offline v `public/locales/cs.js` a `en.js`.
+Explicitní preference `launchpad.locale` má přednost před jazykem prohlížeče;
+fallback je čeština. Přepnutí jazyka reloadne stejnou route, takže nemění
+vybraný prostor ani lifecycle běžících Apps.
+
+Kód používá pouze stabilní významové klíče a API důvody vyhodnocuje podle
+`error`/`failure_kind`, nikdy podle lidské věty. Text Organizace — názvy,
+popisy, commit messages, plugin obsah — a raw technická evidence zůstávají
+beze změny, protože jejich jazyk vlastní zdrojové repo. Překladový postup a
+QA pravidla jsou v [`CONTRIBUTING.md`](../CONTRIBUTING.md).
+
 ## Discovery model
 
 Launchpad skládá dostupné Organizace scan-first:

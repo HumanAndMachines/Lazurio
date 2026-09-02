@@ -1,4 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
+import { readFile, readdir } from "node:fs/promises";
+import { join } from "node:path";
 import {
   DEFAULT_LOCALE,
   LOCALE_STORAGE_KEY,
@@ -10,6 +12,8 @@ import {
   t,
   tp,
 } from "../public/i18n.js";
+import { cs } from "../public/locales/cs.js";
+import { en } from "../public/locales/en.js";
 
 afterEach(() => setLocale(DEFAULT_LOCALE, { storage: null }));
 
@@ -71,4 +75,41 @@ test("initialization translates text, attributes, document language and selector
 
 test("unsupported explicit locale is rejected", () => {
   expect(() => setLocale("de")).toThrow(RangeError);
+});
+
+test("Czech and English catalogs expose the same semantic contract", () => {
+  expect(Object.keys(en).sort()).toEqual(Object.keys(cs).sort());
+  expect(Object.values(cs).every((value) => typeof value === "string" && value.length > 0)).toBe(true);
+  expect(Object.values(en).every((value) => typeof value === "string" && value.length > 0)).toBe(true);
+});
+
+test("English covers loading, warnings, recovery, personalspace and worktree copy", () => {
+  setLocale("en", { storage: null });
+  expect(t("loading.title", { title: "Mission Control" })).toBe("Starting Mission Control");
+  expect(t("warning.invalidConfig")).toBe("Configuration error");
+  expect(t("recovery.timeoutTitle")).toBe("The application is taking too long to start");
+  expect(t("personal.loadFailed.title")).toBe("Personal space could not be loaded");
+  expect(t("worktree.created", { app: "Infra", worktree: "DEV-1" })).toBe("Infra: worktree created (DEV-1).");
+});
+
+test("every literal UI key resolves and locale sources contain no duplicate keys", async () => {
+  const publicRoot = join(import.meta.dirname, "..", "public");
+  const files = (await readdir(publicRoot)).filter((file) => file.endsWith(".js"));
+  const literalKeys = new Set();
+  for (const file of files) {
+    const source = await readFile(join(publicRoot, file), "utf8");
+    for (const match of source.matchAll(/\b(?:t|tp)\("([^"]+)"/g)) literalKeys.add(match[1]);
+  }
+  for (const key of literalKeys) {
+    const resolvesDirectly = Object.hasOwn(cs, key);
+    const resolvesAsPlural = Object.keys(cs).some((candidate) => candidate.startsWith(`${key}.`));
+    expect(resolvesDirectly || resolvesAsPlural).toBe(true);
+  }
+
+  for (const [file, catalog] of [["cs.js", cs], ["en.js", en]]) {
+    const source = await readFile(join(publicRoot, "locales", file), "utf8");
+    const declaredKeys = [...source.matchAll(/^\s*,?"([^"]+)":/gm)].map((match) => match[1]);
+    expect(new Set(declaredKeys).size).toBe(declaredKeys.length);
+    expect(declaredKeys.length).toBe(Object.keys(catalog).length);
+  }
 });

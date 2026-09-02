@@ -6,7 +6,18 @@ export const SUPPORTED_LOCALES = Object.freeze(["cs", "en"]);
 export const LOCALE_STORAGE_KEY = "launchpad.locale";
 
 const catalogs = Object.freeze({ cs, en });
-let activeLocale = DEFAULT_LOCALE;
+let activeLocale = environmentLocale();
+
+function environmentLocale() {
+  let stored = null;
+  try {
+    stored = globalThis.localStorage?.getItem(LOCALE_STORAGE_KEY);
+  } catch {}
+  return resolveLocale({
+    stored,
+    languages: globalThis.navigator?.languages ?? [globalThis.navigator?.language],
+  });
+}
 
 export function normalizeLocale(value) {
   const primary = String(value ?? "").trim().toLowerCase().split(/[-_]/)[0];

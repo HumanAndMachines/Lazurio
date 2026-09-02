@@ -8,69 +8,50 @@
 // z CAC-0042. Bez dostupného git read modelu se chip na kartě chová graceful:
 // bez git dat se prostě nezobrazí (viz gitChipModel).
 
+import { t } from "./i18n.js";
+
 // Krátký lidský label stavu — pro chip na kartě.
 export function humanGitStatusLabel(status) {
-  const labels = {
-    up_to_date: "v pořádku",
-    // CAC-0042 read model používá pull_available; GEN2 mělo update_available.
-    pull_available: "novější verze",
-    update_available: "novější verze",
-    push_required: "čeká na odeslání",
-    diverged: "ověřit změny",
-    draft_changes: "rozdělaná práce",
-    dirty_local_changes: "rozdělaná práce",
-    wrong_branch: "jiný režim",
-    rebase_in_progress: "rebase vyžaduje pomoc",
-    git_am_in_progress: "aplikování patchů vyžaduje pomoc",
-    not_on_main: "jiný režim",
-    repo_missing: "chybí složka",
-    git_unavailable: "Git nejde spustit",
-    check_failed: "kontrola se nepovedla",
+  const keys = {
+    up_to_date: "up_to_date",
+    pull_available: "pull_available",
+    update_available: "pull_available",
+    push_required: "push_required",
+    diverged: "diverged",
+    draft_changes: "draft_changes",
+    dirty_local_changes: "draft_changes",
+    wrong_branch: "wrong_branch",
+    rebase_in_progress: "rebase_in_progress",
+    git_am_in_progress: "git_am_in_progress",
+    not_on_main: "wrong_branch",
+    repo_missing: "repo_missing",
+    git_unavailable: "git_unavailable",
+    check_failed: "check_failed",
   };
-  return labels[status] ?? status;
+  return keys[status] ? t(`git.label.${keys[status]}`) : status;
 }
 
 // Delší vysvětlení stavu — pro detail a ⋯ menu. Diverged/wrong_branch vedou na
 // pomocníka, ne na automatický pull (nesmí zamlčet riziko).
 export function gitStatusUserMessage(repo) {
   if (!repo) return "";
-  if (
-    (repo.status === "git_unavailable" || repo.status === "check_failed") &&
-    repo.message
-  ) {
-    return repo.message;
-  }
-
-  const messages = {
-    up_to_date: "Tenhle modul je připravený.",
-    pull_available:
-      "Někdo mezitím poslal novější verzi. Použij Synchronizovat.",
-    update_available:
-      "Někdo mezitím poslal novější verzi. Použij Synchronizovat.",
-    push_required:
-      "Tady jsou hotové uložené změny, které ještě nejsou odeslané ostatním.",
-    diverged:
-      "Tady jsou změny na tvém počítači i ve sdílené verzi. Nech to raději porovnat pomocníkem.",
-    draft_changes:
-      "Tady je rozepsaná práce. Můžeš si zobrazit, co se změnilo.",
-    dirty_local_changes:
-      "Tady je rozepsaná práce. Můžeš si zobrazit, co se změnilo.",
-    wrong_branch:
-      "Tenhle modul je v nestandardním pracovním režimu. Pomocník zjistí proč.",
-    rebase_in_progress:
-      "Stahování změn zůstalo rozpracované. Rebase můžeš abortnout nebo předat screenshot agentovi do Codexu.",
-    git_am_in_progress:
-      "Aplikování patchů zůstalo rozpracované. Udělej screenshot a předej ho agentovi do Codexu; Launchpad do git am automaticky nezasahuje.",
-    not_on_main:
-      "Tenhle modul je v nestandardním pracovním režimu. Pomocník zjistí proč.",
-    repo_missing:
-      "Launchpad tuhle složku nenašel. Pomocník zjistí, jestli chybí přístup nebo lokální instalace.",
-    git_unavailable:
-      "Launchpad neumí spustit kontrolu stavu. Pomocník prověří lokální nastavení.",
-    check_failed:
-      "Kontrola se nepovedla. Pomocník se podívá na detail a navrhne další krok.",
+  const keys = {
+    up_to_date: "up_to_date",
+    pull_available: "pull_available",
+    update_available: "pull_available",
+    push_required: "push_required",
+    diverged: "diverged",
+    draft_changes: "draft_changes",
+    dirty_local_changes: "draft_changes",
+    wrong_branch: "wrong_branch",
+    rebase_in_progress: "rebase_in_progress",
+    git_am_in_progress: "git_am_in_progress",
+    not_on_main: "wrong_branch",
+    repo_missing: "repo_missing",
+    git_unavailable: "git_unavailable",
+    check_failed: "check_failed",
   };
-  return messages[repo.status] ?? repo.message ?? repo.title ?? "";
+  return keys[repo.status] ? t(`git.message.${keys[repo.status]}`) : repo.message ?? repo.title ?? "";
 }
 
 // Tón chipu podle severity (ok/warn/fail) → mapuje na chip- třídy v CSS.

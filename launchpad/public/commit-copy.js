@@ -13,21 +13,22 @@
 //
 // Čistá prezentační vrstva: žádný git, žádné IO, žádná org-specific pravda.
 
+import { t } from "./i18n.js";
 import { TOPIC_LABELS, VERBS } from "./commit-glossary.js";
 
 // Conventional Commits prefix → co to pro člověka znamená.
 const CHANGE_KINDS = {
-  feat: "Nová funkce",
-  fix: "Oprava",
-  docs: "Dokumentace",
-  chore: "Údržba",
-  refactor: "Přepis kódu",
-  test: "Testy",
-  style: "Úprava formátování",
-  perf: "Zrychlení",
-  build: "Sestavení aplikace",
-  ci: "Automatické kontroly",
-  revert: "Vrácení dřívější změny",
+  feat: "feature",
+  fix: "fix",
+  docs: "docs",
+  chore: "chore",
+  refactor: "refactor",
+  test: "test",
+  style: "style",
+  perf: "performance",
+  build: "build",
+  ci: "ci",
+  revert: "revert",
 };
 
 // „Merge pull request #15 from org/branch" nikomu nic neřekne. Skutečný název
@@ -71,7 +72,7 @@ export function humanCommitCopy(payload = {}, description = "") {
   let area = null;
   const conventional = subject.match(CONVENTIONAL);
   if (conventional && CHANGE_KINDS[conventional[1].toLowerCase()]) {
-    kind = CHANGE_KINDS[conventional[1].toLowerCase()];
+    kind = t(`commit.kind.${CHANGE_KINDS[conventional[1].toLowerCase()]}`);
     area = conventional[2]?.trim() || null;
     subject = conventional[4].trim();
   }
@@ -94,23 +95,24 @@ export function changeKindLabel(payload = {}, copy = {}) {
   if (!title) return null;
   const withoutArea = title.replace(/^[^:]{2,40}:\s*/, "");
   const first = withoutArea.split(/\s+/)[0]?.toLowerCase();
-  return VERBS[first] ?? null;
+  return VERBS[first] ? t(`commit.verb.${VERBS[first]}`) : null;
 }
 
 // Odkud změna přišla — jediná další věc, kterou umíme říct spolehlivě.
 export function changeOriginLabel(copy = {}) {
-  return copy.pullRequest ? `přes schválený návrh #${copy.pullRequest}` : null;
+  return copy.pullRequest ? t("commit.origin.pullRequest", { number: copy.pullRequest }) : null;
 }
 
 // Čeho se změna týkala. Neodvozuje se z textu commitu (tam jsou vlastní jména,
 // která přeložit nejde), ale ze složek, ve kterých se soubory měnily.
 export function topicLabel(payload = {}) {
   const topics = (payload.topics ?? []).map(humanTopic).filter(Boolean);
-  return topics.length > 0 ? topics.join(" a ") : null;
+  return topics.length > 0 ? topics.join(t("commit.topicJoin")) : null;
 }
 
 function humanTopic(segment) {
   const key = String(segment ?? "").trim();
   if (!key) return null;
-  return TOPIC_LABELS[key.toLowerCase()] ?? key.replace(/[-_]+/g, " ");
+  const topic = TOPIC_LABELS[key.toLowerCase()];
+  return topic ? t(`commit.topic.${topic}`) : key.replace(/[-_]+/g, " ");
 }
