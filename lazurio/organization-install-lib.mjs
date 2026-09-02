@@ -258,29 +258,72 @@ export async function installOrganizationRepositoryDbMounts({
     })];
   }
   const repositoryInventory = resolution.resource?.repository_inventory ?? [];
-  const slots = repositoryInventory
-    .filter((slot) => (
-      slot?.path === "mission-control/db"
-      && slot?.materialization === "repository_db_mount"
-      && slot?.status === "active"
-    ))
-    .sort((left, right) => String(left.path).localeCompare(String(right.path), "en"));
-  const results = [];
-  for (const slot of slots) {
-    results.push(await installOrganizationRepositoryDbMount({
-      rootPath,
-      organizationPath,
-      organizationRoot,
+  const missionControlSlots = repositoryInventory
+    .filter((slot) => normalizeOrganizationSlotPath(slot?.path) === "mission-control");
+  const repositoryDbSlots = repositoryInventory
+    .filter((slot) => normalizeOrganizationSlotPath(slot?.path) === "mission-control/db");
+
+  // A plain Organization scaffold may not have Mission Control at all. Once
+  // either side of the app/data boundary is declared, however, an explicit
+  // install must not claim convergence while leaving its required data mount
+  // absent, inactive, or under the wrong materialization contract.
+  if (missionControlSlots.length === 0 && repositoryDbSlots.length === 0) return [];
+  if (missionControlSlots.length !== 1) {
+    return [repositoryDbBlockedResult({
       source,
-      slot,
-      repositoryInventory,
-      platform,
-      run,
-      runPinnedChild,
-      materializationDeps,
-    }));
+      organizationPath,
+      reason: "repository_db_parent_invalid",
+      message: "Mission Control boundary nemá právě jeden deklarovaný parent repozitář.",
+    })];
   }
-  return results;
+  if (repositoryDbSlots.length === 0) {
+    return [repositoryDbBlockedResult({
+      source,
+      organizationPath,
+      reason: "repository_db_required_missing",
+      message: "Deklarovaný Mission Control nemá povinný mission-control/db repository-db mount.",
+    })];
+  }
+  if (repositoryDbSlots.length !== 1) {
+    return [repositoryDbBlockedResult({
+      source,
+      organizationPath,
+      reason: "repository_db_manifest_invalid",
+      message: "Mission Control deklaruje více než jeden mission-control/db repository-db mount.",
+    })];
+  }
+
+  const [slot] = repositoryDbSlots;
+  if (slot?.path !== "mission-control/db" || slot?.status !== "active") {
+    return [repositoryDbBlockedResult({
+      source,
+      organizationPath,
+      slot,
+      reason: "repository_db_not_active",
+      message: "Mission Control repository-db mount musí být přesně aktivní mission-control/db.",
+    })];
+  }
+  if (slot.materialization !== "repository_db_mount") {
+    return [repositoryDbBlockedResult({
+      source,
+      organizationPath,
+      slot,
+      reason: "repository_db_materialization_invalid",
+      message: "Aktivní mission-control/db musí používat materialization: repository_db_mount.",
+    })];
+  }
+  return [await installOrganizationRepositoryDbMount({
+    rootPath,
+    organizationPath,
+    organizationRoot,
+    source,
+    slot,
+    repositoryInventory,
+    platform,
+    run,
+    runPinnedChild,
+    materializationDeps,
+  })];
 }
 
 async function installOrganizationRepositoryDbMount({
@@ -525,9 +568,9 @@ function repositoryDbResultIdentity({ source, organizationPath, slot }) {
   };
 }
 
-function repositoryDbBlockedResult({ source, organizationPath, reason, message }) {
+function repositoryDbBlockedResult({ source, organizationPath, slot = null, reason, message }) {
   return {
-    ...repositoryDbResultIdentity({ source, organizationPath, slot: null }),
+    ...repositoryDbResultIdentity({ source, organizationPath, slot }),
     state: "blocked",
     reason,
     message,

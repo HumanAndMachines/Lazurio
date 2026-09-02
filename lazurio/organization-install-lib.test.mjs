@@ -258,6 +258,46 @@ test("explicit Organization install materializes an active repository-db mount o
   expect((await runGit(["remote", "get-url", "origin"], { cwd: dataPath })).stdout).toBe(fakeDataRemote);
 });
 
+test("declared Mission Control never reports successful install without its active repository-db mount", async () => {
+  const scenarios = [
+    {
+      options: { includeRepositoryDb: false },
+      reason: "repository_db_required_missing",
+    },
+    {
+      options: { repositoryDbStatus: "inactive" },
+      reason: "repository_db_not_active",
+    },
+    {
+      options: { repositoryDbMaterialization: "doctor_managed_nested_repo" },
+      reason: "repository_db_materialization_invalid",
+    },
+  ];
+
+  for (const scenario of scenarios) {
+    const fixture = await organizationRepositoryDbFixture(scenario.options);
+    const source = sourceObservation({ documents: fixture.documents });
+    const report = await installOrganization({
+      rootPath: fixture.root,
+      githubLogin: login,
+      deps: {
+        observe: async () => source,
+        reobserve: async () => ({ ok: true }),
+        runGit: translatedGitRunner(fixture.remote),
+        runPinnedChild: translatedPinnedGitRunner(fixture.remote),
+        runUpdate: async () => updateReport("current"),
+      },
+    });
+
+    expect(report).toMatchObject({ state: "blocked", ok: false });
+    expect(report.convergence.results).toContainEqual(expect.objectContaining({
+      state: "blocked",
+      reason: scenario.reason,
+    }));
+    expect(existsSync(join(fixture.root, "organizations", `${login}_GEN3`, "mission-control", "db"))).toBe(false);
+  }
+});
+
 test("Organization-level ignore cannot authorize a repository-db clone into a non-repository parent", async () => {
   const fixture = await organizationRepositoryDbFixture();
   const source = sourceObservation({ documents: fixture.documents });
@@ -528,31 +568,35 @@ async function organizationRemoteFixture({ repositoryId = ids.repository } = {})
   return { root, remote, source };
 }
 
-async function organizationRepositoryDbFixture() {
+async function organizationRepositoryDbFixture({
+  includeRepositoryDb = true,
+  repositoryDbStatus = "active",
+  repositoryDbMaterialization = "repository_db_mount",
+} = {}) {
   const fixture = await organizationRemoteFixture();
   const documents = scaffoldDocuments();
   documents.company.layers ??= [];
   documents.company.layers.push({ path: "mission-control", kind: "root-docs", ownership: "manual" });
-  documents.modules.module_slots.push(
-    {
-      path: "mission-control",
-      slug: "mission-control",
-      source_of_truth: "git-native",
-      space: "root",
-      status: "active",
-      materialization: "doctor_managed_nested_repo",
-      git: { url: `git@github.com:${login}/mission-control.git`, branch: "main" },
-    },
-    {
+  documents.modules.module_slots.push({
+    path: "mission-control",
+    slug: "mission-control",
+    source_of_truth: "git-native",
+    space: "root",
+    status: "active",
+    materialization: "doctor_managed_nested_repo",
+    git: { url: `git@github.com:${login}/mission-control.git`, branch: "main" },
+  });
+  if (includeRepositoryDb) {
+    documents.modules.module_slots.push({
       path: "mission-control/db",
       slug: "mission-control-data",
       source_of_truth: "repository-db:v3",
       space: "root",
-      status: "active",
-      materialization: "repository_db_mount",
+      status: repositoryDbStatus,
+      materialization: repositoryDbMaterialization,
       git: { url: fakeDataRemote, branch: "v3" },
-    },
-  );
+    });
+  }
   await writeFile(join(fixture.source, "company.gen3.json"), `${JSON.stringify(documents.company, null, 2)}\n`);
   await writeFile(join(fixture.source, "modules.manifest.json"), `${JSON.stringify(documents.modules, null, 2)}\n`);
   await runGit(["add", "company.gen3.json", "modules.manifest.json"], { cwd: fixture.source });

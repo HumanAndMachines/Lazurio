@@ -75,7 +75,9 @@ doplnit aktivní root-space `mission-control/db` s materializací
 materializovaným parent Git repozitářem. Ověří Organization-owned remote,
 deklarovanou branch, Git ignore v parent repozitáři a bezpečnou fyzickou cestu.
 Duplicitní legacy `repository_db` projekce není další autorita; rozhodují
-normalizovaná Git pole slotu.
+normalizovaná Git pole slotu. Nemá-li deklarovaný Mission Control právě jeden
+aktivní `mission-control/db` mount s tímto kontraktem, install skončí
+`blocked` — nesmí hlásit úspěšnou konvergenci s chybějícími daty.
 
 Existující repository-db checkout installer nefetchuje ani nefast-forwarduje:
 ověří pouze čistý exact Git root, remote a deklarovanou branch. Ongoing sync,

@@ -298,7 +298,9 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    mechanismu vyloučené. Explicitní `lazurio organization install` smí jako
    úzký bootstrap doplnit pouze aktivní deklarovaný root-space
    `mission-control/db` pod ověřeným parent Git repem; existující repository-db
-   neaktualizuje a nezískává commit/publish autoritu. Agent nikdy nezačíná práci
+   neaktualizuje a nezískává commit/publish autoritu. Deklarovaný Mission Control
+   bez právě jednoho aktivního `repository_db_mount` končí `blocked`, nikdy
+   zdánlivě úspěšnou instalací. Agent nikdy nezačíná práci
    v primárním checkoutu; pro všechny změny používá task/PR worktree. Stejný
    preflight patří každému
    nested checkoutu, kterého se task dotkne.
