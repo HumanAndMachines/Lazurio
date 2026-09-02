@@ -1,6 +1,6 @@
 # Canva
 
-Stav ověřen 2026-07-24.
+Stav ověřen 2026-09-02.
 
 ## Možnosti
 
@@ -43,6 +43,14 @@ Codex: `codex mcp add <org_slug>_canva --url https://mcp.canva.com/mcp` +
 (správný tým!). Multi-org mašina: OAuth je origin-keyed jako u Atlassianu —
 víc Canva účtů na jedné mašině řeš oddělenými harness profily, nebo drž
 Canva na org-dedikovaných mašinách.
+
+Canva může na consent obrazovce rozšířit užší seznam scope požadovaný
+klientem na celý grant konektoru. Při ověření v Codexu 2026-09-02 grant
+zahrnoval i mazání složek a assetů a publikaci Brand Templates. Principál
+proto před potvrzením kontroluje skutečný provider grant a široký grant musí
+výslovně schválit jako samostatný krok; parametr `--scopes` není důkaz, že
+provider přístup technicky omezil. Procesní approval gate dál omezuje, které
+operace Agent skutečně provede.
 
 ## Smoke test
 

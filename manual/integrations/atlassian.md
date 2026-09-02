@@ -1,6 +1,6 @@
 # Atlassian: Jira a Confluence
 
-Stav ověřen 2026-07-24.
+Stav ověřen 2026-09-02.
 
 ## Možnosti
 
@@ -47,6 +47,11 @@ Katalogový zápis v org `.mcp.json`:
 Codex: `codex mcp add <org_slug>_atlassian --url https://mcp.atlassian.com/v1/mcp/authv2`
 + `codex mcp login`. OAuth consent dokončuje Principál a vybírá správnou
 site Organizace.
+
+Pro Jira JQL search je `search:jira-work` samostatný scope; samotný
+`read:jira-work` jej nenahrazuje. Přesný seznam vždy porovnej s aktuálním
+OAuth consentem provideru a nepřidávej scope pro workflow, které Organizace
+nepoužívá.
 
 Sooperset varianta (multi-org/DC): pinned Docker image nebo `uvx`, env
 jména `<ORG_SLUG>_JIRA_URL`, `<ORG_SLUG>_ATLASSIAN_TOKEN` apod. v katalogu,
