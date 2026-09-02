@@ -149,12 +149,16 @@ function collectObservations({ request, appSlug, provider }) {
   }
 
   const membership = invoke(["api", `user/memberships/orgs/${organization.login}`]);
-  if (!membership.ok && ![403, 404].includes(membership.httpStatus)) {
-    requireSuccess(membership, {
-      missingCode: "github_transport_failed",
-      missingNextAction: "retry",
-    });
+  if (!membership.ok && [403, 404].includes(membership.httpStatus)) {
+    // A concealed membership boundary is not evidence of non-ownership.
+    // Stop before private root/App probes and return an explicit permission
+    // error rather than inventing a false owner observation.
+    throw new ActivationProbeError("github_access_denied", false, "refresh_github_permissions");
   }
+  requireSuccess(membership, {
+    missingCode: "github_transport_failed",
+    missingNextAction: "retry",
+  });
   const membershipIsOwner = membership.ok
     && membership.value?.state === "active"
     && membership.value?.role === "admin"
