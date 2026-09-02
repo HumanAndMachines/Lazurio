@@ -6077,20 +6077,57 @@ html[data-i18n-ready="true"] .locale-bootstrap {
   to { transform: rotate(360deg); }
 }
 
-.locale-control {
-  display: inline-flex;
-}
-
 .locale-switcher {
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  border-radius: 8px;
-  color: var(--lz-gray-100);
-  font: inherit;
-  font-size: 0.8125rem;
-  padding: 0.38rem 1.65rem 0.38rem 0.55rem;
+  align-items: center;
+  display: inline-flex;
+  flex: none;
+  gap: 0.45rem;
+  margin-inline: 0.2rem;
 }
 
-.locale-switcher option {
-  color: #111;
+.locale-switcher-option {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  min-height: 32px;
+  padding: 0.25rem 0;
+  position: relative;
+  transition: color var(--t-fast) ease;
+}
+
+.locale-switcher-option::after {
+  background: currentColor;
+  bottom: 3px;
+  content: "";
+  height: 1px;
+  left: 0;
+  opacity: 0;
+  position: absolute;
+  right: 0;
+  transform: scaleX(0.65);
+  transition: opacity var(--t-fast) ease, transform var(--t-fast) ease;
+}
+
+.locale-switcher-option:hover,
+.locale-switcher-option[aria-pressed="true"] {
+  color: var(--lz-white);
+}
+
+.locale-switcher-option[aria-pressed="true"]::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+.locale-switcher-option:focus-visible {
+  border-radius: 2px;
+  outline: 2px solid var(--lz-white);
+  outline-offset: 3px;
+}
+
+.locale-switcher-divider {
+  color: rgba(255, 255, 255, 0.28);
+  font-size: 0.75rem;
+  line-height: 1;
 }

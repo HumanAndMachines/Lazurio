@@ -38,7 +38,7 @@ test("locale is stored per browser and catalogs interpolate semantic keys", () =
   expect(tp("plural.blocker", 2)).toBe("blockers");
 });
 
-test("initialization translates text, attributes, document language and selector before reveal", () => {
+test("initialization translates text, attributes, document language and locale controls before reveal", () => {
   const nodes = {
     text: [{ dataset: { i18n: "workspace.welcome" }, textContent: "" }],
     placeholder: [{ dataset: { i18nPlaceholder: "workspace.searchPlaceholder" }, setAttribute(name, value) { this[name] = value; } }],
@@ -46,7 +46,10 @@ test("initialization translates text, attributes, document language and selector
     title: [{ dataset: { i18nTitle: "topbar.syncTitle" }, setAttribute(name, value) { this[name] = value; } }],
   };
   const attributes = new Map();
-  const selector = { value: "" };
+  const localeOptions = [
+    { dataset: { locale: "en" }, setAttribute(name, value) { this[name] = value; } },
+    { dataset: { locale: "cs" }, setAttribute(name, value) { this[name] = value; } },
+  ];
   const documentRef = {
     title: "",
     documentElement: { setAttribute: (name, value) => attributes.set(name, value) },
@@ -55,8 +58,8 @@ test("initialization translates text, attributes, document language and selector
       "[data-i18n-placeholder]": nodes.placeholder,
       "[data-i18n-aria-label]": nodes.aria,
       "[data-i18n-title]": nodes.title,
+      "[data-locale]": localeOptions,
     })[query] ?? [],
-    querySelector: (query) => query === "#localeSwitcher" ? selector : null,
   };
 
   initializeI18n({
@@ -70,7 +73,8 @@ test("initialization translates text, attributes, document language and selector
   expect(nodes.aria[0]["aria-label"]).toBe("Language");
   expect(attributes.get("lang")).toBe("en");
   expect(attributes.get("data-i18n-ready")).toBe("true");
-  expect(selector.value).toBe("en");
+  expect(localeOptions[0]["aria-pressed"]).toBe("true");
+  expect(localeOptions[1]["aria-pressed"]).toBe("false");
 });
 
 test("unsupported explicit locale is rejected", () => {
