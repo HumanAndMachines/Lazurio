@@ -244,8 +244,19 @@ test("portable Windows paths and trusted executable candidates are deterministic
     "C:\\Program Files (x86)\\Git\\cmd\\git.exe",
     "C:\\Program Files (x86)\\Git\\bin\\git.exe",
   ]);
-  expect(trustedGitHubCliCandidates("darwin", { PATH: "/tmp/shadow" }))
-    .toEqual(["/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/usr/bin/gh"]);
+  expect(trustedGitHubCliCandidates("darwin", {
+    PATH: "/tmp/shadow",
+    homeDirectory: "/Users/fixture",
+  })).toEqual([
+    "/opt/homebrew/bin/gh",
+    "/usr/local/bin/gh",
+    "/usr/bin/gh",
+    "/Users/fixture/.local/bin/gh",
+  ]);
+  expect(trustedGitHubCliCandidates("darwin", {
+    PATH: "/tmp/shadow",
+    homeDirectory: "relative-home",
+  })).not.toContain("relative-home/.local/bin/gh");
   expect(trustedGitHubCliCandidates("linux", { PATH: "/tmp/shadow" }))
     .toContain("/usr/bin/gh");
   expect(trustedGitHubCliCandidates("win32", {

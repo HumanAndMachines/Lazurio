@@ -10,7 +10,7 @@ export const GIT_FETCH_TIMEOUT_MS = 20_000;
 export const GIT_COMMAND_CONCURRENCY = 4;
 export const GIT_FETCH_CONCURRENCY = 4;
 const GIT_TIMEOUT_DRAIN_GRACE_MS = 2_000;
-const PINNED_TEMPORARY_CHILD_MODE = "--lazurio-pinned-temporary-git-child";
+export const PINNED_TEMPORARY_CHILD_MODE = "--lazurio-pinned-temporary-git-child";
 
 let cachedGitExecutablePromise = null;
 let cachedGitExecutableSync;
@@ -439,7 +439,7 @@ function collectStreamText(stream) {
   };
 }
 
-async function runPinnedTemporaryGitChild() {
+export async function runPinnedTemporaryGitChild() {
   let childName = null;
   try {
     const payload = JSON.parse(await Bun.stdin.text());
@@ -535,9 +535,14 @@ function writePinnedGitChildResult(result) {
   if (!result.ok) process.exitCode = 1;
 }
 
+export async function runPinnedTemporaryGitChildMode(argv = process.argv.slice(2)) {
+  if (argv[0] !== PINNED_TEMPORARY_CHILD_MODE) return false;
+  await runPinnedTemporaryGitChild();
+  return true;
+}
+
 if (import.meta.main) {
-  if (process.argv[2] !== PINNED_TEMPORARY_CHILD_MODE) {
+  if (!await runPinnedTemporaryGitChildMode()) {
     throw new Error("git-lib.mjs je interní Git knihovna");
   }
-  await runPinnedTemporaryGitChild();
 }
