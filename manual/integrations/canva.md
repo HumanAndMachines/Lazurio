@@ -47,10 +47,12 @@ Canva na org-dedikovaných mašinách.
 Canva může na consent obrazovce rozšířit užší seznam scope požadovaný
 klientem na celý grant konektoru. Při ověření v Codexu 2026-09-02 grant
 zahrnoval i mazání složek a assetů a publikaci Brand Templates. Principál
-proto před potvrzením kontroluje skutečný provider grant a široký grant musí
-výslovně schválit jako samostatný krok; parametr `--scopes` není důkaz, že
-provider přístup technicky omezil. Procesní approval gate dál omezuje, které
-operace Agent skutečně provede.
+proto před potvrzením kontroluje skutečný provider grant. Pokud grant obsahuje
+mazání, správu oprávnění, admin operace nebo jiný nevratný drahý scope,
+autorizaci zruší a aktivaci ponechá jako blocker; výslovný provozní souhlas
+Principála takový technický scope nenahrazuje. Parametr `--scopes` není důkaz,
+že provider přístup technicky omezil, a approval gate jednoho harnessu není
+bezpečnostní hranice pro ostatní procesy na mašině.
 
 ## Smoke test
 
