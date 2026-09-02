@@ -1,3 +1,5 @@
+import { t, tp } from "./i18n.js";
+
 export function filterApps(apps, filters) {
   return apps.filter((app) => {
     if (filters.company !== "all" && app.company !== filters.company) return false;
@@ -163,7 +165,7 @@ export function updateBannerPresentation(status, { updatePending = false } = {})
     return {
       visible: true,
       tone: "loading",
-      message: "Načítám lokální stav Lazurio…",
+      message: t("update.loading"),
       action: null,
     };
   }
@@ -172,7 +174,7 @@ export function updateBannerPresentation(status, { updatePending = false } = {})
     return {
       visible: true,
       tone: "updating",
-      message: "Synchronizuji Lazurio…",
+      message: t("update.syncing"),
       action: null,
     };
   }
@@ -194,9 +196,9 @@ export function updateBannerPresentation(status, { updatePending = false } = {})
     return {
       visible: true,
       tone: "blocked",
-      message: "Lazurio potřebuje údržbu.",
+      message: t("update.maintenance"),
       action: {
-        label: "Vyřešit s Codexem",
+        label: t("common.solveWithCodex"),
         prompt,
       },
     };
@@ -208,10 +210,10 @@ export function updateBannerPresentation(status, { updatePending = false } = {})
       visible: true,
       tone: "current",
       message: readyToSync
-        ? "Lazurio je připravené k synchronizaci."
-        : "Lazurio je aktuální.",
+        ? t("update.ready")
+        : t("update.current"),
       action: readyToSync
-        ? { kind: "sync", label: "Synchronizovat" }
+        ? { kind: "sync", label: t("topbar.sync") }
         : null,
     };
   }
@@ -219,7 +221,7 @@ export function updateBannerPresentation(status, { updatePending = false } = {})
   return {
     visible: true,
     tone: "updated",
-    message: "Lazurio bylo při poslední synchronizaci aktualizované.",
+    message: t("update.updated"),
     action: null,
   };
 }
@@ -231,10 +233,10 @@ export function agentRepairDetailSummary(app) {
     ?.trim();
   return {
     tone: "danger",
-    title: quarantined ? "Modul je bezpečně pozastavený" : "Aplikaci je potřeba opravit",
+    title: quarantined ? t("repair.quarantinedTitle") : t("repair.applicationTitle"),
     message: explicitMessage ?? (quarantined
-      ? "Lazurio pozastavilo jen tento modul. Ostatní zdravé moduly mohou dál fungovat."
-      : "Lazurio tuto aplikaci nepovažuje za připravenou. Předejte připravenou diagnostiku Codexu."),
+      ? t("repair.quarantinedMessage")
+      : t("repair.applicationMessage")),
   };
 }
 
@@ -336,31 +338,31 @@ export function buildSpaceProblemModel(health = {}) {
     ...(health.blocking_slots ?? []).map(slotBlockerModel),
     ...(health.space_failures ?? []).map((failure) => ({
       severity: "danger",
-      title: "Osobní prostor se nepodařilo načíst",
-      impact: "Část osobního prostoru proto nemusí být dostupná.",
-      nextStep: "Opravte uvedené nastavení a potom obnovte stav.",
+      title: t("problem.personalLoad.title"),
+      impact: t("problem.personalLoad.impact"),
+      nextStep: t("problem.personalLoad.next"),
       technical: [String(failure)],
     })),
     ...(health.load_failures ?? []).map((failure) => ({
       severity: "danger",
-      title: "Stav prostoru se nepodařilo obnovit",
-      impact: "Zobrazené informace mohou být zastaralé, dokud se kontrola znovu nepodaří.",
-      nextStep: "Zkontrolujte připojení a potom znovu obnovte stav.",
+      title: t("problem.workspaceLoad.title"),
+      impact: t("problem.workspaceLoad.impact"),
+      nextStep: t("problem.workspaceLoad.next"),
       technical: [String(failure)],
     })),
     ...(health.attention_apps ?? []).map(appWarningModel),
     ...(health.space_warnings ?? []).map((warning) => ({
       severity: "warning",
-      title: "Osobní prostor se nepodařilo úplně obnovit",
-      impact: "Některé informace v osobním prostoru mohou být dočasně zastaralé.",
-      nextStep: "Zkontrolujte připojení nebo nastavení a potom obnovte stav.",
+      title: t("problem.personalRefresh.title"),
+      impact: t("problem.personalRefresh.impact"),
+      nextStep: t("problem.personalRefresh.next"),
       technical: [String(warning)],
     })),
     ...(health.conformance_issues ?? []).map((warning) => ({
       severity: "warning",
-      title: "Nastavení pracovního prostoru potřebuje kontrolu",
-      impact: "Některé aplikace mohou být zařazené nebo popsané nepřesně.",
-      nextStep: "Zkontrolujte nastavení prostoru a potom obnovte stav.",
+      title: t("problem.conformance.title"),
+      impact: t("problem.conformance.impact"),
+      nextStep: t("problem.conformance.next"),
       technical: [String(warning)],
     })),
   ];
@@ -368,9 +370,9 @@ export function buildSpaceProblemModel(health = {}) {
   for (let index = modeledWarnings; index < (health.warnings ?? 0); index += 1) {
     issues.push({
       severity: "warning",
-      title: "Prostor potřebuje kontrolu",
-      impact: "Kontrola našla upozornění, které nebrání běžné práci.",
-      nextStep: "Obnovte stav. Pokud upozornění zůstane, otevřete technické informace prostoru.",
+      title: t("problem.generic.title"),
+      impact: t("problem.generic.impact"),
+      nextStep: t("problem.generic.next"),
       technical: [],
     });
   }
@@ -391,9 +393,9 @@ function appBlockerModel(app) {
   if (app.runtime?.failure_kind === "port_owner_cwd_mismatch") {
     return {
       severity: "danger",
-      title: `${title} už běží z jiné kopie`,
-      impact: "Launchpad ji nechává beze změny, aby nepoškodil práci otevřenou jinde.",
-      nextStep: "Otevřete běžící aplikaci, nebo ji ukončete v původním okně a potom obnovte stav.",
+      title: t("problem.foreignCopy.title", { app: title }),
+      impact: t("problem.foreignCopy.impact"),
+      nextStep: t("problem.foreignCopy.next"),
       appId: app.id,
       technical,
     };
@@ -403,9 +405,9 @@ function appBlockerModel(app) {
   if (["missing_access", "restricted"].includes(dependencyState)) {
     return {
       severity: "danger",
-      title: `${title} není v tomto prostoru dostupný`,
-      impact: "Launchpad nemá oprávnění potřebná k bezpečnému otevření aplikace.",
-      nextStep: "Požádejte správce prostoru o přístup a potom obnovte stav.",
+      title: t("problem.access.title", { app: title }),
+      impact: t("problem.access.impact"),
+      nextStep: t("problem.access.next"),
       appId: app.id,
       technical,
     };
@@ -413,9 +415,9 @@ function appBlockerModel(app) {
   if (["dependency_boundary_invalid", "missing_package", "missing_lockfile", "unknown_package_manager", "invalid_manifest"].includes(dependencyState)) {
     return {
       severity: "danger",
-      title: `${title} potřebuje opravit nastavení`,
-      impact: "Launchpad aplikaci v aktuálním stavu neumí bezpečně připravit ani otevřít.",
-      nextStep: "Opravte nastavení aplikace a potom obnovte stav.",
+      title: t("problem.config.title", { app: title }),
+      impact: t("problem.config.impact"),
+      nextStep: t("problem.config.next"),
       appId: app.id,
       technical,
     };
@@ -423,9 +425,9 @@ function appBlockerModel(app) {
 
   return {
     severity: "danger",
-    title: `${title} teď nejde spolehlivě otevřít`,
-    impact: "Launchpad zjistil provozní chybu a aplikaci proto nepovažuje za připravenou.",
-    nextStep: "Otevřete detail aplikace, vyřešte uvedenou chybu a potom obnovte stav.",
+    title: t("problem.runtime.title", { app: title }),
+    impact: t("problem.runtime.impact"),
+    nextStep: t("problem.runtime.next"),
     appId: app.id,
     technical,
   };
@@ -436,9 +438,9 @@ function slotBlockerModel(slot) {
   if (slot.scope === "organization") {
     return {
       severity: "danger",
-      title: `${label} potřebuje opravit základní nastavení`,
-      impact: "Lazurio nemůže této Organizaci bezpečně důvěřovat, proto pozastavilo její moduly. Jiné Organizace zůstávají použitelné.",
-      nextStep: "Opravte uvedený Organization kontrakt a potom obnovte stav.",
+      title: t("problem.organization.title", { module: label }),
+      impact: t("problem.organization.impact"),
+      nextStep: t("problem.organization.next"),
       action: slot.next_action ?? null,
       technical: [slot.message, slot.reason, slot.path].filter(Boolean),
     };
@@ -447,10 +449,10 @@ function slotBlockerModel(slot) {
     return {
       severity: "danger",
       title: slot.reason === "repository_transition_unverified"
-        ? `${label} potřebuje bezpečně ověřit checkout`
-        : `${label} potřebuje sladit s repozitářem`,
-      impact: "Lazurio bezpečně pozastavilo jen tento modul. Ostatní moduly prostoru mohou dál fungovat.",
-      nextStep: "Předejte připravený postup Codexu; nejdřív ověří Git data a potom provede guardovanou opravu.",
+        ? t("problem.checkout.title", { module: label })
+        : t("problem.repository.title", { module: label }),
+      impact: t("problem.modulePaused.impact"),
+      nextStep: t("problem.modulePaused.next"),
       action: slot.next_action ?? null,
       technical: [slot.message, slot.reason, slot.found_path, slot.expected_path].filter(Boolean),
     };
@@ -458,18 +460,18 @@ function slotBlockerModel(slot) {
   if (slot.next_action?.prompt) {
     return {
       severity: "danger",
-      title: `${label} potřebuje opravit nastavení`,
-      impact: "Lazurio bezpečně pozastavilo jen tento modul. Ostatní moduly prostoru mohou dál fungovat.",
-      nextStep: "Předejte přesnou diagnostiku Codexu; opraví zdrojový kontrakt bez odhadu nad lokálními daty.",
+      title: t("problem.config.title", { app: label }),
+      impact: t("problem.modulePaused.impact"),
+      nextStep: t("problem.moduleConfig.next"),
       action: slot.next_action,
       technical: [slot.message, slot.reason, slot.path].filter(Boolean),
     };
   }
   return {
     severity: "danger",
-    title: `${label} není připravený`,
-    impact: "Tato část prostoru chybí nebo k ní nemáte očekávaný přístup.",
-    nextStep: "Doplňte modul nebo potřebné oprávnění a potom obnovte stav.",
+    title: t("problem.moduleMissing.title", { module: label }),
+    impact: t("problem.moduleMissing.impact"),
+    nextStep: t("problem.moduleMissing.next"),
     action: slot.next_action ?? null,
     technical: [slot.message, slot.reason, slot.path].filter(Boolean),
   };
@@ -479,16 +481,16 @@ function appWarningModel(app) {
   const title = problemAppTitle(app);
   return {
     severity: "warning",
-    title: `${title} potřebuje kontrolu`,
-    impact: "Aplikace je v přechodném stavu nebo čeká na drobnou údržbu.",
-    nextStep: "Otevřete detail aplikace a zkontrolujte doporučený další krok.",
+    title: t("problem.appWarning.title", { app: title }),
+    impact: t("problem.appWarning.impact"),
+    nextStep: t("problem.appWarning.next"),
     appId: app.id,
     technical: [app.runtime?.message, app.dependencies?.message, app.dependencies?.cwd].filter(Boolean),
   };
 }
 
 function problemAppTitle(app) {
-  return String(app.title ?? app.id ?? "Aplikace").replace(/\s+v\d+$/i, "");
+  return String(app.title ?? app.id ?? t("common.application")).replace(/\s+v\d+$/i, "");
 }
 
 function humanizePathTail(path) {
@@ -504,25 +506,25 @@ export function computeSpaceHeroState(health) {
   if (health.blockers > 0) {
     return {
       tone: "danger",
-      title: `Prostor vyžaduje nastavení · ${health.blockers} ${pluralBlocker(health.blockers)}`,
-      cta: "Zobrazit problémy",
+      title: t("hero.blocked", { count: health.blockers, noun: tp("plural.blocker", health.blockers) }),
+      cta: t("hero.showProblems"),
       action: "problems",
     };
   }
   if (health.warnings > 0) {
     return {
       tone: "warn",
-      title: `Prostor chce pozornost · ${health.warnings} ${pluralAttention(health.warnings)}`,
-      cta: "Projít ke kontrole",
+      title: t("hero.warning", { count: health.warnings, noun: tp("plural.attention", health.warnings) }),
+      cta: t("hero.reviewAttention"),
       action: health.attention > 0 ? "attention" : "problems",
     };
   }
   return {
     tone: "ok",
     title: health.running > 0
-      ? `Prostor je připravený · ${health.running} ${pluralRunningApp(health.running)} běží`
-      : "Prostor je připravený",
-    cta: "Obnovit stav",
+      ? t("hero.readyRunning", { count: health.running, noun: tp("plural.runningApp", health.running) })
+      : t("hero.ready"),
+    cta: t("common.refresh"),
     action: "reload",
   };
 }
@@ -532,20 +534,6 @@ function slotReadinessSeverity(slot) {
   if (slot.status === "available" || slot.status === "planned_slot") return "neutral";
   if (slot.status === "missing_access") return "blocking";
   return "blocking";
-}
-
-function pluralBlocker(count) {
-  if (count === 1) return "blokátor";
-  if (count >= 2 && count <= 4) return "blokátory";
-  return "blokátorů";
-}
-
-function pluralAttention(count) {
-  return count === 1 ? "položka ke kontrole" : count >= 2 && count <= 4 ? "položky ke kontrole" : "položek ke kontrole";
-}
-
-function pluralRunningApp(count) {
-  return count === 1 ? "aplikace" : count >= 2 && count <= 4 ? "aplikace" : "aplikací";
 }
 
 // ---- Module families --------------------------------------------------------
@@ -836,24 +824,24 @@ export function primaryAppActionModel(app = {}, {
   needsStaticLeaseReclaim = false,
   canStart = false,
   recovery = null,
-  dependencyLabel = app.dependencies?.state ?? "Aplikace není připravená",
+  dependencyLabel = app.dependencies?.state ?? t("repair.applicationTitle"),
 } = {}) {
   const dependencyState = app.dependencies?.state;
   if (app.repair_action?.prompt) {
     return {
       type: "codex",
-      label: app.repair_action.label ?? "Vyřešit s Codexem",
+      label: app.repair_action.label ?? t("common.solveWithCodex"),
       repairAction: app.repair_action,
     };
   }
   if (productionspace || app.is_readonly_system) {
-    return { type: "disabled", label: "Jen pro čtení" };
+    return { type: "disabled", label: t("action.readOnly") };
   }
   if (moduleApps?.state === "declared" && !moduleApps.open_target_app_id) {
-    return { type: "disabled", label: "Výchozí App není připravená" };
+    return { type: "disabled", label: t("action.defaultAppUnavailable") };
   }
   if (!projectedOpenTarget) {
-    return { type: "disabled", label: "Výchozí App je jiná varianta" };
+    return { type: "disabled", label: t("action.differentDefaultVariant") };
   }
   if (["missing_access", "planned_slot", "restricted", "invalid_manifest"].includes(dependencyState)) {
     return { type: "disabled", label: dependencyLabel };
@@ -864,28 +852,28 @@ export function primaryAppActionModel(app = {}, {
       : { type: "disabled", label: dependencyLabel };
   }
   if (dependencyState === "ready" && sharedPortPeer) {
-    return { type: "open_chain", label: "Otevřít a převzít port", peer: sharedPortPeer };
+    return { type: "open_chain", label: t("action.openTakeover"), peer: sharedPortPeer };
   }
   if (recovery) return { type: "recovery", label: recovery.actionLabel, recovery };
   if (legacyForeignViewer) {
-    return { type: "open", label: "Otevřít běžící checkout" };
+    return { type: "open", label: t("action.openRunningCheckout") };
   }
   if (untrustedPortOwner) {
-    return { type: "disabled", label: "Checkout procesu nelze ověřit" };
+    return { type: "disabled", label: t("action.unverifiedCheckout") };
   }
   if (needsStaticLeaseReclaim) {
-    return { type: "open_chain", label: "Otevřít a převzít port" };
+    return { type: "open_chain", label: t("action.openTakeover") };
   }
   if (app.runtime_status === "healthy" && app.url) {
     return {
       type: "open",
       label: reclaimableStaticLease && app.runtime?.owner !== "current-instance"
-        ? "Otevřít a převzít port"
-        : "Otevřít",
+        ? t("action.openTakeover")
+        : t("common.open"),
     };
   }
-  if (canStart) return { type: "runtime", action: "start", label: "Spustit a otevřít" };
-  return { type: "logs", label: "Logy" };
+  if (canStart) return { type: "runtime", action: "start", label: t("common.startAndOpen") };
+  return { type: "logs", label: t("common.logs") };
 }
 
 export function runtimeStagesForApp(app, { openable = false, worktreeCount = 0 } = {}) {
@@ -894,41 +882,41 @@ export function runtimeStagesForApp(app, { openable = false, worktreeCount = 0 }
     {
       stage: "prod",
       label: "PROD",
-      caption: "Nasazená produkce",
+      caption: t("runtime.prod.caption"),
       available: Boolean(prodUrl),
       url: prodUrl,
       action: prodUrl ? "open_url" : null,
-      reason: prodUrl ? null : "Produkce zatím není nasazená — žádná veřejná adresa.",
+      reason: prodUrl ? null : t("runtime.prod.unavailable"),
     },
     {
       stage: "main",
       label: "MAIN",
-      caption: "Hlavní větev · Workspace Host",
+      caption: t("runtime.main.caption"),
       available: false,
       url: null,
       action: null,
-      reason: "Přes tailnet — spojení zatím není v Launchpadu propojené.",
+      reason: t("runtime.tailnet.unavailable"),
     },
     {
       stage: "dev_remote",
-      label: "DEV remote",
-      caption: "Vývojová větev · Workspace Host",
+      label: t("runtime.devRemote.label"),
+      caption: t("runtime.devRemote.caption"),
       available: false,
       url: null,
       action: null,
       reason:
         worktreeCount > 0
-          ? "Přes tailnet — plánované. Vzdálený vývojový běh zatím není propojený; rozdělanou práci teď spustíš v DEV local."
-          : "Přes tailnet — plánované. Vzdálený vývojový běh zatím není propojený.",
+          ? t("runtime.devRemote.plannedWithLocal")
+          : t("runtime.devRemote.planned"),
     },
     {
       stage: "dev_local",
-      label: "DEV local",
-      caption: "Tvůj počítač · localhost",
+      label: t("runtime.devLocal.label"),
+      caption: t("runtime.devLocal.caption"),
       available: Boolean(openable),
       url: null,
       action: openable ? "open_local" : null,
-      reason: openable ? null : "Tady na počítači teď nejde spustit — vyřeš nejdřív stav modulu na kartě.",
+      reason: openable ? null : t("runtime.devLocal.unavailable"),
     },
   ];
 }

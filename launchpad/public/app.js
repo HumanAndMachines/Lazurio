@@ -46,6 +46,7 @@ import {
 import { runtimeRecoveryForApp } from "./runtime-recovery.js";
 import { launchpadFetch } from "./session-aware-fetch.js";
 import { writeReservedTabStatus } from "./reserved-tab-status.js";
+import { initializeI18n, setLocale, t } from "./i18n.js";
 import {
   organizationHash,
   personalspaceHash,
@@ -57,6 +58,8 @@ import {
 // ploše (nahoře, nad workspace/productionspace); layout se mění, datová izolace
 // (oddělená lane + Private badge) zůstává.
 import { initPersonalspace, renderPersonalspace } from "./personalspace.js";
+
+initializeI18n();
 
 const state = {
   apps: [],
@@ -152,11 +155,6 @@ const mobileTopbarQuery = window.matchMedia("(max-width: 900px)");
 //
 // Barvu nese POUZE dlaždice, kresba je inkoustová. Paleta záměrně neobsahuje
 // žlutý/pyritový stupeň; pozornost patří čisté oranžové stavové roli.
-// Obecné popisky, které samy neříkají, co se děje. Když je akce takhle
-// bezobsažná, převezme tlačítko popis problému — jinak by z karty zmizela
-// informace a zbyla nabídka kliknout neznámo proč.
-const OBECNA_AKCE = new Set(["Zobrazit detail", "Detail", "Zobrazit"]);
-
 const APP_ICON_FAMILY = {
   "control": "stavba",
   "dashboard": "stavba",
@@ -239,26 +237,26 @@ const APP_ICON_STYLES = {
 
 // Org-agnostic lidské fallbacky drží karty čitelné i ve firmě, která ještě
 // nedoplnila prezentační metadata. Manifest zůstává autorita a vždy vyhrává.
-const APP_DESCRIPTION_FALLBACKS = Object.freeze({
-  control: "Procesy, automatizace a koordinace práce.",
-  book: "Návody, dokumentace a sdílené znalosti.",
-  pen: "Tvorba, správa a publikace obsahu.",
-  palette: "Vizuální systém, značka a sdílené komponenty.",
-  deal: "Obchodní případy, nabídky a práce se zákazníky.",
-  warehouse: "Skladové položky, zásoby a pohyby materiálu.",
-  product: "Produktový katalog, parametry a podklady.",
-  datasheet: "Strukturovaná data a technické podklady.",
-  pricebook: "Ceníky, sazby a obchodní podklady.",
-  invoice: "Faktury, odběratelé a evidence úhrad.",
-  installation: "Realizace u zákazníků a návazná projektová práce.",
-  dashboard: "Přehled firmy, výsledků a důležitých ukazatelů.",
-  profitability: "Marže, náklady a finanční zdraví zakázek.",
-  marketing: "Marketingové aktivity, kampaně a podklady.",
-  website: "Webový obsah, stránky a veřejná prezentace.",
-  examples: "Ukázky, vzory a referenční řešení.",
-  database: "Data, záznamy a jejich bezpečná správa.",
-  app: "Pracovní podklady a soubory tohoto modulu.",
-  system: "Provozní nástroje a technické zázemí.",
+const APP_DESCRIPTION_FALLBACK_KEYS = Object.freeze({
+  control: "description.control",
+  book: "description.book",
+  pen: "description.pen",
+  palette: "description.palette",
+  deal: "description.deal",
+  warehouse: "description.warehouse",
+  product: "description.product",
+  datasheet: "description.datasheet",
+  pricebook: "description.pricebook",
+  invoice: "description.invoice",
+  installation: "description.installation",
+  dashboard: "description.dashboard",
+  profitability: "description.profitability",
+  marketing: "description.marketing",
+  website: "description.website",
+  examples: "description.examples",
+  database: "description.database",
+  app: "description.app",
+  system: "description.system",
 });
 
 // Ikony rozhraní jsou Iconoir (MIT) — sada, kterou drží identita Lazuria
@@ -382,12 +380,17 @@ const elements = {
   notificationsFilterUnread: document.querySelector("#notificationsFilterUnread"),
   notificationsCountAll: document.querySelector("#notificationsCountAll"),
   notificationsCountUnread: document.querySelector("#notificationsCountUnread"),
+  localeSwitcher: document.querySelector("#localeSwitcher"),
 };
 
 initTheme();
 initScrollOffset();
 initResponsiveChrome();
 initNotifications();
+elements.localeSwitcher?.addEventListener("change", (event) => {
+  setLocale(event.target.value);
+  window.location.reload();
+});
 // Personalspace rail dostane most k toastům a k Synchronizovat reloadu, ať
 // osobní runtime akce vypadají stejně jako firemní.
 initPersonalspace({
@@ -1882,8 +1885,8 @@ function renderWorkspaceWelcome() {
   const organization = state.companies.find((company) => company.slug === state.filters.company);
   const organizationName = organization?.display_name ?? organization?.slug;
   elements.workspaceWelcomeTitle.textContent = organizationName
-    ? `Vítejte v pracovním prostoru ${organizationName}`
-    : "Vítejte v pracovních prostorech";
+    ? t("workspace.welcomeOrganization", { organization: organizationName })
+    : t("workspace.welcomePlural");
 }
 
 /* =========================================================
@@ -3223,6 +3226,7 @@ function cardWarningModel(app, gitRepo) {
       tone: "danger",
       title: dependencyState === "invalid_manifest" ? "Chyba v nastavení" : humanDependencyLabel(dependencyState),
       actionLabel: "Zobrazit detail",
+      actionKind: "detail",
       run: () => revealAppDetail(app),
     };
   }
@@ -3248,10 +3252,12 @@ function cardWarningModel(app, gitRepo) {
   }
 
   if (isUntrustedPortOwner(app)) {
+    const codexConflict = isCodexPortConflict(app);
     return {
       tone: "danger",
       title: app.runtime?.owner === "foreign-port" ? "Cizí checkout na portu" : "Checkout procesu nelze ověřit",
-      actionLabel: isCodexPortConflict(app) ? "Vyřešit s Codexem" : "Zobrazit detail",
+      actionLabel: codexConflict ? "Vyřešit s Codexem" : "Zobrazit detail",
+      actionKind: codexConflict ? "codex" : "detail",
       run: () => revealAppDetail(app),
       placement: "top-action",
     };
@@ -3262,6 +3268,7 @@ function cardWarningModel(app, gitRepo) {
       tone: "warn",
       title: "Změny k odeslání",
       actionLabel: "Zobrazit detail",
+      actionKind: "detail",
       run: () => revealAppDetail(app),
     };
   }
@@ -3286,6 +3293,7 @@ function cardWarningModel(app, gitRepo) {
       kind: tone === "warn" ? "fact" : "task",
       title: gitModel.label.replace(/^./, (character) => character.toUpperCase()),
       actionLabel: "Zobrazit detail",
+      actionKind: "detail",
       run: () => revealAppDetail(app),
     };
   }
@@ -3334,7 +3342,7 @@ function cardWarningNode(warning) {
   node.append(icon, body);
 
   if (warning.actionLabel && typeof warning.run === "function") {
-    const obecna = OBECNA_AKCE.has(warning.actionLabel);
+    const obecna = warning.actionKind === "detail";
     // PROBLÉM JE TLAČÍTKO, ne krabice. Plocha s ikonou, nadpisem a tlačítkem
     // uvnitř říká totéž třikrát; zůstává akce, protože to je to jediné, co
     // se s problémem dá udělat (rozhodnutí Principálky 8. 8. 2026).
@@ -5283,7 +5291,10 @@ function appDescription(app) {
   if (hasManifestDescription(app)) {
     return app.description.trim();
   }
-  const purpose = APP_DESCRIPTION_FALLBACKS[appIconKey(app)] ?? `Aplikace pro každodenní práci v modulu ${appBaseTitle(app)}.`;
+  const purposeKey = APP_DESCRIPTION_FALLBACK_KEYS[appIconKey(app)];
+  const purpose = purposeKey
+    ? t(purposeKey)
+    : t("description.default", { module: appBaseTitle(app) });
   const surface = ["admin", "productionspace", "public-preview"].includes(app.surface)
     ? surfaceLabel(app.surface)
     : null;
@@ -5292,7 +5303,7 @@ function appDescription(app) {
 
 // Label hlavní akce podle stavu (běží → Otevřít, jinak Spustit a otevřít).
 function openActionLabel(app) {
-  return app.runtime_status === "healthy" ? "Otevřít" : "Spustit a otevřít";
+  return app.runtime_status === "healthy" ? t("common.open") : t("common.startAndOpen");
 }
 
 function iconOpenGlyph() {

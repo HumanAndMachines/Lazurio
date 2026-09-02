@@ -12,7 +12,8 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <a class="skip-link" href="#workspaceMain">Přeskočit na obsah</a>
+    <div class="locale-bootstrap" aria-hidden="true"><span class="locale-bootstrap-spinner"></span></div>
+    <a class="skip-link" href="#workspaceMain" data-i18n="a11y.skipToContent"></a>
 
     <header class="topbar" role="banner">
       <div class="topbar-inner">
@@ -32,30 +33,37 @@
                 <path d="M12 12C14.2091 12 16 10.2091 16 8C16 5.79086 14.2091 4 12 4C9.79086 4 8 5.79086 8 8C8 10.2091 9.79086 12 12 12Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" />
               </svg>
             </span>
-            <span id="currentSpaceLabel" class="space-switcher-label">Osobní</span>
+            <span id="currentSpaceLabel" class="space-switcher-label" data-i18n="topbar.personal"></span>
             <!-- iconoir/nav-arrow-down -->
             <svg class="space-switcher-chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke-width="1.5" aria-hidden="true">
               <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
           </button>
-          <div id="spaceSwitcherMenu" class="space-switcher-menu" role="dialog" aria-label="Profil a prostory" hidden></div>
+          <div id="spaceSwitcherMenu" class="space-switcher-menu" role="dialog" data-i18n-aria-label="a11y.profileAndSpaces" hidden></div>
         </div>
 
-        <nav class="topbar-actions" aria-label="Akce">
+        <nav class="topbar-actions" data-i18n-aria-label="a11y.actions">
           <span id="personalPrivacyBadge" class="privacy-pill" hidden>
             <!-- iconoir/lock -->
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke-width="1.5" aria-hidden="true">
               <path d="M16 12H17.4C17.7314 12 18 12.2686 18 12.6V19.4C18 19.7314 17.7314 20 17.4 20H6.6C6.26863 20 6 19.7314 6 19.4V12.6C6 12.2686 6.26863 12 6.6 12H8M16 12V8C16 6.66667 15.2 4 12 4C8.8 4 8 6.66667 8 8V12M16 12H8" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
-            Soukromé
+            <span data-i18n="topbar.private"></span>
           </span>
+          <label class="locale-control">
+            <span class="sr-only" data-i18n="locale.label"></span>
+            <select id="localeSwitcher" class="locale-switcher" data-i18n-aria-label="locale.label">
+              <option value="cs" data-i18n="locale.cs">Čeština</option>
+              <option value="en" data-i18n="locale.en">English</option>
+            </select>
+          </label>
           <div class="notifications-anchor">
             <button
               id="notificationsToggle"
               type="button"
               class="icon-btn topbar-icon-plain"
-              title="Notifikace — kdo co změnil a ve kterém modulu"
-              aria-label="Notifikace"
+              data-i18n-title="topbar.notificationsTitle"
+              data-i18n-aria-label="topbar.notifications"
               aria-expanded="false"
               aria-controls="notificationsPanel"
             >
@@ -66,17 +74,17 @@
               </svg>
               <span id="notificationsBadge" class="notifications-badge" aria-hidden="true" hidden></span>
             </button>
-            <section id="notificationsPanel" class="notifications-panel" aria-label="Notifikace" hidden>
+            <section id="notificationsPanel" class="notifications-panel" data-i18n-aria-label="topbar.notifications" hidden>
               <div class="notifications-head">
-                <span class="rail-eyebrow">Notifikace</span>
-                <button id="notificationsMarkAll" type="button" class="notifications-mark-all">Označit vše jako přečtené</button>
+                <span class="rail-eyebrow" data-i18n="topbar.notifications"></span>
+                <button id="notificationsMarkAll" type="button" class="notifications-mark-all" data-i18n="topbar.markAllRead"></button>
               </div>
-              <div class="notifications-filters" role="tablist" aria-label="Filtr notifikací">
+              <div class="notifications-filters" role="tablist" data-i18n-aria-label="a11y.notificationsFilter">
                 <button id="notificationsFilterAll" type="button" class="notifications-filter is-active" role="tab" aria-selected="true">
-                  Vše <span id="notificationsCountAll" class="notifications-filter-count">0</span>
+                  <span data-i18n="topbar.all"></span> <span id="notificationsCountAll" class="notifications-filter-count">0</span>
                 </button>
                 <button id="notificationsFilterUnread" type="button" class="notifications-filter" role="tab" aria-selected="false">
-                  Nepřečtené <span id="notificationsCountUnread" class="notifications-filter-count">0</span>
+                  <span data-i18n="topbar.unread"></span> <span id="notificationsCountUnread" class="notifications-filter-count">0</span>
                 </button>
               </div>
               <div id="notificationsList" class="notifications-list"></div>
@@ -86,8 +94,8 @@
             id="drawerToggle"
             type="button"
             class="icon-btn topbar-icon-plain"
-            title="Panely — stav prostoru, nejčastější, detail"
-            aria-label="Panely"
+            data-i18n-title="topbar.panelsTitle"
+            data-i18n-aria-label="topbar.panels"
             aria-expanded="false"
           >
             <!-- iconoir/layout-right -->
@@ -99,7 +107,7 @@
             <span id="spaceHealthBadge" class="space-health-badge" aria-hidden="true" hidden></span>
           </button>
           <details id="topbarOverflow" class="topbar-overflow">
-            <summary class="icon-btn topbar-icon-plain topbar-overflow-toggle" title="Další možnosti" aria-label="Další možnosti">
+            <summary class="icon-btn topbar-icon-plain topbar-overflow-toggle" data-i18n-title="topbar.more" data-i18n-aria-label="topbar.more">
               <!-- iconoir/more-horiz -->
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke-width="1.5" aria-hidden="true">
                 <path d="M20 12.5C20.2761 12.5 20.5 12.2761 20.5 12C20.5 11.7239 20.2761 11.5 20 11.5C19.7239 11.5 19.5 11.7239 19.5 12C19.5 12.2761 19.7239 12.5 20 12.5Z" fill="currentColor" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" />
@@ -114,8 +122,8 @@
                 class="icon-btn topbar-icon-plain doctor-status-icon"
                 aria-controls="problemsPanel"
                 aria-expanded="false"
-                aria-label="Doktor: bez výsledku"
-                title="Doktor: bez výsledku"
+                data-i18n-aria-label="topbar.doctorEmpty"
+                data-i18n-title="topbar.doctorEmpty"
               >
                 <!-- iconoir/health-shield -->
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -128,9 +136,8 @@
                 id="reloadButton"
                 type="button"
                 class="icon-btn topbar-icon-plain"
-                data-overflow-label="Synchronizovat"
-                title="Synchronizovat — aktualizovat Lazurio Root, Organizace a Workspace Moduly"
-                aria-label="Synchronizovat"
+                data-i18n-title="topbar.syncTitle"
+                data-i18n-aria-label="topbar.sync"
               >
                 <!-- iconoir/refresh -->
                 <svg class="refresh-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke-width="1.5" aria-hidden="true">
@@ -147,38 +154,38 @@
     <main class="page">
       <div id="globalUpdateSlot" class="global-update-slot"></div>
       <div class="layout">
-        <section id="workspaceMain" class="workspace-panel" aria-label="Aplikace">
+        <section id="workspaceMain" class="workspace-panel" data-i18n-aria-label="a11y.apps">
           <section id="workspaceWelcome" class="workspace-welcome" aria-labelledby="workspaceWelcomeTitle">
-            <h1 id="workspaceWelcomeTitle" class="workspace-welcome-title">Vítejte v pracovním prostoru</h1>
+            <h1 id="workspaceWelcomeTitle" class="workspace-welcome-title" data-i18n="workspace.welcome"></h1>
           </section>
 
-          <div id="appsToolbar" class="apps-toolbar" aria-label="Filtrování aplikací">
+          <div id="appsToolbar" class="apps-toolbar" data-i18n-aria-label="a11y.appFiltering">
             <label class="search-field">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <circle cx="11" cy="11" r="8" />
                 <path d="m21 21-4.35-4.35" />
               </svg>
-              <span class="sr-only">Hledat aplikaci</span>
-              <input id="appsSearch" type="search" autocomplete="off" placeholder="Hledat aplikaci…" />
+              <span class="sr-only" data-i18n="workspace.search"></span>
+              <input id="appsSearch" type="search" autocomplete="off" data-i18n-placeholder="workspace.searchPlaceholder" />
             </label>
             <div id="appsFilterFallback" class="apps-filter-fallback is-active">
               <div id="appsFilterControls" class="filter-controls">
-                <div class="segmented-control" role="group" aria-label="Zobrazení aplikací">
-                  <button type="button" class="segment is-active" data-status-segment="all" aria-pressed="true">Vše</button>
-                  <button id="attentionToggle" type="button" class="segment attention-toggle" aria-pressed="false">Ke kontrole</button>
+                <div class="segmented-control" role="group" data-i18n-aria-label="a11y.appView">
+                  <button type="button" class="segment is-active" data-status-segment="all" aria-pressed="true" data-i18n="topbar.all"></button>
+                  <button id="attentionToggle" type="button" class="segment attention-toggle" aria-pressed="false" data-i18n="workspace.attention"></button>
                 </div>
               </div>
             </div>
           </div>
 
-          <section id="problemsPanel" class="problems-panel hidden" aria-label="Problémy"></section>
-          <section id="actionPanel" class="action-panel hidden" aria-label="Výsledek akce"></section>
+          <section id="problemsPanel" class="problems-panel hidden" data-i18n-aria-label="a11y.problems"></section>
+          <section id="actionPanel" class="action-panel hidden" data-i18n-aria-label="a11y.actionResult"></section>
 
-          <section id="appsGrid" class="apps-stack" aria-label="Workspace aplikace"></section>
+          <section id="appsGrid" class="apps-stack" data-i18n-aria-label="a11y.workspaceApps"></section>
 
         </section>
 
-        <aside id="recentChangesSidebar" class="recent-changes-sidebar hidden" aria-label="Stav pracovního prostoru">
+        <aside id="recentChangesSidebar" class="recent-changes-sidebar hidden" data-i18n-aria-label="a11y.workspaceStatus">
           <div id="updateBannerGroup" class="update-banner-group">
             <div id="updateBanner" class="update-banner" role="status">
               <svg class="update-banner-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -193,20 +200,20 @@
               <svg class="update-banner-spinner" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
                 <path d="M12 3a9 9 0 1 1-6.4 2.6" />
               </svg>
-              <span id="updateBannerText" class="update-banner-text">Kontroluji dostupné změny…</span>
+              <span id="updateBannerText" class="update-banner-text"></span>
               <button id="updateBannerAction" type="button" class="update-banner-action" hidden></button>
             </div>
           </div>
-          <section id="hero" class="hero side-panel hero-loading" aria-live="polite" aria-label="Stav prostoru">
+          <section id="hero" class="hero side-panel hero-loading" aria-live="polite" data-i18n-aria-label="workspace.status">
             <div class="hero-head">
-              <span class="rail-eyebrow">Stav prostoru</span>
+              <span class="rail-eyebrow" data-i18n="workspace.status"></span>
               <span class="hero-indicator" aria-hidden="true"></span>
             </div>
-            <h2 id="heroTitle" class="hero-title">Načítám stav…</h2>
-            <p id="heroSummary" class="hero-summary">Ověřuji pracovní prostor.</p>
-            <div id="heroIssues" class="hero-issues" aria-label="Doporučené kroky" hidden></div>
+            <h2 id="heroTitle" class="hero-title" data-i18n="workspace.loadingStatus"></h2>
+            <p id="heroSummary" class="hero-summary" data-i18n="workspace.checking"></p>
+            <div id="heroIssues" class="hero-issues" data-i18n-aria-label="a11y.recommendedSteps" hidden></div>
             <div class="hero-panel">
-              <button id="heroCta" type="button" class="btn btn-secondary btn-sm">Zkontrolovat stav</button>
+              <button id="heroCta" type="button" class="btn btn-secondary btn-sm" data-i18n="workspace.checkStatus"></button>
             </div>
           </section>
           <section class="marketplace-teaser side-panel" aria-labelledby="marketplaceTeaserTitle">
@@ -221,34 +228,34 @@
                   <path d="M3.87567 3.43517L2.18166 9.36418C2.08431 9.7049 2.3018 10.0526 2.6535 10.0958C3.49916 10.1998 4.98424 10.3125 6 10C6.59477 9.81699 7.35751 9.38698 7.74678 9.15495C7.90767 9.05904 8.00913 8.89043 8.02469 8.70377L8.5 3H4.45258C4.18469 3 3.94926 3.17759 3.87567 3.43517Z" stroke="currentColor" stroke-width="1.5" />
                 </svg>
               </span>
-              <span class="marketplace-teaser-status">Již brzy</span>
+              <span class="marketplace-teaser-status" data-i18n="marketplace.soon"></span>
             </div>
             <div class="marketplace-teaser-copy">
-              <h2 id="marketplaceTeaserTitle">Marketplace</h2>
-              <p>Moduly pro váš pracovní prostor od Lazuria i dalších tvůrců.</p>
+              <h2 id="marketplaceTeaserTitle" data-i18n="marketplace.title"></h2>
+              <p data-i18n="marketplace.description"></p>
             </div>
           </section>
         </aside>
 
         <div id="drawerBackdrop" class="drawer-backdrop" hidden></div>
-        <aside class="detail-drawer" id="detailDrawer" role="dialog" aria-label="Panely" aria-hidden="true" aria-modal="false" tabindex="-1" inert>
+        <aside class="detail-drawer" id="detailDrawer" role="dialog" data-i18n-aria-label="a11y.panels" aria-hidden="true" aria-modal="false" tabindex="-1" inert>
           <div class="drawer-head">
-            <span class="rail-eyebrow">Panely</span>
-            <button id="drawerClose" type="button" class="icon-btn" title="Zavřít panely" aria-label="Zavřít panely">
+            <span class="rail-eyebrow" data-i18n="topbar.panels"></span>
+            <button id="drawerClose" type="button" class="icon-btn" data-i18n-title="a11y.closePanels" data-i18n-aria-label="a11y.closePanels">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M18 6 6 18" /><path d="m6 6 12 12" />
               </svg>
             </button>
           </div>
           <div class="drawer-body">
-            <section id="mostUsedPanel" class="side-panel" aria-label="Nejčastější">
+            <section id="mostUsedPanel" class="side-panel" data-i18n-aria-label="a11y.mostUsed">
               <div class="side-panel-head">
-                <span class="rail-eyebrow">Nejčastější</span>
+                <span class="rail-eyebrow" data-i18n="mostUsed.title"></span>
               </div>
               <div id="mostUsed" class="most-used"></div>
             </section>
 
-            <div id="appDetail" class="empty-detail">Vyber aplikaci</div>
+            <div id="appDetail" class="empty-detail" data-i18n="workspace.selectApp"></div>
           </div>
         </aside>
       </div>

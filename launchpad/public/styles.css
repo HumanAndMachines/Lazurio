@@ -6046,3 +6046,51 @@ body {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+html:not([data-i18n-ready="true"]) body > :not(.locale-bootstrap) {
+  visibility: hidden;
+}
+
+.locale-bootstrap {
+  align-items: center;
+  background: var(--lz-paper, #fff);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  position: fixed;
+  z-index: 9999;
+}
+
+html[data-i18n-ready="true"] .locale-bootstrap {
+  display: none;
+}
+
+.locale-bootstrap-spinner {
+  animation: locale-bootstrap-spin 800ms linear infinite;
+  border: 2px solid #d9d9d9;
+  border-radius: 50%;
+  border-top-color: #111;
+  height: 24px;
+  width: 24px;
+}
+
+@keyframes locale-bootstrap-spin {
+  to { transform: rotate(360deg); }
+}
+
+.locale-control {
+  display: inline-flex;
+}
+
+.locale-switcher {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 8px;
+  color: inherit;
+  font: inherit;
+  font-size: 0.8125rem;
+  padding: 0.38rem 1.65rem 0.38rem 0.55rem;
+}
+
+.locale-switcher option {
+  color: #111;
+}
