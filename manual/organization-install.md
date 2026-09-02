@@ -4,6 +4,52 @@ Tento postup přidá do existujícího Lazurio Rootu už aktivní GitHub Organiz
 ke které má přihlášený uživatel read access. Je stejný pro veřejnou referenční,
 privátní klientskou i vlastní Organization; CLI nezná žádnou jmennou výjimku.
 
+## Krátký prompt pro novou Builder Mašinu
+
+Následující blok je user-facing vstup pro Codex nebo jiného Task Agenta. Před
+vložením nahraď `<github-organization>` přesným GitHub loginem Organizace.
+Úplný bezpečnostní a diagnostický kontrakt zůstává v navazujících kapitolách
+tohoto runbooku; krátký prompt jej nenahrazuje ani nerozšiřuje.
+
+> Připrav tuto Mašinu jako Lazurio Builder pro GitHub Organization
+> `<github-organization>`. Nejdřív pouze čtením ověř platformu, aktuální účet,
+> Git stav a živá oprávnění. Organization owner musí ještě před instalací této
+> Mašiny nainstalovat GitHub App **Lazurio for GitHub** pro **All repositories**
+> a dokončit jednorázovou aktivaci; jako Builder jeho `admin:org` kontrolu
+> neopakuj ani z její nedostupnosti neodvozuj stav App.
+>
+> Máš mé výslovné svolení nainstalovat chybějící Git, GitHub CLI, Codex CLI a
+> přesně verzovaný Bun z jejich oficiálních zdrojů a změnit pouze můj
+> uživatelský `PATH` tak, aby jejich skutečné instalační adresáře byly dostupné
+> v novém čistém terminálu. Zachovej existující `PATH`. Neměň system-wide
+> `PATH`, package manager, bezpečnostní nastavení ani jiné verze nástrojů bez
+> mého dalšího souhlasu.
+>
+> Pokud pro právě ověřený GitHub účet chybí použitelný SSH klíč, máš svolení
+> vytvořit na této Mašině nový ed25519 klíč, nahrát přes GitHub CLI pouze jeho
+> veřejnou část a uložit privátní klíč jen do standardní SSH custody této
+> Mašiny. GitHub přihlášení spusť právě jednou přes
+> `gh auth login --hostname github.com --git-protocol ssh --web`; drž živý
+> proces, nech mě dokončit jediný osobní krok v čerstvě otevřené GitHub stránce
+> a device kód, token ani privátní klíč nevypisuj do chatu, logu ani issue.
+>
+> Na Windows po každé autorizované WinGet instalaci obnov `PATH` pouze pro
+> aktuální instalační proces z čerstvých Machine + User hodnot podle tohoto
+> runbooku, aby práce mohla pokračovat bez ručního hledání verzovaných cest.
+> Hotový stav ale vždy dokazuj ještě z nového čistého procesu. Potom ověř
+> správný GitHub účet, `git_protocol=ssh` a exact `git ls-remote` root repa
+> `<github-organization>/<github-organization>_GEN3`.
+>
+> Spusť konvergentně `lazurio install --json`,
+> `lazurio doctor --tool-updates --json`,
+> `lazurio organization install <github-organization> --json` a finální
+> `lazurio doctor`; všechny bezpečně opravitelné required nálezy v tomto
+> mandátu vyřeš a kontroly opakuj. Přístupy, secrets ani cizí Organizace
+> neměň. Nakonec spusť Launchpad stejnou podporovanou cestou, ověř health
+> aktivních aplikací a předej matici `runtime ready` / `editing ready` /
+> `publishing ready`. `READ` nikdy nevydávej za Builder-ready `WRITE`; access
+> blocker pojmenuj přesným účtem, Teamem a repozitářem pro Organization ownera.
+
 ## Co z GitHub Organization tvoří Lazurio Organization
 
 Prvním konstitutivním krokem je instalace oficiální GitHub App
@@ -76,6 +122,46 @@ nejdřív spustí `lazurio install --json` a při troubleshootingu také
 `lazurio doctor --tool-updates --json`. Install Core odlišuje chybějící nástroj
 od stavu `*_not_on_path`; přesnou podporovanou Bun verzi dál vlastní
 `package.json#packageManager`.
+
+### Windows: pokračování po WinGet ve stejné instalační relaci
+
+WinGet zapisuje nový User `PATH`, ale už běžící PowerShell, Task Agent nebo
+Explorer dál drží starý process snapshot. Po autorizované instalaci proto
+instalační Agent v témže PowerShell procesu načte aktuální persistentní Machine
+a User hodnoty a změní **jen process `PATH`**:
+
+```powershell
+$machinePath = [Environment]::GetEnvironmentVariable(
+  'Path', [System.EnvironmentVariableTarget]::Machine
+)
+$userPath = [Environment]::GetEnvironmentVariable(
+  'Path', [System.EnvironmentVariableTarget]::User
+)
+$env:Path = (@($machinePath, $userPath) | Where-Object { $_ }) `
+  -join [IO.Path]::PathSeparator
+```
+
+Tento krok nic nezapisuje do registru ani shell profilu a nepoužívá ručně
+dohledaný verzovaný package adresář. Umožní instalační relaci pokračovat, ale
+není finálním důkazem: po dokončení musí nový čistý proces bez tohoto snippet
+najít tytéž příkazy. Jejich skutečnou identitu a použitelnost následně ověří
+`lazurio install --json` a Doctor; pouhé `Get-Command` nestačí.
+
+### Windows: podporovaná Codex CLI lane
+
+Pro novou Windows Mašinu použij po výslovném souhlasu Principála
+[oficiální OpenAI standalone Windows instalátor](https://github.com/openai/codex/blob/main/scripts/install/install.ps1).
+Ten instaluje viditelný nativní `codex.exe` a sám ověřuje jeho `--version`.
+WinGet `OpenAI.Codex` není podporovaný fallback, dokud na všech podporovaných
+Windows konfiguracích spolehlivě nevytváří příkaz `codex`; samotná
+`codex-x86_64-pc-windows-msvc.exe` nebo `codex-aarch64-pc-windows-msvc.exe`
+na `PATH` proto není zelený stav.
+
+Nevytvářej ad-hoc `codex.cmd`, nekopíruj target-specific binárku a nepřijímej
+ji jako důkaz připravenosti. Doctor tento konkrétní WinGet stav pojmenuje, ale
+záměrně jej neopravuje. Po autorizované oficiální instalaci obnov process
+`PATH` podle předchozí kapitoly, v novém čistém procesu ověř `codex --version`
+a zopakuj `lazurio doctor --tool-updates --json`.
 
 Obsahuje-li instalační prompt explicitní mandát pro přesné nástroje a změnu
 uživatelského `PATH`, Agent nezůstane u handoff warningu:

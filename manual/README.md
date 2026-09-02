@@ -43,6 +43,9 @@ Maintenance agent před zásahem ověřuje:
   per-machine OAuth custody, cutover ze sdíleného integračního brokeru, approval
   policy, ClickUp a komunitní Google Workspace příklad.
 - `manual/first-client-organization-rollout.md` — obecný rollout runbook pro první klientskou Organization: repo hranice, mount, manifesty, Doctor/Launchpad support-loop gate, Install/Repair smoke a rollback.
+- `manual/organization-install.md` — autoritativní Organization install runbook
+  včetně krátkého copy-paste promptu pro novou Builder Mašinu, jednoho GitHub
+  SSH pairing flow, Windows process `PATH` obnovy a finální readiness matice.
 - `manual/lazurio-manifest-family.md` — přijatý Organization kontrakt pro
   `lazurio.organization.json` a navazující reader-first rollout; pojmenování
   Personalspace zůstává samostatný proposal a tento krok nic nemigruje.
