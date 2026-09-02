@@ -6085,7 +6085,7 @@ html[data-i18n-ready="true"] .locale-bootstrap {
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 8px;
-  color: inherit;
+  color: var(--lz-gray-100);
   font: inherit;
   font-size: 0.8125rem;
   padding: 0.38rem 1.65rem 0.38rem 0.55rem;

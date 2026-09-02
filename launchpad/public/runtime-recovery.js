@@ -64,14 +64,14 @@ export function runtimeRecoveryForApp(app = {}, error = null) {
   const runtime = app?.runtime && typeof app.runtime === "object" ? app.runtime : {};
   const details = uniqueStrings([
     ...(Array.isArray(app?.dependencies?.missing_required_dependencies)
-      ? app.dependencies.missing_required_dependencies.map((name) => `Chybí balíček: ${name}`)
+      ? app.dependencies.missing_required_dependencies.map((name) => t("recovery.missingPackage", { name }))
       : []),
     runtime.last_error,
     runtime.message,
-    Number.isInteger(runtime?.probe?.status_code) ? `Health odpověděl HTTP ${runtime.probe.status_code}.` : null,
+    Number.isInteger(runtime?.probe?.status_code) ? t("recovery.healthHttp", { status: runtime.probe.status_code }) : null,
     runtime?.probe?.error,
     app?.dependencies?.message,
-    app?.health_url ? `Health endpoint: ${app.health_url}` : null,
+    app?.health_url ? t("recovery.healthEndpoint", { url: app.health_url }) : null,
   ]);
 
   if (error) {
@@ -145,8 +145,8 @@ function clampRecoveryToAppCapabilities(app, recovery, technical = []) {
     return { ...recovery, technical: mergedTechnical };
   }
   const preservedCause = uniqueStrings([
-    `Původní kód chyby: ${recovery.code}`,
-    `Původní druh selhání: ${recovery.failureKind}`,
+    t("recovery.originalCode", { code: recovery.code }),
+    t("recovery.originalFailure", { kind: recovery.failureKind }),
     ...mergedTechnical,
   ]);
   return runtimeRecoveryModel({

@@ -110,8 +110,8 @@ test("Personalspace používá zaoblené Lazurio objekty a stavové ikony", asyn
   expect(styles).toMatch(/\.personalspace-overview > \.buddy-card,[^}]*\.personalspace-overview > \.buddy-routines\s*{[^}]*border-radius: 0/);
   expect(styles).toMatch(/\.personal-support-grid > \.personal-support-card\s*{[^}]*border-radius: 0/);
   expect(styles).toMatch(/\.buddy-card h2[\s\S]*?font-size: var\(--lz-size-display\)/);
-  expect(personalspace).toContain('statusBadge("Buddy je nastavený"');
-  expect(personalspace).toContain('statusBadge("Soukromé"');
+  expect(personalspace).toContain('statusBadge(t("buddy.configured")');
+  expect(personalspace).toContain('statusBadge(t("common.private")');
   expect(personalspace).toContain("var(--lz-blue-500)");
   expect(personalspace).not.toContain('badge("Private"');
 });
@@ -162,8 +162,8 @@ test("Marketplace teaser je klidná neinteraktivní dlaždice v pravém sloupci"
     html.indexOf("</section>", html.indexOf('class="marketplace-teaser side-panel"')),
   );
   expect(teaser).toContain('aria-labelledby="marketplaceTeaserTitle"');
-  expect(teaser).toContain('id="marketplaceTeaserTitle">Marketplace</h2>');
-  expect(teaser).toContain('class="marketplace-teaser-status">Již brzy</span>');
+  expect(teaser).toContain('id="marketplaceTeaserTitle" data-i18n="marketplace.title"');
+  expect(teaser).toContain('class="marketplace-teaser-status" data-i18n="marketplace.soon"');
   expect(teaser).not.toContain("<button");
   expect(teaser).not.toContain("<a ");
   expect(styles).toMatch(/\.marketplace-teaser\s*{[^}]*gap: var\(--lz-space-16\);[^}]*padding: var\(--lz-space-16\)/);
@@ -189,9 +189,9 @@ test("Organizace, Workspace a Productionspace používají modrou záložku v be
   expect(styles).toMatch(/\.app-section-productionspace > \.app-section-head:first-child\s*{[\s\S]*?position: static;[\s\S]*?transform: none/);
   expect(styles).toMatch(/\.app-section-productionspace > \.app-section-head:first-child \.app-section-title[\s\S]*?background: var\(--lz-blue-500\)[\s\S]*?color: var\(--lz-white\)/);
   expect(styles).toContain("font-variant-numeric: tabular-nums");
-  expect(app).toContain('appSectionHead("Organizace"');
-  expect(app).toMatch(/"Workspace",\r?\n\s+`\$\{uniqueModules\.size\}/);
-  expect(app).toContain('entry.productionspace.display_name ?? "Productionspace"');
+  expect(app).toContain('appSectionHead(t("surface.organization")');
+  expect(app).toMatch(/t\("surface\.workspace"\),\r?\n\s+`\$\{uniqueModules\.size\}/);
+  expect(app).toContain('entry.productionspace.display_name ?? t("surface.productionspace")');
   expect(app).not.toContain("app-section-eyebrow");
 });
 
@@ -218,9 +218,9 @@ test("kanonické modulové dlaždice jsou samostatné zaoblené karty", async ()
   expect(app).toContain("const key = appIconKey(app);");
   expect(app).not.toContain("guideIconExperiment");
   expect(app).toContain('app.module === "mission-control" ? "" : variantTag(app, moduleName)');
-  expect(app).toContain('control: "Procesy, automatizace a koordinace práce."');
-  expect(app).toContain('book: "Návody, dokumentace a sdílené znalosti."');
-  expect(app).toContain('system: "Provozní nástroje a technické zázemí."');
+  expect(app).toContain('control: "description.control"');
+  expect(app).toContain('book: "description.book"');
+  expect(app).toContain('system: "description.system"');
 });
 
 test("pracovní plocha používá teplý papír bez mřížky a obvodových linek sekcí", async () => {

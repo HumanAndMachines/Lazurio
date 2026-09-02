@@ -1,7 +1,9 @@
+import { t } from "./i18n.js";
+
 const SESSION_EXPIRED_CODE = "hosted_session_expired";
 
 function sessionExpiredError() {
-  const error = new Error("Přihlášení vypršelo. Obnovuji relaci…");
+  const error = new Error(t("session.expired"));
   error.code = SESSION_EXPIRED_CODE;
   return error;
 }

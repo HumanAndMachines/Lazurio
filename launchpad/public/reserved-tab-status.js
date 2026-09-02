@@ -1,3 +1,5 @@
+import { getLocale, t } from "./i18n.js";
+
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({
     "&": "&amp;",
@@ -8,37 +10,9 @@ function escapeHtml(value) {
   }[char]));
 }
 
-export const LAZURIO_LOADING_HINTS = Object.freeze([
-  "Push odešle commity pracovní větve na GitHub. Do main se tím nic nemerguje.",
-  "Commit je uložený krok historie, ke kterému se lze vrátit.",
-  "Pull stáhne aktuální změny z GitHubu.",
-  "PR je návrh změny ke kontrole, ne Publikace.",
-  "Ready for review znamená, že je změna ověřená a čeká na kontrolu.",
-  "Merge přijme změnu do cílové větve.",
-  "Pushnutá pracovní větev má mít otevřený PR, aby práce nezapadla.",
-  "Lokální náhled z worktree ještě není publikovaná změna.",
-  "Testy dokládají technický stav. O Publikaci rozhoduje Principál.",
-  "Dobré ráno synchronizuje Workspace a připraví krátký přehled rozdělané práce.",
-  "Dobrou noc ověří změny, připraví PR a uklidí pracovní stůl.",
-  "Draft je vratný a editovatelný výsledek.",
-  "Publikace vyžaduje vědomé rozhodnutí oprávněného Principála.",
-  "Souhlas s Publikací platí jen v aktuálním vlákně.",
-  "Steward kontroluje kvalitu, řeší technické blokátory a hlídá cestu k Publikaci.",
-  "Review je kontrola Draftu. Samo o sobě nic nepublikuje.",
-  "V Lazuriu můžete pracovat v několika vláknech současně.",
-  "Samostatná vlákna fungují nejlépe, když má každé jeden jasný úkol.",
-  "Paralelní úkoly používají oddělené worktrees, aby si změny nepřekážely.",
-  "Launchpad umí otevřít aplikaci z main i z pracovního worktree.",
-  "GitHub je autorita pro přístupy k repozitářům.",
-  "Každá Organizace tvoří samostatnou hranici dat a oprávnění.",
-  "Personalspace je soukromý a s Organizací se automaticky nesdílí.",
-  "Jedna Mašina představuje jednu lokální bezpečnostní hranici.",
-  "Mission Control drží plány, úkoly a otevřená rozhodnutí.",
-  "Knowledgebase uchovává znalosti, které mají přežít jednotlivý chat.",
-  "Chat je pracovní kontext. Trvalé poznatky patří do zdroje pravdy.",
-  "Launchpad ukazuje jen Organizace a moduly, ke kterým máte lokální přístup.",
-  "Chybějící modul nemusí být chyba — může jít o přístupovou hranici.",
-]);
+export const LAZURIO_LOADING_HINTS = Object.freeze(
+  Array.from({ length: 29 }, (_value, index) => t(`loading.hint.${index}`)),
+);
 
 const reservedTabHints = new WeakMap();
 
@@ -59,11 +33,11 @@ export function buildReservedTabStatusDocument({ title, message, origin, tip = L
   const safeTip = escapeHtml(tip);
 
   return `<!doctype html>
-<html lang="cs">
+<html lang="${getLocale()}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Spouštím ${safeTitle}</title>
+  <title>${escapeHtml(t("loading.title", { title }))}</title>
   <link rel="stylesheet" href="${escapeHtml(fontUrl)}">
   <link rel="stylesheet" href="${escapeHtml(tokensUrl)}">
   <style>

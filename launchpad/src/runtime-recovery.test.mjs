@@ -1,5 +1,8 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 import { runtimeRecoveryForApp, runtimeRecoveryModel } from "../public/runtime-recovery.js";
+import { setLocale } from "../public/i18n.js";
+
+afterEach(() => setLocale("cs", { storage: null }));
 
 test("cross-Organization discovery failure offers a concrete Codex repair handoff", () => {
   const model = runtimeRecoveryModel(Object.assign(
@@ -170,4 +173,13 @@ test("passive health timeout remains retryable", () => {
     dependencies: { state: "ready", can_install: true },
     runtime: { failure_kind: "health_timeout", message: "Health endpoint zatím neodpovídá." },
   })).toMatchObject({ action: "retry", actionLabel: "Zkusit znovu" });
+});
+
+test("runtime recovery presents stable failures in English", () => {
+  setLocale("en", { storage: null });
+  expect(runtimeRecoveryModel({ code: "app_repair_failed", payload: { failure_kind: "missing_dependencies" } })).toMatchObject({
+    title: "The application needs repair",
+    actionLabel: "Repair packages",
+    action: "repair",
+  });
 });

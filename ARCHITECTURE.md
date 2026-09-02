@@ -276,9 +276,11 @@ uživatele Mašiny. Fresh a Managed target je `~/Lazurio` na macOS/Linuxu a
 - **Source Root** je dnešní nasazený a podporovaný profil. Ověřený Lazurio Git
   checkout přímo v home je současně pracovní Root a může do řízené migrace
   zachovat svůj existující historický název složky.
-- **Managed Root** je budoucí cílový profil. Canonical cesta je jazykově
-  generovaný non-Git Root pro instrukce, konfiguraci, data a mounty; runtime
-  vlastní immutable package mimo Root.
+- **Managed Root** je budoucí cílový profil. Canonical cesta je non-Git Root
+  sestavený z immutable source jako přesný součin `resident profile × locale`:
+  profil určuje například Buddyho nebo AI Kolegu a locale jazyk Root-owned
+  generovaných instrukcí včetně `AGENTS.md`. Runtime vlastní immutable package
+  mimo Root.
 
 Výběr jazyka nemění strojové cesty ani identity. Top-level installer nemá root
 picker a žádný profil nevytváří druhý aktivní Root. Přechodové rozpoznání
@@ -291,8 +293,17 @@ vědomě přelinkovat na jediný ověřený checkout
 `<home>/Lazurio/development/Lazurio`. Package-only Managed profil source
 checkout nepotřebuje a instalátor jej implicitně neklonuje. Generátor
 nevytváří uvnitř Rootu další vendored kopii CLI nebo Launchpadu;
-Organization checkouty, Personalspace a runtime data zůstávají samostatné
-měnitelné mounty.
+Organization checkouty se do zvoleného jazyka nikdy nepřekládají ani
+nepřepisují: Organizace si jazyk svého repozitáře vlastní sama. Personalspace
+a runtime data také zůstávají samostatné měnitelné mounty.
+
+Launchpad locale je oproti tomu runtime preference prohlížeče, ne varianta
+Rootu. Launchpad-owned copy je offline v párových katalozích; přednost má
+explicitně uložená volba, potom podporovaný jazyk prohlížeče a nakonec český
+fallback. Přepnutí reloadne stejnou URL a nemění scope ani běžící procesy.
+Core a API zůstávají locale-neutral: poskytují stabilní reason kódy a parametry,
+zatímco UI vlastní lidské error, warning a loading texty. Organization-owned
+názvy, popisy, commit messages a technická evidence se zobrazují beze změny.
 
 `lazurio install` je jediný konvergenční vstup pro oba profily. Nad Source
 Rootem jej defaultně zachová a opraví jen podporovaný stav. Source → Managed
