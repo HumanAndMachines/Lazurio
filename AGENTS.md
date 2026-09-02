@@ -255,6 +255,12 @@ Launchpad ani aplikaci neotevírej automaticky při zahájení chatu. Vestavěn�
 browser použij jen když aktuální úkol vyžaduje práci v jejich UI nebo vizuální
 ověření výsledku.
 
+Když Principál řekne „web Lazuria“, myslí tím Workspace Modul
+`website-lazurio` a jeho App `Website Lazurio`, nikoli Launchpad. Najdi jej
+standardním Organization auto-discovery, spusť jej přes `lazurio module start`
+a ve vestavěném browseru otevři URL vrácenou lifecycle kontraktem; adresu ani
+port neodvozuj ručně.
+
 Potřebuje-li úkol Launchpad, spusť podle scope právě jeden příkaz:
 
 - Organizace: `lazurio launchpad serve --organization <přesný company.slug>`;
