@@ -7,6 +7,13 @@ import { isValidServerIdentity } from "./server-identity-lib.mjs";
 export const MODULE_LIFECYCLE_REPORT_SCHEMA = "lazurio.module_lifecycle.report.v1";
 export const MODULE_LIFECYCLE_ACTIONS = new Set(["status", "start", "open", "stop"]);
 
+// Discovery must fail quickly when the locator points at a dead Server. A
+// deliberate lifecycle mutation is different: Server-owned start can spend its
+// bounded listener-ownership grace period, and Open may then wait for health.
+// Keep that request bounded too, but do not cut it off at the read deadline.
+const serverReadTimeoutMs = 5_000;
+const lifecycleActionTimeoutMs = 60_000;
+
 export async function runModuleLifecycle({
   action,
   selector = null,
@@ -129,6 +136,7 @@ export async function runModuleLifecycle({
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
+      timeoutMs: lifecycleActionTimeoutMs,
     },
   );
   const report = {
@@ -232,12 +240,12 @@ async function verifyLocatedServer({ locator, fetchFn }) {
   return { ok: true, identity };
 }
 
-async function requestJson(fetchFn, url, options) {
+async function requestJson(fetchFn, url, { timeoutMs = serverReadTimeoutMs, ...options }) {
   let response;
   try {
     response = await fetchFn(url, {
       ...options,
-      signal: AbortSignal.timeout(5_000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (error) {
     return { ok: false, status: 0, payload: null, message: error.message };
