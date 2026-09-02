@@ -1,7 +1,10 @@
 import { readdir } from "node:fs/promises";
-import { launchpadTestGroups } from "./test-runner-lib.mjs";
+import {
+  launchpadTestGroups,
+  launchpadTestTimeout,
+} from "./test-runner-lib.mjs";
 
-const defaultTimeoutMs = process.platform === "win32" ? 15_000 : 5_000;
+const defaultTimeoutMs = launchpadTestTimeout(process.platform);
 const requestedTests = process.argv.slice(2);
 const testGroups = launchpadTestGroups({
   platform: process.platform,

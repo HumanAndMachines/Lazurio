@@ -139,7 +139,7 @@ async function attachModule(fixture, { moduleMaterialized = true } = {}) {
   await mkdir(join(organizationWorking, "workspace"), { recursive: true });
   const sshBridge = join(fixture.sandbox, "fixture-github-ssh.mjs");
   const fixtureSshCommand = [process.execPath, sshBridge, moduleRemote]
-    .map((value) => JSON.stringify(value))
+    .map((value) => JSON.stringify(value.replaceAll("\\", "/")))
     .join(" ");
   await writeFile(sshBridge, fixtureGitHubSshBridge(), "utf8");
   if (moduleMaterialized) {
@@ -147,14 +147,13 @@ async function attachModule(fixture, { moduleMaterialized = true } = {}) {
     configure(moduleWorking);
     git(moduleWorking, ["remote", "set-url", "origin", declaredModuleRemote]);
     git(moduleWorking, ["config", "core.sshCommand", fixtureSshCommand]);
+    git(moduleWorking, ["config", "ssh.variant", "simple"]);
   } else {
     const fixtureHome = join(fixture.sandbox, "home");
     await mkdir(fixtureHome, { recursive: true });
-    await writeFile(join(fixtureHome, ".gitconfig"), [
-      "[core]",
-      `\tsshCommand = ${fixtureSshCommand}`,
-      "",
-    ].join("\n"));
+    const globalConfig = join(fixtureHome, ".gitconfig");
+    git(fixtureHome, ["config", "--file", globalConfig, "core.sshCommand", fixtureSshCommand]);
+    git(fixtureHome, ["config", "--file", globalConfig, "ssh.variant", "simple"]);
     fixture.environment = { ...process.env, HOME: fixtureHome };
   }
   Object.assign(fixture, { organizationWorking, moduleSeed, moduleWorking });

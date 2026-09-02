@@ -1,6 +1,15 @@
 import { expect, test } from "bun:test";
 import { join } from "node:path";
-import { launchpadTestGroups } from "./test-runner-lib.mjs";
+import {
+  launchpadTestGroups,
+  launchpadTestTimeout,
+} from "./test-runner-lib.mjs";
+
+test("Windows Git-heavy tests keep a bounded runner-variance margin", () => {
+  expect(launchpadTestTimeout("win32")).toBe(30_000);
+  expect(launchpadTestTimeout("darwin")).toBe(5_000);
+  expect(launchpadTestTimeout("linux")).toBe(5_000);
+});
 
 test("Windows full check isolates every test file in its own Bun process", () => {
   expect(launchpadTestGroups({
