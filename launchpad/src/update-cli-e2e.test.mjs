@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -39,7 +40,7 @@ test("isolated CLI runtime carries schema assets into post-update app discovery"
   expect(report.results.some((result) => result.reason === "dependency_inventory_unavailable")).toBe(false);
 });
 
-test("isolated CLI runtime routes pinned child modes when materializing a missing module", async () => {
+test("isolated CLI runtime ignores ambient Git transport rewrites when materializing a missing module", async () => {
   const fixture = await createLazurioUpdateFixture({
     withModule: true,
     moduleMaterialized: false,
@@ -51,9 +52,14 @@ test("isolated CLI runtime routes pinned child modes when materializing a missin
     environment: fixture.environment,
   });
 
-  expect(report).toMatchObject({ ok: true, state: "updated" });
+  expect(report).toMatchObject({ ok: false, state: "blocked" });
   expect(report.results.find((result) => result.repo_key === "FixtureOrg::sample"))
-    .toMatchObject({ state: "updated", reason: "module_materialized", actions: ["materialize"] });
+    .toMatchObject({
+      state: "blocked",
+      reason: "materialization_source_unavailable",
+      actions: [],
+    });
+  expect(existsSync(fixture.moduleWorking)).toBe(false);
 });
 
 test("isolated runtime accepts one internal Organization scope without a second updater", async () => {

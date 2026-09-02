@@ -1665,7 +1665,10 @@ function probeFreePort() {
 }
 
 async function waitForHealth(port, server) {
-  const deadline = Date.now() + platformTestTimeout(5_000);
+  // A cold Windows runner may need more than 15 s to start the detached Bun
+  // server after Git-heavy fixture setup. This remains bounded by the enclosing
+  // test timeout and still fails immediately when the child exits.
+  const deadline = Date.now() + platformTestTimeout(10_000);
   while (Date.now() < deadline) {
     // Pokud server spadl při startu (např. port si mezi findFreePort a bindem
     // stihl vzít někdo jiný), neplýtvej celým readiness timeoutem ani nepokračuj proti
