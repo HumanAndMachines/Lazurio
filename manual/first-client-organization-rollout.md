@@ -551,10 +551,11 @@ truth a `.claude/skills` je **Git-tracked odvozený byte-for-byte mirror**
 decision 0104). `bun run doctor:agent-skills` je read-only parity check;
 čerstvý checkout z template stavu má mirror rovnou v Gitu a hlásí `ok`. Legacy
 symlink/junction/placeholder nebo drift hlásí `repair`; `bun run
-repair:agent-skills` mirror deterministicky zregeneruje a změnu commitni ve
-stejném diffu jako kanonickou úpravu. Repair failuje zavřeně jen na neznámém
-obsahu (`mirror_unknown_content`) — ten porovnej s kanonickým katalogem a
-odstraň ručně; nikdy nesmí být `.claude/skills` v `.gitignore`.
+repair:agent-skills` je fail-closed no-write diagnostika a nic neregeneruje ani
+nestageuje. Jakýkoli drift, chybějící mirror nebo legacy tvar oprav explicitně
+v task worktree a odvozený mirror commitni ve stejném diffu jako kanonickou
+úpravu; neznámý obsah nejdřív porovnej a zachovej cizí práci. `.claude/skills`
+nikdy nesmí být v `.gitignore`.
 
 Mission Control data repo zakládej jako samostatný Git checkout na větvi `v3`.
 Při použití skeletonu z `mission-control/templates/organization-data` ponech

@@ -408,8 +408,9 @@ Root upravuj jen když se mění:
 - Základní agentní skill balíček: `.agents/skills/` (registry
   `manifest.json`); `.claude/skills` je Git-tracked byte-for-byte mirror
   aktivních skillů (decision 0104 v manual/decision-register.md) —
-  paritu hlídá `bun run doctor:agent-skills`, regeneruje
-  `bun run repair:agent-skills`
+  paritu hlídá `bun run doctor:agent-skills`; `bun run repair:agent-skills`
+  je pouze fail-closed no-write diagnostika a drift vrací k explicitní
+  Git-reviewované opravě v task worktree
 - Sdílený Launchpad: `launchpad/`
 - Sdílený Guide: `guide/`
 - Organizace: lokální gitignored nested repos v `organizations/<org>/`; root repo trackuje jen `organizations/README.md`
