@@ -3,7 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
-export async function createLazurioUpdateFixture({ sandboxRoot = null, withModule = false } = {}) {
+export async function createLazurioUpdateFixture({
+  sandboxRoot = null,
+  withModule = false,
+  moduleMaterialized = true,
+} = {}) {
   const sandbox = sandboxRoot ?? await mkdtemp(join(tmpdir(), "lazurio-update-cli-"));
   await mkdir(sandbox, { recursive: true });
   const remote = join(sandbox, "remote.git");
@@ -37,7 +41,7 @@ export async function createLazurioUpdateFixture({ sandboxRoot = null, withModul
   configure(working);
 
   const fixture = { sandbox, remote, seed, contributor, working };
-  if (withModule) await attachModule(fixture);
+  if (withModule) await attachModule(fixture, { moduleMaterialized });
   return fixture;
 }
 
@@ -56,7 +60,7 @@ export async function commitRemoteModule(fixture) {
   git(fixture.moduleSeed, ["push", "origin", "main"]);
 }
 
-async function attachModule(fixture) {
+async function attachModule(fixture, { moduleMaterialized = true } = {}) {
   const organizationRemote = join(fixture.sandbox, "organization.git");
   const organizationSeed = join(fixture.sandbox, "organization-seed");
   const organizationWorking = join(fixture.working, "organizations", "FixtureOrg_GEN3");
@@ -133,16 +137,26 @@ async function attachModule(fixture) {
   git(moduleSeed, ["push", "-u", "origin", "main"]);
   git(fixture.sandbox, ["--git-dir", moduleRemote, "symbolic-ref", "HEAD", "refs/heads/main"]);
   await mkdir(join(organizationWorking, "workspace"), { recursive: true });
-  git(fixture.sandbox, ["clone", moduleRemote, moduleWorking]);
-  configure(moduleWorking);
   const sshBridge = join(fixture.sandbox, "fixture-github-ssh.mjs");
+  const fixtureSshCommand = [process.execPath, sshBridge, moduleRemote]
+    .map((value) => JSON.stringify(value))
+    .join(" ");
   await writeFile(sshBridge, fixtureGitHubSshBridge(), "utf8");
-  git(moduleWorking, ["remote", "set-url", "origin", declaredModuleRemote]);
-  git(moduleWorking, [
-    "config",
-    "core.sshCommand",
-    [process.execPath, sshBridge, moduleRemote].map((value) => JSON.stringify(value)).join(" "),
-  ]);
+  if (moduleMaterialized) {
+    git(fixture.sandbox, ["clone", moduleRemote, moduleWorking]);
+    configure(moduleWorking);
+    git(moduleWorking, ["remote", "set-url", "origin", declaredModuleRemote]);
+    git(moduleWorking, ["config", "core.sshCommand", fixtureSshCommand]);
+  } else {
+    const fixtureHome = join(fixture.sandbox, "home");
+    await mkdir(fixtureHome, { recursive: true });
+    await writeFile(join(fixtureHome, ".gitconfig"), [
+      "[core]",
+      `\tsshCommand = ${fixtureSshCommand}`,
+      "",
+    ].join("\n"));
+    fixture.environment = { ...process.env, HOME: fixtureHome };
+  }
   Object.assign(fixture, { organizationWorking, moduleSeed, moduleWorking });
 }
 

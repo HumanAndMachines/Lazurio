@@ -7,7 +7,11 @@ import { join } from "node:path";
 // Hosted Launchpad does not use this escape hatch: its long-running runtime
 // must be installed outside the working root and passes that exact runtime root
 // to runLazurioUpdate.
-export async function runIsolatedLazurioUpdate({ rootPath, organizations = null }) {
+export async function runIsolatedLazurioUpdate({
+  rootPath,
+  organizations = null,
+  environment = process.env,
+}) {
   const directory = await mkdtemp(join(tmpdir(), "lazurio-update-runtime-"));
   try {
     const build = await Bun.build({
@@ -41,7 +45,7 @@ export async function runIsolatedLazurioUpdate({ rootPath, organizations = null 
     }
     const child = Bun.spawn(
       runtimeArgs,
-      { stdin: "ignore", stdout: "pipe", stderr: "pipe", env: process.env },
+      { stdin: "ignore", stdout: "pipe", stderr: "pipe", env: environment },
     );
     const [stdout, stderr, exitCode] = await Promise.all([
       new Response(child.stdout).text(),

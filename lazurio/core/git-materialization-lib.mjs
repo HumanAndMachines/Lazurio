@@ -15,8 +15,8 @@ export const GIT_CHECKOUT_MATERIALIZATION_MODES = Object.freeze([
 export const GIT_CLONE_TIMEOUT_MS = 10 * 60_000;
 export const GIT_FETCH_TIMEOUT_MS = 20_000;
 export const GIT_LOCAL_TIMEOUT_MS = 10_000;
-const PINNED_CHECKOUT_PUBLISH_MODE = "--lazurio-pinned-checkout-publisher";
-const PINNED_CHECKOUT_DISCARD_MODE = "--lazurio-pinned-checkout-discarder";
+export const PINNED_CHECKOUT_PUBLISH_MODE = "--lazurio-pinned-checkout-publisher";
+export const PINNED_CHECKOUT_DISCARD_MODE = "--lazurio-pinned-checkout-discarder";
 const PINNED_CHECKOUT_OPERATION_TIMEOUT_MS = 60_000;
 
 // One checkout publication primitive is shared by Organization install and
@@ -297,7 +297,7 @@ async function runPinnedCheckoutOperation({ mode, targetParent, payload, failure
   }
 }
 
-async function runPinnedCheckoutPublisher() {
+export async function runPinnedCheckoutPublisher() {
   try {
     const payload = JSON.parse(await Bun.stdin.text());
     assertPinnedPublisherPayload(payload);
@@ -336,7 +336,7 @@ async function runPinnedCheckoutPublisher() {
   }
 }
 
-async function runPinnedCheckoutDiscarder() {
+export async function runPinnedCheckoutDiscarder() {
   try {
     const payload = JSON.parse(await Bun.stdin.text());
     if (
@@ -515,12 +515,20 @@ async function lstatOrNull(path) {
   }
 }
 
-if (import.meta.main) {
-  if (process.argv[2] === PINNED_CHECKOUT_PUBLISH_MODE) {
+export async function runPinnedCheckoutChildMode(argv = process.argv.slice(2)) {
+  if (argv[0] === PINNED_CHECKOUT_PUBLISH_MODE) {
     await runPinnedCheckoutPublisher();
-  } else if (process.argv[2] === PINNED_CHECKOUT_DISCARD_MODE) {
+    return true;
+  }
+  if (argv[0] === PINNED_CHECKOUT_DISCARD_MODE) {
     await runPinnedCheckoutDiscarder();
-  } else {
+    return true;
+  }
+  return false;
+}
+
+if (import.meta.main) {
+  if (!await runPinnedCheckoutChildMode()) {
     throw new Error("git-materialization-lib.mjs je interní Core knihovna");
   }
 }

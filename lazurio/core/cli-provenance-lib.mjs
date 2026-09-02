@@ -5,6 +5,7 @@ import {
   realpathSync,
   statSync,
 } from "node:fs";
+import { homedir } from "node:os";
 import {
   isAbsolute,
   join,
@@ -142,9 +143,16 @@ export function trustedGitCandidates(platform = process.platform) {
   ];
 }
 
-export function trustedGitHubCliCandidates(platform = process.platform) {
+export function trustedGitHubCliCandidates(platform = process.platform, {
+  homeDirectory = homedir(),
+} = {}) {
   if (platform === "darwin") {
-    return ["/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/usr/bin/gh"];
+    return [
+      "/opt/homebrew/bin/gh",
+      "/usr/local/bin/gh",
+      "/usr/bin/gh",
+      isAbsolute(homeDirectory) ? join(homeDirectory, ".local", "bin", "gh") : null,
+    ].filter(Boolean);
   }
   if (platform === "linux") {
     return ["/usr/bin/gh", "/bin/gh", "/usr/local/bin/gh", "/home/linuxbrew/.linuxbrew/bin/gh"];
@@ -164,8 +172,9 @@ export function resolveTrustedGitExecutable({
 
 export function resolveTrustedGitHubCliExecutable({
   platform = process.platform,
+  homeDirectory = homedir(),
 } = {}) {
-  return resolveTrustedExecutable(trustedGitHubCliCandidates(platform));
+  return resolveTrustedExecutable(trustedGitHubCliCandidates(platform, { homeDirectory }));
 }
 
 function resolveTrustedExecutable(candidates) {

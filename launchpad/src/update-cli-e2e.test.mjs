@@ -39,6 +39,23 @@ test("isolated CLI runtime carries schema assets into post-update app discovery"
   expect(report.results.some((result) => result.reason === "dependency_inventory_unavailable")).toBe(false);
 });
 
+test("isolated CLI runtime routes pinned child modes when materializing a missing module", async () => {
+  const fixture = await createLazurioUpdateFixture({
+    withModule: true,
+    moduleMaterialized: false,
+  });
+  cleanup.push(fixture.sandbox);
+
+  const report = await runIsolatedLazurioUpdate({
+    rootPath: fixture.working,
+    environment: fixture.environment,
+  });
+
+  expect(report.ok).toBe(true);
+  expect(report.results.find((result) => result.repo_key === "FixtureOrg::sample"))
+    .toMatchObject({ state: "updated", reason: "module_materialized", actions: ["materialize"] });
+});
+
 test("isolated runtime accepts one internal Organization scope without a second updater", async () => {
   const fixture = await createLazurioUpdateFixture({ withModule: true });
   cleanup.push(fixture.sandbox);
