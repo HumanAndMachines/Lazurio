@@ -22,6 +22,7 @@ import { openCodexRepairDialog, openCodexRuntimeIssueDialog } from "./codex-hand
 import { runtimeRecoveryForApp } from "./runtime-recovery.js";
 import { launchpadFetch } from "./session-aware-fetch.js";
 import { writeReservedTabStatus } from "./reserved-tab-status.js";
+import { t } from "./i18n.js";
 
 const state = {
   data: null,
@@ -1203,8 +1204,7 @@ async function openPersonalApp(app) {
     await deps.onReload();
   } catch (error) {
     closePersonalTab(reservedTab);
-    const message = error instanceof Error ? error.message : String(error);
-    deps.onToast(`${app.title}: ${classifyPersonalOpenError(message)}`, "fail", 7000);
+    deps.onToast(`${app.title}: ${classifyPersonalOpenError(error)}`, "fail", 7000);
   } finally {
     state.openingApps.delete(app.id);
     state.openingMessages.delete(app.id);
@@ -1262,21 +1262,21 @@ function closePersonalTab(reservedTab) {
   if (reservedTab && !reservedTab.closed) reservedTab.close();
 }
 
-function classifyPersonalOpenError(message) {
-  const text = String(message ?? "");
-  if (/port/i.test(text) && /(obsazen|conflict|kolize|PID|EADDRINUSE|in use)/i.test(text)) {
-    return "Port osobní aplikace je obsazený jiným procesem. Zavři starou instanci nebo uvolni port.";
+function classifyPersonalOpenError(error) {
+  const code = String(error?.code ?? "runtime_action_failed").toLowerCase();
+  if (["port_in_use", "port_conflict", "port_occupied", "eaddrinuse"].includes(code)) {
+    return t("personal.error.port");
   }
-  if (/install|balíč|dependency|needs_install/i.test(text)) {
-    return "Nepodařilo se doinstalovat balíčky. Otevři logy osobní aplikace.";
+  if (["app_install_failed", "app_repair_failed", "missing_dependencies", "needs_install"].includes(code)) {
+    return t("personal.error.install");
   }
-  if (/pořád startuje|ještě startuje|health endpoint|start timeout/i.test(text)) {
-    return "Osobní aplikace startuje moc dlouho. Launchpad ji dál neumí potvrdit přes health endpoint.";
+  if (["start_timeout", "starting_timeout", "health_timeout"].includes(code)) {
+    return t("personal.error.timeout");
   }
-  if (/not[_ ]?ready|app_not_ready|restricted|missing_access/i.test(text)) {
-    return "Osobní modul zatím není připravený ke spuštění.";
+  if (["not_ready", "app_not_ready", "restricted", "missing_access"].includes(code)) {
+    return t("personal.error.notReady");
   }
-  return "Spuštění se nepovedlo. Otevři logy osobní aplikace.";
+  return t("personal.error.failed");
 }
 
 function sleep(ms) {
@@ -1374,13 +1374,17 @@ async function fetchJson(path, init = {}) {
   const response = await launchpadFetch(path, { cache: "no-store", ...init });
   if (!response.ok) {
     let message = `${path} ${response.status}`;
+    let payload = null;
     try {
-      const payload = await response.json();
+      payload = await response.json();
       if (payload?.message) message = payload.message;
     } catch {
       // ignore
     }
-    throw new Error(message);
+    const error = new Error(message);
+    error.code = payload?.error ?? `http_${response.status}`;
+    error.payload = payload;
+    throw error;
   }
   return response.json();
 }
