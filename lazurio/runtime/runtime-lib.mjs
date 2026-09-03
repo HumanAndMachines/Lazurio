@@ -916,7 +916,15 @@ export function createRuntimeManager({
         // its health endpoint is intentionally still warming up. Ownership is
         // already verified here, so the final capture can safely bind it and
         // let Start return `starting` for hosted-maintenance backoff.
-        await captureWindowsRuntimeOwnerProofSerialized(app, record);
+        try {
+          await captureWindowsRuntimeOwnerProofSerialized(app, record);
+        } catch {
+          // Owner proof is optional recovery authority. A failed proof-only
+          // write must not prevent the final listener audit from recording a
+          // process that Start has already verified as owning the lease.
+          record.ownerProof = null;
+          record.ownerProofCaptured = false;
+        }
         if (record.ownerProofWritePromise) {
           await Promise.allSettled([record.ownerProofWritePromise]);
         }
@@ -957,7 +965,9 @@ export function createRuntimeManager({
           launcher_exit_code: earlyExit,
           owner_proof: earlySurvivingListenerProof,
         } : {}),
-        ...windowsRuntimeOwnerProofState(earlySurvivingListenerProof ?? record.ownerProof),
+        ...windowsRuntimeOwnerProofState(
+          earlySurvivingListenerProof ?? (record.ownerProofCaptured ? record.ownerProof : null),
+        ),
         process_group_id: record.processGroupId,
         listeners: runtimeListenerState(app),
         listener_ownership: ownershipProof,

@@ -2482,6 +2482,57 @@ test("Windows Start zachová background owner proof v konečném listener auditu
   }
 }, platformTestTimeout(10_000));
 
+test("Windows Start po selhání owner-proof zápisu zachová finální listener audit", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port });
+  const app = withStaticEntrypoint(fixtureDiscoveryApp({ port }));
+  const statePath = join(root, "launchpad", "runtime", "apps", `${app.id}.json`);
+  let child = null;
+  let proofOnlyWriteFailures = 0;
+  const identityFor = (pid) => ({
+    pid,
+    parent_pid: process.pid,
+    created_at: "2026-07-27T08:00:00.000Z",
+    executable_path: "C:\\Tools\\bun.exe",
+  });
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "windows-owner-proof-write-failure",
+    platform: "win32",
+    bunExecutable: process.execPath,
+    discover: discoveryWithApp(app),
+    spawnProcess: (command, options) => {
+      child = spawnFixtureChild(root, command, options);
+      return child;
+    },
+    resolvePortOwnerFn: async () => child
+      ? { pid: child.pid, cwd_matches: null }
+      : null,
+    resolveProcessIdentityFn: async (pid) => pid === child?.pid ? identityFor(pid) : null,
+    writeRuntimeStateFile: async (path, content, encoding) => {
+      const state = JSON.parse(content);
+      if (state.owner_proof && !state.listener_ownership) {
+        proofOnlyWriteFailures += 1;
+        throw new Error("simulated owner-proof state lock");
+      }
+      return writeFile(path, content, encoding);
+    },
+  });
+
+  try {
+    expect((await runtime.start(app.id)).runtime.status).toBe("healthy");
+    const state = JSON.parse(await readFile(statePath, "utf8"));
+    expect(proofOnlyWriteFailures).toBeGreaterThan(0);
+    expect(state.listener_ownership).toEqual([
+      expect.objectContaining({ owner_pid: child.pid, owned: true }),
+    ]);
+    expect(state.owner_proof).toBeUndefined();
+  } finally {
+    await killFixtureProcess(child, root);
+  }
+}, platformTestTimeout(10_000));
+
 test("Windows launcher exit after Start preserves Lazurio listener audit for restart", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({ port });
