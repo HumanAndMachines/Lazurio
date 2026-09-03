@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import {
   launchpadEntryHash,
   launchpadEntryUrl,
+  guideHash,
   organizationHash,
   parseLaunchpadHash,
   personalspaceHash,
@@ -35,6 +36,16 @@ test("Personalspace má stabilní local-only route bez username nebo osobních d
     company: "all",
   });
   expect(resolveLaunchpadHash(personalspaceHash(), { personalspaceAvailable: false }).status).toBe("unavailable");
+});
+
+test("Guide má stabilní globální route nezávislou na Organization scope", () => {
+  expect(guideHash()).toBe("#/guide");
+  expect(parseLaunchpadHash(guideHash())).toEqual({ kind: "guide" });
+  expect(resolveLaunchpadHash(guideHash(), { companies })).toEqual({
+    status: "matched",
+    route: { kind: "guide" },
+    surface: "guide",
+  });
 });
 
 test("Root bez scope zachová současný default a neplatné route failují bezpečně", () => {

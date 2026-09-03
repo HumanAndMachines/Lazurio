@@ -183,6 +183,152 @@
 
         </section>
 
+        <section id="guideMain" class="guide-surface" aria-labelledby="guideTitle" hidden>
+          <header class="guide-header">
+            <button id="guideBack" type="button" class="guide-back" aria-label="Zpět do pracovního prostoru">
+              <!-- iconoir/nav-arrow-left -->
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M15 6L9 12L15 18" />
+              </svg>
+              <span>Zpět</span>
+            </button>
+            <div class="guide-heading">
+              <h1 id="guideTitle" tabindex="-1">Guide</h1>
+              <p>Praktické odpovědi a návody přímo ve vašem pracovním prostředí.</p>
+            </div>
+          </header>
+
+          <div class="guide-workspace">
+            <aside class="guide-navigation" aria-labelledby="guideNavigationTitle">
+              <div class="guide-search">
+                <label for="guideSearch">Hledat v Guide</label>
+                <div class="guide-search-control">
+                  <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="m21 21-4.35-4.35" />
+                  </svg>
+                  <input id="guideSearch" type="search" placeholder="Hledat v Guide…" autocomplete="off" aria-describedby="guideSearchHint" />
+                </div>
+                <p id="guideSearchHint" class="guide-field-hint">Hledejte v pojmech i doporučených aplikacích.</p>
+              </div>
+              <nav class="guide-topics" aria-labelledby="guideNavigationTitle">
+                <h2 id="guideNavigationTitle">Obsah</h2>
+                <button class="guide-topic-link is-active" type="button" data-guide-topic="glossary" aria-current="page">Slovníček pojmů</button>
+                <button class="guide-topic-link" type="button" data-guide-topic="recommended-apps">Doporučené aplikace</button>
+              </nav>
+            </aside>
+
+            <article class="guide-reader" aria-label="Obsah Guide">
+              <div class="guide-reader-content">
+                <section id="guideGlossary" class="guide-topic-panel" data-guide-topic-panel="glossary">
+                  <header class="guide-article-header">
+                    <span class="guide-reader-kicker">Slovníček</span>
+                    <h2>Pojmy, se kterými se v Lazuriu setkáte</h2>
+                    <p>Začněte základními pojmy. Do pokročilé části se podívejte, když řešíte správu, vývoj nebo schvalování změn.</p>
+                  </header>
+
+                  <section class="guide-glossary-section" data-guide-search-group aria-labelledby="guideBasicTitle">
+                  <h3 id="guideBasicTitle">Základní pojmy</h3>
+                  <dl class="guide-term-list">
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Lazurio</dt><dd>Společné pracovní prostředí pro lidi a AI Kolegy. Pomáhá vám najít aplikace, práci a potřebné informace.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Launchpad</dt><dd>Domovská obrazovka Lazuria. Odtud si vyberete Organizaci a otevřete aplikaci, ve které chcete pracovat.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Guide</dt><dd>Praktická nápověda k Lazuriu. Když nevíte, co něco znamená nebo jak pokračovat, začněte tady.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>GitHub</dt><dd>Účet, kterým se přihlašujete do Lazuria. Zároveň určuje, do kterých Organizací a projektů máte přístup a co v nich smíte dělat.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Předplatné</dt><dd>Určuje, kolik AI služeb můžete využívat a kolik tokenů máte k dispozici. Nemusí být propojené s vaším GitHub účtem — přihlášení a placení jsou dvě oddělené věci.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Tokeny</dt><dd>Jednotky, podle kterých se počítá využití AI. Spotřebovávají se při čtení zadání i vytváření odpovědi; nejde o hesla ani přístupové klíče.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Organizace</dt><dd>Oddělený pracovní prostor jedné firmy. Má vlastní lidi, aplikace, data a přístupy.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Team</dt><dd>Skupina lidí a AI Kolegů, kteří společně pracují na určité oblasti, například na obchodu nebo produktu.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Workspace</dt><dd>Část Organizace s aplikacemi pro každodenní práci.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Modul</dt><dd>Jedna konkrétní aplikace v Organizaci, například Mission Control nebo Knowledgebase.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Marketplace</dt><dd>Místo, kde můžete objevit další aplikace a rozšíření pro Lazurio.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Mission Control</dt><dd>Místo pro řízení práce. Uvidíte zde, co se řeší, kdo za to odpovídá a co má následovat.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Knowledgebase</dt><dd>Firemní knihovna znalostí. Obsahuje postupy, rozhodnutí, zkušenosti a další informace důležité pro Organizaci.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Personalspace</dt><dd>Váš soukromý prostor. Patří pouze vám a případně vašemu Buddymu.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Kolega</dt><dd>Člověk, který pracuje v Organizaci.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>AI Kolega</dt><dd>Digitální člen týmu s vlastní pracovní rolí, odpovědností a přístupy.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Buddy</dt><dd>Váš osobní AI pomocník. Může vám pomáhat nebo vás zastupovat pouze v rozsahu, který mu dovolíte.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Prompt</dt><dd>Zadání, které napíšete AI. Například: „Připravte mi přehled nezaplacených faktur a vysvětlete, co mám řešit jako první.“</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Spustit</dt><dd>Zapnout aplikaci, aby ji bylo možné používat.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Otevřít</dt><dd>Přejít do vybrané aplikace. Pokud ještě neběží, Launchpad ji může nejprve spustit.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Zastavit</dt><dd>Vypnout lokálně spuštěnou aplikaci. Její data se tím nemažou.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Synchronizovat</dt><dd>Načíst aktuální stav projektů a aplikací, abyste pracovali s nejnovějšími změnami.</dd></div>
+                  </dl>
+                  </section>
+
+                  <section class="guide-glossary-section" data-guide-search-group aria-labelledby="guideAdvancedTitle">
+                  <h3 id="guideAdvancedTitle">Pokročilé pojmy</h3>
+                  <dl class="guide-term-list">
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>User</dt><dd>Uživatel Organizace. Používá zpřístupněné aplikace, ale běžně nemění jejich zdrojový kód ani nastavení Organizace.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Builder</dt><dd>Člen Organizace, který vytváří a upravuje aplikace. Jeho přesné možnosti určují skutečná oprávnění na GitHubu.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Steward</dt><dd>Správce kvality a pořádku v Organizaci. Kontroluje změny, pomáhá je dotahovat a podle svých oprávnění je může publikovat.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Admin</dt><dd>Správce Organizace s rozšířenými oprávněními. Řídí přístupy a důležitá nastavení; tím ale nezískává přístup do cizího Personalspace.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Principál</dt><dd>Člověk nebo AI Kolega, pro kterého Agent právě pracuje a který má poslední slovo.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Task Agent</dt><dd>Dočasný AI pomocník pro konkrétní úkol nebo konverzaci. Nemá vlastní oprávnění a pracuje pouze v rámci přístupů svého Principála.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Skill</dt><dd>Ověřený pracovní postup pro určitý typ úkolu. Pomáhá AI postupovat správně a opakovatelně, například při tvorbě prezentace, práci s dokumenty nebo kontrole změn.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>MCP server</dt><dd>Spojení, přes které může AI používat konkrétní nástroj nebo pracovat s jeho daty, například s GitHubem. Sám AI nedává další oprávnění — použije jen přístupy dostupné na dané Mašině.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Plugin</dt><dd>Instalovatelný balíček, který rozšíří Codex o nové možnosti. Může obsahovat Skilly, MCP servery nebo napojení na aplikace; instalací ale automaticky nezíská přístup do vašich účtů.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Opatrovník</dt><dd>Určený člověk, který může pomoci s obnovou nebo servisním zásahem u AI Kolegy. Neřídí jeho každodenní práci.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Draft</dt><dd>Rozpracovaný návrh, který ještě není oficiální. Můžete ho kontrolovat, měnit nebo zahodit.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Publikace</dt><dd>Okamžik, kdy se Draft stane oficiálním nebo viditelným ostatním. Agent ji provede pouze po výslovném souhlasu oprávněného Principála.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Release</dt><dd>Oficiální vydání označené verze produktu nebo aplikace, například nové verze pro zákazníky.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Pull request (PR)</dt><dd>Návrh změn čekající na kontrolu a schválení před zařazením do oficiální verze.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Main</dt><dd>Hlavní, aktuálně platná verze projektu. Rozpracované změny se do ní dostanou až po potřebných kontrolách.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Worktree</dt><dd>Oddělená pracovní kopie projektu. Agent nebo vývojář v ní může bezpečně připravovat změny bez zásahu do hlavní verze.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Productionspace</dt><dd>Technická část Organizace pro zdrojové kódy a systémy, které nejsou běžnými pracovními aplikacemi.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Bun</dt><dd>Technický nástroj používaný k instalaci, spouštění a testování aplikací. Pokud nejste vývojář, obvykle s ním nemusíte pracovat přímo.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Mašina</dt><dd>Zařízení nebo oddělené pracovní prostředí, ve kterém Lazurio běží. Tvoří také hranici pro zabezpečení, přístupy a obnovu.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt>Přístup</dt><dd>Skutečné oprávnění něco zobrazit nebo změnit. V pracovních Organizacích ho určuje GitHub, nikoli pouze název vaší role.</dd></div>
+                  </dl>
+                  </section>
+                </section>
+
+                <section id="guideRecommendedApps" class="guide-topic-panel" data-guide-topic-panel="recommended-apps" hidden>
+                  <header class="guide-article-header">
+                    <span class="guide-reader-kicker">Doporučené aplikace</span>
+                    <h2>Pomocníci pro pohodlnější práci</h2>
+                    <p>Tyto externí aplikace nejsou součástí Lazuria. Doporučujeme je, protože vám mohou usnadnit zadávání práce a hlídání dostupných AI limitů.</p>
+                  </header>
+
+                  <div class="guide-recommendation-list">
+                    <section class="guide-recommendation" data-guide-search-item aria-labelledby="guideWisprFlowTitle">
+                      <div class="guide-recommendation-heading">
+                        <span class="guide-recommendation-label">Hlasové zadávání</span>
+                        <h3 id="guideWisprFlowTitle">Wispr Flow</h3>
+                      </div>
+                      <p>Diktování, které funguje v textových polích napříč aplikacemi. Mluvte přirozeně a Wispr Flow z řeči připraví upravený text.</p>
+                      <p><strong>Kdy se hodí:</strong> Když chcete rychle nadiktovat delší prompt, e-mail nebo zprávu a nechcete vše psát na klávesnici.</p>
+                      <a class="guide-recommendation-link" href="https://wisprflow.ai/downloads" target="_blank" rel="noreferrer">Stáhnout Wispr Flow <span aria-hidden="true">↗</span></a>
+                    </section>
+
+                    <section class="guide-recommendation" data-guide-search-item aria-labelledby="guideCodexBarTitle">
+                      <div class="guide-recommendation-heading">
+                        <span class="guide-recommendation-label">Přehled AI limitů</span>
+                        <h3 id="guideCodexBarTitle">CodexBar</h3>
+                      </div>
+                      <p>Bezplatná open-source aplikace pro macOS, která v horní liště ukazuje využití AI služeb, dostupné limity a čas jejich obnovení.</p>
+                      <p><strong>Kdy se hodí:</strong> Než zadáte delší práci AI Kolegovi, rychle uvidíte, kolik kapacity zbývá a kdy se limit obnoví.</p>
+                      <a class="guide-recommendation-link" href="https://codexbar.app/" target="_blank" rel="noreferrer">Otevřít CodexBar <span aria-hidden="true">↗</span></a>
+                    </section>
+
+                    <section class="guide-recommendation" data-guide-search-item aria-labelledby="guideBrowserUseTitle">
+                      <div class="guide-recommendation-heading">
+                        <span class="guide-recommendation-label">Práce AI na webu</span>
+                        <h3 id="guideBrowserUseTitle">Browser Use</h3>
+                      </div>
+                      <p>Nástroj, díky kterému může AI Kolega otevřít webovou stránku, klikat, vyplňovat formuláře a pracovat s webovými aplikacemi podle vašeho zadání.</p>
+                      <p><strong>Kdy se hodí:</strong> Když chcete, aby AI Kolega například vyhledal informace, prošel administraci nebo připravil formulář bez posílání každého jednotlivého kroku.</p>
+                      <p><strong>Mějte na paměti:</strong> Přihlášení mu nezvyšuje oprávnění. Citlivé, destruktivní a publikační kroky stále vyžadují vaše potvrzení.</p>
+                      <a class="guide-recommendation-link" href="https://browser-use.com/" target="_blank" rel="noreferrer">Otevřít Browser Use <span aria-hidden="true">↗</span></a>
+                    </section>
+                  </div>
+                </section>
+
+                <p id="guideNoResults" class="guide-no-results" role="status" hidden>Tomuto hledání neodpovídá žádný obsah.</p>
+              </div>
+            </article>
+          </div>
+        </section>
+
         <aside id="recentChangesSidebar" class="recent-changes-sidebar hidden" data-i18n-aria-label="a11y.workspaceStatus">
           <div id="updateBannerGroup" class="update-banner-group">
             <div id="updateBanner" class="update-banner" role="status">
@@ -214,6 +360,23 @@
               <button id="heroCta" type="button" class="btn btn-secondary btn-sm" data-i18n="workspace.checkStatus"></button>
             </div>
           </section>
+          <a id="guideTile" class="guide-tile side-panel" href="#/guide" aria-labelledby="guideTileTitle" aria-describedby="guideTileSummary">
+            <div class="guide-tile-head">
+              <span class="guide-tile-icon" aria-hidden="true">
+                <img src="/app-icons/lazurio/guide-signpost-solid-96.png" alt="" />
+              </span>
+              <span class="guide-tile-action">
+                Otevřít
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M9 18L15 12L9 6" />
+                </svg>
+              </span>
+            </div>
+            <div class="guide-tile-copy">
+              <h2 id="guideTileTitle">Guide</h2>
+              <p id="guideTileSummary">Návody a odpovědi k práci v Lazuriu.</p>
+            </div>
+          </a>
           <section class="marketplace-teaser side-panel" aria-labelledby="marketplaceTeaserTitle">
             <div class="marketplace-teaser-head">
               <span class="marketplace-teaser-icon" aria-hidden="true">

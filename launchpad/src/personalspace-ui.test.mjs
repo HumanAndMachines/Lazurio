@@ -50,13 +50,13 @@ test("Launchpad renderuje personalspace jako vlastní sekci v hlavní ploše (ne
   // Sdílený rail filtrů už neexistuje. V osobním scope se skrývá jen toolbar
   // aplikací; attention CTA proto vede přímo na osobní karty s warning panely.
   expect(appJs).toContain("function renderScopeControls");
-  expect(appJs).toContain('elements.hero.classList.toggle("hidden", personal)');
+  expect(appJs).toContain('elements.hero.classList.toggle("hidden", personal || guide)');
   expect(html).toContain('id="personalPrivacyBadge"');
-  expect(appJs).toContain('elements.personalPrivacyBadge?.toggleAttribute("hidden", !personal)');
+  expect(appJs).toContain('elements.personalPrivacyBadge?.toggleAttribute("hidden", !personal || guide)');
   expect(appJs).not.toContain("filterRail");
-  expect(appJs).toContain('elements.appsToolbar.classList.toggle("hidden", personal)');
-  expect(appJs).toContain('elements.drawerToggle.classList.toggle("hidden", personal)');
-  expect(appJs).toContain('elements.recentChangesSidebar.classList.toggle("hidden", personal)');
+  expect(appJs).toContain('elements.appsToolbar.classList.toggle("hidden", personal || guide)');
+  expect(appJs).toContain('elements.drawerToggle.classList.toggle("hidden", personal || guide)');
+  expect(appJs).toContain('elements.recentChangesSidebar.classList.toggle("hidden", personal || guide)');
   expect(appJs).toContain('if (state.filters.scope === "personal")');
   expect(appJs).toContain('Boolean(state.personalspace)');
 });

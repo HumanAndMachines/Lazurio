@@ -44,6 +44,45 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(marketplaceBlock).toContain("iconoir/shop");
   expect(marketplaceBlock).not.toContain("<a ");
   expect(marketplaceBlock).not.toContain("<button");
+  const guideTileIndex = html.indexOf('id="guideTile"');
+  const marketplaceIndex = html.indexOf('class="marketplace-teaser side-panel"');
+  expect(guideTileIndex).toBeGreaterThan(-1);
+  expect(guideTileIndex).toBeLessThan(marketplaceIndex);
+  expect(html).toContain('id="guideTile" class="guide-tile side-panel" href="#/guide"');
+  expect(html).toContain('/app-icons/lazurio/guide-signpost-solid-96.png');
+  expect(html).not.toContain('<img src="/app-icons/lazurio/knowledgebase-96.png" alt="" />');
+  expect(html).toContain('id="guideMain" class="guide-surface"');
+  expect(html).not.toContain('class="guide-eyebrow"');
+  expect(html).toContain('id="guideSearch" type="search" placeholder="Hledat v Guide…"');
+  expect(html).toContain("Slovníček pojmů");
+  expect(html).toContain("Doporučené aplikace");
+  expect(html).toContain("Základní pojmy");
+  expect(html).toContain("Pokročilé pojmy");
+  expect(html).toContain("Účet, kterým se přihlašujete do Lazuria.");
+  expect(html).toContain("Předplatné");
+  expect(html).toContain("Tokeny");
+  expect(html).toContain("AI Kolega");
+  expect(html).toContain("Steward");
+  expect(html).toContain("Admin");
+  expect(html).toContain("Bun");
+  expect(html).toContain("<dt>Skill</dt>");
+  expect(html).toContain("<dt>MCP server</dt>");
+  expect(html).toContain("<dt>Plugin</dt>");
+  expect(html).toContain("Sám AI nedává další oprávnění");
+  expect(html).toContain("instalací ale automaticky nezíská přístup do vašich účtů");
+  expect(html).toContain("Wispr Flow");
+  expect(html).toContain('href="https://wisprflow.ai/downloads"');
+  expect(html).toContain("CodexBar");
+  expect(html).toContain('href="https://codexbar.app/"');
+  expect(html).toContain("Browser Use");
+  expect(html).toContain('href="https://browser-use.com/"');
+  expect(html).toContain("Citlivé, destruktivní a publikační kroky stále vyžadují vaše potvrzení.");
+  expect(html).toContain("Tyto externí aplikace nejsou součástí Lazuria.");
+  expect(js).toContain("function filterGuideContent(query)");
+  expect(js).toContain("function selectGuideTopic(topic)");
+  expect(js).toContain('.normalize("NFD")');
+  expect(js).toContain('document.querySelectorAll("[data-guide-search-item]")');
+  expect(html).not.toContain("<iframe");
   expect(html).not.toContain('class="debug-table"');
   expect(html).not.toContain('id="appsTable"');
   expect(html).not.toContain('id="organizationRail"');
@@ -106,11 +145,16 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(js).toContain("function syncActiveSpaceHash");
   expect(js).toContain("let launchpadScopeDataReady = false");
   expect(js).toContain("launchpadScopeDataReady = true");
-  expect(js).toContain("if (launchpadScopeDataReady) syncActiveSpaceHash({ replace: true })");
+  expect(js).toContain('if (launchpadScopeDataReady && state.activeSurface === "workspace")');
   expect(js).toContain("!launchpadScopeDataReady || window.location.hash === appliedLaunchpadHash");
   expect(js).toContain('window.addEventListener("hashchange", applyBrowserLaunchpadHash)');
   expect(js).toContain("organizationHash(state.filters.company)");
   expect(js).toContain("personalspaceHash()");
+  expect(js).toContain("guideHash()");
+  expect(js).toContain('state.activeSurface = "guide"');
+  expect(js.match(/state\.guideReturnHash = activeSpaceHash\(\);/g)?.length).toBe(3);
+  expect(js).toContain('elements.skipLink.href = guide ? "#guideMain" : "#workspaceMain"');
+  expect(js).toContain('app.organization_path === "guide"');
   expect(js).toContain("suppressNextDrawerOpen");
   expect(js).toContain("function visibleNotifications");
   expect(js).toContain("function visibleMostUsed");
@@ -151,7 +195,7 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(js).toContain('state.filters.scope === "personal"');
   expect(html).not.toContain('id="runtimeRootBadge"');
   expect(js).not.toContain('WORKTREE · ${worktreeName}');
-  expect(js).toContain('elements.drawerToggle.classList.toggle("hidden", personal)');
+  expect(js).toContain('elements.drawerToggle.classList.toggle("hidden", personal || guide)');
   expect(js).toContain('state.filters.scope = "personal";\n  state.filters.company = "all";');
   const switcherBlock = js.slice(js.indexOf("function renderSpaceSwitcher"), js.indexOf("Side panels:"));
   expect(switcherBlock).not.toContain("organizationStats");
@@ -710,7 +754,7 @@ test("CAC-0044/0095: pravé panely, notifikace pod zvonečkem a git chip", async
   expect(css).toContain(".recent-changes-sidebar");
   expect(css).toContain("grid-template-columns: minmax(0, 1fr) minmax(250px, 300px)");
   expect(css).toContain(".quick-app");
-  expect(js).toContain('elements.recentChangesSidebar.classList.toggle("hidden", personal)');
+  expect(js).toContain('elements.recentChangesSidebar.classList.toggle("hidden", personal || guide)');
 });
 
 test("CAC-0095: zvoneček nese actor, scope a payload a respektuje izolaci", async () => {
@@ -773,7 +817,7 @@ test("CAC-0095: zvoneček nese actor, scope a payload a respektuje izolaci", asy
 
   // Izolace: Personalspace zvoneček nedostane a notifikace nepřekročí Organizaci.
   expect(js).toContain('if (state.filters.scope === "personal") return []');
-  expect(js).toContain('elements.notificationsToggle?.classList.toggle("hidden", personal)');
+  expect(js).toContain('elements.notificationsToggle?.classList.toggle("hidden", personal || guide)');
   expect(js).toContain("item.scope?.company === state.filters.company");
 
   expect(css).toContain(".notifications-panel");
