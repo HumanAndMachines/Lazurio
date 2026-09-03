@@ -946,7 +946,10 @@ test("Lazurio doctor drží identity a výsledky existujícího root Doctor core
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
   });
-  const lazurio = await buildLazurioDoctorReport({ root });
+  const lazurio = await buildLazurioDoctorReport({
+    root,
+    buildLaunchpadReport: async () => existing,
+  });
 
   expect(lazurio.root_kind).toBe("launchpad_root");
   expect(lazurio.report.scope).toEqual(existing.scope);
