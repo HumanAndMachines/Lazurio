@@ -108,7 +108,7 @@ export async function materializeGitCheckout({
         env: remoteEnvironment,
       },
     );
-    if (!source.ok || !source.stdout) return missingAccess();
+    if (!source.ok || !source.stdout) return missingAccess(source);
 
     await makeDirectory(targetParent, { recursive: true });
     const parentBoundary = await inspectCanonicalPathBoundary({
@@ -152,7 +152,7 @@ export async function materializeGitCheckout({
       if (["parent_identity_changed", "child_identity_changed"].includes(clone.code)) {
         return boundaryFailure("Rodič cílového checkoutu se před klonováním fyzicky změnil.");
       }
-      return cloneFailure();
+      return cloneFailure(clone);
     }
     stagingName = clone.child_name;
     if (!isPortableChildName(stagingName)) return cloneFailure();
@@ -240,8 +240,8 @@ export async function materializeGitCheckout({
       head: gitVerification.head,
       remote,
     };
-  } catch {
-    return cloneFailure();
+  } catch (error) {
+    return cloneFailure({ error: error instanceof Error ? error.message : String(error) });
   } finally {
     if (transportCwd) {
       await remove(transportCwd, { recursive: true, force: true }).catch(() => {});
@@ -548,22 +548,67 @@ function targetCollision() {
   };
 }
 
-function missingAccess() {
+function missingAccess(result = {}) {
+  const diagnostic = gitFailureDiagnostic(result);
   return {
     ok: false,
     outcome: "missing_access",
     code: "materialization_source_unavailable",
-    message: "Git nedokázal přečíst repo nebo jeho větev přes deklarovaný remote. Ověř repo access i Git transport; u privátního SSH remote musí uspět exact `git ls-remote`. Opakované `gh auth login` bez tohoto testu transport neopraví. Nic se nenaklonovalo.",
+    message: appendGitDiagnostic(
+      "Git nedokázal přečíst repo nebo jeho větev přes deklarovaný remote. Ověř repo access i Git transport; u privátního SSH remote musí uspět exact `git ls-remote`. Opakované `gh auth login` bez tohoto testu transport neopraví. Nic se nenaklonovalo.",
+      diagnostic,
+    ),
   };
 }
 
-function cloneFailure() {
+function cloneFailure(result = {}) {
+  const diagnostic = gitFailureDiagnostic(result);
   return {
     ok: false,
     outcome: "failed",
     code: "materialization_clone_failed",
-    message: "Git nedokončil ověřený checkout; finální target zůstal nedotčený.",
+    message: appendGitDiagnostic(
+      "Git nedokončil ověřený checkout; finální target zůstal nedotčený.",
+      diagnostic,
+    ),
   };
+}
+
+function appendGitDiagnostic(message, diagnostic) {
+  return diagnostic ? `${message} Git příčina: ${diagnostic}` : message;
+}
+
+function gitFailureDiagnostic(result) {
+  const facts = [];
+  if (result?.timedOut === true) facts.push("timeout");
+  if (Number.isInteger(result?.exitCode)) facts.push(`exit ${result.exitCode}`);
+  if (
+    typeof result?.code === "string"
+    && /^[a-z0-9_]{1,80}$/u.test(result.code)
+    && !["git_command_failed", "materialization_clone_failed"].includes(result.code)
+  ) {
+    facts.push(result.code);
+  }
+  const raw = [result?.stderr, result?.error, result?.stdout]
+    .find((value) => typeof value === "string" && value.trim() !== "");
+  const output = sanitizeGitFailureOutput(raw);
+  if (output) facts.push(output);
+  return facts.join(": ");
+}
+
+function sanitizeGitFailureOutput(value) {
+  if (typeof value !== "string") return "";
+  const sanitized = value
+    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/gu, "")
+    .replace(/([a-z][a-z0-9+.-]*:\/\/[^\s?#"'<>]+)[?#][^\s"'<>]*/giu, "$1?<redacted>")
+    .replace(/([a-z][a-z0-9+.-]*:\/\/)[^/\s@]+@/giu, "$1<redacted>@")
+    .replace(/\b((?:authorization|credential|access[_-]?token|token|password|passwd|secret)\s*[:=]\s*)[^\s&,;]+/giu, "$1<redacted>")
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/gu, "")
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(" · ");
+  return sanitized.length <= 1_200 ? sanitized : `…${sanitized.slice(-1_199)}`;
 }
 
 async function lstatOrNull(path) {
