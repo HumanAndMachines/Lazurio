@@ -199,6 +199,7 @@ test("missing Organization root converges once and a second install is a no-op",
   expect(first).toMatchObject({
     state: "updated",
     ok: true,
+    access: { authority: "github", role: null, status: "not_requested" },
     target: { state: "updated", reason: "root_materialized" },
   });
   expect(second).toMatchObject({
@@ -460,8 +461,8 @@ test("CLI exposes install without weakening activation flags", () => {
     stderr: "pipe",
   });
   expect(help.exitCode).toBe(0);
-  expect(help.stdout.toString()).toContain("lazurio organization install <github-login> [--json]");
-  expect(help.stdout.toString()).not.toContain("lazurio organization install <github-login> [--json] [--root");
+  expect(help.stdout.toString()).toContain("lazurio organization install <github-login> [--role builder] [--json]");
+  expect(help.stdout.toString()).not.toContain("lazurio organization install <github-login> [--role builder] [--json] [--root");
 
   const invalid = Bun.spawnSync([
     process.execPath,
@@ -493,6 +494,47 @@ test("CLI exposes install without weakening activation flags", () => {
   });
   expect(alternateRoot.exitCode).toBe(2);
   expect(alternateRoot.stderr.toString()).toContain("vždy používá kanonický Lazurio Root v home");
+
+  const invalidRole = Bun.spawnSync([
+    process.execPath,
+    "lazurio/cli.mjs",
+    "organization",
+    "install",
+    login,
+    "--role",
+    "steward",
+  ], {
+    cwd: join(import.meta.dirname, ".."),
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  expect(invalidRole.exitCode).toBe(2);
+  expect(invalidRole.stderr.toString()).toContain("--role zatím podporuje pouze hodnotu builder");
+});
+
+test("Builder role blocks before materialization when provider observation did not prove readiness", async () => {
+  const fixture = await organizationRemoteFixture();
+  let materialized = false;
+  const report = await installOrganization({
+    rootPath: fixture.root,
+    githubLogin: login,
+    role: "builder",
+    deps: {
+      observe: async () => sourceObservation(),
+      runPinnedChild: async () => {
+        materialized = true;
+        throw new Error("must not materialize");
+      },
+    },
+  });
+
+  expect(report).toMatchObject({
+    state: "blocked",
+    access: { authority: "github", role: "builder", status: "blocked" },
+    target: { reason: "builder_access_not_ready" },
+  });
+  expect(materialized).toBe(false);
+  expect(existsSync(join(fixture.root, "organizations", `${login}_GEN3`))).toBe(false);
 });
 
 function sourceObservation({ documents = scaffoldDocuments() } = {}) {
