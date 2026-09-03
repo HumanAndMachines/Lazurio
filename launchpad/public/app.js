@@ -361,6 +361,8 @@ const elements = {
   guideTitle: document.querySelector("#guideTitle"),
   guideBack: document.querySelector("#guideBack"),
   guideTile: document.querySelector("#guideTile"),
+  guideSearch: document.querySelector("#guideSearch"),
+  guideNoResults: document.querySelector("#guideNoResults"),
   appsSearch: document.querySelector("#appsSearch"),
   attentionToggle: document.querySelector("#attentionToggle"),
   segmentedControl: document.querySelectorAll("[data-status-segment]"),
@@ -457,6 +459,9 @@ elements.guideTile?.addEventListener("click", () => {
   state.guideOpenedFromLaunchpad = true;
 });
 elements.guideBack?.addEventListener("click", () => closeGuide());
+elements.guideSearch?.addEventListener("input", (event) => {
+  filterGuideTerms(event.target.value);
+});
 
 // Drawer doplňkových panelů (Nejčastější / detail). Poslední změny jsou v
 // Organization scope trvale viditelné vedle hlavní plochy.
@@ -1627,9 +1632,13 @@ function applyLaunchpadHash({ notify = false } = {}) {
   }
 
   state.activeSurface = "workspace";
+  state.guideOpenedFromLaunchpad = false;
   const changed = state.filters.scope !== resolution.scope || state.filters.company !== resolution.company;
   state.filters.scope = resolution.scope;
   state.filters.company = resolution.company;
+  // Každý navštívený workspace je nový návratový kontext. Pokud se uživatel
+  // vrátí do Guide historií, tlačítko Zpět ho proto nepošle do starší Organizace.
+  state.guideReturnHash = activeSpaceHash();
   if (changed) resetSpaceSelection();
   return changed;
 }
@@ -1657,6 +1666,30 @@ function closeGuide() {
   queueMicrotask(() => {
     if (elements.guideTile?.offsetParent) elements.guideTile.focus({ preventScroll: true });
   });
+}
+
+function normalizeGuideSearch(value) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLocaleLowerCase("cs")
+    .trim();
+}
+
+function filterGuideTerms(query) {
+  const needle = normalizeGuideSearch(query);
+  let visibleTerms = 0;
+  for (const term of document.querySelectorAll("[data-guide-term]")) {
+    const matches = !needle || normalizeGuideSearch(term.textContent).includes(needle);
+    term.toggleAttribute("hidden", !matches);
+    if (matches) visibleTerms += 1;
+  }
+  for (const section of document.querySelectorAll("[data-guide-section]")) {
+    const hasVisibleTerm = [...section.querySelectorAll("[data-guide-term]")]
+      .some((term) => !term.hidden);
+    section.toggleAttribute("hidden", !hasVisibleTerm);
+  }
+  elements.guideNoResults?.toggleAttribute("hidden", visibleTerms > 0);
 }
 
 function writeLaunchpadHash(hash, { replace = false } = {}) {
@@ -1826,6 +1859,7 @@ function selectSpace(space) {
     state.filters.scope = "org";
     state.filters.company = space.organization.slug;
   }
+  state.guideReturnHash = activeSpaceHash();
   syncActiveSpaceHash();
   render();
   void loadSidePanels();
