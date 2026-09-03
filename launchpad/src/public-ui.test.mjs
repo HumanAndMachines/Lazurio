@@ -53,8 +53,9 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(html).not.toContain('<img src="/app-icons/lazurio/knowledgebase-96.png" alt="" />');
   expect(html).toContain('id="guideMain" class="guide-surface"');
   expect(html).not.toContain('class="guide-eyebrow"');
-  expect(html).toContain('id="guideSearch" type="search" placeholder="Hledat pojem…"');
+  expect(html).toContain('id="guideSearch" type="search" placeholder="Hledat v Guide…"');
   expect(html).toContain("Slovníček pojmů");
+  expect(html).toContain("Doporučené aplikace");
   expect(html).toContain("Základní pojmy");
   expect(html).toContain("Pokročilé pojmy");
   expect(html).toContain("Účet, kterým se přihlašujete do Lazuria.");
@@ -64,9 +65,15 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(html).toContain("Steward");
   expect(html).toContain("Admin");
   expect(html).toContain("Bun");
-  expect(js).toContain("function filterGuideTerms(query)");
+  expect(html).toContain("Wispr Flow");
+  expect(html).toContain('href="https://wisprflow.ai/downloads"');
+  expect(html).toContain("CodexBar");
+  expect(html).toContain('href="https://codexbar.app/"');
+  expect(html).toContain("Tyto externí aplikace nejsou součástí Lazuria.");
+  expect(js).toContain("function filterGuideContent(query)");
+  expect(js).toContain("function selectGuideTopic(topic)");
   expect(js).toContain('.normalize("NFD")');
-  expect(js).toContain('document.querySelectorAll("[data-guide-term]")');
+  expect(js).toContain('document.querySelectorAll("[data-guide-search-item]")');
   expect(html).not.toContain("<iframe");
   expect(html).not.toContain('class="debug-table"');
   expect(html).not.toContain('id="appsTable"');

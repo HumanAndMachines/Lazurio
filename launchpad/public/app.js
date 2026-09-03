@@ -115,6 +115,7 @@ const state = {
   activeSurface: "workspace",
   guideReturnHash: null,
   guideOpenedFromLaunchpad: false,
+  guideActiveTopic: "glossary",
   filters: {
     // Scope selector vždy ukazuje právě jeden prostor: personalspace nebo
     // konkrétní Organizaci. Cross-organization pohled „Vše" není v denním UI.
@@ -363,6 +364,7 @@ const elements = {
   guideTile: document.querySelector("#guideTile"),
   guideSearch: document.querySelector("#guideSearch"),
   guideNoResults: document.querySelector("#guideNoResults"),
+  guideTopicButtons: document.querySelectorAll("[data-guide-topic]"),
   appsSearch: document.querySelector("#appsSearch"),
   attentionToggle: document.querySelector("#attentionToggle"),
   segmentedControl: document.querySelectorAll("[data-status-segment]"),
@@ -460,8 +462,11 @@ elements.guideTile?.addEventListener("click", () => {
 });
 elements.guideBack?.addEventListener("click", () => closeGuide());
 elements.guideSearch?.addEventListener("input", (event) => {
-  filterGuideTerms(event.target.value);
+  filterGuideContent(event.target.value);
 });
+for (const topicButton of elements.guideTopicButtons) {
+  topicButton.addEventListener("click", () => selectGuideTopic(topicButton.dataset.guideTopic));
+}
 
 // Drawer doplňkových panelů (Nejčastější / detail). Poslední změny jsou v
 // Organization scope trvale viditelné vedle hlavní plochy.
@@ -1676,20 +1681,40 @@ function normalizeGuideSearch(value) {
     .trim();
 }
 
-function filterGuideTerms(query) {
+function filterGuideContent(query) {
   const needle = normalizeGuideSearch(query);
-  let visibleTerms = 0;
-  for (const term of document.querySelectorAll("[data-guide-term]")) {
-    const matches = !needle || normalizeGuideSearch(term.textContent).includes(needle);
-    term.toggleAttribute("hidden", !matches);
-    if (matches) visibleTerms += 1;
+  let visibleItems = 0;
+  for (const item of document.querySelectorAll("[data-guide-search-item]")) {
+    const matches = !needle || normalizeGuideSearch(item.textContent).includes(needle);
+    item.toggleAttribute("hidden", !matches);
+    if (matches) visibleItems += 1;
   }
-  for (const section of document.querySelectorAll("[data-guide-section]")) {
-    const hasVisibleTerm = [...section.querySelectorAll("[data-guide-term]")]
-      .some((term) => !term.hidden);
-    section.toggleAttribute("hidden", !hasVisibleTerm);
+  for (const group of document.querySelectorAll("[data-guide-search-group]")) {
+    const hasVisibleItem = [...group.querySelectorAll("[data-guide-search-item]")]
+      .some((item) => !item.hidden);
+    group.toggleAttribute("hidden", !hasVisibleItem);
   }
-  elements.guideNoResults?.toggleAttribute("hidden", visibleTerms > 0);
+  for (const panel of document.querySelectorAll("[data-guide-topic-panel]")) {
+    const hasVisibleItem = [...panel.querySelectorAll("[data-guide-search-item]")]
+      .some((item) => !item.hidden);
+    const isSelected = panel.dataset.guideTopicPanel === state.guideActiveTopic;
+    panel.toggleAttribute("hidden", needle ? !hasVisibleItem : !isSelected);
+  }
+  for (const button of elements.guideTopicButtons) {
+    const isActive = !needle && button.dataset.guideTopic === state.guideActiveTopic;
+    button.classList.toggle("is-active", isActive);
+    if (isActive) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
+  }
+  elements.guideNoResults?.toggleAttribute("hidden", visibleItems > 0);
+}
+
+function selectGuideTopic(topic) {
+  const panel = document.querySelector(`[data-guide-topic-panel="${topic}"]`);
+  if (!panel) return;
+  state.guideActiveTopic = topic;
+  if (elements.guideSearch) elements.guideSearch.value = "";
+  filterGuideContent("");
 }
 
 function writeLaunchpadHash(hash, { replace = false } = {}) {
