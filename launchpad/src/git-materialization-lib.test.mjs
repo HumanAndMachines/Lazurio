@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { runGit, runGitInPinnedTemporaryChild } from "../../lazurio/runtime/git-lib.mjs";
+import { CANONICAL_GIT_FETCH_REFSPEC } from "../../lazurio/core/git-materialization-lib.mjs";
 import { materializeRepoCheckout } from "../../lazurio/runtime/git-materialization-lib.mjs";
 import { buildGitInventory } from "../../lazurio/runtime/git-inventory-lib.mjs";
 import {
@@ -59,6 +60,14 @@ test("materializes an active manifest slot on its exact repository and branch", 
   expect(result.head).toMatch(/^[0-9a-f]{40}$/);
   expect(await readFile(join(organizationRoot, "workspace", "lazurio", "README.md"), "utf8"))
     .toContain("# main");
+  const fetchRefspec = await runGit(
+    ["config", "--local", "--get-all", "remote.origin.fetch"],
+    { cwd: join(organizationRoot, "workspace", "lazurio") },
+  );
+  expect(fetchRefspec).toMatchObject({
+    ok: true,
+    stdout: CANONICAL_GIT_FETCH_REFSPEC,
+  });
 });
 
 test("treats an inaccessible manifest repository as missing_access and leaves no partial checkout", async () => {

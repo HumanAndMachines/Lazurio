@@ -5,7 +5,7 @@ import {
   realpathSync,
   statSync,
 } from "node:fs";
-import { homedir } from "node:os";
+import { userInfo } from "node:os";
 import {
   isAbsolute,
   join,
@@ -129,7 +129,7 @@ export function normalizeComparableCliPath(path, platform = process.platform) {
 }
 
 export function trustedGitCandidates(platform = process.platform, {
-  homeDirectory = homedir(),
+  homeDirectory = currentAccountHomeDirectory(),
 } = {}) {
   if (platform === "darwin") {
     return [
@@ -153,11 +153,15 @@ export function trustedGitCandidates(platform = process.platform, {
     "C:\\Program Files\\Git\\bin\\git.exe",
     "C:\\Program Files (x86)\\Git\\cmd\\git.exe",
     "C:\\Program Files (x86)\\Git\\bin\\git.exe",
-  ];
+    trustedWindowsUserLocalExecutable(homeDirectory, "Git", "cmd", "git.exe"),
+    trustedWindowsUserLocalExecutable(homeDirectory, "Git", "bin", "git.exe"),
+    trustedWindowsUserLocalExecutable(homeDirectory, "PortableGit", "cmd", "git.exe"),
+    trustedWindowsUserLocalExecutable(homeDirectory, "PortableGit", "bin", "git.exe"),
+  ].filter(Boolean);
 }
 
 export function trustedGitHubCliCandidates(platform = process.platform, {
-  homeDirectory = homedir(),
+  homeDirectory = currentAccountHomeDirectory(),
 } = {}) {
   if (platform === "darwin") {
     return [
@@ -180,11 +184,13 @@ export function trustedGitHubCliCandidates(platform = process.platform, {
   return [
     "C:\\Program Files\\GitHub CLI\\gh.exe",
     "C:\\Program Files (x86)\\GitHub CLI\\gh.exe",
-  ];
+    trustedWindowsUserLocalExecutable(homeDirectory, "GitHub CLI", "bin", "gh.exe"),
+    trustedWindowsUserLocalExecutable(homeDirectory, "GitHub CLI", "gh.exe"),
+  ].filter(Boolean);
 }
 
 export function trustedNodeCandidates(platform = process.platform, {
-  homeDirectory = homedir(),
+  homeDirectory = currentAccountHomeDirectory(),
 } = {}) {
   if (platform === "darwin") {
     return [
@@ -212,21 +218,21 @@ export function trustedNodeCandidates(platform = process.platform, {
 
 export function resolveTrustedGitExecutable({
   platform = process.platform,
-  homeDirectory = homedir(),
+  homeDirectory = currentAccountHomeDirectory(),
 } = {}) {
   return resolveTrustedExecutable(trustedGitCandidates(platform, { homeDirectory }));
 }
 
 export function resolveTrustedGitHubCliExecutable({
   platform = process.platform,
-  homeDirectory = homedir(),
+  homeDirectory = currentAccountHomeDirectory(),
 } = {}) {
   return resolveTrustedExecutable(trustedGitHubCliCandidates(platform, { homeDirectory }));
 }
 
 export function resolveTrustedNodeExecutable({
   platform = process.platform,
-  homeDirectory = homedir(),
+  homeDirectory = currentAccountHomeDirectory(),
 } = {}) {
   return resolveTrustedExecutable(trustedNodeCandidates(platform, { homeDirectory }));
 }
@@ -244,9 +250,28 @@ function resolveTrustedExecutable(candidates) {
 }
 
 function trustedPosixUserLocalExecutable(homeDirectory, executable) {
-  return typeof homeDirectory === "string" && posix.isAbsolute(homeDirectory)
+  return safeHomeDirectory(homeDirectory) && posix.isAbsolute(homeDirectory)
     ? posix.join(homeDirectory, ".local", "bin", executable)
     : null;
+}
+
+function trustedWindowsUserLocalExecutable(homeDirectory, ...parts) {
+  if (!safeHomeDirectory(homeDirectory) || !win32.isAbsolute(homeDirectory)) return null;
+  return win32.join(homeDirectory, "AppData", "Local", "Programs", ...parts);
+}
+
+function safeHomeDirectory(homeDirectory) {
+  return typeof homeDirectory === "string"
+    && homeDirectory !== ""
+    && !/[\u0000\r\n]/u.test(homeDirectory);
+}
+
+function currentAccountHomeDirectory() {
+  try {
+    return userInfo().homedir;
+  } catch {
+    return null;
+  }
 }
 
 function sourceProvenance({

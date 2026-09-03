@@ -21,7 +21,10 @@ import {
   safeGitRemoteEnv,
 } from "../runtime/git-lib.mjs";
 import { initGitRepo } from "../../launchpad/src/git-fixture-helpers.test.mjs";
-import { materializeGitCheckout } from "./git-materialization-lib.mjs";
+import {
+  CANONICAL_GIT_FETCH_REFSPEC,
+  materializeGitCheckout,
+} from "./git-materialization-lib.mjs";
 
 const roots = [];
 
@@ -52,6 +55,14 @@ test("one Core primitive publishes an Organization root only after owner verific
   expect(result).toMatchObject({ ok: true, outcome: "materialized", mode: "organization-root" });
   expect(verifiedPath).not.toBe(target);
   expect(existsSync(join(target, "README.md"))).toBe(true);
+  const fetchRefspec = await runGit(
+    ["config", "--local", "--get-all", "remote.origin.fetch"],
+    { cwd: target },
+  );
+  expect(fetchRefspec).toMatchObject({
+    ok: true,
+    stdout: CANONICAL_GIT_FETCH_REFSPEC,
+  });
 });
 
 test("post-clone repository fsmonitor cannot execute during materialization verification", async () => {

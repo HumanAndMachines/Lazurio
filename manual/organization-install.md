@@ -163,6 +163,16 @@ není finálním důkazem: po dokončení musí nový čistý proces bez tohoto 
 najít tytéž příkazy. Jejich skutečnou identitu a použitelnost následně ověří
 `lazurio install --json` a Doctor; pouhé `Get-Command` nestačí.
 
+Git a GitHub CLI smějí být na Windows nainstalované i bez admin práv do
+oficiálních uživatelských adresářů pod
+`%USERPROFILE%\AppData\Local\Programs`. Install Core a Doctor přijímají Git
+Installer v `Git\cmd`/`Git\bin`, PortableGit v
+`PortableGit\cmd`/`PortableGit\bin` a GitHub CLI v `GitHub CLI\bin` (včetně
+varianty s `gh.exe` přímo v `GitHub CLI`). Autoritou pro tento prefix je home
+aktuálního OS účtu, ne zděděné `LOCALAPPDATA`, `USERPROFILE` ani libovolná
+položka `PATH`; nalezená binárka se stále musí kanonicky shodovat s jedním
+z těchto pevných kandidátů a projít funkčním probe.
+
 ### Windows: podporovaná Codex CLI lane
 
 Pro novou Windows Mašinu použij po výslovném souhlasu Principála
@@ -338,7 +348,11 @@ deklarovanou branch, Git ignore v parent repozitáři a bezpečnou fyzickou cest
 Duplicitní legacy `repository_db` projekce není další autorita; rozhodují
 normalizovaná Git pole slotu. Nemá-li deklarovaný Mission Control právě jeden
 aktivní `mission-control/db` mount s tímto kontraktem, install skončí
-`blocked` — nesmí hlásit úspěšnou konvergenci s chybějícími daty.
+`blocked` — nesmí hlásit úspěšnou konvergenci s chybějícími daty. Každý
+čerstvě materializovaný checkout používá pro úvodní clone
+`--single-branch`, ale před publikací dostane přesně jeden kanonický fetch
+refspec `+refs/heads/*:refs/remotes/origin/*`. Následný update, review ani
+Doctor proto nezdědí úzký refspec omezený jen na bootstrap branch.
 
 Existující repository-db checkout installer nefetchuje ani nefast-forwarduje:
 ověří pouze čistý exact Git root, remote a deklarovanou branch. Ongoing sync,

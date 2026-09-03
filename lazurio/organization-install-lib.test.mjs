@@ -7,6 +7,7 @@ import { dirname, join } from "node:path";
 import { initGitRepo } from "../launchpad/src/git-fixture-helpers.test.mjs";
 import { runGit, runGitInPinnedTemporaryChild } from "./runtime/git-lib.mjs";
 import { createOrganizationScaffold } from "./core/organization-scaffold-lib.mjs";
+import { CANONICAL_GIT_FETCH_REFSPEC } from "./core/git-materialization-lib.mjs";
 import {
   installOrganization,
   observeOrganizationInstallSource,
@@ -257,6 +258,10 @@ test("explicit Organization install materializes an active repository-db mount o
   expect(existsSync(join(dataPath, "repository-db.yaml"))).toBe(true);
   expect((await runGit(["branch", "--show-current"], { cwd: dataPath })).stdout).toBe("v3");
   expect((await runGit(["remote", "get-url", "origin"], { cwd: dataPath })).stdout).toBe(fakeDataRemote);
+  expect((await runGit(
+    ["config", "--local", "--get-all", "remote.origin.fetch"],
+    { cwd: dataPath },
+  )).stdout).toBe(CANONICAL_GIT_FETCH_REFSPEC);
 });
 
 test("declared Mission Control never reports successful install without its active repository-db mount", async () => {
