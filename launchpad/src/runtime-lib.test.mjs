@@ -4396,13 +4396,16 @@ test("hosted maintenance backs off while an exact runtime source is still starti
   const root = await createCompaniesWorkspaceFixture({
     port,
     serverSource: [
-      "const startedAt = Date.now();",
+      "import { existsSync } from 'node:fs';",
+      "import { dirname, join } from 'node:path';",
+      "import { fileURLToPath } from 'node:url';",
+      "const readyPath = join(dirname(fileURLToPath(import.meta.url)), 'maintenance-ready');",
       "const server = Bun.serve({",
       "  hostname: process.env.LAZURIO_RUNTIME_HOST,",
       "  port: Number(process.env.LAZURIO_RUNTIME_PORT),",
       "  fetch(request) {",
       "    const url = new URL(request.url);",
-      "    if (url.pathname === '/health' && Date.now() - startedAt < 2500) return new Response('building', { status: 404 });",
+      "    if (url.pathname === '/health' && !existsSync(readyPath)) return new Response('building', { status: 404 });",
       "    if (url.pathname === '/health') return Response.json({ status: 'ok' });",
       "    return new Response('ok');",
       "  },",
@@ -4429,6 +4432,11 @@ test("hosted maintenance backs off while an exact runtime source is still starti
       (state) => state?.status === "starting" && state.attempts > 0,
     );
     expect(Date.parse(retrying.next_attempt_at)).toBeGreaterThan(Date.now());
+    await writeFile(
+      join(root, "organizations", "TestCompany", "modules", "demo", "app", "v1", "maintenance-ready"),
+      "ready\n",
+      "utf8",
+    );
     expect(await waitForStatus(() => runtime.health(app.id), "healthy")).toMatchObject({
       managed: true,
       maintenance: { status: "healthy", attempts: 0 },
