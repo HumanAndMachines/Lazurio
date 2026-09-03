@@ -91,6 +91,146 @@ test("Builder readiness fails closed when an internal Team lacks immutable GitHu
   expect(calls.some((endpoint) => endpoint.includes("/teams/"))).toBe(false);
 });
 
+test("Builder readiness reports a Team provider failure without inventing an identity mismatch", () => {
+  const report = observeGitHubBuilderReadiness({
+    provider: providerFixture({
+      teamMembership: "active",
+      permission: "write",
+      failures: { teamIdentity: 403 },
+    }),
+    organization,
+    rootRepository,
+    resource: resourceFixture(),
+  });
+
+  expect(report.status).toBe("blocked");
+  expect(report.teams).toContainEqual(expect.objectContaining({
+    internal_slug: "workspace",
+    identity: "unavailable",
+    membership: "not_evaluated",
+  }));
+  expect(report.blockers).toContainEqual(expect.objectContaining({
+    reason: "provider_observation_failed",
+    team: "workspace",
+  }));
+  expect(report.blockers.some((item) => item.reason === "team_identity_mismatch")).toBe(false);
+});
+
+test("Builder readiness keeps verified Team identity mismatch distinct from provider failure", () => {
+  const report = observeGitHubBuilderReadiness({
+    provider: providerFixture({
+      teamMembership: "active",
+      permission: "write",
+      teamId: 99999999,
+    }),
+    organization,
+    rootRepository,
+    resource: resourceFixture(),
+  });
+
+  expect(report.teams).toContainEqual(expect.objectContaining({
+    internal_slug: "workspace",
+    identity: "mismatch",
+  }));
+  expect(report.blockers).toContainEqual(expect.objectContaining({
+    reason: "team_identity_mismatch",
+    team: "workspace",
+  }));
+  expect(report.blockers.some((item) => item.reason === "provider_observation_failed")).toBe(false);
+});
+
+test("Builder readiness distinguishes missing Team membership from an unavailable observation", () => {
+  const missing = observeGitHubBuilderReadiness({
+    provider: providerFixture({ teamMembership: "missing", permission: "write" }),
+    organization,
+    rootRepository,
+    resource: resourceFixture(),
+  });
+  const unavailable = observeGitHubBuilderReadiness({
+    provider: providerFixture({
+      teamMembership: "active",
+      permission: "write",
+      failures: { teamMembership: 403 },
+    }),
+    organization,
+    rootRepository,
+    resource: resourceFixture(),
+  });
+
+  expect(missing.teams[0].membership).toBe("missing");
+  expect(missing.blockers.some((item) => item.reason === "team_membership_missing")).toBe(true);
+  expect(unavailable.teams[0].membership).toBe("unavailable");
+  expect(unavailable.blockers.some((item) => item.reason === "provider_observation_failed")).toBe(true);
+  expect(unavailable.blockers.some((item) => item.reason === "team_membership_missing")).toBe(false);
+});
+
+test("Builder readiness reports unavailable Organization membership without inventing a missing membership", () => {
+  const report = observeGitHubBuilderReadiness({
+    provider: providerFixture({
+      teamMembership: "active",
+      permission: "write",
+      failures: { organizationMembership: 403 },
+    }),
+    organization,
+    rootRepository,
+    resource: resourceFixture(),
+  });
+
+  expect(report.organization_membership).toEqual({ state: "unavailable", role: null });
+  expect(report.blockers.some((item) => item.reason === "provider_observation_failed")).toBe(true);
+  expect(report.blockers.some((item) => item.reason === "organization_membership_missing")).toBe(false);
+});
+
+test("Builder readiness distinguishes repository and Team grant provider failures from missing WRITE", () => {
+  const repositoryUnavailable = observeGitHubBuilderReadiness({
+    provider: providerFixture({
+      teamMembership: "active",
+      permission: "write",
+      failures: { repository: 403 },
+    }),
+    organization,
+    rootRepository,
+    resource: resourceFixture(),
+  });
+  const grantsUnavailable = observeGitHubBuilderReadiness({
+    provider: providerFixture({
+      teamMembership: "active",
+      permission: "write",
+      failures: { teamRepositories: 403 },
+    }),
+    organization,
+    rootRepository,
+    resource: resourceFixture(),
+  });
+
+  expect(repositoryUnavailable.repositories.every((item) => (
+    item.effective_permission === "unavailable"
+  ))).toBe(true);
+  expect(repositoryUnavailable.blockers.some((item) => item.reason === "repository_write_missing")).toBe(false);
+  expect(repositoryUnavailable.blockers.some((item) => item.reason === "provider_observation_failed")).toBe(true);
+  expect(grantsUnavailable.repositories.every((item) => (
+    item.team_grants.every((grant) => grant.permission === "unavailable")
+  ))).toBe(true);
+  expect(grantsUnavailable.blockers.some((item) => item.reason === "team_repository_write_missing")).toBe(false);
+  expect(grantsUnavailable.blockers.some((item) => item.reason === "provider_observation_failed")).toBe(true);
+
+  const grantMissing = observeGitHubBuilderReadiness({
+    provider: providerFixture({
+      teamMembership: "active",
+      permission: "write",
+      missingTeamRepository: "ExampleOrganization/knowledgebase",
+    }),
+    organization,
+    rootRepository,
+    resource: resourceFixture(),
+  });
+  expect(grantMissing.blockers).toContainEqual(expect.objectContaining({
+    reason: "team_repository_write_missing",
+    repository: "ExampleOrganization/knowledgebase",
+  }));
+  expect(grantMissing.blockers.some((item) => item.reason === "provider_observation_failed")).toBe(false);
+});
+
 function resourceFixture() {
   return {
     teams: [{
@@ -133,37 +273,54 @@ function resourceFixture() {
   };
 }
 
-function providerFixture({ teamMembership, permission, calls = [] }) {
+function providerFixture({
+  teamMembership,
+  permission,
+  calls = [],
+  failures = {},
+  teamId = 61616161,
+  missingTeamRepository = null,
+}) {
   const repositories = new Map([
     [rootRepository.full_name, { id: Number(rootRepository.id), name: "ExampleOrganization_GEN3" }],
     ["ExampleOrganization/knowledgebase", { id: 71717171, name: "knowledgebase" }],
   ]);
   return {
     json(args) {
-      const endpoint = args[1];
+      const endpoint = args.at(-1);
       calls.push(endpoint);
       if (endpoint === "user") return ok(account);
       if (endpoint === `orgs/${organization.login}/memberships/${account.login}`) {
+        if (failures.organizationMembership) return failed(failures.organizationMembership);
         return ok({ state: "active", role: "member" });
       }
       if (endpoint === `orgs/${organization.login}/teams/builders`) {
-        return ok({ id: 61616161, slug: "builders" });
+        if (failures.teamIdentity) return failed(failures.teamIdentity);
+        return ok({ id: teamId, slug: "builders" });
       }
       if (endpoint === `orgs/${organization.login}/teams/builders/memberships/${account.login}`) {
+        if (failures.teamMembership) return failed(failures.teamMembership);
         return teamMembership === "active"
           ? ok({ state: "active", role: "member" })
           : { ok: false, httpStatus: 404, value: null };
       }
+      if (endpoint === `orgs/${organization.login}/teams/builders/repos?per_page=100`) {
+        if (failures.teamRepositories) return failed(failures.teamRepositories);
+        return ok([
+          [...repositories.entries()]
+            .filter(([fullName]) => fullName !== missingTeamRepository)
+            .map(([fullName, repository]) => ({
+              ...repository,
+              full_name: fullName,
+              owner: { id: Number(organization.id), login: organization.login },
+              permissions: permissions(permission),
+              role_name: permission,
+            })),
+        ]);
+      }
       for (const [fullName, repository] of repositories) {
         if (endpoint === `repos/${fullName}`) {
-          return ok({
-            ...repository,
-            full_name: fullName,
-            owner: { id: Number(organization.id), login: organization.login },
-            permissions: permissions(permission),
-          });
-        }
-        if (endpoint === `orgs/${organization.login}/teams/builders/repos/${fullName}`) {
+          if (failures.repository) return failed(failures.repository);
           return ok({
             ...repository,
             full_name: fullName,
@@ -189,4 +346,8 @@ function permissions(permission) {
 
 function ok(value) {
   return { ok: true, httpStatus: 200, value };
+}
+
+function failed(httpStatus) {
+  return { ok: false, httpStatus, value: null };
 }

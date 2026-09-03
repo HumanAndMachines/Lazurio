@@ -52,7 +52,7 @@
               "additionalProperties": false,
               "required": ["state", "role"],
               "properties": {
-                "state": { "enum": ["active", "missing"] },
+                "state": { "enum": ["active", "missing", "unavailable"] },
                 "role": { "type": ["string", "null"] }
               }
             }
@@ -68,8 +68,8 @@
               "internal_slug": { "type": "string", "minLength": 1 },
               "github_team_id": { "type": ["string", "null"] },
               "github_team_slug": { "type": ["string", "null"] },
-              "identity": { "enum": ["verified", "mismatch", "not_evaluated"] },
-              "membership": { "enum": ["active", "missing", "not_evaluated"] }
+              "identity": { "enum": ["verified", "mismatch", "unavailable", "not_evaluated"] },
+              "membership": { "enum": ["active", "missing", "unavailable", "not_evaluated"] }
             }
           }
         },
@@ -82,7 +82,7 @@
             "properties": {
               "full_name": { "type": "string", "minLength": 3 },
               "repository_id": { "type": ["string", "null"] },
-              "effective_permission": { "enum": ["none", "read", "triage", "write", "maintain", "admin", "unknown"] },
+              "effective_permission": { "enum": ["none", "read", "triage", "write", "maintain", "admin", "unknown", "unavailable"] },
               "team_grants": {
                 "type": "array",
                 "items": {
@@ -92,7 +92,7 @@
                   "properties": {
                     "internal_team_slug": { "type": "string", "minLength": 1 },
                     "github_team_slug": { "type": ["string", "null"] },
-                    "permission": { "enum": ["none", "read", "triage", "write", "maintain", "admin", "not_evaluated"] }
+                    "permission": { "enum": ["none", "read", "triage", "write", "maintain", "admin", "unavailable", "not_evaluated"] }
                   }
                 }
               }
