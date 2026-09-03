@@ -14,7 +14,10 @@ import {
   installReasonCodes,
   isValidLazurioInstallReport,
 } from "./install-core-lib.mjs";
-import { resolveTrustedGitExecutable } from "./cli-provenance-lib.mjs";
+import {
+  resolveTrustedGitExecutable,
+  trustedNodeCandidates,
+} from "./cli-provenance-lib.mjs";
 
 const tempRoots = [];
 
@@ -468,6 +471,70 @@ test("user-local Git and GitHub CLI remain trusted when an earlier system candid
   expect(executed).toContain("/home/fixture/.local/bin/gh");
 });
 
+test("Windows per-user Git, GitHub CLI and versioned Node satisfy the toolchain gate", () => {
+  const homeDirectory = "C:\\Users\\Fixture";
+  const gitExecutable = `${homeDirectory}\\AppData\\Local\\Programs\\PortableGit\\cmd\\git.exe`;
+  const githubCliExecutable = `${homeDirectory}\\AppData\\Local\\Programs\\GitHub CLI\\bin\\gh.exe`;
+  const nodeExecutable = `${homeDirectory}\\AppData\\Local\\Programs\\nodejs\\node-v24.20.0-win-x64\\node.exe`;
+  const environment = {
+    LOCALAPPDATA: `${homeDirectory}\\AppData\\Local`,
+    PATH: [gitExecutable, githubCliExecutable, nodeExecutable]
+      .map((executable) => dirname(executable))
+      .join(";"),
+  };
+  const executed = [];
+  const report = inspectLazurioInstallation({
+    root: null,
+    platform: "win32",
+    architecture: "x64",
+    bunVersion: "1.4.0",
+    environment,
+    homeDirectory,
+    resolveGit: () => "C:\\Program Files\\Git\\cmd\\git.exe",
+    resolveGitHubCli: () => "C:\\Program Files\\GitHub CLI\\gh.exe",
+    resolveNode: () => "C:\\Program Files\\nodejs\\node.exe",
+    nodeCandidatePaths: trustedNodeCandidates,
+    resolvePathCommand: (command) => ({
+      bun: process.execPath,
+      git: gitExecutable,
+      gh: githubCliExecutable,
+      node: nodeExecutable,
+    })[command] ?? null,
+    sameExecutable: (pathExecutable, trustedExecutable) => (
+      pathExecutable.toLowerCase() === trustedExecutable.toLowerCase()
+    ),
+    runCommand: ({ executable, args }) => {
+      executed.push(executable);
+      return {
+        status: 0,
+        stdout: executable === process.execPath
+          ? "1.4.0"
+          : executable === nodeExecutable
+            ? "v24.20.0"
+            : args[0] === "config"
+              ? "ssh"
+              : "",
+      };
+    },
+    inspectRoot: missingRootObservation,
+  });
+
+  expect(Object.fromEntries(
+    ["git", "github_cli", "node", "github_auth"].map((id) => [
+      id,
+      report.steps.find((step) => step.id === id),
+    ]),
+  )).toEqual({
+    git: { id: "git", status: "completed", reason: "git_available" },
+    github_cli: { id: "github_cli", status: "completed", reason: "github_cli_available" },
+    node: { id: "node", status: "completed", reason: "node_runtime_compatible" },
+    github_auth: { id: "github_auth", status: "completed", reason: "github_authenticated" },
+  });
+  expect(executed).toContain(gitExecutable);
+  expect(executed).toContain(githubCliExecutable);
+  expect(executed).toContain(nodeExecutable);
+});
+
 test("Node.js gate distinguishes missing, PATH drift, shadow, unsupported, unusable and supported runtimes", () => {
   const observe = ({ nodePath, nodeResult, trustedNode = nodePath }) => inspectLazurioInstallation({
     root: null,
@@ -830,13 +897,17 @@ function rootStep(root, {
   gitExecutable = resolveTrustedGitExecutable(),
   homeDirectory = dirname(root),
 } = {}) {
+  const resolvePathCommand = (command, context) => (
+    command === "git" ? gitExecutable : fixturePathCommand(command, context)
+  );
+
   return inspectLazurioInstallation({
     root,
     homeDirectory,
     environment: environmentWithoutGitOverrides(),
     resolveGit: () => gitExecutable,
     resolveGitHubCli: () => null,
-    resolvePathCommand: fixturePathCommand,
+    resolvePathCommand,
   }).steps.find((step) => step.id === "root");
 }
 

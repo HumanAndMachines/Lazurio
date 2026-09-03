@@ -169,7 +169,7 @@ export function inspectLazurioInstallation({
     if (!pathExecutable) {
       return actionRequired(trustedExecutable ? "git_not_on_path" : "git_missing");
     }
-    const candidates = gitCandidatePaths(platform, { homeDirectory });
+    const candidates = gitCandidatePaths(platform, { homeDirectory, environment });
     if (!matchesTrustedExecutable(pathExecutable, trustedExecutable, candidates, sameExecutable, platform)) {
       return actionRequired("git_path_identity_mismatch");
     }
@@ -187,7 +187,7 @@ export function inspectLazurioInstallation({
       githubCliExecutable = null;
       return actionRequired(trustedExecutable ? "github_cli_not_on_path" : "github_cli_missing");
     }
-    const candidates = githubCliCandidatePaths(platform, { homeDirectory });
+    const candidates = githubCliCandidatePaths(platform, { homeDirectory, environment });
     if (!matchesTrustedExecutable(pathExecutable, trustedExecutable, candidates, sameExecutable, platform)) {
       githubCliExecutable = null;
       return actionRequired("github_cli_path_identity_mismatch");
@@ -217,7 +217,7 @@ export function inspectLazurioInstallation({
     if (!pathExecutable) {
       return actionRequired(trustedExecutable ? "node_runtime_not_on_path" : "node_runtime_missing");
     }
-    const candidates = nodeCandidatePaths(platform, { homeDirectory });
+    const candidates = nodeCandidatePaths(platform, { homeDirectory, environment });
     if (!matchesTrustedExecutable(pathExecutable, trustedExecutable, candidates, sameExecutable, platform)) {
       return actionRequired("node_path_identity_mismatch");
     }

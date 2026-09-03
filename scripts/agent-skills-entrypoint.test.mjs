@@ -242,16 +242,10 @@ test("Git kontrakt: toplevel guard nezaměňuje index nadřazeného repozitáře
 });
 
 test("Windows per-user instalace Gitu je mezi trusted kandidáty", async () => {
-  const withLocalAppData = trustedGitCandidates("win32", {
-    LOCALAPPDATA: "C:\\Users\\kolega\\AppData\\Local",
-  });
-  expect(withLocalAppData).toContain("C:\\Program Files\\Git\\cmd\\git.exe");
-  expect(withLocalAppData.some((path) => path.includes("AppData\\Local") && path.endsWith("git.exe")))
-    .toBe(true);
-
-  // Relativní nebo chybějící LOCALAPPDATA nesmí vytvořit relativního kandidáta.
-  expect(trustedGitCandidates("win32", { LOCALAPPDATA: "relativni\\cesta" }))
-    .toEqual(trustedGitCandidates("win32", {}));
+  const candidates = trustedGitCandidates("win32");
+  expect(candidates).toContain("C:\\Program Files\\Git\\cmd\\git.exe");
+  expect(candidates.some((path) => path.endsWith("Programs\\Git\\cmd\\git.exe"))).toBe(true);
+  expect(candidates.some((path) => path.endsWith("Programs\\PortableGit\\cmd\\git.exe"))).toBe(true);
   expect(trustedGitCandidates("darwin", {})).toContain("/opt/homebrew/bin/git");
   expect(trustedGitCandidates("linux", {})).toContain("/usr/local/bin/git");
 });

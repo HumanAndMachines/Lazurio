@@ -237,8 +237,11 @@ test("portable Windows paths and trusted executable candidates are deterministic
   expect(normalizeComparableCliPath("\\\\?\\C:\\Users\\Matous\\Lazurio", "win32"))
     .toBe(normalizeComparableCliPath("c:\\users\\matous\\lazurio", "win32"));
   expect(trustedGitCandidates("win32", {
-    PATH: "C:\\Shadow",
-    LOCALAPPDATA: "C:\\AttackerControlled",
+    homeDirectory: "C:\\Users\\Matous",
+    environment: {
+      PATH: "C:\\Shadow",
+      LOCALAPPDATA: "C:\\AttackerControlled",
+    },
   })).toEqual([
     "C:\\Program Files\\Git\\cmd\\git.exe",
     "C:\\Program Files\\Git\\bin\\git.exe",
@@ -271,21 +274,43 @@ test("portable Windows paths and trusted executable candidates are deterministic
     homeDirectory: "relative-home",
   })).not.toContain("relative-home/.local/bin/git");
   expect(trustedGitHubCliCandidates("win32", {
-    PATH: "C:\\Shadow",
-    LOCALAPPDATA: "C:\\Users\\Matous\\AppData\\Local",
+    homeDirectory: "C:\\Users\\Matous",
+    environment: {
+      PATH: "C:\\Shadow",
+      LOCALAPPDATA: "C:\\Users\\Matous\\AppData\\Local",
+    },
   })).toEqual([
     "C:\\Program Files\\GitHub CLI\\gh.exe",
     "C:\\Program Files (x86)\\GitHub CLI\\gh.exe",
+    "C:\\Users\\Matous\\AppData\\Local\\Programs\\GitHub CLI\\bin\\gh.exe",
+    "C:\\Users\\Matous\\AppData\\Local\\Programs\\GitHub CLI\\gh.exe",
   ]);
   expect(trustedNodeCandidates("darwin", {
     homeDirectory: "relative-home",
   })).not.toContain("relative-home/.local/bin/node");
   expect(trustedNodeCandidates("win32", {
-    PATH: "C:\\Shadow",
+    homeDirectory: "C:\\Users\\Matous",
+    environment: {
+      PATH: "C:\\Users\\Matous\\AppData\\Local\\Programs\\nodejs\\node-v24.20.0-win-x64;C:\\Shadow",
+      LOCALAPPDATA: "C:\\Users\\Matous\\AppData\\Local",
+    },
   })).toEqual([
     "C:\\Program Files\\nodejs\\node.exe",
     "C:\\Program Files (x86)\\nodejs\\node.exe",
+    "C:\\Users\\Matous\\AppData\\Local\\Programs\\nodejs\\node.exe",
+    "c:\\users\\matous\\appdata\\local\\programs\\nodejs\\node-v24.20.0-win-x64\\node.exe",
   ]);
+  expect(trustedGitCandidates("win32", {
+    homeDirectory: "C:\\Users\\Matous",
+    environment: { LOCALAPPDATA: "C:\\Users\\Matous\\AppData\\Local" },
+  })).toContain("C:\\Users\\Matous\\AppData\\Local\\Programs\\PortableGit\\cmd\\git.exe");
+  expect(trustedNodeCandidates("win32", {
+    homeDirectory: "C:\\Users\\Matous",
+    environment: {
+      PATH: "C:\\Tools\\node-v24.20.0-win-x64;C:\\Users\\Matous\\AppData\\Local\\Programs\\nodejs\\custom\\node-v24.20.0-win-x64",
+      LOCALAPPDATA: "C:\\Users\\Matous\\AppData\\Local",
+    },
+  })).not.toContain("C:\\Tools\\node-v24.20.0-win-x64\\node.exe");
 });
 
 function expectValid(value) {

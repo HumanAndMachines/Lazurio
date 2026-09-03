@@ -7,8 +7,10 @@ import {
   readFile,
 } from "node:fs/promises";
 import { realpathSync, statSync } from "node:fs";
-import { dirname, isAbsolute, join, resolve, win32 as pathWin32 } from "node:path";
+import { homedir } from "node:os";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { trustedGitCandidates as canonicalTrustedGitCandidates } from "../lazurio/core/cli-provenance-lib.mjs";
 import {
   AGENT_SKILLS_ENTRYPOINT_SCHEMA,
   CLAUDE_SKILLS_MATERIALIZATION,
@@ -27,29 +29,10 @@ const defaultRoot = resolve(dirname(scriptPath), "..");
 // %LOCALAPPDATA%\Programs\Git (cílová persona decision 0059), na macOS bývá
 // vedle systémového shimu Homebrew.
 export function trustedGitCandidates(platform = process.platform, env = process.env) {
-  if (platform === "darwin") {
-    return ["/usr/bin/git", "/opt/homebrew/bin/git", "/usr/local/bin/git"];
-  }
-  if (platform === "linux") {
-    return ["/usr/bin/git", "/bin/git", "/usr/local/bin/git"];
-  }
-  if (platform !== "win32") return [];
-  const localAppData = env.LOCALAPPDATA;
-  // Windows cesty se skládají výhradně přes path.win32 — isAbsolute i join
-  // z node:path mají sémantiku hostitelské platformy, takže by tahle větev
-  // na macOS/Linuxu (a v testech) tiše vypadla.
-  return [
-    "C:\\Program Files\\Git\\cmd\\git.exe",
-    "C:\\Program Files\\Git\\bin\\git.exe",
-    "C:\\Program Files (x86)\\Git\\cmd\\git.exe",
-    "C:\\Program Files (x86)\\Git\\bin\\git.exe",
-    ...(typeof localAppData === "string" && pathWin32.isAbsolute(localAppData)
-      ? [
-        pathWin32.join(localAppData, "Programs", "Git", "cmd", "git.exe"),
-        pathWin32.join(localAppData, "Programs", "Git", "bin", "git.exe"),
-      ]
-      : []),
-  ];
+  return canonicalTrustedGitCandidates(platform, {
+    homeDirectory: homedir(),
+    environment: env,
+  });
 }
 
 function sanitizedGitEnvironment() {

@@ -130,6 +130,7 @@ export function normalizeComparableCliPath(path, platform = process.platform) {
 
 export function trustedGitCandidates(platform = process.platform, {
   homeDirectory = homedir(),
+  environment = process.env,
 } = {}) {
   if (platform === "darwin") {
     return [
@@ -148,16 +149,24 @@ export function trustedGitCandidates(platform = process.platform, {
     ].filter(Boolean);
   }
   if (platform !== "win32") return [];
+  const userPrograms = trustedWindowsUserPrograms(homeDirectory, environment);
   return [
     "C:\\Program Files\\Git\\cmd\\git.exe",
     "C:\\Program Files\\Git\\bin\\git.exe",
     "C:\\Program Files (x86)\\Git\\cmd\\git.exe",
     "C:\\Program Files (x86)\\Git\\bin\\git.exe",
+    ...(userPrograms ? [
+      win32.join(userPrograms, "Git", "cmd", "git.exe"),
+      win32.join(userPrograms, "Git", "bin", "git.exe"),
+      win32.join(userPrograms, "PortableGit", "cmd", "git.exe"),
+      win32.join(userPrograms, "PortableGit", "bin", "git.exe"),
+    ] : []),
   ];
 }
 
 export function trustedGitHubCliCandidates(platform = process.platform, {
   homeDirectory = homedir(),
+  environment = process.env,
 } = {}) {
   if (platform === "darwin") {
     return [
@@ -177,14 +186,20 @@ export function trustedGitHubCliCandidates(platform = process.platform, {
     ].filter(Boolean);
   }
   if (platform !== "win32") return [];
+  const userPrograms = trustedWindowsUserPrograms(homeDirectory, environment);
   return [
     "C:\\Program Files\\GitHub CLI\\gh.exe",
     "C:\\Program Files (x86)\\GitHub CLI\\gh.exe",
+    ...(userPrograms ? [
+      win32.join(userPrograms, "GitHub CLI", "bin", "gh.exe"),
+      win32.join(userPrograms, "GitHub CLI", "gh.exe"),
+    ] : []),
   ];
 }
 
 export function trustedNodeCandidates(platform = process.platform, {
   homeDirectory = homedir(),
+  environment = process.env,
 } = {}) {
   if (platform === "darwin") {
     return [
@@ -204,31 +219,70 @@ export function trustedNodeCandidates(platform = process.platform, {
     ].filter(Boolean);
   }
   if (platform !== "win32") return [];
+  const userPrograms = trustedWindowsUserPrograms(homeDirectory, environment);
+  const userNodeRoot = userPrograms ? win32.join(userPrograms, "nodejs") : null;
   return [
     "C:\\Program Files\\nodejs\\node.exe",
     "C:\\Program Files (x86)\\nodejs\\node.exe",
+    ...(userNodeRoot ? [
+      win32.join(userNodeRoot, "node.exe"),
+      ...trustedVersionedWindowsNodeCandidates(userNodeRoot, environment),
+    ] : []),
   ];
 }
 
 export function resolveTrustedGitExecutable({
   platform = process.platform,
   homeDirectory = homedir(),
+  environment = process.env,
 } = {}) {
-  return resolveTrustedExecutable(trustedGitCandidates(platform, { homeDirectory }));
+  return resolveTrustedExecutable(trustedGitCandidates(platform, { homeDirectory, environment }));
 }
 
 export function resolveTrustedGitHubCliExecutable({
   platform = process.platform,
   homeDirectory = homedir(),
+  environment = process.env,
 } = {}) {
-  return resolveTrustedExecutable(trustedGitHubCliCandidates(platform, { homeDirectory }));
+  return resolveTrustedExecutable(trustedGitHubCliCandidates(platform, { homeDirectory, environment }));
 }
 
 export function resolveTrustedNodeExecutable({
   platform = process.platform,
   homeDirectory = homedir(),
+  environment = process.env,
 } = {}) {
-  return resolveTrustedExecutable(trustedNodeCandidates(platform, { homeDirectory }));
+  return resolveTrustedExecutable(trustedNodeCandidates(platform, { homeDirectory, environment }));
+}
+
+function trustedWindowsUserPrograms(homeDirectory, environment) {
+  if (typeof homeDirectory !== "string" || !win32.isAbsolute(homeDirectory)) return null;
+  const expectedLocalAppData = win32.join(homeDirectory, "AppData", "Local");
+  const declaredLocalAppData = environment?.LOCALAPPDATA;
+  if (
+    typeof declaredLocalAppData === "string"
+    && declaredLocalAppData.trim() !== ""
+    && normalizeComparableCliPath(declaredLocalAppData, "win32")
+      !== normalizeComparableCliPath(expectedLocalAppData, "win32")
+  ) {
+    return null;
+  }
+  return win32.join(expectedLocalAppData, "Programs");
+}
+
+function trustedVersionedWindowsNodeCandidates(nodeRoot, environment) {
+  const pathValue = environment?.PATH ?? environment?.Path;
+  if (typeof pathValue !== "string" || pathValue.trim() === "") return [];
+  const normalizedRoot = normalizeComparableCliPath(nodeRoot, "win32");
+  const directoryPattern = /^node-v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)-win-(?:x64|arm64)$/u;
+  const candidates = [];
+  for (const entry of pathValue.split(";")) {
+    const directory = entry.trim();
+    if (!win32.isAbsolute(directory) || !directoryPattern.test(win32.basename(directory))) continue;
+    if (normalizeComparableCliPath(win32.dirname(directory), "win32") !== normalizedRoot) continue;
+    candidates.push(win32.join(directory, "node.exe"));
+  }
+  return [...new Set(candidates.map((candidate) => normalizeComparableCliPath(candidate, "win32")))];
 }
 
 function resolveTrustedExecutable(candidates) {
