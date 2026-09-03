@@ -524,6 +524,7 @@ export const en = Object.freeze({
   "detail.foreignCopy.message": "You can open it safely. Launchpad will not start or stop it, however, to avoid damaging work that is open elsewhere.",
   "detail.outgoing.title": "{changes} waiting to be sent",
   "detail.outgoing.one": "It is saved on this computer. Others cannot see it yet.",
+  "detail.outgoing.few": "They are saved on this computer. Others cannot see them yet.",
   "detail.outgoing.other": "They are saved on this computer. Others cannot see them yet.",
   "detail.draft.title": "Work in progress",
   "detail.draft.message": "{changes} exist only on this computer for now.",

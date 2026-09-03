@@ -96,18 +96,33 @@ test("English covers loading, warnings, recovery, personalspace and worktree cop
   expect(t("worktree.created", { app: "Infra", worktree: "DEV-1" })).toBe("Infra: worktree created (DEV-1).");
 });
 
-test("every literal UI key resolves and locale sources contain no duplicate keys", async () => {
+test("Czech outgoing changes resolve the few plural category", () => {
+  setLocale("cs", { storage: null });
+  expect(tp("detail.outgoing", 2)).toBe("Jsou uložené na tomto počítači. Ostatní je zatím nevidí.");
+  expect(tp("detail.outgoing", 4)).toBe("Jsou uložené na tomto počítači. Ostatní je zatím nevidí.");
+});
+
+test("every literal UI key and integer plural category resolves", async () => {
   const publicRoot = join(import.meta.dirname, "..", "public");
   const files = (await readdir(publicRoot)).filter((file) => file.endsWith(".js"));
   const literalKeys = new Set();
+  const pluralKeys = new Set();
   for (const file of files) {
     const source = await readFile(join(publicRoot, file), "utf8");
-    for (const match of source.matchAll(/\b(?:t|tp)\("([^"]+)"/g)) literalKeys.add(match[1]);
+    for (const match of source.matchAll(/\bt\("([^"]+)"/g)) literalKeys.add(match[1]);
+    for (const match of source.matchAll(/\btp\("([^"]+)"/g)) pluralKeys.add(match[1]);
   }
   for (const key of literalKeys) {
-    const resolvesDirectly = Object.hasOwn(cs, key);
-    const resolvesAsPlural = Object.keys(cs).some((candidate) => candidate.startsWith(`${key}.`));
-    expect(resolvesDirectly || resolvesAsPlural).toBe(true);
+    expect(Object.hasOwn(cs, key)).toBe(true);
+  }
+  for (const [locale, catalog] of [["cs", cs], ["en", en]]) {
+    const pluralRules = new Intl.PluralRules(locale);
+    const integerCategories = new Set(Array.from({ length: 201 }, (_unused, count) => pluralRules.select(count)));
+    for (const key of pluralKeys) {
+      for (const category of integerCategories) {
+        expect(Object.hasOwn(catalog, `${key}.${category}`)).toBe(true);
+      }
+    }
   }
 
   for (const [file, catalog] of [["cs.js", cs], ["en.js", en]]) {
