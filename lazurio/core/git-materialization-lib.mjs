@@ -15,6 +15,7 @@ export const GIT_CHECKOUT_MATERIALIZATION_MODES = Object.freeze([
 export const GIT_CLONE_TIMEOUT_MS = 10 * 60_000;
 export const GIT_FETCH_TIMEOUT_MS = 20_000;
 export const GIT_LOCAL_TIMEOUT_MS = 10_000;
+export const CANONICAL_GIT_FETCH_REFSPEC = "+refs/heads/*:refs/remotes/origin/*";
 export const PINNED_CHECKOUT_PUBLISH_MODE = "--lazurio-pinned-checkout-publisher";
 export const PINNED_CHECKOUT_DISCARD_MODE = "--lazurio-pinned-checkout-discarder";
 const PINNED_CHECKOUT_OPERATION_TIMEOUT_MS = 60_000;
@@ -165,6 +166,25 @@ export async function materializeGitCheckout({
     });
     if (!stagingBoundary.ok) {
       return boundaryFailure("Dočasný checkout nevznikl ve fyzicky ověřeném rodiči targetu.");
+    }
+    // Keep the bandwidth-saving single-branch bootstrap, but leave every
+    // published checkout with the canonical all-branches fetch contract that
+    // Doctor and subsequent update/review flows require.
+    const fetchConfiguration = await run(
+      materializationGitArgs([
+        "config",
+        "--local",
+        "--replace-all",
+        "remote.origin.fetch",
+        CANONICAL_GIT_FETCH_REFSPEC,
+      ]),
+      {
+        cwd: stagingPath,
+        timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+      },
+    );
+    if (!fetchConfiguration.ok) {
+      return verificationFailure("Naklonovaný checkout nemá kanonický fetch kontrakt.");
     }
     const gitVerification = await verifyClonedCheckout({
       path: stagingPath,
@@ -441,7 +461,7 @@ function materializationRequestIssue({
 }
 
 async function verifyClonedCheckout({ path, branch, remote, run }) {
-  const [root, currentBranch, origin, head, status] = await Promise.all([
+  const [root, currentBranch, origin, fetchRefspec, head, status] = await Promise.all([
     run(materializationGitArgs(["rev-parse", "--show-toplevel"]), {
       cwd: path,
       timeoutMs: GIT_LOCAL_TIMEOUT_MS,
@@ -454,6 +474,10 @@ async function verifyClonedCheckout({ path, branch, remote, run }) {
       cwd: path,
       timeoutMs: GIT_LOCAL_TIMEOUT_MS,
     }),
+    run(materializationGitArgs(["config", "--local", "--get-all", "remote.origin.fetch"]), {
+      cwd: path,
+      timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+    }),
     run(materializationGitArgs(["rev-parse", "--verify", "HEAD^{commit}"]), {
       cwd: path,
       timeoutMs: GIT_LOCAL_TIMEOUT_MS,
@@ -463,7 +487,7 @@ async function verifyClonedCheckout({ path, branch, remote, run }) {
       timeoutMs: GIT_LOCAL_TIMEOUT_MS,
     }),
   ]);
-  if ([root, currentBranch, origin, head, status].some((result) => !result.ok)) {
+  if ([root, currentBranch, origin, fetchRefspec, head, status].some((result) => !result.ok)) {
     return verificationFailure("Naklonovaný checkout nejde spolehlivě ověřit.");
   }
   let realRoot;
@@ -477,6 +501,7 @@ async function verifyClonedCheckout({ path, branch, remote, run }) {
     !isSamePath(realRoot, realPath)
     || currentBranch.stdout !== branch
     || origin.stdout !== remote
+    || fetchRefspec.stdout !== CANONICAL_GIT_FETCH_REFSPEC
     || status.stdout !== ""
     || !/^[0-9a-f]{40}$/u.test(head.stdout)
   ) {

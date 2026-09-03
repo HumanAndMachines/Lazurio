@@ -239,11 +239,16 @@ test("portable Windows paths and trusted executable candidates are deterministic
   expect(trustedGitCandidates("win32", {
     PATH: "C:\\Shadow",
     LOCALAPPDATA: "C:\\AttackerControlled",
+    homeDirectory: "C:\\Users\\Matous",
   })).toEqual([
     "C:\\Program Files\\Git\\cmd\\git.exe",
     "C:\\Program Files\\Git\\bin\\git.exe",
     "C:\\Program Files (x86)\\Git\\cmd\\git.exe",
     "C:\\Program Files (x86)\\Git\\bin\\git.exe",
+    "C:\\Users\\Matous\\AppData\\Local\\Programs\\Git\\cmd\\git.exe",
+    "C:\\Users\\Matous\\AppData\\Local\\Programs\\Git\\bin\\git.exe",
+    "C:\\Users\\Matous\\AppData\\Local\\Programs\\PortableGit\\cmd\\git.exe",
+    "C:\\Users\\Matous\\AppData\\Local\\Programs\\PortableGit\\bin\\git.exe",
   ]);
   expect(trustedGitHubCliCandidates("darwin", {
     PATH: "/tmp/shadow",
@@ -272,11 +277,20 @@ test("portable Windows paths and trusted executable candidates are deterministic
   })).not.toContain("relative-home/.local/bin/git");
   expect(trustedGitHubCliCandidates("win32", {
     PATH: "C:\\Shadow",
-    LOCALAPPDATA: "C:\\Users\\Matous\\AppData\\Local",
+    LOCALAPPDATA: "C:\\AttackerControlled",
+    homeDirectory: "C:\\Users\\Matous",
   })).toEqual([
     "C:\\Program Files\\GitHub CLI\\gh.exe",
     "C:\\Program Files (x86)\\GitHub CLI\\gh.exe",
+    "C:\\Users\\Matous\\AppData\\Local\\Programs\\GitHub CLI\\bin\\gh.exe",
+    "C:\\Users\\Matous\\AppData\\Local\\Programs\\GitHub CLI\\gh.exe",
   ]);
+  expect(trustedGitCandidates("win32", {
+    homeDirectory: "relative-home",
+  })).toHaveLength(4);
+  expect(trustedGitHubCliCandidates("win32", {
+    homeDirectory: "relative-home",
+  })).toHaveLength(2);
   expect(trustedNodeCandidates("darwin", {
     homeDirectory: "relative-home",
   })).not.toContain("relative-home/.local/bin/node");
