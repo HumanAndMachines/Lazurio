@@ -49,6 +49,8 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(guideTileIndex).toBeGreaterThan(-1);
   expect(guideTileIndex).toBeLessThan(marketplaceIndex);
   expect(html).toContain('id="guideTile" class="guide-tile side-panel" href="#/guide"');
+  expect(html).toContain('/app-icons/lazurio/guide-signpost-96.png');
+  expect(html).not.toContain('<img src="/app-icons/lazurio/knowledgebase-96.png" alt="" />');
   expect(html).toContain('id="guideMain" class="guide-surface"');
   expect(html).toContain('id="guideSearch" type="search" placeholder="Hledat…" disabled');
   expect(html).toContain("Zatím tu nejsou žádná témata.");

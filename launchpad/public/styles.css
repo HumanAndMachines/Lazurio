@@ -1100,7 +1100,7 @@ input:focus-visible,
   justify-content: center;
   flex: 0 0 var(--lz-space-48);
   border-radius: var(--lz-radius-sm);
-  background: var(--lz-blue-50);
+  background: transparent;
 }
 
 .guide-tile-icon img {
