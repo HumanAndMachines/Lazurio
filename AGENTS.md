@@ -256,10 +256,12 @@ browser použij jen když aktuální úkol vyžaduje práci v jejich UI nebo viz
 ověření výsledku.
 
 Když Principál řekne „web Lazuria“, myslí tím Workspace Modul
-`website-lazurio` a jeho App `Website Lazurio`, nikoli Launchpad. Najdi jej
-standardním Organization auto-discovery, spusť jej přes `lazurio module start`
-a ve vestavěném browseru otevři URL vrácenou lifecycle kontraktem; adresu ani
-port neodvozuj ručně.
+`website-lazurio` Organizace `HumanAndMachine-ai` a jeho App `Website Lazurio`,
+nikoli Launchpad. Ověř jej standardním Organization auto-discovery přes
+`lazurio module status HumanAndMachine-ai/website-lazurio --json`, spusť jej
+přes `lazurio module start HumanAndMachine-ai/website-lazurio --json` a ve
+vestavěném browseru otevři `result.runtime.url` vrácené lifecycle kontraktem;
+adresu ani port neodvozuj ručně.
 
 Potřebuje-li úkol Launchpad, spusť podle scope právě jeden příkaz:
 
