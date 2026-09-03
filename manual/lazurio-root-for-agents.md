@@ -76,7 +76,10 @@ Mašina připravená. Install Core proto vedle exact Bun verze ověřuje také p
 `bun` v `PATH`; u Gitu, GitHub CLI a Node.js rozlišuje nainstalovaný nástroj
 od `git_not_on_path`, `github_cli_not_on_path` a
 `node_runtime_not_on_path`. Git, `gh` ani `node` se nespustí, dokud příkaz z
-`PATH` neodpovídá omezené sadě důvěryhodných instalačních cest. Běžný Doctor
+`PATH` neodpovídá omezené sadě důvěryhodných instalačních cest. Na Windows tato
+sada zahrnuje i explicitní user-scope cesty odvozené z home právě běžícího OS
+účtu, včetně WinGet user command linku pro Node; ambientní `USERPROFILE`,
+`LOCALAPPDATA` ani libovolná dřívější položka `PATH` tuto autoritu nemění. Běžný Doctor
 navíc spouští z aktuálního PATH ověřený Bun, `bun x`, Git, `gh`, GitHub auth i
 nastavený SSH protokol, Node v rozsahu z `lazurio/package.json#engines.node` a
 `codex`.

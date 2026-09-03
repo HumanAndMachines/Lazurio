@@ -213,7 +213,9 @@ export function trustedNodeCandidates(platform = process.platform, {
   return [
     "C:\\Program Files\\nodejs\\node.exe",
     "C:\\Program Files (x86)\\nodejs\\node.exe",
-  ];
+    trustedWindowsUserLocalExecutable(homeDirectory, "nodejs", "node.exe"),
+    trustedWindowsUserWinGetLink(homeDirectory, "node.exe"),
+  ].filter(Boolean);
 }
 
 export function resolveTrustedGitExecutable({
@@ -258,6 +260,19 @@ function trustedPosixUserLocalExecutable(homeDirectory, executable) {
 function trustedWindowsUserLocalExecutable(homeDirectory, ...parts) {
   if (!safeHomeDirectory(homeDirectory) || !win32.isAbsolute(homeDirectory)) return null;
   return win32.join(homeDirectory, "AppData", "Local", "Programs", ...parts);
+}
+
+function trustedWindowsUserWinGetLink(homeDirectory, executable) {
+  if (!safeHomeDirectory(homeDirectory) || !win32.isAbsolute(homeDirectory)) return null;
+  return win32.join(
+    homeDirectory,
+    "AppData",
+    "Local",
+    "Microsoft",
+    "WinGet",
+    "Links",
+    executable,
+  );
 }
 
 function safeHomeDirectory(homeDirectory) {
