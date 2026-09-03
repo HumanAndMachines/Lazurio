@@ -4,8 +4,12 @@ import { dirname } from "node:path";
 import {
   bunVersionFromPackageManager,
   classifyBunRuntime,
-  readRequiredBunVersion,
+  classifyNodeRuntime,
   executablePathsMatch,
+  nodeVersionFromOutput,
+  nodeVersionRangeFromEngines,
+  readRequiredBunVersion,
+  readRequiredNodeVersionRange,
   resolveExecutableOnPath,
 } from "./toolchain-lib.mjs";
 
@@ -36,6 +40,49 @@ test("runtime classifier is exact and keeps future patches fail-closed", () => {
     .toBe("unavailable");
   expect(() => classifyBunRuntime({ currentVersion: "1.4.0", requiredVersion: "latest" }))
     .toThrow("exact stable version");
+});
+
+test("package engines are the single Node.js compatibility authority", () => {
+  expect(nodeVersionRangeFromEngines({ node: ">=22.12.0" })).toBe(">=22.12.0");
+  expect(() => nodeVersionRangeFromEngines({ node: "latest" }))
+    .toThrow("minimum stable Node.js version");
+  expect(readRequiredNodeVersionRange({
+    root: "/fixture",
+    readText: () => JSON.stringify({ engines: { node: ">=22.12.0" } }),
+  })).toBe(">=22.12.0");
+  expect(() => readRequiredNodeVersionRange({
+    root: "/fixture",
+    readText: () => "not json",
+  })).toThrow("cannot be read");
+});
+
+test("Node.js classifier accepts the supported LTS and current consumer proofs", () => {
+  expect(classifyNodeRuntime({
+    currentVersion: "22.12.0",
+    requiredRange: ">=22.12.0",
+  }).status).toBe("compatible");
+  expect(classifyNodeRuntime({
+    currentVersion: "24.19.0",
+    requiredRange: ">=22.12.0",
+  }).status).toBe("compatible");
+  expect(classifyNodeRuntime({
+    currentVersion: "26.5.0",
+    requiredRange: ">=22.12.0",
+  }).status).toBe("compatible");
+  expect(classifyNodeRuntime({
+    currentVersion: "22.11.0",
+    requiredRange: ">=22.12.0",
+  }).status).toBe("incompatible");
+  expect(classifyNodeRuntime({
+    currentVersion: null,
+    requiredRange: ">=22.12.0",
+  }).status).toBe("unavailable");
+  expect(() => classifyNodeRuntime({
+    currentVersion: "26.5.0",
+    requiredRange: "latest",
+  })).toThrow("minimum stable version");
+  expect(nodeVersionFromOutput("v24.19.0\n")).toBe("24.19.0");
+  expect(nodeVersionFromOutput("CANARY")).toBeNull();
 });
 
 test("PATH resolver proves the executable visible to a fresh command process", () => {

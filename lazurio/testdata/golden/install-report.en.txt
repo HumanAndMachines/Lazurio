@@ -8,6 +8,7 @@ Lazurio Root: "/Users/example/Lazurio"
 ✓ Bun — Bun 1.4.0 matches the required version
 ✓ Git — Git is available
 ! GitHub CLI — GitHub CLI was not found
+✓ Node.js — Node.js 24.19.0 satisfies the supported range >=22.12.0
 – GitHub sign-in — sign-in cannot be checked without GitHub CLI
 ! Lazurio Root — the Lazurio Root needs to be generated
 

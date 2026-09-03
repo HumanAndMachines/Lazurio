@@ -128,12 +128,24 @@ export function normalizeComparableCliPath(path, platform = process.platform) {
   return resolve(path).replace(/[\\/]+$/u, "");
 }
 
-export function trustedGitCandidates(platform = process.platform) {
+export function trustedGitCandidates(platform = process.platform, {
+  homeDirectory = homedir(),
+} = {}) {
   if (platform === "darwin") {
-    return ["/usr/bin/git", "/opt/homebrew/bin/git", "/usr/local/bin/git"];
+    return [
+      "/usr/bin/git",
+      "/opt/homebrew/bin/git",
+      "/usr/local/bin/git",
+      trustedPosixUserLocalExecutable(homeDirectory, "git"),
+    ].filter(Boolean);
   }
   if (platform === "linux") {
-    return ["/usr/bin/git", "/bin/git", "/usr/local/bin/git"];
+    return [
+      "/usr/bin/git",
+      "/bin/git",
+      "/usr/local/bin/git",
+      trustedPosixUserLocalExecutable(homeDirectory, "git"),
+    ].filter(Boolean);
   }
   if (platform !== "win32") return [];
   return [
@@ -152,13 +164,17 @@ export function trustedGitHubCliCandidates(platform = process.platform, {
       "/opt/homebrew/bin/gh",
       "/usr/local/bin/gh",
       "/usr/bin/gh",
-      typeof homeDirectory === "string" && posix.isAbsolute(homeDirectory)
-        ? posix.join(homeDirectory, ".local", "bin", "gh")
-        : null,
+      trustedPosixUserLocalExecutable(homeDirectory, "gh"),
     ].filter(Boolean);
   }
   if (platform === "linux") {
-    return ["/usr/bin/gh", "/bin/gh", "/usr/local/bin/gh", "/home/linuxbrew/.linuxbrew/bin/gh"];
+    return [
+      "/usr/bin/gh",
+      "/bin/gh",
+      "/usr/local/bin/gh",
+      "/home/linuxbrew/.linuxbrew/bin/gh",
+      trustedPosixUserLocalExecutable(homeDirectory, "gh"),
+    ].filter(Boolean);
   }
   if (platform !== "win32") return [];
   return [
@@ -169,8 +185,9 @@ export function trustedGitHubCliCandidates(platform = process.platform, {
 
 export function resolveTrustedGitExecutable({
   platform = process.platform,
+  homeDirectory = homedir(),
 } = {}) {
-  return resolveTrustedExecutable(trustedGitCandidates(platform));
+  return resolveTrustedExecutable(trustedGitCandidates(platform, { homeDirectory }));
 }
 
 export function resolveTrustedGitHubCliExecutable({
@@ -190,6 +207,12 @@ function resolveTrustedExecutable(candidates) {
     }
   }
   return null;
+}
+
+function trustedPosixUserLocalExecutable(homeDirectory, executable) {
+  return typeof homeDirectory === "string" && posix.isAbsolute(homeDirectory)
+    ? posix.join(homeDirectory, ".local", "bin", executable)
+    : null;
 }
 
 function sourceProvenance({

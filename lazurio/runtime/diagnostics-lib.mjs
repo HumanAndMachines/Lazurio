@@ -54,13 +54,17 @@ import {
 } from "../core/module-contract-lib.mjs";
 import {
   classifyBunRuntime,
+  classifyNodeRuntime,
   executablePathsMatch,
+  nodeVersionFromOutput,
   readRequiredBunVersion,
+  readRequiredNodeVersionRange,
   resolveExecutableOnPath,
 } from "../core/toolchain-lib.mjs";
 import {
   resolveTrustedGitHubCliExecutable,
   trustedGitCandidates,
+  trustedGitHubCliCandidates,
 } from "../core/cli-provenance-lib.mjs";
 import { sanitizedGitHubEnvironment } from "../core/github-provider-lib.mjs";
 import {
@@ -2049,6 +2053,13 @@ function platformChecks(companiesRoot) {
   const gitOnPath = resolveExecutableOnPath("git");
   const githubCliOnPath = resolveExecutableOnPath("gh");
   const nodeOnPath = resolveExecutableOnPath("node");
+  const gitTrustedCandidates = trustedGitCandidates();
+  const githubCliTrustedCandidates = trustedGitHubCliCandidates();
+  const githubCliPathIsTrusted = matchesTrustedPath(
+    githubCliOnPath,
+    githubCliExecutable,
+    githubCliTrustedCandidates,
+  );
   return [
     {
       id: "platform.os",
@@ -2085,7 +2096,7 @@ function platformChecks(companiesRoot) {
       title: "Git",
       pathExecutable: gitOnPath,
       trustedExecutable: gitExecutable,
-      trustedCandidates: trustedGitCandidates(),
+      trustedCandidates: gitTrustedCandidates,
       args: ["--version"],
       cwd: companiesRoot,
       okMessage: (result) => result.stdout,
@@ -2098,6 +2109,7 @@ function platformChecks(companiesRoot) {
       title: "GitHub CLI",
       pathExecutable: githubCliOnPath,
       trustedExecutable: githubCliExecutable,
+      trustedCandidates: githubCliTrustedCandidates,
       args: ["--version"],
       cwd: companiesRoot,
       okMessage: (result) => result.stdout.split("\n")[0],
@@ -2106,18 +2118,11 @@ function platformChecks(companiesRoot) {
     }),
     githubAuthenticationCheck({
       companiesRoot,
-      executable: githubCliOnPath && executablePathsMatch(githubCliOnPath, githubCliExecutable)
-        ? githubCliOnPath
-        : null,
+      executable: githubCliPathIsTrusted ? githubCliOnPath : null,
     }),
-    commandCheck({
-      id: "platform.node",
-      title: "Node.js",
+    nodeRuntimeCheck({
+      companiesRoot,
       command: nodeOnPath,
-      args: ["--version"],
-      cwd: companiesRoot,
-      okMessage: (result) => `Node.js je dostupný v PATH: ${result.stdout}`,
-      failMessage: "Příkaz node není dostupný nebo jej nelze spustit z PATH nového procesu.",
     }),
     codexRuntimeCheck({ companiesRoot }),
   ];
@@ -2214,11 +2219,10 @@ function pathIdentityCheck({
   mismatchMessage,
   env,
 }) {
-  if (!pathExecutable || !trustedExecutable) {
+  if (!pathExecutable || (!trustedExecutable && trustedCandidates.length === 0)) {
     return requiredToolFailure({ id, title, message: missingMessage, pathExecutable, trustedExecutable, args });
   }
-  const matchesTrusted = executablePathsMatch(pathExecutable, trustedExecutable)
-    || trustedCandidates.some((candidate) => executablePathsMatch(pathExecutable, candidate));
+  const matchesTrusted = matchesTrustedPath(pathExecutable, trustedExecutable, trustedCandidates);
   if (!matchesTrusted) {
     return requiredToolFailure({ id, title, message: mismatchMessage, pathExecutable, trustedExecutable, args });
   }
@@ -2232,6 +2236,16 @@ function pathIdentityCheck({
     failMessage: `${title} bylo nalezeno, ale ověřovací příkaz selhal.`,
     env,
   });
+}
+
+function matchesTrustedPath(pathExecutable, trustedExecutable, trustedCandidates = []) {
+  return Boolean(
+    pathExecutable
+    && (
+      (trustedExecutable && executablePathsMatch(pathExecutable, trustedExecutable))
+      || trustedCandidates.some((candidate) => executablePathsMatch(pathExecutable, candidate))
+    )
+  );
 }
 
 function requiredToolFailure({ id, title, message, pathExecutable, trustedExecutable, args }) {
@@ -2322,6 +2336,74 @@ export function bunRuntimeCheck({
       `command: ${bunExecutable} --version`,
       `current: ${runtime.current_version}`,
       `required: ${runtime.required_version}`,
+    ],
+  };
+}
+
+export function nodeRuntimeCheck({
+  companiesRoot,
+  command = resolveExecutableOnPath("node"),
+  requiredRange = readRequiredNodeVersionRange({ root: join(import.meta.dirname, "..") }),
+  run = runCommand,
+} = {}) {
+  const result = command
+    ? run(command, ["--version"], { cwd: companiesRoot })
+    : {
+        ok: false,
+        exitCode: null,
+        stdout: "",
+        stderr: "",
+        error: "Node.js executable nebyl nalezen v PATH.",
+      };
+  const currentVersion = result.ok ? nodeVersionFromOutput(result.stdout) : null;
+  if (!currentVersion) {
+    return {
+      id: "platform.node",
+      status: "fail",
+      severity: "required",
+      title: "Node.js",
+      message: command
+        ? "Příkaz node je v PATH, ale jeho stabilní verzi se nepodařilo ověřit."
+        : "Příkaz node není dostupný v PATH nového procesu.",
+      paths: ["lazurio/package.json"],
+      links: [{
+        label: "Oficiální Node.js LTS",
+        kind: "external",
+        url: "https://nodejs.org/en/download",
+      }],
+      details: [
+        `command: ${command ?? "<missing>"} --version`,
+        `required: ${requiredRange}`,
+        result.stderr || result.error || "Příkaz nevrátil stabilní Node.js verzi.",
+      ],
+    };
+  }
+
+  const runtime = classifyNodeRuntime({
+    currentVersion,
+    requiredRange,
+  });
+  const compatible = runtime.status === "compatible";
+  return {
+    id: "platform.node",
+    status: compatible ? "ok" : "fail",
+    severity: "required",
+    title: "Node.js",
+    message: compatible
+      ? `Node.js ${runtime.current_version} odpovídá Lazurio toolchain rozsahu ${runtime.required_range}.`
+      : `Node.js ${runtime.current_version} neodpovídá požadovanému rozsahu ${runtime.required_range}; Agent musí nejdřív požádat Principála o souhlas s instalací aktuálního oficiálního Node.js LTS.`,
+    paths: ["lazurio/package.json"],
+    links: compatible
+      ? []
+      : [{
+          label: "Oficiální Node.js LTS",
+          kind: "external",
+          url: "https://nodejs.org/en/download",
+        }],
+    details: [
+      `command: ${command} --version`,
+      `current: ${runtime.current_version}`,
+      `required: ${runtime.required_range}`,
     ],
   };
 }

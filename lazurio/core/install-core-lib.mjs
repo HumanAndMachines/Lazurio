@@ -9,11 +9,16 @@ import {
   resolveTrustedGitExecutable,
   resolveTrustedGitHubCliExecutable,
   sanitizedGitEnvironment,
+  trustedGitCandidates,
+  trustedGitHubCliCandidates,
 } from "./cli-provenance-lib.mjs";
 import {
   classifyBunRuntime,
+  classifyNodeRuntime,
   executablePathsMatch,
+  nodeVersionFromOutput,
   readRequiredBunVersion,
+  readRequiredNodeVersionRange,
   resolveExecutableOnPath,
 } from "./toolchain-lib.mjs";
 
@@ -24,6 +29,7 @@ export const INSTALL_STEP_IDS = Object.freeze([
   "bun",
   "git",
   "github_cli",
+  "node",
   "github_auth",
   "root",
 ]);
@@ -74,6 +80,13 @@ const reasonsByStep = Object.freeze({
     "github_cli_unusable",
     "probe_failed",
   ]),
+  node: new Set([
+    "node_runtime_compatible",
+    "node_runtime_incompatible",
+    "node_runtime_missing",
+    "node_runtime_unusable",
+    "probe_failed",
+  ]),
   github_auth: new Set(["github_authenticated", "github_login_required", "github_ssh_protocol_required", "github_cli_unavailable", "probe_failed"]),
   root: new Set([
     "root_creation_required",
@@ -96,10 +109,13 @@ export function inspectLazurioInstallation({
   bunVersion = process.versions.bun ?? null,
   bunExecutable = process.execPath,
   requiredBunVersion = readRequiredBunVersion(),
+  requiredNodeVersionRange = readRequiredNodeVersionRange(),
   environment = process.env,
   homeDirectory = homedir(),
   resolveGit = resolveTrustedGitExecutable,
   resolveGitHubCli = resolveTrustedGitHubCliExecutable,
+  gitCandidatePaths = trustedGitCandidates,
+  githubCliCandidatePaths = trustedGitHubCliCandidates,
   resolvePathCommand = resolveExecutableOnPath,
   sameExecutable = executablePathsMatch,
   runCommand = runCommandSync,
@@ -142,15 +158,16 @@ export function inspectLazurioInstallation({
 
   let gitExecutable = null;
   steps.push(boundedProbe("git", () => {
-    gitExecutable = resolveGit({ platform, environment });
-    if (!gitExecutable) return actionRequired("git_missing");
+    const trustedExecutable = resolveGit({ platform, environment, homeDirectory });
     const pathExecutable = resolvePathCommand("git", { environment, platform, cwd: commandCwd });
     if (!pathExecutable) {
-      return actionRequired("git_not_on_path");
+      return actionRequired(trustedExecutable ? "git_not_on_path" : "git_missing");
     }
-    if (!sameExecutable(pathExecutable, gitExecutable, { platform })) {
+    const candidates = gitCandidatePaths(platform, { homeDirectory });
+    if (!matchesTrustedExecutable(pathExecutable, trustedExecutable, candidates, sameExecutable, platform)) {
       return actionRequired("git_path_identity_mismatch");
     }
+    gitExecutable = pathExecutable;
     return commandSucceeded(runCommand, pathExecutable, ["--version"], environment, commandCwd)
       ? completed("git_available")
       : failed("git_unusable");
@@ -158,14 +175,14 @@ export function inspectLazurioInstallation({
 
   let githubCliExecutable = null;
   steps.push(boundedProbe("github_cli", () => {
-    githubCliExecutable = resolveGitHubCli({ platform, environment, homeDirectory });
-    if (!githubCliExecutable) return actionRequired("github_cli_missing");
+    const trustedExecutable = resolveGitHubCli({ platform, environment, homeDirectory });
     const pathExecutable = resolvePathCommand("gh", { environment, platform, cwd: commandCwd });
     if (!pathExecutable) {
       githubCliExecutable = null;
-      return actionRequired("github_cli_not_on_path");
+      return actionRequired(trustedExecutable ? "github_cli_not_on_path" : "github_cli_missing");
     }
-    if (!sameExecutable(pathExecutable, githubCliExecutable, { platform })) {
+    const candidates = githubCliCandidatePaths(platform, { homeDirectory });
+    if (!matchesTrustedExecutable(pathExecutable, trustedExecutable, candidates, sameExecutable, platform)) {
       githubCliExecutable = null;
       return actionRequired("github_cli_path_identity_mismatch");
     }
@@ -181,6 +198,38 @@ export function inspectLazurioInstallation({
     }
     githubCliExecutable = pathExecutable;
     return completed("github_cli_available");
+  }));
+
+  let nodeRuntime = Object.freeze({
+    status: "unavailable",
+    current_version: null,
+    required_range: requiredNodeVersionRange,
+  });
+  steps.push(boundedProbe("node", () => {
+    const pathExecutable = resolvePathCommand("node", { environment, platform, cwd: commandCwd });
+    if (!pathExecutable) return actionRequired("node_runtime_missing");
+    const result = runCommand({
+      executable: pathExecutable,
+      args: ["--version"],
+      environment,
+      cwd: commandCwd,
+    });
+    const currentVersion = result?.status === 0 ? nodeVersionFromOutput(result.stdout) : null;
+    if (!currentVersion) {
+      nodeRuntime = Object.freeze({
+        status: "unusable",
+        current_version: null,
+        required_range: requiredNodeVersionRange,
+      });
+      return failed("node_runtime_unusable");
+    }
+    nodeRuntime = classifyNodeRuntime({
+      currentVersion,
+      requiredRange: requiredNodeVersionRange,
+    });
+    return nodeRuntime.status === "compatible"
+      ? completed("node_runtime_compatible")
+      : actionRequired("node_runtime_incompatible");
   }));
 
   steps.push(boundedProbe("github_auth", () => {
@@ -226,6 +275,7 @@ export function inspectLazurioInstallation({
       platform,
       architecture,
       bun: bunRuntime,
+      node: nodeRuntime,
     },
     root: rootObservation.root,
     steps,
@@ -262,6 +312,7 @@ export function isValidLazurioInstallReport(value) {
   if (typeof value.machine.platform !== "string" || value.machine.platform === "") return false;
   if (typeof value.machine.architecture !== "string" || value.machine.architecture === "") return false;
   if (!validBunRuntime(value.machine.bun)) return false;
+  if (!validNodeRuntime(value.machine.node)) return false;
   if (!validRoot(value.root)) return false;
   if (!Array.isArray(value.steps) || value.steps.length !== INSTALL_STEP_IDS.length) return false;
   for (let index = 0; index < INSTALL_STEP_IDS.length; index += 1) {
@@ -285,6 +336,22 @@ function validBunRuntime(value) {
   return value.status === (value.current_version === value.required_version ? "current" : "mismatch");
 }
 
+function validNodeRuntime(value) {
+  if (!plainObject(value)) return false;
+  if (!new Set(["compatible", "incompatible", "unavailable", "unusable"]).has(value.status)) return false;
+  if (!/^>=(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$/u.test(value.required_range ?? "")) {
+    return false;
+  }
+  if (value.status === "unavailable" || value.status === "unusable") {
+    return value.current_version === null;
+  }
+  const classified = classifyNodeRuntime({
+    currentVersion: value.current_version,
+    requiredRange: value.required_range,
+  });
+  return classified.status === value.status;
+}
+
 export function installExitCode(report) {
   if (!isValidLazurioInstallReport(report)) return 2;
   if (report.status === "completed") return 0;
@@ -302,6 +369,13 @@ function boundedProbe(id, probe) {
   } catch {
     return { id, status: "failed", reason: "probe_failed" };
   }
+}
+
+function matchesTrustedExecutable(pathExecutable, trustedExecutable, candidates, sameExecutable, platform) {
+  return (
+    (trustedExecutable && sameExecutable(pathExecutable, trustedExecutable, { platform }))
+    || candidates.some((candidate) => sameExecutable(pathExecutable, candidate, { platform }))
+  );
 }
 
 function boundedRootProbe(root, inspectRoot, context) {

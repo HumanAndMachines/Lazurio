@@ -42,7 +42,8 @@ function fixtureReport({
   resolvePathCommand = (command) => {
     if (command === "bun") return process.execPath;
     if (command === "git") return "/usr/bin/git";
-    return `/trusted/bin/${command}`;
+    if (command === "node") return "/trusted/bin/node";
+    return null;
   },
 } = {}) {
   return inspectLazurioInstallation({
@@ -55,7 +56,10 @@ function fixtureReport({
     resolveGit: () => "/usr/bin/git",
     resolveGitHubCli: () => null,
     resolvePathCommand,
-    runCommand: () => ({ status: 0 }),
+    runCommand: ({ executable }) => ({
+      status: 0,
+      stdout: executable === "/trusted/bin/node" ? "v24.19.0" : "",
+    }),
     inspectRoot: (path) => ({
       path,
       layout: "missing",

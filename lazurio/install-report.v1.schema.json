@@ -9,7 +9,7 @@
     "status": { "enum": ["completed", "action_required", "failed"] },
     "machine": {
       "type": "object",
-      "required": ["platform", "architecture", "bun"],
+      "required": ["platform", "architecture", "bun", "node"],
       "properties": {
         "platform": { "type": "string", "minLength": 1 },
         "architecture": { "type": "string", "minLength": 1 },
@@ -25,6 +25,21 @@
               ]
             },
             "required_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+          },
+          "additionalProperties": false
+        },
+        "node": {
+          "type": "object",
+          "required": ["status", "current_version", "required_range"],
+          "properties": {
+            "status": { "enum": ["compatible", "incompatible", "unavailable", "unusable"] },
+            "current_version": {
+              "anyOf": [
+                { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+                { "enum": [null] }
+              ]
+            },
+            "required_range": { "type": "string", "pattern": "^>=[0-9]+\\.[0-9]+\\.[0-9]+$" }
           },
           "additionalProperties": false
         }
@@ -54,8 +69,8 @@
     },
     "steps": {
       "type": "array",
-      "minItems": 6,
-      "maxItems": 6,
+      "minItems": 7,
+      "maxItems": 7,
       "prefixItems": [
         {
           "type": "object",
@@ -101,6 +116,16 @@
           "type": "object",
           "required": ["id", "status", "reason"],
           "properties": {
+            "id": { "const": "node" },
+            "status": { "enum": ["completed", "skipped", "action_required", "failed"] },
+            "reason": { "enum": ["node_runtime_compatible", "node_runtime_incompatible", "node_runtime_missing", "node_runtime_unusable", "probe_failed"] }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["id", "status", "reason"],
+          "properties": {
             "id": { "const": "github_auth" },
             "status": { "enum": ["completed", "skipped", "action_required", "failed"] },
             "reason": { "enum": ["github_authenticated", "github_login_required", "github_ssh_protocol_required", "github_cli_unavailable", "probe_failed"] }
@@ -135,7 +160,7 @@
         "type": "object",
         "required": ["id", "status", "reason"],
         "properties": {
-          "id": { "enum": ["platform", "bun", "git", "github_cli", "github_auth", "root"] },
+          "id": { "enum": ["platform", "bun", "git", "github_cli", "node", "github_auth", "root"] },
           "status": { "enum": ["completed", "skipped", "action_required", "failed"] },
           "reason": {
             "enum": [
@@ -157,6 +182,10 @@
               "github_cli_not_on_path",
               "github_cli_path_identity_mismatch",
               "github_cli_unusable",
+              "node_runtime_compatible",
+              "node_runtime_incompatible",
+              "node_runtime_missing",
+              "node_runtime_unusable",
               "github_authenticated",
               "github_login_required",
               "github_ssh_protocol_required",
