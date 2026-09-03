@@ -48,6 +48,7 @@ import { launchpadFetch } from "./session-aware-fetch.js";
 import { writeReservedTabStatus } from "./reserved-tab-status.js";
 import { getLocale, initializeI18n, setLocale, t, tp } from "./i18n.js";
 import {
+  guideHash,
   organizationHash,
   personalspaceHash,
   resolveLaunchpadHash,
@@ -111,6 +112,9 @@ const state = {
   // appky otevře automaticky.
   drawerOpen: false,
   drawerView: "overview",
+  activeSurface: "workspace",
+  guideReturnHash: null,
+  guideOpenedFromLaunchpad: false,
   filters: {
     // Scope selector vždy ukazuje právě jeden prostor: personalspace nebo
     // konkrétní Organizaci. Cross-organization pohled „Vše" není v denním UI.
@@ -327,6 +331,7 @@ const APP_ICON_PATHS = {
 };
 
 const elements = {
+  skipLink: document.querySelector("#skipLink"),
   topbar: document.querySelector(".topbar"),
   spaceSwitcher: document.querySelector("#spaceSwitcher"),
   spaceSwitcherButton: document.querySelector("#spaceSwitcherButton"),
@@ -351,6 +356,11 @@ const elements = {
   appsFilterFallback: document.querySelector("#appsFilterFallback"),
   workspaceWelcome: document.querySelector("#workspaceWelcome"),
   workspaceWelcomeTitle: document.querySelector("#workspaceWelcomeTitle"),
+  workspaceMain: document.querySelector("#workspaceMain"),
+  guideMain: document.querySelector("#guideMain"),
+  guideTitle: document.querySelector("#guideTitle"),
+  guideBack: document.querySelector("#guideBack"),
+  guideTile: document.querySelector("#guideTile"),
   appsSearch: document.querySelector("#appsSearch"),
   attentionToggle: document.querySelector("#attentionToggle"),
   segmentedControl: document.querySelectorAll("[data-status-segment]"),
@@ -393,6 +403,7 @@ elements.localeSwitcher?.addEventListener("click", (event) => {
   setLocale(option.dataset.locale);
   window.location.reload();
 });
+elements.guideTile?.setAttribute("href", guideHash());
 // Personalspace rail dostane most k toastům a k Synchronizovat reloadu, ať
 // osobní runtime akce vypadají stejně jako firemní.
 initPersonalspace({
@@ -441,6 +452,11 @@ elements.attentionToggle?.addEventListener("click", () => {
   state.filters.attentionOnly = true;
   render();
 });
+elements.guideTile?.addEventListener("click", () => {
+  state.guideReturnHash = activeSpaceHash();
+  state.guideOpenedFromLaunchpad = true;
+});
+elements.guideBack?.addEventListener("click", () => closeGuide());
 
 // Drawer doplňkových panelů (Nejčastější / detail). Poslední změny jsou v
 // Organization scope trvale viditelné vedle hlavní plochy.
@@ -1027,7 +1043,9 @@ function render() {
   // Transientní chyba prvního discovery nesmí zničit požadovaný deep-link.
   // URL kanonizujeme až poté, co máme první autoritativní seznam prostorů;
   // úspěšný retry pak může stále aplikovat původní Organization hash.
-  if (launchpadScopeDataReady) syncActiveSpaceHash({ replace: true });
+  if (launchpadScopeDataReady && state.activeSurface === "workspace") {
+    syncActiveSpaceHash({ replace: true });
+  }
   applyOrganizationTheme();
   const previousSelectedAppId = state.selectedAppId;
   const previousReadonlyDetailId = state.selectedReadonlyDetail?.id ?? null;
@@ -1045,7 +1063,7 @@ function render() {
     state.selectedLogs = null;
     state.autoOpenTechnicalAppId = null;
   } else {
-    state.selectedAppId = reconcileSelectedAppId(state.apps, state.filters, state.selectedAppId);
+    state.selectedAppId = reconcileSelectedAppId(dailyApps(state.apps), state.filters, state.selectedAppId);
     if (previousSelectedAppId !== state.selectedAppId && state.selectedLogs?.app_id !== state.selectedAppId) {
       state.selectedLogs = null;
       state.autoOpenTechnicalAppId = null;
@@ -1567,8 +1585,15 @@ function activeSpace() {
 
 function applyBrowserLaunchpadHash() {
   if (!state.loaded || !launchpadScopeDataReady || window.location.hash === appliedLaunchpadHash) return;
+  const previousSurface = state.activeSurface;
   const changed = applyLaunchpadHash({ notify: true });
   render();
+  if (previousSurface !== state.activeSurface) {
+    queueMicrotask(() => {
+      if (state.activeSurface === "guide") elements.guideTitle?.focus({ preventScroll: true });
+      else if (elements.guideTile?.offsetParent) elements.guideTile.focus({ preventScroll: true });
+    });
+  }
   if (changed) void loadSidePanels();
 }
 
@@ -1579,7 +1604,10 @@ function applyLaunchpadHash({ notify = false } = {}) {
     personalspaceAvailable: Boolean(state.personalspace),
   });
   appliedLaunchpadHash = hash;
-  if (resolution.status === "none") return false;
+  if (resolution.status === "none") {
+    state.activeSurface = "workspace";
+    return false;
+  }
   if (resolution.status !== "matched") {
     if (notify) {
       const message = resolution.status === "not_found"
@@ -1592,6 +1620,13 @@ function applyLaunchpadHash({ notify = false } = {}) {
     return false;
   }
 
+  if (resolution.surface === "guide") {
+    state.activeSurface = "guide";
+    resetSpaceSelection();
+    return false;
+  }
+
+  state.activeSurface = "workspace";
   const changed = state.filters.scope !== resolution.scope || state.filters.company !== resolution.company;
   state.filters.scope = resolution.scope;
   state.filters.company = resolution.company;
@@ -1600,10 +1635,28 @@ function applyLaunchpadHash({ notify = false } = {}) {
 }
 
 function syncActiveSpaceHash({ replace = false } = {}) {
-  const hash = state.filters.scope === "personal"
+  writeLaunchpadHash(activeSpaceHash(), { replace });
+}
+
+function activeSpaceHash() {
+  return state.filters.scope === "personal"
     ? personalspaceHash()
     : organizationHash(state.filters.company);
-  writeLaunchpadHash(hash, { replace });
+}
+
+function closeGuide() {
+  if (state.activeSurface !== "guide") return;
+  if (state.guideOpenedFromLaunchpad) {
+    state.guideOpenedFromLaunchpad = false;
+    window.history.back();
+    return;
+  }
+  state.activeSurface = "workspace";
+  writeLaunchpadHash(state.guideReturnHash ?? activeSpaceHash(), { replace: true });
+  render();
+  queueMicrotask(() => {
+    if (elements.guideTile?.offsetParent) elements.guideTile.focus({ preventScroll: true });
+  });
 }
 
 function writeLaunchpadHash(hash, { replace = false } = {}) {
@@ -1764,6 +1817,8 @@ function selectSpace(space) {
   restoreSpaceMenuFocusOnClose = true;
   state.spaceMenuOpen = false;
   resetSpaceSelection();
+  state.activeSurface = "workspace";
+  state.guideOpenedFromLaunchpad = false;
   if (space.kind === "personal") {
     state.filters.scope = "personal";
     state.filters.company = "all";
@@ -1853,19 +1908,25 @@ function applySpaceMenuState() {
 
 function renderScopeControls() {
   const personal = state.filters.scope === "personal";
+  const guide = state.activeSurface === "guide";
   mountUpdateBannerGroup();
-  elements.hero.classList.toggle("hidden", personal);
-  elements.personalPrivacyBadge?.toggleAttribute("hidden", !personal);
-  elements.appsToolbar.classList.toggle("hidden", personal);
-  elements.drawerToggle.classList.toggle("hidden", personal);
+  if (elements.skipLink) elements.skipLink.href = guide ? "#guideMain" : "#workspaceMain";
+  elements.workspaceMain?.toggleAttribute("hidden", guide);
+  elements.guideMain?.toggleAttribute("hidden", !guide);
+  elements.hero.classList.toggle("hidden", personal || guide);
+  elements.personalPrivacyBadge?.toggleAttribute("hidden", !personal || guide);
+  elements.appsToolbar.classList.toggle("hidden", personal || guide);
+  elements.drawerToggle.classList.toggle("hidden", personal || guide);
   elements.layout.classList.toggle("is-personal", personal);
-  elements.recentChangesSidebar.classList.toggle("hidden", personal);
+  elements.layout.classList.toggle("is-guide", guide);
+  elements.recentChangesSidebar.classList.toggle("hidden", personal || guide);
+  elements.globalUpdateSlot?.toggleAttribute("hidden", guide);
   // Notifikace agregují změny napříč moduly Organizace — v Personalspace
   // nemají co dělat, stejně jako pravé panely. Zvoneček proto mizí i s
   // otevřeným panelem, ne jen jeho obsah.
-  elements.notificationsToggle?.classList.toggle("hidden", personal);
-  if (personal && state.notificationsOpen) setNotificationsOpen(false);
-  if (personal && state.drawerOpen) setDrawer(false);
+  elements.notificationsToggle?.classList.toggle("hidden", personal || guide);
+  if ((personal || guide) && state.notificationsOpen) setNotificationsOpen(false);
+  if ((personal || guide) && state.drawerOpen) setDrawer(false);
 }
 
 // Na desktopu je update první kartou pravého sloupce. Na mobilu se pravý
@@ -1874,7 +1935,8 @@ function renderScopeControls() {
 // layoutem. Po návratu na desktop Organization scope se vrátí do sidebaru.
 function mountUpdateBannerGroup() {
   const group = elements.updateBannerGroup;
-  const global = mobilePanelQuery.matches || state.filters.scope === "personal";
+  const global = state.activeSurface !== "guide"
+    && (mobilePanelQuery.matches || state.filters.scope === "personal");
   const target = global ? elements.globalUpdateSlot : elements.recentChangesSidebar;
   if (!group || !target || group.parentElement === target) return;
   if (global) target.append(group);
@@ -5144,7 +5206,15 @@ function pluginNode(plugin) {
 
 function filtered(apps) {
   if (state.filters.scope === "personal") return [];
-  return filterApps(apps, state.filters);
+  return filterApps(dailyApps(apps), state.filters);
+}
+
+function dailyApps(apps) {
+  return apps.filter((app) => !(
+    app.organization_path === "guide"
+    && app.module === "guide"
+    && app.surface === "manual"
+  ));
 }
 
 function activeSpaceApps() {

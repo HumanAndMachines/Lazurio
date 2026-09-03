@@ -183,6 +183,61 @@
 
         </section>
 
+        <section id="guideMain" class="guide-surface" aria-labelledby="guideTitle" hidden>
+          <header class="guide-header">
+            <button id="guideBack" type="button" class="guide-back" aria-label="Zpět do pracovního prostoru">
+              <!-- iconoir/nav-arrow-left -->
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M15 6L9 12L15 18" />
+              </svg>
+              <span>Zpět</span>
+            </button>
+            <div class="guide-heading">
+              <span class="guide-eyebrow">Lazurio</span>
+              <h1 id="guideTitle" tabindex="-1">Guide</h1>
+              <p>Praktické odpovědi a návody přímo ve vašem pracovním prostředí.</p>
+            </div>
+          </header>
+
+          <div class="guide-workspace">
+            <aside class="guide-navigation" aria-labelledby="guideNavigationTitle">
+              <div class="guide-search">
+                <label for="guideSearch">Hledat v Guide</label>
+                <div class="guide-search-control">
+                  <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="m21 21-4.35-4.35" />
+                  </svg>
+                  <input id="guideSearch" type="search" placeholder="Hledat…" disabled aria-describedby="guideSearchHint" />
+                </div>
+                <p id="guideSearchHint" class="guide-field-hint">Vyhledávání se zpřístupní s prvními tématy.</p>
+              </div>
+              <nav class="guide-topics" aria-labelledby="guideNavigationTitle">
+                <h2 id="guideNavigationTitle">Obsah</h2>
+                <div class="guide-topics-empty">
+                  <span aria-hidden="true">·</span>
+                  <p>Zatím tu nejsou žádná témata.</p>
+                </div>
+              </nav>
+            </aside>
+
+            <article class="guide-reader" aria-labelledby="guideReaderTitle">
+              <div class="guide-reader-empty">
+                <span class="guide-reader-icon" aria-hidden="true">
+                  <!-- iconoir/book -->
+                  <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 5.6C3 4.71634 3.71634 4 4.6 4H9.5C10.8807 4 12 5.11929 12 6.5V21C12 19.6193 10.8807 18.5 9.5 18.5H3V5.6Z" />
+                    <path d="M21 5.6C21 4.71634 20.2837 4 19.4 4H14.5C13.1193 4 12 5.11929 12 6.5V21C12 19.6193 13.1193 18.5 14.5 18.5H21V5.6Z" />
+                  </svg>
+                </span>
+                <span class="guide-reader-kicker">Nový Guide</span>
+                <h2 id="guideReaderTitle">Obsah doplníme postupně</h2>
+                <p>Rozhraní je připravené. První témata vzniknou podle skutečných otázek lidí.</p>
+              </div>
+            </article>
+          </div>
+        </section>
+
         <aside id="recentChangesSidebar" class="recent-changes-sidebar hidden" data-i18n-aria-label="a11y.workspaceStatus">
           <div id="updateBannerGroup" class="update-banner-group">
             <div id="updateBanner" class="update-banner" role="status">
@@ -214,6 +269,23 @@
               <button id="heroCta" type="button" class="btn btn-secondary btn-sm" data-i18n="workspace.checkStatus"></button>
             </div>
           </section>
+          <a id="guideTile" class="guide-tile side-panel" href="#/guide" aria-labelledby="guideTileTitle" aria-describedby="guideTileSummary">
+            <div class="guide-tile-head">
+              <span class="guide-tile-icon" aria-hidden="true">
+                <img src="/app-icons/lazurio/guide-96.png" alt="" />
+              </span>
+              <span class="guide-tile-action">
+                Otevřít
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M9 18L15 12L9 6" />
+                </svg>
+              </span>
+            </div>
+            <div class="guide-tile-copy">
+              <h2 id="guideTileTitle">Guide</h2>
+              <p id="guideTileSummary">Návody a odpovědi k práci v Lazuriu.</p>
+            </div>
+          </a>
           <section class="marketplace-teaser side-panel" aria-labelledby="marketplaceTeaserTitle">
             <div class="marketplace-teaser-head">
               <span class="marketplace-teaser-icon" aria-hidden="true">

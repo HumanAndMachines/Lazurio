@@ -1018,6 +1018,10 @@ input:focus-visible,
   grid-template-columns: minmax(0, 1fr);
 }
 
+.layout.is-guide {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .global-update-slot:empty {
   display: none;
 }
@@ -1047,6 +1051,93 @@ input:focus-visible,
 
 .recent-changes-sidebar .side-panel {
   margin-bottom: 0;
+}
+
+/* Guide je dostupná capability, proto je v pravém sloupci aktivní dlaždice
+   nad budoucím, záměrně neinteraktivním Marketplace teaserem. */
+.guide-tile {
+  gap: var(--lz-space-16);
+  padding: var(--lz-space-16);
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.guide-tile:hover,
+.guide-tile:focus-visible {
+  border-color: var(--lz-blue-500);
+  background: color-mix(in srgb, var(--lz-blue-500) 7%, var(--lz-white));
+  box-shadow: 0 10px 24px -22px color-mix(in srgb, var(--lz-ink) 18%, transparent);
+  outline: none;
+}
+
+.guide-tile:focus-visible {
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--lz-blue-500) 24%, transparent),
+    0 10px 24px -22px color-mix(in srgb, var(--lz-ink) 18%, transparent);
+}
+
+.guide-tile-head,
+.guide-tile-action {
+  display: flex;
+  align-items: center;
+}
+
+.guide-tile-head {
+  justify-content: space-between;
+  gap: var(--lz-space-12);
+}
+
+.guide-tile-icon {
+  width: var(--lz-space-48);
+  height: var(--lz-space-48);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 var(--lz-space-48);
+  border-radius: var(--lz-radius-sm);
+  background: var(--lz-blue-50);
+}
+
+.guide-tile-icon img {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+}
+
+.guide-tile-action {
+  gap: var(--lz-space-4);
+  color: var(--lz-ink-muted);
+  font-size: var(--lz-size-meta);
+  font-weight: var(--lz-weight-akce);
+}
+
+.guide-tile-copy {
+  display: grid;
+  gap: var(--lz-space-8);
+}
+
+.guide-tile-copy h2,
+.guide-tile-copy p {
+  margin: 0;
+}
+
+.guide-tile-copy h2 {
+  color: var(--lz-ink);
+  font-size: var(--lz-size-title);
+  font-weight: var(--lz-weight-title);
+  line-height: var(--lz-leading-title);
+  letter-spacing: var(--lz-track-title);
+}
+
+.guide-tile-copy p {
+  color: var(--lz-ink-muted);
+  font-size: var(--lz-size-meta);
+  line-height: var(--lz-leading-body);
 }
 
 /* Stav aktualizací je globální provozní informace stejně jako Stav prostoru.
@@ -1133,6 +1224,215 @@ input:focus-visible,
   margin: 0;
   color: var(--lz-ink-muted);
   font-size: var(--lz-size-meta);
+  line-height: var(--lz-leading-body);
+}
+
+/* Guide surface zůstává součástí shellu Launchpadu. Neobsahuje iframe
+   ani druhý runtime; tento řez dodává pouze wiki-like prezentační kostru. */
+.guide-surface {
+  min-width: 0;
+  display: grid;
+  gap: var(--lz-space-24);
+}
+
+.guide-surface[hidden] {
+  display: none;
+}
+
+.guide-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--lz-space-24);
+  padding: var(--lz-space-24) 0 0;
+}
+
+.guide-back {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lz-space-4);
+  padding: 0 var(--lz-space-12);
+  border: 1px solid var(--lz-line);
+  border-radius: var(--lz-radius-pill);
+  background: var(--lz-white);
+  color: var(--lz-ink);
+  font: inherit;
+  font-size: var(--lz-size-meta);
+  font-weight: var(--lz-weight-akce);
+  cursor: pointer;
+}
+
+.guide-back:hover,
+.guide-back:focus-visible {
+  border-color: var(--lz-gray-700);
+  outline: none;
+}
+
+.guide-back:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--lz-blue-500) 20%, transparent);
+}
+
+.guide-heading {
+  display: grid;
+  gap: var(--lz-space-8);
+}
+
+.guide-eyebrow,
+.guide-reader-kicker {
+  color: var(--lz-blue-700);
+  font-size: var(--lz-size-meta);
+  font-weight: var(--lz-weight-akce);
+  letter-spacing: 0;
+}
+
+.guide-heading h1,
+.guide-heading p,
+.guide-navigation h2,
+.guide-reader h2,
+.guide-reader p,
+.guide-field-hint,
+.guide-topics-empty p {
+  margin: 0;
+}
+
+.guide-heading h1 {
+  color: var(--lz-ink);
+  font-family: var(--font-heading, var(--font-body));
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  font-weight: var(--lz-weight-title);
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.guide-heading h1:focus-visible {
+  outline: none;
+}
+
+.guide-heading p {
+  max-width: 46rem;
+  color: var(--lz-ink-muted);
+  font-size: var(--lz-size-body);
+  line-height: var(--lz-leading-body);
+}
+
+.guide-workspace {
+  min-height: min(64vh, 720px);
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  border: 1px solid var(--lz-line);
+  border-radius: var(--lz-radius-md);
+  background: var(--lz-white);
+  overflow: hidden;
+}
+
+.guide-navigation {
+  display: grid;
+  align-content: start;
+  gap: var(--lz-space-24);
+  padding: var(--lz-space-24);
+  border-right: 1px solid var(--lz-line);
+  background: var(--lz-gray-50);
+}
+
+.guide-search {
+  display: grid;
+  gap: var(--lz-space-8);
+}
+
+.guide-search label,
+.guide-navigation h2 {
+  color: var(--lz-ink);
+  font-size: var(--lz-size-body);
+  font-weight: var(--lz-weight-akce);
+}
+
+.guide-search-control {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: var(--lz-space-8);
+  padding: 0 var(--lz-space-12);
+  border: 1px solid var(--lz-line);
+  border-radius: var(--lz-radius-sm);
+  background: var(--lz-white);
+  color: var(--lz-ink-muted);
+}
+
+.guide-search-control input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--lz-ink);
+  font: inherit;
+}
+
+.guide-search-control:has(input:disabled) {
+  background: color-mix(in srgb, var(--lz-gray-100) 70%, var(--lz-white));
+}
+
+.guide-field-hint,
+.guide-topics-empty p {
+  color: var(--lz-ink-muted);
+  font-size: var(--lz-size-meta);
+  line-height: var(--lz-leading-body);
+}
+
+.guide-topics {
+  display: grid;
+  gap: var(--lz-space-12);
+}
+
+.guide-topics-empty {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--lz-space-8);
+  padding: var(--lz-space-12);
+  border: 1px dashed var(--lz-line);
+  border-radius: var(--lz-radius-sm);
+}
+
+.guide-reader {
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  padding: clamp(var(--lz-space-32), 7vw, 7rem);
+}
+
+.guide-reader-empty {
+  max-width: 34rem;
+  display: grid;
+  justify-items: start;
+  gap: var(--lz-space-12);
+}
+
+.guide-reader-icon {
+  width: 56px;
+  height: 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--lz-space-8);
+  border-radius: var(--lz-radius-sm);
+  background: var(--lz-blue-50);
+  color: var(--lz-ink);
+}
+
+.guide-reader h2 {
+  color: var(--lz-ink);
+  font-family: var(--font-heading, var(--font-body));
+  font-size: clamp(1.6rem, 3vw, 2.4rem);
+  font-weight: var(--lz-weight-title);
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+}
+
+.guide-reader p {
+  color: var(--lz-ink-muted);
+  font-size: var(--lz-size-body);
   line-height: var(--lz-leading-body);
 }
 
@@ -3162,6 +3462,29 @@ tbody tr.selected {
   .segment {
     min-height: 36px;
     flex: 1 1 0;
+  }
+
+  .guide-header {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--lz-space-16);
+  }
+
+  .guide-back {
+    justify-self: start;
+  }
+
+  .guide-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .guide-navigation {
+    border-right: 0;
+    border-bottom: 1px solid var(--lz-line);
+  }
+
+  .guide-reader {
+    min-height: 360px;
+    padding: var(--lz-space-32) var(--lz-space-24);
   }
 
 }

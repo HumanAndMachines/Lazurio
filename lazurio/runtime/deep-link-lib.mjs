@@ -1,5 +1,6 @@
 const ROOT_HASH = "#/";
 const PERSONALSPACE_HASH = "#/personalspace";
+const GUIDE_HASH = "#/guide";
 
 export function organizationHash(organizationSlug) {
   const slug = validRouteSegment(organizationSlug);
@@ -9,6 +10,10 @@ export function organizationHash(organizationSlug) {
 
 export function personalspaceHash() {
   return PERSONALSPACE_HASH;
+}
+
+export function guideHash() {
+  return GUIDE_HASH;
 }
 
 export function launchpadEntryHash({ organization = null, personalspace = false } = {}) {
@@ -40,6 +45,9 @@ export function parseLaunchpadHash(hash) {
   if (segments.length === 1 && segments[0] === "personalspace") {
     return { kind: "personalspace" };
   }
+  if (segments.length === 1 && segments[0] === "guide") {
+    return { kind: "guide" };
+  }
   if (segments.length === 2 && segments[0] === "org") {
     const organization = decodeRouteSegment(segments[1]);
     if (organization) return { kind: "organization", organization };
@@ -54,6 +62,7 @@ export function resolveLaunchpadHash(hash, {
   const route = parseLaunchpadHash(hash);
   if (route.kind === "root") return { status: "none", route };
   if (route.kind === "invalid") return { status: "invalid", route };
+  if (route.kind === "guide") return { status: "matched", route, surface: "guide" };
   if (route.kind === "personalspace") {
     return personalspaceAvailable
       ? { status: "matched", route, scope: "personal", company: "all" }
