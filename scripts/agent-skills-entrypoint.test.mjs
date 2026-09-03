@@ -9,8 +9,11 @@ import {
   trustedGitCandidates,
   trustedGitExecutable,
 } from "./agent-skills-entrypoint.mjs";
+import { supportsFileSymlinks } from "./test-platform-capabilities.mjs";
 
 const tempRoots = [];
+
+const fileSymlinkTest = (await supportsFileSymlinks()) ? test : test.skip;
 
 afterEach(async () => {
   await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
@@ -167,7 +170,7 @@ test("slug s traversal cestou v manifestu je blocked manifest_invalid", async ()
   expect(state.code).toBe("manifest_invalid");
 });
 
-test("symlink v kanonickém katalogu: repair failuje zavřeně a nic nekopíruje", async () => {
+fileSymlinkTest("symlink v kanonickém katalogu: repair failuje zavřeně a nic nekopíruje", async () => {
   const root = await rootFixture("canonical-symlink");
   const outside = await mkdtemp(join(tmpdir(), "canonical-outside-"));
   tempRoots.push(outside);

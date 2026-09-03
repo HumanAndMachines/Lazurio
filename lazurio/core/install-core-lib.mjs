@@ -217,7 +217,7 @@ export function inspectLazurioInstallation({
     if (!pathExecutable) {
       return actionRequired(trustedExecutable ? "node_runtime_not_on_path" : "node_runtime_missing");
     }
-    const candidates = nodeCandidatePaths(platform, { homeDirectory });
+    const candidates = nodeCandidatePaths(platform, { homeDirectory, environment });
     if (!matchesTrustedExecutable(pathExecutable, trustedExecutable, candidates, sameExecutable, platform)) {
       return actionRequired("node_path_identity_mismatch");
     }

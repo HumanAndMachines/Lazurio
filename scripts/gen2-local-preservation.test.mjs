@@ -23,9 +23,13 @@ import {
   committedVerifierIdentity,
   probeCloneCapability,
 } from "./gen2-local-preservation.mjs";
+import { supportsFileSymlinks } from "./test-platform-capabilities.mjs";
 
 const scriptPath = fileURLToPath(new URL("./gen2-local-preservation.mjs", import.meta.url));
 const tempRoots = [];
+
+const fileSymlinkSupported = await supportsFileSymlinks();
+const fileSymlinkTest = fileSymlinkSupported ? test : test.skip;
 
 // The suite intentionally exercises real Git repositories, refs, stashes,
 // fsck and filesystem metadata. Five seconds is not a meaningful failure
@@ -82,7 +86,11 @@ async function makeSource(root, name = "source") {
   await mkdir(join(source, "data"), { recursive: true });
   await writeFile(join(source, "data", "customer.txt"), "customer data\n", { mode: 0o640 });
   await writeFile(join(source, ".ignored-secret"), "fixture-secret-value\n", { mode: 0o600 });
-  await symlink("data/customer.txt", join(source, "customer-link"));
+  if (fileSymlinkSupported) {
+    await symlink("data/customer.txt", join(source, "customer-link"));
+  } else {
+    await writeFile(join(source, "customer-link"), "portable fixture fallback\n");
+  }
   return source;
 }
 
@@ -308,7 +316,7 @@ describe("fail-closed preflight", () => {
     expect(result.stderr).toContain("organizations");
   });
 
-  test("refuses a destination that escapes personalspace through a symlinked parent", async () => {
+  fileSymlinkTest("refuses a destination that escapes personalspace through a symlinked parent", async () => {
     const root = await makeTempRoot();
     const source = await makeSource(root);
     const personalspaceRoot = join(root, "personalspace");
@@ -322,7 +330,7 @@ describe("fail-closed preflight", () => {
     expect(result.stderr).toContain("destination must stay under the explicit personalspace root");
   });
 
-  test("refuses a resolved personalspace root inside an organizations boundary", async () => {
+  fileSymlinkTest("refuses a resolved personalspace root inside an organizations boundary", async () => {
     const root = await makeTempRoot();
     const source = await makeSource(root);
     const organizationsRoot = join(root, "organizations", "PrivateOrg_GEN3");
@@ -349,7 +357,7 @@ describe("fail-closed preflight", () => {
     expect(result.stderr).toContain("external gitdir");
   });
 
-  test("refuses an absolute symlink outside rebuildable caches before creating destination", async () => {
+  fileSymlinkTest("refuses an absolute symlink outside rebuildable caches before creating destination", async () => {
     const root = await makeTempRoot();
     const source = await makeSource(root);
     await symlink(join(source, "data", "customer.txt"), join(source, "absolute-user-link"));
@@ -362,7 +370,7 @@ describe("fail-closed preflight", () => {
     await expect(lstat(destination)).rejects.toThrow();
   });
 
-  test("refuses a user-data symlink whose transitive chain crosses a non-portable cache link", async () => {
+  fileSymlinkTest("refuses a user-data symlink whose transitive chain crosses a non-portable cache link", async () => {
     const root = await makeTempRoot();
     const source = await makeSource(root);
     await mkdir(join(source, "node_modules"));
@@ -425,7 +433,7 @@ describe("fail-closed preflight", () => {
 });
 
 describe.skipIf(process.platform === "win32")("apply and evidence", () => {
-  test("allows explicitly counted non-portable symlinks only inside rebuildable caches", async () => {
+  fileSymlinkTest("allows explicitly counted non-portable symlinks only inside rebuildable caches", async () => {
     const root = await makeTempRoot();
     const source = await makeSource(root);
     await mkdir(join(source, "node_modules"));
@@ -440,7 +448,7 @@ describe.skipIf(process.platform === "win32")("apply and evidence", () => {
     expect(JSON.parse(result.stdout).files.nonportable_rebuildable_symlinks).toBe(1);
   });
 
-  test("preserves ignored files, symlinks, modes, nested Git refs/stash, and leaves source unchanged", async () => {
+  fileSymlinkTest("preserves ignored files, symlinks, modes, nested Git refs/stash, and leaves source unchanged", async () => {
     const root = await makeTempRoot();
     const source = await makeSource(root);
     const sourceRepo = join(source, "nested-repo");
@@ -667,7 +675,7 @@ describe.skipIf(process.platform === "win32")("verification drift detection", ()
     expect(result.stderr).toContain("mode changed");
   });
 
-  test("fails on changed symlink target", async () => {
+  fileSymlinkTest("fails on changed symlink target", async () => {
     const { source, destination, personalspaceRoot } = await archiveFixture();
     await rm(join(destination, "customer-link"));
     await symlink(".ignored-secret", join(destination, "customer-link"));

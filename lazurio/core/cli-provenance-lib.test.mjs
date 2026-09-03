@@ -295,18 +295,35 @@ test("portable Windows paths and trusted executable candidates are deterministic
     homeDirectory: "relative-home",
   })).not.toContain("relative-home/.local/bin/node");
   expect(trustedNodeCandidates("win32", {
-    PATH: "C:\\Shadow",
-    LOCALAPPDATA: "C:\\AttackerControlled",
-    USERPROFILE: "C:\\OtherUser",
     homeDirectory: "C:\\Users\\Matous",
+    environment: {
+      PATH: "\"C:\\Users\\Matous\\AppData\\Local\\Programs\\nodejs\\node-v24.20.0-win-x64\";C:\\Shadow",
+      LOCALAPPDATA: "C:\\AttackerControlled",
+      USERPROFILE: "C:\\OtherUser",
+    },
   })).toEqual([
     "C:\\Program Files\\nodejs\\node.exe",
     "C:\\Program Files (x86)\\nodejs\\node.exe",
     "C:\\Users\\Matous\\AppData\\Local\\Programs\\nodejs\\node.exe",
     "C:\\Users\\Matous\\AppData\\Local\\Microsoft\\WinGet\\Links\\node.exe",
+    "C:\\Users\\Matous\\AppData\\Local\\Programs\\nodejs\\node-v24.20.0-win-x64\\node.exe",
   ]);
   expect(trustedNodeCandidates("win32", {
+    homeDirectory: "C:\\Users\\Matous",
+    environment: {
+      PATH: [
+        "C:\\Tools\\node-v24.20.0-win-x64",
+        "C:\\Users\\Matous\\AppData\\Local\\Programs\\nodejs\\nested\\node-v24.20.0-win-x64",
+        "C:\\Users\\Matous\\AppData\\Local\\Programs\\nodejs\\node-current-win-x64",
+        "\"C:\\Users\\Matous\\AppData\\Local\\Programs\\nodejs\\node-v24.20.0-win-x64",
+      ].join(";"),
+    },
+  })).toHaveLength(4);
+  expect(trustedNodeCandidates("win32", {
     homeDirectory: "relative-home",
+    environment: {
+      PATH: "relative-home\\AppData\\Local\\Programs\\nodejs\\node-v24.20.0-win-x64",
+    },
   })).toHaveLength(2);
 });
 

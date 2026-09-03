@@ -191,6 +191,7 @@ export function trustedGitHubCliCandidates(platform = process.platform, {
 
 export function trustedNodeCandidates(platform = process.platform, {
   homeDirectory = currentAccountHomeDirectory(),
+  environment = process.env,
 } = {}) {
   if (platform === "darwin") {
     return [
@@ -210,11 +211,13 @@ export function trustedNodeCandidates(platform = process.platform, {
     ].filter(Boolean);
   }
   if (platform !== "win32") return [];
+  const userNodeRoot = trustedWindowsUserLocalDirectory(homeDirectory, "nodejs");
   return [
     "C:\\Program Files\\nodejs\\node.exe",
     "C:\\Program Files (x86)\\nodejs\\node.exe",
     trustedWindowsUserLocalExecutable(homeDirectory, "nodejs", "node.exe"),
     trustedWindowsUserWinGetLink(homeDirectory, "node.exe"),
+    ...trustedVersionedWindowsNodeCandidates(userNodeRoot, environment),
   ].filter(Boolean);
 }
 
@@ -235,8 +238,9 @@ export function resolveTrustedGitHubCliExecutable({
 export function resolveTrustedNodeExecutable({
   platform = process.platform,
   homeDirectory = currentAccountHomeDirectory(),
+  environment = process.env,
 } = {}) {
-  return resolveTrustedExecutable(trustedNodeCandidates(platform, { homeDirectory }));
+  return resolveTrustedExecutable(trustedNodeCandidates(platform, { homeDirectory, environment }));
 }
 
 function resolveTrustedExecutable(candidates) {
@@ -258,8 +262,32 @@ function trustedPosixUserLocalExecutable(homeDirectory, executable) {
 }
 
 function trustedWindowsUserLocalExecutable(homeDirectory, ...parts) {
+  const parent = trustedWindowsUserLocalDirectory(homeDirectory, ...parts.slice(0, -1));
+  return parent ? win32.join(parent, parts.at(-1)) : null;
+}
+
+function trustedWindowsUserLocalDirectory(homeDirectory, ...parts) {
   if (!safeHomeDirectory(homeDirectory) || !win32.isAbsolute(homeDirectory)) return null;
   return win32.join(homeDirectory, "AppData", "Local", "Programs", ...parts);
+}
+
+function trustedVersionedWindowsNodeCandidates(nodeRoot, environment) {
+  const pathValue = environment?.PATH ?? environment?.Path;
+  if (!nodeRoot || typeof pathValue !== "string" || pathValue.trim() === "") return [];
+  const normalizedRoot = normalizeComparableCliPath(nodeRoot, "win32");
+  const directoryPattern = /^node-v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)-win-(?:x64|arm64)$/u;
+  const candidates = new Map();
+  for (const rawEntry of pathValue.split(";")) {
+    const trimmedEntry = rawEntry.trim();
+    const directory = trimmedEntry.startsWith("\"") && trimmedEntry.endsWith("\"")
+      ? trimmedEntry.slice(1, -1).trim()
+      : trimmedEntry;
+    if (!win32.isAbsolute(directory) || !directoryPattern.test(win32.basename(directory))) continue;
+    if (normalizeComparableCliPath(win32.dirname(directory), "win32") !== normalizedRoot) continue;
+    const executable = win32.join(directory, "node.exe");
+    candidates.set(normalizeComparableCliPath(executable, "win32"), executable);
+  }
+  return [...candidates.values()];
 }
 
 function trustedWindowsUserWinGetLink(homeDirectory, executable) {
