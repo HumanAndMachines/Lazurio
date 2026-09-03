@@ -55,6 +55,8 @@ function fixtureReport({
     homeDirectory: "/Users/example",
     resolveGit: () => "/usr/bin/git",
     resolveGitHubCli: () => null,
+    resolveNode: () => "/trusted/bin/node",
+    nodeCandidatePaths: () => ["/trusted/bin/node"],
     resolvePathCommand,
     runCommand: ({ executable }) => ({
       status: 0,

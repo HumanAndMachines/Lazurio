@@ -20,6 +20,7 @@ import {
   normalizeGitHubRepository,
   trustedGitCandidates,
   trustedGitHubCliCandidates,
+  trustedNodeCandidates,
 } from "./cli-provenance-lib.mjs";
 
 const cleanup = [];
@@ -263,6 +264,9 @@ test("portable Windows paths and trusted executable candidates are deterministic
   expect(trustedGitHubCliCandidates("linux", {
     homeDirectory: "/home/fixture",
   })).toContain("/home/fixture/.local/bin/gh");
+  expect(trustedNodeCandidates("linux", {
+    homeDirectory: "/home/fixture",
+  })).toContain("/home/fixture/.local/bin/node");
   expect(trustedGitCandidates("linux", {
     homeDirectory: "relative-home",
   })).not.toContain("relative-home/.local/bin/git");
@@ -272,6 +276,15 @@ test("portable Windows paths and trusted executable candidates are deterministic
   })).toEqual([
     "C:\\Program Files\\GitHub CLI\\gh.exe",
     "C:\\Program Files (x86)\\GitHub CLI\\gh.exe",
+  ]);
+  expect(trustedNodeCandidates("darwin", {
+    homeDirectory: "relative-home",
+  })).not.toContain("relative-home/.local/bin/node");
+  expect(trustedNodeCandidates("win32", {
+    PATH: "C:\\Shadow",
+  })).toEqual([
+    "C:\\Program Files\\nodejs\\node.exe",
+    "C:\\Program Files (x86)\\nodejs\\node.exe",
   ]);
 });
 

@@ -8,9 +8,11 @@ import {
   LAZURIO_SOURCE_REPOSITORY,
   resolveTrustedGitExecutable,
   resolveTrustedGitHubCliExecutable,
+  resolveTrustedNodeExecutable,
   sanitizedGitEnvironment,
   trustedGitCandidates,
   trustedGitHubCliCandidates,
+  trustedNodeCandidates,
 } from "./cli-provenance-lib.mjs";
 import {
   classifyBunRuntime,
@@ -84,6 +86,8 @@ const reasonsByStep = Object.freeze({
     "node_runtime_compatible",
     "node_runtime_incompatible",
     "node_runtime_missing",
+    "node_runtime_not_on_path",
+    "node_path_identity_mismatch",
     "node_runtime_unusable",
     "probe_failed",
   ]),
@@ -114,8 +118,10 @@ export function inspectLazurioInstallation({
   homeDirectory = homedir(),
   resolveGit = resolveTrustedGitExecutable,
   resolveGitHubCli = resolveTrustedGitHubCliExecutable,
+  resolveNode = resolveTrustedNodeExecutable,
   gitCandidatePaths = trustedGitCandidates,
   githubCliCandidatePaths = trustedGitHubCliCandidates,
+  nodeCandidatePaths = trustedNodeCandidates,
   resolvePathCommand = resolveExecutableOnPath,
   sameExecutable = executablePathsMatch,
   runCommand = runCommandSync,
@@ -206,8 +212,15 @@ export function inspectLazurioInstallation({
     required_range: requiredNodeVersionRange,
   });
   steps.push(boundedProbe("node", () => {
+    const trustedExecutable = resolveNode({ platform, environment, homeDirectory });
     const pathExecutable = resolvePathCommand("node", { environment, platform, cwd: commandCwd });
-    if (!pathExecutable) return actionRequired("node_runtime_missing");
+    if (!pathExecutable) {
+      return actionRequired(trustedExecutable ? "node_runtime_not_on_path" : "node_runtime_missing");
+    }
+    const candidates = nodeCandidatePaths(platform, { homeDirectory });
+    if (!matchesTrustedExecutable(pathExecutable, trustedExecutable, candidates, sameExecutable, platform)) {
+      return actionRequired("node_path_identity_mismatch");
+    }
     const result = runCommand({
       executable: pathExecutable,
       args: ["--version"],

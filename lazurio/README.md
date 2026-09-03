@@ -31,8 +31,9 @@ dogfoodovat tutéž fasádu. Dnešní read-only slice Source Root nemigruje;
 budoucí Source → Managed přechod bude explicitní, samostatně gated operace
 stejného Install Core. Jiná cesta se tiše neadoptuje ani nepřesouvá. Společné Core
 postupně ověří platformu, exact Bun runtime z
-`package.json#packageManager`, dostupnost příkazů Bun, Git a GitHub CLI v
-`PATH`, přihlášení ke github.com
+`package.json#packageManager`, podporovaný Node.js rozsah z
+`package.json#engines.node`, ověřenou identitu příkazů Bun, Git, GitHub CLI a
+Node.js v `PATH`, přihlášení ke github.com
 a tvar Rootu; chyba jednoho probe nezastaví nezávislé kontroly a výstup nikdy
 neobsahuje stdout ani stderr externího nástroje. JSON zůstává locale-neutral,
 český a anglický terminálový report jsou jen dva rendery stejného výsledku.
@@ -44,8 +45,10 @@ nedostane neotestovaný runtime jen proto, že vyšel. První read-only installe
 Bun sám nemění. Agent nejdřív zjistí způsob instalace, vyžádá souhlas
 s externí změnou a použije standardní upstream postup; `lazurio update`
 runtime nikdy potichu nepřepisuje. Stejně tak Install Core odliší
-`bun_runtime_not_on_path`, `git_not_on_path` a `github_cli_not_on_path` od
-chybějící instalace. Instalační Agent s explicitním mandátem opraví pouze
+`bun_runtime_not_on_path`, `git_not_on_path`, `github_cli_not_on_path` a
+`node_runtime_not_on_path` od chybějící instalace. Dřívější stínující příkaz
+Node.js vrací `node_path_identity_mismatch` a před ověřením se nespouští.
+Instalační Agent s explicitním mandátem opraví pouze
 uživatelský PATH a výsledek prokáže v novém čistém procesu; Organization
 materializace ani běžný update tuto machine autoritu nepřebírají.
 

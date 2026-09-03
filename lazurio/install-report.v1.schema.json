@@ -118,7 +118,7 @@
           "properties": {
             "id": { "const": "node" },
             "status": { "enum": ["completed", "skipped", "action_required", "failed"] },
-            "reason": { "enum": ["node_runtime_compatible", "node_runtime_incompatible", "node_runtime_missing", "node_runtime_unusable", "probe_failed"] }
+            "reason": { "enum": ["node_runtime_compatible", "node_runtime_incompatible", "node_runtime_missing", "node_runtime_not_on_path", "node_path_identity_mismatch", "node_runtime_unusable", "probe_failed"] }
           },
           "additionalProperties": false
         },
@@ -185,6 +185,8 @@
               "node_runtime_compatible",
               "node_runtime_incompatible",
               "node_runtime_missing",
+              "node_runtime_not_on_path",
+              "node_path_identity_mismatch",
               "node_runtime_unusable",
               "github_authenticated",
               "github_login_required",

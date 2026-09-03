@@ -63,8 +63,10 @@ import {
 } from "../core/toolchain-lib.mjs";
 import {
   resolveTrustedGitHubCliExecutable,
+  resolveTrustedNodeExecutable,
   trustedGitCandidates,
   trustedGitHubCliCandidates,
+  trustedNodeCandidates,
 } from "../core/cli-provenance-lib.mjs";
 import { sanitizedGitHubEnvironment } from "../core/github-provider-lib.mjs";
 import {
@@ -2049,12 +2051,14 @@ function platformChecks(companiesRoot) {
   const bunExecutable = resolveBunExecutable();
   const gitExecutable = resolveGitExecutableSync();
   const githubCliExecutable = resolveTrustedGitHubCliExecutable();
+  const nodeExecutable = resolveTrustedNodeExecutable();
   const bunOnPath = resolveExecutableOnPath("bun");
   const gitOnPath = resolveExecutableOnPath("git");
   const githubCliOnPath = resolveExecutableOnPath("gh");
   const nodeOnPath = resolveExecutableOnPath("node");
   const gitTrustedCandidates = trustedGitCandidates();
   const githubCliTrustedCandidates = trustedGitHubCliCandidates();
+  const nodeTrustedCandidates = trustedNodeCandidates();
   const githubCliPathIsTrusted = matchesTrustedPath(
     githubCliOnPath,
     githubCliExecutable,
@@ -2123,6 +2127,8 @@ function platformChecks(companiesRoot) {
     nodeRuntimeCheck({
       companiesRoot,
       command: nodeOnPath,
+      trustedExecutable: nodeExecutable,
+      trustedCandidates: nodeTrustedCandidates,
     }),
     codexRuntimeCheck({ companiesRoot }),
   ];
@@ -2343,28 +2349,24 @@ export function bunRuntimeCheck({
 export function nodeRuntimeCheck({
   companiesRoot,
   command = resolveExecutableOnPath("node"),
+  trustedExecutable = resolveTrustedNodeExecutable(),
+  trustedCandidates = trustedNodeCandidates(),
   requiredRange = readRequiredNodeVersionRange({ root: join(import.meta.dirname, "..") }),
   run = runCommand,
 } = {}) {
-  const result = command
-    ? run(command, ["--version"], { cwd: companiesRoot })
-    : {
-        ok: false,
-        exitCode: null,
-        stdout: "",
-        stderr: "",
-        error: "Node.js executable nebyl nalezen v PATH.",
-      };
-  const currentVersion = result.ok ? nodeVersionFromOutput(result.stdout) : null;
-  if (!currentVersion) {
+  const trustedPath = matchesTrustedPath(command, trustedExecutable, trustedCandidates);
+  if (!trustedPath) {
+    const message = command
+      ? "Příkaz node v PATH není ověřená instalace Node.js."
+      : trustedExecutable
+        ? "Node.js je nainstalovaný, ale příkaz node není dostupný v PATH nového procesu."
+        : "Příkaz node není dostupný v PATH nového procesu.";
     return {
       id: "platform.node",
       status: "fail",
       severity: "required",
       title: "Node.js",
-      message: command
-        ? "Příkaz node je v PATH, ale jeho stabilní verzi se nepodařilo ověřit."
-        : "Příkaz node není dostupný v PATH nového procesu.",
+      message,
       paths: ["lazurio/package.json"],
       links: [{
         label: "Oficiální Node.js LTS",
@@ -2373,6 +2375,30 @@ export function nodeRuntimeCheck({
       }],
       details: [
         `command: ${command ?? "<missing>"} --version`,
+        `trusted_command: ${trustedExecutable ?? "<missing>"}`,
+        `required: ${requiredRange}`,
+      ],
+    };
+  }
+
+  const result = run(command, ["--version"], { cwd: companiesRoot });
+  const currentVersion = result.ok ? nodeVersionFromOutput(result.stdout) : null;
+  if (!currentVersion) {
+    return {
+      id: "platform.node",
+      status: "fail",
+      severity: "required",
+      title: "Node.js",
+      message: "Příkaz node je v PATH, ale jeho stabilní verzi se nepodařilo ověřit.",
+      paths: ["lazurio/package.json"],
+      links: [{
+        label: "Oficiální Node.js LTS",
+        kind: "external",
+        url: "https://nodejs.org/en/download",
+      }],
+      details: [
+        `command: ${command} --version`,
+        `trusted_command: ${trustedExecutable ?? "<missing>"}`,
         `required: ${requiredRange}`,
         result.stderr || result.error || "Příkaz nevrátil stabilní Node.js verzi.",
       ],
@@ -2402,6 +2428,7 @@ export function nodeRuntimeCheck({
         }],
     details: [
       `command: ${command} --version`,
+      `trusted_command: ${trustedExecutable ?? "<missing>"}`,
       `current: ${runtime.current_version}`,
       `required: ${runtime.required_range}`,
     ],

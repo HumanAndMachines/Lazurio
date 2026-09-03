@@ -9,7 +9,7 @@ import schema from "../install-report.v1.schema.json";
 import {
   canonicalLazurioRoot,
   INSTALL_STEP_IDS,
-  inspectLazurioInstallation,
+  inspectLazurioInstallation as inspectLazurioInstallationCore,
   installExitCode,
   installReasonCodes,
   isValidLazurioInstallReport,
@@ -17,6 +17,18 @@ import {
 import { resolveTrustedGitExecutable } from "./cli-provenance-lib.mjs";
 
 const tempRoots = [];
+
+function inspectLazurioInstallation(options) {
+  return inspectLazurioInstallationCore({
+    resolveNode: ({ platform }) => (
+      platform === "win32" ? "C:\\Tools\\node.exe" : "/trusted/bin/node"
+    ),
+    nodeCandidatePaths: (platform) => (
+      platform === "win32" ? ["C:\\Tools\\node.exe"] : ["/trusted/bin/node"]
+    ),
+    ...options,
+  });
+}
 
 afterAll(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })));
@@ -456,8 +468,8 @@ test("user-local Git and GitHub CLI remain trusted when an earlier system candid
   expect(executed).toContain("/home/fixture/.local/bin/gh");
 });
 
-test("Node.js gate distinguishes missing, unsupported, unusable and supported runtimes", () => {
-  const observe = ({ nodePath, nodeResult }) => inspectLazurioInstallation({
+test("Node.js gate distinguishes missing, PATH drift, shadow, unsupported, unusable and supported runtimes", () => {
+  const observe = ({ nodePath, nodeResult, trustedNode = nodePath }) => inspectLazurioInstallation({
     root: null,
     platform: "linux",
     architecture: "x64",
@@ -466,6 +478,8 @@ test("Node.js gate distinguishes missing, unsupported, unusable and supported ru
     homeDirectory: "/home/fixture",
     resolveGit: () => "/usr/bin/git",
     resolveGitHubCli: () => null,
+    resolveNode: () => trustedNode,
+    nodeCandidatePaths: () => ["/trusted/bin/node"],
     resolvePathCommand: (command) => (
       command === "node" ? nodePath : fixturePathCommand(command, { platform: "linux" })
     ),
@@ -481,6 +495,18 @@ test("Node.js gate distinguishes missing, unsupported, unusable and supported ru
 
   expect(observe({ nodePath: null, nodeResult: null }).steps.find((step) => step.id === "node"))
     .toMatchObject({ status: "action_required", reason: "node_runtime_missing" });
+  expect(observe({
+    nodePath: null,
+    nodeResult: null,
+    trustedNode: "/trusted/bin/node",
+  }).steps.find((step) => step.id === "node"))
+    .toMatchObject({ status: "action_required", reason: "node_runtime_not_on_path" });
+  expect(observe({
+    nodePath: "/tmp/shadow/node",
+    nodeResult: { status: 0, stdout: "v26.5.0" },
+    trustedNode: "/trusted/bin/node",
+  }).steps.find((step) => step.id === "node"))
+    .toMatchObject({ status: "action_required", reason: "node_path_identity_mismatch" });
   expect(observe({
     nodePath: "/trusted/bin/node",
     nodeResult: { status: 0, stdout: "v22.11.0" },

@@ -36,24 +36,32 @@ test("Node.js Doctor shares the Install Core version authority", () => {
   const supportedLts = nodeRuntimeCheck({
     companiesRoot: "/fixture",
     command: "/trusted/node",
+    trustedExecutable: "/trusted/node",
+    trustedCandidates: ["/trusted/node"],
     requiredRange: ">=22.12.0",
     run: () => ({ ok: true, stdout: "v24.19.0", stderr: "" }),
   });
   const supportedCurrent = nodeRuntimeCheck({
     companiesRoot: "/fixture",
     command: "/trusted/node",
+    trustedExecutable: "/trusted/node",
+    trustedCandidates: ["/trusted/node"],
     requiredRange: ">=22.12.0",
     run: () => ({ ok: true, stdout: "v26.5.0", stderr: "" }),
   });
   const incompatible = nodeRuntimeCheck({
     companiesRoot: "/fixture",
     command: "/trusted/node",
+    trustedExecutable: "/trusted/node",
+    trustedCandidates: ["/trusted/node"],
     requiredRange: ">=22.12.0",
     run: () => ({ ok: true, stdout: "v22.11.0", stderr: "" }),
   });
   const missing = nodeRuntimeCheck({
     companiesRoot: "/fixture",
     command: null,
+    trustedExecutable: null,
+    trustedCandidates: ["/trusted/node"],
     requiredRange: ">=22.12.0",
     run: () => {
       throw new Error("missing Node.js must not execute");
@@ -67,6 +75,32 @@ test("Node.js Doctor shares the Install Core version authority", () => {
   expect(missing).toMatchObject({ id: "platform.node", status: "fail" });
   expect(missing.message).toContain("není dostupný");
   expect(missing.links[0]?.url).toBe("https://nodejs.org/en/download");
+
+  const installedButNotOnPath = nodeRuntimeCheck({
+    companiesRoot: "/fixture",
+    command: null,
+    trustedExecutable: "/trusted/node",
+    trustedCandidates: ["/trusted/node"],
+    requiredRange: ">=22.12.0",
+    run: () => {
+      throw new Error("Node.js outside PATH must not execute");
+    },
+  });
+  expect(installedButNotOnPath).toMatchObject({ id: "platform.node", status: "fail" });
+  expect(installedButNotOnPath.message).toContain("nainstalovaný");
+
+  const shadowed = nodeRuntimeCheck({
+    companiesRoot: "/fixture",
+    command: "/tmp/shadow/node",
+    trustedExecutable: "/trusted/node",
+    trustedCandidates: ["/trusted/node"],
+    requiredRange: ">=22.12.0",
+    run: () => {
+      throw new Error("untrusted Node.js must not execute");
+    },
+  });
+  expect(shadowed).toMatchObject({ id: "platform.node", status: "fail" });
+  expect(shadowed.message).toContain("není ověřená");
 });
 
 test("Codex Doctor names the broken WinGet alias without accepting its target binary as ready", () => {

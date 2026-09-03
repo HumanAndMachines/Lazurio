@@ -183,6 +183,33 @@ export function trustedGitHubCliCandidates(platform = process.platform, {
   ];
 }
 
+export function trustedNodeCandidates(platform = process.platform, {
+  homeDirectory = homedir(),
+} = {}) {
+  if (platform === "darwin") {
+    return [
+      "/opt/homebrew/bin/node",
+      "/usr/local/bin/node",
+      "/usr/bin/node",
+      trustedPosixUserLocalExecutable(homeDirectory, "node"),
+    ].filter(Boolean);
+  }
+  if (platform === "linux") {
+    return [
+      "/usr/bin/node",
+      "/bin/node",
+      "/usr/local/bin/node",
+      "/home/linuxbrew/.linuxbrew/bin/node",
+      trustedPosixUserLocalExecutable(homeDirectory, "node"),
+    ].filter(Boolean);
+  }
+  if (platform !== "win32") return [];
+  return [
+    "C:\\Program Files\\nodejs\\node.exe",
+    "C:\\Program Files (x86)\\nodejs\\node.exe",
+  ];
+}
+
 export function resolveTrustedGitExecutable({
   platform = process.platform,
   homeDirectory = homedir(),
@@ -195,6 +222,13 @@ export function resolveTrustedGitHubCliExecutable({
   homeDirectory = homedir(),
 } = {}) {
   return resolveTrustedExecutable(trustedGitHubCliCandidates(platform, { homeDirectory }));
+}
+
+export function resolveTrustedNodeExecutable({
+  platform = process.platform,
+  homeDirectory = homedir(),
+} = {}) {
+  return resolveTrustedExecutable(trustedNodeCandidates(platform, { homeDirectory }));
 }
 
 function resolveTrustedExecutable(candidates) {
