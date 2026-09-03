@@ -207,6 +207,7 @@ export function trustedNodeCandidates(platform = process.platform, {
   return [
     "C:\\Program Files\\nodejs\\node.exe",
     "C:\\Program Files (x86)\\nodejs\\node.exe",
+    win32.join(homeDirectory, "AppData", "Local", "Programs", "nodejs", "node.exe"),
   ];
 }
 

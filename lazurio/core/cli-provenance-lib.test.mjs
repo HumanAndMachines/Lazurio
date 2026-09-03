@@ -282,9 +282,11 @@ test("portable Windows paths and trusted executable candidates are deterministic
   })).not.toContain("relative-home/.local/bin/node");
   expect(trustedNodeCandidates("win32", {
     PATH: "C:\\Shadow",
+    homeDirectory: "C:\\Users\\Matous",
   })).toEqual([
     "C:\\Program Files\\nodejs\\node.exe",
     "C:\\Program Files (x86)\\nodejs\\node.exe",
+    "C:\\Users\\Matous\\AppData\\Local\\Programs\\nodejs\\node.exe",
   ]);
 });
 
