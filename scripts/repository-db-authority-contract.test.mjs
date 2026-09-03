@@ -7,6 +7,22 @@ import { readMissionControlRepositoryDbAuthority } from "./repository-db-authori
 
 const cleanup = [];
 
+async function detectFileSymlinkSupport() {
+  const root = await mkdtemp(join(tmpdir(), "repository-db-symlink-probe-"));
+  try {
+    await writeFile(join(root, "target"), "probe\n");
+    await symlink(join(root, "target"), join(root, "link"));
+    return true;
+  } catch (error) {
+    if (error?.code === "EPERM" || error?.code === "EACCES") return false;
+    throw error;
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+const fileSymlinkTest = (await detectFileSymlinkSupport()) ? test : test.skip;
+
 afterEach(async () => {
   await Promise.all(cleanup.splice(0).map((path) => rm(path, { recursive: true, force: true })));
 });
@@ -42,7 +58,7 @@ describe("Mission Control repository-db authority", () => {
     expect(() => readMissionControlRepositoryDbAuthority(root)).toThrow("coexist");
   });
 
-  test("rejects a symlinked authority marker", async () => {
+  fileSymlinkTest("rejects a symlinked authority marker", async () => {
     const root = await fixture();
     const external = join(root, "external.yaml");
     await writeFile(external, canonicalConfig, "utf8");

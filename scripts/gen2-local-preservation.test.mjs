@@ -27,6 +27,23 @@ import {
 const scriptPath = fileURLToPath(new URL("./gen2-local-preservation.mjs", import.meta.url));
 const tempRoots = [];
 
+async function detectFileSymlinkSupport() {
+  const root = await mkdtemp(join(tmpdir(), "gen2-preservation-symlink-probe-"));
+  try {
+    await writeFile(join(root, "target"), "probe\n");
+    await symlink("target", join(root, "link"));
+    return true;
+  } catch (error) {
+    if (error?.code === "EPERM" || error?.code === "EACCES") return false;
+    throw error;
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+const fileSymlinkSupported = await detectFileSymlinkSupport();
+const fileSymlinkTest = fileSymlinkSupported ? test : test.skip;
+
 // The suite intentionally exercises real Git repositories, refs, stashes,
 // fsck and filesystem metadata. Five seconds is not a meaningful failure
 // boundary under CI or concurrent local load, especially on Windows.
@@ -82,7 +99,11 @@ async function makeSource(root, name = "source") {
   await mkdir(join(source, "data"), { recursive: true });
   await writeFile(join(source, "data", "customer.txt"), "customer data\n", { mode: 0o640 });
   await writeFile(join(source, ".ignored-secret"), "fixture-secret-value\n", { mode: 0o600 });
-  await symlink("data/customer.txt", join(source, "customer-link"));
+  if (fileSymlinkSupported) {
+    await symlink("data/customer.txt", join(source, "customer-link"));
+  } else {
+    await writeFile(join(source, "customer-link"), "portable fixture fallback\n");
+  }
   return source;
 }
 
@@ -308,7 +329,7 @@ describe("fail-closed preflight", () => {
     expect(result.stderr).toContain("organizations");
   });
 
-  test("refuses a destination that escapes personalspace through a symlinked parent", async () => {
+  fileSymlinkTest("refuses a destination that escapes personalspace through a symlinked parent", async () => {
     const root = await makeTempRoot();
     const source = await makeSource(root);
     const personalspaceRoot = join(root, "personalspace");
@@ -322,7 +343,7 @@ describe("fail-closed preflight", () => {
     expect(result.stderr).toContain("destination must stay under the explicit personalspace root");
   });
 
-  test("refuses a resolved personalspace root inside an organizations boundary", async () => {
+  fileSymlinkTest("refuses a resolved personalspace root inside an organizations boundary", async () => {
     const root = await makeTempRoot();
     const source = await makeSource(root);
     const organizationsRoot = join(root, "organizations", "PrivateOrg_GEN3");
@@ -349,7 +370,7 @@ describe("fail-closed preflight", () => {
     expect(result.stderr).toContain("external gitdir");
   });
 
-  test("refuses an absolute symlink outside rebuildable caches before creating destination", async () => {
+  fileSymlinkTest("refuses an absolute symlink outside rebuildable caches before creating destination", async () => {
     const root = await makeTempRoot();
     const source = await makeSource(root);
     await symlink(join(source, "data", "customer.txt"), join(source, "absolute-user-link"));
@@ -362,7 +383,7 @@ describe("fail-closed preflight", () => {
     await expect(lstat(destination)).rejects.toThrow();
   });
 
-  test("refuses a user-data symlink whose transitive chain crosses a non-portable cache link", async () => {
+  fileSymlinkTest("refuses a user-data symlink whose transitive chain crosses a non-portable cache link", async () => {
     const root = await makeTempRoot();
     const source = await makeSource(root);
     await mkdir(join(source, "node_modules"));

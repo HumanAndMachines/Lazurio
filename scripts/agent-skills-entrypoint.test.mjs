@@ -12,6 +12,22 @@ import {
 
 const tempRoots = [];
 
+async function detectFileSymlinkSupport() {
+  const root = await mkdtemp(join(tmpdir(), "agent-skills-symlink-probe-"));
+  try {
+    await writeFile(join(root, "target"), "probe\n");
+    await symlink(join(root, "target"), join(root, "link"));
+    return true;
+  } catch (error) {
+    if (error?.code === "EPERM" || error?.code === "EACCES") return false;
+    throw error;
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+const fileSymlinkTest = (await detectFileSymlinkSupport()) ? test : test.skip;
+
 afterEach(async () => {
   await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
@@ -167,7 +183,7 @@ test("slug s traversal cestou v manifestu je blocked manifest_invalid", async ()
   expect(state.code).toBe("manifest_invalid");
 });
 
-test("symlink v kanonickém katalogu: repair failuje zavřeně a nic nekopíruje", async () => {
+fileSymlinkTest("symlink v kanonickém katalogu: repair failuje zavřeně a nic nekopíruje", async () => {
   const root = await rootFixture("canonical-symlink");
   const outside = await mkdtemp(join(tmpdir(), "canonical-outside-"));
   tempRoots.push(outside);
