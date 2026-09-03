@@ -536,6 +536,7 @@ export const cs = Object.freeze({
   "detail.foreignCopy.message": "Můžete ji bezpečně otevřít. Launchpad ji ale nebude spouštět ani zastavovat, aby nepoškodil práci otevřenou jinde.",
   "detail.outgoing.title": "{changes} čeká na odeslání",
   "detail.outgoing.one": "Je uložená na tomto počítači. Ostatní ji zatím nevidí.",
+  "detail.outgoing.few": "Jsou uložené na tomto počítači. Ostatní je zatím nevidí.",
   "detail.outgoing.other": "Jsou uložené na tomto počítači. Ostatní je zatím nevidí.",
   "detail.draft.title": "Rozpracované změny",
   "detail.draft.message": "{changes} je zatím jen na tomto počítači.",
