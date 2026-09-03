@@ -90,8 +90,10 @@ Tato aktivace je provider-side owner gate, ne krok na každé pracovní mašině
 Builder ji neopakuje a nepotřebuje `admin:org`: installations endpoint je pro
 něj záměrně nepozorovatelný a GitHub může hranici vrátit jako HTTP 403 i skryté
 404. Taková odpověď nedokazuje chybějící App ani rozbitý transport. Builder
-materializuje už aktivní Organizaci přes `lazurio organization install`, které
-ověřuje jeho vlastní read access k rootu a Modulům.
+materializuje už aktivní Organizaci přes
+`lazurio organization install <github-login> --role builder`. Vedle read
+přístupu tím před klonem prokáže i vlastní aktivní Organization a Team
+membership a WRITE nebo vyšší oprávnění k Builder repozitářům.
 
 ## Předpoklady
 
@@ -108,6 +110,14 @@ ověřuje jeho vlastní read access k rootu a Modulům.
 Příkaz je local-only. Nikdy nevytváří nebo nemění GitHub repo, GitHub App grant,
 Team membership, branch rules, visibility, port ani commit. K založení remote
 Organization slouží oddělený explicitní activation postup.
+
+Interní Team slug není autorizační identita. Organization manifest jej pro
+Builder gate mapuje přes `teams[].forge_binding` na
+`lazurio.team-forge-binding.github.v0`, neměnné GitHub Team `id` a jeho
+`asserted_slug`. Chybějící nebo přejmenovaná vazba je owner blocker, ne důvod
+hádat Team podle display name. Kontrolují se Organization root a aktivní sloty
+určené Builderovi; `planned_slot` a restricted/Admin-only sloty se záměrně
+nezařazují.
 
 ## Toolchain gate před Organization scope
 
@@ -254,7 +264,8 @@ Instalační prompt pro novou Builder Mašinu musí tuto hranici uvést výslovn
   na právě ověřený GitHub účet jen tehdy, když prompt obsahuje explicitní
   svolení k této přesné změně přístupu;
 - po přihlášení nebo opravě klíče vždy ověř exact root pomocí `git ls-remote`
-  a teprve potom spusť `lazurio organization install`.
+  a teprve potom spusť
+  `lazurio organization install <github-login> --role builder`.
 
 Chce-li Principál bez dalšího přerušení autorizovat SSH bootstrap, prompt má
 říct: „Pokud pro tento účet chybí použitelný SSH klíč, máš svolení vytvořit na
@@ -265,8 +276,8 @@ klíč nikdy nevypisuj ani nekopíruj mimo standardní SSH custody této Mašiny
 ## Konvergentní postup
 
 ```sh
-lazurio organization install <github-login> --json
-lazurio organization install <github-login> --json
+lazurio organization install <github-login> --role builder --json
+lazurio organization install <github-login> --role builder --json
 lazurio doctor
 ```
 
@@ -277,8 +288,9 @@ ověření, dokud současně neplatí:
 2. `lazurio doctor --tool-updates --json` nemá žádný required `fail`,
    `blocked` ani `incomplete`; chybějící nebo nečitelná verze povinného Gitu,
    GitHub CLI či Codexu není warning, ale nedokončená instalace;
-3. `lazurio organization install <github-login> --json` je `current` nebo
-   bezpečně `updated` a exact SSH root probe prošel;
+3. `lazurio organization install <github-login> --role builder --json` je
+   `current` nebo bezpečně `updated`, `access.status` je `ready` a exact SSH
+   root probe prošel;
 4. finální `lazurio doctor` je zelený včetně všech deklarovaných podřízených
    doctorů.
 

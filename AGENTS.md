@@ -325,7 +325,11 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    `lazurio doctor`, dokud nezmizí všechny required `fail`, `blocked` a
    `incomplete` stavy. Doporučené warningy buď opraví v mandátu, nebo jim v
    handoffu dá explicitní disposition; required nález nevydává za hotovou
-   instalaci. Nový GitHub účet páruje jednou přes
+   instalaci. Na Builder Mašině používá exact Organization gate
+   `lazurio organization install <github-login> --role builder --json`, který
+   read-only ověří čerstvé Organization/Team membership a WRITE capability na
+   aktivních Builder repozitářích; `planned_slot` ani restricted Admin-only
+   repo Buildera neblokuje. Nový GitHub účet páruje jednou přes
    `gh auth login --hostname github.com --git-protocol ssh --web`, po souhlasu
    nechá tentýž flow vytvořit nebo nahrát veřejnou část SSH klíče a výsledek
    dokáže exact `git ls-remote` cílového root repa. Device kód, token ani

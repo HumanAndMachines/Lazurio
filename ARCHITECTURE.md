@@ -97,6 +97,12 @@ profil a infrastruktura daného Ownera a provideru.
 Lazurio tato oprávnění nekopíruje do druhého interního IAM. Lokální přítomnost
 checkoutu také sama nedokazuje přístup u poskytovatele.
 
+Manifest interní Team pouze váže na neměnné ID odpovídajícího GitHub Teamu;
+oprávnění z něj nevzniká. Builder readiness je explicitní čerstvý readback
+GitHub účtu, Organization a Team membership a efektivního i Teamového grantu
+na přesných aktivních Builder repozitářích. Běžný offline Doctor tento síťový
+provider gate nepředstírá.
+
 ### 3. Resident a Agent jsou různé identity
 
 Resident má dlouhodobý vztah, paměť a mandát. Agent dostane konkrétní úkol,

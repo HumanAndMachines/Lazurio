@@ -10,6 +10,12 @@ import {
   readGitHubRepositoryJsonDocument,
   runTrustedGitHubCliSync,
 } from "./core/github-provider-lib.mjs";
+import {
+  githubBuilderReadinessNotRequested,
+  githubBuilderReadinessUnavailable,
+  isValidGitHubBuilderReadiness,
+  observeGitHubBuilderReadiness,
+} from "./core/github-builder-readiness-lib.mjs";
 import { resolveTrustedGitHubCliExecutable } from "./core/cli-provenance-lib.mjs";
 import { resolveOrganizationRootDocuments } from "./core/organization-activation-lib.mjs";
 import { readOrganizationRoot } from "./core/organization-root-reader-lib.mjs";
@@ -37,6 +43,7 @@ const githubLoginPattern = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/u;
 export async function installOrganization({
   rootPath,
   githubLogin,
+  role = null,
   expectedOrganizationId = null,
   platform = process.platform,
   environment = process.env,
@@ -44,6 +51,7 @@ export async function installOrganization({
 } = {}) {
   if (!rootPath) throw new TypeError("Organization install requires a Lazurio Root.");
   const locator = normalizeGitHubLogin(githubLogin);
+  const requestedRole = normalizeOptionalInstallRole(role);
   const expectedId = normalizeOptionalOrganizationId(expectedOrganizationId);
   const absoluteRoot = resolve(rootPath);
   const observe = deps.observe ?? observeOrganizationInstallSource;
@@ -58,23 +66,39 @@ export async function installOrganization({
     return blockedReport({
       rootPath: absoluteRoot,
       locator,
+      role: requestedRole,
       root: rootOutcome("blocked", localRoot.code, `organizations/${locator}_GEN3`, localRoot.message),
     });
   }
 
   const source = await observe({
     githubLogin: locator,
+    role: requestedRole,
     expectedOrganizationId: expectedId,
     platform,
     environment,
     resolveGitHubCli: deps.resolveGitHubCli,
     runGitHubCli: deps.runGitHubCli,
   });
-  if (!source.ok) return blockedReport({ rootPath: absoluteRoot, locator, source });
+  if (!source.ok) return blockedReport({ rootPath: absoluteRoot, locator, role: requestedRole, source });
+  if (requestedRole === "builder" && source.access?.status !== "ready") {
+    return blockedReport({
+      rootPath: absoluteRoot,
+      locator,
+      role: requestedRole,
+      source: {
+        ...source,
+        ok: false,
+        code: "builder_access_not_ready",
+        message: "GitHub účet nesplňuje deklarovaný Builder access kontrakt.",
+      },
+    });
+  }
   if (expectedId !== null && source.organization.id !== expectedId) {
     return blockedReport({
       rootPath: absoluteRoot,
       locator,
+      role: requestedRole,
       source,
       root: rootOutcome(
         "blocked",
@@ -97,6 +121,7 @@ export async function installOrganization({
     return blockedReport({
       rootPath: absoluteRoot,
       locator,
+      role: requestedRole,
       source,
       root: rootOutcome(
         "blocked",
@@ -113,6 +138,7 @@ export async function installOrganization({
       return blockedReport({
         rootPath: absoluteRoot,
         locator,
+        role: requestedRole,
         source,
         root: rootOutcome("blocked", "root_target_unsafe", organizationPath),
       });
@@ -126,6 +152,7 @@ export async function installOrganization({
       return blockedReport({
         rootPath: absoluteRoot,
         locator,
+        role: requestedRole,
         source,
         root: rootOutcome("blocked", verification.code, organizationPath, verification.message),
       });
@@ -141,6 +168,7 @@ export async function installOrganization({
       return blockedReport({
         rootPath: absoluteRoot,
         locator,
+        role: requestedRole,
         source,
         root: rootOutcome("blocked", identity.code, organizationPath, identity.message),
       });
@@ -174,6 +202,7 @@ export async function installOrganization({
         rootPath: absoluteRoot,
         locator,
         source,
+        role: requestedRole,
         root: rootOutcome(
           "blocked",
           materialized.code ?? "root_materialization_failed",
@@ -211,6 +240,7 @@ export async function installOrganization({
     ok: state !== "blocked",
     root: absoluteRoot,
     organization: organizationIdentity(source, locator),
+    access: source.access ?? githubBuilderReadinessNotRequested(),
     target: rootResult,
     convergence,
   });
@@ -615,6 +645,7 @@ function appendConvergenceResults(convergence, additions) {
 
 export function observeOrganizationInstallSource({
   githubLogin,
+  role = null,
   expectedOrganizationId = null,
   platform = process.platform,
   environment = process.env,
@@ -622,6 +653,7 @@ export function observeOrganizationInstallSource({
   runGitHubCli = runTrustedGitHubCliSync,
 } = {}) {
   const locator = normalizeGitHubLogin(githubLogin);
+  const requestedRole = normalizeOptionalInstallRole(role);
   const expectedId = normalizeOptionalOrganizationId(expectedOrganizationId);
   const provider = createTrustedGitHubProvider({
     platform,
@@ -660,7 +692,26 @@ export function observeOrganizationInstallSource({
   if (!documents.ok) return documents;
   const rootVerification = verifyOrganizationRootDocuments({ documents, organization, repository });
   if (!rootVerification.ok) return rootVerification;
-  return freeze({ ok: true, organization, repository, documents });
+  const access = requestedRole === "builder"
+    ? observeGitHubBuilderReadiness({
+        provider,
+        organization,
+        rootRepository: repository,
+        resource: rootVerification.resource,
+      })
+    : githubBuilderReadinessNotRequested();
+  if (access.status === "blocked") {
+    return freeze({
+      ok: false,
+      code: "builder_access_not_ready",
+      message: "GitHub účet nesplňuje deklarovaný Builder access kontrakt.",
+      organization,
+      repository,
+      documents,
+      access,
+    });
+  }
+  return freeze({ ok: true, organization, repository, documents, access });
 }
 
 export function observeOrganizationInstallIdentity({
@@ -751,6 +802,7 @@ export function isValidOrganizationInstallReport(report) {
     && typeof report.root === "string"
     && report.organization
     && typeof report.organization.locator === "string"
+    && isValidGitHubBuilderReadiness(report.access)
     && report.target
     && ORGANIZATION_INSTALL_STATES.includes(report.target.state)
     && typeof report.target.reason === "string"
@@ -767,8 +819,16 @@ export function renderHumanOrganizationInstall(report) {
   const lines = [
     `Lazurio Organization install: ${report.state}`,
     `Organization: ${report.organization.login ?? report.organization.locator}${report.organization.id ? ` · ID ${report.organization.id}` : ""}`,
+    `Access: ${report.access.status}${report.access.role ? ` · role ${report.access.role}` : ""}`,
     `Root: ${report.target.state} — ${report.target.reason} (${report.target.path})`,
   ];
+  if (report.access.account) lines.push(`  GitHub account: ${report.access.account.login} · ID ${report.access.account.id}`);
+  for (const team of report.access.teams) {
+    lines.push(`  Team ${team.internal_slug}: ${team.github_team_slug ?? "unbound"} · membership ${team.membership}`);
+  }
+  for (const blocker of report.access.blockers) {
+    lines.push(`! ${blocker.message}`);
+  }
   if (report.target.message) lines.push(`  ${report.target.message}`);
   for (const result of report.convergence?.results ?? []) {
     const symbol = result.state === "blocked" ? "!" : result.state === "updated" ? "✓" : "·";
@@ -904,7 +964,7 @@ function verifyOrganizationRootDocuments({ documents, organization, repository }
       "Organization root manifesty neodpovídají immutable GitHub Organization a repository identitě.",
     );
   }
-  return { ok: true, company: documents.company, modules: documents.modules };
+  return { ok: true, company: documents.company, modules: documents.modules, resource: resolution.resource };
 }
 
 function organizationInventoryDescriptor({ source, organizationPath }) {
@@ -928,7 +988,7 @@ function organizationIdentity(source, locator) {
   };
 }
 
-function blockedReport({ rootPath, locator, source = null, root = null }) {
+function blockedReport({ rootPath, locator, role = null, source = null, root = null }) {
   const target = root ?? rootOutcome(
     "blocked",
     source?.code ?? "provider_observation_failed",
@@ -941,6 +1001,9 @@ function blockedReport({ rootPath, locator, source = null, root = null }) {
     ok: false,
     root: rootPath,
     organization: organizationIdentity(source, locator),
+    access: source?.access ?? (role === "builder"
+      ? githubBuilderReadinessUnavailable(source?.code, source?.message)
+      : githubBuilderReadinessNotRequested()),
     target,
     convergence: null,
   });
@@ -1009,6 +1072,14 @@ function normalizeOptionalOrganizationId(value) {
     throw new TypeError("Organization install expected immutable GitHub Organization ID must be positive.");
   }
   return id;
+}
+
+function normalizeOptionalInstallRole(value) {
+  if (value === null || value === undefined || value === "") return null;
+  if (value !== "builder") {
+    throw new TypeError("Organization install --role zatím podporuje pouze hodnotu builder.");
+  }
+  return value;
 }
 
 async function readJson(path, { optional = false } = {}) {

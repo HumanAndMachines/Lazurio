@@ -4,7 +4,7 @@
   "title": "Lazurio Organization install report v0",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "state", "ok", "root", "organization", "target", "convergence"],
+  "required": ["schema_version", "state", "ok", "root", "organization", "access", "target", "convergence"],
   "properties": {
     "schema_version": { "const": "lazurio.organization.install.v0" },
     "state": { "enum": ["current", "updated", "blocked"] },
@@ -20,6 +20,99 @@
         "login": { "type": ["string", "null"] },
         "repository_id": { "type": ["string", "null"] },
         "repository": { "type": ["string", "null"] }
+      }
+    },
+    "access": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authority", "role", "status", "account", "organization_membership", "teams", "repositories", "blockers"],
+      "properties": {
+        "authority": { "const": "github" },
+        "role": { "enum": [null, "builder"] },
+        "status": { "enum": ["not_requested", "ready", "blocked"] },
+        "account": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "login"],
+              "properties": {
+                "id": { "type": "string", "pattern": "^[1-9][0-9]{0,19}$" },
+                "login": { "type": "string", "minLength": 1 }
+              }
+            }
+          ]
+        },
+        "organization_membership": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["state", "role"],
+              "properties": {
+                "state": { "enum": ["active", "missing"] },
+                "role": { "type": ["string", "null"] }
+              }
+            }
+          ]
+        },
+        "teams": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["internal_slug", "github_team_id", "github_team_slug", "identity", "membership"],
+            "properties": {
+              "internal_slug": { "type": "string", "minLength": 1 },
+              "github_team_id": { "type": ["string", "null"] },
+              "github_team_slug": { "type": ["string", "null"] },
+              "identity": { "enum": ["verified", "mismatch", "not_evaluated"] },
+              "membership": { "enum": ["active", "missing", "not_evaluated"] }
+            }
+          }
+        },
+        "repositories": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["full_name", "repository_id", "effective_permission", "team_grants"],
+            "properties": {
+              "full_name": { "type": "string", "minLength": 3 },
+              "repository_id": { "type": ["string", "null"] },
+              "effective_permission": { "enum": ["none", "read", "triage", "write", "maintain", "admin", "unknown"] },
+              "team_grants": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["internal_team_slug", "github_team_slug", "permission"],
+                  "properties": {
+                    "internal_team_slug": { "type": "string", "minLength": 1 },
+                    "github_team_slug": { "type": ["string", "null"] },
+                    "permission": { "enum": ["none", "read", "triage", "write", "maintain", "admin", "not_evaluated"] }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "blockers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["reason", "team", "repository", "message"],
+            "properties": {
+              "reason": { "type": "string", "minLength": 1 },
+              "team": { "type": ["string", "null"] },
+              "repository": { "type": ["string", "null"] },
+              "message": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
       }
     },
     "target": {
