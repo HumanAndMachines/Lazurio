@@ -29,8 +29,10 @@ import {
 import { discoverLaunchpadApps } from "../../lazurio/runtime/discovery-lib.mjs";
 import { platformTestTimeout } from "./test-platform-setup.mjs";
 import { buildWorktreeIndex } from "../../lazurio/runtime/worktree-lib.mjs";
+import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.mjs";
 
 const tempRoots = [];
+const fileSymlinkTest = (await supportsFileSymlinks()) ? test : test.skip;
 // Windows záměrně neumí z vestavěného resolveru ověřit CWD cizího procesu,
 // takže adopted/foreign klasifikaci fail-closed drží jako unknown-port. Testy
 // pozitivní CWD adopce patří na OS, kde je skutečný process CWD čitelný.
@@ -3163,7 +3165,11 @@ test("refused clean Repair leaves the dependency boundary untouched and the app 
     join(externalDependencies, "fixture", "package.json"),
     JSON.stringify({ name: "fixture", version: "1.0.0" }),
   );
-  await symlink(externalDependencies, join(appRoot, "node_modules"), "dir");
+  await symlink(
+    externalDependencies,
+    join(appRoot, "node_modules"),
+    process.platform === "win32" ? "junction" : "dir",
+  );
   const runtime = createRuntimeManager({
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
@@ -3428,7 +3434,7 @@ test("runtime accepts an exact declared file dependency from the same Organizati
   });
 });
 
-test.skipIf(process.platform === "win32")("runtime blocks a local link farm whose executable payload escapes the Organization", async () => {
+fileSymlinkTest("runtime blocks a local link farm whose executable payload escapes the Organization [requires file symlink capability]", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({
     port,
@@ -3466,7 +3472,7 @@ test.skipIf(process.platform === "win32")("runtime blocks a local link farm whos
   });
 });
 
-test.skipIf(process.platform === "win32")("runtime reads package and selected lockfile only after exact checkout authority", async () => {
+fileSymlinkTest("runtime reads package and selected lockfile only after exact checkout authority [requires file symlink capability]", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({ port, writeLockfile: true });
   const appRoot = join(root, "organizations", "TestCompany", "modules", "demo", "app", "v1");
@@ -4071,7 +4077,7 @@ test("worktree Start materializes its explicit contract while main is still lega
   }
 }, platformTestTimeout(15_000));
 
-test.skipIf(process.platform === "win32")("worktree runtime reads package and Module manifests only inside the selected checkout", async () => {
+fileSymlinkTest("worktree runtime reads package and Module manifests only inside the selected checkout [requires file symlink capability]", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({ port });
   const { slug, worktreeRoot } = await createOwnedWorktreeFixture({

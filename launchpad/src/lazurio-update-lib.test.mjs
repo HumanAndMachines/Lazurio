@@ -30,8 +30,10 @@ import {
   projectLegacyOrganizationManifest,
 } from "../../lazurio/core/organization-activation-lib.mjs";
 import { readOrganizationRoot } from "../../lazurio/core/organization-root-reader-lib.mjs";
+import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.mjs";
 
 const cleanup = [];
+const fileSymlinkTest = (await supportsFileSymlinks()) ? test : test.skip;
 
 afterEach(async () => {
   await Promise.all(cleanup.splice(0).map((path) => rm(path, { recursive: true, force: true })));
@@ -521,7 +523,7 @@ test("dependency refresh runs only for an updated package root", async () => {
     .toBe(runGit(locked.working, ["rev-parse", "refs/remotes/origin/main"]));
 });
 
-test.skipIf(process.platform === "win32")("dependency refresh inspects package authority before reading or running lifecycle code", async () => {
+fileSymlinkTest("dependency refresh inspects package authority before reading or running lifecycle code [requires file symlink capability]", async () => {
   const fixture = await repositoryFixture("external-package-authority");
   await writeFile(join(fixture.sandbox, "foreign-package.json"), JSON.stringify({
     name: "foreign",
@@ -553,7 +555,7 @@ test.skipIf(process.platform === "win32")("dependency refresh inspects package a
   });
 });
 
-test.skipIf(process.platform === "win32")("dependency refresh rejects a broken Bun lockfile symlink instead of treating it as absent", async () => {
+fileSymlinkTest("dependency refresh rejects a broken Bun lockfile symlink instead of treating it as absent [requires file symlink capability]", async () => {
   const fixture = await repositoryFixture("broken-lockfile-authority");
   await writeFile(join(fixture.contributor, "package.json"), JSON.stringify({
     name: "fixture",
@@ -1582,7 +1584,7 @@ test("an updated Organization root refreshes an unchanged App that consumes its 
   });
 });
 
-test.skipIf(process.platform === "win32")("a changed nested repo invalidates a broken local target behind its symlinked parent", async () => {
+test("a changed nested repo invalidates a broken local target behind its symlinked parent", async () => {
   const root = await mkdtemp(join(tmpdir(), "lazurio-update-missing-symlink-parent-target-"));
   cleanup.push(root);
   const organizationRoot = join(root, "organizations", "TestCo");
@@ -1592,8 +1594,9 @@ test.skipIf(process.platform === "win32")("a changed nested repo invalidates a b
   await mkdir(appRoot, { recursive: true });
   await mkdir(join(organizationRoot, "launchpad"), { recursive: true });
   await mkdir(sharedRoot, { recursive: true });
-  await symlink(sharedRoot, join(organizationRoot, "launchpad", "contracts"), "dir");
-  await symlink(join(sharedRoot, "removed-v1"), join(sharedRoot, "v1"), "dir");
+  const directoryLinkType = process.platform === "win32" ? "junction" : "dir";
+  await symlink(sharedRoot, join(organizationRoot, "launchpad", "contracts"), directoryLinkType);
+  await symlink(join(sharedRoot, "removed-v1"), join(sharedRoot, "v1"), directoryLinkType);
   await writeJson(join(appRoot, "package.json"), {
     name: "test-pricebook",
     dependencies: { "@workspace-contracts/v1": "file:../../../../launchpad/contracts/v1" },

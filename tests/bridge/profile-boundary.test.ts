@@ -29,6 +29,9 @@ import { readProfileDirective } from "../../bridge/identity/address-block.ts";
 import { startupExitCode } from "../../bridge/run.ts";
 import { zulipConfigFromEnv } from "../../bridge/outbound/zulip.ts";
 import { createRuntimeReplyProvider } from "../../bridge/runtime-adapter/http-client.ts";
+import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.mjs";
+
+const fileSymlinkTest = (await supportsFileSymlinks()) ? test : test.skip;
 
 function tree(files: Record<string, string>): string {
   const root = mkdtempSync(join(tmpdir(), "buddy-profile-"));
@@ -62,7 +65,7 @@ describe("a real profile is accepted, and what is accepted is the RESOLVED path"
     const memory = tree({ "README.md": "# gbrain memory\n", "notes/day.md": "…\n" });
     const parent = mkdtempSync(join(tmpdir(), "buddy-space-"));
     const link = join(parent, "buddy");
-    symlinkSync(memory, link);
+    symlinkSync(memory, link, process.platform === "win32" ? "junction" : "dir");
     const verdict = inspectProfileMount(link);
     expect(verdict.ok).toBe(false);
     // The reason names the RESOLVED directory, not the pretty name.
@@ -102,10 +105,10 @@ describe("the refusals, each for a failure somebody actually made", () => {
     expect(verdict.reason).not.toContain("PRIVATE KEY");
   });
 
-  test("contract documents cannot be symlinks into a private store", () => {
+  fileSymlinkTest("contract documents cannot be symlinks into a private store [requires file symlink capability]", () => {
     const privateStore = tree({ "principal-memory.md": "private memory marker\n" });
     const dir = tree({ "MANDATES.md": "# Buddy standing mandates\n" });
-    symlinkSync(join(privateStore, "principal-memory.md"), join(dir, "CONSTITUTION.md"));
+    symlinkSync(join(privateStore, "principal-memory.md"), join(dir, "CONSTITUTION.md"), "file");
 
     const verdict = inspectProfileMount(dir);
     expect(verdict.ok).toBe(false);

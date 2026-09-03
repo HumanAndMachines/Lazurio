@@ -353,7 +353,7 @@ test("rejects an Organization authority whose canonical validator fails", async 
   });
 });
 
-test.skipIf(process.platform === "win32")(
+test(
   "rejects a symlink in an Organization authority path",
   async () => {
     const fixture = await createFixture({
@@ -391,7 +391,11 @@ test.skipIf(process.platform === "win32")(
         module_slots: [],
       }, null, 2)}\n`,
     );
-    await symlink(outside, join(organizationRoot, "mission-control"));
+    await symlink(
+      outside,
+      join(organizationRoot, "mission-control"),
+      process.platform === "win32" ? "junction" : "dir",
+    );
 
     const report = await auditRepository(fixture.root, {
       authorityRoot: fixture.authorityRoot,

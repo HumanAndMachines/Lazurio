@@ -152,7 +152,7 @@ test("Server lifetime lease refuses a symlinked locator directory", async () => 
   const external = await mkdtemp(join(tmpdir(), "lazurio-server-lifetime-lock-external-"));
   roots.push(root, external);
   const stateDirectory = join(root, "state");
-  await symlink(external, stateDirectory);
+  await symlink(external, stateDirectory, process.platform === "win32" ? "junction" : "dir");
 
   await expect(acquireServerLifetimeLock({
     stateDirectory,

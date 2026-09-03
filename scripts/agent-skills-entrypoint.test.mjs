@@ -170,13 +170,17 @@ test("slug s traversal cestou v manifestu je blocked manifest_invalid", async ()
   expect(state.code).toBe("manifest_invalid");
 });
 
-fileSymlinkTest("symlink v kanonickém katalogu: repair failuje zavřeně a nic nekopíruje", async () => {
+fileSymlinkTest("symlink v kanonickém katalogu: repair failuje zavřeně a nic nekopíruje [requires file symlink capability]", async () => {
   const root = await rootFixture("canonical-symlink");
   const outside = await mkdtemp(join(tmpdir(), "canonical-outside-"));
   tempRoots.push(outside);
   await writeFile(join(outside, "secret.md"), "tajný obsah\n");
   await rm(join(root, ".agents", "skills", "example-skill", "SKILL.md"));
-  await symlink(join(outside, "secret.md"), join(root, ".agents", "skills", "example-skill", "SKILL.md"));
+  await symlink(
+    join(outside, "secret.md"),
+    join(root, ".agents", "skills", "example-skill", "SKILL.md"),
+    "file",
+  );
 
   const state = await repairAgentSkillsMirror(root);
   expect(state.status).toBe("blocked");

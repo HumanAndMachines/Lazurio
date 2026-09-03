@@ -20,9 +20,11 @@ import {
   detectLazurioRoot,
   validateLazurioContext,
 } from "./lib.mjs";
+import { supportsFileSymlinks } from "../scripts/test-platform-capabilities.mjs";
 
 const tempRoots = [];
 const cliPath = join(import.meta.dirname, "cli.mjs");
+const fileSymlinkTest = (await supportsFileSymlinks()) ? test : test.skip;
 
 afterAll(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })));
@@ -713,8 +715,8 @@ test("mountpoint mimo portable schema abecedu degraduje před sestavením path",
   expect(await validateLazurioContext(context)).toEqual([]);
 });
 
-test.skipIf(process.platform === "win32")(
-  "symlinkovaný Personalspace manifest se nečte ani nevydá za lokální provenienci",
+fileSymlinkTest(
+  "symlinkovaný Personalspace manifest se nečte ani nevydá za lokální provenienci [requires file symlink capability]",
   async () => {
   const root = await tempRoot("lazurio-symlinked-personalspace-manifest-");
   await writeJson(join(root, "launchpad.gen3.json"), {
@@ -729,7 +731,7 @@ test.skipIf(process.platform === "win32")(
   await writeJson(outsideManifest, {
     owner: { github_username: "owner-login", display_name: "PRIVATE_LINK_CANARY" },
   });
-  await symlink(outsideManifest, join(mount, "personal.gen3.json"));
+  await symlink(outsideManifest, join(mount, "personal.gen3.json"), "file");
 
   const context = await buildLazurioContext({ root });
 
@@ -746,8 +748,8 @@ test.skipIf(process.platform === "win32")(
   },
 );
 
-test.skipIf(process.platform === "win32")(
-  "rootless režim nečte symlinkovaný manifest ani jeho Doctor deklaraci",
+fileSymlinkTest(
+  "rootless režim nečte symlinkovaný manifest ani jeho Doctor deklaraci [requires file symlink capability]",
   async () => {
     const root = await tempRoot("lazurio-rootless-symlinked-manifest-");
     const targetRoot = await tempRoot("lazurio-rootless-manifest-target-");
@@ -760,7 +762,7 @@ test.skipIf(process.platform === "win32")(
         scope_type: "personalspace",
       },
     });
-    await symlink(join(targetRoot, "personal.gen3.json"), join(root, "personal.gen3.json"));
+    await symlink(join(targetRoot, "personal.gen3.json"), join(root, "personal.gen3.json"), "file");
 
     const context = await buildLazurioContext({ root });
     const doctor = run([process.execPath, "run", cliPath, "doctor", "--json", "--root", root], root);

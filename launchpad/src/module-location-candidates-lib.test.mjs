@@ -67,7 +67,6 @@ test("inventory separates marker-authorized candidates from persistent Git suspe
 });
 
 test("symlinked mount container is never traversed and returns a boundary error", async () => {
-  if (process.platform === "win32") return;
   const sandbox = await mkdtemp(join(tmpdir(), "lazurio-candidates-boundary-"));
   cleanup.push(sandbox);
   const organizationRoot = join(sandbox, "organization");
@@ -75,7 +74,11 @@ test("symlinked mount container is never traversed and returns a boundary error"
   await mkdir(join(organizationRoot, "modules"), { recursive: true });
   await mkdir(join(outside, "studio", ".git"), { recursive: true });
   await writeFile(join(outside, "studio", "lazurio.module.json"), marker("studio", "TestCo"));
-  await symlink(outside, join(organizationRoot, "workspace"), "dir");
+  await symlink(
+    outside,
+    join(organizationRoot, "workspace"),
+    process.platform === "win32" ? "junction" : "dir",
+  );
 
   const inventory = await inspectOrganizationModuleCheckoutCandidates({
     organizationRoot,
@@ -367,12 +370,15 @@ test("an exact stable-slug symlink remains a persistent no-clone suspect", async
 });
 
 test("a symlink at the canonical target is an ambiguity collision even when it aliases the old checkout", async () => {
-  if (process.platform === "win32") return;
   const organizationRoot = await fixtureRoot("target-symlink");
   const oldCheckout = join(organizationRoot, "workspace", "legacy-name");
   await mkdir(oldCheckout, { recursive: true });
   await writeFile(join(oldCheckout, "lazurio.module.json"), marker("studio", "TestCo"));
-  await symlink(oldCheckout, join(organizationRoot, "workspace", "studio-v2"), "dir");
+  await symlink(
+    oldCheckout,
+    join(organizationRoot, "workspace", "studio-v2"),
+    process.platform === "win32" ? "junction" : "dir",
+  );
 
   const inspection = await inspectOrganizationModuleCheckoutCandidates({
     organizationRoot,

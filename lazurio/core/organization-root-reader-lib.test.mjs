@@ -7,8 +7,10 @@ import {
   ORGANIZATION_DOCUMENT_PATHS,
   readOrganizationRoot,
 } from "./organization-root-reader-lib.mjs";
+import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.mjs";
 
 const roots = [];
+const fileSymlinkTest = (await supportsFileSymlinks()) ? test : test.skip;
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
@@ -29,11 +31,11 @@ test("filesystem adapter reads a legacy Organization through the single Core res
   });
 });
 
-test("filesystem adapter rejects symlinked Organization documents without following them", () => {
+fileSymlinkTest("filesystem adapter rejects symlinked Organization documents without following them [requires file symlink capability]", () => {
   const root = fixtureRoot();
   const outside = fixtureRoot();
   writeJson(outside, "foreign.json", legacyOrganization());
-  symlinkSync(join(outside, "foreign.json"), join(root, ORGANIZATION_DOCUMENT_PATHS.legacy_projection));
+  symlinkSync(join(outside, "foreign.json"), join(root, ORGANIZATION_DOCUMENT_PATHS.legacy_projection), "file");
   writeJson(root, ORGANIZATION_DOCUMENT_PATHS.modules, modulesManifest());
 
   expect(readOrganizationRoot({ organizationRoot: root })).toMatchObject({
@@ -43,9 +45,9 @@ test("filesystem adapter rejects symlinked Organization documents without follow
   });
 });
 
-test("filesystem adapter treats a dangling document symlink as a conflict, not absence", () => {
+fileSymlinkTest("filesystem adapter treats a dangling document symlink as a conflict, not absence [requires file symlink capability]", () => {
   const root = fixtureRoot();
-  symlinkSync(join(root, "missing.json"), join(root, ORGANIZATION_DOCUMENT_PATHS.canonical));
+  symlinkSync(join(root, "missing.json"), join(root, ORGANIZATION_DOCUMENT_PATHS.canonical), "file");
   writeJson(root, ORGANIZATION_DOCUMENT_PATHS.legacy_projection, legacyOrganization());
   writeJson(root, ORGANIZATION_DOCUMENT_PATHS.modules, modulesManifest());
 
@@ -85,7 +87,7 @@ test("Organization root boundary fails closed for missing, file and symlink root
 
   const symlinkParent = fixtureRoot();
   const symlinkRoot = join(symlinkParent, "linked-root");
-  symlinkSync(fixtureRoot(), symlinkRoot);
+  symlinkSync(fixtureRoot(), symlinkRoot, process.platform === "win32" ? "junction" : "dir");
   expect(readOrganizationRoot({ organizationRoot: symlinkRoot })).toMatchObject({
     state: "conflict",
     resource_count: 0,
