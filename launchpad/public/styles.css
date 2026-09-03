@@ -1278,7 +1278,6 @@ input:focus-visible,
   gap: var(--lz-space-8);
 }
 
-.guide-eyebrow,
 .guide-reader-kicker {
   color: var(--lz-blue-700);
   font-size: var(--lz-size-meta);
