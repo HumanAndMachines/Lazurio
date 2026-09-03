@@ -2406,6 +2406,82 @@ test("Windows Lazurio Start accepts a listener owned by the launcher's child pro
   }
 }, platformTestTimeout(10_000));
 
+test("Windows Start zachová background owner proof v konečném listener auditu", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port });
+  const app = withStaticEntrypoint(fixtureDiscoveryApp({ port }));
+  const statePath = join(root, "launchpad", "runtime", "apps", `${app.id}.json`);
+  let child = null;
+  let ownerProbeCount = 0;
+  let reportProofPersisted;
+  const proofPersisted = new Promise((resolve) => {
+    reportProofPersisted = resolve;
+  });
+  const identityFor = (pid) => ({
+    pid,
+    parent_pid: process.pid,
+    created_at: "2026-07-27T08:00:00.000Z",
+    executable_path: "C:\\Tools\\bun.exe",
+  });
+  const resolveOwner = async () => {
+    if (!child) return null;
+    ownerProbeCount += 1;
+    if (ownerProbeCount > 1) await proofPersisted;
+    return { pid: child.pid, cwd_matches: null };
+  };
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "windows-owner-proof-final-state",
+    platform: "win32",
+    bunExecutable: process.execPath,
+    discover: discoveryWithApp(app),
+    spawnProcess: (command, options) => {
+      child = spawnFixtureChild(root, command, options);
+      return child;
+    },
+    resolvePortOwnerFn: resolveOwner,
+    resolveProcessIdentityFn: async (pid) => pid === child?.pid ? identityFor(pid) : null,
+    writeRuntimeStateFile: async (path, content, encoding) => {
+      const state = JSON.parse(content);
+      await writeFile(path, content, encoding);
+      if (state.owner_proof && !state.listener_ownership) reportProofPersisted();
+    },
+  });
+
+  try {
+    expect((await runtime.start(app.id)).runtime.status).toBe("healthy");
+    const state = JSON.parse(await readFile(statePath, "utf8"));
+    expect(ownerProbeCount).toBeGreaterThan(1);
+    expect(state).toMatchObject({
+      status: "starting",
+      listener_ownership: [expect.objectContaining({ owner_pid: child.pid, owned: true })],
+      owner_proof: {
+        launcher_pid: child.pid,
+        listener_pid: child.pid,
+      },
+    });
+
+    const restartedRuntime = createRuntimeManager({
+      companiesRoot: root,
+      launchpadRoot: join(root, "launchpad"),
+      instanceId: "windows-owner-proof-after-restart",
+      platform: "win32",
+      discover: discoveryWithApp(app),
+      resolvePortOwnerFn: resolveOwner,
+      resolveProcessIdentityFn: async (pid) => pid === child?.pid ? identityFor(pid) : null,
+    });
+    expect(await restartedRuntime.health(app.id)).toMatchObject({
+      status: "healthy",
+      owner: "adopted-port",
+      port_owner: { verified_by: "runtime-owner-proof" },
+    });
+  } finally {
+    reportProofPersisted();
+    await killFixtureProcess(child, root);
+  }
+}, platformTestTimeout(10_000));
+
 test("Windows launcher exit after Start preserves Lazurio listener audit for restart", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({ port });

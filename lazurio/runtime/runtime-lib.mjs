@@ -909,6 +909,24 @@ export function createRuntimeManager({
     }
 
     if (app.module_contract?.schema_version === "lazurio.module.v1") {
+      if (platform === "win32") {
+        // Background capture starts immediately after spawn so it can retain
+        // short-lived launcher ancestry. Its state write must finish before
+        // the Start transaction commits listener ownership; otherwise either
+        // writer can overwrite evidence produced by the other from an older
+        // state snapshot. Ownership is verified at this point, so one final
+        // bounded capture also covers a listener that appeared at the edge of
+        // the background capture window.
+        if (record.ownerProofPromise) {
+          await record.ownerProofPromise;
+        }
+        if (!record.ownerProofCaptured) {
+          await captureWindowsRuntimeOwnerProof(app, record);
+        }
+        if (record.ownerProofWritePromise) {
+          await Promise.allSettled([record.ownerProofWritePromise]);
+        }
+      }
       if (managedProcesses.get(runtimeKey) !== record || record.stopping) {
         throw new RuntimeActionError(
           409,
@@ -945,6 +963,7 @@ export function createRuntimeManager({
           launcher_exit_code: earlyExit,
           owner_proof: earlySurvivingListenerProof,
         } : {}),
+        ...windowsRuntimeOwnerProofState(earlySurvivingListenerProof ?? record.ownerProof),
         process_group_id: record.processGroupId,
         listeners: runtimeListenerState(app),
         listener_ownership: ownershipProof,
