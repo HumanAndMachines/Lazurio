@@ -125,7 +125,7 @@ test("dry-run rejects an explicit external repository-db authority", async () =>
   );
 });
 
-test.skipIf(process.platform === "win32")(
+test(
   "dry-run rejects a symlinked Organization authority component",
   async () => {
     const fixture = await createLaneFixture({
@@ -134,7 +134,11 @@ test.skipIf(process.platform === "win32")(
     const externalAuthorityRoot = join(dirname(fixture.root), "symlink-target-db");
     await cp(fixture.authorityRoot, externalAuthorityRoot, { recursive: true });
     await rm(fixture.authorityRoot, { recursive: true, force: true });
-    await symlink(externalAuthorityRoot, fixture.authorityRoot, "dir");
+    await symlink(
+      externalAuthorityRoot,
+      fixture.authorityRoot,
+      process.platform === "win32" ? "junction" : "dir",
+    );
     const result = runCreateLane(fixture);
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("obsahuje symlink nebo neadresářovou komponentu");

@@ -82,7 +82,11 @@ test("odmítne chybějící checkout a symlink mimo Organizaci", async () => {
   const outside = join(root, "outside");
   await mkdir(organizationRoot, { recursive: true });
   await mkdir(outside, { recursive: true });
-  await symlink(outside, join(organizationRoot, "escaped"));
+  await symlink(
+    outside,
+    join(organizationRoot, "escaped"),
+    process.platform === "win32" ? "junction" : "dir",
+  );
 
   const response = {
     organizations: [{
@@ -120,7 +124,11 @@ test("odmítne Organization mount, jehož realpath uniká mimo Lazurio root", as
   const outsideOrganization = join(root, "outside-org");
   await mkdir(join(companiesRoot, "organizations"), { recursive: true });
   await mkdir(join(outsideOrganization, "workspace", "presentation"), { recursive: true });
-  await symlink(outsideOrganization, join(companiesRoot, "organizations", "Escaped_GEN3"));
+  await symlink(
+    outsideOrganization,
+    join(companiesRoot, "organizations", "Escaped_GEN3"),
+    process.platform === "win32" ? "junction" : "dir",
+  );
   let spawnCount = 0;
   const opener = createModuleFolderOpener({
     companiesRoot,

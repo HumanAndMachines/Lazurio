@@ -373,7 +373,11 @@ test("guarded create never follows a symlink swapped in before rollback", async 
       branch: "CAC-0042-deals-publish",
       sidecarWriter: async () => {
         await rm(worktreePath, { recursive: true, force: true });
-        await symlink(foreignPath, worktreePath);
+        await symlink(
+          foreignPath,
+          worktreePath,
+          process.platform === "win32" ? "junction" : "dir",
+        );
         throw new Error("simulated post-add sidecar failure");
       },
     }),

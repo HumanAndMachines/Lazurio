@@ -87,7 +87,7 @@ async function makeSource(root, name = "source") {
   await writeFile(join(source, "data", "customer.txt"), "customer data\n", { mode: 0o640 });
   await writeFile(join(source, ".ignored-secret"), "fixture-secret-value\n", { mode: 0o600 });
   if (fileSymlinkSupported) {
-    await symlink("data/customer.txt", join(source, "customer-link"));
+    await symlink("data/customer.txt", join(source, "customer-link"), "file");
   } else {
     await writeFile(join(source, "customer-link"), "portable fixture fallback\n");
   }
@@ -316,27 +316,35 @@ describe("fail-closed preflight", () => {
     expect(result.stderr).toContain("organizations");
   });
 
-  fileSymlinkTest("refuses a destination that escapes personalspace through a symlinked parent", async () => {
+  test("refuses a destination that escapes personalspace through a symlinked parent", async () => {
     const root = await makeTempRoot();
     const source = await makeSource(root);
     const personalspaceRoot = join(root, "personalspace");
     const outside = join(root, "outside");
     await mkdir(personalspaceRoot);
     await mkdir(outside);
-    await symlink(outside, join(personalspaceRoot, "escape"));
+    await symlink(
+      outside,
+      join(personalspaceRoot, "escape"),
+      process.platform === "win32" ? "junction" : "dir",
+    );
     const destination = join(personalspaceRoot, "escape", "archive");
     const result = cli(applyArgs(source, destination, personalspaceRoot));
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain("destination must stay under the explicit personalspace root");
   });
 
-  fileSymlinkTest("refuses a resolved personalspace root inside an organizations boundary", async () => {
+  test("refuses a resolved personalspace root inside an organizations boundary", async () => {
     const root = await makeTempRoot();
     const source = await makeSource(root);
     const organizationsRoot = join(root, "organizations", "PrivateOrg_GEN3");
     const personalspaceLink = join(root, "personalspace-link");
     await mkdir(organizationsRoot, { recursive: true });
-    await symlink(organizationsRoot, personalspaceLink);
+    await symlink(
+      organizationsRoot,
+      personalspaceLink,
+      process.platform === "win32" ? "junction" : "dir",
+    );
     const destination = join(personalspaceLink, "migration-archive", "source");
     const result = cli(applyArgs(source, destination, personalspaceLink));
     expect(result.status).not.toBe(0);
@@ -357,10 +365,10 @@ describe("fail-closed preflight", () => {
     expect(result.stderr).toContain("external gitdir");
   });
 
-  fileSymlinkTest("refuses an absolute symlink outside rebuildable caches before creating destination", async () => {
+  fileSymlinkTest("refuses an absolute symlink outside rebuildable caches before creating destination [requires file symlink capability]", async () => {
     const root = await makeTempRoot();
     const source = await makeSource(root);
-    await symlink(join(source, "data", "customer.txt"), join(source, "absolute-user-link"));
+    await symlink(join(source, "data", "customer.txt"), join(source, "absolute-user-link"), "file");
     const personalspaceRoot = join(root, "personalspace", "owner_GEN3");
     const destination = join(personalspaceRoot, "migration-archive", "source");
     await mkdir(personalspaceRoot, { recursive: true });
@@ -370,12 +378,12 @@ describe("fail-closed preflight", () => {
     await expect(lstat(destination)).rejects.toThrow();
   });
 
-  fileSymlinkTest("refuses a user-data symlink whose transitive chain crosses a non-portable cache link", async () => {
+  fileSymlinkTest("refuses a user-data symlink whose transitive chain crosses a non-portable cache link [requires file symlink capability]", async () => {
     const root = await makeTempRoot();
     const source = await makeSource(root);
     await mkdir(join(source, "node_modules"));
-    await symlink(join(source, "data", "customer.txt"), join(source, "node_modules", "cache-link"));
-    await symlink("node_modules/cache-link", join(source, "user-data-link"));
+    await symlink(join(source, "data", "customer.txt"), join(source, "node_modules", "cache-link"), "file");
+    await symlink("node_modules/cache-link", join(source, "user-data-link"), "file");
     const personalspaceRoot = join(root, "personalspace", "owner_GEN3");
     const destination = join(personalspaceRoot, "migration-archive", "source");
     await mkdir(personalspaceRoot, { recursive: true });
@@ -433,11 +441,11 @@ describe("fail-closed preflight", () => {
 });
 
 describe.skipIf(process.platform === "win32")("apply and evidence", () => {
-  fileSymlinkTest("allows explicitly counted non-portable symlinks only inside rebuildable caches", async () => {
+  fileSymlinkTest("allows explicitly counted non-portable symlinks only inside rebuildable caches [requires file symlink capability]", async () => {
     const root = await makeTempRoot();
     const source = await makeSource(root);
     await mkdir(join(source, "node_modules"));
-    await symlink(join(source, "data", "customer.txt"), join(source, "node_modules", "cache-link"));
+    await symlink(join(source, "data", "customer.txt"), join(source, "node_modules", "cache-link"), "file");
     const personalspaceRoot = join(root, "personalspace", "owner_GEN3");
     const destination = join(personalspaceRoot, "migration-archive", "source");
     await mkdir(personalspaceRoot, { recursive: true });
@@ -448,7 +456,7 @@ describe.skipIf(process.platform === "win32")("apply and evidence", () => {
     expect(JSON.parse(result.stdout).files.nonportable_rebuildable_symlinks).toBe(1);
   });
 
-  fileSymlinkTest("preserves ignored files, symlinks, modes, nested Git refs/stash, and leaves source unchanged", async () => {
+  fileSymlinkTest("preserves ignored files, symlinks, modes, nested Git refs/stash, and leaves source unchanged [requires file symlink capability]", async () => {
     const root = await makeTempRoot();
     const source = await makeSource(root);
     const sourceRepo = join(source, "nested-repo");
@@ -675,10 +683,10 @@ describe.skipIf(process.platform === "win32")("verification drift detection", ()
     expect(result.stderr).toContain("mode changed");
   });
 
-  fileSymlinkTest("fails on changed symlink target", async () => {
+  fileSymlinkTest("fails on changed symlink target [requires file symlink capability]", async () => {
     const { source, destination, personalspaceRoot } = await archiveFixture();
     await rm(join(destination, "customer-link"));
-    await symlink(".ignored-secret", join(destination, "customer-link"));
+    await symlink(".ignored-secret", join(destination, "customer-link"), "file");
     const result = cli(verifyArgs(source, destination, personalspaceRoot));
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain("symlink target changed");

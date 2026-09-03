@@ -5,8 +5,10 @@ import { mkdir, mkdtemp, rename, rm, symlink, writeFile } from "fs/promises";
 import { appPlacementResolverForOrganization, buildDoctorReportFromAppsResponse, buildEnvironmentChecks, buildLaunchpadAppsResponse, buildLaunchpadDoctorReport, bunRuntimeCheck, codexRuntimeCheck, developerToolUpdateChecks, lazurioUpdateCheck, nodeRuntimeCheck, runtimeAppStatus } from "../../lazurio/runtime/diagnostics-lib.mjs";
 import { createLaunchpadGitFixture, initGitRepo, runGit } from "./git-fixture-helpers.test.mjs";
 import { buildGitInventory } from "../../lazurio/runtime/git-inventory-lib.mjs";
+import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.mjs";
 
 const tempRoots = [];
+const fileSymlinkTest = (await supportsFileSymlinks()) ? test : test.skip;
 
 afterAll(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })));
@@ -2650,7 +2652,7 @@ test("invalid_manifest appka je viditelná v apps response a doctor ji hlásí j
   expect(goodCheck).toBeDefined();
 });
 
-test.skipIf(process.platform === "win32")("CAC-0042: Doctor reportuje worktree problémy bez cleanup rozhodování", async () => {
+fileSymlinkTest("CAC-0042: Doctor reportuje worktree problémy bez cleanup rozhodování [requires file symlink capability]", async () => {
   const root = await createLaunchpadGitFixture();
   tempRoots.push(root);
   const orgRoot = join(root, "organizations", "BetaCo_GEN3");
@@ -2703,7 +2705,11 @@ test.skipIf(process.platform === "win32")("CAC-0042: Doctor reportuje worktree p
   });
   await writeFile(join(foreignAuthorityRoot, "package-lock.json"), "{}\n", "utf8");
   await mkdir(join(foreignAuthorityRoot, "secret-customer-project"));
-  await symlink(foreignAuthorityRoot, join(stalePath, "app"), "dir");
+  await symlink(
+    foreignAuthorityRoot,
+    join(stalePath, "app"),
+    process.platform === "win32" ? "junction" : "dir",
+  );
   run(["git", "add", "app"], stalePath);
   run(["git", "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "add escaped app fixture"], stalePath);
   await mkdir(join(activePath, "app", "v2"), { recursive: true });

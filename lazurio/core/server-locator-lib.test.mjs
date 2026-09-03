@@ -91,7 +91,7 @@ test("server locator refuses to write through a symlinked local directory", asyn
   const root = await temporaryRoot();
   const external = await temporaryRoot();
   const stateDirectory = join(root, "state");
-  await symlink(external, stateDirectory);
+  await symlink(external, stateDirectory, process.platform === "win32" ? "junction" : "dir");
 
   await expect(writeServerLocator({
     stateDirectory,

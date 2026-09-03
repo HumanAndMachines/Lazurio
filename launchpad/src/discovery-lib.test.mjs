@@ -14,8 +14,10 @@ import {
   organizationLegacyProjectionHash,
   projectLegacyOrganizationManifest,
 } from "../../lazurio/core/organization-activation-lib.mjs";
+import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.mjs";
 
 const tempRoots = [];
+const fileSymlinkTest = (await supportsFileSymlinks()) ? test : test.skip;
 
 afterAll(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })));
@@ -78,7 +80,7 @@ test("discovery přenese builder metadata icon/description/group z manifestu", a
   expect(apps[0].group).toBe("Denní práce");
 });
 
-test.skipIf(process.platform === "win32")("Organization discovery izoluje Module manifest odkazující mimo přesný checkout", async () => {
+fileSymlinkTest("Organization discovery izoluje Module manifest odkazující mimo přesný checkout [requires file symlink capability]", async () => {
   const root = await createCompaniesWorkspaceFixture({ plugin: null });
   const companyRoot = join(root, "organizations", "TestCompany");
   const moduleRoot = join(companyRoot, "modules", "demo");
@@ -133,7 +135,7 @@ test.skipIf(process.platform === "win32")("Organization discovery izoluje Module
   expect(result.invalid_apps[0].manifest_issues.join("\n")).toContain("odkazuje mimo vybraný checkout");
 });
 
-test.skipIf(process.platform === "win32")("Organization root authority JSON nesmí odkazovat mimo přesný mount", async () => {
+fileSymlinkTest("Organization root authority JSON nesmí odkazovat mimo přesný mount [requires file symlink capability]", async () => {
   for (const fileName of ["company.gen3.json", "modules.manifest.json"]) {
     const root = await createCompaniesWorkspaceFixture({ plugin: null });
     const companyRoot = join(root, "organizations", "TestCompany");
@@ -2346,7 +2348,11 @@ test("case-like leaf behind a workspace symlink remains an Organization boundary
     id: "renamed",
     company: "test-company",
   });
-  await symlink(join(root, "organizations", "ForeignCompany"), join(organizationRoot, "workspace"));
+  await symlink(
+    join(root, "organizations", "ForeignCompany"),
+    join(organizationRoot, "workspace"),
+    process.platform === "win32" ? "junction" : "dir",
+  );
   await writeJson(join(organizationRoot, "modules.manifest.json"), {
     company: "test-company",
     github_org: "TestCompany",
@@ -2468,7 +2474,11 @@ test("Organization module paths fail closed on traversal and canonical symlink e
   const foreignRoot = join(root, "organizations", "ForeignOrg", "workspace", "shared");
   await mkdir(foreignRoot, { recursive: true });
   await mkdir(join(organizationRoot, "workspace"), { recursive: true });
-  await symlink(foreignRoot, join(organizationRoot, "workspace", "foreign-link"));
+  await symlink(
+    foreignRoot,
+    join(organizationRoot, "workspace", "foreign-link"),
+    process.platform === "win32" ? "junction" : "dir",
+  );
   await writeJson(join(organizationRoot, "modules.manifest.json"), {
     company: "test-company",
     github_org: "TestCompany",
