@@ -65,6 +65,11 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(html).toContain("Steward");
   expect(html).toContain("Admin");
   expect(html).toContain("Bun");
+  expect(html).toContain("<dt>Skill</dt>");
+  expect(html).toContain("<dt>MCP server</dt>");
+  expect(html).toContain("<dt>Plugin</dt>");
+  expect(html).toContain("Sám AI nedává další oprávnění");
+  expect(html).toContain("instalací ale automaticky nezíská přístup do vašich účtů");
   expect(html).toContain("Wispr Flow");
   expect(html).toContain('href="https://wisprflow.ai/downloads"');
   expect(html).toContain("CodexBar");
