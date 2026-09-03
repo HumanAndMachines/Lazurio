@@ -1,6 +1,6 @@
 import { existsSync } from "fs";
 import { lstat, mkdtemp, realpath, rm } from "fs/promises";
-import { basename, dirname, win32 } from "path";
+import { basename, dirname, isAbsolute, win32 } from "path";
 import { fileURLToPath } from "url";
 
 import { isSamePath } from "../core/path-boundary-lib.mjs";
@@ -73,11 +73,15 @@ export async function runGit(args, { cwd, timeoutMs = GIT_LOCAL_TIMEOUT_MS, env 
       error: "Git executable was not found.",
     };
   }
-  return runCommand([executable, ...args], {
+  return runGitWithExecutable(executable, args, {
     cwd,
     timeoutMs,
     env,
   });
+}
+
+async function runGitWithExecutable(executable, args, options) {
+  return runCommand([executable, ...args], options);
 }
 
 // Creates the temporary child and runs Git inside one OS-pinned parent cwd.
@@ -91,12 +95,19 @@ export async function runGitInPinnedTemporaryChild(args, {
   timeoutMs = GIT_LOCAL_TIMEOUT_MS,
   env = {},
 } = {}) {
+  const gitExecutable = await resolveGitExecutable();
+  if (!gitExecutable) {
+    return pinnedGitChildFailure("git_executable_missing", {
+      error: "Git executable was not found.",
+    });
+  }
   const payload = JSON.stringify({
     args,
     expected_cwd_real_path: expectedCwdRealPath,
     child_prefix: childPrefix,
     timeout_ms: timeoutMs,
     env,
+    git_executable: gitExecutable,
   });
   const child = await runCommand(
     [process.execPath, fileURLToPath(import.meta.url), PINNED_TEMPORARY_CHILD_MODE],
@@ -204,7 +215,11 @@ async function runCommand(command, { cwd, timeoutMs, env = {}, input } = {}) {
       stderr: "pipe",
       env: commandEnvironment(
         isSterileGitEnvironment(env)
-          ? minimalRemoteGitEnvironment(processEnv(), globalThis.process.platform)
+          ? minimalRemoteGitEnvironment(
+            processEnv(),
+            globalThis.process.platform,
+            command[0],
+          )
           : processEnv(),
         env,
       ),
@@ -382,7 +397,7 @@ function isSterileGitEnvironment(environment) {
     && ["/dev/null", "NUL"].includes(environment?.GIT_CONFIG_GLOBAL);
 }
 
-function minimalRemoteGitEnvironment(base, platform) {
+export function minimalRemoteGitEnvironment(base, platform, gitExecutable) {
   const allowed = new Set([
     "APPDATA",
     "COMSPEC",
@@ -413,17 +428,24 @@ function minimalRemoteGitEnvironment(base, platform) {
     if (allowed.has(key.toUpperCase()) && typeof value === "string") clean[key] = value;
   }
   clean.PATH = platform === "win32"
-    ? trustedWindowsChildPath()
+    ? trustedWindowsChildPath(gitExecutable)
     : "/usr/bin:/bin:/usr/sbin:/sbin";
   return clean;
 }
 
-function trustedWindowsChildPath() {
-  const candidates = [];
-  for (const git of gitExecutableCandidates({ platform: "win32" })) {
-    candidates.push(dirname(git), win32.join(dirname(dirname(git)), "usr", "bin"));
+function trustedWindowsChildPath(gitExecutable) {
+  if (
+    typeof gitExecutable !== "string"
+    || gitExecutable === ""
+    || !win32.isAbsolute(gitExecutable)
+  ) {
+    return "";
   }
-  return [...new Set(candidates)].join(";");
+  const gitDirectory = win32.dirname(gitExecutable);
+  return [...new Set([
+    gitDirectory,
+    win32.join(win32.dirname(gitDirectory), "usr", "bin"),
+  ])].join(";");
 }
 
 async function probeGitExecutable(executable) {
@@ -490,6 +512,13 @@ export async function runPinnedTemporaryGitChild() {
     if (!isSamePath(actualParentRealPath, payload.expected_cwd_real_path)) {
       throw pinnedGitChildError("parent_identity_changed");
     }
+    const verifiedGitExecutable = await resolveGitExecutable();
+    if (
+      !verifiedGitExecutable
+      || !isSamePath(verifiedGitExecutable, payload.git_executable)
+    ) {
+      throw pinnedGitChildError("git_executable_changed");
+    }
 
     const childPath = await mkdtemp(payload.child_prefix);
     childName = basename(childPath);
@@ -503,11 +532,15 @@ export async function runPinnedTemporaryGitChild() {
       throw pinnedGitChildError("child_identity_changed");
     }
 
-    const result = await runGit([...payload.args, childName], {
-      cwd: ".",
-      timeoutMs: payload.timeout_ms,
-      env: payload.env,
-    });
+    const result = await runGitWithExecutable(
+      payload.git_executable,
+      [...payload.args, childName],
+      {
+        cwd: ".",
+        timeoutMs: payload.timeout_ms,
+        env: payload.env,
+      },
+    );
     if (!result.ok) {
       await rm(childName, { recursive: true, force: true }).catch(() => {});
       childName = null;
@@ -538,6 +571,9 @@ function assertPinnedTemporaryGitChildPayload(payload) {
     || !isPortableTemporaryChildPrefix(payload.child_prefix)
     || !Number.isFinite(payload.timeout_ms)
     || payload.timeout_ms <= 0
+    || typeof payload.git_executable !== "string"
+    || payload.git_executable === ""
+    || !isAbsolute(payload.git_executable)
     || !payload.env
     || typeof payload.env !== "object"
     || Array.isArray(payload.env)
@@ -569,6 +605,7 @@ function pinnedGitChildFailure(code, result = {}) {
     timedOut: result.timedOut ?? false,
     stdout: result.stdout ?? "",
     stderr: result.stderr ?? "",
+    error: result.error ?? null,
   };
 }
 

@@ -213,8 +213,9 @@ test("clone failure leaves no partial final target or staging directory", async 
       runPinnedChild: async () => ({
         ok: false,
         code: "git_command_failed",
+        exitCode: 128,
         stdout: "",
-        stderr: "simulated clone failure",
+        stderr: "fatal: unable to access 'https://builder:private-credential-value@github.com/BetaCo/broken-clone.git?X-Amz-Signature=signed-value&X-Amz-Credential=credential-value#secret-fragment': simulated clone failure\npassword=must-not-leak",
       }),
     },
   });
@@ -224,6 +225,15 @@ test("clone failure leaves no partial final target or staging directory", async 
     outcome: "failed",
     code: "materialization_clone_failed",
   });
+  expect(result.message).toContain("Git příčina: exit 128");
+  expect(result.message).toContain("simulated clone failure");
+  expect(result.message).toContain("https://<redacted>@github.com/BetaCo/broken-clone.git?<redacted>");
+  expect(result.message).toContain("password=<redacted>");
+  expect(result.message).not.toContain("private-credential-value");
+  expect(result.message).not.toContain("signed-value");
+  expect(result.message).not.toContain("credential-value");
+  expect(result.message).not.toContain("secret-fragment");
+  expect(result.message).not.toContain("must-not-leak");
   expect(existsSync(target)).toBe(false);
   expect((await readdir(join(organizationRoot, "workspace"))).filter((name) => name.includes("lazurio-update"))).toEqual([]);
 });

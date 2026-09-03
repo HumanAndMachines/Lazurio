@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm } from "fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import {
@@ -8,9 +8,11 @@ import {
   gitExecutableCandidates,
   gitTimeoutKillCommand,
   mapWithConcurrency,
+  minimalRemoteGitEnvironment,
   resolveGitExecutable,
   resolveGitExecutableSync,
   runGit,
+  runGitInPinnedTemporaryChild,
   safeGitCommandEnv,
   safeGitRemoteEnv,
 } from "../../lazurio/runtime/git-lib.mjs";
@@ -174,6 +176,56 @@ test("Windows remote Git environment never contains a POSIX askpass executable",
     GCM_INTERACTIVE: "never",
     SSH_ASKPASS_REQUIRE: "never",
   });
+});
+
+test("Windows sterile child PATH is derived only from the exact verified Git executable", () => {
+  const environment = minimalRemoteGitEnvironment({
+    HOME: "C:\\Users\\builder",
+    USERPROFILE: "C:\\Users\\builder",
+    SSH_AUTH_SOCK: "\\\\.\\pipe\\openssh-ssh-agent",
+    PATH: "C:\\attacker\\bin",
+    GIT_SSH_COMMAND: "C:\\attacker\\ssh.exe",
+  }, "win32", "C:\\Users\\builder\\AppData\\Local\\Programs\\Git\\cmd\\git.exe");
+
+  expect(environment).toMatchObject({
+    HOME: "C:\\Users\\builder",
+    USERPROFILE: "C:\\Users\\builder",
+    SSH_AUTH_SOCK: "\\\\.\\pipe\\openssh-ssh-agent",
+    PATH: [
+      "C:\\Users\\builder\\AppData\\Local\\Programs\\Git\\cmd",
+      "C:\\Users\\builder\\AppData\\Local\\Programs\\Git\\usr\\bin",
+    ].join(";"),
+  });
+  expect(JSON.stringify(environment)).not.toContain("attacker");
+});
+
+test("pinned child executes clone through the parent-verified absolute Git executable", async () => {
+  const root = await mkdtemp(join(tmpdir(), "launchpad-pinned-git-executable-"));
+  const source = join(root, "source");
+  const remote = join(root, "remote.git");
+  try {
+    await initGitRepo(source, { remotePath: remote });
+    const result = await runGitInPinnedTemporaryChild([
+      "clone",
+      "--branch",
+      "main",
+      "--single-branch",
+      "--",
+      remote,
+    ], {
+      cwd: root,
+      expectedCwdRealPath: await realpath(root),
+      childPrefix: ".pinned-executable-",
+      env: safeGitRemoteEnv(),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.child_name).toStartWith(".pinned-executable-");
+    expect(await readFile(join(root, result.child_name, "README.md"), "utf8"))
+      .toContain("# main");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("Windows Git resolver uses only fixed Git for Windows locations", async () => {
