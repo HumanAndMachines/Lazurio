@@ -163,12 +163,14 @@ není finálním důkazem: po dokončení musí nový čistý proces bez tohoto 
 najít tytéž příkazy. Jejich skutečnou identitu a použitelnost následně ověří
 `lazurio install --json` a Doctor; pouhé `Get-Command` nestačí.
 
-Git a GitHub CLI smějí být na Windows nainstalované i bez admin práv do
+Git, GitHub CLI a Node.js smějí být na Windows nainstalované i bez admin práv do
 oficiálních uživatelských adresářů pod
 `%USERPROFILE%\AppData\Local\Programs`. Install Core a Doctor přijímají Git
 Installer v `Git\cmd`/`Git\bin`, PortableGit v
 `PortableGit\cmd`/`PortableGit\bin` a GitHub CLI v `GitHub CLI\bin` (včetně
-varianty s `gh.exe` přímo v `GitHub CLI`). Autoritou pro tento prefix je home
+varianty s `gh.exe` přímo v `GitHub CLI`). Node.js přijímají v
+`Programs\nodejs` a přes přesný user-scope WinGet command link
+`AppData\Local\Microsoft\WinGet\Links\node.exe`. Autoritou pro tyto prefixy je home
 aktuálního OS účtu, ne zděděné `LOCALAPPDATA`, `USERPROFILE` ani libovolná
 položka `PATH`; nalezená binárka se stále musí kanonicky shodovat s jedním
 z těchto pevných kandidátů a projít funkčním probe.
