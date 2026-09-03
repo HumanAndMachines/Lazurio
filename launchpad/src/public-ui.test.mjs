@@ -69,6 +69,9 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(html).toContain('href="https://wisprflow.ai/downloads"');
   expect(html).toContain("CodexBar");
   expect(html).toContain('href="https://codexbar.app/"');
+  expect(html).toContain("Browser Use");
+  expect(html).toContain('href="https://browser-use.com/"');
+  expect(html).toContain("Citlivé, destruktivní a publikační kroky stále vyžadují vaše potvrzení.");
   expect(html).toContain("Tyto externí aplikace nejsou součástí Lazuria.");
   expect(js).toContain("function filterGuideContent(query)");
   expect(js).toContain("function selectGuideTopic(topic)");
