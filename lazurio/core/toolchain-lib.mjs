@@ -13,6 +13,7 @@ import {
 } from "node:path";
 
 const exactStableVersionPattern = /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$/u;
+const minimumStableVersionRangePattern = /^>=((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))$/u;
 
 export function bunVersionFromPackageManager(packageManager) {
   const match = /^bun@(.+)$/u.exec(packageManager ?? "");
@@ -37,6 +38,29 @@ export function readRequiredBunVersion({
   return bunVersionFromPackageManager(sourcePackage.packageManager);
 }
 
+export function nodeVersionRangeFromEngines(engines) {
+  const range = engines?.node;
+  if (typeof range !== "string" || !minimumStableVersionRangePattern.test(range)) {
+    throw new Error("package.json#engines.node must declare one minimum stable Node.js version");
+  }
+  return range;
+}
+
+export function readRequiredNodeVersionRange({
+  root = resolve(import.meta.dirname, ".."),
+  readText = (path) => readFileSync(path, "utf8"),
+} = {}) {
+  let sourcePackage;
+  try {
+    sourcePackage = JSON.parse(readText(resolve(root, "package.json")));
+  } catch (error) {
+    throw new Error(
+      `Lazurio Node.js version authority cannot be read: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  return nodeVersionRangeFromEngines(sourcePackage.engines);
+}
+
 export function classifyBunRuntime({ currentVersion, requiredVersion }) {
   if (!exactStableVersionPattern.test(requiredVersion ?? "")) {
     throw new Error("required Bun version must be an exact stable version");
@@ -49,6 +73,32 @@ export function classifyBunRuntime({ currentVersion, requiredVersion }) {
     current_version: currentVersion,
     required_version: requiredVersion,
   });
+}
+
+export function classifyNodeRuntime({ currentVersion, requiredRange }) {
+  const minimumMatch = minimumStableVersionRangePattern.exec(requiredRange ?? "");
+  if (!minimumMatch) {
+    throw new Error("required Node.js range must declare one minimum stable version");
+  }
+  if (typeof currentVersion !== "string" || !exactStableVersionPattern.test(currentVersion)) {
+    return Object.freeze({
+      status: "unavailable",
+      current_version: null,
+      required_range: requiredRange,
+    });
+  }
+  return Object.freeze({
+    status: compareStableVersions(currentVersion, minimumMatch[1]) >= 0 ? "compatible" : "incompatible",
+    current_version: currentVersion,
+    required_range: requiredRange,
+  });
+}
+
+export function nodeVersionFromOutput(output) {
+  if (typeof output !== "string") return null;
+  const match = /^v?((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))$/u
+    .exec(output.trim());
+  return match?.[1] ?? null;
 }
 
 export function resolveExecutableOnPath(command, {
@@ -109,4 +159,13 @@ function environmentPathValue(environment, platform) {
   if (platform !== "win32") return environment.PATH ?? "";
   const entry = Object.entries(environment).find(([name]) => name.toLowerCase() === "path");
   return entry?.[1] ?? "";
+}
+
+function compareStableVersions(left, right) {
+  const leftParts = left.split(".").map(Number);
+  const rightParts = right.split(".").map(Number);
+  for (let index = 0; index < 3; index += 1) {
+    if (leftParts[index] !== rightParts[index]) return leftParts[index] - rightParts[index];
+  }
+  return 0;
 }

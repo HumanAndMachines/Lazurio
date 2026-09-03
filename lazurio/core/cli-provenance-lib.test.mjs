@@ -257,8 +257,15 @@ test("portable Windows paths and trusted executable candidates are deterministic
     PATH: "/tmp/shadow",
     homeDirectory: "relative-home",
   })).not.toContain("relative-home/.local/bin/gh");
-  expect(trustedGitHubCliCandidates("linux", { PATH: "/tmp/shadow" }))
-    .toContain("/usr/bin/gh");
+  expect(trustedGitCandidates("linux", {
+    homeDirectory: "/home/fixture",
+  })).toContain("/home/fixture/.local/bin/git");
+  expect(trustedGitHubCliCandidates("linux", {
+    homeDirectory: "/home/fixture",
+  })).toContain("/home/fixture/.local/bin/gh");
+  expect(trustedGitCandidates("linux", {
+    homeDirectory: "relative-home",
+  })).not.toContain("relative-home/.local/bin/git");
   expect(trustedGitHubCliCandidates("win32", {
     PATH: "C:\\Shadow",
     LOCALAPPDATA: "C:\\Users\\Matous\\AppData\\Local",

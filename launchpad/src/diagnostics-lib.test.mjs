@@ -2,7 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { tmpdir } from "os";
 import { join } from "path";
 import { mkdir, mkdtemp, rename, rm, symlink, writeFile } from "fs/promises";
-import { appPlacementResolverForOrganization, buildDoctorReportFromAppsResponse, buildEnvironmentChecks, buildLaunchpadAppsResponse, buildLaunchpadDoctorReport, bunRuntimeCheck, codexRuntimeCheck, developerToolUpdateChecks, lazurioUpdateCheck, runtimeAppStatus } from "../../lazurio/runtime/diagnostics-lib.mjs";
+import { appPlacementResolverForOrganization, buildDoctorReportFromAppsResponse, buildEnvironmentChecks, buildLaunchpadAppsResponse, buildLaunchpadDoctorReport, bunRuntimeCheck, codexRuntimeCheck, developerToolUpdateChecks, lazurioUpdateCheck, nodeRuntimeCheck, runtimeAppStatus } from "../../lazurio/runtime/diagnostics-lib.mjs";
 import { createLaunchpadGitFixture, initGitRepo, runGit } from "./git-fixture-helpers.test.mjs";
 import { buildGitInventory } from "../../lazurio/runtime/git-inventory-lib.mjs";
 
@@ -30,6 +30,43 @@ test("Bun Doctor check enforces the exact authority and gives an Agent handoff",
   expect(mismatch).toMatchObject({ id: "platform.bun", status: "fail" });
   expect(mismatch.message).toContain("Principála");
   expect(mismatch.details).toEqual(expect.arrayContaining(["current: 1.4.1", "required: 1.4.0"]));
+});
+
+test("Node.js Doctor shares the Install Core version authority", () => {
+  const supportedLts = nodeRuntimeCheck({
+    companiesRoot: "/fixture",
+    command: "/trusted/node",
+    requiredRange: ">=22.12.0",
+    run: () => ({ ok: true, stdout: "v24.19.0", stderr: "" }),
+  });
+  const supportedCurrent = nodeRuntimeCheck({
+    companiesRoot: "/fixture",
+    command: "/trusted/node",
+    requiredRange: ">=22.12.0",
+    run: () => ({ ok: true, stdout: "v26.5.0", stderr: "" }),
+  });
+  const incompatible = nodeRuntimeCheck({
+    companiesRoot: "/fixture",
+    command: "/trusted/node",
+    requiredRange: ">=22.12.0",
+    run: () => ({ ok: true, stdout: "v22.11.0", stderr: "" }),
+  });
+  const missing = nodeRuntimeCheck({
+    companiesRoot: "/fixture",
+    command: null,
+    requiredRange: ">=22.12.0",
+    run: () => {
+      throw new Error("missing Node.js must not execute");
+    },
+  });
+
+  expect(supportedLts).toMatchObject({ id: "platform.node", status: "ok" });
+  expect(supportedCurrent).toMatchObject({ id: "platform.node", status: "ok" });
+  expect(incompatible).toMatchObject({ id: "platform.node", status: "fail" });
+  expect(incompatible.message).toContain(">=22.12.0");
+  expect(missing).toMatchObject({ id: "platform.node", status: "fail" });
+  expect(missing.message).toContain("není dostupný");
+  expect(missing.links[0]?.url).toBe("https://nodejs.org/en/download");
 });
 
 test("Codex Doctor names the broken WinGet alias without accepting its target binary as ready", () => {

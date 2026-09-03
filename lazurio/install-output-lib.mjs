@@ -63,7 +63,9 @@ function renderInstallText(template, report) {
   if (typeof template !== "string") return template;
   return template
     .replaceAll("{current}", report.machine.bun.current_version ?? "unknown")
-    .replaceAll("{required}", report.machine.bun.required_version);
+    .replaceAll("{required}", report.machine.bun.required_version)
+    .replaceAll("{node_current}", report.machine.node.current_version ?? "unknown")
+    .replaceAll("{node_required}", report.machine.node.required_range);
 }
 
 export function installCatalogIssues() {
