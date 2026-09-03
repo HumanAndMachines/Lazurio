@@ -9,24 +9,11 @@ import {
   trustedGitCandidates,
   trustedGitExecutable,
 } from "./agent-skills-entrypoint.mjs";
+import { supportsFileSymlinks } from "./test-platform-capabilities.mjs";
 
 const tempRoots = [];
 
-async function detectFileSymlinkSupport() {
-  const root = await mkdtemp(join(tmpdir(), "agent-skills-symlink-probe-"));
-  try {
-    await writeFile(join(root, "target"), "probe\n");
-    await symlink(join(root, "target"), join(root, "link"));
-    return true;
-  } catch (error) {
-    if (error?.code === "EPERM" || error?.code === "EACCES") return false;
-    throw error;
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
-}
-
-const fileSymlinkTest = (await detectFileSymlinkSupport()) ? test : test.skip;
+const fileSymlinkTest = (await supportsFileSymlinks()) ? test : test.skip;
 
 afterEach(async () => {
   await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));

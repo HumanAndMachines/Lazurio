@@ -23,25 +23,12 @@ import {
   committedVerifierIdentity,
   probeCloneCapability,
 } from "./gen2-local-preservation.mjs";
+import { supportsFileSymlinks } from "./test-platform-capabilities.mjs";
 
 const scriptPath = fileURLToPath(new URL("./gen2-local-preservation.mjs", import.meta.url));
 const tempRoots = [];
 
-async function detectFileSymlinkSupport() {
-  const root = await mkdtemp(join(tmpdir(), "gen2-preservation-symlink-probe-"));
-  try {
-    await writeFile(join(root, "target"), "probe\n");
-    await symlink("target", join(root, "link"));
-    return true;
-  } catch (error) {
-    if (error?.code === "EPERM" || error?.code === "EACCES") return false;
-    throw error;
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
-}
-
-const fileSymlinkSupported = await detectFileSymlinkSupport();
+const fileSymlinkSupported = await supportsFileSymlinks();
 const fileSymlinkTest = fileSymlinkSupported ? test : test.skip;
 
 // The suite intentionally exercises real Git repositories, refs, stashes,
