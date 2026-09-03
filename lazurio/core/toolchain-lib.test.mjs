@@ -54,6 +54,8 @@ test("engines.node is the minimum Node.js workstation authority", () => {
 test("Node.js classifier accepts the declared minimum or newer", () => {
   expect(classifyNodeRuntime({ currentVersion: "v22.0.0", minimumVersion: "22.0.0" }))
     .toEqual({ status: "current", current_version: "22.0.0", minimum_version: "22.0.0" });
+  expect(classifyNodeRuntime({ currentVersion: "v22.0.0-rc.1", minimumVersion: "22.0.0" }))
+    .toEqual({ status: "unavailable", current_version: null, minimum_version: "22.0.0" });
   expect(classifyNodeRuntime({ currentVersion: "24.1.0", minimumVersion: "22.0.0" }).status)
     .toBe("current");
   expect(classifyNodeRuntime({ currentVersion: "v20.19.0", minimumVersion: "22.0.0" }).status)

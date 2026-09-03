@@ -153,7 +153,7 @@ function environmentPathValue(environment, platform) {
 }
 
 function stableVersionParts(value) {
-  const match = /^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:[-+].*)?$/u.exec(value ?? "");
+  const match = /^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/u.exec(value ?? "");
   return match ? match.slice(1, 4).map(Number) : null;
 }
 

@@ -195,7 +195,7 @@ export function inspectLazurioInstallation({
 
   let gitExecutable = null;
   steps.push(boundedProbe("git", () => {
-    gitExecutable = resolveGit({ platform, environment });
+    gitExecutable = resolveGit({ platform, environment, homeDirectory });
     if (!gitExecutable) return actionRequired("git_missing");
     const pathExecutable = resolvePathCommand("git", { environment, platform, cwd: commandCwd });
     if (!pathExecutable) {
@@ -355,11 +355,10 @@ function validNodeRuntime(value) {
   if (!/^\d+\.\d+\.\d+$/u.test(value.minimum_version ?? "")) return false;
   if (value.status === "unavailable") return value.current_version === null;
   if (!/^\d+\.\d+\.\d+$/u.test(value.current_version ?? "")) return false;
-  const current = value.current_version.split(".").map(Number);
-  const minimum = value.minimum_version.split(".").map(Number);
-  const comparison = current.findIndex((part, index) => part !== minimum[index]);
-  const meetsMinimum = comparison === -1 || current[comparison] > minimum[comparison];
-  return value.status === (meetsMinimum ? "current" : "outdated");
+  return classifyNodeRuntime({
+    currentVersion: value.current_version,
+    minimumVersion: value.minimum_version,
+  }).status === value.status;
 }
 
 export function installExitCode(report) {
