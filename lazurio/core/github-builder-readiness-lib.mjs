@@ -55,8 +55,19 @@ export function observeGitHubBuilderReadiness({
     observeTeam(provider, organization, account, team, blockers)
   ));
   const teamByInternalSlug = new Map(teamObservations.map((team) => [team.internal_slug, team]));
+  const teamRepositoryPermissions = new Map(teamObservations.map((team) => [
+    team.internal_slug,
+    observeTeamRepositoryPermissions(provider, organization, team, blockers),
+  ]));
   const repositories = plan.repositories.map((repository) => (
-    observeRepository(provider, organization, repository, teamByInternalSlug, blockers)
+    observeRepository(
+      provider,
+      organization,
+      repository,
+      teamByInternalSlug,
+      teamRepositoryPermissions,
+      blockers,
+    )
   ));
 
   return freeze({
@@ -235,6 +246,13 @@ function observeOrganizationMembership(provider, organization, account, blockers
     "api",
     `orgs/${organization.login}/memberships/${account.login}`,
   ]);
+  if (!response.ok && response.httpStatus !== 404) {
+    blockers.push(blocker(
+      "provider_observation_failed",
+      `GitHub provider nedokázal ověřit členství účtu '${account.login}' v Organization '${organization.login}'.`,
+    ));
+    return { state: "unavailable", role: null };
+  }
   const state = response.ok && response.value?.state === "active" ? "active" : "missing";
   if (state !== "active") {
     blockers.push(blocker(
@@ -260,6 +278,14 @@ function observeTeam(provider, organization, account, team, blockers) {
     "api",
     `orgs/${organization.login}/teams/${team.github_team_slug}`,
   ]);
+  if (!identityResponse.ok && identityResponse.httpStatus !== 404) {
+    blockers.push(blocker(
+      "provider_observation_failed",
+      `GitHub provider nedokázal ověřit identitu Teamu '${team.github_team_slug}'.`,
+      { team: team.internal_slug },
+    ));
+    return { ...team, identity: "unavailable", membership: "not_evaluated" };
+  }
   const identityMatches = identityResponse.ok
     && String(identityResponse.value?.id ?? "") === team.github_team_id
     && identityResponse.value?.slug === team.github_team_slug;
@@ -276,6 +302,14 @@ function observeTeam(provider, organization, account, team, blockers) {
     "api",
     `orgs/${organization.login}/teams/${team.github_team_slug}/memberships/${account.login}`,
   ]);
+  if (!membershipResponse.ok && membershipResponse.httpStatus !== 404) {
+    blockers.push(blocker(
+      "provider_observation_failed",
+      `GitHub provider nedokázal ověřit členství účtu '${account.login}' v Teamu '${team.github_team_slug}'.`,
+      { team: team.internal_slug },
+    ));
+    return { ...team, identity: "verified", membership: "unavailable" };
+  }
   const membership = membershipResponse.ok && membershipResponse.value?.state === "active"
     ? "active"
     : "missing";
@@ -289,22 +323,84 @@ function observeTeam(provider, organization, account, team, blockers) {
   return { ...team, identity: "verified", membership };
 }
 
-function observeRepository(provider, organization, repository, teamByInternalSlug, blockers) {
+function observeTeamRepositoryPermissions(provider, organization, team, blockers) {
+  if (team.identity !== "verified") return null;
+  const response = provider.json([
+    "api",
+    "--paginate",
+    "--slurp",
+    `orgs/${organization.login}/teams/${team.github_team_slug}/repos?per_page=100`,
+  ]);
+  if (!response.ok || !validPaginatedRepositoryResponse(response.value)) {
+    blockers.push(blocker(
+      "provider_observation_failed",
+      `GitHub provider nedokázal ověřit repository granty Teamu '${team.github_team_slug}'.`,
+      { team: team.internal_slug },
+    ));
+    return null;
+  }
+  const permissions = new Map();
+  for (const repository of response.value.flat()) {
+    if (
+      typeof repository?.full_name !== "string"
+      || repository.owner?.login?.toLowerCase() !== organization.login.toLowerCase()
+    ) {
+      blockers.push(blocker(
+        "provider_observation_failed",
+        `GitHub provider vrátil neplatný repository grant Teamu '${team.github_team_slug}'.`,
+        { team: team.internal_slug },
+      ));
+      return null;
+    }
+    const permission = repositoryPermission(repository);
+    const key = repository.full_name.toLowerCase();
+    if (permissions.has(key) && permissions.get(key) !== permission) {
+      blockers.push(blocker(
+        "provider_observation_failed",
+        `GitHub provider vrátil rozporný repository grant Teamu '${team.github_team_slug}'.`,
+        { team: team.internal_slug, repository: repository.full_name },
+      ));
+      return null;
+    }
+    permissions.set(key, permission);
+  }
+  return permissions;
+}
+
+function observeRepository(
+  provider,
+  organization,
+  repository,
+  teamByInternalSlug,
+  teamRepositoryPermissions,
+  blockers,
+) {
   const response = provider.json(["api", `repos/${repository.full_name}`]);
+  if (!response.ok) {
+    blockers.push(blocker(
+      "provider_observation_failed",
+      `GitHub provider nedokázal ověřit repozitář '${repository.full_name}' a efektivní oprávnění účtu.`,
+      { repository: repository.full_name },
+    ));
+  }
   const observedId = String(response.value?.id ?? "");
   const identityMatches = response.ok
     && positiveIdPattern.test(observedId)
     && response.value?.full_name?.toLowerCase() === repository.full_name.toLowerCase()
     && response.value?.owner?.login?.toLowerCase() === organization.login.toLowerCase()
     && (repository.expected_id === null || observedId === repository.expected_id);
-  const effectivePermission = identityMatches ? repositoryPermission(response.value) : "unknown";
-  if (!identityMatches) {
+  const effectivePermission = identityMatches
+    ? repositoryPermission(response.value)
+    : response.ok
+      ? "unknown"
+      : "unavailable";
+  if (response.ok && !identityMatches) {
     blockers.push(blocker(
-      "repository_identity_unavailable",
-      `Repozitář '${repository.full_name}' nejde na GitHubu bezpečně ověřit.`,
+      "repository_identity_mismatch",
+      `GitHub odpověď neodpovídá deklarované identitě repozitáře '${repository.full_name}'.`,
       { repository: repository.full_name },
     ));
-  } else if (!isWritePermission(effectivePermission)) {
+  } else if (identityMatches && !isWritePermission(effectivePermission)) {
     blockers.push(blocker(
       "repository_write_missing",
       `Účet nemá WRITE nebo vyšší oprávnění do '${repository.full_name}' (zjištěno: ${effectivePermission}).`,
@@ -321,12 +417,18 @@ function observeRepository(provider, organization, repository, teamByInternalSlu
         permission: "not_evaluated",
       };
     }
-    const grantResponse = provider.json([
-      "api",
-      `orgs/${organization.login}/teams/${team.github_team_slug}/repos/${repository.full_name}`,
-    ]);
-    const permission = grantResponse.ok ? repositoryPermission(grantResponse.value) : "none";
+    const observedPermissions = teamRepositoryPermissions.get(internalSlug);
+    const permission = observedPermissions === null
+      ? "unavailable"
+      : observedPermissions.get(repository.full_name.toLowerCase()) ?? "none";
     if (!isWritePermission(permission)) {
+      if (permission === "unavailable") {
+        return {
+          internal_team_slug: internalSlug,
+          github_team_slug: team.github_team_slug,
+          permission,
+        };
+      }
       blockers.push(blocker(
         "team_repository_write_missing",
         `GitHub Team '${team.github_team_slug}' nemá WRITE nebo vyšší grant do '${repository.full_name}' (zjištěno: ${permission}).`,
@@ -359,6 +461,10 @@ function repositoryPermission(value) {
 
 function isWritePermission(permission) {
   return ["write", "maintain", "admin"].includes(permission);
+}
+
+function validPaginatedRepositoryResponse(value) {
+  return Array.isArray(value) && value.every((page) => Array.isArray(page));
 }
 
 function validTeamForgeBinding(value) {
