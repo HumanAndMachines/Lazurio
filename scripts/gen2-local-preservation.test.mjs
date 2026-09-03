@@ -433,7 +433,7 @@ describe("fail-closed preflight", () => {
 });
 
 describe.skipIf(process.platform === "win32")("apply and evidence", () => {
-  test("allows explicitly counted non-portable symlinks only inside rebuildable caches", async () => {
+  fileSymlinkTest("allows explicitly counted non-portable symlinks only inside rebuildable caches", async () => {
     const root = await makeTempRoot();
     const source = await makeSource(root);
     await mkdir(join(source, "node_modules"));
@@ -448,7 +448,7 @@ describe.skipIf(process.platform === "win32")("apply and evidence", () => {
     expect(JSON.parse(result.stdout).files.nonportable_rebuildable_symlinks).toBe(1);
   });
 
-  test("preserves ignored files, symlinks, modes, nested Git refs/stash, and leaves source unchanged", async () => {
+  fileSymlinkTest("preserves ignored files, symlinks, modes, nested Git refs/stash, and leaves source unchanged", async () => {
     const root = await makeTempRoot();
     const source = await makeSource(root);
     const sourceRepo = join(source, "nested-repo");
@@ -675,7 +675,7 @@ describe.skipIf(process.platform === "win32")("verification drift detection", ()
     expect(result.stderr).toContain("mode changed");
   });
 
-  test("fails on changed symlink target", async () => {
+  fileSymlinkTest("fails on changed symlink target", async () => {
     const { source, destination, personalspaceRoot } = await archiveFixture();
     await rm(join(destination, "customer-link"));
     await symlink(".ignored-secret", join(destination, "customer-link"));

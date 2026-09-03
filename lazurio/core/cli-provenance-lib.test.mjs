@@ -297,7 +297,7 @@ test("portable Windows paths and trusted executable candidates are deterministic
   expect(trustedNodeCandidates("win32", {
     homeDirectory: "C:\\Users\\Matous",
     environment: {
-      PATH: "C:\\Users\\Matous\\AppData\\Local\\Programs\\nodejs\\node-v24.20.0-win-x64;C:\\Shadow",
+      PATH: "\"C:\\Users\\Matous\\AppData\\Local\\Programs\\nodejs\\node-v24.20.0-win-x64\";C:\\Shadow",
       LOCALAPPDATA: "C:\\AttackerControlled",
       USERPROFILE: "C:\\OtherUser",
     },
@@ -315,6 +315,7 @@ test("portable Windows paths and trusted executable candidates are deterministic
         "C:\\Tools\\node-v24.20.0-win-x64",
         "C:\\Users\\Matous\\AppData\\Local\\Programs\\nodejs\\nested\\node-v24.20.0-win-x64",
         "C:\\Users\\Matous\\AppData\\Local\\Programs\\nodejs\\node-current-win-x64",
+        "\"C:\\Users\\Matous\\AppData\\Local\\Programs\\nodejs\\node-v24.20.0-win-x64",
       ].join(";"),
     },
   })).toHaveLength(4);

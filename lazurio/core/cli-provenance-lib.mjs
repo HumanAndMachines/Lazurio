@@ -278,7 +278,10 @@ function trustedVersionedWindowsNodeCandidates(nodeRoot, environment) {
   const directoryPattern = /^node-v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)-win-(?:x64|arm64)$/u;
   const candidates = new Map();
   for (const rawEntry of pathValue.split(";")) {
-    const directory = rawEntry.trim();
+    const trimmedEntry = rawEntry.trim();
+    const directory = trimmedEntry.startsWith("\"") && trimmedEntry.endsWith("\"")
+      ? trimmedEntry.slice(1, -1).trim()
+      : trimmedEntry;
     if (!win32.isAbsolute(directory) || !directoryPattern.test(win32.basename(directory))) continue;
     if (normalizeComparableCliPath(win32.dirname(directory), "win32") !== normalizedRoot) continue;
     const executable = win32.join(directory, "node.exe");
