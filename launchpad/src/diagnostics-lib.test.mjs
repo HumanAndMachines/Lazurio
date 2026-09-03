@@ -8,7 +8,7 @@ import { buildGitInventory } from "../../lazurio/runtime/git-inventory-lib.mjs";
 import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.mjs";
 
 const tempRoots = [];
-const fileSymlinkTest = (await supportsFileSymlinks()) ? test : test.skip;
+const fileSymlinkCapability = await supportsFileSymlinks();
 
 afterAll(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })));
@@ -2652,7 +2652,7 @@ test("invalid_manifest appka je viditelná v apps response a doctor ji hlásí j
   expect(goodCheck).toBeDefined();
 });
 
-fileSymlinkTest("CAC-0042: Doctor reportuje worktree problémy bez cleanup rozhodování [requires file symlink capability]", async () => {
+test("CAC-0042: Doctor reportuje worktree problémy bez cleanup rozhodování", async () => {
   const root = await createLaunchpadGitFixture();
   tempRoots.push(root);
   const orgRoot = join(root, "organizations", "BetaCo_GEN3");
@@ -2712,22 +2712,24 @@ fileSymlinkTest("CAC-0042: Doctor reportuje worktree problémy bez cleanup rozho
   );
   run(["git", "add", "app"], stalePath);
   run(["git", "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "add escaped app fixture"], stalePath);
-  await mkdir(join(activePath, "app", "v2"), { recursive: true });
-  await symlink(
-    join(foreignAuthorityRoot, "package.json"),
-    join(activePath, "app", "v2", "package.json"),
-    "file",
-  );
-  await mkdir(join(activePath, "app", "v3"), { recursive: true });
-  await writeJson(join(activePath, "app", "v3", "package.json"), {
-    private: true,
-    packageManager: "bun@1.3.14",
-  });
-  await symlink(
-    join(foreignAuthorityRoot, "package-lock.json"),
-    join(activePath, "app", "v3", "package-lock.json"),
-    "file",
-  );
+  if (fileSymlinkCapability) {
+    await mkdir(join(activePath, "app", "v2"), { recursive: true });
+    await symlink(
+      join(foreignAuthorityRoot, "package.json"),
+      join(activePath, "app", "v2", "package.json"),
+      "file",
+    );
+    await mkdir(join(activePath, "app", "v3"), { recursive: true });
+    await writeJson(join(activePath, "app", "v3", "package.json"), {
+      private: true,
+      packageManager: "bun@1.3.14",
+    });
+    await symlink(
+      join(foreignAuthorityRoot, "package-lock.json"),
+      join(activePath, "app", "v3", "package-lock.json"),
+      "file",
+    );
+  }
   await mkdir(join(activePath, "app", "v4"), { recursive: true });
   await writeJson(join(activePath, "app", "v4", "package.json"), {
     private: true,
@@ -2799,17 +2801,19 @@ fileSymlinkTest("CAC-0042: Doctor reportuje worktree problémy bez cleanup rozho
   expect(checks.get("git.worktrees.dependencies")?.details).toEqual(expect.arrayContaining([
     "checked_worktrees: 2",
     "skipped_declared_inactive_worktrees: 0",
-    "checked_packages: 6",
+    `checked_packages: ${fileSymlinkCapability ? 6 : 4}`,
     "ready: 1",
     "needs_install: 1",
-    "dependency_boundary_invalid: 3",
+    `dependency_boundary_invalid: ${fileSymlinkCapability ? 3 : 1}`,
     "unknown_package_manager: 1",
   ]));
   expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("CAC-0042-doctor-active/app/v1");
   expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("bun install");
   expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("missing: demo");
-  expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("CAC-0042-doctor-active/app/v2");
-  expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("CAC-0042-doctor-active/app/v3");
+  if (fileSymlinkCapability) {
+    expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("CAC-0042-doctor-active/app/v2");
+    expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("CAC-0042-doctor-active/app/v3");
+  }
   expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("CAC-0042-doctor-active/app/v4");
   expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("mismatches package-lock.json (npm)");
   expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("CAC-0042-doctor-stale");
