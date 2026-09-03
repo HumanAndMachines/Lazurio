@@ -743,6 +743,7 @@ export function createRuntimeManager({
       stopFinalizationPromise: null,
       ownerProofCaptured: false,
       ownerProof: null,
+      ownerProofCapturePromise: null,
       startTrigger: trigger,
       outputPipes: [],
     };
@@ -909,6 +910,25 @@ export function createRuntimeManager({
     }
 
     if (app.module_contract?.schema_version === "lazurio.module.v1") {
+      if (platform === "win32") {
+        // Background and final capture share one serialized operation. Do not
+        // await the background health window: a listener may be owned while
+        // its health endpoint is intentionally still warming up. Ownership is
+        // already verified here, so the final capture can safely bind it and
+        // let Start return `starting` for hosted-maintenance backoff.
+        try {
+          await captureWindowsRuntimeOwnerProofSerialized(app, record);
+        } catch {
+          // Owner proof is optional recovery authority. A failed proof-only
+          // write must not prevent the final listener audit from recording a
+          // process that Start has already verified as owning the lease.
+          record.ownerProof = null;
+          record.ownerProofCaptured = false;
+        }
+        if (record.ownerProofWritePromise) {
+          await Promise.allSettled([record.ownerProofWritePromise]);
+        }
+      }
       if (managedProcesses.get(runtimeKey) !== record || record.stopping) {
         throw new RuntimeActionError(
           409,
@@ -945,6 +965,9 @@ export function createRuntimeManager({
           launcher_exit_code: earlyExit,
           owner_proof: earlySurvivingListenerProof,
         } : {}),
+        ...windowsRuntimeOwnerProofState(
+          earlySurvivingListenerProof ?? (record.ownerProofCaptured ? record.ownerProof : null),
+        ),
         process_group_id: record.processGroupId,
         listeners: runtimeListenerState(app),
         listener_ownership: ownershipProof,
@@ -3590,10 +3613,11 @@ export function createRuntimeManager({
       && !record.stopping
       && Date.now() < deadline
     ) {
+      if (record.ownerProofCaptured) return;
       const probe = await probeHealth(app);
       if (probe.reachable && probe.ok) {
         captureAttempts += 1;
-        if (await captureWindowsRuntimeOwnerProof(app, record)) return;
+        if (await captureWindowsRuntimeOwnerProofSerialized(app, record)) return;
         if (captureAttempts >= windowsOwnerProofCaptureAttempts) {
           await appendLog(
             record.logPath,
@@ -3604,6 +3628,19 @@ export function createRuntimeManager({
       }
       await sleep(openHealthyPollMs);
     }
+  }
+
+  async function captureWindowsRuntimeOwnerProofSerialized(app, record, expectedCwd = null) {
+    if (record.ownerProofCaptured) return true;
+    if (record.ownerProofCapturePromise) return record.ownerProofCapturePromise;
+    const capturePromise = captureWindowsRuntimeOwnerProof(app, record, expectedCwd)
+      .finally(() => {
+        if (record.ownerProofCapturePromise === capturePromise) {
+          record.ownerProofCapturePromise = null;
+        }
+      });
+    record.ownerProofCapturePromise = capturePromise;
+    return capturePromise;
   }
 
   async function captureWindowsRuntimeOwnerProof(app, record, expectedCwd = null) {

@@ -2406,6 +2406,133 @@ test("Windows Lazurio Start accepts a listener owned by the launcher's child pro
   }
 }, platformTestTimeout(10_000));
 
+test("Windows Start zachová background owner proof v konečném listener auditu", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port });
+  const app = withStaticEntrypoint(fixtureDiscoveryApp({ port }));
+  const statePath = join(root, "launchpad", "runtime", "apps", `${app.id}.json`);
+  let child = null;
+  let ownerProbeCount = 0;
+  let reportProofPersisted;
+  const proofPersisted = new Promise((resolve) => {
+    reportProofPersisted = resolve;
+  });
+  const identityFor = (pid) => ({
+    pid,
+    parent_pid: process.pid,
+    created_at: "2026-07-27T08:00:00.000Z",
+    executable_path: "C:\\Tools\\bun.exe",
+  });
+  const resolveOwner = async () => {
+    if (!child) return null;
+    ownerProbeCount += 1;
+    if (ownerProbeCount > 1) await proofPersisted;
+    return { pid: child.pid, cwd_matches: null };
+  };
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "windows-owner-proof-final-state",
+    platform: "win32",
+    bunExecutable: process.execPath,
+    discover: discoveryWithApp(app),
+    spawnProcess: (command, options) => {
+      child = spawnFixtureChild(root, command, options);
+      return child;
+    },
+    resolvePortOwnerFn: resolveOwner,
+    resolveProcessIdentityFn: async (pid) => pid === child?.pid ? identityFor(pid) : null,
+    writeRuntimeStateFile: async (path, content, encoding) => {
+      const state = JSON.parse(content);
+      await writeFile(path, content, encoding);
+      if (state.owner_proof && !state.listener_ownership) reportProofPersisted();
+    },
+  });
+
+  try {
+    expect((await runtime.start(app.id)).runtime.status).toBe("healthy");
+    const state = JSON.parse(await readFile(statePath, "utf8"));
+    expect(ownerProbeCount).toBeGreaterThan(1);
+    expect(state).toMatchObject({
+      status: "starting",
+      listener_ownership: [expect.objectContaining({ owner_pid: child.pid, owned: true })],
+      owner_proof: {
+        launcher_pid: child.pid,
+        listener_pid: child.pid,
+      },
+    });
+
+    const restartedRuntime = createRuntimeManager({
+      companiesRoot: root,
+      launchpadRoot: join(root, "launchpad"),
+      instanceId: "windows-owner-proof-after-restart",
+      platform: "win32",
+      discover: discoveryWithApp(app),
+      resolvePortOwnerFn: resolveOwner,
+      resolveProcessIdentityFn: async (pid) => pid === child?.pid ? identityFor(pid) : null,
+    });
+    expect(await restartedRuntime.health(app.id)).toMatchObject({
+      status: "healthy",
+      owner: "adopted-port",
+      port_owner: { verified_by: "runtime-owner-proof" },
+    });
+  } finally {
+    reportProofPersisted();
+    await killFixtureProcess(child, root);
+  }
+}, platformTestTimeout(10_000));
+
+test("Windows Start po selhání owner-proof zápisu zachová finální listener audit", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port });
+  const app = withStaticEntrypoint(fixtureDiscoveryApp({ port }));
+  const statePath = join(root, "launchpad", "runtime", "apps", `${app.id}.json`);
+  let child = null;
+  let proofOnlyWriteFailures = 0;
+  const identityFor = (pid) => ({
+    pid,
+    parent_pid: process.pid,
+    created_at: "2026-07-27T08:00:00.000Z",
+    executable_path: "C:\\Tools\\bun.exe",
+  });
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "windows-owner-proof-write-failure",
+    platform: "win32",
+    bunExecutable: process.execPath,
+    discover: discoveryWithApp(app),
+    spawnProcess: (command, options) => {
+      child = spawnFixtureChild(root, command, options);
+      return child;
+    },
+    resolvePortOwnerFn: async () => child
+      ? { pid: child.pid, cwd_matches: null }
+      : null,
+    resolveProcessIdentityFn: async (pid) => pid === child?.pid ? identityFor(pid) : null,
+    writeRuntimeStateFile: async (path, content, encoding) => {
+      const state = JSON.parse(content);
+      if (state.owner_proof && !state.listener_ownership) {
+        proofOnlyWriteFailures += 1;
+        throw new Error("simulated owner-proof state lock");
+      }
+      return writeFile(path, content, encoding);
+    },
+  });
+
+  try {
+    expect((await runtime.start(app.id)).runtime.status).toBe("healthy");
+    const state = JSON.parse(await readFile(statePath, "utf8"));
+    expect(proofOnlyWriteFailures).toBeGreaterThan(0);
+    expect(state.listener_ownership).toEqual([
+      expect.objectContaining({ owner_pid: child.pid, owned: true }),
+    ]);
+    expect(state.owner_proof).toBeUndefined();
+  } finally {
+    await killFixtureProcess(child, root);
+  }
+}, platformTestTimeout(10_000));
+
 test("Windows launcher exit after Start preserves Lazurio listener audit for restart", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({ port });
@@ -4320,13 +4447,16 @@ test("hosted maintenance backs off while an exact runtime source is still starti
   const root = await createCompaniesWorkspaceFixture({
     port,
     serverSource: [
-      "const startedAt = Date.now();",
+      "import { existsSync } from 'node:fs';",
+      "import { dirname, join } from 'node:path';",
+      "import { fileURLToPath } from 'node:url';",
+      "const readyPath = join(dirname(fileURLToPath(import.meta.url)), 'maintenance-ready');",
       "const server = Bun.serve({",
       "  hostname: process.env.LAZURIO_RUNTIME_HOST,",
       "  port: Number(process.env.LAZURIO_RUNTIME_PORT),",
       "  fetch(request) {",
       "    const url = new URL(request.url);",
-      "    if (url.pathname === '/health' && Date.now() - startedAt < 2500) return new Response('building', { status: 404 });",
+      "    if (url.pathname === '/health' && !existsSync(readyPath)) return new Response('building', { status: 404 });",
       "    if (url.pathname === '/health') return Response.json({ status: 'ok' });",
       "    return new Response('ok');",
       "  },",
@@ -4353,6 +4483,11 @@ test("hosted maintenance backs off while an exact runtime source is still starti
       (state) => state?.status === "starting" && state.attempts > 0,
     );
     expect(Date.parse(retrying.next_attempt_at)).toBeGreaterThan(Date.now());
+    await writeFile(
+      join(root, "organizations", "TestCompany", "modules", "demo", "app", "v1", "maintenance-ready"),
+      "ready\n",
+      "utf8",
+    );
     expect(await waitForStatus(() => runtime.health(app.id), "healthy")).toMatchObject({
       managed: true,
       maintenance: { status: "healthy", attempts: 0 },
