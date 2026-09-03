@@ -6,6 +6,7 @@ Lazurio Root: "/Users/example/Lazurio"
 
 ✓ Platform — supported platform
 ✓ Bun — Bun 1.4.0 matches the required version
+✓ Node.js — Node.js 22.0.0 meets the minimum supported version 22.0.0
 ✓ Git — Git is available
 ! GitHub CLI — GitHub CLI was not found
 – GitHub sign-in — sign-in cannot be checked without GitHub CLI

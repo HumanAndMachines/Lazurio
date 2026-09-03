@@ -31,7 +31,8 @@ dogfoodovat tutéž fasádu. Dnešní read-only slice Source Root nemigruje;
 budoucí Source → Managed přechod bude explicitní, samostatně gated operace
 stejného Install Core. Jiná cesta se tiše neadoptuje ani nepřesouvá. Společné Core
 postupně ověří platformu, exact Bun runtime z
-`package.json#packageManager`, dostupnost příkazů Bun, Git a GitHub CLI v
+`package.json#packageManager`, minimální Node.js z `package.json#engines.node`,
+dostupnost příkazů Bun, Node.js, Git a GitHub CLI v
 `PATH`, přihlášení ke github.com
 a tvar Rootu; chyba jednoho probe nezastaví nezávislé kontroly a výstup nikdy
 neobsahuje stdout ani stderr externího nástroje. JSON zůstává locale-neutral,

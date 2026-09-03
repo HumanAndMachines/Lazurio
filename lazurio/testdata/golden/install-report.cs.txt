@@ -6,6 +6,7 @@ Lazurio Root: "/Users/example/Lazurio"
 
 ✓ Platforma — podporovaná platforma
 ✓ Bun — Bun 1.4.0 odpovídá požadované verzi
+✓ Node.js — Node.js 22.0.0 splňuje minimální podporovanou verzi 22.0.0
 ✓ Git — Git je dostupný
 ! GitHub CLI — GitHub CLI nebylo nalezeno
 – Přihlášení ke GitHubu — bez GitHub CLI nelze přihlášení ověřit

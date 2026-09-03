@@ -9,7 +9,7 @@ import schema from "../install-report.v1.schema.json";
 import {
   canonicalLazurioRoot,
   INSTALL_STEP_IDS,
-  inspectLazurioInstallation,
+  inspectLazurioInstallation as inspectLazurioInstallationCore,
   installExitCode,
   installReasonCodes,
   isValidLazurioInstallReport,
@@ -35,7 +35,7 @@ test("Install Core returns one deterministic locale-neutral report", () => {
   });
   expect(report.summary).toEqual({
     status: "action_required",
-    counts: { completed: 3, skipped: 1, action_required: 2, failed: 0 },
+    counts: { completed: 4, skipped: 1, action_required: 2, failed: 0 },
   });
   expect(isValidLazurioInstallReport(report)).toBe(true);
   expect(validateAgainstSchema(report, schema, "install")).toEqual([]);
@@ -97,6 +97,7 @@ test("independent probes continue after a bounded failure", () => {
       if (executable === process.execPath && args[0] === "--version") {
         return { status: 0, stdout: "1.4.0" };
       }
+      if (executable === "/trusted/bin/node") return { status: 0, stdout: "v22.0.0" };
       if (executable === "/trusted/bin/gh" && args[0] === "--version") return { status: 0 };
       return { status: 1, stdout: "CANARY_STDOUT", stderr: "CANARY_STDERR" };
     },
@@ -111,6 +112,7 @@ test("independent probes continue after a bounded failure", () => {
   expect(report.steps.find((step) => step.id === "github_auth").reason).toBe("github_login_required");
   expect(invoked).toEqual([
     `${process.execPath} --version`,
+    "/trusted/bin/node --version",
     "/trusted/bin/gh --version",
     "/trusted/bin/gh auth status --hostname github.com",
   ]);
@@ -135,6 +137,8 @@ test("supported complete fixture exits zero with all probes completed", () => {
         status: 0,
         stdout: executable === process.execPath
           ? "1.4.0"
+          : executable.endsWith("node.exe")
+            ? "v22.0.0"
           : args[0] === "config"
             ? "ssh"
             : "",
@@ -150,7 +154,7 @@ test("supported complete fixture exits zero with all probes completed", () => {
 
   expect(report.status).toBe("completed");
   expect(report.summary.counts).toEqual({
-    completed: 6,
+    completed: 7,
     skipped: 0,
     action_required: 0,
     failed: 0,
@@ -159,6 +163,7 @@ test("supported complete fixture exits zero with all probes completed", () => {
   expect(isValidLazurioInstallReport(report)).toBe(true);
   expect(commands).toEqual([
     { executable: process.execPath, cwd: "C:\\Windows\\System32" },
+    { executable: "C:\\Program Files\\nodejs\\node.exe", cwd: "C:\\Windows\\System32" },
     { executable: "C:\\Program Files\\Git\\cmd\\git.exe", cwd: "C:\\Windows\\System32" },
     { executable: "C:\\Program Files\\GitHub CLI\\gh.exe", cwd: "C:\\Windows\\System32" },
     { executable: "C:\\Program Files\\GitHub CLI\\gh.exe", cwd: "C:\\Windows\\System32" },
@@ -179,6 +184,8 @@ test("GitHub auth is not ready until gh config selects SSH", () => {
       status: 0,
       stdout: executable === process.execPath
         ? "1.4.0"
+        : executable === "/trusted/bin/node"
+          ? "v22.0.0"
         : args[0] === "config"
           ? "https"
           : "",
@@ -211,7 +218,10 @@ test("Bun probe requires the exact packageManager version and reports both versi
     resolveGit: () => "/usr/bin/git",
     resolveGitHubCli: () => null,
     resolvePathCommand: fixturePathCommand,
-    runCommand: () => ({ status: 0 }),
+    runCommand: ({ executable }) => ({
+      status: 0,
+      stdout: executable === "/trusted/bin/node" ? "v22.0.0" : "",
+    }),
     inspectRoot: missingRootObservation,
   });
 
@@ -255,6 +265,61 @@ test("missing Bun runtime is a failed probe with an explicit required version", 
   expect(report.status).toBe("failed");
 });
 
+test("Node.js is a declared minimum-version gate with explicit remediation states", () => {
+  const base = {
+    root: null,
+    platform: "darwin",
+    architecture: "arm64",
+    bunVersion: "1.4.0",
+    homeDirectory: "/Users/example",
+    environment: { HOME: "/Users/example" },
+    resolveGit: () => "/usr/bin/git",
+    resolveGitHubCli: () => null,
+    resolvePathCommand: fixturePathCommand,
+    inspectRoot: missingRootObservation,
+  };
+  const current = inspectLazurioInstallation({
+    ...base,
+    runCommand: ({ executable }) => ({
+      status: 0,
+      stdout: executable === "/trusted/bin/node" ? "v22.1.0" : "1.4.0",
+    }),
+  });
+  expect(current.machine.node).toEqual({
+    status: "current",
+    current_version: "22.1.0",
+    minimum_version: "22.0.0",
+  });
+  expect(current.steps.find((step) => step.id === "node")).toMatchObject({
+    status: "completed",
+    reason: "node_runtime_current",
+  });
+
+  const outdated = inspectLazurioInstallation({
+    ...base,
+    runCommand: ({ executable }) => ({
+      status: 0,
+      stdout: executable === "/trusted/bin/node" ? "v20.19.0" : "1.4.0",
+    }),
+  });
+  expect(outdated.steps.find((step) => step.id === "node")).toMatchObject({
+    status: "action_required",
+    reason: "node_runtime_outdated",
+  });
+
+  const missing = inspectLazurioInstallation({
+    ...base,
+    resolveNode: () => null,
+    runCommand: () => {
+      throw new Error("missing Node.js must not execute an ambient command");
+    },
+  });
+  expect(missing.steps.find((step) => step.id === "node")).toMatchObject({
+    status: "action_required",
+    reason: "node_runtime_missing",
+  });
+});
+
 test("an exact running Bun outside PATH cannot mark the machine ready", () => {
   const report = inspectLazurioInstallation({
     root: null,
@@ -269,7 +334,10 @@ test("an exact running Bun outside PATH cannot mark the machine ready", () => {
     resolvePathCommand: (command, context) => (
       command === "bun" ? null : fixturePathCommand(command, context)
     ),
-    runCommand: () => ({ status: 0 }),
+    runCommand: ({ executable }) => ({
+      status: 0,
+      stdout: executable === "/trusted/bin/node" ? "v22.0.0" : "",
+    }),
     inspectRoot: missingRootObservation,
   });
 
@@ -291,7 +359,10 @@ test("unsupported architecture requires action even on a supported OS", () => {
     resolveGit: () => "/usr/bin/git",
     resolveGitHubCli: () => "/usr/bin/gh",
     resolvePathCommand: fixturePathCommand,
-    runCommand: () => ({ status: 0 }),
+    runCommand: ({ executable }) => ({
+      status: 0,
+      stdout: executable === "/trusted/bin/node" ? "v22.0.0" : "",
+    }),
     inspectRoot: () => ({
       path: "/fixture/root",
       layout: "generated_root",
@@ -367,7 +438,10 @@ test("GitHub CLI discovery receives the same explicit home as Root discovery", (
     sameExecutable: (pathExecutable, trustedExecutable) => (
       pathExecutable === trustedExecutable
     ),
-    runCommand: () => ({ status: 0 }),
+    runCommand: ({ executable }) => ({
+      status: 0,
+      stdout: executable === "/trusted/bin/node" ? "v22.0.0" : "",
+    }),
     inspectRoot: missingRootObservation,
   });
 
@@ -379,6 +453,51 @@ test("GitHub CLI discovery receives the same explicit home as Root discovery", (
   expect(report.steps.find((step) => step.id === "github_cli")).toMatchObject({
     status: "completed",
     reason: "github_cli_available",
+  });
+});
+
+test("supported user-local Git and GitHub CLI candidates pass even when a system candidate also exists", () => {
+  const homeDirectory = "/Users/fixture";
+  const report = inspectLazurioInstallation({
+    root: null,
+    platform: "darwin",
+    architecture: "arm64",
+    bunVersion: "1.4.0",
+    environment: { HOME: homeDirectory },
+    homeDirectory,
+    resolveGit: () => "/usr/bin/git",
+    resolveGitHubCli: () => "/usr/local/bin/gh",
+    resolvePathCommand: (command) => ({
+      bun: process.execPath,
+      node: "/trusted/bin/node",
+      git: `${homeDirectory}/.local/bin/git`,
+      gh: `${homeDirectory}/.local/bin/gh`,
+    })[command] ?? null,
+    sameExecutable: (first, second) => first === second,
+    runCommand: ({ executable, args }) => ({
+      status: 0,
+      stdout: executable === process.execPath
+        ? "1.4.0"
+        : executable === "/trusted/bin/node"
+          ? "v22.0.0"
+          : args[0] === "config"
+            ? "ssh"
+            : "",
+    }),
+    inspectRoot: missingRootObservation,
+  });
+
+  expect(report.steps.find((step) => step.id === "git")).toMatchObject({
+    status: "completed",
+    reason: "git_available",
+  });
+  expect(report.steps.find((step) => step.id === "github_cli")).toMatchObject({
+    status: "completed",
+    reason: "github_cli_available",
+  });
+  expect(report.steps.find((step) => step.id === "github_auth")).toMatchObject({
+    status: "completed",
+    reason: "github_authenticated",
   });
 });
 
@@ -651,7 +770,11 @@ function fixtureReport() {
     resolvePathCommand: fixturePathCommand,
     runCommand: ({ executable }) => ({
       status: 0,
-      stdout: executable === process.execPath ? "1.4.0" : "CANARY_STDOUT",
+      stdout: executable === process.execPath
+        ? "1.4.0"
+        : executable === "/trusted/bin/node"
+          ? "v22.0.0"
+          : "CANARY_STDOUT",
       stderr: "CANARY_STDERR",
     }),
     inspectRoot: (path) => ({
@@ -694,9 +817,21 @@ function fixturePathCommand(command, { platform }) {
   if (command === "gh") {
     return platform === "win32" ? "C:\\Program Files\\GitHub CLI\\gh.exe" : "/trusted/bin/gh";
   }
+  if (command === "node") {
+    return platform === "win32" ? "C:\\Program Files\\nodejs\\node.exe" : "/trusted/bin/node";
+  }
   return platform === "win32"
     ? `C:\\Tools\\${command}.exe`
     : `/trusted/bin/${command}`;
+}
+
+function inspectLazurioInstallation(options = {}) {
+  return inspectLazurioInstallationCore({
+    resolveNode: ({ platform }) => (
+      platform === "win32" ? "C:\\Program Files\\nodejs\\node.exe" : "/trusted/bin/node"
+    ),
+    ...options,
+  });
 }
 
 async function writeLaunchpadManifest(root) {

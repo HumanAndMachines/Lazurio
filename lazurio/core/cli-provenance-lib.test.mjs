@@ -20,6 +20,7 @@ import {
   normalizeGitHubRepository,
   trustedGitCandidates,
   trustedGitHubCliCandidates,
+  trustedNodeCandidates,
 } from "./cli-provenance-lib.mjs";
 
 const cleanup = [];
@@ -244,6 +245,10 @@ test("portable Windows paths and trusted executable candidates are deterministic
     "C:\\Program Files (x86)\\Git\\cmd\\git.exe",
     "C:\\Program Files (x86)\\Git\\bin\\git.exe",
   ]);
+  expect(trustedGitCandidates("darwin", { homeDirectory: "/Users/fixture" }))
+    .toContain("/Users/fixture/.local/bin/git");
+  expect(trustedGitCandidates("linux", { homeDirectory: "/home/fixture" }))
+    .toContain("/home/fixture/.local/bin/git");
   expect(trustedGitHubCliCandidates("darwin", {
     PATH: "/tmp/shadow",
     homeDirectory: "/Users/fixture",
@@ -257,14 +262,22 @@ test("portable Windows paths and trusted executable candidates are deterministic
     PATH: "/tmp/shadow",
     homeDirectory: "relative-home",
   })).not.toContain("relative-home/.local/bin/gh");
-  expect(trustedGitHubCliCandidates("linux", { PATH: "/tmp/shadow" }))
-    .toContain("/usr/bin/gh");
+  expect(trustedGitHubCliCandidates("linux", {
+    PATH: "/tmp/shadow",
+    homeDirectory: "/home/fixture",
+  })).toEqual(expect.arrayContaining(["/usr/bin/gh", "/home/fixture/.local/bin/gh"]));
   expect(trustedGitHubCliCandidates("win32", {
     PATH: "C:\\Shadow",
     LOCALAPPDATA: "C:\\Users\\Matous\\AppData\\Local",
   })).toEqual([
     "C:\\Program Files\\GitHub CLI\\gh.exe",
     "C:\\Program Files (x86)\\GitHub CLI\\gh.exe",
+  ]);
+  expect(trustedNodeCandidates("darwin", { homeDirectory: "/Users/fixture" }))
+    .toContain("/Users/fixture/.local/bin/node");
+  expect(trustedNodeCandidates("win32")).toEqual([
+    "C:\\Program Files\\nodejs\\node.exe",
+    "C:\\Program Files (x86)\\nodejs\\node.exe",
   ]);
 });
 

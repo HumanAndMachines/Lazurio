@@ -18,8 +18,8 @@ tohoto runbooku; krátký prompt jej nenahrazuje ani nerozšiřuje.
 > a dokončit jednorázovou aktivaci; jako Builder jeho `admin:org` kontrolu
 > neopakuj ani z její nedostupnosti neodvozuj stav App.
 >
-> Máš mé výslovné svolení nainstalovat chybějící Git, GitHub CLI, Codex CLI a
-> přesně verzovaný Bun z jejich oficiálních zdrojů a změnit pouze můj
+> Máš mé výslovné svolení nainstalovat chybějící Git, GitHub CLI, Node.js 22
+> nebo novější, Codex CLI a přesně verzovaný Bun z jejich oficiálních zdrojů a změnit pouze můj
 > uživatelský `PATH` tak, aby jejich skutečné instalační adresáře byly dostupné
 > v novém čistém terminálu. Zachovej existující `PATH`. Neměň system-wide
 > `PATH`, package manager, bezpečnostní nastavení ani jiné verze nástrojů bez
@@ -98,7 +98,7 @@ membership a WRITE nebo vyšší oprávnění k Builder repozitářům.
 ## Předpoklady
 
 - produkční nebo development-linked příkaz `lazurio` je v `PATH`;
-- Git, přesně pinovaný Bun a GitHub CLI jsou dostupné v `PATH` nového čistého
+- Git, přesně pinovaný Bun, Node.js 22 nebo novější a GitHub CLI jsou dostupné v `PATH` nového čistého
   procesu;
 - `gh auth status --hostname github.com` potvrzuje správný účet;
 - Organization owner už dokončil jednorázovou aktivaci `Lazurio for GitHub`;
@@ -124,7 +124,7 @@ nezařazují.
 Instalovaná binárka ještě není připravený nástroj. Onboarding nesmí pokračovat
 jen proto, že instalační skript umí spustit Bun absolutní cestou nebo že právě
 běžící terminál zdědil dočasně rozšířený `PATH`. Před materializací Organizace
-musí nový čistý proces najít příkazy `bun`, `git`, `gh`, `codex` a následně
+musí nový čistý proces najít příkazy `bun`, `node`, `git`, `gh`, `codex` a následně
 `lazurio`; u SSH remote musí fungovat i Gitův SSH transport.
 
 Machine toolchain vlastní top-level instalační tok, nikoli Organizace. Agent
@@ -176,7 +176,7 @@ a zopakuj `lazurio doctor --tool-updates --json`.
 Obsahuje-li instalační prompt explicitní mandát pro přesné nástroje a změnu
 uživatelského `PATH`, Agent nezůstane u handoff warningu:
 
-1. chybějící Git, GitHub CLI, Codex CLI nebo přesně pinovaný Bun nainstaluje
+1. chybějící Git, GitHub CLI, Node.js 22 nebo novější, Codex CLI nebo přesně pinovaný Bun nainstaluje
    výhradně oficiálním postupem pro zjištěnou platformu;
 2. do uživatelského `PATH` doplní pouze skutečný instalační adresář chybějícího
    nástroje, zachová všechny existující položky a nevytvoří vazbu na task
@@ -187,13 +187,13 @@ uživatelského `PATH`, Agent nezůstane u handoff warningu:
 4. zahodí dočasné PATH dědictví a z nového čistého procesu ověří příkazy
    `bun --version`, `git --version`, `gh --version`, `codex --version` a po
    registraci také `lazurio cli status --json`;
-5. znovu spustí Install Core. Bun, Git ani GitHub CLI nesmí mít reason
+5. znovu spustí Install Core. Bun, Node.js, Git ani GitHub CLI nesmí mít reason
    `*_not_on_path`; teprve potom pokračuje `lazurio organization install`.
 
 Doporučený autorizační blok instalačního promptu je:
 
-> Máš mé výslovné svolení nainstalovat chybějící Git, GitHub CLI, Codex CLI a
-> přesně verzovaný Bun z jejich oficiálních zdrojů a změnit pouze můj
+> Máš mé výslovné svolení nainstalovat chybějící Git, GitHub CLI, Node.js 22
+> nebo novější, Codex CLI a přesně verzovaný Bun z jejich oficiálních zdrojů a změnit pouze můj
 > uživatelský PATH tak, aby jejich skutečné instalační adresáře byly dostupné
 > v novém čistém terminálu. Zachovej existující PATH. Neměň system-wide PATH,
 > neinstaluj systémový package manager, neměň bezpečnostní nastavení ani

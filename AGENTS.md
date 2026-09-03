@@ -306,13 +306,13 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    preflight patří každému
    nested checkoutu, kterého se task dotkne.
    Když Agent troubleshootuje nástrojové prostředí mašiny, přidá explicitní
-   `lazurio doctor --tool-updates`. Git, GitHub CLI a Codex musí být dostupné
+   `lazurio doctor --tool-updates`. Git, GitHub CLI, Node.js a Codex musí být dostupné
    v `PATH`; Claude Code je volitelný a kontroluje se jen tam, kde nainstalovaný
    je. Nález chybějícího Codexu, novější verze nástroje nebo nesouladu Bunu
    Agent nejdřív předá Principálovi; updater, package manager ani změnu `PATH`
    nespustí bez jeho souhlasu s přesnou změnou. Při nové instalaci Mašiny smí
    instalační prompt tento souhlas udělit předem pro přesně Git, GitHub CLI,
-   Codex CLI a verzovaný Bun. V takovém případě Agent chybějící povolený nástroj
+   Node.js 22 nebo novější, Codex CLI a verzovaný Bun. V takovém případě Agent chybějící povolený nástroj
    nainstaluje z oficiálního zdroje, doplní pouze jeho skutečnou instalační cestu
    do uživatelského `PATH` a ověří ji z nového čistého procesu; úspěch v právě
    běžící zděděné relaci není důkaz. Existující `PATH` nepřepisuje, system-wide

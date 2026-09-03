@@ -54,13 +54,18 @@ import {
 } from "../core/module-contract-lib.mjs";
 import {
   classifyBunRuntime,
+  classifyNodeRuntime,
   executablePathsMatch,
   readRequiredBunVersion,
+  readRequiredNodeMinimum,
   resolveExecutableOnPath,
 } from "../core/toolchain-lib.mjs";
 import {
   resolveTrustedGitHubCliExecutable,
+  resolveTrustedNodeExecutable,
   trustedGitCandidates,
+  trustedGitHubCliCandidates,
+  trustedNodeCandidates,
 } from "../core/cli-provenance-lib.mjs";
 import { sanitizedGitHubEnvironment } from "../core/github-provider-lib.mjs";
 import {
@@ -2045,10 +2050,12 @@ function platformChecks(companiesRoot) {
   const bunExecutable = resolveBunExecutable();
   const gitExecutable = resolveGitExecutableSync();
   const githubCliExecutable = resolveTrustedGitHubCliExecutable();
+  const nodeExecutable = resolveTrustedNodeExecutable();
   const bunOnPath = resolveExecutableOnPath("bun");
   const gitOnPath = resolveExecutableOnPath("git");
   const githubCliOnPath = resolveExecutableOnPath("gh");
   const nodeOnPath = resolveExecutableOnPath("node");
+  const githubCliCandidates = trustedGitHubCliCandidates();
   return [
     {
       id: "platform.os",
@@ -2098,6 +2105,7 @@ function platformChecks(companiesRoot) {
       title: "GitHub CLI",
       pathExecutable: githubCliOnPath,
       trustedExecutable: githubCliExecutable,
+      trustedCandidates: githubCliCandidates,
       args: ["--version"],
       cwd: companiesRoot,
       okMessage: (result) => result.stdout.split("\n")[0],
@@ -2106,18 +2114,22 @@ function platformChecks(companiesRoot) {
     }),
     githubAuthenticationCheck({
       companiesRoot,
-      executable: githubCliOnPath && executablePathsMatch(githubCliOnPath, githubCliExecutable)
+      executable: githubCliOnPath && matchesTrustedExecutable(
+        githubCliOnPath,
+        githubCliExecutable,
+        githubCliCandidates,
+      )
         ? githubCliOnPath
         : null,
     }),
-    commandCheck({
+    nodeRuntimeCheck({
       id: "platform.node",
       title: "Node.js",
       command: nodeOnPath,
-      args: ["--version"],
+      trustedExecutable: nodeExecutable,
+      trustedCandidates: trustedNodeCandidates(),
       cwd: companiesRoot,
-      okMessage: (result) => `Node.js je dostupný v PATH: ${result.stdout}`,
-      failMessage: "Příkaz node není dostupný nebo jej nelze spustit z PATH nového procesu.",
+      minimumVersion: readRequiredNodeMinimum(),
     }),
     codexRuntimeCheck({ companiesRoot }),
   ];
@@ -2217,8 +2229,7 @@ function pathIdentityCheck({
   if (!pathExecutable || !trustedExecutable) {
     return requiredToolFailure({ id, title, message: missingMessage, pathExecutable, trustedExecutable, args });
   }
-  const matchesTrusted = executablePathsMatch(pathExecutable, trustedExecutable)
-    || trustedCandidates.some((candidate) => executablePathsMatch(pathExecutable, candidate));
+  const matchesTrusted = matchesTrustedExecutable(pathExecutable, trustedExecutable, trustedCandidates);
   if (!matchesTrusted) {
     return requiredToolFailure({ id, title, message: mismatchMessage, pathExecutable, trustedExecutable, args });
   }
@@ -2232,6 +2243,11 @@ function pathIdentityCheck({
     failMessage: `${title} bylo nalezeno, ale ověřovací příkaz selhal.`,
     env,
   });
+}
+
+function matchesTrustedExecutable(pathExecutable, trustedExecutable, trustedCandidates = []) {
+  return executablePathsMatch(pathExecutable, trustedExecutable)
+    || trustedCandidates.some((candidate) => executablePathsMatch(pathExecutable, candidate));
 }
 
 function requiredToolFailure({ id, title, message, pathExecutable, trustedExecutable, args }) {
@@ -2297,7 +2313,7 @@ export function bunRuntimeCheck({
       severity: "required",
       title: "Bun runtime",
       message: "Bun nebyl nalezen ani neprošel validací executable kandidáta.",
-      paths: ["package.json"],
+      paths: ["lazurio/package.json"],
       links: [],
       details: [`required: ${requiredVersion}`, result.error ?? result.stderr ?? "unknown failure"],
     };
@@ -2316,7 +2332,7 @@ export function bunRuntimeCheck({
     message: current
       ? `Bun ${runtime.current_version} odpovídá Lazurio toolchain autoritě.`
       : `Bun ${runtime.current_version} neodpovídá požadované verzi ${runtime.required_version}; Agent musí nejdřív požádat Principála o souhlas s aktualizací.`,
-    paths: ["package.json"],
+    paths: ["lazurio/package.json"],
     links: [],
     details: [
       `command: ${bunExecutable} --version`,
@@ -2442,6 +2458,54 @@ function commandCheck({ id, title, command, args, cwd, okMessage, failMessage, e
     details: result.ok
       ? [`command: ${command} ${args.join(" ")}`]
       : [`command: ${command ?? "<missing>"} ${args.join(" ")}`, result.stderr || result.error || "Příkaz selhal."],
+  };
+}
+
+function nodeRuntimeCheck({
+  id,
+  title,
+  command,
+  trustedExecutable,
+  trustedCandidates,
+  cwd,
+  minimumVersion,
+}) {
+  const args = ["--version"];
+  const trusted = command && trustedExecutable
+    ? matchesTrustedExecutable(command, trustedExecutable, trustedCandidates)
+    : false;
+  const result = trusted
+    ? runCommand(command, args, { cwd })
+    : {
+        ok: false,
+        stdout: "",
+        stderr: "",
+        error: "Executable resolver nevrátil příkaz Node.js.",
+      };
+  const runtime = classifyNodeRuntime({
+    currentVersion: result.ok ? result.stdout.trim() : null,
+    minimumVersion,
+  });
+  const ready = trusted && result.ok && runtime.status === "current";
+  return {
+    id,
+    status: ready ? "ok" : "fail",
+    severity: "required",
+    title,
+    message: ready
+      ? `Node.js ${runtime.current_version} splňuje minimální podporovanou verzi ${minimumVersion}.`
+      : !trusted && command && trustedExecutable
+        ? "Příkaz node v PATH není ověřená instalace Node.js."
+        : runtime.status === "outdated"
+        ? `Node.js ${runtime.current_version} je starší než minimální podporovaná verze ${minimumVersion}.`
+        : "Příkaz node není dostupný nebo jej nelze spustit z PATH nového procesu.",
+    paths: ["lazurio/package.json"],
+    links: [],
+    details: [
+      `command: ${command ?? "<missing>"} ${args.join(" ")}`,
+      `trusted_command: ${trustedExecutable ?? "<missing>"}`,
+      `minimum: ${minimumVersion}`,
+    ],
   };
 }
 

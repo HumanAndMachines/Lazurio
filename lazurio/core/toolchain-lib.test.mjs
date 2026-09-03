@@ -4,7 +4,10 @@ import { dirname } from "node:path";
 import {
   bunVersionFromPackageManager,
   classifyBunRuntime,
+  classifyNodeRuntime,
+  nodeMinimumVersionFromEngines,
   readRequiredBunVersion,
+  readRequiredNodeMinimum,
   executablePathsMatch,
   resolveExecutableOnPath,
 } from "./toolchain-lib.mjs";
@@ -36,6 +39,27 @@ test("runtime classifier is exact and keeps future patches fail-closed", () => {
     .toBe("unavailable");
   expect(() => classifyBunRuntime({ currentVersion: "1.4.0", requiredVersion: "latest" }))
     .toThrow("exact stable version");
+});
+
+test("engines.node is the minimum Node.js workstation authority", () => {
+  expect(nodeMinimumVersionFromEngines(">=22.0.0")).toBe("22.0.0");
+  expect(() => nodeMinimumVersionFromEngines(">=22")).toThrow("exact minimum stable");
+  expect(() => nodeMinimumVersionFromEngines("latest")).toThrow("exact minimum stable");
+  expect(readRequiredNodeMinimum({
+    root: "/fixture",
+    readText: () => JSON.stringify({ engines: { node: ">=22.0.0" } }),
+  })).toBe("22.0.0");
+});
+
+test("Node.js classifier accepts the declared minimum or newer", () => {
+  expect(classifyNodeRuntime({ currentVersion: "v22.0.0", minimumVersion: "22.0.0" }))
+    .toEqual({ status: "current", current_version: "22.0.0", minimum_version: "22.0.0" });
+  expect(classifyNodeRuntime({ currentVersion: "24.1.0", minimumVersion: "22.0.0" }).status)
+    .toBe("current");
+  expect(classifyNodeRuntime({ currentVersion: "v20.19.0", minimumVersion: "22.0.0" }).status)
+    .toBe("outdated");
+  expect(classifyNodeRuntime({ currentVersion: null, minimumVersion: "22.0.0" }).status)
+    .toBe("unavailable");
 });
 
 test("PATH resolver proves the executable visible to a fresh command process", () => {

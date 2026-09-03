@@ -73,10 +73,11 @@ proto, že je Git checkout.
 
 Přítomnost binárky ani `process.execPath` právě běžícího Bunu nedokazují, že je
 Mašina připravená. Install Core proto vedle exact Bun verze ověřuje také příkaz
-`bun` v `PATH`; u Gitu a GitHub CLI rozlišuje nainstalovaný nástroj od
-`git_not_on_path` a `github_cli_not_on_path`. Běžný Doctor navíc spouští z
-aktuálního PATH ověřený Bun, `bun x`, Git, `gh`, GitHub auth i nastavený SSH
-protokol, Node a `codex`.
+`bun` v `PATH`; u Gitu, GitHub CLI a Node.js rozlišuje nainstalovaný nástroj od
+PATH nebo identity problému. Minimální Node.js verzi vlastní jediné
+`lazurio/package.json#engines.node`. Běžný Doctor z aktuálního PATH spouští
+ověřený Bun, `bun x`, Git, `gh`, GitHub auth i nastavený SSH protokol, Node.js
+a `codex`.
 Troubleshooting lane `lazurio doctor --tool-updates` ověří i čitelnou verzi a
 aktuálnost povinných nástrojů; chybějící nebo nečitelný povinný nástroj je
 required failure, zatímco pouhá dostupnost novější verze zůstává warningem a
@@ -90,7 +91,7 @@ nástroje předem znovu předloží Principálovi. Výsledek ověří v novém �
 procesu, nikoli v shellu s dočasným `export` nebo `$env:Path`.
 
 Organization instalace tuto machine autoritu nepřebírá. Začíná až poté, co
-top-level gate vidí Bun, Git a `gh` v PATH a Doctor vidí Codex; potom se
+top-level gate vidí Bun, Node.js, Git a `gh` v PATH a Doctor vidí Codex; potom se
 registruje `lazurio` a z nového procesu projde `lazurio cli status --json`.
 Přesný Builder postup a doporučený prompt blok drží
 [`manual/organization-install.md`](organization-install.md).

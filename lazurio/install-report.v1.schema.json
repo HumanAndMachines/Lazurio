@@ -9,7 +9,7 @@
     "status": { "enum": ["completed", "action_required", "failed"] },
     "machine": {
       "type": "object",
-      "required": ["platform", "architecture", "bun"],
+      "required": ["platform", "architecture", "bun", "node"],
       "properties": {
         "platform": { "type": "string", "minLength": 1 },
         "architecture": { "type": "string", "minLength": 1 },
@@ -25,6 +25,21 @@
               ]
             },
             "required_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+          },
+          "additionalProperties": false
+        },
+        "node": {
+          "type": "object",
+          "required": ["status", "current_version", "minimum_version"],
+          "properties": {
+            "status": { "enum": ["current", "outdated", "unavailable"] },
+            "current_version": {
+              "anyOf": [
+                { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+                { "enum": [null] }
+              ]
+            },
+            "minimum_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
           },
           "additionalProperties": false
         }
@@ -54,8 +69,8 @@
     },
     "steps": {
       "type": "array",
-      "minItems": 6,
-      "maxItems": 6,
+      "minItems": 7,
+      "maxItems": 7,
       "prefixItems": [
         {
           "type": "object",
@@ -74,6 +89,16 @@
             "id": { "const": "bun" },
             "status": { "enum": ["completed", "skipped", "action_required", "failed"] },
             "reason": { "enum": ["bun_runtime_current", "bun_runtime_mismatch", "bun_runtime_unavailable", "bun_runtime_not_on_path", "bun_path_identity_mismatch", "bun_path_unusable", "probe_failed"] }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["id", "status", "reason"],
+          "properties": {
+            "id": { "const": "node" },
+            "status": { "enum": ["completed", "skipped", "action_required", "failed"] },
+            "reason": { "enum": ["node_runtime_current", "node_runtime_outdated", "node_runtime_missing", "node_runtime_not_on_path", "node_path_identity_mismatch", "node_runtime_unusable", "probe_failed"] }
           },
           "additionalProperties": false
         },
@@ -135,7 +160,7 @@
         "type": "object",
         "required": ["id", "status", "reason"],
         "properties": {
-          "id": { "enum": ["platform", "bun", "git", "github_cli", "github_auth", "root"] },
+          "id": { "enum": ["platform", "bun", "node", "git", "github_cli", "github_auth", "root"] },
           "status": { "enum": ["completed", "skipped", "action_required", "failed"] },
           "reason": {
             "enum": [
@@ -147,6 +172,12 @@
               "bun_runtime_not_on_path",
               "bun_path_identity_mismatch",
               "bun_path_unusable",
+              "node_runtime_current",
+              "node_runtime_outdated",
+              "node_runtime_missing",
+              "node_runtime_not_on_path",
+              "node_path_identity_mismatch",
+              "node_runtime_unusable",
               "git_available",
               "git_missing",
               "git_not_on_path",

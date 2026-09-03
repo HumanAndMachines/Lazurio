@@ -8,12 +8,18 @@ import {
   LAZURIO_SOURCE_REPOSITORY,
   resolveTrustedGitExecutable,
   resolveTrustedGitHubCliExecutable,
+  resolveTrustedNodeExecutable,
   sanitizedGitEnvironment,
+  trustedGitCandidates,
+  trustedGitHubCliCandidates,
+  trustedNodeCandidates,
 } from "./cli-provenance-lib.mjs";
 import {
   classifyBunRuntime,
+  classifyNodeRuntime,
   executablePathsMatch,
   readRequiredBunVersion,
+  readRequiredNodeMinimum,
   resolveExecutableOnPath,
 } from "./toolchain-lib.mjs";
 
@@ -22,6 +28,7 @@ export const INSTALL_MODE = "report";
 export const INSTALL_STEP_IDS = Object.freeze([
   "platform",
   "bun",
+  "node",
   "git",
   "github_cli",
   "github_auth",
@@ -56,6 +63,15 @@ const reasonsByStep = Object.freeze({
     "bun_runtime_not_on_path",
     "bun_path_identity_mismatch",
     "bun_path_unusable",
+    "probe_failed",
+  ]),
+  node: new Set([
+    "node_runtime_current",
+    "node_runtime_outdated",
+    "node_runtime_missing",
+    "node_runtime_not_on_path",
+    "node_path_identity_mismatch",
+    "node_runtime_unusable",
     "probe_failed",
   ]),
   git: new Set([
@@ -96,10 +112,12 @@ export function inspectLazurioInstallation({
   bunVersion = process.versions.bun ?? null,
   bunExecutable = process.execPath,
   requiredBunVersion = readRequiredBunVersion(),
+  requiredNodeVersion = readRequiredNodeMinimum(),
   environment = process.env,
   homeDirectory = homedir(),
   resolveGit = resolveTrustedGitExecutable,
   resolveGitHubCli = resolveTrustedGitHubCliExecutable,
+  resolveNode = resolveTrustedNodeExecutable,
   resolvePathCommand = resolveExecutableOnPath,
   sameExecutable = executablePathsMatch,
   runCommand = runCommandSync,
@@ -140,6 +158,41 @@ export function inspectLazurioInstallation({
     return failed("bun_runtime_unavailable");
   }));
 
+  let nodeRuntime = classifyNodeRuntime({
+    currentVersion: null,
+    minimumVersion: requiredNodeVersion,
+  });
+  steps.push(boundedProbe("node", () => {
+    let nodeExecutable = resolveNode({ platform, environment, homeDirectory });
+    if (!nodeExecutable) return actionRequired("node_runtime_missing");
+    const pathExecutable = resolvePathCommand("node", { environment, platform, cwd: commandCwd });
+    if (!pathExecutable) return actionRequired("node_runtime_not_on_path");
+    const trustedCandidates = trustedNodeCandidates(platform, { homeDirectory });
+    if (
+      !sameExecutable(pathExecutable, nodeExecutable, { platform })
+      && !trustedCandidates.some((candidate) => sameExecutable(pathExecutable, candidate, { platform }))
+    ) {
+      return actionRequired("node_path_identity_mismatch");
+    }
+    nodeExecutable = pathExecutable;
+    const result = runCommand({
+      executable: nodeExecutable,
+      args: ["--version"],
+      environment,
+      cwd: commandCwd,
+    });
+    if (result?.status !== 0) return failed("node_runtime_unusable");
+    nodeRuntime = classifyNodeRuntime({
+      currentVersion: result.stdout?.trim() ?? null,
+      minimumVersion: requiredNodeVersion,
+    });
+    return nodeRuntime.status === "current"
+      ? completed("node_runtime_current")
+      : nodeRuntime.status === "outdated"
+        ? actionRequired("node_runtime_outdated")
+        : failed("node_runtime_unusable");
+  }));
+
   let gitExecutable = null;
   steps.push(boundedProbe("git", () => {
     gitExecutable = resolveGit({ platform, environment });
@@ -148,9 +201,14 @@ export function inspectLazurioInstallation({
     if (!pathExecutable) {
       return actionRequired("git_not_on_path");
     }
-    if (!sameExecutable(pathExecutable, gitExecutable, { platform })) {
+    const trustedCandidates = trustedGitCandidates(platform, { homeDirectory });
+    if (
+      !sameExecutable(pathExecutable, gitExecutable, { platform })
+      && !trustedCandidates.some((candidate) => sameExecutable(pathExecutable, candidate, { platform }))
+    ) {
       return actionRequired("git_path_identity_mismatch");
     }
+    gitExecutable = pathExecutable;
     return commandSucceeded(runCommand, pathExecutable, ["--version"], environment, commandCwd)
       ? completed("git_available")
       : failed("git_unusable");
@@ -165,7 +223,11 @@ export function inspectLazurioInstallation({
       githubCliExecutable = null;
       return actionRequired("github_cli_not_on_path");
     }
-    if (!sameExecutable(pathExecutable, githubCliExecutable, { platform })) {
+    const trustedCandidates = trustedGitHubCliCandidates(platform, { homeDirectory });
+    if (
+      !sameExecutable(pathExecutable, githubCliExecutable, { platform })
+      && !trustedCandidates.some((candidate) => sameExecutable(pathExecutable, candidate, { platform }))
+    ) {
       githubCliExecutable = null;
       return actionRequired("github_cli_path_identity_mismatch");
     }
@@ -226,6 +288,7 @@ export function inspectLazurioInstallation({
       platform,
       architecture,
       bun: bunRuntime,
+      node: nodeRuntime,
     },
     root: rootObservation.root,
     steps,
@@ -262,6 +325,7 @@ export function isValidLazurioInstallReport(value) {
   if (typeof value.machine.platform !== "string" || value.machine.platform === "") return false;
   if (typeof value.machine.architecture !== "string" || value.machine.architecture === "") return false;
   if (!validBunRuntime(value.machine.bun)) return false;
+  if (!validNodeRuntime(value.machine.node)) return false;
   if (!validRoot(value.root)) return false;
   if (!Array.isArray(value.steps) || value.steps.length !== INSTALL_STEP_IDS.length) return false;
   for (let index = 0; index < INSTALL_STEP_IDS.length; index += 1) {
@@ -283,6 +347,19 @@ function validBunRuntime(value) {
   if (value.status === "unavailable") return value.current_version === null;
   if (!/^\d+\.\d+\.\d+$/u.test(value.current_version ?? "")) return false;
   return value.status === (value.current_version === value.required_version ? "current" : "mismatch");
+}
+
+function validNodeRuntime(value) {
+  if (!plainObject(value)) return false;
+  if (!new Set(["current", "outdated", "unavailable"]).has(value.status)) return false;
+  if (!/^\d+\.\d+\.\d+$/u.test(value.minimum_version ?? "")) return false;
+  if (value.status === "unavailable") return value.current_version === null;
+  if (!/^\d+\.\d+\.\d+$/u.test(value.current_version ?? "")) return false;
+  const current = value.current_version.split(".").map(Number);
+  const minimum = value.minimum_version.split(".").map(Number);
+  const comparison = current.findIndex((part, index) => part !== minimum[index]);
+  const meetsMinimum = comparison === -1 || current[comparison] > minimum[comparison];
+  return value.status === (meetsMinimum ? "current" : "outdated");
 }
 
 export function installExitCode(report) {

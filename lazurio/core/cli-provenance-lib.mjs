@@ -128,12 +128,17 @@ export function normalizeComparableCliPath(path, platform = process.platform) {
   return resolve(path).replace(/[\\/]+$/u, "");
 }
 
-export function trustedGitCandidates(platform = process.platform) {
+export function trustedGitCandidates(platform = process.platform, {
+  homeDirectory = homedir(),
+} = {}) {
+  const userLocal = typeof homeDirectory === "string" && posix.isAbsolute(homeDirectory)
+    ? posix.join(homeDirectory, ".local", "bin", "git")
+    : null;
   if (platform === "darwin") {
-    return ["/usr/bin/git", "/opt/homebrew/bin/git", "/usr/local/bin/git"];
+    return ["/usr/bin/git", "/opt/homebrew/bin/git", "/usr/local/bin/git", userLocal].filter(Boolean);
   }
   if (platform === "linux") {
-    return ["/usr/bin/git", "/bin/git", "/usr/local/bin/git"];
+    return ["/usr/bin/git", "/bin/git", "/usr/local/bin/git", userLocal].filter(Boolean);
   }
   if (platform !== "win32") return [];
   return [
@@ -158,7 +163,15 @@ export function trustedGitHubCliCandidates(platform = process.platform, {
     ].filter(Boolean);
   }
   if (platform === "linux") {
-    return ["/usr/bin/gh", "/bin/gh", "/usr/local/bin/gh", "/home/linuxbrew/.linuxbrew/bin/gh"];
+    return [
+      "/usr/bin/gh",
+      "/bin/gh",
+      "/usr/local/bin/gh",
+      "/home/linuxbrew/.linuxbrew/bin/gh",
+      typeof homeDirectory === "string" && posix.isAbsolute(homeDirectory)
+        ? posix.join(homeDirectory, ".local", "bin", "gh")
+        : null,
+    ].filter(Boolean);
   }
   if (platform !== "win32") return [];
   return [
@@ -167,10 +180,36 @@ export function trustedGitHubCliCandidates(platform = process.platform, {
   ];
 }
 
+export function trustedNodeCandidates(platform = process.platform, {
+  homeDirectory = homedir(),
+} = {}) {
+  const userLocal = typeof homeDirectory === "string" && posix.isAbsolute(homeDirectory)
+    ? posix.join(homeDirectory, ".local", "bin", "node")
+    : null;
+  if (platform === "darwin") {
+    return ["/opt/homebrew/bin/node", "/usr/local/bin/node", "/usr/bin/node", userLocal].filter(Boolean);
+  }
+  if (platform === "linux") {
+    return [
+      "/usr/bin/node",
+      "/bin/node",
+      "/usr/local/bin/node",
+      "/home/linuxbrew/.linuxbrew/bin/node",
+      userLocal,
+    ].filter(Boolean);
+  }
+  if (platform !== "win32") return [];
+  return [
+    "C:\\Program Files\\nodejs\\node.exe",
+    "C:\\Program Files (x86)\\nodejs\\node.exe",
+  ];
+}
+
 export function resolveTrustedGitExecutable({
   platform = process.platform,
+  homeDirectory = homedir(),
 } = {}) {
-  return resolveTrustedExecutable(trustedGitCandidates(platform));
+  return resolveTrustedExecutable(trustedGitCandidates(platform, { homeDirectory }));
 }
 
 export function resolveTrustedGitHubCliExecutable({
@@ -178,6 +217,13 @@ export function resolveTrustedGitHubCliExecutable({
   homeDirectory = homedir(),
 } = {}) {
   return resolveTrustedExecutable(trustedGitHubCliCandidates(platform, { homeDirectory }));
+}
+
+export function resolveTrustedNodeExecutable({
+  platform = process.platform,
+  homeDirectory = homedir(),
+} = {}) {
+  return resolveTrustedExecutable(trustedNodeCandidates(platform, { homeDirectory }));
 }
 
 function resolveTrustedExecutable(candidates) {

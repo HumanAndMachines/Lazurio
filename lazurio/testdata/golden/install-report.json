@@ -9,6 +9,11 @@
       "status": "current",
       "current_version": "1.4.0",
       "required_version": "1.4.0"
+    },
+    "node": {
+      "status": "current",
+      "current_version": "22.0.0",
+      "minimum_version": "22.0.0"
     }
   },
   "root": {
@@ -26,6 +31,11 @@
       "id": "bun",
       "status": "completed",
       "reason": "bun_runtime_current"
+    },
+    {
+      "id": "node",
+      "status": "completed",
+      "reason": "node_runtime_current"
     },
     {
       "id": "git",
@@ -51,7 +61,7 @@
   "summary": {
     "status": "action_required",
     "counts": {
-      "completed": 3,
+      "completed": 4,
       "skipped": 1,
       "action_required": 2,
       "failed": 0

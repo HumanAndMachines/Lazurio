@@ -37,6 +37,47 @@ export function readRequiredBunVersion({
   return bunVersionFromPackageManager(sourcePackage.packageManager);
 }
 
+export function nodeMinimumVersionFromEngines(nodeRange) {
+  const match = /^>=(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/u.exec(nodeRange ?? "");
+  if (!match) {
+    throw new Error("package.json#engines.node must declare one exact minimum stable Node.js version");
+  }
+  return `${match[1]}.${match[2]}.${match[3]}`;
+}
+
+export function readRequiredNodeMinimum({
+  root = resolve(import.meta.dirname, ".."),
+  readText = (path) => readFileSync(path, "utf8"),
+} = {}) {
+  let sourcePackage;
+  try {
+    sourcePackage = JSON.parse(readText(resolve(root, "package.json")));
+  } catch (error) {
+    throw new Error(
+      `Lazurio Node.js version authority cannot be read: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  return nodeMinimumVersionFromEngines(sourcePackage.engines?.node);
+}
+
+export function classifyNodeRuntime({ currentVersion, minimumVersion }) {
+  const required = stableVersionParts(minimumVersion);
+  if (!required) throw new Error("minimum Node.js version must be an exact stable version");
+  const current = stableVersionParts(currentVersion);
+  if (!current) {
+    return Object.freeze({
+      status: "unavailable",
+      current_version: null,
+      minimum_version: minimumVersion,
+    });
+  }
+  return Object.freeze({
+    status: compareVersionParts(current, required) >= 0 ? "current" : "outdated",
+    current_version: current.join("."),
+    minimum_version: minimumVersion,
+  });
+}
+
 export function classifyBunRuntime({ currentVersion, requiredVersion }) {
   if (!exactStableVersionPattern.test(requiredVersion ?? "")) {
     throw new Error("required Bun version must be an exact stable version");
@@ -109,4 +150,16 @@ function environmentPathValue(environment, platform) {
   if (platform !== "win32") return environment.PATH ?? "";
   const entry = Object.entries(environment).find(([name]) => name.toLowerCase() === "path");
   return entry?.[1] ?? "";
+}
+
+function stableVersionParts(value) {
+  const match = /^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:[-+].*)?$/u.exec(value ?? "");
+  return match ? match.slice(1, 4).map(Number) : null;
+}
+
+function compareVersionParts(first, second) {
+  for (let index = 0; index < first.length; index += 1) {
+    if (first[index] !== second[index]) return first[index] - second[index];
+  }
+  return 0;
 }
