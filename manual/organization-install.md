@@ -271,8 +271,16 @@ cesta může být jen odkaz na Homebrew. Funkční starší instalace dál splň
 runtime dostupnost; Doctor ji automaticky nepřevádí ani její původ nepotvrzuje.
 
 Převod vyžaduje mandát i k odstranění přesného původního Codex balíčku.
-Nejdřív nainstaluj standalone a ověř jeho viditelný příkaz, cíl a verzi.
-Teprve po úspěchu odinstaluj původní Codex jeho skutečným správcem
+Předem si zaznamenej původního správce, verzi a postup obnovy přesného balíčku.
+Nejdřív nainstaluj standalone. Z výstupu oficiálního instalátoru zjisti jeho
+skutečný instalační adresář a novou binárku spusť explicitní absolutní cestou
+s `--version`. Rozbal celý řetězec symlinků a ověř, že cíl patří této
+standalone instalaci a neleží v původním Homebrew/npm/WinGet balíčku.
+Potom ověř, že běžný `codex` v novém procesu rozliší tutéž standalone binárku;
+shodná verze dvou různých souborů nestačí. Při stínění oprav pouze již
+autorizovanou vrstvu `PATH`. Nejasný původ nebo chybějící PATH mandát znamená
+ponechat starý balíček a předat přesný nález.
+Teprve po obou úspěšných probech odinstaluj původní Codex jeho skutečným správcem
 (např. `brew uninstall --cask codex` nebo `npm uninstall -g @openai/codex`).
 Pokud instalátor nabízí odstranění staré instalace před ověřením nové, odlož
 je na tento krok. Neodstraňuj samotný package manager, Node ani jiné nástroje.
@@ -285,7 +293,13 @@ verzi v novém procesu: na macOS/Linuxu `command -v codex` a skutečný cíl
 symlinku, na Windows `Get-Command codex -All`. Ověř `codex --version` a
 `codex login status` bez čtení či vypisování credential souborů. Na Windows
 obnov process `PATH` a dokonči úplný Codex relaunch podle předchozí kapitoly;
-child shell staré relace nestačí. Nakonec zopakuj
+child shell staré relace nestačí. Pokud po odstranění starého balíčku příkaz
+selže nebo míří jinam, vrať v uděleném mandátu funkční rozlišení na ověřenou
+standalone binárku; pokud to nejde, obnov přesný původní balíček a jeho
+původní PATH vazbu podle připraveného recovery kroku. Bez recovery mandátu
+nic nehádej: zachovej standalone soubory i uživatelská data a vrať přesný
+blokátor. Přechod nevydávej za hotový, dokud probe z nového procesu neprojde.
+Nakonec zopakuj
 `lazurio doctor --tool-updates --json`.
 
 Windows instalátor vytváří viditelný nativní `codex.exe` a ověřuje jeho verzi.

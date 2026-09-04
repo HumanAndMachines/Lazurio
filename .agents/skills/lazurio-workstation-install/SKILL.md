@@ -44,7 +44,8 @@ Při publikačním mandátu pro instalační vady přečti také
    oficiálním OpenAI standalone instalátorem podle kapitoly „Codex CLI:
    instalace a aktualizace“ v `manual/organization-install.md`, ne přes
    Homebrew, npm ani WinGet. Existující instalaci převeď jen v mandátu pro
-   přesný Codex balíček: nejdřív ověř standalone, potom odstraň původní balíček
+   přesný Codex balíček: nejdřív ověř skutečnou standalone binárku absolutní
+   cestou i přes PATH podle manuálu, potom odstraň původní balíček
    jeho správcem; zachovej nastavení, přihlášení a historii. Už udělený scoped
    mandát neopakuj. Doctor nástroje neinstaluje a způsob instalace neprokazuje.
    Bun nastav vždy na exact stabilní verzi z aktuálního clean
