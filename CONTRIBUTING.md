@@ -79,6 +79,14 @@ warning flow větví podle stabilního `error`/`failure_kind` kódu; text server
 je pouze technická evidence a nesmí řídit chování ani být běžnou uživatelskou
 copy. Testy musí prokázat shodu klíčů katalogů a aspoň jeden anglický consumer.
 
+Dlouhý Guide obsah, který se nehodí do UI katalogu, má stejně přísný párový
+kontrakt. Organization install runbook drží češtinu v
+`manual/organization-install.md` a anglickou projekci v
+`distribution/locales/en/manual/organization-install.md`; oba soubory musí
+zachovat stejné strojové markery, příkazy a bezpečnostní invarianty. Consumer
+posílá explicitní locale, ověřuje locale i source path odpovědi a při
+chybějícím nebo neplatném překladu skončí bez cross-locale fallbacku.
+
 ## Review a merge
 
 Otevřený PR je Draft — je vidět, dá se editovat a dá se zavřít. Během aktivní

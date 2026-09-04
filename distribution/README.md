@@ -3,7 +3,11 @@
 Tato vrstva skládá celý non-Git Lazurio Root z exact commitu společného source.
 Sdílený produkt zůstává v běžných adresářích rootu; nevzniká paralelní
 `common/` strom. Pod `distribution/` žijí pouze build kontrakt, profilové
-fragmenty, dependency piny, evaly a runtime lifecycle soubory.
+fragmenty, dependency piny, evaly, runtime lifecycle soubory a locale projekce
+dlouhých Root-owned dokumentů, které musí resident build dodat spolu s jejich
+consumerem. Anglická projekce Organization install Guide proto žije v
+`locales/en/manual/organization-install.md`; český kanonický zdroj zůstává v
+`../manual/organization-install.md`.
 
 Kurátorovaný přechod ze starších produktových repozitářů drží
 `migrations/`. Inventář zapisuje exact source commit a disposition každé
