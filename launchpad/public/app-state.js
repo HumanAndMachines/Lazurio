@@ -1,5 +1,23 @@
 import { t, tp } from "./i18n.js";
 
+const GUIDE_INSTALL_SOURCE_BY_LOCALE = Object.freeze({
+  cs: "manual/organization-install.md",
+  en: "distribution/locales/en/manual/organization-install.md",
+});
+
+export function guideInstallPayloadIsValid(payload, locale) {
+  const expectedSourcePath = GUIDE_INSTALL_SOURCE_BY_LOCALE[locale];
+  return Boolean(
+    expectedSourcePath
+    && payload?.schema_version === "lazurio.guide.organization_install.v2"
+    && payload.locale === locale
+    && payload.source?.path === expectedSourcePath
+    && payload.source?.authority === "lazurio-root-manual"
+    && typeof payload.short_prompt === "string"
+    && typeof payload.policy_markdown === "string"
+  );
+}
+
 export function filterApps(apps, filters) {
   return apps.filter((app) => {
     if (filters.company !== "all" && app.company !== filters.company) return false;
