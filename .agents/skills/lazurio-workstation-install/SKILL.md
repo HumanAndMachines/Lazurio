@@ -51,11 +51,17 @@ Při publikačním mandátu pro instalační vady přečti také
    `.exe`, cache, dočasnou cestu ani worktree; zachovej nesouvisející platné
    položky a odstraň pouze prokázaný stale/shadow záznam téhož nástroje.
    Neobcházej UAC ani správu zařízení.
-6. **Prokaž nový proces.** Po Windows instalaci obnov pouze process `PATH` z
-   čerstvých Machine + User hodnot, aby mohla pokračovat stejná relace. Tento
-   proces není acceptance: otevři nový čistý proces a ověř `bun`, `git`, `gh`,
-   `node`, `codex` a po registraci `lazurio cli status --json` včetně jejich
-   canonical identity.
+6. **Aktivuj nový Codex proces.** Po Windows instalaci nebo upgradu nástroje či
+   změně persistentního `PATH` obnov Machine + User hodnoty jen dočasně pro
+   dokončení právě rozpracované atomické operace. Potom v chatu ulož přesný
+   resume bod, nech Principála úplně ukončit Codex včetně všech jeho oken a
+   znovu jej spustit; pokračuj v obnoveném threadu jako nová Task Agent relace.
+   Nový terminál nebo child proces otevřený ze starého Codexu není acceptance,
+   protože může dál dědit staré prostředí rodiče. Až z relaunchnutého Codexu
+   ověř `bun`, `git`, `gh`, `node`, `codex` a po registraci
+   `lazurio cli status --json` včetně canonical identity. Odhlášení uživatele
+   nebo restart Windows je pouze fallback, pokud jsou persistentní User/Machine
+   hodnoty správné, ale ani nový Codex je nevidí.
 7. **Spáruj GitHub jen jednou.** Použij
    `gh auth login --hostname github.com --git-protocol ssh --web`, nech
    Principála dokončit osobní web krok a neloguj device kód, token ani privátní
@@ -88,8 +94,8 @@ Při publikačním mandátu pro instalační vady přečti také
 Instalace je hotová teprve tehdy, když:
 
 - Root a CLI provenance odpovídají podporovanému profilu;
-- povinné nástroje i `lazurio` fungují z nového čistého procesu a Bun odpovídá
-  exact pinu;
+- povinné nástroje i `lazurio` fungují z relaunchnutého Codexu a jeho nového
+  čistého procesu a Bun odpovídá exact pinu;
 - `lazurio install --json` je `completed`, Organization install je `current`
   nebo bezpečně `updated` a finální Doctor nemá required selhání;
 - GitHub identity, role/Team gate a exact Git transport jsou reportované
@@ -98,7 +104,8 @@ Instalace je hotová teprve tehdy, když:
 - každý warning má disposition a každé publikované Issue URL je v handoffu.
 
 Handoff obsahuje matici `runtime ready` / `editing ready` / `publishing ready`,
-skutečné verze a canonical cesty nástrojů, stav User/Machine `PATH`,
+skutečné verze a canonical cesty nástrojů, stav User/Machine `PATH`, důkaz
+restartu Codexu (nebo odůvodněný Windows fallback),
 Organization a `mission-control/db`, Launchpad health, nevyřešené blockery a
 Issue odkazy. Issue mandát nikdy sám nepovoluje source push, merge, release nebo
 deploy.

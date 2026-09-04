@@ -324,8 +324,11 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    Node.js LTS, Codex CLI a verzovaný Bun. V takovém případě Agent chybějící
    povolený nástroj nainstaluje z oficiálního zdroje, doplní pouze jeho
    skutečnou instalační cestu do autorizovaného User nebo Machine `PATH` a
-   ověří ji z nového čistého procesu; úspěch v právě běžící zděděné
-   relaci není důkaz. Výchozí nejmenší mandát dovoluje jen User `PATH` a
+   na Windows po přesném resume handoffu úplně ukončí a znovu spustí Codex a
+   ověří ji z čistého procesu nové relace; child proces právě běžícího Codexu
+   není důkaz. Odhlášení uživatele nebo restart Windows je až fallback, když
+   ani relaunchnutý Codex správné persistentní hodnoty nevidí. Výchozí
+   nejmenší mandát dovoluje jen User `PATH` a
    chybějící nástroje. Rozšířený instalační mandát smí navíc přesně
    povolit Machine/system-wide `PATH`, standardní OS package manager a upgrade
    jmenovaných nástrojů; Agent zachová nesouvisející položky a bezpečnostní

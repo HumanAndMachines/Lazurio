@@ -111,13 +111,16 @@ Machine vrstvu. Git, GitHub CLI a Codex mohou s rozšířeným mandátem směřo
 na aktuální oficiální stable a Node na podporované aktuální LTS. Bun je
 výjimka: vždy konverguje na exact verzi z
 `lazurio/package.json#packageManager`, ne na obecný upstream latest. Výsledek
-se ověří v novém čistém procesu, nikoli v shellu s dočasným `export` nebo
-`$env:Path`.
+se na Windows ověří až po úplném ukončení a novém spuštění Codexu, v čistém
+procesu této nové relace, nikoli v child shellu starého Codexu s dočasným
+`export` nebo `$env:Path`. Před ukončením Agent zapíše do chatu přesný resume
+bod. Odhlášení uživatele nebo restart Windows je pouze fallback, pokud nový
+Codex správné persistentní User/Machine hodnoty stále nevidí.
 
 Organization instalace tuto machine autoritu nepřebírá. Začíná až poté, co
 top-level gate vidí Bun, Git, `gh` a kompatibilní Node.js v PATH a Doctor vidí
-Codex; potom se
-registruje `lazurio` a z nového procesu projde `lazurio cli status --json`.
+Codex; potom se registruje `lazurio` a z nového Codex procesu projde
+`lazurio cli status --json`.
 Přesný Builder postup a doporučený prompt blok drží
 [`manual/organization-install.md`](organization-install.md).
 
