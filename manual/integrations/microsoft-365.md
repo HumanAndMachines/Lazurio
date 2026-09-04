@@ -108,9 +108,16 @@ jeho npm JavaScript entrypoint `node_modules/npm/bin/npx-cli.js`. Node může b�
 nalezený z Machine i User `PATH`; launcher nehardcoduje `Program Files` ani
 jinou system-wide cestu. Z reálné cesty `process.execPath` odvoď instalační
 root, vyžaduj, aby `npx-cli.js` byl skutečný běžný soubor a jeho `realpath`
-zůstal uvnitř stejného Node instalačního rootu. Když layout nebo containment
-neprojde, skonči fail-closed — nevracej se k shellu ani k jinému `npx` z
-`PATH`.
+zůstal uvnitř stejného Node instalačního rootu. Containment nikdy neověřuj
+řetězcovým prefixem: sousední cesta jako `nodejs-evil` by takovou kontrolou
+prošla. Použij separator-aware ekvivalent kanonického
+`isPathDescendant(parent, candidate)` z `lazurio/core/path-boundary-lib.mjs`:
+nad oběma `realpath` hodnotami spočítej platformní
+`relative(resolve(parent), resolve(candidate))` a přijmi jen neprázdný
+výsledek, který není `..`, nezačíná `..${sep}` a není absolutní. `relative`
+na Windows současně respektuje case-insensitive drive/UNC path semantics.
+Když layout nebo containment neprojde, skonči fail-closed — nevracej se k
+shellu ani k jinému `npx` z `PATH`.
 
 Každou hodnotu předej jako samostatnou položku `spawn` argv v tomto pořadí:
 

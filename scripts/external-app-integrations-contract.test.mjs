@@ -110,10 +110,24 @@ test("Microsoft 365 launcher obchází Windows shell a zachovává přesné argv
   expect(microsoft).toContain("process.execPath");
   expect(microsoft).toContain("User `PATH`");
   expect(microsoft).toMatch(/skutečný běžný soubor[\s\S]*`realpath`[\s\S]*stejného Node instalačního rootu/);
-  expect(microsoft).toMatch(/skonči fail-closed[\s\S]*nevracej se k shellu ani k jinému `npx` z\s+`PATH`/);
-  expect(microsoft).toContain('"@softeria/ms-365-mcp-server@0.148.0"');
-  expect(microsoft).toContain('"--enabled-tools",\n  PINNED_TOOLS_REGEX');
-  expect(microsoft).toContain('"--allowed-scopes",\n  PINNED_ALLOWED_SCOPES');
+  expect(microsoft).toMatch(/Containment nikdy neověřuj\s+řetězcovým prefixem[\s\S]*`nodejs-evil`/);
+  expect(microsoft).toMatch(/`relative\(resolve\(parent\), resolve\(candidate\)\)`[\s\S]*není `\.\.`[\s\S]*nezačíná `\.\.\$\{sep\}`[\s\S]*není absolutní/);
+  expect(microsoft).toContain("case-insensitive drive/UNC path semantics");
+  expect(microsoft).toMatch(/skonči fail-closed[\s\S]*nevracej se k\s+shellu ani k jinému `npx` z\s+`PATH`/);
+  expect(microsoft).toContain([
+    "const providerArgs = [",
+    "  validatedNpxCliPath,",
+    '  "-y",',
+    '  "@softeria/ms-365-mcp-server@0.148.0",',
+    '  "--org-mode",',
+    '  "--read-only",',
+    '  "--enabled-tools",',
+    "  PINNED_TOOLS_REGEX,",
+    '  "--allowed-scopes",',
+    "  PINNED_ALLOWED_SCOPES,",
+    "  ...validatedManagementArgs,",
+    "];",
+  ].join("\n"));
   expect(microsoft).toMatch(/spawn\(process\.execPath, providerArgs,[\s\S]*shell: false/);
   expect(microsoft).toMatch(/capture shimem[\s\S]*`process\.argv`[\s\S]*položku po položce/);
   expect(microsoft).toMatch(/`--list-permissions`[\s\S]*exit codem `0`[\s\S]*`org mode`[\s\S]*`readOnly: true`/);
