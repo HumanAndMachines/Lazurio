@@ -2292,7 +2292,7 @@ export function codexRuntimeCheck({
     cwd: companiesRoot,
   });
   if (command) {
-    return commandCheck({
+    return withCodexInstallationGuidance(commandCheck({
       id: "platform.codex",
       title: "Codex CLI",
       command,
@@ -2303,7 +2303,7 @@ export function codexRuntimeCheck({
         "Příkaz codex je v PATH, ale nejde spustit jako nativní Codex CLI. "
         + "Nepoužívej neověřený wrapper; s výslovným souhlasem nainstaluj oficiální OpenAI standalone balíček a kontrolu zopakuj z nového procesu.",
       run,
-    });
+    }), platform);
   }
 
   const targetCommand = platform === "win32"
@@ -2321,7 +2321,7 @@ export function codexRuntimeCheck({
       })
     : null;
   if (targetExecutable) {
-    return {
+    return withCodexInstallationGuidance({
       id: "platform.codex",
       status: "fail",
       severity: "required",
@@ -2330,21 +2330,17 @@ export function codexRuntimeCheck({
         `Windows našel pouze target-specific kandidát ${targetCommand}, ale příkaz codex chybí. `
         + "Tento stav není připravený; s výslovným souhlasem použij oficiální OpenAI standalone Windows instalátor a kontrolu zopakuj z nového procesu.",
       paths: [],
-      links: [{
-        label: "Oficiální OpenAI Windows instalátor",
-        kind: "external",
-        url: "https://github.com/openai/codex/blob/main/scripts/install/install.ps1",
-      }],
+      links: [],
       details: [
         "path_command: <missing>",
         `target_specific_candidate: ${targetExecutable}`,
         "candidate_probe: not_run_untrusted_candidate",
         "next_action: ask_principal_before_official_codex_standalone_install",
       ],
-    };
+    }, platform);
   }
 
-  return commandCheck({
+  return withCodexInstallationGuidance(commandCheck({
     id: "platform.codex",
     title: "Codex CLI",
     command: null,
@@ -2353,7 +2349,33 @@ export function codexRuntimeCheck({
     okMessage: (result) => `Codex CLI je dostupné v PATH: ${result.stdout}`,
     failMessage: "Příkaz codex není dostupný nebo jej nelze spustit z PATH nového procesu.",
     run,
-  });
+  }), platform);
+}
+
+// Guidance only: executable readiness does not prove an installation method.
+// The provider owns installation/update; Doctor never runs these commands.
+function withCodexInstallationGuidance(check, platform) {
+  const installCommand = platform === "win32"
+    ? 'powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"'
+    : platform === "darwin" || platform === "linux"
+      ? "curl -fsSL https://chatgpt.com/codex/install.sh | sh"
+      : null;
+  return {
+    ...check,
+    message: `${check.message} Pro instalaci a aktualizace Codex CLI používej oficiální OpenAI standalone instalátor podle manual/organization-install.md; Homebrew, npm ani WinGet nejsou výchozí instalační cesta Lazuria.`,
+    links: [...check.links, {
+      label: "Oficiální instalace Codex CLI",
+      kind: "external",
+      url: "https://developers.openai.com/codex/cli",
+    }],
+    details: [
+      ...check.details,
+      "preferred_installation: openai_standalone",
+      ...(installCommand ? [`install_or_update_command: ${installCommand}`] : []),
+      "installation_policy: use_existing_explicit_mandate_or_ask_principal",
+      "migration: verify_standalone_before_removing_previous_install; preserve_codex_settings_and_auth",
+    ],
+  };
 }
 
 function pathIdentityCheck({
@@ -2581,6 +2603,7 @@ export function nodeRuntimeCheck({
 
 export async function developerToolUpdateChecks({
   inspectUpdates = inspectDeveloperToolUpdates,
+  platform = process.platform,
 } = {}) {
   let observations;
   try {
@@ -2595,7 +2618,10 @@ export async function developerToolUpdateChecks({
   }
   return observations
     .filter((observation) => observation.required || observation.status !== "not_available")
-    .map(toolUpdateDoctorCheck);
+    .map((observation) => {
+      const check = toolUpdateDoctorCheck(observation);
+      return observation.id === "codex" ? withCodexInstallationGuidance(check, platform) : check;
+    });
 }
 
 function toolUpdateDoctorCheck(observation) {

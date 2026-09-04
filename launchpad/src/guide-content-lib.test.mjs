@@ -49,6 +49,8 @@ test("Guide projects a complete locale-paired prompt and policy contract", () =>
     expect(guide.short_prompt).toContain("Lazurio for GitHub");
     expect(guide.short_prompt).toContain("All repositories");
     expect(guide.short_prompt).toContain("Node.js LTS");
+    expect(guide.short_prompt).toContain("OpenAI standalone");
+    expect(guide.short_prompt).toContain("Homebrew, npm");
     expect(guide.short_prompt).toContain(
       "lazurio organization install <github-organization> --role builder --json",
     );

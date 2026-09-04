@@ -117,6 +117,14 @@ procesu této nové relace, nikoli v child shellu starého Codexu s dočasným
 bod. Odhlášení uživatele nebo restart Windows je pouze fallback, pokud nový
 Codex správné persistentní User/Machine hodnoty stále nevidí.
 
+Codex CLI na macOS, Linuxu i Windows instaluj a aktualizuj oficiálním OpenAI
+standalone instalátorem; Homebrew, npm ani WinGet nejsou výchozí cesta Lazuria.
+Přesné příkazy, scoped mandát, zachování nastavení/přihlášení a bezpečný převod
+existující instalace drží
+[Codex CLI: instalace a aktualizace](organization-install.md#codex-cli-instalace-a-aktualizace).
+Doctor pouze naviguje na tento postup, neinstaluje nástroje a úspěšnou verzní
+zkoušku nevydává za důkaz způsobu instalace.
+
 Organization instalace tuto machine autoritu nepřebírá. Začíná až poté, co
 top-level gate vidí Bun, Git, `gh` a kompatibilní Node.js v PATH a Doctor vidí
 Codex; potom se registruje `lazurio` a z nového Codex procesu projde

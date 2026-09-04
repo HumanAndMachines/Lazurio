@@ -79,11 +79,19 @@ Troubleshooting vývojové mašiny používá explicitní
 `lazurio doctor --tool-updates`. Běžný Doctor tím nezískává skrytou síťovou
 závislost: teprve přepínač načte oficiální stabilní release metadata pro Git,
 GitHub CLI, Codex dostupný v `PATH` a volitelně nainstalovaný Claude Code.
-Nedostupný Codex je warning; chybějící Claude je neutrální. Výsledek je pouze
-advisory. `update_available` instruuje Agenta, aby požádal Principála o souhlas;
+Nedostupný nebo nečitelný Codex je required failure; chybějící Claude je
+neutrální. Samotná dostupnost novější verze je advisory. `update_available`
+instruuje Agenta, aby ověřil existující mandát nebo požádal Principála o souhlas;
 samotný Doctor nikdy nespouští updater ani package manager. Neověřitelná
 aktuálnost zůstává `warn`, ne falešné `ok`. Bun do obecného latest-release
 porovnání nevstupuje — jeho localhost autoritou zůstává exact pin výše.
+
+Pro localhost Codex CLI naviguje Doctor na oficiální OpenAI standalone
+instalátor pro macOS/Linux/Windows podle
+[instalačního manuálu](organization-install.md#codex-cli-instalace-a-aktualizace),
+včetně instalace i aktualizace v existujícím scoped mandátu. Homebrew/npm/WinGet
+nejsou výchozí lane; runtime dostupnost existující instalace zůstává oddělená
+od doporučeného způsobu instalace. Hosted image a Resident piny se tím nemění.
 
 ## Launchpad process interface
 

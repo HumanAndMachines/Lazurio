@@ -139,7 +139,7 @@ test("Codex Doctor names the broken WinGet alias without accepting its target bi
   expect(check.message).toContain("příkaz codex chybí");
   expect(check.details).toContain("candidate_probe: not_run_untrusted_candidate");
   expect(check.details).toContain("next_action: ask_principal_before_official_codex_standalone_install");
-  expect(check.links[0]?.url).toContain("openai/codex/blob/main/scripts/install/install.ps1");
+  expect(check.links[0]?.url).toBe("https://developers.openai.com/codex/cli");
 });
 
 test("Codex Doctor accepts only a working codex command as ready", () => {
@@ -3213,3 +3213,54 @@ function run(command, cwd) {
     throw new Error(new TextDecoder().decode(result.stderr));
   }
 }
+
+
+test("Codex installation guidance stays platform-specific and read-only for runtime failures", () => {
+  for (const platform of ["darwin", "linux", "win32"]) {
+    for (const state of ["missing", "broken", "working"]) {
+      const calls = [];
+      const check = codexRuntimeCheck({
+        companiesRoot: "/fixture",
+        platform,
+        architecture: "x64",
+        resolvePathCommand: (name) => name === "codex" && state !== "missing" ? "/fixture/codex" : null,
+        run: (command, args) => {
+          calls.push([command, args]);
+          return { ok: state === "working", stdout: "codex-cli 0.153.3", stderr: "" };
+        },
+      });
+      expect(check.status).toBe(state === "working" ? "ok" : "fail");
+      expect(calls).toEqual(state === "missing" ? [] : [["/fixture/codex", ["--version"]]]);
+      expect(check.message).toContain("OpenAI standalone instalátor");
+      expect(check.details).toContain("preferred_installation: openai_standalone");
+      expect(check.details).toContain(platform === "win32"
+        ? 'install_or_update_command: powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"'
+        : "install_or_update_command: curl -fsSL https://chatgpt.com/codex/install.sh | sh");
+      expect(check.details).toContain("installation_policy: use_existing_explicit_mandate_or_ask_principal");
+    }
+  }
+});
+
+test("Codex currency results preserve status and consent while pointing to the same installer", async () => {
+  for (const platform of ["darwin", "linux", "win32"]) {
+    for (const [status, expected] of [
+      ["update_available", "warn"], ["current", "ok"],
+      ["not_available", "fail"], ["probe_failed", "fail"], ["currency_unknown", "warn"],
+    ]) {
+      const [check] = await developerToolUpdateChecks({
+        platform,
+        inspectUpdates: async () => [{
+          id: "codex", title: "Codex CLI", required: true, status,
+          current_version: "0.153.2", latest_version: "0.153.3",
+          release_url: "https://github.com/openai/codex/releases/tag/rust-v0.153.3",
+          reason: "fixture",
+        }],
+      });
+      expect(check.status).toBe(expected);
+      expect(check.message).toContain("OpenAI standalone instalátor");
+      expect(check.links.some((link) => link.url === "https://developers.openai.com/codex/cli")).toBe(true);
+      expect(check.details.some((detail) => detail.includes(platform === "win32" ? "install.ps1" : "install.sh"))).toBe(true);
+      expect(check.details).toContain("update_policy: principal_consent_required");
+    }
+  }
+});
