@@ -2923,6 +2923,41 @@ test("worktree dependency Doctor proves the exact repository-db member and rejec
   expect(drifted?.details.join("\n")).toContain("binding HEAD neodpovídá sidecar base_sha");
 });
 
+test("worktree dependency Doctor reports a legacy sidecar without module_path", async () => {
+  const fixture = await createRepositoryDbWorktreeFixture({ port: 25424 });
+  tempRoots.push(fixture.root);
+  const created = await createWorktreeFromPlan({
+    companiesRoot: fixture.root,
+    repoKey: "BetaCo::mission-control",
+    planPath: fixture.planPath,
+    branch: "CAC-0099-doctor-legacy-sidecar",
+  });
+  const sidecarPath = join(
+    fixture.orgRoot,
+    ".worktrees",
+    "root",
+    "mission-control",
+    `${created.worktree.slug}.worktree.json`,
+  );
+  const sidecar = JSON.parse(await readFile(sidecarPath, "utf8"));
+  delete sidecar.module_path;
+  await writeFile(sidecarPath, `${JSON.stringify(sidecar, null, 2)}\n`);
+
+  const report = await buildLaunchpadDoctorReport({
+    companiesRoot: fixture.root,
+    launchpadRoot: join(fixture.root, "launchpad"),
+    runtimeManager: { appsWithRuntime: async (apps) => apps },
+    runChildDoctors: false,
+  });
+  const dependencies = report.checks.find((check) => check.id === "git.worktrees.dependencies");
+  expect(dependencies?.status).toBe("warn");
+  expect(dependencies?.details).toEqual(expect.arrayContaining([
+    "repository_db_ready: 0",
+    "repository_db_binding_invalid: 1",
+  ]));
+  expect(dependencies?.details.join("\n")).toContain("module_path");
+});
+
 if (fileSymlinkCapability) {
   test("worktree dependency Doctor rejects a canonical repository-db owner replaced by a symlink", async () => {
     const fixture = await createRepositoryDbWorktreeFixture({ port: 25423 });

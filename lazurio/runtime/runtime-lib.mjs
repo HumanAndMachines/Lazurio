@@ -2128,7 +2128,7 @@ export function createRuntimeManager({
     }
 
     const runtimeKey = worktreeRuntimeKey(app, worktree.slug);
-    const modulePath = normalizeRelativePath(worktree.metadata?.module_path ?? `modules/${app.module}`);
+    const modulePath = worktreeModuleSlotPath(app, worktree.metadata);
     const mainModulePath = normalizeRelativePath(`${app.organization_path}/${modulePath}`);
     const worktreePath = normalizeRelativePath(worktree.path);
     const organizationRoot = resolve(companiesRoot, app.organization_path);
@@ -2778,6 +2778,20 @@ export function createRuntimeManager({
 
   function normalizeRelativePath(value) {
     return String(value ?? "").replace(/\\/g, "/").replace(/^\.\//, "");
+  }
+
+  function worktreeModuleSlotPath(app, metadata) {
+    if (typeof metadata?.module_path === "string" && metadata.module_path.trim() !== "") {
+      return normalizeRelativePath(metadata.module_path);
+    }
+    const organizationPrefix = `${normalizeRelativePath(app?.organization_path)}/`;
+    const contractPath = normalizeRelativePath(app?.module_contract?.module_path);
+    const manifestSuffix = "/lazurio.module.json";
+    if (contractPath.startsWith(organizationPrefix) && contractPath.endsWith(manifestSuffix)) {
+      const discoveredPath = contractPath.slice(organizationPrefix.length, -manifestSuffix.length);
+      if (discoveredPath !== "") return discoveredPath;
+    }
+    return normalizeRelativePath(`modules/${app.module}`);
   }
 
   function replacePathPrefix(value, oldPrefix, newPrefix) {

@@ -37,7 +37,10 @@ export async function readRequiredRepositoryDbWorktreeSlots({
     );
   }
   if (!safeRelativePath(moduleSlotPath, { allowDot: false })) {
-    return failure("module_slot_path_invalid", `Module slot path ${String(moduleSlotPath)} není bezpečná Organization-relative cesta.`);
+    return failure(
+      "module_slot_path_invalid",
+      "Module worktree nemá bezpečný module_path pro odvození repository-db bindingu.",
+    );
   }
 
   const checkoutBoundary = await inspectCanonicalPathBoundary({
@@ -143,6 +146,15 @@ export function repositoryDbWorktreeDependencyForSlot({ slot, moduleSlotPath } =
     && slot?.materialization === "repository_db_mount"
     && REPOSITORY_DB_SOURCE.test(sourceOfTruth);
   if (!required) return { ok: true, required: false, dependency: null };
+  if (!safeRelativePath(moduleSlotPath, { allowDot: false })) {
+    return {
+      ...failure(
+        "module_slot_path_invalid",
+        "Module worktree nemá bezpečný module_path pro odvození repository-db bindingu.",
+      ),
+      required: true,
+    };
+  }
   const relativePath = posix.relative(moduleSlotPath, slotPath);
   if (!safeRelativePath(relativePath, { allowDot: false }) || relativePath.startsWith("../")) {
     return {

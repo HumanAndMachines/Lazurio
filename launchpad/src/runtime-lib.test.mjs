@@ -4929,6 +4929,47 @@ test("Mission Control worktree uses only its exact owned repository-db binding",
   }
 }, platformTestTimeout(15_000));
 
+test("Mission Control legacy worktree without module_path blocks instead of crashing", async () => {
+  const port = await findFreePort();
+  const fixture = await createRepositoryDbWorktreeFixture({ port });
+  registerTempRoot(fixture.root, { port });
+  const created = await createWorktreeFromPlan({
+    companiesRoot: fixture.root,
+    repoKey: "BetaCo::mission-control",
+    planPath: fixture.planPath,
+    branch: "CAC-0099-runtime-legacy-sidecar",
+  });
+  const sidecarPath = join(
+    fixture.orgRoot,
+    ".worktrees",
+    "root",
+    "mission-control",
+    `${created.worktree.slug}.worktree.json`,
+  );
+  const sidecar = JSON.parse(await readFile(sidecarPath, "utf8"));
+  delete sidecar.module_path;
+  await writeFile(sidecarPath, `${JSON.stringify(sidecar, null, 2)}\n`);
+  const runtime = createRuntimeManager({
+    companiesRoot: fixture.root,
+    launchpadRoot: join(fixture.root, "launchpad"),
+    instanceId: "repository-db-legacy-sidecar",
+  });
+
+  try {
+    const health = await runtime.health("betaco-mission-control-v3", {
+      source: { type: "worktree", slug: created.worktree.slug },
+    });
+    expect(health.dependencies).toMatchObject({
+      state: "required_slot_unavailable",
+      can_start: false,
+      can_install: false,
+    });
+    expect(health.dependencies.message).toContain("module_path");
+  } finally {
+    await runtime.shutdown();
+  }
+}, platformTestTimeout(15_000));
+
 test("runtime open po exit 0 neodstartuje aplikaci s pořád neúplným stromem", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({

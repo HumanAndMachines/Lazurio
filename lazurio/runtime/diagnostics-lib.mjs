@@ -711,14 +711,17 @@ async function worktreeRepositoryDbReadiness({
   worktree,
   absoluteWorktreePath,
 }) {
-  if (typeof worktree.metadata?.module_path !== "string" || worktree.metadata.module_path === "") {
-    return [];
-  }
+  const declaredModulePath = worktree.metadata?.module_path;
+  const missingModulePath = declaredModulePath === undefined || declaredModulePath === "";
+  const moduleSlotPath = missingModulePath
+    ? legacyWorktreeModuleSlotPath(worktree)
+    : declaredModulePath;
+  if (moduleSlotPath === null) return [];
   const organizationRoot = join(companiesRoot, worktree.organization_path);
   const requirements = await readRequiredRepositoryDbWorktreeSlots({
     organizationRoot,
     moduleCheckoutRoot: absoluteWorktreePath,
-    moduleSlotPath: worktree.metadata?.module_path,
+    moduleSlotPath,
     moduleId: worktree.module,
   });
   if (!requirements.ok) {
@@ -727,6 +730,14 @@ async function worktreeRepositoryDbReadiness({
       state: "repository_db_binding_invalid",
       worktree,
       detail: `repository_db_binding_invalid: ${worktree.slug} (${worktree.path}) — ${requirements.details.join("; ")}`,
+    }];
+  }
+  if (missingModulePath && requirements.dependencies.length > 0) {
+    return [{
+      kind: "repository_db",
+      state: "repository_db_binding_invalid",
+      worktree,
+      detail: `repository_db_binding_invalid: ${worktree.slug} (${worktree.path}) — sidecar module_path chybí; repository-db binding nelze autorizovat z odvozené legacy cesty`,
     }];
   }
   const members = Array.isArray(worktree.metadata?.members) ? worktree.metadata.members : [];
@@ -760,6 +771,19 @@ async function worktreeRepositoryDbReadiness({
     });
   }
   return records;
+}
+
+function legacyWorktreeModuleSlotPath(worktree) {
+  let candidate = null;
+  if (worktree?.repo_kind === "root_repo") {
+    candidate = worktree.module;
+  } else if (
+    worktree?.repo_kind === "module"
+    || worktree?.repo_kind === "productionspace"
+  ) {
+    candidate = `${worktree.workspace}/${worktree.module}`;
+  }
+  return isCanonicalOrganizationRepositorySlotPath(candidate) ? candidate : null;
 }
 
 async function worktreePackageRoots({ companiesRoot, worktree, absoluteWorktreePath }) {
