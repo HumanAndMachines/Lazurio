@@ -366,8 +366,8 @@ nepřepíše, v nested checkoutu zakáže klientský obsah nebo přeskočí otá
 na Publikaci Draftu. Tohle je stejná chyba, která se stala u prvních
 klientských Organizací.
 
-Jakmile je `organization_kind: organization`, v reviewovatelném PR (nebo ve
-stejném bootstrap PR) proveď:
+Jakmile je `organization_kind: organization`, proveď rewrite v reviewovatelném
+PR **každého owning nested repa**:
 
 1. Organization `AGENTS.md` — na začátku blok **Povinný handoff** s dvojotázkou
    „Mám změny Publikovat tvým jménem? Nebo mám požádat jiného oprávněného
@@ -384,13 +384,23 @@ stejném bootstrap PR) proveď:
 5. Design System a infra, pokud existují — instance odkaz na parent `AGENTS.md`;
    tokenová a no-secrets pravidla ponech.
 
-Fail-closed z Organization rootu (chybějící soubor přeskoč):
+Organization root, Knowledgebase, Mission Control app, Mission Control data,
+Design System i infra jsou samostatné Git repozitáře; jeden Organization-root
+PR jejich obsah nepokrývá. Bootstrap je dávka PR ve vlastních repo, ne jeden
+gitlink commit.
+
+Fail-closed z Organization rootu. Gate čte `modules.manifest.json` přes
+`readOrganizationRoot`, povinný baseline (Knowledgebase, Mission Control app,
+Mission Control data) musí existovat a držet instance výroky, Design System a
+infra jen když je jejich aktuální slot aktivní, a nečitelný soubor je fail —
+ne úspěch.
 
 ```sh
-! rg -n "KnowledgebaseTemplate —|Tento repozitář není knowledgebase konkrétní firmy|MissionControlTemplate —|Mattyčus owns implementation|forkable šablona" \
-  --glob 'AGENTS.md' --glob '!**/node_modules' --glob '!**/.worktrees'
-rg -n "Mám změny Publikovat" AGENTS.md
+bun "$LAZURIO_ROOT/scripts/check-organization-agents-instance.mjs" "$ORG_ROOT"
 ```
+
+Exit 0 = instance rewrite drží. Exit 1 = chybí soubor, zbyla identita šablony,
+chybí závazný výrok, nebo scan nešel dočíst. Exit 2 = špatné použití.
 
 Obsah šablon (`TemplatesRozjedeme-ai/*`) se mění jen template PR, nikdy
 zkopírováním klientských dat zpět. Detail opakuje OrganizationTemplate skill
@@ -761,7 +771,7 @@ Použij pro první klientský closeout. Pole označené `pokud ...` dokládej je
 - `bun run doctor`: ok/warn/fail + excerpt
 - Runtime smoke: `<app-id>` ready/start/repair result (pokud se app runtime předává)
 - Secrets: metadata-only custody check, no values printed (pokud se secrets konfigurovaly)
-- Nested AGENTS instance rewrite: pass/fail (`rg` gate z §1a)
+- Nested AGENTS instance rewrite: pass/fail (`scripts/check-organization-agents-instance.mjs`)
 - Known accepted warnings: `<none>` or explicit list
 - Rollback path: tested/available/not applicable + proč
 ```
@@ -781,7 +791,8 @@ GEN3 je ready pro prvního klienta, když:
   app + data, Knowledgebase, Design System boundary a Infra mají výše popsané
   nested repo/sloty, zatímco další workspace moduly se nezakládají big-bang;
 - Organization `AGENTS.md` má na začátku povinný handoff Publikace a nested
-  `AGENTS.md` jsou instance, ne text šablony (grep gate v §1a);
+  `AGENTS.md` jsou instance, ne text šablony
+  (`scripts/check-organization-agents-instance.mjs` v §1a);
 - required template mounty zahrnují `OrganizationTemplate_GEN3`,
   `MissionControlTemplate`, `KnowledgebaseTemplate` a
   `DesignSystemTemplate`; Mission Control i Design System template mají
