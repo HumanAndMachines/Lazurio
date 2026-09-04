@@ -40,9 +40,12 @@ extends it.
 >
 > On Windows, after each authorized WinGet installation, refresh `PATH` only
 > for the current installation process from fresh Machine + User values
-> according to this runbook, so that work can continue without manually
-> searching for versioned paths. Always prove the finished state from a new
-> clean process, though. Then verify the correct GitHub account,
+> according to this runbook so that the current operation can finish safely.
+> Then tell me the exact resume point, let me fully close every Codex window,
+> and continue in this thread after Codex has been started again. Prove the
+> finished state only from the relaunched Codex and its new clean process; a
+> new terminal opened from the old Codex is not enough. Use a Windows restart
+> only as a fallback. Then verify the correct GitHub account,
 > `git_protocol=ssh`, and an exact `git ls-remote` of the root repo
 > `<github-organization>/<github-organization>_GEN3`.
 >
@@ -62,6 +65,50 @@ extends it.
 > name any access blocker by the exact account, Team, and repository for the
 > Organization owner.
 <!-- lazurio-guide:organization-install-short:end -->
+
+### Optional expanded installation mandate
+
+The default prompt above remains the smallest safe mandate: it installs
+missing tools and changes only the User `PATH`. A Principal who owns or
+administers the whole Machine may consciously permit a complete system
+installation in the same prompt. The expanded mandate is neither a new
+installation profile nor a permanent Lazurio setting; it authorizes exact
+external changes for the current installation session.
+
+Add only the paragraphs whose impact the Principal actually approves:
+
+> For this Machine, you additionally have my explicit permission to use a
+> supported system package manager, request the standard OS elevation, and
+> change both the User and Machine/system-wide `PATH`. Add only the canonical
+> installation directories of the named tools, preserve all other valid
+> entries, and remove only a demonstrably invalid or shadowing entry for the
+> same tool. Do not bypass UAC, device-management policy, or the Machine's
+> security protections.
+>
+> Install missing and update existing Git, GitHub CLI, and Codex CLI to the
+> current official stable versions, and Node.js to the current supported LTS.
+> Always set Bun to the exact stable version declared by the current clean
+> Lazurio `lazurio/package.json#packageManager`, even when upstream offers a
+> newer release. Do not use preview, beta, nightly, or canary versions. Resolve
+> every safely fixable required Install Core and Doctor finding within this
+> mandate and repeat the checks; do not stop after merely reporting it.
+>
+> If you reproduce a general Lazurio problem during installation, you have my
+> permission—after checking open and closed duplicates and sanitizing the
+> evidence—to create or extend a GitHub Issue in
+> `<installation-issue-repository>` and include its URL in the handoff. Do not
+> publish secrets, Personalspace, the local username, or Organization-specific
+> data. Do not close, assign, or prioritize the issue.
+
+`<installation-issue-repository>` must be the exact owning repo, not a generic
+name. For the installer, CLI, Doctor, Launchpad, and shared manual, that is
+currently `HumanAndMachines/Lazurio`; an Organization-specific finding does
+not belong there. Follow the publication and sanitization process in
+[`manual/github-issues.md`](github-issues.md).
+
+This expanded mandate does not authorize a merge, release, source push,
+GitHub membership or Team changes, or GitHub App installation outside the
+explicitly named Organization.
 
 ## What turns a GitHub Organization into a Lazurio Organization
 
@@ -180,10 +227,16 @@ $env:Path = (@($machinePath, $userPath) | Where-Object { $_ }) `
 
 This step writes nothing to the registry or the shell profile and does not use
 a manually located versioned package directory. It allows the installation
-session to continue, but it is not the final proof: after completion, a new
-clean process must find the same commands without this snippet. Their actual
-identity and usability are subsequently verified by `lazurio install --json`
-and Doctor; a mere `Get-Command` is not enough.
+session to continue, but it is not the final proof. After the currently active
+atomic operation finishes, the Agent records the exact resume point in the
+chat and the Principal fully closes every Codex window and starts Codex again.
+Only a new clean process from the relaunched Codex may prove that the same
+commands are available without this snippet. A new terminal started by the old
+Codex still inherits its environment snapshot and is not sufficient. Their
+actual identity and usability are subsequently verified by
+`lazurio install --json` and Doctor; a mere `Get-Command` is not enough. User
+sign-out or a Windows restart is only a fallback when the persistent User and
+Machine values are correct but the new Codex still cannot see them.
 
 On Windows, Git, GitHub CLI, and Node.js may be installed even without admin
 rights into the official user directories under
@@ -216,20 +269,23 @@ verify `codex --version` in a new clean process, and repeat
 `lazurio doctor --tool-updates --json`.
 
 If the installation prompt contains an explicit mandate for the exact tools and
-a change to the user `PATH`, the Agent does not stop at a handoff warning:
+a change to the User or Machine `PATH`, the Agent does not stop at a handoff
+warning:
 
 1. it installs any missing Git, GitHub CLI, Node.js LTS, Codex CLI, or exactly
    pinned Bun exclusively via the official procedure for the detected
    platform;
-2. it adds only the actual installation directory of the missing tool to the
-   user `PATH`, preserves all existing entries, and creates no binding to the
-   task worktree;
-3. without further consent, it does not change the system-wide `PATH`, does
-   not install a system package manager, does not upgrade functional foreign
-   tools, and does not overwrite the shell profile with unrelated content;
-4. it discards the temporary PATH inheritance and verifies from a new clean
-   process the commands `bun --version`, `git --version`, `gh --version`,
-   `node --version`, `codex --version`, and, after registration, also
+2. it adds only the actual installation directory of the tool to the explicitly
+   authorized User or Machine `PATH`, preserves unrelated valid entries, and
+   creates no binding to the task worktree;
+3. it uses the system-wide `PATH`, a system package manager, or an upgrade of
+   an existing tool only when the prompt explicitly permits each category; even
+   the expanded mandate does not authorize overwriting an unrelated shell
+   profile or changing security settings;
+4. after an exact resume handoff, it fully closes and restarts Codex, thereby
+   discarding the temporary PATH inheritance, and from the new clean process
+   verifies `bun --version`, `git --version`, `gh --version`, `node --version`,
+   `codex --version`, and, after registration, also
    `lazurio cli status --json`;
 5. it runs Install Core again. Bun, Git, and GitHub CLI must not have the
    reason `*_not_on_path`, and Node must satisfy the versioned range; only then
@@ -245,9 +301,10 @@ The recommended authorization block of the installation prompt is:
 > manager, do not change security settings, and do not upgrade other tools
 > without my further consent.
 
-When the prompt does not authorize the `PATH` change, the Agent returns an
-exact installation report and requests consent; a temporary absolute path is
-not an acceptable bypass of the gate.
+When the prompt does not authorize the concrete `PATH` layer, the Agent returns
+an exact installation report and requests consent. User consent is not treated
+as Machine consent, and a temporary absolute path is not an acceptable bypass
+of the gate.
 
 ## GitHub login is not Git transport
 
