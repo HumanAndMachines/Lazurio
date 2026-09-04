@@ -58,6 +58,9 @@ test("hosted trust revalidates only the exact Team-scoped signed OAuth session",
     cookie: `launchpad-theme=dark; ${authCookieName}=valid-session; analytics-id=private`,
     origin: externalOrigin,
     "sec-fetch-site": "same-origin",
+    // A local process can forge this historical gateway header. Its malformed
+    // value must be ignored when the exact Team-scoped session is valid.
+    "x-lazurio-github-login": "not/a-github-login",
   };
 
   expect(await trust.isTrustedWorkspaceRequest(request(headers), backendUrl)).toBe(true);
