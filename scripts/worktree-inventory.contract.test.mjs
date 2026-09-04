@@ -7,9 +7,10 @@ import {
   formatHuman,
   resolveAuthorityPlanPath,
 } from "../.agents/skills/worktree-development-discipline/scripts/worktree-inventory.mjs";
+import { platformTestTimeout } from "../launchpad/src/test-platform-setup.mjs";
 
 const cleanupPaths = [];
-setDefaultTimeout(process.platform === "win32" ? 45_000 : 20_000);
+setDefaultTimeout(platformTestTimeout(20_000));
 const auditScript = join(
   import.meta.dir,
   "..",
@@ -546,7 +547,7 @@ test("fails closed on root identity, scope and path mutations", async () => {
       "canonical worktree has invalid sidecar",
     );
   }
-}, 45_000);
+}, platformTestTimeout(45_000));
 
 test("fails closed when the owning plan dev_code does not match the sidecar", async () => {
   const fixture = await createFixture({

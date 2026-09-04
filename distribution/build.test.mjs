@@ -14,6 +14,7 @@ import {
   scanArtifactEntries,
   verifyArtifactTree,
 } from "./build-lib.mjs";
+import { platformTestTimeout } from "../launchpad/src/test-platform-setup.mjs";
 
 const cleanup = [];
 
@@ -303,7 +304,7 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
   const tampered = runDoctor(first.artifact_root);
   expect(tampered.status).toBe(1);
   expect(JSON.parse(tampered.stdout)).toMatchObject({ status: "fail" });
-}, 60_000);
+}, platformTestTimeout(60_000));
 
 test("resident provenance is independent of mutable remote configuration", async () => {
   const fixture = await isolatedRepositoryFixture();
@@ -337,7 +338,7 @@ test("resident provenance is independent of mutable remote configuration", async
   expect(
     (await readFile(mutated.archive_path)).equals(await readFile(baseline.archive_path)),
   ).toBe(true);
-}, process.platform === "win32" ? 45_000 : 20_000);
+}, platformTestTimeout(20_000));
 
 test.skipIf(process.platform === "win32")(
   "resident build ignores PATH git and a checkout-local fsmonitor helper",
