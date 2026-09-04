@@ -1158,6 +1158,112 @@ test("Windows managed Stop používá taskkill jen nad známým PID a celým str
     .toBe("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe");
 });
 
+test("Windows Stop přijme taskkill false negative až po potvrzeném child exitu", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port });
+  const commands = [];
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "windows-taskkill-false-negative",
+    platform: "win32",
+    bunExecutable: process.execPath,
+    resolvePortOwnerFn: async () => null,
+    runSystemCommandFn: async (command) => {
+      commands.push(command);
+      await executeWindowsStopCommand(command);
+      return { ok: false, exitCode: 1, stdout: "", stderr: "taskkill reported a partial failure" };
+    },
+  });
+
+  await runtime.start("test-company-demo-v1");
+  await waitForStatus(() => runtime.health("test-company-demo-v1"), "healthy");
+  const stopped = await runtime.stop("test-company-demo-v1");
+
+  expect(stopped.runtime).toMatchObject({ status: "stopped", managed: false });
+  expect(commands).toHaveLength(1);
+  expect(commands[0]).toContain("/T");
+  expect(commands[0]).toContain("/F");
+});
+
+test("Windows Stop vrátí úspěch, když se exact child exit potvrdí při recovery po timeoutu", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port });
+  const commands = [];
+  let reportExit;
+  const reportedExit = new Promise((resolve) => {
+    reportExit = resolve;
+  });
+  let releasedDuringRecovery = false;
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "windows-taskkill-timeout-recovery",
+    platform: "win32",
+    bunExecutable: process.execPath,
+    resolvePortOwnerFn: async () => null,
+    sleepFn: async () => {},
+    spawnProcess: (command, options) => {
+      const child = spawnFixtureChild(root, command, options);
+      return {
+        pid: child.pid,
+        stdout: child.stdout,
+        stderr: child.stderr,
+        exited: reportedExit,
+      };
+    },
+    writeRuntimeStateFile: async (path, content, encoding) => {
+      const state = JSON.parse(content);
+      if (state.status === "unhealthy" && state.failure_kind === "stop_signal_failed") {
+        releasedDuringRecovery = true;
+        reportExit(0);
+        await Promise.resolve();
+      }
+      return writeFile(path, content, encoding);
+    },
+    runSystemCommandFn: async (command) => {
+      commands.push(command);
+      await executeWindowsStopCommand(command);
+      return { ok: false, exitCode: 1, stdout: "", stderr: "taskkill reported a partial failure" };
+    },
+  });
+
+  await runtime.start("test-company-demo-v1");
+  await waitForStatus(() => runtime.health("test-company-demo-v1"), "healthy");
+  const stopped = await runtime.stop("test-company-demo-v1");
+
+  expect(releasedDuringRecovery).toBe(true);
+  expect(stopped.runtime).toMatchObject({ status: "stopped", managed: false });
+  expect(stopped.forced).toBe(true);
+  expect(commands).toHaveLength(1);
+  expect(commands[0]).toContain("/T");
+  expect(commands[0]).toContain("/F");
+});
+
+test("Windows shutdown používá stejné false-negative Stop smíření jako UI", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port });
+  const commands = [];
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "windows-shutdown-taskkill-false-negative",
+    platform: "win32",
+    bunExecutable: process.execPath,
+    resolvePortOwnerFn: async () => null,
+    runSystemCommandFn: async (command) => {
+      commands.push(command);
+      await executeWindowsStopCommand(command);
+      return { ok: false, exitCode: 1, stdout: "", stderr: "taskkill reported a partial failure" };
+    },
+  });
+
+  await runtime.start("test-company-demo-v1");
+  await waitForStatus(() => runtime.health("test-company-demo-v1"), "healthy");
+  expect(await runtime.shutdown()).toMatchObject({ attempted: 1, stopped: 1, failed: 0 });
+  expect(commands).toHaveLength(1);
+});
+
 test("Windows Stop nikdy nepoužije taskkill jen podle neověřeného portu", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({ port });
