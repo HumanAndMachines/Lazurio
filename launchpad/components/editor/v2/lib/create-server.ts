@@ -14,6 +14,7 @@ import {
 } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { comparablePath, pathIsInside } from './path-identity.ts'
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost'])
 const AUTHORING_EXTENSIONS = new Set(['.md', '.mdx', '.ts', '.json'])
@@ -145,10 +146,10 @@ function resolveEditorConfig(config: EditorConfig) {
   }
   const repoRoot = realDirectorySync(config.repoRoot, 'repoRoot')
   const appRoot = realDirectorySync(config.appRoot, 'appRoot')
-  if (!inside(repoRoot, appRoot, true)) throw new EditorBoundaryError('appRoot must stay inside repoRoot.')
+  if (!pathIsInside(repoRoot, appRoot, true)) throw new EditorBoundaryError('appRoot must stay inside repoRoot.')
   const publicDir = realDirectorySync(config.publicDir, 'publicDir')
   const componentPublicDir = realDirectorySync(COMPONENT_PUBLIC_DIR, 'component publicDir')
-  if (pathKey(publicDir) !== pathKey(componentPublicDir)) {
+  if (comparablePath(publicDir) !== comparablePath(componentPublicDir)) {
     throw new EditorBoundaryError('publicDir must be the canonical shared editor asset directory.')
   }
   const previewBaseUrl = exactHttpUrl(config.previewBaseUrl, 'previewBaseUrl')
@@ -185,7 +186,7 @@ function resolveAuthoringRootsSync(repoRoot: string, authoringPaths: string[]) {
     if (seen.has(relativePath)) throw new EditorBoundaryError(`Duplicate authoringPath: ${relativePath}`)
     seen.add(relativePath)
     const absolutePath = path.resolve(repoRoot, ...relativePath.split('/'))
-    if (!inside(repoRoot, absolutePath, false)) {
+    if (!pathIsInside(repoRoot, absolutePath, false)) {
       throw new EditorBoundaryError(`authoringPath escapes repoRoot: ${relativePath}`)
     }
     assertNoLinkedSegmentsSync(repoRoot, absolutePath)
@@ -321,8 +322,8 @@ async function resolveAuthoringFile(
   const absolutePath = path.resolve(repoRoot, ...relativePath.split('/'))
   const owningRoot = roots.find((root) => (
     root.kind === 'file'
-      ? pathKey(root.absolutePath) === pathKey(absolutePath)
-      : inside(root.absolutePath, absolutePath, false)
+      ? comparablePath(root.absolutePath) === comparablePath(absolutePath)
+      : pathIsInside(root.absolutePath, absolutePath, false)
   ))
   if (!owningRoot) throw new EditorBoundaryError('Requested file is outside authoringPaths.', 403)
   await assertNoLinkedSegments(repoRoot, absolutePath, allowMissing)
@@ -363,7 +364,7 @@ async function assertNoLinkedSegments(repoRoot: string, targetPath: string, allo
     }
   }
   const canonical = await realpath(targetPath)
-  if (!inside(repoRoot, canonical, false)) throw new EditorBoundaryError('Canonical editor path escapes repoRoot.')
+  if (!pathIsInside(repoRoot, canonical, false)) throw new EditorBoundaryError('Canonical editor path escapes repoRoot.')
 }
 
 function assertNoLinkedSegmentsSync(repoRoot: string, targetPath: string) {
@@ -378,7 +379,7 @@ function assertNoLinkedSegmentsSync(repoRoot: string, targetPath: string) {
     if (stat.isSymbolicLink()) throw new EditorBoundaryError('Linked editor paths are forbidden.')
   }
   const canonical = realpathSync(targetPath)
-  if (!inside(repoRoot, canonical, false)) throw new EditorBoundaryError('Canonical editor path escapes repoRoot.')
+  if (!pathIsInside(repoRoot, canonical, false)) throw new EditorBoundaryError('Canonical editor path escapes repoRoot.')
 }
 
 function realDirectorySync(value: unknown, label: string) {
@@ -392,7 +393,7 @@ function realDirectorySync(value: unknown, label: string) {
 
 async function readPublicFile(publicDir: string, relativePath: string) {
   const absolutePath = path.resolve(publicDir, relativePath)
-  if (!inside(publicDir, absolutePath, false)) throw new EditorBoundaryError('Public asset path escapes its root.')
+  if (!pathIsInside(publicDir, absolutePath, false)) throw new EditorBoundaryError('Public asset path escapes its root.')
   await assertNoLinkedSegments(publicDir, absolutePath, false)
   const bytes = await readFile(absolutePath)
   const contentType = relativePath.endsWith('.html')
@@ -427,17 +428,6 @@ function assertAuthoringExtension(relativePath: string) {
 
 function portableFromNative(value: string) {
   return value.split(path.sep).join('/')
-}
-
-function inside(root: string, candidate: string, allowRoot: boolean) {
-  const relativePath = path.relative(root, candidate)
-  return (allowRoot && relativePath === '')
-    || (relativePath !== '' && !relativePath.startsWith('..') && !path.isAbsolute(relativePath))
-}
-
-function pathKey(value: string) {
-  const normalized = path.resolve(value).split(path.sep).join('/')
-  return process.platform === 'win32' ? normalized.toLowerCase() : normalized
 }
 
 function exactHttpUrl(value: unknown, label: string) {

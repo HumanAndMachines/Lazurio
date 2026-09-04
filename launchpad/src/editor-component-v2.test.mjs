@@ -8,6 +8,10 @@ import {
   createEditorServer,
 } from '../components/editor/v2/lib/create-server.ts'
 import {
+  comparablePath,
+  pathIsInside,
+} from '../components/editor/v2/lib/path-identity.ts'
+import {
   buildClientScript,
   editorButton,
 } from '../components/editor/v2/lib/astro-integration.ts'
@@ -79,6 +83,25 @@ function sessionCookie(response) {
 }
 
 describe('shared Knowledgebase editor v2', () => {
+  test('normalizes Windows extended path identities without weakening the repo boundary', () => {
+    const root = 'D:\\a\\Lazurio\\Lazurio'
+    expect(comparablePath('\\\\?\\D:\\A\\Lazurio\\Lazurio', 'win32')).toBe(
+      'd:/a/lazurio/lazurio',
+    )
+    expect(pathIsInside(root, '\\\\?\\D:\\a\\Lazurio\\Lazurio\\data\\v2', false, 'win32')).toBe(true)
+    expect(pathIsInside(root, 'D:\\a\\Lazurio\\Lazurio-other\\data', false, 'win32')).toBe(false)
+    expect(pathIsInside(root, '\\\\?\\D:\\a\\Lazurio\\Lazurio', false, 'win32')).toBe(false)
+    expect(pathIsInside(root, '\\\\?\\D:\\a\\Lazurio\\Lazurio', true, 'win32')).toBe(true)
+    expect(
+      pathIsInside(
+        '\\\\server\\share\\Lazurio',
+        '\\\\?\\UNC\\server\\share\\Lazurio\\data\\v2',
+        false,
+        'win32',
+      ),
+    ).toBe(true)
+  })
+
   test('serves a loopback session and saves only an exact non-stale authoring draft', async () => {
     const config = await fixture()
     const server = createEditorServer(config)
