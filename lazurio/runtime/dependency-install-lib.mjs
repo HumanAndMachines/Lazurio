@@ -15,8 +15,16 @@ const PACKAGE_LOCKFILES = Object.freeze([
 ]);
 const LOCAL_DEPENDENCY_TREE_ENTRY_LIMIT = 20_000;
 
-export function frozenBunInstallCommand(bunExecutable = process.execPath) {
-  return [bunExecutable, "install", "--frozen-lockfile"];
+export function frozenBunInstallCommand(
+  bunExecutable = process.execPath,
+  { platform = process.platform } = {},
+) {
+  return [
+    bunExecutable,
+    "install",
+    "--frozen-lockfile",
+    ...(platform === "win32" ? ["--backend=copyfile"] : []),
+  ];
 }
 
 export async function runFrozenBunInstall({

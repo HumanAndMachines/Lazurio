@@ -262,11 +262,17 @@ test("package and boundary paths must be explicit absolute paths", async () => {
   expect(result).toMatchObject({ ok: false, reason: "package_root_invalid" });
 });
 
-test("frozen Bun command never authorizes lockfile mutation", () => {
-  expect(frozenBunInstallCommand("/runtime/bun")).toEqual([
+test("frozen Bun command never authorizes lockfile mutation and avoids Windows hardlinks", () => {
+  expect(frozenBunInstallCommand("/runtime/bun", { platform: "linux" })).toEqual([
     "/runtime/bun",
     "install",
     "--frozen-lockfile",
+  ]);
+  expect(frozenBunInstallCommand("C:\\runtime\\bun.exe", { platform: "win32" })).toEqual([
+    "C:\\runtime\\bun.exe",
+    "install",
+    "--frozen-lockfile",
+    "--backend=copyfile",
   ]);
 });
 
