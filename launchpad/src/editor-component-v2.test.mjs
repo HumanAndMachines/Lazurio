@@ -15,6 +15,26 @@ import {
 const cleanup = []
 const componentPublicDir = fileURLToPath(new URL('../components/editor/v2/public', import.meta.url))
 
+function deferred() {
+  let resolve
+  const promise = new Promise((next) => { resolve = next })
+  return { promise, resolve }
+}
+
+function browserResponse(payload) {
+  return {
+    ok: true,
+    status: 200,
+    async json() {
+      return payload
+    },
+  }
+}
+
+async function flushBrowserTasks() {
+  await new Promise((resolve) => setTimeout(resolve, 0))
+}
+
 afterEach(async () => {
   await Promise.all(cleanup.splice(0).reverse().map(async (value) => {
     if (typeof value === 'function') return value()
@@ -240,6 +260,7 @@ describe('shared Knowledgebase editor v2', () => {
     const integration = editorButton({
       editorServerPath: '/fixture/editor/server.ts',
       editorPort: 45123,
+      projectKey: 'fixture-kb',
     })
     expect(integration.name).toBe('lazurio-knowledgebase-editor-v2')
     const script = buildClientScript('http://127.0.0.1:45123')
@@ -282,5 +303,149 @@ describe('shared Knowledgebase editor v2', () => {
       },
     }, response, () => {})
     expect(response.statusCode).toBe(403)
+  })
+
+  test('Astro integration reuses a healthy listener only for the configured project', async () => {
+    const port = await freePort()
+    const listener = Bun.serve({
+      hostname: '127.0.0.1',
+      port,
+      fetch() {
+        return Response.json({
+          schema_version: 'lazurio.knowledgebase.editor.health.v2',
+          status: 'ok',
+          project_key: 'foreign-kb',
+        })
+      },
+    })
+    cleanup.push(() => listener.stop(true))
+
+    async function statusFor(projectKey) {
+      const integration = editorButton({
+        editorServerPath: '/fixture/editor/server.ts',
+        editorPort: port,
+        projectKey,
+      })
+      let middleware
+      await integration.hooks['astro:server:setup']({
+        server: {
+          middlewares: {
+            use(handler) {
+              middleware = handler
+            },
+          },
+        },
+      })
+      const response = {
+        statusCode: 200,
+        headers: {},
+        body: '',
+        setHeader(name, value) {
+          this.headers[name] = value
+        },
+        end(body) {
+          this.body = body
+        },
+      }
+      await middleware({
+        method: 'GET',
+        url: '/__editor/status',
+        headers: { host: '127.0.0.1:4321' },
+      }, response, () => {})
+      return JSON.parse(response.body)
+    }
+
+    expect(await statusFor('fixture-kb')).toMatchObject({ ok: true, running: false })
+    expect(await statusFor('foreign-kb')).toMatchObject({ ok: true, running: true })
+  })
+
+  test('browser ignores an older file response after a newer selection', async () => {
+    const clientSource = await readFile(
+      path.join(componentPublicDir, 'app.js'),
+      'utf8',
+    )
+    const handlers = new Map()
+    const elements = new Map()
+    const element = (id, initial = {}) => {
+      const value = {
+        textContent: '',
+        value: '',
+        disabled: false,
+        dataset: {},
+        options: [],
+        addEventListener(event, handler) {
+          handlers.set(`${id}:${event}`, handler)
+        },
+        appendChild(child) {
+          this.options.push(child)
+        },
+        ...initial,
+      }
+      elements.set(`#${id}`, value)
+      return value
+    }
+    element('project-title')
+    element('preview-link')
+    const fileList = element('file-list')
+    element('new-file-form')
+    element('new-file')
+    const currentPath = element('current-path')
+    const content = element('content', { disabled: true })
+    const save = element('save', { disabled: true })
+    const status = element('status')
+    const document = {
+      title: '',
+      querySelector(selector) {
+        return elements.get(selector)
+      },
+      createElement() {
+        return { value: '', textContent: '' }
+      },
+    }
+    const fileRequests = new Map()
+    const fetch = (url) => {
+      if (url === '/api/state') {
+        return Promise.resolve(browserResponse({
+          ok: true,
+          data: {
+            projectTitle: 'Fixture Knowledgebase',
+            previewBaseUrl: 'http://127.0.0.1:49000/cs/',
+            files: ['data/v2/docs/cs/a.md', 'data/v2/docs/cs/b.md'],
+          },
+        }))
+      }
+      const pending = deferred()
+      fileRequests.set(url, pending)
+      return pending.promise
+    }
+    Function('document', 'fetch', clientSource)(document, fetch)
+    await flushBrowserTasks()
+
+    const pathA = 'data/v2/docs/cs/a.md'
+    const pathB = 'data/v2/docs/cs/b.md'
+    fileList.value = pathA
+    handlers.get('file-list:change')()
+    fileList.value = pathB
+    handlers.get('file-list:change')()
+
+    fileRequests.get(`/api/file?path=${encodeURIComponent(pathB)}`).resolve(browserResponse({
+      ok: true,
+      data: { path: pathB, revision: 'revision-b', content: '# B\n' },
+    }))
+    await flushBrowserTasks()
+    expect(currentPath.textContent).toBe(pathB)
+    expect(content.value).toBe('# B\n')
+    expect(content.disabled).toBe(false)
+    expect(save.disabled).toBe(false)
+    expect(status.textContent).toBe('Načteno')
+
+    fileRequests.get(`/api/file?path=${encodeURIComponent(pathA)}`).resolve(browserResponse({
+      ok: true,
+      data: { path: pathA, revision: 'revision-a', content: '# A\n' },
+    }))
+    await flushBrowserTasks()
+    expect(fileList.value).toBe(pathB)
+    expect(currentPath.textContent).toBe(pathB)
+    expect(content.value).toBe('# B\n')
   })
 })

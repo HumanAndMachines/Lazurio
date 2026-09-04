@@ -10,6 +10,7 @@ const status = document.querySelector('#status')
 
 let selectedPath = null
 let baseRevision = null
+let openSequence = 0
 
 async function api(url, options = {}) {
   const response = await fetch(url, { credentials: 'same-origin', ...options })
@@ -40,25 +41,41 @@ async function loadState() {
 }
 
 async function openFile(path) {
+  const sequence = ++openSequence
+  selectedPath = null
+  baseRevision = null
+  currentPath.textContent = path
+  content.value = ''
+  content.disabled = true
+  save.disabled = true
   setStatus('Načítám…')
-  const file = await api(`/api/file?path=${encodeURIComponent(path)}`)
-  selectedPath = file.path
-  baseRevision = file.revision
-  currentPath.textContent = file.path
-  content.value = file.content
-  content.disabled = false
-  save.disabled = false
-  setStatus('Načteno', 'ok')
+  try {
+    const file = await api(`/api/file?path=${encodeURIComponent(path)}`)
+    if (sequence !== openSequence || fileList.value !== path) return
+    if (file.path !== path) throw new Error('Server vrátil jiný soubor, než byl vybrán.')
+    selectedPath = file.path
+    baseRevision = file.revision
+    currentPath.textContent = file.path
+    content.value = file.content
+    content.disabled = false
+    save.disabled = false
+    setStatus('Načteno', 'ok')
+  } catch (error) {
+    if (sequence === openSequence && fileList.value === path) {
+      setStatus(error.message, 'error')
+    }
+  }
 }
 
 fileList.addEventListener('change', () => {
-  if (fileList.value) openFile(fileList.value).catch((error) => setStatus(error.message, 'error'))
+  if (fileList.value) openFile(fileList.value)
 })
 
 newFileForm.addEventListener('submit', (event) => {
   event.preventDefault()
   const path = newFile.value.trim()
   if (!path) return
+  openSequence += 1
   addFileOption(path)
   fileList.value = path
   selectedPath = path
