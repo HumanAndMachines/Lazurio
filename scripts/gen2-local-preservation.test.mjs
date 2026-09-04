@@ -217,6 +217,41 @@ describe("verifier source identity", () => {
 });
 
 describe("documented origin activation", () => {
+  test("required template access is read-only, exact and checked before template remote mutation", async () => {
+    const repoRoot = dirname(dirname(scriptPath));
+    const manual = await readFile(join(repoRoot, "manual", "first-client-organization-rollout.md"), "utf8");
+    const preflight = manual
+      .split("preflight_required_template_access() {")[1]
+      ?.split("\n}\n\npreflight_gen3_rollout() {")[0];
+    const rollout = manual.split("preflight_gen3_rollout() {")[1]?.split("\n}\n\npreflight_gen3_rollout")[0];
+
+    expect(preflight).toBeDefined();
+    expect(rollout).toBeDefined();
+    for (const repository of [
+      "TemplatesRozjedeme-ai/OrganizationTemplate_GEN3",
+      "TemplatesRozjedeme-ai/MissionControlTemplate",
+      "TemplatesRozjedeme-ai/KnowledgebaseTemplate",
+      "TemplatesRozjedeme-ai/DesignSystemTemplate",
+    ]) {
+      expect(preflight.match(new RegExp(repository, "g"))).toHaveLength(1);
+    }
+    expect(preflight).toContain("gh auth status --hostname github.com");
+    expect(preflight).toContain('gh api --include "repos/$template_repository"');
+    expect(preflight).toContain("git ls-remote --exit-code --heads --");
+    expect(preflight).toContain('" 403 "');
+    expect(preflight).toContain('" 404 "');
+    expect(preflight).toContain("GitHub provider nebo síť");
+    expect(preflight).toContain("READ pozvánku/grant pro přesné repo");
+    expect(preflight).not.toMatch(/\bgit\s+(?:clone|fetch|push|remote\s+add)\b/);
+
+    const accessGate = rollout.indexOf("preflight_required_template_access || return 1");
+    const templateCheckoutRead = rollout.indexOf('organization_template_root="${ORGANIZATION_TEMPLATE_ROOT:-}"');
+    const firstTemplateFetch = rollout.indexOf('git -C "$organization_template_root" fetch');
+    expect(accessGate).toBeGreaterThan(-1);
+    expect(templateCheckoutRead).toBeGreaterThan(accessGate);
+    expect(firstTemplateFetch).toBeGreaterThan(accessGate);
+  });
+
   test.skipIf(process.platform === "win32")(
     "stops before every push when fetch or ls-remote cannot prove remote state",
     async () => {
