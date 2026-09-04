@@ -11,6 +11,7 @@ import {
   groupAppFamilies,
   groupFamiliesBySpace,
   groupWorkspaceFamiliesByTeam,
+  guideInstallPayloadIsValid,
   isAttentionState,
   isProjectedModuleOpenTarget,
   offersMoreThanLocalRun,
@@ -1700,13 +1701,7 @@ function loadGuideInstallContent() {
     .then(async (response) => {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error ?? "guide_content_unavailable");
-      if (
-        payload?.schema_version !== "lazurio.guide.organization_install.v2"
-        || payload.locale !== locale
-        || typeof payload.short_prompt !== "string"
-        || typeof payload.policy_markdown !== "string"
-        || typeof payload.source?.path !== "string"
-      ) {
+      if (!guideInstallPayloadIsValid(payload, locale)) {
         throw new Error("guide_content_invalid");
       }
       elements.guidePrompt?.querySelector("code")?.replaceChildren(payload.short_prompt);

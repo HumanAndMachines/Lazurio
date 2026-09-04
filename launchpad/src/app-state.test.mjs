@@ -12,6 +12,7 @@ import {
   groupAppFamilies,
   groupFamiliesBySpace,
   groupWorkspaceFamiliesByTeam,
+  guideInstallPayloadIsValid,
   isAttentionState,
   isProjectedModuleOpenTarget,
   matchesQuery,
@@ -30,6 +31,30 @@ import {
   variantMenuLabel,
   variantTag,
 } from "../public/app-state.js";
+
+test("Guide install payload accepts only the exact source for its active locale", () => {
+  const payload = {
+    schema_version: "lazurio.guide.organization_install.v2",
+    locale: "cs",
+    source: {
+      path: "manual/organization-install.md",
+      authority: "lazurio-root-manual",
+    },
+    short_prompt: "Prompt",
+    policy_markdown: "Policy",
+  };
+
+  expect(guideInstallPayloadIsValid(payload, "cs")).toBe(true);
+  expect(guideInstallPayloadIsValid({
+    ...payload,
+    source: { ...payload.source, path: "wrong-locale-source.md" },
+  }, "cs")).toBe(false);
+  expect(guideInstallPayloadIsValid({
+    ...payload,
+    locale: "en",
+  }, "en")).toBe(false);
+  expect(guideInstallPayloadIsValid(payload, "de")).toBe(false);
+});
 
 test("declared shared-port peer is matched by endpoint and ownership, not listener PID", () => {
   const target = {
