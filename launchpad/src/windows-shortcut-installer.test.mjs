@@ -60,7 +60,9 @@ test("Windows installer drží jediný per-user bootstrap kontrakt bez druhé ru
   expect(contents).toContain("field '$($requiredField.Name)' is empty");
   expect(contents).toContain("@{ Name = 'TargetPath'; Value = [string]$shortcut.TargetPath }");
   expect(contents).toContain("@{ Name = 'WorkingDirectory'; Value = [string]$shortcut.WorkingDirectory }");
-  expect(contents).toContain("$taskbarShortcut = if ($StartMenuOnly) { $null }");
+  expect(contents).toContain("[switch]$IncludeTaskbar");
+  expect(contents).toContain("$installTaskbar = $IncludeTaskbar.IsPresent");
+  expect(contents).toContain("$taskbarShortcut = if ($installTaskbar)");
   expect(contents).not.toContain("ScheduledTask");
   expect(contents).not.toMatch(/\bport\b/i);
   expect(contents.indexOf("Publish-AtomicFile -SourcePath $sourceBootstrapPath"))
@@ -74,19 +76,21 @@ test("Windows installer drží jediný per-user bootstrap kontrakt bez druhé ru
 windowsTest("Windows installer publikuje stabilní bootstrap idempotentně a bez temp zbytků", async () => {
   const fixture = await shortcutFixture("happy");
 
-  const first = runInstaller(fixture, ["-StartMenuOnly", "-SkipShellPin"]);
+  const first = runInstaller(fixture, []);
   expectSuccessfulProcess(first);
   const firstReport = JSON.parse(first.stdout.toString());
   expect(firstReport.install_config_valid).toBe(true);
   expect(firstReport.bootstrap_valid).toBe(true);
   expect(firstReport.start_menu_valid).toBe(true);
+  expect(firstReport.taskbar_shortcut).toBeNull();
+  expect(firstReport.taskbar_status).toBe("not_requested");
 
   const config = JSON.parse(await readFile(join(fixture.install, "install.json"), "utf8"));
   expect(config.schema_version).toBe(installSchema);
   expect(config.root.toLowerCase()).toBe(fixture.root.toLowerCase());
   expect(await Bun.file(join(fixture.install, "Launchpad-Bootstrap.ps1")).exists()).toBe(true);
 
-  const second = runInstaller(fixture, ["-StartMenuOnly", "-SkipShellPin"]);
+  const second = runInstaller(fixture, []);
   expectSuccessfulProcess(second);
   const secondReport = JSON.parse(second.stdout.toString());
   expect(secondReport.install_config_valid).toBe(true);
@@ -240,7 +244,7 @@ windowsTest("Windows installer zachová Start Menu a taskbar zkratky v oddělen�
   await writeFile(startMenuShortcut, "start-menu-original", "utf8");
   await writeFile(taskbarShortcut, "taskbar-original", "utf8");
 
-  const result = runInstaller(fixture, ["-SkipShellPin"]);
+  const result = runInstaller(fixture, ["-IncludeTaskbar", "-SkipShellPin"]);
   expectSuccessfulProcess(result);
   const report = JSON.parse(result.stdout.toString());
   expect(report.backups).toHaveLength(2);
@@ -251,6 +255,17 @@ windowsTest("Windows installer zachová Start Menu a taskbar zkratky v oddělen�
   const taskbarBackup = report.backups.find((path) => path.includes("\\taskbar\\"));
   expect(await readFile(startBackup, "utf8")).toBe("start-menu-original");
   expect(await readFile(taskbarBackup, "utf8")).toBe("taskbar-original");
+}, 30_000);
+
+windowsTest("Windows installer odmítne rozporný explicitní Taskbar režim bez mutace", async () => {
+  const fixture = await shortcutFixture("conflicting-taskbar-mode");
+
+  const result = runInstaller(fixture, ["-StartMenuOnly", "-IncludeTaskbar"]);
+  expect(result.exitCode).not.toBe(0);
+  expect(`${result.stdout}\n${result.stderr}`).toContain(
+    "cannot combine -StartMenuOnly with -IncludeTaskbar",
+  );
+  expect(await Bun.file(join(fixture.install, "install.json")).exists()).toBe(false);
 }, 30_000);
 
 windowsTest("Windows installer -WhatIf nevytvoří bootstrap, icon, config ani zkratky", async () => {

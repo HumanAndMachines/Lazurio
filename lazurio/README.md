@@ -370,8 +370,10 @@ lazurio launchpad install
 Příkaz je veřejným vlastníkem uživatelského záměru „nainstaluj lokální
 Launchpad“. Na macOS spustí existující Bash instalátor; na Windows existující
 PowerShell instalátor v bezpečném Start Menu-only režimu bez Taskbar pinu.
-Taskbar zůstává jen explicitní volbou přímého PowerShell instalátoru, protože
-jeho dostupnost se mezi Windows sestaveními liší. Nainstalovaný Windows
+Stejný bezpečný režim je výchozí i při přímém spuštění PowerShell instalátoru;
+Taskbar shortcut je kvůli rozdílům mezi Windows sestaveními dostupný pouze
+explicitním `-IncludeTaskbar` a případné shell připnutí lze samostatně potlačit
+přes `-SkipShellPin`. Nainstalovaný Windows
 bootstrap před každým spuštěním obnoví svůj procesní `PATH` z aktuálních
 Machine + User hodnot, takže funguje i bez odhlášení po WinGet instalaci Bunu;
 persistentní `PATH` ani vlastní cestu k Bunu přitom nemění. Jejich validace
