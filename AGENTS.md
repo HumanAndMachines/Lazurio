@@ -323,12 +323,19 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    instalační prompt tento souhlas udělit předem pro přesně Git, GitHub CLI,
    Node.js LTS, Codex CLI a verzovaný Bun. V takovém případě Agent chybějící
    povolený nástroj nainstaluje z oficiálního zdroje, doplní pouze jeho
-   skutečnou instalační cestu
-   do uživatelského `PATH` a ověří ji z nového čistého procesu; úspěch v právě
-   běžící zděděné relaci není důkaz. Existující `PATH` nepřepisuje, system-wide
-   `PATH`, systémový package manager ani jiné verze nástrojů bez zvláštního
-   souhlasu nemění. Organization materializace začíná až po tomto machine gate;
-   sama nástroje ani `PATH` nevlastní.
+   skutečnou instalační cestu do autorizovaného User nebo Machine `PATH` a
+   ověří ji z nového čistého procesu; úspěch v právě běžící zděděné
+   relaci není důkaz. Výchozí nejmenší mandát dovoluje jen User `PATH` a
+   chybějící nástroje. Rozšířený instalační mandát smí navíc přesně
+   povolit Machine/system-wide `PATH`, standardní OS package manager a upgrade
+   jmenovaných nástrojů; Agent zachová nesouvisející položky a bezpečnostní
+   nastavení a nikdy z tohoto souhlasu neodvodí obecný machine-admin mandát.
+   Git, GitHub CLI a Codex směřují na aktuální oficiální stable, Node na
+   podporované aktuální LTS, ale Bun vždy na exact verzi z
+   `lazurio/package.json#packageManager`; obecný latest Bun není autorita.
+   Organization materializace začíná až po tomto machine gate; sama nástroje
+   ani `PATH` nevlastní. Přesný rozhodovací postup drží skill
+   `.agents/skills/lazurio-workstation-install/SKILL.md`.
    Instalační práce nekončí předáním nálezů, které jsou bezpečně a v uděleném
    mandátu opravitelné. Agent opakuje `lazurio install --json`,
    `lazurio doctor --tool-updates --json`, exact Organization install a finální
@@ -362,7 +369,12 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    bezpečný repo nebo mandát, vrať sanitizovaný draft. Úplný postup drží
    `manual/github-issues.md`. Legacy `ISSUES.open.json` a
    `ISSUES.resolved.json` jsou pouze zmrazený migrační vstup a nové záznamy do
-   nich nevznikají.
+   nich nevznikají. Když instalační prompt předem jmenuje exact issue repo a
+   dovolí do něj publikovat obecné instalační vady, Agent se u každého
+   reprodukovaného nálezu znovu neptá: po kontrole duplicit a sanitizaci issue
+   vytvoří nebo doplní a jeho URL vrátí v handoffu. Mandát nepovoluje issue
+   zavřít, přiřadit, prioritizovat ani do veřejného repa zapsat
+   Organization-specific obsah.
 6. **Delegace.** Pro Claude/Codex/Desktop delegaci platí skill
    `.agents/skills/desktop-execution-agent-collaboration/SKILL.md`:
    self-report není důkaz, QA gate drží delegující Kolega.
@@ -406,6 +418,10 @@ Root upravuj jen když se mění:
   `HumanAndMachines/Lazurio`; routing a publikační pravidla:
   `manual/github-issues.md`. `ISSUES.open.json` a `ISSUES.resolved.json` jsou
   pouze legacy migrační vstup.
+- Fresh/repair workstation instalace — autoritativní manuály
+  `manual/lazurio-root-for-agents.md` a `manual/organization-install.md`;
+  opakovatelný rozhodovací postup skill
+  `.agents/skills/lazurio-workstation-install/SKILL.md`.
 - First-client rollout a migrace: `manual/first-client-organization-rollout.md`,
   `manual/gen2-to-gen3-migration.md`
 - Desktop-agent collaboration — kanonický domov je skill

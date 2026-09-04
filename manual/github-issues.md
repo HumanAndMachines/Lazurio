@@ -61,6 +61,12 @@ explicitní mandát pro přesný owning repo. Doporučená věta:
 > Personalspace ani Organization-specific data a issue nezavírej ani
 > nepřiřazuj.
 
+Takto předem udělený repo-specific mandát je dostatečný pro celou aktuální
+instalační relaci. Agent se u každé nové reprodukované vady znovu neptá a
+nezůstane jen u lokální poznámky: po kontrole duplicit a sanitizaci issue
+proaktivně vytvoří nebo doplní. Mandát se nevztahuje na náhodný transient,
+neověřenou domněnku, jiné repo, uzavření, assignment ani prioritizaci issue.
+
 Když Issues nejsou povolené, GitHub účet nemá potřebné právo, síť je
 nedostupná nebo public-safety není jistá, Agent nic neobchází a nezapisuje
 fallback do jiné Organizace. Vrátí Principálovi hotový sanitizovaný body draft,
