@@ -388,7 +388,7 @@ Fail-closed z Organization rootu (chybějící soubor přeskoč):
 
 ```sh
 ! rg -n "KnowledgebaseTemplate —|Tento repozitář není knowledgebase konkrétní firmy|MissionControlTemplate —|Mattyčus owns implementation|forkable šablona" \
-  --glob 'AGENTS.md' --glob '!**/node_modules/**' --glob '!**/.worktrees/**'
+  --glob 'AGENTS.md' --glob '!**/node_modules' --glob '!**/.worktrees'
 rg -n "Mám změny Publikovat" AGENTS.md
 ```
 
