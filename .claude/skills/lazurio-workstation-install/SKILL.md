@@ -85,9 +85,12 @@ Při publikačním mandátu pro instalační vady přečti také
     Personalspace a Organization data a issue vytvoř nebo doplň pomocí body
     file. U téhož nálezu se znovu neptej. Transient nebo domněnku nepublikuj;
     issue bez dalšího mandátu nezavírej, nepřiřazuj ani neprioritizuj.
-11. **Dokonči povrch.** Podporovanou CLI cestou nainstaluj desktop Launchpad,
-    spusť jej pro exact Organization scope, použij vrácenou URL a ověř health
-    aktivních aplikací. Port ani route neodvozuj ručně.
+11. **Dokonči povrch podle platformy.** Na macOS a Windows podporovanou CLI
+    cestou nainstaluj desktop Launchpad. Na Linuxu je desktop instalace
+    `not_applicable`, dokud ji CLI nepodporuje; nepředstírej ji ani nevolej
+    odmítaný installer. Na všech platformách spusť Launchpad pro exact
+    Organization scope, použij vrácenou URL a ověř health aktivních aplikací.
+    Port ani route neodvozuj ručně.
 
 ## Oveření
 
@@ -100,7 +103,8 @@ Instalace je hotová teprve tehdy, když:
   nebo bezpečně `updated` a finální Doctor nemá required selhání;
 - GitHub identity, role/Team gate a exact Git transport jsou reportované
   odděleně a pravdivě;
-- Launchpad a aktivní aplikace prošly health kontrolou;
+- podporovaný desktop Launchpad je nainstalovaný a na každé platformě Launchpad
+  i aktivní aplikace prošly health kontrolou;
 - každý warning má disposition a každé publikované Issue URL je v handoffu.
 
 Handoff obsahuje matici `runtime ready` / `editing ready` / `publishing ready`,
