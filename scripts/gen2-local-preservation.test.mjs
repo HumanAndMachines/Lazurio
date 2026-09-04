@@ -255,18 +255,31 @@ describe("documented origin activation", () => {
   });
 
   test.skipIf(process.platform === "win32")(
-    "template access preflight classifies controlled API, metadata and SSH failures",
+    "template access preflight executes every controlled branch from a CRLF checkout",
     async () => {
       const repoRoot = dirname(dirname(scriptPath));
       const manual = await readFile(
         join(repoRoot, "manual", "first-client-organization-rollout.md"),
         "utf8",
       );
-      const functionBody = manual
+      const windowsCheckoutRoot = await makeTempRoot();
+      const windowsManualPath = join(
+        windowsCheckoutRoot,
+        "manual",
+        "first-client-organization-rollout.md",
+      );
+      await mkdir(dirname(windowsManualPath), { recursive: true });
+      await writeFile(windowsManualPath, manual.replace(/\r?\n/g, "\r\n"));
+      const windowsCheckoutManual = await readFile(windowsManualPath, "utf8");
+      expect(windowsCheckoutManual).toContain("\r\n");
+
+      const functionBody = windowsCheckoutManual
         .split("preflight_required_template_access() {")[1]
         ?.split(/\r?\n}\r?\n\r?\npreflight_gen3_rollout\(\) \{/)[0];
       expect(functionBody).toBeDefined();
-      const flow = `preflight_required_template_access() {${functionBody}\n}\npreflight_required_template_access`;
+      expect(functionBody).toContain("\r\n");
+      const normalizedFunctionBody = functionBody.replace(/\r\n/g, "\n");
+      const flow = `preflight_required_template_access() {${normalizedFunctionBody}\n}\npreflight_required_template_access`;
 
       for (const fixture of [
         {
