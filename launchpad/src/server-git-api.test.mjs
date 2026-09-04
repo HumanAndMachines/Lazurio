@@ -81,6 +81,7 @@ test("Launchpad server exposes read-only git and Mission Control routes", async 
   const scopedPull = await postJson(port, "/api/git/pull-all?company=BetaCo", {});
   const worktrees = await getJson(port, "/api/git/worktrees?organization=BetaCo&module=deals");
   const plans = await getJson(port, "/api/mission-control/plans?organization=BetaCo&module=deals");
+  const guide = await getJson(port, "/api/guide/organization-install");
   const moduleFolderGet = await fetch(`http://127.0.0.1:${port}/api/modules/open-folder`);
   const invalidModuleFolderPost = await fetch(`http://127.0.0.1:${port}/api/modules/open-folder`, { method: "POST" });
   const deepLinkModule = await fetch(`http://127.0.0.1:${port}/lazurio-runtime/deep-link-lib.mjs`);
@@ -98,6 +99,14 @@ test("Launchpad server exposes read-only git and Mission Control routes", async 
   expect(scopedPull.results).toEqual(pullAll.results);
   expect(worktrees.schema_version).toBe("companiesascode.launchpad.worktrees.v1");
   expect(plans.schema_version).toBe("companiesascode.launchpad.mission_control_plans.v1");
+  expect(existsSync(join(root, "manual", "organization-install.md"))).toBe(false);
+  expect(guide).toMatchObject({
+    schema_version: "lazurio.guide.organization_install.v1",
+    source: { path: "manual/organization-install.md", authority: "lazurio-root-manual" },
+  });
+  expect(guide.short_prompt).toContain(
+    "lazurio organization install <github-organization> --role builder --json",
+  );
   expect(moduleFolderGet.status).toBe(405);
   expect(invalidModuleFolderPost.status).toBe(400);
   expect(deepLinkModule.status).toBe(200);
