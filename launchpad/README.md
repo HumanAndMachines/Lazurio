@@ -160,6 +160,15 @@ Explicitní preference `launchpad.locale` má přednost před jazykem prohlíže
 fallback je čeština. Přepnutí jazyka reloadne stejnou route, takže nemění
 vybraný prostor ani lifecycle běžících Apps.
 
+In-shell Guide je součást stejného locale kontraktu a nemá vlastní přepínač.
+Statické nadpisy, slovník, doporučení i loading/error/copy stavy používají
+stejné katalogy. Organization install prompt a úplný policy runbook vyžadují
+explicitní `locale` na read-only API; `cs` čte
+`manual/organization-install.md`, `en` čte
+`distribution/locales/en/manual/organization-install.md`. API vrací vybrané
+locale i relativní source path a při chybějící projekci skončí fail-closed —
+anglický Guide nesmí zobrazit český runbook jako fallback.
+
 Kód používá pouze stabilní významové klíče a API důvody vyhodnocuje podle
 `error`/`failure_kind`, nikdy podle lidské věty. Text Organizace — názvy,
 popisy, commit messages, plugin obsah — a raw technická evidence zůstávají

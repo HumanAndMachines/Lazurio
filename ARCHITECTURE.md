@@ -301,6 +301,12 @@ Launchpad locale je oproti tomu runtime preference prohlížeče, ne varianta
 Rootu. Launchpad-owned copy je offline v párových katalozích; přednost má
 explicitně uložená volba, potom podporovaný jazyk prohlížeče a nakonec český
 fallback. Přepnutí reloadne stejnou URL a nemění scope ani běžící procesy.
+Guide je součást stejného Launchpad surface: statická copy používá tytéž
+katalogy a dlouhý Organization install runbook se načítá pro explicitní
+`cs`/`en` locale z párových Root-owned zdrojů. Českou autoritou zůstává
+`manual/organization-install.md`, anglickou projekcí
+`distribution/locales/en/manual/organization-install.md`; chybějící nebo
+neshodný locale zdroj skončí fail-closed a nikdy se potichu nenahradí češtinou.
 Core a API zůstávají locale-neutral: poskytují stabilní reason kódy a parametry,
 zatímco UI vlastní lidské error, warning a loading texty. Organization-owned
 názvy, popisy, commit messages a technická evidence se zobrazují beze změny.

@@ -96,6 +96,20 @@ test("English covers loading, warnings, recovery, personalspace and worktree cop
   expect(t("worktree.created", { app: "Infra", worktree: "DEV-1" })).toBe("Infra: worktree created (DEV-1).");
 });
 
+test("English covers the complete Guide shell, statuses, glossary and recommendations", () => {
+  setLocale("en", { storage: null });
+  expect(t("guide.navigation.installation")).toBe("Set up a new Machine");
+  expect(t("guide.install.roles.agent.title")).toBe("What the Agent handles");
+  expect(t("guide.install.prompt.loading")).toBe("Loading the current prompt from the installation manual…");
+  expect(t("guide.install.prompt.error")).toContain("could not be loaded safely");
+  expect(t("guide.install.prompt.copyFailed")).toContain("copy it manually");
+  expect(t("guide.term.organization.label")).toBe("Organization");
+  expect(t("guide.term.machine.label")).toBe("Machine");
+  expect(t("guide.term.plugin.body")).toContain("does not automatically grant access");
+  expect(t("guide.apps.browserUse.caution")).toContain("still require your confirmation");
+  expect(Object.keys(en).filter((key) => key.startsWith("guide.")).length).toBeGreaterThan(120);
+});
+
 test("Czech outgoing changes resolve the few plural category", () => {
   setLocale("cs", { storage: null });
   expect(tp("detail.outgoing", 2)).toBe("Jsou uložené na tomto počítači. Ostatní je zatím nevidí.");
@@ -111,6 +125,10 @@ test("every literal UI key and integer plural category resolves", async () => {
     const source = await readFile(join(publicRoot, file), "utf8");
     for (const match of source.matchAll(/\bt\("([^"]+)"/g)) literalKeys.add(match[1]);
     for (const match of source.matchAll(/\btp\("([^"]+)"/g)) pluralKeys.add(match[1]);
+  }
+  const html = await readFile(join(publicRoot, "index.html"), "utf8");
+  for (const match of html.matchAll(/data-i18n(?:-placeholder|-aria-label|-title)?="([^"]+)"/g)) {
+    literalKeys.add(match[1]);
   }
   for (const key of literalKeys) {
     expect(Object.hasOwn(cs, key)).toBe(true);

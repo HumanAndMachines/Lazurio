@@ -1,17 +1,29 @@
 import { open } from "node:fs/promises";
 import { join } from "node:path";
 
-export const ORGANIZATION_INSTALL_GUIDE_SCHEMA = "lazurio.guide.organization_install.v1";
+export const ORGANIZATION_INSTALL_GUIDE_SCHEMA = "lazurio.guide.organization_install.v2";
 export const ORGANIZATION_INSTALL_PROMPT_START = "<!-- lazurio-guide:organization-install-short:start -->";
 export const ORGANIZATION_INSTALL_PROMPT_END = "<!-- lazurio-guide:organization-install-short:end -->";
 
-const requiredPromptFragments = Object.freeze([
+export const ORGANIZATION_INSTALL_GUIDE_SOURCES = Object.freeze({
+  cs: Object.freeze({
+    path: "manual/organization-install.md",
+    segments: Object.freeze(["manual", "organization-install.md"]),
+    languageContract: "uživatelský `PATH`",
+  }),
+  en: Object.freeze({
+    path: "distribution/locales/en/manual/organization-install.md",
+    segments: Object.freeze(["distribution", "locales", "en", "manual", "organization-install.md"]),
+    languageContract: "user `PATH`",
+  }),
+});
+
+const sharedRequiredPromptFragments = Object.freeze([
   "<github-organization>",
   "Lazurio for GitHub",
   "All repositories",
   "gh auth login --hostname github.com --git-protocol ssh --web",
   "Node.js LTS",
-  "uživatelský `PATH`",
   "versioned Organization manifest",
   "lazurio doctor --tool-updates --json",
   "runtime ready",
@@ -31,7 +43,19 @@ function markerCount(source, marker) {
   return source.split(marker).length - 1;
 }
 
-export function extractOrganizationInstallPrompt(manual) {
+function guideSource(locale) {
+  const source = ORGANIZATION_INSTALL_GUIDE_SOURCES[locale];
+  if (!source) {
+    throw new GuideContentError(
+      "guide_locale_unsupported",
+      `Unsupported Guide locale: ${locale ?? "missing"}`,
+    );
+  }
+  return source;
+}
+
+export function extractOrganizationInstallPrompt(manual, { locale } = {}) {
+  const source = guideSource(locale);
   if (typeof manual !== "string" || manual.trim() === "") {
     throw new GuideContentError(
       "guide_manual_empty",
@@ -70,6 +94,7 @@ export function extractOrganizationInstallPrompt(manual) {
     .map((line) => line === ">" ? "" : line.replace(/^> ?/, ""))
     .join("\n")
     .trim();
+  const requiredPromptFragments = [...sharedRequiredPromptFragments, source.languageContract];
   const missing = requiredPromptFragments.filter((fragment) => !prompt.includes(fragment));
   if (missing.length > 0) {
     throw new GuideContentError(
@@ -80,20 +105,23 @@ export function extractOrganizationInstallPrompt(manual) {
   return prompt;
 }
 
-export function buildOrganizationInstallGuide(manual) {
+export function buildOrganizationInstallGuide(manual, { locale } = {}) {
+  const source = guideSource(locale);
   return {
     schema_version: ORGANIZATION_INSTALL_GUIDE_SCHEMA,
+    locale,
     source: {
-      path: "manual/organization-install.md",
+      path: source.path,
       authority: "lazurio-root-manual",
     },
-    short_prompt: extractOrganizationInstallPrompt(manual),
+    short_prompt: extractOrganizationInstallPrompt(manual, { locale }),
     policy_markdown: manual,
   };
 }
 
-export async function readOrganizationInstallGuide({ rootPath }) {
-  const sourcePath = join(rootPath, "manual", "organization-install.md");
+export async function readOrganizationInstallGuide({ rootPath, locale }) {
+  const source = guideSource(locale);
+  const sourcePath = join(rootPath, ...source.segments);
   let handle;
   try {
     handle = await open(sourcePath, "r");
@@ -104,7 +132,7 @@ export async function readOrganizationInstallGuide({ rootPath }) {
         "Instalační manuál není běžný soubor.",
       );
     }
-    return buildOrganizationInstallGuide(await handle.readFile("utf8"));
+    return buildOrganizationInstallGuide(await handle.readFile("utf8"), { locale });
   } catch (error) {
     if (error instanceof GuideContentError) throw error;
     throw new GuideContentError(

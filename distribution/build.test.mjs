@@ -15,6 +15,7 @@ import {
   verifyArtifactTree,
 } from "./build-lib.mjs";
 import { platformTestTimeout } from "../launchpad/src/test-platform-setup.mjs";
+import { ORGANIZATION_INSTALL_GUIDE_SOURCES } from "../launchpad/src/guide-content-lib.mjs";
 
 const cleanup = [];
 
@@ -30,6 +31,13 @@ test("normalizes supported resident targets and rejects unknown ones", () => {
   expect(normalizeTarget("darwin-arm64")).toEqual({ id: "darwin-arm64", os: "darwin", arch: "arm64" });
   expect(() => normalizeTarget("plan9-x64")).toThrow("unsupported target OS");
   expect(() => normalizeTarget("linux-riscv64")).toThrow("unsupported target architecture");
+});
+
+test("resident artifact includes every localized Organization install Guide source", async () => {
+  const contract = JSON.parse(await readFile(join(import.meta.dir, "contract.v1.json"), "utf8"));
+  for (const source of Object.values(ORGANIZATION_INSTALL_GUIDE_SOURCES)) {
+    expect(contract.source_includes).toContain(source.path);
+  }
 });
 
 test("Workspace runtime profile declares the immutable runtime/working-root boundary", async () => {

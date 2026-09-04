@@ -69,7 +69,10 @@ import {
   parseLaunchpadServerArgs,
 } from "./server-args-lib.mjs";
 import { resolveLaunchpadStateRoot } from "./state-root-lib.mjs";
-import { readOrganizationInstallGuide } from "./guide-content-lib.mjs";
+import {
+  GuideContentError,
+  readOrganizationInstallGuide,
+} from "./guide-content-lib.mjs";
 import {
   buildServerIdentity,
   classifyServerIdentity,
@@ -1464,7 +1467,18 @@ function startServer(startPort) {
         if (url.pathname === "/api/doctor") return jsonResponse(await buildDoctorReport());
         if (url.pathname === "/api/guide/organization-install") {
           if (request.method !== "GET") return jsonResponse({ error: "method_not_allowed" }, 405);
-          return jsonResponse(await readOrganizationInstallGuide({ rootPath: lazurioCodeRoot }));
+          try {
+            return jsonResponse(await readOrganizationInstallGuide({
+              rootPath: lazurioCodeRoot,
+              locale: url.searchParams.get("locale"),
+            }));
+          } catch (error) {
+            if (error instanceof GuideContentError) {
+              const status = error.code === "guide_locale_unsupported" ? 400 : 503;
+              return jsonResponse({ error: error.code }, status);
+            }
+            throw error;
+          }
         }
         if (url.pathname === "/api/recent-changes") return jsonResponse(await buildRecentChangesResponse(url.searchParams.get("company")));
         if (url.pathname === "/api/notifications") return jsonResponse(await buildNotificationsResponse(url.searchParams.get("company")));

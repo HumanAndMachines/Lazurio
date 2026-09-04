@@ -1685,23 +1685,27 @@ function normalizeGuideSearch(value) {
   return String(value ?? "")
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
-    .toLocaleLowerCase("cs")
+    .toLocaleLowerCase(getLocale())
     .trim();
 }
 
 function loadGuideInstallContent() {
   if (state.guideInstallContentPromise) return state.guideInstallContentPromise;
+  const locale = getLocale();
   elements.guidePromptStatus?.removeAttribute("hidden");
   elements.guidePromptError?.setAttribute("hidden", "");
-  state.guideInstallContentPromise = launchpadFetch("/api/guide/organization-install")
+  state.guideInstallContentPromise = launchpadFetch(
+    `/api/guide/organization-install?locale=${encodeURIComponent(locale)}`,
+  )
     .then(async (response) => {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error ?? "guide_content_unavailable");
       if (
-        payload?.schema_version !== "lazurio.guide.organization_install.v1"
+        payload?.schema_version !== "lazurio.guide.organization_install.v2"
+        || payload.locale !== locale
         || typeof payload.short_prompt !== "string"
         || typeof payload.policy_markdown !== "string"
-        || payload.source?.path !== "manual/organization-install.md"
+        || typeof payload.source?.path !== "string"
       ) {
         throw new Error("guide_content_invalid");
       }
@@ -1730,7 +1734,7 @@ async function copyGuideInstallPrompt() {
   if (!prompt) return;
   try {
     await navigator.clipboard.writeText(prompt);
-    elements.guidePromptStatus.textContent = "Prompt je ve schránce.";
+    elements.guidePromptStatus.textContent = t("guide.install.prompt.copied");
     elements.guidePromptStatus.removeAttribute("hidden");
   } catch {
     const selection = window.getSelection();
@@ -1738,7 +1742,7 @@ async function copyGuideInstallPrompt() {
     range.selectNodeContents(elements.guidePrompt);
     selection?.removeAllRanges();
     selection?.addRange(range);
-    elements.guidePromptStatus.textContent = "Automatické kopírování selhalo. Prompt je označený; zkopírujte ho ručně.";
+    elements.guidePromptStatus.textContent = t("guide.install.prompt.copyFailed");
     elements.guidePromptStatus.removeAttribute("hidden");
   }
 }
@@ -1747,7 +1751,9 @@ function filterGuideContent(query) {
   const needle = normalizeGuideSearch(query);
   let visibleItems = 0;
   for (const item of document.querySelectorAll("[data-guide-search-item]")) {
-    const searchableText = item.dataset.guideSearchText ?? item.textContent;
+    const searchableText = item.dataset.guideSearchKey
+      ? t(item.dataset.guideSearchKey)
+      : item.dataset.guideSearchText ?? item.textContent;
     const matches = !needle || normalizeGuideSearch(searchableText).includes(needle);
     item.toggleAttribute("hidden", !matches);
     if (matches) visibleItems += 1;
