@@ -3838,7 +3838,7 @@ test("chybějící dependency bez exact lockfilu vede k repair diagnostice bez I
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({
     port,
-    packageManager: "bun@1.4.0",
+    packageManager: "bun@1.4.1",
     dependencies: { fixture: "1.0.0" },
     writeLockfile: false,
     withNodeModules: false,

@@ -24,7 +24,9 @@ tohoto runbooku; krátký prompt jej nenahrazuje ani nerozšiřuje.
 > uživatelský `PATH` tak, aby jejich skutečné instalační adresáře byly dostupné
 > v novém čistém terminálu. Zachovej existující `PATH`. Neměň system-wide
 > `PATH`, package manager, bezpečnostní nastavení ani jiné verze nástrojů bez
-> mého dalšího souhlasu.
+> mého dalšího souhlasu. Codex CLI instaluj oficiálním OpenAI standalone
+> instalátorem pro tuto platformu podle kapitoly „Codex CLI: instalace a aktualizace“;
+> Homebrew, npm ani WinGet nejsou podmínkou ani překážkou: vyhovující instalaci zachovej.
 >
 > Pokud pro právě ověřený GitHub účet chybí použitelný SSH klíč, máš svolení
 > vytvořit na této Mašině nový ed25519 klíč, nahrát přes GitHub CLI pouze jeho
@@ -80,6 +82,10 @@ Do promptu přidej pouze ty odstavce, jejichž dopad Principál skutečně schva
 > na aktuální oficiální stable a Node.js na aktuální podporované LTS. Bun
 > nastav vždy na exact stabilní verzi deklarovanou aktuálním clean Lazurio
 > `lazurio/package.json#packageManager`, i když upstream nabízí novější verzi.
+> Codex CLI instaluj a aktualizuj oficiálním OpenAI standalone instalátorem.
+> Pokud výslovně požádám o změnu způsobu instalace, smíš převést existující Homebrew/npm/WinGet instalaci
+> na standalone: nejdřív ověř novou instalaci, pak odstraň pouze původní balíček
+> Codex CLI a zachovej nastavení, přihlášení i historii.
 > Preview, beta, nightly ani canary verze nepoužívej. Všechny bezpečně
 > opravitelné required nálezy Install Core a Doctoru v tomto mandátu skutečně
 > oprav a kontroly opakuj; nekonči pouhým reportem.
@@ -217,33 +223,117 @@ použitelnost následně ověří `lazurio install --json` a Doctor; pouhé
 `Get-Command` nestačí. Odhlášení uživatele nebo restart Windows je až fallback,
 pokud persistentní User/Machine hodnoty sedí, ale ani nový Codex je nevidí.
 
-Git, GitHub CLI a Node.js smějí být na Windows nainstalované i bez admin práv do
-oficiálních uživatelských adresářů pod
-`%USERPROFILE%\AppData\Local\Programs`. Install Core a Doctor přijímají Git
-Installer v `Git\cmd`/`Git\bin`, PortableGit v
-`PortableGit\cmd`/`PortableGit\bin` a GitHub CLI v `GitHub CLI\bin` (včetně
-varianty s `gh.exe` přímo v `GitHub CLI`). Node.js přijímají v
-`Programs\nodejs` a přes přesný user-scope WinGet command link
-`AppData\Local\Microsoft\WinGet\Links\node.exe`. Autoritou pro tyto prefixy je home
-aktuálního OS účtu, ne zděděné `LOCALAPPDATA`, `USERPROFILE` ani libovolná
-položka `PATH`; nalezená binárka se stále musí kanonicky shodovat s jedním
-z těchto pevných kandidátů a projít funkčním probe.
+Git, GitHub CLI a Node.js smějí být i na Windows instalované bez admin práv.
+Jejich umístění není omezené seznamem prefixů; platí společný kontrakt níže.
 
-### Windows: podporovaná Codex CLI lane
+### Nástroje z PATH: kompatibilita před způsobem instalace
 
-Pro novou Windows Mašinu použij po výslovném souhlasu Principála
-[oficiální OpenAI standalone Windows instalátor](https://github.com/openai/codex/blob/main/scripts/install/install.ps1).
-Ten instaluje viditelný nativní `codex.exe` a sám ověřuje jeho `--version`.
-WinGet `OpenAI.Codex` není podporovaný fallback, dokud na všech podporovaných
-Windows konfiguracích spolehlivě nevytváří příkaz `codex`; samotná
-`codex-x86_64-pc-windows-msvc.exe` nebo `codex-aarch64-pc-windows-msvc.exe`
-na `PATH` proto není zelený stav.
+Homebrew není závislost instalace Lazuria. Nejprve ověř existující příkazy
+v prostředí, ze kterého Lazurio skutečně běží. Doctor a Install Core používají
+první nalezený executable v `PATH`, ověří jeho spuštění a podporovanou verzi.
+Neprohledávají povolené instalační adresáře a při nefunkčním prvním příkazu
+nevyberou potichu jinou instalaci. Absolutní cesta je diagnostika, nikoli
+potvrzení původu nebo bezpečnosti balíčku.
 
+Git potřebuje alespoň 2.31.0 (absolutní cesty z rev-parse), GitHub CLI 2.57.0
+(ověření aktivního účtu). Jejich kanonický kontrakt drží
+`lazurio/core/toolchain-lib.mjs`. Node minimum vlastní
+`lazurio/package.json#engines.node`; Bun zůstává přesně pinovaný přes
+`lazurio/package.json#packageManager`. Codex musí vrátit rozpoznatelnou
+stabilní verzi svého CLI; Lazurio dnes nepoužívá funkci vyžadující novější
+číselné minimum. Novější upstream release je samostatné doporučení v
+`doctor --tool-updates`, ne automatický důvod k neúspěšnému běžnému Doctoru.
+
+Instalační Agent zachová funkční Homebrew/npm, systémovou instalaci i správce
+verzí. Instaluje nebo opravuje jen chybějící či nekompatibilní nástroj v uděleném
+mandátu. Neinstaluje Homebrew jen proto, že jde o macOS. Shell alias dostupný
+pouze v interaktivním terminálu nestačí: příkaz musí fungovat i z procesu
+Lazuria. Symlinky a shimy jsou přípustné, pokud fungují také ve skutečném
+consumerovi. Konfigurace správce verzí nesmí v jiném pracovním adresáři
+vybrat nekompatibilní nástroj. Git konfigurace, přístupy, timeouty a izolace
+Organizací zůstávají samostatnými kontrolami.
+
+Na Windows se standardní npm `*.cmd` shim pro Node spouští přes jeho
+ověřený JavaScript vstup a nativní `node.exe`, bez shellu. Zachovává se
+přednost Node vedle shimu před Node z PATH. Musí odpovídat celý podporovaný
+formát npm shimu i deklarace binárky v balíčku; vlastní příkazy, argumenty
+interpretu a neznámé `*.bat` obálky se neinterpretují a skončí s diagnostikou.
+Takovou obálku Agent neopravuje přepnutím na obecný shell ani výběrem jiné
+instalace za zády uživatele.
+
+### Codex CLI: instalace a aktualizace
+
+Pro localhost workstation na macOS, Linuxu i Windows je výchozí cestou
+[oficiální OpenAI standalone instalátor](https://developers.openai.com/codex/cli).
+Instalaci i další aktualizace vlastní OpenAI; Lazurio na něj pouze naviguje.
+Tím se dostupnost verze Codexu neodvíjí od aktualizace Homebrew casku.
+Homebrew, npm ani WinGet nejsou povinné ani zakázané. Vyhovující existující
+instalaci zachovej; standalone je doporučení pro chybějící Codex, nikoli
+podmínka readiness. Immutable hosted Resident/Buddy piny mají vlastní lifecycle.
+
+Na macOS a Linuxu použij pro instalaci i aktualizaci:
+
+```sh
+curl -fsSL https://chatgpt.com/codex/install.sh | sh
+```
+
+Na Windows použij pro instalaci i aktualizaci:
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"
+```
+
+Použij aktuální oficiální stable, ne preview ani verzi napevno opsanou z manuálu.
+Před spuštěním platí scoped instalační nebo aktualizační mandát pro Codex a
+příslušnou vrstvu `PATH`. Už udělený mandát se nevyžaduje podruhé; chybí-li,
+Agent nejdřív připraví přesnou nápravu a požádá Principála o souhlas.
+Doctor ani `lazurio update` tento příkaz nikdy nespouštějí. `lazurio install`
+zůstává reportem machine gate, ne instalátorem externího toolchainu.
+
+**Existující Homebrew/npm/WinGet instalace.** Zjisti všechny příkazy `codex`
+v `PATH`, jejich skutečné symlink cíle a správce původního balíčku. Samotná
+verze nebo cesta `~/.local/bin/codex` neprokazuje standalone původ: i tato
+cesta může být jen odkaz na Homebrew. Funkční starší instalace dál splňuje
+runtime dostupnost; Doctor ji automaticky nepřevádí ani její původ nepotvrzuje.
+
+Převod vyžaduje mandát i k odstranění přesného původního Codex balíčku.
+Předem si zaznamenej původního správce, verzi a postup obnovy přesného balíčku.
+Nejdřív nainstaluj standalone. Z výstupu oficiálního instalátoru zjisti jeho
+skutečný instalační adresář a novou binárku spusť explicitní absolutní cestou
+s `--version`. Rozbal celý řetězec symlinků a ověř, že cíl patří této
+standalone instalaci a neleží v původním Homebrew/npm/WinGet balíčku.
+Potom ověř, že běžný `codex` v novém procesu rozliší tutéž standalone binárku;
+shodná verze dvou různých souborů nestačí. Při stínění oprav pouze již
+autorizovanou vrstvu `PATH`. Nejasný původ nebo chybějící PATH mandát znamená
+ponechat starý balíček a předat přesný nález.
+Teprve po obou úspěšných probech odinstaluj původní Codex jeho skutečným správcem
+(např. `brew uninstall --cask codex` nebo `npm uninstall -g @openai/codex`).
+Pokud instalátor nabízí odstranění staré instalace před ověřením nové, odlož
+je na tento krok. Neodstraňuj samotný package manager, Node ani jiné nástroje.
+Nepoužívej purge/zap a nemaž `CODEX_HOME`, nastavení, přihlášení ani historii.
+Při selhání nové instalace zachovej funkční původní instalaci a popiš nález;
+nevytvářej vlastní fallback installer nebo wrapper.
+
+Po instalaci i po odstranění starého balíčku ověř rozlišení příkazu a jeho
+verzi v novém procesu: na macOS/Linuxu `command -v codex` a skutečný cíl
+symlinku, na Windows `Get-Command codex -All`. Ověř `codex --version` a
+`codex login status` bez čtení či vypisování credential souborů. Na Windows
+obnov process `PATH` a dokonči úplný Codex relaunch podle předchozí kapitoly;
+child shell staré relace nestačí. Pokud po odstranění starého balíčku příkaz
+selže nebo míří jinam, vrať v uděleném mandátu funkční rozlišení na ověřenou
+standalone binárku; pokud to nejde, obnov přesný původní balíček a jeho
+původní PATH vazbu podle připraveného recovery kroku. Bez recovery mandátu
+nic nehádej: zachovej standalone soubory i uživatelská data a vrať přesný
+blokátor. Přechod nevydávej za hotový, dokud probe z nového procesu neprojde.
+Nakonec zopakuj
+`lazurio doctor --tool-updates --json`.
+
+Windows instalátor vytváří viditelný nativní `codex.exe` a ověřuje jeho verzi.
+Samotná `codex-x86_64-pc-windows-msvc.exe` nebo
+`codex-aarch64-pc-windows-msvc.exe` na `PATH` není zelený stav.
 Nevytvářej ad-hoc `codex.cmd`, nekopíruj target-specific binárku a nepřijímej
-ji jako důkaz připravenosti. Doctor tento konkrétní WinGet stav pojmenuje, ale
-záměrně jej neopravuje. Po autorizované oficiální instalaci obnov process
-`PATH` podle předchozí kapitoly, v novém čistém procesu ověř `codex --version`
-a zopakuj `lazurio doctor --tool-updates --json`.
+ji jako důkaz připravenosti. Doctor tento konkrétní WinGet stav pojmenuje,
+ale záměrně jej neopravuje.
 
 Obsahuje-li instalační prompt explicitní mandát pro přesné nástroje a změnu
 User nebo Machine `PATH`, Agent nezůstane u handoff warningu:
@@ -272,7 +362,9 @@ Doporučený autorizační blok instalačního promptu je:
 > uživatelský PATH tak, aby jejich skutečné instalační adresáře byly dostupné
 > v novém čistém terminálu. Zachovej existující PATH. Neměň system-wide PATH,
 > neinstaluj systémový package manager, neměň bezpečnostní nastavení ani
-> neupgraduj jiné nástroje bez mého dalšího souhlasu.
+> neupgraduj jiné nástroje bez mého dalšího souhlasu. Pro Codex CLI použij
+> oficiální OpenAI standalone instalátor podle kapitoly výše jako doporučenou cestu;
+> existující vyhovující instalaci zachovej bez ohledu na jejího správce.
 
 Když prompt změnu konkrétní vrstvy `PATH` neautorizuje, Agent vrátí přesný
 instalační report a vyžádá si souhlas; User souhlas se neinterpretuje jako

@@ -18,9 +18,6 @@ import {
   isValidLazurioCliProvenance,
   normalizeComparableCliPath,
   normalizeGitHubRepository,
-  trustedGitCandidates,
-  trustedGitHubCliCandidates,
-  trustedNodeCandidates,
 } from "./cli-provenance-lib.mjs";
 
 const cleanup = [];
@@ -236,95 +233,7 @@ test("portable Windows paths and trusted executable candidates are deterministic
     .toBe(normalizeComparableCliPath("c:/users/matous/lazurio", "win32"));
   expect(normalizeComparableCliPath("\\\\?\\C:\\Users\\Matous\\Lazurio", "win32"))
     .toBe(normalizeComparableCliPath("c:\\users\\matous\\lazurio", "win32"));
-  expect(trustedGitCandidates("win32", {
-    PATH: "C:\\Shadow",
-    LOCALAPPDATA: "C:\\AttackerControlled",
-    homeDirectory: "C:\\Users\\Matous",
-  })).toEqual([
-    "C:\\Program Files\\Git\\cmd\\git.exe",
-    "C:\\Program Files\\Git\\bin\\git.exe",
-    "C:\\Program Files (x86)\\Git\\cmd\\git.exe",
-    "C:\\Program Files (x86)\\Git\\bin\\git.exe",
-    "C:\\Users\\Matous\\AppData\\Local\\Programs\\Git\\cmd\\git.exe",
-    "C:\\Users\\Matous\\AppData\\Local\\Programs\\Git\\bin\\git.exe",
-    "C:\\Users\\Matous\\AppData\\Local\\Programs\\PortableGit\\cmd\\git.exe",
-    "C:\\Users\\Matous\\AppData\\Local\\Programs\\PortableGit\\bin\\git.exe",
-  ]);
-  expect(trustedGitHubCliCandidates("darwin", {
-    PATH: "/tmp/shadow",
-    homeDirectory: "/Users/fixture",
-  })).toEqual([
-    "/opt/homebrew/bin/gh",
-    "/usr/local/bin/gh",
-    "/usr/bin/gh",
-    "/Users/fixture/.local/bin/gh",
-  ]);
-  expect(trustedGitHubCliCandidates("darwin", {
-    PATH: "/tmp/shadow",
-    homeDirectory: "relative-home",
-  })).not.toContain("relative-home/.local/bin/gh");
-  expect(trustedGitCandidates("linux", {
-    homeDirectory: "/home/fixture",
-  })).toContain("/home/fixture/.local/bin/git");
-  expect(trustedGitHubCliCandidates("linux", {
-    homeDirectory: "/home/fixture",
-  })).toContain("/home/fixture/.local/bin/gh");
-  expect(trustedNodeCandidates("linux", {
-    homeDirectory: "/home/fixture",
-  })).toContain("/home/fixture/.local/bin/node");
-  expect(trustedGitCandidates("linux", {
-    homeDirectory: "relative-home",
-  })).not.toContain("relative-home/.local/bin/git");
-  expect(trustedGitHubCliCandidates("win32", {
-    PATH: "C:\\Shadow",
-    LOCALAPPDATA: "C:\\AttackerControlled",
-    homeDirectory: "C:\\Users\\Matous",
-  })).toEqual([
-    "C:\\Program Files\\GitHub CLI\\gh.exe",
-    "C:\\Program Files (x86)\\GitHub CLI\\gh.exe",
-    "C:\\Users\\Matous\\AppData\\Local\\Programs\\GitHub CLI\\bin\\gh.exe",
-    "C:\\Users\\Matous\\AppData\\Local\\Programs\\GitHub CLI\\gh.exe",
-  ]);
-  expect(trustedGitCandidates("win32", {
-    homeDirectory: "relative-home",
-  })).toHaveLength(4);
-  expect(trustedGitHubCliCandidates("win32", {
-    homeDirectory: "relative-home",
-  })).toHaveLength(2);
-  expect(trustedNodeCandidates("darwin", {
-    homeDirectory: "relative-home",
-  })).not.toContain("relative-home/.local/bin/node");
-  expect(trustedNodeCandidates("win32", {
-    homeDirectory: "C:\\Users\\Matous",
-    environment: {
-      PATH: "\"C:\\Users\\Matous\\AppData\\Local\\Programs\\nodejs\\node-v24.20.0-win-x64\";C:\\Shadow",
-      LOCALAPPDATA: "C:\\AttackerControlled",
-      USERPROFILE: "C:\\OtherUser",
-    },
-  })).toEqual([
-    "C:\\Program Files\\nodejs\\node.exe",
-    "C:\\Program Files (x86)\\nodejs\\node.exe",
-    "C:\\Users\\Matous\\AppData\\Local\\Programs\\nodejs\\node.exe",
-    "C:\\Users\\Matous\\AppData\\Local\\Microsoft\\WinGet\\Links\\node.exe",
-    "C:\\Users\\Matous\\AppData\\Local\\Programs\\nodejs\\node-v24.20.0-win-x64\\node.exe",
-  ]);
-  expect(trustedNodeCandidates("win32", {
-    homeDirectory: "C:\\Users\\Matous",
-    environment: {
-      PATH: [
-        "C:\\Tools\\node-v24.20.0-win-x64",
-        "C:\\Users\\Matous\\AppData\\Local\\Programs\\nodejs\\nested\\node-v24.20.0-win-x64",
-        "C:\\Users\\Matous\\AppData\\Local\\Programs\\nodejs\\node-current-win-x64",
-        "\"C:\\Users\\Matous\\AppData\\Local\\Programs\\nodejs\\node-v24.20.0-win-x64",
-      ].join(";"),
-    },
-  })).toHaveLength(4);
-  expect(trustedNodeCandidates("win32", {
-    homeDirectory: "relative-home",
-    environment: {
-      PATH: "relative-home\\AppData\\Local\\Programs\\nodejs\\node-v24.20.0-win-x64",
-    },
-  })).toHaveLength(2);
+
 });
 
 function expectValid(value) {

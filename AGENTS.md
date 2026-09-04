@@ -334,7 +334,13 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    jmenovaných nástrojů; Agent zachová nesouvisející položky a bezpečnostní
    nastavení a nikdy z tohoto souhlasu neodvodí obecný machine-admin mandát.
    Git, GitHub CLI a Codex směřují na aktuální oficiální stable, Node na
-   podporované aktuální LTS, ale Bun vždy na exact verzi z
+   podporované aktuální LTS. Codex CLI instaluj a aktualizuj přes oficiální
+   OpenAI standalone instalátor pro macOS/Linux/Windows jako doporučenou cestu.
+   Existující vyhovující Homebrew/npm/WinGet či jinou instalaci zachovej;
+   instalační správce ani pevný adresář nejsou readiness podmínka. Příkazy a bezpečný převod existující instalace se zachováním
+   nastavení a přihlášení drží `manual/organization-install.md` v kapitole
+   „Codex CLI: instalace a aktualizace“; již udělený scoped mandát neopakuj.
+   Bun směřuje vždy na exact verzi z
    `lazurio/package.json#packageManager`; obecný latest Bun není autorita.
    Organization materializace začíná až po tomto machine gate; sama nástroje
    ani `PATH` nevlastní. Přesný rozhodovací postup drží skill

@@ -10,7 +10,7 @@ import {
   readGitHubRepositoryJsonDocument,
   runTrustedGitHubCliSync,
 } from "./core/github-provider-lib.mjs";
-import { resolveTrustedGitHubCliExecutable } from "./core/cli-provenance-lib.mjs";
+import { resolveGitHubCliExecutableOnPath } from "./core/toolchain-lib.mjs";
 
 export const LAZURIO_GITHUB_APP_SLUG = "lazurio-for-github";
 
@@ -31,7 +31,7 @@ export function checkOrganizationActivation({
   appSlug = LAZURIO_GITHUB_APP_SLUG,
   platform = process.platform,
   environment = process.env,
-  resolveGitHubCli = resolveTrustedGitHubCliExecutable,
+  resolveGitHubCli = resolveGitHubCliExecutableOnPath,
   runGitHubCli = runTrustedGitHubCliSync,
 } = {}) {
   const request = createOrganizationActivationRequest({ githubOrganizationId });

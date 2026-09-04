@@ -15,21 +15,29 @@ import {
   isValidLazurioInstallReport,
 } from "./install-core-lib.mjs";
 import {
-  resolveTrustedGitExecutable,
-  trustedNodeCandidates,
-} from "./cli-provenance-lib.mjs";
+  resolveGitExecutableOnPath,
+} from "./toolchain-lib.mjs";
 
 const tempRoots = [];
 
 function inspectLazurioInstallation(options) {
+  const resolvePath = options.resolvePathCommand ?? fixturePathCommand;
+  const run = options.runCommand;
   return inspectLazurioInstallationCore({
-    resolveNode: ({ platform }) => (
-      platform === "win32" ? "C:\\Tools\\node.exe" : "/trusted/bin/node"
-    ),
-    nodeCandidatePaths: (platform) => (
-      platform === "win32" ? ["C:\\Tools\\node.exe"] : ["/trusted/bin/node"]
-    ),
     ...options,
+    resolvePathCommand: (command, context) => {
+      const resolver = { git: options.resolveGit, gh: options.resolveGitHubCli, node: options.resolveNode }[command];
+      return resolver && !options.resolvePathCommand ? resolver(context) : resolvePath(command, context);
+    },
+    ...(run ? { runCommand: (request) => {
+      const result = run(request);
+      if (request.args[0] === "--version" && result?.status === 0 && !result.stdout) {
+        const name = request.executable.replaceAll("\\", "/").split("/").at(-1).toLowerCase();
+        if (name === "git" || name === "git.exe") return { ...result, stdout: "git version 2.47.0" };
+        if (name === "gh" || name === "gh.exe") return { ...result, stdout: "gh version 2.90.0" };
+      }
+      return result;
+    } } : {}),
   });
 }
 
@@ -93,7 +101,7 @@ test("independent probes continue after a bounded failure", () => {
     root: null,
     platform: "linux",
     architecture: "x64",
-    bunVersion: "1.4.0",
+    bunVersion: "1.4.1",
     environment: { HOME: "/home/example" },
     homeDirectory: "/home/example",
     inspectRoot: (path) => ({
@@ -106,11 +114,11 @@ test("independent probes continue after a bounded failure", () => {
       throw new Error("CANARY_GIT_FAILURE");
     },
     resolveGitHubCli: () => "/trusted/bin/gh",
-    resolvePathCommand: fixturePathCommand,
+    resolvePathCommand: (command, context) => { if (command === "git") throw new Error("CANARY_GIT_FAILURE"); return fixturePathCommand(command, context); },
     runCommand: ({ executable, args }) => {
       invoked.push([executable, ...args].join(" "));
       if (executable === process.execPath && args[0] === "--version") {
-        return { status: 0, stdout: "1.4.0" };
+        return { status: 0, stdout: "1.4.1" };
       }
       if (executable === "/trusted/bin/gh" && args[0] === "--version") return { status: 0 };
       if (executable === "/trusted/bin/node" && args[0] === "--version") {
@@ -143,7 +151,7 @@ test("supported complete fixture exits zero with all probes completed", () => {
     root: "/fixture/root",
     platform: "win32",
     architecture: "x64",
-    bunVersion: "1.4.0",
+    bunVersion: "1.4.1",
     resolveGit: () => "C:\\Program Files\\Git\\cmd\\git.exe",
     resolveGitHubCli: () => "C:\\Program Files\\GitHub CLI\\gh.exe",
     resolvePathCommand: fixturePathCommand,
@@ -153,7 +161,7 @@ test("supported complete fixture exits zero with all probes completed", () => {
       return {
         status: 0,
         stdout: executable === process.execPath
-          ? "1.4.0"
+          ? "1.4.1"
           : executable === "C:\\Tools\\node.exe"
             ? "v24.19.0"
           : args[0] === "config"
@@ -179,12 +187,12 @@ test("supported complete fixture exits zero with all probes completed", () => {
   expect(installExitCode(report)).toBe(0);
   expect(isValidLazurioInstallReport(report)).toBe(true);
   expect(commands).toEqual([
-    { executable: process.execPath, cwd: "C:\\Windows\\System32" },
-    { executable: "C:\\Program Files\\Git\\cmd\\git.exe", cwd: "C:\\Windows\\System32" },
-    { executable: "C:\\Program Files\\GitHub CLI\\gh.exe", cwd: "C:\\Windows\\System32" },
-    { executable: "C:\\Tools\\node.exe", cwd: "C:\\Windows\\System32" },
-    { executable: "C:\\Program Files\\GitHub CLI\\gh.exe", cwd: "C:\\Windows\\System32" },
-    { executable: "C:\\Program Files\\GitHub CLI\\gh.exe", cwd: "C:\\Windows\\System32" },
+    { executable: process.execPath, cwd: process.cwd() },
+    { executable: "C:\\Program Files\\Git\\cmd\\git.exe", cwd: process.cwd() },
+    { executable: "C:\\Program Files\\GitHub CLI\\gh.exe", cwd: process.cwd() },
+    { executable: "C:\\Tools\\node.exe", cwd: process.cwd() },
+    { executable: "C:\\Program Files\\GitHub CLI\\gh.exe", cwd: process.cwd() },
+    { executable: "C:\\Program Files\\GitHub CLI\\gh.exe", cwd: process.cwd() },
   ]);
 });
 
@@ -193,14 +201,14 @@ test("GitHub auth is not ready until gh config selects SSH", () => {
     root: "/fixture/root",
     platform: "linux",
     architecture: "x64",
-    bunVersion: "1.4.0",
+    bunVersion: "1.4.1",
     resolveGit: () => "/usr/bin/git",
     resolveGitHubCli: () => "/trusted/bin/gh",
     resolvePathCommand: fixturePathCommand,
     runCommand: ({ executable, args }) => ({
       status: 0,
       stdout: executable === process.execPath
-        ? "1.4.0"
+        ? "1.4.1"
         : executable === "/trusted/bin/node"
           ? "v24.19.0"
         : args[0] === "config"
@@ -228,8 +236,8 @@ test("Bun probe requires the exact packageManager version and reports both versi
     root: null,
     platform: "darwin",
     architecture: "arm64",
-    bunVersion: "1.4.1",
-    requiredBunVersion: "1.4.0",
+    bunVersion: "1.4.2",
+    requiredBunVersion: "1.4.1",
     environment: { HOME: "/Users/example" },
     homeDirectory: "/Users/example",
     resolveGit: () => "/usr/bin/git",
@@ -244,8 +252,8 @@ test("Bun probe requires the exact packageManager version and reports both versi
 
   expect(report.machine.bun).toEqual({
     status: "mismatch",
-    current_version: "1.4.1",
-    required_version: "1.4.0",
+    current_version: "1.4.2",
+    required_version: "1.4.1",
   });
   expect(report.steps.find((step) => step.id === "bun")).toEqual({
     id: "bun",
@@ -262,7 +270,7 @@ test("missing Bun runtime is a failed probe with an explicit required version", 
     platform: "linux",
     architecture: "x64",
     bunVersion: null,
-    requiredBunVersion: "1.4.0",
+    requiredBunVersion: "1.4.1",
     environment: { HOME: "/home/example" },
     homeDirectory: "/home/example",
     resolveGit: () => null,
@@ -273,7 +281,7 @@ test("missing Bun runtime is a failed probe with an explicit required version", 
   expect(report.machine.bun).toEqual({
     status: "unavailable",
     current_version: null,
-    required_version: "1.4.0",
+    required_version: "1.4.1",
   });
   expect(report.steps.find((step) => step.id === "bun")).toMatchObject({
     status: "failed",
@@ -287,8 +295,8 @@ test("an exact running Bun outside PATH cannot mark the machine ready", () => {
     root: null,
     platform: "linux",
     architecture: "x64",
-    bunVersion: "1.4.0",
-    requiredBunVersion: "1.4.0",
+    bunVersion: "1.4.1",
+    requiredBunVersion: "1.4.1",
     environment: { HOME: "/home/example", PATH: "/usr/bin" },
     homeDirectory: "/home/example",
     resolveGit: () => "/usr/bin/git",
@@ -303,7 +311,7 @@ test("an exact running Bun outside PATH cannot mark the machine ready", () => {
     inspectRoot: missingRootObservation,
   });
 
-  expect(report.machine.bun).toMatchObject({ status: "current", current_version: "1.4.0" });
+  expect(report.machine.bun).toMatchObject({ status: "current", current_version: "1.4.1" });
   expect(report.steps.find((step) => step.id === "bun")).toEqual({
     id: "bun",
     status: "action_required",
@@ -317,13 +325,13 @@ test("unsupported architecture requires action even on a supported OS", () => {
     root: "/fixture/root",
     platform: "linux",
     architecture: "mips64",
-    bunVersion: "1.4.0",
+    bunVersion: "1.4.1",
     resolveGit: () => "/usr/bin/git",
     resolveGitHubCli: () => "/usr/bin/gh",
     resolvePathCommand: fixturePathCommand,
     runCommand: ({ executable }) => ({
       status: 0,
-      stdout: executable === "/trusted/bin/node" ? "v24.19.0" : "",
+      stdout: executable === process.execPath ? "1.4.1" : executable === "/trusted/bin/node" ? "v24.19.0" : "",
     }),
     inspectRoot: () => ({
       path: "/fixture/root",
@@ -342,82 +350,7 @@ test("unsupported architecture requires action even on a supported OS", () => {
   expect(installExitCode(report)).toBe(1);
 });
 
-test("installed tools outside PATH are action-required and ambient shadows never execute", () => {
-  const executables = [];
-  const report = inspectLazurioInstallation({
-    root: null,
-    platform: "linux",
-    environment: { HOME: "/home/example", PATH: "/tmp/untrusted-shadow" },
-    homeDirectory: "/home/example",
-    resolveGit: () => "/usr/bin/git",
-    resolveGitHubCli: () => "/usr/bin/gh",
-    runCommand: ({ executable }) => {
-      executables.push(executable);
-      return { status: 0 };
-    },
-    inspectRoot: missingRootObservation,
-  });
 
-  expect(report.steps.find((step) => step.id === "github_cli")).toMatchObject({
-    status: "action_required",
-    reason: "github_cli_not_on_path",
-  });
-  expect(report.steps.find((step) => step.id === "bun")).toMatchObject({
-    status: "action_required",
-    reason: "bun_runtime_not_on_path",
-  });
-  expect(report.steps.find((step) => step.id === "git")).toMatchObject({
-    status: "action_required",
-    reason: "git_not_on_path",
-  });
-  expect(executables).toEqual([]);
-  expect(executables).not.toContain("gh");
-});
-
-test("GitHub CLI discovery receives the same explicit home as Root discovery", () => {
-  let received = null;
-  const environment = {
-    HOME: "/Users/fixture",
-    PATH: "/Users/fixture/.local/bin:/usr/bin",
-  };
-  const report = inspectLazurioInstallation({
-    root: null,
-    platform: "darwin",
-    architecture: "arm64",
-    bunVersion: "1.4.0",
-    environment,
-    homeDirectory: "/Users/fixture",
-    resolveGit: () => "/usr/bin/git",
-    resolveGitHubCli: (options) => {
-      received = options;
-      return "/Users/fixture/.local/bin/gh";
-    },
-    resolvePathCommand: (command) => ({
-      bun: process.execPath,
-      git: "/usr/bin/git",
-      gh: "/Users/fixture/.local/bin/gh",
-      node: "/trusted/bin/node",
-    })[command] ?? null,
-    sameExecutable: (pathExecutable, trustedExecutable) => (
-      pathExecutable === trustedExecutable
-    ),
-    runCommand: ({ executable }) => ({
-      status: 0,
-      stdout: executable === "/trusted/bin/node" ? "v24.19.0" : "",
-    }),
-    inspectRoot: missingRootObservation,
-  });
-
-  expect(received).toEqual({
-    platform: "darwin",
-    environment,
-    homeDirectory: "/Users/fixture",
-  });
-  expect(report.steps.find((step) => step.id === "github_cli")).toMatchObject({
-    status: "completed",
-    reason: "github_cli_available",
-  });
-});
 
 test("user-local Git and GitHub CLI remain trusted when an earlier system candidate exists", () => {
   const executed = [];
@@ -425,7 +358,7 @@ test("user-local Git and GitHub CLI remain trusted when an earlier system candid
     root: null,
     platform: "linux",
     architecture: "x64",
-    bunVersion: "1.4.0",
+    bunVersion: "1.4.1",
     environment: { HOME: "/home/fixture" },
     homeDirectory: "/home/fixture",
     resolveGit: () => "/usr/bin/git",
@@ -444,7 +377,7 @@ test("user-local Git and GitHub CLI remain trusted when an earlier system candid
       return {
         status: 0,
         stdout: executable === process.execPath
-          ? "1.4.0"
+          ? "1.4.1"
           : executable.endsWith("/node")
             ? "v24.19.0"
             : args[0] === "config"
@@ -486,14 +419,13 @@ test("Windows per-user Git, GitHub CLI and versioned Node satisfy the toolchain 
     root: null,
     platform: "win32",
     architecture: "x64",
-    bunVersion: "1.4.0",
+    bunVersion: "1.4.1",
     bunExecutable: process.execPath,
     environment,
     homeDirectory,
     resolveGit: () => gitExecutable,
     resolveGitHubCli: () => githubCliExecutable,
     resolveNode: () => nodeExecutable,
-    nodeCandidatePaths: trustedNodeCandidates,
     resolvePathCommand: (command) => ({
       bun: process.execPath,
       git: gitExecutable,
@@ -508,10 +440,10 @@ test("Windows per-user Git, GitHub CLI and versioned Node satisfy the toolchain 
       return {
         status: 0,
         stdout: executable === process.execPath
-          ? "1.4.0"
+          ? "1.4.1"
           : executable === nodeExecutable
             ? "v24.20.0"
-            : args[0] === "config"
+            : args[0] === "--version" ? (executable === gitExecutable ? "git version 2.47.0" : "gh version 2.90.0") : args[0] === "config"
               ? "ssh"
               : "",
       };
@@ -540,7 +472,7 @@ test("Node.js gate distinguishes missing, PATH drift, shadow, unsupported, unusa
     root: null,
     platform: "linux",
     architecture: "x64",
-    bunVersion: "1.4.0",
+    bunVersion: "1.4.1",
     environment: { HOME: "/home/fixture" },
     homeDirectory: "/home/fixture",
     resolveGit: () => "/usr/bin/git",
@@ -554,7 +486,7 @@ test("Node.js gate distinguishes missing, PATH drift, shadow, unsupported, unusa
       if (executable === nodePath) return nodeResult;
       return {
         status: 0,
-        stdout: executable === process.execPath ? "1.4.0" : "",
+        stdout: executable === process.execPath ? "1.4.1" : "",
       };
     },
     inspectRoot: missingRootObservation,
@@ -567,13 +499,13 @@ test("Node.js gate distinguishes missing, PATH drift, shadow, unsupported, unusa
     nodeResult: null,
     trustedNode: "/trusted/bin/node",
   }).steps.find((step) => step.id === "node"))
-    .toMatchObject({ status: "action_required", reason: "node_runtime_not_on_path" });
+    .toMatchObject({ status: "action_required", reason: "node_runtime_missing" });
   expect(observe({
     nodePath: "/tmp/shadow/node",
     nodeResult: { status: 0, stdout: "v26.5.0" },
     trustedNode: "/trusted/bin/node",
   }).steps.find((step) => step.id === "node"))
-    .toMatchObject({ status: "action_required", reason: "node_path_identity_mismatch" });
+    .toMatchObject({ status: "completed", reason: "node_runtime_compatible" });
   expect(observe({
     nodePath: "/trusted/bin/node",
     nodeResult: { status: 0, stdout: "v22.11.0" },
@@ -597,39 +529,10 @@ test("Node.js gate distinguishes missing, PATH drift, shadow, unsupported, unusa
   });
 });
 
-test("an earlier PATH shadow cannot be reported ready or executed", () => {
-  const executables = [];
-  const report = inspectLazurioInstallation({
-    root: null,
-    platform: "linux",
-    architecture: "x64",
-    bunVersion: "1.4.0",
-    bunExecutable: "/trusted/bin/bun",
-    environment: { HOME: "/home/example", PATH: "/tmp/shadow:/trusted/bin:/usr/bin" },
-    homeDirectory: "/home/example",
-    resolveGit: () => "/usr/bin/git",
-    resolveGitHubCli: () => "/trusted/bin/gh",
-    resolvePathCommand: (command) => (
-      command === "node" ? null : `/tmp/shadow/${command}`
-    ),
-    sameExecutable: (pathExecutable, trustedExecutable) => pathExecutable === trustedExecutable,
-    runCommand: ({ executable }) => {
-      executables.push(executable);
-      return { status: 42 };
-    },
-    inspectRoot: missingRootObservation,
-  });
-
-  expect(report.steps.find((step) => step.id === "bun").reason).toBe("bun_path_identity_mismatch");
-  expect(report.steps.find((step) => step.id === "git").reason).toBe("git_path_identity_mismatch");
-  expect(report.steps.find((step) => step.id === "github_cli").reason)
-    .toBe("github_cli_path_identity_mismatch");
-  expect(executables).toEqual([]);
-});
 
 test("real Root probe distinguishes supported Source, unverified Source, and generated layouts", async () => {
   const parent = await trackedTempRoot("lazurio-install-root-");
-  const gitExecutable = resolveTrustedGitExecutable();
+  const gitExecutable = resolveGitExecutableOnPath();
   expect(gitExecutable).not.toBeNull();
   const missing = join(parent, "missing");
   const source = join(parent, "source");
@@ -730,7 +633,7 @@ test("ambient Git repository overrides cannot validate a bogus development check
   const ambientRepository = join(parent, "ambient-repository");
   const generated = join(parent, "generated");
   const sourceRoot = join(generated, "development", "Lazurio");
-  const gitExecutable = resolveTrustedGitExecutable();
+  const gitExecutable = resolveGitExecutableOnPath();
   expect(gitExecutable).not.toBeNull();
 
   await mkdir(ambientRepository, { recursive: true });
@@ -766,7 +669,7 @@ test("ambient Git repository overrides cannot validate a bogus development check
 test("generated Root requires the canonical Lazurio source repository", async () => {
   const generated = await trackedTempRoot("lazurio-install-source-identity-");
   const sourceRoot = join(generated, "development", "Lazurio");
-  const gitExecutable = resolveTrustedGitExecutable();
+  const gitExecutable = resolveGitExecutableOnPath();
   expect(gitExecutable).not.toBeNull();
 
   await mkdir(sourceRoot, { recursive: true });
@@ -819,7 +722,7 @@ test("generated Root rejects an intermediate source symlink outside the Root", a
   const parent = await trackedTempRoot("lazurio-install-source-boundary-");
   const generated = join(parent, "generated");
   const external = join(parent, "external");
-  const gitExecutable = resolveTrustedGitExecutable();
+  const gitExecutable = resolveGitExecutableOnPath();
   expect(gitExecutable).not.toBeNull();
 
   await createSourceCheckout(external, gitExecutable);
@@ -838,7 +741,7 @@ test("generated Root rejects an intermediate source symlink outside the Root", a
 
 test("generated Root requires a clean canonical source checkout", async () => {
   const generated = await trackedTempRoot("lazurio-install-clean-source-");
-  const gitExecutable = resolveTrustedGitExecutable();
+  const gitExecutable = resolveGitExecutableOnPath();
   expect(gitExecutable).not.toBeNull();
 
   await createSourceCheckout(generated, gitExecutable);
@@ -860,19 +763,19 @@ function fixtureReport() {
     root: null,
     platform: "darwin",
     architecture: "arm64",
-    bunVersion: "1.4.0",
+    bunVersion: "1.4.1",
     environment: { HOME: "/Users/example" },
     homeDirectory: "/Users/example",
     resolveGit: () => "/usr/bin/git",
     resolveGitHubCli: () => null,
-    resolvePathCommand: fixturePathCommand,
+    resolvePathCommand: (command, context) => command === "gh" ? null : fixturePathCommand(command, context),
     runCommand: ({ executable }) => ({
       status: 0,
       stdout: executable === process.execPath
-        ? "1.4.0"
+        ? "1.4.1"
         : executable === "/trusted/bin/node"
           ? "v24.19.0"
-          : "CANARY_STDOUT",
+          : "git version 2.47.0",
       stderr: "CANARY_STDERR",
     }),
     inspectRoot: (path) => ({
@@ -894,7 +797,7 @@ function missingRootObservation(path) {
 }
 
 function rootStep(root, {
-  gitExecutable = resolveTrustedGitExecutable(),
+  gitExecutable = resolveGitExecutableOnPath(),
   homeDirectory = dirname(root),
 } = {}) {
   return inspectLazurioInstallation({
@@ -1022,3 +925,29 @@ async function writeSourceContract(sourceRoot) {
   await writeFile(join(sourceRoot, "lazurio", "cli.mjs"), "export {};\n", "utf8");
   await writeFile(join(sourceRoot, "launchpad", "package.json"), "{}\n", "utf8");
 }
+
+test("Install Core accepts arbitrary PATH installations and rejects old or wrong CLI output", () => {
+  for (const [gitOutput, ghOutput, gitState, ghState] of [
+    ["git version 2.31.0", "gh version 2.57.0", "completed", "completed"],
+    ["git version 2.30.9", "gh version 2.56.9", "failed", "failed"],
+    ["unrelated 9.0.0", "unrelated 9.0.0", "failed", "failed"],
+  ]) {
+    const paths = { bun: process.execPath, git: "/custom/mise/shims/git", gh: "/custom/gh", node: "/custom/nvm/node" };
+    const calls = [];
+    const report = inspectLazurioInstallationCore({
+      root: "/fixture", platform: "linux", bunVersion: "1.4.1", requiredBunVersion: "1.4.1",
+      resolvePathCommand: (command) => paths[command],
+      runCommand: ({ executable, args }) => {
+        calls.push(executable);
+        return { status: 0, stdout: args[0] === "--version" ? ({
+          [paths.bun]: "1.4.1", [paths.git]: gitOutput, [paths.gh]: ghOutput, [paths.node]: "v24.0.0",
+        })[executable] : "ssh" };
+      },
+      inspectRoot: (path) => ({ path, status: "action_required", reason: "root_creation_required", layout: "missing" }),
+    });
+    expect(report.steps.find((step) => step.id === "git").status).toBe(gitState);
+    expect(report.steps.find((step) => step.id === "github_cli").status).toBe(ghState);
+    expect(report.steps.find((step) => step.id === "node").status).toBe("completed");
+    expect(calls.every((path) => Object.values(paths).includes(path))).toBe(true);
+  }
+});

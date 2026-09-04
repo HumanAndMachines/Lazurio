@@ -178,7 +178,7 @@ test("Windows remote Git environment never contains a POSIX askpass executable",
   });
 });
 
-test("Windows sterile child PATH is derived only from the exact verified Git executable", () => {
+test("remote child preserves the Principal PATH while isolating Git configuration", () => {
   const environment = minimalRemoteGitEnvironment({
     HOME: "C:\\Users\\builder",
     USERPROFILE: "C:\\Users\\builder",
@@ -191,12 +191,9 @@ test("Windows sterile child PATH is derived only from the exact verified Git exe
     HOME: "C:\\Users\\builder",
     USERPROFILE: "C:\\Users\\builder",
     SSH_AUTH_SOCK: "\\\\.\\pipe\\openssh-ssh-agent",
-    PATH: [
-      "C:\\Users\\builder\\AppData\\Local\\Programs\\Git\\cmd",
-      "C:\\Users\\builder\\AppData\\Local\\Programs\\Git\\usr\\bin",
-    ].join(";"),
+    PATH: "C:\\attacker\\bin",
   });
-  expect(JSON.stringify(environment)).not.toContain("attacker");
+  expect(environment.GIT_EXEC_PATH).toBeUndefined();
 });
 
 test("pinned child executes clone through the parent-verified absolute Git executable", async () => {
@@ -228,84 +225,16 @@ test("pinned child executes clone through the parent-verified absolute Git execu
   }
 });
 
-test("Windows Git resolver uses only fixed Git for Windows locations", async () => {
-  const env = {
-    ProgramW6432: "C:\\attacker-w6432",
-    ProgramFiles: "C:\\attacker-program-files",
-    "ProgramFiles(x86)": "C:\\attacker-x86",
-    LOCALAPPDATA: "C:\\attacker-local",
-  };
-  const candidates = gitExecutableCandidates({ platform: "win32", env });
-
-  expect(candidates).toContain("C:\\Program Files\\Git\\cmd\\git.exe");
-  expect(candidates.join("\n")).not.toContain("attacker");
-
-  const expected = candidates.at(-1);
-  const resolved = await resolveGitExecutable({
-    platform: "win32",
-    env,
-    which: () => null,
-    pathExists: (candidate) => candidate === expected,
-    probe: async (candidate) => candidate === expected,
-  });
-  expect(resolved).toBe(expected);
-});
-
-test("Windows Git resolver never probes environment-directed executable roots", async () => {
-  const environment = {
-    ProgramW6432: "C:\\attacker-w6432",
-    ProgramFiles: "C:\\attacker-program-files",
-    "ProgramFiles(x86)": "C:\\attacker-x86",
-    LOCALAPPDATA: "C:\\attacker-local",
-  };
-  const attackerCandidates = [
-    "C:\\attacker-w6432\\Git\\cmd\\git.exe",
-    "C:\\attacker-program-files\\Git\\cmd\\git.exe",
-    "C:\\attacker-x86\\Git\\cmd\\git.exe",
-    "C:\\attacker-local\\Programs\\Git\\cmd\\git.exe",
-  ];
-  const probes = [];
-
-  const resolved = await resolveGitExecutable({
-    platform: "win32",
-    env: environment,
-    pathExists: (candidate) => attackerCandidates.includes(candidate),
-    probe: async (candidate) => {
-      probes.push(candidate);
-      return true;
-    },
-  });
-
-  expect(resolved).toBeNull();
-  expect(probes).toEqual([]);
-});
-
-test("Git resolver nikdy nezkouší WindowsApps PATH alias a ověří skutečný Git for Windows", async () => {
-  const broken = "C:\\Users\\builder\\AppData\\Local\\Microsoft\\WindowsApps\\git.exe";
-  const working = "C:\\Program Files\\Git\\cmd\\git.exe";
-  const probes = [];
-  const options = {
-    platform: "win32",
-    env: { ProgramFiles: "C:\\Program Files" },
-    which: () => broken,
-    pathExists: (candidate) => candidate === working,
-  };
-
-  const asyncResolved = await resolveGitExecutable({
-    ...options,
-    probe: async (candidate) => {
-      probes.push(candidate);
-      return candidate === working;
-    },
-  });
-  const syncResolved = resolveGitExecutableSync({
-    ...options,
-    probe: (candidate) => candidate === working,
-  });
-
-  expect(asyncResolved).toBe(working);
-  expect(syncResolved).toBe(working);
-  expect(probes).toEqual([working]);
+test("Git resolver probes only the selected PATH executable and never falls back", async () => {
+  for (const selected of ["/custom/mise/shims/git", null]) {
+    const calls = [];
+    const options = { resolvePathCommand: () => selected, probe: (path) => { calls.push(path); return false; } };
+    expect(await resolveGitExecutable(options)).toBeNull();
+    expect(resolveGitExecutableSync(options)).toBeNull();
+    expect(calls).toEqual(selected ? [selected, selected] : []);
+    expect(gitExecutableCandidates(options)).toEqual(selected ? [selected] : []);
+  }
+  expect(await resolveGitExecutable({ resolvePathCommand: () => "/custom/git", probe: () => true })).toBe("/custom/git");
 });
 
 test("sterile materialization environment disables ambient Git config", () => {
@@ -362,4 +291,43 @@ test("local Git probes use the Windows-proven timeout and bounded concurrency", 
     "/T",
     "/F",
   ]);
+});
+
+test.skipIf(process.platform === "win32")("a PATH shim works in the actual isolated remote Git consumer", async () => {
+  const { writeFile, chmod } = await import("node:fs/promises");
+  const { pathToFileURL } = await import("node:url");
+  const root = await mkdtemp(join(tmpdir(), "lazurio-git-shim-"));
+  const git = resolveGitExecutableSync();
+  try {
+    const shim = join(root, "shims"), helpers = join(root, "helpers");
+    await mkdir(shim); await mkdir(helpers);
+    // The shim delegates through PATH, as common version managers do.
+    await writeFile(join(shim, "git"), '#!/bin/sh\nexec selected-git "$@"\n');
+    await writeFile(join(helpers, "selected-git"), `#!/bin/sh\nexec '${git.replaceAll("'", "'\\''")}' "$@"\n`);
+    await chmod(join(shim, "git"), 0o755); await chmod(join(helpers, "selected-git"), 0o755);
+    const moduleUrl = pathToFileURL(join(import.meta.dirname, "../../lazurio/runtime/git-lib.mjs")).href;
+    const child = Bun.spawnSync([process.execPath, "--eval", `const {runGit,safeGitRemoteEnv}=await import(${JSON.stringify(moduleUrl)});const r=await runGit(["--version"],{cwd:${JSON.stringify(root)},env:safeGitRemoteEnv()});console.log(r.stdout);process.exit(r.ok?0:1);`], {
+      env: { ...process.env, PATH: `${shim}:${helpers}:${process.env.PATH}` }, stdout: "pipe", stderr: "pipe",
+    });
+    expect(child.exitCode, new TextDecoder().decode(child.stderr)).toBe(0);
+    expect(new TextDecoder().decode(child.stdout)).toContain("git version");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test.skipIf(process.platform === "win32")("runtime rejects Git 2.30 from PATH before invoking a module consumer", async () => {
+  const { writeFile, chmod } = await import("node:fs/promises");
+  const { pathToFileURL } = await import("node:url");
+  const root = await mkdtemp(join(tmpdir(), "lazurio-old-git-"));
+  try {
+    const marker = join(root, "consumer-invoked");
+    await writeFile(join(root, "git"), `#!/bin/sh\nif [ "$1" = "--version" ]; then echo 'git version 2.30.9'; exit 0; fi\n: > '${marker}'\nexit 129\n`);
+    await chmod(join(root, "git"), 0o755);
+    const moduleUrl = pathToFileURL(join(import.meta.dirname, "../../lazurio/runtime/git-lib.mjs")).href;
+    const child = Bun.spawnSync([process.execPath, "--eval", `const g=await import(${JSON.stringify(moduleUrl)});const a=await g.resolveGitExecutable();const s=g.resolveGitExecutableSync();const r=await g.runGit(["rev-parse","--path-format=absolute","--show-toplevel"],{cwd:${JSON.stringify(root)}});console.log(JSON.stringify({a,s,ok:r.ok}));`], {
+      env: { ...process.env, PATH: `${root}:${process.env.PATH}` }, stdout: "pipe", stderr: "pipe",
+    });
+    expect(child.exitCode, new TextDecoder().decode(child.stderr)).toBe(0);
+    expect(JSON.parse(new TextDecoder().decode(child.stdout))).toEqual({ a: null, s: null, ok: false });
+    expect(await Bun.file(marker).exists()).toBe(false);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
