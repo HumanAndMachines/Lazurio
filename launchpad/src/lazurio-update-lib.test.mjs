@@ -34,10 +34,126 @@ import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.m
 
 const cleanup = [];
 const fileSymlinkTest = (await supportsFileSymlinks()) ? test : test.skip;
+const TRANSIENT_WINDOWS_REMOVE_CODES = new Set(["EBUSY", "EPERM", "ENOTEMPTY"]);
 
 afterEach(async () => {
-  await Promise.all(cleanup.splice(0).map((path) => rm(path, { recursive: true, force: true })));
+  await Promise.all(cleanup.splice(0).map((path) => removeFixtureRoot(path)));
 });
+
+test("fixture cleanup retries only bounded transient Windows locks", async () => {
+  const attempts = [];
+  const delays = [];
+
+  await removeFixtureRoot("C:\\fixture", {
+    platform: "win32",
+    rootRemovalAttempts: 3,
+    retryDelayMs: 17,
+    removeFn: async (path, options) => {
+      attempts.push({ path, options });
+      if (attempts.length < 3) {
+        const error = new Error("simulated Windows lock");
+        error.code = attempts.length === 1 ? "EBUSY" : "EPERM";
+        throw error;
+      }
+    },
+    sleepFn: async (delayMs) => delays.push(delayMs),
+  });
+
+  expect(attempts).toEqual([
+    { path: "C:\\fixture", options: { recursive: true, force: true } },
+    { path: "C:\\fixture", options: { recursive: true, force: true } },
+    { path: "C:\\fixture", options: { recursive: true, force: true } },
+  ]);
+  expect(delays).toEqual([17, 17]);
+});
+
+test("fixture cleanup preserves a non-retryable removal failure", async () => {
+  const failure = new Error("access denied");
+  failure.code = "EACCES";
+  let attempts = 0;
+  let sleeps = 0;
+
+  try {
+    await removeFixtureRoot("C:\\fixture", {
+      platform: "win32",
+      removeFn: async () => {
+        attempts += 1;
+        throw failure;
+      },
+      sleepFn: async () => {
+        sleeps += 1;
+      },
+    });
+    throw new Error("fixture cleanup unexpectedly succeeded");
+  } catch (error) {
+    expect(error.message).toContain("root=C:\\fixture");
+    expect(error.message).toContain("code=EACCES");
+    expect(error.cause).toBe(failure);
+  }
+
+  expect(attempts).toBe(1);
+  expect(sleeps).toBe(0);
+});
+
+test("fixture cleanup reports the exhausted Windows retry budget", async () => {
+  let attempts = 0;
+  let sleeps = 0;
+
+  try {
+    await removeFixtureRoot("C:\\fixture", {
+      platform: "win32",
+      rootRemovalAttempts: 2,
+      removeFn: async () => {
+        attempts += 1;
+        const error = new Error("still busy");
+        error.code = "ENOTEMPTY";
+        throw error;
+      },
+      sleepFn: async () => {
+        sleeps += 1;
+      },
+    });
+    throw new Error("fixture cleanup unexpectedly succeeded");
+  } catch (error) {
+    expect(error.message).toContain("after 2 attempts");
+    expect(error.message).toContain("code=ENOTEMPTY");
+  }
+
+  expect(attempts).toBe(2);
+  expect(sleeps).toBe(1);
+});
+
+test("fixture Git failure identifies the command, exit code and stderr", () => {
+  expect(() => runGit(process.cwd(), ["lazurio-fixture-invalid-command"]))
+    .toThrow(/git lazurio-fixture-invalid-command failed: exit=.+; stderr=.+/);
+});
+
+async function removeFixtureRoot(path, {
+  platform = process.platform,
+  rootRemovalAttempts = platform === "win32" ? 21 : 1,
+  retryDelayMs = 100,
+  removeFn = rm,
+  sleepFn = (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)),
+} = {}) {
+  let lastError = null;
+  for (let attempt = 0; attempt < rootRemovalAttempts; attempt += 1) {
+    try {
+      await removeFn(path, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      lastError = error;
+      const retryable = platform === "win32"
+        && TRANSIENT_WINDOWS_REMOVE_CODES.has(error?.code)
+        && attempt < rootRemovalAttempts - 1;
+      if (!retryable) break;
+      await sleepFn(retryDelayMs);
+    }
+  }
+  throw new Error(
+    `Lazurio update fixture root remained locked after ${rootRemovalAttempts} attempts: root=${path}; code=${lastError?.code ?? "unknown"}`,
+    { cause: lastError },
+  );
+}
 
 async function readPortableText(path) {
   return (await readFile(path, "utf8")).replace(/\r\n/g, "\n");
@@ -2878,7 +2994,12 @@ async function branch(cwd) {
 
 function runGit(cwd, args) {
   const result = runGitResult(cwd, args);
-  if (result.status !== 0) throw new Error(`git ${args.join(" ")} failed: ${result.stderr}`);
+  if (result.status !== 0) {
+    throw new Error(
+      `git ${args.join(" ")} failed: exit=${result.status ?? "unknown"}; stderr=${result.stderr?.trim() || result.error?.message || "empty"}`,
+      { cause: result.error },
+    );
+  }
   return result.stdout.trim();
 }
 
