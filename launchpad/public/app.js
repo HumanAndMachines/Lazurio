@@ -115,7 +115,7 @@ const state = {
   activeSurface: "workspace",
   guideReturnHash: null,
   guideOpenedFromLaunchpad: false,
-  guideActiveTopic: "glossary",
+  guideActiveTopic: "installation",
   filters: {
     // Scope selector vždy ukazuje právě jeden prostor: personalspace nebo
     // konkrétní Organizaci. Cross-organization pohled „Vše" není v denním UI.
@@ -365,6 +365,11 @@ const elements = {
   guideSearch: document.querySelector("#guideSearch"),
   guideNoResults: document.querySelector("#guideNoResults"),
   guideTopicButtons: document.querySelectorAll("[data-guide-topic]"),
+  guidePrompt: document.querySelector("#guidePrompt"),
+  guidePromptCopy: document.querySelector("#guidePromptCopy"),
+  guidePromptStatus: document.querySelector("#guidePromptStatus"),
+  guidePromptError: document.querySelector("#guidePromptError"),
+  guidePolicy: document.querySelector("#guidePolicy"),
   appsSearch: document.querySelector("#appsSearch"),
   attentionToggle: document.querySelector("#attentionToggle"),
   segmentedControl: document.querySelectorAll("[data-status-segment]"),
@@ -467,6 +472,7 @@ elements.guideSearch?.addEventListener("input", (event) => {
 for (const topicButton of elements.guideTopicButtons) {
   topicButton.addEventListener("click", () => selectGuideTopic(topicButton.dataset.guideTopic));
 }
+elements.guidePromptCopy?.addEventListener("click", () => void copyGuideInstallPrompt());
 
 // Drawer doplňkových panelů (Nejčastější / detail). Poslední změny jsou v
 // Organization scope trvale viditelné vedle hlavní plochy.
@@ -1633,6 +1639,7 @@ function applyLaunchpadHash({ notify = false } = {}) {
   if (resolution.surface === "guide") {
     state.activeSurface = "guide";
     resetSpaceSelection();
+    void loadGuideInstallContent();
     return false;
   }
 
@@ -1679,6 +1686,62 @@ function normalizeGuideSearch(value) {
     .replace(/\p{Diacritic}/gu, "")
     .toLocaleLowerCase("cs")
     .trim();
+}
+
+let guideInstallContentPromise = null;
+
+function loadGuideInstallContent() {
+  if (guideInstallContentPromise) return guideInstallContentPromise;
+  elements.guidePromptStatus?.removeAttribute("hidden");
+  elements.guidePromptError?.setAttribute("hidden", "");
+  guideInstallContentPromise = launchpadFetch("/api/guide/organization-install")
+    .then(async (response) => {
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.error ?? "guide_content_unavailable");
+      if (
+        payload?.schema_version !== "lazurio.guide.organization_install.v1"
+        || typeof payload.short_prompt !== "string"
+        || typeof payload.policy_markdown !== "string"
+        || payload.source?.path !== "manual/organization-install.md"
+      ) {
+        throw new Error("guide_content_invalid");
+      }
+      elements.guidePrompt?.querySelector("code")?.replaceChildren(payload.short_prompt);
+      elements.guidePolicy?.querySelector("code")?.replaceChildren(payload.policy_markdown);
+      elements.guidePrompt?.removeAttribute("hidden");
+      elements.guidePolicy?.removeAttribute("hidden");
+      elements.guidePromptStatus?.setAttribute("hidden", "");
+      if (elements.guidePromptCopy) elements.guidePromptCopy.disabled = false;
+      filterGuideContent(elements.guideSearch?.value ?? "");
+      return payload;
+    })
+    .catch((error) => {
+      elements.guidePromptStatus?.setAttribute("hidden", "");
+      elements.guidePromptError?.removeAttribute("hidden");
+      if (elements.guidePromptCopy) elements.guidePromptCopy.disabled = true;
+      guideInstallContentPromise = null;
+      console.warn(`[lazurio] Guide install content unavailable: ${error.message}`);
+      return null;
+    });
+  return guideInstallContentPromise;
+}
+
+async function copyGuideInstallPrompt() {
+  const prompt = elements.guidePrompt?.textContent?.trim();
+  if (!prompt) return;
+  try {
+    await navigator.clipboard.writeText(prompt);
+    elements.guidePromptStatus.textContent = "Prompt je ve schránce.";
+    elements.guidePromptStatus.removeAttribute("hidden");
+  } catch {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(elements.guidePrompt);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    elements.guidePromptStatus.textContent = "Automatické kopírování selhalo. Prompt je označený; zkopírujte ho ručně.";
+    elements.guidePromptStatus.removeAttribute("hidden");
+  }
 }
 
 function filterGuideContent(query) {

@@ -11,6 +11,7 @@ vložením nahraď `<github-organization>` přesným GitHub loginem Organizace.
 Úplný bezpečnostní a diagnostický kontrakt zůstává v navazujících kapitolách
 tohoto runbooku; krátký prompt jej nenahrazuje ani nerozšiřuje.
 
+<!-- lazurio-guide:organization-install-short:start -->
 > Připrav tuto Mašinu jako Lazurio Builder pro GitHub Organization
 > `<github-organization>`. Nejdřív pouze čtením ověř platformu, aktuální účet,
 > Git stav a živá oprávnění. Organization owner musí ještě před instalací této
@@ -45,10 +46,14 @@ tohoto runbooku; krátký prompt jej nenahrazuje ani nerozšiřuje.
 > `lazurio organization install <github-organization> --json` a finální
 > `lazurio doctor`; všechny bezpečně opravitelné required nálezy v tomto
 > mandátu vyřeš a kontroly opakuj. Přístupy, secrets ani cizí Organizace
-> neměň. Nakonec spusť Launchpad stejnou podporovanou cestou, ověř health
+> neměň. Aktivní scope určuje aktuální versioned Organization manifest. Když
+> se s ním moje zadání nebo předaná evidence rozchází, nic tiše nepřepisuj ani
+> nepřeskakuj: ukaž mi přesný rozpor a vyžádej moje rozhodnutí o navrhované
+> změně. Nakonec spusť Launchpad stejnou podporovanou cestou, ověř health
 > aktivních aplikací a předej matici `runtime ready` / `editing ready` /
 > `publishing ready`. `READ` nikdy nevydávej za Builder-ready `WRITE`; access
 > blocker pojmenuj přesným účtem, Teamem a repozitářem pro Organization ownera.
+<!-- lazurio-guide:organization-install-short:end -->
 
 ## Co z GitHub Organization tvoří Lazurio Organization
 
