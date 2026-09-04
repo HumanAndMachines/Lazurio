@@ -9,7 +9,11 @@ After merge into `main`, GitHub user `immakermatty` (immutable ID `16311043`)
 can add exactly `@claude review` to an open PR or dispatch **Claude review**
 from **main** with its PR number. Only first attempts run: to retry, create a
 new request, not **Re-run jobs**. Unrelated comments cannot cancel review jobs.
-Authorized requests are serialized without cancelling an active publisher.
+Authorized requests for the same PR are serialized without cancelling an active
+publisher. Different PRs and repositories may run concurrently and share the
+owner's subscription allowance; there is no subscription-wide queue. GitHub
+keeps at most one pending request per concurrency group, so a newer pending
+request can replace an older pending request. This is not a FIFO delivery queue.
 Manual cancellation or runner failure can still interrupt readback; every report
 is labeled a commit snapshot from its initial publication.
 
