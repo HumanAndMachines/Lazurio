@@ -95,6 +95,7 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(js).toContain("function selectGuideTopic(topic)");
   expect(js).toContain('launchpadFetch("/api/guide/organization-install")');
   expect(js).toContain('payload?.schema_version !== "lazurio.guide.organization_install.v1"');
+  expect(js.indexOf("guideInstallContentPromise: null")).toBeLessThan(js.indexOf("await loadData()"));
   expect(js).toContain("navigator.clipboard.writeText(prompt)");
   expect(js).toContain("Guide install content unavailable");
   expect(server).toContain('url.pathname === "/api/guide/organization-install"');

@@ -116,6 +116,7 @@ const state = {
   guideReturnHash: null,
   guideOpenedFromLaunchpad: false,
   guideActiveTopic: "installation",
+  guideInstallContentPromise: null,
   filters: {
     // Scope selector vždy ukazuje právě jeden prostor: personalspace nebo
     // konkrétní Organizaci. Cross-organization pohled „Vše" není v denním UI.
@@ -1688,13 +1689,11 @@ function normalizeGuideSearch(value) {
     .trim();
 }
 
-let guideInstallContentPromise = null;
-
 function loadGuideInstallContent() {
-  if (guideInstallContentPromise) return guideInstallContentPromise;
+  if (state.guideInstallContentPromise) return state.guideInstallContentPromise;
   elements.guidePromptStatus?.removeAttribute("hidden");
   elements.guidePromptError?.setAttribute("hidden", "");
-  guideInstallContentPromise = launchpadFetch("/api/guide/organization-install")
+  state.guideInstallContentPromise = launchpadFetch("/api/guide/organization-install")
     .then(async (response) => {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error ?? "guide_content_unavailable");
@@ -1719,11 +1718,11 @@ function loadGuideInstallContent() {
       elements.guidePromptStatus?.setAttribute("hidden", "");
       elements.guidePromptError?.removeAttribute("hidden");
       if (elements.guidePromptCopy) elements.guidePromptCopy.disabled = true;
-      guideInstallContentPromise = null;
+      state.guideInstallContentPromise = null;
       console.warn(`[lazurio] Guide install content unavailable: ${error.message}`);
       return null;
     });
-  return guideInstallContentPromise;
+  return state.guideInstallContentPromise;
 }
 
 async function copyGuideInstallPrompt() {
