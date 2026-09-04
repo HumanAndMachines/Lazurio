@@ -3077,18 +3077,22 @@ test("runtime manager umí nainstalovat balíčky aplikace a zapsat install log"
       ? Bun.spawn([process.execPath, "-e", fixtureDependencyInstallScript("await Bun.write('node_modules/fixture.txt', 'ready\\n')")], options)
       : spawnFixtureChild(root, command, options),
   });
+  const expectedInstallCommand = process.platform === "win32"
+    ? "bun install --frozen-lockfile --backend=copyfile"
+    : "bun install --frozen-lockfile";
 
   const result = await runtime.install("test-company-demo-v1");
   expect(result.action).toBe("install");
   expect(result.exit_code).toBe(0);
-  expect(result.command_display).toBe("bun install --frozen-lockfile");
+  expect(result.command_display).toBe(expectedInstallCommand);
+  expect(result.command_display.includes("--backend=copyfile")).toBe(process.platform === "win32");
   expect(result.cwd.endsWith(join("organizations", "TestCompany", "modules", "demo", "app", "v1"))).toBe(true);
   expect(result.log_path).toBe("logs/apps/test-company-demo-v1.log");
   const repair = await runtime.install("test-company-demo-v1", { action: "repair" });
   expect(repair.action).toBe("repair");
   const logs = await runtime.logs("test-company-demo-v1");
-  expect(logs.content).toContain("install test-company-demo-v1 command=bun install --frozen-lockfile");
-  expect(logs.content).toContain("repair test-company-demo-v1 command=bun install --frozen-lockfile");
+  expect(logs.content).toContain(`install test-company-demo-v1 command=${expectedInstallCommand}`);
+  expect(logs.content).toContain(`repair test-company-demo-v1 command=${expectedInstallCommand}`);
   expect(logs.content).toContain("code=0");
 });
 
