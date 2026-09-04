@@ -1460,10 +1460,20 @@ export function createRuntimeManager({
 
     if (result.timeout && platform === "win32") {
       if (stopSignalError) {
-        await recoverRetryableStopAttempt(app, record, runtimeKey, runtimeSource, stopSignalError, {
-          failureKind: stopSignalError?.metadata?.failure_kind ?? "stop_signal_failed",
-          forced: true,
-        });
+        const finalizedAfterRecovery = await recoverRetryableStopAttempt(
+          app,
+          record,
+          runtimeKey,
+          runtimeSource,
+          stopSignalError,
+          {
+            failureKind: stopSignalError?.metadata?.failure_kind ?? "stop_signal_failed",
+            forced: true,
+          },
+        );
+        if (finalizedAfterRecovery) {
+          return stopActionResult(app, record, runtimeKey, runtimeSource, { forced: true });
+        }
         throw stopSignalError;
       }
       enableStopFinalizationOnExit(app, record, runtimeKey, runtimeSource, {
@@ -1586,15 +1596,28 @@ export function createRuntimeManager({
     }
 
     if (record.stopExitConfirmed) {
-      enableStopFinalizationOnExit(app, record, runtimeKey, runtimeSource, {
-        forced,
-      });
-      return;
+      record.finalizeStopOnExit = true;
+      record.finalizeStopForced = forced;
+      try {
+        return await finalizeDeferredManagedStop(app, record, runtimeKey, runtimeSource, {
+          exitCode: record.stopExitCode,
+          forced,
+        });
+      } catch (finalizationError) {
+        try {
+          await appendLog(
+            record.logPath,
+            `[launchpad] recovered stop finalization failed ${app.id}: ${finalizationError.message}\n`,
+          );
+        } catch {}
+        return false;
+      }
     }
 
     record.stopping = false;
     record.finalizeStopOnExit = false;
     record.finalizeStopForced = false;
+    return false;
   }
 
   function enableStopFinalizationOnExit(app, record, runtimeKey, runtimeSource, { forced }) {
