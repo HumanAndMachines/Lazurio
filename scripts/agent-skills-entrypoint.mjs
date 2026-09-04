@@ -1,3 +1,6 @@
+import { sanitizedGitEnvironment } from "../lazurio/core/cli-provenance-lib.mjs";
+import { realpathSync } from "node:fs";
+import { resolveGitExecutableOnPath } from "../lazurio/core/toolchain-lib.mjs";
 // Decision 0104: .claude/skills je Git-tracked byte-for-byte mirror kanonického
 // .agents/skills. Tenhle skript je lokální doctor/repair lane Lazuria
 // rootu (adaptace referenční implementace z OrganizationTemplate_GEN3):
@@ -6,8 +9,7 @@
 import {
   readFile,
 } from "node:fs/promises";
-import { realpathSync, statSync } from "node:fs";
-import { dirname, isAbsolute, join, resolve, win32 as pathWin32 } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   AGENT_SKILLS_ENTRYPOINT_SCHEMA,
@@ -21,64 +23,8 @@ export const CLAUDE_SKILLS_PATH = ".claude/skills";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const defaultRoot = resolve(dirname(scriptPath), "..");
-// Známé instalační prefixy Gitu. Discovery zůstává bez PATH lookupu (obrana
-// proti podvrženému `git` v PATH), ale musí pokrýt i instalace bez admin práv:
-// Git for Windows se u korporátního uživatele bez administrátora instaluje do
-// %LOCALAPPDATA%\Programs\Git (cílová persona decision 0059), na macOS bývá
-// vedle systémového shimu Homebrew.
-export function trustedGitCandidates(platform = process.platform, env = process.env) {
-  if (platform === "darwin") {
-    return ["/usr/bin/git", "/opt/homebrew/bin/git", "/usr/local/bin/git"];
-  }
-  if (platform === "linux") {
-    return ["/usr/bin/git", "/bin/git", "/usr/local/bin/git"];
-  }
-  if (platform !== "win32") return [];
-  const localAppData = env.LOCALAPPDATA;
-  // Windows cesty se skládají výhradně přes path.win32 — isAbsolute i join
-  // z node:path mají sémantiku hostitelské platformy, takže by tahle větev
-  // na macOS/Linuxu (a v testech) tiše vypadla.
-  return [
-    "C:\\Program Files\\Git\\cmd\\git.exe",
-    "C:\\Program Files\\Git\\bin\\git.exe",
-    "C:\\Program Files (x86)\\Git\\cmd\\git.exe",
-    "C:\\Program Files (x86)\\Git\\bin\\git.exe",
-    ...(typeof localAppData === "string" && pathWin32.isAbsolute(localAppData)
-      ? [
-        pathWin32.join(localAppData, "Programs", "Git", "cmd", "git.exe"),
-        pathWin32.join(localAppData, "Programs", "Git", "bin", "git.exe"),
-      ]
-      : []),
-  ];
-}
-
-function sanitizedGitEnvironment() {
-  const environment = {};
-  for (const key of ["TMPDIR", "TEMP", "TMP", "SystemRoot", "ComSpec", "PATHEXT"]) {
-    if (typeof process.env[key] === "string") environment[key] = process.env[key];
-  }
-  environment.LC_ALL = "C";
-  environment.GIT_TERMINAL_PROMPT = "0";
-  environment.GIT_OPTIONAL_LOCKS = "0";
-  environment.GIT_PAGER = "cat";
-  environment.GIT_CONFIG_NOSYSTEM = "1";
-  environment.GIT_CONFIG_GLOBAL = process.platform === "win32" ? "NUL" : "/dev/null";
-  environment.GIT_CONFIG_COUNT = "0";
-  return environment;
-}
-
 export function trustedGitExecutable(platform = process.platform) {
-  for (const candidate of trustedGitCandidates(platform)) {
-    try {
-      const canonicalPath = realpathSync.native(candidate);
-      if (isAbsolute(canonicalPath) && statSync(canonicalPath).isFile()) {
-        return canonicalPath;
-      }
-    } catch {
-      // Zkus další system-owned kandidát; caller-controlled discovery není povolená.
-    }
-  }
-  return null;
+  return resolveGitExecutableOnPath({ platform });
 }
 
 function git(root, args) {
@@ -89,7 +35,7 @@ function git(root, args) {
   return Bun.spawnSync({
     cmd: [executable, ...args],
     cwd: root,
-    env: sanitizedGitEnvironment(),
+    env: sanitizedGitEnvironment(process.env),
     stdout: "pipe",
     stderr: "pipe",
   });

@@ -24,20 +24,20 @@ test("Bun Doctor check enforces the exact authority and gives an Agent handoff",
   const current = bunRuntimeCheck({
     companiesRoot: "/fixture",
     bunExecutable: "/trusted/bun",
-    requiredVersion: "1.4.0",
-    run: () => ({ ok: true, stdout: "1.4.0", stderr: "" }),
+    requiredVersion: "1.4.1",
+    run: () => ({ ok: true, stdout: "1.4.1", stderr: "" }),
   });
   const mismatch = bunRuntimeCheck({
     companiesRoot: "/fixture",
     bunExecutable: "/trusted/bun",
-    requiredVersion: "1.4.0",
-    run: () => ({ ok: true, stdout: "1.4.1", stderr: "" }),
+    requiredVersion: "1.4.1",
+    run: () => ({ ok: true, stdout: "1.4.2", stderr: "" }),
   });
 
   expect(current).toMatchObject({ id: "platform.bun", status: "ok" });
   expect(mismatch).toMatchObject({ id: "platform.bun", status: "fail" });
   expect(mismatch.message).toContain("Principála");
-  expect(mismatch.details).toEqual(expect.arrayContaining(["current: 1.4.1", "required: 1.4.0"]));
+  expect(mismatch.details).toEqual(expect.arrayContaining(["current: 1.4.2", "required: 1.4.1"]));
 });
 
 test("Node.js Doctor shares the Install Core version authority", () => {
@@ -95,7 +95,7 @@ test("Node.js Doctor shares the Install Core version authority", () => {
     },
   });
   expect(installedButNotOnPath).toMatchObject({ id: "platform.node", status: "fail" });
-  expect(installedButNotOnPath.message).toContain("nainstalovaný");
+  expect(installedButNotOnPath.message).toContain("není dostupný");
 
   const shadowed = nodeRuntimeCheck({
     companiesRoot: "/fixture",
@@ -104,11 +104,11 @@ test("Node.js Doctor shares the Install Core version authority", () => {
     trustedCandidates: ["/trusted/node"],
     requiredRange: ">=22.12.0",
     run: () => {
-      throw new Error("untrusted Node.js must not execute");
+      return { ok: true, stdout: "v24.0.0" };
     },
   });
-  expect(shadowed).toMatchObject({ id: "platform.node", status: "fail" });
-  expect(shadowed.message).toContain("není ověřená");
+  expect(shadowed).toMatchObject({ id: "platform.node", status: "ok" });
+
 });
 
 test("Codex Doctor names the broken WinGet alias without accepting its target binary as ready", () => {
@@ -3262,5 +3262,12 @@ test("Codex currency results preserve status and consent while pointing to the s
       expect(check.details.some((detail) => detail.includes(platform === "win32" ? "install.ps1" : "install.sh"))).toBe(true);
       expect(check.details).toContain("update_policy: principal_consent_required");
     }
+  }
+});
+
+test("Bun PATH readiness accepts a separate exact-version installation and rejects empty output", async () => {
+  const { bunPathCheck } = await import("../../lazurio/runtime/diagnostics-lib.mjs");
+  for (const [stdout, status] of [["1.4.1", "ok"], ["1.4.0", "fail"], ["", "fail"]]) {
+    expect(bunPathCheck({ pathExecutable: "/custom/manager/bun", requiredVersion: "1.4.1", run: () => ({ ok: true, stdout }) }).status).toBe(status);
   }
 });

@@ -29,7 +29,7 @@ extends it.
 > `PATH`. Do not change the system-wide `PATH`, the package manager, security
 > settings, or other tool versions without my further consent. Install Codex CLI
 > using the official OpenAI standalone installer for this platform as described
-> in “Codex CLI: installation and updates”; do not use Homebrew, npm, or WinGet for it.
+> in “Codex CLI: installation and updates”; preserve compatible Homebrew, npm, or WinGet installations.
 >
 > If no usable SSH key exists for the GitHub account just verified, you have
 > permission to create a new ed25519 key on this Machine, upload only its
@@ -92,7 +92,7 @@ Add only the paragraphs whose impact the Principal actually approves:
 > Always set Bun to the exact stable version declared by the current clean
 > Lazurio `lazurio/package.json#packageManager`, even when upstream offers a
 > newer release. Install and update Codex CLI using the official OpenAI standalone
-> installer. For Codex, you also have permission to migrate an existing
+> installer. If I explicitly request a change of installation method, you may migrate an existing
 > Homebrew/npm/WinGet installation to standalone: first verify the new
 > installation, then remove only the previous Codex CLI package and preserve
 > settings, authentication, and history.
@@ -245,18 +245,36 @@ actual identity and usability are subsequently verified by
 sign-out or a Windows restart is only a fallback when the persistent User and
 Machine values are correct but the new Codex still cannot see them.
 
-On Windows, Git, GitHub CLI, and Node.js may be installed even without admin
-rights into the official user directories under
-`%USERPROFILE%\AppData\Local\Programs`. Install Core and Doctor accept the Git
-Installer in `Git\cmd`/`Git\bin`, PortableGit in
-`PortableGit\cmd`/`PortableGit\bin`, and the GitHub CLI in `GitHub CLI\bin`
-(including the variant with `gh.exe` directly in `GitHub CLI`). They accept
-Node.js in `Programs\nodejs` and via the exact user-scope WinGet command link
-`AppData\Local\Microsoft\WinGet\Links\node.exe`. The authority for these
-prefixes is the home of the current OS account, not an inherited
-`LOCALAPPDATA`, `USERPROFILE`, or an arbitrary `PATH` entry; the binary found
-must still canonically match one of these fixed candidates and pass a
-functional probe.
+Git, GitHub CLI, and Node.js may also be installed without admin rights on
+Windows. Their locations are not restricted to an approved prefix list; the
+shared contract below applies.
+
+### Tools from PATH: compatibility before installation method
+
+Homebrew is not a Lazurio installation dependency. First check existing commands
+in the environment that actually launches Lazurio. Doctor and Install Core select
+the first executable in `PATH`, run it and check the supported version. They do
+not search approved installation directories or silently fall back to another
+installation when the selected command fails. The absolute path is diagnostic,
+not proof of package provenance or safety.
+
+Git requires at least 2.31.0 (absolute rev-parse paths) and GitHub CLI 2.57.0
+(active-account checks). Their canonical contract lives in
+`lazurio/core/toolchain-lib.mjs`. The Node minimum belongs to
+`lazurio/package.json#engines.node`; Bun remains exactly pinned through
+`lazurio/package.json#packageManager`. Codex must report a recognizable stable
+CLI version; Lazurio currently consumes no feature requiring a newer numeric
+minimum. A newer upstream release is a separate advisory in
+`doctor --tool-updates`, not an automatic ordinary Doctor failure.
+
+The installation Agent preserves compatible Homebrew/npm, system installations
+and version managers. It installs or repairs only missing or incompatible tools
+within its mandate. It does not install Homebrew merely because the OS is macOS.
+An alias available only in an interactive shell is insufficient: the command
+must also work from the Lazurio process. Symlinks and shims are acceptable if they
+work in the actual consumer. Version-manager configuration must not select an
+incompatible tool in another working directory. Git configuration, access,
+timeouts and Organization isolation remain independent controls.
 
 ### Codex CLI: installation and updates
 
@@ -264,9 +282,10 @@ For localhost workstations on macOS, Linux, and Windows, the default path is
 [the official OpenAI standalone installer](https://developers.openai.com/codex/cli).
 OpenAI owns installation and subsequent updates; Lazurio only directs Agents
 to that procedure. Codex release availability therefore does not depend on
-updates to the Homebrew cask. Do not use Homebrew, npm, or WinGet for new Codex
-CLI installations. This rule does not change how other tools are installed or
-the immutable hosted Resident/Buddy pins and their release lifecycle.
+updates to the Homebrew cask. Homebrew, npm, and WinGet are neither required
+nor prohibited. Preserve compatible existing installations; standalone is a
+recommendation for missing Codex, not a readiness condition. Immutable hosted
+Resident/Buddy pins retain their own lifecycle.
 
 On macOS and Linux, use this for installation and updates:
 
@@ -369,7 +388,7 @@ The recommended authorization block of the installation prompt is:
 > PATH. Do not change the system-wide PATH, do not install a system package
 > manager, do not change security settings, and do not upgrade other tools
 > without my further consent. For Codex CLI, use the official OpenAI standalone
-> installer from the chapter above, not Homebrew, npm, or WinGet.
+> installer from the chapter above as the default; preserve an existing compatible installation.
 
 When the prompt does not authorize the concrete `PATH` layer, the Agent returns
 an exact installation report and requests consent. User consent is not treated

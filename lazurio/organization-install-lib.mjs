@@ -16,7 +16,7 @@ import {
   isValidGitHubBuilderReadiness,
   observeGitHubBuilderReadiness,
 } from "./core/github-builder-readiness-lib.mjs";
-import { resolveTrustedGitHubCliExecutable } from "./core/cli-provenance-lib.mjs";
+import { resolveGitHubCliExecutableOnPath } from "./core/toolchain-lib.mjs";
 import { resolveOrganizationRootDocuments } from "./core/organization-activation-lib.mjs";
 import { readOrganizationRoot } from "./core/organization-root-reader-lib.mjs";
 import { isValidOrganizationForgeBinding } from "./core/organization-scaffold-lib.mjs";
@@ -649,7 +649,7 @@ export function observeOrganizationInstallSource({
   expectedOrganizationId = null,
   platform = process.platform,
   environment = process.env,
-  resolveGitHubCli = resolveTrustedGitHubCliExecutable,
+  resolveGitHubCli = resolveGitHubCliExecutableOnPath,
   runGitHubCli = runTrustedGitHubCliSync,
 } = {}) {
   const locator = normalizeGitHubLogin(githubLogin);
@@ -718,7 +718,7 @@ export function observeOrganizationInstallIdentity({
   source,
   platform = process.platform,
   environment = process.env,
-  resolveGitHubCli = resolveTrustedGitHubCliExecutable,
+  resolveGitHubCli = resolveGitHubCliExecutableOnPath,
   runGitHubCli = runTrustedGitHubCliSync,
 } = {}) {
   const provider = createTrustedGitHubProvider({

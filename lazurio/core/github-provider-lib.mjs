@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 
-import { resolveTrustedGitHubCliExecutable } from "./cli-provenance-lib.mjs";
+import { resolveGitHubCliExecutableOnPath } from "./toolchain-lib.mjs";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MAX_STDIO_BYTES = 16 * 1024 * 1024;
@@ -9,7 +9,7 @@ export function createTrustedGitHubProvider({
   platform = process.platform,
   environment = process.env,
   cwd = process.cwd(),
-  resolveExecutable = resolveTrustedGitHubCliExecutable,
+  resolveExecutable = resolveGitHubCliExecutableOnPath,
   runCommand = runTrustedGitHubCliSync,
 } = {}) {
   const executable = resolveExecutable({ platform, environment });
@@ -177,6 +177,11 @@ export function sanitizedGitHubEnvironment(environment) {
   for (const key of [
     "PATH",
     "HOME",
+    "XDG_DATA_HOME",
+    "ASDF_DATA_DIR",
+    "ASDF_DIR",
+    "MISE_DATA_DIR",
+    "MISE_CONFIG_DIR",
     "XDG_CONFIG_HOME",
     "GH_CONFIG_DIR",
     "GH_TOKEN",

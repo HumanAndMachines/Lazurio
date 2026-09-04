@@ -1,7 +1,7 @@
 import {
   accessSync,
   constants,
-  lstatSync,
+  statSync,
   readFileSync,
   realpathSync,
 } from "node:fs";
@@ -108,6 +108,7 @@ export function resolveExecutableOnPath(command, {
 } = {}) {
   if (typeof command !== "string" || !/^[A-Za-z0-9._-]+$/u.test(command)) return null;
   const pathValue = environmentPathValue(environment, platform);
+  if (pathValue === "") return null;
   const pathDelimiter = platform === "win32" ? ";" : delimiter;
   const extensions = platform === "win32"
     ? (environment.PATHEXT ?? ".COM;.EXE;.BAT;.CMD")
@@ -117,15 +118,14 @@ export function resolveExecutableOnPath(command, {
     : [""];
   for (const rawDirectory of pathValue.split(pathDelimiter)) {
     const unquoted = rawDirectory.replace(/^"|"$/gu, "");
-    if (!unquoted) continue;
     const directory = isAbsolute(unquoted) ? unquoted : resolve(cwd, unquoted);
     const candidates = platform === "win32"
       ? extensions.map((extension) => join(directory, `${command}${extension}`))
       : [join(directory, command)];
     for (const candidate of candidates) {
       try {
-        const stat = lstatSync(candidate);
-        if (!stat.isFile() && !stat.isSymbolicLink()) continue;
+        const stat = statSync(candidate);
+        if (!stat.isFile()) continue;
         if (platform !== "win32") accessSync(candidate, constants.X_OK);
         return resolve(candidate);
       } catch {
@@ -168,4 +168,32 @@ function compareStableVersions(left, right) {
     if (leftParts[index] !== rightParts[index]) return leftParts[index] - rightParts[index];
   }
   return 0;
+}
+
+// Workstation executable selection belongs to the Principal's process PATH.
+// Keep the selected shim path: resolving its symlink can change argv[0] behavior.
+export function resolveGitExecutableOnPath(options = {}) {
+  return resolveExecutableOnPath("git", options);
+}
+export function resolveGitHubCliExecutableOnPath(options = {}) {
+  return resolveExecutableOnPath("gh", options);
+}
+export function resolveNodeExecutableOnPath(options = {}) {
+  return resolveExecutableOnPath("node", options);
+}
+
+// Capability floors, independent of the optional latest-release lookup.
+// Git: rev-parse --path-format; gh: auth status --active.
+export const REQUIRED_TOOL_VERSIONS = Object.freeze({ git: "2.31.0", github_cli: "2.57.0" });
+export function classifyToolVersion(tool, output) {
+  const pattern = {
+    git: /^git version (\d+\.\d+\.\d+)(?:[. -]|$)/u,
+    github_cli: /^gh version (\d+\.\d+\.\d+)(?:[ (\r\n]|$)/u,
+    codex: /^codex-cli (\d+\.\d+\.\d+)(?:[\r\n]|$)/u,
+  }[tool];
+  if (!pattern) throw new Error(`Unknown tool: ${tool}`);
+  const current = pattern.exec(String(output ?? "").trim())?.[1] ?? null;
+  const minimum = REQUIRED_TOOL_VERSIONS[tool] ?? null;
+  return { current_version: current, minimum_version: minimum,
+    status: !current ? "unusable" : minimum && compareStableVersions(current, minimum) < 0 ? "incompatible" : "compatible" };
 }

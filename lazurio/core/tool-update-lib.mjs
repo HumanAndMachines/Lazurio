@@ -1,6 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { realpathSync, statSync } from "node:fs";
-import { isAbsolute } from "node:path";
+import { resolveExecutableOnPath } from "./toolchain-lib.mjs";
 
 export const DEVELOPER_TOOL_UPDATE_POLICY = "principal_consent_required";
 
@@ -167,14 +166,7 @@ function inspectInstalledVersion({ definition, resolveExecutable, runCommand }) 
 }
 
 function resolveEffectiveExecutable(name) {
-  const candidate = Bun.which(name);
-  if (!candidate) return null;
-  try {
-    const canonical = realpathSync.native(candidate);
-    return isAbsolute(canonical) && statSync(canonical).isFile() ? canonical : null;
-  } catch {
-    return null;
-  }
+  return resolveExecutableOnPath(name);
 }
 
 function runVersionCommand(executable, args) {

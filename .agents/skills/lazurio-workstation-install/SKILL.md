@@ -42,8 +42,9 @@ Při publikačním mandátu pro instalační vady přečti také
    GitHub CLI a Codex na aktuální oficiální stable a Node na podporované
    aktuální LTS. Codex CLI na macOS/Linuxu/Windows instaluj a aktualizuj
    oficiálním OpenAI standalone instalátorem podle kapitoly „Codex CLI:
-   instalace a aktualizace“ v `manual/organization-install.md`, ne přes
-   Homebrew, npm ani WinGet. Existující instalaci převeď jen v mandátu pro
+   instalace a aktualizace“ v `manual/organization-install.md` jako doporučenou
+   cestou. Vyhovující instalaci z PATH zachovej bez ohledu na správce či adresář.
+   Homebrew není instalační závislost; neinstaluj jej pouze kvůli Lazuriu. Existující instalaci převeď jen v mandátu pro
    přesný Codex balíček: nejdřív ověř skutečnou standalone binárku absolutní
    cestou i přes PATH podle manuálu, potom odstraň původní balíček
    jeho správcem; zachovej nastavení, přihlášení a historii. Už udělený scoped

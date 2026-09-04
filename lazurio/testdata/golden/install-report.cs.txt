@@ -5,7 +5,7 @@ Mašina: darwin/arm64
 Lazurio Root: "/Users/example/Lazurio"
 
 ✓ Platforma — podporovaná platforma
-✓ Bun — Bun 1.4.0 odpovídá požadované verzi
+✓ Bun — Bun 1.4.1 odpovídá požadované verzi
 ✓ Git — Git je dostupný
 ! GitHub CLI — GitHub CLI nebylo nalezeno
 ✓ Node.js — Node.js 24.19.0 odpovídá podporovanému rozsahu >=22.12.0

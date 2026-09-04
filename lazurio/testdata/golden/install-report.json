@@ -7,8 +7,8 @@
     "architecture": "arm64",
     "bun": {
       "status": "current",
-      "current_version": "1.4.0",
-      "required_version": "1.4.0"
+      "current_version": "1.4.1",
+      "required_version": "1.4.1"
     },
     "node": {
       "status": "compatible",
