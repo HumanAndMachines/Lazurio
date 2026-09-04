@@ -1396,8 +1396,9 @@ export function createRuntimeManager({
       throw error;
     }
 
+    let stopSignalError = null;
     try {
-      await signalManagedProcess(record, runtimeKey, "SIGTERM");
+      stopSignalError = await signalManagedProcess(record, runtimeKey, "SIGTERM");
     } catch (error) {
       await recoverRetryableStopAttempt(app, record, runtimeKey, runtimeSource, error, {
         failureKind: error?.metadata?.failure_kind ?? "stop_signal_failed",
@@ -1408,12 +1409,20 @@ export function createRuntimeManager({
     const result = platform === "win32"
       ? await Promise.race([
           record.child.exited.then((exitCode) => ({ exitCode, timeout: false })),
-          sleep(stopTimeoutMs).then(() => ({ exitCode: null, timeout: true })),
+          sleepFn(stopTimeoutMs).then(() => ({ exitCode: null, timeout: true })),
         ])
       : await waitForPosixManagedExit(record, stopTimeoutMs);
     if (!result.timeout) {
       record.stopExitConfirmed = true;
       record.stopExitCode = result.exitCode;
+      if (stopSignalError) {
+        try {
+          await appendLog(
+            record.logPath,
+            `[launchpad] taskkill reported failure but exact child exit confirmed ${app.id} managed_pid=${record.pid}\n`,
+          );
+        } catch {}
+      }
     }
 
     // Windows už první bezpečně scoped Stop provede přes taskkill /T /F.
@@ -1450,6 +1459,13 @@ export function createRuntimeManager({
     }
 
     if (result.timeout && platform === "win32") {
+      if (stopSignalError) {
+        await recoverRetryableStopAttempt(app, record, runtimeKey, runtimeSource, stopSignalError, {
+          failureKind: stopSignalError?.metadata?.failure_kind ?? "stop_signal_failed",
+          forced: true,
+        });
+        throw stopSignalError;
+      }
       enableStopFinalizationOnExit(app, record, runtimeKey, runtimeSource, {
         forced: true,
       });
@@ -1738,7 +1754,11 @@ export function createRuntimeManager({
       const result = await runSystemCommandFn(command);
       if (!result.ok && !isMissingProcessResult(result)) {
         await appendLog(record.logPath, `[launchpad] taskkill failed: ${result.stderr || result.error || "unknown"}\n`);
-        throw new RuntimeActionError(
+        // taskkill umí vrátit nenulový kód i po skutečném ukončení stromu.
+        // Volající proto chybu drží stranou a nejdřív omezeně čeká na exit
+        // přesného child handle. Bez jeho potvrzení se chyba vrátí beze změny
+        // ownershipu a bez druhého cílení potenciálně recyklovaného PID.
+        return new RuntimeActionError(
           500,
           "app_stop_failed",
           `Managed strom procesu PID ${record.pid} se nepodařilo ukončit.`,
@@ -1746,7 +1766,7 @@ export function createRuntimeManager({
           { failure_kind: "stop_signal_failed", owner: "current-instance", pid: record.pid },
         );
       }
-      return;
+      return null;
     }
 
     try {
