@@ -854,11 +854,12 @@ Všechny mutující metody pod `/api/` procházejí před routingem jednotnou re
 trust kontrolou. Lokálně musí `Host` být `127.0.0.1` nebo `localhost`, případný
 `Origin` musí přesně odpovídat request originu a `Sec-Fetch-Site` smí být jen
 `same-origin` nebo `none`. Hosted profil přijme jen přesný nakonfigurovaný HTTPS
-origin, `Sec-Fetch-Site: same-origin`, gateway-authenticated GitHub login a
-jedinou přesně pojmenovanou session, kterou Launchpad nezávisle znovu ověřil u
-interního oauth2-proxy;
-backend listener zůstává loopback-only. Cross-origin, DNS-rebinding,
-header-spoofed a neautentizované hosted požadavky končí `403` dřív, než se spustí
+origin, `Sec-Fetch-Site: same-origin` a jedinou přesně pojmenovanou podepsanou
+Team session, kterou Launchpad nezávisle znovu ověřil u interního oauth2-proxy
+přes oddělenou TLS route. Proxy ani identity hlavičky se do rozhodnutí
+nezapojují; backend listener zůstává loopback-only. Cross-origin,
+DNS-rebinding, pouze header-spoofed a neautentizované hosted požadavky končí
+`403` dřív, než se spustí
 Git, worktree, runtime nebo synchronizační akce. Nový mutující endpoint tuto
 centrální ochranu dědí automaticky; Personalspace a další local-only routy mají
 ještě užší gate.
