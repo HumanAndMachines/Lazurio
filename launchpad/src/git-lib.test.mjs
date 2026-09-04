@@ -313,3 +313,21 @@ test.skipIf(process.platform === "win32")("a PATH shim works in the actual isola
     expect(new TextDecoder().decode(child.stdout)).toContain("git version");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test.skipIf(process.platform === "win32")("runtime rejects Git 2.30 from PATH before invoking a module consumer", async () => {
+  const { writeFile, chmod } = await import("node:fs/promises");
+  const { pathToFileURL } = await import("node:url");
+  const root = await mkdtemp(join(tmpdir(), "lazurio-old-git-"));
+  try {
+    const marker = join(root, "consumer-invoked");
+    await writeFile(join(root, "git"), `#!/bin/sh\nif [ "$1" = "--version" ]; then echo 'git version 2.30.9'; exit 0; fi\n: > '${marker}'\nexit 129\n`);
+    await chmod(join(root, "git"), 0o755);
+    const moduleUrl = pathToFileURL(join(import.meta.dirname, "../../lazurio/runtime/git-lib.mjs")).href;
+    const child = Bun.spawnSync([process.execPath, "--eval", `const g=await import(${JSON.stringify(moduleUrl)});const a=await g.resolveGitExecutable();const s=g.resolveGitExecutableSync();const r=await g.runGit(["rev-parse","--path-format=absolute","--show-toplevel"],{cwd:${JSON.stringify(root)}});console.log(JSON.stringify({a,s,ok:r.ok}));`], {
+      env: { ...process.env, PATH: `${root}:${process.env.PATH}` }, stdout: "pipe", stderr: "pipe",
+    });
+    expect(child.exitCode, new TextDecoder().decode(child.stderr)).toBe(0);
+    expect(JSON.parse(new TextDecoder().decode(child.stdout))).toEqual({ a: null, s: null, ok: false });
+    expect(await Bun.file(marker).exists()).toBe(false);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

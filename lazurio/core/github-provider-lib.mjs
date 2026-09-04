@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawnToolSync } from "./tool-invocation-lib.mjs";
 
 import { resolveGitHubCliExecutableOnPath } from "./toolchain-lib.mjs";
 
@@ -213,7 +213,7 @@ export function runTrustedGitHubCliSync({
   cwd,
   environment,
 }) {
-  const result = spawnSync(executable, args, {
+  const result = spawnToolSync(executable, args, {
     cwd,
     env: environment,
     encoding: "utf8",

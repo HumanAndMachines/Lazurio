@@ -1,9 +1,10 @@
+import { toolInvocation } from "../core/tool-invocation-lib.mjs";
 import { lstat, mkdtemp, realpath, rm } from "fs/promises";
 import { basename, dirname, isAbsolute, win32 } from "path";
 import { fileURLToPath } from "url";
 
 import { isSamePath } from "../core/path-boundary-lib.mjs";
-import { resolveExecutableOnPath } from "../core/toolchain-lib.mjs";
+import { classifyToolVersion, resolveExecutableOnPath } from "../core/toolchain-lib.mjs";
 
 export const GIT_LOCAL_TIMEOUT_MS = 10_000;
 export const GIT_FETCH_TIMEOUT_MS = 20_000;
@@ -207,21 +208,19 @@ async function runCommand(command, { cwd, timeoutMs, env = {}, input } = {}) {
   let timeout;
   let drainTimeout;
   try {
-    child = Bun.spawn(command, {
+    const environment = commandEnvironment(
+      isSterileGitEnvironment(env)
+        ? minimalRemoteGitEnvironment(processEnv(), process.platform, command[0])
+        : processEnv(),
+      env,
+    );
+    const invocation = toolInvocation(command[0], command.slice(1), { cwd, environment });
+    child = Bun.spawn([invocation.executable, ...invocation.args], {
       cwd,
       stdin: input === undefined ? "ignore" : "pipe",
       stdout: "pipe",
       stderr: "pipe",
-      env: commandEnvironment(
-        isSterileGitEnvironment(env)
-          ? minimalRemoteGitEnvironment(
-            processEnv(),
-            globalThis.process.platform,
-            command[0],
-          )
-          : processEnv(),
-        env,
-      ),
+      env: environment,
       detached: globalThis.process.platform !== "win32",
       windowsHide: true,
     });
@@ -433,19 +432,21 @@ export function minimalRemoteGitEnvironment(base, platform, gitExecutable) {
 
 async function probeGitExecutable(executable) {
   const result = await runCommand([executable, "--version"], { timeoutMs: GIT_LOCAL_TIMEOUT_MS });
-  return result.ok;
+  return result.ok && classifyToolVersion("git", result.stdout).status === "compatible";
 }
 
 function probeGitExecutableSync(executable) {
   try {
-    const result = Bun.spawnSync([executable, "--version"], {
-      stdout: "ignore",
+    const invocation = toolInvocation(executable, ["--version"], { environment: safeGitCommandEnv() });
+    const result = Bun.spawnSync([invocation.executable, ...invocation.args], {
+      stdout: "pipe",
       stderr: "ignore",
       env: safeGitCommandEnv(),
       windowsHide: true,
       timeout: GIT_LOCAL_TIMEOUT_MS,
     });
-    return result.exitCode === 0;
+    return result.exitCode === 0
+      && classifyToolVersion("git", new TextDecoder().decode(result.stdout)).status === "compatible";
   } catch {
     return false;
   }

@@ -253,6 +253,14 @@ consumerovi. Konfigurace správce verzí nesmí v jiném pracovním adresáři
 vybrat nekompatibilní nástroj. Git konfigurace, přístupy, timeouty a izolace
 Organizací zůstávají samostatnými kontrolami.
 
+Na Windows se standardní npm `*.cmd` shim pro Node spouští přes jeho
+ověřený JavaScript vstup a nativní `node.exe`, bez shellu. Zachovává se
+přednost Node vedle shimu před Node z PATH. Musí odpovídat celý podporovaný
+formát npm shimu i deklarace binárky v balíčku; vlastní příkazy, argumenty
+interpretu a neznámé `*.bat` obálky se neinterpretují a skončí s diagnostikou.
+Takovou obálku Agent neopravuje přepnutím na obecný shell ani výběrem jiné
+instalace za zády uživatele.
+
 ### Codex CLI: instalace a aktualizace
 
 Pro localhost workstation na macOS, Linuxu i Windows je výchozí cestou

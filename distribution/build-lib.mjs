@@ -1,9 +1,9 @@
+import { spawnToolSync } from "../lazurio/core/tool-invocation-lib.mjs";
 import { sanitizedGitEnvironment } from "../lazurio/core/cli-provenance-lib.mjs";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, isAbsolute, join, posix, resolve } from "node:path";
-import { spawnSync } from "node:child_process";
 import { trustedGitExecutable } from "../scripts/agent-skills-entrypoint.mjs";
 import { verifyArtifactTree } from "./runtime/integrity.mjs";
 
@@ -769,7 +769,7 @@ function gitBytes(cwd, args) {
     "-c", "protocol.ext.allow=never",
     ...args,
   ];
-  const result = spawnSync(executable, safeArgs, {
+  const result = spawnToolSync(executable, safeArgs, {
     cwd,
     env: residentBuildGitEnvironment(),
     encoding: args.includes("cat-file") || args.includes("ls-tree") ? null : "utf8",

@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawnToolSync } from "./tool-invocation-lib.mjs";
 import { resolveExecutableOnPath } from "./toolchain-lib.mjs";
 
 export const DEVELOPER_TOOL_UPDATE_POLICY = "principal_consent_required";
@@ -170,7 +170,7 @@ function resolveEffectiveExecutable(name) {
 }
 
 function runVersionCommand(executable, args) {
-  return spawnSync(executable, args, {
+  return spawnToolSync(executable, args, {
     encoding: "utf8",
     timeout: 5_000,
     windowsHide: true,

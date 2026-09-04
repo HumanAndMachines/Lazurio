@@ -1,3 +1,4 @@
+import { toolInvocation } from "../lazurio/core/tool-invocation-lib.mjs";
 import { sanitizedGitEnvironment } from "../lazurio/core/cli-provenance-lib.mjs";
 import { realpathSync } from "node:fs";
 import { resolveGitExecutableOnPath } from "../lazurio/core/toolchain-lib.mjs";
@@ -32,8 +33,9 @@ function git(root, args) {
   if (!executable) {
     return { exitCode: 1, stdout: new Uint8Array(), stderr: new Uint8Array() };
   }
+  const invocation = toolInvocation(executable, args, { cwd: root, environment: sanitizedGitEnvironment(process.env) });
   return Bun.spawnSync({
-    cmd: [executable, ...args],
+    cmd: [invocation.executable, ...invocation.args],
     cwd: root,
     env: sanitizedGitEnvironment(process.env),
     stdout: "pipe",

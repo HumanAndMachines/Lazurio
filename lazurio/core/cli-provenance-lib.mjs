@@ -1,5 +1,5 @@
 import { resolveGitExecutableOnPath } from "./toolchain-lib.mjs";
-import { spawnSync } from "node:child_process";
+import { spawnToolSync } from "./tool-invocation-lib.mjs";
 import {
   lstatSync,
   readFileSync,
@@ -316,7 +316,7 @@ function gitText(runGit, executable, cwd, args, environment, { trim = true } = {
 }
 
 export function runTrustedGitCommandSync({ executable, cwd, args, environment }) {
-  const result = spawnSync(
+  const result = spawnToolSync(
     executable,
     [
       "--no-optional-locks",

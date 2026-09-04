@@ -1,3 +1,4 @@
+import { toolInvocation } from "../core/tool-invocation-lib.mjs";
 import { existsSync, lstatSync, readFileSync } from "fs";
 import { readFile, readdir } from "fs/promises";
 import { basename, dirname, isAbsolute, join, posix, relative } from "path";
@@ -2259,6 +2260,7 @@ export function codexRuntimeCheck({
       title: "Codex CLI",
       pathExecutable: command,
       cwd: companiesRoot,
+      env: environment,
       run,
     }), platform);
   }
@@ -2996,7 +2998,8 @@ function runGit(args, cwd) {
 
 function runCommand(command, args, { cwd, env } = {}) {
   try {
-    const result = Bun.spawnSync([command, ...args], {
+    const invocation = toolInvocation(command, args, { cwd, environment: env ?? process.env });
+    const result = Bun.spawnSync([invocation.executable, ...invocation.args], {
       cwd,
       ...(env ? { env } : {}),
       stdout: "pipe",

@@ -276,6 +276,14 @@ work in the actual consumer. Version-manager configuration must not select an
 incompatible tool in another working directory. Git configuration, access,
 timeouts and Organization isolation remain independent controls.
 
+On Windows, a standard npm `*.cmd` Node shim runs through its verified
+JavaScript entry and native `node.exe`, without a shell. Node beside the shim
+retains precedence over Node from PATH. Both the complete supported npm shim
+format and the package bin declaration must match; custom commands, interpreter
+arguments and unknown `*.bat` wrappers are not interpreted and return a diagnostic.
+The Agent must not repair such wrappers by enabling a general shell or silently
+selecting another installation.
+
 ### Codex CLI: installation and updates
 
 For localhost workstations on macOS, Linux, and Windows, the default path is

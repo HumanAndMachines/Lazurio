@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawnToolSync } from "./tool-invocation-lib.mjs";
 import { lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, posix, resolve, win32 } from "node:path";
@@ -598,7 +598,7 @@ function validLazurioSourceTree(sourceRoot, gitExecutable, environment, platform
 }
 
 function runCommandSync({ executable, args, environment, cwd }) {
-  return spawnSync(executable, args, {
+  return spawnToolSync(executable, args, {
     cwd,
     encoding: "utf8",
     env: environment,
