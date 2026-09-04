@@ -213,14 +213,76 @@
               </div>
               <nav class="guide-topics" aria-labelledby="guideNavigationTitle">
                 <h2 id="guideNavigationTitle">Obsah</h2>
-                <button class="guide-topic-link is-active" type="button" data-guide-topic="glossary" aria-current="page">Slovníček pojmů</button>
+                <button class="guide-topic-link is-active" type="button" data-guide-topic="installation" aria-current="page">Instalace nové Mašiny</button>
+                <button class="guide-topic-link" type="button" data-guide-topic="glossary">Slovníček pojmů</button>
                 <button class="guide-topic-link" type="button" data-guide-topic="recommended-apps">Doporučené aplikace</button>
               </nav>
             </aside>
 
             <article class="guide-reader" aria-label="Obsah Guide">
               <div class="guide-reader-content">
-                <section id="guideGlossary" class="guide-topic-panel" data-guide-topic-panel="glossary">
+                <section id="guideInstallation" class="guide-topic-panel" data-guide-topic-panel="installation">
+                  <header class="guide-article-header" data-guide-search-item>
+                    <span class="guide-reader-kicker">První spuštění</span>
+                    <h2>Novou Mašinu připraví Agent. Vy jen dokončíte osobní kroky.</h2>
+                    <p>Nepotřebujete otevírat terminál ani hledat příkazy. Zkopírujte připravené zadání do Codexu a Agent vás zastaví pouze tam, kde je opravdu potřeba vaše přihlášení, potvrzení nebo rozhodnutí.</p>
+                  </header>
+
+                  <div class="guide-onboarding-roles" aria-label="Rozdělení odpovědnosti">
+                    <section class="guide-onboarding-role" data-guide-search-item>
+                      <span class="guide-onboarding-step">1</span>
+                      <h3>Co zařídí Agent</h3>
+                      <p>Zkontroluje a bezpečně doplní povolené nástroje, obslouží terminál, ověří GitHub a SSH, nainstaluje Organizaci, dokončí Doctor a spustí aplikace přes Launchpad.</p>
+                    </section>
+                    <section class="guide-onboarding-role" data-guide-search-item>
+                      <span class="guide-onboarding-step">2</span>
+                      <h3>Co může potřebovat od vás</h3>
+                      <p>Dokončit právě otevřené GitHub přihlášení, přijmout repository pozvánku nebo rozhodnout o přesně vysvětleném rozporu. Přístup ani bezpečnostní nastavení Agent nemění potichu.</p>
+                    </section>
+                    <section class="guide-onboarding-role" data-guide-search-item>
+                      <span class="guide-onboarding-step">3</span>
+                      <h3>Co musí být připravené předem</h3>
+                      <p>Owner Organizace nainstaluje GitHub App <strong>Lazurio for GitHub</strong> pro <strong>All repositories</strong>. Builder musí mít přijaté pozvánky a skutečné GitHub oprávnění k pracovním repozitářům.</p>
+                    </section>
+                  </div>
+
+                  <section class="guide-readiness" data-guide-search-item aria-labelledby="guideReadinessTitle">
+                    <div class="guide-section-heading">
+                      <span class="guide-reader-kicker">Jak poznáte hotovo</span>
+                      <h3 id="guideReadinessTitle">Tři různé úrovně připravenosti</h3>
+                    </div>
+                    <div class="guide-readiness-grid">
+                      <div><strong>Runtime ready</strong><span>Aplikace jde spustit a její health kontrola odpovídá.</span></div>
+                      <div><strong>Editing ready</strong><span>Builder má správný checkout, nástroje a právo zapisovat změny.</span></div>
+                      <div><strong>Publishing ready</strong><span>GitHub dovoluje dokončit schválenou změnu podle aktuálních pravidel repozitáře.</span></div>
+                    </div>
+                    <p class="guide-readiness-note">Pouhé <code>READ</code> není Builder-ready stav. Agent v závěru pojmenuje každé omezení zvlášť.</p>
+                  </section>
+
+                  <section class="guide-prompt-card" data-guide-search-item aria-labelledby="guidePromptTitle">
+                    <div class="guide-prompt-heading">
+                      <div>
+                        <span class="guide-reader-kicker">Zadání pro Codex</span>
+                        <h3 id="guidePromptTitle">Krátký instalační prompt</h3>
+                      </div>
+                      <button id="guidePromptCopy" class="guide-copy-button" type="button" disabled>Kopírovat prompt</button>
+                    </div>
+                    <p>Po zkopírování nahraďte <code>&lt;github-organization&gt;</code> přesným názvem GitHub Organizace.</p>
+                    <p id="guidePromptStatus" class="guide-content-status" role="status">Načítám aktuální prompt z instalačního manuálu…</p>
+                    <pre id="guidePrompt" class="guide-code-block" tabindex="0" hidden><code></code></pre>
+                    <div id="guidePromptError" class="guide-content-error" role="alert" hidden>
+                      Aktuální prompt se nepodařilo bezpečně načíst. Nepoužívejte starou kopii; požádejte Agenta, aby ověřil instalační manuál a Doctor.
+                    </div>
+                  </section>
+
+                  <details id="guidePolicyDisclosure" class="guide-policy" data-guide-search-item>
+                    <summary>Úplný expert/policy postup</summary>
+                    <p>Toto je celý aktuální runbook pro Agenta. Je pouze ke čtení; Launchpad z něj nic automaticky nespouští.</p>
+                    <pre id="guidePolicy" class="guide-code-block guide-policy-code" tabindex="0" hidden><code></code></pre>
+                  </details>
+                </section>
+
+                <section id="guideGlossary" class="guide-topic-panel" data-guide-topic-panel="glossary" hidden>
                   <header class="guide-article-header">
                     <span class="guide-reader-kicker">Slovníček</span>
                     <h2>Pojmy, se kterými se v Lazuriu setkáte</h2>

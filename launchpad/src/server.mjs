@@ -69,6 +69,7 @@ import {
   parseLaunchpadServerArgs,
 } from "./server-args-lib.mjs";
 import { resolveLaunchpadStateRoot } from "./state-root-lib.mjs";
+import { readOrganizationInstallGuide } from "./guide-content-lib.mjs";
 import {
   buildServerIdentity,
   classifyServerIdentity,
@@ -1461,6 +1462,10 @@ function startServer(startPort) {
           });
         }
         if (url.pathname === "/api/doctor") return jsonResponse(await buildDoctorReport());
+        if (url.pathname === "/api/guide/organization-install") {
+          if (request.method !== "GET") return jsonResponse({ error: "method_not_allowed" }, 405);
+          return jsonResponse(await readOrganizationInstallGuide({ rootPath: rootSourceRoot }));
+        }
         if (url.pathname === "/api/recent-changes") return jsonResponse(await buildRecentChangesResponse(url.searchParams.get("company")));
         if (url.pathname === "/api/notifications") return jsonResponse(await buildNotificationsResponse(url.searchParams.get("company")));
         if (url.pathname === "/api/most-used") return jsonResponse(await buildMostUsedResponse(url.searchParams.get("company")));
