@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
+import { win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 
 function repoPath(relativePath) {
@@ -22,6 +23,50 @@ const smokeInstructionPaths = [
 
 function canonicalNewlines(text) {
   return text.replace(/\r\n/g, "\n");
+}
+
+const expectedMicrosoftProviderArgs = [
+  "const providerArgs = [",
+  "  validatedNpxCliPath,",
+  '  "-y",',
+  '  "@softeria/ms-365-mcp-server@0.148.0",',
+  '  "--org-mode",',
+  '  "--read-only",',
+  '  "--enabled-tools",',
+  "  PINNED_TOOLS_REGEX,",
+  '  "--allowed-scopes",',
+  "  PINNED_ALLOWED_SCOPES,",
+  "  ...validatedManagementArgs,",
+  "];",
+].join("\n");
+
+function assertMicrosoftLauncherContract(microsoft) {
+  expect(microsoft).toContain("node_modules/npm/bin/npx-cli.js");
+  expect(microsoft).toContain("process.execPath");
+  expect(microsoft).toContain("User `PATH`");
+  expect(microsoft).toContain("command string pro `cmd.exe`");
+  expect(microsoft).toContain("`npx.cmd`");
+  expect(microsoft).toContain("`shell: true`");
+  expect(microsoft).toMatch(/skutečný běžný soubor[\s\S]*`realpath`[\s\S]*stejného Node instalačního rootu/);
+  expect(microsoft).toMatch(/Containment nikdy neověřuj\s+řetězcovým prefixem[\s\S]*`nodejs-evil`/);
+  expect(microsoft).toMatch(/`relative\(resolve\(parent\), resolve\(candidate\)\)`[\s\S]*není `\.\.`[\s\S]*nezačíná `\.\.\$\{sep\}`[\s\S]*není absolutní/);
+  expect(microsoft).toContain("case-insensitive drive/UNC path semantics");
+  expect(microsoft).toMatch(/skonči fail-closed[\s\S]*nevracej se k\s+shellu ani k jinému `npx` z\s+`PATH`/);
+  expect(microsoft).toContain(expectedMicrosoftProviderArgs);
+  expect(microsoft).toMatch(/spawn\(process\.execPath, providerArgs,[\s\S]*shell: false/);
+  expect(microsoft).toMatch(/capture shimem[\s\S]*`process\.argv`[\s\S]*položku po položce/);
+  expect(microsoft).toMatch(/`--list-permissions`[\s\S]*exit codem `0`[\s\S]*`org mode`[\s\S]*`readOnly: true`/);
+  expect(microsoft).toMatch(/nesmí otevřít login ani vyžádat device code/);
+}
+
+function isWindowsPathDescendant(parent, candidate) {
+  const relativePath = win32.relative(win32.resolve(parent), win32.resolve(candidate));
+  return (
+    relativePath !== ""
+    && relativePath !== ".."
+    && !relativePath.startsWith(`..${win32.sep}`)
+    && !win32.isAbsolute(relativePath)
+  );
 }
 
 async function readPolicy(path) {
@@ -106,32 +151,42 @@ test("OAuth write scope zůstává schopností, ne souhlasem s publikací", asyn
 test("Microsoft 365 launcher obchází Windows shell a zachovává přesné argv", async () => {
   const microsoft = await readPolicy(microsoftRunbookPath);
 
-  expect(microsoft).toContain("node_modules/npm/bin/npx-cli.js");
-  expect(microsoft).toContain("process.execPath");
-  expect(microsoft).toContain("User `PATH`");
-  expect(microsoft).toMatch(/skutečný běžný soubor[\s\S]*`realpath`[\s\S]*stejného Node instalačního rootu/);
-  expect(microsoft).toMatch(/Containment nikdy neověřuj\s+řetězcovým prefixem[\s\S]*`nodejs-evil`/);
-  expect(microsoft).toMatch(/`relative\(resolve\(parent\), resolve\(candidate\)\)`[\s\S]*není `\.\.`[\s\S]*nezačíná `\.\.\$\{sep\}`[\s\S]*není absolutní/);
-  expect(microsoft).toContain("case-insensitive drive/UNC path semantics");
-  expect(microsoft).toMatch(/skonči fail-closed[\s\S]*nevracej se k\s+shellu ani k jinému `npx` z\s+`PATH`/);
-  expect(microsoft).toContain([
-    "const providerArgs = [",
-    "  validatedNpxCliPath,",
-    '  "-y",',
-    '  "@softeria/ms-365-mcp-server@0.148.0",',
-    '  "--org-mode",',
-    '  "--read-only",',
-    '  "--enabled-tools",',
-    "  PINNED_TOOLS_REGEX,",
-    '  "--allowed-scopes",',
-    "  PINNED_ALLOWED_SCOPES,",
-    "  ...validatedManagementArgs,",
-    "];",
-  ].join("\n"));
-  expect(microsoft).toMatch(/spawn\(process\.execPath, providerArgs,[\s\S]*shell: false/);
-  expect(microsoft).toMatch(/capture shimem[\s\S]*`process\.argv`[\s\S]*položku po položce/);
-  expect(microsoft).toMatch(/`--list-permissions`[\s\S]*exit codem `0`[\s\S]*`org mode`[\s\S]*`readOnly: true`/);
-  expect(microsoft).toMatch(/nesmí otevřít login ani vyžádat device code/);
+  assertMicrosoftLauncherContract(microsoft);
+});
+
+test("Microsoft 365 kontrakt odmítne shell fallback i neúplné nebo přeuspořádané argv", async () => {
+  const microsoft = await readPolicy(microsoftRunbookPath);
+  const requiredShellProhibitions = [
+    "command string pro `cmd.exe`",
+    "`npx.cmd`",
+    "`shell: true`",
+  ];
+
+  for (const required of requiredShellProhibitions) {
+    expect(() => assertMicrosoftLauncherContract(microsoft.replace(required, "odstraněná ochrana"))).toThrow();
+  }
+
+  const providerArgLines = expectedMicrosoftProviderArgs.split("\n").slice(1, -1);
+  for (const requiredLine of providerArgLines) {
+    const incompleteArgs = expectedMicrosoftProviderArgs.replace(requiredLine, "  // odstraněná nebo přesunutá položka");
+    const mutated = microsoft.replace(expectedMicrosoftProviderArgs, incompleteArgs);
+    expect(() => assertMicrosoftLauncherContract(mutated)).toThrow();
+  }
+});
+
+test("Windows containment odmítne sibling-prefix a jiný drive", () => {
+  expect(isWindowsPathDescendant(
+    "C:\\Program Files\\nodejs",
+    "c:\\PROGRAM FILES\\nodejs\\node_modules\\npm\\bin\\npx-cli.js",
+  )).toBe(true);
+  expect(isWindowsPathDescendant(
+    "C:\\Program Files\\nodejs",
+    "C:\\Program Files\\nodejs-evil\\node_modules\\npm\\bin\\npx-cli.js",
+  )).toBe(false);
+  expect(isWindowsPathDescendant(
+    "C:\\Program Files\\nodejs",
+    "D:\\nodejs\\node_modules\\npm\\bin\\npx-cli.js",
+  )).toBe(false);
 });
 
 test("kontraktní text se čte shodně z Windows CRLF checkoutu", () => {
