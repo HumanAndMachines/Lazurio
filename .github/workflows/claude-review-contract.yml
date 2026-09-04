@@ -1,0 +1,16 @@
+name: Claude review contract
+on:
+  pull_request:
+    paths: ['.github/workflows/claude-review*', '.github/claude-review.test.cjs']
+  push:
+    paths: ['.github/workflows/claude-review*', '.github/claude-review.test.cjs']
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: node --test .github/claude-review.test.cjs

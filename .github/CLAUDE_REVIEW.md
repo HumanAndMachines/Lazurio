@@ -1,54 +1,67 @@
 # Claude review
 
-This repository uses the official Claude Code Action with an existing personal
-Claude subscription. It does not use an Anthropic API key or the separately
-billed managed Code Review service.
+This repository uses the official pinned Claude Code Action and the owner's
+existing Claude subscription, not an Anthropic API key or managed Code Review.
 
 ## Request a review
 
-After `.github/workflows/claude-review.yml` is merged into the default branch:
+After merge into `main`, GitHub user `immakermatty` (immutable ID `16311043`)
+can add exactly `@claude review` to an open PR or dispatch **Claude review**
+from **main** with its PR number. Only first attempts run: to retry, create a
+new request, not **Re-run jobs**. Unrelated comments cannot cancel review jobs.
 
-- GitHub user `immakermatty` (immutable user ID `16311043`) can add a PR comment
-  containing exactly `@claude review`.
-- The same user can run **Actions → Claude review → Run workflow**, supplying the
-  number of an open PR. Use the default branch when dispatching.
+The result is an advisory COMMENT review by `github-actions[bot]`, explicitly
+bound to a commit snapshot. It never approves, edits, merges or deploys code.
 
-The official action also checks the triggering user's repository access.
-Other users and bots do not consume this personal subscription through the workflow.
-To review again, add a new comment. Editing an old comment does not trigger it.
+## Trust boundary and subscription custody
 
-The result is a GitHub review from `github-actions[bot]`, headed **Claude review**
-and tied to the reviewed commit. It is advisory; it never approves or merges a PR.
+The `CLAUDE_CODE_OAUTH_TOKEN` secret belongs exclusively to the `claude-review`
+GitHub environment. That environment must have **Selected branches and tags**,
+with exactly one **Branch: main** policy and no tag policies. Do not create a
+same-named repository or organization secret: that would bypass this boundary.
+The environment policy, not an editable feature-branch workflow condition,
+prevents other workflow refs from receiving the token. Repository admins and
+people authorized to change trusted main workflows remain trusted custodians.
 
-## Credentials and limits
+The job additionally requires the owner's immutable ID, `refs/heads/main`,
+and `github.run_attempt == 1`. The official action checks repository access.
+The environment's branch policy does not replace these caller checks.
 
-A repository Actions secret named `CLAUDE_CODE_OAUTH_TOKEN` is required.
-The subscription owner generates it with `claude setup-token` and saves it through
-GitHub Secrets. Never put the value in source, PR descriptions, logs or chat.
-The token can be revoked or replaced without changing the workflow.
+Claude receives a bounded PR diff directly as prompt data. There is no checkout
+and **no model filesystem, shell or network tool** (`--tools=`), no skills,
+no hooks and no MCP servers. This intentionally sacrifices unchanged-file
+context rather than exposing runner files, process environment or credential
+stores to model-selected reads. The OAuth-authenticated harness remains trusted;
+the model only receives the supplied diff and returns structured text.
+The equals form of the empty tools option preserves its empty value through
+the pinned action's argument parser; do not replace it with a quoted empty token.
+Diffs above 200,000 bytes or 300 changed files are rejected. A review is limited
+to 15 minutes and 20 model turns, consuming subscription allowance and Actions
+minutes. Missing context and AI mistakes remain explicit review limitations.
 
-Reviews consume the owner's Claude subscription allowance and GitHub Actions
-minutes. Runs stop after 15 minutes or 20 model turns. Diffs over 500,000 bytes
-or PRs over 300 changed files fail explicitly and should be split.
+A fixed publisher checks structured output, rejects recognizable token prefixes,
+and verifies base/head/open state before posting. Prefix filtering is defense in
+depth, not the credential isolation boundary. After posting, it rechecks state
+and marks the review **INVALIDATED** if state changed or cannot be read back.
+GitHub provides no atomic compare-and-post review operation: even a successful
+readback is a point-in-time observation. Every report therefore remains labeled
+as a commit snapshot, never a promise about the current branch. Failed posting,
+readback or invalidation is reported as a failed run; inspect the PR before retrying.
 
-The workflow checks out the PR base, captures the diff, and verifies that both
-base and head still match. Claude has only Read, Grep and Glob tools, with hooks
-and project MCP configuration disabled. It does not install or execute PR code.
-Only the final publishing step writes a review, and it rejects empty reports,
-credential-like text, closed PRs and revisions that changed during review.
-This reduces exposure to untrusted PR text; model findings still require human
-judgment and do not replace tests or security review.
+## Verification and rollback
 
-## Rollback and troubleshooting
+`node --test .github/claude-review.test.cjs` tests the actual inline publisher,
+diff-output encoding, caller/ref/attempt gates and fixed tool policy. The
+secret-free **Claude review contract** CI runs these tests on workflow changes.
+No repository dependencies or lifecycle scripts are installed by either workflow.
 
-Disable **Claude review** in GitHub Actions to stop new runs. Remove the workflow
-through a PR and remove the repository secret if retiring the integration;
-deleting a GitHub secret does not revoke the underlying Claude token.
+Disable **Claude review** to stop requests. Renew the token with
+`claude setup-token` and replace it only in the protected environment.
+Removing a GitHub secret does not revoke its OAuth token; revoke separately
+when retiring it. Never put credential values in Git, logs or chat.
+The integration requires the environment secret and reviewed main workflow;
+a missing prerequisite fails closed.
 
-If a request does not start, check the comment text, user ID and default-branch
-workflow. If authentication fails, renew the subscription token. If the PR
-changed while being reviewed, request a fresh review. Full model output is
-disabled to keep credentials and raw tool output out of Actions logs.
-
-Setup references: [official action documentation](https://code.claude.com/docs/en/github-actions)
-and [action security model](https://github.com/anthropics/claude-code-action/blob/ef8bb1e43bf303cff727a1dd0b8837029fe982a2/docs/security.md).
+References: [official action](https://code.claude.com/docs/en/github-actions),
+[CLI tools](https://code.claude.com/docs/en/cli-reference),
+[GitHub environment protection](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments).
