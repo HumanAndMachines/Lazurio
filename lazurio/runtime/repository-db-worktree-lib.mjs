@@ -324,10 +324,26 @@ async function inspectRepositoryDbOwnerRegistration({
   expectedHead,
 }) {
   const sourcePath = resolve(organizationRoot, dependency.slot_path);
-  if (!existsSync(sourcePath)) return failure("repository_db_owner_missing", "Kanonický owner checkout chybí.");
+  let sourceEntry;
+  try {
+    sourceEntry = await lstat(sourcePath);
+  } catch {
+    return failure("repository_db_owner_missing", "Kanonický owner checkout chybí.");
+  }
+  if (!sourceEntry.isDirectory() || sourceEntry.isSymbolicLink()) {
+    return failure("repository_db_owner_boundary_invalid", "Kanonický owner checkout není běžný adresář.");
+  }
+  const sourceBoundary = await inspectCanonicalPathBoundary({
+    rootPath: organizationRoot,
+    targetPath: sourcePath,
+  });
+  if (!sourceBoundary.ok || !sourceBoundary.targetRealPath) {
+    return failure("repository_db_owner_boundary_invalid", "Kanonický owner checkout opouští Organization root.");
+  }
+  const ownerRoot = sourceBoundary.targetRealPath;
   const [listed, remoteUrls] = await Promise.all([
-    runGit(["worktree", "list", "--porcelain", "-z"], { cwd: sourcePath, timeoutMs: GIT_LOCAL_TIMEOUT_MS }),
-    runGit(["remote", "get-url", "--all", "origin"], { cwd: sourcePath, timeoutMs: GIT_LOCAL_TIMEOUT_MS }),
+    runGit(["worktree", "list", "--porcelain", "-z"], { cwd: ownerRoot, timeoutMs: GIT_LOCAL_TIMEOUT_MS }),
+    runGit(["remote", "get-url", "--all", "origin"], { cwd: ownerRoot, timeoutMs: GIT_LOCAL_TIMEOUT_MS }),
   ]);
   const expectedCoordinate = githubRepositoryCoordinate(dependency.remote);
   const configuredUrls = remoteUrls.ok ? remoteUrls.stdout.split("\n").filter(Boolean) : [];

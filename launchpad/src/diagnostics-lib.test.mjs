@@ -2923,6 +2923,37 @@ test("worktree dependency Doctor proves the exact repository-db member and rejec
   expect(drifted?.details.join("\n")).toContain("binding HEAD neodpovídá sidecar base_sha");
 });
 
+if (fileSymlinkCapability) {
+  test("worktree dependency Doctor rejects a canonical repository-db owner replaced by a symlink", async () => {
+    const fixture = await createRepositoryDbWorktreeFixture({ port: 25423 });
+    tempRoots.push(fixture.root);
+    await createWorktreeFromPlan({
+      companiesRoot: fixture.root,
+      repoKey: "BetaCo::mission-control",
+      planPath: fixture.planPath,
+      branch: "CAC-0099-doctor-owner-boundary",
+    });
+
+    const movedOwner = join(fixture.orgRoot, "mission-control", "db-owner-moved");
+    await rename(fixture.repositoryDbRepo, movedOwner);
+    await symlink(movedOwner, fixture.repositoryDbRepo, "dir");
+
+    const report = await buildLaunchpadDoctorReport({
+      companiesRoot: fixture.root,
+      launchpadRoot: join(fixture.root, "launchpad"),
+      runtimeManager: { appsWithRuntime: async (apps) => apps },
+      runChildDoctors: false,
+    });
+    const dependencies = report.checks.find((check) => check.id === "git.worktrees.dependencies");
+    expect(dependencies?.status).toBe("warn");
+    expect(dependencies?.details).toEqual(expect.arrayContaining([
+      "repository_db_ready: 0",
+      "repository_db_binding_invalid: 1",
+    ]));
+    expect(dependencies?.details.join("\n")).toContain("Kanonický owner checkout není běžný adresář");
+  });
+}
+
 function buildDoctorRuntimeReport(apps) {
   return buildDoctorReportFromAppsResponse({
     launchpad_root: { display_name: "Test root" },
