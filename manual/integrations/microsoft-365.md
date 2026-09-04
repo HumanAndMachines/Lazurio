@@ -95,6 +95,58 @@ Organization launcher je připravený k použití teprve tehdy, když:
 Dokud soubor launcheru a tyto důkazy v Organization source neexistují,
 katalogový příklad výše není aktivace a nesmí se nasadit Kolegom.
 
+### Windows: spouštění `npx` bez shellu
+
+Na Windows launcher nesmí sestavit command string pro `cmd.exe`, volat
+`npx.cmd` ani zapnout `shell: true`. Předem uvozovaný string může předat npm
+doslovný argument `"-y"`; při oddělených argumentech zase shell interpretuje
+znaky připnutého tool regexu, například `|`. V obou případech se mění
+reviewovaný argumentový kontrakt ještě před spuštěním provideru.
+
+Použij tentýž Node runtime, který už spustil launcher (`process.execPath`), a
+jeho npm JavaScript entrypoint `node_modules/npm/bin/npx-cli.js`. Node může být
+nalezený z Machine i User `PATH`; launcher nehardcoduje `Program Files` ani
+jinou system-wide cestu. Z reálné cesty `process.execPath` odvoď instalační
+root, vyžaduj, aby `npx-cli.js` byl skutečný běžný soubor a jeho `realpath`
+zůstal uvnitř stejného Node instalačního rootu. Když layout nebo containment
+neprojde, skonči fail-closed — nevracej se k shellu ani k jinému `npx` z
+`PATH`.
+
+Každou hodnotu předej jako samostatnou položku `spawn` argv v tomto pořadí:
+
+```js
+const providerArgs = [
+  validatedNpxCliPath,
+  "-y",
+  "@softeria/ms-365-mcp-server@0.148.0",
+  "--org-mode",
+  "--read-only",
+  "--enabled-tools",
+  PINNED_TOOLS_REGEX,
+  "--allowed-scopes",
+  PINNED_ALLOWED_SCOPES,
+  ...validatedManagementArgs,
+];
+
+const child = spawn(process.execPath, providerArgs, {
+  env: childEnvironment,
+  shell: false,
+  stdio: "inherit",
+});
+```
+
+`PINNED_TOOLS_REGEX`, `PINNED_ALLOWED_SCOPES` i management argumenty vlastní
+Organization launcher; poslední skupina smí obsahovat pouze jeho explicitní
+allowlist operací podporovaných připnutou verzí. Skutečný Windows integrační
+test nahradí `npx-cli.js` lokálním capture shimem spuštěným přes Node, zachytí
+`process.argv` a porovná celý seznam položku po položce — porovnání command
+stringu ani test samotné builder funkce nestačí.
+
+Před device-code loginem spusť přes stejný launcher `--list-permissions`.
+Smoke musí skončit exit codem `0`, potvrdit `org mode`, `readOnly: true` a
+přesně schválené scopes; nesmí otevřít login ani vyžádat device code. Teprve
+potom pokračuj explicitním `--login`, který dokončí Principál.
+
 ## Token storage a persistence
 
 Server 0.148.0 neukládá celou token cache do keychainu. MSAL cache je
