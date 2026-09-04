@@ -425,6 +425,10 @@ Root upravuj jen když se mění:
   `manual/lazurio-root-for-agents.md` a `manual/organization-install.md`;
   opakovatelný rozhodovací postup skill
   `.agents/skills/lazurio-workstation-install/SKILL.md`.
+- Native Windows install, bug nebo PR acceptance — veřejný gate
+  `manual/windows-e2e-lab.md`; konkrétní osobní testovací notebook, přístup a
+  custody zůstávají pouze v omezeném owner runbooku a nikdy se z něj nestává
+  Organization Machine ani veřejný fixture.
 - First-client rollout a migrace: `manual/first-client-organization-rollout.md`,
   `manual/gen2-to-gen3-migration.md`
 - Desktop-agent collaboration — kanonický domov je skill

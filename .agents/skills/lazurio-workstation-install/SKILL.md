@@ -91,6 +91,15 @@ Při publikačním mandátu pro instalační vady přečti také
     odmítaný installer. Na všech platformách spusť Launchpad pro exact
     Organization scope, použij vrácenou URL a ověř health aktivních aplikací.
     Port ani route neodvozuj ručně.
+12. **Prokaž native Windows na určené laboratoři.** Když task vyžaduje
+    Windows install, bug nebo PR acceptance, přečti
+    [`manual/windows-e2e-lab.md`](../../../manual/windows-e2e-lab.md) a
+    konkrétní omezený owner runbook. Headscale je jen transport a deklarace
+    notebooku není access proof. Disposable označení dovoluje odstranit pouze
+    exact Lazurio footprint, nikdy Windows, uživatelský profil, obecný
+    toolchain, GitHub login, Tailscale/Headscale identitu ani servisní SSH.
+    Windows CI není náhradou za skutečný Windows 11, UAC, relaunchnutý Codex,
+    restart a rollback, pokud je acceptance vyžaduje.
 
 ## Ověření
 
@@ -106,6 +115,9 @@ Instalace je hotová teprve tehdy, když:
 - podporovaný desktop Launchpad je nainstalovaný a na každé platformě Launchpad
   i aktivní aplikace prošly health kontrolou;
 - každý warning má disposition a každé publikované Issue URL je v handoffu.
+- native Windows acceptance navíc uvádí přesný source/PR HEAD, nový proces,
+  rerun a požadovaný restart či rollback; lab-specific identity a cesty
+  zůstávají mimo veřejný report.
 
 Handoff obsahuje matici `runtime ready` / `editing ready` / `publishing ready`,
 skutečné verze a canonical cesty nástrojů, stav User/Machine `PATH`, důkaz
