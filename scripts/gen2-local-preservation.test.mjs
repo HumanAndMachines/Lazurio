@@ -222,8 +222,10 @@ describe("documented origin activation", () => {
     const manual = await readFile(join(repoRoot, "manual", "first-client-organization-rollout.md"), "utf8");
     const preflight = manual
       .split("preflight_required_template_access() {")[1]
-      ?.split("\n}\n\npreflight_gen3_rollout() {")[0];
-    const rollout = manual.split("preflight_gen3_rollout() {")[1]?.split("\n}\n\npreflight_gen3_rollout")[0];
+      ?.split(/\r?\n}\r?\n\r?\npreflight_gen3_rollout\(\) \{/)[0];
+    const rollout = manual
+      .split("preflight_gen3_rollout() {")[1]
+      ?.split(/\r?\n}\r?\n\r?\npreflight_gen3_rollout/)[0];
 
     expect(preflight).toBeDefined();
     expect(rollout).toBeDefined();
