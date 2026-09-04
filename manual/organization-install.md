@@ -36,8 +36,11 @@ tohoto runbooku; krátký prompt jej nenahrazuje ani nerozšiřuje.
 >
 > Na Windows po každé autorizované WinGet instalaci obnov `PATH` pouze pro
 > aktuální instalační proces z čerstvých Machine + User hodnot podle tohoto
-> runbooku, aby práce mohla pokračovat bez ručního hledání verzovaných cest.
-> Hotový stav ale vždy dokazuj ještě z nového čistého procesu. Potom ověř
+> runbooku, aby šla bezpečně dokončit právě rozpracovaná operace. Pak mi napiš
+> přesný resume bod, nech mě úplně ukončit všechna okna Codexu a po jeho novém
+> spuštění pokračuj v tomto threadu. Hotový stav dokazuj až z relaunchnutého
+> Codexu a jeho nového čistého procesu; nový terminál otevřený ze starého
+> Codexu nestačí. Restart Windows použij jen jako fallback. Potom ověř
 > správný GitHub účet, `git_protocol=ssh` a exact `git ls-remote` root repa
 > `<github-organization>/<github-organization>_GEN3`.
 >
@@ -205,9 +208,14 @@ $env:Path = (@($machinePath, $userPath) | Where-Object { $_ }) `
 
 Tento krok nic nezapisuje do registru ani shell profilu a nepoužívá ručně
 dohledaný verzovaný package adresář. Umožní instalační relaci pokračovat, ale
-není finálním důkazem: po dokončení musí nový čistý proces bez tohoto snippet
-najít tytéž příkazy. Jejich skutečnou identitu a použitelnost následně ověří
-`lazurio install --json` a Doctor; pouhé `Get-Command` nestačí.
+není finálním důkazem. Po dokončení právě rozpracované atomické operace Agent
+do chatu zapíše přesný resume bod a Principál úplně ukončí Codex včetně všech
+oken a znovu jej spustí. Teprve nový čistý proces z relaunchnutého Codexu musí
+bez tohoto snippet najít tytéž příkazy. Nový terminál spuštěný starým Codexem
+stále dědí jeho environment snapshot a nestačí. Jejich skutečnou identitu a
+použitelnost následně ověří `lazurio install --json` a Doctor; pouhé
+`Get-Command` nestačí. Odhlášení uživatele nebo restart Windows je až fallback,
+pokud persistentní User/Machine hodnoty sedí, ale ani nový Codex je nevidí.
 
 Git, GitHub CLI a Node.js smějí být na Windows nainstalované i bez admin práv do
 oficiálních uživatelských adresářů pod
@@ -249,7 +257,8 @@ User nebo Machine `PATH`, Agent nezůstane u handoff warningu:
    nástroje použije jen tehdy, když prompt každou tuto kategorii výslovně
    povoluje; ani rozšířený mandát neopravňuje přepisovat nesouvisející shell
    profil nebo bezpečnostní nastavení;
-4. zahodí dočasné PATH dědictví a z nového čistého procesu ověří příkazy
+4. po přesném resume handoffu úplně ukončí a znovu spustí Codex, zahodí tím
+   dočasné PATH dědictví a z jeho nového čistého procesu ověří příkazy
    `bun --version`, `git --version`, `gh --version`, `node --version`,
    `codex --version` a po registraci také `lazurio cli status --json`;
 5. znovu spustí Install Core. Bun, Git ani GitHub CLI nesmí mít reason
@@ -364,8 +373,9 @@ ověření, dokud současně neplatí:
 Každý doporučený warning má v handoffu explicitní disposition: opraveno,
 vědomě přijato Principálem, nebo blokováno chybějící pravomocí. Required nález
 se pouze „vezme na vědomí“ nikdy. Po změně perzistentního PATH Agent spustí
-nový čistý proces; na Windows nestačí otevřený Explorer, Start menu nebo
-terminál se starým environment snapshotem.
+novou Codex relaci a z ní čistý proces; na Windows nestačí nový terminál
+otevřený ze starého Codexu ani Explorer se starým environment snapshotem.
+Restart celých Windows je pouze fallback po neúspěšném Codex relaunchi.
 
 ## Windows bez Developer Mode
 
