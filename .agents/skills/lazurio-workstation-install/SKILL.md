@@ -92,7 +92,7 @@ Při publikačním mandátu pro instalační vady přečti také
     Organization scope, použij vrácenou URL a ověř health aktivních aplikací.
     Port ani route neodvozuj ručně.
 
-## Oveření
+## Ověření
 
 Instalace je hotová teprve tehdy, když:
 
