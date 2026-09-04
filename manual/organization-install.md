@@ -43,7 +43,8 @@ tohoto runbooku; krátký prompt jej nenahrazuje ani nerozšiřuje.
 >
 > Spusť konvergentně `lazurio install --json`,
 > `lazurio doctor --tool-updates --json`,
-> `lazurio organization install <github-organization> --json` a finální
+> `lazurio organization install <github-organization> --role builder --json`
+> a finální
 > `lazurio doctor`; všechny bezpečně opravitelné required nálezy v tomto
 > mandátu vyřeš a kontroly opakuj. Přístupy, secrets ani cizí Organizace
 > neměň. Aktivní scope určuje aktuální versioned Organization manifest. Když

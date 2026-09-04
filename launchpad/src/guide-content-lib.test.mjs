@@ -28,6 +28,9 @@ test("Guide projects the marked short prompt and full policy from one manual", (
   expect(guide.short_prompt).toContain("Lazurio for GitHub");
   expect(guide.short_prompt).toContain("All repositories");
   expect(guide.short_prompt).toContain("Node.js LTS");
+  expect(guide.short_prompt).toContain(
+    "lazurio organization install <github-organization> --role builder --json",
+  );
   expect(guide.short_prompt).toContain("versioned Organization manifest");
   expect(guide.short_prompt).toContain("runtime ready");
   expect(guide.short_prompt).not.toContain(ORGANIZATION_INSTALL_PROMPT_START);
