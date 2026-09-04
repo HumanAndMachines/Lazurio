@@ -65,7 +65,9 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(html).toContain("Editing ready");
   expect(html).toContain("Publishing ready");
   expect(html).toContain('id="guidePromptCopy"');
-  expect(html).toContain('id="guidePolicyDisclosure"');
+  expect(html).toContain(
+    'id="guidePolicyDisclosure" class="guide-policy" data-guide-search-item data-guide-search-text="Úplný expert/policy postup"',
+  );
   expect(html).not.toContain("gh auth login --hostname github.com");
   expect(html).toContain("Slovníček pojmů");
   expect(html).toContain("Doporučené aplikace");
@@ -99,7 +101,9 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(js).toContain("navigator.clipboard.writeText(prompt)");
   expect(js).toContain("Guide install content unavailable");
   expect(server).toContain('url.pathname === "/api/guide/organization-install"');
-  expect(server).toContain("readOrganizationInstallGuide({ rootPath: rootSourceRoot })");
+  expect(server).toContain("readOrganizationInstallGuide({ rootPath: lazurioCodeRoot })");
+  expect(server).not.toContain("readOrganizationInstallGuide({ rootPath: rootSourceRoot })");
+  expect(js).toContain("item.dataset.guideSearchText ?? item.textContent");
   expect(js).toContain('.normalize("NFD")');
   expect(js).toContain('document.querySelectorAll("[data-guide-search-item]")');
   expect(html).not.toContain("<iframe");

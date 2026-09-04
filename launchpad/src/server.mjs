@@ -1464,7 +1464,7 @@ function startServer(startPort) {
         if (url.pathname === "/api/doctor") return jsonResponse(await buildDoctorReport());
         if (url.pathname === "/api/guide/organization-install") {
           if (request.method !== "GET") return jsonResponse({ error: "method_not_allowed" }, 405);
-          return jsonResponse(await readOrganizationInstallGuide({ rootPath: rootSourceRoot }));
+          return jsonResponse(await readOrganizationInstallGuide({ rootPath: lazurioCodeRoot }));
         }
         if (url.pathname === "/api/recent-changes") return jsonResponse(await buildRecentChangesResponse(url.searchParams.get("company")));
         if (url.pathname === "/api/notifications") return jsonResponse(await buildNotificationsResponse(url.searchParams.get("company")));
