@@ -27,7 +27,9 @@ extends it.
 > sources, and to change only my user `PATH` so that their actual installation
 > directories are available in a new clean terminal. Preserve the existing
 > `PATH`. Do not change the system-wide `PATH`, the package manager, security
-> settings, or other tool versions without my further consent.
+> settings, or other tool versions without my further consent. Install Codex CLI
+> using the official OpenAI standalone installer for this platform as described
+> in “Codex CLI: installation and updates”; do not use Homebrew, npm, or WinGet for it.
 >
 > If no usable SSH key exists for the GitHub account just verified, you have
 > permission to create a new ed25519 key on this Machine, upload only its
@@ -89,7 +91,12 @@ Add only the paragraphs whose impact the Principal actually approves:
 > current official stable versions, and Node.js to the current supported LTS.
 > Always set Bun to the exact stable version declared by the current clean
 > Lazurio `lazurio/package.json#packageManager`, even when upstream offers a
-> newer release. Do not use preview, beta, nightly, or canary versions. Resolve
+> newer release. Install and update Codex CLI using the official OpenAI standalone
+> installer. For Codex, you also have permission to migrate an existing
+> Homebrew/npm/WinGet installation to standalone: first verify the new
+> installation, then remove only the previous Codex CLI package and preserve
+> settings, authentication, and history.
+> Do not use preview, beta, nightly, or canary versions. Resolve
 > every safely fixable required Install Core and Doctor finding within this
 > mandate and repeat the checks; do not stop after merely reporting it.
 >
@@ -251,22 +258,84 @@ prefixes is the home of the current OS account, not an inherited
 must still canonically match one of these fixed candidates and pass a
 functional probe.
 
-### Windows: supported Codex CLI lane
+### Codex CLI: installation and updates
 
-For a new Windows Machine, after the Principal's explicit consent, use the
-[official OpenAI standalone Windows installer](https://github.com/openai/codex/blob/main/scripts/install/install.ps1).
-It installs a visible native `codex.exe` and verifies its `--version` itself.
-WinGet `OpenAI.Codex` is not a supported fallback until it reliably creates the
-`codex` command on all supported Windows configurations; a bare
-`codex-x86_64-pc-windows-msvc.exe` or `codex-aarch64-pc-windows-msvc.exe` on
-`PATH` is therefore not a green state.
+For localhost workstations on macOS, Linux, and Windows, the default path is
+[the official OpenAI standalone installer](https://developers.openai.com/codex/cli).
+OpenAI owns installation and subsequent updates; Lazurio only directs Agents
+to that procedure. Codex release availability therefore does not depend on
+updates to the Homebrew cask. Do not use Homebrew, npm, or WinGet for new Codex
+CLI installations. This rule does not change how other tools are installed or
+the immutable hosted Resident/Buddy pins and their release lifecycle.
 
-Do not create an ad-hoc `codex.cmd`, do not copy the target-specific binary,
-and do not accept it as proof of readiness. Doctor names this specific WinGet
-state but deliberately does not fix it. After the authorized official
-installation, refresh the process `PATH` according to the previous chapter,
-verify `codex --version` in a new clean process, and repeat
-`lazurio doctor --tool-updates --json`.
+On macOS and Linux, use this for installation and updates:
+
+```sh
+curl -fsSL https://chatgpt.com/codex/install.sh | sh
+```
+
+On Windows, use this for installation and updates:
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"
+```
+
+Use the current official stable release, not a preview or a version copied
+verbatim from a manual. Before execution, a scoped installation or update
+mandate for Codex and the relevant `PATH` layer must apply. Do not request an
+already granted mandate again; if it is missing, first prepare the exact
+remediation and request the Principal's consent. Neither Doctor nor
+`lazurio update` ever executes this command. `lazurio install` remains a
+machine-gate report, not an installer for the external toolchain.
+
+**Existing Homebrew/npm/WinGet installations.** Identify all `codex` commands
+on `PATH`, their actual symlink targets, and the previous package's manager.
+A version string or the path `~/.local/bin/codex` does not prove standalone
+ownership: this path can also link to Homebrew. A working older installation
+still meets runtime availability; Doctor neither migrates it automatically
+nor confirms its origin.
+
+Migration requires a mandate to remove the exact previous Codex package as
+well. Record its manager, version, and exact recovery procedure beforehand.
+First install standalone. Read the actual installation directory from the
+official installer's output and invoke the new binary by explicit absolute
+path with `--version`. Resolve the complete symlink chain and verify that the
+target belongs to that standalone installation, outside the previous
+Homebrew/npm/WinGet package. Then verify that ordinary `codex` in a new
+process resolves to that same standalone binary; matching version strings
+from two different files are not sufficient. If it is shadowed, fix only the
+already authorized `PATH` layer. Uncertain ownership or a missing PATH
+mandate means keeping the old package and reporting the exact finding.
+Only after both probes succeed, uninstall the previous Codex through its
+actual manager (for example, `brew uninstall --cask codex` or
+`npm uninstall -g @openai/codex`). If the installer offers to remove the old
+installation before the new one is verified, defer removal until this step.
+Do not remove the package manager itself, Node, or other tools. Do not use
+purge/zap and do not delete `CODEX_HOME`, settings, authentication, or history.
+If the new installation fails, retain the working previous installation and
+report the finding; do not create a custom fallback installer or wrapper.
+
+After installation and again after removing the old package, verify command
+resolution and version in a new process: on macOS/Linux, use `command -v codex`
+and the actual symlink target; on Windows, use `Get-Command codex -All`.
+Verify `codex --version` and `codex login status` without reading or printing
+credential files. On Windows, refresh the process `PATH` and complete the
+full Codex relaunch described in the preceding chapter; a child shell of the
+old session is not sufficient. If the command fails or points elsewhere after
+removal of the old package, restore working resolution to the verified
+standalone binary within the granted mandate; if that is not possible,
+restore the exact previous package and its original PATH binding using the
+prepared recovery step. Without a recovery mandate, do not guess: preserve
+the standalone files and user data and report the precise blocker. Do not
+present the migration as complete until the new-process probe passes.
+Finally, repeat `lazurio doctor --tool-updates --json`.
+
+The Windows installer creates a visible native `codex.exe` and checks its
+version. A bare `codex-x86_64-pc-windows-msvc.exe` or
+`codex-aarch64-pc-windows-msvc.exe` on `PATH` is not a green state. Do not
+create an ad-hoc `codex.cmd`, copy the target-specific binary, or accept it as
+proof of readiness. Doctor names this specific WinGet state but deliberately
+does not fix it.
 
 If the installation prompt contains an explicit mandate for the exact tools and
 a change to the User or Machine `PATH`, the Agent does not stop at a handoff
@@ -299,7 +368,8 @@ The recommended authorization block of the installation prompt is:
 > directories are available in a new clean terminal. Preserve the existing
 > PATH. Do not change the system-wide PATH, do not install a system package
 > manager, do not change security settings, and do not upgrade other tools
-> without my further consent.
+> without my further consent. For Codex CLI, use the official OpenAI standalone
+> installer from the chapter above, not Homebrew, npm, or WinGet.
 
 When the prompt does not authorize the concrete `PATH` layer, the Agent returns
 an exact installation report and requests consent. User consent is not treated
