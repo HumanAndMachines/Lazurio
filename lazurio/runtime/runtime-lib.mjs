@@ -18,6 +18,7 @@ import { acquireModuleRuntimeLock } from "./module-runtime-lock-lib.mjs";
 import { trustedWindowsSystemExecutable } from "./windows-system-path-lib.mjs";
 import {
   declaredDependencyCount,
+  frozenBunInstallCommand,
   inspectRequiredDependencies,
   refreshFrozenBunDependencies,
   runFrozenBunInstall,
@@ -3849,7 +3850,7 @@ export function createRuntimeManager({
     }
 
     const packageJson = dependencyInspection.package_json;
-    const manager = detectPackageManager({ packageJson, lockfile });
+    const manager = detectPackageManager({ packageJson, lockfile, platform });
     const declaredDependencies = declaredDependencyCount(packageJson);
     const requiredDependencyCount = dependencyInspection.required_dependency_count;
     const missingDependencyNames = dependencyInspection.missing_required_dependencies;
@@ -4129,7 +4130,7 @@ async function firstExistingLockfile(appRoot) {
   return null;
 }
 
-function detectPackageManager({ packageJson, lockfile }) {
+function detectPackageManager({ packageJson, lockfile, platform = process.platform }) {
   const declared = typeof packageJson.packageManager === "string" ? packageJson.packageManager.trim() : "";
   if (declared) {
     const name = packageManagerName(declared);
@@ -4140,7 +4141,7 @@ function detectPackageManager({ packageJson, lockfile }) {
       source: "packageManager",
       supported,
       lockfile_mismatch: lockfileMismatch,
-      installCommand: supported ? [name, "install", "--frozen-lockfile"] : null,
+      installCommand: supported ? frozenBunInstallCommand(name, { platform }) : null,
     };
   }
 
@@ -4149,7 +4150,9 @@ function detectPackageManager({ packageJson, lockfile }) {
       name: lockfile.package_manager,
       source: `lockfile:${lockfile.path}`,
       supported: supportedInstallManagers.has(lockfile.package_manager),
-      installCommand: supportedInstallManagers.has(lockfile.package_manager) ? [lockfile.package_manager, "install", "--frozen-lockfile"] : null,
+      installCommand: supportedInstallManagers.has(lockfile.package_manager)
+        ? frozenBunInstallCommand(lockfile.package_manager, { platform })
+        : null,
     };
   }
 

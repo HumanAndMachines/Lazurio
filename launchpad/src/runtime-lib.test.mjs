@@ -3092,6 +3092,65 @@ test("runtime manager umí nainstalovat balíčky aplikace a zapsat install log"
   expect(logs.content).toContain("code=0");
 });
 
+test("Windows runtime Install zachová copyfile backend ve skutečném Bun příkazu i evidenci", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({
+    port,
+    dependencies: { fixture: "1.0.0" },
+    writeLockfile: true,
+  });
+  const installCommands = [];
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "windows-copyfile-install",
+    platform: "win32",
+    bunExecutable: process.execPath,
+    resolvePortOwnerFn: async () => null,
+    spawnProcess: (command, options) => {
+      if (!command.slice(1).includes("install")) return spawnFixtureChild(root, command, options);
+      installCommands.push(command);
+      return Bun.spawn([
+        process.execPath,
+        "-e",
+        fixtureDependencyInstallScript("await Bun.write('node_modules/fixture.txt', 'ready\\n')"),
+      ], options);
+    },
+  });
+
+  const beforeInstall = await runtime.health("test-company-demo-v1");
+  expect(beforeInstall.dependencies.install_command).toEqual([
+    "bun",
+    "install",
+    "--frozen-lockfile",
+    "--backend=copyfile",
+  ]);
+
+  const result = await runtime.install("test-company-demo-v1");
+  const refreshed = await runtime.refreshDependencies("test-company-demo-v1");
+
+  expect(installCommands).toEqual([
+    [process.execPath, "install", "--frozen-lockfile", "--backend=copyfile"],
+    [process.execPath, "install", "--frozen-lockfile", "--backend=copyfile"],
+  ]);
+  expect(result.command).toEqual([
+    "bun",
+    "install",
+    "--frozen-lockfile",
+    "--backend=copyfile",
+  ]);
+  expect(result.command_display).toBe("bun install --frozen-lockfile --backend=copyfile");
+  expect(refreshed).toMatchObject({
+    action: "refresh",
+    command: ["bun", "install", "--frozen-lockfile", "--backend=copyfile"],
+    command_display: "bun install --frozen-lockfile --backend=copyfile",
+  });
+  const logs = await runtime.logs("test-company-demo-v1");
+  expect(logs.content).toContain(
+    "install test-company-demo-v1 command=bun install --frozen-lockfile --backend=copyfile",
+  );
+});
+
 test("clean Repair zastaví a znovu spustí přesně managed aplikaci", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({
