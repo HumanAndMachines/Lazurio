@@ -255,6 +255,133 @@ describe("documented origin activation", () => {
   });
 
   test.skipIf(process.platform === "win32")(
+    "template access preflight classifies controlled API, metadata and SSH failures",
+    async () => {
+      const repoRoot = dirname(dirname(scriptPath));
+      const manual = await readFile(
+        join(repoRoot, "manual", "first-client-organization-rollout.md"),
+        "utf8",
+      );
+      const functionBody = manual
+        .split("preflight_required_template_access() {")[1]
+        ?.split(/\r?\n}\r?\n\r?\npreflight_gen3_rollout\(\) \{/)[0];
+      expect(functionBody).toBeDefined();
+      const flow = `preflight_required_template_access() {${functionBody}\n}\npreflight_required_template_access`;
+
+      for (const fixture of [
+        {
+          name: "expired authentication",
+          env: { FAKE_API_STATUS: "401" },
+          diagnostic: "GitHub autentizace už není platná",
+        },
+        {
+          name: "missing repository access",
+          env: { FAKE_API_STATUS: "403" },
+          diagnostic: "READ pozvánku/grant pro přesné repo",
+        },
+        {
+          name: "hidden or missing repository",
+          env: { FAKE_API_STATUS: "404" },
+          diagnostic: "READ pozvánku/grant pro přesné repo",
+        },
+        {
+          name: "provider failure",
+          env: { FAKE_API_STATUS: "500" },
+          diagnostic: "GitHub provider nebo síť",
+        },
+        {
+          name: "metadata mismatch",
+          env: { FAKE_METADATA_MISMATCH: "1" },
+          diagnostic: "Template metadata neodpovídají",
+        },
+        {
+          name: "SSH transport failure",
+          env: { FAKE_SSH_FAILURE: "1" },
+          diagnostic: "SSH Git transport neověřil exact main",
+        },
+      ]) {
+        const root = await makeTempRoot();
+        const fakeBin = join(root, "bin");
+        const ghPath = join(fakeBin, "gh");
+        const gitPath = join(fakeBin, "git");
+        await mkdir(fakeBin, { recursive: true });
+        await writeFile(ghPath, `#!/bin/sh
+set -eu
+if [ "\${1:-}" = auth ]; then exit 0; fi
+repository="\${3#repos/}"
+case "\${FAKE_API_STATUS:-200}" in
+  200) ;;
+  *)
+    printf 'HTTP/2 %s failure\\n' "$FAKE_API_STATUS"
+    printf 'gh: controlled failure (HTTP %s)\\n' "$FAKE_API_STATUS"
+    exit 1
+    ;;
+esac
+printf 'HTTP/2 200 OK\\n'
+if [ "\${FAKE_METADATA_MISMATCH:-0}" = 1 ]; then
+  printf '%s\\tfalse\\tmain\\n' "$repository"
+else
+  printf '%s\\ttrue\\tmain\\n' "$repository"
+fi
+`);
+        await writeFile(gitPath, `#!/bin/sh
+set -eu
+[ "\${FAKE_SSH_FAILURE:-0}" != 1 ]
+`);
+        await chmod(ghPath, 0o755);
+        await chmod(gitPath, 0o755);
+
+        const result = spawnSync("/bin/bash", ["-c", flow], {
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            PATH: `${fakeBin}:${process.env.PATH}`,
+            ...fixture.env,
+          },
+        });
+
+        expect(result.status, fixture.name).not.toBe(0);
+        expect(result.stderr, fixture.name).toContain(fixture.diagnostic);
+      }
+
+      const root = await makeTempRoot();
+      const fakeBin = join(root, "bin");
+      const seenRepositories = join(root, "seen-repositories");
+      await mkdir(fakeBin, { recursive: true });
+      await writeFile(join(fakeBin, "gh"), `#!/bin/sh
+set -eu
+if [ "\${1:-}" = auth ]; then exit 0; fi
+repository="\${3#repos/}"
+printf 'HTTP/2 200 OK\\n'
+printf '%s\\ttrue\\tmain\\n' "$repository"
+`);
+      await writeFile(join(fakeBin, "git"), `#!/bin/sh
+set -eu
+printf '%s\\n' "$5" >> "$SEEN_REPOSITORIES"
+`);
+      await chmod(join(fakeBin, "gh"), 0o755);
+      await chmod(join(fakeBin, "git"), 0o755);
+
+      const success = spawnSync("/bin/bash", ["-c", flow], {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          PATH: `${fakeBin}:${process.env.PATH}`,
+          SEEN_REPOSITORIES: seenRepositories,
+        },
+      });
+
+      expect(success.status).toBe(0);
+      expect((await readFile(seenRepositories, "utf8")).trim().split("\n")).toEqual([
+        "git@github.com:TemplatesRozjedeme-ai/OrganizationTemplate_GEN3.git",
+        "git@github.com:TemplatesRozjedeme-ai/MissionControlTemplate.git",
+        "git@github.com:TemplatesRozjedeme-ai/KnowledgebaseTemplate.git",
+        "git@github.com:TemplatesRozjedeme-ai/DesignSystemTemplate.git",
+      ]);
+    },
+  );
+
+  test.skipIf(process.platform === "win32")(
     "stops before every push when fetch or ls-remote cannot prove remote state",
     async () => {
     const repoRoot = dirname(dirname(scriptPath));
