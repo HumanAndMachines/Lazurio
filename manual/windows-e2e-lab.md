@@ -96,12 +96,18 @@ neduplikuje. Pro skutečný E2E běh navíc dodrž:
    registraci a konvergentně `lazurio install --json`,
    `lazurio doctor --tool-updates --json`, exact Organization install a finální
    `lazurio doctor`.
-5. Po PATH/tool změně úplně ukonči všechna okna Codexu a pokračuj až z nově
-   spuštěné relace. Nový child terminál starého Codexu není acceptance; restart
-   Windows je až fallback.
-6. Ověř Launchpad, aktivní aplikace, druhý idempotentní běh a taskem požadovaný
-   restart nebo rollback. Required `fail`, `blocked` či `incomplete` není
-   dokončená instalace.
+5. Kroky vyžadující Windows desktop provede jmenovaný Owner nebo Task Agent s
+   explicitně autorizovanou aktivní interaktivní relací; samotné SSH je
+   neprokazuje. Po PATH/tool změně vykonavatel úplně ukončí všechna okna Codexu,
+   spustí nový Codex a z jeho nové relace zaznamená start-time/PID parent procesu,
+   efektivní `PATH` a verze nástrojů. Nový child terminál starého Codexu není
+   acceptance; bez interaktivního vykonavatele je tento gate `unavailable`, ne
+   `pass`, a restart Windows je až fallback.
+6. Tentýž interaktivní vykonavatel ověří skutečný Start Menu shortcut a otevření
+   Launchpadu; SSH relace samostatně ověří jeho lifecycle/health a vlastnictví
+   procesu. Shoda obou důkazů, druhý idempotentní běh a taskem požadovaný restart
+   nebo rollback tvoří acceptance. Required `fail`, `blocked`, `incomplete` nebo
+   chybějící interaktivní důkaz není dokončená instalace.
 
 ## Bug a PR gate
 
@@ -109,6 +115,23 @@ Pro Windows-only bug nejprve reprodukuj stav na `main`, potom ve fresh task
 worktree ověř exact PR HEAD a nakonec relevantní negativní scénář. Neměň
 primární checkout, nepoužívej pracovní větev jako permanentní CLI/PATH target a
 nevynechávej plný root check jen proto, že focused reprodukce prošla.
+
+PR gate nesmí volat permanentně nainstalovaný `lazurio`, protože ten dál patří
+canonical `main`. Z kořene exact worktree:
+
+1. ověř `git rev-parse HEAD` proti požadovanému PR SHA a clean stav;
+2. spusť `bun run lazurio -- --version --json` a vyžaduj `root_kind: source`,
+   stejný commit a `dirty: false`;
+3. pouze u příkazu, který podporuje explicitní Root, volej worktree kód jako
+   `bun run lazurio -- <příkaz> --root <canonical-root> ...`; výstup musí nést
+   očekávaný Root a evidence zaznamená celý argv bez secrets;
+4. focused test i `bun run check` spouštěj z téhož exact worktree.
+
+Příkaz, který `--root` záměrně nepřijímá nebo vyžaduje canonical primary source,
+se tímto způsobem za nativně PR-ověřený nevydává. Dokud nemá vlastní podporovaný
+test harness, zůstává jeho native PR gate `unavailable`; Agent nesmí dočasně
+přelinkovat CLI, přesunout Root ani přepnout primary checkout z `main`, aby tuto
+hranici obešel.
 
 Issue publikuj do exact owning repa pouze s publikačním mandátem podle
 `manual/github-issues.md`. Sanitizuj lokální username, absolutní cesty, device
