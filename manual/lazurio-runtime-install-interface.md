@@ -53,6 +53,10 @@ Na Windows veřejný CLI vstup instaluje jen spolehlivý Start Menu shortcut bez
 Taskbar pinu. Jeho stabilní bootstrap při každém spuštění sestaví process
 `PATH` z právě uložených Machine + User hodnot; neukládá vlastní Bun locator a
 nemění persistentní environment.
+Start Menu-only je bezpečný default i při přímém spuštění rootového PowerShell
+instalátoru. Taskbar variantu musí volající vyžádat explicitně přepínačem
+`-IncludeTaskbar`; tím výsledek nezávisí na tom, zda vyšší CLI vrstva správně
+předala negativní přepínač `-StartMenuOnly`.
 
 Source checkout zpřístupní samotné CLI explicitním `lazurio cli install`
 přes standardní Bun global link. Tento per-user krok neupravuje shell/Windows

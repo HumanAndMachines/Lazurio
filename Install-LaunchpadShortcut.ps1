@@ -18,6 +18,9 @@ param(
     [switch]$StartMenuOnly,
 
     [Parameter()]
+    [switch]$IncludeTaskbar,
+
+    [Parameter()]
     [switch]$SkipShellPin,
 
     [Parameter()]
@@ -27,6 +30,10 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $installSchema = 'lazurio.launchpad.windows_install.v1'
+if ($StartMenuOnly -and $IncludeTaskbar) {
+    throw 'Launchpad shortcut install cannot combine -StartMenuOnly with -IncludeTaskbar.'
+}
+$installTaskbar = $IncludeTaskbar.IsPresent
 
 function Get-FullPath {
     param([Parameter(Mandatory = $true)][string]$Path)
@@ -396,7 +403,7 @@ if ([string]::IsNullOrWhiteSpace($StartMenuRoot)) {
     }
     $StartMenuRoot = Join-Path $programsRoot 'Lazurio'
 }
-if (-not $StartMenuOnly) {
+if ($installTaskbar) {
     if ([string]::IsNullOrWhiteSpace($TaskbarRoot)) {
         if ([string]::IsNullOrWhiteSpace($env:APPDATA)) {
             throw 'Windows roaming AppData path could not be resolved. Pass -TaskbarRoot explicitly.'
@@ -420,11 +427,11 @@ $installedBootstrapPath = Join-Path $InstallRoot 'Launchpad-Bootstrap.ps1'
 $installConfigPath = Join-Path $InstallRoot 'install.json'
 $shortcutName = 'Lazurio Launchpad.lnk'
 $startMenuShortcut = Join-Path $StartMenuRoot $shortcutName
-$taskbarShortcut = if ($StartMenuOnly) { $null } else { Join-Path $TaskbarRoot $shortcutName }
+$taskbarShortcut = if ($installTaskbar) { Join-Path $TaskbarRoot $shortcutName } else { $null }
 $backupBaseRoot = Join-Path $InstallRoot 'shortcut-backups'
 $backups = New-Object System.Collections.Generic.List[string]
 $installApplied = $false
-$taskbarStatus = if ($StartMenuOnly) { 'not_requested' } else { 'not_applied' }
+$taskbarStatus = if ($installTaskbar) { 'not_applied' } else { 'not_requested' }
 $startMenuValid = $null
 $taskbarValid = $null
 $configValid = $null
@@ -443,7 +450,7 @@ if ($PSCmdlet.ShouldProcess($resolvedRoot, 'Install per-user Lazurio Launchpad b
     Publish-AtomicFile -SourcePath $sourceIconPath -DestinationPath $iconPath
     $backupRoot = $null
     $startMenuHadShortcut = Test-Path -LiteralPath $startMenuShortcut -PathType Leaf
-    $taskbarHadShortcut = -not $StartMenuOnly -and (Test-Path -LiteralPath $taskbarShortcut -PathType Leaf)
+    $taskbarHadShortcut = $installTaskbar -and (Test-Path -LiteralPath $taskbarShortcut -PathType Leaf)
     if ($startMenuHadShortcut -or $taskbarHadShortcut) {
         $backupRoot = New-BackupRunRoot -BackupBaseRoot $backupBaseRoot -BackupTime $BackupTime
     }
@@ -459,7 +466,7 @@ if ($PSCmdlet.ShouldProcess($resolvedRoot, 'Install per-user Lazurio Launchpad b
         $startMenuMutationStarted = $true
         New-LaunchpadShortcut -ShortcutPath $startMenuShortcut -BootstrapPath $installedBootstrapPath -ConfigPath $installConfigPath -InstalledRoot $InstallRoot -PowerShellPath $powerShellPath -IconPath $iconPath
 
-        if (-not $StartMenuOnly) {
+        if ($installTaskbar) {
             if ($null -ne $backupRoot) {
                 $taskbarBackup = Backup-ExistingShortcut -ShortcutPath $taskbarShortcut -BackupRoot (Join-Path $backupRoot 'taskbar')
                 if ($null -ne $taskbarBackup) { $backups.Add($taskbarBackup) }
@@ -482,12 +489,12 @@ if ($PSCmdlet.ShouldProcess($resolvedRoot, 'Install per-user Lazurio Launchpad b
         }
 
         $startMenuValid = Test-LaunchpadShortcut -ShortcutPath $startMenuShortcut -BootstrapPath $installedBootstrapPath -ConfigPath $installConfigPath -InstalledRoot $InstallRoot -PowerShellPath $powerShellPath -IconPath $iconPath
-        $taskbarValid = if ($StartMenuOnly) { $null } else {
+        $taskbarValid = if ($installTaskbar) {
             Test-LaunchpadShortcut -ShortcutPath $taskbarShortcut -BootstrapPath $installedBootstrapPath -ConfigPath $installConfigPath -InstalledRoot $InstallRoot -PowerShellPath $powerShellPath -IconPath $iconPath
-        }
+        } else { $null }
         $bootstrapValid = (Get-Sha256Digest -Path $installedBootstrapPath) -eq
             (Get-Sha256Digest -Path $sourceBootstrapPath)
-        if (-not $startMenuValid -or (-not $StartMenuOnly -and -not $taskbarValid) -or -not $bootstrapValid) {
+        if (-not $startMenuValid -or ($installTaskbar -and -not $taskbarValid) -or -not $bootstrapValid) {
             throw 'Launchpad per-user installation validation failed before activation.'
         }
 
@@ -535,7 +542,7 @@ if ($PSCmdlet.ShouldProcess($resolvedRoot, 'Install per-user Lazurio Launchpad b
     installed_icon = $iconPath
     start_menu_shortcut = $startMenuShortcut
     start_menu_valid = $startMenuValid
-    taskbar_shortcut = if ($StartMenuOnly) { $null } else { $taskbarShortcut }
+    taskbar_shortcut = if ($installTaskbar) { $taskbarShortcut } else { $null }
     taskbar_shortcut_valid = $taskbarValid
     taskbar_status = $taskbarStatus
     backups = @($backups)
