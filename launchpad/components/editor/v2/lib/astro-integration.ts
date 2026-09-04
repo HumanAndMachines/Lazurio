@@ -7,6 +7,7 @@ export type EditorButtonConfig = {
   editorServerPath: string
   editorHost?: string
   editorPort: number
+  projectKey: string
 }
 
 export function editorButton(config: EditorButtonConfig): AstroIntegration {
@@ -18,8 +19,12 @@ export function editorButton(config: EditorButtonConfig): AstroIntegration {
   if (typeof config.editorServerPath !== 'string' || config.editorServerPath.trim() === '') {
     throw new Error('Editor integration requires an editor server path.')
   }
+  if (typeof config.projectKey !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(config.projectKey)) {
+    throw new Error('Editor integration requires a portable project key.')
+  }
 
   const editorOrigin = `http://${authorityFor(editorHost, config.editorPort)}`
+  const projectKey = config.projectKey
   let editorProcess: ChildProcess | null = null
 
   async function health() {
@@ -27,7 +32,9 @@ export function editorButton(config: EditorButtonConfig): AstroIntegration {
       const response = await fetch(`${editorOrigin}/api/health`, { signal: AbortSignal.timeout(700) })
       if (!response.ok) return false
       const payload = await response.json() as Record<string, unknown>
-      return payload.schema_version === 'lazurio.knowledgebase.editor.health.v2' && payload.status === 'ok'
+      return payload.schema_version === 'lazurio.knowledgebase.editor.health.v2'
+        && payload.status === 'ok'
+        && payload.project_key === projectKey
     } catch {
       return false
     }

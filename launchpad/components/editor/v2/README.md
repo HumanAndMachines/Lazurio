@@ -17,6 +17,9 @@ and dynamically imports:
 The consumer supplies its exact module listener lease, repository root,
 application root, preview URL, project identity, and authoring paths. Its
 `publicDir` must resolve to this component's own `public/` directory.
+`editorButton(config)` receives the same `projectKey` as `createEditorServer`;
+the integration reuses an existing healthy listener only when that exact
+project identity matches.
 
 Authoring paths are portable repository-relative paths. Existing files may be
 configured directly; new files can be created only below a configured directory
