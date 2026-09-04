@@ -28,6 +28,10 @@ import {
   readJsonWithinCanonicalBoundary,
 } from "../core/path-boundary-lib.mjs";
 import { normalizeRuntimeSource } from "./runtime-source-lib.mjs";
+import {
+  inspectRepositoryDbWorktreeBinding,
+  repositoryDbWorktreeDependencyForSlot,
+} from "./repository-db-worktree-lib.mjs";
 
 const healthTimeoutMs = 1_200;
 const startGraceMs = 30_000;
@@ -55,6 +59,7 @@ const supportedLifecycleProfiles = new Set(["local", "hosted"]);
 const APP_RUNTIME_CWD = Symbol("lazurio.app.runtime-cwd");
 const APP_RUNTIME_PACKAGE_PATH = Symbol("lazurio.app.runtime-package-path");
 const APP_RUNTIME_OWNER_ROOT = Symbol("lazurio.app.runtime-owner-root");
+const APP_WORKTREE_METADATA = Symbol("lazurio.app.worktree-metadata");
 const DEPENDENCY_RUNTIME_AUTHORITY = Symbol("lazurio.dependencies.runtime-authority");
 
 export function runtimeHostsShareListener(left, right) {
@@ -2123,7 +2128,7 @@ export function createRuntimeManager({
     }
 
     const runtimeKey = worktreeRuntimeKey(app, worktree.slug);
-    const modulePath = normalizeRelativePath(worktree.metadata?.module_path ?? `modules/${app.module}`);
+    const modulePath = worktreeModuleSlotPath(app, worktree.metadata);
     const mainModulePath = normalizeRelativePath(`${app.organization_path}/${modulePath}`);
     const worktreePath = normalizeRelativePath(worktree.path);
     const organizationRoot = resolve(companiesRoot, app.organization_path);
@@ -2165,6 +2170,7 @@ export function createRuntimeManager({
       ...app,
       ...worktreeContract,
       [APP_CHECKOUT_ROOT]: absoluteWorktreeRoot,
+      [APP_WORKTREE_METADATA]: worktree.metadata,
       [APP_RUNTIME_CWD]: resolve(absoluteWorktreeRoot, cwdFromWorktree),
       // Plugin paths/capabilities are validated only by main discovery. A
       // worktree may change its Module App runtime, but it cannot smuggle a
@@ -2304,6 +2310,7 @@ export function createRuntimeManager({
       entrypoint_listener: worktreeApp.entrypoint_listener ?? null,
       module_contract: worktreeApp.module_contract ?? null,
       runtime_contract: worktreeApp.runtime_contract ?? null,
+      required_module_slots: worktreeApp.required_module_slots ?? [],
       tags: worktreeApp.tags ?? [],
     };
   }
@@ -2771,6 +2778,20 @@ export function createRuntimeManager({
 
   function normalizeRelativePath(value) {
     return String(value ?? "").replace(/\\/g, "/").replace(/^\.\//, "");
+  }
+
+  function worktreeModuleSlotPath(app, metadata) {
+    if (typeof metadata?.module_path === "string" && metadata.module_path.trim() !== "") {
+      return normalizeRelativePath(metadata.module_path);
+    }
+    const organizationPrefix = `${normalizeRelativePath(app?.organization_path)}/`;
+    const contractPath = normalizeRelativePath(app?.module_contract?.module_path);
+    const manifestSuffix = "/lazurio.module.json";
+    if (contractPath.startsWith(organizationPrefix) && contractPath.endsWith(manifestSuffix)) {
+      const discoveredPath = contractPath.slice(organizationPrefix.length, -manifestSuffix.length);
+      if (discoveredPath !== "") return discoveredPath;
+    }
+    return normalizeRelativePath(`modules/${app.module}`);
   }
 
   function replacePathPrefix(value, oldPrefix, newPrefix) {
@@ -4048,6 +4069,44 @@ async function requiredModuleSlotState({ organizationRoot, app }) {
         state: "planned_slot",
         message: `${app.title} zatím nejde spustit: datový slot ${requiredPath} je plánovaný. Dokonči jeho schválenou manifestem řízenou aktivaci; repozitář ručně neklonuj.`,
       };
+    }
+    const worktreeMetadata = app?.[APP_WORKTREE_METADATA];
+    const repositoryDb = worktreeMetadata
+      ? repositoryDbWorktreeDependencyForSlot({
+          slot,
+          moduleSlotPath: worktreeMetadata.module_path,
+        })
+      : { ok: true, required: false, dependency: null };
+    if (repositoryDb.required) {
+      if (!repositoryDb.ok) {
+        return {
+          state: "required_slot_unavailable",
+          message: `${app.title} nejde spustit, protože repository-db binding ${requiredPath} není bezpečně odvoditelný: ${repositoryDb.message}`,
+        };
+      }
+      const members = Array.isArray(worktreeMetadata.members) ? worktreeMetadata.members : [];
+      const matchingMembers = members.filter((member) =>
+        member?.role === "dependency" && member?.slot_path === requiredPath
+      );
+      if (matchingMembers.length !== 1 || typeof app?.[APP_CHECKOUT_ROOT] !== "string") {
+        return {
+          state: "required_slot_unavailable",
+          message: `${app.title} nejde spustit, protože worktree nemá právě jeden vlastněný repository-db binding ${requiredPath}. Vytvoř nový worktree přes Launchpad nebo oprav sidecar vědomým recovery postupem.`,
+        };
+      }
+      const binding = await inspectRepositoryDbWorktreeBinding({
+        organizationRoot,
+        editWorktreeRoot: app[APP_CHECKOUT_ROOT],
+        dependency: repositoryDb.dependency,
+        member: matchingMembers[0],
+      });
+      if (!binding.ok) {
+        return {
+          state: "required_slot_unavailable",
+          message: `${app.title} nejde spustit, protože repository-db binding ${requiredPath} není připravený (${binding.details.join("; ")}).`,
+        };
+      }
+      continue;
     }
     const requiredSlotBoundary = await inspectCanonicalPathBoundary({
       rootPath: organizationRoot,

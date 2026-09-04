@@ -1,9 +1,15 @@
 import { afterAll, expect, test } from "bun:test";
 import { tmpdir } from "os";
 import { join } from "path";
-import { mkdir, mkdtemp, rename, rm, symlink, writeFile } from "fs/promises";
+import { mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from "fs/promises";
 import { appPlacementResolverForOrganization, buildDoctorReportFromAppsResponse, buildEnvironmentChecks, buildLaunchpadAppsResponse, buildLaunchpadDoctorReport, bunRuntimeCheck, codexRuntimeCheck, developerToolUpdateChecks, lazurioUpdateCheck, nodeRuntimeCheck, runtimeAppStatus } from "../../lazurio/runtime/diagnostics-lib.mjs";
-import { createLaunchpadGitFixture, initGitRepo, runGit } from "./git-fixture-helpers.test.mjs";
+import {
+  createLaunchpadGitFixture,
+  createRepositoryDbWorktreeFixture,
+  initGitRepo,
+  runGit,
+} from "./git-fixture-helpers.test.mjs";
+import { createWorktreeFromPlan } from "./worktree-actions-lib.mjs";
 import { buildGitInventory } from "../../lazurio/runtime/git-inventory-lib.mjs";
 import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.mjs";
 
@@ -2868,6 +2874,120 @@ test("worktree dependency Doctor follows the configured Organization mountpoint"
     "ready: 1",
   ]));
 });
+
+test("worktree dependency Doctor proves the exact repository-db member and rejects sidecar drift", async () => {
+  const fixture = await createRepositoryDbWorktreeFixture({ port: 25422 });
+  tempRoots.push(fixture.root);
+  const branch = "CAC-0099-doctor-binding";
+  const created = await createWorktreeFromPlan({
+    companiesRoot: fixture.root,
+    repoKey: "BetaCo::mission-control",
+    planPath: fixture.planPath,
+    branch,
+  });
+  const report = await buildLaunchpadDoctorReport({
+    companiesRoot: fixture.root,
+    launchpadRoot: join(fixture.root, "launchpad"),
+    runtimeManager: { appsWithRuntime: async (apps) => apps },
+    runChildDoctors: false,
+  });
+  const dependencies = report.checks.find((check) => check.id === "git.worktrees.dependencies");
+  expect(dependencies?.details).toEqual(expect.arrayContaining([
+    "checked_repository_db_bindings: 1",
+    "repository_db_ready: 1",
+    "repository_db_binding_invalid: 0",
+  ]));
+
+  const sidecarPath = join(
+    fixture.orgRoot,
+    ".worktrees",
+    "root",
+    "mission-control",
+    `${created.worktree.slug}.worktree.json`,
+  );
+  const sidecar = JSON.parse(await readFile(sidecarPath, "utf8"));
+  sidecar.members.find((member) => member.role === "dependency").base_sha = "0".repeat(40);
+  await writeFile(sidecarPath, `${JSON.stringify(sidecar, null, 2)}\n`);
+  const driftedReport = await buildLaunchpadDoctorReport({
+    companiesRoot: fixture.root,
+    launchpadRoot: join(fixture.root, "launchpad"),
+    runtimeManager: { appsWithRuntime: async (apps) => apps },
+    runChildDoctors: false,
+  });
+  const drifted = driftedReport.checks.find((check) => check.id === "git.worktrees.dependencies");
+  expect(drifted?.status).toBe("warn");
+  expect(drifted?.details).toEqual(expect.arrayContaining([
+    "repository_db_ready: 0",
+    "repository_db_binding_invalid: 1",
+  ]));
+  expect(drifted?.details.join("\n")).toContain("binding HEAD neodpovídá sidecar base_sha");
+});
+
+test("worktree dependency Doctor reports a legacy sidecar without module_path", async () => {
+  const fixture = await createRepositoryDbWorktreeFixture({ port: 25424 });
+  tempRoots.push(fixture.root);
+  const created = await createWorktreeFromPlan({
+    companiesRoot: fixture.root,
+    repoKey: "BetaCo::mission-control",
+    planPath: fixture.planPath,
+    branch: "CAC-0099-doctor-legacy-sidecar",
+  });
+  const sidecarPath = join(
+    fixture.orgRoot,
+    ".worktrees",
+    "root",
+    "mission-control",
+    `${created.worktree.slug}.worktree.json`,
+  );
+  const sidecar = JSON.parse(await readFile(sidecarPath, "utf8"));
+  delete sidecar.module_path;
+  await writeFile(sidecarPath, `${JSON.stringify(sidecar, null, 2)}\n`);
+
+  const report = await buildLaunchpadDoctorReport({
+    companiesRoot: fixture.root,
+    launchpadRoot: join(fixture.root, "launchpad"),
+    runtimeManager: { appsWithRuntime: async (apps) => apps },
+    runChildDoctors: false,
+  });
+  const dependencies = report.checks.find((check) => check.id === "git.worktrees.dependencies");
+  expect(dependencies?.status).toBe("warn");
+  expect(dependencies?.details).toEqual(expect.arrayContaining([
+    "repository_db_ready: 0",
+    "repository_db_binding_invalid: 1",
+  ]));
+  expect(dependencies?.details.join("\n")).toContain("module_path");
+});
+
+if (fileSymlinkCapability) {
+  test("worktree dependency Doctor rejects a canonical repository-db owner replaced by a symlink", async () => {
+    const fixture = await createRepositoryDbWorktreeFixture({ port: 25423 });
+    tempRoots.push(fixture.root);
+    await createWorktreeFromPlan({
+      companiesRoot: fixture.root,
+      repoKey: "BetaCo::mission-control",
+      planPath: fixture.planPath,
+      branch: "CAC-0099-doctor-owner-boundary",
+    });
+
+    const movedOwner = join(fixture.orgRoot, "mission-control", "db-owner-moved");
+    await rename(fixture.repositoryDbRepo, movedOwner);
+    await symlink(movedOwner, fixture.repositoryDbRepo, "dir");
+
+    const report = await buildLaunchpadDoctorReport({
+      companiesRoot: fixture.root,
+      launchpadRoot: join(fixture.root, "launchpad"),
+      runtimeManager: { appsWithRuntime: async (apps) => apps },
+      runChildDoctors: false,
+    });
+    const dependencies = report.checks.find((check) => check.id === "git.worktrees.dependencies");
+    expect(dependencies?.status).toBe("warn");
+    expect(dependencies?.details).toEqual(expect.arrayContaining([
+      "repository_db_ready: 0",
+      "repository_db_binding_invalid: 1",
+    ]));
+    expect(dependencies?.details.join("\n")).toContain("Kanonický owner checkout není běžný adresář");
+  });
+}
 
 function buildDoctorRuntimeReport(apps) {
   return buildDoctorReportFromAppsResponse({

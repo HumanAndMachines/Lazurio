@@ -76,6 +76,126 @@ export async function createLaunchpadGitFixture() {
   return root;
 }
 
+export async function createRepositoryDbWorktreeFixture({ port = 25421 } = {}) {
+  const root = await createLaunchpadGitFixture();
+  const orgRoot = join(root, "organizations", "BetaCo_GEN3");
+  const companyPath = join(orgRoot, "company.gen3.json");
+  const company = JSON.parse(await readFile(companyPath, "utf8"));
+  company.module_port_pool = { start: port, end: port };
+  await writeJson(companyPath, company);
+  const manifestPath = join(orgRoot, "modules.manifest.json");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  manifest.module_slots.push(
+    {
+      path: "mission-control",
+      slug: "mission-control",
+      category: "planning",
+      default_access: "expected",
+      required_roles: ["*"],
+      source_of_truth: "git-native",
+      space: "root",
+      status: "active",
+      materialization: "doctor_managed_nested_repo",
+      git: { url: "git@github.com:BetaCo/mission-control.git", branch: "main" },
+    },
+    {
+      path: "mission-control/db",
+      slug: "mission-control-data",
+      category: "planning-data",
+      default_access: "expected",
+      required_roles: ["*"],
+      source_of_truth: "repository-db:v3",
+      space: "root",
+      status: "active",
+      materialization: "repository_db_mount",
+      git: { url: "git@github.com:BetaCo/mission-control-data.git", branch: "v3" },
+    },
+  );
+  await writeJson(manifestPath, manifest);
+
+  const missionControlRepo = join(orgRoot, "mission-control");
+  const appRoot = join(missionControlRepo, "app", "v3");
+  await mkdir(missionControlRepo, { recursive: true });
+  await writeFile(join(missionControlRepo, ".gitignore"), "db\n");
+  await writeJson(join(missionControlRepo, "lazurio.module.json"), {
+    schema_version: "lazurio.module.v1",
+    id: "mission-control",
+    company: "BetaCo",
+    tcp_port_policy: { mode: "single" },
+    port_leases: [{ id: "main", host: "127.0.0.1", port }],
+    apps: ["app/v3/package.json"],
+    default_app: "app/v3/package.json",
+  });
+  await writeJson(join(appRoot, "package.json"), {
+    name: "betaco-mission-control-v3",
+    private: true,
+    type: "module",
+    scripts: { dev: "bun server.mjs" },
+    lazurio: {
+      runtime: {
+        schema_version: "lazurio.runtime.v1",
+        id: "betaco-mission-control-v3",
+        title: "BetaCo Mission Control",
+        company: "BetaCo",
+        module: "mission-control",
+        surface: "internal",
+        dev_script: "dev",
+        required_module_slots: ["mission-control/db"],
+        tags: ["mission-control", "repository-db"],
+        listeners: [{
+          id: "web",
+          role: "entrypoint",
+          lease: "main",
+          protocol: "http",
+          health: { kind: "http", path: "/" },
+        }],
+      },
+    },
+  });
+  await writeFile(join(appRoot, "server.mjs"), [
+    "import { createServer } from 'node:http';",
+    "const host = process.env.LAZURIO_RUNTIME_HOST;",
+    "const port = Number(process.env.LAZURIO_RUNTIME_PORT);",
+    "createServer((_request, response) => { response.writeHead(200); response.end('ok'); }).listen(port, host);",
+    "",
+  ].join("\n"));
+  const missionControlRemote = join(root, "remotes", "mission-control.git");
+  await initGitRepo(missionControlRepo, { remotePath: missionControlRemote });
+  runGit(["add", ".gitignore", "lazurio.module.json", "app/v3/package.json", "app/v3/server.mjs"], missionControlRepo);
+  runGit(["commit", "-m", "add mission control runtime"], missionControlRepo);
+  runGit(["push", "origin", "main"], missionControlRepo);
+
+  const repositoryDbRepo = join(missionControlRepo, "db");
+  const repositoryDbRemote = join(root, "remotes", "mission-control-data.git");
+  await initGitRepo(repositoryDbRepo, { branch: "v3", remotePath: repositoryDbRemote });
+  const planPath = "mission-control/db/data/mission-control/plans/2026/09/CAC-0099-repository-db-worktree.yaml";
+  const absolutePlanPath = join(orgRoot, planPath);
+  await mkdir(dirname(absolutePlanPath), { recursive: true });
+  await writeFile(absolutePlanPath, [
+    "dev_code: CAC-0099",
+    "title: Repository DB worktree binding",
+    "status: in_progress",
+    "links:",
+    "  - path: mission-control",
+    "",
+  ].join("\n"));
+  runGit(["add", "data/mission-control/plans/2026/09/CAC-0099-repository-db-worktree.yaml"], repositoryDbRepo);
+  runGit(["commit", "-m", "add worktree plan"], repositoryDbRepo);
+  runGit(["push", "origin", "v3"], repositoryDbRepo);
+  runGit(["remote", "set-url", "origin", "git@github.com:BetaCo/mission-control-data.git"], repositoryDbRepo);
+
+  return {
+    root,
+    orgRoot,
+    missionControlRepo,
+    repositoryDbRepo,
+    missionControlRemote,
+    repositoryDbRemote,
+    planPath,
+    port,
+  };
+}
+
 export async function createOrganization({ root, orgPath, slug, moduleSlots }) {
   const orgRoot = join(root, orgPath);
   await mkdir(join(orgRoot, "manual"), { recursive: true });
