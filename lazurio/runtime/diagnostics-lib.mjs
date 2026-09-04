@@ -2319,7 +2319,7 @@ function withCodexInstallationGuidance(check, platform) {
       : null;
   return {
     ...check,
-    message: `${check.message} Pro instalaci a aktualizace Codex CLI používej oficiální OpenAI standalone instalátor podle manual/organization-install.md; Homebrew, npm ani WinGet nejsou výchozí instalační cesta Lazuria.`,
+    message: `${check.message} Pro chybějící Codex CLI doporučujeme oficiální OpenAI standalone instalátor podle manual/organization-install.md. Vyhovující instalaci zachovej bez ohledu na jejího správce.`,
     links: [...check.links, {
       label: "Oficiální instalace Codex CLI",
       kind: "external",

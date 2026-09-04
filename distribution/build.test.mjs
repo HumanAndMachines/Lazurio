@@ -349,7 +349,7 @@ test("resident provenance is independent of mutable remote configuration", async
 }, platformTestTimeout(20_000));
 
 test.skipIf(process.platform === "win32")(
-  "resident build ignores PATH git and a checkout-local fsmonitor helper",
+  "resident build uses PATH Git while disabling a checkout-local fsmonitor helper",
   async () => {
     const fixture = await isolatedRepositoryFixture();
     const fakeBin = join(fixture.sandbox, "fake-bin");
@@ -364,6 +364,8 @@ test.skipIf(process.platform === "win32")(
     await chmod(fsmonitor, 0o755);
     runTrustedGit(fixture.repositoryRoot, ["config", "--local", "core.fsmonitor", fsmonitor]);
 
+    const realGit = Bun.which("git");
+    await writeFile(fakeGit, `#!/bin/sh\n: > "${fakeGitMarker}"\nexec '${realGit.replaceAll("'", "'\\''")}' "$@"\n`);
     const originalPath = process.env.PATH;
     process.env.PATH = originalPath
       ? `${fakeBin}${delimiter}${originalPath}`
@@ -383,7 +385,7 @@ test.skipIf(process.platform === "win32")(
       else process.env.PATH = originalPath;
     }
 
-    expect(existsSync(fakeGitMarker)).toBe(false);
+    expect(existsSync(fakeGitMarker)).toBe(true);
     expect(existsSync(fsmonitorMarker)).toBe(false);
   },
   20_000,

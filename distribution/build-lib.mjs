@@ -1,3 +1,4 @@
+import { sanitizedGitEnvironment } from "../lazurio/core/cli-provenance-lib.mjs";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
@@ -759,7 +760,7 @@ export function gitText(cwd, args) {
 function gitBytes(cwd, args) {
   const executable = trustedGitExecutable();
   if (!executable) {
-    throw new Error("resident build requires Git from a trusted system-owned path");
+    throw new Error("resident build requires a working Git on PATH");
   }
   const safeArgs = [
     "-c", `core.hooksPath=${process.platform === "win32" ? "NUL" : "/dev/null"}`,
@@ -788,18 +789,5 @@ function gitBytes(cwd, args) {
 }
 
 function residentBuildGitEnvironment(base = process.env) {
-  const environment = {};
-  for (const key of ["TMPDIR", "TEMP", "TMP", "SystemRoot", "ComSpec", "PATHEXT"]) {
-    if (typeof base[key] === "string") environment[key] = base[key];
-  }
-  environment.LC_ALL = "C";
-  environment.LANG = "C";
-  environment.GIT_ATTR_NOSYSTEM = "1";
-  environment.GIT_CONFIG_NOSYSTEM = "1";
-  environment.GIT_CONFIG_GLOBAL = process.platform === "win32" ? "NUL" : "/dev/null";
-  environment.GIT_CONFIG_COUNT = "0";
-  environment.GIT_OPTIONAL_LOCKS = "0";
-  environment.GIT_PAGER = "cat";
-  environment.GIT_TERMINAL_PROMPT = "0";
-  return environment;
+  return { ...sanitizedGitEnvironment(base), LANG: "C", GIT_ATTR_NOSYSTEM: "1" };
 }
