@@ -8,7 +8,6 @@ import {
   open,
   readdir,
   readFile,
-  realpath,
   rename,
   rm,
 } from 'node:fs/promises'
@@ -363,7 +362,10 @@ async function assertNoLinkedSegments(repoRoot: string, targetPath: string, allo
       throw error
     }
   }
-  const canonical = await realpath(targetPath)
+  // Keep the request-time identity on the same provider that pinned repoRoot.
+  // Bun on Windows can represent promises.realpath() differently from
+  // realpathSync() even for the same file, which must not look like an escape.
+  const canonical = realpathSync(targetPath)
   if (!pathIsInside(repoRoot, canonical, false)) throw new EditorBoundaryError('Canonical editor path escapes repoRoot.')
 }
 
