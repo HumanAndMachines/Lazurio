@@ -35,7 +35,8 @@ stores to model-selected reads. The OAuth-authenticated harness remains trusted;
 the model only receives the supplied diff and returns structured text.
 The equals form of the empty tools option preserves its empty value through
 the pinned action's argument parser; do not replace it with a quoted empty token.
-Diffs above 200,000 bytes or 300 changed files are rejected. A review is limited
+Diffs above 60,000 raw or JSON-encoded bytes or 300 changed files are rejected.
+This leaves headroom below Linux's per-environment-string limit for action inputs. A review is limited
 to 15 minutes and 20 model turns, consuming subscription allowance and Actions
 minutes. Missing context and AI mistakes remain explicit review limitations.
 

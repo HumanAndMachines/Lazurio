@@ -53,7 +53,7 @@ jobs:
         run: |
           mkdir -p .review-input
           gh pr diff "$PR_NUMBER" --repo "$GH_REPO" > .review-input/pr.diff
-          test "$(wc -c < .review-input/pr.diff)" -le 200000 || {
+          test "$(wc -c < .review-input/pr.diff)" -le 60000 || {
             echo "::error::PR diff exceeds the review size limit; split the PR."
             exit 1
           }
@@ -66,6 +66,9 @@ jobs:
           const { randomUUID } = require('node:crypto');
           const patch = readFileSync('.review-input/pr.diff', 'utf8');
           if (!patch.trim()) throw new Error('Empty PR diff');
+          if (Buffer.byteLength(JSON.stringify(patch), 'utf8') > 60000) {
+            throw new Error('Encoded diff exceeds the action input limit');
+          }
           const marker = randomUUID();
           appendFileSync(process.env.GITHUB_OUTPUT, `patch<<${marker}\n${patch}\n${marker}\n`);
           NODE
@@ -86,7 +89,7 @@ jobs:
             --strict-mcp-config
             --mcp-config '{"mcpServers":{}}'
             --setting-sources user
-            --json-schema '{"type":"object","properties":{"review":{"type":"string","maxLength":40000}},"required":["review"],"additionalProperties":false}'
+            --json-schema '{"type":"object","properties":{"review":{"type":"string","maxLength":12000}},"required":["review"],"additionalProperties":false}'
           prompt: |
             Review PR #${{ github.event.issue.number || inputs.pr_number }} in ${{ github.repository }}.
             The immutable reviewed head is ${{ steps.pr.outputs.head }}.
@@ -116,7 +119,7 @@ jobs:
           const { execFileSync } = require('node:child_process');
           const { GH_REPO, PR_NUMBER, BASE_SHA, HEAD_SHA, REVIEW_JSON } = process.env;
           const report = JSON.parse(REVIEW_JSON);
-          if (typeof report.review !== 'string' || !report.review.trim() || report.review.length > 40000) {
+          if (typeof report.review !== 'string' || !report.review.trim() || report.review.length > 12000) {
             throw new Error('Missing or oversized structured review');
           }
           if (/sk-ant-|gh[pousr]_[A-Za-z0-9]|github_pat_/i.test(report.review)) {

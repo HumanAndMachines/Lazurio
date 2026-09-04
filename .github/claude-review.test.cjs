@@ -34,12 +34,13 @@ test('concurrency belongs to the authorized job; environment and zero tools are 
   assert.match(workflow, /--mcp-config '\{"mcpServers":\{\}\}'/);
   assert.match(workflow, /disableAllHooks/);
   assert.doesNotMatch(workflow, /uses: actions\/checkout/);
-  assert.match(workflow, /200000/);
+  assert.match(workflow, /60000/);
   assert.match(workflow, /steps\.diff\.outputs\.patch/);
 });
 test('diff output uses a fresh delimiter and rejects empty input', () => {
   let result;
   const run = patch => runInNewContext(scripts[0], {
+    Buffer,
     require: name => name === 'node:crypto' ? { randomUUID: () => 'unique-marker' } : {
       readFileSync: () => patch,
       appendFileSync: (path, value) => { assert.equal(path, 'output'); result = value; },
@@ -48,6 +49,8 @@ test('diff output uses a fresh delimiter and rejects empty input', () => {
   run('diff\nEOF\nmalicious=value');
   assert.equal(result, 'patch<<unique-marker\ndiff\nEOF\nmalicious=value\nunique-marker\n');
   assert.throws(() => run(' '), /Empty/);
+  assert.throws(() => run('x'.repeat(60001)), /Encoded/);
+  assert.throws(() => run('\u0001'.repeat(11000)), /Encoded/);
 });
 function simulate(options = {}) {
   const state = { state: 'open', head: { sha: 'head' }, base: { sha: 'base' } };
@@ -91,7 +94,7 @@ test('valid output posts exactly one COMMENT bound to the reviewed commit', () =
 });
 for (const [name, raw] of [
   ['malformed', '{'], ['null', 'null'], ['missing', '{}'], ['empty', '{"review":" "}'],
-  ['wrong type', '{"review":7}'], ['oversized', JSON.stringify({ review: 'x'.repeat(40001) })],
+  ['wrong type', '{"review":7}'], ['oversized', JSON.stringify({ review: 'x'.repeat(12001) })],
   ['credential', '{"review":"sk-ant-example"}'], ['github credential', '{"review":"github_pat_example"}'],
 ]) test('rejects ' + name + ' before publication', () => {
   const result = simulate({ env: { REVIEW_JSON: raw } });
