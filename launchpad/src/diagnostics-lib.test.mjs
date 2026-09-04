@@ -729,6 +729,17 @@ test("apps response materializes HTTPS endpoints from the module-owned lease", a
   await mkdir(join(sharedEditorRoot, "public"), { recursive: true });
   await writeFile(join(sharedEditorRoot, "lib", "astro-integration.ts"), "// fixture\n", "utf8");
   await writeFile(join(sharedEditorRoot, "lib", "create-server.ts"), "// fixture\n", "utf8");
+  await writeFile(join(sharedEditorRoot, "public", "index.html"), "<!doctype html>\n", "utf8");
+  await writeFile(join(sharedEditorRoot, "public", "app.js"), "// fixture\n", "utf8");
+  await writeFile(join(sharedEditorRoot, "public", "styles.css"), "/* fixture */\n", "utf8");
+  await writeJson(join(sharedEditorRoot, "component.json"), {
+    schema_version: "lazurio.knowledgebase.editor.component.v2",
+    entrypoints: {
+      astro_integration: "lib/astro-integration.ts",
+      server: "lib/create-server.ts",
+    },
+    public_files: ["public/index.html", "public/app.js", "public/styles.css"],
+  });
   const readyResponse = await buildLaunchpadAppsResponse({
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
@@ -739,6 +750,39 @@ test("apps response materializes HTTPS endpoints from the module-owned lease", a
     status: "ready",
     label: "Editor připraven",
   });
+
+  await writeJson(join(sharedEditorRoot, "component.json"), {
+    schema_version: "lazurio.knowledgebase.editor.component.v2",
+    entrypoints: {
+      astro_integration: "lib/astro-integration.ts",
+      server: "lib/create-server.ts",
+    },
+    public_files: ["public/index.html", "public/app.js"],
+  });
+  const incompleteManifestResponse = await buildLaunchpadAppsResponse({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    runtimeManager: { appsWithRuntime: async (apps) => apps },
+    includeGit: false,
+  });
+  expect(incompleteManifestResponse.apps[0]?.editor?.status).toBe("read_only");
+
+  await writeJson(join(sharedEditorRoot, "component.json"), {
+    schema_version: "lazurio.knowledgebase.editor.component.v2",
+    entrypoints: {
+      astro_integration: "lib/astro-integration.ts",
+      server: "lib/create-server.ts",
+    },
+    public_files: ["public/index.html", "public/app.js", "public/styles.css"],
+  });
+  await rm(join(sharedEditorRoot, "public", "styles.css"));
+  const missingAssetResponse = await buildLaunchpadAppsResponse({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    runtimeManager: { appsWithRuntime: async (apps) => apps },
+    includeGit: false,
+  });
+  expect(missingAssetResponse.apps[0]?.editor?.status).toBe("read_only");
 });
 
 test("Doctor treats Organization port policy violations as hard errors", () => {

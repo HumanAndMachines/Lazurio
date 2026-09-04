@@ -1,6 +1,6 @@
-import { existsSync, lstatSync } from "fs";
+import { existsSync, lstatSync, readFileSync } from "fs";
 import { readFile, readdir } from "fs/promises";
-import { basename, dirname, join, posix } from "path";
+import { basename, dirname, isAbsolute, join, posix, relative } from "path";
 import {
   discoverLaunchpadApps,
   organizationRelativePathIssue,
@@ -332,12 +332,7 @@ function editorCapabilityForApp(app, launchpadRoot) {
   if (!lease) return null;
 
   const editorRoot = join(launchpadRoot, "components", "editor", "v2");
-  const requiredFiles = [
-    join(editorRoot, "lib", "astro-integration.ts"),
-    join(editorRoot, "lib", "create-server.ts"),
-  ];
-  const publicRoot = join(editorRoot, "public");
-  const ready = requiredFiles.every(realRegularFile) && realDirectory(publicRoot);
+  const ready = validEditorComponentV2(editorRoot);
   return {
     schema_version: "lazurio.editor.capability.v1",
     status: ready ? "ready" : "read_only",
@@ -351,6 +346,51 @@ function editorCapabilityForApp(app, launchpadRoot) {
     },
     component_path: "launchpad/components/editor/v2",
   };
+}
+
+function validEditorComponentV2(editorRoot) {
+  const manifestPath = join(editorRoot, "component.json");
+  if (!realDirectory(editorRoot) || !realContainedRegularFile(editorRoot, manifestPath)) return false;
+  try {
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    if (manifest?.schema_version !== "lazurio.knowledgebase.editor.component.v2") return false;
+    if (manifest?.entrypoints?.astro_integration !== "lib/astro-integration.ts") return false;
+    if (manifest?.entrypoints?.server !== "lib/create-server.ts") return false;
+    const publicFiles = manifest?.public_files;
+    const expectedPublicFiles = ["public/index.html", "public/app.js", "public/styles.css"];
+    if (
+      !Array.isArray(publicFiles)
+      || publicFiles.length !== expectedPublicFiles.length
+      || publicFiles.some((relativePath, index) => relativePath !== expectedPublicFiles[index])
+    ) return false;
+    const declaredFiles = [
+      manifest.entrypoints.astro_integration,
+      manifest.entrypoints.server,
+      ...publicFiles,
+    ];
+    return declaredFiles.every((relativePath) => (
+      realContainedRegularFile(editorRoot, join(editorRoot, relativePath))
+    ));
+  } catch {
+    return false;
+  }
+}
+
+function realContainedRegularFile(root, targetPath) {
+  const relativePath = relative(root, targetPath);
+  if (relativePath === "" || relativePath.startsWith("..") || isAbsolute(relativePath)) return false;
+  let cursor = root;
+  try {
+    for (const segment of relativePath.split(/[\\/]/).filter(Boolean)) {
+      cursor = join(cursor, segment);
+      const stat = lstatSync(cursor);
+      if (stat.isSymbolicLink()) return false;
+    }
+    return lstatSync(targetPath).isFile();
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw error;
+  }
 }
 
 function realRegularFile(targetPath) {
