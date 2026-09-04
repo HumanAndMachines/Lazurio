@@ -31,6 +31,13 @@ Missing, dirty, foreign, partial ani podobné nálezy nejsou další profily. Js
 to diagnostické reason kódy, které Agent řeší nad rozpoznaným profilem nebo
 bezpečně předá jako nerozpoznaný vstup.
 
+Na úplně fresh Source Mašině instaluj nejdřív jen chybějící oficiální Git,
+naklonuj canonical Lazurio source do `<home>/Lazurio` a teprve z jeho
+`lazurio/package.json#packageManager` přečti exact Bun pin. Neinstaluj obecný
+latest Bun jako dočasný mezikrok; clone Bun nepotřebuje a následný downgrade by
+jen přidal další chybnou mezifázi. Pokud source již existuje, nejdřív ověř jeho
+identitu, branch a stav a cizí nebo dirty adresář nepřepisuj.
+
 ## Root profil není CLI provenance
 
 Na localhost workstation má příkaz `lazurio` vždy právě jednu aktivní code
@@ -88,12 +95,24 @@ aktuálnost povinných nástrojů; chybějící nebo nečitelný povinný nástr
 required failure, zatímco pouhá dostupnost novější verze zůstává warningem a
 vyžaduje rozhodnutí Principála.
 
-Při instalačním mandátu, který výslovně dovoluje přesné nástroje a změnu
-uživatelského `PATH`, Agent chybějící oficiální instalaci i nejmenší PATH
-registraci skutečně dokončí. Existující PATH zachová, task worktree do něj
-nikdy nezapíše a system-wide změnu, nový package manager nebo upgrade jiného
-nástroje předem znovu předloží Principálovi. Výsledek ověří v novém čistém
-procesu, nikoli v shellu s dočasným `export` nebo `$env:Path`.
+Instalační mandát má explicitní rozsah, ne implicitní admin práva:
+
+- výchozí nejmenší mandát dovoluje nainstalovat jmenované chybějící
+  nástroje a doplnit jejich skutečné adresáře jen do User `PATH`;
+- rozšířený mandát smí pro jednu instalaci navíc výslovně povolit standardní
+  OS package manager, Machine/system-wide `PATH`, elevation a upgrade
+  jmenovaných nástrojů;
+- samostatný repo-specific publikační mandát smí Agentovi dovolit
+  proaktivně vytvořit nebo doplnit sanitizované instalační GitHub Issues.
+
+Agent provede jen kategorie skutečně povolené promptem. Existující platný PATH
+zachová, task worktree do něj nikdy nezapíše a User souhlas nerozšíří na
+Machine vrstvu. Git, GitHub CLI a Codex mohou s rozšířeným mandátem směřovat
+na aktuální oficiální stable a Node na podporované aktuální LTS. Bun je
+výjimka: vždy konverguje na exact verzi z
+`lazurio/package.json#packageManager`, ne na obecný upstream latest. Výsledek
+se ověří v novém čistém procesu, nikoli v shellu s dočasným `export` nebo
+`$env:Path`.
 
 Organization instalace tuto machine autoritu nepřebírá. Začíná až poté, co
 top-level gate vidí Bun, Git, `gh` a kompatibilní Node.js v PATH a Doctor vidí
@@ -133,7 +152,14 @@ Když onboarding odhalí reprodukovatelný problém, nenechá jej Agent jen v
 chatu. Vybere přesný owning repo a postupuje podle
 [`manual/github-issues.md`](github-issues.md). Vytvoření issue nebo komentáře
 je Publikace a vyžaduje explicitní mandát v instalačním promptu; bez něj Agent
-vrátí sanitizovaný draft, cílový repo a důvod, proč jej nezveřejnil.
+vrátí sanitizovaný draft, cílový repo a důvod, proč jej nezveřejnil. Pokud
+prompt exact repo předem povolil, Agent se u každého stejného nálezu znovu
+neptá: ověří reprodukci, najde duplicity, sanitizuje evidence a issue vytvoří
+nebo doplní. Tento mandát nepovoluje issue zavřít, přiřadit ani prioritizovat.
+
+Kompletní rozhodovací postup pro fresh install, repair i opakovaný onboarding
+drží skill
+[`lazurio-workstation-install`](../.agents/skills/lazurio-workstation-install/SKILL.md).
 
 ## Budoucí Managed Root
 

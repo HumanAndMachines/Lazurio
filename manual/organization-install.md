@@ -56,6 +56,46 @@ tohoto runbooku; krátký prompt jej nenahrazuje ani nerozšiřuje.
 > blocker pojmenuj přesným účtem, Teamem a repozitářem pro Organization ownera.
 <!-- lazurio-guide:organization-install-short:end -->
 
+### Volitelný rozšířený instalační mandát
+
+Výchozí prompt nahoře zůstává nejmenší bezpečný mandát: instaluje chybějící
+nástroje a mění jen User `PATH`. Principál, který vlastní nebo spravuje celou
+Mašinu, může v tomtéž promptu vědomě povolit i úplnou system instalaci.
+Rozšířený mandát není nový instalační profil ani trvalé nastavení Lazuria;
+je to autorizace přesných externích změn pro aktuální instalační relaci.
+
+Do promptu přidej pouze ty odstavce, jejichž dopad Principál skutečně schvaluje:
+
+> Pro tuto Mašinu máš navíc mé výslovné svolení použít podporovaný
+> systémový package manager, vyžádat standardní OS elevation a změnit User i
+> Machine/system-wide `PATH`. Přidej jen canonical instalační adresáře
+> jmenovaných nástrojů, zachovej ostatní platné položky a odstraň jen
+> prokazatelně neplatný nebo stínící záznam téhož nástroje. Neobcházej UAC,
+> device-management policy ani bezpečnostní ochranu Mašiny.
+>
+> Nainstaluj chybějící a aktualizuj existující Git, GitHub CLI a Codex CLI
+> na aktuální oficiální stable a Node.js na aktuální podporované LTS. Bun
+> nastav vždy na exact stabilní verzi deklarovanou aktuálním clean Lazurio
+> `lazurio/package.json#packageManager`, i když upstream nabízí novější verzi.
+> Preview, beta, nightly ani canary verze nepoužívej. Všechny bezpečně
+> opravitelné required nálezy Install Core a Doctoru v tomto mandátu skutečně
+> oprav a kontroly opakuj; nekonči pouhým reportem.
+>
+> Pokud během instalace reprodukuješ obecný Lazurio problém, máš svolení po
+> kontrole otevřených i zavřených duplicit a sanitizaci vytvořit nebo doplnit
+> GitHub Issue v `<installation-issue-repository>` a uvést jeho URL v handoffu.
+> Nezveřejňuj secrets, Personalspace, lokální username ani
+> Organization-specific data. Issue nezavírej, nepřiřazuj ani neprioritizuj.
+
+`<installation-issue-repository>` musí být exact owning repo, ne obecný název.
+Pro installer, CLI, Doctor, Launchpad a sdílený manuál je dnes
+`HumanAndMachines/Lazurio`; Organization-specific nález do něj nepatří.
+Publikační postup a sanitizaci drží
+[`manual/github-issues.md`](github-issues.md).
+
+Tento rozšířený mandát nepovoluje merge, release, source push, změnu GitHub
+membership/Teamů ani instalaci GitHub App mimo výslovně určenou Organizaci.
+
 ## Co z GitHub Organization tvoří Lazurio Organization
 
 Prvním konstitutivním krokem je instalace oficiální GitHub App
@@ -198,16 +238,17 @@ záměrně jej neopravuje. Po autorizované oficiální instalaci obnov process
 a zopakuj `lazurio doctor --tool-updates --json`.
 
 Obsahuje-li instalační prompt explicitní mandát pro přesné nástroje a změnu
-uživatelského `PATH`, Agent nezůstane u handoff warningu:
+User nebo Machine `PATH`, Agent nezůstane u handoff warningu:
 
 1. chybějící Git, GitHub CLI, Node.js LTS, Codex CLI nebo přesně pinovaný Bun
    nainstaluje výhradně oficiálním postupem pro zjištěnou platformu;
-2. do uživatelského `PATH` doplní pouze skutečný instalační adresář chybějícího
-   nástroje, zachová všechny existující položky a nevytvoří vazbu na task
-   worktree;
-3. bez dalšího souhlasu nemění system-wide `PATH`, neinstaluje systémový
-   package manager, neupgraduje funkční cizí nástroje ani nepřepisuje shell
-   profil nesouvisejícím obsahem;
+2. do výslovně autorizovaného User nebo Machine `PATH` doplní pouze skutečný
+   instalační adresář nástroje, zachová nesouvisející platné položky a
+   nevytvoří vazbu na task worktree;
+3. system-wide `PATH`, systémový package manager a upgrade existujícího
+   nástroje použije jen tehdy, když prompt každou tuto kategorii výslovně
+   povoluje; ani rozšířený mandát neopravňuje přepisovat nesouvisející shell
+   profil nebo bezpečnostní nastavení;
 4. zahodí dočasné PATH dědictví a z nového čistého procesu ověří příkazy
    `bun --version`, `git --version`, `gh --version`, `node --version`,
    `codex --version` a po registraci také `lazurio cli status --json`;
@@ -224,8 +265,9 @@ Doporučený autorizační blok instalačního promptu je:
 > neinstaluj systémový package manager, neměň bezpečnostní nastavení ani
 > neupgraduj jiné nástroje bez mého dalšího souhlasu.
 
-Když prompt změnu `PATH` neautorizuje, Agent vrátí přesný instalační report a
-vyžádá si souhlas; dočasná absolutní cesta není přípustný bypass gate.
+Když prompt změnu konkrétní vrstvy `PATH` neautorizuje, Agent vrátí přesný
+instalační report a vyžádá si souhlas; User souhlas se neinterpretuje jako
+Machine souhlas a dočasná absolutní cesta není přípustný bypass gate.
 
 ## GitHub přihlášení není Git transport
 
