@@ -45,6 +45,57 @@ Před spuštěním přečti root `AGENTS.md`, potom
 `$ORGANIZATION_TEMPLATE_ROOT/AGENTS.md`. V shared rootu spusť:
 
 ```sh
+preflight_required_template_access() {
+gh auth status --hostname github.com >/dev/null 2>&1 || {
+  echo "GitHub CLI není přihlášené k github.com; dokonči nejdřív machine auth/SSH gate." >&2
+  return 1
+}
+
+for template_repository in \
+  TemplatesRozjedeme-ai/OrganizationTemplate_GEN3 \
+  TemplatesRozjedeme-ai/MissionControlTemplate \
+  TemplatesRozjedeme-ai/KnowledgebaseTemplate \
+  TemplatesRozjedeme-ai/DesignSystemTemplate
+do
+  api_probe="$(
+    gh api --include "repos/$template_repository" \
+      --jq '"\(.full_name)\t\(.is_template)\t\(.default_branch)"' 2>&1
+  )"
+  api_status=$?
+  api_status_line="$(printf '%s\n' "$api_probe" | sed -n '1p')"
+  api_result_line="$(printf '%s\n' "$api_probe" | tail -n 1)"
+
+  if [ "$api_status" -ne 0 ]; then
+    case "$api_status_line $api_result_line" in
+      *" 401 "*|*"(HTTP 401)"*)
+        echo "GitHub autentizace už není platná; neopakuj template operaci před opravou přihlášení." >&2
+        ;;
+      *" 403 "*|*" 404 "*|*"(HTTP 403)"*|*"(HTTP 404)"*)
+        echo "Template repo není pro tento účet čitelné nebo neexistuje: $template_repository" >&2
+        echo "Požádej ownera TemplatesRozjedeme-ai o READ pozvánku/grant pro přesné repo; pokud je souřadnice zastaralá, oprav ji reviewovanou změnou tohoto runbooku." >&2
+        ;;
+      *)
+        echo "GitHub provider nebo síť nedovolily ověřit template repo: $template_repository" >&2
+        echo "Neodvozuj z technického selhání chybějící přístup a žádný náhradní remote nevytvářej." >&2
+        ;;
+    esac
+    return 1
+  fi
+
+  expected_result="$(printf '%s\ttrue\tmain' "$template_repository")"
+  test "$api_result_line" = "$expected_result" || {
+    echo "Template metadata neodpovídají exact repo, is_template=true a default_branch=main: $template_repository" >&2
+    return 1
+  }
+  git ls-remote --exit-code --heads -- \
+    "git@github.com:$template_repository.git" refs/heads/main >/dev/null 2>&1 || {
+    echo "GitHub API repo čte, ale SSH Git transport neověřil exact main: $template_repository" >&2
+    echo "Oprav SSH transport právě přihlášeného účtu; další gh login ani alternativní remote nevytvářej." >&2
+    return 1
+  }
+done
+}
+
 preflight_gen3_rollout() {
 cd /path/to/Lazurio || return 1
 lazurio_root="$(pwd -P)" || return 1
@@ -80,6 +131,7 @@ else
 fi
 bun run check || return 1
 bun run doctor || return 1
+preflight_required_template_access || return 1
 
 organization_template_root="${ORGANIZATION_TEMPLATE_ROOT:-}"
 if [ -z "$organization_template_root" ] || [ "${organization_template_root#/}" = "$organization_template_root" ]; then
@@ -220,7 +272,8 @@ Pokračuj jen pokud:
 - explicitní preflight výše potvrdí existenci a Git stav všech čtyř required
   template checkoutů; Doctor pouze discovery-reportuje ty přítomné a nemá
   hardcodovaný allowlist, kterým by jejich absenci vynucoval;
-- GitHub API potvrzuje `is_template: true` pro
+- read-only provider a SSH preflight potvrzuje přihlášenému účtu READ přístup,
+  exact `refs/heads/main` a `is_template: true` pro
   `TemplatesRozjedeme-ai/OrganizationTemplate_GEN3`,
   `TemplatesRozjedeme-ai/MissionControlTemplate`,
   `TemplatesRozjedeme-ai/KnowledgebaseTemplate` a
@@ -229,15 +282,11 @@ Pokračuj jen pokud:
 
 Fail-fast: novou GEN3 Organizaci nezakládej ze starého `CompanyTemplate` / GEN2 workspace template. Výchozí Organization upstream je `TemplatesRozjedeme-ai/OrganizationTemplate_GEN3`.
 
-Stav template flagů ověř read-only, ne podle názvu repozitáře:
-
-```sh
-for repo in OrganizationTemplate_GEN3 MissionControlTemplate KnowledgebaseTemplate DesignSystemTemplate; do
-  gh api "repos/TemplatesRozjedeme-ai/$repo" --jq '"\(.full_name) is_template=\(.is_template) default_branch=\(.default_branch)"'
-done
-```
-
-Každý řádek musí uvést `is_template=true` a `default_branch=main`.
+GitHub může u privátního repozitáře záměrně vrátit HTTP 404 jak pro chybějící
+repo, tak pro účet bez READ. Runbook tento rozdíl nehádá: vrátí přesnou
+souřadnici a požadavek na READ pozvánku/grant. Chybějící nebo neplatné
+přihlášení, provider/network failure a selhání SSH transportu zůstávají
+samostatné blokátory. Žádný z nich neopravuj forkem ani alternativním remote.
 
 ### 1. Organization repo bootstrap
 
