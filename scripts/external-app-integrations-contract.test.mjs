@@ -9,6 +9,7 @@ function repoPath(relativePath) {
 const manualPath = repoPath("../manual/external-app-integrations.md");
 const codexManualPath = repoPath("../manual/codex-manual-mcp-integrations.md");
 const googleRunbookPath = repoPath("../manual/integrations/google-workspace.md");
+const microsoftRunbookPath = repoPath("../manual/integrations/microsoft-365.md");
 const integrationSkillPath = repoPath("../.agents/skills/external-app-integrations/SKILL.md");
 const smokeInstructionPaths = [
   "../manual/integrations/slack.md",
@@ -100,6 +101,23 @@ test("OAuth write scope zůstává schopností, ne souhlasem s publikací", asyn
   expect(google).toMatch(/Udělený OAuth grant je schopnost mašiny, ne souhlas/);
   expect(google).toContain("approval mode harnessu");
   expect(skill).toMatch(/Udělený OAuth grant je\s+schopnost mašiny, ne souhlas/);
+});
+
+test("Microsoft 365 launcher obchází Windows shell a zachovává přesné argv", async () => {
+  const microsoft = await readPolicy(microsoftRunbookPath);
+
+  expect(microsoft).toContain("node_modules/npm/bin/npx-cli.js");
+  expect(microsoft).toContain("process.execPath");
+  expect(microsoft).toContain("User `PATH`");
+  expect(microsoft).toMatch(/skutečný běžný soubor[\s\S]*`realpath`[\s\S]*stejného Node instalačního rootu/);
+  expect(microsoft).toMatch(/skonči fail-closed[\s\S]*nevracej se k shellu ani k jinému `npx` z\s+`PATH`/);
+  expect(microsoft).toContain('"@softeria/ms-365-mcp-server@0.148.0"');
+  expect(microsoft).toContain('"--enabled-tools",\n  PINNED_TOOLS_REGEX');
+  expect(microsoft).toContain('"--allowed-scopes",\n  PINNED_ALLOWED_SCOPES');
+  expect(microsoft).toMatch(/spawn\(process\.execPath, providerArgs,[\s\S]*shell: false/);
+  expect(microsoft).toMatch(/capture shimem[\s\S]*`process\.argv`[\s\S]*položku po položce/);
+  expect(microsoft).toMatch(/`--list-permissions`[\s\S]*exit codem `0`[\s\S]*`org mode`[\s\S]*`readOnly: true`/);
+  expect(microsoft).toMatch(/nesmí otevřít login ani vyžádat device code/);
 });
 
 test("kontraktní text se čte shodně z Windows CRLF checkoutu", () => {
