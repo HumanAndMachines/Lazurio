@@ -359,6 +359,43 @@ provisionuje Knowledgebase a další moduly přibývají až podle business pot�
 Mission Control, Design System a Infra jsou Organization root boundaries, ne
 Team moduly.
 
+### 1a. Instance `AGENTS.md` po forku (povinné)
+
+Fork z template zdědí `AGENTS.md`, které mluví jako šablona. Pokud ho Agent
+nepřepíše, v nested checkoutu zakáže klientský obsah nebo přeskočí otázku
+na Publikaci Draftu. Tohle je stejná chyba, která se stala u prvních
+klientských Organizací.
+
+Jakmile je `organization_kind: organization`, v reviewovatelném PR (nebo ve
+stejném bootstrap PR) proveď:
+
+1. Organization `AGENTS.md` — na začátku blok **Povinný handoff** s dvojotázkou
+   „Mám změny Publikovat tvým jménem? Nebo mám požádat jiného oprávněného
+   Principála o kontrolu a Publikaci?". Nested soubory tenhle kontrakt
+   nenahrazují.
+2. `workspace/knowledgebase/AGENTS.md` — instance: název firmy, privátní
+   knowledgebase této Organizace, zákaz vracet obsah do šablony, odkaz na
+   parent `AGENTS.md`. Pryč nadpis `KnowledgebaseTemplate` a věta „není
+   knowledgebase konkrétní firmy".
+3. `mission-control/AGENTS.md` — instance app/code této Organizace. Review
+   nesměruj na maintainery šablony (žádný jmenovitý Mattyčus).
+4. `mission-control/db/AGENTS.md` — PR proti `v3` je Draft; commit+push/merge
+   na `v3` je Publikace až po explicitním „Publikuj".
+5. Design System a infra, pokud existují — instance odkaz na parent `AGENTS.md`;
+   tokenová a no-secrets pravidla ponech.
+
+Fail-closed z Organization rootu (chybějící soubor přeskoč):
+
+```sh
+! rg -n "KnowledgebaseTemplate —|Tento repozitář není knowledgebase konkrétní firmy|MissionControlTemplate —|Mattyčus owns implementation|forkable šablona" \
+  --glob 'AGENTS.md' --glob '!**/node_modules/**' --glob '!**/.worktrees/**'
+rg -n "Mám změny Publikovat" AGENTS.md
+```
+
+Obsah šablon (`TemplatesRozjedeme-ai/*`) se mění jen template PR, nikdy
+zkopírováním klientských dat zpět. Detail opakuje OrganizationTemplate skill
+`workspace-initialization` krok 4a.
+
 ### 2. Lokální mount a remote hranice
 
 #### GitHub-first mount
@@ -724,6 +761,7 @@ Použij pro první klientský closeout. Pole označené `pokud ...` dokládej je
 - `bun run doctor`: ok/warn/fail + excerpt
 - Runtime smoke: `<app-id>` ready/start/repair result (pokud se app runtime předává)
 - Secrets: metadata-only custody check, no values printed (pokud se secrets konfigurovaly)
+- Nested AGENTS instance rewrite: pass/fail (`rg` gate z §1a)
 - Known accepted warnings: `<none>` or explicit list
 - Rollback path: tested/available/not applicable + proč
 ```
@@ -742,6 +780,8 @@ GEN3 je ready pro prvního klienta, když:
 - Organization baseline je z `OrganizationTemplate_GEN3`; Mission Control
   app + data, Knowledgebase, Design System boundary a Infra mají výše popsané
   nested repo/sloty, zatímco další workspace moduly se nezakládají big-bang;
+- Organization `AGENTS.md` má na začátku povinný handoff Publikace a nested
+  `AGENTS.md` jsou instance, ne text šablony (grep gate v §1a);
 - required template mounty zahrnují `OrganizationTemplate_GEN3`,
   `MissionControlTemplate`, `KnowledgebaseTemplate` a
   `DesignSystemTemplate`; Mission Control i Design System template mají
