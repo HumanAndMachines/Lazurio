@@ -9,6 +9,9 @@ After merge into `main`, GitHub user `immakermatty` (immutable ID `16311043`)
 can add exactly `@claude review` to an open PR or dispatch **Claude review**
 from **main** with its PR number. Only first attempts run: to retry, create a
 new request, not **Re-run jobs**. Unrelated comments cannot cancel review jobs.
+Authorized requests are serialized without cancelling an active publisher.
+Manual cancellation or runner failure can still interrupt readback; every report
+is labeled a commit snapshot from its initial publication.
 
 The result is an advisory COMMENT review by `github-actions[bot]`, explicitly
 bound to a commit snapshot. It never approves, edits, merges or deploys code.

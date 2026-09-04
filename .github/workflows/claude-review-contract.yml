@@ -14,3 +14,5 @@ jobs:
         with:
           persist-credentials: false
       - run: node --test .github/claude-review.test.cjs
+      - name: Validate workflow syntax and expressions
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@03d0035246f3e81f36aed592ffb4bebf33a03106 -shellcheck= -pyflakes= .github/workflows/claude-review.yml .github/workflows/claude-review-contract.yml

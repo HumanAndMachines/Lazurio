@@ -25,6 +25,7 @@ test('only owner first-attempt main requests pass the exact workflow gate', () =
 });
 test('concurrency belongs to the authorized job; environment and zero tools are fixed', () => {
   assert.ok(!/^concurrency:/m.test(workflow));
+  assert.match(workflow, /^      cancel-in-progress: false$/m);
   assert.match(workflow, /^    concurrency:\n      group: claude-review-/m);
   assert.match(workflow, /^    environment: claude-review$/m);
   assert.match(workflow, /^            --tools=$/m);

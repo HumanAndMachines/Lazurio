@@ -26,7 +26,7 @@ jobs:
     environment: claude-review
     concurrency:
       group: claude-review-${{ github.event.issue.number || inputs.pr_number }}
-      cancel-in-progress: true
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
