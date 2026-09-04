@@ -31,7 +31,7 @@ test("local trust accepts loopback same-origin requests and rejects foreign orig
   });
 });
 
-test("hosted trust revalidates the signed OAuth session and exact gateway identity", async () => {
+test("hosted trust revalidates only the exact Team-scoped signed OAuth session", async () => {
   const externalOrigin = "https://launchpad.management.iotorlazurio.lazurio.io";
   const authCheckUrl = "https://auth.management.iotorlazurio.lazurio.io/oauth2/auth";
   const authCookieName = "__Secure-lazurio-management-workspace";
@@ -48,7 +48,9 @@ test("hosted trust revalidates the signed OAuth session and exact gateway identi
       }
       return new Response(null, {
         status: 202,
-        headers: { "x-auth-request-user": "annavesela" },
+        // A generic OIDC consumer exposes opaque `sub` here. Launchpad does
+        // not reinterpret it as a GitHub login or a second access decision.
+        headers: { "x-auth-request-user": "issuer-subject:001" },
       });
     },
   });
@@ -56,7 +58,6 @@ test("hosted trust revalidates the signed OAuth session and exact gateway identi
     cookie: `launchpad-theme=dark; ${authCookieName}=valid-session; analytics-id=private`,
     origin: externalOrigin,
     "sec-fetch-site": "same-origin",
-    "x-lazurio-github-login": "annavesela",
   };
 
   expect(await trust.isTrustedWorkspaceRequest(request(headers), backendUrl)).toBe(true);
@@ -77,8 +78,6 @@ test("hosted trust revalidates the signed OAuth session and exact gateway identi
   }), backendUrl)).toBe(false);
   expect(await trust.isTrustedWorkspaceRequest(request({ ...headers, origin: "https://evil.invalid" }), backendUrl)).toBe(false);
   expect(await trust.isTrustedWorkspaceRequest(request({ ...headers, "sec-fetch-site": "cross-site" }), backendUrl)).toBe(false);
-  expect(await trust.isTrustedWorkspaceRequest(request({ ...headers, "x-lazurio-github-login": "" }), backendUrl)).toBe(false);
-  expect(await trust.isTrustedWorkspaceRequest(request({ ...headers, "x-lazurio-github-login": "not a login!" }), backendUrl)).toBe(false);
   expect(await trust.isTrustedWorkspaceRequest(request({ ...headers, cookie: "" }), backendUrl)).toBe(false);
   expect(await trust.isTrustedWorkspaceRequest(request({
     ...headers,
@@ -110,10 +109,6 @@ test("hosted trust revalidates the signed OAuth session and exact gateway identi
     trusted: false,
     reason: "hosted_auth_cookie_missing",
   });
-  expect(await trust.isTrustedWorkspaceRequest(request({
-    ...headers,
-    "x-lazurio-github-login": "other-user",
-  }), backendUrl)).toBe(false);
 });
 
 test("hosted trust configuration fails closed", () => {

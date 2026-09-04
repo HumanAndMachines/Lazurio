@@ -46,23 +46,23 @@ Hosted browser akce navíc vyžadují
 `LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN=https://<přesný-launchpad-host>` a interní
 `LAZURIO_LAUNCHPAD_AUTH_CHECK_URL=https://<přesný-auth-host>/oauth2/auth` spolu
 s přesným `LAZURIO_LAUNCHPAD_AUTH_COOKIE_NAME=<oauth2-proxy-cookie>`. Server
-přijme tento origin pouze v hosted profilu, pouze přes svůj loopback listener,
-s browser metadata `Sec-Fetch-Site: same-origin` a s
-`X-Lazurio-GitHub-Login`, který smí po úspěšném OAuth/GitHub Team checku vložit
-ingress. Ingress před autentizací stejný příchozí header vždy odstraní. Protože
-samotné proxy hlavičky umí proces ve sdíleném loopback namespace napodobit,
-Launchpad před každou chráněnou akcí znovu ověří podepsanou HttpOnly session u
-stejného oauth2-proxy přes oddělený TLS-autentizovaný Team auth host a porovná
-jeho autoritativní login s ingress hlavičkou. Na auth origin předá pouze přesně
-pojmenovanou oauth2-proxy session cookie; žádnou další browser cookie ani OAuth
-token neloguje nebo nepředává a auth check failuje zavřeně. Tím hostovaný
-povrch používá stejné `/api/sync`, runtime, Git a update handlery jako localhost
-bez druhého IAM nebo druhé implementace akcí.
+přijme tento origin pouze v hosted profilu, pouze přes svůj loopback listener a
+s browser metadata `Sec-Fetch-Site: same-origin`. Proxy ani identity hlavička
+se nepovažuje za důkaz, protože ji proces ve sdíleném loopback namespace umí
+napodobit. Launchpad proto před každou chráněnou akcí znovu ověří podepsanou
+HttpOnly session u stejného Team-scoped oauth2-proxy přes oddělený
+TLS-autentizovaný auth host. Na auth origin předá pouze přesně pojmenovanou
+oauth2-proxy session cookie; žádnou další browser cookie, lidský display login
+ani OAuth token neloguje nebo nepředává a auth check failuje zavřeně. Exact
+Team capability je součástí konfigurace této auth session, ne paralelní
+Launchpad identity. Tím hostovaný povrch používá stejné `/api/sync`, runtime,
+Git a update handlery jako localhost bez druhého IAM nebo druhé implementace
+akcí.
 
 Personalspace, `/api/launchpad/identity` a otevření složky v lokálním OS zůstávají
 i v hosted profilu local-only. Chybějící nebo neplatný external origin či auth
-check URL je startup chyba; chybějící gateway identita nebo session, neúspěšný
-auth check, odlišný origin nebo cross-site request končí `403` před routingem.
+check URL je startup chyba; chybějící session, neúspěšný auth check, odlišný
+origin nebo cross-site request končí `403` před routingem.
 
 Hosted profil je privátní vývojový preview povrch uvnitř schváleného
 Tailscale/VPN access plane, nikoli produkční deployment. Zdroj lze editovat bez

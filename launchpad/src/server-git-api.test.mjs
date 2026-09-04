@@ -830,7 +830,7 @@ test("locator publication failure releases Server leases for retry", async () =>
   await lifetimeProbe.release();
 }, platformTestTimeout(15_000));
 
-test("hosted Launchpad rejects forged gateway headers without a TLS-authenticated OAuth session", async () => {
+test("hosted Launchpad rejects forged browser context without a TLS-authenticated OAuth session", async () => {
   const root = await createLaunchpadGitFixture();
   const stateRoot = `${root}-launchpad-state`;
   tempRoots.push(root, stateRoot);
@@ -853,7 +853,6 @@ test("hosted Launchpad rejects forged gateway headers without a TLS-authenticate
   const gatewayHeaders = {
     origin: externalOrigin,
     "sec-fetch-site": "same-origin",
-    "x-lazurio-github-login": "annavesela",
   };
 
   const directServerIdentity = await getJson(port, "/api/lazurio/server-identity");

@@ -1,5 +1,4 @@
 const localBackendHosts = new Set(["127.0.0.1", "localhost"]);
-const githubLoginPattern = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
 const cookieNamePattern = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 const maxHostedCookieHeaderBytes = 16 * 1024;
 const maxHostedCookieNameBytes = 256;
@@ -51,24 +50,17 @@ export function createRequestTrustPolicy({
       return trustDecision(false, "hosted_backend_not_loopback");
     }
 
-    // The hosted browser never reaches this loopback listener directly. Caddy
-    // authenticates the exact GitHub Team, strips an incoming identity header,
-    // and only then injects X-Lazurio-GitHub-Login into the proxied request.
-    // A local workspace process can forge those transport headers, so they are
-    // only routing invariants. Authorization is independently revalidated
-    // over a separately authenticated TLS route against oauth2-proxy with
-    // the browser's signed HttpOnly session cookie.
-    const login = request.headers.get("x-lazurio-github-login") ?? "";
+    // The hosted browser never reaches this loopback listener directly. A
+    // local workspace process can forge every proxy or identity header, so no
+    // such header participates in trust. Authorization is revalidated over a
+    // separately authenticated TLS route against the Team-scoped oauth2-proxy
+    // with only the browser's exact signed HttpOnly session cookie.
     if (request.headers.get("sec-fetch-site") !== "same-origin") {
       return trustDecision(false, "hosted_fetch_site_mismatch");
     }
     if (request.headers.get("origin") !== hostedOrigin) {
       return trustDecision(false, "hosted_origin_mismatch");
     }
-    if (!githubLoginPattern.test(login)) {
-      return trustDecision(false, "hosted_gateway_login_invalid");
-    }
-
     const cookieSelection = selectHostedAuthCookie(
       request.headers.get("cookie") ?? "",
       hostedCookieName,
@@ -84,12 +76,8 @@ export function createRequestTrustPolicy({
         redirect: "manual",
         signal: AbortSignal.timeout(hostedAuthCheckTimeoutMs),
       });
-      const authorizedLogin = authResponse.headers.get("x-auth-request-user") ?? "";
       if (authResponse.status < 200 || authResponse.status >= 300) {
         return trustDecision(false, "hosted_auth_rejected");
-      }
-      if (authorizedLogin !== login) {
-        return trustDecision(false, "hosted_auth_identity_mismatch");
       }
       return trustDecision(true, "trusted_hosted");
     } catch {
