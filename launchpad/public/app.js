@@ -1747,7 +1747,8 @@ function filterGuideContent(query) {
   const needle = normalizeGuideSearch(query);
   let visibleItems = 0;
   for (const item of document.querySelectorAll("[data-guide-search-item]")) {
-    const matches = !needle || normalizeGuideSearch(item.textContent).includes(needle);
+    const searchableText = item.dataset.guideSearchText ?? item.textContent;
+    const matches = !needle || normalizeGuideSearch(searchableText).includes(needle);
     item.toggleAttribute("hidden", !matches);
     if (matches) visibleItems += 1;
   }
