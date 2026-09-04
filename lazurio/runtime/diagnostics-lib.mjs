@@ -75,6 +75,10 @@ import {
 } from "../core/tool-update-lib.mjs";
 import { inspectDirectoryWithinCanonicalBoundary } from "../core/path-boundary-lib.mjs";
 import { readOrganizationRoot } from "../core/organization-root-reader-lib.mjs";
+import {
+  inspectRepositoryDbWorktreeBinding,
+  readRequiredRepositoryDbWorktreeSlots,
+} from "./repository-db-worktree-lib.mjs";
 
 const supportedPlatforms = {
   darwin: "macOS",
@@ -647,17 +651,33 @@ async function worktreeDependencyCheck({ companiesRoot, index }) {
         absoluteWorktreePath: packageDiscovery.worktree_root,
       }));
     }
+    records.push(...await worktreeRepositoryDbReadiness({
+      companiesRoot,
+      worktree,
+      absoluteWorktreePath,
+    }));
   }
 
   const counts = countBy(records.map((record) => record.state));
-  const packageRecords = records.filter((record) => record.state !== "no_package");
-  const warningStates = new Set(["needs_install", "dependency_boundary_invalid", "missing_lockfile", "unknown_package_manager", "invalid_package_json"]);
+  const packageRecords = records.filter((record) => record.kind !== "repository_db" && record.state !== "no_package");
+  const repositoryDbRecords = records.filter((record) => record.kind === "repository_db");
+  const warningStates = new Set([
+    "needs_install",
+    "dependency_boundary_invalid",
+    "missing_lockfile",
+    "unknown_package_manager",
+    "invalid_package_json",
+    "repository_db_binding_invalid",
+  ]);
   const warnings = records.filter((record) => warningStates.has(record.state));
   const details = [
     `checked_worktrees: ${runnableWorktrees.length}`,
     `skipped_declared_inactive_worktrees: ${inactiveWorktrees.length}`,
     `checked_packages: ${packageRecords.length}`,
+    `checked_repository_db_bindings: ${repositoryDbRecords.length}`,
     `ready: ${counts.ready ?? 0}`,
+    `repository_db_ready: ${counts.repository_db_ready ?? 0}`,
+    `repository_db_binding_invalid: ${counts.repository_db_binding_invalid ?? 0}`,
     `needs_install: ${counts.needs_install ?? 0}`,
     `dependency_boundary_invalid: ${counts.dependency_boundary_invalid ?? 0}`,
     `missing_lockfile: ${counts.missing_lockfile ?? 0}`,
@@ -676,10 +696,70 @@ async function worktreeDependencyCheck({ companiesRoot, index }) {
       warnings.length > 0
         ? `Worktree dependency readiness má ${formatCount(warnings.length, "varování", "varování", "varování")}.`
         : `Worktree dependency readiness je čistá pro ${formatCount(packageRecords.length, "package", "packages", "packages")}.`,
-    paths: ["organizations/*/.worktrees/*/*/*/package.json", "organizations/*/.worktrees/*/*/*/app/*/package.json"],
+    paths: [
+      "organizations/*/.worktrees/*/*/*.worktree.json",
+      "organizations/*/.worktrees/*/*/*/package.json",
+      "organizations/*/.worktrees/*/*/*/app/*/package.json",
+    ],
     links: [],
     details,
   };
+}
+
+async function worktreeRepositoryDbReadiness({
+  companiesRoot,
+  worktree,
+  absoluteWorktreePath,
+}) {
+  if (typeof worktree.metadata?.module_path !== "string" || worktree.metadata.module_path === "") {
+    return [];
+  }
+  const organizationRoot = join(companiesRoot, worktree.organization_path);
+  const requirements = await readRequiredRepositoryDbWorktreeSlots({
+    organizationRoot,
+    moduleCheckoutRoot: absoluteWorktreePath,
+    moduleSlotPath: worktree.metadata?.module_path,
+    moduleId: worktree.module,
+  });
+  if (!requirements.ok) {
+    return [{
+      kind: "repository_db",
+      state: "repository_db_binding_invalid",
+      worktree,
+      detail: `repository_db_binding_invalid: ${worktree.slug} (${worktree.path}) — ${requirements.details.join("; ")}`,
+    }];
+  }
+  const members = Array.isArray(worktree.metadata?.members) ? worktree.metadata.members : [];
+  const records = [];
+  for (const dependency of requirements.dependencies) {
+    const matching = members.filter((member) =>
+      member?.role === "dependency" && member?.slot_path === dependency.slot_path
+    );
+    if (matching.length !== 1) {
+      records.push({
+        kind: "repository_db",
+        state: "repository_db_binding_invalid",
+        worktree,
+        detail: `repository_db_binding_invalid: ${worktree.slug} (${worktree.path}) — ${dependency.slot_path} nemá právě jeden dependency member`,
+      });
+      continue;
+    }
+    const inspection = await inspectRepositoryDbWorktreeBinding({
+      organizationRoot,
+      editWorktreeRoot: absoluteWorktreePath,
+      dependency,
+      member: matching[0],
+    });
+    records.push({
+      kind: "repository_db",
+      state: inspection.ok ? "repository_db_ready" : "repository_db_binding_invalid",
+      worktree,
+      detail: inspection.ok
+        ? `repository_db_ready: ${worktree.slug} (${worktree.path}) — ${dependency.slot_path}@${matching[0].base_sha}`
+        : `repository_db_binding_invalid: ${worktree.slug} (${worktree.path}) — ${inspection.details.join("; ")}`,
+    });
+  }
+  return records;
 }
 
 async function worktreePackageRoots({ companiesRoot, worktree, absoluteWorktreePath }) {

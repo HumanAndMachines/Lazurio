@@ -11,6 +11,11 @@ import { GIT_LOCAL_TIMEOUT_MS, runGit, safeGitRemoteEnv } from "../../lazurio/ru
 import { readGitRepoStatus } from "../../lazurio/runtime/git-status-lib.mjs";
 import { isMissionControlPlanPath, readMissionControlPlanAt } from "../../lazurio/runtime/mission-control-plan-lib.mjs";
 import { inspectCanonicalPathBoundary } from "../../lazurio/core/path-boundary-lib.mjs";
+import {
+  inspectCanonicalRepositoryDbCheckout,
+  inspectRepositoryDbWorktreeBinding,
+  readRequiredRepositoryDbWorktreeSlots,
+} from "../../lazurio/runtime/repository-db-worktree-lib.mjs";
 import { buildWorktreeIndex } from "../../lazurio/runtime/worktree-lib.mjs";
 
 export class WorktreeActionError extends Error {
@@ -165,28 +170,50 @@ export async function createWorktreeFromPlan({
     });
   }
 
-  const metadata = {
-    schema_version: "companiesascode.worktree.v1",
-    organization: repo.organization,
-    organization_path: repo.organization_path,
-    workspace: repo.workspace,
-    module: repo.module,
-    module_path: repo.slot_path ?? repo.repo_path.replace(`${repo.organization_path}/`, ""),
-    repo_kind: repo.repo_kind,
-    base_branch: repo.expected_branch ?? "main",
-    branch: normalizedBranch,
-    mission_control_plan_code: plan.code,
-    mission_control_plan_path: normalizedPlanPath,
-    worktree_path: paths.organizationRelativeWorktreePath,
-    created_at: createdAt,
-    created_by: createdBy,
-    conversation_origin: resolvedConversationOrigin,
-    recovery_handoff: resolvedRecoveryHandoff,
-    status: "active",
-  };
+  const createdDependencyBindings = [];
   let sidecarPublished = false;
   let sidecarStagingPath = null;
   try {
+    const modulePath = repo.slot_path ?? repo.repo_path.replace(`${repo.organization_path}/`, "");
+    const dependencyMembers = await materializeRequiredRepositoryDbBindings({
+      organizationRoot: join(companiesRoot, repo.organization_path),
+      editWorktreeRoot: paths.absoluteWorktreePath,
+      modulePath,
+      repo,
+      createdBindings: createdDependencyBindings,
+    });
+    const metadata = {
+      schema_version: "companiesascode.worktree.v1",
+      organization: repo.organization,
+      organization_path: repo.organization_path,
+      workspace: repo.workspace,
+      module: repo.module,
+      module_path: modulePath,
+      repo_kind: repo.repo_kind,
+      base_branch: repo.expected_branch ?? "main",
+      branch: normalizedBranch,
+      mission_control_plan_code: plan.code,
+      mission_control_plan_path: normalizedPlanPath,
+      worktree_path: paths.organizationRelativeWorktreePath,
+      created_at: createdAt,
+      created_by: createdBy,
+      conversation_origin: resolvedConversationOrigin,
+      recovery_handoff: resolvedRecoveryHandoff,
+      status: "active",
+      members: [
+        {
+          repo_path: ".",
+          slot_path: modulePath,
+          role: "edit",
+          base_ref: `origin/${repo.expected_branch ?? "main"}`,
+          base_sha: branchAllocation.branchHead,
+          branch: normalizedBranch,
+          materialization: "linked_worktree",
+          disposition: "active",
+        },
+        ...dependencyMembers,
+      ],
+    };
     const sidecarWrite = await sidecarWriter({
       sidecarPath: paths.absoluteSidecarPath,
       contents: `${JSON.stringify(metadata, null, 2)}\n`,
@@ -222,24 +249,180 @@ export async function createWorktreeFromPlan({
     const stagingReport = attachedStagingPath
       ? `staging sidecar ${attachedStagingPath} zůstává pro vědomý úklid`
       : "sidecar nebyl publikován";
-    const rollback = await rollbackOwnedWorktreeCreate({
-      repo,
-      worktreePath: paths.absoluteWorktreePath,
-      branch: normalizedBranch,
-      ownerMarker: branchAllocation.ownerMarker,
-      branchHead: branchAllocation.branchHead,
+    const dependencyRollback = await rollbackOwnedRepositoryDbBindings({
+      organizationRoot: join(companiesRoot, repo.organization_path),
+      editWorktreeRoot: paths.absoluteWorktreePath,
+      createdBindings: createdDependencyBindings,
     });
+    const rollback = dependencyRollback.ok
+      ? await rollbackOwnedWorktreeCreate({
+          repo,
+          worktreePath: paths.absoluteWorktreePath,
+          branch: normalizedBranch,
+          ownerMarker: branchAllocation.ownerMarker,
+          branchHead: branchAllocation.branchHead,
+        })
+      : `edit worktree ani branch se nemažou: ${dependencyRollback.message}`;
     throw new WorktreeActionError(
-      `Worktree sidecar nelze publikovat: ${error instanceof Error ? error.message : error}; ${stagingReport}; ${rollback}.`,
+      `Worktree environment nelze dokončit: ${error instanceof Error ? error.message : error}; ${stagingReport}; ${dependencyRollback.message}; ${rollback}.`,
       {
         status: 500,
         code: "worktree_create_rolled_back",
-        details: [error instanceof Error ? error.message : String(error), stagingReport, rollback],
+        details: [
+          error instanceof Error ? error.message : String(error),
+          ...(error instanceof WorktreeActionError ? error.details : []),
+          stagingReport,
+          dependencyRollback.message,
+          rollback,
+        ],
       },
     );
   }
     },
   );
+}
+
+async function materializeRequiredRepositoryDbBindings({
+  organizationRoot,
+  editWorktreeRoot,
+  modulePath,
+  repo,
+  createdBindings,
+}) {
+  const requirements = await readRequiredRepositoryDbWorktreeSlots({
+    organizationRoot,
+    moduleCheckoutRoot: editWorktreeRoot,
+    moduleSlotPath: modulePath,
+    moduleId: repo.module,
+  });
+  if (!requirements.ok) {
+    throw new WorktreeActionError(requirements.message, {
+      status: 409,
+      code: requirements.code,
+      details: requirements.details,
+    });
+  }
+
+  const members = [];
+  for (const dependency of requirements.dependencies) {
+    const source = await inspectCanonicalRepositoryDbCheckout({ organizationRoot, dependency });
+    if (!source.ok) {
+      throw new WorktreeActionError(source.message, {
+        status: 409,
+        code: source.code,
+        details: source.details,
+      });
+    }
+    const targetPath = resolve(editWorktreeRoot, dependency.relative_path);
+    const targetBoundary = await inspectCanonicalPathBoundary({
+      rootPath: editWorktreeRoot,
+      targetPath,
+      allowMissingTarget: true,
+    });
+    if (!targetBoundary.ok) {
+      throw new WorktreeActionError(`Repository-db binding ${dependency.relative_path} opouští edit worktree.`, {
+        status: 409,
+        code: "repository_db_binding_boundary_invalid",
+      });
+    }
+    if (existsSync(targetPath)) {
+      throw new WorktreeActionError(`Repository-db binding cesta už existuje: ${dependency.relative_path}.`, {
+        status: 409,
+        code: "repository_db_binding_path_occupied",
+      });
+    }
+    const ignored = await runGit(["check-ignore", "--no-index", "--quiet", "--", dependency.relative_path], {
+      cwd: editWorktreeRoot,
+      timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+    });
+    if (!ignored.ok) {
+      throw new WorktreeActionError(
+        `Repository-db binding cesta ${dependency.relative_path} není ignorovaná editovaným repem; publish izolaci nelze zaručit.`,
+        { status: 409, code: "repository_db_binding_not_ignored" },
+      );
+    }
+    await mkdir(dirname(targetPath), { recursive: true });
+    const added = await runGit(["worktree", "add", "--detach", targetPath, source.head], {
+      cwd: source.source_path,
+      timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+    });
+    if (!added.ok) {
+      throw new WorktreeActionError(
+        `Repository-db child worktree ${dependency.relative_path} nelze vytvořit: ${added.stderr || added.error || added.stdout}.`,
+        { status: 500, code: "repository_db_binding_create_failed" },
+      );
+    }
+    const member = {
+      repo_path: dependency.relative_path,
+      slot_path: dependency.slot_path,
+      role: "dependency",
+      base_ref: source.base_ref,
+      base_sha: source.head,
+      branch: null,
+      materialization: "linked_worktree",
+    };
+    const created = { dependency, member, sourcePath: source.source_path, targetPath };
+    createdBindings.push(created);
+    const inspection = await inspectRepositoryDbWorktreeBinding({
+      organizationRoot,
+      editWorktreeRoot,
+      dependency,
+      member,
+    });
+    if (!inspection.ok) {
+      throw new WorktreeActionError(inspection.message, {
+        status: 500,
+        code: inspection.code,
+        details: inspection.details,
+      });
+    }
+    members.push(member);
+  }
+  return members;
+}
+
+async function rollbackOwnedRepositoryDbBindings({
+  organizationRoot,
+  editWorktreeRoot,
+  createdBindings,
+}) {
+  if (createdBindings.length === 0) {
+    return { ok: true, message: "žádný dependency child worktree nevznikl" };
+  }
+  const removed = [];
+  for (const binding of [...createdBindings].reverse()) {
+    const inspection = await inspectRepositoryDbWorktreeBinding({
+      organizationRoot,
+      editWorktreeRoot,
+      dependency: binding.dependency,
+      member: binding.member,
+    });
+    if (!inspection.ok) {
+      return {
+        ok: false,
+        message: `dependency child ${binding.member.repo_path} zůstává zachovaný: ${inspection.details.join("; ")}`,
+      };
+    }
+    const result = await runGit(["worktree", "remove", binding.targetPath], {
+      cwd: binding.sourcePath,
+      timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+    });
+    if (!result.ok) {
+      return {
+        ok: false,
+        message: `dependency child ${binding.member.repo_path} nelze bezpečně odstranit: ${result.stderr || result.error || result.stdout}`,
+      };
+    }
+    await runGit(["worktree", "prune", "--expire", "now"], {
+      cwd: binding.sourcePath,
+      timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+    });
+    removed.push(binding.member.repo_path);
+  }
+  return {
+    ok: true,
+    message: `dependency child worktrees vráceny v opačném pořadí: ${removed.join(", ")}`,
+  };
 }
 
 export async function publishWorktreeDraft({

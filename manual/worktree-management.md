@@ -5,6 +5,12 @@ preflight a PR push preflight popsané níže jsou aktivní. `lazurio doctor`
 navíc lokálně reportuje nepovolené worktree cesty a jejich pozorovatelný Git
 stav, ale cleanup neklasifikuje ani neprovádí. Plánované `doctor worktrees ...`
 create/hydrate/cleanup příkazy zatím aktivním operátorským postupem nejsou.
+Aktivní Launchpad guarded create/publish lane už umí jeden edit worktree. Pokud
+jeho explicitně deklarovaná App vyžaduje aktivní child `repository_db_mount`,
+create navíc materializuje exact detached linked worktree ze zdravého
+kanonického checkoutu, zapíše oba members do v1 sidecaru a Runtime i Doctor
+ověřují tento binding. Obecné dependency profily, outer Organization
+environment a automatický cleanup zůstávají cílem CAC-0065.
 
 Tento dokument přesně definuje, jak má Lazurio vytvářet,
 zobrazovat, kontrolovat a uklízet Git worktrees pro Lazurio root a pro
@@ -222,6 +228,14 @@ Každý member má jednu roli:
 Dependency, kterou je potřeba změnit, se nesmí tiše editovat. Builder použije
 explicitní akci `add-edit`/`promote`; Doctor vytvoří branch, doplní member
 metadata a od té chvíle ji kontroluje jako další edit target.
+
+Současná úzká Launchpad lane používá stejnou roli `dependency` pro aktivní
+`repository_db_mount` deklarovaný v `lazurio.runtime.required_module_slots`.
+Jeho `repo_path` je relativní k edit worktree, `slot_path` ukazuje zpět na
+jedinou Organization manifest autoritu a `base_sha` je exact detached revize.
+Dependency cesta musí být edit repem ignorovaná; Launchpad Publish nadále
+stageuje, commituje a pushuje pouze edit repo a repository-db nevystavuje jako
+publish target. Sidecar je cleanup evidence, nikoli sám cleanup příkaz.
 
 Default materializace je linked Git worktree ze stávajícího Doctor-managed
 owner checkoutu. Když owner checkout na stroji není, Doctor může použít pouze

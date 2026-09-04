@@ -30,6 +30,8 @@ import { discoverLaunchpadApps } from "../../lazurio/runtime/discovery-lib.mjs";
 import { platformTestTimeout } from "./test-platform-setup.mjs";
 import { buildWorktreeIndex } from "../../lazurio/runtime/worktree-lib.mjs";
 import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.mjs";
+import { createWorktreeFromPlan } from "./worktree-actions-lib.mjs";
+import { createRepositoryDbWorktreeFixture } from "./git-fixture-helpers.test.mjs";
 
 const tempRoots = [];
 const fileSymlinkTest = (await supportsFileSymlinks()) ? test : test.skip;
@@ -4868,6 +4870,64 @@ test("Mission Control s planned data slotem se zastaví před startem procesu", 
   });
   expect((await runtime.health("test-company-demo-v1")).managed).toBe(false);
 });
+
+test("Mission Control worktree uses only its exact owned repository-db binding", async () => {
+  const port = await findFreePort();
+  const fixture = await createRepositoryDbWorktreeFixture({ port });
+  registerTempRoot(fixture.root, { port });
+  const branch = "CAC-0099-runtime-binding";
+  const created = await createWorktreeFromPlan({
+    companiesRoot: fixture.root,
+    repoKey: "BetaCo::mission-control",
+    planPath: fixture.planPath,
+    branch,
+  });
+  const runtime = createRuntimeManager({
+    companiesRoot: fixture.root,
+    launchpadRoot: join(fixture.root, "launchpad"),
+    instanceId: "repository-db-worktree-binding",
+  });
+
+  try {
+    expect(await runtime.health("betaco-mission-control-v3", {
+      source: { type: "worktree", slug: created.worktree.slug },
+    })).toMatchObject({
+      runtime_source: { type: "worktree", slug: created.worktree.slug },
+      dependencies: { state: "ready", can_start: true },
+    });
+    const opened = await runtime.open("betaco-mission-control-v3", {
+      source: { type: "worktree", slug: created.worktree.slug },
+    });
+    expect(opened.url).toBe(`http://127.0.0.1:${port}`);
+    expect(await runtime.health("betaco-mission-control-v3", {
+      source: { type: "worktree", slug: created.worktree.slug },
+    })).toMatchObject({ status: "healthy" });
+    await runtime.stop("betaco-mission-control-v3", {
+      source: { type: "worktree", slug: created.worktree.slug },
+    });
+
+    const sidecarPath = join(
+      fixture.orgRoot,
+      ".worktrees",
+      "root",
+      "mission-control",
+      `${created.worktree.slug}.worktree.json`,
+    );
+    const sidecar = JSON.parse(await readFile(sidecarPath, "utf8"));
+    sidecar.members.find((member) => member.role === "dependency").base_sha = "0".repeat(40);
+    await writeFile(sidecarPath, `${JSON.stringify(sidecar, null, 2)}\n`);
+    expect(await runtime.health("betaco-mission-control-v3", {
+      source: { type: "worktree", slug: created.worktree.slug },
+    })).toMatchObject({
+      dependencies: {
+        state: "required_slot_unavailable",
+        can_start: false,
+      },
+    });
+  } finally {
+    await runtime.shutdown();
+  }
+}, platformTestTimeout(15_000));
 
 test("runtime open po exit 0 neodstartuje aplikaci s pořád neúplným stromem", async () => {
   const port = await findFreePort();

@@ -9,7 +9,12 @@ import {
 import { readOrganizationRoot } from "../../lazurio/core/organization-root-reader-lib.mjs";
 import { buildWorktreeIndex } from "../../lazurio/runtime/worktree-lib.mjs";
 import { createWorktreeFromPlan, publishWorktreeDraft, WorktreeActionError } from "./worktree-actions-lib.mjs";
-import { createLaunchpadGitFixture, initGitRepo, runGit } from "./git-fixture-helpers.test.mjs";
+import {
+  createLaunchpadGitFixture,
+  createRepositoryDbWorktreeFixture,
+  initGitRepo,
+  runGit,
+} from "./git-fixture-helpers.test.mjs";
 
 const tempRoots = [];
 
@@ -157,6 +162,144 @@ test("guarded create accepts the canonical nested Mission Control v3 data path a
     await readFile(join(orgRoot, ".worktrees", "workspace", "deals", "CAC-0042-deals-publish.worktree.json"), "utf8"),
   );
   expect(sidecar.mission_control_plan_path).toBe(nestedPlanPath);
+});
+
+test("guarded create materializes an exact detached repository-db member and publish stays isolated to the edit repo", async () => {
+  const fixture = await createRepositoryDbWorktreeFixture();
+  tempRoots.push(fixture.root);
+  const branch = "CAC-0099-mission-control-binding";
+  const sourceHead = runGit(["rev-parse", "HEAD"], fixture.repositoryDbRepo);
+  const sourceRefs = runGit(["show-ref"], fixture.repositoryDbRepo);
+
+  const created = await createWorktreeFromPlan({
+    companiesRoot: fixture.root,
+    repoKey: "BetaCo::mission-control",
+    planPath: fixture.planPath,
+    branch,
+    createdBy: "test-agent",
+  });
+
+  const editWorktree = join(fixture.root, created.worktree.path);
+  const dependencyWorktree = join(editWorktree, "db");
+  const sidecar = JSON.parse(await readFile(join(
+    fixture.orgRoot,
+    ".worktrees",
+    "root",
+    "mission-control",
+    `${branch}.worktree.json`,
+  ), "utf8"));
+  expect(sidecar.members).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      repo_path: ".",
+      slot_path: "mission-control",
+      role: "edit",
+      branch,
+    }),
+    {
+      repo_path: "db",
+      slot_path: "mission-control/db",
+      role: "dependency",
+      base_ref: "origin/v3",
+      base_sha: sourceHead,
+      branch: null,
+      materialization: "linked_worktree",
+    },
+  ]));
+  expect(runGit(["branch", "--show-current"], dependencyWorktree)).toBe("");
+  expect(runGit(["rev-parse", "HEAD"], dependencyWorktree)).toBe(sourceHead);
+  expect(runGit(["status", "--porcelain=v1", "--untracked-files=normal"], dependencyWorktree)).toBe("");
+  expect(runGit(["check-ignore", "--no-index", "--quiet", "--", "db"], editWorktree)).toBe("");
+
+  await writeFile(join(editWorktree, "draft.md"), "edit repo only\n");
+  await publishWorktreeDraft({
+    companiesRoot: fixture.root,
+    repoKey: "BetaCo::mission-control",
+    slug: branch,
+    commitMessage: "feat: prove repository db isolation",
+  });
+  expect(runGit(["show-ref"], fixture.repositoryDbRepo)).toBe(sourceRefs);
+  expect(runGit(["rev-parse", "HEAD"], dependencyWorktree)).toBe(sourceHead);
+  expect(runGit(["status", "--porcelain=v1", "--untracked-files=normal"], fixture.repositoryDbRepo)).toBe("");
+});
+
+test("guarded create rolls back the owned repository-db child before the edit worktree", async () => {
+  const fixture = await createRepositoryDbWorktreeFixture();
+  tempRoots.push(fixture.root);
+  const branch = "CAC-0099-binding-rollback";
+  const editWorktree = join(fixture.orgRoot, ".worktrees", "root", "mission-control", branch);
+
+  await expect(createWorktreeFromPlan({
+    companiesRoot: fixture.root,
+    repoKey: "BetaCo::mission-control",
+    planPath: fixture.planPath,
+    branch,
+    sidecarWriter: async () => { throw new Error("simulated sidecar failure"); },
+  })).rejects.toMatchObject({ code: "worktree_create_rolled_back", status: 500 });
+
+  expect(existsSync(editWorktree)).toBe(false);
+  expect(runGit(["worktree", "list", "--porcelain"], fixture.repositoryDbRepo)).not.toContain(branch);
+  expect(runGit(["status", "--porcelain=v1", "--untracked-files=normal"], fixture.repositoryDbRepo)).toBe("");
+});
+
+test("guarded create fails closed on a dirty canonical repository-db source", async () => {
+  const fixture = await createRepositoryDbWorktreeFixture();
+  tempRoots.push(fixture.root);
+  const branch = "CAC-0099-dirty-binding";
+  const editWorktree = join(fixture.orgRoot, ".worktrees", "root", "mission-control", branch);
+  await writeFile(join(fixture.repositoryDbRepo, "local-draft.md"), "must stay local\n");
+
+  await expect(createWorktreeFromPlan({
+    companiesRoot: fixture.root,
+    repoKey: "BetaCo::mission-control",
+    planPath: fixture.planPath,
+    branch,
+  })).rejects.toMatchObject({
+    code: "worktree_create_rolled_back",
+    details: expect.arrayContaining([expect.stringContaining("není clean")]),
+  });
+
+  expect(existsSync(editWorktree)).toBe(false);
+  expect(await readFile(join(fixture.repositoryDbRepo, "local-draft.md"), "utf8")).toBe("must stay local\n");
+});
+
+test("guarded create fails closed when the canonical repository-db origin drifts from the Organization declaration", async () => {
+  const fixture = await createRepositoryDbWorktreeFixture();
+  tempRoots.push(fixture.root);
+  const branch = "CAC-0099-wrong-remote";
+  const editWorktree = join(fixture.orgRoot, ".worktrees", "root", "mission-control", branch);
+  runGit(["remote", "set-url", "origin", "git@github.com:ForeignOrg/mission-control-data.git"], fixture.repositoryDbRepo);
+
+  await expect(createWorktreeFromPlan({
+    companiesRoot: fixture.root,
+    repoKey: "BetaCo::mission-control",
+    planPath: fixture.planPath,
+    branch,
+  })).rejects.toMatchObject({
+    code: "worktree_create_rolled_back",
+    details: expect.arrayContaining([expect.stringContaining("origin neodpovídá")]),
+  });
+  expect(existsSync(editWorktree)).toBe(false);
+});
+
+test("guarded create fails closed when the canonical repository-db revision is ahead of its declared branch", async () => {
+  const fixture = await createRepositoryDbWorktreeFixture();
+  tempRoots.push(fixture.root);
+  const branch = "CAC-0099-wrong-revision";
+  const editWorktree = join(fixture.orgRoot, ".worktrees", "root", "mission-control", branch);
+  await writeFile(join(fixture.repositoryDbRepo, "local-commit.md"), "not on origin/v3\n");
+  runGit(["add", "local-commit.md"], fixture.repositoryDbRepo);
+  runGit(["commit", "-m", "local repository db commit"], fixture.repositoryDbRepo);
+
+  await expect(createWorktreeFromPlan({
+    companiesRoot: fixture.root,
+    repoKey: "BetaCo::mission-control",
+    planPath: fixture.planPath,
+    branch,
+  })).rejects.toMatchObject({
+    code: "worktree_create_rolled_back",
+    details: expect.arrayContaining([expect.stringContaining("HEAD neodpovídá origin/v3")]),
+  });
+  expect(existsSync(editWorktree)).toBe(false);
 });
 
 test("guarded create rejects a non-exact plan path alias before creating a worktree", async () => {
