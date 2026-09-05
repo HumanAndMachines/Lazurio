@@ -1,0 +1,17 @@
+{
+  "schema_version": "lazurio.knowledgebase.editor.component.v2",
+  "entrypoints": {
+    "astro_integration": "lib/astro-integration.ts",
+    "server": "lib/create-server.ts"
+  },
+  "public_files": [
+    "public/index.html",
+    "public/app.js",
+    "public/styles.css"
+  ],
+  "capabilities": [
+    "allowlisted-text-drafts",
+    "optimistic-concurrency",
+    "loopback-session"
+  ]
+}

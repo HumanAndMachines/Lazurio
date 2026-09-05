@@ -29,8 +29,12 @@ import {
 import { discoverLaunchpadApps } from "../../lazurio/runtime/discovery-lib.mjs";
 import { platformTestTimeout } from "./test-platform-setup.mjs";
 import { buildWorktreeIndex } from "../../lazurio/runtime/worktree-lib.mjs";
+import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.mjs";
+import { createWorktreeFromPlan } from "./worktree-actions-lib.mjs";
+import { createRepositoryDbWorktreeFixture } from "./git-fixture-helpers.test.mjs";
 
 const tempRoots = [];
+const fileSymlinkTest = (await supportsFileSymlinks()) ? test : test.skip;
 // Windows záměrně neumí z vestavěného resolveru ověřit CWD cizího procesu,
 // takže adopted/foreign klasifikaci fail-closed drží jako unknown-port. Testy
 // pozitivní CWD adopce patří na OS, kde je skutečný process CWD čitelný.
@@ -1156,6 +1160,112 @@ test("Windows managed Stop používá taskkill jen nad známým PID a celým str
     .toBe("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe");
 });
 
+test("Windows Stop přijme taskkill false negative až po potvrzeném child exitu", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port });
+  const commands = [];
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "windows-taskkill-false-negative",
+    platform: "win32",
+    bunExecutable: process.execPath,
+    resolvePortOwnerFn: async () => null,
+    runSystemCommandFn: async (command) => {
+      commands.push(command);
+      await executeWindowsStopCommand(command);
+      return { ok: false, exitCode: 1, stdout: "", stderr: "taskkill reported a partial failure" };
+    },
+  });
+
+  await runtime.start("test-company-demo-v1");
+  await waitForStatus(() => runtime.health("test-company-demo-v1"), "healthy");
+  const stopped = await runtime.stop("test-company-demo-v1");
+
+  expect(stopped.runtime).toMatchObject({ status: "stopped", managed: false });
+  expect(commands).toHaveLength(1);
+  expect(commands[0]).toContain("/T");
+  expect(commands[0]).toContain("/F");
+});
+
+test("Windows Stop vrátí úspěch, když se exact child exit potvrdí při recovery po timeoutu", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port });
+  const commands = [];
+  let reportExit;
+  const reportedExit = new Promise((resolve) => {
+    reportExit = resolve;
+  });
+  let releasedDuringRecovery = false;
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "windows-taskkill-timeout-recovery",
+    platform: "win32",
+    bunExecutable: process.execPath,
+    resolvePortOwnerFn: async () => null,
+    sleepFn: async () => {},
+    spawnProcess: (command, options) => {
+      const child = spawnFixtureChild(root, command, options);
+      return {
+        pid: child.pid,
+        stdout: child.stdout,
+        stderr: child.stderr,
+        exited: reportedExit,
+      };
+    },
+    writeRuntimeStateFile: async (path, content, encoding) => {
+      const state = JSON.parse(content);
+      if (state.status === "unhealthy" && state.failure_kind === "stop_signal_failed") {
+        releasedDuringRecovery = true;
+        reportExit(0);
+        await Promise.resolve();
+      }
+      return writeFile(path, content, encoding);
+    },
+    runSystemCommandFn: async (command) => {
+      commands.push(command);
+      await executeWindowsStopCommand(command);
+      return { ok: false, exitCode: 1, stdout: "", stderr: "taskkill reported a partial failure" };
+    },
+  });
+
+  await runtime.start("test-company-demo-v1");
+  await waitForStatus(() => runtime.health("test-company-demo-v1"), "healthy");
+  const stopped = await runtime.stop("test-company-demo-v1");
+
+  expect(releasedDuringRecovery).toBe(true);
+  expect(stopped.runtime).toMatchObject({ status: "stopped", managed: false });
+  expect(stopped.forced).toBe(true);
+  expect(commands).toHaveLength(1);
+  expect(commands[0]).toContain("/T");
+  expect(commands[0]).toContain("/F");
+});
+
+test("Windows shutdown používá stejné false-negative Stop smíření jako UI", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port });
+  const commands = [];
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "windows-shutdown-taskkill-false-negative",
+    platform: "win32",
+    bunExecutable: process.execPath,
+    resolvePortOwnerFn: async () => null,
+    runSystemCommandFn: async (command) => {
+      commands.push(command);
+      await executeWindowsStopCommand(command);
+      return { ok: false, exitCode: 1, stdout: "", stderr: "taskkill reported a partial failure" };
+    },
+  });
+
+  await runtime.start("test-company-demo-v1");
+  await waitForStatus(() => runtime.health("test-company-demo-v1"), "healthy");
+  expect(await runtime.shutdown()).toMatchObject({ attempted: 1, stopped: 1, failed: 0 });
+  expect(commands).toHaveLength(1);
+});
+
 test("Windows Stop nikdy nepoužije taskkill jen podle neověřeného portu", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({ port });
@@ -2251,12 +2361,12 @@ test("Windows po restartu adoptuje jen listener s platným capture-time owner pr
   }
 });
 
-test("Windows standalone Start doplní owner proof, i když listener začne být zdravý pomalu", async () => {
+test("Windows standalone Start reconciles a healthy listener at the timeout boundary", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({
     port,
     serverSource: [
-      "await Bun.sleep(1400);",
+      "await Bun.sleep(900);",
       "const server = Bun.serve({",
       "  hostname: process.env.LAZURIO_RUNTIME_HOST,",
       "  port: Number(process.env.LAZURIO_RUNTIME_PORT),",
@@ -2292,11 +2402,12 @@ test("Windows standalone Start doplní owner proof, i když listener začne být
       ? { pid: child.pid, cwd_matches: null }
       : null,
     resolveProcessIdentityFn: async (pid) => child && pid === child.pid ? identityFor(pid) : null,
+    startedListenerOwnershipTimeoutMs: 1_200,
   });
 
   try {
     const started = await runtime.start("test-company-demo-v1");
-    expect(started.runtime.status).toBe("starting");
+    expect(started.runtime.status).toBe("healthy");
     const statePath = join(root, "launchpad", "runtime", "apps", "test-company-demo-v1.json");
     const state = await waitForJson(statePath, (value) => value.owner_proof);
     expect(state).toMatchObject({
@@ -2328,6 +2439,7 @@ test("Windows standalone Start doplní owner proof, i když listener začne být
       },
     });
   } finally {
+    await runtime.stop("test-company-demo-v1").catch(() => {});
     await killFixtureProcess(child, root);
   }
 }, platformTestTimeout(10_000));
@@ -2401,6 +2513,133 @@ test("Windows Lazurio Start accepts a listener owned by the launcher's child pro
     ]);
   } finally {
     await killFixtureProcess(listener, root);
+  }
+}, platformTestTimeout(10_000));
+
+test("Windows Start zachová background owner proof v konečném listener auditu", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port });
+  const app = withStaticEntrypoint(fixtureDiscoveryApp({ port }));
+  const statePath = join(root, "launchpad", "runtime", "apps", `${app.id}.json`);
+  let child = null;
+  let ownerProbeCount = 0;
+  let reportProofPersisted;
+  const proofPersisted = new Promise((resolve) => {
+    reportProofPersisted = resolve;
+  });
+  const identityFor = (pid) => ({
+    pid,
+    parent_pid: process.pid,
+    created_at: "2026-07-27T08:00:00.000Z",
+    executable_path: "C:\\Tools\\bun.exe",
+  });
+  const resolveOwner = async () => {
+    if (!child) return null;
+    ownerProbeCount += 1;
+    if (ownerProbeCount > 1) await proofPersisted;
+    return { pid: child.pid, cwd_matches: null };
+  };
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "windows-owner-proof-final-state",
+    platform: "win32",
+    bunExecutable: process.execPath,
+    discover: discoveryWithApp(app),
+    spawnProcess: (command, options) => {
+      child = spawnFixtureChild(root, command, options);
+      return child;
+    },
+    resolvePortOwnerFn: resolveOwner,
+    resolveProcessIdentityFn: async (pid) => pid === child?.pid ? identityFor(pid) : null,
+    writeRuntimeStateFile: async (path, content, encoding) => {
+      const state = JSON.parse(content);
+      await writeFile(path, content, encoding);
+      if (state.owner_proof && !state.listener_ownership) reportProofPersisted();
+    },
+  });
+
+  try {
+    expect((await runtime.start(app.id)).runtime.status).toBe("healthy");
+    const state = JSON.parse(await readFile(statePath, "utf8"));
+    expect(ownerProbeCount).toBeGreaterThan(1);
+    expect(state).toMatchObject({
+      status: "starting",
+      listener_ownership: [expect.objectContaining({ owner_pid: child.pid, owned: true })],
+      owner_proof: {
+        launcher_pid: child.pid,
+        listener_pid: child.pid,
+      },
+    });
+
+    const restartedRuntime = createRuntimeManager({
+      companiesRoot: root,
+      launchpadRoot: join(root, "launchpad"),
+      instanceId: "windows-owner-proof-after-restart",
+      platform: "win32",
+      discover: discoveryWithApp(app),
+      resolvePortOwnerFn: resolveOwner,
+      resolveProcessIdentityFn: async (pid) => pid === child?.pid ? identityFor(pid) : null,
+    });
+    expect(await restartedRuntime.health(app.id)).toMatchObject({
+      status: "healthy",
+      owner: "adopted-port",
+      port_owner: { verified_by: "runtime-owner-proof" },
+    });
+  } finally {
+    reportProofPersisted();
+    await killFixtureProcess(child, root);
+  }
+}, platformTestTimeout(10_000));
+
+test("Windows Start po selhání owner-proof zápisu zachová finální listener audit", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port });
+  const app = withStaticEntrypoint(fixtureDiscoveryApp({ port }));
+  const statePath = join(root, "launchpad", "runtime", "apps", `${app.id}.json`);
+  let child = null;
+  let proofOnlyWriteFailures = 0;
+  const identityFor = (pid) => ({
+    pid,
+    parent_pid: process.pid,
+    created_at: "2026-07-27T08:00:00.000Z",
+    executable_path: "C:\\Tools\\bun.exe",
+  });
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "windows-owner-proof-write-failure",
+    platform: "win32",
+    bunExecutable: process.execPath,
+    discover: discoveryWithApp(app),
+    spawnProcess: (command, options) => {
+      child = spawnFixtureChild(root, command, options);
+      return child;
+    },
+    resolvePortOwnerFn: async () => child
+      ? { pid: child.pid, cwd_matches: null }
+      : null,
+    resolveProcessIdentityFn: async (pid) => pid === child?.pid ? identityFor(pid) : null,
+    writeRuntimeStateFile: async (path, content, encoding) => {
+      const state = JSON.parse(content);
+      if (state.owner_proof && !state.listener_ownership) {
+        proofOnlyWriteFailures += 1;
+        throw new Error("simulated owner-proof state lock");
+      }
+      return writeFile(path, content, encoding);
+    },
+  });
+
+  try {
+    expect((await runtime.start(app.id)).runtime.status).toBe("healthy");
+    const state = JSON.parse(await readFile(statePath, "utf8"));
+    expect(proofOnlyWriteFailures).toBeGreaterThan(0);
+    expect(state.listener_ownership).toEqual([
+      expect.objectContaining({ owner_pid: child.pid, owned: true }),
+    ]);
+    expect(state.owner_proof).toBeUndefined();
+  } finally {
+    await killFixtureProcess(child, root);
   }
 }, platformTestTimeout(10_000));
 
@@ -2840,19 +3079,82 @@ test("runtime manager umí nainstalovat balíčky aplikace a zapsat install log"
       ? Bun.spawn([process.execPath, "-e", fixtureDependencyInstallScript("await Bun.write('node_modules/fixture.txt', 'ready\\n')")], options)
       : spawnFixtureChild(root, command, options),
   });
+  const expectedInstallCommand = process.platform === "win32"
+    ? "bun install --frozen-lockfile --backend=copyfile"
+    : "bun install --frozen-lockfile";
 
   const result = await runtime.install("test-company-demo-v1");
   expect(result.action).toBe("install");
   expect(result.exit_code).toBe(0);
-  expect(result.command_display).toBe("bun install --frozen-lockfile");
+  expect(result.command_display).toBe(expectedInstallCommand);
+  expect(result.command_display.includes("--backend=copyfile")).toBe(process.platform === "win32");
   expect(result.cwd.endsWith(join("organizations", "TestCompany", "modules", "demo", "app", "v1"))).toBe(true);
   expect(result.log_path).toBe("logs/apps/test-company-demo-v1.log");
   const repair = await runtime.install("test-company-demo-v1", { action: "repair" });
   expect(repair.action).toBe("repair");
   const logs = await runtime.logs("test-company-demo-v1");
-  expect(logs.content).toContain("install test-company-demo-v1 command=bun install --frozen-lockfile");
-  expect(logs.content).toContain("repair test-company-demo-v1 command=bun install --frozen-lockfile");
+  expect(logs.content).toContain(`install test-company-demo-v1 command=${expectedInstallCommand}`);
+  expect(logs.content).toContain(`repair test-company-demo-v1 command=${expectedInstallCommand}`);
   expect(logs.content).toContain("code=0");
+});
+
+test("Windows runtime Install zachová copyfile backend ve skutečném Bun příkazu i evidenci", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({
+    port,
+    dependencies: { fixture: "1.0.0" },
+    writeLockfile: true,
+  });
+  const installCommands = [];
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "windows-copyfile-install",
+    platform: "win32",
+    bunExecutable: process.execPath,
+    resolvePortOwnerFn: async () => null,
+    spawnProcess: (command, options) => {
+      if (!command.slice(1).includes("install")) return spawnFixtureChild(root, command, options);
+      installCommands.push(command);
+      return Bun.spawn([
+        process.execPath,
+        "-e",
+        fixtureDependencyInstallScript("await Bun.write('node_modules/fixture.txt', 'ready\\n')"),
+      ], options);
+    },
+  });
+
+  const beforeInstall = await runtime.health("test-company-demo-v1");
+  expect(beforeInstall.dependencies.install_command).toEqual([
+    "bun",
+    "install",
+    "--frozen-lockfile",
+    "--backend=copyfile",
+  ]);
+
+  const result = await runtime.install("test-company-demo-v1");
+  const refreshed = await runtime.refreshDependencies("test-company-demo-v1");
+
+  expect(installCommands).toEqual([
+    [process.execPath, "install", "--frozen-lockfile", "--backend=copyfile"],
+    [process.execPath, "install", "--frozen-lockfile", "--backend=copyfile"],
+  ]);
+  expect(result.command).toEqual([
+    "bun",
+    "install",
+    "--frozen-lockfile",
+    "--backend=copyfile",
+  ]);
+  expect(result.command_display).toBe("bun install --frozen-lockfile --backend=copyfile");
+  expect(refreshed).toMatchObject({
+    action: "refresh",
+    command: ["bun", "install", "--frozen-lockfile", "--backend=copyfile"],
+    command_display: "bun install --frozen-lockfile --backend=copyfile",
+  });
+  const logs = await runtime.logs("test-company-demo-v1");
+  expect(logs.content).toContain(
+    "install test-company-demo-v1 command=bun install --frozen-lockfile --backend=copyfile",
+  );
 });
 
 test("clean Repair zastaví a znovu spustí přesně managed aplikaci", async () => {
@@ -3034,7 +3336,11 @@ test("refused clean Repair leaves the dependency boundary untouched and the app 
     join(externalDependencies, "fixture", "package.json"),
     JSON.stringify({ name: "fixture", version: "1.0.0" }),
   );
-  await symlink(externalDependencies, join(appRoot, "node_modules"), "dir");
+  await symlink(
+    externalDependencies,
+    join(appRoot, "node_modules"),
+    process.platform === "win32" ? "junction" : "dir",
+  );
   const runtime = createRuntimeManager({
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
@@ -3299,7 +3605,7 @@ test("runtime accepts an exact declared file dependency from the same Organizati
   });
 });
 
-test.skipIf(process.platform === "win32")("runtime blocks a local link farm whose executable payload escapes the Organization", async () => {
+fileSymlinkTest("runtime blocks a local link farm whose executable payload escapes the Organization [requires file symlink capability]", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({
     port,
@@ -3337,7 +3643,7 @@ test.skipIf(process.platform === "win32")("runtime blocks a local link farm whos
   });
 });
 
-test.skipIf(process.platform === "win32")("runtime reads package and selected lockfile only after exact checkout authority", async () => {
+fileSymlinkTest("runtime reads package and selected lockfile only after exact checkout authority [requires file symlink capability]", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({ port, writeLockfile: true });
   const appRoot = join(root, "organizations", "TestCompany", "modules", "demo", "app", "v1");
@@ -3532,7 +3838,7 @@ test("chybějící dependency bez exact lockfilu vede k repair diagnostice bez I
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({
     port,
-    packageManager: "bun@1.4.0",
+    packageManager: "bun@1.4.1",
     dependencies: { fixture: "1.0.0" },
     writeLockfile: false,
     withNodeModules: false,
@@ -3942,7 +4248,7 @@ test("worktree Start materializes its explicit contract while main is still lega
   }
 }, platformTestTimeout(15_000));
 
-test.skipIf(process.platform === "win32")("worktree runtime reads package and Module manifests only inside the selected checkout", async () => {
+fileSymlinkTest("worktree runtime reads package and Module manifests only inside the selected checkout [requires file symlink capability]", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({ port });
   const { slug, worktreeRoot } = await createOwnedWorktreeFixture({
@@ -4318,13 +4624,16 @@ test("hosted maintenance backs off while an exact runtime source is still starti
   const root = await createCompaniesWorkspaceFixture({
     port,
     serverSource: [
-      "const startedAt = Date.now();",
+      "import { existsSync } from 'node:fs';",
+      "import { dirname, join } from 'node:path';",
+      "import { fileURLToPath } from 'node:url';",
+      "const readyPath = join(dirname(fileURLToPath(import.meta.url)), 'maintenance-ready');",
       "const server = Bun.serve({",
       "  hostname: process.env.LAZURIO_RUNTIME_HOST,",
       "  port: Number(process.env.LAZURIO_RUNTIME_PORT),",
       "  fetch(request) {",
       "    const url = new URL(request.url);",
-      "    if (url.pathname === '/health' && Date.now() - startedAt < 2500) return new Response('building', { status: 404 });",
+      "    if (url.pathname === '/health' && !existsSync(readyPath)) return new Response('building', { status: 404 });",
       "    if (url.pathname === '/health') return Response.json({ status: 'ok' });",
       "    return new Response('ok');",
       "  },",
@@ -4351,6 +4660,11 @@ test("hosted maintenance backs off while an exact runtime source is still starti
       (state) => state?.status === "starting" && state.attempts > 0,
     );
     expect(Date.parse(retrying.next_attempt_at)).toBeGreaterThan(Date.now());
+    await writeFile(
+      join(root, "organizations", "TestCompany", "modules", "demo", "app", "v1", "maintenance-ready"),
+      "ready\n",
+      "utf8",
+    );
     expect(await waitForStatus(() => runtime.health(app.id), "healthy")).toMatchObject({
       managed: true,
       maintenance: { status: "healthy", attempts: 0 },
@@ -4556,6 +4870,105 @@ test("Mission Control s planned data slotem se zastaví před startem procesu", 
   });
   expect((await runtime.health("test-company-demo-v1")).managed).toBe(false);
 });
+
+test("Mission Control worktree uses only its exact owned repository-db binding", async () => {
+  const port = await findFreePort();
+  const fixture = await createRepositoryDbWorktreeFixture({ port });
+  registerTempRoot(fixture.root, { port });
+  const branch = "CAC-0099-runtime-binding";
+  const created = await createWorktreeFromPlan({
+    companiesRoot: fixture.root,
+    repoKey: "BetaCo::mission-control",
+    planPath: fixture.planPath,
+    branch,
+  });
+  const runtime = createRuntimeManager({
+    companiesRoot: fixture.root,
+    launchpadRoot: join(fixture.root, "launchpad"),
+    instanceId: "repository-db-worktree-binding",
+  });
+
+  try {
+    expect(await runtime.health("betaco-mission-control-v3", {
+      source: { type: "worktree", slug: created.worktree.slug },
+    })).toMatchObject({
+      runtime_source: { type: "worktree", slug: created.worktree.slug },
+      dependencies: { state: "ready", can_start: true },
+    });
+    const opened = await runtime.open("betaco-mission-control-v3", {
+      source: { type: "worktree", slug: created.worktree.slug },
+    });
+    expect(opened.url).toBe(`http://127.0.0.1:${port}`);
+    expect(await runtime.health("betaco-mission-control-v3", {
+      source: { type: "worktree", slug: created.worktree.slug },
+    })).toMatchObject({ status: "healthy" });
+    await runtime.stop("betaco-mission-control-v3", {
+      source: { type: "worktree", slug: created.worktree.slug },
+    });
+
+    const sidecarPath = join(
+      fixture.orgRoot,
+      ".worktrees",
+      "root",
+      "mission-control",
+      `${created.worktree.slug}.worktree.json`,
+    );
+    const sidecar = JSON.parse(await readFile(sidecarPath, "utf8"));
+    sidecar.members.find((member) => member.role === "dependency").base_sha = "0".repeat(40);
+    await writeFile(sidecarPath, `${JSON.stringify(sidecar, null, 2)}\n`);
+    expect(await runtime.health("betaco-mission-control-v3", {
+      source: { type: "worktree", slug: created.worktree.slug },
+    })).toMatchObject({
+      dependencies: {
+        state: "required_slot_unavailable",
+        can_start: false,
+      },
+    });
+  } finally {
+    await runtime.shutdown();
+  }
+}, platformTestTimeout(15_000));
+
+test("Mission Control legacy worktree without module_path blocks instead of crashing", async () => {
+  const port = await findFreePort();
+  const fixture = await createRepositoryDbWorktreeFixture({ port });
+  registerTempRoot(fixture.root, { port });
+  const created = await createWorktreeFromPlan({
+    companiesRoot: fixture.root,
+    repoKey: "BetaCo::mission-control",
+    planPath: fixture.planPath,
+    branch: "CAC-0099-runtime-legacy-sidecar",
+  });
+  const sidecarPath = join(
+    fixture.orgRoot,
+    ".worktrees",
+    "root",
+    "mission-control",
+    `${created.worktree.slug}.worktree.json`,
+  );
+  const sidecar = JSON.parse(await readFile(sidecarPath, "utf8"));
+  delete sidecar.module_path;
+  await writeFile(sidecarPath, `${JSON.stringify(sidecar, null, 2)}\n`);
+  const runtime = createRuntimeManager({
+    companiesRoot: fixture.root,
+    launchpadRoot: join(fixture.root, "launchpad"),
+    instanceId: "repository-db-legacy-sidecar",
+  });
+
+  try {
+    const health = await runtime.health("betaco-mission-control-v3", {
+      source: { type: "worktree", slug: created.worktree.slug },
+    });
+    expect(health.dependencies).toMatchObject({
+      state: "required_slot_unavailable",
+      can_start: false,
+      can_install: false,
+    });
+    expect(health.dependencies.message).toContain("module_path");
+  } finally {
+    await runtime.shutdown();
+  }
+}, platformTestTimeout(15_000));
 
 test("runtime open po exit 0 neodstartuje aplikaci s pořád neúplným stromem", async () => {
   const port = await findFreePort();

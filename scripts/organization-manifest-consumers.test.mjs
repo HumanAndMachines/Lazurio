@@ -18,6 +18,7 @@ const normalizedConsumers = [
   "lazurio/runtime/module-location-repair-lib.mjs",
   "lazurio/runtime/runtime-lib.mjs",
   "lazurio/search-lib.mjs",
+  "scripts/check-organization-agents-instance.mjs",
   "scripts/lazurio-module-inventory.mjs",
   "scripts/mission-control-trust-smoke.mjs",
   "scripts/worktree-create.mjs",

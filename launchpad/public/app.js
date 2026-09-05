@@ -11,6 +11,7 @@ import {
   groupAppFamilies,
   groupFamiliesBySpace,
   groupWorkspaceFamiliesByTeam,
+  guideInstallPayloadIsValid,
   isAttentionState,
   isProjectedModuleOpenTarget,
   offersMoreThanLocalRun,
@@ -46,7 +47,9 @@ import {
 import { runtimeRecoveryForApp } from "./runtime-recovery.js";
 import { launchpadFetch } from "./session-aware-fetch.js";
 import { writeReservedTabStatus } from "./reserved-tab-status.js";
+import { getLocale, initializeI18n, setLocale, t, tp } from "./i18n.js";
 import {
+  guideHash,
   organizationHash,
   personalspaceHash,
   resolveLaunchpadHash,
@@ -57,6 +60,8 @@ import {
 // ploše (nahoře, nad workspace/productionspace); layout se mění, datová izolace
 // (oddělená lane + Private badge) zůstává.
 import { initPersonalspace, renderPersonalspace } from "./personalspace.js";
+
+initializeI18n();
 
 const state = {
   apps: [],
@@ -108,6 +113,11 @@ const state = {
   // appky otevře automaticky.
   drawerOpen: false,
   drawerView: "overview",
+  activeSurface: "workspace",
+  guideReturnHash: null,
+  guideOpenedFromLaunchpad: false,
+  guideActiveTopic: "installation",
+  guideInstallContentPromise: null,
   filters: {
     // Scope selector vždy ukazuje právě jeden prostor: personalspace nebo
     // konkrétní Organizaci. Cross-organization pohled „Vše" není v denním UI.
@@ -152,11 +162,6 @@ const mobileTopbarQuery = window.matchMedia("(max-width: 900px)");
 //
 // Barvu nese POUZE dlaždice, kresba je inkoustová. Paleta záměrně neobsahuje
 // žlutý/pyritový stupeň; pozornost patří čisté oranžové stavové roli.
-// Obecné popisky, které samy neříkají, co se děje. Když je akce takhle
-// bezobsažná, převezme tlačítko popis problému — jinak by z karty zmizela
-// informace a zbyla nabídka kliknout neznámo proč.
-const OBECNA_AKCE = new Set(["Zobrazit detail", "Detail", "Zobrazit"]);
-
 const APP_ICON_FAMILY = {
   "control": "stavba",
   "dashboard": "stavba",
@@ -239,26 +244,26 @@ const APP_ICON_STYLES = {
 
 // Org-agnostic lidské fallbacky drží karty čitelné i ve firmě, která ještě
 // nedoplnila prezentační metadata. Manifest zůstává autorita a vždy vyhrává.
-const APP_DESCRIPTION_FALLBACKS = Object.freeze({
-  control: "Procesy, automatizace a koordinace práce.",
-  book: "Návody, dokumentace a sdílené znalosti.",
-  pen: "Tvorba, správa a publikace obsahu.",
-  palette: "Vizuální systém, značka a sdílené komponenty.",
-  deal: "Obchodní případy, nabídky a práce se zákazníky.",
-  warehouse: "Skladové položky, zásoby a pohyby materiálu.",
-  product: "Produktový katalog, parametry a podklady.",
-  datasheet: "Strukturovaná data a technické podklady.",
-  pricebook: "Ceníky, sazby a obchodní podklady.",
-  invoice: "Faktury, odběratelé a evidence úhrad.",
-  installation: "Realizace u zákazníků a návazná projektová práce.",
-  dashboard: "Přehled firmy, výsledků a důležitých ukazatelů.",
-  profitability: "Marže, náklady a finanční zdraví zakázek.",
-  marketing: "Marketingové aktivity, kampaně a podklady.",
-  website: "Webový obsah, stránky a veřejná prezentace.",
-  examples: "Ukázky, vzory a referenční řešení.",
-  database: "Data, záznamy a jejich bezpečná správa.",
-  app: "Pracovní podklady a soubory tohoto modulu.",
-  system: "Provozní nástroje a technické zázemí.",
+const APP_DESCRIPTION_FALLBACK_KEYS = Object.freeze({
+  control: "description.control",
+  book: "description.book",
+  pen: "description.pen",
+  palette: "description.palette",
+  deal: "description.deal",
+  warehouse: "description.warehouse",
+  product: "description.product",
+  datasheet: "description.datasheet",
+  pricebook: "description.pricebook",
+  invoice: "description.invoice",
+  installation: "description.installation",
+  dashboard: "description.dashboard",
+  profitability: "description.profitability",
+  marketing: "description.marketing",
+  website: "description.website",
+  examples: "description.examples",
+  database: "description.database",
+  app: "description.app",
+  system: "description.system",
 });
 
 // Ikony rozhraní jsou Iconoir (MIT) — sada, kterou drží identita Lazuria
@@ -329,6 +334,7 @@ const APP_ICON_PATHS = {
 };
 
 const elements = {
+  skipLink: document.querySelector("#skipLink"),
   topbar: document.querySelector(".topbar"),
   spaceSwitcher: document.querySelector("#spaceSwitcher"),
   spaceSwitcherButton: document.querySelector("#spaceSwitcherButton"),
@@ -353,6 +359,19 @@ const elements = {
   appsFilterFallback: document.querySelector("#appsFilterFallback"),
   workspaceWelcome: document.querySelector("#workspaceWelcome"),
   workspaceWelcomeTitle: document.querySelector("#workspaceWelcomeTitle"),
+  workspaceMain: document.querySelector("#workspaceMain"),
+  guideMain: document.querySelector("#guideMain"),
+  guideTitle: document.querySelector("#guideTitle"),
+  guideBack: document.querySelector("#guideBack"),
+  guideTile: document.querySelector("#guideTile"),
+  guideSearch: document.querySelector("#guideSearch"),
+  guideNoResults: document.querySelector("#guideNoResults"),
+  guideTopicButtons: document.querySelectorAll("[data-guide-topic]"),
+  guidePrompt: document.querySelector("#guidePrompt"),
+  guidePromptCopy: document.querySelector("#guidePromptCopy"),
+  guidePromptStatus: document.querySelector("#guidePromptStatus"),
+  guidePromptError: document.querySelector("#guidePromptError"),
+  guidePolicy: document.querySelector("#guidePolicy"),
   appsSearch: document.querySelector("#appsSearch"),
   attentionToggle: document.querySelector("#attentionToggle"),
   segmentedControl: document.querySelectorAll("[data-status-segment]"),
@@ -382,12 +401,20 @@ const elements = {
   notificationsFilterUnread: document.querySelector("#notificationsFilterUnread"),
   notificationsCountAll: document.querySelector("#notificationsCountAll"),
   notificationsCountUnread: document.querySelector("#notificationsCountUnread"),
+  localeSwitcher: document.querySelector("#localeSwitcher"),
 };
 
 initTheme();
 initScrollOffset();
 initResponsiveChrome();
 initNotifications();
+elements.localeSwitcher?.addEventListener("click", (event) => {
+  const option = event.target.closest?.("[data-locale]");
+  if (!option || option.getAttribute("aria-pressed") === "true") return;
+  setLocale(option.dataset.locale);
+  window.location.reload();
+});
+elements.guideTile?.setAttribute("href", guideHash());
 // Personalspace rail dostane most k toastům a k Synchronizovat reloadu, ať
 // osobní runtime akce vypadají stejně jako firemní.
 initPersonalspace({
@@ -436,6 +463,18 @@ elements.attentionToggle?.addEventListener("click", () => {
   state.filters.attentionOnly = true;
   render();
 });
+elements.guideTile?.addEventListener("click", () => {
+  state.guideReturnHash = activeSpaceHash();
+  state.guideOpenedFromLaunchpad = true;
+});
+elements.guideBack?.addEventListener("click", () => closeGuide());
+elements.guideSearch?.addEventListener("input", (event) => {
+  filterGuideContent(event.target.value);
+});
+for (const topicButton of elements.guideTopicButtons) {
+  topicButton.addEventListener("click", () => selectGuideTopic(topicButton.dataset.guideTopic));
+}
+elements.guidePromptCopy?.addEventListener("click", () => void copyGuideInstallPrompt());
 
 // Drawer doplňkových panelů (Nejčastější / detail). Poslední změny jsou v
 // Organization scope trvale viditelné vedle hlavní plochy.
@@ -899,15 +938,15 @@ async function fetchPersonalspaceSafe() {
   try {
     const data = await fetchJson("/api/personalspace");
     const detail = data?.ok === false
-      ? (data.failures ?? []).join("; ") || "discovery osobního prostoru selhalo"
+      ? (data.failures ?? []).join("; ") || t("personal.discoveryFailed")
       : null;
     return {
       ok: true,
       data,
-      error: detail ? `Některé osobní prostory se nepodařilo obnovit: ${detail}` : null,
+      error: detail ? t("personal.partialRefresh", { detail }) : null,
     };
   } catch (error) {
-    return { ok: false, data: undefined, error: `Osobní prostor se nepodařilo obnovit: ${error.message}` };
+    return { ok: false, data: undefined, error: t("personal.refreshFailed", { error: error.message }) };
   }
 }
 
@@ -1022,7 +1061,9 @@ function render() {
   // Transientní chyba prvního discovery nesmí zničit požadovaný deep-link.
   // URL kanonizujeme až poté, co máme první autoritativní seznam prostorů;
   // úspěšný retry pak může stále aplikovat původní Organization hash.
-  if (launchpadScopeDataReady) syncActiveSpaceHash({ replace: true });
+  if (launchpadScopeDataReady && state.activeSurface === "workspace") {
+    syncActiveSpaceHash({ replace: true });
+  }
   applyOrganizationTheme();
   const previousSelectedAppId = state.selectedAppId;
   const previousReadonlyDetailId = state.selectedReadonlyDetail?.id ?? null;
@@ -1040,7 +1081,7 @@ function render() {
     state.selectedLogs = null;
     state.autoOpenTechnicalAppId = null;
   } else {
-    state.selectedAppId = reconcileSelectedAppId(state.apps, state.filters, state.selectedAppId);
+    state.selectedAppId = reconcileSelectedAppId(dailyApps(state.apps), state.filters, state.selectedAppId);
     if (previousSelectedAppId !== state.selectedAppId && state.selectedLogs?.app_id !== state.selectedAppId) {
       state.selectedLogs = null;
       state.autoOpenTechnicalAppId = null;
@@ -1113,11 +1154,11 @@ function renderHero(apps, diagnostics) {
 
   if (!state.loaded) {
     hero.classList.add("hero-loading");
-    elements.heroTitle.textContent = "Načítám stav…";
-    elements.heroSummary.textContent = "Ověřuji pracovní prostor.";
+    elements.heroTitle.textContent = t("workspace.loadingStatus");
+    elements.heroSummary.textContent = t("workspace.checking");
     elements.heroIssues.hidden = true;
     elements.heroIssues.replaceChildren();
-    elements.heroCta.textContent = "Zkontrolovat stav";
+    elements.heroCta.textContent = t("workspace.checkStatus");
     elements.heroCta.hidden = false;
     heroAction = "reload";
     renderSpaceHealthBadge();
@@ -1141,18 +1182,18 @@ function renderHeroIssues(verdict, diagnostics) {
       : [];
 
   if (verdict.tone === "ok") {
-    elements.heroSummary.textContent = "Všechny důležité části prostoru jsou připravené.";
+    elements.heroSummary.textContent = t("workspace.readySummary");
     elements.heroIssues.hidden = true;
     elements.heroIssues.replaceChildren();
-    elements.heroCta.textContent = "Obnovit stav";
+    elements.heroCta.textContent = t("common.refresh");
     elements.heroCta.hidden = false;
     return;
   }
 
   const issueCount = relevantIssues.length;
   elements.heroSummary.textContent = verdict.tone === "danger"
-    ? `${issueCount} ${issueCount === 1 ? "věc" : issueCount >= 2 && issueCount <= 4 ? "věci" : "věcí"} brání spolehlivému používání prostoru. Vyberte, co chcete vyřešit.`
-    : `${issueCount} ${issueCount === 1 ? "věc potřebuje" : "věci potřebují"} kontrolu. Vyberte doporučený další krok.`;
+    ? t("hero.blockingSummary", { count: issueCount, noun: tp("plural.thing", issueCount) })
+    : t("hero.warningSummary", { count: issueCount, noun: tp("plural.needs", issueCount) });
 
   // Stav prostoru žije na jednom místě v pravém panelu. Zobrazení stejného
   // seznamu také uprostřed stránky působilo jako druhá, konkurenční chyba.
@@ -1210,7 +1251,9 @@ function renderSpaceHealthBadge(verdict, diagnostics) {
   badge.hidden = count === 0;
   badge.textContent = count > 99 ? "99+" : String(count);
   badge.dataset.tone = verdict?.tone ?? "loading";
-  const label = verdict?.title ? `Panely · Stav prostoru: ${verdict.title}` : "Panely · Stav prostoru se načítá";
+  const label = verdict?.title
+    ? t("panels.status", { status: verdict.title })
+    : t("panels.loading");
   toggle.setAttribute("aria-label", label);
   toggle.title = label;
 }
@@ -1272,12 +1315,12 @@ function renderDoctorStatus(spaceHealth = {}) {
       : "ok";
   const chipStatus = runState === "unavailable" ? "fail" : runState === "complete" ? status : "unknown";
   const label = runState === "running"
-    ? "Kontrola systému: probíhá…"
+    ? t("doctor.running")
     : runState === "unavailable"
-      ? "Kontrola systému: nedostupná"
+      ? t("doctor.unavailable")
       : runState === "complete"
-        ? `Kontrola systému: ${statusLabel(status)}`
-        : "Kontrola systému: bez výsledku";
+        ? t("doctor.status", { status: statusLabel(status) })
+        : t("doctor.empty");
   const needsAttention = runState === "unavailable"
     || ["fail", "warn", "incomplete", "blocked", "error"].includes(status);
   elements.doctorStatus.dataset.status = chipStatus;
@@ -1319,22 +1362,22 @@ function renderProblems(spaceHealth) {
   heading.className = "problems-heading";
   const headingCopy = document.createElement("div");
   const title = document.createElement("h2");
-  title.textContent = visibleHasDanger ? "Co je potřeba vyřešit" : "Co je potřeba zkontrolovat";
+  title.textContent = visibleHasDanger ? t("problems.resolveTitle") : t("problems.reviewTitle");
   const intro = document.createElement("p");
   intro.textContent = state.problemsIncludeSystem && systemIssue
-    ? `Nejdřív vidíte prostor ${activeSpace().label}, potom širší kontrolu systému. U každé položky najdete další krok.`
-    : `Týká se pouze prostoru ${activeSpace().label}. U každé položky najdete dopad a další krok.`;
+    ? t("problems.systemIntro", { space: activeSpace().label })
+    : t("problems.spaceIntro", { space: activeSpace().label });
   headingCopy.append(title, intro);
   const refresh = document.createElement("button");
   refresh.type = "button";
   refresh.className = "btn btn-secondary btn-sm";
-  refresh.textContent = "Obnovit stav";
+  refresh.textContent = t("common.refresh");
   refresh.addEventListener("click", () => loadData({ fresh: true }));
   const close = document.createElement("button");
   close.type = "button";
   close.className = "btn btn-icon problems-close";
-  close.setAttribute("aria-label", "Zavřít přehled problémů");
-  close.title = "Zavřít";
+  close.setAttribute("aria-label", t("problems.close"));
+  close.title = t("common.close");
   close.innerHTML = '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="M6 6 18 18"/></svg>';
   close.addEventListener("click", () => hideProblems());
   const headingActions = document.createElement("div");
@@ -1377,9 +1420,9 @@ function systemProblemIssue() {
   if (state.doctorRunState === "unavailable") {
     return {
       severity: "danger",
-      title: "Kontrola systému teď není dostupná",
-      impact: "Launchpad proto nemůže potvrdit, že je celé pracovní prostředí v pořádku.",
-      nextStep: "Obnovte stav. Pokud se kontrola znovu nespustí, obraťte se na správce pracovního prostředí.",
+      title: t("problems.systemUnavailable.title"),
+      impact: t("problems.systemUnavailable.impact"),
+      nextStep: t("problems.systemUnavailable.next"),
       technical: [],
     };
   }
@@ -1392,9 +1435,9 @@ function systemProblemIssue() {
     : "warning";
   return {
     severity,
-    title: "Širší kontrola systému potřebuje pozornost",
-    impact: "Tato kontrola zahrnuje i společné technické části mimo právě otevřený prostor.",
-    nextStep: "Obnovte stav. Pokud upozornění zůstane, předejte ho správci pracovního prostředí.",
+    title: t("problems.systemAttention.title"),
+    impact: t("problems.systemAttention.impact"),
+    nextStep: t("problems.systemAttention.next"),
     technical: [
       ...state.failures.map((value) => `Discovery: ${value}`),
       ...state.warnings.map((value) => `Discovery: ${value}`),
@@ -1435,7 +1478,7 @@ function spaceProblemNode(issue) {
   impact.textContent = issue.impact;
   const nextStep = document.createElement("p");
   nextStep.className = "space-problem-next-step";
-  nextStep.textContent = `Co udělat: ${issue.nextStep}`;
+  nextStep.textContent = t("problems.nextStep", { step: issue.nextStep });
   copy.append(title, impact, nextStep);
   node.append(marker, copy);
   if (issue.appId) {
@@ -1445,7 +1488,7 @@ function spaceProblemNode(issue) {
       action.type = "button";
       action.className = "btn btn-secondary btn-sm space-problem-action";
       action.dataset.appId = app.id;
-      action.textContent = isCodexPortConflict(app) ? "Vyřešit s Codexem" : "Zobrazit aplikaci";
+      action.textContent = isCodexPortConflict(app) ? t("common.solveWithCodex") : t("problems.showApplication");
       action.addEventListener("click", () => revealAppDetail(app));
       node.append(action);
     }
@@ -1454,7 +1497,7 @@ function spaceProblemNode(issue) {
     const action = document.createElement("button");
     action.type = "button";
     action.className = "btn btn-secondary btn-sm space-problem-action";
-    action.textContent = issue.action.label ?? "Vyřešit s Codexem";
+    action.textContent = issue.action.label ?? t("common.solveWithCodex");
     action.addEventListener("click", () => openCodexRepairDialog(issue.action));
     node.append(action);
   }
@@ -1466,7 +1509,7 @@ function technicalProblemsNode(issues) {
   details.className = "technical-problems";
   details.open = state.problemsExpanded;
   const summary = document.createElement("summary");
-  summary.textContent = "Technické detaily";
+  summary.textContent = t("common.technicalDetails");
   const list = document.createElement("div");
   list.className = "technical-problems-list";
   for (const issue of issues) {
@@ -1505,8 +1548,8 @@ function renderActionMessage() {
   const dismiss = document.createElement("button");
   dismiss.type = "button";
   dismiss.className = "action-panel-dismiss";
-  dismiss.setAttribute("aria-label", "Zavřít zprávu");
-  dismiss.title = "Zavřít";
+  dismiss.setAttribute("aria-label", t("message.close"));
+  dismiss.title = t("common.close");
   // iconoir/xmark
   dismiss.innerHTML = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="M6 6 18 18"/></svg>';
   dismiss.addEventListener("click", () => {
@@ -1550,18 +1593,25 @@ function personalspaceScopeAvailable(data) {
 
 function activeSpace() {
   if (state.filters.scope === "personal") {
-    return { kind: "personal", label: "Osobní", slug: "personal" };
+    return { kind: "personal", label: t("topbar.personal"), slug: "personal" };
   }
   const organization = state.companies.find((company) => company.slug === state.filters.company);
   return organization
     ? { kind: "organization", label: organization.display_name ?? organization.slug, organization }
-    : { kind: "personal", label: "Osobní", slug: "personal" };
+    : { kind: "personal", label: t("topbar.personal"), slug: "personal" };
 }
 
 function applyBrowserLaunchpadHash() {
   if (!state.loaded || !launchpadScopeDataReady || window.location.hash === appliedLaunchpadHash) return;
+  const previousSurface = state.activeSurface;
   const changed = applyLaunchpadHash({ notify: true });
   render();
+  if (previousSurface !== state.activeSurface) {
+    queueMicrotask(() => {
+      if (state.activeSurface === "guide") elements.guideTitle?.focus({ preventScroll: true });
+      else if (elements.guideTile?.offsetParent) elements.guideTile.focus({ preventScroll: true });
+    });
+  }
   if (changed) void loadSidePanels();
 }
 
@@ -1572,31 +1622,163 @@ function applyLaunchpadHash({ notify = false } = {}) {
     personalspaceAvailable: Boolean(state.personalspace),
   });
   appliedLaunchpadHash = hash;
-  if (resolution.status === "none") return false;
+  if (resolution.status === "none") {
+    state.activeSurface = "workspace";
+    return false;
+  }
   if (resolution.status !== "matched") {
     if (notify) {
       const message = resolution.status === "not_found"
-        ? `Organizace ${resolution.route.organization} na této mašině není dostupná.`
+        ? t("navigation.organizationUnavailable", { organization: resolution.route.organization })
         : resolution.status === "unavailable"
-          ? "Personalspace na této mašině není dostupný."
-          : "Odkaz na Launchpad není platný.";
+          ? t("navigation.personalUnavailable")
+          : t("navigation.invalidLink");
       toast(message, "warning");
     }
     return false;
   }
 
+  if (resolution.surface === "guide") {
+    state.activeSurface = "guide";
+    resetSpaceSelection();
+    void loadGuideInstallContent();
+    return false;
+  }
+
+  state.activeSurface = "workspace";
+  state.guideOpenedFromLaunchpad = false;
   const changed = state.filters.scope !== resolution.scope || state.filters.company !== resolution.company;
   state.filters.scope = resolution.scope;
   state.filters.company = resolution.company;
+  // Každý navštívený workspace je nový návratový kontext. Pokud se uživatel
+  // vrátí do Guide historií, tlačítko Zpět ho proto nepošle do starší Organizace.
+  state.guideReturnHash = activeSpaceHash();
   if (changed) resetSpaceSelection();
   return changed;
 }
 
 function syncActiveSpaceHash({ replace = false } = {}) {
-  const hash = state.filters.scope === "personal"
+  writeLaunchpadHash(activeSpaceHash(), { replace });
+}
+
+function activeSpaceHash() {
+  return state.filters.scope === "personal"
     ? personalspaceHash()
     : organizationHash(state.filters.company);
-  writeLaunchpadHash(hash, { replace });
+}
+
+function closeGuide() {
+  if (state.activeSurface !== "guide") return;
+  if (state.guideOpenedFromLaunchpad) {
+    state.guideOpenedFromLaunchpad = false;
+    window.history.back();
+    return;
+  }
+  state.activeSurface = "workspace";
+  writeLaunchpadHash(state.guideReturnHash ?? activeSpaceHash(), { replace: true });
+  render();
+  queueMicrotask(() => {
+    if (elements.guideTile?.offsetParent) elements.guideTile.focus({ preventScroll: true });
+  });
+}
+
+function normalizeGuideSearch(value) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLocaleLowerCase(getLocale())
+    .trim();
+}
+
+function loadGuideInstallContent() {
+  if (state.guideInstallContentPromise) return state.guideInstallContentPromise;
+  const locale = getLocale();
+  elements.guidePromptStatus?.removeAttribute("hidden");
+  elements.guidePromptError?.setAttribute("hidden", "");
+  state.guideInstallContentPromise = launchpadFetch(
+    `/api/guide/organization-install?locale=${encodeURIComponent(locale)}`,
+  )
+    .then(async (response) => {
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.error ?? "guide_content_unavailable");
+      if (!guideInstallPayloadIsValid(payload, locale)) {
+        throw new Error("guide_content_invalid");
+      }
+      elements.guidePrompt?.querySelector("code")?.replaceChildren(payload.short_prompt);
+      elements.guidePolicy?.querySelector("code")?.replaceChildren(payload.policy_markdown);
+      elements.guidePrompt?.removeAttribute("hidden");
+      elements.guidePolicy?.removeAttribute("hidden");
+      elements.guidePromptStatus?.setAttribute("hidden", "");
+      if (elements.guidePromptCopy) elements.guidePromptCopy.disabled = false;
+      filterGuideContent(elements.guideSearch?.value ?? "");
+      return payload;
+    })
+    .catch((error) => {
+      elements.guidePromptStatus?.setAttribute("hidden", "");
+      elements.guidePromptError?.removeAttribute("hidden");
+      if (elements.guidePromptCopy) elements.guidePromptCopy.disabled = true;
+      state.guideInstallContentPromise = null;
+      console.warn(`[lazurio] Guide install content unavailable: ${error.message}`);
+      return null;
+    });
+  return state.guideInstallContentPromise;
+}
+
+async function copyGuideInstallPrompt() {
+  const prompt = elements.guidePrompt?.textContent?.trim();
+  if (!prompt) return;
+  try {
+    await navigator.clipboard.writeText(prompt);
+    elements.guidePromptStatus.textContent = t("guide.install.prompt.copied");
+    elements.guidePromptStatus.removeAttribute("hidden");
+  } catch {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(elements.guidePrompt);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    elements.guidePromptStatus.textContent = t("guide.install.prompt.copyFailed");
+    elements.guidePromptStatus.removeAttribute("hidden");
+  }
+}
+
+function filterGuideContent(query) {
+  const needle = normalizeGuideSearch(query);
+  let visibleItems = 0;
+  for (const item of document.querySelectorAll("[data-guide-search-item]")) {
+    const searchableText = item.dataset.guideSearchKey
+      ? t(item.dataset.guideSearchKey)
+      : item.dataset.guideSearchText ?? item.textContent;
+    const matches = !needle || normalizeGuideSearch(searchableText).includes(needle);
+    item.toggleAttribute("hidden", !matches);
+    if (matches) visibleItems += 1;
+  }
+  for (const group of document.querySelectorAll("[data-guide-search-group]")) {
+    const hasVisibleItem = [...group.querySelectorAll("[data-guide-search-item]")]
+      .some((item) => !item.hidden);
+    group.toggleAttribute("hidden", !hasVisibleItem);
+  }
+  for (const panel of document.querySelectorAll("[data-guide-topic-panel]")) {
+    const hasVisibleItem = [...panel.querySelectorAll("[data-guide-search-item]")]
+      .some((item) => !item.hidden);
+    const isSelected = panel.dataset.guideTopicPanel === state.guideActiveTopic;
+    panel.toggleAttribute("hidden", needle ? !hasVisibleItem : !isSelected);
+  }
+  for (const button of elements.guideTopicButtons) {
+    const isActive = !needle && button.dataset.guideTopic === state.guideActiveTopic;
+    button.classList.toggle("is-active", isActive);
+    if (isActive) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
+  }
+  elements.guideNoResults?.toggleAttribute("hidden", visibleItems > 0);
+}
+
+function selectGuideTopic(topic) {
+  const panel = document.querySelector(`[data-guide-topic-panel="${topic}"]`);
+  if (!panel) return;
+  state.guideActiveTopic = topic;
+  if (elements.guideSearch) elements.guideSearch.value = "";
+  filterGuideContent("");
 }
 
 function writeLaunchpadHash(hash, { replace = false } = {}) {
@@ -1629,7 +1811,7 @@ function renderSpaceSwitcher() {
   // s nulou prostorů a failure payloadem — právě v Osobním scope se vykreslí
   // jeho cílený error state a náprava.
   if (state.personalspace) {
-    options.push(spaceOption({ kind: "personal", label: "Osobní", slug: "personal" }));
+    options.push(spaceOption({ kind: "personal", label: t("topbar.personal"), slug: "personal" }));
   }
   options.push(
     ...state.companies.map((organization) => spaceOption({
@@ -1642,7 +1824,7 @@ function renderSpaceSwitcher() {
   const spaces = document.createElement("div");
   spaces.className = "space-switcher-options";
   spaces.setAttribute("role", "listbox");
-  spaces.setAttribute("aria-label", "Vybrat prostor");
+  spaces.setAttribute("aria-label", t("a11y.chooseSpace"));
   spaces.append(...options);
 
   const profile = state.personalspace?.profile;
@@ -1684,7 +1866,7 @@ function spaceProfileCard(profile) {
   name.href = profile.settings_url;
   name.target = "_blank";
   name.rel = "noopener noreferrer";
-  name.textContent = profile.display_name ?? profile.github_username ?? "Uživatel";
+  name.textContent = profile.display_name ?? profile.github_username ?? t("common.user");
   name.addEventListener("click", () => {
     restoreSpaceMenuFocusOnClose = true;
     state.spaceMenuOpen = false;
@@ -1692,7 +1874,7 @@ function spaceProfileCard(profile) {
   });
   const email = document.createElement("span");
   email.className = "space-profile-email";
-  email.textContent = profile.email ?? "E-mail není nastavený";
+  email.textContent = profile.email ?? t("common.emailMissing");
   copy.append(name, email);
   card.append(photo, copy);
   return card;
@@ -1707,7 +1889,7 @@ function profileSettingsItem() {
   const item = document.createElement("div");
   item.className = "space-profile-settings is-disabled";
   item.setAttribute("aria-disabled", "true");
-  item.append(settingsIcon(), document.createTextNode("Nastavení"));
+  item.append(settingsIcon(), document.createTextNode(t("profile.settings")));
   return item;
 }
 
@@ -1757,6 +1939,8 @@ function selectSpace(space) {
   restoreSpaceMenuFocusOnClose = true;
   state.spaceMenuOpen = false;
   resetSpaceSelection();
+  state.activeSurface = "workspace";
+  state.guideOpenedFromLaunchpad = false;
   if (space.kind === "personal") {
     state.filters.scope = "personal";
     state.filters.company = "all";
@@ -1764,6 +1948,7 @@ function selectSpace(space) {
     state.filters.scope = "org";
     state.filters.company = space.organization.slug;
   }
+  state.guideReturnHash = activeSpaceHash();
   syncActiveSpaceHash();
   render();
   void loadSidePanels();
@@ -1846,19 +2031,25 @@ function applySpaceMenuState() {
 
 function renderScopeControls() {
   const personal = state.filters.scope === "personal";
+  const guide = state.activeSurface === "guide";
   mountUpdateBannerGroup();
-  elements.hero.classList.toggle("hidden", personal);
-  elements.personalPrivacyBadge?.toggleAttribute("hidden", !personal);
-  elements.appsToolbar.classList.toggle("hidden", personal);
-  elements.drawerToggle.classList.toggle("hidden", personal);
+  if (elements.skipLink) elements.skipLink.href = guide ? "#guideMain" : "#workspaceMain";
+  elements.workspaceMain?.toggleAttribute("hidden", guide);
+  elements.guideMain?.toggleAttribute("hidden", !guide);
+  elements.hero.classList.toggle("hidden", personal || guide);
+  elements.personalPrivacyBadge?.toggleAttribute("hidden", !personal || guide);
+  elements.appsToolbar.classList.toggle("hidden", personal || guide);
+  elements.drawerToggle.classList.toggle("hidden", personal || guide);
   elements.layout.classList.toggle("is-personal", personal);
-  elements.recentChangesSidebar.classList.toggle("hidden", personal);
+  elements.layout.classList.toggle("is-guide", guide);
+  elements.recentChangesSidebar.classList.toggle("hidden", personal || guide);
+  elements.globalUpdateSlot?.toggleAttribute("hidden", guide);
   // Notifikace agregují změny napříč moduly Organizace — v Personalspace
   // nemají co dělat, stejně jako pravé panely. Zvoneček proto mizí i s
   // otevřeným panelem, ne jen jeho obsah.
-  elements.notificationsToggle?.classList.toggle("hidden", personal);
-  if (personal && state.notificationsOpen) setNotificationsOpen(false);
-  if (personal && state.drawerOpen) setDrawer(false);
+  elements.notificationsToggle?.classList.toggle("hidden", personal || guide);
+  if ((personal || guide) && state.notificationsOpen) setNotificationsOpen(false);
+  if ((personal || guide) && state.drawerOpen) setDrawer(false);
 }
 
 // Na desktopu je update první kartou pravého sloupce. Na mobilu se pravý
@@ -1867,7 +2058,8 @@ function renderScopeControls() {
 // layoutem. Po návratu na desktop Organization scope se vrátí do sidebaru.
 function mountUpdateBannerGroup() {
   const group = elements.updateBannerGroup;
-  const global = mobilePanelQuery.matches || state.filters.scope === "personal";
+  const global = state.activeSurface !== "guide"
+    && (mobilePanelQuery.matches || state.filters.scope === "personal");
   const target = global ? elements.globalUpdateSlot : elements.recentChangesSidebar;
   if (!group || !target || group.parentElement === target) return;
   if (global) target.append(group);
@@ -1882,8 +2074,8 @@ function renderWorkspaceWelcome() {
   const organization = state.companies.find((company) => company.slug === state.filters.company);
   const organizationName = organization?.display_name ?? organization?.slug;
   elements.workspaceWelcomeTitle.textContent = organizationName
-    ? `Vítejte v pracovním prostoru ${organizationName}`
-    : "Vítejte v pracovních prostorech";
+    ? t("workspace.welcomeOrganization", { organization: organizationName })
+    : t("workspace.welcomePlural");
 }
 
 /* =========================================================
@@ -1916,8 +2108,8 @@ function renderNotifications() {
     const empty = document.createElement("p");
     empty.className = "rail-copy";
     empty.textContent = state.notificationsFilter === "unread"
-      ? "Všechno přečtené."
-      : "Zatím tu nevidím žádné změny.";
+      ? t("notifications.allRead")
+      : t("notifications.empty");
     mount.append(empty);
     return;
   }
@@ -1960,16 +2152,16 @@ function notificationItem(item, expanded = false) {
   const headline = document.createElement("p");
   headline.className = "notification-headline";
   const actor = document.createElement("strong");
-  actor.textContent = item.actor?.name ?? "Neznámý autor";
-  const verb = document.createTextNode(" změnil·a modul ");
+  actor.textContent = item.actor?.name ?? t("common.unknownAuthor");
+  const verb = document.createTextNode(t("notifications.changedModule"));
   const scope = document.createElement("strong");
-  scope.textContent = item.scope?.name ?? item.scope?.module ?? "neznámý modul";
+  scope.textContent = item.scope?.name ?? item.scope?.module ?? t("common.unknownModule");
   headline.append(actor, verb, scope);
   if (item.actor?.kind === "agent") {
     const tag = document.createElement("span");
     tag.className = "notification-actor-tag";
-    tag.textContent = "Agent";
-    tag.title = "Odhadnuto z podpisu commitu, ne z rosteru Organizace.";
+    tag.textContent = t("common.agent");
+    tag.title = t("notifications.agentInference");
     headline.append(" ", tag);
   }
 
@@ -1987,7 +2179,7 @@ function notificationItem(item, expanded = false) {
   const copy = humanCommitCopy(item.payload, item.payload?.description);
   const subject = document.createElement("span");
   subject.className = "notification-subject";
-  subject.textContent = copy.title || "(bez popisu)";
+  subject.textContent = copy.title || t("common.noDescription");
   const kindLabel = changeKindLabel(item.payload, copy);
   const origin = changeOriginLabel(copy);
   const scale = document.createElement("span");
@@ -2016,7 +2208,7 @@ function notificationItem(item, expanded = false) {
   const unreadDot = document.createElement("span");
   unreadDot.className = "notification-unread-dot";
   unreadDot.hidden = read;
-  unreadDot.setAttribute("aria-label", "Nepřečteno");
+  unreadDot.setAttribute("aria-label", t("a11y.unread"));
 
   article.append(avatar, body, unreadDot);
   return article;
@@ -2033,10 +2225,10 @@ function notificationDetailNodes(item, copy) {
   if (kindLabel || origin || topic) {
     const summary = document.createElement("p");
     summary.className = "notification-human-summary";
-    const where = item.scope?.name ? ` v modulu ${item.scope.name}` : "";
-    const what = topic ? ` Týká se: ${topic}.` : "";
-    const via = origin ? ` Přišlo ${origin}.` : "";
-    summary.textContent = `${kindLabel ?? "Změna"}${where}.${what}${via}`;
+    const where = item.scope?.name ? t("notifications.inModule", { module: item.scope.name }) : "";
+    const what = topic ? t("notifications.topic", { topic }) : "";
+    const via = origin ? t("notifications.origin", { origin }) : "";
+    summary.textContent = `${kindLabel ?? t("notifications.change")}${where}.${what}${via}`;
     nodes.push(summary);
   }
 
@@ -2046,7 +2238,7 @@ function notificationDetailNodes(item, copy) {
   if (authorText) {
     const label = document.createElement("p");
     label.className = "notification-author-label";
-    label.textContent = `Vlastními slovy autora (${item.actor?.name ?? "neznámý autor"}):`;
+    label.textContent = t("notifications.authorWords", { author: item.actor?.name ?? t("common.unknownAuthor").toLowerCase() });
     const description = document.createElement("p");
     description.className = "notification-description";
     description.textContent = authorText;
@@ -2057,7 +2249,7 @@ function notificationDetailNodes(item, copy) {
   if (files.length > 0) {
     const filesLabel = document.createElement("p");
     filesLabel.className = "notification-author-label";
-    filesLabel.textContent = "Dotčené soubory:";
+    filesLabel.textContent = t("notifications.affectedFiles");
     nodes.push(filesLabel);
     const list = document.createElement("ul");
     list.className = "notification-files";
@@ -2070,7 +2262,7 @@ function notificationDetailNodes(item, copy) {
     if (truncated > 0) {
       const rest = document.createElement("li");
       rest.className = "notification-files-rest";
-      rest.textContent = `a další ${truncated} ${truncated >= 2 && truncated <= 4 ? "soubory" : "souborů"}`;
+      rest.textContent = t("notifications.moreFiles", { count: truncated, noun: tp("plural.file", truncated) });
       list.append(rest);
     }
     nodes.push(list);
@@ -2082,7 +2274,7 @@ function notificationDetailNodes(item, copy) {
   if (coAuthors.length > 0) {
     const line = document.createElement("p");
     line.className = "notification-coauthors";
-    line.textContent = `Spolu s: ${coAuthors.map((author) => author.name).join(", ")}`;
+  line.textContent = t("notifications.with", { authors: coAuthors.map((author) => author.name).join(", ") });
     nodes.push(line);
   }
 
@@ -2100,7 +2292,9 @@ function renderNotificationsBadge() {
   const unread = visibleNotifications().filter((item) => !state.readNotificationIds.has(item.id)).length;
   badge.hidden = unread === 0;
   badge.textContent = unread > 99 ? "99+" : String(unread);
-  const label = unread === 0 ? "Notifikace · nic nového" : `Notifikace · ${unread} nepřečtených`;
+  const label = unread === 0
+    ? t("notifications.noneNew")
+    : t("notifications.unreadCount", { count: unread });
   toggle.setAttribute("aria-label", label);
   toggle.title = label;
 }
@@ -2221,7 +2415,7 @@ function renderMostUsed() {
   if (items.length === 0) {
     const empty = document.createElement("p");
     empty.className = "rail-copy";
-    empty.textContent = "Zatím nemám co nabídnout — otevři první aplikaci.";
+    empty.textContent = t("mostUsed.empty");
     mount.append(empty);
     return;
   }
@@ -2229,7 +2423,7 @@ function renderMostUsed() {
   if (usedItems.length === 0) {
     const hint = document.createElement("p");
     hint.className = "rail-copy rail-copy-hint";
-    hint.textContent = "Zatím podle připravených aplikací; jak budeš otevírat, seřadí se podle tvého použití.";
+    hint.textContent = t("mostUsed.coldStart");
     mount.append(hint);
   }
 
@@ -2252,15 +2446,15 @@ function renderMostUsed() {
     const blocked = nextAction?.type === "disabled";
     const needsAttention = primaryActionSurfaceState(nextAction).needs_attention;
     small.textContent = blocked
-      ? "blokovaná"
-      : needsAttention ? "vyžaduje pozornost"
-        : app?.runtime_status === "healthy" ? "otevřená" : "připravená";
+      ? t("mostUsed.blocked")
+      : needsAttention ? t("mostUsed.attention")
+        : app?.runtime_status === "healthy" ? t("mostUsed.open") : t("mostUsed.ready");
     text.append(strong, small);
     const action = document.createElement("span");
     action.className = "quick-app-action";
     action.textContent = blocked
-      ? (isCodexPortConflict(app) ? "Vyřešit s Codexem" : "Zobrazit detail")
-      : nextAction?.label ?? (app ? openActionLabel(app) : "Otevřít");
+      ? (isCodexPortConflict(app) ? t("common.solveWithCodex") : t("common.showDetail"))
+      : nextAction?.label ?? (app ? openActionLabel(app) : t("common.open"));
     button.append(mark, text, action);
     if (app && !isProductionspace(app)) {
       button.addEventListener("click", () => {
@@ -2295,25 +2489,23 @@ function coldStartMostUsed() {
 }
 
 function formatModuleChangeDate(value, { includeTime = false } = {}) {
-  if (!value) return "neznámé datum";
+  if (!value) return t("date.unknown");
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "neznámé datum";
+  if (Number.isNaN(date.getTime())) return t("date.unknown");
   const dayDiff = Math.floor((Date.now() - date.getTime()) / 86_400_000);
   const base =
-    dayDiff <= 0 ? "dnes" : dayDiff === 1 ? "včera" : `před ${dayDiff} ${pluralDay(dayDiff)}`;
+    dayDiff <= 0
+      ? t("date.today")
+      : dayDiff === 1
+        ? t("date.yesterday")
+        : t("date.daysAgo", { count: dayDiff, noun: tp("plural.day", dayDiff) });
   if (!includeTime) return base;
-  const time = date.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" });
-  return `${base} v ${time}`;
-}
-
-function pluralDay(count) {
-  return count >= 2 && count <= 4 ? "dny" : "dní";
+  const time = date.toLocaleTimeString(getLocale(), { hour: "2-digit", minute: "2-digit" });
+  return t("date.atTime", { date: base, time });
 }
 
 function newCommitCountLabel(count) {
-  if (count === 1) return "1 změna";
-  if (count >= 2 && count <= 4) return `${count} změny`;
-  return `${count} změn`;
+  return tp("plural.change", count);
 }
 
 
@@ -2324,7 +2516,7 @@ function newCommitCountLabel(count) {
 function renderSkeleton() {
   const section = document.createElement("section");
   section.className = "app-section app-section-organization skeleton-section";
-  section.setAttribute("aria-label", "Načítám aplikace");
+  section.setAttribute("aria-label", t("a11y.loadingApps"));
   section.setAttribute("aria-busy", "true");
 
   const head = document.createElement("header");
@@ -2334,7 +2526,7 @@ function renderSkeleton() {
   title.setAttribute("aria-hidden", "true");
   const status = document.createElement("span");
   status.className = "sr-only";
-  status.textContent = "Načítám aplikace…";
+  status.textContent = t("workspace.loadingApps");
   head.append(title, status);
 
   const grid = document.createElement("div");
@@ -2365,7 +2557,7 @@ function renderAppsGrid(apps) {
     } else {
       const empty = document.createElement("div");
       empty.className = "empty-card";
-      empty.textContent = "Zatím tu není namountovaný žádný osobní prostor.";
+      empty.textContent = t("workspace.noPersonalspace");
       elements.appsGrid.replaceChildren(empty);
     }
     return;
@@ -2376,7 +2568,7 @@ function renderAppsGrid(apps) {
     if (families.length === 0) {
       const empty = document.createElement("div");
       empty.className = "empty-card";
-      empty.textContent = "Žádné aplikace pro aktuální filtr.";
+      empty.textContent = t("workspace.noAppsFilter");
       elements.appsGrid.replaceChildren(empty);
     } else {
       elements.appsGrid.replaceChildren(familyGridNode(families));
@@ -2397,7 +2589,7 @@ function renderAppsGrid(apps) {
   if (rootFamilies.length === 0 && organizationModules.length === 0 && teamSections.length === 0 && productionspace.length === 0 && !personalNode) {
     const empty = document.createElement("div");
     empty.className = "empty-card";
-    empty.textContent = "Žádné aplikace ani moduly pro aktuální filtr.";
+    empty.textContent = t("workspace.noAppsOrModulesFilter");
     elements.appsGrid.replaceChildren(empty);
     return;
   }
@@ -2449,7 +2641,7 @@ function organizationSectionNode({ organization, families, modules }) {
   const node = document.createElement("section");
   node.className = "app-section app-section-organization";
   node.append(
-    appSectionHead("Organizace", `${moduleCount} ${pluralModule(moduleCount)}`),
+    appSectionHead(t("surface.organization"), `${moduleCount} ${pluralModule(moduleCount)}`),
     grid,
   );
   return node;
@@ -2472,7 +2664,7 @@ function workspaceSectionNode({ organization, teamSections }) {
   const teamAccess = teamAccessSummaryNode(organization);
   teamAccess.classList.add("is-in-section-head");
   node.append(appSectionHead(
-    "Workspace",
+    t("surface.workspace"),
     `${uniqueModules.size} ${pluralModule(uniqueModules.size)}`,
     teamAccess,
   ));
@@ -2507,7 +2699,7 @@ function teamAccessSummaryNode(organization) {
   node.className = `team-access-summary is-${access.status === "verified" ? "verified" : "unverified"}`;
   const summary = document.createElement("summary");
   const title = document.createElement("strong");
-  title.textContent = "Přístup k Teamům";
+  title.textContent = t("teamAccess.title");
   const help = document.createElement("span");
   help.className = "team-access-help";
   help.setAttribute("aria-hidden", "true");
@@ -2524,11 +2716,11 @@ function teamAccessSummaryNode(organization) {
       "chip-ok",
     )));
   } else {
-    memberships.append(chip("Členství zatím neověřeno", "chip-muted"));
+    memberships.append(chip(t("teamAccess.unverified"), "chip-muted"));
   }
   const copy = document.createElement("p");
   copy.textContent = access.message
-    ?? "Skutečný přístup určuje GitHub; Launchpad ho zatím živě neověřuje.";
+    ?? t("teamAccess.message");
   content.append(memberships, copy);
   node.append(summary, content);
   return node;
@@ -2633,7 +2825,9 @@ function workspaceModuleDetail(module, companySlug, { kind = "workspace-module",
   return {
     id: readonlyDetailKey(kind, companySlug, workspaceSlug, module.slug ?? module.path ?? module.name),
     kind,
-    title: module.name ?? module.slug ?? module.path ?? (kind === "organization-module" ? "Modul Organizace" : "Workspace modul"),
+    title: module.name ?? module.slug ?? module.path ?? t(
+      kind === "organization-module" ? "module.organizationFallback" : "module.workspaceFallback",
+    ),
     company: companySlug,
     company_display_name: organization?.display_name ?? companySlug,
     module: module.slug ?? module.path ?? "workspace-module",
@@ -2652,6 +2846,7 @@ function workspaceModuleDetail(module, companySlug, { kind = "workspace-module",
     can_open_folder: module.status === "available",
     default_app: defaultApp,
     module_apps: moduleApps,
+    module_readiness: module.readiness ?? null,
     repair_action: module.readiness?.next_action ?? null,
     is_readonly_system: !defaultApp,
     readonly_reason: moduleMessage,
@@ -2659,29 +2854,37 @@ function workspaceModuleDetail(module, companySlug, { kind = "workspace-module",
 }
 
 function workspaceModuleMessage(module, moduleApps) {
-  const readinessMessage = module?.readiness?.message;
-  if (typeof readinessMessage === "string" && readinessMessage.trim()) return readinessMessage.trim();
+  const reasonKeys = {
+    planned: "module.planned",
+    team_not_assigned: "module.teamNotAssigned",
+    role_not_entitled: "module.roleNotEntitled",
+    access_entitlement_unknown: "module.accessUnknown",
+    unexpected_missing_access: "module.unavailable",
+  };
+  const reasonKey = reasonKeys[module?.readiness?.reason];
+  if (reasonKey) return t(reasonKey);
+  if (module?.status === "quarantined") return t("module.repositoryMismatch");
   return moduleApplicationMessage(moduleApps, module?.status);
 }
 
 function moduleApplicationMessage(moduleApps, moduleStatus = "available") {
   if (moduleStatus === "quarantined") {
-    return "Umístění repozitáře tohoto modulu je potřeba bezpečně sladit.";
+    return t("module.repositoryMismatch");
   }
   if (!moduleApps && moduleStatus === "missing_access") {
-    return "Modul na tomto počítači není dostupný.";
+    return t("module.unavailable");
   }
   if (!moduleApps && moduleStatus === "planned_slot") {
-    return "Modul zatím není na tomto počítači připravený.";
+    return t("module.planned");
   }
-  if (!moduleApps) return "Tento modul zatím nemá připravenou aplikaci.";
-  if (moduleApps.state === "explicit-none") return "Tento modul nemá samostatnou aplikaci.";
-  if (moduleApps.state === "unresolved-invalid") return "Aplikaci tohoto modulu je potřeba opravit.";
+  if (!moduleApps) return t("module.noApplication");
+  if (moduleApps.state === "explicit-none") return t("module.explicitNone");
+  if (moduleApps.state === "unresolved-invalid") return t("module.applicationRepair");
   if (moduleApps.state === "declared" && !moduleApps.open_target_app_id) {
-    return "Aplikaci tohoto modulu je potřeba opravit.";
+    return t("module.applicationRepair");
   }
-  if (moduleApps.state === "legacy-missing") return "Tento modul zatím nemá připravenou aplikaci.";
-  return "Modul má připravenou aplikaci.";
+  if (moduleApps.state === "legacy-missing") return t("module.noApplication");
+  return t("module.applicationReady");
 }
 
 function workspaceModuleCard(module, companySlug, options = {}) {
@@ -2689,6 +2892,7 @@ function workspaceModuleCard(module, companySlug, options = {}) {
   const selected = state.selectedReadonlyDetail?.id === detail.id;
   const defaultAction = detail.default_app ? primaryNextAction(detail.default_app, null) : null;
   const moduleRepair = detail.repair_action?.prompt ? detail.repair_action : null;
+  const repairHandoff = moduleRepair ? localizedModuleRepairHandoff(moduleRepair) : null;
   const actsOnApp = Boolean(detail.default_app && defaultAction?.type !== "disabled" && !moduleRepair);
   const openable = Boolean(moduleRepair || actsOnApp || detail.can_open_folder);
   const availabilityClass = module.status === "available" ? "is-available" : "is-unavailable";
@@ -2700,8 +2904,8 @@ function workspaceModuleCard(module, companySlug, options = {}) {
   card.dataset.readonlyDetailId = detail.id;
   card.tabIndex = 0;
   card.setAttribute("aria-label", moduleRepair
-    ? `${moduleRepair.label ?? "Vyřešit s Codexem"}: ${detail.title}`
-    : actsOnApp ? `${defaultAction.label}: ${detail.title}` : `${detail.title} — detail`);
+    ? `${t("common.solveWithCodex")}: ${detail.title}`
+    : actsOnApp ? `${defaultAction.label}: ${detail.title}` : `${detail.title} — ${t("common.detail").toLowerCase()}`);
 
   const head = document.createElement("div");
   head.className = "app-card-head";
@@ -2720,15 +2924,15 @@ function workspaceModuleCard(module, companySlug, options = {}) {
   desc.className = "app-card-desc";
   desc.textContent = detail.default_app
     ? defaultAction?.type === "recovery" ? defaultAction.recovery.title
-      : defaultAction?.type === "codex" ? "Aplikaci je potřeba opravit."
+      : defaultAction?.type === "codex" ? t("repair.applicationTitle")
         : appDescription(detail.default_app)
     : module.status === "quarantined"
       ? detail.readonly_reason
       : module.status === "missing_access"
-      ? "Modul není na tomto počítači dostupný."
+      ? t("module.unavailable")
       : module.status === "available"
         ? moduleApplicationMessage(detail.module_apps)
-        : "Modul je zatím naplánovaný, ale ještě není připravený.";
+        : t("module.planned");
   titleBody.append(titleRow, desc);
   titleBlock.append(titleBody);
   head.append(titleBlock);
@@ -2741,7 +2945,7 @@ function workspaceModuleCard(module, companySlug, options = {}) {
   }
   if (detail.can_open_folder) {
     const folderAction = cardActionButton(
-      "Otevřít složku",
+      t("module.folder"),
       () => openWorkspaceModuleFolder(detail),
       state.pendingAction === `${detail.id}:open-folder`,
     );
@@ -2750,8 +2954,8 @@ function workspaceModuleCard(module, companySlug, options = {}) {
   }
   if (detail.repair_action?.prompt) {
     const repairAction = cardActionButton(
-      detail.repair_action.label ?? "Vyřešit s Codexem",
-      () => openCodexRepairDialog(detail.repair_action),
+      t("common.solveWithCodex"),
+      () => openCodexRepairDialog(repairHandoff),
       false,
     );
     repairAction.classList.add("btn", "btn-secondary", "btn-sm", "manifest-module-repair-action");
@@ -2759,7 +2963,7 @@ function workspaceModuleCard(module, companySlug, options = {}) {
   }
   card.addEventListener("click", (event) => {
     if (!shouldOpenFromCardSurface(event.target)) return;
-    if (moduleRepair) openCodexRepairDialog(moduleRepair);
+    if (moduleRepair) openCodexRepairDialog(repairHandoff);
     else if (actsOnApp) runPrimaryNextAction(detail.default_app, defaultAction, {});
     else selectReadonlyDetail(detail);
   });
@@ -2767,11 +2971,19 @@ function workspaceModuleCard(module, companySlug, options = {}) {
     if (event.target !== card) return;
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
-    if (moduleRepair) openCodexRepairDialog(moduleRepair);
+    if (moduleRepair) openCodexRepairDialog(repairHandoff);
     else if (actsOnApp) runPrimaryNextAction(detail.default_app, defaultAction, {});
     else selectReadonlyDetail(detail);
   });
   return card;
+}
+
+function localizedModuleRepairHandoff(action) {
+  return {
+    prompt: action.prompt,
+    title: t("repair.quarantinedTitle"),
+    intro: t("repair.quarantinedMessage"),
+  };
 }
 
 // Productionspace systems are read-only references to externally-developed repos
@@ -2781,13 +2993,13 @@ function productionspaceSectionNode(entry) {
   node.className = "app-section app-section-productionspace";
   node.append(
     appSectionHead(
-      entry.productionspace.display_name ?? "Productionspace",
+      entry.productionspace.display_name ?? t("surface.productionspace"),
       `${entry.productionspace.systems.length} ${pluralSystem(entry.productionspace.systems.length)}`,
     ),
   );
   const note = document.createElement("p");
   note.className = "app-section-note";
-  note.textContent = "Externě spravované systémy s vlastními pravidly. V Launchpadu jsou pouze k nahlédnutí.";
+  note.textContent = t("productionspace.note");
   node.append(note);
   const grid = document.createElement("div");
   grid.className = "apps-grid";
@@ -2805,7 +3017,7 @@ function productionspaceCard(system, entry) {
   card.style.setProperty("--app-focus-accent", appIconFocusAccent("system"));
   card.dataset.readonlyDetailId = detail.id;
   card.tabIndex = 0;
-  card.setAttribute("aria-label", `${detail.title} — pouze k nahlédnutí, otevřít detail`);
+  card.setAttribute("aria-label", `${detail.title} — ${t("common.readOnly")}, ${t("common.openDetail")}`);
 
   const head = document.createElement("div");
   head.className = "app-card-head";
@@ -2822,7 +3034,7 @@ function productionspaceCard(system, entry) {
   titleRow.append(title);
   const desc = document.createElement("p");
   desc.className = "app-card-desc";
-  desc.textContent = "Externě spravovaný systém s vlastními pravidly.";
+  desc.textContent = t("productionspace.description");
   const copyBlock = document.createElement("div");
   copyBlock.className = "app-card-copy";
   copyBlock.append(titleRow, desc);
@@ -2851,13 +3063,13 @@ function productionspaceCard(system, entry) {
 }
 
 function productionspaceCardFact(system) {
-  if (system.status === "planned_slot") return "Systém je zatím naplánovaný.";
+  if (system.status === "planned_slot") return t("productionspace.planned");
   if (system.status === "missing_access") {
     const blocking = system.readiness?.severity === "blocking"
       || !system.readiness;
-    return blocking ? "Chybí očekávaný přístup." : "Omezený přístup je očekávaný.";
+    return blocking ? t("productionspace.missingAccess") : t("productionspace.expectedRestriction");
   }
-  return "V Launchpadu pouze k nahlédnutí.";
+  return t("productionspace.viewOnly");
 }
 
 function productionspaceDetail(system, entry) {
@@ -2876,7 +3088,7 @@ function productionspaceDetail(system, entry) {
     runtime_status: "unknown",
     dependencies: {
       state: dependencyState,
-      message: "Productionspace repozitář má vlastní pravidla mimo Launchpad lifecycle.",
+      message: t("productionspace.lifecycle"),
       can_start: false,
     },
     package_path: system.path ?? "-",
@@ -2884,7 +3096,7 @@ function productionspaceDetail(system, entry) {
     productionspace_readiness: system.readiness ?? null,
     is_productionspace: true,
     is_readonly_system: true,
-    readonly_reason: "Productionspace systémy jsou v Launchpadu jen pro čtení. Nespouštějí se ani nereleasují z rootu bez explicitní policy.",
+    readonly_reason: t("productionspace.readonlyReason"),
   };
 }
 
@@ -2942,7 +3154,7 @@ function appCard(app, family = { key: app.id, members: [app], primary: app, appl
   card.dataset.appId = app.id;
   card.tabIndex = 0;
   card.setAttribute("aria-label", readOnly
-    ? `${appBaseTitle(app)} — detail`
+    ? `${appBaseTitle(app)} — ${t("common.detail").toLowerCase()}`
     : `${nextAction.label}: ${appBaseTitle(app)}`);
 
   // GEN2-minimal dlaždice (port web/app.js:2875–2896 zjednodušený per owner
@@ -2982,6 +3194,8 @@ function appCard(app, family = { key: app.id, members: [app], primary: app, appl
   const cardTag = app.module === "mission-control" ? "" : variantTag(app, moduleName);
   const versionBadge = badgeNode(cardTag);
   if (versionBadge) titleRow.append(versionBadge);
+  const editorBadge = badgeNode(app.editor?.status === "read_only" ? "Jen čtení" : "");
+  if (editorBadge) titleRow.append(editorBadge);
 
   const desc = document.createElement("p");
   desc.className = "app-card-desc";
@@ -3092,7 +3306,7 @@ function renderRuntimeStages(app, readOnly, feedback, nextAction) {
   const row = document.createElement("div");
   row.className = "runtime-stages";
   row.setAttribute("role", "group");
-  row.setAttribute("aria-label", "Kde modul spustit");
+  row.setAttribute("aria-label", t("a11y.runModule"));
   for (const stage of stages) {
     row.append(runtimeStageNode(app, stage, feedback, nextAction));
   }
@@ -3180,10 +3394,13 @@ function isSameModulePeer(app, peer) {
 function confirmedTakeoverPayload(app) {
   const peer = runningSharedPortPeer(app);
   if (!peer || isSameModulePeer(app, peer)) return {};
-  const confirmed = window.confirm(
-    `Port ${app.port} teď používá ${appBaseTitle(peer)} z Organizace ${peer.company}. `
-      + `Zastavit ji a spustit ${appBaseTitle(app)} z Organizace ${app.company}?`,
-  );
+  const confirmed = window.confirm(t("confirm.takeover", {
+    port: app.port,
+    currentApp: appBaseTitle(peer),
+    currentOrganization: peer.company,
+    nextApp: appBaseTitle(app),
+    nextOrganization: app.company,
+  }));
   if (!confirmed) return null;
   return { confirmed: true, replace_app_id: peer.id };
 }
@@ -3196,10 +3413,10 @@ function cardWarningModel(app, gitRepo) {
   if (["rebase_in_progress", "git_am_in_progress"].includes(gitRepo?.status)) {
     return {
       tone: "danger",
-      title: "Git operace zůstala rozpracovaná",
+      title: t("warning.gitOperation"),
       message: [
         gitRepo?.message,
-        "Udělejte screenshot této hlášky a vložte ho agentovi do Codexu. Agent problém bezpečně dořeší.",
+        t("warning.gitOperationHelp"),
       ].filter(Boolean).join(" "),
     };
   }
@@ -3207,7 +3424,7 @@ function cardWarningModel(app, gitRepo) {
   if (nextAction.type === "codex") {
     return {
       tone: "danger",
-      title: "Aplikaci je potřeba opravit",
+      title: t("repair.applicationTitle"),
       actionLabel: nextAction.label,
       run: () => openCodexRepairDialog(nextAction.repairAction),
       placement: "top-action",
@@ -3219,8 +3436,9 @@ function cardWarningModel(app, gitRepo) {
   if (["missing_access", "planned_slot", "restricted", "invalid_manifest"].includes(dependencyState)) {
     return {
       tone: "danger",
-      title: dependencyState === "invalid_manifest" ? "Chyba v nastavení" : humanDependencyLabel(dependencyState),
-      actionLabel: "Zobrazit detail",
+      title: dependencyState === "invalid_manifest" ? t("warning.invalidConfig") : humanDependencyLabel(dependencyState),
+      actionLabel: t("common.showDetail"),
+      actionKind: "detail",
       run: () => revealAppDetail(app),
     };
   }
@@ -3239,17 +3457,19 @@ function cardWarningModel(app, gitRepo) {
   if (sharedPortPeer && nextAction.type === "open_chain") {
     return {
       tone: "warn",
-      title: `Port používá ${appBaseTitle(sharedPortPeer)}`,
-      actionLabel: "Otevřít a převzít port",
+      title: t("warning.portUsed", { app: appBaseTitle(sharedPortPeer) }),
+      actionLabel: t("action.openTakeover"),
       run: () => runPrimaryNextAction(app, nextAction, {}),
     };
   }
 
   if (isUntrustedPortOwner(app)) {
+    const codexConflict = isCodexPortConflict(app);
     return {
       tone: "danger",
-      title: app.runtime?.owner === "foreign-port" ? "Cizí checkout na portu" : "Checkout procesu nelze ověřit",
-      actionLabel: isCodexPortConflict(app) ? "Vyřešit s Codexem" : "Zobrazit detail",
+      title: app.runtime?.owner === "foreign-port" ? t("warning.foreignCheckout") : t("warning.unverifiedCheckout"),
+      actionLabel: codexConflict ? t("common.solveWithCodex") : t("common.showDetail"),
+      actionKind: codexConflict ? "codex" : "detail",
       run: () => revealAppDetail(app),
       placement: "top-action",
     };
@@ -3258,8 +3478,9 @@ function cardWarningModel(app, gitRepo) {
   if (gitRepo?.status === "push_required") {
     return {
       tone: "warn",
-      title: "Změny k odeslání",
-      actionLabel: "Zobrazit detail",
+      title: t("warning.changesToSend"),
+      actionLabel: t("common.showDetail"),
+      actionKind: "detail",
       run: () => revealAppDetail(app),
     };
   }
@@ -3283,7 +3504,8 @@ function cardWarningModel(app, gitRepo) {
       // tam se něco rozbilo.
       kind: tone === "warn" ? "fact" : "task",
       title: gitModel.label.replace(/^./, (character) => character.toUpperCase()),
-      actionLabel: "Zobrazit detail",
+      actionLabel: t("common.showDetail"),
+      actionKind: "detail",
       run: () => revealAppDetail(app),
     };
   }
@@ -3332,7 +3554,7 @@ function cardWarningNode(warning) {
   node.append(icon, body);
 
   if (warning.actionLabel && typeof warning.run === "function") {
-    const obecna = OBECNA_AKCE.has(warning.actionLabel);
+    const obecna = warning.actionKind === "detail";
     // PROBLÉM JE TLAČÍTKO, ne krabice. Plocha s ikonou, nadpisem a tlačítkem
     // uvnitř říká totéž třikrát; zůstává akce, protože to je to jediné, co
     // se s problémem dá udělat (rozhodnutí Principálky 8. 8. 2026).
@@ -3425,19 +3647,19 @@ function cardMenuActions(app) {
   const sharedPortPeer = runningSharedPortPeer(app);
   if (sharedPortPeer && nextAction.type === "open_chain") {
     actions.push({
-      label: `Otevřít místo ${appBaseTitle(sharedPortPeer)}`,
+      label: t("action.openInstead", { app: appBaseTitle(sharedPortPeer) }),
       run: () => runPrimaryNextAction(app, nextAction, {}),
     });
   }
   if (canStop(app)) {
-    actions.push({ label: "Zastavit", run: () => runRuntimeAction(app, "stop"), pending: `${app.id}:stop` });
+    actions.push({ label: t("action.stop"), run: () => runRuntimeAction(app, "stop"), pending: `${app.id}:stop` });
   }
   if (canRestart(app) && actionSurface.cold_start_candidate) {
-    actions.push({ label: "Restart", run: () => runRuntimeAction(app, "restart"), pending: `${app.id}:restart` });
+    actions.push({ label: t("action.restart"), run: () => runRuntimeAction(app, "restart"), pending: `${app.id}:restart` });
   }
   if (canInstall(app) && app.dependencies?.state === "ready" && !["recovery", "codex", "disabled"].includes(nextAction.type)) {
     actions.push({
-      label: "Opravit balíčky",
+      label: t("common.repairPackages"),
       run: () => runRuntimeAction(app, "repair"),
       pending: `${app.id}:repair`,
     });
@@ -3445,7 +3667,7 @@ function cardMenuActions(app) {
   // Detail/logy nabídni, jen když je co zkoumat — běžící, spadlá nebo vlastněná
   // instance.
   if (actions.length > 0 || app.runtime_status === "healthy" || app.runtime_status === "unhealthy") {
-    actions.push({ label: "Zobrazit detail a logy", run: () => loadLogs(app) });
+    actions.push({ label: t("action.showDetailsAndLogs"), run: () => loadLogs(app) });
   }
   return actions;
 }
@@ -3492,10 +3714,10 @@ async function openAppChain(app, { feedback } = {}) {
   // Rezervace tabu PŘED akcí, aby ho prohlížeč nezablokoval (není to
   // asynchronní window.open po fetchi).
   const reservedTab = reserveResultTab(app);
-  writeCardProgress(feedback, "Otevírám", { loading: true });
+  writeCardProgress(feedback, t("action.opening"), { loading: true });
   writeReservedTabStatus(reservedTab, {
     title: appBaseTitle(app),
-    message: "Spouštím aplikaci...",
+    message: t("action.startingMessage"),
   });
   render();
   try {
@@ -3509,21 +3731,21 @@ async function openAppChain(app, { feedback } = {}) {
       toast(`${appBaseTitle(app)}: ${translateOpenStatus(payload)}`, "success");
       openResultUrl(payload.url, reservedTab, app);
     } else if (payload.status === "starting") {
-      toast(`${appBaseTitle(app)}: startuje, otevřu ji hned jak naběhne`, "info", 6000);
+      toast(t("action.startingOpening", { app: appBaseTitle(app) }), "info", 6000);
       const runtime = await waitForOpenRuntime(app, { reservedTab, feedback });
       writeCardProgress(feedback, "");
-      toast(`${appBaseTitle(app)}: běží, otevírám`, "success");
+      toast(t("action.runningOpening", { app: appBaseTitle(app) }), "success");
       openResultUrl(runtime.url ?? app.url, reservedTab, app);
     } else if (payload.status === "healthy" && (payload.runtime?.url || app.url)) {
       writeCardProgress(feedback, "");
-      toast(`${appBaseTitle(app)}: běží, otevírám`, "success");
+      toast(t("action.runningOpening", { app: appBaseTitle(app) }), "success");
       openResultUrl(payload.runtime?.url ?? app.url, reservedTab, app);
     } else {
       throw new Error(
         payload.runtime?.last_error
           ?? payload.runtime?.message
           ?? payload.message
-          ?? "Launchpad nedostal URL běžící aplikace.",
+          ?? t("action.urlMissing"),
       );
     }
   } catch (error) {
@@ -3558,9 +3780,9 @@ async function openWorkspaceModuleFolder(module) {
         module_path: module.cwd,
       }),
     });
-    toast(`${module.title}: složka otevřená.`, "success");
+    toast(t("action.folderOpened", { module: module.title }), "success");
   } catch (error) {
-    toast(`${module.title}: ${error.message}`, "error", 7000);
+    toast(t("error.folderOpen", { module: module.title }), "error", 7000);
   } finally {
     state.pendingAction = null;
     render();
@@ -3572,7 +3794,7 @@ function reserveResultTab(app) {
   if (tab) {
     tab.opener = null;
     try {
-      tab.document.title = `Spouštím ${appBaseTitle(app)}`;
+      tab.document.title = t("loading.title", { title: appBaseTitle(app) });
     } catch {}
   }
   return tab;
@@ -3582,10 +3804,10 @@ async function waitForOpenRuntime(app, { reservedTab, feedback } = {}) {
   const deadline = Date.now() + OPEN_STARTING_WAIT_MS;
   let lastRuntime = null;
   while (Date.now() < deadline) {
-    writeCardProgress(feedback, "Aplikace startuje", { loading: true });
+    writeCardProgress(feedback, t("action.starting"), { loading: true });
     writeReservedTabStatus(reservedTab, {
       title: appBaseTitle(app),
-      message: "Aplikace startuje...",
+      message: t("action.appStartingMessage"),
     });
     await sleep(OPEN_STARTING_POLL_MS);
     const runtime = await fetchJson(`/api/apps/${encodeURIComponent(app.id)}/health`, {
@@ -3596,11 +3818,11 @@ async function waitForOpenRuntime(app, { reservedTab, feedback } = {}) {
     lastRuntime = runtime;
     if (runtime.status === "healthy") return runtime;
     if (runtime.status === "unhealthy" || runtime.status === "stopped") {
-      const message = runtime.last_error ?? runtime.message ?? "Aplikace se po startu nerozeběhla.";
+      const message = runtime.last_error ?? runtime.message ?? t("action.startFailed");
       throw new Error(message);
     }
   }
-  throw new Error(lastRuntime?.message ?? "Aplikace pořád startuje a health endpoint zatím neodpovídá.");
+  throw new Error(lastRuntime?.message ?? t("action.healthTimeout"));
 }
 
 function openResultUrl(url, reservedTab, app) {
@@ -3609,7 +3831,7 @@ function openResultUrl(url, reservedTab, app) {
     return;
   }
   if (!window.open(url, "_blank", "noopener")) {
-    toast(`${appBaseTitle(app)}: prohlížeč zablokoval nové okno.`, "warn", 6000);
+    toast(t("action.popupBlocked", { app: appBaseTitle(app) }), "warn", 6000);
   }
 }
 
@@ -3657,10 +3879,10 @@ function translateOpenStatus(payload) {
   const installed = (payload.steps ?? []).some((step) => step.step === "install" || step.step === "repair");
   // Když server ještě čeká, až dev server začne poslouchat (žádné URL, status
   // 'starting'), řekni to na rovinu místo falešného „spuštěno".
-  if (payload.status === "starting" && !payload.url) return "startuje, otevře se za chvíli";
-  if (reused) return "už běží, otevírám";
-  if (installed) return "nainstalováno a spuštěno";
-  return "spuštěno";
+  if (payload.status === "starting" && !payload.url) return t("action.outcome.starting");
+  if (reused) return t("action.outcome.reused");
+  if (installed) return t("action.outcome.installed");
+  return t("action.outcome.started");
 }
 
 // Klasifikace chyb one-click chainu do lidského jazyka (port GEN2 vzoru).
@@ -3691,9 +3913,9 @@ function versionMenuNode(primary, others, familyKey, moduleName) {
   trigger.type = "button";
   trigger.className = `app-more-button ${anyRunning ? "has-running" : ""}`.trim();
   trigger.dataset.menuFocusKey = familyKey;
-  trigger.setAttribute("aria-label", "Další možnosti modulu");
+  trigger.setAttribute("aria-label", t("a11y.moduleOptions"));
   trigger.setAttribute("aria-expanded", String(isOpen));
-  trigger.title = "Další možnosti";
+  trigger.title = t("topbar.more");
   trigger.innerHTML =
     '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>';
   trigger.addEventListener("click", (event) => {
@@ -3707,7 +3929,7 @@ function versionMenuNode(primary, others, familyKey, moduleName) {
   const panel = document.createElement("div");
   panel.className = "app-version-menu-panel";
   panel.setAttribute("role", "group");
-  panel.setAttribute("aria-label", "Další možnosti modulu");
+  panel.setAttribute("aria-label", t("a11y.moduleOptions"));
   panel.addEventListener("click", (event) => event.stopPropagation());
 
   // Sekce 1 — varianty modulu (jiné verze / vedlejší aplikace). Note vysvětluje,
@@ -3717,8 +3939,8 @@ function versionMenuNode(primary, others, familyKey, moduleName) {
     note.className = "app-version-menu-note";
     const defaultTag = variantTag(primary, moduleName);
     note.textContent = defaultTag
-      ? `Dlaždice použije bezpečný další krok pro výchozí verzi ${defaultTag}. U každé další verze je její vlastní bezpečný další krok.`
-      : "Dlaždice použije bezpečný další krok tohoto modulu. U každé vedlejší verze je její vlastní bezpečný další krok.";
+      ? t("variants.default", { version: defaultTag })
+      : t("variants.module");
     panel.append(note, ...others.map((app) => versionOptionNode(app, moduleName)));
   }
 
@@ -3744,12 +3966,12 @@ function versionMenuNode(primary, others, familyKey, moduleName) {
 function versionOptionNode(app, moduleName) {
   const opening = state.openingApps.has(app.id);
   const nextAction = primaryNextAction(app, null);
-  const actionLabel = nextAction.type === "disabled" ? "Zobrazit detail" : nextAction.label;
+  const actionLabel = nextAction.type === "disabled" ? t("common.showDetail") : nextAction.label;
   const button = document.createElement("button");
   button.type = "button";
   button.className = "app-version-option";
   const label = document.createElement("strong");
-  label.textContent = `${opening ? "Otevírám" : actionLabel} ${variantMenuLabel(app, moduleName)}`;
+  label.textContent = `${opening ? t("action.opening") : actionLabel} ${variantMenuLabel(app, moduleName)}`;
   const meta = document.createElement("small");
   meta.textContent = variantOptionDescription(app);
   const cue = document.createElement("span");
@@ -3998,8 +4220,8 @@ function isProductionspace(app) {
 
 function policyLabel(app) {
   return isProductionspace(app)
-    ? "Productionspace: lifecycle akce jsou jen pro čtení, dokud nebude schválená policy."
-    : "Workspace aplikace: lokální Instalovat/Opravit/Spustit jsou povolené, když projdou preconditions.";
+    ? t("debug.productionspacePolicy")
+    : t("debug.workspacePolicy");
 }
 
 /* =========================================================
@@ -4011,7 +4233,7 @@ function renderApps(apps) {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
     cell.colSpan = 8;
-    cell.textContent = "Žádné aplikace";
+    cell.textContent = t("workspace.noApplications");
     row.append(cell);
     elements.appsTable.replaceChildren(row);
     return;
@@ -4089,8 +4311,8 @@ function actionButtons(app) {
   const surface = primaryActionSurfaceState(nextAction);
   wrapper.append(
     primaryActionNode(app, nextAction),
-    runtimeButton(app, "stop", "Zastavit", !canStop(app)),
-    runtimeButton(app, "restart", "Restart", !surface.cold_start_candidate || !canRestart(app)),
+    runtimeButton(app, "stop", t("action.stop"), !canStop(app)),
+    runtimeButton(app, "restart", t("action.restart"), !surface.cold_start_candidate || !canRestart(app)),
     logsButton(app),
   );
   return wrapper;
@@ -4113,7 +4335,7 @@ function logsButton(app) {
   const button = document.createElement("button");
   button.className = "small-button";
   button.type = "button";
-  button.textContent = "Logy";
+  button.textContent = t("common.logs");
   button.disabled = state.pendingAction === `${app.id}:logs`;
   button.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -4131,7 +4353,7 @@ function installAction(app) {
 }
 
 function installLabel(app) {
-  return app.dependencies?.state === "needs_install" ? "Instalovat" : "Opravit balíčky";
+  return app.dependencies?.state === "needs_install" ? t("action.install") : t("action.repairPackages");
 }
 
 function canStart(app) {
@@ -4198,7 +4420,7 @@ function renderDetail(apps) {
   if (!app) {
     delete elements.appDetail.dataset.appId;
     elements.appDetail.className = "empty-detail";
-    elements.appDetail.textContent = "Vyber aplikaci";
+    elements.appDetail.textContent = t("detail.selectApplication");
     return;
   }
 
@@ -4252,7 +4474,7 @@ function renderDetailSummary(app) {
   if (model.change) {
     const change = document.createElement("p");
     change.className = "detail-summary-change";
-    change.textContent = `Poslední změna: ${model.change}`;
+    change.textContent = t("detail.lastChange", { change: model.change });
     section.append(change);
   }
 
@@ -4301,7 +4523,7 @@ function detailSummaryModel(app, git) {
   if (nextAction.type === "disabled") {
     return {
       tone: "danger",
-      title: "Aplikaci teď nejde otevřít",
+      title: t("detail.cannotOpen.title"),
       message: nextActionReason(app, nextAction),
       action: primaryActionNode(app, nextAction),
     };
@@ -4310,8 +4532,8 @@ function detailSummaryModel(app, git) {
   if (app.runtime?.failure_kind === "port_owner_cwd_mismatch") {
     return {
       tone: "warn",
-      title: "Aplikace už běží z jiné kopie",
-      message: "Můžete ji bezpečně otevřít. Launchpad ji ale nebude spouštět ani zastavovat, aby nepoškodil práci otevřenou jinde.",
+      title: t("detail.foreignCopy.title"),
+      message: t("detail.foreignCopy.message"),
       action: primaryActionNode(app, nextAction),
     };
   }
@@ -4319,10 +4541,8 @@ function detailSummaryModel(app, git) {
   if (git?.status === "push_required") {
     return {
       tone: "warn",
-      title: `${newCommitCountLabel(outgoing)} čeká na odeslání`,
-      message: outgoing === 1
-        ? "Je uložená na tomto počítači. Ostatní ji zatím nevidí."
-        : "Jsou uložené na tomto počítači. Ostatní je zatím nevidí.",
+      title: t("detail.outgoing.title", { changes: newCommitCountLabel(outgoing) }),
+      message: tp("detail.outgoing", outgoing),
       change: simpleChangeSubject(git.head?.subject),
     };
   }
@@ -4331,40 +4551,40 @@ function detailSummaryModel(app, git) {
     const changesLoaded = Boolean(git.key && state.gitChangesByRepo.has(git.key));
     return {
       tone: "warn",
-      title: "Rozpracované změny",
-      message: `${newCommitCountLabel(changedFiles)} je zatím jen na tomto počítači.`,
-      action: summaryButton(changesLoaded ? "Obnovit seznam" : "Zobrazit změny", () => showRepoChanges(app, git), `${app.id}:git-changes`),
+      title: t("detail.draft.title"),
+      message: t("detail.draft.message", { changes: newCommitCountLabel(changedFiles) }),
+      action: summaryButton(changesLoaded ? t("detail.refreshList") : t("detail.showChanges"), () => showRepoChanges(app, git), `${app.id}:git-changes`),
     };
   }
 
   if (git?.status === "diverged") {
     return {
       tone: "danger",
-      title: "Změny je potřeba porovnat",
-      message: "Na tomto počítači i ve sdílené verzi jsou jiné změny.",
+      title: t("detail.diverged.title"),
+      message: t("detail.diverged.message"),
     };
   }
 
   if (["wrong_branch", "not_on_main"].includes(git?.status)) {
     return {
       tone: "warn",
-      title: "Jiný pracovní režim",
-      message: "Než budete pokračovat, je potřeba stav aplikace zkontrolovat.",
+      title: t("detail.workMode.title"),
+      message: t("detail.workMode.message"),
     };
   }
 
   if (app.runtime_status === "healthy") {
     return {
       tone: "ok",
-      title: "Aplikace běží",
-      message: "Můžete pokračovat v práci.",
+      title: t("detail.running.title"),
+      message: t("detail.running.message"),
       action: primaryActionNode(app, nextAction),
     };
   }
   return {
     tone: "ok",
-    title: "Aplikace je připravená",
-    message: "Můžete ji spustit a pokračovat v práci.",
+    title: t("detail.ready.title"),
+    message: t("detail.ready.message"),
     action: primaryActionNode(app, nextAction),
   };
 }
@@ -4391,7 +4611,7 @@ function renderDetailTech(app) {
   const details = document.createElement("details");
   details.className = "detail-tech";
   const summary = document.createElement("summary");
-  summary.textContent = "Technické detaily";
+  summary.textContent = t("common.technicalDetails");
   const body = document.createElement("div");
   body.className = "detail-tech-body";
   body.append(renderDetailStatus(app));
@@ -4438,10 +4658,16 @@ function renderDetailHeader(app) {
 }
 
 function renderDetailStatus(app) {
-  const section = detailSection("Stav");
+  const section = detailSection(t("detail.status"));
   const badges = document.createElement("div");
   badges.className = "detail-badges";
   badges.append(chip(surfaceLabel(app.surface), "chip-surface"), runtimeChip(app), dependencyChip(app));
+  if (app.editor) {
+    badges.append(chip(
+      app.editor.status === "ready" ? "Editor připraven" : "Jen čtení",
+      app.editor.status === "ready" ? "chip-ok" : "chip-warn",
+    ));
+  }
   section.append(badges);
   // Only surface the policy note where it changes what the user may do
   // (productionspace stays read-only). Workspace apps get no extra noise.
@@ -4453,9 +4679,15 @@ function renderDetailStatus(app) {
   }
   if (app.productionspace_readiness) {
     section.append(detailList([
-      ["Stav přístupu", app.productionspace_readiness.message ?? "Bez dalšího vysvětlení."],
-      ["Důvod", app.productionspace_readiness.reason ?? "-"],
+      [t("detail.accessState"), app.productionspace_readiness.message ?? t("detail.noExplanation")],
+      [t("detail.reason"), app.productionspace_readiness.reason ?? "-"],
     ]));
+  }
+  if (app.editor?.message) {
+    const note = document.createElement("p");
+    note.className = "detail-note";
+    note.textContent = app.editor.message;
+    section.append(note);
   }
   return section;
 }
@@ -4463,31 +4695,33 @@ function renderDetailStatus(app) {
 function renderDetailMissionControlOwnership(app) {
   const git = gitDetailForApp(app);
   if (!git) return null;
-  const section = detailSection("Verze a rozpracovaná práce");
+  const section = detailSection(t("detail.versionWork"));
   const chipModel = gitChipModel(git);
   const badges = document.createElement("div");
   badges.className = "detail-badges";
   if (chipModel) badges.append(gitChipNode(chipModel));
   const worktrees = normalizedGitWorktrees(git);
   badges.append(chip(
-    `${worktrees.length} ${worktrees.length === 1 ? "pracovní návrh" : "pracovní návrhy"}`,
+    tp("detail.worktreeCount", worktrees.length),
     worktrees.some((item) => item.isOrphan) ? "chip-warn" : "chip-muted",
   ));
   section.append(badges);
 
   const ownership = normalizedMissionControlOwnership(git);
-  section.append(
-    detailList([
-      ["Stav verze", chipModel?.message ?? "Stav verze zatím není ověřený."],
-      ["Kontrola sdílené verze", gitFreshnessLabel(git.freshness)],
-      ["Pracovní plán", ownership.ownerPlanCode ? `${ownership.ownerPlanCode} — ${ownership.ownerPlanTitle ?? "bez názvu"}` : "žádný otevřený plán"],
-    ]),
-  );
+  const versionRows = [
+    [t("detail.versionState"), chipModel?.message ?? t("detail.versionUnverified")],
+    [t("detail.sharedVersionCheck"), gitFreshnessLabel(git.freshness)],
+    [t("detail.workPlan"), ownership.ownerPlanCode ? `${ownership.ownerPlanCode} — ${ownership.ownerPlanTitle ?? t("detail.untitled")}` : t("detail.noOpenPlan")],
+  ];
+  if (typeof git.message === "string" && git.message.trim() && git.message !== chipModel?.message) {
+    versionRows.push([t("detail.gitEvidence"), git.message.trim()]);
+  }
+  section.append(detailList(versionRows));
 
   if (worktrees.length === 0) {
     const note = document.createElement("p");
     note.className = "detail-note";
-    note.textContent = "Pro tento modul není otevřený žádný pracovní návrh. Aplikace proto běží z aktuální hlavní verze.";
+    note.textContent = t("detail.noWorktree");
     section.append(note);
     return section;
   }
@@ -4502,16 +4736,16 @@ function renderDetailMissionControlOwnership(app) {
 }
 
 function gitFreshnessLabel(freshness) {
-  if (!freshness) return "Neověřeno v této relaci";
-  if (freshness.remote_refresh_state === "refreshing") return "Právě ověřuji…";
+  if (!freshness) return t("detail.freshness.unverified");
+  if (freshness.remote_refresh_state === "refreshing") return t("detail.freshness.refreshing");
   const checked = freshness.remote_checked_at
     ? formatModuleChangeDate(freshness.remote_checked_at, { includeTime: true })
     : null;
   if (freshness.remote_refresh_state === "error") {
-    return checked ? `Ověření se nepovedlo · naposledy ${checked}` : "Ověření se nepovedlo · zkusím znovu";
+    return checked ? t("detail.freshness.failedAt", { date: checked }) : t("detail.freshness.failed");
   }
-  if (checked) return `Ověřeno ${checked}`;
-  return "Čeká na první ověření";
+  if (checked) return t("detail.freshness.checked", { date: checked });
+  return t("detail.freshness.waiting");
 }
 
 function worktreeItemNode(worktree) {
@@ -4524,7 +4758,7 @@ function worktreeItemNode(worktree) {
   const meta = document.createElement("span");
   meta.className = "worktree-meta";
   meta.textContent = [
-    worktree.isOrphan ? "Přiřadit Mission Control plán" : "Pokračovat v plánu",
+    worktree.isOrphan ? t("detail.assignPlan") : t("detail.continuePlan"),
     worktree.branch ? `branch ${worktree.branch}` : null,
     worktree.status,
     worktree.ownerPlan?.path ?? worktree.path,
@@ -4596,24 +4830,24 @@ function ownedRuntimeWorktrees(app) {
 function renderGitBuilderActions(app) {
   const git = gitDetailForApp(app);
   if (!git?.key || isProductionspace(app)) return null;
-  const section = detailSection("Git kontrola");
+  const section = detailSection(t("detail.gitCheck"));
   const actions = document.createElement("div");
   actions.className = "git-builder-actions";
 
   if (["pull_available", "update_available"].includes(git.status)) {
     const syncCard = builderActionCard(
-      "Je dostupná novější verze",
-      "Synchronizace aktualizuje Lazurio i všechny spravované moduly a potom ověří jejich balíčky.",
+      t("detail.newVersion.title"),
+      t("detail.newVersion.message"),
     );
-    syncCard.append(builderActionButton("Aktualizovat Lazurio", () => loadData({ sync: true })));
+    syncCard.append(builderActionButton(t("detail.updateLazurio"), () => loadData({ sync: true })));
     actions.append(syncCard);
   }
 
   const changesCard = builderActionCard(
-    "Ukázat změny",
-    "Zobrazí jen seznam změněných souborů a typ změny. Obsah souborů zůstává skrytý.",
+    t("detail.showChanges.title"),
+    t("detail.showChanges.message"),
   );
-  changesCard.append(builderActionButton("Ukázat změny", () => showRepoChanges(app, git)));
+  changesCard.append(builderActionButton(t("detail.showChanges.title"), () => showRepoChanges(app, git)));
   actions.append(changesCard);
 
   section.append(actions);
@@ -4626,7 +4860,7 @@ function gitChangeListNode(payload) {
   wrapper.setAttribute("aria-live", "polite");
   const title = document.createElement("strong");
   const count = payload.changes?.length ?? 0;
-  title.textContent = count ? `Rozpracované soubory (${count})` : "Žádné lokální změny";
+  title.textContent = count ? t("detail.changedFiles", { count }) : t("detail.noLocalChanges");
   wrapper.append(title);
   if (payload.changes?.length) {
     const list = document.createElement("ul");
@@ -4646,12 +4880,12 @@ function gitChangeListNode(payload) {
 
 function gitChangeStatusLabel(status) {
   const normalized = String(status ?? "").trim();
-  if (normalized === "??" || normalized.includes("A")) return "nový soubor";
-  if (normalized.includes("D")) return "smazaný";
-  if (normalized.includes("R")) return "přejmenovaný";
-  if (normalized.includes("U")) return "konflikt";
-  if (normalized.includes("M")) return "upravený";
-  return "změněný";
+  if (normalized === "??" || normalized.includes("A")) return t("git.change.added");
+  if (normalized.includes("D")) return t("git.change.deleted");
+  if (normalized.includes("R")) return t("git.change.renamed");
+  if (normalized.includes("U")) return t("git.change.conflict");
+  if (normalized.includes("M")) return t("git.change.modified");
+  return t("git.change.changed");
 }
 
 async function showRepoChanges(app, git) {
@@ -4661,7 +4895,7 @@ async function showRepoChanges(app, git) {
     const payload = await fetchJson(`/api/git/repos/${encodeURIComponent(git.key)}/changes`);
     state.gitChangesByRepo.set(git.key, payload);
   } catch (error) {
-    toast(`${appBaseTitle(app)}: ${error.message}`, "error", 7000);
+    toast(t("error.changesLoad", { app: appBaseTitle(app) }), "error", 7000);
   } finally {
     state.pendingAction = null;
     render();
@@ -4677,7 +4911,7 @@ async function loadUpdateStatus() {
     ? payload
     : {
         state: "blocked",
-        message: payload?.message ?? "Stav aktualizace se nepodařilo ověřit.",
+        message: payload?.message ?? t("update.statusFailed"),
       };
   renderUpdatePill();
 }
@@ -4725,16 +4959,16 @@ function runtimeSourceLabel(source) {
 function renderRuntimeSourceChooser(app) {
   const worktrees = ownedRuntimeWorktrees(app);
   if (worktrees.length === 0) return null;
-  const section = detailSection("DEV runtime source");
+  const section = detailSection(t("detail.runtimeSource"));
   const chooser = document.createElement("div");
   chooser.className = "runtime-source-chooser";
   chooser.append(
-    runtimeSourceOptionNode(app, { type: "main", label: "MAIN checkout", meta: "DEV z main checkoutu" }),
+    runtimeSourceOptionNode(app, { type: "main", label: "MAIN checkout", meta: t("source.mainMeta") }),
     ...worktrees.map((worktree) => runtimeSourceOptionNode(app, {
       type: "worktree",
       slug: worktree.slug,
       label: runtimeSourceLabel({ type: "worktree", ...worktree }),
-      meta: ["DEV z worktree", worktree.ownerPlan?.title, worktree.status].filter(Boolean).join(" · "),
+      meta: [t("source.worktreeMeta"), worktree.ownerPlan?.title, worktree.status].filter(Boolean).join(" · "),
     })),
   );
   section.append(chooser);
@@ -4742,8 +4976,8 @@ function renderRuntimeSourceChooser(app) {
   const note = document.createElement("p");
   note.className = "detail-note";
   note.textContent = selected.type === "worktree"
-    ? "Spustit/Otevřít/Zastavit/Restart použije vybraný worktree a Launchpad mu přidělí samostatný DEV port."
-    : "Spustit/Otevřít/Zastavit/Restart použije main checkout. Worktree lze zvolit tady bez přepínání gitu.";
+    ? t("source.worktree")
+    : t("source.main");
   section.append(note);
   return section;
 }
@@ -4779,7 +5013,7 @@ function runtimeSourceOptionNode(app, source) {
 function renderWorktreeBuilderActions(app) {
   const git = gitDetailForApp(app);
   if (!git?.key || isProductionspace(app)) return null;
-  const section = detailSection("Builder worktree actions");
+  const section = detailSection(t("worktree.actions"));
   const actions = document.createElement("div");
   actions.className = "worktree-builder-actions";
   actions.append(createWorktreeActionCard(app, git));
@@ -4790,32 +5024,32 @@ function renderWorktreeBuilderActions(app) {
   if (selectedWorktree) actions.append(publishWorktreeActionCard(app, git, selectedWorktree));
   const note = document.createElement("p");
   note.className = "detail-note";
-  note.textContent = "Guarded worktree create a Publish draft jsou lokální builder akce. PR krok je oddělený a musí zůstat viditelný.";
+  note.textContent = t("worktree.builderNote");
   section.append(actions, note);
   return section;
 }
 
 function createWorktreeActionCard(app, git) {
   const card = builderActionCard(
-    "Guarded worktree create",
-    "Vytvoří canonical Mission-Control-owned worktree a sidecar jen když je main checkout čistý.",
+    t("worktree.create.cardTitle"),
+    t("worktree.create.message"),
   );
   const ownership = normalizedMissionControlOwnership(git);
   const defaultPlan = ownership.ownerPlanPath ?? firstPlanPathForGit(git) ?? "mission-control/plans/YYYY/MM/CAC-0000-plan.yaml";
   const defaultBranch = ownership.ownerPlanCode
     ? `${ownership.ownerPlanCode}-${app.module ?? "worktree"}`
     : `${app.module ?? "workspace"}-builder-worktree`;
-  const button = builderActionButton("Vytvořit worktree", () => createWorktreeForPlan(app, git, { defaultPlan, defaultBranch }));
+  const button = builderActionButton(t("worktree.create.title"), () => createWorktreeForPlan(app, git, { defaultPlan, defaultBranch }));
   card.append(button);
   return card;
 }
 
 function publishWorktreeActionCard(app, git, worktree) {
   const card = builderActionCard(
-    "Publish draft",
-    `Commitne a pushne vybraný worktree ${worktree.slug}. PR krok je oddělený — po pushi ho otevři zvlášť.`,
+    t("worktree.publish.title"),
+    t("worktree.publish.message", { worktree: worktree.slug }),
   );
-  card.append(builderActionButton("Commit + push draft", () => publishSelectedWorktreeDraft(app, git, worktree)));
+  card.append(builderActionButton(t("worktree.publish.action"), () => publishSelectedWorktreeDraft(app, git, worktree)));
   return card;
 }
 
@@ -4843,9 +5077,9 @@ function builderActionButton(label, onClick) {
 }
 
 async function createWorktreeForPlan(app, git, { defaultPlan, defaultBranch }) {
-  const planPath = window.prompt("Mission Control plan path", defaultPlan);
+  const planPath = window.prompt(t("worktree.planPrompt"), defaultPlan);
   if (!planPath) return;
-  const branch = window.prompt("Nová branch/worktree", defaultBranch);
+  const branch = window.prompt(t("worktree.branchPrompt"), defaultBranch);
   if (!branch) return;
   state.pendingAction = `${app.id}:worktree-create`;
   render();
@@ -4856,9 +5090,9 @@ async function createWorktreeForPlan(app, git, { defaultPlan, defaultBranch }) {
       body: JSON.stringify({ planPath, branch, createdBy: "launchpad-builder" }),
     });
     state.runtimeSourcesByApp.set(app.id, { type: "worktree", slug: payload.worktree?.slug });
-    toast(`${appBaseTitle(app)}: worktree vytvořený (${payload.worktree?.slug ?? branch}).`, "success");
+    toast(t("worktree.created", { app: appBaseTitle(app), worktree: payload.worktree?.slug ?? branch }), "success");
   } catch (error) {
-    toast(`${appBaseTitle(app)}: ${error.message}`, "error", 7000);
+    toast(t("error.worktreeCreate", { app: appBaseTitle(app) }), "error", 7000);
   } finally {
     await loadData({ quiet: true, fresh: true });
     state.pendingAction = null;
@@ -4867,7 +5101,7 @@ async function createWorktreeForPlan(app, git, { defaultPlan, defaultBranch }) {
 }
 
 async function publishSelectedWorktreeDraft(app, git, worktree) {
-  const commitMessage = window.prompt("Commit message", `feat(${app.module ?? "workspace"}): publish ${worktree.planCode ?? worktree.slug}`);
+  const commitMessage = window.prompt(t("worktree.commitPrompt"), `feat(${app.module ?? "workspace"}): publish ${worktree.planCode ?? worktree.slug}`);
   if (!commitMessage) return;
   state.pendingAction = `${app.id}:worktree-publish`;
   render();
@@ -4877,9 +5111,9 @@ async function publishSelectedWorktreeDraft(app, git, worktree) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ commitMessage, publisher: "launchpad-builder" }),
     });
-    toast(`${appBaseTitle(app)}: draft pushnutý (${payload.commit?.short_sha ?? payload.commit?.sha ?? "commit"}). Otevři PR jako samostatný krok.`, "success", 7000);
+    toast(t("worktree.pushed", { app: appBaseTitle(app), commit: payload.commit?.short_sha ?? payload.commit?.sha ?? "commit" }), "success", 7000);
   } catch (error) {
-    toast(`${appBaseTitle(app)}: ${error.message}`, "error", 7000);
+    toast(t("error.worktreePublish", { app: appBaseTitle(app) }), "error", 7000);
   } finally {
     await loadData({ quiet: true, fresh: true });
     state.pendingAction = null;
@@ -4893,7 +5127,7 @@ function firstPlanPathForGit(git) {
 }
 
 function renderDetailNextAction(app) {
-  const section = detailSection("Bezpečná další akce");
+  const section = detailSection(t("detail.safeNextAction"));
   const next = document.createElement("div");
   next.className = "detail-next";
   const nextAction = primaryNextAction(app);
@@ -4911,34 +5145,34 @@ function renderDetailNextAction(app) {
 function nextActionReason(app, nextAction) {
   if (nextAction.type === "disabled") {
     if (app.is_readonly_system) {
-      return app.readonly_reason ?? "Tenhle záznam je v Launchpadu jen pro čtení.";
+      return app.readonly_reason ?? t("next.readonly");
     }
     if (isProductionspace(app)) {
-      return "Productionspace systémy zůstávají read-only, dokud nebude commitnutá explicitní policy.";
+      return t("next.productionspace");
     }
     if (isUntrustedPortOwner(app)) {
-      return app.runtime?.message || "Launchpad nedokázal bezpečně ověřit proces na portu. Vyřeš instanci mimo Launchpad.";
+      return app.runtime?.message || t("next.unverifiedProcess");
     }
-    return `Akce není dostupná: ${humanDependencyLabel(app.dependencies?.state)}. Vyřeš to přes Doktora nebo sync.`;
+    return t("next.unavailable", { status: humanDependencyLabel(app.dependencies?.state) });
   }
   if (nextAction.type === "open_chain") {
     const owner = nextAction.peer
       ? appBaseTitle(nextAction.peer)
-      : "jiný nebo neověřený proces";
-    return `Port ${app.port} teď vlastní ${owner}. Otevřením jej Launchpad převezme a spustí tuto aplikaci; poslední otevřená verze modulu vyhraje.`;
+      : t("next.unknownOwner");
+    return t("next.takeover", { port: app.port, owner });
   }
-  if (nextAction.type === "open") return "Aplikace běží — otevře se v novém panelu, nic se nespouští.";
-  if (nextAction.type === "folder") return "Otevře lokální checkout ve správci souborů; nic v něm nemění.";
-  if (nextAction.type === "recovery") return "Hlavní bezpečný krok je nahoře. Tady můžete načíst technický log pro diagnostiku.";
-  if (nextAction.action === "install") return "Doplní chybějící balíčky v rozsahu cwd aplikace.";
-  if (nextAction.action === "repair") return "Provede čistou reinstalaci podle uzamčených verzí a při neúspěchu obnoví předchozí balíčky.";
-  if (nextAction.action === "start") return "Spustí lokální dev proces, pokud nejsou runtime konflikty.";
-  if (nextAction.type === "logs") return "Otevři logy a zjisti, proč runtime spadl.";
+  if (nextAction.type === "open") return t("next.open");
+  if (nextAction.type === "folder") return t("next.folder");
+  if (nextAction.type === "recovery") return t("next.recovery");
+  if (nextAction.action === "install") return t("next.install");
+  if (nextAction.action === "repair") return t("next.repair");
+  if (nextAction.action === "start") return t("next.start");
+  if (nextAction.type === "logs") return t("next.logs");
   return "";
 }
 
 function renderDetailEndpoint(app) {
-  const section = detailSection("Lokální endpoint");
+  const section = detailSection(t("detail.localEndpoint"));
   section.append(
     detailList([
       ["URL", app.url, true],
@@ -4950,13 +5184,13 @@ function renderDetailEndpoint(app) {
 }
 
 function renderDetailPaths(app) {
-  const section = detailSection("Cesty a balíčky");
+  const section = detailSection(t("detail.pathsPackages"));
   section.append(
     detailList([
       ["ID", app.id, true],
-      ["Dependency stav", `${humanDependencyLabel(app.dependencies?.state)} — ${app.dependencies?.message ?? "-"}`],
-      ["Install command", app.dependencies?.install_command_display ?? "-", true],
-      ["Package manager", app.dependencies?.package_manager ?? "-"],
+      [t("detail.dependencyState"), `${humanDependencyLabel(app.dependencies?.state)} — ${app.dependencies?.message ?? "-"}`],
+      [t("detail.installCommand"), app.dependencies?.install_command_display ?? "-", true],
+      [t("detail.packageManager"), app.dependencies?.package_manager ?? "-"],
       ["Package", app.package_path, true],
       ["Cwd", app.dependencies?.cwd ?? app.cwd ?? "-", true],
       ["Script", app.dev_script ?? "-", true],
@@ -4970,7 +5204,7 @@ function renderDetailFailure(app) {
   const failureKind = app.runtime?.failure_kind;
   const lastInstall = app.runtime?.last_install;
   if (!failureKind && !lastInstall && !app.runtime?.message) return null;
-  const section = detailSection("Poslední akce / chyba");
+  const section = detailSection(t("detail.lastActionError"));
   section.append(
     detailList([
       ["Runtime message", app.runtime?.message ?? "-"],
@@ -4988,10 +5222,10 @@ function renderDetailLogs(app) {
   section.className = "logs-block";
   const title = document.createElement("p");
   title.className = "detail-section-title";
-  title.textContent = "Logy";
+  title.textContent = t("common.logs");
   const logs = document.createElement("pre");
   logs.className = "console logs-output";
-  logs.textContent = state.selectedLogs.content || state.selectedLogs.message || "Log je prázdný.";
+  logs.textContent = state.selectedLogs.content || state.selectedLogs.message || t("common.logEmpty");
   section.append(title, logs);
   return section;
 }
@@ -5000,7 +5234,7 @@ function renderDebugPayload(app) {
   const details = document.createElement("details");
   details.className = "debug-payload";
   const summary = document.createElement("summary");
-  summary.textContent = "Debug payload";
+  summary.textContent = t("detail.debugPayload");
   const pre = document.createElement("pre");
   pre.textContent = JSON.stringify(app, null, 2);
   details.append(summary, pre);
@@ -5035,10 +5269,10 @@ function detailList(rows) {
 
 function pluginNode(plugin) {
   if (!plugin) {
-    const section = detailSection("Launchpad plugin");
+    const section = detailSection(t("detail.launchpadPlugin"));
     const node = document.createElement("p");
     node.className = "detail-note";
-    node.textContent = "Aplikace nemá read-only Launchpad plugin.";
+    node.textContent = t("plugin.missing");
     section.append(node);
     return section;
   }
@@ -5095,7 +5329,15 @@ function pluginNode(plugin) {
 
 function filtered(apps) {
   if (state.filters.scope === "personal") return [];
-  return filterApps(apps, state.filters);
+  return filterApps(dailyApps(apps), state.filters);
+}
+
+function dailyApps(apps) {
+  return apps.filter((app) => !(
+    app.organization_path === "guide"
+    && app.module === "guide"
+    && app.surface === "manual"
+  ));
 }
 
 function activeSpaceApps() {
@@ -5140,20 +5382,9 @@ function heroDiagnostics(apps) {
 }
 
 function statusLabel(status) {
-  return (
-    {
-      ok: "v pořádku",
-      warn: "varování",
-      fail: "chyba",
-      // Slovník společného surfacu doctorů (decision 0118). `incomplete` není
-      // „skoro zelená": je to stav, ve kterém jsme nepozorovali, co jsme
-      // pozorovat měli, a bránu nikdy nesplní.
-      incomplete: "nedokončeno",
-      blocked: "nešlo změřit",
-      not_applicable: "mimo scope",
-      unknown: "nezjištěno",
-    }[status] ?? status
-  );
+  return t(`doctor.label.${status}`) === `[doctor.label.${status}]`
+    ? status
+    : t(`doctor.label.${status}`);
 }
 
 // Raw status tokens — kept English to mirror Doctor/discovery vocabulary in
@@ -5188,35 +5419,28 @@ function dependencyLabel(status) {
   );
 }
 
-// Human Czech labels — used on cards and in the detail panel.
+// Localized human labels used on cards and in the detail panel.
 function humanRuntimeLabel(status) {
-  return (
-    {
-      healthy: "Běží",
-      starting: "Startuje",
-      stopped: "Zastaveno",
-      unhealthy: "Selhalo",
-      unknown: "Neznámé",
-    }[status] ?? "Neznámé"
-  );
+  const key = `runtime.status.${status}`;
+  const label = t(key);
+  return label === `[${key}]` ? t("runtime.status.unknown") : label;
 }
 
 function humanDependencyLabel(status) {
-  return (
-    {
-      ready: "Připraveno",
-      needs_install: "Instalovat",
-      missing_package: "Chybí balíček",
-      missing_lockfile: "Chybí lockfile",
-      dependency_boundary_invalid: "Neplatná hranice balíčků",
-      unknown_package_manager: "Neznámý správce",
-      missing_access: "Chybí přístup",
-      restricted: "Omezeno",
-      planned_slot: "Plánováno",
-      invalid_manifest: "Neplatný manifest",
-      runtime_failed: "Runtime selhal",
-    }[status] ?? "Neznámé"
-  );
+  const keys = {
+    ready: "status.ready",
+    needs_install: "status.install",
+    missing_package: "status.missingPackage",
+    missing_lockfile: "status.missingLockfile",
+    dependency_boundary_invalid: "status.invalidDependencyBoundary",
+    unknown_package_manager: "status.unknownPackageManager",
+    missing_access: "status.missingAccess",
+    restricted: "status.restricted",
+    planned_slot: "status.planned",
+    invalid_manifest: "status.invalidManifest",
+    runtime_failed: "status.runtimeFailed",
+  };
+  return keys[status] ? t(keys[status]) : t("common.unknown");
 }
 
 function dependencyClass(status) {
@@ -5229,34 +5453,29 @@ function dependencyClass(status) {
 function surfaceLabel(surface) {
   return (
     {
-      internal: "Workspace",
-      manual: "Manuál",
-      admin: "Admin",
-      productionspace: "Productionspace",
-      "public-preview": "Public preview",
+      internal: t("surface.workspace"),
+      manual: t("surface.manual"),
+      admin: t("surface.admin"),
+      productionspace: t("surface.productionspace"),
+      "public-preview": t("surface.publicPreview"),
     }[surface] ?? surface
   );
 }
 
 function pluralApp(count) {
-  return count === 1 ? "aplikace" : "aplikací";
+  return tp("plural.app", count);
 }
 
 function pluralCommit(count) {
-  return count === 1 ? "commit" : count >= 2 && count <= 4 ? "commity" : "commitů";
-}
-
-function pluralWarning() {
-  // "varování" is indeclinable in Czech — 1 varování, 2 varování, 5 varování.
-  return "varování";
+  return tp("plural.commit", count);
 }
 
 function pluralModule(count) {
-  return count === 1 ? "modul" : count >= 2 && count <= 4 ? "moduly" : "modulů";
+  return tp("plural.module", count);
 }
 
 function pluralSystem(count) {
-  return count === 1 ? "systém" : count >= 2 && count <= 4 ? "systémy" : "systémů";
+  return tp("plural.system", count);
 }
 
 // Má modul lidský popis z manifestu?
@@ -5269,7 +5488,10 @@ function appDescription(app) {
   if (hasManifestDescription(app)) {
     return app.description.trim();
   }
-  const purpose = APP_DESCRIPTION_FALLBACKS[appIconKey(app)] ?? `Aplikace pro každodenní práci v modulu ${appBaseTitle(app)}.`;
+  const purposeKey = APP_DESCRIPTION_FALLBACK_KEYS[appIconKey(app)];
+  const purpose = purposeKey
+    ? t(purposeKey)
+    : t("description.default", { module: appBaseTitle(app) });
   const surface = ["admin", "productionspace", "public-preview"].includes(app.surface)
     ? surfaceLabel(app.surface)
     : null;
@@ -5278,7 +5500,7 @@ function appDescription(app) {
 
 // Label hlavní akce podle stavu (běží → Otevřít, jinak Spustit a otevřít).
 function openActionLabel(app) {
-  return app.runtime_status === "healthy" ? "Otevřít" : "Spustit a otevřít";
+  return app.runtime_status === "healthy" ? t("common.open") : t("common.startAndOpen");
 }
 
 function iconOpenGlyph() {
@@ -5419,13 +5641,9 @@ async function refreshRuntimeActionState(appId) {
 }
 
 function completedRuntimeActionLabel(action) {
-  return ({
-    install: "instalace dokončena",
-    repair: "oprava dokončena",
-    start: "spuštění dokončeno",
-    stop: "zastavení dokončeno",
-    restart: "restart dokončen",
-  })[action] ?? "akce dokončena";
+  const key = `action.completed.${action}`;
+  const label = t(key);
+  return label === `[${key}]` ? t("action.completed.default") : label;
 }
 
 async function switchRuntimeApp(app, peer) {
@@ -5434,10 +5652,13 @@ async function switchRuntimeApp(app, peer) {
     await openAppChain(app);
     return;
   }
-  const confirmed = window.confirm(
-    `Port ${app.port} teď používá ${appBaseTitle(peer)} z Organizace ${peer.company}. `
-      + `Zastavit ji a spustit ${appBaseTitle(app)} z Organizace ${app.company}?`,
-  );
+  const confirmed = window.confirm(t("confirm.takeover", {
+    port: app.port,
+    currentApp: appBaseTitle(peer),
+    currentOrganization: peer.company,
+    nextApp: appBaseTitle(app),
+    nextOrganization: app.company,
+  }));
   if (!confirmed) return;
 
   state.pendingAction = `${app.id}:switch`;
@@ -5455,15 +5676,15 @@ async function switchRuntimeApp(app, peer) {
     });
     state.actionMessage = {
       type: "ok",
-      message: `${appBaseTitle(peer)} zastavena; ${appBaseTitle(app)} se spouští.`,
+      message: t("switch.stoppedStarting", { previous: appBaseTitle(peer), next: appBaseTitle(app) }),
     };
-    toast(`${appBaseTitle(app)}: přepnutí dokončeno.`, "ok");
+    toast(t("switch.completed", { app: appBaseTitle(app) }), "ok");
   } catch (error) {
     state.actionMessage = {
       type: "fail",
-      message: `${appBaseTitle(app)}: ${error.message}`,
+      message: t("error.switch", { app: appBaseTitle(app) }),
     };
-    toast(`${appBaseTitle(app)}: ${error.message}`, "fail", 6000);
+    toast(t("error.switch", { app: appBaseTitle(app) }), "fail", 6000);
   } finally {
     await loadData({ quiet: true, fresh: true });
     state.pendingAction = null;
@@ -5484,7 +5705,7 @@ async function loadLogs(app) {
       content: "",
       message: error.message,
     };
-    toast(`${app.title}: logy se nepodařilo načíst.`, "fail", 6000);
+    toast(t("logs.loadFailed", { app: app.title }), "fail", 6000);
   } finally {
     state.pendingAction = null;
     render();

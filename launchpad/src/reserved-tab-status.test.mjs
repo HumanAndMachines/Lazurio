@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import {
@@ -6,6 +6,9 @@ import {
   LAZURIO_LOADING_HINTS,
   loadingHintForTab,
 } from "../public/reserved-tab-status.js";
+import { setLocale } from "../public/i18n.js";
+
+afterEach(() => setLocale("cs", { storage: null }));
 
 const canonicalSymbolSha256 = "6334e2b815cd83c8be7e601aa7bfab740a34d74848f522803065026a6f18609b";
 
@@ -95,4 +98,18 @@ test("reserved app tab escapes dynamic copy", () => {
   expect(html).toContain("Spouštím &lt;aplikaci&gt;");
   expect(html).toContain("Tip s &lt;tagem&gt; &amp; znakem");
   expect(html).not.toContain('<Deals & "Quotes">');
+});
+
+test("reserved app tab follows the active English locale", () => {
+  setLocale("en", { storage: null });
+  const html = buildReservedTabStatusDocument({
+    title: "Knowledgebase",
+    message: "Application is starting...",
+    origin: "http://127.0.0.1:4174",
+    tip: "A worktree keeps the task isolated.",
+  });
+
+  expect(html).toContain('<html lang="en">');
+  expect(html).toContain("<title>Starting Knowledgebase</title>");
+  expect(html).toContain("Application is starting...");
 });

@@ -10,7 +10,7 @@ import {
   readGitHubRepositoryJsonDocument,
   runTrustedGitHubCliSync,
 } from "./core/github-provider-lib.mjs";
-import { resolveTrustedGitHubCliExecutable } from "./core/cli-provenance-lib.mjs";
+import { resolveGitHubCliExecutableOnPath } from "./core/toolchain-lib.mjs";
 
 export const LAZURIO_GITHUB_APP_SLUG = "lazurio-for-github";
 
@@ -31,7 +31,7 @@ export function checkOrganizationActivation({
   appSlug = LAZURIO_GITHUB_APP_SLUG,
   platform = process.platform,
   environment = process.env,
-  resolveGitHubCli = resolveTrustedGitHubCliExecutable,
+  resolveGitHubCli = resolveGitHubCliExecutableOnPath,
   runGitHubCli = runTrustedGitHubCliSync,
 } = {}) {
   const request = createOrganizationActivationRequest({ githubOrganizationId });
@@ -149,12 +149,16 @@ function collectObservations({ request, appSlug, provider }) {
   }
 
   const membership = invoke(["api", `user/memberships/orgs/${organization.login}`]);
-  if (!membership.ok && ![403, 404].includes(membership.httpStatus)) {
-    requireSuccess(membership, {
-      missingCode: "github_transport_failed",
-      missingNextAction: "retry",
-    });
+  if (!membership.ok && [403, 404].includes(membership.httpStatus)) {
+    // A concealed membership boundary is not evidence of non-ownership.
+    // Stop before private root/App probes and return an explicit permission
+    // error rather than inventing a false owner observation.
+    throw new ActivationProbeError("github_access_denied", false, "refresh_github_permissions");
   }
+  requireSuccess(membership, {
+    missingCode: "github_transport_failed",
+    missingNextAction: "retry",
+  });
   const membershipIsOwner = membership.ok
     && membership.value?.state === "active"
     && membership.value?.role === "admin"
@@ -162,13 +166,16 @@ function collectObservations({ request, appSlug, provider }) {
   const viewerIsOwner = membershipIsOwner && graph.organization.viewerCanAdminister === true;
   const viewerCanCreateRepositories = graph.organization.viewerCanCreateRepositories === true;
 
-  const rootRepository = inspectRootRepository({ invoke, organization });
-  const githubApp = inspectGitHubApp({
-    invoke,
-    organization,
-    appSlug,
-    rootRepository,
-  });
+  // Activation is owner-only. Once the live membership proves a non-owner,
+  // do not probe either the private root or the owner-only installations
+  // endpoint: GitHub may conceal both boundaries as 403/404 and neither is
+  // needed to return the stable owner-required action.
+  const rootRepository = viewerIsOwner
+    ? inspectRootRepository({ invoke, organization })
+    : unavailableRoot(organization);
+  const githubApp = viewerIsOwner
+    ? inspectGitHubApp({ invoke, organization, appSlug, rootRepository })
+    : unavailableApp();
 
   return {
     github: {
@@ -448,6 +455,24 @@ function unavailableApp() {
     installation_id: null,
     repository_selection: null,
     root_access: "unverified",
+  };
+}
+
+function unavailableRoot(organization) {
+  const name = `${organization.login}_GEN3`;
+  return {
+    presence: "unobservable",
+    id: null,
+    name,
+    full_name: `${organization.login}/${name}`,
+    default_branch: null,
+    viewer_can_push: null,
+    candidate_count: 0,
+    resolver: {
+      status: "not_applicable",
+      format: null,
+      reason: "root_repository_unobservable",
+    },
   };
 }
 

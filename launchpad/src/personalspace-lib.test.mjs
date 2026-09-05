@@ -4,8 +4,10 @@ import { join } from "path";
 import { mkdir, mkdtemp, realpath, rename, rm, symlink, writeFile } from "fs/promises";
 import { buddyPresentationProjection, discoverPersonalspace, personalAppRuntimeId } from "../../lazurio/runtime/personalspace-lib.mjs";
 import { APP_CHECKOUT_ROOT, APP_FILESYSTEM_ROOT, discoverLaunchpadApps } from "../../lazurio/runtime/discovery-lib.mjs";
+import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.mjs";
 
 const tempRoots = [];
+const fileSymlinkTest = (await supportsFileSymlinks()) ? test : test.skip;
 
 afterAll(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })));
@@ -315,7 +317,7 @@ test("Personalspace odmítne workspace junction mimo owner checkout a neuniknou 
   expect(result.failures.join("\n")).toContain("workspace odkazuje přes symlink/junction mimo Personalspace");
 });
 
-test.skipIf(process.platform === "win32")("Personalspace izoluje Module manifest odkazující mimo přesný modul", async () => {
+fileSymlinkTest("Personalspace izoluje Module manifest odkazující mimo přesný modul [requires file symlink capability]", async () => {
   const root = await createPersonalspaceFixture({
     localOwner: "exampleuser",
     spaces: [{
@@ -346,7 +348,7 @@ test.skipIf(process.platform === "win32")("Personalspace izoluje Module manifest
   expect(result.invalid_apps[0].manifest_issues.join("\n")).toContain("odkazuje mimo vybraný checkout");
 });
 
-test.skipIf(process.platform === "win32")("Personalspace root authority JSON nesmí odkazovat mimo přesný owner mount", async () => {
+fileSymlinkTest("Personalspace root authority JSON nesmí odkazovat mimo přesný owner mount [requires file symlink capability]", async () => {
   const personalRoot = await createPersonalspaceFixture({
     localOwner: "exampleuser",
     spaces: [{

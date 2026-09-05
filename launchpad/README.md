@@ -46,23 +46,23 @@ Hosted browser akce navíc vyžadují
 `LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN=https://<přesný-launchpad-host>` a interní
 `LAZURIO_LAUNCHPAD_AUTH_CHECK_URL=https://<přesný-auth-host>/oauth2/auth` spolu
 s přesným `LAZURIO_LAUNCHPAD_AUTH_COOKIE_NAME=<oauth2-proxy-cookie>`. Server
-přijme tento origin pouze v hosted profilu, pouze přes svůj loopback listener,
-s browser metadata `Sec-Fetch-Site: same-origin` a s
-`X-Lazurio-GitHub-Login`, který smí po úspěšném OAuth/GitHub Team checku vložit
-ingress. Ingress před autentizací stejný příchozí header vždy odstraní. Protože
-samotné proxy hlavičky umí proces ve sdíleném loopback namespace napodobit,
-Launchpad před každou chráněnou akcí znovu ověří podepsanou HttpOnly session u
-stejného oauth2-proxy přes oddělený TLS-autentizovaný Team auth host a porovná
-jeho autoritativní login s ingress hlavičkou. Na auth origin předá pouze přesně
-pojmenovanou oauth2-proxy session cookie; žádnou další browser cookie ani OAuth
-token neloguje nebo nepředává a auth check failuje zavřeně. Tím hostovaný
-povrch používá stejné `/api/sync`, runtime, Git a update handlery jako localhost
-bez druhého IAM nebo druhé implementace akcí.
+přijme tento origin pouze v hosted profilu, pouze přes svůj loopback listener a
+s browser metadata `Sec-Fetch-Site: same-origin`. Proxy ani identity hlavička
+se nepovažuje za důkaz, protože ji proces ve sdíleném loopback namespace umí
+napodobit. Launchpad proto před každou chráněnou akcí znovu ověří podepsanou
+HttpOnly session u stejného Team-scoped oauth2-proxy přes oddělený
+TLS-autentizovaný auth host. Na auth origin předá pouze přesně pojmenovanou
+oauth2-proxy session cookie; žádnou další browser cookie, lidský display login
+ani OAuth token neloguje nebo nepředává a auth check failuje zavřeně. Exact
+Team capability je součástí konfigurace této auth session, ne paralelní
+Launchpad identity. Tím hostovaný povrch používá stejné `/api/sync`, runtime,
+Git a update handlery jako localhost bez druhého IAM nebo druhé implementace
+akcí.
 
 Personalspace, `/api/launchpad/identity` a otevření složky v lokálním OS zůstávají
 i v hosted profilu local-only. Chybějící nebo neplatný external origin či auth
-check URL je startup chyba; chybějící gateway identita nebo session, neúspěšný
-auth check, odlišný origin nebo cross-site request končí `403` před routingem.
+check URL je startup chyba; chybějící session, neúspěšný auth check, odlišný
+origin nebo cross-site request končí `403` před routingem.
 
 Hosted profil je privátní vývojový preview povrch uvnitř schváleného
 Tailscale/VPN access plane, nikoli produkční deployment. Zdroj lze editovat bez
@@ -152,6 +152,28 @@ machine rootu, hash selected control rootu i hash skutečných runtime/public
 source bytes. Přechod main ↔ worktree nebo změna Server generace proto bezpečně
 nahradí tutéž sdílenou instanci a launcher ohlásí její skutečný origin;
 nekompatibilní ani cizí listener se nikdy nepřevezme.
+
+## Jazyk UI
+
+Launchpad-owned UI copy žije offline v `public/locales/cs.js` a `en.js`.
+Explicitní preference `launchpad.locale` má přednost před jazykem prohlížeče;
+fallback je čeština. Přepnutí jazyka reloadne stejnou route, takže nemění
+vybraný prostor ani lifecycle běžících Apps.
+
+In-shell Guide je součást stejného locale kontraktu a nemá vlastní přepínač.
+Statické nadpisy, slovník, doporučení i loading/error/copy stavy používají
+stejné katalogy. Organization install prompt a úplný policy runbook vyžadují
+explicitní `locale` na read-only API; `cs` čte
+`manual/organization-install.md`, `en` čte
+`distribution/locales/en/manual/organization-install.md`. API vrací vybrané
+locale i relativní source path a při chybějící projekci skončí fail-closed —
+anglický Guide nesmí zobrazit český runbook jako fallback.
+
+Kód používá pouze stabilní významové klíče a API důvody vyhodnocuje podle
+`error`/`failure_kind`, nikdy podle lidské věty. Text Organizace — názvy,
+popisy, commit messages, plugin obsah — a raw technická evidence zůstávají
+beze změny, protože jejich jazyk vlastní zdrojové repo. Překladový postup a
+QA pravidla jsou v [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 ## Discovery model
 
@@ -832,11 +854,12 @@ Všechny mutující metody pod `/api/` procházejí před routingem jednotnou re
 trust kontrolou. Lokálně musí `Host` být `127.0.0.1` nebo `localhost`, případný
 `Origin` musí přesně odpovídat request originu a `Sec-Fetch-Site` smí být jen
 `same-origin` nebo `none`. Hosted profil přijme jen přesný nakonfigurovaný HTTPS
-origin, `Sec-Fetch-Site: same-origin`, gateway-authenticated GitHub login a
-jedinou přesně pojmenovanou session, kterou Launchpad nezávisle znovu ověřil u
-interního oauth2-proxy;
-backend listener zůstává loopback-only. Cross-origin, DNS-rebinding,
-header-spoofed a neautentizované hosted požadavky končí `403` dřív, než se spustí
+origin, `Sec-Fetch-Site: same-origin` a jedinou přesně pojmenovanou podepsanou
+Team session, kterou Launchpad nezávisle znovu ověřil u interního oauth2-proxy
+přes oddělenou TLS route. Proxy ani identity hlavičky se do rozhodnutí
+nezapojují; backend listener zůstává loopback-only. Cross-origin,
+DNS-rebinding, pouze header-spoofed a neautentizované hosted požadavky končí
+`403` dřív, než se spustí
 Git, worktree, runtime nebo synchronizační akce. Nový mutující endpoint tuto
 centrální ochranu dědí automaticky; Personalspace a další local-only routy mají
 ještě užší gate.

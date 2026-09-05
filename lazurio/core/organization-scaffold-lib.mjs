@@ -8,6 +8,42 @@ export const ORGANIZATION_GITHUB_LOGIN_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,
 const organizationSlugPattern = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/u;
 
 const staticFiles = Object.freeze({
+  ".github/ISSUE_TEMPLATE/agent-report.md": `---
+name: Agent report
+about: Sanitized technical problem in this Organization repository
+title: ""
+labels: ""
+assignees: ""
+---
+
+<!--
+Before publishing, search for duplicates and remove secrets, credentials,
+Personalspace, another Organization's data, local usernames and unnecessary
+absolute paths. A problem owned by one Module belongs in that Module repository.
+-->
+
+## Problem
+
+## Environment and exact source version
+
+## Reproduction
+
+1.
+2.
+3.
+
+## Actual result
+
+## Expected result
+
+## Safe workaround
+
+## Acceptance criteria
+
+- [ ] The owning scope and repository are verified.
+- [ ] The report contains no secrets or cross-Organization data.
+- [ ] The expected result is testable.
+`,
   ".gitignore": `# Local dependencies, generated output and secrets
 node_modules/
 coverage/
@@ -53,6 +89,13 @@ Use a task branch and pull request for tracked changes. A draft may be prepared,
 committed and pushed for review; merge, release and other publication require
 the current Principal's explicit instruction and live GitHub permission.
 
+Open technical problems and uncertainties belong in GitHub Issues of the exact
+owning repository. Plans, priorities and responsibility belong in Mission
+Control. Creating an issue or comment is publication: it requires the current
+Principal's explicit mandate, duplicate search and sanitization. Never publish
+secrets, Personalspace or another Organization's data. If no safe repository or
+mandate exists, return a sanitized draft instead of creating a shadow ledger.
+
 Workspace Modules live under \`workspace/<module>\`. Organization-wide
 repositories live in their declared root or \`productionspace/\` slots. Nested
 repositories are separate checkouts and must never become gitlinks in this root.
@@ -90,7 +133,6 @@ const scaffoldFilePaths = Object.freeze([
   "modules.manifest.json",
   "TODO.tasks.json",
   "DONE.tasks.json",
-  "ISSUES.open.json",
 ].sort(compareGitNames));
 
 export function createOrganizationScaffold({ organization, repository }) {
@@ -115,12 +157,6 @@ export function createOrganizationScaffold({ organization, repository }) {
     scope,
     tasks: [],
   }));
-  files.set("ISSUES.open.json", json({
-    schema_version: "companiesascode.open_issues.v1",
-    scope,
-    issues: [],
-  }));
-
   const orderedFiles = [...files]
     .map(([path, content]) => freeze({ path, content, blob_oid: gitObjectId("blob", Buffer.from(content)) }))
     .sort((left, right) => compareGitNames(left.path, right.path));

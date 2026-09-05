@@ -45,6 +45,57 @@ Před spuštěním přečti root `AGENTS.md`, potom
 `$ORGANIZATION_TEMPLATE_ROOT/AGENTS.md`. V shared rootu spusť:
 
 ```sh
+preflight_required_template_access() {
+gh auth status --hostname github.com >/dev/null 2>&1 || {
+  echo "GitHub CLI není přihlášené k github.com; dokonči nejdřív machine auth/SSH gate." >&2
+  return 1
+}
+
+for template_repository in \
+  TemplatesRozjedeme-ai/OrganizationTemplate_GEN3 \
+  TemplatesRozjedeme-ai/MissionControlTemplate \
+  TemplatesRozjedeme-ai/KnowledgebaseTemplate \
+  TemplatesRozjedeme-ai/DesignSystemTemplate
+do
+  api_probe="$(
+    gh api --include "repos/$template_repository" \
+      --jq '"\(.full_name)\t\(.is_template)\t\(.default_branch)"' 2>&1
+  )"
+  api_status=$?
+  api_status_line="$(printf '%s\n' "$api_probe" | sed -n '1p')"
+  api_result_line="$(printf '%s\n' "$api_probe" | tail -n 1)"
+
+  if [ "$api_status" -ne 0 ]; then
+    case "$api_status_line $api_result_line" in
+      *" 401 "*|*"(HTTP 401)"*)
+        echo "GitHub autentizace už není platná; neopakuj template operaci před opravou přihlášení." >&2
+        ;;
+      *" 403 "*|*" 404 "*|*"(HTTP 403)"*|*"(HTTP 404)"*)
+        echo "Template repo není pro tento účet čitelné nebo neexistuje: $template_repository" >&2
+        echo "Požádej ownera TemplatesRozjedeme-ai o READ pozvánku/grant pro přesné repo; pokud je souřadnice zastaralá, oprav ji reviewovanou změnou tohoto runbooku." >&2
+        ;;
+      *)
+        echo "GitHub provider nebo síť nedovolily ověřit template repo: $template_repository" >&2
+        echo "Neodvozuj z technického selhání chybějící přístup a žádný náhradní remote nevytvářej." >&2
+        ;;
+    esac
+    return 1
+  fi
+
+  expected_result="$(printf '%s\ttrue\tmain' "$template_repository")"
+  test "$api_result_line" = "$expected_result" || {
+    echo "Template metadata neodpovídají exact repo, is_template=true a default_branch=main: $template_repository" >&2
+    return 1
+  }
+  git ls-remote --exit-code --heads -- \
+    "git@github.com:$template_repository.git" refs/heads/main >/dev/null 2>&1 || {
+    echo "GitHub API repo čte, ale SSH Git transport neověřil exact main: $template_repository" >&2
+    echo "Oprav SSH transport právě přihlášeného účtu; další gh login ani alternativní remote nevytvářej." >&2
+    return 1
+  }
+done
+}
+
 preflight_gen3_rollout() {
 cd /path/to/Lazurio || return 1
 lazurio_root="$(pwd -P)" || return 1
@@ -80,6 +131,7 @@ else
 fi
 bun run check || return 1
 bun run doctor || return 1
+preflight_required_template_access || return 1
 
 organization_template_root="${ORGANIZATION_TEMPLATE_ROOT:-}"
 if [ -z "$organization_template_root" ] || [ "${organization_template_root#/}" = "$organization_template_root" ]; then
@@ -220,7 +272,8 @@ Pokračuj jen pokud:
 - explicitní preflight výše potvrdí existenci a Git stav všech čtyř required
   template checkoutů; Doctor pouze discovery-reportuje ty přítomné a nemá
   hardcodovaný allowlist, kterým by jejich absenci vynucoval;
-- GitHub API potvrzuje `is_template: true` pro
+- read-only provider a SSH preflight potvrzuje přihlášenému účtu READ přístup,
+  exact `refs/heads/main` a `is_template: true` pro
   `TemplatesRozjedeme-ai/OrganizationTemplate_GEN3`,
   `TemplatesRozjedeme-ai/MissionControlTemplate`,
   `TemplatesRozjedeme-ai/KnowledgebaseTemplate` a
@@ -229,15 +282,11 @@ Pokračuj jen pokud:
 
 Fail-fast: novou GEN3 Organizaci nezakládej ze starého `CompanyTemplate` / GEN2 workspace template. Výchozí Organization upstream je `TemplatesRozjedeme-ai/OrganizationTemplate_GEN3`.
 
-Stav template flagů ověř read-only, ne podle názvu repozitáře:
-
-```sh
-for repo in OrganizationTemplate_GEN3 MissionControlTemplate KnowledgebaseTemplate DesignSystemTemplate; do
-  gh api "repos/TemplatesRozjedeme-ai/$repo" --jq '"\(.full_name) is_template=\(.is_template) default_branch=\(.default_branch)"'
-done
-```
-
-Každý řádek musí uvést `is_template=true` a `default_branch=main`.
+GitHub může u privátního repozitáře záměrně vrátit HTTP 404 jak pro chybějící
+repo, tak pro účet bez READ. Runbook tento rozdíl nehádá: vrátí přesnou
+souřadnici a požadavek na READ pozvánku/grant. Chybějící nebo neplatné
+přihlášení, provider/network failure a selhání SSH transportu zůstávají
+samostatné blokátory. Žádný z nich neopravuj forkem ani alternativním remote.
 
 ### 1. Organization repo bootstrap
 
@@ -258,7 +307,6 @@ Minimální tvar, který má klientské repo směřovat mít:
 ├── modules.manifest.json
 ├── TODO.tasks.json
 ├── DONE.tasks.json
-├── ISSUES.open.json
 ├── manual/
 │   └── README.md
 ├── company/
@@ -310,6 +358,57 @@ Tento baseline není big-bang workspace rollout: v `workspace/` se na začátku
 provisionuje Knowledgebase a další moduly přibývají až podle business potřeby.
 Mission Control, Design System a Infra jsou Organization root boundaries, ne
 Team moduly.
+
+### 1a. Instance `AGENTS.md` po forku (povinné)
+
+Fork z template zdědí `AGENTS.md`, které mluví jako šablona. Pokud ho Agent
+nepřepíše, v nested checkoutu zakáže klientský obsah nebo přeskočí otázku
+na Publikaci Draftu. Tohle je stejná chyba, která se stala u prvních
+klientských Organizací.
+
+Jakmile je `organization_kind: organization`, proveď rewrite v reviewovatelném
+PR **každého owning nested repa**:
+
+1. Organization `AGENTS.md` — první neprázdný řádek je přesně heading
+   **Povinný handoff** (bez doplňku v nadpisu) a soubor obsahuje obě celé
+   věty dvojotázky „Mám změny Publikovat tvým jménem?“ a „Nebo mám požádat
+   jiného oprávněného Principála o kontrolu a Publikaci?“. Nested soubory
+   tenhle kontrakt nenahrazují.
+2. `workspace/knowledgebase/AGENTS.md` — gate vyžaduje `privátní knowledgebase`,
+   `AGENTS.md` a otázku na Publikaci; zakazuje `KnowledgebaseTemplate` a
+   `není knowledgebase konkrétní firmy` bez ohledu na pomlčkový suffix.
+   Rewrite dál doplní název firmy a zákaz vracet obsah do šablony; ty gate
+   necertifikuje.
+3. `mission-control/AGENTS.md` — gate vyžaduje otázku na Publikaci a zakazuje
+   `MissionControlTemplate` i každý výskyt `Mattyčus`. Rewrite dál označí
+   soubor jako instance app/code této Organizace.
+4. `mission-control/db/AGENTS.md` — gate vyžaduje `PR proti`, `v3` a otázku
+   na Publikaci. Rewrite dál drží, že commit+push/merge na `v3` je Publikace
+   až po explicitním „Publikuj".
+5. Design System a infra, pokud existují — gate vyžaduje `AGENTS.md`.
+   Rewrite dál drží tokenová a no-secrets pravidla; ta gate necertifikuje.
+
+Organization root, Knowledgebase, Mission Control app, Mission Control data,
+Design System i infra jsou samostatné Git repozitáře; jeden Organization-root
+PR jejich obsah nepokrývá. Bootstrap je dávka PR ve vlastních repo, ne jeden
+gitlink commit.
+
+Fail-closed z Organization rootu. Gate čte `modules.manifest.json` přes
+`readOrganizationRoot`, povinný baseline (Knowledgebase, Mission Control app,
+Mission Control data) musí existovat a držet instance výroky, kanonická cesta
+určí druh souboru i když `category` nesedí, Design System a infra jen když
+je jejich aktuální slot aktivní, a nečitelný soubor je fail — ne úspěch.
+
+```sh
+bun "$LAZURIO_ROOT/scripts/check-organization-agents-instance.mjs" "$ORG_ROOT"
+```
+
+Exit 0 = instance rewrite drží. Exit 1 = chybí soubor, zbyla identita šablony,
+chybí závazný výrok, nebo scan nešel dočíst. Exit 2 = špatné použití.
+
+Obsah šablon (`TemplatesRozjedeme-ai/*`) se mění jen template PR, nikdy
+zkopírováním klientských dat zpět. Detail opakuje OrganizationTemplate skill
+`workspace-initialization` krok 4a.
 
 ### 2. Lokální mount a remote hranice
 
@@ -552,18 +651,20 @@ truth a `.claude/skills` je **Git-tracked odvozený byte-for-byte mirror**
 decision 0104). `bun run doctor:agent-skills` je read-only parity check;
 čerstvý checkout z template stavu má mirror rovnou v Gitu a hlásí `ok`. Legacy
 symlink/junction/placeholder nebo drift hlásí `repair`; `bun run
-repair:agent-skills` mirror deterministicky zregeneruje a změnu commitni ve
-stejném diffu jako kanonickou úpravu. Repair failuje zavřeně jen na neznámém
-obsahu (`mirror_unknown_content`) — ten porovnej s kanonickým katalogem a
-odstraň ručně; nikdy nesmí být `.claude/skills` v `.gitignore`.
+repair:agent-skills` je fail-closed no-write diagnostika a nic neregeneruje ani
+nestageuje. Jakýkoli drift, chybějící mirror nebo legacy tvar oprav explicitně
+v task worktree a odvozený mirror commitni ve stejném diffu jako kanonickou
+úpravu; neznámý obsah nejdřív porovnej a zachovej cizí práci. `.claude/skills`
+nikdy nesmí být v `.gitignore`.
 
 Mission Control data repo zakládej jako samostatný Git checkout na větvi `v3`.
 Při použití skeletonu z `mission-control/templates/organization-data` ponech
 `repository-db.yaml#schema.name` jako `mission-control-data`, nastav klientský
 `plan_prefix`, odstraň template DEV/RM fixture soubory s cizím prefixem a
-přenes počáteční klientské `TODO.tasks.json`, `DONE.tasks.json` a
-`ISSUES.open.json` do `data/mission-control/`. Root ledgery pak deklaruj jen
-jako mirrors. Validaci dat pusť až po prvním commitu, protože audit kontrola
+přenes počáteční klientské `TODO.tasks.json` a `DONE.tasks.json` do
+`data/mission-control/`; root task ledgery pak deklaruj jen jako mirrors.
+Technické problémy drž v GitHub Issues přesného owning repa a nevytvářej pro
+ně JSON mirror. Validaci dat pusť až po prvním commitu, protože audit kontrola
 počítá s existující Git historií.
 
 Pokud Doctor hlásí warning, nejdřív ho zařaď podle boundary:
@@ -674,6 +775,7 @@ Použij pro první klientský closeout. Pole označené `pokud ...` dokládej je
 - `bun run doctor`: ok/warn/fail + excerpt
 - Runtime smoke: `<app-id>` ready/start/repair result (pokud se app runtime předává)
 - Secrets: metadata-only custody check, no values printed (pokud se secrets konfigurovaly)
+- Nested AGENTS instance rewrite: pass/fail (`scripts/check-organization-agents-instance.mjs`)
 - Known accepted warnings: `<none>` or explicit list
 - Rollback path: tested/available/not applicable + proč
 ```
@@ -692,6 +794,9 @@ GEN3 je ready pro prvního klienta, když:
 - Organization baseline je z `OrganizationTemplate_GEN3`; Mission Control
   app + data, Knowledgebase, Design System boundary a Infra mají výše popsané
   nested repo/sloty, zatímco další workspace moduly se nezakládají big-bang;
+- Organization `AGENTS.md` má na začátku povinný handoff Publikace a nested
+  `AGENTS.md` jsou instance, ne text šablony
+  (`scripts/check-organization-agents-instance.mjs` v §1a);
 - required template mounty zahrnují `OrganizationTemplate_GEN3`,
   `MissionControlTemplate`, `KnowledgebaseTemplate` a
   `DesignSystemTemplate`; Mission Control i Design System template mají

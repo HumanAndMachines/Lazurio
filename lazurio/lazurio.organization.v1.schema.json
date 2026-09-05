@@ -64,7 +64,20 @@
         "access_authority": { "const": "github" }
       }
     },
-    "teams": { "type": "array" },
+    "teams": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["slug", "display_name"],
+        "properties": {
+          "slug": { "type": "string", "minLength": 1 },
+          "display_name": { "type": "string", "minLength": 1 },
+          "default": { "type": "boolean" },
+          "description": { "type": "string" },
+          "forge_binding": { "$ref": "#/$defs/teamForgeBinding" }
+        }
+      }
+    },
     "layers": { "type": "array" },
     "task_sources": { "type": "array" },
     "doctor": { "type": "object" },
@@ -140,6 +153,24 @@
           "else": { "not": { "required": ["repository_id"] } }
         }
       ]
+    },
+    "teamForgeBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "provider", "team"],
+      "properties": {
+        "schema_version": { "const": "lazurio.team-forge-binding.github.v0" },
+        "provider": { "const": "github" },
+        "team": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "asserted_slug"],
+          "properties": {
+            "id": { "type": "string", "pattern": "^[1-9][0-9]{0,19}$" },
+            "asserted_slug": { "type": "string", "pattern": "^[a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?$" }
+          }
+        }
+      }
     }
   }
 }

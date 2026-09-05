@@ -1,12 +1,20 @@
 import { afterAll, expect, test } from "bun:test";
 import { tmpdir } from "os";
 import { join } from "path";
-import { mkdir, mkdtemp, rename, rm, symlink, writeFile } from "fs/promises";
-import { appPlacementResolverForOrganization, buildDoctorReportFromAppsResponse, buildEnvironmentChecks, buildLaunchpadAppsResponse, buildLaunchpadDoctorReport, bunRuntimeCheck, developerToolUpdateChecks, lazurioUpdateCheck, runtimeAppStatus } from "../../lazurio/runtime/diagnostics-lib.mjs";
-import { createLaunchpadGitFixture, initGitRepo, runGit } from "./git-fixture-helpers.test.mjs";
+import { mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from "fs/promises";
+import { appPlacementResolverForOrganization, buildDoctorReportFromAppsResponse, buildEnvironmentChecks, buildLaunchpadAppsResponse, buildLaunchpadDoctorReport, bunRuntimeCheck, codexRuntimeCheck, developerToolUpdateChecks, lazurioUpdateCheck, nodeRuntimeCheck, runtimeAppStatus } from "../../lazurio/runtime/diagnostics-lib.mjs";
+import {
+  createLaunchpadGitFixture,
+  createRepositoryDbWorktreeFixture,
+  initGitRepo,
+  runGit,
+} from "./git-fixture-helpers.test.mjs";
+import { createWorktreeFromPlan } from "./worktree-actions-lib.mjs";
 import { buildGitInventory } from "../../lazurio/runtime/git-inventory-lib.mjs";
+import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.mjs";
 
 const tempRoots = [];
+const fileSymlinkCapability = await supportsFileSymlinks();
 
 afterAll(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })));
@@ -16,20 +24,136 @@ test("Bun Doctor check enforces the exact authority and gives an Agent handoff",
   const current = bunRuntimeCheck({
     companiesRoot: "/fixture",
     bunExecutable: "/trusted/bun",
-    requiredVersion: "1.4.0",
-    run: () => ({ ok: true, stdout: "1.4.0", stderr: "" }),
+    requiredVersion: "1.4.1",
+    run: () => ({ ok: true, stdout: "1.4.1", stderr: "" }),
   });
   const mismatch = bunRuntimeCheck({
     companiesRoot: "/fixture",
     bunExecutable: "/trusted/bun",
-    requiredVersion: "1.4.0",
-    run: () => ({ ok: true, stdout: "1.4.1", stderr: "" }),
+    requiredVersion: "1.4.1",
+    run: () => ({ ok: true, stdout: "1.4.2", stderr: "" }),
   });
 
   expect(current).toMatchObject({ id: "platform.bun", status: "ok" });
   expect(mismatch).toMatchObject({ id: "platform.bun", status: "fail" });
   expect(mismatch.message).toContain("Principála");
-  expect(mismatch.details).toEqual(expect.arrayContaining(["current: 1.4.1", "required: 1.4.0"]));
+  expect(mismatch.details).toEqual(expect.arrayContaining(["current: 1.4.2", "required: 1.4.1"]));
+});
+
+test("Node.js Doctor shares the Install Core version authority", () => {
+  const supportedLts = nodeRuntimeCheck({
+    companiesRoot: "/fixture",
+    command: "/trusted/node",
+    trustedExecutable: "/trusted/node",
+    trustedCandidates: ["/trusted/node"],
+    requiredRange: ">=22.12.0",
+    run: () => ({ ok: true, stdout: "v24.19.0", stderr: "" }),
+  });
+  const supportedCurrent = nodeRuntimeCheck({
+    companiesRoot: "/fixture",
+    command: "/trusted/node",
+    trustedExecutable: "/trusted/node",
+    trustedCandidates: ["/trusted/node"],
+    requiredRange: ">=22.12.0",
+    run: () => ({ ok: true, stdout: "v26.5.0", stderr: "" }),
+  });
+  const incompatible = nodeRuntimeCheck({
+    companiesRoot: "/fixture",
+    command: "/trusted/node",
+    trustedExecutable: "/trusted/node",
+    trustedCandidates: ["/trusted/node"],
+    requiredRange: ">=22.12.0",
+    run: () => ({ ok: true, stdout: "v22.11.0", stderr: "" }),
+  });
+  const missing = nodeRuntimeCheck({
+    companiesRoot: "/fixture",
+    command: null,
+    trustedExecutable: null,
+    trustedCandidates: ["/trusted/node"],
+    requiredRange: ">=22.12.0",
+    run: () => {
+      throw new Error("missing Node.js must not execute");
+    },
+  });
+
+  expect(supportedLts).toMatchObject({ id: "platform.node", status: "ok" });
+  expect(supportedCurrent).toMatchObject({ id: "platform.node", status: "ok" });
+  expect(incompatible).toMatchObject({ id: "platform.node", status: "fail" });
+  expect(incompatible.message).toContain(">=22.12.0");
+  expect(missing).toMatchObject({ id: "platform.node", status: "fail" });
+  expect(missing.message).toContain("není dostupný");
+  expect(missing.links[0]?.url).toBe("https://nodejs.org/en/download");
+
+  const installedButNotOnPath = nodeRuntimeCheck({
+    companiesRoot: "/fixture",
+    command: null,
+    trustedExecutable: "/trusted/node",
+    trustedCandidates: ["/trusted/node"],
+    requiredRange: ">=22.12.0",
+    run: () => {
+      throw new Error("Node.js outside PATH must not execute");
+    },
+  });
+  expect(installedButNotOnPath).toMatchObject({ id: "platform.node", status: "fail" });
+  expect(installedButNotOnPath.message).toContain("není dostupný");
+
+  const shadowed = nodeRuntimeCheck({
+    companiesRoot: "/fixture",
+    command: "/tmp/shadow/node",
+    trustedExecutable: "/trusted/node",
+    trustedCandidates: ["/trusted/node"],
+    requiredRange: ">=22.12.0",
+    run: () => {
+      return { ok: true, stdout: "v24.0.0" };
+    },
+  });
+  expect(shadowed).toMatchObject({ id: "platform.node", status: "ok" });
+
+});
+
+test("Codex Doctor names the broken WinGet alias without accepting its target binary as ready", () => {
+  const check = codexRuntimeCheck({
+    companiesRoot: "C:\\Users\\Builder\\Lazurio",
+    platform: "win32",
+    architecture: "x64",
+    environment: {
+      Path: "C:\\Users\\Builder\\AppData\\Local\\Microsoft\\WinGet\\Packages\\OpenAI.Codex__DefaultSource",
+      PATHEXT: ".EXE;.CMD",
+    },
+    resolvePathCommand: (command) => (
+      command === "codex-x86_64-pc-windows-msvc"
+        ? "C:\\Users\\Builder\\AppData\\Local\\Microsoft\\WinGet\\Packages\\OpenAI.Codex__DefaultSource\\codex-x86_64-pc-windows-msvc.exe"
+        : null
+    ),
+    run: () => {
+      throw new Error("target-specific candidate must not be executed");
+    },
+  });
+
+  expect(check).toMatchObject({
+    id: "platform.codex",
+    status: "fail",
+    severity: "required",
+  });
+  expect(check.message).toContain("target-specific");
+  expect(check.message).toContain("příkaz codex chybí");
+  expect(check.details).toContain("candidate_probe: not_run_untrusted_candidate");
+  expect(check.details).toContain("next_action: ask_principal_before_official_codex_standalone_install");
+  expect(check.links[0]?.url).toBe("https://developers.openai.com/codex/cli");
+});
+
+test("Codex Doctor accepts only a working codex command as ready", () => {
+  const check = codexRuntimeCheck({
+    companiesRoot: "/fixture",
+    platform: "linux",
+    architecture: "x64",
+    environment: { PATH: "/trusted" },
+    resolvePathCommand: (command) => command === "codex" ? "/trusted/codex" : null,
+    run: () => ({ ok: true, exitCode: 0, stdout: "codex-cli 0.147.0", stderr: "" }),
+  });
+
+  expect(check).toMatchObject({ id: "platform.codex", status: "ok", severity: "required" });
+  expect(check.message).toContain("codex-cli 0.147.0");
 });
 
 test("tool update Doctor checks warn the Agent without running an updater", async () => {
@@ -78,6 +202,7 @@ test("tool update Doctor checks warn the Agent without running an updater", asyn
   expect(checks[0]).toMatchObject({ status: "warn", severity: "recommended" });
   expect(checks[0].message).toContain("požádat Principála o souhlas");
   expect(checks[0].details).toContain("next_action: ask_principal_before_update");
+  expect(checks[1]).toMatchObject({ status: "fail", severity: "required" });
   expect(checks[1].message).toContain("není dostupný v PATH");
   expect(checks[1].message).toContain("Principála");
   expect(checks[1].details).toContain("next_action: ask_principal_before_install");
@@ -536,8 +661,11 @@ test("apps response materializes HTTPS endpoints from the module-owned lease", a
     schema_version: "lazurio.module.v1",
     id: "secure",
     company: "SecureCo",
-    tcp_port_policy: { mode: "single" },
-    port_leases: [{ id: "main", host: "127.0.0.1", port: 5450 }],
+    tcp_port_policy: { mode: "exception", reason: "The optional local editor owns a second listener." },
+    port_leases: [
+      { id: "main", host: "127.0.0.1", port: 5450 },
+      { id: "editor", host: "127.0.0.1", port: 5451 },
+    ],
     apps: ["app/v1/package.json"],
     default_app: "app/v1/package.json",
   });
@@ -563,6 +691,12 @@ test("apps response materializes HTTPS endpoints from the module-owned lease", a
     },
     module_catalog_path: "workspace/secure",
     module_open_target: true,
+    editor: {
+      status: "read_only",
+      label: "Pouze pro čtení",
+      listener: { host: "127.0.0.1", port: 5451 },
+      component_path: "launchpad/components/editor/v2",
+    },
   });
   const secureModule = response.organizations
     .find((organization) => organization.slug === "SecureCo")
@@ -587,6 +721,68 @@ test("apps response materializes HTTPS endpoints from the module-owned lease", a
   const report = buildDoctorReportFromAppsResponse(response);
   const check = report.checks.find((item) => item.id === "launchpad.port_ownership");
   expect(check?.status).toBe("ok");
+  const appCheck = report.checks.find((item) => item.id === "launchpad.runtime.secureco-secure");
+  expect(appCheck?.details).toContain("editor: read-only (known limitation)");
+
+  const sharedEditorRoot = join(root, "launchpad", "components", "editor", "v2");
+  await mkdir(join(sharedEditorRoot, "lib"), { recursive: true });
+  await mkdir(join(sharedEditorRoot, "public"), { recursive: true });
+  await writeFile(join(sharedEditorRoot, "lib", "astro-integration.ts"), "// fixture\n", "utf8");
+  await writeFile(join(sharedEditorRoot, "lib", "create-server.ts"), "// fixture\n", "utf8");
+  await writeFile(join(sharedEditorRoot, "public", "index.html"), "<!doctype html>\n", "utf8");
+  await writeFile(join(sharedEditorRoot, "public", "app.js"), "// fixture\n", "utf8");
+  await writeFile(join(sharedEditorRoot, "public", "styles.css"), "/* fixture */\n", "utf8");
+  await writeJson(join(sharedEditorRoot, "component.json"), {
+    schema_version: "lazurio.knowledgebase.editor.component.v2",
+    entrypoints: {
+      astro_integration: "lib/astro-integration.ts",
+      server: "lib/create-server.ts",
+    },
+    public_files: ["public/index.html", "public/app.js", "public/styles.css"],
+  });
+  const readyResponse = await buildLaunchpadAppsResponse({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    runtimeManager: { appsWithRuntime: async (apps) => apps },
+    includeGit: false,
+  });
+  expect(readyResponse.apps[0]?.editor).toMatchObject({
+    status: "ready",
+    label: "Editor připraven",
+  });
+
+  await writeJson(join(sharedEditorRoot, "component.json"), {
+    schema_version: "lazurio.knowledgebase.editor.component.v2",
+    entrypoints: {
+      astro_integration: "lib/astro-integration.ts",
+      server: "lib/create-server.ts",
+    },
+    public_files: ["public/index.html", "public/app.js"],
+  });
+  const incompleteManifestResponse = await buildLaunchpadAppsResponse({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    runtimeManager: { appsWithRuntime: async (apps) => apps },
+    includeGit: false,
+  });
+  expect(incompleteManifestResponse.apps[0]?.editor?.status).toBe("read_only");
+
+  await writeJson(join(sharedEditorRoot, "component.json"), {
+    schema_version: "lazurio.knowledgebase.editor.component.v2",
+    entrypoints: {
+      astro_integration: "lib/astro-integration.ts",
+      server: "lib/create-server.ts",
+    },
+    public_files: ["public/index.html", "public/app.js", "public/styles.css"],
+  });
+  await rm(join(sharedEditorRoot, "public", "styles.css"));
+  const missingAssetResponse = await buildLaunchpadAppsResponse({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    runtimeManager: { appsWithRuntime: async (apps) => apps },
+    includeGit: false,
+  });
+  expect(missingAssetResponse.apps[0]?.editor?.status).toBe("read_only");
 });
 
 test("Doctor treats Organization port policy violations as hard errors", () => {
@@ -691,7 +887,13 @@ test("doctor report obsahuje platform, git a gitignore checks", async () => {
   const checks = new Map(report.checks.map((check) => [check.id, check]));
 
   expect(checks.get("platform.bun")?.status).toBe("ok");
+  expect(checks.get("platform.bun_path")?.status).toBe("ok");
+  expect(checks.get("platform.bun_package_runner")?.status).toBe("ok");
   expect(checks.get("platform.git")?.status).toBe("ok");
+  expect(checks.has("platform.github_cli")).toBe(true);
+  expect(checks.has("platform.github_auth")).toBe(true);
+  expect(checks.has("platform.node")).toBe(true);
+  expect(checks.has("platform.codex")).toBe(true);
   expect(checks.get("git.root")?.status).toBe("ok");
   expect(checks.get("git.worktree")?.status).toBe("ok");
   expect(checks.get("gitignore.protection")?.status).toBe("ok");
@@ -2500,7 +2702,7 @@ test("invalid_manifest appka je viditelná v apps response a doctor ji hlásí j
   expect(goodCheck).toBeDefined();
 });
 
-test.skipIf(process.platform === "win32")("CAC-0042: Doctor reportuje worktree problémy bez cleanup rozhodování", async () => {
+test("CAC-0042: Doctor reportuje worktree problémy bez cleanup rozhodování", async () => {
   const root = await createLaunchpadGitFixture();
   tempRoots.push(root);
   const orgRoot = join(root, "organizations", "BetaCo_GEN3");
@@ -2553,25 +2755,31 @@ test.skipIf(process.platform === "win32")("CAC-0042: Doctor reportuje worktree p
   });
   await writeFile(join(foreignAuthorityRoot, "package-lock.json"), "{}\n", "utf8");
   await mkdir(join(foreignAuthorityRoot, "secret-customer-project"));
-  await symlink(foreignAuthorityRoot, join(stalePath, "app"), "dir");
+  await symlink(
+    foreignAuthorityRoot,
+    join(stalePath, "app"),
+    process.platform === "win32" ? "junction" : "dir",
+  );
   run(["git", "add", "app"], stalePath);
   run(["git", "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "add escaped app fixture"], stalePath);
-  await mkdir(join(activePath, "app", "v2"), { recursive: true });
-  await symlink(
-    join(foreignAuthorityRoot, "package.json"),
-    join(activePath, "app", "v2", "package.json"),
-    "file",
-  );
-  await mkdir(join(activePath, "app", "v3"), { recursive: true });
-  await writeJson(join(activePath, "app", "v3", "package.json"), {
-    private: true,
-    packageManager: "bun@1.3.14",
-  });
-  await symlink(
-    join(foreignAuthorityRoot, "package-lock.json"),
-    join(activePath, "app", "v3", "package-lock.json"),
-    "file",
-  );
+  if (fileSymlinkCapability) {
+    await mkdir(join(activePath, "app", "v2"), { recursive: true });
+    await symlink(
+      join(foreignAuthorityRoot, "package.json"),
+      join(activePath, "app", "v2", "package.json"),
+      "file",
+    );
+    await mkdir(join(activePath, "app", "v3"), { recursive: true });
+    await writeJson(join(activePath, "app", "v3", "package.json"), {
+      private: true,
+      packageManager: "bun@1.3.14",
+    });
+    await symlink(
+      join(foreignAuthorityRoot, "package-lock.json"),
+      join(activePath, "app", "v3", "package-lock.json"),
+      "file",
+    );
+  }
   await mkdir(join(activePath, "app", "v4"), { recursive: true });
   await writeJson(join(activePath, "app", "v4", "package.json"), {
     private: true,
@@ -2643,17 +2851,19 @@ test.skipIf(process.platform === "win32")("CAC-0042: Doctor reportuje worktree p
   expect(checks.get("git.worktrees.dependencies")?.details).toEqual(expect.arrayContaining([
     "checked_worktrees: 2",
     "skipped_declared_inactive_worktrees: 0",
-    "checked_packages: 6",
+    `checked_packages: ${fileSymlinkCapability ? 6 : 4}`,
     "ready: 1",
     "needs_install: 1",
-    "dependency_boundary_invalid: 3",
+    `dependency_boundary_invalid: ${fileSymlinkCapability ? 3 : 1}`,
     "unknown_package_manager: 1",
   ]));
   expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("CAC-0042-doctor-active/app/v1");
   expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("bun install");
   expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("missing: demo");
-  expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("CAC-0042-doctor-active/app/v2");
-  expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("CAC-0042-doctor-active/app/v3");
+  if (fileSymlinkCapability) {
+    expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("CAC-0042-doctor-active/app/v2");
+    expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("CAC-0042-doctor-active/app/v3");
+  }
   expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("CAC-0042-doctor-active/app/v4");
   expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("mismatches package-lock.json (npm)");
   expect(checks.get("git.worktrees.dependencies")?.details.join("\n")).toContain("CAC-0042-doctor-stale");
@@ -2708,6 +2918,120 @@ test("worktree dependency Doctor follows the configured Organization mountpoint"
     "ready: 1",
   ]));
 });
+
+test("worktree dependency Doctor proves the exact repository-db member and rejects sidecar drift", async () => {
+  const fixture = await createRepositoryDbWorktreeFixture({ port: 25422 });
+  tempRoots.push(fixture.root);
+  const branch = "CAC-0099-doctor-binding";
+  const created = await createWorktreeFromPlan({
+    companiesRoot: fixture.root,
+    repoKey: "BetaCo::mission-control",
+    planPath: fixture.planPath,
+    branch,
+  });
+  const report = await buildLaunchpadDoctorReport({
+    companiesRoot: fixture.root,
+    launchpadRoot: join(fixture.root, "launchpad"),
+    runtimeManager: { appsWithRuntime: async (apps) => apps },
+    runChildDoctors: false,
+  });
+  const dependencies = report.checks.find((check) => check.id === "git.worktrees.dependencies");
+  expect(dependencies?.details).toEqual(expect.arrayContaining([
+    "checked_repository_db_bindings: 1",
+    "repository_db_ready: 1",
+    "repository_db_binding_invalid: 0",
+  ]));
+
+  const sidecarPath = join(
+    fixture.orgRoot,
+    ".worktrees",
+    "root",
+    "mission-control",
+    `${created.worktree.slug}.worktree.json`,
+  );
+  const sidecar = JSON.parse(await readFile(sidecarPath, "utf8"));
+  sidecar.members.find((member) => member.role === "dependency").base_sha = "0".repeat(40);
+  await writeFile(sidecarPath, `${JSON.stringify(sidecar, null, 2)}\n`);
+  const driftedReport = await buildLaunchpadDoctorReport({
+    companiesRoot: fixture.root,
+    launchpadRoot: join(fixture.root, "launchpad"),
+    runtimeManager: { appsWithRuntime: async (apps) => apps },
+    runChildDoctors: false,
+  });
+  const drifted = driftedReport.checks.find((check) => check.id === "git.worktrees.dependencies");
+  expect(drifted?.status).toBe("warn");
+  expect(drifted?.details).toEqual(expect.arrayContaining([
+    "repository_db_ready: 0",
+    "repository_db_binding_invalid: 1",
+  ]));
+  expect(drifted?.details.join("\n")).toContain("binding HEAD neodpovídá sidecar base_sha");
+});
+
+test("worktree dependency Doctor reports a legacy sidecar without module_path", async () => {
+  const fixture = await createRepositoryDbWorktreeFixture({ port: 25424 });
+  tempRoots.push(fixture.root);
+  const created = await createWorktreeFromPlan({
+    companiesRoot: fixture.root,
+    repoKey: "BetaCo::mission-control",
+    planPath: fixture.planPath,
+    branch: "CAC-0099-doctor-legacy-sidecar",
+  });
+  const sidecarPath = join(
+    fixture.orgRoot,
+    ".worktrees",
+    "root",
+    "mission-control",
+    `${created.worktree.slug}.worktree.json`,
+  );
+  const sidecar = JSON.parse(await readFile(sidecarPath, "utf8"));
+  delete sidecar.module_path;
+  await writeFile(sidecarPath, `${JSON.stringify(sidecar, null, 2)}\n`);
+
+  const report = await buildLaunchpadDoctorReport({
+    companiesRoot: fixture.root,
+    launchpadRoot: join(fixture.root, "launchpad"),
+    runtimeManager: { appsWithRuntime: async (apps) => apps },
+    runChildDoctors: false,
+  });
+  const dependencies = report.checks.find((check) => check.id === "git.worktrees.dependencies");
+  expect(dependencies?.status).toBe("warn");
+  expect(dependencies?.details).toEqual(expect.arrayContaining([
+    "repository_db_ready: 0",
+    "repository_db_binding_invalid: 1",
+  ]));
+  expect(dependencies?.details.join("\n")).toContain("module_path");
+});
+
+if (fileSymlinkCapability) {
+  test("worktree dependency Doctor rejects a canonical repository-db owner replaced by a symlink", async () => {
+    const fixture = await createRepositoryDbWorktreeFixture({ port: 25423 });
+    tempRoots.push(fixture.root);
+    await createWorktreeFromPlan({
+      companiesRoot: fixture.root,
+      repoKey: "BetaCo::mission-control",
+      planPath: fixture.planPath,
+      branch: "CAC-0099-doctor-owner-boundary",
+    });
+
+    const movedOwner = join(fixture.orgRoot, "mission-control", "db-owner-moved");
+    await rename(fixture.repositoryDbRepo, movedOwner);
+    await symlink(movedOwner, fixture.repositoryDbRepo, "dir");
+
+    const report = await buildLaunchpadDoctorReport({
+      companiesRoot: fixture.root,
+      launchpadRoot: join(fixture.root, "launchpad"),
+      runtimeManager: { appsWithRuntime: async (apps) => apps },
+      runChildDoctors: false,
+    });
+    const dependencies = report.checks.find((check) => check.id === "git.worktrees.dependencies");
+    expect(dependencies?.status).toBe("warn");
+    expect(dependencies?.details).toEqual(expect.arrayContaining([
+      "repository_db_ready: 0",
+      "repository_db_binding_invalid: 1",
+    ]));
+    expect(dependencies?.details.join("\n")).toContain("Kanonický owner checkout není běžný adresář");
+  });
+}
 
 function buildDoctorRuntimeReport(apps) {
   return buildDoctorReportFromAppsResponse({
@@ -2889,3 +3213,61 @@ function run(command, cwd) {
     throw new Error(new TextDecoder().decode(result.stderr));
   }
 }
+
+
+test("Codex installation guidance stays platform-specific and read-only for runtime failures", () => {
+  for (const platform of ["darwin", "linux", "win32"]) {
+    for (const state of ["missing", "broken", "working"]) {
+      const calls = [];
+      const check = codexRuntimeCheck({
+        companiesRoot: "/fixture",
+        platform,
+        architecture: "x64",
+        resolvePathCommand: (name) => name === "codex" && state !== "missing" ? "/fixture/codex" : null,
+        run: (command, args) => {
+          calls.push([command, args]);
+          return { ok: state === "working", stdout: "codex-cli 0.153.3", stderr: "" };
+        },
+      });
+      expect(check.status).toBe(state === "working" ? "ok" : "fail");
+      expect(calls).toEqual(state === "missing" ? [] : [["/fixture/codex", ["--version"]]]);
+      expect(check.message).toContain("OpenAI standalone instalátor");
+      expect(check.details).toContain("preferred_installation: openai_standalone");
+      expect(check.details).toContain(platform === "win32"
+        ? 'install_or_update_command: powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"'
+        : "install_or_update_command: curl -fsSL https://chatgpt.com/codex/install.sh | sh");
+      expect(check.details).toContain("installation_policy: use_existing_explicit_mandate_or_ask_principal");
+    }
+  }
+});
+
+test("Codex currency results preserve status and consent while pointing to the same installer", async () => {
+  for (const platform of ["darwin", "linux", "win32"]) {
+    for (const [status, expected] of [
+      ["update_available", "warn"], ["current", "ok"],
+      ["not_available", "fail"], ["probe_failed", "fail"], ["currency_unknown", "warn"],
+    ]) {
+      const [check] = await developerToolUpdateChecks({
+        platform,
+        inspectUpdates: async () => [{
+          id: "codex", title: "Codex CLI", required: true, status,
+          current_version: "0.153.2", latest_version: "0.153.3",
+          release_url: "https://github.com/openai/codex/releases/tag/rust-v0.153.3",
+          reason: "fixture",
+        }],
+      });
+      expect(check.status).toBe(expected);
+      expect(check.message).toContain("OpenAI standalone instalátor");
+      expect(check.links.some((link) => link.url === "https://developers.openai.com/codex/cli")).toBe(true);
+      expect(check.details.some((detail) => detail.includes(platform === "win32" ? "install.ps1" : "install.sh"))).toBe(true);
+      expect(check.details).toContain("update_policy: principal_consent_required");
+    }
+  }
+});
+
+test("Bun PATH readiness accepts a separate exact-version installation and rejects empty output", async () => {
+  const { bunPathCheck } = await import("../../lazurio/runtime/diagnostics-lib.mjs");
+  for (const [stdout, status] of [["1.4.1", "ok"], ["1.4.0", "fail"], ["", "fail"]]) {
+    expect(bunPathCheck({ pathExecutable: "/custom/manager/bun", requiredVersion: "1.4.1", run: () => ({ ok: true, stdout }) }).status).toBe(status);
+  }
+});

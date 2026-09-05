@@ -50,18 +50,18 @@ test("Launchpad renderuje personalspace jako vlastní sekci v hlavní ploše (ne
   // Sdílený rail filtrů už neexistuje. V osobním scope se skrývá jen toolbar
   // aplikací; attention CTA proto vede přímo na osobní karty s warning panely.
   expect(appJs).toContain("function renderScopeControls");
-  expect(appJs).toContain('elements.hero.classList.toggle("hidden", personal)');
+  expect(appJs).toContain('elements.hero.classList.toggle("hidden", personal || guide)');
   expect(html).toContain('id="personalPrivacyBadge"');
-  expect(appJs).toContain('elements.personalPrivacyBadge?.toggleAttribute("hidden", !personal)');
+  expect(appJs).toContain('elements.personalPrivacyBadge?.toggleAttribute("hidden", !personal || guide)');
   expect(appJs).not.toContain("filterRail");
-  expect(appJs).toContain('elements.appsToolbar.classList.toggle("hidden", personal)');
-  expect(appJs).toContain('elements.drawerToggle.classList.toggle("hidden", personal)');
-  expect(appJs).toContain('elements.recentChangesSidebar.classList.toggle("hidden", personal)');
+  expect(appJs).toContain('elements.appsToolbar.classList.toggle("hidden", personal || guide)');
+  expect(appJs).toContain('elements.drawerToggle.classList.toggle("hidden", personal || guide)');
+  expect(appJs).toContain('elements.recentChangesSidebar.classList.toggle("hidden", personal || guide)');
   expect(appJs).toContain('if (state.filters.scope === "personal")');
   expect(appJs).toContain('Boolean(state.personalspace)');
 });
 
-test("personalspace.js renderuje Principálův prostor, český privacy badge a runtime akce oddělenou lane", async () => {
+test("personalspace.js renderuje Principálův prostor, lokalizovaný privacy badge a runtime akce oddělenou lane", async () => {
   const js = await readFile(join(publicRoot, "personalspace.js"), "utf8");
 
   expect(js).toContain("export function renderPersonalspace");
@@ -72,9 +72,9 @@ test("personalspace.js renderuje Principálův prostor, český privacy badge a 
   // Runtime propouští pouze Principálův prostor.
   expect(js).toContain("is_owner_primary");
   expect(js).not.toContain("personalspace-owner-badge");
-  // Soukromí je vždy česky a jako stav s ikonou i slovem.
+  // Soukromí je lokalizované a jako stav s ikonou i slovem.
   expect(js).toContain("personalspace-private-badge");
-  expect(js).toContain('statusBadge("Soukromé"');
+  expect(js).toContain('statusBadge(t("common.private")');
   expect(js).toContain('private: \'<path d="M7 11h10v9H7z"');
   // Runtime akce přes oddělenou personalspace lane: one-click open (start &
   // otevři) klikem na dlaždici + zastavit/restart pod ⋯ menu.
@@ -86,9 +86,9 @@ test("personalspace.js renderuje Principálův prostor, český privacy badge a 
   expect(js).toContain("writeReservedTabStatus(reservedTab");
   expect(js).toContain("function waitForPersonalRuntime");
   expect(js).toContain("/health");
-  expect(js).toContain("Launchpad nedostal URL běžící osobní aplikace");
+  expect(js).toContain('t("personal.urlMissing")');
   expect(js).toContain("function classifyPersonalOpenError");
-  expect(js).toContain("EADDRINUSE");
+  expect(js).toContain('"eaddrinuse"');
   expect(js).toContain('"stop"');
   expect(js).toContain('"restart"');
   // missing_access / planned_slot sloty z historického multi-space UI.
@@ -105,25 +105,25 @@ test("Personalspace je owner-first, Buddy je volitelný a technické údaje jsou
   expect(js).toContain("function buddyCard");
   expect(js).toContain("function recurringTasksCard");
   expect(js).toContain("function telegramIcon");
-  expect(js).toContain("Pravidelné úkoly");
-  expect(js).toContain("Používáš v aplikaci");
-  expect(js).toContain("Buddy je nastavený");
+  expect(js).toContain('t("buddy.recurringTasks")');
+  expect(js).toContain('t("buddy.usesApp")');
+  expect(js).toContain('t("buddy.configured")');
   expect(js).toContain("function noBuddyCard");
-  expect(js).toContain("Personalspace je připravený");
-  expect(js).toContain("Buddy není připojený");
-  expect(js).toContain("Personalspace zatím není vytvořený");
-  expect(js).toContain("Osobní paměť");
-  expect(js).toContain('statusBadge("Nastaveno", "buddy-application-state", "success")');
+  expect(js).toContain('t("personal.ready.title")');
+  expect(js).toContain('t("personal.ready.message")');
+  expect(js).toContain('t("personal.notCreated.title")');
+  expect(js).toContain('t("personal.memory.title")');
+  expect(js).toContain('statusBadge(t("common.configured"), "buddy-application-state", "success")');
   expect(js).not.toContain("image.src = avatarUrl");
-  expect(js).toContain("Moje aplikace");
-  expect(js).toContain("Technické informace");
+  expect(js).toContain('t("personal.apps.title")');
+  expect(js).toContain('t("common.technicalInformation")');
   expect(js).toContain("function safeExternalUrl");
   expect(js).toContain("technicalOpen: new Set()");
   expect(js).toContain("function bindTechnicalDetails");
   expect(js).toContain("details.open = state.technicalOpen.has(spaceKey)");
-  expect(js).toContain("Moje aplikace");
+  expect(js).toContain('t("personal.apps.title")');
   expect(js).toContain("function personalspaceErrorState");
-  expect(js).toContain("Osobní prostor se nepodařilo načíst");
+  expect(js).toContain('t("personal.loadFailed.title")');
   expect(js).not.toContain('textContent = "Demo Buddy"');
   expect(css).toContain(".personalspace-overview");
   expect(css).toContain(".privacy-pill");
@@ -148,18 +148,18 @@ test("personalspace.js má gbrain sekci: Obsidian deep link + read-only browser 
   const js = await readFile(join(publicRoot, "personalspace.js"), "utf8");
 
   // Obsidian deep link.
-  expect(js).toContain("Otevřít v Obsidianu");
+  expect(js).toContain('t("gbrain.openObsidian")');
   expect(js).toContain("obsidian://open");
   expect(js).toContain("function obsidianDeepLink");
   // Fallback text pro nezaregistrovaný vault.
-  expect(js).toContain("vault v něm ještě není zaregistrovaný");
+  expect(js).toContain('t("gbrain.pathHint"');
   // Read-only browser: strom, náhled zápisu, fulltext.
   expect(js).toContain("/gbrain/tree");
   expect(js).toContain("/gbrain/note");
   expect(js).toContain("/gbrain/search");
   expect(js).toContain("function renderMarkdown");
   // gbrain se defaultně nesdílí — UI to říká.
-  expect(js).toContain("defaultně nesdílí");
+  expect(js).toContain('t("gbrain.private")');
 });
 
 test("personalspace.js markdown render neinjektuje raw HTML z obsahu vaultu", async () => {
@@ -236,7 +236,7 @@ test("Personalspace dlaždice je GEN2-minimal (port GEN2-minimal karty): tile-fi
   expect(js).toContain("function shouldOpenFromCardSurface");
   expect(js).toContain("function isOpenable");
   expect(js).toContain("openingMessages");
-  expect(js).toContain("Osobní aplikace startuje moc dlouho");
+  expect(js).toContain('t("personal.healthTimeout")');
 
   // Personalspace je také rozcestník: běžný runtime stav na dlaždici nepíšeme;
   // trvalý „Připraveno" chip (dependencyChip) je rovněž pryč.
@@ -275,15 +275,15 @@ test("Personalspace dlaždice je GEN2-minimal (port GEN2-minimal karty): tile-fi
   expect(js).toContain('button.className = "app-menu-action";');
   const personalMenuActions = js.slice(js.indexOf("function personalMenuActions"), js.indexOf("function menuActionRow"));
   expect(personalMenuActions).toContain('["healthy", "unhealthy"].includes(app.runtime_status)');
-  expect(personalMenuActions).toContain('label: "Logy"');
+  expect(personalMenuActions).toContain('label: t("common.logs")');
   expect(js).toContain("openCodexRuntimeIssueDialog(app, recovery)");
 
   // Ikona aplikace zůstává; duplicitní ↗ cue už karta nepotřebuje.
   expect(js).toContain("function personalAppIconNode");
   expect(js).not.toContain('cue.className = "app-open-cue";');
 
-  // Český badge s ikonou zůstává — privátní hranice se nikdy nesmí splést s firemní.
-  expect(js).toContain('statusBadge("Soukromé"');
+  // Lokalizovaný badge s ikonou zůstává — privátní hranice se nikdy nesmí splést s firemní.
+  expect(js).toContain('statusBadge(t("common.private")');
 
   // CSS: nové dlaždicové třídy + reuse sdílených warning/menu tříd z GEN2-minimal karty.
   expect(css).toContain(".personalspace-app.is-openable");

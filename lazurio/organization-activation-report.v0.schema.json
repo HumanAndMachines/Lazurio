@@ -204,7 +204,7 @@
           "type": "object",
           "required": ["presence", "id", "name", "full_name", "default_branch", "viewer_can_push", "candidate_count", "resolver"],
           "properties": {
-            "presence": { "enum": ["absent", "empty", "present"] },
+            "presence": { "enum": ["absent", "empty", "present", "unobservable"] },
             "id": { "$ref": "#/definitions/nullableId" },
             "name": { "type": "string", "minLength": 1 },
             "full_name": { "type": "string", "minLength": 1 },
@@ -231,7 +231,7 @@
             }
           },
           "additionalProperties": false,
-          "if": { "properties": { "presence": { "const": "absent" } } },
+          "if": { "properties": { "presence": { "enum": ["absent", "unobservable"] } } },
           "then": {
             "properties": {
               "id": { "enum": [null] },

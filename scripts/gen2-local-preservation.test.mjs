@@ -23,9 +23,13 @@ import {
   committedVerifierIdentity,
   probeCloneCapability,
 } from "./gen2-local-preservation.mjs";
+import { supportsFileSymlinks } from "./test-platform-capabilities.mjs";
 
 const scriptPath = fileURLToPath(new URL("./gen2-local-preservation.mjs", import.meta.url));
 const tempRoots = [];
+
+const fileSymlinkSupported = await supportsFileSymlinks();
+const fileSymlinkTest = fileSymlinkSupported ? test : test.skip;
 
 // The suite intentionally exercises real Git repositories, refs, stashes,
 // fsck and filesystem metadata. Five seconds is not a meaningful failure
@@ -82,7 +86,11 @@ async function makeSource(root, name = "source") {
   await mkdir(join(source, "data"), { recursive: true });
   await writeFile(join(source, "data", "customer.txt"), "customer data\n", { mode: 0o640 });
   await writeFile(join(source, ".ignored-secret"), "fixture-secret-value\n", { mode: 0o600 });
-  await symlink("data/customer.txt", join(source, "customer-link"));
+  if (fileSymlinkSupported) {
+    await symlink("data/customer.txt", join(source, "customer-link"), "file");
+  } else {
+    await writeFile(join(source, "customer-link"), "portable fixture fallback\n");
+  }
   return source;
 }
 
@@ -209,6 +217,183 @@ describe("verifier source identity", () => {
 });
 
 describe("documented origin activation", () => {
+  test("required template access is read-only, exact and checked before template remote mutation", async () => {
+    const repoRoot = dirname(dirname(scriptPath));
+    const manual = await readFile(join(repoRoot, "manual", "first-client-organization-rollout.md"), "utf8");
+    const preflight = manual
+      .split("preflight_required_template_access() {")[1]
+      ?.split(/\r?\n}\r?\n\r?\npreflight_gen3_rollout\(\) \{/)[0];
+    const rollout = manual
+      .split("preflight_gen3_rollout() {")[1]
+      ?.split(/\r?\n}\r?\n\r?\npreflight_gen3_rollout/)[0];
+
+    expect(preflight).toBeDefined();
+    expect(rollout).toBeDefined();
+    for (const repository of [
+      "TemplatesRozjedeme-ai/OrganizationTemplate_GEN3",
+      "TemplatesRozjedeme-ai/MissionControlTemplate",
+      "TemplatesRozjedeme-ai/KnowledgebaseTemplate",
+      "TemplatesRozjedeme-ai/DesignSystemTemplate",
+    ]) {
+      expect(preflight.match(new RegExp(repository, "g"))).toHaveLength(1);
+    }
+    expect(preflight).toContain("gh auth status --hostname github.com");
+    expect(preflight).toContain('gh api --include "repos/$template_repository"');
+    expect(preflight).toContain("git ls-remote --exit-code --heads --");
+    expect(preflight).toContain('" 403 "');
+    expect(preflight).toContain('" 404 "');
+    expect(preflight).toContain("GitHub provider nebo síť");
+    expect(preflight).toContain("READ pozvánku/grant pro přesné repo");
+    expect(preflight).not.toMatch(/\bgit\s+(?:clone|fetch|push|remote\s+add)\b/);
+
+    const accessGate = rollout.indexOf("preflight_required_template_access || return 1");
+    const templateCheckoutRead = rollout.indexOf('organization_template_root="${ORGANIZATION_TEMPLATE_ROOT:-}"');
+    const firstTemplateFetch = rollout.indexOf('git -C "$organization_template_root" fetch');
+    expect(accessGate).toBeGreaterThan(-1);
+    expect(templateCheckoutRead).toBeGreaterThan(accessGate);
+    expect(firstTemplateFetch).toBeGreaterThan(accessGate);
+  });
+
+  test.skipIf(process.platform === "win32")(
+    "template access preflight executes every controlled branch from a CRLF checkout",
+    async () => {
+      const repoRoot = dirname(dirname(scriptPath));
+      const manual = await readFile(
+        join(repoRoot, "manual", "first-client-organization-rollout.md"),
+        "utf8",
+      );
+      const windowsCheckoutRoot = await makeTempRoot();
+      const windowsManualPath = join(
+        windowsCheckoutRoot,
+        "manual",
+        "first-client-organization-rollout.md",
+      );
+      await mkdir(dirname(windowsManualPath), { recursive: true });
+      await writeFile(windowsManualPath, manual.replace(/\r?\n/g, "\r\n"));
+      const windowsCheckoutManual = await readFile(windowsManualPath, "utf8");
+      expect(windowsCheckoutManual).toContain("\r\n");
+
+      const functionBody = windowsCheckoutManual
+        .split("preflight_required_template_access() {")[1]
+        ?.split(/\r?\n}\r?\n\r?\npreflight_gen3_rollout\(\) \{/)[0];
+      expect(functionBody).toBeDefined();
+      expect(functionBody).toContain("\r\n");
+      const normalizedFunctionBody = functionBody.replace(/\r\n/g, "\n");
+      const flow = `preflight_required_template_access() {${normalizedFunctionBody}\n}\npreflight_required_template_access`;
+
+      for (const fixture of [
+        {
+          name: "expired authentication",
+          env: { FAKE_API_STATUS: "401" },
+          diagnostic: "GitHub autentizace už není platná",
+        },
+        {
+          name: "missing repository access",
+          env: { FAKE_API_STATUS: "403" },
+          diagnostic: "READ pozvánku/grant pro přesné repo",
+        },
+        {
+          name: "hidden or missing repository",
+          env: { FAKE_API_STATUS: "404" },
+          diagnostic: "READ pozvánku/grant pro přesné repo",
+        },
+        {
+          name: "provider failure",
+          env: { FAKE_API_STATUS: "500" },
+          diagnostic: "GitHub provider nebo síť",
+        },
+        {
+          name: "metadata mismatch",
+          env: { FAKE_METADATA_MISMATCH: "1" },
+          diagnostic: "Template metadata neodpovídají",
+        },
+        {
+          name: "SSH transport failure",
+          env: { FAKE_SSH_FAILURE: "1" },
+          diagnostic: "SSH Git transport neověřil exact main",
+        },
+      ]) {
+        const root = await makeTempRoot();
+        const fakeBin = join(root, "bin");
+        const ghPath = join(fakeBin, "gh");
+        const gitPath = join(fakeBin, "git");
+        await mkdir(fakeBin, { recursive: true });
+        await writeFile(ghPath, `#!/bin/sh
+set -eu
+if [ "\${1:-}" = auth ]; then exit 0; fi
+repository="\${3#repos/}"
+case "\${FAKE_API_STATUS:-200}" in
+  200) ;;
+  *)
+    printf 'HTTP/2 %s failure\\n' "$FAKE_API_STATUS"
+    printf 'gh: controlled failure (HTTP %s)\\n' "$FAKE_API_STATUS"
+    exit 1
+    ;;
+esac
+printf 'HTTP/2 200 OK\\n'
+if [ "\${FAKE_METADATA_MISMATCH:-0}" = 1 ]; then
+  printf '%s\\tfalse\\tmain\\n' "$repository"
+else
+  printf '%s\\ttrue\\tmain\\n' "$repository"
+fi
+`);
+        await writeFile(gitPath, `#!/bin/sh
+set -eu
+[ "\${FAKE_SSH_FAILURE:-0}" != 1 ]
+`);
+        await chmod(ghPath, 0o755);
+        await chmod(gitPath, 0o755);
+
+        const result = spawnSync("/bin/bash", ["-c", flow], {
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            PATH: `${fakeBin}:${process.env.PATH}`,
+            ...fixture.env,
+          },
+        });
+
+        expect(result.status, fixture.name).not.toBe(0);
+        expect(result.stderr, fixture.name).toContain(fixture.diagnostic);
+      }
+
+      const root = await makeTempRoot();
+      const fakeBin = join(root, "bin");
+      const seenRepositories = join(root, "seen-repositories");
+      await mkdir(fakeBin, { recursive: true });
+      await writeFile(join(fakeBin, "gh"), `#!/bin/sh
+set -eu
+if [ "\${1:-}" = auth ]; then exit 0; fi
+repository="\${3#repos/}"
+printf 'HTTP/2 200 OK\\n'
+printf '%s\\ttrue\\tmain\\n' "$repository"
+`);
+      await writeFile(join(fakeBin, "git"), `#!/bin/sh
+set -eu
+printf '%s\\n' "$5" >> "$SEEN_REPOSITORIES"
+`);
+      await chmod(join(fakeBin, "gh"), 0o755);
+      await chmod(join(fakeBin, "git"), 0o755);
+
+      const success = spawnSync("/bin/bash", ["-c", flow], {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          PATH: `${fakeBin}:${process.env.PATH}`,
+          SEEN_REPOSITORIES: seenRepositories,
+        },
+      });
+
+      expect(success.status).toBe(0);
+      expect((await readFile(seenRepositories, "utf8")).trim().split("\n")).toEqual([
+        "git@github.com:TemplatesRozjedeme-ai/OrganizationTemplate_GEN3.git",
+        "git@github.com:TemplatesRozjedeme-ai/MissionControlTemplate.git",
+        "git@github.com:TemplatesRozjedeme-ai/KnowledgebaseTemplate.git",
+        "git@github.com:TemplatesRozjedeme-ai/DesignSystemTemplate.git",
+      ]);
+    },
+  );
+
   test.skipIf(process.platform === "win32")(
     "stops before every push when fetch or ls-remote cannot prove remote state",
     async () => {
@@ -315,7 +500,11 @@ describe("fail-closed preflight", () => {
     const outside = join(root, "outside");
     await mkdir(personalspaceRoot);
     await mkdir(outside);
-    await symlink(outside, join(personalspaceRoot, "escape"));
+    await symlink(
+      outside,
+      join(personalspaceRoot, "escape"),
+      process.platform === "win32" ? "junction" : "dir",
+    );
     const destination = join(personalspaceRoot, "escape", "archive");
     const result = cli(applyArgs(source, destination, personalspaceRoot));
     expect(result.status).not.toBe(0);
@@ -328,7 +517,11 @@ describe("fail-closed preflight", () => {
     const organizationsRoot = join(root, "organizations", "PrivateOrg_GEN3");
     const personalspaceLink = join(root, "personalspace-link");
     await mkdir(organizationsRoot, { recursive: true });
-    await symlink(organizationsRoot, personalspaceLink);
+    await symlink(
+      organizationsRoot,
+      personalspaceLink,
+      process.platform === "win32" ? "junction" : "dir",
+    );
     const destination = join(personalspaceLink, "migration-archive", "source");
     const result = cli(applyArgs(source, destination, personalspaceLink));
     expect(result.status).not.toBe(0);
@@ -349,10 +542,10 @@ describe("fail-closed preflight", () => {
     expect(result.stderr).toContain("external gitdir");
   });
 
-  test("refuses an absolute symlink outside rebuildable caches before creating destination", async () => {
+  fileSymlinkTest("refuses an absolute symlink outside rebuildable caches before creating destination [requires file symlink capability]", async () => {
     const root = await makeTempRoot();
     const source = await makeSource(root);
-    await symlink(join(source, "data", "customer.txt"), join(source, "absolute-user-link"));
+    await symlink(join(source, "data", "customer.txt"), join(source, "absolute-user-link"), "file");
     const personalspaceRoot = join(root, "personalspace", "owner_GEN3");
     const destination = join(personalspaceRoot, "migration-archive", "source");
     await mkdir(personalspaceRoot, { recursive: true });
@@ -362,12 +555,12 @@ describe("fail-closed preflight", () => {
     await expect(lstat(destination)).rejects.toThrow();
   });
 
-  test("refuses a user-data symlink whose transitive chain crosses a non-portable cache link", async () => {
+  fileSymlinkTest("refuses a user-data symlink whose transitive chain crosses a non-portable cache link [requires file symlink capability]", async () => {
     const root = await makeTempRoot();
     const source = await makeSource(root);
     await mkdir(join(source, "node_modules"));
-    await symlink(join(source, "data", "customer.txt"), join(source, "node_modules", "cache-link"));
-    await symlink("node_modules/cache-link", join(source, "user-data-link"));
+    await symlink(join(source, "data", "customer.txt"), join(source, "node_modules", "cache-link"), "file");
+    await symlink("node_modules/cache-link", join(source, "user-data-link"), "file");
     const personalspaceRoot = join(root, "personalspace", "owner_GEN3");
     const destination = join(personalspaceRoot, "migration-archive", "source");
     await mkdir(personalspaceRoot, { recursive: true });
@@ -425,11 +618,11 @@ describe("fail-closed preflight", () => {
 });
 
 describe.skipIf(process.platform === "win32")("apply and evidence", () => {
-  test("allows explicitly counted non-portable symlinks only inside rebuildable caches", async () => {
+  fileSymlinkTest("allows explicitly counted non-portable symlinks only inside rebuildable caches [requires file symlink capability]", async () => {
     const root = await makeTempRoot();
     const source = await makeSource(root);
     await mkdir(join(source, "node_modules"));
-    await symlink(join(source, "data", "customer.txt"), join(source, "node_modules", "cache-link"));
+    await symlink(join(source, "data", "customer.txt"), join(source, "node_modules", "cache-link"), "file");
     const personalspaceRoot = join(root, "personalspace", "owner_GEN3");
     const destination = join(personalspaceRoot, "migration-archive", "source");
     await mkdir(personalspaceRoot, { recursive: true });
@@ -440,7 +633,7 @@ describe.skipIf(process.platform === "win32")("apply and evidence", () => {
     expect(JSON.parse(result.stdout).files.nonportable_rebuildable_symlinks).toBe(1);
   });
 
-  test("preserves ignored files, symlinks, modes, nested Git refs/stash, and leaves source unchanged", async () => {
+  fileSymlinkTest("preserves ignored files, symlinks, modes, nested Git refs/stash, and leaves source unchanged [requires file symlink capability]", async () => {
     const root = await makeTempRoot();
     const source = await makeSource(root);
     const sourceRepo = join(source, "nested-repo");
@@ -667,10 +860,10 @@ describe.skipIf(process.platform === "win32")("verification drift detection", ()
     expect(result.stderr).toContain("mode changed");
   });
 
-  test("fails on changed symlink target", async () => {
+  fileSymlinkTest("fails on changed symlink target [requires file symlink capability]", async () => {
     const { source, destination, personalspaceRoot } = await archiveFixture();
     await rm(join(destination, "customer-link"));
-    await symlink(".ignored-secret", join(destination, "customer-link"));
+    await symlink(".ignored-secret", join(destination, "customer-link"), "file");
     const result = cli(verifyArgs(source, destination, personalspaceRoot));
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain("symlink target changed");

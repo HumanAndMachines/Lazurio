@@ -1,5 +1,5 @@
 {
-  "schema_version": "lazurio.install.report.v1",
+  "schema_version": "lazurio.install.report.v2",
   "mode": "report",
   "status": "action_required",
   "machine": {
@@ -7,8 +7,13 @@
     "architecture": "arm64",
     "bun": {
       "status": "current",
-      "current_version": "1.4.0",
-      "required_version": "1.4.0"
+      "current_version": "1.4.1",
+      "required_version": "1.4.1"
+    },
+    "node": {
+      "status": "compatible",
+      "current_version": "24.19.0",
+      "required_range": ">=22.12.0"
     }
   },
   "root": {
@@ -38,6 +43,16 @@
       "reason": "github_cli_missing"
     },
     {
+      "id": "node",
+      "status": "completed",
+      "reason": "node_runtime_compatible"
+    },
+    {
+      "id": "codex",
+      "status": "action_required",
+      "reason": "codex_missing"
+    },
+    {
       "id": "github_auth",
       "status": "skipped",
       "reason": "github_cli_unavailable"
@@ -51,9 +66,9 @@
   "summary": {
     "status": "action_required",
     "counts": {
-      "completed": 3,
+      "completed": 4,
       "skipped": 1,
-      "action_required": 2,
+      "action_required": 3,
       "failed": 0
     }
   }

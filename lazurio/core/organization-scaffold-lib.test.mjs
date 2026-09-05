@@ -40,12 +40,12 @@ describe("Organization scaffold", () => {
         default_branch: "main",
       },
     });
-    expect(scaffold.git_tree_oid).toBe("11214659e23ffe0bb61df50dcf87df80c8b30bf0");
+    expect(scaffold.git_tree_oid).toBe("7d5ca2ff545ddb0cafe4e1b3e8d3e310fecdfee8");
     expect(scaffold.files.map((file) => file.path)).toEqual([
+      ".github/ISSUE_TEMPLATE/agent-report.md",
       ".gitignore",
       "AGENTS.md",
       "DONE.tasks.json",
-      "ISSUES.open.json",
       "README.md",
       "TODO.tasks.json",
       "company.gen3.json",

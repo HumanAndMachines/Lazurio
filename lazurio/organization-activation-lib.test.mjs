@@ -84,6 +84,66 @@ test("standard gh OAuth limitation stays an explicit selected-scope action", () 
   expect(renderHumanOrganizationActivation(report)).toContain("selected");
 });
 
+test("Builder activation check stops at the owner boundary without probing private root or App", () => {
+  const calls = [];
+  const report = checkOrganizationActivation({
+    githubOrganizationId: "314957563",
+    resolveGitHubCli: () => "/usr/bin/gh",
+    runGitHubCli: fixtureRunner({
+      calls,
+      root: "legacy",
+      appSelection: "all",
+      viewerIsOwner: false,
+    }),
+  });
+
+  expect(report).toMatchObject({
+    execution: { status: "ok" },
+    outcome: "action_required",
+    reasons: ["github_organization_owner_required"],
+    next_action: { kind: "request_organization_owner" },
+    observations: {
+      github: { organization: { viewer_is_owner: false } },
+      github_app: { status: "unobservable" },
+      root_repository: { presence: "unobservable" },
+    },
+  });
+  const endpoints = calls.map((call) => call.args[1]).filter(Boolean);
+  expect(endpoints.some((endpoint) => endpoint.startsWith("repos/Example/"))).toBe(false);
+  expect(endpoints.some((endpoint) => endpoint.startsWith("orgs/Example/repos?"))).toBe(false);
+  expect(endpoints).not.toContain("orgs/Example/installations?per_page=100&page=1");
+});
+
+for (const membershipStatus of [403, 404]) {
+  test(`unobservable membership HTTP ${membershipStatus} never becomes non-ownership`, () => {
+    const calls = [];
+    const report = checkOrganizationActivation({
+      githubOrganizationId: "314957563",
+      resolveGitHubCli: () => "/usr/bin/gh",
+      runGitHubCli: fixtureRunner({
+        calls,
+        root: "legacy",
+        appSelection: "all",
+        membershipStatus,
+      }),
+    });
+
+    expect(report).toMatchObject({
+      execution: {
+        status: "error",
+        error: { code: "github_access_denied", retryable: false },
+      },
+      next_action: { kind: "refresh_github_permissions" },
+    });
+    expect(report).not.toHaveProperty("outcome");
+    expect(report).not.toHaveProperty("observations");
+    const endpoints = calls.map((call) => call.args[1]).filter(Boolean);
+    expect(endpoints.some((endpoint) => endpoint.startsWith("repos/Example/"))).toBe(false);
+    expect(endpoints.some((endpoint) => endpoint.startsWith("orgs/Example/repos?"))).toBe(false);
+    expect(endpoints).not.toContain("orgs/Example/installations?per_page=100&page=1");
+  });
+}
+
 test("GitHub App lookup follows installation pagination", () => {
   const calls = [];
   const report = checkOrganizationActivation({
@@ -215,8 +275,10 @@ function fixtureRunner({
   calls = [],
   root,
   appSelection,
+  viewerIsOwner = true,
   appInstallationPage = 1,
   appInstallationFailurePage = null,
+  membershipStatus = null,
   selectedAccess = "included",
   malformedCanonical = false,
 }) {
@@ -233,16 +295,17 @@ function fixtureRunner({
           organization: {
             databaseId: 314957563,
             login: "Example",
-            viewerCanAdminister: true,
-            viewerCanCreateRepositories: true,
+            viewerCanAdminister: viewerIsOwner,
+            viewerCanCreateRepositories: viewerIsOwner,
           },
         },
       });
     }
     if (endpoint === "user/memberships/orgs/Example") {
+      if (membershipStatus !== null) return httpError(membershipStatus);
       return ok({
         state: "active",
-        role: "admin",
+        role: viewerIsOwner ? "admin" : "member",
         organization: { id: 314957563, login: "Example" },
       });
     }

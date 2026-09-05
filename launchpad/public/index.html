@@ -12,7 +12,8 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <a class="skip-link" href="#workspaceMain">Přeskočit na obsah</a>
+    <div class="locale-bootstrap" aria-hidden="true"><span class="locale-bootstrap-spinner"></span></div>
+    <a class="skip-link" href="#workspaceMain" data-i18n="a11y.skipToContent"></a>
 
     <header class="topbar" role="banner">
       <div class="topbar-inner">
@@ -32,30 +33,35 @@
                 <path d="M12 12C14.2091 12 16 10.2091 16 8C16 5.79086 14.2091 4 12 4C9.79086 4 8 5.79086 8 8C8 10.2091 9.79086 12 12 12Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" />
               </svg>
             </span>
-            <span id="currentSpaceLabel" class="space-switcher-label">Osobní</span>
+            <span id="currentSpaceLabel" class="space-switcher-label" data-i18n="topbar.personal"></span>
             <!-- iconoir/nav-arrow-down -->
             <svg class="space-switcher-chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke-width="1.5" aria-hidden="true">
               <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
           </button>
-          <div id="spaceSwitcherMenu" class="space-switcher-menu" role="dialog" aria-label="Profil a prostory" hidden></div>
+          <div id="spaceSwitcherMenu" class="space-switcher-menu" role="dialog" data-i18n-aria-label="a11y.profileAndSpaces" hidden></div>
         </div>
 
-        <nav class="topbar-actions" aria-label="Akce">
+        <nav class="topbar-actions" data-i18n-aria-label="a11y.actions">
           <span id="personalPrivacyBadge" class="privacy-pill" hidden>
             <!-- iconoir/lock -->
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke-width="1.5" aria-hidden="true">
               <path d="M16 12H17.4C17.7314 12 18 12.2686 18 12.6V19.4C18 19.7314 17.7314 20 17.4 20H6.6C6.26863 20 6 19.7314 6 19.4V12.6C6 12.2686 6.26863 12 6.6 12H8M16 12V8C16 6.66667 15.2 4 12 4C8.8 4 8 6.66667 8 8V12M16 12H8" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
-            Soukromé
+            <span data-i18n="topbar.private"></span>
           </span>
+          <div id="localeSwitcher" class="locale-switcher" role="group" data-i18n-aria-label="locale.label">
+            <button type="button" class="locale-switcher-option" data-locale="en" data-i18n-aria-label="locale.en">EN</button>
+            <span class="locale-switcher-divider" aria-hidden="true">/</span>
+            <button type="button" class="locale-switcher-option" data-locale="cs" data-i18n-aria-label="locale.cs">CS</button>
+          </div>
           <div class="notifications-anchor">
             <button
               id="notificationsToggle"
               type="button"
               class="icon-btn topbar-icon-plain"
-              title="Notifikace — kdo co změnil a ve kterém modulu"
-              aria-label="Notifikace"
+              data-i18n-title="topbar.notificationsTitle"
+              data-i18n-aria-label="topbar.notifications"
               aria-expanded="false"
               aria-controls="notificationsPanel"
             >
@@ -66,17 +72,17 @@
               </svg>
               <span id="notificationsBadge" class="notifications-badge" aria-hidden="true" hidden></span>
             </button>
-            <section id="notificationsPanel" class="notifications-panel" aria-label="Notifikace" hidden>
+            <section id="notificationsPanel" class="notifications-panel" data-i18n-aria-label="topbar.notifications" hidden>
               <div class="notifications-head">
-                <span class="rail-eyebrow">Notifikace</span>
-                <button id="notificationsMarkAll" type="button" class="notifications-mark-all">Označit vše jako přečtené</button>
+                <span class="rail-eyebrow" data-i18n="topbar.notifications"></span>
+                <button id="notificationsMarkAll" type="button" class="notifications-mark-all" data-i18n="topbar.markAllRead"></button>
               </div>
-              <div class="notifications-filters" role="tablist" aria-label="Filtr notifikací">
+              <div class="notifications-filters" role="tablist" data-i18n-aria-label="a11y.notificationsFilter">
                 <button id="notificationsFilterAll" type="button" class="notifications-filter is-active" role="tab" aria-selected="true">
-                  Vše <span id="notificationsCountAll" class="notifications-filter-count">0</span>
+                  <span data-i18n="topbar.all"></span> <span id="notificationsCountAll" class="notifications-filter-count">0</span>
                 </button>
                 <button id="notificationsFilterUnread" type="button" class="notifications-filter" role="tab" aria-selected="false">
-                  Nepřečtené <span id="notificationsCountUnread" class="notifications-filter-count">0</span>
+                  <span data-i18n="topbar.unread"></span> <span id="notificationsCountUnread" class="notifications-filter-count">0</span>
                 </button>
               </div>
               <div id="notificationsList" class="notifications-list"></div>
@@ -86,8 +92,8 @@
             id="drawerToggle"
             type="button"
             class="icon-btn topbar-icon-plain"
-            title="Panely — stav prostoru, nejčastější, detail"
-            aria-label="Panely"
+            data-i18n-title="topbar.panelsTitle"
+            data-i18n-aria-label="topbar.panels"
             aria-expanded="false"
           >
             <!-- iconoir/layout-right -->
@@ -99,7 +105,7 @@
             <span id="spaceHealthBadge" class="space-health-badge" aria-hidden="true" hidden></span>
           </button>
           <details id="topbarOverflow" class="topbar-overflow">
-            <summary class="icon-btn topbar-icon-plain topbar-overflow-toggle" title="Další možnosti" aria-label="Další možnosti">
+            <summary class="icon-btn topbar-icon-plain topbar-overflow-toggle" data-i18n-title="topbar.more" data-i18n-aria-label="topbar.more">
               <!-- iconoir/more-horiz -->
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke-width="1.5" aria-hidden="true">
                 <path d="M20 12.5C20.2761 12.5 20.5 12.2761 20.5 12C20.5 11.7239 20.2761 11.5 20 11.5C19.7239 11.5 19.5 11.7239 19.5 12C19.5 12.2761 19.7239 12.5 20 12.5Z" fill="currentColor" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" />
@@ -114,8 +120,8 @@
                 class="icon-btn topbar-icon-plain doctor-status-icon"
                 aria-controls="problemsPanel"
                 aria-expanded="false"
-                aria-label="Doktor: bez výsledku"
-                title="Doktor: bez výsledku"
+                data-i18n-aria-label="topbar.doctorEmpty"
+                data-i18n-title="topbar.doctorEmpty"
               >
                 <!-- iconoir/health-shield -->
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -128,9 +134,8 @@
                 id="reloadButton"
                 type="button"
                 class="icon-btn topbar-icon-plain"
-                data-overflow-label="Synchronizovat"
-                title="Synchronizovat — aktualizovat Lazurio Root, Organizace a Workspace Moduly"
-                aria-label="Synchronizovat"
+                data-i18n-title="topbar.syncTitle"
+                data-i18n-aria-label="topbar.sync"
               >
                 <!-- iconoir/refresh -->
                 <svg class="refresh-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke-width="1.5" aria-hidden="true">
@@ -147,38 +152,246 @@
     <main class="page">
       <div id="globalUpdateSlot" class="global-update-slot"></div>
       <div class="layout">
-        <section id="workspaceMain" class="workspace-panel" aria-label="Aplikace">
+        <section id="workspaceMain" class="workspace-panel" data-i18n-aria-label="a11y.apps">
           <section id="workspaceWelcome" class="workspace-welcome" aria-labelledby="workspaceWelcomeTitle">
-            <h1 id="workspaceWelcomeTitle" class="workspace-welcome-title">Vítejte v pracovním prostoru</h1>
+            <h1 id="workspaceWelcomeTitle" class="workspace-welcome-title" data-i18n="workspace.welcome"></h1>
           </section>
 
-          <div id="appsToolbar" class="apps-toolbar" aria-label="Filtrování aplikací">
+          <div id="appsToolbar" class="apps-toolbar" data-i18n-aria-label="a11y.appFiltering">
             <label class="search-field">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <circle cx="11" cy="11" r="8" />
                 <path d="m21 21-4.35-4.35" />
               </svg>
-              <span class="sr-only">Hledat aplikaci</span>
-              <input id="appsSearch" type="search" autocomplete="off" placeholder="Hledat aplikaci…" />
+              <span class="sr-only" data-i18n="workspace.search"></span>
+              <input id="appsSearch" type="search" autocomplete="off" data-i18n-placeholder="workspace.searchPlaceholder" />
             </label>
             <div id="appsFilterFallback" class="apps-filter-fallback is-active">
               <div id="appsFilterControls" class="filter-controls">
-                <div class="segmented-control" role="group" aria-label="Zobrazení aplikací">
-                  <button type="button" class="segment is-active" data-status-segment="all" aria-pressed="true">Vše</button>
-                  <button id="attentionToggle" type="button" class="segment attention-toggle" aria-pressed="false">Ke kontrole</button>
+                <div class="segmented-control" role="group" data-i18n-aria-label="a11y.appView">
+                  <button type="button" class="segment is-active" data-status-segment="all" aria-pressed="true" data-i18n="topbar.all"></button>
+                  <button id="attentionToggle" type="button" class="segment attention-toggle" aria-pressed="false" data-i18n="workspace.attention"></button>
                 </div>
               </div>
             </div>
           </div>
 
-          <section id="problemsPanel" class="problems-panel hidden" aria-label="Problémy"></section>
-          <section id="actionPanel" class="action-panel hidden" aria-label="Výsledek akce"></section>
+          <section id="problemsPanel" class="problems-panel hidden" data-i18n-aria-label="a11y.problems"></section>
+          <section id="actionPanel" class="action-panel hidden" data-i18n-aria-label="a11y.actionResult"></section>
 
-          <section id="appsGrid" class="apps-stack" aria-label="Workspace aplikace"></section>
+          <section id="appsGrid" class="apps-stack" data-i18n-aria-label="a11y.workspaceApps"></section>
 
         </section>
 
-        <aside id="recentChangesSidebar" class="recent-changes-sidebar hidden" aria-label="Stav pracovního prostoru">
+        <section id="guideMain" class="guide-surface" aria-labelledby="guideTitle" hidden>
+          <header class="guide-header">
+            <button id="guideBack" type="button" class="guide-back" data-i18n-aria-label="guide.back.a11y">
+              <!-- iconoir/nav-arrow-left -->
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M15 6L9 12L15 18" />
+              </svg>
+              <span data-i18n="guide.back">Zpět</span>
+            </button>
+            <div class="guide-heading">
+              <h1 id="guideTitle" tabindex="-1">Guide</h1>
+              <p data-i18n="guide.subtitle">Praktické odpovědi a návody přímo ve vašem pracovním prostředí.</p>
+            </div>
+          </header>
+
+          <div class="guide-workspace">
+            <aside class="guide-navigation" aria-labelledby="guideNavigationTitle">
+              <div class="guide-search">
+                <label for="guideSearch" data-i18n="guide.search.label">Hledat v Guide</label>
+                <div class="guide-search-control">
+                  <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="m21 21-4.35-4.35" />
+                  </svg>
+                  <input id="guideSearch" type="search" data-i18n-placeholder="guide.search.placeholder" autocomplete="off" aria-describedby="guideSearchHint" />
+                </div>
+                <p id="guideSearchHint" class="guide-field-hint" data-i18n="guide.search.hint">Hledejte v pojmech i doporučených aplikacích.</p>
+              </div>
+              <nav class="guide-topics" aria-labelledby="guideNavigationTitle">
+                <h2 id="guideNavigationTitle" data-i18n="guide.navigation.title">Obsah</h2>
+                <button class="guide-topic-link is-active" type="button" data-guide-topic="installation" aria-current="page" data-i18n="guide.navigation.installation">Instalace nové Mašiny</button>
+                <button class="guide-topic-link" type="button" data-guide-topic="glossary" data-i18n="guide.navigation.glossary">Slovníček pojmů</button>
+                <button class="guide-topic-link" type="button" data-guide-topic="recommended-apps" data-i18n="guide.navigation.recommendedApps">Doporučené aplikace</button>
+              </nav>
+            </aside>
+
+            <article class="guide-reader" data-i18n-aria-label="guide.reader.a11y">
+              <div class="guide-reader-content">
+                <section id="guideInstallation" class="guide-topic-panel" data-guide-topic-panel="installation">
+                  <header class="guide-article-header" data-guide-search-item>
+                    <span class="guide-reader-kicker" data-i18n="guide.install.kicker">První spuštění</span>
+                    <h2 data-i18n="guide.install.title">Novou Mašinu připraví Agent. Vy jen dokončíte osobní kroky.</h2>
+                    <p data-i18n="guide.install.intro">Nepotřebujete otevírat terminál ani hledat příkazy. Zkopírujte připravené zadání do Codexu a Agent vás zastaví pouze tam, kde je opravdu potřeba vaše přihlášení, potvrzení nebo rozhodnutí.</p>
+                  </header>
+
+                  <div class="guide-onboarding-roles" data-i18n-aria-label="guide.install.roles.a11y">
+                    <section class="guide-onboarding-role" data-guide-search-item>
+                      <span class="guide-onboarding-step">1</span>
+                      <h3 data-i18n="guide.install.roles.agent.title">Co zařídí Agent</h3>
+                      <p data-i18n="guide.install.roles.agent.body">Zkontroluje a bezpečně doplní povolené nástroje, obslouží terminál, ověří GitHub a SSH, nainstaluje Organizaci, dokončí Doctor a spustí aplikace přes Launchpad.</p>
+                    </section>
+                    <section class="guide-onboarding-role" data-guide-search-item>
+                      <span class="guide-onboarding-step">2</span>
+                      <h3 data-i18n="guide.install.roles.user.title">Co může potřebovat od vás</h3>
+                      <p data-i18n="guide.install.roles.user.body">Dokončit právě otevřené GitHub přihlášení, přijmout repository pozvánku nebo rozhodnout o přesně vysvětleném rozporu. Přístup ani bezpečnostní nastavení Agent nemění potichu.</p>
+                    </section>
+                    <section class="guide-onboarding-role" data-guide-search-item>
+                      <span class="guide-onboarding-step">3</span>
+                      <h3 data-i18n="guide.install.roles.prerequisites.title">Co musí být připravené předem</h3>
+                      <p><span data-i18n="guide.install.roles.prerequisites.beforeApp">Owner Organizace nainstaluje GitHub App</span> <strong>Lazurio for GitHub</strong> <span data-i18n="guide.install.roles.prerequisites.for">pro</span> <strong>All repositories</strong>. <span data-i18n="guide.install.roles.prerequisites.afterScope">Builder musí mít přijaté pozvánky a skutečné GitHub oprávnění k pracovním repozitářům.</span></p>
+                    </section>
+                  </div>
+
+                  <section class="guide-readiness" data-guide-search-item aria-labelledby="guideReadinessTitle">
+                    <div class="guide-section-heading">
+                      <span class="guide-reader-kicker" data-i18n="guide.install.readiness.kicker">Jak poznáte hotovo</span>
+                      <h3 id="guideReadinessTitle" data-i18n="guide.install.readiness.title">Tři různé úrovně připravenosti</h3>
+                    </div>
+                    <div class="guide-readiness-grid">
+                      <div><strong>Runtime ready</strong><span data-i18n="guide.install.readiness.runtime">Aplikace jde spustit a její health kontrola odpovídá.</span></div>
+                      <div><strong>Editing ready</strong><span data-i18n="guide.install.readiness.editing">Builder má správný checkout, nástroje a právo zapisovat změny.</span></div>
+                      <div><strong>Publishing ready</strong><span data-i18n="guide.install.readiness.publishing">GitHub dovoluje dokončit schválenou změnu podle aktuálních pravidel repozitáře.</span></div>
+                    </div>
+                    <p class="guide-readiness-note"><span data-i18n="guide.install.readiness.noteBefore">Pouhé</span> <code>READ</code> <span data-i18n="guide.install.readiness.noteAfter">není Builder-ready stav. Agent v závěru pojmenuje každé omezení zvlášť.</span></p>
+                  </section>
+
+                  <section class="guide-prompt-card" data-guide-search-item aria-labelledby="guidePromptTitle">
+                    <div class="guide-prompt-heading">
+                      <div>
+                        <span class="guide-reader-kicker" data-i18n="guide.install.prompt.kicker">Zadání pro Codex</span>
+                        <h3 id="guidePromptTitle" data-i18n="guide.install.prompt.title">Krátký instalační prompt</h3>
+                      </div>
+                      <button id="guidePromptCopy" class="guide-copy-button" type="button" disabled data-i18n="guide.install.prompt.copy">Kopírovat prompt</button>
+                    </div>
+                    <p><span data-i18n="guide.install.prompt.instructionBefore">Po zkopírování nahraďte</span> <code>&lt;github-organization&gt;</code> <span data-i18n="guide.install.prompt.instructionAfter">přesným názvem GitHub Organizace.</span></p>
+                    <p id="guidePromptStatus" class="guide-content-status" role="status" data-i18n="guide.install.prompt.loading">Načítám aktuální prompt z instalačního manuálu…</p>
+                    <pre id="guidePrompt" class="guide-code-block" tabindex="0" hidden><code></code></pre>
+                    <div id="guidePromptError" class="guide-content-error" role="alert" hidden data-i18n="guide.install.prompt.error">
+                      Aktuální prompt se nepodařilo bezpečně načíst. Nepoužívejte starou kopii; požádejte Agenta, aby ověřil instalační manuál a Doctor.
+                    </div>
+                  </section>
+
+                  <details id="guidePolicyDisclosure" class="guide-policy" data-guide-search-item data-guide-search-key="guide.install.policy.summary">
+                    <summary data-i18n="guide.install.policy.summary">Úplný expert/policy postup</summary>
+                    <p data-i18n="guide.install.policy.body">Toto je celý aktuální runbook pro Agenta. Je pouze ke čtení; Launchpad z něj nic automaticky nespouští.</p>
+                    <pre id="guidePolicy" class="guide-code-block guide-policy-code" tabindex="0" hidden><code></code></pre>
+                  </details>
+                </section>
+
+                <section id="guideGlossary" class="guide-topic-panel" data-guide-topic-panel="glossary" hidden>
+                  <header class="guide-article-header">
+                    <span class="guide-reader-kicker" data-i18n="guide.glossary.kicker">Slovníček</span>
+                    <h2 data-i18n="guide.glossary.title">Pojmy, se kterými se v Lazuriu setkáte</h2>
+                    <p data-i18n="guide.glossary.intro">Začněte základními pojmy. Do pokročilé části se podívejte, když řešíte správu, vývoj nebo schvalování změn.</p>
+                  </header>
+
+                  <section class="guide-glossary-section" data-guide-search-group aria-labelledby="guideBasicTitle">
+                  <h3 id="guideBasicTitle" data-i18n="guide.glossary.basic">Základní pojmy</h3>
+                  <dl class="guide-term-list">
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.lazurio.label">Lazurio</dt><dd data-i18n="guide.term.lazurio.body">Společné pracovní prostředí pro lidi a AI Kolegy. Pomáhá vám najít aplikace, práci a potřebné informace.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.launchpad.label">Launchpad</dt><dd data-i18n="guide.term.launchpad.body">Domovská obrazovka Lazuria. Odtud si vyberete Organizaci a otevřete aplikaci, ve které chcete pracovat.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.guide.label">Guide</dt><dd data-i18n="guide.term.guide.body">Praktická nápověda k Lazuriu. Když nevíte, co něco znamená nebo jak pokračovat, začněte tady.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.github.label">GitHub</dt><dd data-i18n="guide.term.github.body">Účet, kterým se přihlašujete do Lazuria. Zároveň určuje, do kterých Organizací a projektů máte přístup a co v nich smíte dělat.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.subscription.label">Předplatné</dt><dd data-i18n="guide.term.subscription.body">Určuje, kolik AI služeb můžete využívat a kolik tokenů máte k dispozici. Nemusí být propojené s vaším GitHub účtem — přihlášení a placení jsou dvě oddělené věci.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.tokens.label">Tokeny</dt><dd data-i18n="guide.term.tokens.body">Jednotky, podle kterých se počítá využití AI. Spotřebovávají se při čtení zadání i vytváření odpovědi; nejde o hesla ani přístupové klíče.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.organization.label">Organizace</dt><dd data-i18n="guide.term.organization.body">Oddělený pracovní prostor jedné firmy. Má vlastní lidi, aplikace, data a přístupy.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.team.label">Team</dt><dd data-i18n="guide.term.team.body">Skupina lidí a AI Kolegů, kteří společně pracují na určité oblasti, například na obchodu nebo produktu.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.workspace.label">Workspace</dt><dd data-i18n="guide.term.workspace.body">Část Organizace s aplikacemi pro každodenní práci.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.module.label">Modul</dt><dd data-i18n="guide.term.module.body">Jedna konkrétní aplikace v Organizaci, například Mission Control nebo Knowledgebase.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.marketplace.label">Marketplace</dt><dd data-i18n="guide.term.marketplace.body">Místo, kde můžete objevit další aplikace a rozšíření pro Lazurio.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.missionControl.label">Mission Control</dt><dd data-i18n="guide.term.missionControl.body">Místo pro řízení práce. Uvidíte zde, co se řeší, kdo za to odpovídá a co má následovat.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.knowledgebase.label">Knowledgebase</dt><dd data-i18n="guide.term.knowledgebase.body">Firemní knihovna znalostí. Obsahuje postupy, rozhodnutí, zkušenosti a další informace důležité pro Organizaci.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.personalspace.label">Personalspace</dt><dd data-i18n="guide.term.personalspace.body">Váš soukromý prostor. Patří pouze vám a případně vašemu Buddymu.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.colleague.label">Kolega</dt><dd data-i18n="guide.term.colleague.body">Člověk, který pracuje v Organizaci.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.aiColleague.label">AI Kolega</dt><dd data-i18n="guide.term.aiColleague.body">Digitální člen týmu s vlastní pracovní rolí, odpovědností a přístupy.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.buddy.label">Buddy</dt><dd data-i18n="guide.term.buddy.body">Váš osobní AI pomocník. Může vám pomáhat nebo vás zastupovat pouze v rozsahu, který mu dovolíte.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.prompt.label">Prompt</dt><dd data-i18n="guide.term.prompt.body">Zadání, které napíšete AI. Například: „Připravte mi přehled nezaplacených faktur a vysvětlete, co mám řešit jako první.“</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.start.label">Spustit</dt><dd data-i18n="guide.term.start.body">Zapnout aplikaci, aby ji bylo možné používat.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.open.label">Otevřít</dt><dd data-i18n="guide.term.open.body">Přejít do vybrané aplikace. Pokud ještě neběží, Launchpad ji může nejprve spustit.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.stop.label">Zastavit</dt><dd data-i18n="guide.term.stop.body">Vypnout lokálně spuštěnou aplikaci. Její data se tím nemažou.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.sync.label">Synchronizovat</dt><dd data-i18n="guide.term.sync.body">Načíst aktuální stav projektů a aplikací, abyste pracovali s nejnovějšími změnami.</dd></div>
+                  </dl>
+                  </section>
+
+                  <section class="guide-glossary-section" data-guide-search-group aria-labelledby="guideAdvancedTitle">
+                  <h3 id="guideAdvancedTitle" data-i18n="guide.glossary.advanced">Pokročilé pojmy</h3>
+                  <dl class="guide-term-list">
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.user.label">User</dt><dd data-i18n="guide.term.user.body">Uživatel Organizace. Používá zpřístupněné aplikace, ale běžně nemění jejich zdrojový kód ani nastavení Organizace.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.builder.label">Builder</dt><dd data-i18n="guide.term.builder.body">Člen Organizace, který vytváří a upravuje aplikace. Jeho přesné možnosti určují skutečná oprávnění na GitHubu.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.steward.label">Steward</dt><dd data-i18n="guide.term.steward.body">Správce kvality a pořádku v Organizaci. Kontroluje změny, pomáhá je dotahovat a podle svých oprávnění je může publikovat.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.admin.label">Admin</dt><dd data-i18n="guide.term.admin.body">Správce Organizace s rozšířenými oprávněními. Řídí přístupy a důležitá nastavení; tím ale nezískává přístup do cizího Personalspace.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.principal.label">Principál</dt><dd data-i18n="guide.term.principal.body">Člověk nebo AI Kolega, pro kterého Agent právě pracuje a který má poslední slovo.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.taskAgent.label">Task Agent</dt><dd data-i18n="guide.term.taskAgent.body">Dočasný AI pomocník pro konkrétní úkol nebo konverzaci. Nemá vlastní oprávnění a pracuje pouze v rámci přístupů svého Principála.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.skill.label">Skill</dt><dd data-i18n="guide.term.skill.body">Ověřený pracovní postup pro určitý typ úkolu. Pomáhá AI postupovat správně a opakovatelně, například při tvorbě prezentace, práci s dokumenty nebo kontrole změn.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.mcp.label">MCP server</dt><dd data-i18n="guide.term.mcp.body">Spojení, přes které může AI používat konkrétní nástroj nebo pracovat s jeho daty, například s GitHubem. Sám AI nedává další oprávnění — použije jen přístupy dostupné na dané Mašině.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.plugin.label">Plugin</dt><dd data-i18n="guide.term.plugin.body">Instalovatelný balíček, který rozšíří Codex o nové možnosti. Může obsahovat Skilly, MCP servery nebo napojení na aplikace; instalací ale automaticky nezíská přístup do vašich účtů.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.guardian.label">Opatrovník</dt><dd data-i18n="guide.term.guardian.body">Určený člověk, který může pomoci s obnovou nebo servisním zásahem u AI Kolegy. Neřídí jeho každodenní práci.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.draft.label">Draft</dt><dd data-i18n="guide.term.draft.body">Rozpracovaný návrh, který ještě není oficiální. Můžete ho kontrolovat, měnit nebo zahodit.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.publication.label">Publikace</dt><dd data-i18n="guide.term.publication.body">Okamžik, kdy se Draft stane oficiálním nebo viditelným ostatním. Agent ji provede pouze po výslovném souhlasu oprávněného Principála.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.release.label">Release</dt><dd data-i18n="guide.term.release.body">Oficiální vydání označené verze produktu nebo aplikace, například nové verze pro zákazníky.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.pullRequest.label">Pull request (PR)</dt><dd data-i18n="guide.term.pullRequest.body">Návrh změn čekající na kontrolu a schválení před zařazením do oficiální verze.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.main.label">Main</dt><dd data-i18n="guide.term.main.body">Hlavní, aktuálně platná verze projektu. Rozpracované změny se do ní dostanou až po potřebných kontrolách.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.worktree.label">Worktree</dt><dd data-i18n="guide.term.worktree.body">Oddělená pracovní kopie projektu. Agent nebo vývojář v ní může bezpečně připravovat změny bez zásahu do hlavní verze.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.productionspace.label">Productionspace</dt><dd data-i18n="guide.term.productionspace.body">Technická část Organizace pro zdrojové kódy a systémy, které nejsou běžnými pracovními aplikacemi.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.bun.label">Bun</dt><dd data-i18n="guide.term.bun.body">Technický nástroj používaný k instalaci, spouštění a testování aplikací. Pokud nejste vývojář, obvykle s ním nemusíte pracovat přímo.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.machine.label">Mašina</dt><dd data-i18n="guide.term.machine.body">Zařízení nebo oddělené pracovní prostředí, ve kterém Lazurio běží. Tvoří také hranici pro zabezpečení, přístupy a obnovu.</dd></div>
+                    <div class="guide-term" data-guide-term data-guide-search-item><dt data-i18n="guide.term.access.label">Přístup</dt><dd data-i18n="guide.term.access.body">Skutečné oprávnění něco zobrazit nebo změnit. V pracovních Organizacích ho určuje GitHub, nikoli pouze název vaší role.</dd></div>
+                  </dl>
+                  </section>
+                </section>
+
+                <section id="guideRecommendedApps" class="guide-topic-panel" data-guide-topic-panel="recommended-apps" hidden>
+                  <header class="guide-article-header">
+                    <span class="guide-reader-kicker" data-i18n="guide.apps.kicker">Doporučené aplikace</span>
+                    <h2 data-i18n="guide.apps.title">Pomocníci pro pohodlnější práci</h2>
+                    <p data-i18n="guide.apps.intro">Tyto externí aplikace nejsou součástí Lazuria. Doporučujeme je, protože vám mohou usnadnit zadávání práce a hlídání dostupných AI limitů.</p>
+                  </header>
+
+                  <div class="guide-recommendation-list">
+                    <section class="guide-recommendation" data-guide-search-item aria-labelledby="guideWisprFlowTitle">
+                      <div class="guide-recommendation-heading">
+                        <span class="guide-recommendation-label" data-i18n="guide.apps.wispr.label">Hlasové zadávání</span>
+                        <h3 id="guideWisprFlowTitle">Wispr Flow</h3>
+                      </div>
+                      <p data-i18n="guide.apps.wispr.body">Diktování, které funguje v textových polích napříč aplikacemi. Mluvte přirozeně a Wispr Flow z řeči připraví upravený text.</p>
+                      <p><strong data-i18n="guide.apps.whenLabel">Kdy se hodí:</strong> <span data-i18n="guide.apps.wispr.when">Když chcete rychle nadiktovat delší prompt, e-mail nebo zprávu a nechcete vše psát na klávesnici.</span></p>
+                      <a class="guide-recommendation-link" href="https://wisprflow.ai/downloads" target="_blank" rel="noreferrer"><span data-i18n="guide.apps.wispr.link">Stáhnout Wispr Flow</span> <span aria-hidden="true">↗</span></a>
+                    </section>
+
+                    <section class="guide-recommendation" data-guide-search-item aria-labelledby="guideCodexBarTitle">
+                      <div class="guide-recommendation-heading">
+                        <span class="guide-recommendation-label" data-i18n="guide.apps.codexBar.label">Přehled AI limitů</span>
+                        <h3 id="guideCodexBarTitle">CodexBar</h3>
+                      </div>
+                      <p data-i18n="guide.apps.codexBar.body">Bezplatná open-source aplikace pro macOS, která v horní liště ukazuje využití AI služeb, dostupné limity a čas jejich obnovení.</p>
+                      <p><strong data-i18n="guide.apps.whenLabel">Kdy se hodí:</strong> <span data-i18n="guide.apps.codexBar.when">Než zadáte delší práci AI Kolegovi, rychle uvidíte, kolik kapacity zbývá a kdy se limit obnoví.</span></p>
+                      <a class="guide-recommendation-link" href="https://codexbar.app/" target="_blank" rel="noreferrer"><span data-i18n="guide.apps.codexBar.link">Otevřít CodexBar</span> <span aria-hidden="true">↗</span></a>
+                    </section>
+
+                    <section class="guide-recommendation" data-guide-search-item aria-labelledby="guideBrowserUseTitle">
+                      <div class="guide-recommendation-heading">
+                        <span class="guide-recommendation-label" data-i18n="guide.apps.browserUse.label">Práce AI na webu</span>
+                        <h3 id="guideBrowserUseTitle">Browser Use</h3>
+                      </div>
+                      <p data-i18n="guide.apps.browserUse.body">Nástroj, díky kterému může AI Kolega otevřít webovou stránku, klikat, vyplňovat formuláře a pracovat s webovými aplikacemi podle vašeho zadání.</p>
+                      <p><strong data-i18n="guide.apps.whenLabel">Kdy se hodí:</strong> <span data-i18n="guide.apps.browserUse.when">Když chcete, aby AI Kolega například vyhledal informace, prošel administraci nebo připravil formulář bez posílání každého jednotlivého kroku.</span></p>
+                      <p><strong data-i18n="guide.apps.rememberLabel">Mějte na paměti:</strong> <span data-i18n="guide.apps.browserUse.caution">Přihlášení mu nezvyšuje oprávnění. Citlivé, destruktivní a publikační kroky stále vyžadují vaše potvrzení.</span></p>
+                      <a class="guide-recommendation-link" href="https://browser-use.com/" target="_blank" rel="noreferrer"><span data-i18n="guide.apps.browserUse.link">Otevřít Browser Use</span> <span aria-hidden="true">↗</span></a>
+                    </section>
+                  </div>
+                </section>
+
+                <p id="guideNoResults" class="guide-no-results" role="status" hidden data-i18n="guide.search.noResults">Tomuto hledání neodpovídá žádný obsah.</p>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <aside id="recentChangesSidebar" class="recent-changes-sidebar hidden" data-i18n-aria-label="a11y.workspaceStatus">
           <div id="updateBannerGroup" class="update-banner-group">
             <div id="updateBanner" class="update-banner" role="status">
               <svg class="update-banner-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -193,22 +406,39 @@
               <svg class="update-banner-spinner" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
                 <path d="M12 3a9 9 0 1 1-6.4 2.6" />
               </svg>
-              <span id="updateBannerText" class="update-banner-text">Kontroluji dostupné změny…</span>
+              <span id="updateBannerText" class="update-banner-text"></span>
               <button id="updateBannerAction" type="button" class="update-banner-action" hidden></button>
             </div>
           </div>
-          <section id="hero" class="hero side-panel hero-loading" aria-live="polite" aria-label="Stav prostoru">
+          <section id="hero" class="hero side-panel hero-loading" aria-live="polite" data-i18n-aria-label="workspace.status">
             <div class="hero-head">
-              <span class="rail-eyebrow">Stav prostoru</span>
+              <span class="rail-eyebrow" data-i18n="workspace.status"></span>
               <span class="hero-indicator" aria-hidden="true"></span>
             </div>
-            <h2 id="heroTitle" class="hero-title">Načítám stav…</h2>
-            <p id="heroSummary" class="hero-summary">Ověřuji pracovní prostor.</p>
-            <div id="heroIssues" class="hero-issues" aria-label="Doporučené kroky" hidden></div>
+            <h2 id="heroTitle" class="hero-title" data-i18n="workspace.loadingStatus"></h2>
+            <p id="heroSummary" class="hero-summary" data-i18n="workspace.checking"></p>
+            <div id="heroIssues" class="hero-issues" data-i18n-aria-label="a11y.recommendedSteps" hidden></div>
             <div class="hero-panel">
-              <button id="heroCta" type="button" class="btn btn-secondary btn-sm">Zkontrolovat stav</button>
+              <button id="heroCta" type="button" class="btn btn-secondary btn-sm" data-i18n="workspace.checkStatus"></button>
             </div>
           </section>
+          <a id="guideTile" class="guide-tile side-panel" href="#/guide" aria-labelledby="guideTileTitle" aria-describedby="guideTileSummary">
+            <div class="guide-tile-head">
+              <span class="guide-tile-icon" aria-hidden="true">
+                <img src="/app-icons/lazurio/guide-signpost-solid-96.png" alt="" />
+              </span>
+              <span class="guide-tile-action">
+                <span data-i18n="guide.tile.open">Otevřít</span>
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M9 18L15 12L9 6" />
+                </svg>
+              </span>
+            </div>
+            <div class="guide-tile-copy">
+              <h2 id="guideTileTitle">Guide</h2>
+              <p id="guideTileSummary" data-i18n="guide.tile.summary">Návody a odpovědi k práci v Lazuriu.</p>
+            </div>
+          </a>
           <section class="marketplace-teaser side-panel" aria-labelledby="marketplaceTeaserTitle">
             <div class="marketplace-teaser-head">
               <span class="marketplace-teaser-icon" aria-hidden="true">
@@ -221,34 +451,34 @@
                   <path d="M3.87567 3.43517L2.18166 9.36418C2.08431 9.7049 2.3018 10.0526 2.6535 10.0958C3.49916 10.1998 4.98424 10.3125 6 10C6.59477 9.81699 7.35751 9.38698 7.74678 9.15495C7.90767 9.05904 8.00913 8.89043 8.02469 8.70377L8.5 3H4.45258C4.18469 3 3.94926 3.17759 3.87567 3.43517Z" stroke="currentColor" stroke-width="1.5" />
                 </svg>
               </span>
-              <span class="marketplace-teaser-status">Již brzy</span>
+              <span class="marketplace-teaser-status" data-i18n="marketplace.soon"></span>
             </div>
             <div class="marketplace-teaser-copy">
-              <h2 id="marketplaceTeaserTitle">Marketplace</h2>
-              <p>Moduly pro váš pracovní prostor od Lazuria i dalších tvůrců.</p>
+              <h2 id="marketplaceTeaserTitle" data-i18n="marketplace.title"></h2>
+              <p data-i18n="marketplace.description"></p>
             </div>
           </section>
         </aside>
 
         <div id="drawerBackdrop" class="drawer-backdrop" hidden></div>
-        <aside class="detail-drawer" id="detailDrawer" role="dialog" aria-label="Panely" aria-hidden="true" aria-modal="false" tabindex="-1" inert>
+        <aside class="detail-drawer" id="detailDrawer" role="dialog" data-i18n-aria-label="a11y.panels" aria-hidden="true" aria-modal="false" tabindex="-1" inert>
           <div class="drawer-head">
-            <span class="rail-eyebrow">Panely</span>
-            <button id="drawerClose" type="button" class="icon-btn" title="Zavřít panely" aria-label="Zavřít panely">
+            <span class="rail-eyebrow" data-i18n="topbar.panels"></span>
+            <button id="drawerClose" type="button" class="icon-btn" data-i18n-title="a11y.closePanels" data-i18n-aria-label="a11y.closePanels">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M18 6 6 18" /><path d="m6 6 12 12" />
               </svg>
             </button>
           </div>
           <div class="drawer-body">
-            <section id="mostUsedPanel" class="side-panel" aria-label="Nejčastější">
+            <section id="mostUsedPanel" class="side-panel" data-i18n-aria-label="a11y.mostUsed">
               <div class="side-panel-head">
-                <span class="rail-eyebrow">Nejčastější</span>
+                <span class="rail-eyebrow" data-i18n="mostUsed.title"></span>
               </div>
               <div id="mostUsed" class="most-used"></div>
             </section>
 
-            <div id="appDetail" class="empty-detail">Vyber aplikaci</div>
+            <div id="appDetail" class="empty-detail" data-i18n="workspace.selectApp"></div>
           </div>
         </aside>
       </div>

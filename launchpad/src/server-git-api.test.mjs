@@ -81,6 +81,9 @@ test("Launchpad server exposes read-only git and Mission Control routes", async 
   const scopedPull = await postJson(port, "/api/git/pull-all?company=BetaCo", {});
   const worktrees = await getJson(port, "/api/git/worktrees?organization=BetaCo&module=deals");
   const plans = await getJson(port, "/api/mission-control/plans?organization=BetaCo&module=deals");
+  const guideEn = await getJson(port, "/api/guide/organization-install?locale=en");
+  const guideCs = await getJson(port, "/api/guide/organization-install?locale=cs");
+  const guideWithoutLocale = await fetch(`http://127.0.0.1:${port}/api/guide/organization-install`);
   const moduleFolderGet = await fetch(`http://127.0.0.1:${port}/api/modules/open-folder`);
   const invalidModuleFolderPost = await fetch(`http://127.0.0.1:${port}/api/modules/open-folder`, { method: "POST" });
   const deepLinkModule = await fetch(`http://127.0.0.1:${port}/lazurio-runtime/deep-link-lib.mjs`);
@@ -98,6 +101,27 @@ test("Launchpad server exposes read-only git and Mission Control routes", async 
   expect(scopedPull.results).toEqual(pullAll.results);
   expect(worktrees.schema_version).toBe("companiesascode.launchpad.worktrees.v1");
   expect(plans.schema_version).toBe("companiesascode.launchpad.mission_control_plans.v1");
+  expect(existsSync(join(root, "manual", "organization-install.md"))).toBe(false);
+  expect(guideEn).toMatchObject({
+    schema_version: "lazurio.guide.organization_install.v2",
+    locale: "en",
+    source: {
+      path: "distribution/locales/en/manual/organization-install.md",
+      authority: "lazurio-root-manual",
+    },
+  });
+  expect(guideEn.short_prompt).toContain(
+    "lazurio organization install <github-organization> --role builder --json",
+  );
+  expect(guideEn.short_prompt).toContain("Prepare this Machine");
+  expect(guideCs).toMatchObject({
+    schema_version: "lazurio.guide.organization_install.v2",
+    locale: "cs",
+    source: { path: "manual/organization-install.md", authority: "lazurio-root-manual" },
+  });
+  expect(guideCs.short_prompt).toContain("Připrav tuto Mašinu");
+  expect(guideWithoutLocale.status).toBe(400);
+  expect(await guideWithoutLocale.json()).toEqual({ error: "guide_locale_unsupported" });
   expect(moduleFolderGet.status).toBe(405);
   expect(invalidModuleFolderPost.status).toBe(400);
   expect(deepLinkModule.status).toBe(200);
@@ -806,7 +830,7 @@ test("locator publication failure releases Server leases for retry", async () =>
   await lifetimeProbe.release();
 }, platformTestTimeout(15_000));
 
-test("hosted Launchpad rejects forged gateway headers without a TLS-authenticated OAuth session", async () => {
+test("hosted Launchpad rejects forged browser context without a TLS-authenticated OAuth session", async () => {
   const root = await createLaunchpadGitFixture();
   const stateRoot = `${root}-launchpad-state`;
   tempRoots.push(root, stateRoot);
@@ -829,7 +853,6 @@ test("hosted Launchpad rejects forged gateway headers without a TLS-authenticate
   const gatewayHeaders = {
     origin: externalOrigin,
     "sec-fetch-site": "same-origin",
-    "x-lazurio-github-login": "annavesela",
   };
 
   const directServerIdentity = await getJson(port, "/api/lazurio/server-identity");
@@ -1247,7 +1270,7 @@ test("PORT environment configuration is implicit and falls forward to a free por
   try {
     const actualPort = await Promise.race([
       readLaunchpadPort(launcher),
-      Bun.sleep(5_000).then(() => {
+      Bun.sleep(platformTestTimeout(5_000)).then(() => {
         throw new Error("Launchpad s implicitním PORT nenastartoval na fallback portu");
       }),
     ]);
@@ -1665,7 +1688,10 @@ function probeFreePort() {
 }
 
 async function waitForHealth(port, server) {
-  const deadline = Date.now() + platformTestTimeout(5_000);
+  // A cold Windows runner may need more than 15 s to start the detached Bun
+  // server after Git-heavy fixture setup. This remains bounded by the enclosing
+  // test timeout and still fails immediately when the child exits.
+  const deadline = Date.now() + platformTestTimeout(10_000);
   while (Date.now() < deadline) {
     // Pokud server spadl při startu (např. port si mezi findFreePort a bindem
     // stihl vzít někdo jiný), neplýtvej celým readiness timeoutem ani nepokračuj proti

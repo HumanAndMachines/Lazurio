@@ -211,9 +211,10 @@ rozhodnutí odpovídal skutečnému HEADu.
 **Poznatky patří tam, kde je najdou ostatní.** Aha momenty, rozhodnutí a
 zjištění z konverzace průběžně zapisuješ na správná místa: syntéza poznání →
 Knowledgebase; trvalé rozhodnutí → decision record; plán a jeho stav →
-Mission Control a task ledgery; otevřená nejistota → `ISSUES.open.json`;
-změna pravidel práce → `AGENTS.md` daného scope — vždy jako PR ze svého
-worktree. Chat i soukromá paměť agenta (gbrain) jsou jen cache: poznatek,
+Mission Control a task ledgery; otevřený technický problém nebo nejistota →
+GitHub Issue v přesném owning repu; změna pravidel práce → `AGENTS.md` daného
+scope — vždy jako PR ze svého worktree. Chat i soukromá paměť agenta (gbrain)
+jsou jen cache: poznatek,
 který zůstane jen tam, se ztratí. Zapisuješ jen relevantní, netajné poznatky,
 které tvůj Principál smí do daného store umístit; personalspace a cross-org
 izolace mají před povinností zapisovat vždy přednost — v pochybnosti nech
@@ -253,6 +254,14 @@ Nepracuj v konkrétní firmě z rootu. Nejdřív vyber organizaci v `organizatio
 Launchpad ani aplikaci neotevírej automaticky při zahájení chatu. Vestavěný
 browser použij jen když aktuální úkol vyžaduje práci v jejich UI nebo vizuální
 ověření výsledku.
+
+Když Principál řekne „web Lazuria“, myslí tím Workspace Modul
+`website-lazurio` Organizace `HumanAndMachine-ai` a jeho App `Website Lazurio`,
+nikoli Launchpad. Ověř jej standardním Organization auto-discovery přes
+`lazurio module status HumanAndMachine-ai/website-lazurio --json`, spusť jej
+přes `lazurio module start HumanAndMachine-ai/website-lazurio --json` a ve
+vestavěném browseru otevři `result.runtime.url` vrácené lifecycle kontraktem;
+adresu ani port neodvozuj ručně.
 
 Potřebuje-li úkol Launchpad, spusť podle scope právě jeden příkaz:
 
@@ -295,15 +304,62 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    stav bez bezpečné vazby, rozpracovaný merge/rebase/am ani neplatný lockfile
    neopravuje odhadem: vrátí přesný prompt „Vyřešit s Codexem“. Productionspace,
    Personalspace, worktrees a root-space repository-db jsou z obecného update
-   mechanismu vyloučené. Agent nikdy nezačíná práci v primárním checkoutu; pro
-   všechny změny používá task/PR worktree. Stejný preflight patří každému
+   mechanismu vyloučené. Explicitní `lazurio organization install` smí jako
+   úzký bootstrap doplnit pouze aktivní deklarovaný root-space
+   `mission-control/db` pod ověřeným parent Git repem; existující repository-db
+   neaktualizuje a nezískává commit/publish autoritu. Deklarovaný Mission Control
+   bez právě jednoho aktivního `repository_db_mount` končí `blocked`, nikdy
+   zdánlivě úspěšnou instalací. Agent nikdy nezačíná práci
+   v primárním checkoutu; pro všechny změny používá task/PR worktree. Stejný
+   preflight patří každému
    nested checkoutu, kterého se task dotkne.
    Když Agent troubleshootuje nástrojové prostředí mašiny, přidá explicitní
-   `lazurio doctor --tool-updates`. Git, GitHub CLI a Codex musí být dostupné
-   v `PATH`; Claude Code je volitelný a kontroluje se jen tam, kde nainstalovaný
-   je. Warning o chybějícím Codexu, novější verzi nástroje nebo nesouladu Bunu
-   Agent nejdřív předá Principálovi; updater, package manager ani změnu `PATH`
-   nespustí bez jeho souhlasu s přesnou změnou.
+   `lazurio doctor --tool-updates`. Git, GitHub CLI, Node.js a Codex musí být
+   dostupné v `PATH`; Claude Code je volitelný a kontroluje se jen tam, kde
+   nainstalovaný je. Nález chybějícího Node.js či Codexu, novější verze
+   nástroje nebo nesouladu Bunu Agent nejdřív předá Principálovi; updater,
+   package manager ani změnu `PATH`
+   nespustí bez jeho souhlasu s přesnou změnou. Při nové instalaci Mašiny smí
+   instalační prompt tento souhlas udělit předem pro přesně Git, GitHub CLI,
+   Node.js LTS, Codex CLI a verzovaný Bun. V takovém případě Agent chybějící
+   povolený nástroj nainstaluje z oficiálního zdroje, doplní pouze jeho
+   skutečnou instalační cestu do autorizovaného User nebo Machine `PATH` a
+   na Windows po přesném resume handoffu úplně ukončí a znovu spustí Codex a
+   ověří ji z čistého procesu nové relace; child proces právě běžícího Codexu
+   není důkaz. Odhlášení uživatele nebo restart Windows je až fallback, když
+   ani relaunchnutý Codex správné persistentní hodnoty nevidí. Výchozí
+   nejmenší mandát dovoluje jen User `PATH` a
+   chybějící nástroje. Rozšířený instalační mandát smí navíc přesně
+   povolit Machine/system-wide `PATH`, standardní OS package manager a upgrade
+   jmenovaných nástrojů; Agent zachová nesouvisející položky a bezpečnostní
+   nastavení a nikdy z tohoto souhlasu neodvodí obecný machine-admin mandát.
+   Git, GitHub CLI a Codex směřují na aktuální oficiální stable, Node na
+   podporované aktuální LTS. Codex CLI instaluj a aktualizuj přes oficiální
+   OpenAI standalone instalátor pro macOS/Linux/Windows jako doporučenou cestu.
+   Existující vyhovující Homebrew/npm/WinGet či jinou instalaci zachovej;
+   instalační správce ani pevný adresář nejsou readiness podmínka. Příkazy a bezpečný převod existující instalace se zachováním
+   nastavení a přihlášení drží `manual/organization-install.md` v kapitole
+   „Codex CLI: instalace a aktualizace“; již udělený scoped mandát neopakuj.
+   Bun směřuje vždy na exact verzi z
+   `lazurio/package.json#packageManager`; obecný latest Bun není autorita.
+   Organization materializace začíná až po tomto machine gate; sama nástroje
+   ani `PATH` nevlastní. Přesný rozhodovací postup drží skill
+   `.agents/skills/lazurio-workstation-install/SKILL.md`.
+   Instalační práce nekončí předáním nálezů, které jsou bezpečně a v uděleném
+   mandátu opravitelné. Agent opakuje `lazurio install --json`,
+   `lazurio doctor --tool-updates --json`, exact Organization install a finální
+   `lazurio doctor`, dokud nezmizí všechny required `fail`, `blocked` a
+   `incomplete` stavy. Doporučené warningy buď opraví v mandátu, nebo jim v
+   handoffu dá explicitní disposition; required nález nevydává za hotovou
+   instalaci. Na Builder Mašině používá exact Organization gate
+   `lazurio organization install <github-login> --role builder --json`, který
+   read-only ověří čerstvé Organization/Team membership a WRITE capability na
+   aktivních Builder repozitářích; `planned_slot` ani restricted Admin-only
+   repo Buildera neblokuje. Nový GitHub účet páruje jednou přes
+   `gh auth login --hostname github.com --git-protocol ssh --web`, po souhlasu
+   nechá tentýž flow vytvořit nebo nahrát veřejnou část SSH klíče a výsledek
+   dokáže exact `git ls-remote` cílového root repa. Device kód, token ani
+   privátní klíč neloguje.
 3. **Drž worktree disciplínu.** Primární checkout zůstává na `main` a nemění
    se v něm trackovaný obsah. Postup, kanonickou cestu
    `.worktrees/root/<canonical-plan-basename>/` se sidecarem, PR lifecycle
@@ -314,9 +370,20 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
 4. **Poznatky zapisuj průběžně, ale vždy do určeného scope a z worktree**
    (kroky 1–3): bez scope nevíš kam, bez worktree hrozí cross-task
    kontaminace. Kam který druh poznatku patří, říká kanonický blok výš.
-5. **Nenechávej rozhodnutí v chatu.** Aktivní nejistoty do
-   `ISSUES.open.json`, vyřešené do `ISSUES.resolved.json`; follow-upy a
-   blokery do source of truth.
+5. **Nenechávej rozhodnutí v chatu.** Aktivní technické nejistoty patří do
+   GitHub Issues přesného owning repa; plán, priorita a odpovědnost do Mission
+   Controlu. Vytvoření issue nebo komentáře je Publikace a vyžaduje explicitní
+   mandát Principála. Před Publikací odstraň secrets, Personalspace,
+   Organization-specific obsah mimo jeho access hranici a duplicity; nemáš-li
+   bezpečný repo nebo mandát, vrať sanitizovaný draft. Úplný postup drží
+   `manual/github-issues.md`. Legacy `ISSUES.open.json` a
+   `ISSUES.resolved.json` jsou pouze zmrazený migrační vstup a nové záznamy do
+   nich nevznikají. Když instalační prompt předem jmenuje exact issue repo a
+   dovolí do něj publikovat obecné instalační vady, Agent se u každého
+   reprodukovaného nálezu znovu neptá: po kontrole duplicit a sanitizaci issue
+   vytvoří nebo doplní a jeho URL vrátí v handoffu. Mandát nepovoluje issue
+   zavřít, přiřadit, prioritizovat ani do veřejného repa zapsat
+   Organization-specific obsah.
 6. **Delegace.** Pro Claude/Codex/Desktop delegaci platí skill
    `.agents/skills/desktop-execution-agent-collaboration/SKILL.md`:
    self-report není důkaz, QA gate drží delegující Kolega.
@@ -356,8 +423,18 @@ Root upravuj jen když se mění:
 - Agentní pravidla: tento soubor
 - Lidská mapa: `MAP.md`
 - Maintenance manuál: `manual/`
-- Aktivní root issues: `ISSUES.open.json`; resolved audit trail:
-  `ISSUES.resolved.json`
+- Aktivní root technické problémy: GitHub Issues owning repa
+  `HumanAndMachines/Lazurio`; routing a publikační pravidla:
+  `manual/github-issues.md`. `ISSUES.open.json` a `ISSUES.resolved.json` jsou
+  pouze legacy migrační vstup.
+- Fresh/repair workstation instalace — autoritativní manuály
+  `manual/lazurio-root-for-agents.md` a `manual/organization-install.md`;
+  opakovatelný rozhodovací postup skill
+  `.agents/skills/lazurio-workstation-install/SKILL.md`.
+- Native Windows install, bug nebo PR acceptance — veřejný gate
+  `manual/windows-e2e-lab.md`; konkrétní osobní testovací notebook, přístup a
+  custody zůstávají pouze v omezeném owner runbooku a nikdy se z něj nestává
+  Organization Machine ani veřejný fixture.
 - First-client rollout a migrace: `manual/first-client-organization-rollout.md`,
   `manual/gen2-to-gen3-migration.md`
 - Desktop-agent collaboration — kanonický domov je skill
@@ -374,8 +451,9 @@ Root upravuj jen když se mění:
 - Základní agentní skill balíček: `.agents/skills/` (registry
   `manifest.json`); `.claude/skills` je Git-tracked byte-for-byte mirror
   aktivních skillů (decision 0104 v manual/decision-register.md) —
-  paritu hlídá `bun run doctor:agent-skills`, regeneruje
-  `bun run repair:agent-skills`
+  paritu hlídá `bun run doctor:agent-skills`; `bun run repair:agent-skills`
+  je pouze fail-closed no-write diagnostika a drift vrací k explicitní
+  Git-reviewované opravě v task worktree
 - Sdílený Launchpad: `launchpad/`
 - Sdílený Guide: `guide/`
 - Organizace: lokální gitignored nested repos v `organizations/<org>/`; root repo trackuje jen `organizations/README.md`
@@ -439,6 +517,18 @@ do personalspace scope. Postup a standard: skill
 `manual/external-app-integrations.md` + per-provider runbooky. Zaseknutí
 nebo zastaralý postup řeš opravným PR na standard, ne poznámkou v chatu.
 
+### Figma: kanonický Lazurio soubor a Browser Use only
+
+Figma je vědomá provider-specific výjimka z obecného integračního žebříčku
+výše. Kanonický design pro Lazurio je jedině
+<https://www.figma.com/design/o14eNlc08MDmwnrtoeb91M/Lazurio>; bez
+explicitního pokynu Principála nezakládej paralelní Lazurio Figma soubor.
+Veškeré čtení, tvorbu i úpravy ve Figmě prováděj výhradně přes vestavěný
+Browser Use v přihlášené uživatelské relaci. Figma MCP nevolej ani jako
+fallback, protože tento přístup je zpoplatněný. Není-li Browser Use nebo
+přihlášená Figma relace dostupná, práci zastav a transparentně požádej
+Principála o nápravu; na Figma MCP automaticky nepřepínej.
+
 ## Launchpad pravidlo
 
 Launchpad je **builder-first** root surface (decision 0047): spouští
@@ -474,8 +564,8 @@ Před handoffem uveď:
 - lidské a praktické shrnutí toho, co Publikace zavede, jaký má dopad, co
   záměrně nemění a jaká nese podstatná rizika, rollout důsledky nebo otevřené
   otázky;
-- kam je zapsaný případný blocker nebo next action (`ISSUES.open.json`,
-  Organization Mission Control, TODO ledger apod.).
+- kam je zapsaný případný blocker nebo next action (GitHub Issue v přesném
+  owning repu, Organization Mission Control, TODO ledger apod.).
 
 Závěrečná zpráva pracovního chatu, ve kterém vznikl PR, začíná
 standardizovaným handoff blokem (decision 0103

@@ -7,6 +7,13 @@ import { isValidServerIdentity } from "./server-identity-lib.mjs";
 export const MODULE_LIFECYCLE_REPORT_SCHEMA = "lazurio.module_lifecycle.report.v1";
 export const MODULE_LIFECYCLE_ACTIONS = new Set(["status", "start", "open", "stop"]);
 
+// Discovery must fail quickly when the locator points at a dead Server. A
+// deliberate lifecycle mutation is different: Server-owned start can spend its
+// bounded listener-ownership grace period, and Open may then wait for health.
+// Keep that request bounded too, but do not cut it off at the read deadline.
+const serverReadTimeoutMs = 5_000;
+const lifecycleActionTimeoutMs = 60_000;
+
 export async function runModuleLifecycle({
   action,
   selector = null,
@@ -129,6 +136,7 @@ export async function runModuleLifecycle({
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
+      timeoutMs: lifecycleActionTimeoutMs,
     },
   );
   const report = {
@@ -232,12 +240,12 @@ async function verifyLocatedServer({ locator, fetchFn }) {
   return { ok: true, identity };
 }
 
-async function requestJson(fetchFn, url, options) {
+async function requestJson(fetchFn, url, { timeoutMs = serverReadTimeoutMs, ...options }) {
   let response;
   try {
     response = await fetchFn(url, {
       ...options,
-      signal: AbortSignal.timeout(5_000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (error) {
     return { ok: false, status: 0, payload: null, message: error.message };
@@ -264,20 +272,19 @@ async function requestJson(fetchFn, url, options) {
 function canonicalModuleApps(value) {
   if (!Array.isArray(value)) return [];
   return value
-    .filter((app) =>
+    .map((app) => ({ app, appPackage: lifecycleAppPackage(app) }))
+    .filter(({ app, appPackage }) =>
       typeof app?.id === "string"
       && typeof app?.company === "string"
       && typeof app?.module === "string"
-      && app?.module_app?.declared === true
-      && app?.module_app?.state === "explicit"
-      && typeof app?.module_app?.package === "string")
-    .map((app) => ({
+      && appPackage !== null)
+    .map(({ app, appPackage }) => ({
       app_id: app.id,
       title: typeof app.title === "string" ? app.title : app.id,
       organization: app.company,
       module: app.module,
-      app_package: app.module_app.package,
-      default: app.module_app.default === true,
+      app_package: appPackage,
+      default: app.module_app?.default === true || isLegacyOpenTarget(app),
       host: typeof app.host === "string" ? app.host : null,
       port: Number.isInteger(app.port) ? app.port : null,
       url: typeof app.url === "string" ? app.url : null,
@@ -296,6 +303,50 @@ function canonicalModuleApps(value) {
       left.organization.localeCompare(right.organization)
       || left.module.localeCompare(right.module)
       || left.app_package.localeCompare(right.app_package));
+}
+
+function lifecycleAppPackage(app) {
+  if (
+    app?.module_app?.declared === true
+    && app?.module_app?.state === "explicit"
+    && typeof app?.module_app?.package === "string"
+  ) {
+    return app.module_app.package;
+  }
+  if (!isLegacyOpenTarget(app)) return null;
+  const packagePath = portablePath(app.package_path);
+  const organizationPath = portablePath(app.organization_path);
+  const modulePath = portablePath(app.module_catalog_path);
+  if (!packagePath || !organizationPath || !modulePath) return null;
+  const moduleRoot = `${organizationPath}/${modulePath}`;
+  if (!packagePath.startsWith(`${moduleRoot}/`)) return null;
+  const relativePackage = packagePath.slice(moduleRoot.length + 1);
+  try {
+    return normalizeAppPackage(relativePackage);
+  } catch {
+    return null;
+  }
+}
+
+function isLegacyOpenTarget(app) {
+  return app?.runtime_contract?.legacy === true
+    && app?.module_open_target === true
+    && app?.module_apps?.open_target_app_id === app?.id
+    && app?.module_apps?.open_target_source === "legacy-fallback";
+}
+
+function portablePath(value) {
+  if (typeof value !== "string" || value.trim() === "") return null;
+  const normalized = value.trim().replaceAll("\\", "/").replace(/^\.\//u, "").replace(/\/+$/u, "");
+  if (
+    normalized === ""
+    || normalized.startsWith("/")
+    || /^[A-Za-z]:\//u.test(normalized)
+    || normalized.split("/").some((segment) => segment === "" || segment === "." || segment === "..")
+  ) {
+    return null;
+  }
+  return normalized;
 }
 
 function projectDependencies(value) {

@@ -31,6 +31,13 @@ Missing, dirty, foreign, partial ani podobné nálezy nejsou další profily. Js
 to diagnostické reason kódy, které Agent řeší nad rozpoznaným profilem nebo
 bezpečně předá jako nerozpoznaný vstup.
 
+Na úplně fresh Source Mašině instaluj nejdřív jen chybějící oficiální Git,
+naklonuj canonical Lazurio source do `<home>/Lazurio` a teprve z jeho
+`lazurio/package.json#packageManager` přečti exact Bun pin. Neinstaluj obecný
+latest Bun jako dočasný mezikrok; clone Bun nepotřebuje a následný downgrade by
+jen přidal další chybnou mezifázi. Pokud source již existuje, nejdřív ověř jeho
+identitu, branch a stav a cizí nebo dirty adresář nepřepisuj.
+
 ## Root profil není CLI provenance
 
 Na localhost workstation má příkaz `lazurio` vždy právě jednu aktivní code
@@ -68,6 +75,102 @@ trackované změny připraví v task worktree. Primární Source Root zůstává
 Opakovaný `lazurio install` smí Source Root inspectovat a reconciliovat, ale
 bez explicitní volby Principála jej nesmí migrovat ani označit za závadu jen
 proto, že je Git checkout.
+
+## Toolchain musí přežít instalační relaci
+
+Přítomnost binárky ani `process.execPath` právě běžícího Bunu nedokazují, že je
+Mašina připravená. Install Core proto vedle exact Bun verze ověřuje také příkaz
+`bun` v `PATH`; u Gitu, GitHub CLI a Node.js rozlišuje nainstalovaný nástroj
+od `git_not_on_path`, `github_cli_not_on_path` a
+`node_runtime_not_on_path`. Git, `gh` ani `node` se nespustí, dokud příkaz z
+`PATH` neodpovídá omezené sadě důvěryhodných instalačních cest. Na Windows tato
+sada zahrnuje i explicitní user-scope cesty odvozené z home právě běžícího OS
+účtu, včetně WinGet user command linku pro Node; ambientní `USERPROFILE`,
+`LOCALAPPDATA` ani libovolná dřívější položka `PATH` tuto autoritu nemění. Běžný Doctor
+navíc spouští z aktuálního PATH ověřený Bun, `bun x`, Git, `gh`, GitHub auth i
+nastavený SSH protokol, Node v rozsahu z `lazurio/package.json#engines.node` a
+`codex`.
+Troubleshooting lane `lazurio doctor --tool-updates` ověří i čitelnou verzi a
+aktuálnost povinných nástrojů; chybějící nebo nečitelný povinný nástroj je
+required failure, zatímco pouhá dostupnost novější verze zůstává warningem a
+vyžaduje rozhodnutí Principála.
+
+Instalační mandát má explicitní rozsah, ne implicitní admin práva:
+
+- výchozí nejmenší mandát dovoluje nainstalovat jmenované chybějící
+  nástroje a doplnit jejich skutečné adresáře jen do User `PATH`;
+- rozšířený mandát smí pro jednu instalaci navíc výslovně povolit standardní
+  OS package manager, Machine/system-wide `PATH`, elevation a upgrade
+  jmenovaných nástrojů;
+- samostatný repo-specific publikační mandát smí Agentovi dovolit
+  proaktivně vytvořit nebo doplnit sanitizované instalační GitHub Issues.
+
+Agent provede jen kategorie skutečně povolené promptem. Existující platný PATH
+zachová, task worktree do něj nikdy nezapíše a User souhlas nerozšíří na
+Machine vrstvu. Git, GitHub CLI a Codex mohou s rozšířeným mandátem směřovat
+na aktuální oficiální stable a Node na podporované aktuální LTS. Bun je
+výjimka: vždy konverguje na exact verzi z
+`lazurio/package.json#packageManager`, ne na obecný upstream latest. Výsledek
+se na Windows ověří až po úplném ukončení a novém spuštění Codexu, v čistém
+procesu této nové relace, nikoli v child shellu starého Codexu s dočasným
+`export` nebo `$env:Path`. Před ukončením Agent zapíše do chatu přesný resume
+bod. Odhlášení uživatele nebo restart Windows je pouze fallback, pokud nový
+Codex správné persistentní User/Machine hodnoty stále nevidí.
+
+Codex CLI na macOS, Linuxu i Windows instaluj a aktualizuj oficiálním OpenAI
+standalone instalátorem; Homebrew, npm ani WinGet nejsou výchozí cesta Lazuria.
+Přesné příkazy, scoped mandát, zachování nastavení/přihlášení a bezpečný převod
+existující instalace drží
+[Codex CLI: instalace a aktualizace](organization-install.md#codex-cli-instalace-a-aktualizace).
+Doctor pouze naviguje na tento postup, neinstaluje nástroje a úspěšnou verzní
+zkoušku nevydává za důkaz způsobu instalace.
+
+Organization instalace tuto machine autoritu nepřebírá. Začíná až poté, co
+top-level gate vidí Bun, Git, `gh` a kompatibilní Node.js v PATH a Doctor vidí
+Codex; potom se registruje `lazurio` a z nového Codex procesu projde
+`lazurio cli status --json`.
+Přesný Builder postup a doporučený prompt blok drží
+[`manual/organization-install.md`](organization-install.md).
+
+## GitHub transport při workstation onboardingu
+
+Úspěšné `gh auth status --hostname github.com` dokazuje GitHub API session,
+nikoli Git transport pro privátní repozitáře. Agent se proto nepřihlašuje
+opakovaně naslepo. Pro jednu cílovou Organizaci nejdřív přečte její install
+postup a ověří exact canonical root remote přes `git ls-remote`; teprve tento
+probe dokazuje, že zvolený HTTPS nebo SSH transport umí repo skutečně číst.
+
+Nový účet páruj jednou přes
+`gh auth login --hostname github.com --git-protocol ssh --web`. Tentýž flow
+umí vybrat, vytvořit a nahrát veřejnou část SSH klíče; přístupovou změnu ale
+musí instalační prompt výslovně autorizovat. Po pairing flow se vždy zvlášť
+ověří `gh auth status`, nastavený Git protokol a exact `git ls-remote` cílového
+Organization rootu.
+
+Je-li deklarovaný privátní remote SSH a probe selže při platném `gh` loginu,
+Agent ověří existující SSH klíč a vazbu na tentýž GitHub účet. Vytvoření nebo
+nahrání nového klíče je změna přístupu: vyžaduje explicitní souhlas Principála,
+privátní klíč se nevypisuje a po nápravě se opakuje `git ls-remote`, ne celý
+GitHub login. Podrobný owner/Builder postup drží
+[`manual/organization-install.md`](organization-install.md).
+
+Na Windows se kvůli skills nezapíná Developer Mode. `.agents/skills` je source
+a `.claude/skills` jeho Git-tracked exact mirror; žádný symlink, junction ani
+per-worktree lokální materializátor nevzniká. Paritu dokazuje
+`bun run doctor:agent-skills`.
+
+Když onboarding odhalí reprodukovatelný problém, nenechá jej Agent jen v
+chatu. Vybere přesný owning repo a postupuje podle
+[`manual/github-issues.md`](github-issues.md). Vytvoření issue nebo komentáře
+je Publikace a vyžaduje explicitní mandát v instalačním promptu; bez něj Agent
+vrátí sanitizovaný draft, cílový repo a důvod, proč jej nezveřejnil. Pokud
+prompt exact repo předem povolil, Agent se u každého stejného nálezu znovu
+neptá: ověří reprodukci, najde duplicity, sanitizuje evidence a issue vytvoří
+nebo doplní. Tento mandát nepovoluje issue zavřít, přiřadit ani prioritizovat.
+
+Kompletní rozhodovací postup pro fresh install, repair i opakovaný onboarding
+drží skill
+[`lazurio-workstation-install`](../.agents/skills/lazurio-workstation-install/SKILL.md).
 
 ## Budoucí Managed Root
 

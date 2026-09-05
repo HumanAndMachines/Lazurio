@@ -75,8 +75,10 @@ Upstream template: `TemplatesRozjedeme-ai/OrganizationTemplate` (rename na
   dovoluje (decisions 0103/0112).
 - Organization Steward: merge sync PRs své Organizace.
 - Owner template (Admin/Steward): merge promotion PRs do template.
-- Nejistý kandidát na promotion nezakládá PR — zapiš ho do `ISSUES.open.json`
-  / TODO s tagem `template-promotion` k rozhodnutí.
+- Nejistý kandidát na promotion nezakládá PR — technickou nejistotu připrav
+  jako GitHub Issue v přesném owning repu podle `manual/github-issues.md` a
+  rozhodnutí/prioritu zapiš do Mission Controlu nebo TODO s tagem
+  `template-promotion`.
 
 ## Související
 

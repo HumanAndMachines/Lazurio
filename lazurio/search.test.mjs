@@ -15,9 +15,11 @@ import {
   searchLazurioQmd,
   updateLazurioQmdIndex,
 } from "./search-lib.mjs";
+import { supportsFileSymlinks } from "../scripts/test-platform-capabilities.mjs";
 
 const tempRoots = [];
 const cliPath = join(import.meta.dirname, "cli.mjs");
+const fileSymlinkTest = (await supportsFileSymlinks()) ? test : test.skip;
 
 afterAll(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })));
@@ -91,7 +93,11 @@ test("zděděný ripgrep config nemůže následovat symlink mimo exact ani snap
       root: fixture.root,
       principalId: "immakermatty",
     });
-    await symlink(fixture.personalspace, join(fixture.website, "linked-personalspace"));
+    await symlink(
+      fixture.personalspace,
+      join(fixture.website, "linked-personalspace"),
+      process.platform === "win32" ? "junction" : "dir",
+    );
 
     const exact = await searchLazurioExact({
       root: fixture.root,
@@ -116,7 +122,7 @@ test("Organization containment odmítne symlinkovaný pilotní source", async ()
   const fixture = await searchFixture({ withoutWebsite: true });
   const outside = await tempRoot("lazurio-search-outside-");
   await writeFile(join(outside, "escape.md"), "escape canary\n", "utf8");
-  await symlink(outside, fixture.website);
+  await symlink(outside, fixture.website, process.platform === "win32" ? "junction" : "dir");
 
   await expect(discoverLazurioSearchScope({
     root: fixture.root,
@@ -217,11 +223,11 @@ test("QMD config materializuje jen tři explicitní textové collections s bound
   expect(existsSync(layout.config_path)).toBe(true);
 });
 
-test("QMD config fail-closed odmítne nested symlink uvnitř povoleného source", async () => {
+fileSymlinkTest("QMD config fail-closed odmítne nested symlink uvnitř povoleného source [requires file symlink capability]", async () => {
   const fixture = await searchFixture();
   const outside = await tempRoot("lazurio-qmd-symlink-outside-");
   await writeFile(join(outside, "escape.md"), "secret outside scope\n", "utf8");
-  await symlink(join(outside, "escape.md"), join(fixture.website, "escape.md"));
+  await symlink(join(outside, "escape.md"), join(fixture.website, "escape.md"), "file");
   const scope = await discoverLazurioSearchScope({
     root: fixture.root,
     principalId: "immakermatty",
@@ -239,7 +245,11 @@ test("QMD config bezpečně přeskočí interní symlink bez duplikace kanonick�
   await mkdir(canonical, { recursive: true });
   await writeFile(join(canonical, "canonical.md"), "kanonický obsah\n", "utf8");
   await mkdir(join(fixture.designSystem, "app", "public"), { recursive: true });
-  await symlink(canonical, join(fixture.designSystem, "app", "public", "content"));
+  await symlink(
+    canonical,
+    join(fixture.designSystem, "app", "public", "content"),
+    process.platform === "win32" ? "junction" : "dir",
+  );
   const scope = await discoverLazurioSearchScope({
     root: fixture.root,
     principalId: "immakermatty",
@@ -546,12 +556,12 @@ test("QMD lexical adapter normalizuje výsledek do stejné scoped provenance", a
   })]);
 });
 
-test("QMD adapter nepublikuje stale hity mimo aktuální source boundary", async () => {
+fileSymlinkTest("QMD adapter nepublikuje stale hity mimo aktuální source boundary [requires file symlink capability]", async () => {
   const fixture = await searchFixture();
   await mkdir(join(fixture.knowledge, "private"), { recursive: true });
   await writeFile(join(fixture.knowledge, "private", "stale.md"), "STALE_INDEX_PRIVATE_CANARY\n", "utf8");
   await writeFile(join(fixture.personalspace, "external.md"), "STALE_INDEX_SYMLINK_CANARY\n", "utf8");
-  await symlink(join(fixture.personalspace, "external.md"), join(fixture.knowledge, "external-link.md"));
+  await symlink(join(fixture.personalspace, "external.md"), join(fixture.knowledge, "external-link.md"), "file");
   const scope = await discoverLazurioSearchScope({
     root: fixture.root,
     principalId: "immakermatty",

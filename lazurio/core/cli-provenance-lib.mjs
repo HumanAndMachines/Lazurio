@@ -1,4 +1,5 @@
-import { spawnSync } from "node:child_process";
+import { resolveGitExecutableOnPath } from "./toolchain-lib.mjs";
+import { spawnToolSync } from "./tool-invocation-lib.mjs";
 import {
   lstatSync,
   readFileSync,
@@ -126,60 +127,6 @@ export function normalizeComparableCliPath(path, platform = process.platform) {
   return resolve(path).replace(/[\\/]+$/u, "");
 }
 
-export function trustedGitCandidates(platform = process.platform) {
-  if (platform === "darwin") {
-    return ["/usr/bin/git", "/opt/homebrew/bin/git", "/usr/local/bin/git"];
-  }
-  if (platform === "linux") {
-    return ["/usr/bin/git", "/bin/git", "/usr/local/bin/git"];
-  }
-  if (platform !== "win32") return [];
-  return [
-    "C:\\Program Files\\Git\\cmd\\git.exe",
-    "C:\\Program Files\\Git\\bin\\git.exe",
-    "C:\\Program Files (x86)\\Git\\cmd\\git.exe",
-    "C:\\Program Files (x86)\\Git\\bin\\git.exe",
-  ];
-}
-
-export function trustedGitHubCliCandidates(platform = process.platform) {
-  if (platform === "darwin") {
-    return ["/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/usr/bin/gh"];
-  }
-  if (platform === "linux") {
-    return ["/usr/bin/gh", "/bin/gh", "/usr/local/bin/gh", "/home/linuxbrew/.linuxbrew/bin/gh"];
-  }
-  if (platform !== "win32") return [];
-  return [
-    "C:\\Program Files\\GitHub CLI\\gh.exe",
-    "C:\\Program Files (x86)\\GitHub CLI\\gh.exe",
-  ];
-}
-
-export function resolveTrustedGitExecutable({
-  platform = process.platform,
-} = {}) {
-  return resolveTrustedExecutable(trustedGitCandidates(platform));
-}
-
-export function resolveTrustedGitHubCliExecutable({
-  platform = process.platform,
-} = {}) {
-  return resolveTrustedExecutable(trustedGitHubCliCandidates(platform));
-}
-
-function resolveTrustedExecutable(candidates) {
-  for (const candidate of candidates) {
-    try {
-      const canonicalPath = realpathSync.native(candidate);
-      if (isAbsolute(canonicalPath) && statSync(canonicalPath).isFile()) return canonicalPath;
-    } catch {
-      // Only fixed installation candidates are considered.
-    }
-  }
-  return null;
-}
-
 function sourceProvenance({
   root,
   marker,
@@ -192,7 +139,7 @@ function sourceProvenance({
     return unresolved(root, "source_metadata_unsafe", "source");
   }
   const executable = gitExecutable === undefined
-    ? resolveTrustedGitExecutable({ platform, environment })
+    ? resolveGitExecutableOnPath({ platform, environment })
     : gitExecutable;
   if (!executable) return unresolved(root, "git_unavailable", "source");
 
@@ -369,7 +316,7 @@ function gitText(runGit, executable, cwd, args, environment, { trim = true } = {
 }
 
 export function runTrustedGitCommandSync({ executable, cwd, args, environment }) {
-  const result = spawnSync(
+  const result = spawnToolSync(
     executable,
     [
       "--no-optional-locks",
@@ -398,7 +345,7 @@ export function runTrustedGitCommandSync({ executable, cwd, args, environment })
 
 export function sanitizedGitEnvironment(environment, platform = process.platform) {
   const result = {};
-  for (const key of ["PATH", "TMPDIR", "TEMP", "TMP", "SystemRoot", "ComSpec", "PATHEXT"]) {
+  for (const key of ["PATH", "Path", "HOME", "USERPROFILE", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "ASDF_DATA_DIR", "ASDF_DIR", "MISE_DATA_DIR", "MISE_CONFIG_DIR", "TMPDIR", "TEMP", "TMP", "SystemRoot", "ComSpec", "PATHEXT"]) {
     if (typeof environment[key] === "string") result[key] = environment[key];
   }
   result.LC_ALL = "C";

@@ -1,6 +1,7 @@
-import { existsSync } from "fs";
+import { toolInvocation } from "../core/tool-invocation-lib.mjs";
+import { existsSync, lstatSync, readFileSync } from "fs";
 import { readFile, readdir } from "fs/promises";
-import { basename, dirname, join, posix } from "path";
+import { basename, dirname, isAbsolute, join, posix, relative } from "path";
 import {
   discoverLaunchpadApps,
   organizationRelativePathIssue,
@@ -53,15 +54,26 @@ import {
   resolveModuleApplications,
 } from "../core/module-contract-lib.mjs";
 import {
+  classifyToolVersion,
   classifyBunRuntime,
+  classifyNodeRuntime,
+  nodeVersionFromOutput,
   readRequiredBunVersion,
+  readRequiredNodeVersionRange,
+  resolveExecutableOnPath,
 } from "../core/toolchain-lib.mjs";
+
+import { sanitizedGitHubEnvironment } from "../core/github-provider-lib.mjs";
 import {
   DEVELOPER_TOOL_UPDATE_POLICY,
   inspectDeveloperToolUpdates,
 } from "../core/tool-update-lib.mjs";
 import { inspectDirectoryWithinCanonicalBoundary } from "../core/path-boundary-lib.mjs";
 import { readOrganizationRoot } from "../core/organization-root-reader-lib.mjs";
+import {
+  inspectRepositoryDbWorktreeBinding,
+  readRequiredRepositoryDbWorktreeSlots,
+} from "./repository-db-worktree-lib.mjs";
 
 const supportedPlatforms = {
   darwin: "macOS",
@@ -218,6 +230,10 @@ export async function buildLaunchpadAppsResponse({
     organizations,
     apps: visibleApps,
   });
+  for (const app of visibleApps) {
+    const editor = editorCapabilityForApp(app, launchpadRoot);
+    if (editor) app.editor = editor;
+  }
   const gitContext = includeGit
     ? await buildGitContext({ companiesRoot, gitStatusService })
     : { reposByKey: new Map(), inventoryWarnings: [], worktreeWarnings: [], warnings: [] };
@@ -304,6 +320,92 @@ export async function buildLaunchpadAppsResponse({
     git_worktree_warnings: gitContext.worktreeWarnings,
     warnings: [...discoveryWarnings, ...gitContext.warnings],
   };
+}
+
+function editorCapabilityForApp(app, launchpadRoot) {
+  const lease = app.module_contract?.port_leases?.find((candidate) => candidate?.id === "editor");
+  if (!lease) return null;
+
+  const editorRoot = join(launchpadRoot, "components", "editor", "v2");
+  const ready = validEditorComponentV2(editorRoot);
+  return {
+    schema_version: "lazurio.editor.capability.v1",
+    status: ready ? "ready" : "read_only",
+    label: ready ? "Editor připraven" : "Pouze pro čtení",
+    message: ready
+      ? "Lokální editor je připravený z kanonické komponenty Launchpadu."
+      : "Obsah lze procházet, ale lokální editor není na tomto Lazurio rootu nainstalovaný (známé omezení).",
+    listener: {
+      host: lease.host ?? null,
+      port: Number.isInteger(lease.port) ? lease.port : null,
+    },
+    component_path: "launchpad/components/editor/v2",
+  };
+}
+
+function validEditorComponentV2(editorRoot) {
+  const manifestPath = join(editorRoot, "component.json");
+  if (!realDirectory(editorRoot) || !realContainedRegularFile(editorRoot, manifestPath)) return false;
+  try {
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    if (manifest?.schema_version !== "lazurio.knowledgebase.editor.component.v2") return false;
+    if (manifest?.entrypoints?.astro_integration !== "lib/astro-integration.ts") return false;
+    if (manifest?.entrypoints?.server !== "lib/create-server.ts") return false;
+    const publicFiles = manifest?.public_files;
+    const expectedPublicFiles = ["public/index.html", "public/app.js", "public/styles.css"];
+    if (
+      !Array.isArray(publicFiles)
+      || publicFiles.length !== expectedPublicFiles.length
+      || publicFiles.some((relativePath, index) => relativePath !== expectedPublicFiles[index])
+    ) return false;
+    const declaredFiles = [
+      manifest.entrypoints.astro_integration,
+      manifest.entrypoints.server,
+      ...publicFiles,
+    ];
+    return declaredFiles.every((relativePath) => (
+      realContainedRegularFile(editorRoot, join(editorRoot, relativePath))
+    ));
+  } catch {
+    return false;
+  }
+}
+
+function realContainedRegularFile(root, targetPath) {
+  const relativePath = relative(root, targetPath);
+  if (relativePath === "" || relativePath.startsWith("..") || isAbsolute(relativePath)) return false;
+  let cursor = root;
+  try {
+    for (const segment of relativePath.split(/[\\/]/).filter(Boolean)) {
+      cursor = join(cursor, segment);
+      const stat = lstatSync(cursor);
+      if (stat.isSymbolicLink()) return false;
+    }
+    return lstatSync(targetPath).isFile();
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+function realRegularFile(targetPath) {
+  try {
+    const stat = lstatSync(targetPath);
+    return stat.isFile() && !stat.isSymbolicLink();
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+function realDirectory(targetPath) {
+  try {
+    const stat = lstatSync(targetPath);
+    return stat.isDirectory() && !stat.isSymbolicLink();
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw error;
+  }
 }
 
 function projectActiveTeamSpaces(spaces, activeTeamId) {
@@ -584,17 +686,33 @@ async function worktreeDependencyCheck({ companiesRoot, index }) {
         absoluteWorktreePath: packageDiscovery.worktree_root,
       }));
     }
+    records.push(...await worktreeRepositoryDbReadiness({
+      companiesRoot,
+      worktree,
+      absoluteWorktreePath,
+    }));
   }
 
   const counts = countBy(records.map((record) => record.state));
-  const packageRecords = records.filter((record) => record.state !== "no_package");
-  const warningStates = new Set(["needs_install", "dependency_boundary_invalid", "missing_lockfile", "unknown_package_manager", "invalid_package_json"]);
+  const packageRecords = records.filter((record) => record.kind !== "repository_db" && record.state !== "no_package");
+  const repositoryDbRecords = records.filter((record) => record.kind === "repository_db");
+  const warningStates = new Set([
+    "needs_install",
+    "dependency_boundary_invalid",
+    "missing_lockfile",
+    "unknown_package_manager",
+    "invalid_package_json",
+    "repository_db_binding_invalid",
+  ]);
   const warnings = records.filter((record) => warningStates.has(record.state));
   const details = [
     `checked_worktrees: ${runnableWorktrees.length}`,
     `skipped_declared_inactive_worktrees: ${inactiveWorktrees.length}`,
     `checked_packages: ${packageRecords.length}`,
+    `checked_repository_db_bindings: ${repositoryDbRecords.length}`,
     `ready: ${counts.ready ?? 0}`,
+    `repository_db_ready: ${counts.repository_db_ready ?? 0}`,
+    `repository_db_binding_invalid: ${counts.repository_db_binding_invalid ?? 0}`,
     `needs_install: ${counts.needs_install ?? 0}`,
     `dependency_boundary_invalid: ${counts.dependency_boundary_invalid ?? 0}`,
     `missing_lockfile: ${counts.missing_lockfile ?? 0}`,
@@ -613,10 +731,94 @@ async function worktreeDependencyCheck({ companiesRoot, index }) {
       warnings.length > 0
         ? `Worktree dependency readiness má ${formatCount(warnings.length, "varování", "varování", "varování")}.`
         : `Worktree dependency readiness je čistá pro ${formatCount(packageRecords.length, "package", "packages", "packages")}.`,
-    paths: ["organizations/*/.worktrees/*/*/*/package.json", "organizations/*/.worktrees/*/*/*/app/*/package.json"],
+    paths: [
+      "organizations/*/.worktrees/*/*/*.worktree.json",
+      "organizations/*/.worktrees/*/*/*/package.json",
+      "organizations/*/.worktrees/*/*/*/app/*/package.json",
+    ],
     links: [],
     details,
   };
+}
+
+async function worktreeRepositoryDbReadiness({
+  companiesRoot,
+  worktree,
+  absoluteWorktreePath,
+}) {
+  const declaredModulePath = worktree.metadata?.module_path;
+  const missingModulePath = declaredModulePath === undefined || declaredModulePath === "";
+  const moduleSlotPath = missingModulePath
+    ? legacyWorktreeModuleSlotPath(worktree)
+    : declaredModulePath;
+  if (moduleSlotPath === null) return [];
+  const organizationRoot = join(companiesRoot, worktree.organization_path);
+  const requirements = await readRequiredRepositoryDbWorktreeSlots({
+    organizationRoot,
+    moduleCheckoutRoot: absoluteWorktreePath,
+    moduleSlotPath,
+    moduleId: worktree.module,
+  });
+  if (!requirements.ok) {
+    return [{
+      kind: "repository_db",
+      state: "repository_db_binding_invalid",
+      worktree,
+      detail: `repository_db_binding_invalid: ${worktree.slug} (${worktree.path}) — ${requirements.details.join("; ")}`,
+    }];
+  }
+  if (missingModulePath && requirements.dependencies.length > 0) {
+    return [{
+      kind: "repository_db",
+      state: "repository_db_binding_invalid",
+      worktree,
+      detail: `repository_db_binding_invalid: ${worktree.slug} (${worktree.path}) — sidecar module_path chybí; repository-db binding nelze autorizovat z odvozené legacy cesty`,
+    }];
+  }
+  const members = Array.isArray(worktree.metadata?.members) ? worktree.metadata.members : [];
+  const records = [];
+  for (const dependency of requirements.dependencies) {
+    const matching = members.filter((member) =>
+      member?.role === "dependency" && member?.slot_path === dependency.slot_path
+    );
+    if (matching.length !== 1) {
+      records.push({
+        kind: "repository_db",
+        state: "repository_db_binding_invalid",
+        worktree,
+        detail: `repository_db_binding_invalid: ${worktree.slug} (${worktree.path}) — ${dependency.slot_path} nemá právě jeden dependency member`,
+      });
+      continue;
+    }
+    const inspection = await inspectRepositoryDbWorktreeBinding({
+      organizationRoot,
+      editWorktreeRoot: absoluteWorktreePath,
+      dependency,
+      member: matching[0],
+    });
+    records.push({
+      kind: "repository_db",
+      state: inspection.ok ? "repository_db_ready" : "repository_db_binding_invalid",
+      worktree,
+      detail: inspection.ok
+        ? `repository_db_ready: ${worktree.slug} (${worktree.path}) — ${dependency.slot_path}@${matching[0].base_sha}`
+        : `repository_db_binding_invalid: ${worktree.slug} (${worktree.path}) — ${inspection.details.join("; ")}`,
+    });
+  }
+  return records;
+}
+
+function legacyWorktreeModuleSlotPath(worktree) {
+  let candidate = null;
+  if (worktree?.repo_kind === "root_repo") {
+    candidate = worktree.module;
+  } else if (
+    worktree?.repo_kind === "module"
+    || worktree?.repo_kind === "productionspace"
+  ) {
+    candidate = `${worktree.workspace}/${worktree.module}`;
+  }
+  return isCanonicalOrganizationRepositorySlotPath(candidate) ? candidate : null;
 }
 
 async function worktreePackageRoots({ companiesRoot, worktree, absoluteWorktreePath }) {
@@ -1986,7 +2188,10 @@ function humanizeSlug(slug) {
 function platformChecks(companiesRoot) {
   const platformName = supportedPlatforms[process.platform];
   const bunExecutable = resolveBunExecutable();
-  const gitExecutable = resolveGitExecutableSync();
+  const bunOnPath = resolveExecutableOnPath("bun");
+  const gitOnPath = resolveExecutableOnPath("git");
+  const githubCliOnPath = resolveExecutableOnPath("gh");
+  const nodeOnPath = resolveExecutableOnPath("node");
   return [
     {
       id: "platform.os",
@@ -2001,17 +2206,202 @@ function platformChecks(companiesRoot) {
       details: [`platform: ${process.platform}`, `arch: ${process.arch}`],
     },
     bunRuntimeCheck({ companiesRoot, bunExecutable }),
-    commandCheck({
-      id: "platform.git",
-      title: "Git",
-      command: gitExecutable,
-      args: ["--version"],
+    bunPathCheck({ pathExecutable: bunOnPath, cwd: companiesRoot }),
+    bunPackageRunnerCheck({
+      id: "platform.bun_package_runner",
+      title: "Bun package runner",
+      command: bunOnPath,
       cwd: companiesRoot,
-      okMessage: (result) => result.stdout,
-      failMessage: "Git nebyl nalezen ani neprošel validací executable kandidáta.",
+    }),
+    toolVersionCheck({
+      id: "platform.git",
+      tool: "git",
+      title: "Git",
+      pathExecutable: gitOnPath,
+      cwd: companiesRoot,
       env: safeGitCommandEnv(),
     }),
+    toolVersionCheck({
+      id: "platform.github_cli",
+      tool: "github_cli",
+      title: "GitHub CLI",
+      pathExecutable: githubCliOnPath,
+      cwd: companiesRoot,
+    }),
+    githubAuthenticationCheck({
+      companiesRoot,
+      executable: githubCliOnPath,
+    }),
+    nodeRuntimeCheck({
+      companiesRoot,
+      command: nodeOnPath,
+    }),
+    codexRuntimeCheck({ companiesRoot }),
   ];
+}
+
+export function codexRuntimeCheck({
+  companiesRoot,
+  platform = process.platform,
+  architecture = process.arch,
+  environment = process.env,
+  resolvePathCommand = resolveExecutableOnPath,
+  run = runCommand,
+} = {}) {
+  const command = resolvePathCommand("codex", {
+    environment,
+    platform,
+    cwd: companiesRoot,
+  });
+  if (command) {
+    return withCodexInstallationGuidance(toolVersionCheck({
+      id: "platform.codex",
+      tool: "codex",
+      title: "Codex CLI",
+      pathExecutable: command,
+      cwd: companiesRoot,
+      env: environment,
+      run,
+    }), platform);
+  }
+
+  const targetCommand = platform === "win32"
+    ? architecture === "arm64"
+      ? "codex-aarch64-pc-windows-msvc"
+      : architecture === "x64"
+        ? "codex-x86_64-pc-windows-msvc"
+        : null
+    : null;
+  const targetExecutable = targetCommand
+    ? resolvePathCommand(targetCommand, {
+        environment,
+        platform,
+        cwd: companiesRoot,
+      })
+    : null;
+  if (targetExecutable) {
+    return withCodexInstallationGuidance({
+      id: "platform.codex",
+      status: "fail",
+      severity: "required",
+      title: "Codex CLI",
+      message:
+        `Windows našel pouze target-specific kandidát ${targetCommand}, ale příkaz codex chybí. `
+        + "Tento stav není připravený; s výslovným souhlasem použij oficiální OpenAI standalone Windows instalátor a kontrolu zopakuj z nového procesu.",
+      paths: [],
+      links: [],
+      details: [
+        "path_command: <missing>",
+        `target_specific_candidate: ${targetExecutable}`,
+        "candidate_probe: not_run_untrusted_candidate",
+        "next_action: ask_principal_before_official_codex_standalone_install",
+      ],
+    }, platform);
+  }
+
+  return withCodexInstallationGuidance(commandCheck({
+    id: "platform.codex",
+    title: "Codex CLI",
+    command: null,
+    args: ["--version"],
+    cwd: companiesRoot,
+    okMessage: (result) => `Codex CLI je dostupné v PATH: ${result.stdout}`,
+    failMessage: "Příkaz codex není dostupný nebo jej nelze spustit z PATH nového procesu.",
+    run,
+  }), platform);
+}
+
+// Guidance only: executable readiness does not prove an installation method.
+// The provider owns installation/update; Doctor never runs these commands.
+function withCodexInstallationGuidance(check, platform) {
+  const installCommand = platform === "win32"
+    ? 'powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"'
+    : platform === "darwin" || platform === "linux"
+      ? "curl -fsSL https://chatgpt.com/codex/install.sh | sh"
+      : null;
+  return {
+    ...check,
+    message: `${check.message} Pro chybějící Codex CLI doporučujeme oficiální OpenAI standalone instalátor podle manual/organization-install.md. Vyhovující instalaci zachovej bez ohledu na jejího správce.`,
+    links: [...check.links, {
+      label: "Oficiální instalace Codex CLI",
+      kind: "external",
+      url: "https://developers.openai.com/codex/cli",
+    }],
+    details: [
+      ...check.details,
+      "preferred_installation: openai_standalone",
+      ...(installCommand ? [`install_or_update_command: ${installCommand}`] : []),
+      "installation_policy: use_existing_explicit_mandate_or_ask_principal",
+      "migration: verify_standalone_before_removing_previous_install; preserve_codex_settings_and_auth",
+    ],
+  };
+}
+
+export function toolVersionCheck({ tool, id, title, pathExecutable, cwd, env, run = runCommand }) {
+  if (!pathExecutable) return requiredToolFailure({ id, title, message: `${title} není dostupné v PATH.`, pathExecutable, args: ["--version"] });
+  const result = run(pathExecutable, ["--version"], { cwd, env });
+  const version = classifyToolVersion(tool, result.ok ? result.stdout : null);
+  const compatible = result.ok && version.status === "compatible";
+  return { id, title, status: compatible ? "ok" : "fail", severity: "required",
+    message: compatible ? `${title} je dostupné v PATH: ${result.stdout.trim()}`
+      : `${title} v PATH je nefunkční nebo nekompatibilní${version.minimum_version ? `; minimum je ${version.minimum_version}` : ""}.`,
+    paths: [], links: [], details: [`command: ${pathExecutable} --version`, `current: ${version.current_version ?? "<unknown>"}`, `minimum: ${version.minimum_version ?? "parseable stable CLI"}`, ...(result.ok ? [] : [result.stderr || result.error || "Version probe failed"])] };
+}
+
+export function bunPathCheck({ pathExecutable, cwd, requiredVersion = readRequiredBunVersion(), run = runCommand }) {
+  const id = "platform.bun_path", title = "Bun v PATH";
+  if (!pathExecutable) return requiredToolFailure({ id, title, message: "Příkaz bun není dostupný v PATH.", pathExecutable, args: ["--version"] });
+  const result = run(pathExecutable, ["--version"], { cwd });
+  const current = result.ok ? result.stdout.trim() : null;
+  return { id, title, status: current === requiredVersion ? "ok" : "fail", severity: "required",
+    message: current === requiredVersion ? `Bun ${current} v PATH odpovídá požadované verzi.` : `Bun v PATH musí fungovat ve verzi ${requiredVersion}.`,
+    paths: [], links: [], details: [`command: ${pathExecutable} --version`, `current: ${current ?? "<unknown>"}`, `required: ${requiredVersion}`] };
+}
+
+function requiredToolFailure({ id, title, message, pathExecutable, args }) {
+  return {
+    id,
+    status: "fail",
+    severity: "required",
+    title,
+    message,
+    paths: [],
+    links: [],
+    details: [
+      `path_command: ${pathExecutable ?? "<missing>"}`,
+      `probe: ${args.join(" ")}`,
+    ],
+  };
+}
+
+function githubAuthenticationCheck({ companiesRoot, executable }) {
+  const env = sanitizedGitHubEnvironment(process.env);
+  const authArgs = ["auth", "status", "--hostname", "github.com"];
+  const auth = executable
+    ? runCommand(executable, authArgs, { cwd: companiesRoot, env })
+    : { ok: false };
+  const protocolArgs = ["config", "get", "git_protocol", "--host", "github.com"];
+  const protocol = executable && auth.ok
+    ? runCommand(executable, protocolArgs, { cwd: companiesRoot, env })
+    : { ok: false, stdout: "" };
+  const ready = auth.ok && protocol.ok && protocol.stdout.trim().toLowerCase() === "ssh";
+  return {
+    id: "platform.github_auth",
+    status: ready ? "ok" : "fail",
+    severity: "required",
+    title: "GitHub přihlášení a SSH",
+    message: ready
+      ? "GitHub CLI je přihlášené ke github.com a Git operace používají SSH."
+      : auth.ok
+        ? "GitHub CLI je přihlášené, ale git_protocol pro github.com není ověřeně SSH."
+        : "GitHub CLI nemá ověřené přihlášení ke github.com pod aktuálním účtem.",
+    paths: [],
+    links: [],
+    details: [
+      `command: ${executable ?? "<missing>"} ${authArgs.join(" ")}`,
+      `protocol_command: ${executable ?? "<missing>"} ${protocolArgs.join(" ")}`,
+    ],
+  };
 }
 
 export function bunRuntimeCheck({
@@ -2059,8 +2449,88 @@ export function bunRuntimeCheck({
   };
 }
 
+export function nodeRuntimeCheck({
+  companiesRoot,
+  command = resolveExecutableOnPath("node"),
+  requiredRange = readRequiredNodeVersionRange({ root: join(import.meta.dirname, "..") }),
+  run = runCommand,
+} = {}) {
+  if (!command) {
+    const message = "Příkaz node není dostupný v PATH nového procesu.";
+    return {
+      id: "platform.node",
+      status: "fail",
+      severity: "required",
+      title: "Node.js",
+      message,
+      paths: ["lazurio/package.json"],
+      links: [{
+        label: "Oficiální Node.js LTS",
+        kind: "external",
+        url: "https://nodejs.org/en/download",
+      }],
+      details: [
+        `command: ${command ?? "<missing>"} --version`,
+        `required: ${requiredRange}`,
+      ],
+    };
+  }
+
+  const result = run(command, ["--version"], { cwd: companiesRoot });
+  const currentVersion = result.ok ? nodeVersionFromOutput(result.stdout) : null;
+  if (!currentVersion) {
+    return {
+      id: "platform.node",
+      status: "fail",
+      severity: "required",
+      title: "Node.js",
+      message: "Příkaz node je v PATH, ale jeho stabilní verzi se nepodařilo ověřit.",
+      paths: ["lazurio/package.json"],
+      links: [{
+        label: "Oficiální Node.js LTS",
+        kind: "external",
+        url: "https://nodejs.org/en/download",
+      }],
+      details: [
+        `command: ${command} --version`,
+        `required: ${requiredRange}`,
+        result.stderr || result.error || "Příkaz nevrátil stabilní Node.js verzi.",
+      ],
+    };
+  }
+
+  const runtime = classifyNodeRuntime({
+    currentVersion,
+    requiredRange,
+  });
+  const compatible = runtime.status === "compatible";
+  return {
+    id: "platform.node",
+    status: compatible ? "ok" : "fail",
+    severity: "required",
+    title: "Node.js",
+    message: compatible
+      ? `Node.js ${runtime.current_version} odpovídá Lazurio toolchain rozsahu ${runtime.required_range}.`
+      : `Node.js ${runtime.current_version} neodpovídá požadovanému rozsahu ${runtime.required_range}; Agent musí nejdřív požádat Principála o souhlas s instalací aktuálního oficiálního Node.js LTS.`,
+    paths: ["lazurio/package.json"],
+    links: compatible
+      ? []
+      : [{
+          label: "Oficiální Node.js LTS",
+          kind: "external",
+          url: "https://nodejs.org/en/download",
+        }],
+    details: [
+      `command: ${command} --version`,
+      `current: ${runtime.current_version}`,
+      `required: ${runtime.required_range}`,
+    ],
+  };
+}
+
 export async function developerToolUpdateChecks({
   inspectUpdates = inspectDeveloperToolUpdates,
+  platform = process.platform,
 } = {}) {
   let observations;
   try {
@@ -2075,7 +2545,10 @@ export async function developerToolUpdateChecks({
   }
   return observations
     .filter((observation) => observation.required || observation.status !== "not_available")
-    .map(toolUpdateDoctorCheck);
+    .map((observation) => {
+      const check = toolUpdateDoctorCheck(observation);
+      return observation.id === "codex" ? withCodexInstallationGuidance(check, platform) : check;
+    });
 }
 
 function toolUpdateDoctorCheck(observation) {
@@ -2113,12 +2586,13 @@ function toolUpdateDoctorCheck(observation) {
     };
   }
   if (observation.status === "not_available") {
+    const required = observation.required === true;
     return {
       id,
-      status: "warn",
-      severity: "recommended",
+      status: required ? "fail" : "warn",
+      severity: required ? "required" : "recommended",
       title: `${observation.title} · dostupnost`,
-      message: `${observation.title} není dostupný v PATH. Může chybět nebo být nainstalovaný mimo PATH; Agent musí před instalací nebo změnou PATH nejdřív požádat Principála o souhlas.`,
+      message: `${observation.title} není dostupný v PATH. Může chybět nebo být nainstalovaný mimo PATH; instalace není hotová, dokud jej nový čistý proces nespustí. Agent musí před instalací nebo změnou PATH nejdřív požádat Principála o souhlas.`,
       paths: [],
       links: [],
       details: [...details, "next_action: ask_principal_before_install"],
@@ -2129,16 +2603,19 @@ function toolUpdateDoctorCheck(observation) {
     title: observation.title,
     currentVersion: observation.current_version,
     reason: observation.reason,
+    required: observation.required === true && observation.status === "probe_failed",
   });
 }
 
-function toolCurrencyUnknownCheck({ id, title, currentVersion, reason }) {
+function toolCurrencyUnknownCheck({ id, title, currentVersion, reason, required = false }) {
   return {
     id: `platform.${id}_update`,
-    status: "warn",
-    severity: "recommended",
+    status: required ? "fail" : "warn",
+    severity: required ? "required" : "recommended",
     title: `${title} · aktualizace`,
-    message: `Aktuálnost ${title} se nepodařilo spolehlivě ověřit; Doctor nebude stav hádat ani nic měnit.`,
+    message: required
+      ? `${title} je na PATH, ale jeho nainstalovanou verzi se nepodařilo ověřit; Doctor jej nevydá za připravený nástroj.`
+      : `Aktuálnost ${title} se nepodařilo spolehlivě ověřit; Doctor nebude stav hádat ani nic měnit.`,
     paths: [],
     links: [],
     details: [
@@ -2150,9 +2627,9 @@ function toolCurrencyUnknownCheck({ id, title, currentVersion, reason }) {
   };
 }
 
-function commandCheck({ id, title, command, args, cwd, okMessage, failMessage, env }) {
+function commandCheck({ id, title, command, args, cwd, okMessage, failMessage, env, run = runCommand }) {
   const result = command
-    ? runCommand(command, args, { cwd, env })
+    ? run(command, args, { cwd, env })
     : {
         ok: false,
         exitCode: null,
@@ -2171,6 +2648,41 @@ function commandCheck({ id, title, command, args, cwd, okMessage, failMessage, e
     details: result.ok
       ? [`command: ${command} ${args.join(" ")}`]
       : [`command: ${command ?? "<missing>"} ${args.join(" ")}`, result.stderr || result.error || "Příkaz selhal."],
+  };
+}
+
+function bunPackageRunnerCheck({ id, title, command, cwd }) {
+  const args = ["x", "--help"];
+  const result = command
+    ? runCommand(command, args, { cwd })
+    : {
+        ok: false,
+        exitCode: null,
+        stdout: "",
+        stderr: "",
+        error: "Executable resolver nevrátil ověřený Bun z PATH.",
+      };
+  // Bun 1.4 prints the valid bunx help contract but intentionally exits 1
+  // because no package was supplied. Treat only that exact help sentinel as
+  // capability proof; an arbitrary exit 1 remains a required failure.
+  const helpOutput = `${result.stdout}\n${result.stderr}`;
+  const ready = result.ok || (result.exitCode === 1 && /Usage:\s+bunx\b/u.test(helpOutput));
+  return {
+    id,
+    status: ready ? "ok" : "fail",
+    severity: "required",
+    title,
+    message: ready
+      ? "Bun umí spouštět package binárky přes `bun x`; samostatný příkaz bunx není potřeba."
+      : "Ověřený Bun neumí použít package runner `bun x`.",
+    paths: [],
+    links: [],
+    details: ready
+      ? [`command: ${command} ${args.join(" ")}`, `exit_code: ${result.exitCode}`]
+      : [
+          `command: ${command ?? "<missing>"} ${args.join(" ")}`,
+          result.stderr || result.error || "Příkaz selhal.",
+        ],
   };
 }
 
@@ -2486,7 +2998,8 @@ function runGit(args, cwd) {
 
 function runCommand(command, args, { cwd, env } = {}) {
   try {
-    const result = Bun.spawnSync([command, ...args], {
+    const invocation = toolInvocation(command, args, { cwd, environment: env ?? process.env });
+    const result = Bun.spawnSync([invocation.executable, ...invocation.args], {
       cwd,
       ...(env ? { env } : {}),
       stdout: "pipe",
@@ -2749,15 +3262,19 @@ function runtimeSummaryCheck(apps, expectedInactiveVersions = new Map()) {
 function runtimeAppCheck(app, { activeVersion = null } = {}) {
   const runtime = app.runtime ?? {};
   const dependencies = app.dependencies ?? runtime.dependencies ?? {};
+  const runtimeStatus = runtimeAppStatus(app);
+  const editorReadOnly = app.editor?.status === "read_only";
   return {
     id: `launchpad.runtime.${app.id}`,
-    status: activeVersion ? "ok" : runtimeAppStatus(app),
+    status: activeVersion ? "ok" : runtimeStatus === "ok" && editorReadOnly ? "warn" : runtimeStatus,
     severity: "runtime",
     title: app.title,
     message: activeVersion
       ? `Sdílený port ${app.port} používá zdravá výchozí verze ${activeVersion.title}; ${app.title} je očekávaně neaktivní verze stejného Modulu.`
       : dependencies.state && dependencies.state !== "ready"
       ? dependencies.message
+      : editorReadOnly && runtimeStatus === "ok"
+      ? app.editor.message
       : (runtime.message ?? runtimeLabel(runtime.status)),
     paths: [app.package_path, runtime.log_path].filter(Boolean),
     links: [],
@@ -2769,6 +3286,7 @@ function runtimeAppCheck(app, { activeVersion = null } = {}) {
       `pid: ${runtime.pid ?? "-"}`,
       `port: ${app.port ?? "-"}`,
       `health: ${app.health_url ?? "-"}`,
+      ...(app.editor ? [`editor: ${app.editor.status === "ready" ? "ready" : "read-only (known limitation)"}`] : []),
       ...(activeVersion ? [`active_version: ${activeVersion.id}`] : []),
     ],
   };

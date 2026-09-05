@@ -5,14 +5,17 @@ Mašina: darwin/arm64
 Lazurio Root: "/Users/example/Lazurio"
 
 ✓ Platforma — podporovaná platforma
-✓ Bun — Bun 1.4.0 odpovídá požadované verzi
+✓ Bun — Bun 1.4.1 odpovídá požadované verzi
 ✓ Git — Git je dostupný
 ! GitHub CLI — GitHub CLI nebylo nalezeno
+✓ Node.js — Node.js 24.19.0 odpovídá podporovanému rozsahu >=22.12.0
+! Codex CLI — Codex CLI není dostupný v PATH.
 – Přihlášení ke GitHubu — bez GitHub CLI nelze přihlášení ověřit
 ! Lazurio Root — Lazurio Root je potřeba vygenerovat
 
 Co je potřeba udělat
 - Nainstaluj GitHub CLI (`gh`) standardním postupem pro svou platformu.
+- Ve schváleném instalačním mandátu zpřístupněte Codex CLI podle manual/organization-install.md a ověřte jej z nové relace.
 - Počkej na navazující instalační slice; tento read-only řez složku záměrně nemění.
 
 Příkaz můžeš spustit znovu kdykoli; vždy znovu odvodí aktuální stav.

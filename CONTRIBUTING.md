@@ -62,11 +62,30 @@ změna Lazuria, ale kandidát na plugin nebo obsah Organizace.
   Před odesláním musí projít `bun run check` a `bun run --cwd launchpad
   test`; po změně configů i `bun run doctor`. Výsledky napiš do popisu PR.
 - **Jazykový kontrakt:** strojové identifikátory (klíče, slugs, stavy, CLI)
-  anglicky bez diakritiky; lidský text (UI copy, dokumentace, commit
-  messages) česky s háčky a čárkami.
+  anglicky bez diakritiky. Launchpad-owned lidský text patří pod významový
+  klíč do obou katalogů `launchpad/public/locales/cs.js` a `en.js`; logika se
+  nikdy nerozhoduje podle přeložené věty. Organization-owned názvy, popisy,
+  commit messages a technická evidence se nepřekládají ani nepřepisují.
 - **Čitelnost pro dalšího agenta:** PR musí být srozumitelný bez kontextu
   chatu, ve kterém vznikl. Rozhodnutí a poznatky patří do dokumentace repa,
   ne do konverzace.
+
+### Překlady Launchpadu
+
+Přidání nebo změna Launchpad copy je změna jednoho kontraktu ve dvou
+katalozích. Použij stabilní významový klíč, parametry předávej jako data a
+počty a datumy formátuj přes `tp`, `formatNumber` a `formatDate`. Error a
+warning flow větví podle stabilního `error`/`failure_kind` kódu; text serveru
+je pouze technická evidence a nesmí řídit chování ani být běžnou uživatelskou
+copy. Testy musí prokázat shodu klíčů katalogů a aspoň jeden anglický consumer.
+
+Dlouhý Guide obsah, který se nehodí do UI katalogu, má stejně přísný párový
+kontrakt. Organization install runbook drží češtinu v
+`manual/organization-install.md` a anglickou projekci v
+`distribution/locales/en/manual/organization-install.md`; oba soubory musí
+zachovat stejné strojové markery, příkazy a bezpečnostní invarianty. Consumer
+posílá explicitní locale, ověřuje locale i source path odpovědi a při
+chybějícím nebo neplatném překladu skončí bez cross-locale fallbacku.
 
 ## Review a merge
 

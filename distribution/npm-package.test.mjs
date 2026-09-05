@@ -20,7 +20,7 @@ test("private workspace root delegates every publishable field to @lazurio/runti
   expect(sourcePackage.packageManager).toBeUndefined();
   expect(sourcePackage.bin).toBeUndefined();
   expect(validateLazurioPackageManifest(cliPackage)).toEqual({
-    bunVersion: "1.4.0",
+    bunVersion: "1.4.1",
     version: "0.0.0-development",
   });
 });
@@ -67,7 +67,7 @@ test("package smoke keeps canonical home Root deterministic across host prerequi
     root: null,
     platform: "linux",
     architecture: "x64",
-    bunVersion: "1.4.0",
+    bunVersion: "1.4.1",
     environment: { HOME: "/home/example" },
     homeDirectory: "/home/example",
     resolveGit: () => null,
@@ -78,11 +78,16 @@ test("package smoke keeps canonical home Root deterministic across host prerequi
     root: null,
     platform: "win32",
     architecture: "x64",
-    bunVersion: "1.4.0",
+    bunVersion: "1.4.1",
     environment: { USERPROFILE: "C:\\Users\\Example", SystemRoot: "C:\\Windows" },
     homeDirectory: "C:\\Users\\Example",
     resolveGit: () => "C:\\Program Files\\Git\\cmd\\git.exe",
     resolveGitHubCli: () => "C:\\Program Files\\GitHub CLI\\gh.exe",
+    resolvePathCommand: (command) => ({
+      bun: "C:\\Users\\Example\\.bun\\bin\\bun.exe",
+      git: "C:\\Program Files\\Git\\cmd\\git.exe",
+      gh: "C:\\Program Files\\GitHub CLI\\gh.exe",
+    })[command] ?? null,
     runCommand: ({ executable }) => ({
       status: executable.endsWith("gh.exe") ? 1 : 0,
     }),
@@ -108,7 +113,7 @@ test("package smoke rejects a non-canonical Root", () => {
     root: "/fixture/root",
     platform: "linux",
     architecture: "x64",
-    bunVersion: "1.4.0",
+    bunVersion: "1.4.1",
     resolveGit: () => null,
     resolveGitHubCli: () => null,
     inspectRoot: () => ({

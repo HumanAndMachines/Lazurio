@@ -1,10 +1,13 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 import {
   changeKindLabel,
   changeOriginLabel,
   humanCommitCopy,
   topicLabel,
 } from "../public/commit-copy.js";
+import { setLocale } from "../public/i18n.js";
+
+afterEach(() => setLocale("cs", { storage: null }));
 
 test("Conventional Commits prefix se přeloží na druh změny a zmizí z názvu", () => {
   const copy = humanCommitCopy({ subject: "feat(launchpad): notifikace pod zvonečkem" });
@@ -98,4 +101,13 @@ test("téma se bere ze složek, ne z textu commitu", () => {
   expect(topicLabel({ topics: ["cenik-2026"] })).toBe("cenik 2026");
   expect(topicLabel({ topics: [] })).toBeNull();
   expect(topicLabel({})).toBeNull();
+});
+
+test("commit metadata follows the selected language while author text stays unchanged", () => {
+  setLocale("en", { storage: null });
+  const copy = humanCommitCopy({ subject: "feat(launchpad): Přidat jazyk" });
+  expect(copy.kind).toBe("New feature");
+  expect(copy.title).toBe("Přidat jazyk");
+  expect(changeOriginLabel({ pullRequest: "15" })).toBe("through approved proposal #15");
+  expect(topicLabel({ topics: ["socialni-site", "brand"] })).toBe("social media and brand");
 });

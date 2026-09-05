@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="cs">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Knowledgebase Editor</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <div>
+          <p class="eyebrow">Lazurio</p>
+          <h1 id="project-title">Knowledgebase Editor</h1>
+        </div>
+        <a id="preview-link" class="preview" target="_blank" rel="noopener noreferrer">Otevřít náhled</a>
+      </header>
+      <section class="workspace">
+        <aside>
+          <label for="file-list">Soubor</label>
+          <select id="file-list" size="18" aria-label="Knowledgebase soubory"></select>
+          <form id="new-file-form">
+            <label for="new-file">Nová cesta v povolené složce</label>
+            <div class="new-file-row">
+              <input id="new-file" placeholder="data/v2/docs/cs/nova-stranka.md" autocomplete="off">
+              <button type="submit" class="secondary">Nový</button>
+            </div>
+          </form>
+        </aside>
+        <section class="editor-pane">
+          <div class="toolbar">
+            <code id="current-path">Vyberte soubor</code>
+            <span id="status" role="status">Připraveno</span>
+          </div>
+          <textarea id="content" spellcheck="false" disabled></textarea>
+          <div class="actions">
+            <p>Změny zůstávají lokální Draft. Commit, push a merge probíhají přes standardní Lazurio workflow.</p>
+            <button id="save" type="button" disabled>Uložit Draft</button>
+          </div>
+        </section>
+      </section>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

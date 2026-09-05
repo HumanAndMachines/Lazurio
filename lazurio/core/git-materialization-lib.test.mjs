@@ -1,6 +1,17 @@
 import { afterAll, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { lstat, mkdir, mkdtemp, readdir, rename, rm, symlink } from "node:fs/promises";
+import {
+  appendFile,
+  chmod,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readdir,
+  rename,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -10,7 +21,10 @@ import {
   safeGitRemoteEnv,
 } from "../runtime/git-lib.mjs";
 import { initGitRepo } from "../../launchpad/src/git-fixture-helpers.test.mjs";
-import { materializeGitCheckout } from "./git-materialization-lib.mjs";
+import {
+  CANONICAL_GIT_FETCH_REFSPEC,
+  materializeGitCheckout,
+} from "./git-materialization-lib.mjs";
 
 const roots = [];
 
@@ -41,6 +55,64 @@ test("one Core primitive publishes an Organization root only after owner verific
   expect(result).toMatchObject({ ok: true, outcome: "materialized", mode: "organization-root" });
   expect(verifiedPath).not.toBe(target);
   expect(existsSync(join(target, "README.md"))).toBe(true);
+  const fetchRefspec = await runGit(
+    ["config", "--local", "--get-all", "remote.origin.fetch"],
+    { cwd: target },
+  );
+  expect(fetchRefspec).toMatchObject({
+    ok: true,
+    stdout: CANONICAL_GIT_FETCH_REFSPEC,
+  });
+});
+
+test("post-clone repository fsmonitor cannot execute during materialization verification", async () => {
+  const fixture = await fixtureRemote();
+  const target = join(fixture.root, "organizations", "FsmonitorSafe_GEN3");
+  const marker = join(fixture.root, "fsmonitor-invoked.txt");
+  const hook = join(fixture.root, process.platform === "win32" ? "fsmonitor.cmd" : "fsmonitor.sh");
+  const hookBody = process.platform === "win32"
+    ? `@echo off\r\n> "${marker}" echo invoked\r\necho {}\r\n`
+    : `#!/bin/sh\nprintf invoked > "${marker}"\nprintf '{}\\n'\n`;
+  await writeFile(hook, hookBody);
+  if (process.platform !== "win32") await chmod(hook, 0o755);
+
+  let injection = null;
+  const observedArgs = [];
+  const runWithInjectedLocalConfig = async (args, options) => {
+    observedArgs.push(args);
+    if (options.cwd?.includes(".lazurio-materialize-")) {
+      injection ??= appendFile(
+        join(options.cwd, ".git", "config"),
+        `\n[core]\n\tfsmonitor = ${JSON.stringify(hook.replaceAll("\\", "/"))}\n`,
+      );
+      await injection;
+    }
+    return runGit(args, options);
+  };
+
+  const result = await materializeGitCheckout({
+    mode: "organization-root",
+    boundaryRoot: fixture.root,
+    targetPath: target,
+    remote: fixture.remote,
+    branch: "main",
+    run: runWithInjectedLocalConfig,
+    runPinnedChild: runGitInPinnedTemporaryChild,
+    remoteEnvironment: safeGitRemoteEnv(),
+  });
+
+  expect(result).toMatchObject({ ok: true, outcome: "materialized" });
+  expect(injection).not.toBeNull();
+  expect(existsSync(marker)).toBe(false);
+  expect(observedArgs.every((args) => (
+    args.includes("core.fsmonitor=false")
+    && args.includes("core.useBuiltinFSMonitor=false")
+    && args.some((arg) => arg.startsWith("core.hooksPath="))
+  ))).toBe(true);
+
+  const unsafeControl = await runGit(["status", "--porcelain=v1"], { cwd: target });
+  expect(unsafeControl.ok).toBe(true);
+  expect(existsSync(marker)).toBe(true);
 });
 
 test("failed staged identity verification never publishes the target", async () => {

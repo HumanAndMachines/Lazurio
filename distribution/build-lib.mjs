@@ -1,8 +1,9 @@
+import { spawnToolSync } from "../lazurio/core/tool-invocation-lib.mjs";
+import { sanitizedGitEnvironment } from "../lazurio/core/cli-provenance-lib.mjs";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, isAbsolute, join, posix, resolve } from "node:path";
-import { spawnSync } from "node:child_process";
 import { trustedGitExecutable } from "../scripts/agent-skills-entrypoint.mjs";
 import { verifyArtifactTree } from "./runtime/integrity.mjs";
 
@@ -777,7 +778,7 @@ export function gitText(cwd, args) {
 function gitBytes(cwd, args) {
   const executable = trustedGitExecutable();
   if (!executable) {
-    throw new Error("resident build requires Git from a trusted system-owned path");
+    throw new Error("resident build requires a working Git on PATH");
   }
   const safeArgs = [
     "-c", `core.hooksPath=${process.platform === "win32" ? "NUL" : "/dev/null"}`,
@@ -786,7 +787,7 @@ function gitBytes(cwd, args) {
     "-c", "protocol.ext.allow=never",
     ...args,
   ];
-  const result = spawnSync(executable, safeArgs, {
+  const result = spawnToolSync(executable, safeArgs, {
     cwd,
     env: residentBuildGitEnvironment(),
     encoding: args.includes("cat-file") || args.includes("ls-tree") ? null : "utf8",
@@ -806,18 +807,5 @@ function gitBytes(cwd, args) {
 }
 
 function residentBuildGitEnvironment(base = process.env) {
-  const environment = {};
-  for (const key of ["TMPDIR", "TEMP", "TMP", "SystemRoot", "ComSpec", "PATHEXT"]) {
-    if (typeof base[key] === "string") environment[key] = base[key];
-  }
-  environment.LC_ALL = "C";
-  environment.LANG = "C";
-  environment.GIT_ATTR_NOSYSTEM = "1";
-  environment.GIT_CONFIG_NOSYSTEM = "1";
-  environment.GIT_CONFIG_GLOBAL = process.platform === "win32" ? "NUL" : "/dev/null";
-  environment.GIT_CONFIG_COUNT = "0";
-  environment.GIT_OPTIONAL_LOCKS = "0";
-  environment.GIT_PAGER = "cat";
-  environment.GIT_TERMINAL_PROMPT = "0";
-  return environment;
+  return { ...sanitizedGitEnvironment(base), LANG: "C", GIT_ATTR_NOSYSTEM: "1" };
 }

@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { runGit, runGitInPinnedTemporaryChild } from "../../lazurio/runtime/git-lib.mjs";
+import { CANONICAL_GIT_FETCH_REFSPEC } from "../../lazurio/core/git-materialization-lib.mjs";
 import { materializeRepoCheckout } from "../../lazurio/runtime/git-materialization-lib.mjs";
 import { buildGitInventory } from "../../lazurio/runtime/git-inventory-lib.mjs";
 import {
@@ -59,6 +60,14 @@ test("materializes an active manifest slot on its exact repository and branch", 
   expect(result.head).toMatch(/^[0-9a-f]{40}$/);
   expect(await readFile(join(organizationRoot, "workspace", "lazurio", "README.md"), "utf8"))
     .toContain("# main");
+  const fetchRefspec = await runGit(
+    ["config", "--local", "--get-all", "remote.origin.fetch"],
+    { cwd: join(organizationRoot, "workspace", "lazurio") },
+  );
+  expect(fetchRefspec).toMatchObject({
+    ok: true,
+    stdout: CANONICAL_GIT_FETCH_REFSPEC,
+  });
 });
 
 test("treats an inaccessible manifest repository as missing_access and leaves no partial checkout", async () => {
@@ -204,8 +213,9 @@ test("clone failure leaves no partial final target or staging directory", async 
       runPinnedChild: async () => ({
         ok: false,
         code: "git_command_failed",
+        exitCode: 128,
         stdout: "",
-        stderr: "simulated clone failure",
+        stderr: "fatal: unable to access 'https://builder:private-credential-value@github.com/BetaCo/broken-clone.git?X-Amz-Signature=signed-value&X-Amz-Credential=credential-value#secret-fragment': simulated clone failure\npassword=must-not-leak",
       }),
     },
   });
@@ -215,6 +225,15 @@ test("clone failure leaves no partial final target or staging directory", async 
     outcome: "failed",
     code: "materialization_clone_failed",
   });
+  expect(result.message).toContain("Git příčina: exit 128");
+  expect(result.message).toContain("simulated clone failure");
+  expect(result.message).toContain("https://<redacted>@github.com/BetaCo/broken-clone.git?<redacted>");
+  expect(result.message).toContain("password=<redacted>");
+  expect(result.message).not.toContain("private-credential-value");
+  expect(result.message).not.toContain("signed-value");
+  expect(result.message).not.toContain("credential-value");
+  expect(result.message).not.toContain("secret-fragment");
+  expect(result.message).not.toContain("must-not-leak");
   expect(existsSync(target)).toBe(false);
   expect((await readdir(join(organizationRoot, "workspace"))).filter((name) => name.includes("lazurio-update"))).toEqual([]);
 });
@@ -226,12 +245,12 @@ async function prepareOrganizationRoot(organizationRoot) {
 
 function fixtureRemoteRunner({ declaredRemote, actualRemote, failClone = false }) {
   return async (args, options) => {
-    if (failClone && args[0] === "clone") {
+    if (failClone && args.includes("clone")) {
       return { ok: false, exitCode: 1, timedOut: false, stdout: "", stderr: "simulated clone failure" };
     }
     const mappedArgs = args.map((value) => value === declaredRemote ? actualRemote : value);
     const result = await runGit(mappedArgs, options);
-    if (result.ok && args[0] === "clone") {
+    if (result.ok && args.includes("clone")) {
       const stagingPath = args.at(-1);
       const restored = await runGit(["remote", "set-url", "origin", declaredRemote], {
         cwd: stagingPath,
@@ -246,7 +265,7 @@ function fixturePinnedRemoteRunner({ declaredRemote, actualRemote }) {
   return async (args, options) => {
     const mappedArgs = args.map((value) => value === declaredRemote ? actualRemote : value);
     const result = await runGitInPinnedTemporaryChild(mappedArgs, options);
-    if (result.ok && args[0] === "clone") {
+    if (result.ok && args.includes("clone")) {
       const stagingPath = join(options.cwd, result.child_name);
       const restored = await runGit(["remote", "set-url", "origin", declaredRemote], {
         cwd: stagingPath,

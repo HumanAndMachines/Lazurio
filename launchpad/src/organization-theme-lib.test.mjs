@@ -3,8 +3,10 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import { extractLaunchpadTheme, readOrganizationLaunchpadTheme } from "./organization-theme-lib.mjs";
+import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.mjs";
 
 const tempRoots = [];
+const fileSymlinkTest = (await supportsFileSymlinks()) ? test : test.skip;
 
 afterAll(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })));
@@ -102,7 +104,7 @@ test("Organization theme draft Design System neaktivuje a pokračuje GEN2 fallba
   expect(theme.light["--accent"]).toBe("#6058e9");
 });
 
-test("Organization theme odmítne chybějící, cizí, neplatný i symlinkovaný Design System config", async () => {
+test("Organization theme odmítne chybějící, cizí i neplatný Design System config", async () => {
   const scenarios = [
     {
       name: "missing",
@@ -122,18 +124,6 @@ test("Organization theme odmítne chybějící, cizí, neplatný i symlinkovaný
         join(organizationRoot, "design-system", "design-system.config.json"),
         "{invalid",
       ),
-    },
-    {
-      name: "symlink",
-      configure: async (organizationRoot) => {
-        const target = join(organizationRoot, "design-system", "approved-config-target.json");
-        await writeFile(target, designSystemConfig());
-        await symlink(
-          target,
-          join(organizationRoot, "design-system", "design-system.config.json"),
-          "file",
-        );
-      },
     },
   ];
   const results = [];
@@ -163,6 +153,27 @@ test("Organization theme odmítne chybějící, cizí, neplatný i symlinkovaný
     source: "launchpad/app/v1/web/style.css",
     accent: "#6058e9",
   })));
+});
+
+fileSymlinkTest("Organization theme odmítne symlinkovaný Design System config [requires file symlink capability]", async () => {
+  const root = await makeOrganizationRoot();
+  const organizationRoot = join(root, "organizations", "Example_GEN3");
+  const designSystemRoot = join(organizationRoot, "design-system");
+  await mkdir(designSystemRoot, { recursive: true });
+  await mkdir(join(organizationRoot, "launchpad", "app", "v1", "web"), { recursive: true });
+  await writeFile(
+    join(designSystemRoot, "launchpad.tokens.css"),
+    themeCss("#0056d2", { onAccentLight: "#fff", onAccentDark: "#fff" }),
+  );
+  await writeFile(join(organizationRoot, "launchpad", "app", "v1", "web", "style.css"), themeCss("#6058e9"));
+  const target = join(designSystemRoot, "approved-config-target.json");
+  await writeFile(target, designSystemConfig());
+  await symlink(target, join(designSystemRoot, "design-system.config.json"), "file");
+
+  const theme = await readExampleTheme(root);
+
+  expect(theme.source).toBe("launchpad/app/v1/web/style.css");
+  expect(theme.light["--accent"]).toBe("#6058e9");
 });
 
 test("Schválený Design System bez on-accent v obou režimech se neaktivuje", async () => {

@@ -110,6 +110,7 @@ async function run(argv) {
     const report = await installOrganization({
       rootPath: options.root,
       githubLogin: options.organizationLogin,
+      role: options.organizationRole,
     });
     console.log(options.json
       ? JSON.stringify(report, null, 2)
@@ -285,6 +286,7 @@ function parseArgs(argv) {
     check: false,
     toolUpdates: false,
     githubOrganizationId: null,
+    organizationRole: null,
     apply: false,
     applyPresent: false,
     noApp: false,
@@ -389,6 +391,17 @@ function parseArgs(argv) {
       if (!value || value.startsWith("-")) throw new Error("--github-id vyžaduje immutable GitHub Organization ID.");
       parsed.githubOrganizationId = value;
       index += 1;
+      continue;
+    }
+    if (arg === "--role") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("-")) throw new Error("--role vyžaduje hodnotu builder.");
+      parsed.organizationRole = value;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--role=")) {
+      parsed.organizationRole = requiredInlineValue(arg, "--role");
       continue;
     }
     if (arg.startsWith("--github-id=")) {
@@ -596,6 +609,9 @@ function parseArgs(argv) {
       if (parsed.rootExplicit) {
         throw new Error("organization activate --check pracuje s GitHubem a nepřijímá --root.");
       }
+      if (parsed.organizationRole !== null) {
+        throw new Error("--role lze použít pouze s `lazurio organization install`.");
+      }
     } else {
       if (parsed.operands.length !== 2) {
         throw new Error("organization install vyžaduje <github-login>.");
@@ -607,6 +623,9 @@ function parseArgs(argv) {
         throw new Error("organization install vždy používá kanonický Lazurio Root v home a nepřijímá --root.");
       }
       parsed.organizationLogin = parsed.operands[1];
+      if (parsed.organizationRole !== null && parsed.organizationRole !== "builder") {
+        throw new Error("organization install --role zatím podporuje pouze hodnotu builder.");
+      }
     }
   } else if (parsed.searchFlags.size > 0) {
     throw new Error(`${[...parsed.searchFlags].join(", ")} lze použít pouze s příkazem search.`);
@@ -650,6 +669,12 @@ function parseArgs(argv) {
   }
   if (parsed.githubOrganizationId !== null && parsed.command !== "organization") {
     throw new Error("--github-id lze použít pouze s `lazurio organization activate`.");
+  }
+  if (
+    parsed.organizationRole !== null
+    && !(parsed.command === "organization" && parsed.organizationAction === "install")
+  ) {
+    throw new Error("--role lze použít pouze s `lazurio organization install`.");
   }
   if (parsed.version && parsed.command !== null) {
     throw new Error("--version nelze kombinovat s příkazem.");
@@ -715,7 +740,7 @@ function usage() {
     "  lazurio --version [--json]",
     "  lazurio install [--language cs|en] [--json]",
     "  lazurio organization activate --check --github-id <id> [--json]",
-    "  lazurio organization install <github-login> [--json]",
+    "  lazurio organization install <github-login> [--role builder] [--json]",
     "  lazurio context [--organization <slug>] [--json] [--root <cesta>]",
     "  lazurio doctor [--tool-updates] [--json] [--root <cesta>]",
     "  lazurio update [--json] [--root <cesta>]",

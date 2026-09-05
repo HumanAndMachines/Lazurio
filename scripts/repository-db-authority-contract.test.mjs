@@ -4,8 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { readMissionControlRepositoryDbAuthority } from "./repository-db-authority-contract.mjs";
+import { supportsFileSymlinks } from "./test-platform-capabilities.mjs";
 
 const cleanup = [];
+
+const fileSymlinkTest = (await supportsFileSymlinks()) ? test : test.skip;
 
 afterEach(async () => {
   await Promise.all(cleanup.splice(0).map((path) => rm(path, { recursive: true, force: true })));
@@ -42,11 +45,11 @@ describe("Mission Control repository-db authority", () => {
     expect(() => readMissionControlRepositoryDbAuthority(root)).toThrow("coexist");
   });
 
-  test("rejects a symlinked authority marker", async () => {
+  fileSymlinkTest("rejects a symlinked authority marker [requires file symlink capability]", async () => {
     const root = await fixture();
     const external = join(root, "external.yaml");
     await writeFile(external, canonicalConfig, "utf8");
-    await symlink(external, join(root, "repository-db.yaml"));
+    await symlink(external, join(root, "repository-db.yaml"), "file");
 
     expect(() => readMissionControlRepositoryDbAuthority(root)).toThrow("not a regular file");
   });

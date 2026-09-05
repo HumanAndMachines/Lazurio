@@ -1,16 +1,17 @@
-import { existsSync } from "fs";
+import { toolInvocation } from "../core/tool-invocation-lib.mjs";
 import { lstat, mkdtemp, realpath, rm } from "fs/promises";
-import { basename, dirname, win32 } from "path";
+import { basename, dirname, isAbsolute, win32 } from "path";
 import { fileURLToPath } from "url";
 
 import { isSamePath } from "../core/path-boundary-lib.mjs";
+import { classifyToolVersion, resolveExecutableOnPath } from "../core/toolchain-lib.mjs";
 
 export const GIT_LOCAL_TIMEOUT_MS = 10_000;
 export const GIT_FETCH_TIMEOUT_MS = 20_000;
 export const GIT_COMMAND_CONCURRENCY = 4;
 export const GIT_FETCH_CONCURRENCY = 4;
 const GIT_TIMEOUT_DRAIN_GRACE_MS = 2_000;
-const PINNED_TEMPORARY_CHILD_MODE = "--lazurio-pinned-temporary-git-child";
+export const PINNED_TEMPORARY_CHILD_MODE = "--lazurio-pinned-temporary-git-child";
 
 let cachedGitExecutablePromise = null;
 let cachedGitExecutableSync;
@@ -27,12 +28,11 @@ export async function resolveGitExecutable(options = {}) {
 
 async function resolveGitExecutableUncached({
   platform = process.platform,
-  env = processEnv(),
-  which = defaultWhich,
-  pathExists = existsSync,
+  environment = process.env,
+  resolvePathCommand = resolveExecutableOnPath,
   probe = probeGitExecutable,
 } = {}) {
-  for (const candidate of orderedGitExecutableCandidates({ platform, env, which, pathExists })) {
+  for (const candidate of gitExecutableCandidates({ platform, environment, resolvePathCommand })) {
     if (await probe(candidate)) return candidate;
   }
   return null;
@@ -52,12 +52,11 @@ export function resolveGitExecutableSync(options = {}) {
 
 function resolveGitExecutableSyncUncached({
   platform = process.platform,
-  env = processEnv(),
-  which = defaultWhich,
-  pathExists = existsSync,
+  environment = process.env,
+  resolvePathCommand = resolveExecutableOnPath,
   probe = probeGitExecutableSync,
 } = {}) {
-  for (const candidate of orderedGitExecutableCandidates({ platform, env, which, pathExists })) {
+  for (const candidate of gitExecutableCandidates({ platform, environment, resolvePathCommand })) {
     if (probe(candidate)) return candidate;
   }
   return null;
@@ -76,11 +75,15 @@ export async function runGit(args, { cwd, timeoutMs = GIT_LOCAL_TIMEOUT_MS, env 
       error: "Git executable was not found.",
     };
   }
-  return runCommand([executable, ...args], {
+  return runGitWithExecutable(executable, args, {
     cwd,
     timeoutMs,
     env,
   });
+}
+
+async function runGitWithExecutable(executable, args, options) {
+  return runCommand([executable, ...args], options);
 }
 
 // Creates the temporary child and runs Git inside one OS-pinned parent cwd.
@@ -94,12 +97,19 @@ export async function runGitInPinnedTemporaryChild(args, {
   timeoutMs = GIT_LOCAL_TIMEOUT_MS,
   env = {},
 } = {}) {
+  const gitExecutable = await resolveGitExecutable();
+  if (!gitExecutable) {
+    return pinnedGitChildFailure("git_executable_missing", {
+      error: "Git executable was not found.",
+    });
+  }
   const payload = JSON.stringify({
     args,
     expected_cwd_real_path: expectedCwdRealPath,
     child_prefix: childPrefix,
     timeout_ms: timeoutMs,
     env,
+    git_executable: gitExecutable,
   });
   const child = await runCommand(
     [process.execPath, fileURLToPath(import.meta.url), PINNED_TEMPORARY_CHILD_MODE],
@@ -123,6 +133,9 @@ export function safeGitRemoteEnv(platform = process.platform) {
     GIT_TERMINAL_PROMPT: "0",
     GCM_INTERACTIVE: "never",
     SSH_ASKPASS_REQUIRE: "never",
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_CONFIG_GLOBAL: platform === "win32" ? "NUL" : "/dev/null",
+    GIT_CONFIG_COUNT: "0",
     // Launchpad spouští Git nad explicitním cwd. Kontext zděděný například
     // z hooku nesmí přesměrovat child proces do jiného repozitáře.
     GIT_ALTERNATE_OBJECT_DIRECTORIES: undefined,
@@ -150,27 +163,22 @@ export function safeGitRemoteEnv(platform = process.platform) {
 }
 
 export function safeGitCommandEnv(platform = process.platform, base = processEnv()) {
-  return commandEnvironment(base, safeGitRemoteEnv(platform));
+  const {
+    GIT_CONFIG_NOSYSTEM: _systemConfig,
+    GIT_CONFIG_GLOBAL: _globalConfig,
+    GIT_CONFIG_COUNT: _configCount,
+    ...nonInteractive
+  } = safeGitRemoteEnv(platform);
+  // General Git operations retain the user's normal credentials, SSH agent
+  // and enterprise proxy, while checkout-context injection variables are
+  // stripped. Materialization passes safeGitRemoteEnv() explicitly and is the
+  // narrower sterile lane that also disables all ambient Git config.
+  return commandEnvironment(base, nonInteractive);
 }
 
-export function gitExecutableCandidates({ platform = process.platform, env = processEnv() } = {}) {
-  if (platform !== "win32") return [];
-  const roots = [
-    env.ProgramW6432,
-    env.ProgramFiles,
-    env["ProgramFiles(x86)"],
-  ].filter(Boolean);
-  const candidates = [];
-  for (const root of roots) {
-    candidates.push(
-      win32.join(root, "Git", "cmd", "git.exe"),
-      win32.join(root, "Git", "bin", "git.exe"),
-    );
-  }
-  if (env.LOCALAPPDATA) {
-    candidates.push(win32.join(env.LOCALAPPDATA, "Programs", "Git", "cmd", "git.exe"));
-  }
-  return [...new Set(candidates)];
+export function gitExecutableCandidates({ platform = process.platform, environment = process.env, resolvePathCommand = resolveExecutableOnPath } = {}) {
+  const executable = resolvePathCommand("git", { platform, environment });
+  return executable ? [executable] : [];
 }
 
 export function resetGitExecutableCacheForTests() {
@@ -200,12 +208,19 @@ async function runCommand(command, { cwd, timeoutMs, env = {}, input } = {}) {
   let timeout;
   let drainTimeout;
   try {
-    child = Bun.spawn(command, {
+    const environment = commandEnvironment(
+      isSterileGitEnvironment(env)
+        ? minimalRemoteGitEnvironment(processEnv(), process.platform, command[0])
+        : processEnv(),
+      env,
+    );
+    const invocation = toolInvocation(command[0], command.slice(1), { cwd, environment });
+    child = Bun.spawn([invocation.executable, ...invocation.args], {
       cwd,
       stdin: input === undefined ? "ignore" : "pipe",
       stdout: "pipe",
       stderr: "pipe",
-      env: commandEnvironment(processEnv(), env),
+      env: environment,
       detached: globalThis.process.platform !== "win32",
       windowsHide: true,
     });
@@ -320,7 +335,11 @@ function commandEnvironment(base, overrides) {
       const safePosixAskpass =
         ["GIT_ASKPASS", "SSH_ASKPASS"].includes(normalizedKey) &&
         value === "/bin/false";
-      if (safePosixAskpass) merged[normalizedKey] = value;
+      const safeSterileGitConfig =
+        (normalizedKey === "GIT_CONFIG_NOSYSTEM" && value === "1")
+        || (normalizedKey === "GIT_CONFIG_GLOBAL" && ["/dev/null", "NUL"].includes(value))
+        || (normalizedKey === "GIT_CONFIG_COUNT" && value === "0");
+      if (safePosixAskpass || safeSterileGitConfig) merged[normalizedKey] = value;
       continue;
     }
     if (value !== undefined && value !== null) merged[key] = value;
@@ -364,43 +383,70 @@ function unsafeAmbientGitEnvironmentKey(key) {
   );
 }
 
-function defaultWhich(command) {
-  try {
-    return typeof Bun.which === "function" ? Bun.which(command) : null;
-  } catch {
-    return null;
-  }
+function isSterileGitEnvironment(environment) {
+  return environment?.GIT_CONFIG_NOSYSTEM === "1"
+    && environment?.GIT_CONFIG_COUNT === "0"
+    && ["/dev/null", "NUL"].includes(environment?.GIT_CONFIG_GLOBAL);
 }
 
-function orderedGitExecutableCandidates({ platform, env, which, pathExists }) {
-  const pathCommand = platform === "win32" ? "git.exe" : "git";
-  const fromPath = which(pathCommand) ?? which("git");
-  const installedCandidates = gitExecutableCandidates({ platform, env })
-    .filter((candidate) => pathExists(candidate));
-  return [...new Set([
-    fromPath,
-    ...installedCandidates,
-    pathCommand,
-  ].filter(Boolean))];
+export function minimalRemoteGitEnvironment(base, platform, gitExecutable) {
+  const allowed = new Set([
+    "APPDATA",
+    "COMSPEC",
+    "HOMEDRIVE",
+    "HOMEPATH",
+    "HOME",
+    "XDG_DATA_HOME",
+    "ASDF_DATA_DIR",
+    "ASDF_DIR",
+    "MISE_DATA_DIR",
+    "MISE_CONFIG_DIR",
+    "LANG",
+    "LC_ALL",
+    "LOCALAPPDATA",
+    "PATHEXT",
+    "PROGRAMDATA",
+    "PROGRAMFILES",
+    "PROGRAMFILES(X86)",
+    "PROGRAMW6432",
+    "SSH_AUTH_SOCK",
+    "SYSTEMDRIVE",
+    "SYSTEMROOT",
+    "TEMP",
+    "TMP",
+    "TMPDIR",
+    "USER",
+    "USERNAME",
+    "USERPROFILE",
+    "WINDIR",
+  ]);
+  const clean = {};
+  for (const [key, value] of Object.entries(base)) {
+    if (allowed.has(key.toUpperCase()) && typeof value === "string") clean[key] = value;
+  }
+  const pathEntry = Object.entries(base).find(([key]) => key.toUpperCase() === "PATH");
+  clean.PATH = pathEntry?.[1] ?? "";
+  return clean;
 }
+
 
 async function probeGitExecutable(executable) {
-  const result = await runCommand([executable, "--version"], {
-    timeoutMs: GIT_LOCAL_TIMEOUT_MS,
-  });
-  return result.ok;
+  const result = await runCommand([executable, "--version"], { timeoutMs: GIT_LOCAL_TIMEOUT_MS });
+  return result.ok && classifyToolVersion("git", result.stdout).status === "compatible";
 }
 
 function probeGitExecutableSync(executable) {
   try {
-    const result = Bun.spawnSync([executable, "--version"], {
-      stdout: "ignore",
+    const invocation = toolInvocation(executable, ["--version"], { environment: safeGitCommandEnv() });
+    const result = Bun.spawnSync([invocation.executable, ...invocation.args], {
+      stdout: "pipe",
       stderr: "ignore",
       env: safeGitCommandEnv(),
       windowsHide: true,
       timeout: GIT_LOCAL_TIMEOUT_MS,
     });
-    return result.exitCode === 0;
+    return result.exitCode === 0
+      && classifyToolVersion("git", new TextDecoder().decode(result.stdout)).status === "compatible";
   } catch {
     return false;
   }
@@ -439,7 +485,7 @@ function collectStreamText(stream) {
   };
 }
 
-async function runPinnedTemporaryGitChild() {
+export async function runPinnedTemporaryGitChild() {
   let childName = null;
   try {
     const payload = JSON.parse(await Bun.stdin.text());
@@ -447,6 +493,13 @@ async function runPinnedTemporaryGitChild() {
     const actualParentRealPath = await realpath(".");
     if (!isSamePath(actualParentRealPath, payload.expected_cwd_real_path)) {
       throw pinnedGitChildError("parent_identity_changed");
+    }
+    const verifiedGitExecutable = await resolveGitExecutable();
+    if (
+      !verifiedGitExecutable
+      || !isSamePath(verifiedGitExecutable, payload.git_executable)
+    ) {
+      throw pinnedGitChildError("git_executable_changed");
     }
 
     const childPath = await mkdtemp(payload.child_prefix);
@@ -461,11 +514,15 @@ async function runPinnedTemporaryGitChild() {
       throw pinnedGitChildError("child_identity_changed");
     }
 
-    const result = await runGit([...payload.args, childName], {
-      cwd: ".",
-      timeoutMs: payload.timeout_ms,
-      env: payload.env,
-    });
+    const result = await runGitWithExecutable(
+      payload.git_executable,
+      [...payload.args, childName],
+      {
+        cwd: ".",
+        timeoutMs: payload.timeout_ms,
+        env: payload.env,
+      },
+    );
     if (!result.ok) {
       await rm(childName, { recursive: true, force: true }).catch(() => {});
       childName = null;
@@ -496,6 +553,9 @@ function assertPinnedTemporaryGitChildPayload(payload) {
     || !isPortableTemporaryChildPrefix(payload.child_prefix)
     || !Number.isFinite(payload.timeout_ms)
     || payload.timeout_ms <= 0
+    || typeof payload.git_executable !== "string"
+    || payload.git_executable === ""
+    || !isAbsolute(payload.git_executable)
     || !payload.env
     || typeof payload.env !== "object"
     || Array.isArray(payload.env)
@@ -527,6 +587,7 @@ function pinnedGitChildFailure(code, result = {}) {
     timedOut: result.timedOut ?? false,
     stdout: result.stdout ?? "",
     stderr: result.stderr ?? "",
+    error: result.error ?? null,
   };
 }
 
@@ -535,9 +596,14 @@ function writePinnedGitChildResult(result) {
   if (!result.ok) process.exitCode = 1;
 }
 
+export async function runPinnedTemporaryGitChildMode(argv = process.argv.slice(2)) {
+  if (argv[0] !== PINNED_TEMPORARY_CHILD_MODE) return false;
+  await runPinnedTemporaryGitChild();
+  return true;
+}
+
 if (import.meta.main) {
-  if (process.argv[2] !== PINNED_TEMPORARY_CHILD_MODE) {
+  if (!await runPinnedTemporaryGitChildMode()) {
     throw new Error("git-lib.mjs je interní Git knihovna");
   }
-  await runPinnedTemporaryGitChild();
 }

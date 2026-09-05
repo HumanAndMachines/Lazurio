@@ -60,6 +60,18 @@
       "required": true
     },
     {
+      "slug": "lazurio-workstation-install",
+      "path": ".agents/skills/lazurio-workstation-install/SKILL.md",
+      "applies_to": [
+        "lazurio-installation",
+        "workstation-onboarding",
+        "machine-toolchain",
+        "organization-install",
+        "installation-repair"
+      ],
+      "required": true
+    },
+    {
       "slug": "nightly-steward-pr-sweep",
       "path": ".agents/skills/nightly-steward-pr-sweep/SKILL.md",
       "applies_to": [

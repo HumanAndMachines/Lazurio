@@ -18,8 +18,6 @@ import {
   isValidLazurioCliProvenance,
   normalizeComparableCliPath,
   normalizeGitHubRepository,
-  trustedGitCandidates,
-  trustedGitHubCliCandidates,
 } from "./cli-provenance-lib.mjs";
 
 const cleanup = [];
@@ -235,26 +233,7 @@ test("portable Windows paths and trusted executable candidates are deterministic
     .toBe(normalizeComparableCliPath("c:/users/matous/lazurio", "win32"));
   expect(normalizeComparableCliPath("\\\\?\\C:\\Users\\Matous\\Lazurio", "win32"))
     .toBe(normalizeComparableCliPath("c:\\users\\matous\\lazurio", "win32"));
-  expect(trustedGitCandidates("win32", {
-    PATH: "C:\\Shadow",
-    LOCALAPPDATA: "C:\\AttackerControlled",
-  })).toEqual([
-    "C:\\Program Files\\Git\\cmd\\git.exe",
-    "C:\\Program Files\\Git\\bin\\git.exe",
-    "C:\\Program Files (x86)\\Git\\cmd\\git.exe",
-    "C:\\Program Files (x86)\\Git\\bin\\git.exe",
-  ]);
-  expect(trustedGitHubCliCandidates("darwin", { PATH: "/tmp/shadow" }))
-    .toEqual(["/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/usr/bin/gh"]);
-  expect(trustedGitHubCliCandidates("linux", { PATH: "/tmp/shadow" }))
-    .toContain("/usr/bin/gh");
-  expect(trustedGitHubCliCandidates("win32", {
-    PATH: "C:\\Shadow",
-    LOCALAPPDATA: "C:\\Users\\Matous\\AppData\\Local",
-  })).toEqual([
-    "C:\\Program Files\\GitHub CLI\\gh.exe",
-    "C:\\Program Files (x86)\\GitHub CLI\\gh.exe",
-  ]);
+
 });
 
 function expectValid(value) {

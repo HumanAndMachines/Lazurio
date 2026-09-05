@@ -1,6 +1,6 @@
 # Slack
 
-Stav ověřen 2026-07-24.
+Stav ověřen 2026-09-02.
 
 ## Možnosti
 
@@ -19,18 +19,24 @@ invaliduje, na Enterprise Grid rotují během hodin a obcházení detekce
 
 **Default: oficiální Slack MCP server.** Remote endpoint, žádný lokální
 proces, OAuth grant per workspace a per mašina, revokovatelný v nastavení
-Slack účtu. Fallback `korotovsky` v `xoxp` režimu jen tam, kde admin
-nemůže MCP klienta schválit, a s vědomím, že jde o komunitní software s
-pinned verzí.
+Slack účtu. Aktivace ale vyžaduje Marketplace aplikaci nebo interní Slack
+app s důvěrným OAuth klientem; samotný endpoint a interaktivní login v Codexu
+bez `client_id` a `client_secret` nestačí. Fallback `korotovsky` v `xoxp`
+režimu jen tam, kde admin nemůže oficiální MCP klient schválit, a s vědomím,
+že jde o komunitní software s pinned verzí. Dokud admin-owned MCP cesta není
+připravená, použij browser fallback podle hlavního integračního standardu.
 
 ## Org-side kroky
 
-1. Admin workspace musí schválit MCP klienta (např. aplikaci Claude) v app
-   management nastavení; na Enterprise Grid platí org-wide app policy
-   ([návod](https://docs.slack.dev/ai/slack-mcp-server/connect-to-claude/)).
+1. Admin workspace musí vytvořit nebo schválit Marketplace/interní MCP
+   aplikaci v app management nastavení; na Enterprise Grid platí org-wide app
+   policy ([návod](https://docs.slack.dev/ai/slack-mcp-server/connect-to-claude/)).
 2. Scopes uděluj podle workflow rovnou včetně write (`search:read.*`,
    čtení historie, `chat:write`…); per-action ochranu odeslání drží
    approval mode harnessu.
+3. Redirect URI a důvěrné OAuth credentials patří do admin-owned nastavení a
+   lokální secret custody; `client_secret` nikdy nepatří do `.mcp.json` ani
+   do Gitu.
 
 ## Per-machine aktivace
 
@@ -47,10 +53,13 @@ Katalogový zápis v org `.mcp.json`:
 }
 ```
 
-Codex: `codex mcp add <org_slug>_slack --url https://mcp.slack.com/mcp` a
-`codex mcp login <org_slug>_slack`. OAuth consent dokončuje Principál a
-při něm vybírá **správný workspace Organizace**; víc workspace = víc
-pojmenovaných serverů, každý s vlastní OAuth session.
+Tento katalogový tvar je cílový endpoint, ne úplná aktivace. MCP zápis v
+Codexu přidej teprve tehdy, když použitý launcher nebo harness umí načíst
+`client_id` a `client_secret` z lokální custody. OAuth consent dokončuje
+Principál a vybírá **správný workspace Organizace**; víc workspace = víc
+pojmenovaných serverů, každý s vlastní OAuth session. Pokud klient důvěrné
+credentials předat neumí, eviduj admin blocker a nepředstírej PASS pouhým
+`codex mcp add` + `codex mcp login`.
 
 ## Smoke test
 

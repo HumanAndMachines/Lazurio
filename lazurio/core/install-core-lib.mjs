@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawnToolSync } from "./tool-invocation-lib.mjs";
 import { lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, posix, resolve, win32 } from "node:path";
@@ -6,22 +6,27 @@ import { dirname, join, posix, resolve, win32 } from "node:path";
 import {
   buildLazurioCliProvenance,
   LAZURIO_SOURCE_REPOSITORY,
-  resolveTrustedGitExecutable,
-  resolveTrustedGitHubCliExecutable,
   sanitizedGitEnvironment,
 } from "./cli-provenance-lib.mjs";
 import {
+  classifyToolVersion,
   classifyBunRuntime,
+  classifyNodeRuntime,
+  nodeVersionFromOutput,
   readRequiredBunVersion,
+  readRequiredNodeVersionRange,
+  resolveExecutableOnPath,
 } from "./toolchain-lib.mjs";
 
-export const LAZURIO_INSTALL_REPORT_SCHEMA = "lazurio.install.report.v1";
+export const LAZURIO_INSTALL_REPORT_SCHEMA = "lazurio.install.report.v2";
 export const INSTALL_MODE = "report";
 export const INSTALL_STEP_IDS = Object.freeze([
   "platform",
   "bun",
   "git",
   "github_cli",
+  "node",
+  "codex",
   "github_auth",
   "root",
 ]);
@@ -47,10 +52,42 @@ const rootLayouts = new Set([
 ]);
 const reasonsByStep = Object.freeze({
   platform: new Set(["platform_supported", "platform_unsupported", "probe_failed"]),
-  bun: new Set(["bun_runtime_current", "bun_runtime_mismatch", "bun_runtime_unavailable", "probe_failed"]),
-  git: new Set(["git_available", "git_missing", "git_unusable", "probe_failed"]),
-  github_cli: new Set(["github_cli_available", "github_cli_missing", "github_cli_unusable", "probe_failed"]),
-  github_auth: new Set(["github_authenticated", "github_login_required", "github_cli_unavailable", "probe_failed"]),
+  bun: new Set([
+    "bun_runtime_current",
+    "bun_runtime_mismatch",
+    "bun_runtime_unavailable",
+    "bun_runtime_not_on_path",
+    "bun_path_identity_mismatch",
+    "bun_path_unusable",
+    "probe_failed",
+  ]),
+  git: new Set([
+    "git_available",
+    "git_missing",
+    "git_not_on_path",
+    "git_path_identity_mismatch",
+    "git_unusable",
+    "probe_failed",
+  ]),
+  github_cli: new Set([
+    "github_cli_available",
+    "github_cli_missing",
+    "github_cli_not_on_path",
+    "github_cli_path_identity_mismatch",
+    "github_cli_unusable",
+    "probe_failed",
+  ]),
+  node: new Set([
+    "node_runtime_compatible",
+    "node_runtime_incompatible",
+    "node_runtime_missing",
+    "node_runtime_not_on_path",
+    "node_path_identity_mismatch",
+    "node_runtime_unusable",
+    "probe_failed",
+  ]),
+  codex: new Set(["codex_available", "codex_missing", "codex_unusable", "probe_failed"]),
+  github_auth: new Set(["github_authenticated", "github_login_required", "github_ssh_protocol_required", "github_cli_unavailable", "probe_failed"]),
   root: new Set([
     "root_creation_required",
     "source_root_ready",
@@ -70,16 +107,18 @@ export function inspectLazurioInstallation({
   platform = process.platform,
   architecture = process.arch,
   bunVersion = process.versions.bun ?? null,
+  bunExecutable = process.execPath,
   requiredBunVersion = readRequiredBunVersion(),
+  requiredNodeVersionRange = readRequiredNodeVersionRange(),
   environment = process.env,
   homeDirectory = homedir(),
-  resolveGit = resolveTrustedGitExecutable,
-  resolveGitHubCli = resolveTrustedGitHubCliExecutable,
+  cwd = process.cwd(),
+  resolvePathCommand = resolveExecutableOnPath,
   runCommand = runCommandSync,
   inspectRoot = inspectRootLayout,
 } = {}) {
   const steps = [];
-  const commandCwd = trustedCommandCwd(platform, environment);
+  const commandCwd = cwd;
 
   steps.push(boundedProbe("platform", () => (
     supportedPlatforms.has(platform) && supportedArchitectures.has(architecture)
@@ -92,45 +131,113 @@ export function inspectLazurioInstallation({
     requiredVersion: requiredBunVersion,
   });
   steps.push(boundedProbe("bun", () => {
-    if (bunRuntime.status === "current") return completed("bun_runtime_current");
+    if (bunRuntime.status === "current") {
+      const pathExecutable = resolvePathCommand("bun", { environment, platform, cwd: commandCwd });
+      if (!pathExecutable) return actionRequired("bun_runtime_not_on_path");
+      const result = runCommand({
+        executable: pathExecutable,
+        args: ["--version"],
+        environment,
+        cwd: commandCwd,
+      });
+      const observedVersion = result?.stdout?.trim();
+      return result?.status === 0 && observedVersion === requiredBunVersion
+        ? completed("bun_runtime_current")
+        : failed("bun_path_unusable");
+    }
     if (bunRuntime.status === "mismatch") return actionRequired("bun_runtime_mismatch");
     return failed("bun_runtime_unavailable");
   }));
 
   let gitExecutable = null;
   steps.push(boundedProbe("git", () => {
-    gitExecutable = resolveGit({ platform, environment });
-    if (!gitExecutable) return actionRequired("git_missing");
-    return commandSucceeded(runCommand, gitExecutable, ["--version"], environment, commandCwd)
-      ? completed("git_available")
-      : failed("git_unusable");
+    const pathExecutable = resolvePathCommand("git", { environment, platform, cwd: commandCwd });
+    if (!pathExecutable) return actionRequired("git_missing");
+    gitExecutable = pathExecutable;
+    const result = runCommand({ executable: pathExecutable, args: ["--version"], environment, cwd: commandCwd });
+    return result?.status === 0 && classifyToolVersion("git", result.stdout).status === "compatible"
+      ? completed("git_available") : failed("git_unusable");
   }));
 
   let githubCliExecutable = null;
   steps.push(boundedProbe("github_cli", () => {
-    githubCliExecutable = resolveGitHubCli({ platform, environment });
-    if (!githubCliExecutable) return actionRequired("github_cli_missing");
+    const pathExecutable = resolvePathCommand("gh", { environment, platform, cwd: commandCwd });
+    if (!pathExecutable) return actionRequired("github_cli_missing");
     const result = runCommand({
-      executable: githubCliExecutable,
+      executable: pathExecutable,
       args: ["--version"],
       environment,
       cwd: commandCwd,
     });
-    if (result?.status !== 0) return failed("github_cli_unusable");
+    if (result?.status !== 0 || classifyToolVersion("github_cli", result.stdout).status !== "compatible") {
+      githubCliExecutable = null;
+      return failed("github_cli_unusable");
+    }
+    githubCliExecutable = pathExecutable;
     return completed("github_cli_available");
+  }));
+
+  let nodeRuntime = Object.freeze({
+    status: "unavailable",
+    current_version: null,
+    required_range: requiredNodeVersionRange,
+  });
+  steps.push(boundedProbe("node", () => {
+    const pathExecutable = resolvePathCommand("node", { environment, platform, cwd: commandCwd });
+    if (!pathExecutable) return actionRequired("node_runtime_missing");
+    const result = runCommand({
+      executable: pathExecutable,
+      args: ["--version"],
+      environment,
+      cwd: commandCwd,
+    });
+    const currentVersion = result?.status === 0 ? nodeVersionFromOutput(result.stdout) : null;
+    if (!currentVersion) {
+      nodeRuntime = Object.freeze({
+        status: "unusable",
+        current_version: null,
+        required_range: requiredNodeVersionRange,
+      });
+      return failed("node_runtime_unusable");
+    }
+    nodeRuntime = classifyNodeRuntime({
+      currentVersion,
+      requiredRange: requiredNodeVersionRange,
+    });
+    return nodeRuntime.status === "compatible"
+      ? completed("node_runtime_compatible")
+      : actionRequired("node_runtime_incompatible");
+  }));
+
+  steps.push(boundedProbe("codex", () => {
+    const executable = resolvePathCommand("codex", { environment, platform, cwd: commandCwd });
+    if (!executable) return actionRequired("codex_missing");
+    const result = runCommand({ executable, args: ["--version"], environment, cwd: commandCwd });
+    return result?.status === 0 && classifyToolVersion("codex", result.stdout).status === "compatible"
+      ? completed("codex_available")
+      : failed("codex_unusable");
   }));
 
   steps.push(boundedProbe("github_auth", () => {
     if (!githubCliExecutable) return skipped("github_cli_unavailable");
-    return commandSucceeded(
+    if (!commandSucceeded(
       runCommand,
       githubCliExecutable,
       ["auth", "status", "--hostname", "github.com"],
       environment,
       commandCwd,
-    )
+    )) {
+      return actionRequired("github_login_required");
+    }
+    const protocol = runCommand({
+      executable: githubCliExecutable,
+      args: ["config", "get", "git_protocol", "--host", "github.com"],
+      environment,
+      cwd: commandCwd,
+    });
+    return protocol?.status === 0 && protocol.stdout?.trim().toLowerCase() === "ssh"
       ? completed("github_authenticated")
-      : actionRequired("github_login_required");
+      : actionRequired("github_ssh_protocol_required");
   }));
 
   const effectiveRoot = root ?? canonicalLazurioRoot({
@@ -154,6 +261,7 @@ export function inspectLazurioInstallation({
       platform,
       architecture,
       bun: bunRuntime,
+      node: nodeRuntime,
     },
     root: rootObservation.root,
     steps,
@@ -190,6 +298,7 @@ export function isValidLazurioInstallReport(value) {
   if (typeof value.machine.platform !== "string" || value.machine.platform === "") return false;
   if (typeof value.machine.architecture !== "string" || value.machine.architecture === "") return false;
   if (!validBunRuntime(value.machine.bun)) return false;
+  if (!validNodeRuntime(value.machine.node)) return false;
   if (!validRoot(value.root)) return false;
   if (!Array.isArray(value.steps) || value.steps.length !== INSTALL_STEP_IDS.length) return false;
   for (let index = 0; index < INSTALL_STEP_IDS.length; index += 1) {
@@ -211,6 +320,22 @@ function validBunRuntime(value) {
   if (value.status === "unavailable") return value.current_version === null;
   if (!/^\d+\.\d+\.\d+$/u.test(value.current_version ?? "")) return false;
   return value.status === (value.current_version === value.required_version ? "current" : "mismatch");
+}
+
+function validNodeRuntime(value) {
+  if (!plainObject(value)) return false;
+  if (!new Set(["compatible", "incompatible", "unavailable", "unusable"]).has(value.status)) return false;
+  if (!/^>=(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$/u.test(value.required_range ?? "")) {
+    return false;
+  }
+  if (value.status === "unavailable" || value.status === "unusable") {
+    return value.current_version === null;
+  }
+  const classified = classifyNodeRuntime({
+    currentVersion: value.current_version,
+    requiredRange: value.required_range,
+  });
+  return classified.status === value.status;
 }
 
 export function installExitCode(report) {
@@ -484,7 +609,7 @@ function validLazurioSourceTree(sourceRoot, gitExecutable, environment, platform
 }
 
 function runCommandSync({ executable, args, environment, cwd }) {
-  return spawnSync(executable, args, {
+  return spawnToolSync(executable, args, {
     cwd,
     encoding: "utf8",
     env: environment,
@@ -498,15 +623,6 @@ function runCommandSync({ executable, args, environment, cwd }) {
 function commandSucceeded(runCommand, executable, args, environment, cwd) {
   const result = runCommand({ executable, args, environment, cwd });
   return result?.status === 0;
-}
-
-function trustedCommandCwd(platform, environment) {
-  if (platform !== "win32") return "/";
-  const systemRoot = environment.SystemRoot;
-  if (typeof systemRoot === "string" && win32.isAbsolute(systemRoot)) {
-    return win32.join(systemRoot, "System32");
-  }
-  return "C:\\Windows\\System32";
 }
 
 function plainObject(value) {

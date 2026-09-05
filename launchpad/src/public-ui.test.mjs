@@ -28,11 +28,15 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(html).toContain(`<meta name="apple-mobile-web-app-title" content="${LAZURIO_LAUNCHPAD_NAME}" />`);
   expect(html).toContain('id="spaceSwitcherButton"');
   expect(html).toContain('id="spaceSwitcherMenu"');
+  expect(html).toContain('id="localeSwitcher"');
+  expect(html).toContain('data-locale="en"');
+  expect(html).toContain('data-locale="cs"');
+  expect(css).toMatch(/\.locale-switcher-option\[aria-pressed="true"\][^{]*\{[^}]*color: var\(--lz-white\)/);
   expect(html).toContain('id="appsGrid"');
   expect(html).toContain('class="marketplace-teaser side-panel"');
-  expect(html).toContain('id="marketplaceTeaserTitle">Marketplace</h2>');
-  expect(html).toContain('class="marketplace-teaser-status">Již brzy</span>');
-  expect(html).toContain("Moduly pro váš pracovní prostor od Lazuria i dalších tvůrců.");
+  expect(html).toContain('id="marketplaceTeaserTitle" data-i18n="marketplace.title"');
+  expect(html).toContain('data-i18n="marketplace.soon"');
+  expect(html).toContain('data-i18n="marketplace.description"');
   const marketplaceBlock = html.slice(
     html.indexOf('class="marketplace-teaser side-panel"'),
     html.indexOf("</section>", html.indexOf('class="marketplace-teaser side-panel"')),
@@ -40,6 +44,67 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(marketplaceBlock).toContain("iconoir/shop");
   expect(marketplaceBlock).not.toContain("<a ");
   expect(marketplaceBlock).not.toContain("<button");
+  const guideTileIndex = html.indexOf('id="guideTile"');
+  const marketplaceIndex = html.indexOf('class="marketplace-teaser side-panel"');
+  expect(guideTileIndex).toBeGreaterThan(-1);
+  expect(guideTileIndex).toBeLessThan(marketplaceIndex);
+  expect(html).toContain('id="guideTile" class="guide-tile side-panel" href="#/guide"');
+  expect(html).toContain('/app-icons/lazurio/guide-signpost-solid-96.png');
+  expect(html).not.toContain('<img src="/app-icons/lazurio/knowledgebase-96.png" alt="" />');
+  expect(html).toContain('id="guideMain" class="guide-surface"');
+  expect(html).not.toContain('class="guide-eyebrow"');
+  expect(html).toContain('id="guideSearch" type="search" data-i18n-placeholder="guide.search.placeholder"');
+  expect(html).toContain('data-guide-topic="installation" aria-current="page"');
+  expect(html).toContain('data-guide-topic-panel="installation"');
+  expect(html).toContain('data-i18n="guide.navigation.installation"');
+  expect(html).toContain('data-i18n="guide.install.roles.agent.title"');
+  expect(html).toContain('data-i18n="guide.install.roles.user.title"');
+  expect(html).toContain("Lazurio for GitHub");
+  expect(html).toContain("All repositories");
+  expect(html).toContain("Runtime ready");
+  expect(html).toContain("Editing ready");
+  expect(html).toContain("Publishing ready");
+  expect(html).toContain('id="guidePromptCopy" class="guide-copy-button" type="button" disabled data-i18n="guide.install.prompt.copy"');
+  expect(html).toContain('id="guidePromptError" class="guide-content-error" role="alert" hidden data-i18n="guide.install.prompt.error"');
+  expect(html).toContain('id="guidePolicyDisclosure" class="guide-policy" data-guide-search-item data-guide-search-key="guide.install.policy.summary"');
+  expect(html).not.toContain("data-guide-search-text=");
+  expect(html).toContain('data-i18n="guide.install.policy.summary"');
+  expect(html).not.toContain("gh auth login --hostname github.com");
+  expect(html).toContain('data-i18n="guide.glossary.basic"');
+  expect(html).toContain('data-i18n="guide.glossary.advanced"');
+  expect(html).toContain('data-i18n="guide.term.subscription.label"');
+  expect(html).toContain('data-i18n="guide.term.tokens.body"');
+  expect(html).toContain('data-i18n="guide.term.aiColleague.body"');
+  expect(html).toContain('data-i18n="guide.term.steward.body"');
+  expect(html).toContain('data-i18n="guide.term.mcp.body"');
+  expect(html).toContain('data-i18n="guide.term.plugin.body"');
+  expect(html).toContain("Wispr Flow");
+  expect(html).toContain('href="https://wisprflow.ai/downloads"');
+  expect(html).toContain("CodexBar");
+  expect(html).toContain('href="https://codexbar.app/"');
+  expect(html).toContain("Browser Use");
+  expect(html).toContain('href="https://browser-use.com/"');
+  expect(html).toContain('data-i18n="guide.apps.browserUse.caution"');
+  expect(html).toContain('data-i18n="guide.apps.intro"');
+  expect(js).toContain("function filterGuideContent(query)");
+  expect(js).toContain("function selectGuideTopic(topic)");
+  expect(js).toContain('`/api/guide/organization-install?locale=${encodeURIComponent(locale)}`');
+  expect(js).toContain("guideInstallPayloadIsValid(payload, locale)");
+  expect(js).toContain('t("guide.install.prompt.copied")');
+  expect(js).toContain('t("guide.install.prompt.copyFailed")');
+  expect(js.indexOf("guideInstallContentPromise: null")).toBeLessThan(js.indexOf("await loadData()"));
+  expect(js).toContain("navigator.clipboard.writeText(prompt)");
+  expect(js).toContain("Guide install content unavailable");
+  expect(server).toContain('url.pathname === "/api/guide/organization-install"');
+  expect(server).toContain("rootPath: lazurioCodeRoot");
+  expect(server).toContain('locale: url.searchParams.get("locale")');
+  expect(server).not.toContain("readOrganizationInstallGuide({ rootPath: rootSourceRoot })");
+  expect(js).toContain("item.dataset.guideSearchKey");
+  expect(js).toContain("t(item.dataset.guideSearchKey)");
+  expect(js).toContain('.normalize("NFD")');
+  expect(js).toContain(".toLocaleLowerCase(getLocale())");
+  expect(js).toContain('document.querySelectorAll("[data-guide-search-item]")');
+  expect(html).not.toContain("<iframe");
   expect(html).not.toContain('class="debug-table"');
   expect(html).not.toContain('id="appsTable"');
   expect(html).not.toContain('id="organizationRail"');
@@ -93,7 +158,7 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(js).toContain("elements.spaceSwitcherButton.focus()");
   expect(js).toContain("restoreSpaceMenuFocusOnClose");
   expect(js).toContain('.space-switcher-option[aria-selected="true"]');
-  expect(js).toContain("E-mail není nastavený");
+  expect(js).toContain('t("common.emailMissing")');
   expect(js).toContain("function normalizeActiveSpace");
   expect(js).toContain("function spaceOption");
   expect(js).toContain("function selectSpace");
@@ -102,11 +167,16 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(js).toContain("function syncActiveSpaceHash");
   expect(js).toContain("let launchpadScopeDataReady = false");
   expect(js).toContain("launchpadScopeDataReady = true");
-  expect(js).toContain("if (launchpadScopeDataReady) syncActiveSpaceHash({ replace: true })");
+  expect(js).toContain('if (launchpadScopeDataReady && state.activeSurface === "workspace")');
   expect(js).toContain("!launchpadScopeDataReady || window.location.hash === appliedLaunchpadHash");
   expect(js).toContain('window.addEventListener("hashchange", applyBrowserLaunchpadHash)');
   expect(js).toContain("organizationHash(state.filters.company)");
   expect(js).toContain("personalspaceHash()");
+  expect(js).toContain("guideHash()");
+  expect(js).toContain('state.activeSurface = "guide"');
+  expect(js.match(/state\.guideReturnHash = activeSpaceHash\(\);/g)?.length).toBe(3);
+  expect(js).toContain('elements.skipLink.href = guide ? "#guideMain" : "#workspaceMain"');
+  expect(js).toContain('app.organization_path === "guide"');
   expect(js).toContain("suppressNextDrawerOpen");
   expect(js).toContain("function visibleNotifications");
   expect(js).toContain("function visibleMostUsed");
@@ -147,7 +217,7 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(js).toContain('state.filters.scope === "personal"');
   expect(html).not.toContain('id="runtimeRootBadge"');
   expect(js).not.toContain('WORKTREE · ${worktreeName}');
-  expect(js).toContain('elements.drawerToggle.classList.toggle("hidden", personal)');
+  expect(js).toContain('elements.drawerToggle.classList.toggle("hidden", personal || guide)');
   expect(js).toContain('state.filters.scope = "personal";\n  state.filters.company = "all";');
   const switcherBlock = js.slice(js.indexOf("function renderSpaceSwitcher"), js.indexOf("Side panels:"));
   expect(switcherBlock).not.toContain("organizationStats");
@@ -176,17 +246,17 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(appState).toContain("runtimeHostsShareListener(candidate.host, app.host)");
   expect(appState).toContain('host === "localhost" ? "127.0.0.1" : host');
   expect(appState).not.toContain("candidate.runtime?.pid");
-  expect(js).toContain('actionLabel: "Otevřít a převzít port"');
+  expect(js).toContain('actionLabel: t("action.openTakeover")');
   expect(js).not.toContain('candidate.company !== app.company');
   expect(js).toContain("function switchRuntimeApp");
   expect(js).toContain("replace_app_id: peer.id");
   expect(js).toContain("confirmed: true");
   expect(server).toContain("health|install|repair|start|switch|open|stop|restart|logs");
   expect(server).toContain("runtimeManager.switchApp(route.appId, runtimeOptions)");
-  expect(js).toContain('title: app.runtime?.owner === "foreign-port" ? "Cizí checkout na portu" : "Checkout procesu nelze ověřit"');
-  expect(js).toContain('actionLabel: "Zobrazit detail"');
+  expect(js).toContain('title: app.runtime?.owner === "foreign-port" ? t("warning.foreignCheckout") : t("warning.unverifiedCheckout")');
+  expect(js).toContain('actionLabel: t("common.showDetail")');
   expect(js).toContain('app.runtime?.owner === "foreign-port" && app.url');
-  expect(appState).toContain('label: "Otevřít běžící checkout"');
+  expect(appState).toContain('label: t("action.openRunningCheckout")');
   const primaryDispatcher = js.slice(js.indexOf("function runPrimaryNextAction"), js.indexOf("function hasReclaimableStaticLease"));
   expect(primaryDispatcher).toContain('nextAction.type === "open"');
   expect(primaryDispatcher).toContain('app.runtime?.owner === "foreign-port"');
@@ -195,10 +265,10 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   const openChainBlock = js.slice(js.indexOf("async function openAppChain"), js.indexOf("function reserveResultTab"));
   expect(openChainBlock).toContain('app.runtime?.owner === "foreign-port" && app.url');
   expect(openChainBlock).toContain('openResultUrl(app.url, null, app)');
-  expect(appState).toContain('label: "Checkout procesu nelze ověřit"');
+  expect(appState).toContain('label: t("action.unverifiedCheckout")');
   expect(js).toContain("const needsAttention = primaryActionSurfaceState(nextAction).needs_attention");
-  expect(js).toContain('? "blokovaná"');
-  expect(js).toContain('? (isCodexPortConflict(app) ? "Vyřešit s Codexem" : "Zobrazit detail")');
+  expect(js).toContain('? t("mostUsed.blocked")');
+  expect(js).toContain('? (isCodexPortConflict(app) ? t("common.solveWithCodex") : t("common.showDetail"))');
   expect(js).toContain("primaryActionSurfaceState(primaryNextAction(app)).cold_start_candidate");
   expect(js).not.toContain("Nabízím rovnou další krok");
 
@@ -300,7 +370,7 @@ test("Launchpad shell ships GEN2-like command center, theme and feedback afforda
   expect(js).toContain("state.personalspace?.presentation_warnings ?? []");
   expect(js).toContain("loadFailures: state.loadError ? [state.loadError] : []");
   expect(js).not.toContain("spaceFailures: state.failures");
-  expect(js).toContain("Kontrola systému:");
+  expect(js).toContain('t("doctor.status"');
   expect(js).toContain("state.doctor?.summary?.status");
   expect(js).toContain("state.failures.length > 0 ? \"fail\"");
   expect(js).toContain("...state.failures.map((value) => `Discovery: ${value}`)");
@@ -308,10 +378,10 @@ test("Launchpad shell ships GEN2-like command center, theme and feedback afforda
   expect(js).toContain("buildSpaceProblemModel");
   expect(js).toContain("function spaceProblemNode");
   expect(js).toContain("function technicalProblemsNode");
-  expect(js).toContain("Co je potřeba vyřešit");
-  expect(js).toContain("Co udělat:");
-  expect(js).toContain("Chybí očekávaný přístup");
-  expect(js).toContain("Omezený přístup je očekávaný");
+  expect(js).toContain('t("problems.resolveTitle")');
+  expect(js).toContain('t("problems.nextStep"');
+  expect(js).toContain('t("productionspace.missingAccess")');
+  expect(js).toContain('t("productionspace.expectedRestriction")');
   expect(js).not.toContain("elements.heroSubtitle");
   expect(css).toContain("padding: 0 clamp(2rem, 3vw, 3.5rem) 3rem");
   expect(css).toContain(".hero .btn-sm");
@@ -354,7 +424,7 @@ test("Launchpad shell ships GEN2-like command center, theme and feedback afforda
   expect(html).not.toContain('data-status-segment="healthy"');
   expect(html).not.toContain('data-status-segment="stopped"');
   expect(html).toContain('id="attentionToggle"');
-  expect(html).toContain("Ke kontrole");
+  expect(html).toContain('data-i18n="workspace.attention"');
   expect(js).toContain("state.filters.attentionOnly = true");
   expect(js).toContain("state.filters.attentionOnly = false");
   expect(js).toContain("function syncAttentionToggle");
@@ -391,13 +461,13 @@ test("Daily surface hides diagnostics until the hero action requests them", asyn
   expect(js.match(/renderDoctorStatus\(currentSpaceHealth\(\)\);/g)?.length).toBe(2);
   expect(js).toContain("renderDoctorStatus(spaceHealth);");
   expect(js).toContain('model.issues.filter((issue) => issue.severity === "danger")');
-  expect(js).toContain('title.textContent = visibleHasDanger ? "Co je potřeba vyřešit"');
-  expect(js).toContain("Týká se pouze prostoru ${activeSpace().label}");
-  expect(js).toContain('nextStep.textContent = `Co udělat: ${issue.nextStep}`');
-  expect(js).toContain('summary.textContent = "Technické detaily"');
-  expect(js).toContain('action.textContent = isCodexPortConflict(app) ? "Vyřešit s Codexem" : "Zobrazit aplikaci"');
-  expect(js).toContain('refresh.textContent = "Obnovit stav"');
-  expect(js).toContain('close.setAttribute("aria-label", "Zavřít přehled problémů")');
+  expect(js).toContain('title.textContent = visibleHasDanger ? t("problems.resolveTitle")');
+  expect(js).toContain('t("problems.spaceIntro", { space: activeSpace().label })');
+  expect(js).toContain('nextStep.textContent = t("problems.nextStep", { step: issue.nextStep })');
+  expect(js).toContain('summary.textContent = t("common.technicalDetails")');
+  expect(js).toContain('action.textContent = isCodexPortConflict(app) ? t("common.solveWithCodex") : t("problems.showApplication")');
+  expect(js).toContain('refresh.textContent = t("common.refresh")');
+  expect(js).toContain('close.setAttribute("aria-label", t("problems.close"))');
   expect(js).toContain("function hideProblems()");
   expect(js).toContain('state.problemsIncludeSystem || state.filters.scope === "personal"');
   expect(js).toContain("state.problemsDismissed = true");
@@ -431,7 +501,7 @@ test("Daily surface hides diagnostics until the hero action requests them", asyn
   // "Technické detaily" drawer, not on the default detail view.
   expect(js).toContain("function renderDetailTech");
   expect(js).toContain('"detail-tech"');
-  expect(js).toContain("Technické detaily");
+  expect(js).toContain('t("common.technicalDetails")');
   expect(css).toContain(".detail-tech");
 
   // Výchozí detail ukazuje jen identitu a krátké lidské shrnutí. Diagnostika
@@ -518,7 +588,7 @@ test("Launchpad quiet refresh is lightweight and non-overlapping", async () => {
   expect(js).not.toContain("setInterval(() => loadData");
   expect(js).toContain("fetchJsonSafe(`/api/git/repos${companyQuery}`)");
   expect(js).toContain("function gitFreshnessLabel");
-  expect(js).toContain('["Kontrola sdílené verze", gitFreshnessLabel(git.freshness)]');
+  expect(js).toContain('[t("detail.sharedVersionCheck"), gitFreshnessLabel(git.freshness)]');
 });
 
 test("Launchpad icon registry is initialized before the first async data render", async () => {
@@ -620,12 +690,12 @@ test("CAC-0044: karty jsou celé klikatelné a spouští one-click open s guarde
   expect(reservedTabStatus).toContain("/vendor/lazurio/symbol-color.svg");
   expect(js).toContain("function waitForOpenRuntime");
   expect(js).toContain('payload.status === "starting"');
-  expect(js).toContain("Launchpad nedostal URL běžící aplikace");
+  expect(js).toContain('t("action.urlMissing")');
   expect(js).toContain(`/health`);
   expect(js).toContain("function classifyOpenError");
   expect(js).toContain("runtimeRecoveryForApp(app, error)");
-  expect(recovery).toContain("Aplikace startuje příliš dlouho");
-  expect(recovery).toContain('actionLabel: "Vyřešit s Codexem"');
+  expect(recovery).toContain('t("recovery.timeoutTitle")');
+  expect(recovery).toContain('actionLabel: t("common.solveWithCodex")');
   expect(js).toContain("runtimeRecoveryForApp(app)");
   expect(js).toContain("openCodexRuntimeIssueDialog(app, recovery)");
   expect(js).toContain("function runRuntimeRecoveryAction");
@@ -633,8 +703,8 @@ test("CAC-0044: karty jsou celé klikatelné a spouští one-click open s guarde
   expect(js).toContain('nextAction.type === "recovery"');
   expect(js).toContain("function writeCardProgress");
   expect(js).toContain("function completedRuntimeActionLabel");
-  expect(js).toContain('repair: "oprava dokončena"');
-  expect(js).toContain('dismiss.setAttribute("aria-label", "Zavřít zprávu")');
+  expect(js).toContain('const key = `action.completed.${action}`');
+  expect(js).toContain('dismiss.setAttribute("aria-label", t("message.close"))');
   expect(css).toContain(".action-panel-dismiss");
   // Karta čte popis a ikonu z manifestu s fallbacky.
   expect(js).toContain("function appDescription");
@@ -662,8 +732,8 @@ test("CAC-0044: technická diagnostika nerozbíjí mřížku karet", async () =>
   );
 
   expect(warningModel).not.toContain("detail: app.dependencies?.message");
-  expect(warningModel).toContain('dependencyState === "invalid_manifest" ? "Chyba v nastavení"');
-  expect(warningModel).toContain('actionLabel: "Zobrazit detail"');
+  expect(warningModel).toContain('dependencyState === "invalid_manifest" ? t("warning.invalidConfig")');
+  expect(warningModel).toContain('actionLabel: t("common.showDetail")');
   expect(warningNode).not.toContain("card-warning-detail");
   expect(warningNode).toContain('button.setAttribute("aria-label"');
   expect(css).toContain("align-items: start");
@@ -691,7 +761,7 @@ test("CAC-0044/0095: pravé panely, notifikace pod zvonečkem a git chip", async
   expect(js).toContain("/api/most-used");
   // Nejčastější má cold-start fallback.
   expect(js).toContain("function coldStartMostUsed");
-  expect(js).toContain('needsAttention ? "vyžaduje pozornost"');
+  expect(js).toContain('needsAttention ? t("mostUsed.attention")');
   expect(js).toContain("primaryActionSurfaceState(primaryNextAction(app)).cold_start_candidate");
   expect(js).toContain("runPrimaryNextAction(app, nextAction, {})");
   expect(js).toContain('if (nextAction.type === "logs")');
@@ -706,7 +776,7 @@ test("CAC-0044/0095: pravé panely, notifikace pod zvonečkem a git chip", async
   expect(css).toContain(".recent-changes-sidebar");
   expect(css).toContain("grid-template-columns: minmax(0, 1fr) minmax(250px, 300px)");
   expect(css).toContain(".quick-app");
-  expect(js).toContain('elements.recentChangesSidebar.classList.toggle("hidden", personal)');
+  expect(js).toContain('elements.recentChangesSidebar.classList.toggle("hidden", personal || guide)');
 });
 
 test("CAC-0095: zvoneček nese actor, scope a payload a respektuje izolaci", async () => {
@@ -737,7 +807,7 @@ test("CAC-0095: zvoneček nese actor, scope a payload a respektuje izolaci", asy
   expect(js).toContain("function renderNotifications");
   expect(js).toContain("function notificationItem");
   expect(js).toContain("item.actor?.name");
-  expect(js).toContain("změnil·a modul");
+  expect(js).toContain('t("notifications.changedModule")');
 
   // Commit se ukazuje nejdřív lidsky a teprve potom slovy autora.
   expect(js).toContain('from "./commit-copy.js"');
@@ -753,7 +823,7 @@ test("CAC-0095: zvoneček nese actor, scope a payload a respektuje izolaci", asy
   expect(css).toMatch(/\.notification-avatar[\s\S]*?background: var\(--lz-paper\)/);
   // Počty souborů a řádků v notifikaci nejsou — neříkají, co se stalo.
   expect(js).not.toContain("notificationScaleLabel");
-  expect(js).toContain("Vlastními slovy autora");
+  expect(js).toContain('t("notifications.authorWords"');
   expect(css).toContain(".notification-human-summary");
 
   // Tichý 15s poll překresluje seznam; rozbalený detail ani scroll to nesmí
@@ -769,7 +839,7 @@ test("CAC-0095: zvoneček nese actor, scope a payload a respektuje izolaci", asy
 
   // Izolace: Personalspace zvoneček nedostane a notifikace nepřekročí Organizaci.
   expect(js).toContain('if (state.filters.scope === "personal") return []');
-  expect(js).toContain('elements.notificationsToggle?.classList.toggle("hidden", personal)');
+  expect(js).toContain('elements.notificationsToggle?.classList.toggle("hidden", personal || guide)');
   expect(js).toContain("item.scope?.company === state.filters.company");
 
   expect(css).toContain(".notifications-panel");
@@ -785,10 +855,10 @@ test("CAC-0044: git stavy mají lidský text a vstupují do kontrolního togglu"
   ]);
 
   // Lidské texty portované 1:1 z GEN2 Kontroly.
-  expect(copy).toContain("Někdo mezitím poslal novější verzi. Použij Synchronizovat.");
-  expect(copy).toContain("Tady je rozepsaná práce. Můžeš si zobrazit, co se změnilo.");
+  expect(copy).toContain('t(`git.message.${keys[repo.status]}`)');
+  expect(copy).toContain('draft_changes: "draft_changes"');
   expect(copy).toContain("git_am_in_progress");
-  expect(copy).toContain("Launchpad do git am automaticky nezasahuje.");
+  expect(copy).toContain('git_am_in_progress: "git_am_in_progress"');
   expect(copy).toContain("export function gitChipModel");
   expect(copy).toContain("export function isGitAttentionStatus");
   // Graceful absence: bez git dat vrací null.
@@ -804,18 +874,18 @@ test("CAC-0044: detail ukazuje změny, ale update zůstává jediná globální 
   ]);
 
   expect(js).toContain("function renderGitBuilderActions");
-  expect(js).toContain("Ukázat změny");
+  expect(js).toContain('t("detail.showChanges.title")');
   expect(js).toContain("function showRepoChanges");
   expect(js).toContain("/changes");
   expect(js).not.toContain("function pullLatestRepoVersion");
   expect(js).not.toContain("function pullGitRepository");
   expect(js).not.toContain('summaryButton("Stáhnout"');
-  expect(js).toContain('title: "Změny k odeslání"');
+  expect(js).toContain('title: t("warning.changesToSend")');
   expect(js).toContain('button.className = "btn btn-sm btn-secondary card-warning-action"');
   expect(js).not.toContain("warning.actionStyle");
   expect(js).not.toContain("Můžeš ji bezpečně stáhnout (fast-forward).");
   expect(js).toContain("state.gitChangesByRepo");
-  expect(js).toContain("Udělejte screenshot této hlášky a vložte ho agentovi do Codexu");
+  expect(js).toContain('t("warning.gitOperationHelp")');
   expect(js).not.toContain("Abortnout rebase");
   expect(js).not.toContain("function abortGitRebase");
   expect(js).not.toContain("/rebase-abort");
@@ -835,7 +905,7 @@ test("Launchpad používá jednu explicitní Synchronizovat akci místo dílčí
 
   expect(html).toContain('id="updateBannerGroup"');
   expect(html).not.toContain('id="moduleUpdateBanner"');
-  expect(html).toContain("Synchronizovat");
+  expect(html).toContain('data-i18n-aria-label="topbar.sync"');
   expect(html).not.toContain('id="organizationGitPanel"');
   expect(js).not.toContain("moduleUpdateBanner");
   expect(js).not.toContain("renderModuleUpdateBanner");
@@ -869,8 +939,8 @@ test("CAC-0042: detail panel vysvětluje verzi a Mission Control pracovní návr
   expect(recoveryBranch).toBeLessThan(disabledBranch);
   expect(summaryModel).toContain("agentRepairDetailSummary(app)");
   expect(summaryModel).toContain("action: primaryActionNode(app, nextAction)");
-  expect(js).toContain('"Je uložená na tomto počítači. Ostatní ji zatím nevidí."');
-  expect(js).toContain('summary.textContent = "Technické detaily"');
+  expect(js).toContain('message: tp("detail.outgoing", outgoing)');
+  expect(js).toContain('summary.textContent = t("common.technicalDetails")');
   expect(js).toContain("git.repo_key");
   expect(js).toContain("git.incomingCommitCount");
   expect(js).toContain("git.outgoingCommitCount");
@@ -878,12 +948,12 @@ test("CAC-0042: detail panel vysvětluje verzi a Mission Control pracovní návr
   expect(js).toContain('app.runtime_status === "unhealthy"');
   expect(js).toContain("runtimeRecoveryForApp(app)");
   expect(js).toContain("button.disabled = pendingKey ? state.pendingAction === pendingKey : false");
-  expect(js).toContain("Verze a rozpracovaná práce");
-  expect(js).toContain("Aktualizovat Lazurio");
+  expect(js).toContain('t("detail.versionWork")');
+  expect(js).toContain('t("detail.updateLazurio")');
   expect(js).toContain("Owned by");
   expect(js).toContain("Orphan worktree");
-  expect(js).toContain("Pokračovat v plánu");
-  expect(js).toContain("Přiřadit Mission Control plán");
+  expect(js).toContain('t("detail.continuePlan")');
+  expect(js).toContain('t("detail.assignPlan")');
   expect(css).toContain(".worktree-list");
   expect(css).toContain(".detail-summary");
   expect(css).toContain(".worktree-item");
@@ -901,7 +971,7 @@ test("CAC-0042: detail umí zvolit main/worktree runtime source a posílá ho do
   expect(js).toContain("function selectedRuntimeSourceForApp");
   expect(js).toContain("function sourcePayloadForApp");
   expect(js).toContain("WORKTREE ·");
-  expect(js).toContain("DEV z worktree");
+  expect(js).toContain('t("source.worktreeMeta")');
   expect(js).toContain("JSON.stringify({ source: sourcePayloadForApp(app) })");
   expect(js).toContain('headers: { "content-type": "application/json" }');
   expect(css).toContain(".runtime-source-chooser");
@@ -916,15 +986,15 @@ test("CAC-0042: detail nabízí guarded worktree create a publish assistant jako
   ]);
 
   expect(js).toContain("function renderWorktreeBuilderActions");
-  expect(js).toContain("Guarded worktree create");
-  expect(js).toContain("Publish draft");
+  expect(js).toContain('t("worktree.create.cardTitle")');
+  expect(js).toContain('t("worktree.publish.title")');
   expect(js).toContain("function createWorktreeForPlan");
   expect(js).toContain("function publishSelectedWorktreeDraft");
   expect(js).toContain("/worktrees/create");
   expect(js).toContain("/publish");
   expect(js).toContain("commitMessage");
   expect(js).toContain("payload?.message");
-  expect(js).toContain("PR krok je oddělený");
+  expect(js).toContain('t("worktree.builderNote")');
   expect(css).toContain(".worktree-builder-actions");
   expect(css).toContain(".builder-action-card");
 });
@@ -1012,8 +1082,8 @@ test("UI separates physical Organization/Workspace/Productionspace and prepares 
   expect(teamSection).not.toContain("team.description");
   expect(teamSection).not.toContain('description.className = "app-section-note"');
   expect(js).toContain("function teamAccessSummaryNode");
-  expect(js).toContain("Přístup k Teamům");
-  expect(js).toContain("Členství zatím neověřeno");
+  expect(js).toContain('t("teamAccess.title")');
+  expect(js).toContain('t("teamAccess.unverified")');
   expect(js).toContain("titleRow.append(summaryNode)");
   expect(js).toContain('teamAccess.classList.add("is-in-section-head")');
   expect(js).toContain("if (action) titleRow.append(action)");
@@ -1031,7 +1101,7 @@ test("UI separates physical Organization/Workspace/Productionspace and prepares 
   expect(js).not.toContain("app-section-eyebrow");
   expect(js).toContain("function workspaceModuleCard");
   expect(js).toContain("function workspaceModulesInView");
-  expect(js).toContain("Otevřít složku");
+  expect(js).toContain('t("module.folder")');
   expect(js).toContain('const availabilityClass = module.status === "available" ? "is-available" : "is-unavailable"');
   expect(js).toContain('folderAction.classList.add("btn", "btn-ghost", "btn-sm", "manifest-module-folder-action")');
   expect(css).toContain(".apps-grid > .manifest-module-card.is-unavailable");
@@ -1051,7 +1121,7 @@ test("UI separates physical Organization/Workspace/Productionspace and prepares 
   expect(productionspaceCard).toContain("appIconNode(detail)");
   expect(productionspaceCard).toContain('desc.className = "app-card-desc"');
   expect(productionspaceCard).toContain('copyBlock.className = "app-card-copy"');
-  expect(productionspaceCard).toContain("Externě spravovaný systém s vlastními pravidly.");
+  expect(productionspaceCard).toContain('t("productionspace.description")');
   expect(productionspaceCard).toContain("productionspaceCardFact(system)");
   expect(productionspaceCard).not.toContain('badges.className = "app-card-badges"');
   expect(productionspaceCard).not.toContain('path.className = "app-card-endpoint"');
@@ -1095,9 +1165,9 @@ test("manifest-only module cards keep semantic icon precedence over a broad cate
   expect(detailBlock).toContain("tags: module.category ? [module.category] : []");
   expect(detailBlock).toContain("moduleApplicationMessage(moduleApps, module?.status)");
   expect(detailBlock).toContain("workspaceModuleMessage(module, moduleApps)");
-  expect(detailBlock).toContain("Modul na tomto počítači není dostupný.");
-  expect(detailBlock).toContain("Modul zatím není na tomto počítači připravený.");
-  expect(detailBlock).toContain("Tento modul zatím nemá připravenou aplikaci.");
+  expect(detailBlock).toContain('t("module.unavailable")');
+  expect(detailBlock).toContain('t("module.planned")');
+  expect(detailBlock).toContain('t("module.noApplication")');
   expect(detailBlock).not.toContain("explicitní deklaraci Apps");
   expect(detailBlock).not.toContain("lazurio.module.json");
   expect(cardBlock).toContain("appIconNode(detail)");
@@ -1121,17 +1191,17 @@ test("productionspace cards keep technical metadata in detail, not in the tile",
     js.indexOf("// Lazurio section header"),
   );
 
-  expect(cardBlock).toContain("V Launchpadu pouze k nahlédnutí.");
-  expect(cardBlock).toContain("Omezený přístup je očekávaný.");
-  expect(cardBlock).toContain("Chybí očekávaný přístup.");
-  expect(cardBlock).toContain("Systém je zatím naplánovaný.");
+  expect(cardBlock).toContain('t("productionspace.viewOnly")');
+  expect(cardBlock).toContain('t("productionspace.expectedRestriction")');
+  expect(cardBlock).toContain('t("productionspace.missingAccess")');
+  expect(cardBlock).toContain('t("productionspace.planned")');
   expect(cardBlock).not.toContain("system.path");
   expect(cardBlock).not.toContain("entry.productionspace.status");
   expect(detailBlock).toContain("package_path: system.path");
   expect(detailBlock).toContain("cwd: system.path");
   expect(detailBlock).toContain("productionspace_readiness: system.readiness ?? null");
   expect(detailBlock).toContain("is_readonly_system: true");
-  expect(js).toContain('["Stav přístupu", app.productionspace_readiness.message');
+  expect(js).toContain('[t("detail.accessState"), app.productionspace_readiness.message');
 });
 
 test("read-only app and system detail selection opens the right drawer", async () => {
@@ -1166,7 +1236,7 @@ test("read-only app and system detail selection opens the right drawer", async (
   expect(workspaceModuleCard).not.toContain("cardWarningNode(detail.default_app, defaultWarning)");
   expect(workspaceModuleCard).not.toContain("openAppChain(detail.default_app)");
   expect(workspaceModuleCard).not.toContain("if (openable) void openWorkspaceModuleFolder(detail)");
-  expect(js).toContain("Aplikaci tohoto modulu je potřeba opravit.");
+  expect(js).toContain('t("module.applicationRepair")');
   const primaryNextAction = js.slice(js.indexOf("function primaryNextAction"), js.indexOf("function hasReclaimableStaticLease"));
   expect(primaryNextAction).toContain("primaryAppActionModel(app");
   expect(primaryNextAction).not.toContain('app.kind === "workspace-module" && app.can_open_folder');
@@ -1205,7 +1275,7 @@ test("Runtime stages (founder 2026-07-15/16): karta nabízí čtyři runy jednoh
   expect(js).toContain("function renderRuntimeStages");
   expect(js).toContain("function runtimeStageNode");
   expect(js).toContain('row.className = "runtime-stages"');
-  expect(js).toContain('row.setAttribute("aria-label", "Kde modul spustit")');
+  expect(js).toContain('row.setAttribute("aria-label", t("a11y.runModule"))');
 
   // Pilulka nese JEN label; caption i reason žijí v tooltipu (title) + aria-label.
   expect(js).toContain("link.textContent = stage.label");
@@ -1239,8 +1309,8 @@ test("Runtime stages (founder 2026-07-15/16): karta nabízí čtyři runy jednoh
   expect(js).toContain("chip.title = tooltip");
 
   // Model drží honest stavy: PROD stub, tailnet MAIN/DEV remote, jargon-free copy.
-  expect(appState).toContain("Produkce zatím není nasazená");
-  expect(appState).toContain("Přes tailnet");
+  expect(appState).toContain('t("runtime.prod.unavailable")');
+  expect(appState).toContain('t("runtime.tailnet.unavailable")');
   expect(appState).not.toContain("worktree —");
 
   // CSS: kompaktní pilulkový řádek (flex-wrap), stavové hooky přežily.
@@ -1282,7 +1352,7 @@ test("Owner 2026-07-05: karta modulu je GEN2-minimal dlaždice bez velkých tla�
   // Příprava balíčků zůstává kontextovou akcí karty; update checkoutů má
   // právě jednu explicitní globální akci Synchronizovat.
   expect(js).toContain("runRuntimeRecoveryAction(app, recovery)");
-  expect(js).toContain('label: "Opravit balíčky"');
+  expect(js).toContain('label: t("common.repairPackages")');
   expect(js).toContain('run: () => runRuntimeAction(app, "repair")');
   expect(js).not.toContain("pullLatestRepoVersion");
 
@@ -1293,7 +1363,7 @@ test("Owner 2026-07-05: karta modulu je GEN2-minimal dlaždice bez velkých tla�
   expect(js).toContain("function menuActionRow");
   expect(js).toContain("function revealAppDetail");
   expect(js).toContain("cardHasMenu(app, others)");
-  expect(js).toContain("Zobrazit detail a logy");
+  expect(js).toContain('t("action.showDetailsAndLogs")');
   const canStop = js.slice(js.indexOf("function canStop"), js.indexOf("function canRestart"));
   expect(canStop).toContain('app.runtime?.owner === "current-instance"');
   expect(canStop).toContain("app.runtime?.controllable === true");
@@ -1323,8 +1393,9 @@ test("cross-Organization port takeover is named and confirmed before runtime mut
   const js = await readFile(join(publicRoot, "app.js"), "utf8");
   expect(js).toContain("function confirmedTakeoverPayload");
   expect(js).toContain("replace_app_id: peer.id");
-  expect(js).toContain("Organizace ${peer.company}");
-  expect(js).toContain("Organizace ${app.company}");
+  expect(js).toContain('t("confirm.takeover", {');
+  expect(js).toContain("currentOrganization: peer.company");
+  expect(js).toContain("nextOrganization: app.company");
   expect(js).toContain("JSON.stringify({ source: sourcePayloadForApp(app), ...takeover })");
   expect(js).toContain("if (!peer || isSameModulePeer(app, peer)) return {};");
   expect(js).not.toContain('selectedRuntimeSourceForApp(app).type !== "main"');
@@ -1352,8 +1423,8 @@ test("Launchpad používá jednotný kompaktní grid s jemně zvýšenými dlaž
   expect(css).toContain("font-weight: 400");
   expect(css).toContain("color-mix(in srgb, var(--accent) 58%, var(--line))");
   expect(css).toContain(".app-card.selected:focus-visible");
-  expect(js).toContain("APP_DESCRIPTION_FALLBACKS");
-  expect(js).toContain("Procesy, automatizace a koordinace práce.");
+  expect(js).toContain("APP_DESCRIPTION_FALLBACK_KEYS");
+  expect(js).toContain('control: "description.control"');
   expect(js).toContain('["admin", "productionspace", "public-preview"].includes(app.surface)');
   expect(js).toContain("return surface ? `${surface} · ${purpose}` : purpose");
   expect(js).toContain("if (orgLabel && shouldShowCardOrg())");
@@ -1376,7 +1447,7 @@ test("Organization workspace má kompaktní uvítání s dynamickým názvem fir
   expect(html.indexOf('id="workspaceWelcome"')).toBeLessThan(html.indexOf('id="appsToolbar"'));
   expect(html).not.toContain("Vyberte aplikaci a pokračujte tam, kde potřebujete.");
   expect(js).toContain("function renderWorkspaceWelcome");
-  expect(js).toContain("`Vítejte v pracovním prostoru ${organizationName}`");
+  expect(js).toContain('t("workspace.welcomeOrganization"');
   expect(js).toContain('toggleAttribute("hidden", personal)');
   expect(css).toContain(".workspace-welcome-title");
   expect(css).toContain("margin-top: 1.5rem");
@@ -1420,8 +1491,8 @@ test("DEV-6493: banner používá GET-first Lazurio stav a pouze current|updated
   expect(js).not.toContain("elements.updateBannerText.textContent = status.message");
   expect(stateLib).toContain('status.state === "blocked"');
   expect(stateLib).toContain('status.state === "current"');
-  expect(stateLib).toContain('"Lazurio bylo při poslední synchronizaci aktualizované."');
-  expect(stateLib).toContain('"Lazurio je aktuální."');
+  expect(stateLib).toContain('t("update.updated")');
+  expect(stateLib).toContain('t("update.current")');
   expect(stateLib).not.toContain("status.message");
   expect(js).not.toContain("Všechny aplikace jsou aktuální");
   expect(js).toContain("elements.updateBannerText.textContent = presentation.message");
@@ -1456,7 +1527,7 @@ test("DEV-6493: explicitní Sync ukazuje spinner a po dokončení zůstává na 
   expect(html).toContain('class="update-banner-spinner"');
   expect(html).toContain('class="update-banner-icon"');
   expect(js).toContain('banner.classList.toggle("is-updating", presentation.tone === "updating")');
-  expect(stateLib).toContain("Synchronizuji Lazurio…");
+  expect(stateLib).toContain('t("update.syncing")');
   expect(css).toContain(".update-banner.is-updating .update-banner-spinner");
   expect(css).toContain("@keyframes update-spin");
 

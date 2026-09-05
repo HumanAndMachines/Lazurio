@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readFile, rm } from "fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import {
@@ -8,9 +8,11 @@ import {
   gitExecutableCandidates,
   gitTimeoutKillCommand,
   mapWithConcurrency,
+  minimalRemoteGitEnvironment,
   resolveGitExecutable,
   resolveGitExecutableSync,
   runGit,
+  runGitInPinnedTemporaryChild,
   safeGitCommandEnv,
   safeGitRemoteEnv,
 } from "../../lazurio/runtime/git-lib.mjs";
@@ -50,6 +52,9 @@ test("runGit returns stdout and protects remote probes from interactive credenti
     GCM_INTERACTIVE: "never",
     GIT_ASKPASS: "/bin/false",
     SSH_ASKPASS: "/bin/false",
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_CONFIG_COUNT: "0",
   });
 });
 
@@ -162,8 +167,10 @@ test("Windows remote Git environment never contains a POSIX askpass executable",
     ssh_askpass: "C:\\malicious\\ssh-askpass.exe",
     HOME: "C:\\Users\\builder",
     PATH: "C:\\Windows\\System32",
+    SystemRoot: "C:\\Windows",
   })).toEqual({
     HOME: "C:\\Users\\builder",
+    SystemRoot: "C:\\Windows",
     PATH: "C:\\Windows\\System32",
     GIT_TERMINAL_PROMPT: "0",
     GCM_INTERACTIVE: "never",
@@ -171,54 +178,107 @@ test("Windows remote Git environment never contains a POSIX askpass executable",
   });
 });
 
-test("Windows Git resolver falls back to standard Git for Windows locations", async () => {
-  const env = {
-    ProgramFiles: "C:\\Program Files",
-    "ProgramFiles(x86)": "C:\\Program Files (x86)",
-    LOCALAPPDATA: "C:\\Users\\builder\\AppData\\Local",
-  };
-  const candidates = gitExecutableCandidates({ platform: "win32", env });
+test("remote child preserves the Principal PATH while isolating Git configuration", () => {
+  const environment = minimalRemoteGitEnvironment({
+    HOME: "C:\\Users\\builder",
+    USERPROFILE: "C:\\Users\\builder",
+    SSH_AUTH_SOCK: "\\\\.\\pipe\\openssh-ssh-agent",
+    PATH: "C:\\attacker\\bin",
+    GIT_SSH_COMMAND: "C:\\attacker\\ssh.exe",
+  }, "win32", "C:\\Users\\builder\\AppData\\Local\\Programs\\Git\\cmd\\git.exe");
 
-  expect(candidates).toContain("C:\\Program Files\\Git\\cmd\\git.exe");
-  expect(candidates).toContain("C:\\Users\\builder\\AppData\\Local\\Programs\\Git\\cmd\\git.exe");
-
-  const expected = candidates.at(-1);
-  const resolved = await resolveGitExecutable({
-    platform: "win32",
-    env,
-    which: () => null,
-    pathExists: (candidate) => candidate === expected,
-    probe: async (candidate) => candidate === expected,
+  expect(environment).toMatchObject({
+    HOME: "C:\\Users\\builder",
+    USERPROFILE: "C:\\Users\\builder",
+    SSH_AUTH_SOCK: "\\\\.\\pipe\\openssh-ssh-agent",
+    PATH: "C:\\attacker\\bin",
   });
-  expect(resolved).toBe(expected);
+  expect(environment.GIT_EXEC_PATH).toBeUndefined();
 });
 
-test("Git resolver přeskočí nefunkční WindowsApps alias a ověří skutečný Git for Windows", async () => {
-  const broken = "C:\\Users\\builder\\AppData\\Local\\Microsoft\\WindowsApps\\git.exe";
-  const working = "C:\\Program Files\\Git\\cmd\\git.exe";
-  const probes = [];
-  const options = {
-    platform: "win32",
-    env: { ProgramFiles: "C:\\Program Files" },
-    which: () => broken,
-    pathExists: (candidate) => candidate === working,
-  };
+test("pinned child executes clone through the parent-verified absolute Git executable", async () => {
+  const root = await mkdtemp(join(tmpdir(), "launchpad-pinned-git-executable-"));
+  const source = join(root, "source");
+  const remote = join(root, "remote.git");
+  try {
+    await initGitRepo(source, { remotePath: remote });
+    const result = await runGitInPinnedTemporaryChild([
+      "clone",
+      "--branch",
+      "main",
+      "--single-branch",
+      "--",
+      remote,
+    ], {
+      cwd: root,
+      expectedCwdRealPath: await realpath(root),
+      childPrefix: ".pinned-executable-",
+      env: safeGitRemoteEnv(),
+    });
 
-  const asyncResolved = await resolveGitExecutable({
-    ...options,
-    probe: async (candidate) => {
-      probes.push(candidate);
-      return candidate === working;
-    },
-  });
-  const syncResolved = resolveGitExecutableSync({
-    ...options,
-    probe: (candidate) => candidate === working,
-  });
+    expect(result.ok).toBe(true);
+    expect(result.child_name).toStartWith(".pinned-executable-");
+    expect(await readFile(join(root, result.child_name, "README.md"), "utf8"))
+      .toContain("# main");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
-  expect(asyncResolved).toBe(working);
-  expect(syncResolved).toBe(working);
-  expect(probes).toEqual([broken, working]);
+test("Git resolver probes only the selected PATH executable and never falls back", async () => {
+  for (const selected of ["/custom/mise/shims/git", null]) {
+    const calls = [];
+    const options = { resolvePathCommand: () => selected, probe: (path) => { calls.push(path); return false; } };
+    expect(await resolveGitExecutable(options)).toBeNull();
+    expect(resolveGitExecutableSync(options)).toBeNull();
+    expect(calls).toEqual(selected ? [selected, selected] : []);
+    expect(gitExecutableCandidates(options)).toEqual(selected ? [selected] : []);
+  }
+  expect(await resolveGitExecutable({ resolvePathCommand: () => "/custom/git", probe: () => true })).toBe("/custom/git");
+});
+
+test("sterile materialization environment disables ambient Git config", () => {
+  const environment = safeGitRemoteEnv("linux");
+
+  expect(environment.GIT_CONFIG_GLOBAL).toBe("/dev/null");
+  expect(environment.GIT_CONFIG_NOSYSTEM).toBe("1");
+  expect(environment.GIT_CONFIG_COUNT).toBe("0");
+  expect(environment.GIT_TERMINAL_PROMPT).toBe("0");
+});
+
+test("remote Git ignores global insteadOf and external-protocol configuration", async () => {
+  const root = await mkdtemp(join(tmpdir(), "launchpad-git-sterile-config-"));
+  const source = join(root, "source");
+  const remote = join(root, "remote.git");
+  const fakeHome = join(root, "home");
+  try {
+    await initGitRepo(source, { remotePath: remote });
+    await mkdir(fakeHome);
+    await Bun.write(join(root, "home", ".gitconfig"), [
+      `[url "file://${join(root, "must-not-be-used.git")}"]`,
+      `\tinsteadOf = ${remote}`,
+      "[protocol \"ext\"]",
+      "\tallow = always",
+      "",
+    ].join("\n"));
+
+    const result = await runGit(["ls-remote", remote, "refs/heads/main"], {
+      cwd: root,
+      env: {
+        ...safeGitRemoteEnv(),
+        HOME: fakeHome,
+        USERPROFILE: fakeHome,
+        LAZURIO_CREDENTIAL_CANARY: "must-not-reach-git",
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.stdout).toContain("refs/heads/main");
+    expect(result.stderr).not.toContain("must-not-be-used");
+    expect(result.stderr).not.toContain("must-not-reach-git");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("local Git probes use the Windows-proven timeout and bounded concurrency", () => {
@@ -231,4 +291,43 @@ test("local Git probes use the Windows-proven timeout and bounded concurrency", 
     "/T",
     "/F",
   ]);
+});
+
+test.skipIf(process.platform === "win32")("a PATH shim works in the actual isolated remote Git consumer", async () => {
+  const { writeFile, chmod } = await import("node:fs/promises");
+  const { pathToFileURL } = await import("node:url");
+  const root = await mkdtemp(join(tmpdir(), "lazurio-git-shim-"));
+  const git = resolveGitExecutableSync();
+  try {
+    const shim = join(root, "shims"), helpers = join(root, "helpers");
+    await mkdir(shim); await mkdir(helpers);
+    // The shim delegates through PATH, as common version managers do.
+    await writeFile(join(shim, "git"), '#!/bin/sh\nexec selected-git "$@"\n');
+    await writeFile(join(helpers, "selected-git"), `#!/bin/sh\nexec '${git.replaceAll("'", "'\\''")}' "$@"\n`);
+    await chmod(join(shim, "git"), 0o755); await chmod(join(helpers, "selected-git"), 0o755);
+    const moduleUrl = pathToFileURL(join(import.meta.dirname, "../../lazurio/runtime/git-lib.mjs")).href;
+    const child = Bun.spawnSync([process.execPath, "--eval", `const {runGit,safeGitRemoteEnv}=await import(${JSON.stringify(moduleUrl)});const r=await runGit(["--version"],{cwd:${JSON.stringify(root)},env:safeGitRemoteEnv()});console.log(r.stdout);process.exit(r.ok?0:1);`], {
+      env: { ...process.env, PATH: `${shim}:${helpers}:${process.env.PATH}` }, stdout: "pipe", stderr: "pipe",
+    });
+    expect(child.exitCode, new TextDecoder().decode(child.stderr)).toBe(0);
+    expect(new TextDecoder().decode(child.stdout)).toContain("git version");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test.skipIf(process.platform === "win32")("runtime rejects Git 2.30 from PATH before invoking a module consumer", async () => {
+  const { writeFile, chmod } = await import("node:fs/promises");
+  const { pathToFileURL } = await import("node:url");
+  const root = await mkdtemp(join(tmpdir(), "lazurio-old-git-"));
+  try {
+    const marker = join(root, "consumer-invoked");
+    await writeFile(join(root, "git"), `#!/bin/sh\nif [ "$1" = "--version" ]; then echo 'git version 2.30.9'; exit 0; fi\n: > '${marker}'\nexit 129\n`);
+    await chmod(join(root, "git"), 0o755);
+    const moduleUrl = pathToFileURL(join(import.meta.dirname, "../../lazurio/runtime/git-lib.mjs")).href;
+    const child = Bun.spawnSync([process.execPath, "--eval", `const g=await import(${JSON.stringify(moduleUrl)});const a=await g.resolveGitExecutable();const s=g.resolveGitExecutableSync();const r=await g.runGit(["rev-parse","--path-format=absolute","--show-toplevel"],{cwd:${JSON.stringify(root)}});console.log(JSON.stringify({a,s,ok:r.ok}));`], {
+      env: { ...process.env, PATH: `${root}:${process.env.PATH}` }, stdout: "pipe", stderr: "pipe",
+    });
+    expect(child.exitCode, new TextDecoder().decode(child.stderr)).toBe(0);
+    expect(JSON.parse(new TextDecoder().decode(child.stdout))).toEqual({ a: null, s: null, ok: false });
+    expect(await Bun.file(marker).exists()).toBe(false);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });

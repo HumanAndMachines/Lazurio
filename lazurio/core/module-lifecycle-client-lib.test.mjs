@@ -34,7 +34,7 @@ const locator = Object.freeze({
 });
 
 describe("Core-owned Module lifecycle client", () => {
-  test("one status snapshot exposes only explicit Module Apps without guessing a default", async () => {
+  test("one status snapshot exposes explicit Apps and the server-selected legacy open target", async () => {
     const requests = [];
     const report = await runModuleLifecycle({
       action: "status",
@@ -46,6 +46,7 @@ describe("Core-owned Module lifecycle client", () => {
     expect(validateAgainstSchema(report, reportSchema, "report")).toEqual([]);
     expect(report.status).toBe("current");
     expect(report.apps.map((app) => app.app_id)).toEqual([
+      "example-organization-legacy-design-system-v1",
       "example-organization-website-v2",
       "example-organization-website-v3",
     ]);
@@ -68,6 +69,39 @@ describe("Core-owned Module lifecycle client", () => {
     expect(report.status).toBe("current");
     expect(report.app.app_id).toBe("example-organization-website-v2");
     expect(report.app.default).toBe(true);
+  });
+
+  test("selected status accepts the same legacy fallback chosen by Discovery and Doctor", async () => {
+    const report = await runModuleLifecycle({
+      action: "status",
+      selector: "ExampleOrganization/legacy-design-system",
+      readLocator: async () => locator,
+      fetchFn: fixtureFetch(),
+    });
+
+    expect(report.status).toBe("current");
+    expect(report.app).toMatchObject({
+      app_id: "example-organization-legacy-design-system-v1",
+      app_package: "app/v1/package.json",
+      default: true,
+    });
+  });
+
+  test("legacy fallback anchors the package at the exact Organization module root", async () => {
+    const report = await runModuleLifecycle({
+      action: "status",
+      selector: "ExampleOrganization/legacy-design-system",
+      readLocator: async () => locator,
+      fetchFn: fixtureFetch({
+        legacyOverrides: {
+          package_path:
+            "organizations/ExampleOrganization_GEN3/design-system/nested/design-system/app/v1/package.json",
+        },
+      }),
+    });
+
+    expect(report.status).toBe("current");
+    expect(report.app.app_package).toBe("nested/design-system/app/v1/package.json");
   });
 
   test("missing or ambiguous default fails closed instead of selecting by order", async () => {
@@ -105,6 +139,18 @@ describe("Core-owned Module lifecycle client", () => {
       body: { source: { type: "main" } },
     });
   });
+
+  test("mutating lifecycle actions wait past the short Server-discovery deadline", async () => {
+    const report = await runModuleLifecycle({
+      action: "open",
+      selector: "ExampleOrganization/website",
+      readLocator: async () => locator,
+      fetchFn: fixtureFetch({ actionDelayMs: 5_250 }),
+    });
+
+    expect(report.status).toBe("completed");
+    expect(report.reason).toBe("module_lifecycle_open_completed");
+  }, 10_000);
 
   test("cross-Organization takeover stays blocked without exact confirmation", async () => {
     const requests = [];
@@ -222,6 +268,8 @@ function fixtureFetch({
   identityOverride = identity,
   defaultAppIds = ["example-organization-website-v2"],
   takeoverRequired = false,
+  legacyOverrides = {},
+  actionDelayMs = 0,
 } = {}) {
   return async (input, options = {}) => {
     const url = new URL(input);
@@ -230,9 +278,10 @@ function fixtureFetch({
     requests.push({ pathname: url.pathname, method: options.method ?? "GET", ...(body === null ? {} : { body }) });
     if (url.pathname === "/api/lazurio/server-identity") return Response.json(identityOverride);
     if (url.pathname === "/api/apps") {
-      return Response.json({ apps: fixtureApps(defaultAppIds) });
+      return Response.json({ apps: fixtureApps(defaultAppIds, legacyOverrides) });
     }
-    if (/^\/api\/apps\/example-organization-website-v[23]\/(?:start|open|stop)$/u.test(url.pathname)) {
+    if (/^\/api\/apps\/(?:example-organization-website-v[23]|example-organization-legacy-design-system-v1)\/(?:start|open|stop)$/u.test(url.pathname)) {
+      if (actionDelayMs > 0) await waitForAbortableDelay(actionDelayMs, options.signal);
       if (takeoverRequired && body?.replace_app_id !== "other-organization-portal-v1") {
         return Response.json({
           error: "cross_organization_takeover_confirmation_required",
@@ -249,7 +298,26 @@ function fixtureFetch({
   };
 }
 
-function fixtureApps(defaultAppIds) {
+function waitForAbortableDelay(milliseconds, signal) {
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal.reason instanceof Error ? signal.reason : new Error("Request aborted."));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, milliseconds);
+    if (!signal) return;
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+function fixtureApps(defaultAppIds, legacyOverrides = {}) {
   const app = (version, explicit = true) => ({
     id: `example-organization-website-${version}`,
     title: `Website ${version}`,
@@ -273,5 +341,33 @@ function fixtureApps(defaultAppIds) {
       port: 24711,
     }],
   });
-  return [app("v3"), app("v2"), app("v1", false)];
+  const legacy = {
+    id: "example-organization-legacy-design-system-v1",
+    title: "Legacy Design System",
+    company: "ExampleOrganization",
+    module: "legacy-design-system",
+    organization_path: "organizations/ExampleOrganization_GEN3",
+    package_path: "organizations/ExampleOrganization_GEN3/design-system/app/v1/package.json",
+    module_catalog_path: "design-system",
+    module_open_target: true,
+    module_apps: {
+      state: "legacy-missing",
+      contract_path: null,
+      open_target_app_id: "example-organization-legacy-design-system-v1",
+      open_target_source: "legacy-fallback",
+    },
+    runtime_contract: {
+      schema_version: "companyascode.launchpad_app.v1",
+      source: "companyascode.app",
+      legacy: true,
+    },
+    host: "127.0.0.1",
+    port: 24712,
+    url: "http://127.0.0.1:24712",
+    dependencies: { state: "ready", can_start: true, message: "ready" },
+    runtime: { status: "stopped", owner: "none", controllable: false, pid: null, url: null },
+    shared_port_owners: [],
+    ...legacyOverrides,
+  };
+  return [app("v3"), app("v2"), app("v1", false), legacy];
 }

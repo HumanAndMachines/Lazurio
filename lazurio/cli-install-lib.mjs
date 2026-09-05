@@ -1,7 +1,5 @@
 import { spawnSync } from "node:child_process";
 import {
-  accessSync,
-  constants,
   existsSync,
   lstatSync,
   readFileSync,
@@ -21,6 +19,7 @@ import {
   computeServerRootId,
 } from "./core/server-identity-lib.mjs";
 import { buildLazurioCliProvenance } from "./core/cli-provenance-lib.mjs";
+import { resolveExecutableOnPath } from "./core/toolchain-lib.mjs";
 
 export const LAZURIO_CLI_IDENTITY_SCHEMA = "lazurio.cli.identity.v1";
 export const LAZURIO_CLI_INSTALLATION_SCHEMA = "lazurio.cli.installation.v1";
@@ -101,7 +100,7 @@ export function inspectLazurioCliInstallation({
   bunExecutable = process.execPath,
   homeDirectory = homedir(),
   runProcess = runProcessSync,
-  resolveCommand = findPathCommand,
+  resolveCommand = resolveExecutableOnPath,
   probeIdentity = true,
 } = {}) {
   const canonicalRoot = assertInstallableLazurioRoot(root);
@@ -522,36 +521,6 @@ function runProcessSync(command, args, { cwd, environment }) {
     stdout: String(result.stdout ?? ""),
     stderr: String(result.stderr ?? result.error?.message ?? ""),
   };
-}
-
-function findPathCommand(command, { environment, platform, cwd }) {
-  const pathValue = environmentPathValue(environment, platform);
-  const pathDelimiter = platform === "win32" ? ";" : delimiter;
-  const extensions = platform === "win32"
-    ? (environment.PATHEXT ?? ".COM;.EXE;.BAT;.CMD")
-      .split(";")
-      .filter(Boolean)
-      .map((extension) => extension.toLowerCase())
-    : [""];
-  for (const rawDirectory of pathValue.split(pathDelimiter)) {
-    const unquoted = rawDirectory.replace(/^"|"$/gu, "");
-    if (!unquoted) continue;
-    const directory = isAbsolute(unquoted) ? unquoted : resolve(cwd, unquoted);
-    const candidates = platform === "win32"
-      ? extensions.map((extension) => join(directory, `${command}${extension}`))
-      : [join(directory, command)];
-    for (const candidate of candidates) {
-      try {
-        const stat = lstatSync(candidate);
-        if (!stat.isFile() && !stat.isSymbolicLink()) continue;
-        if (platform !== "win32") accessSync(candidate, constants.X_OK);
-        return resolve(candidate);
-      } catch {
-        // Continue through PATH just like a shell resolver.
-      }
-    }
-  }
-  return null;
 }
 
 function environmentPathValue(environment, platform) {

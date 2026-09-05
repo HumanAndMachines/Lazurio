@@ -7,8 +7,10 @@ import {
   agentSkillsEntrypointsDoctorCheck,
   inspectAgentSkillsEntrypoint,
 } from "../../lazurio/runtime/agent-skills-entrypoint-lib.mjs";
+import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.mjs";
 
 const tempRoots = [];
+const fileSymlinkTest = (await supportsFileSymlinks()) ? test : test.skip;
 
 afterEach(async () => {
   await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
@@ -264,7 +266,7 @@ test("gitignored OS junk v mirroru nehlásí sdílený doctor jako drift", async
   expect(check.details[0]).toContain("ok/mirror_ready");
 });
 
-test("symlink kanonického SKILL.md hlásí sdílený doctor zavřeně, ne mirror_ready", async () => {
+fileSymlinkTest("symlink kanonického SKILL.md hlásí sdílený doctor zavřeně, ne mirror_ready [requires file symlink capability]", async () => {
   const { companiesRoot, organizationRoot } = await organizationFixture("canonical-symlink");
   const outside = await mkdtemp(join(tmpdir(), "agent-skills-canonical-outside-"));
   tempRoots.push(outside);
@@ -273,6 +275,7 @@ test("symlink kanonického SKILL.md hlásí sdílený doctor zavřeně, ne mirro
   await symlink(
     join(outside, "secret.md"),
     join(organizationRoot, ".agents", "skills", "example-skill", "SKILL.md"),
+    "file",
   );
   // Mirror nese shodné bajty — dřív to doctor prohlásil za mirror_ready.
   await writeMirror(organizationRoot, "example-skill");
@@ -339,7 +342,7 @@ test("extra soubor v mirror skill adresáři je drift (repair lane), ne fail", a
   expect(check.details[0]).toContain("notes.md nepatří do mirroru");
 });
 
-test("symlink uvnitř references v mirroru je fail-closed", async () => {
+fileSymlinkTest("symlink uvnitř references v mirroru je fail-closed [requires file symlink capability]", async () => {
   const { companiesRoot, organizationRoot } = await organizationFixture("full-symlink");
   await writeSkill(organizationRoot, "example-skill");
   await writeMirror(organizationRoot, "example-skill");
@@ -347,6 +350,7 @@ test("symlink uvnitř references v mirroru je fail-closed", async () => {
   await symlink(
     join(organizationRoot, ".agents", "skills", "example-skill", "SKILL.md"),
     join(organizationRoot, ".claude", "skills", "example-skill", "references", "link.md"),
+    "file",
   );
 
   const check = await agentSkillsEntrypointsDoctorCheck({

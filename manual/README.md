@@ -43,6 +43,14 @@ Maintenance agent před zásahem ověřuje:
   per-machine OAuth custody, cutover ze sdíleného integračního brokeru, approval
   policy, ClickUp a komunitní Google Workspace příklad.
 - `manual/first-client-organization-rollout.md` — obecný rollout runbook pro první klientskou Organization: repo hranice, mount, manifesty, Doctor/Launchpad support-loop gate, Install/Repair smoke a rollback.
+- `manual/organization-install.md` — autoritativní Organization install runbook
+  včetně krátkého copy-paste promptu pro novou Builder Mašinu, volitelného
+  rozšířeného mandátu pro upgrade a Machine `PATH`, jednoho GitHub SSH
+  pairing flow, Windows process `PATH` obnovy, instalačních Issues a finální
+  readiness matice.
+- `manual/windows-e2e-lab.md` — native Windows 11 acceptance runbook pro
+  owner-controlled resetovatelnou testovací Mašinu: Headscale/OpenSSH hranice,
+  Lazurio-only reset, fresh install, PR reprodukce a povinná evidence.
 - `manual/lazurio-manifest-family.md` — přijatý Organization kontrakt pro
   `lazurio.organization.json` a navazující reader-first rollout; pojmenování
   Personalspace zůstává samostatný proposal a tento krok nic nemigruje.
@@ -105,7 +113,10 @@ runtime/cache cesty, ne custody source of truth.
 - Citlivá data, zákaznická data a osobní overlaye nesmí přetéct mezi organizacemi.
 - Pokud se mění registry nebo mountpointy, změna musí být propsaná do docs, test fixtures a Launchpad discovery.
 - V `organizations/` root repo nikdy netrackuje konkrétní Organization checkouty ani submodule pointery; na GitHubu tam patří jen `organizations/README.md`.
-- Pokud je otevřená otázka bez rozhodnutého řešení, patří do `ISSUES.open.json`, ne do ad-hoc Markdown poznámky.
+- Otevřený technický problém nebo nejistota patří do GitHub Issues přesného
+  owning repa podle [github-issues.md](github-issues.md), ne do ad-hoc
+  Markdown poznámky ani nového JSON ledgeru. Plán a odpovědnost dál vlastní
+  Mission Control; vytvoření issue nebo komentáře je Publikace.
 - Shared Launchpad nesmí držet hardcodované porty jedné Organizace. Přesný
   port vlastní verzovaný module-root `lazurio.module.json`; `package.json`
   pouze odkazuje na lease jejím ID. Přímý start čte lease z manifestu.
@@ -128,6 +139,9 @@ runtime/cache cesty, ne custody source of truth.
   per-machine postup jako Codex část standardu; přímé STDIO/HTTP varianty
   Docker nepotřebují.
 - [First-client Organization rollout](first-client-organization-rollout.md) — od čistého root preflightu přes klientský Organization mount po zelený Doctor/Launchpad handoff.
+- [Native Windows E2E lab](windows-e2e-lab.md) — reálný Windows 11 consumer
+  proof pro instalaci, restart, rollback a Windows-only bugy bez hardcodování
+  privátního notebooku do veřejného Lazuria.
 - [GEN2 → GEN3 migration manual](gen2-to-gen3-migration.md) — převod GEN2 workspace do Organization modelu včetně pravidla, že obecný Organization-local `guide/` se maže a nahrazuje shared `Lazurio/guide`.
 - [Workspace module version lifecycle](workspace-module-version-lifecycle.md) — standard `v0`/`v1`/`v2`/`v3` pro standardní workspace moduly, repository-db v3 writer/draft/publish pipeline, template propagation a Pricebook v3 dogfood.
 - [Doctor worktree management](worktree-management.md) — shaping manuál a

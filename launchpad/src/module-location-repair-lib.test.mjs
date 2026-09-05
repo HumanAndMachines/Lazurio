@@ -13,6 +13,7 @@ import {
 } from "../../lazurio/runtime/module-location-repair-lib.mjs";
 import { runGit } from "../../lazurio/runtime/git-lib.mjs";
 import { githubRepositoryCoordinate } from "../../lazurio/core/organization-slot-scope-lib.mjs";
+import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.mjs";
 
 // This file exercises real Git repositories and subprocesses. Cold Windows
 // runners can spend more than the shared 15 s Launchpad limit in one complete
@@ -21,6 +22,7 @@ import { githubRepositoryCoordinate } from "../../lazurio/core/organization-slot
 if (process.platform === "win32") setDefaultTimeout(30_000);
 
 const cleanup = [];
+const fileSymlinkTest = (await supportsFileSymlinks()) ? test : test.skip;
 
 afterEach(async () => {
   await Promise.all(cleanup.splice(0).map((path) => rm(path, { recursive: true, force: true })));
@@ -959,12 +961,12 @@ test("target created after check is never overwritten and repair restores the so
   expect(git(fixture.sourcePath, ["remote", "get-url", "origin"])).toBe(fixture.oldRemote);
 });
 
-test("symlinked module marker is an unverified suspect and never authorizes repair", async () => {
+fileSymlinkTest("symlinked module marker is an unverified suspect and never authorizes repair [requires file symlink capability]", async () => {
   const fixture = await repairFixture("marker-symlink", { sourceName: "studio" });
   const markerPath = join(fixture.sourcePath, "lazurio.module.json");
   const realMarkerPath = join(fixture.sourcePath, "lazurio.module.real.json");
   await rename(markerPath, realMarkerPath);
-  await symlink("lazurio.module.real.json", markerPath);
+  await symlink("lazurio.module.real.json", markerPath, "file");
 
   const report = await checkFixture(fixture);
 
@@ -995,11 +997,14 @@ test("template organization cannot authorize a repair", async () => {
 });
 
 test("symlinked alternate mount container blocks the entire repair scan", async () => {
-  if (process.platform === "win32") return;
   const fixture = await repairFixture("container-symlink", { targetContainer: "modules" });
   const outsideWorkspace = join(fixture.sandbox, "outside-workspace");
   await rename(fixture.workspaceRoot, outsideWorkspace);
-  await symlink(outsideWorkspace, fixture.workspaceRoot, "dir");
+  await symlink(
+    outsideWorkspace,
+    fixture.workspaceRoot,
+    process.platform === "win32" ? "junction" : "dir",
+  );
 
   const report = await checkFixture(fixture);
 

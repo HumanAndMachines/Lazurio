@@ -1,3 +1,5 @@
+import { t } from "./i18n.js";
+
 export function runtimeRecoveryModel(error = {}) {
   const payload = error?.payload && typeof error.payload === "object" ? error.payload : {};
   const code = cleanToken(error?.code ?? payload.error ?? "runtime_action_failed");
@@ -12,10 +14,10 @@ export function runtimeRecoveryModel(error = {}) {
   if (["invalid_discovery", "invalid_manifest", "bad_cwd", "missing_script"].includes(failureKind)
     || ["invalid_discovery", "invalid_manifest", "app_not_found"].includes(code)) {
     return {
-      title: "Nastavení aplikace je potřeba opravit",
-      message: "Launchpad aplikaci bezpečně nespustil. Připravil přesný kontext, se kterým může Codex opravit správnou deklaraci a ověřit spuštění.",
+      title: t("recovery.configTitle"),
+      message: t("recovery.configMessage"),
       action: "codex",
-      actionLabel: "Vyřešit s Codexem",
+      actionLabel: t("common.solveWithCodex"),
       code,
       failureKind,
       technical,
@@ -25,10 +27,10 @@ export function runtimeRecoveryModel(error = {}) {
   if (["missing_dependencies", "needs_install", "install_script_failed", "missing_package"].includes(failureKind)
     || ["app_install_failed", "app_repair_failed"].includes(code)) {
     return {
-      title: "Aplikaci je potřeba opravit",
-      message: "Chybí nebo nesedí potřebné součásti. Launchpad je může bezpečně opravit v rozsahu této aplikace.",
+      title: t("recovery.dependenciesTitle"),
+      message: t("recovery.dependenciesMessage"),
       action: "repair",
-      actionLabel: "Opravit balíčky",
+      actionLabel: t("common.repairPackages"),
       code,
       failureKind,
       technical,
@@ -37,10 +39,10 @@ export function runtimeRecoveryModel(error = {}) {
 
   if (["start_timeout", "starting_timeout", "health_timeout"].includes(failureKind)) {
     return {
-      title: "Aplikace startuje příliš dlouho",
-      message: "Launchpad zatím nepotvrdil, že aplikace odpovídá. Stav můžete znovu ověřit a spuštění bezpečně zopakovat.",
+      title: t("recovery.timeoutTitle"),
+      message: t("recovery.timeoutMessage"),
       action: "retry",
-      actionLabel: "Zkusit znovu",
+      actionLabel: t("common.retry"),
       code,
       failureKind,
       technical,
@@ -48,10 +50,10 @@ export function runtimeRecoveryModel(error = {}) {
   }
 
   return {
-    title: "Spuštění se nepovedlo",
-    message: "Launchpad zachoval přesnou příčinu a připravil bezpečné předání do Codexu, který problém ověří a opraví ve správném scope.",
+    title: t("recovery.failedTitle"),
+    message: t("recovery.failedMessage"),
     action: "codex",
-    actionLabel: "Vyřešit s Codexem",
+    actionLabel: t("common.solveWithCodex"),
     code,
     failureKind,
     technical,
@@ -62,14 +64,14 @@ export function runtimeRecoveryForApp(app = {}, error = null) {
   const runtime = app?.runtime && typeof app.runtime === "object" ? app.runtime : {};
   const details = uniqueStrings([
     ...(Array.isArray(app?.dependencies?.missing_required_dependencies)
-      ? app.dependencies.missing_required_dependencies.map((name) => `Chybí balíček: ${name}`)
+      ? app.dependencies.missing_required_dependencies.map((name) => t("recovery.missingPackage", { name }))
       : []),
     runtime.last_error,
     runtime.message,
-    Number.isInteger(runtime?.probe?.status_code) ? `Health odpověděl HTTP ${runtime.probe.status_code}.` : null,
+    Number.isInteger(runtime?.probe?.status_code) ? t("recovery.healthHttp", { status: runtime.probe.status_code }) : null,
     runtime?.probe?.error,
     app?.dependencies?.message,
-    app?.health_url ? `Health endpoint: ${app.health_url}` : null,
+    app?.health_url ? t("recovery.healthEndpoint", { url: app.health_url }) : null,
   ]);
 
   if (error) {
@@ -79,10 +81,10 @@ export function runtimeRecoveryForApp(app = {}, error = null) {
   if (app?.dependencies?.state === "needs_install") {
     if (app.dependencies?.can_install === true) {
       return {
-        title: "Aplikaci je potřeba připravit",
-        message: "Než ji otevřete, je potřeba bezpečně doplnit chybějící balíčky podle uzamčených verzí.",
+        title: t("recovery.prepareTitle"),
+        message: t("recovery.prepareMessage"),
         action: "install",
-        actionLabel: "Instalovat",
+        actionLabel: t("common.install"),
         code: "dependencies_incomplete",
         failureKind: "missing_dependencies",
         technical: details,
@@ -90,7 +92,7 @@ export function runtimeRecoveryForApp(app = {}, error = null) {
     }
     return runtimeRecoveryModel({
       code: "app_install_unavailable",
-      message: app.dependencies?.message ?? "Chybějící balíčky nelze bezpečně nainstalovat z verzovaného lockfilu.",
+      message: app.dependencies?.message ?? t("recovery.lockfileMessage"),
       payload: {
         error: "app_install_unavailable",
         failure_kind: "dependency_install_unavailable",
@@ -102,7 +104,7 @@ export function runtimeRecoveryForApp(app = {}, error = null) {
   if (app?.dependencies?.state === "dependency_boundary_invalid") {
     return runtimeRecoveryModel({
       code: "app_dependency_boundary_invalid",
-      message: app.dependencies?.message ?? "Dependency strom aplikace překračuje owning checkout.",
+      message: app.dependencies?.message ?? t("recovery.boundaryMessage"),
       payload: {
         error: "app_dependency_boundary_invalid",
         failure_kind: "dependency_boundary_invalid",
@@ -115,7 +117,7 @@ export function runtimeRecoveryForApp(app = {}, error = null) {
     const dependencyState = app.dependencies.state;
     return clampRecoveryToAppCapabilities(app, runtimeRecoveryModel({
       code: `app_${dependencyState}`,
-      message: app.dependencies?.message ?? "Dependency kontrakt aplikace je potřeba opravit.",
+      message: app.dependencies?.message ?? t("recovery.contractMessage"),
       payload: {
         error: `app_${dependencyState}`,
         failure_kind: dependencyState,
@@ -127,7 +129,7 @@ export function runtimeRecoveryForApp(app = {}, error = null) {
   if (app?.runtime_status !== "unhealthy") return null;
   return clampRecoveryToAppCapabilities(app, runtimeRecoveryModel({
     code: "app_unhealthy",
-    message: runtime.last_error ?? runtime.message ?? "Aplikace neprošla kontrolou health endpointu.",
+    message: runtime.last_error ?? runtime.message ?? t("recovery.healthMessage"),
     payload: {
       error: "app_unhealthy",
       failure_kind: runtime.failure_kind ?? "health_failed",
@@ -143,8 +145,8 @@ function clampRecoveryToAppCapabilities(app, recovery, technical = []) {
     return { ...recovery, technical: mergedTechnical };
   }
   const preservedCause = uniqueStrings([
-    `Původní kód chyby: ${recovery.code}`,
-    `Původní druh selhání: ${recovery.failureKind}`,
+    t("recovery.originalCode", { code: recovery.code }),
+    t("recovery.originalFailure", { kind: recovery.failureKind }),
     ...mergedTechnical,
   ]);
   return runtimeRecoveryModel({

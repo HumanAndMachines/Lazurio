@@ -31,18 +31,26 @@ dogfoodovat tutéž fasádu. Dnešní read-only slice Source Root nemigruje;
 budoucí Source → Managed přechod bude explicitní, samostatně gated operace
 stejného Install Core. Jiná cesta se tiše neadoptuje ani nepřesouvá. Společné Core
 postupně ověří platformu, exact Bun runtime z
-`package.json#packageManager`, Git, GitHub CLI, přihlášení ke github.com
+`package.json#packageManager`, podporovaný Node.js rozsah z
+`package.json#engines.node`, ověřenou identitu příkazů Bun, Git, GitHub CLI a
+Node.js a Codex CLI v `PATH`, přihlášení ke github.com
 a tvar Rootu; chyba jednoho probe nezastaví nezávislé kontroly a výstup nikdy
 neobsahuje stdout ani stderr externího nástroje. JSON zůstává locale-neutral,
 český a anglický terminálový report jsou jen dva rendery stejného výsledku.
 
-Install report `lazurio.install.report.v1` i `lazurio doctor` uvádějí
+Install report `lazurio.install.report.v2` i `lazurio doctor` uvádějí
 aktuální a požadovanou Bun verzi. Odlišný patch, včetně novějšího dosud
 nepromovaného vydání, je `action_required`/Doctor failure: Kolega tak
 nedostane neotestovaný runtime jen proto, že vyšel. První read-only installer
 Bun sám nemění. Agent nejdřív zjistí způsob instalace, vyžádá souhlas
 s externí změnou a použije standardní upstream postup; `lazurio update`
-runtime nikdy potichu nepřepisuje.
+runtime nikdy potichu nepřepisuje. Stejně tak Install Core odliší
+`bun_runtime_not_on_path`, `git_not_on_path`, `github_cli_not_on_path` a
+`node_runtime_not_on_path` od chybějící instalace. Dřívější stínující příkaz
+Node.js vrací `node_path_identity_mismatch` a před ověřením se nespouští.
+Instalační Agent s explicitním mandátem opraví pouze
+uživatelský PATH a výsledek prokáže v novém čistém procesu; Organization
+materializace ani běžný update tuto machine autoritu nepřebírají.
 
 Doctor lokálně upozorní také na nepovolené worktree cesty, například
 `.codex-tmp` nebo `.claude/worktrees`. U neprázdné cesty vypíše Agentovi
@@ -80,7 +88,8 @@ consent a writer kroky přijdou jako samostatné řezy nad stejným kontraktem;
 
 ## Read-only aktivace Organization
 
-První activation řez pouze pozoruje živý GitHub stav:
+První activation řez je owner-only provider gate a pouze pozoruje živý GitHub
+stav:
 
 ```sh
 lazurio organization activate --check --github-id <immutable-id>
@@ -106,6 +115,13 @@ kompatibilitních stavů. Remote activation ale canonical a dual-file stav
 zůstává v prvním DEV-6512 řezu fail-closed, dokud navazující
 reader/activation gate nepřesune všechny consumery na tentýž normalizovaný
 výsledek; activation si vlastní parser nevymýšlí.
+
+Builder tento owner gate na pracovní mašině neopakuje. GitHub installations i
+private-root endpoint mohou owner nebo repo access hranici skrýt jako HTTP 403
+nebo 404; CLI proto u pozorovaného non-ownera dál neprobuje root ani App a
+vrátí stabilní `github_organization_owner_required`. To nevypovídá o tom, zda
+je App nainstalovaná nebo zda Builder root čte. Lokální Builder onboarding
+pokračuje níže přes jeho vlastní repo read access.
 
 Exit code `0` znamená `active`, `1` znamená bezpečný další krok a `2`
 technickou chybu. Veřejný tvar drží
@@ -136,11 +152,23 @@ reconciler, který materializuje dostupné deklarované Moduly. Příkaz nevytv�
 GitHub repo, App grant, Team, port ani commit a neobsahuje Organization-specific
 výjimku.
 
+`gh auth status` dokazuje API přihlášení, ne Git transport. U privátního rootu
+CLI používá deklarovaný SSH remote a před klonem na něm provede exact
+`git ls-remote`. Selhání vrátí `materialization_source_unavailable` a nic
+nevytvoří; Agent má ověřit repo access a SSH klíč pro tentýž účet, ne opakovat
+owner activation ani několikrát spouštět `gh auth login`. Vytvoření nebo
+nahrání klíče zůstává explicitně schvalovanou změnou přístupu.
+
 Report používá stejné veřejné stavy `current`, `updated`, `blocked` jako
 update. Nedostupný private Modul nezruší už bezpečně dokončené checkouty, ale
 celkový výsledek zůstane `blocked` s přesným GitHub access reasonem. Dirty,
 foreign, diverged nebo symlink target se nepřebírá. Úplný bezpečný postup drží
 [Organization install manuál](../manual/organization-install.md).
+
+Reprodukovatelné instalační problémy patří po kontrole duplicit a sanitizaci
+do GitHub Issues přesného owning repa, nikoli do nového lokálního JSON ledgeru.
+Vytvoření issue nebo komentáře je Publikace; úplný routing, prompt mandát a
+fallback draft drží [GitHub Issues manuál](../manual/github-issues.md).
 
 ## Module setup
 
@@ -341,7 +369,15 @@ lazurio launchpad install
 
 Příkaz je veřejným vlastníkem uživatelského záměru „nainstaluj lokální
 Launchpad“. Na macOS spustí existující Bash instalátor; na Windows existující
-PowerShell instalátor. Jejich validace rootu, bezpečná výměna, rollback,
+PowerShell instalátor v bezpečném Start Menu-only režimu bez Taskbar pinu.
+Stejný bezpečný režim je výchozí i při přímém spuštění PowerShell instalátoru;
+Taskbar shortcut je kvůli rozdílům mezi Windows sestaveními dostupný pouze
+explicitním `-IncludeTaskbar` a případné shell připnutí lze samostatně potlačit
+přes `-SkipShellPin`. Nainstalovaný Windows
+bootstrap před každým spuštěním obnoví svůj procesní `PATH` z aktuálních
+Machine + User hodnot, takže funguje i bez odhlášení po WinGet instalaci Bunu;
+persistentní `PATH` ani vlastní cestu k Bunu přitom nemění. Jejich validace
+rootu, bezpečná výměna, rollback,
 historická migrace a platformní filesystem pravidla se v CLI neduplikují.
 CLI dědí jejich výstup a vrací jejich exit code beze změny. Linux tento
 desktop instalační slice zatím nepodporuje a skončí před mutací čitelnou
@@ -499,3 +535,11 @@ mimo deklarovanou Organization/Principál boundary.
 
 Launchpad pole „Hledat aplikaci“ zůstává filtrem karet. Search UI ani obecný
 cross-Organization search nejsou součástí tohoto slice.
+
+Install report v2 přidává povinný krok `codex` s důvody `codex_available`,
+`codex_missing` a `codex_unusable`. Kontroluje standardní `codex --version`
+příkazu vybraného z PATH bez přihlášení, upgradu nebo změny konfigurace.
+Existující vyhovující instalace je platná bez ohledu na instalační správce.
+Agent JSON consumer musí číst schema version; v1 schema zůstává historicky
+zachované, ale nový installer vydává v2 s osmi kroky. Zelený version probe
+neprokazuje přihlášení k modelu ani celý onboarding Organizace.

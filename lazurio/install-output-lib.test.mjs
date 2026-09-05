@@ -15,6 +15,8 @@ test("cs/en catalogs are complete and machine output stays locale-neutral", asyn
   expect(installCatalogIssues()).toEqual([]);
   expect(renderHumanInstallReport(report, { language: "cs" })).toContain("vyžaduje akci");
   expect(renderHumanInstallReport(report, { language: "en" })).toContain("action required");
+  expect(renderHumanInstallReport(fixtureReport({ resolvePathCommand: () => null }), { language: "cs" }))
+    .toContain("uživatelském PATH");
   expect(JSON.stringify(report, null, 2)).toBe(machineBefore);
 });
 
@@ -36,17 +38,30 @@ test("human and JSON golden files derive from the same Core result", async () =>
   expect(`${renderHumanInstallReport(report, { language: "en" })}\n`).toBe(expectedEn);
 });
 
-function fixtureReport() {
+function fixtureReport({
+  resolvePathCommand = (command) => {
+    if (command === "bun") return process.execPath;
+    if (command === "git") return "/usr/bin/git";
+    if (command === "node") return "/trusted/bin/node";
+    return null;
+  },
+} = {}) {
   return inspectLazurioInstallation({
     root: null,
     platform: "darwin",
     architecture: "arm64",
-    bunVersion: "1.4.0",
+    bunVersion: "1.4.1",
     environment: { HOME: "/Users/example" },
     homeDirectory: "/Users/example",
     resolveGit: () => "/usr/bin/git",
     resolveGitHubCli: () => null,
-    runCommand: () => ({ status: 0 }),
+    resolveNode: () => "/trusted/bin/node",
+    nodeCandidatePaths: () => ["/trusted/bin/node"],
+    resolvePathCommand,
+    runCommand: ({ executable }) => ({
+      status: 0,
+      stdout: executable === process.execPath ? "1.4.1" : executable === "/trusted/bin/node" ? "v24.19.0" : "git version 2.47.0",
+    }),
     inspectRoot: (path) => ({
       path,
       layout: "missing",

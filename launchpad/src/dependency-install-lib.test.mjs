@@ -10,8 +10,10 @@ import {
   refreshFrozenBunDependencies,
   runFrozenBunInstall,
 } from "../../lazurio/runtime/dependency-install-lib.mjs";
+import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.mjs";
 
 const cleanup = [];
+const fileSymlinkTest = (await supportsFileSymlinks()) ? test : test.skip;
 
 function fixtureDependencyInstallScript(extra = "") {
   return [
@@ -81,7 +83,11 @@ test("clean repair refuses a symlinked node_modules boundary", async () => {
   await writeFile(join(foreign, "keep"), "safe\n");
   await mkdir(join(foreign, "fixture"));
   await writeFile(join(foreign, "fixture", "package.json"), JSON.stringify({ name: "fixture", version: "1.0.0" }));
-  await symlink(foreign, join(packageRoot, "node_modules"), "dir");
+  await symlink(
+    foreign,
+    join(packageRoot, "node_modules"),
+    process.platform === "win32" ? "junction" : "dir",
+  );
 
   const result = await runFrozenBunInstall({
     cwd: packageRoot,
@@ -256,11 +262,17 @@ test("package and boundary paths must be explicit absolute paths", async () => {
   expect(result).toMatchObject({ ok: false, reason: "package_root_invalid" });
 });
 
-test("frozen Bun command never authorizes lockfile mutation", () => {
-  expect(frozenBunInstallCommand("/runtime/bun")).toEqual([
+test("frozen Bun command never authorizes lockfile mutation and avoids Windows hardlinks", () => {
+  expect(frozenBunInstallCommand("/runtime/bun", { platform: "linux" })).toEqual([
     "/runtime/bun",
     "install",
     "--frozen-lockfile",
+  ]);
+  expect(frozenBunInstallCommand("C:\\runtime\\bun.exe", { platform: "win32" })).toEqual([
+    "C:\\runtime\\bun.exe",
+    "install",
+    "--frozen-lockfile",
+    "--backend=copyfile",
   ]);
 });
 
@@ -539,7 +551,7 @@ test("invalid dependency names and symlink escapes are scoped blockers", async (
   expect(escaped).toMatchObject({ ok: false, reason: "dependency_tree_boundary_invalid" });
 });
 
-test.skipIf(process.platform === "win32")("dependency package metadata may not escape through a file symlink", async () => {
+fileSymlinkTest("dependency package metadata may not escape through a file symlink [requires file symlink capability]", async () => {
   const root = await packageFixture({ dependencies: { fixture: "1.0.0" } });
   const packageRoot = join(root, "app");
   const foreign = await mkdtemp(join(tmpdir(), "lazurio-dependency-metadata-"));
@@ -593,7 +605,7 @@ test("a declared link dependency uses the ordinary checkout-scoped metadata cont
   });
 });
 
-test.skipIf(process.platform === "win32")("an exact declared Organization-local file dependency accepts Bun's link-farm layout", async () => {
+fileSymlinkTest("an exact declared Organization-local file dependency accepts Bun's link-farm layout [requires file symlink capability]", async () => {
   const fixture = await organizationFileDependencyFixture();
   await mkdir(fixture.installedRoot, { recursive: true });
   await symlink(join(fixture.targetRoot, "package.json"), join(fixture.installedRoot, "package.json"), "file");
@@ -612,7 +624,7 @@ test.skipIf(process.platform === "win32")("an exact declared Organization-local 
   });
 });
 
-test.skipIf(process.platform === "win32")("an Organization-local link farm rejects an executable symlink outside its exact target", async () => {
+fileSymlinkTest("an Organization-local link farm rejects an executable symlink outside its exact target [requires file symlink capability]", async () => {
   const fixture = await organizationFileDependencyFixture();
   const foreignRoot = join(fixture.root, "organizations", "OtherCo", "payload");
   await mkdir(foreignRoot, { recursive: true });
@@ -628,7 +640,7 @@ test.skipIf(process.platform === "win32")("an Organization-local link farm rejec
   })).toMatchObject({ ok: false, reason: "dependency_tree_boundary_invalid" });
 });
 
-test.skipIf(process.platform === "win32")("a local link-farm leaf swap during readiness is rejected", async () => {
+fileSymlinkTest("a local link-farm leaf swap during readiness is rejected [requires file symlink capability]", async () => {
   const fixture = await organizationFileDependencyFixture();
   const foreignRoot = join(fixture.root, "organizations", "OtherCo", "payload");
   await mkdir(foreignRoot, { recursive: true });
@@ -650,7 +662,7 @@ test.skipIf(process.platform === "win32")("a local link-farm leaf swap during re
   expect(state).toMatchObject({ ok: false, reason: "dependency_authority_changed" });
 });
 
-test.skipIf(process.platform === "win32")("a local link-farm directory swap during readiness is rejected", async () => {
+fileSymlinkTest("a local link-farm directory swap during readiness is rejected [requires file symlink capability]", async () => {
   const fixture = await organizationFileDependencyFixture();
   const targetSchemas = join(fixture.targetRoot, "schemas");
   const installedSchemas = join(fixture.installedRoot, "schemas");
@@ -676,7 +688,7 @@ test.skipIf(process.platform === "win32")("a local link-farm directory swap duri
   expect(state).toMatchObject({ ok: false, reason: "dependency_authority_changed" });
 });
 
-test.skipIf(process.platform === "win32")("a declared local package rejects a nested symlink outside its exact target", async () => {
+fileSymlinkTest("a declared local package rejects a nested symlink outside its exact target [requires file symlink capability]", async () => {
   const fixture = await organizationFileDependencyFixture();
   const foreignRoot = join(fixture.root, "organizations", "OtherCo", "payload");
   await mkdir(foreignRoot, { recursive: true });
@@ -856,7 +868,7 @@ test("a worktree-relative file target is never rebound to the main Organization 
   });
 });
 
-test.skipIf(process.platform === "win32")("a declared local target package change during readiness inspection is rejected", async () => {
+fileSymlinkTest("a declared local target package change during readiness inspection is rejected [requires file symlink capability]", async () => {
   const fixture = await organizationFileDependencyFixture();
   await mkdir(fixture.installedRoot, { recursive: true });
   await symlink(join(fixture.targetRoot, "package.json"), join(fixture.installedRoot, "package.json"), "file");
@@ -877,7 +889,7 @@ test.skipIf(process.platform === "win32")("a declared local target package chang
   expect(state).toMatchObject({ ok: false, reason: "dependency_authority_changed" });
 });
 
-test.skipIf(process.platform === "win32")("a frozen install pins the declared local target package authority", async () => {
+fileSymlinkTest("a frozen install pins the declared local target package authority [requires file symlink capability]", async () => {
   const fixture = await organizationFileDependencyFixture();
   await mkdir(fixture.installedRoot, { recursive: true });
   await symlink(join(fixture.targetRoot, "package.json"), join(fixture.installedRoot, "package.json"), "file");
@@ -1056,7 +1068,7 @@ test("a local external node_modules root blocks a safe ancestor dependency", asy
   expect(state).toMatchObject({ ok: false, reason: "dependency_tree_boundary_invalid" });
 });
 
-test.skipIf(process.platform === "win32")("package.json and Bun lockfile authority may not escape the package root", async () => {
+fileSymlinkTest("package.json and Bun lockfile authority may not escape the package root [requires file symlink capability]", async () => {
   const packageEscapeRoot = await packageFixture();
   const packageRoot = join(packageEscapeRoot, "app");
   const foreign = await mkdtemp(join(tmpdir(), "lazurio-package-authority-"));

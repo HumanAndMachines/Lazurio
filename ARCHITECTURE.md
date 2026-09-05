@@ -97,6 +97,12 @@ profil a infrastruktura daného Ownera a provideru.
 Lazurio tato oprávnění nekopíruje do druhého interního IAM. Lokální přítomnost
 checkoutu také sama nedokazuje přístup u poskytovatele.
 
+Manifest interní Team pouze váže na neměnné ID odpovídajícího GitHub Teamu;
+oprávnění z něj nevzniká. Builder readiness je explicitní čerstvý readback
+GitHub účtu, Organization a Team membership a efektivního i Teamového grantu
+na přesných aktivních Builder repozitářích. Běžný offline Doctor tento síťový
+provider gate nepředstírá.
+
 ### 3. Resident a Agent jsou různé identity
 
 Resident má dlouhodobý vztah, paměť a mandát. Agent dostane konkrétní úkol,
@@ -289,9 +295,11 @@ uživatele Mašiny. Fresh a Managed target je `~/Lazurio` na macOS/Linuxu a
 - **Source Root** je dnešní nasazený a podporovaný profil. Ověřený Lazurio Git
   checkout přímo v home je současně pracovní Root a může do řízené migrace
   zachovat svůj existující historický název složky.
-- **Managed Root** je budoucí cílový profil. Canonical cesta je jazykově
-  generovaný non-Git Root pro instrukce, konfiguraci, data a mounty; runtime
-  vlastní immutable package mimo Root.
+- **Managed Root** je budoucí cílový profil. Canonical cesta je non-Git Root
+  sestavený z immutable source jako přesný součin `resident profile × locale`:
+  profil určuje například Buddyho nebo AI Kolegu a locale jazyk Root-owned
+  generovaných instrukcí včetně `AGENTS.md`. Runtime vlastní immutable package
+  mimo Root.
 
 Výběr jazyka nemění strojové cesty ani identity. Top-level installer nemá root
 picker a žádný profil nevytváří druhý aktivní Root. Přechodové rozpoznání
@@ -304,8 +312,23 @@ vědomě přelinkovat na jediný ověřený checkout
 `<home>/Lazurio/development/Lazurio`. Package-only Managed profil source
 checkout nepotřebuje a instalátor jej implicitně neklonuje. Generátor
 nevytváří uvnitř Rootu další vendored kopii CLI nebo Launchpadu;
-Organization checkouty, Personalspace a runtime data zůstávají samostatné
-měnitelné mounty.
+Organization checkouty se do zvoleného jazyka nikdy nepřekládají ani
+nepřepisují: Organizace si jazyk svého repozitáře vlastní sama. Personalspace
+a runtime data také zůstávají samostatné měnitelné mounty.
+
+Launchpad locale je oproti tomu runtime preference prohlížeče, ne varianta
+Rootu. Launchpad-owned copy je offline v párových katalozích; přednost má
+explicitně uložená volba, potom podporovaný jazyk prohlížeče a nakonec český
+fallback. Přepnutí reloadne stejnou URL a nemění scope ani běžící procesy.
+Guide je součást stejného Launchpad surface: statická copy používá tytéž
+katalogy a dlouhý Organization install runbook se načítá pro explicitní
+`cs`/`en` locale z párových Root-owned zdrojů. Českou autoritou zůstává
+`manual/organization-install.md`, anglickou projekcí
+`distribution/locales/en/manual/organization-install.md`; chybějící nebo
+neshodný locale zdroj skončí fail-closed a nikdy se potichu nenahradí češtinou.
+Core a API zůstávají locale-neutral: poskytují stabilní reason kódy a parametry,
+zatímco UI vlastní lidské error, warning a loading texty. Organization-owned
+názvy, popisy, commit messages a technická evidence se zobrazují beze změny.
 
 `lazurio install` je jediný konvergenční vstup pro oba profily. Nad Source
 Rootem jej defaultně zachová a opraví jen podporovaný stav. Source → Managed
@@ -343,8 +366,14 @@ org-level repa typu Mission Control, tak Workspace Moduly. Chybějící Workspac
 Modul se materializuje z úplných Git souřadnic; chybějící root repo jen tehdy,
 když manifest explicitně deklaruje `materialization:
 doctor_managed_nested_repo`. Productionspace a root-space repository-db tím
-autoritu nezískávají. Dirty obsah
-primárního checkoutu nejdřív
+autoritu nezískávají. Jedinou úzkou výjimkou je explicitní
+`lazurio organization install`: po materializaci aktivního root-level parent
+repozitáře smí jednorázově atomicky doplnit deklarovaný
+`mission-control/db` `repository_db_mount`. Jakmile je deklarovaná Mission
+Control app/data hranice neúplná, neaktivní nebo pod jiným materializačním
+kontraktem, instalace fail-closed skončí jako blokovaná. Existující databázi pouze ověří;
+nefetchuje ji, nefast-forwarduje a nezískává commit ani publish autoritu.
+Dirty obsah primárního checkoutu nejdřív
 uloží do ověřeného recovery stashe, který nikdy automaticky nevrací, a potom
 použije jen fast-forward. Historii s lokálními commity nebo konfliktem
 nepřepisuje — předá ji Agentovi.

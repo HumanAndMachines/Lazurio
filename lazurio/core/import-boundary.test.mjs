@@ -92,6 +92,7 @@ test("canonical path containment has one physical Core owner", async () => {
     "lazurio/runtime/mission-control-plan-lib.mjs",
     "lazurio/runtime/module-location-repair-lib.mjs",
     "lazurio/runtime/personalspace-lib.mjs",
+    "lazurio/runtime/repository-db-worktree-lib.mjs",
     "lazurio/runtime/runtime-lib.mjs",
     "lazurio/runtime/worktree-lib.mjs",
   ]);
@@ -154,6 +155,7 @@ test("runtime declaration validation has one physical Core owner", async () => {
     "lazurio/module-setup-lib.mjs",
     "lazurio/runtime/discovery-lib.mjs",
     "lazurio/runtime/personalspace-lib.mjs",
+    "lazurio/runtime/repository-db-worktree-lib.mjs",
     "lazurio/runtime/runtime-lib.mjs",
   ]);
 });
@@ -179,6 +181,7 @@ test("Module declaration validation has one physical Core owner", async () => {
     "lazurio/runtime/diagnostics-lib.mjs",
     "lazurio/runtime/discovery-lib.mjs",
     "lazurio/runtime/personalspace-lib.mjs",
+    "lazurio/runtime/repository-db-worktree-lib.mjs",
     "lazurio/runtime/runtime-lib.mjs",
     "scripts/lazurio-module-inventory.mjs",
   ]);

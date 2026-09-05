@@ -15,9 +15,23 @@ export const GIT_CHECKOUT_MATERIALIZATION_MODES = Object.freeze([
 export const GIT_CLONE_TIMEOUT_MS = 10 * 60_000;
 export const GIT_FETCH_TIMEOUT_MS = 20_000;
 export const GIT_LOCAL_TIMEOUT_MS = 10_000;
-const PINNED_CHECKOUT_PUBLISH_MODE = "--lazurio-pinned-checkout-publisher";
-const PINNED_CHECKOUT_DISCARD_MODE = "--lazurio-pinned-checkout-discarder";
+export const CANONICAL_GIT_FETCH_REFSPEC = "+refs/heads/*:refs/remotes/origin/*";
+export const PINNED_CHECKOUT_PUBLISH_MODE = "--lazurio-pinned-checkout-publisher";
+export const PINNED_CHECKOUT_DISCARD_MODE = "--lazurio-pinned-checkout-discarder";
 const PINNED_CHECKOUT_OPERATION_TIMEOUT_MS = 60_000;
+
+function materializationGitArgs(args, platform = process.platform) {
+  const nullDevice = platform === "win32" ? "NUL" : "/dev/null";
+  return [
+    "-c",
+    `core.hooksPath=${nullDevice}`,
+    "-c",
+    "core.fsmonitor=false",
+    "-c",
+    "core.useBuiltinFSMonitor=false",
+    ...args,
+  ];
+}
 
 // One checkout publication primitive is shared by Organization install and
 // Launchpad Sync. Callers own policy (manifest/root identity); Core owns the
@@ -80,14 +94,21 @@ export async function materializeGitCheckout({
   try {
     transportCwd = await makeTempDirectory(join(tmpdir(), "lazurio-git-transport-"));
     const source = await run(
-      ["ls-remote", "--exit-code", "--heads", "--", remote, `refs/heads/${branch}`],
+      materializationGitArgs([
+        "ls-remote",
+        "--exit-code",
+        "--heads",
+        "--",
+        remote,
+        `refs/heads/${branch}`,
+      ]),
       {
         cwd: transportCwd,
         timeoutMs: GIT_FETCH_TIMEOUT_MS,
         env: remoteEnvironment,
       },
     );
-    if (!source.ok || !source.stdout) return missingAccess();
+    if (!source.ok || !source.stdout) return missingAccess(source);
 
     await makeDirectory(targetParent, { recursive: true });
     const parentBoundary = await inspectCanonicalPathBoundary({
@@ -109,7 +130,7 @@ export async function materializeGitCheckout({
     // write outside the validated physical owner boundary.
     await beforeStage();
     const clone = await runPinnedChild(
-      [
+      materializationGitArgs([
         "clone",
         "--branch",
         branch,
@@ -118,7 +139,7 @@ export async function materializeGitCheckout({
         "origin",
         "--",
         remote,
-      ],
+      ]),
       {
         cwd: targetParent,
         expectedCwdRealPath: expectedParentRealPath,
@@ -131,7 +152,7 @@ export async function materializeGitCheckout({
       if (["parent_identity_changed", "child_identity_changed"].includes(clone.code)) {
         return boundaryFailure("Rodič cílového checkoutu se před klonováním fyzicky změnil.");
       }
-      return cloneFailure();
+      return cloneFailure(clone);
     }
     stagingName = clone.child_name;
     if (!isPortableChildName(stagingName)) return cloneFailure();
@@ -145,6 +166,25 @@ export async function materializeGitCheckout({
     });
     if (!stagingBoundary.ok) {
       return boundaryFailure("Dočasný checkout nevznikl ve fyzicky ověřeném rodiči targetu.");
+    }
+    // Keep the bandwidth-saving single-branch bootstrap, but leave every
+    // published checkout with the canonical all-branches fetch contract that
+    // Doctor and subsequent update/review flows require.
+    const fetchConfiguration = await run(
+      materializationGitArgs([
+        "config",
+        "--local",
+        "--replace-all",
+        "remote.origin.fetch",
+        CANONICAL_GIT_FETCH_REFSPEC,
+      ]),
+      {
+        cwd: stagingPath,
+        timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+      },
+    );
+    if (!fetchConfiguration.ok) {
+      return verificationFailure("Naklonovaný checkout nemá kanonický fetch kontrakt.");
     }
     const gitVerification = await verifyClonedCheckout({
       path: stagingPath,
@@ -200,8 +240,8 @@ export async function materializeGitCheckout({
       head: gitVerification.head,
       remote,
     };
-  } catch {
-    return cloneFailure();
+  } catch (error) {
+    return cloneFailure({ error: error instanceof Error ? error.message : String(error) });
   } finally {
     if (transportCwd) {
       await remove(transportCwd, { recursive: true, force: true }).catch(() => {});
@@ -297,7 +337,7 @@ async function runPinnedCheckoutOperation({ mode, targetParent, payload, failure
   }
 }
 
-async function runPinnedCheckoutPublisher() {
+export async function runPinnedCheckoutPublisher() {
   try {
     const payload = JSON.parse(await Bun.stdin.text());
     assertPinnedPublisherPayload(payload);
@@ -336,7 +376,7 @@ async function runPinnedCheckoutPublisher() {
   }
 }
 
-async function runPinnedCheckoutDiscarder() {
+export async function runPinnedCheckoutDiscarder() {
   try {
     const payload = JSON.parse(await Bun.stdin.text());
     if (
@@ -421,14 +461,33 @@ function materializationRequestIssue({
 }
 
 async function verifyClonedCheckout({ path, branch, remote, run }) {
-  const [root, currentBranch, origin, head, status] = await Promise.all([
-    run(["rev-parse", "--show-toplevel"], { cwd: path, timeoutMs: GIT_LOCAL_TIMEOUT_MS }),
-    run(["branch", "--show-current"], { cwd: path, timeoutMs: GIT_LOCAL_TIMEOUT_MS }),
-    run(["remote", "get-url", "origin"], { cwd: path, timeoutMs: GIT_LOCAL_TIMEOUT_MS }),
-    run(["rev-parse", "--verify", "HEAD^{commit}"], { cwd: path, timeoutMs: GIT_LOCAL_TIMEOUT_MS }),
-    run(["status", "--porcelain=v1"], { cwd: path, timeoutMs: GIT_LOCAL_TIMEOUT_MS }),
+  const [root, currentBranch, origin, fetchRefspec, head, status] = await Promise.all([
+    run(materializationGitArgs(["rev-parse", "--show-toplevel"]), {
+      cwd: path,
+      timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+    }),
+    run(materializationGitArgs(["branch", "--show-current"]), {
+      cwd: path,
+      timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+    }),
+    run(materializationGitArgs(["remote", "get-url", "origin"]), {
+      cwd: path,
+      timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+    }),
+    run(materializationGitArgs(["config", "--local", "--get-all", "remote.origin.fetch"]), {
+      cwd: path,
+      timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+    }),
+    run(materializationGitArgs(["rev-parse", "--verify", "HEAD^{commit}"]), {
+      cwd: path,
+      timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+    }),
+    run(materializationGitArgs(["status", "--porcelain=v1"]), {
+      cwd: path,
+      timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+    }),
   ]);
-  if ([root, currentBranch, origin, head, status].some((result) => !result.ok)) {
+  if ([root, currentBranch, origin, fetchRefspec, head, status].some((result) => !result.ok)) {
     return verificationFailure("Naklonovaný checkout nejde spolehlivě ověřit.");
   }
   let realRoot;
@@ -442,6 +501,7 @@ async function verifyClonedCheckout({ path, branch, remote, run }) {
     !isSamePath(realRoot, realPath)
     || currentBranch.stdout !== branch
     || origin.stdout !== remote
+    || fetchRefspec.stdout !== CANONICAL_GIT_FETCH_REFSPEC
     || status.stdout !== ""
     || !/^[0-9a-f]{40}$/u.test(head.stdout)
   ) {
@@ -488,22 +548,67 @@ function targetCollision() {
   };
 }
 
-function missingAccess() {
+function missingAccess(result = {}) {
+  const diagnostic = gitFailureDiagnostic(result);
   return {
     ok: false,
     outcome: "missing_access",
     code: "materialization_source_unavailable",
-    message: "Repo nebo jeho větev nejsou s aktuálními GitHub přístupy dostupné; nic se nenaklonovalo.",
+    message: appendGitDiagnostic(
+      "Git nedokázal přečíst repo nebo jeho větev přes deklarovaný remote. Ověř repo access i Git transport; u privátního SSH remote musí uspět exact `git ls-remote`. Opakované `gh auth login` bez tohoto testu transport neopraví. Nic se nenaklonovalo.",
+      diagnostic,
+    ),
   };
 }
 
-function cloneFailure() {
+function cloneFailure(result = {}) {
+  const diagnostic = gitFailureDiagnostic(result);
   return {
     ok: false,
     outcome: "failed",
     code: "materialization_clone_failed",
-    message: "Git nedokončil ověřený checkout; finální target zůstal nedotčený.",
+    message: appendGitDiagnostic(
+      "Git nedokončil ověřený checkout; finální target zůstal nedotčený.",
+      diagnostic,
+    ),
   };
+}
+
+function appendGitDiagnostic(message, diagnostic) {
+  return diagnostic ? `${message} Git příčina: ${diagnostic}` : message;
+}
+
+function gitFailureDiagnostic(result) {
+  const facts = [];
+  if (result?.timedOut === true) facts.push("timeout");
+  if (Number.isInteger(result?.exitCode)) facts.push(`exit ${result.exitCode}`);
+  if (
+    typeof result?.code === "string"
+    && /^[a-z0-9_]{1,80}$/u.test(result.code)
+    && !["git_command_failed", "materialization_clone_failed"].includes(result.code)
+  ) {
+    facts.push(result.code);
+  }
+  const raw = [result?.stderr, result?.error, result?.stdout]
+    .find((value) => typeof value === "string" && value.trim() !== "");
+  const output = sanitizeGitFailureOutput(raw);
+  if (output) facts.push(output);
+  return facts.join(": ");
+}
+
+function sanitizeGitFailureOutput(value) {
+  if (typeof value !== "string") return "";
+  const sanitized = value
+    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/gu, "")
+    .replace(/([a-z][a-z0-9+.-]*:\/\/[^\s?#"'<>]+)[?#][^\s"'<>]*/giu, "$1?<redacted>")
+    .replace(/([a-z][a-z0-9+.-]*:\/\/)[^/\s@]+@/giu, "$1<redacted>@")
+    .replace(/\b((?:authorization|credential|access[_-]?token|token|password|passwd|secret)\s*[:=]\s*)[^\s&,;]+/giu, "$1<redacted>")
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/gu, "")
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(" · ");
+  return sanitized.length <= 1_200 ? sanitized : `…${sanitized.slice(-1_199)}`;
 }
 
 async function lstatOrNull(path) {
@@ -515,12 +620,20 @@ async function lstatOrNull(path) {
   }
 }
 
-if (import.meta.main) {
-  if (process.argv[2] === PINNED_CHECKOUT_PUBLISH_MODE) {
+export async function runPinnedCheckoutChildMode(argv = process.argv.slice(2)) {
+  if (argv[0] === PINNED_CHECKOUT_PUBLISH_MODE) {
     await runPinnedCheckoutPublisher();
-  } else if (process.argv[2] === PINNED_CHECKOUT_DISCARD_MODE) {
+    return true;
+  }
+  if (argv[0] === PINNED_CHECKOUT_DISCARD_MODE) {
     await runPinnedCheckoutDiscarder();
-  } else {
+    return true;
+  }
+  return false;
+}
+
+if (import.meta.main) {
+  if (!await runPinnedCheckoutChildMode()) {
     throw new Error("git-materialization-lib.mjs je interní Core knihovna");
   }
 }

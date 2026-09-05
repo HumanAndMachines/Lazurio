@@ -18,6 +18,7 @@ import { acquireModuleRuntimeLock } from "./module-runtime-lock-lib.mjs";
 import { trustedWindowsSystemExecutable } from "./windows-system-path-lib.mjs";
 import {
   declaredDependencyCount,
+  frozenBunInstallCommand,
   inspectRequiredDependencies,
   refreshFrozenBunDependencies,
   runFrozenBunInstall,
@@ -27,6 +28,10 @@ import {
   readJsonWithinCanonicalBoundary,
 } from "../core/path-boundary-lib.mjs";
 import { normalizeRuntimeSource } from "./runtime-source-lib.mjs";
+import {
+  inspectRepositoryDbWorktreeBinding,
+  repositoryDbWorktreeDependencyForSlot,
+} from "./repository-db-worktree-lib.mjs";
 
 const healthTimeoutMs = 1_200;
 const startGraceMs = 30_000;
@@ -54,6 +59,7 @@ const supportedLifecycleProfiles = new Set(["local", "hosted"]);
 const APP_RUNTIME_CWD = Symbol("lazurio.app.runtime-cwd");
 const APP_RUNTIME_PACKAGE_PATH = Symbol("lazurio.app.runtime-package-path");
 const APP_RUNTIME_OWNER_ROOT = Symbol("lazurio.app.runtime-owner-root");
+const APP_WORKTREE_METADATA = Symbol("lazurio.app.worktree-metadata");
 const DEPENDENCY_RUNTIME_AUTHORITY = Symbol("lazurio.dependencies.runtime-authority");
 
 export function runtimeHostsShareListener(left, right) {
@@ -743,6 +749,7 @@ export function createRuntimeManager({
       stopFinalizationPromise: null,
       ownerProofCaptured: false,
       ownerProof: null,
+      ownerProofCapturePromise: null,
       startTrigger: trigger,
       outputPipes: [],
     };
@@ -909,6 +916,25 @@ export function createRuntimeManager({
     }
 
     if (app.module_contract?.schema_version === "lazurio.module.v1") {
+      if (platform === "win32") {
+        // Background and final capture share one serialized operation. Do not
+        // await the background health window: a listener may be owned while
+        // its health endpoint is intentionally still warming up. Ownership is
+        // already verified here, so the final capture can safely bind it and
+        // let Start return `starting` for hosted-maintenance backoff.
+        try {
+          await captureWindowsRuntimeOwnerProofSerialized(app, record);
+        } catch {
+          // Owner proof is optional recovery authority. A failed proof-only
+          // write must not prevent the final listener audit from recording a
+          // process that Start has already verified as owning the lease.
+          record.ownerProof = null;
+          record.ownerProofCaptured = false;
+        }
+        if (record.ownerProofWritePromise) {
+          await Promise.allSettled([record.ownerProofWritePromise]);
+        }
+      }
       if (managedProcesses.get(runtimeKey) !== record || record.stopping) {
         throw new RuntimeActionError(
           409,
@@ -945,6 +971,9 @@ export function createRuntimeManager({
           launcher_exit_code: earlyExit,
           owner_proof: earlySurvivingListenerProof,
         } : {}),
+        ...windowsRuntimeOwnerProofState(
+          earlySurvivingListenerProof ?? (record.ownerProofCaptured ? record.ownerProof : null),
+        ),
         process_group_id: record.processGroupId,
         listeners: runtimeListenerState(app),
         listener_ownership: ownershipProof,
@@ -1373,8 +1402,9 @@ export function createRuntimeManager({
       throw error;
     }
 
+    let stopSignalError = null;
     try {
-      await signalManagedProcess(record, runtimeKey, "SIGTERM");
+      stopSignalError = await signalManagedProcess(record, runtimeKey, "SIGTERM");
     } catch (error) {
       await recoverRetryableStopAttempt(app, record, runtimeKey, runtimeSource, error, {
         failureKind: error?.metadata?.failure_kind ?? "stop_signal_failed",
@@ -1385,12 +1415,20 @@ export function createRuntimeManager({
     const result = platform === "win32"
       ? await Promise.race([
           record.child.exited.then((exitCode) => ({ exitCode, timeout: false })),
-          sleep(stopTimeoutMs).then(() => ({ exitCode: null, timeout: true })),
+          sleepFn(stopTimeoutMs).then(() => ({ exitCode: null, timeout: true })),
         ])
       : await waitForPosixManagedExit(record, stopTimeoutMs);
     if (!result.timeout) {
       record.stopExitConfirmed = true;
       record.stopExitCode = result.exitCode;
+      if (stopSignalError) {
+        try {
+          await appendLog(
+            record.logPath,
+            `[launchpad] taskkill reported failure but exact child exit confirmed ${app.id} managed_pid=${record.pid}\n`,
+          );
+        } catch {}
+      }
     }
 
     // Windows už první bezpečně scoped Stop provede přes taskkill /T /F.
@@ -1427,6 +1465,23 @@ export function createRuntimeManager({
     }
 
     if (result.timeout && platform === "win32") {
+      if (stopSignalError) {
+        const finalizedAfterRecovery = await recoverRetryableStopAttempt(
+          app,
+          record,
+          runtimeKey,
+          runtimeSource,
+          stopSignalError,
+          {
+            failureKind: stopSignalError?.metadata?.failure_kind ?? "stop_signal_failed",
+            forced: true,
+          },
+        );
+        if (finalizedAfterRecovery) {
+          return stopActionResult(app, record, runtimeKey, runtimeSource, { forced: true });
+        }
+        throw stopSignalError;
+      }
       enableStopFinalizationOnExit(app, record, runtimeKey, runtimeSource, {
         forced: true,
       });
@@ -1547,15 +1602,28 @@ export function createRuntimeManager({
     }
 
     if (record.stopExitConfirmed) {
-      enableStopFinalizationOnExit(app, record, runtimeKey, runtimeSource, {
-        forced,
-      });
-      return;
+      record.finalizeStopOnExit = true;
+      record.finalizeStopForced = forced;
+      try {
+        return await finalizeDeferredManagedStop(app, record, runtimeKey, runtimeSource, {
+          exitCode: record.stopExitCode,
+          forced,
+        });
+      } catch (finalizationError) {
+        try {
+          await appendLog(
+            record.logPath,
+            `[launchpad] recovered stop finalization failed ${app.id}: ${finalizationError.message}\n`,
+          );
+        } catch {}
+        return false;
+      }
     }
 
     record.stopping = false;
     record.finalizeStopOnExit = false;
     record.finalizeStopForced = false;
+    return false;
   }
 
   function enableStopFinalizationOnExit(app, record, runtimeKey, runtimeSource, { forced }) {
@@ -1715,7 +1783,11 @@ export function createRuntimeManager({
       const result = await runSystemCommandFn(command);
       if (!result.ok && !isMissingProcessResult(result)) {
         await appendLog(record.logPath, `[launchpad] taskkill failed: ${result.stderr || result.error || "unknown"}\n`);
-        throw new RuntimeActionError(
+        // taskkill umí vrátit nenulový kód i po skutečném ukončení stromu.
+        // Volající proto chybu drží stranou a nejdřív omezeně čeká na exit
+        // přesného child handle. Bez jeho potvrzení se chyba vrátí beze změny
+        // ownershipu a bez druhého cílení potenciálně recyklovaného PID.
+        return new RuntimeActionError(
           500,
           "app_stop_failed",
           `Managed strom procesu PID ${record.pid} se nepodařilo ukončit.`,
@@ -1723,7 +1795,7 @@ export function createRuntimeManager({
           { failure_kind: "stop_signal_failed", owner: "current-instance", pid: record.pid },
         );
       }
-      return;
+      return null;
     }
 
     try {
@@ -2056,7 +2128,7 @@ export function createRuntimeManager({
     }
 
     const runtimeKey = worktreeRuntimeKey(app, worktree.slug);
-    const modulePath = normalizeRelativePath(worktree.metadata?.module_path ?? `modules/${app.module}`);
+    const modulePath = worktreeModuleSlotPath(app, worktree.metadata);
     const mainModulePath = normalizeRelativePath(`${app.organization_path}/${modulePath}`);
     const worktreePath = normalizeRelativePath(worktree.path);
     const organizationRoot = resolve(companiesRoot, app.organization_path);
@@ -2098,6 +2170,7 @@ export function createRuntimeManager({
       ...app,
       ...worktreeContract,
       [APP_CHECKOUT_ROOT]: absoluteWorktreeRoot,
+      [APP_WORKTREE_METADATA]: worktree.metadata,
       [APP_RUNTIME_CWD]: resolve(absoluteWorktreeRoot, cwdFromWorktree),
       // Plugin paths/capabilities are validated only by main discovery. A
       // worktree may change its Module App runtime, but it cannot smuggle a
@@ -2237,6 +2310,7 @@ export function createRuntimeManager({
       entrypoint_listener: worktreeApp.entrypoint_listener ?? null,
       module_contract: worktreeApp.module_contract ?? null,
       runtime_contract: worktreeApp.runtime_contract ?? null,
+      required_module_slots: worktreeApp.required_module_slots ?? [],
       tags: worktreeApp.tags ?? [],
     };
   }
@@ -2706,6 +2780,20 @@ export function createRuntimeManager({
     return String(value ?? "").replace(/\\/g, "/").replace(/^\.\//, "");
   }
 
+  function worktreeModuleSlotPath(app, metadata) {
+    if (typeof metadata?.module_path === "string" && metadata.module_path.trim() !== "") {
+      return normalizeRelativePath(metadata.module_path);
+    }
+    const organizationPrefix = `${normalizeRelativePath(app?.organization_path)}/`;
+    const contractPath = normalizeRelativePath(app?.module_contract?.module_path);
+    const manifestSuffix = "/lazurio.module.json";
+    if (contractPath.startsWith(organizationPrefix) && contractPath.endsWith(manifestSuffix)) {
+      const discoveredPath = contractPath.slice(organizationPrefix.length, -manifestSuffix.length);
+      if (discoveredPath !== "") return discoveredPath;
+    }
+    return normalizeRelativePath(`modules/${app.module}`);
+  }
+
   function replacePathPrefix(value, oldPrefix, newPrefix) {
     const normalized = normalizeRelativePath(value);
     const prefix = normalizeRelativePath(oldPrefix);
@@ -2785,7 +2873,7 @@ export function createRuntimeManager({
     const expectedCwd = runtimeCwdForApp(app);
     const deadline = Date.now() + timeoutMs;
     let evidence = [];
-    do {
+    const observeAllListeners = async () => {
       evidence = [];
       for (const listener of app.listeners ?? []) {
         const { owner, processGroupId, observedBindings, owned } =
@@ -2801,21 +2889,42 @@ export function createRuntimeManager({
           owned,
         });
       }
-      if (evidence.length > 0 && evidence.every((item) => item.owned)) return evidence;
-      await sleep(50);
+      return evidence.length > 0 && evidence.every((item) => item.owned);
+    };
+    do {
+      if (await observeAllListeners()) return evidence;
+      if (Date.now() >= deadline) break;
+      await sleep(Math.min(50, Math.max(0, deadline - Date.now())));
     } while (Date.now() < deadline);
+
+    // A listener can become healthy exactly while the final polling sleep
+    // crosses the deadline (notably on Windows, where PID ownership appears
+    // after a wrapper hands the socket to its child). Reconcile health and
+    // ownership once more before declaring a timeout; do not abandon a late
+    // healthy process that this start transaction actually owns.
+    const finalHealth = await probeHealth(app);
+    if (finalHealth.reachable && finalHealth.ok && await observeAllListeners()) {
+      return evidence;
+    }
+    const logExcerpt = await logTail(record.logPath, errorTailBytes);
     throw new RuntimeActionError(
       500,
       "runtime_listener_ownership_unverified",
       `${app.title}: nový managed proces nepřevzal všechny deklarované module leases.`,
-      evidence.map((item) =>
-        `${item.listener_id}: ${item.host}:${item.port}, owner_pid=${item.owner_pid ?? "none"}, process_group_id=${item.process_group_id ?? "unknown"}`,
-      ),
+      [
+        ...evidence.map((item) =>
+          `${item.listener_id}: ${item.host}:${item.port}, owner_pid=${item.owner_pid ?? "none"}, process_group_id=${item.process_group_id ?? "unknown"}`,
+        ),
+        ...(logExcerpt ? [`startup_log: ${logExcerpt}`] : []),
+      ],
       {
         failure_kind: "started_listener_ownership_unverified",
         launcher_pid: record.pid,
         process_group_id: record.processGroupId,
         listeners: evidence,
+        final_health: finalHealth,
+        log_path: relativeRuntimePath(record.logPath),
+        log_excerpt: logExcerpt,
       },
     );
   }
@@ -3569,10 +3678,11 @@ export function createRuntimeManager({
       && !record.stopping
       && Date.now() < deadline
     ) {
+      if (record.ownerProofCaptured) return;
       const probe = await probeHealth(app);
       if (probe.reachable && probe.ok) {
         captureAttempts += 1;
-        if (await captureWindowsRuntimeOwnerProof(app, record)) return;
+        if (await captureWindowsRuntimeOwnerProofSerialized(app, record)) return;
         if (captureAttempts >= windowsOwnerProofCaptureAttempts) {
           await appendLog(
             record.logPath,
@@ -3583,6 +3693,19 @@ export function createRuntimeManager({
       }
       await sleep(openHealthyPollMs);
     }
+  }
+
+  async function captureWindowsRuntimeOwnerProofSerialized(app, record, expectedCwd = null) {
+    if (record.ownerProofCaptured) return true;
+    if (record.ownerProofCapturePromise) return record.ownerProofCapturePromise;
+    const capturePromise = captureWindowsRuntimeOwnerProof(app, record, expectedCwd)
+      .finally(() => {
+        if (record.ownerProofCapturePromise === capturePromise) {
+          record.ownerProofCapturePromise = null;
+        }
+      });
+    record.ownerProofCapturePromise = capturePromise;
+    return capturePromise;
   }
 
   async function captureWindowsRuntimeOwnerProof(app, record, expectedCwd = null) {
@@ -3748,7 +3871,7 @@ export function createRuntimeManager({
     }
 
     const packageJson = dependencyInspection.package_json;
-    const manager = detectPackageManager({ packageJson, lockfile });
+    const manager = detectPackageManager({ packageJson, lockfile, platform });
     const declaredDependencies = declaredDependencyCount(packageJson);
     const requiredDependencyCount = dependencyInspection.required_dependency_count;
     const missingDependencyNames = dependencyInspection.missing_required_dependencies;
@@ -3947,6 +4070,44 @@ async function requiredModuleSlotState({ organizationRoot, app }) {
         message: `${app.title} zatím nejde spustit: datový slot ${requiredPath} je plánovaný. Dokonči jeho schválenou manifestem řízenou aktivaci; repozitář ručně neklonuj.`,
       };
     }
+    const worktreeMetadata = app?.[APP_WORKTREE_METADATA];
+    const repositoryDb = worktreeMetadata
+      ? repositoryDbWorktreeDependencyForSlot({
+          slot,
+          moduleSlotPath: worktreeMetadata.module_path,
+        })
+      : { ok: true, required: false, dependency: null };
+    if (repositoryDb.required) {
+      if (!repositoryDb.ok) {
+        return {
+          state: "required_slot_unavailable",
+          message: `${app.title} nejde spustit, protože repository-db binding ${requiredPath} není bezpečně odvoditelný: ${repositoryDb.message}`,
+        };
+      }
+      const members = Array.isArray(worktreeMetadata.members) ? worktreeMetadata.members : [];
+      const matchingMembers = members.filter((member) =>
+        member?.role === "dependency" && member?.slot_path === requiredPath
+      );
+      if (matchingMembers.length !== 1 || typeof app?.[APP_CHECKOUT_ROOT] !== "string") {
+        return {
+          state: "required_slot_unavailable",
+          message: `${app.title} nejde spustit, protože worktree nemá právě jeden vlastněný repository-db binding ${requiredPath}. Vytvoř nový worktree přes Launchpad nebo oprav sidecar vědomým recovery postupem.`,
+        };
+      }
+      const binding = await inspectRepositoryDbWorktreeBinding({
+        organizationRoot,
+        editWorktreeRoot: app[APP_CHECKOUT_ROOT],
+        dependency: repositoryDb.dependency,
+        member: matchingMembers[0],
+      });
+      if (!binding.ok) {
+        return {
+          state: "required_slot_unavailable",
+          message: `${app.title} nejde spustit, protože repository-db binding ${requiredPath} není připravený (${binding.details.join("; ")}).`,
+        };
+      }
+      continue;
+    }
     const requiredSlotBoundary = await inspectCanonicalPathBoundary({
       rootPath: organizationRoot,
       rootRealPath: organizationRoot,
@@ -4028,7 +4189,7 @@ async function firstExistingLockfile(appRoot) {
   return null;
 }
 
-function detectPackageManager({ packageJson, lockfile }) {
+function detectPackageManager({ packageJson, lockfile, platform = process.platform }) {
   const declared = typeof packageJson.packageManager === "string" ? packageJson.packageManager.trim() : "";
   if (declared) {
     const name = packageManagerName(declared);
@@ -4039,7 +4200,7 @@ function detectPackageManager({ packageJson, lockfile }) {
       source: "packageManager",
       supported,
       lockfile_mismatch: lockfileMismatch,
-      installCommand: supported ? [name, "install", "--frozen-lockfile"] : null,
+      installCommand: supported ? frozenBunInstallCommand(name, { platform }) : null,
     };
   }
 
@@ -4048,7 +4209,9 @@ function detectPackageManager({ packageJson, lockfile }) {
       name: lockfile.package_manager,
       source: `lockfile:${lockfile.path}`,
       supported: supportedInstallManagers.has(lockfile.package_manager),
-      installCommand: supportedInstallManagers.has(lockfile.package_manager) ? [lockfile.package_manager, "install", "--frozen-lockfile"] : null,
+      installCommand: supportedInstallManagers.has(lockfile.package_manager)
+        ? frozenBunInstallCommand(lockfile.package_manager, { platform })
+        : null,
     };
   }
 

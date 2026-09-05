@@ -1172,7 +1172,11 @@ test("git action inventory rejects traversal and symlink module paths that escap
   const betaRoot = join(root, "organizations", "BetaCo_GEN3");
   const omegaTarget = join(root, "organizations", "OmegaCo_GEN3", "workspace", "studio");
   await mkdir(join(betaRoot, "workspace"), { recursive: true });
-  await symlink(omegaTarget, join(betaRoot, "workspace", "foreign-link"));
+  await symlink(
+    omegaTarget,
+    join(betaRoot, "workspace", "foreign-link"),
+    process.platform === "win32" ? "junction" : "dir",
+  );
   const manifestPath = join(betaRoot, "modules.manifest.json");
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
   manifest.module_slots.push(

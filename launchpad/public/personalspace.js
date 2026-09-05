@@ -22,6 +22,7 @@ import { openCodexRepairDialog, openCodexRuntimeIssueDialog } from "./codex-hand
 import { runtimeRecoveryForApp } from "./runtime-recovery.js";
 import { launchpadFetch } from "./session-aware-fetch.js";
 import { writeReservedTabStatus } from "./reserved-tab-status.js";
+import { t } from "./i18n.js";
 
 const state = {
   data: null,
@@ -120,9 +121,9 @@ function personalspaceErrorState() {
   const card = document.createElement("section");
   card.className = "personalspace-friendly-empty is-error";
   const title = document.createElement("h2");
-  title.textContent = "Osobní prostor se nepodařilo načíst";
+  title.textContent = t("personal.loadFailed.title");
   const copy = document.createElement("p");
-  copy.textContent = "Zkus prostor znovu synchronizovat. Technický důvod najde technolog v přehledu problémů.";
+  copy.textContent = t("personal.loadFailed.message");
   card.append(title, copy);
   return card;
 }
@@ -163,20 +164,20 @@ function cssEscape(value) {
 function spaceBlock(space) {
   const block = document.createElement("div");
   block.className = "personalspace-space-block is-primary";
-  block.setAttribute("aria-label", `Osobní prostor ${space.display_name}`);
+  block.setAttribute("aria-label", t("personal.spaceLabel", { space: space.display_name }));
 
   if (!space.config_valid) {
     const invalid = document.createElement("section");
     invalid.className = "personalspace-friendly-empty";
     const title = document.createElement("h2");
-    title.textContent = "Osobní prostor teď nejde načíst";
+    title.textContent = t("personal.spaceUnavailable.title");
     const copy = document.createElement("p");
-    copy.textContent = "Zkus obnovit stav. Pokud problém zůstane, podrobnosti najde technolog v technických informacích.";
+    copy.textContent = t("personal.spaceUnavailable.message");
     const technical = document.createElement("details");
     technical.className = "personalspace-technical";
     bindTechnicalDetails(technical, space.dir_name);
     const summary = document.createElement("summary");
-    summary.textContent = "Technické informace";
+    summary.textContent = t("common.technicalInformation");
     const issues = document.createElement("p");
     issues.className = "personalspace-invalid";
     issues.textContent = (space.config_issues ?? []).join("; ");
@@ -204,9 +205,9 @@ function personalspaceEmptyState() {
   const card = document.createElement("section");
   card.className = "personalspace-friendly-empty";
   const title = document.createElement("h2");
-  title.textContent = "Personalspace zatím není vytvořený";
+  title.textContent = t("personal.notCreated.title");
   const copy = document.createElement("p");
-  copy.textContent = "Vytvoř si privátní osobní prostor; Buddyho můžeš připojit až později.";
+  copy.textContent = t("personal.notCreated.message");
   card.append(title, copy);
   return card;
 }
@@ -226,16 +227,16 @@ function noBuddyCard() {
   const card = document.createElement("section");
   card.className = "personalspace-friendly-empty personalspace-no-buddy";
   const title = document.createElement("h2");
-  title.textContent = "Personalspace je připravený";
+  title.textContent = t("personal.ready.title");
   const copy = document.createElement("p");
-  copy.textContent = "Buddy není připojený — osobní aplikace i gbrain můžeš používat samostatně a Buddyho přidat později.";
+  copy.textContent = t("personal.ready.message");
   card.append(title, copy);
   return card;
 }
 
 function buddyCard(space) {
   const buddy = space.buddy ?? {};
-  const name = buddy.display_name ?? "Tvůj Buddy";
+  const name = buddy.display_name ?? t("buddy.yours");
   const card = document.createElement("article");
   card.className = "buddy-card";
 
@@ -250,14 +251,14 @@ function buddyCard(space) {
   content.className = "buddy-card-content";
   const eyebrow = document.createElement("span");
   eyebrow.className = "buddy-eyebrow";
-  eyebrow.textContent = "Tvůj Buddy";
+  eyebrow.textContent = t("buddy.yours");
   const title = document.createElement("h2");
   title.textContent = name;
-  const status = statusBadge("Buddy je nastavený", "buddy-status is-configured", "success");
+  const status = statusBadge(t("buddy.configured"), "buddy-status is-configured", "success");
   const description = document.createElement("p");
   description.className = "buddy-description";
   description.textContent = buddy.description
-    ?? "Pomáhá ti zachytit nápady, navázat na rozdělanou práci a připomenout věci, na kterých ti záleží.";
+    ?? t("buddy.description");
   content.append(eyebrow, title, status, description);
 
   if (buddy.application) content.append(buddyApplicationRow(buddy.application));
@@ -271,23 +272,23 @@ function buddyCard(space) {
     open.href = openUrl;
     open.target = "_blank";
     open.rel = "noopener noreferrer";
-    open.textContent = `Otevřít ${name}`;
+    open.textContent = t("common.openNamed", { name });
     actions.append(open);
   } else {
     const open = document.createElement("button");
     open.type = "button";
     open.className = "btn btn-primary buddy-open";
     open.disabled = true;
-    open.textContent = `Otevřít ${name}`;
-    open.title = "Buddy zatím nemá nastavený odkaz na komunikační aplikaci.";
+    open.textContent = t("common.openNamed", { name });
+    open.title = t("buddy.linkMissing");
     actions.append(open);
   }
   const settings = document.createElement("button");
   settings.type = "button";
   settings.className = "btn btn-secondary";
   settings.disabled = true;
-  settings.textContent = "Nastavení Buddyho";
-  settings.title = "Nastavení Buddyho bude součástí připravovaného administračního rozhraní.";
+  settings.textContent = t("buddy.settings");
+  settings.title = t("buddy.settingsPlanned");
   actions.append(settings);
   content.append(actions);
   card.append(portrait, content);
@@ -303,11 +304,11 @@ function buddyApplicationRow(application) {
   const copy = document.createElement("span");
   copy.className = "buddy-application-copy";
   const label = document.createElement("span");
-  label.textContent = "Používáš v aplikaci";
+  label.textContent = t("buddy.usesApp");
   const name = document.createElement("strong");
-  name.textContent = application.name ?? "Komunikační aplikace";
+  name.textContent = application.name ?? t("buddy.communicationApp");
   copy.append(label, name);
-  row.append(icon, copy, statusBadge("Nastaveno", "buddy-application-state", "success"));
+  row.append(icon, copy, statusBadge(t("common.configured"), "buddy-application-state", "success"));
   return row;
 }
 
@@ -317,11 +318,11 @@ function recurringTasksCard(space) {
   const card = document.createElement("aside");
   card.className = "buddy-routines";
   const title = document.createElement("h2");
-  title.textContent = "Pravidelné úkoly";
+  title.textContent = t("buddy.recurringTasks");
   const intro = document.createElement("p");
   intro.textContent = tasks.length > 0
-    ? `Co je pro ${buddy.display_name ?? "Buddyho"} nastavené jako pravidelný úkol.`
-    : "Buddy zatím nemá popsané žádné opakované úkoly.";
+    ? t("buddy.recurringIntro", { buddy: buddy.display_name ?? t("buddy.yours") })
+    : t("buddy.noRecurringTasks");
   card.append(title, intro);
 
   const list = document.createElement("div");
@@ -353,7 +354,7 @@ function personalAppsSection(space) {
   const section = document.createElement("section");
   section.className = "personal-apps-section";
   const title = document.createElement("h2");
-  title.textContent = "Moje aplikace";
+  title.textContent = t("personal.apps.title");
   section.append(title);
 
   // Osobní aplikace — stejná `.apps-grid` mřížka jako workspace sekce.
@@ -362,9 +363,9 @@ function personalAppsSection(space) {
     const emptyApps = document.createElement("div");
     emptyApps.className = "personalspace-apps-empty";
     const heading = document.createElement("strong");
-    heading.textContent = "Zatím tu nemáš další osobní aplikace";
+    heading.textContent = t("personal.apps.emptyTitle");
     const copy = document.createElement("p");
-    copy.textContent = "Personalspace funguje i bez nich. Až nějakou přidáš, objeví se právě tady.";
+    copy.textContent = t("personal.apps.emptyMessage");
     emptyApps.append(heading, copy);
     section.append(emptyApps);
   } else {
@@ -383,14 +384,14 @@ function personalSupportCards(space) {
   grid.className = "personal-support-grid";
   grid.append(
     supportCard(
-      "Osobní paměť",
+      t("personal.memory.title"),
       space.gbrain?.exists
-        ? "Gbrain je připojený jako soukromá dlouhodobá paměť vlastníka."
-        : "Soukromý gbrain zatím není připojený.",
+        ? t("personal.memory.connected")
+        : t("personal.memory.disconnected"),
     ),
     supportCard(
-      "Osobní účet a soukromí",
-      "Spravuješ svůj soukromý prostor. Obsah se automaticky nesdílí do Organizací.",
+      t("personal.privacy.title"),
+      t("personal.privacy.message"),
     ),
   );
   return grid;
@@ -412,12 +413,12 @@ function technicalDetails(space) {
   details.className = "personalspace-technical";
   bindTechnicalDetails(details, space.dir_name);
   const summary = document.createElement("summary");
-  summary.textContent = "Technické informace";
+  summary.textContent = t("common.technicalInformation");
   const inner = document.createElement("div");
   inner.className = "personalspace-technical-inner";
   const mount = document.createElement("p");
   mount.className = "personalspace-space-mount";
-  mount.textContent = `Zdroj: ${space.mount_path}`;
+  mount.textContent = t("common.source", { source: space.mount_path });
   inner.append(mount);
 
   // Nedostupné/plánované moduly (missing_access / planned_slot) — jako u Organizací.
@@ -484,7 +485,9 @@ function personalAppCard(app) {
   card.className = `personalspace-app is-${appTone(app, warning)} ${openable ? "is-openable" : "is-readonly"}`.trim();
   card.dataset.appId = app.id;
   card.tabIndex = 0;
-  card.setAttribute("aria-label", openable ? `Otevřít ${app.title}` : `${app.title} — detail`);
+  card.setAttribute("aria-label", openable
+    ? t("common.openNamed", { name: app.title })
+    : t("personal.cardDetail", { app: app.title }));
 
   const head = document.createElement("div");
   head.className = "personalspace-app-head";
@@ -502,7 +505,7 @@ function personalAppCard(app) {
   title.textContent = app.title;
   // Badge Soukromé zůstává na title-row — osobní surface se nikdy nesmí splést
   // s firemní (izolace per decision 0051).
-  titleRow.append(title, statusBadge("Soukromé", "personalspace-private-badge", "private"));
+  titleRow.append(title, statusBadge(t("common.private"), "personalspace-private-badge", "private"));
   const desc = document.createElement("p");
   desc.className = "personalspace-app-desc";
   desc.textContent = personalAppDescription(app);
@@ -535,7 +538,7 @@ function personalAppCard(app) {
     feedback.classList.remove("empty");
     const note = document.createElement("p");
     note.className = "progress-note loading-dots";
-    note.textContent = state.openingMessages.get(app.id) ?? "Otevírám";
+    note.textContent = state.openingMessages.get(app.id) ?? t("action.opening");
     feedback.append(note);
   }
   card.append(feedback);
@@ -561,7 +564,9 @@ function personalAppCard(app) {
 function moduleSlotChip(slot) {
   const chipEl = document.createElement("span");
   chipEl.className = `personalspace-slot-chip is-${slot.status}`;
-  const label = slot.status === "missing_access" ? "chybí přístup" : "plánovaný slot";
+  const label = slot.status === "missing_access"
+    ? t("personal.slot.missingAccess")
+    : t("personal.slot.planned");
   chipEl.textContent = `${slot.slug} · ${label}`;
   chipEl.title = slot.path;
   return chipEl;
@@ -602,8 +607,8 @@ function gbrainSection(space) {
     const missing = document.createElement("p");
     missing.className = "personalspace-gbrain-missing";
     missing.textContent = gbrain.transitional_missing
-      ? `Přechodný gbrain zdroj ${gbrain.transitional_missing} není lokálně dostupný. Zkontroluj mount nebo migraci.`
-      : "gbrain vault pro tento prostor není lokálně dostupný.";
+      ? t("gbrain.transitionalMissing", { source: gbrain.transitional_missing })
+      : t("gbrain.unavailable");
     section.append(missing);
     return section;
   }
@@ -614,9 +619,9 @@ function gbrainSection(space) {
 
   const obsidianBtn = document.createElement("a");
   obsidianBtn.className = "btn btn-secondary btn-sm personalspace-gbrain-obsidian";
-  obsidianBtn.textContent = "Otevřít v Obsidianu";
+  obsidianBtn.textContent = t("gbrain.openObsidian");
   obsidianBtn.href = obsidianDeepLink(gbrain);
-  obsidianBtn.title = "Otevře vault v desktopové aplikaci Obsidian (obsidian://open).";
+  obsidianBtn.title = t("gbrain.openObsidianTitle");
   // Obsidian deep link nemusí fungovat, pokud vault v Obsidianu není
   // zaregistrovaný — vždy ukážeme i cestu jako fallback.
   buttons.append(obsidianBtn);
@@ -625,21 +630,21 @@ function gbrainSection(space) {
   const browseBtn = document.createElement("button");
   browseBtn.type = "button";
   browseBtn.className = "btn btn-ghost btn-sm";
-  browseBtn.textContent = gstate.open ? "Skrýt zápisy" : "Procházet zápisy";
+  browseBtn.textContent = gstate.open ? t("gbrain.hideNotes") : t("gbrain.browseNotes");
   browseBtn.addEventListener("click", () => toggleGbrainBrowser(space));
   buttons.append(browseBtn);
   section.append(buttons);
 
   const pathHint = document.createElement("p");
   pathHint.className = "personalspace-gbrain-path";
-  const modeLabel = gbrain.mode === "transitional" ? " (přechodný mount)" : "";
-  pathHint.textContent = `Vault: ${gbrain.source_rel}${modeLabel}. Pokud se Obsidian neotevře, vault v něm ještě není zaregistrovaný — otevři tuto cestu ručně.`;
+  const modeLabel = gbrain.mode === "transitional" ? t("gbrain.transitionalMount") : "";
+  pathHint.textContent = t("gbrain.pathHint", { source: gbrain.source_rel, mode: modeLabel });
   section.append(pathHint);
 
   if (gbrain.default_shared === false) {
     const priv = document.createElement("p");
     priv.className = "personalspace-gbrain-private";
-    priv.textContent = "gbrain se defaultně nesdílí — přístup drží jen pár Kolega ↔ jeho Buddy.";
+    priv.textContent = t("gbrain.private");
     section.append(priv);
   }
 
@@ -660,7 +665,7 @@ function gbrainBrowser(space, gstate) {
   input.type = "search";
   input.className = "personalspace-gbrain-search-input";
   input.dataset.space = space.dir_name;
-  input.placeholder = "Fulltext v zápisech…";
+  input.placeholder = t("gbrain.searchPlaceholder");
   input.value = gstate.query ?? "";
   input.addEventListener("input", (event) => {
     gstate.query = event.target.value ?? "";
@@ -672,7 +677,7 @@ function gbrainBrowser(space, gstate) {
   const searchBtn = document.createElement("button");
   searchBtn.type = "submit";
   searchBtn.className = "btn btn-secondary btn-sm";
-  searchBtn.textContent = "Hledat";
+  searchBtn.textContent = t("gbrain.search");
   searchForm.append(input, searchBtn);
   browser.append(searchForm);
 
@@ -685,7 +690,7 @@ function gbrainBrowser(space, gstate) {
   if (gstate.loading) {
     const loading = document.createElement("p");
     loading.className = "personalspace-gbrain-loading";
-    loading.textContent = "Načítám…";
+    loading.textContent = t("gbrain.loading");
     browser.append(loading);
   }
 
@@ -700,7 +705,7 @@ function gbrainBrowser(space, gstate) {
   } else if (gstate.tree) {
     const count = document.createElement("p");
     count.className = "personalspace-gbrain-count";
-    count.textContent = `${gstate.tree.file_count} zápisů`;
+    count.textContent = t("gbrain.noteCount", { count: gstate.tree.file_count });
     listCol.append(count, gbrainTreeNode(space, gstate.tree.tree));
   }
   columns.append(listCol);
@@ -719,7 +724,7 @@ function gbrainBrowser(space, gstate) {
   } else {
     const hint = document.createElement("p");
     hint.className = "personalspace-gbrain-note-empty";
-    hint.textContent = "Vyber zápis vlevo pro náhled (read-only).";
+    hint.textContent = t("gbrain.selectNote");
     noteCol.append(hint);
   }
   columns.append(noteCol);
@@ -757,11 +762,11 @@ function gbrainSearchResults(space, gstate) {
   wrap.className = "personalspace-gbrain-results";
   const summary = document.createElement("div");
   summary.className = "personalspace-gbrain-results-head";
-  summary.textContent = `${gstate.searchResults.result_count} zápisů se shodou`;
+  summary.textContent = t("gbrain.matchCount", { count: gstate.searchResults.result_count });
   const back = document.createElement("button");
   back.type = "button";
   back.className = "btn btn-ghost btn-sm";
-  back.textContent = "Zpět na strom";
+  back.textContent = t("gbrain.backToTree");
   back.addEventListener("click", () => {
     gstate.searchResults = null;
     rerender();
@@ -812,7 +817,7 @@ async function loadGbrainTree(space) {
   try {
     gstate.tree = await fetchJson(`/api/personalspace/${encodeURIComponent(space.dir_name)}/gbrain/tree`);
   } catch (error) {
-    gstate.error = `Strom zápisů se nepodařilo načíst: ${error.message}`;
+    gstate.error = t("gbrain.treeFailed");
   } finally {
     gstate.loading = false;
     rerender();
@@ -830,7 +835,7 @@ async function openGbrainNote(space, path) {
       `/api/personalspace/${encodeURIComponent(space.dir_name)}/gbrain/note?path=${encodeURIComponent(path)}`,
     );
   } catch (error) {
-    gstate.error = `Zápis se nepodařilo načíst: ${error.message}`;
+    gstate.error = t("gbrain.noteFailed");
     gstate.note = null;
   } finally {
     gstate.loading = false;
@@ -842,7 +847,7 @@ async function runGbrainSearch(space) {
   const gstate = gbrainState(space);
   const query = (gstate.query ?? "").trim();
   if (query.length < 2) {
-    gstate.error = "Hledaný výraz musí mít aspoň 2 znaky.";
+    gstate.error = t("gbrain.queryShort");
     rerender();
     return;
   }
@@ -854,7 +859,7 @@ async function runGbrainSearch(space) {
       `/api/personalspace/${encodeURIComponent(space.dir_name)}/gbrain/search?q=${encodeURIComponent(query)}`,
     );
   } catch (error) {
-    gstate.error = `Hledání selhalo: ${error.message}`;
+    gstate.error = t("gbrain.searchFailed");
   } finally {
     gstate.loading = false;
     rerender();
@@ -877,7 +882,7 @@ function isOpenable(app) {
 function personalAppDescription(app) {
   const endpoint = app.host && app.port ? `${app.host}:${app.port}` : null;
   const parts = [app.module, endpoint].filter(Boolean);
-  return parts.length > 0 ? parts.join(" · ") : "Osobní aplikace";
+  return parts.length > 0 ? parts.join(" · ") : t("personal.application");
 }
 
 // Warning model dlaždice (port cardWarningModel z GEN2-minimal karty, ořezaný na personalspace
@@ -888,9 +893,9 @@ function personalCardWarningModel(app) {
   if (app.repair_action?.prompt) {
     return {
       tone: "danger",
-      title: "Aplikaci je potřeba opravit",
-      detail: app.dependencies?.message || "Lazurio připravilo bezpečný postup pro opravu této osobní aplikace.",
-      actionLabel: app.repair_action.label ?? "Vyřešit s Codexem",
+      title: t("repair.applicationTitle"),
+      detail: app.dependencies?.message || t("personal.repairMessage"),
+      actionLabel: app.repair_action.label ?? t("common.solveWithCodex"),
       run: () => openCodexRepairDialog(app.repair_action),
     };
   }
@@ -1001,9 +1006,9 @@ function personalMenuNode(app) {
   trigger.type = "button";
   trigger.className = `app-more-button ${app.runtime_status === "healthy" ? "has-running" : ""}`.trim();
   trigger.dataset.menuFocusKey = app.id;
-  trigger.setAttribute("aria-label", "Další možnosti aplikace");
+  trigger.setAttribute("aria-label", t("a11y.appOptions"));
   trigger.setAttribute("aria-expanded", String(isOpen));
-  trigger.title = "Další možnosti";
+  trigger.title = t("topbar.more");
   trigger.innerHTML =
     '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>';
   trigger.addEventListener("click", (event) => {
@@ -1017,7 +1022,7 @@ function personalMenuNode(app) {
   const panel = document.createElement("div");
   panel.className = "app-version-menu-panel";
   panel.setAttribute("role", "group");
-  panel.setAttribute("aria-label", "Další možnosti aplikace");
+  panel.setAttribute("aria-label", t("a11y.appOptions"));
   panel.addEventListener("click", (event) => event.stopPropagation());
   panel.append(...actions.map((action) => menuActionRow(action)));
 
@@ -1031,13 +1036,13 @@ function personalMenuNode(app) {
 function personalMenuActions(app) {
   const actions = [];
   if (canStop(app)) {
-    actions.push({ label: "Zastavit", run: () => runAction(app, "stop"), pending: `${app.id}:stop` });
+    actions.push({ label: t("action.stop"), run: () => runAction(app, "stop"), pending: `${app.id}:stop` });
   }
   if (canRestart(app)) {
-    actions.push({ label: "Restart", run: () => runAction(app, "restart"), pending: `${app.id}:restart` });
+    actions.push({ label: t("action.restart"), run: () => runAction(app, "restart"), pending: `${app.id}:restart` });
   }
   if (["healthy", "unhealthy"].includes(app.runtime_status)) {
-    actions.push({ label: "Logy", run: () => loadLogs(app), pending: `${app.id}:logs` });
+    actions.push({ label: t("common.logs"), run: () => loadLogs(app), pending: `${app.id}:logs` });
   }
   return actions;
 }
@@ -1126,11 +1131,16 @@ async function runAction(app, action) {
       cache: "no-store",
     });
     const payload = await response.json();
-    if (!response.ok) throw new Error(payload.message ?? `${action} selhal`);
+    if (!response.ok) {
+      const error = new Error(payload.message ?? `${action} failed`);
+      error.code = payload.error ?? "runtime_action_failed";
+      error.payload = payload;
+      throw error;
+    }
     deps.onToast(`${app.title}: ${completedRuntimeActionLabel(action)}.`, "ok");
     await deps.onReload();
   } catch (error) {
-    deps.onToast(`${app.title}: ${error.message}`, "fail", 6000);
+    deps.onToast(`${app.title}: ${runtimeRecoveryForApp(app, error).message}`, "fail", 6000);
   } finally {
     state.pendingAction = null;
     rerender();
@@ -1138,13 +1148,9 @@ async function runAction(app, action) {
 }
 
 function completedRuntimeActionLabel(action) {
-  return ({
-    install: "instalace dokončena",
-    repair: "oprava dokončena",
-    start: "spuštění dokončeno",
-    stop: "zastavení dokončeno",
-    restart: "restart dokončen",
-  })[action] ?? "akce dokončena";
+  const key = `action.completed.${action}`;
+  const label = t(key);
+  return label === `[${key}]` ? t("action.completed.default") : label;
 }
 
 async function loadLogs(app) {
@@ -1154,9 +1160,13 @@ async function loadLogs(app) {
     const logs = await fetchJson(`/api/personalspace/apps/${encodeURIComponent(app.id)}/logs`);
     // Logy zobrazíme jako toast s odkazem — jednoduché read-only. Detailní log
     // panel řeší org lane; osobní appky drží slim povrch.
-    deps.onToast(`${app.title}: log má ${logs.content ? logs.content.length : 0} znaků (viz ${logs.log_path}).`, "info", 5000);
+    deps.onToast(t("personal.logLength", {
+      app: app.title,
+      count: logs.content ? logs.content.length : 0,
+      path: logs.log_path,
+    }), "info", 5000);
   } catch (error) {
-    deps.onToast(`${app.title}: logy se nepodařilo načíst.`, "fail", 6000);
+    deps.onToast(t("personal.logsFailed", { app: app.title }), "fail", 6000);
   } finally {
     state.pendingAction = null;
     rerender();
@@ -1169,11 +1179,11 @@ async function loadLogs(app) {
 async function openPersonalApp(app) {
   if (state.openingApps.has(app.id)) return;
   state.openingApps.add(app.id);
-  state.openingMessages.set(app.id, "Otevírám");
+  state.openingMessages.set(app.id, t("action.opening"));
   const reservedTab = reservePersonalTab(app);
   writeReservedTabStatus(reservedTab, {
     title: app.title,
-    message: "Spouštím osobní aplikaci...",
+    message: t("personal.startingMessage"),
   });
   rerender();
   try {
@@ -1183,28 +1193,28 @@ async function openPersonalApp(app) {
     );
     if (payload.url) {
       openPersonalResultUrl(payload.url, reservedTab, app);
-      deps.onToast(`${app.title}: běží, otevírám.`, "ok");
+      deps.onToast(t("personal.runningOpening", { app: app.title }), "ok");
     } else if (payload.status === "starting") {
-      deps.onToast(`${app.title}: startuje, otevřu ji hned jak naběhne.`, "info", 6000);
+      deps.onToast(t("personal.startingOpening", { app: app.title }), "info", 6000);
       const runtime = await waitForPersonalRuntime(app, reservedTab);
       openPersonalResultUrl(runtime.url ?? app.url, reservedTab, app);
-      deps.onToast(`${app.title}: běží, otevírám.`, "ok");
+      deps.onToast(t("personal.runningOpening", { app: app.title }), "ok");
     } else if (payload.status === "healthy" && (payload.runtime?.url || app.url)) {
       openPersonalResultUrl(payload.runtime?.url ?? app.url, reservedTab, app);
-      deps.onToast(`${app.title}: běží, otevírám.`, "ok");
+      deps.onToast(t("personal.runningOpening", { app: app.title }), "ok");
     } else {
-      throw new Error(
+      throw codedPersonalError(
         payload.runtime?.last_error
           ?? payload.runtime?.message
           ?? payload.message
-          ?? "Launchpad nedostal URL běžící osobní aplikace.",
+          ?? t("personal.urlMissing"),
+        payload.error ?? "app_url_missing",
       );
     }
     await deps.onReload();
   } catch (error) {
     closePersonalTab(reservedTab);
-    const message = error instanceof Error ? error.message : String(error);
-    deps.onToast(`${app.title}: ${classifyPersonalOpenError(message)}`, "fail", 7000);
+    deps.onToast(`${app.title}: ${classifyPersonalOpenError(error)}`, "fail", 7000);
   } finally {
     state.openingApps.delete(app.id);
     state.openingMessages.delete(app.id);
@@ -1219,7 +1229,7 @@ function reservePersonalTab(app) {
   if (tab) {
     tab.opener = null;
     try {
-      tab.document.title = `Spouštím ${app.title}`;
+      tab.document.title = t("loading.title", { title: app.title });
     } catch {
       // blank tab titulek není nutný — když to hodí, nevadí
     }
@@ -1231,10 +1241,10 @@ async function waitForPersonalRuntime(app, reservedTab) {
   const deadline = Date.now() + PERSONAL_OPEN_STARTING_WAIT_MS;
   let lastRuntime = null;
   while (Date.now() < deadline) {
-    state.openingMessages.set(app.id, "Aplikace startuje");
+    state.openingMessages.set(app.id, t("action.starting"));
     writeReservedTabStatus(reservedTab, {
       title: app.title,
-      message: "Osobní aplikace startuje...",
+      message: t("personal.appStartingMessage"),
     });
     rerender();
     await sleep(PERSONAL_OPEN_STARTING_POLL_MS);
@@ -1242,10 +1252,10 @@ async function waitForPersonalRuntime(app, reservedTab) {
     lastRuntime = runtime;
     if (runtime.status === "healthy") return runtime;
     if (runtime.status === "unhealthy" || runtime.status === "stopped") {
-      throw new Error(runtime.last_error ?? runtime.message ?? "Osobní aplikace se po startu nerozeběhla.");
+      throw codedPersonalError(runtime.last_error ?? runtime.message ?? t("personal.startFailed"), runtime.error ?? "runtime_unhealthy");
     }
   }
-  throw new Error(lastRuntime?.message ?? "Osobní aplikace pořád startuje a health endpoint zatím neodpovídá.");
+  throw codedPersonalError(lastRuntime?.message ?? t("personal.healthTimeout"), "health_timeout");
 }
 
 function openPersonalResultUrl(url, reservedTab, app) {
@@ -1254,7 +1264,7 @@ function openPersonalResultUrl(url, reservedTab, app) {
     return;
   }
   if (!window.open(url, "_blank", "noopener")) {
-    deps.onToast(`${app.title}: prohlížeč zablokoval nové okno.`, "fail", 6000);
+    deps.onToast(t("personal.popupBlocked", { app: app.title }), "fail", 6000);
   }
 }
 
@@ -1262,21 +1272,27 @@ function closePersonalTab(reservedTab) {
   if (reservedTab && !reservedTab.closed) reservedTab.close();
 }
 
-function classifyPersonalOpenError(message) {
-  const text = String(message ?? "");
-  if (/port/i.test(text) && /(obsazen|conflict|kolize|PID|EADDRINUSE|in use)/i.test(text)) {
-    return "Port osobní aplikace je obsazený jiným procesem. Zavři starou instanci nebo uvolni port.";
+function codedPersonalError(message, code) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function classifyPersonalOpenError(error) {
+  const code = String(error?.code ?? "runtime_action_failed").toLowerCase();
+  if (["port_in_use", "port_conflict", "port_occupied", "eaddrinuse"].includes(code)) {
+    return t("personal.error.port");
   }
-  if (/install|balíč|dependency|needs_install/i.test(text)) {
-    return "Nepodařilo se doinstalovat balíčky. Otevři logy osobní aplikace.";
+  if (["app_install_failed", "app_repair_failed", "missing_dependencies", "needs_install"].includes(code)) {
+    return t("personal.error.install");
   }
-  if (/pořád startuje|ještě startuje|health endpoint|start timeout/i.test(text)) {
-    return "Osobní aplikace startuje moc dlouho. Launchpad ji dál neumí potvrdit přes health endpoint.";
+  if (["start_timeout", "starting_timeout", "health_timeout"].includes(code)) {
+    return t("personal.error.timeout");
   }
-  if (/not[_ ]?ready|app_not_ready|restricted|missing_access/i.test(text)) {
-    return "Osobní modul zatím není připravený ke spuštění.";
+  if (["not_ready", "app_not_ready", "restricted", "missing_access"].includes(code)) {
+    return t("personal.error.notReady");
   }
-  return "Spuštění se nepovedlo. Otevři logy osobní aplikace.";
+  return t("personal.error.failed");
 }
 
 function sleep(ms) {
@@ -1307,27 +1323,23 @@ function appTone(app, warning) {
 }
 
 function runtimeChip(app) {
-  const labels = {
-    healthy: ["Běží", "chip-success"],
-    starting: ["Startuje", "chip-warn"],
-    stopped: ["Zastavené", "chip-muted"],
-    unhealthy: ["Runtime problém", "chip-warn"],
+  const tones = {
+    healthy: "chip-success",
+    starting: "chip-warn",
+    stopped: "chip-muted",
+    unhealthy: "chip-warn",
   };
-  const [label, tone] = labels[app.runtime_status] ?? ["Neznámý stav", "chip-muted"];
+  const labelKey = `personal.status.${app.runtime_status}`;
+  const localized = t(labelKey);
+  const label = localized === `[${labelKey}]` ? t("personal.status.unknown") : localized;
+  const tone = tones[app.runtime_status] ?? "chip-muted";
   return chip(label, tone, app.runtime_status === "healthy" ? "success" : null);
 }
 
 function dependencyLabel(stateName) {
-  return (
-    {
-      needs_install: "Chybí balíčky",
-      dependency_boundary_invalid: "Neplatná hranice balíčků",
-      missing_package: "Chybí package.json",
-      missing_lockfile: "Chybí lockfile",
-      unknown_package_manager: "Nepodporovaný manažer",
-      invalid_manifest: "Nevalidní manifest",
-    }[stateName] ?? stateName
-  );
+  const key = `personal.dependency.${stateName}`;
+  const localized = t(key);
+  return localized === `[${key}]` ? stateName : localized;
 }
 
 function chip(label, toneClass, status = null) {
@@ -1374,13 +1386,17 @@ async function fetchJson(path, init = {}) {
   const response = await launchpadFetch(path, { cache: "no-store", ...init });
   if (!response.ok) {
     let message = `${path} ${response.status}`;
+    let payload = null;
     try {
-      const payload = await response.json();
+      payload = await response.json();
       if (payload?.message) message = payload.message;
     } catch {
       // ignore
     }
-    throw new Error(message);
+    const error = new Error(message);
+    error.code = payload?.error ?? `http_${response.status}`;
+    error.payload = payload;
+    throw error;
   }
   return response.json();
 }
