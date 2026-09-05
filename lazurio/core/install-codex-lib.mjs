@@ -11,6 +11,7 @@ import { spawnToolSync } from "./tool-invocation-lib.mjs";
 export async function installMissingCodex({
   root = null,
   allowUserPath = false,
+  codexAbsent = false,
   platform = process.platform,
   architecture = process.arch,
   environment = process.env,
@@ -57,10 +58,25 @@ export async function installMissingCodex({
     if (!userPathsSafe({ binary, homeDirectory, platform })) {
       return finish("action_required", "codex_custom_location");
     }
-    if (pathExists(binary)) return finish("action_required", "codex_outside_path");
+    const candidates = platform === "win32" ? [binary,
+      environment.APPDATA && paths.join(environment.APPDATA, "npm", "codex.cmd"),
+      paths.join(environment.LOCALAPPDATA, "Microsoft", "WinGet", "Links", "codex.exe"),
+      paths.join(homeDirectory, "scoop", "shims", "codex.exe"),
+      paths.join(homeDirectory, "scoop", "shims", "codex.ps1"),
+      paths.join(homeDirectory, ".bun", "bin", "codex.exe"),
+    ] : [binary, "/opt/homebrew/bin/codex", "/usr/local/bin/codex", "/usr/bin/codex",
+      "/opt/homebrew/Caskroom/codex", "/usr/local/Caskroom/codex",
+      "/usr/local/lib/node_modules/@openai/codex",
+      paths.join(homeDirectory, ".bun", "bin", "codex"),
+    ];
+    if (candidates.filter(Boolean).some(pathExists)) return finish("action_required", "codex_outside_path");
   } catch {
     return finish("failed", "codex_install_probe_failed");
   }
+  // No finite path inventory proves absence at custom package-manager prefixes.
+  // A clean-image runner or an Agent must supply that verified fact explicitly;
+  // missing PATH alone never authorizes creating a second installation.
+  if (codexAbsent !== true) return finish("action_required", "codex_absence_unverified");
   let result;
   try {
     result = await runInstaller({ platform, environment });

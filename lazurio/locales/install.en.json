@@ -101,5 +101,6 @@
   "apply.codex_installer_failed": "The official installer failed or could not start. Check connectivity and installer prerequisites, then repeat the same command.",
   "apply.codex_restart_required": "The installer finished. Open a new terminal session; on Windows fully quit and relaunch Codex. Then repeat lazurio install --json and lazurio doctor. A child of the original session is insufficient.",
   "apply.codex_installed": "Codex was installed and verified on PATH.",
-  "report.after_action": "Fresh observation of the machine after the installation action follows."
+  "report.after_action": "Fresh observation of the machine after the installation action follows.",
+  "apply.codex_absence_unverified": "First verify Codex is not installed outside PATH either, including custom prefixes and version managers. Only after that verification or for a known clean OS image, add --confirm-codex-absent; absence from PATH alone is insufficient."
 }

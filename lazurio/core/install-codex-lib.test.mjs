@@ -14,7 +14,7 @@ function fixture(overrides = {}) {
   const calls = [];
   const options = {
     platform: "linux", architecture: "x64", environment: { HOME: "/home/example" },
-    homeDirectory: "/home/example", allowUserPath: true, pathExists: () => false, userPathsSafe: () => true,
+    homeDirectory: "/home/example", allowUserPath: true, codexAbsent: true, pathExists: () => false, userPathsSafe: () => true,
     inspect: () => inspectLazurioInstallation({
       platform: "linux", architecture: "x64", homeDirectory: "/home/example",
       bunVersion: "1.4.1", requiredBunVersion: "1.4.1",
@@ -202,5 +202,29 @@ test("Windows installer fails before download without a trusted SystemRoot", asy
       fetchImpl: async () => { fetched = true; return new Response("script"); },
     })).rejects.toThrow();
     expect(fetched).toBe(false);
+  }
+});
+
+
+test("PATH absence alone never authorizes another installation", async () => {
+  const f = fixture({ codexAbsent: false });
+  expect((await installMissingCodex(f.options)).action.reason).toBe("codex_absence_unverified");
+  expect(f.calls).toHaveLength(0);
+});
+
+test("off-PATH package manager installs are preserved even with an absence assertion", async () => {
+  for (const installedPath of ["/opt/homebrew/bin/codex", "/usr/local/lib/node_modules/@openai/codex",
+    "/home/example/.bun/bin/codex"]) {
+    const f = fixture({ pathExists: (path) => path === installedPath });
+    expect((await installMissingCodex(f.options)).action.reason).toBe("codex_outside_path");
+    expect(f.calls).toHaveLength(0);
+  }
+  for (const installedPath of ["C:\\Users\\example\\AppData\\Roaming\\npm\\codex.cmd",
+    "C:\\Users\\example\\AppData\\Local\\Microsoft\\WinGet\\Links\\codex.exe"]) {
+    const f = fixture({ platform: "win32", homeDirectory: "C:\\Users\\example",
+      environment: { USERPROFILE: "C:\\Users\\example", LOCALAPPDATA: "C:\\Users\\example\\AppData\\Local",
+        APPDATA: "C:\\Users\\example\\AppData\\Roaming" }, pathExists: (path) => path === installedPath });
+    expect((await installMissingCodex(f.options)).action.reason).toBe("codex_outside_path");
+    expect(f.calls).toHaveLength(0);
   }
 });

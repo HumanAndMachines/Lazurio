@@ -313,7 +313,10 @@ already granted mandate again; if it is missing, first prepare the exact
 remediation and request the Principal's consent. Neither Doctor nor
 `lazurio update` ever executes this command. Plain `lazurio install` remains
 read-only. For missing Codex with the mandate above, run
-`lazurio install --install-missing codex --allow-user-path --json`.
+`lazurio install --install-missing codex --allow-user-path --confirm-codex-absent --json`.
+Only assert absence after checking existing installations outside PATH,
+including custom prefixes and version managers; a known clean OS image is
+the lab evidence. A missing PATH command alone is insufficient.
 The CLI runs the official installer noninteractively and returns the action
 outcome together with a fresh machine report. It preserves working installs;
 custom destinations and repairs require the separately scoped procedure above.

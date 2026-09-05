@@ -90,7 +90,7 @@ async function run(argv) {
     const root = operatedRootForCliProvenance({ codeRoot, provenance });
     const language = selectInstallLanguage({ requested: options.language });
     if (options.installMissing !== null) {
-      const report = await installMissingCodex({ root, allowUserPath: options.allowUserPath });
+      const report = await installMissingCodex({ root, allowUserPath: options.allowUserPath, codexAbsent: options.codexAbsent });
       console.log(options.json ? JSON.stringify(report, null, 2)
         : renderHumanInstallApplyReport(report, { language }));
       return report.status === "completed" ? 0 : report.status === "action_required" ? 1 : 2;
@@ -299,6 +299,7 @@ function parseArgs(argv) {
     applyPresent: false,
     installMissing: null,
     allowUserPath: false,
+    codexAbsent: false,
     noApp: false,
     appPackage: null,
     appId: null,
@@ -331,6 +332,10 @@ function parseArgs(argv) {
         throw new Error("--install-missing přijímá právě jednu hodnotu codex.");
       }
       parsed.installMissing = argv[++index];
+      continue;
+    }
+    if (arg === "--confirm-codex-absent") {
+      parsed.codexAbsent = true;
       continue;
     }
     if (arg === "--allow-user-path") {
@@ -676,11 +681,11 @@ function parseArgs(argv) {
   if (parsed.personalspace && !(parsed.command === "launchpad" && parsed.launchpadAction === "serve")) {
     throw new Error("--personalspace lze použít pouze s příkazem launchpad serve.");
   }
-  if ((parsed.installMissing !== null || parsed.allowUserPath) && parsed.command !== "install") {
-    throw new Error("--install-missing a --allow-user-path lze použít pouze s install.");
+  if ((parsed.installMissing !== null || parsed.allowUserPath || parsed.codexAbsent) && parsed.command !== "install") {
+    throw new Error("Instalační přepínače lze použít pouze s install.");
   }
-  if (parsed.allowUserPath && parsed.installMissing === null) {
-    throw new Error("--allow-user-path vyžaduje --install-missing codex.");
+  if ((parsed.allowUserPath || parsed.codexAbsent) && parsed.installMissing === null) {
+    throw new Error("Instalační souhlas a potvrzení nepřítomnosti vyžadují --install-missing codex.");
   }
   if (parsed.language !== null && parsed.command !== "install") {
     throw new Error("--language lze použít pouze s příkazem install.");
@@ -765,7 +770,7 @@ function usage() {
     "",
     "Použití:",
     "  lazurio --version [--json]",
-    "  lazurio install [--install-missing codex --allow-user-path] [--language cs|en] [--json]",
+    "  lazurio install [--install-missing codex --allow-user-path --confirm-codex-absent] [--language cs|en] [--json]",
     "  lazurio organization activate --check --github-id <id> [--json]",
     "  lazurio organization install <github-login> [--role builder] [--json]",
     "  lazurio context [--organization <slug>] [--json] [--root <cesta>]",

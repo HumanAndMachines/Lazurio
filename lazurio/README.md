@@ -22,7 +22,7 @@ lazurio install --json
 Chybějící Codex lze nyní doplnit stejným CLI:
 
 ```sh
-lazurio install --install-missing codex --allow-user-path --json
+lazurio install --install-missing codex --allow-user-path --confirm-codex-absent --json
 ```
 
 Přepínače vyjadřují předem udělený souhlas Principála s instalací Codexu a
@@ -30,6 +30,11 @@ jeho uživatelským PATH na aktuální Mašině. Bez `--allow-user-path` chyběj
 Codex vrátí žádost o tento přesný souhlas bez instalace. Vyhovující Codex se
 zachová; rozbitá instalace, existující soubor mimo PATH, vlastní
 `CODEX_HOME`/`CODEX_INSTALL_DIR` a Hosted Resident vyžadují samostatný postup.
+`--confirm-codex-absent` potvrzuje ověřenou nepřítomnost nástroje i mimo PATH,
+nikoli další souhlas. Agent musí prověřit existující správce balíčků, vlastní
+prefixy a správce verzí; lab jej smí předat pro známý čistý obraz OS. Samotná
+absence příkazu v PATH nestačí. CLI navíc zachová nalezené standardní
+Homebrew/npm/WinGet/Bun instalace a bez potvrzeného stavu nic neinstaluje.
 CLI stáhne celý oficiální OpenAI instalátor, spustí jej neinteraktivně pro
 stable a znovu odvodí machine gate. Instalaci, zámek a User PATH vlastní
 upstream instalátor. CLI neupgraduje nástroje, neodstraňuje jinou instalaci,

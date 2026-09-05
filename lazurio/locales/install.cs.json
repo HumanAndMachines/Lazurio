@@ -101,5 +101,6 @@
   "apply.codex_installer_failed": "Oficiální instalátor selhal nebo jej nelze spustit. Ověř síť a předpoklady instalátoru a zopakuj stejný příkaz.",
   "apply.codex_restart_required": "Instalátor skončil. Otevři novou relaci terminálu; na Windows úplně ukonči a znovu spusť Codex. Potom zopakuj lazurio install --json a lazurio doctor. Child proces původní relace nestačí.",
   "apply.codex_installed": "Codex byl nainstalován a ověřen v PATH.",
-  "report.after_action": "Následuje nová kontrola skutečného stavu mašiny po instalačním kroku."
+  "report.after_action": "Následuje nová kontrola skutečného stavu mašiny po instalačním kroku.",
+  "apply.codex_absence_unverified": "Nejprve ověř, že Codex není nainstalovaný ani mimo PATH (včetně vlastních prefixů a správců verzí). Teprve po ověření nebo pro známý čistý obraz OS přidej --confirm-codex-absent; samotná absence v PATH nestačí."
 }
