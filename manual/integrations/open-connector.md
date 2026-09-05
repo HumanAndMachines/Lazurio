@@ -81,3 +81,22 @@ Still required before release: complete Google acceptance, client attachment,
 Launchpad entry, platform lifecycle expansion, partial-install/concurrency
 hardening, public fork and reviewed promotion. Neon management is supported
 upstream but SQL execution is not; keep the existing SQL-capable integration.
+
+### Direct client authentication
+
+The pilot uses the officially supported local HTTP-header helper contract:
+Codex `http_headers_helper` and Claude Code `headersHelper`. Each invokes the
+installed worker with `--headers codex` or `--headers claude`, which reads only
+that client's separately revocable runtime credential from local custody.
+Its stdout is a secret protocol channel consumed by the harness: do not run
+the helper interactively or log its output. User configuration contains only
+the helper command and localhost URL, never a bearer token. There is no MCP
+relay and no dependency on a GUI process inheriting environment variables.
+
+Use Codex `default_tools_approval_mode = "prompt"` and Claude Code an `ask`
+rule for `mcp__lazurio_open_connector__execute_action`. Do not blanket-allow
+the execution tool. OAuth grants remain broader than the explicit runtime
+action and connection allowlists edited in the upstream console.
+
+References: [Codex MCP](https://learn.chatgpt.com/docs/extend/mcp),
+[Claude Code dynamic headers](https://code.claude.com/docs/en/mcp#use-dynamic-headers-for-custom-authentication).

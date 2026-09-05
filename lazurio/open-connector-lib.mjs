@@ -32,6 +32,16 @@ export function validateRuntimeSecrets(secrets) {
   return secrets;
 }
 
+export function clientHeaders(client) {
+  if (!['codex', 'claude'].includes(client)) throw new Error('Unknown MCP client.');
+  const config = load(configPath());
+  const credential = load(join(config.custody, `${client}.json`));
+  if (typeof credential.token !== 'string' || !/^oct_[A-Za-z0-9_-]{43}$/.test(credential.token)) {
+    throw new Error('Invalid runtime credential.');
+  }
+  return { Authorization: `Bearer ${credential.token}` };
+}
+
 function refreshWorker(config) {
   const secretPath = join(config.custody, 'runtime.json');
   const secrets = load(secretPath);
@@ -53,7 +63,7 @@ export async function connectorApi(path, { body, method = body ? 'POST' : 'GET',
   const config = load(configPath());
   const secrets = load(join(config.custody, 'runtime.json'));
   const response = await fetch(`${config.origin}${path}`, {
-    method, headers: { 'content-type': 'application/json', authorization: `Bearer ${runtimeToken ?? secrets.admin}` },
+    method, redirect: 'error', headers: { 'content-type': 'application/json', authorization: `Bearer ${runtimeToken ?? secrets.admin}` },
     body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(15000),
   });
   const result = await response.json();
@@ -65,7 +75,7 @@ async function health() {
   if (!existsSync(configPath())) return { installed: false, running: false };
   const config = load(configPath());
   let healthy = false;
-  try { await connectorApi('/api/auth/session'); healthy = true; } catch { /* stopped or foreign port */ }
+  try { const session = await connectorApi('/api/auth/session'); healthy = session.authenticated === true && session.adminAuthConfigured === true; } catch { /* stopped or foreign port */ }
   return { installed: true, running: loaded() && healthy, service_loaded: loaded(), version: config.version, origin: config.origin, mcp_url: `${config.origin}/mcp`, custody: config.custody };
 }
 
@@ -80,11 +90,21 @@ async function start() {
   throw new Error('OpenConnector did not become healthy; inspect its local service log.');
 }
 
+async function stop() {
+  if (loaded()) launch(['bootout', `${domain()}/${label}`]);
+  // launchctl bootout returns before launchd finishes removing the job.
+  for (let attempt = 0; attempt < 100; attempt++) {
+    if (!loaded()) return;
+    await new Promise(done => setTimeout(done, 200));
+  }
+  throw new Error('OpenConnector service is still stopping; retry after it exits.');
+}
+
 async function install(root) {
   if (process.platform !== 'darwin' || process.arch !== 'arm64') throw new Error('This DEV pilot currently supports Apple Silicon macOS only.');
   if (existsSync(configPath())) {
     const config = load(configPath());
-    if (loaded()) launch(['bootout', `${domain()}/${label}`]);
+    await stop();
     refreshWorker(config);
     return { ...(await start()), changed: false };
   }
@@ -144,7 +164,7 @@ export async function runOpenConnector({ action, root }) {
   if (action === 'install') return install(resolve(root));
   if (action === 'start') return start();
   if (action === 'stop') {
-    if (loaded()) launch(['bootout', `${domain()}/${label}`]);
+    await stop();
     return health();
   }
   if (action === 'status') return health();
@@ -163,3 +183,5 @@ export async function runOpenConnector({ action, root }) {
 }
 
 if (process.argv[2] === '--worker') await worker();
+// Harness-owned credential protocol, never a human-facing CLI status command.
+if (process.argv[2] === '--headers') process.stdout.write(JSON.stringify(clientHeaders(process.argv[3])));
