@@ -49,6 +49,85 @@ Since the MCP has a generic `execute_action`, harness approval should be
 
 ## Google onboarding
 
+### Proč potřebujeme OAuth aplikaci, když máme OpenConnector
+
+OpenConnector je v tomto pilotu společná integrační křižovatka Mašiny:
+Claude Code, Codex i další harnessy se připojují na jeho MCP endpoint.
+Google účty se přihlašují v OpenConnectoru, ne znovu v každém harnessu.
+GitHub zůstává výslovnou výjimkou přes `gh`. Tento směr není tvrzení,
+že už jsou všechny dosavadní integrace migrované nebo podporované.
+
+Je potřeba rozlišovat čtyři věci:
+
+| Pojem | Co představuje | Kdo jej v pilotu spravuje |
+| --- | --- | --- |
+| Google Cloud projekt a OAuth klient | Registrace aplikace, zapnutá API, kvóty a identita na consent obrazovce | Owner pilotu v Google Cloud |
+| Google účet a jeho OAuth grant | Konkrétní člověk/účet, který povolil konkrétní scopes | Účet uděluje a odvolává souhlas; OpenConnector drží tokeny lokálně |
+| Pojmenované připojení | Volba konkrétního účtu u konkrétního provideru | OpenConnector Web Console |
+| Runtime token harnessu | Přístup Codexu či Claude k povoleným akcím a připojením | OpenConnector; oddělený token pro každý harness |
+
+OAuth klient tedy není přihlášený uživatel. Jedna správně nastavená External
+aplikace může obsloužit více účtů z různých Workspace organizací i osobní
+Gmail, pokud jejich administrátorské politiky přístup dovolují. Projekt
+nezakládáme pro každý účet ani pro každý harness. Upstream pilot přitom
+přihlašuje Gmail, Drive a Sheets jako samostatné providery s vlastními
+pojmenovanými připojeními; neznamená to jeden společný grant pro všechny služby.
+
+### Jak to řeší Composio
+
+Composio nabízí **managed OAuth**: pro podporované služby, včetně Gmailu,
+registruje a udržuje vlastní OAuth aplikaci, klientské credentials a callback.
+Uživatel proto svůj Google Cloud projekt zakládat nemusí; pouze udělí souhlas.
+Composio potom ukládá a obnovuje jeho tokeny. Registrace aplikace tedy nezmizela,
+jen ji za uživatele spravuje poskytovatel. Alternativou je **custom OAuth**,
+kdy zákazník poskytne vlastní aplikaci kvůli brandingu, scopes nebo kvótám.
+[Managed vs custom auth](https://docs.composio.dev/docs/authentication/custom-app-vs-managed-app),
+[Managed OAuth apps](https://docs.composio.dev/toolkits/managed-auth).
+
+Self-hostovaný OpenConnector v tomto pilotu tuto registraci jako managed
+službu nedodává: připravíme vlastní OAuth aplikaci a OpenConnector bude
+spravovat výsledná připojení. Cloud projekt zde neznamená hostování našich
+agentů nebo OpenConnectoru v Google Cloud. Tento návod neautorizuje billing,
+centrální broker ani přesun uživatelských tokenů mimo Mašinu.
+
+### Internal, External a chyba `403: org_internal`
+
+Internal aplikace připouští jen účty své Google Workspace organizace.
+Chyba `org_internal` proto neznamená chybný callback ani poruchu MCP serveru.
+Pro účty mimo tuto organizaci potřebujeme vhodnou External aplikaci.
+Neměň existující Internal aplikaci bez explicitního pokynu: může ji používat
+jiná integrace. Bezpečný oddělený pilot dostane vlastní projekt a klienta.
+
+External není synonymum pro hotovou produkční integraci. U zvolených Google
+scopes mají External/Testing refresh tokeny standardně sedmidenní životnost.
+Publikační stav, případné ověření aplikace, výjimky pro osobní použití a
+Workspace administrátorské politiky je nutné ověřit podle konkrétního použití;
+přepnutí stavu samo nezaručuje schválení Googlu ani neomezenou platnost tokenů.
+[Google OAuth](https://developers.google.com/identity/protocols/oauth2),
+[ověření restricted scopes](https://developers.google.com/identity/protocols/oauth2/production-readiness/restricted-scope-verification).
+
+### Mac pilot versus distribuce Lazuria
+
+Pilot řeší aplikaci pro známé účty jednoho Ownera a lokální custody.
+Budoucí onboarding dalších Mašin musí zvlášť rozhodnout ownership OAuth
+aplikace, typ klientů pro jednotlivé platformy, callbacky, případné Google
+ověření, kvóty, revokaci a recovery. Společná registrace aplikace sama o sobě
+neznamená společné uživatelské tokeny; granty mají zůstat per Mašina.
+Privátní client secret se nesmí přibalit do veřejného forku ani rozesílat
+na všechny Mašiny jako univerzální tajemství. Public fork sám není managed
+OAuth služba a tyto otázky neřeší.
+
+Google poskytuje také vlastní remote MCP pro Workspace, podle dokumentace
+ověřené 2026-09-05 stále v Developer Preview. I tato cesta vyžaduje Cloud
+projekt a OAuth konfiguraci. Pro tento pilot ji nezavádíme jako další přímé
+napojení harnessů: OpenConnector zůstává společným vstupem a používá své
+stávající Google providery. Případné použití Google MCP za OpenConnectorem
+vyžaduje nejprve ověřit podporovaný upstream způsob; nepředpokládej automatické
+přeposílání libovolného MCP serveru.
+[Google Workspace MCP](https://developers.google.com/workspace/guides/configure-mcp-servers).
+
+### Aktivační kontrola
+
 An OAuth client identifies the application, not the Google account. Reuse an
 existing local client only after verifying its permitted audience; an Internal
 app cannot onboard other Workspace tenants or consumer Gmail. External Testing

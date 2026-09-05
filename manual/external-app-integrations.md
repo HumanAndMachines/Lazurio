@@ -278,6 +278,7 @@ nepoužívají; personalspace izolace má přednost.
 | Runbook | Pokrývá |
 | --- | --- |
 | [integrations/google-workspace.md](integrations/google-workspace.md) | Gmail, Drive, Docs, Sheets, Slides, Meet |
+| [integrations/open-connector.md](integrations/open-connector.md) | DEV pilot integrační křižovatky Mašiny; OAuth aplikace versus účty, Composio managed auth a hranice distribuce |
 | [integrations/microsoft-365.md](integrations/microsoft-365.md) | Outlook mail a kalendář, M365 |
 | [integrations/slack.md](integrations/slack.md) | Slack |
 | [integrations/atlassian.md](integrations/atlassian.md) | Jira, Confluence |
