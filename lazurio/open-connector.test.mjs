@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
-import { digest, OPEN_CONNECTOR_RELEASE, validateRuntimeSecrets, validateInstallConfig, assertNoSymlinks, runOpenConnector } from './open-connector-lib.mjs';
+import { digest, OPEN_CONNECTOR_RELEASE, validateRuntimeSecrets, validateInstallConfig, assertNoSymlinks, runOpenConnector, renderLaunchAgent } from './open-connector-lib.mjs';
+import { spawnSync } from 'node:child_process';
 import { mkdtempSync, symlinkSync, rmSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,6 +11,24 @@ test('release is immutable and checksum comparison detects altered bytes', () =>
   expect(OPEN_CONNECTOR_RELEASE.url).toContain('/v1.5.0/');
   expect(digest('abc')).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
   expect(digest('abc')).not.toBe(digest('abcd'));
+});
+
+test('importing the library cannot invoke either private executable entrypoint', () => {
+  for (const flag of ['--headers', '--worker']) {
+    const code = `process.argv[2] = ${JSON.stringify(flag)}; process.argv[3] = 'claude'; await import(${JSON.stringify(new URL('./open-connector-lib.mjs', import.meta.url).href)});`;
+    const child = spawnSync(process.execPath, ['--eval', code], { encoding: 'utf8', timeout: 5000 });
+    expect(child.status).toBe(0);
+    expect(child.stdout).toBe('');
+    expect(child.stderr).toBe('');
+  }
+});
+
+test('LaunchAgent rendering tracks the actual interpreter and escapes XML paths', () => {
+  const before = renderLaunchAgent('/old/bun', '/state');
+  const after = renderLaunchAgent('/new/bun', '/state');
+  expect(before).not.toBe(after);
+  expect(after).toContain('<string>/new/bun</string>');
+  expect(renderLaunchAgent('/a&b/bun', '/state')).toContain('/a&amp;b/bun');
 });
 
 test('worker fails closed before spawning when any startup credential is absent', () => {

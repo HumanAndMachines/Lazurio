@@ -13,6 +13,7 @@ export const OPEN_CONNECTOR_RELEASE = Object.freeze({
   url: 'https://github.com/oomol-lab/open-connector/releases/download/v1.5.0/open-connector-darwin-arm64',
 });
 const label = 'ai.lazurio.open-connector';
+const apiOrigin = 'http://127.0.0.1:24321';
 const domain = () => `gui/${process.getuid()}`;
 export const connectorState = () => join(homedir(), 'Library/Application Support/Lazurio/open-connector');
 const configPath = () => join(connectorState(), 'config.json');
@@ -88,7 +89,7 @@ function refreshWorker(config) {
 export async function connectorApi(path, { body, method = body ? 'POST' : 'GET', runtimeToken } = {}) {
   const config = installedConfig();
   const secrets = load(join(config.custody, 'runtime.json'));
-  const response = await fetch(`${config.origin}${path}`, {
+  const response = await fetch(`${apiOrigin}${path}`, {
     method, redirect: 'error', headers: { 'content-type': 'application/json', authorization: `Bearer ${runtimeToken ?? secrets.admin}` },
     body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(15000),
   });
@@ -101,12 +102,18 @@ async function health() {
   if (!existsSync(configPath())) return { installed: false, running: false };
   const config = installedConfig();
   let healthy = false;
-  try { const session = await connectorApi('/api/auth/session'); healthy = session.authenticated === true && session.adminAuthConfigured === true; } catch { /* stopped or foreign port */ }
+  // Liveness never discloses an admin credential to an unverified listener.
+  try {
+    const response = await fetch(`${apiOrigin}/api/auth/session`, { redirect: 'error', signal: AbortSignal.timeout(1500) });
+    const session = await response.json();
+    healthy = response.ok && session.authenticated === false && session.adminAuthConfigured === true;
+  } catch { /* stopped or foreign port */ }
   return { installed: true, running: loaded() && healthy, service_loaded: loaded(), version: config.version, origin: config.origin, mcp_url: `${config.origin}/mcp`, custody: config.custody };
 }
 
 async function start() {
   if (!existsSync(configPath())) throw new Error('Run open-connector install first.');
+  if (!existsSync(plistPath())) throw new Error(`Missing LaunchAgent: ${plistPath()}; rerun open-connector install.`);
   if (!loaded()) launch(['bootstrap', domain(), plistPath()]);
   for (let attempt = 0; attempt < 30; attempt++) {
     const result = await health();
@@ -131,7 +138,11 @@ async function install(root) {
   assertNoSymlinks(connectorState());
   mkdirSync(connectorState(), { recursive: true, mode: 0o700 });
   const lock = join(connectorState(), 'install.lock');
-  save(lock, { pid: process.pid, createdAt: new Date().toISOString() });
+  try { save(lock, { pid: process.pid, createdAt: new Date().toISOString() }); }
+  catch (error) {
+    if (error.code === 'EEXIST') throw new Error(`Install lock exists: ${lock}. Verify its recorded process before reconciling; no credentials were removed.`);
+    throw error;
+  }
   try { return await installLocked(root); }
   finally { unlinkSync(lock); }
 }
@@ -152,11 +163,21 @@ async function installLocked(root) {
     if (config.custody !== custody) throw new Error('Installed OpenConnector belongs to another Root or owner.');
     const workerPath = join(connectorState(), 'worker.mjs');
     assertNoSymlinks(workerPath);
-    const needsRefresh = !existsSync(workerPath) || digest(readFileSync(workerPath)) !== digest(readFileSync(fileURLToPath(import.meta.url)));
-    if (needsRefresh) { await stop(); refreshWorker(config); }
+    const needsRefresh = !existsSync(workerPath) || digest(readFileSync(workerPath)) !== digest(readFileSync(fileURLToPath(import.meta.url))) ||
+      !existsSync(plistPath()) || readFileSync(plistPath(), 'utf8') !== renderLaunchAgent();
+    if (needsRefresh) {
+      await stop();
+      refreshWorker(config);
+      const temporaryPlist = `${plistPath()}.${randomBytes(6).toString('hex')}`;
+      writeFileSync(temporaryPlist, renderLaunchAgent(), { mode: 0o600, flag: 'wx' });
+      renameSync(temporaryPlist, plistPath());
+    }
     return { ...(await start()), changed: needsRefresh };
   }
   if (existsSync(custody)) throw new Error('Existing custody without install config: preserve it and reconcile before retrying.');
+  for (const artifact of [join(connectorState(), 'open-connector-1.5.0'), join(connectorState(), 'worker.mjs'), join(connectorState(), 'service.log'), plistPath()]) {
+    if (existsSync(artifact)) throw new Error(`Incomplete install artifact: ${artifact}. Preserve it and reconcile before retrying.`);
+  }
   const response = await fetch(OPEN_CONNECTOR_RELEASE.url, { signal: AbortSignal.timeout(180000) });
   if (!response.ok) throw new Error(`Release download failed: ${response.status}`);
   const bytes = Buffer.from(await response.arrayBuffer());
@@ -174,10 +195,8 @@ async function installLocked(root) {
   copyFileSync(fileURLToPath(import.meta.url), worker);
   chmodSync(worker, 0o600);
   mkdirSync(join(homedir(), 'Library/LaunchAgents'), { recursive: true });
-  const argumentsXml = [process.execPath, worker, '--worker'].map(value => `<string>${xml(value)}</string>`).join('');
-  const plist = `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>Label</key><string>${label}</string><key>ProgramArguments</key><array>${argumentsXml}</array><key>RunAtLoad</key><true/><key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict><key>ThrottleInterval</key><integer>10</integer><key>StandardOutPath</key><string>${xml(join(state, 'service.log'))}</string><key>StandardErrorPath</key><string>${xml(join(state, 'service.log'))}</string></dict></plist>`;
   writeFileSync(join(state, 'service.log'), '', { mode: 0o600, flag: 'wx' });
-  writeFileSync(plistPath(), plist, { mode: 0o600, flag: 'wx' });
+  writeFileSync(plistPath(), renderLaunchAgent(), { mode: 0o600, flag: 'wx' });
   // Publish the installed marker only after every required artifact exists.
   save(configPath(), config);
   return { ...(await start()), changed: true };
@@ -219,12 +238,17 @@ export async function runOpenConnector({ action, root }) {
     const status = await health();
     if (!status.installed) return { ...status, ok: false };
     const config = installedConfig();
-    const integrity = digest(readFileSync(config.binary)) === config.sha256;
+    const integrity = existsSync(config.binary) && digest(readFileSync(config.binary)) === config.sha256;
     return { ...status, integrity, ok: status.running && integrity };
   }
   throw new Error('Pilot supports install, start, stop, status, configure and doctor.');
 }
 
-if (process.argv[2] === '--worker') await worker();
+export function renderLaunchAgent(executable = process.execPath, state = connectorState()) {
+  const argumentsXml = [executable, join(state, 'worker.mjs'), '--worker'].map(value => `<string>${xml(value)}</string>`).join('');
+  return `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>Label</key><string>${label}</string><key>ProgramArguments</key><array>${argumentsXml}</array><key>RunAtLoad</key><true/><key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict><key>ThrottleInterval</key><integer>10</integer><key>StandardOutPath</key><string>${xml(join(state, 'service.log'))}</string><key>StandardErrorPath</key><string>${xml(join(state, 'service.log'))}</string></dict></plist>`;
+}
+
+if (import.meta.main && process.argv[2] === '--worker') await worker();
 // Harness-owned credential protocol, never a human-facing CLI status command.
-if (process.argv[2] === '--headers') process.stdout.write(JSON.stringify(clientHeaders(process.argv[3])));
+if (import.meta.main && process.argv[2] === '--headers') process.stdout.write(JSON.stringify(clientHeaders(process.argv[3])));
