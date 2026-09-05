@@ -199,6 +199,18 @@ test("root handoff must be the first block and include the full double-question"
     }),
     expect.objectContaining({ code: "missing_statement", detail: "Nebo mám požádat" }),
   ]));
+  expect(inspectAgentsInstanceText({
+    relativePath: "AGENTS.md",
+    kind: "root",
+    text: [
+      "# Běžný úvod",
+      "## Povinný handoff",
+      "Mám změny Publikovat tvým jménem? Nebo mám požádat jiného oprávněného Principála o kontrolu a Publikaci?",
+      "",
+    ].join("\n"),
+  })).toEqual([
+    expect.objectContaining({ code: "handoff_not_first", detail: "Povinný handoff" }),
+  ]);
 });
 
 test("happy Organization fixture passes the instance rewrite", () => {

@@ -9,6 +9,7 @@ import { normalizeOrganizationSlotPath } from "../lazurio/core/organization-slot
 
 export const PUBLICATION_QUESTION = "Mám změny Publikovat";
 export const ROOT_HANDOFF_HEADING = "Povinný handoff";
+export const ROOT_HANDOFF_HEADING_PATTERN = /^#{1,6}[ \t]+Povinný handoff(?:\s|$)/u;
 export const PUBLICATION_DOUBLE_QUESTION = Object.freeze([
   "Mám změny Publikovat tvým jménem?",
   "Nebo mám požádat",
@@ -98,16 +99,17 @@ export function collectAgentsInstanceTargets(resource) {
   return targets;
 }
 
-export function firstNonEmptyMarkdownBlock(text) {
-  const trimmed = String(text ?? "").replace(/^\uFEFF/, "").replace(/^\s+/, "");
-  if (trimmed === "") return "";
-  return trimmed.split(/\n[ \t]*\n/)[0];
+export function firstNonEmptyMarkdownLine(text) {
+  for (const line of String(text ?? "").replace(/^\uFEFF/, "").split(/\r?\n/)) {
+    if (line.trim() !== "") return line.trim();
+  }
+  return "";
 }
 
 export function inspectRootHandoff(text, relativePath = "AGENTS.md") {
   const findings = [];
-  const firstBlock = firstNonEmptyMarkdownBlock(text);
-  if (!firstBlock.includes(ROOT_HANDOFF_HEADING)) {
+  const firstLine = firstNonEmptyMarkdownLine(text);
+  if (!ROOT_HANDOFF_HEADING_PATTERN.test(firstLine)) {
     findings.push({
       code: "handoff_not_first",
       path: relativePath,
