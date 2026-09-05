@@ -197,7 +197,10 @@ test("root handoff must be the first block and include the full double-question"
       code: "missing_statement",
       detail: "Mám změny Publikovat tvým jménem?",
     }),
-    expect.objectContaining({ code: "missing_statement", detail: "Nebo mám požádat" }),
+    expect.objectContaining({
+      code: "missing_statement",
+      detail: "Nebo mám požádat jiného oprávněného Principála o kontrolu a Publikaci?",
+    }),
   ]));
   expect(inspectAgentsInstanceText({
     relativePath: "AGENTS.md",
@@ -205,6 +208,32 @@ test("root handoff must be the first block and include the full double-question"
     text: [
       "# Běžný úvod",
       "## Povinný handoff",
+      "Mám změny Publikovat tvým jménem? Nebo mám požádat jiného oprávněného Principála o kontrolu a Publikaci?",
+      "",
+    ].join("\n"),
+  })).toEqual([
+    expect.objectContaining({ code: "handoff_not_first", detail: "Povinný handoff" }),
+  ]);
+  expect(inspectAgentsInstanceText({
+    relativePath: "AGENTS.md",
+    kind: "root",
+    text: [
+      "## Povinný handoff",
+      "Mám změny Publikovat tvým jménem?",
+      "Nebo mám požádat kohokoliv.",
+      "",
+    ].join("\n"),
+  })).toEqual([
+    expect.objectContaining({
+      code: "missing_statement",
+      detail: "Nebo mám požádat jiného oprávněného Principála o kontrolu a Publikaci?",
+    }),
+  ]);
+  expect(inspectAgentsInstanceText({
+    relativePath: "AGENTS.md",
+    kind: "root",
+    text: [
+      "## Povinný handoff — nepovolený doplněk",
       "Mám změny Publikovat tvým jménem? Nebo mám požádat jiného oprávněného Principála o kontrolu a Publikaci?",
       "",
     ].join("\n"),
