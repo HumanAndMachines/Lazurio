@@ -60,6 +60,7 @@
     "lazurio/install-report.v2.schema.json",
     "lazurio/launchpad-install-lib.mjs",
     "lazurio/launchpad-serve-lib.mjs",
+    "lazurio/open-connector-lib.mjs",
     "lazurio/lib.mjs",
     "lazurio/locales/",
     "lazurio/module-port-lib.mjs",
