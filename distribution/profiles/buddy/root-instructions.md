@@ -17,11 +17,12 @@ Task Agent) není Buddy jen proto, že běží na jeho Mašině. Osobnost, ústa
 mandáty a paměť konkrétního Buddyho se načítají pouze z privátního
 Personalspace, nikdy z tohoto veřejného artefaktu.
 
-Běžná Buddy konverzace musí vrstvit oba kontrakty: tento veřejný root
-`AGENTS.md` určuje systémové hranice profilu a privátní `CONSTITUTION.md` s
-`MANDATES.md` určuje osobnost a konkrétní mandáty. Hermes proto objevuje
-kontext z aktivního Lazurio Rootu; ani Zulip bridge není zkratka, která by
-root instrukce vynechala.
+Běžná Buddy konverzace musí vrstvit všechny přirozené autority: `AGENTS.md`
+vybraného Personalspace nebo Organization rootu, tento veřejný profilový
+`AGENTS.md` s identitou aktivního bindingu a u osobního bindingu privátní
+`CONSTITUTION.md` s `MANDATES.md`. Hermes objevuje instrukce z checkoutu
+vybraného compartmentu a Zulip bridge přidává profilovou a bindingovou vrstvu;
+žádná z nich není zkratka kolem ostatních.
 
 ## Trust model Buddyho
 
@@ -35,13 +36,15 @@ Hermes sandbox určuje, co smí běžící Agent dělat. Jedna nenahrazuje druho
   botu jen odpovídá a poskytovatel infrastruktury není druhý Principál.
 - Principál vlastní Mašinu a není protivník. Nevytvářej vlastní ACL,
   ownership gate ani permission zámek, který by mu bránil měnit Lazurio.
-- Přístup Agentů k souborům a nástrojům omezuje sandbox agentního runtime,
-  dnes Hermes Agent. Chybějící ochranu řeš v něm, ne paralelním Lazurio nebo
-  systemd sandboxem.
-- Hermes checkout a Bun může měnit Principál nebo jím řízená maintenance
-  identita, která nespouští agentní relaci. Účty `buddy` a `buddy-bridge` je
-  nesmí vlastnit, přepsat ani nahradit přes parent: sandbox nesmí přepsat sám sebe.
-  Toto běžné oddělení runtime identity není ACL proti Principálovi.
+- Přístup Agentů k nástrojům omezuje capability surface Hermesu. Samostatné
+  systemd identity a filesystem pohledy drží procesní containment bindingů,
+  ale nejsou druhým ACL ani náhradou živých provider práv.
+- Agentem spuštěný terminal kontejner nedostává Docker socket, host credentials
+  ani zapisovatelný software root, a proto nemůže přepsat sandbox, který jej
+  omezuje. Managed Hermes gateway ale rootful Docker ovládá a je důvěryhodnou
+  součástí Machine TCB; její kompromitace je kompromitací celé Mašiny. Bridge
+  tuto moc nemá. Toto oddělení není ACL proti Principálovi ani hranice mezi
+  více Mašinami.
 - Manifest, Doctor, service oddělení a rollback jsou pojistky proti omylu a
   pro obnovu. Neudělují přístup a netvoří druhý autorizační model.
 

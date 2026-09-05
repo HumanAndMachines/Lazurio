@@ -3,10 +3,10 @@
   "id": "hermes",
   "repository": "Lazurio/hermes-agent",
   "upstream_repository": "NousResearch/hermes-agent",
-  "release_tag": "v2026.7.20",
-  "commit": "3ef6bbd201263d354fd83ec55b3c306ded2eb72a",
+  "release_tag": "v2026.8.27",
+  "commit": "03bed7d454f3fc11c0050fea0b2702ef4e6020d5",
   "lock_file": "uv.lock",
-  "lock_sha256": "456f76d5396df0f543d1035c2d05173cae1882c290ba585cc926a79958b9d7fe",
+  "lock_sha256": "5a9276183671e997c2213ede18b9cda4920e1cf57616219a3b08ddebda3281ab",
   "compatibility": {
     "artifact_contract_versions": [
       1
@@ -14,13 +14,37 @@
     "independent_self_update_allowed": false
   },
   "provenance": {
-    "remote_verified_on": "2026-08-12",
+    "remote_verified_on": "2026-08-31",
     "remote_verification": {
       "fork": true,
+      "fork_repository": "Lazurio/hermes-agent",
+      "fork_commit": "03bed7d454f3fc11c0050fea0b2702ef4e6020d5",
+      "fork_bridge_commit": "6814181b033e3469fdbfb477dc46f4227cd87a71",
+      "fork_overlay_commit": "03bed7d454f3fc11c0050fea0b2702ef4e6020d5",
+      "fork_overlay_paths": [
+        ".github/workflows/contributor-check.yml",
+        ".github/workflows/js-tests.yml",
+        ".github/workflows/nix.yml",
+        ".github/workflows/rust-tests.yml",
+        ".github/workflows/tests-os.yml",
+        ".github/workflows/tests.yml",
+        "FORK_POLICY.md",
+        "fork-maintenance/audit_overlay.py",
+        "fork-maintenance/patches.v1.json"
+      ],
+      "fork_overlay_runtime_delta": false,
+      "fork_previous_default_commit": "a4973c3f11d9cc92da986cbe150d1e79d094626f",
+      "fork_bridge_parent_order": [
+        "5fc308a70719a83cccdbba4c0e39c23f5a8239d5",
+        "a4973c3f11d9cc92da986cbe150d1e79d094626f"
+      ],
       "upstream_repository": "NousResearch/hermes-agent",
-      "tag_object": "c7d08de287556b3d339df336b180a39d4980ebd7",
-      "dereferenced_commit": "3ef6bbd201263d354fd83ec55b3c306ded2eb72a",
-      "lock_sha256_observed": "456f76d5396df0f543d1035c2d05173cae1882c290ba585cc926a79958b9d7fe",
+      "tag_object": "fcebd62163497e77e5de00d26d2ed86cb4ef8761",
+      "dereferenced_commit": "5fc308a70719a83cccdbba4c0e39c23f5a8239d5",
+      "upstream_tree": "222ec43b5237deb643277bc2f64fa4b873dd7f28",
+      "bridge_tree_matches_upstream_release": true,
+      "fork_tree": "572ea8886751bbf02ec2bd4a8ec772b8d263678f",
+      "lock_sha256_observed": "5a9276183671e997c2213ede18b9cda4920e1cf57616219a3b08ddebda3281ab",
       "agrees_with_pin": true
     }
   }

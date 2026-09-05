@@ -233,14 +233,44 @@ test("an explicitly declared source can replace only an empty managed mount", as
     .toBe("must not hide\n");
 });
 
-test("Buddy profile refuses an external organizations mount", async () => {
+test("managed Buddy adopts explicit Personalspace and Organizations roots without copying them", async () => {
   if (process.platform === "win32") return;
   const fixtureRoot = await temporary("lazurio-updater-org-boundary-fixtures-");
   const installRoot = join(await temporary("lazurio-updater-org-boundary-parent-"), "lazurio");
   const organizations = await temporary("lazurio-external-organizations-");
+  const personalspace = await temporary("lazurio-external-personalspace-");
   const fixture = await buildFixture(fixtureRoot, "0.3.2-candidate.1");
-  await expect(install(fixture, installRoot, { organizations }))
-    .rejects.toThrow("cannot adopt an organizations mount");
+  await writeFile(join(organizations, "organization-sentinel.txt"), "organization stays\n");
+  await writeFile(join(personalspace, "personal-sentinel.txt"), "personal stays\n");
+
+  await expect(install(fixture, installRoot, { organizations, personalspace }))
+    .rejects.toThrow("assisted Buddy cannot adopt");
+  const installed = await install(
+    fixture,
+    installRoot,
+    { organizations, personalspace },
+    "managed",
+  );
+  expect(installed.mutable_mounts).toEqual([
+    {
+      name: "organizations",
+      kind: "external-symlink",
+      target: await realpath(organizations),
+    },
+    {
+      name: "personalspace",
+      kind: "external-symlink",
+      target: await realpath(personalspace),
+    },
+  ]);
+  expect(await readFile(
+    join(installRoot, "active", "organizations", "organization-sentinel.txt"),
+    "utf8",
+  )).toBe("organization stays\n");
+  expect(await readFile(
+    join(installRoot, "active", "personalspace", "personal-sentinel.txt"),
+    "utf8",
+  )).toBe("personal stays\n");
 });
 
 test("rollout compensation can revert an initial or updated activation without deleting versions", async () => {
@@ -305,13 +335,19 @@ test("Windows resident lifecycle remains fail-closed until its atomic pointer ad
   await expect(rollbackResidentArtifact({})).rejects.toThrow("POSIX atomic-symlink adapter");
 });
 
-async function install(fixture, installRoot, mutableMountSources = {}) {
+async function install(
+  fixture,
+  installRoot,
+  mutableMountSources = {},
+  installationMode = "assisted",
+) {
   return installResidentArtifact({
     archivePath: fixture.archivePath,
     checksumPath: fixture.checksumPath,
     installRoot,
     expectedProfile: "buddy",
     expectedChannel: "candidate",
+    installationMode,
     mutableMountSources,
   });
 }
@@ -338,6 +374,10 @@ async function buildFixture(root, version, target = currentResidentTarget()) {
     })}\n`), mode: "0644" }],
     ["resident/doctor.mjs", { bytes: await readFile(join(import.meta.dir, "runtime", "doctor.mjs")), mode: "0755" }],
     ["resident/integrity.mjs", { bytes: await readFile(join(import.meta.dir, "runtime", "integrity.mjs")), mode: "0644" }],
+    ["resident/updater-lib.mjs", { bytes: await readFile(join(import.meta.dir, "runtime", "updater-lib.mjs")), mode: "0644" }],
+    ["resident/updater.mjs", { bytes: await readFile(join(import.meta.dir, "runtime", "updater.mjs")), mode: "0755" }],
+    ["resident/controller-lib.mjs", { bytes: await readFile(join(import.meta.dir, "runtime", "controller-lib.mjs")), mode: "0644" }],
+    ["resident/controller.mjs", { bytes: await readFile(join(import.meta.dir, "runtime", "controller.mjs")), mode: "0755" }],
     ["lazurio/core/resident-manifest-lib.mjs", {
       bytes: await readFile(join(import.meta.dir, "..", "lazurio", "core", "resident-manifest-lib.mjs")),
       mode: "0644",

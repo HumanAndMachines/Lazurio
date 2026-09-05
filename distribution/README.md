@@ -170,10 +170,10 @@ indexu i digest `uv.lock` a po něm jeho HTTP health.
 Bun zapsaný do unit se resolveuje na přesnou spustitelnou binárku a preflight
 ověří, že ji runtime účet umí použít. Nemusí být root-owned: konkrétní host
 dependency volí Principál přes `--bun PATH` a installer ji nekopíruje ani
-neopravuje. Bun ani Hermes checkout však nesmí být vlastněný, zapisovatelný či
-nahraditelný účty `buddy` a `buddy-bridge`: sandbox nesmí umět přepsat sám
-sebe. Vlastníkem může dál být Principál nebo jím řízená maintenance identita,
-která nespouští agentní relaci.
+neopravuje. Tato assisted legacy lane ověřuje, že Bun ani Hermes checkout
+nemohou přepsat účty `buddy` a `buddy-bridge`. Managed lane má jiný explicitní
+trust kontrakt: agentem spuštěné terminal kontejnery nedostávají Docker socket,
+ale Hermes gateway rootful Docker ovládá a je součástí Machine TCB.
 Privilegované instalační subprocessy nepoužívají ambientní `PATH` nebo
 checkout-local Git hooky; tyto kontroly chrání instalační krok a integritu
 sandboxu, nikoli Lazurio před Principálem.

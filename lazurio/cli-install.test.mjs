@@ -36,7 +36,8 @@ beforeAll(() => {
       preserveTimestamps: true,
       filter(candidatePath) {
         const candidateRelative = relative(sourcePath, candidatePath);
-        return candidateRelative !== ".local" && !candidateRelative.startsWith(`.local${sep}`);
+        const segments = candidateRelative.split(sep);
+        return !segments.some((segment) => segment === ".local" || segment === "node_modules");
       },
     });
   }

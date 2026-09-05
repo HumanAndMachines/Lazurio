@@ -2,16 +2,16 @@
   "schema_version": "lazurio.resident.toolchain-pins.v1",
   "tools": {
     "bun": {
-      "version": "1.3.10",
+      "version": "1.4.0",
       "targets": {
         "linux-x64": {
-          "archive": "https://github.com/oven-sh/bun/releases/download/bun-v1.3.10/bun-linux-x64.zip",
-          "sha256": "f57bc0187e39623de716ba3a389fda5486b2d7be7131a980ba54dc7b733d2e08",
+          "archive": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.0/bun-linux-x64.zip",
+          "sha256": "2d03fb5fb83ac8b567aca0a281b2ce1a1a19d488f56c2968d88c3f25e92fe452",
           "binary": "bun-linux-x64/bun"
         },
         "linux-arm64": {
-          "archive": "https://github.com/oven-sh/bun/releases/download/bun-v1.3.10/bun-linux-aarch64.zip",
-          "sha256": "fa5ecb25cafa8e8f5c87a0f833719d46dd0af0a86c7837d806531212d55636d3",
+          "archive": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.0/bun-linux-aarch64.zip",
+          "sha256": "4b1a332ee861983eb93bcfe6f770fff94e3e31b2c388bdaea3c8ed35e58eed0e",
           "binary": "bun-linux-aarch64/bun"
         }
       }
@@ -33,7 +33,7 @@
     }
   },
   "provenance": {
-    "remote_verified_on": "2026-08-16",
+    "remote_verified_on": "2026-08-31",
     "remote_verification": "GitHub release API asset digests agree for both supported Linux targets"
   }
 }

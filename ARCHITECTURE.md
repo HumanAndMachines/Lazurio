@@ -128,9 +128,10 @@ mandátem a správou dat, ne odděleným vývojem runtime.
 
 | Vlastnost | Buddy | AI Kolega |
 | --- | --- | --- |
-| Owner | jeden lidský Principál | Organizace |
+| Principál | jeden člověk, jehož Buddy zastupuje | AI Kolega sám |
+| Owner/provider custody Mašiny | lidský Principál | Organizace |
 | Mandát | osobní | pracovní a organizační |
-| Paměť | osobní GBrain | organizačně svěřený GBrain |
+| Paměť | osobní, binding-scoped GBrain | organizačně svěřený, binding-scoped GBrain |
 | Síťová bezpečnostní hranice | Principálova | organizační |
 | Přístupy | delegace Principála | granty Organizace |
 | Technický základ | Resident runtime | stejný Resident runtime |
@@ -138,7 +139,25 @@ mandátem a správou dat, ne odděleným vývojem runtime.
 Buddyho smí oslovovat právě jeden lidský Principál přes privátní komunikační
 rozhraní. Mašinu vlastní Principál a může ji měnit. Co smí běžící Agent dělat,
 omezuje sandbox agentního runtime; Lazurio vedle něj nestaví druhý sandbox.
-Proces omezený sandboxem jej zároveň nesmí vlastnit ani přepisovat.
+Nástrojový kontejner omezený sandboxem nedostává Docker socket ani právo měnit
+jeho definici. Hermes gateway, která rootful Docker sandbox spouští, však kvůli
+tomu patří do důvěryhodného Machine TCB: její kompromitace je kompromitací celé
+Mašiny, nikoli izolovaného bindingu. V1 tuto hranici neskrývá za nepravdivé
+tvrzení o neprivilegovaném supervisoru.
+
+Každý příchozí turn nejdřív vybere právě jeden **Communication Binding** a tím
+právě jeden **Authority Compartment**. Teprve potom se načtou jeho instrukce,
+paměť, credentials, repozitáře a nástroje. Buddy má jeden osobní binding a smí
+mít více navzájem oddělených Organization bindingů; AI Kolega v první verzi
+pracuje právě přes jeden Organization binding. Procesy, fronty, session
+namespace, runtime klíče a GBrain stav jsou binding-scoped. Jejich oddělení
+omezuje náhodné promíchání, ale z jedné VPS nedělá více Mašin: host root,
+kompromitace a obnova zůstávají společnou hranicí.
+
+Soukromý Zulip lidského Principála je komponenta stejné Buddy Mašiny a obnovuje
+se se stejným checkpointem. Organization Zulip je Workload na Conglomerate
+Hostu, jehož custody daná Organizace přijala; není servisní ani recovery cesta.
+Při výpadku se Host obnovuje přes provider konzoli a SSH, ne přes Zulip.
 
 Podrobný profil, instalaci a incidentní hranice popisuje
 [manuál Residentů](manual/lazurio-resident-profiles.md). Pravidla pro práci s
@@ -321,6 +340,24 @@ Rootu není podporovaný postup.
 Hosted Resident profily mohou dál používat verzovaný immutable artefakt s
 atomickou aktivací a rollbackem. Ani tam se běžící runtime neaktualizuje
 přepisem source checkoutu a artefakt nesmí vytvořit druhou datovou autoritu.
+
+Managed Resident drží čtyři oddělené pravdy: persistent desired Machine
+Record/owner overlay, krátkodobý readback, jednorázový Plan plus Permit a
+šifrovaný checkpoint s content-free katalogem. Veřejný Machines Adapter v3 je
+proto pouze `validate/readback/plan/apply`; checkpoint timer a pre/post-change
+checkpoint jsou policy konvergovaná uvnitř `apply`. `applied.json` dokazuje
+jen poslední konvergenci a checkpoint jej nepřepisuje. Návrat kódu vybere
+předchozí exact kompatibilní artefakt jako desired state a použije stejný
+Deploy; rebuild skládá provider provisioning, Deploy a budoucí datový recover,
+není Resident primitive.
+
+Datový recover dostane až aditivní, jednorázový break-glass kontrakt po
+clean-host, revocation a recovery-key drillech. Checkpoint compatibility váže
+Mašinu, Profil, persistent-state schéma, Authority Compartment/Communication
+Binding topology a u Buddyho Zulip PostgreSQL major; artifact id a Git HEADy
+zůstávají auditní provenience. Obnova nejdřív zkonverguje aktuální desired
+state a živou autoritu a nikdy neobnoví credentials ani odvolaný binding:
+restore re-derives, never resurrects.
 
 Pracovní checkouty aktualizuje jediná explicitní akce `lazurio update`, kterou
 volá CLI i tlačítko **Synchronizovat**. Postupuje shora dolů přes Lazurio,

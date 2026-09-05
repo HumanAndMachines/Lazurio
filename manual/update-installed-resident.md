@@ -1,14 +1,33 @@
 # Aktualizace už nainstalovaného Lazurio Residenta
 
-Tento manuál řeší pouze Mašinu, na které už existuje zdravý Lazurio Resident
-pod `/opt/lazurio`. Neinstaluje operační systém, uživatele, Hermes, GBrain,
-Zulip, síť ani zálohovací custody. Tyto změny patří do reviewovaného operator
-plane a mají jiný failure a recovery kontrakt.
+Tento manuál rozlišuje dvě lane, které se nesmějí zaměnit:
 
-Update je v první fázi vždy viditelný assisted krok. Není to background daemon,
-fleet command ani automatická maintenance window.
+- **Managed Resident** je normální cesta pro Buddy a AI Kolegu. Machines
+  konverguje host, exact Lazurio artefakt, Hermes, GBrain, bindingy, osobní
+  Zulip, firewall i šifrovaný checkpoint jednou reviewovanou operací.
+- **Legacy assisted Buddy** mění jen immutable Lazurio Root v existující
+  instalaci a skládá jeho cutover se starší jednou Hermes/bridge službou.
+  Neumí dokazovat zdraví celé Managed Mašiny.
 
-## 1. Nejdřív zjisti stav
+Žádná lane není background daemon, fleet command ani automatická maintenance
+window. Každá mutace je viditelná, svázaná s jednou přesnou Mašinou a má
+last-known-good nebo obnovovací checkpoint.
+
+## 1. Nejdřív zjisti stav a lane
+
+Na Managed Mašině je jediný content-free provozní vstup:
+
+```sh
+sudo lazurio-resident-status
+```
+
+Vrací profil (`buddy` nebo `ai-colleague`), exact artifact, aplikované
+Deployment/Machines HEADy, služby, binding count, sandbox, poslední šifrovanou
+zálohu a kompatibilní checkpoint. Pokračuj jen když odpovídají reviewovanému
+Machine Recordu a cílovému Plánu. Zelený samotný proces není důkaz zdravé
+Mašiny.
+
+Následující přímý příkaz patří pouze legacy assisted instalaci:
 
 Z aktivního rootu spusť:
 
@@ -18,8 +37,10 @@ bun /opt/lazurio/active/resident/updater.mjs status \
 ```
 
 Pokračuj pouze když výstup označí aktivní artefakt, profil `buddy` a health
-`pass`. `fail`, nečitelný manifest, chybějící mount nebo lokální drift nejsou
-důvodem vynutit update; jsou důvodem nejdřív určit, co se změnilo.
+`pass`. Pro legacy AI Kolegu lze místo něj použít `--profile ai-colleague`, ale
+vznik nové AI Colleague Mašiny patří do Managed lane. `fail`, nečitelný
+manifest, chybějící mount nebo lokální drift nejsou důvodem vynutit update;
+jsou důvodem nejdřív určit, co se změnilo.
 
 Do sdílené evidence zapisuj jen content-free fakta: artifact id, source commit,
 čas, jméno checku a výsledek. Nezapisuj obsah Personalspace, konverzace,
@@ -37,7 +58,51 @@ Před dalším update Principál nebo jeho operátor vědomě zvolí jednu možn
 2. přenést opravu do odděleného Lazurio source checkoutu a vydat nový artefakt;
 3. vrátit soubor na kanonickou release podobu a znovu spustit status.
 
-## 3. Assisted update
+## 3. Managed deploy, návrat artefaktu a budoucí obnova
+
+Managed změna začíná v provider-custody Deployment Repo, ne SSH příkazem na
+hostu. Změň exact Lazurio artifact pin nebo jiný desired state jedné Mašiny a
+proveď stejný uzavřený lifecycle jako při první instalaci:
+
+```text
+fresh readback → canonical Plan → review/merge → one-use Permit
+  → apply s pre/post-change checkpoint policy → fresh readback
+```
+
+Machines Adapter přes SSH předá controlleru uzavřený kontrakt a dva oddělené
+purpose-scoped secret bundly: runtime credentials a checkpoint credentials.
+Controller atomicky aktivuje exact Lazurio Root,
+ověří exact Hermes a GBrain checkouty, znovu vygeneruje binding-scoped služby,
+pro Buddyho zkonverguje osobní Zulip a po mutaci vyžaduje čerstvou šifrovanou
+zálohu. Runtime si Permit nevydává a jeho service account nemá dostat
+Deployment Repo, provider credential ani checkpoint credential.
+
+Machines volá updater s explicitním `--mode managed` a oběma mount source.
+Výchozí `assisted` mode u Buddyho Organizations mount odmítne, aby stará jediná
+osobní bridge služba omylem nezískala společný pohled na více Organizací.
+
+Veřejný Adapter v3 má jen `validate`, `readback`, `plan` a Permit-backed
+`apply`. Návrat kódu proto není druhý protokol: v Machine Recordu se zvolí
+předchozí exact kompatibilní artefakt a projde se stejný Deploy. Selhání
+atomické aktivace vrátí last-known-good artefakt ještě uvnitř této transakce.
+
+Datový recover zatím není spustitelná Machines capability. Checkpoint nese
+metadata-only katalog a compatibility fingerprint Mašiny, Profilu, persistent
+state schématu, authority/binding topology a u Buddyho Zulip PostgreSQL majoru.
+Artifact id a Git HEADy jsou auditní provenience, ne podmínka kompatibility.
+Budoucí recover dostane vlastní aditivní, jednorázový Plan/Permit kontrakt až
+po clean-host restore, revocation a recovery-key drillu. Musí nejdřív
+zkonvergovat aktuální desired state a živou autoritu; ze checkpointu nikdy
+neoživí odvolané bindingy ani credentials.
+
+`rebuild` je orchestrace přes provider boundary: provision blank hostu,
+Resident Deploy a teprve potom autorizovaný recover. Není to Resident verb a
+nesmí schovat nákup, smazání nebo nahrazení VPS za `apply`. Dokud tyto brány
+nejsou doložené, oba Managed Resident Profily zůstávají `shaping`. Konkrétní
+custody pravidla a promotion gates drží verzovaný Machines release v
+`docs/resident-machines.md`.
+
+## 4. Legacy assisted Buddy update
 
 Použij exact artefakt a jeho `.sha256` sidecar z jednoho reviewovaného release.
 Produkční Buddy rollout spouštěj z exact operator kitu nebo přes reviewovaný
@@ -76,7 +141,7 @@ existenci a oprávnění musí preflight skutečně přečíst.
 Samotný zelený příkaz, běžící systemd unit nebo existence nového adresáře není
 postačující důkaz.
 
-## 4. Rollback
+## 5. Legacy rollback
 
 Při selhání před přepnutím zůstává původní active verze beze změny. Selže-li
 service gate po přepnutí, `buddy-rollout` se pokusí vrátit předchozí active root
@@ -94,7 +159,7 @@ nikdy nemaže Personalspace, Organization checkouty ani starší verzované root
 Obnova secrets, dat nebo přístupů je jiná operace a vyžaduje přesný souhlas
 Principála.
 
-## 5. Kdy použít operator plane místo updateru
+## 6. Kdy použít Managed operator plane místo updateru
 
 Vrať se k operator runbooku, když je problém v některé z těchto vrstev:
 
@@ -104,6 +169,7 @@ Vrať se k operator runbooku, když je problém v některé z těchto vrstev:
 - obnova celé Mašiny, custody souborů nebo zálohy;
 - první instalace na blank host.
 
-Updater není Ansible a Ansible není updater. Operator plane konverguje Mašinu;
-updater atomicky spravuje jednu aktivní verzi Lazurio Rootu; Doctor pozoruje,
-zda skutečnost odpovídá oběma kontraktům.
+Updater není Ansible a Ansible není updater. Managed operator plane konverguje
+Mašinu, Resident controller skládá její runtime a updater atomicky spravuje
+jednu aktivní verzi Lazurio Rootu. Doctor pozoruje artefaktovou hranici;
+`lazurio-resident-status` dokazuje health celé Managed kompozice.

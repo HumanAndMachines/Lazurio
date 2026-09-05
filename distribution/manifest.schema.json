@@ -201,7 +201,7 @@
           ],
           "properties": {
             "bun": {
-              "const": "1.3.10"
+              "const": "1.4.0"
             },
             "uv": {
               "const": "0.11.32"

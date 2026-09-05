@@ -22,6 +22,19 @@ credentials.
 | Mašina | Fyzické zařízení, virtuální server nebo providerem izolovaný hostovaný pracovní prostor, který tvoří jednu sdílenou runtime, bezpečnostní a recovery hranici se známým Ownerem. |
 | Personalspace | Privátní prostor právě jednoho Principála a případného Buddyho. |
 | Organizace | Jedna firma, jeden GitHub Organization scope a jedna access hranice. |
+| Authority Compartment | Nejmenší runtime scope jedné sady credentials, repozitářů, nástrojů, instrukcí a paměti; je osobní, nebo patří právě jedné Organizaci. |
+| Communication Binding | Vazba jednoho přesného Zulip realmu a jeho immutable routing policy na právě jeden Authority Compartment. Přenáší zprávu, ale sama neuděluje práva. |
+
+Instrukce nemají vedlejší manifestovou autoritu. Hermes načítá kanonický
+`AGENTS.md` přímo z rootu repozitáře vybraného compartmentu; osobní binding
+Buddyho k němu přidává privátní `CONSTITUTION.md` a `MANDATES.md`. Binding
+přidává jen neměnnou identitu aktivního compartmentu a zákaz sáhnout do jiného.
+
+Seznam repozitářů v compartmentu je hranice materializace, ne druhé ACL.
+Read/write a Publikační právo určuje výhradně živý scoped GitHub credential.
+Dokud Managed runtime nemá revokovatelný Git credential broker pro pracovní
+kontejner, smí checkouty připravit, ale nesmí tvrdit, že Agent umí
+autentizovaný fetch nebo push.
 
 Kanonickou cross-profile definici drží root `ARCHITECTURE.md`. Tento manuál dál
 slovem Mašina myslí konkrétně Mašinu hostující Residenta. Hosted Team Workspace
@@ -112,29 +125,39 @@ dnes Hermes Agent. Manifest, Doctor, service oddělení a rollback pouze
 zviditelňují odchylky, omezují náhodnou self-mutaci procesu a umožňují obnovu;
 nejsou druhou autorizační hranicí.
 
-Jedna úzká provozní podmínka z toho neustupuje: runtime nesmí vlastnit ani umět
-přepsat sandbox, který jej omezuje. Hermes checkout a Bun může vlastnit a měnit
-Principál nebo jím řízená maintenance identita, která nespouští agentní relaci.
-Účty `buddy` a `buddy-bridge` k nim musí mít pouze potřebné čtení/spuštění a
-nesmí je nahradit ani přes parent adresář. Preflight kontroluje skutečná host
-oprávnění a tracked Hermes bytes proti pinned commitu bez důvěry v Git index,
-replacement refs či symlinkované předky. Jde o self-protection existujícího
-Hermes sandboxu, ne o nový Lazurio ACL.
+Agentem spuštěný terminal kontejner nesmí vlastnit ani přepsat sandbox, který
+jej omezuje: nedostává Docker socket, host credentials ani zapisovatelný
+software root. Hermes checkout a Bun může vlastnit a měnit Principál nebo jím
+řízená maintenance identita. Preflight kontroluje skutečná host oprávnění a
+tracked Hermes bytes proti pinned commitu bez důvěry v Git index, replacement
+refs či symlinkované předky.
+
+Managed v1 přitom používá rootful Docker. Binding-scoped Hermes gateway proto
+musí umět vytvářet terminal kontejnery a členství v `docker` group z ní dělá
+důvěryhodnou součást Machine TCB s prakticky root-equivalentní mocí. Bridge tuto
+moc nemá. Procesní a datové oddělení bindingů brání běžnému scope bleed, ale
+kompromitace gatewaye je kompromitací celé Mašiny. Silnější hranice vyžaduje
+pozdější ověřený rootless sandbox nebo úzký privilegovaný broker; současný
+kontrakt ji nepředstírá.
 
 Veřejný Buddy runtime obsahuje komunikační bridge mezi privátním Zulipem a
 agentním runtime. Bridge sám nevlastní identitu ani mandáty: před prvním
 síťovým krokem ověří mount privátního profilu, vloží jeho ústavu a mandáty do
 každého turnu a odmítne běh bez úplného kontraktu. Běží pod odděleným účtem,
 nevystavuje příchozí port a trvanlivou frontu drží mimo immutable root.
-Přechodová služba používá již existující host custody soubor; jeho secrets
+Managed Machines nasazení vytváří jeden gateway a jeden bridge proces pro
+každý binding. Každý má vlastní OS identity, `HERMES_HOME`, frontu, API klíč,
+port, session namespace a `GBRAIN_HOME`; Organization binding nikdy nedostane
+Buddyho soukromý profil. Osobní binding vrství veřejný profilový `AGENTS.md`
+s privátní ústavou a mandáty, zatímco Organization binding vrství veřejný
+profil s instrukcemi právě vybrané Organizace. Žádná vrstva nenahrazuje druhou.
+Oddělené procesy omezují záměnu scope, ale nejsou novým IAM ani novou Mašinou:
+root VPS, její kompromitace a obnova zůstávají společnou hranicí.
+
+Předchozí assisted `buddy-rollout` zůstává pouze přechodovou migrační lane pro
+existující instalace. Používá již existující host custody soubor; secrets
 nekopíruje ani nevypisuje. Cutover je vratný přes uchovanou původní systemd
-unit a úspěch nového residenta dokazuje registrace polleru, nikoli jen stav
-procesu. Unmanaged pre-resident unit se před migrací i po explicitním restore
-ověřuje svým legacy enabled/active systemd kontraktem; nový `poller.json` po ní
-se nedá vyžadovat.
-Hermes dostává aktivní Lazurio Root jako `TERMINAL_CWD`, aby jeho context-file
-discovery vložilo veřejný profilový `AGENTS.md` i do Zulip session. Ten se
-vrství s privátní ústavou a mandáty; žádná z těchto vrstev nenahrazuje druhou.
+unit a úspěch dokazuje registrace polleru, nikoli jen stav procesu.
 Existující Personalspace se při migraci nekopíruje: updater ho adoptuje jako
 explicitní updater-managed mutable mount kontrakt a service preflight ověří, že
 deklarovaný Buddy profil skutečně leží uvnitř `active/personalspace`.
@@ -155,8 +178,10 @@ nástrojů omezuje existující Hermes sandbox.
 ## Profil AI Kolega a Steward overlay
 
 AI Kolega je samostatný Principál. Má vlastní účet, seat, Mašinu,
-Personalspace a přístupy do Organizací. Budoucí profil `ai-colleague` použije
-stejný build, manifest, Doctor a updater jako Buddy, ale jiné root instrukce.
+Personalspace a přístupy do Organizací. Profil `ai-colleague` používá stejný
+build, manifest, Doctor, updater a Managed controller jako Buddy, ale jiné root
+instrukce a v1 právě jeden Organization Communication Binding. Jeho
+Organization turn nikdy automaticky nemountuje ani nečte Personalspace.
 
 Steward není třetí profil. Je to role overlay nad AI Kolegou, který může
 zpřesnit workflow a health checks. Overlay však nevytvoří žádné oprávnění:
@@ -172,19 +197,29 @@ checkoutu. Běžný update už aktivního Residenta provádí pouze jeho verzova
 updater. Ansible může updater explicitně zavolat, ale nesmí znovu implementovat
 kopírování, přepnutí active verze ani rollback.
 
-Buddy/Linux operator lane v1 používá jen existující mechanismy: Ansible pro
-host desired state, upstream install rozhraní Hermesu a GBrainu, Tailscale jako
-access plane, UFW jako host firewall a provider snapshot jako recovery bod.
-Nový osobní GBrain začíná na lokálním PGLite; nevzniká kvůli němu další
-PostgreSQL service. Zulip je privátní externí transport prerequisite a Buddy
-bridge jej polluje odchozím spojením, takže resident host nepotřebuje veřejný
-Zulip ingress.
+Managed Linux lane v1 používá Machines Ansible pro host desired state a
+Resident controller z exact Lazurio artefaktu pro runtime kompozici. Podporuje
+Ubuntu 24.04 na x64/arm64, Bun 1.4.0, exact-pinned Hermes a GBrain, systemd,
+Docker terminal sandbox, UFW, fail2ban, automatické security updates a
+šifrovaný Restic checkpoint mimo host. GBrain je pro každý binding samostatný
+PGLite/stdio store bez embeddings a s výslovně zvoleným search modem.
 
-Síťový kontrakt Linux profilu v1 má nulový veřejný ingress. SSH, případný
-privátní Zulip HTTPS a servisní UI se připouštějí pouze přes deklarované
-tailnet rozhraní. Najde-li preflight staré veřejné nebo jinak cizí allow
-pravidlo, nic nemaže ani nepřepisuje: zastaví se a nechá Principála rozhodnout,
-co na jeho Mašině skutečně patří zachovat.
+Buddyho osobní Zulip je součást stejné Mašiny: oficiální digest-pinned Compose
+stack poslouchá aplikačně jen na loopbacku, veřejné TLS ukončuje Caddy a jeho
+`/data` vstupuje do stejného quiesced checkpointu jako Resident. První apply
+idempotentně založí realm, lidského ownera a Generic bot identitu. Budoucí
+obnova nejdřív ověří Machine, Profile, persistent-state schéma,
+authority/binding topology a Zulip PostgreSQL major; exact artefakt a Git HEADy
+zůstávají auditní provenience. Organization Zulip naopak patří jako explicitní
+Workload na Conglomerate Host a jeho výpadek se obnovuje přes provider/SSH,
+nikdy přes samotný chat.
+
+Host přijímá jen deklarované SSH recovery CIDRy a u Buddyho veřejné porty
+80/443. Terminal sandbox má exact image digest, CPU/memory/PID limit,
+`no-new-privileges`, žádný Docker socket a žádné automatické forwardování
+host credentials. Síť je výslovná: `none`, nebo standardní `docker-bridge`.
+Druhá volba znamená dostupný egress, nikoli předstíraný allowlist; skutečně
+filtrovaný egress vyžaduje samostatný implementovaný mechanismus.
 
 Release je svázaný s přesným artefaktem. Bezpečný lifecycle má tento tvar:
 
@@ -199,6 +234,19 @@ Rollout v1 je úmyslně asistovaný a viditelný. Background daemon,
 nepozorovaná fleet aktualizace a autonomní maintenance window nejsou součástí
 základního kontraktu. Přesný stav aktuálního artefaktu ověří
 `bun run resident:doctor`.
+
+Managed Machines mají jediný podporovaný mutační sled `readback → plan → review
+→ one-use Permit → apply → readback`. Adapter v3 další mutační verb nemá.
+Checkpoint timer i pre/post-change checkpoint jsou desired policy, kterou
+zkonverguje `apply`; checkpoint nepřepisuje `applied.json`. Finální gate
+vyžaduje exact aplikovaný Machines/Lazurio release, aktivní bindingy, sandbox,
+čerstvou šifrovanou zálohu a poslední kompatibilní checkpoint.
+
+Návrat kódu zvolí předchozí exact artefakt jako desired state a použije stejný
+Deploy. Datový recover bude až samostatný aditivní break-glass kontrakt po
+clean-host, revocation a recovery-key drillech. Rebuild skládá provider
+provisioning, čistý Deploy a recover; není Resident primitive. Provider nákup
+nebo zrušení VPS vždy vyžaduje samostatný Provisioning Intent.
 
 Updater v1 drží immutable verze pod `versions/`, content-free lifecycle stav a
 mutable `organizations/` a `personalspace/` pod odděleným `state/`. `active`
@@ -217,6 +265,21 @@ po Managed migraci patří source oprava do
 Konkrétní offline postup pro status, update, rollback a zachování lokálního
 hotfixu je v `manual/update-installed-resident.md` a je součástí resident
 artefaktu.
+
+## Hermes fork je release mirror
+
+`Lazurio/hermes-agent` není vývojové repo a neočekává další contributory. Jeho
+jediným správcem je Matěj Suchánek. Fork se obnovuje pouze z přesného upstream
+release tagu: tree-neutral bridge zachová identický upstream strom a až nad něj
+se aplikuje malý pořadový overlay popsaný ve `FORK_POLICY.md` a
+`fork-maintenance/patches.v1.json`.
+
+Produktové změny Buddyho a AI Kolegy patří do Lazurio nebo Machines, ne do
+forku. Dočasný compatibility patch smí ve forku zůstat jen s popsanou upstream
+mezerou, testem a objektivní retirement condition. Při každém refreshi se
+nejdřív ověří, zda upstream už chování nedodal; pokud ano, lokální patch se ve
+stejné změně odstraní nebo zúží. Consumery pinují exact commit, nezávislý Hermes
+self-update je vypnutý a publikovaná historie ani tagy se nepřepisují.
 
 ## Když je potřeba vlastní oprava Launchpadu
 
