@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, win32 } from "node:path";
 
 import { validateAgainstSchema } from "../runtime/json-schema-mini.mjs";
-import schema from "../install-report.v1.schema.json";
+import schema from "../install-report.v2.schema.json";
 import {
   canonicalLazurioRoot,
   INSTALL_STEP_IDS,
@@ -30,6 +30,9 @@ function inspectLazurioInstallation(options) {
       return resolver && !options.resolvePathCommand ? resolver(context) : resolvePath(command, context);
     },
     ...(run ? { runCommand: (request) => {
+      if (request.executable.replaceAll("\\", "/").split("/").at(-1).replace(/\.exe$/, "") === "codex") {
+        return { status: 0, stdout: "codex-cli 0.100.0" };
+      }
       const result = run(request);
       if (request.args[0] === "--version" && result?.status === 0 && !result.stdout) {
         const name = request.executable.replaceAll("\\", "/").split("/").at(-1).toLowerCase();
@@ -58,7 +61,7 @@ test("Install Core returns one deterministic locale-neutral report", () => {
   });
   expect(report.summary).toEqual({
     status: "action_required",
-    counts: { completed: 4, skipped: 1, action_required: 2, failed: 0 },
+    counts: { completed: 5, skipped: 1, action_required: 2, failed: 0 },
   });
   expect(isValidLazurioInstallReport(report)).toBe(true);
   expect(validateAgainstSchema(report, schema, "install")).toEqual([]);
@@ -179,7 +182,7 @@ test("supported complete fixture exits zero with all probes completed", () => {
 
   expect(report.status).toBe("completed");
   expect(report.summary.counts).toEqual({
-    completed: 7,
+    completed: 8,
     skipped: 0,
     action_required: 0,
     failed: 0,
@@ -951,3 +954,52 @@ test("Install Core accepts arbitrary PATH installations and rejects old or wrong
     expect(calls.every((path) => Object.values(paths).includes(path))).toBe(true);
   }
 });
+
+for (const platform of ["darwin", "linux", "win32"]) {
+  for (const scenario of ["missing", "available", "wrong-output", "nonzero", "throws"]) {
+    test(`Codex prerequisite on ${platform}: ${scenario}`, () => {
+      const calls = [];
+      const codexPath = platform === "win32" ? "C:\\Users\\Example\\Tools\\codex.exe" : "/home/example/.local/bin/codex";
+      const report = inspectLazurioInstallationCore({
+        platform,
+        architecture: "x64",
+        root: "/fixture/root",
+        bunVersion: "1.4.1",
+        environment: {},
+        resolvePathCommand: (command) => command === "codex"
+          ? scenario === "missing" ? null : codexPath
+          : `/fixture/${command}`,
+        runCommand: ({ executable, args }) => {
+          calls.push({ executable, args });
+          if (executable === codexPath) {
+            if (scenario === "throws") throw new Error("CANARY_PRIVATE_FAILURE");
+            return {
+              status: scenario === "nonzero" ? 1 : 0,
+              stdout: scenario === "wrong-output" ? "CANARY_PRIVATE_OUTPUT" : "codex-cli 0.100.0\n",
+              stderr: "CANARY_PRIVATE_ERROR",
+            };
+          }
+          const tool = executable.split("/").at(-1);
+          return { status: 0, stdout: args[0] === "config" ? "ssh" : ({
+            bun: "1.4.1", git: "git version 2.47.0", gh: "gh version 2.90.0", node: "v24.19.0",
+          }[tool] ?? "") };
+        },
+        inspectRoot: (path) => ({ path, layout: "source_root", status: "completed", reason: "source_root_ready" }),
+      });
+      const expected = {
+        missing: ["action_required", "codex_missing"],
+        available: ["completed", "codex_available"],
+        "wrong-output": ["failed", "codex_unusable"],
+        nonzero: ["failed", "codex_unusable"],
+        throws: ["failed", "probe_failed"],
+      }[scenario];
+      expect(report.steps.find((step) => step.id === "codex")).toEqual({ id: "codex", status: expected[0], reason: expected[1] });
+      expect(report.status).toBe(expected[0]);
+      expect(installExitCode(report) === 0).toBe(scenario === "available");
+      expect(report.steps.find((step) => step.id === "github_auth").status).toBe("completed");
+      expect(calls.filter((call) => call.executable === codexPath)).toEqual(scenario === "missing" ? [] : [{ executable: codexPath, args: ["--version"] }]);
+      expect(JSON.stringify(report)).not.toContain("CANARY_PRIVATE");
+      expect(validateAgainstSchema(report, schema, "install")).toEqual([]);
+    });
+  }
+}
