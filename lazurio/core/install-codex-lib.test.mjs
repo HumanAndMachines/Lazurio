@@ -41,6 +41,7 @@ test("explicit User PATH mandate is required before any installer side effect", 
   expect(isValidLazurioInstallReport(report.installation)).toBe(true);
   expect(installCatalogIssues()).toEqual([]);
   expect(renderHumanInstallApplyReport(report, { language: "en" })).toContain("--allow-user-path");
+  expect(renderHumanInstallApplyReport(report, { language: "en" })).not.toContain("changes nothing");
   expect(renderHumanInstallApplyReport(report, { language: "cs" })).toContain("souhlasu Principála");
 });
 

@@ -100,5 +100,6 @@
   "apply.codex_install_probe_failed": "Instalační cestu nelze bezpečně ověřit. Zkontroluj přístup k ní.",
   "apply.codex_installer_failed": "Oficiální instalátor selhal nebo jej nelze spustit. Ověř síť a předpoklady instalátoru a zopakuj stejný příkaz.",
   "apply.codex_restart_required": "Instalátor skončil. Otevři novou relaci terminálu; na Windows úplně ukonči a znovu spusť Codex. Potom zopakuj lazurio install --json a lazurio doctor. Child proces původní relace nestačí.",
-  "apply.codex_installed": "Codex byl nainstalován a ověřen v PATH."
+  "apply.codex_installed": "Codex byl nainstalován a ověřen v PATH.",
+  "report.after_action": "Následuje nová kontrola skutečného stavu mašiny po instalačním kroku."
 }

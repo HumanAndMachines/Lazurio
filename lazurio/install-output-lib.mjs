@@ -26,7 +26,7 @@ export function selectInstallLanguage({ requested = null, environment = process.
   return "cs";
 }
 
-export function renderHumanInstallReport(report, { language = "cs" } = {}) {
+export function renderHumanInstallReport(report, { language = "cs", afterAction = false } = {}) {
   if (!isValidLazurioInstallReport(report)) {
     throw new Error("Nelze vykreslit neplatný instalační report.");
   }
@@ -35,7 +35,7 @@ export function renderHumanInstallReport(report, { language = "cs" } = {}) {
 
   const lines = [
     catalog["report.title"],
-    catalog["report.read_only"],
+    catalog[afterAction ? "report.after_action" : "report.read_only"],
     `${catalog["report.status"]}: ${catalog[`status.${report.status}`]}`,
     `${catalog["report.machine"]}: ${report.machine.platform}/${report.machine.architecture}`,
     `${catalog["report.root"]}: ${printablePath(report.root.path)}`,
@@ -70,7 +70,7 @@ export function renderHumanInstallApplyReport(report, { language = "cs" } = {}) 
   return [catalog["apply.title"],
     `${catalog["report.status"]}: ${catalog[`status.${report.status}`]}`,
     catalog[`apply.${report.action.reason}`], "",
-    renderHumanInstallReport(report.installation, { language }),
+    renderHumanInstallReport(report.installation, { language, afterAction: true }),
   ].join("\n");
 }
 
@@ -89,6 +89,7 @@ export function installCatalogIssues() {
     ...applySchema.properties.action.properties.reason.enum.map((reason) => `apply.${reason}`),
     "report.title",
     "report.read_only",
+    "report.after_action",
     "report.status",
     "report.machine",
     "report.root",
