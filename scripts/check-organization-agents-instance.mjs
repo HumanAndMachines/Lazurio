@@ -43,9 +43,12 @@ const REQUIRED_STATEMENTS = Object.freeze({
 export function classifyAgentsInstanceSlot(slot) {
   const path = normalizeOrganizationSlotPath(slot?.path) ?? "";
   const category = String(slot?.category ?? "").toLowerCase();
-  if (path === "mission-control/db" || category === "planning-data") return "mission-control-data";
-  if (path === "mission-control" || category === "planning") return "mission-control";
-  if (path === "workspace/knowledgebase" || category === "knowledge") return "knowledgebase";
+  if (path === "mission-control/db") return "mission-control-data";
+  if (path === "mission-control") return "mission-control";
+  if (path === "workspace/knowledgebase") return "knowledgebase";
+  if (category === "planning-data") return "mission-control-data";
+  if (category === "planning") return "mission-control";
+  if (category === "knowledge") return "knowledgebase";
   if (category === "design" || path === "design-system" || path.includes("design-system")) {
     return "design-system";
   }
@@ -71,28 +74,30 @@ export function isCanonicalBaselinePath(kind, path) {
 export function collectAgentsInstanceTargets(resource) {
   const targets = [{ relativePath: "AGENTS.md", kind: "root", required: true }];
   const seenBaseline = new Set();
-  const seenPaths = new Set(["AGENTS.md"]);
+  const seenKeys = new Set(["root:AGENTS.md"]);
 
   for (const slot of resource?.repository_inventory ?? []) {
     const kind = classifyAgentsInstanceSlot(slot);
     const path = normalizeOrganizationSlotPath(slot?.path);
     if (!kind || !path) continue;
     const relativePath = `${path}/AGENTS.md`;
+    const key = `${kind}:${relativePath}`;
     const canonical = isCanonicalBaselinePath(kind, path);
     const required = canonical
       || (BASELINE_KINDS.has(kind) && !slotIsPlanned(slot))
       || (CONDITIONAL_KINDS.has(kind) && !slotIsPlanned(slot));
     if (!required) continue;
-    if (seenPaths.has(relativePath)) continue;
-    seenPaths.add(relativePath);
+    if (seenKeys.has(key)) continue;
+    seenKeys.add(key);
     targets.push({ relativePath, kind, required: true });
     if (canonical) seenBaseline.add(kind);
   }
 
   for (const [kind, path] of Object.entries(BASELINE_KIND_PATHS)) {
     const relativePath = `${path}/AGENTS.md`;
-    if (seenBaseline.has(kind) || seenPaths.has(relativePath)) continue;
-    seenPaths.add(relativePath);
+    const key = `${kind}:${relativePath}`;
+    if (seenBaseline.has(kind) || seenKeys.has(key)) continue;
+    seenKeys.add(key);
     targets.push({ relativePath, kind, required: true });
   }
 
