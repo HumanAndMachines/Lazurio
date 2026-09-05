@@ -40,7 +40,7 @@
   "reason.node_runtime_missing": "příkaz node není dostupný",
   "reason.node_runtime_not_on_path": "Node.js je nainstalovaný, ale příkaz node není dostupný",
   "reason.node_path_identity_mismatch": "příkaz node není ověřená instalace Node.js",
-  "reason.node_runtime_unusable": "příkaz node je, ale jeho stabilní verzi nelze ověřit",
+  "reason.node_runtime_unusable": "Node.js byl nalezen, ale jeho stabilní verzi nelze ověřit",
   "reason.github_authenticated": "GitHub CLI je přihlášené ke github.com a používá SSH protokol",
   "reason.github_login_required": "GitHub CLI vyžaduje přihlášení ke github.com",
   "reason.github_ssh_protocol_required": "GitHub CLI je přihlášené, ale Git operace nejsou nastavené na SSH",

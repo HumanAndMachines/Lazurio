@@ -40,7 +40,7 @@
   "reason.node_runtime_missing": "the node command is not available",
   "reason.node_runtime_not_on_path": "Node.js is installed but the node command is not available",
   "reason.node_path_identity_mismatch": "the node command is not the trusted Node.js installation",
-  "reason.node_runtime_unusable": "the node command is but its stable version could not be verified",
+  "reason.node_runtime_unusable": "Node.js was found, but its stable version could not be verified",
   "reason.github_authenticated": "GitHub CLI is signed in to github.com and uses the SSH protocol",
   "reason.github_login_required": "GitHub CLI needs a github.com sign-in",
   "reason.github_ssh_protocol_required": "GitHub CLI is signed in, but Git operations are not configured for SSH",
