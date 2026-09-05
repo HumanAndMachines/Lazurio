@@ -160,6 +160,7 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
     "lazurio/cli-provenance.v1.schema.json",
     "lazurio/launchpad-install-lib.mjs",
     "lazurio/launchpad-serve-lib.mjs",
+    "lazurio/open-connector-lib.mjs",
     "lazurio/module-port-lib.mjs",
     "lazurio/module-setup-lib.mjs",
     "lazurio/organization-activation-lib.mjs",
