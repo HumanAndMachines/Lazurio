@@ -240,7 +240,7 @@ test("inspect fails each missing required statement and leftover template identi
     kind: "knowledgebase",
     text: "KnowledgebaseTemplate — šablona bez parent pointeru\n",
   })).toEqual(expect.arrayContaining([
-    expect.objectContaining({ code: "forbidden_text", detail: "KnowledgebaseTemplate —" }),
+    expect.objectContaining({ code: "forbidden_text", detail: "KnowledgebaseTemplate" }),
     expect.objectContaining({ code: "missing_statement", detail: "privátní knowledgebase" }),
     expect.objectContaining({ code: "missing_statement", detail: "AGENTS.md" }),
     expect.objectContaining({ code: "missing_statement", detail: PUBLICATION_QUESTION }),
@@ -275,6 +275,161 @@ test("inspect fails each missing required statement and leftover template identi
     for (const statement of requiredStatementsForKind(kind)) {
       expect(empty.some((finding) => finding.code === "missing_statement" && finding.detail === statement)).toBe(true);
     }
+  }
+});
+
+test("template identity headings fail even when required statements are present", () => {
+  const files = baselineFiles();
+  files["workspace/knowledgebase/AGENTS.md"] = [
+    "# KnowledgebaseTemplate",
+    "Toto je privátní knowledgebase této Organizace.",
+    "Čti parent AGENTS.md.",
+    PUBLICATION_QUESTION,
+    "",
+  ].join("\n");
+  files["mission-control/AGENTS.md"] = [
+    "# MissionControlTemplate",
+    "Mattyčus provádí kontrolu této instance.",
+    PUBLICATION_QUESTION,
+    "",
+  ].join("\n");
+  const result = checkOrganizationAgentsInstance({
+    organizationRoot: writeOrganizationFixture({ slots: baselineSlots(), files }),
+  });
+  expect(result.ok).toBe(false);
+  expect(result.findings).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      code: "forbidden_text",
+      path: "workspace/knowledgebase/AGENTS.md",
+      detail: "KnowledgebaseTemplate",
+    }),
+    expect.objectContaining({
+      code: "forbidden_text",
+      path: "mission-control/AGENTS.md",
+      detail: "MissionControlTemplate",
+    }),
+    expect.objectContaining({
+      code: "forbidden_text",
+      path: "mission-control/AGENTS.md",
+      detail: "Mattyčus",
+    }),
+  ]));
+});
+
+test("each leftover template identity fails on its own", () => {
+  expect(inspectAgentsInstanceText({
+    relativePath: "workspace/knowledgebase/AGENTS.md",
+    kind: "knowledgebase",
+    text: [
+      "# KnowledgebaseTemplate",
+      "Toto je privátní knowledgebase této Organizace.",
+      "Čti parent AGENTS.md.",
+      PUBLICATION_QUESTION,
+      "",
+    ].join("\n"),
+  })).toEqual([
+    expect.objectContaining({ code: "forbidden_text", detail: "KnowledgebaseTemplate" }),
+  ]);
+  expect(inspectAgentsInstanceText({
+    relativePath: "workspace/knowledgebase/AGENTS.md",
+    kind: "knowledgebase",
+    text: [
+      "Toto je privátní knowledgebase této Organizace.",
+      "Tento repozitář není knowledgebase konkrétní firmy.",
+      "Čti parent AGENTS.md.",
+      PUBLICATION_QUESTION,
+      "",
+    ].join("\n"),
+  })).toEqual([
+    expect.objectContaining({
+      code: "forbidden_text",
+      detail: "není knowledgebase konkrétní firmy",
+    }),
+  ]);
+  expect(inspectAgentsInstanceText({
+    relativePath: "mission-control/AGENTS.md",
+    kind: "mission-control",
+    text: ["# MissionControlTemplate", PUBLICATION_QUESTION, ""].join("\n"),
+  })).toEqual([
+    expect.objectContaining({ code: "forbidden_text", detail: "MissionControlTemplate" }),
+  ]);
+  expect(inspectAgentsInstanceText({
+    relativePath: "mission-control/AGENTS.md",
+    kind: "mission-control",
+    text: ["Mattyčus provádí kontrolu této instance.", PUBLICATION_QUESTION, ""].join("\n"),
+  })).toEqual([
+    expect.objectContaining({ code: "forbidden_text", detail: "Mattyčus" }),
+  ]);
+  expect(inspectAgentsInstanceText({
+    relativePath: "mission-control/AGENTS.md",
+    kind: "mission-control",
+    text: ["Tato forkable šablona zůstává.", PUBLICATION_QUESTION, ""].join("\n"),
+  })).toEqual([
+    expect.objectContaining({ code: "forbidden_text", detail: "forkable šablona" }),
+  ]);
+});
+
+test("each required nested statement has its own negative fixture", () => {
+  const cases = [
+    {
+      kind: "knowledgebase",
+      relativePath: "workspace/knowledgebase/AGENTS.md",
+      text: `Čti parent AGENTS.md.\n${PUBLICATION_QUESTION}\n`,
+      missing: "privátní knowledgebase",
+    },
+    {
+      kind: "knowledgebase",
+      relativePath: "workspace/knowledgebase/AGENTS.md",
+      text: `Toto je privátní knowledgebase této Organizace.\n${PUBLICATION_QUESTION}\n`,
+      missing: "AGENTS.md",
+    },
+    {
+      kind: "knowledgebase",
+      relativePath: "workspace/knowledgebase/AGENTS.md",
+      text: "Toto je privátní knowledgebase této Organizace.\nČti parent AGENTS.md.\n",
+      missing: PUBLICATION_QUESTION,
+    },
+    {
+      kind: "mission-control",
+      relativePath: "mission-control/AGENTS.md",
+      text: "Instance Mission Control app této Organizace.\n",
+      missing: PUBLICATION_QUESTION,
+    },
+    {
+      kind: "mission-control-data",
+      relativePath: "mission-control/db/AGENTS.md",
+      text: `Draft na v3.\n${PUBLICATION_QUESTION}\n`,
+      missing: "PR proti",
+    },
+    {
+      kind: "mission-control-data",
+      relativePath: "mission-control/db/AGENTS.md",
+      text: `PR proti main je Draft.\n${PUBLICATION_QUESTION}\n`,
+      missing: "v3",
+    },
+    {
+      kind: "mission-control-data",
+      relativePath: "mission-control/db/AGENTS.md",
+      text: "PR proti v3 je Draft.\n",
+      missing: PUBLICATION_QUESTION,
+    },
+    {
+      kind: "design-system",
+      relativePath: "design-system/AGENTS.md",
+      text: "Instance Design System této Organizace.\n",
+      missing: "AGENTS.md",
+    },
+    {
+      kind: "infra",
+      relativePath: "infra/AGENTS.md",
+      text: "Instance infra této Organizace.\n",
+      missing: "AGENTS.md",
+    },
+  ];
+  for (const { kind, relativePath, text, missing } of cases) {
+    expect(inspectAgentsInstanceText({ relativePath, kind, text })).toEqual([
+      expect.objectContaining({ code: "missing_statement", detail: missing }),
+    ]);
   }
 });
 

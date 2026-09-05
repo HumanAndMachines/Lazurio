@@ -16,12 +16,19 @@ export const PUBLICATION_DOUBLE_QUESTION = Object.freeze([
 ]);
 
 export const FORBIDDEN_LITERALS = Object.freeze([
-  "KnowledgebaseTemplate —",
-  "Tento repozitář není knowledgebase konkrétní firmy",
-  "MissionControlTemplate —",
-  "Mattyčus owns implementation",
+  "KnowledgebaseTemplate",
+  "není knowledgebase konkrétní firmy",
+  "MissionControlTemplate",
   "forkable šablona",
 ]);
+
+export const FORBIDDEN_LITERALS_BY_KIND = Object.freeze({
+  "mission-control": ["Mattyčus"],
+});
+
+export function forbiddenLiteralsForKind(kind) {
+  return [...FORBIDDEN_LITERALS, ...(FORBIDDEN_LITERALS_BY_KIND[kind] ?? [])];
+}
 
 export const BASELINE_KIND_PATHS = Object.freeze({
   knowledgebase: "workspace/knowledgebase",
@@ -131,7 +138,7 @@ export function inspectRootHandoff(text, relativePath = "AGENTS.md") {
 
 export function inspectAgentsInstanceText({ relativePath, kind, text }) {
   const findings = [];
-  for (const literal of FORBIDDEN_LITERALS) {
+  for (const literal of forbiddenLiteralsForKind(kind)) {
     if (text.includes(literal)) {
       findings.push({ code: "forbidden_text", path: relativePath, detail: literal });
     }
