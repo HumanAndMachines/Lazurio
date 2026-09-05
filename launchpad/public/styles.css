@@ -3743,6 +3743,15 @@ tbody tr.selected {
 }
 
 @media (max-width: 900px) {
+  .guide-recommendation {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--lz-space-16);
+  }
+
+  .guide-recommendation-visual {
+    width: min(100%, 28rem);
+  }
+
   #drawerToggle:not(.hidden) {
     display: inline-flex !important;
   }
@@ -3899,15 +3908,6 @@ tbody tr.selected {
   .guide-term {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--lz-space-4);
-  }
-
-  .guide-recommendation {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--lz-space-16);
-  }
-
-  .guide-recommendation-visual {
-    width: min(100%, 28rem);
   }
 
   .guide-onboarding-roles,
