@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { existsSync, readFileSync, mkdirSync, writeFileSync, chmodSync, copyFileSync, renameSync } from 'node:fs';
+import { existsSync, readFileSync, mkdirSync, writeFileSync, chmodSync, copyFileSync, renameSync, lstatSync, unlinkSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, resolve, dirname, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync, spawn } from 'node:child_process';
 
@@ -21,11 +21,34 @@ const load = path => JSON.parse(readFileSync(path, 'utf8'));
 const save = (path, value) => writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
 const xml = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
 const launch = args => execFileSync('/bin/launchctl', args, { stdio: 'pipe' });
+export function assertNoSymlinks(path) {
+  for (let current = resolve(path); ; current = dirname(current)) {
+    try { if (lstatSync(current).isSymbolicLink()) throw new Error('Symlink in OpenConnector path; refusing to follow it.'); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+    if (current === dirname(current)) return;
+  }
+}
+export function validateInstallConfig(config, state = connectorState()) {
+  if (!config || config.version !== OPEN_CONNECTOR_RELEASE.version ||
+      config.sha256 !== OPEN_CONNECTOR_RELEASE.sha256 || config.origin !== 'http://localhost:24321' ||
+      config.binary !== join(state, 'open-connector-1.5.0') ||
+      typeof config.custody !== 'string' || !isAbsolute(config.custody) ||
+      !config.custody.endsWith('/secrets/open-connector/mac-pilot')) {
+    throw new Error('Invalid OpenConnector install metadata.');
+  }
+  return config;
+}
+function installedConfig() {
+  assertNoSymlinks(configPath());
+  const config = validateInstallConfig(load(configPath()));
+  for (const path of [config.custody, config.binary, join(config.custody, 'runtime.json')]) assertNoSymlinks(path);
+  return config;
+}
 function loaded() { try { launch(['print', `${domain()}/${label}`]); return true; } catch { return false; } }
 export function digest(bytes) { return createHash('sha256').update(bytes).digest('hex'); }
 export function validateRuntimeSecrets(secrets) {
   for (const key of ['admin', 'encryption', 'bootstrap']) {
-    if (typeof secrets[key] !== 'string' || !/^[a-f0-9]{64}$/.test(secrets[key])) {
+    if (typeof secrets?.[key] !== 'string' || !/^[a-f0-9]{64}$/.test(secrets[key])) {
       throw new Error(`Missing or invalid ${key} credential; refusing to start.`);
     }
   }
@@ -34,7 +57,8 @@ export function validateRuntimeSecrets(secrets) {
 
 export function clientHeaders(client) {
   if (!['codex', 'claude'].includes(client)) throw new Error('Unknown MCP client.');
-  const config = load(configPath());
+  const config = installedConfig();
+  assertNoSymlinks(join(config.custody, `${client}.json`));
   const credential = load(join(config.custody, `${client}.json`));
   if (typeof credential.token !== 'string' || !/^oct_[A-Za-z0-9_-]{43}$/.test(credential.token)) {
     throw new Error('Invalid runtime credential.');
@@ -55,12 +79,14 @@ function refreshWorker(config) {
   }
   validateRuntimeSecrets(secrets);
   const workerPath = join(connectorState(), 'worker.mjs');
-  copyFileSync(fileURLToPath(import.meta.url), workerPath);
-  chmodSync(workerPath, 0o600);
+  assertNoSymlinks(workerPath);
+  const temporaryWorker = `${workerPath}.${randomBytes(6).toString('hex')}`;
+  writeFileSync(temporaryWorker, readFileSync(fileURLToPath(import.meta.url)), { mode: 0o600, flag: 'wx' });
+  renameSync(temporaryWorker, workerPath);
 }
 
 export async function connectorApi(path, { body, method = body ? 'POST' : 'GET', runtimeToken } = {}) {
-  const config = load(configPath());
+  const config = installedConfig();
   const secrets = load(join(config.custody, 'runtime.json'));
   const response = await fetch(`${config.origin}${path}`, {
     method, redirect: 'error', headers: { 'content-type': 'application/json', authorization: `Bearer ${runtimeToken ?? secrets.admin}` },
@@ -73,7 +99,7 @@ export async function connectorApi(path, { body, method = body ? 'POST' : 'GET',
 
 async function health() {
   if (!existsSync(configPath())) return { installed: false, running: false };
-  const config = load(configPath());
+  const config = installedConfig();
   let healthy = false;
   try { const session = await connectorApi('/api/auth/session'); healthy = session.authenticated === true && session.adminAuthConfigured === true; } catch { /* stopped or foreign port */ }
   return { installed: true, running: loaded() && healthy, service_loaded: loaded(), version: config.version, origin: config.origin, mcp_url: `${config.origin}/mcp`, custody: config.custody };
@@ -102,18 +128,34 @@ async function stop() {
 
 async function install(root) {
   if (process.platform !== 'darwin' || process.arch !== 'arm64') throw new Error('This DEV pilot currently supports Apple Silicon macOS only.');
-  if (existsSync(configPath())) {
-    const config = load(configPath());
-    await stop();
-    refreshWorker(config);
-    return { ...(await start()), changed: false };
-  }
+  assertNoSymlinks(connectorState());
+  mkdirSync(connectorState(), { recursive: true, mode: 0o700 });
+  const lock = join(connectorState(), 'install.lock');
+  save(lock, { pid: process.pid, createdAt: new Date().toISOString() });
+  try { return await installLocked(root); }
+  finally { unlinkSync(lock); }
+}
+
+async function installLocked(root) {
+  assertNoSymlinks(join(root, 'launchpad.gen3.local.json'));
   const owner = load(join(root, 'launchpad.gen3.local.json')).personalspace_owner;
   if (typeof owner !== 'string' || !/^[a-zA-Z0-9-]+$/.test(owner)) throw new Error('A known local Personalspace owner is required.');
   const personal = join(root, 'personalspace', `${owner}_GEN3`);
+  assertNoSymlinks(join(personal, 'personal.gen3.json'));
   const manifest = load(join(personal, 'personal.gen3.json'));
   if (manifest.owner?.github_username !== owner) throw new Error('Personalspace owner mismatch.');
   const custody = join(personal, 'secrets/open-connector/mac-pilot');
+  assertNoSymlinks(custody);
+  assertNoSymlinks(plistPath());
+  if (existsSync(configPath())) {
+    const config = installedConfig();
+    if (config.custody !== custody) throw new Error('Installed OpenConnector belongs to another Root or owner.');
+    const workerPath = join(connectorState(), 'worker.mjs');
+    assertNoSymlinks(workerPath);
+    const needsRefresh = !existsSync(workerPath) || digest(readFileSync(workerPath)) !== digest(readFileSync(fileURLToPath(import.meta.url)));
+    if (needsRefresh) { await stop(); refreshWorker(config); }
+    return { ...(await start()), changed: needsRefresh };
+  }
   if (existsSync(custody)) throw new Error('Existing custody without install config: preserve it and reconcile before retrying.');
   const response = await fetch(OPEN_CONNECTOR_RELEASE.url, { signal: AbortSignal.timeout(180000) });
   if (!response.ok) throw new Error(`Release download failed: ${response.status}`);
@@ -131,18 +173,19 @@ async function install(root) {
   const worker = join(state, 'worker.mjs');
   copyFileSync(fileURLToPath(import.meta.url), worker);
   chmodSync(worker, 0o600);
-  save(configPath(), config);
   mkdirSync(join(homedir(), 'Library/LaunchAgents'), { recursive: true });
   const argumentsXml = [process.execPath, worker, '--worker'].map(value => `<string>${xml(value)}</string>`).join('');
   const plist = `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>Label</key><string>${label}</string><key>ProgramArguments</key><array>${argumentsXml}</array><key>RunAtLoad</key><true/><key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict><key>ThrottleInterval</key><integer>10</integer><key>StandardOutPath</key><string>${xml(join(state, 'service.log'))}</string><key>StandardErrorPath</key><string>${xml(join(state, 'service.log'))}</string></dict></plist>`;
   writeFileSync(join(state, 'service.log'), '', { mode: 0o600, flag: 'wx' });
   writeFileSync(plistPath(), plist, { mode: 0o600, flag: 'wx' });
+  // Publish the installed marker only after every required artifact exists.
+  save(configPath(), config);
   return { ...(await start()), changed: true };
 }
 
 async function worker() {
   process.umask(0o077);
-  const config = load(configPath());
+  const config = installedConfig();
   if (digest(readFileSync(config.binary)) !== config.sha256) throw new Error('Installed binary integrity check failed.');
   const secrets = validateRuntimeSecrets(load(join(config.custody, 'runtime.json')));
   const child = spawn(config.binary, [], {
@@ -175,7 +218,7 @@ export async function runOpenConnector({ action, root }) {
   if (action === 'doctor') {
     const status = await health();
     if (!status.installed) return { ...status, ok: false };
-    const config = load(configPath());
+    const config = installedConfig();
     const integrity = digest(readFileSync(config.binary)) === config.sha256;
     return { ...status, integrity, ok: status.running && integrity };
   }
