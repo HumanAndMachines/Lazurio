@@ -374,16 +374,19 @@ PR **každého owning nested repa**:
    věty dvojotázky „Mám změny Publikovat tvým jménem?“ a „Nebo mám požádat
    jiného oprávněného Principála o kontrolu a Publikaci?“. Nested soubory
    tenhle kontrakt nenahrazují.
-2. `workspace/knowledgebase/AGENTS.md` — instance: název firmy, privátní
-   knowledgebase této Organizace, zákaz vracet obsah do šablony, odkaz na
-   parent `AGENTS.md`. Pryč nadpis `KnowledgebaseTemplate` a věta „není
-   knowledgebase konkrétní firmy".
-3. `mission-control/AGENTS.md` — instance app/code této Organizace. Review
-   nesměruj na maintainery šablony (žádný jmenovitý Mattyčus).
-4. `mission-control/db/AGENTS.md` — PR proti `v3` je Draft; commit+push/merge
-   na `v3` je Publikace až po explicitním „Publikuj".
-5. Design System a infra, pokud existují — instance odkaz na parent `AGENTS.md`;
-   tokenová a no-secrets pravidla ponech.
+2. `workspace/knowledgebase/AGENTS.md` — gate vyžaduje `privátní knowledgebase`,
+   `AGENTS.md` a otázku na Publikaci; zakazuje `KnowledgebaseTemplate` a
+   `není knowledgebase konkrétní firmy` bez ohledu na pomlčkový suffix.
+   Rewrite dál doplní název firmy a zákaz vracet obsah do šablony; ty gate
+   necertifikuje.
+3. `mission-control/AGENTS.md` — gate vyžaduje otázku na Publikaci a zakazuje
+   `MissionControlTemplate` i každý výskyt `Mattyčus`. Rewrite dál označí
+   soubor jako instance app/code této Organizace.
+4. `mission-control/db/AGENTS.md` — gate vyžaduje `PR proti`, `v3` a otázku
+   na Publikaci. Rewrite dál drží, že commit+push/merge na `v3` je Publikace
+   až po explicitním „Publikuj".
+5. Design System a infra, pokud existují — gate vyžaduje `AGENTS.md`.
+   Rewrite dál drží tokenová a no-secrets pravidla; ta gate necertifikuje.
 
 Organization root, Knowledgebase, Mission Control app, Mission Control data,
 Design System i infra jsou samostatné Git repozitáře; jeden Organization-root
