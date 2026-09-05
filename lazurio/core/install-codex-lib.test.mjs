@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { installMissingCodex, runOfficialCodexInstaller } from "./install-codex-lib.mjs";
@@ -153,4 +153,29 @@ test.skipIf(process.platform === "win32")("real subprocess executes downloaded f
     expect(result.status).toBe(0);
     expect(await readFile(marker, "utf8")).toBe("verified");
   } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+
+test.skipIf(process.platform === "win32")("User-only installer refuses symlinked provider storage", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "lazurio-codex-boundary-"));
+  try {
+    await mkdir(join(directory, ".codex"));
+    const outside = join(directory, "other-owner");
+    await mkdir(outside);
+    await symlink(outside, join(directory, ".codex", "packages"));
+    const f = fixture({ homeDirectory: directory, environment: { HOME: directory }, userPathsSafe: undefined });
+    expect((await installMissingCodex(f.options)).action.reason).toBe("codex_custom_location");
+    expect(f.calls).toHaveLength(0);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("partial failure retries from the observed state and then preserves success", async () => {
+  const f = fixture();
+  const installer = f.options.runInstaller;
+  let attempts = 0;
+  f.options.runInstaller = async (args) => ++attempts === 1 ? { status: 1 } : installer(args);
+  expect((await installMissingCodex(f.options)).status).toBe("failed");
+  expect((await installMissingCodex(f.options)).status).toBe("completed");
+  expect((await installMissingCodex(f.options)).action.attempted).toBe(false);
+  expect(attempts).toBe(2);
 });

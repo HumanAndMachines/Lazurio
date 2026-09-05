@@ -36,7 +36,7 @@ export async function installMissingCodex({
     || installation.root.layout.includes("generated")) {
     return finish("action_required", "codex_install_unsupported");
   }
-  if (!allowUserPath) return finish("action_required", "codex_user_path_consent_required");
+  if (allowUserPath !== true) return finish("action_required", "codex_user_path_consent_required");
 
   const paths = platform === "win32" ? win32 : posix;
   const expectedHome = platform === "win32" ? environment.USERPROFILE : environment.HOME;
@@ -132,7 +132,7 @@ function entryExists(path) {
 
 function codexUserPathsSafe({ binary, homeDirectory, platform }) {
   const paths = platform === "win32" ? win32 : posix;
-  const targets = [paths.dirname(binary), paths.join(homeDirectory, ".codex")];
+  const targets = [paths.dirname(binary), paths.join(homeDirectory, ".codex", "packages", "standalone")];
   if (platform !== "win32") {
     targets.push(...[".profile", ".bash_profile", ".bashrc", ".zprofile", ".zshrc"]
       .map((name) => paths.join(homeDirectory, name)));
