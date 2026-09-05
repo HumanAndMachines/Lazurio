@@ -372,7 +372,7 @@ PR **každého owning nested repa**:
 1. Organization `AGENTS.md` — první neprázdný řádek je přesně heading
    **Povinný handoff** (bez doplňku v nadpisu) a soubor obsahuje obě celé
    věty dvojotázky „Mám změny Publikovat tvým jménem?“ a „Nebo mám požádat
-   jiného oprávněného Principála o kontrolu a Publikaci?“. Nested soubory
+   jiného Kolegu o kontrolu a Publikaci?“. Nested soubory
    tenhle kontrakt nenahrazují.
 2. `workspace/knowledgebase/AGENTS.md` — gate vyžaduje `privátní knowledgebase`,
    `AGENTS.md` a otázku na Publikaci; zakazuje `KnowledgebaseTemplate` a
