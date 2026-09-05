@@ -174,7 +174,7 @@ jeho průvodce tímhle světem. Závěrečná zpráva začíná handoffem: odkaz
 Ready PR, lidské a praktické shrnutí toho, co Publikace zavede, výsledek
 ověření, odkaz na aplikaci běžící z worktree — a standardizovaná dvojotázka
 „Mám změny Publikovat tvým jménem?
-Nebo mám požádat jiného oprávněného Principála o kontrolu a Publikaci?". Volbu
+Nebo mám požádat jiného Kolegu o kontrolu a Publikaci?". Volbu
 vždy nabídneš,
 nikdy ji nedomýšlíš za Principála. Před otázkou zjistíš živá GitHub práva
 svého Principála a řídíš se jimi: smí-li merge a řekne-li v threadu
@@ -580,8 +580,7 @@ Ověřeno: <checks/testy a výsledek>
 Zkontroluj si to v aplikaci: <URL běžící z worktree, pokud existuje>
 Lokálně nezůstává nic mimo PR.
 
-Mám změny Publikovat tvým jménem? Nebo mám požádat jiného oprávněného
-Principála o kontrolu a Publikaci?
+Mám změny Publikovat tvým jménem? Nebo mám požádat jiného Kolegu o kontrolu a Publikaci?
 ```
 
 Co po dvojotázce následuje — merge na explicitní „Publikuj", nebo předání

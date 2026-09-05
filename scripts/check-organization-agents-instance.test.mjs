@@ -103,7 +103,7 @@ test("mismatched Knowledgebase category still requires Knowledgebase statements"
       "AGENTS.md": instanceRoot(),
       "workspace/knowledgebase/AGENTS.md": [
         "Mám změny Publikovat tvým jménem?",
-        "Nebo mám požádat jiného oprávněného Principála o kontrolu a Publikaci?",
+        "Nebo mám požádat jiného Kolegu o kontrolu a Publikaci?",
         "",
       ].join("\n"),
       "mission-control/AGENTS.md": [
@@ -443,7 +443,7 @@ test("root handoff must be the first block and include the full double-question"
       "Běžný text před handoffem.",
       "",
       "## Povinný handoff",
-      "Mám změny Publikovat tvým jménem? Nebo mám požádat jiného oprávněného Principála o kontrolu a Publikaci?",
+      "Mám změny Publikovat tvým jménem? Nebo mám požádat jiného Kolegu o kontrolu a Publikaci?",
       "",
     ].join("\n"),
   })).toEqual([
@@ -464,7 +464,7 @@ test("root handoff must be the first block and include the full double-question"
     }),
     expect.objectContaining({
       code: "missing_statement",
-      detail: "Nebo mám požádat jiného oprávněného Principála o kontrolu a Publikaci?",
+      detail: "Nebo mám požádat jiného Kolegu o kontrolu a Publikaci?",
     }),
   ]));
   expect(inspectAgentsInstanceText({
@@ -473,7 +473,7 @@ test("root handoff must be the first block and include the full double-question"
     text: [
       "# Běžný úvod",
       "## Povinný handoff",
-      "Mám změny Publikovat tvým jménem? Nebo mám požádat jiného oprávněného Principála o kontrolu a Publikaci?",
+      "Mám změny Publikovat tvým jménem? Nebo mám požádat jiného Kolegu o kontrolu a Publikaci?",
       "",
     ].join("\n"),
   })).toEqual([
@@ -491,7 +491,21 @@ test("root handoff must be the first block and include the full double-question"
   })).toEqual([
     expect.objectContaining({
       code: "missing_statement",
-      detail: "Nebo mám požádat jiného oprávněného Principála o kontrolu a Publikaci?",
+      detail: "Nebo mám požádat jiného Kolegu o kontrolu a Publikaci?",
+    }),
+  ]);
+  expect(inspectAgentsInstanceText({
+    relativePath: "AGENTS.md",
+    kind: "root",
+    text: [
+      "## Povinný handoff",
+      "Mám změny Publikovat tvým jménem? Nebo mám požádat jiného oprávněného Principála o kontrolu a Publikaci?",
+      "",
+    ].join("\n"),
+  })).toEqual([
+    expect.objectContaining({
+      code: "missing_statement",
+      detail: "Nebo mám požádat jiného Kolegu o kontrolu a Publikaci?",
     }),
   ]);
   expect(inspectAgentsInstanceText({
@@ -499,7 +513,7 @@ test("root handoff must be the first block and include the full double-question"
     kind: "root",
     text: [
       "## Povinný handoff — nepovolený doplněk",
-      "Mám změny Publikovat tvým jménem? Nebo mám požádat jiného oprávněného Principála o kontrolu a Publikaci?",
+      "Mám změny Publikovat tvým jménem? Nebo mám požádat jiného Kolegu o kontrolu a Publikaci?",
       "",
     ].join("\n"),
   })).toEqual([
@@ -692,7 +706,7 @@ function baselineFiles() {
 function instanceRoot() {
   return [
     "## Povinný handoff",
-    "Mám změny Publikovat tvým jménem? Nebo mám požádat jiného oprávněného Principála o kontrolu a Publikaci?",
+    "Mám změny Publikovat tvým jménem? Nebo mám požádat jiného Kolegu o kontrolu a Publikaci?",
     "",
   ].join("\n");
 }
