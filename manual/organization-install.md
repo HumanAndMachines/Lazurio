@@ -289,8 +289,7 @@ příslušnou vrstvu `PATH`. Už udělený mandát se nevyžaduje podruhé; chyb
 Agent nejdřív připraví přesnou nápravu a požádá Principála o souhlas.
 Doctor ani `lazurio update` tento příkaz nikdy nespouštějí. Běžný
 `lazurio install` zůstává read-only reportem. Pro chybějící Codex s výše
-uvedeným mandátem použij `lazurio install --install-missing codex
---allow-user-path --json` (na jednom řádku). CLI spustí oficiální instalátor
+uvedeným mandátem použij `lazurio install --install-missing codex --allow-user-path --json`. CLI spustí oficiální instalátor
 neinteraktivně a vrátí výsledek operace i nový machine report. Vyhovující
 instalaci zachová; vlastní instalační cesty a opravy existujících instalací
 řeš výše uvedeným přesným postupem. Po požadavku na novou relaci, na Windows
