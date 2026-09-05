@@ -72,6 +72,116 @@ test("off-path planning category does not satisfy the canonical Mission Control 
   ]));
 });
 
+test("canonical path wins over a conflicting category for every baseline kind", () => {
+  expect(classifyAgentsInstanceSlot(slot("workspace/knowledgebase", { category: "planning" }))).toBe(
+    "knowledgebase",
+  );
+  expect(classifyAgentsInstanceSlot(slot("mission-control", { category: "knowledge" }))).toBe(
+    "mission-control",
+  );
+  expect(classifyAgentsInstanceSlot(slot("mission-control/db", { category: "knowledge" }))).toBe(
+    "mission-control-data",
+  );
+  const targets = collectAgentsInstanceTargets({
+    repository_inventory: [
+      slot("workspace/knowledgebase", { category: "planning", status: "active" }),
+    ],
+  });
+  expect(targets).toEqual(expect.arrayContaining([
+    { relativePath: "workspace/knowledgebase/AGENTS.md", kind: "knowledgebase", required: true },
+  ]));
+  expect(targets.some((target) => (
+    target.relativePath === "workspace/knowledgebase/AGENTS.md"
+    && target.kind === "mission-control"
+  ))).toBe(false);
+});
+
+test("mismatched Knowledgebase category still requires Knowledgebase statements", () => {
+  const root = writeOrganizationFixture({
+    slots: [slot("workspace/knowledgebase", { category: "planning", status: "active" })],
+    files: {
+      "AGENTS.md": instanceRoot(),
+      "workspace/knowledgebase/AGENTS.md": [
+        "Mám změny Publikovat tvým jménem?",
+        "Nebo mám požádat jiného oprávněného Principála o kontrolu a Publikaci?",
+        "",
+      ].join("\n"),
+      "mission-control/AGENTS.md": [
+        "Instance Mission Control app této Organizace.",
+        PUBLICATION_QUESTION,
+        "",
+      ].join("\n"),
+      "mission-control/db/AGENTS.md": [
+        "PR proti v3 je Draft.",
+        PUBLICATION_QUESTION,
+        "",
+      ].join("\n"),
+    },
+  });
+  expect(checkOrganizationAgentsInstance({ organizationRoot: root })).toEqual({
+    ok: false,
+    findings: expect.arrayContaining([
+      expect.objectContaining({
+        code: "missing_statement",
+        path: "workspace/knowledgebase/AGENTS.md",
+        detail: "privátní knowledgebase",
+      }),
+      expect.objectContaining({
+        code: "missing_statement",
+        path: "workspace/knowledgebase/AGENTS.md",
+        detail: "AGENTS.md",
+      }),
+    ]),
+  });
+});
+
+test("mismatched Mission Control category still requires Mission Control statements", () => {
+  const files = baselineFiles();
+  files["mission-control/AGENTS.md"] = "Instance bez otázky na Publikaci.\n";
+  const root = writeOrganizationFixture({
+    slots: [
+      slot("workspace/knowledgebase", { category: "knowledge", status: "active" }),
+      slot("mission-control", { category: "knowledge", status: "active" }),
+      slot("mission-control/db", { category: "planning-data", status: "active" }),
+    ],
+    files,
+  });
+  expect(checkOrganizationAgentsInstance({ organizationRoot: root }).findings).toEqual([
+    expect.objectContaining({
+      code: "missing_statement",
+      path: "mission-control/AGENTS.md",
+      detail: PUBLICATION_QUESTION,
+    }),
+  ]);
+});
+
+test("mismatched Mission Control data category still requires data statements", () => {
+  const files = baselineFiles();
+  files["mission-control/db/AGENTS.md"] = [
+    "Toto je privátní knowledgebase této Organizace.",
+    "Čti parent AGENTS.md.",
+    PUBLICATION_QUESTION,
+    "",
+  ].join("\n");
+  const root = writeOrganizationFixture({
+    slots: [
+      slot("workspace/knowledgebase", { category: "knowledge", status: "active" }),
+      slot("mission-control", { category: "planning", status: "active" }),
+      slot("mission-control/db", { category: "knowledge", status: "active" }),
+    ],
+    files,
+  });
+  expect(checkOrganizationAgentsInstance({ organizationRoot: root }).findings).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        code: "missing_statement",
+        path: "mission-control/db/AGENTS.md",
+        detail: "PR proti",
+      }),
+    ]),
+  );
+});
+
 test("canonical Knowledgebase remains required when only an off-path knowledge slot exists", () => {
   const root = writeOrganizationFixture({
     slots: [slot("workspace/not-knowledgebase", { category: "knowledge", status: "active" })],

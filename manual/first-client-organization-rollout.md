@@ -392,9 +392,9 @@ gitlink commit.
 
 Fail-closed z Organization rootu. Gate čte `modules.manifest.json` přes
 `readOrganizationRoot`, povinný baseline (Knowledgebase, Mission Control app,
-Mission Control data) musí existovat a držet instance výroky, Design System a
-infra jen když je jejich aktuální slot aktivní, a nečitelný soubor je fail —
-ne úspěch.
+Mission Control data) musí existovat a držet instance výroky, kanonická cesta
+určí druh souboru i když `category` nesedí, Design System a infra jen když
+je jejich aktuální slot aktivní, a nečitelný soubor je fail — ne úspěch.
 
 ```sh
 bun "$LAZURIO_ROOT/scripts/check-organization-agents-instance.mjs" "$ORG_ROOT"
