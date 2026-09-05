@@ -99,4 +99,3 @@ takže cesta ani shodná verze neprokazují identitu binárky. Consumer testy ov
 použití vybraného příkazu a zachování PATH pro shimy. Git context/config
 sanitizace, GitHub host, explicitní argv, timeouty, access a immutable hosted
 Resident/Buddy artefaktové piny zůstávají samostatnými hranicemi.
-
