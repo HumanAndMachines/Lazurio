@@ -38,6 +38,11 @@ metadata are not wholly encrypted. Preserve both the data directory and
 encryption key for recovery. Stopping the LaunchAgent does not delete data.
 An incomplete install preserves its files and requires reconciliation;
 never resolve it by deleting the custody directory.
+Installation is serialized with a local lock; a leftover lock is reported with
+its exact path and must be reconciled against its recorded process, not blindly
+deleted. Reinstall refreshes the copied worker and LaunchAgent interpreter path
+without rotating existing credentials. Liveness probes are unauthenticated;
+administrative API requests use literal IPv4 loopback rather than `localhost`.
 
 Admin credentials belong only to console administration. A separate random
 bootstrap runtime credential closes the runtime API even before a persistent
@@ -72,6 +77,14 @@ Gmail, pokud jejich administrátorské politiky přístup dovolují. Projekt
 nezakládáme pro každý účet ani pro každý harness. Upstream pilot přitom
 přihlašuje Gmail, Drive a Sheets jako samostatné providery s vlastními
 pojmenovanými připojeními; neznamená to jeden společný grant pro všechny služby.
+
+Pozor při změně výchozího OAuth klienta provideru: v upstream v1.5.0 běžné
+console připojení používá aktuální výchozí konfiguraci i při obnově tokenu.
+Pouze explicitní custom-client flow ukládá vlastní snapshot konfigurace.
+Změna defaultu proto není izolovaná jen na příští nové připojení. Naplánuj
+opětovné přihlášení existujících účtů daného provideru a zachovej původní
+klientské údaje pro rollback, dokud migrace není ověřená. Neměň všechny
+providery najednou před dokončením prvního přihlášení.
 
 ### Jak to řeší Composio
 
