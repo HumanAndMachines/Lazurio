@@ -22,12 +22,14 @@ lazurio install --json
 Chybějící Codex lze nyní doplnit stejným CLI:
 
 ```sh
-lazurio install --install-missing codex --allow-user-path --confirm-codex-absent --json
+lazurio install --install-missing codex --confirm-codex-absent --json
 ```
 
-Přepínače vyjadřují předem udělený souhlas Principála s instalací Codexu a
-jeho uživatelským PATH na aktuální Mašině. Bez `--allow-user-path` chybějící
-Codex vrátí žádost o tento přesný souhlas bez instalace. Vyhovující Codex se
+Instalace automaticky zpřístupní příkaz pro aktuálního uživatele. Samostatný
+souhlas s User PATH ani přepínač navíc není potřeba. Pokročilý opt-out
+`--no-modify-path` ponechá konfiguraci na uživateli: protože oficiální Codex
+instalátor úpravu PATH neumí vypnout, chybějící Codex neinstaluje a vrátí
+`codex_manual_setup_required`. Vyhovující Codex se
 zachová; rozbitá instalace, existující soubor mimo PATH, vlastní
 `CODEX_HOME`/`CODEX_INSTALL_DIR` a Hosted Resident vyžadují samostatný postup.
 `--confirm-codex-absent` potvrzuje ověřenou nepřítomnost nástroje i mimo PATH,

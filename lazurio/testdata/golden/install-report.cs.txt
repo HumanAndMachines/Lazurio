@@ -9,7 +9,7 @@ Lazurio Root: "/Users/example/Lazurio"
 ✓ Git — Git je dostupný
 ! GitHub CLI — GitHub CLI nebylo nalezeno
 ✓ Node.js — Node.js 24.19.0 odpovídá podporovanému rozsahu >=22.12.0
-! Codex CLI — Codex CLI není dostupný v PATH.
+! Codex CLI — Codex CLI není dostupný.
 – Přihlášení ke GitHubu — bez GitHub CLI nelze přihlášení ověřit
 ! Lazurio Root — Lazurio Root je potřeba vygenerovat
 

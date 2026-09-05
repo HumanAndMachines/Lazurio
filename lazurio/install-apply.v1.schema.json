@@ -45,7 +45,7 @@
             "codex_preserved",
             "codex_existing_unusable",
             "codex_install_unsupported",
-            "codex_user_path_consent_required",
+            "codex_manual_setup_required",
             "codex_custom_location",
             "codex_outside_path",
             "codex_install_probe_failed",

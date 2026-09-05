@@ -48,7 +48,7 @@ test("top-level install rejects a selectable Root", () => {
 
 test("tool installation options reject ambiguous or cross-command consent", () => {
   for (const args of [["doctor", "--install-missing", "codex"],
-    ["install", "--allow-user-path"], ["install", "--confirm-codex-absent"], ["install", "--install-missing", "git"],
+    ["install", "--no-modify-path"], ["install", "--confirm-codex-absent"], ["install", "--install-missing", "git"],
     ["install", "--install-missing", "codex", "--install-missing", "codex"]]) {
     const result = run([process.execPath, "run", cliPath, ...args], import.meta.dirname);
     expect(result.exitCode).toBe(2);

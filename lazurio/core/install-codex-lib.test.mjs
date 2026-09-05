@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, mkdir, readFile, rm, symlink } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { installMissingCodex, runOfficialCodexInstaller } from "./install-codex-lib.mjs";
@@ -14,7 +14,7 @@ function fixture(overrides = {}) {
   const calls = [];
   const options = {
     platform: "linux", architecture: "x64", environment: { HOME: "/home/example" },
-    homeDirectory: "/home/example", allowUserPath: true, codexAbsent: true, pathExists: () => false, userPathsSafe: () => true,
+    homeDirectory: "/home/example", codexAbsent: true, pathExists: () => false, userPathsSafe: () => true,
     inspect: () => inspectLazurioInstallation({
       platform: "linux", architecture: "x64", homeDirectory: "/home/example",
       bunVersion: "1.4.1", requiredBunVersion: "1.4.1",
@@ -31,24 +31,24 @@ function fixture(overrides = {}) {
   return { options, calls, setPresent: (value) => { present = value; } };
 }
 
-test("explicit User PATH mandate is required before any installer side effect", async () => {
-  const f = fixture({ allowUserPath: false });
+test("advanced opt-out skips the provider before any installer side effect", async () => {
+  const f = fixture({ modifyPath: false });
   const report = await installMissingCodex(f.options);
-  expect(report.action.reason).toBe("codex_user_path_consent_required");
+  expect(report.action.reason).toBe("codex_manual_setup_required");
   expect(report.status).toBe("action_required");
   expect(f.calls).toHaveLength(0);
   expect(validateAgainstSchema(report, { ...schema, properties: { ...schema.properties, installation: reportSchema } }, "apply")).toEqual([]);
   expect(isValidLazurioInstallReport(report.installation)).toBe(true);
   expect(installCatalogIssues()).toEqual([]);
-  expect(renderHumanInstallApplyReport(report, { language: "en" })).toContain("--allow-user-path");
+  expect(renderHumanInstallApplyReport(report, { language: "en" })).toContain("automatic installation is disabled");
   expect(renderHumanInstallApplyReport(report, { language: "en" })).not.toContain("changes nothing");
-  expect(renderHumanInstallApplyReport(report, { language: "cs" })).toContain("souhlasu Principála");
+  expect(renderHumanInstallApplyReport(report, { language: "cs" })).toContain("automatická instalace je vypnutá");
 });
 
-test("install then rerun converges without upgrading a working installation", async () => {
+test("default installation needs no separate PATH consent and rerun preserves it", async () => {
   const f = fixture();
   expect((await installMissingCodex(f.options)).action.reason).toBe("codex_installed");
-  expect((await installMissingCodex({ ...f.options, allowUserPath: false })).action.reason).toBe("codex_preserved");
+  expect((await installMissingCodex({ ...f.options, modifyPath: false })).action.reason).toBe("codex_preserved");
   expect(f.calls).toHaveLength(1);
 });
 
@@ -127,6 +127,11 @@ test("provider invocation uses official download, latest and noninteractive mode
     expect(calls[1].executable).toBe(platform === "win32"
       ? "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" : "/bin/sh");
     expect(calls[1].args.at(-1)).toBe("latest");
+    expect(calls[1].options.env.PATH).not.toContain("untrusted-shadow-directory");
+    expect(calls[1].options.env.CODEX_RELEASE).toBeUndefined();
+    if (platform === "win32") {
+      expect(calls[1].options.env.PSModulePath).toBe("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\Modules");
+    }
     expect(calls[1].options.env.CODEX_NON_INTERACTIVE).toBe("1");
     expect(calls[1].options.stdio[0]).toBe("ignore");
     expect(await readFile(scriptPath).catch((e) => e.code)).toBe("ENOENT");
@@ -144,16 +149,36 @@ test("download failure, empty body and untrusted redirect never execute", async 
   }
 });
 
-test.skipIf(process.platform === "win32")("real subprocess executes downloaded fixture and cleans staging", async () => {
+test.skipIf(process.platform === "win32")("real provider subprocess cannot execute ambient helper or shell sentinels", async () => {
   const directory = await mkdtemp(join(tmpdir(), "lazurio-codex-consumer-"));
   try {
     const marker = join(directory, "proof");
+    const poison = join(directory, "poison");
+    await writeFile(poison, 'printf poisoned > "'+marker+'"\n');
+    for (const name of ["uname", "curl"]) {
+      await writeFile(join(directory, name), '#!/bin/sh\nprintf poisoned > "'+marker+'"\n', { mode: 0o755 });
+    }
     const result = await runOfficialCodexInstaller({
-      environment: { ...process.env, LAZURIO_TEST_INSTALL_MARKER: marker },
-      fetchImpl: async () => new Response('set -eu\n[ "$1" = "--release" ]\n[ "$2" = "latest" ]\n[ "$CODEX_NON_INTERACTIVE" = "1" ]\nprintf verified > "$LAZURIO_TEST_INSTALL_MARKER"\n'),
+      environment: { ...process.env, PATH: directory, ENV: poison, BASH_ENV: poison,
+        CODEX_RELEASE: "evil", SHELL: join(directory, "sh") },
+      fetchImpl: async () => new Response('set -eu\n[ "$1" = "--release" ]\n[ "$2" = "latest" ]\n[ "$CODEX_NON_INTERACTIVE" = "1" ]\n[ -z "${ENV:-}${BASH_ENV:-}${CODEX_RELEASE:-}" ]\nuname -s >/dev/null\nif command -v curl >/dev/null; then curl --version >/dev/null; fi\n'),
     });
     expect(result.status).toBe(0);
-    expect(await readFile(marker, "utf8")).toBe("verified");
+    expect(await readFile(marker).catch((e) => e.code)).toBe("ENOENT");
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("equivalent home spelling does not block a safe installation", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "lazurio-codex-home-"));
+  try {
+    const trailingHome = directory + (process.platform === "win32" ? "\\" : "/");
+    const f = fixture({ platform: process.platform, homeDirectory: trailingHome,
+      environment: process.platform === "win32"
+        ? { USERPROFILE: trailingHome, LOCALAPPDATA: join(directory, "AppData", "Local") }
+        : { HOME: trailingHome }, userPathsSafe: undefined });
+    const report = await installMissingCodex(f.options);
+    expect(report.action.attempted).toBe(true);
+    expect(f.calls).toHaveLength(1);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 

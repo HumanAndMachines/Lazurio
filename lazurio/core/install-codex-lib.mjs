@@ -3,14 +3,14 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, posix, win32 } from "node:path";
 import { inspectLazurioInstallation } from "./install-core-lib.mjs";
-import { trustedWindowsSystemExecutable } from "./windows-system-path-lib.mjs";
+import { trustedWindowsSystemExecutable, trustedWindowsSystemRoot } from "./windows-system-path-lib.mjs";
 import { spawnToolSync } from "./tool-invocation-lib.mjs";
 
-// The provider owns installation, locking and User PATH. Lazurio owns consent,
+// The provider owns installation, locking and User PATH. Lazurio owns the requested installation scope,
 // bounded invocation and fresh observation; no persisted install journal.
 export async function installMissingCodex({
   root = null,
-  allowUserPath = false,
+  modifyPath = true,
   codexAbsent = false,
   platform = process.platform,
   architecture = process.arch,
@@ -37,7 +37,9 @@ export async function installMissingCodex({
     || installation.root.layout.includes("generated")) {
     return finish("action_required", "codex_install_unsupported");
   }
-  if (allowUserPath !== true) return finish("action_required", "codex_user_path_consent_required");
+  // The official installer always configures User PATH. Opt-out must skip it
+  // entirely, before network or writes; never promise an unsupported provider flag.
+  if (modifyPath !== true) return finish("action_required", "codex_manual_setup_required");
 
   const paths = platform === "win32" ? win32 : posix;
   const expectedHome = platform === "win32" ? environment.USERPROFILE : environment.HOME;
@@ -51,6 +53,7 @@ export async function installMissingCodex({
       || paths.isAbsolute(paths.relative(homeDirectory, environment.LOCALAPPDATA))))) {
     return finish("action_required", "codex_custom_location");
   }
+  homeDirectory = paths.resolve(homeDirectory);
   const binary = platform === "win32"
     ? paths.join(environment.LOCALAPPDATA, "Programs", "OpenAI", "Codex", "bin", "codex.exe")
     : paths.join(homeDirectory, ".local", "bin", "codex");
@@ -125,7 +128,7 @@ export async function runOfficialCodexInstaller({
       ? ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, "-Release", "latest"]
       : [script, "--release", "latest"];
     const result = spawn(executable, args, {
-      env: { ...environment, CODEX_NON_INTERACTIVE: "1" },
+      env: installerEnvironment({ platform, environment, directory }),
       cwd: directory,
       encoding: "utf8",
       timeout: 600_000,
@@ -137,6 +140,30 @@ export async function runOfficialCodexInstaller({
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+}
+
+// Provider scripts invoke bare helpers too. Pin their search path and omit
+// loader, shell-startup, package-manager and release-selection overrides.
+function installerEnvironment({ platform, environment, directory }) {
+  const windows = platform === "win32";
+  const result = { CODEX_NON_INTERACTIVE: "1", TMPDIR: directory, TMP: directory, TEMP: directory };
+  for (const key of windows ? ["USERPROFILE", "LOCALAPPDATA", "APPDATA"] : ["HOME"]) {
+    if (typeof environment[key] === "string") result[key] = environment[key];
+  }
+  if (windows) {
+    const systemRoot = trustedWindowsSystemRoot(environment);
+    const system32 = win32.join(systemRoot, "System32");
+    Object.assign(result, { SystemRoot: systemRoot, WINDIR: systemRoot, OS: "Windows_NT",
+      PATH: `${system32};${systemRoot};${win32.join(system32, "WindowsPowerShell", "v1.0")}`,
+      PSModulePath: win32.join(system32, "WindowsPowerShell", "v1.0", "Modules"),
+      PATHEXT: ".COM;.EXE;.BAT;.CMD", ComSpec: win32.join(system32, "cmd.exe"),
+    });
+  } else {
+    result.PATH = "/usr/bin:/bin:/usr/sbin:/sbin";
+    result.SHELL = ["/bin/sh", "/bin/bash", "/bin/zsh", "/usr/bin/bash", "/usr/bin/zsh"]
+      .includes(environment.SHELL) ? environment.SHELL : "/bin/sh";
+  }
+  return result;
 }
 
 function entryExists(path) {
