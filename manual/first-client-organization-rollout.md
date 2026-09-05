@@ -369,10 +369,10 @@ klientských Organizací.
 Jakmile je `organization_kind: organization`, proveď rewrite v reviewovatelném
 PR **každého owning nested repa**:
 
-1. Organization `AGENTS.md` — na začátku blok **Povinný handoff** s dvojotázkou
-   „Mám změny Publikovat tvým jménem? Nebo mám požádat jiného oprávněného
-   Principála o kontrolu a Publikaci?". Nested soubory tenhle kontrakt
-   nenahrazují.
+1. Organization `AGENTS.md` — první neprázdný blok je **Povinný handoff**
+   a obsahuje celou dvojotázku „Mám změny Publikovat tvým jménem? Nebo mám
+   požádat jiného oprávněného Principála o kontrolu a Publikaci?". Nested
+   soubory tenhle kontrakt nenahrazují.
 2. `workspace/knowledgebase/AGENTS.md` — instance: název firmy, privátní
    knowledgebase této Organizace, zákaz vracet obsah do šablony, odkaz na
    parent `AGENTS.md`. Pryč nadpis `KnowledgebaseTemplate` a věta „není

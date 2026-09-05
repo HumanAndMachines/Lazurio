@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   PUBLICATION_QUESTION,
+  PUBLICATION_DOUBLE_QUESTION,
   checkOrganizationAgentsInstance,
   classifyAgentsInstanceSlot,
   readAgentsInstanceFile,
@@ -40,6 +41,65 @@ test("baseline Knowledgebase, Mission Control and data remain required even as p
     "knowledgebase:workspace/knowledgebase/AGENTS.md",
     "mission-control:mission-control/AGENTS.md",
     "mission-control-data:mission-control/db/AGENTS.md",
+  ]);
+});
+
+test("off-path knowledge category does not satisfy the canonical Knowledgebase baseline", () => {
+  const targets = collectAgentsInstanceTargets({
+    repository_inventory: [
+      slot("workspace/not-knowledgebase", { category: "knowledge", status: "active" }),
+    ],
+  });
+  expect(targets).toEqual(expect.arrayContaining([
+    { relativePath: "workspace/knowledgebase/AGENTS.md", kind: "knowledgebase", required: true },
+    { relativePath: "workspace/not-knowledgebase/AGENTS.md", kind: "knowledgebase", required: true },
+    { relativePath: "mission-control/AGENTS.md", kind: "mission-control", required: true },
+    { relativePath: "mission-control/db/AGENTS.md", kind: "mission-control-data", required: true },
+  ]));
+});
+
+test("off-path planning category does not satisfy the canonical Mission Control baseline", () => {
+  const targets = collectAgentsInstanceTargets({
+    repository_inventory: [
+      slot("workspace/planning-notes", { category: "planning", status: "active" }),
+    ],
+  });
+  expect(targets.map(({ relativePath }) => relativePath)).toEqual(expect.arrayContaining([
+    "mission-control/AGENTS.md",
+    "mission-control/db/AGENTS.md",
+    "workspace/knowledgebase/AGENTS.md",
+    "workspace/planning-notes/AGENTS.md",
+  ]));
+});
+
+test("canonical Knowledgebase remains required when only an off-path knowledge slot exists", () => {
+  const root = writeOrganizationFixture({
+    slots: [slot("workspace/not-knowledgebase", { category: "knowledge", status: "active" })],
+    files: {
+      "AGENTS.md": instanceRoot(),
+      "workspace/not-knowledgebase/AGENTS.md": [
+        "Toto je privátní knowledgebase této Organizace.",
+        "Čti parent AGENTS.md.",
+        PUBLICATION_QUESTION,
+        "",
+      ].join("\n"),
+      "mission-control/AGENTS.md": [
+        "Instance Mission Control app této Organizace.",
+        PUBLICATION_QUESTION,
+        "",
+      ].join("\n"),
+      "mission-control/db/AGENTS.md": [
+        "PR proti v3 je Draft.",
+        PUBLICATION_QUESTION,
+        "",
+      ].join("\n"),
+    },
+  });
+  expect(checkOrganizationAgentsInstance({ organizationRoot: root }).findings).toEqual([
+    expect.objectContaining({
+      code: "missing_file",
+      path: "workspace/knowledgebase/AGENTS.md",
+    }),
   ]);
 });
 
@@ -92,10 +152,53 @@ test("inspect fails each missing required statement and leftover template identi
     infra: true,
   })) {
     const empty = inspectAgentsInstanceText({ relativePath: "AGENTS.md", kind, text: "" });
+    if (kind === "root") {
+      expect(empty).toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: "handoff_not_first", detail: "Povinný handoff" }),
+        ...PUBLICATION_DOUBLE_QUESTION.map((detail) => expect.objectContaining({
+          code: "missing_statement",
+          detail,
+        })),
+      ]));
+      continue;
+    }
     for (const statement of requiredStatementsForKind(kind)) {
       expect(empty.some((finding) => finding.code === "missing_statement" && finding.detail === statement)).toBe(true);
     }
   }
+});
+
+test("root handoff must be the first block and include the full double-question", () => {
+  expect(inspectAgentsInstanceText({
+    relativePath: "AGENTS.md",
+    kind: "root",
+    text: [
+      "# Úvod",
+      "",
+      "Běžný text před handoffem.",
+      "",
+      "## Povinný handoff",
+      "Mám změny Publikovat tvým jménem? Nebo mám požádat jiného oprávněného Principála o kontrolu a Publikaci?",
+      "",
+    ].join("\n"),
+  })).toEqual([
+    expect.objectContaining({ code: "handoff_not_first", detail: "Povinný handoff" }),
+  ]);
+  expect(inspectAgentsInstanceText({
+    relativePath: "AGENTS.md",
+    kind: "root",
+    text: [
+      "## Povinný handoff",
+      "Mám změny Publikovat.",
+      "",
+    ].join("\n"),
+  })).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      code: "missing_statement",
+      detail: "Mám změny Publikovat tvým jménem?",
+    }),
+    expect.objectContaining({ code: "missing_statement", detail: "Nebo mám požádat" }),
+  ]));
 });
 
 test("happy Organization fixture passes the instance rewrite", () => {
@@ -283,7 +386,7 @@ function baselineFiles() {
 function instanceRoot() {
   return [
     "## Povinný handoff",
-    PUBLICATION_QUESTION,
+    "Mám změny Publikovat tvým jménem? Nebo mám požádat jiného oprávněného Principála o kontrolu a Publikaci?",
     "",
   ].join("\n");
 }

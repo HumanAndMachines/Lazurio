@@ -8,6 +8,11 @@ import { readOrganizationRoot } from "../lazurio/core/organization-root-reader-l
 import { normalizeOrganizationSlotPath } from "../lazurio/core/organization-slot-scope-lib.mjs";
 
 export const PUBLICATION_QUESTION = "Mám změny Publikovat";
+export const ROOT_HANDOFF_HEADING = "Povinný handoff";
+export const PUBLICATION_DOUBLE_QUESTION = Object.freeze([
+  "Mám změny Publikovat tvým jménem?",
+  "Nebo mám požádat",
+]);
 
 export const FORBIDDEN_LITERALS = Object.freeze([
   "KnowledgebaseTemplate —",
@@ -27,7 +32,6 @@ const BASELINE_KINDS = new Set(Object.keys(BASELINE_KIND_PATHS));
 const CONDITIONAL_KINDS = new Set(["design-system", "infra"]);
 
 const REQUIRED_STATEMENTS = Object.freeze({
-  root: [PUBLICATION_QUESTION],
   knowledgebase: ["privátní knowledgebase", "AGENTS.md", PUBLICATION_QUESTION],
   "mission-control": [PUBLICATION_QUESTION],
   "mission-control-data": ["PR proti", "v3", PUBLICATION_QUESTION],
@@ -59,6 +63,10 @@ export function requiredStatementsForKind(kind) {
   return REQUIRED_STATEMENTS[kind] ?? [];
 }
 
+export function isCanonicalBaselinePath(kind, path) {
+  return BASELINE_KINDS.has(kind) && path === BASELINE_KIND_PATHS[kind];
+}
+
 export function collectAgentsInstanceTargets(resource) {
   const targets = [{ relativePath: "AGENTS.md", kind: "root", required: true }];
   const seenBaseline = new Set();
@@ -69,12 +77,15 @@ export function collectAgentsInstanceTargets(resource) {
     const path = normalizeOrganizationSlotPath(slot?.path);
     if (!kind || !path) continue;
     const relativePath = `${path}/AGENTS.md`;
-    const required = BASELINE_KINDS.has(kind) || (CONDITIONAL_KINDS.has(kind) && !slotIsPlanned(slot));
+    const canonical = isCanonicalBaselinePath(kind, path);
+    const required = canonical
+      || (BASELINE_KINDS.has(kind) && !slotIsPlanned(slot))
+      || (CONDITIONAL_KINDS.has(kind) && !slotIsPlanned(slot));
     if (!required) continue;
     if (seenPaths.has(relativePath)) continue;
     seenPaths.add(relativePath);
     targets.push({ relativePath, kind, required: true });
-    if (BASELINE_KINDS.has(kind)) seenBaseline.add(kind);
+    if (canonical) seenBaseline.add(kind);
   }
 
   for (const [kind, path] of Object.entries(BASELINE_KIND_PATHS)) {
@@ -87,12 +98,40 @@ export function collectAgentsInstanceTargets(resource) {
   return targets;
 }
 
+export function firstNonEmptyMarkdownBlock(text) {
+  const trimmed = String(text ?? "").replace(/^\uFEFF/, "").replace(/^\s+/, "");
+  if (trimmed === "") return "";
+  return trimmed.split(/\n[ \t]*\n/)[0];
+}
+
+export function inspectRootHandoff(text, relativePath = "AGENTS.md") {
+  const findings = [];
+  const firstBlock = firstNonEmptyMarkdownBlock(text);
+  if (!firstBlock.includes(ROOT_HANDOFF_HEADING)) {
+    findings.push({
+      code: "handoff_not_first",
+      path: relativePath,
+      detail: ROOT_HANDOFF_HEADING,
+    });
+  }
+  for (const statement of PUBLICATION_DOUBLE_QUESTION) {
+    if (!String(text ?? "").includes(statement)) {
+      findings.push({ code: "missing_statement", path: relativePath, detail: statement });
+    }
+  }
+  return findings;
+}
+
 export function inspectAgentsInstanceText({ relativePath, kind, text }) {
   const findings = [];
   for (const literal of FORBIDDEN_LITERALS) {
     if (text.includes(literal)) {
       findings.push({ code: "forbidden_text", path: relativePath, detail: literal });
     }
+  }
+  if (kind === "root") {
+    findings.push(...inspectRootHandoff(text, relativePath));
+    return findings;
   }
   for (const statement of requiredStatementsForKind(kind)) {
     if (!text.includes(statement)) {
