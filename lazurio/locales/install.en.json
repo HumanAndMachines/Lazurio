@@ -89,5 +89,16 @@
   "reason.codex_missing": "Codex CLI is not available on PATH.",
   "reason.codex_unusable": "The codex command did not return a valid Codex CLI version.",
   "action.codex_missing": "Within the approved installation scope, make Codex CLI available using manual/organization-install.md and verify it from a new session.",
-  "action.codex_unusable": "Check the codex command selected from PATH and repair it within the approved scope using manual/organization-install.md."
+  "action.codex_unusable": "Check the codex command selected from PATH and repair it within the approved scope using manual/organization-install.md.",
+  "apply.title": "Install missing Codex CLI",
+  "apply.codex_preserved": "Codex already works; existing installation preserved.",
+  "apply.codex_existing_unusable": "Existing Codex could not be verified. Repair that exact installation with the Principal’s consent.",
+  "apply.codex_install_unsupported": "Automatic installation is unsupported for this platform or Resident profile.",
+  "apply.codex_user_path_consent_required": "With the Principal’s consent to install missing Codex and configure its User PATH, add --allow-user-path.",
+  "apply.codex_custom_location": "Custom installation locations require a separately scoped installation procedure; the CLI leaves them unchanged.",
+  "apply.codex_outside_path": "A Codex file already exists at the installation destination but is absent from PATH. Open a new session; if the finding persists, inspect and repair that exact path.",
+  "apply.codex_install_probe_failed": "The installation destination could not be verified. Check access to it.",
+  "apply.codex_installer_failed": "The official installer failed or could not start. Check connectivity and installer prerequisites, then repeat the same command.",
+  "apply.codex_restart_required": "The installer finished. Open a new terminal session; on Windows fully quit and relaunch Codex. Then repeat lazurio install --json and lazurio doctor. A child of the original session is insufficient.",
+  "apply.codex_installed": "Codex was installed and verified on PATH."
 }

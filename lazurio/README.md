@@ -11,7 +11,7 @@ první explicitně omezený Organization pilot.
 
 Opakovatelný top-level příkaz má jednu dlouhodobou roli: znovu odvodit stav
 mašiny, doplnit jen odsouhlasené chybějící části a vždy skončit reportem. První
-slice je záměrně pouze read-only:
+režim bez přepínačů je pouze read-only:
 
 ```sh
 lazurio install
@@ -19,15 +19,41 @@ lazurio install --language en
 lazurio install --json
 ```
 
+Chybějící Codex lze nyní doplnit stejným CLI:
+
+```sh
+lazurio install --install-missing codex --allow-user-path --json
+```
+
+Přepínače vyjadřují předem udělený souhlas Principála s instalací Codexu a
+jeho uživatelským PATH na aktuální Mašině. Bez `--allow-user-path` chybějící
+Codex vrátí žádost o tento přesný souhlas bez instalace. Vyhovující Codex se
+zachová; rozbitá instalace, existující soubor mimo PATH, vlastní
+`CODEX_HOME`/`CODEX_INSTALL_DIR` a Hosted Resident vyžadují samostatný postup.
+CLI stáhne celý oficiální OpenAI instalátor, spustí jej neinteraktivně pro
+stable a znovu odvodí machine gate. Instalaci, zámek a User PATH vlastní
+upstream instalátor. CLI neupgraduje nástroje, neodstraňuje jinou instalaci,
+nemění Machine PATH ani se nepřihlašuje.
+
+Výsledek této explicitní operace je `lazurio.install.apply.v1`: `action`
+rozlišuje zachování, instalaci, chybu a potřebu nové relace; `installation`
+obsahuje nezměněný kontrakt `lazurio.install.report.v2`. Exit 0 znamená
+celkový `completed`, 1 potřebnou akci a 2 chybu. Po instalaci na Windows je
+vždy nutné úplně ukončit a znovu spustit Codex, potom zopakovat
+`lazurio install --json` a Doctor. Child proces staré relace není důkazem.
+Resume čte skutečný stav bez journalu. Git, gh, Node.js a exact Bun zatím
+instaluje Agent oficiálním postupem v uděleném mandátu; jejich automatizace
+zůstává navazujícím krokem.
+
 Fresh a Managed Root není uživatelská volba: vždy používá přesně
 `<home>/Lazurio` (`~/Lazurio` na macOS/Linuxu a
 `%USERPROFILE%\Lazurio` na Windows). Dnešní podporovaný profil `source`
 používá ověřený existující Lazurio checkout přímo v home a do řízené migrace
 smí zachovat historický název složky. Budoucí `managed` profil použije
 canonical target jako generovaný non-Git Root. Top-level
-`lazurio install` proto nepřijímá `--root`, nic nepersistuje a nenabízí picker.
+`lazurio install` proto nepřijímá `--root` a nenabízí picker.
 Source-linked CLI dál kontroluje svůj ověřený Source Root, aby Agenti mohli
-dogfoodovat tutéž fasádu. Dnešní read-only slice Source Root nemigruje;
+dogfoodovat tutéž fasádu. Dnešní instalátor Source Root nemigruje;
 budoucí Source → Managed přechod bude explicitní, samostatně gated operace
 stejného Install Core. Jiná cesta se tiše neadoptuje ani nepřesouvá. Společné Core
 postupně ověří platformu, exact Bun runtime z
@@ -73,7 +99,7 @@ je-li na dané mašině nainstalovaný a dostupný v `PATH`. Chybějící Claude
 neutrální, zatímco nedostupný příkaz `codex` je warning: Doctor nemůže poznat,
 zda Codex chybí úplně, nebo leží mimo `PATH`, a navede Agenta k ověření se
 souhlasem Principála. Kontrola je pouze advisory: novější
-verze je `warn` s `next_action: ask_principal_before_update`; Lazurio nikdy
+verze je `warn` s `next_action: ask_principal_before_update`; tato Doctor lane nikdy
 nespustí updater, package manager ani instalační příkaz. Nedostupná síť vrátí
 výslovné `currency_unknown` místo zeleného odhadu. Volitelný přepínač drží
 běžný `lazurio doctor` rychlý a deterministický. Bun se dál posuzuje výhradně

@@ -89,5 +89,16 @@
   "reason.codex_missing": "Codex CLI není dostupný v PATH.",
   "reason.codex_unusable": "Příkaz codex nevrátil platnou verzi Codex CLI.",
   "action.codex_missing": "Ve schváleném instalačním mandátu zpřístupněte Codex CLI podle manual/organization-install.md a ověřte jej z nové relace.",
-  "action.codex_unusable": "Ověřte příkaz codex vybraný z PATH a opravte jej ve schváleném mandátu podle manual/organization-install.md."
+  "action.codex_unusable": "Ověřte příkaz codex vybraný z PATH a opravte jej ve schváleném mandátu podle manual/organization-install.md.",
+  "apply.title": "Instalace chybějícího Codex CLI",
+  "apply.codex_preserved": "Codex už funguje; existující instalace zachována.",
+  "apply.codex_existing_unusable": "Existující Codex nelze ověřit. Oprav jeho přesnou instalaci se souhlasem Principála.",
+  "apply.codex_install_unsupported": "Automatická instalace není pro tuto platformu nebo Resident profil podporovaná.",
+  "apply.codex_user_path_consent_required": "Pro instalaci chybějícího Codexu a jeho uživatelský PATH přidej po souhlasu Principála --allow-user-path.",
+  "apply.codex_custom_location": "Vlastní instalační cesty vyžadují přesný samostatný instalační postup; CLI je nemění.",
+  "apply.codex_outside_path": "Codex už má soubor v instalační cestě, ale není v PATH. Otevři novou relaci; pokud nález trvá, ověř a oprav přesnou cestu.",
+  "apply.codex_install_probe_failed": "Instalační cestu nelze bezpečně ověřit. Zkontroluj přístup k ní.",
+  "apply.codex_installer_failed": "Oficiální instalátor selhal nebo jej nelze spustit. Ověř síť a předpoklady instalátoru a zopakuj stejný příkaz.",
+  "apply.codex_restart_required": "Instalátor skončil. Otevři novou relaci terminálu; na Windows úplně ukonči a znovu spusť Codex. Potom zopakuj lazurio install --json a lazurio doctor. Child proces původní relace nestačí.",
+  "apply.codex_installed": "Codex byl nainstalován a ověřen v PATH."
 }

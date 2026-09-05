@@ -265,7 +265,7 @@ instalace za zády uživatele.
 
 Pro localhost workstation na macOS, Linuxu i Windows je výchozí cestou
 [oficiální OpenAI standalone instalátor](https://developers.openai.com/codex/cli).
-Instalaci i další aktualizace vlastní OpenAI; Lazurio na něj pouze naviguje.
+Instalaci i další aktualizace vlastní OpenAI; Lazurio používá jeho instalátor.
 Tím se dostupnost verze Codexu neodvíjí od aktualizace Homebrew casku.
 Homebrew, npm ani WinGet nejsou povinné ani zakázané. Vyhovující existující
 instalaci zachovej; standalone je doporučení pro chybějící Codex, nikoli
@@ -287,8 +287,16 @@ Použij aktuální oficiální stable, ne preview ani verzi napevno opsanou z ma
 Před spuštěním platí scoped instalační nebo aktualizační mandát pro Codex a
 příslušnou vrstvu `PATH`. Už udělený mandát se nevyžaduje podruhé; chybí-li,
 Agent nejdřív připraví přesnou nápravu a požádá Principála o souhlas.
-Doctor ani `lazurio update` tento příkaz nikdy nespouštějí. `lazurio install`
-zůstává reportem machine gate, ne instalátorem externího toolchainu.
+Doctor ani `lazurio update` tento příkaz nikdy nespouštějí. Běžný
+`lazurio install` zůstává read-only reportem. Pro chybějící Codex s výše
+uvedeným mandátem použij `lazurio install --install-missing codex
+--allow-user-path --json` (na jednom řádku). CLI spustí oficiální instalátor
+neinteraktivně a vrátí výsledek operace i nový machine report. Vyhovující
+instalaci zachová; vlastní instalační cesty a opravy existujících instalací
+řeš výše uvedeným přesným postupem. Po požadavku na novou relaci, na Windows
+vždy po instalaci, úplně ukonči a znovu spusť Codex a ověř
+`lazurio install --json` a Doctor z nové relace. Git, gh, Node a Bun tato
+instalační větev zatím nemění.
 
 **Existující Homebrew/npm/WinGet instalace.** Zjisti všechny příkazy `codex`
 v `PATH`, jejich skutečné symlink cíle a správce původního balíčku. Samotná

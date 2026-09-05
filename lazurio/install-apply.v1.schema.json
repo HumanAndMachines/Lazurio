@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lazurio.ai/schemas/install-apply.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "action",
+    "installation"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "lazurio.install.apply.v1"
+    },
+    "status": {
+      "enum": [
+        "completed",
+        "action_required",
+        "failed"
+      ]
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tool",
+        "status",
+        "reason",
+        "attempted"
+      ],
+      "properties": {
+        "tool": {
+          "const": "codex"
+        },
+        "status": {
+          "enum": [
+            "completed",
+            "action_required",
+            "failed"
+          ]
+        },
+        "reason": {
+          "enum": [
+            "codex_preserved",
+            "codex_existing_unusable",
+            "codex_install_unsupported",
+            "codex_user_path_consent_required",
+            "codex_custom_location",
+            "codex_outside_path",
+            "codex_install_probe_failed",
+            "codex_installer_failed",
+            "codex_restart_required",
+            "codex_installed"
+          ]
+        },
+        "attempted": {
+          "type": "boolean"
+        }
+      }
+    },
+    "installation": {
+      "$ref": "https://lazurio.ai/schemas/install-report.v2.schema.json"
+    }
+  }
+}

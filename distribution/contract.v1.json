@@ -58,6 +58,7 @@
     "lazurio/install-output-lib.mjs",
     "lazurio/install-report.v1.schema.json",
     "lazurio/install-report.v2.schema.json",
+    "lazurio/install-apply.v1.schema.json",
     "lazurio/launchpad-install-lib.mjs",
     "lazurio/launchpad-serve-lib.mjs",
     "lazurio/lib.mjs",
