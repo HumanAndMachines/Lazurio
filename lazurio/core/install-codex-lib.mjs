@@ -65,7 +65,7 @@ export async function installMissingCodex({
   try {
     result = await runInstaller({ platform, environment });
   } catch {
-    return finish("failed", "codex_installer_failed", true);
+    result = { status: 1 };
   }
   installation = inspect(observationOptions);
   if (result?.status !== 0) return finish("failed", "codex_installer_failed", true);

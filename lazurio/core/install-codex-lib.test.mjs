@@ -179,3 +179,14 @@ test("partial failure retries from the observed state and then preserves success
   expect((await installMissingCodex(f.options)).action.attempted).toBe(false);
   expect(attempts).toBe(2);
 });
+
+
+test("an exception after mutation still returns a fresh observation", async () => {
+  const f = fixture();
+  f.options.runInstaller = async () => { f.setPresent(true); throw new Error("CANARY_AFTER_WRITE"); };
+  const report = await installMissingCodex(f.options);
+  expect(report.status).toBe("failed");
+  expect(report.installation.steps.find((step) => step.id === "codex").status).toBe("completed");
+  expect(JSON.stringify(report)).not.toContain("CANARY");
+  expect(schema.properties.installation.$ref).toBe(reportSchema.$id);
+});
