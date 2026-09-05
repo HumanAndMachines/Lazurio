@@ -1703,9 +1703,108 @@ input:focus-visible,
 
 .guide-recommendation {
   display: grid;
-  gap: var(--lz-space-12);
+  grid-template-columns: minmax(190px, 240px) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--lz-space-24);
   padding: var(--lz-space-24) 0;
   border-bottom: 1px solid var(--lz-line);
+}
+
+.guide-recommendation-content {
+  min-width: 0;
+  display: grid;
+  gap: var(--lz-space-12);
+}
+
+.guide-recommendation-visual {
+  --guide-visual-accent: var(--lz-blue-700);
+  min-width: 0;
+  color: var(--guide-visual-accent);
+}
+
+.guide-recommendation--wispr .guide-recommendation-visual {
+  --guide-visual-accent: var(--lz-expressive-orange-figure);
+}
+
+.guide-recommendation--codexbar .guide-recommendation-visual {
+  --guide-visual-accent: var(--lz-success);
+}
+
+.guide-recommendation-visual-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+
+.guide-visual-canvas {
+  fill: color-mix(in srgb, var(--guide-visual-accent) 9%, var(--surface));
+  stroke: color-mix(in srgb, var(--guide-visual-accent) 24%, var(--lz-line));
+}
+
+.guide-visual-panel {
+  fill: var(--surface);
+  stroke: color-mix(in srgb, var(--guide-visual-accent) 24%, var(--lz-line));
+}
+
+.guide-visual-accent-fill {
+  fill: var(--guide-visual-accent);
+}
+
+.guide-visual-soft-fill {
+  fill: color-mix(in srgb, var(--guide-visual-accent) 14%, var(--surface));
+}
+
+.guide-visual-muted-fill {
+  fill: var(--lz-gray-300);
+}
+
+.guide-visual-on-accent {
+  fill: var(--on-accent);
+}
+
+.guide-visual-on-accent-stroke,
+.guide-visual-accent-stroke,
+.guide-visual-arrow,
+.guide-visual-line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.guide-visual-on-accent-stroke {
+  stroke: var(--on-accent);
+  stroke-width: 3;
+}
+
+.guide-visual-accent-stroke {
+  stroke: var(--guide-visual-accent);
+  stroke-width: 3;
+}
+
+.guide-visual-wave {
+  stroke-width: 4;
+}
+
+.guide-visual-arrow {
+  stroke: color-mix(in srgb, var(--guide-visual-accent) 60%, var(--lz-ink-muted));
+  stroke-width: 2;
+}
+
+.guide-visual-line {
+  stroke: var(--lz-gray-300);
+  stroke-width: 3;
+}
+
+.guide-visual-meter {
+  stroke-width: 6;
+}
+
+.guide-visual-cursor {
+  fill: var(--surface);
+  stroke: var(--lz-ink);
+  stroke-width: 2;
+  stroke-linejoin: round;
 }
 
 .guide-recommendation-heading {
@@ -3800,6 +3899,15 @@ tbody tr.selected {
   .guide-term {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--lz-space-4);
+  }
+
+  .guide-recommendation {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--lz-space-16);
+  }
+
+  .guide-recommendation-visual {
+    width: min(100%, 28rem);
   }
 
   .guide-onboarding-roles,

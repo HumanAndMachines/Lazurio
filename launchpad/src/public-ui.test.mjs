@@ -84,6 +84,12 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(html).toContain('href="https://codexbar.app/"');
   expect(html).toContain("Browser Use");
   expect(html).toContain('href="https://browser-use.com/"');
+  expect((html.match(/class="guide-recommendation-visual" aria-hidden="true"/g) ?? []).length).toBe(3);
+  expect(html).toContain("guide-recommendation--wispr");
+  expect(html).toContain("guide-recommendation--codexbar");
+  expect(html).toContain("guide-recommendation--browser-use");
+  expect(css).toContain("grid-template-columns: minmax(190px, 240px) minmax(0, 1fr)");
+  expect(css).toContain(".guide-visual-cursor");
   expect(html).toContain('data-i18n="guide.apps.browserUse.caution"');
   expect(html).toContain('data-i18n="guide.apps.intro"');
   expect(js).toContain("function filterGuideContent(query)");
