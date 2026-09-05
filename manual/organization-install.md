@@ -265,7 +265,7 @@ instalace za zády uživatele.
 
 Pro localhost workstation na macOS, Linuxu i Windows je výchozí cestou
 [oficiální OpenAI standalone instalátor](https://developers.openai.com/codex/cli).
-Instalaci i další aktualizace vlastní OpenAI; Lazurio na něj pouze naviguje.
+Instalaci i další aktualizace vlastní OpenAI; Lazurio používá jeho instalátor.
 Tím se dostupnost verze Codexu neodvíjí od aktualizace Homebrew casku.
 Homebrew, npm ani WinGet nejsou povinné ani zakázané. Vyhovující existující
 instalaci zachovej; standalone je doporučení pro chybějící Codex, nikoli
@@ -284,11 +284,30 @@ powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1
 ```
 
 Použij aktuální oficiální stable, ne preview ani verzi napevno opsanou z manuálu.
-Před spuštěním platí scoped instalační nebo aktualizační mandát pro Codex a
-příslušnou vrstvu `PATH`. Už udělený mandát se nevyžaduje podruhé; chybí-li,
+Před spuštěním platí scoped instalační nebo aktualizační mandát pro Codex.
+Běžná instalace zahrnuje User `PATH`; Machine změny vyžadují vlastní mandát.
+Už udělený mandát se nevyžaduje podruhé; chybí-li souhlas s instalací nástroje,
 Agent nejdřív připraví přesnou nápravu a požádá Principála o souhlas.
-Doctor ani `lazurio update` tento příkaz nikdy nespouštějí. `lazurio install`
-zůstává reportem machine gate, ne instalátorem externího toolchainu.
+Doctor ani `lazurio update` tento příkaz nikdy nespouštějí. Běžný
+`lazurio install` zůstává read-only reportem. Pro chybějící Codex s výše
+uvedeným mandátem použij `lazurio install --install-missing codex --confirm-codex-absent --json`. Potvrzení nepřítomnosti smí Agent přidat až po ověření všech existujících
+instalací mimo PATH včetně vlastních prefixů a správců verzí; v labu je
+podkladem známý čistý obraz OS. Samotný chybějící příkaz nestačí.
+CLI spustí oficiální instalátor
+neinteraktivně a vrátí výsledek operace i nový machine report. Vyhovující
+instalaci zachová; vlastní instalační cesty a opravy existujících instalací
+řeš výše uvedeným přesným postupem. Po požadavku na novou relaci, na Windows
+vždy po instalaci, úplně ukonči a znovu spusť Codex a ověř
+`lazurio install --json` a Doctor z nové relace. Git, gh, Node a Bun tato
+instalační větev zatím nemění.
+
+Instalace chybějícího Codexu zahrnuje automatické nastavení uživatelského
+`PATH`; Agent pro tuto běžnou součást instalace nežádá další souhlas.
+Běžnému uživateli popisuje přípravu nástroje a případné znovuspuštění aplikace,
+nikoli nastavení prostředí. Pokročilé `--no-modify-path` zakáže spuštění
+oficiálního instalátoru, který vypnutí úpravy nepodporuje. Chybějící Codex
+pak vrátí `codex_manual_setup_required`, bez stahování nebo zápisu;
+uživatel si nástroj připraví sám. Existující funkční instalace zůstává použitelná.
 
 **Existující Homebrew/npm/WinGet instalace.** Zjisti všechny příkazy `codex`
 v `PATH`, jejich skutečné symlink cíle a správce původního balíčku. Samotná

@@ -46,6 +46,16 @@ test("top-level install rejects a selectable Root", () => {
   expect(result.stderr).toContain("nepřijímá --root");
 });
 
+test("tool installation options reject ambiguous or cross-command consent", () => {
+  for (const args of [["doctor", "--install-missing", "codex"],
+    ["install", "--no-modify-path"], ["install", "--confirm-codex-absent"], ["install", "--install-missing", "git"],
+    ["install", "--install-missing", "codex", "--install-missing", "codex"]]) {
+    const result = run([process.execPath, "run", cliPath, ...args], import.meta.dirname);
+    expect(result.exitCode).toBe(2);
+    expect(result.stdout).toBe("");
+  }
+});
+
 test("rootless context je deterministický allowlist bez Residentova obsahu", async () => {
   const root = await tempRoot("lazurio-personalspace-");
   await writeJson(join(root, "personal.gen3.json"), personalConfig("owner-login", {

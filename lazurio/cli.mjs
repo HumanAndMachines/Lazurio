@@ -29,8 +29,10 @@ import {
 } from "./core/install-core-lib.mjs";
 import {
   renderHumanInstallReport,
+  renderHumanInstallApplyReport,
   selectInstallLanguage,
 } from "./install-output-lib.mjs";
+import { installMissingCodex } from "./core/install-codex-lib.mjs";
 import { runLaunchpadInstall } from "./launchpad-install-lib.mjs";
 import { runLaunchpadServe } from "./launchpad-serve-lib.mjs";
 import {
@@ -86,8 +88,14 @@ async function run(argv) {
     const codeRoot = cliCodeRoot();
     const provenance = buildLazurioCliProvenance({ root: codeRoot });
     const root = operatedRootForCliProvenance({ codeRoot, provenance });
-    const report = inspectLazurioInstallation({ root });
     const language = selectInstallLanguage({ requested: options.language });
+    if (options.installMissing !== null) {
+      const report = await installMissingCodex({ root, modifyPath: options.modifyPath, codexAbsent: options.codexAbsent });
+      console.log(options.json ? JSON.stringify(report, null, 2)
+        : renderHumanInstallApplyReport(report, { language }));
+      return report.status === "completed" ? 0 : report.status === "action_required" ? 1 : 2;
+    }
+    const report = inspectLazurioInstallation({ root });
     if (options.json) {
       console.log(JSON.stringify(report, null, 2));
     } else {
@@ -289,6 +297,9 @@ function parseArgs(argv) {
     organizationRole: null,
     apply: false,
     applyPresent: false,
+    installMissing: null,
+    modifyPath: true,
+    codexAbsent: false,
     noApp: false,
     appPackage: null,
     appId: null,
@@ -314,6 +325,21 @@ function parseArgs(argv) {
     }
     if (["search", "launchpad", "cli", "organization", "module", "repair"].includes(parsed.command) && !arg.startsWith("-")) {
       parsed.operands.push(arg);
+      continue;
+    }
+    if (arg === "--install-missing") {
+      if (parsed.installMissing !== null || argv[index + 1] !== "codex") {
+        throw new Error("--install-missing přijímá právě jednu hodnotu codex.");
+      }
+      parsed.installMissing = argv[++index];
+      continue;
+    }
+    if (arg === "--confirm-codex-absent") {
+      parsed.codexAbsent = true;
+      continue;
+    }
+    if (arg === "--no-modify-path") {
+      parsed.modifyPath = false;
       continue;
     }
     if (arg === "--json") {
@@ -655,6 +681,12 @@ function parseArgs(argv) {
   if (parsed.personalspace && !(parsed.command === "launchpad" && parsed.launchpadAction === "serve")) {
     throw new Error("--personalspace lze použít pouze s příkazem launchpad serve.");
   }
+  if ((parsed.installMissing !== null || !parsed.modifyPath || parsed.codexAbsent) && parsed.command !== "install") {
+    throw new Error("Instalační přepínače lze použít pouze s install.");
+  }
+  if ((!parsed.modifyPath || parsed.codexAbsent) && parsed.installMissing === null) {
+    throw new Error("Pokročilé instalační volby vyžadují --install-missing codex.");
+  }
   if (parsed.language !== null && parsed.command !== "install") {
     throw new Error("--language lze použít pouze s příkazem install.");
   }
@@ -738,7 +770,7 @@ function usage() {
     "",
     "Použití:",
     "  lazurio --version [--json]",
-    "  lazurio install [--language cs|en] [--json]",
+    "  lazurio install [--install-missing codex --confirm-codex-absent [--no-modify-path]] [--language cs|en] [--json]",
     "  lazurio organization activate --check --github-id <id> [--json]",
     "  lazurio organization install <github-login> [--role builder] [--json]",
     "  lazurio context [--organization <slug>] [--json] [--root <cesta>]",
