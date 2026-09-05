@@ -114,8 +114,7 @@ test("provider invocation uses official download, latest and noninteractive mode
     const calls = [];
     let scriptPath;
     const result = await runOfficialCodexInstaller({ platform,
-      environment: { PATH: "fixture", CODEX_RELEASE: "0.1.0-alpha" },
-      resolveCommand: () => platform === "win32" ? "C:\\Windows\\powershell.exe" : "/bin/sh",
+      environment: { PATH: "untrusted-shadow-directory", SystemRoot: "C:\\Windows", CODEX_RELEASE: "0.1.0-alpha" },
       fetchImpl: async (url) => { calls.push(url); return new Response("provider fixture"); },
       spawn: (executable, args, options) => {
         calls.push({ executable, args, options });
@@ -125,6 +124,8 @@ test("provider invocation uses official download, latest and noninteractive mode
     });
     expect(result).toEqual({ status: 0 });
     expect(calls[0]).toBe(`https://chatgpt.com/codex/install.${platform === "win32" ? "ps1" : "sh"}`);
+    expect(calls[1].executable).toBe(platform === "win32"
+      ? "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" : "/bin/sh");
     expect(calls[1].args.at(-1)).toBe("latest");
     expect(calls[1].options.env.CODEX_NON_INTERACTIVE).toBe("1");
     expect(calls[1].options.stdio[0]).toBe("ignore");
@@ -136,7 +137,7 @@ test("download failure, empty body and untrusted redirect never execute", async 
   for (const response of [new Response("no", { status: 500 }), new Response(""),
     { ok: true, url: "https://untrusted.example/install.sh" }]) {
     let called = false;
-    expect((await runOfficialCodexInstaller({ resolveCommand: () => "/bin/sh",
+    expect((await runOfficialCodexInstaller({ platform: "linux",
       fetchImpl: async () => response, spawn: () => { called = true; },
     })).status).toBe(1);
     expect(called).toBe(false);
@@ -190,4 +191,16 @@ test("an exception after mutation still returns a fresh observation", async () =
   expect(report.installation.steps.find((step) => step.id === "codex").status).toBe("completed");
   expect(JSON.stringify(report)).not.toContain("CANARY");
   expect(schema.properties.installation.$ref).toBe(reportSchema.$id);
+});
+
+
+test("Windows installer fails before download without a trusted SystemRoot", async () => {
+  for (const environment of [{ PATH: "attacker" }, { SystemRoot: "relative" },
+    { SystemRoot: "C:\\Windows\\..\\attacker" }, { SystemRoot: "\\\\remote\\share" }]) {
+    let fetched = false;
+    await expect(runOfficialCodexInstaller({ platform: "win32", environment,
+      fetchImpl: async () => { fetched = true; return new Response("script"); },
+    })).rejects.toThrow();
+    expect(fetched).toBe(false);
+  }
 });

@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, posix, win32 } from "node:path";
 import { inspectLazurioInstallation } from "./install-core-lib.mjs";
-import { resolveExecutableOnPath } from "./toolchain-lib.mjs";
+import { trustedWindowsSystemExecutable } from "./windows-system-path-lib.mjs";
 import { spawnToolSync } from "./tool-invocation-lib.mjs";
 
 // The provider owns installation, locking and User PATH. Lazurio owns consent,
@@ -80,12 +80,12 @@ export async function runOfficialCodexInstaller({
   platform = process.platform,
   environment = process.env,
   fetchImpl = fetch,
-  resolveCommand = resolveExecutableOnPath,
   spawn = spawnToolSync,
 } = {}) {
   const windows = platform === "win32";
-  const executable = resolveCommand(windows ? "powershell" : "sh", { environment, platform });
-  if (!executable || (windows && !executable.toLowerCase().endsWith(".exe"))) return { status: 1 };
+  const executable = windows
+    ? trustedWindowsSystemExecutable(["System32", "WindowsPowerShell", "v1.0", "powershell.exe"], environment)
+    : "/bin/sh";
   const url = `https://chatgpt.com/codex/install.${windows ? "ps1" : "sh"}`;
   const response = await fetchImpl(url, { signal: AbortSignal.timeout(30_000) });
   const finalUrl = new URL(response.url || url);
