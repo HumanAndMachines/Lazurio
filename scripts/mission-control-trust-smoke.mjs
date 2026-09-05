@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { resolveGitExecutableOnPath } from "../lazurio/core/toolchain-lib.mjs";
 
 import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
@@ -7,7 +8,6 @@ import { fileURLToPath } from "node:url";
 import {
   normalizeComparableCliPath,
   normalizeGitHubRepository,
-  resolveTrustedGitExecutable,
   runTrustedGitCommandSync,
 } from "../lazurio/core/cli-provenance-lib.mjs";
 import { createTrustedGitHubProvider } from "../lazurio/core/github-provider-lib.mjs";
@@ -610,7 +610,7 @@ function effectiveBranchRules(provider, repo, branch) {
 function createTrustedGitReader({
   platform = process.platform,
   environment = process.env,
-  resolveExecutable = resolveTrustedGitExecutable,
+  resolveExecutable = resolveGitExecutableOnPath,
   runCommand = runTrustedGitCommandSync,
 } = {}) {
   const executable = resolveExecutable({ platform, environment });

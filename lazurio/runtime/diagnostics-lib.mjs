@@ -1,3 +1,4 @@
+import { toolInvocation } from "../core/tool-invocation-lib.mjs";
 import { existsSync, lstatSync, readFileSync } from "fs";
 import { readFile, readdir } from "fs/promises";
 import { basename, dirname, isAbsolute, join, posix, relative } from "path";
@@ -53,21 +54,15 @@ import {
   resolveModuleApplications,
 } from "../core/module-contract-lib.mjs";
 import {
+  classifyToolVersion,
   classifyBunRuntime,
   classifyNodeRuntime,
-  executablePathsMatch,
   nodeVersionFromOutput,
   readRequiredBunVersion,
   readRequiredNodeVersionRange,
   resolveExecutableOnPath,
 } from "../core/toolchain-lib.mjs";
-import {
-  resolveTrustedGitHubCliExecutable,
-  resolveTrustedNodeExecutable,
-  trustedGitCandidates,
-  trustedGitHubCliCandidates,
-  trustedNodeCandidates,
-} from "../core/cli-provenance-lib.mjs";
+
 import { sanitizedGitHubEnvironment } from "../core/github-provider-lib.mjs";
 import {
   DEVELOPER_TOOL_UPDATE_POLICY,
@@ -2193,21 +2188,10 @@ function humanizeSlug(slug) {
 function platformChecks(companiesRoot) {
   const platformName = supportedPlatforms[process.platform];
   const bunExecutable = resolveBunExecutable();
-  const gitExecutable = resolveGitExecutableSync();
-  const githubCliExecutable = resolveTrustedGitHubCliExecutable();
-  const nodeExecutable = resolveTrustedNodeExecutable();
   const bunOnPath = resolveExecutableOnPath("bun");
   const gitOnPath = resolveExecutableOnPath("git");
   const githubCliOnPath = resolveExecutableOnPath("gh");
   const nodeOnPath = resolveExecutableOnPath("node");
-  const gitTrustedCandidates = trustedGitCandidates();
-  const githubCliTrustedCandidates = trustedGitHubCliCandidates();
-  const nodeTrustedCandidates = trustedNodeCandidates();
-  const githubCliPathIsTrusted = matchesTrustedPath(
-    githubCliOnPath,
-    githubCliExecutable,
-    githubCliTrustedCandidates,
-  );
   return [
     {
       id: "platform.os",
@@ -2222,57 +2206,35 @@ function platformChecks(companiesRoot) {
       details: [`platform: ${process.platform}`, `arch: ${process.arch}`],
     },
     bunRuntimeCheck({ companiesRoot, bunExecutable }),
-    pathIdentityCheck({
-      id: "platform.bun_path",
-      title: "Bun v PATH",
-      pathExecutable: bunOnPath,
-      trustedExecutable: bunExecutable,
-      args: ["--version"],
-      cwd: companiesRoot,
-      okMessage: (result) => `Příkaz bun v PATH spouští ověřený runtime: ${result.stdout}`,
-      missingMessage: "Příkaz bun není dostupný v PATH nového procesu.",
-      mismatchMessage: "Příkaz bun v PATH míří na jiný soubor než ověřený Bun runtime.",
-    }),
+    bunPathCheck({ pathExecutable: bunOnPath, cwd: companiesRoot }),
     bunPackageRunnerCheck({
       id: "platform.bun_package_runner",
       title: "Bun package runner",
-      command: bunOnPath && executablePathsMatch(bunOnPath, bunExecutable) ? bunOnPath : null,
+      command: bunOnPath,
       cwd: companiesRoot,
     }),
-    pathIdentityCheck({
+    toolVersionCheck({
       id: "platform.git",
+      tool: "git",
       title: "Git",
       pathExecutable: gitOnPath,
-      trustedExecutable: gitExecutable,
-      trustedCandidates: gitTrustedCandidates,
-      args: ["--version"],
       cwd: companiesRoot,
-      okMessage: (result) => result.stdout,
-      missingMessage: "Příkaz git není dostupný v PATH nového procesu.",
-      mismatchMessage: "Příkaz git v PATH není ověřená instalace Gitu.",
       env: safeGitCommandEnv(),
     }),
-    pathIdentityCheck({
+    toolVersionCheck({
       id: "platform.github_cli",
+      tool: "github_cli",
       title: "GitHub CLI",
       pathExecutable: githubCliOnPath,
-      trustedExecutable: githubCliExecutable,
-      trustedCandidates: githubCliTrustedCandidates,
-      args: ["--version"],
       cwd: companiesRoot,
-      okMessage: (result) => result.stdout.split("\n")[0],
-      missingMessage: "Příkaz gh není dostupný v PATH nového procesu.",
-      mismatchMessage: "Příkaz gh v PATH není ověřená instalace GitHub CLI.",
     }),
     githubAuthenticationCheck({
       companiesRoot,
-      executable: githubCliPathIsTrusted ? githubCliOnPath : null,
+      executable: githubCliOnPath,
     }),
     nodeRuntimeCheck({
       companiesRoot,
       command: nodeOnPath,
-      trustedExecutable: nodeExecutable,
-      trustedCandidates: nodeTrustedCandidates,
     }),
     codexRuntimeCheck({ companiesRoot }),
   ];
@@ -2292,18 +2254,15 @@ export function codexRuntimeCheck({
     cwd: companiesRoot,
   });
   if (command) {
-    return commandCheck({
+    return withCodexInstallationGuidance(toolVersionCheck({
       id: "platform.codex",
+      tool: "codex",
       title: "Codex CLI",
-      command,
-      args: ["--version"],
+      pathExecutable: command,
       cwd: companiesRoot,
-      okMessage: (result) => `Codex CLI je dostupné v PATH: ${result.stdout}`,
-      failMessage:
-        "Příkaz codex je v PATH, ale nejde spustit jako nativní Codex CLI. "
-        + "Nepoužívej neověřený wrapper; s výslovným souhlasem nainstaluj oficiální OpenAI standalone balíček a kontrolu zopakuj z nového procesu.",
+      env: environment,
       run,
-    });
+    }), platform);
   }
 
   const targetCommand = platform === "win32"
@@ -2321,7 +2280,7 @@ export function codexRuntimeCheck({
       })
     : null;
   if (targetExecutable) {
-    return {
+    return withCodexInstallationGuidance({
       id: "platform.codex",
       status: "fail",
       severity: "required",
@@ -2330,21 +2289,17 @@ export function codexRuntimeCheck({
         `Windows našel pouze target-specific kandidát ${targetCommand}, ale příkaz codex chybí. `
         + "Tento stav není připravený; s výslovným souhlasem použij oficiální OpenAI standalone Windows instalátor a kontrolu zopakuj z nového procesu.",
       paths: [],
-      links: [{
-        label: "Oficiální OpenAI Windows instalátor",
-        kind: "external",
-        url: "https://github.com/openai/codex/blob/main/scripts/install/install.ps1",
-      }],
+      links: [],
       details: [
         "path_command: <missing>",
         `target_specific_candidate: ${targetExecutable}`,
         "candidate_probe: not_run_untrusted_candidate",
         "next_action: ask_principal_before_official_codex_standalone_install",
       ],
-    };
+    }, platform);
   }
 
-  return commandCheck({
+  return withCodexInstallationGuidance(commandCheck({
     id: "platform.codex",
     title: "Codex CLI",
     command: null,
@@ -2353,52 +2308,57 @@ export function codexRuntimeCheck({
     okMessage: (result) => `Codex CLI je dostupné v PATH: ${result.stdout}`,
     failMessage: "Příkaz codex není dostupný nebo jej nelze spustit z PATH nového procesu.",
     run,
-  });
+  }), platform);
 }
 
-function pathIdentityCheck({
-  id,
-  title,
-  pathExecutable,
-  trustedExecutable,
-  trustedCandidates = [],
-  args,
-  cwd,
-  okMessage,
-  missingMessage,
-  mismatchMessage,
-  env,
-}) {
-  if (!pathExecutable || (!trustedExecutable && trustedCandidates.length === 0)) {
-    return requiredToolFailure({ id, title, message: missingMessage, pathExecutable, trustedExecutable, args });
-  }
-  const matchesTrusted = matchesTrustedPath(pathExecutable, trustedExecutable, trustedCandidates);
-  if (!matchesTrusted) {
-    return requiredToolFailure({ id, title, message: mismatchMessage, pathExecutable, trustedExecutable, args });
-  }
-  return commandCheck({
-    id,
-    title,
-    command: pathExecutable,
-    args,
-    cwd,
-    okMessage,
-    failMessage: `${title} bylo nalezeno, ale ověřovací příkaz selhal.`,
-    env,
-  });
+// Guidance only: executable readiness does not prove an installation method.
+// The provider owns installation/update; Doctor never runs these commands.
+function withCodexInstallationGuidance(check, platform) {
+  const installCommand = platform === "win32"
+    ? 'powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"'
+    : platform === "darwin" || platform === "linux"
+      ? "curl -fsSL https://chatgpt.com/codex/install.sh | sh"
+      : null;
+  return {
+    ...check,
+    message: `${check.message} Pro chybějící Codex CLI doporučujeme oficiální OpenAI standalone instalátor podle manual/organization-install.md. Vyhovující instalaci zachovej bez ohledu na jejího správce.`,
+    links: [...check.links, {
+      label: "Oficiální instalace Codex CLI",
+      kind: "external",
+      url: "https://developers.openai.com/codex/cli",
+    }],
+    details: [
+      ...check.details,
+      "preferred_installation: openai_standalone",
+      ...(installCommand ? [`install_or_update_command: ${installCommand}`] : []),
+      "installation_policy: use_existing_explicit_mandate_or_ask_principal",
+      "migration: verify_standalone_before_removing_previous_install; preserve_codex_settings_and_auth",
+    ],
+  };
 }
 
-function matchesTrustedPath(pathExecutable, trustedExecutable, trustedCandidates = []) {
-  return Boolean(
-    pathExecutable
-    && (
-      (trustedExecutable && executablePathsMatch(pathExecutable, trustedExecutable))
-      || trustedCandidates.some((candidate) => executablePathsMatch(pathExecutable, candidate))
-    )
-  );
+export function toolVersionCheck({ tool, id, title, pathExecutable, cwd, env, run = runCommand }) {
+  if (!pathExecutable) return requiredToolFailure({ id, title, message: `${title} není dostupné v PATH.`, pathExecutable, args: ["--version"] });
+  const result = run(pathExecutable, ["--version"], { cwd, env });
+  const version = classifyToolVersion(tool, result.ok ? result.stdout : null);
+  const compatible = result.ok && version.status === "compatible";
+  return { id, title, status: compatible ? "ok" : "fail", severity: "required",
+    message: compatible ? `${title} je dostupné v PATH: ${result.stdout.trim()}`
+      : `${title} v PATH je nefunkční nebo nekompatibilní${version.minimum_version ? `; minimum je ${version.minimum_version}` : ""}.`,
+    paths: [], links: [], details: [`command: ${pathExecutable} --version`, `current: ${version.current_version ?? "<unknown>"}`, `minimum: ${version.minimum_version ?? "parseable stable CLI"}`, ...(result.ok ? [] : [result.stderr || result.error || "Version probe failed"])] };
 }
 
-function requiredToolFailure({ id, title, message, pathExecutable, trustedExecutable, args }) {
+export function bunPathCheck({ pathExecutable, cwd, requiredVersion = readRequiredBunVersion(), run = runCommand }) {
+  const id = "platform.bun_path", title = "Bun v PATH";
+  if (!pathExecutable) return requiredToolFailure({ id, title, message: "Příkaz bun není dostupný v PATH.", pathExecutable, args: ["--version"] });
+  const result = run(pathExecutable, ["--version"], { cwd });
+  const current = result.ok ? result.stdout.trim() : null;
+  return { id, title, status: current === requiredVersion ? "ok" : "fail", severity: "required",
+    message: current === requiredVersion ? `Bun ${current} v PATH odpovídá požadované verzi.` : `Bun v PATH musí fungovat ve verzi ${requiredVersion}.`,
+    paths: [], links: [], details: [`command: ${pathExecutable} --version`, `current: ${current ?? "<unknown>"}`, `required: ${requiredVersion}`] };
+}
+
+function requiredToolFailure({ id, title, message, pathExecutable, args }) {
   return {
     id,
     status: "fail",
@@ -2409,7 +2369,6 @@ function requiredToolFailure({ id, title, message, pathExecutable, trustedExecut
     links: [],
     details: [
       `path_command: ${pathExecutable ?? "<missing>"}`,
-      `trusted_command: ${trustedExecutable ?? "<missing>"}`,
       `probe: ${args.join(" ")}`,
     ],
   };
@@ -2493,18 +2452,11 @@ export function bunRuntimeCheck({
 export function nodeRuntimeCheck({
   companiesRoot,
   command = resolveExecutableOnPath("node"),
-  trustedExecutable = resolveTrustedNodeExecutable(),
-  trustedCandidates = trustedNodeCandidates(),
   requiredRange = readRequiredNodeVersionRange({ root: join(import.meta.dirname, "..") }),
   run = runCommand,
 } = {}) {
-  const trustedPath = matchesTrustedPath(command, trustedExecutable, trustedCandidates);
-  if (!trustedPath) {
-    const message = command
-      ? "Příkaz node v PATH není ověřená instalace Node.js."
-      : trustedExecutable
-        ? "Node.js je nainstalovaný, ale příkaz node není dostupný v PATH nového procesu."
-        : "Příkaz node není dostupný v PATH nového procesu.";
+  if (!command) {
+    const message = "Příkaz node není dostupný v PATH nového procesu.";
     return {
       id: "platform.node",
       status: "fail",
@@ -2519,7 +2471,6 @@ export function nodeRuntimeCheck({
       }],
       details: [
         `command: ${command ?? "<missing>"} --version`,
-        `trusted_command: ${trustedExecutable ?? "<missing>"}`,
         `required: ${requiredRange}`,
       ],
     };
@@ -2542,7 +2493,6 @@ export function nodeRuntimeCheck({
       }],
       details: [
         `command: ${command} --version`,
-        `trusted_command: ${trustedExecutable ?? "<missing>"}`,
         `required: ${requiredRange}`,
         result.stderr || result.error || "Příkaz nevrátil stabilní Node.js verzi.",
       ],
@@ -2572,7 +2522,6 @@ export function nodeRuntimeCheck({
         }],
     details: [
       `command: ${command} --version`,
-      `trusted_command: ${trustedExecutable ?? "<missing>"}`,
       `current: ${runtime.current_version}`,
       `required: ${runtime.required_range}`,
     ],
@@ -2581,6 +2530,7 @@ export function nodeRuntimeCheck({
 
 export async function developerToolUpdateChecks({
   inspectUpdates = inspectDeveloperToolUpdates,
+  platform = process.platform,
 } = {}) {
   let observations;
   try {
@@ -2595,7 +2545,10 @@ export async function developerToolUpdateChecks({
   }
   return observations
     .filter((observation) => observation.required || observation.status !== "not_available")
-    .map(toolUpdateDoctorCheck);
+    .map((observation) => {
+      const check = toolUpdateDoctorCheck(observation);
+      return observation.id === "codex" ? withCodexInstallationGuidance(check, platform) : check;
+    });
 }
 
 function toolUpdateDoctorCheck(observation) {
@@ -3045,7 +2998,8 @@ function runGit(args, cwd) {
 
 function runCommand(command, args, { cwd, env } = {}) {
   try {
-    const result = Bun.spawnSync([command, ...args], {
+    const invocation = toolInvocation(command, args, { cwd, environment: env ?? process.env });
+    const result = Bun.spawnSync([invocation.executable, ...invocation.args], {
       cwd,
       ...(env ? { env } : {}),
       stdout: "pipe",

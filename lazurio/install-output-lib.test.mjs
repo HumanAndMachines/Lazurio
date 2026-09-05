@@ -50,7 +50,7 @@ function fixtureReport({
     root: null,
     platform: "darwin",
     architecture: "arm64",
-    bunVersion: "1.4.0",
+    bunVersion: "1.4.1",
     environment: { HOME: "/Users/example" },
     homeDirectory: "/Users/example",
     resolveGit: () => "/usr/bin/git",
@@ -60,7 +60,7 @@ function fixtureReport({
     resolvePathCommand,
     runCommand: ({ executable }) => ({
       status: 0,
-      stdout: executable === "/trusted/bin/node" ? "v24.19.0" : "",
+      stdout: executable === process.execPath ? "1.4.1" : executable === "/trusted/bin/node" ? "v24.19.0" : "git version 2.47.0",
     }),
     inspectRoot: (path) => ({
       path,

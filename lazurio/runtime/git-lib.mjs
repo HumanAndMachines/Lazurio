@@ -1,10 +1,10 @@
-import { existsSync } from "fs";
+import { toolInvocation } from "../core/tool-invocation-lib.mjs";
 import { lstat, mkdtemp, realpath, rm } from "fs/promises";
 import { basename, dirname, isAbsolute, win32 } from "path";
 import { fileURLToPath } from "url";
 
 import { isSamePath } from "../core/path-boundary-lib.mjs";
-import { trustedGitCandidates } from "../core/cli-provenance-lib.mjs";
+import { classifyToolVersion, resolveExecutableOnPath } from "../core/toolchain-lib.mjs";
 
 export const GIT_LOCAL_TIMEOUT_MS = 10_000;
 export const GIT_FETCH_TIMEOUT_MS = 20_000;
@@ -28,10 +28,11 @@ export async function resolveGitExecutable(options = {}) {
 
 async function resolveGitExecutableUncached({
   platform = process.platform,
-  pathExists = existsSync,
+  environment = process.env,
+  resolvePathCommand = resolveExecutableOnPath,
   probe = probeGitExecutable,
 } = {}) {
-  for (const candidate of orderedGitExecutableCandidates({ platform, pathExists })) {
+  for (const candidate of gitExecutableCandidates({ platform, environment, resolvePathCommand })) {
     if (await probe(candidate)) return candidate;
   }
   return null;
@@ -51,10 +52,11 @@ export function resolveGitExecutableSync(options = {}) {
 
 function resolveGitExecutableSyncUncached({
   platform = process.platform,
-  pathExists = existsSync,
+  environment = process.env,
+  resolvePathCommand = resolveExecutableOnPath,
   probe = probeGitExecutableSync,
 } = {}) {
-  for (const candidate of orderedGitExecutableCandidates({ platform, pathExists })) {
+  for (const candidate of gitExecutableCandidates({ platform, environment, resolvePathCommand })) {
     if (probe(candidate)) return candidate;
   }
   return null;
@@ -174,11 +176,9 @@ export function safeGitCommandEnv(platform = process.platform, base = processEnv
   return commandEnvironment(base, nonInteractive);
 }
 
-export function gitExecutableCandidates({ platform = process.platform } = {}) {
-  // Executable provenance is platform-owned. Ambient ProgramFiles or
-  // LOCALAPPDATA values may describe the current session, but they are not an
-  // authority from which a pre-identity Git process may be selected.
-  return trustedGitCandidates(platform);
+export function gitExecutableCandidates({ platform = process.platform, environment = process.env, resolvePathCommand = resolveExecutableOnPath } = {}) {
+  const executable = resolvePathCommand("git", { platform, environment });
+  return executable ? [executable] : [];
 }
 
 export function resetGitExecutableCacheForTests() {
@@ -208,21 +208,19 @@ async function runCommand(command, { cwd, timeoutMs, env = {}, input } = {}) {
   let timeout;
   let drainTimeout;
   try {
-    child = Bun.spawn(command, {
+    const environment = commandEnvironment(
+      isSterileGitEnvironment(env)
+        ? minimalRemoteGitEnvironment(processEnv(), process.platform, command[0])
+        : processEnv(),
+      env,
+    );
+    const invocation = toolInvocation(command[0], command.slice(1), { cwd, environment });
+    child = Bun.spawn([invocation.executable, ...invocation.args], {
       cwd,
       stdin: input === undefined ? "ignore" : "pipe",
       stdout: "pipe",
       stderr: "pipe",
-      env: commandEnvironment(
-        isSterileGitEnvironment(env)
-          ? minimalRemoteGitEnvironment(
-            processEnv(),
-            globalThis.process.platform,
-            command[0],
-          )
-          : processEnv(),
-        env,
-      ),
+      env: environment,
       detached: globalThis.process.platform !== "win32",
       windowsHide: true,
     });
@@ -385,12 +383,6 @@ function unsafeAmbientGitEnvironmentKey(key) {
   );
 }
 
-function orderedGitExecutableCandidates({ platform, pathExists }) {
-  const installedCandidates = gitExecutableCandidates({ platform })
-    .filter((candidate) => pathExists(candidate));
-  return [...new Set(installedCandidates)];
-}
-
 function isSterileGitEnvironment(environment) {
   return environment?.GIT_CONFIG_NOSYSTEM === "1"
     && environment?.GIT_CONFIG_COUNT === "0"
@@ -404,6 +396,11 @@ export function minimalRemoteGitEnvironment(base, platform, gitExecutable) {
     "HOMEDRIVE",
     "HOMEPATH",
     "HOME",
+    "XDG_DATA_HOME",
+    "ASDF_DATA_DIR",
+    "ASDF_DIR",
+    "MISE_DATA_DIR",
+    "MISE_CONFIG_DIR",
     "LANG",
     "LC_ALL",
     "LOCALAPPDATA",
@@ -427,44 +424,29 @@ export function minimalRemoteGitEnvironment(base, platform, gitExecutable) {
   for (const [key, value] of Object.entries(base)) {
     if (allowed.has(key.toUpperCase()) && typeof value === "string") clean[key] = value;
   }
-  clean.PATH = platform === "win32"
-    ? trustedWindowsChildPath(gitExecutable)
-    : "/usr/bin:/bin:/usr/sbin:/sbin";
+  const pathEntry = Object.entries(base).find(([key]) => key.toUpperCase() === "PATH");
+  clean.PATH = pathEntry?.[1] ?? "";
   return clean;
 }
 
-function trustedWindowsChildPath(gitExecutable) {
-  if (
-    typeof gitExecutable !== "string"
-    || gitExecutable === ""
-    || !win32.isAbsolute(gitExecutable)
-  ) {
-    return "";
-  }
-  const gitDirectory = win32.dirname(gitExecutable);
-  return [...new Set([
-    gitDirectory,
-    win32.join(win32.dirname(gitDirectory), "usr", "bin"),
-  ])].join(";");
-}
 
 async function probeGitExecutable(executable) {
-  const result = await runCommand([executable, "--version"], {
-    timeoutMs: GIT_LOCAL_TIMEOUT_MS,
-  });
-  return result.ok;
+  const result = await runCommand([executable, "--version"], { timeoutMs: GIT_LOCAL_TIMEOUT_MS });
+  return result.ok && classifyToolVersion("git", result.stdout).status === "compatible";
 }
 
 function probeGitExecutableSync(executable) {
   try {
-    const result = Bun.spawnSync([executable, "--version"], {
-      stdout: "ignore",
+    const invocation = toolInvocation(executable, ["--version"], { environment: safeGitCommandEnv() });
+    const result = Bun.spawnSync([invocation.executable, ...invocation.args], {
+      stdout: "pipe",
       stderr: "ignore",
       env: safeGitCommandEnv(),
       windowsHide: true,
       timeout: GIT_LOCAL_TIMEOUT_MS,
     });
-    return result.exitCode === 0;
+    return result.exitCode === 0
+      && classifyToolVersion("git", new TextDecoder().decode(result.stdout)).status === "compatible";
   } catch {
     return false;
   }

@@ -76,3 +76,22 @@ frameworku se sem nepřenášejí).
 | 0140 | Onboarding nové pracovní Mašiny má před Organization materializací jediný top-level toolchain gate. Git, GitHub CLI, Codex CLI, Node a přesně pinovaný Bun nejsou připravené pouhou přítomností binárky ani úspěchem ve zděděné instalační relaci: jejich příkazy musí být dostupné v uživatelském `PATH` nového čistého procesu. Install Core váže Bun, Git a GitHub CLI na skutečně ověřený executable a GitHub stav nevydá za hotový bez `git_protocol=ssh`; běžný Doctor spouští Bun i `bun x`, Git, GitHub CLI, GitHub auth s SSH protokolem, Node a Codex a tool-update lane failuje na chybějící či nečitelném povinném nástroji. Instalační Agent smí oficiální instalaci a nejmenší uživatelskou `PATH` změnu provést jen s explicitním mandátem pro přesné nástroje, zachová existující položky a nezasahuje do system-wide `PATH`, package manageru ani cizích verzí bez dalšího souhlasu. Nový GitHub účet páruje jednou přes `gh auth login --git-protocol ssh`, ale hotový SSH transport dokazuje až exact `git ls-remote`. `lazurio organization install` materializuje Organizaci až po gate a samo systémové nástroje ani `PATH` nevlastní. |
 | 0141 | Builder readiness je explicitní read-only provider gate `lazurio organization install <github-login> --role builder`: GitHub zůstává jedinou access autoritou a manifest pouze mapuje interní Team na ověřené neměnné GitHub Team ID a asserted slug. Gate používá čerstvý přihlášený účet a samostatně dokazuje aktivní Organization membership, Team membership, efektivní WRITE nebo vyšší oprávnění i Teamový WRITE nebo vyšší grant na Organization rootu a všech aktivních repozitářích určených Builderovi. `planned_slot`, restricted/Admin-only repa a role-mismatched sloty Buildera neblokují. Neúplná vazba nebo READ failuje zavřeně před materializací s přesným účtem, Teamem a repem; gate nic na GitHubu nemění a běžný Doctor zůstává síťově nezávislý. |
 | 0142 | Launchpad-owned UI je offline vícejazyčný surface s párovými `cs`/`en` katalogy a stabilními významovými klíči. Locale se vyhodnotí `explicitní preference v prohlížeči → podporovaný browser locale → cs fallback`; přepnutí reloadne stejnou URL bez změny scope a runtime. In-shell Guide používá tutéž autoritu bez druhého switcheru: statická copy žije v katalozích, dlouhý Organization install runbook v explicitně vybraném páru `manual/organization-install.md` / `distribution/locales/en/manual/organization-install.md`; chybějící nebo neshodný zdroj nemá cross-locale fallback. Core/API drží locale-neutral reason kódy a parametry, chování nikdy nevětví podle přeložené věty. Organization-owned názvy, popisy, commit text a technická evidence se nepřekládají. Budoucí Managed Root se skládá z immutable source jako `resident profile × locale` pouze pro Root-owned generované instrukce včetně `AGENTS.md`; namountované Organization repozitáře zůstávají byte-for-byte pod jazykovou autoritou Organizace. |
+
+## Workstation toolchain: PATH compatibility (2026-09-04)
+
+Principál schválil instalaci nezávislou na správci balíčků. Pro localhost
+workstation rozvíjí decision 0140 společný resolver v
+`lazurio/core/toolchain-lib.mjs`: první executable z PATH procesu je autorita
+výběru, jeho funkčnost a kompatibilní verze jsou readiness podmínkou. Pevné
+instalační allowlisty nejsou důkaz provenance a nahrazují se tímto kontraktem
+v Install Core, Doctoru i skutečných Git/GitHub consumerech. Homebrew není
+požadovaná závislost ani důvod odmítnutí existující instalace. Instalátor
+nejprve využije vyhovující nástroje. Nejnovější release zůstává advisory lane
+0135, Bun drží exact 0134 pin (nyní 1.4.1). Codex má zatím capability pouze
+rozpoznatelného stabilního CLI, nikoli vymyšlené minimum odvozené z latest.
+
+Výběr prostředí patří Principálovi; shim může podle cwd měnit skutečný runtime,
+takže cesta ani shodná verze neprokazují identitu binárky. Consumer testy ověřují
+použití vybraného příkazu a zachování PATH pro shimy. Git context/config
+sanitizace, GitHub host, explicitní argv, timeouty, access a immutable hosted
+Resident/Buddy artefaktové piny zůstávají samostatnými hranicemi.

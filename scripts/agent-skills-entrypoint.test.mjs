@@ -6,7 +6,6 @@ import { join } from "node:path";
 import {
   checkAgentSkillsMirror,
   repairAgentSkillsMirror,
-  trustedGitCandidates,
   trustedGitExecutable,
 } from "./agent-skills-entrypoint.mjs";
 import { supportsFileSymlinks } from "./test-platform-capabilities.mjs";
@@ -248,20 +247,6 @@ test("Git kontrakt: toplevel guard nezaměňuje index nadřazeného repozitáře
   expect(state.problems.join(" ")).toContain("nadřazeného repozitáře");
 });
 
-test("Windows per-user instalace Gitu je mezi trusted kandidáty", async () => {
-  const withLocalAppData = trustedGitCandidates("win32", {
-    LOCALAPPDATA: "C:\\Users\\kolega\\AppData\\Local",
-  });
-  expect(withLocalAppData).toContain("C:\\Program Files\\Git\\cmd\\git.exe");
-  expect(withLocalAppData.some((path) => path.includes("AppData\\Local") && path.endsWith("git.exe")))
-    .toBe(true);
-
-  // Relativní nebo chybějící LOCALAPPDATA nesmí vytvořit relativního kandidáta.
-  expect(trustedGitCandidates("win32", { LOCALAPPDATA: "relativni\\cesta" }))
-    .toEqual(trustedGitCandidates("win32", {}));
-  expect(trustedGitCandidates("darwin", {})).toContain("/opt/homebrew/bin/git");
-  expect(trustedGitCandidates("linux", {})).toContain("/usr/local/bin/git");
-});
 
 test("resolution kandidátů najde na hostitelské platformě skutečný git", () => {
   // Běží v CI na Windows i Linuxu, takže pokrývá realpath+stat větev
@@ -269,7 +254,7 @@ test("resolution kandidátů najde na hostitelské platformě skutečný git", (
   const resolved = trustedGitExecutable();
   expect(typeof resolved).toBe("string");
   expect(isAbsolute(resolved)).toBe(true);
-  expect(trustedGitCandidates().length).toBeGreaterThan(0);
+
 });
 
 test("tracked mirror přijme celý adresář skillu včetně references (CAC-0085)", async () => {

@@ -40,7 +40,16 @@ Při publikačním mandátu pro instalační vady přečti také
 4. **Konverguj toolchain z oficiálních zdrojů.** Povinné capability jsou Git,
    GitHub CLI, Node.js, Codex CLI a Bun. S rozšířeným mandátem aktualizuj Git,
    GitHub CLI a Codex na aktuální oficiální stable a Node na podporované
-   aktuální LTS. Bun nastav vždy na exact stabilní verzi z aktuálního clean
+   aktuální LTS. Codex CLI na macOS/Linuxu/Windows instaluj a aktualizuj
+   oficiálním OpenAI standalone instalátorem podle kapitoly „Codex CLI:
+   instalace a aktualizace“ v `manual/organization-install.md` jako doporučenou
+   cestou. Vyhovující instalaci z PATH zachovej bez ohledu na správce či adresář.
+   Homebrew není instalační závislost; neinstaluj jej pouze kvůli Lazuriu. Existující instalaci převeď jen v mandátu pro
+   přesný Codex balíček: nejdřív ověř skutečnou standalone binárku absolutní
+   cestou i přes PATH podle manuálu, potom odstraň původní balíček
+   jeho správcem; zachovej nastavení, přihlášení a historii. Už udělený scoped
+   mandát neopakuj. Doctor nástroje neinstaluje a způsob instalace neprokazuje.
+   Bun nastav vždy na exact stabilní verzi z aktuálního clean
    `lazurio/package.json#packageManager`; upstream latest ani canary není
    autorita. Po dostupnosti exact Bunu registruj source CLI jen podporovaným
    `bun run lazurio -- cli install`. Claude Code je volitelný a kontroluje se

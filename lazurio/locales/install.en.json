@@ -29,12 +29,12 @@
   "reason.git_missing": "Git was not found",
   "reason.git_not_on_path": "Git is installed but the git command is not available on PATH",
   "reason.git_path_identity_mismatch": "the git command on PATH is not the trusted Git installation",
-  "reason.git_unusable": "Git was found but could not be executed",
+  "reason.git_unusable": "Git on PATH is unusable or does not meet the supported version",
   "reason.github_cli_available": "GitHub CLI is available",
   "reason.github_cli_missing": "GitHub CLI was not found",
   "reason.github_cli_not_on_path": "GitHub CLI is installed but the gh command is not available on PATH",
   "reason.github_cli_path_identity_mismatch": "the gh command on PATH is not the trusted GitHub CLI installation",
-  "reason.github_cli_unusable": "GitHub CLI was found but could not be executed",
+  "reason.github_cli_unusable": "GitHub CLI on PATH is unusable or does not meet the supported version",
   "reason.node_runtime_compatible": "Node.js {node_current} satisfies the supported range {node_required}",
   "reason.node_runtime_incompatible": "Node.js {node_current} does not satisfy the supported range {node_required}",
   "reason.node_runtime_missing": "the node command is not available on PATH",
@@ -83,5 +83,11 @@
   "action.root_unrecognized": "Choose an empty folder or an existing Lazurio Root.",
   "action.root_path_unsafe": "Choose a real directory that is not a symlink or file.",
   "action.root_probe_failed": "Give the JSON report to an Agent and check permissions for the selected folder.",
-  "action.probe_failed": "Give the JSON report to an Agent; the other independent checks still completed."
+  "action.probe_failed": "Give the JSON report to an Agent; the other independent checks still completed.",
+  "step.codex": "Codex CLI",
+  "reason.codex_available": "Codex CLI is available and reports a valid version.",
+  "reason.codex_missing": "Codex CLI is not available on PATH.",
+  "reason.codex_unusable": "The codex command did not return a valid Codex CLI version.",
+  "action.codex_missing": "Within the approved installation scope, make Codex CLI available using manual/organization-install.md and verify it from a new session.",
+  "action.codex_unusable": "Check the codex command selected from PATH and repair it within the approved scope using manual/organization-install.md."
 }

@@ -29,12 +29,12 @@
   "reason.git_missing": "Git nebyl nalezen",
   "reason.git_not_on_path": "Git je nainstalovaný, ale příkaz git není dostupný v PATH",
   "reason.git_path_identity_mismatch": "příkaz git v PATH není ověřená instalace Gitu",
-  "reason.git_unusable": "Git byl nalezen, ale nelze jej spustit",
+  "reason.git_unusable": "Git v PATH nefunguje nebo nesplňuje podporovanou verzi",
   "reason.github_cli_available": "GitHub CLI je dostupné",
   "reason.github_cli_missing": "GitHub CLI nebylo nalezeno",
   "reason.github_cli_not_on_path": "GitHub CLI je nainstalované, ale příkaz gh není dostupný v PATH",
   "reason.github_cli_path_identity_mismatch": "příkaz gh v PATH není ověřená instalace GitHub CLI",
-  "reason.github_cli_unusable": "GitHub CLI bylo nalezeno, ale nelze jej spustit",
+  "reason.github_cli_unusable": "GitHub CLI v PATH nefunguje nebo nesplňuje podporovanou verzi",
   "reason.node_runtime_compatible": "Node.js {node_current} odpovídá podporovanému rozsahu {node_required}",
   "reason.node_runtime_incompatible": "Node.js {node_current} neodpovídá podporovanému rozsahu {node_required}",
   "reason.node_runtime_missing": "příkaz node není dostupný v PATH",
@@ -83,5 +83,11 @@
   "action.root_unrecognized": "Zvol prázdnou složku nebo existující Lazurio Root.",
   "action.root_path_unsafe": "Zvol skutečnou složku, která není symlink ani soubor.",
   "action.root_probe_failed": "Předej JSON report Agentovi a ověř přístupová práva zvolené složky.",
-  "action.probe_failed": "Předej JSON report Agentovi; ostatní nezávislé kontroly doběhly."
+  "action.probe_failed": "Předej JSON report Agentovi; ostatní nezávislé kontroly doběhly.",
+  "step.codex": "Codex CLI",
+  "reason.codex_available": "Codex CLI je dostupný a vrací platnou verzi.",
+  "reason.codex_missing": "Codex CLI není dostupný v PATH.",
+  "reason.codex_unusable": "Příkaz codex nevrátil platnou verzi Codex CLI.",
+  "action.codex_missing": "Ve schváleném instalačním mandátu zpřístupněte Codex CLI podle manual/organization-install.md a ověřte jej z nové relace.",
+  "action.codex_unusable": "Ověřte příkaz codex vybraný z PATH a opravte jej ve schváleném mandátu podle manual/organization-install.md."
 }

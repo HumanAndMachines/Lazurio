@@ -1,15 +1,14 @@
-import { spawnSync } from "node:child_process";
+import { resolveGitExecutableOnPath } from "./toolchain-lib.mjs";
+import { spawnToolSync } from "./tool-invocation-lib.mjs";
 import {
   lstatSync,
   readFileSync,
   realpathSync,
   statSync,
 } from "node:fs";
-import { userInfo } from "node:os";
 import {
   isAbsolute,
   join,
-  posix,
   resolve,
   win32,
 } from "node:path";
@@ -128,195 +127,6 @@ export function normalizeComparableCliPath(path, platform = process.platform) {
   return resolve(path).replace(/[\\/]+$/u, "");
 }
 
-export function trustedGitCandidates(platform = process.platform, {
-  homeDirectory = currentAccountHomeDirectory(),
-} = {}) {
-  if (platform === "darwin") {
-    return [
-      "/usr/bin/git",
-      "/opt/homebrew/bin/git",
-      "/usr/local/bin/git",
-      trustedPosixUserLocalExecutable(homeDirectory, "git"),
-    ].filter(Boolean);
-  }
-  if (platform === "linux") {
-    return [
-      "/usr/bin/git",
-      "/bin/git",
-      "/usr/local/bin/git",
-      trustedPosixUserLocalExecutable(homeDirectory, "git"),
-    ].filter(Boolean);
-  }
-  if (platform !== "win32") return [];
-  return [
-    "C:\\Program Files\\Git\\cmd\\git.exe",
-    "C:\\Program Files\\Git\\bin\\git.exe",
-    "C:\\Program Files (x86)\\Git\\cmd\\git.exe",
-    "C:\\Program Files (x86)\\Git\\bin\\git.exe",
-    trustedWindowsUserLocalExecutable(homeDirectory, "Git", "cmd", "git.exe"),
-    trustedWindowsUserLocalExecutable(homeDirectory, "Git", "bin", "git.exe"),
-    trustedWindowsUserLocalExecutable(homeDirectory, "PortableGit", "cmd", "git.exe"),
-    trustedWindowsUserLocalExecutable(homeDirectory, "PortableGit", "bin", "git.exe"),
-  ].filter(Boolean);
-}
-
-export function trustedGitHubCliCandidates(platform = process.platform, {
-  homeDirectory = currentAccountHomeDirectory(),
-} = {}) {
-  if (platform === "darwin") {
-    return [
-      "/opt/homebrew/bin/gh",
-      "/usr/local/bin/gh",
-      "/usr/bin/gh",
-      trustedPosixUserLocalExecutable(homeDirectory, "gh"),
-    ].filter(Boolean);
-  }
-  if (platform === "linux") {
-    return [
-      "/usr/bin/gh",
-      "/bin/gh",
-      "/usr/local/bin/gh",
-      "/home/linuxbrew/.linuxbrew/bin/gh",
-      trustedPosixUserLocalExecutable(homeDirectory, "gh"),
-    ].filter(Boolean);
-  }
-  if (platform !== "win32") return [];
-  return [
-    "C:\\Program Files\\GitHub CLI\\gh.exe",
-    "C:\\Program Files (x86)\\GitHub CLI\\gh.exe",
-    trustedWindowsUserLocalExecutable(homeDirectory, "GitHub CLI", "bin", "gh.exe"),
-    trustedWindowsUserLocalExecutable(homeDirectory, "GitHub CLI", "gh.exe"),
-  ].filter(Boolean);
-}
-
-export function trustedNodeCandidates(platform = process.platform, {
-  homeDirectory = currentAccountHomeDirectory(),
-  environment = process.env,
-} = {}) {
-  if (platform === "darwin") {
-    return [
-      "/opt/homebrew/bin/node",
-      "/usr/local/bin/node",
-      "/usr/bin/node",
-      trustedPosixUserLocalExecutable(homeDirectory, "node"),
-    ].filter(Boolean);
-  }
-  if (platform === "linux") {
-    return [
-      "/usr/bin/node",
-      "/bin/node",
-      "/usr/local/bin/node",
-      "/home/linuxbrew/.linuxbrew/bin/node",
-      trustedPosixUserLocalExecutable(homeDirectory, "node"),
-    ].filter(Boolean);
-  }
-  if (platform !== "win32") return [];
-  const userNodeRoot = trustedWindowsUserLocalDirectory(homeDirectory, "nodejs");
-  return [
-    "C:\\Program Files\\nodejs\\node.exe",
-    "C:\\Program Files (x86)\\nodejs\\node.exe",
-    trustedWindowsUserLocalExecutable(homeDirectory, "nodejs", "node.exe"),
-    trustedWindowsUserWinGetLink(homeDirectory, "node.exe"),
-    ...trustedVersionedWindowsNodeCandidates(userNodeRoot, environment),
-  ].filter(Boolean);
-}
-
-export function resolveTrustedGitExecutable({
-  platform = process.platform,
-  homeDirectory = currentAccountHomeDirectory(),
-} = {}) {
-  return resolveTrustedExecutable(trustedGitCandidates(platform, { homeDirectory }));
-}
-
-export function resolveTrustedGitHubCliExecutable({
-  platform = process.platform,
-  homeDirectory = currentAccountHomeDirectory(),
-} = {}) {
-  return resolveTrustedExecutable(trustedGitHubCliCandidates(platform, { homeDirectory }));
-}
-
-export function resolveTrustedNodeExecutable({
-  platform = process.platform,
-  homeDirectory = currentAccountHomeDirectory(),
-  environment = process.env,
-} = {}) {
-  return resolveTrustedExecutable(trustedNodeCandidates(platform, { homeDirectory, environment }));
-}
-
-function resolveTrustedExecutable(candidates) {
-  for (const candidate of candidates) {
-    try {
-      const canonicalPath = realpathSync.native(candidate);
-      if (isAbsolute(canonicalPath) && statSync(canonicalPath).isFile()) return canonicalPath;
-    } catch {
-      // Only fixed installation candidates are considered.
-    }
-  }
-  return null;
-}
-
-function trustedPosixUserLocalExecutable(homeDirectory, executable) {
-  return safeHomeDirectory(homeDirectory) && posix.isAbsolute(homeDirectory)
-    ? posix.join(homeDirectory, ".local", "bin", executable)
-    : null;
-}
-
-function trustedWindowsUserLocalExecutable(homeDirectory, ...parts) {
-  const parent = trustedWindowsUserLocalDirectory(homeDirectory, ...parts.slice(0, -1));
-  return parent ? win32.join(parent, parts.at(-1)) : null;
-}
-
-function trustedWindowsUserLocalDirectory(homeDirectory, ...parts) {
-  if (!safeHomeDirectory(homeDirectory) || !win32.isAbsolute(homeDirectory)) return null;
-  return win32.join(homeDirectory, "AppData", "Local", "Programs", ...parts);
-}
-
-function trustedVersionedWindowsNodeCandidates(nodeRoot, environment) {
-  const pathValue = environment?.PATH ?? environment?.Path;
-  if (!nodeRoot || typeof pathValue !== "string" || pathValue.trim() === "") return [];
-  const normalizedRoot = normalizeComparableCliPath(nodeRoot, "win32");
-  const directoryPattern = /^node-v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)-win-(?:x64|arm64)$/u;
-  const candidates = new Map();
-  for (const rawEntry of pathValue.split(";")) {
-    const trimmedEntry = rawEntry.trim();
-    const directory = trimmedEntry.startsWith("\"") && trimmedEntry.endsWith("\"")
-      ? trimmedEntry.slice(1, -1).trim()
-      : trimmedEntry;
-    if (!win32.isAbsolute(directory) || !directoryPattern.test(win32.basename(directory))) continue;
-    if (normalizeComparableCliPath(win32.dirname(directory), "win32") !== normalizedRoot) continue;
-    const executable = win32.join(directory, "node.exe");
-    candidates.set(normalizeComparableCliPath(executable, "win32"), executable);
-  }
-  return [...candidates.values()];
-}
-
-function trustedWindowsUserWinGetLink(homeDirectory, executable) {
-  if (!safeHomeDirectory(homeDirectory) || !win32.isAbsolute(homeDirectory)) return null;
-  return win32.join(
-    homeDirectory,
-    "AppData",
-    "Local",
-    "Microsoft",
-    "WinGet",
-    "Links",
-    executable,
-  );
-}
-
-function safeHomeDirectory(homeDirectory) {
-  return typeof homeDirectory === "string"
-    && homeDirectory !== ""
-    && !/[\u0000\r\n]/u.test(homeDirectory);
-}
-
-function currentAccountHomeDirectory() {
-  try {
-    return userInfo().homedir;
-  } catch {
-    return null;
-  }
-}
-
 function sourceProvenance({
   root,
   marker,
@@ -329,7 +139,7 @@ function sourceProvenance({
     return unresolved(root, "source_metadata_unsafe", "source");
   }
   const executable = gitExecutable === undefined
-    ? resolveTrustedGitExecutable({ platform, environment })
+    ? resolveGitExecutableOnPath({ platform, environment })
     : gitExecutable;
   if (!executable) return unresolved(root, "git_unavailable", "source");
 
@@ -506,7 +316,7 @@ function gitText(runGit, executable, cwd, args, environment, { trim = true } = {
 }
 
 export function runTrustedGitCommandSync({ executable, cwd, args, environment }) {
-  const result = spawnSync(
+  const result = spawnToolSync(
     executable,
     [
       "--no-optional-locks",
@@ -535,7 +345,7 @@ export function runTrustedGitCommandSync({ executable, cwd, args, environment })
 
 export function sanitizedGitEnvironment(environment, platform = process.platform) {
   const result = {};
-  for (const key of ["PATH", "TMPDIR", "TEMP", "TMP", "SystemRoot", "ComSpec", "PATHEXT"]) {
+  for (const key of ["PATH", "Path", "HOME", "USERPROFILE", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "ASDF_DATA_DIR", "ASDF_DIR", "MISE_DATA_DIR", "MISE_CONFIG_DIR", "TMPDIR", "TEMP", "TMP", "SystemRoot", "ComSpec", "PATHEXT"]) {
     if (typeof environment[key] === "string") result[key] = environment[key];
   }
   result.LC_ALL = "C";

@@ -13,6 +13,26 @@ async function readFile(path, encoding) {
   return normalizeLineEndings(await readRawFile(path, encoding));
 }
 
+function cssBlock(source, marker) {
+  const markerIndex = source.indexOf(marker);
+  expect(markerIndex).toBeGreaterThan(-1);
+  const openingBrace = source.indexOf("{", markerIndex);
+  let depth = 0;
+  for (let index = openingBrace; index < source.length; index += 1) {
+    if (source[index] === "{") depth += 1;
+    if (source[index] !== "}") continue;
+    depth -= 1;
+    if (depth === 0) return source.slice(openingBrace + 1, index);
+  }
+  throw new Error(`CSS block is not closed: ${marker}`);
+}
+
+function cssProperty(source, selector, property) {
+  const rule = cssBlock(source, `${selector} {`);
+  const match = rule.match(new RegExp(`${property.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*:\\s*([^;]+);`));
+  return match?.[1]?.trim() ?? null;
+}
+
 test("Launchpad public shell exposes a header space switcher and app cards", async () => {
   const [html, js, css, server, appState] = await Promise.all([
     readFile(join(publicRoot, "index.html"), "utf8"),
@@ -84,6 +104,15 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(html).toContain('href="https://codexbar.app/"');
   expect(html).toContain("Browser Use");
   expect(html).toContain('href="https://browser-use.com/"');
+  expect((html.match(/class="guide-recommendation-visual" aria-hidden="true"/g) ?? []).length).toBe(3);
+  expect(html).toContain("guide-recommendation--wispr");
+  expect(html).toContain("guide-recommendation--codexbar");
+  expect(html).toContain("guide-recommendation--browser-use");
+  expect(cssProperty(css, ".guide-recommendation", "grid-template-columns")).toBe("minmax(190px, 240px) minmax(0, 1fr)");
+  const workspaceBreakpoint = cssBlock(css, "@media (max-width: 900px)");
+  expect(cssProperty(workspaceBreakpoint, ".guide-recommendation", "grid-template-columns")).toBe("minmax(0, 1fr)");
+  expect(cssProperty(workspaceBreakpoint, ".guide-recommendation-visual", "width")).toBe("min(100%, 28rem)");
+  expect(css).toContain(".guide-visual-cursor");
   expect(html).toContain('data-i18n="guide.apps.browserUse.caution"');
   expect(html).toContain('data-i18n="guide.apps.intro"');
   expect(js).toContain("function filterGuideContent(query)");
