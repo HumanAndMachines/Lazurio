@@ -33,12 +33,12 @@ stejného Install Core. Jiná cesta se tiše neadoptuje ani nepřesouvá. Spole�
 postupně ověří platformu, exact Bun runtime z
 `package.json#packageManager`, podporovaný Node.js rozsah z
 `package.json#engines.node`, ověřenou identitu příkazů Bun, Git, GitHub CLI a
-Node.js v `PATH`, přihlášení ke github.com
+Node.js a Codex CLI v `PATH`, přihlášení ke github.com
 a tvar Rootu; chyba jednoho probe nezastaví nezávislé kontroly a výstup nikdy
 neobsahuje stdout ani stderr externího nástroje. JSON zůstává locale-neutral,
 český a anglický terminálový report jsou jen dva rendery stejného výsledku.
 
-Install report `lazurio.install.report.v1` i `lazurio doctor` uvádějí
+Install report `lazurio.install.report.v2` i `lazurio doctor` uvádějí
 aktuální a požadovanou Bun verzi. Odlišný patch, včetně novějšího dosud
 nepromovaného vydání, je `action_required`/Doctor failure: Kolega tak
 nedostane neotestovaný runtime jen proto, že vyšel. První read-only installer
@@ -535,3 +535,11 @@ mimo deklarovanou Organization/Principál boundary.
 
 Launchpad pole „Hledat aplikaci“ zůstává filtrem karet. Search UI ani obecný
 cross-Organization search nejsou součástí tohoto slice.
+
+Install report v2 přidává povinný krok `codex` s důvody `codex_available`,
+`codex_missing` a `codex_unusable`. Kontroluje standardní `codex --version`
+příkazu vybraného z PATH bez přihlášení, upgradu nebo změny konfigurace.
+Existující vyhovující instalace je platná bez ohledu na instalační správce.
+Agent JSON consumer musí číst schema version; v1 schema zůstává historicky
+zachované, ale nový installer vydává v2 s osmi kroky. Zelený version probe
+neprokazuje přihlášení k modelu ani celý onboarding Organizace.

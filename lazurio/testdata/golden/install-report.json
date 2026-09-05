@@ -1,5 +1,5 @@
 {
-  "schema_version": "lazurio.install.report.v1",
+  "schema_version": "lazurio.install.report.v2",
   "mode": "report",
   "status": "action_required",
   "machine": {
@@ -48,6 +48,11 @@
       "reason": "node_runtime_compatible"
     },
     {
+      "id": "codex",
+      "status": "action_required",
+      "reason": "codex_missing"
+    },
+    {
       "id": "github_auth",
       "status": "skipped",
       "reason": "github_cli_unavailable"
@@ -63,7 +68,7 @@
     "counts": {
       "completed": 4,
       "skipped": 1,
-      "action_required": 2,
+      "action_required": 3,
       "failed": 0
     }
   }

@@ -83,5 +83,11 @@
   "action.root_unrecognized": "Zvol prázdnou složku nebo existující Lazurio Root.",
   "action.root_path_unsafe": "Zvol skutečnou složku, která není symlink ani soubor.",
   "action.root_probe_failed": "Předej JSON report Agentovi a ověř přístupová práva zvolené složky.",
-  "action.probe_failed": "Předej JSON report Agentovi; ostatní nezávislé kontroly doběhly."
+  "action.probe_failed": "Předej JSON report Agentovi; ostatní nezávislé kontroly doběhly.",
+  "step.codex": "Codex CLI",
+  "reason.codex_available": "Codex CLI je dostupný a vrací platnou verzi.",
+  "reason.codex_missing": "Codex CLI není dostupný v PATH.",
+  "reason.codex_unusable": "Příkaz codex nevrátil platnou verzi Codex CLI.",
+  "action.codex_missing": "Ve schváleném instalačním mandátu zpřístupněte Codex CLI podle manual/organization-install.md a ověřte jej z nové relace.",
+  "action.codex_unusable": "Ověřte příkaz codex vybraný z PATH a opravte jej ve schváleném mandátu podle manual/organization-install.md."
 }

@@ -83,5 +83,11 @@
   "action.root_unrecognized": "Choose an empty folder or an existing Lazurio Root.",
   "action.root_path_unsafe": "Choose a real directory that is not a symlink or file.",
   "action.root_probe_failed": "Give the JSON report to an Agent and check permissions for the selected folder.",
-  "action.probe_failed": "Give the JSON report to an Agent; the other independent checks still completed."
+  "action.probe_failed": "Give the JSON report to an Agent; the other independent checks still completed.",
+  "step.codex": "Codex CLI",
+  "reason.codex_available": "Codex CLI is available and reports a valid version.",
+  "reason.codex_missing": "Codex CLI is not available on PATH.",
+  "reason.codex_unusable": "The codex command did not return a valid Codex CLI version.",
+  "action.codex_missing": "Within the approved installation scope, make Codex CLI available using manual/organization-install.md and verify it from a new session.",
+  "action.codex_unusable": "Check the codex command selected from PATH and repair it within the approved scope using manual/organization-install.md."
 }

@@ -18,7 +18,7 @@ import {
   resolveExecutableOnPath,
 } from "./toolchain-lib.mjs";
 
-export const LAZURIO_INSTALL_REPORT_SCHEMA = "lazurio.install.report.v1";
+export const LAZURIO_INSTALL_REPORT_SCHEMA = "lazurio.install.report.v2";
 export const INSTALL_MODE = "report";
 export const INSTALL_STEP_IDS = Object.freeze([
   "platform",
@@ -26,6 +26,7 @@ export const INSTALL_STEP_IDS = Object.freeze([
   "git",
   "github_cli",
   "node",
+  "codex",
   "github_auth",
   "root",
 ]);
@@ -85,6 +86,7 @@ const reasonsByStep = Object.freeze({
     "node_runtime_unusable",
     "probe_failed",
   ]),
+  codex: new Set(["codex_available", "codex_missing", "codex_unusable", "probe_failed"]),
   github_auth: new Set(["github_authenticated", "github_login_required", "github_ssh_protocol_required", "github_cli_unavailable", "probe_failed"]),
   root: new Set([
     "root_creation_required",
@@ -205,6 +207,15 @@ export function inspectLazurioInstallation({
     return nodeRuntime.status === "compatible"
       ? completed("node_runtime_compatible")
       : actionRequired("node_runtime_incompatible");
+  }));
+
+  steps.push(boundedProbe("codex", () => {
+    const executable = resolvePathCommand("codex", { environment, platform, cwd: commandCwd });
+    if (!executable) return actionRequired("codex_missing");
+    const result = runCommand({ executable, args: ["--version"], environment, cwd: commandCwd });
+    return result?.status === 0 && classifyToolVersion("codex", result.stdout).status === "compatible"
+      ? completed("codex_available")
+      : failed("codex_unusable");
   }));
 
   steps.push(boundedProbe("github_auth", () => {
