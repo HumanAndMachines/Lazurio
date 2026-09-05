@@ -33,6 +33,7 @@ import {
 } from "./install-output-lib.mjs";
 import { runLaunchpadInstall } from "./launchpad-install-lib.mjs";
 import { runLaunchpadServe } from "./launchpad-serve-lib.mjs";
+import { runOpenConnector } from "./open-connector-lib.mjs";
 import {
   moduleLocationRepairExitCode,
   renderHumanModuleLocationRepair,
@@ -202,6 +203,12 @@ async function run(argv) {
     return report.ok ? 0 : 1;
   }
 
+  if (options.command === "open-connector") {
+    const result = await runOpenConnector({ action: options.operands[0], root: options.root });
+    console.log(JSON.stringify(result, null, 2));
+    return result.ok === false ? 1 : 0;
+  }
+
   if (options.command === "launchpad") {
     return options.launchpadAction === "serve"
       ? runLaunchpadServe({
@@ -312,7 +319,7 @@ function parseArgs(argv) {
       parsed.command = arg;
       continue;
     }
-    if (["search", "launchpad", "cli", "organization", "module", "repair"].includes(parsed.command) && !arg.startsWith("-")) {
+    if (["search", "launchpad", "cli", "organization", "module", "repair", "open-connector"].includes(parsed.command) && !arg.startsWith("-")) {
       parsed.operands.push(arg);
       continue;
     }
@@ -480,6 +487,11 @@ function parseArgs(argv) {
       continue;
     }
     throw new Error(`Neznámý argument '${arg}'.`);
+  }
+  if (parsed.command === "open-connector") {
+    if (parsed.operands.length !== 1 || !['install', 'start', 'stop', 'status', 'configure', 'doctor'].includes(parsed.operands[0])) {
+      throw new Error('open-connector requires install, start, stop, status, configure or doctor.');
+    }
   }
   if (parsed.command === "search") {
     if (parsed.status && parsed.update) {
@@ -756,6 +768,7 @@ function usage() {
     "  lazurio cli install [--json] [--root <cesta>]",
     "  lazurio cli status [--json] [--root <cesta>]",
     "  lazurio launchpad install [--root <cesta>]",
+    "  lazurio open-connector install|start|stop|status|configure|doctor [--json] [--root <cesta>] (macOS pilot)",
     "  lazurio launchpad serve [--organization <slug> | --personalspace] [--root <cesta>]",
     "  lazurio search <dotaz> [--mode exact|lexical|semantic|hybrid] [--scope lazurio] [--limit N] [--json] [--root <cesta>]",
     "  lazurio search --status [--scope lazurio] [--json] [--root <cesta>]",
