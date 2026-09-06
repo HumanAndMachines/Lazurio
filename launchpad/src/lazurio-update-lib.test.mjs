@@ -3006,3 +3006,21 @@ function runGit(cwd, args) {
 function runGitResult(cwd, args) {
   return spawnSync("git", args, { cwd, encoding: "utf8", shell: false });
 }
+
+
+test("declared managed directory-only checkout blocks both Sync and GET readiness", async () => {
+  const root = await mkdtemp(join(tmpdir(), "lazurio-db-first-status-")); cleanup.push(root);
+  const organization = repo("TestCo::root", "organization_root", "TestCo", "root");
+  organization.absolute_path = join(root, "organizations", "TestCo");
+  const parent = repo("TestCo::mission-control", "root_repo", "TestCo", "mission-control");
+  parent.absolute_path = join(organization.absolute_path, "mission-control");
+  parent.slot_path = "mission-control";
+  parent.materialization = "doctor_managed_nested_repo";
+  await mkdir(join(parent.absolute_path, "db"), { recursive: true });
+  const inspectLocalRepo = async () => ({ ok: true, directoryOnly: true, dirtyPaths: [] });
+  expect(await updateManagedRepo(parent, { deps: { inspectLocalRepo } })).toMatchObject({ state: "blocked", reason: "managed_checkout_not_repository" });
+  expect(await readLazurioUpdateStatus({ rootPath: root, deps: {
+    inspectLocalRepo, buildInventory: async () => ({ repos: [organization, parent], warnings: [] }),
+  } })).toMatchObject({ state: "blocked", checked_remote: false, reason: "managed_checkout_not_repository", repo_key: parent.key });
+  expect(await updateManagedRepo({ ...parent, materialization: null }, { deps: { inspectLocalRepo } })).toMatchObject({ state: "current", reason: "directory_only" });
+});

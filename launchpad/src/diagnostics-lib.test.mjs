@@ -3271,3 +3271,44 @@ test("Bun PATH readiness accepts a separate exact-version installation and rejec
     expect(bunPathCheck({ pathExecutable: "/custom/manager/bun", requiredVersion: "1.4.1", run: () => ({ ok: true, stdout }) }).status).toBe(status);
   }
 });
+
+
+async function appReadinessFixture({ managed = false, contract = null } = {}) {
+  const root = await createCompaniesWorkspaceFixture();
+  const organizationRoot = join(root, "organizations/OmegaCo_GEN3");
+  const target = join(organizationRoot, "design-system");
+  await mkdir(target, { recursive: true });
+  await mkdir(join(organizationRoot, "company/colleagues"), { recursive: true });
+  await mkdir(join(organizationRoot, "manual"), { recursive: true });
+  await writeJson(join(organizationRoot, "company.gen3.json"), {
+    organization_generation: "gen3", company: { slug: "OmegaCo", display_name: "OmegaCo", github_org: "OmegaCo" },
+    workspaces: [{ slug: "workspace", default: true }], layers: [{ path: "design-system", kind: "root-docs", ownership: "manual" }],
+  });
+  await writeJson(join(organizationRoot, "modules.manifest.json"), {
+    organization_generation: "gen3", company: "OmegaCo", github_org: "OmegaCo", module_slots: [{
+      path: "design-system", slug: "design-system", space: "root", status: "active", default_access: "expected",
+      materialization: managed ? "doctor_managed_nested_repo" : undefined,
+      git: { url: "git@github.com:OmegaCo/design-system.git", branch: "main" },
+    }],
+  });
+  if (contract) await writeJson(join(target, "lazurio.module.json"), contract);
+  return { root, target, read: () => buildLaunchpadAppsResponse({ companiesRoot: root, launchpadRoot: join(root, "launchpad"), runtimeManager: { appsWithRuntime: async (apps) => apps } }) };
+}
+test("managed app parent with only db is not available merely because its directory exists", async () => {
+  const fixture = await appReadinessFixture({ managed: true });
+  await mkdir(join(fixture.target, "db"));
+  const response = await fixture.read();
+  expect(response.organizations[0].organization_modules[0]).toMatchObject({ status: "quarantined", readiness: { severity: "blocking", reason: "managed_checkout_not_repository" } });
+  expect(response.organizations[0].space_readiness.blocking_slots).toContainEqual(expect.objectContaining({ path: "design-system", reason: "managed_checkout_not_repository" }));
+});
+test("missing declared App blocks readiness but explicit data-only does not", async () => {
+  const fixture = await appReadinessFixture({ contract: {
+    schema_version: "lazurio.module.v1", id: "design-system", company: "OmegaCo", tcp_port_policy: { mode: "none" }, port_leases: [], apps: ["app/package.json"], default_app: "app/package.json",
+  } });
+  const missing = await fixture.read();
+  expect(missing.organizations[0].space_readiness.blocking_slots).toContainEqual(expect.objectContaining({ reason: "declared_app_unavailable" }));
+  await writeJson(join(fixture.target, "lazurio.module.json"), { schema_version: "lazurio.module.v1", id: "design-system", company: "OmegaCo", tcp_port_policy: { mode: "none" }, port_leases: [], apps: [] });
+  const dataOnly = await fixture.read();
+  expect(dataOnly.organizations[0].organization_modules[0].apps.state).toBe("explicit-none");
+  expect(dataOnly.organizations[0].space_readiness.blocking_slots).toEqual([]);
+});
