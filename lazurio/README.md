@@ -379,6 +379,31 @@ Machine + User hodnot, takže funguje i bez odhlášení po WinGet instalaci Bun
 persistentní `PATH` ani vlastní cestu k Bunu přitom nemění. Jejich validace
 rootu, bezpečná výměna, rollback,
 historická migrace a platformní filesystem pravidla se v CLI neduplikují.
+macOS bundle obsahuje nativní universal Mach-O executable pro Apple Silicon
+(`arm64`) i Intel (`x86_64`) a ICNS vytvořený ze stávající kanonické ikony
+`assets/launchpad.svg`. Instalátor jej sestaví pomocí Apple Command Line Tools,
+`sips` a `iconutil`; pokud compiler chybí, skončí před nahrazením aplikace.
+Rosetta se neinstaluje ani nevyžaduje. Po aktualizaci source spusť instalaci
+znovu, aby se již nainstalovaný bundle opravil.
+
+Kliknutí ve Finderu či Docku spustí `Launchpad.command` přímo přes Bash bez
+okna Terminálu. Tentýž human entrypoint dál vlastní Bun a předání Core, který
+server spustí nebo znovu použije a otevře UI. Nativní adaptér zůstává bez oken;
+opakované kliknutí znovu požádá Core o otevření UI, i když první spuštění dál
+běží se serverem. Ukončení této Dock aplikace samo managed server neukončuje.
+Chyba spuštění se zobrazí v nativním dialogu; žádný další locator, port registry
+ani launchd služba nevzniká.
+
+Pro výslovně autorizované lokální ověření instalační opravy lze spustit
+`bash scripts/install-launchpad-macos.sh --review-primary` z review worktree.
+Tento vývojářský přepínač nepřijímá cestu: Git common directory worktree musí
+patřit k fyzickému primárnímu `~/Lazurio` na `main`. Bundle i ikona se sestaví
+z review source, ale uložený runtime root vždy zůstává tento primární checkout;
+worktree není runtime ani persistentní položka `PATH`. Běžné `lazurio launchpad
+install` dál vyžaduje primární checkout. Předchozí app zůstává rollback zálohou.
+Ověření změny zahrnuje skutečné otevření nainstalovaného bundlu, opakovaný Dock
+klik, native architekturu, ikonu a stav Core serveru; samotný HTTP smoke nestačí.
+
 CLI dědí jejich výstup a vrací jejich exit code beze změny. Linux tento
 desktop instalační slice zatím nepodporuje a skončí před mutací čitelnou
 chybou.

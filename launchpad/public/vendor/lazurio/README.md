@@ -18,7 +18,8 @@ stejného kanonického repozitáře, z commitu
 - `favicon.svg` a `favicon.ico` jsou kanonické favicon exporty;
 - `apple-touch-icon.png` je 180px platformní export kanonického
   `profile-light-1024.png` pro použití na světlé ploše;
-- `assets/launchpad.svg` je kanonický `profile-light.svg`;
+- `assets/launchpad.svg` je kanonický `profile-light.svg`; macOS instalátor z něj
+  přes systémové `sips` a `iconutil` odvozuje `Launchpad.icns` pro Dock app;
 - `assets/launchpad.ico` je platformní balení kanonického
   `profile-light-1024.png` pro Windows zástupce na světlé ploše.
 

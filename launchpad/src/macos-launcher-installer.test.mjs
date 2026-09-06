@@ -6,8 +6,16 @@ import { dirname, join } from "node:path";
 
 const sourceRoot = join(import.meta.dirname, "..", "..");
 const tempRoots = [];
-const macTest = process.platform === "darwin" ? test : test.skip;
-const lockfTest = process.platform === "darwin" && existsSync("/usr/bin/lockf") ? test : test.skip;
+// Real universal compilation, icon rendering, signing and repeated rollback
+// installations can exceed the shared runner's 10s unit-test budget. Keep the
+// allowance scoped to this native integration suite, including its lock tests.
+const nativeInstallTimeoutMs = 60_000;
+const macTest = (name, body) => (process.platform === "darwin" ? test : test.skip)(
+  name, body, nativeInstallTimeoutMs,
+);
+const lockfTest = (name, body) => (process.platform === "darwin" && existsSync("/usr/bin/lockf") ? test : test.skip)(
+  name, body, nativeInstallTimeoutMs,
+);
 
 afterEach(async () => {
   await Promise.all(tempRoots.splice(0).map((path) => rm(path, { recursive: true, force: true })));
@@ -18,6 +26,9 @@ async function fixtureRoot({ git = "directory" } = {}) {
   tempRoots.push(root);
   await mkdir(join(root, "scripts", "macos"), { recursive: true });
   await mkdir(join(root, "launchpad"), { recursive: true });
+  await mkdir(join(root, "assets"), { recursive: true });
+  await copyFile(join(sourceRoot, "assets", "launchpad.svg"), join(root, "assets", "launchpad.svg"));
+  await copyFile(join(sourceRoot, "scripts", "macos", "launchpad-main.m"), join(root, "scripts", "macos", "launchpad-main.m"));
   await copyFile(join(sourceRoot, "scripts", "install-launchpad-macos.sh"), join(root, "scripts", "install-launchpad-macos.sh"));
   await copyFile(join(sourceRoot, "scripts", "macos", "launchpad-bootstrap.sh"), join(root, "scripts", "macos", "launchpad-bootstrap.sh"));
   await copyFile(join(sourceRoot, "scripts", "macos", "replace-app.jxa"), join(root, "scripts", "macos", "replace-app.jxa"));
@@ -105,7 +116,7 @@ async function waitForChildCommand(parentPid, commandName, timeoutMs = 2_000) {
   return false;
 }
 
-test("macOS app is only a per-user bootstrap to the canonical human launcher", async () => {
+test("macOS native app delegates to the canonical human launcher without Terminal", async () => {
   const installer = await readFile(join(sourceRoot, "scripts", "install-launchpad-macos.sh"), "utf8");
   const bootstrap = await readFile(join(sourceRoot, "scripts", "macos", "launchpad-bootstrap.sh"), "utf8");
   const replacement = await readFile(join(sourceRoot, "scripts", "macos", "replace-app.jxa"), "utf8");
@@ -119,7 +130,8 @@ test("macOS app is only a per-user bootstrap to the canonical human launcher", a
   expect(bootstrap).not.toContain("HumanAndMachine Launchpad");
   expect(installer).toContain("lazurio.launchpad.macos_install.v1");
   expect(bootstrap).toContain('LAUNCHER="$CANONICAL_ROOT/Launchpad.command"');
-  expect(bootstrap).toContain('/usr/bin/open "$LAUNCHER"');
+  expect(bootstrap).toContain('exec /bin/bash "$LAUNCHER"');
+  expect(bootstrap).not.toContain('/usr/bin/open "$LAUNCHER"');
   expect(bootstrap).not.toContain("launchctl");
   expect(installer).not.toContain("launchctl");
   expect(bootstrap).not.toContain("LaunchAgent");
@@ -158,6 +170,13 @@ macTest("default install succeeds without admin rights and produces a verified u
   const bundleId = spawn(["/usr/bin/plutil", "-extract", "CFBundleIdentifier", "raw", join(app, "Contents", "Info.plist")]);
   expect(bundleId.exitCode).toBe(0);
   expect(bundleId.stdout.toString().trim()).toBe("com.lazurio.launchpad");
+  const executable = join(app, "Contents", "MacOS", "launchpad-bootstrap");
+  const architectures = spawn(["/usr/bin/lipo", executable, "-verify_arch", "arm64", "x86_64"]);
+  expect(architectures.exitCode, architectures.stderr.toString()).toBe(0);
+  expect(spawn(["/usr/bin/file", executable]).stdout.toString()).toContain("Mach-O universal binary");
+  const icon = join(app, "Contents", "Resources", "Launchpad.icns");
+  expect((await readFile(icon)).subarray(0, 4).toString()).toBe("icns");
+  expect(spawn(["/usr/bin/plutil", "-extract", "CFBundleIconFile", "raw", join(app, "Contents", "Info.plist")]).stdout.toString().trim()).toBe("Launchpad.icns");
   const signature = spawn(["/usr/bin/codesign", "--verify", "--deep", "--strict", app]);
   expect(signature.exitCode, signature.stderr.toString()).toBe(0);
 });
@@ -510,4 +529,46 @@ macTest("a symlinked user Applications directory cannot redirect installation", 
   expect(result.stderr.toString()).toContain("Applications adresář nesmí být symlink");
   expect(await readFile(join(external, "sentinel"), "utf8")).toBe("keep\n");
   expect(await Bun.file(join(external, "Lazurio Launchpad.app")).exists()).toBe(false);
+});
+
+macTest("bundled bootstrap executes the exact root entrypoint and propagates failure without a terminal", async () => {
+  const root = await fixtureRoot();
+  const app = join(root, "fixture.app");
+  const resources = join(app, "Contents", "Resources");
+  await mkdir(resources, { recursive: true });
+  await copyFile(join(sourceRoot, "scripts/macos/launchpad-bootstrap.sh"), join(resources, "launchpad-bootstrap.sh"));
+  await writeFile(join(resources, "root-path"), `${await realpath(root)}\n`);
+  await writeFile(join(resources, "install-schema"), "lazurio.launchpad.macos_install.v1\n");
+  await writeFile(join(root, "Launchpad.command"), '#!/bin/bash\nprintf "CORE_ENTRY_EXECUTED\\n"\nexit 37\n');
+  const result = spawn(["/bin/bash", join(resources, "launchpad-bootstrap.sh")], { stdin: "ignore" });
+  expect(result.stdout.toString()).toBe("CORE_ENTRY_EXECUTED\n");
+  expect(result.exitCode).toBe(37);
+  await writeFile(join(resources, "root-path"), `${root}\n/unexpected\n`);
+  const invalid = spawn(["/bin/bash", join(resources, "launchpad-bootstrap.sh")], { stdin: "ignore" });
+  expect(invalid.exitCode).toBe(1);
+  expect(invalid.stderr.toString()).toContain("víceřádkový");
+  expect(invalid.stdout.toString()).toBe("");
+});
+
+macTest("review install binds a linked source only to its own primary ~/Lazurio", async () => {
+  const fixture = await fixtureRoot();
+  const home = await mkdtemp(join(tmpdir(), "lazurio-macos-review-home-"));
+  tempRoots.push(home);
+  const root = join(home, "Lazurio");
+  expect(spawn(["/bin/mv", fixture, root]).exitCode).toBe(0);
+  expect(spawn(["git", "-C", root, "branch", "-M", "main"]).exitCode).toBe(0);
+  expect(spawn(["git", "-C", root, "add", "."]).exitCode).toBe(0);
+  expect(spawn(["git", "-C", root, "-c", "user.email=fixture@example.invalid", "-c", "user.name=Fixture", "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", "commit", "--quiet", "-m", "fixture"]).exitCode).toBe(0);
+  const linked = join(home, "review");
+  expect(spawn(["git", "-C", root, "worktree", "add", "--quiet", "-b", "review", linked]).exitCode).toBe(0);
+  const result = spawn(["/bin/bash", join(linked, "scripts/install-launchpad-macos.sh"), "--review-primary"], { env: { ...process.env, HOME: home } });
+  expect(result.exitCode, result.stderr.toString()).toBe(0);
+  expect(await readFile(join(home, "Applications/Lazurio Launchpad.app/Contents/Resources/root-path"), "utf8")).toBe(`${await realpath(root)}\n`);
+  const otherHome = await mkdtemp(join(tmpdir(), "lazurio-macos-other-home-"));
+  tempRoots.push(otherHome);
+  await mkdir(join(otherHome, "Lazurio", ".git"), { recursive: true });
+  const refused = spawn(["/bin/bash", join(linked, "scripts/install-launchpad-macos.sh"), "--review-primary"], { env: { ...process.env, HOME: otherHome } });
+  expect(refused.exitCode).not.toBe(0);
+  expect(refused.stderr.toString()).toContain("review source nepatří");
+  expect(existsSync(join(otherHome, "Applications"))).toBe(false);
 });

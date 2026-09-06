@@ -3,6 +3,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 SOURCE_DIR="$ROOT/scripts/macos"
+SOURCE_ROOT="$ROOT"
+REVIEW_PRIMARY=false
 APP_NAME="Lazurio Launchpad.app"
 INSTALL_SCHEMA="lazurio.launchpad.macos_install.v1"
 LEGACY_SYSTEM_APP="/Applications/Launchpad GEN3.app"
@@ -135,7 +137,9 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
   exit 1
 fi
 
-if [[ $# -ne 0 ]]; then
+if [[ $# -eq 1 && "$1" == "--review-primary" ]]; then
+  REVIEW_PRIMARY=true
+elif [[ $# -ne 0 ]]; then
   show_error "instalátor nepřijímá vlastní cíl; aplikace vždy patří do uživatelského ~/Applications."
   exit 1
 fi
@@ -145,18 +149,6 @@ if [[ "$ROOT" == *$'\n'* ]]; then
   exit 1
 fi
 
-if [[ ! -f "$ROOT/package.json" || -L "$ROOT/package.json" ]]; then
-  show_error "root není úplný; chybí bezpečný $ROOT/package.json."
-  exit 1
-fi
-if [[ ! -d "$ROOT/launchpad" || -L "$ROOT/launchpad" ]]; then
-  show_error "root není úplný; chybí bezpečný $ROOT/launchpad."
-  exit 1
-fi
-if [[ ! -f "$ROOT/Launchpad.command" || -L "$ROOT/Launchpad.command" || ! -x "$ROOT/Launchpad.command" ]]; then
-  show_error "root launcher není spustitelný: $ROOT/Launchpad.command"
-  exit 1
-fi
 
 GIT_MARKER="$ROOT/.git"
 if [[ -L "$GIT_MARKER" ]]; then
@@ -183,11 +175,39 @@ if [[ -f "$GIT_MARKER" ]]; then
   fi
   GIT_DIR="$(cd "$GIT_DIR" && pwd -P)"
   if [[ -f "$GIT_DIR/commondir" ]]; then
-    show_error "instalace z linked worktree je zakázaná; spusť ji z primárního Lazurio checkoutu."
-    exit 1
+    if [[ "$REVIEW_PRIMARY" != true ]]; then
+      show_error "instalace z linked worktree je zakázaná; pro explicitní lokální review použij --review-primary."
+      exit 1
+    fi
+    # This is a review build seam, not an arbitrary runtime-root picker. Only
+    # the source's own physical primary checkout at ~/Lazurio can be installed.
+    COMMON_DIR="$(git -C "$SOURCE_ROOT" rev-parse --path-format=absolute --git-common-dir)"
+    COMMON_DIR="$(cd "$COMMON_DIR" && pwd -P)"
+    if [[ -z "${HOME:-}" || ! -d "$HOME/Lazurio" || -L "$HOME/Lazurio" || -L "$HOME/Lazurio/.git" || ! -d "$HOME/Lazurio/.git" ]]; then
+      show_error "review vyžaduje fyzický primární checkout ~/Lazurio."
+      exit 1
+    fi
+    ROOT="$(cd "$HOME/Lazurio" && pwd -P)"
+    if [[ "$COMMON_DIR" != "$ROOT/.git" || "$(git -C "$ROOT" rev-parse --show-toplevel)" != "$ROOT" || "$(git -C "$ROOT" symbolic-ref --short HEAD)" != main ]]; then
+      show_error "review source nepatří k primárnímu ~/Lazurio na main."
+      exit 1
+    fi
   fi
 elif [[ -e "$GIT_MARKER" && ! -d "$GIT_MARKER" ]]; then
   show_error "Git metadata rootu mají nepodporovaný typ."
+  exit 1
+fi
+
+if [[ ! -f "$ROOT/package.json" || -L "$ROOT/package.json" ]]; then
+  show_error "root není úplný; chybí bezpečný $ROOT/package.json."
+  exit 1
+fi
+if [[ ! -d "$ROOT/launchpad" || -L "$ROOT/launchpad" ]]; then
+  show_error "root není úplný; chybí bezpečný $ROOT/launchpad."
+  exit 1
+fi
+if [[ ! -f "$ROOT/Launchpad.command" || -L "$ROOT/Launchpad.command" || ! -x "$ROOT/Launchpad.command" ]]; then
+  show_error "root launcher není spustitelný: $ROOT/Launchpad.command"
   exit 1
 fi
 
@@ -272,18 +292,41 @@ elif [[ -d "$LEGACY_SYSTEM_APP" ]]; then
   fi
 fi
 
-for source in launchpad-bootstrap.sh replace-app.jxa Info.plist; do
+for source in launchpad-main.m launchpad-bootstrap.sh replace-app.jxa Info.plist; do
   if [[ ! -f "$SOURCE_DIR/$source" || -L "$SOURCE_DIR/$source" ]]; then
     show_error "chybí bezpečný zdroj macOS launcheru: $SOURCE_DIR/$source"
     exit 1
   fi
 done
 
+if [[ ! -f "$SOURCE_ROOT/assets/launchpad.svg" || -L "$SOURCE_ROOT/assets/launchpad.svg" ]]; then
+  show_error "chybí kanonická ikona assets/launchpad.svg."
+  exit 1
+fi
+if ! /usr/bin/xcrun --find clang >/dev/null 2>&1; then
+  show_error "nativní launcher vyžaduje Apple Command Line Tools (xcode-select --install)."
+  exit 1
+fi
+
 BUILD_ROOT="$(mktemp -d "$TARGET_PARENT/.lazurio-launchpad-install.XXXXXX")"
 BUILD_APP="$BUILD_ROOT/$APP_NAME"
 PREVIOUS_BACKUP_PATH="$BUILD_ROOT/previous-rollback"
 mkdir -p "$BUILD_APP/Contents/MacOS" "$BUILD_APP/Contents/Resources"
-cp "$SOURCE_DIR/launchpad-bootstrap.sh" "$BUILD_APP/Contents/MacOS/launchpad-bootstrap"
+/usr/bin/xcrun clang -fobjc-arc -framework Cocoa -arch arm64 -arch x86_64 \
+  -mmacosx-version-min=12.0 -Wall -Wextra -Werror \
+  "$SOURCE_DIR/launchpad-main.m" -o "$BUILD_APP/Contents/MacOS/launchpad-bootstrap"
+/usr/bin/lipo "$BUILD_APP/Contents/MacOS/launchpad-bootstrap" -verify_arch arm64 x86_64
+cp "$SOURCE_DIR/launchpad-bootstrap.sh" "$BUILD_APP/Contents/Resources/launchpad-bootstrap.sh"
+# Package the existing canonical Lazurio profile export, without redrawing it.
+ICONSET="$BUILD_ROOT/Launchpad.iconset"
+mkdir "$ICONSET"
+/usr/bin/sips -s format png "$SOURCE_ROOT/assets/launchpad.svg" --out "$BUILD_ROOT/icon.png" >/dev/null
+for size in 16 32 128 256 512; do
+  /usr/bin/sips -z "$size" "$size" "$BUILD_ROOT/icon.png" --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
+  double=$((size * 2))
+  /usr/bin/sips -z "$double" "$double" "$BUILD_ROOT/icon.png" --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
+done
+/usr/bin/iconutil -c icns "$ICONSET" -o "$BUILD_APP/Contents/Resources/Launchpad.icns"
 cp "$SOURCE_DIR/Info.plist" "$BUILD_APP/Contents/Info.plist"
 chmod +x "$BUILD_APP/Contents/MacOS/launchpad-bootstrap"
 printf '%s\n' "$ROOT" > "$BUILD_APP/Contents/Resources/root-path"
