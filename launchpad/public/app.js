@@ -1832,8 +1832,8 @@ function renderSpaceSwitcher() {
   spaces.append(...options);
 
   const profile = state.personalspace?.profile;
-  const profileNodes = profile ? [spaceProfileCard(profile), profileSettingsItem()] : [];
-  if (state.openConnector?.installed) profileNodes.push(openConnectorSettingsItem());
+  const profileNodes = profile ? [spaceProfileCard(profile)] : [];
+  profileNodes.push(profileSettingsItem());
   if (profileNodes.length > 0 && options.length > 0) {
     const divider = document.createElement("div");
     divider.className = "space-switcher-divider";
@@ -1891,11 +1891,58 @@ function profileInitials(name) {
 }
 
 function profileSettingsItem() {
-  const item = document.createElement("div");
-  item.className = "space-profile-settings is-disabled";
-  item.setAttribute("aria-disabled", "true");
+  const item = document.createElement("button");
+  item.type = "button";
+  item.className = "space-profile-settings";
+  item.setAttribute("aria-haspopup", "dialog");
   item.append(settingsIcon(), document.createTextNode(t("profile.settings")));
+  item.addEventListener("click", showSettings);
   return item;
+}
+
+function showSettings() {
+  if (document.getElementById("launchpadSettings")) return;
+  state.spaceMenuOpen = false;
+  applySpaceMenuState();
+  const dialog = document.createElement("dialog");
+  dialog.id = "launchpadSettings";
+  dialog.className = "launchpad-settings";
+  dialog.setAttribute("aria-labelledby", "launchpadSettingsTitle");
+  const header = document.createElement("header");
+  const title = document.createElement("h2");
+  title.id = "launchpadSettingsTitle";
+  title.textContent = t("profile.settings");
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "btn btn-secondary btn-sm";
+  close.textContent = t("common.close");
+  close.addEventListener("click", () => dialog.close());
+  header.append(title, close);
+  const section = document.createElement("section");
+  const heading = document.createElement("h3");
+  heading.textContent = t("settings.connections");
+  const description = document.createElement("p");
+  description.textContent = t("settings.connectionsDescription");
+  section.append(heading, description);
+  if (state.openConnector?.installed) {
+    section.append(openConnectorSettingsItem());
+    if (!state.openConnector.running) {
+      const hint = document.createElement("p");
+      hint.textContent = t("profile.openConnectorStopped");
+      section.append(hint);
+    }
+  } else {
+    const unavailable = document.createElement("p");
+    unavailable.textContent = t("settings.connectionsUnavailable");
+    section.append(unavailable);
+  }
+  dialog.append(header, section);
+  dialog.addEventListener("close", () => {
+    dialog.remove();
+    elements.spaceSwitcherButton.focus();
+  }, { once: true });
+  document.body.append(dialog);
+  dialog.showModal();
 }
 
 function openConnectorSettingsItem() {

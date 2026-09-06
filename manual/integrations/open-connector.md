@@ -13,8 +13,11 @@ token policies. Launchpad must link to the upstream console; it is not an
 MCP proxy or a second provider configuration store. Agents connect directly
 to `/mcp`. Named connections are orientation labels, not organization ACLs.
 
-The DEV Launchpad's space menu links to the upstream console when the local
-Mac installation is running. Its trusted-local GET endpoint exposes only
+The DEV Launchpad's space menu has one Settings entry. Its native dialog
+contains Machine connections and links to the upstream console when the local
+Mac installation is running. It creates no settings store or provider forms;
+Escape or Close dismisses it and restores focus to the space switcher.
+Its trusted-local GET endpoint exposes only
 installation/running flags and a validated console URL, never credentials,
 custody paths or account inventory. A stopped installation shows the CLI
 `lazurio open-connector configure` hint; reading Launchpad does not start or

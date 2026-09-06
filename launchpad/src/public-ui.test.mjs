@@ -231,8 +231,14 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(profileBlock).toContain("name.href = profile.settings_url");
   expect(profileBlock).toContain('name.target = "_blank"');
   const settingsBlock = js.slice(js.indexOf("function profileSettingsItem"), js.indexOf("function openConnectorSettingsItem"));
-  expect(settingsBlock).toContain('document.createElement("div")');
-  expect(settingsBlock).toContain('item.setAttribute("aria-disabled", "true")');
+  expect(settingsBlock).toContain('document.createElement("button")');
+  expect(settingsBlock).toContain('item.addEventListener("click", showSettings)');
+  expect(settingsBlock).toContain('document.createElement("dialog")');
+  expect(settingsBlock).toContain('dialog.showModal()');
+  expect(settingsBlock).toContain('dialog.remove()');
+  expect(settingsBlock).toContain('elements.spaceSwitcherButton.focus()');
+  expect(settingsBlock).toContain('section.append(openConnectorSettingsItem())');
+  expect(js).not.toContain('profileNodes.push(openConnectorSettingsItem())');
   expect(settingsBlock).not.toContain(".href");
   expect(server).toContain("organizationLogoCandidates");
   expect(server).toContain("launchpad/app/v1/web/launchpad-icon.png");
