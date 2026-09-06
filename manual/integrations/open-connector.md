@@ -160,6 +160,63 @@ the upstream console. No passwords, authorization URLs or codes enter chat.
 The provider page's action scopes are not necessarily the requested subset.
 Gmail settings actions requiring additional scopes are intentionally excluded.
 
+## ClickUp: official MCP versus the API provider
+
+Do not confuse the existing `clickup` provider with ClickUp's official remote
+MCP server. The former calls ClickUp API v2/v3 and accepts a personal API token
+or a separately registered OAuth application. The latter uses
+`https://mcp.clickup.com/mcp` and its own OAuth onboarding; it does not require
+the user to manually create an API application in the ClickUp dashboard.
+[Official ClickUp MCP](https://developer.clickup.com/docs/connect-an-ai-assistant-to-clickups-mcp-server),
+[ClickUp API authentication](https://developer.clickup.com/docs/authentication).
+
+For the pilot, prefer the official MCP OAuth route, but keep the current
+direct harness connection until OpenConnector supports and verifies that
+route. Do not create an API application merely to replace an already-working
+official MCP connection. This is a temporary, explicit migration exception,
+not a claim that all harness traffic already goes through OpenConnector.
+
+On 2026-09-06, both the pinned v1.5.0 source and upstream main
+`1455f050839b349041a0c357b58899e14a0f91ad` lacked a `clickup_mcp` provider.
+OpenConnector already has a shared MCP client and provider-specific remote
+MCP integrations, including `sunsama_mcp` with public-client registration and
+PKCE. These are extension seams, not a generic UI for attaching arbitrary
+OAuth MCP servers. Prefer an upstream-owned ClickUp MCP provider using those
+seams over a separate Lazurio MCP proxy, a second credential store or custom
+Launchpad OAuth forms. Keep the existing ClickUp API provider's contract intact.
+
+Public discovery at the official ClickUp MCP endpoint advertises the
+authorization server `https://mcp.clickup.com`, public dynamic registration
+at `/oauth/register`, PKCE S256, `read` and `write` scopes, and resource
+indicator support. Discovery is not evidence of a successful authorization:
+registration, callback acceptance, code exchange, token lifetime and the
+granted workspace set still need live verification. In particular, validate
+resource handling across authorization and token exchange rather than
+assuming that copying another provider's URLs is sufficient.
+
+Acceptance for an upstream-compatible extension:
+
+- Use OpenConnector's existing OAuth state, PKCE, encrypted credentials,
+  named connections, console and shared MCP transport. Do not extract or
+  reuse another harness's OAuth token or register a second normal runtime.
+- Show the requested `read`/`write` scopes and let the Principal select the
+  intended Workspaces and consent. Verify the resulting authorized set;
+  local aliases are not proof of provider-side workspace isolation.
+- Expose named, reviewed actions so runtime-token policies can distinguish
+  reads from writes. An unrestricted `call_tool` must not bypass those
+  policies. Newly added upstream tools are not automatically authorized.
+- Verify the exact account/workspace on read operations, a specifically
+  selected reversible scratch write, rejected actions, restart persistence,
+  revocation and fresh execution from both harnesses. Handle rate limits
+  without retrying ambiguous writes or hiding partial failure.
+- Ship only after DEV verification and reviewed, pinned promotion. Until
+  then preserve the direct official MCP connection and report the gap.
+
+ClickUp currently documents lower daily MCP allowances for Workspaces without
+the Everything AI add-on. Do not purchase an add-on or switch to a different
+authentication path to evade that limit; include quota behavior in acceptance.
+Consult the official MCP documentation for current limits before rollout.
+
 ## Acceptance and open work
 
 Do not call an installed runtime a completed integration. Required acceptance:
@@ -169,9 +226,16 @@ reversible draft/scratch write smoke; server restart and fresh harness smoke.
 Never send mail, share files, modify existing business documents or delete the
 smoke artifacts without a specific publication/cleanup instruction.
 
-Still required before release: complete Google acceptance, client attachment,
-Launchpad entry, platform lifecycle expansion, partial-install/concurrency
-hardening, public fork and reviewed promotion. Neon management is supported
+The current Mac pilot passed 24 post-restart Google read checks across twelve
+connections and two separately scoped harness tokens. Reversible Gmail draft,
+Drive file and Sheets cell write/readback checks passed using one authorized
+scratch account; the artifacts were retained without sending or sharing.
+Token-level checks do not replace fresh model execution from both harnesses.
+
+Still required before release: complete fresh-harness acceptance, durable Google
+OAuth rollout, client-attachment lifecycle, Launchpad entry, platform lifecycle
+expansion, public fork and reviewed promotion. ClickUp official MCP support is
+pending the acceptance above. Neon management is supported
 upstream but SQL execution is not; keep the existing SQL-capable integration.
 
 ### Direct client authentication
