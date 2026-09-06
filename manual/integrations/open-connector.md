@@ -249,6 +249,37 @@ through their own header helpers with only that read tool exposed for the
 smoke. This proves fresh discovery, not complete workflow parity for every
 provider or model-generated write.
 
+Fresh Codex and Claude Opus 5 sessions subsequently executed Gmail profile,
+Drive identity and scratch Sheets reads with only OpenConnector configured.
+Gmail and Drive identities matched, and both read the expected scratch row.
+An initially incorrect sheet title produced an explicit provider error in both
+harnesses; reading actual spreadsheet metadata and correcting the range fixed
+the test without changing the sheet. Never infer a localized default tab name.
+One Codex retry reported no available tool without invoking MCP; it was not
+counted as a pass. An explicit tool-discovery prompt then produced a completed
+MCP call. This remains a discovery/reliability acceptance concern, not evidence
+of uninterrupted fresh-session readiness. Persistent approval settings were
+unchanged; execution permission was limited to the bounded smoke processes.
+
+### Whole-harness migration gate
+
+Inventory active manual MCP servers, project configuration and installed
+plugins separately. A provider with the same name is not proof of feature
+parity. Classify each required workflow as verified, missing implementation,
+waiting for authorization, deliberately retired, or explicitly retained direct.
+Only disable a direct integration after its replacement passes real calls in
+both harnesses, restart acceptance and an explicit rollback check. Preserve its
+configuration and credential custody until the owner accepts the migration.
+
+The inspected upstream MCP client supports HTTP/SSE provider integrations,
+not arbitrary local STDIO process supervision. Local memory, browser execution
+and other harness-native tools therefore cannot be assumed to move behind the
+connector. Building generic passthrough would be a separate architectural
+decision, with tool-policy, credential, process-lifecycle and upstream-drift
+implications. Do not add it silently to satisfy a single-endpoint claim.
+The pilot is not accepted as a complete replacement while required workflows
+still rely on direct servers or cloud plugins.
+
 Still required before release: complete fresh-harness acceptance, durable Google
 OAuth rollout, fresh-client credential onboarding and wider attachment acceptance, platform lifecycle
 expansion and reviewed fork promotion. ClickUp official MCP support is
