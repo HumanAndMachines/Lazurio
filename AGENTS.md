@@ -444,6 +444,9 @@ Root upravuj jen když se mění:
   spolupráce výše, opakovatelnou metodu skill
   `.agents/skills/architecture-shaping/SKILL.md` a trvalé rozhodnutí 0132
   (`manual/decision-register.md`)
+- Cross-Organization closeout cizích PR Organization Adminem (inventura,
+  jeden PR = jeden worktree, merge/close/předání ownerovi) — skill
+  `.agents/skills/admin-pr-sweep/SKILL.md`
 - Worktree create/inventura/předávka/cleanup — consumer skill
   `.agents/skills/worktree-development-discipline/SKILL.md`; autorita
   decision 0049 (`manual/decision-register.md`) a shaping manual
