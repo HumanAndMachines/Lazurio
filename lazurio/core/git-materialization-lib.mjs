@@ -1,3 +1,4 @@
+import { inspectRepositoryContainer, publishRepositoryContainer } from "./repository-container-publisher-lib.mjs";
 import { lstat, mkdir, mkdtemp, readdir, realpath, rename, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
@@ -11,6 +12,7 @@ import {
 export const GIT_CHECKOUT_MATERIALIZATION_MODES = Object.freeze([
   "organization-root",
   "nested-repo",
+  "repository-db-parent",
 ]);
 export const GIT_CLONE_TIMEOUT_MS = 10 * 60_000;
 export const GIT_FETCH_TIMEOUT_MS = 20_000;
@@ -82,7 +84,11 @@ export async function materializeGitCheckout({
     beforeStage = async () => {},
     beforePublish = async () => {},
   } = deps;
-  if (await pathEntry(absoluteTargetPath)) return targetExists();
+  let existingContainer = null;
+  if (mode === "repository-db-parent") {
+    try { existingContainer = inspectRepositoryContainer(absoluteTargetPath, "db"); }
+    catch (error) { return verificationFailure("Existující db-first parent nelze bezpečně doplnit.", error.code); }
+  } else if (await pathEntry(absoluteTargetPath)) return targetExists();
 
   const targetParent = dirname(absoluteTargetPath);
   const targetName = basename(absoluteTargetPath);
@@ -91,6 +97,12 @@ export async function materializeGitCheckout({
   let stagingName = null;
   let expectedParentRealPath = null;
   let materialized = false;
+  // Every existing-container failure retains the stage, including failures
+  // during verification: concurrent content may already have appeared there.
+  const preserveStaging = Boolean(existingContainer);
+  const recoveryFailure = (result) => existingContainer && stagingPath
+    ? { ...result, message: `${result.message} Recovery checkout zůstal v ${stagingPath}.` }
+    : result;
   try {
     transportCwd = await makeTempDirectory(join(tmpdir(), "lazurio-git-transport-"));
     const source = await run(
@@ -165,7 +177,7 @@ export async function materializeGitCheckout({
       targetPath: stagingPath,
     });
     if (!stagingBoundary.ok) {
-      return boundaryFailure("Dočasný checkout nevznikl ve fyzicky ověřeném rodiči targetu.");
+      return recoveryFailure(boundaryFailure("Dočasný checkout nevznikl ve fyzicky ověřeném rodiči targetu."));
     }
     // Keep the bandwidth-saving single-branch bootstrap, but leave every
     // published checkout with the canonical all-branches fetch contract that
@@ -184,7 +196,7 @@ export async function materializeGitCheckout({
       },
     );
     if (!fetchConfiguration.ok) {
-      return verificationFailure("Naklonovaný checkout nemá kanonický fetch kontrakt.");
+      return recoveryFailure(verificationFailure("Naklonovaný checkout nemá kanonický fetch kontrakt."));
     }
     const gitVerification = await verifyClonedCheckout({
       path: stagingPath,
@@ -192,7 +204,7 @@ export async function materializeGitCheckout({
       remote,
       run,
     });
-    if (!gitVerification.ok) return gitVerification;
+    if (!gitVerification.ok) return recoveryFailure(gitVerification);
 
     const policyVerification = await verifyStaged({
       mode,
@@ -202,10 +214,10 @@ export async function materializeGitCheckout({
       head: gitVerification.head,
     });
     if (!policyVerification?.ok) {
-      return verificationFailure(
+      return recoveryFailure(verificationFailure(
         policyVerification?.message ?? "Naklonovaný checkout neprošel ověřením identity vlastníka.",
         policyVerification?.code,
-      );
+      ));
     }
 
     await beforePublish({
@@ -219,8 +231,14 @@ export async function materializeGitCheckout({
       expectedParentRealPath,
       stagingName,
       targetName,
+      existingContainer,
     });
     if (!publication?.ok) {
+      if (existingContainer) {
+        // The recovery publisher may have quarantined a concurrent edit. Never
+        // recursively discard that evidence after a failed multi-item publish.
+        return recoveryFailure(verificationFailure("Doplnění app-code selhalo; db zůstalo na místě.", publication?.code ?? "repository_parent_recovery_failed"));
+      }
       if (publication?.code === "target_exists") return targetExists();
       if (publication?.code === "target_case_collision") return targetCollision();
       if (["parent_identity_changed", "staging_identity_changed"].includes(publication?.code)) {
@@ -241,12 +259,12 @@ export async function materializeGitCheckout({
       remote,
     };
   } catch (error) {
-    return cloneFailure({ error: error instanceof Error ? error.message : String(error) });
+    return recoveryFailure(cloneFailure({ error: error instanceof Error ? error.message : String(error) }));
   } finally {
     if (transportCwd) {
       await remove(transportCwd, { recursive: true, force: true }).catch(() => {});
     }
-    if (stagingName && expectedParentRealPath && !materialized) {
+    if (stagingName && expectedParentRealPath && !materialized && !preserveStaging) {
       try {
         await discard({
           targetParent,
@@ -279,6 +297,7 @@ async function publishCheckoutWithPinnedParent({
   expectedParentRealPath,
   stagingName,
   targetName,
+  existingContainer = null,
 }) {
   return runPinnedCheckoutOperation({
     mode: PINNED_CHECKOUT_PUBLISH_MODE,
@@ -287,6 +306,7 @@ async function publishCheckoutWithPinnedParent({
       expected_parent_real_path: expectedParentRealPath,
       staging_name: stagingName,
       target_name: targetName,
+      existing_container: existingContainer,
     },
     failureCode: "publisher_failed",
   });
@@ -353,6 +373,16 @@ export async function runPinnedCheckoutPublisher() {
     const stagingRealPath = await realpath(payload.staging_name);
     if (!isSamePath(dirname(stagingRealPath), actualParentRealPath)) {
       throw pinnedPublisherError("staging_identity_changed");
+    }
+    if (payload.existing_container) {
+      const result = await publishRepositoryContainer({
+        stagingPath: join(actualParentRealPath, payload.staging_name),
+        targetPath: join(actualParentRealPath, payload.target_name),
+        expectedContainer: payload.existing_container,
+      });
+      process.stdout.write(`${JSON.stringify(result)}\n`);
+      if (!result.ok) process.exitCode = 1;
+      return;
     }
     if (await lstatOrNull(payload.target_name)) {
       throw pinnedPublisherError("target_exists");

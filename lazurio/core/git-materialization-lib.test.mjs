@@ -27,9 +27,36 @@ import {
 } from "./git-materialization-lib.mjs";
 
 const roots = [];
+const macTest = process.platform === "darwin" ? test : test.skip;
 
 afterAll(async () => {
   await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })));
+});
+
+macTest("db-first verification failure preserves its stage and concurrent contents", async () => {
+  const fixture = await fixtureRemote();
+  const target = join(fixture.root, "organizations", "DbFirst_GEN3");
+  await mkdir(join(target, "db"), { recursive: true });
+  const dbBefore = await lstat(join(target, "db"));
+  let stagedPath;
+  let discarded = false;
+  const result = await materializeGitCheckout({
+    mode: "repository-db-parent", boundaryRoot: fixture.root, targetPath: target,
+    remote: fixture.remote, branch: "main", run: runGit,
+    runPinnedChild: runGitInPinnedTemporaryChild, remoteEnvironment: safeGitRemoteEnv(),
+    deps: { discard: async () => { discarded = true; } },
+    verifyStaged: async ({ path }) => {
+      stagedPath = path;
+      await writeFile(join(path, "concurrent.txt"), "preserve");
+      return { ok: false, code: "injected_verification_failure" };
+    },
+  });
+  expect(result).toMatchObject({ ok: false, code: "injected_verification_failure" });
+  expect(result.message).toContain(stagedPath);
+  expect(discarded).toBe(false);
+  expect(existsSync(join(stagedPath, "concurrent.txt"))).toBe(true);
+  expect(await readdir(target)).toEqual(["db"]);
+  expect((await lstat(join(target, "db"))).ino).toBe(dbBefore.ino);
 });
 
 test("one Core primitive publishes an Organization root only after owner verification", async () => {

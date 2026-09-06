@@ -1,6 +1,6 @@
 import { afterAll, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile, lstat, readFile, readdir, symlink, rename } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -750,3 +750,76 @@ function providerFixture({ calls, documents, privateRepository = false }) {
 function ok(value) {
   return { status: 0, stdout: JSON.stringify(value), stderr: "" };
 }
+
+
+async function dbFirstFixture() {
+  const fixture = await organizationRepositoryDbFixture();
+  const parentRemote = join(fixture.root, "app-remote.git");
+  const appSource = join(fixture.root, "app-source");
+  await initGitRepo(appSource, { remotePath: parentRemote });
+  await writeFile(join(appSource, ".gitignore"), "db/\n");
+  await mkdir(join(appSource, "app"));
+  await writeFile(join(appSource, "app/main.mjs"), "app code\n");
+  await runGit(["add", "."], { cwd: appSource });
+  await runGit(["commit", "-m", "App fixture"], { cwd: appSource });
+  await runGit(["push", "origin", "main"], { cwd: appSource });
+  const organizationRoot = join(fixture.root, "organizations", `${login}_GEN3`);
+  expect((await runGit(["clone", "--branch", "main", fixture.remote, organizationRoot], { cwd: fixture.root })).ok).toBe(true);
+  await runGit(["remote", "set-url", "origin", fakeHttpsRemote], { cwd: organizationRoot });
+  const parent = join(organizationRoot, "mission-control");
+  const db = join(parent, "db");
+  await mkdir(parent);
+  await runGit(["clone", "--branch", "v3", fixture.dataRemote, db], { cwd: fixture.root });
+  await runGit(["remote", "set-url", "origin", fakeDataRemote], { cwd: db });
+  const remotes = new Map([[fakeHttpsRemote, fixture.remote], [fakeDataRemote, fixture.dataRemote], [`git@github.com:${login}/mission-control.git`, parentRemote]]);
+  const deps = {
+    observe: async () => sourceObservation({ documents: fixture.documents }), reobserve: async () => ({ ok: true }),
+    runGit: translatedGitRunner(fixture.remote, remotes), runPinnedChild: translatedPinnedGitRunner(fixture.remote, remotes),
+    runUpdate: async () => existsSync(join(parent, ".git")) ? updateReport("current") : {
+      ...updateReport("blocked"), results: [{ state: "blocked", reason: "managed_checkout_not_repository", repo_key: `${login}::mission-control`, repo_kind: "root_repo", module: "mission-control", path: `organizations/${login}_GEN3/mission-control` }],
+    },
+  };
+  return { ...fixture, deps, parent, db, appSource };
+}
+const macRecoveryTest = process.platform === "darwin" ? test : test.skip;
+macRecoveryTest("db-first Organization install preserves canonical data and converges idempotently", async () => {
+  const fixture = await dbFirstFixture();
+  const before = await lstat(fixture.db);
+  const head = (await runGit(["rev-parse", "HEAD"], { cwd: fixture.db })).stdout;
+  const contents = await readFile(join(fixture.db, "repository-db.yaml"), "utf8");
+  const first = await installOrganization({ rootPath: fixture.root, githubLogin: login, deps: fixture.deps });
+  expect(first, JSON.stringify(first)).toMatchObject({ state: "updated", ok: true });
+  expect(first.convergence.results).toContainEqual(expect.objectContaining({ reason: "repository_parent_recovered" }));
+  expect(await readFile(join(fixture.parent, "app/main.mjs"), "utf8")).toBe("app code\n");
+  expect((await lstat(fixture.db)).ino).toBe(before.ino);
+  expect((await runGit(["rev-parse", "HEAD"], { cwd: fixture.db })).stdout).toBe(head);
+  expect(await readFile(join(fixture.db, "repository-db.yaml"), "utf8")).toBe(contents);
+  expect((await runGit(["remote", "get-url", "origin"], { cwd: fixture.db })).stdout).toBe(fakeDataRemote);
+  expect((await runGit(["branch", "--show-current"], { cwd: fixture.db })).stdout).toBe("v3");
+  expect(await installOrganization({ rootPath: fixture.root, githubLogin: login, deps: fixture.deps })).toMatchObject({ state: "current", ok: true });
+});
+for (const fault of ["dirty", "foreign", "branch", "unknown", "symlink", "tracked-db", "not-ignored"]) macRecoveryTest(`db-first recovery rejects ${fault} without app publication`, async () => {
+  const fixture = await dbFirstFixture();
+  if (fault === "symlink") { await rename(fixture.db, join(fixture.root, "db-original")); await symlink(join(fixture.root, "db-original"), fixture.db); }
+  if (fault === "dirty") await writeFile(join(fixture.db, "local-note"), "keep");
+  if (fault === "foreign") await runGit(["remote", "set-url", "origin", "git@github.com:Other/data.git"], { cwd: fixture.db });
+  if (fault === "branch") await runGit(["checkout", "-b", "local-work"], { cwd: fixture.db });
+  if (fault === "unknown") await writeFile(join(fixture.parent, "local-note"), "keep");
+  if (fault === "tracked-db" || fault === "not-ignored") {
+    await writeFile(join(fixture.appSource, ".gitignore"), "");
+    if (fault === "tracked-db") { await mkdir(join(fixture.appSource, "db")); await writeFile(join(fixture.appSource, "db/foreign"), "never publish"); }
+    await runGit(["add", "."], { cwd: fixture.appSource });
+    await runGit(["commit", "-m", "Fault fixture"], { cwd: fixture.appSource });
+    await runGit(["push", "origin", "main"], { cwd: fixture.appSource });
+  }
+  const before = await lstat(fixture.db);
+  const head = (await runGit(["rev-parse", "HEAD"], { cwd: fixture.db })).stdout;
+  const report = await installOrganization({ rootPath: fixture.root, githubLogin: login, deps: fixture.deps });
+  expect(report).toMatchObject({ state: "blocked", ok: false });
+  expect(report.target.state).toBe("current");
+  expect(report.convergence.results).toContainEqual(expect.objectContaining({ reason: fault === "symlink" ? "repository_db_target_unsafe" : fault === "unknown" ? "repository_parent_recovery_content_unknown" : ["tracked-db", "not-ignored"].includes(fault) ? "repository_parent_db_preservation_failed" : "repository_db_identity_mismatch" }));
+  expect(existsSync(join(fixture.parent, ".git"))).toBe(false);
+  expect(existsSync(join(fixture.parent, "app"))).toBe(false);
+  expect((await lstat(fixture.db)).ino).toBe(before.ino);
+  expect((await runGit(["rev-parse", "HEAD"], { cwd: fixture.db })).stdout).toBe(head);
+});
