@@ -8,11 +8,6 @@ EXPECTED_SCHEMA="lazurio.launchpad.macos_install.v1"
 
 fail() {
   local message="$1"
-  /usr/bin/osascript \
-    -e 'on run argv' \
-    -e 'display dialog (item 1 of argv) buttons {"OK"} default button "OK" with icon stop' \
-    -e 'end run' \
-    "$message" >/dev/null 2>&1 || true
   printf '%s\n' "$message" >&2
   exit 1
 }
@@ -45,8 +40,6 @@ if [[ ! -f "$LAUNCHER" || -L "$LAUNCHER" || ! -x "$LAUNCHER" ]]; then
   fail "V nakonfigurovaném Lazurio rootu chybí spustitelný Launchpad.command."
 fi
 
-# Launchpad.command je jediný human launcher. Ten resolveuje Bun a předává
-# start/reuse/upgrade rozhodnutí Core-owned Server identity handshaku.
-if ! /usr/bin/open "$LAUNCHER"; then
-  fail "Launchpad.command se nepodařilo otevřít. Spusť ho přímo z Lazurio rootu a zkontroluj chybu."
-fi
+# Execute the canonical human entrypoint directly. Opening a .command document
+# asks LaunchServices for Terminal; a native app must never do that.
+exec /bin/bash "$LAUNCHER"
