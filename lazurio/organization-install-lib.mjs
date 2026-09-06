@@ -216,6 +216,17 @@ export async function installOrganization({
 
   const organization = organizationInventoryDescriptor({ source, organizationPath });
   let convergence = await runUpdate({ rootPath: absoluteRoot, organizations: [organization] });
+  const blockers = (convergence.results ?? []).filter((result) => result.state === "blocked");
+  if (convergence.state !== "blocked" || (blockers.length > 0 && blockers.every((result) => result.reason === "managed_checkout_not_repository"))) {
+    const recovered = await recoverOrganizationRepositoryDbParent({
+      rootPath: absoluteRoot, organizationPath, organizationRoot: targetPath,
+      source, platform, run, runPinnedChild, materializationDeps: deps.materialization,
+    });
+    if (recovered?.state === "updated") {
+      convergence = appendConvergenceResults(await runUpdate({ rootPath: absoluteRoot, organizations: [organization] }), [recovered]);
+    } else if (recovered) convergence = appendConvergenceResults(convergence, [recovered]);
+  }
+
   if (convergence.state !== "blocked") {
     const repositoryDbResults = await installRepositoryDb({
       rootPath: absoluteRoot,
@@ -248,6 +259,57 @@ export async function installOrganization({
     throw new Error("Organization install produced an invalid report.");
   }
   return report;
+}
+
+async function recoverOrganizationRepositoryDbParent({ rootPath, organizationPath, organizationRoot, source, platform, run, runPinnedChild, materializationDeps }) {
+  const resolution = readOrganizationRoot({ organizationRoot });
+  if (!["current", "legacy", "transition"].includes(resolution.state) || resolution.resource_count !== 1) return null;
+  const inventory = resolution.resource?.repository_inventory ?? [];
+  const slots = inventory.filter((slot) => slot.path === "mission-control/db" && slot.status === "active" && slot.materialization === "repository_db_mount");
+  if (slots.length !== 1) return null;
+  const slot = slots[0];
+  const parentPath = join(organizationRoot, "mission-control");
+  const parent = await lstatOrNull(parentPath);
+  if (!parent || await lstatOrNull(join(parentPath, ".git")) || !await lstatOrNull(join(parentPath, "db"))) return null;
+  const identity = { ...repositoryDbResultIdentity({ source, organizationPath, slot }), repo_key: `${source.organization.login}::mission-control`, module: "mission-control", path: `${organizationPath}/mission-control` };
+  const fail = (reason, message) => ({ ...identity, state: "blocked", reason, message });
+  if (platform !== "darwin") return fail("repository_parent_recovery_platform_unsupported", "Doplnění app-code nad existujícím db je zatím podporované jen na macOS; obsah zůstal nedotčený.");
+  const validation = await validateOrganizationRepositoryDbMount({ rootPath, organizationPath, organizationRoot, source, slot, repositoryInventory: inventory, run, requireParentCheckout: false });
+  if (!validation.ok) return fail(validation.code, validation.message);
+  const parentSlot = validation.parentSlot;
+  const parentRemote = organizationSlotRepositoryRemote(parentSlot, "mission-control");
+  const parentBranch = organizationSlotRepositoryBranch(parentSlot, "mission-control");
+  const coordinate = githubRepositoryCoordinate(parentRemote);
+  if (!coordinate || coordinate.owner.toLowerCase() !== source.organization.login.toLowerCase() || coordinate.repository !== parentSlot.slug || parentBranch !== "main") {
+    return fail("repository_parent_manifest_invalid", "Parent app-code nemá přesné Organization-owned repo a main branch.");
+  }
+  const contents = await readdir(parentPath);
+  if (contents.length !== 1 || contents[0] !== "db") return fail("repository_parent_recovery_content_unknown", "Db-first parent obsahuje neznámé položky; instalace nic nepřepsala.");
+  const data = await verifyExistingRepositoryDbCheckout({ targetPath: validation.targetPath, remote: validation.remote, branch: validation.branch, run });
+  if (!data.ok) return fail(data.code, data.message);
+  const before = await lstat(validation.targetPath);
+  const result = await materializeGitCheckout({
+    mode: "repository-db-parent", boundaryRoot: organizationRoot, targetPath: parentPath,
+    remote: parentRemote, branch: parentBranch, run, runPinnedChild,
+    remoteEnvironment: safeGitRemoteEnv(platform), deps: materializationDeps,
+    verifyStaged: async ({ path }) => {
+      const [ignore, tracked, liveData] = await Promise.all([
+        run(["check-ignore", "--quiet", "--no-index", "--", "db/"], { cwd: path, timeoutMs: GIT_LOCAL_TIMEOUT_MS }),
+        run(["ls-files", "--", "db"], { cwd: path, timeoutMs: GIT_LOCAL_TIMEOUT_MS }),
+        verifyExistingRepositoryDbCheckout({ targetPath: validation.targetPath, remote: validation.remote, branch: validation.branch, run }),
+      ]);
+      const current = await lstat(validation.targetPath);
+      if (!ignore.ok || !tracked.ok || tracked.stdout || !liveData.ok || liveData.head !== data.head || current.dev !== before.dev || current.ino !== before.ino) {
+        return providerFailure("repository_parent_db_preservation_failed", "Staged app-code neignoruje db nebo se canonical db změnilo; nic se nepublikovalo.");
+      }
+      return { ok: true };
+    },
+  });
+  if (!result.ok) return fail(result.code, result.message);
+  const after = await lstat(validation.targetPath);
+  const verified = await verifyExistingRepositoryDbCheckout({ targetPath: validation.targetPath, remote: validation.remote, branch: validation.branch, run });
+  if (!verified.ok || verified.head !== data.head || before.dev !== after.dev || before.ino !== after.ino) return fail("repository_db_changed_during_parent_recovery", "App-code byl doplněn, ale souběžná změna db vyžaduje kontrolu; data nebyla přepisována.");
+  return { ...identity, state: "updated", reason: "repository_parent_recovered", message: "App-code byl doplněn nad existujícím db; canonical cesta, inode i HEAD dat zůstaly zachované.", head: result.head, actions: ["materialize"] };
 }
 
 // General `lazurio update` intentionally excludes repository-db checkouts from
@@ -445,6 +507,7 @@ async function validateOrganizationRepositoryDbMount({
   slot,
   repositoryInventory,
   run,
+  requireParentCheckout = true,
 }) {
   const path = normalizeOrganizationSlotPath(slot?.path);
   const remote = organizationSlotRepositoryRemote(slot, path);
@@ -502,6 +565,7 @@ async function validateOrganizationRepositoryDbMount({
       "Repository-db parent repozitář ještě není bezpečně materializovaný.",
     );
   }
+  if (!requireParentCheckout) return { ok: true, targetPath, remote, branch, parentPath, parentSlot };
   const [parentRoot, ignore, ref] = await Promise.all([
     run(["rev-parse", "--show-toplevel"], {
       cwd: parentPath,

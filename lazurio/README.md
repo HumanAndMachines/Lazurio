@@ -568,3 +568,36 @@ Existující vyhovující instalace je platná bez ohledu na instalační správ
 Agent JSON consumer musí číst schema version; v1 schema zůstává historicky
 zachované, ale nový installer vydává v2 s osmi kroky. Zelený version probe
 neprokazuje přihlášení k modelu ani celý onboarding Organizace.
+
+
+### Obnova db-first Mission Control instalace
+
+Pouhá složka deklarovaného `doctor_managed_nested_repo` není hotový checkout.
+Update i lokální status ji hlásí jako `managed_checkout_not_repository`;
+Doctor ověřuje vlastní Git root a očekávané App projekce. Chybějící nebo
+neplatná deklarovaná App blokuje readiness. Výslovné `apps: []` dál označuje
+legitimní datový modul a nevyžaduje runtime.
+
+Explicitní `lazurio organization install <github-login>` na macOS umí doplnit
+chybějící Mission Control app-code, pokud parent obsahuje právě existující
+canonical `db/`. Nejprve projde standardní immutable Organization identitou,
+manifesty a ověřením db jako vlastního čistého Git checkoutu s přesným originem
+na deklarované `v3`. Neznámé soubory, symlink, cizí nebo dirty db blokují zápis.
+Staged clone musí patřit deklarovanému Organization app repu, ignorovat `db/`
+a nesmí pod ním trackovat obsah.
+
+Core přes systémové macOS JXA volá `renameatx_np(RENAME_EXCL)` nad otevřenými
+directory descriptors: app položky se přesouvají bez přepsání existujícího
+cíle, `.git` se aktivuje poslední. Canonical db zůstává na stejné cestě/inode
+se stejným HEADem a není kopírované, přesunuté, fetchované ani publikované.
+Při selhání se vlastní app položky vracejí do stagingu; souběžně změněný obsah
+se nemaže. Změněné `.git` zůstává v karanténě, aby neaktivovalo neúplnou app.
+Staging se zachovává i při selhání ověření před publikací. Recovery checkout a přesný blocker zůstávají v reportu k ověření
+Agentem. Pád procesu může zanechat neaktivované app položky: další běh je
+nepřebírá odhadem, ale vrátí blocker. Po úspěchu může zůstat prázdný staging
+adresář; nevzniká nový runtime stav ani druhý databázový locator.
+
+Tato úzká obnova existujícího db-first parentu je zatím **macOS-only**.
+Jiné platformy vrátí `repository_parent_recovery_platform_unsupported` před
+mutací tohoto parentu. Standardní instalace do chybějícího cíle i validní již
+existující checkouty dál používají původní přenositelný postup.

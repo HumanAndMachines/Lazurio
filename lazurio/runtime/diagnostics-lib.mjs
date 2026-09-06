@@ -1,5 +1,5 @@
 import { toolInvocation } from "../core/tool-invocation-lib.mjs";
-import { existsSync, lstatSync, readFileSync } from "fs";
+import { existsSync, lstatSync, readFileSync, realpathSync } from "fs";
 import { readFile, readdir } from "fs/promises";
 import { basename, dirname, isAbsolute, join, posix, relative } from "path";
 import {
@@ -1263,6 +1263,22 @@ async function attachModuleApplicationProjections({ companiesRoot, organizations
         apps,
       });
       slot.apps = projection;
+      const unavailable = projection.state === "unresolved-invalid"
+        || (projection.state === "declared" && projection.items.some((item) => item.declared && item.record !== "valid"))
+        || (slot.materialization === "doctor_managed_nested_repo" && projection.state === "legacy-missing" && projection.items.length === 0);
+      if (unavailable && slot.readiness?.severity !== "blocking") {
+        const reason = projection.state === "legacy-missing" ? "app_runtime_not_declared" : "declared_app_unavailable";
+        const message = projection.state === "legacy-missing"
+          ? "Modul nemá deklarovaný ani dostupný runtime. Doplň app kontrakt, nebo výslovně deklaruj apps: [] pro datový modul."
+          : "Deklarovaná App nemá platný dostupný runtime. Oprav její kontrakt nebo chybějící package.";
+        slot.readiness = { severity: "blocking", reason, message };
+        organization.space_readiness.blocking_slots.push({
+          slug: slot.slug, path: slot.path, status: slot.status,
+          scope: "module_slot", reason, message,
+          found_path: null, expected_path: null, next_action: null,
+        });
+      }
+
 
       const appProjection = {
         state: projection.state,
@@ -1963,6 +1979,26 @@ function moduleSlotWithReadiness(
       },
     };
   }
+  if (slot.materialization === "doctor_managed_nested_repo" && existsSync(join(organizationRoot, slot.path))) {
+    const target = join(organizationRoot, slot.path);
+    let ownRoot = false;
+    try {
+      const entry = lstatSync(target);
+      const gitRoot = entry.isDirectory() && !entry.isSymbolicLink()
+        ? runGit(["rev-parse", "--show-toplevel"], target)
+        : null;
+      ownRoot = gitRoot?.ok && realpathSync(gitRoot.stdout) === realpathSync(target);
+    } catch {}
+    if (!ownRoot) return {
+      ...slot,
+      status: "quarantined",
+      readiness: {
+        severity: "blocking",
+        reason: "managed_checkout_not_repository",
+        message: "Deklarovaný managed checkout nemá vlastní Git root; samotný adresář nestačí. Spusť explicitní Organization instalaci.",
+      },
+    };
+  }
   const status = moduleSlotStatus(organizationRoot, slot);
   return {
     ...slot,
@@ -2155,6 +2191,7 @@ function normalizeModuleSlot(slot) {
     default_access: slot.default_access ?? null,
     required_roles: Array.isArray(slot.required_roles) ? slot.required_roles : [],
     classification: slot.classification ?? null,
+    materialization: slot.materialization ?? null,
     launchpad_port: slot.launchpad_port ?? null,
     repo,
     branch,

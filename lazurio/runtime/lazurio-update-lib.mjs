@@ -342,7 +342,10 @@ export async function readLazurioUpdateStatus({ rootPath, deps = {} } = {}) {
         codex: local.codex !== false,
       }));
     }
-    if (local.directoryOnly) continue;
+    if (local.directoryOnly) {
+      if (isAutoMaterializationCandidate(repo)) return localStatusReport(unmaterializedCheckoutResult(repo));
+      continue;
+    }
     if (local.operation) {
       return localStatusReport(blockedResult(repo, `${local.operation}_in_progress`, {
         detail: `V repozitáři probíhá ${local.operation}.`,
@@ -409,13 +412,21 @@ async function safeUpdateRepo(repo, context) {
   }
 }
 
+function unmaterializedCheckoutResult(repo) {
+  return blockedResult(repo, "managed_checkout_not_repository", {
+    detail: "Deklarovaný managed checkout obsahuje jen adresář bez vlastního Git rootu. Explicitní Organization instalace musí bezpečně doplnit app-code; existující obsah zůstal nedotčený.",
+  });
+}
+
 export async function updateManagedRepo(repo, context = {}) {
   const run = context.deps?.runGit ?? runGit;
   const inspect = context.deps?.inspectLocalRepo ?? inspectLocalRepo;
   const checkpoint = context.checkpoint ?? (() => {});
   const block = (reason, options = {}) => blockedResult(repo, reason, options);
   let local = await inspect(repo, { ...context.deps, runGit: run });
-  if (local.directoryOnly) return currentResult(repo, "directory_only", "Adresář nemá vlastní Git checkout; Lazurio ho přeskočilo.");
+  if (local.directoryOnly) return isAutoMaterializationCandidate(repo)
+    ? unmaterializedCheckoutResult(repo)
+    : currentResult(repo, "directory_only", "Adresář nemá vlastní Git checkout; Lazurio ho přeskočilo.");
   if (!local.ok) {
     return block(local.reason ?? "git_inspection_failed", {
       detail: local.detail,
