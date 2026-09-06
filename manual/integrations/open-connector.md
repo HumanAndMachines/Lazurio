@@ -250,12 +250,46 @@ smoke. This proves fresh discovery, not complete workflow parity for every
 provider or model-generated write.
 
 Still required before release: complete fresh-harness acceptance, durable Google
-OAuth rollout, client-attachment lifecycle, platform lifecycle
+OAuth rollout, fresh-client credential onboarding and wider attachment acceptance, platform lifecycle
 expansion and reviewed fork promotion. ClickUp official MCP support is
 pending the acceptance above. Neon management is supported
 upstream but SQL execution is not; keep the existing SQL-capable integration.
 
 ### Direct client authentication
+
+Once an explicitly scoped, separate runtime credential is provisioned in each
+client's custody file, run:
+
+```bash
+lazurio open-connector attach codex --json
+lazurio open-connector attach claude --json
+```
+
+This macOS pilot adapter writes only the user-level server definition and
+required execution approval policy. It returns `attached` or `already_attached`;
+repeat invocation preserves an already-compatible configuration byte for byte.
+It does not mint tokens, select accounts, broaden grants, start the service or
+remove existing MCP integrations. Missing client credentials require explicit
+OpenConnector Access configuration and local custody provisioning first; fresh
+credential onboarding is not automated by `attach`.
+
+Codex uses its existing `CODEX_HOME` when supplied. A custom
+`CLAUDE_CONFIG_DIR` is currently rejected rather than guessing its layout.
+Conflicting endpoints, helpers or unsafe Codex execution overrides fail without
+replacing the server. Invalid configuration and symlink paths fail closed.
+Claude's `ask` rule is written before adding the server, so a partially failed
+attachment can leave a harmless restrictive rule; rerun after reconciliation.
+Config files are atomically replaced with mode 0600, with a pre-write change
+check. The local attach lock serializes Lazurio writers, not unrelated harness
+processes: avoid editing the same configuration concurrently. Do not delete a
+leftover lock until its recorded process is reconciled.
+
+After a new attachment, start a fresh harness session and verify a real MCP
+call. `already_attached` proves configuration compatibility, not token validity
+or provider availability. To roll back an attachment, remove only the named
+`lazurio_open_connector` server with the harness's own MCP management command;
+keep credential custody and unrelated servers. Token revocation is a separate,
+explicit operation in OpenConnector.
 
 The pilot uses the officially supported local HTTP-header helper contract:
 Codex `http_headers_helper` and Claude Code `headersHelper`. Each invokes the

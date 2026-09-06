@@ -67,6 +67,111 @@ export function clientHeaders(client) {
   return { Authorization: `Bearer ${credential.token}` };
 }
 
+const clientServerName = 'lazurio_open_connector';
+const executeAsk = `mcp__${clientServerName}__execute_action`;
+const shellQuote = value => `'${value.replaceAll("'", "'\\''")}'`;
+
+// Pure adapter: preserve unrelated config and never replace an existing server.
+export function planClientAttachment(client, { source = '', settings = '', executable = process.execPath, worker = join(connectorState(), 'worker.mjs') } = {}) {
+  if (!['codex', 'claude'].includes(client)) throw new Error('Attach requires codex or claude.');
+  if (![executable, worker].every(path => isAbsolute(path) && !/[\r\n\0]/.test(path))) throw new Error('Invalid helper path.');
+  const helper = `${shellQuote(executable)} ${shellQuote(worker)} --headers ${client}`;
+  const helpers = [helper];
+  // Accept the safe, already-installed pilot spelling without rewriting it.
+  if (client === 'claude' && /^[\w/.-]+$/.test(executable) && /^[\w/ .-]+$/.test(worker)) {
+    helpers.push(`${executable} "${worker}" --headers claude`);
+  }
+  const url = 'http://localhost:24321/mcp';
+  const conflict = () => { throw new Error('Existing OpenConnector client configuration conflicts; nothing was overwritten. Reconcile it explicitly.'); };
+  if (client === 'codex') {
+    let parsed;
+    try { parsed = Bun.TOML.parse(source); } catch { throw new Error('Invalid Codex TOML; nothing was changed.'); }
+    const existing = parsed.mcp_servers?.[clientServerName];
+    if (existing) {
+      if (existing.url !== url || !helpers.includes(existing.http_headers_helper) ||
+          existing.default_tools_approval_mode !== 'prompt' || existing.enabled === false ||
+          ['command', 'args', 'http_headers', 'env_http_headers', 'bearer_token_env_var', 'oauth'].some(key => key in existing) ||
+          (existing.tools?.execute_action?.approval_mode && existing.tools.execute_action.approval_mode !== 'prompt')) conflict();
+      return { source, settings };
+    }
+    const next = `${source}${source.endsWith('\n') || !source ? '' : '\n'}\n[mcp_servers.${clientServerName}]\nurl = ${JSON.stringify(url)}\nhttp_headers_helper = ${JSON.stringify(helper)}\ndefault_tools_approval_mode = "prompt"\n`;
+    // Dotted/inline parent tables may prohibit appending. Fail before any write.
+    try { Bun.TOML.parse(next); } catch { throw new Error('Codex table layout requires manual reconciliation; nothing was changed.'); }
+    return { source: next, settings };
+  }
+  let config, policy;
+  try { config = source ? JSON.parse(source) : {}; policy = settings ? JSON.parse(settings) : {}; }
+  catch { throw new Error('Invalid Claude JSON; nothing was changed.'); }
+  const object = value => value && typeof value === 'object' && !Array.isArray(value);
+  if (!object(config) || !object(policy) || (config.mcpServers !== undefined && !object(config.mcpServers)) ||
+      (policy.permissions !== undefined && !object(policy.permissions)) ||
+      ['ask', 'allow', 'deny'].some(key => policy.permissions?.[key] !== undefined &&
+        (!Array.isArray(policy.permissions[key]) || !policy.permissions[key].every(value => typeof value === 'string')))) throw new Error('Invalid Claude configuration shape.');
+  const existing = config.mcpServers?.[clientServerName];
+  if (existing && (existing.type !== 'http' || existing.url !== url || !helpers.includes(existing.headersHelper) ||
+      ['headers', 'oauth', 'command', 'args'].some(key => key in existing))) conflict();
+  if (!existing) {
+    config.mcpServers = { ...config.mcpServers, [clientServerName]: { type: 'http', url, headersHelper: helper } };
+    source = `${JSON.stringify(config, null, 2)}\n`;
+  }
+  if (!policy.permissions?.ask?.includes(executeAsk)) {
+    policy.permissions = { ...policy.permissions, ask: [...(policy.permissions?.ask ?? []), executeAsk] };
+    settings = `${JSON.stringify(policy, null, 2)}\n`;
+  }
+  return { source, settings };
+}
+
+function readClientFile(path) {
+  assertNoSymlinks(path);
+  if (!existsSync(path)) return '';
+  const stat = lstatSync(path);
+  if (!stat.isFile() || stat.nlink !== 1 || stat.uid !== process.getuid()) throw new Error('Client config must be a regular file owned by the current user.');
+  return readFileSync(path, 'utf8');
+}
+
+export function writeClientFile(path, before, after) {
+  if (before === after) return false;
+  if (readClientFile(path) !== before) throw new Error('Client config changed concurrently; retry attach.');
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+  assertNoSymlinks(path);
+  const temporary = `${path}.open-connector-${randomBytes(6).toString('hex')}`;
+  try {
+    writeFileSync(temporary, after, { mode: 0o600, flag: 'wx' });
+    if (readClientFile(path) !== before) throw new Error('Client config changed concurrently; retry attach.');
+    renameSync(temporary, path);
+  } finally { if (existsSync(temporary)) unlinkSync(temporary); }
+  return true;
+}
+
+async function attachClient(client) {
+  if (process.platform !== 'darwin') throw new Error('Client attachment currently supports the macOS pilot only.');
+  if (!['codex', 'claude'].includes(client)) throw new Error('Attach requires codex or claude.');
+  if (process.env.CLAUDE_CONFIG_DIR && client === 'claude') throw new Error('Custom CLAUDE_CONFIG_DIR requires explicit configuration; default files were not changed.');
+  const config = installedConfig();
+  const credentialPath = join(config.custody, `${client}.json`);
+  if (!existsSync(credentialPath)) throw new Error('Missing scoped client credential. Configure a separate runtime token in OpenConnector and store it in client custody first; attach never creates grants.');
+  clientHeaders(client); // Validate without printing or passing the credential to config writers.
+  if ((lstatSync(credentialPath).mode & 0o777) !== 0o600) throw new Error('Client credential must have mode 0600.');
+  const worker = join(connectorState(), 'worker.mjs');
+  assertNoSymlinks(worker);
+  if (!existsSync(worker)) throw new Error('Installed header helper is missing; reconcile the installation first.');
+  const file = client === 'codex' ? join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'config.toml') : join(homedir(), '.claude.json');
+  if (!isAbsolute(file)) throw new Error('Client configuration directory must be absolute.');
+  const policyFile = join(homedir(), '.claude/settings.json');
+  const lock = join(connectorState(), 'attach.lock');
+  try { save(lock, { pid: process.pid, createdAt: new Date().toISOString() }); }
+  catch { throw new Error('Attach lock exists or cannot be created; reconcile its recorded process before retrying.'); }
+  try {
+    const source = readClientFile(file);
+    const settings = client === 'claude' ? readClientFile(policyFile) : '';
+    const planned = planClientAttachment(client, { source, settings, worker });
+    // Restrictive approval first: a partial failure never exposes an ungated new server.
+    let changed = client === 'claude' ? writeClientFile(policyFile, settings, planned.settings) : false;
+    changed = writeClientFile(file, source, planned.source) || changed;
+    return { ok: true, client, server: clientServerName, status: changed ? 'attached' : 'already_attached', restart_client: changed, grants_changed: false };
+  } finally { unlinkSync(lock); }
+}
+
 function refreshWorker(config) {
   const secretPath = join(config.custody, 'runtime.json');
   const secrets = load(secretPath);
@@ -240,7 +345,8 @@ async function worker() {
   child.on('exit', code => process.exit(code ?? 1));
 }
 
-export async function runOpenConnector({ action, root }) {
+export async function runOpenConnector({ action, root, client }) {
+  if (action === 'attach') return attachClient(client);
   if (action === 'install') return install(resolve(root));
   if (action === 'start') return start();
   if (action === 'stop') {

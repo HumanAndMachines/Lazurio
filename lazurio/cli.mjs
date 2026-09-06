@@ -204,7 +204,7 @@ async function run(argv) {
   }
 
   if (options.command === "open-connector") {
-    const result = await runOpenConnector({ action: options.operands[0], root: options.root });
+    const result = await runOpenConnector({ action: options.operands[0], client: options.operands[1], root: options.root });
     console.log(JSON.stringify(result, null, 2));
     return result.ok === false ? 1 : 0;
   }
@@ -489,8 +489,9 @@ function parseArgs(argv) {
     throw new Error(`Neznámý argument '${arg}'.`);
   }
   if (parsed.command === "open-connector") {
-    if (parsed.operands.length !== 1 || !['install', 'start', 'stop', 'status', 'configure', 'doctor'].includes(parsed.operands[0])) {
-      throw new Error('open-connector requires install, start, stop, status, configure or doctor.');
+    const attach = parsed.operands[0] === 'attach' && parsed.operands.length === 2 && ['codex', 'claude'].includes(parsed.operands[1]);
+    if (!attach && (parsed.operands.length !== 1 || !['install', 'start', 'stop', 'status', 'configure', 'doctor'].includes(parsed.operands[0]))) {
+      throw new Error('open-connector requires install, start, stop, status, configure, doctor or attach codex|claude.');
     }
   }
   if (parsed.command === "search") {
@@ -769,6 +770,7 @@ function usage() {
     "  lazurio cli status [--json] [--root <cesta>]",
     "  lazurio launchpad install [--root <cesta>]",
     "  lazurio open-connector install|start|stop|status|configure|doctor [--json] [--root <cesta>] (macOS pilot)",
+    "  lazurio open-connector attach codex|claude [--json] (macOS pilot, existing scoped credential)",
     "  lazurio launchpad serve [--organization <slug> | --personalspace] [--root <cesta>]",
     "  lazurio search <dotaz> [--mode exact|lexical|semantic|hybrid] [--scope lazurio] [--limit N] [--json] [--root <cesta>]",
     "  lazurio search --status [--scope lazurio] [--json] [--root <cesta>]",

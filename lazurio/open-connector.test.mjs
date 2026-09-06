@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
-import { digest, OPEN_CONNECTOR_RELEASE, validateRuntimeSecrets, validateInstallConfig, assertNoSymlinks, runOpenConnector, renderLaunchAgent, connectorConsoleStatus } from './open-connector-lib.mjs';
+import { digest, OPEN_CONNECTOR_RELEASE, validateRuntimeSecrets, validateInstallConfig, assertNoSymlinks, runOpenConnector, renderLaunchAgent, connectorConsoleStatus, planClientAttachment, writeClientFile } from './open-connector-lib.mjs';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, symlinkSync, rmSync, realpathSync } from 'node:fs';
+import { mkdtempSync, symlinkSync, rmSync, realpathSync, readFileSync, writeFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -11,6 +11,62 @@ test('release is immutable and checksum comparison detects altered bytes', () =>
   expect(OPEN_CONNECTOR_RELEASE.url).toContain('/v1.5.0/');
   expect(digest('abc')).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
   expect(digest('abc')).not.toBe(digest('abcd'));
+});
+
+const attachmentFixture = { executable: '/opt/bun', worker: '/state with spaces/worker.mjs' };
+test('Codex attachment preserves existing text and is byte-idempotent', () => {
+  const source = '# Keep my comment\nmodel = "example"\n[mcp_servers.other]\nurl = "https://example.test/mcp"\n';
+  const planned = planClientAttachment('codex', { ...attachmentFixture, source });
+  expect(planned.source.startsWith(source)).toBe(true);
+  const server = Bun.TOML.parse(planned.source).mcp_servers.lazurio_open_connector;
+  expect(server.default_tools_approval_mode).toBe('prompt');
+  expect(server.http_headers_helper).toContain("'/state with spaces/worker.mjs'");
+  expect(server.http_headers).toBeUndefined();
+  expect(planClientAttachment('codex', { ...attachmentFixture, ...planned })).toEqual(planned);
+  expect(() => planClientAttachment('codex', { ...attachmentFixture, source: planned.source.replace('"prompt"', '"approve"') })).toThrow('conflicts');
+  expect(() => planClientAttachment('codex', { ...attachmentFixture, source: planned.source + '\n[mcp_servers.lazurio_open_connector.tools.execute_action]\napproval_mode = "approve"\n' })).toThrow('conflicts');
+});
+
+test('Claude attachment preserves other servers and policies and gates execution first', () => {
+  const source = JSON.stringify({ theme: 'dark', mcpServers: { other: { type: 'http', url: 'https://example.test' } } });
+  const settings = JSON.stringify({ permissions: { allow: ['Read'], deny: ['Bash'], ask: ['Write'] } });
+  const planned = planClientAttachment('claude', { ...attachmentFixture, source, settings });
+  expect(JSON.parse(planned.source).mcpServers.other).toEqual(JSON.parse(source).mcpServers.other);
+  expect(JSON.parse(planned.source).theme).toBe('dark');
+  expect(JSON.parse(planned.settings).permissions).toEqual({ allow: ['Read'], deny: ['Bash'], ask: ['Write', 'mcp__lazurio_open_connector__execute_action'] });
+  expect(planClientAttachment('claude', { ...attachmentFixture, ...planned })).toEqual(planned);
+  expect(() => planClientAttachment('claude', { ...attachmentFixture, source: planned.source.replace('http://localhost:24321/mcp', 'https://example.test') })).toThrow('conflicts');
+});
+
+test('attachment rejects malformed input without echoing secret-bearing contents', () => {
+  for (const client of ['claude', 'codex']) {
+    expect(() => planClientAttachment(client, { ...attachmentFixture, source: 'DO_NOT_ECHO_SECRET = [' })).toThrow(client === 'codex' ? 'Invalid Codex TOML' : 'Invalid Claude JSON');
+  }
+  expect(() => planClientAttachment('other', attachmentFixture)).toThrow('codex or claude');
+  expect(() => planClientAttachment('claude', { ...attachmentFixture, settings: '[]' })).toThrow('shape');
+});
+
+test('CLI attach rejects missing or unknown clients before touching the machine', () => {
+  for (const operands of [['attach'], ['attach', 'unknown'], ['status', 'codex']]) {
+    const child = spawnSync(process.execPath, [join(import.meta.dirname, 'cli.mjs'), 'open-connector', ...operands], { encoding: 'utf8', timeout: 10000 });
+    expect(child.status).toBe(2);
+    expect(child.stderr).toContain('attach codex|claude');
+  }
+});
+
+test.skipIf(process.platform === 'win32')('client config writes are private, idempotent and reject changed files and symlinks', () => {
+  const dir = mkdtempSync(join(realpathSync(tmpdir()), 'lazurio-attach-test-'));
+  const file = join(dir, 'config.json');
+  try {
+    expect(writeClientFile(file, '', '{"test":true}\n')).toBe(true);
+    expect(statSync(file).mode & 0o777).toBe(0o600);
+    expect(writeClientFile(file, '{"test":true}\n', '{"test":true}\n')).toBe(false);
+    writeFileSync(file, 'changed');
+    expect(() => writeClientFile(file, '{"test":true}\n', 'replacement')).toThrow('concurrently');
+    expect(readFileSync(file, 'utf8')).toBe('changed');
+    symlinkSync(file, join(dir, 'alias'));
+    expect(() => writeClientFile(join(dir, 'alias'), 'changed', 'replacement')).toThrow('Symlink');
+  } finally { rmSync(dir, { recursive: true }); }
 });
 
 test('console discovery exposes only a healthy local link and never custody or secrets', async () => {
