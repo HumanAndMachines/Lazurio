@@ -6,8 +6,16 @@ import { dirname, join } from "node:path";
 
 const sourceRoot = join(import.meta.dirname, "..", "..");
 const tempRoots = [];
-const macTest = process.platform === "darwin" ? test : test.skip;
-const lockfTest = process.platform === "darwin" && existsSync("/usr/bin/lockf") ? test : test.skip;
+// Real universal compilation, icon rendering, signing and repeated rollback
+// installations can exceed the shared runner's 10s unit-test budget. Keep the
+// allowance scoped to this native integration suite, including its lock tests.
+const nativeInstallTimeoutMs = 60_000;
+const macTest = (name, body) => (process.platform === "darwin" ? test : test.skip)(
+  name, body, nativeInstallTimeoutMs,
+);
+const lockfTest = (name, body) => (process.platform === "darwin" && existsSync("/usr/bin/lockf") ? test : test.skip)(
+  name, body, nativeInstallTimeoutMs,
+);
 
 afterEach(async () => {
   await Promise.all(tempRoots.splice(0).map((path) => rm(path, { recursive: true, force: true })));
