@@ -230,7 +230,7 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(profileBlock).toContain('const name = document.createElement("a")');
   expect(profileBlock).toContain("name.href = profile.settings_url");
   expect(profileBlock).toContain('name.target = "_blank"');
-  const settingsBlock = js.slice(js.indexOf("function profileSettingsItem"), js.indexOf("function settingsIcon"));
+  const settingsBlock = js.slice(js.indexOf("function profileSettingsItem"), js.indexOf("function openConnectorSettingsItem"));
   expect(settingsBlock).toContain('document.createElement("div")');
   expect(settingsBlock).toContain('item.setAttribute("aria-disabled", "true")');
   expect(settingsBlock).not.toContain(".href");

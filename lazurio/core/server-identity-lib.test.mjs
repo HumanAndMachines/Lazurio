@@ -142,11 +142,15 @@ test("install generation hashes one deterministic cross-platform source set", as
   const schemaChanged = computeServerInstallGeneration(root);
   await writeFile(join(root, "scripts", "worktree-create-lib.mjs"), "export const create = 2;\n");
   expect(computeServerInstallGeneration(root)).not.toBe(schemaChanged);
+  const connectorUnchanged = computeServerInstallGeneration(root);
+  await writeFile(join(root, "lazurio", "open-connector-lib.mjs"), "export const consoleStatus = 2;\n");
+  expect(computeServerInstallGeneration(root)).not.toBe(connectorUnchanged);
   expect(serverInstallGenerationInputPaths(root)).toEqual([
     "launchpad/package.json",
     "launchpad/public/app.js",
     "launchpad/src/server.mjs",
     "lazurio/core/contract.mjs",
+    "lazurio/open-connector-lib.mjs",
     "lazurio/runtime/runtime.mjs",
     "lazurio/schemas/runtime.json",
     "scripts/worktree-create-lib.mjs",
@@ -257,6 +261,7 @@ async function sourceFixture() {
   await writeFile(join(root, "launchpad", "src", "server.test.mjs"), "ignored test\n");
   await writeFile(join(root, "launchpad", "public", "app.js"), "export const ui = 1;\n");
   await writeFile(join(root, "lazurio", "core", "contract.mjs"), "export const value = 1;\n");
+  await writeFile(join(root, "lazurio", "open-connector-lib.mjs"), "export const consoleStatus = 1;\n");
   await writeFile(join(root, "lazurio", "runtime", "runtime.mjs"), "export const runtime = 1;\n");
   await writeFile(join(root, "lazurio", "schemas", "runtime.json"), "{\"version\":1}\n");
   await writeFile(join(root, "scripts", "worktree-create-lib.mjs"), "export const create = 1;\n");

@@ -111,6 +111,24 @@ async function health() {
   return { installed: true, running: loaded() && healthy, service_loaded: loaded(), version: config.version, origin: config.origin, mcp_url: `${config.origin}/mcp`, custody: config.custody };
 }
 
+// Public machine-local projection. Never forward custody, credentials or raw errors to Launchpad.
+export async function connectorConsoleStatus({ platform = process.platform, readStatus = health } = {}) {
+  if (platform !== 'darwin') return { installed: false, running: false };
+  try {
+    const status = await readStatus();
+    if (!status.installed) return { installed: false, running: false };
+    // The pilot has one supported console origin; malformed metadata cannot create an external link.
+    if (status.origin !== 'http://localhost:24321') return { installed: false, running: false };
+    return {
+      installed: true,
+      running: status.running === true,
+      configure_url: status.running === true ? status.origin : null,
+    };
+  } catch {
+    return { installed: false, running: false };
+  }
+}
+
 async function start() {
   if (!existsSync(configPath())) throw new Error('Run open-connector install first.');
   if (!existsSync(plistPath())) throw new Error(`Missing LaunchAgent: ${plistPath()}; rerun open-connector install.`);

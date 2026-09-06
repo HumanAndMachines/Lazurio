@@ -12,6 +12,7 @@ const generationDirectories = ["launchpad/src", "lazurio/core", "lazurio/runtime
 const generationTreeDirectories = ["launchpad/public", "lazurio/schemas"];
 const generationFiles = [
   "launchpad/package.json",
+  "lazurio/open-connector-lib.mjs",
   "scripts/worktree-create-lib.mjs",
   "scripts/worktree-create-lock.mjs",
 ];

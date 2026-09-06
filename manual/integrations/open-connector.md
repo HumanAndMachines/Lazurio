@@ -13,6 +13,13 @@ token policies. Launchpad must link to the upstream console; it is not an
 MCP proxy or a second provider configuration store. Agents connect directly
 to `/mcp`. Named connections are orientation labels, not organization ACLs.
 
+The DEV Launchpad's space menu links to the upstream console when the local
+Mac installation is running. Its trusted-local GET endpoint exposes only
+installation/running flags and a validated console URL, never credentials,
+custody paths or account inventory. A stopped installation shows the CLI
+`lazurio open-connector configure` hint; reading Launchpad does not start or
+restart the service. Hosted profiles reject this workstation-only endpoint.
+
 The pilot uses the upstream signed macOS ARM64 v1.5.0 binary at commit
 `0eeed9dc8fecaa3d914c8375125680ff2372eced`, SHA-256
 `804ae35511a6f995c26b87382f48cba339ce8462ea6da1e7c9e12f8ec3924332`.
@@ -175,6 +182,8 @@ direct harness connection until OpenConnector supports and verifies that
 route. Do not create an API application merely to replace an already-working
 official MCP connection. This is a temporary, explicit migration exception,
 not a claim that all harness traffic already goes through OpenConnector.
+Upstream alignment is tracked in
+[OpenConnector issue #504](https://github.com/oomol-lab/open-connector/issues/504).
 
 On 2026-09-06, both the pinned v1.5.0 source and upstream main
 `1455f050839b349041a0c357b58899e14a0f91ad` lacked a `clickup_mcp` provider.
@@ -233,7 +242,7 @@ scratch account; the artifacts were retained without sending or sharing.
 Token-level checks do not replace fresh model execution from both harnesses.
 
 Still required before release: complete fresh-harness acceptance, durable Google
-OAuth rollout, client-attachment lifecycle, Launchpad entry, platform lifecycle
+OAuth rollout, client-attachment lifecycle, platform lifecycle
 expansion, public fork and reviewed promotion. ClickUp official MCP support is
 pending the acceptance above. Neon management is supported
 upstream but SQL execution is not; keep the existing SQL-capable integration.

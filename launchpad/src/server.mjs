@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { connectorConsoleStatus } from "../../lazurio/open-connector-lib.mjs";
 import { constants, existsSync, lstatSync, realpathSync } from "fs";
 import { open, readFile } from "fs/promises";
 import { createConnection } from "node:net";
@@ -1357,6 +1358,13 @@ function startServer(startPort) {
       };
       let mutationAdmission = null;
       try {
+        if (url.pathname === "/api/lazurio/open-connector") {
+          if (hostedWorkspace.profile === "hosted" || !requestTrust.isTrustedLocalRequest(request, url)) {
+            return jsonResponse({ error: "open_connector_local_only" }, 403);
+          }
+          if (request.method !== "GET") return jsonResponse({ error: "method_not_allowed" }, 405);
+          return jsonResponse(await connectorConsoleStatus());
+        }
         if (url.pathname.startsWith("/api/personalspace") && !requestTrust.isTrustedLocalRequest(request, url)) {
           return jsonResponse({ error: "personalspace_request_forbidden" }, 403);
         }

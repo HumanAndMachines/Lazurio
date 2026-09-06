@@ -70,6 +70,7 @@ const state = {
   warnings: [],
   loadError: null,
   personalspace: null,
+  openConnector: null,
   personalspaceError: null,
   doctor: null,
   doctorRunState: "idle",
@@ -838,21 +839,24 @@ async function runLoadData({ quiet = false, sync = false, isCurrent = () => true
   try {
     // První render i quiet refresh jsou GET-only. Pouze explicitní kliknutí na
     // Synchronizovat spustí jediný společný update engine přes POST /api/sync.
-    const [appsResponse, personalspaceResponse] = await Promise.all(
+    const [appsResponse, personalspaceResponse, openConnector] = await Promise.all(
       !sync
         ? [
             fetchJson("/api/apps"),
             fetchPersonalspaceSafe(),
+            fetchJsonSafe("/api/lazurio/open-connector"),
           ]
         : [
             fetchJson("/api/sync", { method: "POST" }),
             fetchPersonalspaceSafe(),
+            fetchJsonSafe("/api/lazurio/open-connector"),
       ],
     );
     // Forced post-mutation refresh může přijít, zatímco starý quiet poll čeká
     // na odpověď. Coordinator ho nechá doběhnout, ale tento pre-mutation
     // snapshot už nesmí změnit UI; přesně jeden fresh read je za ním ve frontě.
     if (!isCurrent()) return;
+    state.openConnector = openConnector;
     state.apps = appsResponse.apps ?? [];
     state.companies = appsResponse.companies ?? [];
     state.failures = appsResponse.failures ?? [];
@@ -1829,6 +1833,7 @@ function renderSpaceSwitcher() {
 
   const profile = state.personalspace?.profile;
   const profileNodes = profile ? [spaceProfileCard(profile), profileSettingsItem()] : [];
+  if (state.openConnector?.installed) profileNodes.push(openConnectorSettingsItem());
   if (profileNodes.length > 0 && options.length > 0) {
     const divider = document.createElement("div");
     divider.className = "space-switcher-divider";
@@ -1836,7 +1841,7 @@ function renderSpaceSwitcher() {
     profileNodes.push(divider);
   }
   elements.spaceSwitcherMenu.replaceChildren(...profileNodes, spaces);
-  elements.spaceSwitcherButton.disabled = options.length === 0;
+  elements.spaceSwitcherButton.disabled = options.length === 0 && profileNodes.length === 0;
   applySpaceMenuState();
 }
 
@@ -1890,6 +1895,24 @@ function profileSettingsItem() {
   item.className = "space-profile-settings is-disabled";
   item.setAttribute("aria-disabled", "true");
   item.append(settingsIcon(), document.createTextNode(t("profile.settings")));
+  return item;
+}
+
+function openConnectorSettingsItem() {
+  const url = state.openConnector?.configure_url;
+  const ready = state.openConnector?.running === true && url === "http://localhost:24321";
+  const item = document.createElement(ready ? "a" : "div");
+  item.className = `space-profile-settings${ready ? "" : " is-disabled"}`;
+  item.append(settingsIcon(), document.createTextNode(t("profile.openConnector")));
+  if (ready) {
+    item.href = url;
+    item.target = "_blank";
+    item.rel = "noopener noreferrer";
+    item.title = t("profile.openConnectorHint");
+  } else {
+    item.setAttribute("aria-disabled", "true");
+    item.title = t("profile.openConnectorStopped");
+  }
   return item;
 }
 

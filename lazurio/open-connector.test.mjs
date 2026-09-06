@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { digest, OPEN_CONNECTOR_RELEASE, validateRuntimeSecrets, validateInstallConfig, assertNoSymlinks, runOpenConnector, renderLaunchAgent } from './open-connector-lib.mjs';
+import { digest, OPEN_CONNECTOR_RELEASE, validateRuntimeSecrets, validateInstallConfig, assertNoSymlinks, runOpenConnector, renderLaunchAgent, connectorConsoleStatus } from './open-connector-lib.mjs';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, symlinkSync, rmSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -11,6 +11,23 @@ test('release is immutable and checksum comparison detects altered bytes', () =>
   expect(OPEN_CONNECTOR_RELEASE.url).toContain('/v1.5.0/');
   expect(digest('abc')).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
   expect(digest('abc')).not.toBe(digest('abcd'));
+});
+
+test('console discovery exposes only a healthy local link and never custody or secrets', async () => {
+  const status = { installed: true, running: true, origin: 'http://localhost:24321', custody: '/private/owner', token: 'secret' };
+  expect(await connectorConsoleStatus({ platform: 'darwin', readStatus: async () => status })).toEqual({
+    installed: true, running: true, configure_url: 'http://localhost:24321',
+  });
+  expect(await connectorConsoleStatus({ platform: 'darwin', readStatus: async () => ({ ...status, running: false }) })).toEqual({
+    installed: true, running: false, configure_url: null,
+  });
+  for (const origin of ['https://example.com', 'javascript:alert(1)', 'http://localhost:24321/?token=secret']) {
+    expect(await connectorConsoleStatus({ platform: 'darwin', readStatus: async () => ({ ...status, origin }) })).toEqual({ installed: false, running: false });
+  }
+  expect(await connectorConsoleStatus({ platform: 'darwin', readStatus: async () => { throw new Error('/private/secret'); } })).toEqual({ installed: false, running: false });
+  let reads = 0;
+  expect(await connectorConsoleStatus({ platform: 'linux', readStatus: async () => { reads++; return status; } })).toEqual({ installed: false, running: false });
+  expect(reads).toBe(0);
 });
 
 test('importing the library cannot invoke either private executable entrypoint', () => {

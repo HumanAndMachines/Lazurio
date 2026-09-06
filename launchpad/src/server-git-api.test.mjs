@@ -71,6 +71,17 @@ test("Launchpad server exposes read-only git and Mission Control routes", async 
   await initGitRepo(join(omegacoRoot, "productionspace", "firmware"));
   const { port } = await startLaunchpadServer(root);
 
+  const connector = await getJson(port, "/api/lazurio/open-connector");
+  expect(typeof connector.installed).toBe("boolean");
+  expect(typeof connector.running).toBe("boolean");
+  expect(Object.keys(connector).every((key) => ["installed", "running", "configure_url"].includes(key))).toBe(true);
+  const foreignConnector = await fetch(`http://127.0.0.1:${port}/api/lazurio/open-connector`, {
+    headers: { Origin: "https://untrusted.example" },
+  });
+  expect(foreignConnector.status).toBe(403);
+  const mutatingConnector = await fetch(`http://127.0.0.1:${port}/api/lazurio/open-connector`, { method: "POST" });
+  expect(mutatingConnector.status).toBe(405);
+
   const repos = await getJson(port, "/api/git/repos");
   const deals = await getJson(port, "/api/git/repos/BetaCo%3A%3Adeals");
   const changes = await getJson(port, "/api/git/repos/BetaCo%3A%3Adeals/changes");
@@ -857,6 +868,9 @@ test("hosted Launchpad rejects forged browser context without a TLS-authenticate
 
   const directServerIdentity = await getJson(port, "/api/lazurio/server-identity");
   expect(directServerIdentity.request_trust_profile).toBe("hosted");
+  const hostedConnector = await fetch(`http://127.0.0.1:${port}/api/lazurio/open-connector`);
+  expect(hostedConnector.status).toBe(403);
+  expect((await hostedConnector.json()).error).toBe("open_connector_local_only");
 
   const forgedGatewayHeaders = await fetch(`http://127.0.0.1:${port}/api/sync`, {
     method: "POST",
