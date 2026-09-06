@@ -23,8 +23,10 @@ restart the service. Hosted profiles reject this workstation-only endpoint.
 The pilot uses the upstream signed macOS ARM64 v1.5.0 binary at commit
 `0eeed9dc8fecaa3d914c8375125680ff2372eced`, SHA-256
 `804ae35511a6f995c26b87382f48cba339ce8462ea6da1e7c9e12f8ec3924332`.
-The public Lazurio fork and release promotion are subsequent delivery work;
-this binary is explicitly upstream, not a Lazurio release.
+The public [Lazurio fork](https://github.com/Lazurio/open-connector) exists as
+an upstream fork. Reviewed release promotion is still delivery work; this
+installed binary is explicitly upstream, not a Lazurio release. Creating the
+fork does not update the runtime or approve the fork's current main for rollout.
 
 Native upstream binary plus a user LaunchAgent avoids adding Docker to the
 first consumer. Docker remains a hosted deployment option, not another
@@ -239,11 +241,14 @@ The current Mac pilot passed 24 post-restart Google read checks across twelve
 connections and two separately scoped harness tokens. Reversible Gmail draft,
 Drive file and Sheets cell write/readback checks passed using one authorized
 scratch account; the artifacts were retained without sending or sharing.
-Token-level checks do not replace fresh model execution from both harnesses.
+Fresh Codex CLI and Claude Code sessions also executed `list_connections`
+through their own header helpers with only that read tool exposed for the
+smoke. This proves fresh discovery, not complete workflow parity for every
+provider or model-generated write.
 
 Still required before release: complete fresh-harness acceptance, durable Google
 OAuth rollout, client-attachment lifecycle, platform lifecycle
-expansion, public fork and reviewed promotion. ClickUp official MCP support is
+expansion and reviewed fork promotion. ClickUp official MCP support is
 pending the acceptance above. Neon management is supported
 upstream but SQL execution is not; keep the existing SQL-capable integration.
 
