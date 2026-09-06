@@ -1,3 +1,4 @@
+import applySchema from "./install-apply.v1.schema.json";
 import cs from "./locales/install.cs.json";
 import en from "./locales/install.en.json";
 import {
@@ -25,7 +26,7 @@ export function selectInstallLanguage({ requested = null, environment = process.
   return "cs";
 }
 
-export function renderHumanInstallReport(report, { language = "cs" } = {}) {
+export function renderHumanInstallReport(report, { language = "cs", afterAction = false } = {}) {
   if (!isValidLazurioInstallReport(report)) {
     throw new Error("Nelze vykreslit neplatný instalační report.");
   }
@@ -34,7 +35,7 @@ export function renderHumanInstallReport(report, { language = "cs" } = {}) {
 
   const lines = [
     catalog["report.title"],
-    catalog["report.read_only"],
+    catalog[afterAction ? "report.after_action" : "report.read_only"],
     `${catalog["report.status"]}: ${catalog[`status.${report.status}`]}`,
     `${catalog["report.machine"]}: ${report.machine.platform}/${report.machine.architecture}`,
     `${catalog["report.root"]}: ${printablePath(report.root.path)}`,
@@ -59,6 +60,20 @@ export function renderHumanInstallReport(report, { language = "cs" } = {}) {
   return lines.join("\n");
 }
 
+export function renderHumanInstallApplyReport(report, { language = "cs" } = {}) {
+  const catalog = catalogs[language];
+  if (report?.schema_version !== "lazurio.install.apply.v1"
+    || !catalog || !applySchema.properties.action.properties.reason.enum.includes(report.action?.reason)
+    || !["completed", "action_required", "failed"].includes(report.status)) {
+    throw new Error("Invalid installation action report.");
+  }
+  return [catalog["apply.title"],
+    `${catalog["report.status"]}: ${catalog[`status.${report.status}`]}`,
+    catalog[`apply.${report.action.reason}`], "",
+    renderHumanInstallReport(report.installation, { language, afterAction: true }),
+  ].join("\n");
+}
+
 function renderInstallText(template, report) {
   if (typeof template !== "string") return template;
   return template
@@ -70,8 +85,11 @@ function renderInstallText(template, report) {
 
 export function installCatalogIssues() {
   const requiredKeys = new Set([
+    "apply.title",
+    ...applySchema.properties.action.properties.reason.enum.map((reason) => `apply.${reason}`),
     "report.title",
     "report.read_only",
+    "report.after_action",
     "report.status",
     "report.machine",
     "report.root",

@@ -288,8 +288,7 @@ selecting another installation.
 
 For localhost workstations on macOS, Linux, and Windows, the default path is
 [the official OpenAI standalone installer](https://developers.openai.com/codex/cli).
-OpenAI owns installation and subsequent updates; Lazurio only directs Agents
-to that procedure. Codex release availability therefore does not depend on
+OpenAI owns installation and subsequent updates; Lazurio uses its installer. Codex release availability therefore does not depend on
 updates to the Homebrew cask. Homebrew, npm, and WinGet are neither required
 nor prohibited. Preserve compatible existing installations; standalone is a
 recommendation for missing Codex, not a readiness condition. Immutable hosted
@@ -309,11 +308,31 @@ powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1
 
 Use the current official stable release, not a preview or a version copied
 verbatim from a manual. Before execution, a scoped installation or update
-mandate for Codex and the relevant `PATH` layer must apply. Do not request an
-already granted mandate again; if it is missing, first prepare the exact
-remediation and request the Principal's consent. Neither Doctor nor
-`lazurio update` ever executes this command. `lazurio install` remains a
-machine-gate report, not an installer for the external toolchain.
+mandate for Codex must apply. Normal installation includes User `PATH`;
+Machine changes require their own mandate. Do not request an already granted
+mandate again; if tool installation consent is missing, first prepare the
+exact remediation and request the Principal's consent. Neither Doctor nor
+`lazurio update` ever executes this command. Plain `lazurio install` remains
+read-only. For missing Codex with the mandate above, run
+`lazurio install --install-missing codex --confirm-codex-absent --json`.
+Only assert absence after checking existing installations outside PATH,
+including custom prefixes and version managers; a known clean OS image is
+the lab evidence. A missing PATH command alone is insufficient.
+The CLI runs the official installer noninteractively and returns the action
+outcome together with a fresh machine report. It preserves working installs;
+custom destinations and repairs require the separately scoped procedure above.
+When a new session is requested, always after installation on Windows, fully
+quit and relaunch Codex and verify `lazurio install --json` and Doctor from
+the new session. This operation does not yet install Git, gh, Node or Bun.
+
+Installing missing Codex includes automatic user `PATH` configuration; the
+Agent does not request separate consent for this normal installation step.
+Ordinary users see tool preparation and, if needed, an application restart,
+not environment configuration. Advanced `--no-modify-path` prevents invoking
+the official installer, which does not support disabling this modification.
+Missing Codex then returns `codex_manual_setup_required`, without downloads
+or writes; the user supplies the tool themselves. Existing working installs
+remain usable.
 
 **Existing Homebrew/npm/WinGet installations.** Identify all `codex` commands
 on `PATH`, their actual symlink targets, and the previous package's manager.

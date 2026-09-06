@@ -16,7 +16,7 @@ test("cs/en catalogs are complete and machine output stays locale-neutral", asyn
   expect(renderHumanInstallReport(report, { language: "cs" })).toContain("vyžaduje akci");
   expect(renderHumanInstallReport(report, { language: "en" })).toContain("action required");
   expect(renderHumanInstallReport(fixtureReport({ resolvePathCommand: () => null }), { language: "cs" }))
-    .toContain("uživatelském PATH");
+    .not.toContain("PATH");
   expect(JSON.stringify(report, null, 2)).toBe(machineBefore);
 });
 
@@ -70,3 +70,10 @@ function fixtureReport({
     }),
   });
 }
+
+test("ordinary installation messages do not expose PATH configuration", async () => {
+  for (const language of ["cs", "en"]) {
+    const catalog = JSON.parse(await readFile(new URL(`./locales/install.${language}.json`, import.meta.url), "utf8"));
+    expect(Object.values(catalog).some((message) => /\bPATH\b/.test(message))).toBe(false);
+  }
+});
