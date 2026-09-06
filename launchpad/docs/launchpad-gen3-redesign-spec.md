@@ -217,7 +217,13 @@ per-module download button, restore overlay, update journal, or second daemon.
 
 ## 1b. Builder Bridge API — versioning, transport adapters, CORS/LNA, pairing token, headless mode [PROPOSAL — pending founder ratification of decision 0077]
 
-**Canonical term (founder 2026-07-12).** The **Builder Bridge** is the **headless daemon + versioned API layer of the Launchpad**. It lives HERE — inside the Launchpad app in the source-available Lazurio core — not as a separate service. The local HTTP API is no longer an internal same-origin surface: it is the Bridge, one versioned API a browser served from another origin (the hosted Dashboard) can reach directly. In hosted Team Workspaces the Bridge runs in the same builder-visible work container as T3, Codex, checkout/worktrees and module children. SSH is only an optional operator/recovery transport; it does not define a second agent runtime or filesystem topology. The canonical public contract is this section together with the versioned Bridge routes and their tests in this repo.
+**Canonical term (founder 2026-07-12).** The **Builder Bridge** is the **headless daemon + versioned API layer of the Launchpad**. It lives HERE — inside the Launchpad app in the source-available Lazurio core — not as a separate service. The local HTTP API is no longer an internal same-origin surface: it is the Bridge, one versioned API a browser served from another origin (the hosted Dashboard) can reach directly. In hosted Team Workspaces the Bridge runs in the same builder-visible work container as T3, Codex, checkout/worktrees and module children. The canonical public contract is this section together with the versioned Bridge routes and their tests in this repo.
+
+The target also supports desktop Codex through native OpenSSH into the assigned
+workshop, without a local Lazurio installation. This is a Builder entry, distinct
+from operator access to the Organization Host. It uses the same remote runtime
+and files. SSH support and migration from the current access and GitHub broker
+paths still need verification.
 
 - **Foundation is the contract + shared Builder UI + transport/auth adapters — not routes on localhost.** Browser-to-loopback is one transport, not the architecture.
 - **One contract, two deployments, two security profiles.** `/bridge/v1/...` on the builder's `127.0.0.1` daemon (pairing token over CORS + LNA), or on the Workspace Host VPS as **normal HTTPS behind organization login** (same-origin reverse proxy; platform session CAC-0055; real organization authorization and audit on every request). Identical routes/shapes; transport binding, auth adapter and security profile differ. Maps 1:1 to the localhost-vs-Workspace-Host placement in section 1.

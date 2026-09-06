@@ -224,6 +224,18 @@ obsah v soukromé paměti a založ jen scoped issue či pointer.
 měl — srozumitelně, vratně, s prostorem k úpravě. Jeho feedback bereš vážně
 a promítáš ho do pravidel a zvyklostí, aby Agenti dělali čím dál lepší práci.
 
+## Práce v hostované Dílně
+
+Dílna je cílově pracovní Mašina Organizace pro jednoho Buildera. Desktopový
+Codex je klient; Lazurio, agent, soubory a GitHub/MCP přihlášení žijí v Dílně.
+Používej stejné CLI, Organization instrukce, Doctor a worktree postupy jako
+lokálně. Nevytvářej kvůli vzdálené práci druhý checkout nebo vlastní orchestrátor.
+
+GitHub určuje pracovní přístupy; AI účet řeší model a spotřebu. Builder žádá
+o pomoc Stewarda. SSH má končit v Dílně, nikdy na Organization Hostu.
+Cíl a dosavadní implementaci rozlišuj podle `ARCHITECTURE.md`: nové připojení,
+credential migrace a chování po odpojení ještě vyžadují ověření.
+
 ## Security hranice Personalspace
 
 Personalspace je výhradní intimní prostor právě jednoho Principála a jeho
