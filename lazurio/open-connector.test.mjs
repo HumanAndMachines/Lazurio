@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { digest, OPEN_CONNECTOR_RELEASE, validateRuntimeSecrets, validateInstallConfig, assertNoSymlinks, runOpenConnector, renderLaunchAgent, connectorConsoleStatus, planClientAttachment, writeClientFile } from './open-connector-lib.mjs';
+import { digest, OPEN_CONNECTOR_RELEASE, OPEN_CONNECTOR_CANDIDATE, validateRuntimeSecrets, validateInstallConfig, assertNoSymlinks, runOpenConnector, renderLaunchAgent, connectorConsoleStatus, planClientAttachment, writeClientFile } from './open-connector-lib.mjs';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, symlinkSync, rmSync, realpathSync, readFileSync, writeFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -14,6 +14,18 @@ test('release is immutable and checksum comparison detects altered bytes', () =>
 });
 
 const attachmentFixture = { executable: '/opt/bun', worker: '/state with spaces/worker.mjs' };
+test('DEV candidate pin is exact and cannot mix a stable filename or checksum', () => {
+  const state = '/Users/example/state';
+  const candidate = { version: OPEN_CONNECTOR_CANDIDATE.version, sha256: OPEN_CONNECTOR_CANDIDATE.sha256,
+    origin: 'http://localhost:24321', binary: join(state, `open-connector-${OPEN_CONNECTOR_CANDIDATE.version}`),
+    custody: '/Users/example/personalspace/owner_GEN3/secrets/open-connector/mac-pilot' };
+  expect(Object.isFrozen(OPEN_CONNECTOR_CANDIDATE)).toBe(true);
+  expect(validateInstallConfig(candidate, state)).toEqual(candidate);
+  for (const delta of [{ sha256: OPEN_CONNECTOR_RELEASE.sha256 }, { binary: join(state, 'open-connector-1.5.0') },
+    { version: '1.5.0-dev.latest' }, { sha256: '6bf8be3c243d8927988c04f0be2e0925f90039c855a577ed8ce83e6cd7f67dc0' }]) {
+    expect(() => validateInstallConfig({ ...candidate, ...delta }, state)).toThrow('Invalid');
+  }
+});
 test('Codex attachment preserves existing text and is byte-idempotent', () => {
   const source = '# Keep my comment\nmodel = "example"\n[mcp_servers.other]\nurl = "https://example.test/mcp"\n';
   const planned = planClientAttachment('codex', { ...attachmentFixture, source });
@@ -125,7 +137,7 @@ test('install metadata cannot redirect credentials or select another binary', ()
     custody: '/Users/example/personalspace/owner_GEN3/secrets/open-connector/mac-pilot' };
   expect(validateInstallConfig(valid, state)).toEqual(valid);
   for (const delta of [{ origin: 'https://example.com' }, { binary: '/bin/sh' },
-    { version: 'latest' }, { sha256: '0'.repeat(64) }, { custody: '../secrets/open-connector/mac-pilot' }]) {
+    { version: 'latest' }, { sha256: OPEN_CONNECTOR_CANDIDATE.sha256 }, { sha256: '0'.repeat(64) }, { custody: '../secrets/open-connector/mac-pilot' }]) {
     expect(() => validateInstallConfig({ ...valid, ...delta }, state)).toThrow('Invalid');
   }
   expect(() => validateRuntimeSecrets(null)).toThrow('refusing to start');

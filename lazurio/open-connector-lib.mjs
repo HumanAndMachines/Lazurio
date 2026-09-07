@@ -12,6 +12,13 @@ export const OPEN_CONNECTOR_RELEASE = Object.freeze({
   sha256: '804ae35511a6f995c26b87382f48cba339ce8462ea6da1e7c9e12f8ec3924332',
   url: 'https://github.com/oomol-lab/open-connector/releases/download/v1.5.0/open-connector-darwin-arm64',
 });
+// Explicit DEV-only promotion, not a moving upstream version or installer default.
+// Exact upstream CI run 34078620961; ad-hoc signed as its macOS smoke workflow requires.
+export const OPEN_CONNECTOR_CANDIDATE = Object.freeze({
+  version: '1.5.0-dev.3e36f55e',
+  commit: '3e36f55e0b441a8242bf4ec199c7c76393cb70ca',
+  sha256: 'ba6acd5498d67799d67d73b4b9d2eadd31453d3c68ec946f218de42dda2c4517',
+});
 const label = 'ai.lazurio.open-connector';
 const apiOrigin = 'http://127.0.0.1:24321';
 const domain = () => `gui/${process.getuid()}`;
@@ -30,9 +37,9 @@ export function assertNoSymlinks(path) {
   }
 }
 export function validateInstallConfig(config, state = connectorState()) {
-  if (!config || config.version !== OPEN_CONNECTOR_RELEASE.version ||
-      config.sha256 !== OPEN_CONNECTOR_RELEASE.sha256 || config.origin !== 'http://localhost:24321' ||
-      config.binary !== join(state, 'open-connector-1.5.0') ||
+  const pin = [OPEN_CONNECTOR_RELEASE, OPEN_CONNECTOR_CANDIDATE].find(candidate => candidate.version === config?.version);
+  if (!pin || config.sha256 !== pin.sha256 || config.origin !== 'http://localhost:24321' ||
+      config.binary !== join(state, `open-connector-${pin.version}`) ||
       typeof config.custody !== 'string' || !isAbsolute(config.custody) ||
       !config.custody.endsWith('/secrets/open-connector/mac-pilot')) {
     throw new Error('Invalid OpenConnector install metadata.');

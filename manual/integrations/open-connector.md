@@ -31,6 +31,42 @@ an upstream fork. Reviewed release promotion is still delivery work; this
 installed binary is explicitly upstream, not a Lazurio release. Creating the
 fork does not update the runtime or approve the fork's current main for rollout.
 
+### Explicit ClickUp DEV candidate
+
+The runtime validator additionally accepts exactly `1.5.0-dev.3e36f55e`,
+upstream commit `3e36f55e0b441a8242bf4ec199c7c76393cb70ca`, from
+[binary CI run 34078620961](https://github.com/oomol-lab/open-connector/actions/runs/34078620961).
+This is an explicitly approved local candidate, **not** a stable release or
+an automatic update channel. New installations still download v1.5.0.
+The [fork candidate PR](https://github.com/Lazurio/open-connector/pull/1)
+retains the exact upstream tree and ancestry, without a custom provider patch.
+
+The non-tag macOS artifact requires ad-hoc signing, exactly as upstream's
+macOS smoke workflow does. Original binary SHA-256 is
+`6bf8be3c243d8927988c04f0be2e0925f90039c855a577ed8ce83e6cd7f67dc0`;
+the locally signed, tested bytes pinned by this pilot are
+`ba6acd5498d67799d67d73b4b9d2eadd31453d3c68ec946f218de42dda2c4517`.
+An ad-hoc signature proves local integrity, not a Developer ID identity.
+
+Promotion is an operator step until the reusable update command is delivered:
+stop launchd, verify the old binary and configuration, snapshot the complete
+data directory plus its matching encryption credentials in ignored owner
+custody, preserve the original config and worker, then place the candidate at
+its versioned filename. Install the dual-pin worker and atomically replace
+the non-secret config before starting. Never overwrite the v1.5.0 binary,
+rotate tokens, change policies or use an arbitrary checksum supplied by config.
+Verify health, binary integrity, preserved connections/policies and both actual
+harness consumers after startup. Runtime version labels distinguish the
+candidate even though upstream package metadata still says 1.5.0.
+
+For rollback, stop the service, preserve candidate data separately, restore
+the paired original data/config/worker snapshot and start v1.5.0. Preserve the
+matching key; do not silently overwrite a concurrently changed key. Rolling
+back only the executable is not a general database downgrade strategy. No
+storage-layer diff exists between these two exact revisions, but a consistent
+snapshot remains required. OAuth consent and capability parity are separate
+acceptance gates; a successful binary smoke is not a successful connection.
+
 Native upstream binary plus a user LaunchAgent avoids adding Docker to the
 first consumer. Docker remains a hosted deployment option, not another
 workstation runtime running alongside it. Existing individual MCP servers
@@ -189,6 +225,22 @@ official MCP connection. This is a temporary, explicit migration exception,
 not a claim that all harness traffic already goes through OpenConnector.
 Upstream alignment is tracked in
 [OpenConnector issue #504](https://github.com/oomol-lab/open-connector/issues/504).
+
+Update 2026-09-07: upstream [PR #505](https://github.com/oomol-lab/open-connector/pull/505)
+is merged at the exact DEV candidate above. Its additive `clickup_mcp` provider
+supports public-client registration at `https://mcp.clickup.com/oauth/register`,
+PKCE S256 and scopes `read write`. Copy the callback from the upstream console;
+register that exact URI, enter the returned Client ID and leave Client Secret
+empty. The Principal completes consent and selects the intended workspaces.
+Do not transplant a harness's existing OAuth token or bypass consent.
+
+The upstream provider exposes eight named actions: search, get task, workspace
+hierarchy, workspace members, create/update task, create comment and send chat
+message. This is not full parity with all direct ClickUp MCP tools. Verify each
+required workspace through actual reads, not merely successful credential
+validation (which only checks tool discovery). Keep unsupported capabilities
+direct until their replacement is proven. New runtime-token grants require
+their own exact approval; adding a provider to the binary grants nothing.
 
 On 2026-09-06, both the pinned v1.5.0 source and upstream main
 `1455f050839b349041a0c357b58899e14a0f91ad` lacked a `clickup_mcp` provider.
