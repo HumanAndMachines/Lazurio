@@ -97,7 +97,10 @@ verify the current approved revision, validity, scope, assigned account and
 provider permissions. A missing, revoked, expired or unverifiable mandate stops
 autonomous publication. An Agent cannot grant, expand or renew its own mandate.
 Company automation has an accountable human and no private Personalspace.
-See the Lazurio manual \`manual/organization-mandates.md\` for the contract.
+Resolve \`manual/organization-mandates.md\` against the active Lazurio runtime
+root (\`LAZURIO_RUNTIME_ROOT\` for an installed runtime, the Lazurio source
+root for a source installation), never against this Organization checkout.
+That runtime manual defines the contract; it is not a local mandate grant.
 
 Open technical problems and uncertainties belong in GitHub Issues of the exact
 owning repository. Plans, priorities and responsibility belong in Mission

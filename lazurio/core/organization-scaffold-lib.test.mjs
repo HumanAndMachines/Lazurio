@@ -40,7 +40,7 @@ describe("Organization scaffold", () => {
         default_branch: "main",
       },
     });
-    expect(scaffold.git_tree_oid).toBe("d1dba6c729fa39b9e92d92067b668a62af802d06");
+    expect(scaffold.git_tree_oid).toBe("9e6ce4bc5defa97e7455a60708659c55b235d4ce");
     expect(scaffold.files.map((file) => file.path)).toEqual([
       ".github/ISSUE_TEMPLATE/agent-report.md",
       ".gitignore",
@@ -59,6 +59,8 @@ describe("Organization scaffold", () => {
     expect(instructions).toContain("MANDATES.md");
     expect(instructions).toContain("current approved revision, validity, scope, assigned account");
     expect(instructions).toContain("An Agent cannot grant, expand or renew its own mandate");
+    expect(instructions).toContain("never against this Organization checkout");
+    expect(instructions).toContain("LAZURIO_RUNTIME_ROOT");
     expect(scaffold.files.some((file) => file.path === "MANDATES.md")).toBe(false);
     expect(isValidOrganizationScaffold(scaffold)).toBe(true);
     expect(Object.isFrozen(scaffold)).toBe(true);
