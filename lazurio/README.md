@@ -46,7 +46,14 @@ Bun sám nemění. Agent nejdřív zjistí způsob instalace, vyžádá souhlas
 s externí změnou a použije standardní upstream postup; `lazurio update`
 runtime nikdy potichu nepřepisuje. Stejně tak Install Core odliší
 `bun_runtime_not_on_path`, `git_not_on_path`, `github_cli_not_on_path` a
-`node_runtime_not_on_path` od chybějící instalace. Dřívější stínující příkaz
+`node_runtime_not_on_path` od chybějící instalace. Exact Bun v `PATH` musí
+navíc umět package runner `bun x`, který používají verzované skripty
+repozitářů; Install Core jinak vrátí `bun_package_runner_unusable` a Doctor
+failne `platform.bun_package_runner`. Samostatná binárka `bunx` není
+podmínkou — oficiální WinGet balíček ji na Windows nemusí dodat — a Doctor ji
+uvádí jen informativně. Každé Bun selhání nese oficiální instalátor připnutý
+přesně na `packageManager` verzi; balíček z jiného registru není náprava a
+Lazurio instalační příkaz nikdy samo nespouští. Dřívější stínující příkaz
 Node.js vrací `node_path_identity_mismatch` a před ověřením se nespouští.
 Instalační Agent s explicitním mandátem opraví pouze
 uživatelský PATH a výsledek prokáže v novém čistém procesu; Organization

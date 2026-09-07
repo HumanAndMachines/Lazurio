@@ -2,7 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { tmpdir } from "os";
 import { join } from "path";
 import { mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from "fs/promises";
-import { appPlacementResolverForOrganization, buildDoctorReportFromAppsResponse, buildEnvironmentChecks, buildLaunchpadAppsResponse, buildLaunchpadDoctorReport, bunRuntimeCheck, codexRuntimeCheck, developerToolUpdateChecks, lazurioUpdateCheck, nodeRuntimeCheck, runtimeAppStatus } from "../../lazurio/runtime/diagnostics-lib.mjs";
+import { appPlacementResolverForOrganization, buildDoctorReportFromAppsResponse, buildEnvironmentChecks, buildLaunchpadAppsResponse, buildLaunchpadDoctorReport, bunPackageRunnerCheck, bunPathCheck, bunRuntimeCheck, codexRuntimeCheck, developerToolUpdateChecks, lazurioUpdateCheck, nodeRuntimeCheck, runtimeAppStatus } from "../../lazurio/runtime/diagnostics-lib.mjs";
 import {
   createLaunchpadGitFixture,
   createRepositoryDbWorktreeFixture,
@@ -109,6 +109,127 @@ test("Node.js Doctor shares the Install Core version authority", () => {
   });
   expect(shadowed).toMatchObject({ id: "platform.node", status: "ok" });
 
+});
+
+test("Bun package runner Doctor proves `bun x` and only reports a standalone bunx as optional", () => {
+  const calls = [];
+  const bunOnly = bunPackageRunnerCheck({
+    command: "C:\\Users\\Builder\\.bun\\bin\\bun.exe",
+    cwd: "C:\\Users\\Builder\\Lazurio",
+    platform: "win32",
+    requiredVersion: "1.4.2",
+    resolvePathCommand: () => null,
+    run: (command, args) => {
+      calls.push([command, ...args]);
+      // Bun 1.4 prints the bunx usage contract but exits 1 without a package.
+      return { ok: false, exitCode: 1, stdout: "", stderr: "Usage: bunx [flags] <package><@version> [flags and arguments for the package]" };
+    },
+  });
+
+  expect(calls).toEqual([["C:\\Users\\Builder\\.bun\\bin\\bun.exe", "x", "--help"]]);
+  expect(bunOnly).toMatchObject({ id: "platform.bun_package_runner", status: "ok", severity: "required" });
+  expect(bunOnly.message).toContain("`bun x`");
+  expect(bunOnly.message).toContain("bunx není potřeba");
+  expect(bunOnly.details).toContain("standalone_bunx: absent (optional, not required)");
+  expect(bunOnly.links).toEqual([]);
+
+  const withBunx = bunPackageRunnerCheck({
+    command: "C:\\Users\\Builder\\.bun\\bin\\bun.exe",
+    cwd: "C:\\Users\\Builder\\Lazurio",
+    platform: "win32",
+    requiredVersion: "1.4.2",
+    resolvePathCommand: (command) => (command === "bunx" ? "C:\\Users\\Builder\\.bun\\bin\\bunx.exe" : null),
+    run: () => ({ ok: true, exitCode: 0, stdout: "Usage: bunx [flags] <package>", stderr: "" }),
+  });
+  expect(withBunx.status).toBe("ok");
+  expect(withBunx.details).toContain("standalone_bunx: C:\\Users\\Builder\\.bun\\bin\\bunx.exe (optional, not required)");
+});
+
+test("Bun package runner failure carries the official version-pinned remedy and no registry package", () => {
+  const failing = bunPackageRunnerCheck({
+    command: "C:\\Users\\Builder\\.bun\\bin\\bun.exe",
+    cwd: "C:\\Users\\Builder\\Lazurio",
+    platform: "win32",
+    requiredVersion: "1.4.2",
+    resolvePathCommand: () => null,
+    run: () => ({ ok: false, exitCode: 1, stdout: "", stderr: "error: unknown subcommand" }),
+  });
+
+  expect(failing).toMatchObject({ id: "platform.bun_package_runner", status: "fail", severity: "required" });
+  expect(failing.message).toContain("`bun x`");
+  expect(failing.message).toContain("připnutý přesně na 1.4.2");
+  expect(failing.message).toContain("balíček z jiného registru není náprava");
+  expect(failing.links).toEqual([
+    { label: "Oficiální instalace Bun", kind: "external", url: "https://bun.com/docs/installation" },
+  ]);
+  expect(failing.details).toEqual(expect.arrayContaining([
+    "command: C:\\Users\\Builder\\.bun\\bin\\bun.exe x --help",
+    "error: unknown subcommand",
+    "standalone_bunx: absent (optional, not required)",
+    "required: 1.4.2",
+    "remedy_source: official_bun_installer_pinned",
+    'install_or_update_command: iex "& {$(irm https://bun.com/install.ps1)} -Version 1.4.2"',
+    "installation_policy: use_existing_explicit_mandate_or_ask_principal",
+  ]));
+  expect(JSON.stringify(failing)).not.toMatch(/npm|npx|winget|choco|scoop/iu);
+
+  const missing = bunPackageRunnerCheck({
+    command: null,
+    cwd: "/Users/builder/Lazurio",
+    platform: "darwin",
+    requiredVersion: "1.4.2",
+    resolvePathCommand: () => null,
+    run: () => {
+      throw new Error("missing Bun must not be executed");
+    },
+  });
+  expect(missing.status).toBe("fail");
+  expect(missing.details).toContain('install_or_update_command: curl -fsSL https://bun.com/install | bash -s "bun-v1.4.2"');
+});
+
+test("Bun runtime and PATH Doctor failures point to the official pinned installer", () => {
+  const notOnPath = bunPathCheck({
+    pathExecutable: null,
+    cwd: "C:\\Users\\Builder\\Lazurio",
+    platform: "win32",
+    requiredVersion: "1.4.2",
+    run: () => {
+      throw new Error("missing bun must not be executed");
+    },
+  });
+  expect(notOnPath).toMatchObject({ id: "platform.bun_path", status: "fail" });
+  expect(notOnPath.links.map((link) => link.url)).toEqual(["https://bun.com/docs/installation"]);
+  expect(notOnPath.details).toContain('install_or_update_command: iex "& {$(irm https://bun.com/install.ps1)} -Version 1.4.2"');
+
+  const wrongVersion = bunPathCheck({
+    pathExecutable: "/usr/local/bin/bun",
+    cwd: "/Users/builder/Lazurio",
+    platform: "darwin",
+    requiredVersion: "1.4.2",
+    run: () => ({ ok: true, exitCode: 0, stdout: "1.4.0", stderr: "" }),
+  });
+  expect(wrongVersion.status).toBe("fail");
+  expect(wrongVersion.details).toContain('install_or_update_command: curl -fsSL https://bun.com/install | bash -s "bun-v1.4.2"');
+
+  const exact = bunPathCheck({
+    pathExecutable: "/usr/local/bin/bun",
+    cwd: "/Users/builder/Lazurio",
+    platform: "darwin",
+    requiredVersion: "1.4.2",
+    run: () => ({ ok: true, exitCode: 0, stdout: "1.4.2", stderr: "" }),
+  });
+  expect(exact).toMatchObject({ status: "ok", links: [] });
+
+  const mismatch = bunRuntimeCheck({
+    companiesRoot: "/tmp/test-root",
+    bunExecutable: "/usr/local/bin/bun",
+    platform: "linux",
+    requiredVersion: "1.4.2",
+    run: () => ({ ok: true, exitCode: 0, stdout: "1.4.1", stderr: "" }),
+  });
+  expect(mismatch.status).toBe("fail");
+  expect(mismatch.message).toContain("Principála");
+  expect(mismatch.details).toContain("remedy_source: official_bun_installer_pinned");
 });
 
 test("Codex Doctor names the broken WinGet alias without accepting its target binary as ready", () => {

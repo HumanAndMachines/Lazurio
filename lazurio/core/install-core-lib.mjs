@@ -9,6 +9,8 @@ import {
   sanitizedGitEnvironment,
 } from "./cli-provenance-lib.mjs";
 import {
+  BUN_PACKAGE_RUNNER_PROBE_ARGS,
+  classifyBunPackageRunnerProbe,
   classifyToolVersion,
   classifyBunRuntime,
   classifyNodeRuntime,
@@ -59,6 +61,7 @@ const reasonsByStep = Object.freeze({
     "bun_runtime_not_on_path",
     "bun_path_identity_mismatch",
     "bun_path_unusable",
+    "bun_package_runner_unusable",
     "probe_failed",
   ]),
   git: new Set([
@@ -141,9 +144,22 @@ export function inspectLazurioInstallation({
         cwd: commandCwd,
       });
       const observedVersion = result?.stdout?.trim();
-      return result?.status === 0 && observedVersion === requiredBunVersion
+      if (result?.status !== 0 || observedVersion !== requiredBunVersion) return failed("bun_path_unusable");
+      // Versioned repository scripts execute packages through `bun x`; the
+      // exact Bun on PATH must provide it. A standalone `bunx` is not required.
+      const packageRunner = runCommand({
+        executable: pathExecutable,
+        args: [...BUN_PACKAGE_RUNNER_PROBE_ARGS],
+        environment,
+        cwd: commandCwd,
+      });
+      return classifyBunPackageRunnerProbe({
+        exitCode: packageRunner?.status ?? null,
+        stdout: packageRunner?.stdout,
+        stderr: packageRunner?.stderr,
+      }) === "ready"
         ? completed("bun_runtime_current")
-        : failed("bun_path_unusable");
+        : failed("bun_package_runner_unusable");
     }
     if (bunRuntime.status === "mismatch") return actionRequired("bun_runtime_mismatch");
     return failed("bun_runtime_unavailable");

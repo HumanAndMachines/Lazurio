@@ -123,6 +123,10 @@ test("independent probes continue after a bounded failure", () => {
       if (executable === process.execPath && args[0] === "--version") {
         return { status: 0, stdout: "1.4.2" };
       }
+      if (executable === process.execPath && args[0] === "x") {
+        // Bun 1.4 exits 1 with the bunx usage contract when no package is given.
+        return { status: 1, stdout: "", stderr: "Usage: bunx [flags] <package><@version> [flags and arguments for the package]" };
+      }
       if (executable === "/trusted/bin/gh" && args[0] === "--version") return { status: 0 };
       if (executable === "/trusted/bin/node" && args[0] === "--version") {
         return { status: 0, stdout: "v24.19.0" };
@@ -136,10 +140,16 @@ test("independent probes continue after a bounded failure", () => {
     status: "failed",
     reason: "probe_failed",
   });
+  expect(report.steps.find((step) => step.id === "bun")).toEqual({
+    id: "bun",
+    status: "completed",
+    reason: "bun_runtime_current",
+  });
   expect(report.steps.find((step) => step.id === "github_cli").status).toBe("completed");
   expect(report.steps.find((step) => step.id === "github_auth").reason).toBe("github_login_required");
   expect(invoked).toEqual([
     `${process.execPath} --version`,
+    `${process.execPath} x --help`,
     "/trusted/bin/gh --version",
     "/trusted/bin/node --version",
     "/trusted/bin/gh auth status --hostname github.com",
@@ -190,6 +200,7 @@ test("supported complete fixture exits zero with all probes completed", () => {
   expect(installExitCode(report)).toBe(0);
   expect(isValidLazurioInstallReport(report)).toBe(true);
   expect(commands).toEqual([
+    { executable: process.execPath, cwd: process.cwd() },
     { executable: process.execPath, cwd: process.cwd() },
     { executable: "C:\\Program Files\\Git\\cmd\\git.exe", cwd: process.cwd() },
     { executable: "C:\\Program Files\\GitHub CLI\\gh.exe", cwd: process.cwd() },
@@ -265,6 +276,50 @@ test("Bun probe requires the exact packageManager version and reports both versi
   });
   expect(report.status).toBe("action_required");
   expect(validateAgainstSchema(report, schema, "install")).toEqual([]);
+});
+
+test("an exact Bun on PATH without the `bun x` package runner cannot mark the machine ready", () => {
+  const invoked = [];
+  const report = inspectLazurioInstallation({
+    root: null,
+    platform: "win32",
+    architecture: "x64",
+    bunVersion: "1.4.2",
+    requiredBunVersion: "1.4.2",
+    environment: { USERPROFILE: "C:\\Users\\example", Path: "C:\\Users\\example\\.bun\\bin" },
+    homeDirectory: "C:\\Users\\example",
+    resolveGit: () => null,
+    resolveGitHubCli: () => null,
+    resolvePathCommand: (command, context) => (
+      command === "bun" ? process.execPath : fixturePathCommand(command, context)
+    ),
+    runCommand: ({ executable, args }) => {
+      invoked.push([executable, ...args].join(" "));
+      if (executable === process.execPath && args[0] === "--version") return { status: 0, stdout: "1.4.2" };
+      if (executable === process.execPath && args[0] === "x") {
+        // An arbitrary exit 1 without the bunx usage sentinel is not capability proof.
+        return { status: 1, stdout: "", stderr: "error: unknown subcommand" };
+      }
+      if (executable === "/trusted/bin/node" && args[0] === "--version") return { status: 0, stdout: "v24.19.0" };
+      return { status: 0, stdout: "" };
+    },
+    inspectRoot: missingRootObservation,
+  });
+
+  expect(report.machine.bun).toEqual({ status: "current", current_version: "1.4.2", required_version: "1.4.2" });
+  expect(report.steps.find((step) => step.id === "bun")).toEqual({
+    id: "bun",
+    status: "failed",
+    reason: "bun_package_runner_unusable",
+  });
+  expect(invoked.filter((call) => call.startsWith(process.execPath))).toEqual([
+    `${process.execPath} --version`,
+    `${process.execPath} x --help`,
+  ]);
+  expect(report.status).toBe("failed");
+  expect(installExitCode(report)).toBe(2);
+  expect(validateAgainstSchema(report, schema, "install")).toEqual([]);
+  expect(installReasonCodes()).toContain("bun_package_runner_unusable");
 });
 
 test("missing Bun runtime is a failed probe with an explicit required version", () => {
