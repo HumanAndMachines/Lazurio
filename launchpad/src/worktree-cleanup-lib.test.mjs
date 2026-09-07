@@ -347,6 +347,22 @@ test("partial failure nechá pravdivý journal a resume dokončí jen zbývajíc
   expect(midPreview.blockers.map((blocker) => blocker.code)).toContain("cleanup_incomplete");
   expect(midPreview.journal.remaining_steps).toEqual(["remove_edit", "remove_sidecar"]);
 
+  // Resume znovu vyžaduje runtime evidenci: mezitím spuštěný environment
+  // destruktivní krok zablokuje bez zásahu.
+  await expect(applyWorktreeCleanup({
+    companiesRoot: fixture.root,
+    worktree,
+    expectedFingerprint: preview.preview_fingerprint,
+    inspectRuntimeUsage: async () => ({ verified: true, in_use: true, message: "app běží", details: [] }),
+  })).rejects.toMatchObject({ code: "cleanup_runtime_in_use" });
+  expect(existsSync(fixture.worktreePath)).toBe(true);
+  await expect(applyWorktreeCleanup({
+    companiesRoot: fixture.root,
+    worktree,
+    expectedFingerprint: preview.preview_fingerprint,
+  })).rejects.toMatchObject({ code: "cleanup_runtime_unverified" });
+  expect(existsSync(fixture.worktreePath)).toBe(true);
+
   const resumeLog = [];
   const applied = await applyWorktreeCleanup({
     companiesRoot: fixture.root,
@@ -361,6 +377,104 @@ test("partial failure nechá pravdivý journal a resume dokončí jen zbývajíc
   expect(existsSync(journalPath)).toBe(false);
   // Dokončený dependency krok se při resume neopakuje jako destruktivní remove.
   expect(resumeLog.filter((entry) => entry.args[1] === "remove").length).toBe(1);
+});
+
+test("required slot bez sidecar memberu blokuje cleanup fail-closed", async () => {
+  const fixture = await createCleanupFixture({ branch: "CAC-0099-cleanup-slotless" });
+  await markPlanDone(fixture);
+  await signOffSidecar(fixture);
+  const sidecar = JSON.parse(await readFile(fixture.sidecarPath, "utf8"));
+  sidecar.members = sidecar.members.filter((member) => member.role !== "dependency");
+  await writeFile(fixture.sidecarPath, `${JSON.stringify(sidecar, null, 2)}\n`);
+  const worktree = await findWorktreeRecord(fixture);
+
+  const preview = await previewWorktreeCleanup({
+    companiesRoot: fixture.root,
+    worktree,
+    inspectRuntimeUsage: runtimeIdle,
+  });
+  expect(preview.state).toBe("needs_attention");
+  expect(preview.blockers.map((blocker) => blocker.code)).toContain("member_shape_invalid");
+});
+
+test("tamper journal cesty mimo environment resume odmítne bez destrukce", async () => {
+  const fixture = await createCleanupFixture({ branch: "CAC-0099-cleanup-tamper" });
+  await markPlanDone(fixture);
+  await signOffSidecar(fixture);
+  const worktree = await findWorktreeRecord(fixture);
+  const journalPath = cleanupJournalPath({ companiesRoot: fixture.root, worktree });
+  const failingRunGit = recordingRunGit([], {
+    failOn: (args, options) => args[1] === "remove" && !options?.cwd?.endsWith("db"),
+  });
+  const preview = await previewWorktreeCleanup({
+    companiesRoot: fixture.root,
+    worktree,
+    inspectRuntimeUsage: runtimeIdle,
+    runGitFn: failingRunGit,
+  });
+  await expect(applyWorktreeCleanup({
+    companiesRoot: fixture.root,
+    worktree,
+    expectedFingerprint: preview.preview_fingerprint,
+    inspectRuntimeUsage: runtimeIdle,
+    runGitFn: failingRunGit,
+  })).rejects.toMatchObject({ code: "cleanup_step_failed" });
+
+  const journal = JSON.parse(await readFile(journalPath, "utf8"));
+  journal.environment.owner_root = "/tmp/dev6555-attacker";
+  await writeFile(journalPath, `${JSON.stringify(journal, null, 2)}\n`);
+
+  await expect(applyWorktreeCleanup({
+    companiesRoot: fixture.root,
+    worktree,
+    expectedFingerprint: preview.preview_fingerprint,
+    inspectRuntimeUsage: runtimeIdle,
+  })).rejects.toMatchObject({ code: "cleanup_journal_invalid" });
+  expect(existsSync(fixture.worktreePath)).toBe(true);
+  expect(existsSync(fixture.sidecarPath)).toBe(true);
+});
+
+test("action lane dokončí journal i po odstraněném edit worktree", async () => {
+  const fixture = await createCleanupFixture({ branch: "CAC-0099-cleanup-tail" });
+  await markPlanDone(fixture);
+  await signOffSidecar(fixture);
+  const worktree = await findWorktreeRecord(fixture);
+  const journalPath = cleanupJournalPath({ companiesRoot: fixture.root, worktree });
+  const failingRunGit = recordingRunGit([], {
+    failOn: (args, options) => args[1] === "remove" && !options?.cwd?.endsWith("db"),
+  });
+  const preview = await previewWorktreeCleanup({
+    companiesRoot: fixture.root,
+    worktree,
+    inspectRuntimeUsage: runtimeIdle,
+    runGitFn: failingRunGit,
+  });
+  await expect(applyWorktreeCleanup({
+    companiesRoot: fixture.root,
+    worktree,
+    expectedFingerprint: preview.preview_fingerprint,
+    inspectRuntimeUsage: runtimeIdle,
+    runGitFn: failingRunGit,
+  })).rejects.toMatchObject({ code: "cleanup_step_failed" });
+
+  // Simulace pádu po provedeném remove_edit, ale před zápisem completed:
+  // worktree je pryč, journal drží remove_edit completed a remove_sidecar pending.
+  runGit(["worktree", "remove", fixture.worktreePath], fixture.missionControlRepo);
+  runGit(["worktree", "prune", "--expire", "now"], fixture.missionControlRepo);
+  const journal = JSON.parse(await readFile(journalPath, "utf8"));
+  journal.steps.find((step) => step.id === "remove_edit").status = "completed";
+  await writeFile(journalPath, `${JSON.stringify(journal, null, 2)}\n`);
+
+  const applied = await applyWorktreeCleanupEnvironment({
+    companiesRoot: fixture.root,
+    repoKey: "BetaCo::mission-control",
+    slug: fixture.branch,
+    expectedFingerprint: preview.preview_fingerprint,
+    inspectRuntimeUsage: runtimeIdle,
+  });
+  expect(applied.steps.find((step) => step.id === "remove_sidecar").status).toBe("completed");
+  expect(existsSync(fixture.sidecarPath)).toBe(false);
+  expect(existsSync(journalPath)).toBe(false);
 });
 
 test("poškozený journal je fail-closed blocker bez destrukce", async () => {

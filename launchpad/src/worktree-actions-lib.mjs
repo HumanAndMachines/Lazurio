@@ -578,7 +578,7 @@ export async function applyWorktreeCleanupEnvironment({
 } = {}) {
   if (!companiesRoot) throw new Error("applyWorktreeCleanupEnvironment requires companiesRoot");
   const repo = await resolveRepo(companiesRoot, repoKey);
-  const worktree = await findWorktree(companiesRoot, repo, validateSlug(slug));
+  const worktree = await findCleanupWorktreeRecord(companiesRoot, repo, validateSlug(slug));
   await assertWorktreePathsInsideOrganization({
     companiesRoot,
     repo,
@@ -609,6 +609,32 @@ export async function applyWorktreeCleanupEnvironment({
       }
     },
   );
+}
+
+// Po odstranění edit worktree už directory scan environment nevidí, ale
+// nedokončený journal (typicky zbývající remove_sidecar) musí jít dokončit.
+// Rekonstrukce používá výhradně kanonické cesty odvozené z repo kontraktu;
+// journal sám autoritu nezískává — jeho hranice znovu prokáže cleanup lib.
+async function findCleanupWorktreeRecord(companiesRoot, repo, slug) {
+  try {
+    return await findWorktree(companiesRoot, repo, slug);
+  } catch (error) {
+    if (!(error instanceof WorktreeActionError) || error.code !== "worktree_not_found") throw error;
+    const parent = parentPathForRepo(repo);
+    const journalPath = join(companiesRoot, repo.organization_path, parent, `${slug}.cleanup.journal.json`);
+    if (!existsSync(journalPath)) throw error;
+    const organizationRelative = (path) => relative(companiesRoot, path).replace(/\\/g, "/");
+    return {
+      slug,
+      organization: repo.organization,
+      organization_path: repo.organization_path,
+      module: repo.module,
+      branch: null,
+      plan_code: null,
+      path: organizationRelative(join(companiesRoot, repo.organization_path, parent, slug)),
+      sidecar_path: organizationRelative(join(companiesRoot, repo.organization_path, parent, `${slug}.worktree.json`)),
+    };
+  }
 }
 
 function validatePrEvidencePayload(prEvidence) {

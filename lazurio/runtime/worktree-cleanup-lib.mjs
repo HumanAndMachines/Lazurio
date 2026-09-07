@@ -228,6 +228,7 @@ export async function applyWorktreeCleanup({
       organizationRoot,
       journalPath,
       journal: journal.value,
+      inspectRuntimeUsage,
       runGitFn,
       now,
     });
@@ -325,6 +326,7 @@ export async function applyWorktreeCleanup({
     organizationRoot,
     journalPath,
     journal: journalValue,
+    inspectRuntimeUsage,
     runGitFn,
     now,
   });
@@ -336,9 +338,11 @@ async function resumeCleanupFromJournal({
   organizationRoot,
   journalPath,
   journal,
+  inspectRuntimeUsage,
   runGitFn,
   now,
 }) {
+  await assertJournalPathsWithinEnvironment({ organizationRoot, journal });
   const worktreePath = resolve(companiesRoot, worktree.path);
   if (existsSync(worktreePath)) {
     const boundary = await inspectWorktreeDirectory({ organizationRoot, worktreePath });
@@ -365,9 +369,58 @@ async function resumeCleanupFromJournal({
     organizationRoot,
     journalPath,
     journal,
+    inspectRuntimeUsage,
     runGitFn,
     now,
   });
+}
+
+// Journal je editovatelný lokální soubor; resume proto každou cestu, kterou by
+// destruktivní krok použil, znovu prokáže uvnitř environment hranic. Tamper
+// nebo drift je fail-closed konec, nikdy zásah mimo Organization root.
+async function assertJournalPathsWithinEnvironment({ organizationRoot, journal }) {
+  const organizationRealPath = await realpathOrNull(organizationRoot);
+  const organizationLexicalPath = resolve(organizationRoot);
+  const environment = journal.environment ?? {};
+  const issues = [];
+  if (!organizationRealPath) issues.push("Organization root nelze kanonicky rozbalit");
+  // Journal drží mix kanonických (realpath) a lexikálních absolutních cest;
+  // obě formy se prokazují proti téže Organization hranici.
+  const insideOrganization = (value) =>
+    typeof value === "string"
+    && organizationRealPath
+    && (
+      isPathSameOrDescendant(organizationRealPath, value)
+      || isPathSameOrDescendant(organizationLexicalPath, value)
+    );
+  if (!insideOrganization(environment.worktree_real_path) || samePath(environment.worktree_real_path, organizationRealPath)) {
+    issues.push("worktree_real_path neleží uvnitř Organization rootu");
+  }
+  if (!insideOrganization(environment.owner_root)) issues.push("owner_root neleží uvnitř Organization rootu");
+  if (!insideOrganization(environment.sidecar_path) || samePath(environment.sidecar_path, organizationRealPath)) {
+    issues.push("sidecar_path neleží uvnitř Organization rootu");
+  }
+  if (!SHA.test(environment.edit_head ?? "")) issues.push("edit_head není exact SHA");
+  if (typeof environment.sidecar_sha256 !== "string" || !/^[0-9a-f]{64}$/.test(environment.sidecar_sha256)) {
+    issues.push("sidecar_sha256 není platný otisk");
+  }
+  for (const step of journal.steps ?? []) {
+    if (step.kind !== "remove_dependency") continue;
+    if (!insideOrganization(step.source_path)) issues.push(`source_path kroku ${step.id} neleží uvnitř Organization rootu`);
+    if (
+      typeof step.target_real_path !== "string"
+      || !isPathSameOrDescendant(environment.worktree_real_path ?? "", step.target_real_path)
+    ) {
+      issues.push(`target_real_path kroku ${step.id} neleží uvnitř edit worktree`);
+    }
+    if (!SHA.test(step.base_sha ?? "")) issues.push(`base_sha kroku ${step.id} není exact SHA`);
+  }
+  if (issues.length > 0) {
+    throw new WorktreeCleanupError(
+      `Cleanup journal neprokázal environment hranice: ${issues.join("; ")}.`,
+      { code: "cleanup_journal_invalid", details: issues },
+    );
+  }
 }
 
 async function executeCleanupJournal({
@@ -376,6 +429,7 @@ async function executeCleanupJournal({
   organizationRoot,
   journalPath,
   journal,
+  inspectRuntimeUsage,
   runGitFn,
   now,
 }) {
@@ -384,6 +438,22 @@ async function executeCleanupJournal({
     if (step.status === "completed") {
       results.push({ id: step.id, status: "completed" });
       continue;
+    }
+    // Runtime brána těsně před každým destruktivním krokem: mezi preview,
+    // resume a jednotlivými kroky mohl někdo environment spustit. Neúplná
+    // evidence je blocker, nikdy důvod proces ukončit.
+    if (step.kind !== "remove_sidecar") {
+      const runtime = await resolveRuntimeEvidence({
+        inspectRuntimeUsage,
+        environment: { slug: journal.environment.slug, organization: journal.environment.organization },
+        worktreeRealPath: journal.environment.worktree_real_path,
+      });
+      if (!runtime.verified || runtime.in_use) {
+        throw new WorktreeCleanupError(
+          `Runtime evidence blokuje krok ${step.id}: ${runtime.message}`,
+          { code: runtime.verified ? "cleanup_runtime_in_use" : "cleanup_runtime_unverified", details: runtime.details },
+        );
+      }
     }
     const outcome = await executeCleanupStep({
       companiesRoot,
@@ -859,6 +929,19 @@ async function inspectDependencyMembers({
     return [];
   }
   const requirementsBySlot = new Map(requirements.dependencies.map((dependency) => [dependency.slot_path, dependency]));
+  // Symetrický fail-closed: každý aktivní required slot musí mít právě jeden
+  // sidecar member. Slot deklarovaný až po create nemá v environmentu ověřenou
+  // evidenci a případný ručně přidaný checkout na jeho (gitignorované) cestě
+  // by teardown mohl tiše zasáhnout.
+  for (const dependency of requirements.dependencies) {
+    const matching = dependencyMembers.filter((member) => member?.slot_path === dependency.slot_path);
+    if (matching.length !== 1) {
+      blockers.push(blocker(
+        "member_shape_invalid",
+        `Required repository-db slot ${dependency.slot_path} nemá právě jeden sidecar dependency member; environment neodpovídá aktuální deklaraci.`,
+      ));
+    }
+  }
   const dependencies = [];
   for (const member of dependencyMembers) {
     const dependency = requirementsBySlot.get(member.slot_path);
