@@ -3,14 +3,24 @@
 Status: **cílový kontrakt a implementační plán CAC-0065**. Fresh-main task
 preflight a PR push preflight popsané níže jsou aktivní. `lazurio doctor`
 navíc lokálně reportuje nepovolené worktree cesty a jejich pozorovatelný Git
-stav, ale cleanup neklasifikuje ani neprovádí. Plánované `doctor worktrees ...`
-create/hydrate/cleanup příkazy zatím aktivním operátorským postupem nejsou.
+stav. Plánované `doctor worktrees ...` create/hydrate CLI příkazy zatím
+aktivním operátorským postupem nejsou.
 Aktivní Launchpad guarded create/publish lane už umí jeden edit worktree. Pokud
 jeho explicitně deklarovaná App vyžaduje aktivní child `repository_db_mount`,
 create navíc materializuje exact detached linked worktree ze zdravého
 kanonického checkoutu, zapíše oba members do v1 sidecaru a Runtime i Doctor
-ověřují tento binding. Obecné dependency profily, outer Organization
-environment a automatický cleanup zůstávají cílem CAC-0065.
+ověřují tento binding. Pro takto vytvořený single-edit environment je aktivní
+i úzká cleanup lane (DEV-6555): sdílená knihovna
+`lazurio/runtime/worktree-cleanup-lib.mjs` poskytuje read-only preview
+povinných guardů níže a explicitní apply, který po živém rechecku proti
+preview fingerprintu a pod canonical create lockem odstraní nested-first
+pouze sidecarem vlastněné members (dependency child → edit worktree →
+sidecar) s idempotentním completed/remaining journalem; branch refs nechává
+a jen je jmenuje. Launchpad ji vystavuje přes
+`POST /api/git/repos/<repo>/worktrees/<slug>/cleanup/preview|apply`
+(hosted profil apply odmítá) a Doctor čte tentýž výsledek v checku
+`git.worktrees.cleanup`. Obecné dependency profily, outer Organization
+environment a širší automatický cleanup zůstávají cílem CAC-0065.
 
 Tento dokument přesně definuje, jak má Lazurio vytvářet,
 zobrazovat, kontrolovat a uklízet Git worktrees pro Lazurio root a pro

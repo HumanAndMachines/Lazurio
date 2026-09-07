@@ -3143,7 +3143,12 @@ test("CAC-0042: Doctor reportuje worktree problémy bez cleanup rozhodování", 
   expect(checks.get("git.worktrees.contract")?.details.join("\n")).toContain("Sidecar nemá conversation_origin");
   expect(checks.get("git.worktrees.contract")?.details.join("\n")).not.toContain("[object Object]");
   expect(checks.get("launchpad.discovery")?.details.join("\n")).not.toContain("Sidecar nemá conversation_origin");
-  expect(checks.has("git.worktrees.cleanup")).toBe(false);
+  // DEV-6555: Doctor cleanup check je read-only eligibility nad terminálními
+  // environments; aktivní plány sem nepatří a nic se tu nerozhoduje ani nemaže.
+  expect(checks.get("git.worktrees.cleanup")?.status).toBe("ok");
+  expect(checks.get("git.worktrees.cleanup")?.details).toEqual(
+    expect.arrayContaining(["checked_environments: 0"]),
+  );
   expect(checks.get("git.worktrees.dependencies")?.status).toBe("warn");
   expect(checks.get("git.worktrees.dependencies")?.details).toEqual(expect.arrayContaining([
     "checked_worktrees: 2",
@@ -3262,6 +3267,71 @@ test("worktree dependency Doctor proves the exact repository-db member and rejec
     "repository_db_binding_invalid: 1",
   ]));
   expect(drifted?.details.join("\n")).toContain("binding HEAD neodpovídá sidecar base_sha");
+});
+
+test("worktree cleanup Doctor čte terminální environment stejnou preview knihovnou jako Launchpad", async () => {
+  const fixture = await createRepositoryDbWorktreeFixture({ port: 25426 });
+  tempRoots.push(fixture.root);
+  const branch = "CAC-0099-doctor-cleanup";
+  await createWorktreeFromPlan({
+    companiesRoot: fixture.root,
+    repoKey: "BetaCo::mission-control",
+    planPath: fixture.planPath,
+    branch,
+  });
+  const planFile = join(fixture.orgRoot, fixture.planPath);
+  await writeFile(planFile, (await readFile(planFile, "utf8")).replace("status: in_progress", "status: done"));
+  runGit(["add", "-A"], fixture.repositoryDbRepo);
+  runGit(["commit", "-m", "plan done"], fixture.repositoryDbRepo);
+  const sidecarPath = join(fixture.orgRoot, ".worktrees", "root", "mission-control", `${branch}.worktree.json`);
+  const sidecar = JSON.parse(await readFile(sidecarPath, "utf8"));
+  sidecar.recovery_handoff = {
+    state: "completed",
+    summary: "Doctor cleanup fixture.",
+    blocker: null,
+    next_action: "Ukliď environment.",
+    updated_at: new Date().toISOString(),
+  };
+  await writeFile(sidecarPath, `${JSON.stringify(sidecar, null, 2)}\n`);
+
+  // Bez runtime state rootu je evidence fail-closed unverified.
+  const unverifiedReport = await buildLaunchpadDoctorReport({
+    companiesRoot: fixture.root,
+    launchpadRoot: join(fixture.root, "launchpad"),
+    runtimeManager: { appsWithRuntime: async (apps) => apps },
+    runChildDoctors: false,
+  });
+  const unverified = unverifiedReport.checks.find((check) => check.id === "git.worktrees.cleanup");
+  expect(unverified?.status).toBe("ok");
+  expect(unverified?.details).toEqual(expect.arrayContaining(["checked_environments: 1"]));
+  expect(unverified?.details.join("\n")).toContain(`needs_attention: ${branch}`);
+  expect(unverified?.details.join("\n")).toContain("runtime_unverified");
+
+  // Se stejným durable runtime store jako Launchpad je environment ready_to_delete.
+  const report = await buildLaunchpadDoctorReport({
+    companiesRoot: fixture.root,
+    launchpadRoot: join(fixture.root, "launchpad"),
+    runtimeManager: { appsWithRuntime: async (apps) => apps },
+    runChildDoctors: false,
+    runtimeStateRoot: join(fixture.root, "launchpad"),
+  });
+  const cleanup = report.checks.find((check) => check.id === "git.worktrees.cleanup");
+  expect(cleanup?.status).toBe("ok");
+  expect(cleanup?.details.join("\n")).toContain(`ready_to_delete: ${branch}`);
+
+  // Přerušený cleanup journal je jediný warn stav checku.
+  const journalPath = join(fixture.orgRoot, ".worktrees", "root", "mission-control", `${branch}.cleanup.journal.json`);
+  await writeFile(journalPath, "{ not json");
+  const journalReport = await buildLaunchpadDoctorReport({
+    companiesRoot: fixture.root,
+    launchpadRoot: join(fixture.root, "launchpad"),
+    runtimeManager: { appsWithRuntime: async (apps) => apps },
+    runChildDoctors: false,
+    runtimeStateRoot: join(fixture.root, "launchpad"),
+  });
+  const journalCheck = journalReport.checks.find((check) => check.id === "git.worktrees.cleanup");
+  expect(journalCheck?.status).toBe("warn");
+  expect(journalCheck?.details.join("\n")).toContain("cleanup_journal_invalid");
 });
 
 test("worktree dependency Doctor reports a legacy sidecar without module_path", async () => {

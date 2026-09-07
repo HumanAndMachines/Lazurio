@@ -16,6 +16,10 @@ import {
   runtimeListenerHasStaticLease,
   runtimeUrlHost,
 } from "./runtime-lib.mjs";
+import {
+  inspectDurableWorktreeRuntimeUsage,
+  previewWorktreeCleanup,
+} from "./worktree-cleanup-lib.mjs";
 import { buildWorktreeIndex } from "./worktree-lib.mjs";
 import {
   GIT_LOCAL_TIMEOUT_MS,
@@ -464,7 +468,10 @@ export async function buildLaunchpadDoctorReport(options = {}) {
   // gbrain mount stav). Nikdy nečte obsah osobních modulů ani gbrain zápisů a
   // osobní aplikace se NIKDY nemíchají do org appsResponse. Selhání personalspace
   // discovery nesmí shodit celý org doctor → izolované do skip/warn.
-  const worktreeChecks = await buildWorktreeDoctorChecks({ companiesRoot: appsResponse.root });
+  const worktreeChecks = await buildWorktreeDoctorChecks({
+    companiesRoot: appsResponse.root,
+    runtimeStateRoot: options.runtimeStateRoot ?? null,
+  });
   const personalspaceChecks = await buildPersonalspaceDoctorChecks({
     companiesRoot: appsResponse.root,
     rootSourceRoot: options.rootSourceRoot ?? appsResponse.control_root ?? appsResponse.root,
@@ -556,13 +563,14 @@ async function buildPersonalspaceDoctorChecks({ companiesRoot, rootSourceRoot = 
   }
 }
 
-async function buildWorktreeDoctorChecks({ companiesRoot }) {
+async function buildWorktreeDoctorChecks({ companiesRoot, runtimeStateRoot = null }) {
   try {
     const index = await buildWorktreeIndex({ companiesRoot });
     return [
       worktreeInventoryCheck(index),
       worktreeContractCheck(index),
       await worktreeDependencyCheck({ companiesRoot, index }),
+      await worktreeCleanupCheck({ companiesRoot, index, runtimeStateRoot }),
     ];
   } catch (error) {
     return [
@@ -592,8 +600,62 @@ async function buildWorktreeDoctorChecks({ companiesRoot }) {
         blockedReason: `Worktree inventory nejde načíst: ${error.message}`,
         remedy: "Oprav worktree inventory (sidecary, umístění) a spusť doctor znovu.",
       }),
+      blockedCheck({
+        id: "git.worktrees.cleanup",
+        title: "Worktree cleanup eligibility",
+        message: "Worktree cleanup kontroly se nedaly provést, protože inventory nejde načíst.",
+        paths: ["organizations"],
+        blockedReason: `Worktree inventory nejde načíst: ${error.message}`,
+        remedy: "Oprav worktree inventory (sidecary, umístění) a spusť doctor znovu.",
+      }),
     ];
   }
+}
+
+// Read-only cleanup eligibility (DEV-6555): stejná previewWorktreeCleanup
+// knihovna jako Launchpad API, žádná destruktivní akce. Kandidáti jsou pouze
+// environments s terminálním plánem nebo terminální edit disposition; aktivní
+// práce se nehodnotí. Warn signalizuje jen přerušený/nečitelný cleanup journal
+// — to je stav, který si žádá dokončení nebo vědomé rozhodnutí.
+async function worktreeCleanupCheck({ companiesRoot, index, runtimeStateRoot }) {
+  const terminalPlanStatuses = new Set(["done", "archived"]);
+  const candidates = (index.worktrees ?? []).filter((worktree) => {
+    if (worktree.ownership_status !== "owned") return false;
+    const editMember = (worktree.metadata?.members ?? []).find((member) => member?.role === "edit");
+    return terminalPlanStatuses.has(worktree.owner_plan?.status)
+      || ["merged", "abandoned"].includes(editMember?.disposition);
+  });
+  const details = [`checked_environments: ${candidates.length}`];
+  let journalAttention = false;
+  for (const worktree of candidates) {
+    const preview = await previewWorktreeCleanup({
+      companiesRoot,
+      worktree,
+      inspectRuntimeUsage: runtimeStateRoot
+        ? ({ environment }) => inspectDurableWorktreeRuntimeUsage({
+            stateRoot: runtimeStateRoot,
+            worktree: { slug: environment.slug },
+          })
+        : null,
+    });
+    const blockerCodes = preview.blockers.map((item) => item.code);
+    details.push(`${preview.state}: ${worktree.slug} (${worktree.path})${blockerCodes.length > 0 ? ` — ${blockerCodes.join(", ")}` : ""}`);
+    if (blockerCodes.includes("cleanup_incomplete") || blockerCodes.includes("cleanup_journal_invalid")) {
+      journalAttention = true;
+    }
+  }
+  return {
+    id: "git.worktrees.cleanup",
+    status: journalAttention ? "warn" : "ok",
+    severity: "local-state",
+    title: "Worktree cleanup eligibility",
+    message: candidates.length === 0
+      ? "Žádný terminální worktree environment nečeká na cleanup."
+      : `Cleanup eligibility: ${formatCount(candidates.length, "terminální environment", "terminální environments", "terminálních environments")} (viz details).`,
+    paths: ["organizations/*/.worktrees"],
+    links: [],
+    details,
+  };
 }
 
 function worktreeInventoryCheck(index) {
