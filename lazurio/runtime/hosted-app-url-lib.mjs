@@ -86,11 +86,10 @@ export function validateHostedWorkspaceBindings(
 }
 
 export function selectHostedWorkspaceApps(configuration, { apps = [], organizations = [] } = {}) {
-  if (configuration?.profile !== "hosted") return { apps: [], skipped: [] };
+  if (!validHostedContext(configuration)) return { apps: [], skipped: [] };
   const candidates = apps.filter((app) =>
     app?.company === configuration.organization_slug
-    && app?.space === "workspace"
-    && (app?.teams ?? []).includes(configuration.team_id)
+    && appInHostedScope(app, configuration)
     && typeof app?.module === "string"
   );
   const candidatesByModule = new Map();
@@ -103,11 +102,7 @@ export function selectHostedWorkspaceApps(configuration, { apps = [], organizati
     (candidate) => candidate?.slug === configuration.organization_slug,
   );
   const declaredModules = (organization?.module_declarations ?? []).filter((slot) =>
-    slot?.space === "workspace"
-    && slot?.status === "available"
-    && slot?.ui_exposure === "module"
-    && slot?.launchpad_section !== "organization"
-    && (slot?.teams ?? []).includes(configuration.team_id)
+    declarationInHostedScope(slot, configuration)
   );
   const modules = declaredModules.length > 0
     ? declaredModules.map((slot) => ({
@@ -187,13 +182,50 @@ export function projectHostedRuntimePayload(payload, app, configuration) {
 
 function hostedAppUrl(app, configuration) {
   if (
-    configuration.profile !== "hosted"
+    !validHostedContext(configuration)
     || app?.company !== configuration.organization_slug
-    || app?.space !== "workspace"
-    || !(app?.teams ?? []).includes(configuration.team_id)
+    || !appInHostedScope(app, configuration)
     || !dnsLabelPattern.test(app?.module ?? "")
   ) return null;
   return `https://${app.module}.${configuration.team_id}.${configuration.domain}/`;
+}
+
+function validHostedContext(configuration) {
+  return configuration?.profile === "hosted"
+    && organizationSlugPattern.test(configuration.organization_slug ?? "")
+    && dnsLabelPattern.test(configuration.team_id ?? "")
+    && dnsDomainPattern.test(configuration.domain ?? "");
+}
+
+function declarationInHostedScope(slot, configuration) {
+  return slot?.status === "available"
+    && slot?.ui_exposure === "module"
+    && (slot.space === "root"
+      || (slot.space === "workspace" && (slot.teams ?? []).includes(configuration.team_id)));
+}
+
+function appInHostedScope(app, configuration) {
+  if (app?.space === "workspace") return (app.teams ?? []).includes(configuration.team_id);
+  if (app?.space !== "root") return false;
+  const projection = app.module_apps;
+  const declaration = projection?.declaration;
+  // Root/UI-organization placement alone grants nothing. Only the declared
+  // default of an available local module may acquire a hosted lifecycle/URL.
+  // Organization-section Workspace modules retain their original Team intent.
+  return declarationInHostedScope(declaration, configuration)
+    && projection.state === "declared"
+    && projection.open_target_source === "declared-default"
+    && projection.open_target_app_id === app.id
+    && app.module_open_target === true
+    && declaration.path === app.module_catalog_path
+    && typeof declaration.path === "string" && declaration.path.length > 0
+    && projection.contract_path === `${app.organization_path}/${declaration.path}/lazurio.module.json`
+    && app.module_contract?.schema_version === "lazurio.module.v1"
+    && app.module_contract.id === app.module
+    && app.module_contract.company === app.company
+    && app.module_app?.declared === true
+    && app.module_app.default === true
+    && app.runtime_contract?.schema_version === "lazurio.runtime.v1";
 }
 
 function projectLifecycleUrls(payload, hostedUrl) {

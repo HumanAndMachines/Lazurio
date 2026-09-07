@@ -202,3 +202,80 @@ function workspaceApp(overrides = {}) {
     ...overrides,
   };
 }
+
+function declaredOrganizationApp() {
+  return {
+    id: "example-planning", company: "ExampleOrg", module: "planning",
+    space: "root", teams: [], organization_path: "organizations/ExampleOrg",
+    module_catalog_path: "planning", module_open_target: true,
+    module_apps: {
+      state: "declared", open_target_app_id: "example-planning",
+      open_target_source: "declared-default",
+      contract_path: "organizations/ExampleOrg/planning/lazurio.module.json",
+      declaration: { path: "planning", space: "root", teams: [], status: "available", ui_exposure: "module" },
+    },
+    module_app: { declared: true, default: true },
+    module_contract: { schema_version: "lazurio.module.v1", id: "planning", company: "ExampleOrg" },
+    runtime_contract: { schema_version: "lazurio.runtime.v1" },
+  };
+}
+
+test("declared available Organization default shares the hosted URL and lifecycle selection", () => {
+  const app = declaredOrganizationApp();
+  const inventory = { apps: [app], organizations: [{ slug: "ExampleOrg", module_declarations: [{
+    ...app.module_apps.declaration, slug: "planning", apps: app.module_apps,
+  }] }] };
+  expect(selectHostedWorkspaceApps(configuration, inventory)).toEqual({ apps: [app], skipped: [] });
+  const url = "https://planning.builders.workspace.example.test/";
+  expect(requireHostedAppUrl(app, configuration)).toBe(url);
+  expect(projectHostedRuntimePayload({ url: "http://127.0.0.1:1234", start: { url: "http://127.0.0.1:1234" } }, app, configuration))
+    .toMatchObject({ url, start: { url } });
+});
+
+test("Organization-section Workspace default retains the original Team constraint", () => {
+  const app = declaredOrganizationApp();
+  Object.assign(app.module_apps.declaration, { space: "workspace", teams: ["builders"], path: "workspace/planning" });
+  app.module_catalog_path = "workspace/planning";
+  app.module_apps.contract_path = "organizations/ExampleOrg/workspace/planning/lazurio.module.json";
+  expect(projectHostedAppUrl(app, configuration).url).toBe("https://planning.builders.workspace.example.test/");
+  expect(selectHostedWorkspaceApps(configuration, { apps: [app] }).apps).toEqual([app]);
+  app.module_apps.declaration.teams = ["other-team"];
+  expect(projectHostedAppUrl(app, configuration).url).toBeNull();
+  expect(selectHostedWorkspaceApps(configuration, { apps: [app] }).apps).toEqual([]);
+});
+
+const rootDenyCases = {
+  "foreign Organization": app => { app.company = "OtherOrg"; },
+  "productionspace": app => { app.space = "productionspace"; },
+  "unavailable checkout": app => { app.module_apps.declaration.status = "missing_access"; },
+  "diagnostics-only database": app => { app.module_apps.declaration.ui_exposure = "diagnostics-only"; },
+  "undeclared root script": app => { delete app.module_apps.declaration; },
+  "ambiguous module": app => { app.module_apps.state = "unresolved-invalid"; },
+  "missing default": app => { app.module_apps.open_target_app_id = null; },
+  "non-default sibling": app => { app.module_apps.open_target_app_id = "example-other"; },
+  "legacy inferred default": app => { app.module_apps.open_target_source = "legacy-single"; },
+  "unverified catalog path": app => { app.module_catalog_path = "other"; },
+  "missing module contract": app => { delete app.module_contract; },
+  "missing runtime contract": app => { delete app.runtime_contract; },
+  "unbound contract path": app => { app.module_apps.contract_path = "elsewhere/lazurio.module.json"; },
+  "runtime belonging to another module": app => { app.module_contract.id = "other"; },
+  "undeclared package": app => { app.module_app.declared = false; },
+  "missing default projection": app => { app.module_open_target = false; },
+};
+for (const [label, mutate] of Object.entries(rootDenyCases)) {
+  test(`hosted Organization default denies ${label}`, () => {
+    const app = declaredOrganizationApp();
+    mutate(app);
+    expect(projectHostedAppUrl(app, configuration).url).toBeNull();
+    expect(() => requireHostedAppUrl(app, configuration)).toThrow(HostedAppUrlError);
+    expect(selectHostedWorkspaceApps(configuration, { apps: [app] }).apps).toEqual([]);
+  });
+}
+
+test("invalid hosted context never manufactures a root application URL", () => {
+  for (const override of [{ domain: "https://invalid.test" }, { team_id: "../other" }, { organization_slug: "" }]) {
+    const invalid = { ...configuration, ...override };
+    expect(projectHostedAppUrl(declaredOrganizationApp(), invalid).url).toBeNull();
+    expect(selectHostedWorkspaceApps(invalid, { apps: [declaredOrganizationApp()] }).apps).toEqual([]);
+  }
+});
