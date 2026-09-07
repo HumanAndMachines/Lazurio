@@ -1,9 +1,9 @@
-# Buddy a AI Kolega v Lazuriu
+# Buddy, Workspace a automatizovaná práce v Lazuriu
 
 Lazurio je pracovní prostředí, ve kterém lidé a stroje používají stejné
-Organizace, nástroje a dohledatelné procesy. Buddy a AI Kolega nejsou dvě kopie
-Lazuria ani dlouhodobé Git branche. Jsou to dva profily jednoho produktu,
-postavené z jednoho přesného source commitu.
+Organizace, nástroje a dohledatelné procesy. Buddy je osobní Resident runtime;
+Workspace je pracovní runtime. Firemní automatizovaná Mašina používá svěřené
+účty a mandát Organizace a nevyžaduje samostatnou AI personu ani Buddy runtime.
 
 Tento manuál je veřejná a offline dostupná část kontraktu. Neobsahuje
 konkrétní osobnosti, mandáty, paměť, jména instalací, incidentní logy ani
@@ -16,9 +16,9 @@ credentials.
 | Principál | Ten, pro koho Agent pracuje a kdo má poslední slovo. |
 | Kolega | Lidský Principál. Jeho pracovní Root leží přímo v home; dnešní Source Root může do migrace nést historický název složky, fresh/Managed target je `<home>/Lazurio`. Managed profil potřebuje source checkout jen pro vývoj Lazuria. |
 | Buddy | Osobní zástupce jednoho lidského Principála uvnitř jeho Personalspace. Jedná jen v mezích jeho práv a mandátů. |
-| AI Kolega | AI Principál s vlastní identitou, Mašinou, Personalspace a pracovními právy. Není Buddy. |
+| Firemní automatizovaná Mašina | Mašina Organizace se svěřeným účtem, mandátem a odpovědným člověkem; Agenty spouští harness. |
 | Task Agent | Nástrojová pracovní relace, například Codex nebo Claude Code. Sama žádná práva nevlastní. |
-| Steward | Organizační role AI Kolegy nebo Kolegy. Její název nic neautorizuje; rozhodují živá GitHub práva. |
+| Steward | Organizační role, jejíž práci může podle mandátu vykonávat automatizace. Její název nic neautorizuje; rozhodují živá GitHub práva. |
 | Mašina | Fyzické zařízení, virtuální server nebo providerem izolovaný hostovaný pracovní prostor, který tvoří jednu sdílenou runtime, bezpečnostní a recovery hranici se známým Ownerem. |
 | Personalspace | Privátní prostor právě jednoho Principála a případného Buddyho. |
 | Organizace | Jedna firma, jeden GitHub Organization scope a jedna access hranice. |
@@ -65,7 +65,7 @@ se nejmenují `AGENTS.md`, takže v development checkoutu omylem nepřebírají
 ## Profil Workspace
 
 Workspace profil je immutable runtime pro Launchpad a Lazurio CLI v hostovaném pracovním
-prostoru Kolegy nebo AI Kolegy. Není druhým datovým modelem hosted prostředí:
+prostoru člověka nebo firemní automatizace. Není druhým datovým modelem hosted prostředí:
 lokální i vzdálený pracovní prostor používají stejný Lazurio Root kontrakt,
 Organization Rooty, org-level repa a Workspace Moduly. Liší se jen transportem, custody,
 aktivní Team projekcí a způsobem provozního nasazení runtime.
@@ -83,7 +83,7 @@ hranice práce, soukromí a incidentního chování; neurčuje osobnost konkrét
 Buddyho. Ta spolu s ústavou, mandáty a pamětí zůstává v privátním
 Personalspace.
 
-Buddy není AI Kolega ani Steward. Běžný Task Agent spuštěný na Buddyho
+Buddy není firemní automatizovaná Mašina. Běžný Task Agent spuštěný na Buddyho
 Mašině také není Buddy. Transakčně citlivé kroky — přístupy, secrets,
 destruktivní operace, billing, ownership a publish/release mimo trvalý mandát
 — vyžadují přesný souhlas lidského Principála.
@@ -152,16 +152,21 @@ Privátní Buddy profil zůstává mutable a služba jej čte přes běžná hos
 oprávnění. Další sandbox pro Personalspace tu nevzniká; přístup agentních
 nástrojů omezuje existující Hermes sandbox.
 
-## Profil AI Kolega a Steward overlay
+## Firemní automatizace a práce Stewarda
 
-AI Kolega je samostatný Principál. Má vlastní účet, seat, Mašinu,
-Personalspace a přístupy do Organizací. Budoucí profil `ai-colleague` použije
-stejný build, manifest, Doctor a updater jako Buddy, ale jiné root instrukce.
+Rozhodnutí 0143 nahrazuje plán budoucího `ai-colleague` profilu automatizovanou
+Mašinou Organizace. Harness se vybírá podle potřeb práce; Buddyho Hermes a
+privátní komunikační bridge nejsou povinným firemním runtime.
 
-Steward není třetí profil. Je to role overlay nad AI Kolegou, který může
-zpřesnit workflow a health checks. Overlay však nevytvoří žádné oprávnění:
-merge, release a administrativní operace dál povoluje jen přihlášená GitHub
-identita, její Teamy a branch rules.
+Steward označuje práci podle organizačních pravidel. Svěřený účet musí mít
+živá provider oprávnění a samostatná Publikace musí být výslovně pokrytá
+účinným mandátem. Jméno Mašiny, role overlay ani prompt pověření nevytváří.
+Kanonický domov, schválenou revizi a odvolání drží
+[Organization mandáty](organization-mandates.md).
+
+Staré `ai-colleague` Personalspace záznamy zůstávají pouze čitelným migračním
+vstupem. Nová tvorba je zakázána; soukromá data se automaticky nepřevádějí do
+Organizace. Tato změna není rolloutem živého scheduleru, účtů ani mandátů.
 
 ## Instalace, aktualizace a rollback
 
@@ -252,7 +257,8 @@ nepřátelský model.
 - Obecné interní know-how a anonymizované learnings: Knowledgebase příslušné
   Organizace.
 - Aktivní plán, rollout a blokery: její Mission Control.
-- Osobnost, mandáty a paměť: privátní Personalspace.
+- Osobnost, osobní mandáty a paměť Buddyho: privátní Personalspace.
+- Firemní mandáty: `MANDATES.md` příslušného Organization repozitáře.
 - Jmenovitá evidence, credentials, zálohy a runtime logy: scoped privátní
   custody dané instalace.
 

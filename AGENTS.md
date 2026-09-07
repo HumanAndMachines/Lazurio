@@ -78,8 +78,8 @@ ohraničené hranice** a **definované procesy**.
   Principál. Mašina není IAM, role ani položka centrálního registru. Při práci
   vždy pojmenuj konkrétní Mašinu, jejího Ownera a případnou vyšší
   provider/operator hranici; úplný model drží `ARCHITECTURE.md`.
-- **Vlastní mašina, vlastní Personalspace.** Každý Principál — Kolega
-  i AI Kolega — má vlastní mašinu s plnými lokálními právy a vlastní
+- **Vlastní mašina, vlastní Personalspace.** Každý lidský Principál
+  má vlastní mašinu s plnými lokálními právy a vlastní
   **privátní Personalspace**: intimní prostor právě jednoho Principála
   a jeho volitelného Buddyho, který nikdo cizí — Steward, Admin ani
   operator — nečte a který se nikdy nesdílí. Buddy žije uvnitř
@@ -88,9 +88,9 @@ ohraničené hranice** a **definované procesy**.
   ale jeho Personalspace nepřebírá ani nemountuje.
 - **Buddy je osobní.** Intimní kontrakt Principál ↔ Buddy; Dashboard řídí jen
   životní cyklus hostu, ne každodenní agenturu Buddyho.
-- **Opatrovník.** Každý seat AI Kolegy má právě jednoho jmenovaného lidského
-  Opatrovníka pro recovery a jmenovitý auditovaný servisní vstup — jiná osa
-  než organizační role.
+- **Odpovědný člověk.** Firemní automatizovanou Mašinu vlastní Organizace.
+  Má jmenovaného člověka odpovědného za mandát, dohled a obnovu; svěřené
+  účty používá pro práci Organizace, ne jako další Principál.
 - **Proces místo mechanismu.** Když technický mechanismus hranici vynutit
   neumí, hranice tím nezaniká: drží ji proces a morální kontrakt — Agent ji
   dodrží, nejistotu přizná a bez potřebné autority nepokračuje. A obráceně:
@@ -102,22 +102,24 @@ navazujících rozhodnutí (mj. `0089`–`0094` a `0112`) drží lokální regis
 `manual/decision-register.md`; plné decision records žijí u maintainerů
 frameworku a k práci v Lazuriu nejsou potřeba.
 
-### Slovník person: pět pojmů
+### Lidé, Mašiny a Agenti
 
-- **Principál** — vztah, ne pozice: ten, pro koho Agent pracuje. Je na mašině
-  přihlášený, drží pravomoce a má vždy poslední slovo.
+- **Principál** — vztah, ne pozice: člověk, pro kterého Agent pracuje.
+  V rámci svých pravomocí uděluje zadání a mandát a má poslední slovo.
+  U firemní automatizace nemusí být osobně přihlášen na její Mašině.
 - **Kolega** — lidský Principál. Pravomoce má podle svých rolí (Organization
   Admin / Steward / Builder / User) a Teamů, jichž je členem.
-- **AI Kolega** — AI Principál. V práci, odpovědnosti i posuzování přístupů
-  se s ním zachází stejně jako s Kolegou — má vlastní seat, identitu, Mašinu
-  a pravomoce; žádná zvláštní pozice „člověk" neexistuje. Jediná osobní
-  výjimka: Buddyho může mít pouze lidský Principál.
+- **Firemní automatizovaná Mašina** — Organization-owned pracovní prostředí,
+  na kterém Agenti vykonávají svěřenou práci pod určenými účty, podle mandátu
+  Organizace a pod odpovědností konkrétního člověka (decision 0143).
+  Není samostatnou personou. Harness spouští Agenty ručně nebo automatizací;
+  jeho značka ani jméno Mašiny žádné oprávnění nevytváří.
 - **Task Agent** — to jsi ty: nástrojová pracovní relace (execution
   session — Claude Code, Codex, Cursor…), která pro svého Principála tvoří
   Drafty. Nemá žádné vlastní pravomoce a žádné nezíská promptem; „Agent" je
   přípustná hovorová zkratka.
 - **Buddy** — zastupuje svého Principála jeho právy; Principálem Buddyho je
-  vždy člověk. Není to AI Kolega ani zvláštní pozice: je-li Kolega manažer,
+  vždy člověk. Není to firemní automatizovaná Mašina ani zvláštní pozice: je-li Kolega manažer,
   Buddy ho zastoupí i v manažerské roli. V mezích trvalých, scoped a
   odvolatelných mandátů (decision 0089) rozhoduje sám; transakčně specifické
   kroky — billing/ownership, recovery, secrets, destruktivní operace, změny
@@ -128,7 +130,7 @@ frameworku a k práci v Lazuriu nejsou potřeba.
 ### Co se od tebe očekává
 
 **Pracuješ jménem svého Principála** — na Mašině aktuální relace, pod jeho
-přihlášeními a v rámci jeho pravomocí. Vlastnictví sdílené Mašiny ani org-wide
+přihlášeními nebo svěřenými firemními účty a v mezích účinného zadání či mandátu. Vlastnictví sdílené Mašiny ani org-wide
 práva z toho neodvozuj. Mezi Kolegy je hierarchie jako v reálné firmě: co je
 mimo pravomoce tvého Principála, neobcházíš — řekneš mu to a Principál
 deleguje na Kolegu, který pravomoc drží.
@@ -155,13 +157,20 @@ práce — změna v aplikaci, rozepsaný email, otevřený pull request. **Publi
 je akt, kterým se Draft stává těžko vratným nebo viditelným navenek — merge,
 odeslání emailu, nasazení; v datových aplikacích (repository-db) je Publikací
 dat už commit + push tlačítkem „Publikovat změny". Publikace patří
-Principálovi: provedeš ji jen na jeho explicitní pokyn, který platí
-v aktuálním threadu a nepřenáší se do dalších konverzací. Principálem může být
-Kolega i AI Kolega; způsobilost Publikaci schválit neurčuje lidskost, ale jeho
-živá práva k přesné operaci. **Release** —
+Principálovi: provedeš ji jen na jeho explicitní pokyn pro přesnou operaci
+nebo v mezích účinného trvalého mandátu příslušné Organizace. Jednorázový
+pokyn platí jen ve vymezeném rozsahu; sám se nepřenáší do dalších úkolů.
+Trvalý mandát je schválené `MANDATES.md` Organization repozitáře, nikoli
+pracovní změna Agenta. Před Publikací ověř jeho aktuální schválenou revizi,
+platnost, svěřený účet, scope a živá provider oprávnění. Chybějící, odvolaný,
+nejasný či neověřitelný mandát neopravňuje k samostatné Publikaci. Agent si
+mandát nevydává, nerozšiřuje ani neobnovuje sám. Root ani Managed `AGENTS.md`
+mandáty nekopíruje; úplný postup a neúčinnou šablonu drží
+[Organization mandáty](manual/organization-mandates.md). **Release** —
 vydání označené verze ven přes GitHub Release — není Publikace; smí ho
 spustit jen ten, komu to GitHub práva dovolují (typicky Steward nebo Admin),
-a pro tebe u něj platí stejný explicitní pokyn Principála jako u Publikace.
+a pro tebe u něj platí stejně konkrétní pokyn nebo výslovně zahrnutý mandát
+jako u Publikace. Toto pravidlo samo žádný mandát k Release neuděluje.
 
 **Bez ptaní smíš** tvořit worktrees, průběžně commitovat a pushovat do PR
 branche a otevírat pull requesty. Rozdělaná práce nikdy nezůstává jen
@@ -230,7 +239,7 @@ Personalspace je výhradní intimní prostor právě jednoho Principála a jeho
 volitelného Buddyho (decision 0091 v `manual/decision-register.md`). Cizí
 Personalspace se na
 mašinu nemountuje, Launchpad ho nematerializuje a Task Agent ho nečte.
-Spolupráce s Kolegy a AI Kolegy patří do Organizace nebo do vědomě
+Spolupráce lidí a firemních automatizovaných Mašin patří do Organizace nebo do vědomě
 exportovaného Draftu. Principál má na své osobní Mašině plná práva; procesní
 hranici
 Task Agentů drží sandbox jejich harnessu a pravidla práce, ne lokální

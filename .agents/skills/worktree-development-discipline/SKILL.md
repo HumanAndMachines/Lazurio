@@ -124,7 +124,11 @@ autoritu.
    `gh repo view <owner>/<repo> --json
    rebaseMergeAllowed,squashMergeAllowed,mergeCommitAllowed`,
    `gh pr view <číslo> --json mergeable,mergeStateStatus,reviewDecision`.
-   Po explicitním „Publikuj" v threadu PR mergni metodou, kterou repozitář
+   Pro jednorázovou práci čekej na explicitní „Publikuj". U předem pověřené
+   automatizace může přesnou Publikaci autorizovat účinný Organization mandát
+   podle `manual/organization-mandates.md`; před akcí ověř aktuální schválenou
+   revizi, účet, scope a provider práva. Tento skill sám mandát neuděluje.
+   Po explicitním „Publikuj" nebo takto ověřeném mandátu PR mergni metodou, kterou repozitář
    povoluje (při více povolených je default rebase, pokud Organizace ve svém
    `AGENTS.md` nedeklaruje jinak), v primárním checkoutu spusť
    `lazurio update`, potom `bun run doctor:task` a pokračuj cleanup guardy

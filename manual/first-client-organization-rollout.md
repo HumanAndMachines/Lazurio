@@ -26,7 +26,7 @@ Vyplň před tím, než vytvoříš nebo mountneš klientský checkout:
 | Lokální mount slug | `organizations/ClientX_GEN3/`; suffix `_GEN3` je filesystem marker, ne interní company identity |
 | Repo hranice | klientské super-repo ve vlastnictví klientské/GitHub organization hranice |
 | Default Team | právě jeden default Team se slugem `workspace`; Team je logická deklarace, ne adresář |
-| Role hranice | Admin Organizace, Builder Organizace, Uživatel Organizace; Steward Organizace (AI Kolega ve Steward seatu) na Workspace Hostu; kdo drží secrets a kdo smí měnit source |
+| Role hranice | Admin Organizace, Builder Organizace, Uživatel Organizace; Steward Organizace (svěřená agenda s mandátem a odpovědným člověkem) na Workspace Hostu; kdo drží secrets a kdo smí měnit source |
 | Počáteční baseline | Mission Control app + data, Knowledgebase, Design System a Infra; ostatní workspace moduly až podle business potřeby, ne big-bang rollout |
 | Design System scope | `active`, pokud je vytvoření objednané; jinak manifestový `planned_slot` bez repa a bez vymyšlených brandových dat |
 | Template baseline | Organization z `TemplatesRozjedeme-ai/OrganizationTemplate_GEN3`; Mission Control, Knowledgebase a Design System z vlastních `TemplatesRozjedeme-ai/*Template` upstreamů |

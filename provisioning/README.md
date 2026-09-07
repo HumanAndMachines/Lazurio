@@ -131,9 +131,11 @@ Playbook nespouštěj proti žádnému živému hostu jen proto, že jeho syntax
 testy prošly. Live host vyžaduje samostatný exact rollout gate, before-state a
 rollback cíl.
 
-## Budoucí AI Kolega
+## Firemní automatizovaná Mašina
 
-AI Kolega později použije stejné role jen tam, kde je kontrakt skutečně
-společný. Linux systemd, macOS launchd, firewall a package manager se nesmějí
-sloučit do jednoho playbooku plného podmínek. Steward nebude třetí host
-playbook: je to role overlay AI Kolegy a práva dál určuje provider.
+Decision 0143 nahrazuje budoucí AI Resident profil pracovním prostředím
+Organizace se svěřenými účty, mandátem a odpovědným člověkem. Tento Buddy
+playbook není installerem firemní automatizace. Harness a jeho plánování se
+ověří pro konkrétní nasazení; práce Stewarda nevyžaduje další host profil.
+Společné role se znovu použijí jen při skutečně shodném kontraktu. Linux
+systemd, macOS launchd, firewall a package manager mají své vlastní hranice.

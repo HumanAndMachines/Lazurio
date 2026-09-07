@@ -1,11 +1,14 @@
 import { expect, test } from "bun:test";
 import { posix, win32 } from "path";
+import { readFile } from "node:fs/promises";
+import { validateAgainstSchema } from "../lazurio/runtime/json-schema-mini.mjs";
 
 import {
   PERSONAL_SCHEMA_VERSION,
   PERSONALSPACE_TEMPLATE,
   PERSONALSPACE_TEMPLATE_VERSION,
   parseCreateArgs,
+  createPersonalspace,
   targetForRoot,
   validateGbrainRepoOption,
   validateTemplateMarker,
@@ -62,4 +65,22 @@ test("custom gbrain repo patří ownerovi a nikdy nealiasuje owner repo", () => 
   expect(validateGbrainRepoOption("example", "other/example-gbrain")).toHaveLength(1);
   expect(validateGbrainRepoOption("example", "example/example_GEN3")).toHaveLength(1);
   expect(validateGbrainRepoOption("example", "invalid")).toHaveLength(1);
+});
+
+test("new non-human Personalspace fails before filesystem or provider operations", async () => {
+  const root = "/nonexistent-lazurio-mandate-test";
+  for (const ownerType of ["ai-colleague", "unknown"]) {
+    await expect(createPersonalspace({ ownerType, apply: true }, { root }))
+      .rejects.toThrow("Nový Personalspace patří pouze člověku");
+  }
+  // Human creation proceeds to the existing root preflight, without touching GitHub.
+  await expect(createPersonalspace({ ownerType: "human", apply: false }, { root }))
+    .rejects.toThrow("Příkaz spusť z kořene Lazuria");
+});
+
+test("legacy Personalspace owner records remain readable without reclassification", async () => {
+  const schema = JSON.parse(await readFile(new URL("../lazurio/schemas/personal.gen3.schema.json", import.meta.url), "utf8"));
+  for (const type of ["human", "ai-colleague"]) {
+    expect(validateAgainstSchema({ github_username: "example", display_name: "Example", type }, schema.properties.owner, "owner")).toEqual([]);
+  }
 });

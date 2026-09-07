@@ -1,6 +1,6 @@
 ---
 name: lazurio-workstation-install
-description: Nainstaluje, opraví nebo dokončí localhost Lazurio na macOS, Linuxu či Windows včetně toolchainu, GitHub přihlášení, Organization materializace, Launchpadu a finálního Doctor gate. Použij pro novou pracovní Mašinu nebo nedokončený workstation onboarding; nepoužívej pro hosted Buddy/AI Kolega runtime ani běžný update hotového Rootu.
+description: Nainstaluje, opraví nebo dokončí localhost Lazurio na macOS, Linuxu či Windows včetně toolchainu, GitHub přihlášení, Organization materializace, Launchpadu a finálního Doctor gate. Použij pro novou pracovní Mašinu nebo nedokončený workstation onboarding; nepoužívej pro hosted Buddy runtime ani nasazení firemních automatizací ani běžný update hotového Rootu.
 ---
 
 # Lazurio workstation install

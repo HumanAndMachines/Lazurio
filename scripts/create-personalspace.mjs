@@ -80,7 +80,7 @@ function requireValue(argv, index, option) {
 function usage() {
   console.log(`Použití:
   bun run personalspace:create -- --display-name "<jméno>"
-      [--owner-type human|ai-colleague] [--gbrain-repo <login>/<repo>]
+      [--owner-type human] [--gbrain-repo <login>/<repo>]
       [--install-gbrain]
       [--apply]
 
@@ -193,14 +193,14 @@ function checkNoSubmodules(cwd) {
 }
 
 export async function createPersonalspace(options, { root = process.cwd() } = {}) {
+  if (options.ownerType !== "human") {
+    throw new Error("Nový Personalspace patří pouze člověku (--owner-type human). Firemní automatizace používá kontext Organizace; legacy ai-colleague data se nemigrují automaticky.");
+  }
   const conglomerateRoot = resolve(root);
   if (!existsSync(join(conglomerateRoot, "launchpad.gen3.json"))) {
     throw new Error("Příkaz spusť z kořene Lazuria.");
   }
   if (!options.displayName && options.apply) throw new Error("--display-name je pro --apply povinný.");
-  if (!["human", "ai-colleague"].includes(options.ownerType)) {
-    throw new Error("--owner-type musí být human nebo ai-colleague.");
-  }
 
   const login = json("gh", ["api", "user"], conglomerateRoot)?.login;
   if (typeof login !== "string" || login.trim() === "") throw new Error("GitHub CLI nevrátil přihlášený login.");

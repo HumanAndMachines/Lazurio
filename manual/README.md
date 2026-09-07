@@ -65,7 +65,7 @@ Maintenance agent před zásahem ověřuje:
   Nese i slovník `not_applicable` / `blocked` / `incomplete`.
 - `manual/hosted-buddy-vps.md` — pro agenty v source checkoutu: jak zjistit, jestli Principál má hostovaného Buddyho, co s hostem smíš a nesmíš dělat, a pravidlo, že na VPS platí vygenerovaný Buddy resident root a privátní profil místo source pravidel.
 - `manual/lazurio-resident-profiles.md` — public-safe a offline dostupné
-  vysvětlení Buddyho, AI Kolegy, instalovaného non-Git Lazurio Rootu,
+  vysvětlení Buddyho, Workspace, automatizované práce a instalovaného non-Git Lazurio Rootu,
   aktualizací, incidentů a odděleného source checkoutu.
 - `manual/personalspace-modules-and-hosted-gbrain.md` — seed koncept pro personalspace privátní moduly, per-user/per-colleague aplikace, hosted GBrain a Obsidian-compatible sync/reader model.
 - `manual/app/v1/` — statická read-only aplikace technického manuálu (`index.html`); nesmí držet pravidla, která nejsou zapsaná v manuálu nebo root dokumentech.
@@ -171,3 +171,5 @@ bun run doctor
 ```
 
 Tyto příkazy ověřují root strukturu, `launchpad.gen3.json`, organizace, Launchpad discovery, testy a read-only doctor report.
+
+- [Organization mandáty](organization-mandates.md) — trvalé pověření, schválená revize, odvolání a šablona.
