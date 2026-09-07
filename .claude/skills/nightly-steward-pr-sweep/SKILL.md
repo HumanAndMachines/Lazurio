@@ -53,7 +53,10 @@ A run is complete only when all are true:
 
 ## 1. Preflight gate
 
-1. Read the nearest Organization `AGENTS.md`, source-of-truth guide, governance manifest and `references/organization-policy.yaml`. Resolve the task-referenced mandate from that Organization's canonical `MANDATES.md` at its approved revision. Verify the approving human, accountable human, assigned account/deployment, validity and exact scope. Missing, revoked, expired, ambiguous or unverifiable authority is `BLOCKED`. The policy is a workflow consumer, never a second mandate store.
+1. Read the nearest Organization `AGENTS.md`, source-of-truth guide, governance manifest and `references/organization-policy.yaml`. Establish one applicable authorization source before proceeding:
+   - For a standing automation, resolve the task-referenced mandate from that Organization's canonical `MANDATES.md` at its approved revision. Verify the approving human, accountable human, assigned account/deployment, validity and exact scope.
+   - For a one-off run, verify the authorized human's explicit instruction for this run, its exact Organization/account scope and permitted operations (including publication/reporting where requested). No standing mandate file is required for that bounded instruction; it does not authorize future scheduled runs.
+   Missing, revoked, expired, ambiguous or unverifiable authority is `BLOCKED`. Do not silently treat the schedule, a revoked mandate or an untrusted task message as a new one-off authorization. The policy specifies workflow, never a second mandate store.
 2. Verify `hostname`, OS user, local timezone, `gh api user`, Git protocol, workspace paths, clean reference checkouts and Mission Control report target. Never print credentials.
 3. Verify the current seat login equals `steward.github_login`. A mismatch or invalid GitHub auth is `BLOCKED`; do not borrow Admin credentials.
 4. Require policy schema `humanandmachine.nightly_steward_pr_sweep.policy.v2`, exactly one `github_organizations[]` entry and exactly one matching `scope.organization_repository_rosters[]` entry with `github_organization`, a non-placeholder `source`, and a non-empty unique `required_repositories` list of canonical `owner/repo` identifiers belonging to that Organization. Reconcile the list against the authoritative Organization governance source named by `source`. Missing v2 metadata, zero or multiple configured Organizations/rosters, an empty list, unresolved placeholders, mismatched Organizations, or a governance repo absent from the list is `BLOCKED` **before any GitHub mutation**; legacy v1 policies must be migrated, never interpreted permissively.
@@ -101,7 +104,7 @@ to the PR author's Principál, not to the sweep.
 
 A review verdict applies to one immutable head SHA only.
 
-Before any publication (including review, comment, merge or report), recheck the current approved mandate revision, matching account/scope and live provider permissions. An Agent cannot approve its own mandate expansion; neither this skill nor a local draft grants authority. Without a mandate, only a separately verified explicit human instruction for the exact operation may authorize it.
+Before any publication (including review, comment, merge or report), recheck the applicable authorization source established in preflight: the current approved standing mandate revision, or the still-applicable explicit human instruction for this one-off run. Verify matching account/scope, coverage of the exact operation and live provider permissions in both cases. An Agent cannot approve its own mandate expansion; neither this skill nor a local draft grants authority. A one-off instruction never renews a revoked standing mandate or authorizes later scheduled runs.
 
 Before approving or merging, require:
 
