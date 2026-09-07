@@ -29,20 +29,21 @@ test("real discovery preserves Organization defaults and organization-section Te
     teams: [{ slug: "editors", display_name: "Editors", default: true }, { slug: "reviewers", display_name: "Reviewers" }],
   });
   const definitions = [
-    { path: "mission-control", slug: "mission-control", space: "root" },
+    { path: "mission-control", slug: "planning-repository", moduleId: "mission-control", space: "root" },
     { path: "workspace/team-docs", slug: "team-docs", teams: ["editors"], launchpad_section: "organization" },
     { path: "workspace/other-team", slug: "other-team", teams: ["reviewers"], launchpad_section: "organization" },
     { path: "workspace/ordinary", slug: "ordinary", teams: ["editors"] },
   ];
   await writeJson(join(companyRoot, "modules.manifest.json"), {
     organization_generation: "gen3", company: "HostedTestOrganization", github_org: "HostedTestOrganization",
-    module_slots: definitions.map(slot => ({ ...slot, status: "active", git: { url: `git@github.com:HostedTestOrganization/${slot.slug}.git`, branch: "main" } })),
+    module_slots: definitions.map(({ moduleId, ...slot }) => ({ ...slot, status: "active", git: { url: `git@github.com:HostedTestOrganization/${slot.slug}.git`, branch: "main" } })),
   });
   for (const [index, slot] of definitions.entries()) {
+    const moduleId = slot.moduleId ?? slot.slug;
     const moduleRoot = join(companyRoot, slot.path);
     await mkdir(join(moduleRoot, "app"), { recursive: true });
     await writeJson(join(moduleRoot, "lazurio.module.json"), {
-      schema_version: "lazurio.module.v1", id: slot.slug, company: "HostedTestOrganization",
+      schema_version: "lazurio.module.v1", id: moduleId, company: "HostedTestOrganization",
       tcp_port_policy: { mode: "single" }, port_leases: [{ id: "main", host: "127.0.0.1", port: 5400 + index }],
       apps: ["app/package.json"], default_app: "app/package.json",
     });
@@ -50,7 +51,7 @@ test("real discovery preserves Organization defaults and organization-section Te
       name: `hostedtestorganization-${slot.slug}`, private: true, scripts: { dev: "bun server.mjs" },
       lazurio: { runtime: {
         schema_version: "lazurio.runtime.v1", id: `hostedtestorganization-${slot.slug}`, title: slot.slug,
-        company: "HostedTestOrganization", module: slot.slug, surface: "internal", dev_script: "dev", tags: ["test"],
+        company: "HostedTestOrganization", module: moduleId, surface: "internal", dev_script: "dev", tags: ["test"],
         listeners: [{ id: "web", role: "entrypoint", lease: "main", protocol: "http", health: { kind: "http", path: "/" } }],
       } },
     });
