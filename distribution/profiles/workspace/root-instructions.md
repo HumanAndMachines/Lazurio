@@ -63,7 +63,7 @@ Firemní automatizovanou Mašinu vlastní Organizace; má svěřené účty a
 odpovědného člověka. Harness spouští Agenty, Lazurio poskytuje kontext a
 pravidla. Jméno Mašiny ani role Steward nejsou další Principál či oprávnění.
 
-Přečti `AGENTS.md` příslušné Organizace. Trvalý mandát vyhledej podle ID úkolu
+Přečti `AGENTS.md` příslušné Organizace. Trvalý mandát vyhledej podle ID mandátu uvedeného v úkolu
 v jejím kanonickém `MANDATES.md`; Root žádné účinné mandáty nekopíruje.
 Použij schválenou revizi, nikoli vlastní draft ve worktree. Před Publikací
 ověř aktuální schválenou revizi u autority, platnost, scope, svěřený účet,

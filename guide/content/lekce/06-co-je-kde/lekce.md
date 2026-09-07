@@ -17,7 +17,7 @@ ukol: false
 
 V digitální kanceláři jsou různé místnosti. Některé jsou na plánování práce, jiné na znalosti, jiné na obsah, finance nebo provoz. Nemusíš znát všechny názvy hned první den.
 
-Když hledáš, co máš dělat, začni u úkolů nebo plánování. Když hledáš, jak něco u nás funguje, jdi do znalostí nebo návodů. Když nevíš, zeptej se průvodce nebo AI kolegy.
+Když hledáš, co máš dělat, začni u úkolů nebo plánování. Když hledáš, jak něco u nás funguje, jdi do znalostí nebo návodů. Když nevíš, zeptej se průvodce nebo Agenty.
 
 Důležité není zapamatovat si mapu nazpaměť. Důležité je naučit se položit správnou otázku: hledám úkol, znalost, člověka, rozhodnutí, nebo hotový výstup?
 

@@ -14,7 +14,7 @@ příkazové nástroje, diagnostika a Git udržují stav a dohledatelnou histori
 Každý úkol začíná jednoznačným kontextem: pro koho se pracuje, které firmy nebo
 projektu se týká, jaká data smí AI nástroj použít a kdo může výsledek schválit
 nebo zveřejnit. Výsledek zůstává editovatelný a kontrolovatelný, dokud jej
-oprávněný člověk nebo AI spolupracovník vědomě neposune dál.
+oprávněný člověk nebo Agent podle účinného mandátu neposune dál.
 
 Lazurio není nový AI model ani společné cloudové úložiště všech dat. Je to
 koordinační vrstva, která propojuje lidi, AI nástroje, repozitáře a aplikace

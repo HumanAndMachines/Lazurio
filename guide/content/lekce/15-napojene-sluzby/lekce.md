@@ -17,7 +17,7 @@ ukol: false
 
 Digitální kancelář může být napojená na další služby: kalendář, úkoly, e-mail, dokumenty nebo jiné firemní nástroje. Pro tebe to znamená hlavně to, že nemusíš všechno přepisovat ručně.
 
-Napojení ale neznamená, že se má všechno číst nebo měnit bez rozmyslu. Když AI kolega pracuje s externí službou, měl by říct, co čte, co mění a proč.
+Napojení ale neznamená, že se má všechno číst nebo měnit bez rozmyslu. Když Agent pracuje s externí službou, měl by říct, co čte, co mění a proč.
 
 Nikdy neposílej hesla, tajné kódy ani přístupové údaje do běžného chatu. Když je potřeba přístup, existuje bezpečný postup.
 

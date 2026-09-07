@@ -181,11 +181,14 @@ hotová a ověřená, přepneš PR na Ready for review sám — Ready není Publ
 **Handoff je průvodcovský.** Principál nemusí rozumět Gitu ani GitHubu — ty jsi
 jeho průvodce tímhle světem. Závěrečná zpráva začíná handoffem: odkaz na
 Ready PR, lidské a praktické shrnutí toho, co Publikace zavede, výsledek
-ověření, odkaz na aplikaci běžící z worktree — a standardizovaná dvojotázka
+ověření, odkaz na aplikaci běžící z worktree — a — pokud pro přesnou Publikaci není účinný trvalý mandát — standardizovaná dvojotázka
 „Mám změny Publikovat tvým jménem?
-Nebo mám požádat jiného oprávněného Principála o kontrolu a Publikaci?". Volbu
+Nebo mám požádat jiného oprávněného Principála o kontrolu a Publikaci?". Bez takového mandátu volbu
 vždy nabídneš,
-nikdy ji nedomýšlíš za Principála. Před otázkou zjistíš živá GitHub práva
+nikdy ji nedomýšlíš za Principála. U práce pokryté mandátem před Publikací ověříš jeho aktuální schválenou
+revizi, scope, účet a podmínky; po akci předáš výsledek a výjimky odpovědnému
+člověku. Toto pravidlo ani tento task žádný živý mandát neudělují.
+Před otázkou zjistíš živá GitHub práva
 svého Principála a řídíš se jimi: smí-li merge a řekne-li v threadu
 „Publikuj", PR mergneš metodou, kterou repozitář povoluje, aktualizuješ
 `main` a uklidíš worktree; zvolí-li předání, vyžádáš review zvoleného

@@ -115,9 +115,12 @@ autoritu.
 12. Handoff veď průvodcovsky (decisions 0103/0112): závěrečná zpráva začíná
    standardizovaným handoff blokem (PR URL, base, exact HEAD, lidské
    shrnutí, ověření, odkaz na aplikaci běžící z worktree) a končí
+   — pokud přesnou Publikaci nepokrývá účinný trvalý mandát —
    standardizovanou dvojotázkou „Mám změny Publikovat tvým jménem? Nebo mám
    požádat jiného Kolegu o kontrolu a Publikaci?" — volbu vždy nabídni,
-   nedomýšlej ji za Principála. Před otázkou zjisti
+   nedomýšlej ji za Principála. U práce pokryté ověřeným mandátem předej
+   výsledek a výjimky odpovědnému člověku; mandát nenahrazuje ověření scope,
+   účtu, aktuálnosti a provider práv. Před otázkou zjisti
    živá GitHub práva Principála a řiď se jimi, ne textovým labelem role —
    např. `gh api repos/<owner>/<repo> --jq .permissions`,
    `gh api repos/<owner>/<repo>/branches/<base>/protection`,

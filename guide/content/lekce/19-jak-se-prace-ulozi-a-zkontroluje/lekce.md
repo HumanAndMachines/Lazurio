@@ -17,7 +17,9 @@ ukol: false
 
 Když vznikne použitelný výsledek, nemá zůstat jen v chatu. Musí se dostat na místo, kde ho tým najde a kde je vidět, co se změnilo.
 
-Kontrola změny není nedůvěra. Je to ochrana práce. Druhý člověk nebo AI kolega může všimnout chybějící souvislosti, nejasné formulace nebo rizika.
+Kontrola změny není nedůvěra. Je to ochrana práce. Druhý člověk nebo Agent si může všimnout chybějící souvislosti, nejasné formulace nebo rizika.
+
+U opakované práce může oprávněný člověk předem udělit mandát: stanoví, co smí Agent dokončit sám a které kontroly musí splnit. Výjimky a situace mimo mandát předává Agent odpovědnému člověku.
 
 Pro netechnického kolegu stačí vědět: u důležité věci chtěj náhled, krátké vysvětlení změn a informaci, kdo ji zkontroloval.
 

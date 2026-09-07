@@ -2,7 +2,7 @@
   "questions": [
     {
       "id": "q1",
-      "text": "Kdy je dobré použít AI kolegu?",
+      "text": "Kdy je dobré použít Agenta?",
       "type": "single",
       "options": [
         {
