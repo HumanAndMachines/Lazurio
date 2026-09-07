@@ -109,16 +109,18 @@ The supported hosted Builder topology is **one non-root, builder-visible work
 container per Team Workspace**. T3 Code, Codex CLI, the always-available
 Launchpad, `~/Lazurio`, Organization checkouts, plan-owned worktrees and all
 allowed module child processes share one user, `$HOME`, filesystem, PID and
-network namespace. T3 is therefore part of the target hosted surface, not an
-optional add-on, and does not receive another working container. Module apps are
+network namespace. T3 is part of the current implementation; in the target
+model it may remain a web entry alongside desktop Codex over SSH. It does not
+receive another working container. Module apps are
 ordinary Launchpad-managed child processes, never per-module Compose services.
 
 Outside this work container are infrastructure-only sidecars such as Tailscale
 and authenticated HTTPS ingress. Their control-plane sockets, Caddy admin,
 host mounts, sudo, unnecessary capabilities and GitHub App private key are not
-mounted into the Workspace. SSH may remain an operator/recovery transport, but
-it is not the canonical hosted agent topology and must not create a second
-filesystem or runtime procedure. Local and hosted profiles expose the same
+mounted into the Workspace. The target Builder SSH connection ends inside the
+Workspace, separately from operator/recovery access to the Organization Host.
+It must not create a second filesystem or runtime procedure. Local and hosted
+profiles expose the same
 builder-visible `~/Lazurio` structure, discovery/manifests, module-owned leases,
 worktree lifecycle and Doctor/Install/Start/Stop/Open operations; only the
 hosted authentication, ingress and network envelope differs.

@@ -41,6 +41,18 @@ Skutečné přístupy určuje přihlášená identita a živá GitHub práva. Ru
 textová role ani prompt nevytvářejí druhý ACL. Nejasný nebo nebezpečný Git stav
 se neopravuje odhadem: zachová se a předá Kolegovi jako prompt pro Codex.
 
+## Práce v hostované Dílně
+
+Výchozí cílová Dílna je pracovní Mašina Organizace pro jednoho Buildera.
+Desktopový Codex je klient; Lazurio, agent, soubory a GitHub/MCP přihlášení
+zůstávají v Dílně. Používej stejné CLI, Organization instrukce, Doctor a worktree postupy
+jako lokálně. Nevytvářej kvůli vzdálené práci druhý checkout nebo vlastní orchestrátor.
+
+GitHub určuje pracovní přístupy; AI účet řeší model a spotřebu.
+Builder žádá o pomoc Stewarda. SSH má končit v Dílně, nikdy na Organization Hostu.
+Jde o cílový model: SSH připojení, přechod přihlášení a chování po odpojení
+ještě vyžadují ověření. Text sám nemění dosavadní přístupy ani nasazení.
+
 ## Architektonická odpovědnost při změně source kódu
 
 Principál určuje chtěný výsledek a má poslední slovo, ale jeho zadání není

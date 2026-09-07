@@ -287,6 +287,13 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
   expect(workspaceInstructions).toContain(".agents/skills/architecture-shaping/SKILL.md");
   expect(workspaceInstructions).toContain("Mašina je jedna sdílená runtime, bezpečnostní a recovery hranice");
   expect(workspaceInstructions).toContain("Organization Hostu zůstává vyšší");
+  // Check the shipped instructions, not the source checkout's AGENTS.md.
+  expect(workspaceInstructions).toContain("Desktopový Codex je klient");
+  expect(workspaceInstructions).toContain("CLI, Organization instrukce, Doctor a worktree postupy");
+  expect(workspaceInstructions).toContain("Nevytvářej kvůli vzdálené práci druhý checkout nebo vlastní orchestrátor");
+  expect(workspaceInstructions).toContain("Builder žádá o pomoc Stewarda");
+  expect(workspaceInstructions).toContain("SSH má končit v Dílně, nikdy na Organization Hostu");
+
   const workspacePackage = JSON.parse(await readFile(join(workspace.artifact_root, "package.json"), "utf8"));
   expect(workspacePackage).toMatchObject({
     name: "lazurio",
