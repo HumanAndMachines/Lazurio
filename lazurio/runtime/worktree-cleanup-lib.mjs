@@ -33,9 +33,22 @@ export class WorktreeCleanupError extends Error {
 // Read-only eligibility snapshot pro přesně jeden Launchpadem vytvořený
 // single-edit environment (DEV-6555 úzká lane). Nikdy nic nezapisuje;
 // ready_to_delete znamená, že všechny povinné cleanup guardy právě prošly.
-export async function previewWorktreeCleanup({
+export async function previewWorktreeCleanup(options = {}) {
+  const { preview } = await inspectCleanupEnvironment(options);
+  return preview;
+}
+
+// Jediná pravda cleanup guardů pro fresh preview i journal resume. Bez
+// `resumeJournal` je to read-only preview. S ním se tytéž guardy přepočítají
+// nad rozpracovaným environmentem: už odstraněné members se prokazují
+// journalem (absence + neregistrace), všechno ostatní — Mission Control plán,
+// sidecar handoff/disposition, edit registrace/HEAD/čistota, dependency
+// množina, runtime a PR evidence — se čte znovu ze živého stavu a identita
+// (sidecar otisk, worktree cesta, exact HEAD) musí sedět na journal.
+async function inspectCleanupEnvironment({
   companiesRoot,
   worktree,
+  resumeJournal = null,
   inspectRuntimeUsage = null,
   prEvidence = null,
   runGitFn = defaultRunGit,
@@ -59,71 +72,136 @@ export async function previewWorktreeCleanup({
     branch: null,
     plan_code: null,
   };
+  const snapshot = {
+    sidecar: null,
+    worktreeRealPath: null,
+    edit: null,
+    plan: null,
+    handoffState: null,
+    runtime: null,
+    dependencies: [],
+    fingerprint: null,
+  };
   const base = (state, extra = {}) => ({
-    schema_version: CLEANUP_PREVIEW_SCHEMA,
-    generated_at: generatedAt,
-    environment,
-    state,
-    blockers,
-    steps: [],
-    branch_refs_kept: [],
-    preview_fingerprint: null,
-    journal: null,
-    ...extra,
+    preview: {
+      schema_version: CLEANUP_PREVIEW_SCHEMA,
+      generated_at: generatedAt,
+      environment,
+      state,
+      blockers,
+      steps: [],
+      branch_refs_kept: [],
+      preview_fingerprint: null,
+      journal: null,
+      ...extra,
+    },
+    snapshot,
   });
+  const editRemoved = journalStepCompleted(resumeJournal, "remove_edit");
 
   // 1) Sidecar: běžný soubor uvnitř Organization rootu s validním kontraktem.
+  //    Při resume musí být bajt po bajtu ten, se kterým cleanup začal.
   const sidecar = await readCleanupSidecar({ organizationRoot, sidecarPath, blockers });
   if (!sidecar) return base("invalid");
+  snapshot.sidecar = sidecar;
   environment.branch = sidecar.metadata.branch ?? null;
   environment.plan_code = sidecar.metadata.mission_control_plan_code ?? null;
+  if (resumeJournal && sidecar.sha256 !== resumeJournal.environment.sidecar_sha256) {
+    blockers.push(blocker(
+      "cleanup_journal_environment_mismatch",
+      "Sidecar se od zahájení cleanupu změnil; journal se neaplikuje na jiný obsah.",
+    ));
+    return base("needs_attention");
+  }
   const editMember = sidecar.editMember;
   const dependencyMembers = sidecar.dependencyMembers;
 
   // 2) Worktree cesta: existující běžný adresář bez symlink/junction úniku.
-  if (!existsSync(worktreePath)) {
-    blockers.push(blocker("worktree_missing", `Worktree cesta ${worktree.path} neexistuje; kandidát na repair/prune, ne běžný cleanup.`));
-    return base("missing_path");
+  //    Po dokončeném remove_edit je jedinou pravdou o cestě journal; návrat
+  //    adresáře na tutéž cestu je cizí obsah, který cleanup nesmí zasáhnout.
+  let worktreeRealPath;
+  if (editRemoved) {
+    if (existsSync(worktreePath)) {
+      blockers.push(blocker(
+        "cleanup_journal_environment_mismatch",
+        `Worktree cesta ${worktree.path} po dokončeném remove_edit znovu existuje; cleanup se neobnoví.`,
+      ));
+      return base("needs_attention");
+    }
+    worktreeRealPath = resumeJournal.environment.worktree_real_path;
+  } else {
+    if (!existsSync(worktreePath)) {
+      blockers.push(blocker("worktree_missing", `Worktree cesta ${worktree.path} neexistuje; kandidát na repair/prune, ne běžný cleanup.`));
+      return base("missing_path");
+    }
+    const worktreeBoundary = await inspectWorktreeDirectory({ organizationRoot, worktreePath });
+    if (!worktreeBoundary.ok) {
+      blockers.push(blocker("containment_invalid", worktreeBoundary.message));
+      return base("invalid");
+    }
+    worktreeRealPath = worktreeBoundary.realPath;
+    if (resumeJournal && !samePath(worktreeRealPath, resumeJournal.environment.worktree_real_path)) {
+      blockers.push(blocker(
+        "cleanup_journal_environment_mismatch",
+        "Journal identita nesedí na aktuální worktree cestu; cleanup se neobnoví.",
+      ));
+      return base("needs_attention");
+    }
   }
-  const worktreeBoundary = await inspectWorktreeDirectory({ organizationRoot, worktreePath });
-  if (!worktreeBoundary.ok) {
-    blockers.push(blocker("containment_invalid", worktreeBoundary.message));
-    return base("invalid");
-  }
-  const worktreeRealPath = worktreeBoundary.realPath;
+  snapshot.worktreeRealPath = worktreeRealPath;
 
   // 3) Journal z předchozího nedokončeného apply: preview jej pravdivě ukáže,
-  //    ale ready_to_delete z něj nikdy neodvodí — dokončení patří apply resume.
-  const journal = await readCleanupJournal({ journalPath });
-  if (journal.state === "invalid") {
-    blockers.push(blocker("cleanup_journal_invalid", journal.message));
-    return base("invalid", { journal: journal.summary });
-  }
-  if (journal.state === "present") {
-    blockers.push(blocker(
-      "cleanup_incomplete",
-      "Předchozí cleanup apply nedoběhl; zbývající kroky dokončí opakovaný apply stejného environmentu.",
-      journal.value.steps.filter((step) => step.status !== "completed").map((step) => step.id),
-    ));
-    return base("needs_attention", { journal: journal.summary });
+  //    ale ready_to_delete z něj nikdy neodvodí — dokončení patří apply resume,
+  //    který tuto funkci volá znovu s `resumeJournal`.
+  if (!resumeJournal) {
+    const journal = await readCleanupJournal({ journalPath });
+    if (journal.state === "invalid") {
+      blockers.push(blocker("cleanup_journal_invalid", journal.message));
+      return base("invalid", { journal: journal.summary });
+    }
+    if (journal.state === "present") {
+      blockers.push(blocker(
+        "cleanup_incomplete",
+        "Předchozí cleanup apply nedoběhl; zbývající kroky dokončí opakovaný apply stejného environmentu.",
+        journal.value.steps.filter((step) => step.status !== "completed").map((step) => step.id),
+      ));
+      return base("needs_attention", { journal: journal.summary });
+    }
   }
 
   // 4) Edit member: exact registrace u owner repa, clean včetně untracked,
   //    žádná probíhající Git operace, branch odpovídá sidecaru. Owner repo se
   //    odvozuje z Git registru samotného worktree a musí ležet uvnitř
   //    Organization rootu (root_repo i module worktrees mají různé ownery).
-  const edit = await inspectEditWorktree({
-    organizationRoot,
-    worktreePath,
-    worktreeRealPath,
-    branch: sidecar.metadata.branch,
-    runGitFn,
-  });
+  //    Po dokončeném remove_edit nese exact HEAD i ownera journal.
+  const edit = editRemoved
+    ? {
+        blockers: [],
+        head: resumeJournal.environment.edit_head,
+        ownerRoot: resumeJournal.environment.owner_root,
+        remoteRefsContainHead: false,
+      }
+    : await inspectEditWorktree({
+        organizationRoot,
+        worktreePath,
+        worktreeRealPath,
+        branch: sidecar.metadata.branch,
+        runGitFn,
+      });
   blockers.push(...edit.blockers);
+  if (resumeJournal && !editRemoved && edit.head && edit.head !== resumeJournal.environment.edit_head) {
+    blockers.push(blocker(
+      "cleanup_journal_environment_mismatch",
+      "Exact HEAD edit worktree se od zahájení cleanupu změnil; journal se neaplikuje.",
+    ));
+  }
+  snapshot.edit = edit;
 
   // 5) Zachování práce: buď žádná změna nikdy nevznikla, nebo čerstvý
-  //    exact-head PR/disposition důkaz (manual guard 9).
-  if (edit.head) {
+  //    exact-head PR/disposition důkaz (manual guard 9). Hodnotí se živě,
+  //    dokud edit worktree existuje; po jeho odstranění drží potvrzený důkaz
+  //    journal a preview fingerprint.
+  if (edit.head && !editRemoved) {
     blockers.push(...evaluateHeadPreservation({
       editMember,
       editHead: edit.head,
@@ -154,6 +232,8 @@ export async function previewWorktreeCleanup({
       `Recovery handoff je ve stavu ${handoffState ?? "missing"} a edit disposition je ${editMember.disposition}; environment nemá writer sign-off.`,
     ));
   }
+  snapshot.plan = plan;
+  snapshot.handoffState = handoffState;
 
   // 7) Runtime: bez ověřeného „nic environment nepoužívá" se nemaže.
   const runtime = await resolveRuntimeEvidence({ inspectRuntimeUsage, environment, worktreeRealPath });
@@ -162,6 +242,7 @@ export async function previewWorktreeCleanup({
   } else if (runtime.in_use) {
     blockers.push(blocker("runtime_in_use", runtime.message, runtime.details));
   }
+  snapshot.runtime = runtime;
 
   // 8) Dependency members: exact detached binding u kanonického ownera —
   //    zároveň reverse-order teardown dry-run (manual guard 12).
@@ -171,9 +252,16 @@ export async function previewWorktreeCleanup({
     metadata: sidecar.metadata,
     dependencyMembers,
     blockers,
+    journal: resumeJournal,
+    editRemoved,
+    runGitFn,
   });
+  snapshot.dependencies = dependencies;
 
   const steps = planCleanupSteps({ dependencies, editMember });
+  // Při resume se otisk počítá nad tímtéž důkazem, který volající potvrdil
+  // (journal drží normalizovanou PR evidenci preview); čerstvost živé PR
+  // evidence hlídá krok 5. Fresh preview otiskne evidenci volajícího.
   const fingerprint = computePreviewFingerprint({
     sidecarSha256: sidecar.sha256,
     worktreeRealPath,
@@ -183,8 +271,9 @@ export async function previewWorktreeCleanup({
     handoffState,
     dependencies,
     runtime,
-    prEvidence,
+    prEvidence: resumeJournal ? (resumeJournal.pr_evidence ?? null) : prEvidence,
   });
+  snapshot.fingerprint = fingerprint;
 
   return base(blockers.length > 0 ? "needs_attention" : "ready_to_delete", {
     steps: steps.map((step) => step.id),
@@ -230,12 +319,13 @@ export async function applyWorktreeCleanup({
       journal: journal.value,
       expectedFingerprint,
       inspectRuntimeUsage,
+      prEvidence,
       runGitFn,
       now,
     });
   }
 
-  const preview = await previewWorktreeCleanup({
+  const { preview, snapshot } = await inspectCleanupEnvironment({
     companiesRoot,
     worktree,
     inspectRuntimeUsage,
@@ -256,53 +346,25 @@ export async function applyWorktreeCleanup({
     );
   }
 
-  // Živé evidence pro journal: znovu odvodit members ze sidecaru, se kterým
-  // preview právě prošlo (fingerprint drží jeho přesný obsah).
-  const sidecarPath = resolve(companiesRoot, worktree.sidecar_path);
-  const worktreePath = resolve(companiesRoot, worktree.path);
-  const worktreeRealPath = await realpath(worktreePath);
-  const sidecarRaw = await readFile(sidecarPath, "utf8");
-  const metadata = JSON.parse(sidecarRaw);
-  const dependencyBlockers = [];
-  const dependencyMembers = (metadata.members ?? []).filter((member) => member?.role === "dependency");
-  const dependencies = await inspectDependencyMembers({
-    organizationRoot,
-    worktreePath,
-    metadata,
-    dependencyMembers,
-    blockers: dependencyBlockers,
-  });
-  if (dependencyBlockers.length > 0 || dependencies.length !== dependencyMembers.length) {
-    throw new WorktreeCleanupError(
-      "Živý stav dependency members se od preview změnil; vyžádej nové preview.",
-      { code: "cleanup_stale_preview", details: dependencyBlockers.map((item) => item.message) },
-    );
-  }
-  const editHeadResult = await runGitFn(["rev-parse", "HEAD"], { cwd: worktreePath, timeoutMs: GIT_LOCAL_TIMEOUT_MS });
-  const editHead = editHeadResult.ok ? editHeadResult.stdout : "";
-  if (!SHA.test(editHead)) {
-    throw new WorktreeCleanupError("Exact HEAD edit worktree nelze určit; cleanup se neaplikuje.", {
-      code: "cleanup_stale_preview",
-    });
-  }
-  const owner = await resolveEditOwnerRoot({ organizationRoot, worktreePath, runGitFn });
-  if (!owner.ok) {
-    throw new WorktreeCleanupError(owner.message, { code: "cleanup_stale_preview" });
-  }
+  // Journal vzniká z téhož živého snapshotu, který právě prošel guardy a dal
+  // potvrzený fingerprint — žádná druhá re-derivace members, HEADu ani ownera.
+  const { sidecar, edit, dependencies, worktreeRealPath } = snapshot;
+  const timestamp = now().toISOString();
   const journalValue = {
     schema_version: CLEANUP_JOURNAL_SCHEMA,
-    created_at: now().toISOString(),
-    updated_at: now().toISOString(),
+    created_at: timestamp,
+    updated_at: timestamp,
     preview_fingerprint: expectedFingerprint,
+    pr_evidence: normalizePrEvidence(prEvidence),
     environment: {
       organization: worktree.organization,
       slug: worktree.slug,
-      branch: metadata.branch,
+      branch: sidecar.metadata.branch,
       worktree_real_path: worktreeRealPath,
-      owner_root: owner.root,
-      sidecar_path: sidecarPath,
-      sidecar_sha256: sha256(sidecarRaw),
-      edit_head: editHead,
+      owner_root: edit.ownerRoot,
+      sidecar_path: resolve(companiesRoot, worktree.sidecar_path),
+      sidecar_sha256: sidecar.sha256,
+      edit_head: edit.head,
     },
     steps: [
       ...dependencies.map((dependency) => ({
@@ -341,6 +403,7 @@ async function resumeCleanupFromJournal({
   journal,
   expectedFingerprint,
   inspectRuntimeUsage,
+  prEvidence,
   runGitFn,
   now,
 }) {
@@ -353,57 +416,53 @@ async function resumeCleanupFromJournal({
     );
   }
   await assertJournalPathsWithinEnvironment({ organizationRoot, journal });
-  const worktreePath = resolve(companiesRoot, worktree.path);
-  if (existsSync(worktreePath)) {
-    const boundary = await inspectWorktreeDirectory({ organizationRoot, worktreePath });
-    if (!boundary.ok || !samePath(boundary.realPath, journal.environment.worktree_real_path)) {
-      throw new WorktreeCleanupError(
-        "Journal identita nesedí na aktuální worktree cestu; cleanup se neobnoví.",
-        { code: "cleanup_journal_environment_mismatch" },
-      );
-    }
-    // Dokud edit worktree existuje, každý AKTUÁLNĚ required repository-db slot
-    // musí mít svůj journal krok: slot deklarovaný až během cleanupu nemá
-    // ověřený teardown a odstranění parentu by ho mohlo tiše zasáhnout.
-    const sidecarRawNow = existsSync(resolve(companiesRoot, worktree.sidecar_path))
-      ? await readFile(resolve(companiesRoot, worktree.sidecar_path), "utf8")
-      : null;
-    if (sidecarRawNow !== null) {
-      const metadataNow = JSON.parse(sidecarRawNow);
-      const requirementsNow = await readRequiredRepositoryDbWorktreeSlots({
-        organizationRoot,
-        moduleCheckoutRoot: worktreePath,
-        moduleSlotPath: metadataNow.module_path,
-        moduleId: metadataNow.module,
-      });
-      const journalSlots = new Set(
-        journal.steps.filter((step) => step.kind === "remove_dependency").map((step) => step.slot_path),
-      );
-      const uncovered = requirementsNow.ok
-        ? requirementsNow.dependencies.filter((dependency) => !journalSlots.has(dependency.slot_path))
-        : null;
-      if (!requirementsNow.ok || uncovered.length > 0) {
-        throw new WorktreeCleanupError(
-          "Aktuálně required repository-db sloty neodpovídají journal plánu; cleanup se neobnoví.",
-          {
-            code: "cleanup_journal_environment_mismatch",
-            details: requirementsNow.ok
-              ? uncovered.map((dependency) => `required slot bez journal kroku: ${dependency.slot_path}`)
-              : requirementsNow.details,
-          },
-        );
-      }
-    }
-  }
+
+  // Po odstranění všech worktree members zbývá nejvýš sidecar; když už ani ten
+  // není (pád mezi unlinkem a zápisem journalu), není co znovu hodnotit —
+  // dokončení jen uzavře journal bez destruktivního kroku.
+  const remaining = journal.steps.filter((step) => step.status !== "completed");
   const sidecarPath = resolve(companiesRoot, worktree.sidecar_path);
-  if (existsSync(sidecarPath)) {
-    const raw = await readFile(sidecarPath, "utf8");
-    if (sha256(raw) !== journal.environment.sidecar_sha256) {
-      throw new WorktreeCleanupError(
-        "Sidecar se od zahájení cleanupu změnil; journal se neaplikuje na jiný obsah.",
-        { code: "cleanup_journal_environment_mismatch" },
-      );
-    }
+  const onlySidecarRemains = remaining.every((step) => step.kind === "remove_sidecar");
+  if (remaining.length === 0 || (onlySidecarRemains && !existsSync(sidecarPath))) {
+    return executeCleanupJournal({
+      companiesRoot,
+      worktree,
+      organizationRoot,
+      journalPath,
+      journal,
+      inspectRuntimeUsage,
+      runGitFn,
+      now,
+    });
+  }
+
+  // Manuál: apply znovu přepočítá všechny guardy těsně před mutací — i při
+  // resume. Journal fingerprint říká, co volající potvrdil; živý eligibility
+  // snapshot (plán, handoff, edit, dependency množina, runtime, PR evidence)
+  // musí i teď projít a dát přesně tentýž otisk. Jinak se žádný krok nespustí.
+  const { preview, snapshot } = await inspectCleanupEnvironment({
+    companiesRoot,
+    worktree,
+    resumeJournal: journal,
+    inspectRuntimeUsage,
+    prEvidence,
+    runGitFn,
+    now,
+  });
+  if (preview.state !== "ready_to_delete") {
+    throw new WorktreeCleanupError(
+      `Živý eligibility snapshot blokuje resume cleanupu (${preview.state}): ${preview.blockers.map((item) => item.code).join(", ") || "unknown"}.`,
+      {
+        code: resumeBlockerCode(preview.blockers),
+        details: preview.blockers.flatMap((item) => [item.message, ...item.details]),
+      },
+    );
+  }
+  if (snapshot.fingerprint !== journal.preview_fingerprint) {
+    throw new WorktreeCleanupError(
+      "Živý stav environmentu už neodpovídá potvrzenému preview fingerprintu journalu; cleanup se neobnoví.",
+      { code: "cleanup_stale_preview" },
+    );
   }
   return executeCleanupJournal({
     companiesRoot,
@@ -953,39 +1012,94 @@ async function resolveRuntimeEvidence({ inspectRuntimeUsage, environment, worktr
   }
 }
 
+// Dependency množina se hodnotí živě proti aktuálně required slotům. Při
+// resume (`journal`) navíc: každý member musí mít journal teardown krok; už
+// dokončený krok se prokazuje absencí cesty i registrace (návrat obsahu na
+// gitignorovanou cestu by remove_edit tiše smazal); nedokončený krok se
+// hodnotí stejně jako ve fresh preview. Po odstraněném edit worktree už
+// module contract nejde číst, proto se required sloty znovu nečtou — všechny
+// dependency kroky musí být v takovém journalu completed.
 async function inspectDependencyMembers({
   organizationRoot,
   worktreePath,
   metadata,
   dependencyMembers,
   blockers,
+  journal = null,
+  editRemoved = false,
+  runGitFn = defaultRunGit,
 }) {
-  const requirements = await readRequiredRepositoryDbWorktreeSlots({
-    organizationRoot,
-    moduleCheckoutRoot: worktreePath,
-    moduleSlotPath: metadata.module_path,
-    moduleId: metadata.module,
-  });
-  if (!requirements.ok) {
-    blockers.push(blocker("dependency_binding_not_ready", requirements.message, requirements.details));
-    return [];
-  }
-  const requirementsBySlot = new Map(requirements.dependencies.map((dependency) => [dependency.slot_path, dependency]));
-  // Symetrický fail-closed: každý aktivní required slot musí mít právě jeden
-  // sidecar member. Slot deklarovaný až po create nemá v environmentu ověřenou
-  // evidenci a případný ručně přidaný checkout na jeho (gitignorované) cestě
-  // by teardown mohl tiše zasáhnout.
-  for (const dependency of requirements.dependencies) {
-    const matching = dependencyMembers.filter((member) => member?.slot_path === dependency.slot_path);
-    if (matching.length !== 1) {
-      blockers.push(blocker(
-        "member_shape_invalid",
-        `Required repository-db slot ${dependency.slot_path} nemá právě jeden sidecar dependency member; environment neodpovídá aktuální deklaraci.`,
-      ));
+  const journalSteps = new Map(
+    (journal?.steps ?? [])
+      .filter((step) => step.kind === "remove_dependency")
+      .map((step) => [step.slot_path, step]),
+  );
+  let requirementsBySlot = new Map();
+  if (!editRemoved) {
+    const requirements = await readRequiredRepositoryDbWorktreeSlots({
+      organizationRoot,
+      moduleCheckoutRoot: worktreePath,
+      moduleSlotPath: metadata.module_path,
+      moduleId: metadata.module,
+    });
+    if (!requirements.ok) {
+      blockers.push(blocker("dependency_binding_not_ready", requirements.message, requirements.details));
+      return [];
+    }
+    requirementsBySlot = new Map(requirements.dependencies.map((dependency) => [dependency.slot_path, dependency]));
+    // Symetrický fail-closed: každý aktivní required slot musí mít právě jeden
+    // sidecar member. Slot deklarovaný až po create nemá v environmentu ověřenou
+    // evidenci a případný ručně přidaný checkout na jeho (gitignorované) cestě
+    // by teardown mohl tiše zasáhnout.
+    for (const dependency of requirements.dependencies) {
+      const matching = dependencyMembers.filter((member) => member?.slot_path === dependency.slot_path);
+      if (matching.length !== 1) {
+        blockers.push(blocker(
+          "member_shape_invalid",
+          `Required repository-db slot ${dependency.slot_path} nemá právě jeden sidecar dependency member; environment neodpovídá aktuální deklaraci.`,
+        ));
+      }
     }
   }
   const dependencies = [];
   for (const member of dependencyMembers) {
+    const step = journal ? journalSteps.get(member.slot_path) : null;
+    if (journal && !step) {
+      blockers.push(blocker(
+        "cleanup_journal_environment_mismatch",
+        `Dependency member ${member.slot_path} nemá v journalu teardown krok; cleanup se neobnoví.`,
+      ));
+      continue;
+    }
+    if (step?.status === "completed") {
+      const registration = await ownerRegistrationForPath({
+        ownerRoot: step.source_path,
+        targetPath: step.target_real_path,
+        runGitFn,
+      });
+      if (existsSync(step.target_real_path) || registration.found) {
+        blockers.push(blocker(
+          "cleanup_journal_environment_mismatch",
+          `Dependency member ${member.slot_path} po dokončeném kroku znovu existuje nebo je registrovaný u ownera; cleanup se neobnoví.`,
+        ));
+        continue;
+      }
+      dependencies.push({
+        member,
+        dependency: null,
+        sourcePath: step.source_path,
+        targetRealPath: step.target_real_path,
+        head: step.base_sha,
+      });
+      continue;
+    }
+    if (editRemoved) {
+      blockers.push(blocker(
+        "cleanup_journal_environment_mismatch",
+        `Dependency member ${member.slot_path} má nedokončený krok po odstraněném edit worktree; journal neodpovídá pořadí teardownu.`,
+      ));
+      continue;
+    }
     const dependency = requirementsBySlot.get(member.slot_path);
     if (!dependency) {
       blockers.push(blocker(
@@ -1069,6 +1183,7 @@ async function readCleanupJournal({ journalPath }) {
     || !value.environment
     || !Array.isArray(value.steps)
     || value.steps.some((step) => !step?.id || !step?.kind || !["pending", "completed"].includes(step?.status))
+    || (value.pr_evidence != null && normalizePrEvidence(value.pr_evidence) === null)
   ) {
     return { state: "invalid", message: "Cleanup journal neodpovídá schema kontraktu." };
   }
@@ -1134,6 +1249,21 @@ function parseWorktreePorcelain(porcelain) {
 
 function blocker(code, message, details = []) {
   return { code, message, details };
+}
+
+function journalStepCompleted(journal, stepId) {
+  return Boolean(journal?.steps?.some((step) => step?.id === stepId && step?.status === "completed"));
+}
+
+// Kód chyby resume podle povahy blockerů: drift identity journalu má přednost,
+// čistě runtime nález si nechá svůj specifický kód (consumer ví, že má App
+// zastavit), všechno ostatní je obecné „environment už není eligible".
+function resumeBlockerCode(blockers) {
+  const codes = new Set(blockers.map((item) => item.code));
+  if (codes.has("cleanup_journal_environment_mismatch")) return "cleanup_journal_environment_mismatch";
+  if (codes.size === 1 && codes.has("runtime_in_use")) return "cleanup_runtime_in_use";
+  if (codes.size === 1 && codes.has("runtime_unverified")) return "cleanup_runtime_unverified";
+  return "cleanup_not_ready";
 }
 
 function sha256(value) {

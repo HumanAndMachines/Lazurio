@@ -53,12 +53,53 @@ async function findWorktreeRecord(fixture) {
   return record;
 }
 
-async function markPlanDone(fixture) {
+async function setPlanStatus(fixture, { from, to }) {
   const planFile = join(fixture.orgRoot, fixture.planPath);
   const contents = await readFile(planFile, "utf8");
-  await writeFile(planFile, contents.replace("status: in_progress", "status: done"));
+  if (!contents.includes(`status: ${from}`)) throw new Error(`plan fixture is not in status ${from}`);
+  await writeFile(planFile, contents.replace(`status: ${from}`, `status: ${to}`));
   runGit(["add", "-A"], fixture.repositoryDbRepo);
-  runGit(["commit", "-m", "plan done"], fixture.repositoryDbRepo);
+  runGit(["commit", "-m", `plan ${to}`], fixture.repositoryDbRepo);
+}
+
+async function markPlanDone(fixture) {
+  await setPlanStatus(fixture, { from: "in_progress", to: "done" });
+}
+
+// Přeruší apply po úspěšném remove_dependency: journal drží remove_edit a
+// remove_sidecar pending, edit worktree i sidecar existují.
+async function interruptAfterDependencyRemoval(fixture, worktree, { prEvidence = null } = {}) {
+  const failingRunGit = recordingRunGit([], {
+    failOn: (args, options) => args[1] === "remove" && !options?.cwd?.endsWith("db"),
+  });
+  const preview = await previewWorktreeCleanup({
+    companiesRoot: fixture.root,
+    worktree,
+    inspectRuntimeUsage: runtimeIdle,
+    prEvidence,
+    runGitFn: failingRunGit,
+  });
+  expect(preview.state).toBe("ready_to_delete");
+  await expect(applyWorktreeCleanup({
+    companiesRoot: fixture.root,
+    worktree,
+    expectedFingerprint: preview.preview_fingerprint,
+    inspectRuntimeUsage: runtimeIdle,
+    prEvidence,
+    runGitFn: failingRunGit,
+  })).rejects.toMatchObject({ code: "cleanup_step_failed" });
+  const journalPath = cleanupJournalPath({ companiesRoot: fixture.root, worktree });
+  const journal = JSON.parse(await readFile(journalPath, "utf8"));
+  expect(journal.steps.find((step) => step.id === "remove_edit").status).toBe("pending");
+  expect(existsSync(join(fixture.worktreePath, "db"))).toBe(false);
+  return { preview, journalPath, journal };
+}
+
+function expectPartialEnvironmentIntact(fixture, journalPath) {
+  expect(existsSync(fixture.worktreePath)).toBe(true);
+  expect(existsSync(fixture.sidecarPath)).toBe(true);
+  expect(existsSync(journalPath)).toBe(true);
+  expect(runGit(["worktree", "list", "--porcelain"], fixture.missionControlRepo)).toContain(fixture.branch);
 }
 
 async function signOffSidecar(fixture, { disposition = "active", handoffState = "completed" } = {}) {
@@ -386,6 +427,141 @@ test("partial failure nechá pravdivý journal a resume dokončí jen zbývajíc
   expect(existsSync(journalPath)).toBe(false);
   // Dokončený dependency krok se při resume neopakuje jako destruktivní remove.
   expect(resumeLog.filter((entry) => entry.args[1] === "remove").length).toBe(1);
+});
+
+test("resume odmítne znovu aktivovaný Mission Control plán a nic neodstraní", async () => {
+  const fixture = await createCleanupFixture({ branch: "CAC-0099-cleanup-reactivated" });
+  await markPlanDone(fixture);
+  await signOffSidecar(fixture);
+  const worktree = await findWorktreeRecord(fixture);
+  const { preview, journalPath } = await interruptAfterDependencyRemoval(fixture, worktree);
+
+  // Plán se po přerušení cleanupu vrátil do práce; sidecar i journal
+  // fingerprint jsou beze změny — právě scénář z exact-head review.
+  await setPlanStatus(fixture, { from: "done", to: "in_progress" });
+
+  await expect(applyWorktreeCleanup({
+    companiesRoot: fixture.root,
+    worktree,
+    expectedFingerprint: preview.preview_fingerprint,
+    inspectRuntimeUsage: runtimeIdle,
+  })).rejects.toMatchObject({
+    code: "cleanup_not_ready",
+    details: expect.arrayContaining([expect.stringContaining("in_progress")]),
+  });
+  expectPartialEnvironmentIntact(fixture, journalPath);
+  const journalAfter = JSON.parse(await readFile(journalPath, "utf8"));
+  expect(journalAfter.steps.find((step) => step.id === "remove_edit").status).toBe("pending");
+  expect(journalAfter.preview_fingerprint).toBe(preview.preview_fingerprint);
+
+  // Návrat plánu do terminálního stavu resume znovu odemkne se stejným
+  // potvrzeným fingerprintem — guard je živý, ne trvale zaseknutý.
+  await setPlanStatus(fixture, { from: "in_progress", to: "done" });
+  const applied = await applyWorktreeCleanup({
+    companiesRoot: fixture.root,
+    worktree,
+    expectedFingerprint: preview.preview_fingerprint,
+    inspectRuntimeUsage: runtimeIdle,
+  });
+  expect(applied.steps.map((step) => step.status)).toEqual(["completed", "completed", "completed"]);
+  expect(existsSync(fixture.worktreePath)).toBe(false);
+  expect(existsSync(fixture.sidecarPath)).toBe(false);
+  expect(existsSync(journalPath)).toBe(false);
+});
+
+test("resume odmítne drift identity: změněný sidecar i obsah vrácený na odstraněnou dependency cestu", async () => {
+  const fixture = await createCleanupFixture({ branch: "CAC-0099-cleanup-identity" });
+  await markPlanDone(fixture);
+  await signOffSidecar(fixture);
+  const worktree = await findWorktreeRecord(fixture);
+  const { preview, journalPath, journal } = await interruptAfterDependencyRemoval(fixture, worktree);
+
+  // Něco se na cestu odstraněného dependency memberu vrátilo (gitignorovaná
+  // cesta — remove_edit by ji tiše smazal).
+  const { mkdir } = await import("fs/promises");
+  const dependencyStep = journal.steps.find((step) => step.kind === "remove_dependency");
+  await mkdir(dependencyStep.target_real_path, { recursive: true });
+  await writeFile(join(dependencyStep.target_real_path, "notes.md"), "cizí obsah\n");
+  await expect(applyWorktreeCleanup({
+    companiesRoot: fixture.root,
+    worktree,
+    expectedFingerprint: preview.preview_fingerprint,
+    inspectRuntimeUsage: runtimeIdle,
+  })).rejects.toMatchObject({ code: "cleanup_journal_environment_mismatch" });
+  expectPartialEnvironmentIntact(fixture, journalPath);
+  expect(existsSync(join(dependencyStep.target_real_path, "notes.md"))).toBe(true);
+  await rm(dependencyStep.target_real_path, { recursive: true, force: true });
+
+  // Sidecar upravený po zahájení cleanupu (i jen last_touched) journal nepřijme.
+  const sidecar = JSON.parse(await readFile(fixture.sidecarPath, "utf8"));
+  sidecar.last_touched = new Date().toISOString();
+  await writeFile(fixture.sidecarPath, `${JSON.stringify(sidecar, null, 2)}\n`);
+  await expect(applyWorktreeCleanup({
+    companiesRoot: fixture.root,
+    worktree,
+    expectedFingerprint: preview.preview_fingerprint,
+    inspectRuntimeUsage: runtimeIdle,
+  })).rejects.toMatchObject({ code: "cleanup_journal_environment_mismatch" });
+  expectPartialEnvironmentIntact(fixture, journalPath);
+});
+
+test("resume publikované práce znovu vyžaduje čerstvou exact-head PR evidenci", async () => {
+  const fixture = await createCleanupFixture({ branch: "CAC-0099-cleanup-resume-pr" });
+  await writeFile(join(fixture.worktreePath, "draft.md"), "published work\n");
+  await publishWorktreeDraft({
+    companiesRoot: fixture.root,
+    repoKey: "BetaCo::mission-control",
+    slug: fixture.branch,
+    commitMessage: "feat: cleanup resume fixture draft",
+  });
+  await markPlanDone(fixture);
+  await signOffSidecar(fixture, { disposition: "merged" });
+  const worktree = await findWorktreeRecord(fixture);
+  const editHead = runGit(["rev-parse", "HEAD"], fixture.worktreePath);
+  const evidence = (checkedAt) => ({
+    url: "https://github.com/BetaCo/mission-control/pull/2",
+    state: "MERGED",
+    head_sha: editHead,
+    checked_at: checkedAt.toISOString(),
+  });
+  const { preview, journalPath, journal } = await interruptAfterDependencyRemoval(fixture, worktree, {
+    prEvidence: evidence(new Date()),
+  });
+  expect(journal.pr_evidence).toMatchObject({ state: "MERGED", head_sha: editHead });
+
+  // Bez evidence nebo se stale evidencí resume neprokáže zachování práce.
+  await expect(applyWorktreeCleanup({
+    companiesRoot: fixture.root,
+    worktree,
+    expectedFingerprint: preview.preview_fingerprint,
+    inspectRuntimeUsage: runtimeIdle,
+  })).rejects.toMatchObject({
+    code: "cleanup_not_ready",
+    details: expect.arrayContaining([expect.stringContaining("PR/disposition důkaz")]),
+  });
+  expectPartialEnvironmentIntact(fixture, journalPath);
+  await expect(applyWorktreeCleanup({
+    companiesRoot: fixture.root,
+    worktree,
+    expectedFingerprint: preview.preview_fingerprint,
+    inspectRuntimeUsage: runtimeIdle,
+    prEvidence: evidence(new Date(Date.now() - 60 * 60 * 1000)),
+  })).rejects.toMatchObject({ code: "cleanup_not_ready" });
+  expectPartialEnvironmentIntact(fixture, journalPath);
+
+  // Čerstvě znovu ověřená evidence (jiný checked_at než v preview) resume
+  // dokončí: fingerprint je vázaný na journalem potvrzený důkaz, čerstvost
+  // hlídá živý guard.
+  const applied = await applyWorktreeCleanup({
+    companiesRoot: fixture.root,
+    worktree,
+    expectedFingerprint: preview.preview_fingerprint,
+    inspectRuntimeUsage: runtimeIdle,
+    prEvidence: evidence(new Date()),
+  });
+  expect(applied.steps.map((step) => step.status)).toEqual(["completed", "completed", "completed"]);
+  expect(existsSync(fixture.worktreePath)).toBe(false);
+  expect(existsSync(journalPath)).toBe(false);
 });
 
 test("required slot bez sidecar memberu blokuje cleanup fail-closed", async () => {

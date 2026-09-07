@@ -16,7 +16,12 @@ povinných guardů níže a explicitní apply, který po živém rechecku proti
 preview fingerprintu a pod canonical create lockem odstraní nested-first
 pouze sidecarem vlastněné members (dependency child → edit worktree →
 sidecar) s idempotentním completed/remaining journalem; branch refs nechává
-a jen je jmenuje. Launchpad ji vystavuje přes
+a jen je jmenuje. Resume rozpracovaného journalu není výjimka z guardů:
+před prvním zbývajícím krokem se tímtéž kódem znovu sestaví živý eligibility
+snapshot (Mission Control plán, sidecar handoff/disposition, edit
+registrace/HEAD/čistota, dependency množina, runtime, PR evidence), který
+musí projít a dát přesně potvrzený journal fingerprint; jinak resume skončí
+fail-closed bez destruktivního kroku. Launchpad ji vystavuje přes
 `POST /api/git/repos/<repo>/worktrees/<slug>/cleanup/preview|apply`
 (hosted profil apply odmítá) a Doctor čte tentýž výsledek v checku
 `git.worktrees.cleanup`. Obecné dependency profily, outer Organization
