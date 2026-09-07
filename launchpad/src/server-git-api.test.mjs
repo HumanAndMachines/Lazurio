@@ -1652,6 +1652,19 @@ test("Launchpad server provede guarded worktree cleanup preview a apply nad term
   const { port } = await startLaunchpadServer(fixture.root);
   const repoKey = encodeURIComponent("BetaCo::mission-control");
 
+  // Reálný runtime smoke: běžící worktree App drží cleanup fail-closed a po
+  // explicitním Stop se environment uvolní.
+  const startedApp = await postJson(port, "/api/apps/betaco-mission-control-v3/start", {
+    source: { type: "worktree", slug: branch },
+  });
+  expect(startedApp.action).toBe("start");
+  const runningPreview = await postJson(port, `/api/git/repos/${repoKey}/worktrees/${branch}/cleanup/preview`, {});
+  expect(runningPreview.state).toBe("needs_attention");
+  expect(runningPreview.blockers.map((blocker) => blocker.code)).toContain("runtime_in_use");
+  expect((await postJson(port, "/api/apps/betaco-mission-control-v3/stop", {
+    source: { type: "worktree", slug: branch },
+  })).action).toBe("stop");
+
   const preview = await postJson(port, `/api/git/repos/${repoKey}/worktrees/${branch}/cleanup/preview`, {});
   expect(preview).toMatchObject({
     schema_version: "companiesascode.worktree_cleanup_preview.v1",
