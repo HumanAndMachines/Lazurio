@@ -56,6 +56,10 @@ const ignoredDirs = new Set([
   ".git",
   ".worktrees",
   "node_modules",
+  // Local review previews and other generated artifacts can contain complete
+  // runtime manifests. They are not declared Organization modules and must
+  // never create a second, invalid Launchpad card.
+  "output",
   "dist",
   "build",
   ".next",
