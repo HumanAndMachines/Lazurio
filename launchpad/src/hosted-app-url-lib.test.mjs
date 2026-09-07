@@ -232,6 +232,24 @@ test("declared available Organization default shares the hosted URL and lifecycl
     .toMatchObject({ url, start: { url } });
 });
 
+test("adding an Organization default preserves candidate-only Workspace module selection", () => {
+  const planning = declaredOrganizationApp();
+  const knowledgebase = workspaceApp();
+  const inventory = { apps: [planning, knowledgebase], organizations: [{ slug: "ExampleOrg", module_declarations: [{
+    ...planning.module_apps.declaration, slug: "planning", apps: planning.module_apps,
+  }] }] };
+  expect(selectHostedWorkspaceApps(configuration, inventory)).toEqual({ apps: [knowledgebase, planning], skipped: [] });
+});
+
+test("Organization repository slot binds by catalog path while lifecycle and DNS use manifest Module ID", () => {
+  const app = declaredOrganizationApp();
+  const inventory = { apps: [app], organizations: [{ slug: "ExampleOrg", module_declarations: [{
+    ...app.module_apps.declaration, slug: "planning-repository", apps: app.module_apps,
+  }] }] };
+  expect(selectHostedWorkspaceApps(configuration, inventory)).toEqual({ apps: [app], skipped: [] });
+  expect(requireHostedAppUrl(app, configuration)).toBe("https://planning.builders.workspace.example.test/");
+});
+
 test("Organization-section Workspace default retains the original Team constraint", () => {
   const app = declaredOrganizationApp();
   Object.assign(app.module_apps.declaration, { space: "workspace", teams: ["builders"], path: "workspace/planning" });

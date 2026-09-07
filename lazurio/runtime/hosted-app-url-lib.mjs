@@ -104,17 +104,26 @@ export function selectHostedWorkspaceApps(configuration, { apps = [], organizati
   const declaredModules = (organization?.module_declarations ?? []).filter((slot) =>
     declarationInHostedScope(slot, configuration)
   );
-  const modules = declaredModules.length > 0
-    ? declaredModules.map((slot) => ({
-        module: slot.slug,
-        group: candidatesByModule.get(slot.slug) ?? [],
-        declaredTargetId: slot.apps?.open_target_app_id ?? null,
-      }))
-    : [...candidatesByModule].map(([module, group]) => ({
-        module,
-        group,
-        declaredTargetId: null,
-      }));
+  const representedModules = new Set();
+  const modules = declaredModules.map((slot) => {
+    // A repository slot is not the manifest-owned Module ID. Bind discovered
+    // Apps to their declaration by catalog path before selecting the default.
+    const group = typeof slot.path === "string"
+      ? candidates.filter((app) => app.module_catalog_path === slot.path)
+      : candidatesByModule.get(slot.slug) ?? [];
+    const identities = [...new Set(group.map((app) => app.module))];
+    for (const identity of identities) representedModules.add(identity);
+    return {
+      module: identities.length === 1 ? identities[0] : slot.slug,
+      group: identities.length <= 1 ? group : [],
+      declaredTargetId: slot.apps?.open_target_app_id ?? null,
+    };
+  });
+  // Adding an Organization default must not retire existing candidate-only
+  // Workspace modules. Keep the original candidate selection alongside it.
+  for (const [module, group] of candidatesByModule) {
+    if (!representedModules.has(module)) modules.push({ module, group, declaredTargetId: null });
+  }
 
   const selected = [];
   const skipped = [];
