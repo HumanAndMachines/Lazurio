@@ -228,6 +228,7 @@ export async function applyWorktreeCleanup({
       organizationRoot,
       journalPath,
       journal: journal.value,
+      expectedFingerprint,
       inspectRuntimeUsage,
       runGitFn,
       now,
@@ -338,10 +339,19 @@ async function resumeCleanupFromJournal({
   organizationRoot,
   journalPath,
   journal,
+  expectedFingerprint,
   inspectRuntimeUsage,
   runGitFn,
   now,
 }) {
+  // Resume je pokračování přesně toho apply, jehož preview volající potvrdil.
+  // Jiný fingerprint znamená požadavek na jiný environment stav — fail-closed.
+  if (journal.preview_fingerprint !== expectedFingerprint) {
+    throw new WorktreeCleanupError(
+      "Rozpracovaný cleanup journal patří jinému preview fingerprintu; potvrď přesně původní preview, nebo journal vyřeš vědomě.",
+      { code: "cleanup_stale_preview" },
+    );
+  }
   await assertJournalPathsWithinEnvironment({ organizationRoot, journal });
   const worktreePath = resolve(companiesRoot, worktree.path);
   if (existsSync(worktreePath)) {
@@ -351,6 +361,38 @@ async function resumeCleanupFromJournal({
         "Journal identita nesedí na aktuální worktree cestu; cleanup se neobnoví.",
         { code: "cleanup_journal_environment_mismatch" },
       );
+    }
+    // Dokud edit worktree existuje, každý AKTUÁLNĚ required repository-db slot
+    // musí mít svůj journal krok: slot deklarovaný až během cleanupu nemá
+    // ověřený teardown a odstranění parentu by ho mohlo tiše zasáhnout.
+    const sidecarRawNow = existsSync(resolve(companiesRoot, worktree.sidecar_path))
+      ? await readFile(resolve(companiesRoot, worktree.sidecar_path), "utf8")
+      : null;
+    if (sidecarRawNow !== null) {
+      const metadataNow = JSON.parse(sidecarRawNow);
+      const requirementsNow = await readRequiredRepositoryDbWorktreeSlots({
+        organizationRoot,
+        moduleCheckoutRoot: worktreePath,
+        moduleSlotPath: metadataNow.module_path,
+        moduleId: metadataNow.module,
+      });
+      const journalSlots = new Set(
+        journal.steps.filter((step) => step.kind === "remove_dependency").map((step) => step.slot_path),
+      );
+      const uncovered = requirementsNow.ok
+        ? requirementsNow.dependencies.filter((dependency) => !journalSlots.has(dependency.slot_path))
+        : null;
+      if (!requirementsNow.ok || uncovered.length > 0) {
+        throw new WorktreeCleanupError(
+          "Aktuálně required repository-db sloty neodpovídají journal plánu; cleanup se neobnoví.",
+          {
+            code: "cleanup_journal_environment_mismatch",
+            details: requirementsNow.ok
+              ? uncovered.map((dependency) => `required slot bez journal kroku: ${dependency.slot_path}`)
+              : requirementsNow.details,
+          },
+        );
+      }
     }
   }
   const sidecarPath = resolve(companiesRoot, worktree.sidecar_path);

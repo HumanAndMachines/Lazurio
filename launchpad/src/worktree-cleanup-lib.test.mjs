@@ -363,6 +363,15 @@ test("partial failure nechá pravdivý journal a resume dokončí jen zbývajíc
   })).rejects.toMatchObject({ code: "cleanup_runtime_unverified" });
   expect(existsSync(fixture.worktreePath)).toBe(true);
 
+  // Resume je vázaný na přesně původní preview fingerprint.
+  await expect(applyWorktreeCleanup({
+    companiesRoot: fixture.root,
+    worktree,
+    expectedFingerprint: "2".repeat(64),
+    inspectRuntimeUsage: runtimeIdle,
+  })).rejects.toMatchObject({ code: "cleanup_stale_preview" });
+  expect(existsSync(fixture.worktreePath)).toBe(true);
+
   const resumeLog = [];
   const applied = await applyWorktreeCleanup({
     companiesRoot: fixture.root,
