@@ -87,7 +87,7 @@ instalační allowlisty nejsou důkaz provenance a nahrazují se tímto kontrakt
 v Install Core, Doctoru i skutečných Git/GitHub consumerech. Homebrew není
 požadovaná závislost ani důvod odmítnutí existující instalace. Instalátor
 nejprve využije vyhovující nástroje. Nejnovější release zůstává advisory lane
-0135, Bun drží exact 0134 pin (nyní 1.4.1). Codex má zatím capability pouze
+0135, Bun drží exact 0134 pin z `lazurio/package.json#packageManager`. Codex má zatím capability pouze
 rozpoznatelného stabilního CLI, nikoli vymyšlené minimum odvozené z latest.
 
 Výběr prostředí patří Principálovi; shim může podle cwd měnit skutečný runtime,
