@@ -1,5 +1,21 @@
 # Hosted Workspace machine parity contract
 
+## Rozsah synchronizace
+
+CLI i Launchpad Sync používají existující ověřenou konfiguraci Hosted Workspace:
+přesnou Organizaci a deklarovaný Team, nikoli OS username nebo nový access grant.
+Aktualizují spravovaná root repa této Organizace a jen Workspace Moduly přiřazené
+Teamu, včetně sdílených N:M modulů. Repozitářů ostatních Teamů se nedotknou,
+ať už jsou přítomné nebo absentní. Lokální workstation si zachovává svůj rozsah.
+
+Inventář zachovává deklarované Teamy a po aktualizaci Organization rootu je
+ověřuje znovu. Chybějící Organizace, nedeklarovaný Team nebo neúplná hosted
+konfigurace znamená blocked, nikoli návrat k neomezenému rozsahu. Chyby slotů
+mimo rozsah lze vynechat jen při prokázaném přiřazení Organizace/Teamu; chyby
+vybraných slotů a neklasifikovatelné chyby hranic dál blokují. Přístup stále
+určuje GitHub a credential broker. Git chyba vybraného repozitáře se neskrývá
+ani nevyvolává automatické rozšíření oprávnění.
+
 Tento kontrakt je acceptance vstup pro Hosted Team Workspace lane. Ověřuje, že
 localhost i hosted používají stejný builder-visible Lazurio filesystem,
 discovery, module lease a Launchpad runtime. Nemění provider, DNS, ingress ani

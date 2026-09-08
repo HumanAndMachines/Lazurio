@@ -10,6 +10,7 @@ import {
 } from "./discovery-lib.mjs";
 import { inspectRequiredDependencies, refreshFrozenBunDependencies } from "./dependency-install-lib.mjs";
 import { buildGitInventory } from "./git-inventory-lib.mjs";
+import { createHostedWorkspaceConfiguration } from "./hosted-app-url-lib.mjs";
 import { materializeRepoCheckout } from "./git-materialization-lib.mjs";
 import { buildModuleLocationRepairAction } from "../core/module-location-repair-contract-lib.mjs";
 import { resolveOrganizationRootDocuments } from "../core/organization-activation-lib.mjs";
@@ -94,6 +95,7 @@ export async function runLazurioUpdate({
   rootPath,
   runtimeRoot = resolve(import.meta.dirname, "..", ".."),
   organizations = null,
+  hostedWorkspace = createHostedWorkspaceConfiguration(),
   deps = {},
 } = {}) {
   if (!rootPath) throw new Error("runLazurioUpdate requires rootPath");
@@ -111,6 +113,21 @@ export async function runLazurioUpdate({
   const refreshAppDependencies = deps.refreshAppDependencies ?? null;
   const checkpoint = deps.checkpoint ?? (() => {});
   let lock;
+
+  try {
+    hostedWorkspace = createHostedWorkspaceConfiguration({
+      profile: hostedWorkspace?.profile,
+      organizationSlug: hostedWorkspace?.organization_slug,
+      teamId: hostedWorkspace?.team_id,
+      domain: hostedWorkspace?.domain,
+    });
+  } catch (error) {
+    return updateReport({ rootPath: absoluteRoot, runId, now, results: [
+      blockedResult(rootDescriptor(absoluteRoot), "workspace_configuration_invalid", {
+        detail: error.message, codex: false,
+      }),
+    ], warnings: [] });
+  }
 
   if (await runtimeOverlapsWorkingRoot({ runtimeRoot, workingRoot: absoluteRoot })) {
     const result = blockedResult(rootDescriptor(absoluteRoot), "runtime_not_isolated", {
@@ -144,7 +161,7 @@ export async function runLazurioUpdate({
     });
     results.push(rootResult);
 
-    const initialInventory = await safeInventory(buildInventory, absoluteRoot, warnings, organizations);
+    const initialInventory = await safeInventory(buildInventory, absoluteRoot, warnings, organizations, hostedWorkspace);
     if (initialInventory.failed) {
       results.push(blockedResult(inventoryDescriptor(absoluteRoot), "inventory_unavailable", {
         detail: "Lazurio nedokázalo bezpečně určit Organizace a jejich spravované repozitáře; žádný další checkout nezměnilo.",
@@ -188,7 +205,7 @@ export async function runLazurioUpdate({
       // The Organization root owns the manifest. Re-read after its update so
       // a newly declared Workspace Modul can be materialized and every mounted
       // Organization-level repository can be updated during this same run.
-      const refreshed = await safeInventory(buildInventory, absoluteRoot, warnings, organizations);
+      const refreshed = await safeInventory(buildInventory, absoluteRoot, warnings, organizations, hostedWorkspace);
       if (refreshed.failed) {
         results.push(blockedResult(inventoryDescriptor(absoluteRoot, organizationRoot.organization), "inventory_unavailable", {
           detail: `Po aktualizaci Organization rootu ${organizationRoot.organization} nešel znovu načíst manifest; jeho repozitáře zůstaly nedotčené.`,
@@ -296,7 +313,7 @@ export async function runLazurioUpdate({
   }
 }
 
-export async function readLazurioUpdateStatus({ rootPath, deps = {} } = {}) {
+export async function readLazurioUpdateStatus({ rootPath, hostedWorkspace = createHostedWorkspaceConfiguration(), deps = {} } = {}) {
   if (!rootPath) throw new Error("readLazurioUpdateStatus requires rootPath");
   const absoluteRoot = resolve(rootPath);
   const rootRepo = rootDescriptor(absoluteRoot);
@@ -305,7 +322,7 @@ export async function readLazurioUpdateStatus({ rootPath, deps = {} } = {}) {
   const run = deps.runGit ?? runGit;
   let inventory;
   try {
-    inventory = await buildInventory({ companiesRoot: absoluteRoot });
+    inventory = scopeHostedUpdateInventory(await buildInventory({ companiesRoot: absoluteRoot }), hostedWorkspace);
   } catch (error) {
     const blocked = blockedResult(inventoryDescriptor(absoluteRoot), "inventory_unavailable", {
       detail: `Lokální inventář nejde bezpečně načíst: ${error instanceof Error ? error.message : String(error)}`,
@@ -1563,9 +1580,9 @@ function applyDependencyOutcomes(results, outcomes, repoDescriptors) {
   }
 }
 
-async function safeInventory(buildInventory, rootPath, warnings, organizations = null) {
+async function safeInventory(buildInventory, rootPath, warnings, organizations = null, hostedWorkspace = createHostedWorkspaceConfiguration()) {
   try {
-    const inventory = await buildInventory({ companiesRoot: rootPath, organizations });
+    const inventory = scopeHostedUpdateInventory(await buildInventory({ companiesRoot: rootPath, organizations }), hostedWorkspace);
     // Validní snapshot může obsahovat izolované Organization/slot issues.
     // Ty nejsou globální inventory failure: zdravé sourozence smíme dál
     // aktualizovat a problém vracíme jako vlastní blocked result.
@@ -1732,6 +1749,39 @@ function inventoryWarningsWithoutIssues(inventory) {
       .filter((message) => typeof message === "string"),
   );
   return (inventory.warnings ?? []).filter((warning) => !issueMessages.has(warning));
+}
+
+// Work selection only: GitHub and the existing broker remain access authorities.
+// Re-evaluated after the Organization manifest advances, before any child Git action.
+function scopeHostedUpdateInventory(inventory, workspace) {
+  const configuration = createHostedWorkspaceConfiguration({
+    profile: workspace?.profile,
+    organizationSlug: workspace?.organization_slug,
+    teamId: workspace?.team_id,
+    domain: workspace?.domain,
+  });
+  if (configuration.profile !== "hosted") return inventory;
+  const organization = (inventory.repos ?? []).find((repo) =>
+    repo.repo_kind === "organization_root" && repo.organization === configuration.organization_slug);
+  if (!organization) throw new Error("Hosted Workspace Organization is not mounted in the update inventory.");
+  if (!(organization.teams ?? []).includes(configuration.team_id)) {
+    throw new Error("Hosted Workspace Team is not declared by its Organization.");
+  }
+  const excludedIssues = new Set((inventory.inventory_issues ?? []).filter((issue) =>
+    (issue.organization && issue.organization !== configuration.organization_slug)
+    || (issue.scope === "module_slot" && issue.space === "workspace"
+      && Array.isArray(issue.teams) && issue.teams.length > 0
+      && issue.teams.every((team) => organization.teams.includes(team))
+      && !issue.teams.includes(configuration.team_id))));
+  const excludedMessages = new Set([...excludedIssues].map((issue) => issue.message));
+  return {
+    ...inventory,
+    inventory_issues: (inventory.inventory_issues ?? []).filter((issue) => !excludedIssues.has(issue)),
+    warnings: (inventory.warnings ?? []).filter((warning) => !excludedMessages.has(warning)),
+    repos: (inventory.repos ?? []).filter((repo) =>
+      repo.organization === configuration.organization_slug
+      && (repo.repo_kind !== "module" || (repo.teams ?? []).includes(configuration.team_id))),
+  };
 }
 
 function managedOrganizationRoots(inventory) {
