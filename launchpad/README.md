@@ -693,11 +693,24 @@ nepřepisuje odhadem.
 
 Organization App může relativním `file:` specem deklarovat read-only package
 cíl v jiném checkoutu téže Organizace. Write a ancestor-resolution hranicí
-zůstává owning checkout; Lazurio přijme jen přesný canonical cíl a Bun
-link-farm, jehož všechny symlinky zůstávají uvnitř tohoto cíle. Změna owning
+zůstává owning checkout; Lazurio přijme jen přesný canonical cíl, Bun
+link-farm, jehož všechny symlinky zůstávají uvnitř tohoto cíle, a Bun isolated
+hardlink store, ve kterém je každý soubor totožný filesystem objekt (stejný
+device a inode) se souborem přesného cíle a strom se s cílem kryje jedna ku
+jedné. Prostá kopie, soubor navíc ani neúplný strom nejsou deklarovaná
+dependency. Změna owning
 repozitáře cíle zahrne do post-update obnovy i jinak nezměněného App consumera.
 Personalspace, template, absolutní/UNC cíle a cross-Organization odkazy tuto
 výjimku nezískávají.
+
+Na Windows Lazurio spouští `bun install --frozen-lockfile --linker=isolated`.
+Hoisted linker materializuje `file:` adresář přes kopírovací cestu, která pod
+ne-elevovaným účtem bez Developer Mode skončí `EPERM` bez ohledu na
+`--backend`; isolated linker přesný cíl hardlinkuje do `node_modules/.bun` a
+vystaví ho junction bez jakéhokoli privilegia. Lockfile je pro oba linkery
+byte-identický, takže frozen kontrakt platí beze změny. Důsledkem je
+pnpm-like layout bez hoistingu tranzitivních balíčků; App, která na Windows
+spoléhala na nedeklarovanou (phantom) dependency, ji musí deklarovat.
 
 `/api/apps` a `/api/apps/:id/health` vrací sdílený dependency stav
 `dependencies.state`, který používá stejné labely v UI i Doctor detailech:

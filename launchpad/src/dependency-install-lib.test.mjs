@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { link, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 
@@ -262,18 +262,27 @@ test("package and boundary paths must be explicit absolute paths", async () => {
   expect(result).toMatchObject({ ok: false, reason: "package_root_invalid" });
 });
 
-test("frozen Bun command never authorizes lockfile mutation and avoids Windows hardlinks", () => {
+test("frozen Bun command never authorizes lockfile mutation and uses the isolated linker on Windows", () => {
   expect(frozenBunInstallCommand("/runtime/bun", { platform: "linux" })).toEqual([
     "/runtime/bun",
     "install",
     "--frozen-lockfile",
   ]);
+  expect(frozenBunInstallCommand("/runtime/bun", { platform: "darwin" })).toEqual([
+    "/runtime/bun",
+    "install",
+    "--frozen-lockfile",
+  ]);
+  // Hoisted `file:` materialization fails with EPERM for a non-elevated Windows
+  // account regardless of `--backend`; the isolated linker hardlinks the exact
+  // target without any privilege and keeps the lockfile byte-identical.
   expect(frozenBunInstallCommand("C:\\runtime\\bun.exe", { platform: "win32" })).toEqual([
     "C:\\runtime\\bun.exe",
     "install",
     "--frozen-lockfile",
-    "--backend=copyfile",
+    "--linker=isolated",
   ]);
+  expect(frozenBunInstallCommand("C:\\runtime\\bun.exe", { platform: "win32" })).not.toContain("--backend=copyfile");
 });
 
 test("Bun install refuses a packageManager that disagrees with the selected lockfile", async () => {
@@ -722,6 +731,120 @@ test("an exact declared Organization-local file dependency accepts a direct dire
     boundaryRoot: fixture.checkoutRoot,
     organizationDependencyRoot: fixture.organizationRoot,
   })).toMatchObject({ ok: true, missing_required_dependencies: [] });
+});
+
+async function isolatedHardlinkStoreFixture() {
+  const fixture = await organizationFileDependencyFixture();
+  const storeRoot = join(
+    fixture.packageRoot,
+    "node_modules",
+    ".bun",
+    "@rozjedeme-contracts+v1@file+..+..+..+..+launchpad+contracts+v1",
+    "node_modules",
+    "@rozjedeme-contracts",
+    "v1",
+  );
+  await mkdir(join(fixture.targetRoot, "schemas"), { recursive: true });
+  await writeFile(join(fixture.targetRoot, "schemas", "value.ts"), "export const local = true;\n");
+  await mkdir(join(storeRoot, "schemas"), { recursive: true });
+  for (const relativePath of ["package.json", "index.ts", join("schemas", "value.ts")]) {
+    await link(join(fixture.targetRoot, relativePath), join(storeRoot, relativePath));
+  }
+  await mkdir(join(fixture.packageRoot, "node_modules", "@workspace-contracts"), { recursive: true });
+  await symlink(storeRoot, fixture.installedRoot, process.platform === "win32" ? "junction" : "dir");
+  return { ...fixture, storeRoot };
+}
+
+test("an exact declared Organization-local file dependency accepts Bun's isolated hardlink store", async () => {
+  const fixture = await isolatedHardlinkStoreFixture();
+
+  expect(await inspectRequiredDependencies({
+    cwd: fixture.packageRoot,
+    boundaryRoot: fixture.checkoutRoot,
+    organizationDependencyRoot: fixture.organizationRoot,
+  })).toMatchObject({ ok: true, required_dependency_count: 1, missing_required_dependencies: [] });
+});
+
+test("an isolated store copy that is not the exact target object is rejected", async () => {
+  const fixture = await isolatedHardlinkStoreFixture();
+  await rm(join(fixture.storeRoot, "index.ts"));
+  await writeFile(join(fixture.storeRoot, "index.ts"), await readFile(join(fixture.targetRoot, "index.ts")));
+
+  const state = await inspectRequiredDependencies({
+    cwd: fixture.packageRoot,
+    boundaryRoot: fixture.checkoutRoot,
+    organizationDependencyRoot: fixture.organizationRoot,
+  });
+
+  expect(state).toMatchObject({ ok: false, reason: "dependency_tree_boundary_invalid" });
+  expect(state.detail).toContain("není totožný objekt");
+});
+
+test("an isolated store with a file outside the declared target or an incomplete tree is rejected", async () => {
+  const extra = await isolatedHardlinkStoreFixture();
+  await writeFile(join(extra.storeRoot, "extra.ts"), "export const extra = true;\n");
+  expect(await inspectRequiredDependencies({
+    cwd: extra.packageRoot,
+    boundaryRoot: extra.checkoutRoot,
+    organizationDependencyRoot: extra.organizationRoot,
+  })).toMatchObject({ ok: false, reason: "dependency_tree_boundary_invalid" });
+
+  const incomplete = await isolatedHardlinkStoreFixture();
+  await rm(join(incomplete.storeRoot, "schemas", "value.ts"));
+  const state = await inspectRequiredDependencies({
+    cwd: incomplete.packageRoot,
+    boundaryRoot: incomplete.checkoutRoot,
+    organizationDependencyRoot: incomplete.organizationRoot,
+  });
+  expect(state).toMatchObject({ ok: false, reason: "dependency_tree_boundary_invalid" });
+  expect(state.detail).toContain("neobsahuje celý deklarovaný cíl");
+});
+
+test("an isolated store file swap during readiness is rejected", async () => {
+  const fixture = await isolatedHardlinkStoreFixture();
+
+  const state = await inspectRequiredDependencies({
+    cwd: fixture.packageRoot,
+    boundaryRoot: fixture.checkoutRoot,
+    organizationDependencyRoot: fixture.organizationRoot,
+    async beforeLocalDependencyTreeRecheck() {
+      await rm(join(fixture.storeRoot, "index.ts"));
+      await writeFile(join(fixture.storeRoot, "index.ts"), "export const swapped = true;\n");
+    },
+  });
+
+  expect(state).toMatchObject({ ok: false, reason: "dependency_authority_changed" });
+});
+
+test("a real Bun isolated frozen install satisfies the shared Organization-local file dependency postcondition", async () => {
+  const fixture = await organizationFileDependencyFixture();
+  await rm(join(fixture.packageRoot, "bun.lock"), { force: true });
+  const lockfileInstall = Bun.spawnSync(
+    [process.execPath, "install", "--lockfile-only", "--ignore-scripts"],
+    { cwd: fixture.packageRoot, stdin: "ignore", stdout: "pipe", stderr: "pipe", windowsHide: true },
+  );
+  expect(lockfileInstall.exitCode).toBe(0);
+  const lockfileBefore = await readFile(join(fixture.packageRoot, "bun.lock"));
+  await rm(join(fixture.packageRoot, "node_modules"), { recursive: true, force: true });
+
+  // Same argv Lazurio uses on Windows, exercised on every CI platform so the
+  // isolated hardlink store acceptance is proven without a Windows machine.
+  const result = await runFrozenBunInstall({
+    cwd: fixture.packageRoot,
+    boundaryRoot: fixture.checkoutRoot,
+    organizationDependencyRoot: fixture.organizationRoot,
+    command: frozenBunInstallCommand(process.execPath, { platform: "win32" }),
+  });
+
+  expect(result).toMatchObject({
+    ok: true,
+    exit_code: 0,
+    mode: "ensure",
+    runtime_tree_usable: true,
+    missing_required_dependencies: [],
+  });
+  expect(await readFile(join(fixture.packageRoot, "bun.lock"))).toEqual(lockfileBefore);
+  expect(existsSync(join(fixture.packageRoot, "node_modules", ".bun"))).toBe(true);
 });
 
 test("a file dependency copied inside its owning checkout remains usable", async () => {

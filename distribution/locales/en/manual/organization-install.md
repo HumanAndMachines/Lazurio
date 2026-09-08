@@ -528,6 +528,21 @@ drift. The diagnostic lane does not overwrite any content or symlink/junction
 by guesswork; it returns every conflict to the Agent for a safe fix in the
 owning repo.
 
+The same boundary applies to Organization App dependencies. Bun's hoisted
+linker materializes an Organization-local `file:` package through a copy path
+that ends with `EPERM: failed copying files from cache to destination` under a
+standard non-elevated account without Developer Mode, regardless of
+`--backend`; an elevated terminal masks it but is not a supported consumer.
+Launchpad, Doctor and update therefore run
+`bun install --frozen-lockfile --linker=isolated` on Windows: Bun hardlinks the
+exact target into `node_modules/.bun` and exposes a junction in `node_modules`,
+which requires no privilege and no Developer Mode. The lockfile stays
+byte-identical, Lazurio accepts only a store whose every file is the same
+filesystem object as the file of the declared target, and the layout is
+pnpm-like without hoisting of transitive packages. The Agent does not work
+around this state by running Codex "as administrator", enabling Developer Mode,
+or copying the package into `node_modules` by hand.
+
 The CLI neither selects the Root nor stores it as additional configuration. A
 production installation always uses `~/Lazurio` on macOS/Linux and
 `%USERPROFILE%\\Lazurio` on Windows. This gives both people and Agents one
