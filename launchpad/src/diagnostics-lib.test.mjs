@@ -3143,12 +3143,12 @@ test("CAC-0042: Doctor reportuje worktree problémy bez cleanup rozhodování", 
   expect(checks.get("git.worktrees.contract")?.details.join("\n")).toContain("Sidecar nemá conversation_origin");
   expect(checks.get("git.worktrees.contract")?.details.join("\n")).not.toContain("[object Object]");
   expect(checks.get("launchpad.discovery")?.details.join("\n")).not.toContain("Sidecar nemá conversation_origin");
-  // DEV-6555: Doctor cleanup check je read-only eligibility nad terminálními
-  // environments; aktivní plány sem nepatří a nic se tu nerozhoduje ani nemaže.
+  // DEV-6555: Doctor cleanup check je read-only eligibility nad každým
+  // task-owned environmentem; nic se tu nerozhoduje ani nemaže a bez runtime
+  // evidence / důkazu o vlastníkovi zůstává každý environment needs_attention.
   expect(checks.get("git.worktrees.cleanup")?.status).toBe("ok");
-  expect(checks.get("git.worktrees.cleanup")?.details).toEqual(
-    expect.arrayContaining(["checked_environments: 0"]),
-  );
+  expect(checks.get("git.worktrees.cleanup")?.details.join("\n")).toMatch(/checked_environments: [1-9]\d*/);
+  expect(checks.get("git.worktrees.cleanup")?.details.join("\n")).not.toContain("ready_to_delete:");
   expect(checks.get("git.worktrees.dependencies")?.status).toBe("warn");
   expect(checks.get("git.worktrees.dependencies")?.details).toEqual(expect.arrayContaining([
     "checked_worktrees: 2",
@@ -3285,12 +3285,12 @@ test("worktree cleanup Doctor čte terminální environment stejnou preview knih
   runGit(["commit", "-m", "plan done"], fixture.repositoryDbRepo);
   const sidecarPath = join(fixture.orgRoot, ".worktrees", "root", "mission-control", `${branch}.worktree.json`);
   const sidecar = JSON.parse(await readFile(sidecarPath, "utf8"));
-  sidecar.recovery_handoff = {
-    state: "completed",
-    summary: "Doctor cleanup fixture.",
-    blocker: null,
-    next_action: "Ukliď environment.",
-    updated_at: new Date().toISOString(),
+  // Environment bez Task Agent relace: vlastník není živý proces, takže je
+  // prokazatelně opuštěný (plán negatuje; rozhoduje merged nebo mrtvý vlastník).
+  sidecar.conversation_origin = {
+    ...sidecar.conversation_origin,
+    thread_id: null,
+    thread_locator_status: "not_applicable",
   };
   await writeFile(sidecarPath, `${JSON.stringify(sidecar, null, 2)}\n`);
 

@@ -20,6 +20,7 @@ import {
   WorktreeCleanupError,
   applyWorktreeCleanup,
   previewWorktreeCleanup,
+  resolveMergedPullRequestEvidence,
 } from "../../lazurio/runtime/worktree-cleanup-lib.mjs";
 import { buildWorktreeIndex } from "../../lazurio/runtime/worktree-lib.mjs";
 
@@ -549,7 +550,9 @@ export async function previewWorktreeCleanupEnvironment({
   repoKey,
   slug,
   inspectRuntimeUsage = null,
+  inspectOwnerSession = undefined,
   prEvidence = null,
+  runGhFn = defaultRunGh,
 } = {}) {
   if (!companiesRoot) throw new Error("previewWorktreeCleanupEnvironment requires companiesRoot");
   const repo = await resolveRepo(companiesRoot, repoKey);
@@ -564,8 +567,54 @@ export async function previewWorktreeCleanupEnvironment({
     companiesRoot,
     worktree,
     inspectRuntimeUsage,
-    prEvidence: validatePrEvidencePayload(prEvidence),
+    ...(inspectOwnerSession !== undefined ? { inspectOwnerSession } : {}),
+    prEvidence: await resolveCleanupPrEvidence({ companiesRoot, worktree, prEvidence, runGhFn }),
   });
+}
+
+// PR evidence: volající ji smí dodat explicitně; jinak se MERGED důkaz hledá
+// v GitHubu podle head branche (pokrývá squash). Bez gh/sítě zůstane
+// evidence prázdná a rozhoduje jen důkaz mrtvého vlastníka.
+async function resolveCleanupPrEvidence({ companiesRoot, worktree, prEvidence, runGhFn }) {
+  const explicit = validatePrEvidencePayload(prEvidence);
+  if (explicit) return explicit;
+  if (typeof runGhFn !== "function" || typeof worktree.branch !== "string" || !worktree.branch) return null;
+  const worktreePath = join(companiesRoot, worktree.path);
+  if (!existsSync(worktreePath)) return null;
+  const commonDir = await runGit(["rev-parse", "--path-format=absolute", "--git-common-dir"], {
+    cwd: worktreePath,
+    timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+  });
+  if (!commonDir.ok) return null;
+  return resolveMergedPullRequestEvidence({
+    ownerRoot: dirname(resolve(commonDir.stdout.trim())),
+    branch: worktree.branch,
+    runGhFn,
+  });
+}
+
+async function defaultRunGh(args) {
+  let child;
+  try {
+    child = Bun.spawn(["gh", ...args], {
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { ...process.env, GH_PROMPT_DISABLED: "1", GH_NO_UPDATE_NOTIFIER: "1" },
+    });
+  } catch (error) {
+    return { ok: false, stdout: "", stderr: error instanceof Error ? error.message : String(error) };
+  }
+  const timeout = setTimeout(() => child.kill(), 20_000);
+  try {
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    return { ok: exitCode === 0, stdout, stderr };
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function applyWorktreeCleanupEnvironment({
@@ -574,7 +623,10 @@ export async function applyWorktreeCleanupEnvironment({
   slug,
   expectedFingerprint,
   inspectRuntimeUsage = null,
+  stopRuntimeUsage = null,
+  inspectOwnerSession = undefined,
   prEvidence = null,
+  runGhFn = defaultRunGh,
 } = {}) {
   if (!companiesRoot) throw new Error("applyWorktreeCleanupEnvironment requires companiesRoot");
   const repo = await resolveRepo(companiesRoot, repoKey);
@@ -595,12 +647,14 @@ export async function applyWorktreeCleanupEnvironment({
           worktree,
           expectedFingerprint,
           inspectRuntimeUsage,
-          prEvidence: validatePrEvidencePayload(prEvidence),
+          stopRuntimeUsage,
+          ...(inspectOwnerSession !== undefined ? { inspectOwnerSession } : {}),
+          prEvidence: await resolveCleanupPrEvidence({ companiesRoot, worktree, prEvidence, runGhFn }),
         });
       } catch (error) {
         if (error instanceof WorktreeCleanupError) {
           throw new WorktreeActionError(error.message, {
-            status: error.code === "cleanup_stale_preview" || error.code === "cleanup_not_ready" ? 409 : 500,
+            status: ["cleanup_stale_preview", "cleanup_not_ready", "cleanup_active_owner", "cleanup_runtime_in_use"].includes(error.code) ? 409 : 500,
             code: error.code,
             details: error.details,
           });

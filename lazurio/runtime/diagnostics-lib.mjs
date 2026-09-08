@@ -613,18 +613,13 @@ async function buildWorktreeDoctorChecks({ companiesRoot, runtimeStateRoot = nul
 }
 
 // Read-only cleanup eligibility (DEV-6555): stejná previewWorktreeCleanup
-// knihovna jako Launchpad API, žádná destruktivní akce. Kandidáti jsou pouze
-// environments s terminálním plánem nebo terminální edit disposition; aktivní
-// práce se nehodnotí. Warn signalizuje jen přerušený/nečitelný cleanup journal
-// — to je stav, který si žádá dokončení nebo vědomé rozhodnutí.
+// knihovna jako Launchpad API, žádná destruktivní akce ani síť. Hodnotí se
+// každý task-owned environment: eligibility je merged práce (evidenci dodá
+// Launchpad/agent, Doctor ji offline nemá) nebo prokazatelně mrtvý vlastník;
+// živý vlastník zůstává chráněný. Warn signalizuje jen přerušený/nečitelný
+// cleanup journal — stav, který si žádá dokončení nebo vědomé rozhodnutí.
 async function worktreeCleanupCheck({ companiesRoot, index, runtimeStateRoot }) {
-  const terminalPlanStatuses = new Set(["done", "archived"]);
-  const candidates = (index.worktrees ?? []).filter((worktree) => {
-    if (worktree.ownership_status !== "owned") return false;
-    const editMember = (worktree.metadata?.members ?? []).find((member) => member?.role === "edit");
-    return terminalPlanStatuses.has(worktree.owner_plan?.status)
-      || ["merged", "abandoned"].includes(editMember?.disposition);
-  });
+  const candidates = (index.worktrees ?? []).filter((worktree) => worktree.ownership_status === "owned");
   const details = [`checked_environments: ${candidates.length}`];
   let journalAttention = false;
   for (const worktree of candidates) {
@@ -650,8 +645,8 @@ async function worktreeCleanupCheck({ companiesRoot, index, runtimeStateRoot }) 
     severity: "local-state",
     title: "Worktree cleanup eligibility",
     message: candidates.length === 0
-      ? "Žádný terminální worktree environment nečeká na cleanup."
-      : `Cleanup eligibility: ${formatCount(candidates.length, "terminální environment", "terminální environments", "terminálních environments")} (viz details).`,
+      ? "Žádný task-owned worktree environment k hodnocení cleanupu."
+      : `Cleanup eligibility: ${formatCount(candidates.length, "task-owned environment", "task-owned environments", "task-owned environments")} (viz details).`,
     paths: ["organizations/*/.worktrees"],
     links: [],
     details,

@@ -175,13 +175,19 @@ const runtimeManager = createRuntimeManager({
   }),
 });
 // Cleanup runtime evidence čte durable runtime stav tohoto Serveru: každý
-// managed Start/Stop jej zapisuje, takže živý pid referující worktree slug je
-// fail-closed blocker. Nic se tady neukončuje — neúplný důkaz cleanup zastaví.
+// managed Start/Stop jej zapisuje. Běžící worktree App není důkaz aktivního
+// vlastníka: apply ji jako první krok zastaví přes vlastní lifecycle
+// (stop → grace → kill jen managed procesů) a dokud existuje cleanup
+// journal, runtime manager start téhož worktree odmítá. Co po zastavení
+// zbude s neznámým původem, cleanup vyhodnotí fail-closed — nic cizího nezabíjí.
 function cleanupRuntimeUsageInspector({ environment }) {
   return inspectDurableWorktreeRuntimeUsage({
     stateRoot: launchpadStateRoot,
     worktree: { slug: environment.slug },
   });
+}
+function cleanupRuntimeStopper({ environment }) {
+  return runtimeManager.stopWorktreeRuntimes({ slug: environment.slug, organization: environment.organization ?? null });
 }
 function runWorkspaceUpdate() {
   return runLazurioUpdate({
@@ -1090,6 +1096,7 @@ async function handleGitApiRoute(request, url, route) {
           slug: route.slug,
           expectedFingerprint: payload.previewFingerprint,
           inspectRuntimeUsage: cleanupRuntimeUsageInspector,
+          stopRuntimeUsage: cleanupRuntimeStopper,
           prEvidence: payload.prEvidence ?? null,
         })));
     }

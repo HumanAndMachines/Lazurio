@@ -168,6 +168,14 @@ branche a otevírat pull requesty. Rozdělaná práce nikdy nezůstává jen
 lokálně: od prvního pushe je viditelná jako GitHub Draft PR, a jakmile je
 hotová a ověřená, přepneš PR na Ready for review sám — Ready není Publikace,
 říká jen „připraveno ke kontrole"; hotová práce nezůstává viset jako Draft.
+Lokální worktree je zahoditelná kopie: vše hodnotné se průběžně commituje a
+pushuje do GitHub Draft PR. Dokončené (PR merged v GitHubu) nebo prokazatelně
+opuštěné task-owned worktrees (vlastník bez živého procesu, ne jen staré) se
+uklízejí bez dalšího potvrzování lokálního driftu — dirty, untracked i
+nepushnuté změny se zahodí a obnovený agent navazuje z GitHubu. Otevřený PR a
+remote branch zůstávají; prostředí živého agenta, hlavní checkouty, canonical
+repository-db, personalspace ani cizí procesy se nikdy nemažou (rozhodnutí
+Principála 2026-09-08, kontrakt v `manual/worktree-management.md`).
 
 **Handoff je průvodcovský.** Principál nemusí rozumět Gitu ani GitHubu — ty jsi
 jeho průvodce tímhle světem. Závěrečná zpráva začíná handoffem: odkaz na

@@ -99,8 +99,9 @@ autoritu.
    `main`, exact head, mergeability a checks.
 9. Commituj a pushuj do PR branche průběžně — po každém uzavřeném pracovním
    kroku, nejpozději před každou odpovědí Principálovi, která ohlašuje stav
-   práce. Po prvním pushi branch hned otevři PR proti správné base branchi
-   jako GitHub Draft PR. Pokud Principál výslovně zakázal PR otevřít,
+   práce. Lokální worktree je zahoditelná kopie: co není pushnuté v GitHub
+   Draft PR, může cleanup kdykoli bez ptaní zahodit. Po prvním pushi branch
+   hned otevři PR proti správné base branchi jako GitHub Draft PR. Pokud Principál výslovně zakázal PR otevřít,
    nepokračuj za hranici lokálního experimentu a před dalším pushem nebo
    koncem práce si vyžádej rozhodnutí: Draft zahodit, nebo PR povolit —
    samotná remote branch bez PR není přípustná náhrada.
@@ -150,13 +151,24 @@ autoritu.
    dotažení vlastní. Merge neobcházej ani na
    opakovanou žádost — GitHub ho fyzicky blokuje. Bez zelené PR zůstává
    otevřený a nic se neděje.
-13. Worktree odstraň jen když je clean včetně untracked souborů, nemá
-   local-only commit, exact HEAD je na remote, PR je merged nebo explicitně
-   abandoned se snapshotem, runtime ho nepoužívá a neexistuje aktivní writer.
-   Pak použij owner repo `git worktree remove <path>` a `git worktree prune`;
-   sidecar smaž až potom.
-14. Plošné `rm -rf`, `--force`, `git branch -D` a automatické mazání podle stáří
-   nejsou běžný cleanup. Nesplněný guard se předává konkrétně.
+13. Task-owned worktree odstraň, když je dokončený nebo prokazatelně
+   opuštěný: PR jeho branche je v GitHubu `MERGED` (ověř podle head branche —
+   po squash merge commit není předek), nebo edit member má explicitní
+   `abandoned` disposition, nebo vlastník ze sidecar `conversation_origin`
+   nemá na této Mašině živý proces. Stáří samo nikdy nestačí. Dirty,
+   untracked ani nepushnuté změny nejsou důvod ho držet — zahazují se bez
+   dalšího potvrzení; obnovený agent navazuje z GitHubu. Běžící aplikaci
+   z worktree zastav (Launchpad stop → grace → kill jen vlastních procesů,
+   během úklidu bez restartu). Pak použij owner repo
+   `git worktree remove --force <path>` a `git worktree prune`; sidecar smaž
+   až potom. Branch ref i otevřený PR zůstávají. Kanonická lane je
+   `bun run worktrees:status` + Launchpad cleanup preview/apply
+   (`lazurio/runtime/worktree-cleanup-lib.mjs`).
+14. Nikdy nemaž prostředí živého agenta (proces se session ID sidecaru),
+   hlavní checkout, canonical repository-db, personalspace, cizí worktrees ani
+   cizí procesy; neověřitelný vlastník není důkaz smrti. Plošné `rm -rf`,
+   `git branch -D`, karanténa, backup registr ani trvalý monitor nejsou
+   součást cleanupu. Nesplněný guard se předává konkrétně.
 
 ## Ověření
 
