@@ -170,6 +170,7 @@ const runtimeManager = createRuntimeManager({
 function runWorkspaceUpdate() {
   return runLazurioUpdate({
     rootPath: companiesRoot,
+    hostedWorkspace,
     runtimeRoot: configuredRuntimeRoot,
     deps: {
       // Server je jediný vlastník app lifecycle. Dependency refresh po pullu
@@ -1440,7 +1441,7 @@ function startServer(startPort) {
         // GET je čistě lokální snapshot: žádný fetch, credentials ani mutace.
         // Teprve explicitní POST prochází společným mutation trust gatem výš.
         if (url.pathname === "/api/update/status" && request.method === "GET") {
-          return jsonResponse(await readLazurioUpdateStatus({ rootPath: companiesRoot }));
+          return jsonResponse(await readLazurioUpdateStatus({ rootPath: companiesRoot, hostedWorkspace }));
         }
         if (url.pathname === "/api/update" && request.method === "POST") {
           const result = await appsResponseCache.runMutation(() =>
