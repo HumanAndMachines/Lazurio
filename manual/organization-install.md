@@ -478,13 +478,8 @@ neklonuje, nic se na GitHubu nečte a Organization owner opraví manifest.
 Tři cesty se liší jen v tom, co udělají s **absentním** restricted slotem:
 
 ```sh
-# Admin: explicitní opt-in, materializuje i restricted sloty (jako dosud)
 lazurio organization install <github-login> --json
-
-# Steward: běžné aplikace + povinný Mission Control data mount, restricted mimo scope
 lazurio organization install <github-login> --role steward --json
-
-# Builder: stejná materializační semantika jako Steward, Builder readiness gate
 lazurio organization install <github-login> --role builder --json
 ```
 

@@ -522,13 +522,8 @@ manifest.
 The three paths differ only in what they do with an **absent** restricted slot:
 
 ```sh
-# Admin: explicit opt-in, materializes restricted slots too (as before)
 lazurio organization install <github-login> --json
-
-# Steward: ordinary apps + the required Mission Control data mount, restricted out of scope
 lazurio organization install <github-login> --role steward --json
-
-# Builder: same materialization semantics as Steward, Builder readiness gate
 lazurio organization install <github-login> --role builder --json
 ```
 
