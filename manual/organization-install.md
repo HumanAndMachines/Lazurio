@@ -202,8 +202,8 @@ ji na Windows nemusí dodat a Doctor její přítomnost uvádí jen informativn�
 Selhání (`bun_package_runner_unusable`, `platform.bun_package_runner`) nese
 jedinou nápravu — oficiální Bun instalátor připnutý přesně na
 `package.json#packageManager` (Windows PowerShell:
-`iex "& {$(irm https://bun.com/install.ps1)} -Version <verze>"`; macOS/Linux:
-`curl -fsSL https://bun.com/install | bash -s "bun-v<verze>"`) — a Agent ji
+`iex "& {$(irm https://bun.com/install.ps1)} -Version <version>"`; macOS/Linux:
+`curl -fsSL https://bun.com/install | bash -s "bun-v<version>"`) — a Agent ji
 spustí až se scoped mandátem. Balíček z jiného registru ani `bunx` z npm nejsou
 náprava. Consumer, který místo `bun x` volá samostatný `bunx`, opravuje svůj
 verzovaný skript ve vlastním repu; root gate za něj druhou binárku neinstaluje.
