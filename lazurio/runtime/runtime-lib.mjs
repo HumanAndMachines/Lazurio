@@ -4267,12 +4267,18 @@ async function waitForEarlyExit(child, timeoutMs, clock) {
 }
 
 // Lifecycle clock runtime manageru. Bez injekce běží na Date.now a reálném
-// setTimeout. Injektovaný sleepFn bez nowFn dostane virtuální now, který se
-// posouvá o spanou dobu, aby deadline smyčky vždy konvergovaly; každé čekání
-// navíc uvolní event loop makrotaskem, takže okamžitý test sleep nikdy
-// nezmění polling na hot-spin a už vyřešené child.exited/health promisy stihnou
-// vyhrát Promise.race stejně jako při reálném čekání.
+// setTimeout. Injektovaný sleepFn bez nowFn dostane virtuální now: každé
+// dokončené čekání posune čas nejméně na svůj vlastní wake-up okamžik
+// (monotónně, překrývající se ani prohrané čekání se nesčítají), aby deadline
+// smyčky vždy konvergovaly; každé čekání navíc uvolní event loop makrotaskem,
+// takže okamžitý test sleep nikdy nezmění polling na hot-spin a už vyřešené
+// child.exited/health promisy stihnou vyhrát Promise.race stejně jako při
+// reálném čekání. nowFn bez sleepFn je fail-closed: reálné čekání nad
+// injektovaným (typicky pevným) časem by deadline nikdy nedosáhlo.
 export function createLifecycleClock({ nowFn = null, sleepFn = null } = {}) {
+  if (nowFn && !sleepFn) {
+    throw new TypeError("Lifecycle clock requires sleepFn whenever nowFn is injected.");
+  }
   let virtualOffsetMs = 0;
   const now = nowFn ?? (sleepFn ? () => Date.now() + virtualOffsetMs : Date.now);
   const wait = async (milliseconds) => {
@@ -4281,8 +4287,9 @@ export function createLifecycleClock({ nowFn = null, sleepFn = null } = {}) {
       await sleep(duration);
       return;
     }
+    const wakeAtMs = now() + duration;
     await sleepFn(duration);
-    if (!nowFn) virtualOffsetMs += duration;
+    if (!nowFn) virtualOffsetMs = Math.max(virtualOffsetMs, wakeAtMs - Date.now());
     await sleep(0);
   };
   return {

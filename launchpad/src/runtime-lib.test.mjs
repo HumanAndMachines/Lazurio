@@ -8,6 +8,7 @@ import {
   RuntimeActionError,
   bunExecutableCandidates,
   canonicalRuntimeListenerHost,
+  createLifecycleClock,
   createRuntimeManager as createRuntimeManagerImpl,
   observedListenerMatchesDeclaration,
   parseProcessGroupListeners,
@@ -350,6 +351,37 @@ test("crash v early-exit probe okně skončí app_start_failed i na virtuálním
   });
   expect((await runtime.health("test-company-demo-v1")).managed).toBe(false);
 }, platformTestTimeout(10_000));
+
+test("lifecycle clock odmítne nowFn bez sleepFn a v sleep-only režimu nesčítá překrývající se čekání", async () => {
+  expect(() => createLifecycleClock({ nowFn: () => 0 })).toThrow(/sleepFn/u);
+  expect(() => createRuntimeManagerImpl({
+    companiesRoot: tmpdir(),
+    launchpadRoot: join(tmpdir(), "launchpad"),
+    nowFn: () => 0,
+  })).toThrow(/sleepFn/u);
+
+  const clock = createLifecycleClock({ sleepFn: async () => {} });
+  const start = clock.now();
+  // Souběžná čekání sdílejí jeden virtuální čas: posune se na nejzazší wake-up,
+  // ne o součet trvání.
+  await Promise.all([clock.sleep(1_000), clock.sleep(5_000), clock.sleep(2_000)]);
+  const afterConcurrent = clock.now() - start;
+  expect(afterConcurrent).toBeGreaterThanOrEqual(5_000);
+  expect(afterConcurrent).toBeLessThan(8_000);
+  // Prohrané Promise.race čekání čas nezdvojí: dokončí se do svého wake-up,
+  // který už uplynul, a virtuální čas zůstane monotónní.
+  const lostSleep = clock.sleep(1_000);
+  await clock.sleep(3_000);
+  await lostSleep;
+  const afterRace = clock.now() - start;
+  expect(afterRace).toBeGreaterThanOrEqual(8_000);
+  expect(afterRace).toBeLessThan(11_000);
+  // sleepTowards nikdy nepřekročí deadline.
+  const deadline = clock.now() + 20;
+  await clock.sleepTowards(deadline);
+  expect(clock.now()).toBeGreaterThanOrEqual(deadline);
+  expect(clock.now() - deadline).toBeLessThan(1_000);
+});
 
 test("injektovaný sleepFn bez nowFn dostane virtuální now a polling vždy uvolní event loop", async () => {
   const port = await findFreePort();
