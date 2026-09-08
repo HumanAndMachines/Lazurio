@@ -463,10 +463,16 @@ function unmaterializedCheckoutResult(repo) {
 }
 
 export async function updateManagedRepo(repo, context = {}) {
+  let fetchRetried = false;
+  const withFetchDiagnostic = (result) => fetchRetried ? {
+    ...result,
+    actions: [...(result.actions ?? []), "fetch_retried_after_repository_not_found"],
+    message: `${result.message} První fetch GitHub odmítl jako Repository not found; proběhl jeden nový pokus se stejným originem a běžným přihlášením.`,
+  } : result;
   const run = context.deps?.runGit ?? runGit;
   const inspect = context.deps?.inspectLocalRepo ?? inspectLocalRepo;
   const checkpoint = context.checkpoint ?? (() => {});
-  const block = (reason, options = {}) => blockedResult(repo, reason, options);
+  const block = (reason, options = {}) => withFetchDiagnostic(blockedResult(repo, reason, options));
   let local = await inspect(repo, { ...context.deps, runGit: run });
   if (local.directoryOnly) return isAutoMaterializationCandidate(repo)
     ? unmaterializedCheckoutResult(repo)
@@ -525,22 +531,36 @@ export async function updateManagedRepo(repo, context = {}) {
       action: repairAction,
     });
   }
-  const fetched = await run(
-    [
-      "fetch",
-      "--no-tags",
-      "--prune",
-      "--force",
-      "--",
-      source.fetchUrl,
-      "+refs/heads/main:refs/remotes/origin/main",
-    ],
-    // This is an existing, origin-verified checkout, not sterile materialization.
-    // Retain its normal credential helper (including a Machine-managed broker),
-    // while the shared command environment removes inherited Git injection and
-    // disables interactive prompts. The source is reverified after this fetch.
-    { cwd: repo.absolute_path, timeoutMs: GIT_FETCH_TIMEOUT_MS, env: safeGitCommandEnv() },
-  );
+  const fetchArgs = [
+    "fetch",
+    "--no-tags",
+    "--prune",
+    "--force",
+    "--",
+    source.fetchUrl,
+    "+refs/heads/main:refs/remotes/origin/main",
+  ];
+  // This is an existing, origin-verified checkout, not sterile materialization.
+  // Retain its normal credential helper (including a Machine-managed broker),
+  // while the shared command environment removes inherited Git injection and
+  // disables interactive prompts. The source is reverified after this fetch.
+  const fetchOptions = () => ({ cwd: repo.absolute_path, timeoutMs: GIT_FETCH_TIMEOUT_MS, env: safeGitCommandEnv() });
+  let fetched = await run(fetchArgs, fetchOptions());
+  // GitHub can reject a correctly scoped credential at its Git endpoint.
+  // Retry only this read, once, through the same normal credential helper.
+  // Never retry an explicit broker/auth denial, another operation or origin.
+  const failure = `${fetched.stderr ?? ""}\n${fetched.error ?? ""}`;
+  if (!fetched.ok && !fetched.timedOut && fetched.exitCode === 128
+    && /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?$/i.test(source.url)
+    && /remote: Repository not found\./.test(failure)
+    && !/broker|outside.*policy|authentication failed|permission denied|HTTP\s+(?:401|403)|could not read Username/i.test(failure)) {
+    const beforeRetry = await verifyRemoteSource(repo, run);
+    if (!beforeRetry.ok || beforeRetry.fingerprint !== source.fingerprint) {
+      return block("remote_changed", { detail: "Origin se po neúspěšném fetch změnil; nový pokus byl zastaven." });
+    }
+    fetchRetried = true;
+    fetched = await run(fetchArgs, fetchOptions());
+  }
   if (!fetched.ok) {
     return block("github_unavailable", {
       detail: commandFailure(fetched, "GitHub verzi se nepodařilo stáhnout."),
@@ -694,11 +714,11 @@ export async function updateManagedRepo(repo, context = {}) {
   }
 
   if (actions.length === 0) {
-    return currentResult(repo, "already_current", "Repo už je clean main na origin/main.", {
+    return withFetchDiagnostic(currentResult(repo, "already_current", "Repo už je clean main na origin/main.", {
       head: final.head,
-    });
+    }));
   }
-  return updatedResult(repo, {
+  return withFetchDiagnostic(updatedResult(repo, {
     reason: recoveryStash
       ? "local_changes_preserved"
       : actions.length === 1 && actions[0] === "worktree_ignore_repaired"
@@ -712,7 +732,7 @@ export async function updateManagedRepo(repo, context = {}) {
     head: final.head,
     actions,
     recoveryStash,
-  });
+  }));
 }
 
 async function verifyOrganizationUpdateTarget({
@@ -1985,7 +2005,9 @@ function updateReport({ rootPath, runId, now, results, warnings, restrictedSlotP
       blocked: results.filter((result) => result.state === "blocked").length,
     },
     results,
-    warnings: [...new Set(warnings)],
+    warnings: [...new Set([...warnings, ...results
+      .filter((result) => result.actions?.includes("fetch_retried_after_repository_not_found"))
+      .map((result) => `${result.repo_key}: ${result.message}`)])],
   };
 }
 
