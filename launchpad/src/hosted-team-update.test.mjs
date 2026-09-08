@@ -194,4 +194,17 @@ test("hosted reports omit proven out-of-Team slot errors but retain selected-Tea
   const inside = await runLazurioUpdate({ rootPath: root, hostedWorkspace, deps });
   expect(inside.ok).toBe(false);
   expect(inside.results.some((result) => result.module === "invalid-reference" && result.state === "blocked")).toBe(true);
+  // A missing verified root must retain exact repair diagnostics, never
+  // authorize child actions or degrade to a generic "not mounted" error.
+  calls.length = 0;
+  const broken = await runLazurioUpdate({ rootPath: root, hostedWorkspace, deps: {
+    ...deps,
+    buildInventory: async () => ({ repos: [], warnings: ["Repair the manifest"], inventory_issues: [{
+      organization: "WorkspaceTestOrg", scope: "organization",
+      code: "organization_manifest_conflict", message: "Repair the manifest",
+    }] }),
+  } });
+  expect(broken.ok).toBe(false);
+  expect(broken.results.some((result) => result.reason === "inventory_unavailable")).toBe(false);
+  expect(calls.every((module) => module === "root")).toBe(true);
 });
