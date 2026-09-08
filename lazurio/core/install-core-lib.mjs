@@ -624,13 +624,15 @@ function validLazurioSourceTree(sourceRoot, gitExecutable, environment, platform
   ));
 }
 
+// stderr is captured, never shown: Bun 1.4 prints the `bun x` usage sentinel
+// there with exit 1, and the package-runner classifier must be able to see it.
 function runCommandSync({ executable, args, environment, cwd }) {
   return spawnToolSync(executable, args, {
     cwd,
     encoding: "utf8",
     env: environment,
     shell: false,
-    stdio: ["ignore", "pipe", "ignore"],
+    stdio: ["ignore", "pipe", "pipe"],
     timeout: 10_000,
     windowsHide: true,
   });

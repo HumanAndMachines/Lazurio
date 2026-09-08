@@ -322,6 +322,28 @@ test("an exact Bun on PATH without the `bun x` package runner cannot mark the ma
   expect(installReasonCodes()).toContain("bun_package_runner_unusable");
 });
 
+test("the production command runner keeps the Bun 1.4 stderr usage sentinel for the `bun x` probe", () => {
+  // No injected runner: the real spawn wiring must expose stderr, otherwise an
+  // exact Bun whose `bun x --help` exits 1 with usage on stderr is misclassified.
+  const report = inspectLazurioInstallationCore({
+    root: null,
+    platform: process.platform,
+    architecture: process.arch,
+    bunVersion: process.versions.bun,
+    requiredBunVersion: process.versions.bun,
+    environment: process.env,
+    resolvePathCommand: (command) => (command === "bun" ? process.execPath : null),
+    inspectRoot: missingRootObservation,
+  });
+
+  expect(report.machine.bun.status).toBe("current");
+  expect(report.steps.find((step) => step.id === "bun")).toEqual({
+    id: "bun",
+    status: "completed",
+    reason: "bun_runtime_current",
+  });
+});
+
 test("missing Bun runtime is a failed probe with an explicit required version", () => {
   const report = inspectLazurioInstallation({
     root: null,
