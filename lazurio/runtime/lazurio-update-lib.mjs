@@ -488,7 +488,7 @@ export async function updateManagedRepo(repo, context = {}) {
       "--prune",
       "--force",
       "--",
-      source.url,
+      source.fetchUrl,
       "+refs/heads/main:refs/remotes/origin/main",
     ],
     // This is an existing, origin-verified checkout, not sterile materialization.
@@ -1036,12 +1036,19 @@ async function readOperation(repo, run) {
 }
 
 async function verifyRemoteSource(repo, run) {
+  // get-url expands insteadOf once. Fetch must receive the original URL, not
+  // that expanded result, or Git can apply a second rewrite to another repo.
+  const configured = await run(["config", "--get-all", "remote.origin.url"], {
+    cwd: repo.absolute_path,
+    timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+  });
+  const configuredUrls = configured.stdout.split("\n").filter(Boolean);
   const remote = await run(["remote", "get-url", "--all", "origin"], {
     cwd: repo.absolute_path,
     timeoutMs: GIT_LOCAL_TIMEOUT_MS,
   });
   const urls = remote.stdout.split("\n").filter(Boolean);
-  if (!remote.ok || urls.length !== 1) {
+  if (!configured.ok || configuredUrls.length !== 1 || !remote.ok || urls.length !== 1) {
     return {
       ok: false,
       reason: "origin_invalid",
@@ -1059,7 +1066,8 @@ async function verifyRemoteSource(repo, run) {
   return {
     ok: true,
     url: urls[0],
-    fingerprint: normalizeGitRemote(urls[0]),
+    fetchUrl: configuredUrls[0],
+    fingerprint: JSON.stringify([configuredUrls[0], urls[0]]),
   };
 }
 

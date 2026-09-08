@@ -262,6 +262,43 @@ test("verified checkout update retains configured credential helpers without int
   expect(status(fixture.working)).toBe("");
 });
 
+test("verified update applies a configured URL rewrite only once", async () => {
+  const fixture = await repositoryFixture("single-url-rewrite");
+  await addRemoteCommit(fixture, "expected.txt", "expected\n");
+  const foreign = join(fixture.sandbox, "foreign.git");
+  const foreignWorking = join(fixture.sandbox, "foreign-working");
+  runGit(fixture.sandbox, ["clone", fixture.remote, foreignWorking]);
+  configure(foreignWorking);
+  await writeFile(join(foreignWorking, "foreign.txt"), "must not be installed\n");
+  runGit(foreignWorking, ["add", "foreign.txt"]);
+  runGit(foreignWorking, ["commit", "-m", "foreign descendant"]);
+  runGit(fixture.sandbox, ["clone", "--bare", foreignWorking, foreign]);
+  const home = join(fixture.sandbox, "rewrite-home");
+  const alias = join(fixture.sandbox, "origin-alias");
+  await mkdir(home);
+  await writeFile(join(home, ".gitconfig"), [
+    `[url "${fixture.remote.replaceAll("\\", "/")}"]`,
+    `\tinsteadOf = ${alias.replaceAll("\\", "/")}`,
+    `[url "${foreign.replaceAll("\\", "/")}"]`,
+    `\tinsteadOf = ${fixture.remote.replaceAll("\\", "/")}`,
+    "",
+  ].join("\n"));
+  runGit(fixture.working, ["remote", "set-url", "origin", alias.replaceAll("\\", "/")]);
+  const actualGit = (args, options) => runGitAsync(args, {
+    ...options,
+    env: { ...options.env, HOME: home, USERPROFILE: home, XDG_CONFIG_HOME: home },
+  });
+  const before = await actualGit(["remote", "get-url", "origin"], { cwd: fixture.working });
+  expect(before.stdout.trim().replaceAll("\\", "/")).toBe(fixture.remote.replaceAll("\\", "/"));
+  const result = await updateManagedRepo({ ...descriptor(fixture), repo: fixture.remote.replaceAll("\\", "/") }, {
+    runId: "single-url-rewrite",
+    deps: { runGit: actualGit, installDependencies: async () => ({ ok: true }) },
+  });
+  expect(result.state).toBe("updated");
+  expect(await readPortableText(join(fixture.working, "expected.txt"))).toBe("expected\n");
+  expect(existsSync(join(fixture.working, "foreign.txt"))).toBe(false);
+});
+
 test("Organization update fast-forwards only a parity-verified transition target", async () => {
   const fixture = await organizationActivationFixture("transition-target");
   const transition = transitionOrganizationDocuments();
