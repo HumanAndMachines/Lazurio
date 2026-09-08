@@ -7,6 +7,7 @@ import {
   MODULE_LIFECYCLE_REPORT_SCHEMA,
   moduleLifecycleExitCode,
   parseModuleSelector,
+  MODULE_LIFECYCLE_TIMEOUTS_MS,
   runModuleLifecycle,
 } from "./module-lifecycle-client-lib.mjs";
 
@@ -177,6 +178,9 @@ describe("Core-owned Module lifecycle client", () => {
       selector: "ExampleOrganization/website",
       readLocator: async () => locator,
       fetchFn: fixtureFetch({ requests, inventoryBodyDelayMs: 60_000 }),
+      // Same abort path as production, on a fixture deadline instead of the
+      // real 30 s inventory budget (Greptile: keep CI from waiting 40 s).
+      timeoutsMs: { ...MODULE_LIFECYCLE_TIMEOUTS_MS, inventory: 500 },
     });
     expect(report.reason).toBe("server_inventory_unavailable");
     expect(report.status).toBe("failed");
@@ -184,7 +188,12 @@ describe("Core-owned Module lifecycle client", () => {
       "/api/lazurio/server-identity",
       "/api/apps",
     ]);
-  }, 40_000);
+  }, 10_000);
+
+  test("production deadlines stay frozen: identity 5 s, inventory 30 s, action 60 s", () => {
+    expect(MODULE_LIFECYCLE_TIMEOUTS_MS).toEqual({ identity: 5_000, inventory: 30_000, action: 60_000 });
+    expect(Object.isFrozen(MODULE_LIFECYCLE_TIMEOUTS_MS)).toBe(true);
+  });
 
   test("a stalled identity still fails before inventory or mutation", async () => {
     const requests = [];
@@ -193,6 +202,7 @@ describe("Core-owned Module lifecycle client", () => {
       selector: "ExampleOrganization/website",
       readLocator: async () => locator,
       fetchFn: fixtureFetch({ requests, identityDelayMs: 15_000 }),
+      timeoutsMs: { ...MODULE_LIFECYCLE_TIMEOUTS_MS, identity: 500 },
     });
     expect(report.status).toBe("action_required");
     expect(requests.map((request) => request.pathname)).toEqual(["/api/lazurio/server-identity"]);
