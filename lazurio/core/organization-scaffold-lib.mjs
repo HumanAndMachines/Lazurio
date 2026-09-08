@@ -87,7 +87,20 @@ of this repository.
 
 Use a task branch and pull request for tracked changes. A draft may be prepared,
 committed and pushed for review; merge, release and other publication require
-the current Principal's explicit instruction and live GitHub permission.
+the current human Principal's explicit instruction or an effective standing
+Organization mandate, together with live GitHub permission.
+
+Standing mandates belong in this Organization repository's \`MANDATES.md\`.
+Tasks reference a mandate and specify work; Root instructions do not copy grants.
+Use the approved canonical revision, never an Agent's draft. Before publication,
+verify the current approved revision, validity, scope, assigned account and
+provider permissions. A missing, revoked, expired or unverifiable mandate stops
+autonomous publication. An Agent cannot grant, expand or renew its own mandate.
+Company automation has an accountable human and no private Personalspace.
+Resolve \`manual/organization-mandates.md\` against the active Lazurio runtime
+root (\`LAZURIO_RUNTIME_ROOT\` for an installed runtime, the Lazurio source
+root for a source installation), never against this Organization checkout.
+That runtime manual defines the contract; it is not a local mandate grant.
 
 Open technical problems and uncertainties belong in GitHub Issues of the exact
 owning repository. Plans, priorities and responsibility belong in Mission

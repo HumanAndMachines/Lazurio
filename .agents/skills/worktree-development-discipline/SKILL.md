@@ -115,16 +115,23 @@ autoritu.
 12. Handoff veď průvodcovsky (decisions 0103/0112): závěrečná zpráva začíná
    standardizovaným handoff blokem (PR URL, base, exact HEAD, lidské
    shrnutí, ověření, odkaz na aplikaci běžící z worktree) a končí
+   — pokud přesnou Publikaci nepokrývá účinný trvalý mandát —
    standardizovanou dvojotázkou „Mám změny Publikovat tvým jménem? Nebo mám
    požádat jiného Kolegu o kontrolu a Publikaci?" — volbu vždy nabídni,
-   nedomýšlej ji za Principála. Před otázkou zjisti
+   nedomýšlej ji za Principála. U práce pokryté ověřeným mandátem předej
+   výsledek a výjimky odpovědnému člověku; mandát nenahrazuje ověření scope,
+   účtu, aktuálnosti a provider práv. Před otázkou zjisti
    živá GitHub práva Principála a řiď se jimi, ne textovým labelem role —
    např. `gh api repos/<owner>/<repo> --jq .permissions`,
    `gh api repos/<owner>/<repo>/branches/<base>/protection`,
    `gh repo view <owner>/<repo> --json
    rebaseMergeAllowed,squashMergeAllowed,mergeCommitAllowed`,
    `gh pr view <číslo> --json mergeable,mergeStateStatus,reviewDecision`.
-   Po explicitním „Publikuj" v threadu PR mergni metodou, kterou repozitář
+   Pro jednorázovou práci čekej na explicitní „Publikuj". U předem pověřené
+   automatizace může přesnou Publikaci autorizovat účinný Organization mandát
+   podle `manual/organization-mandates.md`; před akcí ověř aktuální schválenou
+   revizi, účet, scope a provider práva. Tento skill sám mandát neuděluje.
+   Po explicitním „Publikuj" nebo takto ověřeném mandátu PR mergni metodou, kterou repozitář
    povoluje (při více povolených je default rebase, pokud Organizace ve svém
    `AGENTS.md` nedeklaruje jinak), v primárním checkoutu spusť
    `lazurio update`, potom `bun run doctor:task` a pokračuj cleanup guardy

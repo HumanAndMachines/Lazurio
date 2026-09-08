@@ -7,7 +7,7 @@
       "options": [
         {
           "id": "a",
-          "text": "Aby tým i AI kolega rozuměli jeho pracovnímu kontextu.",
+          "text": "Aby tým i Agent rozuměli jeho pracovnímu kontextu.",
           "correct": true,
           "feedback": "Ano. Tohle je správný a bezpečný směr."
         },

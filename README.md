@@ -14,7 +14,7 @@ příkazové nástroje, diagnostika a Git udržují stav a dohledatelnou histori
 Každý úkol začíná jednoznačným kontextem: pro koho se pracuje, které firmy nebo
 projektu se týká, jaká data smí AI nástroj použít a kdo může výsledek schválit
 nebo zveřejnit. Výsledek zůstává editovatelný a kontrolovatelný, dokud jej
-oprávněný člověk nebo AI spolupracovník vědomě neposune dál.
+oprávněný člověk nebo Agent podle účinného mandátu neposune dál.
 
 Lazurio není nový AI model ani společné cloudové úložiště všech dat. Je to
 koordinační vrstva, která propojuje lidi, AI nástroje, repozitáře a aplikace
@@ -49,9 +49,9 @@ používá následující pojmy s jejich přesným významem.
 
 | Pojem | Co znamená běžnou řečí |
 | --- | --- |
-| **Principál** | Ten, pro koho Agent právě pracuje, z čích oprávnění vychází a kdo má poslední slovo. Principálem může být člověk i AI Kolega. |
+| **Principál** | Člověk, pro kterého Agent pracuje a který v mezích svých pravomocí zadává práci, uděluje mandát a má poslední slovo. |
 | **Kolega** | Lidský Principál zapojený do práce podle svých firemních rolí a oprávnění. |
-| **AI Kolega** | Dlouhodobá AI identita s vlastním účtem, pracovním prostředím, odpovědností a přístupy. Není to jedna dočasná relace nástroje. |
+| **Firemní automatizovaná Mašina** | Pracovní prostředí Organizace se svěřenými účty, mandátem a odpovědným člověkem. Nastavené automatizace v harnessu spouštějí Agenty. |
 | **Task Agent (hovorově Agent)** | Dočasná relace AI nástroje, která pro svého Principála řeší konkrétní úkol. Sama nevlastní žádná oprávnění. |
 | **Buddy** | Osobní AI zástupce právě jednoho člověka. Jedná v mezích jeho oprávnění a trvalých, ohraničených a odvolatelných mandátů. |
 
@@ -64,6 +64,10 @@ používá následující pojmy s jejich přesným významem.
 | **Personalspace** | Soukromý prostor jednoho Principála a jeho případného Buddyho. S firemní Organizací se automaticky nesdílí. |
 | **Root** | Kořenová složka pracovního prostředí, která zastřešuje Lazurio, dostupné Organizace a případný Personalspace. |
 | **Draft a Publikace** | Draft je vratný a editovatelný výsledek. Publikace jej zviditelní navenek nebo z něj udělá obtížně vratnou změnu a vyžaduje vědomé rozhodnutí oprávněného Principála. |
+
+Člověk ověří pracovní postup a nastaví jeho automatické spouštění. Lazurio
+dodává společný kontext a pravidla. [Mandát Organizace](manual/organization-mandates.md)
+určuje, co smí Mašina dokončit sama a kdy se obrátí na odpovědného člověka.
 
 Tento zkrácený slovník stačí pro čtení README. Úplný model spolupráce drží
 [pravidla pro Agenty](AGENTS.md#model-spolupráce-principál-a-agenti) a cílové
@@ -85,7 +89,7 @@ Lazurio nad tím staví malý počet pevných pravidel:
 - **Agent pracuje pro svého Principála** a odevzdává editovatelný Draft;
 - **publikace zůstává vědomým rozhodnutím oprávněného Principála**.
 
-Výsledkem má být pracovní prostředí, ve kterém lidé i AI Kolegové používají
+Výsledkem má být pracovní prostředí, ve kterém lidé a automatizované Mašiny používají
 stejnou organizační strukturu, stejné zdroje pravdy a stejné kontrolovatelné
 procesy.
 
@@ -152,12 +156,12 @@ Launchpad ho nenahrazuje.
 | --- | --- |
 | **Lazurio CLI/Core** | Headless kontrakt pro kontext, diagnostiku, synchronizaci, instalaci a reportování. Současné CLI v0 je interní a nestabilní. |
 | **Launchpad** | Builder-first grafický povrch nad stejnými pravidly: objevuje Organizace a moduly, spouští vývojové aplikace a ukazuje jejich stav. |
-| **Guide** | Netechnický průvodce spoluprací lidí, AI Kolegů a digitálních kanceláří. |
+| **Guide** | Netechnický průvodce spoluprací lidí a Mašin ve firemním prostředí. |
 | **Personalspace** | Privátní prostor právě jednoho vlastníka a jeho případného Buddyho; neleží uvnitř firemní Organizace. |
 | **Organizace** | Jedna firma, jedna GitHub Organization, jeden samostatný super-repozitář a jedna access hranice. |
 | **Workspace moduly** | Samostatné repozitáře pro každodenní práci uvnitř Organizace; Teamy jsou nad nimi logické N:M seskupení. |
 | **Productionspace** | Org-level repozitáře s vlastním release a provozním modelem, které Launchpad standardně ukazuje read-only. |
-| **Resident** | Dlouhodobá instalace Lazuria na Mašině, například profil Buddyho nebo AI Kolegy. |
+| **Resident** | Dlouhodobý osobní runtime Buddyho; firemní automatizace tento profil nevyžaduje. |
 | **Task Agent** | Dočasná relace AI nástroje pro konkrétní úkol; sama nevlastní žádná oprávnění. |
 
 Podrobný cílový model vysvětluje [ARCHITECTURE.md](ARCHITECTURE.md) a fyzické

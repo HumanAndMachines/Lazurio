@@ -4,7 +4,7 @@ type: reflection
 checklist:
   - "Vyber jednu konkrétní situaci z dnešní nebo nedávné práce."
   - "Napiš ji jednoduše jednou až třemi větami."
-  - "Doplň, co by měl další člověk nebo AI kolega vědět, aby mohl navázat."
+  - "Doplň, co by měl další člověk nebo Agent vědět, aby mohl navázat."
   - "Pokud si nejsi jistý/jistá, označ otázku místo domněnky."
 achievement_on_complete: "calm-recovery"
 ---

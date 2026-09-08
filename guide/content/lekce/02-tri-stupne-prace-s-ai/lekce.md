@@ -19,6 +19,6 @@ První stupeň je obyčejné ptaní: napíšeš otázku a dostaneš odpověď. H
 
 Druhý stupeň je práce s podklady: ukážeš text, úkol nebo stránku a požádáš o návrh. Tady už může vzniknout něco použitelného, pokud jasně řekneš, z čeho má AI vycházet.
 
-Třetí stupeň je pracovní spolupráce: AI kolega ví, kde co hledat, umí připravit změnu a nechá ji zkontrolovat. Tady nejvíc záleží na hranicích a ověření.
+Třetí stupeň je automatizace ověřené práce. Člověk nejprve s Agentem doladí postup a potom nastaví, kdy se má spouštět. Mašina pracuje podle zadání a mandátu; výsledky zpřístupní člověku a situace mimo pověření mu předá. Lazurio poskytuje společný kontext a pravidla.
 
 Shrnutí: vezmi si jeden malý praktický krok a neboj se zeptat lidskou řečí.

@@ -1,7 +1,7 @@
 {
   "title": "Průvodce digitální kanceláří",
   "intro": "Cesta pro nové kolegy, kteří chtějí vědět, jak s digitální kanceláří pracovat každý den — lidsky, prakticky a bez technických detailů.",
-  "welcome": "Začni tady. Tohle není technická dokumentace. Je to průvodce pro první dny v digitální kanceláři: co kde najdeš, jak mluvit s AI kolegou, jak si hlídat bezpečí a jak po sobě nechávat práci čitelnou pro ostatní.",
+  "welcome": "Začni tady. Tohle není technická dokumentace. Je to průvodce pro první dny v digitální kanceláři: co kde najdeš, jak mluvit s Agentem, jak si hlídat bezpečí a jak po sobě nechávat práci čitelnou pro ostatní.",
   "sections": [
     {
       "id": "1-mindset",
@@ -29,7 +29,7 @@
     },
     {
       "id": "3-komunikace-s-ai",
-      "title": "Jak mluvit s AI kolegou",
+      "title": "Jak mluvit s Agentem",
       "description": "Jak zadávat práci, diktovat česky, používat uložené postupy a chápat napojení na služby.",
       "lessons": [
         "11-ai-kolegove-a-nastroje",

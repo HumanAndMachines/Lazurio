@@ -6,11 +6,11 @@ Vychází z funkčně nejdál dotažené GEN2 guide předlohy: Astro aplikace, `
 
 ## Účel
 
-Guide je netechnický úvod pro nové kolegy: jak v prvních dnech pracovat s digitální kanceláří a AI kolegy. Současných 26 lekcí vysvětluje:
+Guide je netechnický úvod pro nové kolegy: jak v prvních dnech pracovat s digitální kanceláří a Agenty. Současných 26 lekcí vysvětluje:
 
 - co je digitální kancelář a jak poznat dobrý výstup od AI;
 - kde hledat úkoly, znalosti a návody;
-- jak zadávat práci AI kolegovi, diktovat česky a používat uložené postupy;
+- jak zadávat práci Agentovi, diktovat česky a používat uložené postupy;
 - jak se práce bezpečně uloží a co dělat, když se něco rozbije;
 - jak přidávat vlastní poznatky a postupy a pomáhat kolegům.
 

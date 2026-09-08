@@ -60,7 +60,7 @@ jeho volitelná canonical cesta:
 ├── MAP.md
 ├── AGENTS.md
 ├── manual/
-├── .agents/skills/             # základní postupy pro Buddy a AI kolegy
+├── .agents/skills/             # základní postupy pro Buddyho a firemní automatizace
 ├── lazurio/                    # Lazurio CLI v0: context, Doctor, update, install a scoped search
 ├── launchpad/
 ├── Launchpad.command
@@ -107,7 +107,7 @@ nikdy se neduplikují pod `development/Lazurio`.
   productionspace. Obsahuje také současný in-shell Guide; jeho UI copy používá
   Launchpad katalogy a dlouhý Organization install runbook párové Root locale
   zdroje. Admin konfigurace a produkční aplikace patří do Lazurio Dashboardu.
-- `guide/` — sdílený netechnický onboarding kurz (26 lekcí) do práce s digitální kanceláří a AI kolegy; technická cesta „mapa systému“ (Launchpad root, Organizace, workspace, productionspace, personalspace) je plánovaná budoucí část, do té doby tato témata drží MAP.md a `manual/`
+- `guide/` — sdílený netechnický onboarding kurz (26 lekcí) do práce s firemním prostředím a automatizacemi; technická cesta „mapa systému“ (Launchpad root, Organizace, workspace, productionspace, personalspace) je plánovaná budoucí část, do té doby tato témata drží MAP.md a `manual/`
 - Lazurio Dashboard — v1 spike lokální mount (`dashboard/`) byl z rootu odstraněn i s launchery a Dock ikonou; aktuální Dashboard spike žije v privátním repu (v2 reference). Zůstává hostovaným surfacem pro Admin Organizace (billing, plány, přístupy, konfigurace, Buddy policies) a vstupem Uživatele Organizace (Organization User) do produkčních aplikací (decision 0047/0048 v manual/decision-register.md)
 - `manual/` — technický maintenance manuál Launchpad rootu
 - `manual/mission-control-trusted-builder-smoke.md` — živý cross-Lazurio audit GitHub-only writeru, root pointerů a progresivního `trusted-process` / `provider-enforced` režimu
@@ -121,7 +121,7 @@ nikdy se neduplikují pod `development/Lazurio`.
 - `provisioning/` — source-only operator plane pro přípravu Resident Mašiny;
   do výsledného Lazurio Rootu se nebalí a atomický install/update/rollback
   deleguje na verzovaný resident lifecycle.
-- `.agents/skills/` — základní opakovatelné postupy pro Buddy a AI kolegy
+- `.agents/skills/` — základní opakovatelné postupy pro Buddyho a firemní automatizace
 - `organizations/README.md` — vysvětlení mountpointu; jediný trackovaný soubor uvnitř `organizations/` v root repu
 - `organizations/<org>/` — lokální gitignored Organization GEN3 checkout, ideálně podle GitHub organizace
 - Legacy top-level Organization template mount s markerem `company.gen3.json` `organization_kind: "template"` zůstává discovery-kompatibilní, ale nový se nezakládá. Current pracovní checkout podle decision 0127 žije v `organizations/<AdminOrganization>/productionspace/OrganizationTemplate_GEN3`; template nástroje dostávají explicitní cestu a ověřují Git provenienci.
@@ -143,3 +143,10 @@ nikdy se neduplikují pod `development/Lazurio`.
   `AGENTS.md → Model spolupráce → Koexistence Human and Machine`. Vysvětluje
   hierarchii, hranice a procesy, ve kterých tenhle root a všechny Organizace
   fungují — pro lidi i agenty.
+
+## Automatizovaná práce a mandáty
+
+Obecný kontrakt drží [manual/organization-mandates.md](manual/organization-mandates.md).
+Účinné firemní mandáty žijí pouze v `MANDATES.md` kořene příslušného
+Organization repozitáře. Root a Managed instrukce je pouze vyhledávají;
+úkoly odkazují na konkrétní pověření. Buddyho osobní profil zůstává oddělený.

@@ -1,6 +1,6 @@
 ---
 name: agent-builder
-description: Navrhne, sestaví nebo zreviduje bezpečný a přenositelný agentní kompetenční balíček se scoped instrukcemi, nástroji, access hranicemi, evaly, observabilitou a publikačními branami. Použij při požadavku postavit agenta, agent workflow, golden agenta, AI workflow nebo opakovatelnou agentní roli; nepoužívej pro pouhé sepsání jednoho promptu ani pro automatické založení autonomního AI Kolegy.
+description: Navrhne, sestaví nebo zreviduje bezpečný a přenositelný agentní kompetenční balíček se scoped instrukcemi, nástroji, access hranicemi, evaly, observabilitou a publikačními branami. Použij při požadavku postavit agenta, agent workflow, golden agenta, AI workflow nebo opakovatelnou agentní roli; nepoužívej pro pouhé sepsání jednoho promptu ani pro automatické udělení účtů či mandátu firemní Mašině.
 ---
 
 # Agent Builder
@@ -17,9 +17,11 @@ Nejdřív rozliš:
 - **Plugin** — distribuční balíček skillů a případných MCP nástrojů pro další lidi.
 - **Task Agent** — řízený runtime s nástroji, evaly a trace; nemá vlastní
   pravomoce a pracuje jménem Principála.
-- **AI Kolega / AI Architekt** — organizační persona se seatem, vlastníkem,
-  governance a recovery kontraktem. Tento skill smí vytvořit jen návrh; nesmí
-  personu aktivovat, přidělit jí přístupy ani obejít schvalované apply plány.
+- **Firemní automatizovaná Mašina** — pracovní prostředí Organizace se
+  svěřenými účty, mandátem v Organization `MANDATES.md` a odpovědným člověkem.
+  Tento skill připravuje návrh; sám neuděluje mandát, přístupy ani nasazení.
+  Harness se volí podle potřeb práce; AI persona ani Buddy runtime nejsou
+  povinnou mezivrstvou. AI Architekt jako služba dál respektuje apply plány.
 
 Před návrhem načti `references/surface-selection.md`. Pro implementaci nebo
 review balíčku načti také `references/quality-gates.md`.

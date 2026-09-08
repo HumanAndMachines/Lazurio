@@ -94,7 +94,7 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(html).toContain('data-i18n="guide.glossary.advanced"');
   expect(html).toContain('data-i18n="guide.term.subscription.label"');
   expect(html).toContain('data-i18n="guide.term.tokens.body"');
-  expect(html).toContain('data-i18n="guide.term.aiColleague.body"');
+  expect(html).toContain('data-i18n="guide.term.automatedMachine.body"');
   expect(html).toContain('data-i18n="guide.term.steward.body"');
   expect(html).toContain('data-i18n="guide.term.mcp.body"');
   expect(html).toContain('data-i18n="guide.term.plugin.body"');

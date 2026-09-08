@@ -1,6 +1,6 @@
 ---
 id: "11-ai-kolegove-a-nastroje"
-title: "AI kolegové a nástroje"
+title: "Agenti a nástroje"
 section: "3-komunikace-s-ai"
 order: 11
 prerequisites: ["10-prvni-prochazka"]
@@ -8,14 +8,16 @@ duration_min: 7
 quiz: true
 ukol: false
 ---
-# AI kolegové a nástroje
+# Agenti a nástroje
 
 - Co se v této lekci naučíš:
-  - kdy použít AI kolegu;
+  - kdy použít Agenta;
   - kdy stačí běžný nástroj;
   - proč je dobré chtít ověření.
 
-AI kolega je dobrý na práci, kde je potřeba porozumět souvislostem: shrnout, navrhnout, zkontrolovat, najít správné místo nebo připravit první verzi.
+Agent je dobrý na práci, kde je potřeba porozumět souvislostem: shrnout, navrhnout, zkontrolovat, najít správné místo nebo připravit první verzi.
+
+Agenta spouštíš v prostředí pro agenty (harnessu). Ověřený postup můžeš podle jeho možností nastavit jako automatizaci. Firemní Mašina k tomu potřebuje svěřené účty, mandát Organizace a odpovědného člověka; samotný název nástroje nebo role nic nepovoluje.
 
 Běžný nástroj je dobrý na přímou akci: otevřít dokument, najít položku, zobrazit tabulku. Není potřeba dávat AI každou drobnost, když stačí jedno kliknutí.
 

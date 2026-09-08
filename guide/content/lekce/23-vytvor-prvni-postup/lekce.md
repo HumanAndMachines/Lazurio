@@ -19,6 +19,6 @@ Když něco děláš opakovaně a pokaždé to musíš znovu vysvětlovat, je č
 
 Krátký postup stačí: kdy ho použít, co potřebuješ, jaké kroky udělat a podle čeho poznáš hotovo. Nemusí být dokonalý napoprvé.
 
-AI kolega ti s tím může pomoct. Stačí říct: „Tuhle věc děláme opakovaně. Udělej z toho jednoduchý postup pro nového kolegu.“
+Agent ti s tím může pomoct. Stačí říct: „Tuhle věc děláme opakovaně. Udělej z toho jednoduchý postup pro nového kolegu.“
 
 Shrnutí: vezmi si jeden malý praktický krok a neboj se zeptat lidskou řečí.

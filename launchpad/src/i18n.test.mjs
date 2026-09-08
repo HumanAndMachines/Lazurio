@@ -106,7 +106,7 @@ test("English covers the complete Guide shell, statuses, glossary and recommenda
   expect(t("guide.term.organization.label")).toBe("Organization");
   expect(t("guide.term.machine.label")).toBe("Machine");
   expect(t("guide.term.plugin.body")).toContain("does not automatically grant access");
-  expect(t("guide.apps.browserUse.caution")).toContain("still require your confirmation");
+  expect(t("guide.apps.browserUse.caution")).toContain("appropriate consent and actual permissions");
   expect(Object.keys(en).filter((key) => key.startsWith("guide.")).length).toBeGreaterThan(120);
 });
 

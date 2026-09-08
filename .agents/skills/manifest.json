@@ -2,7 +2,7 @@
   "schema_version": "conglomerate.skills.v0",
   "claude_compatibility": "tracked-derived-mirror",
   "policy": {
-    "principle": "Opakovatelné postupy pro Buddy a AI kolegy v Launchpad rootu patří do .agents/skills.",
+    "principle": "Opakovatelné postupy pro Buddyho a firemní automatizace v Launchpad rootu patří do .agents/skills.",
     "directory": ".agents/skills",
     "required_headings": [
       "## Kdy použít",

@@ -36,7 +36,7 @@
     {
       "id": "good-brief",
       "name": "Umím zadat práci",
-      "description": "Umíš AI kolegovi říct cíl, kontext i hranice.",
+      "description": "Umíš Agentovi říct cíl, kontext i hranice.",
       "icon": "sparkles",
       "level": "silver",
       "trigger": {

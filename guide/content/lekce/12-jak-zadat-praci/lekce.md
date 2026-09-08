@@ -1,6 +1,6 @@
 ---
 id: "12-jak-zadat-praci"
-title: "Jak zadat práci AI kolegovi"
+title: "Jak zadat práci Agentovi"
 section: "3-komunikace-s-ai"
 order: 12
 prerequisites: ["11-ai-kolegove-a-nastroje"]
@@ -9,7 +9,7 @@ quiz: true
 ukol: false
 achievement_on_complete: "good-brief"
 ---
-# Jak zadat práci AI kolegovi
+# Jak zadat práci Agentovi
 
 - Co se v této lekci naučíš:
   - co má dobré zadání obsahovat;

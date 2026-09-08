@@ -19,6 +19,6 @@ Každý kolega má v digitální kanceláři svoje místo: kdo je, jakou má rol
 
 To neznamená, že všechno o tobě má být veřejné. Pracovní role a týmový kontext pomáhají spolupráci. Soukromé věci a citlivé údaje mají zůstat chráněné.
 
-Když se tvoje role nebo odpovědnost změní, je dobré upravit i pracovní popis. AI kolega pak lépe pochopí, co je pro tebe relevantní.
+Když se tvoje role nebo odpovědnost změní, je dobré upravit i pracovní popis. Agent pak lépe pochopí, co je pro tebe relevantní.
 
 Shrnutí: vezmi si jeden malý praktický krok a neboj se zeptat lidskou řečí.

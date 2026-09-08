@@ -39,13 +39,15 @@ Lazurio                             distribuce, životní cyklus a koordinace
 | --- | --- |
 | **Owner** | Člověk nebo Organizace, která vlastní Mašinu, její data, přístupy a poslední cestu obnovy. |
 | **Machine (Mašina)** | Fyzické zařízení, virtuální server nebo providerem izolovaný hostovaný pracovní prostor, který Lazurio chápe jako jednu sdílenou runtime, bezpečnostní a recovery hranici se známým Ownerem. Není to třída hardwaru ani registrovaná identita. |
-| **Resident** | Dlouhodobá digitální identita s kontinuitou, pamětí a mandátem. Buddy a AI Kolega jsou dva profily Residenta. |
+| **Resident** | Dlouhodobý osobní runtime Buddyho s kontinuitou a pamětí. Firemní automatizace Residenta nevyžaduje. |
+| **Firemní automatizovaná Mašina** | Mašina Organizace se svěřenými účty, schváleným pracovním mandátem a odpovědným člověkem. Agenty spouští zvolený harness; nová persona nevzniká. |
+| **Mandát** | Trvalé, ohraničené a odvolatelné pověření od oprávněného člověka. Firemní mandáty vlastní příslušná Organizace v `MANDATES.md`. |
 | **Task Agent** | Dočasná pracovní relace pro konkrétní úkol, například Codex, Claude Code nebo Cursor. V běžné řeči se může zkrátit na „Agent“. |
 | **Organizace** | Jedna firma, jedna GitHub Organization a jedna access hranice. |
 | **Personalspace** | Privátní prostor právě jednoho Principála a jeho případného Buddyho. |
 | **Modul** | Verzovaná pracovní schopnost uvnitř Organizace nebo Personalspace. Může, ale nemusí obsahovat spustitelnou aplikaci. |
 
-Principál je ten, pro koho Agent právě pracuje. V osobním prostředí bývá
+Principál je člověk, pro kterého Agent právě pracuje. V osobním prostředí bývá
 Principál současně Ownerem Mašiny. Ve sdíleném Hosted Team Workspace je
 Ownerem Organizace a jednotliví Principálové jsou jeho oprávnění uživatelé;
 používáním Mašiny její vlastnictví ani org-wide pravomoci nezískávají. V
@@ -121,28 +123,44 @@ Plný Resident musí po dočasném odpojení Lazuria dál komunikovat se svým
 Ownerem, používat lokální paměť a nástroje a pracovat s již udělenými
 přístupy u poskytovatelů.
 
-## Buddy a AI Kolega
+## Osobní Buddy a firemní automatizace
 
-Buddy a AI Kolega používají stejný technický základ. Liší se vlastníkem,
-mandátem a správou dat, ne odděleným vývojem runtime.
+Buddy je osobní zástupce jednoho lidského Principála. Jeho privátní profil,
+mandáty, paměť, Hermes runtime a komunikační hranice zůstávají oddělené podle
+[manuálu Residentů](manual/lazurio-resident-profiles.md).
 
-| Vlastnost | Buddy | AI Kolega |
-| --- | --- | --- |
-| Owner | jeden lidský Principál | Organizace |
-| Mandát | osobní | pracovní a organizační |
-| Paměť | osobní GBrain | organizačně svěřený GBrain |
-| Síťová bezpečnostní hranice | Principálova | organizační |
-| Přístupy | delegace Principála | granty Organizace |
-| Technický základ | Resident runtime | stejný Resident runtime |
+Firemní automatizovanou Mašinu vlastní Organizace. Člověk nejprve ověří práci
+s Agentem a pak nastaví opakované zadání ve vhodném harnessu. Stejné Lazurio
+poskytuje kontext a pracovní pravidla; harness zajišťuje běh Agentů. Povinný
+Hermes, Zulip, samostatná AI persona ani privátní Personalspace pro automat
+z tohoto modelu nevyplývají. Používají se existující provider účty a přístupy,
+ne nový registr Mašin či interní IAM.
 
-Buddyho smí oslovovat právě jeden lidský Principál přes privátní komunikační
-rozhraní. Mašinu vlastní Principál a může ji měnit. Co smí běžící Agent dělat,
-omezuje sandbox agentního runtime; Lazurio vedle něj nestaví druhý sandbox.
-Proces omezený sandboxem jej zároveň nesmí vlastnit ani přepisovat.
+Organizace drží trvalé mandáty v kanonickém `MANDATES.md`; úkol nebo
+automatizace odkazuje na konkrétní mandát a určuje práci. Odpovědný člověk
+zajišťuje dohled a obnovu, oprávněný člověk pověření uděluje a odvolává.
+Mašina používá identitu, ale nevlastní oprávnění nezávislá na provideru.
+Při výměně serveru se vazba nasazení, účtu a mandátu ověřuje znovu;
+kopie souboru ani prompt samy mandát nepřenášejí.
 
-Podrobný profil, instalaci a incidentní hranice popisuje
-[manuál Residentů](manual/lazurio-resident-profiles.md). Pravidla pro práci s
-hostovaným Buddym jsou v [manuálu hostovaného Buddyho](manual/hosted-buddy-vps.md).
+Mandát není další ACL. Samostatná Publikace vyžaduje současně platné pověření
+pro přesnou operaci, skutečné přístupy a splněné kontroly. Agent nesmí jako
+pověření použít vlastní návrh změny mandátu. Podrobný kontrakt, aktuálnost,
+selhání a šablonu drží [Organization mandáty](manual/organization-mandates.md).
+
+### Migrace rozhodnutí 0143
+
+Nový model nahrazuje aktivní personu AI Kolega a záměr budoucího stejnojmenného
+Resident profilu. Existující `ai-colleague` záznamy ve schématu Personalspace
+zůstávají pouze read-compatible migrační data; nová tvorba je zakázaná.
+Jejich privátní obsah se nepřeklasifikuje ani nekopíruje do Organizace bez
+samostatného oprávněného posouzení a migračního kroku. Historické enumy a
+názvy seatů nejsou aktivní alternativou cílového modelu.
+
+Tato změna instrukcí sama nenasazuje scheduler, firemní účty ani živý mandát.
+Každé nasazení musí doložit dostupnost běhu, opakování bez duplicitních akcí,
+aktuální mandát a obnovu. Staré instalace vyžadují odpovídající verzovaný
+rollout; aktualizace dokumentace není důkaz jejich migrace.
 
 ## Pracovní prostory
 
@@ -258,7 +276,8 @@ je v [GEN2 → GEN3 runbooku](manual/gen2-to-gen3-migration.md).
 
 ## Konverzační a nástrojové povrchy
 
-- **Zulip je chat s Residentem.** Nese jeho identitu, kontinuitu a mandát.
+- **Privátní Zulip je dnešní chat s Buddym.** Není povinným firemním kanálem;
+  firemní zadání může přicházet z nástrojů příslušné Organizace.
 - **T3 Code nebo jiné agentní CLI je chat s Agenty na Mašině.** Slouží
   konkrétní práci, opravám a diagnostice.
 - **Lazurio CLI je nástroj Agentů.** Promítá bezpečný kontext, Doctor a
@@ -278,7 +297,7 @@ uživatele Mašiny. Fresh a Managed target je `~/Lazurio` na macOS/Linuxu a
   zachovat svůj existující historický název složky.
 - **Managed Root** je budoucí cílový profil. Canonical cesta je non-Git Root
   sestavený z immutable source jako přesný součin `resident profile × locale`:
-  profil určuje například Buddyho nebo AI Kolegu a locale jazyk Root-owned
+  profil určuje například Buddy nebo Workspace a locale jazyk Root-owned
   generovaných instrukcí včetně `AGENTS.md`. Runtime vlastní immutable package
   mimo Root.
 
@@ -402,7 +421,8 @@ paměti Residenta.
 ## Generace nejsou produkty
 
 GEN2 je ověřovací kohorta a GEN3 první veřejně opakovatelná distribuce.
-Dlouhodobé názvy produktu jsou Lazurio, Buddy a AI Kolega. Generační označení
+Dlouhodobé názvy produktu jsou Lazurio a Buddy; firemní automatizace je
+způsob práce s Agenty na Mašinách. Generační označení
 může zůstat v historii a migračních formátech, ale není samostatnou vrstvou
 architektury.
 
@@ -412,11 +432,12 @@ Nový návrh musí umět jednoduše odpovědět:
 
 1. Kdo je Owner?
 2. Která Machine tvoří společnou bezpečnostní hranici?
-3. Kdo je Resident a jaký má mandát?
+3. Kdo je odpovědný člověk a kde je účinný mandát?
 4. Který Agent vykonává práci a komu se výsledek připíše?
 5. Který provider vynucuje přístup?
 6. Kde bude trvalý výsledek a kde paměť?
-7. Funguje Resident dál, když Lazurio není dostupné?
+7. Jak běh selže, obnoví se a ověří aktuální mandát? U Buddyho: funguje dál
+   i při dočasné nedostupnosti Lazuria?
 8. Řeší nový mechanismus konkrétní problém?
 
 Pokud odpovědi vyžadují další skryté autority, registry nebo identity, návrh
@@ -429,6 +450,6 @@ ještě není dost jednoduchý.
   kontrakt Modulů.
 - [Manifest family](manual/lazurio-manifest-family.md) — návrh přechodu z
   generačních názvů manifestů na rodinu `lazurio.*.json`.
-- [Resident profiles](manual/lazurio-resident-profiles.md) — Buddy, AI Kolega,
+- [Resident profiles](manual/lazurio-resident-profiles.md) — Buddy, Workspace,
   instalovaný root a provozní hranice.
 - [AGENTS.md](AGENTS.md) — pravidla spolupráce, pravomoci a publikace.

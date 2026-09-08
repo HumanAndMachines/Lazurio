@@ -6,7 +6,7 @@ Tento adresář je immutable Lazurio runtime artefakt. Není to pracovní Git
 checkout a nesmí se v něm vytvářet branche, commity, stashe ani lokální
 hotfixy. Jeho exact source commit a digest dokazuje `lazurio.resident.json`.
 
-Pracovní prostor Kolegy nebo AI Kolegy žije v odděleném mutable Lazurio Rootu.
+Pracovní prostor člověka nebo firemní automatizované Mašiny žije v odděleném mutable Lazurio Rootu.
 Lokálně i hosted používá stejný model a stejné mechanismy; lišit se smí pouze
 transport, custody, aktivní Team projekce a provozní nasazení runtime.
 
@@ -56,3 +56,24 @@ jeho kanonické autoritě místo tichého vedlejšího diffu.
 Runtime nemá self-update službu. Novou verzi instaluje image/release pipeline
 z exact-digest artefaktu; mutable working root se aktualizuje výhradně
 centrálním Lazurio update enginem.
+
+## Automatizovaná práce a mandát
+
+Firemní automatizovanou Mašinu vlastní Organizace; má svěřené účty a
+odpovědného člověka. Harness spouští Agenty, Lazurio poskytuje kontext a
+pravidla. Jméno Mašiny ani role Steward nejsou další Principál či oprávnění.
+
+Přečti `AGENTS.md` příslušné Organizace. Trvalý mandát vyhledej podle ID mandátu uvedeného v úkolu
+v jejím kanonickém `MANDATES.md`; Root žádné účinné mandáty nekopíruje.
+Použij schválenou revizi, nikoli vlastní draft ve worktree. Před Publikací
+ověř aktuální schválenou revizi u autority, platnost, scope, svěřený účet,
+podmínky a živá provider práva. Bez těchto důkazů zachovej bezpečný draft a
+předej výjimku odpovědnému člověku. Agent si mandát nevydává, nerozšiřuje ani
+neobnovuje sám; vlastní změna mandátu nemůže autorizovat svou Publikaci.
+
+Úkol určuje práci a může rozsah zúžit. Jednorázový explicitní pokyn
+oprávněného člověka platí pouze v jeho vymezeném rozsahu. Chybějící, odvolaný,
+expirovaný či neověřitelný mandát neopravňuje k samostatné Publikaci; jiná
+Organizace ani osobní mandát Buddyho není fallback. Úplný kontrakt drží
+`manual/organization-mandates.md`. Tato instalace sama nevytváří živý mandát,
+scheduler ani garanci obnovy a opakování bez duplicit.

@@ -58,6 +58,9 @@ test("Workspace runtime profile declares the immutable runtime/working-root boun
     "runtime-working-root-separation",
     "get-first-no-fetch",
     "no-runtime-self-update",
+    "organization-mandate-approved-revision",
+    "current-mandate-before-publication",
+    "no-self-granted-mandate",
   ]));
   expect(new Set(evals.cases.map((item) => item.kind))).toEqual(new Set([
     "normal",
@@ -285,6 +288,11 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
   expect(workspacePaths).toContain(".agents/skills/architecture-shaping/SKILL.md");
   const workspaceInstructions = await readFile(join(workspace.artifact_root, "AGENTS.md"), "utf8");
   expect(workspaceInstructions).toContain(".agents/skills/architecture-shaping/SKILL.md");
+  expect(workspaceInstructions).toContain("MANDATES.md");
+  expect(workspaceInstructions).toContain("aktuální schválenou revizi u autority");
+  expect(workspaceInstructions).toContain("vlastní změna mandátu nemůže autorizovat svou Publikaci");
+  expect(workspacePaths).toContain("manual/organization-mandates.md");
+  expect(workspacePaths).not.toContain("MANDATES.md");
   expect(workspaceInstructions).toContain("Mašina je jedna sdílená runtime, bezpečnostní a recovery hranice");
   expect(workspaceInstructions).toContain("Organization Hostu zůstává vyšší");
   const workspacePackage = JSON.parse(await readFile(join(workspace.artifact_root, "package.json"), "utf8"));

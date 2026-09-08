@@ -42,7 +42,8 @@
           "enum": [
             "human",
             "ai-colleague"
-          ]
+          ],
+          "description": "Nová tvorba pouze human (decision 0143). ai-colleague je read-compatible historický vstup; není aktivní persona a soukromá data se automaticky nepřevádějí."
         }
       },
       "additionalProperties": true
