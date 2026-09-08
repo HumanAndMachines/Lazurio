@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,12 +7,14 @@ import {
   AGENT_SKILLS_MIRROR_MESSAGE,
   checkAgentSkillsMirror,
   syncAgentSkillsMirror,
+  syncTestHooks,
 } from "./agent-skills-entrypoint.mjs";
 
 const scriptPath = fileURLToPath(new URL("./agent-skills-entrypoint.mjs", import.meta.url));
 const tempRoots = [];
 
 afterEach(async () => {
+  syncTestHooks.afterParentValidated = null;
   await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
@@ -187,6 +189,48 @@ test("symlinkovaný .agents předek mimo repozitář: check selže a sync nic ne
   expect(state.differences[0]).toContain("symlinkovaný předek");
   await expect(syncAgentSkillsMirror(root)).rejects.toThrow("symlinkovaný předek");
   expect(await readdir(join(root, ".claude", "skills"))).not.toContain("evil-skill");
+});
+
+test("swap .claude parentu mezi validací a první mutací nepřesměruje zápis mimo repozitář", async () => {
+  const root = await fixture("parent-swap");
+  await syncAgentSkillsMirror(root);
+  await writeFile(join(root, ".agents", "skills", "example-skill", "SKILL.md"), "# swapped\n");
+  const outside = await mkdtemp(join(tmpdir(), "agent-skills-swap-outside-"));
+  tempRoots.push(outside);
+  const cwdBefore = process.cwd();
+  let swapped = false;
+  syncTestHooks.afterParentValidated = async () => {
+    try {
+      await rename(join(root, ".claude"), join(root, ".claude-safe"));
+    } catch (error) {
+      // Windows drží cwd procesu zamčený; nepřejmenovatelný parent je sám důkaz.
+      if (process.platform === "win32" && ["EPERM", "EBUSY", "EACCES"].includes(error?.code)) return;
+      throw error;
+    }
+    await linkDirectory(outside, join(root, ".claude"));
+    swapped = true;
+  };
+
+  const outcome = await syncAgentSkillsMirror(root).then((result) => ({ result }), (error) => ({ error }));
+
+  expect(process.cwd()).toBe(cwdBefore);
+  expect(await readdir(outside)).toEqual([]);
+  if (swapped) {
+    // Zápis zůstal v původním (přejmenovaném) inode uvnitř repozitáře.
+    expect(outcome.error).toBeUndefined();
+    expect(await readFile(join(root, ".claude-safe", "skills", "example-skill", "SKILL.md"), "utf8")).toBe("# swapped\n");
+    expect((await lstat(join(root, ".claude"))).isSymbolicLink()).toBe(true);
+  }
+});
+
+test("sync obnoví cwd i po chybě uvnitř ukotvení", async () => {
+  const root = await fixture("cwd-restore");
+  const cwdBefore = process.cwd();
+  syncTestHooks.afterParentValidated = async () => {
+    throw new Error("injected");
+  };
+  await expect(syncAgentSkillsMirror(root)).rejects.toThrow("injected");
+  expect(process.cwd()).toBe(cwdBefore);
 });
 
 test("chybějící nebo symlinkovaný .agents/skills: check selže a sync nic nemaže", async () => {
