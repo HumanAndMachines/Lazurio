@@ -94,8 +94,12 @@ export function reconcileDetailDrawerState({
   return { drawerView, drawerOpen, restoreFocus: true };
 }
 
-export function createLatestDataLoadCoordinator({ run } = {}) {
+// `onFresh` se volá při každém fresh loadu (lokální mutace, Sync, ruční
+// reload) — jediné místo, kde platí default `fresh = !quiet`; závislé read
+// modely (pravé panely) se přes něj invalidují bez druhé definice „fresh“.
+export function createLatestDataLoadCoordinator({ run, onFresh = null } = {}) {
   if (typeof run !== "function") throw new TypeError("data load coordinator requires a run function");
+  if (onFresh !== null && typeof onFresh !== "function") throw new TypeError("data load coordinator onFresh must be a function");
 
   let generation = 0;
   let inFlight = null;
@@ -145,7 +149,10 @@ export function createLatestDataLoadCoordinator({ run } = {}) {
   }
 
   function load({ quiet = false, fresh = !quiet, sync = false } = {}) {
-    if (fresh) generation += 1;
+    if (fresh) {
+      generation += 1;
+      onFresh?.();
+    }
     if (inFlight) {
       if (!fresh) return inFlight.promise;
       return queueFresh({ quiet, sync });
@@ -157,9 +164,9 @@ export function createLatestDataLoadCoordinator({ run } = {}) {
 }
 
 // Snapshot pravých panelů (notifikace, Nejčastější, Git read model) smí přepsat
-// UI jen tehdy, když je to nejnovější request aktivní Organizace a od jeho
-// startu neproběhla žádná lokální mutace (epoch). Starší odpověď téže
-// Organizace ani pre-mutation snapshot se nikdy nepoužijí.
+// UI jen tehdy, když je to nejnovější generace aktivní Organizace. Generaci
+// posouvá každý nový request i každá lokální mutace, takže starší odpověď
+// téže Organizace ani pre-mutation snapshot se nikdy nepoužijí.
 export function sidePanelResponseIsCurrent({
   requestId,
   latestRequestId,
@@ -167,21 +174,18 @@ export function sidePanelResponseIsCurrent({
   requestedCompany,
   activeScope,
   activeCompany,
-  requestEpoch = 0,
-  latestEpoch = requestEpoch,
 }) {
   return activeScope === "org"
     && requestId === latestRequestId
-    && requestEpoch === latestEpoch
     && requestedScope === activeScope
     && requestedCompany === activeCompany;
 }
 
-// Sekvence načtení pravých panelů jako čistý applier: monotónní generation
-// requestů, mutation epoch a scope guard drží jedno místo, které používá
-// produkční app.js i behaviorální testy. `invalidate()` volá každá lokální
-// mutace (Start/Stop/Sync/ruční reload), aby snapshot rozběhnutý před ní
-// nepřepsal stav načtený po ní.
+// Sekvence načtení pravých panelů jako čistý applier: jeden monotónní čítač
+// generace (nový request i lokální mutace) a scope guard drží jedno místo,
+// které používá produkční app.js i behaviorální testy. `invalidate()` volá
+// fresh data load (Start/Stop/Sync/ruční reload), aby snapshot rozběhnutý
+// před mutací nepřepsal stav načtený po ní.
 export function createSidePanelLoadCoordinator({
   readScope,
   fetchSnapshot,
@@ -193,15 +197,13 @@ export function createSidePanelLoadCoordinator({
   }
 
   let generation = 0;
-  let epoch = 0;
 
   function invalidate() {
-    epoch += 1;
+    generation += 1;
   }
 
   async function load() {
     const requestId = ++generation;
-    const requestEpoch = epoch;
     const requested = readScope();
     if (requested.scope !== "org" || requested.company === "all") {
       clearSnapshot();
@@ -212,20 +214,13 @@ export function createSidePanelLoadCoordinator({
     const current = sidePanelResponseIsCurrent({
       requestId,
       latestRequestId: generation,
-      requestEpoch,
-      latestEpoch: epoch,
       requestedScope: requested.scope,
       requestedCompany: requested.company,
       activeScope: active.scope,
       activeCompany: active.company,
     });
     if (!current) {
-      const reason = requestId !== generation
-        ? "superseded"
-        : requestEpoch !== epoch
-          ? "stale_epoch"
-          : "scope_changed";
-      return { applied: false, reason };
+      return { applied: false, reason: requestId !== generation ? "superseded" : "scope_changed" };
     }
     applySnapshot(snapshot, requested);
     return { applied: true, reason: null };

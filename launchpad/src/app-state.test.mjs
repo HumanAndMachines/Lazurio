@@ -384,8 +384,6 @@ test("A→B→A side-panel race accepts only the newest request generation", () 
   expect(sidePanelResponseIsCurrent({ ...activeA, requestId: 2, requestedCompany: "Beta" })).toBe(false);
   expect(sidePanelResponseIsCurrent({ ...activeA, requestId: 3 })).toBe(true);
   expect(sidePanelResponseIsCurrent({ ...activeA, requestId: 3, activeScope: "future" })).toBe(false);
-  expect(sidePanelResponseIsCurrent({ ...activeA, requestId: 3, requestEpoch: 1, latestEpoch: 1 })).toBe(true);
-  expect(sidePanelResponseIsCurrent({ ...activeA, requestId: 3, requestEpoch: 1, latestEpoch: 2 })).toBe(false);
 });
 
 function createSidePanelHarness(initialScope = { scope: "org", company: "Alpha" }) {
@@ -452,13 +450,40 @@ test("side panels reject a pre-mutation snapshot and accept the read started aft
   // původní request stále běží.
   coordinator.invalidate();
   requests[0].resolve({ tag: "pre-mutation" });
-  expect(await preMutation).toEqual({ applied: false, reason: "stale_epoch" });
+  expect(await preMutation).toEqual({ applied: false, reason: "superseded" });
   expect(applied).toEqual([]);
 
   const postMutation = coordinator.load();
   requests[1].resolve({ tag: "post-mutation" });
   expect(await postMutation).toEqual({ applied: true, reason: null });
   expect(applied).toEqual([{ tag: "post-mutation" }]);
+});
+
+test("fresh data loads invalidate dependent side panels through onFresh, quiet polls do not", async () => {
+  const { requests, applied, coordinator: sidePanels } = createSidePanelHarness();
+  const dataLoads = createLatestDataLoadCoordinator({
+    run: async () => "apps",
+    onFresh: () => sidePanels.invalidate(),
+  });
+
+  const pollSnapshot = sidePanels.load();
+  await dataLoads.load({ quiet: true });
+  requests[0].resolve({ tag: "after-quiet-poll" });
+  expect(await pollSnapshot).toEqual({ applied: true, reason: null });
+
+  const preMutation = sidePanels.load();
+  // Mutace vždy končí fresh readem (loadData({ quiet: true, fresh: true })),
+  // Sync i ruční reload jsou non-quiet, tedy fresh implicitně.
+  await dataLoads.load({ quiet: true, fresh: true });
+  requests[1].resolve({ tag: "pre-mutation" });
+  expect(await preMutation).toEqual({ applied: false, reason: "superseded" });
+
+  const preSync = sidePanels.load();
+  await dataLoads.load({ sync: true });
+  requests[2].resolve({ tag: "pre-sync" });
+  expect(await preSync).toEqual({ applied: false, reason: "superseded" });
+  expect(applied).toEqual([{ tag: "after-quiet-poll" }]);
+  expect(() => createLatestDataLoadCoordinator({ run: async () => {}, onFresh: "later" })).toThrow(TypeError);
 });
 
 test("side panel coordinator clears panels outside an Organization scope and fails closed on missing hooks", async () => {

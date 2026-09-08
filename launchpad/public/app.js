@@ -136,12 +136,18 @@ const state = {
 let heroAction = "reload";
 let doctorLoadInFlight = null;
 let doctorReloadRequested = false;
-const dataLoadCoordinator = createLatestDataLoadCoordinator({ run: runLoadData });
 const sidePanelLoader = createSidePanelLoadCoordinator({
   readScope: () => ({ scope: state.filters.scope, company: state.filters.company }),
   fetchSnapshot: fetchSidePanelSnapshot,
   applySnapshot: applySidePanelSnapshot,
   clearSnapshot: clearSidePanelSnapshot,
+});
+// Fresh read (lokální mutace, Sync, ruční reload) zneplatní snapshot pravých
+// panelů rozběhnutý před ním: pre-mutation stav nesmí přepsat read model
+// načtený po mutaci, i kdyby dorazil dřív.
+const dataLoadCoordinator = createLatestDataLoadCoordinator({
+  run: runLoadData,
+  onFresh: () => sidePanelLoader.invalidate(),
 });
 let quietPollTimer = null;
 let restoreSpaceMenuFocusOnClose = false;
@@ -736,11 +742,6 @@ function toast(message, tone = "info", timeout = 4200) {
    ========================================================= */
 
 function loadData(options = {}) {
-  // Fresh read žádá lokální mutace (Start/Stop/Sync, ruční reload). Snapshot
-  // pravých panelů rozběhnutý před ní je pre-mutation stav a nesmí přepsat
-  // read model načtený po ní, i kdyby dorazil dřív.
-  const fresh = options.fresh ?? !options.quiet;
-  if (fresh || options.sync) sidePanelLoader.invalidate();
   return dataLoadCoordinator.load(options);
 }
 
