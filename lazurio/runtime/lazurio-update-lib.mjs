@@ -22,7 +22,7 @@ import {
   GIT_FETCH_TIMEOUT_MS,
   GIT_LOCAL_TIMEOUT_MS,
   runGit,
-  safeGitRemoteEnv,
+  safeGitCommandEnv,
 } from "./git-lib.mjs";
 
 export const LAZURIO_UPDATE_STATES = Object.freeze(["current", "updated", "blocked"]);
@@ -491,7 +491,11 @@ export async function updateManagedRepo(repo, context = {}) {
       source.url,
       "+refs/heads/main:refs/remotes/origin/main",
     ],
-    { cwd: repo.absolute_path, timeoutMs: GIT_FETCH_TIMEOUT_MS, env: safeGitRemoteEnv() },
+    // This is an existing, origin-verified checkout, not sterile materialization.
+    // Retain its normal credential helper (including a Machine-managed broker),
+    // while the shared command environment removes inherited Git injection and
+    // disables interactive prompts. The source is reverified after this fetch.
+    { cwd: repo.absolute_path, timeoutMs: GIT_FETCH_TIMEOUT_MS, env: safeGitCommandEnv() },
   );
   if (!fetched.ok) {
     return block("github_unavailable", {
