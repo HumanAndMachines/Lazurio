@@ -1763,7 +1763,17 @@ function scopeHostedUpdateInventory(inventory, workspace) {
   if (configuration.profile !== "hosted") return inventory;
   const organization = (inventory.repos ?? []).find((repo) =>
     repo.repo_kind === "organization_root" && repo.organization === configuration.organization_slug);
-  if (!organization) throw new Error("Hosted Workspace Organization is not mounted in the update inventory.");
+  if (!organization) {
+    const issues = (inventory.inventory_issues ?? []).filter((issue) =>
+      issue.organization === configuration.organization_slug);
+    if (issues.length > 0) {
+      // Preserve the inventory's precise repair guidance, but permit no Git
+      // work while the configured Organization has no verified root record.
+      return { ...inventory, repos: [], inventory_issues: issues,
+        warnings: issues.map((issue) => issue.message) };
+    }
+    throw new Error("Hosted Workspace Organization is not mounted in the update inventory.");
+  }
   if (!(organization.teams ?? []).includes(configuration.team_id)) {
     throw new Error("Hosted Workspace Team is not declared by its Organization.");
   }

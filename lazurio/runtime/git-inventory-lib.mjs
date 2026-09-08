@@ -123,6 +123,7 @@ export async function buildGitInventory({ companiesRoot, organizations = null } 
         continue;
       }
       if (resolution.state === "projection_drift") {
+        normalized.teams = [...declaredOrganizationTeamSlugs(resolution.resource)];
         recordInventoryIssue({
           inventoryIssues,
           warnings,
