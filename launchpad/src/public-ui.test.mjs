@@ -209,11 +209,12 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(js).toContain("suppressNextDrawerOpen");
   expect(js).toContain("function visibleNotifications");
   expect(js).toContain("function visibleMostUsed");
-  expect(js).toContain('?company=${encodeURIComponent(requestedCompany)}');
-  expect(js).toContain("const requestedCompany = state.filters.company");
-  expect(js).toContain("let sidePanelRequestGeneration = 0;");
-  expect(js).toContain("const requestId = ++sidePanelRequestGeneration;");
-  expect(js).toContain("sidePanelResponseIsCurrent({");
+  expect(js).toContain('?company=${encodeURIComponent(company)}');
+  expect(js).toContain("const sidePanelLoader = createSidePanelLoadCoordinator({");
+  expect(js).toContain("readScope: () => ({ scope: state.filters.scope, company: state.filters.company })");
+  expect(js).toContain("return sidePanelLoader.load();");
+  expect(js).toContain("if (fresh || options.sync) sidePanelLoader.invalidate();");
+  expect(js).not.toContain("sidePanelRequestGeneration");
   expect(js).toContain("return filtered(state.apps)");
   expect(js).not.toContain("--space-logo-hue");
   expect(js).toContain("space.organization.logo_url");

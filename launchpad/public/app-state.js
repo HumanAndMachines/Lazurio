@@ -156,6 +156,10 @@ export function createLatestDataLoadCoordinator({ run } = {}) {
   return { load };
 }
 
+// Snapshot pravých panelů (notifikace, Nejčastější, Git read model) smí přepsat
+// UI jen tehdy, když je to nejnovější request aktivní Organizace a od jeho
+// startu neproběhla žádná lokální mutace (epoch). Starší odpověď téže
+// Organizace ani pre-mutation snapshot se nikdy nepoužijí.
 export function sidePanelResponseIsCurrent({
   requestId,
   latestRequestId,
@@ -163,11 +167,71 @@ export function sidePanelResponseIsCurrent({
   requestedCompany,
   activeScope,
   activeCompany,
+  requestEpoch = 0,
+  latestEpoch = requestEpoch,
 }) {
   return activeScope === "org"
     && requestId === latestRequestId
+    && requestEpoch === latestEpoch
     && requestedScope === activeScope
     && requestedCompany === activeCompany;
+}
+
+// Sekvence načtení pravých panelů jako čistý applier: monotónní generation
+// requestů, mutation epoch a scope guard drží jedno místo, které používá
+// produkční app.js i behaviorální testy. `invalidate()` volá každá lokální
+// mutace (Start/Stop/Sync/ruční reload), aby snapshot rozběhnutý před ní
+// nepřepsal stav načtený po ní.
+export function createSidePanelLoadCoordinator({
+  readScope,
+  fetchSnapshot,
+  applySnapshot,
+  clearSnapshot,
+} = {}) {
+  for (const [name, fn] of Object.entries({ readScope, fetchSnapshot, applySnapshot, clearSnapshot })) {
+    if (typeof fn !== "function") throw new TypeError(`side panel coordinator requires ${name} function`);
+  }
+
+  let generation = 0;
+  let epoch = 0;
+
+  function invalidate() {
+    epoch += 1;
+  }
+
+  async function load() {
+    const requestId = ++generation;
+    const requestEpoch = epoch;
+    const requested = readScope();
+    if (requested.scope !== "org" || requested.company === "all") {
+      clearSnapshot();
+      return { applied: false, reason: "out_of_scope" };
+    }
+    const snapshot = await fetchSnapshot(requested);
+    const active = readScope();
+    const current = sidePanelResponseIsCurrent({
+      requestId,
+      latestRequestId: generation,
+      requestEpoch,
+      latestEpoch: epoch,
+      requestedScope: requested.scope,
+      requestedCompany: requested.company,
+      activeScope: active.scope,
+      activeCompany: active.company,
+    });
+    if (!current) {
+      const reason = requestId !== generation
+        ? "superseded"
+        : requestEpoch !== epoch
+          ? "stale_epoch"
+          : "scope_changed";
+      return { applied: false, reason };
+    }
+    applySnapshot(snapshot, requested);
+    return { applied: true, reason: null };
+  }
+
+  return { load, invalidate };
 }
 
 export function replacePersonalspaceResponse(_previous, incoming) {
