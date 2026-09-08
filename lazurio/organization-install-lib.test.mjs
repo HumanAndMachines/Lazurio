@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 
 import { initGitRepo } from "../launchpad/src/git-fixture-helpers.test.mjs";
 import { runGit, runGitInPinnedTemporaryChild } from "./runtime/git-lib.mjs";
+import { runLazurioUpdate } from "./runtime/lazurio-update-lib.mjs";
 import { createOrganizationScaffold } from "./core/organization-scaffold-lib.mjs";
 import { CANONICAL_GIT_FETCH_REFSPEC } from "./core/git-materialization-lib.mjs";
 import {
@@ -466,8 +467,8 @@ test("CLI exposes install without weakening activation flags", () => {
     stderr: "pipe",
   });
   expect(help.exitCode).toBe(0);
-  expect(help.stdout.toString()).toContain("lazurio organization install <github-login> [--role builder] [--json]");
-  expect(help.stdout.toString()).not.toContain("lazurio organization install <github-login> [--role builder] [--json] [--root");
+  expect(help.stdout.toString()).toContain("lazurio organization install <github-login> [--role builder|steward] [--json]");
+  expect(help.stdout.toString()).not.toContain("lazurio organization install <github-login> [--role builder|steward] [--json] [--root");
 
   const invalid = Bun.spawnSync([
     process.execPath,
@@ -507,14 +508,14 @@ test("CLI exposes install without weakening activation flags", () => {
     "install",
     login,
     "--role",
-    "steward",
+    "admin",
   ], {
     cwd: join(import.meta.dirname, ".."),
     stdout: "pipe",
     stderr: "pipe",
   });
   expect(invalidRole.exitCode).toBe(2);
-  expect(invalidRole.stderr.toString()).toContain("--role zatím podporuje pouze hodnotu builder");
+  expect(invalidRole.stderr.toString()).toContain("--role podporuje pouze hodnoty builder a steward");
 });
 
 test("Builder role blocks before materialization when provider observation did not prove readiness", async () => {
@@ -536,11 +537,326 @@ test("Builder role blocks before materialization when provider observation did n
   expect(report).toMatchObject({
     state: "blocked",
     access: { authority: "github", role: "builder", status: "blocked" },
+    scope: { role: "builder", restricted_slots: "exclude" },
     target: { reason: "builder_access_not_ready" },
   });
   expect(materialized).toBe(false);
   expect(existsSync(join(fixture.root, "organizations", `${login}_GEN3`))).toBe(false);
 });
+
+test("Steward role blocks before materialization when provider observation did not prove readiness", async () => {
+  const fixture = await organizationRemoteFixture();
+  let materialized = false;
+  const report = await installOrganization({
+    rootPath: fixture.root,
+    githubLogin: login,
+    role: "steward",
+    deps: {
+      observe: async () => sourceObservation(),
+      runPinnedChild: async () => {
+        materialized = true;
+        throw new Error("must not materialize");
+      },
+    },
+  });
+
+  expect(report).toMatchObject({
+    state: "blocked",
+    access: { authority: "github", role: "steward", status: "blocked" },
+    scope: { role: "steward", restricted_slots: "exclude" },
+    target: { reason: "steward_access_not_ready" },
+  });
+  expect(materialized).toBe(false);
+  expect(existsSync(join(fixture.root, "organizations", `${login}_GEN3`))).toBe(false);
+});
+
+test("Steward install converges ordinary apps and the Mission Control data mount without touching the restricted root slot", async () => {
+  const fixture = await restrictedScopeFixture();
+  const infraKey = "lazurio-example-organization::infra";
+  const first = await installOrganization({
+    rootPath: fixture.root,
+    githubLogin: login,
+    role: "steward",
+    deps: fixture.deps,
+  });
+
+  expect(first, JSON.stringify(first)).toMatchObject({
+    state: "updated",
+    ok: true,
+    access: { role: "steward", status: "ready" },
+    scope: { role: "steward", restricted_slots: "exclude" },
+    target: { state: "updated", reason: "root_materialized" },
+  });
+  expect(first.convergence.restricted_slot_policy).toBe("exclude");
+  expect(first.convergence.results).toContainEqual(expect.objectContaining({
+    repo_key: infraKey,
+    state: "current",
+    reason: "excluded_by_role_scope",
+    materialization_scope: "excluded_by_role_scope",
+  }));
+  expect(first.convergence.results).toContainEqual(expect.objectContaining({
+    repo_key: "lazurio-example-organization::mission-control",
+    state: "updated",
+    reason: "organization_repository_materialized",
+  }));
+  expect(first.convergence.results).toContainEqual(expect.objectContaining({
+    repo_key: "lazurio-example-organization::knowledgebase",
+    state: "updated",
+    reason: "module_materialized",
+  }));
+  expect(first.convergence.results).toContainEqual(expect.objectContaining({
+    state: "updated",
+    reason: "repository_db_materialized",
+    path: `organizations/${login}_GEN3/mission-control/db`,
+  }));
+  expect(fixture.materialized).not.toContain(infraKey);
+  expect(fixture.materialized).toEqual(expect.arrayContaining([
+    "lazurio-example-organization::mission-control",
+    "lazurio-example-organization::knowledgebase",
+  ]));
+  expect(existsSync(join(fixture.organizationRoot, "infra"))).toBe(false);
+  expect(existsSync(join(fixture.organizationRoot, "mission-control", "db", "repository-db.yaml"))).toBe(true);
+  expectNoProviderOperation(fixture, "infra");
+
+  const materializedBeforeRerun = fixture.materialized.length;
+  const second = await installOrganization({
+    rootPath: fixture.root,
+    githubLogin: login,
+    role: "steward",
+    deps: fixture.deps,
+  });
+  expect(second, JSON.stringify(second)).toMatchObject({ state: "current", ok: true });
+  expect(second.convergence.results).toContainEqual(expect.objectContaining({
+    repo_key: infraKey,
+    reason: "excluded_by_role_scope",
+  }));
+  expect(second.convergence.results).toContainEqual(expect.objectContaining({ reason: "repository_db_current" }));
+  expect(fixture.materialized).toHaveLength(materializedBeforeRerun);
+  expectNoProviderOperation(fixture, "infra");
+  expect(organizationInstallExitCode(first)).toBe(0);
+  expect(organizationInstallExitCode(second)).toBe(0);
+});
+
+test("generic update after a Steward install defers the absent restricted slot but keeps updating a mounted one", async () => {
+  const fixture = await restrictedScopeFixture();
+  const infraKey = "lazurio-example-organization::infra";
+  await installOrganization({ rootPath: fixture.root, githubLogin: login, role: "steward", deps: fixture.deps });
+
+  const deferred = await fixture.runUpdate({ rootPath: fixture.root });
+  expect(deferred, JSON.stringify(deferred)).toMatchObject({ state: "current", ok: true, restricted_slot_policy: "defer" });
+  expect(deferred.results).toContainEqual(expect.objectContaining({
+    repo_key: infraKey,
+    state: "current",
+    reason: "restricted_not_materialized",
+    materialization_scope: "restricted_deferred",
+  }));
+  expect(fixture.materialized).not.toContain(infraKey);
+  expect(fixture.updated).not.toContain(infraKey);
+  expectNoProviderOperation(fixture, "infra");
+
+  await initGitRepo(join(fixture.organizationRoot, "infra"));
+  const mounted = await fixture.runUpdate({ rootPath: fixture.root });
+  expect(mounted, JSON.stringify(mounted)).toMatchObject({ state: "current", ok: true });
+  expect(fixture.updated).toContain(infraKey);
+  expect(mounted.results.some((result) => result.repo_key === infraKey && result.reason === "restricted_not_materialized")).toBe(false);
+  expect(fixture.materialized).not.toContain(infraKey);
+});
+
+test("Admin install without a role still materializes the restricted root slot", async () => {
+  const fixture = await restrictedScopeFixture();
+  const infraKey = "lazurio-example-organization::infra";
+  const report = await installOrganization({ rootPath: fixture.root, githubLogin: login, deps: fixture.deps });
+
+  expect(report, JSON.stringify(report)).toMatchObject({
+    state: "updated",
+    ok: true,
+    access: { role: null, status: "not_requested" },
+    scope: { role: null, restricted_slots: "include" },
+  });
+  expect(report.convergence.restricted_slot_policy).toBe("include");
+  expect(report.convergence.results).toContainEqual(expect.objectContaining({
+    repo_key: infraKey,
+    state: "updated",
+    reason: "organization_repository_materialized",
+  }));
+  expect(fixture.materialized).toContain(infraKey);
+  expect(existsSync(join(fixture.organizationRoot, "infra"))).toBe(true);
+  expect(JSON.stringify(report)).not.toContain("excluded_by_role_scope");
+});
+
+test("Builder install shares the restricted exclusion semantics of the Steward scope", async () => {
+  const fixture = await restrictedScopeFixture({ role: "builder" });
+  const report = await installOrganization({ rootPath: fixture.root, githubLogin: login, role: "builder", deps: fixture.deps });
+
+  expect(report, JSON.stringify(report)).toMatchObject({
+    state: "updated",
+    ok: true,
+    scope: { role: "builder", restricted_slots: "exclude" },
+  });
+  expect(report.convergence.results).toContainEqual(expect.objectContaining({
+    repo_key: "lazurio-example-organization::infra",
+    reason: "excluded_by_role_scope",
+  }));
+  expect(fixture.materialized).not.toContain("lazurio-example-organization::infra");
+  expectNoProviderOperation(fixture, "infra");
+});
+
+test("restricted Mission Control excludes its repository-db descendant from a Steward install without any provider operation", async () => {
+  const fixture = await restrictedScopeFixture({ missionControlAccess: "restricted" });
+  const report = await installOrganization({ rootPath: fixture.root, githubLogin: login, role: "steward", deps: fixture.deps });
+
+  expect(report, JSON.stringify(report)).toMatchObject({ state: "updated", ok: true });
+  expect(report.convergence.results).toContainEqual(expect.objectContaining({
+    repo_key: "lazurio-example-organization::mission-control",
+    reason: "excluded_by_role_scope",
+  }));
+  expect(report.convergence.results).toContainEqual(expect.objectContaining({
+    path: `organizations/${login}_GEN3/mission-control/db`,
+    state: "current",
+    reason: "excluded_by_role_scope",
+  }));
+  expect(report.convergence.results.some((result) => result.reason === "repository_db_materialized")).toBe(false);
+  expect(fixture.materialized).toEqual(["lazurio-example-organization::knowledgebase"]);
+  expect(existsSync(join(fixture.organizationRoot, "mission-control"))).toBe(false);
+  expectNoProviderOperation(fixture, "mission-control");
+  expect(fixture.gitCalls.some((call) => call.args.includes(fakeDataRemote))).toBe(false);
+
+  const admin = await installOrganization({ rootPath: fixture.root, githubLogin: login, deps: fixture.deps });
+  expect(admin, JSON.stringify(admin)).toMatchObject({ state: "updated", ok: true, scope: { role: null, restricted_slots: "include" } });
+  expect(admin.convergence.results).toContainEqual(expect.objectContaining({ reason: "repository_db_materialized" }));
+});
+
+test("unknown slot access classification fails safe for every install scope", async () => {
+  for (const role of ["steward", null]) {
+    const fixture = await restrictedScopeFixture({ infraAccess: "secret" });
+    const report = await installOrganization({ rootPath: fixture.root, githubLogin: login, role, deps: fixture.deps });
+    expect(report, JSON.stringify(report)).toMatchObject({ state: "blocked", ok: false });
+    expect(report.convergence.results).toContainEqual(expect.objectContaining({
+      repo_key: "lazurio-example-organization::infra",
+      state: "blocked",
+      reason: "access_classification_unknown",
+    }));
+    expect(fixture.materialized).not.toContain("lazurio-example-organization::infra");
+    expectNoProviderOperation(fixture, "infra");
+  }
+});
+
+function roleReadiness(role) {
+  return {
+    authority: "github",
+    role,
+    status: "ready",
+    account: { id: "51515151", login: `${role}-account` },
+    organization_membership: { state: "active", role: "member" },
+    teams: [],
+    repositories: [],
+    blockers: [],
+  };
+}
+
+// Organization s běžnými sloty, Mission Control app/data hranicí a restricted
+// root slotem `infra`. Install používá skutečný update reconciler nad reálným
+// inventářem; Git i materializace jsou špehované, takže test dokáže, že se nad
+// vyloučeným slotem nespustila žádná provider operace.
+async function restrictedScopeFixture({
+  role = "steward",
+  infraAccess = "restricted",
+  missionControlAccess = "expected",
+} = {}) {
+  const fixture = await organizationRepositoryDbFixture();
+  const documents = fixture.documents;
+  const missionControl = documents.modules.module_slots.find((slot) => slot.path === "mission-control");
+  missionControl.default_access = missionControlAccess;
+  missionControl.required_roles = ["organization-admin"];
+  documents.company.layers.push({ path: "infra", kind: "root-docs", ownership: "manual" });
+  documents.modules.module_slots.push(
+    {
+      path: "infra",
+      slug: "infra",
+      space: "root",
+      status: "active",
+      default_access: infraAccess,
+      required_roles: ["organization-admin"],
+      materialization: "doctor_managed_nested_repo",
+      git: { url: `git@github.com:${login}/infra.git`, branch: "main" },
+    },
+    {
+      path: "workspace/knowledgebase",
+      slug: "knowledgebase",
+      status: "active",
+      default_access: "expected",
+      required_roles: ["*"],
+      teams: ["workspace"],
+      git: { url: `git@github.com:${login}/knowledgebase.git`, branch: "main" },
+    },
+  );
+  await writeFile(join(fixture.source, "company.gen3.json"), `${JSON.stringify(documents.company, null, 2)}\n`);
+  await writeFile(join(fixture.source, "modules.manifest.json"), `${JSON.stringify(documents.modules, null, 2)}\n`);
+  await runGit(["add", "company.gen3.json", "modules.manifest.json"], { cwd: fixture.source });
+  await runGit(["commit", "-m", "Declare restricted scope fixture"], { cwd: fixture.source });
+  await runGit(["push", "origin", "main"], { cwd: fixture.source });
+
+  const organizationRoot = join(fixture.root, "organizations", `${login}_GEN3`);
+  const remoteMap = new Map([
+    [fakeHttpsRemote, fixture.remote],
+    [fakeDataRemote, fixture.dataRemote],
+  ]);
+  const gitCalls = [];
+  const materialized = [];
+  const updated = [];
+  const spy = (runner) => async (args, options) => {
+    gitCalls.push({ args, cwd: options?.cwd ?? null });
+    return runner(args, options);
+  };
+  const identity = (item) => ({
+    repo_key: item.key,
+    repo_kind: item.repo_kind,
+    organization: item.organization ?? null,
+    module: item.module ?? null,
+    path: item.repo_path ?? item.absolute_path,
+  });
+  const runUpdate = async ({ rootPath, organizations = null, restrictedSlotPolicy = "defer" }) => runLazurioUpdate({
+    rootPath,
+    organizations,
+    restrictedSlotPolicy,
+    runtimeRoot: join(fixture.root, "..", "runtime"),
+    deps: {
+      acquireLock: async () => ({ release: async () => {} }),
+      updateRepo: async (item) => {
+        updated.push(item.key);
+        return { ...identity(item), state: "current", reason: "already_current", message: "current" };
+      },
+      materializeRepo: async ({ repo }) => {
+        materialized.push(repo.key);
+        gitCalls.push({ args: ["clone", repo.repo], cwd: repo.absolute_path });
+        if (repo.module === "mission-control") await ensureRepositoryDbParentCheckout(fixture);
+        else await initGitRepo(repo.absolute_path);
+        return { ok: true, outcome: "materialized", head: "a".repeat(40) };
+      },
+      discoverApps: async () => ({ apps: [], failures: [] }),
+    },
+  });
+  const deps = {
+    observe: async ({ role: requestedRole }) => ({
+      ...sourceObservation({ documents }),
+      ...(requestedRole ? { access: roleReadiness(requestedRole) } : {}),
+    }),
+    reobserve: async () => ({ ok: true }),
+    runGit: spy(translatedGitRunner(fixture.remote, remoteMap)),
+    runPinnedChild: spy(translatedPinnedGitRunner(fixture.remote, remoteMap)),
+    runUpdate,
+  };
+  return { ...fixture, organizationRoot, deps, runUpdate, gitCalls, materialized, updated, role };
+}
+
+function expectNoProviderOperation(fixture, slotPath) {
+  const slotRoot = join(fixture.organizationRoot, slotPath);
+  const offending = fixture.gitCalls.filter((call) => (
+    (typeof call.cwd === "string" && (call.cwd === slotRoot || call.cwd.startsWith(`${slotRoot}/`)))
+    || call.args.some((arg) => typeof arg === "string" && arg.includes(`/${slotPath}.git`))
+  ));
+  expect(offending).toEqual([]);
+}
 
 function sourceObservation({ documents = scaffoldDocuments() } = {}) {
   return {

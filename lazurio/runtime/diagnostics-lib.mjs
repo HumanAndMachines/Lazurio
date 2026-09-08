@@ -36,6 +36,7 @@ import {
   isCanonicalOrganizationRepositorySlotPath,
   isOrganizationRootSlotDescendantPath,
   isOrganizationRootSlotPath,
+  classifyOrganizationSlotAccess,
   isOrganizationSlotContainerPath,
   normalizeOrganizationSlotPath,
   organizationRepositorySlotCollectionIssues,
@@ -2040,6 +2041,10 @@ function projectDiagnosticMessages(messages = [], hiddenPaths = []) {
 // prostor. Dokud Doctor nemá autoritativní principal-scoped ACL důkaz, je
 // role-based chybějící checkout fail-closed. UI umí přijmout kanonicky
 // doloženou neutral severity, ale lokální odhad z GitHub tokenu ji nevyrábí.
+// Deklarovaný restricted (Admin-only) slot je výjimka: běžný update ho záměrně
+// automaticky nematerializuje, takže jeho absence je advisory stav s návodem
+// na explicitní Admin install, ne required failure. Malformed deklarace
+// zůstává fail-closed, aby neschovala skutečně chybějící povinnou aplikaci.
 function classifyModuleSlotReadiness(
   slot,
   status,
@@ -2068,6 +2073,14 @@ function classifyModuleSlotReadiness(
         message: "Checkout není deklarovaný pro aktivní Team tohoto Hosted Workspace.",
       };
     }
+    const classification = classifyOrganizationSlotAccess(slot);
+    if (classification === "unknown") {
+      return {
+        severity: "blocking",
+        reason: "access_classification_unknown",
+        message: "Slot deklaruje neznámý default_access nebo malformed required_roles; Lazurio ho fail-safe nematerializuje. Oprav deklaraci v Organization manifestu.",
+      };
+    }
     const accessRestricted = ["role_based", "restricted", "private"].includes(slot.default_access);
     const requiredRoles = Array.isArray(slot.required_roles) ? slot.required_roles : [];
     const hasPrincipalRoleEvidence = Array.isArray(principalRoles);
@@ -2078,6 +2091,13 @@ function classifyModuleSlotReadiness(
         severity: "neutral",
         reason: "role_not_entitled",
         message: "Checkout podle lokálně deklarovaných rolí tohoto Principála není očekávaný.",
+      };
+    }
+    if (classification === "restricted") {
+      return {
+        severity: "neutral",
+        reason: "restricted_not_materialized",
+        message: "Restricted slot není namountovaný a běžný update ho záměrně automaticky neklonuje. Materializaci provede jen explicitní Admin `lazurio organization install <login>` bez --role.",
       };
     }
     return {

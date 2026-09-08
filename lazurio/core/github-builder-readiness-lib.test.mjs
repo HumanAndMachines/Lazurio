@@ -2,7 +2,10 @@ import { expect, test } from "bun:test";
 
 import {
   GITHUB_TEAM_FORGE_BINDING_SCHEMA,
-  observeGitHubBuilderReadiness,
+  ORGANIZATION_INSTALL_ROLES,
+  githubRoleReadinessUnavailable,
+  isValidGitHubRoleReadiness,
+  observeGitHubRoleReadiness,
 } from "./github-builder-readiness-lib.mjs";
 
 const organization = Object.freeze({ id: "314957563", login: "ExampleOrganization" });
@@ -14,7 +17,8 @@ const account = Object.freeze({ id: 51515151, login: "builder-account" });
 
 test("Builder readiness distinguishes active Organization membership from missing Team membership", () => {
   const provider = providerFixture({ teamMembership: "missing", permission: "write" });
-  const report = observeGitHubBuilderReadiness({
+  const report = observeGitHubRoleReadiness({
+    role: "builder",
     provider,
     organization,
     rootRepository,
@@ -36,7 +40,8 @@ test("Builder readiness distinguishes active Organization membership from missin
 });
 
 test("Builder readiness rejects READ even when Team membership is active", () => {
-  const report = observeGitHubBuilderReadiness({
+  const report = observeGitHubRoleReadiness({
+    role: "builder",
     provider: providerFixture({ teamMembership: "active", permission: "read" }),
     organization,
     rootRepository,
@@ -51,7 +56,8 @@ test("Builder readiness rejects READ even when Team membership is active", () =>
 
 test("Builder readiness accepts Team and effective WRITE on active Builder repositories only", () => {
   const calls = [];
-  const report = observeGitHubBuilderReadiness({
+  const report = observeGitHubRoleReadiness({
+    role: "builder",
     provider: providerFixture({ teamMembership: "active", permission: "write", calls }),
     organization,
     rootRepository,
@@ -76,7 +82,8 @@ test("Builder readiness fails closed when an internal Team lacks immutable GitHu
   const calls = [];
   const resource = resourceFixture();
   delete resource.teams[0].forge_binding;
-  const report = observeGitHubBuilderReadiness({
+  const report = observeGitHubRoleReadiness({
+    role: "builder",
     provider: providerFixture({ teamMembership: "active", permission: "write", calls }),
     organization,
     rootRepository,
@@ -92,7 +99,8 @@ test("Builder readiness fails closed when an internal Team lacks immutable GitHu
 });
 
 test("Builder readiness reports a Team provider failure without inventing an identity mismatch", () => {
-  const report = observeGitHubBuilderReadiness({
+  const report = observeGitHubRoleReadiness({
+    role: "builder",
     provider: providerFixture({
       teamMembership: "active",
       permission: "write",
@@ -117,7 +125,8 @@ test("Builder readiness reports a Team provider failure without inventing an ide
 });
 
 test("Builder readiness keeps verified Team identity mismatch distinct from provider failure", () => {
-  const report = observeGitHubBuilderReadiness({
+  const report = observeGitHubRoleReadiness({
+    role: "builder",
     provider: providerFixture({
       teamMembership: "active",
       permission: "write",
@@ -140,13 +149,15 @@ test("Builder readiness keeps verified Team identity mismatch distinct from prov
 });
 
 test("Builder readiness distinguishes missing Team membership from an unavailable observation", () => {
-  const missing = observeGitHubBuilderReadiness({
+  const missing = observeGitHubRoleReadiness({
+    role: "builder",
     provider: providerFixture({ teamMembership: "missing", permission: "write" }),
     organization,
     rootRepository,
     resource: resourceFixture(),
   });
-  const unavailable = observeGitHubBuilderReadiness({
+  const unavailable = observeGitHubRoleReadiness({
+    role: "builder",
     provider: providerFixture({
       teamMembership: "active",
       permission: "write",
@@ -165,7 +176,8 @@ test("Builder readiness distinguishes missing Team membership from an unavailabl
 });
 
 test("Builder readiness reports unavailable Organization membership without inventing a missing membership", () => {
-  const report = observeGitHubBuilderReadiness({
+  const report = observeGitHubRoleReadiness({
+    role: "builder",
     provider: providerFixture({
       teamMembership: "active",
       permission: "write",
@@ -182,7 +194,8 @@ test("Builder readiness reports unavailable Organization membership without inve
 });
 
 test("Builder readiness distinguishes repository and Team grant provider failures from missing WRITE", () => {
-  const repositoryUnavailable = observeGitHubBuilderReadiness({
+  const repositoryUnavailable = observeGitHubRoleReadiness({
+    role: "builder",
     provider: providerFixture({
       teamMembership: "active",
       permission: "write",
@@ -192,7 +205,8 @@ test("Builder readiness distinguishes repository and Team grant provider failure
     rootRepository,
     resource: resourceFixture(),
   });
-  const grantsUnavailable = observeGitHubBuilderReadiness({
+  const grantsUnavailable = observeGitHubRoleReadiness({
+    role: "builder",
     provider: providerFixture({
       teamMembership: "active",
       permission: "write",
@@ -214,7 +228,8 @@ test("Builder readiness distinguishes repository and Team grant provider failure
   expect(grantsUnavailable.blockers.some((item) => item.reason === "team_repository_write_missing")).toBe(false);
   expect(grantsUnavailable.blockers.some((item) => item.reason === "provider_observation_failed")).toBe(true);
 
-  const grantMissing = observeGitHubBuilderReadiness({
+  const grantMissing = observeGitHubRoleReadiness({
+    role: "builder",
     provider: providerFixture({
       teamMembership: "active",
       permission: "write",
@@ -280,10 +295,12 @@ function providerFixture({
   failures = {},
   teamId = 61616161,
   missingTeamRepository = null,
+  extraRepositories = {},
 }) {
   const repositories = new Map([
     [rootRepository.full_name, { id: Number(rootRepository.id), name: "ExampleOrganization_GEN3" }],
     ["ExampleOrganization/knowledgebase", { id: 71717171, name: "knowledgebase" }],
+    ...Object.entries(extraRepositories),
   ]);
   return {
     json(args) {
@@ -351,3 +368,71 @@ function ok(value) {
 function failed(httpStatus) {
   return { ok: false, httpStatus, value: null };
 }
+
+test("Steward readiness reuses the Builder gate over Steward-scoped ordinary repositories and never reads restricted slots", () => {
+  const calls = [];
+  const resource = resourceFixture();
+  resource.repository_inventory.push({
+    path: "workspace/steward-desk",
+    slug: "steward-desk",
+    status: "active",
+    default_access: "role_based",
+    required_roles: ["steward"],
+    teams: ["workspace"],
+    git: { url: "git@github.com:ExampleOrganization/steward-desk.git", branch: "main" },
+  });
+  const report = observeGitHubRoleReadiness({
+    role: "steward",
+    provider: providerFixture({
+      teamMembership: "active",
+      permission: "write",
+      calls,
+      extraRepositories: { "ExampleOrganization/steward-desk": { id: 81818181, name: "steward-desk" } },
+    }),
+    organization,
+    rootRepository,
+    resource,
+  });
+
+  expect(ORGANIZATION_INSTALL_ROLES).toEqual(["builder", "steward"]);
+  expect(report.role).toBe("steward");
+  expect(report.status).toBe("ready");
+  expect(report.repositories.map((repository) => repository.full_name)).toEqual([
+    "ExampleOrganization/ExampleOrganization_GEN3",
+    "ExampleOrganization/knowledgebase",
+    "ExampleOrganization/steward-desk",
+  ]);
+  expect(calls.some((endpoint) => endpoint.includes("/infra"))).toBe(false);
+  expect(calls.some((endpoint) => endpoint.includes("/admin-only"))).toBe(false);
+  expect(isValidGitHubRoleReadiness(report)).toBe(true);
+  expect(isValidGitHubRoleReadiness({ ...report, role: "admin" })).toBe(false);
+  expect(githubRoleReadinessUnavailable("steward", "github_auth_required", "login")).toMatchObject({
+    role: "steward",
+    status: "blocked",
+    blockers: [{ reason: "github_auth_required" }],
+  });
+  expect(() => observeGitHubRoleReadiness({ role: "admin", provider: providerFixture({ teamMembership: "active", permission: "write" }), organization, rootRepository, resource })).toThrow(/builder, steward/);
+});
+
+test("role readiness never reads a repository whose access declaration is malformed", () => {
+  const calls = [];
+  const resource = resourceFixture();
+  resource.repository_inventory.push({
+    path: "workspace/typo",
+    slug: "typo",
+    status: "active",
+    default_access: "Expected",
+    required_roles: ["*"],
+    teams: ["workspace"],
+    git: { url: "git@github.com:ExampleOrganization/typo.git", branch: "main" },
+  });
+  const report = observeGitHubRoleReadiness({
+    role: "builder",
+    provider: providerFixture({ teamMembership: "active", permission: "write", calls }),
+    organization,
+    rootRepository,
+    resource,
+  });
+  expect(report.status).toBe("ready");
+  expect(calls.some((endpoint) => endpoint.includes("/typo"))).toBe(false);
+});

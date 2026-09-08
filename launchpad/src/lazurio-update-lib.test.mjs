@@ -1488,6 +1488,258 @@ test("explicit root-repository materialization is scoped, atomic and access-awar
   expect(JSON.stringify(report)).not.toContain(database.key);
 });
 
+test("generic update never auto-materializes an absent restricted slot but still updates a mounted one", async () => {
+  const root = await mkdtemp(join(tmpdir(), "lazurio-update-restricted-defer-"));
+  cleanup.push(root);
+  const organization = repo("Example::root", "organization_root", "Example", "root");
+  organization.absolute_path = join(root, "organizations", "Example_GEN3");
+  await mkdir(organization.absolute_path, { recursive: true });
+
+  const infra = repo("Example::infra", "root_repo", "Example", "infra");
+  infra.absolute_path = join(organization.absolute_path, "infra");
+  infra.slot_path = "infra";
+  infra.materialization = "doctor_managed_nested_repo";
+  infra.default_access = "restricted";
+  infra.required_roles = ["organization-admin"];
+
+  const mountedRestricted = repo("Example::finance", "module", "Example", "finance", "workspace");
+  mountedRestricted.absolute_path = join(organization.absolute_path, "workspace", "finance");
+  mountedRestricted.slot_path = "workspace/finance";
+  mountedRestricted.default_access = "restricted";
+  mountedRestricted.required_roles = ["organization-admin"];
+  await mkdir(mountedRestricted.absolute_path, { recursive: true });
+
+  const missionControl = repo("Example::mission-control", "root_repo", "Example", "mission-control");
+  missionControl.absolute_path = join(organization.absolute_path, "mission-control");
+  missionControl.slot_path = "mission-control";
+  missionControl.materialization = "doctor_managed_nested_repo";
+  missionControl.default_access = "expected";
+  missionControl.required_roles = ["organization-admin"];
+
+  const everyone = repo("Example::everyone", "module", "Example", "everyone", "workspace");
+  everyone.absolute_path = join(organization.absolute_path, "workspace", "everyone");
+  everyone.slot_path = "workspace/everyone";
+  everyone.default_access = "role_based";
+  everyone.required_roles = ["*"];
+
+  const roleBased = repo("Example::sales", "module", "Example", "sales", "workspace");
+  roleBased.absolute_path = join(organization.absolute_path, "workspace", "sales");
+  roleBased.slot_path = "workspace/sales";
+  roleBased.default_access = "role_based";
+  roleBased.required_roles = ["sales"];
+
+  const undeclared = repo("Example::wiki", "module", "Example", "wiki", "workspace");
+  undeclared.absolute_path = join(organization.absolute_path, "workspace", "wiki");
+  undeclared.slot_path = "workspace/wiki";
+
+  const materialized = [];
+  const updated = [];
+  const report = await runLazurioUpdate({
+    rootPath: root,
+    runtimeRoot: join(root, "..", "runtime"),
+    deps: {
+      runId: "restricted-defer",
+      acquireLock: async () => ({ release: async () => {} }),
+      buildInventory: async () => ({
+        repos: [organization, infra, mountedRestricted, missionControl, everyone, roleBased, undeclared],
+        warnings: [],
+      }),
+      updateRepo: async (item) => {
+        updated.push(item.key);
+        return { ...identity(item), state: "current", reason: "already_current", message: "current" };
+      },
+      materializeRepo: async ({ repo: item }) => {
+        materialized.push(item.key);
+        return { ok: true, outcome: "materialized", head: "a".repeat(40) };
+      },
+      discoverApps: async () => ({ apps: [], failures: [] }),
+    },
+  });
+
+  expect(report.state).toBe("updated");
+  expect(report.restricted_slot_policy).toBe("defer");
+  expect(materialized.sort()).toEqual([everyone.key, missionControl.key, roleBased.key, undeclared.key].sort());
+  expect(updated).toContain(mountedRestricted.key);
+  expect(report.results.find((result) => result.repo_key === infra.key)).toMatchObject({
+    state: "current",
+    reason: "restricted_not_materialized",
+    materialization_scope: "restricted_deferred",
+  });
+  expect(report.results.find((result) => result.repo_key === infra.key).message).toContain("lazurio organization install");
+  expect(report.results.find((result) => result.repo_key === mountedRestricted.key)).toMatchObject({
+    state: "current",
+    reason: "already_current",
+  });
+});
+
+test("restricted slot policy decides between Admin opt-in and role-scoped exclusion without touching ordinary slots", async () => {
+  const scenarios = [
+    { policy: "include", expectMaterialized: true, reason: "organization_repository_materialized" },
+    { policy: "exclude", expectMaterialized: false, reason: "excluded_by_role_scope" },
+  ];
+  for (const scenario of scenarios) {
+    const root = await mkdtemp(join(tmpdir(), `lazurio-update-restricted-${scenario.policy}-`));
+    cleanup.push(root);
+    const organization = repo("Example::root", "organization_root", "Example", "root");
+    organization.absolute_path = join(root, "organizations", "Example_GEN3");
+    await mkdir(organization.absolute_path, { recursive: true });
+    const infra = repo("Example::infra", "root_repo", "Example", "infra");
+    infra.absolute_path = join(organization.absolute_path, "infra");
+    infra.slot_path = "infra";
+    infra.materialization = "doctor_managed_nested_repo";
+    infra.default_access = "restricted";
+    infra.required_roles = ["organization-admin"];
+    const ordinary = repo("Example::design-system", "root_repo", "Example", "design-system");
+    ordinary.absolute_path = join(organization.absolute_path, "design-system");
+    ordinary.slot_path = "design-system";
+    ordinary.materialization = "doctor_managed_nested_repo";
+    ordinary.default_access = "expected";
+    ordinary.required_roles = ["*"];
+    const materialized = [];
+
+    const report = await runLazurioUpdate({
+      rootPath: root,
+      runtimeRoot: join(root, "..", "runtime"),
+      restrictedSlotPolicy: scenario.policy,
+      deps: {
+        runId: `restricted-${scenario.policy}`,
+        acquireLock: async () => ({ release: async () => {} }),
+        buildInventory: async () => ({ repos: [organization, infra, ordinary], warnings: [] }),
+        updateRepo: async (item) => ({ ...identity(item), state: "current", reason: "already_current", message: "current" }),
+        materializeRepo: async ({ repo: item }) => {
+          materialized.push(item.key);
+          return { ok: true, outcome: "materialized", head: "a".repeat(40) };
+        },
+        discoverApps: async () => ({ apps: [], failures: [] }),
+      },
+    });
+
+    expect(report.state).toBe("updated");
+    expect(report.restricted_slot_policy).toBe(scenario.policy);
+    expect(materialized).toContain(ordinary.key);
+    expect(materialized.includes(infra.key)).toBe(scenario.expectMaterialized);
+    expect(report.results.find((result) => result.repo_key === infra.key)).toMatchObject({
+      state: scenario.expectMaterialized ? "updated" : "current",
+      reason: scenario.reason,
+    });
+  }
+  await expect(runLazurioUpdate({ rootPath: "/working", restrictedSlotPolicy: "everything" })).rejects.toThrow(/restrictedSlotPolicy/);
+});
+
+test("unknown or malformed slot access classification blocks materialization fail-safe under every policy", async () => {
+  for (const policy of ["defer", "include", "exclude"]) {
+    const root = await mkdtemp(join(tmpdir(), "lazurio-update-unknown-access-"));
+    cleanup.push(root);
+    const organization = repo("Example::root", "organization_root", "Example", "root");
+    organization.absolute_path = join(root, "organizations", "Example_GEN3");
+    await mkdir(organization.absolute_path, { recursive: true });
+    const typo = repo("Example::infra", "root_repo", "Example", "infra");
+    typo.absolute_path = join(organization.absolute_path, "infra");
+    typo.slot_path = "infra";
+    typo.materialization = "doctor_managed_nested_repo";
+    typo.default_access = "Restricted";
+    const malformedRoles = repo("Example::finance", "module", "Example", "finance", "workspace");
+    malformedRoles.absolute_path = join(organization.absolute_path, "workspace", "finance");
+    malformedRoles.slot_path = "workspace/finance";
+    malformedRoles.default_access = "expected";
+    malformedRoles.required_roles = "organization-admin";
+    const materialized = [];
+
+    const report = await runLazurioUpdate({
+      rootPath: root,
+      runtimeRoot: join(root, "..", "runtime"),
+      restrictedSlotPolicy: policy,
+      deps: {
+        runId: `unknown-${policy}`,
+        acquireLock: async () => ({ release: async () => {} }),
+        buildInventory: async () => ({ repos: [organization, typo, malformedRoles], warnings: [] }),
+        updateRepo: async (item) => ({ ...identity(item), state: "current", reason: "already_current", message: "current" }),
+        materializeRepo: async ({ repo: item }) => {
+          materialized.push(item.key);
+          return { ok: true, outcome: "materialized", head: "a".repeat(40) };
+        },
+        discoverApps: async () => ({ apps: [], failures: [] }),
+      },
+    });
+
+    expect(materialized).toEqual([]);
+    expect(report.state).toBe("blocked");
+    for (const key of [typo.key, malformedRoles.key]) {
+      expect(report.results.find((result) => result.repo_key === key)).toMatchObject({
+        state: "blocked",
+        reason: "access_classification_unknown",
+        next_action: { kind: "codex" },
+      });
+    }
+  }
+});
+
+test("a manifest reclassified between Sync runs is honored on the refreshed inventory without cloning over a mounted checkout", async () => {
+  const root = await mkdtemp(join(tmpdir(), "lazurio-update-reclassified-"));
+  cleanup.push(root);
+  const organization = repo("Example::root", "organization_root", "Example", "root");
+  organization.absolute_path = join(root, "organizations", "Example_GEN3");
+  await mkdir(organization.absolute_path, { recursive: true });
+  const slot = () => {
+    const item = repo("Example::infra", "root_repo", "Example", "infra");
+    item.absolute_path = join(organization.absolute_path, "infra");
+    item.slot_path = "infra";
+    item.materialization = "doctor_managed_nested_repo";
+    item.required_roles = ["organization-admin"];
+    return item;
+  };
+  const accessSequence = ["restricted", "expected", "restricted"];
+  let inventoryReads = 0;
+  const materialized = [];
+  const updated = [];
+  const run = async (runId) => runLazurioUpdate({
+    rootPath: root,
+    runtimeRoot: join(root, "..", "runtime"),
+    deps: {
+      runId,
+      acquireLock: async () => ({ release: async () => {} }),
+      buildInventory: async () => {
+        // The reconciler reads the manifest before and after the Organization
+        // root update; both reads of one run observe the same declaration.
+        const access = accessSequence[Math.min(Math.floor(inventoryReads / 2), accessSequence.length - 1)];
+        inventoryReads += 1;
+        const infra = slot();
+        infra.default_access = access;
+        return { repos: [organization, infra], warnings: [] };
+      },
+      updateRepo: async (item) => {
+        updated.push(item.key);
+        return { ...identity(item), state: "current", reason: "already_current", message: "current" };
+      },
+      materializeRepo: async ({ repo: item }) => {
+        materialized.push(item.key);
+        await mkdir(item.absolute_path, { recursive: true });
+        return { ok: true, outcome: "materialized", head: "a".repeat(40) };
+      },
+      discoverApps: async () => ({ apps: [], failures: [] }),
+    },
+  });
+
+  const first = await run("reclassified-1");
+  expect(first.results.find((result) => result.repo_key === "Example::infra")).toMatchObject({
+    reason: "restricted_not_materialized",
+  });
+  expect(materialized).toEqual([]);
+
+  const second = await run("reclassified-2");
+  expect(second.results.find((result) => result.repo_key === "Example::infra")).toMatchObject({
+    reason: "organization_repository_materialized",
+  });
+  expect(materialized).toEqual(["Example::infra"]);
+
+  const third = await run("reclassified-3");
+  expect(updated).toContain("Example::infra");
+  expect(third.results.find((result) => result.repo_key === "Example::infra")).toMatchObject({
+    reason: "already_current",
+  });
+  expect(materialized).toEqual(["Example::infra"]);
+});
+
 test("updated Module refreshes each manifest-declared app package once through the Server lifecycle seam", async () => {
   const root = await mkdtemp(join(tmpdir(), "lazurio-update-app-dependencies-"));
   cleanup.push(root);

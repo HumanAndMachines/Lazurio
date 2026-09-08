@@ -17,7 +17,10 @@ import {
   normalizeOrganizationDocumentJson,
   readOrganizationRoot,
 } from "../core/organization-root-reader-lib.mjs";
-import { githubRepositoryCoordinate } from "../core/organization-slot-scope-lib.mjs";
+import {
+  classifyOrganizationSlotAccess,
+  githubRepositoryCoordinate,
+} from "../core/organization-slot-scope-lib.mjs";
 import {
   GIT_FETCH_TIMEOUT_MS,
   GIT_LOCAL_TIMEOUT_MS,
@@ -26,6 +29,15 @@ import {
 } from "./git-lib.mjs";
 
 export const LAZURIO_UPDATE_STATES = Object.freeze(["current", "updated", "blocked"]);
+// Jak Sync zachází s absentním slotem deklarovaným jako restricted (Admin-only):
+// - `defer`: běžný `lazurio update`; slot zůstane nematerializovaný a report ho
+//   pravdivě uvede jako `restricted_not_materialized`;
+// - `include`: explicitní Admin `lazurio organization install` bez role; slot
+//   se materializuje stejně jako běžné sloty;
+// - `exclude`: role-scoped install; slot i jeho descendants skončí jako
+//   `excluded_by_role_scope` bez jediné provider operace.
+// Už namountované restricted checkouty se aktualizují při každé politice.
+export const RESTRICTED_SLOT_POLICIES = Object.freeze(["defer", "include", "exclude"]);
 
 const BLOCKING_RELATIONS = new Set(["ahead", "diverged", "unknown"]);
 const BLOCKING_OPERATIONS = new Set(["merge", "rebase", "am", "cherry_pick", "revert"]);
@@ -94,9 +106,13 @@ export async function runLazurioUpdate({
   rootPath,
   runtimeRoot = resolve(import.meta.dirname, "..", ".."),
   organizations = null,
+  restrictedSlotPolicy = "defer",
   deps = {},
 } = {}) {
   if (!rootPath) throw new Error("runLazurioUpdate requires rootPath");
+  if (!RESTRICTED_SLOT_POLICIES.includes(restrictedSlotPolicy)) {
+    throw new Error(`runLazurioUpdate restrictedSlotPolicy must be one of ${RESTRICTED_SLOT_POLICIES.join(", ")}`);
+  }
   const absoluteRoot = resolve(rootPath);
   const now = deps.now ?? (() => new Date());
   const runId = deps.runId ?? randomUUID();
@@ -118,13 +134,13 @@ export async function runLazurioUpdate({
       codex: false,
       nextAction: "retry",
     });
-    return updateReport({ rootPath: absoluteRoot, runId, now, results: [result], warnings: [] });
+    return updateReport({ rootPath: absoluteRoot, runId, now, results: [result], warnings: [], restrictedSlotPolicy });
   }
 
   try {
     lock = await acquireLock({ rootPath: absoluteRoot, runId, now });
   } catch (error) {
-    return lockedReport({ rootPath: absoluteRoot, runId, now, error });
+    return lockedReport({ rootPath: absoluteRoot, runId, now, error, restrictedSlotPolicy });
   }
 
   const results = [];
@@ -149,7 +165,7 @@ export async function runLazurioUpdate({
       results.push(blockedResult(inventoryDescriptor(absoluteRoot), "inventory_unavailable", {
         detail: "Lazurio nedokázalo bezpečně určit Organizace a jejich spravované repozitáře; žádný další checkout nezměnilo.",
       }));
-      return updateReport({ rootPath: absoluteRoot, runId, now, results, warnings });
+      return updateReport({ rootPath: absoluteRoot, runId, now, results, warnings, restrictedSlotPolicy });
     }
     finalInventory = initialInventory;
     const organizationRoots = managedOrganizationRoots(initialInventory);
@@ -162,6 +178,7 @@ export async function runLazurioUpdate({
         now,
         results,
         warnings: inventoryReportWarnings(initialInventory, warnings),
+        restrictedSlotPolicy,
       });
     }
 
@@ -220,6 +237,16 @@ export async function runLazurioUpdate({
         }
         if (childPresence.state === "absent") {
           if (!isAutoMaterializationCandidate(childRepo)) continue;
+          const scoped = await restrictedSlotMaterializationResult({
+            repo: childRepo,
+            siblings: children,
+            restrictedSlotPolicy,
+            lstatPath: deps.lstatPath ?? lstat,
+          });
+          if (scoped) {
+            results.push(scoped);
+            continue;
+          }
           if (childRepo.repo_kind === "module") {
             const transitionBlocker = await moduleCheckoutTransitionBlocker({
               initialInventory,
@@ -290,6 +317,7 @@ export async function runLazurioUpdate({
       now,
       results,
       warnings: inventoryReportWarnings(finalInventory, warnings),
+      restrictedSlotPolicy,
     });
   } finally {
     await lock.release().catch(() => {});
@@ -1758,6 +1786,64 @@ function isAutoMaterializationCandidate(repo) {
     && repo.materialization === DOCTOR_MANAGED_NESTED_REPO;
 }
 
+// Absentní kandidát dostane výsledek bez provider operace, pokud jeho vlastní
+// deklarace (nebo deklarace absentního nadřazeného slotu) není běžná. Vrací
+// null, když se má slot materializovat běžnou cestou. Klasifikace čte jen
+// `default_access`/`required_roles`; název ani cesta slotu nerozhodují.
+async function restrictedSlotMaterializationResult({
+  repo,
+  siblings,
+  restrictedSlotPolicy,
+  lstatPath = lstat,
+}) {
+  const classification = classifyOrganizationSlotAccess(repo);
+  if (classification === "unknown") {
+    return blockedResult(repo, "access_classification_unknown", {
+      detail: "Slot deklaruje neznámý default_access nebo malformed required_roles; Lazurio ho fail-safe nematerializuje a nic na GitHubu nečte. Oprav deklaraci v Organization manifestu.",
+    });
+  }
+  let restrictedBy = classification === "restricted" ? repo : null;
+  if (!restrictedBy) {
+    for (const candidate of siblings) {
+      if (candidate === repo || !isSlotDescendantPath(repo.slot_path, candidate.slot_path)) continue;
+      const ancestorClassification = classifyOrganizationSlotAccess(candidate);
+      if (ancestorClassification === "ordinary") continue;
+      const presence = await inspectPathPresence(candidate.absolute_path, lstatPath);
+      if (presence.state === "present") continue;
+      if (ancestorClassification === "unknown") {
+        return blockedResult(repo, "access_classification_unknown", {
+          detail: `Nadřazený slot ${candidate.slot_path} deklaruje neznámý default_access nebo malformed required_roles; Lazurio potomka fail-safe nematerializuje a nic na GitHubu nečte.`,
+        });
+      }
+      restrictedBy = candidate;
+      break;
+    }
+  }
+  if (!restrictedBy || restrictedSlotPolicy === "include") return null;
+  const ancestorNote = restrictedBy === repo ? "" : ` (nadřazený restricted slot ${restrictedBy.slot_path})`;
+  if (restrictedSlotPolicy === "exclude") {
+    return currentResult(
+      repo,
+      "excluded_by_role_scope",
+      `Restricted slot${ancestorNote} je záměrně mimo scope role-scoped Organization instalace; žádná GitHub operace nad ním neproběhla. Materializaci provede jen explicitní Admin \`lazurio organization install <login>\` bez --role.`,
+      { materialization_scope: "excluded_by_role_scope" },
+    );
+  }
+  return currentResult(
+    repo,
+    "restricted_not_materialized",
+    `Restricted slot${ancestorNote} není namountovaný a běžný update ho záměrně automaticky neklonuje. Materializaci provede jen explicitní Admin \`lazurio organization install <login>\` bez --role.`,
+    { materialization_scope: "restricted_deferred" },
+  );
+}
+
+function isSlotDescendantPath(path, ancestorPath) {
+  return typeof path === "string"
+    && typeof ancestorPath === "string"
+    && ancestorPath !== ""
+    && path.startsWith(`${ancestorPath}/`);
+}
+
 function deferredHierarchyResults(inventory, parentKey) {
   return (inventory.repos ?? [])
     .filter((repo) => repo.repo_kind === "organization_root" || isManagedOrganizationChild(repo))
@@ -1802,7 +1888,7 @@ function inventoryDescriptor(rootPath, organization = null) {
   };
 }
 
-function updateReport({ rootPath, runId, now, results, warnings }) {
+function updateReport({ rootPath, runId, now, results, warnings, restrictedSlotPolicy = "defer" }) {
   const state = results.some((result) => result.state === "blocked")
     ? "blocked"
     : results.some((result) => result.state === "updated")
@@ -1816,6 +1902,7 @@ function updateReport({ rootPath, runId, now, results, warnings }) {
     run_id: runId,
     generated_at: now().toISOString(),
     root: rootPath,
+    restricted_slot_policy: restrictedSlotPolicy,
     message: state === "blocked"
       ? firstBlocked?.message ?? "Část Lazurio update potřebuje pomoc."
       : state === "updated"
@@ -1832,13 +1919,13 @@ function updateReport({ rootPath, runId, now, results, warnings }) {
   };
 }
 
-function lockedReport({ rootPath, runId, now, error }) {
+function lockedReport({ rootPath, runId, now, error, restrictedSlotPolicy = "defer" }) {
   const result = blockedResult(rootDescriptor(rootPath), "update_locked", {
     detail: error?.message ?? "Jiný Lazurio update právě běží.",
     codex: false,
     nextAction: "retry",
   });
-  return updateReport({ rootPath, runId, now, results: [result], warnings: [] });
+  return updateReport({ rootPath, runId, now, results: [result], warnings: [], restrictedSlotPolicy });
 }
 
 function currentResult(repo, reason, message, extra = {}) {

@@ -11,16 +11,18 @@ import {
   runTrustedGitHubCliSync,
 } from "./core/github-provider-lib.mjs";
 import {
-  githubBuilderReadinessNotRequested,
-  githubBuilderReadinessUnavailable,
-  isValidGitHubBuilderReadiness,
-  observeGitHubBuilderReadiness,
+  ORGANIZATION_INSTALL_ROLES,
+  githubRoleReadinessNotRequested,
+  githubRoleReadinessUnavailable,
+  isValidGitHubRoleReadiness,
+  observeGitHubRoleReadiness,
 } from "./core/github-builder-readiness-lib.mjs";
 import { resolveGitHubCliExecutableOnPath } from "./core/toolchain-lib.mjs";
 import { resolveOrganizationRootDocuments } from "./core/organization-activation-lib.mjs";
 import { readOrganizationRoot } from "./core/organization-root-reader-lib.mjs";
 import { isValidOrganizationForgeBinding } from "./core/organization-scaffold-lib.mjs";
 import {
+  classifyOrganizationSlotAccess,
   githubRepositoryCoordinate,
   normalizeOrganizationSlotPath,
   organizationSlotRepositoryBranch,
@@ -37,6 +39,7 @@ import {
 
 export const ORGANIZATION_INSTALL_REPORT_SCHEMA = "lazurio.organization.install.v0";
 export const ORGANIZATION_INSTALL_STATES = Object.freeze(["current", "updated", "blocked"]);
+export const ORGANIZATION_INSTALL_RESTRICTED_SLOT_SCOPES = Object.freeze(["include", "exclude"]);
 
 const githubLoginPattern = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/u;
 
@@ -52,6 +55,11 @@ export async function installOrganization({
   if (!rootPath) throw new TypeError("Organization install requires a Lazurio Root.");
   const locator = normalizeGitHubLogin(githubLogin);
   const requestedRole = normalizeOptionalInstallRole(role);
+  // Explicitní Admin instalace (bez --role) je jediný opt-in pro absentní
+  // restricted sloty. Role-scoped instalace je vyloučí bez provider operace;
+  // běžný `lazurio update` je vždy jen odloží (`defer`).
+  const restrictedSlotPolicy = installRestrictedSlotPolicy(requestedRole);
+  const scope = freeze({ role: requestedRole, restricted_slots: restrictedSlotPolicy });
   const expectedId = normalizeOptionalOrganizationId(expectedOrganizationId);
   const absoluteRoot = resolve(rootPath);
   const observe = deps.observe ?? observeOrganizationInstallSource;
@@ -67,6 +75,7 @@ export async function installOrganization({
       rootPath: absoluteRoot,
       locator,
       role: requestedRole,
+      scope,
       root: rootOutcome("blocked", localRoot.code, `organizations/${locator}_GEN3`, localRoot.message),
     });
   }
@@ -80,17 +89,18 @@ export async function installOrganization({
     resolveGitHubCli: deps.resolveGitHubCli,
     runGitHubCli: deps.runGitHubCli,
   });
-  if (!source.ok) return blockedReport({ rootPath: absoluteRoot, locator, role: requestedRole, source });
-  if (requestedRole === "builder" && source.access?.status !== "ready") {
+  if (!source.ok) return blockedReport({ rootPath: absoluteRoot, locator, role: requestedRole, scope, source });
+  if (requestedRole !== null && source.access?.status !== "ready") {
     return blockedReport({
       rootPath: absoluteRoot,
       locator,
       role: requestedRole,
+      scope,
       source: {
         ...source,
         ok: false,
-        code: "builder_access_not_ready",
-        message: "GitHub účet nesplňuje deklarovaný Builder access kontrakt.",
+        code: roleAccessNotReadyCode(requestedRole),
+        message: roleAccessNotReadyMessage(requestedRole),
       },
     });
   }
@@ -99,6 +109,7 @@ export async function installOrganization({
       rootPath: absoluteRoot,
       locator,
       role: requestedRole,
+      scope,
       source,
       root: rootOutcome(
         "blocked",
@@ -122,6 +133,7 @@ export async function installOrganization({
       rootPath: absoluteRoot,
       locator,
       role: requestedRole,
+      scope,
       source,
       root: rootOutcome(
         "blocked",
@@ -139,6 +151,8 @@ export async function installOrganization({
         rootPath: absoluteRoot,
         locator,
         role: requestedRole,
+        scope,
+      scope,
         source,
         root: rootOutcome("blocked", "root_target_unsafe", organizationPath),
       });
@@ -153,6 +167,8 @@ export async function installOrganization({
         rootPath: absoluteRoot,
         locator,
         role: requestedRole,
+        scope,
+      scope,
         source,
         root: rootOutcome("blocked", verification.code, organizationPath, verification.message),
       });
@@ -169,6 +185,8 @@ export async function installOrganization({
         rootPath: absoluteRoot,
         locator,
         role: requestedRole,
+        scope,
+      scope,
         source,
         root: rootOutcome("blocked", identity.code, organizationPath, identity.message),
       });
@@ -203,6 +221,8 @@ export async function installOrganization({
         locator,
         source,
         role: requestedRole,
+        scope,
+      scope,
         root: rootOutcome(
           "blocked",
           materialized.code ?? "root_materialization_failed",
@@ -215,15 +235,15 @@ export async function installOrganization({
   }
 
   const organization = organizationInventoryDescriptor({ source, organizationPath });
-  let convergence = await runUpdate({ rootPath: absoluteRoot, organizations: [organization] });
+  let convergence = await runUpdate({ rootPath: absoluteRoot, organizations: [organization], restrictedSlotPolicy });
   const blockers = (convergence.results ?? []).filter((result) => result.state === "blocked");
   if (convergence.state !== "blocked" || (blockers.length > 0 && blockers.every((result) => result.reason === "managed_checkout_not_repository"))) {
     const recovered = await recoverOrganizationRepositoryDbParent({
       rootPath: absoluteRoot, organizationPath, organizationRoot: targetPath,
-      source, platform, run, runPinnedChild, materializationDeps: deps.materialization,
+      source, platform, run, runPinnedChild, materializationDeps: deps.materialization, restrictedSlotPolicy,
     });
     if (recovered?.state === "updated") {
-      convergence = appendConvergenceResults(await runUpdate({ rootPath: absoluteRoot, organizations: [organization] }), [recovered]);
+      convergence = appendConvergenceResults(await runUpdate({ rootPath: absoluteRoot, organizations: [organization], restrictedSlotPolicy }), [recovered]);
     } else if (recovered) convergence = appendConvergenceResults(convergence, [recovered]);
   }
 
@@ -237,6 +257,7 @@ export async function installOrganization({
       run,
       runPinnedChild,
       materializationDeps: deps.materialization,
+      restrictedSlotPolicy,
     });
     convergence = appendConvergenceResults(convergence, repositoryDbResults);
   }
@@ -251,7 +272,8 @@ export async function installOrganization({
     ok: state !== "blocked",
     root: absoluteRoot,
     organization: organizationIdentity(source, locator),
-    access: source.access ?? githubBuilderReadinessNotRequested(),
+    access: source.access ?? githubRoleReadinessNotRequested(),
+    scope,
     target: rootResult,
     convergence,
   });
@@ -261,13 +283,23 @@ export async function installOrganization({
   return report;
 }
 
-async function recoverOrganizationRepositoryDbParent({ rootPath, organizationPath, organizationRoot, source, platform, run, runPinnedChild, materializationDeps }) {
+async function recoverOrganizationRepositoryDbParent({ rootPath, organizationPath, organizationRoot, source, platform, run, runPinnedChild, materializationDeps, restrictedSlotPolicy = "include" }) {
   const resolution = readOrganizationRoot({ organizationRoot });
   if (!["current", "legacy", "transition"].includes(resolution.state) || resolution.resource_count !== 1) return null;
   const inventory = resolution.resource?.repository_inventory ?? [];
   const slots = inventory.filter((slot) => slot.path === "mission-control/db" && slot.status === "active" && slot.materialization === "repository_db_mount");
   if (slots.length !== 1) return null;
   const slot = slots[0];
+  // Db-first recovery klonuje parent app-code. Nad restricted nebo malformed
+  // Mission Control hranicí ji role-scoped install nikdy nespustí; výsledek
+  // pravdivě vrátí repository-db krok níže.
+  if (repositoryDbScopeResult({
+    source,
+    organizationPath,
+    slot,
+    parentSlot: inventory.filter((candidate) => normalizeOrganizationSlotPath(candidate?.path) === "mission-control")[0] ?? null,
+    restrictedSlotPolicy,
+  })) return null;
   const parentPath = join(organizationRoot, "mission-control");
   const parent = await lstatOrNull(parentPath);
   if (!parent || await lstatOrNull(join(parentPath, ".git")) || !await lstatOrNull(join(parentPath, "db"))) return null;
@@ -325,7 +357,11 @@ export async function installOrganizationRepositoryDbMounts({
   run = runGit,
   runPinnedChild = runGitInPinnedTemporaryChild,
   materializationDeps = {},
+  restrictedSlotPolicy = "include",
 } = {}) {
+  if (!ORGANIZATION_INSTALL_RESTRICTED_SLOT_SCOPES.includes(restrictedSlotPolicy)) {
+    throw new TypeError("Repository-db install restrictedSlotPolicy must be include or exclude.");
+  }
   let resolution;
   try {
     resolution = readOrganizationRoot({ organizationRoot });
@@ -404,6 +440,14 @@ export async function installOrganizationRepositoryDbMounts({
       message: "Aktivní mission-control/db musí používat materialization: repository_db_mount.",
     })];
   }
+  const scoped = repositoryDbScopeResult({
+    source,
+    organizationPath,
+    slot,
+    parentSlot: missionControlSlots[0],
+    restrictedSlotPolicy,
+  });
+  if (scoped) return [scoped];
   return [await installOrganizationRepositoryDbMount({
     rootPath,
     organizationPath,
@@ -651,6 +695,37 @@ async function verifyExistingRepositoryDbCheckout({ targetPath, remote, branch, 
   return { ok: true, head: head.stdout };
 }
 
+// Datový mount dědí access scope svého parent app repozitáře: restricted nebo
+// malformed Mission Control hranice nesmí vyvolat žádnou provider operaci
+// (clone, fetch, ls-remote) při role-scoped instalaci. Admin instalace
+// (`include`) pokračuje běžnou cestou; malformed deklarace blokuje vždy.
+function repositoryDbScopeResult({ source, organizationPath, slot, parentSlot, restrictedSlotPolicy }) {
+  const classifications = [
+    [slot, slot?.path ?? "mission-control/db"],
+    [parentSlot, parentSlot?.path ?? "mission-control"],
+  ];
+  const unknown = classifications.find(([candidate]) => classifyOrganizationSlotAccess(candidate) === "unknown");
+  if (unknown) {
+    return repositoryDbBlockedResult({
+      source,
+      organizationPath,
+      slot,
+      reason: "access_classification_unknown",
+      message: `Slot ${unknown[1]} deklaruje neznámý default_access nebo malformed required_roles; Lazurio repository-db fail-safe nematerializuje.`,
+    });
+  }
+  if (restrictedSlotPolicy !== "exclude") return null;
+  const restricted = classifications.find(([candidate]) => classifyOrganizationSlotAccess(candidate) === "restricted");
+  if (!restricted) return null;
+  return {
+    ...repositoryDbResultIdentity({ source, organizationPath, slot }),
+    state: "current",
+    reason: "excluded_by_role_scope",
+    message: `Restricted slot ${restricted[1]} je záměrně mimo scope role-scoped Organization instalace; repository-db mount pod ním neproběhl a žádná GitHub operace se nespustila. Materializaci provede jen explicitní Admin \`lazurio organization install <login>\` bez --role.`,
+    materialization_scope: "excluded_by_role_scope",
+  };
+}
+
 function repositoryDbResultIdentity({ source, organizationPath, slot }) {
   const organization = source?.documents?.company?.company?.slug ?? source?.organization?.login ?? null;
   return {
@@ -756,19 +831,20 @@ export function observeOrganizationInstallSource({
   if (!documents.ok) return documents;
   const rootVerification = verifyOrganizationRootDocuments({ documents, organization, repository });
   if (!rootVerification.ok) return rootVerification;
-  const access = requestedRole === "builder"
-    ? observeGitHubBuilderReadiness({
+  const access = requestedRole !== null
+    ? observeGitHubRoleReadiness({
         provider,
         organization,
         rootRepository: repository,
         resource: rootVerification.resource,
+        role: requestedRole,
       })
-    : githubBuilderReadinessNotRequested();
+    : githubRoleReadinessNotRequested();
   if (access.status === "blocked") {
     return freeze({
       ok: false,
-      code: "builder_access_not_ready",
-      message: "GitHub účet nesplňuje deklarovaný Builder access kontrakt.",
+      code: roleAccessNotReadyCode(requestedRole),
+      message: roleAccessNotReadyMessage(requestedRole),
       organization,
       repository,
       documents,
@@ -866,7 +942,8 @@ export function isValidOrganizationInstallReport(report) {
     && typeof report.root === "string"
     && report.organization
     && typeof report.organization.locator === "string"
-    && isValidGitHubBuilderReadiness(report.access)
+    && isValidGitHubRoleReadiness(report.access)
+    && isValidInstallScope(report.scope, report.access)
     && report.target
     && ORGANIZATION_INSTALL_STATES.includes(report.target.state)
     && typeof report.target.reason === "string"
@@ -884,6 +961,7 @@ export function renderHumanOrganizationInstall(report) {
     `Lazurio Organization install: ${report.state}`,
     `Organization: ${report.organization.login ?? report.organization.locator}${report.organization.id ? ` · ID ${report.organization.id}` : ""}`,
     `Access: ${report.access.status}${report.access.role ? ` · role ${report.access.role}` : ""}`,
+    `Scope: ${report.scope.role ?? "admin (bez --role)"} · restricted sloty ${report.scope.restricted_slots === "include" ? "zahrnuté" : "vyloučené bez provider operace"}`,
     `Root: ${report.target.state} — ${report.target.reason} (${report.target.path})`,
   ];
   if (report.access.account) lines.push(`  GitHub account: ${report.access.account.login} · ID ${report.access.account.id}`);
@@ -1052,7 +1130,7 @@ function organizationIdentity(source, locator) {
   };
 }
 
-function blockedReport({ rootPath, locator, role = null, source = null, root = null }) {
+function blockedReport({ rootPath, locator, role = null, scope = null, source = null, root = null }) {
   const target = root ?? rootOutcome(
     "blocked",
     source?.code ?? "provider_observation_failed",
@@ -1065,12 +1143,36 @@ function blockedReport({ rootPath, locator, role = null, source = null, root = n
     ok: false,
     root: rootPath,
     organization: organizationIdentity(source, locator),
-    access: source?.access ?? (role === "builder"
-      ? githubBuilderReadinessUnavailable(source?.code, source?.message)
-      : githubBuilderReadinessNotRequested()),
+    access: source?.access ?? (role !== null
+      ? githubRoleReadinessUnavailable(role, source?.code, source?.message)
+      : githubRoleReadinessNotRequested()),
+    scope: scope ?? { role, restricted_slots: installRestrictedSlotPolicy(role) },
     target,
     convergence: null,
   });
+}
+
+function installRestrictedSlotPolicy(role) {
+  return role === null ? "include" : "exclude";
+}
+
+function isValidInstallScope(scope, access) {
+  return Boolean(
+    scope
+    && typeof scope === "object"
+    && (scope.role === null || ORGANIZATION_INSTALL_ROLES.includes(scope.role))
+    && scope.role === (access?.role ?? null)
+    && scope.restricted_slots === installRestrictedSlotPolicy(scope.role),
+  );
+}
+
+function roleAccessNotReadyCode(role) {
+  return `${role}_access_not_ready`;
+}
+
+function roleAccessNotReadyMessage(role) {
+  const label = role.charAt(0).toUpperCase() + role.slice(1);
+  return `GitHub účet nesplňuje deklarovaný ${label} access kontrakt.`;
 }
 
 function rootOutcome(state, reason, path, message = null) {
@@ -1140,8 +1242,8 @@ function normalizeOptionalOrganizationId(value) {
 
 function normalizeOptionalInstallRole(value) {
   if (value === null || value === undefined || value === "") return null;
-  if (value !== "builder") {
-    throw new TypeError("Organization install --role zatím podporuje pouze hodnotu builder.");
+  if (!ORGANIZATION_INSTALL_ROLES.includes(value)) {
+    throw new TypeError("Organization install --role podporuje pouze hodnoty builder a steward; Admin instaluje bez --role.");
   }
   return value;
 }
