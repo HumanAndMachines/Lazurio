@@ -33,6 +33,7 @@ import { buildWorktreeIndex } from "../../lazurio/runtime/worktree-lib.mjs";
 import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.mjs";
 import { createWorktreeFromPlan } from "./worktree-actions-lib.mjs";
 import { createRepositoryDbWorktreeFixture } from "./git-fixture-helpers.test.mjs";
+import { createHostedWorkspaceConfiguration, requireHostedAppUrl, selectHostedWorkspaceApps } from "../../lazurio/runtime/hosted-app-url-lib.mjs";
 
 const tempRoots = [];
 const fileSymlinkTest = (await supportsFileSymlinks()) ? test : test.skip;
@@ -4624,6 +4625,41 @@ test("hosted maintenance starts the discovered App, rejects Stop and retires rem
     runtime.maintainApps([]);
     await waitForStatus(() => runtime.health(app.id), "stopped");
     expect(runtime.maintenanceSummary()).toMatchObject({ total: 0 });
+  } finally {
+    await runtime.shutdown();
+  }
+}, platformTestTimeout(15_000));
+
+test("selected Organization-section default uses the existing hosted open/start/restart manager", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port });
+  const app = withStaticEntrypoint(fixtureDiscoveryApp({ port }));
+  Object.assign(app, {
+    space: "root", teams: [], module_catalog_path: "modules/demo", module_open_target: true,
+    module_app: { declared: true, default: true },
+    module_apps: {
+      state: "declared", open_target_app_id: app.id, open_target_source: "declared-default",
+      contract_path: "organizations/TestCompany/modules/demo/lazurio.module.json",
+      declaration: { path: "modules/demo", space: "workspace", teams: ["builders"], status: "available", ui_exposure: "module" },
+    },
+  });
+  const configuration = createHostedWorkspaceConfiguration({ profile: "hosted", organizationSlug: app.company, teamId: "builders", domain: "organization.example.test" });
+  const selection = selectHostedWorkspaceApps(configuration, { apps: [app] });
+  expect(selection.apps).toEqual([app]);
+  expect(requireHostedAppUrl(app, configuration)).toBe("https://demo.builders.organization.example.test/");
+  const runtime = createRuntimeManager({
+    companiesRoot: root, launchpadRoot: join(root, "launchpad"), instanceId: "hosted-organization-default",
+    lifecycleProfile: "hosted", discover: discoveryWithApp(app), maintenanceIntervalMs: 10, maintenanceRetryDelaysMs: [10],
+  });
+  try {
+    runtime.maintainApps(selection.apps);
+    await waitForStatus(() => runtime.health(app.id), "healthy");
+    await runtime.open(app.id);
+    await expect(runtime.start(app.id)).rejects.toMatchObject({ code: "already_managed" });
+    await runtime.restart(app.id);
+    const healthy = await waitForStatus(() => runtime.health(app.id), "healthy");
+    expect(healthy.managed).toBe(true);
+    expect((await fetch(healthy.health_url)).ok).toBe(true);
   } finally {
     await runtime.shutdown();
   }
