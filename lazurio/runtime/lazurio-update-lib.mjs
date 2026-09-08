@@ -535,8 +535,19 @@ export async function updateManagedRepo(repo, context = {}) {
     fetched = await run(fetchArgs, fetchOptions());
   }
   if (!fetched.ok) {
+    // Git/helper stderr can contain credential-bearing URLs or headers.
+    // Reports (including warnings/CLI output) expose only a closed diagnosis.
+    const finalFailure = `${fetched.stderr ?? ""}\n${fetched.error ?? ""}`;
     return block("github_unavailable", {
-      detail: commandFailure(fetched, "GitHub verzi se nepodařilo stáhnout."),
+      detail: fetched.timedOut
+        ? "Vypršel časový limit Git fetch pro ověřený origin."
+        : /broker|outside.*policy/i.test(finalFailure)
+          ? "Git credential broker nepotvrdil přístup k ověřenému originu."
+          : /authentication failed|permission denied|(?:HTTP(?:\/[\d.]+)?\s+|returned error:\s*)(?:401|403)/i.test(finalFailure)
+            ? "GitHub odmítl přihlášení nebo oprávnění pro ověřený origin."
+            : /remote: Repository not found\./.test(finalFailure)
+              ? "GitHub oznámil Repository not found pro ověřený origin."
+              : "Git fetch nedokázal načíst ověřený origin.",
       nextAction: "github_access",
       codex: false,
     });
