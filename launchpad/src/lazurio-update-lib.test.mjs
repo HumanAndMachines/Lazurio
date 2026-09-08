@@ -226,6 +226,79 @@ test("clean behind checkout fast-forwards and rerun is idempotent", async () => 
   expect(second).toMatchObject({ state: "current", reason: "already_current" });
 });
 
+test("verified checkout update retains configured credential helpers without interactive prompts", async () => {
+  const fixture = await repositoryFixture("configured-credentials");
+  const home = join(fixture.sandbox, "credential-home");
+  await mkdir(home);
+  // A harmless fixture value proves real Git config loading, not token storage.
+  await writeFile(join(home, ".gitconfig"), "[credential]\n\thelper = fixture-managed-broker\n");
+  await addRemoteCommit(fixture, "remote.txt", "remote\n");
+  let fetches = 0;
+  const result = await updateManagedRepo(descriptor(fixture), {
+    runId: "configured-credentials",
+    deps: {
+      installDependencies: async () => ({ ok: true }),
+      runGit: async (args, options) => {
+        if (args[0] !== "fetch") return runGitAsync(args, options);
+        fetches += 1;
+        expect(options.env.GIT_TERMINAL_PROMPT).toBe("0");
+        expect(options.env.GCM_INTERACTIVE).toBe("never");
+        expect(options.env.GIT_CONFIG_NOSYSTEM).toBeUndefined();
+        expect(options.env.GIT_CONFIG_GLOBAL).toBeUndefined();
+        const isolatedOptions = {
+          ...options,
+          env: { ...options.env, HOME: home, USERPROFILE: home, XDG_CONFIG_HOME: home },
+        };
+        const helper = await runGitAsync(["config", "--global", "--get", "credential.helper"], isolatedOptions);
+        expect(helper.ok).toBe(true);
+        expect(helper.stdout.trim()).toBe("fixture-managed-broker");
+        return runGitAsync(args, isolatedOptions);
+      },
+    },
+  });
+  expect(fetches).toBe(1);
+  expect(result.state).toBe("updated");
+  expect(await readPortableText(join(fixture.working, "remote.txt"))).toBe("remote\n");
+  expect(status(fixture.working)).toBe("");
+});
+
+test("verified update applies a configured URL rewrite only once", async () => {
+  const fixture = await repositoryFixture("single-url-rewrite");
+  await addRemoteCommit(fixture, "expected.txt", "expected\n");
+  const foreign = join(fixture.sandbox, "foreign.git");
+  const foreignWorking = join(fixture.sandbox, "foreign-working");
+  runGit(fixture.sandbox, ["clone", fixture.remote, foreignWorking]);
+  configure(foreignWorking);
+  await writeFile(join(foreignWorking, "foreign.txt"), "must not be installed\n");
+  runGit(foreignWorking, ["add", "foreign.txt"]);
+  runGit(foreignWorking, ["commit", "-m", "foreign descendant"]);
+  runGit(fixture.sandbox, ["clone", "--bare", foreignWorking, foreign]);
+  const home = join(fixture.sandbox, "rewrite-home");
+  const alias = join(fixture.sandbox, "origin-alias");
+  await mkdir(home);
+  await writeFile(join(home, ".gitconfig"), [
+    `[url "${fixture.remote.replaceAll("\\", "/")}"]`,
+    `\tinsteadOf = ${alias.replaceAll("\\", "/")}`,
+    `[url "${foreign.replaceAll("\\", "/")}"]`,
+    `\tinsteadOf = ${fixture.remote.replaceAll("\\", "/")}`,
+    "",
+  ].join("\n"));
+  runGit(fixture.working, ["remote", "set-url", "origin", alias.replaceAll("\\", "/")]);
+  const actualGit = (args, options) => runGitAsync(args, {
+    ...options,
+    env: { ...options.env, HOME: home, USERPROFILE: home, XDG_CONFIG_HOME: home },
+  });
+  const before = await actualGit(["remote", "get-url", "origin"], { cwd: fixture.working });
+  expect(before.stdout.trim().replaceAll("\\", "/")).toBe(fixture.remote.replaceAll("\\", "/"));
+  const result = await updateManagedRepo({ ...descriptor(fixture), repo: fixture.remote.replaceAll("\\", "/") }, {
+    runId: "single-url-rewrite",
+    deps: { runGit: actualGit, installDependencies: async () => ({ ok: true }) },
+  });
+  expect(result.state).toBe("updated");
+  expect(await readPortableText(join(fixture.working, "expected.txt"))).toBe("expected\n");
+  expect(existsSync(join(fixture.working, "foreign.txt"))).toBe(false);
+});
+
 test("Organization update fast-forwards only a parity-verified transition target", async () => {
   const fixture = await organizationActivationFixture("transition-target");
   const transition = transitionOrganizationDocuments();

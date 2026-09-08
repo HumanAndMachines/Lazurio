@@ -2,7 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { tmpdir } from "os";
 import { join } from "path";
 import { mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from "fs/promises";
-import { appPlacementResolverForOrganization, buildDoctorReportFromAppsResponse, buildEnvironmentChecks, buildLaunchpadAppsResponse, buildLaunchpadDoctorReport, bunRuntimeCheck, codexRuntimeCheck, developerToolUpdateChecks, lazurioUpdateCheck, nodeRuntimeCheck, runtimeAppStatus } from "../../lazurio/runtime/diagnostics-lib.mjs";
+import { appPlacementResolverForOrganization, buildDoctorReportFromAppsResponse, buildEnvironmentChecks, buildLaunchpadAppsResponse, buildLaunchpadDoctorReport, bunPackageRunnerCheck, bunPathCheck, bunRuntimeCheck, codexRuntimeCheck, developerToolUpdateChecks, lazurioUpdateCheck, nodeRuntimeCheck, runtimeAppStatus } from "../../lazurio/runtime/diagnostics-lib.mjs";
 import {
   createLaunchpadGitFixture,
   createRepositoryDbWorktreeFixture,
@@ -12,9 +12,68 @@ import {
 import { createWorktreeFromPlan } from "./worktree-actions-lib.mjs";
 import { buildGitInventory } from "../../lazurio/runtime/git-inventory-lib.mjs";
 import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.mjs";
+import { createHostedWorkspaceConfiguration, projectHostedAppUrl, selectHostedWorkspaceApps } from "../../lazurio/runtime/hosted-app-url-lib.mjs";
 
 const tempRoots = [];
 const fileSymlinkCapability = await supportsFileSymlinks();
+
+test("real discovery preserves Organization defaults and organization-section Team restrictions for hosted lifecycle", async () => {
+  const root = await createCompaniesWorkspaceFixture();
+  const companyRoot = join(root, "organizations", "HostedTestOrganization");
+  await mkdir(join(companyRoot, "manual"), { recursive: true });
+  await mkdir(join(companyRoot, "company/colleagues"), { recursive: true });
+  await writeJson(join(companyRoot, "company.gen3.json"), {
+    organization_generation: "gen3",
+    company: { slug: "HostedTestOrganization", display_name: "Hosted test organization", github_org: "HostedTestOrganization" },
+    module_port_pool: { start: 5400, end: 5499 },
+    teams: [{ slug: "editors", display_name: "Editors", default: true }, { slug: "reviewers", display_name: "Reviewers" }],
+  });
+  const definitions = [
+    { path: "mission-control", slug: "planning-repository", moduleId: "mission-control", space: "root" },
+    { path: "workspace/team-docs", slug: "team-docs", teams: ["editors"], launchpad_section: "organization" },
+    { path: "workspace/other-team", slug: "other-team", teams: ["reviewers"], launchpad_section: "organization" },
+    { path: "workspace/ordinary", slug: "ordinary", teams: ["editors"] },
+  ];
+  await writeJson(join(companyRoot, "modules.manifest.json"), {
+    organization_generation: "gen3", company: "HostedTestOrganization", github_org: "HostedTestOrganization",
+    module_slots: definitions.map(({ moduleId, ...slot }) => ({ ...slot, status: "active", git: { url: `git@github.com:HostedTestOrganization/${slot.slug}.git`, branch: "main" } })),
+  });
+  for (const [index, slot] of definitions.entries()) {
+    const moduleId = slot.moduleId ?? slot.slug;
+    const moduleRoot = join(companyRoot, slot.path);
+    await mkdir(join(moduleRoot, "app"), { recursive: true });
+    await writeJson(join(moduleRoot, "lazurio.module.json"), {
+      schema_version: "lazurio.module.v1", id: moduleId, company: "HostedTestOrganization",
+      tcp_port_policy: { mode: "single" }, port_leases: [{ id: "main", host: "127.0.0.1", port: 5400 + index }],
+      apps: ["app/package.json"], default_app: "app/package.json",
+    });
+    await writeJson(join(moduleRoot, "app/package.json"), {
+      name: `hostedtestorganization-${slot.slug}`, private: true, scripts: { dev: "bun server.mjs" },
+      lazurio: { runtime: {
+        schema_version: "lazurio.runtime.v1", id: `hostedtestorganization-${slot.slug}`, title: slot.slug,
+        company: "HostedTestOrganization", module: moduleId, surface: "internal", dev_script: "dev", tags: ["test"],
+        listeners: [{ id: "web", role: "entrypoint", lease: "main", protocol: "http", health: { kind: "http", path: "/" } }],
+      } },
+    });
+  }
+  const response = await buildLaunchpadAppsResponse({
+    companiesRoot: root, launchpadRoot: join(root, "launchpad"), includeGit: false,
+    organization: "HostedTestOrganization", activeTeamId: "editors",
+    runtimeManager: { appsWithRuntime: async apps => apps },
+  });
+  const config = createHostedWorkspaceConfiguration({ profile: "hosted", organizationSlug: "HostedTestOrganization", teamId: "editors", domain: "organization.example.test" });
+  expect(response.invalid_apps ?? []).toEqual([]);
+  expect(response.failures).toEqual([]);
+  expect(response.apps.map(app => ({ id: app.id, issues: app.manifest_issues }))).toHaveLength(4);
+  const selected = selectHostedWorkspaceApps(config, response);
+  expect(selected.apps.map(app => app.module)).toEqual(["mission-control", "ordinary", "team-docs"]);
+  const planning = selected.apps.find(app => app.module === "mission-control");
+  expect(planning).toMatchObject({ space: "root", teams: [], module_apps: { declaration: { space: "root", status: "available" } } });
+  expect(projectHostedAppUrl(planning, config).url).toBe("https://mission-control.editors.organization.example.test/");
+  const other = response.apps.find(app => app.module === "other-team");
+  expect(other.module_apps.declaration.teams).toEqual(["reviewers"]);
+  expect(projectHostedAppUrl(other, config).url).toBeNull();
+});
 
 afterAll(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })));
@@ -109,6 +168,127 @@ test("Node.js Doctor shares the Install Core version authority", () => {
   });
   expect(shadowed).toMatchObject({ id: "platform.node", status: "ok" });
 
+});
+
+test("Bun package runner Doctor proves `bun x` and only reports a standalone bunx as optional", () => {
+  const calls = [];
+  const bunOnly = bunPackageRunnerCheck({
+    command: "C:\\Users\\Builder\\.bun\\bin\\bun.exe",
+    cwd: "C:\\Users\\Builder\\Lazurio",
+    platform: "win32",
+    requiredVersion: "1.4.2",
+    resolvePathCommand: () => null,
+    run: (command, args) => {
+      calls.push([command, ...args]);
+      // Bun 1.4 prints the bunx usage contract but exits 1 without a package.
+      return { ok: false, exitCode: 1, stdout: "", stderr: "Usage: bunx [flags] <package><@version> [flags and arguments for the package]" };
+    },
+  });
+
+  expect(calls).toEqual([["C:\\Users\\Builder\\.bun\\bin\\bun.exe", "x", "--help"]]);
+  expect(bunOnly).toMatchObject({ id: "platform.bun_package_runner", status: "ok", severity: "required" });
+  expect(bunOnly.message).toContain("`bun x`");
+  expect(bunOnly.message).toContain("bunx není potřeba");
+  expect(bunOnly.details).toContain("standalone_bunx: absent (optional, not required)");
+  expect(bunOnly.links).toEqual([]);
+
+  const withBunx = bunPackageRunnerCheck({
+    command: "C:\\Users\\Builder\\.bun\\bin\\bun.exe",
+    cwd: "C:\\Users\\Builder\\Lazurio",
+    platform: "win32",
+    requiredVersion: "1.4.2",
+    resolvePathCommand: (command) => (command === "bunx" ? "C:\\Users\\Builder\\.bun\\bin\\bunx.exe" : null),
+    run: () => ({ ok: true, exitCode: 0, stdout: "Usage: bunx [flags] <package>", stderr: "" }),
+  });
+  expect(withBunx.status).toBe("ok");
+  expect(withBunx.details).toContain("standalone_bunx: C:\\Users\\Builder\\.bun\\bin\\bunx.exe (optional, not required)");
+});
+
+test("Bun package runner failure carries the official version-pinned remedy and no registry package", () => {
+  const failing = bunPackageRunnerCheck({
+    command: "C:\\Users\\Builder\\.bun\\bin\\bun.exe",
+    cwd: "C:\\Users\\Builder\\Lazurio",
+    platform: "win32",
+    requiredVersion: "1.4.2",
+    resolvePathCommand: () => null,
+    run: () => ({ ok: false, exitCode: 1, stdout: "", stderr: "error: unknown subcommand" }),
+  });
+
+  expect(failing).toMatchObject({ id: "platform.bun_package_runner", status: "fail", severity: "required" });
+  expect(failing.message).toContain("`bun x`");
+  expect(failing.message).toContain("připnutý přesně na 1.4.2");
+  expect(failing.message).toContain("balíček z jiného registru není náprava");
+  expect(failing.links).toEqual([
+    { label: "Oficiální instalace Bun", kind: "external", url: "https://bun.com/docs/installation" },
+  ]);
+  expect(failing.details).toEqual(expect.arrayContaining([
+    "command: C:\\Users\\Builder\\.bun\\bin\\bun.exe x --help",
+    "error: unknown subcommand",
+    "standalone_bunx: absent (optional, not required)",
+    "required: 1.4.2",
+    "remedy_source: official_bun_installer_pinned",
+    'install_or_update_command: iex "& {$(irm https://bun.com/install.ps1)} -Version 1.4.2"',
+    "installation_policy: use_existing_explicit_mandate_or_ask_principal",
+  ]));
+  expect(JSON.stringify(failing)).not.toMatch(/npm|npx|winget|choco|scoop/iu);
+
+  const missing = bunPackageRunnerCheck({
+    command: null,
+    cwd: "/Users/builder/Lazurio",
+    platform: "darwin",
+    requiredVersion: "1.4.2",
+    resolvePathCommand: () => null,
+    run: () => {
+      throw new Error("missing Bun must not be executed");
+    },
+  });
+  expect(missing.status).toBe("fail");
+  expect(missing.details).toContain('install_or_update_command: curl -fsSL https://bun.com/install | bash -s "bun-v1.4.2"');
+});
+
+test("Bun runtime and PATH Doctor failures point to the official pinned installer", () => {
+  const notOnPath = bunPathCheck({
+    pathExecutable: null,
+    cwd: "C:\\Users\\Builder\\Lazurio",
+    platform: "win32",
+    requiredVersion: "1.4.2",
+    run: () => {
+      throw new Error("missing bun must not be executed");
+    },
+  });
+  expect(notOnPath).toMatchObject({ id: "platform.bun_path", status: "fail" });
+  expect(notOnPath.links.map((link) => link.url)).toEqual(["https://bun.com/docs/installation"]);
+  expect(notOnPath.details).toContain('install_or_update_command: iex "& {$(irm https://bun.com/install.ps1)} -Version 1.4.2"');
+
+  const wrongVersion = bunPathCheck({
+    pathExecutable: "/usr/local/bin/bun",
+    cwd: "/Users/builder/Lazurio",
+    platform: "darwin",
+    requiredVersion: "1.4.2",
+    run: () => ({ ok: true, exitCode: 0, stdout: "1.4.0", stderr: "" }),
+  });
+  expect(wrongVersion.status).toBe("fail");
+  expect(wrongVersion.details).toContain('install_or_update_command: curl -fsSL https://bun.com/install | bash -s "bun-v1.4.2"');
+
+  const exact = bunPathCheck({
+    pathExecutable: "/usr/local/bin/bun",
+    cwd: "/Users/builder/Lazurio",
+    platform: "darwin",
+    requiredVersion: "1.4.2",
+    run: () => ({ ok: true, exitCode: 0, stdout: "1.4.2", stderr: "" }),
+  });
+  expect(exact).toMatchObject({ status: "ok", links: [] });
+
+  const mismatch = bunRuntimeCheck({
+    companiesRoot: "/tmp/test-root",
+    bunExecutable: "/usr/local/bin/bun",
+    platform: "linux",
+    requiredVersion: "1.4.2",
+    run: () => ({ ok: true, exitCode: 0, stdout: "1.4.1", stderr: "" }),
+  });
+  expect(mismatch.status).toBe("fail");
+  expect(mismatch.message).toContain("Principála");
+  expect(mismatch.details).toContain("remedy_source: official_bun_installer_pinned");
 });
 
 test("Codex Doctor names the broken WinGet alias without accepting its target binary as ready", () => {

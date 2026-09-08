@@ -54,10 +54,14 @@ import {
   resolveModuleApplications,
 } from "../core/module-contract-lib.mjs";
 import {
+  BUN_PACKAGE_RUNNER_PROBE_ARGS,
+  classifyBunPackageRunnerProbe,
   classifyToolVersion,
   classifyBunRuntime,
   classifyNodeRuntime,
   nodeVersionFromOutput,
+  OFFICIAL_BUN_INSTALL_DOCS_URL,
+  officialBunInstallCommand,
   readRequiredBunVersion,
   readRequiredNodeVersionRange,
   resolveExecutableOnPath,
@@ -1285,6 +1289,15 @@ async function attachModuleApplicationProjections({ companiesRoot, organizations
         contract_path: projection.contract_path,
         open_target_app_id: projection.open_target_app_id,
         open_target_source: projection.open_target_source,
+        // Preserve physical scope and Team intent independently of UI placement.
+        // This is a projection of the available local module, never an ACL.
+        declaration: {
+          path: slot.path,
+          space: slot.space,
+          teams: [...(slot.teams ?? [])],
+          status: slot.status,
+          ui_exposure: slot.ui_exposure,
+        },
       };
       const itemByPackagePath = new Map(
         projection.items.map((item) => [posix.join(moduleRootPath, item.package_path), item]),
@@ -2245,8 +2258,6 @@ function platformChecks(companiesRoot) {
     bunRuntimeCheck({ companiesRoot, bunExecutable }),
     bunPathCheck({ pathExecutable: bunOnPath, cwd: companiesRoot }),
     bunPackageRunnerCheck({
-      id: "platform.bun_package_runner",
-      title: "Bun package runner",
       command: bunOnPath,
       cwd: companiesRoot,
     }),
@@ -2385,14 +2396,20 @@ export function toolVersionCheck({ tool, id, title, pathExecutable, cwd, env, ru
     paths: [], links: [], details: [`command: ${pathExecutable} --version`, `current: ${version.current_version ?? "<unknown>"}`, `minimum: ${version.minimum_version ?? "parseable stable CLI"}`, ...(result.ok ? [] : [result.stderr || result.error || "Version probe failed"])] };
 }
 
-export function bunPathCheck({ pathExecutable, cwd, requiredVersion = readRequiredBunVersion(), run = runCommand }) {
+export function bunPathCheck({ pathExecutable, cwd, platform = process.platform, requiredVersion = readRequiredBunVersion(), run = runCommand }) {
   const id = "platform.bun_path", title = "Bun v PATH";
-  if (!pathExecutable) return requiredToolFailure({ id, title, message: "Příkaz bun není dostupný v PATH.", pathExecutable, args: ["--version"] });
+  if (!pathExecutable) {
+    return withBunInstallationGuidance(
+      requiredToolFailure({ id, title, message: "Příkaz bun není dostupný v PATH.", pathExecutable, args: ["--version"] }),
+      { platform, requiredVersion },
+    );
+  }
   const result = run(pathExecutable, ["--version"], { cwd });
   const current = result.ok ? result.stdout.trim() : null;
-  return { id, title, status: current === requiredVersion ? "ok" : "fail", severity: "required",
+  const check = { id, title, status: current === requiredVersion ? "ok" : "fail", severity: "required",
     message: current === requiredVersion ? `Bun ${current} v PATH odpovídá požadované verzi.` : `Bun v PATH musí fungovat ve verzi ${requiredVersion}.`,
     paths: [], links: [], details: [`command: ${pathExecutable} --version`, `current: ${current ?? "<unknown>"}`, `required: ${requiredVersion}`] };
+  return check.status === "ok" ? check : withBunInstallationGuidance(check, { platform, requiredVersion });
 }
 
 function requiredToolFailure({ id, title, message, pathExecutable, args }) {
@@ -2444,6 +2461,7 @@ function githubAuthenticationCheck({ companiesRoot, executable }) {
 export function bunRuntimeCheck({
   companiesRoot,
   bunExecutable = resolveBunExecutable(),
+  platform = process.platform,
   requiredVersion = readRequiredBunVersion({ root: join(import.meta.dirname, "..") }),
   run = runCommand,
 } = {}) {
@@ -2451,7 +2469,7 @@ export function bunRuntimeCheck({
     ? run(bunExecutable, ["--version"], { cwd: companiesRoot })
     : { ok: false, stdout: "", error: "Bun executable nebyl nalezen." };
   if (!result.ok) {
-    return {
+    return withBunInstallationGuidance({
       id: "platform.bun",
       status: "fail",
       severity: "required",
@@ -2460,7 +2478,7 @@ export function bunRuntimeCheck({
       paths: ["package.json"],
       links: [],
       details: [`required: ${requiredVersion}`, result.error ?? result.stderr ?? "unknown failure"],
-    };
+    }, { platform, requiredVersion });
   }
 
   const runtime = classifyBunRuntime({
@@ -2468,7 +2486,7 @@ export function bunRuntimeCheck({
     requiredVersion,
   });
   const current = runtime.status === "current";
-  return {
+  const check = {
     id: "platform.bun",
     status: current ? "ok" : "fail",
     severity: "required",
@@ -2484,6 +2502,7 @@ export function bunRuntimeCheck({
       `required: ${runtime.required_version}`,
     ],
   };
+  return current ? check : withBunInstallationGuidance(check, { platform, requiredVersion });
 }
 
 export function nodeRuntimeCheck({
@@ -2688,10 +2707,23 @@ function commandCheck({ id, title, command, args, cwd, okMessage, failMessage, e
   };
 }
 
-function bunPackageRunnerCheck({ id, title, command, cwd }) {
-  const args = ["x", "--help"];
+// Versioned repository scripts execute packages through `bun x`; that is the
+// capability Doctor proves. A standalone `bunx` binary is only reported as
+// information: the official WinGet package may ship `bun.exe` alone.
+export function bunPackageRunnerCheck({
+  id = "platform.bun_package_runner",
+  title = "Bun package runner",
+  command,
+  cwd,
+  platform = process.platform,
+  environment = process.env,
+  requiredVersion = readRequiredBunVersion({ root: join(import.meta.dirname, "..") }),
+  resolvePathCommand = resolveExecutableOnPath,
+  run = runCommand,
+} = {}) {
+  const args = [...BUN_PACKAGE_RUNNER_PROBE_ARGS];
   const result = command
-    ? runCommand(command, args, { cwd })
+    ? run(command, args, { cwd })
     : {
         ok: false,
         exitCode: null,
@@ -2699,27 +2731,48 @@ function bunPackageRunnerCheck({ id, title, command, cwd }) {
         stderr: "",
         error: "Executable resolver nevrátil ověřený Bun z PATH.",
       };
-  // Bun 1.4 prints the valid bunx help contract but intentionally exits 1
-  // because no package was supplied. Treat only that exact help sentinel as
-  // capability proof; an arbitrary exit 1 remains a required failure.
-  const helpOutput = `${result.stdout}\n${result.stderr}`;
-  const ready = result.ok || (result.exitCode === 1 && /Usage:\s+bunx\b/u.test(helpOutput));
-  return {
+  const ready = classifyBunPackageRunnerProbe(result) === "ready";
+  const standaloneBunx = resolvePathCommand("bunx", { environment, platform, cwd });
+  const check = {
     id,
     status: ready ? "ok" : "fail",
     severity: "required",
     title,
     message: ready
       ? "Bun umí spouštět package binárky přes `bun x`; samostatný příkaz bunx není potřeba."
-      : "Ověřený Bun neumí použít package runner `bun x`.",
+      : "Ověřený Bun neumí použít package runner `bun x`, který používají verzované skripty repozitářů.",
     paths: [],
     links: [],
-    details: ready
-      ? [`command: ${command} ${args.join(" ")}`, `exit_code: ${result.exitCode}`]
-      : [
-          `command: ${command ?? "<missing>"} ${args.join(" ")}`,
-          result.stderr || result.error || "Příkaz selhal.",
-        ],
+    details: [
+      `command: ${command ?? "<missing>"} ${args.join(" ")}`,
+      ...(ready
+        ? [`exit_code: ${result.exitCode}`]
+        : [result.stderr || result.error || "Příkaz selhal."]),
+      `standalone_bunx: ${standaloneBunx ?? "absent"} (optional, not required)`,
+    ],
+  };
+  return ready ? check : withBunInstallationGuidance(check, { platform, requiredVersion });
+}
+
+// Guidance only: Doctor quotes the official, version-pinned Bun installer and
+// never runs it. A package from another registry is not a remedy for Bun.
+function withBunInstallationGuidance(check, { platform, requiredVersion }) {
+  const installCommand = officialBunInstallCommand({ platform, version: requiredVersion });
+  return {
+    ...check,
+    message: `${check.message} S výslovným souhlasem Principála použij oficiální Bun instalátor připnutý přesně na ${requiredVersion}; balíček z jiného registru není náprava. Potom kontrolu zopakuj z nového čistého procesu.`,
+    links: [...check.links, {
+      label: "Oficiální instalace Bun",
+      kind: "external",
+      url: OFFICIAL_BUN_INSTALL_DOCS_URL,
+    }],
+    details: [
+      ...check.details,
+      `required: ${requiredVersion}`,
+      "remedy_source: official_bun_installer_pinned",
+      ...(installCommand ? [`install_or_update_command: ${installCommand}`] : []),
+      "installation_policy: use_existing_explicit_mandate_or_ask_principal",
+    ],
   };
 }
 
