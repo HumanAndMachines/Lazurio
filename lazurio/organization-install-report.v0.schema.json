@@ -4,158 +4,56 @@
   "title": "Lazurio Organization install report v0",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "schema_version",
-    "state",
-    "ok",
-    "root",
-    "organization",
-    "access",
-    "scope",
-    "target",
-    "convergence"
-  ],
+  "required": ["schema_version", "state", "ok", "root", "organization", "access", "scope", "target", "convergence"],
   "properties": {
-    "schema_version": {
-      "const": "lazurio.organization.install.v0"
-    },
-    "state": {
-      "enum": [
-        "current",
-        "updated",
-        "blocked"
-      ]
-    },
-    "ok": {
-      "type": "boolean"
-    },
-    "root": {
-      "type": "string",
-      "minLength": 1
-    },
+    "schema_version": { "const": "lazurio.organization.install.v0" },
+    "state": { "enum": ["current", "updated", "blocked"] },
+    "ok": { "type": "boolean" },
+    "root": { "type": "string", "minLength": 1 },
     "organization": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "locator",
-        "id",
-        "login",
-        "repository_id",
-        "repository"
-      ],
+      "required": ["locator", "id", "login", "repository_id", "repository"],
       "properties": {
-        "locator": {
-          "type": "string",
-          "minLength": 1
-        },
-        "id": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "login": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "repository_id": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "repository": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
+        "locator": { "type": "string", "minLength": 1 },
+        "id": { "type": ["string", "null"] },
+        "login": { "type": ["string", "null"] },
+        "repository_id": { "type": ["string", "null"] },
+        "repository": { "type": ["string", "null"] }
       }
     },
     "access": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "authority",
-        "role",
-        "status",
-        "account",
-        "organization_membership",
-        "teams",
-        "repositories",
-        "blockers"
-      ],
+      "required": ["authority", "role", "status", "account", "organization_membership", "teams", "repositories", "blockers"],
       "properties": {
-        "authority": {
-          "const": "github"
-        },
-        "role": {
-          "enum": [
-            null,
-            "builder",
-            "steward"
-          ]
-        },
-        "status": {
-          "enum": [
-            "not_requested",
-            "ready",
-            "blocked"
-          ]
-        },
+        "authority": { "const": "github" },
+        "role": { "enum": [null, "builder", "steward"] },
+        "status": { "enum": ["not_requested", "ready", "blocked"] },
         "account": {
           "oneOf": [
-            {
-              "type": "null"
-            },
+            { "type": "null" },
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "id",
-                "login"
-              ],
+              "required": ["id", "login"],
               "properties": {
-                "id": {
-                  "type": "string",
-                  "pattern": "^[1-9][0-9]{0,19}$"
-                },
-                "login": {
-                  "type": "string",
-                  "minLength": 1
-                }
+                "id": { "type": "string", "pattern": "^[1-9][0-9]{0,19}$" },
+                "login": { "type": "string", "minLength": 1 }
               }
             }
           ]
         },
         "organization_membership": {
           "oneOf": [
-            {
-              "type": "null"
-            },
+            { "type": "null" },
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "state",
-                "role"
-              ],
+              "required": ["state", "role"],
               "properties": {
-                "state": {
-                  "enum": [
-                    "active",
-                    "missing",
-                    "unavailable"
-                  ]
-                },
-                "role": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                }
+                "state": { "enum": ["active", "missing", "unavailable"] },
+                "role": { "type": ["string", "null"] }
               }
             }
           ]
@@ -165,46 +63,13 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "internal_slug",
-              "github_team_id",
-              "github_team_slug",
-              "identity",
-              "membership"
-            ],
+            "required": ["internal_slug", "github_team_id", "github_team_slug", "identity", "membership"],
             "properties": {
-              "internal_slug": {
-                "type": "string",
-                "minLength": 1
-              },
-              "github_team_id": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "github_team_slug": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "identity": {
-                "enum": [
-                  "verified",
-                  "mismatch",
-                  "unavailable",
-                  "not_evaluated"
-                ]
-              },
-              "membership": {
-                "enum": [
-                  "active",
-                  "missing",
-                  "unavailable",
-                  "not_evaluated"
-                ]
-              }
+              "internal_slug": { "type": "string", "minLength": 1 },
+              "github_team_id": { "type": ["string", "null"] },
+              "github_team_slug": { "type": ["string", "null"] },
+              "identity": { "enum": ["verified", "mismatch", "unavailable", "not_evaluated"] },
+              "membership": { "enum": ["active", "missing", "unavailable", "not_evaluated"] }
             }
           }
         },
@@ -213,68 +78,21 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "full_name",
-              "repository_id",
-              "effective_permission",
-              "team_grants"
-            ],
+            "required": ["full_name", "repository_id", "effective_permission", "team_grants"],
             "properties": {
-              "full_name": {
-                "type": "string",
-                "minLength": 3
-              },
-              "repository_id": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "effective_permission": {
-                "enum": [
-                  "none",
-                  "read",
-                  "triage",
-                  "write",
-                  "maintain",
-                  "admin",
-                  "unknown",
-                  "unavailable"
-                ]
-              },
+              "full_name": { "type": "string", "minLength": 3 },
+              "repository_id": { "type": ["string", "null"] },
+              "effective_permission": { "enum": ["none", "read", "triage", "write", "maintain", "admin", "unknown", "unavailable"] },
               "team_grants": {
                 "type": "array",
                 "items": {
                   "type": "object",
                   "additionalProperties": false,
-                  "required": [
-                    "internal_team_slug",
-                    "github_team_slug",
-                    "permission"
-                  ],
+                  "required": ["internal_team_slug", "github_team_slug", "permission"],
                   "properties": {
-                    "internal_team_slug": {
-                      "type": "string",
-                      "minLength": 1
-                    },
-                    "github_team_slug": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "permission": {
-                      "enum": [
-                        "none",
-                        "read",
-                        "triage",
-                        "write",
-                        "maintain",
-                        "admin",
-                        "unavailable",
-                        "not_evaluated"
-                      ]
-                    }
+                    "internal_team_slug": { "type": "string", "minLength": 1 },
+                    "github_team_slug": { "type": ["string", "null"] },
+                    "permission": { "enum": ["none", "read", "triage", "write", "maintain", "admin", "unavailable", "not_evaluated"] }
                   }
                 }
               }
@@ -286,121 +104,48 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "reason",
-              "team",
-              "repository",
-              "message"
-            ],
+            "required": ["reason", "team", "repository", "message"],
             "properties": {
-              "reason": {
-                "type": "string",
-                "minLength": 1
-              },
-              "team": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "repository": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "message": {
-                "type": "string",
-                "minLength": 1
-              }
+              "reason": { "type": "string", "minLength": 1 },
+              "team": { "type": ["string", "null"] },
+              "repository": { "type": ["string", "null"] },
+              "message": { "type": "string", "minLength": 1 }
             }
           }
         }
       }
     },
     "scope": {
-      "description": "Materializační scope této instalace. `role: null` je explicitní Admin instalace a jako jediná zahrnuje (`include`) i absentní restricted sloty; role-scoped instalace je vyloučí (`exclude`) bez provider operace a označí je `excluded_by_role_scope`.",
+      "description": "Materializační scope instalace. role null je explicitní Admin instalace a jako jediná zahrnuje (include) i absentní restricted sloty; role-scoped instalace je vyloučí (exclude) bez provider operace a označí je excluded_by_role_scope.",
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "role",
-        "restricted_slots"
-      ],
+      "required": ["role", "restricted_slots"],
       "properties": {
-        "role": {
-          "enum": [
-            null,
-            "builder",
-            "steward"
-          ]
-        },
-        "restricted_slots": {
-          "enum": [
-            "include",
-            "exclude"
-          ]
-        }
+        "role": { "enum": [null, "builder", "steward"] },
+        "restricted_slots": { "enum": ["include", "exclude"] }
       }
     },
     "target": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "state",
-        "reason",
-        "path",
-        "message"
-      ],
+      "required": ["state", "reason", "path", "message"],
       "properties": {
-        "state": {
-          "enum": [
-            "current",
-            "updated",
-            "blocked"
-          ]
-        },
-        "reason": {
-          "type": "string",
-          "minLength": 1
-        },
-        "path": {
-          "type": "string",
-          "minLength": 1
-        },
-        "message": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
+        "state": { "enum": ["current", "updated", "blocked"] },
+        "reason": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "message": { "type": ["string", "null"] }
       }
     },
     "convergence": {
       "oneOf": [
-        {
-          "type": "null"
-        },
+        { "type": "null" },
         {
           "type": "object",
-          "required": [
-            "schema_version",
-            "state",
-            "ok"
-          ],
+          "required": ["schema_version", "state", "ok"],
           "properties": {
-            "schema_version": {
-              "const": "lazurio.update.v1"
-            },
-            "state": {
-              "enum": [
-                "current",
-                "updated",
-                "blocked"
-              ]
-            },
-            "ok": {
-              "type": "boolean"
-            }
+            "schema_version": { "const": "lazurio.update.v1" },
+            "state": { "enum": ["current", "updated", "blocked"] },
+            "ok": { "type": "boolean" }
           }
         }
       ]

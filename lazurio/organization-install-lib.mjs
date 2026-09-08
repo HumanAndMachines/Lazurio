@@ -152,7 +152,6 @@ export async function installOrganization({
         locator,
         role: requestedRole,
         scope,
-      scope,
         source,
         root: rootOutcome("blocked", "root_target_unsafe", organizationPath),
       });
@@ -168,7 +167,6 @@ export async function installOrganization({
         locator,
         role: requestedRole,
         scope,
-      scope,
         source,
         root: rootOutcome("blocked", verification.code, organizationPath, verification.message),
       });
@@ -186,7 +184,6 @@ export async function installOrganization({
         locator,
         role: requestedRole,
         scope,
-      scope,
         source,
         root: rootOutcome("blocked", identity.code, organizationPath, identity.message),
       });
@@ -222,7 +219,6 @@ export async function installOrganization({
         source,
         role: requestedRole,
         scope,
-      scope,
         root: rootOutcome(
           "blocked",
           materialized.code ?? "root_materialization_failed",
