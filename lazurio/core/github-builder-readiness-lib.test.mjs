@@ -436,3 +436,55 @@ test("role readiness never reads a repository whose access declaration is malfor
   expect(report.status).toBe("ready");
   expect(calls.some((endpoint) => endpoint.includes("/typo"))).toBe(false);
 });
+
+test("role readiness never reads an ordinary repository declared below a restricted or malformed slot", () => {
+  const calls = [];
+  const resource = resourceFixture();
+  resource.repository_inventory.push(
+    {
+      path: "mission-control",
+      slug: "mission-control",
+      status: "active",
+      default_access: "restricted",
+      required_roles: ["organization-admin"],
+      git: { url: "git@github.com:ExampleOrganization/mission-control.git", branch: "main" },
+    },
+    {
+      path: "mission-control/db",
+      slug: "mission-control-data",
+      status: "active",
+      required_roles: ["*"],
+      materialization: "repository_db_mount",
+      git: { url: "git@github.com:ExampleOrganization/mission-control-data.git", branch: "main" },
+    },
+    {
+      path: "typo-parent",
+      slug: "typo-parent",
+      status: "active",
+      default_access: "expected",
+      required_roles: "organization-admin",
+      git: { url: "git@github.com:ExampleOrganization/typo-parent.git", branch: "main" },
+    },
+    {
+      path: "typo-parent/child",
+      slug: "typo-child",
+      status: "active",
+      default_access: "expected",
+      required_roles: ["*"],
+      git: { url: "git@github.com:ExampleOrganization/typo-child.git", branch: "main" },
+    },
+  );
+  const report = observeGitHubRoleReadiness({
+    role: "steward",
+    provider: providerFixture({ teamMembership: "active", permission: "write", calls }),
+    organization,
+    rootRepository,
+    resource,
+  });
+  expect(report.status).toBe("ready");
+  expect(report.repositories.map((repository) => repository.full_name)).toEqual([
+    "ExampleOrganization/ExampleOrganization_GEN3",
+    "ExampleOrganization/knowledgebase",
+  ]);
+  expect(calls.filter((endpoint) => /mission-control|typo/u.test(endpoint))).toEqual([]);
+});

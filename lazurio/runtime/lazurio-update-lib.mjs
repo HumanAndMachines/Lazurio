@@ -237,11 +237,10 @@ export async function runLazurioUpdate({
         }
         if (childPresence.state === "absent") {
           if (!isAutoMaterializationCandidate(childRepo)) continue;
-          const scoped = await restrictedSlotMaterializationResult({
+          const scoped = restrictedSlotMaterializationResult({
             repo: childRepo,
             siblings: children,
             restrictedSlotPolicy,
-            lstatPath: deps.lstatPath ?? lstat,
           });
           if (scoped) {
             results.push(scoped);
@@ -1787,14 +1786,15 @@ function isAutoMaterializationCandidate(repo) {
 }
 
 // Absentní kandidát dostane výsledek bez provider operace, pokud jeho vlastní
-// deklarace (nebo deklarace absentního nadřazeného slotu) není běžná. Vrací
-// null, když se má slot materializovat běžnou cestou. Klasifikace čte jen
-// `default_access`/`required_roles`; název ani cesta slotu nerozhodují.
-async function restrictedSlotMaterializationResult({
+// deklarace (nebo deklarace nadřazeného slotu) není běžná. Vrací null, když
+// se má slot materializovat běžnou cestou. Klasifikace čte jen
+// `default_access`/`required_roles`; název, cesta ani to, zda je nadřazený
+// restricted checkout už namountovaný, nerozhodují — namountovaný rodič se
+// dál aktualizuje, ale jeho absentní potomek dědí restricted scope.
+function restrictedSlotMaterializationResult({
   repo,
   siblings,
   restrictedSlotPolicy,
-  lstatPath = lstat,
 }) {
   const classification = classifyOrganizationSlotAccess(repo);
   if (classification === "unknown") {
@@ -1808,8 +1808,6 @@ async function restrictedSlotMaterializationResult({
       if (candidate === repo || !isSlotDescendantPath(repo.slot_path, candidate.slot_path)) continue;
       const ancestorClassification = classifyOrganizationSlotAccess(candidate);
       if (ancestorClassification === "ordinary") continue;
-      const presence = await inspectPathPresence(candidate.absolute_path, lstatPath);
-      if (presence.state === "present") continue;
       if (ancestorClassification === "unknown") {
         return blockedResult(repo, "access_classification_unknown", {
           detail: `Nadřazený slot ${candidate.slot_path} deklaruje neznámý default_access nebo malformed required_roles; Lazurio potomka fail-safe nematerializuje a nic na GitHubu nečte.`,

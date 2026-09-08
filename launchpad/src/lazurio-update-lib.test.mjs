@@ -1626,6 +1626,68 @@ test("restricted slot policy decides between Admin opt-in and role-scoped exclus
   await expect(runLazurioUpdate({ rootPath: "/working", restrictedSlotPolicy: "everything" })).rejects.toThrow(/restrictedSlotPolicy/);
 });
 
+test("an absent descendant inherits the restricted scope even when its parent checkout is already mounted", async () => {
+  const scenarios = [
+    { policy: "defer", reason: "restricted_not_materialized", scope: "restricted_deferred" },
+    { policy: "exclude", reason: "excluded_by_role_scope", scope: "excluded_by_role_scope" },
+    { policy: "include", reason: "organization_repository_materialized", scope: null },
+  ];
+  for (const scenario of scenarios) {
+    const root = await mkdtemp(join(tmpdir(), "lazurio-update-mounted-restricted-parent-"));
+    cleanup.push(root);
+    const organization = repo("Example::root", "organization_root", "Example", "root");
+    organization.absolute_path = join(root, "organizations", "Example_GEN3");
+    await mkdir(organization.absolute_path, { recursive: true });
+    const parent = repo("Example::infra", "root_repo", "Example", "infra");
+    parent.absolute_path = join(organization.absolute_path, "infra");
+    parent.slot_path = "infra";
+    parent.materialization = "doctor_managed_nested_repo";
+    parent.default_access = "restricted";
+    parent.required_roles = ["organization-admin"];
+    await mkdir(parent.absolute_path, { recursive: true });
+    const child = repo("Example::infra-tooling", "root_repo", "Example", "infra-tooling");
+    child.absolute_path = join(organization.absolute_path, "infra", "tooling");
+    child.slot_path = "infra/tooling";
+    child.materialization = "doctor_managed_nested_repo";
+    child.default_access = "expected";
+    child.required_roles = ["*"];
+    const materialized = [];
+    const updated = [];
+
+    const report = await runLazurioUpdate({
+      rootPath: root,
+      runtimeRoot: join(root, "..", "runtime"),
+      restrictedSlotPolicy: scenario.policy,
+      deps: {
+        runId: `mounted-restricted-parent-${scenario.policy}`,
+        acquireLock: async () => ({ release: async () => {} }),
+        buildInventory: async () => ({ repos: [organization, parent, child], warnings: [] }),
+        updateRepo: async (item) => {
+          updated.push(item.key);
+          return { ...identity(item), state: "current", reason: "already_current", message: "current" };
+        },
+        materializeRepo: async ({ repo: item }) => {
+          materialized.push(item.key);
+          return { ok: true, outcome: "materialized", head: "a".repeat(40) };
+        },
+        discoverApps: async () => ({ apps: [], failures: [] }),
+      },
+    });
+
+    expect(updated, scenario.policy).toContain(parent.key);
+    expect(materialized.includes(child.key), scenario.policy).toBe(scenario.policy === "include");
+    const childResult = report.results.find((result) => result.repo_key === child.key);
+    expect(childResult, scenario.policy).toMatchObject({
+      state: scenario.policy === "include" ? "updated" : "current",
+      reason: scenario.reason,
+    });
+    if (scenario.scope) {
+      expect(childResult.materialization_scope).toBe(scenario.scope);
+      expect(childResult.message).toContain("nadřazený restricted slot infra");
+    }
+  }
+});
+
 test("unknown or malformed slot access classification blocks materialization fail-safe under every policy", async () => {
   for (const policy of ["defer", "include", "exclude"]) {
     const root = await mkdtemp(join(tmpdir(), "lazurio-update-unknown-access-"));

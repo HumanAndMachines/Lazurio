@@ -499,7 +499,7 @@ export function organizationSlotProjectsToLocalMachine(
   { materialized = slot?.status === "available" } = {},
 ) {
   if (materialized) return true;
-  if (slot?.required_roles?.includes("*")) return true;
+  if (Array.isArray(slot?.required_roles) && slot.required_roles.includes("*")) return true;
   return !protectedOrganizationSlotAccessModes.has(slot?.default_access);
 }
 
@@ -527,6 +527,14 @@ export function classifyOrganizationSlotAccess(slot) {
     ) return "unknown";
   }
   return restrictedOrganizationSlotAccessModes.has(access) ? "restricted" : "ordinary";
+}
+
+// Chybějící deklarace se normalizuje na prázdný seznam; malformed hodnota
+// (například string místo pole) se záměrně zachová, aby ji
+// `classifyOrganizationSlotAccess` v inventáři i Doctoru dál viděl jako
+// `unknown` místo tichého překlopení na běžný slot.
+export function normalizeOrganizationSlotRequiredRoles(value) {
+  return value === undefined || value === null ? [] : value;
 }
 
 export function normalizeOrganizationSlotPath(path) {

@@ -1666,6 +1666,12 @@ test("Doctor keeps an intentionally absent restricted slot advisory while still 
         required_roles: ["*"],
         git: { url: "git@github.com:ScopeCo/typo.git", branch: "main" },
       },
+      {
+        path: "workspace/typo-roles",
+        default_access: "expected",
+        required_roles: "organization-admin",
+        git: { url: "git@github.com:ScopeCo/typo-roles.git", branch: "main" },
+      },
     ],
   });
   await writeJson(join(companyRoot, "TODO.tasks.json"), {});
@@ -1690,6 +1696,12 @@ test("Doctor keeps an intentionally absent restricted slot advisory while still 
     status: "missing_access",
     readiness: { severity: "blocking", reason: "access_classification_unknown" },
   });
+  // Normalizace nesmí malformed `required_roles` tiše překlopit na běžný slot.
+  expect(declarations.find((slot) => slot.slug === "typo-roles")).toMatchObject({
+    status: "missing_access",
+    required_roles: "organization-admin",
+    readiness: { severity: "blocking", reason: "access_classification_unknown" },
+  });
 
   const report = await buildLaunchpadDoctorReport({
     companiesRoot: root,
@@ -1698,9 +1710,10 @@ test("Doctor keeps an intentionally absent restricted slot advisory while still 
   });
   const declarationCheck = report.checks.find((check) => check.id === "launchpad.workspace_declarations");
   expect(declarationCheck?.status).toBe("fail");
-  expect(declarationCheck?.message).toContain("2 blokátory");
+  expect(declarationCheck?.message).toContain("3 blokátory");
   expect(declarationCheck?.details.join("\n")).toContain("mission-control");
   expect(declarationCheck?.details.join("\n")).toContain("workspace/typo");
+  expect(declarationCheck?.details.join("\n")).toContain("workspace/typo-roles");
   expect(declarationCheck?.details.filter((line) => line.includes("blocker") && line.includes("infra"))).toEqual([]);
 });
 

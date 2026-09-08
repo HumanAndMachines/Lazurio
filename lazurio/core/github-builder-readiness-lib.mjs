@@ -1,6 +1,7 @@
 import {
   classifyOrganizationSlotAccess,
   githubRepositoryCoordinate,
+  normalizeOrganizationSlotPath,
 } from "./organization-slot-scope-lib.mjs";
 
 export const GITHUB_TEAM_FORGE_BINDING_SCHEMA = "lazurio.team-forge-binding.github.v0";
@@ -141,8 +142,9 @@ function roleAccessPlan({ organization, rootRepository, resource, role }) {
     organization,
   });
 
-  for (const slot of resource?.repository_inventory ?? []) {
-    if (!isRoleRepositorySlot(slot, role)) continue;
+  const inventory = Array.isArray(resource?.repository_inventory) ? resource.repository_inventory : [];
+  for (const slot of inventory) {
+    if (!isRoleRepositorySlot(slot, role) || isBelowNonOrdinarySlot(slot, inventory)) continue;
     const coordinate = githubRepositoryCoordinate(slot?.git?.url ?? slot?.repository ?? slot?.git_url);
     if (!coordinate || coordinate.owner.toLowerCase() !== organization.login.toLowerCase()) {
       blockers.push(blocker(
@@ -214,6 +216,20 @@ function isRoleRepositorySlot(slot, role) {
   return requiredRoles.length === 0
     || requiredRoles.includes("*")
     || requiredRoles.includes(role);
+}
+
+// Restricted nebo malformed hranice platí i pro každý slot pod ní (například
+// `mission-control/db` pod restricted `mission-control`): updater takového
+// potomka role-scoped nematerializuje, takže gate nad ním nesmí číst provider.
+function isBelowNonOrdinarySlot(slot, inventory) {
+  const path = normalizeOrganizationSlotPath(slot?.path);
+  if (!path) return false;
+  return inventory.some((candidate) => {
+    if (candidate === slot) return false;
+    const ancestorPath = normalizeOrganizationSlotPath(candidate?.path);
+    if (!ancestorPath || !path.startsWith(`${ancestorPath}/`)) return false;
+    return classifyOrganizationSlotAccess(candidate) !== "ordinary";
+  });
 }
 
 function normalizeInstallRole(role) {

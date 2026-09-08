@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, rm, symlink, writeFile } from "fs/promises";
 import { join } from "path";
 import { buildGitInventory } from "../../lazurio/runtime/git-inventory-lib.mjs";
 import { readOrganizationRoot } from "../../lazurio/core/organization-root-reader-lib.mjs";
+import { classifyOrganizationSlotAccess } from "../../lazurio/core/organization-slot-scope-lib.mjs";
 import {
   organizationLegacyProjectionHash,
   projectLegacyOrganizationManifest,
@@ -317,6 +318,26 @@ test("conflicting remote and branch aliases quarantine one slot without choosing
     "slot_remote_conflict",
   ]);
   expect(conflicts.every((issue) => issue.next_action?.kind === "agent_review")).toBe(true);
+});
+
+test("inventory preserves a malformed required_roles declaration so access classification stays unknown", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const manifestPath = join(root, "organizations", "OmegaCo_GEN3", "modules.manifest.json");
+  const manifest = await Bun.file(manifestPath).json();
+  manifest.module_slots[1] = {
+    ...manifest.module_slots[1],
+    default_access: "expected",
+    required_roles: "organization-admin",
+  };
+  await Bun.write(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  const inventory = await buildGitInventory({ companiesRoot: root });
+  const infra = inventory.repos.find((repo) => repo.key === "OmegaCo::infra");
+
+  expect(infra).toMatchObject({ default_access: "expected", required_roles: "organization-admin" });
+  expect(classifyOrganizationSlotAccess(infra)).toBe("unknown");
+  expect(inventory.repos.find((repo) => repo.key === "OmegaCo::studio")?.required_roles).toEqual([]);
 });
 
 test("inventory keeps lowercase module ID separate from a case-preserving repository mount", async () => {
