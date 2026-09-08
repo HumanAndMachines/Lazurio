@@ -341,6 +341,35 @@ test("GitHub fetch recovery refuses a changed origin before a second request", a
   expect(result.state).toBe("blocked");
 });
 
+test("persistent fetch refusal never exposes credential-bearing stderr in results or reports", async () => {
+  const fixture = await repositoryFixture("fetch-private-diagnostics");
+  const source = "https://github.com/FixtureOrganization/workspace-module.git";
+  const actual = runGitThroughFixtureSource(fixture, source);
+  let fetches = 0;
+  const result = await updateManagedRepo({ ...descriptor(fixture), repo_kind: "module", repo: source }, {
+    deps: { runGit: async (args, options) => {
+      if (args[0] === "fetch") {
+        fetches++;
+        return {
+          ok: false, exitCode: 128,
+          stderr: "remote: Repository not found.\nfatal: https://fixture-user:private-fixture-password@github.com/FixtureOrganization/workspace-module.git\nAuthorization: Bearer private-fixture-bearer",
+          stdout: "private-fixture-stdout", error: "private-fixture-error",
+        };
+      }
+      return actual(args, options);
+    } },
+  });
+  expect(fetches).toBe(2);
+  expect(result.state).toBe("blocked");
+  expect(result.message).toContain("Repository not found");
+  const report = await runRootUpdate(fixture, { updateRepo: async () => result });
+  expect(report.state).toBe("blocked");
+  expect(report.warnings.length).toBeGreaterThan(0);
+  expect(JSON.stringify(result)).not.toContain("private-fixture-");
+  expect(JSON.stringify(report)).not.toContain("private-fixture-");
+  expect(JSON.stringify(report)).not.toContain("Authorization:");
+});
+
 test("non-GitHub fetch errors are not retried", async () => {
   const fixture = await repositoryFixture("local-fetch-no-retry");
   let fetches = 0;
