@@ -1653,6 +1653,14 @@ test("Doctor keeps an intentionally absent restricted slot advisory while still 
         git: { url: "git@github.com:ScopeCo/mission-control.git", branch: "main" },
       },
       {
+        path: "mission-control/db",
+        slug: "mission-control-data",
+        space: "root",
+        status: "planned_slot",
+        default_access: "expected",
+        required_roles: ["organization-admin"],
+      },
+      {
         path: "workspace/typo",
         default_access: "secret",
         required_roles: ["*"],
@@ -1690,7 +1698,6 @@ test("Doctor keeps an intentionally absent restricted slot advisory while still 
   });
   const declarationCheck = report.checks.find((check) => check.id === "launchpad.workspace_declarations");
   expect(declarationCheck?.status).toBe("fail");
-  console.log("DEBUG-DETAILS", JSON.stringify(declarationCheck?.details, null, 2));
   expect(declarationCheck?.message).toContain("2 blokátory");
   expect(declarationCheck?.details.join("\n")).toContain("mission-control");
   expect(declarationCheck?.details.join("\n")).toContain("workspace/typo");

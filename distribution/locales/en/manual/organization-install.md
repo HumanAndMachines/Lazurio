@@ -188,8 +188,10 @@ the Organization manifest maps it via `teams[].forge_binding` to
 `lazurio.team-forge-binding.github.v0`, the immutable GitHub Team `id`, and its
 `asserted_slug`. A missing or renamed binding is an owner blocker, not a reason
 to guess the Team by display name. The Organization root and the active slots
-assigned to the Builder are checked; `planned_slot` and restricted/Admin-only
-slots are deliberately not included.
+assigned to the given role (`--role builder` or `--role steward`) are checked;
+`planned_slot`, restricted/Admin-only slots, and slots with a malformed access
+declaration are deliberately not included, and the gate performs no provider
+read over them.
 
 ## Toolchain gate before the Organization scope
 
@@ -503,6 +505,63 @@ the same time:
    SSH root probe passed;
 4. the final `lazurio doctor` is green, including all declared subordinate
    doctors.
+
+## Steward Machine and restricted slots
+
+The Organization manifest declares `default_access` and `required_roles` for
+every slot. A slot with `default_access: restricted` (or `private`) is
+**restricted** — Admin-only scope. The classification is read only from this
+declaration, never from a name or path (`infra` is not restricted because of
+its name). `expected`, `optional`, and `role_based` are ordinary slots: Sync
+attempts them and a missing GitHub grant is reported truthfully as
+`materialization_source_unavailable`. An unknown mode or malformed
+`required_roles` is the fail-safe `access_classification_unknown`: nothing is
+cloned, nothing is read from GitHub, and the Organization owner fixes the
+manifest.
+
+The three paths differ only in what they do with an **absent** restricted slot:
+
+```sh
+# Admin: explicit opt-in, materializes restricted slots too (as before)
+lazurio organization install <github-login> --json
+
+# Steward: ordinary apps + the required Mission Control data mount, restricted out of scope
+lazurio organization install <github-login> --role steward --json
+
+# Builder: same materialization semantics as Steward, Builder readiness gate
+lazurio organization install <github-login> --role builder --json
+```
+
+- **Without `--role`** the installation is an explicit Admin operation
+  (`scope.restricted_slots: "include"`): an absent restricted slot is
+  materialized like an ordinary one.
+- **`--role steward` and `--role builder`** (`scope.restricted_slots:
+  "exclude"`) materialize only ordinary slots and their descendants, including
+  the required `repository_db_mount` of Mission Control data. The restricted
+  slot and every slot below it end up in the result as `current` with reason
+  `excluded_by_role_scope`: no `git clone`, `fetch`, `ls-remote`, or `gh api`
+  runs over them. This state is intentional and distinct from a missing grant
+  (`materialization_source_unavailable`, `next_action.kind: github_access`).
+  Before cloning, the Steward gate verifies read-only the active Organization
+  membership, Team membership, and WRITE on the Organization root and the
+  ordinary slots whose `required_roles` are empty, `*`, or name `steward`; a
+  blocked gate returns `steward_access_not_ready` and materializes nothing.
+- **Generic `lazurio update`** (`restricted_slot_policy: "defer"`) never
+  auto-clones an absent restricted slot and returns `current` with reason
+  `restricted_not_materialized`. Already mounted restricted checkouts keep
+  updating like any other. A partial Steward installation therefore stays
+  stable across further Sync runs; the only path to a restricted slot is the
+  explicit Admin install above.
+- **Doctor** reports an intentionally absent restricted slot as advisory
+  `restricted_not_materialized` (severity `neutral`) with guidance towards the
+  explicit Admin install. A missing required application (`expected`) or the
+  required data mount remains a required `fail`; a malformed declaration is
+  the blocking `access_classification_unknown`.
+
+After the installation, the Steward Agent reports separately: applications
+ready, the data mount `repository_db_current`/`repository_db_materialized`,
+and the list of `excluded_by_role_scope` slots; an excluded restricted slot is
+never presented as an access blocker nor resolved by requesting a grant.
 
 Every recommended warning has an explicit disposition in the handoff: fixed,
 knowingly accepted by the Principal, or blocked by missing authority. A

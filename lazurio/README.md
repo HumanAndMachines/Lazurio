@@ -165,6 +165,28 @@ celkový výsledek zůstane `blocked` s přesným GitHub access reasonem. Dirty,
 foreign, diverged nebo symlink target se nepřebírá. Úplný bezpečný postup drží
 [Organization install manuál](../manual/organization-install.md).
 
+Restricted (Admin-only) sloty se poznají výhradně z deklarace
+`default_access: restricted`/`private`, ne z názvu nebo cesty:
+
+```sh
+lazurio organization install <github-login>                # Admin: restricted sloty zahrnuté
+lazurio organization install <github-login> --role steward # Steward: restricted mimo scope
+lazurio organization install <github-login> --role builder # Builder: totéž + Builder gate
+```
+
+Instalace bez `--role` je explicitní Admin opt-in (`scope.restricted_slots:
+"include"`) a materializuje i absentní restricted slot. `--role steward` a
+`--role builder` (`"exclude"`) materializují jen běžné sloty a jejich
+descendants včetně povinného Mission Control `repository_db_mount`; restricted
+slot a vše pod ním vrátí jako `current`/`excluded_by_role_scope` bez jediného
+`git clone`, `fetch`, `ls-remote` nebo `gh api`. Role gate před klonem read-only
+ověří membership a WRITE na běžných repozitářích dané role. Běžný
+`lazurio update` (`restricted_slot_policy: "defer"`) absentní restricted slot
+nikdy automaticky neklonuje (`restricted_not_materialized`), namountovaný dál
+aktualizuje; Doctor tento záměrný stav hlásí jen advisory. Neznámý nebo
+malformed `default_access`/`required_roles` je fail-safe
+`access_classification_unknown`.
+
 Reprodukovatelné instalační problémy patří po kontrole duplicit a sanitizaci
 do GitHub Issues přesného owning repa, nikoli do nového lokálního JSON ledgeru.
 Vytvoření issue nebo komentáře je Publikace; úplný routing, prompt mandát a
