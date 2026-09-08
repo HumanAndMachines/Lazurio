@@ -12,9 +12,68 @@ import {
 import { createWorktreeFromPlan } from "./worktree-actions-lib.mjs";
 import { buildGitInventory } from "../../lazurio/runtime/git-inventory-lib.mjs";
 import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.mjs";
+import { createHostedWorkspaceConfiguration, projectHostedAppUrl, selectHostedWorkspaceApps } from "../../lazurio/runtime/hosted-app-url-lib.mjs";
 
 const tempRoots = [];
 const fileSymlinkCapability = await supportsFileSymlinks();
+
+test("real discovery preserves Organization defaults and organization-section Team restrictions for hosted lifecycle", async () => {
+  const root = await createCompaniesWorkspaceFixture();
+  const companyRoot = join(root, "organizations", "HostedTestOrganization");
+  await mkdir(join(companyRoot, "manual"), { recursive: true });
+  await mkdir(join(companyRoot, "company/colleagues"), { recursive: true });
+  await writeJson(join(companyRoot, "company.gen3.json"), {
+    organization_generation: "gen3",
+    company: { slug: "HostedTestOrganization", display_name: "Hosted test organization", github_org: "HostedTestOrganization" },
+    module_port_pool: { start: 5400, end: 5499 },
+    teams: [{ slug: "editors", display_name: "Editors", default: true }, { slug: "reviewers", display_name: "Reviewers" }],
+  });
+  const definitions = [
+    { path: "mission-control", slug: "planning-repository", moduleId: "mission-control", space: "root" },
+    { path: "workspace/team-docs", slug: "team-docs", teams: ["editors"], launchpad_section: "organization" },
+    { path: "workspace/other-team", slug: "other-team", teams: ["reviewers"], launchpad_section: "organization" },
+    { path: "workspace/ordinary", slug: "ordinary", teams: ["editors"] },
+  ];
+  await writeJson(join(companyRoot, "modules.manifest.json"), {
+    organization_generation: "gen3", company: "HostedTestOrganization", github_org: "HostedTestOrganization",
+    module_slots: definitions.map(({ moduleId, ...slot }) => ({ ...slot, status: "active", git: { url: `git@github.com:HostedTestOrganization/${slot.slug}.git`, branch: "main" } })),
+  });
+  for (const [index, slot] of definitions.entries()) {
+    const moduleId = slot.moduleId ?? slot.slug;
+    const moduleRoot = join(companyRoot, slot.path);
+    await mkdir(join(moduleRoot, "app"), { recursive: true });
+    await writeJson(join(moduleRoot, "lazurio.module.json"), {
+      schema_version: "lazurio.module.v1", id: moduleId, company: "HostedTestOrganization",
+      tcp_port_policy: { mode: "single" }, port_leases: [{ id: "main", host: "127.0.0.1", port: 5400 + index }],
+      apps: ["app/package.json"], default_app: "app/package.json",
+    });
+    await writeJson(join(moduleRoot, "app/package.json"), {
+      name: `hostedtestorganization-${slot.slug}`, private: true, scripts: { dev: "bun server.mjs" },
+      lazurio: { runtime: {
+        schema_version: "lazurio.runtime.v1", id: `hostedtestorganization-${slot.slug}`, title: slot.slug,
+        company: "HostedTestOrganization", module: moduleId, surface: "internal", dev_script: "dev", tags: ["test"],
+        listeners: [{ id: "web", role: "entrypoint", lease: "main", protocol: "http", health: { kind: "http", path: "/" } }],
+      } },
+    });
+  }
+  const response = await buildLaunchpadAppsResponse({
+    companiesRoot: root, launchpadRoot: join(root, "launchpad"), includeGit: false,
+    organization: "HostedTestOrganization", activeTeamId: "editors",
+    runtimeManager: { appsWithRuntime: async apps => apps },
+  });
+  const config = createHostedWorkspaceConfiguration({ profile: "hosted", organizationSlug: "HostedTestOrganization", teamId: "editors", domain: "organization.example.test" });
+  expect(response.invalid_apps ?? []).toEqual([]);
+  expect(response.failures).toEqual([]);
+  expect(response.apps.map(app => ({ id: app.id, issues: app.manifest_issues }))).toHaveLength(4);
+  const selected = selectHostedWorkspaceApps(config, response);
+  expect(selected.apps.map(app => app.module)).toEqual(["mission-control", "ordinary", "team-docs"]);
+  const planning = selected.apps.find(app => app.module === "mission-control");
+  expect(planning).toMatchObject({ space: "root", teams: [], module_apps: { declaration: { space: "root", status: "available" } } });
+  expect(projectHostedAppUrl(planning, config).url).toBe("https://mission-control.editors.organization.example.test/");
+  const other = response.apps.find(app => app.module === "other-team");
+  expect(other.module_apps.declaration.teams).toEqual(["reviewers"]);
+  expect(projectHostedAppUrl(other, config).url).toBeNull();
+});
 
 afterAll(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })));

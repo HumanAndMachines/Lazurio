@@ -22,6 +22,7 @@ import {
   organizationSlotRepositoryMountIssue,
   organizationSlotRepositoryRemote,
   organizationSlotScope,
+  organizationSlotTeams,
   organizationSlotWorkspace,
 } from "../core/organization-slot-scope-lib.mjs";
 import {
@@ -123,6 +124,7 @@ export async function buildGitInventory({ companiesRoot, organizations = null } 
         continue;
       }
       if (resolution.state === "projection_drift") {
+        normalized.teams = [...declaredOrganizationTeamSlugs(resolution.resource)];
         recordInventoryIssue({
           inventoryIssues,
           warnings,
@@ -146,6 +148,7 @@ export async function buildGitInventory({ companiesRoot, organizations = null } 
       normalized.declaration_source = resolution.declaration_source;
       normalized.organization_manifest_state = resolution.state;
     }
+    normalized.teams = [...declaredOrganizationTeamSlugs(organizationResource)];
     addOrganizationRootRepo(repos, normalized, companiesRoot);
     if (!existsSync(organizationRoot)) {
       recordInventoryIssue({
@@ -361,7 +364,7 @@ export async function buildGitInventory({ companiesRoot, organizations = null } 
       });
       if (observedLocationIssue) {
         warnings.push(observedLocationIssue.message);
-        inventoryIssues.push(observedLocationIssue);
+        inventoryIssues.push({ ...observedLocationIssue, space: slot.space, teams: slot.teams });
         continue;
       }
       if (!slot.repo) {
@@ -607,6 +610,8 @@ function recordInventoryIssue({
     schema_version: "lazurio.organization_issue.v1",
     severity: "blocking",
     scope: slot ? "module_slot" : "organization",
+    space: slot && path ? organizationSlotScope(slot, path) : null,
+    teams: slot && path ? organizationSlotTeams(slot, path) : null,
     status: "quarantined",
     code,
     organization: organization.slug,
@@ -641,6 +646,8 @@ function recordScopedSlotInventoryIssue({
     organization: organization.slug,
     organization_path: organization.path,
     module: slot.module,
+    space: slot.space,
+    teams: slot.teams,
     path: slot.path,
     expected_path: null,
     message,
@@ -802,6 +809,7 @@ function addOrganizationRootRepo(repos, organization, companiesRoot) {
     repo: organization.repository ?? organization.git_url ?? null,
     remote: sanitizeRemote(organization.repository ?? organization.git_url),
     organization_manifest_state: organization.organization_manifest_state ?? null,
+    teams: organization.teams ?? [],
   });
 }
 
@@ -843,6 +851,7 @@ function slotRecord({ organization, slot, companiesRoot }) {
     materialization: slot.materialization ?? null,
     default_access: slot.default_access ?? null,
     required_roles: slot.required_roles ?? [],
+    teams: slot.teams ?? [],
   };
 }
 
@@ -873,6 +882,7 @@ function normalizeModuleSlot(slot, organization) {
     name: slot.name ?? humanizeSlug(module),
     space,
     workspace: organizationSlotWorkspace(slot, path),
+    teams: organizationSlotTeams(slot, path),
     category: slot.category ?? null,
     materialization: slot.materialization ?? null,
     default_access: slot.default_access ?? null,
