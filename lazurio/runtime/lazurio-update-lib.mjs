@@ -526,7 +526,7 @@ export async function updateManagedRepo(repo, context = {}) {
   if (!fetched.ok && !fetched.timedOut && fetched.exitCode === 128
     && /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?$/i.test(source.url)
     && /remote: Repository not found\./.test(failure)
-    && !/broker|outside.*policy|authentication failed|permission denied|HTTP\s+(?:401|403)|could not read Username/i.test(failure)) {
+    && !/broker|outside.*policy|authentication failed|permission denied|(?:HTTP(?:\/[\d.]+)?\s+|returned error:\s*)(?:401|403)|could not read Username/i.test(failure)) {
     const beforeRetry = await verifyRemoteSource(repo, run);
     if (!beforeRetry.ok || beforeRetry.fingerprint !== source.fingerprint) {
       return block("remote_changed", { detail: "Origin se po neúspěšném fetch změnil; nový pokus byl zastaven." });

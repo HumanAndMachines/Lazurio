@@ -287,12 +287,14 @@ test("GitHub fetch retries once with identical identity and preserves recovery d
   expect(status(fixture.working)).toBe("");
 });
 
-for (const [label, stderr, limit] of [
+for (const [label, stderr, limit, timedOut = false] of [
   ["persistent repository denial", "remote: Repository not found.", 2],
   ["explicit authentication denial", "fatal: Authentication failed", 1],
   ["HTTP 401 denial", "HTTP 401\nremote: Repository not found.", 1],
   ["HTTP 403 denial", "HTTP 403\nremote: Repository not found.", 1],
+  ["Git HTTP status denial", "fatal: The requested URL returned error: 403\nremote: Repository not found.", 1],
   ["broker denial overrides repository error", "GitHub token broker refused the request\nremote: Repository not found.", 1],
+  ["timeout overrides repository error", "remote: Repository not found.", 1, true],
 ]) {
   test(`GitHub fetch remains blocked for ${label} with an exact attempt limit`, async () => {
     const fixture = await repositoryFixture("github-fetch-denial");
@@ -304,7 +306,7 @@ for (const [label, stderr, limit] of [
       deps: { runGit: async (args, options) => {
         if (args[0] === "fetch") {
           fetches++;
-          return { ok: false, exitCode: 128, stderr, stdout: "" };
+          return { ok: false, exitCode: 128, stderr, stdout: "", timedOut };
         }
         return actual(args, options);
       } },
