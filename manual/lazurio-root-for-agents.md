@@ -157,7 +157,12 @@ GitHub login. Podrobný owner/Builder postup drží
 Na Windows se kvůli skills nezapíná Developer Mode. `.agents/skills` je source
 a `.claude/skills` jeho Git-tracked exact mirror; žádný symlink, junction ani
 per-worktree lokální materializátor nevzniká. Paritu dokazuje
-`bun run doctor:agent-skills`.
+`bun run doctor:agent-skills`. Matici kompatibility root × Organization
+Doctoru (`lazurio/runtime/agent-skills-entrypoint-compatibility.json`) a
+deterministickou nedestruktivní opravu legacy linku, placeholderu, chybějícího
+mirroru nebo driftu drží
+[`manual/organization-install.md`](organization-install.md) („Windows bez
+Developer Mode“) a Organization manuál `manual/agent-skills-mirror-migration.md`.
 
 Když onboarding odhalí reprodukovatelný problém, nenechá jej Agent jen v
 chatu. Vybere přesný owning repo a postupuje podle

@@ -1,0 +1,24 @@
+{
+  "purpose": "Pinned Organization-side Doctor implementace pro integrační test lazurio/runtime/agent-skills-entrypoint-compatibility.test.mjs (HumanAndMachines/Lazurio#245). Jsou to test fixtures, ne autorita: kanonický kód žije v OrganizationTemplate_GEN3 a Lazurio root ho nikdy nespouští nad reálným Organization mountem.",
+  "repository": "TemplatesRozjedeme-ai/OrganizationTemplate_GEN3",
+  "fixtures": {
+    "organization-template-v2": {
+      "path": "organization-template-v2/scripts/agent-skills-entrypoint.mjs",
+      "source": "scripts/agent-skills-entrypoint.mjs",
+      "ref": "TemplatesRozjedeme-ai/OrganizationTemplate_GEN3#48",
+      "commit": "408858ec7d175c6a320abb422a268c77b6aaa635",
+      "schema_version": "companiesascode.agent_skills_entrypoint.v2",
+      "materialization": "tracked-derived-mirror"
+    },
+    "organization-template-v1": {
+      "path": "organization-template-v1/scripts/agent-skills-entrypoint.mjs",
+      "source": "scripts/agent-skills-entrypoint.mjs",
+      "ref": "main",
+      "commit": "d75fcbfb1b60c692029898c2a20449b18401b9d5",
+      "schema_version": "companiesascode.agent_skills_entrypoint.v1",
+      "materialization": "operator-managed-link"
+    }
+  },
+  "live_override_env": "LAZURIO_AGENT_SKILLS_ORGANIZATION_SCRIPT",
+  "refresh": "Při změně Organization kontraktu stáhni exact soubor z nového commitu, aktualizuj commit zde i řádky matice v lazurio/runtime/agent-skills-entrypoint-compatibility.json a nech test rozhodnout."
+}

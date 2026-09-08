@@ -485,6 +485,36 @@ vyžadovala další materializační krok a dovolila by lokální drift. Diagnos
 lane nepřepisuje žádný obsah ani symlink/junction odhadem; každý konflikt vrátí
 Agentovi k bezpečné opravě v owning repu.
 
+### Matice kompatibility a nedestruktivní oprava
+
+Které stavy `.claude/skills` hlásí Lazurio root Doctor (check
+`launchpad.agent_skills_entrypoints`) a Organization Doctor
+(`bun run doctor:agent-skills`) a jakým kódem, drží strojově
+`lazurio/runtime/agent-skills-entrypoint-compatibility.json`. Není to próza:
+test `lazurio/runtime/agent-skills-entrypoint-compatibility.test.mjs` ji
+dokazuje nad skutečným fresh checkoutem fixture Organizace (tracked mirror,
+legacy symlink/junction, placeholder, chybějící, drift, cizí link, neznámý
+soubor, link uvnitř mirroru), na POSIX i s Windows `win32` porovnáním cest a
+včetně `codex-only` výjimky; Organization stranu zastupuje pinned kopie
+template Doctoru v `lazurio/testdata/agent-skills-entrypoint/` (provenance u
+fixture) a proměnná `LAZURIO_AGENT_SKILLS_ORGANIZATION_SCRIPT` dovolí test
+spustit proti živému Organization scriptu. Lidskou podobu matice a migrační
+postup drží Organization manuál `manual/agent-skills-mirror-migration.md`
+v Organization rootu (source: OrganizationTemplate_GEN3); root nemá druhou
+pravdu a oba Doctory vrací tutéž remedy.
+
+Oprava je deterministická, nedestruktivní a bez writeru: legacy
+symlink/junction, textový placeholder, chybějící mirror nebo drift opravíš
+výhradně v task worktree Organizace — legacy objekt nahraď obyčejným
+adresářem, přenes pouze soubory deklarované v `.agents/skills/manifest.json`,
+neznámý obsah nemaž odhadem (zastav se a vyžádej rozhodnutí vlastníka), mirror
+commitni společně s kanonickou změnou a ověř `bun run doctor:agent-skills`.
+Organizace s legacy kontraktem `companiesascode.agent_skills_entrypoint.v1`
+(`operator-managed-link`, template před PR #48) přechází na tracked mirror
+samostatným Template Sync PR; do té doby ji root Doctor hlásí jako
+`repair_needed` (warn), nikdy jako fail, a instalace nevyžaduje volbu mezi
+dvěma protichůdnými instrukcemi (HumanAndMachines/Lazurio#245).
+
 CLI Root nevybírá ani neukládá jako další konfiguraci. Produkční instalace
 vždy používá `~/Lazurio` na macOS/Linuxu a `%USERPROFILE%\\Lazurio` na
 Windows. Tím mají lidé i Agenti jednu předvídatelnou cestu a absolutní cesta

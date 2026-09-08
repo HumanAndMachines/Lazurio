@@ -1,0 +1,150 @@
+{
+  "schema_version": "companiesascode.agent_skills_entrypoint_compatibility.v1",
+  "purpose": "Strojová matice kompatibility agent-skills entrypointu: které root kontrakty akceptují které Organization entrypoint kontrakty a jaké kódy vrací Lazurio root Doctor a Organization Doctor nad stejným fresh checkoutem (HumanAndMachines/Lazurio#245). Próza v manual/organization-install.md a v Organization manual/agent-skills-mirror-migration.md na tuto matici jen ukazuje; test agent-skills-entrypoint-compatibility.test.mjs ji dokazuje nad fixture.",
+  "issue": "HumanAndMachines/Lazurio#245",
+  "organization_migration_manual": "manual/agent-skills-mirror-migration.md",
+  "organization_template": {
+    "repository": "TemplatesRozjedeme-ai/OrganizationTemplate_GEN3",
+    "pull_request": "TemplatesRozjedeme-ai/OrganizationTemplate_GEN3#48"
+  },
+  "root_contracts": [
+    {
+      "id": "root-v2",
+      "schema_version": "companiesascode.agent_skills_entrypoint.v2",
+      "materialization": "tracked-derived-mirror",
+      "doctor_check_id": "launchpad.agent_skills_entrypoints",
+      "implementation": "lazurio/runtime/agent-skills-entrypoint-lib.mjs",
+      "accepts": {
+        "org-v2": "ok",
+        "org-v1": "repair_needed",
+        "not_adopted": "not_applicable"
+      },
+      "acceptance_note": "Root Doctor běží read-only i nad cizími Organization mounty: entrypoint v1 (symlink/junction, placeholder) nikdy neblokuje, ale hlásí repair_needed se stejnou remedy jako Organization Doctor v2. Fail (blocked) je vyhrazen stavům, o kterých musí rozhodnout vlastník checkoutu."
+    }
+  ],
+  "entrypoint_contracts": [
+    {
+      "id": "org-v1",
+      "schema_version": "companiesascode.agent_skills_entrypoint.v1",
+      "materialization": "operator-managed-link",
+      "status": "legacy",
+      "fixture": "lazurio/testdata/agent-skills-entrypoint/organization-template-v1",
+      "note": "OrganizationTemplate_GEN3 před PR #48: .claude/skills je operator-managed symlink/junction. Organization Doctor v1 hlásí správný link jako ok/entrypoint_ready, zatímco root Doctor jej hlásí jako repair_needed/mirror_legacy_link — to je rozpor z #245; řešením je migrace checkoutu na org-v2, ne druhá instrukce."
+    },
+    {
+      "id": "org-v2",
+      "schema_version": "companiesascode.agent_skills_entrypoint.v2",
+      "materialization": "tracked-derived-mirror",
+      "status": "current",
+      "fixture": "lazurio/testdata/agent-skills-entrypoint/organization-template-v2",
+      "note": "OrganizationTemplate_GEN3 PR #48: .claude/skills je Git-tracked byte-for-byte mirror; Organization i root repair:agent-skills jsou no-write."
+    }
+  ],
+  "remedy": {
+    "id": "manual_migration",
+    "deterministic": true,
+    "destructive": false,
+    "writer": "none",
+    "description": "Žádná lane mirror nepřepisuje. Oprava je explicitní Git-reviewovaná změna v task worktree Organizace podle manual/agent-skills-mirror-migration.md: legacy objekt nahradit obyčejným adresářem, přenést pouze soubory deklarované v .agents/skills/manifest.json, neznámý obsah nemazat odhadem, mirror commitnout společně s kanonickou změnou. Root i Organization Doctor vrací tutéž remedy."
+  },
+  "states": [
+    {
+      "id": "tracked_mirror",
+      "description": "Fresh checkout s Git-tracked byte-for-byte mirrorem (org-v2 template).",
+      "entrypoint_contract": "org-v2",
+      "root_doctor": { "status": "ok", "code": "mirror_ready" },
+      "organization_doctor": { "status": "ok", "code": "mirror_ready" },
+      "organization_doctor_v1": { "status": "blocked", "code": "entrypoint_duplicate_directory" },
+      "root_aggregate_status": "ok",
+      "remedy": "none"
+    },
+    {
+      "id": "legacy_link",
+      "description": "Symlink (POSIX) nebo directory junction (Windows) .claude/skills -> .agents/skills vytvořený operátorem podle org-v1 instrukcí.",
+      "entrypoint_contract": "org-v1",
+      "root_doctor": { "status": "repair_needed", "code": "mirror_legacy_link" },
+      "organization_doctor": { "status": "repair_needed", "code": "mirror_legacy_link" },
+      "organization_doctor_v1": { "status": "ok", "code": "entrypoint_ready" },
+      "root_aggregate_status": "warn",
+      "remedy": "manual_migration"
+    },
+    {
+      "id": "legacy_placeholder",
+      "description": "Textový soubor .claude/skills s obsahem ../.agents/skills (Windows checkout committed symlinku bez core.symlinks).",
+      "entrypoint_contract": "org-v1",
+      "root_doctor": { "status": "repair_needed", "code": "mirror_legacy_placeholder" },
+      "organization_doctor": { "status": "repair_needed", "code": "mirror_legacy_placeholder" },
+      "organization_doctor_v1": { "status": "repair_needed", "code": "entrypoint_legacy_placeholder" },
+      "root_aggregate_status": "warn",
+      "remedy": "manual_migration"
+    },
+    {
+      "id": "missing",
+      "description": ".claude/skills v checkoutu vůbec není.",
+      "entrypoint_contract": "org-v1",
+      "root_doctor": { "status": "repair_needed", "code": "mirror_missing" },
+      "organization_doctor": { "status": "repair_needed", "code": "mirror_missing" },
+      "organization_doctor_v1": { "status": "repair_needed", "code": "entrypoint_missing" },
+      "root_aggregate_status": "warn",
+      "remedy": "manual_migration"
+    },
+    {
+      "id": "drift",
+      "description": "Tracked mirror existuje, ale není byte-for-byte shodný s kanonickým katalogem (stale obsah, chybějící nebo cizí soubor).",
+      "entrypoint_contract": "org-v2",
+      "root_doctor": { "status": "repair_needed", "code": "mirror_drift" },
+      "organization_doctor": { "status": "repair_needed", "code": "mirror_drift" },
+      "organization_doctor_v1": { "status": "blocked", "code": "entrypoint_duplicate_directory" },
+      "root_aggregate_status": "warn",
+      "remedy": "manual_migration"
+    },
+    {
+      "id": "wrong_link",
+      "description": "Symlink/junction .claude/skills míří mimo kanonický katalog.",
+      "entrypoint_contract": "org-v1",
+      "root_doctor": { "status": "repair_needed", "code": "entrypoint_wrong_link" },
+      "organization_doctor": { "status": "blocked", "code": "entrypoint_wrong_link" },
+      "organization_doctor_v1": { "status": "repair_needed", "code": "entrypoint_wrong_link" },
+      "root_aggregate_status": "warn",
+      "remedy": "owner_decision",
+      "divergence": "Kód je shodný, status se liší: root Doctor read-only nad cizím mountem neblokuje (warn), Organization Doctor v2 nad vlastním checkoutem blokuje. Root chování se tímto PR záměrně nemění."
+    },
+    {
+      "id": "unexpected_file",
+      "description": ".claude/skills je neznámý obyčejný soubor.",
+      "entrypoint_contract": "org-v1",
+      "root_doctor": { "status": "blocked", "code": "entrypoint_unexpected_file" },
+      "organization_doctor": { "status": "blocked", "code": "entrypoint_unexpected_file" },
+      "organization_doctor_v1": { "status": "blocked", "code": "entrypoint_unexpected_file" },
+      "root_aggregate_status": "fail",
+      "remedy": "owner_decision"
+    },
+    {
+      "id": "unsafe_link_inside_mirror",
+      "description": "Mirror adresář obsahuje symlink/junction (link uvnitř katalogu).",
+      "entrypoint_contract": "org-v2",
+      "root_doctor": { "status": "blocked", "code": "mirror_unsafe_content" },
+      "organization_doctor": { "status": "blocked", "code": "mirror_unsafe_content" },
+      "organization_doctor_v1": { "status": "blocked", "code": "entrypoint_duplicate_directory" },
+      "root_aggregate_status": "fail",
+      "remedy": "owner_decision"
+    }
+  ],
+  "platform_overrides": [
+    {
+      "id": "windows_codex_only",
+      "platform": "win32",
+      "agent_capability_mode": "codex-only",
+      "states": ["missing", "legacy_placeholder"],
+      "root_doctor": { "status": "ok", "code": "codex_entrypoint_ready" },
+      "root_aggregate_status": "ok",
+      "organization_doctor": "unchanged",
+      "note": "Root Doctor v módu codex-only na Windows toleruje chybějící mirror nebo placeholder; Organization Doctor mirror vyžaduje vždy, protože ho přináší Git a Claude discovery ho očekává."
+    }
+  ],
+  "windows": {
+    "developer_mode_required": false,
+    "junction_equivalence": "Windows directory junction i POSIX symlink hlásí lstat/Dirent jako symbolic link; root i Organization Doctor je vyhodnotí stejnou cestou (legacy_link / wrong_link / unsafe_link_inside_mirror). Cesty se na win32 porovnávají case-insensitive po normalizaci oddělovačů.",
+    "tracked_mirror_note": "Tracked mirror je obyčejný adresář, který přináší Git; nevyžaduje symlink, junction, Developer Mode ani zvýšená oprávnění."
+  }
+}

@@ -14,6 +14,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   AGENT_SKILLS_ENTRYPOINT_SCHEMA,
+  AGENT_SKILLS_MIGRATION_MANUAL_PATH,
   CLAUDE_SKILLS_MATERIALIZATION,
   inspectAgentSkillsEntrypoint,
   listSkillFiles,
@@ -236,7 +237,7 @@ export async function repairAgentSkillsMirror(root = defaultRoot, options = {}) 
     status: "blocked",
     code: "manual_repair_required",
     problems: before.problems ?? [],
-    message: `${CLAUDE_SKILLS_PATH} vyžaduje explicitní Git-reviewovanou opravu v task worktree; příkaz nic nezměnil.`,
+    message: `${CLAUDE_SKILLS_PATH} vyžaduje explicitní Git-reviewovanou opravu v task worktree podle ${AGENT_SKILLS_MIGRATION_MANUAL_PATH} (Organization root); příkaz nic nezměnil.`,
   });
 }
 

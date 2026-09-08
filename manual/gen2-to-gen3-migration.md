@@ -553,16 +553,20 @@ Organization pravidla.
 ### Gate 4C — skills flip
 
 GEN3 kanonická knihovna je `.agents/skills/`; `.claude/skills` je **Git-tracked
-odvozený byte-for-byte mirror** (`<slug>/SKILL.md` aktivních skillů z manifestu,
+odvozený byte-for-byte mirror** (celé adresáře aktivních skillů z manifestu,
 žádné symlinky ani junctiony — decision 0104). Mirror není druhý source of
-truth: edituje se výhradně kanonická knihovna a mirror regeneruje
-`bun run repair:agent-skills`; paritu hlídá `bun run doctor:agent-skills`.
+truth: edituje se výhradně kanonická knihovna a mirror se upravuje explicitně
+ve stejném task worktree; `bun run repair:agent-skills` je no-write
+diagnostika a paritu hlídá `bun run doctor:agent-skills`.
 
 Na Windows Codex-only stroji, kde se Claude nepoužívá, je autoritou přímo
-`.agents/skills/` a chybějící mirror není blocker. Legacy symlink/junction
-nebo textový placeholder z období symlink modelu hlásí doctor jako
-`repair_needed`; repair lane je nahradí trackovaným mirrorem (cíl linku
-zůstává nedotčený).
+`.agents/skills/` a chybějící mirror není pro root Doctor blocker. Legacy
+symlink/junction nebo textový placeholder z období symlink modelu hlásí root
+i Organization Doctor shodně jako `repair_needed`; žádná lane je nepřepisuje —
+oprava je explicitní Git-reviewovaná změna podle Organization manuálu
+`manual/agent-skills-mirror-migration.md` (cíl linku zůstává nedotčený).
+Strojovou matici kódů root × Organization Doctoru drží
+`lazurio/runtime/agent-skills-entrypoint-compatibility.json`.
 
 GEN2 s reverzním layoutem má `.agents/skills` jako **existující symlink** →
 `../.claude/skills`; ten je nutné nejdřív odstranit. `git rm` symlinku smaže i
@@ -574,12 +578,16 @@ cd "$WT"
 test -L .agents/skills && git rm .agents/skills      # reverzní výchozí stav
 mkdir -p .agents \
   && git mv .claude/skills .agents/skills \
-  && ln -s ../.agents/skills .claude/skills \
-  && git add .claude/skills .agents/skills
+  && mkdir -p .claude/skills
+# odvozený mirror: jen aktivní skilly z manifestu, obyčejné soubory, žádný link
+jq -r '.skills[].slug' .agents/skills/manifest.json \
+  | while read -r slug; do cp -R ".agents/skills/$slug" ".claude/skills/$slug"; done
+git add .claude/skills .agents/skills
 ```
 
+Bez manifestu zrcadli každý adresář `.agents/skills/<slug>/` se `SKILL.md`.
 Před `git mv` klasifikuj případné existující obě složky a sluč je po jednom
-skillu. Nevytvářej symlink přes neznámou dirty knihovnu. Pokud Organizace
+skillu. Nevytvářej mirror přes neznámou dirty knihovnu. Pokud Organizace
 `.agents/skills/manifest.json` má, přegeneruj/validuj ho podle Organization
 tooling; pokud ho nemá a žádné tooling ho negeneruje, flip ho nezakládá —
 založení manifestu je samostatný krok/post-cutover.
@@ -588,21 +596,23 @@ Ověření:
 
 ```bash
 test -d .agents/skills
-test -L .claude/skills
-test "$(readlink .claude/skills)" = "../.agents/skills"
-git ls-files -s .claude/skills | grep '^120000 '
+test -d .claude/skills && ! test -L .claude/skills
+! git ls-files -s .claude/skills | grep -q '^120000 '
+bun run doctor:agent-skills
 find .agents/skills -name SKILL.md -print
 ```
 
 Flip nezmění jen resolvery — přepni i všechny skills-flip **validace**
 (`doctor.sh`/`doctor.ps1` sekce „Skills entrypointy", testy), které by jinak dál
-asserovaly starý směr a na korektním GEN3 layoutu by `doctor check` false-failoval
-(`.agents/skills není symlink`). Čtení skillů přes symlink funguje obousměrně,
-validační assert ne. Po flipu spusť `doctor check` a potvrď, že sekce Skills
-entrypointy je zelená.
+asserovaly symlink model a na korektním GEN3 layoutu by `doctor check`
+false-failoval (`.agents/skills není symlink`, `.claude/skills není symlink`).
+Po flipu spusť `doctor check` i `bun run doctor:agent-skills` a potvrď, že
+sekce Skills entrypointy je zelená.
 
-Na platformě bez funkčního Git symlinku je stav setup gap, ne oprávnění držet
-dva sources of truth. Zapiš ownera a Doctor/init opravu.
+Tracked mirror nepotřebuje Git symlink ani Windows Developer Mode; platforma
+bez symlinků není setup gap. Držet symlink/junction jako druhý source of truth
+není oprávněné — root Doctor jej hlásí `repair_needed/mirror_legacy_link`
+a oprava je migrace podle Organization manuálu.
 
 ### Gate 4D — overlay mapping
 
@@ -1188,7 +1198,8 @@ Migrace Organizace je hotová teprve když:
 - in-org Launchpad runtime je odstraněný a žádný aktivní consumer nezávisí na
   `launchpad/contracts`;
 - obecný Guide je shared; organization-specific onboarding je v owner vrstvě;
-- `.agents/skills` je canonical a `.claude/skills` správný symlink;
+- `.agents/skills` je canonical a `.claude/skills` Git-tracked byte-for-byte
+  mirror (`bun run doctor:agent-skills` hlásí `ok/mirror_ready`);
 - všichni cohort colleagues mají schválené `company/colleagues/<os-user>`
   mapování bez privátních dat;
 - každá required app má reference-only package `lazurio.runtime.v1` a její

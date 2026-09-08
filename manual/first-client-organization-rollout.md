@@ -655,7 +655,12 @@ repair:agent-skills` je fail-closed no-write diagnostika a nic neregeneruje ani
 nestageuje. Jakýkoli drift, chybějící mirror nebo legacy tvar oprav explicitně
 v task worktree a odvozený mirror commitni ve stejném diffu jako kanonickou
 úpravu; neznámý obsah nejdřív porovnej a zachovej cizí práci. `.claude/skills`
-nikdy nesmí být v `.gitignore`.
+nikdy nesmí být v `.gitignore`. Root Doctor hlásí tytéž stavy stejnými kódy a
+stejnou remedy; strojovou matici drží
+`lazurio/runtime/agent-skills-entrypoint-compatibility.json`, postup opravy
+Organization manuál `manual/agent-skills-mirror-migration.md` a
+[`manual/organization-install.md`](organization-install.md) („Matice
+kompatibility a nedestruktivní oprava“).
 
 Mission Control data repo zakládej jako samostatný Git checkout na větvi `v3`.
 Při použití skeletonu z `mission-control/templates/organization-data` ponech

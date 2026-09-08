@@ -4,12 +4,25 @@ import { dirname, join, relative, resolve } from "node:path";
 // Decision 0104 (+ CAC-0085): .claude/skills je Git-tracked byte-for-byte
 // mirror kanonického .agents/skills — celých adresářů aktivních skillů včetně
 // references/, templates/ a scripts/, ne jen SKILL.md (žádné symlinky/junctiony
-// — na Windows nejsou spolehlivé). Tento check běží i nad cizími checkouty
-// (Organization mounty), proto je fail (blocked) vyhrazen jen stavům, které
-// nejde bezpečně opravit lokální repair lane; legacy symlink model, starší
-// SKILL.md-only mirror a drift jsou repair_needed (warn).
+// — na Windows nejsou spolehlivé). Tento check běží read-only i nad cizími
+// checkouty (Organization mounty). Žádná lane mirror nepřepisuje: root i
+// Organization `repair:agent-skills` jsou no-write diagnostika a jediná oprava
+// je explicitní Git-reviewovaná změna v task worktree podle Organization
+// migračního manuálu (HumanAndMachines/Lazurio#245). Proto je fail (blocked)
+// vyhrazen jen stavům, o kterých musí rozhodnout vlastník checkoutu (neznámý
+// obsah, unsafe linky); legacy symlink/junction, placeholder, chybějící mirror
+// a drift jsou repair_needed (warn) se stejnou remedy jako v Organization
+// Doctoru. Strojovou matici kompatibility root × Organization stavů drží
+// ./agent-skills-entrypoint-compatibility.json.
 export const AGENT_SKILLS_ENTRYPOINT_SCHEMA = "companiesascode.agent_skills_entrypoint.v2";
 export const CLAUDE_SKILLS_MATERIALIZATION = "tracked-derived-mirror";
+// Organization migrační manuál (relativně k Organization rootu; v Lazurio
+// rootu na něj ukazuje manual/organization-install.md). Root nemá druhou
+// pravdu — remedy je jedna formulace pro root i Organization.
+export const AGENT_SKILLS_MIGRATION_MANUAL_PATH = "manual/agent-skills-mirror-migration.md";
+export const AGENT_SKILLS_MANUAL_REPAIR_REMEDY =
+  `oprav ho explicitně v task worktree podle ${AGENT_SKILLS_MIGRATION_MANUAL_PATH} `
+  + "(Organization root) a odvozený mirror commitni; repair:agent-skills je no-write a nic nepřepíše";
 export const AGENT_CAPABILITY_MODES = Object.freeze({
   CODEX_ONLY: "codex-only",
   CLAUDE_COMPATIBLE: "claude-compatible",
@@ -278,7 +291,7 @@ export async function inspectAgentSkillsEntrypoint(organizationRoot, {
     return state({
       status: "repair_needed",
       code: "mirror_missing",
-      message: `${compatibilityRelativePath} mirror chybí; spusť bun run repair:agent-skills a mirror commitni.`,
+      message: `${compatibilityRelativePath} mirror chybí; ${AGENT_SKILLS_MANUAL_REPAIR_REMEDY}.`,
     });
   }
 
@@ -292,7 +305,7 @@ export async function inspectAgentSkillsEntrypoint(organizationRoot, {
         return state({
           status: "repair_needed",
           code: "mirror_legacy_link",
-          message: `${compatibilityRelativePath} je legacy symlink/junction; repair lane ho nahradí trackovaným mirrorem (decision 0104).`,
+          message: `${compatibilityRelativePath} je legacy symlink/junction (decision 0104); ${AGENT_SKILLS_MANUAL_REPAIR_REMEDY}.`,
         });
       }
     } catch (error) {
@@ -301,7 +314,7 @@ export async function inspectAgentSkillsEntrypoint(organizationRoot, {
     return state({
       status: "repair_needed",
       code: "entrypoint_wrong_link",
-      message: `${compatibilityRelativePath} je symlink mimo kanonický katalog; repair lane ho nahradí trackovaným mirrorem.`,
+      message: `${compatibilityRelativePath} je symlink mimo kanonický katalog; ${AGENT_SKILLS_MANUAL_REPAIR_REMEDY}.`,
     });
   }
 
@@ -320,7 +333,7 @@ export async function inspectAgentSkillsEntrypoint(organizationRoot, {
       return state({
         status: "repair_needed",
         code: "mirror_legacy_placeholder",
-        message: `${compatibilityRelativePath} je textový placeholder z Windows checkoutu; repair lane ho nahradí mirrorem.`,
+        message: `${compatibilityRelativePath} je textový placeholder z Windows checkoutu; ${AGENT_SKILLS_MANUAL_REPAIR_REMEDY}.`,
       });
     }
     return state({
@@ -351,7 +364,7 @@ export async function inspectAgentSkillsEntrypoint(organizationRoot, {
     return state({
       status: "repair_needed",
       code: "mirror_drift",
-      message: `${compatibilityRelativePath} není byte-for-byte mirror: ${drift.join(" ")}`,
+      message: `${compatibilityRelativePath} není byte-for-byte mirror; ${AGENT_SKILLS_MANUAL_REPAIR_REMEDY}: ${drift.join(" ")}`,
     });
   }
   return state({
@@ -418,7 +431,7 @@ export async function agentSkillsEntrypointsDoctorCheck({
       status === "fail"
         ? `${blocked.length} agent-skills entrypointů je blokovaných.`
         : status === "warn"
-          ? `${repairNeeded.length} agent-skills entrypointů čeká na repair lane (tracked mirror, decision 0104).`
+          ? `${repairNeeded.length} agent-skills entrypointů vyžaduje explicitní Git-reviewovanou opravu v task worktree podle ${AGENT_SKILLS_MIGRATION_MANUAL_PATH} (tracked mirror, decision 0104; žádná lane mirror nepřepisuje).`
           : status === "ok"
             ? `${applicable.length} agent-skills entrypointů drží tracked byte-for-byte mirror.`
             : "Žádný checkout ještě agent-skills entrypoint nedeklaruje.",
