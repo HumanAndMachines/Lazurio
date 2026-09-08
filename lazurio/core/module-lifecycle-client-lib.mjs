@@ -8,10 +8,12 @@ export const MODULE_LIFECYCLE_REPORT_SCHEMA = "lazurio.module_lifecycle.report.v
 export const MODULE_LIFECYCLE_ACTIONS = new Set(["status", "start", "open", "stop"]);
 
 // Discovery must fail quickly when the locator points at a dead Server. A
-// deliberate lifecycle mutation is different: Server-owned start can spend its
-// bounded listener-ownership grace period, and Open may then wait for health.
-// Keep that request bounded too, but do not cut it off at the read deadline.
+// verified Server may need longer to build a cold Apps inventory: discovery,
+// dependency inspection and runtime health are real work, not a liveness probe.
+// Keep inventory and lifecycle mutations bounded without extending identity
+// discovery or retrying a mutation.
 const serverReadTimeoutMs = 5_000;
+const inventoryReadTimeoutMs = 30_000;
 const lifecycleActionTimeoutMs = 60_000;
 
 export async function runModuleLifecycle({
@@ -74,6 +76,7 @@ export async function runModuleLifecycle({
 
   const inventory = await requestJson(fetchFn, new URL("/api/apps", locator.origin), {
     method: "GET",
+    timeoutMs: inventoryReadTimeoutMs,
   });
   if (!inventory.ok) {
     return failed(base, "server_inventory_unavailable", inventory.message, {
