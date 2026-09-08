@@ -1281,6 +1281,15 @@ async function attachModuleApplicationProjections({ companiesRoot, organizations
         contract_path: projection.contract_path,
         open_target_app_id: projection.open_target_app_id,
         open_target_source: projection.open_target_source,
+        // Preserve physical scope and Team intent independently of UI placement.
+        // This is a projection of the available local module, never an ACL.
+        declaration: {
+          path: slot.path,
+          space: slot.space,
+          teams: [...(slot.teams ?? [])],
+          status: slot.status,
+          ui_exposure: slot.ui_exposure,
+        },
       };
       const itemByPackagePath = new Map(
         projection.items.map((item) => [posix.join(moduleRootPath, item.package_path), item]),
