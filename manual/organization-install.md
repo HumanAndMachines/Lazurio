@@ -488,8 +488,9 @@ lazurio organization install <github-login> --role steward --json
 lazurio organization install <github-login> --role builder --json
 ```
 
-- **Bez `--role`** je instalace explicitní Admin operace (`scope.restricted_slots:
-  "include"`): absentní restricted slot se materializuje stejně jako běžné.
+- **Bez `--role`** je instalace explicitní Admin operace
+  (`scope.restricted_slots: "include"`): absentní restricted slot se
+  materializuje stejně jako běžné.
 - **`--role steward` a `--role builder`** (`scope.restricted_slots: "exclude"`)
   materializují jen běžné sloty a jejich descendants včetně povinného
   `repository_db_mount` Mission Control dat. Restricted slot i každý slot pod

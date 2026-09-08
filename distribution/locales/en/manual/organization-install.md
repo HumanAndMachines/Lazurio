@@ -535,9 +535,10 @@ lazurio organization install <github-login> --role builder --json
 - **Without `--role`** the installation is an explicit Admin operation
   (`scope.restricted_slots: "include"`): an absent restricted slot is
   materialized like an ordinary one.
-- **`--role steward` and `--role builder`** (`scope.restricted_slots:
-  "exclude"`) materialize only ordinary slots and their descendants, including
-  the required `repository_db_mount` of Mission Control data. The restricted
+- **`--role steward` and `--role builder`**
+  (`scope.restricted_slots: "exclude"`) materialize only ordinary slots and
+  their descendants, including the required `repository_db_mount` of Mission
+  Control data. The restricted
   slot and every slot below it end up in the result as `current` with reason
   `excluded_by_role_scope`: no `git clone`, `fetch`, `ls-remote`, or `gh api`
   runs over them. This state is intentional and distinct from a missing grant
