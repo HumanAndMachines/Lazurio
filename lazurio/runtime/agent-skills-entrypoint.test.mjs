@@ -172,6 +172,23 @@ test("symlinkovaný .claude parent nikdy nedostane zápis", async () => {
   expect(await readdir(outside)).toEqual([]);
 });
 
+test("symlinkovaný .agents předek mimo repozitář: check selže a sync nic nezkopíruje", async () => {
+  const root = await fixture("canonical-parent-link");
+  await syncAgentSkillsMirror(root);
+  const outside = await mkdtemp(join(tmpdir(), "agent-skills-canonical-outside-"));
+  tempRoots.push(outside);
+  await mkdir(join(outside, "skills", "evil-skill"), { recursive: true });
+  await writeFile(join(outside, "skills", "evil-skill", "SKILL.md"), "# evil\n");
+  await rm(join(root, ".agents"), { recursive: true });
+  await linkDirectory(outside, join(root, ".agents"));
+
+  const state = await checkAgentSkillsMirror(root);
+  expect(state.status).toBe("repair_needed");
+  expect(state.differences[0]).toContain("symlinkovaný předek");
+  await expect(syncAgentSkillsMirror(root)).rejects.toThrow("symlinkovaný předek");
+  expect(await readdir(join(root, ".claude", "skills"))).not.toContain("evil-skill");
+});
+
 test("chybějící nebo symlinkovaný .agents/skills: check selže a sync nic nemaže", async () => {
   const root = await fixture("canonical-missing");
   await syncAgentSkillsMirror(root);

@@ -22,11 +22,12 @@ import {
   mkdir,
   readFile,
   readdir,
+  realpath,
   rm,
   rmdir,
   unlink,
 } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 
 export const CANONICAL_SKILLS_PATH = ".agents/skills";
 export const CLAUDE_SKILLS_PATH = ".claude/skills";
@@ -77,12 +78,23 @@ async function scanTree(baseDirectory, displayPrefix) {
   return { files, directories, unsafe };
 }
 
+// Skutečná cesta musí ležet uvnitř skutečné cesty rootu: symlinkovaný předek
+// (`.agents`, `.claude`, …) by jinak dovolil číst nebo zapisovat mimo repozitář.
+async function assertInsideRoot(root, path, label) {
+  const [rootReal, pathReal] = await Promise.all([realpath(root), realpath(path)]);
+  const comparable = (value) => (process.platform === "win32" ? value.toLowerCase() : value);
+  if (!comparable(pathReal).startsWith(comparable(rootReal) + sep)) {
+    throw new Error(`${label} musí ležet uvnitř repozitáře (žádný symlinkovaný předek).`);
+  }
+}
+
 async function canonicalTree(root) {
   const canonicalPath = join(root, CANONICAL_SKILLS_PATH);
   const stat = await lstatOrNull(canonicalPath);
   if (!stat?.isDirectory() || stat.isSymbolicLink()) {
     throw new Error(`${CANONICAL_SKILLS_PATH} musí být skutečný adresář.`);
   }
+  await assertInsideRoot(root, canonicalPath, CANONICAL_SKILLS_PATH);
   const tree = await scanTree(canonicalPath, CANONICAL_SKILLS_PATH);
   if (tree.unsafe.length > 0) {
     throw new Error(
@@ -94,10 +106,17 @@ async function canonicalTree(root) {
 
 // `.claude` musí být skutečný adresář (nebo chybět): přes symlinkovaný parent
 // by sync zapisoval mimo repozitář a Git by mirror netrackoval.
-async function mirrorParentProblem(mirrorPath) {
-  const parentStat = await lstatOrNull(dirname(mirrorPath));
-  if (parentStat && (parentStat.isSymbolicLink() || !parentStat.isDirectory())) {
+async function mirrorParentProblem(root, mirrorPath) {
+  const parent = dirname(mirrorPath);
+  const parentStat = await lstatOrNull(parent);
+  if (!parentStat) return null;
+  if (parentStat.isSymbolicLink() || !parentStat.isDirectory()) {
     return `${dirname(CLAUDE_SKILLS_PATH)} musí být skutečný adresář, ne symlink nebo junction.`;
+  }
+  try {
+    await assertInsideRoot(root, parent, dirname(CLAUDE_SKILLS_PATH));
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
   }
   return null;
 }
@@ -118,7 +137,7 @@ export async function agentSkillsMirrorDifferences(root = process.cwd()) {
   } catch (error) {
     return [error instanceof Error ? error.message : String(error)];
   }
-  const parentProblem = await mirrorParentProblem(mirrorPath);
+  const parentProblem = await mirrorParentProblem(repositoryRoot, mirrorPath);
   if (parentProblem) return [parentProblem];
   const mirrorStat = await lstatOrNull(mirrorPath);
   if (!mirrorStat) return [`${CLAUDE_SKILLS_PATH} chybí.`];
@@ -169,7 +188,7 @@ export async function syncAgentSkillsMirror(root = process.cwd()) {
   const repositoryRoot = resolve(root);
   const canonical = await canonicalTree(repositoryRoot);
   const mirrorPath = join(repositoryRoot, CLAUDE_SKILLS_PATH);
-  const parentProblem = await mirrorParentProblem(mirrorPath);
+  const parentProblem = await mirrorParentProblem(repositoryRoot, mirrorPath);
   if (parentProblem) throw new Error(parentProblem);
   const changed = [];
   const mirrorStat = await lstatOrNull(mirrorPath);
