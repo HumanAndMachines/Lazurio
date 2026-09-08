@@ -2,6 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { mkdir, readFile, rename, rm, symlink, writeFile } from "fs/promises";
 import { join } from "path";
 import { buildGitInventory } from "../../lazurio/runtime/git-inventory-lib.mjs";
+import { runLazurioUpdate } from "../../lazurio/runtime/lazurio-update-lib.mjs";
 import { readOrganizationRoot } from "../../lazurio/core/organization-root-reader-lib.mjs";
 import {
   organizationLegacyProjectionHash,
@@ -117,9 +118,25 @@ test("projection drift keeps the declared Organization root recovery key across 
     key: "OmegaCo::root",
     repo_path: "organizations/RecoveryMount_GEN3",
     organization_manifest_state: "projection_drift",
+    teams: expect.arrayContaining(["workspace"]),
   }));
   expect(inventory.repos.some((repo) => repo.organization === "OmegaCo" && repo.repo_kind !== "organization_root"))
     .toBe(false);
+  const updates = [];
+  const report = await runLazurioUpdate({ rootPath: root,
+    hostedWorkspace: { profile: "hosted", organization_slug: "OmegaCo",
+      team_id: "workspace", domain: "omega.example.test" },
+    deps: {
+      acquireLock: async () => ({ release: async () => {} }),
+      updateRepo: async (repo) => {
+        updates.push(repo.key);
+        return { repo_key: repo.key, repo_kind: repo.repo_kind, organization: repo.organization,
+          module: repo.module, state: "current", reason: "already_current" };
+      },
+    },
+  });
+  expect(updates).toContain("OmegaCo::root");
+  expect(report.results.some((result) => result.reason === "inventory_unavailable")).toBe(false);
 });
 
 test("a blocked directory fallback cannot shadow a later healthy declared Organization slug", async () => {
