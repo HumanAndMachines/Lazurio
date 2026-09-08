@@ -876,7 +876,7 @@ export function createRuntimeManager({
       return { survivingListenerProof, failure, log_excerpt };
     };
 
-    const earlyExit = await waitForEarlyExit(child, startEarlyExitProbeMs);
+    const earlyExit = await waitForEarlyExit(child, startEarlyExitProbeMs, sleepFn);
     let earlySurvivingListenerProof = null;
     if (earlyExit !== null) {
       record.exitFinalizationPromise = finalizeLauncherExit(earlyExit, { early: true });
@@ -1268,21 +1268,28 @@ export function createRuntimeManager({
 
   // Poll health, dokud port neposlouchá (healthy) nebo nevyprší okno / proces
   // spadne (unhealthy/stopped). Vrací poslední runtime snapshot.
+  // Bounded lifecycle čekání (tady, confirmStableHealthy, waitForPosixManagedExit,
+  // verifyStartedListenerOwnership, waitForReservedListenerChange a early-exit
+  // probe) používají injektovaný nowFn/sleepFn, aby testy mohly běžet na
+  // virtuálním čase. Na reálném čase zůstávají záměrně persistované timestampy,
+  // start-grace klasifikace v healthForApp (startedAt je skutečný ISO timestamp
+  // a grace se počítá vůči němu), krátká cache listener reconciliace a Windows
+  // owner-proof capture na pozadí, který je vázaný na health reálného potomka.
   async function waitForHealthy(app, initialRuntime) {
-    const deadline = Date.now() + openHealthyWaitMs;
+    const deadline = nowFn() + openHealthyWaitMs;
     let runtime = initialRuntime;
-    while (runtime.status === "starting" && Date.now() < deadline) {
+    while (runtime.status === "starting" && nowFn() < deadline) {
       const record = managedProcesses.get(runtimeKeyForApp(app));
       if (record && !record.stopping) {
         const event = await Promise.race([
           record.child.exited.then(() => "exited"),
-          sleep(openHealthyPollMs).then(() => "poll"),
+          sleepFn(openHealthyPollMs).then(() => "poll"),
         ]);
         if (event === "exited" && record.exitFinalizationPromise) {
           await record.exitFinalizationPromise;
         }
       } else {
-        await sleep(openHealthyPollMs);
+        await sleepFn(openHealthyPollMs);
       }
       runtime = await healthForApp(app);
     }
@@ -1294,7 +1301,7 @@ export function createRuntimeManager({
     if (!record) return runtime;
     const result = await Promise.race([
       record.child.exited.then((exitCode) => ({ exited: true, exitCode })),
-      sleep(openHealthyStabilityMs).then(() => ({ exited: false })),
+      sleepFn(openHealthyStabilityMs).then(() => ({ exited: false })),
     ]);
     if (!result.exited) return healthForApp(app);
 
@@ -1679,20 +1686,20 @@ export function createRuntimeManager({
   }
 
   async function waitForPosixManagedExit(record, timeoutMs) {
-    const deadline = Date.now() + timeoutMs;
+    const deadline = nowFn() + timeoutMs;
     const childExit = Promise.resolve(record.child.exited).then((exitCode) => {
       record.stopExitConfirmed = true;
       record.stopExitCode = exitCode;
       return exitCode;
     });
-    while (Date.now() < deadline) {
+    while (nowFn() < deadline) {
       if (!record.stopExitConfirmed) {
-        await Promise.race([childExit, sleep(Math.min(50, deadline - Date.now()))]);
+        await Promise.race([childExit, sleepFn(Math.min(50, Math.max(0, deadline - nowFn())))]);
       }
       if (record.stopExitConfirmed && !(await managedProcessGroupAlive(record))) {
         return { exitCode: record.stopExitCode, timeout: false };
       }
-      await sleep(Math.min(50, Math.max(0, deadline - Date.now())));
+      await sleepFn(Math.min(50, Math.max(0, deadline - nowFn())));
     }
     return { exitCode: null, timeout: true };
   }
@@ -2871,7 +2878,7 @@ export function createRuntimeManager({
 
   async function verifyStartedListenerOwnership(app, record, { timeoutMs }) {
     const expectedCwd = runtimeCwdForApp(app);
-    const deadline = Date.now() + timeoutMs;
+    const deadline = nowFn() + timeoutMs;
     let evidence = [];
     const observeAllListeners = async () => {
       evidence = [];
@@ -2893,9 +2900,9 @@ export function createRuntimeManager({
     };
     do {
       if (await observeAllListeners()) return evidence;
-      if (Date.now() >= deadline) break;
-      await sleep(Math.min(50, Math.max(0, deadline - Date.now())));
-    } while (Date.now() < deadline);
+      if (nowFn() >= deadline) break;
+      await sleepFn(Math.min(50, Math.max(0, deadline - nowFn())));
+    } while (nowFn() < deadline);
 
     // A listener can become healthy exactly while the final polling sleep
     // crosses the deadline (notably on Windows, where PID ownership appears
@@ -3204,13 +3211,13 @@ export function createRuntimeManager({
   }
 
   async function waitForReservedListenerChange(listener, expectedCwd, previousPid, timeoutMs) {
-    const deadline = Date.now() + timeoutMs;
+    const deadline = nowFn() + timeoutMs;
     let owner = null;
     do {
       owner = await resolveOccupiedPortOwner(listener, expectedCwd);
       if (!owner || owner.pid !== previousPid) return owner;
-      await sleep(50);
-    } while (Date.now() < deadline);
+      await sleepFn(50);
+    } while (nowFn() < deadline);
     return owner;
   }
 
@@ -4245,10 +4252,10 @@ function packageManagerForLockfile(name) {
   );
 }
 
-async function waitForEarlyExit(child, timeoutMs) {
+async function waitForEarlyExit(child, timeoutMs, sleepFn = sleep) {
   return Promise.race([
     child.exited,
-    sleep(timeoutMs).then(() => null),
+    sleepFn(timeoutMs).then(() => null),
   ]);
 }
 

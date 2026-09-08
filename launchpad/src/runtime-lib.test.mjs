@@ -251,28 +251,56 @@ test("runtime manager spustí, změří a zastaví managed aplikaci", async () =
 
 test("Open počká na přechodný HTTP 404 během start grace", async () => {
   const port = await findFreePort();
-  const root = await createCompaniesWorkspaceFixture({
-    port,
-    serverSource: [
-      "const startedAt = Date.now();",
-      "const server = Bun.serve({",
-      "  hostname: process.env.LAZURIO_RUNTIME_HOST,",
-      "  port: Number(process.env.LAZURIO_RUNTIME_PORT),",
-      "  fetch(request) {",
-      "    const url = new URL(request.url);",
-      "    if (url.pathname === '/health' && Date.now() - startedAt < 1400) return new Response('building', { status: 404 });",
-      "    if (url.pathname === '/health') return Response.json({ status: 'ok' });",
-      "    return new Response('ok');",
-      "  },",
-      "});",
-      "setInterval(() => {}, 2147483647);",
-      "",
-    ].join("\n"),
+  const root = await createCompaniesWorkspaceFixture({ port });
+  const clock = createVirtualRuntimeClock();
+  // Přechodné 404 jsou počítané, ne časované: první tři health odpovědi jsou
+  // „build ještě běží“, další už 200. Spolu s virtuálním clockem test nezávisí
+  // na wall-clocku ani na zátěži zbytku suite (issue #288).
+  let healthProbes = 0;
+  let server = null;
+  let groupAlive = true;
+  let reportExit;
+  const exited = new Promise((resolve) => {
+    reportExit = resolve;
   });
   const runtime = createRuntimeManager({
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
     instanceId: "transient-health-status",
+    platform: "linux",
+    bunExecutable: process.execPath,
+    resolvePortOwnerFn: async () => null,
+    processGroupAliveFn: async () => groupAlive,
+    signalProcessGroupFn: async () => {
+      groupAlive = false;
+      server?.stop(true);
+      server = null;
+      reportExit(0);
+    },
+    spawnProcess: () => {
+      // Listener vzniká až „spawnem“ jako u skutečného potomka; před startem
+      // je port volný.
+      server = Bun.serve({
+        hostname: "127.0.0.1",
+        port,
+        fetch(request) {
+          const url = new URL(request.url);
+          if (url.pathname !== "/health") return new Response("ok");
+          healthProbes += 1;
+          return healthProbes <= 3
+            ? new Response("building", { status: 404 })
+            : Response.json({ status: "ok" });
+        },
+      });
+      return {
+        pid: 12_347,
+        stdout: new Response("").body,
+        stderr: new Response("").body,
+        exited,
+        kill: () => {},
+      };
+    },
+    ...clock.runtimeOptions,
   });
 
   try {
@@ -280,9 +308,15 @@ test("Open počká na přechodný HTTP 404 během start grace", async () => {
     expect(opened).toMatchObject({
       status: "healthy",
       url: `http://127.0.0.1:${port}`,
+      steps: [{ step: "start", status: "starting" }],
     });
+    expect(opened.runtime.status).toBe("healthy");
+    // Open musel projít přes všechny přechodné 404 a stabilitu potvrdit dalším
+    // úspěšným probe; 404 během start grace nikdy neskončilo jako unhealthy.
+    expect(healthProbes).toBeGreaterThan(4);
   } finally {
     await runtime.stop("test-company-demo-v1").catch(() => {});
+    server?.stop(true);
   }
 }, platformTestTimeout(10_000));
 
@@ -1746,6 +1780,9 @@ test("POSIX Stop bez potvrzeného exitu po SIGKILL vrátí ownership do retryabl
   const exited = new Promise((resolve) => {
     reportExit = resolve;
   });
+  // SIGTERM (5 s) + SIGKILL (2 s) okna běží na virtuálním clocku: test ověřuje
+  // sekvenci signálů a retryable ownership, ne skutečné uplynutí 7 s (issue #288).
+  const clock = createVirtualRuntimeClock();
   const runtime = createRuntimeManager({
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
@@ -1768,8 +1805,10 @@ test("POSIX Stop bez potvrzeného exitu po SIGKILL vrátí ownership do retryabl
       exited,
       kill: () => {},
     }),
+    ...clock.runtimeOptions,
   });
 
+  const startedAtVirtual = clock.now();
   await runtime.start("test-company-demo-v1");
   await expect(runtime.stop("test-company-demo-v1")).rejects.toMatchObject({
     status: 500,
@@ -1781,12 +1820,15 @@ test("POSIX Stop bez potvrzeného exitu po SIGKILL vrátí ownership do retryabl
     },
   });
   expect(signals).toEqual(["SIGTERM", "SIGKILL"]);
+  // Stop skutečně vyčerpal obě čekací okna (SIGTERM 5 s + SIGKILL 2 s) místo
+  // předčasného vzdání; early-exit probe startu přidává 1 s.
+  expect(clock.now() - startedAtVirtual).toBeGreaterThanOrEqual(8_000);
   expect((await runtime.health("test-company-demo-v1")).managed).toBe(true);
 
   const stopped = await runtime.stop("test-company-demo-v1");
   expect(stopped.runtime.status).toBe("stopped");
   expect(signals).toEqual(["SIGTERM", "SIGKILL", "SIGTERM"]);
-}, 12_000);
+}, platformTestTimeout(10_000));
 
 test("runtime manager nepředá stale Organization root lokálnímu surface ani Personalspace lane", async () => {
   const port = await findFreePort();
@@ -5494,6 +5536,26 @@ async function findFreePort() {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Virtuální clock pro bounded lifecycle čekání runtime manageru (nowFn/sleepFn).
+// sleepFn posune virtuální čas a předá řízení event loopu makrotaskem, aby už
+// vyřešené child.exited nebo health promisy stihly vyhrát Promise.race stejně
+// jako při reálném čekání. Testy tím nezávisí na wall-clocku ani na zátěži
+// zbytku suite; startuje z reálného Date.now(), takže se dá srovnávat s
+// persistovanými ISO timestampy.
+function createVirtualRuntimeClock(start = Date.now()) {
+  let now = start;
+  return {
+    now: () => now,
+    runtimeOptions: {
+      nowFn: () => now,
+      sleepFn: async (milliseconds) => {
+        now += Math.max(0, Number(milliseconds) || 0);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      },
+    },
+  };
 }
 
 function createRuntimeManager(options) {
