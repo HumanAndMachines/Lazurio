@@ -528,6 +528,39 @@ drift. The diagnostic lane does not overwrite any content or symlink/junction
 by guesswork; it returns every conflict to the Agent for a safe fix in the
 owning repo.
 
+### Compatibility matrix and non-destructive repair
+
+Which `.claude/skills` states the Lazurio root Doctor (check
+`launchpad.agent_skills_entrypoints`) and the Organization Doctor
+(`bun run doctor:agent-skills`) report, and with which code, is held
+machine-readably by `lazurio/runtime/agent-skills-entrypoint-compatibility.json`.
+It is not prose: the test
+`lazurio/runtime/agent-skills-entrypoint-compatibility.test.mjs` proves it
+over a real fresh checkout of a fixture Organization (tracked mirror, legacy
+symlink/junction, placeholder, missing, drift, foreign link, unknown file, link
+inside the mirror), on POSIX and with Windows `win32` path comparison, including
+the `codex-only` exception; the Organization side is represented by a pinned
+copy of the template Doctor in `lazurio/testdata/agent-skills-entrypoint/`
+(provenance next to the fixture) and the variable
+`LAZURIO_AGENT_SKILLS_ORGANIZATION_SCRIPT` lets the test run against a live
+Organization script. The human form of the matrix and the migration procedure
+live in the Organization manual `manual/agent-skills-mirror-migration.md` in
+the Organization root (source: OrganizationTemplate_GEN3); the root has no
+second truth and both Doctors return the same remedy.
+
+The repair is deterministic, non-destructive and has no writer: a legacy
+symlink/junction, text placeholder, missing mirror or drift is fixed
+exclusively in the Organization task worktree — replace the legacy object with
+a plain directory, carry over only the files declared in
+`.agents/skills/manifest.json`, never delete unknown content by guesswork (stop
+and ask its owner to decide), commit the mirror together with the canonical
+change and verify with `bun run doctor:agent-skills`. An Organization on the
+legacy contract `companiesascode.agent_skills_entrypoint.v1`
+(`operator-managed-link`, template before PR #48) moves to the tracked mirror
+through a separate Template Sync PR; until then the root Doctor reports it as
+`repair_needed` (warn), never as fail, and the installation does not require a
+choice between two contradictory instructions (HumanAndMachines/Lazurio#245).
+
 The CLI neither selects the Root nor stores it as additional configuration. A
 production installation always uses `~/Lazurio` on macOS/Linux and
 `%USERPROFILE%\\Lazurio` on Windows. This gives both people and Agents one
