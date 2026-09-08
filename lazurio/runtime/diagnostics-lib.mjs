@@ -22,7 +22,7 @@ import {
   resolveGitExecutableSync,
   safeGitCommandEnv,
 } from "./git-lib.mjs";
-import { agentSkillsEntrypointsDoctorCheck } from "./agent-skills-entrypoint-lib.mjs";
+import { agentSkillsEntrypointsDoctorCheck } from "./agent-skills-doctor-lib.mjs";
 import { runChildDoctorLane } from "./doctor-children-lib.mjs";
 import {
   DOCTOR_REPORT_SCHEMA_VERSION_V3,
@@ -471,10 +471,6 @@ export async function buildLaunchpadDoctorReport(options = {}) {
         ...(appsResponse.organizations ?? []),
         ...(appsResponse.template_mounts ?? []),
       ],
-      agentCapabilityMode:
-        options.agentCapabilityMode
-        ?? process.env.COMPANYASCODE_AGENT_CAPABILITY_MODE
-        ?? "claude-compatible",
     }),
   ];
   // Podřízené doctory namountovaných rep (decision 0118). Root nese jen

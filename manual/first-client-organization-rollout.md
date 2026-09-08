@@ -645,17 +645,14 @@ Organization manifest gate:
 | `design-system` | aktivní root slot z template, nebo neobjednaný `planned_slot` bez `git` |
 | `infra` | aktivní restricted root slot, `space: "root"`, `git.url` + `git.branch`; u local-first bez provider repa smí být dočasně lokální repo bez remote se zapsaným InfraTemplate adoption issue |
 
-Agentní entrypoint gate: `.agents/skills/` je kanonický Git-tracked source of
-truth a `.claude/skills` je **Git-tracked odvozený byte-for-byte mirror**
-(`<slug>/SKILL.md` aktivních skillů z manifestu, žádné symlinky ani junctiony —
-decision 0104). `bun run doctor:agent-skills` je read-only parity check;
-čerstvý checkout z template stavu má mirror rovnou v Gitu a hlásí `ok`. Legacy
-symlink/junction/placeholder nebo drift hlásí `repair`; `bun run
-repair:agent-skills` je fail-closed no-write diagnostika a nic neregeneruje ani
-nestageuje. Jakýkoli drift, chybějící mirror nebo legacy tvar oprav explicitně
-v task worktree a odvozený mirror commitni ve stejném diffu jako kanonickou
-úpravu; neznámý obsah nejdřív porovnej a zachovej cizí práci. `.claude/skills`
-nikdy nesmí být v `.gitignore`.
+Agentní entrypoint gate: `.agents/skills/` je jediný autorský zdroj skillů a
+`.claude/skills` je **Git-tracked bajtově shodná kopie celého adresáře**
+(generovaný artefakt jako lockfile, žádné symlinky ani junctiony — rozhodnutí
+2026-09-08, nahrazuje repair lane 0104). Čerstvý checkout z template má kopii
+rovnou v Gitu a `bun run skills:check` hlásí `ok`. Po každé změně skillu spusť
+`bun run skills:sync` a kopii commitni ve stejném diffu; `skills:check` je
+součást `bun run check` i CI a na jakýkoli rozdíl nebo symlink failuje jedinou
+hláškou. `.claude/skills` nikdy nesmí být v `.gitignore`.
 
 Mission Control data repo zakládej jako samostatný Git checkout na větvi `v3`.
 Při použití skeletonu z `mission-control/templates/organization-data` ponech

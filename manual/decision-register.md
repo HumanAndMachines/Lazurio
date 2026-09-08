@@ -54,7 +54,7 @@ frameworku se sem nepřenášejí).
 | 0095 | Admin smí mergovat i vlastní PR; Steward je běžná merge lane, ne výhradní autorita. |
 | 0102 | Lokální Mission Control writer používá GitHub identitu přihlášeného Principála (žádný druhý IAM); datová lane se zamyká progresivně. |
 | 0103 | Agentní PR disciplína: vždy worktree + PR, průběžný push, Draft PR → Ready, průvodcovský handoff, Publikace řízená živými GitHub právy, progresivní zamykání `main`. Předání jinému Principálovi používá reviewer request pro kontrolu a assignee pro vlastnictví dotažení; Task Agent pod přiřazeným GitHub účtem pracuje přímo na PR branchi včetně bezpečného `--force-with-lease` a nevrací změny autorovi pouhým komentářem. Assignment sám neuděluje GitHub práva ani publikační mandát. |
-| 0104 | `.claude/skills` je Git-tracked byte-for-byte mirror `.agents/skills` (Windows-safe, žádné symlinky); paritu hlídá doctor a opravuje repair lane. |
+| 0104 | `.claude/skills` je Git-tracked byte-for-byte mirror `.agents/skills` (Windows-safe, žádné symlinky). Původní doctor/repair lane s legacy stavy nahrazuje rozhodnutí 2026-09-08 níže (Draft k potvrzení). |
 | 0112 | Agentní instrukce jsou ústava: vysvětlují hodnoty, hranice a očekávání, nediktují postup; slovník pěti pojmů (Principál, Kolega, AI Kolega, Worker Agent, Buddy); jedno pravidlo = jeden kanonický domov; mechaniku nese skript/skill/doctor. |
 | 0113 | Přejmenovatelné jméno (slug, label, deklarace) není autorizační ani join klíč: vazby a výběr drží stabilní identita a ověřený stav, nikdy samotné jméno. |
 | 0118 | Composable doctor surface: root doctor svolává vlastní doctory namountovaných rep podle deklarace v manifestu, agreguje vnořené reporty a rozbitého potomka hlásí nahlas; slovník stavů `not_applicable` / `blocked` / `incomplete`. |
@@ -95,3 +95,25 @@ takže cesta ani shodná verze neprokazují identitu binárky. Consumer testy ov
 použití vybraného příkazu a zachování PATH pro shimy. Git context/config
 sanitizace, GitHub host, explicitní argv, timeouty, access a immutable hosted
 Resident/Buddy artefaktové piny zůstávají samostatnými hranicemi.
+
+## Agent skills entrypoint: generovaná kopie jako lockfile (2026-09-08, Draft k potvrzení)
+
+Principál rozhodl zjednodušení entrypointu pro Claude Code; formulace je Draft,
+dokud maintaineři frameworku nepřidělí číslo decision recordu. `.agents/skills`
+je jediný autorský zdroj skillů (open standard, Codex ho čte nativně).
+`.claude/skills` je Git-trackovaná bajtově shodná kopie celého adresáře, kterou
+čte pouze Claude Code — generovaný artefakt jako lockfile. Žádné symlinky,
+junctiony, Windows Developer Mode, textové placeholdery ani „operator-managed
+link". Jeden malý skript se dvěma příkazy: `skills:sync` (kopie bajtově shodná,
+přebytek v cíli smazán, symlink/junction v cíli nahrazen adresářem,
+idempotentní a deterministické) a `skills:check` (fail-closed bajtové porovnání
+obou stromů; `.claude/skills` ani žádná jeho část nesmí být symlink/junction;
+jediná hláška „`.claude/skills` neodpovídá `.agents/skills`; spusť
+`bun run skills:sync` a změnu commitni"). `skills:check` je součást
+`bun run check` a CI. Žádné jiné stavy, repair lane, `manual_repair_required`,
+matice kompatibility ani verze kontraktu; migrace starších checkoutů proběhne
+automaticky Gitem (tracked adresář nahradí symlink) a Doctor jen hlásí drift
+touž hláškou. Algoritmus má jediný zdroj v Lazurio
+`lazurio/runtime/agent-skills-entrypoint.mjs`; OrganizationTemplate_GEN3 ho
+nese jako managed verbatim kopii `scripts/agent-skills-entrypoint.mjs`. Toto
+rozhodnutí nahrazuje repair lane z 0104 a uzavírá HumanAndMachines/Lazurio#245.
