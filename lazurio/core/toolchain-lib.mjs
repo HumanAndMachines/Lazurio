@@ -170,6 +170,35 @@ function compareStableVersions(left, right) {
   return 0;
 }
 
+// Package execution used by versioned repository scripts is `bun x`. A
+// standalone `bunx` binary is optional: the official WinGet package may ship
+// only `bun.exe`, and that must not fail a machine that can run `bun x`.
+// Bun 1.4 prints the bunx usage contract and exits 1 when no package is
+// supplied; only that exact sentinel counts as capability proof.
+export const BUN_PACKAGE_RUNNER_PROBE_ARGS = Object.freeze(["x", "--help"]);
+export function classifyBunPackageRunnerProbe({ exitCode = null, stdout = "", stderr = "" } = {}) {
+  if (exitCode === 0) return "ready";
+  if (exitCode === 1 && /Usage:\s+bunx\b/u.test(`${stdout ?? ""}\n${stderr ?? ""}`)) return "ready";
+  return "unusable";
+}
+
+// Official, version-pinned Bun remedy. Doctor and Install Core only quote it;
+// they never run it, and they never point at a third-party registry package.
+export const OFFICIAL_BUN_INSTALL_DOCS_URL = "https://bun.com/docs/installation";
+export function officialBunInstallCommand({ platform, version }) {
+  if (!exactStableVersionPattern.test(version ?? "")) {
+    throw new Error("official Bun install command requires an exact stable version");
+  }
+  if (platform === "win32") {
+    // PowerShell form quoted verbatim from the official installation docs.
+    return `iex "& {$(irm https://bun.com/install.ps1)} -Version ${version}"`;
+  }
+  if (platform === "darwin" || platform === "linux") {
+    return `curl -fsSL https://bun.com/install | bash -s "bun-v${version}"`;
+  }
+  return null;
+}
+
 // Workstation executable selection belongs to the Principal's process PATH.
 // Keep the selected shim path: resolving its symlink can change argv[0] behavior.
 export function resolveGitExecutableOnPath(options = {}) {
