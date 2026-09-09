@@ -123,9 +123,11 @@ mandát, provider oprávnění a skutečné ochrany daného prostředí.
 
 Write smoke nedělej na ostrém obsahu. Použij k tomu určený jednorázový cíl
 — testovací kanál, scratch složku nebo drafts cestu, sandbox projekt/space,
-vlastní draft. Cíl použitý pro smoke zapiš do `INTEGRATIONS.md`, ať ho další
-mašina používá taky a nevzniká nepořádek ani zbytečné notifikace
-v produkčních prostorech Organizace.
+vlastní draft. Organization smoke cíl eviduj v jejím `INTEGRATIONS.md`,
+pokud jej má Organizace sdílet mezi Mašinami. Osobní smoke cíl a důkaz
+patří pouze do příslušného Personalspace nebo soukromého handoffu;
+osobní účty, adresáty ani obsah nepřenášej do sdíleného katalogu.
+Do evidence stačí metadata bezpečná pro daný scope a výsledek úklidu.
 
 **Výjimka pro úklid určeného smoke artefaktu:** když Principál výslovně
 schválil tento jmenovitý smoke cíl, patří do téže schválené operace i úklid
@@ -162,6 +164,7 @@ instalovat je vedle funkčního Composia:
 - [LinkedIn](integrations/linkedin.md)
 - [Canva](integrations/canva.md)
 - [ESO9](integrations/eso9.md)
+- [Osobní WhatsApp přes wacli](integrations/whatsapp-wacli.md)
 
 Jejich konkrétní bezpečnostní a provider limity zůstávají relevantní pro
 zvolenou cestu. Před použitím ověř aktuální oficiální dokumentaci.

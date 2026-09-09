@@ -4,8 +4,9 @@ Tento runbook je Codex-specifická část standardu
 [external-app-integrations.md](external-app-integrations.md): napojení na
 externí aplikace používají existující napojení, preferované Composio nebo
 vhodné přímé MCP či CLI bez Lazurio prostředníka.
-Popisuje, jak Kolega na své mašině přidá MCP server přímo do Codexu a drží
-přihlašovací artefakty lokálně. Přímý lokální STDIO server ani vzdálený
+Popisuje, jak Kolega na své mašině přidá MCP server přímo do Codexu.
+Lokální autorizace Codexu neznamená lokální custody upstream tokenů:
+u Composia je spravuje také poskytovatel ve svém cloudu. Přímý lokální STDIO server ani vzdálený
 HTTP MCP server Docker nepotřebují.
 
 Codex CLI, desktop aplikace a IDE extension používají stejnou lokální
