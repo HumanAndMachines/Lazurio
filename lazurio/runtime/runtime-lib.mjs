@@ -1169,6 +1169,26 @@ export function createRuntimeManager({
     });
   }
 
+  // The ingress may ensure only an already selected Team default. In contrast
+  // to an explicit Builder Open, it must preserve this session's worktree.
+  async function ensureHostedApp(appId) {
+    if (lifecycleProfile !== "hosted") {
+      throw new RuntimeActionError(404, "app_not_found", "Hosted ingress is unavailable.");
+    }
+    const app = await runtimeAppForAction(appId, { enforcePortContract: true });
+    return withModuleLeaseLock(app, async () => {
+      assertRuntimeManagerAcceptingStarts();
+      const entry = maintainedModuleEntryForApp(app);
+      if (!entry || entry.configured_app_id !== appId) {
+        throw new RuntimeActionError(404, "app_not_found", "App is not a selected Hosted Team default.");
+      }
+      const selected = await runtimeAppForAction(appId, { source: entry.source, enforcePortContract: true });
+      const current = await healthForApp(selected);
+      if (current.managed && current.status === "healthy") return { status: "healthy", runtime: current };
+      return openRuntimeAppUnlocked(selected);
+    });
+  }
+
   async function openRuntimeAppUnlocked(app, takeover = {}) {
     const runtimeKey = runtimeKeyForApp(app);
     const runtimeSource = runtimeSourceForApp(app);
@@ -1332,18 +1352,18 @@ export function createRuntimeManager({
   async function stop(appId, { source = null } = {}) {
     const app = await runtimeAppForAction(appId, { source });
     return withModuleLeaseLock(app, async () => {
-      if (maintainedModuleEntryForApp(app)) {
-        throw new RuntimeActionError(
-          409,
-          "hosted_module_always_on",
-          `${app.title}: Hosted Team Workspace keeps every Team Module active; switch source or restart it instead of stopping it.`,
-          [`module_lease_key: ${moduleLeaseKeyForApp(app)}`],
-          { failure_kind: "hosted_module_always_on" },
-        );
-      }
+      const entry = maintainedModuleEntryForApp(app);
       const record = selectManagedModuleStopRecord(managedProcesses.values(), app);
       if (!record) throw appNotManagedError(app, await healthForApp(app));
-      return stopRuntimeAppUnlocked(record.runtimeApp ?? app);
+      const result = await stopRuntimeAppUnlocked(record.runtimeApp ?? app);
+      if (entry) {
+        entry.status = "stopped";
+        entry.next_attempt_at_ms = 0;
+        entry.failure_kind = null;
+        entry.last_error = null;
+        maintenanceRevision += 1;
+      }
+      return result;
     });
   }
 
@@ -2482,7 +2502,7 @@ export function createRuntimeManager({
         company: identity.company,
         module: identity.module,
         source: { type: "main" },
-        status: "pending",
+        status: "stopped",
         attempts: 0,
         failure_kind: null,
         last_error: null,
@@ -2506,6 +2526,7 @@ export function createRuntimeManager({
       schema_version: "lazurio.hosted_workspace_maintenance.v1",
       total: apps.length,
       healthy: apps.filter((entry) => entry.status === "healthy").length,
+      stopped: apps.filter((entry) => entry.status === "stopped").length,
       starting: apps.filter((entry) => ["pending", "starting"].includes(entry.status)).length,
       degraded: apps.filter((entry) => entry.status === "degraded").length,
       apps,
@@ -2585,7 +2606,7 @@ export function createRuntimeManager({
       const retired = retiredMaintainedApps.splice(0);
       await mapWithConcurrency(retired, maintenanceConcurrency, stopRetiredMaintainedApp);
       const now = clock.now();
-      const due = [...maintainedApps.values()].filter((entry) => entry.next_attempt_at_ms <= now);
+      const due = [...maintainedApps.values()].filter((entry) => entry.status !== "stopped" && entry.next_attempt_at_ms <= now);
       await mapWithConcurrency(due, maintenanceConcurrency, ensureMaintainedApp);
       if (stopping) break;
       if (observedRevision !== maintenanceRevision || maintenanceWakePending) {
@@ -2597,7 +2618,7 @@ export function createRuntimeManager({
   }
 
   async function ensureMaintainedApp(entry) {
-    if (stopping || maintainedApps.get(entry.configured_app_id) !== entry) return;
+    if (stopping || entry.status === "stopped" || maintainedApps.get(entry.configured_app_id) !== entry) return;
     entry.status = "starting";
     try {
       const app = await runtimeAppForAction(entry.configured_app_id, {
@@ -2609,6 +2630,7 @@ export function createRuntimeManager({
       const outcome = await withModuleLeaseLock(app, async () => {
         assertRuntimeManagerAcceptingStarts();
         if (maintainedApps.get(entry.configured_app_id) !== entry) return { status: "retired" };
+        if (entry.status === "stopped") return { status: "stopped" };
         const active = managedRecordForModule(app);
         if (
           active
@@ -2624,7 +2646,7 @@ export function createRuntimeManager({
         const started = await startRuntimeAppUnlocked(app, { trigger: "hosted-maintenance" });
         return { status: started.runtime?.status ?? "starting" };
       });
-      if (outcome.status === "retired") return;
+      if (["retired", "stopped"].includes(outcome.status)) return;
       entry.status = outcome.status === "healthy" ? "healthy" : "starting";
       entry.attempts = outcome.status === "healthy" ? 0 : entry.attempts + 1;
       entry.failure_kind = null;
@@ -4032,6 +4054,7 @@ export function createRuntimeManager({
     install,
     refreshDependencies,
     open,
+    ensureHostedApp,
     stop,
     restart,
     logs,

@@ -4590,7 +4590,7 @@ test("worktree Start validates its selected manifest script and proves the actua
   }
 });
 
-test("hosted maintenance starts the discovered App, rejects Stop and retires removed Modules", async () => {
+test("hosted inventory stays cold until Open, supports Stop and retires removed Modules", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({ port });
   const app = withStaticEntrypoint(fixtureDiscoveryApp({ port }));
@@ -4606,7 +4606,10 @@ test("hosted maintenance starts the discovered App, rejects Stop and retires rem
 
   try {
     expect(() => runtime.maintainApps([app.id])).toThrow("requires discovered App records");
-    expect(runtime.maintainApps([app])).toMatchObject({ total: 1, starting: 1 });
+    expect(runtime.maintainApps([app])).toMatchObject({ total: 1, stopped: 1, starting: 0 });
+    await sleep(50);
+    expect(await runtime.health(app.id)).toMatchObject({ managed: false });
+    await Promise.all([runtime.ensureHostedApp(app.id), runtime.ensureHostedApp(app.id)]);
     const healthy = await waitForStatus(() => runtime.health(app.id), "healthy");
     expect(healthy).toMatchObject({
       managed: true,
@@ -4617,11 +4620,12 @@ test("hosted maintenance starts the discovered App, rejects Stop and retires rem
         source: { type: "main" },
       },
     });
-    await expect(runtime.stop(app.id)).rejects.toMatchObject({
-      code: "hosted_module_always_on",
-      metadata: { failure_kind: "hosted_module_always_on" },
-    });
-
+    await runtime.stop(app.id);
+    await sleep(50);
+    expect(await runtime.health(app.id)).toMatchObject({ status: "stopped", managed: false });
+    expect(runtime.maintenanceSummary()).toMatchObject({ stopped: 1, starting: 0 });
+    await runtime.ensureHostedApp(app.id);
+    await waitForStatus(() => runtime.health(app.id), "healthy");
     runtime.maintainApps([]);
     await waitForStatus(() => runtime.health(app.id), "stopped");
     expect(runtime.maintenanceSummary()).toMatchObject({ total: 0 });
@@ -4653,7 +4657,6 @@ test("selected Organization-section default uses the existing hosted open/start/
   });
   try {
     runtime.maintainApps(selection.apps);
-    await waitForStatus(() => runtime.health(app.id), "healthy");
     await runtime.open(app.id);
     await expect(runtime.start(app.id)).rejects.toMatchObject({ code: "already_managed" });
     await runtime.restart(app.id);
@@ -4685,9 +4688,9 @@ test("hosted inventory projects the worktree selected for the current Launchpad 
 
   try {
     runtime.maintainApps([app]);
-    await waitForStatus(() => runtime.health(app.id), "healthy");
     await runtime.open(app.id, { source: { type: "worktree", slug } });
 
+    await runtime.ensureHostedApp(app.id);
     const [projected] = await runtime.appsWithRuntime([app]);
     expect(projected.runtime).toMatchObject({
       status: "healthy",
@@ -4723,6 +4726,7 @@ test("hosted maintenance rejects a non-default App before changing the maintaine
 
   try {
     runtime.maintainApps([defaultApp]);
+    await runtime.start(defaultApp.id);
     const healthy = await waitForStatus(() => runtime.health(defaultApp.id), "healthy");
     for (const action of [
       () => runtime.start(siblingApp.id),
@@ -4756,7 +4760,7 @@ test("hosted maintenance rejects a non-default App before changing the maintaine
   }
 }, platformTestTimeout(15_000));
 
-test("hosted maintenance never installs dependencies during boot and keeps retrying the exact source", async () => {
+test("hosted cold inventory never installs dependencies or starts a missing dependency App", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({
     port,
@@ -4777,18 +4781,10 @@ test("hosted maintenance never installs dependencies during boot and keeps retry
 
   try {
     runtime.maintainApps([app]);
-    const degraded = await waitForRuntime(
-      () => runtime.health(app.id),
-      (state) => state.maintenance?.status === "degraded",
-    );
-    expect(degraded).toMatchObject({
-      status: "degraded",
-      managed: false,
-      maintenance: {
-        source: { type: "main" },
-        failure_kind: "app_not_ready",
-      },
-    });
+    await sleep(30);
+    const cold = await runtime.health(app.id);
+    expect(cold.managed).toBe(false);
+    expect(cold.maintenance).toMatchObject({ status: "stopped", source: { type: "main" } });
     expect(existsSync(join(appRoot, "node_modules"))).toBe(false);
   } finally {
     await runtime.shutdown();
@@ -4831,6 +4827,7 @@ test("hosted maintenance backs off while an exact runtime source is still starti
 
   try {
     runtime.maintainApps([app]);
+    await runtime.start(app.id);
     const retrying = await waitForRuntime(
       () => runtime.maintenanceSummary().apps[0],
       (state) => state?.status === "starting" && state.attempts > 0,
@@ -4850,7 +4847,7 @@ test("hosted maintenance backs off while an exact runtime source is still starti
   }
 }, platformTestTimeout(15_000));
 
-test("hosted shutdown drains an overlapping maintenance pass before taking the child snapshot", async () => {
+test("hosted shutdown prevents a queued ingress Open from starting a late child", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({ port });
   const app = withStaticEntrypoint(fixtureDiscoveryApp({ port }));
@@ -4886,6 +4883,7 @@ test("hosted shutdown drains an overlapping maintenance pass before taking the c
   });
 
   runtime.maintainApps([app]);
+  const opening = runtime.ensureHostedApp(app.id).catch((error) => error);
   await firstLockEntered;
   let shutdownSettled = false;
   const shutdown = runtime.shutdown().then((result) => {
@@ -4893,8 +4891,9 @@ test("hosted shutdown drains an overlapping maintenance pass before taking the c
     return result;
   });
   await sleep(20);
-  expect(shutdownSettled).toBe(false);
+  expect(shutdownSettled).toBe(true);
   releaseFirstLock();
+  expect(await opening).toMatchObject({ code: "runtime_manager_stopping" });
   expect(await shutdown).toMatchObject({ attempted: 0, stopped: 0, failed: 0 });
   expect(spawnCount).toBe(0);
 });
@@ -4923,7 +4922,6 @@ test("hosted maintenance restores an unexpectedly exited App from the same sessi
 
   try {
     runtime.maintainApps([app]);
-    await waitForStatus(() => runtime.health(app.id), "healthy");
     await runtime.open(app.id, { source: { type: "worktree", slug } });
     const initial = await waitForStatus(
       () => runtime.health(app.id, { source: { type: "worktree", slug } }),

@@ -273,7 +273,8 @@ export function hostedTeamMaintenanceProofAccepted({
 }) {
   if (!Array.isArray(healthEvidence) || healthEvidence.length !== expectedTotal || expectedTotal < 1) return false;
   const maintenanceMatches = maintenance?.total === expectedTotal
-    && maintenance.healthy === expectedTotal
+    && maintenance.healthy === 1
+    && maintenance.stopped === expectedTotal - 1
     && maintenance.starting === 0
     && maintenance.degraded === 0
     && maintenance.skipped === expectedSkipped;
@@ -282,12 +283,13 @@ export function hostedTeamMaintenanceProofAccepted({
     const expectedSource = phase === "live" && appId === exercisedAppId
       ? { type: "worktree", slug: worktreeSlug }
       : { type: "main" };
-    return health?.status === "healthy"
-      && health.managed === true
+    const active = appId === exercisedAppId;
+    return health?.status === (active ? "healthy" : "stopped")
+      && health.managed === active
       && health.url === expectedUrl
       && health.runtime_source?.type === expectedSource.type
       && (expectedSource.type !== "worktree" || health.runtime_source?.slug === expectedSource.slug)
-      && health.maintenance?.status === "healthy"
+      && health.maintenance?.status === (active ? "healthy" : "stopped")
       && health.maintenance?.source?.type === expectedSource.type
       && (expectedSource.type !== "worktree" || health.maintenance?.source?.slug === expectedSource.slug)
       && health.maintenance_alignment === "matches";
@@ -341,7 +343,7 @@ async function appendRuntimeChecks({ add, app, options }) {
           runtime_source: health.runtime_source,
         });
       } else {
-        add("runtime.hosted_main_maintained", hostedMainMaintenanceProofAccepted(health), {
+        add("runtime.hosted_main_cold", hostedMainMaintenanceProofAccepted(health), {
           runtime_status: health.status,
           managed: health.managed,
           runtime_source: health.runtime_source,
@@ -353,9 +355,11 @@ async function appendRuntimeChecks({ add, app, options }) {
         observed: health.url,
         expected: options.profile === "hosted" ? hostedOriginFor(app, options) : "loopback",
       });
-      moduleProcess = options.profile === "hosted"
-        ? await captureModuleProcessEvidence(health, options)
-        : null;
+      if (options.profile === "hosted") {
+        const opened = await runtimeRequest(base, app.id, "open", { source: { type: "main" } });
+        add("runtime.hosted_open_after_restart", opened.runtime?.status === "healthy", { status: opened.runtime?.status });
+        moduleProcess = await captureModuleProcessEvidence(opened.runtime, options);
+      }
     } catch (error) {
       add(options.profile === "local" ? "runtime.session_not_restored" : "runtime.hosted_main_maintained", false, {
         error: error.message,
@@ -385,7 +389,10 @@ async function appendRuntimeChecks({ add, app, options }) {
     moduleProcess = await captureModuleProcessEvidence(worktreeTwo.runtime, options);
     if (options.profile === "hosted") {
       const stop = await runtimeRequestOutcome(base, app.id, "stop", worktreeSource(options.worktreeSlug));
-      add("runtime.hosted_stop_forbidden", hostedStopForbidden(stop), { response: stop });
+      add("runtime.hosted_stop", stop.status === 200 && explicitStopResponseAccepted(stop.payload), { response: stop });
+      const reopened = await runtimeRequest(base, app.id, "open", worktreeSource(options.worktreeSlug));
+      add("runtime.hosted_reopen", reopened.runtime?.status === "healthy", { status: reopened.runtime?.status });
+      moduleProcess = await captureModuleProcessEvidence(reopened.runtime, options);
     } else if (options.stopAfter) {
       const stopped = await runtimeRequest(base, app.id, "stop", worktreeSource(options.worktreeSlug));
       appendExplicitStopCheck(add, stopped);
@@ -409,10 +416,10 @@ export function worktreeProvenanceMatches(worktree, expectedCreatedBy) {
 }
 
 export function hostedMainMaintenanceProofAccepted(health) {
-  return health?.status === "healthy"
-    && health.managed === true
+  return health?.status === "stopped"
+    && health.managed === false
     && health.runtime_source?.type === "main"
-    && health.maintenance?.status === "healthy"
+    && health.maintenance?.status === "stopped"
     && health.maintenance?.source?.type === "main"
     && health.maintenance_alignment === "matches";
 }
@@ -427,11 +434,6 @@ export function explicitStopResponseAccepted(stopped) {
   return stopped?.action === "stop"
     && stopped.runtime?.managed === false
     && stopped.desired === undefined;
-}
-
-export function hostedStopForbidden(response) {
-  return response?.status === 409
-    && response.payload?.error === "hosted_module_always_on";
 }
 
 export function noResurrectionProofAccepted(
@@ -697,7 +699,7 @@ export function parseArgs(args) {
     throw new Error("--stop-after is not valid for local post-restart; no session child should exist");
   }
   if (options.profile === "hosted" && options.stopAfter) {
-    throw new Error("--stop-after is not valid for hosted profile; Team modules are always on");
+    throw new Error("--stop-after is not valid for hosted profile; the hosted proof includes Stop followed by reopen");
   }
   if (options.profile === "hosted") {
     if (!options.team) throw new Error("--team is required for hosted profile");

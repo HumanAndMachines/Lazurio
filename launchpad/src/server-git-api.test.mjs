@@ -855,6 +855,11 @@ test("hosted Launchpad rejects forged browser context without a TLS-authenticate
     "sec-fetch-site": "same-origin",
   };
 
+  for (const headers of [gatewayHeaders, { ...gatewayHeaders, cookie: "__Secure-lazurio-sales-workspace=forged" }]) {
+    const ensure = await fetch(`http://127.0.0.1:${port}/api/internal/hosted/apps/betaco-hosted-deals-v1/ensure`, { headers });
+    expect(ensure.status).toBe(403);
+    expect((await ensure.json()).error).toBe("mutating_request_forbidden");
+  }
   const directServerIdentity = await getJson(port, "/api/lazurio/server-identity");
   expect(directServerIdentity.request_trust_profile).toBe("hosted");
 
@@ -948,7 +953,7 @@ test("hosted Launchpad omits another Team app and rejects its runtime route befo
   });
 });
 
-test("hosted Launchpad starts every Team module default App and derives its external URL", async () => {
+test("hosted Launchpad keeps Team modules cold and derives their external URLs", async () => {
   const root = await createLaunchpadGitFixture();
   const stateRoot = `${root}-launchpad-state`;
   const appPort = await findFreePort();
@@ -986,20 +991,22 @@ test("hosted Launchpad starts every Team module default App and derives its exte
       LAZURIO_LAUNCHPAD_AUTH_CHECK_URL: `https://127.0.0.1:${await findFreePort()}/oauth2/auth`,
     },
   });
-  await waitForHealth(appPort, server);
+  await Bun.sleep(100);
+  await expect(fetch(`http://127.0.0.1:${appPort}/health`)).rejects.toThrow();
 
   const apps = await getJson(port, "/api/apps");
   expect(apps.apps).toEqual([
     expect.objectContaining({
       id: app.id,
       url: "https://deals.sales.workspace.example.test/",
-      runtime: expect.objectContaining({ status: "healthy" }),
+      runtime: expect.objectContaining({ managed: false }),
     }),
   ]);
   expect((await getJson(port, "/health")).maintenance).toEqual({
     schema_version: "lazurio.hosted_workspace_maintenance.v1",
     total: 1,
-    healthy: 1,
+    healthy: 0,
+    stopped: 1,
     starting: 0,
     degraded: 0,
     skipped: 1,

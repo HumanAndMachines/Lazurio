@@ -186,11 +186,14 @@ Launchpad proto používá tři oddělené lifecycle profily:
   worktree jen pro život aktuální Server instance. Kliknutí nevytváří trvalý
   intent; graceful shutdown ukončí celý spravovaný process tree a další start
   Launchpadu nic neobnovuje;
-- **Hosted Team Workspace** je always-on dílna. Manifesty Organizace určují
-  Team moduly a jejich výchozí Apps; Launchpad tuto množinu odvodí a po vlastní
-  readiness ji udržuje asynchronně a izolovaně. Cold start vždy začíná z
-  `main`; Builder smí v aktuální session přepnout Modul na Mission
-  Control-owned worktree, ale kliknutí ani přepnutí nevytváří persistentní stav;
+- **Hosted Team Workspace** drží T3 a Launchpad always-on, ale moduly spouští
+  podle potřeby (DEV-6579, náhrada eager části decision 0137). Manifesty
+  Organizace určují dostupné Team moduly a jejich výchozí Apps. `Open` i
+  autentizovaný přímý odkaz používají stejný module lease a runtime manager;
+  `Stop` modul zastaví až do dalšího otevření. Spuštěnou App manager udržuje
+  v aktuální session, dostupnost katalogu ani health kontrola ji neprobouzí.
+  Cold start nic nespouští; první otevření použije `main`. Builderova volba
+  worktree žije jen v aktuální session a ingress ji zachovává;
 - **production** přijímá jen reprodukovatelný Build a běží na samostatném
   produkčním runtime. Team katalog, Launchpad proces ani worktree nejsou
   deployment input.
