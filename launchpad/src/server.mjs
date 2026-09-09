@@ -1515,6 +1515,7 @@ function startServer(startPort) {
                 status: "ok",
                 ...(maintenance
                   ? {
+                      module_lifecycle: "on-demand-v1",
                       maintenance: {
                         schema_version: maintenance.schema_version,
                         total: maintenance.total,

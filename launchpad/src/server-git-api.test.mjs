@@ -1002,6 +1002,7 @@ test("hosted Launchpad keeps Team modules cold and derives their external URLs",
       runtime: expect.objectContaining({ managed: false }),
     }),
   ]);
+  expect((await getJson(port, "/health")).module_lifecycle).toBe("on-demand-v1");
   expect((await getJson(port, "/health")).maintenance).toEqual({
     schema_version: "lazurio.hosted_workspace_maintenance.v1",
     total: 1,
