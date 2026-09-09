@@ -506,16 +506,16 @@ Povolené jsou obecné patterny, anonymizované šablony a poučení převedené
 
 ## Napojení na externí aplikace
 
-Externí aplikace (Gmail, Slack, Jira, Canva…) se napojují primárně lokálně
-kurátorovaným MCP serverem nebo CLI na dané mašině; nové napojení nikdy přes
-ChatGPT/claude.ai konektor ani cloudový broker (už nainstalovaný konektor se
-používat smí; chybí-li MCP cesta, konektor sám neinstaluj — browser fallback
-+ issue). Výběr: oficiální MCP → oficiální CLI → reviewnutý pinned OSS →
-browser fallback; scraping/cookie-session servery nikdy. Identita harnessu
-se sdílet smí, přístupy k aplikacím ne — každá mašina má vlastní, samostatně
-revokovatelné přihlášení; schválené integrace drží tracked katalog
-Organizace (jen jména env proměnných, nikdy hodnoty), osobní integrace patří
-do personalspace scope. Postup a standard: skill
+Externí aplikace připojuj nejprve přes existující funkční napojení; pro nové
+služby preferuj Composio, pokud poskytuje potřebné akce a Principál přijímá
+jeho cloudovou datovou hranici. Přímé MCP v harnessu, CLI na Mašině i jiná
+vhodná cesta jsou přípustné podle potřeby a mandátu; nevytvářej kvůli tomu
+vlastní gateway ani nový uzavřený seznam technologií. Přístupy dostupné na
+Mašině považuj za potenciálně dostupné jejím Agentům. Mandáty dál platí,
+ale technické oddělení citlivých přístupů vyžaduje oddělenou izolovanou
+Mašinu, ne název serveru nebo instrukci Agentovi. Organization katalog
+drží její sdílené know-how, nikoli osobní účty nebo druhé IAM; osobní
+integrace patří do personalspace scope. Postup a standard: skill
 `.agents/skills/external-app-integrations/SKILL.md`,
 `manual/external-app-integrations.md` + per-provider runbooky. Zaseknutí
 nebo zastaralý postup řeš opravným PR na standard, ne poznámkou v chatu.

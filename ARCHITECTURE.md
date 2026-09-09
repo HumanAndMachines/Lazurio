@@ -89,6 +89,23 @@ profil a infrastruktura daného Ownera a provideru.
 
 ### 2. Přístup drží existující poskytovatelé
 
+Přístupy dostupné na Mašině považuje její Owner a Principál za potenciálně
+dostupné všem Agentům, kteří na ní pracují. Platí to pro přihlášení v nástrojích,
+MCP, CLI i jiné cesty. Mandáty určují, co Agent smí; nepředstavují technickou
+izolaci. Citlivý přístup, který Agent nesmí mít technicky dostupný, vyžaduje
+oddělenou Mašinu bez tohoto přístupu, sdílených credentials nebo cesty k nim.
+
+Lazurio preferuje hotové napojení přes Composio, pokud pokrývá potřebnou
+schopnost a Principál přijímá jeho cloudovou datovou hranici. Přímé MCP nebo
+CLI zůstávají normální cestou podle potřeby, nikoli důvodem stavět vlastní
+integrační framework. Lazurio nestojí v cestě provádění akcí: konfiguraci
+vlastní harness nebo nástroj a autentizaci jeho poskytovatel. Provozní postup
+drží [standard externích integrací](manual/external-app-integrations.md).
+
+Přihlášení stejného široce oprávněného cloudového účtu na dvě Mašiny jejich
+vzdálené přístupy neoddělí. GitHub identita určuje GitHub oprávnění, ne práva
+k účtům ostatních služeb; ta se udělují samostatně u jejich poskytovatelů.
+
 - **GitHub** určuje členství, přístup k repozitářům, review a možnost
   publikovat.
 - **Tailscale nebo jiná schválená přístupová vrstva** určuje síťový přístup.
