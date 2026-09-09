@@ -415,8 +415,12 @@ Nejdřív urči owner repo a druh změny:
 - **Běžná repository-db data:** draft podle kontraktu konkrétní aplikace →
   zobrazení diffu a validace → explicitně schválená datová Publikace.
   Mission Control data používají deklarovaný `mission-control/db` na `v3`,
-  nikoli `main`; jejich writer publikuje jeden single-parent commit normálním
-  non-force fast-forward pushem. Samostatná změna jeho validatoru, schémat,
+  nikoli `main`. Pokud živá branch policy dovoluje přímou publikaci, writer
+  publikuje jeden single-parent commit normálním non-force fast-forward
+  pushem. Vyžaduje-li GitHub review, použij PR proti `v3` a splň jeho povinné
+  kontroly; push restrictions, podpisy ani zamčenou branch neobcházej.
+  Publikace v obou případech čeká na explicitní pokyn Principála.
+  Samostatná změna jeho validatoru, schémat,
   konfigurace či instrukcí je control-plane migration PR. Draft v aplikaci
   neznečišťuje primary checkout; ruční commit v primary není náhradou draftu.
 - **Dotaz, čtení a diagnostika:** můžeš odpovědět a číst v oprávněném scope
