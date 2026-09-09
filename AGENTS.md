@@ -172,7 +172,8 @@ hotová a ověřená, přepneš PR na Ready for review sám — Ready není Publ
 **Handoff je průvodcovský.** Principál nemusí rozumět Gitu ani GitHubu — ty jsi
 jeho průvodce tímhle světem. Závěrečná zpráva začíná handoffem: odkaz na
 Ready PR, lidské a praktické shrnutí toho, co Publikace zavede, výsledek
-ověření, odkaz na aplikaci běžící z worktree — a standardizovaná dvojotázka
+ověření a při relevantním UI odkaz na aplikaci běžící z worktree —
+a standardizovaná dvojotázka
 „Mám změny Publikovat tvým jménem?
 Nebo mám požádat jiného oprávněného Principála o kontrolu a Publikaci?". Volbu
 vždy nabídneš,
@@ -213,7 +214,13 @@ zjištění z konverzace průběžně zapisuješ na správná místa: syntéza p
 Knowledgebase; trvalé rozhodnutí → decision record; plán a jeho stav →
 Mission Control a task ledgery; otevřený technický problém nebo nejistota →
 GitHub Issue v přesném owning repu; změna pravidel práce → `AGENTS.md` daného
-scope — vždy jako PR ze svého worktree. Chat i soukromá paměť agenta (gbrain)
+scope. Source a dokumenty měníš přes PR ze svého worktree; repository-db
+data připravuješ a publikuješ podle jejich owner kontraktu, nikoli automaticky
+přes source PR. Publikace dat nadále vyžaduje explicitní pokyn Principála.
+Zapisuj poznatky s trvalým dopadem na budoucí práci nebo výslovně určené
+Principálem k uchování; běžná odpověď, jednorázový dotaz ani read-only audit
+samy nezakládají povinnost vytvořit plán, worktree nebo PR.
+Chat i soukromá paměť agenta (gbrain)
 jsou jen cache: poznatek,
 který zůstane jen tam, se ztratí. Zapisuješ jen relevantní, netajné poznatky,
 které tvůj Principál smí do daného store umístit; personalspace a cross-org
@@ -398,6 +405,40 @@ Root upravuj jen když se mění:
 - sdílený Launchpad nebo Guide baseline
 - root manuál, mapa nebo agentní pravidla
 - základní agentní skill balíček (`.agents/skills/`)
+
+## Rozlišení práce a preflightu
+
+Nejdřív urči owner repo a druh změny:
+
+- **Source, dokumentace a pravidla:** worktree → průběžné commity a PR →
+  validace a review → Publikace pouze na pokyn Principála.
+- **Běžná repository-db data:** draft podle kontraktu konkrétní aplikace →
+  zobrazení diffu a validace → explicitně schválená datová Publikace.
+  Mission Control data používají deklarovaný `mission-control/db` na `v3`,
+  nikoli `main`; jejich writer publikuje jeden single-parent commit normálním
+  non-force fast-forward pushem. Samostatná změna jeho validatoru, schémat,
+  konfigurace či instrukcí je control-plane migration PR. Draft v aplikaci
+  neznečišťuje primary checkout; ruční commit v primary není náhradou draftu.
+- **Dotaz, čtení a diagnostika:** můžeš odpovědět a číst v oprávněném scope
+  i při selhání preflightu. Neověřenou čerstvost nebo přístup přiznej.
+  Selhání není svolení měnit dotčený source, data, obejít gate nebo publikovat.
+  Nejprve proveď čtecí diagnostiku; opravu a opakování gate dělej podle
+  konkrétního recovery postupu a už uděleného mandátu.
+
+Root `doctor:task` ověřuje primární Lazurio source; Organization
+`doctor:task`, pokud ho její vlastní `package.json` deklaruje, je samostatný
+Organization preflight jejího rootu a Mission Control dat. Není wrapperem
+root Doctora. Celkový `lazurio doctor` navíc diagnostikuje mounty a runtime;
+jednotlivé příkazy nejsou vzájemné náhrady. Povinný bounded fetch přesného
+ověřeného originu je součástí delegovaného preflightu; nevyžaduje opakovaný
+souhlas a neopravňuje k novému účtu, datasetu, změně přístupů ani Publikaci.
+Fetch aktualizuje remote-tracking refs, nikoli working tree nebo místní commity.
+Obecné `lazurio update` repository-db data neaktualizuje.
+
+Neaplikuj pravidlo source `main` na všechny nested repozitáře. Spravované
+source checkouty používají `main`, repository-db svou deklarovanou datovou
+branch a productionspace vlastní owner kontrakt. Při nesouladu manifestu a
+owner kontraktu stav diagnostikuj, branch ani manifest nehádej.
 
 ## Source of truth
 
