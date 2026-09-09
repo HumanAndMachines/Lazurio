@@ -145,3 +145,40 @@ test("PATH selection accepts custom locations and preserves the first shim", asy
     expect(resolveExecutableOnPath("codex", { environment: { PATH: second, PATHEXT: ".EXE;.CMD" } })).toBe(join(second, name));
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+test("Bun package execution is proven by `bun x`, not by a standalone bunx binary", async () => {
+  const {
+    BUN_PACKAGE_RUNNER_PROBE_ARGS,
+    classifyBunPackageRunnerProbe,
+  } = await import("./toolchain-lib.mjs");
+  expect(BUN_PACKAGE_RUNNER_PROBE_ARGS).toEqual(["x", "--help"]);
+  expect(classifyBunPackageRunnerProbe({ exitCode: 0, stdout: "Usage: bunx [flags] <package>" })).toBe("ready");
+  // Bun 1.4 prints the usage contract but exits 1 when no package is supplied.
+  expect(classifyBunPackageRunnerProbe({
+    exitCode: 1,
+    stdout: "",
+    stderr: "Usage: bunx [flags] <package><@version> [flags and arguments for the package]",
+  })).toBe("ready");
+  expect(classifyBunPackageRunnerProbe({ exitCode: 1, stdout: "", stderr: "error: unknown subcommand" })).toBe("unusable");
+  expect(classifyBunPackageRunnerProbe({ exitCode: 2, stdout: "Usage: bunx" })).toBe("unusable");
+  expect(classifyBunPackageRunnerProbe({ exitCode: null })).toBe("unusable");
+  expect(classifyBunPackageRunnerProbe()).toBe("unusable");
+});
+
+test("Bun remedy is the official installer pinned to the exact required version", async () => {
+  const { OFFICIAL_BUN_INSTALL_DOCS_URL, officialBunInstallCommand } = await import("./toolchain-lib.mjs");
+  expect(OFFICIAL_BUN_INSTALL_DOCS_URL).toBe("https://bun.com/docs/installation");
+  expect(officialBunInstallCommand({ platform: "win32", version: "1.4.2" }))
+    .toBe('iex "& {$(irm https://bun.com/install.ps1)} -Version 1.4.2"');
+  expect(officialBunInstallCommand({ platform: "darwin", version: "1.4.2" }))
+    .toBe('curl -fsSL https://bun.com/install | bash -s "bun-v1.4.2"');
+  expect(officialBunInstallCommand({ platform: "linux", version: "1.4.2" }))
+    .toBe('curl -fsSL https://bun.com/install | bash -s "bun-v1.4.2"');
+  expect(officialBunInstallCommand({ platform: "freebsd", version: "1.4.2" })).toBeNull();
+  for (const platform of ["win32", "darwin", "linux"]) {
+    const command = officialBunInstallCommand({ platform, version: "1.4.2" });
+    expect(command).not.toMatch(/npm|npx|winget|choco|brew|scoop|registry/iu);
+  }
+  expect(() => officialBunInstallCommand({ platform: "win32", version: "latest" })).toThrow();
+  expect(() => officialBunInstallCommand({ platform: "win32", version: "1.4" })).toThrow();
+});

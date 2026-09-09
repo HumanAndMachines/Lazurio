@@ -195,6 +195,20 @@ latest resolver nebo neznámý registry package. Install Core i Doctor spouště
 `node --version` a stejný verzovaný rozsah vyhodnotí ještě před Organization
 materializací.
 
+Bun není připravený jen tím, že `bun --version` vrátí přesnou verzi. Verzované
+skripty repozitářů spouštějí package binárky přes `bun x`, proto Install Core i
+Doctor tuto capability skutečně spustí (`bun x --help`) nad exact Bun z `PATH`.
+Samostatná binárka `bunx` není podmínkou: oficiální WinGet balíček `Oven-sh.Bun`
+ji na Windows nemusí dodat a Doctor její přítomnost uvádí jen informativně.
+Selhání (`bun_package_runner_unusable`, `platform.bun_package_runner`) nese
+jedinou nápravu — oficiální Bun instalátor připnutý přesně na
+`package.json#packageManager` (Windows PowerShell:
+`iex "& {$(irm https://bun.com/install.ps1)} -Version <version>"`; macOS/Linux:
+`curl -fsSL https://bun.com/install | bash -s "bun-v<version>"`) — a Agent ji
+spustí až se scoped mandátem. Balíček z jiného registru ani `bunx` z npm nejsou
+náprava. Consumer, který místo `bun x` volá samostatný `bunx`, opravuje svůj
+verzovaný skript ve vlastním repu; root gate za něj druhou binárku neinstaluje.
+
 ### Windows: pokračování po WinGet ve stejné instalační relaci
 
 WinGet zapisuje nový User `PATH`, ale už běžící PowerShell, Task Agent nebo

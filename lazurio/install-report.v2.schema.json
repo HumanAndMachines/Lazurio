@@ -88,7 +88,7 @@
           "properties": {
             "id": { "const": "bun" },
             "status": { "enum": ["completed", "skipped", "action_required", "failed"] },
-            "reason": { "enum": ["bun_runtime_current", "bun_runtime_mismatch", "bun_runtime_unavailable", "bun_runtime_not_on_path", "bun_path_identity_mismatch", "bun_path_unusable", "probe_failed"] }
+            "reason": { "enum": ["bun_runtime_current", "bun_runtime_mismatch", "bun_runtime_unavailable", "bun_runtime_not_on_path", "bun_path_identity_mismatch", "bun_path_unusable", "bun_package_runner_unusable", "probe_failed"] }
           },
           "additionalProperties": false
         },
@@ -182,6 +182,7 @@
               "bun_runtime_not_on_path",
               "bun_path_identity_mismatch",
               "bun_path_unusable",
+              "bun_package_runner_unusable",
               "git_available",
               "git_missing",
               "git_not_on_path",

@@ -57,6 +57,14 @@ function assertMicrosoftLauncherContract(microsoft) {
   expect(microsoft).toMatch(/capture shimem[\s\S]*`process\.argv`[\s\S]*položku po položce/);
   expect(microsoft).toMatch(/`--list-permissions`[\s\S]*exit codem `0`[\s\S]*`org mode`[\s\S]*`readOnly: true`/);
   expect(microsoft).toMatch(/nesmí otevřít login ani vyžádat device code/);
+  // #314: `--verify-login` volá `GET /v1.0/me`; u Mail.Read-only launcheru je
+  // 403 falešný neúspěch a autoritou zůstává scoped tool smoke bez rozšíření scopes.
+  expect(microsoft).toContain("### `--verify-login` není success gate pro least-privilege launcher");
+  expect(microsoft).toMatch(/`--verify-login`[\s\S]*`GET \/v1\.0\/me`/);
+  expect(microsoft).toContain("Login successful but Graph API access failed: 403");
+  expect(microsoft).toMatch(/očekávaný falešný neúspěch diagnostiky/);
+  expect(microsoft).toMatch(/Autoritativní ověření onboardingu je scoped MCP tool smoke[\s\S]*`list-mail-messages`/);
+  expect(microsoft).toMatch(/Scopes kvůli této diagnostice nerozšiřuj/);
 }
 
 function isWindowsPathDescendant(parent, candidate) {

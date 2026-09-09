@@ -215,6 +215,22 @@ resolver or an unknown registry package. Both Install Core and Doctor run
 `node --version` and evaluate the same versioned range before Organization
 materialization.
 
+Bun is not ready merely because `bun --version` returns the exact version.
+Versioned repository scripts execute package binaries through `bun x`, so both
+Install Core and Doctor actually run that capability (`bun x --help`) against
+the exact Bun on `PATH`. A standalone `bunx` binary is not a requirement: the
+official `Oven-sh.Bun` WinGet package may not ship it on Windows, and Doctor
+reports its presence only as information. A failure
+(`bun_package_runner_unusable`, `platform.bun_package_runner`) carries a single
+remedy — the official Bun installer pinned exactly to
+`package.json#packageManager` (Windows PowerShell:
+`iex "& {$(irm https://bun.com/install.ps1)} -Version <version>"`; macOS/Linux:
+`curl -fsSL https://bun.com/install | bash -s "bun-v<version>"`) — and the Agent
+runs it only under a scoped mandate. A package from another registry or `bunx`
+from npm is not a remedy. A consumer that calls a standalone `bunx` instead of
+`bun x` fixes its own versioned script in its own repository; the root gate does
+not install a second binary on its behalf.
+
 ### Windows: continuing after WinGet in the same installation session
 
 WinGet writes a new User `PATH`, but an already running PowerShell, Task Agent,
