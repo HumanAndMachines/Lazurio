@@ -83,6 +83,17 @@ test("isolated runtime accepts one internal Organization scope without a second 
   ))).toBe(true);
 });
 
+test("isolated runtime forwards the explicit restricted slot policy and defaults to defer", async () => {
+  const fixture = await createLazurioUpdateFixture();
+  cleanup.push(fixture.sandbox);
+  const scoped = await runIsolatedLazurioUpdate({ rootPath: fixture.working, restrictedSlotPolicy: "exclude" });
+  expect(scoped).toMatchObject({ state: "current", ok: true, restricted_slot_policy: "exclude" });
+  const generic = await runIsolatedLazurioUpdate({ rootPath: fixture.working });
+  expect(generic).toMatchObject({ state: "current", ok: true, restricted_slot_policy: "defer" });
+  await expect(runIsolatedLazurioUpdate({ rootPath: fixture.working, restrictedSlotPolicy: "everything" }))
+    .rejects.toThrow(/restrictedSlotPolicy/);
+});
+
 test("bun update entrypoint and lazurio update expose the same report contract", async () => {
   const fixture = await createLazurioUpdateFixture();
   cleanup.push(fixture.sandbox);

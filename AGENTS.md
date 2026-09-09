@@ -355,7 +355,11 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    `lazurio organization install <github-login> --role builder --json`, který
    read-only ověří čerstvé Organization/Team membership a WRITE capability na
    aktivních Builder repozitářích; `planned_slot` ani restricted Admin-only
-   repo Buildera neblokuje. Nový GitHub účet páruje jednou přes
+   repo Buildera neblokuje. Steward Mašina používá `--role steward`: obě role
+   vyloučí deklarované restricted sloty a jejich descendants bez jediné
+   provider operace (`excluded_by_role_scope`); běžný `lazurio update`
+   absentní restricted slot nikdy automaticky neklonuje a materializuje jej
+   jen explicitní Admin install bez `--role`. Nový GitHub účet páruje jednou přes
    `gh auth login --hostname github.com --git-protocol ssh --web`, po souhlasu
    nechá tentýž flow vytvořit nebo nahrát veřejnou část SSH klíče a výsledek
    dokáže exact `git ls-remote` cílového root repa. Device kód, token ani

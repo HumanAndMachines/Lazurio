@@ -8,6 +8,23 @@ const protectedOrganizationSlotAccessModes = new Set([
   "restricted",
   "role_based",
 ]);
+// Úplný známý enum `default_access`. Hodnota mimo něj není nový režim, ale
+// malformed deklarace, kterou materializace fail-safe nevybírá.
+const organizationSlotAccessModes = new Set([
+  "expected",
+  "optional",
+  "role_based",
+  "restricted",
+  "private",
+]);
+// Deklarovaný Admin-only scope: běžný Sync ho nikdy automaticky neklonuje a
+// role-scoped Organization install nad ním neprovede žádnou provider operaci.
+const restrictedOrganizationSlotAccessModes = new Set(["restricted", "private"]);
+export const ORGANIZATION_SLOT_ACCESS_CLASSIFICATIONS = Object.freeze([
+  "ordinary",
+  "restricted",
+  "unknown",
+]);
 const organizationRootSlotPaths = new Set([
   "design-system",
   "infra",
@@ -482,8 +499,42 @@ export function organizationSlotProjectsToLocalMachine(
   { materialized = slot?.status === "available" } = {},
 ) {
   if (materialized) return true;
-  if (slot?.required_roles?.includes("*")) return true;
+  if (Array.isArray(slot?.required_roles) && slot.required_roles.includes("*")) return true;
   return !protectedOrganizationSlotAccessModes.has(slot?.default_access);
+}
+
+// Materializační klasifikace odvozená výhradně z vlastní access deklarace
+// slotu (`default_access` + `required_roles`), nikdy z názvu nebo cesty. Není
+// to oprávnění Principála — GitHub zůstává jedinou access autoritou:
+// - `ordinary`: expected/optional/role_based nebo chybějící deklarace
+//   (kanonický default `expected`); Sync se o clone pokusí a případný chybějící
+//   GitHub grant vrátí pravdivě jako `materialization_source_unavailable`;
+// - `restricted`: deklarovaný Admin-only scope (`restricted`/`private`); absentní
+//   slot materializuje pouze explicitní Admin `lazurio organization install`;
+// - `unknown`: neznámý režim nebo malformed `required_roles`; fail-safe, nic se
+//   neklonuje a Organization owner opraví manifest.
+export function classifyOrganizationSlotAccess(slot) {
+  if (slot === null || typeof slot !== "object") return "unknown";
+  const access = slot.default_access;
+  if (access !== undefined && access !== null) {
+    if (typeof access !== "string" || !organizationSlotAccessModes.has(access)) return "unknown";
+  }
+  const roles = slot.required_roles;
+  if (roles !== undefined && roles !== null) {
+    if (
+      !Array.isArray(roles)
+      || roles.some((role) => typeof role !== "string" || role.trim() === "")
+    ) return "unknown";
+  }
+  return restrictedOrganizationSlotAccessModes.has(access) ? "restricted" : "ordinary";
+}
+
+// Chybějící deklarace se normalizuje na prázdný seznam; malformed hodnota
+// (například string místo pole) se záměrně zachová, aby ji
+// `classifyOrganizationSlotAccess` v inventáři i Doctoru dál viděl jako
+// `unknown` místo tichého překlopení na běžný slot.
+export function normalizeOrganizationSlotRequiredRoles(value) {
+  return value === undefined || value === null ? [] : value;
 }
 
 export function normalizeOrganizationSlotPath(path) {
