@@ -8,11 +8,18 @@ export const MODULE_LIFECYCLE_REPORT_SCHEMA = "lazurio.module_lifecycle.report.v
 export const MODULE_LIFECYCLE_ACTIONS = new Set(["status", "start", "open", "stop"]);
 
 // Discovery must fail quickly when the locator points at a dead Server. A
-// deliberate lifecycle mutation is different: Server-owned start can spend its
-// bounded listener-ownership grace period, and Open may then wait for health.
-// Keep that request bounded too, but do not cut it off at the read deadline.
+// verified Server may need longer to build a cold Apps inventory: discovery,
+// dependency inspection and runtime health are real work, not a liveness probe.
+// Keep inventory and lifecycle mutations bounded without extending identity
+// discovery or retrying a mutation.
 const serverReadTimeoutMs = 5_000;
+const inventoryReadTimeoutMs = 30_000;
 const lifecycleActionTimeoutMs = 60_000;
+export const MODULE_LIFECYCLE_TIMEOUTS_MS = Object.freeze({
+  identity: serverReadTimeoutMs,
+  inventory: inventoryReadTimeoutMs,
+  action: lifecycleActionTimeoutMs,
+});
 
 export async function runModuleLifecycle({
   action,
@@ -22,6 +29,8 @@ export async function runModuleLifecycle({
   stateDirectory = resolveServerStateDirectory(),
   readLocator = readServerLocatorIfPresent,
   fetchFn = fetch,
+  // Test seam only: production callers keep the frozen defaults above.
+  timeoutsMs = MODULE_LIFECYCLE_TIMEOUTS_MS,
 } = {}) {
   if (!MODULE_LIFECYCLE_ACTIONS.has(action)) {
     throw new TypeError(`Unsupported Module lifecycle action: ${String(action)}`);
@@ -61,7 +70,7 @@ export async function runModuleLifecycle({
     );
   }
 
-  const server = await verifyLocatedServer({ locator, fetchFn });
+  const server = await verifyLocatedServer({ locator, fetchFn, timeoutsMs });
   if (!server.ok) return actionRequired(base, server.reason, server.message);
   if (action !== "status" && server.identity.request_trust_profile === "hosted") {
     return actionRequired(
@@ -74,6 +83,7 @@ export async function runModuleLifecycle({
 
   const inventory = await requestJson(fetchFn, new URL("/api/apps", locator.origin), {
     method: "GET",
+    timeoutMs: timeoutsMs.inventory,
   });
   if (!inventory.ok) {
     return failed(base, "server_inventory_unavailable", inventory.message, {
@@ -136,7 +146,7 @@ export async function runModuleLifecycle({
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
-      timeoutMs: lifecycleActionTimeoutMs,
+      timeoutMs: timeoutsMs.action,
     },
   );
   const report = {
@@ -212,9 +222,10 @@ function normalizeAppId(value) {
   return value;
 }
 
-async function verifyLocatedServer({ locator, fetchFn }) {
+async function verifyLocatedServer({ locator, fetchFn, timeoutsMs = MODULE_LIFECYCLE_TIMEOUTS_MS }) {
   const response = await requestJson(fetchFn, new URL("/api/lazurio/server-identity", locator.origin), {
     method: "GET",
+    timeoutMs: timeoutsMs.identity,
   });
   if (!response.ok) {
     return {

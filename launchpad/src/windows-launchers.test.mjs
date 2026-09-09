@@ -40,6 +40,29 @@ test("Launchpad.cmd přepne konzoli na UTF-8 před českým výstupem", async ()
   expect(contents).toContain("--version >nul 2>nul");
 });
 
+test("Windows bootstrap vyžaduje jen bun.exe z oficiálních instalačních adresářů a nikdy standalone bunx", async () => {
+  const launchers = ["Launchpad.cmd", "Launchpad.ps1", "Launchpad-Bootstrap.ps1", "Install-LaunchpadShortcut.ps1"];
+  for (const filename of launchers) {
+    const contents = await readFile(join(root, filename), "utf8");
+
+    expect(contents).not.toMatch(/\bbunx(?:\.exe)?\b/u);
+  }
+
+  const cmd = await readFile(join(root, "Launchpad.cmd"), "utf8");
+  const ps1 = await readFile(join(root, "Launchpad.ps1"), "utf8");
+  // Oficiální Bun instalátor ukládá bun.exe do %USERPROFILE%\.bun\bin;
+  // WinGet balíček používá %LOCALAPPDATA%\bun\bin. Oba mohou dodat jen bun.exe.
+  expect(cmd).toContain("%USERPROFILE%\\.bun\\bin\\bun.exe");
+  expect(cmd).toContain("%LOCALAPPDATA%\\bun\\bin\\bun.exe");
+  expect(ps1).toContain('".bun\\bin\\bun.exe"');
+  expect(ps1).toContain('"bun\\bin\\bun.exe"');
+  expect(cmd.match(/\.exe\b/gu).every((match) => match === ".exe")).toBe(true);
+  expect([...cmd.matchAll(/(\w+)\.exe/gu)].map((match) => match[1])).toEqual(
+    expect.arrayContaining(["bun"]),
+  );
+  expect([...cmd.matchAll(/(\w+)\.exe/gu)].map((match) => match[1]).filter((name) => name !== "bun")).toEqual([]);
+});
+
 test("Launchpad.ps1 validuje Bun kandidáta před spuštěním Launchpadu", async () => {
   const contents = await readFile(join(root, "Launchpad.ps1"), "utf8");
 

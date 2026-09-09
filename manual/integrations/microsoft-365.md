@@ -154,6 +154,29 @@ Smoke musí skončit exit codem `0`, potvrdit `org mode`, `readOnly: true` a
 přesně schválené scopes; nesmí otevřít login ani vyžádat device code. Teprve
 potom pokračuj explicitním `--login`, který dokončí Principál.
 
+### `--verify-login` není success gate pro least-privilege launcher
+
+Ve verzi 0.148.0 volá `--verify-login` (`testLogin()` v `dist/auth.js`) po
+úspěšném přihlášení `GET /v1.0/me`. Tento endpoint vyžaduje profilový scope
+(typicky `User.Read`), který least-privilege launcher s pouhým `Mail.Read`
+záměrně nemá. Výsledek `Login successful but Graph API access failed: 403` je proto u
+takového launcheru očekávaný falešný neúspěch diagnostiky, ne důkaz rozbitého
+přihlášení nebo cache: samotné přihlášení a persistence účtu proběhly.
+
+Autoritativní ověření onboardingu je scoped MCP tool smoke přes tentýž
+launcher a tutéž persistentní cache — u mail katalogu reálné
+`list-mail-messages` nad schváleným účtem, případně jiný tool z připnutého
+regexu, který používá právě schválený scope. Teprve jeho úspěch (a jeho
+zopakování po restartu MCP procesu podle kapitoly „Smoke test“) znamená
+`ready`. `--verify-login` je použitelný gate jen tehdy, když katalog profilový
+scope pro `/me` vědomě a reviewovaně obsahuje.
+
+Scopes kvůli této diagnostice nerozšiřuj: přidání `User.Read` nebo jiného
+scope jen proto, aby `--verify-login` prošel, je změna reviewovaného katalogu,
+ne oprava onboardingu. Stejně tak 403 z `/me` neřeš `--org-mode`, širším
+presetem ani jiným účtem. Do evidence patří exit code a název použitého toolu;
+adresy účtů, tenant identifikátory ani token materiál ne.
+
 ## Token storage a persistence
 
 Server 0.148.0 neukládá celou token cache do keychainu. MSAL cache je
