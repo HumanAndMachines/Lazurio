@@ -33,6 +33,9 @@ Maintenance agent před zásahem ověřuje:
 - `drafts/` — lokální prostor bez dlouhodobé autority.
 - `manual/security/local-secret-custody.md` — standard pro lokální držení
   OAuth client JSONů, token helper souborů a dalších secret artefaktů mimo Git.
+- [Servisní připravenost agentů](agent-service-readiness.md) — návrh společné
+  acceptance pro neinteraktivní servis, nezávislou obnovu a dostupnost modulu
+  přes běžnou URL; rozlišuje dnešní hranice a cílovou automatickou konvergenci.
 - `manual/external-app-integrations.md` — kanonický standard napojení na
   externí aplikace: lokálně kurátorované MCP servery a CLI místo cloudových
   konektorů, tracked katalog integrací v repu Organizace, žebříček výběru,
