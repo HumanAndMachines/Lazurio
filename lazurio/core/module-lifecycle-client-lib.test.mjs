@@ -7,6 +7,7 @@ import {
   MODULE_LIFECYCLE_REPORT_SCHEMA,
   moduleLifecycleExitCode,
   parseModuleSelector,
+  MODULE_LIFECYCLE_TIMEOUTS_MS,
   runModuleLifecycle,
 } from "./module-lifecycle-client-lib.mjs";
 
@@ -152,6 +153,61 @@ describe("Core-owned Module lifecycle client", () => {
     expect(report.reason).toBe("module_lifecycle_open_completed");
   }, 10_000);
 
+  test("cold inventory and its JSON body can outlast identity discovery", async () => {
+    const reports = await Promise.all([
+      runModuleLifecycle({
+        action: "status",
+        readLocator: async () => locator,
+        fetchFn: fixtureFetch({ inventoryDelayMs: 5_250 }),
+      }),
+      runModuleLifecycle({
+        action: "start",
+        selector: "ExampleOrganization/website",
+        readLocator: async () => locator,
+        fetchFn: fixtureFetch({ inventoryBodyDelayMs: 5_250 }),
+      }),
+    ]);
+    expect(reports.map((report) => report.status)).toEqual(["current", "completed"]);
+    expect(reports[1].reason).toBe("module_lifecycle_start_completed");
+  }, 10_000);
+
+  test("a stalled inventory body times out without dispatching or retrying a mutation", async () => {
+    const requests = [];
+    const report = await runModuleLifecycle({
+      action: "start",
+      selector: "ExampleOrganization/website",
+      readLocator: async () => locator,
+      fetchFn: fixtureFetch({ requests, inventoryBodyDelayMs: 60_000 }),
+      // Same abort path as production, on a fixture deadline instead of the
+      // real 30 s inventory budget (Greptile: keep CI from waiting 40 s).
+      timeoutsMs: { ...MODULE_LIFECYCLE_TIMEOUTS_MS, inventory: 500 },
+    });
+    expect(report.reason).toBe("server_inventory_unavailable");
+    expect(report.status).toBe("failed");
+    expect(requests.map((request) => request.pathname)).toEqual([
+      "/api/lazurio/server-identity",
+      "/api/apps",
+    ]);
+  }, 10_000);
+
+  test("production deadlines stay frozen: identity 5 s, inventory 30 s, action 60 s", () => {
+    expect(MODULE_LIFECYCLE_TIMEOUTS_MS).toEqual({ identity: 5_000, inventory: 30_000, action: 60_000 });
+    expect(Object.isFrozen(MODULE_LIFECYCLE_TIMEOUTS_MS)).toBe(true);
+  });
+
+  test("a stalled identity still fails before inventory or mutation", async () => {
+    const requests = [];
+    const report = await runModuleLifecycle({
+      action: "start",
+      selector: "ExampleOrganization/website",
+      readLocator: async () => locator,
+      fetchFn: fixtureFetch({ requests, identityDelayMs: 15_000 }),
+      timeoutsMs: { ...MODULE_LIFECYCLE_TIMEOUTS_MS, identity: 500 },
+    });
+    expect(report.status).toBe("action_required");
+    expect(requests.map((request) => request.pathname)).toEqual(["/api/lazurio/server-identity"]);
+  }, 10_000);
+
   test("cross-Organization takeover stays blocked without exact confirmation", async () => {
     const requests = [];
     const report = await runModuleLifecycle({
@@ -270,15 +326,30 @@ function fixtureFetch({
   takeoverRequired = false,
   legacyOverrides = {},
   actionDelayMs = 0,
+  identityDelayMs = 0,
+  inventoryDelayMs = 0,
+  inventoryBodyDelayMs = 0,
 } = {}) {
   return async (input, options = {}) => {
     const url = new URL(input);
     let body = null;
     if (typeof options.body === "string") body = JSON.parse(options.body);
     requests.push({ pathname: url.pathname, method: options.method ?? "GET", ...(body === null ? {} : { body }) });
-    if (url.pathname === "/api/lazurio/server-identity") return Response.json(identityOverride);
+    if (url.pathname === "/api/lazurio/server-identity") {
+      if (identityDelayMs > 0) await waitForAbortableDelay(identityDelayMs, options.signal);
+      return Response.json(identityOverride);
+    }
     if (url.pathname === "/api/apps") {
-      return Response.json({ apps: fixtureApps(defaultAppIds, legacyOverrides) });
+      if (inventoryDelayMs > 0) await waitForAbortableDelay(inventoryDelayMs, options.signal);
+      const response = Response.json({ apps: fixtureApps(defaultAppIds, legacyOverrides) });
+      if (inventoryBodyDelayMs > 0) {
+        const readJson = response.json.bind(response);
+        response.json = async () => {
+          await waitForAbortableDelay(inventoryBodyDelayMs, options.signal);
+          return readJson();
+        };
+      }
+      return response;
     }
     if (/^\/api\/apps\/(?:example-organization-website-v[23]|example-organization-legacy-design-system-v1)\/(?:start|open|stop)$/u.test(url.pathname)) {
       if (actionDelayMs > 0) await waitForAbortableDelay(actionDelayMs, options.signal);
