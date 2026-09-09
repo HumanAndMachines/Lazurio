@@ -25,8 +25,12 @@ v Náhledu fungoval. Agent proto připraví **obrázek**, ne screenshot znaků
 terminálu. QR musí vzniknout přesným zakódováním payloadu, nikdy generativní
 úpravou obrázku.
 
-1. Spusť `wacli --store <privatni-cesta> auth --qr-format text` a ponech
-   stejný proces běžet po celou dobu souhlasu a prvního syncu.
+1. Párovací příkaz `wacli --store <privatni-cesta> auth --qr-format text`
+   spouštěj **jen přes lokální renderovací helper**, který zachytí stdout
+   i stderr do privátních pipes a nikdy je nepřepošle do výstupu harnessu,
+   logu či chatu. Payload zpracuje přímo v paměti. Nespouštěj tento příkaz
+   přímo v logovaném agentním terminálu. Stejný proces ponech běžet po celou
+   dobu souhlasu a prvního syncu; helper smí hlásit pouze bezpečný stav.
 2. U verze ověřené v pilotu výstup obsahoval
    `https://wa.me/settings/linked_devices#<payload>`: do QR zakóduj jen
    `<payload>` za tímto přesným prefixem, bez dalších úprav a bez vypsání do

@@ -134,8 +134,9 @@ schválil tento jmenovitý smoke cíl, patří do téže schválené operace i �
 artefaktu, který agent v tomto konkrétním smoke sám vytvořil (draft, testovací
 zpráva nebo testovací záznam). Agent jej smí po ověření odstranit; nejde o
 samostatnou Publikaci ani o obecné oprávnění mazat. Výjimka se nikdy netýká
-existujícího, ostrého nebo cizího obsahu. Není-li cíl jmenovitě určený v
-`INTEGRATIONS.md`, původ artefaktu není prokazatelný nebo úklid zasahuje mimo
+existujícího, ostrého nebo cizího obsahu. Není-li cíl jmenovitě schválený
+Principálem a evidovaný ve správném scope (Organization `INTEGRATIONS.md`,
+nebo osobní Personalspace/soukromý handoff), původ artefaktu není prokazatelný nebo úklid zasahuje mimo
 tento smoke, artefakt ponech a vyžádej si samostatný explicitní pokyn
 Principála.
 
