@@ -564,11 +564,11 @@ sám o sobě child databázi neautorizuje.
 ### Přístupy k externím službám
 
 Před předáním pracovní Mašiny projdi s Principálem
-[onboarding Composia](integrations/composio.md): vlastní účet, připojení
+[onboarding Composia](https://github.com/HumanAndMachines/Lazurio/blob/main/manual/integrations/composio.md): vlastní účet, připojení
 potřebných služeb a samostatnou autorizaci používaných harnessů. Jde o
 asistovaný krok, nikoli automatickou mutaci při `lazurio install`.
 Pokud cloudová cesta není vhodná, zvol podle
-[integračního standardu](external-app-integrations.md) přímé MCP nebo CLI.
+[integračního standardu](https://github.com/HumanAndMachines/Lazurio/blob/main/manual/external-app-integrations.md) přímé MCP nebo CLI.
 Zaznamenej skutečné ověření nebo výslovné odložení; nevydávej zelený Doctor
 za důkaz, že služby fungují. GitHub přihlášení nenahrazuje jejich autorizaci.
 

@@ -1,6 +1,10 @@
 # Google Workspace: Gmail, Drive, Docs, Sheets, Slides, Meet
 
-Jeden provider pokrývá šest služeb. Stav ověřen 2026-08-07.
+Tento runbook popisuje **přímé MCP/CLI alternativy** pro Google Workspace.
+Nejdřív ověř existující připojení a vhodnost [Composia](composio.md) podle
+[integračního standardu](../external-app-integrations.md). Vlastní OAuth
+aplikaci nevytvářej, pokud zvolená spravovaná cesta ji nevyžaduje.
+Technický přehled přímých variant níže byl ověřen 2026-08-07.
 
 ## Možnosti
 
@@ -12,18 +16,18 @@ Jeden provider pokrývá šest služeb. Stav ověřen 2026-08-07.
 | OSS CLI | [gog](https://github.com/steipete/gogcli) | `--account` multi-account, JSON výstup, brew instalace |
 | Meet | **žádný MCP neexistuje** (oficiální ani udržovaný komunitní) | Meet linky vytvářej přes Calendar tools; zbytek browser fallback |
 
-Vyřazené: `GongRzhe/Gmail-MCP-Server` (archivováno 2026-03), hosted
-agregátory (broker drží tokeny — zakázáno standardem).
+Historicky vyřazené: `GongRzhe/Gmail-MCP-Server` (archivováno 2026-03).
+Cloudová správa tokenů sama není zákaz; vyžaduje vědomou volbu Principála.
 
-## Doporučená volba
+## Volba přímé alternativy
 
-- **Default pro Organizaci:** oficiální remote MCP endpointy s vlastním
+- **Oficiální přímá cesta:** remote MCP endpointy s vlastním
   OAuth clientem Organizace. Jedna OAuth session = jeden Google účet, což na
   mašině vázané na jednu Organizaci přesně sedí.
 - **Multi-org mašina nebo potřeba jemnějších tool tierů:** OSS
   `workspace-mcp` s pinned verzí — účet se volí per tool call, takže vedle
-  sebe fungují účty více Organizací; per-org oddělení jmen serverů a
-  credentials dirs zůstává povinné.
+  sebe fungují účty více Organizací. Názvy a oddělené credentials dirs
+  pomáhají orientaci, ale samy netvoří bezpečnostní izolaci na jedné Mašině.
 - **Shell-first práce a skripty:** `gog` nebo oficiální CLI; `gog auth add
   <ucet>` per Organizace.
 
