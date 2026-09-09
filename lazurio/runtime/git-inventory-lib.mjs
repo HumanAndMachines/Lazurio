@@ -410,7 +410,7 @@ async function observedModuleLocationIssue({ organization, slot, classification 
     !(slot.path.startsWith("workspace/") || slot.path.startsWith("modules/"))
     || !classification
     || ["healthy", "vacant"].includes(classification.status)
-    || exactCanonicalMarkerlessCheckoutCanUpdate({ slot, classification })
+    || exactCanonicalBootstrapCheckoutCanUpdate({ slot, classification })
   ) return null;
   return locationIssueFromClassification({
     classification,
@@ -423,18 +423,25 @@ async function observedModuleLocationIssue({ organization, slot, classification 
   });
 }
 
-// A missing Module marker cannot authorize relocation or app execution, but
-// the exact declared mount is still safe to inspect through the ordinary Git
-// update gates. Keeping it in inventory lets Sync fast-forward to a reviewed
-// commit that publishes the marker instead of permanently wedging the checkout.
-// Any path mismatch, ambiguity, boundary issue or non-missing marker failure
-// remains quarantined and cannot create a duplicate clone.
-function exactCanonicalMarkerlessCheckoutCanUpdate({ slot, classification }) {
+// A missing marker or the exact reusable-template marker cannot authorize
+// relocation or app execution. At the exact declared mount, however, the
+// ordinary Git update gates still verify the declared remote, clean state and
+// fast-forward ancestry before touching it. Keeping that narrow bootstrap
+// state in inventory lets Sync publish the reviewed Organization marker.
+// Arbitrary company drift, path mismatch, ambiguity and redirected Git
+// metadata remain quarantined and cannot create a duplicate clone.
+function exactCanonicalBootstrapCheckoutCanUpdate({ slot, classification }) {
   const exactCandidate = classification.unverified?.find((candidate) =>
     candidate.relative_path === slot.path
   ) ?? null;
+  const acceptedMarkerState = classification.reason === "marker_missing"
+    ? exactCandidate?.reason === "marker_missing"
+    : classification.reason === "marker_company_mismatch"
+      && exactCandidate?.reason === "marker_company_mismatch"
+      && exactCandidate.marker_id === slot.module
+      && exactCandidate.marker_company === "TemplateOrganization";
   return classification.status === "unverified"
-    && classification.reason === "marker_missing"
+    && acceptedMarkerState
     && classification.target_occupied === true
     && classification.found_path === slot.path
     && classification.observed_paths?.length === 1
@@ -443,7 +450,6 @@ function exactCanonicalMarkerlessCheckoutCanUpdate({ slot, classification }) {
     // this compatibility lane may update. A .git file can redirect to a linked
     // worktree and a symlink/junction can redirect outside the Organization;
     // both remain slot-local quarantine evidence instead of Git action input.
-    && exactCandidate?.reason === "marker_missing"
     && exactCandidate.git_metadata_kind === "directory";
 }
 

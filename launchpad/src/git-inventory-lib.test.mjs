@@ -560,6 +560,51 @@ test("inventory keeps an exact canonical markerless checkout updateable so Sync 
   expect(inventory.inventory_issues.some((issue) => issue.module === "studio")).toBe(false);
 });
 
+test("inventory keeps an exact canonical template marker checkout updateable so Sync can publish its Organization marker", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const checkout = join(root, "organizations", "OmegaCo_GEN3", "workspace", "studio");
+  await initGitRepo(checkout);
+  await Bun.write(join(checkout, "lazurio.module.json"), `${JSON.stringify({
+    schema_version: "lazurio.module.v1",
+    id: "studio",
+    company: "TemplateOrganization",
+  }, null, 2)}\n`);
+  runGit(["add", "lazurio.module.json"], checkout);
+  runGit(["commit", "-m", "generated checkout with reusable template marker"], checkout);
+
+  const inventory = await buildGitInventory({ companiesRoot: root });
+
+  expect(inventory.repos).toContainEqual(expect.objectContaining({
+    key: "OmegaCo::studio",
+    absolute_path: checkout,
+  }));
+  expect(inventory.inventory_issues.some((issue) => issue.module === "studio")).toBe(false);
+});
+
+test("inventory quarantines an exact canonical marker that belongs to another Organization", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const checkout = join(root, "organizations", "OmegaCo_GEN3", "workspace", "studio");
+  await initGitRepo(checkout);
+  await Bun.write(join(checkout, "lazurio.module.json"), `${JSON.stringify({
+    schema_version: "lazurio.module.v1",
+    id: "studio",
+    company: "OtherOrganization",
+  }, null, 2)}\n`);
+  runGit(["add", "lazurio.module.json"], checkout);
+  runGit(["commit", "-m", "foreign Organization marker"], checkout);
+
+  const inventory = await buildGitInventory({ companiesRoot: root });
+
+  expect(inventory.repos.some((repo) => repo.key === "OmegaCo::studio")).toBe(false);
+  expect(inventory.inventory_issues).toContainEqual(expect.objectContaining({
+    code: "repository_transition_unverified",
+    module: "studio",
+    path: "workspace/studio",
+  }));
+});
+
 test("inventory quarantines exact markerless checkouts whose Git metadata can redirect outside the Module", async () => {
   for (const metadataKind of ["file", "symlink"]) {
     const root = await createLaunchpadGitFixture();
