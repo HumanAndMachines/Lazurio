@@ -561,6 +561,23 @@ sám o sobě child databázi neautorizuje.
 
 ## Handoff
 
+### Přístupy k externím službám
+
+Před předáním pracovní Mašiny projdi s Principálem
+[onboarding Composia](integrations/composio.md): vlastní účet, připojení
+potřebných služeb a samostatnou autorizaci používaných harnessů. Jde o
+asistovaný krok, nikoli automatickou mutaci při `lazurio install`.
+Pokud cloudová cesta není vhodná, zvol podle
+[integračního standardu](external-app-integrations.md) přímé MCP nebo CLI.
+Zaznamenej skutečné ověření nebo výslovné odložení; nevydávej zelený Doctor
+za důkaz, že služby fungují. GitHub přihlášení nenahrazuje jejich autorizaci.
+
+Principál má počítat s tím, že přístupy dostupné na Mašině mohou technicky
+využít její Agenti. Mandáty platí dál; přístupy, které Agent nesmí mít ani
+technicky dostupné, odděl izolovanou Mašinou bez těchto přihlášení.
+
+### Instalační report
+
 Do PR nebo instalačního reportu uveď exact CLI verzi, GitHub login, immutable
 ID z JSON reportu, výsledný target, celkový stav a všechny blocked repo reasons.
 Uveď také stav installer-managed `mission-control/db` mountu; `current` zde
