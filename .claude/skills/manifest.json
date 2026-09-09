@@ -1,0 +1,110 @@
+{
+  "schema_version": "conglomerate.skills.v0",
+  "claude_compatibility": "tracked-derived-mirror",
+  "policy": {
+    "principle": "Opakovatelné postupy pro Buddy a AI kolegy v Launchpad rootu patří do .agents/skills.",
+    "directory": ".agents/skills",
+    "required_headings": [
+      "## Kdy použít",
+      "## Postup",
+      "## Ověření"
+    ]
+  },
+  "skills": [
+    {
+      "slug": "admin-pr-sweep",
+      "path": ".agents/skills/admin-pr-sweep/SKILL.md",
+      "applies_to": [
+        "organization-admin",
+        "github-pull-requests",
+        "cross-organization-sweep",
+        "pr-closeout"
+      ],
+      "required": false
+    },
+    {
+      "slug": "agent-builder",
+      "path": ".agents/skills/agent-builder/SKILL.md",
+      "applies_to": [
+        "agent-design",
+        "agent-workflows",
+        "agent-evals",
+        "agent-governance",
+        "agent-packaging"
+      ],
+      "required": false
+    },
+    {
+      "slug": "architecture-shaping",
+      "path": ".agents/skills/architecture-shaping/SKILL.md",
+      "applies_to": [
+        "source-code-changes",
+        "architecture-shaping",
+        "complexity-reduction",
+        "cross-scope-contracts",
+        "technical-design"
+      ],
+      "required": true
+    },
+    {
+      "slug": "desktop-execution-agent-collaboration",
+      "path": ".agents/skills/desktop-execution-agent-collaboration/SKILL.md",
+      "applies_to": [
+        "claude-desktop",
+        "codex-desktop",
+        "buddy-qa-gate",
+        "desktop-execution-agents",
+        "ai-colleague-collaboration"
+      ],
+      "required": true
+    },
+    {
+      "slug": "external-app-integrations",
+      "path": ".agents/skills/external-app-integrations/SKILL.md",
+      "applies_to": [
+        "external-app-connections",
+        "mcp-servers",
+        "cli-integrations",
+        "oauth-custody",
+        "organization-integration-catalog"
+      ],
+      "required": true
+    },
+    {
+      "slug": "lazurio-workstation-install",
+      "path": ".agents/skills/lazurio-workstation-install/SKILL.md",
+      "applies_to": [
+        "lazurio-installation",
+        "workstation-onboarding",
+        "machine-toolchain",
+        "organization-install",
+        "installation-repair"
+      ],
+      "required": true
+    },
+    {
+      "slug": "nightly-steward-pr-sweep",
+      "path": ".agents/skills/nightly-steward-pr-sweep/SKILL.md",
+      "applies_to": [
+        "organization-steward",
+        "github-pull-requests",
+        "exact-head-review",
+        "mission-control-steward-reporting",
+        "nightly-operations"
+      ],
+      "required": true
+    },
+    {
+      "slug": "worktree-development-discipline",
+      "path": ".agents/skills/worktree-development-discipline/SKILL.md",
+      "applies_to": [
+        "worktree-create",
+        "worktree-inventory",
+        "worktree-handoff",
+        "worktree-cleanup",
+        "pr-preflight"
+      ],
+      "required": true
+    }
+  ]
+}

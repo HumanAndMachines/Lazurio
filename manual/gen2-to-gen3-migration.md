@@ -553,16 +553,15 @@ Organization pravidla.
 ### Gate 4C — skills flip
 
 GEN3 kanonická knihovna je `.agents/skills/`; `.claude/skills` je **Git-tracked
-odvozený byte-for-byte mirror** (`<slug>/SKILL.md` aktivních skillů z manifestu,
-žádné symlinky ani junctiony — decision 0104). Mirror není druhý source of
-truth: edituje se výhradně kanonická knihovna a mirror regeneruje
-`bun run repair:agent-skills`; paritu hlídá `bun run doctor:agent-skills`.
+bajtově shodná kopie celého adresáře** (generovaný artefakt jako lockfile,
+žádné symlinky ani junctiony — rozhodnutí 2026-09-08, nahrazuje repair lane
+0104). Kopie není druhý source of truth: edituje se výhradně kanonická
+knihovna, kopii regeneruje `bun run skills:sync` a shodu hlídá
+`bun run skills:check`.
 
-Na Windows Codex-only stroji, kde se Claude nepoužívá, je autoritou přímo
-`.agents/skills/` a chybějící mirror není blocker. Legacy symlink/junction
-nebo textový placeholder z období symlink modelu hlásí doctor jako
-`repair_needed`; repair lane je nahradí trackovaným mirrorem (cíl linku
-zůstává nedotčený).
+Legacy symlink/junction z období symlink modelu nahradí Git při checkoutu
+trackovaným adresářem; pokud zůstane, `skills:check` ho hlásí jedinou hláškou
+a `skills:sync` ho nahradí adresářem (cíl linku zůstává nedotčený).
 
 GEN2 s reverzním layoutem má `.agents/skills` jako **existující symlink** →
 `../.claude/skills`; ten je nutné nejdřív odstranit. `git rm` symlinku smaže i

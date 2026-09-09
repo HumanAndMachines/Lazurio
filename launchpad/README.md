@@ -889,16 +889,11 @@ Doctor musí hlídat:
   chybějící Organization `module_port_pool` pro budoucí deterministické alokace
 - existenci `dev_script`
 - existenci a validitu read-only plugin manifestu, pokud je uvedený
-- u Organizací, které přijaly agent-skills entrypoint kontrakt, že
-  `.claude/skills` přes `realpath` míří na kanonické `.agents/skills`; shared
-  Doctor nikdy nespouští Organization skript ani nematerializuje odkaz, pouze
-  vrací `ok`, `repair_needed` nebo `blocked`; explicitní capability mode
-  `codex-only` lze pro lokální Doctor nastavit přes
-  `COMPANYASCODE_AGENT_CAPABILITY_MODE=codex-only`. Jen v tomto režimu je na
-  Windows chybějící odkaz nebo jeho textový Git placeholder stav `ok`, protože
-  Codex čte přímo `.agents/skills`. V bezpečném výchozím režimu
-  `claude-compatible` zůstává entrypoint vyžadovaný; skutečná druhá složka
-  je blokovaná v obou režimech
+- u rootu a Organizací s agent-skills katalogem, že `.claude/skills` je
+  bajtově shodná kopie `.agents/skills` bez symlinků a junctionů; shared
+  Doctor nikdy nespouští Organization skript ani nic nezapisuje, pouze vrací
+  `ok`, nebo `repair_needed` s jedinou remedy „v daném repu spusť
+  `bun run skills:sync` a změnu commitni“
 
 Když Doctor selže, chyba má být napsaná tak, aby ji mohl opravit další
 agent bez znalosti historie.

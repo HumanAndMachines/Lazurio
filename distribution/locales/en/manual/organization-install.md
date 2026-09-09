@@ -530,19 +530,20 @@ enough.
 ## Windows without Developer Mode
 
 Neither Lazurio nor OrganizationTemplate may create a symlink or junction for
-`.claude/skills`. The canonical source is `.agents/skills`; `.claude/skills` is
-a Git-tracked, byte-for-byte derived mirror verified by
-`bun run doctor:agent-skills`. A fresh checkout and every worktree therefore
-already contain it, and Windows **does not need to be switched to Developer
-Mode**. The command `bun run repair:agent-skills` is deliberately a no-write
-diagnostic: it does not overwrite drift or a missing mirror, but returns them
-to the Agent for an explicit Git-reviewed fix in the task worktree.
+`.claude/skills`. The only authoring source is `.agents/skills`;
+`.claude/skills` is its Git-tracked byte-identical copy, a generated artifact
+like a lockfile. A fresh checkout and every worktree therefore already contain
+it, and Windows **does not need to be switched to Developer Mode**. After any
+skill change run `bun run skills:sync` and commit the copy; `bun run skills:check`
+is part of `bun run check` and CI and fails on any difference or symlink with a
+single message (`.claude/skills` neodpovídá `.agents/skills`; spusť
+`bun run skills:sync` a změnu commitni).
 
 Do not solve this with a gitignored local copy: it would require an additional
 materialization step after every checkout and worktree and would allow local
-drift. The diagnostic lane does not overwrite any content or symlink/junction
-by guesswork; it returns every conflict to the Agent for a safe fix in the
-owning repo.
+drift. An older checkout with a symlink or junction is converged by Git itself
+when it checks out the tracked directory; any remaining link is replaced by a
+directory by `skills:sync`.
 
 The CLI neither selects the Root nor stores it as additional configuration. A
 production installation always uses `~/Lazurio` on macOS/Linux and

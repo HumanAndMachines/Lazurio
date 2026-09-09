@@ -13,7 +13,7 @@ import { mkdir, readFile, readdir } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { spawnSync } from "node:child_process";
 import { hostname, userInfo } from "node:os";
-import { trustedGitExecutable } from "./agent-skills-entrypoint.mjs";
+import { resolveGitExecutableOnPath } from "../lazurio/core/toolchain-lib.mjs";
 import {
   parseWorktreeCreateArgs,
   PLAN_CODE_PATTERN,
@@ -58,7 +58,7 @@ function fail(message) {
 }
 
 function git(cwd, args, { allowFail = false, useSafetyConfig = true } = {}) {
-  const executable = trustedGitExecutable();
+  const executable = resolveGitExecutableOnPath();
   if (!executable) fail("důvěryhodný Git executable nebyl nalezen.");
   const result = spawnSync(executable, [...(useSafetyConfig ? SAFE_WORKTREE_GIT_CONFIG : []), ...args], {
     cwd,

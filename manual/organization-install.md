@@ -486,18 +486,19 @@ Restart celých Windows je pouze fallback po neúspěšném Codex relaunchi.
 ## Windows bez Developer Mode
 
 Lazurio ani OrganizationTemplate nesmějí pro `.claude/skills` vytvářet
-symlink nebo junction. Kanonický source je `.agents/skills`; `.claude/skills`
-je Git-tracked, byte-for-byte odvozený mirror ověřovaný
-`bun run doctor:agent-skills`. Fresh checkout i každý worktree jej proto už
-obsahuje a Windows **nemusí být přepnutý do Developer Mode**. Příkaz
-`bun run repair:agent-skills` je záměrně no-write diagnostika: drift ani
-chybějící mirror nepřepisuje, ale vrátí je Agentovi k explicitní
-Git-reviewované opravě v task worktree.
+symlink nebo junction. Jediný autorský zdroj je `.agents/skills`;
+`.claude/skills` je jeho Git-tracked bajtově shodná kopie — generovaný
+artefakt jako lockfile. Fresh checkout i každý worktree ji proto už obsahuje a
+Windows **nemusí být přepnutý do Developer Mode**. Po změně skillu spusť
+`bun run skills:sync` a kopii commitni; `bun run skills:check` je součást
+`bun run check` i CI a na jakýkoli rozdíl nebo symlink failuje jedinou hláškou
+(`.claude/skills` neodpovídá `.agents/skills`; spusť `bun run skills:sync` a
+změnu commitni).
 
 Neřeš to gitignored lokální kopií: ta by po každém checkoutu a worktree
-vyžadovala další materializační krok a dovolila by lokální drift. Diagnostická
-lane nepřepisuje žádný obsah ani symlink/junction odhadem; každý konflikt vrátí
-Agentovi k bezpečné opravě v owning repu.
+vyžadovala další materializační krok a dovolila by lokální drift. Starší
+checkout se symlinkem nebo junctionem srovná Git sám při checkoutu
+trackovaného adresáře; zbylý link `skills:sync` nahradí adresářem.
 
 CLI Root nevybírá ani neukládá jako další konfiguraci. Produkční instalace
 vždy používá `~/Lazurio` na macOS/Linuxu a `%USERPROFILE%\\Lazurio` na
