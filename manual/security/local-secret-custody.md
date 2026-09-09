@@ -66,6 +66,11 @@ Když je potřeba OAuth consent nebo zadání hesla:
 
 ## Metadata-only verification
 
+Pro hostovaný servis navazuje
+[návrh standardu servisní připravenosti](../agent-service-readiness.md):
+přítomnost credentialu není důkaz funkčního přístupu. Onboarding má ověřit
+neinteraktivní použití, rotaci, revokaci a nezávislou obnovu v owner scope.
+
 Minimální closeout pro OAuth/Gmail gate:
 
 - expected account/domain match,
