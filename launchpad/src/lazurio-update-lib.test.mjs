@@ -262,6 +262,166 @@ test("verified checkout update retains configured credential helpers without int
   expect(status(fixture.working)).toBe("");
 });
 
+test("GitHub fetch retries once with identical identity and preserves recovery diagnostics without a false update", async () => {
+  const fixture = await repositoryFixture("github-fetch-recovery");
+  const source = "https://github.com/FixtureOrganization/workspace-module.git";
+  const actual = runGitThroughFixtureSource(fixture, source);
+  const calls = [];
+  const result = await updateManagedRepo({ ...descriptor(fixture), repo_kind: "module", repo: source }, {
+    deps: { runGit: async (args, options) => {
+      if (args[0] === "fetch") {
+        calls.push({ args: [...args], cwd: options.cwd });
+        expect(options.env.GIT_TERMINAL_PROMPT).toBe("0");
+        expect(options.env.GIT_CONFIG_GLOBAL).toBeUndefined();
+        if (calls.length === 1) return { ok: false, exitCode: 128, stderr: "remote: Repository not found.\nhttps://fixture-user:fixture-secret@github.com/FixtureOrganization/workspace-module.git", stdout: "" };
+      }
+      return actual(args, options);
+    } },
+  });
+  expect(calls).toHaveLength(2);
+  expect(calls[0]).toEqual(calls[1]);
+  expect(result.state).toBe("current");
+  expect(result.actions).toContain("fetch_retried_after_repository_not_found");
+  expect(result.message).toContain("První fetch");
+  expect(JSON.stringify(result)).not.toContain("fixture-secret");
+  expect(status(fixture.working)).toBe("");
+});
+
+for (const [label, stderr, limit, timedOut = false] of [
+  ["persistent repository denial", "remote: Repository not found.", 2],
+  ["explicit authentication denial", "fatal: Authentication failed", 1],
+  ["HTTP 401 denial", "HTTP 401\nremote: Repository not found.", 1],
+  ["HTTP 403 denial", "HTTP 403\nremote: Repository not found.", 1],
+  ["Git HTTP status denial", "fatal: The requested URL returned error: 403\nremote: Repository not found.", 1],
+  ["broker denial overrides repository error", "GitHub token broker refused the request\nremote: Repository not found.", 1],
+  ["timeout overrides repository error", "remote: Repository not found.", 1, true],
+]) {
+  test(`GitHub fetch remains blocked for ${label} with an exact attempt limit`, async () => {
+    const fixture = await repositoryFixture("github-fetch-denial");
+    const source = "https://github.com/FixtureOrganization/workspace-module.git";
+    const actual = runGitThroughFixtureSource(fixture, source);
+    let fetches = 0;
+    const before = runGit(fixture.working, ["rev-parse", "HEAD"]);
+    const result = await updateManagedRepo({ ...descriptor(fixture), repo_kind: "module", repo: source }, {
+      deps: { runGit: async (args, options) => {
+        if (args[0] === "fetch") {
+          fetches++;
+          return { ok: false, exitCode: 128, stderr, stdout: "", timedOut };
+        }
+        return actual(args, options);
+      } },
+    });
+    expect(fetches).toBe(limit);
+    expect(result.state).toBe("blocked");
+    expect(result.reason).toBe("github_unavailable");
+    expect(runGit(fixture.working, ["rev-parse", "HEAD"])).toBe(before);
+    expect(runGit(fixture.working, ["stash", "list"])).toBe("");
+  });
+}
+
+test("GitHub fetch recovery refuses a changed origin before a second request", async () => {
+  const fixture = await repositoryFixture("github-fetch-origin-change");
+  const source = "https://github.com/FixtureOrganization/workspace-module.git";
+  const actual = runGitThroughFixtureSource(fixture, source);
+  let fetches = 0;
+  const result = await updateManagedRepo({ ...descriptor(fixture), repo_kind: "module", repo: source }, {
+    deps: { runGit: async (args, options) => {
+      if (args[0] === "fetch") {
+        fetches++;
+        return { ok: false, exitCode: 128, stderr: "remote: Repository not found.", stdout: "" };
+      }
+      if (fetches && args[0] === "remote" && args[1] === "get-url") {
+        return { ok: true, stdout: "https://github.com/OtherOrganization/other-module.git", stderr: "" };
+      }
+      return actual(args, options);
+    } },
+  });
+  expect(fetches).toBe(1);
+  expect(result.reason).toBe("remote_changed");
+  expect(result.state).toBe("blocked");
+});
+
+test("persistent fetch refusal never exposes credential-bearing stderr in results or reports", async () => {
+  const fixture = await repositoryFixture("fetch-private-diagnostics");
+  const source = "https://github.com/FixtureOrganization/workspace-module.git";
+  const actual = runGitThroughFixtureSource(fixture, source);
+  let fetches = 0;
+  const result = await updateManagedRepo({ ...descriptor(fixture), repo_kind: "module", repo: source }, {
+    deps: { runGit: async (args, options) => {
+      if (args[0] === "fetch") {
+        fetches++;
+        return {
+          ok: false, exitCode: 128,
+          stderr: "remote: Repository not found.\nfatal: https://fixture-user:private-fixture-password@github.com/FixtureOrganization/workspace-module.git\nAuthorization: Bearer private-fixture-bearer",
+          stdout: "private-fixture-stdout", error: "private-fixture-error",
+        };
+      }
+      return actual(args, options);
+    } },
+  });
+  expect(fetches).toBe(2);
+  expect(result.state).toBe("blocked");
+  expect(result.message).toContain("Repository not found");
+  const report = await runRootUpdate(fixture, { updateRepo: async () => result });
+  expect(report.state).toBe("blocked");
+  expect(report.warnings.length).toBeGreaterThan(0);
+  expect(JSON.stringify(result)).not.toContain("private-fixture-");
+  expect(JSON.stringify(report)).not.toContain("private-fixture-");
+  expect(JSON.stringify(report)).not.toContain("Authorization:");
+});
+
+test("non-GitHub fetch errors are not retried", async () => {
+  const fixture = await repositoryFixture("local-fetch-no-retry");
+  let fetches = 0;
+  const result = await updateManagedRepo(descriptor(fixture), {
+    deps: { runGit: async (args, options) => {
+      if (args[0] === "fetch") {
+        fetches++;
+        return { ok: false, exitCode: 128, stderr: "remote: Repository not found.", stdout: "" };
+      }
+      return runGitAsync(args, options);
+    } },
+  });
+  expect(fetches).toBe(1);
+  expect(result.state).toBe("blocked");
+});
+
+test("a checkout operation is never retried even when it reports repository not found", async () => {
+  const fixture = await repositoryFixture("checkout-no-retry");
+  await addRemoteCommit(fixture, "remote.txt", "remote\n");
+  const source = "https://github.com/FixtureOrganization/workspace-module.git";
+  const actual = runGitThroughFixtureSource(fixture, source);
+  let fetches = 0;
+  let pulls = 0;
+  const result = await updateManagedRepo({ ...descriptor(fixture), repo_kind: "module", repo: source }, {
+    deps: { runGit: async (args, options) => {
+      if (args[0] === "fetch") fetches++;
+      if (args[0] === "pull") {
+        pulls++;
+        return { ok: false, exitCode: 128, stderr: "remote: Repository not found.", stdout: "" };
+      }
+      return actual(args, options);
+    } },
+  });
+  expect(fetches).toBe(1);
+  expect(pulls).toBe(1);
+  expect(result.reason).toBe("fast_forward_failed");
+  expect(result.state).toBe("blocked");
+});
+
+test("successful fetch recovery remains visible in the standard update report", async () => {
+  const fixture = await repositoryFixture("fetch-recovery-report");
+  const report = await runRootUpdate(fixture, {
+    updateRepo: async () => ({
+      repo_key: "fixture::root", state: "current", reason: "already_current",
+      message: "První fetch byl odmítnut; druhý uspěl.",
+      actions: ["fetch_retried_after_repository_not_found"],
+    }),
+  });
+  expect(report.state).toBe("current");
+  expect(report.warnings).toContain("fixture::root: První fetch byl odmítnut; druhý uspěl.");
+});
+
 test("verified update applies a configured URL rewrite only once", async () => {
   const fixture = await repositoryFixture("single-url-rewrite");
   await addRemoteCommit(fixture, "expected.txt", "expected\n");

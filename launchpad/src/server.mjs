@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { hostedRequestMayStartApp } from "./hosted-readiness-lib.mjs";
 import { constants, existsSync, lstatSync, realpathSync } from "fs";
 import { open, readFile } from "fs/promises";
 import { createConnection } from "node:net";
@@ -559,7 +560,9 @@ async function serveOrganizationLogo(request, url, slug) {
 }
 
 function isMutatingApiRequest(request, url) {
-  return url.pathname.startsWith("/api/") && !safeApiMethods.has(request.method);
+  return url.pathname.startsWith("/api/") && (
+    !safeApiMethods.has(request.method) || url.pathname.startsWith("/api/internal/hosted/")
+  );
 }
 
 async function worktreeMutationTouchesCanonicalMount(url) {
@@ -853,6 +856,8 @@ async function requestStaleLaunchpadShutdown(url, observation) {
 }
 
 function appRuntimeRoute(pathname) {
+  const internal = pathname.match(/^\/api\/internal\/hosted\/apps\/([^/]+)\/ensure$/);
+  if (internal) return { appId: decodeURIComponent(internal[1]), action: "ensure" };
   const match = pathname.match(/^\/api\/apps\/([^/]+)\/(health|install|repair|start|switch|open|stop|restart|logs)$/);
   if (!match) return null;
   return {
@@ -952,6 +957,20 @@ async function handlePersonalRuntimeRoute(request, route) {
           requireSource: explicitRuntimeSourceActions.has(route.action),
         })
       : {};
+    // Ingress-only readiness subrequest. The deployment proxy must reject this
+    // namespace on every public hostname. It supplies the same signed Team
+    // cookie used by hosted mutations; proxy identity headers grant no access.
+    if (route.action === "ensure") {
+      if (hostedWorkspace.profile !== "hosted") return notFound();
+      if (request.method !== "GET") return jsonResponse({ error: "method_not_allowed" }, 405);
+      const ready = await appsResponseCache.runMutation(() => runtimeManager.ensureHostedApp(route.appId, {
+        // Team authentication already happened. Fetch Metadata controls lifecycle
+        // only: background fetches and WebSocket reconnects are not a new Open.
+        // Non-browser clients without Fetch Metadata retain direct-link behavior.
+        allowStart: hostedRequestMayStartApp(request.headers),
+      }));
+      return new Response(null, { status: ready.status === "healthy" ? 204 : 503 });
+    }
     if (route.action === "health" && (request.method === "GET" || request.method === "POST")) {
       return jsonResponse(await personalspaceRuntimeManager.health(route.appId, runtimeOptions));
     }
@@ -1137,6 +1156,20 @@ async function handleRuntimeRoute(request, route) {
         "app_not_found",
         "Aplikace není dostupná v aktivním Team Workspace.",
       );
+    }
+    // Ingress-only readiness subrequest. The deployment proxy must reject this
+    // namespace on every public hostname. It supplies the same signed Team
+    // cookie used by hosted mutations; proxy identity headers grant no access.
+    if (route.action === "ensure") {
+      if (hostedWorkspace.profile !== "hosted") return notFound();
+      if (request.method !== "GET") return jsonResponse({ error: "method_not_allowed" }, 405);
+      const ready = await appsResponseCache.runMutation(() => runtimeManager.ensureHostedApp(route.appId, {
+        // Team authentication already happened. Fetch Metadata controls lifecycle
+        // only: background fetches and WebSocket reconnects are not a new Open.
+        // Non-browser clients without Fetch Metadata retain direct-link behavior.
+        allowStart: hostedRequestMayStartApp(request.headers),
+      }));
+      return new Response(null, { status: ready.status === "healthy" ? 204 : 503 });
     }
     if (route.action === "health" && (request.method === "GET" || request.method === "POST")) {
       return jsonResponse(projectHostedRuntimePayload(
@@ -1493,10 +1526,12 @@ function startServer(startPort) {
                 status: "ok",
                 ...(maintenance
                   ? {
+                      module_lifecycle: "on-demand-v1",
                       maintenance: {
                         schema_version: maintenance.schema_version,
                         total: maintenance.total,
                         healthy: maintenance.healthy,
+                        stopped: maintenance.stopped,
                         starting: maintenance.starting,
                         degraded: maintenance.degraded,
                         skipped: hostedMaintenance?.skipped?.length ?? 0,

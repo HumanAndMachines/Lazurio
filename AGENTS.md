@@ -552,10 +552,12 @@ známý lease jiné Organizace vyžaduje výslovné potvrzení konkrétní nahra
 aplikace. Na localhostu jsou Modulové procesy session-scoped: graceful restart
 Launchpadu ukončí všechny jeho managed process trees, nic neobnoví a nový
 `Start`/`Open` znovu explicitně zvolí exact `main` nebo worktree source. Hosted
-Team Workspace automaticky udržuje výchozí App každého workspace Modulu
-deklarovaného pro daný Team; cold start začíná z `main` a session přepnutí na
-worktree se nepersistuje. Explicitní `Stop` je proto jen local akce a hosted ho
-odmítne. Legacy nebo nevalidní lease takovou autoritu nedává.
+Team Workspace spouští výchozí App deklarovaného Modulu na Open nebo
+přihlášený přímý odkaz a pak ji udržuje v aktuální session. Cold start sám
+moduly nespouští; první otevření začíná z `main` a session přepnutí na worktree
+se nepersistuje. Explicitní `Stop` platí i pro hosted a drží do dalšího
+otevření; health, katalog a browserové požadavky na pozadí nejsou Open.
+Legacy nebo nevalidní lease takovou autoritu nedává.
 Productionspace
 repozitáře z rootu nespouštěj ani nereleasuj bez explicitní org policy.
 
