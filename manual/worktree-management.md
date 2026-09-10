@@ -16,11 +16,32 @@ Tento dokument přesně definuje, jak má Lazurio vytvářet,
 zobrazovat, kontrolovat a uklízet Git worktrees pro Lazurio root a pro
 Organizace. Příkazy označené jako plánované se nesmí vydávat za dnešní
 implementaci. Do dokončení CAC-0065 platí decision 0049 a současné Doctor /
-Launchpad guardy.
+Launchpad guardy. Úzká aktivní `worktrees:create` lane zakládá jeden edit
+worktree pro Lazurio Root nebo pro explicitně zvolený Git-backed Organization
+root; obecný Organization environment s moduly a dependency profily tím ještě
+nenahrazuje.
 
 Aktivní plán vždy vlastní konkrétní Organizace a jeho exact locator ukládá
 worktree sidecar. Veřejný manuál na privátní Mission Control neodkazuje;
 stabilní lokální rozhodovací kontrakt shrnuje `manual/decision-register.md`.
+
+Aktuální podporovaný create kontrakt je:
+
+```sh
+bun run worktrees:create -- --plan DEV-6500 --dry-run
+bun run worktrees:create -- --plan DEV-6500 \
+  --repository organizations/ExampleOrg_GEN3 \
+  --dry-run
+```
+
+Bez `--repository` je edit targetem Lazurio Root. Selector přijme pouze exact
+`organizations/<Org-mount>`, jehož nesymlinkovaná cesta, samostatný Git root,
+clean `main`, `origin` a mutation-safe Organization manifest tvoří jednu
+identitu. Worktree a sidecar vzniknou pod `.worktrees/root` tohoto owner repa.
+Mission Control authority může patřit jiné připojené Organizaci; sidecar drží
+její root-relative locator a plán se do editovaného repa nekopíruje. Libovolný
+nested modul, Personalspace, Productionspace, repository-db, traversal nebo
+externí cesta failne před mutací.
 
 ## Výsledek, který chceme
 

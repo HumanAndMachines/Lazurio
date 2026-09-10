@@ -381,15 +381,7 @@ async function validateSidecar(
       planPath: null,
     };
   }
-  const canonicalIdentity = {
-    organization: repositoryIdentity.organization,
-    organization_path: ".",
-    workspace: "root",
-    module: repositoryIdentity.module,
-    module_path: ".",
-    repo_kind: "root_repo",
-    base_branch: "main",
-  };
+  const canonicalIdentity = repositoryIdentity.canonicalIdentity;
   for (const [field, expected] of Object.entries(canonicalIdentity)) {
     if (data[field] !== expected) {
       return {
@@ -404,7 +396,7 @@ async function validateSidecar(
   }
   const declaredWorktree = isAbsolute(data.worktree_path)
     ? resolve(data.worktree_path)
-    : resolve(primaryRoot, data.worktree_path);
+    : resolve(repositoryIdentity.scopeRoot, data.worktree_path);
   if (declaredWorktree !== resolve(record.path)) {
     return { valid: false, error: "worktree_path does not match Git registry", planPath: null };
   }
@@ -412,7 +404,7 @@ async function validateSidecar(
     return { valid: false, error: "mission_control_plan_path must be relative", planPath: null };
   }
   const authority = await resolveSidecarAuthority(
-    primaryRoot,
+    repositoryIdentity.scopeRoot,
     authorityRoot,
     data.mission_control_authority_path,
   );
@@ -767,10 +759,54 @@ async function resolveRepositoryIdentity(primaryRoot) {
   const repository = (githubMatch?.[2] ?? parts.at(-1) ?? "")
     .replace(/\.git$/i, "");
   if (!organization || !repository) return null;
-  return {
+  const rootIdentity = {
     organization,
     module: repository.replace(/_GEN[0-9]+$/i, ""),
+    scopeRoot: primaryRoot,
+    canonicalIdentity: {
+      organization,
+      organization_path: ".",
+      workspace: "root",
+      module: repository.replace(/_GEN[0-9]+$/i, ""),
+      module_path: ".",
+      repo_kind: "root_repo",
+      base_branch: "main",
+    },
   };
+  const organizationsRoot = dirname(primaryRoot);
+  const lazurioRoot = dirname(organizationsRoot);
+  if (
+    basename(organizationsRoot) !== "organizations"
+    || !existsSync(join(lazurioRoot, "launchpad.gen3.json"))
+  ) {
+    return rootIdentity;
+  }
+  try {
+    const resolution = readOrganizationRoot({ organizationRoot: primaryRoot });
+    if (
+      !["legacy", "transition"].includes(resolution.state)
+      || resolution.resource_count !== 1
+      || resolution.resource?.kind !== "organization"
+    ) {
+      return rootIdentity;
+    }
+    const organizationPath = relative(lazurioRoot, primaryRoot).split(sep).join("/");
+    return {
+      ...rootIdentity,
+      scopeRoot: lazurioRoot,
+      canonicalIdentity: {
+        organization: resolution.resource.organization.slug,
+        organization_path: organizationPath,
+        workspace: "root",
+        module: "root",
+        module_path: organizationPath,
+        repo_kind: "organization_root",
+        base_branch: "main",
+      },
+    };
+  } catch {
+    return rootIdentity;
+  }
 }
 
 export async function validateCanonicalMissionControlPlan(

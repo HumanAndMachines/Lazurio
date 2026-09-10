@@ -1,12 +1,20 @@
-import { githubRepositoryCoordinate } from "./organization-slot-scope-lib.mjs";
+import {
+  classifyOrganizationSlotAccess,
+  githubRepositoryCoordinate,
+  normalizeOrganizationSlotPath,
+} from "./organization-slot-scope-lib.mjs";
 
 export const GITHUB_TEAM_FORGE_BINDING_SCHEMA = "lazurio.team-forge-binding.github.v0";
+// Role, pro které `lazurio organization install --role` provádí read-only
+// readiness gate. Textový název role nic neautorizuje: rozhodují živá GitHub
+// práva ověřená tímto gate; manifest jen mapuje Team a scope repozitářů.
+export const ORGANIZATION_INSTALL_ROLES = Object.freeze(["builder", "steward"]);
 
 const positiveIdPattern = /^[1-9][0-9]{0,19}$/u;
 const githubLoginPattern = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/u;
 const githubTeamSlugPattern = /^[a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?$/u;
 
-export function githubBuilderReadinessNotRequested() {
+export function githubRoleReadinessNotRequested() {
   return freeze({
     authority: "github",
     role: null,
@@ -19,10 +27,11 @@ export function githubBuilderReadinessNotRequested() {
   });
 }
 
-export function githubBuilderReadinessUnavailable(reason, message) {
+export function githubRoleReadinessUnavailable(role, reason, message) {
+  const normalizedRole = normalizeInstallRole(role);
   return freeze({
     authority: "github",
-    role: "builder",
+    role: normalizedRole,
     status: "blocked",
     account: null,
     organization_membership: null,
@@ -30,22 +39,24 @@ export function githubBuilderReadinessUnavailable(reason, message) {
     repositories: [],
     blockers: [blocker(
       reason ?? "provider_observation_failed",
-      message ?? "Builder access nešlo ověřit čerstvými GitHub provider daty.",
+      message ?? `${roleLabel(normalizedRole)} access nešlo ověřit čerstvými GitHub provider daty.`,
     )],
   });
 }
 
-export function observeGitHubBuilderReadiness({
+export function observeGitHubRoleReadiness({
   provider,
   organization,
   rootRepository,
   resource,
+  role,
 } = {}) {
+  const normalizedRole = normalizeInstallRole(role);
   if (!provider?.json || !organization?.id || !organization?.login || !rootRepository?.full_name) {
-    throw new TypeError("Builder readiness requires a GitHub provider and verified Organization identity.");
+    throw new TypeError("Role readiness requires a GitHub provider and verified Organization identity.");
   }
 
-  const plan = builderAccessPlan({ organization, rootRepository, resource });
+  const plan = roleAccessPlan({ organization, rootRepository, resource, role: normalizedRole });
   const blockers = [...plan.blockers];
   const account = observeAccount(provider, blockers);
   const organizationMembership = account
@@ -72,7 +83,7 @@ export function observeGitHubBuilderReadiness({
 
   return freeze({
     authority: "github",
-    role: "builder",
+    role: normalizedRole,
     status: blockers.length === 0 ? "ready" : "blocked",
     account,
     organization_membership: organizationMembership,
@@ -82,11 +93,11 @@ export function observeGitHubBuilderReadiness({
   });
 }
 
-export function isValidGitHubBuilderReadiness(value) {
+export function isValidGitHubRoleReadiness(value) {
   if (
     !isRecord(value)
     || value.authority !== "github"
-    || ![null, "builder"].includes(value.role)
+    || ![null, ...ORGANIZATION_INSTALL_ROLES].includes(value.role)
     || !["not_requested", "ready", "blocked"].includes(value.status)
     || !Array.isArray(value.teams)
     || !Array.isArray(value.repositories)
@@ -100,13 +111,13 @@ export function isValidGitHubBuilderReadiness(value) {
       && value.repositories.length === 0
       && value.blockers.length === 0;
   }
-  return value.role === "builder"
+  return ORGANIZATION_INSTALL_ROLES.includes(value.role)
     && (value.account === null || validIdentity(value.account))
     && (value.organization_membership === null || isRecord(value.organization_membership))
     && (value.status === "ready") === (value.blockers.length === 0);
 }
 
-function builderAccessPlan({ organization, rootRepository, resource }) {
+function roleAccessPlan({ organization, rootRepository, resource, role }) {
   const blockers = [];
   const teamDefinitions = Array.isArray(resource?.teams) ? resource.teams : [];
   const defaultTeams = teamDefinitions.filter((team) => team?.default === true);
@@ -119,7 +130,7 @@ function builderAccessPlan({ organization, rootRepository, resource }) {
   if (!defaultTeam) {
     blockers.push(blocker(
       "default_team_ambiguous",
-      "Organization manifest musí deklarovat právě jeden výchozí Team pro Builder root přístup.",
+      `Organization manifest musí deklarovat právě jeden výchozí Team pro ${roleLabel(role)} root přístup.`,
     ));
   }
 
@@ -131,13 +142,14 @@ function builderAccessPlan({ organization, rootRepository, resource }) {
     organization,
   });
 
-  for (const slot of resource?.repository_inventory ?? []) {
-    if (!isBuilderRepositorySlot(slot)) continue;
+  const inventory = Array.isArray(resource?.repository_inventory) ? resource.repository_inventory : [];
+  for (const slot of inventory) {
+    if (!isRoleRepositorySlot(slot, role) || isBelowNonOrdinarySlot(slot, inventory)) continue;
     const coordinate = githubRepositoryCoordinate(slot?.git?.url ?? slot?.repository ?? slot?.git_url);
     if (!coordinate || coordinate.owner.toLowerCase() !== organization.login.toLowerCase()) {
       blockers.push(blocker(
         "repository_binding_invalid",
-        "Aktivní Builder repository slot nemá bezpečnou GitHub souřadnici v této Organizaci.",
+        `Aktivní ${roleLabel(role)} repository slot nemá bezpečnou GitHub souřadnici v této Organizaci.`,
         { repository: typeof slot?.slug === "string" ? slot.slug : null },
       ));
       continue;
@@ -194,13 +206,41 @@ function builderAccessPlan({ organization, rootRepository, resource }) {
   };
 }
 
-function isBuilderRepositorySlot(slot) {
+// Restricted (Admin-only) a malformed sloty gate záměrně vůbec nečte: nad
+// nimi neproběhne žádná provider operace. Ordinary slot patří do gate, když
+// jeho `required_roles` roli výslovně jmenují, jsou prázdné nebo veřejné `*`.
+function isRoleRepositorySlot(slot, role) {
   if (slot?.status !== "active") return false;
-  if (slot?.default_access === "restricted") return false;
+  if (classifyOrganizationSlotAccess(slot) !== "ordinary") return false;
   const requiredRoles = Array.isArray(slot?.required_roles) ? slot.required_roles : [];
   return requiredRoles.length === 0
     || requiredRoles.includes("*")
-    || requiredRoles.includes("builder");
+    || requiredRoles.includes(role);
+}
+
+// Restricted nebo malformed hranice platí i pro každý slot pod ní (například
+// `mission-control/db` pod restricted `mission-control`): updater takového
+// potomka role-scoped nematerializuje, takže gate nad ním nesmí číst provider.
+function isBelowNonOrdinarySlot(slot, inventory) {
+  const path = normalizeOrganizationSlotPath(slot?.path);
+  if (!path) return false;
+  return inventory.some((candidate) => {
+    if (candidate === slot) return false;
+    const ancestorPath = normalizeOrganizationSlotPath(candidate?.path);
+    if (!ancestorPath || !path.startsWith(`${ancestorPath}/`)) return false;
+    return classifyOrganizationSlotAccess(candidate) !== "ordinary";
+  });
+}
+
+function normalizeInstallRole(role) {
+  if (!ORGANIZATION_INSTALL_ROLES.includes(role)) {
+    throw new TypeError(`Role readiness supports only ${ORGANIZATION_INSTALL_ROLES.join(", ")}.`);
+  }
+  return role;
+}
+
+function roleLabel(role) {
+  return role.charAt(0).toUpperCase() + role.slice(1);
 }
 
 function addRepositoryPlan(repositories, blockers, {
@@ -213,7 +253,7 @@ function addRepositoryPlan(repositories, blockers, {
   if (!coordinate || coordinate.owner.toLowerCase() !== organization.login.toLowerCase()) {
     blockers.push(blocker(
       "repository_binding_invalid",
-      "Builder repository nepatří do ověřené GitHub Organization.",
+      "Repository readiness gate nepřijímá repozitář mimo ověřenou GitHub Organization.",
       { repository: fullName ?? null },
     ));
     return;
