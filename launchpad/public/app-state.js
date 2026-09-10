@@ -556,18 +556,19 @@ function slotBlockerModel(slot) {
 
 function appWarningModel(app) {
   const title = problemAppTitle(app);
+  const message = app.dependencies?.state === "needs_install" ? "problem.dependencies" : "problem.appWarning";
   return {
     severity: "warning",
-    title: t("problem.appWarning.title", { app: title }),
-    impact: t("problem.appWarning.impact"),
-    nextStep: t("problem.appWarning.next"),
+    title: t(`${message}.title`, { app: title }),
+    impact: t(`${message}.impact`),
+    nextStep: t(`${message}.next`),
     appId: app.id,
     technical: [app.runtime?.message, app.dependencies?.message, app.dependencies?.cwd].filter(Boolean),
   };
 }
 
 function problemAppTitle(app) {
-  return String(app.title ?? app.id ?? t("common.application")).replace(/\s+v\d+$/i, "");
+  return String(app.title ?? app.id ?? t("common.application"));
 }
 
 function humanizePathTail(path) {
