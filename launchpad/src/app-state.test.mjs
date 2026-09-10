@@ -6,6 +6,7 @@ import {
   buildSpaceProblemModel,
   computeSpaceHeroState,
   createLatestDataLoadCoordinator,
+  createSidePanelLoadCoordinator,
   familyTitle,
   findRunningSharedPortPeer,
   filterApps,
@@ -383,6 +384,114 @@ test("A→B→A side-panel race accepts only the newest request generation", () 
   expect(sidePanelResponseIsCurrent({ ...activeA, requestId: 2, requestedCompany: "Beta" })).toBe(false);
   expect(sidePanelResponseIsCurrent({ ...activeA, requestId: 3 })).toBe(true);
   expect(sidePanelResponseIsCurrent({ ...activeA, requestId: 3, activeScope: "future" })).toBe(false);
+});
+
+function createSidePanelHarness(initialScope = { scope: "org", company: "Alpha" }) {
+  const scope = { ...initialScope };
+  const requests = [];
+  const applied = [];
+  let cleared = 0;
+  const coordinator = createSidePanelLoadCoordinator({
+    readScope: () => ({ ...scope }),
+    fetchSnapshot: ({ company }) => new Promise((resolve) => {
+      requests.push({ company, resolve });
+    }),
+    applySnapshot: (snapshot) => applied.push(snapshot),
+    clearSnapshot: () => {
+      cleared += 1;
+    },
+  });
+  return { scope, requests, applied, coordinator, cleared: () => cleared };
+}
+
+test("side panels timeline A-old → B → A-new → A-old returns keeps only the newest Alpha snapshot", async () => {
+  const { scope, requests, applied, coordinator } = createSidePanelHarness();
+
+  const aOld = coordinator.load();
+  scope.company = "Beta";
+  const b = coordinator.load();
+  scope.company = "Alpha";
+  const aNew = coordinator.load();
+  expect(requests.map((request) => request.company)).toEqual(["Alpha", "Beta", "Alpha"]);
+
+  requests[2].resolve({ tag: "A-new" });
+  expect(await aNew).toEqual({ applied: true, reason: null });
+  expect(applied).toEqual([{ tag: "A-new" }]);
+
+  // Původní pomalá odpověď téže Organizace doráží až po novější: nesmí ji přepsat.
+  requests[0].resolve({ tag: "A-old" });
+  expect(await aOld).toEqual({ applied: false, reason: "superseded" });
+  requests[1].resolve({ tag: "B" });
+  expect(await b).toEqual({ applied: false, reason: "superseded" });
+  expect(applied).toEqual([{ tag: "A-new" }]);
+});
+
+test("side panels ignore a late response after the scope changed without a newer request", async () => {
+  const { scope, requests, applied, coordinator } = createSidePanelHarness();
+
+  const alpha = coordinator.load();
+  scope.company = "Beta";
+  requests[0].resolve({ tag: "Alpha" });
+  expect(await alpha).toEqual({ applied: false, reason: "scope_changed" });
+
+  scope.scope = "personal";
+  scope.company = "all";
+  const personal = coordinator.load();
+  expect(await personal).toEqual({ applied: false, reason: "out_of_scope" });
+  expect(requests).toHaveLength(1);
+  expect(applied).toEqual([]);
+});
+
+test("side panels reject a pre-mutation snapshot and accept the read started after the mutation", async () => {
+  const { requests, applied, coordinator } = createSidePanelHarness();
+
+  const preMutation = coordinator.load();
+  // Lokální akce (Start/Stop/Sync) změnila význam read modelu, zatímco
+  // původní request stále běží.
+  coordinator.invalidate();
+  requests[0].resolve({ tag: "pre-mutation" });
+  expect(await preMutation).toEqual({ applied: false, reason: "superseded" });
+  expect(applied).toEqual([]);
+
+  const postMutation = coordinator.load();
+  requests[1].resolve({ tag: "post-mutation" });
+  expect(await postMutation).toEqual({ applied: true, reason: null });
+  expect(applied).toEqual([{ tag: "post-mutation" }]);
+});
+
+test("fresh data loads invalidate dependent side panels through onFresh, quiet polls do not", async () => {
+  const { requests, applied, coordinator: sidePanels } = createSidePanelHarness();
+  const dataLoads = createLatestDataLoadCoordinator({
+    run: async () => "apps",
+    onFresh: () => sidePanels.invalidate(),
+  });
+
+  const pollSnapshot = sidePanels.load();
+  await dataLoads.load({ quiet: true });
+  requests[0].resolve({ tag: "after-quiet-poll" });
+  expect(await pollSnapshot).toEqual({ applied: true, reason: null });
+
+  const preMutation = sidePanels.load();
+  // Mutace vždy končí fresh readem (loadData({ quiet: true, fresh: true })),
+  // Sync i ruční reload jsou non-quiet, tedy fresh implicitně.
+  await dataLoads.load({ quiet: true, fresh: true });
+  requests[1].resolve({ tag: "pre-mutation" });
+  expect(await preMutation).toEqual({ applied: false, reason: "superseded" });
+
+  const preSync = sidePanels.load();
+  await dataLoads.load({ sync: true });
+  requests[2].resolve({ tag: "pre-sync" });
+  expect(await preSync).toEqual({ applied: false, reason: "superseded" });
+  expect(applied).toEqual([{ tag: "after-quiet-poll" }]);
+  expect(() => createLatestDataLoadCoordinator({ run: async () => {}, onFresh: "later" })).toThrow(TypeError);
+});
+
+test("side panel coordinator clears panels outside an Organization scope and fails closed on missing hooks", async () => {
+  const harness = createSidePanelHarness({ scope: "org", company: "all" });
+  expect(await harness.coordinator.load()).toEqual({ applied: false, reason: "out_of_scope" });
+  expect(harness.cleared()).toBe(1);
+  expect(harness.requests).toHaveLength(0);
+  expect(() => createSidePanelLoadCoordinator({ readScope: () => ({}) })).toThrow(TypeError);
 });
 
 test("failed partial mutation rejects a pre-mutation poll and queues exactly one fresh read", async () => {
