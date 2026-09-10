@@ -112,6 +112,24 @@ test("discovery ignores generated output copies of runtime manifests", async () 
   ]);
 });
 
+test("discovery keeps a valid workspace module named output", async () => {
+  const root = await createCompaniesWorkspaceFixture({
+    plugin: { schema_version: "companyascode.launchpad_plugin.v1", title: "Output context" },
+    appOverrides: { module: "output", id: "test-company-output-v1" },
+  });
+  const companyRoot = join(root, "organizations", "TestCompany");
+  await mkdir(join(companyRoot, "workspace"), { recursive: true });
+  await rename(join(companyRoot, "modules", "demo"), join(companyRoot, "workspace", "output"));
+
+  const { apps, invalid_apps, failures } = await discoverLaunchpadApps(root);
+
+  expect(failures).toEqual([]);
+  expect(invalid_apps).toEqual([]);
+  expect(apps.map((app) => app.package_path)).toEqual([
+    "organizations/TestCompany/workspace/output/app/v1/package.json",
+  ]);
+});
+
 test("discovery přenese builder metadata icon/description/group z manifestu", async () => {
   const root = await createCompaniesWorkspaceFixture({
     plugin: { schema_version: "companyascode.launchpad_plugin.v1", title: "Demo kontext" },
