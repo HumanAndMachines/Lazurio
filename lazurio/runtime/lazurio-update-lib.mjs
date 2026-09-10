@@ -1232,6 +1232,8 @@ async function reconcileUpdatedDependencies({
     repo,
     root: await canonicalPath(repo.absolute_path),
   })));
+  const mountRoots = await unmanagedMountRoots(rootPath);
+  const owningRepo = (cwd) => owningManagedRepo(canonicalRepos, cwd, mountRoots);
   const targetsByPath = new Map();
   const inventoryOutcomes = new Map();
 
@@ -1269,12 +1271,12 @@ async function reconcileUpdatedDependencies({
       const packagePath = typeof app.package_path === "string" ? app.package_path : null;
       if (!packagePath) continue;
       const cwd = await canonicalPath(resolve(rootPath, dirname(packagePath)));
-      const owner = owningManagedRepo(canonicalRepos, cwd);
+      const owner = owningRepo(cwd);
       if (!owner) continue;
       const target = await dependencyTarget({ rootPath, repo: owner.repo, repoRoot: owner.root, cwd, app });
       if (
         !changedRepoKeys.has(owner.repo.key)
-        && !dependencyTargetUsesChangedRepo(target, canonicalRepos, changedRepoKeys)
+        && !dependencyTargetUsesChangedRepo(target, owningRepo, changedRepoKeys)
       ) continue;
       if (target) targetsByPath.set(target.cwd, target);
     }
@@ -1283,7 +1285,7 @@ async function reconcileUpdatedDependencies({
       const packagePath = typeof app.package_path === "string" ? app.package_path : null;
       if (!packagePath) continue;
       const cwd = await canonicalPath(resolve(rootPath, dirname(packagePath)));
-      const owner = owningManagedRepo(canonicalRepos, cwd);
+      const owner = owningRepo(cwd);
       if (!owner || !changedRepoKeys.has(owner.repo.key)) continue;
       const identity = `${owner.repo.key}\0${cwd}`;
       if (invalidPackages.has(identity)) continue;
@@ -1453,19 +1455,41 @@ async function firstPresentBunLockfile(cwd) {
   return { ok: true, name: null };
 }
 
-function owningManagedRepo(canonicalRepos, cwd) {
-  return canonicalRepos
-    .filter(({ root }) => pathWithin(root, cwd))
-    .sort((left, right) => right.root.length - left.root.length)[0] ?? null;
+// Organization a Personalspace mounty jsou samostatné Git hranice. Balíček
+// pod nimi vlastní jen jejich vlastní managed descriptor; když v aktuálním
+// (např. scoped) inventáři chybí, Lazurio root ho nesmí zdědit jako fallback,
+// jinak by scoped install naplánoval refresh cizí Organizace a boundary guard
+// ho správně odmítl jako dependency_tree_boundary_invalid.
+async function unmanagedMountRoots(rootPath) {
+  const roots = [];
+  for (const mount of ["organizations", "personalspace"]) {
+    try {
+      roots.push(await canonicalPath(join(rootPath, mount)));
+    } catch {
+      roots.push(resolve(rootPath, mount));
+    }
+  }
+  return roots;
 }
 
-function dependencyTargetUsesChangedRepo(target, canonicalRepos, changedRepoKeys) {
+function owningManagedRepo(canonicalRepos, cwd, mountRoots = []) {
+  const owner = canonicalRepos
+    .filter(({ root }) => pathWithin(root, cwd))
+    .sort((left, right) => right.root.length - left.root.length)[0] ?? null;
+  if (
+    owner?.repo?.repo_kind === "lazurio_root"
+    && mountRoots.some((mountRoot) => pathWithin(mountRoot, cwd) && mountRoot !== cwd)
+  ) return null;
+  return owner;
+}
+
+function dependencyTargetUsesChangedRepo(target, owningRepo, changedRepoKeys) {
   return (target?.dependency_inspection?.local_dependency_targets ?? []).some((dependencyTarget) => {
     const targetPath = dependencyTarget.canonical_root
       ?? dependencyTarget.attribution_path
       ?? dependencyTarget.path;
     if (typeof targetPath !== "string" || targetPath === "") return false;
-    const owner = owningManagedRepo(canonicalRepos, targetPath);
+    const owner = owningRepo(targetPath);
     return owner ? changedRepoKeys.has(owner.repo.key) : false;
   });
 }
