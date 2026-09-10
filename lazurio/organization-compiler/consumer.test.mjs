@@ -37,7 +37,7 @@ async function fixture() {
 test("real primary dry-run and linked review write are deterministic", async () => {
   const { primary, review } = await fixture();
   const observation = readCheckoutRepositoryObservation(primary);
-  expect(observation.remoteContract.originRoutingReady).toBe(true);
+  expect(observation).toMatchObject({status:"valid", remoteContract:{originRoutingReady:true}});
   expect((await compileOrganization({organizationRoot: primary, repositoryObservation: observation})).changed_target_count).toBe(4);
   await expect(compileOrganization({organizationRoot: primary,write:true})).rejects.toThrow("linked review worktree");
   expect((await compileOrganization({organizationRoot: review,write:true})).changed_target_count).toBe(4);

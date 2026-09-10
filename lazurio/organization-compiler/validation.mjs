@@ -343,15 +343,6 @@ function collectSemanticFailures({
   }
 }
 
-const templateSourceDecisionRef =
-  "docs/decisions/0032-organization-template-derived-from-spectoda.md";
-// Decision 0113: `Spectoda/Spectoda_GEN3` is a renamable, and after a rename a
-// squattable, GitHub coordinate. It stays here only as an asserted label; the
-// authorization key is the immutable numeric repository id below.
-const templateSourceRepository = "Spectoda/Spectoda_GEN3";
-const templateSourceRepositoryId = 1282020273;
-const templateSourceRepositoryIdentity =
-  "spectoda/Spectoda_GEN3";
 const organizationTemplateRepositoryIdentity =
   "templatesrozjedeme-ai/OrganizationTemplate_GEN3";
 
@@ -443,63 +434,7 @@ function validateTemplateSyncContract({
     return;
   }
   if (role === "source") {
-    if (
-      company.slug !== "Spectoda" ||
-      company.github_org?.toLowerCase() !== "spectoda" ||
-      githubRepositoryCoordinateIdentity(
-        company.root_repository,
-      ) !== templateSourceRepositoryIdentity
-    ) {
-      failures.push(
-        "company.gen3.json/template_sync_role: source je aktuálně autorizovaná pouze pro Spectoda/Spectoda_GEN3 podle decision 0032",
-      );
-    }
-    // Decision 0113: bind on the immutable repository id first, then assert the
-    // owner/repo label next to it. A rename of Spectoda/Spectoda_GEN3 followed by a
-    // squat of the freed coordinate must not satisfy this marker.
-    if (
-      authorization?.decision_ref !== templateSourceDecisionRef ||
-      authorization?.source_repository_id !== templateSourceRepositoryId ||
-      authorization?.source_repository !== templateSourceRepository
-    ) {
-      failures.push(
-        "company.gen3.json/template_sync_authorization: source role vyžaduje přesný decision 0032 marker s neměnným source_repository_id a odpovídajícím source_repository",
-      );
-    }
-    if (
-      repositoryObservation?.status !== "valid" ||
-      normalizeObservedRepositoryIdentity(
-        repositoryObservation?.identity,
-      ) !==
-        templateSourceRepositoryIdentity
-    ) {
-      failures.push(
-        "company.gen3.json/template_sync_role: source vyžaduje důvěryhodně zjištěný checkout origin Spectoda/Spectoda_GEN3",
-      );
-    }
-    if (
-      repositoryObservation?.status === "valid" &&
-      repositoryObservation.remoteContract?.originRoutingReady !== true
-    ) {
-      failures.push(
-        "company.gen3.json/template_sync_role: source checkout vyžaduje bezpečný origin fetch/push routing bez transportních přesměrování",
-      );
-    }
-    if (
-      repositoryObservation?.status === "valid" &&
-      (
-        repositoryObservation.remoteContract?.templateRemoteState !==
-          "missing" ||
-        repositoryObservation.remoteContract
-          ?.templateRepositoryRemoteNames?.length !== 0 ||
-        repositoryObservation.remoteContract?.allRemoteUrlsSafeGithub !==
-          true
-      )
-    ) {
-      failures.push(
-        "company.gen3.json/template_sync_role: source checkout nesmí mít OrganizationTemplate remote pod žádným názvem a všechny remote URL musí být bezpečný GitHub tvar",
-      );
-    }
+    failures.push("template_sync_role=source requires the separate template publisher; this compiler does not carry Organization-specific source authorization");
   } else if (authorization !== undefined) {
     failures.push(
       "company.gen3.json/template_sync_authorization: smí být přítomná pouze pro template_sync_role=source",

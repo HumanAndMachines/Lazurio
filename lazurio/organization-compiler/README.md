@@ -50,6 +50,8 @@ This is smaller than migrating the template publisher and its runtime bootstrap.
 The adapter checks local and effective Git routing, the exact target checkout,
 and its primary repository identity. It does not connect to GitHub, attest grants,
 verify SSH endpoint custody, or resolve immutable template repository IDs. A
+template source Organization is deliberately rejected: its scoped authorization remains
+with the separate template publisher and is not copied into public Lazurio. A
 template publisher cannot use name-only local observation to authorize template
 writes; that supply-chain operation remains outside this compiler's write lane.
 Caller-supplied observations and schemas are diagnostic-only, never write authority.
