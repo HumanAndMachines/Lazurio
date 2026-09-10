@@ -21,7 +21,9 @@
     "organization-host/*.json",
     "runtime/*.mjs",
     "schemas/*.json",
-    "!**/*.test.mjs"
+    "!**/*.test.mjs",
+    "organization-compiler/*.mjs",
+    "!**/*.test-support.mjs"
   ],
   "engines": {
     "bun": "1.4.2",
