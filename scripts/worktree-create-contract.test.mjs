@@ -128,6 +128,13 @@ test("creates and inventories a governed Organization-root worktree", async () =
   expect(audit.violations).toEqual([]);
 });
 
+test("overlapping invocations retain their own create-lock ownership", async () => {
+  const fixture = await createLaneFixture({ plans: [["CAC-0007.yaml", validPlan]] });
+  const result = runCreateLane({ ...fixture, repository: "organizations/TestOrganization_GEN3", overlap: true });
+  expect({ status: result.status, stderr: result.stderr }).toMatchObject({ status: 0 });
+  expect(existsSync(join(fixture.root, ".worktrees/.worktree-create.lock"))).toBe(false);
+});
+
 test.each([
   "https://github.com/TestOrganization/TestOrganization_GEN3.git",
   "ssh://git@github.com/TestOrganization/TestOrganization_GEN3.git",
@@ -619,6 +626,7 @@ function runCreateLane({
   fixtureRoot,
   mutation = null,
   productionTransport = false,
+  overlap = false,
   authorityOverride = null,
   includeTaskAgentIdentity = true,
   repository = null,
@@ -647,7 +655,7 @@ function runCreateLane({
     writeFileSync(entrypoint, `
 import { runWorktreeCreate } from ${JSON.stringify(pathToFileURL(createScript).href)};
 import { spawnSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 const mutation = ${JSON.stringify(mutation)};
 const run = (cwd, args) => {
@@ -655,8 +663,13 @@ const run = (cwd, args) => {
   if (r.status !== 0) throw new Error(r.stderr);
   return { status: r.status, stdout: r.stdout.trim(), stderr: r.stderr.trim() };
 };
+const overlap = ${JSON.stringify(overlap)};
+let reachedRemote, resumeRemote;
+const reached = new Promise(resolve => { reachedRemote = resolve; });
+const resume = new Promise(resolve => { resumeRemote = resolve; });
 try {
-  await runWorktreeCreate({ remoteGit(cwd, args) {
+  const dependencies = { async remoteGit(cwd, args) {
+    if (overlap && args[0] === "ls-remote") { reachedRemote(); await resume; }
     const endpoints = ["git@github.com:TestOrganization/TestOrganization_GEN3.git", "https://github.com/TestOrganization/TestOrganization_GEN3.git", "ssh://git@github.com/TestOrganization/TestOrganization_GEN3.git", "ssh://github.com/TestOrganization/TestOrganization_GEN3"];
     if (!endpoints.includes(args[1])) throw new Error("Unexpected fixture endpoint");
     const result = run(cwd, [args[0], ${JSON.stringify(organizationRemote)}, ...args.slice(2)]);
@@ -668,7 +681,23 @@ try {
       if (mutation.kind === "origin") run(cwd, ["remote", "set-url", "origin", "https://github.com/TestOrganization/TestOrganization_GEN3.git"]);
     }
     return result;
-  }});
+  }};
+  if (overlap) {
+    const first = runWorktreeCreate(dependencies);
+    await reached;
+    const lockPath = join(${JSON.stringify(root)}, ".worktrees", ".worktree-create.lock");
+    const ownerPath = join(lockPath, "owner.json");
+    const ownedLock = readFileSync(ownerPath, "utf8");
+    let secondRejected = false;
+    try { await runWorktreeCreate(dependencies); } catch { secondRejected = true; }
+    const preserved = existsSync(ownerPath) && readFileSync(ownerPath, "utf8") === ownedLock;
+    resumeRemote();
+    await first;
+    if (!secondRejected || !preserved) throw new Error("Overlapping call released another invocation's lock");
+    if (existsSync(lockPath)) throw new Error("Owner did not release its own lock");
+  } else {
+    await runWorktreeCreate(dependencies);
+  }
 } catch (error) { console.error(error.message); process.exitCode = 1; }
 `);
   }
@@ -682,6 +711,7 @@ try {
     cwd: root,
     encoding: "utf8",
     env,
+    timeout: overlap ? 15_000 : undefined,
   });
 }
 

@@ -43,8 +43,6 @@ import {
   validateCanonicalMissionControlPlan,
 } from "../.agents/skills/worktree-development-discipline/scripts/worktree-inventory.mjs";
 
-let activeCreateLock = null;
-
 function canonicalOwnedWorktreePath(path) {
   try {
     const entry = lstatSync(path);
@@ -365,7 +363,7 @@ async function findPlanFile(authorityRoot, planCode) {
   };
 }
 
-async function main({ remoteGit = git } = {}) {
+async function main({ remoteGit = git } = {}, invocation) {
   let options;
   try {
     options = parseWorktreeCreateArgs(process.argv.slice(2));
@@ -451,7 +449,7 @@ async function main({ remoteGit = git } = {}) {
   if (!acquiredLock.ok) {
     fail(`jiná worktree create operace blokuje create lane: ${acquiredLock.message}.`);
   }
-  activeCreateLock = acquiredLock.lock;
+  invocation.createLock = acquiredLock.lock;
 
   if (existsSync(worktreePath)) fail(`worktree už existuje: ${worktreePath}`);
   // Osiřelý sidecar bez worktree může nést recovery handoff přerušené práce —
@@ -485,7 +483,7 @@ async function main({ remoteGit = git } = {}) {
     );
   }
   if (editRepository.repoKind === "organization_root") {
-    const remoteMain = remoteGit(primaryRoot, ["ls-remote", identity.remoteUrl, "refs/heads/main"]);
+    const remoteMain = await remoteGit(primaryRoot, ["ls-remote", identity.remoteUrl, "refs/heads/main"]);
     const remoteHead = remoteMain.stdout.split(/\s+/)[0];
     const localHead = git(primaryRoot, ["rev-parse", "HEAD"]).stdout;
     if (!/^[0-9a-f]{40,64}$/i.test(remoteHead) || remoteHead !== localHead) {
@@ -568,7 +566,7 @@ async function main({ remoteGit = git } = {}) {
     return;
   }
 
-  remoteGit(primaryRoot, [
+  await remoteGit(primaryRoot, [
     "fetch",
     identity.remoteUrl,
     "+refs/heads/main:refs/remotes/origin/main",
@@ -648,16 +646,16 @@ async function main({ remoteGit = git } = {}) {
 // Explicit dependency injection keeps local fixture transports outside the CLI.
 // Callers cannot enable it through checkout configuration or environment flags.
 export async function runWorktreeCreate(dependencies = {}) {
+  const invocation = { createLock: null };
   try {
-    await main(dependencies);
+    await main(dependencies, invocation);
   } finally {
-    const released = await releaseCreateLock(activeCreateLock);
-    if (activeCreateLock && !released.released) {
+    const released = await releaseCreateLock(invocation.createLock);
+    if (invocation.createLock && !released.released) {
       console.error(
         `warn - worktrees:create: námi vlastněný create lock nelze bezpečně uvolnit (${released.reason}).`,
       );
     }
-    activeCreateLock = null;
   }
 }
 
