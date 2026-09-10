@@ -5,6 +5,7 @@ import {
   buildSpaceProblemModel,
   computeSpaceHeroState,
   createLatestDataLoadCoordinator,
+  createSidePanelLoadCoordinator,
   familyTitle,
   findRunningSharedPortPeer,
   filterApps,
@@ -22,7 +23,6 @@ import {
   replacePersonalspaceResponse,
   reconcileSelectedAppId,
   runtimeStagesForApp,
-  sidePanelResponseIsCurrent,
   summarizeOrganizationSpaceHealth,
   updateBannerPresentation,
   variantMenuLabel,
@@ -136,8 +136,19 @@ const state = {
 let heroAction = "reload";
 let doctorLoadInFlight = null;
 let doctorReloadRequested = false;
-let sidePanelRequestGeneration = 0;
-const dataLoadCoordinator = createLatestDataLoadCoordinator({ run: runLoadData });
+const sidePanelLoader = createSidePanelLoadCoordinator({
+  readScope: () => ({ scope: state.filters.scope, company: state.filters.company }),
+  fetchSnapshot: fetchSidePanelSnapshot,
+  applySnapshot: applySidePanelSnapshot,
+  clearSnapshot: clearSidePanelSnapshot,
+});
+// Fresh read (lokální mutace, Sync, ruční reload) zneplatní snapshot pravých
+// panelů rozběhnutý před ním: pre-mutation stav nesmí přepsat read model
+// načtený po mutaci, i kdyby dorazil dřív.
+const dataLoadCoordinator = createLatestDataLoadCoordinator({
+  run: runLoadData,
+  onFresh: () => sidePanelLoader.invalidate(),
+});
 let quietPollTimer = null;
 let restoreSpaceMenuFocusOnClose = false;
 let drawerReturnFocus = null;
@@ -963,35 +974,33 @@ async function fetchJsonSafe(path, options = {}) {
 // Načte pravé panely a git read model. Git read model (/api/git/repos) dodává
 // CAC-0042; dokud read model není dostupný, endpoint vrátí 404 → gitReposByModule
 // zůstane prázdná a git chip se na kartách graceful nevykreslí.
-async function loadSidePanels() {
-  const requestId = ++sidePanelRequestGeneration;
-  const requestedScope = state.filters.scope;
-  const requestedCompany = state.filters.company;
-  if (requestedScope === "personal" || requestedCompany === "all") {
-    state.notifications = [];
-    state.mostUsed = [];
-    state.coldStartUsage = true;
-    state.gitReposByModule = new Map();
-    state.gitStatusLoaded = false;
-    state.gitStatusError = false;
-    return;
-  }
-  const companyQuery = `?company=${encodeURIComponent(requestedCompany)}`;
+// Pořadí odpovědí hlídá sidePanelLoader: pomalejší odpověď předchozí
+// Organizace, starší odpověď téže Organizace ani snapshot rozběhnutý před
+// lokální mutací nesmí přepsat panely, které uživatel právě vidí.
+function loadSidePanels() {
+  return sidePanelLoader.load();
+}
+
+async function fetchSidePanelSnapshot({ company }) {
+  const companyQuery = `?company=${encodeURIComponent(company)}`;
   const [notifications, mostUsed, git] = await Promise.all([
     fetchJsonSafe(`/api/notifications${companyQuery}`),
     fetchJsonSafe(`/api/most-used${companyQuery}`),
     fetchJsonSafe(`/api/git/repos${companyQuery}`),
   ]);
-  // Pomalejší odpověď předchozí Organizace nesmí přepsat panely prostoru,
-  // který uživatel mezitím nově vybral.
-  if (!sidePanelResponseIsCurrent({
-    requestId,
-    latestRequestId: sidePanelRequestGeneration,
-    requestedScope,
-    requestedCompany,
-    activeScope: state.filters.scope,
-    activeCompany: state.filters.company,
-  })) return;
+  return { notifications, mostUsed, git };
+}
+
+function clearSidePanelSnapshot() {
+  state.notifications = [];
+  state.mostUsed = [];
+  state.coldStartUsage = true;
+  state.gitReposByModule = new Map();
+  state.gitStatusLoaded = false;
+  state.gitStatusError = false;
+}
+
+function applySidePanelSnapshot({ notifications, mostUsed, git }) {
   state.notifications = notifications?.notifications ?? [];
   state.mostUsed = mostUsed?.most_used ?? [];
   state.coldStartUsage = mostUsed ? mostUsed.cold_start !== false && (mostUsed.most_used ?? []).length === 0 : true;

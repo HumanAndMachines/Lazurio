@@ -1774,10 +1774,127 @@ test("public projection hides protected missing_access while Doctor stays fail-c
   });
   const declarationCheck = report.checks.find((check) => check.id === "launchpad.workspace_declarations");
   expect(declarationCheck?.status).toBe("fail");
-  expect(declarationCheck?.message).toContain("3 blokátory");
+  expect(declarationCheck?.message).toContain("2 blokátory");
   expect(declarationCheck?.details.join("\n")).toContain("workspace/required");
   expect(declarationCheck?.details.join("\n")).toContain("workspace/unknown");
-  expect(declarationCheck?.details.join("\n")).toContain("workspace/restricted");
+  // Deklarovaný restricted slot běžný update záměrně nematerializuje, takže
+  // jeho absence je advisory stav s návodem na explicitní Admin install.
+  const restricted = response.organizations[0].module_declarations.find((slot) => slot.slug === "restricted");
+  expect(restricted).toMatchObject({
+    status: "missing_access",
+    readiness: { severity: "neutral", reason: "restricted_not_materialized" },
+  });
+  expect(restricted.readiness.message).toContain("lazurio organization install");
+  expect(response.organizations[0].space_readiness?.blocking_slots ?? []).not.toContainEqual(
+    expect.objectContaining({ path: "workspace/restricted" }),
+  );
+});
+
+test("Doctor keeps an intentionally absent restricted slot advisory while still failing required apps and malformed access declarations", async () => {
+  const root = await createCompaniesWorkspaceFixture();
+  const companyRoot = join(root, "organizations", "ScopeCo_GEN3");
+  await mkdir(join(companyRoot, "manual"), { recursive: true });
+  await mkdir(join(companyRoot, "company", "colleagues"), { recursive: true });
+  await writeJson(join(root, "launchpad.gen3.json"), {
+    launchpad_root: { slug: "test-companies", display_name: "Test Companies", root_role: "companies-root" },
+  });
+  await writeJson(join(companyRoot, "company.gen3.json"), {
+    organization_generation: "gen3",
+    company: { slug: "ScopeCo", display_name: "Scope Co", github_org: "ScopeCo" },
+    workspaces: [{ slug: "workspace", display_name: "Workspace", default: true }],
+    layers: [
+      { path: "infra", kind: "root-docs", ownership: "manual" },
+      { path: "mission-control", kind: "root-docs", ownership: "manual" },
+    ],
+  });
+  await writeJson(join(companyRoot, "modules.manifest.json"), {
+    organization_generation: "gen3",
+    company: "ScopeCo",
+    github_org: "ScopeCo",
+    module_slots: [
+      {
+        path: "infra",
+        slug: "infra",
+        space: "root",
+        status: "active",
+        default_access: "restricted",
+        required_roles: ["organization-admin"],
+        materialization: "doctor_managed_nested_repo",
+        git: { url: "git@github.com:ScopeCo/infra.git", branch: "main" },
+      },
+      {
+        path: "mission-control",
+        slug: "mission-control",
+        space: "root",
+        status: "active",
+        default_access: "expected",
+        required_roles: ["organization-admin"],
+        materialization: "doctor_managed_nested_repo",
+        git: { url: "git@github.com:ScopeCo/mission-control.git", branch: "main" },
+      },
+      {
+        path: "mission-control/db",
+        slug: "mission-control-data",
+        space: "root",
+        status: "planned_slot",
+        default_access: "expected",
+        required_roles: ["organization-admin"],
+      },
+      {
+        path: "workspace/typo",
+        default_access: "secret",
+        required_roles: ["*"],
+        git: { url: "git@github.com:ScopeCo/typo.git", branch: "main" },
+      },
+      {
+        path: "workspace/typo-roles",
+        default_access: "expected",
+        required_roles: "organization-admin",
+        git: { url: "git@github.com:ScopeCo/typo-roles.git", branch: "main" },
+      },
+    ],
+  });
+  await writeJson(join(companyRoot, "TODO.tasks.json"), {});
+  await writeJson(join(companyRoot, "DONE.tasks.json"), {});
+  await writeJson(join(companyRoot, "ISSUES.open.json"), {});
+
+  const response = await buildLaunchpadAppsResponse({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    runtimeManager: { appsWithRuntime: async (apps) => apps },
+  });
+  const declarations = response.organizations[0].module_declarations;
+  expect(declarations.find((slot) => slot.path === "infra")).toMatchObject({
+    status: "missing_access",
+    readiness: { severity: "neutral", reason: "restricted_not_materialized" },
+  });
+  expect(declarations.find((slot) => slot.path === "mission-control")).toMatchObject({
+    status: "missing_access",
+    readiness: { severity: "blocking", reason: "unexpected_missing_access" },
+  });
+  expect(declarations.find((slot) => slot.slug === "typo")).toMatchObject({
+    status: "missing_access",
+    readiness: { severity: "blocking", reason: "access_classification_unknown" },
+  });
+  // Normalizace nesmí malformed `required_roles` tiše překlopit na běžný slot.
+  expect(declarations.find((slot) => slot.slug === "typo-roles")).toMatchObject({
+    status: "missing_access",
+    required_roles: "organization-admin",
+    readiness: { severity: "blocking", reason: "access_classification_unknown" },
+  });
+
+  const report = await buildLaunchpadDoctorReport({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    runtimeManager: { appsWithRuntime: async (apps) => apps },
+  });
+  const declarationCheck = report.checks.find((check) => check.id === "launchpad.workspace_declarations");
+  expect(declarationCheck?.status).toBe("fail");
+  expect(declarationCheck?.message).toContain("3 blokátory");
+  expect(declarationCheck?.details.join("\n")).toContain("mission-control");
+  expect(declarationCheck?.details.join("\n")).toContain("workspace/typo");
+  expect(declarationCheck?.details.join("\n")).toContain("workspace/typo-roles");
+  expect(declarationCheck?.details.filter((line) => line.includes("blocker") && line.includes("infra"))).toEqual([]);
 });
 
 test("Hosted Doctor requires missing Workspace modules only in their declared Team", async () => {

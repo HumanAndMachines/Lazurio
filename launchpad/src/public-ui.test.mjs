@@ -209,11 +209,6 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(js).toContain("suppressNextDrawerOpen");
   expect(js).toContain("function visibleNotifications");
   expect(js).toContain("function visibleMostUsed");
-  expect(js).toContain('?company=${encodeURIComponent(requestedCompany)}');
-  expect(js).toContain("const requestedCompany = state.filters.company");
-  expect(js).toContain("let sidePanelRequestGeneration = 0;");
-  expect(js).toContain("const requestId = ++sidePanelRequestGeneration;");
-  expect(js).toContain("sidePanelResponseIsCurrent({");
   expect(js).toContain("return filtered(state.apps)");
   expect(js).not.toContain("--space-logo-hue");
   expect(js).toContain("space.organization.logo_url");
@@ -568,7 +563,8 @@ test("Launchpad quiet refresh is lightweight and non-overlapping", async () => {
     js.indexOf("async function fetchJson"),
   );
 
-  expect(js).toContain("createLatestDataLoadCoordinator({ run: runLoadData })");
+  expect(js).toContain("createLatestDataLoadCoordinator({");
+  expect(js).toContain("run: runLoadData,");
   expect(loadDataBlock).toContain("dataLoadCoordinator.load(options)");
   expect(stateLib).toContain("if (!fresh) return inFlight.promise;");
   expect(stateLib).toContain("return queueFresh({ quiet, sync });");

@@ -2108,7 +2108,9 @@ async function walkMountPackages({
     }
     organizationIssues.push(...mountContract.slotIssues);
     await walkPackageJson(companiesRoot, companyRoot, packageEntries, company, {
-      excludedRoots: mountContract.quarantinedPaths,
+      // Only the Organization-root output is generated; workspace/output can
+      // be a real module and must still pass normal discovery validation.
+      excludedRoots: [...mountContract.quarantinedPaths, join(companyRoot, "output")],
     });
   }
 }

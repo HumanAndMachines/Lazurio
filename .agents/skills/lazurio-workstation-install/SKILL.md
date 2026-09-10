@@ -80,9 +80,13 @@ Při publikačním mandátu pro instalační vady přečti také
 8. **Odděl ownera od Buildera.** Organization owner ověří jednorázovou GitHub
    App aktivaci přes immutable Organization ID. Běžný Builder owner gate
    neopakuje a použije `lazurio organization install <login> --role builder
-   --json`. Aktuální CLI nepřijímá `--role admin`; owner/admin stav dokazuj
-   živými GitHub právy a základní materializaci bez vymyšlené role. Builder
-   Team readiness a owner/admin oprávnění reportuj odděleně.
+   --json`; Steward Mašina použije `--role steward --json`. Obě role vyloučí
+   deklarované restricted sloty a jejich descendants bez provider operace
+   (`excluded_by_role_scope`) a vyloučený slot nikdy nevydávají za access
+   blocker. Aktuální CLI nepřijímá `--role admin`; owner/admin stav dokazuj
+   živými GitHub právy a základní materializaci bez vymyšlené role, která
+   jako jediná materializuje i restricted sloty. Role readiness a owner/admin
+   oprávnění reportuj odděleně.
 9. **Opakuj jediný konvergenční tok.** Spusť `lazurio install --json`,
    `lazurio doctor --tool-updates --json`, exact Organization install a finální
    `lazurio doctor`. Required `fail`, `blocked` nebo `incomplete` v uděleném

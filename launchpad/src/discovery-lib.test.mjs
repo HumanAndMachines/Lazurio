@@ -62,6 +62,74 @@ test("discovery načte read-only plugin metadata", async () => {
   expect(apps[0].plugin.links[0].path).toBe("modules/demo/app/v1/README.md");
 });
 
+test("discovery ignores generated output copies of runtime manifests", async () => {
+  const root = await createCompaniesWorkspaceFixture({
+    plugin: { schema_version: "companyascode.launchpad_plugin.v1", title: "Demo context" },
+  });
+  const previewPackage = join(
+    root,
+    "organizations",
+    "TestCompany",
+    "output",
+    "review-preview",
+    "app",
+    "v1",
+    "package.json",
+  );
+  await mkdir(join(root, "organizations", "TestCompany", "output", "review-preview", "app", "v1"), {
+    recursive: true,
+  });
+  await writeJson(previewPackage, {
+    name: "test-company-demo-preview-v1",
+    private: true,
+    scripts: { dev: "bun server.mjs" },
+    lazurio: {
+      runtime: {
+        schema_version: "lazurio.runtime.v1",
+        id: "test-company-demo-v1",
+        title: "Demo preview",
+        company: "test-company",
+        module: "demo",
+        surface: "internal",
+        dev_script: "dev",
+        listeners: [{
+          id: "web",
+          role: "entrypoint",
+          lease: "main",
+          protocol: "http",
+          health: { kind: "http", path: "/health" },
+        }],
+      },
+    },
+  });
+
+  const { apps, invalid_apps, failures } = await discoverLaunchpadApps(root);
+
+  expect(failures).toEqual([]);
+  expect(invalid_apps).toEqual([]);
+  expect(apps.map((app) => app.package_path)).toEqual([
+    "organizations/TestCompany/modules/demo/app/v1/package.json",
+  ]);
+});
+
+test("discovery keeps a valid workspace module named output", async () => {
+  const root = await createCompaniesWorkspaceFixture({
+    plugin: { schema_version: "companyascode.launchpad_plugin.v1", title: "Output context" },
+    appOverrides: { module: "output", id: "test-company-output-v1" },
+  });
+  const companyRoot = join(root, "organizations", "TestCompany");
+  await mkdir(join(companyRoot, "workspace"), { recursive: true });
+  await rename(join(companyRoot, "modules", "demo"), join(companyRoot, "workspace", "output"));
+
+  const { apps, invalid_apps, failures } = await discoverLaunchpadApps(root);
+
+  expect(failures).toEqual([]);
+  expect(invalid_apps).toEqual([]);
+  expect(apps.map((app) => app.package_path)).toEqual([
+    "organizations/TestCompany/workspace/output/app/v1/package.json",
+  ]);
+});
+
 test("discovery přenese builder metadata icon/description/group z manifestu", async () => {
   const root = await createCompaniesWorkspaceFixture({
     plugin: { schema_version: "companyascode.launchpad_plugin.v1", title: "Demo kontext" },
