@@ -3382,7 +3382,13 @@ export function createRuntimeManager({
     const dependencies = await dependencyForApp(app);
     app = appWithRuntimeAuthority(app, dependencies);
     const probe = await probeHealth(app);
-    if (maintenanceEntry && record && probe.reachable && probe.ok) {
+    // Health probes run outside the lifecycle lock. A completed Stop or
+    // replacement while this probe awaited must remain authoritative.
+    if (
+      maintenanceEntry && record && probe.reachable && probe.ok
+      && managedProcesses.get(runtimeKey) === record && !record.stopping
+      && maintenanceEntry.status !== "stopped"
+    ) {
       maintenanceEntry.status = "healthy";
       maintenanceEntry.attempts = 0;
       maintenanceEntry.failure_kind = null;

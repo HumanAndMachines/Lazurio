@@ -4634,6 +4634,51 @@ test("hosted inventory stays cold until Open, supports Stop and retires removed 
   }
 }, platformTestTimeout(15_000));
 
+test("stale hosted health observation cannot undo explicit Stop", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port });
+  const app = withStaticEntrypoint(fixtureDiscoveryApp({ port }));
+  const runtime = createRuntimeManager({
+    companiesRoot: root, launchpadRoot: join(root, "launchpad"),
+    instanceId: "hosted-stale-health", lifecycleProfile: "hosted",
+    discover: discoveryWithApp(app), maintenanceIntervalMs: 60_000,
+  });
+  const originalFetch = globalThis.fetch;
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  let entered;
+  const observed = new Promise((resolve) => { entered = resolve; });
+  let pending;
+  try {
+    runtime.maintainApps([app]);
+    await runtime.ensureHostedApp(app.id);
+    await waitForStatus(() => runtime.health(app.id), "healthy");
+    await sleep(200);
+    let intercept = true;
+    globalThis.fetch = async (...args) => {
+      const response = await originalFetch(...args);
+      if (intercept && String(args[0]).includes(`:${port}/`)) {
+        intercept = false;
+        entered();
+        await gate;
+      }
+      return response;
+    };
+    pending = runtime.health(app.id);
+    await observed;
+    await runtime.stop(app.id);
+    release();
+    await pending;
+    expect(runtime.maintenanceSummary()).toMatchObject({ stopped: 1, healthy: 0 });
+    expect(await runtime.health(app.id)).toMatchObject({ status: "stopped", managed: false });
+  } finally {
+    release();
+    if (pending) await pending.catch(() => {});
+    globalThis.fetch = originalFetch;
+    await runtime.shutdown();
+  }
+}, platformTestTimeout(15_000));
+
 test("selected Organization-section default uses the existing hosted open/start/restart manager", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({ port });
