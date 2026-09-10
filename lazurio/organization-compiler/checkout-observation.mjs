@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { realpathSync, readFileSync } from "node:fs";
+import { realpathSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { resolveGitExecutableOnPath } from "../core/toolchain-lib.mjs";
 import { githubRepositoryUrlIdentity } from "./repository-identity.mjs";
@@ -23,13 +23,14 @@ export function readCheckoutRepositoryObservation(root) {
     };
     phase = "checkout_paths";
     const actual = realpathSync(root);
-    if (relative(realpathSync(git("rev-parse", "--show-toplevel")), actual) !== "") return { status: "invalid", reason: "not_checkout_root" };
+    // Git owns cwd-to-checkout resolution, including Windows short-name aliases.
+    if (git("rev-parse", "--show-prefix") !== "") return { status: "invalid", reason: "not_checkout_root" };
     const common = realpathSync(git("rev-parse", "--path-format=absolute", "--git-common-dir"));
     const checkoutRoot = dirname(common);
     const gitDir = realpathSync(git("rev-parse", "--absolute-git-dir"));
     const linkedWorktree = relative(gitDir, common) !== ""
       && relative(dirname(gitDir), join(common, "worktrees")) === ""
-      && relative(realpathSync(readFileSync(join(gitDir,"gitdir"),"utf8").trim()), realpathSync(join(actual,".git"))) === "";
+      && samePhysicalFile(readFileSync(join(gitDir,"gitdir"),"utf8").trim(), join(actual,".git"));
     const parse = text => text.split("\0").filter(Boolean).map(entry => {
       const i = entry.indexOf("\n");
       return [entry.slice(0, i).toLowerCase(), entry.slice(i + 1)];
@@ -72,4 +73,12 @@ export function readCheckoutRepositoryObservation(root) {
   } catch {
     return { status: "unavailable", reason: phase };
   }
+}
+
+function samePhysicalFile(first, second) {
+  const left = statSync(first, { bigint: true });
+  const right = statSync(second, { bigint: true });
+  if (!left.isFile() || !right.isFile()) return false;
+  if (left.ino !== 0n && right.ino !== 0n) return left.dev === right.dev && left.ino === right.ino;
+  return relative(realpathSync(first), realpathSync(second)) === "";
 }
