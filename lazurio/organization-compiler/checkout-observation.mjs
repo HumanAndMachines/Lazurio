@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { realpathSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { resolveGitExecutableOnPath } from "../core/toolchain-lib.mjs";
 import { githubRepositoryUrlIdentity } from "./repository-identity.mjs";
 
@@ -10,23 +10,26 @@ const fetchSpec = name => `+refs/heads/*:refs/remotes/${name}/*`;
 // Local declaration/routing observation only. No remote transport is executed;
 // this does not attest GitHub grants or immutable template supply-chain identity.
 export function readCheckoutRepositoryObservation(root) {
+  let phase = "executable";
   try {
     const executable = resolveGitExecutableOnPath();
-    if (!executable) return { status: "unavailable" };
-    if (Object.keys(process.env).some(key => /^GIT_(?:DIR|WORK_TREE|COMMON_DIR|CONFIG|SSH|EXEC_PATH|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES)/.test(key))) return { status: "invalid" };
+    if (!executable) return { status: "unavailable", reason: "git_not_on_path" };
+    if (Object.keys(process.env).some(key => /^GIT_(?:DIR|WORK_TREE|COMMON_DIR|CONFIG|SSH|EXEC_PATH|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES)/.test(key))) return { status: "invalid", reason: "git_environment_override" };
     const git = (...args) => {
+      phase = args[0];
       const result = spawnSync(executable, ["-C", root, ...args], { encoding: "utf8", timeout: 10000, maxBuffer: 1024 * 1024, shell: false });
       if (result.status !== 0) throw new Error("git observation failed");
       return result.stdout.trimEnd();
     };
+    phase = "checkout_paths";
     const actual = realpathSync(root);
-    if (realpathSync(git("rev-parse", "--show-toplevel")) !== actual) return { status: "invalid" };
+    if (relative(realpathSync(git("rev-parse", "--show-toplevel")), actual) !== "") return { status: "invalid", reason: "not_checkout_root" };
     const common = realpathSync(git("rev-parse", "--path-format=absolute", "--git-common-dir"));
     const checkoutRoot = dirname(common);
     const gitDir = realpathSync(git("rev-parse", "--absolute-git-dir"));
-    const linkedWorktree = gitDir !== common
-      && dirname(gitDir) === join(common, "worktrees")
-      && realpathSync(readFileSync(join(gitDir,"gitdir"),"utf8").trim()) === realpathSync(join(actual,".git"));
+    const linkedWorktree = relative(gitDir, common) !== ""
+      && relative(dirname(gitDir), join(common, "worktrees")) === ""
+      && relative(realpathSync(readFileSync(join(gitDir,"gitdir"),"utf8").trim()), realpathSync(join(actual,".git"))) === "";
     const parse = text => text.split("\0").filter(Boolean).map(entry => {
       const i = entry.indexOf("\n");
       return [entry.slice(0, i).toLowerCase(), entry.slice(i + 1)];
@@ -67,6 +70,6 @@ export function readCheckoutRepositoryObservation(root) {
       },
     };
   } catch {
-    return { status: "unavailable" };
+    return { status: "unavailable", reason: phase };
   }
 }
