@@ -996,6 +996,117 @@ test("lokální důkaz vlastníka: session ID v env běžícího procesu, jiná 
     listProcessEnvironments: async () => null,
   });
   expect(unsupported.verified).toBe(false);
+
+  // Neúplné pozorování není důkaz smrti: nečitelný proces (EACCES/EPERM,
+  // ořezaný ps výstup) nebo prázdný seznam = unverified, nikdy alive:false.
+  const unreadable = await inspectLocalOwnerSession({
+    conversationOrigin: origin,
+    machineRef: "fixture-machine",
+    platform: "linux",
+    listProcessEnvironments: async () => [processes[0], { pid: 12, env: null, unreadable: true, reason: "EACCES" }],
+  });
+  expect(unreadable).toMatchObject({ verified: false, alive: false, details: ["pid=12 (EACCES)"] });
+  const empty = await inspectLocalOwnerSession({
+    conversationOrigin: origin,
+    machineRef: "fixture-machine",
+    platform: "linux",
+    listProcessEnvironments: async () => [],
+  });
+  expect(empty.verified).toBe(false);
+  // Shoda mezi čitelnými procesy dokazuje život i vedle nečitelných.
+  const aliveBesideUnreadable = await inspectLocalOwnerSession({
+    conversationOrigin: origin,
+    machineRef: "fixture-machine",
+    platform: "linux",
+    listProcessEnvironments: async () => [{ pid: 12, env: null, unreadable: true, reason: "EPERM" }, processes[1]],
+  });
+  expect(aliveBesideUnreadable).toMatchObject({ verified: true, alive: true });
+});
+
+test("živý vlastník s nečitelným env nikdy neprojde jako mrtvý: preview i resume zůstanou fail-closed", async () => {
+  const { hostname } = await import("node:os");
+  const fixture = await createCleanupFixture({ branch: "CAC-0099-cleanup-unreadable-owner" });
+  const sidecar = JSON.parse(await readFile(fixture.sidecarPath, "utf8"));
+  sidecar.conversation_origin = {
+    ...sidecar.conversation_origin,
+    machine_ref: hostname(),
+    surface: "codex",
+    agent_label: "Codex",
+    thread_id: "fixture-live-owner",
+    thread_locator_status: "captured",
+    local_only: true,
+  };
+  await writeFile(fixture.sidecarPath, `${JSON.stringify(sidecar, null, 2)}\n`);
+  const worktree = await findWorktreeRecord(fixture);
+
+  // Reprodukce z review: /proc vrátí živý PID vlastníka, čtení environ EACCES.
+  const liveButUnreadable = async () => [
+    { pid: 1, env: { CLAUDE_CODE_SESSION_ID: "someone-else" } },
+    { pid: 4242, env: null, unreadable: true, reason: "EACCES" },
+  ];
+  const localSession = (listProcessEnvironments) => ({ conversationOrigin }) =>
+    inspectLocalOwnerSession({ conversationOrigin, platform: "linux", listProcessEnvironments });
+
+  const preview = await previewWorktreeCleanup({
+    companiesRoot: fixture.root,
+    worktree,
+    inspectRuntimeUsage: runtimeIdle,
+    inspectOwnerSession: localSession(liveButUnreadable),
+  });
+  expect(preview.state).toBe("needs_attention");
+  expect(preview.owner).toMatchObject({ verified: false, alive: false });
+  expect(preview.blockers.map((blocker) => blocker.code)).toEqual(["not_eligible"]);
+  expect(preview.eligibility.basis).toBeNull();
+  await expect(applyWorktreeCleanup({
+    companiesRoot: fixture.root,
+    worktree,
+    expectedFingerprint: preview.preview_fingerprint,
+    inspectRuntimeUsage: runtimeIdle,
+    inspectOwnerSession: localSession(liveButUnreadable),
+  })).rejects.toMatchObject({ code: "cleanup_not_ready" });
+  expect(existsSync(fixture.worktreePath)).toBe(true);
+  expect(existsSync(join(fixture.worktreePath, "db"))).toBe(true);
+
+  // Resume: journal vznikl s úplným pozorováním (vlastník mrtvý), potom se
+  // pozorování stalo neúplným — zbývající destruktivní kroky se nespustí.
+  const { preview: confirmed, journalPath } = await interruptAfterDependencyRemoval(fixture, worktree, {
+    inspectOwnerSession: localSession(async () => [{ pid: 1, env: { CLAUDE_CODE_SESSION_ID: "someone-else" } }]),
+  });
+  await expect(applyWorktreeCleanup({
+    companiesRoot: fixture.root,
+    worktree,
+    expectedFingerprint: confirmed.preview_fingerprint,
+    inspectRuntimeUsage: runtimeIdle,
+    inspectOwnerSession: localSession(liveButUnreadable),
+  })).rejects.toMatchObject({ code: "cleanup_not_ready" });
+  expectPartialEnvironmentIntact(fixture, journalPath);
+  await expect(applyWorktreeCleanup({
+    companiesRoot: fixture.root,
+    worktree,
+    expectedFingerprint: confirmed.preview_fingerprint,
+    inspectRuntimeUsage: runtimeIdle,
+    inspectOwnerSession: localSession(async () => []),
+  })).rejects.toMatchObject({ code: "cleanup_not_ready" });
+  expectPartialEnvironmentIntact(fixture, journalPath);
+
+  // Čitelný živý vlastník = active_owner; po jeho potvrzeném zániku resume dokončí.
+  await expect(applyWorktreeCleanup({
+    companiesRoot: fixture.root,
+    worktree,
+    expectedFingerprint: confirmed.preview_fingerprint,
+    inspectRuntimeUsage: runtimeIdle,
+    inspectOwnerSession: localSession(async () => [{ pid: 4242, env: { CODEX_THREAD_ID: "fixture-live-owner" } }]),
+  })).rejects.toMatchObject({ code: "cleanup_active_owner" });
+  expectPartialEnvironmentIntact(fixture, journalPath);
+  const applied = await applyWorktreeCleanup({
+    companiesRoot: fixture.root,
+    worktree,
+    expectedFingerprint: confirmed.preview_fingerprint,
+    inspectRuntimeUsage: runtimeIdle,
+    inspectOwnerSession: localSession(async () => [{ pid: 1, env: { CLAUDE_CODE_SESSION_ID: "someone-else" } }]),
+  });
+  expect(applied.steps.every((step) => step.status === "completed")).toBe(true);
+  expect(existsSync(fixture.worktreePath)).toBe(false);
 });
 
 test("durable runtime evidence blokuje na živém záznamu a pouští mrtvý", async () => {

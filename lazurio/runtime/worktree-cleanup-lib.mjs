@@ -882,13 +882,29 @@ export async function inspectLocalOwnerSession({
       details: [],
     };
   }
-  if (!processes) {
+  if (!Array.isArray(processes)) {
     return { verified: false, alive: false, message: `Platforma ${platform} neumí ověřit session procesy; vlastníka nelze ověřit.`, details: [] };
   }
+  if (processes.length === 0) {
+    return { verified: false, alive: false, message: "Seznam procesů je prázdný; pozorování je neúplné a vlastníka nelze ověřit.", details: [] };
+  }
+  // Důkaz smrti je jen úplné pozorování: každý proces v seznamu musí mít
+  // čitelné env. Nečitelný proces (EACCES/EPERM, ořezaný výstup) může být
+  // právě vlastník — shoda mezi čitelnými procesy dokazuje život, chybějící
+  // shoda vedle nečitelného procesu nedokazuje nic.
   const matches = [];
+  const unreadable = [];
   for (const entry of processes) {
+    if (!entry || !Number.isInteger(entry.pid)) {
+      unreadable.push("záznam bez pid");
+      continue;
+    }
+    if (entry.unreadable || !entry.env || typeof entry.env !== "object") {
+      unreadable.push(`pid=${entry.pid}${entry.reason ? ` (${entry.reason})` : ""}`);
+      continue;
+    }
     for (const name of OWNER_SESSION_ENV_NAMES) {
-      if (entry.env?.[name] === threadId) {
+      if (entry.env[name] === threadId) {
         matches.push(`pid=${entry.pid}: ${name}=${threadId}`);
         break;
       }
@@ -896,6 +912,14 @@ export async function inspectLocalOwnerSession({
   }
   if (matches.length > 0) {
     return { verified: true, alive: true, message: `Vlastník ${origin.surface ?? "agent"} (${threadId}) má živý proces na této Mašině.`, details: matches };
+  }
+  if (unreadable.length > 0) {
+    return {
+      verified: false,
+      alive: false,
+      message: `${unreadable.length} proces(ů) této Mašiny má nečitelné env; vlastníka ${threadId} nelze vyloučit.`,
+      details: unreadable.slice(0, 20),
+    };
   }
   return { verified: true, alive: false, message: `Žádný proces této Mašiny nenese session ${threadId}; vlastník je mrtvý.`, details: [] };
 }
@@ -1540,34 +1564,56 @@ function githubCoordinateFromRemote(url) {
   return `${match[1]}/${match[2]}`;
 }
 
-// Seznam procesů této Mašiny s jejich env (jen procesy, které OS dovolí
-// číst — cizí uživatelé se nezobrazí, což je pro důkaz vlastníka správně).
+// Seznam procesů této Mašiny s jejich env. Každý proces, který OS ukáže, ale
+// jehož env nejde přečíst, se vrací jako `unreadable` — volající z toho nikdy
+// neodvodí smrt vlastníka. Jen potvrzené zaniknutí PID (ESRCH/ENOENT mezi
+// výpisem a čtením) se vynechá jako neexistující proces.
 async function defaultListProcessEnvironments({ platform = process.platform } = {}) {
   if (platform === "linux") {
     const entries = await readdir("/proc");
     const processes = [];
     for (const entry of entries) {
       if (!/^\d+$/.test(entry)) continue;
+      const pid = Number(entry);
       try {
         const raw = await readFile(`/proc/${entry}/environ`, "latin1");
-        processes.push({ pid: Number(entry), env: parseEnvironmentPairs(raw.split("\0")) });
-      } catch {
-        // Cizí nebo právě ukončený proces: bez env, nic k porovnání.
+        processes.push({ pid, env: parseEnvironmentPairs(raw.split("\0")) });
+      } catch (error) {
+        if (error?.code === "ENOENT" || error?.code === "ESRCH") continue;
+        processes.push({ pid, env: null, unreadable: true, reason: error?.code ?? "unreadable" });
       }
     }
     return processes;
   }
   if (platform === "darwin") {
-    const child = Bun.spawn(["ps", "-axww", "-E", "-o", "pid=,command="], { stdout: "pipe", stderr: "pipe" });
+    const child = Bun.spawn(["ps", "-axww", "-E", "-o", "pid=,uid=,command="], { stdout: "pipe", stderr: "pipe" });
     const stdout = await new Response(child.stdout).text();
     const exitCode = await child.exited;
     if (exitCode !== 0) throw new Error(`ps skončil kódem ${exitCode}`);
+    const ownUid = typeof process.getuid === "function" ? process.getuid() : null;
     const processes = [];
     for (const line of stdout.split("\n")) {
-      const match = /^\s*(\d+)\s+(.*)$/.exec(line);
+      const match = /^\s*(\d+)\s+(\d+)\s+(.*)$/.exec(line);
       if (!match) continue;
-      const tokens = match[2].split(" ");
-      processes.push({ pid: Number(match[1]), env: parseEnvironmentPairs(tokens) });
+      const pid = Number(match[1]);
+      const uid = Number(match[2]);
+      const tokens = match[3].split(" ");
+      // ps -E ukáže env jen u procesů, které smí čtenář číst. Proces téhož
+      // uživatele bez jediného NAME=value tokenu je nečitelný (hardened
+      // runtime, odepřený KERN_PROCARGS2), ne prázdný — fail-closed.
+      const hasEnvTokens = tokens.some((token) => /^[A-Za-z_][A-Za-z0-9_]*=/.test(token));
+      if (ownUid !== null && uid === ownUid && !hasEnvTokens) {
+        processes.push({ pid, env: null, unreadable: true, reason: "env not readable via ps -E" });
+        continue;
+      }
+      if (ownUid !== null && uid !== ownUid) {
+        // Proces jiného uživatele nemůže nést session tohoto Principála, ale
+        // jeho env vidět nesmíme — hlásí se jako nečitelný jen tehdy, když
+        // seznam nemá žádný čitelný proces (viz caller).
+        processes.push({ pid, env: {}, foreign_uid: true });
+        continue;
+      }
+      processes.push({ pid, env: parseEnvironmentPairs(tokens) });
     }
     return processes;
   }
