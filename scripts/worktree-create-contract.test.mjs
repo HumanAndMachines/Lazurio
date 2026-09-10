@@ -86,8 +86,8 @@ test("dry-run accepts an exact clean Git-backed Organization root target", async
     repository: "organizations/TestOrganization_GEN3",
   });
   expect({ status: result.status, stderr: result.stderr }).toMatchObject({ status: 0 });
-  expect(result.stdout).toContain(
-    `${fixture.organizationRoot}/.worktrees/root/CAC-0007`,
+  expect(result.stdout.replaceAll("\\", "/")).toContain(
+    "/organizations/TestOrganization_GEN3/.worktrees/root/CAC-0007",
   );
 });
 
