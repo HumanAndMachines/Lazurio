@@ -37,7 +37,12 @@ bun run worktrees:create -- --plan DEV-6500 \
 Bez `--repository` je edit targetem Lazurio Root. Selector přijme pouze exact
 `organizations/<Org-mount>`, jehož nesymlinkovaná cesta, samostatný Git root,
 clean `main`, `origin` a mutation-safe Organization manifest tvoří jednu
-identitu. Worktree a sidecar vzniknou pod `.worktrees/root` tohoto owner repa.
+identitu. `origin` musí být přímo GitHub HTTPS nebo SSH endpoint; lokální cesta,
+`file://` ani GitHub jméno vložené do URL jiného serveru nejsou důkaz identity.
+Po remote operacích se před alokací branche znovu ověří checkout, upstream,
+čistota a nezměněný origin. Lokální Git transport testovacích fixtures je pouze
+explicitní závislost testu, nikoli volba produkčního CLI.
+Worktree a sidecar vzniknou pod `.worktrees/root` tohoto owner repa.
 Mission Control authority může patřit jiné připojené Organizaci; sidecar drží
 její root-relative locator a plán se do editovaného repa nekopíruje. Libovolný
 nested modul, Personalspace, Productionspace, repository-db, traversal nebo

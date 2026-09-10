@@ -3,6 +3,8 @@ import { cp, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { pathToFileURL } from "node:url";
+import { existsSync, writeFileSync } from "node:fs";
 import {
   parseWorktreeCreateArgs,
   PLAN_CODE_PATTERN,
@@ -94,7 +96,6 @@ test("dry-run accepts an exact clean Git-backed Organization root target", async
 test("creates and inventories a governed Organization-root worktree", async () => {
   const fixture = await createLaneFixture({
     plans: [["CAC-0007.yaml", validPlan]],
-    localOrganizationRemote: true,
   });
   const result = runCreateLane({
     ...fixture,
@@ -115,6 +116,9 @@ test("creates and inventories a governed Organization-root worktree", async () =
     worktree_path: "organizations/TestOrganization_GEN3/.worktrees/root/CAC-0007",
     mission_control_authority_path: "organizations/TestOrganization_GEN3/mission-control/db",
   });
+  // Inventory has its own real-Git fixture transport; creation above used the
+  // declared GitHub endpoint and only the explicit remoteGit dependency.
+  git(fixture.organizationRoot, ["remote", "set-url", "origin", fixture.organizationRemote]);
   const audit = await auditRepository(fixture.organizationRoot);
   const worktree = audit.worktrees.find((entry) => entry.path_class === "canonical");
   expect(worktree).toMatchObject({
@@ -122,6 +126,51 @@ test("creates and inventories a governed Organization-root worktree", async () =
     branch: "agent/CAC-0007",
   });
   expect(audit.violations).toEqual([]);
+});
+
+test.each([
+  "https://github.com/TestOrganization/TestOrganization_GEN3.git",
+  "ssh://git@github.com/TestOrganization/TestOrganization_GEN3.git",
+  "ssh://github.com/TestOrganization/TestOrganization_GEN3",
+])("accepts the supported GitHub endpoint %s", async (origin) => {
+  const fixture = await createLaneFixture({ plans: [["CAC-0007.yaml", validPlan]] });
+  git(fixture.organizationRoot, ["remote", "set-url", "origin", origin]);
+  const result = runCreateLane({ ...fixture, repository: "organizations/TestOrganization_GEN3" });
+  expect({ status: result.status, stderr: result.stderr }).toMatchObject({ status: 0 });
+});
+
+test.each(["path", "file-url", "embedded-host", "suffix-host"])("rejects undeclared %s origin before transport or mutation", async (kind) => {
+  const fixture = await createLaneFixture({ plans: [["CAC-0007.yaml", validPlan]] });
+  const remote = kind === "path" ? fixture.organizationRemote
+    : kind === "file-url" ? pathToFileURL(fixture.organizationRemote).href
+    : kind === "embedded-host" ? "https://example.invalid/github.com/TestOrganization/TestOrganization_GEN3.git"
+    : "https://evilgithub.com/TestOrganization/TestOrganization_GEN3.git";
+  git(fixture.organizationRoot, ["remote", "set-url", "origin", remote]);
+  const result = runCreateLane({ ...fixture, repository: "organizations/TestOrganization_GEN3", dryRun: false, productionTransport: true });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("podporovaný GitHub origin");
+  expect(git(fixture.organizationRoot, ["branch", "--list", "agent/CAC-0007"])).toBe("");
+  expect(existsSync(join(fixture.organizationRoot, ".worktrees/root/CAC-0007"))).toBe(false);
+});
+
+test.each(["branch", "upstream", "dirty", "tracked", "origin"])("rejects %s changed during fetch without allocating a branch", async (kind) => {
+  const fixture = await createLaneFixture({ plans: [["CAC-0007.yaml", validPlan]] });
+  const result = runCreateLane({ ...fixture, repository: "organizations/TestOrganization_GEN3", dryRun: false, mutation: { after: "fetch", kind } });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toMatch(/primary checkout|origin.*změnil/);
+  expect(git(fixture.organizationRoot, ["branch", "--list", "agent/CAC-0007"])).toBe("");
+  expect(existsSync(join(fixture.organizationRoot, ".worktrees/root/CAC-0007.worktree.json"))).toBe(false);
+  expect(existsSync(join(fixture.organizationRoot, ".worktrees/root/CAC-0007"))).toBe(false);
+  if (kind === "dirty") expect(await Bun.file(join(fixture.organizationRoot, "other-writer.txt")).text()).toContain("preserve me");
+  if (kind === "branch") expect(git(fixture.organizationRoot, ["branch", "--show-current"])).toBe("other-writer");
+});
+
+test("dry-run rechecks checkout state after the remote query", async () => {
+  const fixture = await createLaneFixture({ plans: [["CAC-0007.yaml", validPlan]] });
+  const result = runCreateLane({ ...fixture, repository: "organizations/TestOrganization_GEN3", mutation: { after: "ls-remote", kind: "branch" } });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("primary checkout musí být na main");
+  expect(git(fixture.organizationRoot, ["branch", "--list", "agent/CAC-0007"])).toBe("");
 });
 
 test.each([
@@ -241,7 +290,7 @@ test("dry-run rejects an explicit external repository-db authority", async () =>
   );
   await cp(fixture.authorityRoot, externalAuthorityRoot, { recursive: true });
   const result = runCreateLane({
-    root: fixture.root,
+    ...fixture,
     authorityOverride: externalAuthorityRoot,
   });
   expect(result.status).toBe(1);
@@ -414,7 +463,6 @@ async function createLaneFixture({
   plans,
   legacyPlans = [],
   authorityFormat = "legacy",
-  localOrganizationRemote = true,
 }) {
   const fixtureRoot = await mkdtemp(join(tmpdir(), "worktree-create-contract-"));
   cleanupPaths.push(fixtureRoot);
@@ -538,14 +586,10 @@ if (failures.length > 0) {
 `,
     "utf8",
   );
-  const organizationRemote = localOrganizationRemote
-    ? join(fixtureRoot, "TestOrganization", "TestOrganization_GEN3.git")
-    : "git@github.com:TestOrganization/TestOrganization_GEN3.git";
-  if (localOrganizationRemote) {
-    await mkdir(dirname(organizationRemote), { recursive: true });
-    const bare = spawnSync("git", ["init", "--bare", organizationRemote], { encoding: "utf8" });
-    if (bare.status !== 0) throw new Error(bare.stderr);
-  }
+  const organizationRemote = join(fixtureRoot, "TestOrganization", "TestOrganization_GEN3.git");
+  await mkdir(dirname(organizationRemote), { recursive: true });
+  const bare = spawnSync("git", ["init", "--bare", organizationRemote], { encoding: "utf8" });
+  if (bare.status !== 0) throw new Error(bare.stderr);
   for (const args of [
     ["init", "-b", "main"],
     ["remote", "add", "origin", "git@github.com:TestProvider/Lazurio.git"],
@@ -564,18 +608,17 @@ if (failures.length > 0) {
     const result = spawnSync("git", args, { cwd: organizationRoot, encoding: "utf8" });
     if (result.status !== 0) throw new Error(result.stderr);
   }
-  if (localOrganizationRemote) {
-    const result = spawnSync("git", ["push", "-u", "origin", "main"], {
-      cwd: organizationRoot,
-      encoding: "utf8",
-    });
-    if (result.status !== 0) throw new Error(result.stderr);
-  }
-  return { root, organizationRoot, authorityRoot };
+  git(organizationRoot, ["push", "-u", "origin", "main"]);
+  git(organizationRoot, ["remote", "set-url", "origin", "git@github.com:TestOrganization/TestOrganization_GEN3.git"]);
+  return { root, organizationRoot, authorityRoot, organizationRemote, fixtureRoot };
 }
 
 function runCreateLane({
   root,
+  organizationRemote,
+  fixtureRoot,
+  mutation = null,
+  productionTransport = false,
   authorityOverride = null,
   includeTaskAgentIdentity = true,
   repository = null,
@@ -598,8 +641,39 @@ function runCreateLane({
     env.LAZURIO_TASK_AGENT_SURFACE = "test-harness";
   }
   if (authorityOverride) env.MISSION_CONTROL_AUTHORITY_ROOT = authorityOverride;
+  let entrypoint = createScript;
+  if (!productionTransport) {
+    entrypoint = join(fixtureRoot, "create-harness.mjs");
+    writeFileSync(entrypoint, `
+import { runWorktreeCreate } from ${JSON.stringify(pathToFileURL(createScript).href)};
+import { spawnSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+const mutation = ${JSON.stringify(mutation)};
+const run = (cwd, args) => {
+  const r = spawnSync("git", args, { cwd, encoding: "utf8" });
+  if (r.status !== 0) throw new Error(r.stderr);
+  return { status: r.status, stdout: r.stdout.trim(), stderr: r.stderr.trim() };
+};
+try {
+  await runWorktreeCreate({ remoteGit(cwd, args) {
+    const endpoints = ["git@github.com:TestOrganization/TestOrganization_GEN3.git", "https://github.com/TestOrganization/TestOrganization_GEN3.git", "ssh://git@github.com/TestOrganization/TestOrganization_GEN3.git", "ssh://github.com/TestOrganization/TestOrganization_GEN3"];
+    if (!endpoints.includes(args[1])) throw new Error("Unexpected fixture endpoint");
+    const result = run(cwd, [args[0], ${JSON.stringify(organizationRemote)}, ...args.slice(2)]);
+    if (mutation && args[0] === mutation.after) {
+      if (mutation.kind === "branch") run(cwd, ["switch", "-c", "other-writer"]);
+      if (mutation.kind === "upstream") run(cwd, ["branch", "--unset-upstream"]);
+      if (mutation.kind === "tracked") writeFileSync(join(cwd, ".gitignore"), ".worktrees/\\n# other writer\\n");
+      if (mutation.kind === "dirty") writeFileSync(join(cwd, "other-writer.txt"), "preserve me\\n");
+      if (mutation.kind === "origin") run(cwd, ["remote", "set-url", "origin", "https://github.com/TestOrganization/TestOrganization_GEN3.git"]);
+    }
+    return result;
+  }});
+} catch (error) { console.error(error.message); process.exitCode = 1; }
+`);
+  }
   const args = [
-    createScript,
+    entrypoint,
     "--plan", "CAC-0007",
   ];
   if (dryRun) args.push("--dry-run");
