@@ -1,3 +1,4 @@
+import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.mjs";
 import { afterEach, expect, test } from "bun:test";
 import { mkdtemp, mkdir, rename, rm, symlink, link, readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -49,6 +50,20 @@ test("write rejects caller schemas and observation", async () => {
   await expect(compileOrganization({organizationRoot:review,write:true,repositoryObservation:{status:"valid"}})).rejects.toThrow("pozorování");
 });
 
+test("a separate git directory does not turn a primary checkout into a review worktree", async () => {
+  const primary=await createFixtureWorkspace(); roots.push(primary);
+  const metadata=await mkdtemp(join(tmpdir(),"compiler-git-metadata-")); roots.push(metadata);
+  git(primary,"init","-b","codex/review",`--separate-git-dir=${join(metadata,"repo.git")}`);
+  expect(readCheckoutRepositoryObservation(primary).linkedWorktree).toBe(false);
+  await expect(compileOrganization({organizationRoot:primary,write:true})).rejects.toThrow("linked review worktree");
+});
+
+test("conflicting canonical Organization authority blocks legacy generation", async () => {
+  const {review}=await fixture();
+  await Bun.write(join(review,"lazurio.organization.json"),JSON.stringify({organization:{id:"unrelated"}}));
+  await expect(compileOrganization({organizationRoot:review,write:true})).rejects.toThrow("Organization authority conflict");
+});
+
 test("write rejects traversal through external generated directory without touching victim", async () => {
   const { review } = await fixture();
   const outside = await mkdtemp(join(tmpdir(),"compiler-victim-")); roots.push(outside);
@@ -58,7 +73,9 @@ test("write rejects traversal through external generated directory without touch
   expect(await readFile(victim,"utf8")).toBe("protected");
 });
 
-test.each(["symlink", "hardlink"])("write rejects %s from a derived output to authoritative input", async kind => {
+for (const kind of ["symlink", "hardlink"]) {
+const linkTest = kind === "symlink" && !(await supportsFileSymlinks()) ? test.skip : test;
+linkTest(`write rejects ${kind} from a derived output to authoritative input`, async () => {
   const {review}=await fixture();
   const authority=join(review,"company.gen3.json");
   const original=await readFile(authority,"utf8");
@@ -68,6 +85,7 @@ test.each(["symlink", "hardlink"])("write rejects %s from a derived output to au
   await expect(compileOrganization({organizationRoot:review,write:true})).rejects.toThrow("Unsafe compiler path");
   expect(await readFile(authority,"utf8")).toBe(original);
 });
+}
 
 test.each([
   ["remote.origin.pushurl","git@github.com:OtherOrg/Other_GEN3.git"],
@@ -99,6 +117,10 @@ test("child db uses active mount identity and refuses missing parent and non-db 
   slot.git.url=module.repo;slot.source_of_truth=module.source_of_truth="git-native";await save();
   await expect(compileOrganization({organizationRoot:review,write:true})).rejects.toThrow("validací");
   slot.source_of_truth=module.source_of_truth="repository-db:v3";
+  const parentGit=manifest.module_slots[0].git;
+  delete manifest.module_slots[0].git;await save();
+  await expect(compileOrganization({organizationRoot:review,write:true})).rejects.toThrow("validací");
+  manifest.module_slots[0].git=parentGit;
   manifest.module_slots[0].status="planned_slot";await save();
   await expect(compileOrganization({organizationRoot:review,write:true})).rejects.toThrow("validací");
 });
