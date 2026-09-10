@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { hostedRequestMayStartApp } from "./hosted-readiness-lib.mjs";
 import { constants, existsSync, lstatSync, realpathSync } from "fs";
 import { open, readFile } from "fs/promises";
 import { createConnection } from "node:net";
@@ -966,7 +967,7 @@ async function handlePersonalRuntimeRoute(request, route) {
         // Team authentication already happened. Fetch Metadata controls lifecycle
         // only: background fetches and WebSocket reconnects are not a new Open.
         // Non-browser clients without Fetch Metadata retain direct-link behavior.
-        allowStart: !request.headers.get("sec-fetch-mode") || request.headers.get("sec-fetch-mode") === "navigate",
+        allowStart: hostedRequestMayStartApp(request.headers),
       }));
       return new Response(null, { status: ready.status === "healthy" ? 204 : 503 });
     }
@@ -1166,7 +1167,7 @@ async function handleRuntimeRoute(request, route) {
         // Team authentication already happened. Fetch Metadata controls lifecycle
         // only: background fetches and WebSocket reconnects are not a new Open.
         // Non-browser clients without Fetch Metadata retain direct-link behavior.
-        allowStart: !request.headers.get("sec-fetch-mode") || request.headers.get("sec-fetch-mode") === "navigate",
+        allowStart: hostedRequestMayStartApp(request.headers),
       }));
       return new Response(null, { status: ready.status === "healthy" ? 204 : 503 });
     }
