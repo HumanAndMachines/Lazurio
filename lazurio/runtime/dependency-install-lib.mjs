@@ -927,7 +927,15 @@ async function inspectLocalDependencyTree({
           continue;
         }
         if (entryState.isFile() && !requireFileSymlinks) {
-          authority.push(`file\0${entryRelativePath}`);
+          // Regular files carry their filesystem identity so a late atomic
+          // replacement of a target file (new inode, same path) changes the
+          // authority and fails the final recheck instead of passing by path.
+          authority.push([
+            "file",
+            entryRelativePath,
+            String(entryState.dev),
+            String(entryState.ino),
+          ].join("\0"));
           continue;
         }
         return {
@@ -1574,12 +1582,12 @@ async function dependencyMetadataReadFailure({
 // layout for a `file:` directory dependency on Windows.
 async function inspectExactHardlinkStore({ storeRoot, authority, dependencyName }) {
   const expectedDirectories = new Set();
-  const expectedFiles = new Set();
+  const expectedFiles = new Map();
   for (const entry of String(authority.target_tree_authority ?? "").split("\n")) {
-    const [kind, relativePath] = entry.split("\0");
+    const [kind, relativePath, dev, ino] = entry.split("\0");
     if (kind === "walk-directory") continue;
     if (kind === "directory") expectedDirectories.add(relativePath);
-    else if (kind === "file") expectedFiles.add(relativePath);
+    else if (kind === "file") expectedFiles.set(relativePath, { dev, ino });
     else {
       return {
         ok: false,
@@ -1627,7 +1635,7 @@ async function inspectExactHardlinkStore({ storeRoot, authority, dependencyName 
         const relativePath = relative(storeRoot, entryPath).replace(/\\/g, "/");
         let entryState;
         try {
-          entryState = await lstat(entryPath, { bigint: true });
+          entryState = await lstat(entryPath);
         } catch (error) {
           return {
             ok: false,
@@ -1664,7 +1672,7 @@ async function inspectExactHardlinkStore({ storeRoot, authority, dependencyName 
         }
         let targetState;
         try {
-          targetState = await lstat(join(authority.target_root, ...relativePath.split("/")), { bigint: true });
+          targetState = await lstat(join(authority.target_root, ...relativePath.split("/")));
         } catch (error) {
           return {
             ok: false,
@@ -1672,11 +1680,17 @@ async function inspectExactHardlinkStore({ storeRoot, authority, dependencyName 
             detail: `Deklarovaný lokální soubor ${relativePath} balíčku ${dependencyName} nejde během ověření přečíst: ${error instanceof Error ? error.message : String(error)}`,
           };
         }
+        // The store file must be the same object as both the live target file
+        // and the file identity captured in the target authority being
+        // verified; a target swapped after that read is not the same authority.
+        const expected = expectedFiles.get(relativePath);
         if (
           !targetState.isFile()
           || targetState.dev !== entryState.dev
           || targetState.ino !== entryState.ino
-          || entryState.nlink < 2n
+          || entryState.nlink < 2
+          || expected.dev !== String(entryState.dev)
+          || expected.ino !== String(entryState.ino)
         ) {
           return {
             ok: false,

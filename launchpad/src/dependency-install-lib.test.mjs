@@ -816,6 +816,25 @@ test("an isolated store file swap during readiness is rejected", async () => {
   expect(state).toMatchObject({ ok: false, reason: "dependency_authority_changed" });
 });
 
+test("an isolated store is rejected when the declared target file is swapped before the final authority recheck", async () => {
+  const fixture = await isolatedHardlinkStoreFixture();
+
+  const state = await inspectRequiredDependencies({
+    cwd: fixture.packageRoot,
+    boundaryRoot: fixture.checkoutRoot,
+    organizationDependencyRoot: fixture.organizationRoot,
+    async beforeLocalDependencyAuthorityRecheck() {
+      // Atomic replacement: same path, new regular file (new inode). The store
+      // still hardlinks the old object, so the accepted tree is stale.
+      await rm(join(fixture.targetRoot, "index.ts"));
+      await writeFile(join(fixture.targetRoot, "index.ts"), "export const replaced = true;\n");
+    },
+  });
+
+  expect(state).toMatchObject({ ok: false, reason: "dependency_authority_changed" });
+  expect(await readFile(join(fixture.storeRoot, "index.ts"), "utf8")).toBe("export const fixture = true;\n");
+});
+
 test("a real Bun isolated frozen install satisfies the shared Organization-local file dependency postcondition", async () => {
   const fixture = await organizationFileDependencyFixture();
   await rm(join(fixture.packageRoot, "bun.lock"), { force: true });
