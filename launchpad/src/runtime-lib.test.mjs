@@ -4624,8 +4624,13 @@ test("hosted inventory stays cold until Open, supports Stop and retires removed 
     await sleep(50);
     expect(await runtime.health(app.id)).toMatchObject({ status: "stopped", managed: false });
     expect(runtime.maintenanceSummary()).toMatchObject({ stopped: 1, starting: 0 });
+    // Existing browser tabs keep polling/reconnecting after Stop. Those requests
+    // must not count as a new navigation that deliberately opens the app.
+    expect(await runtime.ensureHostedApp(app.id, { allowStart: false })).toMatchObject({ status: "stopped" });
+    expect(await runtime.health(app.id)).toMatchObject({ status: "stopped", managed: false });
     await runtime.ensureHostedApp(app.id);
     await waitForStatus(() => runtime.health(app.id), "healthy");
+    expect(await runtime.ensureHostedApp(app.id, { allowStart: false })).toMatchObject({ status: "healthy" });
     runtime.maintainApps([]);
     await waitForStatus(() => runtime.health(app.id), "stopped");
     expect(runtime.maintenanceSummary()).toMatchObject({ total: 0 });

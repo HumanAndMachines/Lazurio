@@ -1171,7 +1171,7 @@ export function createRuntimeManager({
 
   // The ingress may ensure only an already selected Team default. In contrast
   // to an explicit Builder Open, it must preserve this session's worktree.
-  async function ensureHostedApp(appId) {
+  async function ensureHostedApp(appId, { allowStart = true } = {}) {
     if (lifecycleProfile !== "hosted") {
       throw new RuntimeActionError(404, "app_not_found", "Hosted ingress is unavailable.");
     }
@@ -1185,6 +1185,7 @@ export function createRuntimeManager({
       const selected = await runtimeAppForAction(appId, { source: entry.source, enforcePortContract: true });
       const current = await healthForApp(selected);
       if (current.managed && current.status === "healthy") return { status: "healthy", runtime: current };
+      if (!allowStart) return { status: current.status === "healthy" ? "unmanaged" : current.status, runtime: current };
       return openRuntimeAppUnlocked(selected);
     });
   }

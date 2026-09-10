@@ -962,7 +962,12 @@ async function handlePersonalRuntimeRoute(request, route) {
     if (route.action === "ensure") {
       if (hostedWorkspace.profile !== "hosted") return notFound();
       if (request.method !== "GET") return jsonResponse({ error: "method_not_allowed" }, 405);
-      const ready = await appsResponseCache.runMutation(() => runtimeManager.ensureHostedApp(route.appId));
+      const ready = await appsResponseCache.runMutation(() => runtimeManager.ensureHostedApp(route.appId, {
+        // Team authentication already happened. Fetch Metadata controls lifecycle
+        // only: background fetches and WebSocket reconnects are not a new Open.
+        // Non-browser clients without Fetch Metadata retain direct-link behavior.
+        allowStart: !request.headers.get("sec-fetch-mode") || request.headers.get("sec-fetch-mode") === "navigate",
+      }));
       return new Response(null, { status: ready.status === "healthy" ? 204 : 503 });
     }
     if (route.action === "health" && (request.method === "GET" || request.method === "POST")) {
@@ -1157,7 +1162,12 @@ async function handleRuntimeRoute(request, route) {
     if (route.action === "ensure") {
       if (hostedWorkspace.profile !== "hosted") return notFound();
       if (request.method !== "GET") return jsonResponse({ error: "method_not_allowed" }, 405);
-      const ready = await appsResponseCache.runMutation(() => runtimeManager.ensureHostedApp(route.appId));
+      const ready = await appsResponseCache.runMutation(() => runtimeManager.ensureHostedApp(route.appId, {
+        // Team authentication already happened. Fetch Metadata controls lifecycle
+        // only: background fetches and WebSocket reconnects are not a new Open.
+        // Non-browser clients without Fetch Metadata retain direct-link behavior.
+        allowStart: !request.headers.get("sec-fetch-mode") || request.headers.get("sec-fetch-mode") === "navigate",
+      }));
       return new Response(null, { status: ready.status === "healthy" ? 204 : 503 });
     }
     if (route.action === "health" && (request.method === "GET" || request.method === "POST")) {

@@ -190,7 +190,10 @@ Launchpad proto používá tři oddělené lifecycle profily:
   podle potřeby (DEV-6579, náhrada eager části decision 0137). Manifesty
   Organizace určují dostupné Team moduly a jejich výchozí Apps. `Open` i
   autentizovaný přímý odkaz používají stejný module lease a runtime manager;
-  `Stop` modul zastaví až do dalšího otevření. Spuštěnou App manager udržuje
+  `Stop` modul zastaví až do dalšího otevření. Browserové požadavky na pozadí
+  (fetch, asset nebo WebSocket reconnect) nejsou nové otevření; ingress je
+  pouze zkontroluje. Navigace a přímí nebrowseroví klienti mohou App otevřít.
+  Spuštěnou App manager udržuje
   v aktuální session, dostupnost katalogu ani health kontrola ji neprobouzí.
   Cold start nic nespouští; první otevření použije `main`. Builderova volba
   worktree žije jen v aktuální session a ingress ji zachovává;
