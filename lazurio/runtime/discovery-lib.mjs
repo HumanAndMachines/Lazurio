@@ -56,10 +56,6 @@ const ignoredDirs = new Set([
   ".git",
   ".worktrees",
   "node_modules",
-  // Local review previews and other generated artifacts can contain complete
-  // runtime manifests. They are not declared Organization modules and must
-  // never create a second, invalid Launchpad card.
-  "output",
   "dist",
   "build",
   ".next",
@@ -2112,7 +2108,9 @@ async function walkMountPackages({
     }
     organizationIssues.push(...mountContract.slotIssues);
     await walkPackageJson(companiesRoot, companyRoot, packageEntries, company, {
-      excludedRoots: mountContract.quarantinedPaths,
+      // Only the Organization-root output is generated; workspace/output can
+      // be a real module and must still pass normal discovery validation.
+      excludedRoots: [...mountContract.quarantinedPaths, join(companyRoot, "output")],
     });
   }
 }
