@@ -1323,3 +1323,17 @@ function app(id, company, dependencyState) {
     },
   };
 }
+
+
+test("dependency warnings retain exact version identity and detail links", () => {
+  const model = buildSpaceProblemModel({ attention_apps: [
+    { id: "example-v1", title: "Example v1", dependencies: { state: "needs_install" } },
+    { id: "example-v2", title: "Example v2", dependencies: { state: "needs_install" } },
+    { id: "plain", title: "Example", dependencies: { state: "needs_install" } },
+  ] });
+  expect(model.issues.map(x => x.title)).toEqual([
+    "Example v1 není připravená ke spuštění", "Example v2 není připravená ke spuštění", "Example není připravená ke spuštění",
+  ]);
+  expect(model.issues.map(x => x.appId)).toEqual(["example-v1", "example-v2", "plain"]);
+  expect(model.issues.every(x => x.nextStep.includes("nemusíte"))).toBe(true);
+});
