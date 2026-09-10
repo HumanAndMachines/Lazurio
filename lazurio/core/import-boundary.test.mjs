@@ -82,6 +82,7 @@ test("canonical path containment has one physical Core owner", async () => {
   expect(consumers).toEqual([
     "launchpad/src/worktree-actions-lib.mjs",
     "lazurio/core/git-materialization-lib.mjs",
+    "lazurio/organization-compiler/index.mjs",
     "lazurio/organization-install-lib.mjs",
     "lazurio/runtime/dependency-install-lib.mjs",
     "lazurio/runtime/diagnostics-lib.mjs",
