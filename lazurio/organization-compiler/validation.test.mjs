@@ -273,255 +273,13 @@ describe("organization config validation", () => {
     expect(observed.valid).toBe(true);
   });
 
-  test("accepts the decision-authorized Spectoda template source role", async () => {
+  test("template source authorization stays outside the public consumer compiler", async () => {
     const documents = createValidDocuments();
     documents.companyConfig.template_sync_role = "source";
-    documents.companyConfig.template_sync_authorization = {
-      decision_ref:
-        "docs/decisions/0032-organization-template-derived-from-spectoda.md",
-      source_repository_id: 1282020273,
-      source_repository: "Spectoda/Spectoda_GEN3",
-    };
-    documents.companyConfig.company.slug = "Spectoda";
-    documents.companyConfig.company.display_name = "Spectoda";
-    documents.companyConfig.company.github_org = "Spectoda";
-    documents.companyConfig.company.root_repository =
-      "Spectoda/Spectoda_GEN3";
-    documents.companyConfig.company.repository =
-      "git@github.com:Spectoda/Spectoda_GEN3.git";
-    documents.modulesManifest.company = "Spectoda";
-    documents.modulesManifest.github_org = "Spectoda";
-
-    const result = await validateOrganizationDocuments({
-      ...documents,
-      repositoryObservation: sourceRepositoryObservation(
-        "spectoda/Spectoda_GEN3",
-      ),
-    });
-
-    expect(result.valid).toBe(true);
-    expect(result.failures).toEqual([]);
-  });
-
-  // Decision 0113 regression: the owner/repo coordinate is renamable by GitHub and
-  // the freed name is then claimable by a stranger, so the label alone must never
-  // authorize a template source. Only the immutable repository id may.
-  test("odmítne source marker s správným jménem, ale bez neměnného repository id", async () => {
-    async function evaluate(authorizationOverrides) {
-      const documents = createValidDocuments();
-      documents.companyConfig.template_sync_role = "source";
-      documents.companyConfig.template_sync_authorization = {
-        decision_ref:
-          "docs/decisions/0032-organization-template-derived-from-spectoda.md",
-        source_repository: "Spectoda/Spectoda_GEN3",
-        ...authorizationOverrides,
-      };
-      documents.companyConfig.company.slug = "Spectoda";
-      documents.companyConfig.company.display_name = "Spectoda";
-      documents.companyConfig.company.github_org = "Spectoda";
-      documents.companyConfig.company.root_repository =
-        "Spectoda/Spectoda_GEN3";
-      documents.companyConfig.company.repository =
-        "git@github.com:Spectoda/Spectoda_GEN3.git";
-      documents.modulesManifest.company = "Spectoda";
-      documents.modulesManifest.github_org = "Spectoda";
-      return validateOrganizationDocuments({
-        ...documents,
-        repositoryObservation: sourceRepositoryObservation(
-          "spectoda/Spectoda_GEN3",
-        ),
-      });
-    }
-
-    const expectedFailure =
-      "company.gen3.json/template_sync_authorization: source role vyžaduje přesný decision 0032 marker s neměnným source_repository_id a odpovídajícím source_repository";
-
-    const missingId = await evaluate({});
-    expect(missingId.valid).toBe(false);
-    expect(missingId.failures).toContain(expectedFailure);
-
-    // A squatter who re-registered the freed coordinate carries a different id.
-    const squattedId = await evaluate({ source_repository_id: 999999999 });
-    expect(squattedId.valid).toBe(false);
-    expect(squattedId.failures).toContain(expectedFailure);
-
-    // The id must be the numeric provider id, not the name wearing an id's clothes.
-    const stringId = await evaluate({ source_repository_id: "1282020273" });
-    expect(stringId.valid).toBe(false);
-    expect(stringId.failures).toContain(expectedFailure);
-  });
-
-  test("source authorization porovnává jen GitHub owner case-insensitive", async () => {
-    const documents = createValidDocuments();
-    documents.companyConfig.template_sync_role = "source";
-    documents.companyConfig.template_sync_authorization = {
-      decision_ref:
-        "docs/decisions/0032-organization-template-derived-from-spectoda.md",
-      source_repository_id: 1282020273,
-      source_repository: "Spectoda/Spectoda_GEN3",
-    };
-    documents.companyConfig.company.slug = "Spectoda";
-    documents.companyConfig.company.display_name = "Spectoda";
-    documents.companyConfig.company.github_org = "spectoda";
-    documents.companyConfig.company.root_repository =
-      "spectoda/Spectoda_GEN3";
-    documents.companyConfig.company.repository =
-      "git@github.com:spectoda/Spectoda_GEN3.git";
-    documents.modulesManifest.company = "Spectoda";
-    documents.modulesManifest.github_org = "spectoda";
-
-    const result = await validateOrganizationDocuments({
-      ...documents,
-      repositoryObservation: sourceRepositoryObservation(
-        "spectoda/Spectoda_GEN3",
-      ),
-    });
-
-    expect(result.valid).toBe(true);
-    expect(result.failures).toEqual([]);
-  });
-
-  test("rejects a self-declared template source without the accepted identity", async () => {
-    const documents = createValidDocuments();
-    documents.companyConfig.template_sync_role = "source";
-    documents.companyConfig.template_sync_authorization = {
-      decision_ref:
-        "docs/decisions/0032-organization-template-derived-from-spectoda.md",
-      source_repository_id: 1282020273,
-      source_repository: "Spectoda/Spectoda_GEN3",
-    };
-    documents.companyConfig.company.root_repository =
-      "FixtureOrg/FixtureCompany_GEN3";
-    documents.companyConfig.company.repository =
-      "git@github.com:FixtureOrg/FixtureCompany_GEN3.git";
-
+    documents.companyConfig.template_sync_authorization = { source_repository_id: 123, source_repository: "FixtureOrg/FixtureCompany_GEN3", decision_ref: "fixture-decision" };
     const result = await validateOrganizationDocuments(documents);
-
     expect(result.valid).toBe(false);
-    expect(result.failures).toContain(
-      "company.gen3.json/template_sync_role: source je aktuálně autorizovaná pouze pro Spectoda/Spectoda_GEN3 podle decision 0032",
-    );
-  });
-
-  test("rejects a copied Spectoda source marker without trusted checkout identity", async () => {
-    const documents = createValidDocuments();
-    documents.companyConfig.template_sync_role = "source";
-    documents.companyConfig.template_sync_authorization = {
-      decision_ref:
-        "docs/decisions/0032-organization-template-derived-from-spectoda.md",
-      source_repository_id: 1282020273,
-      source_repository: "Spectoda/Spectoda_GEN3",
-    };
-    documents.companyConfig.company.slug = "Spectoda";
-    documents.companyConfig.company.display_name = "Spectoda";
-    documents.companyConfig.company.github_org = "Spectoda";
-    documents.companyConfig.company.root_repository =
-      "Spectoda/Spectoda_GEN3";
-    documents.companyConfig.company.repository =
-      "git@github.com:Spectoda/Spectoda_GEN3.git";
-    documents.modulesManifest.company = "Spectoda";
-    documents.modulesManifest.github_org = "Spectoda";
-
-    const missingIdentity = await validateOrganizationDocuments(documents);
-    expect(missingIdentity.valid).toBe(false);
-    expect(missingIdentity.failures).toContain(
-      "company.gen3.json/template_sync_role: source vyžaduje důvěryhodně zjištěný checkout origin Spectoda/Spectoda_GEN3",
-    );
-
-    const wrongIdentity = await validateOrganizationDocuments({
-      ...documents,
-      repositoryObservation:
-        sourceRepositoryObservation("other/Other_GEN3"),
-    });
-    expect(wrongIdentity.valid).toBe(false);
-    expect(wrongIdentity.failures).toContain(
-      "company.gen3.json/template_sync_role: source vyžaduje důvěryhodně zjištěný checkout origin Spectoda/Spectoda_GEN3",
-    );
-
-    for (const identity of [undefined, 42]) {
-      const malformedObservation =
-        sourceRepositoryObservation(identity);
-      const malformed = await validateOrganizationDocuments({
-        ...documents,
-        repositoryObservation: malformedObservation,
-      });
-      expect(malformed.valid).toBe(false);
-      expect(malformed.failures).toContain(
-        "company.gen3.json/template_sync_role: source vyžaduje důvěryhodně zjištěný checkout origin Spectoda/Spectoda_GEN3",
-      );
-      expect(malformed.failures).toContain(
-        "company.gen3.json/company: důvěryhodné pozorování checkoutu neobsahuje validní GitHub repository identitu",
-      );
-    }
-  });
-
-  test("rejects a template source checkout with an OrganizationTemplate remote alias", async () => {
-    const documents = createValidDocuments();
-    documents.companyConfig.template_sync_role = "source";
-    documents.companyConfig.template_sync_authorization = {
-      decision_ref:
-        "docs/decisions/0032-organization-template-derived-from-spectoda.md",
-      source_repository_id: 1282020273,
-      source_repository: "Spectoda/Spectoda_GEN3",
-    };
-    documents.companyConfig.company.slug = "Spectoda";
-    documents.companyConfig.company.display_name = "Spectoda";
-    documents.companyConfig.company.github_org = "Spectoda";
-    documents.companyConfig.company.root_repository =
-      "Spectoda/Spectoda_GEN3";
-    documents.companyConfig.company.repository =
-      "git@github.com:Spectoda/Spectoda_GEN3.git";
-    documents.modulesManifest.company = "Spectoda";
-    documents.modulesManifest.github_org = "Spectoda";
-    const repositoryObservation =
-      sourceRepositoryObservation("spectoda/Spectoda_GEN3");
-    repositoryObservation.remoteContract.templateRemoteState =
-      "invalid";
-    repositoryObservation.remoteContract
-      .templateRepositoryRemoteNames = ["upstream"];
-
-    const result = await validateOrganizationDocuments({
-      ...documents,
-      repositoryObservation,
-    });
-
-    expect(result.valid).toBe(false);
-    expect(result.failures).toContain(
-      "company.gen3.json/template_sync_role: source checkout nesmí mít OrganizationTemplate remote pod žádným názvem a všechny remote URL musí být bezpečný GitHub tvar",
-    );
-  });
-
-  test("rejects a source checkout with unsafe effective origin routing", async () => {
-    const documents = createValidDocuments();
-    documents.companyConfig.template_sync_role = "source";
-    documents.companyConfig.template_sync_authorization = {
-      decision_ref:
-        "docs/decisions/0032-organization-template-derived-from-spectoda.md",
-      source_repository_id: 1282020273,
-      source_repository: "Spectoda/Spectoda_GEN3",
-    };
-    documents.companyConfig.company.slug = "Spectoda";
-    documents.companyConfig.company.display_name = "Spectoda";
-    documents.companyConfig.company.github_org = "Spectoda";
-    documents.companyConfig.company.root_repository =
-      "Spectoda/Spectoda_GEN3";
-    documents.companyConfig.company.repository =
-      "git@github.com:Spectoda/Spectoda_GEN3.git";
-    documents.modulesManifest.company = "Spectoda";
-    documents.modulesManifest.github_org = "Spectoda";
-    const repositoryObservation =
-      sourceRepositoryObservation("spectoda/Spectoda_GEN3");
-    repositoryObservation.remoteContract.originRoutingReady = false;
-
-    const result = await validateOrganizationDocuments({
-      ...documents,
-      repositoryObservation,
-    });
-
-    expect(result.valid).toBe(false);
-    expect(result.failures).toContain(
-      "company.gen3.json/template_sync_role: source checkout vyžaduje bezpečný origin fetch/push routing bez transportních přesměrování",
-    );
+    expect(result.failures.join("\n")).toContain("separate template publisher");
   });
 
   test("binds consumer remote-active coordinates to the observed checkout origin", async () => {
@@ -645,9 +403,9 @@ describe("organization config validation", () => {
     const documents = createValidDocuments();
     documents.companyConfig.template_sync_authorization = {
       decision_ref:
-        "docs/decisions/0032-organization-template-derived-from-spectoda.md",
-      source_repository_id: 1282020273,
-      source_repository: "Spectoda/Spectoda_GEN3",
+        "docs/decisions/0032-organization-template-derived-from-FixtureSource.md",
+      source_repository_id: 123456789,
+      source_repository: "FixtureSource/FixtureSource_GEN3",
     };
 
     const result = await validateOrganizationDocuments(documents);
@@ -1636,7 +1394,7 @@ describe("organization config validation", () => {
 function sourceRepositoryObservation(
   identity,
   {
-    checkoutRoot = "/organizations/Spectoda_GEN3",
+    checkoutRoot = "/organizations/FixtureSource_GEN3",
     checkoutPlatform = "linux",
   } = {},
 ) {

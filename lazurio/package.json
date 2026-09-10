@@ -21,8 +21,8 @@
     "organization-host/*.json",
     "runtime/*.mjs",
     "schemas/*.json",
-    "!**/*.test.mjs",
     "organization-compiler/*.mjs",
+    "!**/*.test.mjs",
     "!**/*.test-support.mjs"
   ],
   "engines": {

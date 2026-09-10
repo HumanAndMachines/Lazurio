@@ -32,34 +32,14 @@
     },
     "template_sync_role": {
       "enum": [
-        "consumer",
-        "source"
+        "consumer"
       ],
       "default": "consumer",
-      "description": "Směr OrganizationTemplate propagace pro reálnou Organizaci (decision 0032/0086). Chybějící pole = consumer a vyžaduje fetch-only template remote. source je accepted-decision výjimka pro Organizaci, ze které se template kurátorsky generalizuje; template remote zpět zakazuje. organization_kind=template tuto roli nepoužívá."
+      "description": "Consumer generation only; template source publication is a separate tool and authority."
     },
     "template_sync_authorization": {
-      "type": "object",
-      "required": [
-        "decision_ref",
-        "source_repository_id",
-        "source_repository"
-      ],
-      "properties": {
-        "decision_ref": {
-          "const": "docs/decisions/0032-organization-template-derived-from-spectoda.md"
-        },
-        "source_repository_id": {
-          "const": 1282020273,
-          "description": "Neměnné GitHub repository id autorizovaného source repa (decision 0113). Tohle je jediný autorizační klíč: owner ani jméno repa přejmenováním nepřenesou autorizaci a uvolněnou souřadnici nelze zabrat."
-        },
-        "source_repository": {
-          "const": "Spectoda/Spectoda_GEN3",
-          "description": "Lidsky čitelné owner/repo, které se pouze ASERTUJE vedle source_repository_id (decision 0113). Nikdy se podle něj nevybírá; nesoulad s id znamená fail closed."
-        }
-      },
-      "additionalProperties": false,
-      "description": "Fail-closed authorization marker pro template_sync_role=source. Aktuální accepted decision 0032 autorizuje pouze repository id 1282020273 (dnes Spectoda/Spectoda_GEN3); další source Organizace vyžaduje nové accepted decision a koordinovanou změnu tohoto allowlistu. Vzor id-binding dvojice viz Buddy host/verification/buddy-host-plan.schema.json (repositoryBinding)."
+      "not": {},
+      "description": "Organization-specific template source authorization belongs to the separate template publisher. Not accepted by this consumer compiler."
     },
     "company": {
       "type": "object",
@@ -72,7 +52,7 @@
         "slug": {
           "type": "string",
           "pattern": "^[A-Za-z0-9][A-Za-z0-9-]*$",
-          "description": "Kanonický Organization slug v ownerem potvrzeném přesném zápisu velkých a malých písmen čisté brand identity (např. AgentMint, Rozjedeme-ai, Spectoda, AVALTAR-HAM). Agent jej nesmí title-case ani lowercase normalizovat; porovnává se case-sensitive. Module a Team slugy zůstávají lowercase."
+          "description": "Kanonický Organization slug v ownerem potvrzeném přesném zápisu velkých a malých písmen čisté brand identity (např. AgentMint, Rozjedeme-ai, ExampleOrg, AVALTAR-HAM). Agent jej nesmí title-case ani lowercase normalizovat; porovnává se case-sensitive. Module a Team slugy zůstávají lowercase."
         },
         "display_name": {
           "type": "string",
@@ -444,7 +424,7 @@
       "additionalProperties": true
     },
     "teams": {
-      "description": "Roster pojmenovaných Teamů — logických skupin modulů a lidí uvnitř Organizace (stejný pojem jako GitHub Team; historicky Oddělení/Space/Workspace-skupina). Team nemá vlastní adresář: moduly žijí ploše v workspace/<repo-name>, jejich stabilní slug je samostatná identita a N:M membership deklaruje modules[].teams. Roster má právě jeden deklarovaný default; bez rosteru se používá implicitní Team `workspace`, explicitní brandový default může mít jiný slug (Spectoda `launchpad`, decision 0048). Hosted vzor je <modul>.<team>.<doména>. `productionspace` je v rosteru i membership zakázaný; semantic validator vynucuje default, reference a cross-file shodu (decisions 0040/0041/0062/0063/0067/0125).",
+      "description": "Roster pojmenovaných Teamů — logických skupin modulů a lidí uvnitř Organizace (stejný pojem jako GitHub Team; historicky Oddělení/Space/Workspace-skupina). Team nemá vlastní adresář: moduly žijí ploše v workspace/<repo-name>, jejich stabilní slug je samostatná identita a N:M membership deklaruje modules[].teams. Roster má právě jeden deklarovaný default; bez rosteru se používá implicitní Team `workspace`, explicitní brandový default může mít jiný slug (ExampleOrg `launchpad`, decision 0048). Hosted vzor je <modul>.<team>.<doména>. `productionspace` je v rosteru i membership zakázaný; semantic validator vynucuje default, reference a cross-file shodu (decisions 0040/0041/0062/0063/0067/0125).",
       "type": "array",
       "items": {
         "type": "object",
@@ -467,7 +447,7 @@
           },
           "default": {
             "type": "boolean",
-            "description": "Právě jeden deklarovaný Team smí být default. Bez rosteru je implicitní fallback se slugem `workspace`; explicitní brandový default může mít jiný slug (např. Spectoda `launchpad`, decision 0048)."
+            "description": "Právě jeden deklarovaný Team smí být default. Bez rosteru je implicitní fallback se slugem `workspace`; explicitní brandový default může mít jiný slug (např. ExampleOrg `launchpad`, decision 0048)."
           },
           "description": {
             "type": "string",
@@ -497,7 +477,7 @@
           },
           "default": {
             "type": "boolean",
-            "description": "Právě jeden deklarovaný Team smí být default. Bez rosteru je implicitní fallback se slugem `workspace`; explicitní brandový default může mít jiný slug (např. Spectoda `launchpad`, decision 0048)."
+            "description": "Právě jeden deklarovaný Team smí být default. Bez rosteru je implicitní fallback se slugem `workspace`; explicitní brandový default může mít jiný slug (např. ExampleOrg `launchpad`, decision 0048)."
           },
           "description": {
             "type": "string",
@@ -973,49 +953,6 @@
               ]
             }
           }
-        }
-      }
-    },
-    {
-      "if": {
-        "required": [
-          "template_sync_role"
-        ],
-        "properties": {
-          "template_sync_role": {
-            "const": "source"
-          }
-        }
-      },
-      "then": {
-        "required": [
-          "template_sync_authorization"
-        ],
-        "properties": {
-          "company": {
-            "properties": {
-              "slug": {
-                "const": "Spectoda"
-              },
-              "github_org": {
-                "pattern": "^[Ss][Pp][Ee][Cc][Tt][Oo][Dd][Aa]$"
-              },
-              "root_repository": {
-                "pattern": "^[Ss][Pp][Ee][Cc][Tt][Oo][Dd][Aa]/Spectoda_GEN3$"
-              }
-            },
-            "required": [
-              "root_repository",
-              "repository"
-            ]
-          }
-        }
-      },
-      "else": {
-        "not": {
-          "required": [
-            "template_sync_authorization"
-          ]
         }
       }
     }
