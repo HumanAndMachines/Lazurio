@@ -1,5 +1,5 @@
 import { readFile } from "fs/promises";
-import { posix, win32 } from "path";
+import { dirname, posix, win32 } from "path";
 import { fileURLToPath } from "url";
 import { validateAgainstSchema } from "../runtime/json-schema-mini.mjs";
 import { isCanonicalOrganizationRepositorySlotPath, isNestedOrganizationRepositoryDbSlotPath, isOrganizationRepositoryDbSlot, organizationSlotRepositoryMountIssue, organizationSlotRepositoryAliasIssues, organizationSlotRepositoryRemote, organizationSlotRepositoryBranch } from "../core/organization-slot-scope-lib.mjs";
@@ -8,7 +8,7 @@ import {
   githubRepositoryUrlIdentity,
 } from "./repository-identity.mjs";
 
-const defaultSchemaRoot = fileURLToPath(new URL("../schemas/", import.meta.url));
+const defaultSchemaRoot = dirname(fileURLToPath(new URL("../schemas/company.gen3.schema.json", import.meta.url)));
 const validatorCache = new Map();
 const schemaDocumentValidatorCache = new WeakMap();
 export const organizationRootSlotPaths = new Set([
