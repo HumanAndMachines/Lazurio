@@ -199,22 +199,17 @@ function sameFilesystemEntry(left, right) {
   }
 }
 
-function resolveRepositoryIdentity(primaryRoot, { allowFilesystem = false } = {}) {
-  // Čti deklarovaný remote bez `insteadOf` expanze: identita repozitáře je
-  // kontrakt checkoutu, ne výsledek lokální transportní optimalizace.
+function resolveRepositoryIdentity(primaryRoot) {
+  // Read the declared endpoint, not its insteadOf expansion. A matching path
+  // suffix or an embedded github.com hostname is not a GitHub origin.
   const remote = git(primaryRoot, ["config", "--local", "--get", "remote.origin.url"]);
-  const normalized = remote.stdout.replaceAll("\\", "/");
-  const match = normalized.match(/github\.com(?::|\/)([^/]+)\/([^/]+?)(?:\.git)?$/i);
-  const parts = normalized
-    .replace(/^file:\/\//i, "")
-    .replace(/\/$/, "")
-    .split("/")
-    .filter(Boolean);
-  const organization = match?.[1] ?? (allowFilesystem ? parts.at(-2) : null);
-  const repository = (
-    match?.[2] ?? (allowFilesystem ? parts.at(-1) : "") ?? ""
-  ).replace(/\.git$/i, "");
-  if (!organization || !repository) fail(`origin remote nejde rozparsovat na identitu: ${normalized}`);
+  const match = remote.stdout.match(
+    /^(?:git@github\.com:|ssh:\/\/(?:git@)?github\.com\/|https:\/\/github\.com\/)([A-Za-z0-9_-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?$/i,
+  );
+  if (!match || [".", ".."].includes(match[2])) {
+    fail("origin musí být podporovaný GitHub origin (HTTPS nebo SSH), nikoli filesystem či jiný endpoint.");
+  }
+  const [, organization, repository] = match;
   return {
     remoteUrl: remote.stdout,
     organization,
@@ -277,7 +272,7 @@ function resolveEditRepository(lazurioRoot, rawRepository) {
   if (gitRoot.status !== 0 || !sameFilesystemEntry(repositoryRoot, gitRoot.stdout)) {
     fail("--repository musí být samostatný Git-backed Organization root.");
   }
-  const identity = resolveRepositoryIdentity(repositoryRoot, { allowFilesystem: true });
+  const identity = resolveRepositoryIdentity(repositoryRoot);
   const declaredFullName = resolution.resource.root_repository?.locator;
   const actualFullName = `${identity.organization}/${identity.repository}`;
   if (declaredFullName !== actualFullName) {
@@ -370,7 +365,7 @@ async function findPlanFile(authorityRoot, planCode) {
   };
 }
 
-async function main() {
+async function main({ remoteGit = git } = {}) {
   let options;
   try {
     options = parseWorktreeCreateArgs(process.argv.slice(2));
@@ -463,6 +458,18 @@ async function main() {
   // nikdy ho tiše nepřepisuj.
   if (existsSync(sidecarPath)) fail(`sidecar už existuje: ${sidecarPath}; zkontroluj jeho recovery_handoff a odstraň ho vědomě.`);
   const identity = editRepository.identity;
+  const revalidateOrganizationCheckout = () => {
+    if (editRepository.repoKind !== "organization_root") return;
+    const current = resolveEditRepository(lazurioRoot, options.repository);
+    if (current.identity.remoteUrl !== identity.remoteUrl
+      || current.organization !== editRepository.organization) {
+      fail("--repository origin nebo Organization identita se během create preflightu změnily.");
+    }
+    const overrides = checkoutTransportOverrideKeys(primaryRoot);
+    if (overrides.length > 0) {
+      fail("--repository primary checkout změnil transportní konfiguraci během create preflightu.");
+    }
+  };
   const transportOverrides = checkoutTransportOverrideKeys(primaryRoot);
   if (transportOverrides.length > 0) {
     fail(
@@ -478,7 +485,7 @@ async function main() {
     );
   }
   if (editRepository.repoKind === "organization_root") {
-    const remoteMain = git(primaryRoot, ["ls-remote", identity.remoteUrl, "refs/heads/main"]);
+    const remoteMain = remoteGit(primaryRoot, ["ls-remote", identity.remoteUrl, "refs/heads/main"]);
     const remoteHead = remoteMain.stdout.split(/\s+/)[0];
     const localHead = git(primaryRoot, ["rev-parse", "HEAD"]).stdout;
     if (!/^[0-9a-f]{40,64}$/i.test(remoteHead) || remoteHead !== localHead) {
@@ -553,6 +560,7 @@ async function main() {
   };
 
   if (options.dryRun) {
+    revalidateOrganizationCheckout();
     console.log(`ok - dry-run: plán ${plan.relative}`);
     console.log(`ok - dry-run: worktree ${worktreePath}`);
     console.log(`ok - dry-run: branch ${branch} z origin/main`);
@@ -560,11 +568,15 @@ async function main() {
     return;
   }
 
-  git(primaryRoot, [
+  remoteGit(primaryRoot, [
     "fetch",
     identity.remoteUrl,
     "+refs/heads/main:refs/remotes/origin/main",
   ]);
+  await mkdir(dirname(worktreePath), { recursive: true });
+  // The remote calls and filesystem await above allow another writer to change
+  // the checkout. Re-read all Organization preconditions at the mutation gate.
+  revalidateOrganizationCheckout();
   if (
     editRepository.repoKind === "organization_root"
     && git(primaryRoot, ["rev-parse", "HEAD"]).stdout
@@ -572,7 +584,6 @@ async function main() {
   ) {
     fail("--repository primary checkout se během create preflightu rozešel s origin/main.");
   }
-  await mkdir(dirname(worktreePath), { recursive: true });
   const branchAllocation = allocateOwnedWorktreeBranch({
     git,
     primaryRoot,
@@ -634,12 +645,11 @@ async function main() {
   console.log("next - ověř `bun run worktrees:check`; pracuj podle skillu worktree-development-discipline.");
 }
 
-if (import.meta.main) {
+// Explicit dependency injection keeps local fixture transports outside the CLI.
+// Callers cannot enable it through checkout configuration or environment flags.
+export async function runWorktreeCreate(dependencies = {}) {
   try {
-    await main();
-  } catch (error) {
-    console.error(`fail - worktrees:create: ${error instanceof Error ? error.message : error}`);
-    process.exitCode = 1;
+    await main(dependencies);
   } finally {
     const released = await releaseCreateLock(activeCreateLock);
     if (activeCreateLock && !released.released) {
@@ -648,5 +658,14 @@ if (import.meta.main) {
       );
     }
     activeCreateLock = null;
+  }
+}
+
+if (import.meta.main) {
+  try {
+    await runWorktreeCreate();
+  } catch (error) {
+    console.error(`fail - worktrees:create: ${error instanceof Error ? error.message : String(error)}`);
+    process.exitCode = 1;
   }
 }
