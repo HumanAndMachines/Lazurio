@@ -751,6 +751,76 @@ test("dynamic auxiliary listener is rejected before Launchpad starts a process",
   });
 });
 
+test("concurrent runtime reads share discovery but observe a removed app on the next read", async () => {
+  const root = await createCompaniesWorkspaceFixture({ port: await findFreePort() });
+  const app = fixtureDiscoveryApp({ port: 3100 });
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  let calls = 0;
+  let apps = [app];
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    discover: async () => {
+      calls += 1;
+      await gate;
+      return { apps, invalid_apps: [], failures: [], warnings: [] };
+    },
+  });
+  const reads = Array.from({ length: 8 }, () => runtime.logs(app.id));
+  await Promise.resolve();
+  expect(calls).toBe(1);
+  release();
+  expect((await Promise.all(reads)).every((result) => result.app_id === app.id)).toBe(true);
+  apps = [];
+  await expect(runtime.logs(app.id)).rejects.toMatchObject({ code: "app_not_found" });
+  expect(calls).toBe(2);
+});
+
+test("failed discovery is retried and is not shared across runtime managers", async () => {
+  const root = await createCompaniesWorkspaceFixture({ port: await findFreePort() });
+  const app = fixtureDiscoveryApp({ port: 3100 });
+  let calls = 0;
+  let fail = true;
+  const options = {
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    discover: async () => {
+      calls += 1;
+      if (fail) throw new Error("inventory unavailable");
+      return { apps: [app], invalid_apps: [], failures: [], warnings: [] };
+    },
+  };
+  const first = createRuntimeManager(options);
+  const second = createRuntimeManager(options);
+  const results = await Promise.allSettled([first.logs(app.id), second.logs(app.id)]);
+  expect(results.map((result) => result.status)).toEqual(["rejected", "rejected"]);
+  expect(calls).toBe(2);
+  fail = false;
+  expect((await first.logs(app.id)).app_id).toBe(app.id);
+  expect(calls).toBe(3);
+});
+
+test("concurrent actions keep Organization discovery scopes separate", async () => {
+  const root = await createCompaniesWorkspaceFixture({ port: await findFreePort() });
+  const first = fixtureDiscoveryApp({ port: 3100 });
+  const second = fixtureDiscoveryApp({ port: 3101, overrides: {
+    id: "other-company-demo-v1", company: "other-company", organization_path: "organizations/OtherCompany",
+  } });
+  const scopes = [];
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    discover: async (_root, options) => {
+      scopes.push(options?.organization ?? "global");
+      return { apps: [first, second], invalid_apps: [], failures: ["invalid declaration"], warnings: [] };
+    },
+  });
+  const results = await Promise.allSettled([runtime.start(first.id), runtime.start(second.id)]);
+  expect(scopes).toEqual(["global", first.company, second.company]);
+  expect(results.map((result) => result.reason?.code)).toEqual(["invalid_discovery", "invalid_discovery"]);
+});
+
 test("runtime action isolates a discovery failure from another Organization", async () => {
   const fixturePort = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({ port: fixturePort });

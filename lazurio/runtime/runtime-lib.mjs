@@ -1900,8 +1900,24 @@ export function createRuntimeManager({
     };
   }
 
+  // Maintenance checks several applications concurrently. Share only the read
+  // already in progress, never a settled inventory: later actions must observe
+  // changed manifests and authority. Organization scopes remain independent.
+  const discoveryReads = new Map();
+  function readDiscovery(options) {
+    const key = options === undefined
+      ? "global"
+      : JSON.stringify([options.organization, options.organization_path]);
+    if (discoveryReads.has(key)) return discoveryReads.get(key);
+    const pending = Promise.resolve()
+      .then(() => discover(companiesRoot, options))
+      .finally(() => discoveryReads.delete(key));
+    discoveryReads.set(key, pending);
+    return pending;
+  }
+
   async function findApp(appId, { requireValidDiscovery = false } = {}) {
-    const globalDiscovery = await discover(companiesRoot);
+    const globalDiscovery = await readDiscovery();
     let discovery = globalDiscovery;
     let app = discovery.apps.find((item) => item.id === appId);
     if (!app) {
@@ -1927,7 +1943,7 @@ export function createRuntimeManager({
       // jejím Organization scope. Root/schema failure se promítne i do scoped
       // výsledku a dál failne zavřeně.
       if (app.organization_kind === "organization" && typeof app.company === "string") {
-        const scopedDiscovery = await discover(companiesRoot, {
+        const scopedDiscovery = await readDiscovery({
           organization: app.company,
           organization_path: app.organization_path,
         });
