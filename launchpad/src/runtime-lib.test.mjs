@@ -108,10 +108,10 @@ test("HTTP health tolerates a busy listener but still rejects a stalled one", as
     protocol: "http", health: { kind: "http", path: "/" },
   });
   try {
-    expect(await probeRuntimeListener(listener)).toEqual({ reachable: true, ok: true, status_code: 200 });
+    expect(await probeRuntimeListener(listener, { timeoutMs: 5000 })).toEqual({ reachable: true, ok: true, status_code: 200 });
     stall = true;
     const start = Date.now();
-    expect(await probeRuntimeListener(listener)).toEqual({ reachable: false, ok: false, error: "timeout" });
+    expect(await probeRuntimeListener(listener, { timeoutMs: 5000 })).toEqual({ reachable: false, ok: false, error: "timeout" });
     expect(Date.now() - start).toBeLessThan(6500);
   } finally { server.stop(true); }
 }, 10000);
@@ -4730,6 +4730,31 @@ test("hosted inventory stays cold until Open, supports Stop and retires removed 
     await runtime.shutdown();
   }
 }, platformTestTimeout(15_000));
+
+test("hosted background readiness accepts a busy managed app without reopening it", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port, serverSource: `
+    import { existsSync } from "fs";
+    Bun.serve({ hostname: "127.0.0.1", port: ${port}, async fetch() {
+      if (existsSync("busy")) await Bun.sleep(1500);
+      return new Response("ready");
+    }});
+  ` });
+  const app = withStaticEntrypoint(fixtureDiscoveryApp({ port }));
+  const runtime = createRuntimeManager({ companiesRoot: root, launchpadRoot: join(root, "launchpad"),
+    instanceId: "hosted-busy-readiness", lifecycleProfile: "hosted",
+    discover: discoveryWithApp(app), maintenanceIntervalMs: 60_000 });
+  try {
+    runtime.maintainApps([app]);
+    await runtime.ensureHostedApp(app.id);
+    const before = await runtime.health(app.id);
+    await writeFile(join(root, "organizations", "TestCompany", "modules", "demo", "app", "v1", "busy"), "1");
+    const ready = await runtime.ensureHostedApp(app.id, { allowStart: false });
+    expect(ready).toMatchObject({ status: "healthy", runtime: { managed: true, pid: before.pid } });
+    await runtime.stop(app.id);
+    expect(await runtime.ensureHostedApp(app.id, { allowStart: false })).toMatchObject({ status: "stopped" });
+  } finally { await runtime.shutdown(); }
+}, platformTestTimeout(15000));
 
 test("stale hosted health observation cannot undo explicit Stop", async () => {
   const port = await findFreePort();

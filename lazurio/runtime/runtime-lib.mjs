@@ -33,10 +33,10 @@ import {
   repositoryDbWorktreeDependencyForSlot,
 } from "./repository-db-worktree-lib.mjs";
 
-// Shared hosted CPUs can spend several seconds serving a valid application
-// request. A 1.2s probe deadline falsely rejected concurrent browser fetches
-// before ingress could forward them. Keep the check bounded and fail closed.
-const healthTimeoutMs = 5_000;
+const healthTimeoutMs = 1_200;
+// Only an already managed hosted app gets this ingress-readiness budget.
+// Busy shared CPUs must not turn valid background requests into false503s.
+const hostedReadinessTimeoutMs = 5_000;
 const startGraceMs = 30_000;
 const startEarlyExitProbeMs = 1_000;
 // One-click open (CAC-0044): po startu pollujeme health, dokud port neposlouchá,
@@ -1186,7 +1186,7 @@ export function createRuntimeManager({
         throw new RuntimeActionError(404, "app_not_found", "App is not a selected Hosted Team default.");
       }
       const selected = await runtimeAppForAction(appId, { source: entry.source, enforcePortContract: true });
-      const current = await healthForApp(selected);
+      const current = await healthForApp(selected, { hostedReadiness: true });
       if (current.managed && current.status === "healthy") return { status: "healthy", runtime: current };
       if (!allowStart) return { status: current.status === "healthy" ? "unmanaged" : current.status, runtime: current };
       return openRuntimeAppUnlocked(selected);
@@ -3399,7 +3399,7 @@ export function createRuntimeManager({
     return reconciliation;
   }
 
-  async function healthForApp(app) {
+  async function healthForApp(app, { hostedReadiness = false } = {}) {
     const runtimeKey = runtimeKeyForApp(app);
     const runtimeSource = runtimeSourceForApp(app);
     const state = await readState(runtimeKey);
@@ -3409,7 +3409,7 @@ export function createRuntimeManager({
     app = record?.runtimeApp ?? await materializeRuntimeListeners(app);
     const dependencies = await dependencyForApp(app);
     app = appWithRuntimeAuthority(app, dependencies);
-    const probe = await probeHealth(app);
+    const probe = await probeHealth(app, hostedReadiness && record ? hostedReadinessTimeoutMs : healthTimeoutMs);
     // Health probes run outside the lifecycle lock. A completed Stop or
     // replacement while this probe awaited must remain authoritative.
     if (
@@ -4940,7 +4940,7 @@ async function appendLog(logPath, content) {
   await appendFile(logPath, content, "utf8");
 }
 
-async function probeHealth(app) {
+async function probeHealth(app, timeoutMs = healthTimeoutMs) {
   const listener = app?.entrypoint_listener
     ? { ...app.entrypoint_listener, port: app.port }
     : {
@@ -4949,10 +4949,10 @@ async function probeHealth(app) {
         protocol: "http",
         health: { kind: "http", path: app?.health_path },
       };
-  return probeRuntimeListener(listener);
+  return probeRuntimeListener(listener, { timeoutMs });
 }
 
-export async function probeRuntimeListener(listener) {
+export async function probeRuntimeListener(listener, { timeoutMs = healthTimeoutMs } = {}) {
   if (!Number.isInteger(listener?.port)) {
     return { reachable: false, ok: false, error: "module port lease is missing" };
   }
@@ -4960,7 +4960,7 @@ export async function probeRuntimeListener(listener) {
     return probeTcpListener(listener);
   }
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), healthTimeoutMs);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(listenerHealthUrl(listener), {
       cache: "no-store",
