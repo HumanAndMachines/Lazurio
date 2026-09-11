@@ -1,3 +1,4 @@
+import { readHostedWorkspaceInventory } from "./hosted-readiness-lib.mjs";
 import { afterAll, expect, test } from "bun:test";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -73,6 +74,22 @@ test("real discovery preserves Organization defaults and organization-section Te
   const other = response.apps.find(app => app.module === "other-team");
   expect(other.module_apps.declaration.teams).toEqual(["reviewers"]);
   expect(projectHostedAppUrl(other, config).url).toBeNull();
+
+  const readInventory = () => readHostedWorkspaceInventory({
+    companiesRoot: root, launchpadRoot: join(root, "launchpad"), configuration: config,
+  });
+  const readiness = await readInventory();
+  expect(selectHostedWorkspaceApps(config, readiness).apps.map(app => app.module))
+    .toEqual(selected.apps.map(app => app.module));
+  // Inventory never starts/probes a process; target runtime health remains a
+  // separate responsibility of ensureHostedApp. Selection still reads changes.
+  expect(readiness.apps.every(app => app.runtime === undefined)).toBe(true);
+  const manifestPath = join(companyRoot, "modules.manifest.json");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  manifest.module_slots.find(slot => slot.slug === "ordinary").teams = ["reviewers"];
+  await writeJson(manifestPath, manifest);
+  expect(selectHostedWorkspaceApps(config, await readInventory()).apps.map(app => app.module))
+    .toEqual(["mission-control", "team-docs"]);
 });
 
 afterAll(async () => {

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { hostedRequestMayStartApp } from "./hosted-readiness-lib.mjs";
+import { hostedRequestMayStartApp, readHostedWorkspaceInventory } from "./hosted-readiness-lib.mjs";
 import { constants, existsSync, lstatSync, realpathSync } from "fs";
 import { open, readFile } from "fs/promises";
 import { createConnection } from "node:net";
@@ -475,14 +475,8 @@ async function buildAppsResponseUncached({ includeGit = false } = {}) {
 }
 
 async function refreshHostedWorkspaceMaintenance({ warnSkipped = false } = {}) {
-  const inventory = await buildLaunchpadAppsResponse({
-    companiesRoot,
-    rootSourceRoot,
-    launchpadRoot,
-    runtimeManager: { appsWithRuntime: async (apps) => apps },
-    includeGit: false,
-    organization: hostedWorkspace.organization_slug,
-    activeTeamId: hostedWorkspace.team_id,
+  const inventory = await readHostedWorkspaceInventory({
+    companiesRoot, rootSourceRoot, launchpadRoot, configuration: hostedWorkspace,
   });
   const result = syncHostedWorkspaceMaintenance(inventory);
   hostedMaintenance = result;
@@ -1139,6 +1133,17 @@ async function jsonRequestPayload(request, code) {
   }
 }
 
+async function hostedAppForReadiness(appId) {
+  const inventory = await readHostedWorkspaceInventory({
+    companiesRoot, rootSourceRoot, launchpadRoot, configuration: hostedWorkspace,
+  });
+  // Preserve fresh Team/default selection, including removals and invalid
+  // bindings. Runtime ensure still validates target source, ports and health.
+  syncHostedWorkspaceMaintenance(inventory);
+  return selectHostedWorkspaceApps(hostedWorkspace, inventory).apps
+    .find((app) => app.id === appId) ?? null;
+}
+
 async function handleRuntimeRoute(request, route) {
   let hostedProjectionApp = null;
   try {
@@ -1148,7 +1153,9 @@ async function handleRuntimeRoute(request, route) {
         })
       : {};
     hostedProjectionApp = hostedWorkspace.profile === "hosted"
-      ? (await buildAppsResponse()).apps.find((app) => app.id === route.appId) ?? null
+      ? route.action === "ensure"
+        ? await hostedAppForReadiness(route.appId)
+        : (await buildAppsResponse()).apps.find((app) => app.id === route.appId) ?? null
       : { id: route.appId };
     if (hostedWorkspace.profile === "hosted" && !hostedProjectionApp) {
       throw new RuntimeActionError(
