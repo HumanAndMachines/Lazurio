@@ -94,6 +94,28 @@ test("durable Stop selects one managed module runtime and rejects true ambiguity
   );
 });
 
+test("HTTP health tolerates a busy listener but still rejects a stalled one", async () => {
+  let stall = false;
+  const server = Bun.serve({
+    hostname: "127.0.0.1", port: 0,
+    async fetch() {
+      if (stall) return new Promise(() => {});
+      await Bun.sleep(1500);
+      return new Response("ready");
+    },
+  });
+  const listener = runtimeListener("api", "primary", server.port, {
+    protocol: "http", health: { kind: "http", path: "/" },
+  });
+  try {
+    expect(await probeRuntimeListener(listener)).toEqual({ reachable: true, ok: true, status_code: 200 });
+    stall = true;
+    const start = Date.now();
+    expect(await probeRuntimeListener(listener)).toEqual({ reachable: false, ok: false, error: "timeout" });
+    expect(Date.now() - start).toBeLessThan(6500);
+  } finally { server.stop(true); }
+}, 10000);
+
 test("TCP listener health používá skutečné spojení místo HTTP předpokladu", async () => {
   const server = createServer();
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));

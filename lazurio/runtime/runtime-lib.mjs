@@ -33,7 +33,10 @@ import {
   repositoryDbWorktreeDependencyForSlot,
 } from "./repository-db-worktree-lib.mjs";
 
-const healthTimeoutMs = 1_200;
+// Shared hosted CPUs can spend several seconds serving a valid application
+// request. A 1.2s probe deadline falsely rejected concurrent browser fetches
+// before ingress could forward them. Keep the check bounded and fail closed.
+const healthTimeoutMs = 5_000;
 const startGraceMs = 30_000;
 const startEarlyExitProbeMs = 1_000;
 // One-click open (CAC-0044): po startu pollujeme health, dokud port neposlouchá,
