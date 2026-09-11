@@ -67,6 +67,7 @@ jobs:
         run: bun run check
       - name: Diagnose failed Windows process identity probe
         if: failure() && runner.os == 'Windows'
+        timeout-minutes: 2
         shell: pwsh
         run: |
           @'
