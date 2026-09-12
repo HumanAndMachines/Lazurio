@@ -1,5 +1,8 @@
 # Architektura Lazuria
 
+> **Buddy target update (2026-09-12).** The current product direction is documented in [the hosted Buddy manual](manual/hosted-buddy-vps.md). Existing pinned dependencies and provisioning mechanics below describe the implemented baseline until a separately verified migration; mandatory Zulip/bridge and VPS-only placement are not requirements for new Buddy product design. This documentation change does not alter runtime behavior.
+
+
 Tento dokument je krátká mapa cílového systému. Popisuje jeho hlavní části,
 hranice a pravidla. Neobsahuje podrobný provozní postup ani úplný popis
 současné implementace.

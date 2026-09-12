@@ -1,5 +1,8 @@
 # Lazurio resident distributions
 
+> **Buddy target update (2026-09-12).** The current product direction is documented in [the hosted Buddy manual](../manual/hosted-buddy-vps.md). Existing pinned dependencies and provisioning mechanics below describe the implemented baseline until a separately verified migration; mandatory Zulip/bridge and VPS-only placement are not requirements for new Buddy product design. This documentation change does not alter runtime behavior.
+
+
 Tato vrstva skládá celý non-Git Lazurio Root z exact commitu společného source.
 Sdílený produkt zůstává v běžných adresářích rootu; nevzniká paralelní
 `common/` strom. Pod `distribution/` žijí pouze build kontrakt, profilové
