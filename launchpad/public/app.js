@@ -1641,6 +1641,7 @@ function applyLaunchpadHash({ notify = false } = {}) {
 
   if (resolution.surface === "guide") {
     state.activeSurface = "guide";
+    selectGuideTopic("glossary");
     resetSpaceSelection();
     return false;
   }
