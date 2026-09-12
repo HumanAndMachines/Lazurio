@@ -117,17 +117,31 @@ export function isValidGitHubRoleReadiness(value) {
     && (value.status === "ready") === (value.blockers.length === 0);
 }
 
+// Builder gate dokazuje vedle efektivního oprávnění i Teamový grant přes
+// immutable forge binding business Teamů. Steward gate business Team
+// identitu záměrně nepoužívá: Steward je governance role Organizace, jeho
+// oprávnění skládá GitHub z živých grantů a manifestové business Teamy ani
+// jejich forge binding nejsou jeho autorizační identita. Gate proto ověří jen
+// aktivní Organization membership a efektivní WRITE/MAINTAIN/ADMIN na
+// vybraných běžných repozitářích; žádný binding se neodhaduje podle slugu.
+function roleUsesTeamBinding(role) {
+  return role === "builder";
+}
+
 function roleAccessPlan({ organization, rootRepository, resource, role }) {
   const blockers = [];
   const teamDefinitions = Array.isArray(resource?.teams) ? resource.teams : [];
+  const usesTeamBinding = roleUsesTeamBinding(role);
   const defaultTeams = teamDefinitions.filter((team) => team?.default === true);
   const fallbackWorkspace = teamDefinitions.filter((team) => team?.slug === "workspace");
-  const defaultTeam = defaultTeams.length === 1
-    ? defaultTeams[0]
-    : defaultTeams.length === 0 && fallbackWorkspace.length === 1
-      ? fallbackWorkspace[0]
-      : null;
-  if (!defaultTeam) {
+  const defaultTeam = !usesTeamBinding
+    ? null
+    : defaultTeams.length === 1
+      ? defaultTeams[0]
+      : defaultTeams.length === 0 && fallbackWorkspace.length === 1
+        ? fallbackWorkspace[0]
+        : null;
+  if (usesTeamBinding && !defaultTeam) {
     blockers.push(blocker(
       "default_team_ambiguous",
       `Organization manifest musí deklarovat právě jeden výchozí Team pro ${roleLabel(role)} root přístup.`,
@@ -154,11 +168,13 @@ function roleAccessPlan({ organization, rootRepository, resource, role }) {
       ));
       continue;
     }
-    const teamSlugs = Array.isArray(slot?.teams) && slot.teams.length > 0
-      ? [...new Set(slot.teams)]
-      : defaultTeam
-        ? [defaultTeam.slug]
-        : [];
+    const teamSlugs = !usesTeamBinding
+      ? []
+      : Array.isArray(slot?.teams) && slot.teams.length > 0
+        ? [...new Set(slot.teams)]
+        : defaultTeam
+          ? [defaultTeam.slug]
+          : [];
     addRepositoryPlan(repositories, blockers, {
       fullName: coordinate.ownerRepo,
       expectedId: null,
