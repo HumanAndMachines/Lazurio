@@ -787,15 +787,14 @@ function normalizeStringSet(values) {
   return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
 
-function normalizedTeamMemberships(item, defaultTeam) {
-  if (Array.isArray(item.teams) && item.teams.length > 0) {
-    return normalizeStringSet(item.teams);
-  }
-  if (Array.isArray(item.workspaces) && item.workspaces.length > 0) {
-    return normalizeStringSet(item.workspaces);
-  }
+export function normalizedTeamMemberships(item, defaultTeam) {
+  // Presence is authoritative; an empty canonical array means the default.
+  // Preserve order because the first Team feeds the legacy primary workspace.
+  const fallback = defaultTeam ? [defaultTeam] : [];
+  if (Array.isArray(item.teams)) return item.teams.length ? [...item.teams] : fallback;
+  if (Array.isArray(item.workspaces) && item.workspaces.length > 0) return [...item.workspaces];
   if (typeof item.workspace === "string" && item.workspace !== "") return [item.workspace];
-  return [defaultTeam];
+  return fallback;
 }
 
 function arraysEqual(left, right) {
