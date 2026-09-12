@@ -44,7 +44,7 @@ frameworku se sem nepřenášejí).
 | 0063 | Worker Agent pracuje jen v explicitně autorizovaném tasku pod dozorem; drafty schvaluje persona s pravomocí (Kolega nebo AI Kolega — gate je pravomoc, ne rozdíl člověk vs. AI). |
 | 0077 | OrganizationTemplate rename a template-first flow; template identitu určuje validovaný `organization_kind` marker, runtime ji vyloučí a neodvozuje ji z názvu. Původní top-level mount lokaci superseduje 0127. |
 | 0079 | Personalspace self-service vzniká z veřejného `PersonalspaceTemplate_GEN3`; reálná instance je vždy privátní repo vlastníka. |
-| 0080 | Buddy runtime běží výhradně na dedikované VPS vlastníka; localhost není instalační volba ani fallback. |
+| 0080 | Historický VPS-only Buddy baseline. Produktový směr 2026-09-12 rozšiřuje umístění na per-owner VM, vlastní VPS nebo hardware; viz `manual/hosted-buddy-vps.md`. Lokální profilový mount není runtime a aktuální instalace vyžadují ověřenou migraci. |
 | 0089 | Buddy je důvěryhodný osobní zástupce lidského Principála: morální kontrakt (`CONSTITUTION.md`) + trvalé, scoped, odvolatelné mandáty (`MANDATES.md`); transakčně specifické gates mandát nikdy nenahrazuje a Buddy si mandát sám nevydá. |
 | 0090 | Slovník person: Worker Agent je kanonický pojem pro execution session bez pravomocí; „Agent" je hovorová zkratka. |
 | 0091 | Security hranice: Personalspace patří výhradně jednomu Principálovi (+ volitelný Buddy); Principál plně ovládá svou mašinu; GitHub je jediná autorita Workspace source přístupů; repo modulu je nejmenší access hranice. |
