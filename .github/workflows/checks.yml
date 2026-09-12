@@ -65,6 +65,31 @@ jobs:
           $bin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - name: Launchpad discovery check + testy
         run: bun run check
+      - name: Diagnose failed Windows process identity probe
+        if: failure() && runner.os == 'Windows'
+        timeout-minutes: 2
+        shell: pwsh
+        run: |
+          @'
+          import { execFileSync } from "node:child_process";
+          import { windowsModuleLockProcessIdentityCommand } from "./lazurio/runtime/module-runtime-lock-lib.mjs";
+          const command = windowsModuleLockProcessIdentityCommand(process.pid);
+          const started = Date.now();
+          const child = Bun.spawn(command, { stdout: "pipe", stderr: "pipe", windowsHide: true });
+          const timer = setTimeout(() => child.kill(), 20000);
+          try {
+            const [exit, stdout, stderr] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
+            console.log(JSON.stringify({ probe: "bun", elapsed_ms: Date.now() - started, exit, stdout: stdout.slice(0, 500), stderr: stderr.slice(0, 500) }));
+          } finally { clearTimeout(timer); }
+          const next = Date.now();
+          try {
+            const stdout = execFileSync(command[0], command.slice(1), { encoding: "utf8", timeout: 20000, windowsHide: true });
+            console.log(JSON.stringify({ probe: "node-api", elapsed_ms: Date.now() - next, stdout: stdout.slice(0, 500) }));
+          } catch (error) {
+            console.log(JSON.stringify({ probe: "node-api", elapsed_ms: Date.now() - next, code: error.code, signal: error.signal }));
+          }
+          '@ | Set-Content -Encoding utf8 diagnose-process-identity.mjs
+          bun diagnose-process-identity.mjs
 
   guide-build:
     name: guide app build

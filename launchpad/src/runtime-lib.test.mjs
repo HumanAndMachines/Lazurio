@@ -94,6 +94,28 @@ test("durable Stop selects one managed module runtime and rejects true ambiguity
   );
 });
 
+test("HTTP health tolerates a busy listener but still rejects a stalled one", async () => {
+  let stall = false;
+  const server = Bun.serve({
+    hostname: "127.0.0.1", port: 0,
+    async fetch() {
+      if (stall) return new Promise(() => {});
+      await Bun.sleep(1500);
+      return new Response("ready");
+    },
+  });
+  const listener = runtimeListener("api", "primary", server.port, {
+    protocol: "http", health: { kind: "http", path: "/" },
+  });
+  try {
+    expect(await probeRuntimeListener(listener, { timeoutMs: 5000 })).toEqual({ reachable: true, ok: true, status_code: 200 });
+    stall = true;
+    const start = Date.now();
+    expect(await probeRuntimeListener(listener, { timeoutMs: 5000 })).toEqual({ reachable: false, ok: false, error: "timeout" });
+    expect(Date.now() - start).toBeLessThan(6500);
+  } finally { server.stop(true); }
+}, 10000);
+
 test("TCP listener health používá skutečné spojení místo HTTP předpokladu", async () => {
   const server = createServer();
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -749,6 +771,76 @@ test("dynamic auxiliary listener is rejected before Launchpad starts a process",
     code: "runtime_listener_not_static",
     metadata: { failure_kind: "dynamic_runtime_listener_forbidden" },
   });
+});
+
+test("concurrent runtime reads share discovery but observe a removed app on the next read", async () => {
+  const root = await createCompaniesWorkspaceFixture({ port: await findFreePort() });
+  const app = fixtureDiscoveryApp({ port: 3100 });
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  let calls = 0;
+  let apps = [app];
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    discover: async () => {
+      calls += 1;
+      await gate;
+      return { apps, invalid_apps: [], failures: [], warnings: [] };
+    },
+  });
+  const reads = Array.from({ length: 8 }, () => runtime.logs(app.id));
+  await Promise.resolve();
+  expect(calls).toBe(1);
+  release();
+  expect((await Promise.all(reads)).every((result) => result.app_id === app.id)).toBe(true);
+  apps = [];
+  await expect(runtime.logs(app.id)).rejects.toMatchObject({ code: "app_not_found" });
+  expect(calls).toBe(2);
+});
+
+test("failed discovery is retried and is not shared across runtime managers", async () => {
+  const root = await createCompaniesWorkspaceFixture({ port: await findFreePort() });
+  const app = fixtureDiscoveryApp({ port: 3100 });
+  let calls = 0;
+  let fail = true;
+  const options = {
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    discover: async () => {
+      calls += 1;
+      if (fail) throw new Error("inventory unavailable");
+      return { apps: [app], invalid_apps: [], failures: [], warnings: [] };
+    },
+  };
+  const first = createRuntimeManager(options);
+  const second = createRuntimeManager(options);
+  const results = await Promise.allSettled([first.logs(app.id), second.logs(app.id)]);
+  expect(results.map((result) => result.status)).toEqual(["rejected", "rejected"]);
+  expect(calls).toBe(2);
+  fail = false;
+  expect((await first.logs(app.id)).app_id).toBe(app.id);
+  expect(calls).toBe(3);
+});
+
+test("concurrent actions keep Organization discovery scopes separate", async () => {
+  const root = await createCompaniesWorkspaceFixture({ port: await findFreePort() });
+  const first = fixtureDiscoveryApp({ port: 3100 });
+  const second = fixtureDiscoveryApp({ port: 3101, overrides: {
+    id: "other-company-demo-v1", company: "other-company", organization_path: "organizations/OtherCompany",
+  } });
+  const scopes = [];
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    discover: async (_root, options) => {
+      scopes.push(options?.organization ?? "global");
+      return { apps: [first, second], invalid_apps: [], failures: ["invalid declaration"], warnings: [] };
+    },
+  });
+  const results = await Promise.allSettled([runtime.start(first.id), runtime.start(second.id)]);
+  expect(scopes).toEqual(["global", first.company, second.company]);
+  expect(results.map((result) => result.reason?.code)).toEqual(["invalid_discovery", "invalid_discovery"]);
 });
 
 test("runtime action isolates a discovery failure from another Organization", async () => {
@@ -4638,6 +4730,31 @@ test("hosted inventory stays cold until Open, supports Stop and retires removed 
     await runtime.shutdown();
   }
 }, platformTestTimeout(15_000));
+
+test("hosted background readiness accepts a busy managed app without reopening it", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port, serverSource: `
+    import { existsSync } from "fs";
+    Bun.serve({ hostname: "127.0.0.1", port: ${port}, async fetch() {
+      if (existsSync("busy")) await Bun.sleep(1500);
+      return new Response("ready");
+    }});
+  ` });
+  const app = withStaticEntrypoint(fixtureDiscoveryApp({ port }));
+  const runtime = createRuntimeManager({ companiesRoot: root, launchpadRoot: join(root, "launchpad"),
+    instanceId: "hosted-busy-readiness", lifecycleProfile: "hosted",
+    discover: discoveryWithApp(app), maintenanceIntervalMs: 60_000 });
+  try {
+    runtime.maintainApps([app]);
+    await runtime.ensureHostedApp(app.id);
+    const before = await runtime.health(app.id);
+    await writeFile(join(root, "organizations", "TestCompany", "modules", "demo", "app", "v1", "busy"), "1");
+    const ready = await runtime.ensureHostedApp(app.id, { allowStart: false });
+    expect(ready).toMatchObject({ status: "healthy", runtime: { managed: true, pid: before.pid } });
+    await runtime.stop(app.id);
+    expect(await runtime.ensureHostedApp(app.id, { allowStart: false })).toMatchObject({ status: "stopped" });
+  } finally { await runtime.shutdown(); }
+}, platformTestTimeout(15000));
 
 test("stale hosted health observation cannot undo explicit Stop", async () => {
   const port = await findFreePort();
