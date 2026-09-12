@@ -1,5 +1,8 @@
 # Buddy a AI Kolega v Lazuriu
 
+> **Buddy migration boundary (2026-09-12).** This page describes the implemented resident distribution, including its existing Zulip/bridge dependencies. The [new Buddy product target](hosted-buddy-vps.md) uses standard Hermes channels and does not require those components. Keep installed-runtime checks until a separately verified migration; do not apply this historical dependency list as requirements for new product design.
+
+
 Lazurio je pracovní prostředí, ve kterém lidé a stroje používají stejné
 Organizace, nástroje a dohledatelné procesy. Buddy a AI Kolega nejsou dvě kopie
 Lazuria ani dlouhodobé Git branche. Jsou to dva profily jednoho produktu,
