@@ -96,18 +96,14 @@ test("English covers loading, warnings, recovery, personalspace and worktree cop
   expect(t("worktree.created", { app: "Infra", worktree: "DEV-1" })).toBe("Infra: worktree created (DEV-1).");
 });
 
-test("English covers the complete Guide shell, statuses, glossary and recommendations", () => {
+test("English covers the complete Guide shell, glossary and recommendations", () => {
   setLocale("en", { storage: null });
-  expect(t("guide.navigation.installation")).toBe("Set up a new Machine");
-  expect(t("guide.install.roles.agent.title")).toBe("What the Agent handles");
-  expect(t("guide.install.prompt.loading")).toBe("Loading the current prompt from the installation manual…");
-  expect(t("guide.install.prompt.error")).toContain("could not be loaded safely");
-  expect(t("guide.install.prompt.copyFailed")).toContain("copy it manually");
+  expect(t("guide.navigation.glossary")).toBe("Glossary");
   expect(t("guide.term.organization.label")).toBe("Organization");
   expect(t("guide.term.machine.label")).toBe("Machine");
   expect(t("guide.term.plugin.body")).toContain("does not automatically grant access");
   expect(t("guide.apps.browserUse.caution")).toContain("still require your confirmation");
-  expect(Object.keys(en).filter((key) => key.startsWith("guide.")).length).toBeGreaterThan(120);
+  expect(Object.keys(en).filter((key) => key.startsWith("guide.")).length).toBeGreaterThan(90);
 });
 
 test("Czech outgoing changes resolve the few plural category", () => {
