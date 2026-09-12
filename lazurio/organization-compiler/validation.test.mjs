@@ -780,7 +780,7 @@ describe("organization config validation", () => {
   test("accepts the transitional plural membership alias without losing N:M intent", async () => {
     const documents = createValidDocuments();
     documents.companyConfig.modules[0].workspaces = ["sales", "workspace"];
-    documents.modulesManifest.module_slots[0].workspaces = ["workspace", "sales"];
+    documents.modulesManifest.module_slots[0].workspaces = ["sales", "workspace"];
 
     const result = await validateOrganizationDocuments(documents);
 

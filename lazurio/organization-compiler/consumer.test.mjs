@@ -124,3 +124,38 @@ test("child db uses active mount identity and refuses missing parent and non-db 
   manifest.module_slots[0].status="planned_slot";await save();
   await expect(compileOrganization({organizationRoot:review,write:true})).rejects.toThrow("validací");
 });
+
+test("empty canonical teams suppress stale aliases in both generated projections", async () => {
+  const { review } = await fixture();
+  const company = await Bun.file(join(review, "company.gen3.json")).json();
+  const manifest = await Bun.file(join(review, "modules.manifest.json")).json();
+  company.teams = [{ slug: "a", display_name: "A", default: true }, { slug: "b", display_name: "B" }];
+  delete company.workspaces;
+  company.modules[0].teams = [];
+  company.modules[0].workspaces = ["b"];
+  manifest.module_slots[0].teams = [];
+  manifest.module_slots[0].workspaces = ["b"];
+  await Bun.write(join(review, "company.gen3.json"), JSON.stringify(company));
+  await Bun.write(join(review, "modules.manifest.json"), JSON.stringify(manifest));
+  await compileOrganization({ organizationRoot: review, write: true });
+  const index = await Bun.file(join(review, "generated/modules.index.json")).json();
+  expect(index.modules[0].teams).toEqual(["a"]);
+  expect(index.manifest_slots[0].teams).toEqual(["a"]);
+  expect(index.modules[0].workspace).toBe("a");
+  expect(index.manifest_slots[0].workspace).toBe("a");
+  expect((await compileOrganization({ organizationRoot: review, write: true })).changed_target_count).toBe(0);
+});
+
+test("different canonical primary-Team order fails before generating outputs", async () => {
+  const { review } = await fixture();
+  const company = await Bun.file(join(review, "company.gen3.json")).json();
+  const manifest = await Bun.file(join(review, "modules.manifest.json")).json();
+  company.teams = [{ slug: "a", display_name: "A", default: true }, { slug: "b", display_name: "B" }];
+  delete company.workspaces;
+  company.modules[0].teams = ["a", "b"];
+  manifest.module_slots[0].teams = ["b", "a"];
+  await Bun.write(join(review, "company.gen3.json"), JSON.stringify(company));
+  await Bun.write(join(review, "modules.manifest.json"), JSON.stringify(manifest));
+  await expect(compileOrganization({ organizationRoot: review, write: true })).rejects.toThrow("schema/semantic validací");
+  expect(await Bun.file(join(review, "generated/modules.index.json")).exists()).toBe(false);
+});
