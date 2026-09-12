@@ -6,7 +6,7 @@ import { delimiter, isAbsolute, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { validateAgainstSchema } from "../lazurio/runtime/json-schema-mini.mjs";
-import { trustedGitExecutable } from "../scripts/agent-skills-entrypoint.mjs";
+import { resolveGitExecutableOnPath } from "../lazurio/core/toolchain-lib.mjs";
 import {
   buildResidentArtifact,
   createDeterministicTar,
@@ -458,7 +458,7 @@ async function isolatedRepositoryFixture() {
 }
 
 function runTrustedGit(cwd, args) {
-  const executable = trustedGitExecutable();
+  const executable = resolveGitExecutableOnPath();
   if (!executable) throw new Error("test requires Git from a trusted system-owned path");
   const result = spawnSync(executable, args, {
     cwd,

@@ -154,10 +154,11 @@ privátní klíč se nevypisuje a po nápravě se opakuje `git ls-remote`, ne ce
 GitHub login. Podrobný owner/Builder postup drží
 [`manual/organization-install.md`](organization-install.md).
 
-Na Windows se kvůli skills nezapíná Developer Mode. `.agents/skills` je source
-a `.claude/skills` jeho Git-tracked exact mirror; žádný symlink, junction ani
-per-worktree lokální materializátor nevzniká. Paritu dokazuje
-`bun run doctor:agent-skills`.
+Na Windows se kvůli skills nezapíná Developer Mode. `.agents/skills` je jediný
+autorský zdroj a `.claude/skills` jeho Git-tracked bajtově shodná kopie
+(generovaný artefakt jako lockfile); žádný symlink, junction ani per-worktree
+lokální materializátor nevzniká. Shodu dokazuje `bun run skills:check`; po
+změně skillu ji obnoví `bun run skills:sync` a commit.
 
 Když onboarding odhalí reprodukovatelný problém, nenechá jej Agent jen v
 chatu. Vybere přesný owning repo a postupuje podle

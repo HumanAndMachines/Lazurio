@@ -456,11 +456,12 @@ Root upravuj jen když se mění:
   decision 0049 (`manual/decision-register.md`) a shaping manual
   `manual/worktree-management.md`
 - Základní agentní skill balíček: `.agents/skills/` (registry
-  `manifest.json`); `.claude/skills` je Git-tracked byte-for-byte mirror
-  aktivních skillů (decision 0104 v manual/decision-register.md) —
-  paritu hlídá `bun run doctor:agent-skills`; `bun run repair:agent-skills`
-  je pouze fail-closed no-write diagnostika a drift vrací k explicitní
-  Git-reviewované opravě v task worktree
+  `manifest.json`); `.claude/skills` je Git-tracked bajtově shodná kopie
+  celého `.agents/skills` — generovaný artefakt jako lockfile (rozhodnutí
+  2026-09-08 v manual/decision-register.md, nahrazuje repair lane 0104).
+  Po každé změně skillu spusť `bun run skills:sync` a kopii commitni;
+  `bun run skills:check` (součást `bun run check` a CI) failuje na každém
+  rozdílu nebo symlinku jedinou hláškou
 - Sdílený Launchpad: `launchpad/`
 - Sdílený Guide: `guide/`
 - Organizace: lokální gitignored nested repos v `organizations/<org>/`; root repo trackuje jen `organizations/README.md`
