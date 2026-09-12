@@ -1,0 +1,972 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rozjedeme.ai/schemas/company.gen3.schema.json",
+  "title": "Organization GEN3 configuration",
+  "type": "object",
+  "required": [
+    "company",
+    "business_context",
+    "governance",
+    "glossary_contract",
+    "access_governance",
+    "colleague_overlays",
+    "generation_policy",
+    "layers"
+  ],
+  "properties": {
+    "organization_generation": {
+      "const": "gen3",
+      "description": "Kanonický klíč generace Organizace (CAC-0016). Nahrazuje historický workspace_generation."
+    },
+    "workspace_generation": {
+      "const": "gen3",
+      "description": "Deprecated alias organization_generation — historický název pole z dob, kdy workspace znamenal celé super-repo (GEN2). Odstraní se po migraci konzumentů (task-2026-06-12-017)."
+    },
+    "organization_kind": {
+      "enum": [
+        "organization",
+        "template"
+      ],
+      "default": "organization",
+      "description": "Strojový marker druhu checkoutu, nezávislý na jeho fyzickém umístění (decisions 0077/0127). `organization` (default) je běžná Organizace s runtime, business přehledy i org počty. `template` označuje šablonu Organizace (např. OrganizationTemplate_GEN3): legacy top-level template mount Launchpad/Doctor validují jako Organizaci, ale vylučují z runtime akcí, business přehledů a org počtů; current pracovní checkout podle decision 0127 žije jako nested repo v productionspace Admin Organizace a není samostatný Organization mount. Jeho marker, strukturu a manifest validují explicitní template/compiler gates. Chybějící pole = organization (zpětná kompatibilita)."
+    },
+    "template_sync_role": {
+      "enum": [
+        "consumer"
+      ],
+      "default": "consumer",
+      "description": "Consumer generation only; template source publication is a separate tool and authority."
+    },
+    "template_sync_authorization": {
+      "not": {},
+      "description": "Organization-specific template source authorization belongs to the separate template publisher. Not accepted by this consumer compiler."
+    },
+    "company": {
+      "type": "object",
+      "required": [
+        "slug",
+        "display_name",
+        "github_org"
+      ],
+      "properties": {
+        "slug": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9-]*$",
+          "description": "Kanonický Organization slug v ownerem potvrzeném přesném zápisu velkých a malých písmen čisté brand identity (např. AgentMint, Rozjedeme-ai, ExampleOrg, AVALTAR-HAM). Agent jej nesmí title-case ani lowercase normalizovat; porovnává se case-sensitive. Module a Team slugy zůstávají lowercase."
+        },
+        "display_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "github_org": {
+          "type": "string",
+          "minLength": 1
+        },
+        "root_repository": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9](?:-?[A-Za-z0-9])*/[A-Za-z0-9][A-Za-z0-9._-]*_GEN3(?![\\s\\S])",
+          "description": "Potvrzená GitHub owner/repo identita remote-active Organization rootu. V local-first stavu se pole úplně vynechává."
+        },
+        "repository": {
+          "type": "string",
+          "pattern": "^(?:git@github\\.com:|https://github\\.com/|ssh://git@github\\.com/)[A-Za-z0-9](?:-?[A-Za-z0-9])*/[A-Za-z0-9][A-Za-z0-9._-]*_GEN3(?:\\.git)?/?(?![\\s\\S])",
+          "description": "Přesná credential-free GitHub fetch URL remote-active Organization rootu. V local-first stavu se pole úplně vynechává; lokální Doctor/Repair ji váže na raw a efektivní origin."
+        }
+      },
+      "additionalProperties": true
+    },
+    "business_context": {
+      "type": "object",
+      "required": [
+        "revenue_drivers",
+        "customer_segments",
+        "value_propositions",
+        "decision_rules"
+      ],
+      "properties": {
+        "revenue_drivers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "slug",
+              "description"
+            ],
+            "properties": {
+              "slug": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "priority": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "customer_segments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "slug",
+              "description"
+            ],
+            "properties": {
+              "slug": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "value_propositions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "slug",
+              "description"
+            ],
+            "properties": {
+              "slug": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "decision_rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "trigger",
+              "rule"
+            ],
+            "properties": {
+              "trigger": {
+                "type": "string"
+              },
+              "rule": {
+                "type": "string"
+              },
+              "owner": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "risks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "slug",
+              "description"
+            ],
+            "properties": {
+              "slug": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "escalation": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "metrics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "slug",
+              "description"
+            ],
+            "properties": {
+              "slug": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "governance": {
+      "type": "object",
+      "required": [
+        "default_branch",
+        "update_model",
+        "file_ownership"
+      ],
+      "properties": {
+        "default_branch": {
+          "type": "string",
+          "default": "main"
+        },
+        "update_model": {
+          "enum": [
+            "forkable-template",
+            "standalone"
+          ]
+        },
+        "file_ownership": {
+          "type": "object",
+          "required": [
+            "managed",
+            "override",
+            "manual"
+          ],
+          "properties": {
+            "managed": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "derived": {
+              "type": "array",
+              "description": "Soubory deterministicky regenerované z cílového source of truth. Při template syncu se nekopírují verbatim; každý soubor smí odpovídat právě jedné z klasifikací managed/derived/override/manual. Pole je schema-optional pouze jako dočasná kompatibilita pro starší GEN3 forky; nové a přemigrované Organizace ho musí deklarovat.",
+              "items": {
+                "type": "string"
+              }
+            },
+            "override": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "manual": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "glossary_contract": {
+      "type": "object",
+      "required": [
+        "source",
+        "agent_rule",
+        "required_term_fields"
+      ],
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "agent_rule": {
+          "type": "string"
+        },
+        "required_term_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "owners": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "access_governance": {
+      "type": "object",
+      "required": [
+        "source_of_truth",
+        "admin_boundary",
+        "agent_rule"
+      ],
+      "properties": {
+        "source_of_truth": {
+          "const": "infra/access"
+        },
+        "admin_boundary": {
+          "type": "string"
+        },
+        "agent_rule": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "colleague_overlays": {
+      "type": "object",
+      "required": [
+        "path",
+        "folder_name_rule",
+        "gitignored_local_paths",
+        "agent_rule"
+      ],
+      "properties": {
+        "path": {
+          "const": "company/colleagues"
+        },
+        "folder_name_rule": {
+          "type": "string"
+        },
+        "gitignored_local_paths": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "allOf": [
+            {
+              "contains": {
+                "const": "archive/"
+              }
+            },
+            {
+              "contains": {
+                "const": "private/"
+              }
+            }
+          ]
+        },
+        "agent_rule": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "generation_policy": {
+      "type": "object",
+      "required": [
+        "prototype_rule",
+        "application_versions",
+        "data_versions",
+        "migration_rules"
+      ],
+      "properties": {
+        "prototype_rule": {
+          "type": "string"
+        },
+        "application_versions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "version",
+              "purpose"
+            ],
+            "properties": {
+              "version": {
+                "type": "string"
+              },
+              "purpose": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "data_versions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "namespace",
+              "source_of_truth"
+            ],
+            "properties": {
+              "namespace": {
+                "type": "string"
+              },
+              "source_of_truth": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "migration_rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "rule"
+            ],
+            "properties": {
+              "rule": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "teams": {
+      "description": "Roster pojmenovaných Teamů — logických skupin modulů a lidí uvnitř Organizace (stejný pojem jako GitHub Team; historicky Oddělení/Space/Workspace-skupina). Team nemá vlastní adresář: moduly žijí ploše v workspace/<repo-name>, jejich stabilní slug je samostatná identita a N:M membership deklaruje modules[].teams. Roster má právě jeden deklarovaný default; bez rosteru se používá implicitní Team `workspace`, explicitní brandový default může mít jiný slug (ExampleOrg `launchpad`, decision 0048). Hosted vzor je <modul>.<team>.<doména>. `productionspace` je v rosteru i membership zakázaný; semantic validator vynucuje default, reference a cross-file shodu (decisions 0040/0041/0062/0063/0067/0125).",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "slug",
+          "display_name"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string",
+            "pattern": "^(?!productionspace$)[a-z0-9][a-z0-9-]*$",
+            "description": "Slug Teamu; `productionspace` je rezervovaný org-level slug (0041 bod 6) a nesmí být položkou rosteru."
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string",
+            "description": "Deprecated compatibility metadata. Team grouping se podle decision 0041 neodvozuje z této cesty, ale z modules[].teams; fyzický modul vždy žije v workspace/<repo-name>/ a stabilní module slug se z basename cesty neodvozuje (decision 0125)."
+          },
+          "default": {
+            "type": "boolean",
+            "description": "Právě jeden deklarovaný Team smí být default. Bez rosteru je implicitní fallback se slugem `workspace`; explicitní brandový default může mít jiný slug (např. ExampleOrg `launchpad`, decision 0048)."
+          },
+          "description": {
+            "type": "string",
+            "description": "Lidský popis Teamu (tým/značka, co pokrývá)."
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "workspaces": {
+      "description": "DEPRECATED alias rosteru `teams[]` (stejný tvar položky). Historický název z doby, kdy se skupina jmenovala „Workspace“; reálné manifesty ho zatím používají, proto zůstává. Nové manifesty deklarují Teamy přes teams[]. Pokud je přítomné i teams[], roster je union obou.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "slug",
+          "display_name"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string",
+            "pattern": "^(?!productionspace$)[a-z0-9][a-z0-9-]*$",
+            "description": "Slug Teamu; `productionspace` je rezervovaný org-level slug (0041 bod 6) a nesmí být položkou rosteru."
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "default": {
+            "type": "boolean",
+            "description": "Právě jeden deklarovaný Team smí být default. Bez rosteru je implicitní fallback se slugem `workspace`; explicitní brandový default může mít jiný slug (např. ExampleOrg `launchpad`, decision 0048)."
+          },
+          "description": {
+            "type": "string",
+            "description": "Lidský popis Teamu (tým/značka, co pokrývá)."
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "layers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "path",
+          "kind",
+          "ownership"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "kind": {
+            "description": "Druh vrstvy Organizace. Kanonická plánovací vrstva na cestě mission-control/ používá `mission-control`; `root-docs` zůstává jen pro obecné root dokumenty. Kanonická vrstva workspace modulů je `workspace` (plochá složka workspace/, decision 0041). Hodnota `modules` je DEPRECATED tranzitní pojmenování pre-0041 nested layoutu — doctor ji flaguje jako migrační TODO.",
+            "enum": [
+              "root-docs",
+              "company-shell",
+              "launchpad",
+              "mission-control",
+              "design-system",
+              "guide",
+              "manual",
+              "modules",
+              "infra",
+              "workspace",
+              "productionspace"
+            ]
+          },
+          "ownership": {
+            "enum": [
+              "managed",
+              "override",
+              "manual"
+            ]
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "path": {
+                  "const": "mission-control"
+                }
+              },
+              "required": [
+                "path"
+              ]
+            },
+            "then": {
+              "properties": {
+                "kind": {
+                  "const": "mission-control"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "mission-control"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "properties": {
+                "path": {
+                  "const": "mission-control"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "modules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "slug",
+          "path",
+          "repo",
+          "category",
+          "source_of_truth",
+          "access"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "description": "Stabilní lowercase identifikátor modulu pro manifesty, vazby a UI. Není odvozený z názvu repozitáře ani z basename fyzické cesty a při přejmenování repozitáře se automaticky nemění (decision 0125)."
+          },
+          "path": {
+            "type": "string",
+            "description": "Fyzická složka modulu uvnitř Organizace. Kanonicky `workspace/<repo-name>` (modul v pracovní vrstvě) nebo `productionspace/<repo-name>` (org-level repo mimo workspace, decision 0041 bod 6). Basename zachovává explicitně deklarovaný zápis názvu repozitáře včetně velkých písmen a podtržítek; nesmí být normalizovaný podle lowercase `slug`. Nové HumanAndMachine mounty používají providerový repo basename přesně, historické aliasy zůstávají validní do explicitní migrace (decision 0125). Prefix `modules/` je ponechán tranzitně pro pre-0041 nested mounty (doctor to flaguje jako migrační TODO). `path` je fyzické umístění a je VĚDOMĚ oddělené od grupování (modules[].teams) — přeřazení modulu mezi Teamy nemění složku (podstata decision 0041).",
+            "pattern": "^(?:(?:workspace|modules)/[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?(?:/db)?|productionspace/[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?)$"
+          },
+          "repo": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "source_of_truth": {
+            "anyOf": [
+              {
+                "enum": [
+                  "git-native",
+                  "db-backed",
+                  "external-system",
+                  "derived"
+                ]
+              },
+              {
+                "type": "string",
+                "pattern": "^repository-db:[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+              }
+            ]
+          },
+          "access": {
+            "type": "object",
+            "required": [
+              "default",
+              "roles"
+            ],
+            "properties": {
+              "default": {
+                "enum": [
+                  "expected",
+                  "role_based",
+                  "restricted"
+                ]
+              },
+              "roles": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "teams": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^(?!productionspace$)[a-z0-9][a-z0-9-]*$",
+              "description": "Slug Teamu; `productionspace` je rezervovaný org-level slug (0041 bod 6) a nesmí být cílem příslušnosti."
+            },
+            "uniqueItems": true,
+            "description": "Kanonická příslušnost modulu k Teamům (dříve Workspaces/Oddělení). Autorita je na modulu (decision 0023, N:M refinement 0041): modul může patřit do VÍCE Teamů zároveň. Každý slug MUSÍ existovat v teams[] rosteru (nebo v deprecated workspaces[] aliasu); compiler neznámý slug odmítne. Prázdné/chybějící = deklarovaný default Team; bez rosteru implicitní `workspace`. `productionspace/*` repo nepatří do žádného Teamu a compiler u něj jakoukoli membership odmítne. Přeřazení do jiného existujícího Teamu = editace tohoto pole, nikdy přesun složky. Pořadí v teams[] je významné jen pro deprecated compat kopii (první Team) v generovaném indexu; jinak je členství neuspořádaná množina."
+          },
+          "workspaces": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^(?!productionspace$)[a-z0-9][a-z0-9-]*$"
+            },
+            "uniqueItems": true,
+            "description": "DEPRECATED přechodový alias pole teams (krátce kanonický tvar mezi 0041 narovnáním a Team namingem 2026-07-11). Pokud je přítomné i teams, vyhrává teams; jinak se čte jako teams. Nová deklarace používá teams."
+          },
+          "workspace": {
+            "type": "string",
+            "pattern": "^(?!productionspace$)[a-z0-9][a-z0-9-]*$",
+            "description": "DEPRECATED alias jednočlenné příslušnosti = [team] (pre-0041 tvar, decision 0023; former field name). Ponechán pro zpětnou kompatibilitu reálných manifestů; pokud je přítomné i teams[], vyhrává teams[] a doctor emituje migrační TODO. Chybějící hodnota znamená deklarovaný default Team, bez rosteru implicitní `workspace`."
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "path"
+              ],
+              "properties": {
+                "path": {
+                  "pattern": "^productionspace/"
+                }
+              }
+            },
+            "then": {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "workspace"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "workspaces"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "teams"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "additionalProperties": true
+      }
+    },
+    "doctor": {
+      "type": "object",
+      "description": "Deklarace VLASTNÍHO doctora tohohle mountu (decision 0118). Root doctor podle ní podřízené doctory NAJDE — discovery je deklarací v manifestu, ne hádáním konvenční cesty: `scripts/doctor.mjs` by nefungovala pro mount, který není Node projekt, a hádaná cesta by z chybějícího doctora udělala ticho místo vady. Chybějící blok znamená 'tenhle mount vlastního doctora nemá', nikdy 'doctor je jinde'. Standardizované kontroly zůstávají rootu, vlastní kontroly patří sem — pull kořenového repa nesmí rozbít prostor, který má vlastní konfiguraci.",
+      "required": [
+        "schema_version",
+        "command"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "humanandmachines.doctor.declaration.v1"
+        },
+        "command": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          },
+          "description": "argv podřízeného doctora. Dostane tenhle argv a pracovní adresář, vrací v3 report na stdout a exit kód 0=ok|warn, 1=fail, 2=incomplete, 3=report vůbec nevznikl."
+        },
+        "cwd": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$",
+          "description": "Pracovní adresář RELATIVNĚ k mountu; výchozí je kořen mountu. Absolutní cesta ani segment '..' se nepřijímají: doctor mountu se spouští jen uvnitř svého mountu. Schéma je tu doplněk — hranici vymáhá runtime nad rozloženou cestou (realpath), protože symlink ven z mountu žádné schéma neuvidí, a uniklý cwd by si scope check POTVRDIL sám se sebou."
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1000,
+          "description": "Limit, po kterém root dítě ukončí a zapíše outcome 'timeout'. Zaseknutý doctor nepozoroval nic — to není zelená."
+        },
+        "scope_type": {
+          "type": "string",
+          "enum": [
+            "companiesascode_core",
+            "launchpad_root",
+            "organization",
+            "workspace",
+            "personalspace"
+          ],
+          "description": "Očekávaný scope.type v reportu dítěte. Root ho ASERTUJE (nesoulad = outcome 'scope_mismatch'), nikdy podle něj nic nevybírá."
+        }
+      },
+      "additionalProperties": false
+    },
+    "roles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "slug",
+          "display_name",
+          "purpose"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "default_modules": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "external_systems": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "slug",
+          "kind",
+          "authority"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "authority": {
+            "enum": [
+              "source-of-truth",
+              "derived",
+              "adapter",
+              "archive"
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "task_sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "slug",
+          "kind",
+          "path",
+          "authority"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "todo-tasks-json",
+              "done-tasks-json",
+              "workspace-tasks",
+              "clickup",
+              "linear",
+              "external",
+              "open-issues-json"
+            ]
+          },
+          "path": {
+            "type": "string"
+          },
+          "authority": {
+            "enum": [
+              "source-of-truth",
+              "mirror",
+              "derived"
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "knowledge_surfaces": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "slug",
+          "kind",
+          "path",
+          "authority"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "blog",
+              "knowledgebase",
+              "wiki",
+              "documentation",
+              "guide"
+            ]
+          },
+          "path": {
+            "type": "string"
+          },
+          "authority": {
+            "enum": [
+              "source-of-truth",
+              "learning-surface",
+              "publishing-surface",
+              "derived"
+            ]
+          },
+          "visibility": {
+            "enum": [
+              "internal",
+              "public-candidate",
+              "public",
+              "mixed"
+            ]
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "internal",
+                "website",
+                "newsletter",
+                "linkedin",
+                "x",
+                "facebook",
+                "instagram",
+                "youtube",
+                "docs",
+                "sales-enablement"
+              ]
+            }
+          },
+          "content_purpose": {
+            "enum": [
+              "internal-communication",
+              "marketing-source",
+              "public-social",
+              "mixed"
+            ]
+          },
+          "agent_policy": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true,
+  "description": "Definice Organizace GEN3: jedna firma = jedno super-repo = jedna GitHub organizace = jedna access hranice (decision 0012/0015). V Launchpad rootu Conglomerate se mountuje jako organizations/<root_repo>/, kde <root_repo> je basename z company.root_repository. Uvnitř Organizace žijí Teamy (skupiny modulů — stejný pojem jako GitHub Team, dříve Workspaces/Oddělení, decisions 0021/0023; founder 2026-07-11), plochá pracovní složka workspace/, org-level productionspace a moduly.",
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "organization_kind"
+        ],
+        "properties": {
+          "organization_kind": {
+            "const": "template"
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "template_sync_role"
+              ]
+            },
+            {
+              "required": [
+                "template_sync_authorization"
+              ]
+            }
+          ]
+        }
+      },
+      "else": {
+        "properties": {
+          "company": {
+            "dependentRequired": {
+              "repository": [
+                "root_repository"
+              ],
+              "root_repository": [
+                "repository"
+              ]
+            }
+          }
+        }
+      }
+    }
+  ],
+  "anyOf": [
+    {
+      "required": [
+        "organization_generation"
+      ]
+    },
+    {
+      "required": [
+        "workspace_generation"
+      ]
+    }
+  ]
+}

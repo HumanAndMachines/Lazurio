@@ -1,0 +1,611 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rozjedeme.ai/schemas/modules.manifest.schema.json",
+  "title": "GEN3 modules manifest",
+  "description": "Kanonický deskriptor module slotů Organizace nebo personalspace. Fyzické cesty jsou ploché workspace/<repo-name>, org-level productionspace/<repo-name> nebo podporované Organization root boundaries design-system, infra a mission-control[/db]. Basename cesty zachovává explicitní case názvu repozitáře a je oddělený od stabilního lowercase slugu (decision 0125). Všechny čtyři root cesty jsou Doctor-managed nested repo checkouty; mission-control je app/code fork z MissionControlTemplate a mission-control/db jeho oddělené Organization-owned data repo. Logická N:M příslušnost k Teamům je jen u workspace slotů v module_slots[].teams. U Organizace musí company obsahovat canonical slug a matching workspace/productionspace sloty držet stejné checkout/access/source kontrakty jako company.gen3.json.",
+  "type": "object",
+  "required": [
+    "module_slots"
+  ],
+  "properties": {
+    "organization_generation": {
+      "const": "gen3",
+      "description": "Kanonický klíč generace Organizace."
+    },
+    "workspace_generation": {
+      "const": "gen3",
+      "description": "Deprecated alias organization_generation."
+    },
+    "personal_generation": {
+      "const": "gen3",
+      "description": "Kanonický klíč generace personalspace."
+    },
+    "company": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Canonical company.slug Organizace, nikoli mutable display_name."
+    },
+    "github_org": {
+      "type": "string",
+      "minLength": 1
+    },
+    "owner": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Owner personalspace."
+    },
+    "workspace_path": {
+      "const": "workspace",
+      "description": "Kanonická plochá složka workspace modulů."
+    },
+    "workspace_rule": {
+      "type": "string"
+    },
+    "access_levels": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "teams": {
+      "type": "array",
+      "description": "Roster pojmenovaných Teamů. Příslušnost deklaruje module_slots[].teams.",
+      "items": {
+        "type": "object",
+        "required": [
+          "slug",
+          "display_name"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string",
+            "pattern": "^(?!productionspace$)[a-z0-9][a-z0-9-]*$",
+            "description": "Slug Teamu; productionspace je rezervovaný org-level slug."
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "default": {
+            "type": "boolean"
+          },
+          "description": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "workspaces": {
+      "type": "array",
+      "description": "Deprecated alias rosteru teams[].",
+      "items": {
+        "type": "object",
+        "required": [
+          "slug",
+          "display_name"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string",
+            "pattern": "^(?!productionspace$)[a-z0-9][a-z0-9-]*$"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "default": {
+            "type": "boolean"
+          },
+          "description": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "module_slots": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/module_slot"
+      }
+    }
+  },
+  "$defs": {
+    "template_provenance": {
+      "type": "object",
+      "description": "Volitelný zpětně kompatibilní záznam původu jednoho modulu: z jaké šablony, z jakého refu a z jakého přesného commitu byl materializovaný nebo forknutý. Stejný tvar jako personal.gen3.json template_provenance, navíc s vN dimenzí modulové appky. Tohle je strojově čitelný vstup pro tříkolejné rozhodnutí Buddyho nebo AI Kolegy Organizace: opravit bug lokálně, fork-syncnout, protože upstream ho už opravil, nebo nabídnout upstream PR (kudy PR vede, říká module_slots[].distribution_lane). Bez tohoto záznamu by se původ musel rekonstruovat archeologií na živém checkoutu.",
+      "required": [
+        "source_repository",
+        "source_ref",
+        "source_commit"
+      ],
+      "properties": {
+        "source_repository": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$",
+          "description": "Šablona nebo upstream repo modulu v zápisu owner/repo, shodně s company.gen3.json template_sync_authorization.source_repository."
+        },
+        "source_ref": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Git ref (branch nebo tag) šablony v okamžiku materializace nebo forku, kanonicky main. Ref se posouvá, proto sám o sobě původ neurčuje."
+        },
+        "source_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$",
+          "description": "Přesný 40-hex commit šablony v okamžiku materializace nebo forku. Podle něj se upstream diff počítá bez archeologie."
+        },
+        "source_version": {
+          "type": "string",
+          "pattern": "^v[0-9]+$",
+          "description": "Volitelná vN generace šablony, ze které modul vznikl (v1, v2, v3 podle docs/workspace-module-version-lifecycle.md; v3 je floor pro cokoli prodejného, protože jen v3 drží data v oddělené data repo). Šablony se verzují interně adresáři vN, nikoli generation suffixem v názvu repa. Dimenze je smysluplná jen u modulové appky; Personalspace root ji nemá."
+        },
+        "materialized_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$",
+          "description": "Volitelný ISO 8601 timestamp materializace nebo forku (UTC nebo s offsetem)."
+        }
+      },
+      "additionalProperties": true
+    },
+    "module_slot": {
+      "type": "object",
+      "required": [
+        "path",
+        "category",
+        "default_access",
+        "required_roles"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Kanonicky workspace/<repo-name> nebo productionspace/<repo-name>; basename zachovává explicitně deklarovaný case a nesmí se odvozovat z lowercase slugu. Nové HumanAndMachine mounty používají providerový repo basename přesně, historické aliasy zůstávají validní do explicitní migrace (decision 0125). design-system, infra a mission-control[/db] jsou Doctor-managed Organization root nested repo checkouty. mission-control je app/code fork a mission-control/db jeho oddělené data repo. modules/<repo-name> je deprecated migrace.",
+          "pattern": "^(?:(?:workspace|modules)/[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?(?:/db)?|productionspace/[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?|design-system|infra|mission-control(?:/db)?)$"
+        },
+        "slug": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$",
+          "description": "Stabilní lowercase identifikátor slotu; není odvozený z názvu repozitáře ani basename fyzické cesty. Vynechat jej smí jen legacy slot, jehož basename už je stejný platný lowercase slug; case-preserving nebo jinak odlišný basename vyžaduje explicitní slug (decision 0125)."
+        },
+        "repo": {
+          "type": "string"
+        },
+        "repository": {
+          "type": "string"
+        },
+        "git": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "minLength": 1
+            },
+            "branch": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": true
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_of_truth": {
+          "type": "string",
+          "minLength": 1
+        },
+        "default_access": {
+          "enum": [
+            "expected",
+            "role_based",
+            "restricted",
+            "private"
+          ]
+        },
+        "required_roles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "space": {
+          "enum": [
+            "root",
+            "workspace",
+            "productionspace"
+          ],
+          "description": "Normalizovaný scope slotu: root checkout boundary, workspace modul nebo productionspace repo."
+        },
+        "teams": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(?!productionspace$)[a-z0-9][a-z0-9-]*$"
+          },
+          "uniqueItems": true,
+          "description": "Kanonická N:M příslušnost slotu k Teamům. Productionspace slot žádnou membership nemá."
+        },
+        "workspaces": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(?!productionspace$)[a-z0-9][a-z0-9-]*$"
+          },
+          "uniqueItems": true,
+          "description": "Deprecated přechodový alias N:M Team membership."
+        },
+        "workspace": {
+          "type": "string",
+          "pattern": "^(?!productionspace$)[a-z0-9][a-z0-9-]*$",
+          "description": "Deprecated alias jednočlenné příslušnosti."
+        },
+        "launchpad_port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Deprecated compatibility copy; package.json#companyascode.app.port je canonical."
+        },
+        "status": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "distribution_lane": {
+          "enum": [
+            "public_template",
+            "marketplace_instance",
+            "private"
+          ],
+          "description": "Volitelný distribuční kanál, ze kterého modul vznikl; určuje, kudy vede jeho feedback loop, a je kontraktem pro pozdější mechanismus. `public_template`: modul vznikl z veřejné šablony a feedback path je upstream PR do té šablony (Buddy nebo AI Kolega Organizace opravu obecného charakteru nabízí zpět běžným PR, viz docs/template-repo-strategy.md). `marketplace_instance`: modul je samostatná instance koupená přes Marketplace, kupující dostal nezávislou kopii a přístup do prodejcova privátního repa nemá, proto feedback path NENÍ upstream PR, ale Marketplace-side mechanismus, který se teprve navrhne (TBD); do té doby se oprava drží lokálně a upstream PR se nepokouší. `private`: modul nemá žádný upstream, feedback path neexistuje a oprava je vždy jen lokální. Chybějící pole = kanál není deklarovaný (starší manifesty), nikdy ne `private`.",
+          "$comment": "Enum je záměrně jen deklarace kanálu a jeho feedback path. Marketplace, instantiation flow, licencování ani ceny do tohoto schématu nepatří."
+        },
+        "template_provenance": {
+          "$ref": "#/$defs/template_provenance"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "not": {
+              "properties": {
+                "path": {
+                  "pattern": "^(?:(?:workspace|productionspace|modules)/[a-z0-9][a-z0-9-]*|design-system|infra|mission-control)$"
+                }
+              },
+              "required": [
+                "path"
+              ]
+            }
+          },
+          "then": {
+            "required": [
+              "slug"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "path": {
+                "const": "mission-control/db"
+              }
+            },
+            "required": [
+              "path"
+            ]
+          },
+          "then": {
+            "properties": {
+              "slug": {
+                "const": "mission-control-data"
+              }
+            },
+            "required": [
+              "slug"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "path": {
+                "pattern": "^(design-system|infra|mission-control(/db)?)$"
+              }
+            },
+            "required": [
+              "path"
+            ]
+          },
+          "then": {
+            "required": [
+              "space"
+            ],
+            "properties": {
+              "space": {
+                "const": "root"
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "workspace"
+                  ]
+                },
+                {
+                  "required": [
+                    "workspaces"
+                  ]
+                },
+                {
+                  "required": [
+                    "teams"
+                  ]
+                },
+                {
+                  "required": [
+                    "repo"
+                  ]
+                },
+                {
+                  "required": [
+                    "repository"
+                  ]
+                },
+                {
+                  "required": [
+                    "branch"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "path": {
+                "pattern": "^(design-system|infra|mission-control(/db)?)$"
+              },
+              "status": {
+                "const": "planned_slot"
+              }
+            },
+            "required": [
+              "path",
+              "status"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "git"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "path": {
+                "const": "mission-control/db"
+              }
+            },
+            "required": [
+              "path"
+            ]
+          },
+          "then": {
+            "properties": {
+              "git": {
+                "properties": {
+                  "branch": {
+                    "const": "v3"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "path": {
+                "pattern": "^(design-system|infra|mission-control(/db)?)$"
+              },
+              "status": {
+                "not": {
+                  "const": "planned_slot"
+                }
+              }
+            },
+            "required": [
+              "path"
+            ]
+          },
+          "then": {
+            "required": [
+              "git"
+            ],
+            "properties": {
+              "git": {
+                "required": [
+                  "url",
+                  "branch"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "path": {
+                "pattern": "^productionspace/"
+              }
+            },
+            "required": [
+              "path"
+            ]
+          },
+          "then": {
+            "properties": {
+              "space": {
+                "const": "productionspace"
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "workspace"
+                  ]
+                },
+                {
+                  "required": [
+                    "workspaces"
+                  ]
+                },
+                {
+                  "required": [
+                    "teams"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "path": {
+                "pattern": "^(workspace|modules)/"
+              }
+            },
+            "required": [
+              "path"
+            ]
+          },
+          "then": {
+            "properties": {
+              "space": {
+                "const": "workspace"
+              }
+            }
+          }
+        }
+      ],
+      "additionalProperties": true
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "anyOf": [
+          {
+            "required": [
+              "organization_generation"
+            ]
+          },
+          {
+            "required": [
+              "workspace_generation"
+            ]
+          }
+        ]
+      },
+      "then": {
+        "required": [
+          "company",
+          "github_org"
+        ]
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "personal_generation"
+        ]
+      },
+      "then": {
+        "required": [
+          "owner"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "module_slots": {
+            "contains": {
+              "properties": {
+                "path": {
+                  "const": "mission-control/db"
+                },
+                "status": {
+                  "not": {
+                    "const": "planned_slot"
+                  }
+                }
+              },
+              "required": [
+                "path"
+              ]
+            }
+          }
+        },
+        "required": [
+          "module_slots"
+        ]
+      },
+      "then": {
+        "properties": {
+          "module_slots": {
+            "contains": {
+              "properties": {
+                "path": {
+                  "const": "mission-control"
+                },
+                "status": {
+                  "not": {
+                    "const": "planned_slot"
+                  }
+                },
+                "git": {
+                  "required": [
+                    "url",
+                    "branch"
+                  ]
+                }
+              },
+              "required": [
+                "path",
+                "git"
+              ]
+            }
+          }
+        }
+      }
+    }
+  ],
+  "anyOf": [
+    {
+      "required": [
+        "organization_generation"
+      ]
+    },
+    {
+      "required": [
+        "workspace_generation"
+      ]
+    },
+    {
+      "required": [
+        "personal_generation"
+      ]
+    }
+  ],
+  "additionalProperties": true
+}
