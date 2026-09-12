@@ -34,15 +34,13 @@ function cssProperty(source, selector, property) {
 }
 
 test("Launchpad public shell exposes a header space switcher and app cards", async () => {
-  const [html, js, css, server, appState, wisprLogo, codexBarLogo, browserUseLogo] = await Promise.all([
+  const [html, js, css, server, appState, guideLink] = await Promise.all([
     readFile(join(publicRoot, "index.html"), "utf8"),
     readFile(join(publicRoot, "app.js"), "utf8"),
     readFile(join(publicRoot, "styles.css"), "utf8"),
     readFile(join(import.meta.dirname, "server.mjs"), "utf8"),
     readFile(join(publicRoot, "app-state.js"), "utf8"),
-    readFile(join(publicRoot, "guide-assets", "wispr-flow.svg"), "utf8"),
-    readFile(join(publicRoot, "guide-assets", "codexbar.svg"), "utf8"),
-    readFile(join(publicRoot, "guide-assets", "browser-use.svg"), "utf8"),
+    readFile(join(publicRoot, "guide-link.js"), "utf8"),
   ]);
 
   // Shell regions jsou přítomné; interní debug tabulka se do denního UI neposílá.
@@ -71,77 +69,21 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   const marketplaceIndex = html.indexOf('class="marketplace-teaser side-panel"');
   expect(guideTileIndex).toBeGreaterThan(-1);
   expect(guideTileIndex).toBeLessThan(marketplaceIndex);
-  expect(html).toContain('id="guideTile" class="guide-tile side-panel" href="#/guide"');
+  expect(html).toContain('id="guideTile" class="guide-tile side-panel" href="https://documentation.lazurio.ai/cs/guide/?utm_source=launchpad&amp;utm_medium=product&amp;utm_campaign=guide"');
   expect(html).toContain('/app-icons/lazurio/guide-signpost-solid-96.png');
   expect(html).not.toContain('<img src="/app-icons/lazurio/knowledgebase-96.png" alt="" />');
-  expect(html).toContain('id="guideMain" class="guide-surface"');
-  expect(html).not.toContain('class="guide-eyebrow"');
-  expect(html).toContain('id="guideSearch" type="search" data-i18n-placeholder="guide.search.placeholder"');
-  expect(html).toContain('data-guide-topic="glossary" aria-current="page"');
-  expect(html).toContain('data-guide-topic-panel="glossary"');
-  expect(html).not.toContain('data-guide-topic="installation"');
-  expect(html).not.toContain('data-guide-topic-panel="installation"');
-  expect(html).not.toContain('data-i18n="guide.navigation.installation"');
-  expect(html).not.toContain('data-i18n="guide.install.');
-  expect(html).not.toContain('id="guidePrompt');
-  expect(html).not.toContain('id="guidePolicy');
-  expect(html).not.toContain("data-guide-search-text=");
-  expect(html).not.toContain("gh auth login --hostname github.com");
-  expect(html).toContain('data-i18n="guide.glossary.basic"');
-  expect(html).toContain('data-i18n="guide.glossary.advanced"');
-  expect(html).toContain('data-i18n="guide.term.subscription.label"');
-  expect(html).toContain('data-i18n="guide.term.tokens.body"');
-  expect(html).toContain('data-i18n="guide.term.aiColleague.body"');
-  expect(html).toContain('data-i18n="guide.term.steward.body"');
-  expect(html).toContain('data-i18n="guide.term.mcp.body"');
-  expect(html).toContain('data-i18n="guide.term.plugin.body"');
-  expect(html).toContain("Wispr Flow");
-  expect(html).toContain('href="https://wisprflow.ai/downloads"');
-  expect(html).toContain("CodexBar");
-  expect(html).toContain('href="https://codexbar.app/"');
-  expect(html).toContain("Browser Use");
-  expect(html).toContain('href="https://browser-use.com/"');
-  expect((html.match(/class="guide-recommendation-visual" aria-hidden="true"/g) ?? []).length).toBe(3);
-  expect(html).toContain('src="/guide-assets/wispr-flow.svg"');
-  expect(html).toContain('src="/guide-assets/codexbar.svg"');
-  expect(html).toContain('src="/guide-assets/browser-use.svg"');
-  expect(wisprLogo).toContain("Official dark Wispr Flow wordmark");
-  expect(wisprLogo).toContain('viewBox="0 0 446 125"');
-  expect(codexBarLogo).toContain("Official CodexBar app icon");
-  expect(codexBarLogo).toContain("data:image/png;base64,");
-  expect(browserUseLogo).toContain("Official Browser Use primary mark");
-  expect(browserUseLogo).toContain('viewBox="0 0 100 100"');
-  expect(html).not.toContain("guide-recommendation-visual-svg");
-  expect(html).toContain("guide-recommendation--wispr");
-  expect(html).toContain("guide-recommendation--codexbar");
-  expect(html).toContain("guide-recommendation--browser-use");
-  expect(cssProperty(css, ".guide-recommendation", "grid-template-columns")).toBe("minmax(190px, 240px) minmax(0, 1fr)");
-  const workspaceBreakpoint = cssBlock(css, "@media (max-width: 900px)");
-  expect(cssProperty(workspaceBreakpoint, ".guide-recommendation", "grid-template-columns")).toBe("minmax(0, 1fr)");
-  expect(cssProperty(workspaceBreakpoint, ".guide-recommendation-visual", "width")).toBe("min(100%, 28rem)");
-  expect(css).toContain(".guide-recommendation-logo--app-icon");
-  expect(html).toContain('data-i18n="guide.apps.browserUse.caution"');
-  expect(html).toContain('data-i18n="guide.apps.intro"');
-  expect(js).toContain("function filterGuideContent(query)");
-  expect(js).toContain("function selectGuideTopic(topic)");
-  expect(js).toContain('guideActiveTopic: "glossary"');
-  const guideRouteBlock = js.slice(
-    js.indexOf('if (resolution.surface === "guide")'),
-    js.indexOf('state.activeSurface = "workspace"', js.indexOf('if (resolution.surface === "guide")')),
-  );
-  expect(guideRouteBlock).toContain('selectGuideTopic("glossary")');
-  expect(js).not.toContain("guideInstallContentPromise");
-  expect(js).not.toContain("loadGuideInstallContent");
-  expect(js).not.toContain("copyGuideInstallPrompt");
+  expect(html).not.toContain('id="guideMain"');
+  expect(html).not.toContain('data-guide-topic');
+  expect(html).not.toContain('data-guide-search-item');
+  expect(html).not.toContain('src="/guide-assets/');
+  expect(js).toContain('import { guideDocumentationUrl } from "./guide-link.js";');
+  expect(js).toContain('window.location.assign(guideDocumentationUrl(getLocale()))');
+  expect(js).not.toContain('state.activeSurface');
+  expect(guideLink).toContain('https://documentation.lazurio.ai');
+  expect(guideLink).toContain('utm_source=launchpad&utm_medium=product&utm_campaign=guide');
+  expect(guideLink).toContain('locale === "en" ? "en" : "cs"');
   expect(server).toContain('url.pathname === "/api/guide/organization-install"');
   expect(server).toContain("rootPath: lazurioCodeRoot");
-  expect(server).toContain('locale: url.searchParams.get("locale")');
-  expect(server).not.toContain("readOrganizationInstallGuide({ rootPath: rootSourceRoot })");
-  expect(js).toContain("item.dataset.guideSearchKey");
-  expect(js).toContain("t(item.dataset.guideSearchKey)");
-  expect(js).toContain('.normalize("NFD")');
-  expect(js).toContain(".toLocaleLowerCase(getLocale())");
-  expect(js).toContain('document.querySelectorAll("[data-guide-search-item]")');
   expect(html).not.toContain("<iframe");
   expect(html).not.toContain('class="debug-table"');
   expect(html).not.toContain('id="appsTable"');
@@ -205,15 +147,14 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(js).toContain("function syncActiveSpaceHash");
   expect(js).toContain("let launchpadScopeDataReady = false");
   expect(js).toContain("launchpadScopeDataReady = true");
-  expect(js).toContain('if (launchpadScopeDataReady && state.activeSurface === "workspace")');
+  expect(js).toContain('if (launchpadScopeDataReady)');
   expect(js).toContain("!launchpadScopeDataReady || window.location.hash === appliedLaunchpadHash");
   expect(js).toContain('window.addEventListener("hashchange", applyBrowserLaunchpadHash)');
   expect(js).toContain("organizationHash(state.filters.company)");
   expect(js).toContain("personalspaceHash()");
-  expect(js).toContain("guideHash()");
-  expect(js).toContain('state.activeSurface = "guide"');
-  expect(js.match(/state\.guideReturnHash = activeSpaceHash\(\);/g)?.length).toBe(3);
-  expect(js).toContain('elements.skipLink.href = guide ? "#guideMain" : "#workspaceMain"');
+  expect(js).not.toContain("guideHash()");
+  expect(js).not.toContain('state.activeSurface = "guide"');
+  expect(js).toContain('elements.skipLink.href = "#workspaceMain"');
   expect(js).toContain('app.organization_path === "guide"');
   expect(js).toContain("suppressNextDrawerOpen");
   expect(js).toContain("function visibleNotifications");
@@ -250,7 +191,7 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(js).toContain('state.filters.scope === "personal"');
   expect(html).not.toContain('id="runtimeRootBadge"');
   expect(js).not.toContain('WORKTREE · ${worktreeName}');
-  expect(js).toContain('elements.drawerToggle.classList.toggle("hidden", personal || guide)');
+  expect(js).toContain('elements.drawerToggle.classList.toggle("hidden", personal)');
   expect(js).toContain('state.filters.scope = "personal";\n  state.filters.company = "all";');
   const switcherBlock = js.slice(js.indexOf("function renderSpaceSwitcher"), js.indexOf("Side panels:"));
   expect(switcherBlock).not.toContain("organizationStats");
@@ -810,7 +751,7 @@ test("CAC-0044/0095: pravé panely, notifikace pod zvonečkem a git chip", async
   expect(css).toContain(".recent-changes-sidebar");
   expect(css).toContain("grid-template-columns: minmax(0, 1fr) minmax(250px, 300px)");
   expect(css).toContain(".quick-app");
-  expect(js).toContain('elements.recentChangesSidebar.classList.toggle("hidden", personal || guide)');
+  expect(js).toContain('elements.recentChangesSidebar.classList.toggle("hidden", personal)');
 });
 
 test("CAC-0095: zvoneček nese actor, scope a payload a respektuje izolaci", async () => {
@@ -873,7 +814,7 @@ test("CAC-0095: zvoneček nese actor, scope a payload a respektuje izolaci", asy
 
   // Izolace: Personalspace zvoneček nedostane a notifikace nepřekročí Organizaci.
   expect(js).toContain('if (state.filters.scope === "personal") return []');
-  expect(js).toContain('elements.notificationsToggle?.classList.toggle("hidden", personal || guide)');
+  expect(js).toContain('elements.notificationsToggle?.classList.toggle("hidden", personal)');
   expect(js).toContain("item.scope?.company === state.filters.company");
 
   expect(css).toContain(".notifications-panel");
