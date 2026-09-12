@@ -63,6 +63,17 @@ Externí App URL je vždy odvozená jako
 `https://<module>.<team>.<domain>/`. Service catalog, revision, per-App desired
 state ani druhý lifecycle controller neexistují.
 
+## Cílový desktopový vstup
+
+Model v `ARCHITECTURE.md` přidává nativní SSH vstup desktopového Codexu do
+jednočlenné Dílny. Práce i přihlášení zůstávají vzdáleně; místní Lazurio není
+potřeba. T3 může zůstat webovým vstupem.
+
+Runner níže ověřuje současnou T3/Codex a modulovou paritu. Neprokazuje nové
+SSH připojení, AI autentizaci, tunely ani pokračování po odpojení. Tyto vlastnosti
+a migrace broker credentials potřebují vlastní důkaz. SSH do Dílny nesmí
+zpřístupnit host OS nebo jinou Dílnu.
+
 ## Runner
 
 Verzovaný runner `launchpad/src/workspace-parity-runner.mjs` se spouští stejně
