@@ -125,6 +125,11 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(js).toContain("function filterGuideContent(query)");
   expect(js).toContain("function selectGuideTopic(topic)");
   expect(js).toContain('guideActiveTopic: "glossary"');
+  const guideRouteBlock = js.slice(
+    js.indexOf('if (resolution.surface === "guide")'),
+    js.indexOf('state.activeSurface = "workspace"', js.indexOf('if (resolution.surface === "guide")')),
+  );
+  expect(guideRouteBlock).toContain('selectGuideTopic("glossary")');
   expect(js).not.toContain("guideInstallContentPromise");
   expect(js).not.toContain("loadGuideInstallContent");
   expect(js).not.toContain("copyGuideInstallPrompt");
