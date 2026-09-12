@@ -48,7 +48,7 @@ migrace. Lokální profilový mount se změnou cíle nestává execution prostř
 
 Personalspace může existovat bez Buddyho a většina jich tak začíná. Když si ale
 Principál Buddyho onboarduje, vznikne mu druhé místo, kde jeho osobní vrstva
-žije: **samostatná per-owner Mašina**. Starší decision 0080 popisovala VPS-only instalaci; cílový model níže rozšiřuje umístění na zákaznickou VM, vlastní VPS nebo hardware. Lokální
+žije: **samostatná per-owner Mašina**. Decision 0080 zachovává původní VPS-only baseline; nové cílové umístění na VM, VPS nebo hardware zavádí samostatné [BUDDY-2026-09-12](buddy-product-decision-2026-09-12.md). Lokální
 mount `personalspace/<owner>_GEN3/buddy/` drží jen Git konfiguraci profilu —
 **runtime tam není a nikdy nebude** (`local_execution: forbidden`).
 
