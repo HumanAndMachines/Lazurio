@@ -3,6 +3,7 @@ import { readFile } from "fs/promises";
 import { join, relative, resolve } from "path";
 import {
   organizationNestedRepoSlotPaths,
+  normalizedTeamMemberships,
   organizationModuleSlotScope,
   ownershipPatternsOverlap,
   repositoryObservationAuthorizesTemplateWrite,
@@ -154,16 +155,7 @@ export function buildCompanyTargets({ companyConfig, modulesManifest = null }) {
     // workspaces[] (krátce kanonický mezi 0041 narovnáním a Team namingem;
     // tiché ignorování by manifestu psanému proti té verzi ztratilo
     // deklarované skupiny) → deprecated singular workspace → default.
-    const declaredTeams =
-      Array.isArray(module.teams) && module.teams.length > 0
-        ? [...module.teams]
-        : Array.isArray(module.workspaces) && module.workspaces.length > 0
-          ? [...module.workspaces]
-          : module.workspace
-            ? [module.workspace]
-            : isProductionspace
-              ? []
-              : [defaultTeam];
+    const declaredTeams = normalizedTeamMemberships(module, isProductionspace ? null : defaultTeam);
 
     if (isProductionspace && declaredTeams.length > 0) {
       throw new OrganizationCompilerError(
@@ -239,14 +231,6 @@ export function buildCompanyTargets({ companyConfig, modulesManifest = null }) {
           // checkout boundaries (infra, Mission Control, primární Design
           // System) žádný Team nemají a compiler jim default nedosazuje.
           const slotScope = organizationModuleSlotScope(slot.path);
-          const declared =
-            Array.isArray(slot.teams) && slot.teams.length > 0
-              ? [...slot.teams]
-              : Array.isArray(slot.workspaces) && slot.workspaces.length > 0
-                ? [...slot.workspaces]
-                : slot.workspace
-                  ? [slot.workspace]
-                  : null;
           const hasTeamMembershipField =
             Object.hasOwn(slot, "teams") ||
             Object.hasOwn(slot, "workspaces") ||
@@ -290,7 +274,7 @@ export function buildCompanyTargets({ companyConfig, modulesManifest = null }) {
               `Aktivní nested repo slot '${slot.path}' musí mít git.url a git.branch; bez checkout údajů použij status planned_slot`,
             );
           }
-          const slotTeams = slotScope === "workspace" ? (declared ?? [defaultTeam]) : [];
+          const slotTeams = slotScope === "workspace" ? normalizedTeamMemberships(slot, defaultTeam) : [];
           return {
             ...slot,
             space: slotScope,
