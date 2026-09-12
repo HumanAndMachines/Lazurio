@@ -32,7 +32,14 @@ import {
 import { RuntimeActionError, createRuntimeManager } from "../../lazurio/runtime/runtime-lib.mjs";
 import { createGitStatusService } from "../../lazurio/runtime/git-status-lib.mjs";
 import { readLazurioUpdateStatus, runLazurioUpdate } from "../../lazurio/runtime/lazurio-update-lib.mjs";
-import { WorktreeActionError, createWorktreeFromPlan, publishWorktreeDraft } from "./worktree-actions-lib.mjs";
+import {
+  WorktreeActionError,
+  applyWorktreeCleanupEnvironment,
+  createWorktreeFromPlan,
+  previewWorktreeCleanupEnvironment,
+  publishWorktreeDraft,
+} from "./worktree-actions-lib.mjs";
+import { inspectDurableWorktreeRuntimeUsage } from "../../lazurio/runtime/worktree-cleanup-lib.mjs";
 import { buildRecentModuleChanges } from "./recent-changes-lib.mjs";
 import { buildNotifications } from "./notifications-lib.mjs";
 import { buildMostUsedApps } from "../../lazurio/runtime/usage-lib.mjs";
@@ -168,6 +175,21 @@ const runtimeManager = createRuntimeManager({
     machine_context_root: companiesRoot,
   }),
 });
+// Cleanup runtime evidence čte durable runtime stav tohoto Serveru: každý
+// managed Start/Stop jej zapisuje. Běžící worktree App není důkaz aktivního
+// vlastníka: apply ji jako první krok zastaví přes vlastní lifecycle
+// (stop → grace → kill jen managed procesů) a dokud existuje cleanup
+// journal, runtime manager start téhož worktree odmítá. Co po zastavení
+// zbude s neznámým původem, cleanup vyhodnotí fail-closed — nic cizího nezabíjí.
+function cleanupRuntimeUsageInspector({ environment }) {
+  return inspectDurableWorktreeRuntimeUsage({
+    stateRoot: launchpadStateRoot,
+    worktree: { slug: environment.slug },
+  });
+}
+function cleanupRuntimeStopper({ environment }) {
+  return runtimeManager.stopWorktreeRuntimes({ slug: environment.slug, organization: environment.organization ?? null });
+}
 function runWorkspaceUpdate() {
   return runLazurioUpdate({
     rootPath: companiesRoot,
@@ -1016,6 +1038,14 @@ function gitApiRoute(pathname) {
       slug: decodeURIComponent(publishWorktreeMatch[2]),
     };
   }
+  const cleanupWorktreeMatch = pathname.match(/^\/api\/git\/repos\/([^/]+)\/worktrees\/([^/]+)\/cleanup\/(preview|apply)$/);
+  if (cleanupWorktreeMatch) {
+    return {
+      kind: cleanupWorktreeMatch[3] === "preview" ? "cleanup_worktree_preview" : "cleanup_worktree_apply",
+      repoKey: decodeURIComponent(cleanupWorktreeMatch[1]),
+      slug: decodeURIComponent(cleanupWorktreeMatch[2]),
+    };
+  }
   const changesMatch = pathname.match(/^\/api\/git\/repos\/([^/]+)\/changes$/);
   if (changesMatch) return { kind: "repo_changes", repoKey: decodeURIComponent(changesMatch[1]) };
   const autostashPullMatch = pathname.match(/^\/api\/git\/repos\/([^/]+)\/pull-autostash$/);
@@ -1054,6 +1084,39 @@ async function handleGitApiRoute(request, url, route) {
           commitMessage: payload.commitMessage,
           publisher: payload.publisher,
           conversationOrigin: payload.conversationOrigin,
+        })));
+    }
+    if (route.kind === "cleanup_worktree_preview") {
+      if (request.method !== "POST") return jsonResponse({ error: "method_not_allowed" }, 405);
+      const payload = await jsonRequestPayload(request, "worktree_cleanup_preview_request");
+      return jsonResponse(await previewWorktreeCleanupEnvironment({
+        companiesRoot,
+        repoKey: route.repoKey,
+        slug: route.slug,
+        inspectRuntimeUsage: cleanupRuntimeUsageInspector,
+        prEvidence: payload.prEvidence ?? null,
+      }));
+    }
+    if (route.kind === "cleanup_worktree_apply") {
+      if (request.method !== "POST") return jsonResponse({ error: "method_not_allowed" }, 405);
+      if (hostedWorkspace.profile === "hosted") {
+        // Hosted Team Workspace drží Team moduly always-on; destruktivní
+        // cleanup environmentů je local-only akce (stejně jako explicitní Stop).
+        return jsonResponse({
+          error: "hosted_cleanup_not_allowed",
+          message: "Hosted Team Workspace neprovádí lokální worktree cleanup.",
+        }, 403);
+      }
+      const payload = await jsonRequestPayload(request, "worktree_cleanup_apply_request");
+      return jsonResponse(await appsResponseCache.runMutation(() =>
+        applyWorktreeCleanupEnvironment({
+          companiesRoot,
+          repoKey: route.repoKey,
+          slug: route.slug,
+          expectedFingerprint: payload.previewFingerprint,
+          inspectRuntimeUsage: cleanupRuntimeUsageInspector,
+          stopRuntimeUsage: cleanupRuntimeStopper,
+          prEvidence: payload.prEvidence ?? null,
         })));
     }
     if (route.kind === "repo_pull") {

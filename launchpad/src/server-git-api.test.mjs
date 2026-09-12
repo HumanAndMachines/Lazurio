@@ -8,12 +8,14 @@ import {
   createLaunchpadGitFixture,
   createOrganization,
   createPackageApp,
+  createRepositoryDbWorktreeFixture,
   initGitRepo,
   runGit,
   startConflictingGitAm,
   startConflictingRebase,
   writeJson,
 } from "./git-fixture-helpers.test.mjs";
+import { createWorktreeFromPlan } from "./worktree-actions-lib.mjs";
 import { platformTestTimeout } from "./test-platform-setup.mjs";
 import { computeServerRootId } from "../../lazurio/core/server-identity-lib.mjs";
 import { runModuleLifecycle } from "../../lazurio/core/module-lifecycle-client-lib.mjs";
@@ -1628,6 +1630,92 @@ async function readLaunchpadPort(server) {
 // vlastní Bun.serve se nenabindoval, waitForHealth dostal 200 z /health cizího
 // serveru a /api/git/repos pak vrátilo 404. OS přidělený port je garantovaně
 // volný, takže health probe i git routy trefí vždy NÁŠ server.
+test("Launchpad server provede guarded worktree cleanup: běžící worktree App zastaví, restart během úklidu odmítne a environment uklidí", async () => {
+  const fixture = await createRepositoryDbWorktreeFixture({ port: 25428 });
+  tempRoots.push(fixture.root);
+  const branch = "CAC-0099-server-cleanup";
+  const created = await createWorktreeFromPlan({
+    companiesRoot: fixture.root,
+    repoKey: "BetaCo::mission-control",
+    planPath: fixture.planPath,
+    branch,
+    createdBy: "server-cleanup-test",
+  });
+  const worktreePath = join(fixture.root, created.worktree.path);
+  const sidecarPath = join(fixture.root, created.worktree.sidecar_path);
+  // Environment bez Task Agent relace (automation): vlastník není živý proces,
+  // takže je prokazatelně opuštěný. Plán zůstává in_progress — plán cleanup
+  // negatuje; rozhoduje merged práce nebo mrtvý vlastník.
+  const sidecar = JSON.parse(await readFile(sidecarPath, "utf8"));
+  sidecar.conversation_origin = {
+    ...sidecar.conversation_origin,
+    thread_id: null,
+    thread_locator_status: "not_applicable",
+  };
+  await writeFile(sidecarPath, `${JSON.stringify(sidecar, null, 2)}\n`);
+
+  const { port } = await startLaunchpadServer(fixture.root);
+  const repoKey = encodeURIComponent("BetaCo::mission-control");
+
+  const startedApp = await postJson(port, "/api/apps/betaco-mission-control-v3/start", {
+    source: { type: "worktree", slug: branch },
+  });
+  expect(startedApp.action).toBe("start");
+
+  // Zákaz restartu během úklidu: dokud existuje cleanup journal, start/open
+  // worktree App runtime manager odmítá.
+  const journalPath = join(fixture.orgRoot, ".worktrees", "root", "mission-control", `${branch}.cleanup.journal.json`);
+  await writeFile(journalPath, `${JSON.stringify({
+    schema_version: "companiesascode.worktree_cleanup_journal.v1",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    preview_fingerprint: "0".repeat(64),
+    environment: {},
+    steps: [{ id: "remove_edit", kind: "remove_edit", status: "pending" }],
+  }, null, 2)}\n`);
+  const banned = await postJson(port, "/api/apps/betaco-mission-control-v3/start", {
+    source: { type: "worktree", slug: branch },
+  }, 409);
+  expect(banned.error).toBe("worktree_cleanup_in_progress");
+  await rm(journalPath, { force: true });
+
+  // Běžící App není blocker: preview je ready_to_delete s runtime driftem a
+  // prvním krokem stop_runtime.
+  const preview = await postJson(port, `/api/git/repos/${repoKey}/worktrees/${branch}/cleanup/preview`, {});
+  expect(preview).toMatchObject({
+    schema_version: "companiesascode.worktree_cleanup_preview.v1",
+    state: "ready_to_delete",
+    blockers: [],
+    eligibility: { basis: "abandoned_owner_dead" },
+  });
+  expect(preview.drift.map((entry) => entry.code)).toContain("runtime_in_use");
+  expect(preview.steps).toEqual(["stop_runtime", "remove_dependency:mission-control/db", "remove_edit", "remove_sidecar"]);
+
+  // Apply se stale fingerprint neprovede žádnou destrukci ani stop.
+  await postJson(port, `/api/git/repos/${repoKey}/worktrees/${branch}/cleanup/apply`, {
+    previewFingerprint: "1".repeat(64),
+  }, 409);
+  expect(existsSync(worktreePath)).toBe(true);
+  expect((await getJson(port, "/api/apps/betaco-mission-control-v3/health")).runtime?.status ?? "").not.toBe("stopped");
+
+  const applied = await postJson(port, `/api/git/repos/${repoKey}/worktrees/${branch}/cleanup/apply`, {
+    previewFingerprint: preview.preview_fingerprint,
+  });
+  expect(applied).toMatchObject({
+    schema_version: "companiesascode.worktree_cleanup_apply.v1",
+    action: "cleanup_worktree",
+    journal_removed: true,
+  });
+  expect(applied.steps[0]).toMatchObject({ id: "stop_runtime", status: "completed" });
+  expect(existsSync(worktreePath)).toBe(false);
+  expect(existsSync(sidecarPath)).toBe(false);
+  // Canonical repository-db checkout zůstává beze změny a bez stale registrací.
+  expect(runGit(["status", "--porcelain=v1", "--untracked-files=normal"], fixture.repositoryDbRepo)).toBe("");
+  expect(runGit(["worktree", "list", "--porcelain"], fixture.repositoryDbRepo)).not.toContain(branch);
+  // Branch ref zůstává ownerovi.
+  expect(runGit(["rev-parse", "--verify", `refs/heads/${branch}`], fixture.missionControlRepo)).toMatch(/^[0-9a-f]{40}$/);
+}, platformTestTimeout(60_000));
+
 async function startLaunchpadServer(root, { env = {}, useDefaultStateRoot = false } = {}) {
   const port = await findFreePort();
   const stateRoot = useDefaultStateRoot

@@ -3,14 +3,70 @@
 Status: **cílový kontrakt a implementační plán CAC-0065**. Fresh-main task
 preflight a PR push preflight popsané níže jsou aktivní. `lazurio doctor`
 navíc lokálně reportuje nepovolené worktree cesty a jejich pozorovatelný Git
-stav, ale cleanup neklasifikuje ani neprovádí. Plánované `doctor worktrees ...`
-create/hydrate/cleanup příkazy zatím aktivním operátorským postupem nejsou.
+stav. Plánované `doctor worktrees ...` create/hydrate CLI příkazy zatím
+aktivním operátorským postupem nejsou.
 Aktivní Launchpad guarded create/publish lane už umí jeden edit worktree. Pokud
 jeho explicitně deklarovaná App vyžaduje aktivní child `repository_db_mount`,
 create navíc materializuje exact detached linked worktree ze zdravého
 kanonického checkoutu, zapíše oba members do v1 sidecaru a Runtime i Doctor
-ověřují tento binding. Obecné dependency profily, outer Organization
-environment a automatický cleanup zůstávají cílem CAC-0065.
+ověřují tento binding. Pro takto vytvořený single-edit environment je aktivní
+i úzká cleanup lane (DEV-6555): sdílená knihovna
+`lazurio/runtime/worktree-cleanup-lib.mjs` poskytuje read-only preview
+guardů níže a explicitní apply, který po živém rechecku proti preview
+fingerprintu a pod canonical create lockem zastaví runtime vlastněný
+environmentem a odstraní nested-first pouze sidecarem vlastněné members
+(dependency child → edit worktree → sidecar) s idempotentním
+completed/remaining journalem; branch refs i otevřený PR nechává. Resume
+rozpracovaného journalu není výjimka z guardů: před prvním zbývajícím krokem
+se tímtéž kódem znovu sestaví živý eligibility snapshot (vlastník, GitHub
+evidence, edit registrace/HEAD, dependency množina, runtime), který musí
+projít a dát přesně potvrzený journal fingerprint; jinak resume skončí
+fail-closed bez destruktivního kroku. Launchpad ji vystavuje přes
+`POST /api/git/repos/<repo>/worktrees/<slug>/cleanup/preview|apply`
+(hosted profil apply odmítá) a Doctor čte tentýž výsledek v checku
+`git.worktrees.cleanup`. Obecné dependency profily, outer Organization
+environment a širší automatický cleanup zůstávají cílem CAC-0065.
+
+## Worktree je zahoditelná kopie (rozhodnutí Principála 2026-09-08)
+
+> „Worktrees jsou zahoditelné kopie; vše hodnotné se průběžně commituje a
+> PUSHUJE do GitHub Draft PR. Při dokončení či autorizovaném úklidu disku
+> uklidit dokončené i prokazatelně opuštěné task-owned worktrees po smrti
+> agenta. Merged práci ověřit v GitHubu včetně squash (merge commit nemusí
+> být ancestor); opuštěnost neodvozovat jen ze stáří. Aktivnímu agentovi
+> prostředí nesmazat. Běžící aplikace není důkaz aktivního vlastníka: zastavit
+> její procesy, po lhůtě kill, zabránit restartu během úklidu, smazat nested
+> dočasné kopie a worktree. Matěj výslovně povolil zahození
+> dirty/untracked/unpushed změn i opuštěného rozpracovaného worktree bez
+> dalšího potvrzení. Obnovený agent navazuje z GitHubu a mezikrok vytvoří
+> znovu. Otevřený PR i remote branch zachovat. Nikdy hlavní checkout, canonical
+> DB (repository-db canonical checkout), osobní data ani cizí procesy. Bez
+> karantény, backup registru či trvalého monitoru."
+
+Prakticky to znamená:
+
+- **Hodnota žije v GitHubu, ne na disku.** Agent commituje a pushuje průběžně
+  do Draft PR; lokální worktree lze kdykoli znovu vytvořit z remote branche.
+- **Cleanup nepotvrzuje lokální drift.** Dirty soubory, untracked obsah,
+  nepushnuté commity ani rozpracovaná Git operace nejsou blocker; preview je
+  pravdivě vypíše jako `drift` a apply je zahodí (`git worktree remove
+  --force`).
+- **Kdo smí být uklizený:** dokončený environment (PR `MERGED` ověřený v
+  GitHubu podle head branche — squash merge commit není předek, proto se
+  neověřuje ancestor merge commitu, ale PR head této branche) nebo
+  prokazatelně opuštěný (explicitní `abandoned` disposition, nebo sidecar
+  `conversation_origin` bez živého procesu s touž session identitou na této
+  Mašině). Stáří samo nikdy nestačí.
+- **Kdo je chráněný:** živý vlastník (proces se session ID sidecaru) — vždy;
+  hlavní checkouty, canonical repository-db, personalspace, cizí worktrees a
+  cizí procesy — vždy. Neověřitelný vlastník (cizí Mašina, chybějící locator,
+  nečitelný process list) není důkaz smrti.
+- **Běžící aplikace se zastaví, ne respektuje.** Launchpad zastaví jen procesy,
+  které sám z tohoto worktree spustil (stop → grace → kill), po dobu úklidu
+  odmítá jejich start a co zbude s neznámým původem, ukončí cleanup
+  fail-closed. Cizí proces se nikdy nezabíjí.
+- **Žádná karanténa, backup registr ani trvalý monitor.** Obnovený agent
+  navazuje z GitHubu; otevřený PR a remote branch zůstávají.
 
 Tento dokument přesně definuje, jak má Lazurio vytvářet,
 zobrazovat, kontrolovat a uklízet Git worktrees pro Lazurio root a pro
@@ -95,15 +151,19 @@ adresář ani branch.
    `adopt` jsou zvláštní guarded akce pod stejným CLI prefixem a sdílenou
    knihovnou.
 8. Cleanup je defaultně dry-run, odstraňuje child worktrees před root obálkou
-   a nikdy implicitně nemaže lokální ani remote branch.
+   a nikdy implicitně nemaže lokální ani remote branch. Task-owned worktree
+   je zahoditelná kopie: lokální drift není důvod ho držet, živý vlastník a
+   chráněné cíle (hlavní checkout, canonical repository-db, personalspace,
+   cizí worktrees a procesy) jsou důvod ho nikdy nemazat.
 9. Productionspace zůstává read-only, pokud konkrétní owner repo nemá explicitní
    policy pro worktree akce.
 10. Root práce a Organization práce se nemíchají do jedné Git/access hranice.
     Shared změnu vlastní `CAC-XXXX`; Organization rollout má vlastní plán a
     prefix.
 11. Sidecar nese minimální lokální conversation origin a recovery handoff.
-    Thread ID pomáhá otevřít původní kontext na stejné mašině, ale cleanup i
-    publish rozhodnutí vždy vycházejí z živé Git/PR/runtime/MC evidence.
+    Thread ID pomáhá otevřít původní kontext na stejné mašině a je jediný
+    lokální důkaz živého vlastníka; cleanup i publish rozhodnutí vždy
+    vycházejí z živé Git/PR/runtime evidence.
 
 ## Tři podporované typy environmentu
 
@@ -574,7 +634,7 @@ Jednotná cleanup taxonomie:
 |---|---|
 | `active` | Práce nebo review pokračuje. |
 | `handoff` | Branch je pushnutá a čeká na převzetí jiným ownerem. |
-| `needs_attention` | Nejasný owner/PR, dirty dependency, orphan, missing path nebo jiný blocker. |
+| `needs_attention` | Živý nebo neověřitelný vlastník bez merged evidence, chráněný cíl v dosahu, nečitelná runtime evidence, orphan, přerušený journal nebo jiný blocker. |
 | `ready_to_delete` | Všechny níže uvedené guardy právě prošly. |
 | `missing_path` | Sidecar nebo Git registrace ukazuje na neexistující cestu; kandidát na repair/prune, ne běžný cleanup. |
 | `invalid` | Kontrakt nebo containment je porušený; žádná runtime/destruktivní akce. |
@@ -585,42 +645,55 @@ PR state (`OPEN`, `MERGED`, `CLOSED`) je samostatná evidence, ne cleanup stav.
 
 Environment je `ready_to_delete`, jen když současně platí:
 
-1. sidecar/schema/plan ownership je validní;
-2. každý existující member je správně registrovaný u owner Git repa;
-3. root i všichni members jsou clean včetně untracked souborů;
-4. žádný edit member nemá local-only/outgoing commit;
-5. exact HEAD každého edit memberu je zachovaný na remote refu nebo v explicitním
-   recovery bundle;
-6. žádný runtime proces nepoužívá environment path;
-7. žádný active/handoff writer environment stále nevlastní;
-8. Mission Control plán je terminální (`done` nebo explicitně `archived` /
-   abandoned podle kontraktu);
-9. každý edit member splní právě jednu PR větev: (a) vůbec nevytvořil změnu —
-   `HEAD == base_sha`, strom je clean a nemá outgoing commit — takže PR není
-   potřeba; (b) jeho exact-head PR je `MERGED`; nebo (c) je `CLOSED` bez merge
-   a současně má explicitní `abandoned` disposition plus ověřený
-   remote/bundle snapshot;
-10. dependency members jsou detached a clean;
-11. PR evidence je čerstvá a exact-head, nikoli stale cache;
-12. reverse-order teardown dry-run je bez containment nebo access chyby.
+1. sidecar/schema/plan ownership je validní a environment leží v kanonické
+   task-owned `.worktrees/` lane uvnitř Organization rootu;
+2. edit member je exact linked registrace svého owner repa na sidecar branchi
+   a není owner (hlavní) checkout sám;
+3. každý nested checkout uvnitř edit worktree je linked worktree kanonického
+   ownera příslušného repository-db slotu; checkout cizího ownera ani
+   kanonický checkout sám se nikdy nemažou;
+4. vlastník není živý: žádný proces této Mašiny nenese session identitu ze
+   sidecar `conversation_origin`;
+5. eligibility má právě jeden základ: (a) PR této head branche je `MERGED`
+   podle čerstvé (≤ 15 min) GitHub evidence, jejíž PR head je exact HEAD,
+   jeho předek nebo tip remote branche — pokrývá squash; (b) edit member má
+   explicitní `abandoned` disposition; nebo (c) vlastník je prokazatelně
+   mrtvý (guard 4 ověřený, ne jen neověřitelný);
+6. runtime evidence je čitelná (běžící managed App není blocker — apply ji
+   zastaví; nečitelná evidence je blocker, protože ji nelze bezpečně
+   zastavit);
+7. reverse-order teardown dry-run je bez containment nebo access chyby.
 
-`CLOSED` samo o sobě není důkaz bezpečí. `MERGED` také nestačí, pokud po merge
-vznikl lokální nepushnutý commit.
+Co **není** guard a hlásí se jen jako `drift`: dirty/untracked soubory,
+nepushnuté commity, rozpracovaná Git operace, posunutý HEAD dependency
+memberu, běžící managed runtime. Mission Control stav plánu cleanup
+negatuje: rozhoduje GitHub a živý vlastník.
+
+`CLOSED` samo o sobě není důkaz dokončení; bez merged evidence rozhoduje jen
+důkaz mrtvého vlastníka nebo explicitní abandon. Stáří worktree, sidecaru ani
+handoffu nikdy není důkaz.
 
 ### Pořadí apply
 
-1. znovu načíst live status a získat environment lock;
-2. zastavit jen runtime procesy explicitně vlastněné environmentem;
-3. odstranit dependency child worktrees;
-4. odstranit edit child worktrees;
-5. provést owner-repo `git worktree prune` pouze pro potvrzené registrace;
-6. odstranit outer Organization/Lazurio root worktree;
-7. archivovat nebo odstranit sidecar podle finálního audit kontraktu;
-8. vypsat ponechané branch refs a případný samostatný branch-cleanup návrh;
+1. znovu načíst live status (stejný eligibility snapshot jako preview,
+   fingerprint musí sedět) a získat environment lock (canonical create lock,
+   takže create a cleanup téže Organizace se nikdy nepřekrývají);
+2. zapsat journal; dokud existuje, Launchpad odmítá start/open worktree App;
+3. zastavit jen runtime procesy vlastněné environmentem přes lifecycle
+   vlastníka (stop → grace → kill); zbývající proces neznámého původu ukončí
+   cleanup fail-closed bez destruktivního kroku;
+4. odstranit dependency child worktrees (`--force`, dirty drift se zahazuje);
+5. odstranit edit worktree (`--force`) včetně nested dočasných kopií uvnitř;
+6. provést owner-repo `git worktree prune` pouze pro potvrzené registrace;
+7. odstranit sidecar a journal;
+8. vypsat ponechané branch refs a otevřený PR (obnovený agent navazuje z
+   GitHubu);
 9. ověřit readbackem, že cesta, registrace a runtime zmizely.
 
 Partial failure se nesmí maskovat. Journal zůstane `needs_attention` s přesným
-completed/remaining krokem; opakovaný příkaz bezpečně naváže.
+completed/remaining krokem; opakovaný příkaz bezpečně naváže — ale před prvním
+zbývajícím krokem znovu přepočítá celý eligibility snapshot (vlastník znovu
+živý, jiný sidecar, obsah vrácený na odstraněnou cestu = fail-closed).
 
 ## Launchpad kontrakt
 

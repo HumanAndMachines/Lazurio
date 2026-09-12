@@ -94,6 +94,7 @@ test("canonical path containment has one physical Core owner", async () => {
     "lazurio/runtime/personalspace-lib.mjs",
     "lazurio/runtime/repository-db-worktree-lib.mjs",
     "lazurio/runtime/runtime-lib.mjs",
+    "lazurio/runtime/worktree-cleanup-lib.mjs",
     "lazurio/runtime/worktree-lib.mjs",
   ]);
 });
