@@ -96,14 +96,14 @@ test("English covers loading, warnings, recovery, personalspace and worktree cop
   expect(t("worktree.created", { app: "Infra", worktree: "DEV-1" })).toBe("Infra: worktree created (DEV-1).");
 });
 
-test("English covers the complete Guide shell, glossary and recommendations", () => {
+test("English covers the external Guide tile", () => {
   setLocale("en", { storage: null });
-  expect(t("guide.navigation.glossary")).toBe("Glossary");
-  expect(t("guide.term.organization.label")).toBe("Organization");
-  expect(t("guide.term.machine.label")).toBe("Machine");
-  expect(t("guide.term.plugin.body")).toContain("does not automatically grant access");
-  expect(t("guide.apps.browserUse.caution")).toContain("still require your confirmation");
-  expect(Object.keys(en).filter((key) => key.startsWith("guide.")).length).toBeGreaterThan(90);
+  expect(t("guide.tile.open")).toBe("Open");
+  expect(t("guide.tile.summary")).toContain("working in Lazurio");
+  expect(Object.keys(en).filter((key) => key.startsWith("guide."))).toEqual([
+    "guide.tile.open",
+    "guide.tile.summary",
+  ]);
 });
 
 test("Czech outgoing changes resolve the few plural category", () => {
