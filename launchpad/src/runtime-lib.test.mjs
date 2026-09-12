@@ -3221,14 +3221,14 @@ test("runtime manager umí nainstalovat balíčky aplikace a zapsat install log"
       : spawnFixtureChild(root, command, options),
   });
   const expectedInstallCommand = process.platform === "win32"
-    ? "bun install --frozen-lockfile --backend=copyfile"
+    ? "bun install --frozen-lockfile --linker=isolated"
     : "bun install --frozen-lockfile";
 
   const result = await runtime.install("test-company-demo-v1");
   expect(result.action).toBe("install");
   expect(result.exit_code).toBe(0);
   expect(result.command_display).toBe(expectedInstallCommand);
-  expect(result.command_display.includes("--backend=copyfile")).toBe(process.platform === "win32");
+  expect(result.command_display.includes("--linker=isolated")).toBe(process.platform === "win32");
   expect(result.cwd.endsWith(join("organizations", "TestCompany", "modules", "demo", "app", "v1"))).toBe(true);
   expect(result.log_path).toBe("logs/apps/test-company-demo-v1.log");
   const repair = await runtime.install("test-company-demo-v1", { action: "repair" });
@@ -3239,7 +3239,7 @@ test("runtime manager umí nainstalovat balíčky aplikace a zapsat install log"
   expect(logs.content).toContain("code=0");
 });
 
-test("Windows runtime Install zachová copyfile backend ve skutečném Bun příkazu i evidenci", async () => {
+test("Windows runtime Install zachová isolated linker ve skutečném Bun příkazu i evidenci", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({
     port,
@@ -3250,7 +3250,7 @@ test("Windows runtime Install zachová copyfile backend ve skutečném Bun pří
   const runtime = createRuntimeManager({
     companiesRoot: root,
     launchpadRoot: join(root, "launchpad"),
-    instanceId: "windows-copyfile-install",
+    instanceId: "windows-isolated-install",
     platform: "win32",
     bunExecutable: process.execPath,
     resolvePortOwnerFn: async () => null,
@@ -3270,31 +3270,31 @@ test("Windows runtime Install zachová copyfile backend ve skutečném Bun pří
     "bun",
     "install",
     "--frozen-lockfile",
-    "--backend=copyfile",
+    "--linker=isolated",
   ]);
 
   const result = await runtime.install("test-company-demo-v1");
   const refreshed = await runtime.refreshDependencies("test-company-demo-v1");
 
   expect(installCommands).toEqual([
-    [process.execPath, "install", "--frozen-lockfile", "--backend=copyfile"],
-    [process.execPath, "install", "--frozen-lockfile", "--backend=copyfile"],
+    [process.execPath, "install", "--frozen-lockfile", "--linker=isolated"],
+    [process.execPath, "install", "--frozen-lockfile", "--linker=isolated"],
   ]);
   expect(result.command).toEqual([
     "bun",
     "install",
     "--frozen-lockfile",
-    "--backend=copyfile",
+    "--linker=isolated",
   ]);
-  expect(result.command_display).toBe("bun install --frozen-lockfile --backend=copyfile");
+  expect(result.command_display).toBe("bun install --frozen-lockfile --linker=isolated");
   expect(refreshed).toMatchObject({
     action: "refresh",
-    command: ["bun", "install", "--frozen-lockfile", "--backend=copyfile"],
-    command_display: "bun install --frozen-lockfile --backend=copyfile",
+    command: ["bun", "install", "--frozen-lockfile", "--linker=isolated"],
+    command_display: "bun install --frozen-lockfile --linker=isolated",
   });
   const logs = await runtime.logs("test-company-demo-v1");
   expect(logs.content).toContain(
-    "install test-company-demo-v1 command=bun install --frozen-lockfile --backend=copyfile",
+    "install test-company-demo-v1 command=bun install --frozen-lockfile --linker=isolated",
   );
 });
 
