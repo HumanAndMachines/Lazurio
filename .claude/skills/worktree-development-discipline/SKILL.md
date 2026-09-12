@@ -16,6 +16,11 @@ autoritu.
 
 ## Postup
 
+Tento skill řídí source/PR práci. Běžná repository-db data mají vlastní
+draft a publikační kontrakt a deklarovanou branch (Mission Control `v3`).
+Read-only dotaz či diagnostika při selhání gate nevyžadují worktree; selhání
+blokuje změny dotčeného checkoutu a Publikaci, nikoli zjištění příčiny.
+
 1. Primární checkout `<Lazurio>` je reference pro Launchpad/Doctor.
    Neměň v něm trackovaný obsah, nezakládej v něm feature branch a drž ho na
    `main`, pokud tomu nebrání už existující zachovaná práce. Před převzetím
@@ -120,7 +125,7 @@ autoritu.
    něm pokládej otázku na Publikaci.
 12. Handoff veď průvodcovsky (decisions 0103/0112): závěrečná zpráva začíná
    standardizovaným handoff blokem (PR URL, base, exact HEAD, lidské
-   shrnutí, ověření, odkaz na aplikaci běžící z worktree) a končí
+   shrnutí, ověření, odkaz na aplikaci běžící z worktree, pokud změna má relevantní UI) a končí
    standardizovanou dvojotázkou „Mám změny Publikovat tvým jménem? Nebo mám
    požádat jiného Kolegu o kontrolu a Publikaci?" — volbu vždy nabídni,
    nedomýšlej ji za Principála. Před otázkou zjisti
