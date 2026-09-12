@@ -34,12 +34,15 @@ function cssProperty(source, selector, property) {
 }
 
 test("Launchpad public shell exposes a header space switcher and app cards", async () => {
-  const [html, js, css, server, appState] = await Promise.all([
+  const [html, js, css, server, appState, wisprLogo, codexBarLogo, browserUseLogo] = await Promise.all([
     readFile(join(publicRoot, "index.html"), "utf8"),
     readFile(join(publicRoot, "app.js"), "utf8"),
     readFile(join(publicRoot, "styles.css"), "utf8"),
     readFile(join(import.meta.dirname, "server.mjs"), "utf8"),
     readFile(join(publicRoot, "app-state.js"), "utf8"),
+    readFile(join(publicRoot, "guide-assets", "wispr-flow.svg"), "utf8"),
+    readFile(join(publicRoot, "guide-assets", "codexbar.svg"), "utf8"),
+    readFile(join(publicRoot, "guide-assets", "browser-use.svg"), "utf8"),
   ]);
 
   // Shell regions jsou přítomné; interní debug tabulka se do denního UI neposílá.
@@ -74,21 +77,15 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(html).toContain('id="guideMain" class="guide-surface"');
   expect(html).not.toContain('class="guide-eyebrow"');
   expect(html).toContain('id="guideSearch" type="search" data-i18n-placeholder="guide.search.placeholder"');
-  expect(html).toContain('data-guide-topic="installation" aria-current="page"');
-  expect(html).toContain('data-guide-topic-panel="installation"');
-  expect(html).toContain('data-i18n="guide.navigation.installation"');
-  expect(html).toContain('data-i18n="guide.install.roles.agent.title"');
-  expect(html).toContain('data-i18n="guide.install.roles.user.title"');
-  expect(html).toContain("Lazurio for GitHub");
-  expect(html).toContain("All repositories");
-  expect(html).toContain("Runtime ready");
-  expect(html).toContain("Editing ready");
-  expect(html).toContain("Publishing ready");
-  expect(html).toContain('id="guidePromptCopy" class="guide-copy-button" type="button" disabled data-i18n="guide.install.prompt.copy"');
-  expect(html).toContain('id="guidePromptError" class="guide-content-error" role="alert" hidden data-i18n="guide.install.prompt.error"');
-  expect(html).toContain('id="guidePolicyDisclosure" class="guide-policy" data-guide-search-item data-guide-search-key="guide.install.policy.summary"');
+  expect(html).toContain('data-guide-topic="glossary" aria-current="page"');
+  expect(html).toContain('data-guide-topic-panel="glossary"');
+  expect(html).not.toContain('data-guide-topic="installation"');
+  expect(html).not.toContain('data-guide-topic-panel="installation"');
+  expect(html).not.toContain('data-i18n="guide.navigation.installation"');
+  expect(html).not.toContain('data-i18n="guide.install.');
+  expect(html).not.toContain('id="guidePrompt');
+  expect(html).not.toContain('id="guidePolicy');
   expect(html).not.toContain("data-guide-search-text=");
-  expect(html).toContain('data-i18n="guide.install.policy.summary"');
   expect(html).not.toContain("gh auth login --hostname github.com");
   expect(html).toContain('data-i18n="guide.glossary.basic"');
   expect(html).toContain('data-i18n="guide.glossary.advanced"');
@@ -105,6 +102,16 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(html).toContain("Browser Use");
   expect(html).toContain('href="https://browser-use.com/"');
   expect((html.match(/class="guide-recommendation-visual" aria-hidden="true"/g) ?? []).length).toBe(3);
+  expect(html).toContain('src="/guide-assets/wispr-flow.svg"');
+  expect(html).toContain('src="/guide-assets/codexbar.svg"');
+  expect(html).toContain('src="/guide-assets/browser-use.svg"');
+  expect(wisprLogo).toContain("Official dark Wispr Flow wordmark");
+  expect(wisprLogo).toContain('viewBox="0 0 446 125"');
+  expect(codexBarLogo).toContain("Official CodexBar app icon");
+  expect(codexBarLogo).toContain("data:image/png;base64,");
+  expect(browserUseLogo).toContain("Official Browser Use primary mark");
+  expect(browserUseLogo).toContain('viewBox="0 0 100 100"');
+  expect(html).not.toContain("guide-recommendation-visual-svg");
   expect(html).toContain("guide-recommendation--wispr");
   expect(html).toContain("guide-recommendation--codexbar");
   expect(html).toContain("guide-recommendation--browser-use");
@@ -112,18 +119,15 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   const workspaceBreakpoint = cssBlock(css, "@media (max-width: 900px)");
   expect(cssProperty(workspaceBreakpoint, ".guide-recommendation", "grid-template-columns")).toBe("minmax(0, 1fr)");
   expect(cssProperty(workspaceBreakpoint, ".guide-recommendation-visual", "width")).toBe("min(100%, 28rem)");
-  expect(css).toContain(".guide-visual-cursor");
+  expect(css).toContain(".guide-recommendation-logo--app-icon");
   expect(html).toContain('data-i18n="guide.apps.browserUse.caution"');
   expect(html).toContain('data-i18n="guide.apps.intro"');
   expect(js).toContain("function filterGuideContent(query)");
   expect(js).toContain("function selectGuideTopic(topic)");
-  expect(js).toContain('`/api/guide/organization-install?locale=${encodeURIComponent(locale)}`');
-  expect(js).toContain("guideInstallPayloadIsValid(payload, locale)");
-  expect(js).toContain('t("guide.install.prompt.copied")');
-  expect(js).toContain('t("guide.install.prompt.copyFailed")');
-  expect(js.indexOf("guideInstallContentPromise: null")).toBeLessThan(js.indexOf("await loadData()"));
-  expect(js).toContain("navigator.clipboard.writeText(prompt)");
-  expect(js).toContain("Guide install content unavailable");
+  expect(js).toContain('guideActiveTopic: "glossary"');
+  expect(js).not.toContain("guideInstallContentPromise");
+  expect(js).not.toContain("loadGuideInstallContent");
+  expect(js).not.toContain("copyGuideInstallPrompt");
   expect(server).toContain('url.pathname === "/api/guide/organization-install"');
   expect(server).toContain("rootPath: lazurioCodeRoot");
   expect(server).toContain('locale: url.searchParams.get("locale")');

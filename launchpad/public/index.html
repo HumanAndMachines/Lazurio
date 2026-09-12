@@ -213,76 +213,14 @@
               </div>
               <nav class="guide-topics" aria-labelledby="guideNavigationTitle">
                 <h2 id="guideNavigationTitle" data-i18n="guide.navigation.title">Obsah</h2>
-                <button class="guide-topic-link is-active" type="button" data-guide-topic="installation" aria-current="page" data-i18n="guide.navigation.installation">Instalace nové Mašiny</button>
-                <button class="guide-topic-link" type="button" data-guide-topic="glossary" data-i18n="guide.navigation.glossary">Slovníček pojmů</button>
+                <button class="guide-topic-link is-active" type="button" data-guide-topic="glossary" aria-current="page" data-i18n="guide.navigation.glossary">Slovníček pojmů</button>
                 <button class="guide-topic-link" type="button" data-guide-topic="recommended-apps" data-i18n="guide.navigation.recommendedApps">Doporučené aplikace</button>
               </nav>
             </aside>
 
             <article class="guide-reader" data-i18n-aria-label="guide.reader.a11y">
               <div class="guide-reader-content">
-                <section id="guideInstallation" class="guide-topic-panel" data-guide-topic-panel="installation">
-                  <header class="guide-article-header" data-guide-search-item>
-                    <span class="guide-reader-kicker" data-i18n="guide.install.kicker">První spuštění</span>
-                    <h2 data-i18n="guide.install.title">Novou Mašinu připraví Agent. Vy jen dokončíte osobní kroky.</h2>
-                    <p data-i18n="guide.install.intro">Nepotřebujete otevírat terminál ani hledat příkazy. Zkopírujte připravené zadání do Codexu a Agent vás zastaví pouze tam, kde je opravdu potřeba vaše přihlášení, potvrzení nebo rozhodnutí.</p>
-                  </header>
-
-                  <div class="guide-onboarding-roles" data-i18n-aria-label="guide.install.roles.a11y">
-                    <section class="guide-onboarding-role" data-guide-search-item>
-                      <span class="guide-onboarding-step">1</span>
-                      <h3 data-i18n="guide.install.roles.agent.title">Co zařídí Agent</h3>
-                      <p data-i18n="guide.install.roles.agent.body">Zkontroluje a bezpečně doplní povolené nástroje, obslouží terminál, ověří GitHub a SSH, nainstaluje Organizaci, dokončí Doctor a spustí aplikace přes Launchpad.</p>
-                    </section>
-                    <section class="guide-onboarding-role" data-guide-search-item>
-                      <span class="guide-onboarding-step">2</span>
-                      <h3 data-i18n="guide.install.roles.user.title">Co může potřebovat od vás</h3>
-                      <p data-i18n="guide.install.roles.user.body">Dokončit právě otevřené GitHub přihlášení, přijmout repository pozvánku nebo rozhodnout o přesně vysvětleném rozporu. Přístup ani bezpečnostní nastavení Agent nemění potichu.</p>
-                    </section>
-                    <section class="guide-onboarding-role" data-guide-search-item>
-                      <span class="guide-onboarding-step">3</span>
-                      <h3 data-i18n="guide.install.roles.prerequisites.title">Co musí být připravené předem</h3>
-                      <p><span data-i18n="guide.install.roles.prerequisites.beforeApp">Owner Organizace nainstaluje GitHub App</span> <strong>Lazurio for GitHub</strong> <span data-i18n="guide.install.roles.prerequisites.for">pro</span> <strong>All repositories</strong>. <span data-i18n="guide.install.roles.prerequisites.afterScope">Builder musí mít přijaté pozvánky a skutečné GitHub oprávnění k pracovním repozitářům.</span></p>
-                    </section>
-                  </div>
-
-                  <section class="guide-readiness" data-guide-search-item aria-labelledby="guideReadinessTitle">
-                    <div class="guide-section-heading">
-                      <span class="guide-reader-kicker" data-i18n="guide.install.readiness.kicker">Jak poznáte hotovo</span>
-                      <h3 id="guideReadinessTitle" data-i18n="guide.install.readiness.title">Tři různé úrovně připravenosti</h3>
-                    </div>
-                    <div class="guide-readiness-grid">
-                      <div><strong>Runtime ready</strong><span data-i18n="guide.install.readiness.runtime">Aplikace jde spustit a její health kontrola odpovídá.</span></div>
-                      <div><strong>Editing ready</strong><span data-i18n="guide.install.readiness.editing">Builder má správný checkout, nástroje a právo zapisovat změny.</span></div>
-                      <div><strong>Publishing ready</strong><span data-i18n="guide.install.readiness.publishing">GitHub dovoluje dokončit schválenou změnu podle aktuálních pravidel repozitáře.</span></div>
-                    </div>
-                    <p class="guide-readiness-note"><span data-i18n="guide.install.readiness.noteBefore">Pouhé</span> <code>READ</code> <span data-i18n="guide.install.readiness.noteAfter">není Builder-ready stav. Agent v závěru pojmenuje každé omezení zvlášť.</span></p>
-                  </section>
-
-                  <section class="guide-prompt-card" data-guide-search-item aria-labelledby="guidePromptTitle">
-                    <div class="guide-prompt-heading">
-                      <div>
-                        <span class="guide-reader-kicker" data-i18n="guide.install.prompt.kicker">Zadání pro Codex</span>
-                        <h3 id="guidePromptTitle" data-i18n="guide.install.prompt.title">Krátký instalační prompt</h3>
-                      </div>
-                      <button id="guidePromptCopy" class="guide-copy-button" type="button" disabled data-i18n="guide.install.prompt.copy">Kopírovat prompt</button>
-                    </div>
-                    <p><span data-i18n="guide.install.prompt.instructionBefore">Po zkopírování nahraďte</span> <code>&lt;github-organization&gt;</code> <span data-i18n="guide.install.prompt.instructionAfter">přesným názvem GitHub Organizace.</span></p>
-                    <p id="guidePromptStatus" class="guide-content-status" role="status" data-i18n="guide.install.prompt.loading">Načítám aktuální prompt z instalačního manuálu…</p>
-                    <pre id="guidePrompt" class="guide-code-block" tabindex="0" hidden><code></code></pre>
-                    <div id="guidePromptError" class="guide-content-error" role="alert" hidden data-i18n="guide.install.prompt.error">
-                      Aktuální prompt se nepodařilo bezpečně načíst. Nepoužívejte starou kopii; požádejte Agenta, aby ověřil instalační manuál a Doctor.
-                    </div>
-                  </section>
-
-                  <details id="guidePolicyDisclosure" class="guide-policy" data-guide-search-item data-guide-search-key="guide.install.policy.summary">
-                    <summary data-i18n="guide.install.policy.summary">Úplný expert/policy postup</summary>
-                    <p data-i18n="guide.install.policy.body">Toto je celý aktuální runbook pro Agenta. Je pouze ke čtení; Launchpad z něj nic automaticky nespouští.</p>
-                    <pre id="guidePolicy" class="guide-code-block guide-policy-code" tabindex="0" hidden><code></code></pre>
-                  </details>
-                </section>
-
-                <section id="guideGlossary" class="guide-topic-panel" data-guide-topic-panel="glossary" hidden>
+                <section id="guideGlossary" class="guide-topic-panel" data-guide-topic-panel="glossary">
                   <header class="guide-article-header">
                     <span class="guide-reader-kicker" data-i18n="guide.glossary.kicker">Slovníček</span>
                     <h2 data-i18n="guide.glossary.title">Pojmy, se kterými se v Lazuriu setkáte</h2>
@@ -354,16 +292,7 @@
                   <div class="guide-recommendation-list">
                     <section class="guide-recommendation guide-recommendation--wispr" data-guide-search-item aria-labelledby="guideWisprFlowTitle">
                       <div class="guide-recommendation-visual" aria-hidden="true">
-                        <svg class="guide-recommendation-visual-svg" viewBox="0 0 240 152" fill="none">
-                          <rect class="guide-visual-canvas" x="1" y="1" width="238" height="150" rx="18" />
-                          <circle class="guide-visual-accent-fill" cx="49" cy="76" r="27" />
-                          <rect class="guide-visual-on-accent" x="43" y="57" width="12" height="24" rx="6" />
-                          <path class="guide-visual-on-accent-stroke" d="M38 76.5C38 83 42.8 87 49 87C55.2 87 60 83 60 76.5M49 87V96M42 96H56" />
-                          <path class="guide-visual-accent-stroke guide-visual-wave" d="M84 69V83M94 62V90M104 71V81" />
-                          <path class="guide-visual-arrow" d="M114 76H127M123 71L128 76L123 81" />
-                          <rect class="guide-visual-panel" x="137" y="43" width="78" height="66" rx="10" />
-                          <path class="guide-visual-line" d="M151 60H201M151 72H192M151 84H204M151 96H180" />
-                        </svg>
+                        <img class="guide-recommendation-logo guide-recommendation-logo--wide" src="/guide-assets/wispr-flow.svg" alt="" />
                       </div>
                       <div class="guide-recommendation-content">
                         <div class="guide-recommendation-heading">
@@ -378,19 +307,7 @@
 
                     <section class="guide-recommendation guide-recommendation--codexbar" data-guide-search-item aria-labelledby="guideCodexBarTitle">
                       <div class="guide-recommendation-visual" aria-hidden="true">
-                        <svg class="guide-recommendation-visual-svg" viewBox="0 0 240 152" fill="none">
-                          <rect class="guide-visual-canvas" x="1" y="1" width="238" height="150" rx="18" />
-                          <rect class="guide-visual-panel" x="24" y="29" width="192" height="94" rx="12" />
-                          <path class="guide-visual-line" d="M24 50H216" />
-                          <circle class="guide-visual-muted-fill" cx="39" cy="40" r="3" />
-                          <circle class="guide-visual-muted-fill" cx="49" cy="40" r="3" />
-                          <rect class="guide-visual-accent-fill" x="169" y="35" width="31" height="10" rx="5" />
-                          <path class="guide-visual-line" d="M46 70H194M46 92H194" />
-                          <path class="guide-visual-accent-stroke guide-visual-meter" d="M46 70H157M46 92H124" />
-                          <circle class="guide-visual-accent-fill" cx="194" cy="70" r="5" />
-                          <circle class="guide-visual-accent-fill" cx="194" cy="92" r="5" />
-                          <path class="guide-visual-accent-stroke" d="M46 108H82" />
-                        </svg>
+                        <img class="guide-recommendation-logo guide-recommendation-logo--app-icon" src="/guide-assets/codexbar.svg" alt="" />
                       </div>
                       <div class="guide-recommendation-content">
                         <div class="guide-recommendation-heading">
@@ -405,19 +322,7 @@
 
                     <section class="guide-recommendation guide-recommendation--browser-use" data-guide-search-item aria-labelledby="guideBrowserUseTitle">
                       <div class="guide-recommendation-visual" aria-hidden="true">
-                        <svg class="guide-recommendation-visual-svg" viewBox="0 0 240 152" fill="none">
-                          <rect class="guide-visual-canvas" x="1" y="1" width="238" height="150" rx="18" />
-                          <rect class="guide-visual-panel" x="23" y="26" width="194" height="100" rx="12" />
-                          <path class="guide-visual-line" d="M23 49H217" />
-                          <circle class="guide-visual-accent-fill" cx="38" cy="38" r="3" />
-                          <circle class="guide-visual-muted-fill" cx="48" cy="38" r="3" />
-                          <circle class="guide-visual-muted-fill" cx="58" cy="38" r="3" />
-                          <rect class="guide-visual-soft-fill" x="38" y="65" width="66" height="45" rx="8" />
-                          <path class="guide-visual-accent-stroke" d="M51 78H91M51 89H83M51 100H72" />
-                          <rect class="guide-visual-accent-fill" x="128" y="66" width="66" height="18" rx="9" />
-                          <path class="guide-visual-line" d="M128 99H190M128 110H174" />
-                          <path class="guide-visual-cursor" d="M177 81L184 105L190 95L201 91L177 81Z" />
-                        </svg>
+                        <img class="guide-recommendation-logo guide-recommendation-logo--symbol" src="/guide-assets/browser-use.svg" alt="" />
                       </div>
                       <div class="guide-recommendation-content">
                         <div class="guide-recommendation-heading">
