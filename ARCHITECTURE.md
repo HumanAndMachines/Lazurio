@@ -1,5 +1,8 @@
 # Architektura Lazuria
 
+> **Buddy target update (2026-09-12).** The current product direction is documented in [the hosted Buddy manual](manual/hosted-buddy-vps.md). Existing pinned dependencies and provisioning mechanics below describe the implemented baseline until a separately verified migration; mandatory Zulip/bridge and VPS-only placement are not requirements for new Buddy product design. This documentation change does not alter runtime behavior.
+
+
 Tento dokument je krátká mapa cílového systému. Popisuje jeho hlavní části,
 hranice a pravidla. Neobsahuje podrobný provozní postup ani úplný popis
 současné implementace.
@@ -264,7 +267,8 @@ je v [GEN2 → GEN3 runbooku](manual/gen2-to-gen3-migration.md).
 
 ## Konverzační a nástrojové povrchy
 
-- **Zulip je chat s Residentem.** Nese jeho identitu, kontinuitu a mandát.
+- **Osobní kontakt s Buddym používá podporovaný kanál Hermesu.** Soukromý obsah zůstává v osobní hranici.
+- **GitHub Discussions je cílová asynchronní organizační domluva.** Odeslání zprávy neznamená okamžité převzetí úkolu; implementace doručování zbývá ověřit. Mission Control dál drží úkoly a jejich stav.
 - **T3 Code nebo jiné agentní CLI je chat s Agenty na Mašině.** Slouží
   konkrétní práci, opravám a diagnostice.
 - **Lazurio CLI je nástroj Agentů.** Promítá bezpečný kontext, Doctor a
@@ -394,7 +398,8 @@ ani worktrees. Konkrétní produkční topologie vyžaduje vlastní kontrakt.
 
 | Druh informace | Kanonický domov |
 | --- | --- |
-| Konverzace Residenta | Zulip |
+| Osobní konverzace s Buddym | Podporovaný soukromý kanál Hermesu / osobní prostředí |
+| Asynchronní organizační domluva (cílově) | GitHub Discussions příslušného repozitáře |
 | Dlouhodobá znalost Residenta | GBrain |
 | Software, dokumentace a review | GitHub |
 | Plán, stav a odpovědnost | Mission Control |
@@ -402,7 +407,7 @@ ani worktrees. Konkrétní produkční topologie vyžaduje vlastní kontrakt.
 | Důvod zásadního rozhodnutí | decision record |
 
 Tyto vrstvy se nekopírují automaticky jedna do druhé. GBrain není kopie
-Mission Controlu, Zulip není task ledger a Lazurio není vzdálený sklad veškeré
+Mission Controlu, Discussions není druhý task ledger a Lazurio není vzdálený sklad veškeré
 paměti Residenta.
 
 ## Generace nejsou produkty
