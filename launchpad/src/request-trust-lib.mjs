@@ -20,7 +20,7 @@ export function createRequestTrustPolicy({
     ? normalizeHostedLaunchpadOrigin(hostedExternalOrigin)
     : null;
   const hostedAuthUrl = normalizedProfile === "hosted"
-    ? normalizeHostedAuthCheckUrl(hostedAuthCheckUrl, hostedOrigin)
+    ? normalizeHostedAuthCheckUrl(hostedAuthCheckUrl)
     : null;
   const hostedCookieName = normalizedProfile === "hosted"
     ? normalizeHostedAuthCookieName(hostedAuthCookieName)
@@ -146,7 +146,7 @@ function normalizeHostedLaunchpadOrigin(rawValue) {
   return url.origin;
 }
 
-function normalizeHostedAuthCheckUrl(rawValue, hostedOrigin) {
+function normalizeHostedAuthCheckUrl(rawValue) {
   const candidate = String(rawValue ?? "").trim();
   if (!candidate) {
     throw new Error("LAZURIO_LAUNCHPAD_AUTH_CHECK_URL is required for the hosted Workspace profile.");
@@ -165,10 +165,9 @@ function normalizeHostedAuthCheckUrl(rawValue, hostedOrigin) {
     || url.hash
     || url.pathname !== "/oauth2/auth"
     || candidate !== url.href
-    || url.origin === hostedOrigin
   ) {
     throw new Error(
-      "LAZURIO_LAUNCHPAD_AUTH_CHECK_URL must be a distinct clean HTTPS /oauth2/auth endpoint.",
+      "LAZURIO_LAUNCHPAD_AUTH_CHECK_URL must be a clean HTTPS /oauth2/auth endpoint.",
     );
   }
   return url.href;

@@ -196,3 +196,8 @@ Shaping prošel nezávislou protiváhou se zaměřením na duplicitní autority,
 readiness versus autorizaci, revokaci a částečný rollout. Jde o návrh
 acceptance; živý drill obnovy a automatický URL consumer zatím tímto
 dokumentem prokázány nejsou.
+
+
+### Native shared-origin session verification
+
+For the approved single-VM trust boundary, Launchpad may verify the exact workspace session at `https://machine.organization.lazurio.io/oauth2/auth` on its own public origin. The gateway must route this exact endpoint to oauth2-proxy, never to Launchpad or a module. This is a server-side HTTPS request with only the selected signed session cookie, manual redirect handling and the existing bounded timeout. Shared origin does not remove session revalidation or permit identity headers to replace it. Non-HTTPS URLs, credentials, query/fragment and other paths remain invalid.
