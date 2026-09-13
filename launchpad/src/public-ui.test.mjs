@@ -102,9 +102,9 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(html).toContain("Browser Use");
   expect(html).toContain('href="https://browser-use.com/"');
   expect((html.match(/class="guide-recommendation-visual" aria-hidden="true"/g) ?? []).length).toBe(3);
-  expect(html).toContain('src="/guide-assets/wispr-flow.svg"');
-  expect(html).toContain('src="/guide-assets/codexbar.svg"');
-  expect(html).toContain('src="/guide-assets/browser-use.svg"');
+  expect(html).toContain('src="./guide-assets/wispr-flow.svg"');
+  expect(html).toContain('src="./guide-assets/codexbar.svg"');
+  expect(html).toContain('src="./guide-assets/browser-use.svg"');
   expect(wisprLogo).toContain("Official dark Wispr Flow wordmark");
   expect(wisprLogo).toContain('viewBox="0 0 446 125"');
   expect(codexBarLogo).toContain("Official CodexBar app icon");
@@ -168,7 +168,7 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(js).toContain("const LAZURIO_APP_ICON_FILES = Object.freeze({");
   expect(js).toContain("const key = appIconKey(app);");
   expect(js).toContain("const lazurioIcon = lazurioAppIcon(key);");
-  expect(js).toContain('return file ? `/app-icons/lazurio/${file}` : "";');
+  expect(js).toContain('return file ? `./app-icons/lazurio/${file}` : "";');
   const iconResolverBlock = js.slice(js.indexOf("function lazurioAppIcon"), js.indexOf("function appCardTone"));
   expect(iconResolverBlock).not.toContain("app.module");
   expect(iconResolverBlock).not.toContain("app.company");
@@ -201,7 +201,7 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(js).toContain("function spaceOption");
   expect(js).toContain("function selectSpace");
   expect(js).toContain("function applyLaunchpadHash");
-  expect(js).toContain('from "/lazurio-runtime/deep-link-lib.mjs"');
+  expect(js).toContain('from "./lazurio-runtime/deep-link-lib.mjs"');
   expect(js).toContain("function syncActiveSpaceHash");
   expect(js).toContain("let launchpadScopeDataReady = false");
   expect(js).toContain("launchpadScopeDataReady = true");
