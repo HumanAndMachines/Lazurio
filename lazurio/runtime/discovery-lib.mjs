@@ -92,7 +92,8 @@ const moduleSchemaPath = join(lazurioPackageRoot, "schemas", "lazurio-module.sch
 const pluginSchemaPath = join(lazurioPackageRoot, "schemas", "launchpad-plugin.schema.json");
 const defaultOrganizationMountpoint = "organizations";
 const defaultModuleTemplateMountpoint = "templates";
-const requiredLaunchpadRootPaths = ["launchpad.gen3.json", "launchpad", "guide", "organizations", "manual"];
+const requiredWorkspaceRootPaths = ["launchpad.gen3.json", "organizations"];
+const requiredRuntimeRootPaths = ["launchpad", "guide", "manual"];
 const requiredOrganizationWorkspacePaths = [
   "modules.manifest.json",
   "manual",
@@ -2364,7 +2365,17 @@ export async function discoverLaunchpadApps(
   validateRequiredPaths({
     root: companiesRoot,
     label: workspaceRelativePath(process.cwd(), companiesRoot) || ".",
-    requiredPaths: requiredLaunchpadRootPaths,
+    requiredPaths: requiredWorkspaceRootPaths,
+    failures,
+  });
+
+  // Resident installs keep framework files outside the writable workspace.
+  // The caller supplies its verified runtime root; never skip either root check.
+  const runtimeRoot = options.runtime_root ?? companiesRoot;
+  validateRequiredPaths({
+    root: runtimeRoot,
+    label: workspaceRelativePath(process.cwd(), runtimeRoot) || ".",
+    requiredPaths: requiredRuntimeRootPaths,
     failures,
   });
 

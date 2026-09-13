@@ -1053,6 +1053,10 @@ test("hosted Launchpad keeps Team modules cold and derives their external URLs",
 
 test("instance-bound local shutdown rejects stale callers and stops the managed module process tree", async () => {
   const root = await createLaunchpadGitFixture();
+  // A resident workspace has no framework checkout; the running Server owns it.
+  for (const name of ["launchpad", "guide", "manual"]) {
+    await rm(join(root, name), { recursive: true });
+  }
   const appPort = await findFreePort();
   const app = {
     id: "betaco-session-shutdown-v1",
