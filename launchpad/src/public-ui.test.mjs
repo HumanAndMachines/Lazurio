@@ -49,10 +49,10 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(html).toContain(`<meta name="apple-mobile-web-app-title" content="${LAZURIO_LAUNCHPAD_NAME}" />`);
   expect(html).toContain('id="spaceSwitcherButton"');
   expect(html).toContain('id="spaceSwitcherMenu"');
-  expect(html).toContain('id="localeSwitcher"');
-  expect(html).toContain('data-locale="en"');
-  expect(html).toContain('data-locale="cs"');
-  expect(css).toMatch(/\.locale-switcher-option\[aria-pressed="true"\][^{]*\{[^}]*color: var\(--lz-white\)/);
+  expect(html).not.toContain('id="localeSwitcher"');
+  expect(html).not.toContain('data-locale="en"');
+  expect(html).not.toContain('data-locale="cs"');
+  expect(css).not.toContain(".locale-switcher-option");
   expect(html).toContain('id="appsGrid"');
   expect(html).toContain('class="marketplace-teaser side-panel"');
   expect(html).toContain('id="marketplaceTeaserTitle" data-i18n="marketplace.title"');
@@ -179,8 +179,12 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(profileBlock).toContain("name.href = profile.settings_url");
   expect(profileBlock).toContain('name.target = "_blank"');
   const settingsBlock = js.slice(js.indexOf("function profileSettingsItem"), js.indexOf("function settingsIcon"));
-  expect(settingsBlock).toContain('document.createElement("div")');
-  expect(settingsBlock).toContain('item.setAttribute("aria-disabled", "true")');
+  expect(settingsBlock).toContain('document.createElement("section")');
+  expect(settingsBlock).toContain('document.createElement("select")');
+  expect(settingsBlock).toContain('select.className = "space-language-select"');
+  expect(settingsBlock).toContain('select.value = getLocale()');
+  expect(settingsBlock).toContain('setLocale(select.value)');
+  expect(settingsBlock).not.toContain('aria-disabled');
   expect(settingsBlock).not.toContain(".href");
   expect(server).toContain("organizationLogoCandidates");
   expect(server).toContain("launchpad/app/v1/web/launchpad-icon.png");
@@ -267,6 +271,7 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(css).toContain(".space-profile-card");
   expect(css).toContain(".space-profile-photo img");
   expect(css).toContain(".space-profile-settings");
+  expect(css).toContain(".space-language-select");
   expect(css).toContain("grid-template-columns: minmax(0, 1fr)");
   expect(css).not.toContain(".rail-panel");
   expect(css).not.toContain(".runtime-root-badge");

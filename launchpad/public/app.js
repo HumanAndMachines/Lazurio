@@ -395,19 +395,12 @@ const elements = {
   notificationsFilterUnread: document.querySelector("#notificationsFilterUnread"),
   notificationsCountAll: document.querySelector("#notificationsCountAll"),
   notificationsCountUnread: document.querySelector("#notificationsCountUnread"),
-  localeSwitcher: document.querySelector("#localeSwitcher"),
 };
 
 initTheme();
 initScrollOffset();
 initResponsiveChrome();
 initNotifications();
-elements.localeSwitcher?.addEventListener("click", (event) => {
-  const option = event.target.closest?.("[data-locale]");
-  if (!option || option.getAttribute("aria-pressed") === "true") return;
-  setLocale(option.dataset.locale);
-  window.location.reload();
-});
 elements.guideTile?.setAttribute("href", guideDocumentationUrl(getLocale()));
 // Personalspace rail dostane most k toastům a k Synchronizovat reloadu, ať
 // osobní runtime akce vypadají stejně jako firemní.
@@ -1679,7 +1672,9 @@ function renderSpaceSwitcher() {
   spaces.append(...options);
 
   const profile = state.personalspace?.profile;
-  const profileNodes = profile ? [spaceProfileCard(profile), profileSettingsItem()] : [];
+  const profileNodes = [];
+  if (profile) profileNodes.push(spaceProfileCard(profile));
+  profileNodes.push(profileSettingsItem());
   if (profileNodes.length > 0 && options.length > 0) {
     const divider = document.createElement("div");
     divider.className = "space-switcher-divider";
@@ -1737,11 +1732,35 @@ function profileInitials(name) {
 }
 
 function profileSettingsItem() {
-  const item = document.createElement("div");
-  item.className = "space-profile-settings is-disabled";
-  item.setAttribute("aria-disabled", "true");
-  item.append(settingsIcon(), document.createTextNode(t("profile.settings")));
-  return item;
+  const group = document.createElement("section");
+  group.className = "space-profile-settings";
+
+  const heading = document.createElement("div");
+  heading.className = "space-profile-settings-heading";
+  heading.append(settingsIcon(), document.createTextNode(t("profile.settings")));
+
+  const language = document.createElement("label");
+  language.className = "space-language-setting";
+  const label = document.createElement("span");
+  label.textContent = t("locale.label");
+  const select = document.createElement("select");
+  select.className = "space-language-select";
+  select.setAttribute("aria-label", t("locale.label"));
+  for (const locale of ["cs", "en"]) {
+    const option = document.createElement("option");
+    option.value = locale;
+    option.textContent = t(`locale.${locale}`);
+    select.append(option);
+  }
+  select.value = getLocale();
+  select.addEventListener("change", () => {
+    if (select.value === getLocale()) return;
+    setLocale(select.value);
+    window.location.reload();
+  });
+  language.append(label, select);
+  group.append(heading, language);
+  return group;
 }
 
 function settingsIcon() {
