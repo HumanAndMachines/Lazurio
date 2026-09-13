@@ -63,6 +63,7 @@ export function hostedLifecycleConfigurationId(configuration) {
     organization_slug: configuration.organization_slug,
     team_id: configuration.team_id,
     domain: configuration.domain,
+    routing: "machine-path-v1",
   })).digest("hex");
 }
 
@@ -196,7 +197,7 @@ function hostedAppUrl(app, configuration) {
     || !appInHostedScope(app, configuration)
     || !dnsLabelPattern.test(app?.module ?? "")
   ) return null;
-  return `https://${app.module}.${configuration.team_id}.${configuration.domain}/`;
+  return `https://${configuration.team_id}.${configuration.domain}/${app.module}/`;
 }
 
 function validHostedContext(configuration) {

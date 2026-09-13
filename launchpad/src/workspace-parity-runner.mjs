@@ -1,3 +1,4 @@
+import { normalizeLaunchpadBasePath, launchpadPath } from "../public/base-path.js";
 import { existsSync } from "node:fs";
 import { readFile, readlink, realpath } from "node:fs/promises";
 import { createConnection } from "node:net";
@@ -206,8 +207,8 @@ async function appendHostedTeamRuntimeChecks({ add, app: exercisedApp, context, 
   const base = new URL(options.launchpadUrl);
   try {
     const [publicInventory, serverHealth] = await Promise.all([
-      fetchJson(new URL("/api/apps", base)),
-      fetchJson(new URL("/health", base)),
+      fetchJson(parityApiUrl(base, "/api/apps")),
+      fetchJson(parityApiUrl(base, "/health")),
     ]);
     const observedWorkspaceApps = (publicInventory.apps ?? []).filter((app) => app.space === "workspace");
     const expectedIds = context.selection.apps.map((app) => app.id).sort();
@@ -300,7 +301,7 @@ async function appendRuntimeChecks({ add, app, options }) {
   let moduleProcess = null;
   const base = new URL(options.launchpadUrl);
   try {
-    const worktreesUrl = new URL("/api/git/worktrees", base);
+    const worktreesUrl = parityApiUrl(base, "/api/git/worktrees");
     worktreesUrl.searchParams.set("organization", app.company);
     worktreesUrl.searchParams.set("module", app.module);
     const worktrees = await fetchJson(worktreesUrl);
@@ -586,7 +587,7 @@ async function processEvidence(pid) {
 }
 
 async function runtimeRequest(base, appId, action, payload) {
-  return fetchJson(new URL(`/api/apps/${encodeURIComponent(appId)}/${action}`, base), {
+  return fetchJson(parityApiUrl(base, `/api/apps/${encodeURIComponent(appId)}/${action}`), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
@@ -594,7 +595,7 @@ async function runtimeRequest(base, appId, action, payload) {
 }
 
 async function runtimeRequestOutcome(base, appId, action, payload) {
-  const response = await fetch(new URL(`/api/apps/${encodeURIComponent(appId)}/${action}`, base), {
+  const response = await fetch(parityApiUrl(base, `/api/apps/${encodeURIComponent(appId)}/${action}`), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
@@ -730,4 +731,10 @@ child was restored. Hosted: run live, restart the work container (and separately
 reboot the host), then use post-restart to prove every Team module returned on
 main without a click. The report lists infra-owned external assertions that the
 Iotor lane must prove outside the work container.`;
+}
+
+export function parityApiUrl(base, path) {
+  const mounted = new URL(base);
+  const prefix = normalizeLaunchpadBasePath(mounted.pathname.endsWith("/") ? mounted.pathname : `${mounted.pathname}/`);
+  return new URL(launchpadPath(path, prefix), mounted);
 }

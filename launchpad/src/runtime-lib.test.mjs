@@ -4747,7 +4747,7 @@ test("selected Organization-section default uses the existing hosted open/start/
   const configuration = createHostedWorkspaceConfiguration({ profile: "hosted", organizationSlug: app.company, teamId: "builders", domain: "organization.example.test" });
   const selection = selectHostedWorkspaceApps(configuration, { apps: [app] });
   expect(selection.apps).toEqual([app]);
-  expect(requireHostedAppUrl(app, configuration)).toBe("https://demo.builders.organization.example.test/");
+  expect(requireHostedAppUrl(app, configuration)).toBe("https://builders.organization.example.test/demo/");
   const runtime = createRuntimeManager({
     companiesRoot: root, launchpadRoot: join(root, "launchpad"), instanceId: "hosted-organization-default",
     lifecycleProfile: "hosted", discover: discoveryWithApp(app), maintenanceIntervalMs: 10, maintenanceRetryDelaysMs: [10],

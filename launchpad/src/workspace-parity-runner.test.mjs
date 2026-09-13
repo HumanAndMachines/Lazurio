@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
   externalAssertions,
+  parityApiUrl,
   explicitStopResponseAccepted,
   hostedMainMaintenanceProofAccepted,
   hostedTeamMaintenanceProofAccepted,
@@ -184,4 +185,13 @@ test("hosted parity accepts the complete derived Team set and exact session sour
     phase: "post-restart",
     healthEvidence: evidence.map((item) => ({ ...item, health: health(main, item.expected_url) })),
   })).toBe(true);
+});
+
+
+test("parity API probes and mutations retain the configured mount", () => {
+  for (const path of ["/api/apps", "/health", "/api/git/worktrees", "/api/apps/example/start"]) {
+    expect(parityApiUrl("http://127.0.0.1:20000/launchpad/", path).href).toBe(`http://127.0.0.1:20000/launchpad${path}`);
+    expect(parityApiUrl("http://127.0.0.1:20000", path).pathname).toBe(path);
+    expect(parityApiUrl("http://127.0.0.1:20000/launchpad", path).pathname).toBe(`/launchpad${path}`);
+  }
 });
