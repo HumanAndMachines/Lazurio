@@ -121,15 +121,15 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(css).toContain("linear-gradient(");
   expect(css).not.toContain("translateY(-3px)");
   expect(css).toContain(":hover .app-card-desc");
-  expect(css).toContain("max-height: 4.8em");
+  expect(css).toContain("max-height: 2.9em");
   expect(css).toContain("opacity 340ms var(--tile-reveal-ease)");
   expect(css).toContain("max-height 420ms var(--tile-reveal-ease)");
   expect(css).toContain("@media (hover: none), (pointer: coarse)");
   expect(css).not.toContain("0 18px 36px color-mix(in srgb, var(--lz-ink) 9%, transparent)");
   expect(css).not.toContain("0 2px 10px color-mix(in srgb, var(--lz-ink) 6%, transparent)");
   expect(css).toContain("/* CAC-0095 — kanonická materiálová dlaždice. */");
-  expect(css).toContain("column-gap: var(--lz-space-16)");
-  expect(css).toContain("row-gap: var(--lz-space-16)");
+  expect(css).toContain("column-gap: var(--lz-space-12)");
+  expect(css).toContain("row-gap: var(--lz-space-12)");
   expect(css).toContain("border-radius: var(--lz-radius-md)");
   expect(css).toContain("border: 1px solid var(--lz-line)");
   expect(css).toContain("0 10px 24px -22px color-mix(in srgb, var(--lz-ink) 18%, transparent)");
@@ -1397,10 +1397,8 @@ test("Launchpad používá jednotný kompaktní grid s jemně zvýšenými dlaž
     readFile(join(publicRoot, "styles.css"), "utf8"),
   ]);
 
-  expect(css).toContain("grid-template-columns: repeat(4, minmax(0, 1fr))");
-  expect(css).toContain("grid-template-columns: repeat(3, minmax(0, 1fr))");
-  expect(css).toContain("grid-template-columns: repeat(2, minmax(0, 1fr))");
-  expect(css).toContain("min-height: 148px");
+  expect(css).toContain("grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr))");
+  expect(css).toContain("min-height: 11rem");
   expect(css).toContain("width: 2.6rem");
   expect(css).toContain("border: 1px solid transparent");
   expect(css).toContain("font-weight: 400");
@@ -1433,7 +1431,7 @@ test("Organization workspace má kompaktní uvítání s dynamickým názvem fir
   expect(js).toContain('t("workspace.welcomeOrganization"');
   expect(js).toContain('toggleAttribute("hidden", personal)');
   expect(css).toContain(".workspace-welcome-title");
-  expect(css).toContain("margin-top: 1.5rem");
+  expect(css).toContain("margin-top: var(--lz-space-16)");
   // CAC-0095: sazba jde na škálu Lazuria. Test tvrdil 1,3 rem / 720 —
   // konkrétní hodnoty, které identita nahradila škálou (14 · 16,5 · 20)
   // a dvěma vahami (400 · 600). Tvrzení tu zůstává, protože hlídá, že

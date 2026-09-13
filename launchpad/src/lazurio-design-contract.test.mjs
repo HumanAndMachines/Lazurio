@@ -236,14 +236,15 @@ test("Organizace, Workspace a Productionspace používají modrou záložku v be
   expect(app).not.toContain("app-section-eyebrow");
 });
 
-test("kanonické modulové dlaždice jsou samostatné zaoblené karty", async () => {
+test("kanonické modulové dlaždice jsou kompaktní samostatné karty", async () => {
   const [styles, app] = await Promise.all([source("styles.css"), source("app.js")]);
-  const base = styles.slice(styles.indexOf("/* Základ dlaždic podle produktové reference"));
+  const base = styles.slice(styles.indexOf("/* Zavřené moduly drží společnou základní výšku"));
   const canonical = styles.slice(styles.indexOf("/* CAC-0095 — kanonická materiálová dlaždice."));
-  expect(base).toMatch(/\.app-card\s*{[\s\S]*?min-height: 16rem;[\s\S]*?padding: var\(--lz-space-24\)/);
-  expect(base).toMatch(/\.app-title-block\s*{[\s\S]*?gap: 28px/);
-  expect(base).toMatch(/\.app-card-desc\s*{[\s\S]*?font-size: 15px;[\s\S]*?line-height: 1\.55/);
-  expect(canonical).toMatch(/\.apps-grid\s*{[\s\S]*?column-gap: var\(--lz-space-16\);[\s\S]*?row-gap: var\(--lz-space-16\);[\s\S]*?border: 0/);
+  expect(base).toMatch(/\.app-card\s*{[\s\S]*?min-height: 11rem;[\s\S]*?padding: var\(--lz-space-16\)/);
+  expect(base).toMatch(/\.app-title-block\s*{[\s\S]*?gap: var\(--lz-space-12\)/);
+  expect(base).toMatch(/\.app-card-desc\s*{[\s\S]*?font-size: 14px;[\s\S]*?line-height: 1\.45/);
+  expect(styles).toMatch(/\.apps-grid\s*{[^}]*grid-template-columns: repeat\(auto-fit, minmax\(min\(100%, 240px\), 1fr\)\)/);
+  expect(canonical).toMatch(/\.apps-grid\s*{[\s\S]*?column-gap: var\(--lz-space-12\);[\s\S]*?row-gap: var\(--lz-space-12\);[\s\S]*?border: 0/);
   expect(canonical).toMatch(/\.apps-grid > \.app-card\s*{[\s\S]*?border: 1px solid var\(--lz-line\);[\s\S]*?border-radius: var\(--lz-radius-md\)/);
   expect(canonical).toMatch(/\.apps-grid > \.app-card:not\(\.has-open-menu\):focus-within,[\s\S]*?\.apps-grid > \.app-card\.selected\s*{[\s\S]*?border-color: var\(--app-focus-accent, var\(--app-accent\)\)/);
   expect(canonical).toMatch(/box-shadow: 0 10px 24px -22px color-mix\(in srgb, var\(--lz-ink\) 18%, transparent\)/);
@@ -297,7 +298,7 @@ test("materiálový průchod používá jemné modulové hrany a odstupňované 
   expect(material).toMatch(/\.topbar\s*{[\s\S]*?border-bottom-width: 1\.5px;[\s\S]*?background: var\(--lz-white\)/);
   expect(material).toMatch(/\.search-field\s*{[\s\S]*?border-width: 1\.5px;[\s\S]*?background: var\(--lz-gray-50\)/);
   expect(material).toMatch(/\.app-card\s*{[\s\S]*?border-width: 1px;[\s\S]*?border-color: var\(--lz-line\);[\s\S]*?background: var\(--lz-white\)/);
-  expect(styles).toMatch(/\.app-card > \.card-warning\.is-fact,[\s\S]*?\.app-card > \.card-warning\.is-jen-akce\s*{[\s\S]*?display: flex;[\s\S]*?min-height: 52px;[\s\S]*?margin-top: auto;[\s\S]*?border-top: 1px solid var\(--lz-line-faint\)/);
+  expect(styles).toMatch(/\.app-card > \.card-warning\.is-fact,[\s\S]*?\.app-card > \.card-warning\.is-jen-akce\s*{[\s\S]*?display: flex;[\s\S]*?min-height: 44px;[\s\S]*?margin-top: auto;[\s\S]*?border-top: 1px solid var\(--lz-line-faint\)/);
   expect(styles).toContain(".app-card > .card-warning:not(.is-jen-akce):not(.is-fact)");
   expect(material).toMatch(/\.space-status-details > \.update-banner-group \.update-banner\s*{[\s\S]*?background: var\(--lz-white\)/);
 });
@@ -305,7 +306,7 @@ test("materiálový průchod používá jemné modulové hrany a odstupňované 
 test("uvítání pracovního prostoru používá display hierarchii Lazuria", async () => {
   const styles = await source("styles.css");
   expect(styles).toMatch(/\.workspace-welcome-title\s*{[\s\S]*?font-size: var\(--lz-size-display\);[\s\S]*?font-weight: var\(--lz-weight-title\);[\s\S]*?line-height: var\(--lz-leading-display\);[\s\S]*?letter-spacing: var\(--lz-track-display\)/);
-  expect(styles).toMatch(/\.workspace-welcome\s*{[\s\S]*?margin-bottom: var\(--lz-space-16\);/);
+  expect(styles).toMatch(/\.workspace-welcome\s*{[\s\S]*?margin-bottom: var\(--lz-space-4\);/);
 });
 
 test("menu dalších možností se rozbalí uvnitř dlaždice bez vrstveného hoveru", async () => {
