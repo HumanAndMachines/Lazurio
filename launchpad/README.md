@@ -37,7 +37,7 @@ Lokální profil je výchozí a zachovává loopback URL. Hosted profil se zapí
 lowercase DNS zóna v `LAZURIO_HOSTED_DOMAIN`. Jiný lifecycle config neexistuje.
 Launchpad z manifestů Organizace odvodí všechny workspace moduly daného Teamu,
 pro každý zvolí jeho deklarovaný výchozí App a URL sestaví jako
-`https://<module>.<team>.<domain>/`. Chybějící nebo nejednoznačný výchozí App
+`https://<team>.<domain>/<module>/`. Chybějící nebo nejednoznačný výchozí App
 izoluje jen daný Modul; loopback URL se do hosted odpovědi nikdy nepropíše.
 Manifesty tím vlastní členství a výchozí App, modulový kontrakt vlastní port a
 ingress vlastní autentizaci. Launchpad mezi nimi nevytváří druhý katalog.
@@ -913,3 +913,8 @@ the bare mount redirects to its trailing-slash form. Browser resources and
 API calls resolve against this mount, leaving sibling applications such as
 `/t3code/` to the machine gateway. This is URL routing, not an additional
 access boundary; the existing request trust checks still apply.
+
+Hosted module links use the same machine origin as Launchpad. A module must
+serve its assigned path; there is no fallback to per-module container hosts.
+The lifecycle configuration fingerprint includes the machine-path routing
+contract so a server using the previous layout is not silently reused.

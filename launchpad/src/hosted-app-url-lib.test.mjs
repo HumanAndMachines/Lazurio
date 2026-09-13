@@ -156,7 +156,7 @@ test("an available Team module without a runnable default App is visible as an i
 
 test("hosted URLs are derived from module, Team and domain for every runtime payload", () => {
   const app = workspaceApp();
-  const expected = "https://knowledgebase.builders.workspace.example.test/";
+  const expected = "https://builders.workspace.example.test/knowledgebase/";
   expect(projectHostedAppUrl({
     ...app,
     url: "http://127.0.0.1:4310/",
@@ -226,7 +226,7 @@ test("declared available Organization default shares the hosted URL and lifecycl
     ...app.module_apps.declaration, slug: "planning", apps: app.module_apps,
   }] }] };
   expect(selectHostedWorkspaceApps(configuration, inventory)).toEqual({ apps: [app], skipped: [] });
-  const url = "https://planning.builders.workspace.example.test/";
+  const url = "https://builders.workspace.example.test/planning/";
   expect(requireHostedAppUrl(app, configuration)).toBe(url);
   expect(projectHostedRuntimePayload({ url: "http://127.0.0.1:1234", start: { url: "http://127.0.0.1:1234" } }, app, configuration))
     .toMatchObject({ url, start: { url } });
@@ -247,7 +247,7 @@ test("Organization repository slot binds by catalog path while lifecycle and DNS
     ...app.module_apps.declaration, slug: "planning-repository", apps: app.module_apps,
   }] }] };
   expect(selectHostedWorkspaceApps(configuration, inventory)).toEqual({ apps: [app], skipped: [] });
-  expect(requireHostedAppUrl(app, configuration)).toBe("https://planning.builders.workspace.example.test/");
+  expect(requireHostedAppUrl(app, configuration)).toBe("https://builders.workspace.example.test/planning/");
 });
 
 test("Organization-section Workspace default retains the original Team constraint", () => {
@@ -255,7 +255,7 @@ test("Organization-section Workspace default retains the original Team constrain
   Object.assign(app.module_apps.declaration, { space: "workspace", teams: ["builders"], path: "workspace/planning" });
   app.module_catalog_path = "workspace/planning";
   app.module_apps.contract_path = "organizations/ExampleOrg/workspace/planning/lazurio.module.json";
-  expect(projectHostedAppUrl(app, configuration).url).toBe("https://planning.builders.workspace.example.test/");
+  expect(projectHostedAppUrl(app, configuration).url).toBe("https://builders.workspace.example.test/planning/");
   expect(selectHostedWorkspaceApps(configuration, { apps: [app] }).apps).toEqual([app]);
   app.module_apps.declaration.teams = ["other-team"];
   expect(projectHostedAppUrl(app, configuration).url).toBeNull();
