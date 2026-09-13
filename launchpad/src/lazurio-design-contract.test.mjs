@@ -18,21 +18,27 @@ test("Launchpad načítá kanonické Lazurio tokeny a lokální fonty", async ()
 });
 
 test("Launchpad používá kanonické Lazurio logo ve webové i systémové ikoně", async () => {
-  const [html, server, favicon, webIco, touchIcon, shortcutSvg, shortcutIco] = await Promise.all([
+  const [html, server, favicon, faviconDark, webIco, touchIcon, shortcutSvg, shortcutIco] = await Promise.all([
     source("index.html"),
     readFile(new URL("launchpad/src/server.mjs", rootUrl), "utf8"),
     readFile(new URL("favicon.svg", publicUrl), "utf8"),
+    readFile(new URL("favicon-dark.svg", publicUrl), "utf8"),
     readFile(new URL("favicon.ico", publicUrl)),
     readFile(new URL("apple-touch-icon.png", publicUrl)),
     readFile(new URL("assets/launchpad.svg", rootUrl), "utf8"),
     readFile(new URL("assets/launchpad.ico", rootUrl)),
   ]);
 
-  expect(html).toContain('<link rel="icon" type="image/svg+xml" href="./favicon.svg" />');
-  expect(html).toContain('<link rel="icon" href="./favicon.ico" sizes="any" />');
+  expect(html).toContain('<link rel="icon" type="image/svg+xml" href="./favicon.svg" media="(prefers-color-scheme: light)" />');
+  expect(html).toContain('<link rel="icon" type="image/svg+xml" href="./favicon-dark.svg" media="(prefers-color-scheme: dark)" />');
+  expect(html).toContain('<link rel="icon" href="./favicon.ico" sizes="16x16 32x32 48x48" />');
   expect(html).toContain('<link rel="apple-touch-icon" href="./apple-touch-icon.png" />');
   expect(server).toContain('if (path.endsWith(".ico")) return "image/x-icon";');
   expect(favicon).toContain('viewBox="0 0 1024 1024"');
+  expect(favicon).not.toContain("<rect");
+  expect(favicon.match(/<path\b/g)).toHaveLength(4);
+  expect(faviconDark).not.toContain("<rect");
+  expect(faviconDark.match(/<path\b/g)).toHaveLength(4);
   expect(shortcutSvg).toContain('viewBox="-14.02 -16.25 128 128"');
   expect(shortcutSvg).toContain('fill="#ffffff"');
   expect(shortcutSvg).toContain('stop-color="#0d12db"');
