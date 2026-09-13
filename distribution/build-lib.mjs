@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, isAbsolute, join, posix, resolve } from "node:path";
-import { trustedGitExecutable } from "../scripts/agent-skills-entrypoint.mjs";
+import { resolveGitExecutableOnPath } from "../lazurio/core/toolchain-lib.mjs";
 import { verifyArtifactTree } from "./runtime/integrity.mjs";
 
 export { verifyArtifactTree } from "./runtime/integrity.mjs";
@@ -758,7 +758,7 @@ export function gitText(cwd, args) {
 }
 
 function gitBytes(cwd, args) {
-  const executable = trustedGitExecutable();
+  const executable = resolveGitExecutableOnPath();
   if (!executable) {
     throw new Error("resident build requires a working Git on PATH");
   }
