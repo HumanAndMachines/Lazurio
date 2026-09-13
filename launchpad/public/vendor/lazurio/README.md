@@ -13,7 +13,9 @@ zdrojem pravdy; změna nejdřív patří do design systému Lazurio.
 
 Ikonové exporty v `launchpad/public/` a kořenovém `assets/` pocházejí ze
 stejného kanonického repozitáře, z commitu
-`4646bbedf625f67773a913add5435d49be0784fc`:
+`4646bbedf625f67773a913add5435d49be0784fc` (platformní exporty).
+Favicon SVG/ICO pocházejí z ověřeného generátoru v commitu
+`e45d28455320a77a5370aeee4248a38313c05ed7`:
 
 - `favicon.svg`, `favicon-dark.svg` a `favicon.ico` jsou kanonické transparentní čtyřplošné favicon exporty;
 - `apple-touch-icon.png` je 180px platformní export kanonického
