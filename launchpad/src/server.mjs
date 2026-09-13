@@ -1,3 +1,4 @@
+import { normalizeLaunchpadBasePath, launchpadPath, launchpadRoute } from "../public/base-path.js";
 import { randomUUID } from "node:crypto";
 import { hostedRequestMayStartApp } from "./hosted-readiness-lib.mjs";
 import { constants, existsSync, lstatSync, realpathSync } from "fs";
@@ -133,6 +134,7 @@ const launchpadServerIdentity = buildServerIdentity({
   startedAt: new Date().toISOString(),
   requestTrustProfile: hostedWorkspace.profile,
 });
+const basePath = normalizeLaunchpadBasePath(process.env.LAZURIO_LAUNCHPAD_BASE_PATH ?? "/");
 const host = options.host ?? defaultHost;
 const port = Number(options.port ?? process.env.PORT ?? defaultPort);
 const explicitPort = options.port !== undefined;
@@ -333,7 +335,7 @@ async function refreshReusedAgentEntryInventory(origin) {
   if (!options.agentEntry || options.organization === undefined) return;
   let response;
   try {
-    response = await fetch(new URL("/api/lazurio/agent-entry-refresh", origin), {
+    response = await fetch(new URL(launchpadPath("/api/lazurio/agent-entry-refresh", basePath), origin), {
       method: "POST",
       signal: AbortSignal.timeout(5_000),
     });
@@ -780,7 +782,7 @@ async function inspectRunningLaunchpad(url, expected) {
 
 async function probeServerReadiness(url) {
   try {
-    const response = await fetch(new URL("/health", url), { signal: AbortSignal.timeout(1_500) });
+    const response = await fetch(new URL(launchpadPath("/health", basePath), url), { signal: AbortSignal.timeout(1_500) });
     if (!response.ok) return "not_ready";
     const health = await response.json().catch(() => null);
     return health?.status === "ok" ? "ready" : "not_ready";
@@ -792,7 +794,7 @@ async function probeServerReadiness(url) {
 async function probeServerIdentity(url, pathname) {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const response = await fetch(new URL(pathname, url), { signal: AbortSignal.timeout(1_500) });
+      const response = await fetch(new URL(launchpadPath(pathname, basePath), url), { signal: AbortSignal.timeout(1_500) });
       if (response.status === 404) return { status: "missing" };
       if (!response.ok) return { status: "probe_failed" };
       const identity = await response.json().catch(() => null);
@@ -841,7 +843,7 @@ async function requestStaleLaunchpadShutdown(url, observation) {
   const instanceId = observation?.identity?.instance_id;
   if (typeof instanceId !== "string") return false;
   try {
-    const response = await fetch(new URL("/api/lazurio/server-shutdown", url), {
+    const response = await fetch(new URL(launchpadPath("/api/lazurio/server-shutdown", basePath), url), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ instance_id: instanceId }),
@@ -1384,6 +1386,13 @@ function startServer(startPort) {
     idleTimeout: 120,
     async fetch(request) {
       const url = new URL(request.url);
+      if (basePath !== "/" && url.pathname === basePath.slice(0, -1)) {
+        url.pathname = basePath;
+        return Response.redirect(url.toString(), 308);
+      }
+      const route = launchpadRoute(url.pathname, basePath);
+      if (route === null) return notFound();
+      url.pathname = route;
       let workspaceTrustDecision;
       const evaluateWorkspaceRequest = () => {
         workspaceTrustDecision ??= requestTrust.evaluateWorkspaceRequest(request, url);

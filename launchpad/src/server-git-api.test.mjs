@@ -48,6 +48,29 @@ afterAll(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })));
 });
 
+test("Launchpad serves its UI and API under a machine path without sibling routes", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const { port } = await startLaunchpadServer(root, { env: { LAZURIO_LAUNCHPAD_BASE_PATH: "/launchpad/" } });
+  const origin = `http://127.0.0.1:${port}`;
+  const bare = await fetch(`${origin}/launchpad`, { redirect: "manual" });
+  expect(bare.status).toBe(308);
+  expect(bare.headers.get("location")).toBe(`${origin}/launchpad/`);
+  const page = await fetch(`${origin}/launchpad/`);
+  expect(page.status).toBe(200);
+  const html = await page.text();
+  for (const match of html.matchAll(/(?:src|href)="(\.\/[^"#]+)"/g)) {
+    const asset = await fetch(new URL(match[1], `${origin}/launchpad/`));
+    expect(asset.status).toBe(200);
+  }
+  for (const path of ["api/apps", "styles.css", "app.js", "base-path.js", "lazurio-runtime/deep-link-lib.mjs", "fonts/fonts.css"]) {
+    expect((await fetch(`${origin}/launchpad/${path}`)).status).toBe(200);
+  }
+  for (const path of ["/", "/api/apps", "/t3code/", "/launchpad-other/api/apps"]) {
+    expect((await fetch(origin + path)).status).toBe(404);
+  }
+});
+
 test("Launchpad server exposes read-only git and Mission Control routes", async () => {
   const root = await createLaunchpadGitFixture();
   tempRoots.push(root);
@@ -1645,7 +1668,7 @@ async function startLaunchpadServer(root, { env = {}, useDefaultStateRoot = fals
     stderr: "pipe",
   });
   servers.push(server);
-  await waitForHealth(port, server);
+  await waitForHealth(port, server, env.LAZURIO_LAUNCHPAD_BASE_PATH ?? "/");
   return { server, port, environment, serverStateDirectory };
 }
 
@@ -1695,7 +1718,7 @@ function probeFreePort() {
   });
 }
 
-async function waitForHealth(port, server) {
+async function waitForHealth(port, server, basePath = "/") {
   // A cold Windows runner may need more than 15 s to start the detached Bun
   // server after Git-heavy fixture setup. This remains bounded by the enclosing
   // test timeout and still fails immediately when the child exits.
@@ -1709,7 +1732,7 @@ async function waitForHealth(port, server) {
       throw new Error(`launchpad server on ${port} exited early (code ${server.exitCode}): ${stderr.trim()}`);
     }
     try {
-      const response = await fetch(`http://127.0.0.1:${port}/health`);
+      const response = await fetch(`http://127.0.0.1:${port}${basePath}health`);
       if (response.ok) return;
     } catch {
       // server not ready yet

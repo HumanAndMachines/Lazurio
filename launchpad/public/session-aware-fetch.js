@@ -1,3 +1,4 @@
+import { browserBasePath, launchpadPath } from "./base-path.js";
 import { t } from "./i18n.js";
 
 const SESSION_EXPIRED_CODE = "hosted_session_expired";
@@ -28,6 +29,6 @@ export function createSessionAwareFetch({ fetchImpl, recoverSession }) {
 }
 
 export const launchpadFetch = createSessionAwareFetch({
-  fetchImpl: (...args) => globalThis.fetch(...args),
+  fetchImpl: (input, init) => globalThis.fetch(launchpadPath(input, browserBasePath), init),
   recoverSession: () => globalThis.location.reload(),
 });

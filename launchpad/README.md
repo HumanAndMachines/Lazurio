@@ -902,3 +902,14 @@ Doctor musí hlídat:
 
 Když Doctor selže, chyba má být napsaná tak, aby ji mohl opravit další
 agent bez znalosti historie.
+
+## Hosted machine path
+
+`LAZURIO_LAUNCHPAD_BASE_PATH=/launchpad/` mounts the Launchpad UI, assets,
+health endpoint and API under one path. The default `/` preserves local
+workstation URLs. The path must start and end with `/` and contain only
+lowercase slug segments. Requests outside the configured mount return 404;
+the bare mount redirects to its trailing-slash form. Browser resources and
+API calls resolve against this mount, leaving sibling applications such as
+`/t3code/` to the machine gateway. This is URL routing, not an additional
+access boundary; the existing request trust checks still apply.
