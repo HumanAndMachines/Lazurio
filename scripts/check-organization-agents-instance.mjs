@@ -12,7 +12,7 @@ export const ROOT_HANDOFF_HEADING = "Povinný handoff";
 export const ROOT_HANDOFF_HEADING_PATTERN = /^#{1,6}[ \t]+Povinný handoff[ \t]*$/u;
 export const PUBLICATION_DOUBLE_QUESTION = Object.freeze([
   "Mám změny Publikovat tvým jménem?",
-  "Nebo mám požádat jiného oprávněného Principála o kontrolu a Publikaci?",
+  "Nebo mám požádat jiného Kolegu o kontrolu a Publikaci?",
 ]);
 
 export const FORBIDDEN_LITERALS = Object.freeze([
