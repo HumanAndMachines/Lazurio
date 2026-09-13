@@ -1,4 +1,4 @@
-import { normalizeLaunchpadBasePath, launchpadPath } from "../../launchpad/public/base-path.js";
+import { normalizeServerMountPath } from "./server-mount-lib.mjs";
 import { randomUUID } from "node:crypto";
 import { existsSync, lstatSync } from "node:fs";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
@@ -47,7 +47,7 @@ export function buildServerLocator({ origin, identity, basePath = "/", writtenAt
   const locator = {
     schema_version: LAZURIO_SERVER_LOCATOR_SCHEMA,
     origin: normalizeLoopbackOrigin(origin),
-    ...(normalizeLaunchpadBasePath(basePath) === "/" ? {} : { base_path: basePath }),
+    ...(normalizeServerMountPath(basePath) === "/" ? {} : { base_path: basePath }),
     root_id: identity?.root_id,
     control_root_id: identity?.control_root_id,
     instance_id: identity?.instance_id,
@@ -91,7 +91,7 @@ export function validateServerLocator(locator) {
   } catch (error) {
     errors.push(error.message);
   }
-  try { normalizeLaunchpadBasePath(locator.base_path ?? "/"); } catch { errors.push("base_path must be a canonical mount path"); }
+  try { normalizeServerMountPath(locator.base_path ?? "/"); } catch { errors.push("base_path must be a canonical mount path"); }
   for (const key of ["root_id", "control_root_id", "install_generation"]) {
     if (!/^[a-f0-9]{64}$/.test(locator[key] ?? "")) errors.push(`${key} must be a SHA-256 digest`);
   }
@@ -207,5 +207,6 @@ function joinForStateDirectory(directory, basename) {
 }
 
 export function locatedServerUrl(locator, path) {
-  return new URL(launchpadPath(path, locator.base_path ?? "/"), locator.origin);
+  if (typeof path !== "string" || !path.startsWith("/") || path.startsWith("//")) throw new TypeError("server_api_path_invalid");
+  return new URL(normalizeServerMountPath(locator.base_path ?? "/") + path.slice(1), locator.origin);
 }
