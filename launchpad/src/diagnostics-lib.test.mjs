@@ -69,7 +69,7 @@ test("real discovery preserves Organization defaults and organization-section Te
   expect(selected.apps.map(app => app.module)).toEqual(["mission-control", "ordinary", "team-docs"]);
   const planning = selected.apps.find(app => app.module === "mission-control");
   expect(planning).toMatchObject({ space: "root", teams: [], module_apps: { declaration: { space: "root", status: "available" } } });
-  expect(projectHostedAppUrl(planning, config).url).toBe("https://mission-control.editors.organization.example.test/");
+  expect(projectHostedAppUrl(planning, config).url).toBe("https://editors.organization.example.test/mission-control/");
   const other = response.apps.find(app => app.module === "other-team");
   expect(other.module_apps.declaration.teams).toEqual(["reviewers"]);
   expect(projectHostedAppUrl(other, config).url).toBeNull();

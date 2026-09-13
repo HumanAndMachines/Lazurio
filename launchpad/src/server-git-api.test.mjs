@@ -1035,7 +1035,7 @@ test("hosted Launchpad keeps Team modules cold and derives their external URLs",
   expect(apps.apps).toEqual([
     expect.objectContaining({
       id: app.id,
-      url: "https://deals.sales.workspace.example.test/",
+      url: "https://sales.workspace.example.test/deals/",
       runtime: expect.objectContaining({ managed: false }),
     }),
   ]);
