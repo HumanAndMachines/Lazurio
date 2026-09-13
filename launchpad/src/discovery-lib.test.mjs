@@ -3,6 +3,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { mkdir, mkdtemp, readdir, rename, rm, symlink, writeFile } from "fs/promises";
 import {
+  APP_FILESYSTEM_ROOT,
   discoverLaunchpadApps,
   organizationRelativePathIssue,
   organizationRepositoryPathCasingIssue,
@@ -467,6 +468,17 @@ test("discovery načte root shared Guide local surface jako Launchpad app", asyn
     "guide",
     "guide/app/v1/package.json",
   ]);
+  const runtime = await mkdtemp(join(tmpdir(), "lazurio-split-guide-"));
+  tempRoots.push(runtime);
+  for (const name of ["launchpad", "guide", "manual"]) {
+    await rename(join(root, name), join(runtime, name));
+  }
+  const resident = await discoverLaunchpadApps(root, { runtime_root: runtime });
+  expect(resident.failures).toEqual([]);
+  const guide = resident.apps.find((app) => app.id === "conglomerate-guide-v1");
+  expect(guide).toBeDefined();
+  expect(guide[APP_FILESYSTEM_ROOT]).toBe(runtime);
+  expect(guide.package_path).toBe("guide/app/v1/package.json");
 });
 
 test("discovery automaticky načte lokálně naklonovanou Organization bez registry entry", async () => {

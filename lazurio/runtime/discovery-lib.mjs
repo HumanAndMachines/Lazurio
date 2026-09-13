@@ -1669,6 +1669,7 @@ function nonPlaceholderString(value) {
 
 function configuredLocalSurfaceEntries({
   companiesRoot,
+  runtimeRoot = companiesRoot,
   machineContextRoot,
   companiesConfig,
   localConfig = null,
@@ -1676,7 +1677,13 @@ function configuredLocalSurfaceEntries({
 }) {
   const shared = Array.isArray(companiesConfig.local_surfaces) ? companiesConfig.local_surfaces : [];
   const machineLocal = Array.isArray(localConfig?.local_surfaces) ? localConfig.local_surfaces : [];
-  const entries = shared.map((surface) => ({ surface, sourceRoot: companiesRoot }));
+  const entries = shared.map((surface) => ({
+    surface,
+    // Only the canonical framework Guide belongs to the installed runtime.
+    // Custom surfaces and machine-local declarations keep their workspace scope.
+    sourceRoot: surface?.path === "guide" && surface?.kind === "shared-guide"
+      ? runtimeRoot : companiesRoot,
+  }));
   const seenPaths = new Set(shared.map((surface) => surface?.path).filter((path) => typeof path === "string"));
 
   for (const surface of machineLocal) {
@@ -1706,6 +1713,7 @@ function launchpadRootSurfaceCompany(companiesConfig, surface) {
 
 async function discoverLocalSurfacePackages({
   companiesRoot,
+  runtimeRoot = companiesRoot,
   machineContextRoot = companiesRoot,
   companiesConfig,
   localConfig,
@@ -1715,6 +1723,7 @@ async function discoverLocalSurfacePackages({
 }) {
   const entries = configuredLocalSurfaceEntries({
     companiesRoot,
+    runtimeRoot,
     machineContextRoot,
     companiesConfig,
     localConfig,
@@ -2461,6 +2470,7 @@ export async function discoverLaunchpadApps(
   if (!organizationSelector) {
     await discoverLocalSurfacePackages({
       companiesRoot,
+      runtimeRoot,
       machineContextRoot,
       companiesConfig,
       localConfig,
