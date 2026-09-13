@@ -44,14 +44,18 @@ ingress vlastní autentizaci. Launchpad mezi nimi nevytváří druhý katalog.
 
 Hosted browser akce navíc vyžadují
 `LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN=https://<přesný-launchpad-host>` a interní
-`LAZURIO_LAUNCHPAD_AUTH_CHECK_URL=https://<přesný-auth-host>/oauth2/auth` spolu
+`LAZURIO_LAUNCHPAD_AUTH_CHECK_URL=https://<přesný-launchpad-host>/oauth2/auth` spolu
 s přesným `LAZURIO_LAUNCHPAD_AUTH_COOKIE_NAME=<oauth2-proxy-cookie>`. Server
 přijme tento origin pouze v hosted profilu, pouze přes svůj loopback listener a
 s browser metadata `Sec-Fetch-Site: same-origin`. Proxy ani identity hlavička
 se nepovažuje za důkaz, protože ji proces ve sdíleném loopback namespace umí
 napodobit. Launchpad proto před každou chráněnou akcí znovu ověří podepsanou
-HttpOnly session u stejného Team-scoped oauth2-proxy přes oddělený
-TLS-autentizovaný auth host. Na auth origin předá pouze přesně pojmenovanou
+HttpOnly session u stejného Team-scoped oauth2-proxy přes HTTPS. Auth check
+může používat stejný přesný origin jako Launchpad (například
+`https://matej.spectoda.lazurio.io/oauth2/auth`) nebo samostatný TLS-autentizovaný
+auth host. Cesta musí být přesně `/oauth2/auth`, bez query, fragmentu nebo
+přihlašovacích údajů v URL. Gateway musí tuto cestu směrovat přímo na
+oauth2-proxy, nikdy na Launchpad ani aplikaci modulu. Na auth origin předá pouze přesně pojmenovanou
 oauth2-proxy session cookie; žádnou další browser cookie, lidský display login
 ani OAuth token neloguje nebo nepředává a auth check failuje zavřeně. Exact
 Team capability je součástí konfigurace této auth session, ne paralelní
