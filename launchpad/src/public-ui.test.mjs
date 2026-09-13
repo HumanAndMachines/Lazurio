@@ -66,12 +66,15 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(marketplaceBlock).not.toContain("<a ");
   expect(marketplaceBlock).not.toContain("<button");
   const guideTileIndex = html.indexOf('id="guideTile"');
+  const updateBannerIndex = html.indexOf('id="updateBannerGroup"');
   const marketplaceIndex = html.indexOf('class="marketplace-teaser side-panel"');
   expect(guideTileIndex).toBeGreaterThan(-1);
+  expect(guideTileIndex).toBeLessThan(updateBannerIndex);
   expect(guideTileIndex).toBeLessThan(marketplaceIndex);
   expect(html).toContain('id="guideTile" class="guide-tile side-panel" href="https://documentation.lazurio.ai/cs/guide/?utm_source=launchpad&amp;utm_medium=product&amp;utm_campaign=guide"');
-  expect(html).toContain('./app-icons/lazurio/guide-signpost-solid-96.png');
-  expect(html).not.toContain('<img src="./app-icons/lazurio/knowledgebase-96.png" alt="" />');
+  expect(html).toContain('<!-- iconoir/book -->');
+  expect(html).not.toContain('guide-signpost-solid-96.png');
+  expect(html).not.toContain('knowledgebase-96.png');
   expect(html).not.toContain('id="guideMain"');
   expect(html).not.toContain('data-guide-topic');
   expect(html).not.toContain('data-guide-search-item');

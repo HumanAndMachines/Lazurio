@@ -1050,8 +1050,8 @@ input:focus-visible,
   margin-bottom: 0;
 }
 
-/* Guide je dostupná capability, proto je v pravém sloupci aktivní dlaždice
-   nad budoucím, záměrně neinteraktivním Marketplace teaserem. */
+/* Guide je dostupná capability, proto je první v pravém sloupci. Jeho ikona
+   používá stejný klidný Iconoir materiál jako Marketplace, ale jiný symbol. */
 .guide-tile {
   gap: var(--lz-space-16);
   padding: var(--lz-space-16);
@@ -1097,13 +1097,8 @@ input:focus-visible,
   justify-content: center;
   flex: 0 0 var(--lz-space-48);
   border-radius: var(--lz-radius-sm);
-  background: transparent;
-}
-
-.guide-tile-icon img {
-  width: 42px;
-  height: 42px;
-  object-fit: contain;
+  background: var(--lz-blue-50);
+  color: var(--lz-blue-600);
 }
 
 .guide-tile-action {

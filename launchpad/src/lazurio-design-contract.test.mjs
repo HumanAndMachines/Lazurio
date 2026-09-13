@@ -171,6 +171,16 @@ test("Marketplace teaser je klidná neinteraktivní dlaždice v pravém sloupci"
   expect(styles).toMatch(/\.marketplace-teaser-copy p\s*{[^}]*color: var\(--lz-ink-muted\);[^}]*font-size: var\(--lz-size-meta\)/);
 });
 
+test("Guide je první pravý panel a jeho ikona sdílí Iconoir materiál Marketplace", async () => {
+  const [html, styles] = await Promise.all([source("index.html"), source("styles.css")]);
+  const guideIndex = html.indexOf('id="guideTile"');
+  expect(guideIndex).toBeGreaterThan(-1);
+  expect(guideIndex).toBeLessThan(html.indexOf('id="updateBannerGroup"'));
+  expect(guideIndex).toBeLessThan(html.indexOf('class="marketplace-teaser side-panel"'));
+  expect(html).toContain("<!-- iconoir/book -->");
+  expect(styles).toMatch(/\.guide-tile-icon\s*{[^}]*width: var\(--lz-space-48\);[^}]*height: var\(--lz-space-48\);[^}]*border-radius: var\(--lz-radius-sm\);[^}]*background: var\(--lz-blue-50\);[^}]*color: var\(--lz-blue-600\)/);
+});
+
 test("mobilní klidové stavy tvoří kompaktní řadu a akční stav zůstává výrazný", async () => {
   const styles = await source("styles.css");
   const mobileStatus = styles.slice(styles.indexOf("/* Na mobilu jsou klidové provozní stavy"));
