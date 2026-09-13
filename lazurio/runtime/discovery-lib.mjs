@@ -1679,9 +1679,11 @@ function configuredLocalSurfaceEntries({
   const machineLocal = Array.isArray(localConfig?.local_surfaces) ? localConfig.local_surfaces : [];
   const entries = shared.map((surface) => ({
     surface,
-    // Only the canonical framework Guide belongs to the installed runtime.
+    // A source checkout owns its Guide, including linked-worktree selection.
+    // A resident workspace omits framework files and uses the installed Guide.
     // Custom surfaces and machine-local declarations keep their workspace scope.
     sourceRoot: surface?.path === "guide" && surface?.kind === "shared-guide"
+      && !existsSync(join(companiesRoot, "guide"))
       ? runtimeRoot : companiesRoot,
   }));
   const seenPaths = new Set(shared.map((surface) => surface?.path).filter((path) => typeof path === "string"));
