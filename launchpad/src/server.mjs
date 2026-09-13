@@ -124,17 +124,19 @@ const hostedWorkspace = createHostedWorkspaceConfiguration({
   domain: process.env.LAZURIO_HOSTED_DOMAIN,
 });
 const launchpadLifecycleConfigurationId = hostedLifecycleConfigurationId(hostedWorkspace);
+const basePath = normalizeLaunchpadBasePath(process.env.LAZURIO_LAUNCHPAD_BASE_PATH ?? "/");
+const knownLaunchpadMounts = new Map();
 const launchpadServerIdentity = buildServerIdentity({
   rootId: launchpadRootId,
   controlRootId: launchpadControlRootId,
   installGeneration: launchpadInstallGeneration,
   lifecycleConfigurationId: launchpadLifecycleConfigurationId,
+  basePath,
   instanceId: randomUUID(),
   pid: process.pid,
   startedAt: new Date().toISOString(),
   requestTrustProfile: hostedWorkspace.profile,
 });
-const basePath = normalizeLaunchpadBasePath(process.env.LAZURIO_LAUNCHPAD_BASE_PATH ?? "/");
 const host = options.host ?? defaultHost;
 const port = Number(options.port ?? process.env.PORT ?? defaultPort);
 const explicitPort = options.port !== undefined;
@@ -241,6 +243,7 @@ try {
   const existingLocator = await withServerStateAccess(() => readServerLocatorIfPresent({
     stateDirectory: serverStateDirectory,
   }));
+  if (existingLocator) knownLaunchpadMounts.set(existingLocator.origin, existingLocator.base_path ?? "/");
   startResult = await startLaunchpadWithPortPolicy({
     requestedPort: port,
     host,
@@ -259,6 +262,7 @@ try {
       controlRootId: launchpadControlRootId,
       installGeneration: launchpadInstallGeneration,
       lifecycleConfigurationId: launchpadLifecycleConfigurationId,
+      basePath,
     }),
     shutdownStaleLaunchpad: requestStaleLaunchpadShutdown,
     openExisting: (origin) => openBrowser(new URL(basePath, origin).href),
@@ -275,6 +279,7 @@ try {
       controlRootId: launchpadControlRootId,
       installGeneration: launchpadInstallGeneration,
       lifecycleConfigurationId: launchpadLifecycleConfigurationId,
+      basePath,
     });
     if (observation.status !== "compatible") {
       throw new Error("Reused Lazurio Server no longer has the expected identity.");
@@ -288,6 +293,7 @@ try {
     }));
   } else {
     const serverUrl = `http://${host}:${startResult.server.port}`;
+    knownLaunchpadMounts.set(serverUrl, basePath);
     serverLocator = await withServerStateAccess(() => writeServerLocator({
       stateDirectory: serverStateDirectory,
       origin: serverUrl,
@@ -784,7 +790,7 @@ async function inspectRunningLaunchpad(url, expected) {
 
 async function probeServerReadiness(url) {
   try {
-    const response = await fetch(new URL(launchpadPath("/health", basePath), url), { signal: AbortSignal.timeout(1_500) });
+    const response = await fetch(new URL(launchpadPath("/health", knownLaunchpadMounts.get(new URL(url).origin) ?? basePath), url), { signal: AbortSignal.timeout(1_500) });
     if (!response.ok) return "not_ready";
     const health = await response.json().catch(() => null);
     return health?.status === "ok" ? "ready" : "not_ready";
@@ -796,7 +802,7 @@ async function probeServerReadiness(url) {
 async function probeServerIdentity(url, pathname) {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const response = await fetch(new URL(launchpadPath(pathname, basePath), url), { signal: AbortSignal.timeout(1_500) });
+      const response = await fetch(new URL(launchpadPath(pathname, knownLaunchpadMounts.get(new URL(url).origin) ?? basePath), url), { signal: AbortSignal.timeout(1_500) });
       if (response.status === 404) return { status: "missing" };
       if (!response.ok) return { status: "probe_failed" };
       const identity = await response.json().catch(() => null);
@@ -845,7 +851,7 @@ async function requestStaleLaunchpadShutdown(url, observation) {
   const instanceId = observation?.identity?.instance_id;
   if (typeof instanceId !== "string") return false;
   try {
-    const response = await fetch(new URL(launchpadPath("/api/lazurio/server-shutdown", basePath), url), {
+    const response = await fetch(new URL(launchpadPath("/api/lazurio/server-shutdown", observation.identity.base_path ?? knownLaunchpadMounts.get(new URL(url).origin) ?? "/"), url), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ instance_id: instanceId }),

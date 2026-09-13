@@ -1855,3 +1855,20 @@ function staleServerFixtureSource() {
     "",
   ].join("\n");
 }
+
+
+test("changing the mount replaces the located same-root server using its previous API path", async () => {
+  const root = await createLaunchpadGitFixture(); tempRoots.push(root);
+  const primary = await startLaunchpadServer(root);
+  const replacement = Bun.spawn(["bun", "src/server.mjs", "--root", root, "--port", String(primary.port), "--reuse"], {
+    cwd: join(import.meta.dirname, ".."),
+    env: { ...primary.environment, LAZURIO_LAUNCHPAD_BASE_PATH: "/launchpad/" },
+    stdout: "ignore", stderr: "pipe",
+  });
+  servers.push(replacement);
+  await waitForHealth(primary.port, replacement, "/launchpad/");
+  expect(await waitForProcessExit(primary.server, 5000)).toBe(0);
+  expect((await fetch(`http://127.0.0.1:${primary.port}/api/apps`)).status).toBe(404);
+  const response = await fetch(`http://127.0.0.1:${primary.port}/launchpad/api/lazurio/server-identity`);
+  expect((await response.json()).base_path).toBe("/launchpad/");
+});

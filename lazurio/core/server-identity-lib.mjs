@@ -1,3 +1,4 @@
+import { normalizeLaunchpadBasePath } from "../../launchpad/public/base-path.js";
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep, win32 } from "node:path";
@@ -200,6 +201,7 @@ export function buildServerIdentity({
   pid,
   startedAt,
   requestTrustProfile = "local",
+  basePath = "/",
 }) {
   const identity = {
     schema_version: LAZURIO_SERVER_IDENTITY_SCHEMA,
@@ -211,6 +213,7 @@ export function buildServerIdentity({
     pid,
     started_at: startedAt,
     request_trust_profile: requestTrustProfile,
+    ...(normalizeLaunchpadBasePath(basePath) === "/" ? {} : { base_path: basePath }),
     ...(lifecycleConfigurationId === null
       ? {}
       : { lifecycle_configuration_id: lifecycleConfigurationId }),
@@ -240,6 +243,7 @@ export function classifyServerIdentity({ observed = null, legacyObserved = null,
     if ((observed.lifecycle_configuration_id ?? null) !== (expected.lifecycleConfigurationId ?? null)) {
       return "stale_install";
     }
+    if ((observed.base_path ?? "/") !== (expected.basePath ?? "/")) return "stale_install";
     return "compatible";
   }
 
@@ -282,6 +286,7 @@ function isPreControlRootServerIdentity(identity) {
 }
 
 export function isValidServerIdentity(identity) {
+  try { normalizeLaunchpadBasePath(identity?.base_path ?? "/"); } catch { return false; }
   return Boolean(
     identity
     && typeof identity === "object"
