@@ -91,11 +91,10 @@
             data-i18n-aria-label="topbar.panels"
             aria-expanded="false"
           >
-            <!-- iconoir/layout-right -->
+            <!-- iconoir/layout-top -->
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke-width="1.5" aria-hidden="true">
               <path d="M20.4 3H3.6C3.26863 3 3 3.26863 3 3.6V20.4C3 20.7314 3.26863 21 3.6 21H20.4C20.7314 21 21 20.7314 21 20.4V3.6C21 3.26863 20.7314 3 20.4 3Z" stroke="currentColor" stroke-width="1.5" />
-              <path d="M14.25 9.75V21" stroke="currentColor" stroke-width="1.5" />
-              <path d="M21 9.75H14.25H3" stroke="currentColor" stroke-width="1.5" />
+              <path d="M21 9.75H3" stroke="currentColor" stroke-width="1.5" />
             </svg>
             <span id="spaceHealthBadge" class="space-health-badge" aria-hidden="true" hidden></span>
           </button>
@@ -152,32 +151,6 @@
             <h1 id="workspaceWelcomeTitle" class="workspace-welcome-title" data-i18n="workspace.welcome"></h1>
           </section>
 
-          <div id="appsToolbar" class="apps-toolbar" data-i18n-aria-label="a11y.appFiltering">
-            <label class="search-field">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <circle cx="11" cy="11" r="8" />
-                <path d="m21 21-4.35-4.35" />
-              </svg>
-              <span class="sr-only" data-i18n="workspace.search"></span>
-              <input id="appsSearch" type="search" autocomplete="off" data-i18n-placeholder="workspace.searchPlaceholder" />
-            </label>
-            <div id="appsFilterFallback" class="apps-filter-fallback is-active">
-              <div id="appsFilterControls" class="filter-controls">
-                <div class="segmented-control" role="group" data-i18n-aria-label="a11y.appView">
-                  <button type="button" class="segment is-active" data-status-segment="all" aria-pressed="true" data-i18n="topbar.all"></button>
-                  <button id="attentionToggle" type="button" class="segment attention-toggle" aria-pressed="false" data-i18n="workspace.attention"></button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <section id="problemsPanel" class="problems-panel hidden" data-i18n-aria-label="a11y.problems"></section>
-          <section id="actionPanel" class="action-panel hidden" data-i18n-aria-label="a11y.actionResult"></section>
-
-          <section id="appsGrid" class="apps-stack" data-i18n-aria-label="a11y.workspaceApps"></section>
-
-        </section>
-
         <aside id="recentChangesSidebar" class="recent-changes-sidebar hidden" data-i18n-aria-label="a11y.workspaceStatus">
           <a id="guideTile" class="guide-tile side-panel" href="https://documentation.lazurio.ai/cs/guide/?utm_source=launchpad&amp;utm_medium=product&amp;utm_campaign=guide" aria-labelledby="guideTileTitle" aria-describedby="guideTileSummary">
             <div class="guide-tile-head">
@@ -208,6 +181,7 @@
               <span data-i18n="workspace.status">Stav prostoru</span>
               <span class="hero-indicator" aria-hidden="true"></span>
             </summary>
+            <div id="spaceStatusContent" class="space-status-content">
             <section id="hero" class="hero side-panel hero-loading" aria-live="polite" data-i18n-aria-label="workspace.status">
               <h2 id="heroTitle" class="hero-title" data-i18n="workspace.loadingStatus"></h2>
               <p id="heroSummary" class="hero-summary" data-i18n="workspace.checking"></p>
@@ -234,6 +208,7 @@
                 <button id="updateBannerAction" type="button" class="update-banner-action" hidden></button>
               </div>
             </div>
+            </div>
           </details>
           <section class="marketplace-teaser side-panel" aria-labelledby="marketplaceTeaserTitle">
             <div class="marketplace-teaser-head">
@@ -255,6 +230,34 @@
             </div>
           </section>
         </aside>
+
+          <div id="appsToolbar" class="apps-toolbar" data-i18n-aria-label="a11y.appFiltering">
+            <label class="search-field">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.35-4.35" />
+              </svg>
+              <span class="sr-only" data-i18n="workspace.search"></span>
+              <input id="appsSearch" type="search" autocomplete="off" data-i18n-placeholder="workspace.searchPlaceholder" />
+            </label>
+            <div id="appsFilterFallback" class="apps-filter-fallback is-active">
+              <div id="appsFilterControls" class="filter-controls">
+                <div class="segmented-control" role="group" data-i18n-aria-label="a11y.appView">
+                  <button type="button" class="segment is-active" data-status-segment="all" aria-pressed="true" data-i18n="topbar.all"></button>
+                  <button id="attentionToggle" type="button" class="segment attention-toggle" aria-pressed="false" data-i18n="workspace.attention"></button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <section id="problemsPanel" class="problems-panel hidden" data-i18n-aria-label="a11y.problems"></section>
+          <section id="actionPanel" class="action-panel hidden" data-i18n-aria-label="a11y.actionResult"></section>
+
+          <section id="appsGrid" class="apps-stack" data-i18n-aria-label="a11y.workspaceApps"></section>
+
+        </section>
+
+
 
         <div id="drawerBackdrop" class="drawer-backdrop" hidden></div>
         <aside class="detail-drawer" id="detailDrawer" role="dialog" data-i18n-aria-label="a11y.panels" aria-hidden="true" aria-modal="false" tabindex="-1" inert>

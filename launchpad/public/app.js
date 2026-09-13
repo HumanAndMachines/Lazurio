@@ -357,6 +357,7 @@ const elements = {
   hero: document.querySelector("#hero"),
   page: document.querySelector(".page"),
   spaceStatusDetails: document.querySelector("#spaceStatusDetails"),
+  spaceStatusContent: document.querySelector("#spaceStatusContent"),
   heroTitle: document.querySelector("#heroTitle"),
   heroSummary: document.querySelector("#heroSummary"),
   heroIssues: document.querySelector("#heroIssues"),
@@ -476,12 +477,21 @@ document.addEventListener("keydown", (event) => {
     state.spaceMenuOpen = false;
     applySpaceMenuState();
   }
+  if (event.key === "Escape" && elements.spaceStatusDetails?.open) {
+    elements.spaceStatusDetails.open = false;
+    elements.spaceStatusDetails.querySelector("summary")?.focus();
+    return;
+  }
   if (event.key === "Tab" && state.drawerOpen && mobilePanelQuery.matches) trapDrawerFocus(event);
   if (event.key === "Escape" && state.drawerOpen) setDrawer(false);
   if (event.key === "Escape") closeMobileOverflow();
 });
 
 document.addEventListener("click", (event) => {
+  if (!mobilePanelQuery.matches && elements.spaceStatusDetails?.open
+    && !elements.spaceStatusDetails.contains(event.target)) {
+    elements.spaceStatusDetails.open = false;
+  }
   if (elements.topbarOverflow?.open && !elements.topbarOverflow.contains(event.target)) {
     closeMobileOverflow();
   }
@@ -496,7 +506,7 @@ function initResponsiveChrome() {
     if (useSheet && elements.recentChangesSidebar?.parentElement !== elements.drawerBody) {
       elements.drawerBody?.prepend(elements.recentChangesSidebar);
     } else if (!useSheet && elements.recentChangesSidebar?.parentElement === elements.drawerBody) {
-      elements.layout?.insertBefore(elements.recentChangesSidebar, elements.drawerBackdrop);
+      elements.workspaceWelcome?.after(elements.recentChangesSidebar);
     }
     mountUpdateBannerGroup();
     elements.detailDrawer?.classList.toggle("is-bottom-sheet", useSheet);
@@ -1944,12 +1954,12 @@ function renderScopeControls() {
 }
 
 // Na desktopu je update součástí rozbaleného Stavu prostoru. Na mobilu se
-// pravý sloupec přesouvá do zavřeného draweru a v Personalspace se skrývá;
+// lišta pomůcek přesouvá do zavřeného draweru a v Personalspace se skrývá;
 // provozní informace proto v těchto stavech přejde do globálního slotu.
 function mountUpdateBannerGroup() {
   const group = elements.updateBannerGroup;
   const global = mobilePanelQuery.matches || state.filters.scope === "personal";
-  const target = global ? elements.globalUpdateSlot : elements.spaceStatusDetails;
+  const target = global ? elements.globalUpdateSlot : elements.spaceStatusContent;
   if (!group || !target) return;
   if (group.parentElement !== target) target.append(group);
 }

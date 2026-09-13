@@ -151,7 +151,7 @@ test("samostatné panely a popovery sdílejí měkký Lazurio radius, sjednocen�
   expect(styles).toMatch(/\.space-switcher-menu,[^}]*\.detail-panel\s*{[^}]*border-radius: var\(--lz-radius-md\)/);
   expect(styles).toMatch(/\.team-access-content\s*{[^}]*border-radius: var\(--lz-radius-md\)/);
   expect(styles).toMatch(/\/\* --- BANNER O NOVÉ VERZI[^]*?\.update-banner\s*{[^}]*border-radius: var\(--lz-radius-md\)/);
-  expect(styles).toMatch(/\.space-status-details > \.update-banner-group \.update-banner\s*{[^}]*border-radius: 0/);
+  expect(styles).toMatch(/\.space-status-content > \.update-banner-group \.update-banner\s*{[^}]*border-radius: 0/);
   expect(styles).toMatch(/\.app-version-menu-panel\s*{[\s\S]*?position: static/);
 });
 
@@ -179,14 +179,14 @@ test("Guide je první pravý panel a jeho ikona sdílí Iconoir materiál Market
   expect(guideIndex).toBeLessThan(html.indexOf('class="marketplace-teaser side-panel"'));
   expect(html).toContain("<!-- iconoir/book -->");
   expect(styles).toMatch(/\.guide-tile-icon\s*{[^}]*width: var\(--lz-space-48\);[^}]*height: var\(--lz-space-48\);[^}]*border-radius: var\(--lz-radius-sm\);[^}]*background: var\(--lz-blue-50\);[^}]*color: var\(--lz-blue-600\)/);
-  expect(styles).not.toMatch(/\.guide-tile:hover\s*{/);
+  expect(styles).toMatch(/\.guide-tile:hover\s*{[^}]*background: var\(--lz-gray-50\)/);
   expect(styles).toMatch(/\.guide-tile:is\(:hover, :focus-visible\)\s*{\s*text-decoration: none;/);
   expect(styles).toMatch(/\.guide-tile:hover \.guide-tile-action,[\s\S]*?color: var\(--lz-blue-700\);/);
   expect(styles).toMatch(/\.guide-tile:hover \.guide-tile-action svg\s*{[^}]*transform: translateX\(var\(--lz-space-4\)\)/);
   expect(styles).toMatch(/\.guide-tile-action svg\s*{[^}]*transition: transform 160ms ease/);
 });
 
-test("pravý sidebar tvoří jediný hranatý výsuvný panel se sbaleným stavem prostoru", async () => {
+test("pomůcky tvoří kompaktní skryvatelnou lištu se sbaleným stavem prostoru", async () => {
   const [html, js, styles] = await Promise.all([source("index.html"), source("app.js"), source("styles.css")]);
   expect(html).toContain('id="spaceStatusDetails" class="space-status-details"');
   expect(html).toContain('<summary class="space-status-toggle">');
@@ -196,20 +196,20 @@ test("pravý sidebar tvoří jediný hranatý výsuvný panel se sbaleným stave
   expect(js).toContain('toggleAttribute("inert", collapsed)');
   expect(js).toContain('desktop ? "recentChangesSidebar" : "detailDrawer"');
   expect(js).toContain('elements.spaceStatusDetails.dataset.tone = verdict.tone');
-  expect(styles).toMatch(/\.recent-changes-sidebar\s*{[^}]*display: block;[^}]*border-radius: 0/);
+  expect(styles).toMatch(/\.recent-changes-sidebar\s*{[^}]*display: block;[^}]*border-radius: var\(--lz-radius-md\)/);
   expect(styles).toMatch(/\.recent-changes-sidebar \.side-panel\s*{[^}]*margin: 0;[^}]*border-radius: 0/);
-  expect(styles).toMatch(/\.layout\.is-sidebar-collapsed\s*{[^}]*grid-template-columns: minmax\(0, 1fr\) 0/);
+  expect(styles).toMatch(/\.layout\.is-sidebar-collapsed \.recent-changes-sidebar\s*{[^}]*display: none/);
 });
 
-test("údržba je v rozbaleném Stavu prostoru a desktopový panel přiléhá k okraji", async () => {
+test("údržba je v rozbaleném Stavu prostoru a pomůcky jsou nad vyhledáváním", async () => {
   const [html, js, styles] = await Promise.all([source("index.html"), source("app.js"), source("styles.css")]);
   const details = html.slice(html.indexOf('id="spaceStatusDetails"'), html.indexOf('</details>', html.indexOf('id="spaceStatusDetails"')));
   expect(details).toContain('id="updateBannerGroup"');
   expect(details.indexOf('id="hero"')).toBeLessThan(details.indexOf('id="updateBannerGroup"'));
-  expect(js).toContain('global ? elements.globalUpdateSlot : elements.spaceStatusDetails');
+  expect(js).toContain('global ? elements.globalUpdateSlot : elements.spaceStatusContent');
   expect(js).toContain('elements.page?.classList.toggle("is-organization", !personal)');
-  expect(styles).toMatch(/\.page\.is-organization\s*{[^}]*max-width: none;[^}]*padding-right: 0/);
-  expect(styles).toMatch(/\.recent-changes-sidebar\s*{[^}]*top: var\(--topbar-h\)/);
+  expect(styles).toMatch(/\.page\.is-organization\s*{[^}]*max-width: none;[^}]*padding-right: clamp/);
+  expect(html.indexOf('id="recentChangesSidebar"')).toBeLessThan(html.indexOf('id="appsToolbar"'));
 });
 
 test("mobilní klidové stavy tvoří kompaktní řadu a akční stav zůstává výrazný", async () => {
@@ -243,7 +243,7 @@ test("kanonické modulové dlaždice jsou kompaktní samostatné karty", async (
   expect(base).toMatch(/\.app-card\s*{[\s\S]*?min-height: 11rem;[\s\S]*?padding: var\(--lz-space-16\)/);
   expect(base).toMatch(/\.app-title-block\s*{[\s\S]*?gap: var\(--lz-space-12\)/);
   expect(base).toMatch(/\.app-card-desc\s*{[\s\S]*?font-size: 14px;[\s\S]*?line-height: 1\.45/);
-  expect(styles).toMatch(/\.apps-grid\s*{[^}]*grid-template-columns: repeat\(auto-fit, minmax\(min\(100%, 240px\), 1fr\)\)/);
+  expect(styles).toMatch(/\.apps-grid\s*{[^}]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
   expect(canonical).toMatch(/\.apps-grid\s*{[\s\S]*?column-gap: var\(--lz-space-12\);[\s\S]*?row-gap: var\(--lz-space-12\);[\s\S]*?border: 0/);
   expect(canonical).toMatch(/\.apps-grid > \.app-card\s*{[\s\S]*?border: 1px solid var\(--lz-line\);[\s\S]*?border-radius: var\(--lz-radius-md\)/);
   expect(canonical).toMatch(/\.apps-grid > \.app-card:not\(\.has-open-menu\):focus-within,[\s\S]*?\.apps-grid > \.app-card\.selected\s*{[\s\S]*?border-color: var\(--app-focus-accent, var\(--app-accent\)\)/);
@@ -300,7 +300,7 @@ test("materiálový průchod používá jemné modulové hrany a odstupňované 
   expect(material).toMatch(/\.app-card\s*{[\s\S]*?border-width: 1px;[\s\S]*?border-color: var\(--lz-line\);[\s\S]*?background: var\(--lz-white\)/);
   expect(styles).toMatch(/\.app-card > \.card-warning\.is-fact,[\s\S]*?\.app-card > \.card-warning\.is-jen-akce\s*{[\s\S]*?display: flex;[\s\S]*?min-height: 44px;[\s\S]*?margin-top: auto;[\s\S]*?border-top: 1px solid var\(--lz-line-faint\)/);
   expect(styles).toContain(".app-card > .card-warning:not(.is-jen-akce):not(.is-fact)");
-  expect(material).toMatch(/\.space-status-details > \.update-banner-group \.update-banner\s*{[\s\S]*?background: var\(--lz-white\)/);
+  expect(material).toMatch(/\.space-status-content > \.update-banner-group \.update-banner\s*{[\s\S]*?background: var\(--lz-white\)/);
 });
 
 test("uvítání pracovního prostoru používá display hierarchii Lazuria", async () => {

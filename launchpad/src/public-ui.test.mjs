@@ -590,7 +590,7 @@ test("CAC-0095: topbar uses canonical Iconoir icons without circular wrappers", 
     readFile(join(publicRoot, "app.js"), "utf8"),
   ]);
 
-  for (const icon of ["user", "nav-arrow-down", "lock", "bell", "layout-right", "more-horiz", "refresh"]) {
+  for (const icon of ["user", "nav-arrow-down", "lock", "bell", "layout-top", "more-horiz", "refresh"]) {
     expect(html).toContain(`<!-- iconoir/${icon} -->`);
   }
 
@@ -598,7 +598,7 @@ test("CAC-0095: topbar uses canonical Iconoir icons without circular wrappers", 
   expect(html).toContain("M6 9L12 15L18 9");
   expect(html).toContain("M16 12H17.4C17.7314");
   expect(html).toContain("M18 8.4C18 6.70261");
-  expect(html).toContain("M14.25 9.75V21");
+  expect(html).toContain("M21 9.75H3");
   expect(html).toContain("M20 12.5C20.2761 12.5");
   expect(html).not.toContain("M3 11.5066C3 16.7497");
   expect(html).toContain("M21.8883 13.5C21.1645");
@@ -757,7 +757,7 @@ test("CAC-0044/0095: pravé panely, notifikace pod zvonečkem a git chip", async
   expect(js).toContain("git_attention");
   expect(css).toContain(".side-panel");
   expect(css).toContain(".recent-changes-sidebar");
-  expect(css).toContain("grid-template-columns: minmax(0, 1fr) 300px");
+  expect(css).toContain("grid-template-columns: minmax(0, 1fr)");
   expect(css).toContain(".quick-app");
   expect(js).toContain('elements.recentChangesSidebar.classList.toggle("hidden", personal)');
 });
@@ -901,7 +901,7 @@ test("Launchpad používá jednu explicitní Synchronizovat akci místo dílčí
   expect(js).toContain("loadData({ sync: true })");
   expect(js).toContain('fetchJson("/api/sync", { method: "POST" })');
   expect(css).toContain(".update-banner-group");
-  expect(css).toContain(".space-status-details > .update-banner-group .update-banner");
+  expect(css).toContain(".space-status-content > .update-banner-group .update-banner");
 });
 
 test("CAC-0042: detail panel vysvětluje verzi a Mission Control pracovní návrhy", async () => {
@@ -1034,7 +1034,7 @@ test("mobilní toolbar drží search kompaktní a sekundární panely přesouvá
   expect(js).toContain('const mobilePanelQuery = window.matchMedia("(max-width: 900px)")');
   expect(js).toContain('const mobileTopbarQuery = window.matchMedia("(max-width: 900px)")');
   expect(js).toContain("elements.drawerBody?.prepend(elements.recentChangesSidebar)");
-  expect(js).toContain("elements.layout?.insertBefore(elements.recentChangesSidebar, elements.drawerBackdrop)");
+  expect(js).toContain("elements.workspaceWelcome?.after(elements.recentChangesSidebar)");
   expect(js).toContain("const restoreFocus = overflow.contains(document.activeElement)");
   expect(js).toContain('const toggle = overflow.querySelector("summary")');
   expect(js).toContain("if (toggle instanceof HTMLElement) toggle.focus()");
@@ -1397,7 +1397,7 @@ test("Launchpad používá jednotný kompaktní grid s jemně zvýšenými dlaž
     readFile(join(publicRoot, "styles.css"), "utf8"),
   ]);
 
-  expect(css).toContain("grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr))");
+  expect(css).toContain("grid-template-columns: repeat(4, minmax(0, 1fr))");
   expect(css).toContain("min-height: 11rem");
   expect(css).toContain("width: 2.6rem");
   expect(css).toContain("border: 1px solid transparent");
@@ -1467,7 +1467,7 @@ test("DEV-6493: banner používá GET-first Lazurio stav a pouze current|updated
   expect(js).toContain("updateBannerPresentation(state.updateStatus");
   expect(js).toContain("function mountUpdateBannerGroup");
   expect(js).toContain('mobilePanelQuery.matches || state.filters.scope === "personal"');
-  expect(js).toContain('global ? elements.globalUpdateSlot : elements.spaceStatusDetails');
+  expect(js).toContain('global ? elements.globalUpdateSlot : elements.spaceStatusContent');
   expect(js).toContain("if (group.parentElement !== target) target.append(group)");
   expect(js).not.toContain("elements.updateBannerText.textContent = status.message");
   expect(stateLib).toContain('status.state === "blocked"');
