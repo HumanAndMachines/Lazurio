@@ -97,11 +97,21 @@ ověření drží owner evidence, nikoli kopie tajných hodnot.
 
 ## Modul až po funkční URL
 
-Výchozí zůstává kanonická subdoména `<modul>.<team>.<doména>`
-([decision 0021](decision-register.md)). Samostatný origin aplikace
-zachovává její běžné routování. Varianta za lomítkem se použije jen při
-vědomém kontraktu aplikace pro base path, redirecty, cookies a WebSockety;
-není obecnou opravou chybějící konvergence.
+Pro hostované workspace VM platí rozhodnutí Principála z 13. 9. 2026:
+jedna Mašina je jedna dílna a jedna hranice důvěry. Launchpad, T3 a aplikace
+sdílejí origin `machine.organization.lazurio.io` a přihlášení; kanonické
+cesty jsou `/launchpad/`, `/t3code/` a `/<aplikace>/`. Přihlášený návštěvník
+dílny má přístup ke všem jejím aplikacím. JavaScript těchto aplikací je tedy
+součástí stejné důvěryhodné dílny, včetně přístupu k jejím Launchpad API;
+path prefix není bezpečnostní izolace. Aplikace vyžadující jinou hranici
+důvěry patří do jiné Mašiny. Jemná práva produkčních aplikací jsou jiný scope.
+
+Toto nahrazuje subdoménovou konvenci decision 0021 pro nové workspace VM,
+nikoli požadavek na skutečnou funkčnost. Každá nasazená aplikace musí mít
+ověřenou podporu své base path, assetů, redirectů, cookies a WebSocketů.
+Samotné odvození URL nedokazuje připravenost aplikace. Pilot musí ověřit
+Launchpad a T3 skutečným použitím; další aplikace nesmějí být označeny za
+funkční pouze podle vygenerovaného odkazu.
 
 Cílový tok je:
 

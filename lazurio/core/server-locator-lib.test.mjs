@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { buildServerIdentity } from "./server-identity-lib.mjs";
 import {
   buildServerLocator,
+  locatedServerUrl,
   readServerLocator,
   readServerLocatorIfPresent,
   removeServerLocatorIfOwned,
@@ -144,3 +145,15 @@ async function temporaryRoot() {
   roots.push(root);
   return root;
 }
+
+
+test("mounted locator survives disk roundtrip and routes clients beneath its mount", async () => {
+  const stateDirectory = await temporaryRoot();
+  await writeServerLocator({ stateDirectory, origin: "http://127.0.0.1:4175", identity: fixtureIdentity(), basePath: "/launchpad/" });
+  const locator = await readServerLocator({ stateDirectory });
+  expect(locator.base_path).toBe("/launchpad/");
+  expect(locatedServerUrl(locator, "/api/apps").href).toBe("http://127.0.0.1:4175/launchpad/api/apps");
+  for (const base_path of ["//foreign.example/", "/../", "/launchpad", "/launchpad/?x"]) {
+    expect(validateServerLocator({ ...locator, base_path }).length).toBeGreaterThan(0);
+  }
+});

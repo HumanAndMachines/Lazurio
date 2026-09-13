@@ -442,3 +442,20 @@ function fixtureApps(defaultAppIds, legacyOverrides = {}) {
   };
   return [app("v3"), app("v2"), app("v1", false), legacy];
 }
+
+
+test("module status discovers and reads a mounted Launchpad without root API requests", async () => {
+  const paths = [];
+  const fixture = fixtureFetch({ requests: [] });
+  const report = await runModuleLifecycle({ action: "status",
+    readLocator: async () => ({ ...locator, base_path: "/launchpad/" }),
+    fetchFn: async (url, options) => {
+      const mounted = new URL(url); paths.push(mounted.pathname);
+      expect(mounted.pathname.startsWith("/launchpad/")).toBe(true);
+      mounted.pathname = mounted.pathname.slice("/launchpad".length);
+      return fixture(mounted, options);
+    },
+  });
+  expect(report.status).toBe("current");
+  expect(paths).toEqual(["/launchpad/api/lazurio/server-identity", "/launchpad/api/apps"]);
+});

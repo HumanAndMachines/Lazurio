@@ -1,5 +1,6 @@
 import {
   readServerLocatorIfPresent,
+  locatedServerUrl,
   resolveServerStateDirectory,
 } from "./server-locator-lib.mjs";
 import { isValidServerIdentity } from "./server-identity-lib.mjs";
@@ -81,7 +82,7 @@ export async function runModuleLifecycle({
     );
   }
 
-  const inventory = await requestJson(fetchFn, new URL("/api/apps", locator.origin), {
+  const inventory = await requestJson(fetchFn, locatedServerUrl(locator, "/api/apps"), {
     method: "GET",
     timeoutMs: timeoutsMs.inventory,
   });
@@ -141,7 +142,7 @@ export async function runModuleLifecycle({
   };
   const response = await requestJson(
     fetchFn,
-    new URL(`/api/apps/${encodeURIComponent(selected.app.app_id)}/${action}`, locator.origin),
+    locatedServerUrl(locator, `/api/apps/${encodeURIComponent(selected.app.app_id)}/${action}`),
     {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -223,7 +224,7 @@ function normalizeAppId(value) {
 }
 
 async function verifyLocatedServer({ locator, fetchFn, timeoutsMs = MODULE_LIFECYCLE_TIMEOUTS_MS }) {
-  const response = await requestJson(fetchFn, new URL("/api/lazurio/server-identity", locator.origin), {
+  const response = await requestJson(fetchFn, locatedServerUrl(locator, "/api/lazurio/server-identity"), {
     method: "GET",
     timeoutMs: timeoutsMs.identity,
   });

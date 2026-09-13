@@ -261,7 +261,7 @@ try {
       lifecycleConfigurationId: launchpadLifecycleConfigurationId,
     }),
     shutdownStaleLaunchpad: requestStaleLaunchpadShutdown,
-    openExisting: openBrowser,
+    openExisting: (origin) => openBrowser(new URL(basePath, origin).href),
     acquireServerLease: async () => {
       serverLifetimeLock ??= await withServerStateAccess(() => acquireServerLifetimeLock({
         stateDirectory: serverStateDirectory,
@@ -284,6 +284,7 @@ try {
       stateDirectory: serverStateDirectory,
       origin: startResult.url,
       identity: observation.identity,
+      basePath,
     }));
   } else {
     const serverUrl = `http://${host}:${startResult.server.port}`;
@@ -291,6 +292,7 @@ try {
       stateDirectory: serverStateDirectory,
       origin: serverUrl,
       identity: launchpadServerIdentity,
+      basePath,
     }));
     serverShutdownState.markRunning();
     if (hostedWorkspace.profile === "hosted") {
