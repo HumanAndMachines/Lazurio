@@ -179,7 +179,7 @@ test("CLI report rejects sibling paths before any generation write", async () =>
 
 test("CLI report writes inside the selected root and safely replaces its own report", async () => {
   const { review } = await fixture();
-  const path = join(review, "reports", "compiler.json");
+  const path = join(review, ".compiler-reports", "compiler.json");
   for (let attempt = 0; attempt < 2; attempt++) {
     const result = reportCli(review, path);
     expect(result.exitCode).toBe(0);
@@ -192,7 +192,8 @@ test("CLI report rejects hardlink aliases without altering external content", as
   const { review } = await fixture();
   const outside = join(dirname(review), "retained.json");
   await Bun.write(outside, "retained");
-  const alias = join(review, "report.json");
+  const alias = join(review, ".compiler-reports", "report.json");
+  await mkdir(join(review, ".compiler-reports"));
   await link(outside, alias);
   expect(reportCli(review, alias).exitCode).toBe(1);
   expect(await Bun.file(outside).text()).toBe("retained");
@@ -202,7 +203,36 @@ test.skipIf(!(await supportsFileSymlinks()))("CLI report rejects symlink directo
   const { review } = await fixture();
   const outside = join(dirname(review), "outside-reports");
   await mkdir(outside);
-  await symlink(outside, join(review, "reports"), "dir");
-  expect(reportCli(review, join(review, "reports", "compiler.json")).exitCode).toBe(1);
+  await symlink(outside, join(review, ".compiler-reports"), "dir");
+  expect(reportCli(review, join(review, ".compiler-reports", "compiler.json")).exitCode).toBe(1);
   expect(await Bun.file(join(outside, "compiler.json")).exists()).toBe(false);
+});
+
+
+test("CLI report cannot overwrite Organization authority or generated targets", async () => {
+  const { review } = await fixture();
+  for (const path of ["company.gen3.json", "modules.manifest.json", ".git", "generated/modules.index.json"]) {
+    const target = join(review, path);
+    const before = await Bun.file(target).exists() ? await Bun.file(target).text() : null;
+    expect(reportCli(review, target).exitCode).toBe(1);
+    expect(await Bun.file(target).exists() ? await Bun.file(target).text() : null).toBe(before);
+  }
+});
+
+test("CLI report rejects a nested checkout at its dedicated report directory", async () => {
+  const { review } = await fixture();
+  await mkdir(join(review, ".compiler-reports"));
+  await Bun.write(join(review, ".compiler-reports", ".git"), "gitdir: elsewhere");
+  expect(reportCli(review, join(review, ".compiler-reports", "compiler.json")).exitCode).toBe(1);
+  expect(await Bun.file(join(review, ".compiler-reports", "compiler.json")).exists()).toBe(false);
+});
+
+
+test("CLI report rejects Windows device names and alternate streams before filesystem access", async () => {
+  const { review } = await fixture();
+  for (const name of ["CON.json", "report:stream.json"]) {
+    const result = reportCli(review, join(review, ".compiler-reports", name));
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr.toString()).toContain("Unsafe compiler path");
+  }
 });

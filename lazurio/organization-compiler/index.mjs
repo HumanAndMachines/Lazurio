@@ -51,7 +51,18 @@ export async function compileOrganization(options = {}) {
 
   const root = resolve(rootInput);
   const reportTarget = reportPath === null ? null : relative(root, resolve(reportPath)).split(sep).join("/");
-  if (reportTarget !== null) await assertCompilerPath(root, reportTarget);
+  if (reportTarget !== null) {
+    // Reports own only this dedicated flat directory, never inputs or Git metadata.
+    if (!/^\.compiler-reports\/[A-Za-z0-9][A-Za-z0-9._-]*\.json$/.test(reportTarget) ||
+        /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(reportTarget.split("/")[1])) {
+      throw new OrganizationCompilerError(`Unsafe compiler path: reports require .compiler-reports/<name>.json`);
+    }
+    try {
+      await lstat(join(root, ".compiler-reports", ".git"));
+      throw new OrganizationCompilerError("Report directory must not be a nested checkout");
+    } catch (error) { if (error.code !== "ENOENT") throw error; }
+    await assertCompilerPath(root, reportTarget);
+  }
   const effectiveRepositoryObservation = write
     ? readCheckoutRepositoryObservation(root)
     : repositoryObservation;
