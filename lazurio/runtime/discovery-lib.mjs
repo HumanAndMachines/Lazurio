@@ -946,11 +946,11 @@ export async function readJson(path) {
   return JSON.parse(await readFile(path, "utf8"));
 }
 
-async function runtimePackageBoundary({ sourceRoot, company, absolutePackagePath }) {
+async function runtimePackageBoundary({ sourceRoot, company, absolutePackagePath, readDeclaredRoots }) {
   const organizationRoot = resolve(sourceRoot, company.path ?? ".");
   if (company.discovery_source === "local_surface") return organizationRoot;
   const packageDirectory = dirname(absolutePackagePath);
-  const declaredRoots = await declaredOrganizationModuleRoots(organizationRoot);
+  const declaredRoots = await readDeclaredRoots(organizationRoot);
   return declaredRoots
     .filter((root) => root === packageDirectory || pathIsWithin(root, packageDirectory))
     .sort((left, right) => right.length - left.length)[0]
@@ -962,6 +962,7 @@ async function resolveRuntimeModuleContract({
   packagePath,
   company,
   runtime,
+  readDeclaredRoots,
 }) {
   const packageDirectory = dirname(resolve(companiesRoot, packagePath));
   const boundary = resolve(companiesRoot, company.path ?? ".");
@@ -973,7 +974,7 @@ async function resolveRuntimeModuleContract({
   }
   const declaredRoots = company.discovery_source === "local_surface"
     ? [boundary]
-    : await declaredOrganizationModuleRoots(boundary);
+    : await readDeclaredRoots(boundary);
   const containingRoots = declaredRoots
     .filter((root) => pathIsWithin(root, packageDirectory))
     .sort((left, right) => right.length - left.length);
@@ -2463,6 +2464,15 @@ export async function discoverLaunchpadApps(
   const apps = [];
   const invalidApps = [];
   const portOwners = [];
+  // One inventory pass shares declared roots; later discovery starts fresh.
+  const declaredRootsByOrganization = new Map();
+  function readDeclaredRoots(root) {
+    const key = resolve(root);
+    if (!declaredRootsByOrganization.has(key)) {
+      declaredRootsByOrganization.set(key, declaredOrganizationModuleRoots(key));
+    }
+    return declaredRootsByOrganization.get(key);
+  }
   const moduleContractsByPath = new Map();
   const appIds = new Map();
   for (const { packagePath, company, sourceRoot = companiesRoot } of sortedPackageEntries) {
@@ -2471,6 +2481,7 @@ export async function discoverLaunchpadApps(
       sourceRoot,
       company,
       absolutePackagePath,
+      readDeclaredRoots,
     });
     let packageJson;
     try {
@@ -2519,6 +2530,7 @@ export async function discoverLaunchpadApps(
         packagePath,
         company,
         runtime: app,
+        readDeclaredRoots,
       });
       if (governingModule.module) {
         runtimeContractIssues.push(
@@ -2531,6 +2543,7 @@ export async function discoverLaunchpadApps(
         packagePath,
         company,
         runtime: app,
+        readDeclaredRoots,
       });
       runtimeContractIssues.push(...moduleResult.issues);
       if (moduleResult.module) {

@@ -2584,6 +2584,41 @@ test("a transition pair discovers one normalized Organization and one app", asyn
   expect(result.apps.map((app) => app.id)).toEqual(["test-company-demo-v1"]);
 });
 
+test("discovery refreshes declared module roots between passes", async () => {
+  const root = await createCompaniesWorkspaceFixture({ plugin: null });
+  const organizationRoot = join(root, "organizations", "TestCompany");
+  const moduleRoot = join(organizationRoot, "modules", "demo");
+  const inventoryPath = join(organizationRoot, "modules.manifest.json");
+  const inventory = {
+    company: "test-company", github_org: "TestCompany",
+    module_slots: [{ slug: "demo", path: "modules/demo", git: {
+      url: "git@github.com:TestCompany/demo.git", branch: "main",
+    } }],
+  };
+  await writeJson(inventoryPath, inventory);
+  await writeJson(join(moduleRoot, "lazurio.module.json"), {
+    schema_version: "lazurio.module.v1", id: "demo", company: "test-company",
+    tcp_port_policy: { mode: "single" },
+    port_leases: [{ id: "main", host: "127.0.0.1", port: 4242 }],
+  });
+  await writeJson(join(moduleRoot, "app", "v1", "package.json"), {
+    name: "test-company-demo-v1", private: true, scripts: { dev: "bun server.mjs" },
+    lazurio: { runtime: {
+      schema_version: "lazurio.runtime.v1", id: "test-company-demo-v1",
+      title: "Demo", company: "test-company", module: "demo", surface: "internal", tags: [],
+      dev_script: "dev", listeners: [{ id: "web", role: "entrypoint", lease: "main",
+        protocol: "http", health: { kind: "http", path: "/health" } }],
+    } },
+  });
+  expect((await discoverLaunchpadApps(root)).apps.map(app => app.id)).toEqual(["test-company-demo-v1"]);
+  await writeJson(inventoryPath, { ...inventory, module_slots: [] });
+  const removed = await discoverLaunchpadApps(root);
+  expect(removed.apps).toHaveLength(0);
+  expect(removed.invalid_apps.some(app => app.manifest_issues.some(issue => issue.includes("repository inventory")))).toBe(true);
+  await writeJson(inventoryPath, inventory);
+  expect((await discoverLaunchpadApps(root)).apps.map(app => app.id)).toEqual(["test-company-demo-v1"]);
+});
+
 async function createCompaniesWorkspaceFixture({ plugin, appOverrides = {} }) {
   const root = await mkdtemp(join(tmpdir(), "companiesascode-discovery-"));
   tempRoots.push(root);
