@@ -149,7 +149,7 @@ test("samostatné panely a popovery sdílejí měkký Lazurio radius, sjednocen�
   expect(styles).toMatch(/\.team-access-content\s*{[^}]*border-radius: var\(--lz-radius-md\)/);
   expect(styles).toMatch(/\/\* --- BANNER O NOVÉ VERZI[^]*?\.update-banner\s*{[^}]*border-radius: var\(--lz-radius-md\)/);
   expect(styles).toMatch(/\.space-status-content > \.update-banner-group \.update-banner\s*{[^}]*border-radius: 0/);
-  expect(styles).toMatch(/\.app-version-menu-panel\s*{[\s\S]*?position: static/);
+  expect(styles).toMatch(/\.app-version-menu-panel\s*{[\s\S]*?position: absolute/);
 });
 
 test("Marketplace teaser je klidná neinteraktivní dlaždice v pravém sloupci", async () => {
@@ -312,7 +312,7 @@ test("menu dalších možností se rozbalí uvnitř dlaždice bez vrstveného ho
     source("app.js"),
     source("personalspace.js"),
   ]);
-  expect(styles).toMatch(/\.app-version-menu-panel\s*{[\s\S]*?position: static;[\s\S]*?width: 100%;[\s\S]*?border-top: 1px solid var\(--lz-line-faint\)/);
+  expect(styles).toMatch(/\.app-version-menu-panel\s*{[\s\S]*?position: absolute;[\s\S]*?width: min\(256px, calc\(100% - 24px\)\);[\s\S]*?border: 1px solid var\(--lz-line\)/);
   expect(styles).toMatch(/\.app-card\.has-open-menu:not\(\.selected\),[\s\S]*?border-color: var\(--lz-line\);[\s\S]*?background: var\(--lz-white\)/);
   expect(styles).toMatch(/\.apps-grid\s*{[\s\S]*?align-items: start/);
   expect(styles).toMatch(/\.apps-grid > \.app-card\s*{[\s\S]*?align-self: start/);

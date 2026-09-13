@@ -456,6 +456,13 @@ elements.drawerToggle?.addEventListener("click", () => {
 elements.drawerClose?.addEventListener("click", () => setDrawer(false));
 elements.drawerBackdrop?.addEventListener("click", () => setDrawer(false));
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && state.openVersionMenu) {
+    const key = state.openVersionMenu;
+    state.openVersionMenu = null;
+    render();
+    focusMenuTriggerAfterRender(document, key);
+    return;
+  }
   if (event.key === "Escape" && state.spaceMenuOpen) {
     restoreSpaceMenuFocusOnClose = true;
     state.spaceMenuOpen = false;

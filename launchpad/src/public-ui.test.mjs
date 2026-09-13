@@ -639,7 +639,7 @@ test("Version families render as one card with a default version and a more-menu
   expect(css).toContain(".app-version-menu");
   expect(css).toContain(".app-version-badge");
   expect(css).toContain(".app-version-option");
-  expect(css).toMatch(/\.app-version-menu-panel\s*{[\s\S]*?position: static;[\s\S]*?width: 100%;[\s\S]*?border-top: 1px solid var\(--lz-line-faint\)/);
+  expect(css).toMatch(/\.app-version-menu-panel\s*{[\s\S]*?position: absolute;[\s\S]*?width: min\(256px, calc\(100% - 24px\)\);[\s\S]*?border: 1px solid var\(--lz-line\)/);
   expect(css).toContain(".app-card.has-open-menu:not(.selected)");
 });
 
