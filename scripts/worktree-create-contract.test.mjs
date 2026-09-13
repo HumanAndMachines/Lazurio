@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, setDefaultTimeout, test } from "bun:test";
 import { cp, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -8,6 +8,12 @@ import {
   PLAN_CODE_PATTERN,
 } from "./worktree-create-contract.mjs";
 import { auditRepository } from "../.agents/skills/worktree-development-discipline/scripts/worktree-inventory.mjs";
+
+import { platformTestTimeout } from "../launchpad/src/test-platform-setup.mjs";
+
+// These fixtures initialize and commit several real Git repositories.
+// Use the same bounded platform allowance as the sibling inventory suite.
+setDefaultTimeout(platformTestTimeout(20_000));
 
 const cleanupPaths = [];
 const createScript = join(import.meta.dir, "worktree-create.mjs");
