@@ -107,9 +107,9 @@ const state = {
   loaded: false,
   spaceMenuOpen: false,
   suppressNextDrawerOpen: false,
-  // Stav prostoru a aktualizací žije v trvalém pravém panelu Organization
-  // scope. Nejčastější a detail zůstávají ve skládacím draweru, který detail
-  // appky otevře automaticky.
+  // Přehled Organization je na desktopu výchozí otevřený a lze jej zasunout.
+  // Detail appky zůstává v samostatném draweru, který se otevře automaticky.
+  sidebarOpen: true,
   drawerOpen: false,
   drawerView: "overview",
   filters: {
@@ -355,6 +355,7 @@ const elements = {
   updateBannerAction: document.querySelector("#updateBannerAction"),
   reloadButton: document.querySelector("#reloadButton"),
   hero: document.querySelector("#hero"),
+  spaceStatusDetails: document.querySelector("#spaceStatusDetails"),
   heroTitle: document.querySelector("#heroTitle"),
   heroSummary: document.querySelector("#heroSummary"),
   heroIssues: document.querySelector("#heroIssues"),
@@ -451,9 +452,13 @@ elements.attentionToggle?.addEventListener("click", () => {
   render();
 });
 
-// Drawer doplňkových panelů (Nejčastější / detail). Poslední změny jsou v
-// Organization scope trvale viditelné vedle hlavní plochy.
+// Jedno tlačítko ovládá desktopový přehled nebo mobilní spodní panel.
 elements.drawerToggle?.addEventListener("click", () => {
+  if (!mobilePanelQuery.matches) {
+    state.sidebarOpen = !state.sidebarOpen;
+    applySidebarState();
+    return;
+  }
   if (state.drawerOpen) {
     setDrawer(false);
     return;
@@ -495,6 +500,7 @@ function initResponsiveChrome() {
     mountUpdateBannerGroup();
     elements.detailDrawer?.classList.toggle("is-bottom-sheet", useSheet);
     applyDrawerState();
+    applySidebarState();
     if (useSheet && state.drawerOpen) focusMobileDrawer();
   };
   const syncTopbar = () => {
@@ -587,11 +593,34 @@ function applyDrawerState() {
   elements.detailDrawer?.classList.toggle("is-open", open);
   elements.detailDrawer?.setAttribute("aria-hidden", open ? "false" : "true");
   elements.detailDrawer?.toggleAttribute("inert", !open);
-  elements.drawerToggle?.setAttribute("aria-expanded", open ? "true" : "false");
-  elements.drawerToggle?.classList.toggle("is-active", open);
   elements.detailDrawer?.setAttribute("aria-modal", mobilePanelQuery.matches && open ? "true" : "false");
   document.body.classList.toggle("drawer-open", mobilePanelQuery.matches && open);
   if (elements.drawerBackdrop) elements.drawerBackdrop.hidden = !open;
+  applySidebarState();
+}
+
+function applySidebarState() {
+  const desktop = !mobilePanelQuery.matches;
+  const collapsed = desktop && !state.sidebarOpen;
+  const open = desktop ? state.sidebarOpen : state.drawerOpen;
+  elements.layout?.classList.toggle("is-sidebar-collapsed", collapsed);
+  elements.recentChangesSidebar?.toggleAttribute("inert", collapsed);
+  elements.recentChangesSidebar?.setAttribute("aria-hidden", collapsed ? "true" : "false");
+  elements.drawerToggle?.setAttribute("aria-controls", desktop ? "recentChangesSidebar" : "detailDrawer");
+  elements.drawerToggle?.setAttribute("aria-expanded", open ? "true" : "false");
+  elements.drawerToggle?.classList.toggle("is-active", open);
+  updatePanelToggleLabel();
+}
+
+function updatePanelToggleLabel() {
+  const toggle = elements.drawerToggle;
+  if (!toggle) return;
+  const open = mobilePanelQuery.matches ? state.drawerOpen : state.sidebarOpen;
+  const action = t(open ? "panels.hide" : "panels.show");
+  const status = elements.heroTitle?.textContent;
+  const label = status ? `${action} · ${status}` : action;
+  toggle.setAttribute("aria-label", label);
+  toggle.title = label;
 }
 
 function selectAppDetail(appId, { autoOpenTechnical = false } = {}) {
@@ -1127,6 +1156,7 @@ function renderHero(apps, diagnostics) {
 
   if (!state.loaded) {
     hero.classList.add("hero-loading");
+    elements.spaceStatusDetails.dataset.tone = "loading";
     elements.heroTitle.textContent = t("workspace.loadingStatus");
     elements.heroSummary.textContent = t("workspace.checking");
     elements.heroIssues.hidden = true;
@@ -1140,6 +1170,7 @@ function renderHero(apps, diagnostics) {
 
   const verdict = computeHeroState(apps, diagnostics);
   hero.classList.add(`hero-${verdict.tone}`);
+  elements.spaceStatusDetails.dataset.tone = verdict.tone;
   elements.heroTitle.textContent = verdict.title;
   renderHeroIssues(verdict, diagnostics);
   heroAction = verdict.action;
@@ -1214,8 +1245,7 @@ function heroIssueNode(issue) {
 
 function renderSpaceHealthBadge(verdict, diagnostics) {
   const badge = elements.spaceHealthBadge;
-  const toggle = elements.drawerToggle;
-  if (!badge || !toggle) return;
+  if (!badge) return;
   const count = verdict?.tone === "danger"
     ? diagnostics?.blockers ?? 0
     : verdict?.tone === "warn"
@@ -1224,11 +1254,7 @@ function renderSpaceHealthBadge(verdict, diagnostics) {
   badge.hidden = count === 0;
   badge.textContent = count > 99 ? "99+" : String(count);
   badge.dataset.tone = verdict?.tone ?? "loading";
-  const label = verdict?.title
-    ? t("panels.status", { status: verdict.title })
-    : t("panels.loading");
-  toggle.setAttribute("aria-label", label);
-  toggle.title = label;
+  updatePanelToggleLabel();
 }
 
 function runHeroAction() {
@@ -1906,6 +1932,7 @@ function renderScopeControls() {
   elements.drawerToggle.classList.toggle("hidden", personal);
   elements.layout.classList.toggle("is-personal", personal);
   elements.recentChangesSidebar.classList.toggle("hidden", personal);
+  applySidebarState();
   // Notifikace agregují změny napříč moduly Organizace — v Personalspace
   // nemají co dělat, stejně jako pravé panely. Zvoneček proto mizí i s
   // otevřeným panelem, ne jen jeho obsah.
@@ -1914,7 +1941,7 @@ function renderScopeControls() {
   if (personal && state.drawerOpen) setDrawer(false);
 }
 
-// Na desktopu je update první kartou pravého sloupce. Na mobilu se pravý
+// Na desktopu je update pod Guidem. Na mobilu se pravý
 // sloupec přesouvá do zavřeného draweru a v Personalspace se skrývá úplně;
 // provozní informace proto v těchto stavech přejde do globálního slotu nad
 // layoutem. Po návratu na desktop Organization scope se vrátí do sidebaru.
@@ -1922,9 +1949,12 @@ function mountUpdateBannerGroup() {
   const group = elements.updateBannerGroup;
   const global = mobilePanelQuery.matches || state.filters.scope === "personal";
   const target = global ? elements.globalUpdateSlot : elements.recentChangesSidebar;
-  if (!group || !target || group.parentElement === target) return;
-  if (global) target.append(group);
-  else target.prepend(group);
+  if (!group || !target) return;
+  if (global) {
+    if (group.parentElement !== target) target.append(group);
+  } else if (group.previousElementSibling !== elements.guideTile) {
+    elements.guideTile?.after(group);
+  }
 }
 
 function renderWorkspaceWelcome() {

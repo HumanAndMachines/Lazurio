@@ -146,12 +146,12 @@ test("filtr aplikací používá jednu společnou Lazurio kapsli", async () => {
   expect(styles).toMatch(/\.search-field input:focus-visible\s*{[\s\S]*?outline: none;/);
 });
 
-test("samostatné panely a popovery sdílejí měkký Lazurio radius", async () => {
+test("samostatné panely a popovery sdílejí měkký Lazurio radius, sjednocený sidebar zůstává hranatý", async () => {
   const styles = await source("styles.css");
   expect(styles).toMatch(/\.space-switcher-menu,[^}]*\.detail-panel\s*{[^}]*border-radius: var\(--lz-radius-md\)/);
   expect(styles).toMatch(/\.team-access-content\s*{[^}]*border-radius: var\(--lz-radius-md\)/);
   expect(styles).toMatch(/\/\* --- BANNER O NOVÉ VERZI[^]*?\.update-banner\s*{[^}]*border-radius: var\(--lz-radius-md\)/);
-  expect(styles).toMatch(/\.recent-changes-sidebar > \.update-banner-group \.update-banner\s*{[^}]*border-radius: var\(--lz-radius-md\)/);
+  expect(styles).toMatch(/\.recent-changes-sidebar > \.update-banner-group \.update-banner\s*{[^}]*border-radius: 0/);
   expect(styles).toMatch(/\.app-version-menu-panel\s*{[\s\S]*?position: static/);
 });
 
@@ -184,6 +184,21 @@ test("Guide je první pravý panel a jeho ikona sdílí Iconoir materiál Market
   expect(styles).toMatch(/\.guide-tile:hover \.guide-tile-action,[\s\S]*?color: var\(--lz-blue-700\);/);
   expect(styles).toMatch(/\.guide-tile:hover \.guide-tile-action svg\s*{[^}]*transform: translateX\(var\(--lz-space-4\)\)/);
   expect(styles).toMatch(/\.guide-tile-action svg\s*{[^}]*transition: transform 160ms ease/);
+});
+
+test("pravý sidebar tvoří jediný hranatý výsuvný panel se sbaleným stavem prostoru", async () => {
+  const [html, js, styles] = await Promise.all([source("index.html"), source("app.js"), source("styles.css")]);
+  expect(html).toContain('id="spaceStatusDetails" class="space-status-details"');
+  expect(html).toContain('<summary class="space-status-toggle">');
+  expect(html).toContain('class="hero-indicator" aria-hidden="true"');
+  expect(js).toContain('sidebarOpen: true');
+  expect(js).toContain('function applySidebarState()');
+  expect(js).toContain('toggleAttribute("inert", collapsed)');
+  expect(js).toContain('desktop ? "recentChangesSidebar" : "detailDrawer"');
+  expect(js).toContain('elements.spaceStatusDetails.dataset.tone = verdict.tone');
+  expect(styles).toMatch(/\.recent-changes-sidebar\s*{[^}]*display: block;[^}]*border-radius: 0/);
+  expect(styles).toMatch(/\.recent-changes-sidebar \.side-panel\s*{[^}]*margin: 0;[^}]*border-radius: 0/);
+  expect(styles).toMatch(/\.layout\.is-sidebar-collapsed\s*{[^}]*grid-template-columns: minmax\(0, 1fr\) 0/);
 });
 
 test("mobilní klidové stavy tvoří kompaktní řadu a akční stav zůstává výrazný", async () => {

@@ -221,18 +221,20 @@
               <button id="updateBannerAction" type="button" class="update-banner-action" hidden></button>
             </div>
           </div>
-          <section id="hero" class="hero side-panel hero-loading" aria-live="polite" data-i18n-aria-label="workspace.status">
-            <div class="hero-head">
-              <span class="rail-eyebrow" data-i18n="workspace.status"></span>
+          <details id="spaceStatusDetails" class="space-status-details" data-tone="loading">
+            <summary class="space-status-toggle">
+              <span data-i18n="workspace.status">Stav prostoru</span>
               <span class="hero-indicator" aria-hidden="true"></span>
-            </div>
-            <h2 id="heroTitle" class="hero-title" data-i18n="workspace.loadingStatus"></h2>
-            <p id="heroSummary" class="hero-summary" data-i18n="workspace.checking"></p>
-            <div id="heroIssues" class="hero-issues" data-i18n-aria-label="a11y.recommendedSteps" hidden></div>
-            <div class="hero-panel">
-              <button id="heroCta" type="button" class="btn btn-secondary btn-sm" data-i18n="workspace.checkStatus"></button>
-            </div>
-          </section>
+            </summary>
+            <section id="hero" class="hero side-panel hero-loading" aria-live="polite" data-i18n-aria-label="workspace.status">
+              <h2 id="heroTitle" class="hero-title" data-i18n="workspace.loadingStatus"></h2>
+              <p id="heroSummary" class="hero-summary" data-i18n="workspace.checking"></p>
+              <div id="heroIssues" class="hero-issues" data-i18n-aria-label="a11y.recommendedSteps" hidden></div>
+              <div class="hero-panel">
+                <button id="heroCta" type="button" class="btn btn-secondary btn-sm" data-i18n="workspace.checkStatus"></button>
+              </div>
+            </section>
+          </details>
           <section class="marketplace-teaser side-panel" aria-labelledby="marketplaceTeaserTitle">
             <div class="marketplace-teaser-head">
               <span class="marketplace-teaser-icon" aria-hidden="true">

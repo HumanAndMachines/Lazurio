@@ -375,7 +375,7 @@ test("Launchpad shell ships GEN2-like command center, theme and feedback afforda
   expect(css).toContain(".hero.hero-warn .btn-secondary");
   expect(css).toContain(".hero.hero-danger .btn-secondary");
   expect(css).toContain('.space-health-badge[data-tone="danger"]');
-  expect(css).toContain("#drawerToggle {");
+  expect(css).toContain("#drawerToggle:not(.hidden) {");
   expect(css).toContain("position: relative");
   expect(js).toContain("function renderSpaceHealthBadge");
   expect(js).toContain('toggle.setAttribute("aria-label", label)');
@@ -757,7 +757,7 @@ test("CAC-0044/0095: pravé panely, notifikace pod zvonečkem a git chip", async
   expect(js).toContain("git_attention");
   expect(css).toContain(".side-panel");
   expect(css).toContain(".recent-changes-sidebar");
-  expect(css).toContain("grid-template-columns: minmax(0, 1fr) minmax(250px, 300px)");
+  expect(css).toContain("grid-template-columns: minmax(0, 1fr) 300px");
   expect(css).toContain(".quick-app");
   expect(js).toContain('elements.recentChangesSidebar.classList.toggle("hidden", personal)');
 });
@@ -1469,8 +1469,8 @@ test("DEV-6493: banner používá GET-first Lazurio stav a pouze current|updated
   expect(js).toContain("updateBannerPresentation(state.updateStatus");
   expect(js).toContain("function mountUpdateBannerGroup");
   expect(js).toContain('mobilePanelQuery.matches || state.filters.scope === "personal"');
-  expect(js).toContain("if (global) target.append(group)");
-  expect(js).toContain("else target.prepend(group)");
+  expect(js).toContain("if (group.parentElement !== target) target.append(group)");
+  expect(js).toContain("elements.guideTile?.after(group)");
   expect(js).not.toContain("elements.updateBannerText.textContent = status.message");
   expect(stateLib).toContain('status.state === "blocked"');
   expect(stateLib).toContain('status.state === "current"');

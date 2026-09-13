@@ -862,16 +862,16 @@ input:focus-visible,
   background: var(--text-subtle);
 }
 
-.hero.hero-ok .hero-indicator {
+.space-status-details[data-tone="ok"] .hero-indicator {
   background: var(--c-success);
 }
-.hero.hero-warn .hero-indicator {
+.space-status-details[data-tone="warn"] .hero-indicator {
   background: var(--c-warn);
 }
-.hero.hero-danger .hero-indicator {
-  background: var(--hero-danger-accent);
+.space-status-details[data-tone="danger"] .hero-indicator {
+  background: var(--lz-red-500);
 }
-.hero.hero-loading .hero-indicator {
+.space-status-details[data-tone="loading"] .hero-indicator {
   background: var(--accent);
   animation: hero-pulse 2.4s ease-in-out infinite;
 }
@@ -1025,8 +1025,8 @@ input:focus-visible,
   line-height: 1;
 }
 
-#drawerToggle {
-  display: none !important;
+#drawerToggle:not(.hidden) {
+  display: inline-flex !important;
   position: relative;
 }
 
@@ -1041,9 +1041,15 @@ input:focus-visible,
 /* ---------- Workbench layout: hlavní plocha ---------- */
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(250px, 300px);
+  grid-template-columns: minmax(0, 1fr) 300px;
   gap: 1rem;
   align-items: start;
+  transition: grid-template-columns 220ms ease, gap 220ms ease;
+}
+
+.layout.is-sidebar-collapsed {
+  grid-template-columns: minmax(0, 1fr) 0;
+  gap: 0;
 }
 
 .layout.is-personal {
@@ -1074,12 +1080,74 @@ input:focus-visible,
   min-width: 0;
   max-height: calc(100vh - var(--topbar-h) - 1.5rem);
   overflow: auto;
-  display: grid;
-  gap: 0.75rem;
+  display: block;
+  background: var(--lz-white);
+  border: 1.5px solid var(--lz-line);
+  border-radius: 0;
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 180ms ease, transform 220ms ease;
+}
+
+.layout.is-sidebar-collapsed > .recent-changes-sidebar {
+  overflow: hidden;
+  opacity: 0;
+  transform: translateX(24px);
+  pointer-events: none;
 }
 
 .recent-changes-sidebar .side-panel {
-  margin-bottom: 0;
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid var(--lz-line);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.recent-changes-sidebar > .update-banner-group {
+  display: block;
+  margin: 0;
+}
+
+.recent-changes-sidebar > :last-child {
+  border-bottom: 0;
+}
+
+.space-status-details {
+  border-bottom: 1px solid var(--lz-line);
+}
+
+.space-status-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--lz-space-12);
+  padding: var(--lz-space-16);
+  color: var(--lz-ink);
+  font-size: var(--lz-size-body);
+  font-weight: var(--lz-weight-akce);
+  cursor: pointer;
+  list-style: none;
+}
+
+.space-status-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.space-status-toggle:hover {
+  background: var(--lz-gray-50);
+}
+
+.space-status-toggle:focus-visible {
+  outline: 2px solid var(--lz-blue-500);
+  outline-offset: -2px;
+}
+
+.space-status-details .hero {
+  padding: 0 var(--lz-space-16) var(--lz-space-16);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 /* Guide je dostupná capability, proto je první v pravém sloupci. Jeho ikona
@@ -6058,21 +6126,19 @@ body {
 
 }
 
-/* Pravý sloupec používá jeden panelový jazyk: bílý papír, stejnou hranu,
-   stejné odsazení a sekundární tlačítko. Stavová barva zůstává na ikoně a
-   hraně, ne v plošném gradientu. */
+/* Aktualizace je jednou hranatou sekcí společného pravého panelu. */
 .recent-changes-sidebar > .update-banner-group .update-banner {
   gap: var(--lz-space-12);
-  padding: 0.9rem;
+  padding: var(--lz-space-16);
   background: var(--lz-white);
-  border: 1.5px solid var(--lz-line);
-  border-left-width: 1.5px;
-  border-radius: var(--lz-radius-md);
+  border: 0;
+  border-bottom: 1px solid var(--lz-line);
+  border-radius: 0;
 }
 
 .recent-changes-sidebar > .update-banner-group .update-banner.is-current {
   background: var(--lz-white);
-  border-color: var(--c-success-line);
+  border-bottom-color: var(--lz-line);
 }
 
 .recent-changes-sidebar > .update-banner-group .update-banner-icon,
