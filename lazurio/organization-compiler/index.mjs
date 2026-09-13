@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { inspectCanonicalPathBoundary } from "../core/path-boundary-lib.mjs";
 import { readOrganizationRoot } from "../core/organization-root-reader-lib.mjs";
 import { lstat, mkdir, writeFile, rename, unlink } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { readCheckoutRepositoryObservation } from "./checkout-observation.mjs";
 import {
   OrganizationCompilerError,
@@ -22,6 +22,7 @@ export async function compileOrganization(options = {}) {
     organizationRoot,
     workspaceRoot,
     write = false,
+    reportPath = null,
     repositoryObservation = null,
     repositoryObservationReader,
     ...rest
@@ -49,6 +50,8 @@ export async function compileOrganization(options = {}) {
   }
 
   const root = resolve(rootInput);
+  const reportTarget = reportPath === null ? null : relative(root, resolve(reportPath)).split(sep).join("/");
+  if (reportTarget !== null) await assertCompilerPath(root, reportTarget);
   const effectiveRepositoryObservation = write
     ? readCheckoutRepositoryObservation(root)
     : repositoryObservation;
@@ -80,18 +83,11 @@ export async function compileOrganization(options = {}) {
   });
   if (write) {
     for (const target of prepared.writes) {
-      const targetPath = join(root, target.path);
-      await mkdir(dirname(targetPath), { recursive: true });
-      await assertCompilerPath(root, target.path);
-      const temporary = `${targetPath}.${randomUUID()}.tmp`;
-      try {
-        await writeFile(temporary, target.content, { flag: "wx" });
-        await assertCompilerPath(root, target.path);
-        await rename(temporary, targetPath);
-      } finally {
-        await unlink(temporary).catch(error => { if (error.code !== "ENOENT") throw error; });
-      }
+      await writeCompilerFile(root, target.path, target.content);
     }
+  }
+  if (reportTarget !== null) {
+    await writeCompilerFile(root, reportTarget, `${JSON.stringify(prepared.report, null, 2)}\n`);
   }
   return prepared.report;
 }
@@ -109,5 +105,20 @@ async function assertCompilerPath(root, path) {
     try { entry = await lstat(join(root,...parts.slice(0,i))); }
     catch(error) { if(error.code === "ENOENT") continue; throw error; }
     if (entry.isSymbolicLink() || (i<parts.length ? !entry.isDirectory() : !entry.isFile() || entry.nlink > 1)) throw unsafe();
+  }
+}
+
+async function writeCompilerFile(root, path, content) {
+  await assertCompilerPath(root, path);
+  const targetPath = join(root, path);
+  await mkdir(dirname(targetPath), { recursive: true });
+  await assertCompilerPath(root, path);
+  const temporary = `${targetPath}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporary, content, { flag: "wx" });
+    await assertCompilerPath(root, path);
+    await rename(temporary, targetPath);
+  } finally {
+    await unlink(temporary).catch(error => { if (error.code !== "ENOENT") throw error; });
   }
 }

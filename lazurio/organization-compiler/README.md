@@ -68,3 +68,9 @@ revert; no persistent state or data migration is introduced.
 primary and linked review checkout behavior, deterministic second writes, child
 DB identity/parent validation, caller bypass attempts, routing and filesystem
 escapes. The suite is part of `bun run check`.
+
+Optional `--report <path>` resolves relative to the current working directory and
+must remain inside the selected Organization checkout. Its path is validated
+before generation and uses the same canonical path checks and atomic replacement
+as generated outputs; symlinks and hardlinked targets are rejected. A dry-run with
+`--report` writes only this explicitly requested report, not generated outputs.
