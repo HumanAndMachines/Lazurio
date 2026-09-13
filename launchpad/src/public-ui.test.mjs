@@ -381,7 +381,6 @@ test("Launchpad shell ships GEN2-like command center, theme and feedback afforda
   expect(js).toContain('toggle.setAttribute("aria-label", label)');
   expect(js).toContain("if (mobilePanelQuery.matches && state.drawerOpen) setDrawer(false)");
   expect(js).toContain("state.suppressNextDrawerOpen = true");
-  expect(js).toContain("if (mobilePanelQuery.matches) setDrawer(false)");
 
   // Launchpad je zatím pouze světlý; stará uložená tmavá volba se odstraní.
   expect(html).toContain('data-theme="light"');
@@ -400,17 +399,15 @@ test("Launchpad shell ships GEN2-like command center, theme and feedback afforda
   expect(css).not.toContain('[data-accent="emerald"]');
   expect(css).toContain("color-mix(in srgb, var(--accent)");
 
-  // Vyhledávání a dvoupolohový filtr zůstávají jediným ovládáním rozcestníku.
+  // Rozcestník filtruje pouze hledáním; problémy zůstávají ve Stavu prostoru.
   expect(html).toContain('id="appsSearch"');
-  expect(html).toContain('data-status-segment="all"');
+  expect(html).not.toContain('data-status-segment="all"');
   expect(html).not.toContain('data-status-segment="healthy"');
   expect(html).not.toContain('data-status-segment="stopped"');
-  expect(html).toContain('id="attentionToggle"');
-  expect(html).toContain('data-i18n="workspace.attention"');
-  expect(js).toContain("state.filters.attentionOnly = true");
-  expect(js).toContain("state.filters.attentionOnly = false");
-  expect(js).toContain("function syncAttentionToggle");
-  expect(html).toContain('class="segment attention-toggle"');
+  expect(html).not.toContain('id="attentionToggle"');
+  expect(js).not.toContain("state.filters.attentionOnly = true");
+  expect(js).not.toContain("function syncAttentionToggle");
+  expect(html).not.toContain('id="guideTileSummary"');
 
   // Toast + skeleton feedback.
   expect(html).toContain('id="toastRoot"');

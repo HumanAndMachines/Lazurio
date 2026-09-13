@@ -149,10 +149,20 @@
         <section id="workspaceMain" class="workspace-panel" data-i18n-aria-label="a11y.apps">
           <section id="workspaceWelcome" class="workspace-welcome" aria-labelledby="workspaceWelcomeTitle">
             <h1 id="workspaceWelcomeTitle" class="workspace-welcome-title" data-i18n="workspace.welcome"></h1>
+            <div id="appsToolbar" class="apps-toolbar" data-i18n-aria-label="a11y.appFiltering">
+              <label class="search-field">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="m21 21-4.35-4.35" />
+                </svg>
+                <span class="sr-only" data-i18n="workspace.search"></span>
+                <input id="appsSearch" type="search" autocomplete="off" data-i18n-placeholder="workspace.searchPlaceholder" />
+              </label>
+            </div>
           </section>
 
         <aside id="recentChangesSidebar" class="recent-changes-sidebar hidden" data-i18n-aria-label="a11y.workspaceStatus">
-          <a id="guideTile" class="guide-tile side-panel" href="https://documentation.lazurio.ai/cs/guide/?utm_source=launchpad&amp;utm_medium=product&amp;utm_campaign=guide" aria-labelledby="guideTileTitle" aria-describedby="guideTileSummary">
+          <a id="guideTile" class="guide-tile side-panel" href="https://documentation.lazurio.ai/cs/guide/?utm_source=launchpad&amp;utm_medium=product&amp;utm_campaign=guide" aria-labelledby="guideTileTitle">
             <div class="guide-tile-head">
               <span class="guide-tile-icon" aria-hidden="true">
                 <!-- iconoir/book -->
@@ -173,7 +183,6 @@
             </div>
             <div class="guide-tile-copy">
               <h2 id="guideTileTitle">Guide</h2>
-              <p id="guideTileSummary" data-i18n="guide.tile.summary">Návody a odpovědi k práci v Lazuriu.</p>
             </div>
           </a>
           <details id="spaceStatusDetails" class="space-status-details" data-tone="loading">
@@ -230,25 +239,6 @@
             </div>
           </section>
         </aside>
-
-          <div id="appsToolbar" class="apps-toolbar" data-i18n-aria-label="a11y.appFiltering">
-            <label class="search-field">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <circle cx="11" cy="11" r="8" />
-                <path d="m21 21-4.35-4.35" />
-              </svg>
-              <span class="sr-only" data-i18n="workspace.search"></span>
-              <input id="appsSearch" type="search" autocomplete="off" data-i18n-placeholder="workspace.searchPlaceholder" />
-            </label>
-            <div id="appsFilterFallback" class="apps-filter-fallback is-active">
-              <div id="appsFilterControls" class="filter-controls">
-                <div class="segmented-control" role="group" data-i18n-aria-label="a11y.appView">
-                  <button type="button" class="segment is-active" data-status-segment="all" aria-pressed="true" data-i18n="topbar.all"></button>
-                  <button id="attentionToggle" type="button" class="segment attention-toggle" aria-pressed="false" data-i18n="workspace.attention"></button>
-                </div>
-              </div>
-            </div>
-          </div>
 
           <section id="problemsPanel" class="problems-panel hidden" data-i18n-aria-label="a11y.problems"></section>
           <section id="actionPanel" class="action-panel hidden" data-i18n-aria-label="a11y.actionResult"></section>

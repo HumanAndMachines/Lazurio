@@ -135,12 +135,9 @@ test("Launchpad nepoužívá pyritovou barevnou roli", async () => {
   expect(iconAccentBlock).toContain('"guide-96.png": "var(--lz-expressive-yellow)"');
 });
 
-test("filtr aplikací používá jednu společnou Lazurio kapsli", async () => {
+test("kompaktní hledání má viditelný focus bez přepínače pohledů", async () => {
   const styles = await source("styles.css");
-  expect(styles).toMatch(/#appsFilterControls \.segmented-control\s*{[^}]*gap: 0;[^}]*border: 1px solid var\(--lz-line\);[^}]*border-radius: var\(--lz-radius-pill\);[^}]*background: var\(--lz-gray-50\)/);
-  expect(styles).toMatch(/#appsFilterControls \.segment\s*{[^}]*border: 0;[^}]*border-radius: var\(--lz-radius-pill\);[^}]*background: transparent/);
-  expect(styles).toContain('#appsFilterControls .segment[aria-pressed="true"]');
-  expect(styles).toMatch(/#appsFilterControls \.segment\[aria-pressed="true"\],[^}]*background: var\(--lz-ink\)[^}]*color: var\(--lz-white\)/);
+  expect(styles).toMatch(/\.apps-toolbar\s*{[^}]*flex: 0 1 240px/);
   expect(styles).toMatch(/\.search-field:focus-within\s*{[\s\S]*?border-color: var\(--lz-gray-700\);[\s\S]*?background: var\(--lz-white\)/);
   expect(styles).toMatch(/\.search-field:focus-within\s*{[\s\S]*?outline: none;/);
   expect(styles).toMatch(/\.search-field input:focus-visible\s*{[\s\S]*?outline: none;/);
@@ -201,7 +198,7 @@ test("pomůcky tvoří kompaktní skryvatelnou lištu se sbaleným stavem prosto
   expect(styles).toMatch(/\.layout\.is-sidebar-collapsed \.recent-changes-sidebar\s*{[^}]*display: none/);
 });
 
-test("údržba je v rozbaleném Stavu prostoru a pomůcky jsou nad vyhledáváním", async () => {
+test("údržba je v rozbaleném Stavu prostoru a hledání je u nadpisu", async () => {
   const [html, js, styles] = await Promise.all([source("index.html"), source("app.js"), source("styles.css")]);
   const details = html.slice(html.indexOf('id="spaceStatusDetails"'), html.indexOf('</details>', html.indexOf('id="spaceStatusDetails"')));
   expect(details).toContain('id="updateBannerGroup"');
@@ -209,7 +206,7 @@ test("údržba je v rozbaleném Stavu prostoru a pomůcky jsou nad vyhledáván�
   expect(js).toContain('global ? elements.globalUpdateSlot : elements.spaceStatusContent');
   expect(js).toContain('elements.page?.classList.toggle("is-organization", !personal)');
   expect(styles).toMatch(/\.page\.is-organization\s*{[^}]*max-width: none;[^}]*padding-right: clamp/);
-  expect(html.indexOf('id="recentChangesSidebar"')).toBeLessThan(html.indexOf('id="appsToolbar"'));
+  expect(html.indexOf('id="appsToolbar"')).toBeLessThan(html.indexOf('id="recentChangesSidebar"'));
 });
 
 test("mobilní klidové stavy tvoří kompaktní řadu a akční stav zůstává výrazný", async () => {

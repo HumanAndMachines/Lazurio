@@ -1352,13 +1352,17 @@ input:focus-visible,
 
 .workspace-welcome {
   min-width: 0;
-  display: grid;
-  gap: 0.12rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--lz-space-12) var(--lz-space-24);
   margin-top: var(--lz-space-16);
   margin-bottom: var(--lz-space-4);
 }
 
 .workspace-welcome-title {
+  flex: 1 1 540px;
   margin: 0;
   color: var(--text);
   font-size: var(--lz-size-display);
@@ -1369,19 +1373,11 @@ input:focus-visible,
 
 /* ---------- Apps toolbar ---------- */
 .apps-toolbar {
+  flex: 0 1 240px;
+  max-width: 100%;
   display: flex;
   align-items: center;
   gap: var(--lz-space-12);
-}
-
-.apps-filter-fallback {
-  display: none;
-  justify-content: flex-end;
-  margin-top: 0;
-}
-
-.apps-filter-fallback.is-active {
-  display: flex;
 }
 
 .search-field {
@@ -5515,43 +5511,6 @@ b {
   box-shadow: inset 2px 0 0 var(--lz-ink);
 }
 
-/* Filtr aplikací je jedna kapsle: společný obal drží vztah obou voleb a
-   černý vnitřní segment ukazuje právě aktivní pohled. */
-#appsFilterControls .segmented-control {
-  gap: 0;
-  min-height: auto;
-  padding: 3px;
-  border: 1px solid var(--lz-line);
-  border-radius: var(--lz-radius-pill);
-  overflow: hidden;
-  background: var(--lz-gray-50);
-}
-
-#appsFilterControls .segment {
-  min-width: auto;
-  min-height: 36px;
-  padding: 0 var(--lz-space-16);
-  border: 0;
-  border-radius: var(--lz-radius-pill);
-  background: transparent;
-  color: var(--lz-ink-muted);
-  box-shadow: none;
-  font-size: var(--lz-size-meta);
-  font-weight: 600;
-}
-
-#appsFilterControls .segment[aria-pressed="true"],
-#appsFilterControls .segment.is-active {
-  background: var(--lz-ink);
-  color: var(--lz-white);
-  box-shadow: none;
-}
-
-#appsFilterControls .segment:hover:not(.is-active),
-#appsFilterControls .segment:focus-visible:not(.is-active) {
-  background: var(--lz-white);
-  color: var(--lz-ink);
-}
 
 /* Organizace, Workspace a Productionspace jsou strukturální záložky na hraně sekce.
    Nadpis se neduplikuje: záložka je stále sémantické h2 v sentence case. */
@@ -6224,18 +6183,10 @@ body {
   flex: 1 1 auto;
 }
 
-.apps-toolbar .apps-filter-fallback {
-  flex: 0 0 auto;
-}
-
 @media (max-width: 760px) {
   .apps-toolbar {
     align-items: stretch;
     flex-direction: column;
-  }
-
-  .apps-toolbar .apps-filter-fallback {
-    justify-content: flex-start;
   }
 
 }

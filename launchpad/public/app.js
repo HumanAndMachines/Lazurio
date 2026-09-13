@@ -363,15 +363,11 @@ const elements = {
   heroIssues: document.querySelector("#heroIssues"),
   heroCta: document.querySelector("#heroCta"),
   appsToolbar: document.querySelector("#appsToolbar"),
-  appsFilterControls: document.querySelector("#appsFilterControls"),
-  appsFilterFallback: document.querySelector("#appsFilterFallback"),
   workspaceWelcome: document.querySelector("#workspaceWelcome"),
   workspaceWelcomeTitle: document.querySelector("#workspaceWelcomeTitle"),
   workspaceMain: document.querySelector("#workspaceMain"),
   guideTile: document.querySelector("#guideTile"),
   appsSearch: document.querySelector("#appsSearch"),
-  attentionToggle: document.querySelector("#attentionToggle"),
-  segmentedControl: document.querySelectorAll("[data-status-segment]"),
   problemsPanel: document.querySelector("#problemsPanel"),
   actionPanel: document.querySelector("#actionPanel"),
   appsGrid: document.querySelector("#appsGrid"),
@@ -439,18 +435,6 @@ elements.spaceSwitcherButton.addEventListener("click", (event) => {
 });
 elements.appsSearch.addEventListener("input", (event) => {
   state.filters.query = event.target.value ?? "";
-  render();
-});
-for (const segment of elements.segmentedControl) {
-  segment.addEventListener("click", () => {
-    state.filters.status = segment.dataset.statusSegment ?? "all";
-    state.filters.attentionOnly = false;
-    render();
-  });
-}
-elements.attentionToggle?.addEventListener("click", () => {
-  state.filters.status = "all";
-  state.filters.attentionOnly = true;
   render();
 });
 
@@ -1050,21 +1034,6 @@ function annotateGitAttention(apps) {
   }
 }
 
-function syncSegmentedControl() {
-  for (const segment of elements.segmentedControl) {
-    const active = !state.filters.attentionOnly
-      && segment.dataset.statusSegment === state.filters.status;
-    segment.classList.toggle("is-active", active);
-    segment.setAttribute("aria-pressed", active ? "true" : "false");
-  }
-}
-
-function syncAttentionToggle() {
-  const active = state.filters.attentionOnly;
-  elements.attentionToggle?.classList.toggle("is-active", active);
-  elements.attentionToggle?.setAttribute("aria-pressed", active ? "true" : "false");
-}
-
 /* =========================================================
    Render orchestration
    ========================================================= */
@@ -1131,8 +1100,6 @@ function render() {
   renderSpaceSwitcher();
   renderScopeControls();
   renderWorkspaceWelcome();
-  syncSegmentedControl();
-  syncAttentionToggle();
   const heroApps = activeSpaceApps();
   const spaceHealth = heroDiagnostics(heroApps);
   renderHero(heroApps, spaceHealth);
@@ -1141,7 +1108,6 @@ function render() {
   renderProblems(spaceHealth);
   renderActionMessage();
   renderAppsGrid(filteredApps);
-  mountAppFilters();
   // Technický tabulkový renderer zůstává dočasně použitelný pro vývojové
   // harnessy, ale běžný Launchpad jeho mount už uživatelům neposílá.
   if (elements.appsTable) renderApps(filteredApps);
@@ -1279,12 +1245,7 @@ function runHeroAction() {
       elements.appsGrid.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
-    state.filters.status = "all";
-    state.filters.attentionOnly = true;
-    state.suppressNextDrawerOpen = true;
-    render();
-    if (mobilePanelQuery.matches) setDrawer(false);
-    elements.appsGrid.scrollIntoView({ behavior: "smooth", block: "start" });
+    revealProblems();
     return;
   }
   // problems
@@ -2543,12 +2504,6 @@ function organizationSectionNode({ organization, families, modules }) {
     grid,
   );
   return node;
-}
-
-function mountAppFilters() {
-  if (!elements.appsFilterControls || !elements.appsFilterFallback) return;
-  elements.appsFilterFallback.append(elements.appsFilterControls);
-  elements.appsFilterFallback.classList.add("is-active");
 }
 
 function workspaceSectionNode({ organization, teamSections }) {
