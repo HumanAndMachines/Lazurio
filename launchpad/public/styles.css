@@ -1092,6 +1092,10 @@ input:focus-visible,
   cursor: pointer;
 }
 
+.guide-tile:is(:hover, :focus-visible) {
+  text-decoration: none;
+}
+
 .guide-tile:focus-visible {
   border-color: var(--lz-blue-500);
   background: var(--lz-white);
