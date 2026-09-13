@@ -1090,15 +1090,6 @@ input:focus-visible,
   color: inherit;
   text-decoration: none;
   cursor: pointer;
-  transition:
-    border-color 160ms ease,
-    background-color 160ms ease;
-}
-
-.guide-tile:hover {
-  border-color: var(--lz-gray-300);
-  background: var(--lz-white);
-  outline: none;
 }
 
 .guide-tile:focus-visible {
@@ -1112,6 +1103,10 @@ input:focus-visible,
 .guide-tile:hover .guide-tile-action,
 .guide-tile:focus-visible .guide-tile-action {
   color: var(--lz-blue-700);
+}
+
+.guide-tile:hover .guide-tile-action svg {
+  transform: translateX(var(--lz-space-4));
 }
 
 .guide-tile-head,
@@ -1142,6 +1137,11 @@ input:focus-visible,
   color: var(--lz-ink-muted);
   font-size: var(--lz-size-meta);
   font-weight: var(--lz-weight-akce);
+  transition: color 160ms ease;
+}
+
+.guide-tile-action svg {
+  transition: transform 160ms ease;
 }
 
 .guide-tile-copy {

@@ -179,9 +179,10 @@ test("Guide je první pravý panel a jeho ikona sdílí Iconoir materiál Market
   expect(guideIndex).toBeLessThan(html.indexOf('class="marketplace-teaser side-panel"'));
   expect(html).toContain("<!-- iconoir/book -->");
   expect(styles).toMatch(/\.guide-tile-icon\s*{[^}]*width: var\(--lz-space-48\);[^}]*height: var\(--lz-space-48\);[^}]*border-radius: var\(--lz-radius-sm\);[^}]*background: var\(--lz-blue-50\);[^}]*color: var\(--lz-blue-600\)/);
-  expect(styles).toMatch(/\.guide-tile:hover\s*{[^}]*border-color: var\(--lz-gray-300\);[^}]*background: var\(--lz-white\);[^}]*outline: none;/);
-  expect(styles).not.toMatch(/\.guide-tile:hover[^}]*background: color-mix/);
+  expect(styles).not.toMatch(/\.guide-tile:hover\s*{/);
   expect(styles).toMatch(/\.guide-tile:hover \.guide-tile-action,[\s\S]*?color: var\(--lz-blue-700\);/);
+  expect(styles).toMatch(/\.guide-tile:hover \.guide-tile-action svg\s*{[^}]*transform: translateX\(var\(--lz-space-4\)\)/);
+  expect(styles).toMatch(/\.guide-tile-action svg\s*{[^}]*transition: transform 160ms ease/);
 });
 
 test("mobilní klidové stavy tvoří kompaktní řadu a akční stav zůstává výrazný", async () => {
