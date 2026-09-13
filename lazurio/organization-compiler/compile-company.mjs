@@ -1,4 +1,3 @@
-import { writeFile } from "fs/promises";
 import { compileOrganization, formatCompilerReport, OrganizationCompilerError } from "./index.mjs";
 import { readCheckoutRepositoryObservation } from "./checkout-observation.mjs";
 
@@ -8,6 +7,7 @@ try {
   report = await compileOrganization({
     organizationRoot: args.organization,
     write: args.write,
+    reportPath: args.report,
     repositoryObservation:
       args.write
         ? null
@@ -28,10 +28,6 @@ try {
 
 const text = formatCompilerReport(report);
 console.log(text);
-
-if (args.report) {
-  await writeFile(args.report, `${JSON.stringify(report, null, 2)}\n`);
-}
 
 function parseArgs(values) {
   const result = {
@@ -69,7 +65,7 @@ function parseArgs(values) {
   }
 
   if (!result.organization) {
-    throw new Error("Usage: bun packages/organization-compiler/src/compile-company.mjs --organization <OrganizationRoot> [--write] [--report <path>]");
+    throw new Error("Usage: bun lazurio/organization-compiler/compile-company.mjs --organization <OrganizationRoot> [--write] [--report <path>]");
   }
 
   return result;

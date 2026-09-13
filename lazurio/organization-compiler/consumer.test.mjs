@@ -1,7 +1,7 @@
 import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.mjs";
 import { afterEach, expect, test } from "bun:test";
 import { mkdtemp, mkdir, rename, rm, symlink, link, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { createFixtureWorkspace } from "./fixture.test-support.mjs";
 import { compileOrganization } from "./index.mjs";
@@ -158,4 +158,51 @@ test("different canonical primary-Team order fails before generating outputs", a
   await Bun.write(join(review, "modules.manifest.json"), JSON.stringify(manifest));
   await expect(compileOrganization({ organizationRoot: review, write: true })).rejects.toThrow("schema/semantic validací");
   expect(await Bun.file(join(review, "generated/modules.index.json")).exists()).toBe(false);
+});
+
+function reportCli(root, path, mode = "--dry-run") {
+  return Bun.spawnSync([process.execPath, join(import.meta.dir, "compile-company.mjs"),
+    "--organization", root, mode, "--report", path], { cwd: root, stdout: "pipe", stderr: "pipe" });
+}
+
+test("CLI report rejects sibling paths before any generation write", async () => {
+  const { review } = await fixture();
+  const outside = join(dirname(review), "outside.json");
+  for (const mode of ["--dry-run", "--write"]) {
+    const result = reportCli(review, outside, mode);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr.toString()).toContain("Unsafe compiler path");
+    expect(await Bun.file(outside).exists()).toBe(false);
+    expect(await Bun.file(join(review, "generated/modules.index.json")).exists()).toBe(false);
+  }
+});
+
+test("CLI report writes inside the selected root and safely replaces its own report", async () => {
+  const { review } = await fixture();
+  const path = join(review, "reports", "compiler.json");
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const result = reportCli(review, path);
+    expect(result.exitCode).toBe(0);
+    expect((await Bun.file(path).json()).mode).toBe("dry-run");
+    expect(await Bun.file(join(review, "generated/modules.index.json")).exists()).toBe(false);
+  }
+});
+
+test("CLI report rejects hardlink aliases without altering external content", async () => {
+  const { review } = await fixture();
+  const outside = join(dirname(review), "retained.json");
+  await Bun.write(outside, "retained");
+  const alias = join(review, "report.json");
+  await link(outside, alias);
+  expect(reportCli(review, alias).exitCode).toBe(1);
+  expect(await Bun.file(outside).text()).toBe("retained");
+});
+
+test.skipIf(!(await supportsFileSymlinks()))("CLI report rejects symlink directories before creating an external report", async () => {
+  const { review } = await fixture();
+  const outside = join(dirname(review), "outside-reports");
+  await mkdir(outside);
+  await symlink(outside, join(review, "reports"), "dir");
+  expect(reportCli(review, join(review, "reports", "compiler.json")).exitCode).toBe(1);
+  expect(await Bun.file(join(outside, "compiler.json")).exists()).toBe(false);
 });
