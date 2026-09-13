@@ -52,7 +52,7 @@ se nepovažuje za důkaz, protože ji proces ve sdíleném loopback namespace um
 napodobit. Launchpad proto před každou chráněnou akcí znovu ověří podepsanou
 HttpOnly session u stejného Team-scoped oauth2-proxy přes HTTPS. Auth check
 může používat stejný přesný origin jako Launchpad (například
-`https://matej.spectoda.lazurio.io/oauth2/auth`) nebo samostatný TLS-autentizovaný
+`https://builder.exampleco.lazurio.io/oauth2/auth`) nebo samostatný TLS-autentizovaný
 auth host. Cesta musí být přesně `/oauth2/auth`, bez query, fragmentu nebo
 přihlašovacích údajů v URL. Gateway musí tuto cestu směrovat přímo na
 oauth2-proxy, nikdy na Launchpad ani aplikaci modulu. Na auth origin předá pouze přesně pojmenovanou
