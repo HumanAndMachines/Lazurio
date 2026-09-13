@@ -137,6 +137,17 @@ ověřený stav tam, kde je stále autorizovaný. Odebraný přístup se nezacho
 jako dostupnostní fallback. Nedokončená změna je `incomplete` s konkrétním
 neprovedeným krokem a pokračováním, ne úspěch z host-local health.
 
+Po úspěšném odebrání modulu musí ingress na původní URL odmítnout obsluhu
+aplikace (404 nebo 410), včetně požadavku se starým hostname/Host a SNI proti
+původní IP. Odebrání DNS samo nestačí, protože klient může mít adresu v cache.
+Po úspěšném přejmenování funguje nová URL a původní URL standardně vrací
+404 nebo 410; nesmí dál obsluhovat stejnou ani jinou aplikaci. Pokud Owner
+výslovně schválí migrační redirect, eviduje jeho přesný cíl, účel a konec
+platnosti; po termínu původní vstup opět odmítá. Rollback je samostatná
+výslovná změna desired state obnovující předchozí autorizovanou URL, nikoli
+neomezeně ponechaná stará routa. Stejné pravidlo platí pro cestu aplikace
+uvnitř sdíleného machine originu.
+
 ## Acceptance a zavádění
 
 | Scénář | Požadovaný důkaz |
@@ -146,7 +157,8 @@ neprovedeným krokem a pokračováním, ne úspěch z host-local health.
 | Ztráta původního zařízení | Ověřená nezávislá obnova v owner scope |
 | Nový modul | Běžné DNS → platné TLS → autentizace → správná App |
 | Neoprávněný uživatel nebo neznámý Host | Odmítnutí, nikoli výchozí cizí aplikace |
-| Odebrání/přejmenování modulu | Starý vstup nezpřístupňuje jiný modul ani odebraný přístup |
+| Odebrání modulu | Původní URL vrací 404/410 i při cached DNS; aplikace se již neobsluhuje |
+| Přejmenování modulu | Nová URL funguje; stará vrací 404/410, nebo pouze výslovně schválený redirect do evidovaného termínu; ověřit obě URL a konec výjimky |
 | Opakování a souběh | Nulová změna po konvergenci; serializace podle existujícího lifecycle |
 | Výpadek DNS/řídicího hostu | Pravdivé `incomplete`, zachování práce a vymezené pokračování |
 | Rollback | Předchozí autorizovaná aplikace funguje přes běžnou URL |
