@@ -51,14 +51,28 @@ afterAll(async () => {
 test("Launchpad serves its UI and API under a machine path without sibling routes", async () => {
   const root = await createLaunchpadGitFixture();
   tempRoots.push(root);
-  const { port } = await startLaunchpadServer(root, { env: { LAZURIO_LAUNCHPAD_BASE_PATH: "/launchpad/" } });
+  const logo = join(root, "organizations", "OmegaCo_GEN3", "launchpad", "app", "v1", "web", "launchpad-icon.png");
+  await mkdir(join(logo, ".."), { recursive: true });
+  await writeFile(logo, '<svg xmlns="http://www.w3.org/2000/svg"/>');
+  const { port, environment } = await startLaunchpadServer(root, { env: { LAZURIO_LAUNCHPAD_BASE_PATH: "/launchpad/" } });
   const origin = `http://127.0.0.1:${port}`;
+  const reused = Bun.spawn(["bun", "src/server.mjs", "--root", root, "--port", String(port), "--reuse", "--agent-entry", "--organization", "OmegaCo"], {
+    cwd: join(import.meta.dirname, ".."), env: environment, stdout: "pipe", stderr: "pipe",
+  });
+  servers.push(reused);
+  expect(await reused.exited).toBe(0);
+  expect(await new Response(reused.stdout).text()).toContain(`${origin}/launchpad/#/org/OmegaCo`);
+
   const bare = await fetch(`${origin}/launchpad`, { redirect: "manual" });
   expect(bare.status).toBe(308);
   expect(bare.headers.get("location")).toBe(`${origin}/launchpad/`);
   const page = await fetch(`${origin}/launchpad/`);
   expect(page.status).toBe(200);
   const html = await page.text();
+  const apps = await (await fetch(`${origin}/launchpad/api/apps`)).json();
+  const logoUrl = apps.organizations.find(org => org.slug === "OmegaCo").logo_url;
+  expect(logoUrl).toBe("/launchpad/api/organizations/OmegaCo/logo");
+  expect((await fetch(origin + logoUrl)).status).toBe(200);
   for (const match of html.matchAll(/(?:src|href)="(\.\/[^"#]+)"/g)) {
     const asset = await fetch(new URL(match[1], `${origin}/launchpad/`));
     expect(asset.status).toBe(200);

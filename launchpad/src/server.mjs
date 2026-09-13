@@ -415,7 +415,7 @@ if (hostedWorkspace.profile === "hosted") {
 printAgentEntryUrl(serverUrl);
 
 if (options.open) {
-  await openBrowser(serverUrl);
+  await openBrowser(new URL(basePath, serverUrl).href);
 }
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
@@ -434,7 +434,7 @@ setInterval(() => {}, 2_147_483_647);
 
 function printAgentEntryUrl(origin) {
   if (!options.agentEntry) return;
-  const url = launchpadEntryUrl(origin, {
+  const url = launchpadEntryUrl(new URL(basePath, origin).href, {
     organization: options.organization ?? null,
     personalspace: Boolean(options.personalspace),
   });
@@ -468,7 +468,7 @@ async function buildAppsResponseUncached({ includeGit = false } = {}) {
       readOrganizationLaunchpadTheme({ companiesRoot, organization }),
     ]);
     if (logoPath) {
-      organization.logo_url = `/api/organizations/${encodeURIComponent(organization.slug)}/logo`;
+      organization.logo_url = launchpadPath(`/api/organizations/${encodeURIComponent(organization.slug)}/logo`, basePath);
       nextLogoPaths.set(organization.slug, logoPath);
     }
     if (theme) organization.theme = theme;
