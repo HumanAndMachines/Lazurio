@@ -335,7 +335,7 @@ test("Launchpad shell ships GEN2-like command center, theme and feedback afforda
   expect(html).toContain('id="heroTitle"');
   expect(html).toContain('id="heroCta"');
   expect(html.indexOf('id="hero"')).toBeGreaterThan(html.indexOf('id="recentChangesSidebar"'));
-  expect(html.indexOf('id="updateBanner"')).toBeLessThan(html.indexOf('id="hero"'));
+  expect(html.indexOf('id="updateBanner"')).toBeGreaterThan(html.indexOf('id="hero"'));
   expect(html).not.toContain('id="organizationGitPanel"');
   expect(html).toContain('id="spaceHealthBadge"');
   expect(html).not.toContain('id="heroSubtitle"');
@@ -901,7 +901,7 @@ test("Launchpad používá jednu explicitní Synchronizovat akci místo dílčí
   expect(js).toContain("loadData({ sync: true })");
   expect(js).toContain('fetchJson("/api/sync", { method: "POST" })');
   expect(css).toContain(".update-banner-group");
-  expect(css).toContain(".recent-changes-sidebar > .update-banner-group .update-banner");
+  expect(css).toContain(".space-status-details > .update-banner-group .update-banner");
 });
 
 test("CAC-0042: detail panel vysvětluje verzi a Mission Control pracovní návrhy", async () => {
@@ -1450,15 +1450,15 @@ test("DEV-6493: banner používá GET-first Lazurio stav a pouze current|updated
     readFile(join(publicRoot, "app-state.js"), "utf8"),
   ]);
 
-  // Banner je první blok trvalého pravého sloupce pod sticky hlavičkou.
-  // Neprodlužuje navigační header a sdílí jeden panelový jazyk se stavem.
+  // Na desktopu je údržba uvnitř rozbaleného Stavu prostoru; na mobilu
+  // se stejný blok přesouvá do globálního slotu, aby nezůstal skrytý.
   expect(html).toContain('id="updateBanner"');
   expect(html).toContain('id="globalUpdateSlot"');
   expect(html.indexOf('id="globalUpdateSlot"')).toBeLessThan(html.indexOf('<div class="layout">'));
   expect(html.indexOf("</header>")).toBeLessThan(html.indexOf('id="updateBanner"'));
   expect(html.indexOf('<main class="page">')).toBeLessThan(html.indexOf('id="updateBanner"'));
   expect(html.indexOf('id="recentChangesSidebar"')).toBeLessThan(html.indexOf('id="updateBanner"'));
-  expect(html.indexOf('id="updateBanner"')).toBeLessThan(html.indexOf('id="hero"'));
+  expect(html.indexOf('id="updateBanner"')).toBeGreaterThan(html.indexOf('id="hero"'));
   expect(html).toContain('id="updateBannerText"');
   expect(html).toContain('id="updateBannerAction"');
   expect(html).not.toContain('id="moduleUpdateBanner"');
@@ -1469,8 +1469,8 @@ test("DEV-6493: banner používá GET-first Lazurio stav a pouze current|updated
   expect(js).toContain("updateBannerPresentation(state.updateStatus");
   expect(js).toContain("function mountUpdateBannerGroup");
   expect(js).toContain('mobilePanelQuery.matches || state.filters.scope === "personal"');
+  expect(js).toContain('global ? elements.globalUpdateSlot : elements.spaceStatusDetails');
   expect(js).toContain("if (group.parentElement !== target) target.append(group)");
-  expect(js).toContain("elements.guideTile?.after(group)");
   expect(js).not.toContain("elements.updateBannerText.textContent = status.message");
   expect(stateLib).toContain('status.state === "blocked"');
   expect(stateLib).toContain('status.state === "current"');

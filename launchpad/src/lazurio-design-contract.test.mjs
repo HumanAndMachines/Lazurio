@@ -151,7 +151,7 @@ test("samostatné panely a popovery sdílejí měkký Lazurio radius, sjednocen�
   expect(styles).toMatch(/\.space-switcher-menu,[^}]*\.detail-panel\s*{[^}]*border-radius: var\(--lz-radius-md\)/);
   expect(styles).toMatch(/\.team-access-content\s*{[^}]*border-radius: var\(--lz-radius-md\)/);
   expect(styles).toMatch(/\/\* --- BANNER O NOVÉ VERZI[^]*?\.update-banner\s*{[^}]*border-radius: var\(--lz-radius-md\)/);
-  expect(styles).toMatch(/\.recent-changes-sidebar > \.update-banner-group \.update-banner\s*{[^}]*border-radius: 0/);
+  expect(styles).toMatch(/\.space-status-details > \.update-banner-group \.update-banner\s*{[^}]*border-radius: 0/);
   expect(styles).toMatch(/\.app-version-menu-panel\s*{[\s\S]*?position: static/);
 });
 
@@ -199,6 +199,17 @@ test("pravý sidebar tvoří jediný hranatý výsuvný panel se sbaleným stave
   expect(styles).toMatch(/\.recent-changes-sidebar\s*{[^}]*display: block;[^}]*border-radius: 0/);
   expect(styles).toMatch(/\.recent-changes-sidebar \.side-panel\s*{[^}]*margin: 0;[^}]*border-radius: 0/);
   expect(styles).toMatch(/\.layout\.is-sidebar-collapsed\s*{[^}]*grid-template-columns: minmax\(0, 1fr\) 0/);
+});
+
+test("údržba je v rozbaleném Stavu prostoru a desktopový panel přiléhá k okraji", async () => {
+  const [html, js, styles] = await Promise.all([source("index.html"), source("app.js"), source("styles.css")]);
+  const details = html.slice(html.indexOf('id="spaceStatusDetails"'), html.indexOf('</details>', html.indexOf('id="spaceStatusDetails"')));
+  expect(details).toContain('id="updateBannerGroup"');
+  expect(details.indexOf('id="hero"')).toBeLessThan(details.indexOf('id="updateBannerGroup"'));
+  expect(js).toContain('global ? elements.globalUpdateSlot : elements.spaceStatusDetails');
+  expect(js).toContain('elements.page?.classList.toggle("is-organization", !personal)');
+  expect(styles).toMatch(/\.page\.is-organization\s*{[^}]*max-width: none;[^}]*padding-right: 0/);
+  expect(styles).toMatch(/\.recent-changes-sidebar\s*{[^}]*top: var\(--topbar-h\)/);
 });
 
 test("mobilní klidové stavy tvoří kompaktní řadu a akční stav zůstává výrazný", async () => {
@@ -288,7 +299,7 @@ test("materiálový průchod používá jemné modulové hrany a odstupňované 
   expect(material).toMatch(/\.app-card\s*{[\s\S]*?border-width: 1px;[\s\S]*?border-color: var\(--lz-line\);[\s\S]*?background: var\(--lz-white\)/);
   expect(styles).toMatch(/\.app-card > \.card-warning\.is-fact,[\s\S]*?\.app-card > \.card-warning\.is-jen-akce\s*{[\s\S]*?display: flex;[\s\S]*?min-height: 52px;[\s\S]*?margin-top: auto;[\s\S]*?border-top: 1px solid var\(--lz-line-faint\)/);
   expect(styles).toContain(".app-card > .card-warning:not(.is-jen-akce):not(.is-fact)");
-  expect(material).toMatch(/\.recent-changes-sidebar > \.update-banner-group \.update-banner\s*{[\s\S]*?background: var\(--lz-white\)/);
+  expect(material).toMatch(/\.space-status-details > \.update-banner-group \.update-banner\s*{[\s\S]*?background: var\(--lz-white\)/);
 });
 
 test("uvítání pracovního prostoru používá display hierarchii Lazuria", async () => {

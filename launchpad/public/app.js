@@ -355,6 +355,7 @@ const elements = {
   updateBannerAction: document.querySelector("#updateBannerAction"),
   reloadButton: document.querySelector("#reloadButton"),
   hero: document.querySelector("#hero"),
+  page: document.querySelector(".page"),
   spaceStatusDetails: document.querySelector("#spaceStatusDetails"),
   heroTitle: document.querySelector("#heroTitle"),
   heroSummary: document.querySelector("#heroSummary"),
@@ -1931,6 +1932,7 @@ function renderScopeControls() {
   elements.appsToolbar.classList.toggle("hidden", personal);
   elements.drawerToggle.classList.toggle("hidden", personal);
   elements.layout.classList.toggle("is-personal", personal);
+  elements.page?.classList.toggle("is-organization", !personal);
   elements.recentChangesSidebar.classList.toggle("hidden", personal);
   applySidebarState();
   // Notifikace agregují změny napříč moduly Organizace — v Personalspace
@@ -1941,20 +1943,15 @@ function renderScopeControls() {
   if (personal && state.drawerOpen) setDrawer(false);
 }
 
-// Na desktopu je update pod Guidem. Na mobilu se pravý
-// sloupec přesouvá do zavřeného draweru a v Personalspace se skrývá úplně;
-// provozní informace proto v těchto stavech přejde do globálního slotu nad
-// layoutem. Po návratu na desktop Organization scope se vrátí do sidebaru.
+// Na desktopu je update součástí rozbaleného Stavu prostoru. Na mobilu se
+// pravý sloupec přesouvá do zavřeného draweru a v Personalspace se skrývá;
+// provozní informace proto v těchto stavech přejde do globálního slotu.
 function mountUpdateBannerGroup() {
   const group = elements.updateBannerGroup;
   const global = mobilePanelQuery.matches || state.filters.scope === "personal";
-  const target = global ? elements.globalUpdateSlot : elements.recentChangesSidebar;
+  const target = global ? elements.globalUpdateSlot : elements.spaceStatusDetails;
   if (!group || !target) return;
-  if (global) {
-    if (group.parentElement !== target) target.append(group);
-  } else if (group.previousElementSibling !== elements.guideTile) {
-    elements.guideTile?.after(group);
-  }
+  if (group.parentElement !== target) target.append(group);
 }
 
 function renderWorkspaceWelcome() {
