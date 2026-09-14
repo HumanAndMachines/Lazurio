@@ -35,7 +35,8 @@ mandátu.
 
 - Principál (Admin) chce přehled cizích PR napříč spravovanými Organizacemi
   a jejich dotažení na default branch.
-- Principál zúží frontu na jednoho autora (`gh search prs --author <login>`).
+- Principál zúží frontu na jednoho autora (`gh search prs --author <login>`)
+  nebo na GitHub App (`gh search prs --app <slug>`, např. `dependabot`).
 - Fronta obsahuje PR od Kolegů, AI Kolegů, botů i klientských Organizací.
 
 Nepoužívej pro vlastní PR Principála (ty si řeší sám), pro Release, ani jako
@@ -46,10 +47,12 @@ náhradu review v jedné Organizaci se Steward seatem.
 - `gh auth status` je přihlášený účet Principála; `gh api user --jq .login`
   vrací jeho login — filtr „cizí PR“ se odvozuje od něj.
 - Primární Lazurio checkout prošel `lazurio update` a `bun run doctor:task`.
-  Když update spadne na **nesouvisejícím** mountu (cizí leftover checkout,
-  package pin jiné Organizace), sweep **nezastavuj**: zapiš blocker do
-  ledgeru a pokračuj ve frontě. Update/doctor je closeout gate, ne vstupenka
-  k prvnímu PR.
+  Když update/doctor spadne, zapiš blocker do ledgeru. **Blokovaný lokální
+  checkout nepoužívej** — žádné `cd`, test-merge, rebase ani push z něj.
+  Inventuru a merge čistých PR veď z živého GitHubu (`gh`). Lokální rebase
+  nebo opravu v zasažené Organizaci dělej ze scratch clone / nového
+  worktree z `origin`, ne z toho blocked mountu. Closeout update zopakuje;
+  nesouvisející blocker neschovávej.
 - Explicitní mandát Principála k Publikaci pro celý sweep (merge, close,
   force-push s lease do cizích PR branchí, komentáře a assignee).
 - Principál před startem rozhodl sporné skupiny: legacy repa (např. staré
@@ -74,29 +77,39 @@ gh api user/memberships/orgs --paginate \
 ```bash
 : > /tmp/all_prs.jsonl
 while IFS= read -r org; do
-  gh search prs --owner "$org" --state open --limit 200 \
+  gh search prs --owner "$org" --state open --limit 1000 \
     --json repository,number,title,author,isDraft,createdAt,updatedAt,url \
     | jq -c '.[]' >> /tmp/all_prs.jsonl
 done < /tmp/admin-orgs.txt
 ```
 
-**Author-scoped fronta** (Principál jmenoval autora, např. jeden sweep
-Aniččiných PR):
+**Author-scoped fronta** (Principál jmenoval lidského / AI autora):
 
 ```bash
-gh search prs --author "$AUTHOR" --state open --limit 100 \
+gh search prs --author "$AUTHOR" --state open --limit 1000 \
   --json repository,number,title,author,isDraft,createdAt,updatedAt,url \
   | jq -c '.[]' > /tmp/all_prs.jsonl
 ```
 
+GitHub App (Dependabot a podobně) hledej `--app "$APP"`, ne `--author`.
+`--author dependabot` frontu vyprázdní.
+
+Když počet výsledků == `--limit`, stránka je useknutá. Dosaď per-org
+`--owner "$org"` (a u autora i `--author` / `--app`) a slož frontu z
+úplných org stránek. Stejný cap při closeout inventuře nestačí — znovu
+ověř, že žádný dotaz nestopl na limitu.
+
 Potom vyřaď PR mimo `/tmp/admin-orgs.txt`. Search napříč GitHubem jinak
 vrátí i Drafty v cízích orgs (forks, upstream contrib).
 
-Zkontroluj, že žádný `--limit` nesekl stránku. Vyfiltruj
-`author != <login Principála>`. Ke každému PR doplň `gh pr view --json
-baseRefName,reviewDecision,mergeable,mergeStateStatus,statusCheckRollup,isDraft`.
-Default branch čti z `baseRefName` / `gh repo view --json defaultBranchRef`;
-**není to vždy `main`** (Mission Control data používá `v3`).
+Vyfiltruj `author != <login Principála>`. Ke každému PR doplň
+`gh pr view --json baseRefName,reviewDecision,mergeable,mergeStateStatus,statusCheckRollup,isDraft`
+a zvlášť `gh repo view --json defaultBranchRef --jq .defaultBranchRef.name`.
+**Neslučuj** `baseRefName` s default branch — PR na `release/*` nebo
+údržbovou větev default **není**. Default není vždy `main` (Mission
+Control data používá `v3`). Když `baseRefName != defaultBranchRef`,
+nesplňuje cíl „na default branch“: nechej otevřené s next action, pokud
+Principál ten cílový branch výslovně nezařadil.
 
 Před closeoutem inventuru **zopakuj**. Během běhu mohou vzniknout nové PR
 stejného autora nebo závislosti; tabulka z první chvíle není konečná.
@@ -128,16 +141,23 @@ Worktree **není** daň za každý PR.
 Mountované repo:
 
 ```bash
+local_branch="sweep/${repo_slug}-pr${N}"
 git -C <repo> fetch origin "+refs/heads/${b}:refs/remotes/origin/${b}"
-git -C <repo> worktree add \
+git -C <repo> worktree add -b "$local_branch" \
   <Lazurio>/.worktrees/sweep/<repo>-pr<N> origin/"${b}"
 ```
 
-`git worktree add … origin/<branch>` často nechá **detached HEAD**. Hned
-potom:
+Lokální větev je **sweep-owned** (`sweep/<repo>-pr<N>`), ne reset jména
+PR branche `"${b}"`. Když `worktree add -b` selže, protože `$local_branch`
+už existuje nebo ji drží jiný worktree, **nesahaj** na `switch -C` ani
+na existující `"${b}"` — najdi ten worktree, nebo zvol jiné jméno.
+`git switch -C "$b"` by zahodil lokální commity na `"${b}"`.
+
+Kdyby HEAD přesto zůstal detached, vytvoř novou větev jen malým `-c`
+(selže, když jméno už je):
 
 ```bash
-git -C <worktree> switch -C "$b"
+git -C <worktree> switch -c "$local_branch"
 ```
 
 Nemountované repo: scratch clone v `~/.cache/lazurio-pr-sweep/<owner>/<repo>`
@@ -240,7 +260,8 @@ repu) a sweepem ještě nebyl publikovaný.
 ```bash
 gh api user --jq .login
 gh api user/memberships/orgs --paginate --jq '.[] | select(.role=="admin") | .organization.login'
-gh search prs --author <login> --state open --limit 100 --json url,repository
+gh search prs --author <login> --state open --limit 1000 --json url,repository
+gh repo view <owner/repo> --json defaultBranchRef --jq .defaultBranchRef.name
 git -C <repo> worktree list
 bun <Lazurio>/scripts/pr-preflight.mjs
 gh pr view <N> --repo <owner/repo> --json state,mergeStateStatus,reviewDecision,baseRefName
