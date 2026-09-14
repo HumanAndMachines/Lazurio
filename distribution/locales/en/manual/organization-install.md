@@ -187,7 +187,9 @@ An internal Team slug is not an authorization identity. For the Builder gate,
 the Organization manifest maps it via `teams[].forge_binding` to
 `lazurio.team-forge-binding.github.v0`, the immutable GitHub Team `id`, and its
 `asserted_slug`. A missing or renamed binding is an owner blocker, not a reason
-to guess the Team by display name. The Organization root and the active slots
+to guess the Team by display name. The Steward gate does not use this Team
+binding at all (see "Steward Machine and restricted slots"). The Organization
+root and the active slots
 assigned to the given role (`--role builder` or `--role steward`) are checked;
 `planned_slot`, restricted/Admin-only slots, and slots with a malformed access
 declaration are deliberately not included, and the gate performs no provider
@@ -555,9 +557,14 @@ lazurio organization install <github-login> --role builder --json
   runs over them. This state is intentional and distinct from a missing grant
   (`materialization_source_unavailable`, `next_action.kind: github_access`).
   Before cloning, the Steward gate verifies read-only the active Organization
-  membership, Team membership, and WRITE on the Organization root and the
-  ordinary slots whose `required_roles` are empty, `*`, or name `steward`; a
-  blocked gate returns `steward_access_not_ready` and materializes nothing.
+  membership and the effective WRITE/MAINTAIN/ADMIN on the Organization root
+  and the ordinary slots whose `required_roles` are empty, `*`, or name
+  `steward`. Unlike the Builder gate it requires neither a business-Team
+  `forge_binding` nor Team membership: the Steward is a governance role of the
+  Organization and GitHub composes their rights from live grants; no binding
+  is guessed from a similar slug and the Steward is not added to Builder
+  Teams. A blocked gate (READ, inactive membership, provider failure) returns
+  `steward_access_not_ready` and materializes nothing.
 - **Generic `lazurio update`** (`restricted_slot_policy: "defer"`) never
   auto-clones an absent restricted slot and returns `current` with reason
   `restricted_not_materialized`. Already mounted restricted checkouts keep

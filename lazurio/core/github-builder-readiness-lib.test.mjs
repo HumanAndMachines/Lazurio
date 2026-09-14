@@ -488,3 +488,75 @@ test("role readiness never reads an ordinary repository declared below a restric
   ]);
   expect(calls.filter((endpoint) => /mission-control|typo/u.test(endpoint))).toEqual([]);
 });
+
+test("Steward readiness proves membership and effective capability without any business Team forge binding", () => {
+  const calls = [];
+  const resource = resourceFixture();
+  // Logické business Teamy bez immutable provider vazby: Builder gate je
+  // vyžaduje, Steward gate ne.
+  delete resource.teams[0].forge_binding;
+  resource.teams.push({ slug: "sales", display_name: "Sales" });
+  resource.repository_inventory[0].teams = ["workspace", "sales"];
+  const ready = observeGitHubRoleReadiness({
+    role: "steward",
+    provider: providerFixture({ teamMembership: "missing", permission: "maintain", calls }),
+    organization,
+    rootRepository,
+    resource,
+  });
+
+  expect(ready.status).toBe("ready");
+  expect(ready.blockers).toEqual([]);
+  expect(ready.teams).toEqual([]);
+  expect(ready.organization_membership).toEqual({ state: "active", role: "member" });
+  expect(ready.repositories).toEqual([
+    expect.objectContaining({ full_name: "ExampleOrganization/ExampleOrganization_GEN3", effective_permission: "maintain", team_grants: [] }),
+    expect.objectContaining({ full_name: "ExampleOrganization/knowledgebase", effective_permission: "maintain", team_grants: [] }),
+  ]);
+  expect(calls.some((endpoint) => endpoint.includes("/teams/"))).toBe(false);
+  expect(calls.some((endpoint) => endpoint.includes("/infra") || endpoint.includes("/admin-only"))).toBe(false);
+
+  const builder = observeGitHubRoleReadiness({
+    role: "builder",
+    provider: providerFixture({ teamMembership: "active", permission: "maintain" }),
+    organization,
+    rootRepository,
+    resource,
+  });
+  expect(builder.status).toBe("blocked");
+  expect(builder.blockers.map((item) => item.reason)).toContain("team_forge_binding_missing");
+});
+
+test("Steward readiness still fails closed on READ, inactive membership and provider failures", () => {
+  const resource = resourceFixture();
+  delete resource.teams[0].forge_binding;
+  const read = observeGitHubRoleReadiness({
+    role: "steward",
+    provider: providerFixture({ teamMembership: "active", permission: "read" }),
+    organization,
+    rootRepository,
+    resource,
+  });
+  expect(read.status).toBe("blocked");
+  expect(read.blockers.map((item) => item.reason)).toEqual(["repository_write_missing", "repository_write_missing"]);
+
+  const inactive = observeGitHubRoleReadiness({
+    role: "steward",
+    provider: providerFixture({ teamMembership: "active", permission: "write", failures: { organizationMembership: 404 } }),
+    organization,
+    rootRepository,
+    resource,
+  });
+  expect(inactive.status).toBe("blocked");
+  expect(inactive.blockers.map((item) => item.reason)).toContain("organization_membership_missing");
+
+  const unavailable = observeGitHubRoleReadiness({
+    role: "steward",
+    provider: providerFixture({ teamMembership: "active", permission: "write", failures: { repository: 503 } }),
+    organization,
+    rootRepository,
+    resource,
+  });
+  expect(unavailable.status).toBe("blocked");
+  expect(unavailable.blockers.map((item) => item.reason)).toContain("provider_observation_failed");
+});
