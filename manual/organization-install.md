@@ -551,6 +551,20 @@ vyžadovala další materializační krok a dovolila by lokální drift. Diagnos
 lane nepřepisuje žádný obsah ani symlink/junction odhadem; každý konflikt vrátí
 Agentovi k bezpečné opravě v owning repu.
 
+Stejná hranice platí pro závislosti Organization Apps. Bun hoisted linker
+materializuje Organization-local `file:` balíček kopírovací cestou, která pod
+standardním ne-elevovaným účtem bez Developer Mode skončí
+`EPERM: failed copying files from cache to destination` bez ohledu na
+`--backend`; elevovaný terminál ji maskuje, ale není podporovaný consumer.
+Launchpad, Doctor i update proto na Windows spouštějí
+`bun install --frozen-lockfile --linker=isolated`: Bun přesný cíl hardlinkuje
+do `node_modules/.bun` a do `node_modules` vystaví junction, což nevyžaduje
+žádné privilegium ani Developer Mode. Lockfile zůstává byte-identický, Lazurio
+přijme jen store, jehož každý soubor je totožný filesystem objekt se souborem
+deklarovaného cíle, a layout je pnpm-like bez hoistingu tranzitivních balíčků.
+Agent tento stav neobchází spuštěním Codexu „jako správce“, zapnutím Developer
+Mode ani ruční kopií balíčku do `node_modules`.
+
 CLI Root nevybírá ani neukládá jako další konfiguraci. Produkční instalace
 vždy používá `~/Lazurio` na macOS/Linuxu a `%USERPROFILE%\\Lazurio` na
 Windows. Tím mají lidé i Agenti jednu předvídatelnou cestu a absolutní cesta
