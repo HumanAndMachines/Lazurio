@@ -141,24 +141,21 @@ test("Launchpad nepoužívá pyritovou barevnou roli", async () => {
   expect(iconAccentBlock).toContain('"guide-96.png": "var(--lz-expressive-yellow)"');
 });
 
-test("filtr aplikací používá jednu společnou Lazurio kapsli", async () => {
+test("kompaktní hledání má viditelný focus bez přepínače pohledů", async () => {
   const styles = await source("styles.css");
-  expect(styles).toMatch(/#appsFilterControls \.segmented-control\s*{[^}]*gap: 0;[^}]*border: 1px solid var\(--lz-line\);[^}]*border-radius: var\(--lz-radius-pill\);[^}]*background: var\(--lz-gray-50\)/);
-  expect(styles).toMatch(/#appsFilterControls \.segment\s*{[^}]*border: 0;[^}]*border-radius: var\(--lz-radius-pill\);[^}]*background: transparent/);
-  expect(styles).toContain('#appsFilterControls .segment[aria-pressed="true"]');
-  expect(styles).toMatch(/#appsFilterControls \.segment\[aria-pressed="true"\],[^}]*background: var\(--lz-ink\)[^}]*color: var\(--lz-white\)/);
+  expect(styles).toMatch(/\.apps-toolbar\s*{[^}]*flex: 0 1 240px/);
   expect(styles).toMatch(/\.search-field:focus-within\s*{[\s\S]*?border-color: var\(--lz-gray-700\);[\s\S]*?background: var\(--lz-white\)/);
   expect(styles).toMatch(/\.search-field:focus-within\s*{[\s\S]*?outline: none;/);
   expect(styles).toMatch(/\.search-field input:focus-visible\s*{[\s\S]*?outline: none;/);
 });
 
-test("samostatné panely a popovery sdílejí měkký Lazurio radius", async () => {
+test("samostatné panely a popovery sdílejí měkký Lazurio radius, sjednocený sidebar zůstává hranatý", async () => {
   const styles = await source("styles.css");
   expect(styles).toMatch(/\.space-switcher-menu,[^}]*\.detail-panel\s*{[^}]*border-radius: var\(--lz-radius-md\)/);
   expect(styles).toMatch(/\.team-access-content\s*{[^}]*border-radius: var\(--lz-radius-md\)/);
   expect(styles).toMatch(/\/\* --- BANNER O NOVÉ VERZI[^]*?\.update-banner\s*{[^}]*border-radius: var\(--lz-radius-md\)/);
-  expect(styles).toMatch(/\.recent-changes-sidebar > \.update-banner-group \.update-banner\s*{[^}]*border-radius: var\(--lz-radius-md\)/);
-  expect(styles).toMatch(/\.app-version-menu-panel\s*{[\s\S]*?position: static/);
+  expect(styles).toMatch(/\.space-status-content > \.update-banner-group \.update-banner\s*{[^}]*border-radius: 0/);
+  expect(styles).toMatch(/\.app-version-menu-panel\s*{[\s\S]*?position: absolute/);
 });
 
 test("Marketplace teaser je klidná neinteraktivní dlaždice v pravém sloupci", async () => {
@@ -175,6 +172,47 @@ test("Marketplace teaser je klidná neinteraktivní dlaždice v pravém sloupci"
   expect(styles).toMatch(/\.marketplace-teaser\s*{[^}]*gap: var\(--lz-space-16\);[^}]*padding: var\(--lz-space-16\)/);
   expect(styles).toMatch(/\.marketplace-teaser-icon\s*{[^}]*background: var\(--lz-blue-50\);[^}]*color: var\(--lz-blue-600\)/);
   expect(styles).toMatch(/\.marketplace-teaser-copy p\s*{[^}]*color: var\(--lz-ink-muted\);[^}]*font-size: var\(--lz-size-meta\)/);
+});
+
+test("Guide je první pravý panel a jeho ikona sdílí Iconoir materiál Marketplace", async () => {
+  const [html, styles] = await Promise.all([source("index.html"), source("styles.css")]);
+  const guideIndex = html.indexOf('id="guideTile"');
+  expect(guideIndex).toBeGreaterThan(-1);
+  expect(guideIndex).toBeLessThan(html.indexOf('id="updateBannerGroup"'));
+  expect(guideIndex).toBeLessThan(html.indexOf('class="marketplace-teaser side-panel"'));
+  expect(html).toContain("<!-- iconoir/book -->");
+  expect(styles).toMatch(/\.guide-tile-icon\s*{[^}]*width: var\(--lz-space-48\);[^}]*height: var\(--lz-space-48\);[^}]*border-radius: var\(--lz-radius-sm\);[^}]*background: var\(--lz-blue-50\);[^}]*color: var\(--lz-blue-600\)/);
+  expect(styles).toMatch(/\.guide-tile:hover\s*{[^}]*background: var\(--lz-gray-50\)/);
+  expect(styles).toMatch(/\.guide-tile:is\(:hover, :focus-visible\)\s*{\s*text-decoration: none;/);
+  expect(styles).toMatch(/\.guide-tile:hover \.guide-tile-action,[\s\S]*?color: var\(--lz-blue-700\);/);
+  expect(styles).toMatch(/\.guide-tile:hover \.guide-tile-action svg\s*{[^}]*transform: translateX\(var\(--lz-space-4\)\)/);
+  expect(styles).toMatch(/\.guide-tile-action svg\s*{[^}]*transition: transform 160ms ease/);
+});
+
+test("pomůcky tvoří kompaktní skryvatelnou lištu se sbaleným stavem prostoru", async () => {
+  const [html, js, styles] = await Promise.all([source("index.html"), source("app.js"), source("styles.css")]);
+  expect(html).toContain('id="spaceStatusDetails" class="space-status-details"');
+  expect(html).toContain('<summary class="space-status-toggle">');
+  expect(html).toContain('class="hero-indicator" aria-hidden="true"');
+  expect(js).toContain('sidebarOpen: true');
+  expect(js).toContain('function applySidebarState()');
+  expect(js).toContain('toggleAttribute("inert", collapsed)');
+  expect(js).toContain('desktop ? "recentChangesSidebar" : "detailDrawer"');
+  expect(js).toContain('elements.spaceStatusDetails.dataset.tone = verdict.tone');
+  expect(styles).toMatch(/\.recent-changes-sidebar\s*{[^}]*display: block;[^}]*border-radius: var\(--lz-radius-md\)/);
+  expect(styles).toMatch(/\.recent-changes-sidebar \.side-panel\s*{[^}]*margin: 0;[^}]*border-radius: 0/);
+  expect(styles).toMatch(/\.layout\.is-sidebar-collapsed \.recent-changes-sidebar\s*{[^}]*display: none/);
+});
+
+test("údržba je v rozbaleném Stavu prostoru a hledání je u nadpisu", async () => {
+  const [html, js, styles] = await Promise.all([source("index.html"), source("app.js"), source("styles.css")]);
+  const details = html.slice(html.indexOf('id="spaceStatusDetails"'), html.indexOf('</details>', html.indexOf('id="spaceStatusDetails"')));
+  expect(details).toContain('id="updateBannerGroup"');
+  expect(details.indexOf('id="hero"')).toBeLessThan(details.indexOf('id="updateBannerGroup"'));
+  expect(js).toContain('global ? elements.globalUpdateSlot : elements.spaceStatusContent');
+  expect(js).toContain('elements.page?.classList.toggle("is-organization", !personal)');
+  expect(styles).toMatch(/\.page\.is-organization\s*{[^}]*max-width: none;[^}]*padding-right: clamp/);
+  expect(html.indexOf('id="appsToolbar"')).toBeLessThan(html.indexOf('id="recentChangesSidebar"'));
 });
 
 test("mobilní klidové stavy tvoří kompaktní řadu a akční stav zůstává výrazný", async () => {
@@ -201,14 +239,15 @@ test("Organizace, Workspace a Productionspace používají modrou záložku v be
   expect(app).not.toContain("app-section-eyebrow");
 });
 
-test("kanonické modulové dlaždice jsou samostatné zaoblené karty", async () => {
+test("kanonické modulové dlaždice jsou kompaktní samostatné karty", async () => {
   const [styles, app] = await Promise.all([source("styles.css"), source("app.js")]);
-  const base = styles.slice(styles.indexOf("/* Základ dlaždic podle produktové reference"));
+  const base = styles.slice(styles.indexOf("/* Zavřené moduly drží společnou základní výšku"));
   const canonical = styles.slice(styles.indexOf("/* CAC-0095 — kanonická materiálová dlaždice."));
-  expect(base).toMatch(/\.app-card\s*{[\s\S]*?min-height: 16rem;[\s\S]*?padding: var\(--lz-space-24\)/);
-  expect(base).toMatch(/\.app-title-block\s*{[\s\S]*?gap: 28px/);
-  expect(base).toMatch(/\.app-card-desc\s*{[\s\S]*?font-size: 15px;[\s\S]*?line-height: 1\.55/);
-  expect(canonical).toMatch(/\.apps-grid\s*{[\s\S]*?column-gap: var\(--lz-space-16\);[\s\S]*?row-gap: var\(--lz-space-16\);[\s\S]*?border: 0/);
+  expect(base).toMatch(/\.app-card\s*{[\s\S]*?min-height: 11rem;[\s\S]*?padding: var\(--lz-space-16\)/);
+  expect(base).toMatch(/\.app-title-block\s*{[\s\S]*?gap: var\(--lz-space-12\)/);
+  expect(base).toMatch(/\.app-card-desc\s*{[\s\S]*?font-size: 14px;[\s\S]*?line-height: 1\.45/);
+  expect(styles).toMatch(/\.apps-grid\s*{[^}]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
+  expect(canonical).toMatch(/\.apps-grid\s*{[\s\S]*?column-gap: var\(--lz-space-12\);[\s\S]*?row-gap: var\(--lz-space-12\);[\s\S]*?border: 0/);
   expect(canonical).toMatch(/\.apps-grid > \.app-card\s*{[\s\S]*?border: 1px solid var\(--lz-line\);[\s\S]*?border-radius: var\(--lz-radius-md\)/);
   expect(canonical).toMatch(/\.apps-grid > \.app-card:not\(\.has-open-menu\):focus-within,[\s\S]*?\.apps-grid > \.app-card\.selected\s*{[\s\S]*?border-color: var\(--app-focus-accent, var\(--app-accent\)\)/);
   expect(canonical).toMatch(/box-shadow: 0 10px 24px -22px color-mix\(in srgb, var\(--lz-ink\) 18%, transparent\)/);
@@ -262,15 +301,15 @@ test("materiálový průchod používá jemné modulové hrany a odstupňované 
   expect(material).toMatch(/\.topbar\s*{[\s\S]*?border-bottom-width: 1\.5px;[\s\S]*?background: var\(--lz-white\)/);
   expect(material).toMatch(/\.search-field\s*{[\s\S]*?border-width: 1\.5px;[\s\S]*?background: var\(--lz-gray-50\)/);
   expect(material).toMatch(/\.app-card\s*{[\s\S]*?border-width: 1px;[\s\S]*?border-color: var\(--lz-line\);[\s\S]*?background: var\(--lz-white\)/);
-  expect(styles).toMatch(/\.app-card > \.card-warning\.is-fact,[\s\S]*?\.app-card > \.card-warning\.is-jen-akce\s*{[\s\S]*?display: flex;[\s\S]*?min-height: 52px;[\s\S]*?margin-top: auto;[\s\S]*?border-top: 1px solid var\(--lz-line-faint\)/);
+  expect(styles).toMatch(/\.app-card > \.card-warning\.is-fact,[\s\S]*?\.app-card > \.card-warning\.is-jen-akce\s*{[\s\S]*?display: flex;[\s\S]*?min-height: 44px;[\s\S]*?margin-top: auto;[\s\S]*?border-top: 1px solid var\(--lz-line-faint\)/);
   expect(styles).toContain(".app-card > .card-warning:not(.is-jen-akce):not(.is-fact)");
-  expect(material).toMatch(/\.recent-changes-sidebar > \.update-banner-group \.update-banner\s*{[\s\S]*?background: var\(--lz-white\)/);
+  expect(material).toMatch(/\.space-status-content > \.update-banner-group \.update-banner\s*{[\s\S]*?background: var\(--lz-white\)/);
 });
 
 test("uvítání pracovního prostoru používá display hierarchii Lazuria", async () => {
   const styles = await source("styles.css");
   expect(styles).toMatch(/\.workspace-welcome-title\s*{[\s\S]*?font-size: var\(--lz-size-display\);[\s\S]*?font-weight: var\(--lz-weight-title\);[\s\S]*?line-height: var\(--lz-leading-display\);[\s\S]*?letter-spacing: var\(--lz-track-display\)/);
-  expect(styles).toMatch(/\.workspace-welcome\s*{[\s\S]*?margin-bottom: var\(--lz-space-16\);/);
+  expect(styles).toMatch(/\.workspace-welcome\s*{[\s\S]*?margin-bottom: var\(--lz-space-4\);/);
 });
 
 test("menu dalších možností se rozbalí uvnitř dlaždice bez vrstveného hoveru", async () => {
@@ -279,7 +318,7 @@ test("menu dalších možností se rozbalí uvnitř dlaždice bez vrstveného ho
     source("app.js"),
     source("personalspace.js"),
   ]);
-  expect(styles).toMatch(/\.app-version-menu-panel\s*{[\s\S]*?position: static;[\s\S]*?width: 100%;[\s\S]*?border-top: 1px solid var\(--lz-line-faint\)/);
+  expect(styles).toMatch(/\.app-version-menu-panel\s*{[\s\S]*?position: absolute;[\s\S]*?width: min\(256px, calc\(100% - 24px\)\);[\s\S]*?border: 1px solid var\(--lz-line\)/);
   expect(styles).toMatch(/\.app-card\.has-open-menu:not\(\.selected\),[\s\S]*?border-color: var\(--lz-line\);[\s\S]*?background: var\(--lz-white\)/);
   expect(styles).toMatch(/\.apps-grid\s*{[\s\S]*?align-items: start/);
   expect(styles).toMatch(/\.apps-grid > \.app-card\s*{[\s\S]*?align-self: start/);
