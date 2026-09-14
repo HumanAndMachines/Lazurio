@@ -64,6 +64,11 @@ se nejmenují `AGENTS.md`, takže v development checkoutu omylem nepřebírají
 
 ## Profil Workspace
 
+Cílová Dílna je pracovní Mašina Organizace pro jednoho Buildera. Desktopový
+Codex je vzdálený klient; Lazurio a pracovní přihlášení zůstávají v Dílně.
+Nevzniká nový Machines Profile ani Personalspace. Směr a jeho dosud neověřený
+přechod z dnešní implementace drží [architektura](../ARCHITECTURE.md#hosted-team-workspace).
+
 Workspace profil je immutable runtime pro Launchpad a Lazurio CLI v hostovaném pracovním
 prostoru Kolegy nebo AI Kolegy. Není druhým datovým modelem hosted prostředí:
 lokální i vzdálený pracovní prostor používají stejný Lazurio Root kontrakt,

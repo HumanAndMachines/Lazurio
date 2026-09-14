@@ -158,7 +158,7 @@ Workspace vymezuje jednu sdílenou vývojovou dílnu pro konkrétní Team:
 
 - členové Teamu sdílejí soubory, procesy a síťový prostor;
 - různé Team Workspaces jsou od sebe oddělené na tenantní vrstvě;
-- individuální izolaci poskytne jednočlenný Team Workspace;
+- výchozí Dílna je jednočlenný Team Workspace pro jednoho Buildera;
 - uvnitř běží T3 Code, nástroje Agentů, Launchpad, checkouty a worktrees;
 - řídicí infrastruktura, klíče poskytovatele, Tailscale/VPN sidecar a HTTPS ingress
   zůstávají mimo pracovní prostředí.
@@ -169,8 +169,20 @@ operator zůstává vyšší doménou obnovy a kompromitace, ale běžný Team a
 Agent tím nezískává přístup k host OS, jinému Workspace nebo org-wide
 credentials.
 
-Supervisor udržuje pouze T3 Code a Launchpad. Vývojové procesy Modulů spouští a
-zastavuje Launchpad. Dashboard pouze zpřístupňuje vstupy pracovního prostoru;
+Cílově desktopový Codex přistupuje přes OpenSSH v síti Tailscale spravované
+Headscale.
+Lazurio, agent, soubory a GitHub/MCP přihlášení žijí v Dílně; místní instalace
+Lazuria není potřeba. Pracovní GitHub identita a AI účet pro model a spotřebu
+jsou oddělené. Builder řeší podporu přímo se Stewardem. Launchpad musí jasně
+ukazovat skutečné prostředí a pracovní účet.
+
+SSH končí v Dílně, ne na host OS. Tento směr vyžaduje ověřený přechod z dnešní
+HTTPS/T3 a brokered GitHub cesty. Nepřináší druhý runtime ani synchronizaci
+konverzací. Pokračování úkolu po odpojení je žádoucí, ale dosud neověřené
+a není podmínkou první verze.
+
+V dosavadní implementaci supervisor udržuje pouze T3 Code a Launchpad.
+Vývojové procesy Modulů spouští a zastavuje Launchpad. Dashboard pouze zpřístupňuje vstupy pracovního prostoru;
 procesy Modulů neřídí. Per-module kontejnery, Docker-in-Docker a další
 orchestrátor nejsou součástí tohoto modelu.
 
