@@ -5558,7 +5558,7 @@ b {
   gap: var(--lz-space-12);
   align-items: stretch;
   width: 100%;
-  padding-left: var(--lz-space-16);
+  padding-left: 0;
   border-bottom: 1px solid var(--lz-blue-500);
 }
 
@@ -5609,7 +5609,7 @@ b {
   .app-section-organization:not(.skeleton-section) > .app-section-head:first-child .app-section-title-row,
   .app-section-workspace > .app-section-head:first-child .app-section-title-row,
   .app-section-productionspace > .app-section-head:first-child .app-section-title-row {
-    padding-left: var(--lz-space-12);
+    padding-left: 0;
   }
 
   .app-section-filter-slot {
