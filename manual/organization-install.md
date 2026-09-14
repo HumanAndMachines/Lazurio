@@ -625,3 +625,18 @@ Reprodukovaný obecný problém Lazurio instalátoru reportuj podle
 owning repa. Instalační Agent smí issue vytvořit nebo doplnit jen tehdy, když
 prompt obsahuje explicitní publikační mandát pro tento repo. Jinak vrátí
 sanitizovaný issue draft a exact cílový repo v handoffu.
+
+## Logo Organizace
+
+Organization-owned logo pro sdílený Launchpad patří do `brand/logo.png`
+v Organization root repozitáři (běžný soubor PNG, nejvýše 2 MiB).
+Launchpad jej načte automaticky a obslouží svou existující chráněnou logo
+route. Kvůli logu nezakládej Organization-local Launchpad aplikaci.
+Historické asset cesty `launchpad/app/v1/web/` zůstávají pouze fallback pro
+starší checkouty; `brand/logo.png` má přednost. Symlinky, únik mimo Organization
+a příliš velké soubory se nepřijímají.
+
+Moduly používají své standardní statické assety pro hlavičku a favicon.
+Kopie organizačního loga drží ve vlastním repu, aby mohly fungovat samostatně
+i bez spuštěného Launchpadu. Provenienci a postup aktualizace kopií dokumentuj
+u originálu v Organizaci. GitHub avatar se nastavuje zvlášť v profilu Organizace.
