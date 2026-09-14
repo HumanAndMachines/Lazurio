@@ -16,6 +16,12 @@ import {
   inspectRepositoryDbWorktreeBinding,
   readRequiredRepositoryDbWorktreeSlots,
 } from "../../lazurio/runtime/repository-db-worktree-lib.mjs";
+import {
+  WorktreeCleanupError,
+  applyWorktreeCleanup,
+  previewWorktreeCleanup,
+  resolveMergedPullRequestEvidence,
+} from "../../lazurio/runtime/worktree-cleanup-lib.mjs";
 import { buildWorktreeIndex } from "../../lazurio/runtime/worktree-lib.mjs";
 
 export class WorktreeActionError extends Error {
@@ -532,6 +538,168 @@ export async function publishWorktreeDraft({
     },
     next_action: "open_pull_request",
   };
+}
+
+// Cleanup lane (DEV-6555): read-only preview a explicitní apply nad přesně
+// jedním Launchpad environmentem. Guardy a journal drží sdílená Lazurio
+// knihovna worktree-cleanup-lib; tady se jen resolvuje repo/worktree,
+// vynucuje Organization containment a pro apply drží canonical create lock,
+// aby cleanup nikdy neběžel souběžně s create stejné Organizace.
+export async function previewWorktreeCleanupEnvironment({
+  companiesRoot,
+  repoKey,
+  slug,
+  inspectRuntimeUsage = null,
+  inspectOwnerSession = undefined,
+  prEvidence = null,
+  runGhFn = defaultRunGh,
+} = {}) {
+  if (!companiesRoot) throw new Error("previewWorktreeCleanupEnvironment requires companiesRoot");
+  const repo = await resolveRepo(companiesRoot, repoKey);
+  const worktree = await findWorktree(companiesRoot, repo, validateSlug(slug));
+  await assertWorktreePathsInsideOrganization({
+    companiesRoot,
+    repo,
+    paths: [join(companiesRoot, worktree.path), join(companiesRoot, worktree.sidecar_path)],
+    allowMissingTarget: true,
+  });
+  return previewWorktreeCleanup({
+    companiesRoot,
+    worktree,
+    inspectRuntimeUsage,
+    ...(inspectOwnerSession !== undefined ? { inspectOwnerSession } : {}),
+    prEvidence: await resolveCleanupPrEvidence({ companiesRoot, worktree, prEvidence, runGhFn }),
+  });
+}
+
+// PR evidence: volající ji smí dodat explicitně; jinak se MERGED důkaz hledá
+// v GitHubu podle head branche (pokrývá squash). Bez gh/sítě zůstane
+// evidence prázdná a rozhoduje jen důkaz mrtvého vlastníka.
+async function resolveCleanupPrEvidence({ companiesRoot, worktree, prEvidence, runGhFn }) {
+  const explicit = validatePrEvidencePayload(prEvidence);
+  if (explicit) return explicit;
+  if (typeof runGhFn !== "function" || typeof worktree.branch !== "string" || !worktree.branch) return null;
+  const worktreePath = join(companiesRoot, worktree.path);
+  if (!existsSync(worktreePath)) return null;
+  const commonDir = await runGit(["rev-parse", "--path-format=absolute", "--git-common-dir"], {
+    cwd: worktreePath,
+    timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+  });
+  if (!commonDir.ok) return null;
+  return resolveMergedPullRequestEvidence({
+    ownerRoot: dirname(resolve(commonDir.stdout.trim())),
+    branch: worktree.branch,
+    runGhFn,
+  });
+}
+
+async function defaultRunGh(args) {
+  let child;
+  try {
+    child = Bun.spawn(["gh", ...args], {
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { ...process.env, GH_PROMPT_DISABLED: "1", GH_NO_UPDATE_NOTIFIER: "1" },
+    });
+  } catch (error) {
+    return { ok: false, stdout: "", stderr: error instanceof Error ? error.message : String(error) };
+  }
+  const timeout = setTimeout(() => child.kill(), 20_000);
+  try {
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    return { ok: exitCode === 0, stdout, stderr };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function applyWorktreeCleanupEnvironment({
+  companiesRoot,
+  repoKey,
+  slug,
+  expectedFingerprint,
+  inspectRuntimeUsage = null,
+  stopRuntimeUsage = null,
+  inspectOwnerSession = undefined,
+  prEvidence = null,
+  runGhFn = defaultRunGh,
+} = {}) {
+  if (!companiesRoot) throw new Error("applyWorktreeCleanupEnvironment requires companiesRoot");
+  const repo = await resolveRepo(companiesRoot, repoKey);
+  const worktree = await findCleanupWorktreeRecord(companiesRoot, repo, validateSlug(slug));
+  await assertWorktreePathsInsideOrganization({
+    companiesRoot,
+    repo,
+    paths: [join(companiesRoot, worktree.path), join(companiesRoot, worktree.sidecar_path)],
+    allowMissingTarget: true,
+  });
+  return withWorktreeCreateLock(
+    join(companiesRoot, repo.organization_path),
+    { branch: worktree.branch ?? worktree.slug, planCode: worktree.plan_code ?? "cleanup" },
+    async () => {
+      try {
+        return await applyWorktreeCleanup({
+          companiesRoot,
+          worktree,
+          expectedFingerprint,
+          inspectRuntimeUsage,
+          stopRuntimeUsage,
+          ...(inspectOwnerSession !== undefined ? { inspectOwnerSession } : {}),
+          prEvidence: await resolveCleanupPrEvidence({ companiesRoot, worktree, prEvidence, runGhFn }),
+        });
+      } catch (error) {
+        if (error instanceof WorktreeCleanupError) {
+          throw new WorktreeActionError(error.message, {
+            status: ["cleanup_stale_preview", "cleanup_not_ready", "cleanup_active_owner", "cleanup_runtime_in_use"].includes(error.code) ? 409 : 500,
+            code: error.code,
+            details: error.details,
+          });
+        }
+        throw error;
+      }
+    },
+  );
+}
+
+// Po odstranění edit worktree už directory scan environment nevidí, ale
+// nedokončený journal (typicky zbývající remove_sidecar) musí jít dokončit.
+// Rekonstrukce používá výhradně kanonické cesty odvozené z repo kontraktu;
+// journal sám autoritu nezískává — jeho hranice znovu prokáže cleanup lib.
+async function findCleanupWorktreeRecord(companiesRoot, repo, slug) {
+  try {
+    return await findWorktree(companiesRoot, repo, slug);
+  } catch (error) {
+    if (!(error instanceof WorktreeActionError) || error.code !== "worktree_not_found") throw error;
+    const parent = parentPathForRepo(repo);
+    const journalPath = join(companiesRoot, repo.organization_path, parent, `${slug}.cleanup.journal.json`);
+    if (!existsSync(journalPath)) throw error;
+    const organizationRelative = (path) => relative(companiesRoot, path).replace(/\\/g, "/");
+    return {
+      slug,
+      organization: repo.organization,
+      organization_path: repo.organization_path,
+      module: repo.module,
+      branch: null,
+      plan_code: null,
+      path: organizationRelative(join(companiesRoot, repo.organization_path, parent, slug)),
+      sidecar_path: organizationRelative(join(companiesRoot, repo.organization_path, parent, `${slug}.worktree.json`)),
+    };
+  }
+}
+
+function validatePrEvidencePayload(prEvidence) {
+  if (prEvidence === null || prEvidence === undefined) return null;
+  if (typeof prEvidence !== "object" || Array.isArray(prEvidence)) {
+    throw new WorktreeActionError("prEvidence musí být object { url, state, head_sha, checked_at }.", {
+      status: 400,
+      code: "invalid_pr_evidence",
+    });
+  }
+  return prEvidence;
 }
 
 async function resolveRepo(companiesRoot, repoKey) {

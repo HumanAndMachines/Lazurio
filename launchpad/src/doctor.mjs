@@ -3,6 +3,7 @@ import { buildLaunchpadDoctorReport } from "../../lazurio/runtime/diagnostics-li
 import { renderHumanDoctorReport } from "../../lazurio/runtime/doctor-output-lib.mjs";
 import { exitCodeForSummaryStatus } from "../../lazurio/runtime/doctor-surface-lib.mjs";
 import { createHostedWorkspaceConfiguration } from "./hosted-app-url-lib.mjs";
+import { resolveLaunchpadStateRoot } from "./state-root-lib.mjs";
 
 const options = parseArgs(Bun.argv.slice(2));
 const companiesRoot = resolve(options.root ?? join(import.meta.dirname, "..", ".."));
@@ -20,6 +21,15 @@ const report = await buildLaunchpadDoctorReport({
   runChildDoctors: !options.skipChildren,
   checkToolUpdates: options.toolUpdates,
   activeTeamId: workspaceProfile.profile === "hosted" ? workspaceProfile.team_id : null,
+  // Cleanup eligibility čte stejný durable runtime store jako Launchpad server,
+  // aby CLI doctor a UI odpovídaly o téže mašině stejně.
+  runtimeStateRoot: resolveLaunchpadStateRoot({
+    configuredStateRoot: process.env.LAZURIO_LAUNCHPAD_STATE_ROOT,
+    hosted: workspaceProfile.profile === "hosted",
+    runtimeRoot: resolve(process.env.LAZURIO_RUNTIME_ROOT ?? join(launchpadRoot, "..")),
+    workspaceRoot: companiesRoot,
+    fallbackRoot: join(companiesRoot, "launchpad"),
+  }),
 });
 
 if (options.json) {

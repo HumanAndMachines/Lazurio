@@ -14,6 +14,7 @@ import { normalizePackageRuntime } from "../core/runtime-contract-lib.mjs";
 import { readOrganizationRoot } from "../core/organization-root-reader-lib.mjs";
 import { recordAppOpen } from "./usage-lib.mjs";
 import { buildWorktreeIndex } from "./worktree-lib.mjs";
+import { cleanupJournalPath } from "./worktree-cleanup-lib.mjs";
 import { acquireModuleRuntimeLock } from "./module-runtime-lock-lib.mjs";
 import { trustedWindowsSystemExecutable } from "./windows-system-path-lib.mjs";
 import {
@@ -2158,6 +2159,18 @@ export function createRuntimeManager({
         worktree,
       });
     }
+    // Cleanup ban (DEV-6555): dokud existuje cleanup journal environmentu,
+    // Launchpad worktree App nespustí ani neobnoví — apply právě zastavuje
+    // procesy a maže members; restart během úklidu by je znovu otevřel.
+    if (existsSync(cleanupJournalPath({ companiesRoot, worktree }))) {
+      throw new RuntimeActionError(
+        409,
+        "worktree_cleanup_in_progress",
+        `Worktree ${worktree.slug} právě prochází cleanupem; start je do dokončení nebo vyřešení journalu odmítnutý.`,
+        [`journal: ${cleanupJournalPath({ companiesRoot, worktree })}`],
+        { worktree },
+      );
+    }
 
     const runtimeKey = worktreeRuntimeKey(app, worktree.slug);
     const modulePath = worktreeModuleSlotPath(app, worktree.metadata);
@@ -2797,6 +2810,51 @@ export function createRuntimeManager({
 
   async function shutdown() {
     return stopManagedRuntimes();
+  }
+
+  // Cleanup lane (DEV-6555): zastaví výhradně managed procesy, které tento
+  // Runtime Manager sám spustil z daného worktree slugu — stejným stop →
+  // grace → SIGKILL postupem jako explicitní Stop. Cizí procesy nezná a
+  // nezabíjí; co po něm zbude, cleanup vyhodnotí z durable evidence.
+  async function stopWorktreeRuntimes({ slug, organization = null } = {}) {
+    if (typeof slug !== "string" || slug.trim() === "") {
+      throw new RuntimeActionError(400, "invalid_runtime_source", "stopWorktreeRuntimes vyžaduje worktree slug.");
+    }
+    const records = [...managedProcesses.values()].filter((record) => {
+      const source = runtimeSourceForApp(record.runtimeApp ?? {});
+      if (source.type !== "worktree" || source.slug !== slug) return false;
+      return organization === null || record.runtimeApp?.company === organization;
+    });
+    const results = [];
+    for (const record of records) {
+      const app = record.runtimeApp;
+      try {
+        const result = await withModuleLeaseLock(app, async () => {
+          if (managedProcesses.get(record.runtimeKey) !== record) return { status: "already_stopped" };
+          await stopRuntimeAppUnlocked(app);
+          return { status: "stopped" };
+        });
+        results.push({ app_id: record.appId, runtime_key: record.runtimeKey, status: result.status });
+      } catch (error) {
+        results.push({ app_id: record.appId, runtime_key: record.runtimeKey, status: "failed", error: error.message });
+      }
+    }
+    const failed = results.filter((result) => result.status === "failed");
+    if (failed.length > 0) {
+      throw new RuntimeActionError(
+        409,
+        "worktree_runtime_stop_failed",
+        `Zastavení worktree runtime ${slug} selhalo pro ${failed.length} proces(ů).`,
+        failed.map((result) => `${result.runtime_key}: ${result.error}`),
+      );
+    }
+    return {
+      slug,
+      attempted: records.length,
+      stopped: results.filter((result) => result.status === "stopped").length,
+      already_stopped: results.filter((result) => result.status === "already_stopped").length,
+      results,
+    };
   }
 
   async function rollbackUnpublishedStartup() {
@@ -4071,6 +4129,7 @@ export function createRuntimeManager({
     open,
     ensureHostedApp,
     stop,
+    stopWorktreeRuntimes,
     restart,
     logs,
     maintainApps,
