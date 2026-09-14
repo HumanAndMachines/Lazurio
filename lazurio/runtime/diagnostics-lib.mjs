@@ -107,6 +107,7 @@ let cachedDoctorReportSchema = null;
 export async function buildLaunchpadAppsResponse({
   companiesRoot = join(import.meta.dirname, "..", ".."),
   rootSourceRoot = companiesRoot,
+  runtimeRoot = rootSourceRoot,
   launchpadRoot = join(companiesRoot, "launchpad"),
   runtimeManager = createRuntimeManager({ companiesRoot, launchpadRoot }),
   gitStatusService = null,
@@ -118,6 +119,7 @@ export async function buildLaunchpadAppsResponse({
 } = {}) {
   const discovery = await discoverLaunchpadApps(rootSourceRoot, {
     allowMissingOrganizations,
+    runtime_root: runtimeRoot,
     organization,
     organization_mount_root: companiesRoot,
     machine_context_root: companiesRoot,
