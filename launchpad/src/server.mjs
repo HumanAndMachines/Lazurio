@@ -168,6 +168,7 @@ const runtimeManager = createRuntimeManager({
   lifecycleProfile: hostedWorkspace.profile,
   discover: (_root, discoveryOptions = {}) => discoverLaunchpadApps(rootSourceRoot, {
     ...discoveryOptions,
+    runtime_root: configuredRuntimeRoot,
     organization_mount_root: companiesRoot,
     machine_context_root: companiesRoot,
   }),
@@ -333,6 +334,7 @@ async function validateAgentEntryOrganization() {
   if (!options.agentEntry || options.organization === undefined) return;
   const discovery = await discoverLaunchpadApps(rootSourceRoot, {
     organization: options.organization,
+    runtime_root: configuredRuntimeRoot,
     organization_mount_root: companiesRoot,
     machine_context_root: companiesRoot,
   });
@@ -458,6 +460,7 @@ async function buildAppsResponseUncached({ includeGit = false } = {}) {
   const response = await buildLaunchpadAppsResponse({
     companiesRoot,
     rootSourceRoot,
+    runtimeRoot: configuredRuntimeRoot,
     launchpadRoot,
     runtimeManager,
     gitStatusService,
@@ -488,6 +491,7 @@ async function refreshHostedWorkspaceMaintenance({ warnSkipped = false } = {}) {
   const inventory = await buildLaunchpadAppsResponse({
     companiesRoot,
     rootSourceRoot,
+    runtimeRoot: configuredRuntimeRoot,
     launchpadRoot,
     runtimeManager: { appsWithRuntime: async (apps) => apps },
     includeGit: false,
