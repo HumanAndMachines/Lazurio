@@ -252,6 +252,7 @@ describe("documented origin activation", () => {
       "bun run runtime:inventory -- --organization <exact-company.slug> --json",
       "modules + excluded",
       "exact Organization selector did not resolve once",
+      "slot has unknown status",
       "active slot has unknown access",
       "restricted slot has no exact GitHub binding",
       "restricted repository owner differs from Organization",
@@ -298,6 +299,7 @@ describe("documented origin activation", () => {
       expect(candidate).toContain('observations.github_app.repository_selection == "all"');
       expect(candidate).toContain("bun run runtime:inventory -- --organization <exact-company.slug> --json");
       expect(candidate).toContain("exact Organization selector did not resolve once");
+      expect(candidate).toContain("slot has unknown status");
       expect(candidate).toContain("restricted slot has no exact GitHub binding");
       expect(candidate).toContain("restricted repository owner differs from Organization");
       expect(candidate).toContain("live builders Team roster differs from approved roster");
@@ -320,6 +322,9 @@ describe("documented origin activation", () => {
     )).toThrow();
     expect(() => requireFailClosedProviderBaseline(
       accessGate.replace("exact Organization selector did not resolve once", "prázdný selector projde"),
+    )).toThrow();
+    expect(() => requireFailClosedProviderBaseline(
+      accessGate.replace("slot has unknown status", "unknown status ignoruj"),
     )).toThrow();
     expect(() => requireFailClosedProviderBaseline(
       accessGate.replace("restricted slot has no exact GitHub binding", "missing binding ignoruj"),

@@ -353,9 +353,11 @@ gh api "orgs/<ClientOrg>/teams/builders/memberships/<builder-login>" \
   --jq '{state,role}'
 bun run runtime:inventory -- --organization <exact-company.slug> --json | \
   jq -ce --arg expected_owner "<exact-github-org-login>" '
-    [(.modules + .excluded)[] | select(.status == "active")] as $active
+    (.modules + .excluded) as $declared
+    | [$declared[] | select(.status == "active")] as $active
     | [$active[] | select(.access == "restricted")] as $restricted
     | if .summary.selected_organizations != 1 then error("exact Organization selector did not resolve once")
+      elif any($declared[]; .status == "unknown") then error("slot has unknown status")
       elif any($active[]; .access == "unknown") then error("active slot has unknown access")
       elif any($restricted[]; .github_repository == null) then error("restricted slot has no exact GitHub binding")
       elif any($restricted[]; (.github_repository | split("/")[0] | ascii_downcase) != ($expected_owner | ascii_downcase))
@@ -385,7 +387,8 @@ Teamovým grantem. Příkaz `runtime:inventory` používá stejný Organization 
 alias-conflict pravidla a GitHub coordinate normalizaci jako runtime; jeho
 `modules + excluded` je úplný deklarovaný slot inventory, ne druhý ruční
 seznam. Přesný `jq` nejdřív vyžaduje právě jeden výsledek exact Organization
-selectoru a správného GitHub ownera, potom vybere každý **aktivní** slot s
+selectoru, uzavřený status `active` / `planned_slot` bez hodnoty `unknown`
+a správného GitHub ownera, potom vybere každý **aktivní** slot s
 `default_access: restricted` / `private`, odmítne unknown access, chybějící
 binding i duplicitní repository a vydá deterministicky seřazené exact
 `owner/repository`. Collaborators read-back proveď pro **každý** vydaný prvek —
