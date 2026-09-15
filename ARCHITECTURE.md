@@ -44,6 +44,10 @@ Lazurio                             distribuce, životní cyklus a koordinace
 | **Organizace** | Jedna firma, jedna GitHub Organization a jedna access hranice. |
 | **Personalspace** | Privátní prostor právě jednoho Principála a jeho případného Buddyho. |
 | **Modul** | Verzovaná pracovní schopnost uvnitř Organizace nebo Personalspace. Může, ale nemusí obsahovat spustitelnou aplikaci. |
+| **Lazurio Environment** | Prostředí jedné Mašiny: vybraný profil Mašiny, Lazurio Folder a všechny nástroje a přihlášení, které jsou na Mašině dostupné. Je to prostor, ve kterém pracují Agenti; vlastní ho LazurioPlatform přes `lazurio` CLI a operátor Mašiny. |
+| **Conglomerate** | Pohled na graf všech Mašin Principála napříč jeho Organizacemi. Je to diagram a orientace, ne autorita, ACL ani registr; fakta o Mašině zůstávají u jejího Ownera (decision 0144). |
+| **Conglomerate Host** | Mašina, která pro jeden Conglomerate provozuje Headscale a Vaultwarden. Nehostuje checkouty ani Workspace Moduly Organizací. |
+| **`lazurio.machine.json`** | Identita Mašiny zapsaná při jejím zprovoznění: `machine_id`, Owner, Organizace, profil, custody repozitář a vyšší provider/operator hranice. Zdroj pro každou operaci, která má pojmenovat Mašinu, jejího Ownera a vyšší hranici. |
 
 Principál je ten, pro koho Agent právě pracuje. V osobním prostředí bývá
 Principál současně Ownerem Mašiny. Ve sdíleném Hosted Team Workspace je
@@ -51,6 +55,13 @@ Ownerem Organizace a jednotliví Principálové jsou jeho oprávnění uživatel
 používáním Mašiny její vlastnictví ani org-wide pravomoci nezískávají. V
 Organizaci rozhodují jejich skutečná oprávnění u poskytovatelů, ne textový
 název role.
+
+Machines a LazurioPlatform se potkávají na handoveru jedné Mašiny (decision
+0144): Machines dodají Mašinu online se systémem, sítí, SSH a sudo,
+`lazurio.machine.json`, vstupem přes společnou Auth bránu a nainstalovaným
+releasem LazurioPlatform; od té chvíle vlastní Lazurio Environment uvnitř
+LazurioPlatform a operátor Mašiny. Machines neudržují vlastní resident ani
+artefakty.
 
 ## Pevná pravidla systému
 
@@ -83,9 +94,14 @@ není tvrzením, že jsou izolované od oprávněného host operatora nebo provi
 V komunikaci vždy používej konkrétní druh hranice: například „lokální Mašina
 Kolegy“, „Buddy VPS“, „Hosted Team Workspace Mašina“ nebo „Organization Host
 Mašina“. „Team Machine“ je nanejvýš hovorová zkratka pro Hosted Team Workspace,
-ne další systémový objekt. Lazurio pro Mašiny nezavádí centrální registr,
-vlastní IAM ani nový manifest; konkrétní hranici dokazují její podporovaný
-profil a infrastruktura daného Ownera a provideru.
+ne další systémový objekt. Lazurio pro Mašiny nezavádí centrální registr ani
+vlastní IAM; konkrétní hranici dokazují její podporovaný profil a
+infrastruktura daného Ownera a provideru. Jediný lokální popis identity je
+`lazurio.machine.json` (decision 0144): owner-bound soubor zapsaný při
+handoveru z desired state v Deployment Repu Ownera, který uvnitř Mašiny jen
+jmenuje Mašinu, Ownera a vyšší hranici. Není to registr, manifest s
+oprávněními ani zdroj přístupu; nic neautorizuje a bez něj Mašina nebyla
+dodána přes Machines.
 
 ### 2. Přístup drží existující poskytovatelé
 
