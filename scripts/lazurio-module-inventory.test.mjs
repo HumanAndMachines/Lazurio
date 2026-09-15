@@ -145,7 +145,10 @@ test.skipIf(!Bun.which("jq"))(
     };
     await writeJson(manifestPath, manifest);
 
-    const manual = await readFile(join(repoRoot, "manual", "first-client-organization-rollout.md"), "utf8");
+    const manual = (await readFile(
+      join(repoRoot, "manual", "first-client-organization-rollout.md"),
+      "utf8",
+    )).replace(/\r\n/g, "\n");
     const commandMarker = 'jq -ce --arg expected_owner "<exact-github-org-login>" \'\n';
     const programStart = manual.indexOf(commandMarker);
     const programEnd = manual.indexOf("\n# Pro každý exact .repository", programStart);
