@@ -270,6 +270,7 @@ test("kanonické modulové dlaždice jsou kompaktní samostatné karty", async (
 
 test("pracovní plocha používá bílý podklad bez mřížky a obvodových linek sekcí", async () => {
   const styles = await source("styles.css");
+  expect(styles).toContain("--launchpad-card-surface: color-mix(in srgb, var(--lz-gray-50) 70%, var(--lz-white));");
   const surface = styles.slice(styles.indexOf("/* Klidná pracovní plocha"));
   expect(surface).toMatch(/body\s*{[\s\S]*?background-color: var\(--lz-white\);[\s\S]*?background-image: none/);
   expect(surface).toMatch(/\.apps-grid > \.app-card\s*{[\s\S]*?background-color: var\(--launchpad-card-surface\)/);
