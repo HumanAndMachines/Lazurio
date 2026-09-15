@@ -35,8 +35,12 @@ hádání.
 ## Názvosloví
 
 **Lazurio** je aktuální uživatelský název systému. Dřívější názvy
-„HumanAndMachine“ a „Conglomerate“ jsou deprecated a v nové komunikaci směrem
-k uživateli se nepoužívají (decision 0128 v manual/decision-register.md).
+„HumanAndMachine“ a „Conglomerate“ jako **názvy produktu nebo systému** jsou
+deprecated a v nové komunikaci směrem k uživateli se nepoužívají (decision
+0128 v manual/decision-register.md). Odborný pojem **Conglomerate** ve smyslu
+pohledu na graf všech Mašin jednoho Principála napříč Organizacemi a
+**Conglomerate Host** jako Mašina s Headscale a Vaultwardenem zůstávají
+platné (decision 0144, `ARCHITECTURE.md` Základní pojmy).
 Historická GitHub organization zůstává záměrně `HumanAndMachines` a canonical
 repo rootu `HumanAndMachines/Lazurio`; interní identity se rebrandem
 nepřepisují.
