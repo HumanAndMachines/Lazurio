@@ -5,7 +5,11 @@ import { trustedWindowsSystemExecutable } from "./windows-system-path-lib.mjs";
 
 const defaultTimeoutMs = 30_000;
 const defaultPollMs = 50;
-const defaultIdentityTimeoutMs = 5_000;
+// Process identity is read through `ps` on POSIX and through a PowerShell
+// child on Windows. A cold PowerShell start on shared Windows runners takes
+// several seconds, so Windows gets a wider bound; the lock deadline
+// (defaultTimeoutMs) still caps the whole acquisition.
+const defaultIdentityTimeoutMs = process.platform === "win32" ? 15_000 : 5_000;
 let cachedCurrentProcessIdentity = null;
 
 export function moduleRuntimeLockName(key) {
