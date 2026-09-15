@@ -217,6 +217,55 @@ describe("verifier source identity", () => {
 });
 
 describe("documented origin activation", () => {
+  test("requires the GitHub access baseline before any client Builder Machine install", async () => {
+    const repoRoot = dirname(dirname(scriptPath));
+    const manual = await readFile(
+      join(repoRoot, "manual", "first-client-organization-rollout.md"),
+      "utf8",
+    );
+    const accessGate = manual
+      .split("### 0a. GitHub access baseline před instalací klientských Mašin")[1]
+      ?.split("### 1. Organization repo bootstrap")[0];
+
+    expect(accessGate).toBeDefined();
+    expect(manual.indexOf("### 0a. GitHub access baseline"))
+      .toBeLessThan(manual.indexOf("### 1. Organization repo bootstrap"));
+    for (const contract of [
+      "Lazurio for GitHub",
+      "All repositories",
+      "default_repository_permission",
+      "`none`",
+      "Team se slugem `builders`",
+      "permissions.push: true",
+      "default_access: restricted",
+      "repo `infra`",
+      "explicitní Team `builders` Write grant",
+      "pending member/Team membership",
+      "před vytvořením prvního provider repa",
+      "závěrečném read-backu všech pěti bodů",
+    ]) {
+      expect(accessGate).toContain(contract);
+    }
+    for (const readBack of [
+      'gh api "orgs/<ClientOrg>"',
+      'gh api "orgs/<ClientOrg>/teams/builders"',
+      'gh api --paginate "orgs/<ClientOrg>/teams/builders/repos?per_page=100"',
+      'gh api --paginate "repos/<ClientOrg>/infra/collaborators?affiliation=all&per_page=100"',
+      'gh api "orgs/<ClientOrg>/memberships/<builder-login>"',
+      'gh api "orgs/<ClientOrg>/teams/builders/memberships/<builder-login>"',
+    ]) {
+      expect(accessGate).toContain(readBack);
+    }
+    expect(accessGate).not.toMatch(/gh api[^\n]*(?:--method|-X)\s+(?:POST|PUT|PATCH|DELETE)/i);
+    expect(manual).toContain("Base repository permission: `none`");
+    expect(manual).toContain("Restricted access: `infra`");
+    expect(manual).toContain("pokud se předává nebo instaluje klientská Builder Mašina");
+    expect(manual).toContain("nevydává se za install-ready");
+
+    const decisions = await readFile(join(repoRoot, "manual", "decision-register.md"), "utf8");
+    expect(decisions).toContain("| 0144 | Greenfield klientská Organizace dokončí GitHub access baseline");
+  });
+
   test("required template access is read-only, exact and checked before template remote mutation", async () => {
     const repoRoot = dirname(dirname(scriptPath));
     const manual = await readFile(join(repoRoot, "manual", "first-client-organization-rollout.md"), "utf8");

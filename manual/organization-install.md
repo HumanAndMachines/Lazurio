@@ -18,6 +18,12 @@ tohoto runbooku; krátký prompt jej nenahrazuje ani nerozšiřuje.
 > Mašiny nainstalovat GitHub App **Lazurio for GitHub** pro **All repositories**
 > a dokončit jednorázovou aktivaci; jako Builder jeho `admin:org` kontrolu
 > neopakuj ani z její nedostupnosti neodvozuj stav App.
+> Před první Builder instalací musí Organization owner také nastavit
+> base repository permission `none`, ověřit Team `builders` a jeho aktivní členy,
+> udělit tomuto Teamu `WRITE` na canonical root a každý aktivní non-restricted
+> repo a neudělit Builderům přístup k `infra` ani jinému restricted repu.
+> Pokud live read-back tento stav nedokáže, instalaci nezačínej a vrať ownerovi
+> přesný chybějící member, Team nebo repository grant.
 >
 > Máš mé výslovné svolení nainstalovat chybějící Git, GitHub CLI, Node.js LTS,
 > Codex CLI a přesně verzovaný Bun z jejich oficiálních zdrojů a změnit pouze můj
@@ -121,6 +127,33 @@ canonical Organization root a všechny repozitáře, které má Lazurio skutečn
 obsluhovat, a její partial access se nikdy nesmí vydávat za plný Organization
 scope.
 
+### Access baseline před první Builder Mašinou
+
+Instalace App sama ještě nedokazuje, že nový Builder smí pracovat ve správných
+repech a současně nevidí restricted scope. Organization owner před první
+Builder instalací dokončí a read-only ověří jednu providerovou konfiguraci:
+
+1. Organization base repository permission / API
+   `default_repository_permission` je `none`; samotné Organization membership
+   neuděluje přístup k privátním repozitářům.
+2. Obecnou Builder roli vlastní GitHub Team `builders`. Zamýšlený Builder je
+   aktivní Organization member i aktivní člen Teamu, ne pending invitation.
+3. Team `builders` má user-facing **Write** (GitHub API `push`) na canonical
+   Organization rootu a každém aktivním non-restricted repu určeném Builderovi
+   verzovaným Organization manifestem.
+4. Team ani jednotliví Builders nemají Teamový nebo přímý grant na `infra` ani
+   jiný slot s `default_access: restricted` / `private`. Organization Adminův
+   přístup vycházející z admin role není Builder grant.
+
+GitHub nenabízí trvalý grant „všechna budoucí repo kromě `infra`“. Každý nový
+non-restricted repo proto dostane explicitní Team `builders` `WRITE` grant ve
+stejném provisioning kroku, ve kterém se aktivuje v manifestu; restricted repo
+se nepřidá. Canonical read-back a přesné příkazy drží
+`manual/first-client-organization-rollout.md` §0a. Chybějící App scope, base
+permission jiné než `none`, neaktivní membership, READ místo WRITE nebo
+Builder grant na restricted repo blokují instalaci Mašiny. Lokální manifest ani
+Lazurio installer tento GitHub stav neopravují a nevytvářejí paralelní ACL.
+
 GitHub App sama nenahrazuje source Organizace. Použitelná Lazurio Organization
 má současně:
 
@@ -157,6 +190,10 @@ membership a WRITE nebo vyšší oprávnění k Builder repozitářům.
   v `PATH` nového čistého procesu;
 - `gh auth status --hostname github.com` potvrzuje správný účet;
 - Organization owner už dokončil jednorázovou aktivaci `Lazurio for GitHub`;
+- Organization owner už read-only ověřil base repository permission `none`,
+  aktivní členství v Teamu `builders`, jeho `WRITE` granty na všechny aktivní
+  non-restricted repozitáře a nulový Builder grant na `infra` i další
+  restricted repozitáře;
 - kanonický Lazurio Root `<home>/Lazurio` už prošel `lazurio install` a má
   skutečnou složku `organizations/`;
 - Organization root repo `<login>/<login>_GEN3` existuje na `main`, obsahuje
