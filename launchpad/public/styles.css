@@ -6113,7 +6113,8 @@ body {
 @media (hover: hover) and (pointer: fine) {
   .app-card:not(.selected):not(.has-open-menu):hover {
     transform: none;
-    border-color: var(--lz-blue-400);
+    border-width: 1px;
+    border-color: var(--lz-blue-500);
     background-color: var(--launchpad-card-surface);
     box-shadow: none;
   }
