@@ -164,12 +164,16 @@ test.skipIf(!Bun.which("jq"))(
       { input: JSON.stringify(inventory), encoding: "utf8" },
     );
 
-    const malformedInventory = await inventoryLazurioModules(root, { organization: "Example" });
-    expect([...malformedInventory.modules, ...malformedInventory.excluded]
-      .find((slot) => slot.path === "infra")?.status).toBe("unknown");
-    const malformedGate = runGate(malformedInventory);
-    expect(malformedGate.status).not.toBe(0);
-    expect(malformedGate.stderr).toContain("slot has unknown status");
+    for (const malformedStatus of ["unexpected_status", 17, { state: "active" }, "planned"]) {
+      manifest.module_slots[0].status = malformedStatus;
+      await writeJson(manifestPath, manifest);
+      const malformedInventory = await inventoryLazurioModules(root, { organization: "Example" });
+      expect([...malformedInventory.modules, ...malformedInventory.excluded]
+        .find((slot) => slot.path === "infra")?.status).toBe("unknown");
+      const malformedGate = runGate(malformedInventory);
+      expect(malformedGate.status).not.toBe(0);
+      expect(malformedGate.stderr).toContain("slot has unknown status");
+    }
 
     manifest.module_slots[0].status = "active";
     await writeJson(manifestPath, manifest);

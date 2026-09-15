@@ -53,12 +53,15 @@ function slotGitHubRepository(slot) {
 }
 
 function slotStatus(slot) {
-  const explicit = typeof slot?.status === "string" && slot.status.trim() !== ""
-    ? slot.status.trim()
-    : null;
-  if (explicit === null) return slotRepository(slot) ? "active" : "unknown";
-  if (explicit === "active") return "active";
-  if (["planned", "planned_slot"].includes(explicit)) return "planned_slot";
+  const repository = slotRepository(slot);
+  const hasExplicitStatus = Object.prototype.hasOwnProperty.call(slot ?? {}, "status");
+  if (!hasExplicitStatus) return repository ? "active" : "unknown";
+  if (typeof slot.status !== "string" || slot.status.trim() === "") return "unknown";
+  const explicit = slot.status.trim();
+  if (explicit === "active") return repository ? "active" : "unknown";
+  if (["planned", "planned_slot"].includes(explicit)) {
+    return repository ? "unknown" : "planned_slot";
+  }
   return "unknown";
 }
 
