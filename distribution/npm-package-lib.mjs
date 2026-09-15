@@ -74,7 +74,14 @@ export function parseNpmPackDescriptor(stdout) {
   } catch (error) {
     throw new Error(`npm pack did not return JSON: ${error instanceof Error ? error.message : String(error)}`);
   }
-  const descriptor = Array.isArray(value) ? value[0] : null;
+  // npm 12 keys scoped-package output by name; older npm returns an array.
+  const descriptor = Array.isArray(value)
+    ? value[0]
+    : value !== null && typeof value === "object"
+      && Object.keys(value).length === 1
+      && Object.hasOwn(value, LAZURIO_NPM_PACKAGE)
+      ? value[LAZURIO_NPM_PACKAGE]
+      : null;
   if (
     !descriptor
     || descriptor.name !== LAZURIO_NPM_PACKAGE
