@@ -21,6 +21,13 @@ extends it.
 > **Lazurio for GitHub** for **All repositories** and complete the one-time
 > activation; as a Builder, do not repeat their `admin:org` check and do not
 > infer the App state from its unavailability.
+> Before the first Builder installation, the Organization owner must also
+> set base repository permission `none`, verify the Team `builders` and its active
+> members, grant that Team `WRITE` on the canonical root and every active
+> non-restricted repo, and grant Builders no access to `infra` or any other
+> restricted repo. If live read-back cannot prove that state, do not begin the
+> installation; return the exact missing member, Team, or repository grant to
+> the owner.
 >
 > You have my explicit permission to install any missing Git, GitHub CLI,
 > Node.js LTS, Codex CLI, and the exactly versioned Bun from their official
@@ -134,6 +141,37 @@ must include the canonical Organization root and all repositories that Lazurio
 is actually meant to serve, and its partial access must never be presented as
 the full Organization scope.
 
+### Access baseline before the first Builder Machine
+
+Installing the App alone does not prove that a new Builder can work in the
+right repositories while remaining outside restricted scope. Before the first
+Builder installation, the Organization owner completes and read-only verifies
+one provider configuration:
+
+1. The Organization base repository permission / API
+   `default_repository_permission` is `none`; Organization membership alone
+   grants no access to private repositories.
+2. The GitHub Team `builders` owns the general Builder role. The intended
+   Builder is an active Organization member and an active Team member, not a
+   pending invitation.
+3. The Team `builders` has user-facing **Write** (GitHub API `push`) on the
+   canonical Organization root and every active non-restricted repository
+   assigned to Builders by the versioned Organization manifest.
+4. Neither the Team nor individual Builders have a Team or direct grant on
+   `infra` or any other slot with `default_access: restricted` / `private`.
+   An Organization Admin's access from the admin role is not a Builder grant.
+
+GitHub offers no persistent “all future repositories except `infra`” grant.
+Every new non-restricted repository therefore receives an explicit Team
+`builders` `WRITE` grant in the same provisioning step that activates it in
+the manifest; a restricted repository is not added. The canonical read-back
+and exact commands live in
+`manual/first-client-organization-rollout.md` §0a. A missing App scope, a base
+permission other than `none`, inactive membership, READ instead of WRITE, or a
+Builder grant on a restricted repository blocks Machine installation. The
+local manifest and Lazurio installer neither repair this GitHub state nor
+create a parallel ACL.
+
 The GitHub App itself does not replace the Organization source. A usable
 Lazurio Organization has all of the following at once:
 
@@ -173,6 +211,10 @@ membership and WRITE or higher permission on the Builder repositories.
 - `gh auth status --hostname github.com` confirms the correct account;
 - the Organization owner has already completed the one-time activation of
   `Lazurio for GitHub`;
+- the Organization owner has already read-only verified base repository
+  permission `none`, active Team `builders` membership, its `WRITE` grants on
+  all active non-restricted repositories, and no Builder grant on `infra` or
+  any other restricted repository;
 - the canonical Lazurio Root `<home>/Lazurio` has already gone through
   `lazurio install` and has a real `organizations/` folder;
 - the Organization root repo `<login>/<login>_GEN3` exists on `main`, contains

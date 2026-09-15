@@ -48,6 +48,10 @@ test("Guide projects a complete locale-paired prompt and policy contract", () =>
     });
     expect(guide.short_prompt).toContain("Lazurio for GitHub");
     expect(guide.short_prompt).toContain("All repositories");
+    expect(guide.short_prompt).toContain("base repository permission `none`");
+    expect(guide.short_prompt).toContain("Team `builders`");
+    expect(guide.short_prompt).toContain("`WRITE`");
+    expect(guide.short_prompt).toContain("`infra`");
     expect(guide.short_prompt).toContain("Node.js LTS");
     expect(guide.short_prompt).toContain("OpenAI standalone");
     expect(guide.short_prompt).toContain("Homebrew, npm");
@@ -115,6 +119,17 @@ test("Guide rejects malformed blockquote and missing safety contract", () => {
   const weakened = manuals.en.replace("All repositories", "selected repositories");
   expect(() => extractOrganizationInstallPrompt(weakened, { locale: "en" }))
     .toThrow("All repositories");
+
+  const broadBasePermission = manuals.en.replace(
+    "base repository permission `none`",
+    "base repository permission `read`",
+  );
+  expect(() => extractOrganizationInstallPrompt(broadBasePermission, { locale: "en" }))
+    .toThrow("base repository permission `none`");
+
+  const leakedRestrictedRepo = manuals.en.replace("`infra`", "`infrastructure`");
+  expect(() => extractOrganizationInstallPrompt(leakedRestrictedRepo, { locale: "en" }))
+    .toThrow("`infra`");
 });
 
 test("Reader selects only the requested source and exposes no absolute path", async () => {
