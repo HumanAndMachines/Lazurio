@@ -252,7 +252,7 @@ test("kanonické modulové dlaždice jsou kompaktní samostatné karty", async (
   expect(canonical).toMatch(/\.apps-grid > \.app-card:not\(\.has-open-menu\):focus-within,[\s\S]*?\.apps-grid > \.app-card\.selected\s*{[\s\S]*?border-color: var\(--app-focus-accent, var\(--app-accent\)\)/);
   expect(canonical).toMatch(/box-shadow: 0 10px 24px -22px color-mix\(in srgb, var\(--lz-ink\) 18%, transparent\)/);
   expect(canonical).toMatch(/\.app-card:not\(\.selected\):not\(\.has-open-menu\):hover\s*{[\s\S]*?transform: none;[\s\S]*?background-color: var\(--launchpad-card-surface\);[\s\S]*?box-shadow: none/);
-  expect(canonical).toMatch(/\.app-card:not\(\.selected\):not\(\.has-open-menu\):hover\s*{[\s\S]*?border-color: var\(--lz-blue-400\)/);
+  expect(canonical).toMatch(/\.app-card:not\(\.selected\):not\(\.has-open-menu\):hover\s*{[^}]*border-width: 1px;[^}]*border-color: var\(--lz-blue-500\)/);
   expect(canonical).not.toContain("border-color: color-mix(in srgb, var(--app-accent)");
   expect(canonical).toMatch(/\.apps-grid > \.app-card:not\(\.selected\):not\(\.has-open-menu\):focus-within\s*{[\s\S]*?background-color: var\(--lz-white\);[\s\S]*?box-shadow:/);
   expect(canonical).not.toContain(".app-card:not(.has-open-menu):hover::after");
