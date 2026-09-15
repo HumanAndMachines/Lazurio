@@ -165,7 +165,6 @@ instalovat je vedle funkčního Composia:
 - [LinkedIn](integrations/linkedin.md)
 - [Canva](integrations/canva.md)
 - [ESO9](integrations/eso9.md)
-- [Osobní WhatsApp přes wacli](integrations/whatsapp-wacli.md)
 
 Jejich konkrétní bezpečnostní a provider limity zůstávají relevantní pro
 zvolenou cestu. Před použitím ověř aktuální oficiální dokumentaci.
