@@ -667,6 +667,24 @@ database.
 
 ## Handoff
 
+### External service access
+
+Before handing over a work Machine, walk the Principal through
+[Composio onboarding](https://github.com/HumanAndMachines/Lazurio/blob/main/manual/integrations/composio.md):
+their own account, required services, and separate authorization for each
+harness they use. This is an assisted step, not an automatic mutation by
+`lazurio install`. When the cloud route does not fit, choose direct MCP or CLI
+according to the
+[integration standard](https://github.com/HumanAndMachines/Lazurio/blob/main/manual/external-app-integrations.md).
+Record actual verification or explicit deferral. A green Doctor is not proof
+that external services work; GitHub login does not authorize them.
+
+The Principal should treat access available on the Machine as potentially
+available to its Agents. Mandates remain binding; access an Agent must not
+technically possess requires a separate isolated Machine without that access.
+
+### Installation report
+
 In the PR or the installation report, state the exact CLI version, the GitHub
 login, the immutable ID from the JSON report, the resulting target, the overall
 state, and all blocked repo reasons. Also state the status of the

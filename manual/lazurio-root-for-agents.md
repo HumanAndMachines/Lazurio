@@ -222,6 +222,13 @@ předá přesný report Principálovi.
 
 ## Co Agent nesmí obcházet
 
+Onboarding externích služeb navazuje přes
+[Composio](integrations/composio.md) a [integrační standard](external-app-integrations.md).
+Používej existující nástroje a původní přihlašovací UI; Root není vlastní
+gateway ani OAuth proxy. Přihlášení harnessu ověř zvlášť od přihlášení do
+aplikace a od úspěchu instalátoru. Nová konfigurace nesmí rušit nesouvisející
+funkční účty nebo rozšiřovat mandát.
+
 - nevytváří root picker, lokální `root-path` config ani alternativní aktivní
   Root;
 - nepředává top-level `lazurio install --root ...`;

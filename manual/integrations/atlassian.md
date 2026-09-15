@@ -1,5 +1,10 @@
 # Atlassian: Jira a Confluence
 
+Tento runbook popisuje přímou alternativu. Nejdřív ověř existující připojení
+a vhodnost [Composia](composio.md) podle [společného standardu](../external-app-integrations.md).
+Níže uvedená volba platí uvnitř této přímé cesty; specifická omezení služby
+platí dál a dostupnost jiné cesty je potřeba skutečně ověřit.
+
 Stav ověřen 2026-09-02.
 
 ## Možnosti

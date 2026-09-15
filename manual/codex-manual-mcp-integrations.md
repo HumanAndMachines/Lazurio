@@ -2,17 +2,17 @@
 
 Tento runbook je Codex-specifická část standardu
 [external-app-integrations.md](external-app-integrations.md): napojení na
-externí aplikace se dělá lokálně přidaným MCP serverem místo ChatGPT
-pluginů/konektorů a místo sdíleného cloudového integračního brokeru.
-Popisuje, jak Kolega na své mašině přidá MCP server přímo do Codexu a drží
-přihlašovací artefakty lokálně. Přímý lokální STDIO server ani vzdálený
+externí aplikace používají existující napojení, preferované Composio nebo
+vhodné přímé MCP či CLI bez Lazurio prostředníka.
+Popisuje, jak Kolega na své mašině přidá MCP server přímo do Codexu.
+Lokální autorizace Codexu neznamená lokální custody upstream tokenů:
+u Composia je spravuje také poskytovatel ve svém cloudu. Přímý lokální STDIO server ani vzdálený
 HTTP MCP server Docker nepotřebují.
 
 Codex CLI, desktop aplikace a IDE extension používají stejnou lokální
-konfiguraci. ChatGPT na webu ani v mobilu tuto konfiguraci nečte a pro org
-napojení tam žádná podporovaná cesta neexistuje — cloudové pluginy/konektory
-jsou standardem zakázané a org integrace zůstává vědomě per-machine.
-Aktuální syntaxe a podporované volby jsou v
+konfiguraci na stejné Mašině. Webové prostředí tuto lokální konfiguraci
+nepřebírá; má vlastní správu připojení. Připojení v jiném klientovi
+neprokazuje funkčnost zde. Aktuální syntaxe a podporované volby jsou v
 [oficiálním Codex MCP manuálu](https://learn.chatgpt.com/docs/extend/mcp).
 
 ## Volba integračního tvaru
@@ -21,9 +21,10 @@ Aktuální syntaxe a podporované volby jsou v
 | --- | --- | --- | --- |
 | Jedna mašina, lokální proces a lokální OAuth cache | STDIO MCP | Na dané mašině | Ne |
 | Poskytovatel provozuje svůj MCP endpoint | Streamable HTTP + OAuth | Lokální OAuth úložiště Codexu; token se používá vůči poskytovateli | Ne |
-| Stejné napojení ve webovém nebo mobilním ChatGPT | Nepodporováno — cloudový plugin/connector je pro org napojení zakázaný; pracuj na mašině s per-machine napojením | — | — |
+| Composio Connect | Streamable HTTP + OAuth | Lokální autorizace Codexu; upstream účty a credentials spravuje Composio v cloudu | Ne |
 
-Lokální uložení omezuje cloudového prostředníka, ale neodstraňuje důvěru v MCP
+Lokální konfigurace neznamená lokální zpracování dat ani všech credentials.
+Přímé MCP i agregátor vyžadují důvěru v MCP
 server, poskytovatele služby ani model. MCP nástroj může číst data, která mu
 udělené OAuth scopes a lokální filesystem dovolí, a obsah e-mailu nebo dokumentu
 může nést prompt injection. Připojuj jen zdroj, jehož kód a datovou hranici
@@ -31,17 +32,15 @@ Principál přijímá.
 
 ## Bezpečnostní gate před instalací
 
-1. Urči scope: osobní, root/operator, nebo právě jedna Organizace. Pro různé
-   Organizace používej oddělené názvy serverů i OAuth sessions, například
-   `<org_slug>_clickup`; nepřenášej token jedné Organizace do druhé.
+1. Urči Mašinu, Ownera a scope: osobní nebo Organization. Názvy pomáhají
+   orientaci, ne technické izolaci. Při více účtech ověř konkrétní identitu.
+   Nepřenášej credentials mezi Organizacemi ani Mašinami.
 2. Ověř publishera, zdrojový repozitář, licenci, release/tag nebo přesný commit
    a seznam závislostí. Komunitní MCP není „oficiální integrace“ jen proto, že
    obsluhuje známou službu. Pro trvalý runtime nepoužívej neukotvené `latest`.
-3. Scopes uděluj defaultně read i write pro služby, které workflow
-   potřebuje; per-action ochranu write tools drží
-   `default_tools_approval_mode = "writes"` (nebo přísnější `prompt`).
-   Read-only start je volitelné zpřísnění pro mimořádně citlivé zdroje,
-   ne default.
+3. Scopes zvol podle potřeb a mandátu. Harness může nabídnout doplňkové
+   approvals, ale nejsou izolací vůči jiným procesům. U obecného execute
+   meta-tool nejsou důkazem read-only oprávnění každé upstream akce.
 4. Secret hodnoty, OAuth kódy, tokeny ani obsah client JSONu neposílej chatem a
    necommituj. Řiď se [lokálním secret custody standardem](security/local-secret-custody.md):
    root/operator secrets patří do
@@ -113,64 +112,28 @@ Principál v prohlížeči. Sdílej pouze dokumentovaný postup a metadata; nep�
 mezi lidmi hotové token cache, client secrety ani celý uživatelský
 `~/.codex/config.toml`.
 
-### Výchozí model: jeden Principál, více mašin
+### Composio a více Mašin
 
-Lazurio počítá s tím, že jeden Principál může používat svůj vlastní
-OpenAI účet a subscription na více svých mašinách. Identita a subscription
-mohou být stejné, ale přístupy k ostatním službám zůstávají na každé mašině
-oddělené: každá má vlastní `~/.codex/config.toml`, MCP servery, OAuth granty,
-token cache a povolený filesystem scope. Pracovní počítač tak může mít jiné
-integrace a oprávnění než domácí počítač nebo dedikovaný host.
+Pro běžný onboarding použij [Composio runbook](integrations/composio.md).
+Přihlášení Codexu do Composia je samostatné od Composio CLI i prohlížeče.
+Každý klient autorizuj podporovaným postupem; credentials nekopíruj.
+Stejný Composio účet na dvou Mašinách může zpřístupnit stejné upstream účty.
+Samostatná lokální konfigurace proto neslibuje oddělení těchto oprávnění
+ani nezávislou revokaci upstream grantu.
 
-MCP credentials ani token cache mezi mašinami nekopíruj. Každou mašinu
-autorizuj samostatně, uděluj jí jen potřebné scopes a veď ji jako samostatný
-revokovatelný přístup. Ztracené nebo kompromitované zařízení pak lze odpojit
-u jednotlivých poskytovatelů bez přenášení jeho přístupů na ostatní stroje.
+### Ověření a řízená náhrada
 
-Tento model neznamená sdílení jednoho OpenAI loginu mezi více lidmi. Podle
-[OpenAI Account Sharing Policy](https://help.openai.com/en/articles/10471989-openai-account-sharing-policy)
-je účet určen člověku, který jej vytvořil; tento člověk jej může používat na
-více zařízeních, ale další Kolega potřebuje vlastní účet nebo přidělený seat.
-
-Pro onboarding call použij tento pořádek:
-
-1. Sepiš požadované aplikace, cílový Organization workspace, ownera a nejmenší
-   nutné scopes. Každý server pojmenuj `<org_slug>_<provider>`, například
-   `example_org_clickup` nebo `example_org_google_workspace`.
-2. V `~/.codex/config.toml` nastav systémový keyring a pro nový server ponech
-   `default_tools_approval_mode = "writes"` nebo přísnější `prompt`.
-3. Přidej právě jeden server, přihlas správný Organization účet a ověř
-   `codex mcp list` a `codex mcp get <server_name>`.
-4. Restartuj Codex nebo otevři nový task, zkontroluj `/mcp`, proveď známý
-   čtecí dotaz a potom ověř zápis na neprodukčním záznamu (potvrzený
-   approval modem).
-5. Teprve po úspěšném smoke testu přidej další službu. Do closeoutu zapiš jen
-   název serveru, účel, ownera, scope, datum a výsledek.
-
-### Přechod ze sdíleného integračního brokeru
-
-Přechod ze sdíleného integračního brokeru nedělej pouhým smazáním jeho
-konfigurace v Codexu. Bezpečný cutover je po jednotlivých integracích:
-
-1. inventarizuj poskytovatele, použitý Organization účet, schválené scopes a
-   workflow, které na integraci spoléhají; tokeny nekopíruj;
-2. zprovozni lokální nebo poskytovatelem provozovaný MCP pod novým názvem vedle
-   dosavadního napojení a ověř read-only paritu;
-3. pokud je zápis potřeba, ověř jej odděleně s approval gatem a vratným testem;
-4. po přijetí nového napojení odpoj staré, zruš jeho OAuth grant přímo u
-   poskytovatele a ověř, že broker už k účtu nemá přístup;
-5. otevři nový Codex task a potvrď, že je aktivní jen zamýšlený server.
-
-Lokální MCP konfigurace funguje jen na dané mašině. Codex desktop, CLI a IDE ji
-na téže mašině sdílejí, ale ChatGPT web ani telefon ji nepřevezmou a žádná
-podporovaná org cesta tam neexistuje. To je vědomý trade-off za per-machine
-custody, ne chyba instalace.
+Nejprve ověř správný účet a potřebnou schopnost v novém Codex tasku. CLI
+smoke není MCP smoke. Zápis ověř jen na schváleném vratném cíli. Teprve
+potom odpoj konkrétní nahrazovanou cestu; přímý MCP s unikátní potřebnou
+schopností není zbytečná duplicita. Zrušení upstream grantu může ovlivnit
+jiné klienty, a proto vyžaduje kontrolu jeho skutečného rozsahu a mandát.
 
 ## Příklad A: oficiální vzdálený ClickUp MCP
 
 ClickUp publikuje endpoint `https://mcp.clickup.com/mcp` ve své
 [oficiální MCP dokumentaci](https://developer.clickup.com/docs/connect-an-ai-assistant-to-clickups-mcp-server).
-Pro každou Organizaci vytvoř samostatné pojmenování a přihlášení, například:
+Je-li přímý ClickUp MCP vhodnější pro potřebnou schopnost, přidej jej například:
 
 ```sh
 codex mcp add example_org_clickup --url https://mcp.clickup.com/mcp
@@ -181,7 +144,7 @@ codex mcp get example_org_clickup
 OAuth souhlas dokončuje člověk v prohlížeči. Zkontroluj správný ClickUp
 Workspace a oprávnění účtu; agent může dělat pouze operace, které tento účet
 smí. Smoke začni čtením známého tasku a pokračuj zápisem na testovacím
-záznamu — write je od začátku povolený, potvrzuje ho approval mode.
+záznamu v mandátu Principála.
 
 Pro explicitní approval policy lze server upravit v `~/.codex/config.toml`:
 
@@ -300,7 +263,6 @@ token na straně poskytovatele nemusí zneplatnit.
   nevypisuj.
 - **Nástroj má příliš mnoho možností:** použij `enabled_tools`, read-only mód
   serveru a `default_tools_approval_mode = "prompt"`.
-- **Integrace je potřeba na telefonu:** lokální Codex MCP konfigurace se do
-  ChatGPT web/mobile nepřenáší a podporovaná org cesta tam neexistuje —
-  cloudový workspace connector je zakázaný. Úkol vyžadující org integraci
-  proveď na mašině s per-machine napojením.
+- **Integrace je potřeba na telefonu:** lokální Codex konfigurace se automaticky
+  nepřenáší. Ověř samostatné možnosti cílového klienta; tento runbook je
+  neinstaluje ani netvrdí jejich funkčnost.
