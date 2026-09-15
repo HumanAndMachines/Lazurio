@@ -102,6 +102,10 @@ Instalační mandát má explicitní rozsah, ne implicitní admin práva:
 - rozšířený mandát smí pro jednu instalaci navíc výslovně povolit standardní
   OS package manager, Machine/system-wide `PATH`, elevation a upgrade
   jmenovaných nástrojů;
+- krátký prompt pro novou Builder Mašinu v `manual/organization-install.md`
+  už tento širší end-to-end mandát výslovně obsahuje pro standardní package
+  manager, elevation, chybějící povinné nástroje a nezbytný User i
+  Machine/system-wide `PATH`; mimo tento přesný prompt se oprávnění neodvozuje;
 - samostatný repo-specific publikační mandát smí Agentovi dovolit
   proaktivně vytvořit nebo doplnit sanitizované instalační GitHub Issues.
 
@@ -116,6 +120,13 @@ procesu této nové relace, nikoli v child shellu starého Codexu s dočasným
 `export` nebo `$env:Path`. Před ukončením Agent zapíše do chatu přesný resume
 bod. Odhlášení uživatele nebo restart Windows je pouze fallback, pokud nový
 Codex správné persistentní User/Machine hodnoty stále nevidí.
+
+Builder prompt zároveň vyžaduje user-facing flow bez konzole: Task Agent
+provádí příkazy a změny přes své background nástroje, nikdy po uživateli nechce
+otevřít Terminal nebo PowerShell ani do nich kopírovat příkazy. Nativní
+browser/UAC/heslo dialog zůstává dovoleným osobním consentem. Pokud harness
+nedokáže příkaz spustit bez viditelné konzole, Agent vrátí přesný blocker místo
+přesunutí shellové práce na člověka.
 
 Codex CLI na macOS, Linuxu i Windows instaluj a aktualizuj oficiálním OpenAI
 standalone instalátorem; Homebrew, npm ani WinGet nejsou výchozí cesta Lazuria.
@@ -141,11 +152,17 @@ postup a ověří exact canonical root remote přes `git ls-remote`; teprve tent
 probe dokazuje, že zvolený HTTPS nebo SSH transport umí repo skutečně číst.
 
 Nový účet páruj jednou přes
-`gh auth login --hostname github.com --git-protocol ssh --web`. Tentýž flow
+`gh auth login --hostname github.com --git-protocol ssh --web` bez
+`--clipboard`. Tentýž flow
 umí vybrat, vytvořit a nahrát veřejnou část SSH klíče; přístupovou změnu ale
 musí instalační prompt výslovně autorizovat. Po pairing flow se vždy zvlášť
 ověří `gh auth status`, nastavený Git protokol a exact `git ls-remote` cílového
 Organization rootu.
+
+Jednorázový user-facing ověřovací (device) kód a
+`https://github.com/login/device` Agent předá pouze do aktuálního soukromého
+chatu, nikoli do schránky, issue, repozitáře nebo trvalého diagnostického logu.
+Interní OAuth `device_code`, access token ani privátní klíč nikdy nezobrazí.
 
 Je-li deklarovaný privátní remote SSH a probe selže při platném `gh` loginu,
 Agent ověří existující SSH klíč a vazbu na tentýž GitHub účet. Vytvoření nebo

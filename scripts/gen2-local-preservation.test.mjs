@@ -217,6 +217,153 @@ describe("verifier source identity", () => {
 });
 
 describe("documented origin activation", () => {
+  test("requires the GitHub access baseline before any client Builder Machine install", async () => {
+    const repoRoot = dirname(dirname(scriptPath));
+    const manual = await readFile(
+      join(repoRoot, "manual", "first-client-organization-rollout.md"),
+      "utf8",
+    );
+    const accessGate = manual
+      .split("### 0a. GitHub access baseline před instalací klientských Mašin")[1]
+      ?.split("### 1. Organization repo bootstrap")[0];
+
+    expect(accessGate).toBeDefined();
+    expect(manual.indexOf("### 0a. GitHub access baseline"))
+      .toBeLessThan(manual.indexOf("### 1. Organization repo bootstrap"));
+    for (const contract of [
+      "Lazurio for GitHub",
+      "All repositories",
+      "default_repository_permission",
+      "`none`",
+      "Team se slugem `builders`",
+      "permissions.push: true",
+      "default_access: restricted",
+      "repo `infra`",
+      "explicitní Team `builders` Write grant",
+      "pending member/Team membership",
+      "před vytvořením prvního provider repa",
+      "závěrečném read-backu všech pěti bodů",
+      "lazurio organization activate --check --github-id <immutable-id> --json",
+      'observations.github_app.repository_selection == "all"',
+      'repository_selection == "selected"',
+      "`outcome == \"active\"` nestačí",
+      "každý **aktivní** slot",
+      "ne pouze pro repo pojmenované `infra`",
+      "bun run runtime:inventory -- --organization <exact-company.slug> --json",
+      "modules + excluded",
+      "exact Organization selector did not resolve once",
+      "slot has unknown status",
+      "Neřetězcový či neznámý status",
+      "`planned` / `planned_slot` s repository",
+      "active slot has unknown access",
+      "restricted slot has no exact GitHub binding",
+      "restricted repository owner differs from Organization",
+      "restricted repository binding is duplicated",
+      "approved_builders_json",
+      "--paginate --slurp",
+      "teams/builders/members?role=all&per_page=100",
+      "approved Builder roster contains duplicates",
+      "live builders Team roster differs from approved roster",
+      "úplným živým rosterem",
+      "role: member",
+      "role: admin",
+      "owner_role_exception",
+      "neumí odlišit Organization-owner přístup od repository grantu",
+      "neúplná pagination",
+      "malformed provider",
+      "active restricted slot bez exact repository",
+      "aktuální krátký Builder prompt",
+      "Machine/system-wide",
+      "bez user-facing Terminalu nebo",
+      "bez `--clipboard`",
+      "aktuálním soukromém chatu",
+      "interní OAuth",
+    ]) {
+      expect(accessGate).toContain(contract);
+    }
+    for (const readBack of [
+      'gh api "orgs/<ClientOrg>"',
+      'gh api "orgs/<ClientOrg>/teams/builders"',
+      'gh api --paginate "orgs/<ClientOrg>/teams/builders/repos?per_page=100"',
+      '"orgs/<ClientOrg>/teams/builders/members?role=all&per_page=100"',
+      'gh api --paginate "repos/<exact-owner/repository>/collaborators?affiliation=all&per_page=100"',
+      'gh api "orgs/<ClientOrg>/memberships/<builder-login>"',
+      'gh api "orgs/<ClientOrg>/teams/builders/memberships/<builder-login>"',
+    ]) {
+      expect(accessGate).toContain(readBack);
+    }
+    expect(accessGate).not.toMatch(/gh api[^\n]*(?:--method|-X)\s+(?:POST|PUT|PATCH|DELETE)/i);
+    expect(accessGate).not.toContain(
+      'repos/<ClientOrg>/infra/collaborators?affiliation=all&per_page=100',
+    );
+
+    const requireFailClosedProviderBaseline = (candidate) => {
+      expect(candidate).toContain('observations.github_app.repository_selection == "all"');
+      expect(candidate).toContain("bun run runtime:inventory -- --organization <exact-company.slug> --json");
+      expect(candidate).toContain("exact Organization selector did not resolve once");
+      expect(candidate).toContain("slot has unknown status");
+      expect(candidate).toContain("Neřetězcový či neznámý status");
+      expect(candidate).toContain("`planned` / `planned_slot` s repository");
+      expect(candidate).toContain("restricted slot has no exact GitHub binding");
+      expect(candidate).toContain("restricted repository owner differs from Organization");
+      expect(candidate).toContain("live builders Team roster differs from approved roster");
+      expect(candidate).toContain("úplným živým rosterem");
+      expect(candidate).toContain("owner_role_exception");
+      expect(candidate).toContain("neúplná pagination");
+    };
+    requireFailClosedProviderBaseline(accessGate);
+    expect(() => requireFailClosedProviderBaseline(
+      accessGate.replace(
+        'observations.github_app.repository_selection == "all"',
+        'observations.github_app.repository_selection == "selected"',
+      ),
+    )).toThrow();
+    expect(() => requireFailClosedProviderBaseline(
+      accessGate.replace(
+        "bun run runtime:inventory -- --organization <exact-company.slug> --json",
+        "ručně zkontroluj infra",
+      ),
+    )).toThrow();
+    expect(() => requireFailClosedProviderBaseline(
+      accessGate.replace("exact Organization selector did not resolve once", "prázdný selector projde"),
+    )).toThrow();
+    expect(() => requireFailClosedProviderBaseline(
+      accessGate.replace("slot has unknown status", "unknown status ignoruj"),
+    )).toThrow();
+    expect(() => requireFailClosedProviderBaseline(
+      accessGate.replace("Neřetězcový či neznámý status", "jen neznámý string"),
+    )).toThrow();
+    expect(() => requireFailClosedProviderBaseline(
+      accessGate.replace("`planned` / `planned_slot` s repository", "planned s repository přeskoč"),
+    )).toThrow();
+    expect(() => requireFailClosedProviderBaseline(
+      accessGate.replace("restricted slot has no exact GitHub binding", "missing binding ignoruj"),
+    )).toThrow();
+    expect(() => requireFailClosedProviderBaseline(
+      accessGate.replace("restricted repository owner differs from Organization", "foreign owner projde"),
+    )).toThrow();
+    expect(() => requireFailClosedProviderBaseline(
+      accessGate.replace("live builders Team roster differs from approved roster", "extra member projde"),
+    )).toThrow();
+    expect(() => requireFailClosedProviderBaseline(
+      accessGate.replace("úplným živým rosterem", "ručně vybranými loginy"),
+    )).toThrow();
+    expect(() => requireFailClosedProviderBaseline(
+      accessGate.replace("owner_role_exception", "všechny owner loginy odmítni"),
+    )).toThrow();
+    expect(() => requireFailClosedProviderBaseline(
+      accessGate.replace("neúplná pagination", "prázdný seznam"),
+    )).toThrow();
+    expect(manual).toContain("Base repository permission: `none`");
+    expect(manual).toContain("Restricted access: deterministic inventory");
+    expect(manual).toContain("pokud se předává nebo instaluje klientská Builder Mašina");
+    expect(manual).toContain("nevydává se za install-ready");
+
+    const decisions = await readFile(join(repoRoot, "manual", "decision-register.md"), "utf8");
+    expect(decisions).toContain("| 0144 | Greenfield klientská Organizace dokončí GitHub access baseline");
+    expect(decisions).toContain("| 0145 | Výchozí krátký prompt pro novou Builder Mašinu");
+  });
+
   test("required template access is read-only, exact and checked before template remote mutation", async () => {
     const repoRoot = dirname(dirname(scriptPath));
     const manual = await readFile(join(repoRoot, "manual", "first-client-organization-rollout.md"), "utf8");

@@ -18,29 +18,53 @@ tohoto runbooku; krátký prompt jej nenahrazuje ani nerozšiřuje.
 > Mašiny nainstalovat GitHub App **Lazurio for GitHub** pro **All repositories**
 > a dokončit jednorázovou aktivaci; jako Builder jeho `admin:org` kontrolu
 > neopakuj ani z její nedostupnosti neodvozuj stav App.
+> Před první Builder instalací musí Organization owner také nastavit
+> base repository permission `none`, ověřit Team `builders` a jeho aktivní členy,
+> udělit tomuto Teamu `WRITE` na canonical root a každý aktivní non-restricted
+> repo a neudělit Builderům přístup k `infra` ani jinému restricted repu.
+> Pokud live read-back tento stav nedokáže, instalaci nezačínej a vrať ownerovi
+> přesný chybějící member, Team nebo repository grant.
 >
 > Máš mé výslovné svolení nainstalovat chybějící Git, GitHub CLI, Node.js LTS,
-> Codex CLI a přesně verzovaný Bun z jejich oficiálních zdrojů a změnit pouze můj
-> uživatelský `PATH` tak, aby jejich skutečné instalační adresáře byly dostupné
-> v novém čistém terminálu. Zachovej existující `PATH`. Neměň system-wide
-> `PATH`, package manager, bezpečnostní nastavení ani jiné verze nástrojů bez
-> mého dalšího souhlasu. Codex CLI instaluj oficiálním OpenAI standalone
-> instalátorem pro tuto platformu podle kapitoly „Codex CLI: instalace a aktualizace“;
-> Homebrew, npm ani WinGet nejsou podmínkou ani překážkou: vyhovující instalaci zachovej.
+> Codex CLI a přesně verzovaný Bun z jejich oficiálních zdrojů, použít k tomu
+> podporovaný standardní OS package manager a standardní OS elevation a
+> autonomně změnit User i Machine/system-wide `PATH` v nejmenším rozsahu
+> nutném pro jejich fungování. Přidej jen skutečné canonical instalační
+> adresáře, zachovej ostatní platné položky a odstraň pouze prokazatelně
+> neplatný nebo stínící záznam téhož nástroje. Neobcházej UAC,
+> device-management policy ani bezpečnostní ochranu Mašiny. Jiné nástroje
+> nebo již vyhovující verze bez dalšího souhlasu neupgraduj. Codex CLI instaluj
+> oficiálním OpenAI standalone instalátorem pro tuto platformu podle kapitoly
+> „Codex CLI: instalace a aktualizace“; Homebrew, npm ani WinGet nejsou
+> podmínkou ani překážkou: vyhovující instalaci zachovej.
+>
+> Instalaci proveď end-to-end sám přes své background nástroje. Nechtěj po mně
+> otevřít Terminal nebo PowerShell, kopírovat či spouštět příkazy ani číst
+> konzolový výstup; žádné konzolové okno nemá být součástí user-facing flow.
+> Pokud operační systém vyžaduje heslo, UAC nebo jiný nativní consent, otevři
+> jen příslušný systémový dialog a srozumitelně mi řekni, co potvrzuji. Pokud
+> aktuální agentní prostředí neumí potřebný příkaz spustit skrytě, failni
+> zavřeně s přesným blockerem místo přesunutí práce do terminálu uživatele.
 >
 > Pokud pro právě ověřený GitHub účet chybí použitelný SSH klíč, máš svolení
 > vytvořit na této Mašině nový ed25519 klíč, nahrát přes GitHub CLI pouze jeho
 > veřejnou část a uložit privátní klíč jen do standardní SSH custody této
 > Mašiny. GitHub přihlášení spusť právě jednou přes
-> `gh auth login --hostname github.com --git-protocol ssh --web`; drž živý
-> proces, nech mě dokončit jediný osobní krok v čerstvě otevřené GitHub stránce
-> a device kód, token ani privátní klíč nevypisuj do chatu, logu ani issue.
+> `gh auth login --hostname github.com --git-protocol ssh --web` bez
+> `--clipboard`; drž živý proces, vypiš jednorázový uživatelský ověřovací
+> (device) kód a `https://github.com/login/device` pouze do tohoto aktuálního
+> soukromého chatu a nech mě dokončit jediný osobní krok v čerstvě otevřené
+> GitHub stránce. Kód nekopíruj do schránky ani do issue, repozitáře či
+> trvalého diagnostického logu. Interní OAuth `device_code`, access token ani
+> privátní klíč nikdy nevypisuj.
 >
 > Na Windows po každé autorizované WinGet instalaci obnov `PATH` pouze pro
 > aktuální instalační proces z čerstvých Machine + User hodnot podle tohoto
-> runbooku, aby šla bezpečně dokončit právě rozpracovaná operace. Pak mi napiš
-> přesný resume bod, nech mě úplně ukončit všechna okna Codexu a po jeho novém
-> spuštění pokračuj v tomto threadu. Hotový stav dokazuj až z relaunchnutého
+> runbooku, aby šla bezpečně dokončit právě rozpracovaná operace. Pak do chatu
+> napiš přesný resume bod a, pokud to agentní prostředí bezpečně umí, sám úplně
+> relaunchnuj Codex a pokračuj v tomto threadu. Jinak po mně chtěj pouze zavřít
+> a znovu otevřít Codex v jeho grafickém rozhraní, nikdy práci v PowerShellu.
+> Hotový stav dokazuj až z relaunchnutého
 > Codexu a jeho nového čistého procesu; nový terminál otevřený ze starého
 > Codexu nestačí. Restart Windows použij jen jako fallback. Potom ověř
 > správný GitHub účet, `git_protocol=ssh` a exact `git ls-remote` root repa
@@ -61,24 +85,19 @@ tohoto runbooku; krátký prompt jej nenahrazuje ani nerozšiřuje.
 > blocker pojmenuj přesným účtem, Teamem a repozitářem pro Organization ownera.
 <!-- lazurio-guide:organization-install-short:end -->
 
-### Volitelný rozšířený instalační mandát
+### Volitelný mandát pro upgrade a publikaci Issues
 
-Výchozí prompt nahoře zůstává nejmenší bezpečný mandát: instaluje chybějící
-nástroje a mění jen User `PATH`. Principál, který vlastní nebo spravuje celou
-Mašinu, může v tomtéž promptu vědomě povolit i úplnou system instalaci.
-Rozšířený mandát není nový instalační profil ani trvalé nastavení Lazuria;
-je to autorizace přesných externích změn pro aktuální instalační relaci.
+Výchozí prompt nahoře je úplný end-to-end mandát pro chybějící povinné
+nástroje: výslovně zahrnuje podporovaný standardní OS package manager,
+standardní elevation a nezbytnou změnu User i Machine/system-wide `PATH`.
+Neautorizuje upgrade již vyhovujících nástrojů, převod jejich správce ani
+publikaci Issue. Tyto oddělené dopady lze pro aktuální instalační relaci
+vědomě povolit následujícími dodatky; nejde o nový instalační profil ani
+trvalé nastavení Lazuria.
 
 Do promptu přidej pouze ty odstavce, jejichž dopad Principál skutečně schvaluje:
 
-> Pro tuto Mašinu máš navíc mé výslovné svolení použít podporovaný
-> systémový package manager, vyžádat standardní OS elevation a změnit User i
-> Machine/system-wide `PATH`. Přidej jen canonical instalační adresáře
-> jmenovaných nástrojů, zachovej ostatní platné položky a odstraň jen
-> prokazatelně neplatný nebo stínící záznam téhož nástroje. Neobcházej UAC,
-> device-management policy ani bezpečnostní ochranu Mašiny.
->
-> Nainstaluj chybějící a aktualizuj existující Git, GitHub CLI a Codex CLI
+> Aktualizuj existující Git, GitHub CLI a Codex CLI
 > na aktuální oficiální stable a Node.js na aktuální podporované LTS. Bun
 > nastav vždy na exact stabilní verzi deklarovanou aktuálním clean Lazurio
 > `lazurio/package.json#packageManager`, i když upstream nabízí novější verzi.
@@ -102,7 +121,7 @@ Pro installer, CLI, Doctor, Launchpad a sdílený manuál je dnes
 Publikační postup a sanitizaci drží
 [`manual/github-issues.md`](github-issues.md).
 
-Tento rozšířený mandát nepovoluje merge, release, source push, změnu GitHub
+Tento doplňkový mandát nepovoluje merge, release, source push, změnu GitHub
 membership/Teamů ani instalaci GitHub App mimo výslovně určenou Organizaci.
 
 ## Co z GitHub Organization tvoří Lazurio Organization
@@ -120,6 +139,33 @@ GitHub dál zůstává jedinou autoritou přístupů. Vědomě omezená instalac
 canonical Organization root a všechny repozitáře, které má Lazurio skutečně
 obsluhovat, a její partial access se nikdy nesmí vydávat za plný Organization
 scope.
+
+### Access baseline před první Builder Mašinou
+
+Instalace App sama ještě nedokazuje, že nový Builder smí pracovat ve správných
+repech a současně nevidí restricted scope. Organization owner před první
+Builder instalací dokončí a read-only ověří jednu providerovou konfiguraci:
+
+1. Organization base repository permission / API
+   `default_repository_permission` je `none`; samotné Organization membership
+   neuděluje přístup k privátním repozitářům.
+2. Obecnou Builder roli vlastní GitHub Team `builders`. Zamýšlený Builder je
+   aktivní Organization member i aktivní člen Teamu, ne pending invitation.
+3. Team `builders` má user-facing **Write** (GitHub API `push`) na canonical
+   Organization rootu a každém aktivním non-restricted repu určeném Builderovi
+   verzovaným Organization manifestem.
+4. Team ani jednotliví Builders nemají Teamový nebo přímý grant na `infra` ani
+   jiný slot s `default_access: restricted` / `private`. Organization Adminův
+   přístup vycházející z admin role není Builder grant.
+
+GitHub nenabízí trvalý grant „všechna budoucí repo kromě `infra`“. Každý nový
+non-restricted repo proto dostane explicitní Team `builders` `WRITE` grant ve
+stejném provisioning kroku, ve kterém se aktivuje v manifestu; restricted repo
+se nepřidá. Canonical read-back a přesné příkazy drží
+`manual/first-client-organization-rollout.md` §0a. Chybějící App scope, base
+permission jiné než `none`, neaktivní membership, READ místo WRITE nebo
+Builder grant na restricted repo blokují instalaci Mašiny. Lokální manifest ani
+Lazurio installer tento GitHub stav neopravují a nevytvářejí paralelní ACL.
 
 GitHub App sama nenahrazuje source Organizace. Použitelná Lazurio Organization
 má současně:
@@ -157,6 +203,10 @@ membership a WRITE nebo vyšší oprávnění k Builder repozitářům.
   v `PATH` nového čistého procesu;
 - `gh auth status --hostname github.com` potvrzuje správný účet;
 - Organization owner už dokončil jednorázovou aktivaci `Lazurio for GitHub`;
+- Organization owner už read-only ověřil base repository permission `none`,
+  aktivní členství v Teamu `builders`, jeho `WRITE` granty na všechny aktivní
+  non-restricted repozitáře a nulový Builder grant na `infra` i další
+  restricted repozitáře;
 - kanonický Lazurio Root `<home>/Lazurio` už prošel `lazurio install` a má
   skutečnou složku `organizations/`;
 - Organization root repo `<login>/<login>_GEN3` existuje na `main`, obsahuje
@@ -194,6 +244,22 @@ Mašinu použij po výslovném souhlasu aktuální
 latest resolver nebo neznámý registry package. Install Core i Doctor spouštějí
 `node --version` a stejný verzovaný rozsah vyhodnotí ještě před Organization
 materializací.
+
+### User-facing instalace bez konzole
+
+Krátký prompt výše je vědomě end-to-end: Task Agent provádí CLI, instalátory,
+úpravy `PATH` i ověření přes své background nástroje a nepředává člověku
+příkazy k ručnímu spuštění. Terminal ani PowerShell se neotevírají jako
+user-facing okno. Nativní browser autorizace GitHubu, UAC, heslo nebo jiný
+systémový consent jsou přípustné lidské kroky, protože potvrzují osobní nebo
+privilegovanou operaci; Agent je sám vyvolá a předem lidsky vysvětlí.
+
+Pokud konkrétní agentní harness neumí požadovaný proces spustit bez viditelné
+konzole, Agent nepřenese shellovou práci na člověka a nevydá instalaci za
+hotovou. Vrátí přesný platformní blocker pro opravu instalačního surface.
+Úplný relaunch Codexu po změně persistentního `PATH` provede Agent sám, pokud
+to harness bezpečně umí; jinak jediný fallback požadovaný po člověku je zavřít
+a znovu otevřít grafickou aplikaci Codex, nikdy Terminal nebo PowerShell.
 
 Bun není připravený jen tím, že `bun --version` vrátí přesnou verzi. Verzované
 skripty repozitářů spouštějí package binárky přes `bun x`, proto Install Core i
@@ -370,16 +436,15 @@ User nebo Machine `PATH`, Agent nezůstane u handoff warningu:
    `*_not_on_path` a Node musí splnit verzovaný rozsah; teprve potom pokračuje
    `lazurio organization install`.
 
-Doporučený autorizační blok instalačního promptu je:
+Doporučený end-to-end autorizační blok instalačního promptu je:
 
 > Máš mé výslovné svolení nainstalovat chybějící Git, GitHub CLI, Node.js LTS,
-> Codex CLI a přesně verzovaný Bun z jejich oficiálních zdrojů a změnit pouze můj
-> uživatelský PATH tak, aby jejich skutečné instalační adresáře byly dostupné
-> v novém čistém terminálu. Zachovej existující PATH. Neměň system-wide PATH,
-> neinstaluj systémový package manager, neměň bezpečnostní nastavení ani
-> neupgraduj jiné nástroje bez mého dalšího souhlasu. Pro Codex CLI použij
-> oficiální OpenAI standalone instalátor podle kapitoly výše jako doporučenou cestu;
-> existující vyhovující instalaci zachovej bez ohledu na jejího správce.
+> Codex CLI a přesně verzovaný Bun z jejich oficiálních zdrojů, použít
+> podporovaný standardní OS package manager a standardní OS elevation a
+> autonomně upravit User i Machine/system-wide PATH v nejmenším nutném rozsahu.
+> Zachovej ostatní platné položky a vyhovující nástroje; jiné verze neupgraduj.
+> Všechny příkazy proveď sám background nástroji a nikdy po mně nechtěj otevřít
+> Terminal nebo PowerShell ani do nich kopírovat příkaz.
 
 Když prompt změnu konkrétní vrstvy `PATH` neautorizuje, Agent vrátí přesný
 instalační report a vyžádá si souhlas; User souhlas se neinterpretuje jako
@@ -408,9 +473,14 @@ Volba `--git-protocol ssh` je součást téhož GitHub device/web párování. G
 CLI při loginu vyhledá existující SSH klíče a nabídne nahrání jejich veřejné
 části; pokud žádný nenajde, nabídne vytvoření a nahrání nového. Agent tento
 prompt smí potvrdit jen s níže uvedeným výslovným mandátem. Nespouští paralelně
-druhý login, nevypisuje device kód do issue ani logu a po otevření autorizační
-stránky jasně řekne Principálovi jediný čekající lidský krok. Po dokončení
-stejné relace ověří:
+druhý login a nepoužije `--clipboard`. Z CLI výstupu předá pouze krátkodobý
+uživatelský ověřovací (device) kód a
+`https://github.com/login/device` do aktuálního soukromého chatu; právě tento
+user-facing kód je určený k opsání do browseru a standardně expiruje. Do
+schránky, issue, repozitáře ani trvalého diagnostického logu jej nekopíruje.
+Interní OAuth `device_code`, access token a privátní klíč nikdy nezobrazí.
+Po otevření autorizační stránky jasně řekne Principálovi jediný čekající lidský
+krok. Po dokončení stejné relace ověří:
 
 ```sh
 gh auth status --hostname github.com

@@ -6,8 +6,11 @@ import { basename, join, relative, resolve, sep } from "node:path";
 import { normalizeModuleManifest } from "../lazurio/core/module-contract-lib.mjs";
 import { readOrganizationRoot } from "../lazurio/core/organization-root-reader-lib.mjs";
 import {
+  classifyOrganizationSlotAccess,
+  githubRepositoryCoordinate,
   isOrganizationRepositoryDbSlot,
   normalizeOrganizationSlotPath,
+  organizationSlotRepositoryRemote,
   organizationSlotScope,
 } from "../lazurio/core/organization-slot-scope-lib.mjs";
 import { packagePathsBelow } from "./lazurio-runtime-migrate.mjs";
@@ -31,7 +34,7 @@ function moduleExclusionReason(slot) {
   const nestedPath = path.split("/").length > 2;
   if (isOrganizationRepositoryDbSlot(slot, path)) return "nested-db";
   if (nestedPath) return "not-workspace-module";
-  if (slot?.status === "planned_slot" || !slotRepository(slot)) return "planned-slot";
+  if (slotStatus(slot) === "planned_slot" || !slotRepository(slot)) return "planned-slot";
   return null;
 }
 
@@ -40,6 +43,25 @@ function slotRepository(slot) {
     if (typeof candidate === "string" && candidate.trim() !== "") return candidate.trim();
   }
   return null;
+}
+
+function slotGitHubRepository(slot) {
+  const path = normalizeOrganizationSlotPath(slot?.path);
+  const remote = organizationSlotRepositoryRemote(slot, path);
+  return githubRepositoryCoordinate(remote)?.ownerRepo ?? null;
+}
+
+function slotStatus(slot) {
+  const repository = slotRepository(slot);
+  const hasExplicitStatus = Object.prototype.hasOwnProperty.call(slot ?? {}, "status");
+  if (!hasExplicitStatus) return repository ? "active" : "unknown";
+  if (typeof slot.status !== "string" || slot.status.trim() === "") return "unknown";
+  const explicit = slot.status.trim();
+  if (explicit === "active") return repository ? "active" : "unknown";
+  if (["planned", "planned_slot"].includes(explicit)) {
+    return repository ? "unknown" : "planned_slot";
+  }
+  return "unknown";
 }
 
 function declaredModuleSlots(resolution) {
@@ -114,6 +136,7 @@ export async function inventoryLazurioModules(conglomerateRoot, { organization =
   const organizationsRoot = join(root, "organizations");
   const modules = [];
   const excluded = [];
+  let selectedOrganizations = 0;
   for (const entry of await readdir(organizationsRoot, { withFileTypes: true }).catch(() => [])) {
     if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
     const organizationRoot = join(organizationsRoot, entry.name);
@@ -128,6 +151,7 @@ export async function inventoryLazurioModules(conglomerateRoot, { organization =
     if (resolution.resource.kind === "template") continue;
     const company = resolution.resource.organization.slug;
     if (organization && ![entry.name, company].includes(organization)) continue;
+    selectedOrganizations += 1;
     for (const { slot, declaration_source } of declaredModuleSlots(resolution)) {
       const reason = moduleExclusionReason(slot);
       const record = {
@@ -136,6 +160,9 @@ export async function inventoryLazurioModules(conglomerateRoot, { organization =
         module: slot?.slug ?? basename(slot.path),
         path: slot?.path ?? null,
         repository: slotRepository(slot),
+        github_repository: slotGitHubRepository(slot),
+        status: slotStatus(slot),
+        access: classifyOrganizationSlotAccess(slot),
         classification: slot?.classification ?? null,
         materialization: slot?.materialization ?? null,
         declaration_source,
@@ -192,6 +219,7 @@ export async function inventoryLazurioModules(conglomerateRoot, { organization =
     schema_version: "lazurio.module_inventory.v1",
     root,
     summary: {
+      selected_organizations: selectedOrganizations,
       declared_modules: modules.length,
       materialized_modules: materialized.length,
       missing_module_contracts: materialized.filter((module) => module.contract.state === "missing").length,

@@ -21,30 +21,55 @@ extends it.
 > **Lazurio for GitHub** for **All repositories** and complete the one-time
 > activation; as a Builder, do not repeat their `admin:org` check and do not
 > infer the App state from its unavailability.
+> Before the first Builder installation, the Organization owner must also
+> set base repository permission `none`, verify the Team `builders` and its active
+> members, grant that Team `WRITE` on the canonical root and every active
+> non-restricted repo, and grant Builders no access to `infra` or any other
+> restricted repo. If live read-back cannot prove that state, do not begin the
+> installation; return the exact missing member, Team, or repository grant to
+> the owner.
 >
 > You have my explicit permission to install any missing Git, GitHub CLI,
 > Node.js LTS, Codex CLI, and the exactly versioned Bun from their official
-> sources, and to change only my user `PATH` so that their actual installation
-> directories are available in a new clean terminal. Preserve the existing
-> `PATH`. Do not change the system-wide `PATH`, the package manager, security
-> settings, or other tool versions without my further consent. Install Codex CLI
-> using the official OpenAI standalone installer for this platform as described
-> in “Codex CLI: installation and updates”; preserve compatible Homebrew, npm, or WinGet installations.
+> sources, use a supported standard OS package manager and standard OS
+> elevation for that purpose, and autonomously change both the User and
+> Machine/system-wide `PATH` to the smallest extent required for them to work.
+> Add only the actual canonical installation directories, preserve every other
+> valid entry, and remove only a demonstrably invalid or shadowing entry for
+> the same tool. Do not bypass UAC, device-management policy, or the Machine's
+> security protections. Do not upgrade other tools or already compatible
+> versions without further consent. Install Codex CLI using the official OpenAI standalone
+> installer for this platform as described in “Codex CLI:
+> installation and updates”; preserve compatible Homebrew, npm, or WinGet installations.
+>
+> Complete the installation end to end yourself through your background tools.
+> Do not ask me to open Terminal or PowerShell, copy or run commands, or read
+> console output; no console window may be part of the user-facing flow. If the
+> operating system requires a password, UAC, or another native consent, open
+> only the relevant system dialog and explain clearly what I am approving. If
+> the current agent environment cannot run a required command without showing
+> a console, fail closed with the exact blocker instead of shifting shell work
+> to the user.
 >
 > If no usable SSH key exists for the GitHub account just verified, you have
 > permission to create a new ed25519 key on this Machine, upload only its
 > public part via the GitHub CLI, and store the private key only in this
 > Machine's standard SSH custody. Start the GitHub login exactly once via
-> `gh auth login --hostname github.com --git-protocol ssh --web`; keep the
-> process alive, let me complete the single personal step in the freshly opened
-> GitHub page, and never print the device code, token, or private key into the
-> chat, a log, or an issue.
+> `gh auth login --hostname github.com --git-protocol ssh --web` without
+> `--clipboard`; keep the process alive, print the one-time user verification
+> (device) code and `https://github.com/login/device` only into this current
+> private chat, and let me complete the single personal step in the freshly
+> opened GitHub page. Do not copy the code to the clipboard or place it in an
+> issue, repository, or durable diagnostic log. Never print the internal OAuth
+> `device_code`, access token, or private key.
 >
 > On Windows, after each authorized WinGet installation, refresh `PATH` only
 > for the current installation process from fresh Machine + User values
 > according to this runbook so that the current operation can finish safely.
-> Then tell me the exact resume point, let me fully close every Codex window,
-> and continue in this thread after Codex has been started again. Prove the
+> Then write the exact resume point into the chat and, when the agent
+> environment can do so safely, fully relaunch Codex yourself and continue in
+> this thread. Otherwise ask me only to close and reopen Codex in its graphical
+> interface, never to work in PowerShell. Prove the
 > finished state only from the relaunched Codex and its new clean process; a
 > new terminal opened from the old Codex is not enough. Use a Windows restart
 > only as a fallback. Then verify the correct GitHub account,
@@ -68,26 +93,20 @@ extends it.
 > Organization owner.
 <!-- lazurio-guide:organization-install-short:end -->
 
-### Optional expanded installation mandate
+### Optional mandate for upgrades and Issue publication
 
-The default prompt above remains the smallest safe mandate: it installs
-missing tools and changes only the User `PATH`. A Principal who owns or
-administers the whole Machine may consciously permit a complete system
-installation in the same prompt. The expanded mandate is neither a new
-installation profile nor a permanent Lazurio setting; it authorizes exact
-external changes for the current installation session.
+The default prompt above is a complete end-to-end mandate for missing required
+tools: it explicitly includes a supported standard OS package manager,
+standard elevation, and the necessary change to both the User and
+Machine/system-wide `PATH`. It does not authorize upgrades of already
+compatible tools, migration between package managers, or Issue publication.
+Those separate effects can be consciously authorized for the current
+installation session with the following additions; this is neither a new
+installation profile nor a permanent Lazurio setting.
 
 Add only the paragraphs whose impact the Principal actually approves:
 
-> For this Machine, you additionally have my explicit permission to use a
-> supported system package manager, request the standard OS elevation, and
-> change both the User and Machine/system-wide `PATH`. Add only the canonical
-> installation directories of the named tools, preserve all other valid
-> entries, and remove only a demonstrably invalid or shadowing entry for the
-> same tool. Do not bypass UAC, device-management policy, or the Machine's
-> security protections.
->
-> Install missing and update existing Git, GitHub CLI, and Codex CLI to the
+> Update existing Git, GitHub CLI, and Codex CLI to the
 > current official stable versions, and Node.js to the current supported LTS.
 > Always set Bun to the exact stable version declared by the current clean
 > Lazurio `lazurio/package.json#packageManager`, even when upstream offers a
@@ -113,7 +132,7 @@ currently `HumanAndMachines/Lazurio`; an Organization-specific finding does
 not belong there. Follow the publication and sanitization process in
 [`manual/github-issues.md`](github-issues.md).
 
-This expanded mandate does not authorize a merge, release, source push,
+This additional mandate does not authorize a merge, release, source push,
 GitHub membership or Team changes, or GitHub App installation outside the
 explicitly named Organization.
 
@@ -133,6 +152,37 @@ ACL. GitHub remains the sole authority for access. A deliberately restricted
 must include the canonical Organization root and all repositories that Lazurio
 is actually meant to serve, and its partial access must never be presented as
 the full Organization scope.
+
+### Access baseline before the first Builder Machine
+
+Installing the App alone does not prove that a new Builder can work in the
+right repositories while remaining outside restricted scope. Before the first
+Builder installation, the Organization owner completes and read-only verifies
+one provider configuration:
+
+1. The Organization base repository permission / API
+   `default_repository_permission` is `none`; Organization membership alone
+   grants no access to private repositories.
+2. The GitHub Team `builders` owns the general Builder role. The intended
+   Builder is an active Organization member and an active Team member, not a
+   pending invitation.
+3. The Team `builders` has user-facing **Write** (GitHub API `push`) on the
+   canonical Organization root and every active non-restricted repository
+   assigned to Builders by the versioned Organization manifest.
+4. Neither the Team nor individual Builders have a Team or direct grant on
+   `infra` or any other slot with `default_access: restricted` / `private`.
+   An Organization Admin's access from the admin role is not a Builder grant.
+
+GitHub offers no persistent “all future repositories except `infra`” grant.
+Every new non-restricted repository therefore receives an explicit Team
+`builders` `WRITE` grant in the same provisioning step that activates it in
+the manifest; a restricted repository is not added. The canonical read-back
+and exact commands live in
+`manual/first-client-organization-rollout.md` §0a. A missing App scope, a base
+permission other than `none`, inactive membership, READ instead of WRITE, or a
+Builder grant on a restricted repository blocks Machine installation. The
+local manifest and Lazurio installer neither repair this GitHub state nor
+create a parallel ACL.
 
 The GitHub App itself does not replace the Organization source. A usable
 Lazurio Organization has all of the following at once:
@@ -173,6 +223,10 @@ membership and WRITE or higher permission on the Builder repositories.
 - `gh auth status --hostname github.com` confirms the correct account;
 - the Organization owner has already completed the one-time activation of
   `Lazurio for GitHub`;
+- the Organization owner has already read-only verified base repository
+  permission `none`, active Team `builders` membership, its `WRITE` grants on
+  all active non-restricted repositories, and no Builder grant on `infra` or
+  any other restricted repository;
 - the canonical Lazurio Root `<home>/Lazurio` has already gone through
   `lazurio install` and has a real `organizations/` folder;
 - the Organization root repo `<login>/<login>_GEN3` exists on `main`, contains
@@ -214,6 +268,24 @@ Machine, after explicit consent, use the current
 resolver or an unknown registry package. Both Install Core and Doctor run
 `node --version` and evaluate the same versioned range before Organization
 materialization.
+
+### Console-free user-facing installation
+
+The short prompt above is deliberately end to end: the Task Agent runs the
+CLI, installers, `PATH` changes, and verification through its background tools
+and does not hand commands to the person for manual execution. Terminal and
+PowerShell are not opened as user-facing windows. Native GitHub browser
+authorization, UAC, a password, or another system consent remain valid human
+steps because they approve a personal or privileged operation; the Agent
+invokes them and explains them in plain language beforehand.
+
+If a particular agent harness cannot start the required process without a
+visible console, the Agent does not shift shell work to the person and does
+not present the installation as complete. It returns the exact platform
+blocker so the installation surface can be fixed. The Agent performs the full
+Codex relaunch after a persistent `PATH` change when the harness can do so
+safely; otherwise the only fallback requested from the person is to close and
+reopen the Codex graphical application, never Terminal or PowerShell.
 
 Bun is not ready merely because `bun --version` returns the exact version.
 Versioned repository scripts execute package binaries through `bun x`, so both
@@ -405,16 +477,16 @@ warning:
    reason `*_not_on_path`, and Node must satisfy the versioned range; only then
    does `lazurio organization install` proceed.
 
-The recommended authorization block of the installation prompt is:
+The recommended end-to-end authorization block of the installation prompt is:
 
 > You have my explicit permission to install any missing Git, GitHub CLI,
 > Node.js LTS, Codex CLI, and the exactly versioned Bun from their official
-> sources, and to change only my user PATH so that their actual installation
-> directories are available in a new clean terminal. Preserve the existing
-> PATH. Do not change the system-wide PATH, do not install a system package
-> manager, do not change security settings, and do not upgrade other tools
-> without my further consent. For Codex CLI, use the official OpenAI standalone
-> installer from the chapter above as the default; preserve an existing compatible installation.
+> sources, use a supported standard OS package manager and standard OS
+> elevation, and autonomously change both the User and Machine/system-wide PATH
+> to the smallest necessary extent. Preserve every other valid entry and
+> compatible tool; do not upgrade other versions. Run every command yourself
+> through background tools and never ask me to open Terminal or PowerShell or
+> paste a command into them.
 
 When the prompt does not authorize the concrete `PATH` layer, the Agent returns
 an exact installation report and requests consent. User consent is not treated
@@ -444,10 +516,15 @@ The `--git-protocol ssh` option is part of the same GitHub device/web pairing.
 During login, the GitHub CLI looks for existing SSH keys and offers to upload
 their public part; if it finds none, it offers to create and upload a new one.
 The Agent may confirm this prompt only with the explicit mandate stated below.
-It does not start a second login in parallel, does not print the device code
-into an issue or log, and, after the authorization page opens, clearly tells
-the Principal the single pending human step. After completion, it verifies in
-the same session:
+It does not start a second login in parallel and does not use `--clipboard`.
+From the CLI output it relays only the short-lived user verification (device)
+code and `https://github.com/login/device` into the current private chat; this
+user-facing code is intended to be entered in the browser and expires by
+design. It does not copy it into the clipboard, an issue, a repository, or a
+durable diagnostic log. It never reveals the internal OAuth `device_code`,
+access token, or private key. After opening the authorization page, it clearly
+tells the Principal the single pending human step. After completion, it
+verifies in the same session:
 
 ```sh
 gh auth status --hostname github.com

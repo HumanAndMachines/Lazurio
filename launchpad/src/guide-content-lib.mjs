@@ -9,12 +9,12 @@ export const ORGANIZATION_INSTALL_GUIDE_SOURCES = Object.freeze({
   cs: Object.freeze({
     path: "manual/organization-install.md",
     segments: Object.freeze(["manual", "organization-install.md"]),
-    languageContract: "uživatelský `PATH`",
+    languageContract: "soukromého chatu",
   }),
   en: Object.freeze({
     path: "distribution/locales/en/manual/organization-install.md",
     segments: Object.freeze(["distribution", "locales", "en", "manual", "organization-install.md"]),
-    languageContract: "user `PATH`",
+    languageContract: "private chat",
   }),
 });
 
@@ -22,7 +22,16 @@ const sharedRequiredPromptFragments = Object.freeze([
   "<github-organization>",
   "Lazurio for GitHub",
   "All repositories",
+  "base repository permission `none`",
+  "Team `builders`",
+  "`WRITE`",
+  "`infra`",
   "gh auth login --hostname github.com --git-protocol ssh --web",
+  "Machine/system-wide `PATH`",
+  "Terminal",
+  "PowerShell",
+  "`--clipboard`",
+  "`device_code`",
   "Node.js LTS",
   "versioned Organization manifest",
   "lazurio doctor --tool-updates --json",
