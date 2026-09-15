@@ -94,9 +94,14 @@ není tvrzením, že jsou izolované od oprávněného host operatora nebo provi
 V komunikaci vždy používej konkrétní druh hranice: například „lokální Mašina
 Kolegy“, „Buddy VPS“, „Hosted Team Workspace Mašina“ nebo „Organization Host
 Mašina“. „Team Machine“ je nanejvýš hovorová zkratka pro Hosted Team Workspace,
-ne další systémový objekt. Lazurio pro Mašiny nezavádí centrální registr,
-vlastní IAM ani nový manifest; konkrétní hranici dokazují její podporovaný
-profil a infrastruktura daného Ownera a provideru.
+ne další systémový objekt. Lazurio pro Mašiny nezavádí centrální registr ani
+vlastní IAM; konkrétní hranici dokazují její podporovaný profil a
+infrastruktura daného Ownera a provideru. Jediný lokální popis identity je
+`lazurio.machine.json` (decision 0144): owner-bound soubor zapsaný při
+handoveru z desired state v Deployment Repu Ownera, který uvnitř Mašiny jen
+jmenuje Mašinu, Ownera a vyšší hranici. Není to registr, manifest s
+oprávněními ani zdroj přístupu; nic neautorizuje a bez něj Mašina nebyla
+dodána přes Machines.
 
 ### 2. Přístup drží existující poskytovatelé
 
