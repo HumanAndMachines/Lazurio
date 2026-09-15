@@ -331,13 +331,12 @@ function resolveInstalledCommand(globalBin) {
 function createLinkedWorktreeRoot() {
   const repositoryRoot = join(sandbox, "standalone source repository");
   const linkedRoot = join(sandbox, "linked task worktree");
-  cpSync(fixtureRoot, repositoryRoot, { recursive: true, preserveTimestamps: true });
+  mkdirSync(repositoryRoot, { recursive: true });
   for (const args of [
     ["init", "-b", "main"],
     ["config", "user.name", "Lazurio Test"],
     ["config", "user.email", "lazurio-test@example.invalid"],
-    ["add", "."],
-    ["commit", "-m", "fixture"],
+    ["commit", "--allow-empty", "-m", "fixture"],
     ["worktree", "add", "-b", "agent/test", linkedRoot],
   ]) {
     const result = runExecutable("git", args, {
@@ -348,6 +347,9 @@ function createLinkedWorktreeRoot() {
       throw new Error(`Git fixture selhala: git ${args.join(" ")}\n${result.stderr}`);
     }
   }
+  // Only the real linked-worktree identity is under test; avoid committing and
+  // checking out the entire runtime fixture again on slow Windows runners.
+  cpSync(fixtureRoot, linkedRoot, { recursive: true, preserveTimestamps: true });
   return linkedRoot;
 }
 

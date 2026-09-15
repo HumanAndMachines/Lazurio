@@ -48,10 +48,16 @@ autoritu.
    `organizations/<organization>/mission-control/db`; create lane ji do
    tohoto tvaru normalizuje, uloží do sidecaru a nikdy nevytváří duplicitní
    plán v jiném repu.
-   Worktree cesta je
-   výhradně `<Lazurio>/.worktrees/root/<canonical-plan-basename>/`;
+   Lazurio Root je výchozí edit repository. Pro změnu Organization rootu
+   předej explicitní `--repository organizations/<Org-mount>`; selector přijme
+   jen clean primary checkout na `main`, jehož nesymlinkovaná cesta, Git root,
+   origin a runtime Organization manifest tvoří jednu identitu. Personalspace,
+   Productionspace, repository-db, moduly, traversal a libovolná externí cesta
+   jsou v této úzké lane odmítnuté. Worktree cesta je výhradně
+   `<owner-repo>/.worktrees/root/<canonical-plan-basename>/`;
    basename je název kanonického plan souboru bez `.yaml`. Branch obsahuje
-   kód plánu.
+   kód plánu. Vlastník edit checkoutu a vlastník Mission Control plánu smějí
+   být dvě různé Organizace; sidecar drží obě identity a plán se nekopíruje.
 4. Sidecar `<canonical-plan-basename>.worktree.json` (schema
    `companiesascode.worktree.v1`) generuje create lane — zkontroluj ho,
    nevytvářej podruhé a nepřepisuj odvozená identity/path pole; doplň jen
@@ -156,6 +162,7 @@ autoritu.
 
 ```bash
 bun run worktrees:create -- --plan <KOD-XXXX> --dry-run
+bun run worktrees:create -- --plan <KOD-XXXX> --repository organizations/<Org-mount> --dry-run
 # pouze pro výslovný výběr připojené Organization; běžně se objeví automaticky:
 MISSION_CONTROL_AUTHORITY_ROOT=<organization-root-or-db> bun run worktrees:create -- --plan <KOD-XXXX> --dry-run
 bun run worktrees:status

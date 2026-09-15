@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
 import {
   externalAssertions,
+  parityApiUrl,
   explicitStopResponseAccepted,
   hostedMainMaintenanceProofAccepted,
-  hostedStopForbidden,
   hostedTeamMaintenanceProofAccepted,
   noResurrectionProofAccepted,
   parityLoopbackProbeHosts,
@@ -60,30 +60,12 @@ test("hosted parity requires the derived URL and shared process identities", () 
   ])).toThrow("--hosted-domain is required");
 });
 
-test("hosted Stop and persistent disablement are intentionally absent", () => {
-  expect(() => parseArgs([
-    "--profile", "hosted",
-    "--stop-after",
-    ...shared,
-    "--team", "iotor-builders",
-    "--hosted-domain", "iotor.example",
-    "--t3-pid", "101",
-    "--codex-pid", "151",
-    "--launchpad-pid", "202",
-  ])).toThrow("Team modules are always on");
-  expect(hostedStopForbidden({
-    status: 409,
-    payload: { error: "hosted_module_always_on" },
-  })).toBe(true);
-  expect(hostedStopForbidden({ status: 200, payload: { action: "stop" } })).toBe(false);
-});
-
-test("post-restart hosted proof accepts healthy main maintenance only", () => {
+test("post-restart hosted proof accepts cold main inventory only", () => {
   const health = {
-    status: "healthy",
-    managed: true,
+    status: "stopped",
+    managed: false,
     runtime_source: { type: "main" },
-    maintenance: { status: "healthy", source: { type: "main" } },
+    maintenance: { status: "stopped", source: { type: "main" } },
     maintenance_alignment: "matches",
   };
   expect(hostedMainMaintenanceProofAccepted(health)).toBe(true);
@@ -159,11 +141,11 @@ test("parity resolves an exact Organization slug to its discovered mount path", 
 test("hosted parity accepts the complete derived Team set and exact session sources", () => {
   const worktreeSlug = "DEV-6513-parity";
   const health = (source, url) => ({
-    status: "healthy",
-    managed: true,
+    status: url.includes("knowledgebase") ? "healthy" : "stopped",
+    managed: url.includes("knowledgebase"),
     url,
     runtime_source: source,
-    maintenance: { status: "healthy", source },
+    maintenance: { status: url.includes("knowledgebase") ? "healthy" : "stopped", source },
     maintenance_alignment: "matches",
   });
   const main = { type: "main" };
@@ -185,7 +167,7 @@ test("hosted parity accepts the complete derived Team set and exact session sour
     exercisedAppId: "macano-tech-knowledgebase-v1",
     phase: "live",
     worktreeSlug,
-    maintenance: { total: 2, healthy: 2, starting: 0, degraded: 0, skipped: 1 },
+    maintenance: { total: 2, healthy: 1, stopped: 1, starting: 0, degraded: 0, skipped: 1 },
     expectedTotal: 2,
     expectedSkipped: 1,
   };
@@ -203,4 +185,13 @@ test("hosted parity accepts the complete derived Team set and exact session sour
     phase: "post-restart",
     healthEvidence: evidence.map((item) => ({ ...item, health: health(main, item.expected_url) })),
   })).toBe(true);
+});
+
+
+test("parity API probes and mutations retain the configured mount", () => {
+  for (const path of ["/api/apps", "/health", "/api/git/worktrees", "/api/apps/example/start"]) {
+    expect(parityApiUrl("http://127.0.0.1:20000/launchpad/", path).href).toBe(`http://127.0.0.1:20000/launchpad${path}`);
+    expect(parityApiUrl("http://127.0.0.1:20000", path).pathname).toBe(path);
+    expect(parityApiUrl("http://127.0.0.1:20000/launchpad", path).pathname).toBe(`/launchpad${path}`);
+  }
 });

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  classifyOrganizationSlotAccess,
   isCanonicalOrganizationRepositorySlotPath,
   isOrganizationRepositoryDbSlot,
   organizationRootRepositoryAliasIssues,
@@ -359,5 +360,35 @@ describe("organizationSlotCatalogPresentation", () => {
       description: null,
       ui_exposure: "module",
     });
+  });
+});
+
+describe("Organization slot access classification", () => {
+  test("derives ordinary scope from expected, optional, role_based and absent declarations", () => {
+    expect(classifyOrganizationSlotAccess({ path: "workspace/knowledgebase" })).toBe("ordinary");
+    expect(classifyOrganizationSlotAccess({ default_access: "expected", required_roles: ["*"] })).toBe("ordinary");
+    expect(classifyOrganizationSlotAccess({ default_access: "optional", required_roles: ["ops"] })).toBe("ordinary");
+    expect(classifyOrganizationSlotAccess({ default_access: "role_based", required_roles: ["co-founder"] })).toBe("ordinary");
+    expect(classifyOrganizationSlotAccess({ default_access: "expected", required_roles: ["organization-admin"] })).toBe("ordinary");
+    expect(classifyOrganizationSlotAccess({ default_access: null, required_roles: [] })).toBe("ordinary");
+  });
+
+  test("classifies restricted and private declarations as restricted regardless of path or roles", () => {
+    expect(classifyOrganizationSlotAccess({ path: "infra", default_access: "restricted", required_roles: ["organization-admin"] })).toBe("restricted");
+    expect(classifyOrganizationSlotAccess({ path: "workspace/finance", default_access: "restricted" })).toBe("restricted");
+    expect(classifyOrganizationSlotAccess({ path: "workspace/secret", default_access: "private", required_roles: ["*"] })).toBe("restricted");
+    expect(classifyOrganizationSlotAccess({ path: "infra", default_access: "expected", required_roles: ["*"] })).toBe("ordinary");
+  });
+
+  test("fails safe on unknown or malformed access declarations", () => {
+    expect(classifyOrganizationSlotAccess({ default_access: "secret" })).toBe("unknown");
+    expect(classifyOrganizationSlotAccess({ default_access: "Restricted" })).toBe("unknown");
+    expect(classifyOrganizationSlotAccess({ default_access: 42 })).toBe("unknown");
+    expect(classifyOrganizationSlotAccess({ default_access: ["restricted"] })).toBe("unknown");
+    expect(classifyOrganizationSlotAccess({ default_access: "expected", required_roles: "organization-admin" })).toBe("unknown");
+    expect(classifyOrganizationSlotAccess({ default_access: "expected", required_roles: [""] })).toBe("unknown");
+    expect(classifyOrganizationSlotAccess({ default_access: "expected", required_roles: [null] })).toBe("unknown");
+    expect(classifyOrganizationSlotAccess(null)).toBe("unknown");
+    expect(classifyOrganizationSlotAccess("restricted")).toBe("unknown");
   });
 });

@@ -1,5 +1,5 @@
-@import url("/fonts/fonts.css");
-@import url("/vendor/lazurio/components.css");
+@import url("./fonts/fonts.css");
+@import url("./vendor/lazurio/components.css");
 
 /* Lazurio Launchpad používá kanonické runtime tokeny a komponentové základy
    design systému Lazurio. Lokální proměnné níže jsou pouze kompatibilní
@@ -419,27 +419,59 @@ input:focus-visible,
 }
 
 .space-profile-settings {
-  min-height: 36px;
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.35rem 0.48rem 0.48rem;
+  color: var(--text);
+}
+
+.space-profile-settings-heading {
+  min-height: 30px;
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  padding: 0.35rem 0.48rem;
-  border-radius: var(--r-md);
-  color: var(--text);
+  color: var(--text-muted);
   font-size: 14px;
   font-weight: 600;
-  text-decoration: none;
 }
 
-.space-profile-settings.is-disabled {
-  color: var(--text-muted);
-  cursor: default;
-  user-select: none;
-}
-
-.space-profile-settings svg {
+.space-profile-settings-heading svg {
   flex: 0 0 auto;
   color: var(--text-muted);
+}
+
+.space-language-setting {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-left: calc(17px + 0.55rem);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.space-language-select {
+  min-width: 112px;
+  min-height: 32px;
+  padding: 0.25rem 1.8rem 0.25rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.space-language-select:hover {
+  border-color: var(--line-strong);
+}
+
+.space-language-select:focus-visible {
+  border-color: var(--accent);
+  outline: 2px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  outline-offset: 1px;
 }
 
 .space-switcher-divider {
@@ -794,6 +826,14 @@ input:focus-visible,
   gap: 1rem;
 }
 
+@media (min-width: 901px) {
+  .page.is-organization {
+    max-width: none;
+    margin: 0;
+    padding-right: clamp(2rem, 3vw, 3.5rem);
+  }
+}
+
 /* ---------- Agregovaný stav prostoru v pravém sloupci ---------- */
 .hero {
   position: relative;
@@ -830,16 +870,16 @@ input:focus-visible,
   background: var(--text-subtle);
 }
 
-.hero.hero-ok .hero-indicator {
+.space-status-details[data-tone="ok"] .hero-indicator {
   background: var(--c-success);
 }
-.hero.hero-warn .hero-indicator {
+.space-status-details[data-tone="warn"] .hero-indicator {
   background: var(--c-warn);
 }
-.hero.hero-danger .hero-indicator {
-  background: var(--hero-danger-accent);
+.space-status-details[data-tone="danger"] .hero-indicator {
+  background: var(--lz-red-500);
 }
-.hero.hero-loading .hero-indicator {
+.space-status-details[data-tone="loading"] .hero-indicator {
   background: var(--accent);
   animation: hero-pulse 2.4s ease-in-out infinite;
 }
@@ -993,8 +1033,8 @@ input:focus-visible,
   line-height: 1;
 }
 
-#drawerToggle {
-  display: none !important;
+#drawerToggle:not(.hidden) {
+  display: inline-flex !important;
   position: relative;
 }
 
@@ -1009,17 +1049,13 @@ input:focus-visible,
 /* ---------- Workbench layout: hlavní plocha ---------- */
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(250px, 300px);
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
   align-items: start;
 }
 
-.layout.is-personal {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.layout.is-guide {
-  grid-template-columns: minmax(0, 1fr);
+.layout.is-sidebar-collapsed .recent-changes-sidebar {
+  display: none;
 }
 
 .global-update-slot:empty {
@@ -1040,45 +1076,96 @@ input:focus-visible,
 }
 
 .recent-changes-sidebar {
-  position: sticky;
-  top: calc(var(--topbar-h) + 0.75rem);
   min-width: 0;
-  max-height: calc(100vh - var(--topbar-h) - 1.5rem);
-  overflow: auto;
-  display: grid;
-  gap: 0.75rem;
+  display: block;
+  background: var(--lz-white);
+  border: 1px solid var(--lz-line);
+  border-radius: var(--lz-radius-md);
 }
 
 .recent-changes-sidebar .side-panel {
-  margin-bottom: 0;
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid var(--lz-line);
+  border-radius: 0;
+  box-shadow: none;
 }
 
-/* Guide je dostupná capability, proto je v pravém sloupci aktivní dlaždice
-   nad budoucím, záměrně neinteraktivním Marketplace teaserem. */
+.space-status-content > .update-banner-group {
+  display: block;
+  margin: 0;
+}
+
+.recent-changes-sidebar > :last-child {
+  border-bottom: 0;
+}
+
+.space-status-details {
+  border-bottom: 1px solid var(--lz-line);
+}
+
+.space-status-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--lz-space-12);
+  padding: var(--lz-space-16);
+  color: var(--lz-ink);
+  font-size: var(--lz-size-body);
+  font-weight: var(--lz-weight-akce);
+  cursor: pointer;
+  list-style: none;
+}
+
+.space-status-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.space-status-toggle:hover {
+  background: var(--lz-gray-50);
+}
+
+.space-status-toggle:focus-visible {
+  outline: 2px solid var(--lz-blue-500);
+  outline-offset: -2px;
+}
+
+.space-status-details .hero {
+  padding: 0 var(--lz-space-16) var(--lz-space-16);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Guide je první dostupná pomůcka pracovního prostoru. Jeho ikona
+   používá stejný klidný Iconoir materiál jako Marketplace, ale jiný symbol. */
 .guide-tile {
   gap: var(--lz-space-16);
   padding: var(--lz-space-16);
   color: inherit;
   text-decoration: none;
   cursor: pointer;
-  transition:
-    border-color 160ms ease,
-    background-color 160ms ease,
-    box-shadow 160ms ease;
 }
 
-.guide-tile:hover,
+.guide-tile:is(:hover, :focus-visible) {
+  text-decoration: none;
+}
+
 .guide-tile:focus-visible {
   border-color: var(--lz-blue-500);
-  background: color-mix(in srgb, var(--lz-blue-500) 7%, var(--lz-white));
-  box-shadow: 0 10px 24px -22px color-mix(in srgb, var(--lz-ink) 18%, transparent);
+  background: var(--lz-white);
   outline: none;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--lz-blue-500) 24%, transparent);
 }
 
-.guide-tile:focus-visible {
-  box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--lz-blue-500) 24%, transparent),
-    0 10px 24px -22px color-mix(in srgb, var(--lz-ink) 18%, transparent);
+.guide-tile:hover .guide-tile-action,
+.guide-tile:focus-visible .guide-tile-action {
+  color: var(--lz-blue-700);
+}
+
+.guide-tile:hover .guide-tile-action svg {
+  transform: translateX(var(--lz-space-4));
 }
 
 .guide-tile-head,
@@ -1100,13 +1187,8 @@ input:focus-visible,
   justify-content: center;
   flex: 0 0 var(--lz-space-48);
   border-radius: var(--lz-radius-sm);
-  background: transparent;
-}
-
-.guide-tile-icon img {
-  width: 42px;
-  height: 42px;
-  object-fit: contain;
+  background: var(--lz-blue-50);
+  color: var(--lz-blue-600);
 }
 
 .guide-tile-action {
@@ -1114,6 +1196,11 @@ input:focus-visible,
   color: var(--lz-ink-muted);
   font-size: var(--lz-size-meta);
   font-weight: var(--lz-weight-akce);
+  transition: color 160ms ease;
+}
+
+.guide-tile-action svg {
+  transition: transform 160ms ease;
 }
 
 .guide-tile-copy {
@@ -1140,10 +1227,8 @@ input:focus-visible,
   line-height: var(--lz-leading-body);
 }
 
-/* Stav aktualizací je globální provozní informace stejně jako Stav prostoru.
-   V pravém sloupci proto tvoří první kompaktní kartu místo širokého banneru,
-   který odváděl pozornost od vyhledávání a aplikací. */
-.recent-changes-sidebar > .update-banner-group .update-banner {
+/* Stav aktualizací zůstává jednou informací, na desktopu uvnitř Stavu prostoru. */
+.space-status-content > .update-banner-group .update-banner {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
@@ -1154,12 +1239,12 @@ input:focus-visible,
   padding: var(--lz-space-16);
 }
 
-.recent-changes-sidebar > .update-banner-group .update-banner-text {
+.space-status-content > .update-banner-group .update-banner-text {
   font-size: var(--lz-size-body);
   line-height: var(--lz-leading-body);
 }
 
-.recent-changes-sidebar > .update-banner-group .update-banner-action {
+.space-status-content > .update-banner-group .update-banner-action {
   grid-column: 1 / -1;
   width: 100%;
   margin-left: 0;
@@ -1227,623 +1312,6 @@ input:focus-visible,
   line-height: var(--lz-leading-body);
 }
 
-/* Guide surface zůstává součástí shellu Launchpadu. Neobsahuje iframe
-   ani druhý runtime; tento řez dodává pouze wiki-like prezentační kostru. */
-.guide-surface {
-  min-width: 0;
-  display: grid;
-  gap: var(--lz-space-24);
-}
-
-.guide-surface[hidden] {
-  display: none;
-}
-
-.guide-header {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
-  gap: var(--lz-space-24);
-  padding: var(--lz-space-24) 0 0;
-}
-
-.guide-back {
-  min-height: 38px;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--lz-space-4);
-  padding: 0 var(--lz-space-12);
-  border: 1px solid var(--lz-line);
-  border-radius: var(--lz-radius-pill);
-  background: var(--lz-white);
-  color: var(--lz-ink);
-  font: inherit;
-  font-size: var(--lz-size-meta);
-  font-weight: var(--lz-weight-akce);
-  cursor: pointer;
-}
-
-.guide-back:hover,
-.guide-back:focus-visible {
-  border-color: var(--lz-gray-700);
-  outline: none;
-}
-
-.guide-back:focus-visible {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--lz-blue-500) 20%, transparent);
-}
-
-.guide-heading {
-  display: grid;
-  gap: var(--lz-space-8);
-}
-
-.guide-reader-kicker {
-  color: var(--lz-blue-700);
-  font-size: var(--lz-size-meta);
-  font-weight: var(--lz-weight-akce);
-  letter-spacing: 0;
-}
-
-.guide-heading h1,
-.guide-heading p,
-.guide-navigation h2,
-.guide-reader h2,
-.guide-reader p,
-.guide-field-hint {
-  margin: 0;
-}
-
-.guide-heading h1 {
-  color: var(--lz-ink);
-  font-family: var(--font-heading, var(--font-body));
-  font-size: clamp(2rem, 4vw, 3.2rem);
-  font-weight: var(--lz-weight-title);
-  line-height: 1;
-  letter-spacing: -0.04em;
-}
-
-.guide-heading h1:focus-visible {
-  outline: none;
-}
-
-.guide-heading p {
-  max-width: 46rem;
-  color: var(--lz-ink-muted);
-  font-size: var(--lz-size-body);
-  line-height: var(--lz-leading-body);
-}
-
-.guide-workspace {
-  min-height: min(64vh, 720px);
-  display: grid;
-  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
-  border: 1px solid var(--lz-line);
-  border-radius: var(--lz-radius-md);
-  background: var(--lz-white);
-  overflow: hidden;
-}
-
-.guide-navigation {
-  display: grid;
-  align-content: start;
-  gap: var(--lz-space-24);
-  padding: var(--lz-space-24);
-  border-right: 1px solid var(--lz-line);
-  background: var(--lz-gray-50);
-}
-
-.guide-search {
-  display: grid;
-  gap: var(--lz-space-8);
-}
-
-.guide-search label,
-.guide-navigation h2 {
-  color: var(--lz-ink);
-  font-size: var(--lz-size-body);
-  font-weight: var(--lz-weight-akce);
-}
-
-.guide-search-control {
-  min-height: 42px;
-  display: flex;
-  align-items: center;
-  gap: var(--lz-space-8);
-  padding: 0 var(--lz-space-12);
-  border: 1px solid var(--lz-line);
-  border-radius: var(--lz-radius-sm);
-  background: var(--lz-white);
-  color: var(--lz-ink-muted);
-}
-
-.guide-search-control input {
-  width: 100%;
-  min-width: 0;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--lz-ink);
-  font: inherit;
-}
-
-.guide-search-control:focus-within {
-  border-color: var(--lz-blue-500);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--lz-blue-500) 16%, transparent);
-}
-
-.guide-field-hint {
-  color: var(--lz-ink-muted);
-  font-size: var(--lz-size-meta);
-  line-height: var(--lz-leading-body);
-}
-
-.guide-topics {
-  display: grid;
-  gap: var(--lz-space-12);
-}
-
-.guide-topic-link {
-  width: 100%;
-  display: block;
-  padding: var(--lz-space-12);
-  border: 0;
-  border-radius: var(--lz-radius-sm);
-  background: transparent;
-  color: var(--lz-ink);
-  font-family: inherit;
-  font-size: var(--lz-size-meta);
-  font-weight: var(--lz-weight-akce);
-  line-height: var(--lz-leading-body);
-  text-align: left;
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.guide-topic-link:hover,
-.guide-topic-link:focus-visible,
-.guide-topic-link.is-active {
-  background: var(--lz-blue-50);
-  color: var(--lz-blue-700);
-  outline: none;
-}
-
-.guide-reader {
-  min-width: 0;
-  display: grid;
-  align-content: start;
-  padding: clamp(var(--lz-space-32), 5vw, 4.5rem);
-}
-
-.guide-reader-content {
-  width: min(100%, 56rem);
-  display: grid;
-  gap: var(--lz-space-32);
-}
-
-.guide-topic-panel {
-  display: grid;
-  gap: var(--lz-space-32);
-}
-
-.guide-topic-panel[hidden],
-.guide-recommendation[hidden] {
-  display: none;
-}
-
-.guide-article-header {
-  display: grid;
-  gap: var(--lz-space-12);
-}
-
-.guide-reader h2 {
-  color: var(--lz-ink);
-  font-family: var(--font-heading, var(--font-body));
-  font-size: clamp(1.6rem, 3vw, 2.4rem);
-  font-weight: var(--lz-weight-title);
-  line-height: 1.12;
-  letter-spacing: -0.03em;
-}
-
-.guide-reader p {
-  color: var(--lz-ink-muted);
-  font-size: var(--lz-size-body);
-  line-height: var(--lz-leading-body);
-}
-
-.guide-onboarding-roles {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--lz-space-12);
-}
-
-.guide-onboarding-role,
-.guide-readiness,
-.guide-prompt-card,
-.guide-policy {
-  border: 1px solid var(--lz-line);
-  border-radius: var(--lz-radius-md);
-  background: var(--lz-white);
-}
-
-.guide-onboarding-role {
-  display: grid;
-  align-content: start;
-  gap: var(--lz-space-12);
-  padding: var(--lz-space-20);
-}
-
-.guide-onboarding-step {
-  width: 2rem;
-  height: 2rem;
-  display: grid;
-  place-items: center;
-  border-radius: var(--lz-radius-pill);
-  background: var(--lz-blue-50);
-  color: var(--lz-blue-700);
-  font-size: var(--lz-size-meta);
-  font-weight: var(--lz-weight-akce);
-}
-
-.guide-onboarding-role h3,
-.guide-section-heading h3,
-.guide-prompt-heading h3 {
-  margin: 0;
-  color: var(--lz-ink);
-  font-family: var(--font-heading, var(--font-body));
-  font-size: 1.2rem;
-  line-height: 1.2;
-}
-
-.guide-onboarding-role strong,
-.guide-readiness strong,
-.guide-readiness-note code,
-.guide-prompt-card code {
-  color: var(--lz-ink);
-}
-
-.guide-readiness,
-.guide-prompt-card,
-.guide-policy {
-  display: grid;
-  gap: var(--lz-space-16);
-  padding: var(--lz-space-24);
-}
-
-.guide-section-heading {
-  display: grid;
-  gap: var(--lz-space-8);
-}
-
-.guide-readiness-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  border: 1px solid var(--lz-line);
-  border-radius: var(--lz-radius-sm);
-  overflow: hidden;
-}
-
-.guide-readiness-grid > div {
-  display: grid;
-  gap: var(--lz-space-8);
-  padding: var(--lz-space-16);
-  background: var(--lz-gray-50);
-}
-
-.guide-readiness-grid > div + div {
-  border-left: 1px solid var(--lz-line);
-}
-
-.guide-readiness-grid strong,
-.guide-readiness-grid span {
-  line-height: var(--lz-leading-body);
-}
-
-.guide-readiness-grid span {
-  color: var(--lz-ink-muted);
-  font-size: var(--lz-size-meta);
-}
-
-.guide-readiness-note {
-  padding-left: var(--lz-space-12);
-  border-left: 3px solid var(--lz-blue-500);
-}
-
-.guide-prompt-heading {
-  display: flex;
-  align-items: start;
-  justify-content: space-between;
-  gap: var(--lz-space-16);
-}
-
-.guide-prompt-heading > div {
-  display: grid;
-  gap: var(--lz-space-8);
-}
-
-.guide-copy-button {
-  min-height: 38px;
-  flex: 0 0 auto;
-  padding: 0 var(--lz-space-16);
-  border: 1px solid var(--lz-blue-700);
-  border-radius: var(--lz-radius-pill);
-  background: var(--lz-blue-700);
-  color: var(--lz-white);
-  font: inherit;
-  font-size: var(--lz-size-meta);
-  font-weight: var(--lz-weight-akce);
-  cursor: pointer;
-}
-
-.guide-copy-button:hover,
-.guide-copy-button:focus-visible {
-  background: var(--lz-blue-900);
-  outline: none;
-}
-
-.guide-copy-button:focus-visible {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--lz-blue-500) 24%, transparent);
-}
-
-.guide-copy-button:disabled {
-  border-color: var(--lz-line);
-  background: var(--lz-gray-100);
-  color: var(--lz-ink-muted);
-  cursor: not-allowed;
-}
-
-.guide-content-status,
-.guide-content-error {
-  padding: var(--lz-space-12) var(--lz-space-16);
-  border-radius: var(--lz-radius-sm);
-  background: var(--lz-gray-50);
-  color: var(--lz-ink-muted);
-  font-size: var(--lz-size-meta);
-  line-height: var(--lz-leading-body);
-}
-
-.guide-content-status[hidden],
-.guide-content-error[hidden],
-.guide-code-block[hidden] {
-  display: none;
-}
-
-.guide-content-error {
-  border: 1px solid var(--lz-danger-line, #e7a99f);
-  background: var(--lz-danger-soft, #fff4f1);
-  color: var(--lz-danger-ink, #8b2f23);
-}
-
-.guide-code-block {
-  max-height: 30rem;
-  margin: 0;
-  padding: var(--lz-space-16);
-  overflow: auto;
-  border: 1px solid var(--lz-line);
-  border-radius: var(--lz-radius-sm);
-  background: var(--lz-gray-50);
-  color: var(--lz-ink);
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 0.82rem;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.guide-code-block:focus-visible {
-  border-color: var(--lz-blue-500);
-  outline: none;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--lz-blue-500) 16%, transparent);
-}
-
-.guide-policy summary {
-  color: var(--lz-ink);
-  font-weight: var(--lz-weight-akce);
-  cursor: pointer;
-}
-
-.guide-policy-code {
-  max-height: 38rem;
-}
-
-.guide-glossary-section {
-  display: grid;
-  gap: var(--lz-space-16);
-}
-
-.guide-glossary-section[hidden],
-.guide-term[hidden],
-.guide-no-results[hidden] {
-  display: none;
-}
-
-.guide-glossary-section h3 {
-  margin: 0;
-  color: var(--lz-ink);
-  font-family: var(--font-heading, var(--font-body));
-  font-size: 1.35rem;
-  line-height: 1.2;
-}
-
-.guide-term-list {
-  margin: 0;
-  border-top: 1px solid var(--lz-line);
-}
-
-.guide-term {
-  display: grid;
-  grid-template-columns: minmax(130px, 0.34fr) minmax(0, 1fr);
-  gap: var(--lz-space-24);
-  padding: var(--lz-space-16) 0;
-  border-bottom: 1px solid var(--lz-line);
-}
-
-.guide-term dt {
-  color: var(--lz-ink);
-  font-weight: var(--lz-weight-akce);
-  line-height: var(--lz-leading-body);
-}
-
-.guide-term dd {
-  margin: 0;
-  color: var(--lz-ink-muted);
-  line-height: var(--lz-leading-body);
-}
-
-.guide-no-results {
-  margin: 0;
-  padding: var(--lz-space-16);
-  border-radius: var(--lz-radius-sm);
-  background: var(--lz-gray-50);
-}
-
-.guide-recommendation-list {
-  border-top: 1px solid var(--lz-line);
-}
-
-.guide-recommendation {
-  display: grid;
-  grid-template-columns: minmax(190px, 240px) minmax(0, 1fr);
-  align-items: start;
-  gap: var(--lz-space-24);
-  padding: var(--lz-space-24) 0;
-  border-bottom: 1px solid var(--lz-line);
-}
-
-.guide-recommendation-content {
-  min-width: 0;
-  display: grid;
-  gap: var(--lz-space-12);
-}
-
-.guide-recommendation-visual {
-  --guide-visual-accent: var(--lz-blue-700);
-  min-width: 0;
-  color: var(--guide-visual-accent);
-}
-
-.guide-recommendation--wispr .guide-recommendation-visual {
-  --guide-visual-accent: var(--lz-expressive-orange-figure);
-}
-
-.guide-recommendation--codexbar .guide-recommendation-visual {
-  --guide-visual-accent: var(--lz-success);
-}
-
-.guide-recommendation-visual-svg {
-  width: 100%;
-  height: auto;
-  display: block;
-  overflow: visible;
-}
-
-.guide-visual-canvas {
-  fill: color-mix(in srgb, var(--guide-visual-accent) 9%, var(--surface));
-  stroke: color-mix(in srgb, var(--guide-visual-accent) 24%, var(--lz-line));
-}
-
-.guide-visual-panel {
-  fill: var(--surface);
-  stroke: color-mix(in srgb, var(--guide-visual-accent) 24%, var(--lz-line));
-}
-
-.guide-visual-accent-fill {
-  fill: var(--guide-visual-accent);
-}
-
-.guide-visual-soft-fill {
-  fill: color-mix(in srgb, var(--guide-visual-accent) 14%, var(--surface));
-}
-
-.guide-visual-muted-fill {
-  fill: var(--lz-gray-300);
-}
-
-.guide-visual-on-accent {
-  fill: var(--on-accent);
-}
-
-.guide-visual-on-accent-stroke,
-.guide-visual-accent-stroke,
-.guide-visual-arrow,
-.guide-visual-line {
-  fill: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.guide-visual-on-accent-stroke {
-  stroke: var(--on-accent);
-  stroke-width: 3;
-}
-
-.guide-visual-accent-stroke {
-  stroke: var(--guide-visual-accent);
-  stroke-width: 3;
-}
-
-.guide-visual-wave {
-  stroke-width: 4;
-}
-
-.guide-visual-arrow {
-  stroke: color-mix(in srgb, var(--guide-visual-accent) 60%, var(--lz-ink-muted));
-  stroke-width: 2;
-}
-
-.guide-visual-line {
-  stroke: var(--lz-gray-300);
-  stroke-width: 3;
-}
-
-.guide-visual-meter {
-  stroke-width: 6;
-}
-
-.guide-visual-cursor {
-  fill: var(--surface);
-  stroke: var(--lz-ink);
-  stroke-width: 2;
-  stroke-linejoin: round;
-}
-
-.guide-recommendation-heading {
-  display: grid;
-  gap: var(--lz-space-4);
-}
-
-.guide-recommendation-label {
-  color: var(--lz-blue-700);
-  font-size: var(--lz-size-meta);
-  font-weight: var(--lz-weight-akce);
-  line-height: var(--lz-leading-body);
-}
-
-.guide-recommendation h3 {
-  margin: 0;
-  color: var(--lz-ink);
-  font-family: var(--font-heading, var(--font-body));
-  font-size: 1.35rem;
-  line-height: 1.2;
-}
-
-.guide-recommendation p strong {
-  color: var(--lz-ink);
-}
-
-.guide-recommendation-link {
-  justify-self: start;
-  color: var(--lz-blue-700);
-  font-size: var(--lz-size-meta);
-  font-weight: var(--lz-weight-akce);
-  line-height: var(--lz-leading-body);
-  text-underline-offset: 0.18em;
-}
-
-.guide-recommendation-link:hover,
-.guide-recommendation-link:focus-visible {
-  color: var(--lz-blue-900);
-}
 
 .detail-panel {
   position: sticky;
@@ -1878,19 +1346,23 @@ input:focus-visible,
 .workspace-panel {
   min-width: 0;
   display: grid;
-  gap: 0.9rem;
+  gap: var(--lz-space-12);
   align-content: start;
 }
 
 .workspace-welcome {
   min-width: 0;
-  display: grid;
-  gap: 0.12rem;
-  margin-top: 1.5rem;
-  margin-bottom: var(--lz-space-16);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--lz-space-12) var(--lz-space-24);
+  margin-top: var(--lz-space-16);
+  margin-bottom: var(--lz-space-4);
 }
 
 .workspace-welcome-title {
+  flex: 1 1 540px;
   margin: 0;
   color: var(--text);
   font-size: var(--lz-size-display);
@@ -1901,19 +1373,11 @@ input:focus-visible,
 
 /* ---------- Apps toolbar ---------- */
 .apps-toolbar {
+  flex: 0 1 240px;
+  max-width: 100%;
   display: flex;
   align-items: center;
   gap: var(--lz-space-12);
-}
-
-.apps-filter-fallback {
-  display: none;
-  justify-content: flex-end;
-  margin-top: 0;
-}
-
-.apps-filter-fallback.is-active {
-  display: flex;
 }
 
 .search-field {
@@ -2241,13 +1705,13 @@ input:focus-visible,
 /* ---------- App cards ---------- */
 .apps-stack {
   display: grid;
-  gap: 1.1rem;
+  gap: var(--lz-space-12);
 }
 
 .apps-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.75rem;
+  gap: var(--lz-space-12);
   align-items: start;
 }
 
@@ -2507,6 +1971,160 @@ input:focus-visible,
 }
 
 /* Unified organization card: surface contrast and state strips replace framing. */
+/* Workspace tools share the main content width; status opens on demand. */
+@media (min-width: 901px) {
+  .recent-changes-sidebar {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: var(--lz-space-8);
+    overflow: visible;
+  }
+
+  .recent-changes-sidebar .side-panel {
+    padding: var(--lz-space-8) var(--lz-space-12);
+    border: 0;
+    border-radius: var(--lz-radius-sm);
+  }
+
+  .recent-changes-sidebar .guide-tile,
+  .recent-changes-sidebar .marketplace-teaser {
+    display: flex;
+    align-items: center;
+    gap: var(--lz-space-12);
+    min-width: 0;
+  }
+
+  .recent-changes-sidebar .guide-tile {
+    flex: 1 1 0;
+  }
+
+  .recent-changes-sidebar .guide-tile:hover {
+    background: var(--lz-gray-50);
+  }
+
+  .recent-changes-sidebar .guide-tile-head,
+  .recent-changes-sidebar .marketplace-teaser-head {
+    display: contents;
+  }
+
+  .recent-changes-sidebar .guide-tile-copy,
+  .recent-changes-sidebar .marketplace-teaser-copy {
+    order: 1;
+    gap: 2px;
+  }
+
+  .recent-changes-sidebar .guide-tile-copy h2,
+  .recent-changes-sidebar .marketplace-teaser-copy h2 {
+    font-size: 16px;
+    line-height: 1.3;
+  }
+
+  .recent-changes-sidebar .guide-tile-copy p {
+    font-size: 12px;
+  }
+
+  .recent-changes-sidebar .guide-tile-icon,
+  .recent-changes-sidebar .marketplace-teaser-icon {
+    width: 36px;
+    height: 36px;
+    flex: 0 0 36px;
+    background: transparent;
+  }
+
+  .recent-changes-sidebar .guide-tile-action {
+    order: 2;
+    margin-left: auto;
+  }
+
+  .recent-changes-sidebar .guide-tile-action > span {
+    display: none;
+  }
+
+  .recent-changes-sidebar .marketplace-teaser {
+    order: 1;
+    flex: 0 1 auto;
+    margin-inline: var(--lz-space-16);
+    color: var(--lz-ink-muted);
+  }
+
+  .recent-changes-sidebar .marketplace-teaser-copy h2 {
+    color: var(--lz-ink-muted);
+  }
+
+  .recent-changes-sidebar .marketplace-teaser-copy p {
+    display: none;
+  }
+
+  .recent-changes-sidebar .marketplace-teaser-status {
+    order: 2;
+    padding: 3px 8px;
+    border-radius: var(--lz-radius-sm);
+    background: var(--lz-gray-50);
+    color: var(--lz-ink-muted);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .space-status-details {
+    position: relative;
+    order: 2;
+    flex: 0 0 auto;
+    border: 0;
+    border-left: 1px solid var(--lz-line);
+  }
+
+  .space-status-toggle {
+    min-height: 48px;
+    padding: var(--lz-space-12) var(--lz-space-16);
+    border-radius: var(--lz-radius-sm);
+    font-size: 14px;
+  }
+
+  .space-status-toggle::after {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: rotate(45deg);
+    margin-left: var(--lz-space-4);
+    transition: transform 160ms ease;
+  }
+
+  .space-status-details[open] .space-status-toggle::after {
+    transform: rotate(225deg);
+  }
+
+  .space-status-content {
+    position: absolute;
+    z-index: 30;
+    top: calc(100% + 16px);
+    right: -8px;
+    width: min(420px, calc(100vw - 48px));
+    max-height: min(65vh, 600px);
+    overflow-y: auto;
+    padding-top: var(--lz-space-16);
+    border: 1px solid var(--lz-line);
+    border-radius: var(--lz-radius-md);
+    background: var(--lz-white);
+    box-shadow: 0 16px 48px -16px rgb(0 0 0 / 20%);
+  }
+}
+
+@media (max-width: 900px) {
+  .apps-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .apps-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+
 .app-card {
   position: relative;
   min-width: 0;
@@ -2662,7 +2280,7 @@ input:focus-visible,
 }
 
 .app-card.has-open-menu {
-  z-index: auto;
+  z-index: 20;
 }
 
 .app-more-button {
@@ -2704,16 +2322,21 @@ input:focus-visible,
 }
 
 .app-version-menu-panel {
-  position: static;
-  width: 100%;
+  position: absolute;
+  top: 52px;
+  right: 12px;
+  z-index: 21;
+  width: min(256px, calc(100% - 24px));
+  max-height: 280px;
+  overflow-y: auto;
   display: grid;
-  gap: 0.4rem;
-  margin-top: var(--lz-space-8);
-  padding: var(--lz-space-12) 0 0;
-  border: 0;
-  border-top: 1px solid var(--lz-line-faint);
-  border-radius: 0;
-  background: transparent;
+  gap: 2px;
+  margin: 0;
+  padding: 6px;
+  border: 1px solid var(--lz-line);
+  border-radius: var(--lz-radius-sm);
+  background: var(--lz-white);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 10%);
   cursor: default;
 }
 
@@ -3724,17 +3347,7 @@ tbody tr.selected {
 }
 
 /* ---------- Responsive ---------- */
-@media (max-width: 1400px) {
-  .apps-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 1100px) {
-  .apps-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .detail-panel {
     position: static;
     grid-column: 1 / -1;
@@ -3743,14 +3356,6 @@ tbody tr.selected {
 }
 
 @media (max-width: 900px) {
-  .guide-recommendation {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--lz-space-16);
-  }
-
-  .guide-recommendation-visual {
-    width: min(100%, 28rem);
-  }
 
   #drawerToggle:not(.hidden) {
     display: inline-flex !important;
@@ -3882,58 +3487,6 @@ tbody tr.selected {
     flex: 1 1 0;
   }
 
-  .guide-header {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--lz-space-16);
-  }
-
-  .guide-back {
-    justify-self: start;
-  }
-
-  .guide-workspace {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .guide-navigation {
-    border-right: 0;
-    border-bottom: 1px solid var(--lz-line);
-  }
-
-  .guide-reader {
-    min-height: 360px;
-    padding: var(--lz-space-32) var(--lz-space-24);
-  }
-
-  .guide-term {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--lz-space-4);
-  }
-
-  .guide-onboarding-roles,
-  .guide-readiness-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .guide-readiness-grid > div + div {
-    border-left: 0;
-    border-top: 1px solid var(--lz-line);
-  }
-
-  .guide-prompt-heading {
-    display: grid;
-  }
-
-  .guide-copy-button {
-    justify-self: start;
-  }
-
-}
-
-@media (max-width: 680px) {
-  .apps-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -5963,43 +5516,6 @@ b {
   box-shadow: inset 2px 0 0 var(--lz-ink);
 }
 
-/* Filtr aplikací je jedna kapsle: společný obal drží vztah obou voleb a
-   černý vnitřní segment ukazuje právě aktivní pohled. */
-#appsFilterControls .segmented-control {
-  gap: 0;
-  min-height: auto;
-  padding: 3px;
-  border: 1px solid var(--lz-line);
-  border-radius: var(--lz-radius-pill);
-  overflow: hidden;
-  background: var(--lz-gray-50);
-}
-
-#appsFilterControls .segment {
-  min-width: auto;
-  min-height: 36px;
-  padding: 0 var(--lz-space-16);
-  border: 0;
-  border-radius: var(--lz-radius-pill);
-  background: transparent;
-  color: var(--lz-ink-muted);
-  box-shadow: none;
-  font-size: var(--lz-size-meta);
-  font-weight: 600;
-}
-
-#appsFilterControls .segment[aria-pressed="true"],
-#appsFilterControls .segment.is-active {
-  background: var(--lz-ink);
-  color: var(--lz-white);
-  box-shadow: none;
-}
-
-#appsFilterControls .segment:hover:not(.is-active),
-#appsFilterControls .segment:focus-visible:not(.is-active) {
-  background: var(--lz-white);
-  color: var(--lz-ink);
-}
 
 /* Organizace, Workspace a Productionspace jsou strukturální záložky na hraně sekce.
    Nadpis se neduplikuje: záložka je stále sémantické h2 v sentence case. */
@@ -6140,14 +5656,6 @@ b {
   height: 28px;
 }
 
-/* Základ dlaždic podle produktové reference (Principál 2026-08-09).
-   Drží rozměry a volnější vertikální rytmus; kanonická souvislá mřížka níže
-   přebíjí samostatné hrany a mezery. Barvy a typografie zůstávají tokenové. */
-.apps-grid {
-  gap: var(--lz-space-16);
-  align-items: start;
-}
-
 /* Zavřené moduly drží společnou základní výšku, ale každá dlaždice roste
    samostatně. Rozbalení menu proto nepohne ani nenatáhne sousední karty. */
 .apps-grid > .app-card {
@@ -6155,9 +5663,9 @@ b {
 }
 
 .app-card {
-  min-height: 16rem;
+  min-height: 11rem;
   gap: 0;
-  padding: var(--lz-space-24);
+  padding: var(--lz-space-16);
   border: 1px solid color-mix(in srgb, var(--lz-line-faint) 50%, var(--lz-line));
   border-radius: 18px;
   background: var(--lz-white);
@@ -6186,12 +5694,12 @@ b {
 
 .app-title-block {
   width: 100%;
-  gap: 28px;
+  gap: var(--lz-space-12);
 }
 
 .app-title-body {
   display: grid;
-  gap: var(--lz-space-16);
+  gap: var(--lz-space-8);
 }
 
 .app-card-icon {
@@ -6204,23 +5712,24 @@ b {
 }
 
 .app-card-title {
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1.2;
 }
 
 .app-card-desc {
   margin: 0;
-  font-size: 15px;
-  line-height: 1.55;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 .app-more-button {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   border: 0;
-  background: var(--lz-gray-100);
+  border-radius: var(--lz-radius-sm);
+  background: transparent;
 }
 
 /* Spodní informační lišta drží fakta i skutečné akce na stejné základně.
@@ -6230,9 +5739,9 @@ b {
   display: flex;
   align-items: flex-end;
   justify-content: flex-start;
-  min-height: 52px;
+  min-height: 44px;
   margin-top: auto;
-  padding-top: var(--lz-space-16);
+  padding-top: var(--lz-space-8);
   border-top: 1px solid var(--lz-line-faint);
 }
 
@@ -6244,17 +5753,17 @@ b {
 .app-card > .card-warning:not(.is-jen-akce):not(.is-fact),
 .app-card > .runtime-stages,
 .app-card > .card-feedback:not(.empty) {
-  margin-top: var(--lz-space-24);
+  margin-top: var(--lz-space-12);
 }
 
 @media (max-width: 760px) {
   .app-card {
-    min-height: 230px;
+    min-height: 200px;
     padding: var(--lz-space-16);
   }
 
   .app-title-block {
-    gap: var(--lz-space-24);
+    gap: var(--lz-space-12);
   }
 }
 
@@ -6476,8 +5985,7 @@ body {
   background: var(--lz-white);
 }
 
-/* Další možnosti jsou inline disclosure, ne plovoucí karta. Panel rozšíří
-   dlaždici a nikdy nepřekryje její text, sousední modul ani okraj viewportu. */
+/* Kompaktní nabídka u tlačítka nemění výšku dlaždice ani modulové mřížky. */
 .app-card.has-open-menu:not(.selected),
 .app-card:not(.selected):has(.app-more-button:hover),
 .app-card:not(.selected):has(.app-more-button:focus-visible) {
@@ -6567,12 +6075,11 @@ body {
     opacity 340ms var(--tile-reveal-ease);
 }
 
-/* Samostatné modulové dlaždice: teplý papír zůstává viditelný mezi kartami
-   a Lazurio radius vytváří měkčí, klidnější pracovní plochu. Hover mění jen
-   vnitřní text, hranu a stín, ne polohu ani bílý povrch dlaždice. */
+/* Všechny skupiny modulů sdílejí čtyři stejně široké pozice na desktopu.
+   Neúplná řada nechává volné místo místo roztahování zbývajících karet. */
 .apps-grid {
-  column-gap: var(--lz-space-16);
-  row-gap: var(--lz-space-16);
+  column-gap: var(--lz-space-12);
+  row-gap: var(--lz-space-12);
   margin-inline: 0;
   padding: 0;
   border: 0;
@@ -6619,8 +6126,8 @@ body {
 
   .apps-grid > .app-card:not(.has-open-menu):hover .app-card-desc,
   .apps-grid > .app-card:not(.has-open-menu):focus-within .app-card-desc {
-    max-height: 4.8em;
-    margin-top: var(--lz-space-12);
+    max-height: 2.9em;
+    margin-top: var(--lz-space-8);
     opacity: 1;
   }
 
@@ -6639,8 +6146,8 @@ body {
 /* Na dotykové obrazovce není spolehlivý hover, proto popis zůstává čitelný. */
 @media (hover: none), (pointer: coarse) {
   .apps-grid > .app-card .app-card-desc {
-    max-height: 4.8em;
-    margin-top: var(--lz-space-12);
+    max-height: 2.9em;
+    margin-top: var(--lz-space-8);
     opacity: 1;
   }
 }
@@ -6681,52 +6188,42 @@ body {
   flex: 1 1 auto;
 }
 
-.apps-toolbar .apps-filter-fallback {
-  flex: 0 0 auto;
-}
-
 @media (max-width: 760px) {
   .apps-toolbar {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .apps-toolbar .apps-filter-fallback {
-    justify-content: flex-start;
-  }
-
 }
 
-/* Pravý sloupec používá jeden panelový jazyk: bílý papír, stejnou hranu,
-   stejné odsazení a sekundární tlačítko. Stavová barva zůstává na ikoně a
-   hraně, ne v plošném gradientu. */
-.recent-changes-sidebar > .update-banner-group .update-banner {
+/* Aktualizace je v rozbaleném Stavu prostoru oddělená jen vnitřní linkou. */
+.space-status-content > .update-banner-group .update-banner {
   gap: var(--lz-space-12);
-  padding: 0.9rem;
+  padding: var(--lz-space-16);
   background: var(--lz-white);
-  border: 1.5px solid var(--lz-line);
-  border-left-width: 1.5px;
-  border-radius: var(--lz-radius-md);
+  border: 0;
+  border-top: 1px solid var(--lz-line);
+  border-radius: 0;
 }
 
-.recent-changes-sidebar > .update-banner-group .update-banner.is-current {
+.space-status-content > .update-banner-group .update-banner.is-current {
   background: var(--lz-white);
-  border-color: var(--c-success-line);
+  border-top-color: var(--lz-line);
 }
 
-.recent-changes-sidebar > .update-banner-group .update-banner-icon,
-.recent-changes-sidebar > .update-banner-group .update-banner-success {
+.space-status-content > .update-banner-group .update-banner-icon,
+.space-status-content > .update-banner-group .update-banner-success {
   width: 20px;
   height: 20px;
 }
 
-.recent-changes-sidebar > .update-banner-group .update-banner-text {
+.space-status-content > .update-banner-group .update-banner-text {
   font-size: 14px;
   font-weight: 600;
   line-height: 1.35;
 }
 
-.recent-changes-sidebar > .update-banner-group .update-banner-action {
+.space-status-content > .update-banner-group .update-banner-action {
   min-height: 38px;
   padding: 8px 14px;
   border: 1.5px solid var(--lz-line);
@@ -6737,8 +6234,8 @@ body {
   font-weight: 600;
 }
 
-.recent-changes-sidebar > .update-banner-group .update-banner-action:hover:not(:disabled),
-.recent-changes-sidebar > .update-banner-group .update-banner-action:focus-visible:not(:disabled) {
+.space-status-content > .update-banner-group .update-banner-action:hover:not(:disabled),
+.space-status-content > .update-banner-group .update-banner-action:focus-visible:not(:disabled) {
   background: var(--lz-gray-50);
   filter: none;
 }
@@ -6839,59 +6336,4 @@ html[data-i18n-ready="true"] .locale-bootstrap {
 
 @keyframes locale-bootstrap-spin {
   to { transform: rotate(360deg); }
-}
-
-.locale-switcher {
-  align-items: center;
-  display: inline-flex;
-  flex: none;
-  gap: 0.45rem;
-  margin-inline: 0.2rem;
-}
-
-.locale-switcher-option {
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  line-height: 1;
-  min-height: 32px;
-  padding: 0.25rem 0;
-  position: relative;
-  transition: color var(--t-fast) ease;
-}
-
-.locale-switcher-option::after {
-  background: currentColor;
-  bottom: 3px;
-  content: "";
-  height: 1px;
-  left: 0;
-  opacity: 0;
-  position: absolute;
-  right: 0;
-  transform: scaleX(0.65);
-  transition: opacity var(--t-fast) ease, transform var(--t-fast) ease;
-}
-
-.locale-switcher-option:hover,
-.locale-switcher-option[aria-pressed="true"] {
-  color: var(--lz-white);
-}
-
-.locale-switcher-option[aria-pressed="true"]::after {
-  opacity: 1;
-  transform: scaleX(1);
-}
-
-.locale-switcher-option:focus-visible {
-  border-radius: 2px;
-  outline: 2px solid var(--lz-white);
-  outline-offset: 3px;
-}
-
-.locale-switcher-divider {
-  color: rgba(255, 255, 255, 0.28);
-  font-size: 0.75rem;
-  line-height: 1;
 }

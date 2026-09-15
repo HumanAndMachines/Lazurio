@@ -203,11 +203,17 @@ Launchpad proto používá tři oddělené lifecycle profily:
   worktree jen pro život aktuální Server instance. Kliknutí nevytváří trvalý
   intent; graceful shutdown ukončí celý spravovaný process tree a další start
   Launchpadu nic neobnovuje;
-- **Hosted Team Workspace** je always-on dílna. Manifesty Organizace určují
-  Team moduly a jejich výchozí Apps; Launchpad tuto množinu odvodí a po vlastní
-  readiness ji udržuje asynchronně a izolovaně. Cold start vždy začíná z
-  `main`; Builder smí v aktuální session přepnout Modul na Mission
-  Control-owned worktree, ale kliknutí ani přepnutí nevytváří persistentní stav;
+- **Hosted Team Workspace** drží T3 a Launchpad always-on, ale moduly spouští
+  podle potřeby (DEV-6579, náhrada eager části decision 0137). Manifesty
+  Organizace určují dostupné Team moduly a jejich výchozí Apps. `Open` i
+  autentizovaný přímý odkaz používají stejný module lease a runtime manager;
+  `Stop` modul zastaví až do dalšího otevření. Browserové požadavky na pozadí
+  (fetch, asset nebo WebSocket reconnect) nejsou nové otevření; ingress je
+  pouze zkontroluje. Navigace a přímí nebrowseroví klienti mohou App otevřít.
+  Spuštěnou App manager udržuje
+  v aktuální session, dostupnost katalogu ani health kontrola ji neprobouzí.
+  Cold start nic nespouští; první otevření použije `main`. Builderova volba
+  worktree žije jen v aktuální session a ingress ji zachovává;
 - **production** přijímá jen reprodukovatelný Build a běží na samostatném
   produkčním runtime. Team katalog, Launchpad proces ani worktree nejsou
   deployment input.
@@ -318,12 +324,13 @@ Launchpad locale je oproti tomu runtime preference prohlížeče, ne varianta
 Rootu. Launchpad-owned copy je offline v párových katalozích; přednost má
 explicitně uložená volba, potom podporovaný jazyk prohlížeče a nakonec český
 fallback. Přepnutí reloadne stejnou URL a nemění scope ani běžící procesy.
-Guide je součást stejného Launchpad surface: statická copy používá tytéž
-katalogy a dlouhý Organization install runbook se načítá pro explicitní
-`cs`/`en` locale z párových Root-owned zdrojů. Českou autoritou zůstává
-`manual/organization-install.md`, anglickou projekcí
-`distribution/locales/en/manual/organization-install.md`; chybějící nebo
-neshodný locale zdroj skončí fail-closed a nikdy se potichu nenahradí češtinou.
+Guide je součást veřejné dokumentace na `documentation.lazurio.ai`, nikoli
+lokální obsahový surface Launchpadu. Launchpad zobrazuje lokalizovanou dlaždici
+a odkazuje na odpovídající `cs`/`en` stránku s pevným bezpečným atributem
+vstupu; historický hash `#/guide` přesměruje na stejný cíl. Dlouhý Organization
+install runbook zůstává technickou Root-owned dokumentací: českou autoritou je
+`manual/organization-install.md` a anglickou projekcí
+`distribution/locales/en/manual/organization-install.md`.
 Core a API zůstávají locale-neutral: poskytují stabilní reason kódy a parametry,
 zatímco UI vlastní lidské error, warning a loading texty. Organization-owned
 názvy, popisy, commit messages a technická evidence se zobrazují beze změny.

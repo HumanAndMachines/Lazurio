@@ -134,12 +134,12 @@ test("hosted trust configuration fails closed", () => {
     profile: "hosted",
     hostedExternalOrigin: "https://launchpad.example.test",
     hostedAuthCheckUrl: "http://127.0.0.1:4180/oauth2/auth",
-  })).toThrow("distinct clean HTTPS");
+  })).toThrow("clean HTTPS");
   expect(() => createRequestTrustPolicy({
     profile: "hosted",
     hostedExternalOrigin: "https://launchpad.example.test",
-    hostedAuthCheckUrl: "https://launchpad.example.test/oauth2/auth",
-  })).toThrow("distinct clean HTTPS");
+    hostedAuthCheckUrl: "https://launchpad.example.test/launchpad/api/auth",
+  })).toThrow("clean HTTPS");
   expect(() => createRequestTrustPolicy({
     profile: "hosted",
     hostedExternalOrigin: "https://launchpad.example.test",
@@ -163,4 +163,27 @@ test("hosted trust configuration fails closed", () => {
     profile: "local",
     hostedAuthCookieName: "__Secure-lazurio-example-workspace",
   })).toThrow("only in the hosted");
+});
+
+
+test("native shared-origin workspace still revalidates its exact session", async () => {
+  const origin = "https://builder.exampleco.lazurio.io";
+  const cookie = "__Host-lazurio-workspace";
+  const calls = [];
+  const trust = createRequestTrustPolicy({
+    profile: "hosted", hostedExternalOrigin: origin,
+    hostedAuthCheckUrl: `${origin}/oauth2/auth`, hostedAuthCookieName: cookie,
+    fetchImpl: async (url, init) => {
+      calls.push({url, init});
+      return new Response(null, {status: init.headers.cookie === `${cookie}=valid` ? 202 : 401});
+    },
+  });
+  const headers = {origin, "sec-fetch-site": "same-origin", cookie: `${cookie}=valid; unrelated=excluded`};
+  expect(await trust.isTrustedWorkspaceRequest(request(headers), backendUrl)).toBe(true);
+  expect(calls[0].url).toBe(`${origin}/oauth2/auth`);
+  expect(calls[0].init.headers.cookie).toBe(`${cookie}=valid`);
+  expect(calls[0].init.redirect).toBe("manual");
+  expect(await trust.isTrustedWorkspaceRequest(request({...headers, cookie: `${cookie}=invalid`}), backendUrl)).toBe(false);
+  expect(await trust.isTrustedWorkspaceRequest(request({...headers, cookie: ""}), backendUrl)).toBe(false);
+  expect(await trust.isTrustedWorkspaceRequest(request({...headers, origin: "https://foreign.invalid"}), backendUrl)).toBe(false);
 });

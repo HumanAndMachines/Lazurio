@@ -4,7 +4,7 @@
   "title": "Lazurio Organization install report v0",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "state", "ok", "root", "organization", "access", "target", "convergence"],
+  "required": ["schema_version", "state", "ok", "root", "organization", "access", "scope", "target", "convergence"],
   "properties": {
     "schema_version": { "const": "lazurio.organization.install.v0" },
     "state": { "enum": ["current", "updated", "blocked"] },
@@ -28,7 +28,7 @@
       "required": ["authority", "role", "status", "account", "organization_membership", "teams", "repositories", "blockers"],
       "properties": {
         "authority": { "const": "github" },
-        "role": { "enum": [null, "builder"] },
+        "role": { "enum": [null, "builder", "steward"] },
         "status": { "enum": ["not_requested", "ready", "blocked"] },
         "account": {
           "oneOf": [
@@ -113,6 +113,16 @@
             }
           }
         }
+      }
+    },
+    "scope": {
+      "description": "Materializační scope instalace. role null je explicitní Admin instalace a jako jediná zahrnuje (include) i absentní restricted sloty; role-scoped instalace je vyloučí (exclude) bez provider operace a označí je excluded_by_role_scope.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "restricted_slots"],
+      "properties": {
+        "role": { "enum": [null, "builder", "steward"] },
+        "restricted_slots": { "enum": ["include", "exclude"] }
       }
     },
     "target": {

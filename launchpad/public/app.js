@@ -5,13 +5,13 @@ import {
   buildSpaceProblemModel,
   computeSpaceHeroState,
   createLatestDataLoadCoordinator,
+  createSidePanelLoadCoordinator,
   familyTitle,
   findRunningSharedPortPeer,
   filterApps,
   groupAppFamilies,
   groupFamiliesBySpace,
   groupWorkspaceFamiliesByTeam,
-  guideInstallPayloadIsValid,
   isAttentionState,
   isProjectedModuleOpenTarget,
   offersMoreThanLocalRun,
@@ -22,7 +22,6 @@ import {
   replacePersonalspaceResponse,
   reconcileSelectedAppId,
   runtimeStagesForApp,
-  sidePanelResponseIsCurrent,
   summarizeOrganizationSpaceHealth,
   updateBannerPresentation,
   variantMenuLabel,
@@ -48,12 +47,12 @@ import { runtimeRecoveryForApp } from "./runtime-recovery.js";
 import { launchpadFetch } from "./session-aware-fetch.js";
 import { writeReservedTabStatus } from "./reserved-tab-status.js";
 import { getLocale, initializeI18n, setLocale, t, tp } from "./i18n.js";
+import { guideDocumentationUrl } from "./guide-link.js";
 import {
-  guideHash,
   organizationHash,
   personalspaceHash,
   resolveLaunchpadHash,
-} from "/lazurio-runtime/deep-link-lib.mjs";
+} from "./lazurio-runtime/deep-link-lib.mjs";
 // Personalspace (CAC-0048) je samostatný privátní povrch v odděleném modulu —
 // čte jen z lokálního /api/personalspace, nikdy se nemíchá do org discovery ani
 // filtrů aplikací. Renderuje se jako vlastní vizuálně odlišená sekce v hlavní
@@ -108,16 +107,11 @@ const state = {
   loaded: false,
   spaceMenuOpen: false,
   suppressNextDrawerOpen: false,
-  // Stav prostoru a aktualizací žije v trvalém pravém panelu Organization
-  // scope. Nejčastější a detail zůstávají ve skládacím draweru, který detail
-  // appky otevře automaticky.
+  // Přehled Organization je na desktopu výchozí otevřený a lze jej zasunout.
+  // Detail appky zůstává v samostatném draweru, který se otevře automaticky.
+  sidebarOpen: true,
   drawerOpen: false,
   drawerView: "overview",
-  activeSurface: "workspace",
-  guideReturnHash: null,
-  guideOpenedFromLaunchpad: false,
-  guideActiveTopic: "installation",
-  guideInstallContentPromise: null,
   filters: {
     // Scope selector vždy ukazuje právě jeden prostor: personalspace nebo
     // konkrétní Organizaci. Cross-organization pohled „Vše" není v denním UI.
@@ -136,8 +130,19 @@ const state = {
 let heroAction = "reload";
 let doctorLoadInFlight = null;
 let doctorReloadRequested = false;
-let sidePanelRequestGeneration = 0;
-const dataLoadCoordinator = createLatestDataLoadCoordinator({ run: runLoadData });
+const sidePanelLoader = createSidePanelLoadCoordinator({
+  readScope: () => ({ scope: state.filters.scope, company: state.filters.company }),
+  fetchSnapshot: fetchSidePanelSnapshot,
+  applySnapshot: applySidePanelSnapshot,
+  clearSnapshot: clearSidePanelSnapshot,
+});
+// Fresh read (lokální mutace, Sync, ruční reload) zneplatní snapshot pravých
+// panelů rozběhnutý před ním: pre-mutation stav nesmí přepsat read model
+// načtený po mutaci, i kdyby dorazil dřív.
+const dataLoadCoordinator = createLatestDataLoadCoordinator({
+  run: runLoadData,
+  onFresh: () => sidePanelLoader.invalidate(),
+});
 let quietPollTimer = null;
 let restoreSpaceMenuFocusOnClose = false;
 let drawerReturnFocus = null;
@@ -350,31 +355,19 @@ const elements = {
   updateBannerAction: document.querySelector("#updateBannerAction"),
   reloadButton: document.querySelector("#reloadButton"),
   hero: document.querySelector("#hero"),
+  page: document.querySelector(".page"),
+  spaceStatusDetails: document.querySelector("#spaceStatusDetails"),
+  spaceStatusContent: document.querySelector("#spaceStatusContent"),
   heroTitle: document.querySelector("#heroTitle"),
   heroSummary: document.querySelector("#heroSummary"),
   heroIssues: document.querySelector("#heroIssues"),
   heroCta: document.querySelector("#heroCta"),
   appsToolbar: document.querySelector("#appsToolbar"),
-  appsFilterControls: document.querySelector("#appsFilterControls"),
-  appsFilterFallback: document.querySelector("#appsFilterFallback"),
   workspaceWelcome: document.querySelector("#workspaceWelcome"),
   workspaceWelcomeTitle: document.querySelector("#workspaceWelcomeTitle"),
   workspaceMain: document.querySelector("#workspaceMain"),
-  guideMain: document.querySelector("#guideMain"),
-  guideTitle: document.querySelector("#guideTitle"),
-  guideBack: document.querySelector("#guideBack"),
   guideTile: document.querySelector("#guideTile"),
-  guideSearch: document.querySelector("#guideSearch"),
-  guideNoResults: document.querySelector("#guideNoResults"),
-  guideTopicButtons: document.querySelectorAll("[data-guide-topic]"),
-  guidePrompt: document.querySelector("#guidePrompt"),
-  guidePromptCopy: document.querySelector("#guidePromptCopy"),
-  guidePromptStatus: document.querySelector("#guidePromptStatus"),
-  guidePromptError: document.querySelector("#guidePromptError"),
-  guidePolicy: document.querySelector("#guidePolicy"),
   appsSearch: document.querySelector("#appsSearch"),
-  attentionToggle: document.querySelector("#attentionToggle"),
-  segmentedControl: document.querySelectorAll("[data-status-segment]"),
   problemsPanel: document.querySelector("#problemsPanel"),
   actionPanel: document.querySelector("#actionPanel"),
   appsGrid: document.querySelector("#appsGrid"),
@@ -401,20 +394,13 @@ const elements = {
   notificationsFilterUnread: document.querySelector("#notificationsFilterUnread"),
   notificationsCountAll: document.querySelector("#notificationsCountAll"),
   notificationsCountUnread: document.querySelector("#notificationsCountUnread"),
-  localeSwitcher: document.querySelector("#localeSwitcher"),
 };
 
 initTheme();
 initScrollOffset();
 initResponsiveChrome();
 initNotifications();
-elements.localeSwitcher?.addEventListener("click", (event) => {
-  const option = event.target.closest?.("[data-locale]");
-  if (!option || option.getAttribute("aria-pressed") === "true") return;
-  setLocale(option.dataset.locale);
-  window.location.reload();
-});
-elements.guideTile?.setAttribute("href", guideHash());
+elements.guideTile?.setAttribute("href", guideDocumentationUrl(getLocale()));
 // Personalspace rail dostane most k toastům a k Synchronizovat reloadu, ať
 // osobní runtime akce vypadají stejně jako firemní.
 initPersonalspace({
@@ -451,34 +437,14 @@ elements.appsSearch.addEventListener("input", (event) => {
   state.filters.query = event.target.value ?? "";
   render();
 });
-for (const segment of elements.segmentedControl) {
-  segment.addEventListener("click", () => {
-    state.filters.status = segment.dataset.statusSegment ?? "all";
-    state.filters.attentionOnly = false;
-    render();
-  });
-}
-elements.attentionToggle?.addEventListener("click", () => {
-  state.filters.status = "all";
-  state.filters.attentionOnly = true;
-  render();
-});
-elements.guideTile?.addEventListener("click", () => {
-  state.guideReturnHash = activeSpaceHash();
-  state.guideOpenedFromLaunchpad = true;
-});
-elements.guideBack?.addEventListener("click", () => closeGuide());
-elements.guideSearch?.addEventListener("input", (event) => {
-  filterGuideContent(event.target.value);
-});
-for (const topicButton of elements.guideTopicButtons) {
-  topicButton.addEventListener("click", () => selectGuideTopic(topicButton.dataset.guideTopic));
-}
-elements.guidePromptCopy?.addEventListener("click", () => void copyGuideInstallPrompt());
 
-// Drawer doplňkových panelů (Nejčastější / detail). Poslední změny jsou v
-// Organization scope trvale viditelné vedle hlavní plochy.
+// Jedno tlačítko ovládá desktopový přehled nebo mobilní spodní panel.
 elements.drawerToggle?.addEventListener("click", () => {
+  if (!mobilePanelQuery.matches) {
+    state.sidebarOpen = !state.sidebarOpen;
+    applySidebarState();
+    return;
+  }
   if (state.drawerOpen) {
     setDrawer(false);
     return;
@@ -490,10 +456,22 @@ elements.drawerToggle?.addEventListener("click", () => {
 elements.drawerClose?.addEventListener("click", () => setDrawer(false));
 elements.drawerBackdrop?.addEventListener("click", () => setDrawer(false));
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && state.openVersionMenu) {
+    const key = state.openVersionMenu;
+    state.openVersionMenu = null;
+    render();
+    focusMenuTriggerAfterRender(document, key);
+    return;
+  }
   if (event.key === "Escape" && state.spaceMenuOpen) {
     restoreSpaceMenuFocusOnClose = true;
     state.spaceMenuOpen = false;
     applySpaceMenuState();
+  }
+  if (event.key === "Escape" && elements.spaceStatusDetails?.open) {
+    elements.spaceStatusDetails.open = false;
+    elements.spaceStatusDetails.querySelector("summary")?.focus();
+    return;
   }
   if (event.key === "Tab" && state.drawerOpen && mobilePanelQuery.matches) trapDrawerFocus(event);
   if (event.key === "Escape" && state.drawerOpen) setDrawer(false);
@@ -501,6 +479,10 @@ document.addEventListener("keydown", (event) => {
 });
 
 document.addEventListener("click", (event) => {
+  if (!mobilePanelQuery.matches && elements.spaceStatusDetails?.open
+    && !elements.spaceStatusDetails.contains(event.target)) {
+    elements.spaceStatusDetails.open = false;
+  }
   if (elements.topbarOverflow?.open && !elements.topbarOverflow.contains(event.target)) {
     closeMobileOverflow();
   }
@@ -515,11 +497,12 @@ function initResponsiveChrome() {
     if (useSheet && elements.recentChangesSidebar?.parentElement !== elements.drawerBody) {
       elements.drawerBody?.prepend(elements.recentChangesSidebar);
     } else if (!useSheet && elements.recentChangesSidebar?.parentElement === elements.drawerBody) {
-      elements.layout?.insertBefore(elements.recentChangesSidebar, elements.drawerBackdrop);
+      elements.workspaceWelcome?.after(elements.recentChangesSidebar);
     }
     mountUpdateBannerGroup();
     elements.detailDrawer?.classList.toggle("is-bottom-sheet", useSheet);
     applyDrawerState();
+    applySidebarState();
     if (useSheet && state.drawerOpen) focusMobileDrawer();
   };
   const syncTopbar = () => {
@@ -612,11 +595,34 @@ function applyDrawerState() {
   elements.detailDrawer?.classList.toggle("is-open", open);
   elements.detailDrawer?.setAttribute("aria-hidden", open ? "false" : "true");
   elements.detailDrawer?.toggleAttribute("inert", !open);
-  elements.drawerToggle?.setAttribute("aria-expanded", open ? "true" : "false");
-  elements.drawerToggle?.classList.toggle("is-active", open);
   elements.detailDrawer?.setAttribute("aria-modal", mobilePanelQuery.matches && open ? "true" : "false");
   document.body.classList.toggle("drawer-open", mobilePanelQuery.matches && open);
   if (elements.drawerBackdrop) elements.drawerBackdrop.hidden = !open;
+  applySidebarState();
+}
+
+function applySidebarState() {
+  const desktop = !mobilePanelQuery.matches;
+  const collapsed = desktop && !state.sidebarOpen;
+  const open = desktop ? state.sidebarOpen : state.drawerOpen;
+  elements.layout?.classList.toggle("is-sidebar-collapsed", collapsed);
+  elements.recentChangesSidebar?.toggleAttribute("inert", collapsed);
+  elements.recentChangesSidebar?.setAttribute("aria-hidden", collapsed ? "true" : "false");
+  elements.drawerToggle?.setAttribute("aria-controls", desktop ? "recentChangesSidebar" : "detailDrawer");
+  elements.drawerToggle?.setAttribute("aria-expanded", open ? "true" : "false");
+  elements.drawerToggle?.classList.toggle("is-active", open);
+  updatePanelToggleLabel();
+}
+
+function updatePanelToggleLabel() {
+  const toggle = elements.drawerToggle;
+  if (!toggle) return;
+  const open = mobilePanelQuery.matches ? state.drawerOpen : state.sidebarOpen;
+  const action = t(open ? "panels.hide" : "panels.show");
+  const status = elements.heroTitle?.textContent;
+  const label = status ? `${action} · ${status}` : action;
+  toggle.setAttribute("aria-label", label);
+  toggle.title = label;
 }
 
 function selectAppDetail(appId, { autoOpenTechnical = false } = {}) {
@@ -963,35 +969,33 @@ async function fetchJsonSafe(path, options = {}) {
 // Načte pravé panely a git read model. Git read model (/api/git/repos) dodává
 // CAC-0042; dokud read model není dostupný, endpoint vrátí 404 → gitReposByModule
 // zůstane prázdná a git chip se na kartách graceful nevykreslí.
-async function loadSidePanels() {
-  const requestId = ++sidePanelRequestGeneration;
-  const requestedScope = state.filters.scope;
-  const requestedCompany = state.filters.company;
-  if (requestedScope === "personal" || requestedCompany === "all") {
-    state.notifications = [];
-    state.mostUsed = [];
-    state.coldStartUsage = true;
-    state.gitReposByModule = new Map();
-    state.gitStatusLoaded = false;
-    state.gitStatusError = false;
-    return;
-  }
-  const companyQuery = `?company=${encodeURIComponent(requestedCompany)}`;
+// Pořadí odpovědí hlídá sidePanelLoader: pomalejší odpověď předchozí
+// Organizace, starší odpověď téže Organizace ani snapshot rozběhnutý před
+// lokální mutací nesmí přepsat panely, které uživatel právě vidí.
+function loadSidePanels() {
+  return sidePanelLoader.load();
+}
+
+async function fetchSidePanelSnapshot({ company }) {
+  const companyQuery = `?company=${encodeURIComponent(company)}`;
   const [notifications, mostUsed, git] = await Promise.all([
     fetchJsonSafe(`/api/notifications${companyQuery}`),
     fetchJsonSafe(`/api/most-used${companyQuery}`),
     fetchJsonSafe(`/api/git/repos${companyQuery}`),
   ]);
-  // Pomalejší odpověď předchozí Organizace nesmí přepsat panely prostoru,
-  // který uživatel mezitím nově vybral.
-  if (!sidePanelResponseIsCurrent({
-    requestId,
-    latestRequestId: sidePanelRequestGeneration,
-    requestedScope,
-    requestedCompany,
-    activeScope: state.filters.scope,
-    activeCompany: state.filters.company,
-  })) return;
+  return { notifications, mostUsed, git };
+}
+
+function clearSidePanelSnapshot() {
+  state.notifications = [];
+  state.mostUsed = [];
+  state.coldStartUsage = true;
+  state.gitReposByModule = new Map();
+  state.gitStatusLoaded = false;
+  state.gitStatusError = false;
+}
+
+function applySidePanelSnapshot({ notifications, mostUsed, git }) {
   state.notifications = notifications?.notifications ?? [];
   state.mostUsed = mostUsed?.most_used ?? [];
   state.coldStartUsage = mostUsed ? mostUsed.cold_start !== false && (mostUsed.most_used ?? []).length === 0 : true;
@@ -1037,21 +1041,6 @@ function annotateGitAttention(apps) {
   }
 }
 
-function syncSegmentedControl() {
-  for (const segment of elements.segmentedControl) {
-    const active = !state.filters.attentionOnly
-      && segment.dataset.statusSegment === state.filters.status;
-    segment.classList.toggle("is-active", active);
-    segment.setAttribute("aria-pressed", active ? "true" : "false");
-  }
-}
-
-function syncAttentionToggle() {
-  const active = state.filters.attentionOnly;
-  elements.attentionToggle?.classList.toggle("is-active", active);
-  elements.attentionToggle?.setAttribute("aria-pressed", active ? "true" : "false");
-}
-
 /* =========================================================
    Render orchestration
    ========================================================= */
@@ -1061,7 +1050,7 @@ function render() {
   // Transientní chyba prvního discovery nesmí zničit požadovaný deep-link.
   // URL kanonizujeme až poté, co máme první autoritativní seznam prostorů;
   // úspěšný retry pak může stále aplikovat původní Organization hash.
-  if (launchpadScopeDataReady && state.activeSurface === "workspace") {
+  if (launchpadScopeDataReady) {
     syncActiveSpaceHash({ replace: true });
   }
   applyOrganizationTheme();
@@ -1118,8 +1107,6 @@ function render() {
   renderSpaceSwitcher();
   renderScopeControls();
   renderWorkspaceWelcome();
-  syncSegmentedControl();
-  syncAttentionToggle();
   const heroApps = activeSpaceApps();
   const spaceHealth = heroDiagnostics(heroApps);
   renderHero(heroApps, spaceHealth);
@@ -1128,7 +1115,6 @@ function render() {
   renderProblems(spaceHealth);
   renderActionMessage();
   renderAppsGrid(filteredApps);
-  mountAppFilters();
   // Technický tabulkový renderer zůstává dočasně použitelný pro vývojové
   // harnessy, ale běžný Launchpad jeho mount už uživatelům neposílá.
   if (elements.appsTable) renderApps(filteredApps);
@@ -1154,6 +1140,7 @@ function renderHero(apps, diagnostics) {
 
   if (!state.loaded) {
     hero.classList.add("hero-loading");
+    elements.spaceStatusDetails.dataset.tone = "loading";
     elements.heroTitle.textContent = t("workspace.loadingStatus");
     elements.heroSummary.textContent = t("workspace.checking");
     elements.heroIssues.hidden = true;
@@ -1167,6 +1154,7 @@ function renderHero(apps, diagnostics) {
 
   const verdict = computeHeroState(apps, diagnostics);
   hero.classList.add(`hero-${verdict.tone}`);
+  elements.spaceStatusDetails.dataset.tone = verdict.tone;
   elements.heroTitle.textContent = verdict.title;
   renderHeroIssues(verdict, diagnostics);
   heroAction = verdict.action;
@@ -1241,8 +1229,7 @@ function heroIssueNode(issue) {
 
 function renderSpaceHealthBadge(verdict, diagnostics) {
   const badge = elements.spaceHealthBadge;
-  const toggle = elements.drawerToggle;
-  if (!badge || !toggle) return;
+  if (!badge) return;
   const count = verdict?.tone === "danger"
     ? diagnostics?.blockers ?? 0
     : verdict?.tone === "warn"
@@ -1251,11 +1238,7 @@ function renderSpaceHealthBadge(verdict, diagnostics) {
   badge.hidden = count === 0;
   badge.textContent = count > 99 ? "99+" : String(count);
   badge.dataset.tone = verdict?.tone ?? "loading";
-  const label = verdict?.title
-    ? t("panels.status", { status: verdict.title })
-    : t("panels.loading");
-  toggle.setAttribute("aria-label", label);
-  toggle.title = label;
+  updatePanelToggleLabel();
 }
 
 function runHeroAction() {
@@ -1269,12 +1252,7 @@ function runHeroAction() {
       elements.appsGrid.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
-    state.filters.status = "all";
-    state.filters.attentionOnly = true;
-    state.suppressNextDrawerOpen = true;
-    render();
-    if (mobilePanelQuery.matches) setDrawer(false);
-    elements.appsGrid.scrollIntoView({ behavior: "smooth", block: "start" });
+    revealProblems();
     return;
   }
   // problems
@@ -1603,15 +1581,8 @@ function activeSpace() {
 
 function applyBrowserLaunchpadHash() {
   if (!state.loaded || !launchpadScopeDataReady || window.location.hash === appliedLaunchpadHash) return;
-  const previousSurface = state.activeSurface;
   const changed = applyLaunchpadHash({ notify: true });
   render();
-  if (previousSurface !== state.activeSurface) {
-    queueMicrotask(() => {
-      if (state.activeSurface === "guide") elements.guideTitle?.focus({ preventScroll: true });
-      else if (elements.guideTile?.offsetParent) elements.guideTile.focus({ preventScroll: true });
-    });
-  }
   if (changed) void loadSidePanels();
 }
 
@@ -1623,7 +1594,6 @@ function applyLaunchpadHash({ notify = false } = {}) {
   });
   appliedLaunchpadHash = hash;
   if (resolution.status === "none") {
-    state.activeSurface = "workspace";
     return false;
   }
   if (resolution.status !== "matched") {
@@ -1639,20 +1609,13 @@ function applyLaunchpadHash({ notify = false } = {}) {
   }
 
   if (resolution.surface === "guide") {
-    state.activeSurface = "guide";
-    resetSpaceSelection();
-    void loadGuideInstallContent();
+    window.location.assign(guideDocumentationUrl(getLocale()));
     return false;
   }
 
-  state.activeSurface = "workspace";
-  state.guideOpenedFromLaunchpad = false;
   const changed = state.filters.scope !== resolution.scope || state.filters.company !== resolution.company;
   state.filters.scope = resolution.scope;
   state.filters.company = resolution.company;
-  // Každý navštívený workspace je nový návratový kontext. Pokud se uživatel
-  // vrátí do Guide historií, tlačítko Zpět ho proto nepošle do starší Organizace.
-  state.guideReturnHash = activeSpaceHash();
   if (changed) resetSpaceSelection();
   return changed;
 }
@@ -1665,120 +1628,6 @@ function activeSpaceHash() {
   return state.filters.scope === "personal"
     ? personalspaceHash()
     : organizationHash(state.filters.company);
-}
-
-function closeGuide() {
-  if (state.activeSurface !== "guide") return;
-  if (state.guideOpenedFromLaunchpad) {
-    state.guideOpenedFromLaunchpad = false;
-    window.history.back();
-    return;
-  }
-  state.activeSurface = "workspace";
-  writeLaunchpadHash(state.guideReturnHash ?? activeSpaceHash(), { replace: true });
-  render();
-  queueMicrotask(() => {
-    if (elements.guideTile?.offsetParent) elements.guideTile.focus({ preventScroll: true });
-  });
-}
-
-function normalizeGuideSearch(value) {
-  return String(value ?? "")
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLocaleLowerCase(getLocale())
-    .trim();
-}
-
-function loadGuideInstallContent() {
-  if (state.guideInstallContentPromise) return state.guideInstallContentPromise;
-  const locale = getLocale();
-  elements.guidePromptStatus?.removeAttribute("hidden");
-  elements.guidePromptError?.setAttribute("hidden", "");
-  state.guideInstallContentPromise = launchpadFetch(
-    `/api/guide/organization-install?locale=${encodeURIComponent(locale)}`,
-  )
-    .then(async (response) => {
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload?.error ?? "guide_content_unavailable");
-      if (!guideInstallPayloadIsValid(payload, locale)) {
-        throw new Error("guide_content_invalid");
-      }
-      elements.guidePrompt?.querySelector("code")?.replaceChildren(payload.short_prompt);
-      elements.guidePolicy?.querySelector("code")?.replaceChildren(payload.policy_markdown);
-      elements.guidePrompt?.removeAttribute("hidden");
-      elements.guidePolicy?.removeAttribute("hidden");
-      elements.guidePromptStatus?.setAttribute("hidden", "");
-      if (elements.guidePromptCopy) elements.guidePromptCopy.disabled = false;
-      filterGuideContent(elements.guideSearch?.value ?? "");
-      return payload;
-    })
-    .catch((error) => {
-      elements.guidePromptStatus?.setAttribute("hidden", "");
-      elements.guidePromptError?.removeAttribute("hidden");
-      if (elements.guidePromptCopy) elements.guidePromptCopy.disabled = true;
-      state.guideInstallContentPromise = null;
-      console.warn(`[lazurio] Guide install content unavailable: ${error.message}`);
-      return null;
-    });
-  return state.guideInstallContentPromise;
-}
-
-async function copyGuideInstallPrompt() {
-  const prompt = elements.guidePrompt?.textContent?.trim();
-  if (!prompt) return;
-  try {
-    await navigator.clipboard.writeText(prompt);
-    elements.guidePromptStatus.textContent = t("guide.install.prompt.copied");
-    elements.guidePromptStatus.removeAttribute("hidden");
-  } catch {
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(elements.guidePrompt);
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-    elements.guidePromptStatus.textContent = t("guide.install.prompt.copyFailed");
-    elements.guidePromptStatus.removeAttribute("hidden");
-  }
-}
-
-function filterGuideContent(query) {
-  const needle = normalizeGuideSearch(query);
-  let visibleItems = 0;
-  for (const item of document.querySelectorAll("[data-guide-search-item]")) {
-    const searchableText = item.dataset.guideSearchKey
-      ? t(item.dataset.guideSearchKey)
-      : item.dataset.guideSearchText ?? item.textContent;
-    const matches = !needle || normalizeGuideSearch(searchableText).includes(needle);
-    item.toggleAttribute("hidden", !matches);
-    if (matches) visibleItems += 1;
-  }
-  for (const group of document.querySelectorAll("[data-guide-search-group]")) {
-    const hasVisibleItem = [...group.querySelectorAll("[data-guide-search-item]")]
-      .some((item) => !item.hidden);
-    group.toggleAttribute("hidden", !hasVisibleItem);
-  }
-  for (const panel of document.querySelectorAll("[data-guide-topic-panel]")) {
-    const hasVisibleItem = [...panel.querySelectorAll("[data-guide-search-item]")]
-      .some((item) => !item.hidden);
-    const isSelected = panel.dataset.guideTopicPanel === state.guideActiveTopic;
-    panel.toggleAttribute("hidden", needle ? !hasVisibleItem : !isSelected);
-  }
-  for (const button of elements.guideTopicButtons) {
-    const isActive = !needle && button.dataset.guideTopic === state.guideActiveTopic;
-    button.classList.toggle("is-active", isActive);
-    if (isActive) button.setAttribute("aria-current", "page");
-    else button.removeAttribute("aria-current");
-  }
-  elements.guideNoResults?.toggleAttribute("hidden", visibleItems > 0);
-}
-
-function selectGuideTopic(topic) {
-  const panel = document.querySelector(`[data-guide-topic-panel="${topic}"]`);
-  if (!panel) return;
-  state.guideActiveTopic = topic;
-  if (elements.guideSearch) elements.guideSearch.value = "";
-  filterGuideContent("");
 }
 
 function writeLaunchpadHash(hash, { replace = false } = {}) {
@@ -1828,7 +1677,9 @@ function renderSpaceSwitcher() {
   spaces.append(...options);
 
   const profile = state.personalspace?.profile;
-  const profileNodes = profile ? [spaceProfileCard(profile), profileSettingsItem()] : [];
+  const profileNodes = [];
+  if (profile) profileNodes.push(spaceProfileCard(profile));
+  profileNodes.push(profileSettingsItem());
   if (profileNodes.length > 0 && options.length > 0) {
     const divider = document.createElement("div");
     divider.className = "space-switcher-divider";
@@ -1886,11 +1737,35 @@ function profileInitials(name) {
 }
 
 function profileSettingsItem() {
-  const item = document.createElement("div");
-  item.className = "space-profile-settings is-disabled";
-  item.setAttribute("aria-disabled", "true");
-  item.append(settingsIcon(), document.createTextNode(t("profile.settings")));
-  return item;
+  const group = document.createElement("section");
+  group.className = "space-profile-settings";
+
+  const heading = document.createElement("div");
+  heading.className = "space-profile-settings-heading";
+  heading.append(settingsIcon(), document.createTextNode(t("profile.settings")));
+
+  const language = document.createElement("label");
+  language.className = "space-language-setting";
+  const label = document.createElement("span");
+  label.textContent = t("locale.label");
+  const select = document.createElement("select");
+  select.className = "space-language-select";
+  select.setAttribute("aria-label", t("locale.label"));
+  for (const locale of ["cs", "en"]) {
+    const option = document.createElement("option");
+    option.value = locale;
+    option.textContent = t(`locale.${locale}`);
+    select.append(option);
+  }
+  select.value = getLocale();
+  select.addEventListener("change", () => {
+    if (select.value === getLocale()) return;
+    setLocale(select.value);
+    window.location.reload();
+  });
+  language.append(label, select);
+  group.append(heading, language);
+  return group;
 }
 
 function settingsIcon() {
@@ -1939,8 +1814,6 @@ function selectSpace(space) {
   restoreSpaceMenuFocusOnClose = true;
   state.spaceMenuOpen = false;
   resetSpaceSelection();
-  state.activeSurface = "workspace";
-  state.guideOpenedFromLaunchpad = false;
   if (space.kind === "personal") {
     state.filters.scope = "personal";
     state.filters.company = "all";
@@ -1948,7 +1821,6 @@ function selectSpace(space) {
     state.filters.scope = "org";
     state.filters.company = space.organization.slug;
   }
-  state.guideReturnHash = activeSpaceHash();
   syncActiveSpaceHash();
   render();
   void loadSidePanels();
@@ -2031,39 +1903,33 @@ function applySpaceMenuState() {
 
 function renderScopeControls() {
   const personal = state.filters.scope === "personal";
-  const guide = state.activeSurface === "guide";
   mountUpdateBannerGroup();
-  if (elements.skipLink) elements.skipLink.href = guide ? "#guideMain" : "#workspaceMain";
-  elements.workspaceMain?.toggleAttribute("hidden", guide);
-  elements.guideMain?.toggleAttribute("hidden", !guide);
-  elements.hero.classList.toggle("hidden", personal || guide);
-  elements.personalPrivacyBadge?.toggleAttribute("hidden", !personal || guide);
-  elements.appsToolbar.classList.toggle("hidden", personal || guide);
-  elements.drawerToggle.classList.toggle("hidden", personal || guide);
+  if (elements.skipLink) elements.skipLink.href = "#workspaceMain";
+  elements.hero.classList.toggle("hidden", personal);
+  elements.personalPrivacyBadge?.toggleAttribute("hidden", !personal);
+  elements.appsToolbar.classList.toggle("hidden", personal);
+  elements.drawerToggle.classList.toggle("hidden", personal);
   elements.layout.classList.toggle("is-personal", personal);
-  elements.layout.classList.toggle("is-guide", guide);
-  elements.recentChangesSidebar.classList.toggle("hidden", personal || guide);
-  elements.globalUpdateSlot?.toggleAttribute("hidden", guide);
+  elements.page?.classList.toggle("is-organization", !personal);
+  elements.recentChangesSidebar.classList.toggle("hidden", personal);
+  applySidebarState();
   // Notifikace agregují změny napříč moduly Organizace — v Personalspace
   // nemají co dělat, stejně jako pravé panely. Zvoneček proto mizí i s
   // otevřeným panelem, ne jen jeho obsah.
-  elements.notificationsToggle?.classList.toggle("hidden", personal || guide);
-  if ((personal || guide) && state.notificationsOpen) setNotificationsOpen(false);
-  if ((personal || guide) && state.drawerOpen) setDrawer(false);
+  elements.notificationsToggle?.classList.toggle("hidden", personal);
+  if (personal && state.notificationsOpen) setNotificationsOpen(false);
+  if (personal && state.drawerOpen) setDrawer(false);
 }
 
-// Na desktopu je update první kartou pravého sloupce. Na mobilu se pravý
-// sloupec přesouvá do zavřeného draweru a v Personalspace se skrývá úplně;
-// provozní informace proto v těchto stavech přejde do globálního slotu nad
-// layoutem. Po návratu na desktop Organization scope se vrátí do sidebaru.
+// Na desktopu je update součástí rozbaleného Stavu prostoru. Na mobilu se
+// lišta pomůcek přesouvá do zavřeného draweru a v Personalspace se skrývá;
+// provozní informace proto v těchto stavech přejde do globálního slotu.
 function mountUpdateBannerGroup() {
   const group = elements.updateBannerGroup;
-  const global = state.activeSurface !== "guide"
-    && (mobilePanelQuery.matches || state.filters.scope === "personal");
-  const target = global ? elements.globalUpdateSlot : elements.recentChangesSidebar;
-  if (!group || !target || group.parentElement === target) return;
-  if (global) target.append(group);
-  else target.prepend(group);
+  const global = mobilePanelQuery.matches || state.filters.scope === "personal";
+  const target = global ? elements.globalUpdateSlot : elements.spaceStatusContent;
+  if (!group || !target) return;
+  if (group.parentElement !== target) target.append(group);
 }
 
 function renderWorkspaceWelcome() {
@@ -2645,12 +2511,6 @@ function organizationSectionNode({ organization, families, modules }) {
     grid,
   );
   return node;
-}
-
-function mountAppFilters() {
-  if (!elements.appsFilterControls || !elements.appsFilterFallback) return;
-  elements.appsFilterFallback.append(elements.appsFilterControls);
-  elements.appsFilterFallback.classList.add("is-active");
 }
 
 function workspaceSectionNode({ organization, teamSections }) {
@@ -4022,7 +3882,7 @@ function appIconNode(app) {
 
 function lazurioAppIcon(key) {
   const file = LAZURIO_APP_ICON_FILES[key];
-  return file ? `/app-icons/lazurio/${file}` : "";
+  return file ? `./app-icons/lazurio/${file}` : "";
 }
 
 function appCardTone(app, warning) {

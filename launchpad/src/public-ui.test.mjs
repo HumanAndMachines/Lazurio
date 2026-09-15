@@ -34,12 +34,13 @@ function cssProperty(source, selector, property) {
 }
 
 test("Launchpad public shell exposes a header space switcher and app cards", async () => {
-  const [html, js, css, server, appState] = await Promise.all([
+  const [html, js, css, server, appState, guideLink] = await Promise.all([
     readFile(join(publicRoot, "index.html"), "utf8"),
     readFile(join(publicRoot, "app.js"), "utf8"),
     readFile(join(publicRoot, "styles.css"), "utf8"),
     readFile(join(import.meta.dirname, "server.mjs"), "utf8"),
     readFile(join(publicRoot, "app-state.js"), "utf8"),
+    readFile(join(publicRoot, "guide-link.js"), "utf8"),
   ]);
 
   // Shell regions jsou přítomné; interní debug tabulka se do denního UI neposílá.
@@ -48,10 +49,10 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(html).toContain(`<meta name="apple-mobile-web-app-title" content="${LAZURIO_LAUNCHPAD_NAME}" />`);
   expect(html).toContain('id="spaceSwitcherButton"');
   expect(html).toContain('id="spaceSwitcherMenu"');
-  expect(html).toContain('id="localeSwitcher"');
-  expect(html).toContain('data-locale="en"');
-  expect(html).toContain('data-locale="cs"');
-  expect(css).toMatch(/\.locale-switcher-option\[aria-pressed="true"\][^{]*\{[^}]*color: var\(--lz-white\)/);
+  expect(html).not.toContain('id="localeSwitcher"');
+  expect(html).not.toContain('data-locale="en"');
+  expect(html).not.toContain('data-locale="cs"');
+  expect(css).not.toContain(".locale-switcher-option");
   expect(html).toContain('id="appsGrid"');
   expect(html).toContain('class="marketplace-teaser side-panel"');
   expect(html).toContain('id="marketplaceTeaserTitle" data-i18n="marketplace.title"');
@@ -65,74 +66,27 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(marketplaceBlock).not.toContain("<a ");
   expect(marketplaceBlock).not.toContain("<button");
   const guideTileIndex = html.indexOf('id="guideTile"');
+  const updateBannerIndex = html.indexOf('id="updateBannerGroup"');
   const marketplaceIndex = html.indexOf('class="marketplace-teaser side-panel"');
   expect(guideTileIndex).toBeGreaterThan(-1);
+  expect(guideTileIndex).toBeLessThan(updateBannerIndex);
   expect(guideTileIndex).toBeLessThan(marketplaceIndex);
-  expect(html).toContain('id="guideTile" class="guide-tile side-panel" href="#/guide"');
-  expect(html).toContain('/app-icons/lazurio/guide-signpost-solid-96.png');
-  expect(html).not.toContain('<img src="/app-icons/lazurio/knowledgebase-96.png" alt="" />');
-  expect(html).toContain('id="guideMain" class="guide-surface"');
-  expect(html).not.toContain('class="guide-eyebrow"');
-  expect(html).toContain('id="guideSearch" type="search" data-i18n-placeholder="guide.search.placeholder"');
-  expect(html).toContain('data-guide-topic="installation" aria-current="page"');
-  expect(html).toContain('data-guide-topic-panel="installation"');
-  expect(html).toContain('data-i18n="guide.navigation.installation"');
-  expect(html).toContain('data-i18n="guide.install.roles.agent.title"');
-  expect(html).toContain('data-i18n="guide.install.roles.user.title"');
-  expect(html).toContain("Lazurio for GitHub");
-  expect(html).toContain("All repositories");
-  expect(html).toContain("Runtime ready");
-  expect(html).toContain("Editing ready");
-  expect(html).toContain("Publishing ready");
-  expect(html).toContain('id="guidePromptCopy" class="guide-copy-button" type="button" disabled data-i18n="guide.install.prompt.copy"');
-  expect(html).toContain('id="guidePromptError" class="guide-content-error" role="alert" hidden data-i18n="guide.install.prompt.error"');
-  expect(html).toContain('id="guidePolicyDisclosure" class="guide-policy" data-guide-search-item data-guide-search-key="guide.install.policy.summary"');
-  expect(html).not.toContain("data-guide-search-text=");
-  expect(html).toContain('data-i18n="guide.install.policy.summary"');
-  expect(html).not.toContain("gh auth login --hostname github.com");
-  expect(html).toContain('data-i18n="guide.glossary.basic"');
-  expect(html).toContain('data-i18n="guide.glossary.advanced"');
-  expect(html).toContain('data-i18n="guide.term.subscription.label"');
-  expect(html).toContain('data-i18n="guide.term.tokens.body"');
-  expect(html).toContain('data-i18n="guide.term.aiColleague.body"');
-  expect(html).toContain('data-i18n="guide.term.steward.body"');
-  expect(html).toContain('data-i18n="guide.term.mcp.body"');
-  expect(html).toContain('data-i18n="guide.term.plugin.body"');
-  expect(html).toContain("Wispr Flow");
-  expect(html).toContain('href="https://wisprflow.ai/downloads"');
-  expect(html).toContain("CodexBar");
-  expect(html).toContain('href="https://codexbar.app/"');
-  expect(html).toContain("Browser Use");
-  expect(html).toContain('href="https://browser-use.com/"');
-  expect((html.match(/class="guide-recommendation-visual" aria-hidden="true"/g) ?? []).length).toBe(3);
-  expect(html).toContain("guide-recommendation--wispr");
-  expect(html).toContain("guide-recommendation--codexbar");
-  expect(html).toContain("guide-recommendation--browser-use");
-  expect(cssProperty(css, ".guide-recommendation", "grid-template-columns")).toBe("minmax(190px, 240px) minmax(0, 1fr)");
-  const workspaceBreakpoint = cssBlock(css, "@media (max-width: 900px)");
-  expect(cssProperty(workspaceBreakpoint, ".guide-recommendation", "grid-template-columns")).toBe("minmax(0, 1fr)");
-  expect(cssProperty(workspaceBreakpoint, ".guide-recommendation-visual", "width")).toBe("min(100%, 28rem)");
-  expect(css).toContain(".guide-visual-cursor");
-  expect(html).toContain('data-i18n="guide.apps.browserUse.caution"');
-  expect(html).toContain('data-i18n="guide.apps.intro"');
-  expect(js).toContain("function filterGuideContent(query)");
-  expect(js).toContain("function selectGuideTopic(topic)");
-  expect(js).toContain('`/api/guide/organization-install?locale=${encodeURIComponent(locale)}`');
-  expect(js).toContain("guideInstallPayloadIsValid(payload, locale)");
-  expect(js).toContain('t("guide.install.prompt.copied")');
-  expect(js).toContain('t("guide.install.prompt.copyFailed")');
-  expect(js.indexOf("guideInstallContentPromise: null")).toBeLessThan(js.indexOf("await loadData()"));
-  expect(js).toContain("navigator.clipboard.writeText(prompt)");
-  expect(js).toContain("Guide install content unavailable");
+  expect(html).toContain('id="guideTile" class="guide-tile side-panel" href="https://documentation.lazurio.ai/cs/guide/?utm_source=launchpad&amp;utm_medium=product&amp;utm_campaign=guide"');
+  expect(html).toContain('<!-- iconoir/book -->');
+  expect(html).not.toContain('guide-signpost-solid-96.png');
+  expect(html).not.toContain('knowledgebase-96.png');
+  expect(html).not.toContain('id="guideMain"');
+  expect(html).not.toContain('data-guide-topic');
+  expect(html).not.toContain('data-guide-search-item');
+  expect(html).not.toContain('src="/guide-assets/');
+  expect(js).toContain('import { guideDocumentationUrl } from "./guide-link.js";');
+  expect(js).toContain('window.location.assign(guideDocumentationUrl(getLocale()))');
+  expect(js).not.toContain('state.activeSurface');
+  expect(guideLink).toContain('https://documentation.lazurio.ai');
+  expect(guideLink).toContain('utm_source=launchpad&utm_medium=product&utm_campaign=guide');
+  expect(guideLink).toContain('locale === "en" ? "en" : "cs"');
   expect(server).toContain('url.pathname === "/api/guide/organization-install"');
   expect(server).toContain("rootPath: lazurioCodeRoot");
-  expect(server).toContain('locale: url.searchParams.get("locale")');
-  expect(server).not.toContain("readOrganizationInstallGuide({ rootPath: rootSourceRoot })");
-  expect(js).toContain("item.dataset.guideSearchKey");
-  expect(js).toContain("t(item.dataset.guideSearchKey)");
-  expect(js).toContain('.normalize("NFD")');
-  expect(js).toContain(".toLocaleLowerCase(getLocale())");
-  expect(js).toContain('document.querySelectorAll("[data-guide-search-item]")');
   expect(html).not.toContain("<iframe");
   expect(html).not.toContain('class="debug-table"');
   expect(html).not.toContain('id="appsTable"');
@@ -159,7 +113,7 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(js).toContain("const LAZURIO_APP_ICON_FILES = Object.freeze({");
   expect(js).toContain("const key = appIconKey(app);");
   expect(js).toContain("const lazurioIcon = lazurioAppIcon(key);");
-  expect(js).toContain('return file ? `/app-icons/lazurio/${file}` : "";');
+  expect(js).toContain('return file ? `./app-icons/lazurio/${file}` : "";');
   const iconResolverBlock = js.slice(js.indexOf("function lazurioAppIcon"), js.indexOf("function appCardTone"));
   expect(iconResolverBlock).not.toContain("app.module");
   expect(iconResolverBlock).not.toContain("app.company");
@@ -167,15 +121,15 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(css).toContain("linear-gradient(");
   expect(css).not.toContain("translateY(-3px)");
   expect(css).toContain(":hover .app-card-desc");
-  expect(css).toContain("max-height: 4.8em");
+  expect(css).toContain("max-height: 2.9em");
   expect(css).toContain("opacity 340ms var(--tile-reveal-ease)");
   expect(css).toContain("max-height 420ms var(--tile-reveal-ease)");
   expect(css).toContain("@media (hover: none), (pointer: coarse)");
   expect(css).not.toContain("0 18px 36px color-mix(in srgb, var(--lz-ink) 9%, transparent)");
   expect(css).not.toContain("0 2px 10px color-mix(in srgb, var(--lz-ink) 6%, transparent)");
   expect(css).toContain("/* CAC-0095 — kanonická materiálová dlaždice. */");
-  expect(css).toContain("column-gap: var(--lz-space-16)");
-  expect(css).toContain("row-gap: var(--lz-space-16)");
+  expect(css).toContain("column-gap: var(--lz-space-12)");
+  expect(css).toContain("row-gap: var(--lz-space-12)");
   expect(css).toContain("border-radius: var(--lz-radius-md)");
   expect(css).toContain("border: 1px solid var(--lz-line)");
   expect(css).toContain("0 10px 24px -22px color-mix(in srgb, var(--lz-ink) 18%, transparent)");
@@ -192,28 +146,22 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(js).toContain("function spaceOption");
   expect(js).toContain("function selectSpace");
   expect(js).toContain("function applyLaunchpadHash");
-  expect(js).toContain('from "/lazurio-runtime/deep-link-lib.mjs"');
+  expect(js).toContain('from "./lazurio-runtime/deep-link-lib.mjs"');
   expect(js).toContain("function syncActiveSpaceHash");
   expect(js).toContain("let launchpadScopeDataReady = false");
   expect(js).toContain("launchpadScopeDataReady = true");
-  expect(js).toContain('if (launchpadScopeDataReady && state.activeSurface === "workspace")');
+  expect(js).toContain('if (launchpadScopeDataReady)');
   expect(js).toContain("!launchpadScopeDataReady || window.location.hash === appliedLaunchpadHash");
   expect(js).toContain('window.addEventListener("hashchange", applyBrowserLaunchpadHash)');
   expect(js).toContain("organizationHash(state.filters.company)");
   expect(js).toContain("personalspaceHash()");
-  expect(js).toContain("guideHash()");
-  expect(js).toContain('state.activeSurface = "guide"');
-  expect(js.match(/state\.guideReturnHash = activeSpaceHash\(\);/g)?.length).toBe(3);
-  expect(js).toContain('elements.skipLink.href = guide ? "#guideMain" : "#workspaceMain"');
+  expect(js).not.toContain("guideHash()");
+  expect(js).not.toContain('state.activeSurface = "guide"');
+  expect(js).toContain('elements.skipLink.href = "#workspaceMain"');
   expect(js).toContain('app.organization_path === "guide"');
   expect(js).toContain("suppressNextDrawerOpen");
   expect(js).toContain("function visibleNotifications");
   expect(js).toContain("function visibleMostUsed");
-  expect(js).toContain('?company=${encodeURIComponent(requestedCompany)}');
-  expect(js).toContain("const requestedCompany = state.filters.company");
-  expect(js).toContain("let sidePanelRequestGeneration = 0;");
-  expect(js).toContain("const requestId = ++sidePanelRequestGeneration;");
-  expect(js).toContain("sidePanelResponseIsCurrent({");
   expect(js).toContain("return filtered(state.apps)");
   expect(js).not.toContain("--space-logo-hue");
   expect(js).toContain("space.organization.logo_url");
@@ -231,8 +179,12 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(profileBlock).toContain("name.href = profile.settings_url");
   expect(profileBlock).toContain('name.target = "_blank"');
   const settingsBlock = js.slice(js.indexOf("function profileSettingsItem"), js.indexOf("function settingsIcon"));
-  expect(settingsBlock).toContain('document.createElement("div")');
-  expect(settingsBlock).toContain('item.setAttribute("aria-disabled", "true")');
+  expect(settingsBlock).toContain('document.createElement("section")');
+  expect(settingsBlock).toContain('document.createElement("select")');
+  expect(settingsBlock).toContain('select.className = "space-language-select"');
+  expect(settingsBlock).toContain('select.value = getLocale()');
+  expect(settingsBlock).toContain('setLocale(select.value)');
+  expect(settingsBlock).not.toContain('aria-disabled');
   expect(settingsBlock).not.toContain(".href");
   expect(server).toContain("organizationLogoCandidates");
   expect(server).toContain("launchpad/app/v1/web/launchpad-icon.png");
@@ -246,7 +198,7 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(js).toContain('state.filters.scope === "personal"');
   expect(html).not.toContain('id="runtimeRootBadge"');
   expect(js).not.toContain('WORKTREE · ${worktreeName}');
-  expect(js).toContain('elements.drawerToggle.classList.toggle("hidden", personal || guide)');
+  expect(js).toContain('elements.drawerToggle.classList.toggle("hidden", personal)');
   expect(js).toContain('state.filters.scope = "personal";\n  state.filters.company = "all";');
   const switcherBlock = js.slice(js.indexOf("function renderSpaceSwitcher"), js.indexOf("Side panels:"));
   expect(switcherBlock).not.toContain("organizationStats");
@@ -319,6 +271,7 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(css).toContain(".space-profile-card");
   expect(css).toContain(".space-profile-photo img");
   expect(css).toContain(".space-profile-settings");
+  expect(css).toContain(".space-language-select");
   expect(css).toContain("grid-template-columns: minmax(0, 1fr)");
   expect(css).not.toContain(".rail-panel");
   expect(css).not.toContain(".runtime-root-badge");
@@ -382,7 +335,7 @@ test("Launchpad shell ships GEN2-like command center, theme and feedback afforda
   expect(html).toContain('id="heroTitle"');
   expect(html).toContain('id="heroCta"');
   expect(html.indexOf('id="hero"')).toBeGreaterThan(html.indexOf('id="recentChangesSidebar"'));
-  expect(html.indexOf('id="updateBanner"')).toBeLessThan(html.indexOf('id="hero"'));
+  expect(html.indexOf('id="updateBanner"')).toBeGreaterThan(html.indexOf('id="hero"'));
   expect(html).not.toContain('id="organizationGitPanel"');
   expect(html).toContain('id="spaceHealthBadge"');
   expect(html).not.toContain('id="heroSubtitle"');
@@ -422,13 +375,12 @@ test("Launchpad shell ships GEN2-like command center, theme and feedback afforda
   expect(css).toContain(".hero.hero-warn .btn-secondary");
   expect(css).toContain(".hero.hero-danger .btn-secondary");
   expect(css).toContain('.space-health-badge[data-tone="danger"]');
-  expect(css).toContain("#drawerToggle {");
+  expect(css).toContain("#drawerToggle:not(.hidden) {");
   expect(css).toContain("position: relative");
   expect(js).toContain("function renderSpaceHealthBadge");
   expect(js).toContain('toggle.setAttribute("aria-label", label)');
   expect(js).toContain("if (mobilePanelQuery.matches && state.drawerOpen) setDrawer(false)");
   expect(js).toContain("state.suppressNextDrawerOpen = true");
-  expect(js).toContain("if (mobilePanelQuery.matches) setDrawer(false)");
 
   // Launchpad je zatím pouze světlý; stará uložená tmavá volba se odstraní.
   expect(html).toContain('data-theme="light"');
@@ -447,17 +399,15 @@ test("Launchpad shell ships GEN2-like command center, theme and feedback afforda
   expect(css).not.toContain('[data-accent="emerald"]');
   expect(css).toContain("color-mix(in srgb, var(--accent)");
 
-  // Vyhledávání a dvoupolohový filtr zůstávají jediným ovládáním rozcestníku.
+  // Rozcestník filtruje pouze hledáním; problémy zůstávají ve Stavu prostoru.
   expect(html).toContain('id="appsSearch"');
-  expect(html).toContain('data-status-segment="all"');
+  expect(html).not.toContain('data-status-segment="all"');
   expect(html).not.toContain('data-status-segment="healthy"');
   expect(html).not.toContain('data-status-segment="stopped"');
-  expect(html).toContain('id="attentionToggle"');
-  expect(html).toContain('data-i18n="workspace.attention"');
-  expect(js).toContain("state.filters.attentionOnly = true");
-  expect(js).toContain("state.filters.attentionOnly = false");
-  expect(js).toContain("function syncAttentionToggle");
-  expect(html).toContain('class="segment attention-toggle"');
+  expect(html).not.toContain('id="attentionToggle"');
+  expect(js).not.toContain("state.filters.attentionOnly = true");
+  expect(js).not.toContain("function syncAttentionToggle");
+  expect(html).not.toContain('id="guideTileSummary"');
 
   // Toast + skeleton feedback.
   expect(html).toContain('id="toastRoot"');
@@ -568,7 +518,8 @@ test("Launchpad quiet refresh is lightweight and non-overlapping", async () => {
     js.indexOf("async function fetchJson"),
   );
 
-  expect(js).toContain("createLatestDataLoadCoordinator({ run: runLoadData })");
+  expect(js).toContain("createLatestDataLoadCoordinator({");
+  expect(js).toContain("run: runLoadData,");
   expect(loadDataBlock).toContain("dataLoadCoordinator.load(options)");
   expect(stateLib).toContain("if (!fresh) return inFlight.promise;");
   expect(stateLib).toContain("return queueFresh({ quiet, sync });");
@@ -636,7 +587,7 @@ test("CAC-0095: topbar uses canonical Iconoir icons without circular wrappers", 
     readFile(join(publicRoot, "app.js"), "utf8"),
   ]);
 
-  for (const icon of ["user", "nav-arrow-down", "lock", "bell", "layout-right", "more-horiz", "refresh"]) {
+  for (const icon of ["user", "nav-arrow-down", "lock", "bell", "layout-top", "more-horiz", "refresh"]) {
     expect(html).toContain(`<!-- iconoir/${icon} -->`);
   }
 
@@ -644,7 +595,7 @@ test("CAC-0095: topbar uses canonical Iconoir icons without circular wrappers", 
   expect(html).toContain("M6 9L12 15L18 9");
   expect(html).toContain("M16 12H17.4C17.7314");
   expect(html).toContain("M18 8.4C18 6.70261");
-  expect(html).toContain("M14.25 9.75V21");
+  expect(html).toContain("M21 9.75H3");
   expect(html).toContain("M20 12.5C20.2761 12.5");
   expect(html).not.toContain("M3 11.5066C3 16.7497");
   expect(html).toContain("M21.8883 13.5C21.1645");
@@ -688,7 +639,7 @@ test("Version families render as one card with a default version and a more-menu
   expect(css).toContain(".app-version-menu");
   expect(css).toContain(".app-version-badge");
   expect(css).toContain(".app-version-option");
-  expect(css).toMatch(/\.app-version-menu-panel\s*{[\s\S]*?position: static;[\s\S]*?width: 100%;[\s\S]*?border-top: 1px solid var\(--lz-line-faint\)/);
+  expect(css).toMatch(/\.app-version-menu-panel\s*{[\s\S]*?position: absolute;[\s\S]*?width: min\(256px, calc\(100% - 24px\)\);[\s\S]*?border: 1px solid var\(--lz-line\)/);
   expect(css).toContain(".app-card.has-open-menu:not(.selected)");
 });
 
@@ -803,9 +754,9 @@ test("CAC-0044/0095: pravé panely, notifikace pod zvonečkem a git chip", async
   expect(js).toContain("git_attention");
   expect(css).toContain(".side-panel");
   expect(css).toContain(".recent-changes-sidebar");
-  expect(css).toContain("grid-template-columns: minmax(0, 1fr) minmax(250px, 300px)");
+  expect(css).toContain("grid-template-columns: minmax(0, 1fr)");
   expect(css).toContain(".quick-app");
-  expect(js).toContain('elements.recentChangesSidebar.classList.toggle("hidden", personal || guide)');
+  expect(js).toContain('elements.recentChangesSidebar.classList.toggle("hidden", personal)');
 });
 
 test("CAC-0095: zvoneček nese actor, scope a payload a respektuje izolaci", async () => {
@@ -868,7 +819,7 @@ test("CAC-0095: zvoneček nese actor, scope a payload a respektuje izolaci", asy
 
   // Izolace: Personalspace zvoneček nedostane a notifikace nepřekročí Organizaci.
   expect(js).toContain('if (state.filters.scope === "personal") return []');
-  expect(js).toContain('elements.notificationsToggle?.classList.toggle("hidden", personal || guide)');
+  expect(js).toContain('elements.notificationsToggle?.classList.toggle("hidden", personal)');
   expect(js).toContain("item.scope?.company === state.filters.company");
 
   expect(css).toContain(".notifications-panel");
@@ -947,7 +898,7 @@ test("Launchpad používá jednu explicitní Synchronizovat akci místo dílčí
   expect(js).toContain("loadData({ sync: true })");
   expect(js).toContain('fetchJson("/api/sync", { method: "POST" })');
   expect(css).toContain(".update-banner-group");
-  expect(css).toContain(".recent-changes-sidebar > .update-banner-group .update-banner");
+  expect(css).toContain(".space-status-content > .update-banner-group .update-banner");
 });
 
 test("CAC-0042: detail panel vysvětluje verzi a Mission Control pracovní návrhy", async () => {
@@ -1080,7 +1031,7 @@ test("mobilní toolbar drží search kompaktní a sekundární panely přesouvá
   expect(js).toContain('const mobilePanelQuery = window.matchMedia("(max-width: 900px)")');
   expect(js).toContain('const mobileTopbarQuery = window.matchMedia("(max-width: 900px)")');
   expect(js).toContain("elements.drawerBody?.prepend(elements.recentChangesSidebar)");
-  expect(js).toContain("elements.layout?.insertBefore(elements.recentChangesSidebar, elements.drawerBackdrop)");
+  expect(js).toContain("elements.workspaceWelcome?.after(elements.recentChangesSidebar)");
   expect(js).toContain("const restoreFocus = overflow.contains(document.activeElement)");
   expect(js).toContain('const toggle = overflow.querySelector("summary")');
   expect(js).toContain("if (toggle instanceof HTMLElement) toggle.focus()");
@@ -1444,9 +1395,7 @@ test("Launchpad používá jednotný kompaktní grid s jemně zvýšenými dlaž
   ]);
 
   expect(css).toContain("grid-template-columns: repeat(4, minmax(0, 1fr))");
-  expect(css).toContain("grid-template-columns: repeat(3, minmax(0, 1fr))");
-  expect(css).toContain("grid-template-columns: repeat(2, minmax(0, 1fr))");
-  expect(css).toContain("min-height: 148px");
+  expect(css).toContain("min-height: 11rem");
   expect(css).toContain("width: 2.6rem");
   expect(css).toContain("border: 1px solid transparent");
   expect(css).toContain("font-weight: 400");
@@ -1479,7 +1428,7 @@ test("Organization workspace má kompaktní uvítání s dynamickým názvem fir
   expect(js).toContain('t("workspace.welcomeOrganization"');
   expect(js).toContain('toggleAttribute("hidden", personal)');
   expect(css).toContain(".workspace-welcome-title");
-  expect(css).toContain("margin-top: 1.5rem");
+  expect(css).toContain("margin-top: var(--lz-space-16)");
   // CAC-0095: sazba jde na škálu Lazuria. Test tvrdil 1,3 rem / 720 —
   // konkrétní hodnoty, které identita nahradila škálou (14 · 16,5 · 20)
   // a dvěma vahami (400 · 600). Tvrzení tu zůstává, protože hlídá, že
@@ -1496,15 +1445,15 @@ test("DEV-6493: banner používá GET-first Lazurio stav a pouze current|updated
     readFile(join(publicRoot, "app-state.js"), "utf8"),
   ]);
 
-  // Banner je první blok trvalého pravého sloupce pod sticky hlavičkou.
-  // Neprodlužuje navigační header a sdílí jeden panelový jazyk se stavem.
+  // Na desktopu je údržba uvnitř rozbaleného Stavu prostoru; na mobilu
+  // se stejný blok přesouvá do globálního slotu, aby nezůstal skrytý.
   expect(html).toContain('id="updateBanner"');
   expect(html).toContain('id="globalUpdateSlot"');
   expect(html.indexOf('id="globalUpdateSlot"')).toBeLessThan(html.indexOf('<div class="layout">'));
   expect(html.indexOf("</header>")).toBeLessThan(html.indexOf('id="updateBanner"'));
   expect(html.indexOf('<main class="page">')).toBeLessThan(html.indexOf('id="updateBanner"'));
   expect(html.indexOf('id="recentChangesSidebar"')).toBeLessThan(html.indexOf('id="updateBanner"'));
-  expect(html.indexOf('id="updateBanner"')).toBeLessThan(html.indexOf('id="hero"'));
+  expect(html.indexOf('id="updateBanner"')).toBeGreaterThan(html.indexOf('id="hero"'));
   expect(html).toContain('id="updateBannerText"');
   expect(html).toContain('id="updateBannerAction"');
   expect(html).not.toContain('id="moduleUpdateBanner"');
@@ -1515,8 +1464,8 @@ test("DEV-6493: banner používá GET-first Lazurio stav a pouze current|updated
   expect(js).toContain("updateBannerPresentation(state.updateStatus");
   expect(js).toContain("function mountUpdateBannerGroup");
   expect(js).toContain('mobilePanelQuery.matches || state.filters.scope === "personal"');
-  expect(js).toContain("if (global) target.append(group)");
-  expect(js).toContain("else target.prepend(group)");
+  expect(js).toContain('global ? elements.globalUpdateSlot : elements.spaceStatusContent');
+  expect(js).toContain("if (group.parentElement !== target) target.append(group)");
   expect(js).not.toContain("elements.updateBannerText.textContent = status.message");
   expect(stateLib).toContain('status.state === "blocked"');
   expect(stateLib).toContain('status.state === "current"');

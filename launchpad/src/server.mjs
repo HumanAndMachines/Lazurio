@@ -1,4 +1,6 @@
+import { normalizeLaunchpadBasePath, launchpadPath, launchpadRoute } from "../public/base-path.js";
 import { randomUUID } from "node:crypto";
+import { hostedRequestMayStartApp } from "./hosted-readiness-lib.mjs";
 import { constants, existsSync, lstatSync, realpathSync } from "fs";
 import { open, readFile } from "fs/promises";
 import { createConnection } from "node:net";
@@ -122,11 +124,14 @@ const hostedWorkspace = createHostedWorkspaceConfiguration({
   domain: process.env.LAZURIO_HOSTED_DOMAIN,
 });
 const launchpadLifecycleConfigurationId = hostedLifecycleConfigurationId(hostedWorkspace);
+const basePath = normalizeLaunchpadBasePath(process.env.LAZURIO_LAUNCHPAD_BASE_PATH ?? "/");
+const knownLaunchpadMounts = new Map();
 const launchpadServerIdentity = buildServerIdentity({
   rootId: launchpadRootId,
   controlRootId: launchpadControlRootId,
   installGeneration: launchpadInstallGeneration,
   lifecycleConfigurationId: launchpadLifecycleConfigurationId,
+  basePath,
   instanceId: randomUUID(),
   pid: process.pid,
   startedAt: new Date().toISOString(),
@@ -163,6 +168,7 @@ const runtimeManager = createRuntimeManager({
   lifecycleProfile: hostedWorkspace.profile,
   discover: (_root, discoveryOptions = {}) => discoverLaunchpadApps(rootSourceRoot, {
     ...discoveryOptions,
+    runtime_root: configuredRuntimeRoot,
     organization_mount_root: companiesRoot,
     machine_context_root: companiesRoot,
   }),
@@ -238,6 +244,7 @@ try {
   const existingLocator = await withServerStateAccess(() => readServerLocatorIfPresent({
     stateDirectory: serverStateDirectory,
   }));
+  if (existingLocator) knownLaunchpadMounts.set(existingLocator.origin, existingLocator.base_path ?? "/");
   startResult = await startLaunchpadWithPortPolicy({
     requestedPort: port,
     host,
@@ -256,9 +263,10 @@ try {
       controlRootId: launchpadControlRootId,
       installGeneration: launchpadInstallGeneration,
       lifecycleConfigurationId: launchpadLifecycleConfigurationId,
+      basePath,
     }),
     shutdownStaleLaunchpad: requestStaleLaunchpadShutdown,
-    openExisting: openBrowser,
+    openExisting: (origin) => openBrowser(new URL(basePath, origin).href),
     acquireServerLease: async () => {
       serverLifetimeLock ??= await withServerStateAccess(() => acquireServerLifetimeLock({
         stateDirectory: serverStateDirectory,
@@ -272,6 +280,7 @@ try {
       controlRootId: launchpadControlRootId,
       installGeneration: launchpadInstallGeneration,
       lifecycleConfigurationId: launchpadLifecycleConfigurationId,
+      basePath,
     });
     if (observation.status !== "compatible") {
       throw new Error("Reused Lazurio Server no longer has the expected identity.");
@@ -281,13 +290,16 @@ try {
       stateDirectory: serverStateDirectory,
       origin: startResult.url,
       identity: observation.identity,
+      basePath,
     }));
   } else {
     const serverUrl = `http://${host}:${startResult.server.port}`;
+    knownLaunchpadMounts.set(serverUrl, basePath);
     serverLocator = await withServerStateAccess(() => writeServerLocator({
       stateDirectory: serverStateDirectory,
       origin: serverUrl,
       identity: launchpadServerIdentity,
+      basePath,
     }));
     serverShutdownState.markRunning();
     if (hostedWorkspace.profile === "hosted") {
@@ -322,6 +334,7 @@ async function validateAgentEntryOrganization() {
   if (!options.agentEntry || options.organization === undefined) return;
   const discovery = await discoverLaunchpadApps(rootSourceRoot, {
     organization: options.organization,
+    runtime_root: configuredRuntimeRoot,
     organization_mount_root: companiesRoot,
     machine_context_root: companiesRoot,
   });
@@ -332,7 +345,7 @@ async function refreshReusedAgentEntryInventory(origin) {
   if (!options.agentEntry || options.organization === undefined) return;
   let response;
   try {
-    response = await fetch(new URL("/api/lazurio/agent-entry-refresh", origin), {
+    response = await fetch(new URL(launchpadPath("/api/lazurio/agent-entry-refresh", basePath), origin), {
       method: "POST",
       signal: AbortSignal.timeout(5_000),
     });
@@ -412,7 +425,7 @@ if (hostedWorkspace.profile === "hosted") {
 printAgentEntryUrl(serverUrl);
 
 if (options.open) {
-  await openBrowser(serverUrl);
+  await openBrowser(new URL(basePath, serverUrl).href);
 }
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
@@ -431,7 +444,7 @@ setInterval(() => {}, 2_147_483_647);
 
 function printAgentEntryUrl(origin) {
   if (!options.agentEntry) return;
-  const url = launchpadEntryUrl(origin, {
+  const url = launchpadEntryUrl(new URL(basePath, origin).href, {
     organization: options.organization ?? null,
     personalspace: Boolean(options.personalspace),
   });
@@ -447,6 +460,7 @@ async function buildAppsResponseUncached({ includeGit = false } = {}) {
   const response = await buildLaunchpadAppsResponse({
     companiesRoot,
     rootSourceRoot,
+    runtimeRoot: configuredRuntimeRoot,
     launchpadRoot,
     runtimeManager,
     gitStatusService,
@@ -465,7 +479,7 @@ async function buildAppsResponseUncached({ includeGit = false } = {}) {
       readOrganizationLaunchpadTheme({ companiesRoot, organization }),
     ]);
     if (logoPath) {
-      organization.logo_url = `/api/organizations/${encodeURIComponent(organization.slug)}/logo`;
+      organization.logo_url = launchpadPath(`/api/organizations/${encodeURIComponent(organization.slug)}/logo`, basePath);
       nextLogoPaths.set(organization.slug, logoPath);
     }
     if (theme) organization.theme = theme;
@@ -477,6 +491,7 @@ async function refreshHostedWorkspaceMaintenance({ warnSkipped = false } = {}) {
   const inventory = await buildLaunchpadAppsResponse({
     companiesRoot,
     rootSourceRoot,
+    runtimeRoot: configuredRuntimeRoot,
     launchpadRoot,
     runtimeManager: { appsWithRuntime: async (apps) => apps },
     includeGit: false,
@@ -559,7 +574,9 @@ async function serveOrganizationLogo(request, url, slug) {
 }
 
 function isMutatingApiRequest(request, url) {
-  return url.pathname.startsWith("/api/") && !safeApiMethods.has(request.method);
+  return url.pathname.startsWith("/api/") && (
+    !safeApiMethods.has(request.method) || url.pathname.startsWith("/api/internal/hosted/")
+  );
 }
 
 async function worktreeMutationTouchesCanonicalMount(url) {
@@ -777,7 +794,7 @@ async function inspectRunningLaunchpad(url, expected) {
 
 async function probeServerReadiness(url) {
   try {
-    const response = await fetch(new URL("/health", url), { signal: AbortSignal.timeout(1_500) });
+    const response = await fetch(new URL(launchpadPath("/health", knownLaunchpadMounts.get(new URL(url).origin) ?? basePath), url), { signal: AbortSignal.timeout(1_500) });
     if (!response.ok) return "not_ready";
     const health = await response.json().catch(() => null);
     return health?.status === "ok" ? "ready" : "not_ready";
@@ -789,7 +806,7 @@ async function probeServerReadiness(url) {
 async function probeServerIdentity(url, pathname) {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const response = await fetch(new URL(pathname, url), { signal: AbortSignal.timeout(1_500) });
+      const response = await fetch(new URL(launchpadPath(pathname, knownLaunchpadMounts.get(new URL(url).origin) ?? basePath), url), { signal: AbortSignal.timeout(1_500) });
       if (response.status === 404) return { status: "missing" };
       if (!response.ok) return { status: "probe_failed" };
       const identity = await response.json().catch(() => null);
@@ -838,7 +855,7 @@ async function requestStaleLaunchpadShutdown(url, observation) {
   const instanceId = observation?.identity?.instance_id;
   if (typeof instanceId !== "string") return false;
   try {
-    const response = await fetch(new URL("/api/lazurio/server-shutdown", url), {
+    const response = await fetch(new URL(launchpadPath("/api/lazurio/server-shutdown", observation.identity.base_path ?? knownLaunchpadMounts.get(new URL(url).origin) ?? "/"), url), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ instance_id: instanceId }),
@@ -853,6 +870,8 @@ async function requestStaleLaunchpadShutdown(url, observation) {
 }
 
 function appRuntimeRoute(pathname) {
+  const internal = pathname.match(/^\/api\/internal\/hosted\/apps\/([^/]+)\/ensure$/);
+  if (internal) return { appId: decodeURIComponent(internal[1]), action: "ensure" };
   const match = pathname.match(/^\/api\/apps\/([^/]+)\/(health|install|repair|start|switch|open|stop|restart|logs)$/);
   if (!match) return null;
   return {
@@ -952,6 +971,20 @@ async function handlePersonalRuntimeRoute(request, route) {
           requireSource: explicitRuntimeSourceActions.has(route.action),
         })
       : {};
+    // Ingress-only readiness subrequest. The deployment proxy must reject this
+    // namespace on every public hostname. It supplies the same signed Team
+    // cookie used by hosted mutations; proxy identity headers grant no access.
+    if (route.action === "ensure") {
+      if (hostedWorkspace.profile !== "hosted") return notFound();
+      if (request.method !== "GET") return jsonResponse({ error: "method_not_allowed" }, 405);
+      const ready = await appsResponseCache.runMutation(() => runtimeManager.ensureHostedApp(route.appId, {
+        // Team authentication already happened. Fetch Metadata controls lifecycle
+        // only: background fetches and WebSocket reconnects are not a new Open.
+        // Non-browser clients without Fetch Metadata retain direct-link behavior.
+        allowStart: hostedRequestMayStartApp(request.headers),
+      }));
+      return new Response(null, { status: ready.status === "healthy" ? 204 : 503 });
+    }
     if (route.action === "health" && (request.method === "GET" || request.method === "POST")) {
       return jsonResponse(await personalspaceRuntimeManager.health(route.appId, runtimeOptions));
     }
@@ -1137,6 +1170,20 @@ async function handleRuntimeRoute(request, route) {
         "app_not_found",
         "Aplikace není dostupná v aktivním Team Workspace.",
       );
+    }
+    // Ingress-only readiness subrequest. The deployment proxy must reject this
+    // namespace on every public hostname. It supplies the same signed Team
+    // cookie used by hosted mutations; proxy identity headers grant no access.
+    if (route.action === "ensure") {
+      if (hostedWorkspace.profile !== "hosted") return notFound();
+      if (request.method !== "GET") return jsonResponse({ error: "method_not_allowed" }, 405);
+      const ready = await appsResponseCache.runMutation(() => runtimeManager.ensureHostedApp(route.appId, {
+        // Team authentication already happened. Fetch Metadata controls lifecycle
+        // only: background fetches and WebSocket reconnects are not a new Open.
+        // Non-browser clients without Fetch Metadata retain direct-link behavior.
+        allowStart: hostedRequestMayStartApp(request.headers),
+      }));
+      return new Response(null, { status: ready.status === "healthy" ? 204 : 503 });
     }
     if (route.action === "health" && (request.method === "GET" || request.method === "POST")) {
       return jsonResponse(projectHostedRuntimePayload(
@@ -1351,6 +1398,13 @@ function startServer(startPort) {
     idleTimeout: 120,
     async fetch(request) {
       const url = new URL(request.url);
+      if (basePath !== "/" && url.pathname === basePath.slice(0, -1)) {
+        url.pathname = basePath;
+        return Response.redirect(url.toString(), 308);
+      }
+      const route = launchpadRoute(url.pathname, basePath);
+      if (route === null) return notFound();
+      url.pathname = route;
       let workspaceTrustDecision;
       const evaluateWorkspaceRequest = () => {
         workspaceTrustDecision ??= requestTrust.evaluateWorkspaceRequest(request, url);
@@ -1493,10 +1547,12 @@ function startServer(startPort) {
                 status: "ok",
                 ...(maintenance
                   ? {
+                      module_lifecycle: "on-demand-v1",
                       maintenance: {
                         schema_version: maintenance.schema_version,
                         total: maintenance.total,
                         healthy: maintenance.healthy,
+                        stopped: maintenance.stopped,
                         starting: maintenance.starting,
                         degraded: maintenance.degraded,
                         skipped: hostedMaintenance?.skipped?.length ?? 0,

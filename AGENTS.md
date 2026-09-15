@@ -174,7 +174,7 @@ jeho průvodce tímhle světem. Závěrečná zpráva začíná handoffem: odkaz
 Ready PR, lidské a praktické shrnutí toho, co Publikace zavede, výsledek
 ověření, odkaz na aplikaci běžící z worktree — a standardizovaná dvojotázka
 „Mám změny Publikovat tvým jménem?
-Nebo mám požádat jiného oprávněného Principála o kontrolu a Publikaci?". Volbu
+Nebo mám požádat jiného Kolegu o kontrolu a Publikaci?". Volbu
 vždy nabídneš,
 nikdy ji nedomýšlíš za Principála. Před otázkou zjistíš živá GitHub práva
 svého Principála a řídíš se jimi: smí-li merge a řekne-li v threadu
@@ -355,7 +355,11 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    `lazurio organization install <github-login> --role builder --json`, který
    read-only ověří čerstvé Organization/Team membership a WRITE capability na
    aktivních Builder repozitářích; `planned_slot` ani restricted Admin-only
-   repo Buildera neblokuje. Nový GitHub účet páruje jednou přes
+   repo Buildera neblokuje. Steward Mašina používá `--role steward`: obě role
+   vyloučí deklarované restricted sloty a jejich descendants bez jediné
+   provider operace (`excluded_by_role_scope`); běžný `lazurio update`
+   absentní restricted slot nikdy automaticky neklonuje a materializuje jej
+   jen explicitní Admin install bez `--role`. Nový GitHub účet páruje jednou přes
    `gh auth login --hostname github.com --git-protocol ssh --web`, po souhlasu
    nechá tentýž flow vytvořit nebo nahrát veřejnou část SSH klíče a výsledek
    dokáže exact `git ls-remote` cílového root repa. Device kód, token ani
@@ -548,10 +552,12 @@ známý lease jiné Organizace vyžaduje výslovné potvrzení konkrétní nahra
 aplikace. Na localhostu jsou Modulové procesy session-scoped: graceful restart
 Launchpadu ukončí všechny jeho managed process trees, nic neobnoví a nový
 `Start`/`Open` znovu explicitně zvolí exact `main` nebo worktree source. Hosted
-Team Workspace automaticky udržuje výchozí App každého workspace Modulu
-deklarovaného pro daný Team; cold start začíná z `main` a session přepnutí na
-worktree se nepersistuje. Explicitní `Stop` je proto jen local akce a hosted ho
-odmítne. Legacy nebo nevalidní lease takovou autoritu nedává.
+Team Workspace spouští výchozí App deklarovaného Modulu na Open nebo
+přihlášený přímý odkaz a pak ji udržuje v aktuální session. Cold start sám
+moduly nespouští; první otevření začíná z `main` a session přepnutí na worktree
+se nepersistuje. Explicitní `Stop` platí i pro hosted a drží do dalšího
+otevření; health, katalog a browserové požadavky na pozadí nejsou Open.
+Legacy nebo nevalidní lease takovou autoritu nedává.
 Productionspace
 repozitáře z rootu nespouštěj ani nereleasuj bez explicitní org policy.
 
@@ -583,8 +589,7 @@ Ověřeno: <checks/testy a výsledek>
 Zkontroluj si to v aplikaci: <URL běžící z worktree, pokud existuje>
 Lokálně nezůstává nic mimo PR.
 
-Mám změny Publikovat tvým jménem? Nebo mám požádat jiného oprávněného
-Principála o kontrolu a Publikaci?
+Mám změny Publikovat tvým jménem? Nebo mám požádat jiného Kolegu o kontrolu a Publikaci?
 ```
 
 Co po dvojotázce následuje — merge na explicitní „Publikuj", nebo předání

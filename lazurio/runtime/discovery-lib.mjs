@@ -92,7 +92,8 @@ const moduleSchemaPath = join(lazurioPackageRoot, "schemas", "lazurio-module.sch
 const pluginSchemaPath = join(lazurioPackageRoot, "schemas", "launchpad-plugin.schema.json");
 const defaultOrganizationMountpoint = "organizations";
 const defaultModuleTemplateMountpoint = "templates";
-const requiredLaunchpadRootPaths = ["launchpad.gen3.json", "launchpad", "guide", "organizations", "manual"];
+const requiredWorkspaceRootPaths = ["launchpad.gen3.json", "organizations"];
+const requiredRuntimeRootPaths = ["launchpad", "guide", "manual"];
 const requiredOrganizationWorkspacePaths = [
   "modules.manifest.json",
   "manual",
@@ -1668,6 +1669,7 @@ function nonPlaceholderString(value) {
 
 function configuredLocalSurfaceEntries({
   companiesRoot,
+  runtimeRoot = companiesRoot,
   machineContextRoot,
   companiesConfig,
   localConfig = null,
@@ -1675,7 +1677,15 @@ function configuredLocalSurfaceEntries({
 }) {
   const shared = Array.isArray(companiesConfig.local_surfaces) ? companiesConfig.local_surfaces : [];
   const machineLocal = Array.isArray(localConfig?.local_surfaces) ? localConfig.local_surfaces : [];
-  const entries = shared.map((surface) => ({ surface, sourceRoot: companiesRoot }));
+  const entries = shared.map((surface) => ({
+    surface,
+    // A source checkout owns its Guide, including linked-worktree selection.
+    // A resident workspace omits framework files and uses the installed Guide.
+    // Custom surfaces and machine-local declarations keep their workspace scope.
+    sourceRoot: surface?.path === "guide" && surface?.kind === "shared-guide"
+      && !existsSync(join(companiesRoot, "guide"))
+      ? runtimeRoot : companiesRoot,
+  }));
   const seenPaths = new Set(shared.map((surface) => surface?.path).filter((path) => typeof path === "string"));
 
   for (const surface of machineLocal) {
@@ -1705,6 +1715,7 @@ function launchpadRootSurfaceCompany(companiesConfig, surface) {
 
 async function discoverLocalSurfacePackages({
   companiesRoot,
+  runtimeRoot = companiesRoot,
   machineContextRoot = companiesRoot,
   companiesConfig,
   localConfig,
@@ -1714,6 +1725,7 @@ async function discoverLocalSurfacePackages({
 }) {
   const entries = configuredLocalSurfaceEntries({
     companiesRoot,
+    runtimeRoot,
     machineContextRoot,
     companiesConfig,
     localConfig,
@@ -2108,7 +2120,9 @@ async function walkMountPackages({
     }
     organizationIssues.push(...mountContract.slotIssues);
     await walkPackageJson(companiesRoot, companyRoot, packageEntries, company, {
-      excludedRoots: mountContract.quarantinedPaths,
+      // Only the Organization-root output is generated; workspace/output can
+      // be a real module and must still pass normal discovery validation.
+      excludedRoots: [...mountContract.quarantinedPaths, join(companyRoot, "output")],
     });
   }
 }
@@ -2362,7 +2376,17 @@ export async function discoverLaunchpadApps(
   validateRequiredPaths({
     root: companiesRoot,
     label: workspaceRelativePath(process.cwd(), companiesRoot) || ".",
-    requiredPaths: requiredLaunchpadRootPaths,
+    requiredPaths: requiredWorkspaceRootPaths,
+    failures,
+  });
+
+  // Resident installs keep framework files outside the writable workspace.
+  // The caller supplies its verified runtime root; never skip either root check.
+  const runtimeRoot = options.runtime_root ?? companiesRoot;
+  validateRequiredPaths({
+    root: runtimeRoot,
+    label: workspaceRelativePath(process.cwd(), runtimeRoot) || ".",
+    requiredPaths: requiredRuntimeRootPaths,
     failures,
   });
 
@@ -2448,6 +2472,7 @@ export async function discoverLaunchpadApps(
   if (!organizationSelector) {
     await discoverLocalSurfacePackages({
       companiesRoot,
+      runtimeRoot,
       machineContextRoot,
       companiesConfig,
       localConfig,

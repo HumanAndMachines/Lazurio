@@ -171,8 +171,9 @@ Builder gate mapuje přes `teams[].forge_binding` na
 `lazurio.team-forge-binding.github.v0`, neměnné GitHub Team `id` a jeho
 `asserted_slug`. Chybějící nebo přejmenovaná vazba je owner blocker, ne důvod
 hádat Team podle display name. Kontrolují se Organization root a aktivní sloty
-určené Builderovi; `planned_slot` a restricted/Admin-only sloty se záměrně
-nezařazují.
+určené dané roli (`--role builder` nebo `--role steward`); `planned_slot`,
+restricted/Admin-only sloty a sloty s malformed access deklarací se záměrně
+nezařazují a gate nad nimi neprovede žádné provider čtení.
 
 ## Toolchain gate před Organization scope
 
@@ -475,6 +476,57 @@ ověření, dokud současně neplatí:
    root probe prošel;
 4. finální `lazurio doctor` je zelený včetně všech deklarovaných podřízených
    doctorů.
+
+## Steward Mašina a restricted sloty
+
+Organization manifest deklaruje u každého slotu `default_access` a
+`required_roles`. Slot s `default_access: restricted` (nebo `private`) je
+**restricted** — Admin-only scope. Klasifikace se čte výhradně z této
+deklarace, nikdy z názvu nebo cesty (`infra` není restricted proto, že se tak
+jmenuje). `expected`, `optional` i `role_based` jsou běžné sloty: Sync se o ně
+pokusí a chybějící GitHub grant vrátí pravdivě jako
+`materialization_source_unavailable`. Neznámý režim nebo malformed
+`required_roles` je fail-safe `access_classification_unknown`: nic se
+neklonuje, nic se na GitHubu nečte a Organization owner opraví manifest.
+
+Tři cesty se liší jen v tom, co udělají s **absentním** restricted slotem:
+
+```sh
+lazurio organization install <github-login> --json
+lazurio organization install <github-login> --role steward --json
+lazurio organization install <github-login> --role builder --json
+```
+
+- **Bez `--role`** je instalace explicitní Admin operace
+  (`scope.restricted_slots: "include"`): absentní restricted slot se
+  materializuje stejně jako běžné.
+- **`--role steward` a `--role builder`** (`scope.restricted_slots: "exclude"`)
+  materializují jen běžné sloty a jejich descendants včetně povinného
+  `repository_db_mount` Mission Control dat. Restricted slot i každý slot pod
+  ním skončí ve výsledku jako `current` s reason `excluded_by_role_scope`:
+  nad nimi neproběhne žádný `git clone`, `fetch`, `ls-remote` ani `gh api`.
+  Tento stav je záměrný a odlišný od chybějícího grantu
+  (`materialization_source_unavailable`, `next_action.kind: github_access`).
+  Steward gate před klonem read-only ověří aktivní Organization membership,
+  Team membership a WRITE na Organization rootu a běžných slotech, jejichž
+  `required_roles` jsou prázdné, `*` nebo jmenují `steward`; blokovaný gate
+  vrátí `steward_access_not_ready` a nic nematerializuje.
+- **Běžný `lazurio update`** (`restricted_slot_policy: "defer"`) absentní
+  restricted slot nikdy automaticky neklonuje a vrátí `current` s reason
+  `restricted_not_materialized`. Už namountované restricted checkouty dál
+  aktualizuje jako každý jiný. Partial Steward instalace tedy zůstane stabilní
+  i po dalších Sync bězích; jediná cesta k restricted slotu je explicitní
+  Admin install výše.
+- **Doctor** hlásí záměrně absentní restricted slot jako advisory
+  `restricted_not_materialized` (severity `neutral`) s návodem na explicitní
+  Admin install. Chybějící povinná aplikace (`expected`) nebo povinný datový
+  mount zůstává required `fail`; malformed deklarace je blocking
+  `access_classification_unknown`.
+
+Steward Agent po instalaci reportuje zvlášť: aplikace ready, data mount
+`repository_db_current`/`repository_db_materialized` a seznam
+`excluded_by_role_scope` slotů; vyloučený restricted slot nikdy nevydává za
+access blocker ani neřeší vyžádáním grantu.
 
 Každý doporučený warning má v handoffu explicitní disposition: opraveno,
 vědomě přijato Principálem, nebo blokováno chybějící pravomocí. Required nález

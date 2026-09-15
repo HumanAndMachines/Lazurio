@@ -10,6 +10,7 @@ import { join } from "node:path";
 export async function runIsolatedLazurioUpdate({
   rootPath,
   organizations = null,
+  restrictedSlotPolicy = null,
   environment = process.env,
 }) {
   const directory = await mkdtemp(join(tmpdir(), "lazurio-update-runtime-"));
@@ -42,6 +43,11 @@ export async function runIsolatedLazurioUpdate({
       const organizationScopePath = join(directory, "organization-scope.json");
       await Bun.write(organizationScopePath, `${JSON.stringify(organizations)}\n`);
       runtimeArgs.push("--organizations-file", organizationScopePath);
+    }
+    // Explicitní Organization install vlastní rozhodnutí o restricted slotech;
+    // běžný update runtime default `defer` nepřepisuje.
+    if (restrictedSlotPolicy !== null) {
+      runtimeArgs.push("--restricted-slots", restrictedSlotPolicy);
     }
     const child = Bun.spawn(
       runtimeArgs,

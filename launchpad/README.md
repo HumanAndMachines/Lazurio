@@ -37,21 +37,25 @@ Lokální profil je výchozí a zachovává loopback URL. Hosted profil se zapí
 lowercase DNS zóna v `LAZURIO_HOSTED_DOMAIN`. Jiný lifecycle config neexistuje.
 Launchpad z manifestů Organizace odvodí všechny workspace moduly daného Teamu,
 pro každý zvolí jeho deklarovaný výchozí App a URL sestaví jako
-`https://<module>.<team>.<domain>/`. Chybějící nebo nejednoznačný výchozí App
+`https://<team>.<domain>/<module>/`. Chybějící nebo nejednoznačný výchozí App
 izoluje jen daný Modul; loopback URL se do hosted odpovědi nikdy nepropíše.
 Manifesty tím vlastní členství a výchozí App, modulový kontrakt vlastní port a
 ingress vlastní autentizaci. Launchpad mezi nimi nevytváří druhý katalog.
 
 Hosted browser akce navíc vyžadují
 `LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN=https://<přesný-launchpad-host>` a interní
-`LAZURIO_LAUNCHPAD_AUTH_CHECK_URL=https://<přesný-auth-host>/oauth2/auth` spolu
+`LAZURIO_LAUNCHPAD_AUTH_CHECK_URL=https://<přesný-launchpad-host>/oauth2/auth` spolu
 s přesným `LAZURIO_LAUNCHPAD_AUTH_COOKIE_NAME=<oauth2-proxy-cookie>`. Server
 přijme tento origin pouze v hosted profilu, pouze přes svůj loopback listener a
 s browser metadata `Sec-Fetch-Site: same-origin`. Proxy ani identity hlavička
 se nepovažuje za důkaz, protože ji proces ve sdíleném loopback namespace umí
 napodobit. Launchpad proto před každou chráněnou akcí znovu ověří podepsanou
-HttpOnly session u stejného Team-scoped oauth2-proxy přes oddělený
-TLS-autentizovaný auth host. Na auth origin předá pouze přesně pojmenovanou
+HttpOnly session u stejného Team-scoped oauth2-proxy přes HTTPS. Auth check
+může používat stejný přesný origin jako Launchpad (například
+`https://builder.exampleco.lazurio.io/oauth2/auth`) nebo samostatný TLS-autentizovaný
+auth host. Cesta musí být přesně `/oauth2/auth`, bez query, fragmentu nebo
+přihlašovacích údajů v URL. Gateway musí tuto cestu směrovat přímo na
+oauth2-proxy, nikdy na Launchpad ani aplikaci modulu. Na auth origin předá pouze přesně pojmenovanou
 oauth2-proxy session cookie; žádnou další browser cookie, lidský display login
 ani OAuth token neloguje nebo nepředává a auth check failuje zavřeně. Exact
 Team capability je součástí konfigurace této auth session, ne paralelní
@@ -902,3 +906,19 @@ Doctor musí hlídat:
 
 Když Doctor selže, chyba má být napsaná tak, aby ji mohl opravit další
 agent bez znalosti historie.
+
+## Hosted machine path
+
+`LAZURIO_LAUNCHPAD_BASE_PATH=/launchpad/` mounts the Launchpad UI, assets,
+health endpoint and API under one path. The default `/` preserves local
+workstation URLs. The path must start and end with `/` and contain only
+lowercase slug segments. Requests outside the configured mount return 404;
+the bare mount redirects to its trailing-slash form. Browser resources and
+API calls resolve against this mount, leaving sibling applications such as
+`/t3code/` to the machine gateway. This is URL routing, not an additional
+access boundary; the existing request trust checks still apply.
+
+Hosted module links use the same machine origin as Launchpad. A module must
+serve its assigned path; there is no fallback to per-module container hosts.
+The lifecycle configuration fingerprint includes the machine-path routing
+contract so a server using the previous layout is not silently reused.

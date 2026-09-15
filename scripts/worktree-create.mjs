@@ -5,6 +5,7 @@
 //
 // Použití:
 //   bun run worktrees:create -- --plan CAC-0085 [--branch agent/<basename>]
+//     [--repository organizations/<Org-mount>]
 //     [--purpose "..."] [--surface claude-code] [--agent-label "Claude Code"]
 //     [--task-agent-id <opaque-id>] [--created-by <id>] [--dry-run]
 
@@ -198,17 +199,109 @@ function sameFilesystemEntry(left, right) {
   }
 }
 
-function resolveRepositoryIdentity(primaryRoot) {
+function resolveRepositoryIdentity(primaryRoot, { allowFilesystem = false } = {}) {
   // Čti deklarovaný remote bez `insteadOf` expanze: identita repozitáře je
   // kontrakt checkoutu, ne výsledek lokální transportní optimalizace.
   const remote = git(primaryRoot, ["config", "--local", "--get", "remote.origin.url"]);
   const normalized = remote.stdout.replaceAll("\\", "/");
   const match = normalized.match(/github\.com(?::|\/)([^/]+)\/([^/]+?)(?:\.git)?$/i);
-  if (!match) fail(`origin remote nejde rozparsovat na identitu: ${normalized}`);
+  const parts = normalized
+    .replace(/^file:\/\//i, "")
+    .replace(/\/$/, "")
+    .split("/")
+    .filter(Boolean);
+  const organization = match?.[1] ?? (allowFilesystem ? parts.at(-2) : null);
+  const repository = (
+    match?.[2] ?? (allowFilesystem ? parts.at(-1) : "") ?? ""
+  ).replace(/\.git$/i, "");
+  if (!organization || !repository) fail(`origin remote nejde rozparsovat na identitu: ${normalized}`);
   return {
     remoteUrl: remote.stdout,
-    organization: match[1],
-    module: match[2].replace(/_GEN[0-9]+$/i, ""),
+    organization,
+    repository,
+    module: repository.replace(/_GEN[0-9]+$/i, ""),
+  };
+}
+
+function portableRelativePath(path) {
+  return relative(path.root, path.target).split(sep).join("/");
+}
+
+function resolveEditRepository(lazurioRoot, rawRepository) {
+  if (!rawRepository) {
+    const identity = resolveRepositoryIdentity(lazurioRoot);
+    return {
+      root: lazurioRoot,
+      identity,
+      organizationPath: ".",
+      modulePath: ".",
+      module: identity.module,
+      repoKind: "root_repo",
+    };
+  }
+  if (
+    rawRepository.includes("\\")
+    || rawRepository.startsWith("/")
+    || /^[A-Za-z]:[\\/]/.test(rawRepository)
+    || !/^organizations\/[^/]+$/.test(rawRepository)
+  ) {
+    fail("--repository musí být portable cesta organizations/<organization> bez traversalu.");
+  }
+  let cursor = lazurioRoot;
+  for (const segment of rawRepository.split("/")) {
+    cursor = join(cursor, segment);
+    let stat;
+    try {
+      stat = lstatSync(cursor);
+    } catch {
+      fail(`--repository neexistuje: ${rawRepository}`);
+    }
+    if (!stat.isDirectory() || stat.isSymbolicLink()) {
+      fail("--repository obsahuje symlink nebo neadresářovou komponentu.");
+    }
+  }
+  const repositoryRoot = realpathSync(cursor);
+  const rootRelative = portableRelativePath({ root: lazurioRoot, target: repositoryRoot });
+  if (rootRelative !== rawRepository) {
+    fail("--repository se musí přesně shodovat s kanonickou cestou Organization rootu.");
+  }
+  const resolution = readOrganizationRoot({ organizationRoot: repositoryRoot });
+  if (
+    !["legacy", "transition"].includes(resolution.state)
+    || resolution.resource_count !== 1
+    || resolution.resource?.kind !== "organization"
+  ) {
+    fail(`--repository nemá mutation-safe runtime Organization manifest (${resolution.state}).`);
+  }
+  const gitRoot = git(repositoryRoot, ["rev-parse", "--show-toplevel"], { allowFail: true });
+  if (gitRoot.status !== 0 || !sameFilesystemEntry(repositoryRoot, gitRoot.stdout)) {
+    fail("--repository musí být samostatný Git-backed Organization root.");
+  }
+  const identity = resolveRepositoryIdentity(repositoryRoot, { allowFilesystem: true });
+  const declaredFullName = resolution.resource.root_repository?.locator;
+  const actualFullName = `${identity.organization}/${identity.repository}`;
+  if (declaredFullName !== actualFullName) {
+    fail(`--repository origin ${actualFullName} neodpovídá Organization manifestu ${String(declaredFullName)}.`);
+  }
+  const branch = git(repositoryRoot, ["symbolic-ref", "--short", "HEAD"], { allowFail: true });
+  if (branch.status !== 0 || branch.stdout !== "main") {
+    fail("--repository primary checkout musí být na main.");
+  }
+  if (git(repositoryRoot, ["status", "--porcelain=v1", "--untracked-files=all"]).stdout) {
+    fail("--repository primary checkout musí být clean.");
+  }
+  const upstream = git(repositoryRoot, ["rev-parse", "--abbrev-ref", "@{upstream}"], { allowFail: true });
+  if (upstream.status !== 0 || upstream.stdout !== "origin/main") {
+    fail("--repository primary checkout musí sledovat origin/main.");
+  }
+  return {
+    root: repositoryRoot,
+    identity,
+    organizationPath: rootRelative,
+    modulePath: rootRelative,
+    module: "root",
+    repoKind: "organization_root",
+    organization: resolution.resource.organization.slug,
   };
 }
 
@@ -289,16 +382,19 @@ async function main() {
     fail("--plan <KOD-XXXX> je povinný (kód vlastnického Mission Control plánu).");
   }
 
-  const primaryRoot = git(process.cwd(), ["rev-parse", "--show-toplevel"]).stdout;
-  if (!existsSync(join(primaryRoot, "launchpad.gen3.json"))) {
-    fail(`${primaryRoot} nevypadá jako Lazurio root (chybí launchpad.gen3.json).`);
+  const lazurioRoot = git(process.cwd(), ["rev-parse", "--show-toplevel"]).stdout;
+  if (!existsSync(join(lazurioRoot, "launchpad.gen3.json"))) {
+    fail(`${lazurioRoot} nevypadá jako Lazurio root (chybí launchpad.gen3.json).`);
   }
-  if (primaryRoot.split("/").includes(".worktrees")) {
+  if (lazurioRoot.split("/").includes(".worktrees")) {
     fail("spouštěj z primárního checkoutu, ne z linked worktree.");
   }
 
-  const authorityRoot = await resolveAuthorityRoot(primaryRoot, planCode);
-  const authorityPath = organizationAuthorityPath(primaryRoot, authorityRoot);
+  const editRepository = resolveEditRepository(lazurioRoot, options.repository);
+  const primaryRoot = editRepository.root;
+
+  const authorityRoot = await resolveAuthorityRoot(lazurioRoot, planCode);
+  const authorityPath = organizationAuthorityPath(lazurioRoot, authorityRoot);
   if (!authorityPath) {
     fail(
       "nový worktree vyžaduje Mission Control authority v "
@@ -349,7 +445,7 @@ async function main() {
     fail(`branch ${branch} neobsahuje kód plánu ${planCode}.`);
   }
 
-  const createLockPath = join(primaryRoot, ".worktrees", ".worktree-create.lock");
+  const createLockPath = join(lazurioRoot, ".worktrees", ".worktree-create.lock");
   await mkdir(dirname(createLockPath), { recursive: true });
   const acquiredLock = await acquireCreateLock({
     lockPath: createLockPath,
@@ -366,7 +462,7 @@ async function main() {
   // Osiřelý sidecar bez worktree může nést recovery handoff přerušené práce —
   // nikdy ho tiše nepřepisuj.
   if (existsSync(sidecarPath)) fail(`sidecar už existuje: ${sidecarPath}; zkontroluj jeho recovery_handoff a odstraň ho vědomě.`);
-  const identity = resolveRepositoryIdentity(primaryRoot);
+  const identity = editRepository.identity;
   const transportOverrides = checkoutTransportOverrideKeys(primaryRoot);
   if (transportOverrides.length > 0) {
     fail(
@@ -380,6 +476,14 @@ async function main() {
       `origin URL přepisuje globální url.*.insteadOf (${identity.remoteUrl} -> ${resolvedRemote.stdout}); `
       + "create lane vyžaduje exact endpoint, credential helper a proxy zůstávají podporované.",
     );
+  }
+  if (editRepository.repoKind === "organization_root") {
+    const remoteMain = git(primaryRoot, ["ls-remote", identity.remoteUrl, "refs/heads/main"]);
+    const remoteHead = remoteMain.stdout.split(/\s+/)[0];
+    const localHead = git(primaryRoot, ["rev-parse", "HEAD"]).stdout;
+    if (!/^[0-9a-f]{40,64}$/i.test(remoteHead) || remoteHead !== localHead) {
+      fail("--repository primary checkout musí být přesně aktuální vůči remote main.");
+    }
   }
   const now = new Date().toISOString();
   const explicitTaskAgentId = options["task-agent-id"] ?? options["thread-id"] ?? null;
@@ -408,18 +512,20 @@ async function main() {
   }
   const sidecar = {
     schema_version: "companiesascode.worktree.v1",
-    organization: identity.organization,
-    organization_path: ".",
+    organization: editRepository.organization ?? identity.organization,
+    organization_path: editRepository.organizationPath,
     workspace: "root",
-    module: identity.module,
-    module_path: ".",
-    repo_kind: "root_repo",
+    module: editRepository.module,
+    module_path: editRepository.modulePath,
+    repo_kind: editRepository.repoKind,
     base_branch: "main",
     branch,
     mission_control_plan_code: planCode,
     ...(authorityPath ? { mission_control_authority_path: authorityPath } : {}),
     mission_control_plan_path: plan.relative,
-    worktree_path: `.worktrees/root/${planBasename}`,
+    worktree_path: editRepository.repoKind === "root_repo"
+      ? `.worktrees/root/${planBasename}`
+      : `${editRepository.organizationPath}/.worktrees/root/${planBasename}`,
     created_at: now,
     created_by: options["created-by"] ?? `${taskAgentLocator.surface}-for-${userInfo().username}@${hostname()}`,
     last_touched: now,
@@ -459,6 +565,13 @@ async function main() {
     identity.remoteUrl,
     "+refs/heads/main:refs/remotes/origin/main",
   ]);
+  if (
+    editRepository.repoKind === "organization_root"
+    && git(primaryRoot, ["rev-parse", "HEAD"]).stdout
+      !== git(primaryRoot, ["rev-parse", "origin/main"]).stdout
+  ) {
+    fail("--repository primary checkout se během create preflightu rozešel s origin/main.");
+  }
   await mkdir(dirname(worktreePath), { recursive: true });
   const branchAllocation = allocateOwnedWorktreeBranch({
     git,

@@ -48,6 +48,43 @@ afterAll(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })));
 });
 
+test("Launchpad serves its UI and API under a machine path without sibling routes", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const logo = join(root, "organizations", "OmegaCo_GEN3", "launchpad", "app", "v1", "web", "launchpad-icon.png");
+  await mkdir(join(logo, ".."), { recursive: true });
+  await writeFile(logo, '<svg xmlns="http://www.w3.org/2000/svg"/>');
+  const { port, environment } = await startLaunchpadServer(root, { env: { LAZURIO_LAUNCHPAD_BASE_PATH: "/launchpad/" } });
+  const origin = `http://127.0.0.1:${port}`;
+  const reused = Bun.spawn(["bun", "src/server.mjs", "--root", root, "--port", String(port), "--reuse", "--agent-entry", "--organization", "OmegaCo"], {
+    cwd: join(import.meta.dirname, ".."), env: environment, stdout: "pipe", stderr: "pipe",
+  });
+  servers.push(reused);
+  expect(await reused.exited).toBe(0);
+  expect(await new Response(reused.stdout).text()).toContain(`${origin}/launchpad/#/org/OmegaCo`);
+
+  const bare = await fetch(`${origin}/launchpad`, { redirect: "manual" });
+  expect(bare.status).toBe(308);
+  expect(bare.headers.get("location")).toBe(`${origin}/launchpad/`);
+  const page = await fetch(`${origin}/launchpad/`);
+  expect(page.status).toBe(200);
+  const html = await page.text();
+  const apps = await (await fetch(`${origin}/launchpad/api/apps`)).json();
+  const logoUrl = apps.organizations.find(org => org.slug === "OmegaCo").logo_url;
+  expect(logoUrl).toBe("/launchpad/api/organizations/OmegaCo/logo");
+  expect((await fetch(origin + logoUrl)).status).toBe(200);
+  for (const match of html.matchAll(/(?:src|href)="(\.\/[^"#]+)"/g)) {
+    const asset = await fetch(new URL(match[1], `${origin}/launchpad/`));
+    expect(asset.status).toBe(200);
+  }
+  for (const path of ["api/apps", "styles.css", "app.js", "base-path.js", "lazurio-runtime/deep-link-lib.mjs", "fonts/fonts.css"]) {
+    expect((await fetch(`${origin}/launchpad/${path}`)).status).toBe(200);
+  }
+  for (const path of ["/", "/api/apps", "/t3code/", "/launchpad-other/api/apps"]) {
+    expect((await fetch(origin + path)).status).toBe(404);
+  }
+});
+
 test("Launchpad server exposes read-only git and Mission Control routes", async () => {
   const root = await createLaunchpadGitFixture();
   tempRoots.push(root);
@@ -855,6 +892,11 @@ test("hosted Launchpad rejects forged browser context without a TLS-authenticate
     "sec-fetch-site": "same-origin",
   };
 
+  for (const headers of [gatewayHeaders, { ...gatewayHeaders, cookie: "__Secure-lazurio-sales-workspace=forged" }]) {
+    const ensure = await fetch(`http://127.0.0.1:${port}/api/internal/hosted/apps/betaco-hosted-deals-v1/ensure`, { headers });
+    expect(ensure.status).toBe(403);
+    expect((await ensure.json()).error).toBe("mutating_request_forbidden");
+  }
   const directServerIdentity = await getJson(port, "/api/lazurio/server-identity");
   expect(directServerIdentity.request_trust_profile).toBe("hosted");
 
@@ -948,7 +990,7 @@ test("hosted Launchpad omits another Team app and rejects its runtime route befo
   });
 });
 
-test("hosted Launchpad starts every Team module default App and derives its external URL", async () => {
+test("hosted Launchpad keeps Team modules cold and derives their external URLs", async () => {
   const root = await createLaunchpadGitFixture();
   const stateRoot = `${root}-launchpad-state`;
   const appPort = await findFreePort();
@@ -986,20 +1028,23 @@ test("hosted Launchpad starts every Team module default App and derives its exte
       LAZURIO_LAUNCHPAD_AUTH_CHECK_URL: `https://127.0.0.1:${await findFreePort()}/oauth2/auth`,
     },
   });
-  await waitForHealth(appPort, server);
+  await Bun.sleep(100);
+  await expect(fetch(`http://127.0.0.1:${appPort}/health`)).rejects.toThrow();
 
   const apps = await getJson(port, "/api/apps");
   expect(apps.apps).toEqual([
     expect.objectContaining({
       id: app.id,
-      url: "https://deals.sales.workspace.example.test/",
-      runtime: expect.objectContaining({ status: "healthy" }),
+      url: "https://sales.workspace.example.test/deals/",
+      runtime: expect.objectContaining({ managed: false }),
     }),
   ]);
+  expect((await getJson(port, "/health")).module_lifecycle).toBe("on-demand-v1");
   expect((await getJson(port, "/health")).maintenance).toEqual({
     schema_version: "lazurio.hosted_workspace_maintenance.v1",
     total: 1,
-    healthy: 1,
+    healthy: 0,
+    stopped: 1,
     starting: 0,
     degraded: 0,
     skipped: 1,
@@ -1008,6 +1053,10 @@ test("hosted Launchpad starts every Team module default App and derives its exte
 
 test("instance-bound local shutdown rejects stale callers and stops the managed module process tree", async () => {
   const root = await createLaunchpadGitFixture();
+  // A resident workspace has no framework checkout; the running Server owns it.
+  for (const name of ["launchpad", "guide", "manual"]) {
+    await rm(join(root, name), { recursive: true });
+  }
   const appPort = await findFreePort();
   const app = {
     id: "betaco-session-shutdown-v1",
@@ -1637,7 +1686,7 @@ async function startLaunchpadServer(root, { env = {}, useDefaultStateRoot = fals
     stderr: "pipe",
   });
   servers.push(server);
-  await waitForHealth(port, server);
+  await waitForHealth(port, server, env.LAZURIO_LAUNCHPAD_BASE_PATH ?? "/");
   return { server, port, environment, serverStateDirectory };
 }
 
@@ -1687,7 +1736,7 @@ function probeFreePort() {
   });
 }
 
-async function waitForHealth(port, server) {
+async function waitForHealth(port, server, basePath = "/") {
   // A cold Windows runner may need more than 15 s to start the detached Bun
   // server after Git-heavy fixture setup. This remains bounded by the enclosing
   // test timeout and still fails immediately when the child exits.
@@ -1701,7 +1750,7 @@ async function waitForHealth(port, server) {
       throw new Error(`launchpad server on ${port} exited early (code ${server.exitCode}): ${stderr.trim()}`);
     }
     try {
-      const response = await fetch(`http://127.0.0.1:${port}/health`);
+      const response = await fetch(`http://127.0.0.1:${port}${basePath}health`);
       if (response.ok) return;
     } catch {
       // server not ready yet
@@ -1810,3 +1859,20 @@ function staleServerFixtureSource() {
     "",
   ].join("\n");
 }
+
+
+test("changing the mount replaces the located same-root server using its previous API path", async () => {
+  const root = await createLaunchpadGitFixture(); tempRoots.push(root);
+  const primary = await startLaunchpadServer(root);
+  const replacement = Bun.spawn(["bun", "src/server.mjs", "--root", root, "--port", String(primary.port), "--reuse"], {
+    cwd: join(import.meta.dirname, ".."),
+    env: { ...primary.environment, LAZURIO_LAUNCHPAD_BASE_PATH: "/launchpad/" },
+    stdout: "ignore", stderr: "pipe",
+  });
+  servers.push(replacement);
+  await waitForHealth(primary.port, replacement, "/launchpad/");
+  expect(await waitForProcessExit(primary.server, 5000)).toBe(0);
+  expect((await fetch(`http://127.0.0.1:${primary.port}/api/apps`)).status).toBe(404);
+  const response = await fetch(`http://127.0.0.1:${primary.port}/launchpad/api/lazurio/server-identity`);
+  expect((await response.json()).base_path).toBe("/launchpad/");
+});

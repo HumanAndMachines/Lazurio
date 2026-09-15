@@ -277,3 +277,15 @@ function identity(overrides = {}) {
     ...overrides,
   };
 }
+
+
+test("a mount change replaces the same-root instance instead of reusing the wrong API surface", () => {
+  const expected = { rootId: "1".repeat(64), controlRootId: "5".repeat(64), installGeneration: "2".repeat(64), basePath: "/launchpad/" };
+  const mounted = identity({ root_id: expected.rootId, control_root_id: expected.controlRootId,
+    install_generation: expected.installGeneration, base_path: "/launchpad/" });
+  expect(classifyServerIdentity({ observed: mounted, expected })).toBe("compatible");
+  expect(classifyServerIdentity({ observed: { ...mounted, base_path: "/" }, expected })).toBe("stale_install");
+  const { base_path, ...legacyRoot } = mounted;
+  expect(classifyServerIdentity({ observed: legacyRoot, expected })).toBe("stale_install");
+  expect(isValidServerIdentity({ ...mounted, base_path: "//foreign.example/" })).toBe(false);
+});

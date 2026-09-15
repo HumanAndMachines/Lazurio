@@ -395,7 +395,7 @@ function parseArgs(argv) {
     }
     if (arg === "--role") {
       const value = argv[index + 1];
-      if (!value || value.startsWith("-")) throw new Error("--role vyžaduje hodnotu builder.");
+      if (!value || value.startsWith("-")) throw new Error("--role vyžaduje hodnotu builder nebo steward.");
       parsed.organizationRole = value;
       index += 1;
       continue;
@@ -623,8 +623,8 @@ function parseArgs(argv) {
         throw new Error("organization install vždy používá kanonický Lazurio Root v home a nepřijímá --root.");
       }
       parsed.organizationLogin = parsed.operands[1];
-      if (parsed.organizationRole !== null && parsed.organizationRole !== "builder") {
-        throw new Error("organization install --role zatím podporuje pouze hodnotu builder.");
+      if (parsed.organizationRole !== null && !["builder", "steward"].includes(parsed.organizationRole)) {
+        throw new Error("organization install --role podporuje pouze hodnoty builder a steward; Admin instaluje bez --role.");
       }
     }
   } else if (parsed.searchFlags.size > 0) {
@@ -740,7 +740,9 @@ function usage() {
     "  lazurio --version [--json]",
     "  lazurio install [--language cs|en] [--json]",
     "  lazurio organization activate --check --github-id <id> [--json]",
-    "  lazurio organization install <github-login> [--role builder] [--json]",
+    "  lazurio organization install <github-login> [--role builder|steward] [--json]",
+    "    bez --role: Admin instalace včetně restricted (Admin-only) slotů",
+    "    --role builder|steward: read-only GitHub readiness gate; restricted sloty zůstanou mimo scope bez provider operace",
     "  lazurio context [--organization <slug>] [--json] [--root <cesta>]",
     "  lazurio doctor [--tool-updates] [--json] [--root <cesta>]",
     "  lazurio update [--json] [--root <cesta>]",

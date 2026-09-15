@@ -90,23 +90,25 @@ slug `Macano-Tech` korektně najde mount `organizations/Macano-Tech_GEN3` bez
 druhého mapování.
 
 `live` ověří discovery, Doctor, static module lease, worktree provenienci,
-`main → worktree → main → worktree` takeover na jediném module portu, odvozenou
-URL a to, že hosted `Stop` vrátí `hosted_module_always_on`. V hosted profilu
-navíc stejný canonical selector jako Server odvodí celý Team: runner vyžaduje,
-aby všechny výchozí Apps byly zdravé a managed, přesně jedna zvolená App držela
-testovaný worktree, ostatní zůstaly na `main`, veřejná Workspace projekce
-neobsahovala jiný Team a maintenance souhrn přesně odpovídal odvozeným i
-izolovaným Modulům. Chybějící či nejednoznačný default se tedy nezamění za
-zdravou App, ale zůstane jmenovitě ve `skipped` evidence. Lokální profil může
-na konci použít `--stop-after`; hosted ne.
+`main → worktree → main → worktree` takeover na jediném module portu,
+odvozenou URL a skutečný Stop/reopen. Hosted výchozí Apps mají dostupný katalog,
+ale běží pouze zvolená App; ostatní jsou stopped. Maintenance souhrn musí
+souhlasit s přesnou odvozenou množinou a izolovanými neplatnými Moduly.
 
-Po restartu pracovního kontejneru i po host rebootu se spustí
-`--phase post-restart`. Local profil musí prokázat, že session child nebyl
-obnoven a module port je prázdný. Hosted profil musí bez `/open` prokázat, že
-každá odvozená Team App je zdravá managed instance z `main`, její URL odpovídá
-`<module>.<team>.<domain>`, maintenance souhrn sedí na celý Team a každý runtime
-source se shoduje se svou maintenance evidencí. Starý worktree se po restartu
-obnovit nesmí.
+Po restartu (`--phase post-restart`) hosted profil nejprve prokáže studený
+modul na `main`, pak jej otevře a prokáže zdravý proces. Ostatní Apps zůstanou
+stopped. Starý worktree se neobnovuje. Local profil dál ověřuje prázdný port
+bez obnovení session child.
+
+Přímý odkaz musí mít samostatný actual ingress důkaz: ověření Team relace,
+internal GET `/api/internal/hosted/apps/<exact-app-id>/ensure`, až potom
+původní proxy request. Interní namespace musí proxy blokovat na všech veřejných
+hostnames. Subrequest předává pouze přesnou Team cookie, loopback Host a
+ověřovaný Launchpad Origin/Sec-Fetch-Site; identity hlavička není autorizace.
+Endpoint vrací 204 jen při zdravé App, jinak chybu nebo 503. Původní path,
+query, POST body a WebSocket upgrade se nesmí přepsat nebo opakovat. Starý
+proxy config bez tohoto napojení není kvalifikovaný pro on-demand runtime;
+source testy nenahrazují společný deploy a actual Caddy smoke.
 
 ## Security a infra důkaz
 

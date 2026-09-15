@@ -262,6 +262,166 @@ test("verified checkout update retains configured credential helpers without int
   expect(status(fixture.working)).toBe("");
 });
 
+test("GitHub fetch retries once with identical identity and preserves recovery diagnostics without a false update", async () => {
+  const fixture = await repositoryFixture("github-fetch-recovery");
+  const source = "https://github.com/FixtureOrganization/workspace-module.git";
+  const actual = runGitThroughFixtureSource(fixture, source);
+  const calls = [];
+  const result = await updateManagedRepo({ ...descriptor(fixture), repo_kind: "module", repo: source }, {
+    deps: { runGit: async (args, options) => {
+      if (args[0] === "fetch") {
+        calls.push({ args: [...args], cwd: options.cwd });
+        expect(options.env.GIT_TERMINAL_PROMPT).toBe("0");
+        expect(options.env.GIT_CONFIG_GLOBAL).toBeUndefined();
+        if (calls.length === 1) return { ok: false, exitCode: 128, stderr: "remote: Repository not found.\nhttps://fixture-user:fixture-secret@github.com/FixtureOrganization/workspace-module.git", stdout: "" };
+      }
+      return actual(args, options);
+    } },
+  });
+  expect(calls).toHaveLength(2);
+  expect(calls[0]).toEqual(calls[1]);
+  expect(result.state).toBe("current");
+  expect(result.actions).toContain("fetch_retried_after_repository_not_found");
+  expect(result.message).toContain("První fetch");
+  expect(JSON.stringify(result)).not.toContain("fixture-secret");
+  expect(status(fixture.working)).toBe("");
+});
+
+for (const [label, stderr, limit, timedOut = false] of [
+  ["persistent repository denial", "remote: Repository not found.", 2],
+  ["explicit authentication denial", "fatal: Authentication failed", 1],
+  ["HTTP 401 denial", "HTTP 401\nremote: Repository not found.", 1],
+  ["HTTP 403 denial", "HTTP 403\nremote: Repository not found.", 1],
+  ["Git HTTP status denial", "fatal: The requested URL returned error: 403\nremote: Repository not found.", 1],
+  ["broker denial overrides repository error", "GitHub token broker refused the request\nremote: Repository not found.", 1],
+  ["timeout overrides repository error", "remote: Repository not found.", 1, true],
+]) {
+  test(`GitHub fetch remains blocked for ${label} with an exact attempt limit`, async () => {
+    const fixture = await repositoryFixture("github-fetch-denial");
+    const source = "https://github.com/FixtureOrganization/workspace-module.git";
+    const actual = runGitThroughFixtureSource(fixture, source);
+    let fetches = 0;
+    const before = runGit(fixture.working, ["rev-parse", "HEAD"]);
+    const result = await updateManagedRepo({ ...descriptor(fixture), repo_kind: "module", repo: source }, {
+      deps: { runGit: async (args, options) => {
+        if (args[0] === "fetch") {
+          fetches++;
+          return { ok: false, exitCode: 128, stderr, stdout: "", timedOut };
+        }
+        return actual(args, options);
+      } },
+    });
+    expect(fetches).toBe(limit);
+    expect(result.state).toBe("blocked");
+    expect(result.reason).toBe("github_unavailable");
+    expect(runGit(fixture.working, ["rev-parse", "HEAD"])).toBe(before);
+    expect(runGit(fixture.working, ["stash", "list"])).toBe("");
+  });
+}
+
+test("GitHub fetch recovery refuses a changed origin before a second request", async () => {
+  const fixture = await repositoryFixture("github-fetch-origin-change");
+  const source = "https://github.com/FixtureOrganization/workspace-module.git";
+  const actual = runGitThroughFixtureSource(fixture, source);
+  let fetches = 0;
+  const result = await updateManagedRepo({ ...descriptor(fixture), repo_kind: "module", repo: source }, {
+    deps: { runGit: async (args, options) => {
+      if (args[0] === "fetch") {
+        fetches++;
+        return { ok: false, exitCode: 128, stderr: "remote: Repository not found.", stdout: "" };
+      }
+      if (fetches && args[0] === "remote" && args[1] === "get-url") {
+        return { ok: true, stdout: "https://github.com/OtherOrganization/other-module.git", stderr: "" };
+      }
+      return actual(args, options);
+    } },
+  });
+  expect(fetches).toBe(1);
+  expect(result.reason).toBe("remote_changed");
+  expect(result.state).toBe("blocked");
+});
+
+test("persistent fetch refusal never exposes credential-bearing stderr in results or reports", async () => {
+  const fixture = await repositoryFixture("fetch-private-diagnostics");
+  const source = "https://github.com/FixtureOrganization/workspace-module.git";
+  const actual = runGitThroughFixtureSource(fixture, source);
+  let fetches = 0;
+  const result = await updateManagedRepo({ ...descriptor(fixture), repo_kind: "module", repo: source }, {
+    deps: { runGit: async (args, options) => {
+      if (args[0] === "fetch") {
+        fetches++;
+        return {
+          ok: false, exitCode: 128,
+          stderr: "remote: Repository not found.\nfatal: https://fixture-user:private-fixture-password@github.com/FixtureOrganization/workspace-module.git\nAuthorization: Bearer private-fixture-bearer",
+          stdout: "private-fixture-stdout", error: "private-fixture-error",
+        };
+      }
+      return actual(args, options);
+    } },
+  });
+  expect(fetches).toBe(2);
+  expect(result.state).toBe("blocked");
+  expect(result.message).toContain("Repository not found");
+  const report = await runRootUpdate(fixture, { updateRepo: async () => result });
+  expect(report.state).toBe("blocked");
+  expect(report.warnings.length).toBeGreaterThan(0);
+  expect(JSON.stringify(result)).not.toContain("private-fixture-");
+  expect(JSON.stringify(report)).not.toContain("private-fixture-");
+  expect(JSON.stringify(report)).not.toContain("Authorization:");
+});
+
+test("non-GitHub fetch errors are not retried", async () => {
+  const fixture = await repositoryFixture("local-fetch-no-retry");
+  let fetches = 0;
+  const result = await updateManagedRepo(descriptor(fixture), {
+    deps: { runGit: async (args, options) => {
+      if (args[0] === "fetch") {
+        fetches++;
+        return { ok: false, exitCode: 128, stderr: "remote: Repository not found.", stdout: "" };
+      }
+      return runGitAsync(args, options);
+    } },
+  });
+  expect(fetches).toBe(1);
+  expect(result.state).toBe("blocked");
+});
+
+test("a checkout operation is never retried even when it reports repository not found", async () => {
+  const fixture = await repositoryFixture("checkout-no-retry");
+  await addRemoteCommit(fixture, "remote.txt", "remote\n");
+  const source = "https://github.com/FixtureOrganization/workspace-module.git";
+  const actual = runGitThroughFixtureSource(fixture, source);
+  let fetches = 0;
+  let pulls = 0;
+  const result = await updateManagedRepo({ ...descriptor(fixture), repo_kind: "module", repo: source }, {
+    deps: { runGit: async (args, options) => {
+      if (args[0] === "fetch") fetches++;
+      if (args[0] === "pull") {
+        pulls++;
+        return { ok: false, exitCode: 128, stderr: "remote: Repository not found.", stdout: "" };
+      }
+      return actual(args, options);
+    } },
+  });
+  expect(fetches).toBe(1);
+  expect(pulls).toBe(1);
+  expect(result.reason).toBe("fast_forward_failed");
+  expect(result.state).toBe("blocked");
+});
+
+test("successful fetch recovery remains visible in the standard update report", async () => {
+  const fixture = await repositoryFixture("fetch-recovery-report");
+  const report = await runRootUpdate(fixture, {
+    updateRepo: async () => ({
+      repo_key: "fixture::root", state: "current", reason: "already_current",
+      message: "První fetch byl odmítnut; druhý uspěl.",
+      actions: ["fetch_retried_after_repository_not_found"],
+    }),
+  });
+  expect(report.state).toBe("current");
+  expect(report.warnings).toContain("fixture::root: První fetch byl odmítnut; druhý uspěl.");
+});
+
 test("verified update applies a configured URL rewrite only once", async () => {
   const fixture = await repositoryFixture("single-url-rewrite");
   await addRemoteCommit(fixture, "expected.txt", "expected\n");
@@ -1559,6 +1719,320 @@ test("explicit root-repository materialization is scoped, atomic and access-awar
   expect(JSON.stringify(report)).not.toContain(unmanaged.key);
   expect(JSON.stringify(report)).not.toContain(production.key);
   expect(JSON.stringify(report)).not.toContain(database.key);
+});
+
+test("generic update never auto-materializes an absent restricted slot but still updates a mounted one", async () => {
+  const root = await mkdtemp(join(tmpdir(), "lazurio-update-restricted-defer-"));
+  cleanup.push(root);
+  const organization = repo("Example::root", "organization_root", "Example", "root");
+  organization.absolute_path = join(root, "organizations", "Example_GEN3");
+  await mkdir(organization.absolute_path, { recursive: true });
+
+  const infra = repo("Example::infra", "root_repo", "Example", "infra");
+  infra.absolute_path = join(organization.absolute_path, "infra");
+  infra.slot_path = "infra";
+  infra.materialization = "doctor_managed_nested_repo";
+  infra.default_access = "restricted";
+  infra.required_roles = ["organization-admin"];
+
+  const mountedRestricted = repo("Example::finance", "module", "Example", "finance", "workspace");
+  mountedRestricted.absolute_path = join(organization.absolute_path, "workspace", "finance");
+  mountedRestricted.slot_path = "workspace/finance";
+  mountedRestricted.default_access = "restricted";
+  mountedRestricted.required_roles = ["organization-admin"];
+  await mkdir(mountedRestricted.absolute_path, { recursive: true });
+
+  const missionControl = repo("Example::mission-control", "root_repo", "Example", "mission-control");
+  missionControl.absolute_path = join(organization.absolute_path, "mission-control");
+  missionControl.slot_path = "mission-control";
+  missionControl.materialization = "doctor_managed_nested_repo";
+  missionControl.default_access = "expected";
+  missionControl.required_roles = ["organization-admin"];
+
+  const everyone = repo("Example::everyone", "module", "Example", "everyone", "workspace");
+  everyone.absolute_path = join(organization.absolute_path, "workspace", "everyone");
+  everyone.slot_path = "workspace/everyone";
+  everyone.default_access = "role_based";
+  everyone.required_roles = ["*"];
+
+  const roleBased = repo("Example::sales", "module", "Example", "sales", "workspace");
+  roleBased.absolute_path = join(organization.absolute_path, "workspace", "sales");
+  roleBased.slot_path = "workspace/sales";
+  roleBased.default_access = "role_based";
+  roleBased.required_roles = ["sales"];
+
+  const undeclared = repo("Example::wiki", "module", "Example", "wiki", "workspace");
+  undeclared.absolute_path = join(organization.absolute_path, "workspace", "wiki");
+  undeclared.slot_path = "workspace/wiki";
+
+  const materialized = [];
+  const updated = [];
+  const report = await runLazurioUpdate({
+    rootPath: root,
+    runtimeRoot: join(root, "..", "runtime"),
+    deps: {
+      runId: "restricted-defer",
+      acquireLock: async () => ({ release: async () => {} }),
+      buildInventory: async () => ({
+        repos: [organization, infra, mountedRestricted, missionControl, everyone, roleBased, undeclared],
+        warnings: [],
+      }),
+      updateRepo: async (item) => {
+        updated.push(item.key);
+        return { ...identity(item), state: "current", reason: "already_current", message: "current" };
+      },
+      materializeRepo: async ({ repo: item }) => {
+        materialized.push(item.key);
+        return { ok: true, outcome: "materialized", head: "a".repeat(40) };
+      },
+      discoverApps: async () => ({ apps: [], failures: [] }),
+    },
+  });
+
+  expect(report.state).toBe("updated");
+  expect(report.restricted_slot_policy).toBe("defer");
+  expect(materialized.sort()).toEqual([everyone.key, missionControl.key, roleBased.key, undeclared.key].sort());
+  expect(updated).toContain(mountedRestricted.key);
+  expect(report.results.find((result) => result.repo_key === infra.key)).toMatchObject({
+    state: "current",
+    reason: "restricted_not_materialized",
+    materialization_scope: "restricted_deferred",
+  });
+  expect(report.results.find((result) => result.repo_key === infra.key).message).toContain("lazurio organization install");
+  expect(report.results.find((result) => result.repo_key === mountedRestricted.key)).toMatchObject({
+    state: "current",
+    reason: "already_current",
+  });
+});
+
+test("restricted slot policy decides between Admin opt-in and role-scoped exclusion without touching ordinary slots", async () => {
+  const scenarios = [
+    { policy: "include", expectMaterialized: true, reason: "organization_repository_materialized" },
+    { policy: "exclude", expectMaterialized: false, reason: "excluded_by_role_scope" },
+  ];
+  for (const scenario of scenarios) {
+    const root = await mkdtemp(join(tmpdir(), `lazurio-update-restricted-${scenario.policy}-`));
+    cleanup.push(root);
+    const organization = repo("Example::root", "organization_root", "Example", "root");
+    organization.absolute_path = join(root, "organizations", "Example_GEN3");
+    await mkdir(organization.absolute_path, { recursive: true });
+    const infra = repo("Example::infra", "root_repo", "Example", "infra");
+    infra.absolute_path = join(organization.absolute_path, "infra");
+    infra.slot_path = "infra";
+    infra.materialization = "doctor_managed_nested_repo";
+    infra.default_access = "restricted";
+    infra.required_roles = ["organization-admin"];
+    const ordinary = repo("Example::design-system", "root_repo", "Example", "design-system");
+    ordinary.absolute_path = join(organization.absolute_path, "design-system");
+    ordinary.slot_path = "design-system";
+    ordinary.materialization = "doctor_managed_nested_repo";
+    ordinary.default_access = "expected";
+    ordinary.required_roles = ["*"];
+    const materialized = [];
+
+    const report = await runLazurioUpdate({
+      rootPath: root,
+      runtimeRoot: join(root, "..", "runtime"),
+      restrictedSlotPolicy: scenario.policy,
+      deps: {
+        runId: `restricted-${scenario.policy}`,
+        acquireLock: async () => ({ release: async () => {} }),
+        buildInventory: async () => ({ repos: [organization, infra, ordinary], warnings: [] }),
+        updateRepo: async (item) => ({ ...identity(item), state: "current", reason: "already_current", message: "current" }),
+        materializeRepo: async ({ repo: item }) => {
+          materialized.push(item.key);
+          return { ok: true, outcome: "materialized", head: "a".repeat(40) };
+        },
+        discoverApps: async () => ({ apps: [], failures: [] }),
+      },
+    });
+
+    expect(report.state).toBe("updated");
+    expect(report.restricted_slot_policy).toBe(scenario.policy);
+    expect(materialized).toContain(ordinary.key);
+    expect(materialized.includes(infra.key)).toBe(scenario.expectMaterialized);
+    expect(report.results.find((result) => result.repo_key === infra.key)).toMatchObject({
+      state: scenario.expectMaterialized ? "updated" : "current",
+      reason: scenario.reason,
+    });
+  }
+  await expect(runLazurioUpdate({ rootPath: "/working", restrictedSlotPolicy: "everything" })).rejects.toThrow(/restrictedSlotPolicy/);
+});
+
+test("an absent descendant inherits the restricted scope even when its parent checkout is already mounted", async () => {
+  const scenarios = [
+    { policy: "defer", reason: "restricted_not_materialized", scope: "restricted_deferred" },
+    { policy: "exclude", reason: "excluded_by_role_scope", scope: "excluded_by_role_scope" },
+    { policy: "include", reason: "organization_repository_materialized", scope: null },
+  ];
+  for (const scenario of scenarios) {
+    const root = await mkdtemp(join(tmpdir(), "lazurio-update-mounted-restricted-parent-"));
+    cleanup.push(root);
+    const organization = repo("Example::root", "organization_root", "Example", "root");
+    organization.absolute_path = join(root, "organizations", "Example_GEN3");
+    await mkdir(organization.absolute_path, { recursive: true });
+    const parent = repo("Example::infra", "root_repo", "Example", "infra");
+    parent.absolute_path = join(organization.absolute_path, "infra");
+    parent.slot_path = "infra";
+    parent.materialization = "doctor_managed_nested_repo";
+    parent.default_access = "restricted";
+    parent.required_roles = ["organization-admin"];
+    await mkdir(parent.absolute_path, { recursive: true });
+    const child = repo("Example::infra-tooling", "root_repo", "Example", "infra-tooling");
+    child.absolute_path = join(organization.absolute_path, "infra", "tooling");
+    child.slot_path = "infra/tooling";
+    child.materialization = "doctor_managed_nested_repo";
+    child.default_access = "expected";
+    child.required_roles = ["*"];
+    const materialized = [];
+    const updated = [];
+
+    const report = await runLazurioUpdate({
+      rootPath: root,
+      runtimeRoot: join(root, "..", "runtime"),
+      restrictedSlotPolicy: scenario.policy,
+      deps: {
+        runId: `mounted-restricted-parent-${scenario.policy}`,
+        acquireLock: async () => ({ release: async () => {} }),
+        buildInventory: async () => ({ repos: [organization, parent, child], warnings: [] }),
+        updateRepo: async (item) => {
+          updated.push(item.key);
+          return { ...identity(item), state: "current", reason: "already_current", message: "current" };
+        },
+        materializeRepo: async ({ repo: item }) => {
+          materialized.push(item.key);
+          return { ok: true, outcome: "materialized", head: "a".repeat(40) };
+        },
+        discoverApps: async () => ({ apps: [], failures: [] }),
+      },
+    });
+
+    expect(updated, scenario.policy).toContain(parent.key);
+    expect(materialized.includes(child.key), scenario.policy).toBe(scenario.policy === "include");
+    const childResult = report.results.find((result) => result.repo_key === child.key);
+    expect(childResult, scenario.policy).toMatchObject({
+      state: scenario.policy === "include" ? "updated" : "current",
+      reason: scenario.reason,
+    });
+    if (scenario.scope) {
+      expect(childResult.materialization_scope).toBe(scenario.scope);
+      expect(childResult.message).toContain("nadřazený restricted slot infra");
+    }
+  }
+});
+
+test("unknown or malformed slot access classification blocks materialization fail-safe under every policy", async () => {
+  for (const policy of ["defer", "include", "exclude"]) {
+    const root = await mkdtemp(join(tmpdir(), "lazurio-update-unknown-access-"));
+    cleanup.push(root);
+    const organization = repo("Example::root", "organization_root", "Example", "root");
+    organization.absolute_path = join(root, "organizations", "Example_GEN3");
+    await mkdir(organization.absolute_path, { recursive: true });
+    const typo = repo("Example::infra", "root_repo", "Example", "infra");
+    typo.absolute_path = join(organization.absolute_path, "infra");
+    typo.slot_path = "infra";
+    typo.materialization = "doctor_managed_nested_repo";
+    typo.default_access = "Restricted";
+    const malformedRoles = repo("Example::finance", "module", "Example", "finance", "workspace");
+    malformedRoles.absolute_path = join(organization.absolute_path, "workspace", "finance");
+    malformedRoles.slot_path = "workspace/finance";
+    malformedRoles.default_access = "expected";
+    malformedRoles.required_roles = "organization-admin";
+    const materialized = [];
+
+    const report = await runLazurioUpdate({
+      rootPath: root,
+      runtimeRoot: join(root, "..", "runtime"),
+      restrictedSlotPolicy: policy,
+      deps: {
+        runId: `unknown-${policy}`,
+        acquireLock: async () => ({ release: async () => {} }),
+        buildInventory: async () => ({ repos: [organization, typo, malformedRoles], warnings: [] }),
+        updateRepo: async (item) => ({ ...identity(item), state: "current", reason: "already_current", message: "current" }),
+        materializeRepo: async ({ repo: item }) => {
+          materialized.push(item.key);
+          return { ok: true, outcome: "materialized", head: "a".repeat(40) };
+        },
+        discoverApps: async () => ({ apps: [], failures: [] }),
+      },
+    });
+
+    expect(materialized).toEqual([]);
+    expect(report.state).toBe("blocked");
+    for (const key of [typo.key, malformedRoles.key]) {
+      expect(report.results.find((result) => result.repo_key === key)).toMatchObject({
+        state: "blocked",
+        reason: "access_classification_unknown",
+        next_action: { kind: "codex" },
+      });
+    }
+  }
+});
+
+test("a manifest reclassified between Sync runs is honored on the refreshed inventory without cloning over a mounted checkout", async () => {
+  const root = await mkdtemp(join(tmpdir(), "lazurio-update-reclassified-"));
+  cleanup.push(root);
+  const organization = repo("Example::root", "organization_root", "Example", "root");
+  organization.absolute_path = join(root, "organizations", "Example_GEN3");
+  await mkdir(organization.absolute_path, { recursive: true });
+  const slot = () => {
+    const item = repo("Example::infra", "root_repo", "Example", "infra");
+    item.absolute_path = join(organization.absolute_path, "infra");
+    item.slot_path = "infra";
+    item.materialization = "doctor_managed_nested_repo";
+    item.required_roles = ["organization-admin"];
+    return item;
+  };
+  const accessSequence = ["restricted", "expected", "restricted"];
+  let inventoryReads = 0;
+  const materialized = [];
+  const updated = [];
+  const run = async (runId) => runLazurioUpdate({
+    rootPath: root,
+    runtimeRoot: join(root, "..", "runtime"),
+    deps: {
+      runId,
+      acquireLock: async () => ({ release: async () => {} }),
+      buildInventory: async () => {
+        // The reconciler reads the manifest before and after the Organization
+        // root update; both reads of one run observe the same declaration.
+        const access = accessSequence[Math.min(Math.floor(inventoryReads / 2), accessSequence.length - 1)];
+        inventoryReads += 1;
+        const infra = slot();
+        infra.default_access = access;
+        return { repos: [organization, infra], warnings: [] };
+      },
+      updateRepo: async (item) => {
+        updated.push(item.key);
+        return { ...identity(item), state: "current", reason: "already_current", message: "current" };
+      },
+      materializeRepo: async ({ repo: item }) => {
+        materialized.push(item.key);
+        await mkdir(item.absolute_path, { recursive: true });
+        return { ok: true, outcome: "materialized", head: "a".repeat(40) };
+      },
+      discoverApps: async () => ({ apps: [], failures: [] }),
+    },
+  });
+
+  const first = await run("reclassified-1");
+  expect(first.results.find((result) => result.repo_key === "Example::infra")).toMatchObject({
+    reason: "restricted_not_materialized",
+  });
+  expect(materialized).toEqual([]);
+
+  const second = await run("reclassified-2");
+  expect(second.results.find((result) => result.repo_key === "Example::infra")).toMatchObject({
+    reason: "organization_repository_materialized",
+  });
+  expect(materialized).toEqual(["Example::infra"]);
+
+  const third = await run("reclassified-3");
+  expect(updated).toContain("Example::infra");
+  expect(third.results.find((result) => result.repo_key === "Example::infra")).toMatchObject({
+    reason: "already_current",
+  });
+  expect(materialized).toEqual(["Example::infra"]);
 });
 
 test("updated Module refreshes each manifest-declared app package once through the Server lifecycle seam", async () => {

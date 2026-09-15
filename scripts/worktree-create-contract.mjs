@@ -10,6 +10,7 @@ const VALUE_OPTIONS = new Set([
   "created-by",
   "task-agent-id",
   "thread-id",
+  "repository",
 ]);
 
 export function parseWorktreeCreateArgs(argv) {
