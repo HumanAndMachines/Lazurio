@@ -120,7 +120,7 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(css).toContain("@media (hover: hover) and (pointer: fine)");
   expect(css).toContain("linear-gradient(");
   expect(css).not.toContain("translateY(-3px)");
-  expect(css).toContain(":hover .app-card-desc");
+  expect(css).not.toContain(":hover .app-card-desc");
   expect(css).toMatch(/\.apps-grid > \.app-card \.app-card-desc\s*{[^}]*max-height: none;[^}]*opacity: 1;[^}]*transition: none/);
   expect(css).toContain("@media (hover: none), (pointer: coarse)");
   expect(css).not.toContain("0 18px 36px color-mix(in srgb, var(--lz-ink) 9%, transparent)");
