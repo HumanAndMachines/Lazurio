@@ -243,6 +243,15 @@ describe("documented origin activation", () => {
       "pending member/Team membership",
       "před vytvořením prvního provider repa",
       "závěrečném read-backu všech pěti bodů",
+      "lazurio organization activate --check --github-id <immutable-id> --json",
+      'observations.github_app.repository_selection == "all"',
+      'repository_selection == "selected"',
+      "`outcome == \"active\"` nestačí",
+      "každého **aktivního** slotu",
+      "ne pouze pro repo pojmenované `infra`",
+      "neúplná pagination",
+      "malformed provider odpověď",
+      "active restricted slot bez exact repository",
       "aktuální krátký Builder prompt",
       "Machine/system-wide",
       "bez user-facing Terminalu nebo",
@@ -256,13 +265,35 @@ describe("documented origin activation", () => {
       'gh api "orgs/<ClientOrg>"',
       'gh api "orgs/<ClientOrg>/teams/builders"',
       'gh api --paginate "orgs/<ClientOrg>/teams/builders/repos?per_page=100"',
-      'gh api --paginate "repos/<ClientOrg>/infra/collaborators?affiliation=all&per_page=100"',
+      'gh api --paginate "repos/<restricted-owner>/<restricted-repo>/collaborators?affiliation=all&per_page=100"',
       'gh api "orgs/<ClientOrg>/memberships/<builder-login>"',
       'gh api "orgs/<ClientOrg>/teams/builders/memberships/<builder-login>"',
     ]) {
       expect(accessGate).toContain(readBack);
     }
     expect(accessGate).not.toMatch(/gh api[^\n]*(?:--method|-X)\s+(?:POST|PUT|PATCH|DELETE)/i);
+    expect(accessGate).not.toContain(
+      'repos/<ClientOrg>/infra/collaborators?affiliation=all&per_page=100',
+    );
+
+    const requireFailClosedProviderBaseline = (candidate) => {
+      expect(candidate).toContain('observations.github_app.repository_selection == "all"');
+      expect(candidate).toContain("každého **aktivního** slotu");
+      expect(candidate).toContain("neúplná pagination");
+    };
+    requireFailClosedProviderBaseline(accessGate);
+    expect(() => requireFailClosedProviderBaseline(
+      accessGate.replace(
+        'observations.github_app.repository_selection == "all"',
+        'observations.github_app.repository_selection == "selected"',
+      ),
+    )).toThrow();
+    expect(() => requireFailClosedProviderBaseline(
+      accessGate.replace("každého **aktivního** slotu", "pouze slotu `infra`"),
+    )).toThrow();
+    expect(() => requireFailClosedProviderBaseline(
+      accessGate.replace("neúplná pagination", "prázdný seznam"),
+    )).toThrow();
     expect(manual).toContain("Base repository permission: `none`");
     expect(manual).toContain("Restricted access: `infra`");
     expect(manual).toContain("pokud se předává nebo instaluje klientská Builder Mašina");
