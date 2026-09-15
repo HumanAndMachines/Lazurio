@@ -338,11 +338,35 @@ lazurio organization activate --check --github-id <immutable-id> --json
 gh api "orgs/<ClientOrg>/teams/builders" --jq '{name,slug,id,privacy}'
 gh api --paginate "orgs/<ClientOrg>/teams/builders/repos?per_page=100" \
   --jq '.[] | {name,permissions}'
-gh api --paginate "repos/<restricted-owner>/<restricted-repo>/collaborators?affiliation=all&per_page=100" \
-  --jq '.[] | {login,role_name,permissions}'
+approved_builders_json='<exact JSON array of approved Builder logins from rollout input>'
+actual_builders_json="$(gh api --paginate --slurp \
+  "orgs/<ClientOrg>/teams/builders/members?role=all&per_page=100" \
+  --jq '[.[][] | .login] | sort')"
+jq -en --argjson approved "$approved_builders_json" --argjson actual "$actual_builders_json" '
+  ($approved | sort | unique) as $expected
+  | if ($expected | length) != ($approved | length) then error("approved Builder roster contains duplicates")
+    elif $actual != $expected then error("live builders Team roster differs from approved roster")
+    else {builders:$actual}
+    end'
 gh api "orgs/<ClientOrg>/memberships/<builder-login>" --jq '{state,role}'
 gh api "orgs/<ClientOrg>/teams/builders/memberships/<builder-login>" \
   --jq '{state,role}'
+bun run runtime:inventory -- --organization <exact-company.slug> --json | \
+  jq -ce --arg expected_owner "<exact-github-org-login>" '
+    [(.modules + .excluded)[] | select(.status == "active")] as $active
+    | [$active[] | select(.access == "restricted")] as $restricted
+    | if .summary.selected_organizations != 1 then error("exact Organization selector did not resolve once")
+      elif any($active[]; .access == "unknown") then error("active slot has unknown access")
+      elif any($restricted[]; .github_repository == null) then error("restricted slot has no exact GitHub binding")
+      elif any($restricted[]; (.github_repository | split("/")[0] | ascii_downcase) != ($expected_owner | ascii_downcase))
+        then error("restricted repository owner differs from Organization")
+      elif ($restricted | map(.github_repository | ascii_downcase) | unique | length) != ($restricted | length)
+        then error("restricted repository binding is duplicated")
+      else $restricted | sort_by(.github_repository) | map({path,repository:.github_repository})
+      end'
+# Pro každý exact .repository z předchozího JSON pole, bez ručního vynechání:
+gh api --paginate "repos/<exact-owner/repository>/collaborators?affiliation=all&per_page=100" \
+  --jq '.[] | {login,role_name,permissions}'
 ```
 
 Owner-only activation výstup musí explicitně splnit
@@ -357,18 +381,40 @@ neznámá hodnota nebo ownerovi nedostupný App read-back je blocker, nikdy důk
 Výsledek porovnej s canonical rootem a aktivními sloty manifestu, ne s ručně
 udržovaným druhým seznamem. Team repo read-back musí zahrnout každý zamýšlený
 běžný repozitář s `permissions.push: true` a žádný restricted repozitář s
-Teamovým grantem. Z manifestu sestav úplný seznam každého **aktivního** slotu
-s `default_access: restricted` / `private`, vezmi jeho exact deklarovaný
-GitHub owner/repository binding a collaborators read-back výše proveď pro každý
-z nich — ne pouze pro repo pojmenované `infra`. V žádném výpisu nesmí být login
-zamýšleného Buildera. Nenulový exit, neúplná pagination, ne-JSON nebo jinak
-malformed provider odpověď a active restricted slot bez exact repository
-bindingu jsou fail-closed blocker; neinterpretují se jako prázdný seznam
-collaborators. Chybějící App scope, base
+Teamovým grantem. Příkaz `runtime:inventory` používá stejný Organization reader,
+alias-conflict pravidla a GitHub coordinate normalizaci jako runtime; jeho
+`modules + excluded` je úplný deklarovaný slot inventory, ne druhý ruční
+seznam. Přesný `jq` nejdřív vyžaduje právě jeden výsledek exact Organization
+selectoru a správného GitHub ownera, potom vybere každý **aktivní** slot s
+`default_access: restricted` / `private`, odmítne unknown access, chybějící
+binding i duplicitní repository a vydá deterministicky seřazené exact
+`owner/repository`. Collaborators read-back proveď pro **každý** vydaný prvek —
+ne pouze pro repo pojmenované `infra` a nikdy ručním přepisem seznamu.
+
+GitHub collaborators odpověď vrací efektivní právo ze všech zdrojů a
+[neumí odlišit Organization-owner přístup od repository grantu](https://docs.github.com/en/rest/collaborators/collaborators#list-repository-collaborators).
+Schválený roster pochází z přesného Organization creation/rollout zadání, ne z
+druhého trvalého ACL. `--paginate --slurp` načte celý živý Team roster a exact
+JSON comparison odmítne chybějícího, přebývajícího i duplicitně zadaného
+Buildera; každý následující membership a restricted-repo check iteruj nad tímto
+úplným živým rosterem, ne nad ručně vybranými loginy.
+
+Collaborators výsledek vždy koreluj s výše načteným Organization membership
+`role`: login z úplného rosteru s `role: member` nesmí být v žádném restricted
+výpisu; `role: admin` je Organization owner, ne non-admin Builder, a jeho
+očekávanou přítomnost eviduj jako `owner_role_exception`, nikoli jako Builder
+grant. Builders Team přesto nesmí mít restricted repo ve svém Team repo
+read-backu. Z tohoto endpointu nikdy netvrď, že owner nemá redundantní direct
+grant — GitHub tuto provenienci neposkytuje.
+
+Nenulový exit, neúplná pagination, ne-JSON nebo jinak malformed provider
+odpověď a active restricted slot bez exact repository bindingu jsou
+fail-closed blocker; neinterpretují se jako prázdný seznam collaborators.
+Chybějící App scope, base
 permission jiné než `none`, pending member/Team membership, READ místo WRITE,
-chybějící běžné repo nebo Builder v restricted repu je blocker před instalací
-Mašiny. Oprav přesný GitHub grant a read-back zopakuj; nepřidávej workaround do
-manifestu ani lokální ACL.
+chybějící běžné repo nebo non-admin Builder v restricted repu je blocker před
+instalací Mašiny. Oprav přesný GitHub grant a read-back zopakuj; nepřidávej
+workaround do manifestu ani lokální ACL.
 
 Teprve potom předej klientovi aktuální krátký Builder prompt z
 `manual/organization-install.md`. Prompt musí zůstat self-contained end-to-end
@@ -864,8 +910,8 @@ Použij pro první klientský closeout. Pole označené `pokud ...` dokládej je
 - Client `origin`: `<url>` / `not configured (local-first)`
 - GitHub App: `Lazurio for GitHub`; repository selection: `all` / `not configured (local-first)`
 - Base repository permission: `none` / `not configured (local-first)`
-- Builders: Team `builders` immutable ID `<id>`; active members `<logins>`; ordinary repo WRITE read-back pass/fail / `not configured (local-first)`
-- Restricted access: `infra` and all `default_access: restricted|private` slots exclude Builders pass/fail / `not configured (local-first)`
+- Builders: Team `builders` immutable ID `<id>`; complete paginated roster exactly equals approved members `<logins>`; ordinary repo WRITE read-back pass/fail / `not configured (local-first)`
+- Restricted access: deterministic inventory of all active `default_access: restricted|private` slots; non-admin Builders excluded pass/fail; Organization owners recorded as `owner_role_exception`; / `not configured (local-first)`
 - Origin ancestry + push dry-run: pass/fail + excerpt (pokud se `origin` připojoval)
 - Apps discovered: `<n>`; client apps: `<ids>` (pokud jsou app moduly materializované)
 - `bun run check`: pass/fail + excerpt
@@ -889,8 +935,9 @@ GEN3 je ready pro prvního klienta, když:
 - pokud se předává nebo instaluje klientská Builder Mašina, prošel §0a:
   `Lazurio for GitHub` má `All repositories`, base repository permission je
   `none`, zamýšlení Builders jsou aktivní členové Teamu `builders`, Team má
-  WRITE na canonical rootu a všech aktivních běžných repech a žádný Builder
-  nemá grant na `infra` ani jiný restricted slot; čistě `local-first` Draft
+  WRITE na canonical rootu a všech aktivních běžných repech a žádný non-admin
+  Builder nemá grant na `infra` ani jiný restricted slot; Organization-owner
+  přístup se eviduje odděleně jako `owner_role_exception`; čistě `local-first` Draft
   bez `origin` reportuje `not configured` a nevydává se za install-ready
   klientskou Mašinu;
 - první klientský pilot modul má validní manifest, nekolidující port a vysvětlitelný dependency/runtime stav;

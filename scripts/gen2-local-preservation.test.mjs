@@ -247,10 +247,27 @@ describe("documented origin activation", () => {
       'observations.github_app.repository_selection == "all"',
       'repository_selection == "selected"',
       "`outcome == \"active\"` nestačí",
-      "každého **aktivního** slotu",
+      "každý **aktivní** slot",
       "ne pouze pro repo pojmenované `infra`",
+      "bun run runtime:inventory -- --organization <exact-company.slug> --json",
+      "modules + excluded",
+      "exact Organization selector did not resolve once",
+      "active slot has unknown access",
+      "restricted slot has no exact GitHub binding",
+      "restricted repository owner differs from Organization",
+      "restricted repository binding is duplicated",
+      "approved_builders_json",
+      "--paginate --slurp",
+      "teams/builders/members?role=all&per_page=100",
+      "approved Builder roster contains duplicates",
+      "live builders Team roster differs from approved roster",
+      "úplným živým rosterem",
+      "role: member",
+      "role: admin",
+      "owner_role_exception",
+      "neumí odlišit Organization-owner přístup od repository grantu",
       "neúplná pagination",
-      "malformed provider odpověď",
+      "malformed provider",
       "active restricted slot bez exact repository",
       "aktuální krátký Builder prompt",
       "Machine/system-wide",
@@ -265,7 +282,8 @@ describe("documented origin activation", () => {
       'gh api "orgs/<ClientOrg>"',
       'gh api "orgs/<ClientOrg>/teams/builders"',
       'gh api --paginate "orgs/<ClientOrg>/teams/builders/repos?per_page=100"',
-      'gh api --paginate "repos/<restricted-owner>/<restricted-repo>/collaborators?affiliation=all&per_page=100"',
+      '"orgs/<ClientOrg>/teams/builders/members?role=all&per_page=100"',
+      'gh api --paginate "repos/<exact-owner/repository>/collaborators?affiliation=all&per_page=100"',
       'gh api "orgs/<ClientOrg>/memberships/<builder-login>"',
       'gh api "orgs/<ClientOrg>/teams/builders/memberships/<builder-login>"',
     ]) {
@@ -278,7 +296,13 @@ describe("documented origin activation", () => {
 
     const requireFailClosedProviderBaseline = (candidate) => {
       expect(candidate).toContain('observations.github_app.repository_selection == "all"');
-      expect(candidate).toContain("každého **aktivního** slotu");
+      expect(candidate).toContain("bun run runtime:inventory -- --organization <exact-company.slug> --json");
+      expect(candidate).toContain("exact Organization selector did not resolve once");
+      expect(candidate).toContain("restricted slot has no exact GitHub binding");
+      expect(candidate).toContain("restricted repository owner differs from Organization");
+      expect(candidate).toContain("live builders Team roster differs from approved roster");
+      expect(candidate).toContain("úplným živým rosterem");
+      expect(candidate).toContain("owner_role_exception");
       expect(candidate).toContain("neúplná pagination");
     };
     requireFailClosedProviderBaseline(accessGate);
@@ -289,13 +313,34 @@ describe("documented origin activation", () => {
       ),
     )).toThrow();
     expect(() => requireFailClosedProviderBaseline(
-      accessGate.replace("každého **aktivního** slotu", "pouze slotu `infra`"),
+      accessGate.replace(
+        "bun run runtime:inventory -- --organization <exact-company.slug> --json",
+        "ručně zkontroluj infra",
+      ),
+    )).toThrow();
+    expect(() => requireFailClosedProviderBaseline(
+      accessGate.replace("exact Organization selector did not resolve once", "prázdný selector projde"),
+    )).toThrow();
+    expect(() => requireFailClosedProviderBaseline(
+      accessGate.replace("restricted slot has no exact GitHub binding", "missing binding ignoruj"),
+    )).toThrow();
+    expect(() => requireFailClosedProviderBaseline(
+      accessGate.replace("restricted repository owner differs from Organization", "foreign owner projde"),
+    )).toThrow();
+    expect(() => requireFailClosedProviderBaseline(
+      accessGate.replace("live builders Team roster differs from approved roster", "extra member projde"),
+    )).toThrow();
+    expect(() => requireFailClosedProviderBaseline(
+      accessGate.replace("úplným živým rosterem", "ručně vybranými loginy"),
+    )).toThrow();
+    expect(() => requireFailClosedProviderBaseline(
+      accessGate.replace("owner_role_exception", "všechny owner loginy odmítni"),
     )).toThrow();
     expect(() => requireFailClosedProviderBaseline(
       accessGate.replace("neúplná pagination", "prázdný seznam"),
     )).toThrow();
     expect(manual).toContain("Base repository permission: `none`");
-    expect(manual).toContain("Restricted access: `infra`");
+    expect(manual).toContain("Restricted access: deterministic inventory");
     expect(manual).toContain("pokud se předává nebo instaluje klientská Builder Mašina");
     expect(manual).toContain("nevydává se za install-ready");
 

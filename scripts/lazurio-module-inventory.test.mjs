@@ -50,6 +50,7 @@ test("inventory separates Modules, empty Apps and nested repository-db slots", a
 
   const inventory = await inventoryLazurioModules(root);
   expect(inventory.summary).toMatchObject({
+    selected_organizations: 1,
     declared_modules: 2,
     materialized_modules: 2,
     missing_module_contracts: 1,
@@ -61,6 +62,9 @@ test("inventory separates Modules, empty Apps and nested repository-db slots", a
   const website = inventory.modules.find((module) => module.module === "website");
   expect(website).toMatchObject({
     repository: "git@github.com:Example/website.git",
+    github_repository: "Example/website",
+    status: "active",
+    access: "ordinary",
     declaration_source: "Organization resource#repository_inventory",
   });
   expect(website.proposal).toMatchObject({
@@ -74,6 +78,55 @@ test("inventory separates Modules, empty Apps and nested repository-db slots", a
     "planned-slot",
     "productionspace",
   ]);
+});
+
+test("inventory deterministically emits every active restricted repository from normalized manifest bindings", async () => {
+  const root = await mkdtemp(join(tmpdir(), "lazurio-access-inventory-"));
+  roots.push(root);
+  const organization = join(root, "organizations", "Example_GEN3");
+  await mkdir(organization, { recursive: true });
+  await writeJson(join(organization, "company.gen3.json"), {
+    organization_generation: "gen3",
+    company: { slug: "Example", display_name: "Example", github_org: "Example" },
+  });
+  await writeJson(join(organization, "modules.manifest.json"), {
+    organization_generation: "gen3",
+    company: "Example",
+    github_org: "Example",
+    module_slots: [
+      { slug: "infra", path: "infra", status: "active", default_access: "restricted", git: { url: "git@github.com:Example/infra.git", branch: "main" } },
+      { slug: "audit", path: "productionspace/audit", status: "active", default_access: "private", repository: "https://github.com/Example/audit.git", branch: "main" },
+      { slug: "future-secret", path: "productionspace/future-secret", status: "planned_slot", default_access: "restricted", source_of_truth: "planned_slot" },
+      { slug: "website", path: "workspace/website", status: "active", default_access: "expected", git: { url: "Example/website", branch: "main" } },
+    ],
+  });
+
+  const inventory = await inventoryLazurioModules(root, { organization: "Example" });
+  expect(inventory.summary.selected_organizations).toBe(1);
+  const records = [...inventory.modules, ...inventory.excluded];
+  expect(records
+    .filter((slot) => slot.status === "active" && slot.access === "restricted")
+    .map(({ path, github_repository }) => ({ path, github_repository })))
+    .toEqual([
+      { path: "infra", github_repository: "Example/infra" },
+      { path: "productionspace/audit", github_repository: "Example/audit" },
+    ]);
+  expect(records.find((slot) => slot.path === "productionspace/future-secret")).toMatchObject({
+    status: "planned_slot",
+    access: "restricted",
+    repository: null,
+    github_repository: null,
+  });
+});
+
+test("exact Organization selector stays fail-closed when no Organization matches", async () => {
+  const root = await mkdtemp(join(tmpdir(), "lazurio-access-inventory-missing-"));
+  roots.push(root);
+  await mkdir(join(root, "organizations"), { recursive: true });
+
+  const inventory = await inventoryLazurioModules(root, { organization: "Missing" });
+  expect(inventory.summary.selected_organizations).toBe(0);
+  expect([...inventory.modules, ...inventory.excluded]).toEqual([]);
 });
 
 test("inventory does not revive the legacy compatibility projection as a shadow repository registry", async () => {
