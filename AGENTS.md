@@ -331,12 +331,18 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    na Windows po přesném resume handoffu úplně ukončí a znovu spustí Codex a
    ověří ji z čistého procesu nové relace; child proces právě běžícího Codexu
    není důkaz. Odhlášení uživatele nebo restart Windows je až fallback, když
-   ani relaunchnutý Codex správné persistentní hodnoty nevidí. Výchozí
-   nejmenší mandát dovoluje jen User `PATH` a
-   chybějící nástroje. Rozšířený instalační mandát smí navíc přesně
-   povolit Machine/system-wide `PATH`, standardní OS package manager a upgrade
-   jmenovaných nástrojů; Agent zachová nesouvisející položky a bezpečnostní
-   nastavení a nikdy z tohoto souhlasu neodvodí obecný machine-admin mandát.
+   ani relaunchnutý Codex správné persistentní hodnoty nevidí. Obecný nejmenší
+   mandát dovoluje jen User `PATH` a chybějící nástroje. Krátký prompt pro
+   novou Builder Mašinu v `manual/organization-install.md` ale záměrně
+   předautorizuje end-to-end instalaci chybějících povinných nástrojů,
+   standardní OS package manager, standardní elevation a nezbytný User i
+   Machine/system-wide `PATH`; Agent zachová nesouvisející položky a
+   bezpečnostní nastavení a nikdy z tohoto souhlasu neodvodí obecný
+   machine-admin mandát ani upgrade již vyhovujících nástrojů. Příkazy provádí
+   background nástroji a po člověku nikdy nechce otevřít Terminal nebo
+   PowerShell, kopírovat do něj příkazy ani číst konzolový výstup. Nativní UAC,
+   heslo a browser consent jsou dovolené osobní kroky; neumí-li harness příkaz
+   spustit bez viditelné konzole, instalace failne zavřeně s přesným blockerem.
    Git, GitHub CLI a Codex směřují na aktuální oficiální stable, Node na
    podporované aktuální LTS. Codex CLI instaluj a aktualizuj přes oficiální
    OpenAI standalone instalátor pro macOS/Linux/Windows jako doporučenou cestu.
@@ -364,10 +370,14 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    provider operace (`excluded_by_role_scope`); běžný `lazurio update`
    absentní restricted slot nikdy automaticky neklonuje a materializuje jej
    jen explicitní Admin install bez `--role`. Nový GitHub účet páruje jednou přes
-   `gh auth login --hostname github.com --git-protocol ssh --web`, po souhlasu
+   `gh auth login --hostname github.com --git-protocol ssh --web` bez
+   `--clipboard`, po souhlasu
    nechá tentýž flow vytvořit nebo nahrát veřejnou část SSH klíče a výsledek
-   dokáže exact `git ls-remote` cílového root repa. Device kód, token ani
-   privátní klíč neloguje.
+   dokáže exact `git ls-remote` cílového root repa. Krátkodobý user-facing
+   ověřovací (device) kód a `https://github.com/login/device` předá jen do
+   aktuálního soukromého chatu, nikdy do schránky, issue, repozitáře nebo
+   trvalého logu. Interní OAuth `device_code`, access token ani privátní klíč
+   nikdy nevypíše.
 3. **Drž worktree disciplínu.** Primární checkout zůstává na `main` a nemění
    se v něm trackovaný obsah. Postup, kanonickou cestu
    `.worktrees/root/<canonical-plan-basename>/` se sidecarem, PR lifecycle

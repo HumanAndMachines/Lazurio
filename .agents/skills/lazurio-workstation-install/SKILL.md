@@ -26,7 +26,9 @@ Při publikačním mandátu pro instalační vady přečti také
    nástroje a User/Machine `PATH`. Prompt musí zvlášť autorizovat instalace,
    upgrade existujících nástrojů, systémový package manager,
    Machine/system-wide `PATH`, SSH access změnu a publikaci Issues. Jedna
-   kategorie se neodvozuje z jiné.
+   kategorie se neodvozuje z jiné. Krátký prompt pro novou Builder Mašinu
+   v `manual/organization-install.md` tyto instalační a PATH kategorie
+   autorizuje přímo; další souhlas k nim znovu nevyžaduj.
 2. **Zachovej jeden Root.** Fresh target je `<home>/Lazurio`. Dnešní podporovaný
    profil je Source Root; existující ověřený Source Root smí zachovat historický
    název. Nezakládej alternativní Root, nepřesouvej source ručně a nevytvářej
@@ -54,17 +56,23 @@ Při publikačním mandátu pro instalační vady přečti také
    autorita. Po dostupnosti exact Bunu registruj source CLI jen podporovaným
    `bun run lazurio -- cli install`. Claude Code je volitelný a kontroluje se
    jen tam, kde je instalovaný.
-5. **Měň jen autorizovanou PATH vrstvu.** Výchozí mandát dovoluje User `PATH`.
-   Machine/system-wide `PATH`, elevation a systémový package manager použij jen
-   při jejich explicitním povolení. Přidej canonical instalační adresář, ne
+5. **Měň jen autorizovanou PATH vrstvu.** Obecný nejmenší mandát dovoluje User
+   `PATH`; nový Builder prompt výslovně povoluje i nezbytný
+   Machine/system-wide `PATH`, standardní elevation a systémový package
+   manager. Přidej canonical instalační adresář, ne
    `.exe`, cache, dočasnou cestu ani worktree; zachovej nesouvisející platné
    položky a odstraň pouze prokázaný stale/shadow záznam téhož nástroje.
    Neobcházej UAC ani správu zařízení.
+   Celou instalaci proveď přes background nástroje bez user-facing Terminalu
+   nebo PowerShellu. Po Principálovi nechtěj kopírovat ani spouštět příkaz;
+   nativní UAC, heslo nebo browser consent vyvolej s lidským vysvětlením.
+   Neumí-li harness proces skrýt, vrať přesný blocker místo shellového handoffu.
 6. **Aktivuj nový Codex proces.** Po Windows instalaci nebo upgradu nástroje či
    změně persistentního `PATH` obnov Machine + User hodnoty jen dočasně pro
    dokončení právě rozpracované atomické operace. Potom v chatu ulož přesný
-   resume bod, nech Principála úplně ukončit Codex včetně všech jeho oken a
-   znovu jej spustit; pokračuj v obnoveném threadu jako nová Task Agent relace.
+   resume bod a, umí-li to harness bezpečně, úplně relaunchnuj Codex sám;
+   jinak nech Principála pouze zavřít a znovu otevřít grafickou aplikaci Codex.
+   Pokračuj v obnoveném threadu jako nová Task Agent relace.
    Nový terminál nebo child proces otevřený ze starého Codexu není acceptance,
    protože může dál dědit staré prostředí rodiče. Až z relaunchnutého Codexu
    ověř `bun`, `git`, `gh`, `node`, `codex` a po registraci
@@ -72,9 +80,13 @@ Při publikačním mandátu pro instalační vady přečti také
    nebo restart Windows je pouze fallback, pokud jsou persistentní User/Machine
    hodnoty správné, ale ani nový Codex je nevidí.
 7. **Spáruj GitHub jen jednou.** Použij
-   `gh auth login --hostname github.com --git-protocol ssh --web`, nech
-   Principála dokončit osobní web krok a neloguj device kód, token ani privátní
-   klíč. Nový ed25519 klíč a upload jeho veřejné části proveď pouze s
+   `gh auth login --hostname github.com --git-protocol ssh --web` bez
+   `--clipboard`. Krátkodobý user-facing ověřovací (device) kód a
+   `https://github.com/login/device` vypiš jen do aktuálního soukromého chatu
+   a nech Principála dokončit osobní web krok. Kód nikdy nekopíruj do schránky,
+   issue, repozitáře ani trvalého diagnostického logu; interní OAuth
+   `device_code`, access token a privátní klíč nikdy nevypisuj. Nový ed25519
+   klíč a upload jeho veřejné části proveď pouze s
    explicitním access mandátem. API login není transportní důkaz; před
    materializací musí projít exact `git ls-remote` cílového root repa a branche.
 8. **Odděl ownera od Buildera.** Organization owner ověří jednorázovou GitHub
@@ -127,6 +139,8 @@ Instalace je hotová teprve tehdy, když:
   odděleně a pravdivě;
 - podporovaný desktop Launchpad je nainstalovaný a na každé platformě Launchpad
   i aktivní aplikace prošly health kontrolou;
+- user-facing instalace nevyžádala Terminal, PowerShell ani ruční shellový
+  příkaz; případný nativní consent je pojmenovaný;
 - každý warning má disposition a každé publikované Issue URL je v handoffu.
 - native Windows acceptance navíc uvádí přesný source/PR HEAD, nový proces,
   rerun a požadovaný restart či rollback; lab-specific identity a cesty
