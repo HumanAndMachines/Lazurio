@@ -6023,9 +6023,7 @@ body {
     background-color 420ms var(--tile-reveal-ease);
 }
 
-/* Produktová reference: karta stojí na místě a ikona zůstává nahoře. Nadpis,
-   stav i popis tvoří jeden textový blok, který při hoveru plynule vyjede
-   vzhůru uvnitř karty bez pohybu mřížky nebo sousedních modulů. */
+/* Stejně jako v dokumentaci je obsah čitelný i bez hoveru. */
 .apps-grid > .app-card .app-card-head {
   flex: 1 1 auto;
   position: relative;
@@ -6065,15 +6063,12 @@ body {
 .apps-grid > .app-card .app-card-desc {
   position: static;
   width: auto;
-  max-height: 0;
-  margin: 0;
-  opacity: 0;
+  max-height: none;
+  margin: var(--lz-space-8) 0 0;
+  opacity: 1;
   overflow: hidden;
   transform: none;
-  transition:
-    max-height 420ms var(--tile-reveal-ease),
-    margin-top 420ms var(--tile-reveal-ease),
-    opacity 340ms var(--tile-reveal-ease);
+  transition: none;
 }
 
 /* Všechny skupiny modulů sdílejí čtyři stejně široké pozice na desktopu.
@@ -6118,18 +6113,9 @@ body {
 @media (hover: hover) and (pointer: fine) {
   .app-card:not(.selected):not(.has-open-menu):hover {
     transform: none;
-    border-color: var(--app-accent);
-    background-color: var(--lz-white);
-    box-shadow:
-      0 0 0 3px color-mix(in srgb, var(--app-accent) 10%, transparent),
-      0 16px 34px -24px color-mix(in srgb, var(--lz-ink) 36%, transparent);
-  }
-
-  .apps-grid > .app-card:not(.has-open-menu):hover .app-card-desc,
-  .apps-grid > .app-card:not(.has-open-menu):focus-within .app-card-desc {
-    max-height: 2.9em;
-    margin-top: var(--lz-space-8);
-    opacity: 1;
+    border-color: var(--lz-blue-400);
+    background-color: var(--launchpad-card-surface);
+    box-shadow: none;
   }
 
   /* Tlačítko dalších možností je disclosure uvnitř karty. Jeho hover ani
@@ -6141,15 +6127,6 @@ body {
     border-color: var(--lz-line);
     background: var(--lz-white);
     box-shadow: 0 10px 24px -22px color-mix(in srgb, var(--lz-ink) 18%, transparent);
-  }
-}
-
-/* Na dotykové obrazovce není spolehlivý hover, proto popis zůstává čitelný. */
-@media (hover: none), (pointer: coarse) {
-  .apps-grid > .app-card .app-card-desc {
-    max-height: 2.9em;
-    margin-top: var(--lz-space-8);
-    opacity: 1;
   }
 }
 
