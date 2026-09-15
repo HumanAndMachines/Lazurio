@@ -53,6 +53,11 @@ test("Guide projects a complete locale-paired prompt and policy contract", () =>
     expect(guide.short_prompt).toContain("`WRITE`");
     expect(guide.short_prompt).toContain("`infra`");
     expect(guide.short_prompt).toContain("Node.js LTS");
+    expect(guide.short_prompt).toContain("Machine/system-wide `PATH`");
+    expect(guide.short_prompt).toContain("Terminal");
+    expect(guide.short_prompt).toContain("PowerShell");
+    expect(guide.short_prompt).toContain("`--clipboard`");
+    expect(guide.short_prompt).toContain("`device_code`");
     expect(guide.short_prompt).toContain("OpenAI standalone");
     expect(guide.short_prompt).toContain("Homebrew, npm");
     expect(guide.short_prompt).toContain(
@@ -64,9 +69,9 @@ test("Guide projects a complete locale-paired prompt and policy contract", () =>
     expect(guide.policy_markdown).toBe(manuals[locale]);
   }
   expect(buildOrganizationInstallGuide(manuals.cs, { locale: "cs" }).short_prompt)
-    .toContain("uživatelský `PATH`");
+    .toContain("soukromého chatu");
   expect(buildOrganizationInstallGuide(manuals.en, { locale: "en" }).short_prompt)
-    .toContain("user `PATH`");
+    .toContain("private chat");
   expect(manuals.en).not.toContain("Připrav tuto Mašinu");
 });
 
@@ -130,6 +135,14 @@ test("Guide rejects malformed blockquote and missing safety contract", () => {
   const leakedRestrictedRepo = manuals.en.replace("`infra`", "`infrastructure`");
   expect(() => extractOrganizationInstallPrompt(leakedRestrictedRepo, { locale: "en" }))
     .toThrow("`infra`");
+
+  const clipboardFlow = manuals.en.replace("`--clipboard`", "clipboard");
+  expect(() => extractOrganizationInstallPrompt(clipboardFlow, { locale: "en" }))
+    .toThrow("`--clipboard`");
+
+  const exposedConsole = manuals.en.replaceAll("PowerShell", "a command window");
+  expect(() => extractOrganizationInstallPrompt(exposedConsole, { locale: "en" }))
+    .toThrow("PowerShell");
 });
 
 test("Reader selects only the requested source and exposes no absolute path", async () => {

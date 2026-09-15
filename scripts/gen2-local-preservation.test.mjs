@@ -243,6 +243,12 @@ describe("documented origin activation", () => {
       "pending member/Team membership",
       "před vytvořením prvního provider repa",
       "závěrečném read-backu všech pěti bodů",
+      "aktuální krátký Builder prompt",
+      "Machine/system-wide",
+      "bez user-facing Terminalu nebo",
+      "bez `--clipboard`",
+      "aktuálním soukromém chatu",
+      "interní OAuth",
     ]) {
       expect(accessGate).toContain(contract);
     }
@@ -264,6 +270,7 @@ describe("documented origin activation", () => {
 
     const decisions = await readFile(join(repoRoot, "manual", "decision-register.md"), "utf8");
     expect(decisions).toContain("| 0144 | Greenfield klientská Organizace dokončí GitHub access baseline");
+    expect(decisions).toContain("| 0145 | Výchozí krátký prompt pro novou Builder Mašinu");
   });
 
   test("required template access is read-only, exact and checked before template remote mutation", async () => {
