@@ -6,6 +6,7 @@
    adaptér pro existující selektory Launchpadu. */
 
 :root {
+  --launchpad-card-surface: color-mix(in srgb, var(--lz-gray-50) 70%, var(--lz-white));
   /* Accent palette — GEN2 Launchpad ramp (accent-500 #6058E9). The named tokens
      stay --c-accent-* so a picked accent (data-accent) can override the ramp
      while the GEN2 default keeps 1:1 visual parity. */
@@ -1945,8 +1946,8 @@ input:focus-visible,
 }
 
 .apps-grid > .manifest-module-card.is-unavailable {
-  background: var(--lz-gray-50);
-  border-color: var(--line);
+  background: var(--launchpad-card-surface);
+  border-color: var(--lz-line-faint);
   color: var(--text-muted);
 }
 
@@ -5767,10 +5768,10 @@ b {
   }
 }
 
-/* Klidná pracovní plocha: teplý Lazurio papír bez mřížky. Bílé objekty na
-   něm získají čitelnější materiál a hierarchii bez dekorativních efektů. */
+/* Klidná pracovní plocha: bílý podklad a jemně tónované karty ve všech
+   Organizacích. Barvy ikon, stavů a ovládání zůstávají beze změny. */
 body {
-  background-color: var(--lz-paper);
+  background-color: var(--lz-white);
   background-image: none;
 }
 
@@ -6089,9 +6090,9 @@ body {
 
 .apps-grid > .app-card {
   margin: 0;
-  border: 1px solid var(--lz-line);
+  border: 1px solid var(--lz-line-faint);
   border-radius: var(--lz-radius-md);
-  background-color: var(--lz-white);
+  background-color: var(--launchpad-card-surface);
   background-image: none;
   box-shadow: 0 10px 24px -22px color-mix(in srgb, var(--lz-ink) 18%, transparent);
 }

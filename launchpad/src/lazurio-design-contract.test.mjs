@@ -248,7 +248,7 @@ test("kanonické modulové dlaždice jsou kompaktní samostatné karty", async (
   expect(base).toMatch(/\.app-card-desc\s*{[\s\S]*?font-size: 14px;[\s\S]*?line-height: 1\.45/);
   expect(styles).toMatch(/\.apps-grid\s*{[^}]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
   expect(canonical).toMatch(/\.apps-grid\s*{[\s\S]*?column-gap: var\(--lz-space-12\);[\s\S]*?row-gap: var\(--lz-space-12\);[\s\S]*?border: 0/);
-  expect(canonical).toMatch(/\.apps-grid > \.app-card\s*{[\s\S]*?border: 1px solid var\(--lz-line\);[\s\S]*?border-radius: var\(--lz-radius-md\)/);
+  expect(canonical).toMatch(/\.apps-grid > \.app-card\s*{[\s\S]*?border: 1px solid var\(--lz-line-faint\);[\s\S]*?border-radius: var\(--lz-radius-md\)/);
   expect(canonical).toMatch(/\.apps-grid > \.app-card:not\(\.has-open-menu\):focus-within,[\s\S]*?\.apps-grid > \.app-card\.selected\s*{[\s\S]*?border-color: var\(--app-focus-accent, var\(--app-accent\)\)/);
   expect(canonical).toMatch(/box-shadow: 0 10px 24px -22px color-mix\(in srgb, var\(--lz-ink\) 18%, transparent\)/);
   expect(canonical).toMatch(/\.app-card:not\(\.selected\):not\(\.has-open-menu\):hover\s*{[\s\S]*?transform: none;[\s\S]*?background-color: var\(--lz-white\);[\s\S]*?box-shadow:[\s\S]*?0 0 0 3px color-mix/);
@@ -268,10 +268,12 @@ test("kanonické modulové dlaždice jsou kompaktní samostatné karty", async (
   expect(app).toContain('system: "description.system"');
 });
 
-test("pracovní plocha používá teplý papír bez mřížky a obvodových linek sekcí", async () => {
+test("pracovní plocha používá bílý podklad bez mřížky a obvodových linek sekcí", async () => {
   const styles = await source("styles.css");
   const surface = styles.slice(styles.indexOf("/* Klidná pracovní plocha"));
-  expect(surface).toMatch(/body\s*{[\s\S]*?background-color: var\(--lz-paper\);[\s\S]*?background-image: none/);
+  expect(surface).toMatch(/body\s*{[\s\S]*?background-color: var\(--lz-white\);[\s\S]*?background-image: none/);
+  expect(surface).toMatch(/\.apps-grid > \.app-card\s*{[\s\S]*?background-color: var\(--launchpad-card-surface\)/);
+  expect(styles).toMatch(/\.apps-grid > \.manifest-module-card\.is-unavailable\s*{[\s\S]*?background: var\(--launchpad-card-surface\)/);
   expect(surface).toMatch(/\.app-section-organization:not\(\.skeleton-section\),[\s\S]*?\.app-section-workspace\s*{[\s\S]*?border: 0;[\s\S]*?background: transparent/);
   expect(surface).toMatch(/\.workspace-team\s*{[\s\S]*?border-top: 0/);
 });
