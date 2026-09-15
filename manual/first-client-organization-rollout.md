@@ -388,7 +388,9 @@ alias-conflict pravidla a GitHub coordinate normalizaci jako runtime; jeho
 `modules + excluded` je úplný deklarovaný slot inventory, ne druhý ruční
 seznam. Přesný `jq` nejdřív vyžaduje právě jeden výsledek exact Organization
 selectoru, uzavřený status `active` / `planned_slot` bez hodnoty `unknown`
-a správného GitHub ownera, potom vybere každý **aktivní** slot s
+a správného GitHub ownera. Neřetězcový či neznámý status, `active` bez
+repository nebo `planned` / `planned_slot` s repository se normalizuje na
+`unknown` a instalaci zablokuje. Gate potom vybere každý **aktivní** slot s
 `default_access: restricted` / `private`, odmítne unknown access, chybějící
 binding i duplicitní repository a vydá deterministicky seřazené exact
 `owner/repository`. Collaborators read-back proveď pro **každý** vydaný prvek —

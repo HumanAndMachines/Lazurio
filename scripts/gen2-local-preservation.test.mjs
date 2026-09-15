@@ -253,6 +253,8 @@ describe("documented origin activation", () => {
       "modules + excluded",
       "exact Organization selector did not resolve once",
       "slot has unknown status",
+      "Neřetězcový či neznámý status",
+      "`planned` / `planned_slot` s repository",
       "active slot has unknown access",
       "restricted slot has no exact GitHub binding",
       "restricted repository owner differs from Organization",
@@ -300,6 +302,8 @@ describe("documented origin activation", () => {
       expect(candidate).toContain("bun run runtime:inventory -- --organization <exact-company.slug> --json");
       expect(candidate).toContain("exact Organization selector did not resolve once");
       expect(candidate).toContain("slot has unknown status");
+      expect(candidate).toContain("Neřetězcový či neznámý status");
+      expect(candidate).toContain("`planned` / `planned_slot` s repository");
       expect(candidate).toContain("restricted slot has no exact GitHub binding");
       expect(candidate).toContain("restricted repository owner differs from Organization");
       expect(candidate).toContain("live builders Team roster differs from approved roster");
@@ -325,6 +329,12 @@ describe("documented origin activation", () => {
     )).toThrow();
     expect(() => requireFailClosedProviderBaseline(
       accessGate.replace("slot has unknown status", "unknown status ignoruj"),
+    )).toThrow();
+    expect(() => requireFailClosedProviderBaseline(
+      accessGate.replace("Neřetězcový či neznámý status", "jen neznámý string"),
+    )).toThrow();
+    expect(() => requireFailClosedProviderBaseline(
+      accessGate.replace("`planned` / `planned_slot` s repository", "planned s repository přeskoč"),
     )).toThrow();
     expect(() => requireFailClosedProviderBaseline(
       accessGate.replace("restricted slot has no exact GitHub binding", "missing binding ignoruj"),
