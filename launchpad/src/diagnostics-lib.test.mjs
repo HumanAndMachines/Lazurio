@@ -841,10 +841,9 @@ test("apps response materializes HTTPS endpoints from the module-owned lease", a
     schema_version: "lazurio.module.v1",
     id: "secure",
     company: "SecureCo",
-    tcp_port_policy: { mode: "exception", reason: "The optional local editor owns a second listener." },
+    tcp_port_policy: { mode: "single" },
     port_leases: [
       { id: "main", host: "127.0.0.1", port: 5450 },
-      { id: "editor", host: "127.0.0.1", port: 5451 },
     ],
     apps: ["app/v1/package.json"],
     default_app: "app/v1/package.json",
@@ -871,13 +870,8 @@ test("apps response materializes HTTPS endpoints from the module-owned lease", a
     },
     module_catalog_path: "workspace/secure",
     module_open_target: true,
-    editor: {
-      status: "read_only",
-      label: "Pouze pro čtení",
-      listener: { host: "127.0.0.1", port: 5451 },
-      component_path: "launchpad/components/editor/v2",
-    },
   });
+  expect(response.apps[0]?.editor).toBeUndefined();
   const secureModule = response.organizations
     .find((organization) => organization.slug === "SecureCo")
     ?.teams.flatMap((team) => team.modules)
@@ -902,67 +896,7 @@ test("apps response materializes HTTPS endpoints from the module-owned lease", a
   const check = report.checks.find((item) => item.id === "launchpad.port_ownership");
   expect(check?.status).toBe("ok");
   const appCheck = report.checks.find((item) => item.id === "launchpad.runtime.secureco-secure");
-  expect(appCheck?.details).toContain("editor: read-only (known limitation)");
-
-  const sharedEditorRoot = join(root, "launchpad", "components", "editor", "v2");
-  await mkdir(join(sharedEditorRoot, "lib"), { recursive: true });
-  await mkdir(join(sharedEditorRoot, "public"), { recursive: true });
-  await writeFile(join(sharedEditorRoot, "lib", "astro-integration.ts"), "// fixture\n", "utf8");
-  await writeFile(join(sharedEditorRoot, "lib", "create-server.ts"), "// fixture\n", "utf8");
-  await writeFile(join(sharedEditorRoot, "public", "index.html"), "<!doctype html>\n", "utf8");
-  await writeFile(join(sharedEditorRoot, "public", "app.js"), "// fixture\n", "utf8");
-  await writeFile(join(sharedEditorRoot, "public", "styles.css"), "/* fixture */\n", "utf8");
-  await writeJson(join(sharedEditorRoot, "component.json"), {
-    schema_version: "lazurio.knowledgebase.editor.component.v2",
-    entrypoints: {
-      astro_integration: "lib/astro-integration.ts",
-      server: "lib/create-server.ts",
-    },
-    public_files: ["public/index.html", "public/app.js", "public/styles.css"],
-  });
-  const readyResponse = await buildLaunchpadAppsResponse({
-    companiesRoot: root,
-    launchpadRoot: join(root, "launchpad"),
-    runtimeManager: { appsWithRuntime: async (apps) => apps },
-    includeGit: false,
-  });
-  expect(readyResponse.apps[0]?.editor).toMatchObject({
-    status: "ready",
-    label: "Editor připraven",
-  });
-
-  await writeJson(join(sharedEditorRoot, "component.json"), {
-    schema_version: "lazurio.knowledgebase.editor.component.v2",
-    entrypoints: {
-      astro_integration: "lib/astro-integration.ts",
-      server: "lib/create-server.ts",
-    },
-    public_files: ["public/index.html", "public/app.js"],
-  });
-  const incompleteManifestResponse = await buildLaunchpadAppsResponse({
-    companiesRoot: root,
-    launchpadRoot: join(root, "launchpad"),
-    runtimeManager: { appsWithRuntime: async (apps) => apps },
-    includeGit: false,
-  });
-  expect(incompleteManifestResponse.apps[0]?.editor?.status).toBe("read_only");
-
-  await writeJson(join(sharedEditorRoot, "component.json"), {
-    schema_version: "lazurio.knowledgebase.editor.component.v2",
-    entrypoints: {
-      astro_integration: "lib/astro-integration.ts",
-      server: "lib/create-server.ts",
-    },
-    public_files: ["public/index.html", "public/app.js", "public/styles.css"],
-  });
-  await rm(join(sharedEditorRoot, "public", "styles.css"));
-  const missingAssetResponse = await buildLaunchpadAppsResponse({
-    companiesRoot: root,
-    launchpadRoot: join(root, "launchpad"),
-    runtimeManager: { appsWithRuntime: async (apps) => apps },
-    includeGit: false,
-  });
-  expect(missingAssetResponse.apps[0]?.editor?.status).toBe("read_only");
+  expect(appCheck?.details.join("\n")).not.toContain("editor:");
 });
 
 test("Doctor treats Organization port policy violations as hard errors", () => {

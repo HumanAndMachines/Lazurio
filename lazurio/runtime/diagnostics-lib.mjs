@@ -1,7 +1,7 @@
 import { toolInvocation } from "../core/tool-invocation-lib.mjs";
 import { existsSync, lstatSync, readFileSync, realpathSync } from "fs";
 import { readFile, readdir } from "fs/promises";
-import { basename, dirname, isAbsolute, join, posix, relative } from "path";
+import { basename, dirname, join, posix } from "path";
 import {
   discoverLaunchpadApps,
   organizationRelativePathIssue,
@@ -238,10 +238,6 @@ export async function buildLaunchpadAppsResponse({
     organizations,
     apps: visibleApps,
   });
-  for (const app of visibleApps) {
-    const editor = editorCapabilityForApp(app, launchpadRoot);
-    if (editor) app.editor = editor;
-  }
   const gitContext = includeGit
     ? await buildGitContext({ companiesRoot, gitStatusService })
     : { reposByKey: new Map(), inventoryWarnings: [], worktreeWarnings: [], warnings: [] };
@@ -328,72 +324,6 @@ export async function buildLaunchpadAppsResponse({
     git_worktree_warnings: gitContext.worktreeWarnings,
     warnings: [...discoveryWarnings, ...gitContext.warnings],
   };
-}
-
-function editorCapabilityForApp(app, launchpadRoot) {
-  const lease = app.module_contract?.port_leases?.find((candidate) => candidate?.id === "editor");
-  if (!lease) return null;
-
-  const editorRoot = join(launchpadRoot, "components", "editor", "v2");
-  const ready = validEditorComponentV2(editorRoot);
-  return {
-    schema_version: "lazurio.editor.capability.v1",
-    status: ready ? "ready" : "read_only",
-    label: ready ? "Editor připraven" : "Pouze pro čtení",
-    message: ready
-      ? "Lokální editor je připravený z kanonické komponenty Launchpadu."
-      : "Obsah lze procházet, ale lokální editor není na tomto Lazurio rootu nainstalovaný (známé omezení).",
-    listener: {
-      host: lease.host ?? null,
-      port: Number.isInteger(lease.port) ? lease.port : null,
-    },
-    component_path: "launchpad/components/editor/v2",
-  };
-}
-
-function validEditorComponentV2(editorRoot) {
-  const manifestPath = join(editorRoot, "component.json");
-  if (!realDirectory(editorRoot) || !realContainedRegularFile(editorRoot, manifestPath)) return false;
-  try {
-    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-    if (manifest?.schema_version !== "lazurio.knowledgebase.editor.component.v2") return false;
-    if (manifest?.entrypoints?.astro_integration !== "lib/astro-integration.ts") return false;
-    if (manifest?.entrypoints?.server !== "lib/create-server.ts") return false;
-    const publicFiles = manifest?.public_files;
-    const expectedPublicFiles = ["public/index.html", "public/app.js", "public/styles.css"];
-    if (
-      !Array.isArray(publicFiles)
-      || publicFiles.length !== expectedPublicFiles.length
-      || publicFiles.some((relativePath, index) => relativePath !== expectedPublicFiles[index])
-    ) return false;
-    const declaredFiles = [
-      manifest.entrypoints.astro_integration,
-      manifest.entrypoints.server,
-      ...publicFiles,
-    ];
-    return declaredFiles.every((relativePath) => (
-      realContainedRegularFile(editorRoot, join(editorRoot, relativePath))
-    ));
-  } catch {
-    return false;
-  }
-}
-
-function realContainedRegularFile(root, targetPath) {
-  const relativePath = relative(root, targetPath);
-  if (relativePath === "" || relativePath.startsWith("..") || isAbsolute(relativePath)) return false;
-  let cursor = root;
-  try {
-    for (const segment of relativePath.split(/[\\/]/).filter(Boolean)) {
-      cursor = join(cursor, segment);
-      const stat = lstatSync(cursor);
-      if (stat.isSymbolicLink()) return false;
-    }
-    return lstatSync(targetPath).isFile();
-  } catch (error) {
-    if (error?.code === "ENOENT") return false;
-    throw error;
-  }
 }
 
 function realRegularFile(targetPath) {
@@ -3376,18 +3306,15 @@ function runtimeAppCheck(app, { activeVersion = null } = {}) {
   const runtime = app.runtime ?? {};
   const dependencies = app.dependencies ?? runtime.dependencies ?? {};
   const runtimeStatus = runtimeAppStatus(app);
-  const editorReadOnly = app.editor?.status === "read_only";
   return {
     id: `launchpad.runtime.${app.id}`,
-    status: activeVersion ? "ok" : runtimeStatus === "ok" && editorReadOnly ? "warn" : runtimeStatus,
+    status: activeVersion ? "ok" : runtimeStatus,
     severity: "runtime",
     title: app.title,
     message: activeVersion
       ? `Sdílený port ${app.port} používá zdravá výchozí verze ${activeVersion.title}; ${app.title} je očekávaně neaktivní verze stejného Modulu.`
       : dependencies.state && dependencies.state !== "ready"
       ? dependencies.message
-      : editorReadOnly && runtimeStatus === "ok"
-      ? app.editor.message
       : (runtime.message ?? runtimeLabel(runtime.status)),
     paths: [app.package_path, runtime.log_path].filter(Boolean),
     links: [],
@@ -3399,7 +3326,6 @@ function runtimeAppCheck(app, { activeVersion = null } = {}) {
       `pid: ${runtime.pid ?? "-"}`,
       `port: ${app.port ?? "-"}`,
       `health: ${app.health_url ?? "-"}`,
-      ...(app.editor ? [`editor: ${app.editor.status === "ready" ? "ready" : "read-only (known limitation)"}`] : []),
       ...(activeVersion ? [`active_version: ${activeVersion.id}`] : []),
     ],
   };
