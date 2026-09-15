@@ -52,8 +52,13 @@ function slotGitHubRepository(slot) {
 }
 
 function slotStatus(slot) {
-  if (typeof slot?.status === "string" && slot.status.trim() !== "") return slot.status;
-  return slotRepository(slot) ? "active" : "unknown";
+  const explicit = typeof slot?.status === "string" && slot.status.trim() !== ""
+    ? slot.status.trim()
+    : null;
+  if (explicit === null) return slotRepository(slot) ? "active" : "unknown";
+  if (explicit === "active") return "active";
+  if (["planned", "planned_slot"].includes(explicit)) return "planned_slot";
+  return "unknown";
 }
 
 function declaredModuleSlots(resolution) {
