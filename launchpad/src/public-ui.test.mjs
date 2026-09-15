@@ -1089,7 +1089,7 @@ test("UI separates physical Organization/Workspace/Productionspace and prepares 
     css.indexOf(".apps-grid > .manifest-module-card.is-unavailable {"),
     css.indexOf(".manifest-module-folder-action"),
   );
-  expect(unavailableModuleCss).toContain("background: var(--lz-gray-50)");
+  expect(unavailableModuleCss).toContain("background: var(--launchpad-card-surface)");
   expect(unavailableModuleCss).toContain("filter: grayscale(1)");
   expect(unavailableModuleCss).toContain("outline-color: var(--line-strong)");
   expect(js).toContain("function openWorkspaceModuleFolder");
