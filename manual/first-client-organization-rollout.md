@@ -334,21 +334,37 @@ přesnou Organizaci a zamýšlené Builder loginy:
 
 ```sh
 gh api "orgs/<ClientOrg>" --jq '{login,id,default_repository_permission}'
+lazurio organization activate --check --github-id <immutable-id> --json
 gh api "orgs/<ClientOrg>/teams/builders" --jq '{name,slug,id,privacy}'
 gh api --paginate "orgs/<ClientOrg>/teams/builders/repos?per_page=100" \
   --jq '.[] | {name,permissions}'
-gh api --paginate "repos/<ClientOrg>/infra/collaborators?affiliation=all&per_page=100" \
+gh api --paginate "repos/<restricted-owner>/<restricted-repo>/collaborators?affiliation=all&per_page=100" \
   --jq '.[] | {login,role_name,permissions}'
 gh api "orgs/<ClientOrg>/memberships/<builder-login>" --jq '{state,role}'
 gh api "orgs/<ClientOrg>/teams/builders/memberships/<builder-login>" \
   --jq '{state,role}'
 ```
 
+Owner-only activation výstup musí explicitně splnit
+`execution.status == "ok"`, `observations.github_app.status == "installed"` a
+`observations.github_app.repository_selection == "all"`. Samotné
+`outcome == "active"` nestačí, protože vědomě scoped instalace
+`repository_selection == "selected"` může být platná pro jiný use case, ale
+greenfield klientský baseline nesplňuje. Nečitelný výstup, chybějící pole,
+neznámá hodnota nebo ownerovi nedostupný App read-back je blocker, nikdy důkaz
+`All repositories`.
+
 Výsledek porovnej s canonical rootem a aktivními sloty manifestu, ne s ručně
 udržovaným druhým seznamem. Team repo read-back musí zahrnout každý zamýšlený
 běžný repozitář s `permissions.push: true` a žádný restricted repozitář s
-Teamovým grantem; výpis `infra` collaborators nesmí obsahovat žádného
-Buildera. Chybějící App scope, base
+Teamovým grantem. Z manifestu sestav úplný seznam každého **aktivního** slotu
+s `default_access: restricted` / `private`, vezmi jeho exact deklarovaný
+GitHub owner/repository binding a collaborators read-back výše proveď pro každý
+z nich — ne pouze pro repo pojmenované `infra`. V žádném výpisu nesmí být login
+zamýšleného Buildera. Nenulový exit, neúplná pagination, ne-JSON nebo jinak
+malformed provider odpověď a active restricted slot bez exact repository
+bindingu jsou fail-closed blocker; neinterpretují se jako prázdný seznam
+collaborators. Chybějící App scope, base
 permission jiné než `none`, pending member/Team membership, READ místo WRITE,
 chybějící běžné repo nebo Builder v restricted repu je blocker před instalací
 Mašiny. Oprav přesný GitHub grant a read-back zopakuj; nepřidávej workaround do
