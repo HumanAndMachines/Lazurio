@@ -354,6 +354,17 @@ chybějící běžné repo nebo Builder v restricted repu je blocker před insta
 Mašiny. Oprav přesný GitHub grant a read-back zopakuj; nepřidávej workaround do
 manifestu ani lokální ACL.
 
+Teprve potom předej klientovi aktuální krátký Builder prompt z
+`manual/organization-install.md`. Prompt musí zůstat self-contained end-to-end
+mandátem: Agent autonomně zkonverguje nezbytný User i Machine/system-wide
+`PATH`, používá své background nástroje bez user-facing Terminalu nebo
+PowerShellu a člověku ponechá jen nativní consent a GitHub web krok. GitHub
+párování spouští bez `--clipboard`; krátkodobý user-facing ověřovací (device)
+kód předá pouze v aktuálním soukromém chatu, zatímco interní OAuth
+`device_code`, access token a privátní klíč nikdy nezobrazí. Prompt, který po
+klientovi chce otevřít konzoli, kopírovat příkaz nebo hledat kód ve schránce,
+není připravený k předání.
+
 ### 1. Organization repo bootstrap
 
 Klientská Organization pravda vzniká v samostatném klientském repo, ne v rootu. Baseline vždy pochází z `TemplatesRozjedeme-ai/OrganizationTemplate_GEN3` a checkout drží remote `template` jako fetch-only upstream, aby byl budoucí template sync reviewovatelný. Push na `template` musí být explicitně zakázaný.
