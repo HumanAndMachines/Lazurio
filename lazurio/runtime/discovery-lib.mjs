@@ -1,3 +1,4 @@
+import { isRetiredKnowledgeEditorPath } from "../core/retired-knowledge-editor.mjs";
 import { existsSync, lstatSync, readdirSync, realpathSync } from "fs";
 import { readdir, readFile } from "fs/promises";
 import { basename, dirname, extname, isAbsolute, join, posix, relative, resolve, sep } from "path";
@@ -2517,6 +2518,10 @@ export async function discoverLaunchpadApps(
     }
     const normalizedRuntime = normalizePackageRuntime({ packageJson, packagePath });
     if (!normalizedRuntime) continue;
+    if (isRetiredKnowledgeEditorPath(packagePath)) {
+      warnings.push(`${packagePath}: standalone Knowledgebase Editor is retired; synchronize the module and use chat-based authoring.`);
+      continue;
+    }
     let app = normalizedRuntime.app;
     const sourceLabel = app.runtime_contract?.source ?? "runtime manifest";
     const usesLazurioRuntime = app.runtime_contract?.legacy !== true;

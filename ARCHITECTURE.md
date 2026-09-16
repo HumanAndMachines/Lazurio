@@ -455,3 +455,18 @@ ještě není dost jednoduchý.
 - [Resident profiles](manual/lazurio-resident-profiles.md) — Buddy, AI Kolega,
   instalovaný root a provozní hranice.
 - [AGENTS.md](AGENTS.md) — pravidla spolupráce, pravomoci a publikace.
+
+## Git-native Knowledgebase authoring
+
+Knowledgebase, wiki a dokumentace nepoužívají samostatný browser Editor.
+Knowledgebase reader nabízí statický dialog „Upravit Knowledgebase“ s žádostí
+pro chat a návodem ke kontrole náhledu v interním browseru v pravém sidebaru.
+Agent upravuje Git soubory v worktree; Publikace zůstává schvalovaná operace.
+Dialog nemá writer API, další server ani port. Content/CMS editory nejsou
+součástí tohoto retirementu.
+
+Rollout nejprve aktualizuje reader moduly a odstraní jejich editorové leases,
+teprve potom odstraňuje sdílenou komponentu rootu. Discovery ani inventář
+nenabízejí vyřazené document editory. Pokus spustit starý reader s editorovým
+lease skončí konkrétní žádostí o synchronizaci modulu ještě před převzetím
+portů či spuštěním procesu.

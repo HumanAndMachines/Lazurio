@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
+import { isRetiredKnowledgeEditorPath } from "../lazurio/core/retired-knowledge-editor.mjs";
 import { existsSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { basename, join, relative, resolve, sep } from "node:path";
@@ -93,6 +94,7 @@ async function packageCensus(moduleRoot) {
     const runtime = packageJson?.lazurio?.runtime;
     const legacy = packageJson?.companyascode?.app;
     const relativePath = posixRelative(moduleRoot, packagePath);
+    if (isRetiredKnowledgeEditorPath(`${basename(moduleRoot)}/${relativePath}`)) continue;
     const appShaped = /^(?:app(?:\/v\d+)?|editor(?:\/v\d+)?)\/package\.json$/.test(relativePath);
     if (!runtime && !legacy && !(appShaped && typeof packageJson?.scripts?.dev === "string")) continue;
     const commands = Object.values(packageJson?.scripts ?? {}).filter((command) => typeof command === "string");

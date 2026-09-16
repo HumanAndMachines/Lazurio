@@ -6217,3 +6217,28 @@ async function killFixtureProcess(child, root) {
     throw new Error(`Fixture child PID ${child.pid ?? "unknown"} was not registered for root ${root}`);
   }
 }
+
+test("retired document editors and stale reader leases fail before reclaim or spawn", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port });
+  for (const editor of [true, false]) {
+    const app = fixtureDiscoveryApp({ port, overrides: {
+      module: "knowledgebase",
+      ...(editor ? { package_path: "organizations/TestCompany/workspace/knowledgebase/editor/v2/package.json" }
+        : { module_contract: { port_leases: [{ id: "main", port }, { id: "editor", port: port + 1 }] } }),
+    } });
+    let spawned = false;
+    const signals = [];
+    const runtime = createRuntimeManager({
+      companiesRoot: root, launchpadRoot: join(root, "launchpad"), discover: discoveryWithApp(app),
+      signalPortOwnerFn: async (...args) => signals.push(args),
+      spawnProcess: () => { spawned = true; throw new Error("must not spawn"); },
+    });
+    await expect(runtime.start(app.id)).rejects.toMatchObject({
+      code: editor ? "knowledge_editor_retired" : "knowledge_editor_migration_required",
+    });
+    expect(spawned).toBe(false);
+    expect(signals).toEqual([]);
+    await runtime.shutdown();
+  }
+});
