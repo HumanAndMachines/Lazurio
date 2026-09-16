@@ -10,6 +10,11 @@ const defaultPollMs = 50;
 // several seconds, so Windows gets a wider bound; the lock deadline
 // (defaultTimeoutMs) still caps the whole acquisition.
 const defaultIdentityTimeoutMs = process.platform === "win32" ? 15_000 : 5_000;
+
+/** Upper bound one process-identity lookup may take on this platform. */
+export function moduleRuntimeLockIdentityTimeoutMs() {
+  return defaultIdentityTimeoutMs;
+}
 let cachedCurrentProcessIdentity = null;
 
 export function moduleRuntimeLockName(key) {
@@ -182,26 +187,39 @@ async function defaultProcessAlive(pid) {
   }
 }
 
-async function defaultProcessIdentity(pid) {
+async function defaultProcessIdentity(pid, { timeoutMs = defaultIdentityTimeoutMs, signal } = {}) {
   if (!Number.isInteger(pid) || pid <= 0) return null;
   if (pid === process.pid && cachedCurrentProcessIdentity) {
     return cachedCurrentProcessIdentity;
   }
+  if (signal?.aborted) return null;
   const command = process.platform === "win32"
     ? windowsModuleLockProcessIdentityCommand(pid)
     : ["ps", "-o", "lstart=", "-p", String(pid)];
   try {
     const child = Bun.spawn(command, { stdout: "pipe", stderr: "ignore", windowsHide: true });
     const timedOut = Symbol("identity-timeout");
+    const aborted = Symbol("identity-aborted");
     let timeoutId;
+    let onAbort;
+    // The child never outlives the caller's budget: the smaller of the
+    // platform bound and the remaining acquisition deadline, and an abort
+    // from the caller kills it immediately.
+    const budget = Math.max(0, Math.min(defaultIdentityTimeoutMs, timeoutMs));
     const result = await Promise.race([
       Promise.all([child.exited, new Response(child.stdout).text()]),
       new Promise((resolveTimeout) => {
-        timeoutId = setTimeout(() => resolveTimeout(timedOut), defaultIdentityTimeoutMs);
+        timeoutId = setTimeout(() => resolveTimeout(timedOut), budget);
+      }),
+      new Promise((resolveAbort) => {
+        if (!signal) return;
+        onAbort = () => resolveAbort(aborted);
+        signal.addEventListener("abort", onAbort, { once: true });
       }),
     ]);
     if (timeoutId) clearTimeout(timeoutId);
-    if (result === timedOut) {
+    if (signal && onAbort) signal.removeEventListener("abort", onAbort);
+    if (result === timedOut || result === aborted) {
       try { child.kill("SIGKILL"); } catch {}
       return null;
     }
@@ -234,12 +252,19 @@ async function boundedProcessIdentity(resolver, pid, deadline) {
   if (remainingMs <= 0) return null;
   const timeoutMs = Math.min(defaultIdentityTimeoutMs, remainingMs);
   const timedOut = Symbol("identity-timeout");
+  // The resolver receives the remaining budget and an abort signal, so a
+  // platform lookup (and its child process) cannot outlive the acquisition
+  // deadline even when the outer race gives up first.
+  const controller = new AbortController();
   let timeoutId;
   try {
     const result = await Promise.race([
-      Promise.resolve().then(() => resolver(pid)),
+      Promise.resolve().then(() => resolver(pid, { timeoutMs, signal: controller.signal })),
       new Promise((resolveTimeout) => {
-        timeoutId = setTimeout(() => resolveTimeout(timedOut), timeoutMs);
+        timeoutId = setTimeout(() => {
+          controller.abort();
+          resolveTimeout(timedOut);
+        }, timeoutMs);
       }),
     ]);
     return result === timedOut ? null : result;
