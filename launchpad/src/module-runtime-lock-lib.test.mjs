@@ -4,6 +4,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import {
   acquireModuleRuntimeLock,
+  moduleRuntimeLockIdentityTimeoutMs,
   moduleRuntimeLockName,
   windowsModuleLockProcessIdentityCommand,
 } from "../../lazurio/runtime/module-runtime-lock-lib.mjs";
@@ -180,4 +181,33 @@ test("Windows lock identity probe uses only a trusted local system executable", 
   ]) {
     expect(() => windowsModuleLockProcessIdentityCommand(4242, env)).toThrow("SystemRoot/WINDIR");
   }
+});
+
+test("the identity resolver receives the remaining budget and is aborted when the lock bound expires", async () => {
+  const root = await mkdtemp(join(tmpdir(), "lazurio-module-lock-budget-"));
+  roots.push(root);
+  const calls = [];
+  const resolveProcessIdentity = (pid, options) =>
+    new Promise((resolve) => {
+      calls.push({ pid, timeoutMs: options?.timeoutMs, signal: options?.signal });
+      options?.signal?.addEventListener("abort", () => resolve("late-answer"), { once: true });
+    });
+  await expect(acquireModuleRuntimeLock({
+    root,
+    key: "Acme/budget",
+    instanceId: "one",
+    timeoutMs: 120,
+    pollMs: 5,
+    resolveProcessIdentity,
+  })).rejects.toThrow(/nemůže ověřit identitu PID/);
+  expect(calls.length).toBe(1);
+  expect(calls[0].pid).toBe(process.pid);
+  expect(calls[0].timeoutMs).toBeGreaterThan(0);
+  expect(calls[0].timeoutMs).toBeLessThanOrEqual(Math.min(120, moduleRuntimeLockIdentityTimeoutMs()));
+  expect(calls[0].signal.aborted).toBe(true);
+});
+
+test("the platform identity bound is covered by the module port test budget", () => {
+  const bound = moduleRuntimeLockIdentityTimeoutMs();
+  expect(bound).toBe(process.platform === "win32" ? 15_000 : 5_000);
 });

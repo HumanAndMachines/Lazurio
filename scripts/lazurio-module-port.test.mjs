@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import { platformTestTimeout } from "../launchpad/src/test-platform-setup.mjs";
+import { moduleRuntimeLockIdentityTimeoutMs } from "../lazurio/runtime/module-runtime-lock-lib.mjs";
 import { allocateModulePort } from "./lazurio-module-port.mjs";
 
 const roots = [];
@@ -93,4 +94,4 @@ test("creator allocates once from the tracked Organization pool", async () => {
     company: "Acme",
     module: "gamma",
   })).rejects.toThrow("nesmí alokovat lease do worktree");
-}, platformTestTimeout(5_000));
+}, platformTestTimeout(5_000) + moduleRuntimeLockIdentityTimeoutMs()); // fixture budget plus one platform identity lookup
