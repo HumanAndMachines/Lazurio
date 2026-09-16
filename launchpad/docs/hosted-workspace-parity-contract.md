@@ -1,5 +1,15 @@
 # Hosted Workspace machine parity contract
 
+> **Stav (2026-09-16):** tento kontrakt popisuje **doručený pre-0146 runtime
+> Hosted Team Workspace** (Organization Host, hostname `<module>.<team>.<domain>`).
+> Pro nové změny routingu je **deprecated**: cílový model jmen a vstupu
+> hostovaných Mašin určuje decision 0146 v `manual/decision-register.md`
+> (`<app>.<vm>.<org>.lazurio.io` pro dílny, `<app>.<org>.lazurio.io` pro
+> produkční workspace aplikace, rozcestník na bare hostname). Tento dokument
+> zůstává acceptance vstupem doručeného runtime, dokud samostatně reviewovaný
+> runtime cutover Launchpadu nepřepne hosted identitu na model 0146; do té doby
+> runtime model 0146 **neimplementuje**.
+
 ## Rozsah synchronizace
 
 CLI i Launchpad Sync používají existující ověřenou konfiguraci Hosted Workspace:
@@ -59,9 +69,11 @@ Hosted identitu tvoří pouze:
 - exact lowercase `LAZURIO_TEAM_ID`;
 - společná lowercase DNS zóna v `LAZURIO_HOSTED_DOMAIN`.
 
-Externí App URL je vždy odvozená jako
-`https://<module>.<team>.<domain>/`. Service catalog, revision, per-App desired
-state ani druhý lifecycle controller neexistují.
+Externí App URL doručeného pre-0146 runtime je vždy odvozená jako
+`https://<module>.<team>.<domain>/` (cílový tvar po cutoveru podle decision
+0146 je `https://<app>.<vm>.<org>.lazurio.io/`; viz stav výše). Service
+catalog, revision, per-App desired state ani druhý lifecycle controller
+neexistují.
 
 ## Runner
 
