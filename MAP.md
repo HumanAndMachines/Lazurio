@@ -129,8 +129,10 @@ nikdy se neduplikují pod `development/Lazurio`.
   Team příslušnost je N:M deklarace v `modules[].teams` nebo
   `module_slots[].teams`, ne další adresář. Chybějící deklarace znamená Team
   `workspace`; starší singulární `workspace` je pouze migrační alias. Launchpad
-  podle stejné deklarace grupuje karty a odvozuje hostovaný tvar
-  `<modul>.<team>.<doména>` (decision 0041).
+  podle stejné deklarace grupuje karty (decision 0041). Hostovaná jména
+  aplikací určuje decision 0146: `<app>.<vm>.<org>.lazurio.io` v dílně
+  (hostovaná VM, jen tailnet) a `<app>.<org>.lazurio.io` pro produkční
+  workspace aplikace; starší tvar `<modul>.<team>.<doména>` je nahrazený.
 - `organizations/<org>/productionspace/` — org-level repozitáře dané Organizace, které nejsou workspace moduly (např. firmware, connect, platformní runtime nebo pracovní template checkout); každé repo si definuje vlastní pravidla a Doctor u nich vynucuje jen bezpečné minimum (decisions 0041 a 0127 v manual/decision-register.md)
 - `personalspace/` — privátní osobní repo mimo GitHub organizace; cílově obsahuje privátní moduly a per-user/per-colleague aplikace včetně GBrain rozhraní
 - **Hostovaný Buddy** — když si Principál Buddyho onboarduje, běží na dedikované per-owner VPS (decision 0080), ne lokálně; lokální mount `personalspace/<owner>_GEN3/buddy/` drží jen Git konfiguraci profilu. Na hostu platí vygenerované instrukce aktivního Buddy resident rootu spolu s privátním profilem Principála, ne pravidla source checkoutu — hranici a postup zjištění drží `manual/hosted-buddy-vps.md`

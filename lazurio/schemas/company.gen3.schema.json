@@ -424,7 +424,7 @@
       "additionalProperties": true
     },
     "teams": {
-      "description": "Roster pojmenovaných Teamů — logických skupin modulů a lidí uvnitř Organizace (stejný pojem jako GitHub Team; historicky Oddělení/Space/Workspace-skupina). Team nemá vlastní adresář: moduly žijí ploše v workspace/<repo-name>, jejich stabilní slug je samostatná identita a N:M membership deklaruje modules[].teams. Roster má právě jeden deklarovaný default; bez rosteru se používá implicitní Team `workspace`, explicitní brandový default může mít jiný slug (ExampleOrg `launchpad`, decision 0048). Hosted vzor je <modul>.<team>.<doména>. `productionspace` je v rosteru i membership zakázaný; semantic validator vynucuje default, reference a cross-file shodu (decisions 0040/0041/0062/0063/0067/0125).",
+      "description": "Roster pojmenovaných Teamů — logických skupin modulů a lidí uvnitř Organizace (stejný pojem jako GitHub Team; historicky Oddělení/Space/Workspace-skupina). Team nemá vlastní adresář: moduly žijí ploše v workspace/<repo-name>, jejich stabilní slug je samostatná identita a N:M membership deklaruje modules[].teams. Roster má právě jeden deklarovaný default; bez rosteru se používá implicitní Team `workspace`, explicitní brandový default může mít jiný slug (ExampleOrg `launchpad`, decision 0048). Hosted vzor <modul>.<team>.<doména> je nahrazený decision 0146 (<app>.<vm>.<org>.lazurio.io v dílně, <app>.<org>.lazurio.io pro produkční workspace aplikace). `productionspace` je v rosteru i membership zakázaný; semantic validator vynucuje default, reference a cross-file shodu (decisions 0040/0041/0062/0063/0067/0125).",
       "type": "array",
       "items": {
         "type": "object",
