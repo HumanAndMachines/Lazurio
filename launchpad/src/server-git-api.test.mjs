@@ -1368,14 +1368,20 @@ test("organization branding prefers the current brand asset and rejects unsafe p
   const external = join(root, "outside-brand");
   await mkdir(external);
   await writeFile(join(external, "logo.png"), "must-not-leak");
-  await symlink(external, join(root, "organizations", "BetaCo_GEN3", "brand"), process.platform === "win32" ? "junction" : "dir");
+  const betaOrgRoot = join(root, "organizations", "BetaCo_GEN3");
+  await symlink(external, join(betaOrgRoot, "brand"), process.platform === "win32" ? "junction" : "dir");
+  await mkdir(join(betaOrgRoot, "launchpad", "app", "v1", "web"), { recursive: true });
+  await writeFile(join(betaOrgRoot, "launchpad", "app", "v1", "web", "launchpad-icon.png"), "safe-legacy-logo");
   const { port } = await startLaunchpadServer(root);
   const apps = await getJson(port, "/api/apps");
   expect(apps.organizations.find(org => org.slug === "OmegaCo").logo_url).toBe("/api/organizations/OmegaCo/logo");
-  expect(apps.organizations.find(org => org.slug === "BetaCo").logo_url).toBeUndefined();
+  expect(apps.organizations.find(org => org.slug === "BetaCo").logo_url).toBe("/api/organizations/BetaCo/logo");
   const response = await fetch(`http://127.0.0.1:${port}/api/organizations/OmegaCo/logo`);
   expect(response.status).toBe(200);
   expect(await response.text()).toBe("current-logo");
+  const fallbackResponse = await fetch(`http://127.0.0.1:${port}/api/organizations/BetaCo/logo`);
+  expect(fallbackResponse.status).toBe(200);
+  expect(await fallbackResponse.text()).toBe("safe-legacy-logo");
 });
 
 test("organization branding serves local logos and design-system themes without symlink escapes", async () => {

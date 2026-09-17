@@ -681,3 +681,20 @@ Organization-specific problem belongs in the private owning repo. The
 installing Agent may create or extend an issue only when the prompt contains an
 explicit publication mandate for that repo. Otherwise, it returns a sanitized
 issue draft and the exact target repo in the handoff.
+
+## Organization logo
+
+The Organization-owned logo for the shared Launchpad belongs in
+`brand/logo.png` in the Organization root repository (a regular PNG file, up
+to 2 MiB). Launchpad discovers it automatically and serves it through the
+existing protected logo route. Do not create an Organization-local Launchpad
+application for the logo. Historical asset paths under
+`launchpad/app/v1/web/` remain only as a fallback for older checkouts;
+`brand/logo.png` takes precedence. Symlinks, escapes outside the Organization,
+and oversized files are rejected.
+
+Modules use their standard static assets for the header and favicon. Keep a
+copy of the Organization logo in each owning module repository so the module
+can operate independently without a running Launchpad. Document the provenance
+and update process for those copies at the Organization original. Configure
+the GitHub avatar separately in the Organization profile.
