@@ -40,6 +40,58 @@ test("npm pack descriptor accepts the scoped package identity", () => {
   }]))).toThrow("incomplete @lazurio/runtime descriptor");
 });
 
+test("npm 12 keyed pack descriptor accepts only the single scoped package", () => {
+  const descriptor = {
+    name: "@lazurio/runtime",
+    version: "0.1.0",
+    filename: "lazurio-runtime-0.1.0.tgz",
+    files: [{ path: "package.json", size: 100, mode: 420 }],
+  };
+  expect(parseNpmPackDescriptor(JSON.stringify({
+    "@lazurio/runtime": descriptor,
+  }))).toEqual(descriptor);
+});
+
+test("npm 12 keyed pack descriptor rejects wrong or multiple package keys", () => {
+  const descriptor = {
+    name: "@lazurio/runtime",
+    version: "0.1.0",
+    filename: "lazurio-runtime-0.1.0.tgz",
+    files: [{ path: "package.json" }],
+  };
+  for (const value of [
+    { "other-package": descriptor },
+    { "@lazurio/runtime": descriptor, "other-package": descriptor },
+    {},
+    null,
+  ]) {
+    expect(() => parseNpmPackDescriptor(JSON.stringify(value)))
+      .toThrow("incomplete @lazurio/runtime descriptor");
+  }
+});
+
+test("both npm pack formats retain descriptor field validation", () => {
+  const descriptor = {
+    name: "@lazurio/runtime",
+    version: "0.1.0",
+    filename: "lazurio-runtime-0.1.0.tgz",
+    files: [{ path: "package.json" }],
+  };
+  for (const invalid of [
+    { name: "other-package" },
+    { version: "invalid" },
+    { filename: null },
+    { files: null },
+    { files: [] },
+  ]) {
+    const entry = { ...descriptor, ...invalid };
+    for (const value of [[entry], { "@lazurio/runtime": entry }]) {
+      expect(() => parseNpmPackDescriptor(JSON.stringify(value)))
+        .toThrow("incomplete @lazurio/runtime descriptor");
+    }
+  }
+});
+
 test("production closure rejects source imports outside the publishable package", () => {
   expect(() => assertProductionClosure({
     packageRoot: "/fixture/lazurio",

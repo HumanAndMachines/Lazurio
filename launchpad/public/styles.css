@@ -6,6 +6,7 @@
    adaptér pro existující selektory Launchpadu. */
 
 :root {
+  --launchpad-card-surface: color-mix(in srgb, var(--lz-gray-50) 70%, var(--lz-white));
   /* Accent palette — GEN2 Launchpad ramp (accent-500 #6058E9). The named tokens
      stay --c-accent-* so a picked accent (data-accent) can override the ramp
      while the GEN2 default keeps 1:1 visual parity. */
@@ -1945,8 +1946,8 @@ input:focus-visible,
 }
 
 .apps-grid > .manifest-module-card.is-unavailable {
-  background: var(--lz-gray-50);
-  border-color: var(--line);
+  background: var(--launchpad-card-surface);
+  border-color: var(--lz-line-faint);
   color: var(--text-muted);
 }
 
@@ -5558,7 +5559,7 @@ b {
   gap: var(--lz-space-12);
   align-items: stretch;
   width: 100%;
-  padding-left: var(--lz-space-16);
+  padding-left: 0;
   border-bottom: 1px solid var(--lz-blue-500);
 }
 
@@ -5609,7 +5610,7 @@ b {
   .app-section-organization:not(.skeleton-section) > .app-section-head:first-child .app-section-title-row,
   .app-section-workspace > .app-section-head:first-child .app-section-title-row,
   .app-section-productionspace > .app-section-head:first-child .app-section-title-row {
-    padding-left: var(--lz-space-12);
+    padding-left: 0;
   }
 
   .app-section-filter-slot {
@@ -5767,10 +5768,10 @@ b {
   }
 }
 
-/* Klidná pracovní plocha: teplý Lazurio papír bez mřížky. Bílé objekty na
-   něm získají čitelnější materiál a hierarchii bez dekorativních efektů. */
+/* Klidná pracovní plocha: bílý podklad a jemně tónované karty ve všech
+   Organizacích. Barvy ikon, stavů a ovládání zůstávají beze změny. */
 body {
-  background-color: var(--lz-paper);
+  background-color: var(--lz-white);
   background-image: none;
 }
 
@@ -6022,9 +6023,7 @@ body {
     background-color 420ms var(--tile-reveal-ease);
 }
 
-/* Produktová reference: karta stojí na místě a ikona zůstává nahoře. Nadpis,
-   stav i popis tvoří jeden textový blok, který při hoveru plynule vyjede
-   vzhůru uvnitř karty bez pohybu mřížky nebo sousedních modulů. */
+/* Stejně jako v dokumentaci je obsah čitelný i bez hoveru. */
 .apps-grid > .app-card .app-card-head {
   flex: 1 1 auto;
   position: relative;
@@ -6064,15 +6063,12 @@ body {
 .apps-grid > .app-card .app-card-desc {
   position: static;
   width: auto;
-  max-height: 0;
-  margin: 0;
-  opacity: 0;
+  max-height: none;
+  margin: var(--lz-space-8) 0 0;
+  opacity: 1;
   overflow: hidden;
   transform: none;
-  transition:
-    max-height 420ms var(--tile-reveal-ease),
-    margin-top 420ms var(--tile-reveal-ease),
-    opacity 340ms var(--tile-reveal-ease);
+  transition: none;
 }
 
 /* Všechny skupiny modulů sdílejí čtyři stejně široké pozice na desktopu.
@@ -6089,9 +6085,9 @@ body {
 
 .apps-grid > .app-card {
   margin: 0;
-  border: 1px solid var(--lz-line);
+  border: 1px solid var(--lz-line-faint);
   border-radius: var(--lz-radius-md);
-  background-color: var(--lz-white);
+  background-color: var(--launchpad-card-surface);
   background-image: none;
   box-shadow: 0 10px 24px -22px color-mix(in srgb, var(--lz-ink) 18%, transparent);
 }
@@ -6117,18 +6113,10 @@ body {
 @media (hover: hover) and (pointer: fine) {
   .app-card:not(.selected):not(.has-open-menu):hover {
     transform: none;
-    border-color: var(--app-accent);
-    background-color: var(--lz-white);
-    box-shadow:
-      0 0 0 3px color-mix(in srgb, var(--app-accent) 10%, transparent),
-      0 16px 34px -24px color-mix(in srgb, var(--lz-ink) 36%, transparent);
-  }
-
-  .apps-grid > .app-card:not(.has-open-menu):hover .app-card-desc,
-  .apps-grid > .app-card:not(.has-open-menu):focus-within .app-card-desc {
-    max-height: 2.9em;
-    margin-top: var(--lz-space-8);
-    opacity: 1;
+    border-width: 1px;
+    border-color: var(--lz-blue-500);
+    background-color: var(--launchpad-card-surface);
+    box-shadow: none;
   }
 
   /* Tlačítko dalších možností je disclosure uvnitř karty. Jeho hover ani
@@ -6140,15 +6128,6 @@ body {
     border-color: var(--lz-line);
     background: var(--lz-white);
     box-shadow: 0 10px 24px -22px color-mix(in srgb, var(--lz-ink) 18%, transparent);
-  }
-}
-
-/* Na dotykové obrazovce není spolehlivý hover, proto popis zůstává čitelný. */
-@media (hover: none), (pointer: coarse) {
-  .apps-grid > .app-card .app-card-desc {
-    max-height: 2.9em;
-    margin-top: var(--lz-space-8);
-    opacity: 1;
   }
 }
 
