@@ -1357,6 +1357,33 @@ test("explicit --port without a value fails during argument parsing", async () =
   expect(await new Response(launcher.stderr).text()).toContain("Chybí hodnota pro --port");
 });
 
+test("organization branding prefers the current brand asset and rejects unsafe paths", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const orgRoot = join(root, "organizations", "OmegaCo_GEN3");
+  await mkdir(join(orgRoot, "brand"), { recursive: true });
+  await writeFile(join(orgRoot, "brand", "logo.png"), "current-logo");
+  await mkdir(join(orgRoot, "launchpad", "app", "v1", "web"), { recursive: true });
+  await writeFile(join(orgRoot, "launchpad", "app", "v1", "web", "launchpad-icon.png"), "legacy-logo");
+  const external = join(root, "outside-brand");
+  await mkdir(external);
+  await writeFile(join(external, "logo.png"), "must-not-leak");
+  const betaOrgRoot = join(root, "organizations", "BetaCo_GEN3");
+  await symlink(external, join(betaOrgRoot, "brand"), process.platform === "win32" ? "junction" : "dir");
+  await mkdir(join(betaOrgRoot, "launchpad", "app", "v1", "web"), { recursive: true });
+  await writeFile(join(betaOrgRoot, "launchpad", "app", "v1", "web", "launchpad-icon.png"), "safe-legacy-logo");
+  const { port } = await startLaunchpadServer(root);
+  const apps = await getJson(port, "/api/apps");
+  expect(apps.organizations.find(org => org.slug === "OmegaCo").logo_url).toBe("/api/organizations/OmegaCo/logo");
+  expect(apps.organizations.find(org => org.slug === "BetaCo").logo_url).toBe("/api/organizations/BetaCo/logo");
+  const response = await fetch(`http://127.0.0.1:${port}/api/organizations/OmegaCo/logo`);
+  expect(response.status).toBe(200);
+  expect(await response.text()).toBe("current-logo");
+  const fallbackResponse = await fetch(`http://127.0.0.1:${port}/api/organizations/BetaCo/logo`);
+  expect(fallbackResponse.status).toBe(200);
+  expect(await fallbackResponse.text()).toBe("safe-legacy-logo");
+});
+
 test("organization branding serves local logos and design-system themes without symlink escapes", async () => {
   const root = await createLaunchpadGitFixture();
   tempRoots.push(root);

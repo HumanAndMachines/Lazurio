@@ -191,6 +191,7 @@ const gitStatusService = createGitStatusService();
 // 15s active-window poll: out-of-band pád runtime se nezadrží o další tick.
 const appsResponseCacheTtlMs = 10_000;
 const organizationLogoCandidates = [
+  "brand/logo.png",
   "launchpad/app/v1/web/launchpad-icon.png",
   "launchpad/app/v1/web/logo-square.png",
   "launchpad/app/v1/web/favicon.svg",
