@@ -209,7 +209,7 @@ explicitní migrátor, jehož kód žije ve vyhrazené složce
 ```sh
 lazurio migrate organization-manifest <organization-root>            # jen plán
 lazurio migrate organization-manifest <organization-root> --write    # legacy → transition (nebo regenerace projekce)
-lazurio migrate organization-manifest <organization-root> --finalize # plán transition → current
+lazurio migrate organization-manifest <organization-root> --finalize # neimplementováno: blocked `finalize_not_implemented`
 lazurio migrate organization-manifest <organization-root> --json
 ```
 
@@ -225,9 +225,13 @@ sémantickým hashem jako legacy vstup. Nic necommituje ani nepushuje; commit a
 PR zůstávají na Agentovi. Přerušený zápis je viditelný `projection_drift`
 nebo `conflict` v `git status` a tentýž příkaz jej deterministicky dokončí.
 Legacy `modules[]` musí být před zápisem sladěné s `modules.manifest.json`;
-jinak plán skončí `blocked` s přesným seznamem polí. `--finalize --write`
-zůstává blokovaný, dokud Core `ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS`
-nepřipustí `current` (tentýž gate pro install a update). Exit code `0` = plán
+jinak plán skončí `blocked` s přesným seznamem polí. Migrátor umí jen
+`legacy → transition` a regeneraci projekce; finalizace (`transition →
+current`) **není implementovaná** a `--finalize` příkaz odmítne typed blockerem
+`finalize_not_implemented`. Otevření `current` vyžaduje samostatně přijatý
+reader-readiness mechanismus, který živě prokáže důvěryhodnou kontinuitu
+identity (decision 0145); do té doby Organizace zůstává v `transition`
+s generovanou projekcí. Exit code `0` = plán
 existuje nebo zápis proběhl, `1` = blocked, `2` = chyba použití. Doctor stav
 manifestů hlásí v checku `launchpad.organization_manifests`.
 

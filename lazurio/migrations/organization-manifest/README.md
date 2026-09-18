@@ -2,8 +2,17 @@
 
 **Purpose.** Move one Organization root from the deprecated
 `company.gen3.json` (`legacy`) to the canonical `lazurio.organization.json`
-(`transition`, later `current`). This folder exists only to carry the old
-direction into the new one; it is not part of the forward-direction runtime.
+with a generated legacy projection (`transition`), and regenerate that
+projection when it drifts. This folder exists only to carry the old direction
+into the new one; it is not part of the forward-direction runtime.
+
+**Scope.** `legacy → transition` and projection regeneration only.
+Finalization (`transition → current`, removing `company.gen3.json`) is **not
+implemented**. Opening `current` requires a separately accepted
+reader-readiness mechanism that proves trusted identity continuity live
+(decision 0145): an offline tool can only restate what a manifest asserts about
+itself. Until then every Organization stays in `transition` with the generated
+projection.
 
 **Rule (root `AGENTS.md`).** Migration code lives in a dedicated migrations
 folder and is deleted when the migration completes. It is never mixed into
@@ -14,8 +23,9 @@ canonical file.
 
 **Removal condition.** Delete this folder, its CLI dispatch in
 `lazurio/cli.mjs`, the `lazurio:test` entries and the manual section once every
-Organization root is `current` (no `company.gen3.json` anywhere) and the
-finalization gate has been passed for the whole supported Machine cohort.
+Organization root is `current` (no `company.gen3.json` anywhere). Reaching
+`current` is the job of the separate finalization-readiness work, not of this
+folder.
 
 **Distribution.** The folder ships with the source checkout and the
 package-managed `lazurio` (`lazurio/package.json#files`). Resident artifacts
@@ -38,8 +48,7 @@ Command surface (see `manual/lazurio-manifest-family.md`):
 ```sh
 lazurio migrate organization-manifest <organization-root>                   # plan only
 lazurio migrate organization-manifest <organization-root> --write           # legacy → transition, or regenerate the projection
-lazurio migrate organization-manifest <organization-root> --finalize        # plan transition → current
-lazurio migrate organization-manifest <organization-root> --finalize --write
+lazurio migrate organization-manifest <organization-root> --finalize        # not implemented: refused with finalize_not_implemented
 ```
 
 ## Invariants the code enforces
@@ -58,8 +67,8 @@ lazurio migrate organization-manifest <organization-root> --finalize --write
 - Each file is replaced atomically on its own path (canonical first). An
   interruption leaves a visible fail-closed Git state; rerunning the same
   command regenerates deterministically. No hidden transaction state.
-- `--finalize --write` stays blocked until Core
-  `ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS` admits `current` — the single
-  reader/update gate shared with install and update.
+- `--finalize` is refused before anything is planned: `blocked` with
+  `finalize_not_implemented`, exit 1, with or without `--write`. This tool
+  never removes `company.gen3.json`.
 - Template roots (`kind: template`) are refused; they migrate in their own
   explicit plan.

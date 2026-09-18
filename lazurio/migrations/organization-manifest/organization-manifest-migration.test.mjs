@@ -6,8 +6,10 @@ import { join } from "node:path";
 
 import { validateAgainstSchema } from "../../runtime/json-schema-mini.mjs";
 import reportSchema from "./organization-manifest-migration-report.v0.schema.json";
-import { readOrganizationRoot } from "../../core/organization-root-reader-lib.mjs";
-import { ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS } from "../../core/organization-activation-lib.mjs";
+import {
+  readOrganizationRoot,
+  readOrganizationRootDocuments,
+} from "../../core/organization-root-reader-lib.mjs";
 import { resolveGitExecutableOnPath } from "../../core/toolchain-lib.mjs";
 import {
   organizationManifestMigrationExitCode,
@@ -96,7 +98,8 @@ test("write migrates a clean task worktree to transition, reads it back and is i
 
   const again = await runOrganizationManifestMigration({ organizationRoot: worktree, write: true });
   expect(again).toMatchObject({ operation: "none", outcome: "noop", ok: true, before: { state: "transition" } });
-  expect(again.next_step).toContain("--finalize");
+  // A transition root is the end state of this migrator; nothing follows.
+  expect(again.next_step).toBeNull();
 });
 
 test("an interrupted write is a visible drift state and the same command regenerates it", async () => {
@@ -144,30 +147,43 @@ test("editing the canonical manifest makes the legacy projection stale until reg
     .toBe(readOrganizationRoot({ organizationRoot: worktree }).projection.declared_hash);
 });
 
-test("finalize plans transition → current but stays blocked by the reader gate", async () => {
-  const { worktree } = organizationRepository();
+test("finalization is not implemented: --finalize is refused before anything is planned or written", async () => {
+  // In every state and mode: no plan, no documents, no file change. Opening
+  // `current` needs a separately accepted reader-readiness mechanism.
+  const { primary, worktree } = organizationRepository();
+  const legacyBefore = snapshot(worktree);
+  expect(await runOrganizationManifestMigration({ organizationRoot: worktree, finalize: true, write: true }))
+    .toMatchObject({ outcome: "blocked", before: { state: "legacy" }, blockers: [{ code: "finalize_not_implemented" }] });
+  expect(snapshot(worktree)).toEqual(legacyBefore);
+
   await runOrganizationManifestMigration({ organizationRoot: worktree, write: true });
   const before = snapshot(worktree);
-  const finalize = await runOrganizationManifestMigration({ organizationRoot: worktree, finalize: true, write: true });
-
-  expect(ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS).not.toContain("current");
-  expect(finalize).toMatchObject({
-    operation: "finalize",
-    outcome: "blocked",
-    ok: false,
-    after: { state: "current" },
-    parity: { semantic: true },
-    changes: [{ path: "company.gen3.json", action: "remove" }],
-    blockers: [{ code: "finalize_reader_gate_closed" }],
-  });
+  for (const options of [{ finalize: true }, { finalize: true, write: true }]) {
+    const report = await runOrganizationManifestMigration({ organizationRoot: worktree, ...options });
+    expect(validateAgainstSchema(report, reportSchema, "report")).toEqual([]);
+    expect(report).toMatchObject({
+      operation: "none",
+      outcome: "blocked",
+      ok: false,
+      before: { state: "transition" },
+      after: null,
+      changes: [],
+      blockers: [{ code: "finalize_not_implemented" }],
+      readback: null,
+      next_step: null,
+    });
+    expect(report.blockers).toHaveLength(1);
+    expect(report.blockers[0].message).toContain("manual/lazurio-manifest-family.md");
+    expect(organizationManifestMigrationExitCode(report)).toBe(1);
+    expect(renderHumanOrganizationManifestMigration(report)).toContain("finalize_not_implemented");
+  }
   expect(snapshot(worktree)).toEqual(before);
-
-  const legacyOnly = organizationRepository();
-  expect(await runOrganizationManifestMigration({ organizationRoot: legacyOnly.worktree, finalize: true })).toMatchObject({
-    operation: "finalize",
-    outcome: "blocked",
-    blockers: [{ code: "finalize_requires_transition" }],
-  });
+  expect(readOrganizationRoot({ organizationRoot: worktree }).state).toBe("transition");
+  expect(planOrganizationManifestMigration({
+    documents: readOrganizationRootDocuments({ organizationRoot: primary }),
+    finalize: true,
+  })).toMatchObject({ operation: "none", outcome: "blocked", documents: [], blockers: [{ code: "finalize_not_implemented" }] });
+  expect(reportSchema.properties.operation.enum).toEqual(["migrate", "regenerate", "none"]);
 });
 
 test("template kind, missing roots and unreconciled legacy modules fail closed", async () => {

@@ -211,7 +211,13 @@ complete reader-version evidence today. It is not a second authority:
 ## Doctor and migrator
 
 Doctor remains read-only and returns the next safe command. The Organization
-migrator is **implemented** (DEV-6512 task 010) and lives, together with its
+migrator is **implemented for `legacy → transition` and projection regeneration
+only** (DEV-6512 task 010). **Finalization (`transition → current`) is not
+implemented**: opening `current` requires a separately accepted
+reader-readiness mechanism that proves trusted identity continuity live
+(decision 0145) — an offline tool can only restate what the manifest asserts
+about itself. Until then every Organization stays in `transition` with the
+generated projection. The migrator lives, together with its
 tests and fixtures, in the dedicated migration folder
 `lazurio/migrations/organization-manifest/` — never in Core, Doctor or the
 compiler (root `AGENTS.md`: migration code is separated from current-direction
@@ -221,8 +227,7 @@ migrator remains a separate, unimplemented rollout.
 ```text
 lazurio migrate organization-manifest <organization-root>                   # plan only, exit 0 when a safe plan exists
 lazurio migrate organization-manifest <organization-root> --write           # legacy → transition, or regenerate the projection
-lazurio migrate organization-manifest <organization-root> --finalize        # plan transition → current
-lazurio migrate organization-manifest <organization-root> --finalize --write  # blocked until the reader gate admits `current`
+lazurio migrate organization-manifest <organization-root> --finalize        # not implemented: refused, `finalize_not_implemented`, exit 1
 lazurio migrate organization-manifest <organization-root> --json            # lazurio.organization.manifest-migration.v0
 
 lazurio migrate personalspace-manifest                                      # not implemented
@@ -236,9 +241,9 @@ Implemented behavior per resolver state:
 | --- | --- | --- |
 | `legacy` | `migrate` | derives `lazurio.organization.json` as the exact inverse of the Core projection (the resolver's normalized legacy resource re-shaped into `lazurio.organization.v1` plus the declared projection hash), regenerates `company.gen3.json` from it, and accepts only when the staged pair resolves to `transition` with `issues: []`, the same semantic hash as the legacy input and both JSON schemas valid |
 | `projection_drift`, or `conflict` with a canonical document present | `regenerate` | recomputes the declared hash of the canonical manifest and rewrites the legacy projection from it; the canonical file is the only authority, a hand edit of the legacy file is discarded visibly in the Git diff |
-| `transition` | none | `noop`; next step is `--finalize` |
+| `transition` | none | `noop`; this is the end state of the implemented migrator |
 | `current` | none | `noop` |
-| `transition` + `--finalize` | `finalize` | removes `company.gen3.json` only when the canonical document alone resolves to `current` with the same semantic hash; `--write` stays blocked (`finalize_reader_gate_closed`) until Core `ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS` admits `current` — the same constant that gates install and update |
+| any state + `--finalize` (with or without `--write`) | none | refused before anything is planned: `blocked` with `finalize_not_implemented`, exit 1; nothing is read back or written. `company.gen3.json` is never removed by this tool |
 | `missing`, malformed, `kind: template`, legacy `modules[]` not reconciled | — | `blocked`; nothing is written |
 
 `company.gen3.json#modules[]` is never copied: every entry must be a declared
@@ -267,9 +272,13 @@ Contract:
   hash and changed files;
 - preserve supported extension fields; refuse ambiguous roots, dirty
   worktrees, unpreservable fields, binding mismatch and path traversal;
-- keep `--finalize --write` blocked until a separate accepted mechanism proves
-  the minimum reader version for every supported Machine cohort; the code-owned
-  gate is Core `ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS` (decision 0145).
+- keep `--finalize` refused (`finalize_not_implemented`; not implemented, no
+  plan and no write) until a separate accepted mechanism proves the minimum
+  reader version for every supported Machine cohort **and** trusted identity
+  continuity of the canonical-only root, live against the Forge (decision
+  0145). Core `ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS` only names the
+  formats activation, install and update accept today (`legacy`,
+  `transition`); it is not a finalization switch.
 
 ### Authoring worktree protocol
 
@@ -396,8 +405,10 @@ and cannot become an actionable Organization.
 
 ### 4. Finalize later
 
-`--finalize` remains unavailable until a separate accepted design proves
-reader readiness for online, offline and returning Machines. Finalization then
+`--finalize` remains unavailable — the shipped command refuses it with
+`finalize_not_implemented` — until a separate accepted design proves reader
+readiness for online, offline and returning Machines and a live-verifiable
+identity anchor for the canonical-only root. Finalization then
 requires no conflicts, cross-platform regeneration tests and an owner-approved
 PR for the exact Organization or Personalspace.
 

@@ -19,7 +19,7 @@
     },
     "mode": { "enum": ["plan", "write"] },
     "root": { "type": "string", "minLength": 1 },
-    "operation": { "enum": ["migrate", "regenerate", "finalize", "none"] },
+    "operation": { "enum": ["migrate", "regenerate", "none"] },
     "outcome": { "enum": ["planned", "written", "noop", "blocked"] },
     "ok": { "type": "boolean" },
     "before": { "$ref": "#/$defs/resolution" },
@@ -78,9 +78,9 @@
         "required": ["path", "action", "before_sha256", "after_sha256"],
         "properties": {
           "path": { "enum": ["lazurio.organization.json", "company.gen3.json"] },
-          "action": { "enum": ["create", "replace", "unchanged", "remove"] },
+          "action": { "enum": ["create", "replace", "unchanged"] },
           "before_sha256": { "type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$" },
-          "after_sha256": { "type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$" }
+          "after_sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
         }
       }
     },

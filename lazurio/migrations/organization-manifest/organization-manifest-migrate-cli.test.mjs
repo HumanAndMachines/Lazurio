@@ -11,7 +11,8 @@ const fixtureRoot = join(import.meta.dirname, "fixtures", "gen3-organization");
 test("CLI advertises the explicit migration surface and dispatches into the migrations folder", () => {
   const help = run(["--help"]);
   expect(help.status).toBe(0);
-  expect(help.stdout).toContain("lazurio migrate organization-manifest <organization-root> [--write] [--finalize] [--json]");
+  expect(help.stdout).toContain("lazurio migrate organization-manifest <organization-root> [--write] [--json]");
+  expect(help.stdout).toContain("--finalize: není implementováno");
 
   const plan = run(["migrate", "organization-manifest", fixtureRoot, "--json"]);
   expect(plan.status).toBe(0);
@@ -42,6 +43,20 @@ test("write against a plain fixture directory is refused by the Git gate and cha
   expect(report.blockers.map((blocker) => blocker.code)).toEqual([
     expect.stringMatching(/^git_(?:not_a_repository|not_checkout_root)$/),
   ]);
+});
+
+test("--finalize is refused with a typed blocker and a non-zero exit", () => {
+  for (const extra of [[], ["--write"]]) {
+    const result = run(["migrate", "organization-manifest", fixtureRoot, "--finalize", ...extra, "--json"]);
+    expect(result.status).toBe(1);
+    const report = JSON.parse(result.stdout);
+    expect(validateAgainstSchema(report, reportSchema, "report")).toEqual([]);
+    expect(report).toMatchObject({ operation: "none", outcome: "blocked", ok: false, changes: [] });
+    expect(report.blockers.map((blocker) => blocker.code)).toEqual(["finalize_not_implemented"]);
+  }
+  const human = run(["migrate", "organization-manifest", fixtureRoot, "--finalize"]);
+  expect(human.status).toBe(1);
+  expect(human.stdout).toContain("finalize_not_implemented");
 });
 
 test("usage errors stay usage errors", () => {

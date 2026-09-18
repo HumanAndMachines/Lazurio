@@ -11,7 +11,6 @@ import { rename, unlink, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 import {
-  ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
   ORGANIZATION_ROOT_RESOLUTION_VERSION,
   organizationLegacyProjectionHash,
   projectLegacyOrganizationManifest,
@@ -31,7 +30,7 @@ import { deriveCanonicalOrganizationManifest } from "./derive-canonical-manifest
 
 export const ORGANIZATION_MANIFEST_MIGRATION_REPORT_SCHEMA = "lazurio.organization.manifest-migration.v0";
 export const ORGANIZATION_MANIFEST_MIGRATION_COMMAND = "lazurio migrate organization-manifest";
-export const ORGANIZATION_MANIFEST_MIGRATION_OPERATIONS = Object.freeze(["migrate", "regenerate", "finalize", "none"]);
+export const ORGANIZATION_MANIFEST_MIGRATION_OPERATIONS = Object.freeze(["migrate", "regenerate", "none"]);
 export const ORGANIZATION_MANIFEST_MIGRATION_OUTCOMES = Object.freeze(["planned", "written", "noop", "blocked"]);
 export const ORGANIZATION_MANIFEST_MIGRATION_CANONICAL_BRANCHES = Object.freeze(["main", "master"]);
 
@@ -43,8 +42,13 @@ const managedPaths = Object.freeze([
 /**
  * Pure planner. Input is the raw document set of one Organization root as the
  * single Core filesystem adapter returns it; output is the deterministic plan:
- * resolver state before and after, the exact documents to write or remove,
+ * resolver state before and after, the exact documents to write,
  * parity evidence and fail-closed blockers. No filesystem, no Git.
+ *
+ * Scope is `legacy → transition` and projection regeneration only.
+ * Finalization (`transition → current`, removing the legacy projection) is not
+ * implemented: a request for it is refused with `finalize_not_implemented`
+ * before anything is planned (decision 0145, manual/lazurio-manifest-family.md).
  */
 export function planOrganizationManifestMigration({ documents, finalize = false }) {
   const before = resolveOrganizationRootDocuments(documents);
@@ -64,6 +68,15 @@ export function planOrganizationManifestMigration({ documents, finalize = false 
     plan.blockers.push({ code, message });
     return plan;
   };
+  if (finalize) {
+    return block(
+      "finalize_not_implemented",
+      "Finalizace (transition → current, odstranění company.gen3.json) není implementovaná. Otevření stavu current "
+        + "vyžaduje samostatně přijatý reader-readiness mechanismus, který živě prokáže důvěryhodnou kontinuitu identity "
+        + "(decision 0145); do té doby Organizace zůstává v transition s generovanou projekcí. "
+        + "Viz manual/lazurio-manifest-family.md.",
+    );
+  }
   if (before.state === "missing") {
     return block("organization_root_missing", "Kořen není Lazurio Organization: chybí lazurio.organization.json i company.gen3.json.");
   }
@@ -75,7 +88,6 @@ export function planOrganizationManifestMigration({ documents, finalize = false 
     return block("template_kind_not_migratable", "Template root (kind: template) se tímto příkazem nemigruje; template dostává vlastní explicitní plán.");
   }
 
-  if (finalize) return planFinalize({ plan, before, documents, block });
 
   if (before.state === "legacy") {
     plan.operation = "migrate";
@@ -104,7 +116,6 @@ export function planOrganizationManifestMigration({ documents, finalize = false 
     plan.outcome = "noop";
     plan.after = plan.before;
     plan.parity = { semantic: true, projection: true };
-    plan.next_step = `${ORGANIZATION_MANIFEST_MIGRATION_COMMAND} <root> --finalize`;
     return plan;
   }
   if (before.state === "current") {
@@ -128,41 +139,6 @@ export function planOrganizationManifestMigration({ documents, finalize = false 
     return block("canonical_manifest_invalid", `Canonical manifest nejde promítnout (${before.issues.join(", ") || before.state}).`);
   }
   return stagePair({ plan, before, documents, canonicalManifest, block });
-}
-
-function planFinalize({ plan, before, documents, block }) {
-  plan.operation = "finalize";
-  if (before.state === "current") {
-    plan.outcome = "noop";
-    plan.after = plan.before;
-    plan.parity = { semantic: true, projection: true };
-    return plan;
-  }
-  if (before.state !== "transition") {
-    return block("finalize_requires_transition", `Finalizace vyžaduje stav transition s paritou; aktuální stav je ${before.state}.`);
-  }
-  const after = resolveOrganizationRootDocuments({
-    canonicalManifest: documents.canonicalManifest,
-    companyManifest: null,
-    modulesManifest: documents.modulesManifest,
-  });
-  plan.after = resolutionSummary(after);
-  plan.parity = { semantic: after.semantic_hash === before.semantic_hash, projection: true };
-  plan.documents = [{ path: ORGANIZATION_DOCUMENT_PATHS.legacy_projection, action: "remove", content: null }];
-  if (after.state !== "current" || !plan.parity.semantic) {
-    return block("finalize_readback_invalid", `Canonical manifest sám o sobě neresolvuje jako current (${after.issues.join(", ") || after.state}).`);
-  }
-  if (!ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS.includes("current")) {
-    plan.outcome = "blocked";
-    plan.blockers.push({
-      code: "finalize_reader_gate_closed",
-      message: "Reader/update gate ještě nepřijímá stav current: podporované Machines aktivují pouze "
-        + `${ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS.join(", ")}. Legacy projekce zůstává povinná (decision 0145).`,
-    });
-    return plan;
-  }
-  plan.outcome = "planned";
-  return plan;
 }
 
 function stagePair({ plan, before, documents, canonicalManifest, block }) {
@@ -265,10 +241,6 @@ export async function runOrganizationManifestMigration({
     for (const change of changes) {
       const target = join(root, change.path);
       if (change.action === "unchanged") continue;
-      if (change.action === "remove") {
-        await unlink(target);
-        continue;
-      }
       await replaceFileAtomically(target, change.content);
     }
   } catch (error) {
@@ -289,9 +261,7 @@ export async function runOrganizationManifestMigration({
   }
   report.outcome = "written";
   report.ok = true;
-  report.next_step = plan.operation === "finalize"
-    ? null
-    : "git diff · commit v task worktree · PR pro reviewer Organizace";
+  report.next_step = "git diff · commit v task worktree · PR pro reviewer Organizace";
   return finish(report);
 }
 
@@ -316,7 +286,7 @@ export function renderHumanOrganizationManifestMigration(report) {
     }
   }
   for (const change of report.changes) {
-    const symbol = change.action === "unchanged" ? "·" : change.action === "remove" ? "−" : "✓";
+    const symbol = change.action === "unchanged" ? "·" : "✓";
     lines.push(`${symbol} ${change.path}: ${change.action}${change.after_sha256 ? ` → ${change.after_sha256.slice(0, 19)}` : ""}`);
   }
   lines.push(`Git: ${report.git.status}${report.git.branch ? ` · branch ${report.git.branch}` : ""}${report.git.linked_worktree === true ? " · linked worktree" : report.git.linked_worktree === false ? " · primary checkout" : ""}`);
@@ -391,9 +361,6 @@ function defaultRunGit(executable, args) {
 function describeChange(root, document) {
   const existing = readExistingBytes(join(root, document.path));
   const before = existing === null ? null : sha256(existing);
-  if (document.action === "remove") {
-    return { path: document.path, action: existing === null ? "unchanged" : "remove", before_sha256: before, after_sha256: null, content: null };
-  }
   const after = sha256(document.content);
   return {
     path: document.path,

@@ -22,8 +22,11 @@ export const ORGANIZATION_MANIFEST_SCHEMA_VERSION = "lazurio.organization.v1";
 export const ORGANIZATION_RESOURCE_SCHEMA_VERSION = "lazurio.organization.resource.v1";
 export const ORGANIZATION_LEGACY_PROJECTION_HASH_ALGORITHM = "sha256-canonical-json-v1";
 // Manifest formats the supported Machine cohort may activate, install and
-// fast-forward to during the compatibility window. Adding "current" here is
-// the single reader-readiness gate that unblocks `--finalize` (decision 0145).
+// fast-forward to during the compatibility window: one list instead of three
+// literals in activation, install and update. It is not a finalization switch.
+// A canonical-only `current` root is outside this contract until a separately
+// accepted reader-readiness mechanism proves trusted identity continuity live
+// (decision 0145, manual/lazurio-manifest-family.md).
 export const ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS = Object.freeze(["legacy", "transition"]);
 export const ORGANIZATION_MANIFEST_STATES = Object.freeze([
   "legacy",
