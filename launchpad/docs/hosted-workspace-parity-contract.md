@@ -74,8 +74,9 @@ Hosted identitu tvoří pouze:
   (při obou musí souhlasit; bez platného labelu start selže).
 
 Externí App URL je vždy odvozená jako `https://<module>.<machine>.<domain>/`
-(decision 0146); spuštěný modul dostane stejný origin ve
-`LAZURIO_RUNTIME_EXTERNAL_ORIGIN`. Service catalog, revision, per-App desired
+(decision 0146); spuštěný modul dostane stejný origin v klíčovaném
+`LAZURIO_RUNTIME_LISTENER_<ID>_EXTERNAL_ORIGIN` svého vstupního listeneru a
+v generickém aliasu `LAZURIO_RUNTIME_EXTERNAL_ORIGIN`. Service catalog, revision, per-App desired
 state ani druhý lifecycle controller neexistují.
 
 ## Runner

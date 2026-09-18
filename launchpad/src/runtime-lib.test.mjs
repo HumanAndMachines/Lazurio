@@ -4,6 +4,7 @@ import { createServer } from "net";
 import { tmpdir } from "os";
 import { dirname, join } from "path";
 import { cp, mkdir, mkdtemp, readFile, realpath, rename, rm, symlink, utimes, writeFile } from "fs/promises";
+import { pathToFileURL } from "url";
 import {
   RuntimeActionError,
   bunExecutableCandidates,
@@ -4696,8 +4697,10 @@ test("hosted entrypoint listener receives its application origin; other listener
     runtime.maintainApps([app]);
     await runtime.ensureHostedApp(app.id);
     await waitForStatus(() => runtime.health(app.id), "healthy");
+    expect(childEnv.LAZURIO_RUNTIME_LISTENER_WEB_EXTERNAL_ORIGIN).toBe(expectedOrigin);
     expect(childEnv.LAZURIO_RUNTIME_EXTERNAL_ORIGIN).toBe(expectedOrigin);
-    expect(Object.keys(childEnv).filter((name) => name.endsWith("_EXTERNAL_ORIGIN"))).toEqual(["LAZURIO_RUNTIME_EXTERNAL_ORIGIN"]);
+    expect(Object.keys(childEnv).filter((name) => name.endsWith("_EXTERNAL_ORIGIN")).sort())
+      .toEqual(["LAZURIO_RUNTIME_EXTERNAL_ORIGIN", "LAZURIO_RUNTIME_LISTENER_WEB_EXTERNAL_ORIGIN"]);
     const listeners = JSON.parse(childEnv.LAZURIO_RUNTIME_LISTENERS_JSON);
     expect(listeners).toEqual([expect.objectContaining({ id: "web", role: "entrypoint", external_origin: expectedOrigin })]);
     const runtimeEnv = await (await fetch(`http://127.0.0.1:${port}/runtime-env`)).json();
@@ -4706,6 +4709,118 @@ test("hosted entrypoint listener receives its application origin; other listener
     await runtime.stop(app.id).catch(() => {});
   }
 }, platformTestTimeout(15_000));
+
+// Contract proof against the deployed consumers: the real hosted child env of
+// two Apps is fed to (a) the verbatim Knowledgebase reader and (b) the Mission
+// Control reader semantics. Both declare their single listener with role
+// entrypoint and read the keyed variable, like they read keyed host/port.
+test("hosted child env satisfies the Knowledgebase and Mission Control external-origin readers", async () => {
+  const knowledgebasePort = await findFreePort();
+  const missionControlPort = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port: knowledgebasePort });
+  // Each App lives in its own module checkout (the runtime authority requires
+  // the package root inside the owning module); clone the demo package tree.
+  const hostedApp = async ({ id, module, listenerId, port }) => {
+    const organizationRoot = join(root, "organizations", "TestCompany");
+    await cp(join(organizationRoot, "modules", "demo"), join(organizationRoot, "modules", module), { recursive: true });
+    const app = withStaticEntrypoint(fixtureDiscoveryApp({ port, overrides: {
+      id, module, title: module,
+      package_path: `organizations/TestCompany/modules/${module}/app/v1/package.json`,
+      cwd: `organizations/TestCompany/modules/${module}/app/v1`,
+    } }));
+    const entrypoint = { ...app.entrypoint_listener, id: listenerId };
+    return { ...app, listeners: [entrypoint], entrypoint_listener: entrypoint };
+  };
+  const knowledgebase = await hostedApp({ id: "test-company-knowledgebase-v2", module: "knowledgebase", listenerId: "app", port: knowledgebasePort });
+  const missionControl = await hostedApp({ id: "test-company-mission-control-v3", module: "mission-control", listenerId: "web", port: missionControlPort });
+  const hostedWorkspace = createHostedWorkspaceConfiguration({
+    profile: "hosted", organizationSlug: "test-company", teamId: "builders", domain: "example.lazurio.io", machine: "pilot",
+  });
+  const childEnvs = new Map();
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "hosted-origin-consumers",
+    lifecycleProfile: "hosted",
+    hostedWorkspace,
+    discover: discoveryWithApps(knowledgebase, missionControl),
+    maintenanceIntervalMs: 10,
+    maintenanceRetryDelaysMs: [10],
+    spawnProcess(command, options) {
+      childEnvs.set(options.env.LAZURIO_RUNTIME_APP_ID, options.env);
+      return Bun.spawn(command, options);
+    },
+    spawnProcessIsNative: true,
+  });
+  try {
+    runtime.maintainApps([knowledgebase, missionControl]);
+    await runtime.ensureHostedApp(knowledgebase.id);
+    await runtime.ensureHostedApp(missionControl.id);
+    await waitForStatus(() => runtime.health(knowledgebase.id), "healthy");
+    await waitForStatus(() => runtime.health(missionControl.id), "healthy");
+    const knowledgebaseEnv = childEnvs.get(knowledgebase.id);
+    const missionControlEnv = childEnvs.get(missionControl.id);
+
+    // (a) Knowledgebase: ConceptLineLazurio/knowledgebase main 7cee5ff,
+    // app/v2/scripts/runtime-listener.mjs (vendored verbatim under
+    // launchpad/src/fixtures/hosted-application-origin/). It resolves the
+    // module lease from ../../../lazurio.module.json and ../package.json at
+    // import time, so it runs from a temporary module tree for this App.
+    const moduleRoot = join(await mkdtemp(join(tmpdir(), "knowledgebase-reader-")), "knowledgebase");
+    await mkdir(join(moduleRoot, "app", "v2", "scripts"), { recursive: true });
+    await writeFile(join(moduleRoot, "lazurio.module.json"), JSON.stringify({
+      schema_version: "lazurio.module.v1", id: "knowledgebase", company: "test-company",
+      port_leases: [{ id: "main", host: "127.0.0.1", port: knowledgebasePort }],
+      apps: ["app/v2/package.json"], default_app: "app/v2/package.json",
+    }));
+    await writeFile(join(moduleRoot, "app", "v2", "package.json"), JSON.stringify({
+      name: "knowledgebase", lazurio: { runtime: { company: "test-company", module: "knowledgebase" } },
+    }));
+    const readerPath = join(moduleRoot, "app", "v2", "scripts", "runtime-listener.mjs");
+    await cp(join(import.meta.dir, "fixtures", "hosted-application-origin", "knowledgebase-runtime-listener.mjs"), readerPath);
+    const reader = await import(pathToFileURL(readerPath).href);
+    expect(reader.EXTERNAL_ORIGIN_VARIABLE).toBe("LAZURIO_RUNTIME_LISTENER_APP_EXTERNAL_ORIGIN");
+    const listener = reader.resolveModuleListener(knowledgebaseEnv);
+    expect(listener).toEqual({ host: "127.0.0.1", port: knowledgebasePort, externalOrigin: "https://knowledgebase.pilot.example.lazurio.io" });
+    expect(reader.withExternalOrigin({}, listener).server.allowedHosts).toEqual(["knowledgebase.pilot.example.lazurio.io"]);
+    expect(reader.withModuleListener({}, knowledgebaseEnv).preview.allowedHosts).toEqual(["knowledgebase.pilot.example.lazurio.io"]);
+
+    // (b) Mission Control: ConceptLineLazurio/mission-control main 347d9bd,
+    // app/v3/src/server.ts — serverExternalOrigin() reads
+    // process.env.LAZURIO_RUNTIME_LISTENER_WEB_EXTERNAL_ORIGIN and
+    // parseExternalOrigin() accepts only an exact https origin whose hostname
+    // is lowercase DNS labels, then adds { host, origin } to its allowlists.
+    const externalOriginHostname = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+    const parseExternalOrigin = (value) => {
+      expect(typeof value).toBe("string");
+      expect(value.trim()).toBe(value);
+      const url = new URL(value);
+      expect(url.protocol).toBe("https:");
+      expect([url.username, url.password, url.search, url.hash]).toEqual(["", "", "", ""]);
+      expect(url.pathname).toBe("/");
+      expect(externalOriginHostname.test(url.hostname)).toBe(true);
+      expect(value).toBe(url.origin);
+      return { host: url.host, origin: url.origin };
+    };
+    const external = parseExternalOrigin(missionControlEnv.LAZURIO_RUNTIME_LISTENER_WEB_EXTERNAL_ORIGIN);
+    const allowedHosts = new Set([`127.0.0.1:${missionControlPort}`, external.host]);
+    const allowedOrigins = new Set([`http://127.0.0.1:${missionControlPort}`, external.origin]);
+    expect(allowedHosts.has("mission-control.pilot.example.lazurio.io")).toBe(true);
+    expect(allowedOrigins.has("https://mission-control.pilot.example.lazurio.io")).toBe(true);
+
+    // Generic alias is present for both entrypoint listeners; nothing else carries an origin.
+    expect(knowledgebaseEnv.LAZURIO_RUNTIME_EXTERNAL_ORIGIN).toBe("https://knowledgebase.pilot.example.lazurio.io");
+    expect(missionControlEnv.LAZURIO_RUNTIME_EXTERNAL_ORIGIN).toBe("https://mission-control.pilot.example.lazurio.io");
+    expect(Object.keys(knowledgebaseEnv).filter((name) => name.endsWith("_EXTERNAL_ORIGIN")).sort())
+      .toEqual(["LAZURIO_RUNTIME_EXTERNAL_ORIGIN", "LAZURIO_RUNTIME_LISTENER_APP_EXTERNAL_ORIGIN"]);
+    expect(Object.keys(missionControlEnv).filter((name) => name.endsWith("_EXTERNAL_ORIGIN")).sort())
+      .toEqual(["LAZURIO_RUNTIME_EXTERNAL_ORIGIN", "LAZURIO_RUNTIME_LISTENER_WEB_EXTERNAL_ORIGIN"]);
+    expect(JSON.parse(knowledgebaseEnv.LAZURIO_RUNTIME_LISTENERS_JSON)[0].external_origin).toBe("https://knowledgebase.pilot.example.lazurio.io");
+  } finally {
+    await runtime.stop(knowledgebase.id).catch(() => {});
+    await runtime.stop(missionControl.id).catch(() => {});
+  }
+}, platformTestTimeout(20_000));
 
 test("hosted start fails closed when the App has no derivable application origin", async () => {
   const port = await findFreePort();

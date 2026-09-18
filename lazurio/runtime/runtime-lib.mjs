@@ -2114,7 +2114,13 @@ export function createRuntimeManager({
         values[`LAZURIO_RUNTIME_LISTENER_${key}_PORT`] = String(listener.port);
       }
       if (listener.external_origin) {
-        values[runtimeListenerEnvironmentNames(listener).externalOrigin] = listener.external_origin;
+        // Mirrors host/port: the keyed name for every listener with an origin,
+        // plus the generic alias for the entrypoint role.
+        const names = runtimeListenerEnvironmentNames(listener);
+        values[names.externalOrigin] = listener.external_origin;
+        if (names.entrypointExternalOrigin) {
+          values[names.entrypointExternalOrigin] = listener.external_origin;
+        }
       }
     }
     return values;

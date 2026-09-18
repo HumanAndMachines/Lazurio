@@ -46,10 +46,13 @@ cesta). Label modulu musí splňovat pravidla brány Machines (`[a-z0-9]` s
 jednoduchými pomlčkami, nejvýše 63 znaků, ne `launchpad`, `oauth2`, `api`,
 `well-known`); chybějící nebo nejednoznačný výchozí App i neplatný label
 izoluje jen daný Modul a loopback URL se do hosted odpovědi nikdy nepropíše.
-Spouštěný modul dostane tentýž origin bez lomítka ve
-`LAZURIO_RUNTIME_EXTERNAL_ORIGIN` a v `LAZURIO_RUNTIME_LISTENERS_JSON`
-(`external_origin` vstupního listeneru), aby přijímal same-origin požadavky
-z hostname, který mu brána předává v `Host`. Manifesty tím vlastní členství a
+Spouštěný modul dostane tentýž origin bez lomítka stejně jako host/port:
+v klíčovaném `LAZURIO_RUNTIME_LISTENER_<ID>_EXTERNAL_ORIGIN` vstupního
+listeneru (Knowledgebase čte `..._LISTENER_APP_...`, Mission Control
+`..._LISTENER_WEB_...`), v generickém aliasu `LAZURIO_RUNTIME_EXTERNAL_ORIGIN`
+pro roli `entrypoint` a v `LAZURIO_RUNTIME_LISTENERS_JSON` (`external_origin`),
+aby přijímal same-origin požadavky z hostname, který mu brána předává v
+`Host`. Manifesty tím vlastní členství a
 výchozí App, modulový kontrakt vlastní port, Machines vlastní hostname, TLS a
 autentizaci (`docs/workspace-application-entry.md` v repu Machines). Launchpad
 mezi nimi nevytváří druhý katalog.

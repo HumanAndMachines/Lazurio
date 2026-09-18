@@ -132,12 +132,15 @@ runtime/cache cesty, ne custody source of truth.
   konfigurace listeneru ani druhá autorita a tyto hodnoty nepatří do `.env`.
   Na hostované Mašině (profil `hosted`, decision 0146) dostane vstupní
   listener aplikace navíc svůj browser origin
-  `LAZURIO_RUNTIME_EXTERNAL_ORIGIN=https://<app>.<machine>.<domain>` (bez
-  cesty a lomítka; pro listener bez role `entrypoint` by se jmenoval
-  `LAZURIO_RUNTIME_LISTENER_<ID>_EXTERNAL_ORIGIN`) a stejná hodnota je
-  v `LAZURIO_RUNTIME_LISTENERS_JSON` jako `external_origin` daného
-  listeneru. Aplikace z něj přijímá same-origin požadavky; ostatní listenery
-  zůstávají loopback-only a lokální profil proměnnou vůbec nenastavuje.
+  `https://<app>.<machine>.<domain>` (bez cesty a lomítka) ve dvou jménech
+  zrcadlících host/port: vždy v klíčovaném
+  `LAZURIO_RUNTIME_LISTENER_<ID>_EXTERNAL_ORIGIN` (např.
+  `LAZURIO_RUNTIME_LISTENER_APP_EXTERNAL_ORIGIN` pro listener `app`) a pro
+  roli `entrypoint` navíc v generickém aliasu `LAZURIO_RUNTIME_EXTERNAL_ORIGIN`;
+  stejná hodnota je v `LAZURIO_RUNTIME_LISTENERS_JSON` jako `external_origin`
+  daného listeneru. Aplikace z něj přijímá same-origin požadavky; ostatní
+  listenery zůstávají loopback-only a lokální profil žádnou z proměnných
+  nenastavuje (žádný fallback na neexistující proměnnou v hosted režimu).
   Kontrakt brány Mašiny drží Machines
   `docs/workspace-application-entry.md` („What the application must do“).
 - Doctor je read-only. Když hlásí problém v Git stavu, submodulech nebo `.gitignore` ochraně runtime/private/archive cest, oprav source-of-truth soubor nebo mountpoint.
