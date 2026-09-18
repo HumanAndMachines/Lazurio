@@ -5,7 +5,7 @@ import {
   isValidOrganizationForgeBinding,
   ORGANIZATION_GITHUB_LOGIN_PATTERN,
   ORGANIZATION_POSITIVE_GITHUB_ID_PATTERN,
-} from "./organization-scaffold-lib.mjs";
+} from "./organization-forge-binding-lib.mjs";
 import {
   githubRepositoryCoordinate,
   isNestedOrganizationRepositoryDbSlotPath,
@@ -21,6 +21,10 @@ export const ORGANIZATION_ROOT_RESOLUTION_VERSION = "lazurio.organization.root-r
 export const ORGANIZATION_MANIFEST_SCHEMA_VERSION = "lazurio.organization.v1";
 export const ORGANIZATION_RESOURCE_SCHEMA_VERSION = "lazurio.organization.resource.v1";
 export const ORGANIZATION_LEGACY_PROJECTION_HASH_ALGORITHM = "sha256-canonical-json-v1";
+// Manifest formats the supported Machine cohort may activate, install and
+// fast-forward to during the compatibility window. Adding "current" here is
+// the single reader-readiness gate that unblocks `--finalize` (decision 0145).
+export const ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS = Object.freeze(["legacy", "transition"]);
 export const ORGANIZATION_MANIFEST_STATES = Object.freeze([
   "legacy",
   "transition",
@@ -844,8 +848,13 @@ function projectLegacyForgeBinding(organization, root) {
 }
 
 function projectLegacyModules(slots) {
+  // The legacy `modules[]` surface lists only materializable repositories with
+  // concrete repo coordinates (old-reader schema requires `repo`); planned
+  // slots stay manifest-only. Productionspace entries carry no Team field at
+  // all — `productionspace` is a reserved slug the old reader rejects.
   return slots
     .filter((slot) => organizationSlotPathScope(slot?.path) !== "root")
+    .filter((slot) => (slot?.git?.url ?? slot?.repo ?? slot?.repository) !== undefined)
     .map((slot) => {
       const projected = clone(slot);
       const remote = slot?.git?.url ?? slot?.repo ?? slot?.repository;
@@ -857,10 +866,13 @@ function projectLegacyModules(slots) {
       if (projected.slug === undefined && !isNestedOrganizationRepositoryDbSlotPath(slot.path)) {
         projected.slug = slot.path.split("/").at(-1);
       }
-      if (remote !== undefined) projected.repo = remote;
+      projected.repo = remote;
       if (branch !== undefined) projected.branch = branch;
-      if (slot.space === "productionspace") projected.workspace = "productionspace";
-      else if (Array.isArray(slot.teams)) projected.teams = clone(slot.teams);
+      if (organizationSlotPathScope(slot.path) === "productionspace" || slot.space === "productionspace") {
+        delete projected.teams;
+        delete projected.workspace;
+        delete projected.workspaces;
+      } else if (Array.isArray(slot.teams)) projected.teams = clone(slot.teams);
       else if (slot.workspace !== undefined) projected.workspace = slot.workspace;
       if (slot.default_access !== undefined || slot.required_roles !== undefined) {
         projected.access = {

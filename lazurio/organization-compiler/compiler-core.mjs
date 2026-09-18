@@ -2,6 +2,14 @@ import { existsSync } from "fs";
 import { readFile } from "fs/promises";
 import { join, relative, resolve } from "path";
 import {
+  projectLegacyOrganizationManifest,
+  resolveOrganizationRootDocuments,
+} from "../core/organization-activation-lib.mjs";
+import {
+  ORGANIZATION_DOCUMENT_PATHS,
+  readOrganizationRootDocuments,
+} from "../core/organization-root-reader-lib.mjs";
+import {
   organizationNestedRepoSlotPaths,
   normalizedTeamMemberships,
   organizationModuleSlotScope,
@@ -36,13 +44,8 @@ export async function prepareOrganizationCompilation({
     );
   }
   const root = resolve(rootInput);
-  const companyConfigPath = join(root, "company.gen3.json");
-  if (!existsSync(companyConfigPath)) {
-    throw new OrganizationCompilerError(`Chybí company.gen3.json: ${companyConfigPath}`);
-  }
-
-  const companyConfig = JSON.parse(await readFile(companyConfigPath, "utf8"));
-  const modulesManifest = await readOptionalJson(join(root, "modules.manifest.json"));
+  const { companyConfig, configPath, modulesManifest } = readCompilerInput(root);
+  const companyConfigPath = join(root, configPath);
   const effectiveRepositoryObservation = repositoryObservation;
   if (
     write &&
@@ -75,11 +78,11 @@ export async function prepareOrganizationCompilation({
   const generation = companyConfig.organization_generation ?? companyConfig.workspace_generation ?? null;
   if (generation !== "gen3") {
     throw new OrganizationCompilerError(
-      `company.gen3.json musí mít organization_generation: "gen3" (nebo deprecated alias workspace_generation): ${companyConfigPath}`,
+      `${configPath} musí mít organization_generation: "gen3" (nebo deprecated alias workspace_generation): ${companyConfigPath}`,
     );
   }
   const ownership = companyConfig.governance?.file_ownership ?? {};
-  const targets = buildCompanyTargets({ companyConfig, modulesManifest });
+  const targets = buildCompanyTargets({ companyConfig, modulesManifest, configPath });
   const context = buildContextPaths(root, ownership);
   const targetReports = await Promise.all(
     targets.map(async (target) => buildTargetReport({ root, target, ownership })),
@@ -114,7 +117,7 @@ export async function prepareOrganizationCompilation({
     // `organization_root` is the canonical CAC-0016 report field.
     organization_root: root,
     workspace_root: root,
-    config_path: "company.gen3.json",
+    config_path: configPath,
     company: companyConfig.company,
     target_count: targetReports.length,
     changed_target_count: targetReports.filter((target) => target.status !== "unchanged").length,
@@ -130,7 +133,47 @@ export async function prepareOrganizationCompilation({
   };
 }
 
-export function buildCompanyTargets({ companyConfig, modulesManifest = null }) {
+/**
+ * Compiler input is the normalized Organization root. Once the canonical
+ * `lazurio.organization.json` exists (`transition`/`current`), the compiler
+ * reads it and works on its deterministic in-memory legacy projection; the
+ * on-disk `company.gen3.json` is never the input again. Only a `legacy` root
+ * still compiles from `company.gen3.json`.
+ */
+function readCompilerInput(root) {
+  const documents = readOrganizationRootDocuments({ organizationRoot: root });
+  if (documents.documentIssues.length > 0) {
+    throw new OrganizationCompilerError(
+      `Organization manifest nejde bezpečně přečíst: ${documents.documentIssues.join(", ")}`,
+    );
+  }
+  const modulesManifest = documents.modulesManifest;
+  if (documents.canonicalManifest !== null) {
+    const resolution = resolveOrganizationRootDocuments(documents);
+    if (!["transition", "current"].includes(resolution.state)) {
+      throw new OrganizationCompilerError(
+        `Organization authority conflict: ${resolution.state} (${resolution.issues.join(", ") || "invalid documents"})`,
+      );
+    }
+    return {
+      configPath: ORGANIZATION_DOCUMENT_PATHS.canonical,
+      companyConfig: structuredClone(projectLegacyOrganizationManifest(documents.canonicalManifest, modulesManifest)),
+      modulesManifest,
+    };
+  }
+  if (documents.companyManifest === null) {
+    throw new OrganizationCompilerError(
+      `Chybí Organization manifest (${ORGANIZATION_DOCUMENT_PATHS.canonical} nebo ${ORGANIZATION_DOCUMENT_PATHS.legacy_projection}): ${root}`,
+    );
+  }
+  return {
+    configPath: ORGANIZATION_DOCUMENT_PATHS.legacy_projection,
+    companyConfig: documents.companyManifest,
+    modulesManifest,
+  };
+}
+
+export function buildCompanyTargets({ companyConfig, modulesManifest = null, configPath = "company.gen3.json" }) {
   // Roster je union kanonického teams[] a deprecated workspaces[] aliasu
   // (reálné manifesty zatím používají workspaces[]), DEDUPLIKOVANÝ podle
   // slugu — při stejném slugu v obou polích vyhrává kanonický teams[] záznam
@@ -201,14 +244,14 @@ export function buildCompanyTargets({ companyConfig, modulesManifest = null }) {
         compiler_version: compilerVersion,
         company: companyConfig.company,
         business_context: summarizeBusinessContext(companyConfig.business_context),
-        source_files: ["company.gen3.json", modulesManifest ? "modules.manifest.json" : null].filter(Boolean),
+        source_files: [configPath, modulesManifest ? "modules.manifest.json" : null].filter(Boolean),
         generated_files: generatedFiles,
       }),
     },
     {
       path: "generated/business-context.md",
       kind: "business-context-doc",
-      content: businessContextMarkdown(companyConfig),
+      content: businessContextMarkdown(companyConfig, configPath),
     },
     {
       path: "generated/modules.index.json",
@@ -287,7 +330,7 @@ export function buildCompanyTargets({ companyConfig, modulesManifest = null }) {
     {
       path: "generated/generation-policy.md",
       kind: "generation-policy-doc",
-      content: generationPolicyMarkdown(companyConfig),
+      content: generationPolicyMarkdown(companyConfig, configPath),
     },
   ];
 }
@@ -365,7 +408,7 @@ async function buildTargetReport({ root, target, ownership }) {
 }
 
 function buildContextPaths(root, ownership) {
-  return ["company.gen3.json", "modules.manifest.json", "company/launchpad/plugins/README.md"]
+  return [ORGANIZATION_DOCUMENT_PATHS.canonical, "company.gen3.json", "modules.manifest.json", "company/launchpad/plugins/README.md"]
     .filter((path) => existsSync(join(root, path)))
     .map((path) => ({
       path,
@@ -408,12 +451,12 @@ function summarizeNamedList(values = []) {
   }));
 }
 
-function businessContextMarkdown(companyConfig) {
+function businessContextMarkdown(companyConfig, configPath = "company.gen3.json") {
   const context = companyConfig.business_context ?? {};
   return [
     "# Business kontext (generated)",
     "",
-    "> Tento soubor je generovaný z `company.gen3.json`. Neupravuj ho ručně.",
+    `> Tento soubor je generovaný z \`${configPath}\`. Neupravuj ho ručně.`,
     "",
     `Firma: ${companyConfig.company?.display_name ?? companyConfig.company?.slug ?? "neznámá"}`,
     "",
@@ -438,12 +481,12 @@ function businessContextMarkdown(companyConfig) {
   ].join("\n");
 }
 
-function generationPolicyMarkdown(companyConfig) {
+function generationPolicyMarkdown(companyConfig, configPath = "company.gen3.json") {
   const policy = companyConfig.generation_policy ?? {};
   return [
     "# Generační pravidla (generated)",
     "",
-    "> Tento soubor je generovaný z `company.gen3.json`. Neupravuj ho ručně.",
+    `> Tento soubor je generovaný z \`${configPath}\`. Neupravuj ho ručně.`,
     "",
     `Pravidlo prototypu: ${policy.prototype_rule ?? "není vyplněno"}`,
     "",
@@ -514,11 +557,6 @@ function classifyOwnership(filePath, ownershipConfig) {
           : "ambiguous",
     ownership_matches: ownershipMatches,
   };
-}
-
-async function readOptionalJson(path) {
-  if (!existsSync(path)) return null;
-  return JSON.parse(await readFile(path, "utf8"));
 }
 
 function json(value) {

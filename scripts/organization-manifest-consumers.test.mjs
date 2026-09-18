@@ -36,6 +36,11 @@ const compatibilityWriters = new Set([
   "scripts/gen2-gen3-sync-inventory.mjs",
 ]);
 
+// Migration-only code lives in dedicated migrations folders (root AGENTS.md)
+// and is deleted with the migration; it is the one place allowed to write the
+// legacy compatibility projection.
+const migrationFolders = ["lazurio/migrations/organization-manifest/"];
+
 test("every Organization consumer imports the single Core filesystem adapter", async () => {
   for (const path of normalizedConsumers) {
     const source = await readFile(join(root, path), "utf8");
@@ -48,7 +53,12 @@ test("active source has no unmanaged direct legacy compatibility projection read
   const violations = [];
   for (const absolutePath of sourceFiles) {
     const path = relative(root, absolutePath).replaceAll("\\", "/");
-    if (path.endsWith(".test.mjs") || compatibilityReaders.has(path) || compatibilityWriters.has(path)) continue;
+    if (
+      path.endsWith(".test.mjs")
+      || compatibilityReaders.has(path)
+      || compatibilityWriters.has(path)
+      || migrationFolders.some((folder) => path.startsWith(folder))
+    ) continue;
     const source = await readFile(absolutePath, "utf8");
     const directRead = /(?:Bun\.file|readFile(?:Sync)?|readJson|existsSync|access|stat|lstat)\s*\([^)]{0,240}company\.gen3\.json/su;
     if (directRead.test(source)) violations.push(path);

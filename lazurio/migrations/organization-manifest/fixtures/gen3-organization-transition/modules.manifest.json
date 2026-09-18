@@ -1,0 +1,132 @@
+{
+  "organization_generation": "gen3",
+  "company": "Example-ai",
+  "github_org": "Example-ai",
+  "workspace_rule": "module_slots[].teams declares the N:M Team membership of a module; productionspace/* declares none.",
+  "module_slots": [
+    {
+      "path": "infra",
+      "slug": "infra",
+      "space": "root",
+      "category": "engineering",
+      "default_access": "restricted",
+      "required_roles": ["co-founder"],
+      "source_of_truth": "git-native",
+      "classification": "restricted-root-governance",
+      "git": { "url": "git@github.com:Example-ai/infra.git", "branch": "main" }
+    },
+    {
+      "path": "design-system",
+      "slug": "design-system",
+      "space": "root",
+      "category": "design",
+      "default_access": "expected",
+      "required_roles": ["*"],
+      "source_of_truth": "git-native",
+      "status": "active",
+      "materialization": "doctor_managed_nested_repo",
+      "git": { "url": "git@github.com:Example-ai/design-system.git", "branch": "main" }
+    },
+    {
+      "path": "mission-control",
+      "slug": "mission-control",
+      "space": "root",
+      "category": "planning",
+      "default_access": "expected",
+      "required_roles": ["co-founder"],
+      "source_of_truth": "forked-app-code-repo",
+      "status": "active",
+      "materialization": "doctor_managed_nested_repo",
+      "git": { "url": "git@github.com:Example-ai/mission-control.git", "branch": "main" }
+    },
+    {
+      "path": "mission-control/db",
+      "slug": "mission-control-data",
+      "space": "root",
+      "category": "planning-data",
+      "default_access": "role_based",
+      "required_roles": ["co-founder"],
+      "source_of_truth": "repository-db:v3",
+      "status": "active",
+      "materialization": "repository_db_mount",
+      "repository_db": {
+        "repo": "Example-ai/mission-control-data",
+        "url": "git@github.com:Example-ai/mission-control-data.git",
+        "branch": "v3",
+        "config": "repository-db.yaml",
+        "data_root": "data/mission-control",
+        "profile": "repository-db-v3",
+        "app_writable_path_policy": "repository_db_publish_only"
+      },
+      "git": { "url": "git@github.com:Example-ai/mission-control-data.git", "branch": "v3" }
+    },
+    {
+      "slug": "knowledgebase",
+      "path": "workspace/knowledgebase",
+      "teams": ["delivery", "platform"],
+      "category": "knowledge",
+      "default_access": "role_based",
+      "required_roles": ["co-founder"],
+      "source_of_truth": "git-native",
+      "classification": "workspace",
+      "notes": "Shared knowledge module.",
+      "materialization": "doctor_managed_nested_repo",
+      "git": { "url": "git@github.com:Example-ai/knowledgebase.git", "branch": "main" }
+    },
+    {
+      "slug": "content",
+      "path": "workspace/content-example",
+      "teams": ["delivery"],
+      "category": "publishing",
+      "default_access": "expected",
+      "required_roles": ["*"],
+      "source_of_truth": "git-native",
+      "classification": "workspace",
+      "notes": "Content module.",
+      "materialization": "doctor_managed_nested_repo",
+      "git": { "url": "git@github.com:Example-ai/content-example.git", "branch": "main" }
+    },
+    {
+      "slug": "content-example-data",
+      "path": "workspace/content-example/db",
+      "teams": ["delivery"],
+      "category": "publishing-data",
+      "default_access": "expected",
+      "required_roles": ["*"],
+      "source_of_truth": "repository-db:v3",
+      "classification": "workspace-data",
+      "notes": "Content repository-db.",
+      "materialization": "repository_db_mount",
+      "git": { "url": "git@github.com:Example-ai/content-example-data.git", "branch": "main" }
+    },
+    {
+      "slug": "brainstorm",
+      "path": "workspace/brainstorm",
+      "teams": ["delivery"],
+      "category": "innovation",
+      "default_access": "role_based",
+      "required_roles": ["co-founder", "team-member"],
+      "source_of_truth": "git-native",
+      "status": "planned_slot",
+      "classification": "planned-workspace-slot"
+    },
+    {
+      "slug": "documentation",
+      "path": "productionspace/documentation",
+      "space": "productionspace",
+      "category": "knowledge",
+      "default_access": "role_based",
+      "required_roles": ["co-founder", "team-member"],
+      "source_of_truth": "git-native",
+      "classification": "public-productionspace-documentation",
+      "notes": "Public documentation repository.",
+      "materialization": "doctor_managed_nested_repo",
+      "git": { "url": "git@github.com:Example-public/documentation.git", "branch": "main" }
+    }
+  ],
+  "access_levels": {
+    "expected": "Every colleague unless explicitly restricted.",
+    "role_based": "Available by role; see required_roles.",
+    "restricted": "Denied by default."
+  }
+}

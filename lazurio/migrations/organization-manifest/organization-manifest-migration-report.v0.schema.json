@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lazurio.ai/schemas/organization-manifest-migration-report.v0.schema.json",
+  "title": "Lazurio Organization manifest migration report v0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "tool", "mode", "root", "operation", "outcome", "ok", "before", "after", "parity", "schema_validation", "modules_reconciliation", "changes", "git", "blockers", "readback", "next_step"],
+  "properties": {
+    "schema_version": { "const": "lazurio.organization.manifest-migration.v0" },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command", "package_version", "resolver_contract"],
+      "properties": {
+        "command": { "const": "lazurio migrate organization-manifest" },
+        "package_version": { "type": "string", "minLength": 1 },
+        "resolver_contract": { "const": "lazurio.organization.root-resolution.v1" }
+      }
+    },
+    "mode": { "enum": ["plan", "write"] },
+    "root": { "type": "string", "minLength": 1 },
+    "operation": { "enum": ["migrate", "regenerate", "finalize", "none"] },
+    "outcome": { "enum": ["planned", "written", "noop", "blocked"] },
+    "ok": { "type": "boolean" },
+    "before": { "$ref": "#/$defs/resolution" },
+    "after": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/resolution" }] },
+    "parity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["semantic", "projection"],
+      "properties": {
+        "semantic": { "type": ["boolean", "null"] },
+        "projection": { "type": ["boolean", "null"] }
+      }
+    },
+    "schema_validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["canonical", "legacy_projection"],
+      "properties": {
+        "canonical": { "type": "array", "items": { "type": "string" } },
+        "legacy_projection": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "modules_reconciliation": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["legacy_entries", "reconciled", "unreconciled", "field_conflicts", "issues"],
+          "properties": {
+            "legacy_entries": { "type": "integer", "minimum": 0 },
+            "reconciled": { "type": "integer", "minimum": 0 },
+            "unreconciled": { "type": "array", "items": { "type": "string" } },
+            "field_conflicts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["path", "fields"],
+                "properties": {
+                  "path": { "type": "string" },
+                  "fields": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            },
+            "issues": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      ]
+    },
+    "changes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "action", "before_sha256", "after_sha256"],
+        "properties": {
+          "path": { "enum": ["lazurio.organization.json", "company.gen3.json"] },
+          "action": { "enum": ["create", "replace", "unchanged", "remove"] },
+          "before_sha256": { "type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$" },
+          "after_sha256": { "type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$" }
+        }
+      }
+    },
+    "git": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "reason", "message", "checkout_root", "branch", "linked_worktree", "dirty_paths"],
+      "properties": {
+        "status": { "enum": ["ready", "blocked"] },
+        "reason": { "type": ["string", "null"] },
+        "message": { "type": ["string", "null"] },
+        "checkout_root": { "type": ["string", "null"] },
+        "branch": { "type": ["string", "null"] },
+        "linked_worktree": { "type": ["boolean", "null"] },
+        "dirty_paths": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "message"],
+        "properties": {
+          "code": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+          "message": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "readback": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/resolution" }] },
+    "next_step": { "type": ["string", "null"] }
+  },
+  "$defs": {
+    "resolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "declaration_source", "semantic_hash", "projection", "issues", "warnings"],
+      "properties": {
+        "state": { "enum": ["legacy", "transition", "projection_drift", "conflict", "current", "missing"] },
+        "declaration_source": { "type": ["string", "null"] },
+        "semantic_hash": { "type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$" },
+        "projection": {
+          "anyOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["algorithm", "expected_hash", "declared_hash", "actual_hash"],
+              "properties": {
+                "algorithm": { "const": "sha256-canonical-json-v1" },
+                "expected_hash": { "type": ["string", "null"] },
+                "declared_hash": { "type": ["string", "null"] },
+                "actual_hash": { "type": ["string", "null"] }
+              }
+            }
+          ]
+        },
+        "issues": { "type": "array", "items": { "type": "string" } },
+        "warnings": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

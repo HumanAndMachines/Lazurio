@@ -83,7 +83,7 @@ export async function compileOrganization(options = {}) {
   if (resolution.document_presence.canonical && !["current", "transition"].includes(resolution.state)) {
     throw new OrganizationCompilerError(`Organization authority conflict: ${resolution.state}`);
   }
-  for (const path of ["company.gen3.json", "modules.manifest.json", "generated/company-summary.json", "generated/business-context.md", "generated/modules.index.json", "generated/generation-policy.md"]) {
+  for (const path of ["lazurio.organization.json", "company.gen3.json", "modules.manifest.json", "generated/company-summary.json", "generated/business-context.md", "generated/modules.index.json", "generated/generation-policy.md"]) {
     await assertCompilerPath(root, path);
   }
   const prepared = await prepareOrganizationCompilation({

@@ -1,10 +1,27 @@
 import { createHash } from "node:crypto";
 
-export const ORGANIZATION_SCAFFOLD_CONTRACT_VERSION = "lazurio.organization.scaffold.v0";
-export const ORGANIZATION_FORGE_BINDING_VERSION = "lazurio.forge-binding.github.v0";
+import {
+  ORGANIZATION_LEGACY_PROJECTION_HASH_ALGORITHM,
+  ORGANIZATION_MANIFEST_SCHEMA_VERSION,
+  organizationLegacyProjectionHash,
+  projectLegacyOrganizationManifest,
+} from "./organization-activation-lib.mjs";
+import {
+  isValidForgeBindingShape,
+  isValidOrganizationForgeBinding,
+  ORGANIZATION_FORGE_BINDING_VERSION,
+  ORGANIZATION_GITHUB_LOGIN_PATTERN,
+  ORGANIZATION_POSITIVE_GITHUB_ID_PATTERN,
+} from "./organization-forge-binding-lib.mjs";
 
-export const ORGANIZATION_POSITIVE_GITHUB_ID_PATTERN = /^[1-9][0-9]{0,19}$/u;
-export const ORGANIZATION_GITHUB_LOGIN_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/u;
+export {
+  isValidOrganizationForgeBinding,
+  ORGANIZATION_FORGE_BINDING_VERSION,
+  ORGANIZATION_GITHUB_LOGIN_PATTERN,
+  ORGANIZATION_POSITIVE_GITHUB_ID_PATTERN,
+};
+
+export const ORGANIZATION_SCAFFOLD_CONTRACT_VERSION = "lazurio.organization.scaffold.v0";
 const organizationSlugPattern = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/u;
 
 const staticFiles = Object.freeze({
@@ -77,8 +94,10 @@ company/colleagues/*/scratch/
   "AGENTS.md": `# Lazurio Organization
 
 This repository is the root of exactly one Lazurio Organization and one GitHub
-access boundary. Read \`company.gen3.json\` and \`modules.manifest.json\` before
-changing its source.
+access boundary. Read \`lazurio.organization.json\` and \`modules.manifest.json\`
+before changing its source. \`company.gen3.json\` is a generated legacy
+compatibility projection: edit only the Organization manifest and regenerate
+it with \`lazurio migrate organization-manifest <root> --write\`.
 
 GitHub memberships, Teams, repository grants and branch rules are the only
 access authority. Manifest roles and labels never create a second ACL. Keep
@@ -130,6 +149,7 @@ const scaffoldFilePaths = Object.freeze([
   ...Object.keys(staticFiles),
   "README.md",
   "company.gen3.json",
+  "lazurio.organization.json",
   "modules.manifest.json",
   "TODO.tasks.json",
   "DONE.tasks.json",
@@ -144,9 +164,15 @@ export function createOrganizationScaffold({ organization, repository }) {
     owner: "organization-admin",
   };
   const files = new Map(Object.entries(staticFiles));
+  const modules = modulesManifest(normalized);
+  const canonical = organizationManifest(normalized, modules);
   files.set("README.md", organizationReadme(normalized));
-  files.set("company.gen3.json", json(companyManifest(normalized)));
-  files.set("modules.manifest.json", json(modulesManifest(normalized)));
+  files.set("lazurio.organization.json", json(canonical));
+  // The compatibility window (decision 0145) still requires the deterministic
+  // legacy projection next to the canonical manifest; a new root therefore
+  // starts in `transition`, never with a hand-written second document.
+  files.set("company.gen3.json", json(projectLegacyOrganizationManifest(canonical, modules)));
+  files.set("modules.manifest.json", json(modules));
   files.set("TODO.tasks.json", json({
     schema_version: "companiesascode.todo_tasks.v1",
     scope,
@@ -171,7 +197,7 @@ export function createOrganizationScaffold({ organization, repository }) {
 
 export function isValidOrganizationScaffold(value) {
   if (!isRecord(value) || value.contract_version !== ORGANIZATION_SCAFFOLD_CONTRACT_VERSION) return false;
-  if (!validForgeBinding(value.forge_binding)) return false;
+  if (!isValidForgeBindingShape(value.forge_binding)) return false;
   if (!/^[0-9a-f]{40}$/u.test(value.git_tree_oid ?? "")) return false;
   if (!Array.isArray(value.files) || value.files.length === 0) return false;
   if (value.files.some((file) => (
@@ -188,29 +214,23 @@ export function isValidOrganizationScaffold(value) {
     || paths.length !== scaffoldFilePaths.length
     || paths.some((path, index) => path !== scaffoldFilePaths[index])
   ) return false;
-  const companyFile = value.files.find((file) => file.path === "company.gen3.json");
-  if (!companyFile) return false;
+  const document = (path) => value.files.find((file) => file.path === path);
+  const companyFile = document("company.gen3.json");
+  const canonicalFile = document("lazurio.organization.json");
+  const modulesFile = document("modules.manifest.json");
+  if (!companyFile || !canonicalFile || !modulesFile) return false;
   try {
     const company = JSON.parse(companyFile.content);
+    const canonical = JSON.parse(canonicalFile.content);
+    const modules = JSON.parse(modulesFile.content);
     if (!sameForgeBinding(company?.forge_binding, value.forge_binding)) return false;
+    if (!sameForgeBinding(projectLegacyOrganizationManifest(canonical, modules).forge_binding, value.forge_binding)) return false;
+    if (organizationLegacyProjectionHash(canonical, modules) !== canonical.compatibility?.legacy_projection?.sha256) return false;
+    if (JSON.stringify(projectLegacyOrganizationManifest(canonical, modules)) !== JSON.stringify(company)) return false;
     return gitTreeOid(value.files) === value.git_tree_oid;
   } catch {
     return false;
   }
-}
-
-export function isValidOrganizationForgeBinding(value, {
-  organizationId,
-  organizationLogin,
-  repositoryId,
-  repositoryFullName,
-} = {}) {
-  if (!validForgeBinding(value)) return false;
-  if (organizationId !== undefined && String(organizationId) !== value.organization.id) return false;
-  if (organizationLogin !== undefined && String(organizationLogin).toLowerCase() !== value.organization.asserted_login.toLowerCase()) return false;
-  if (repositoryId !== undefined && String(repositoryId) !== value.repository.id) return false;
-  if (repositoryFullName !== undefined && String(repositoryFullName).toLowerCase() !== value.repository.asserted_full_name.toLowerCase()) return false;
-  return true;
 }
 
 function normalizeInput({ organization, repository }) {
@@ -252,18 +272,29 @@ function normalizeInput({ organization, repository }) {
   });
 }
 
-function companyManifest({ organization, repository }) {
-  return {
-    organization_generation: "gen3",
-    organization_kind: "organization",
-    company: {
+function organizationManifest({ organization, repository }, modules) {
+  const manifest = {
+    schema_version: ORGANIZATION_MANIFEST_SCHEMA_VERSION,
+    kind: "organization",
+    organization: {
       slug: organization.slug,
       display_name: organization.displayName,
-      github_org: organization.login,
-      repository: `git@github.com:${repository.fullName}.git`,
-      root_repository: repository.fullName,
+      forge_binding: {
+        forge: "github",
+        locator: organization.login,
+        binding_state: "verified",
+        organization_id: organization.id,
+      },
+      metadata: {},
     },
-    forge_binding: forgeBinding({ organization, repository }),
+    root_repository: {
+      forge: "github",
+      locator: repository.fullName,
+      default_branch: repository.defaultBranch,
+      binding_state: "verified",
+      repository_id: repository.id,
+    },
+    manifests: { modules: "modules.manifest.json" },
     governance: {
       default_branch: repository.defaultBranch,
       access_authority: "github",
@@ -287,7 +318,17 @@ function companyManifest({ organization, repository }) {
       { slug: "organization-todo", kind: "todo-tasks-json", path: "TODO.tasks.json", authority: "source-of-truth" },
       { slug: "organization-done", kind: "done-tasks-json", path: "DONE.tasks.json", authority: "source-of-truth" },
     ],
+    extensions: { legacy: {} },
+    compatibility: {
+      legacy_projection: {
+        path: "company.gen3.json",
+        algorithm: ORGANIZATION_LEGACY_PROJECTION_HASH_ALGORITHM,
+        sha256: `sha256:${"0".repeat(64)}`,
+      },
+    },
   };
+  manifest.compatibility.legacy_projection.sha256 = organizationLegacyProjectionHash(manifest, modules);
+  return manifest;
 }
 
 function modulesManifest({ organization }) {
@@ -320,25 +361,8 @@ function forgeBinding({ organization, repository }) {
   };
 }
 
-function validForgeBinding(value) {
-  return isRecord(value)
-    && value.schema_version === ORGANIZATION_FORGE_BINDING_VERSION
-    && value.provider === "github"
-    && isRecord(value.organization)
-    && typeof value.organization.id === "string"
-    && ORGANIZATION_POSITIVE_GITHUB_ID_PATTERN.test(value.organization.id ?? "")
-    && typeof value.organization.asserted_login === "string"
-    && ORGANIZATION_GITHUB_LOGIN_PATTERN.test(value.organization.asserted_login ?? "")
-    && isRecord(value.repository)
-    && typeof value.repository.id === "string"
-    && ORGANIZATION_POSITIVE_GITHUB_ID_PATTERN.test(value.repository.id ?? "")
-    && typeof value.repository.asserted_full_name === "string"
-    && value.repository.asserted_full_name.toLowerCase() === `${value.organization.asserted_login}/${value.organization.asserted_login}_GEN3`.toLowerCase()
-    && value.repository.default_branch === "main";
-}
-
 function organizationReadme({ organization, repository }) {
-  return `# ${organization.login}\n\nLazurio Organization root for GitHub Organization \`${organization.login}\`.\n\nThe immutable GitHub Organization and repository binding is recorded in\n\`company.gen3.json#forge_binding\`. Renameable provider locators are asserted\ndisplay values and never replace those immutable IDs. Repository slots are\ndeclared only in \`modules.manifest.json\`; an existing repository is not a\nWorkspace Module unless its own Lazurio Module manifest declares it.\n\nRoot repository: \`${repository.fullName}\` (default branch \`main\`).\n`;
+  return `# ${organization.login}\n\nLazurio Organization root for GitHub Organization \`${organization.login}\`.\n\nThe immutable GitHub Organization and repository binding is recorded in\n\`lazurio.organization.json\` (\`organization.forge_binding\` and \`root_repository\`);\n\`company.gen3.json\` is its generated legacy compatibility projection and is\nnever edited by hand. Renameable provider locators are asserted display\nvalues and never replace those immutable IDs. Repository slots are\ndeclared only in \`modules.manifest.json\`; an existing repository is not a\nWorkspace Module unless its own Lazurio Module manifest declares it.\n\nRoot repository: \`${repository.fullName}\` (default branch \`main\`).\n`;
 }
 
 function gitTreeOid(files) {
@@ -429,8 +453,8 @@ function safeDisplayText(value, label) {
 }
 
 function sameForgeBinding(left, right) {
-  return validForgeBinding(left)
-    && validForgeBinding(right)
+  return isValidForgeBindingShape(left)
+    && isValidForgeBindingShape(right)
     && left.schema_version === right.schema_version
     && left.provider === right.provider
     && left.organization.id === right.organization.id

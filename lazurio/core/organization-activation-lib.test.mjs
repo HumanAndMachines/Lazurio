@@ -254,6 +254,11 @@ test("generated legacy scaffold binds live immutable Organization and repository
   };
 
   expect(resolveOrganizationRootDocuments(input).activation).toMatchObject({ status: "supported", format: "legacy" });
+  expect(resolveOrganizationRootDocuments({
+    ...input,
+    canonicalManifest: document("lazurio.organization.json"),
+    activationFormats: ["legacy", "transition"],
+  })).toMatchObject({ state: "transition", activation: { status: "supported", format: "transition" } });
   expect(resolveOrganizationRootDocuments({ ...input, expectedOrganizationId: "999" }).activation)
     .toMatchObject({ status: "unsupported", reason: "legacy_identity_pair_invalid" });
   expect(resolveOrganizationRootDocuments({ ...input, expectedRepositoryId: "999" }).activation)

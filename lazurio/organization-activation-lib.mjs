@@ -1,5 +1,6 @@
 import {
   createOrganizationActivationRequest,
+  ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
   organizationActivationError,
   organizationActivationExitCode,
   resolveOrganizationActivation,
@@ -267,7 +268,7 @@ function inspectRootRepository({ invoke, organization }) {
     expectedOrganizationLogin: organization.login,
     expectedRepositoryId: repositoryId,
     expectedRepositoryFullName: fullName,
-    activationFormats: ["legacy", "transition"],
+    activationFormats: ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
   });
   return {
     presence: "present",

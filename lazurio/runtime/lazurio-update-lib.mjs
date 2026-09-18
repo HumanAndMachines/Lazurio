@@ -13,7 +13,10 @@ import { buildGitInventory } from "./git-inventory-lib.mjs";
 import { createHostedWorkspaceConfiguration } from "./hosted-app-url-lib.mjs";
 import { materializeRepoCheckout } from "./git-materialization-lib.mjs";
 import { buildModuleLocationRepairAction } from "../core/module-location-repair-contract-lib.mjs";
-import { resolveOrganizationRootDocuments } from "../core/organization-activation-lib.mjs";
+import {
+  ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
+  resolveOrganizationRootDocuments,
+} from "../core/organization-activation-lib.mjs";
 import {
   normalizeOrganizationDocumentJson,
   readOrganizationRoot,
@@ -808,7 +811,7 @@ async function verifyOrganizationUpdateTarget({
   }
 
   const resolution = resolveOrganizationRootDocuments(documents);
-  if (!["legacy", "transition"].includes(resolution.state) || resolution.resource_count !== 1) {
+  if (!ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS.includes(resolution.state) || resolution.resource_count !== 1) {
     return {
       ok: false,
       reason: "organization_target_incompatible",

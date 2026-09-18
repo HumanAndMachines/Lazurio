@@ -28,15 +28,28 @@ export function normalizeOrganizationDocumentJson(value) {
  * to resolveOrganizationRootDocuments.
  */
 export function readOrganizationRoot({ organizationRoot, ...expectations }) {
+  return resolveOrganizationRootDocuments({
+    ...expectations,
+    ...readOrganizationRootDocuments({ organizationRoot }),
+  });
+}
+
+/**
+ * Raw document set of one Organization root exactly as the resolver consumes
+ * it: decoded JSON (or `{ invalid: true }`), `null` for an absent file and the
+ * filesystem issue codes. Callers that need the authored documents themselves
+ * (the compiler input, the manifest migrator) read through this seam instead
+ * of opening the filenames a second time.
+ */
+export function readOrganizationRootDocuments({ organizationRoot }) {
   const boundaryIssue = organizationRootBoundaryIssue(organizationRoot);
   if (boundaryIssue) {
-    return resolveOrganizationRootDocuments({
-      ...expectations,
+    return {
       canonicalManifest: null,
       companyManifest: null,
       modulesManifest: null,
       documentIssues: [boundaryIssue],
-    });
+    };
   }
   const issues = [];
   const canonicalManifest = readOptionalJson({
@@ -58,13 +71,7 @@ export function readOrganizationRoot({ organizationRoot, ...expectations }) {
     issues,
   });
 
-  return resolveOrganizationRootDocuments({
-    ...expectations,
-    canonicalManifest,
-    companyManifest,
-    modulesManifest,
-    documentIssues: issues,
-  });
+  return { canonicalManifest, companyManifest, modulesManifest, documentIssues: issues };
 }
 
 function readOptionalJson({ organizationRoot, relativePath, issueCode, issues }) {

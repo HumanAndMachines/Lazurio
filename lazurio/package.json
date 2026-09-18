@@ -22,6 +22,9 @@
     "runtime/*.mjs",
     "schemas/*.json",
     "organization-compiler/*.mjs",
+    "migrations/*/*.mjs",
+    "migrations/*/*.json",
+    "migrations/*/README.md",
     "!**/*.test.mjs",
     "!**/*.test-support.mjs"
   ],

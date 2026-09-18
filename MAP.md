@@ -98,8 +98,11 @@ nikdy se neduplikují pod `development/Lazurio`.
   API. Aktuální příkazy a hranice popisuje `lazurio/README.md`.
 - `launchpad.gen3.json` — metadata Lazurio rootu a lokální `planned` sloty.
   Není to allowlist; Organizace se objevují z lokálních mountů.
-- Organization manifest — dnes `company.gen3.json`, cílově
-  `lazurio.organization.json`. Drží Organization-wide pravidla včetně poolu
+- Organization manifest — kanonicky `lazurio.organization.json`;
+  `company.gen3.json` je během kompatibilitního okna jen jeho generovaná legacy
+  projekce (decision 0145) a Organizace ji přesune příkazem
+  `lazurio migrate organization-manifest <root> --write` (mechanismus žije
+  v `lazurio/migrations/organization-manifest/`). Drží Organization-wide pravidla včetně poolu
   pro přidělování nových portů. Přesný port vlastní každý Modul ve svém
   `lazurio.module.json`; globální registr neexistuje.
 - `launchpad/` — vývojový povrch pro Buildery. Objevuje Organizace, Teamy a
