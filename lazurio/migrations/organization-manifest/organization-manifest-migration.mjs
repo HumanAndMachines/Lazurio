@@ -13,8 +13,6 @@ import { join, resolve } from "node:path";
 import {
   ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
   ORGANIZATION_ROOT_RESOLUTION_VERSION,
-  isOrganizationForgeIdentityVerified,
-  isOrganizationRootSupported,
   organizationLegacyProjectionHash,
   projectLegacyOrganizationManifest,
   resolveOrganizationRootDocuments,
@@ -47,16 +45,8 @@ const managedPaths = Object.freeze([
  * single Core filesystem adapter returns it; output is the deterministic plan:
  * resolver state before and after, the exact documents to write or remove,
  * parity evidence and fail-closed blockers. No filesystem, no Git.
- *
- * `activationFormats` is the reader contract `--finalize` is gated on. It
- * defaults to the shipped Core gate; the CLI never sets it — only tests inject
- * a future cohort to prove the gate opens exactly with the readers.
  */
-export function planOrganizationManifestMigration({
-  documents,
-  finalize = false,
-  activationFormats = ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
-}) {
+export function planOrganizationManifestMigration({ documents, finalize = false }) {
   const before = resolveOrganizationRootDocuments(documents);
   const plan = {
     operation: "none",
@@ -85,7 +75,7 @@ export function planOrganizationManifestMigration({
     return block("template_kind_not_migratable", "Template root (kind: template) se tímto příkazem nemigruje; template dostává vlastní explicitní plán.");
   }
 
-  if (finalize) return planFinalize({ plan, before, documents, block, activationFormats });
+  if (finalize) return planFinalize({ plan, before, documents, block });
 
   if (before.state === "legacy") {
     plan.operation = "migrate";
@@ -140,7 +130,7 @@ export function planOrganizationManifestMigration({
   return stagePair({ plan, before, documents, canonicalManifest, block });
 }
 
-function planFinalize({ plan, before, documents, block, activationFormats }) {
+function planFinalize({ plan, before, documents, block }) {
   plan.operation = "finalize";
   if (before.state === "current") {
     plan.outcome = "noop";
@@ -162,23 +152,12 @@ function planFinalize({ plan, before, documents, block, activationFormats }) {
   if (after.state !== "current" || !plan.parity.semantic) {
     return block("finalize_readback_invalid", `Canonical manifest sám o sobě neresolvuje jako current (${after.issues.join(", ") || after.state}).`);
   }
-  // Finalization may only produce a root the same cohort's readers accept.
-  // Offline it has no live GitHub facts, so it requires the structural half of
-  // the shared Core identity proof: a complete verified forge binding in the
-  // canonical manifest. Activation/install then match it against live IDs.
-  if (!isOrganizationForgeIdentityVerified(after.resource)) {
-    return block(
-      "finalize_binding_unverified",
-      "Canonical manifest nenese verified forge binding (binding_state: verified s organization_id a repository_id); "
-        + "canonical-only root by žádný reader neaktivoval. Legacy projekce zůstává povinná.",
-    );
-  }
-  if (!isOrganizationRootSupported(after, { activationFormats })) {
+  if (!ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS.includes("current")) {
     plan.outcome = "blocked";
     plan.blockers.push({
       code: "finalize_reader_gate_closed",
       message: "Reader/update gate ještě nepřijímá stav current: podporované Machines aktivují pouze "
-        + `${activationFormats.join(", ")}. Legacy projekce zůstává povinná (decision 0145).`,
+        + `${ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS.join(", ")}. Legacy projekce zůstává povinná (decision 0145).`,
     });
     return plan;
   }
@@ -235,12 +214,11 @@ export async function runOrganizationManifestMigration({
   organizationRoot,
   write = false,
   finalize = false,
-  activationFormats = ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
   runGit = defaultRunGit,
 }) {
   const root = resolve(organizationRoot);
   const documents = readOrganizationRootDocuments({ organizationRoot: root });
-  const plan = planOrganizationManifestMigration({ documents, finalize, activationFormats });
+  const plan = planOrganizationManifestMigration({ documents, finalize });
   const git = observeGitGate({ root, runGit });
   const changes = plan.documents.map((document) => describeChange(root, document));
   const report = {

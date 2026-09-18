@@ -8,7 +8,6 @@ import {
   hasRepositoryDbAuthorityMarker,
   readMissionControlRepositoryDbAuthority,
 } from "../../../../scripts/repository-db-authority-contract.mjs";
-import { isOrganizationRootSupported } from "../../../../lazurio/core/organization-activation-lib.mjs";
 import { readOrganizationRoot } from "../../../../lazurio/core/organization-root-reader-lib.mjs";
 
 const GIT_TIMEOUT_MS = 10_000;
@@ -638,7 +637,8 @@ async function resolveSidecarAuthority(primaryRoot, defaultAuthorityRoot, declar
     const resolution = readOrganizationRoot({ organizationRoot });
     if (
       resolution.operation_status === "migration_in_progress"
-      || !isOrganizationRootSupported(resolution)
+      || !["legacy", "transition"].includes(resolution.state)
+      || resolution.resource_count !== 1
     ) {
       throw new Error(`Organization manifest is not mutation-safe (${resolution.operation_status ?? resolution.state})`);
     }
@@ -784,7 +784,8 @@ async function resolveRepositoryIdentity(primaryRoot) {
   try {
     const resolution = readOrganizationRoot({ organizationRoot: primaryRoot });
     if (
-      !isOrganizationRootSupported(resolution)
+      !["legacy", "transition"].includes(resolution.state)
+      || resolution.resource_count !== 1
       || resolution.resource?.kind !== "organization"
     ) {
       return rootIdentity;

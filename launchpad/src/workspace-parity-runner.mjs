@@ -15,7 +15,6 @@ import {
   selectHostedWorkspaceApps,
   validateHostedWorkspaceBindings,
 } from "../../lazurio/runtime/hosted-app-url-lib.mjs";
-import { isOrganizationRootSupported } from "../../lazurio/core/organization-activation-lib.mjs";
 import { readOrganizationRoot } from "../../lazurio/core/organization-root-reader-lib.mjs";
 
 const schemaVersion = "lazurio.workspace_machine_parity.v1";
@@ -92,7 +91,8 @@ export async function runWorkspaceParity(options) {
     : null;
   add(
     "manifest.organization",
-    isOrganizationRootSupported(organizationResolution)
+    ["legacy", "transition"].includes(organizationResolution?.state)
+      && organizationResolution.resource_count === 1
       && organizationResolution.resource?.organization?.slug === options.organization,
     {
       state: organizationResolution?.state ?? "missing",

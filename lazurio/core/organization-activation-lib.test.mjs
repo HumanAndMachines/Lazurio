@@ -4,7 +4,6 @@ import { validateAgainstSchema } from "../runtime/json-schema-mini.mjs";
 import schema from "../organization-activation-report.v0.schema.json";
 import organizationManifestSchema from "../lazurio.organization.v1.schema.json";
 import {
-  ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
   ORGANIZATION_ACTIVATION_ERROR_CODES,
   ORGANIZATION_ACTIVATION_NEXT_ACTIONS,
   ORGANIZATION_ACTIVATION_OUTCOMES,
@@ -16,9 +15,6 @@ import {
   ORGANIZATION_MANIFEST_STATES,
   ORGANIZATION_RESOURCE_SCHEMA_VERSION,
   createOrganizationActivationRequest,
-  isOrganizationCanonicalManifestAuthoritative,
-  isOrganizationForgeIdentityVerified,
-  isOrganizationRootSupported,
   isValidOrganizationActivationObservations,
   isValidOrganizationActivationReport,
   organizationActivationError,
@@ -463,170 +459,6 @@ test("activation admits a parity-verified transition only for an explicit capabl
     format: "transition",
     reason: "transition_identity_pair_supported",
   });
-});
-
-test("activation admits a verified canonical-only current root only when the reader contract lists current", () => {
-  const modulesManifest = organizationModules();
-  const canonicalManifest = canonicalOrganization(modulesManifest);
-  canonicalManifest.organization.forge_binding = {
-    ...canonicalManifest.organization.forge_binding,
-    binding_state: "verified",
-    organization_id: "314957563",
-  };
-  canonicalManifest.root_repository = {
-    ...canonicalManifest.root_repository,
-    binding_state: "verified",
-    repository_id: "42424242",
-  };
-  canonicalManifest.compatibility.legacy_projection.sha256 = organizationLegacyProjectionHash(
-    canonicalManifest,
-    modulesManifest,
-  );
-  const input = {
-    companyManifest: null,
-    modulesManifest,
-    canonicalManifest,
-    expectedOrganizationId: "314957563",
-    expectedOrganizationLogin: canonicalManifest.organization.forge_binding.locator,
-    expectedRepositoryId: "42424242",
-    expectedRepositoryFullName: canonicalManifest.root_repository.locator,
-  };
-  const currentCohort = [...ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS, "current"];
-  const unavailable = { status: "unsupported", format: null, reason: "canonical_resolver_unavailable" };
-
-  // The shipped gate stays closed: `current` resolves but does not activate.
-  expect(ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS).toEqual(["legacy", "transition"]);
-  expect(resolveOrganizationRootDocuments({
-    ...input,
-    activationFormats: ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
-  })).toMatchObject({ state: "current", resource_count: 1, activation: unavailable });
-
-  // The reviewer's reproduction: the expanded allowlist must really activate.
-  const admitted = resolveOrganizationRootDocuments({ ...input, activationFormats: currentCohort });
-  expect(admitted).toMatchObject({
-    state: "current",
-    resource_count: 1,
-    declaration_source: "lazurio.organization.json",
-    document_presence: { canonical: true, legacy_projection: false },
-  });
-  expect(admitted.activation).toEqual({
-    status: "supported",
-    format: "current",
-    reason: "current_identity_pair_supported",
-  });
-
-  // Identity is the canonical resource checked against the live Forge facts.
-  for (const mismatch of [
-    { expectedOrganizationId: "999" },
-    { expectedRepositoryId: "999" },
-    { expectedOrganizationLogin: "Renamed" },
-    { expectedRepositoryFullName: "Example/Other" },
-  ]) {
-    expect(resolveOrganizationRootDocuments({ ...input, ...mismatch, activationFormats: currentCohort }).activation)
-      .toEqual({ status: "unsupported", format: null, reason: "legacy_identity_pair_invalid" });
-  }
-  // An unverified Forge binding carries no immutable identity to activate on.
-  expect(resolveOrganizationRootDocuments({
-    ...input,
-    canonicalManifest: canonicalOrganization(modulesManifest),
-    activationFormats: currentCohort,
-  })).toMatchObject({
-    state: "current",
-    activation: { status: "unsupported", format: null, reason: "legacy_identity_pair_invalid" },
-  });
-
-  // "Verified" means the resolver proof. A wrong declared projection hash is a
-  // conflict with no resource, and a template never activates, in any cohort.
-  const tampered = structuredClone(canonicalManifest);
-  tampered.compatibility.legacy_projection.sha256 = `sha256:${"0".repeat(64)}`;
-  expect(resolveOrganizationRootDocuments({ ...input, canonicalManifest: tampered, activationFormats: currentCohort }))
-    .toMatchObject({ state: "conflict", resource_count: 0, activation: unavailable });
-  const template = canonicalOrganization(modulesManifest, { kind: "template" });
-  expect(resolveOrganizationRootDocuments({ ...input, canonicalManifest: template, activationFormats: currentCohort }))
-    .toMatchObject({ state: "current", activation: unavailable });
-
-  // Listing only `current` does not silently admit the other formats.
-  expect(resolveOrganizationRootDocuments({
-    ...input,
-    companyManifest: projectLegacyOrganizationManifest(canonicalManifest, modulesManifest),
-    activationFormats: ["current"],
-  })).toMatchObject({ state: "transition", activation: unavailable });
-});
-
-test("one shared predicate decides reader support and demands the verified immutable identity for current", () => {
-  const modulesManifest = organizationModules();
-  const unverifiedCanonical = canonicalOrganization(modulesManifest);
-  const verifiedCanonical = canonicalOrganization(modulesManifest);
-  verifiedCanonical.organization.forge_binding = {
-    ...verifiedCanonical.organization.forge_binding,
-    binding_state: "verified",
-    organization_id: "314957563",
-  };
-  verifiedCanonical.root_repository = {
-    ...verifiedCanonical.root_repository,
-    binding_state: "verified",
-    repository_id: "42424242",
-  };
-  verifiedCanonical.compatibility.legacy_projection.sha256 = organizationLegacyProjectionHash(
-    verifiedCanonical,
-    modulesManifest,
-  );
-  const resolve = (canonicalManifest, { legacy = false } = {}) => resolveOrganizationRootDocuments({
-    canonicalManifest,
-    companyManifest: legacy ? projectLegacyOrganizationManifest(canonicalManifest, modulesManifest) : null,
-    modulesManifest,
-  });
-  const currentCohort = [...ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS, "current"];
-  const verified = resolve(verifiedCanonical);
-  const unverified = resolve(unverifiedCanonical);
-  expect([verified.state, unverified.state]).toEqual(["current", "current"]);
-  expect([verified.issues, unverified.issues]).toEqual([[], []]);
-
-  // Identity proof: structural without expectations, exact with them.
-  const login = verifiedCanonical.organization.forge_binding.locator;
-  const fullName = verifiedCanonical.root_repository.locator;
-  expect(isOrganizationForgeIdentityVerified(verified.resource)).toBe(true);
-  expect(isOrganizationForgeIdentityVerified(verified.resource, {
-    organizationId: "314957563",
-    organizationLogin: login.toUpperCase(),
-    repositoryId: "42424242",
-    repositoryFullName: fullName,
-  })).toBe(true);
-  expect(isOrganizationForgeIdentityVerified(verified.resource, { organizationId: null, repositoryId: undefined })).toBe(true);
-  for (const mismatch of [
-    { organizationId: "999" },
-    { repositoryId: "999" },
-    { organizationLogin: "Other" },
-    { repositoryFullName: "Other/Other_GEN3" },
-    { organizationId: "" },
-  ]) expect(isOrganizationForgeIdentityVerified(verified.resource, mismatch)).toBe(false);
-  expect(isOrganizationForgeIdentityVerified(unverified.resource)).toBe(false);
-  expect(isOrganizationForgeIdentityVerified(null)).toBe(false);
-
-  // Shipped formats: exactly "legacy or transition with one resource".
-  expect(isOrganizationRootSupported(verified)).toBe(false);
-  expect(isOrganizationRootSupported(resolve(unverifiedCanonical, { legacy: true }))).toBe(true);
-  expect(isOrganizationRootSupported(resolve(verifiedCanonical, { legacy: true }))).toBe(true);
-  expect(isOrganizationRootSupported(resolve({ schema_version: "lazurio.organization.v1" }))).toBe(false);
-  expect(isOrganizationRootSupported(null)).toBe(false);
-
-  // Future cohort: `current` is supported only with the verified identity, and
-  // never against a different expected immutable ID.
-  expect(isOrganizationRootSupported(verified, { activationFormats: currentCohort })).toBe(true);
-  expect(isOrganizationRootSupported(unverified, { activationFormats: currentCohort })).toBe(false);
-  expect(isOrganizationRootSupported(verified, {
-    activationFormats: currentCohort,
-    expectedIdentity: { organizationId: "314957563", repositoryId: "42424242" },
-  })).toBe(true);
-  expect(isOrganizationRootSupported(verified, {
-    activationFormats: currentCohort,
-    expectedIdentity: { repositoryId: "999" },
-  })).toBe(false);
-  expect(isOrganizationRootSupported(verified, { activationFormats: null })).toBe(false);
-
-  expect(isOrganizationCanonicalManifestAuthoritative(verified)).toBe(true);
-  expect(isOrganizationCanonicalManifestAuthoritative(resolve(verifiedCanonical, { legacy: true }))).toBe(true);
-  expect(isOrganizationCanonicalManifestAuthoritative(resolve({ schema_version: "lazurio.organization.v1" }))).toBe(false);
 });
 
 test("canonical schema, semantic parity and projection hash are deterministic across key order and formatting", () => {

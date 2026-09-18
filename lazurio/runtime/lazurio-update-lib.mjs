@@ -15,8 +15,6 @@ import { materializeRepoCheckout } from "./git-materialization-lib.mjs";
 import { buildModuleLocationRepairAction } from "../core/module-location-repair-contract-lib.mjs";
 import {
   ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
-  isOrganizationForgeIdentityVerified,
-  isOrganizationRootSupported,
   resolveOrganizationRootDocuments,
 } from "../core/organization-activation-lib.mjs";
 import {
@@ -605,9 +603,6 @@ export async function updateManagedRepo(repo, context = {}) {
     run,
     target,
     sourceUrl: source.url,
-    // Reader contract seam: production always uses the shipped Core gate;
-    // tests inject a future cohort (e.g. with `current`) through `deps`.
-    activationFormats: context.deps?.activationFormats ?? ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
   });
   if (!organizationTarget.ok) {
     return block(organizationTarget.reason, {
@@ -754,7 +749,6 @@ async function verifyOrganizationUpdateTarget({
   run,
   target,
   sourceUrl,
-  activationFormats,
 }) {
   if (repo.repo_kind !== "organization_root") return { ok: true };
 
@@ -817,23 +811,11 @@ async function verifyOrganizationUpdateTarget({
   }
 
   const resolution = resolveOrganizationRootDocuments(documents);
-  // The updater is offline: its trusted immutable facts are the verified IDs
-  // of the already installed checkout. A canonical-only `current` target must
-  // carry the verified binding itself and may never swap those IDs; locators
-  // are bound to the verified remote below.
-  const installed = readOrganizationRoot({ organizationRoot: repo.absolute_path }).resource;
-  const installedBinding = isOrganizationForgeIdentityVerified(installed)
-    ? {
-        organizationId: installed.organization.forge_binding.organization_id,
-        repositoryId: installed.root_repository.repository_id,
-      }
-    : {};
-  if (!isOrganizationRootSupported(resolution, { activationFormats, expectedIdentity: installedBinding })) {
+  if (!ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS.includes(resolution.state) || resolution.resource_count !== 1) {
     return {
       ok: false,
       reason: "organization_target_incompatible",
-      detail: `Stažený Organization target zůstává neaktivní: stav ${resolution.state}, issues ${resolution.issues.join(", ") || "none"}`
-        + `${resolution.state === "current" ? "; canonical-only target vyžaduje verified forge binding shodný s nainstalovanou immutable identitou" : ""}.`,
+      detail: `Stažený Organization target zůstává neaktivní: stav ${resolution.state}, issues ${resolution.issues.join(", ") || "none"}.`,
     };
   }
   const identityIssue = organizationTargetIdentityIssue({

@@ -22,7 +22,6 @@ import {
   validateDeclaredRuntime,
 } from "./core/runtime-contract-lib.mjs";
 import { organizationSlotRepositoryId } from "./core/organization-slot-scope-lib.mjs";
-import { isOrganizationRootSupported } from "./core/organization-activation-lib.mjs";
 import { readOrganizationRoot } from "./core/organization-root-reader-lib.mjs";
 import { readAllModuleContracts } from "./module-port-lib.mjs";
 
@@ -1119,7 +1118,8 @@ async function resolveModuleSetupContext(options) {
     const resolution = readOrganizationRoot({ organizationRoot });
     if (resolution.state === "missing") continue;
     if (
-      !isOrganizationRootSupported(resolution)
+      !["legacy", "transition"].includes(resolution.state)
+      || resolution.resource_count !== 1
     ) {
       throw new ModuleSetupActionRequired({
         code: "organization_manifest_not_mutation_safe",
@@ -1767,7 +1767,8 @@ async function readOrganizationPolicies(lazurioRoot) {
     const resolution = readOrganizationRoot({ organizationRoot });
     if (resolution.state === "missing") continue;
     if (
-      !isOrganizationRootSupported(resolution)
+      !["legacy", "transition"].includes(resolution.state)
+      || resolution.resource_count !== 1
     ) {
       issues.push(`${organizationRoot}: Organization manifest není bezpečný pro mutaci (${resolution.state}; ${resolution.issues.join(", ") || "no stable resource"})`);
       continue;

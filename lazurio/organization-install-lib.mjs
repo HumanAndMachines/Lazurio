@@ -20,14 +20,10 @@ import {
 import { resolveGitHubCliExecutableOnPath } from "./core/toolchain-lib.mjs";
 import {
   ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
-  isOrganizationForgeIdentityVerified,
-  isOrganizationRootSupported,
   resolveOrganizationRootDocuments,
 } from "./core/organization-activation-lib.mjs";
-import {
-  readOrganizationRoot,
-  readOrganizationRootDocuments,
-} from "./core/organization-root-reader-lib.mjs";
+import { readOrganizationRoot } from "./core/organization-root-reader-lib.mjs";
+import { isValidOrganizationForgeBinding } from "./core/organization-scaffold-lib.mjs";
 import {
   classifyOrganizationSlotAccess,
   githubRepositoryCoordinate,
@@ -57,9 +53,6 @@ export async function installOrganization({
   expectedOrganizationId = null,
   platform = process.platform,
   environment = process.env,
-  // Reader contract seam: production always uses the shipped Core gate; tests
-  // inject a future cohort (e.g. with `current`) without changing the default.
-  activationFormats = ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
   deps = {},
 } = {}) {
   if (!rootPath) throw new TypeError("Organization install requires a Lazurio Root.");
@@ -96,7 +89,6 @@ export async function installOrganization({
     expectedOrganizationId: expectedId,
     platform,
     environment,
-    activationFormats,
     resolveGitHubCli: deps.resolveGitHubCli,
     runGitHubCli: deps.runGitHubCli,
   });
@@ -171,7 +163,6 @@ export async function installOrganization({
       path: targetPath,
       source,
       run,
-      activationFormats,
     });
     if (!verification.ok) {
       return blockedReport({
@@ -212,7 +203,7 @@ export async function installOrganization({
       runPinnedChild,
       remoteEnvironment: safeGitRemoteEnv(platform),
       verifyStaged: async ({ path }) => {
-        const checkout = await verifyOrganizationRootCheckout({ path, source, run, activationFormats });
+        const checkout = await verifyOrganizationRootCheckout({ path, source, run });
         if (!checkout.ok) return checkout;
         return reobserveSourceIdentity({
           source,
@@ -248,7 +239,7 @@ export async function installOrganization({
   if (convergence.state !== "blocked" || (blockers.length > 0 && blockers.every((result) => result.reason === "managed_checkout_not_repository"))) {
     const recovered = await recoverOrganizationRepositoryDbParent({
       rootPath: absoluteRoot, organizationPath, organizationRoot: targetPath,
-      source, platform, run, runPinnedChild, materializationDeps: deps.materialization, restrictedSlotPolicy, activationFormats,
+      source, platform, run, runPinnedChild, materializationDeps: deps.materialization, restrictedSlotPolicy,
     });
     if (recovered?.state === "updated") {
       convergence = appendConvergenceResults(await runUpdate({ rootPath: absoluteRoot, organizations: [organization], restrictedSlotPolicy }), [recovered]);
@@ -266,7 +257,6 @@ export async function installOrganization({
       runPinnedChild,
       materializationDeps: deps.materialization,
       restrictedSlotPolicy,
-      activationFormats,
     });
     convergence = appendConvergenceResults(convergence, repositoryDbResults);
   }
@@ -292,9 +282,9 @@ export async function installOrganization({
   return report;
 }
 
-async function recoverOrganizationRepositoryDbParent({ rootPath, organizationPath, organizationRoot, source, platform, run, runPinnedChild, materializationDeps, restrictedSlotPolicy = "include", activationFormats }) {
+async function recoverOrganizationRepositoryDbParent({ rootPath, organizationPath, organizationRoot, source, platform, run, runPinnedChild, materializationDeps, restrictedSlotPolicy = "include" }) {
   const resolution = readOrganizationRoot({ organizationRoot });
-  if (!isOrganizationRootSupported(resolution, { activationFormats })) return null;
+  if (!["current", "legacy", "transition"].includes(resolution.state) || resolution.resource_count !== 1) return null;
   const inventory = resolution.resource?.repository_inventory ?? [];
   const slots = inventory.filter((slot) => slot.path === "mission-control/db" && slot.status === "active" && slot.materialization === "repository_db_mount");
   if (slots.length !== 1) return null;
@@ -367,7 +357,6 @@ export async function installOrganizationRepositoryDbMounts({
   runPinnedChild = runGitInPinnedTemporaryChild,
   materializationDeps = {},
   restrictedSlotPolicy = "include",
-  activationFormats = ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
 } = {}) {
   if (!ORGANIZATION_INSTALL_RESTRICTED_SLOT_SCOPES.includes(restrictedSlotPolicy)) {
     throw new TypeError("Repository-db install restrictedSlotPolicy must be include or exclude.");
@@ -384,7 +373,8 @@ export async function installOrganizationRepositoryDbMounts({
     })];
   }
   if (
-    !isOrganizationRootSupported(resolution, { activationFormats })
+    !["current", "legacy", "transition"].includes(resolution.state)
+    || resolution.resource_count !== 1
     || !Array.isArray(resolution.resource?.repository_inventory)
   ) {
     return [repositoryDbBlockedResult({
@@ -736,7 +726,7 @@ function repositoryDbScopeResult({ source, organizationPath, slot, parentSlot, r
 }
 
 function repositoryDbResultIdentity({ source, organizationPath, slot }) {
-  const organization = source?.resource?.organization?.slug ?? source?.organization?.login ?? null;
+  const organization = source?.documents?.company?.company?.slug ?? source?.organization?.login ?? null;
   return {
     repo_key: `${organization}::${slot?.slug ?? "repository-db"}`,
     repo_kind: "root_repo",
@@ -797,7 +787,6 @@ export function observeOrganizationInstallSource({
   expectedOrganizationId = null,
   platform = process.platform,
   environment = process.env,
-  activationFormats = ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
   resolveGitHubCli = resolveGitHubCliExecutableOnPath,
   runGitHubCli = runTrustedGitHubCliSync,
 } = {}) {
@@ -837,19 +826,16 @@ export function observeOrganizationInstallSource({
   const repository = providerRepository(repositoryResponse.value, { organization, repositoryName, fullName });
   if (!repository) return providerFailure("root_repository_identity_mismatch", "Root repo neodpovídá kanonické Organization identitě.");
 
-  const documents = readProviderRootDocuments({ provider, repository, activationFormats });
+  const documents = readProviderRootDocuments({ provider, repository });
   if (!documents.ok) return documents;
-  const rootVerification = verifyOrganizationRootDocuments({ documents, organization, repository, activationFormats });
+  const rootVerification = verifyOrganizationRootDocuments({ documents, organization, repository });
   if (!rootVerification.ok) return rootVerification;
-  // Consumers read Organization identity from this normalized resource, never
-  // from a raw document: a canonical-only `current` root has no legacy file.
-  const resource = rootVerification.resource;
   const access = requestedRole !== null
     ? observeGitHubRoleReadiness({
         provider,
         organization,
         rootRepository: repository,
-        resource,
+        resource: rootVerification.resource,
         role: requestedRole,
       })
     : githubRoleReadinessNotRequested();
@@ -860,11 +846,11 @@ export function observeOrganizationInstallSource({
       message: roleAccessNotReadyMessage(requestedRole),
       organization,
       repository,
-      resource,
+      documents,
       access,
     });
   }
-  return freeze({ ok: true, organization, repository, resource, access });
+  return freeze({ ok: true, organization, repository, documents, access });
 }
 
 export function observeOrganizationInstallIdentity({
@@ -900,12 +886,7 @@ export function observeOrganizationInstallIdentity({
   return { ok: true };
 }
 
-export async function verifyOrganizationRootCheckout({
-  path,
-  source,
-  run = runGit,
-  activationFormats = ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
-} = {}) {
+export async function verifyOrganizationRootCheckout({ path, source, run = runGit } = {}) {
   const [root, branch, origin, head, status] = await Promise.all([
     run(["rev-parse", "--show-toplevel"], { cwd: path, timeoutMs: GIT_LOCAL_TIMEOUT_MS }),
     run(["branch", "--show-current"], { cwd: path, timeoutMs: GIT_LOCAL_TIMEOUT_MS }),
@@ -948,7 +929,6 @@ export async function verifyOrganizationRootCheckout({
     documents,
     organization: source.organization,
     repository: source.repository,
-    activationFormats,
   });
 }
 
@@ -1044,16 +1024,8 @@ async function caseFoldedOrganizationTarget({ organizationsPath, targetName, rea
   )) ?? null;
 }
 
-function readProviderRootDocuments({ provider, repository, activationFormats }) {
-  // The legacy projection stays a required document until the reader contract
-  // admits a canonical-only `current` root; only then may it be absent.
-  const company = readProviderJson(
-    provider,
-    repository.full_name,
-    "company.gen3.json",
-    repository.default_branch,
-    { optional: activationFormats.includes("current") },
-  );
+function readProviderRootDocuments({ provider, repository }) {
+  const company = readProviderJson(provider, repository.full_name, "company.gen3.json", repository.default_branch);
   if (!company.ok) return company;
   const modules = readProviderJson(provider, repository.full_name, "modules.manifest.json", repository.default_branch);
   if (!modules.ok) return modules;
@@ -1085,55 +1057,61 @@ function readProviderJson(provider, fullName, path, ref, { optional = false } = 
 
 async function readLocalRootDocuments(path) {
   try {
-    const documents = readOrganizationRootDocuments({ organizationRoot: path });
-    return {
-      ok: true,
-      company: documents.companyManifest,
-      modules: documents.modulesManifest,
-      canonical: documents.canonicalManifest,
-      documentIssues: documents.documentIssues,
-    };
+    return { ok: true, resolution: readOrganizationRoot({ organizationRoot: path }) };
   } catch {
     return providerFailure("root_manifest_invalid", "Lokální Organization root nemá validní manifesty.");
   }
 }
 
-// One verification for the provider and the local checkout documents: the
-// Core resolver decides state, identity and — through `activationFormats` —
-// whether this reader cohort may activate the resolved format at all.
-function verifyOrganizationRootDocuments({ documents, organization, repository, activationFormats }) {
-  const resolution = resolveOrganizationRootDocuments({
+function verifyOrganizationRootDocuments({ documents, organization, repository }) {
+  const resolution = documents.resolution ?? resolveOrganizationRootDocuments({
     companyManifest: documents.company,
     modulesManifest: documents.modules,
     canonicalManifest: documents.canonical,
-    documentIssues: documents.documentIssues ?? [],
     expectedOrganizationId: organization.id,
     expectedOrganizationLogin: organization.login,
     expectedRepositoryId: repository.id,
     expectedRepositoryFullName: repository.full_name,
-    activationFormats,
+    activationFormats: ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
   });
-  // Install requires the shared immutable-identity proof in every format,
-  // checked against all four live GitHub facts.
-  const bindingSupported = isOrganizationForgeIdentityVerified(resolution.resource, {
-    organizationId: organization.id,
-    organizationLogin: organization.login,
-    repositoryId: repository.id,
-    repositoryFullName: repository.full_name,
-  });
-  if (resolution.activation.status !== "supported" || !bindingSupported) {
+  const identity = resolution.resource;
+  const bindingSupported = identity?.organization?.forge_binding?.binding_state === "verified"
+    && identity?.root_repository?.binding_state === "verified"
+    && isValidOrganizationForgeBinding({
+      schema_version: "lazurio.forge-binding.github.v0",
+      provider: "github",
+      organization: {
+        id: identity.organization.forge_binding.organization_id,
+        asserted_login: identity.organization.forge_binding.locator,
+      },
+      repository: {
+        id: identity.root_repository.repository_id,
+        asserted_full_name: identity.root_repository.locator,
+        default_branch: identity.root_repository.default_branch,
+      },
+    }, {
+      organizationId: organization.id,
+      organizationLogin: organization.login,
+      repositoryId: repository.id,
+      repositoryFullName: repository.full_name,
+    });
+  const compatibleState = ["legacy", "transition"].includes(resolution.state);
+  const resolverSupported = documents.resolution
+    ? compatibleState
+    : resolution.activation.status === "supported";
+  if (!resolverSupported || !bindingSupported) {
     return providerFailure(
       "root_manifest_identity_mismatch",
       "Organization root manifesty neodpovídají immutable GitHub Organization a repository identitě.",
     );
   }
-  return { ok: true, resource: resolution.resource };
+  return { ok: true, company: documents.company, modules: documents.modules, resource: resolution.resource };
 }
 
 function organizationInventoryDescriptor({ source, organizationPath }) {
   return {
-    slug: source.resource.organization.slug,
-    display_name: source.resource.organization.display_name,
+    slug: source.documents.company.company.slug,
+    display_name: source.documents.company.company.display_name,
     path: organizationPath,
     status: "active",
     default_branch: source.repository.default_branch,

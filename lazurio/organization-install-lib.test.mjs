@@ -8,18 +8,11 @@ import { initGitRepo } from "../launchpad/src/git-fixture-helpers.test.mjs";
 import { runGit, runGitInPinnedTemporaryChild } from "./runtime/git-lib.mjs";
 import { runLazurioUpdate } from "./runtime/lazurio-update-lib.mjs";
 import { createOrganizationScaffold } from "./core/organization-scaffold-lib.mjs";
-import {
-  ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
-  organizationLegacyProjectionHash,
-  resolveOrganizationRootDocuments,
-} from "./core/organization-activation-lib.mjs";
-import { readOrganizationRoot } from "./core/organization-root-reader-lib.mjs";
 import { CANONICAL_GIT_FETCH_REFSPEC } from "./core/git-materialization-lib.mjs";
 import {
   installOrganization,
   observeOrganizationInstallSource,
   organizationInstallExitCode,
-  verifyOrganizationRootCheckout,
 } from "./organization-install-lib.mjs";
 
 const roots = [];
@@ -29,9 +22,6 @@ const fullName = `${login}/${login}_GEN3`;
 const fakeHttpsRemote = `https://github.com/${fullName}.git`;
 const fakeSshRemote = `git@github.com:${fullName}.git`;
 const fakeDataRemote = `git@github.com:${login}/mission-control-data.git`;
-// A future reader cohort: the shipped gate plus `current`. Injected only here;
-// the shipped ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS stays closed.
-const currentCohortFormats = Object.freeze([...ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS, "current"]);
 
 afterAll(async () => {
   await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })));
@@ -101,148 +91,6 @@ test("provider observation verifies the expected immutable Organization before r
   expect(calls.filter((call) => call.args[0] === "api").map((call) => call.args[1])).toEqual([
     `orgs/${login}`,
   ]);
-});
-
-test("provider install admits a verified canonical-only current root only for a reader cohort that lists current", () => {
-  const documents = currentDocuments();
-  const observe = (options = {}) => observeOrganizationInstallSource({
-    githubLogin: login,
-    resolveGitHubCli: () => "/usr/bin/gh",
-    runGitHubCli: providerFixture({ calls: [], documents }),
-    ...options,
-  });
-
-  expect(ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS).not.toContain("current");
-  // Shipped gate: the legacy projection is still a required provider document.
-  expect(observe()).toMatchObject({ ok: false, code: "root_manifest_unavailable" });
-
-  const admitted = observe({ activationFormats: currentCohortFormats });
-  expect(admitted).toMatchObject({
-    ok: true,
-    organization: { id: ids.organization, login },
-    repository: { id: ids.repository, full_name: fullName },
-    resource: {
-      kind: "organization",
-      organization: {
-        slug: "lazurio-example-organization",
-        display_name: "Lazurio Example Organization",
-        forge_binding: { binding_state: "verified", organization_id: ids.organization },
-      },
-      root_repository: { binding_state: "verified", repository_id: ids.repository },
-    },
-  });
-
-  // "Verified" is the resolver proof, not mere presence: a canonical document
-  // whose declared projection hash is wrong never activates, in any cohort.
-  const tampered = currentDocuments();
-  tampered.canonical.compatibility.legacy_projection.sha256 = `sha256:${"0".repeat(64)}`;
-  expect(observeOrganizationInstallSource({
-    githubLogin: login,
-    activationFormats: currentCohortFormats,
-    resolveGitHubCli: () => "/usr/bin/gh",
-    runGitHubCli: providerFixture({ calls: [], documents: tampered }),
-  })).toMatchObject({ ok: false, code: "root_manifest_identity_mismatch" });
-
-  // An unverified but otherwise valid canonical-only root (schema-valid,
-  // hash-valid, resolves as `current`) carries no immutable identity to install.
-  const unverified = unverifiedCurrentDocuments();
-  expect(resolveOrganizationRootDocuments({
-    companyManifest: null,
-    modulesManifest: unverified.modules,
-    canonicalManifest: unverified.canonical,
-  })).toMatchObject({ state: "current", resource_count: 1, issues: [] });
-  expect(observeOrganizationInstallSource({
-    githubLogin: login,
-    activationFormats: currentCohortFormats,
-    resolveGitHubCli: () => "/usr/bin/gh",
-    runGitHubCli: providerFixture({ calls: [], documents: unverified }),
-  })).toMatchObject({ ok: false, code: "root_manifest_identity_mismatch" });
-
-  // Identity comes from the canonical resource and must match the live Forge.
-  expect(observeOrganizationInstallSource({
-    githubLogin: login,
-    activationFormats: currentCohortFormats,
-    resolveGitHubCli: () => "/usr/bin/gh",
-    runGitHubCli: providerFixture({ calls: [], documents, repositoryId: "77777777" }),
-  })).toMatchObject({ ok: false, code: "root_manifest_identity_mismatch" });
-});
-
-test("local install materializes and re-verifies a canonical-only current root through the same reader gate", async () => {
-  const fixture = await organizationRemoteFixture({ cohort: "current" });
-  const documents = currentDocuments();
-  const updates = [];
-  const deps = {
-    resolveGitHubCli: () => "/usr/bin/gh",
-    runGitHubCli: providerFixture({ calls: [], documents }),
-    reobserve: async () => ({ ok: true }),
-    runGit: translatedGitRunner(fixture.remote),
-    runPinnedChild: translatedPinnedGitRunner(fixture.remote),
-    runUpdate: async ({ organizations }) => {
-      updates.push(organizations);
-      return updateReport("current");
-    },
-  };
-  const organizationRoot = join(fixture.root, "organizations", `${login}_GEN3`);
-
-  // Shipped gate: nothing is materialized for a canonical-only root.
-  const closed = await installOrganization({ rootPath: fixture.root, githubLogin: login, deps });
-  expect(closed).toMatchObject({ state: "blocked", ok: false, target: { reason: "root_manifest_unavailable" } });
-  expect(existsSync(organizationRoot)).toBe(false);
-  expect(updates).toEqual([]);
-
-  const install = () => installOrganization({
-    rootPath: fixture.root,
-    githubLogin: login,
-    activationFormats: currentCohortFormats,
-    deps,
-  });
-  const first = await install();
-  const second = await install();
-
-  expect(first).toMatchObject({ state: "updated", ok: true, target: { reason: "root_materialized" } });
-  expect(second).toMatchObject({ state: "current", ok: true, target: { reason: "root_current" } });
-  expect(existsSync(join(organizationRoot, "company.gen3.json"))).toBe(false);
-  expect(readOrganizationRoot({ organizationRoot }).state).toBe("current");
-  // The inventory descriptor is derived from the canonical resource.
-  expect(updates).toHaveLength(2);
-  expect(updates[0]).toEqual([{
-    slug: "lazurio-example-organization",
-    display_name: "Lazurio Example Organization",
-    path: `organizations/${login}_GEN3`,
-    status: "active",
-    default_branch: "main",
-    repository: fakeHttpsRemote,
-  }]);
-
-  // The local checkout reader consumes the very same gate as the provider.
-  const source = sourceObservation({ documents });
-  const run = translatedGitRunner(fixture.remote);
-  expect(await verifyOrganizationRootCheckout({ path: organizationRoot, source, run }))
-    .toMatchObject({ ok: false, code: "root_manifest_identity_mismatch" });
-  expect(await verifyOrganizationRootCheckout({
-    path: organizationRoot,
-    source,
-    run,
-    activationFormats: currentCohortFormats,
-  })).toMatchObject({ ok: true, resource: { organization: { slug: "lazurio-example-organization" } } });
-  const closedAgain = await installOrganization({ rootPath: fixture.root, githubLogin: login, deps });
-  expect(closedAgain).toMatchObject({ state: "blocked", ok: false });
-});
-
-test("local install reader refuses an unverified but otherwise valid canonical-only checkout in the current cohort", async () => {
-  const unverified = unverifiedCurrentDocuments();
-  const fixture = await organizationRemoteFixture({ cohort: "current", canonical: unverified.canonical });
-  const organizationRoot = join(fixture.root, "organizations", `${login}_GEN3`);
-  expect((await runGit(["clone", "--branch", "main", fixture.remote, organizationRoot], { cwd: fixture.root })).ok).toBe(true);
-  await runGit(["remote", "set-url", "origin", fakeHttpsRemote], { cwd: organizationRoot });
-  expect(readOrganizationRoot({ organizationRoot })).toMatchObject({ state: "current", resource_count: 1, issues: [] });
-
-  expect(await verifyOrganizationRootCheckout({
-    path: organizationRoot,
-    source: sourceObservation({ documents: currentDocuments() }),
-    run: translatedGitRunner(fixture.remote),
-    activationFormats: currentCohortFormats,
-  })).toMatchObject({ ok: false, code: "root_manifest_identity_mismatch" });
 });
 
 test("immutable Organization expectation blocks a renamed or reused login before materialization", async () => {
@@ -1024,53 +872,8 @@ function sourceObservation({ documents = scaffoldDocuments() } = {}) {
       ssh_url: fakeSshRemote,
       read_url: fakeHttpsRemote,
     },
-    // The normalized resource the real observation returns; install never
-    // reads Organization identity from a raw document.
-    resource: resolveOrganizationRootDocuments({
-      companyManifest: documents.company,
-      modulesManifest: documents.modules,
-      canonicalManifest: documents.canonical,
-    }).resource,
+    documents,
   };
-}
-
-// A finalized Organization root: canonical + modules, no legacy projection.
-function currentDocuments() {
-  const scaffold = createOrganizationScaffold({
-    organization: {
-      id: ids.organization,
-      login,
-      slug: "lazurio-example-organization",
-      displayName: "Lazurio Example Organization",
-    },
-    repository: {
-      id: ids.repository,
-      name: `${login}_GEN3`,
-      fullName,
-      defaultBranch: "main",
-    },
-  });
-  const files = new Map(scaffold.files.map((file) => [file.path, file.content]));
-  return {
-    company: null,
-    modules: JSON.parse(files.get("modules.manifest.json")),
-    canonical: JSON.parse(files.get("lazurio.organization.json")),
-  };
-}
-
-// Same finalized root, but the canonical manifest only asserts its GitHub
-// locators: no verified binding, no immutable IDs. Still schema- and hash-valid.
-function unverifiedCurrentDocuments() {
-  const documents = currentDocuments();
-  const { organization_id: _organizationId, ...organizationBinding } = documents.canonical.organization.forge_binding;
-  const { repository_id: _repositoryId, ...rootRepository } = documents.canonical.root_repository;
-  documents.canonical.organization.forge_binding = { ...organizationBinding, binding_state: "unverified" };
-  documents.canonical.root_repository = { ...rootRepository, binding_state: "unverified" };
-  documents.canonical.compatibility.legacy_projection.sha256 = organizationLegacyProjectionHash(
-    documents.canonical,
-    documents.modules,
-  );
-  return documents;
 }
 
 function scaffoldDocuments() {
@@ -1096,7 +899,7 @@ function scaffoldDocuments() {
   };
 }
 
-async function organizationRemoteFixture({ repositoryId = ids.repository, cohort = "legacy", canonical = null } = {}) {
+async function organizationRemoteFixture({ repositoryId = ids.repository } = {}) {
   const root = await mkdtemp(join(tmpdir(), "lazurio-organization-install-"));
   roots.push(root);
   await mkdir(join(root, "organizations"), { recursive: true });
@@ -1122,14 +925,10 @@ async function organizationRemoteFixture({ repositoryId = ids.repository, cohort
   // lazurio.organization.json (transition); keeping it here would turn every
   // hand edit of the legacy file into the fail-closed `conflict` state. The
   // canonical scaffold pair is covered by the scaffold and migration tests.
-  // The `current` cohort models the finalized root instead: canonical only.
-  const omitted = cohort === "current" ? "company.gen3.json" : "lazurio.organization.json";
-  for (const file of scaffold.files.filter((entry) => entry.path !== omitted)) {
+  for (const file of scaffold.files.filter((entry) => entry.path !== "lazurio.organization.json")) {
     const path = join(source, file.path);
     await mkdir(dirname(path), { recursive: true });
-    await writeFile(path, canonical !== null && file.path === "lazurio.organization.json"
-      ? `${JSON.stringify(canonical, null, 2)}\n`
-      : file.content);
+    await writeFile(path, file.content);
   }
   await runGit(["add", "--all"], { cwd: source });
   await runGit(["commit", "-m", "Add Organization scaffold"], { cwd: source });
@@ -1237,8 +1036,7 @@ function updateReport(state) {
   };
 }
 
-function providerFixture({ calls, documents, privateRepository = false, repositoryId = ids.repository }) {
-  const notFound = { status: 1, stdout: "", stderr: "gh: Not Found (HTTP 404)" };
+function providerFixture({ calls, documents, privateRepository = false }) {
   const encoded = (value) => Buffer.from(`${JSON.stringify(value)}\n`).toString("base64");
   return (call) => {
     calls.push(call);
@@ -1247,7 +1045,7 @@ function providerFixture({ calls, documents, privateRepository = false, reposito
     if (endpoint === `orgs/${login}`) return ok({ id: Number(ids.organization), login });
     if (endpoint === `repos/${fullName}`) {
       return ok({
-        id: Number(repositoryId),
+        id: Number(ids.repository),
         name: `${login}_GEN3`,
         full_name: fullName,
         default_branch: "main",
@@ -1258,13 +1056,13 @@ function providerFixture({ calls, documents, privateRepository = false, reposito
       });
     }
     if (endpoint === `repos/${fullName}/contents/company.gen3.json?ref=main`) {
-      return documents.company === null ? notFound : ok({ encoding: "base64", content: encoded(documents.company) });
+      return ok({ encoding: "base64", content: encoded(documents.company) });
     }
     if (endpoint === `repos/${fullName}/contents/modules.manifest.json?ref=main`) {
       return ok({ encoding: "base64", content: encoded(documents.modules) });
     }
     if (endpoint === `repos/${fullName}/contents/lazurio.organization.json?ref=main`) {
-      return documents.canonical === null ? notFound : ok({ encoding: "base64", content: encoded(documents.canonical) });
+      return { status: 1, stdout: "", stderr: "gh: Not Found (HTTP 404)" };
     }
     throw new Error(`unexpected provider call ${call.args.join(" ")}`);
   };
