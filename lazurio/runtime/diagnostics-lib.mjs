@@ -1946,7 +1946,9 @@ function moduleSlotWithReadiness(
       },
     };
   }
-  const status = moduleSlotStatus(organizationRoot, slot);
+  const status = slot.status === "inactive"
+    ? "inactive"
+    : moduleSlotStatus(organizationRoot, slot);
   return {
     ...slot,
     status,
@@ -2002,6 +2004,9 @@ function classifyModuleSlotReadiness(
   }
   if (status === "planned_slot") {
     return { severity: "neutral", reason: "planned", message: "Slot je plánovaný a zatím nemá repozitář." };
+  }
+  if (status === "inactive") {
+    return { severity: "neutral", reason: "inactive", message: "Checkout modulu je záměrně neaktivní." };
   }
   if (status === "missing_access") {
     if (
@@ -2158,6 +2163,7 @@ function normalizeModuleSlot(slot) {
     required_roles: normalizeOrganizationSlotRequiredRoles(slot.required_roles),
     classification: slot.classification ?? null,
     materialization: slot.materialization ?? null,
+    status: slot.status ?? null,
     launchpad_port: slot.launchpad_port ?? null,
     repo,
     branch,
