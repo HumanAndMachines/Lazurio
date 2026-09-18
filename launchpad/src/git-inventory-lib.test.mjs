@@ -126,7 +126,7 @@ test("projection drift keeps the declared Organization root recovery key across 
   const updates = [];
   const report = await runLazurioUpdate({ rootPath: root,
     hostedWorkspace: { profile: "hosted", organization_slug: "OmegaCo",
-      team_id: "workspace", domain: "omega.example.test" },
+      team_id: "workspace", domain: "omega.example.test", machine: "builder" },
     deps: {
       acquireLock: async () => ({ release: async () => {} }),
       updateRepo: async (repo) => {

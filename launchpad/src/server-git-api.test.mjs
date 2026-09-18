@@ -871,7 +871,7 @@ test("hosted Launchpad rejects forged browser context without a TLS-authenticate
   const root = await createLaunchpadGitFixture();
   const stateRoot = `${root}-launchpad-state`;
   tempRoots.push(root, stateRoot);
-  const externalOrigin = "https://launchpad.sales.example.test";
+  const externalOrigin = "https://launchpad.builder.workspace.example.test";
   const authPort = await findFreePort();
   const { port } = await startLaunchpadServer(root, {
     env: {
@@ -953,7 +953,7 @@ test("hosted Launchpad omits another Team app and rejects its runtime route befo
   const root = await createLaunchpadGitFixture();
   const stateRoot = `${root}-launchpad-state`;
   tempRoots.push(root, stateRoot);
-  const externalOrigin = "https://launchpad.sales.example.test";
+  const externalOrigin = "https://launchpad.builder.workspace.example.test";
   const authPort = await findFreePort();
   await createPackageApp({
     root,
@@ -1023,7 +1023,7 @@ test("hosted Launchpad keeps Team modules cold and derives their external URLs",
       LAZURIO_TEAM_ID: "sales",
       LAZURIO_HOSTED_DOMAIN: "workspace.example.test",
       LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot,
-      LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN: "https://launchpad.sales.example.test",
+      LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN: "https://launchpad.builder.workspace.example.test",
       LAZURIO_LAUNCHPAD_AUTH_COOKIE_NAME: "__Secure-lazurio-sales-workspace",
       LAZURIO_LAUNCHPAD_AUTH_CHECK_URL: `https://127.0.0.1:${await findFreePort()}/oauth2/auth`,
     },
@@ -1035,7 +1035,7 @@ test("hosted Launchpad keeps Team modules cold and derives their external URLs",
   expect(apps.apps).toEqual([
     expect.objectContaining({
       id: app.id,
-      url: "https://sales.workspace.example.test/deals/",
+      url: "https://deals.builder.workspace.example.test/",
       runtime: expect.objectContaining({ managed: false }),
     }),
   ]);

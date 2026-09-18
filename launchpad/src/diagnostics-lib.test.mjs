@@ -61,7 +61,7 @@ test("real discovery preserves Organization defaults and organization-section Te
     organization: "HostedTestOrganization", activeTeamId: "editors",
     runtimeManager: { appsWithRuntime: async apps => apps },
   });
-  const config = createHostedWorkspaceConfiguration({ profile: "hosted", organizationSlug: "HostedTestOrganization", teamId: "editors", domain: "organization.example.test" });
+  const config = createHostedWorkspaceConfiguration({ profile: "hosted", organizationSlug: "HostedTestOrganization", teamId: "editors", domain: "organization.example.test", machine: "builder" });
   expect(response.invalid_apps ?? []).toEqual([]);
   expect(response.failures).toEqual([]);
   expect(response.apps.map(app => ({ id: app.id, issues: app.manifest_issues }))).toHaveLength(4);
@@ -69,7 +69,7 @@ test("real discovery preserves Organization defaults and organization-section Te
   expect(selected.apps.map(app => app.module)).toEqual(["mission-control", "ordinary", "team-docs"]);
   const planning = selected.apps.find(app => app.module === "mission-control");
   expect(planning).toMatchObject({ space: "root", teams: [], module_apps: { declaration: { space: "root", status: "available" } } });
-  expect(projectHostedAppUrl(planning, config).url).toBe("https://editors.organization.example.test/mission-control/");
+  expect(projectHostedAppUrl(planning, config).url).toBe("https://mission-control.builder.organization.example.test/");
   const other = response.apps.find(app => app.module === "other-team");
   expect(other.module_apps.declaration.teams).toEqual(["reviewers"]);
   expect(projectHostedAppUrl(other, config).url).toBeNull();

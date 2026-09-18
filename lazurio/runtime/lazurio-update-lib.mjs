@@ -131,12 +131,7 @@ export async function runLazurioUpdate({
   let lock;
 
   try {
-    hostedWorkspace = createHostedWorkspaceConfiguration({
-      profile: hostedWorkspace?.profile,
-      organizationSlug: hostedWorkspace?.organization_slug,
-      teamId: hostedWorkspace?.team_id,
-      domain: hostedWorkspace?.domain,
-    });
+    hostedWorkspace = normalizeHostedWorkspace(hostedWorkspace);
   } catch (error) {
     return updateReport({ rootPath: absoluteRoot, runId, now, results: [
       blockedResult(rootDescriptor(absoluteRoot), "workspace_configuration_invalid", {
@@ -1811,13 +1806,21 @@ function inventoryWarningsWithoutIssues(inventory) {
 
 // Work selection only: GitHub and the existing broker remain access authorities.
 // Re-evaluated after the Organization manifest advances, before any child Git action.
-function scopeHostedUpdateInventory(inventory, workspace) {
-  const configuration = createHostedWorkspaceConfiguration({
+// Accepts a validated configuration or the raw hosted identity of the isolated
+// CLI runtime (its Launchpad origin stands in for an explicit Machine label).
+function normalizeHostedWorkspace(workspace) {
+  return createHostedWorkspaceConfiguration({
     profile: workspace?.profile,
     organizationSlug: workspace?.organization_slug,
     teamId: workspace?.team_id,
     domain: workspace?.domain,
+    machine: workspace?.machine,
+    launchpadExternalOrigin: workspace?.launchpad_external_origin,
   });
+}
+
+function scopeHostedUpdateInventory(inventory, workspace) {
+  const configuration = normalizeHostedWorkspace(workspace);
   if (configuration.profile !== "hosted") return inventory;
   const organization = (inventory.repos ?? []).find((repo) =>
     repo.repo_kind === "organization_root" && repo.organization === configuration.organization_slug);

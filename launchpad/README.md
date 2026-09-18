@@ -32,15 +32,30 @@ pracují výhradně s lokálním `127.0.0.1:<port>`; přepisuje se pouze URL vr�
 pro otevření nového tabu.
 
 Lokální profil je výchozí a zachovává loopback URL. Hosted profil se zapíná
-čtyřmi skaláry: `LAZURIO_WORKSPACE_PROFILE=hosted`, exact
-`LAZURIO_ORGANIZATION_SLUG`, exact lowercase `LAZURIO_TEAM_ID` a společná
-lowercase DNS zóna v `LAZURIO_HOSTED_DOMAIN`. Jiný lifecycle config neexistuje.
-Launchpad z manifestů Organizace odvodí všechny workspace moduly daného Teamu,
-pro každý zvolí jeho deklarovaný výchozí App a URL sestaví jako
-`https://<team>.<domain>/<module>/`. Chybějící nebo nejednoznačný výchozí App
-izoluje jen daný Modul; loopback URL se do hosted odpovědi nikdy nepropíše.
-Manifesty tím vlastní členství a výchozí App, modulový kontrakt vlastní port a
-ingress vlastní autentizaci. Launchpad mezi nimi nevytváří druhý katalog.
+skaláry `LAZURIO_WORKSPACE_PROFILE=hosted`, exact `LAZURIO_ORGANIZATION_SLUG`,
+exact lowercase `LAZURIO_TEAM_ID`, společná lowercase DNS zóna
+`LAZURIO_HOSTED_DOMAIN=<org>.lazurio.io` a label hostované Mašiny (VM):
+buď explicitní `LAZURIO_HOSTED_MACHINE`, nebo odvozený z
+`LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN=https://launchpad.<machine>.<domain>`;
+oba zdroje musí souhlasit a bez platného labelu Launchpad nenastartuje. Jiný
+lifecycle config neexistuje. Launchpad z manifestů Organizace odvodí všechny
+workspace moduly daného Teamu, pro každý zvolí jeho deklarovaný výchozí App a
+URL sestaví podle decision 0146 jako `https://<module>.<machine>.<domain>/`
+(Mission Control tedy `https://mission-control.<machine>.<domain>/`, žádná
+cesta). Label modulu musí splňovat pravidla brány Machines (`[a-z0-9]` s
+jednoduchými pomlčkami, nejvýše 63 znaků, ne `launchpad`, `oauth2`, `api`,
+`well-known`); chybějící nebo nejednoznačný výchozí App i neplatný label
+izoluje jen daný Modul a loopback URL se do hosted odpovědi nikdy nepropíše.
+Spouštěný modul dostane tentýž origin bez lomítka stejně jako host/port:
+v klíčovaném `LAZURIO_RUNTIME_LISTENER_<ID>_EXTERNAL_ORIGIN` vstupního
+listeneru (Knowledgebase čte `..._LISTENER_APP_...`, Mission Control
+`..._LISTENER_WEB_...`), v generickém aliasu `LAZURIO_RUNTIME_EXTERNAL_ORIGIN`
+pro roli `entrypoint` a v `LAZURIO_RUNTIME_LISTENERS_JSON` (`external_origin`),
+aby přijímal same-origin požadavky z hostname, který mu brána předává v
+`Host`. Manifesty tím vlastní členství a
+výchozí App, modulový kontrakt vlastní port, Machines vlastní hostname, TLS a
+autentizaci (`docs/workspace-application-entry.md` v repu Machines). Launchpad
+mezi nimi nevytváří druhý katalog.
 
 Hosted browser akce navíc vyžadují
 `LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN=https://<přesný-launchpad-host>` a interní

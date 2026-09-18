@@ -1,8 +1,28 @@
 import { expect, test } from "bun:test";
 import {
   normalizePackageRuntime,
+  runtimeListenerEnvironmentNames,
   validateDeclaredRuntime,
 } from "../../lazurio/core/runtime-contract-lib.mjs";
+
+test("listener environment names include the hosted external origin for both roles", () => {
+  // Deployed readers: Knowledgebase listener `app` reads
+  // LAZURIO_RUNTIME_LISTENER_APP_EXTERNAL_ORIGIN, Mission Control listener `web`
+  // reads LAZURIO_RUNTIME_LISTENER_WEB_EXTERNAL_ORIGIN; both declare role entrypoint.
+  expect(runtimeListenerEnvironmentNames({ id: "web", role: "entrypoint" })).toEqual({
+    host: "LAZURIO_RUNTIME_HOST",
+    port: "LAZURIO_RUNTIME_PORT",
+    externalOrigin: "LAZURIO_RUNTIME_LISTENER_WEB_EXTERNAL_ORIGIN",
+    entrypointExternalOrigin: "LAZURIO_RUNTIME_EXTERNAL_ORIGIN",
+  });
+  expect(runtimeListenerEnvironmentNames({ id: "app", role: "entrypoint" }).externalOrigin)
+    .toBe("LAZURIO_RUNTIME_LISTENER_APP_EXTERNAL_ORIGIN");
+  expect(runtimeListenerEnvironmentNames({ id: "api-ws", role: "auxiliary" })).toEqual({
+    host: "LAZURIO_RUNTIME_LISTENER_API_WS_HOST",
+    port: "LAZURIO_RUNTIME_LISTENER_API_WS_PORT",
+    externalOrigin: "LAZURIO_RUNTIME_LISTENER_API_WS_EXTERNAL_ORIGIN",
+  });
+});
 
 function runtime(overrides = {}) {
   return {

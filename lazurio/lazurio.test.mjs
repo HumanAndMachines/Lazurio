@@ -997,6 +997,7 @@ test("public lazurio doctor propagates the validated Hosted Team scope", async (
     LAZURIO_WORKSPACE_PROFILE: "hosted",
     LAZURIO_ORGANIZATION_SLUG: "TeamCo",
     LAZURIO_HOSTED_DOMAIN: "workspace.example.test",
+    LAZURIO_HOSTED_MACHINE: "builder",
   };
   const management = run(
     [process.execPath, "run", cliPath, "doctor", "--json", "--root", root],
