@@ -1,3 +1,4 @@
+import { isRetiredKnowledgeEditorPath } from "../core/retired-knowledge-editor.mjs";
 import { existsSync } from "fs";
 import { appendFile, lstat, mkdir, readFile, realpath, writeFile } from "fs/promises";
 import { randomUUID } from "crypto";
@@ -660,6 +661,13 @@ export function createRuntimeManager({
 
   async function startRuntimeAppUnlocked(app, { trigger = "user", takeover = {} } = {}) {
     assertRuntimeManagerAcceptingStarts();
+    if (isRetiredKnowledgeEditorPath(app.package_path)) {
+      throw new RuntimeActionError(409, "knowledge_editor_retired", "Samostatný Knowledgebase Editor je vyřazený. Upravte obsah přes chat s Agentem.");
+    }
+    if (isRetiredKnowledgeEditorPath(`${app.module}/editor/package.json`)
+        && app.module_contract?.port_leases?.some((lease) => lease.id === "editor")) {
+      throw new RuntimeActionError(409, "knowledge_editor_migration_required", "Synchronizujte Knowledgebase modul: jeho starý editorový listener musí být odstraněný před spuštěním čtecí aplikace.");
+    }
     const runtimeKey = runtimeKeyForApp(app);
     const runtimeSource = runtimeSourceForApp(app);
     app = await materializeRuntimeListeners(app);
