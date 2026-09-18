@@ -17,6 +17,13 @@ canonical file.
 Organization root is `current` (no `company.gen3.json` anywhere) and the
 finalization gate has been passed for the whole supported Machine cohort.
 
+**Distribution.** The folder ships with the source checkout and the
+package-managed `lazurio` (`lazurio/package.json#files`). Resident artifacts
+built by `distribution/build.mjs` do not carry it: the CLI loads the folder
+lazily and `lazurio migrate organization-manifest` reports the absence with
+exit code 2 there. Migration is an operator task on a source checkout in a
+plan-owned worktree, never a hosted runtime feature.
+
 ## Entry points
 
 | File | Role |

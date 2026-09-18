@@ -54,11 +54,6 @@ import {
   renderHumanOrganizationInstall,
 } from "./organization-install-lib.mjs";
 import {
-  organizationManifestMigrationExitCode,
-  renderHumanOrganizationManifestMigration,
-  runOrganizationManifestMigration,
-} from "./migrations/organization-manifest/organization-manifest-migration.mjs";
-import {
   buildLazurioSearchStatus,
   searchLazurioExact,
   searchLazurioQmd,
@@ -71,6 +66,15 @@ if (import.meta.main) {
   } catch (error) {
     console.error(`lazurio: ${error.message}`);
     process.exitCode = error.lazurioExitCode ?? (Bun.argv[2] === "module" ? 3 : 2);
+  }
+}
+
+async function loadOrganizationManifestMigration() {
+  try {
+    return await import("./migrations/organization-manifest/organization-manifest-migration.mjs");
+  } catch (error) {
+    if (error?.code === "ERR_MODULE_NOT_FOUND" || /Cannot find module/.test(String(error?.message))) return null;
+    throw error;
   }
 }
 
@@ -125,7 +129,19 @@ async function run(argv) {
 
   if (options.command === "migrate") {
     // Thin dispatch only: the migration mechanism lives in
-    // lazurio/migrations/organization-manifest and is deleted with it.
+    // lazurio/migrations/organization-manifest and is deleted with it. It is
+    // loaded lazily so distributions without the migrations folder (resident
+    // artifacts) keep a working CLI and report the absence explicitly.
+    const migration = await loadOrganizationManifestMigration();
+    if (!migration) {
+      console.error("migrate organization-manifest není v této distribuci dostupný; použij source checkout nebo package-managed lazurio.");
+      return 2;
+    }
+    const {
+      organizationManifestMigrationExitCode,
+      renderHumanOrganizationManifestMigration,
+      runOrganizationManifestMigration,
+    } = migration;
     const report = await runOrganizationManifestMigration({
       organizationRoot: options.migrateRoot,
       write: options.write,
