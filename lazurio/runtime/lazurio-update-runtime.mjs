@@ -22,6 +22,8 @@ if (
       organization_slug: process.env.LAZURIO_ORGANIZATION_SLUG,
       team_id: process.env.LAZURIO_TEAM_ID,
       domain: process.env.LAZURIO_HOSTED_DOMAIN,
+      machine: process.env.LAZURIO_HOSTED_MACHINE,
+      launchpad_external_origin: process.env.LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN,
     },
     runtimeRoot: resolve(options.runtimeRoot),
     organizations,

@@ -15,6 +15,7 @@ const configuration = createHostedWorkspaceConfiguration({
   organizationSlug: "ExampleOrg",
   teamId: "builders",
   domain: "workspace.example.test",
+  machine: "builder",
 });
 
 test("local workspace keeps loopback URLs and has no lifecycle configuration identity", () => {
@@ -28,12 +29,13 @@ test("local workspace keeps loopback URLs and has no lifecycle configuration ide
   expect(requireHostedAppUrl(app, local)).toBeNull();
 });
 
-test("hosted workspace identity is three validated scalars rather than a service catalog", () => {
+test("hosted workspace identity is four validated scalars rather than a service catalog", () => {
   expect(configuration).toEqual({
     profile: "hosted",
     organization_slug: "ExampleOrg",
     team_id: "builders",
     domain: "workspace.example.test",
+    machine: "builder",
     source: "workspace-identity",
   });
   expect(hostedLifecycleConfigurationId(configuration)).toMatch(/^[a-f0-9]{64}$/);
@@ -42,6 +44,14 @@ test("hosted workspace identity is three validated scalars rather than a service
     organizationSlug: "ExampleOrg",
     teamId: "builders",
     domain: "other.example.test",
+    machine: "builder",
+  }))).not.toBe(hostedLifecycleConfigurationId(configuration));
+  expect(hostedLifecycleConfigurationId(createHostedWorkspaceConfiguration({
+    profile: "hosted",
+    organizationSlug: "ExampleOrg",
+    teamId: "builders",
+    domain: "workspace.example.test",
+    machine: "other-vm",
   }))).not.toBe(hostedLifecycleConfigurationId(configuration));
 
   expect(() => createHostedWorkspaceConfiguration({ profile: "hosted" }))
@@ -57,6 +67,7 @@ test("hosted workspace identity is three validated scalars rather than a service
     organizationSlug: "ExampleOrg",
     teamId: "builders",
     domain: "https://workspace.example.test",
+    machine: "builder",
   })).toThrow("LAZURIO_HOSTED_DOMAIN");
 });
 
@@ -74,6 +85,7 @@ test("hosted workspace binding fails closed for a different Organization or Team
       organizationSlug: "OtherOrg",
       teamId: "builders",
       domain: "workspace.example.test",
+      machine: "builder",
     }),
     inventory,
   )).toThrow("OtherOrg is not mounted");
@@ -83,6 +95,7 @@ test("hosted workspace binding fails closed for a different Organization or Team
       organizationSlug: "ExampleOrg",
       teamId: "other",
       domain: "workspace.example.test",
+      machine: "builder",
     }),
     inventory,
   )).toThrow("Team other");
@@ -154,9 +167,65 @@ test("an available Team module without a runnable default App is visible as an i
   });
 });
 
-test("hosted URLs are derived from module, Team and domain for every runtime payload", () => {
+test("the Machine label comes from LAZURIO_HOSTED_MACHINE or the Launchpad origin and fails closed", () => {
+  const identity = { profile: "hosted", organizationSlug: "ExampleOrg", teamId: "builders", domain: "workspace.example.test" };
+  const derived = createHostedWorkspaceConfiguration({
+    ...identity, launchpadExternalOrigin: "https://launchpad.blue-team.workspace.example.test",
+  });
+  expect(derived.machine).toBe("blue-team");
+  expect(createHostedWorkspaceConfiguration({
+    ...identity, machine: "builder", launchpadExternalOrigin: "https://launchpad.builder.workspace.example.test/",
+  }).machine).toBe("builder");
+  expect(hostedLifecycleConfigurationId(derived)).not.toBe(hostedLifecycleConfigurationId(configuration));
+
+  expect(() => createHostedWorkspaceConfiguration(identity)).toThrow("LAZURIO_HOSTED_MACHINE");
+  for (const machine of ["Builder", "blue--team", "-vm", "vm_1", "a".repeat(33)]) {
+    expect(() => createHostedWorkspaceConfiguration({ ...identity, machine })).toThrow("LAZURIO_HOSTED_MACHINE");
+  }
+  for (const launchpadExternalOrigin of [
+    "http://launchpad.builder.workspace.example.test",
+    "https://launchpad.builder.other.example.test",
+    "https://launchpad.workspace.example.test",
+    "https://builder.workspace.example.test",
+    "https://launchpad.builder.workspace.example.test/launchpad/",
+    "https://launchpad.builder.workspace.example.test:8443",
+    "https://launchpad.a--b.workspace.example.test",
+    "https://launchpad.sales.example.test",
+    "not a url",
+  ]) {
+    expect(() => createHostedWorkspaceConfiguration({ ...identity, launchpadExternalOrigin }))
+      .toThrow("LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN");
+  }
+  expect(() => createHostedWorkspaceConfiguration({
+    ...identity, machine: "builder", launchpadExternalOrigin: "https://launchpad.other-vm.workspace.example.test",
+  })).toThrow("does not match");
+});
+
+test("Mission Control opens at its own application hostname on the Machine", () => {
+  const app = workspaceApp({ id: "example-mc", module: "mission-control", module_apps: { open_target_app_id: "example-mc" } });
+  const expected = "https://mission-control.builder.workspace.example.test/";
+  expect(projectHostedAppUrl(app, configuration).url).toBe(expected);
+  expect(projectHostedAppUrl(app, createHostedWorkspaceConfiguration({
+    profile: "hosted", organizationSlug: "ExampleOrg", teamId: "builders", domain: "workspace.example.test",
+    launchpadExternalOrigin: "https://launchpad.builder.workspace.example.test",
+  })).url).toBe(expected);
+  expect(requireHostedAppUrl(app, configuration)).toBe(expected);
+});
+
+test("reserved and malformed application labels never receive a hosted hostname", () => {
+  for (const module of ["api", "oauth2", "well-known", "launchpad", "Knowledge", "a--b", "x".repeat(64)]) {
+    const app = workspaceApp({ module });
+    expect(projectHostedAppUrl(app, configuration)).toMatchObject({ url: null, hosted_url_error: "hosted_app_url_unavailable" });
+    expect(selectHostedWorkspaceApps(configuration, { apps: [app] })).toEqual({
+      apps: [],
+      skipped: [{ module, failure_kind: "hosted_module_dns_label_invalid" }],
+    });
+  }
+});
+
+test("hosted URLs are derived from module, Machine and domain for every runtime payload", () => {
   const app = workspaceApp();
-  const expected = "https://builders.workspace.example.test/knowledgebase/";
+  const expected = "https://knowledgebase.builder.workspace.example.test/";
   expect(projectHostedAppUrl({
     ...app,
     url: "http://127.0.0.1:4310/",
@@ -226,7 +295,7 @@ test("declared available Organization default shares the hosted URL and lifecycl
     ...app.module_apps.declaration, slug: "planning", apps: app.module_apps,
   }] }] };
   expect(selectHostedWorkspaceApps(configuration, inventory)).toEqual({ apps: [app], skipped: [] });
-  const url = "https://builders.workspace.example.test/planning/";
+  const url = "https://planning.builder.workspace.example.test/";
   expect(requireHostedAppUrl(app, configuration)).toBe(url);
   expect(projectHostedRuntimePayload({ url: "http://127.0.0.1:1234", start: { url: "http://127.0.0.1:1234" } }, app, configuration))
     .toMatchObject({ url, start: { url } });
@@ -247,7 +316,7 @@ test("Organization repository slot binds by catalog path while lifecycle and DNS
     ...app.module_apps.declaration, slug: "planning-repository", apps: app.module_apps,
   }] }] };
   expect(selectHostedWorkspaceApps(configuration, inventory)).toEqual({ apps: [app], skipped: [] });
-  expect(requireHostedAppUrl(app, configuration)).toBe("https://builders.workspace.example.test/planning/");
+  expect(requireHostedAppUrl(app, configuration)).toBe("https://planning.builder.workspace.example.test/");
 });
 
 test("Organization-section Workspace default retains the original Team constraint", () => {
@@ -255,7 +324,7 @@ test("Organization-section Workspace default retains the original Team constrain
   Object.assign(app.module_apps.declaration, { space: "workspace", teams: ["builders"], path: "workspace/planning" });
   app.module_catalog_path = "workspace/planning";
   app.module_apps.contract_path = "organizations/ExampleOrg/workspace/planning/lazurio.module.json";
-  expect(projectHostedAppUrl(app, configuration).url).toBe("https://builders.workspace.example.test/planning/");
+  expect(projectHostedAppUrl(app, configuration).url).toBe("https://planning.builder.workspace.example.test/");
   expect(selectHostedWorkspaceApps(configuration, { apps: [app] }).apps).toEqual([app]);
   app.module_apps.declaration.teams = ["other-team"];
   expect(projectHostedAppUrl(app, configuration).url).toBeNull();
@@ -291,7 +360,10 @@ for (const [label, mutate] of Object.entries(rootDenyCases)) {
 }
 
 test("invalid hosted context never manufactures a root application URL", () => {
-  for (const override of [{ domain: "https://invalid.test" }, { team_id: "../other" }, { organization_slug: "" }]) {
+  for (const override of [
+    { domain: "https://invalid.test" }, { team_id: "../other" }, { organization_slug: "" },
+    { machine: null }, { machine: "Builder" }, { machine: "a".repeat(33) },
+  ]) {
     const invalid = { ...configuration, ...override };
     expect(projectHostedAppUrl(declaredOrganizationApp(), invalid).url).toBeNull();
     expect(selectHostedWorkspaceApps(invalid, { apps: [declaredOrganizationApp()] }).apps).toEqual([]);

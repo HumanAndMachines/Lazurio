@@ -51,8 +51,8 @@ import { readOrganizationLaunchpadTheme } from "./organization-theme-lib.mjs";
 import { ModuleFolderActionError, createModuleFolderOpener } from "./module-folder-lib.mjs";
 import {
   HostedAppUrlError,
-  createHostedWorkspaceConfiguration,
   hostedLifecycleConfigurationId,
+  hostedWorkspaceConfigurationFromEnvironment,
   projectHostedAppUrl,
   projectHostedRuntimePayload,
   requireHostedAppUrl,
@@ -117,12 +117,7 @@ if (realpathSync.native(configuredRuntimeRoot) !== realpathSync.native(lazurioCo
 const launchpadRootId = computeServerRootId(canonicalCompaniesRoot);
 const launchpadControlRootId = computeServerRootId(rootSourceRoot);
 const launchpadInstallGeneration = computeServerInstallGeneration(lazurioCodeRoot);
-const hostedWorkspace = createHostedWorkspaceConfiguration({
-  profile: process.env.LAZURIO_WORKSPACE_PROFILE,
-  organizationSlug: process.env.LAZURIO_ORGANIZATION_SLUG,
-  teamId: process.env.LAZURIO_TEAM_ID,
-  domain: process.env.LAZURIO_HOSTED_DOMAIN,
-});
+const hostedWorkspace = hostedWorkspaceConfigurationFromEnvironment(process.env);
 const launchpadLifecycleConfigurationId = hostedLifecycleConfigurationId(hostedWorkspace);
 const basePath = normalizeLaunchpadBasePath(process.env.LAZURIO_LAUNCHPAD_BASE_PATH ?? "/");
 const knownLaunchpadMounts = new Map();
@@ -166,6 +161,7 @@ const runtimeManager = createRuntimeManager({
   launchpadRoot,
   stateRoot: launchpadStateRoot,
   lifecycleProfile: hostedWorkspace.profile,
+  hostedWorkspace,
   discover: (_root, discoveryOptions = {}) => discoverLaunchpadApps(rootSourceRoot, {
     ...discoveryOptions,
     runtime_root: configuredRuntimeRoot,

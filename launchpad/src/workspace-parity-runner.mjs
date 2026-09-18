@@ -179,6 +179,7 @@ async function buildHostedParityContext({ add, lazurioRoot, discovery, options }
       organizationSlug: options.organization,
       teamId: options.team,
       domain: options.hostedDomain,
+      machine: options.machine,
     });
     const inventory = await buildLaunchpadAppsResponse({
       companiesRoot: lazurioRoot,
@@ -630,6 +631,7 @@ function hostedOriginFor(app, options) {
     organizationSlug: options.organization,
     teamId: options.team,
     domain: options.hostedDomain,
+    machine: options.machine,
   })).url;
 }
 
@@ -678,6 +680,7 @@ export function parseArgs(args) {
         "worktree-slug": "worktreeSlug",
         "launchpad-url": "launchpadUrl",
         "hosted-domain": "hostedDomain",
+        machine: "machine",
         "expected-worktree-created-by": "expectedWorktreeCreatedBy",
         "t3-command": "t3Command",
         "t3-pid": "t3Pid",
@@ -705,11 +708,13 @@ export function parseArgs(args) {
   if (options.profile === "hosted") {
     if (!options.team) throw new Error("--team is required for hosted profile");
     if (!options.hostedDomain) throw new Error("--hosted-domain is required for hosted profile");
+    if (!options.machine) throw new Error("--machine is required for hosted profile");
     createHostedWorkspaceConfiguration({
       profile: "hosted",
       organizationSlug: options.organization,
       teamId: options.team,
       domain: options.hostedDomain,
+      machine: options.machine,
     });
     for (const key of ["t3Pid", "codexPid", "launchpadPid"]) {
       if (!Number.isInteger(options[key]) || options[key] <= 0) {
@@ -725,7 +730,8 @@ function helpText() {
   --organization <exact-company-slug> --team <team> --app-id <id> --worktree-slug <slug> \\
   --expected-worktree-created-by <t3-creation-identity> [options]
 
-Hosted additionally requires --team, --hosted-domain, --t3-pid, --codex-pid and --launchpad-pid.
+Hosted additionally requires --team, --hosted-domain, --machine (the VM label of
+https://<app>.<machine>.<hosted-domain>/), --t3-pid, --codex-pid and --launchpad-pid.
 Local: run live, restart Launchpad, then use post-restart to prove no session
 child was restored. Hosted: run live, restart the work container (and separately
 reboot the host), then use post-restart to prove every Team module returned on

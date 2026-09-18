@@ -3,6 +3,14 @@ import { createHash } from "node:crypto";
 const organizationSlugPattern = /^[A-Za-z0-9][A-Za-z0-9-]*$/;
 const dnsLabelPattern = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 const dnsDomainPattern = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+// Hosted application hostnames follow decision 0146 and the Machines gateway
+// label rules (Machines docs/workspace-application-entry.md, routes.mjs):
+// single-dash-separated labels, Machine label <= 32, application label <= 63,
+// gateway labels reserved.
+const hostedLabelPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const hostedMachineLabelMax = 32;
+const hostedApplicationLabelMax = 63;
+const reservedHostedApplicationLabels = new Set(["launchpad", "oauth2", "api", "well-known"]);
 
 export class HostedAppUrlError extends Error {
   constructor(code, message) {
@@ -21,11 +29,24 @@ export function parseWorkspaceProfile(value = "local") {
   return profile;
 }
 
+export function hostedWorkspaceConfigurationFromEnvironment(env = process.env) {
+  return createHostedWorkspaceConfiguration({
+    profile: env.LAZURIO_WORKSPACE_PROFILE,
+    organizationSlug: env.LAZURIO_ORGANIZATION_SLUG,
+    teamId: env.LAZURIO_TEAM_ID,
+    domain: env.LAZURIO_HOSTED_DOMAIN,
+    machine: env.LAZURIO_HOSTED_MACHINE,
+    launchpadExternalOrigin: env.LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN,
+  });
+}
+
 export function createHostedWorkspaceConfiguration({
   profile = "local",
   organizationSlug = "",
   teamId = "",
   domain = "",
+  machine = "",
+  launchpadExternalOrigin = "",
 } = {}) {
   const normalizedProfile = parseWorkspaceProfile(profile);
   if (normalizedProfile === "local") {
@@ -34,6 +55,7 @@ export function createHostedWorkspaceConfiguration({
       organization_slug: null,
       team_id: null,
       domain: null,
+      machine: null,
       source: "local-loopback",
     });
   }
@@ -53,8 +75,70 @@ export function createHostedWorkspaceConfiguration({
     organization_slug: organizationSlug,
     team_id: teamId,
     domain,
+    machine: resolveHostedMachineLabel({ machine, launchpadExternalOrigin, domain }),
     source: "workspace-identity",
   });
+}
+
+// The Machine label is the <vm> part of https://<app>.<vm>.<domain>/. Machines
+// hand it to the Launchpad unit either explicitly or through its own external
+// origin, which must have the shape launchpad.<vm>.<domain>; both must agree.
+function resolveHostedMachineLabel({ machine, launchpadExternalOrigin, domain }) {
+  const explicit = String(machine ?? "").trim();
+  if (explicit && !validHostedMachineLabel(explicit)) {
+    throw new Error(
+      `LAZURIO_HOSTED_MACHINE must be a lowercase single-dash DNS label of at most ${hostedMachineLabelMax} characters.`,
+    );
+  }
+  const origin = String(launchpadExternalOrigin ?? "").trim();
+  const derived = origin ? machineLabelFromLaunchpadOrigin(origin, domain) : null;
+  if (origin && !derived) {
+    throw new Error(
+      "LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN must be https://launchpad.<machine>.<LAZURIO_HOSTED_DOMAIN> with a valid Machine label.",
+    );
+  }
+  if (explicit && derived && explicit !== derived) {
+    throw new Error(
+      `LAZURIO_HOSTED_MACHINE ${explicit} does not match the Machine label ${derived} in LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN.`,
+    );
+  }
+  const resolved = explicit || derived;
+  if (!resolved) {
+    throw new Error(
+      "LAZURIO_HOSTED_MACHINE or LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN (https://launchpad.<machine>.<domain>) must identify the hosted Machine.",
+    );
+  }
+  return resolved;
+}
+
+function machineLabelFromLaunchpadOrigin(origin, domain) {
+  let url;
+  try {
+    url = new URL(origin);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:" || url.username || url.password || url.port || url.search || url.hash
+    || url.pathname !== "/" || (origin !== url.origin && origin !== `${url.origin}/`)) {
+    return null;
+  }
+  const hostname = url.hostname.replace(/\.$/, "").toLowerCase();
+  const suffix = `.${domain}`;
+  if (!hostname.endsWith(suffix)) return null;
+  const prefix = hostname.slice(0, -suffix.length);
+  const match = prefix.match(/^launchpad\.([^.]+)$/);
+  return match && validHostedMachineLabel(match[1]) ? match[1] : null;
+}
+
+function validHostedMachineLabel(label) {
+  return typeof label === "string" && hostedLabelPattern.test(label) && label.length <= hostedMachineLabelMax;
+}
+
+function validHostedApplicationLabel(label) {
+  return typeof label === "string"
+    && hostedLabelPattern.test(label)
+    && label.length <= hostedApplicationLabelMax
+    && !reservedHostedApplicationLabels.has(label);
 }
 
 export function hostedLifecycleConfigurationId(configuration) {
@@ -63,7 +147,8 @@ export function hostedLifecycleConfigurationId(configuration) {
     organization_slug: configuration.organization_slug,
     team_id: configuration.team_id,
     domain: configuration.domain,
-    routing: "machine-path-v1",
+    machine: configuration.machine,
+    routing: "application-hostname-v1",
   })).digest("hex");
 }
 
@@ -138,13 +223,13 @@ export function selectHostedWorkspaceApps(configuration, { apps = [], organizati
     const target = targetId
       ? group.find((app) => app.id === targetId)
       : null;
-    if (target && dnsLabelPattern.test(module)) {
+    if (target && validHostedApplicationLabel(module)) {
       selected.push(target);
       continue;
     }
     skipped.push({
       module,
-      failure_kind: !dnsLabelPattern.test(module)
+      failure_kind: !validHostedApplicationLabel(module)
         ? "hosted_module_dns_label_invalid"
         : targetIds.length > 1
           ? "hosted_module_open_target_ambiguous"
@@ -190,21 +275,30 @@ export function projectHostedRuntimePayload(payload, app, configuration) {
   };
 }
 
-function hostedAppUrl(app, configuration) {
+// The browser origin of one hosted application (decision 0146): the module
+// slug is the application label on the Machine's own hostname. Team scope is
+// not part of the name; it decides only whether the Launchpad exposes the App.
+export function hostedApplicationOrigin(app, configuration) {
   if (
     !validHostedContext(configuration)
     || app?.company !== configuration.organization_slug
-    || !appInHostedScope(app, configuration)
-    || !dnsLabelPattern.test(app?.module ?? "")
+    || !validHostedApplicationLabel(app?.module)
   ) return null;
-  return `https://${configuration.team_id}.${configuration.domain}/${app.module}/`;
+  return `https://${app.module}.${configuration.machine}.${configuration.domain}`;
+}
+
+function hostedAppUrl(app, configuration) {
+  if (!appInHostedScope(app, configuration)) return null;
+  const origin = hostedApplicationOrigin(app, configuration);
+  return origin ? `${origin}/` : null;
 }
 
 function validHostedContext(configuration) {
   return configuration?.profile === "hosted"
     && organizationSlugPattern.test(configuration.organization_slug ?? "")
     && dnsLabelPattern.test(configuration.team_id ?? "")
-    && dnsDomainPattern.test(configuration.domain ?? "");
+    && dnsDomainPattern.test(configuration.domain ?? "")
+    && validHostedMachineLabel(configuration.machine);
 }
 
 function declarationInHostedScope(slot, configuration) {

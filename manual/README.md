@@ -130,6 +130,16 @@ runtime/cache cesty, ne custody source of truth.
   `LAZURIO_RUNTIME_LISTENER_<ID>_PORT/HOST` jsou volitelný procesní vstup,
   který musí přesně souhlasit s manifestem. Obecné `PORT` a `HOST` nejsou
   konfigurace listeneru ani druhá autorita a tyto hodnoty nepatří do `.env`.
+  Na hostované Mašině (profil `hosted`, decision 0146) dostane vstupní
+  listener aplikace navíc svůj browser origin
+  `LAZURIO_RUNTIME_EXTERNAL_ORIGIN=https://<app>.<machine>.<domain>` (bez
+  cesty a lomítka; pro listener bez role `entrypoint` by se jmenoval
+  `LAZURIO_RUNTIME_LISTENER_<ID>_EXTERNAL_ORIGIN`) a stejná hodnota je
+  v `LAZURIO_RUNTIME_LISTENERS_JSON` jako `external_origin` daného
+  listeneru. Aplikace z něj přijímá same-origin požadavky; ostatní listenery
+  zůstávají loopback-only a lokální profil proměnnou vůbec nenastavuje.
+  Kontrakt brány Mašiny drží Machines
+  `docs/workspace-application-entry.md` („What the application must do“).
 - Doctor je read-only. Když hlásí problém v Git stavu, submodulech nebo `.gitignore` ochraně runtime/private/archive cest, oprav source-of-truth soubor nebo mountpoint.
 - Secret hodnoty, OAuth URL/kódy, tokeny, hesla a obsah JSON credential souborů
   se nesmí posílat chatem ani commitovat; closeout používej jen metadata-only

@@ -21,6 +21,7 @@ import {
   resolvePosixProcessGroupId,
   runtimeHostsShareListener,
   runtimeListenerHasStaticLease,
+  runtimeListenerState,
   selectManagedModuleStopRecord,
   windowsNetstatCommand,
   windowsProcessIdentityCommand,
@@ -34,6 +35,17 @@ import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.m
 import { createWorktreeFromPlan } from "./worktree-actions-lib.mjs";
 import { createRepositoryDbWorktreeFixture } from "./git-fixture-helpers.test.mjs";
 import { createHostedWorkspaceConfiguration, requireHostedAppUrl, selectHostedWorkspaceApps } from "../../lazurio/runtime/hosted-app-url-lib.mjs";
+
+// One hosted Machine identity for every hosted runtime test: fixture Apps
+// belong to `test-company`, so their hosted origin is
+// https://<module>.builder.organization.example.test.
+const hostedWorkspaceFixture = createHostedWorkspaceConfiguration({
+  profile: "hosted",
+  organizationSlug: "test-company",
+  teamId: "builders",
+  domain: "organization.example.test",
+  machine: "builder",
+});
 
 const tempRoots = [];
 const fileSymlinkTest = (await supportsFileSymlinks()) ? test : test.skip;
@@ -240,6 +252,9 @@ test("runtime manager spustí, změří a zastaví managed aplikaci", async () =
   expect(childEnv.LAZURIO_RUNTIME_PORT).toBe(String(port));
   expect(childEnv[`LAZURIO_RUNTIME_LISTENER_${listenerEnvKey}_HOST`]).toBe("127.0.0.1");
   expect(childEnv[`LAZURIO_RUNTIME_LISTENER_${listenerEnvKey}_PORT`]).toBe(String(port));
+  // Local profile: no external origin anywhere, neither as a variable nor in the listener state.
+  expect(Object.keys(childEnv).filter((name) => name.endsWith("_EXTERNAL_ORIGIN"))).toEqual([]);
+  expect(runtimeEnv.listeners.every((listener) => !("external_origin" in listener))).toBe(true);
   expect(runtimeEnv.astroDevBackground).toBe("1");
   expect(runtimeEnv.astroPreviewBackground).toBe("1");
 
@@ -4599,6 +4614,7 @@ test("hosted inventory stays cold until Open, supports Stop and retires removed 
     launchpadRoot: join(root, "launchpad"),
     instanceId: "hosted-maintenance",
     lifecycleProfile: "hosted",
+    hostedWorkspace: hostedWorkspaceFixture,
     discover: discoveryWithApp(app),
     maintenanceIntervalMs: 10,
     maintenanceRetryDelaysMs: [10],
@@ -4639,6 +4655,78 @@ test("hosted inventory stays cold until Open, supports Stop and retires removed 
   }
 }, platformTestTimeout(15_000));
 
+test("hosted profile requires the matching Workspace configuration", async () => {
+  const root = await createCompaniesWorkspaceFixture({ port: await findFreePort() });
+  const shared = { companiesRoot: root, launchpadRoot: join(root, "launchpad"), instanceId: "hosted-configuration-guard" };
+  expect(() => createRuntimeManager({ ...shared, lifecycleProfile: "hosted" })).toThrow("requires the matching Workspace configuration");
+  expect(() => createRuntimeManager({ ...shared, lifecycleProfile: "local", hostedWorkspace: hostedWorkspaceFixture }))
+    .toThrow("requires the matching Workspace configuration");
+});
+
+test("hosted entrypoint listener receives its application origin; other listeners stay loopback-only", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port });
+  const app = withStaticEntrypoint(fixtureDiscoveryApp({ port }));
+  const expectedOrigin = "https://demo.builder.organization.example.test";
+  // Listener state carries the origin only on the entrypoint, and only when one is given.
+  const auxiliary = { ...app.listeners[0], id: "api", role: "auxiliary", port: port + 1 };
+  const state = runtimeListenerState({ ...app, listeners: [...app.listeners, auxiliary] }, { externalOrigin: expectedOrigin });
+  expect(state.map((listener) => [listener.id, listener.external_origin ?? null]))
+    .toEqual([["web", expectedOrigin], ["api", null]]);
+  expect("external_origin" in state[1]).toBe(false);
+  expect(runtimeListenerState(app).every((listener) => !("external_origin" in listener))).toBe(true);
+
+  let childEnv = null;
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "hosted-external-origin",
+    lifecycleProfile: "hosted",
+    hostedWorkspace: hostedWorkspaceFixture,
+    discover: discoveryWithApp(app),
+    maintenanceIntervalMs: 10,
+    maintenanceRetryDelaysMs: [10],
+    spawnProcess(command, options) {
+      childEnv = options.env;
+      return Bun.spawn(command, options);
+    },
+    spawnProcessIsNative: true,
+  });
+  try {
+    runtime.maintainApps([app]);
+    await runtime.ensureHostedApp(app.id);
+    await waitForStatus(() => runtime.health(app.id), "healthy");
+    expect(childEnv.LAZURIO_RUNTIME_EXTERNAL_ORIGIN).toBe(expectedOrigin);
+    expect(Object.keys(childEnv).filter((name) => name.endsWith("_EXTERNAL_ORIGIN"))).toEqual(["LAZURIO_RUNTIME_EXTERNAL_ORIGIN"]);
+    const listeners = JSON.parse(childEnv.LAZURIO_RUNTIME_LISTENERS_JSON);
+    expect(listeners).toEqual([expect.objectContaining({ id: "web", role: "entrypoint", external_origin: expectedOrigin })]);
+    const runtimeEnv = await (await fetch(`http://127.0.0.1:${port}/runtime-env`)).json();
+    expect(runtimeEnv.listeners[0].external_origin).toBe(expectedOrigin);
+  } finally {
+    await runtime.stop(app.id).catch(() => {});
+  }
+}, platformTestTimeout(15_000));
+
+test("hosted start fails closed when the App has no derivable application origin", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port });
+  const app = withStaticEntrypoint(fixtureDiscoveryApp({ port }));
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "hosted-origin-unavailable",
+    lifecycleProfile: "hosted",
+    hostedWorkspace: createHostedWorkspaceConfiguration({
+      profile: "hosted", organizationSlug: "other-organization", teamId: "builders",
+      domain: "organization.example.test", machine: "builder",
+    }),
+    discover: discoveryWithApp(app),
+    maintenanceIntervalMs: 60_000,
+  });
+  await expect(runtime.start(app.id)).rejects.toMatchObject({ code: "hosted_app_origin_unavailable" });
+  expect(await runtime.health(app.id)).toMatchObject({ managed: false });
+});
+
 test("stale hosted health observation cannot undo explicit Stop", async () => {
   const port = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({ port });
@@ -4646,6 +4734,7 @@ test("stale hosted health observation cannot undo explicit Stop", async () => {
   const runtime = createRuntimeManager({
     companiesRoot: root, launchpadRoot: join(root, "launchpad"),
     instanceId: "hosted-stale-health", lifecycleProfile: "hosted",
+    hostedWorkspace: hostedWorkspaceFixture,
     discover: discoveryWithApp(app), maintenanceIntervalMs: 60_000,
   });
   const originalFetch = globalThis.fetch;
@@ -4691,6 +4780,7 @@ test("successful hosted maintenance cannot undo queued Stop", async () => {
   const runtime = createRuntimeManager({
     companiesRoot: root, launchpadRoot: join(root, "launchpad"),
     instanceId: "hosted-maintenance-stop", lifecycleProfile: "hosted",
+    hostedWorkspace: hostedWorkspaceFixture,
     discover: discoveryWithApp(app), maintenanceIntervalMs: 25,
   });
   const originalFetch = globalThis.fetch;
@@ -4744,13 +4834,13 @@ test("selected Organization-section default uses the existing hosted open/start/
       declaration: { path: "modules/demo", space: "workspace", teams: ["builders"], status: "available", ui_exposure: "module" },
     },
   });
-  const configuration = createHostedWorkspaceConfiguration({ profile: "hosted", organizationSlug: app.company, teamId: "builders", domain: "organization.example.test" });
+  const configuration = createHostedWorkspaceConfiguration({ profile: "hosted", organizationSlug: app.company, teamId: "builders", domain: "organization.example.test", machine: "builder" });
   const selection = selectHostedWorkspaceApps(configuration, { apps: [app] });
   expect(selection.apps).toEqual([app]);
-  expect(requireHostedAppUrl(app, configuration)).toBe("https://builders.organization.example.test/demo/");
+  expect(requireHostedAppUrl(app, configuration)).toBe("https://demo.builder.organization.example.test/");
   const runtime = createRuntimeManager({
     companiesRoot: root, launchpadRoot: join(root, "launchpad"), instanceId: "hosted-organization-default",
-    lifecycleProfile: "hosted", discover: discoveryWithApp(app), maintenanceIntervalMs: 10, maintenanceRetryDelaysMs: [10],
+    lifecycleProfile: "hosted", hostedWorkspace: hostedWorkspaceFixture, discover: discoveryWithApp(app), maintenanceIntervalMs: 10, maintenanceRetryDelaysMs: [10],
   });
   try {
     runtime.maintainApps(selection.apps);
@@ -4778,6 +4868,7 @@ test("hosted inventory projects the worktree selected for the current Launchpad 
     launchpadRoot: join(root, "launchpad"),
     instanceId: "hosted-session-projection",
     lifecycleProfile: "hosted",
+    hostedWorkspace: hostedWorkspaceFixture,
     discover: discoveryWithApp(app),
     maintenanceIntervalMs: 10,
     maintenanceRetryDelaysMs: [10],
@@ -4816,6 +4907,7 @@ test("hosted maintenance rejects a non-default App before changing the maintaine
     launchpadRoot: join(root, "launchpad"),
     instanceId: "hosted-default-app",
     lifecycleProfile: "hosted",
+    hostedWorkspace: hostedWorkspaceFixture,
     discover: discoveryWithApps(defaultApp, siblingApp),
     maintenanceIntervalMs: 10,
     maintenanceRetryDelaysMs: [10],
@@ -4871,6 +4963,7 @@ test("hosted cold inventory never installs dependencies or starts a missing depe
     launchpadRoot: join(root, "launchpad"),
     instanceId: "hosted-no-boot-install",
     lifecycleProfile: "hosted",
+    hostedWorkspace: hostedWorkspaceFixture,
     discover: discoveryWithApp(app),
     maintenanceIntervalMs: 5,
     maintenanceRetryDelaysMs: [5],
@@ -4917,6 +5010,7 @@ test("hosted maintenance backs off while an exact runtime source is still starti
     launchpadRoot: join(root, "launchpad"),
     instanceId: "hosted-start-backoff",
     lifecycleProfile: "hosted",
+    hostedWorkspace: hostedWorkspaceFixture,
     discover: discoveryWithApp(app),
     maintenanceIntervalMs: 10,
     maintenanceRetryDelaysMs: [500, 1_000, 2_000],
@@ -4963,6 +5057,7 @@ test("hosted shutdown prevents a queued ingress Open from starting a late child"
     launchpadRoot: join(root, "launchpad"),
     instanceId: "hosted-shutdown-overlap",
     lifecycleProfile: "hosted",
+    hostedWorkspace: hostedWorkspaceFixture,
     discover: discoveryWithApp(app),
     maintenanceIntervalMs: 5,
     acquireModuleLockFn: async () => {
@@ -5012,6 +5107,7 @@ test("hosted maintenance restores an unexpectedly exited App from the same sessi
     launchpadRoot: join(root, "launchpad"),
     instanceId: "hosted-exit-recovery",
     lifecycleProfile: "hosted",
+    hostedWorkspace: hostedWorkspaceFixture,
     discover: discoveryWithApp(app),
     maintenanceIntervalMs: 10,
     maintenanceRetryDelaysMs: [10],

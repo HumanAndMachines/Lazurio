@@ -10,7 +10,8 @@ import {
   runtimeScriptPortAuthorityIssues,
 } from "./discovery-lib.mjs";
 import { materializeRuntimeFromModule, normalizeModuleManifest } from "../core/module-contract-lib.mjs";
-import { normalizePackageRuntime } from "../core/runtime-contract-lib.mjs";
+import { normalizePackageRuntime, runtimeListenerEnvironmentNames } from "../core/runtime-contract-lib.mjs";
+import { createHostedWorkspaceConfiguration, hostedApplicationOrigin } from "./hosted-app-url-lib.mjs";
 import { readOrganizationRoot } from "../core/organization-root-reader-lib.mjs";
 import { recordAppOpen } from "./usage-lib.mjs";
 import { buildWorktreeIndex } from "./worktree-lib.mjs";
@@ -122,7 +123,11 @@ export function runtimeListenerHasStaticLease(app, listener) {
     && listener?.claim?.mode === "exclusive";
 }
 
-export function runtimeListenerState(app) {
+// `externalOrigin` is the hosted browser origin of the App's entrypoint
+// listener (decision 0146). Other listeners stay loopback-only, and a local
+// run passes nothing, so the field is absent rather than null.
+export function runtimeListenerState(app, { externalOrigin = null } = {}) {
+  const entrypointId = app?.entrypoint_listener?.id ?? null;
   return (app?.listeners ?? []).map((listener) => ({
     id: listener.id,
     role: listener.role,
@@ -132,6 +137,7 @@ export function runtimeListenerState(app) {
     protocol: listener.protocol,
     health: listener.health,
     claim: listener.claim,
+    ...(externalOrigin && listener.id === entrypointId ? { external_origin: externalOrigin } : {}),
   }));
 }
 
@@ -196,6 +202,7 @@ export function createRuntimeManager({
   launchpadRoot,
   stateRoot = launchpadRoot,
   lifecycleProfile = "local",
+  hostedWorkspace = createHostedWorkspaceConfiguration(),
   instanceId = randomUUID(),
   discover = discoverLaunchpadApps,
   resolvePortOwnerFn = resolvePortOwner,
@@ -225,6 +232,13 @@ export function createRuntimeManager({
 }) {
   if (!supportedLifecycleProfiles.has(lifecycleProfile)) {
     throw new Error(`Unsupported Launchpad lifecycle profile: ${String(lifecycleProfile)}.`);
+  }
+  // The hosted Workspace identity is the only source of the external origin
+  // a hosted App must accept; a hosted manager without it cannot start Apps.
+  if ((hostedWorkspace?.profile ?? "local") !== lifecycleProfile) {
+    throw new Error(
+      `Launchpad lifecycle profile ${lifecycleProfile} requires the matching Workspace configuration.`,
+    );
   }
   // Jeden clock pro všechna duration porovnání manageru: bounded lifecycle
   // čekání, start-grace, cache listener reconciliace, owner-proof capture i
@@ -2089,7 +2103,7 @@ export function createRuntimeManager({
   }
 
   function listenerRuntimeEnv(app) {
-    const listeners = runtimeListenerState(app);
+    const listeners = runtimeListenerState(app, { externalOrigin: hostedRuntimeOrigin(app) });
     const values = {
       LAZURIO_RUNTIME_LISTENERS_JSON: JSON.stringify(listeners),
     };
@@ -2099,8 +2113,27 @@ export function createRuntimeManager({
       if (Number.isInteger(listener.port)) {
         values[`LAZURIO_RUNTIME_LISTENER_${key}_PORT`] = String(listener.port);
       }
+      if (listener.external_origin) {
+        values[runtimeListenerEnvironmentNames(listener).externalOrigin] = listener.external_origin;
+      }
     }
     return values;
+  }
+
+  // Hosted profile only: the App is served at https://<app>.<machine>.<domain>
+  // (decision 0146) and must accept same-origin requests from that origin, so
+  // a hosted start without a derivable origin fails closed.
+  function hostedRuntimeOrigin(app) {
+    if (lifecycleProfile !== "hosted") return null;
+    const origin = hostedApplicationOrigin(app, hostedWorkspace);
+    if (origin) return origin;
+    throw new RuntimeActionError(
+      409,
+      "hosted_app_origin_unavailable",
+      `${app.title ?? app.id}: Hosted Team Workspace cannot derive the external origin for ${app.id}.`,
+      [`company: ${app.company ?? "<missing>"}`, `module: ${app.module ?? "<missing>"}`],
+      { failure_kind: "hosted_app_origin_unavailable" },
+    );
   }
 
   function organizationRuntimeEnv(app) {

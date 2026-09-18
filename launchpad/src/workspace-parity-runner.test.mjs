@@ -41,11 +41,14 @@ test("hosted parity requires the derived URL and shared process identities", () 
     ...shared,
     "--team", "iotor-builders",
     "--hosted-domain", "iotor.example",
+    "--machine", "builder",
     "--t3-pid", "101",
     "--codex-pid", "151",
     "--launchpad-pid", "202",
   ];
-  expect(parseArgs(args)).toMatchObject({ profile: "hosted", phase: "post-restart" });
+  expect(parseArgs(args)).toMatchObject({ profile: "hosted", phase: "post-restart", machine: "builder" });
+  expect(() => parseArgs(args.filter((value) => value !== "builder" && value !== "--machine")))
+    .toThrow("--machine is required");
   expect(() => parseArgs(args.filter((value) => value !== "151" && value !== "--codex-pid")))
     .toThrow("--codex-pid is required");
   expect(() => parseArgs(args.filter((value) => value !== "iotor-builders" && value !== "--team")))

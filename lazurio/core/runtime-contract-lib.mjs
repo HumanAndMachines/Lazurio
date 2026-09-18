@@ -51,11 +51,16 @@ export function normalizePackageRuntime({ packageJson, packagePath = "package.js
   };
 }
 
+// `externalOrigin` names the variable that carries the listener's browser
+// origin on a hosted Machine (https://<app>.<machine>.<domain>, decision 0146).
+// Only the entrypoint listener of a hosted App receives it; local runs and
+// loopback-only listeners never see the variable.
 export function runtimeListenerEnvironmentNames(listener) {
   if (listener?.role === "entrypoint") {
     return {
       host: "LAZURIO_RUNTIME_HOST",
       port: "LAZURIO_RUNTIME_PORT",
+      externalOrigin: "LAZURIO_RUNTIME_EXTERNAL_ORIGIN",
     };
   }
   const key = String(listener?.id ?? "listener")
@@ -64,6 +69,7 @@ export function runtimeListenerEnvironmentNames(listener) {
   return {
     host: `LAZURIO_RUNTIME_LISTENER_${key}_HOST`,
     port: `LAZURIO_RUNTIME_LISTENER_${key}_PORT`,
+    externalOrigin: `LAZURIO_RUNTIME_LISTENER_${key}_EXTERNAL_ORIGIN`,
   };
 }
 

@@ -39,7 +39,7 @@ test("Hosted Team Sync excludes absent and mounted sibling-Team modules using th
   });
   const hostedWorkspace = createHostedWorkspaceConfiguration({
     profile: "hosted", organizationSlug: "WorkspaceTestOrg", teamId: "sales",
-    domain: "workspace-test-org.example.test",
+    domain: "workspace-test-org.example.test", machine: "builder",
   });
   const calls = [];
   const deps = {
@@ -114,14 +114,22 @@ test("Hosted Team Sync excludes absent and mounted sibling-Team modules using th
 test("isolated CLI update returns a blocked JSON report for incomplete hosted identity", async () => {
   const root = await mkdtemp(join(tmpdir(), "hosted-update-invalid-"));
   fixtures.push(root);
-  const report = await runIsolatedLazurioUpdate({ rootPath: root, environment: {
+  const identity = {
     ...process.env, LAZURIO_WORKSPACE_PROFILE: "hosted",
-    LAZURIO_ORGANIZATION_SLUG: "WorkspaceTestOrg", LAZURIO_TEAM_ID: "",
+    LAZURIO_ORGANIZATION_SLUG: "WorkspaceTestOrg", LAZURIO_TEAM_ID: "sales",
     LAZURIO_HOSTED_DOMAIN: "workspace-test-org.example.test",
-  } });
-  expect(report.ok).toBe(false);
-  expect(report.results).toHaveLength(1);
-  expect(report.results[0].reason).toBe("workspace_configuration_invalid");
+    LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN: "https://launchpad.builder.workspace-test-org.example.test",
+  };
+  for (const environment of [
+    { ...identity, LAZURIO_TEAM_ID: "" },
+    // A hosted identity without its Machine label cannot name application origins.
+    { ...identity, LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN: "" },
+  ]) {
+    const report = await runIsolatedLazurioUpdate({ rootPath: root, environment });
+    expect(report.ok).toBe(false);
+    expect(report.results).toHaveLength(1);
+    expect(report.results[0].reason).toBe("workspace_configuration_invalid");
+  }
 });
 
 test("real isolated CLI honors a partial Team after a real Organization fetch and stays idempotent", async () => {
@@ -151,7 +159,7 @@ test("real isolated CLI honors a partial Team after a real Organization fetch an
   await commitRemoteModule(fixture);
   const environment = { ...process.env, LAZURIO_WORKSPACE_PROFILE: "hosted",
     LAZURIO_ORGANIZATION_SLUG: "FixtureOrg", LAZURIO_TEAM_ID: "workspace",
-    LAZURIO_HOSTED_DOMAIN: "fixture-org.example.test" };
+    LAZURIO_HOSTED_DOMAIN: "fixture-org.example.test", LAZURIO_HOSTED_MACHINE: "builder" };
   const first = await runIsolatedLazurioUpdate({ rootPath: fixture.working, environment });
   expect(first.ok).toBe(true);
   expect(first.results.find((result) => result.module === "sample")?.state).toBe("updated");
@@ -172,7 +180,7 @@ test("hosted reports omit proven out-of-Team slot errors but retain selected-Tea
   };
   await createOrganization({ root, orgPath, slug: "WorkspaceTestOrg", moduleSlots: [invalidSlot] });
   const hostedWorkspace = createHostedWorkspaceConfiguration({ profile: "hosted",
-    organizationSlug: "WorkspaceTestOrg", teamId: "sales", domain: "workspace.example.test" });
+    organizationSlug: "WorkspaceTestOrg", teamId: "sales", domain: "workspace.example.test", machine: "builder" });
   const calls = [];
   const deps = {
     acquireLock: async () => ({ release: async () => {} }),

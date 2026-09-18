@@ -1,14 +1,15 @@
 # Hosted Workspace machine parity contract
 
-> **Stav (2026-09-16):** tento kontrakt popisuje **doručený pre-0146 runtime
-> Hosted Team Workspace** (Organization Host, hostname `<module>.<team>.<domain>`).
-> Pro nové změny routingu je **deprecated**: cílový model jmen a vstupu
-> hostovaných Mašin určuje decision 0146 v `manual/decision-register.md`
-> (`<app>.<vm>.<org>.lazurio.io` pro dílny, `<app>.<org>.lazurio.io` pro
-> produkční workspace aplikace, rozcestník na bare hostname). Tento dokument
-> zůstává acceptance vstupem doručeného runtime, dokud samostatně reviewovaný
-> runtime cutover Launchpadu nepřepne hosted identitu na model 0146; do té doby
-> runtime model 0146 **neimplementuje**.
+> **Stav (2026-09-18):** hosted identita Launchpadu je přepnutá na model
+> decision 0146 (`manual/decision-register.md`): každá aplikace běží na kořeni
+> vlastního hostname `https://<app>.<machine>.<domain>/` (dílna = hostovaná VM,
+> jen z tailnetu), produkční workspace aplikace na `<app>.<org>.lazurio.io`,
+> bare hostname VM je rozcestník. Pre-0146 tvar `<module>.<team>.<domain>` a
+> jeho path routing jsou **superseded**; tento dokument dál platí jen pro
+> parity rozsah synchronizace, jednu logickou Builder mašinu, runner a
+> infra důkazy. Vstup, TLS, admission a diagnostiku hostname vlastní Machines:
+> `productionspace/Machines/docs/workspace-application-entry.md` (sekce „What
+> the application must do“) a `workloads/workspace-vm/routes.mjs`.
 
 ## Rozsah synchronizace
 
@@ -67,13 +68,15 @@ Hosted identitu tvoří pouze:
 - `LAZURIO_WORKSPACE_PROFILE=hosted`;
 - exact `LAZURIO_ORGANIZATION_SLUG`;
 - exact lowercase `LAZURIO_TEAM_ID`;
-- společná lowercase DNS zóna v `LAZURIO_HOSTED_DOMAIN`.
+- společná lowercase DNS zóna v `LAZURIO_HOSTED_DOMAIN`;
+- label Mašiny: `LAZURIO_HOSTED_MACHINE`, nebo odvozený z
+  `LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN=https://launchpad.<machine>.<domain>`
+  (při obou musí souhlasit; bez platného labelu start selže).
 
-Externí App URL doručeného pre-0146 runtime je vždy odvozená jako
-`https://<module>.<team>.<domain>/` (cílový tvar po cutoveru podle decision
-0146 je `https://<app>.<vm>.<org>.lazurio.io/`; viz stav výše). Service
-catalog, revision, per-App desired state ani druhý lifecycle controller
-neexistují.
+Externí App URL je vždy odvozená jako `https://<module>.<machine>.<domain>/`
+(decision 0146); spuštěný modul dostane stejný origin ve
+`LAZURIO_RUNTIME_EXTERNAL_ORIGIN`. Service catalog, revision, per-App desired
+state ani druhý lifecycle controller neexistují.
 
 ## Runner
 
@@ -91,6 +94,7 @@ bun run parity:workspace -- \
   --expected-worktree-created-by <t3-creation-identity> \
   --launchpad-url http://127.0.0.1:4174 \
   --hosted-domain <shared-lowercase-dns-domain> \
+  --machine <vm-label> \
   --t3-pid <pid> \
   --codex-pid <pid> \
   --launchpad-pid <pid>
