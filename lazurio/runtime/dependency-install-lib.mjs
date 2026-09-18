@@ -15,6 +15,12 @@ const PACKAGE_LOCKFILES = Object.freeze([
 ]);
 const LOCAL_DEPENDENCY_TREE_ENTRY_LIMIT = 20_000;
 
+// Windows uses Bun's isolated linker. The hoisted linker materializes an
+// Organization-local `file:` directory dependency through a Windows copy path
+// that fails with EPERM for a non-elevated account without Developer Mode,
+// regardless of `--backend`. The isolated linker hardlinks the exact declared
+// target into `node_modules/.bun` and exposes it through a junction, which
+// needs no privilege; the lockfile stays byte-identical between both linkers.
 export function frozenBunInstallCommand(
   bunExecutable = process.execPath,
   { platform = process.platform } = {},
@@ -23,7 +29,7 @@ export function frozenBunInstallCommand(
     bunExecutable,
     "install",
     "--frozen-lockfile",
-    ...(platform === "win32" ? ["--backend=copyfile"] : []),
+    ...(platform === "win32" ? ["--linker=isolated"] : []),
   ];
 }
 
@@ -921,7 +927,15 @@ async function inspectLocalDependencyTree({
           continue;
         }
         if (entryState.isFile() && !requireFileSymlinks) {
-          authority.push(`file\0${entryRelativePath}`);
+          // Regular files carry their filesystem identity so a late atomic
+          // replacement of a target file (new inode, same path) changes the
+          // authority and fails the final recheck instead of passing by path.
+          authority.push([
+            "file",
+            entryRelativePath,
+            String(entryState.dev),
+            String(entryState.ino),
+          ].join("\0"));
           continue;
         }
         return {
@@ -1356,18 +1370,33 @@ async function inspectInstalledDependencyCandidate({
     }
   }
 
+  let localHardlinkStore = false;
+  let hardlinkStoreAuthority = null;
   if (localDependencyAuthority) {
     if (
       localDependencyAuthority.target_outside_checkout
       && !directLocalAlias
       && !localLinkFarm
     ) {
-      return {
-        ok: false,
-        reason: "dependency_tree_inspection_failed",
-        detail: `Instalovaný balíček ${dependencyName} není propojený s přesně deklarovaným file: cílem; Lazurio jej nepoužije jako aktuální lokální dependency.`,
-        path: null,
-      };
+      // Bun's isolated linker (Windows) materializes the declared target as a
+      // store directory inside the checkout whose files are hardlinks of the
+      // exact target files. Accept only that exact identity; a plain copy or
+      // any extra file is not the declared Organization-local dependency.
+      const hardlinkStore = await inspectExactHardlinkStore({
+        storeRoot: canonicalCandidateRoot,
+        authority: localDependencyAuthority,
+        dependencyName,
+      });
+      if (!hardlinkStore.ok) {
+        return {
+          ok: false,
+          reason: hardlinkStore.reason,
+          detail: `Instalovaný balíček ${dependencyName} není propojený s přesně deklarovaným file: cílem; Lazurio jej nepoužije jako aktuální lokální dependency. ${hardlinkStore.detail}`,
+          path: null,
+        };
+      }
+      localHardlinkStore = true;
+      hardlinkStoreAuthority = hardlinkStore.authority;
     }
     if (
       (directLocalAlias || localLinkFarm)
@@ -1375,6 +1404,17 @@ async function inspectInstalledDependencyCandidate({
         !samePath(packageSnapshot.targetRealPath, localDependencyAuthority.target_package_path)
         || !sameBytes(packageSnapshot.value, localDependencyAuthority.target_package_bytes)
       )
+    ) {
+      return {
+        ok: false,
+        reason: "dependency_authority_changed",
+        detail: `Deklarovaný lokální balíček ${dependencyName} změnil package identitu během ověření.`,
+        path: null,
+      };
+    }
+    if (
+      localHardlinkStore
+      && !sameBytes(packageSnapshot.value, localDependencyAuthority.target_package_bytes)
     ) {
       return {
         ok: false,
@@ -1411,6 +1451,26 @@ async function inspectInstalledDependencyCandidate({
         detail: `Adresář lokálního balíčku ${dependencyName} se během ověření změnil.`,
         path: null,
       };
+    }
+    if (localHardlinkStore) {
+      if (beforeLocalDependencyTreeRecheck) {
+        await beforeLocalDependencyTreeRecheck({ dependencyName, candidateRoot });
+      }
+      const recheckedStore = await inspectExactHardlinkStore({
+        storeRoot: canonicalCandidateRoot,
+        authority: localDependencyAuthority,
+        dependencyName,
+      });
+      if (!recheckedStore.ok || recheckedStore.authority !== hardlinkStoreAuthority) {
+        return {
+          ok: false,
+          reason: "dependency_authority_changed",
+          detail: recheckedStore.ok
+            ? `Instalovaný hardlink store balíčku ${dependencyName} se během ověření změnil.`
+            : recheckedStore.detail,
+          path: null,
+        };
+      }
     }
     if (localLinkFarm) {
       if (beforeLocalDependencyTreeRecheck) {
@@ -1512,6 +1572,151 @@ async function dependencyMetadataReadFailure({
       : `package.json balíčku ${dependencyName} nejde bezpečně přečíst: ${error instanceof Error ? error.message : String(error)}`,
     path: null,
   };
+}
+
+// Exact hardlink store: every regular file of the installed tree must be the
+// same filesystem object (dev + inode) as the file at the same relative path
+// inside the declared target, directories must match one to one, and the
+// target itself must not contain symlinks. Content is therefore proven by
+// identity, not by trusting a copy. Bun's isolated linker produces exactly this
+// layout for a `file:` directory dependency on Windows.
+async function inspectExactHardlinkStore({ storeRoot, authority, dependencyName }) {
+  const expectedDirectories = new Set();
+  const expectedFiles = new Map();
+  for (const entry of String(authority.target_tree_authority ?? "").split("\n")) {
+    const [kind, relativePath, dev, ino] = entry.split("\0");
+    if (kind === "walk-directory") continue;
+    if (kind === "directory") expectedDirectories.add(relativePath);
+    else if (kind === "file") expectedFiles.set(relativePath, { dev, ino });
+    else {
+      return {
+        ok: false,
+        reason: "dependency_tree_boundary_invalid",
+        detail: `Deklarovaný lokální balíček ${dependencyName} obsahuje symlink; hardlink store jej nemůže přesně reprezentovat.`,
+      };
+    }
+  }
+  const authorityEntries = [];
+  const seenDirectories = new Set();
+  const seenFiles = new Set();
+  const pending = [storeRoot];
+  let inspectedEntries = 0;
+  while (pending.length > 0) {
+    const currentDirectory = pending.pop();
+    let directory;
+    try {
+      const state = await lstat(currentDirectory);
+      if (!state.isDirectory() || state.isSymbolicLink()) {
+        return {
+          ok: false,
+          reason: "dependency_tree_boundary_invalid",
+          detail: `Hardlink store balíčku ${dependencyName} obsahuje adresář, který není běžný adresář.`,
+        };
+      }
+      directory = await opendir(currentDirectory);
+    } catch (error) {
+      return {
+        ok: false,
+        reason: "dependency_tree_inspection_failed",
+        detail: `Hardlink store balíčku ${dependencyName} nejde bezpečně projít: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+    try {
+      for await (const entry of directory) {
+        inspectedEntries += 1;
+        if (inspectedEntries > LOCAL_DEPENDENCY_TREE_ENTRY_LIMIT) {
+          return {
+            ok: false,
+            reason: "dependency_tree_inspection_failed",
+            detail: `Hardlink store balíčku ${dependencyName} přesahuje bezpečný limit ${LOCAL_DEPENDENCY_TREE_ENTRY_LIMIT} položek.`,
+          };
+        }
+        const entryPath = join(currentDirectory, entry.name);
+        const relativePath = relative(storeRoot, entryPath).replace(/\\/g, "/");
+        let entryState;
+        try {
+          entryState = await lstat(entryPath);
+        } catch (error) {
+          return {
+            ok: false,
+            reason: "dependency_tree_inspection_failed",
+            detail: `Hardlink store balíčku ${dependencyName} se během ověření změnil: ${error instanceof Error ? error.message : String(error)}`,
+          };
+        }
+        if (entryState.isDirectory() && !entryState.isSymbolicLink()) {
+          if (!expectedDirectories.has(relativePath)) {
+            return {
+              ok: false,
+              reason: "dependency_tree_boundary_invalid",
+              detail: `Hardlink store balíčku ${dependencyName} obsahuje adresář ${relativePath} mimo deklarovaný cíl.`,
+            };
+          }
+          seenDirectories.add(relativePath);
+          authorityEntries.push(`directory\0${relativePath}`);
+          pending.push(entryPath);
+          continue;
+        }
+        if (!entryState.isFile() || entryState.isSymbolicLink()) {
+          return {
+            ok: false,
+            reason: "dependency_tree_boundary_invalid",
+            detail: `Hardlink store balíčku ${dependencyName} obsahuje nepodporovaný filesystem objekt ${relativePath}.`,
+          };
+        }
+        if (!expectedFiles.has(relativePath)) {
+          return {
+            ok: false,
+            reason: "dependency_tree_boundary_invalid",
+            detail: `Hardlink store balíčku ${dependencyName} obsahuje soubor ${relativePath} mimo deklarovaný cíl.`,
+          };
+        }
+        let targetState;
+        try {
+          targetState = await lstat(join(authority.target_root, ...relativePath.split("/")));
+        } catch (error) {
+          return {
+            ok: false,
+            reason: "dependency_authority_changed",
+            detail: `Deklarovaný lokální soubor ${relativePath} balíčku ${dependencyName} nejde během ověření přečíst: ${error instanceof Error ? error.message : String(error)}`,
+          };
+        }
+        // The store file must be the same object as both the live target file
+        // and the file identity captured in the target authority being
+        // verified; a target swapped after that read is not the same authority.
+        const expected = expectedFiles.get(relativePath);
+        if (
+          !targetState.isFile()
+          || targetState.dev !== entryState.dev
+          || targetState.ino !== entryState.ino
+          || entryState.nlink < 2
+          || expected.dev !== String(entryState.dev)
+          || expected.ino !== String(entryState.ino)
+        ) {
+          return {
+            ok: false,
+            reason: "dependency_tree_boundary_invalid",
+            detail: `Soubor ${relativePath} v hardlink store balíčku ${dependencyName} není totožný objekt s přesně deklarovaným cílem.`,
+          };
+        }
+        seenFiles.add(relativePath);
+        authorityEntries.push(["hardlink", relativePath, String(entryState.dev), String(entryState.ino)].join("\0"));
+      }
+    } finally {
+      try {
+        await directory.close();
+      } catch {
+        // `for await` may already have closed the handle.
+      }
+    }
+  }
+  if (seenFiles.size !== expectedFiles.size || seenDirectories.size !== expectedDirectories.size) {
+    return {
+      ok: false,
+      reason: "dependency_tree_boundary_invalid",
+      detail: `Hardlink store balíčku ${dependencyName} neobsahuje celý deklarovaný cíl (${seenFiles.size}/${expectedFiles.size} souborů, ${seenDirectories.size}/${expectedDirectories.size} adresářů).`,
+    };
+  }
+  return { ok: true, authority: authorityEntries.sort().join("\n") };
 }
 
 async function readExactDeclaredLocalPackageLink({ candidatePackage, authority, dependencyName }) {
