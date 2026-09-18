@@ -194,9 +194,12 @@ Workspace mají committera `lazurio-for-github[bot]`, autora jako Teamovou
 pseudo-identitu a trailer `Lazurio-Workspace: <organization-slug>/<team-slug>`;
 každá změna jde přes pull request otevřený botem s labelem `team:<slug>`,
 který reviewuje a merguje oprávněný Operátor a tím za ni přebírá
-odpovědnost. Na GitHub Free to drží policy, na placeném plánu branch
-protection; principy jsou stejné. Zdrojem pravdy pro přístup Teamu k modulům
-a repozitářům je Dashboard (decision 0149); broker policy je z něj odvozená.
+odpovědnost. Token s `contents: write` umí na nechráněné `main` pushnout i
+merge dokončit, proto na GitHub Free toto pravidlo drží proces a policy a
+provider-enforced je až s branch protection na placeném plánu; principy jsou
+stejné. Přístup Teamu k repozitářům drží živé GitHub granty (decision 0149):
+broker policy je z nich odvozená a před vydáním tokenu živě znovu ověřená;
+Dashboard je jen read-only lens nad těmito granty.
 
 Supervisor udržuje pouze T3 Code a Launchpad. Vývojové procesy Modulů spouští a
 zastavuje Launchpad. Dashboard pouze zpřístupňuje vstupy pracovního prostoru;
