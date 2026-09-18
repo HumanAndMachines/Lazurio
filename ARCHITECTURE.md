@@ -185,6 +185,27 @@ operator zůstává vyšší doménou obnovy a kompromitace, ale běžný Team a
 Agent tím nezískává přístup k host OS, jinému Workspace nebo org-wide
 credentials.
 
+Cílový model GitHub identity Hosted Team Workspace určují decisions 0147 až
+0149 (`manual/decision-register.md`). Workspace nemá přiřazeného operátora;
+jeho Git identitou je platformní GitHub App Lazurio for GitHub dosahovaná
+přes per-Organization token broker, který vydává krátkodobé tokeny scoped na
+jeden repozitář — privátní klíč App na Mašině nikdy neleží. Nasazený broker
+autorizuje podle id workspace, jeho unikátního credentialu a
+`repository_ids`; vazba workspace na neměnný `github_team_id` a živé ověření
+GitHub Team → repository grantu při každém vydání tokenu (fail closed) je
+cílový kontrakt, který vyžaduje versionovanou změnu `Lazurio/github-app`
+s testy a migrací existujících policy před rolloutem. Commity z Workspace
+mají committera `lazurio-for-github[bot]`, autora jako Teamovou
+pseudo-identitu a trailer `Lazurio-Workspace: <organization-slug>/<team-slug>`;
+každá změna jde přes pull request otevřený botem s labelem `team:<slug>`,
+který reviewuje a merguje oprávněný Operátor a tím za ni přebírá
+odpovědnost. Token s `contents: write` umí na nechráněné `main` pushnout i
+merge dokončit, proto na GitHub Free toto pravidlo drží proces a policy a
+provider-enforced je až s branch protection na placeném plánu; principy jsou
+stejné. Jedinou živou autoritou přístupu Teamu k repozitářům zůstává GitHub
+(decision 0149): Dashboard smí vlastnit chtěné mapování jako reviewovaný
+vstup broker policy, ale samo přístup neuděluje ani neudržuje.
+
 Supervisor udržuje pouze T3 Code a Launchpad. Vývojové procesy Modulů spouští a
 zastavuje Launchpad. Dashboard pouze zpřístupňuje vstupy pracovního prostoru;
 procesy Modulů neřídí. Per-module kontejnery, Docker-in-Docker a další
