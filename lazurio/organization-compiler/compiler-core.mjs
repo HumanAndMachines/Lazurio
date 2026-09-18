@@ -2,6 +2,7 @@ import { existsSync } from "fs";
 import { readFile } from "fs/promises";
 import { join, relative, resolve } from "path";
 import {
+  isOrganizationCanonicalManifestAuthoritative,
   projectLegacyOrganizationManifest,
   resolveOrganizationRootDocuments,
 } from "../core/organization-activation-lib.mjs";
@@ -150,7 +151,7 @@ function readCompilerInput(root) {
   const modulesManifest = documents.modulesManifest;
   if (documents.canonicalManifest !== null) {
     const resolution = resolveOrganizationRootDocuments(documents);
-    if (!["transition", "current"].includes(resolution.state)) {
+    if (!isOrganizationCanonicalManifestAuthoritative(resolution)) {
       throw new OrganizationCompilerError(
         `Organization authority conflict: ${resolution.state} (${resolution.issues.join(", ") || "invalid documents"})`,
       );

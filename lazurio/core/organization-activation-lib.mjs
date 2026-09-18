@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { normalizeOrganizationPortPool } from "./organization-port-policy-lib.mjs";
 import {
   isValidOrganizationForgeBinding,
+  ORGANIZATION_FORGE_BINDING_VERSION,
   ORGANIZATION_GITHUB_LOGIN_PATTERN,
   ORGANIZATION_POSITIVE_GITHUB_ID_PATTERN,
 } from "./organization-forge-binding-lib.mjs";
@@ -22,12 +23,13 @@ export const ORGANIZATION_MANIFEST_SCHEMA_VERSION = "lazurio.organization.v1";
 export const ORGANIZATION_RESOURCE_SCHEMA_VERSION = "lazurio.organization.resource.v1";
 export const ORGANIZATION_LEGACY_PROJECTION_HASH_ALGORITHM = "sha256-canonical-json-v1";
 // Manifest formats the supported Machine cohort may activate, install,
-// fast-forward to and mutate under during the compatibility window. Every
-// gated consumer — activation, provider and local install, update, the local
-// mutation-safety checks and `--finalize` — reads exactly this list and keeps
-// no list of its own (scripts/organization-manifest-consumers.test.mjs), and
-// every reader already accepts a verified canonical-only `current` root once
-// the list admits it. Adding "current" here is therefore the single, complete
+// fast-forward to and mutate under during the compatibility window. No
+// consumer reads this list on its own: it is only the default of the
+// `activationFormats` seam, and the one decision "may this cohort operate on
+// this resolved root?" is `isOrganizationRootSupported` below — consumed by
+// activation, install, update, the local mutation-safety checks and
+// `--finalize` (scripts/organization-manifest-consumers.test.mjs pins every
+// consumer). Adding "current" here is therefore the single, complete
 // reader-readiness gate that unblocks `--finalize` (decision 0145); shipping
 // it is a separate readiness decision, not a code change elsewhere.
 export const ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS = Object.freeze(["legacy", "transition"]);
@@ -181,6 +183,72 @@ export function resolveOrganizationActivation({ request, observations }) {
     [`root_supported_${root.resolver.format}`],
     "none",
   );
+}
+
+/**
+ * The one immutable-identity proof of an Organization root, evaluated on the
+ * normalized resource the resolver returns. It holds only when the manifest
+ * itself carries a complete verified GitHub binding — `binding_state:
+ * "verified"` with `organization_id` on the Organization and `repository_id`
+ * on the root repository, in the canonical `<login>/<login>_GEN3` on `main`
+ * shape — and every expectation the caller supplies matches it. Callers with
+ * live or previously verified facts (activation, install, update) pass them;
+ * an offline caller (`--finalize`) passes none and still gets the structural
+ * half of the proof. `null`/`undefined` expectations are "not supplied".
+ */
+export function isOrganizationForgeIdentityVerified(resource, {
+  organizationId,
+  organizationLogin,
+  repositoryId,
+  repositoryFullName,
+} = {}) {
+  const organization = resource?.organization?.forge_binding;
+  const repository = resource?.root_repository;
+  if (organization?.binding_state !== "verified" || repository?.binding_state !== "verified") return false;
+  return isValidOrganizationForgeBinding({
+    schema_version: ORGANIZATION_FORGE_BINDING_VERSION,
+    provider: "github",
+    organization: { id: organization.organization_id, asserted_login: organization.locator },
+    repository: {
+      id: repository.repository_id,
+      asserted_full_name: repository.locator,
+      default_branch: repository.default_branch,
+    },
+  }, {
+    organizationId: organizationId ?? undefined,
+    organizationLogin: organizationLogin ?? undefined,
+    repositoryId: repositoryId ?? undefined,
+    repositoryFullName: repositoryFullName ?? undefined,
+  });
+}
+
+/**
+ * The single reader-readiness decision: may this Machine cohort operate on the
+ * resolved Organization root? True only when the resolver produced exactly one
+ * resource in a format the cohort lists and — for a canonical-only `current`
+ * root, which has no legacy projection left to fall back on — the root also
+ * carries the verified immutable identity above. `legacy` and `transition`
+ * keep their compatibility identity rules, so with the shipped formats this is
+ * exactly the previous "legacy or transition with one resource" check.
+ */
+export function isOrganizationRootSupported(resolution, {
+  activationFormats = ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
+  expectedIdentity = {},
+} = {}) {
+  const resource = resolution?.resource ?? null;
+  if (resource === null || !Array.isArray(activationFormats) || !activationFormats.includes(resolution.state)) {
+    return false;
+  }
+  return resolution.state !== "current" || isOrganizationForgeIdentityVerified(resource, expectedIdentity);
+}
+
+/**
+ * True when the canonical manifest is the consistent authority of the root
+ * (`transition` or `current`): the input question of the compiler, independent
+ * of which formats a cohort may activate.
+ */
+export function isOrganizationCanonicalManifestAuthoritative(resolution) {
+  return resolution?.state === "transition" || resolution?.state === "current";
 }
 
 export function organizationActivationError({ request, code, retryable, nextAction }) {
@@ -792,11 +860,13 @@ function organizationActivationSupport({
   const forgeBinding = companyManifest?.forge_binding;
   // Canonical formats take the immutable identity from the normalized canonical
   // resource; only the legacy format reads it from the legacy document.
+  // Activation always has live immutable IDs; a missing expectation must fail,
+  // so it is passed as "" (never a valid ID) instead of "not supplied".
   const forgeBindingSupported = eligibleFormat !== "legacy"
-    ? organizationBinding?.binding_state === "verified"
-      && repositoryBinding?.binding_state === "verified"
-      && String(organizationBinding.organization_id ?? "") === String(expectedOrganizationId ?? "")
-      && String(repositoryBinding.repository_id ?? "") === String(expectedRepositoryId ?? "")
+    ? isOrganizationForgeIdentityVerified(resource, {
+        organizationId: expectedOrganizationId ?? "",
+        repositoryId: expectedRepositoryId ?? "",
+      })
     : forgeBinding === undefined
     || isValidOrganizationForgeBinding(forgeBinding, {
       organizationId: expectedOrganizationId,

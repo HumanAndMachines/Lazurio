@@ -13,6 +13,8 @@ import { join, resolve } from "node:path";
 import {
   ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
   ORGANIZATION_ROOT_RESOLUTION_VERSION,
+  isOrganizationForgeIdentityVerified,
+  isOrganizationRootSupported,
   organizationLegacyProjectionHash,
   projectLegacyOrganizationManifest,
   resolveOrganizationRootDocuments,
@@ -160,7 +162,18 @@ function planFinalize({ plan, before, documents, block, activationFormats }) {
   if (after.state !== "current" || !plan.parity.semantic) {
     return block("finalize_readback_invalid", `Canonical manifest sám o sobě neresolvuje jako current (${after.issues.join(", ") || after.state}).`);
   }
-  if (!activationFormats.includes("current")) {
+  // Finalization may only produce a root the same cohort's readers accept.
+  // Offline it has no live GitHub facts, so it requires the structural half of
+  // the shared Core identity proof: a complete verified forge binding in the
+  // canonical manifest. Activation/install then match it against live IDs.
+  if (!isOrganizationForgeIdentityVerified(after.resource)) {
+    return block(
+      "finalize_binding_unverified",
+      "Canonical manifest nenese verified forge binding (binding_state: verified s organization_id a repository_id); "
+        + "canonical-only root by žádný reader neaktivoval. Legacy projekce zůstává povinná.",
+    );
+  }
+  if (!isOrganizationRootSupported(after, { activationFormats })) {
     plan.outcome = "blocked";
     plan.blockers.push({
       code: "finalize_reader_gate_closed",

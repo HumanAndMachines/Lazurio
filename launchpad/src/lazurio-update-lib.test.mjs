@@ -27,8 +27,10 @@ import {
 import { buildRepositoryLocationIssue } from "../../lazurio/core/module-location-repair-contract-lib.mjs";
 import {
   ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
+  isOrganizationRootSupported,
   organizationLegacyProjectionHash,
   projectLegacyOrganizationManifest,
+  resolveOrganizationRootDocuments,
 } from "../../lazurio/core/organization-activation-lib.mjs";
 import { readOrganizationRoot } from "../../lazurio/core/organization-root-reader-lib.mjs";
 import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.mjs";
@@ -537,44 +539,98 @@ test("Organization update leaves an incompatible canonical-only target inactive"
 });
 
 test("Organization update fast-forwards to a verified canonical-only target once the reader gate lists current", async () => {
-  // Same finalized target as above; only the injected reader cohort differs.
-  // The shipped ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS stays closed.
+  // Same finalized shape as above, but genuinely verified: the canonical
+  // manifest carries binding_state "verified" with immutable IDs. Only the
+  // injected reader cohort differs; the shipped gate stays closed.
   expect(ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS).not.toContain("current");
+  const currentCohort = [...ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS, "current"];
   const fixture = await organizationActivationFixture("canonical-only-current-cohort");
-  const transition = transitionOrganizationDocuments();
-  await writeFile(join(fixture.contributor, "lazurio.organization.json"), transition["lazurio.organization.json"]);
-  await rm(join(fixture.contributor, "company.gen3.json"));
-  runGit(fixture.contributor, ["add", "-A"]);
-  runGit(fixture.contributor, ["commit", "-m", "publish finalized canonical-only target"]);
-  runGit(fixture.contributor, ["push", "origin", "main"]);
+  const verified = transitionOrganizationDocuments({ verified: true });
+  expect(JSON.parse(verified["lazurio.organization.json"])).toMatchObject({
+    organization: { forge_binding: { binding_state: "verified", organization_id: "314957563" } },
+    root_repository: { binding_state: "verified", repository_id: "42424242" },
+  });
+  await addRemoteFiles(fixture, verified, "publish verified transition pair");
+  expect(await updateManagedRepo(descriptor(fixture), { runId: "verified-transition" }))
+    .toMatchObject({ state: "updated" });
+  await publishCanonicalOnly(fixture, verified["lazurio.organization.json"], "publish finalized canonical-only target");
+  const before = runGit(fixture.working, ["rev-parse", "HEAD"]);
+
+  // Shipped default: the verified canonical-only target still does not advance.
+  expect(await updateManagedRepo(descriptor(fixture), { runId: "canonical-only-shipped-gate" }))
+    .toMatchObject({ state: "blocked", reason: "organization_target_incompatible" });
+  expect(runGit(fixture.working, ["rev-parse", "HEAD"])).toBe(before);
 
   const result = await updateManagedRepo(descriptor(fixture), {
     runId: "canonical-only-current-cohort",
-    deps: { activationFormats: [...ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS, "current"] },
+    deps: { activationFormats: currentCohort },
   });
 
   expect(result).toMatchObject({ state: "updated", actions: expect.arrayContaining(["fast_forward"]) });
   expect(existsSync(join(fixture.working, "company.gen3.json"))).toBe(false);
-  expect(readOrganizationRoot({ organizationRoot: fixture.working })).toMatchObject({
-    state: "current",
-    resource_count: 1,
-  });
+  const installed = readOrganizationRoot({ organizationRoot: fixture.working });
+  expect(installed).toMatchObject({ state: "current", resource_count: 1 });
+  expect(isOrganizationRootSupported(installed, { activationFormats: currentCohort })).toBe(true);
   expect(status(fixture.working)).toBe("");
 });
 
-test("Organization update keeps a canonical-only target with an invalid projection hash blocked in every cohort", async () => {
-  const fixture = await organizationActivationFixture("canonical-only-unverified");
-  const canonical = JSON.parse(transitionOrganizationDocuments()["lazurio.organization.json"]);
-  canonical.compatibility.legacy_projection.sha256 = `sha256:${"0".repeat(64)}`;
-  await writeFile(join(fixture.contributor, "lazurio.organization.json"), `${JSON.stringify(canonical, null, 2)}\n`);
-  await rm(join(fixture.contributor, "company.gen3.json"));
-  runGit(fixture.contributor, ["add", "-A"]);
-  runGit(fixture.contributor, ["commit", "-m", "publish unverified canonical-only target"]);
-  runGit(fixture.contributor, ["push", "origin", "main"]);
+test("Organization update blocks an unverified but otherwise valid canonical-only target in the current cohort", async () => {
+  const currentCohort = [...ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS, "current"];
+  const fixture = await organizationActivationFixture("canonical-only-unverified-binding");
+  const unverified = transitionOrganizationDocuments();
+  await publishCanonicalOnly(fixture, unverified["lazurio.organization.json"], "publish unverified canonical-only target");
+  const before = runGit(fixture.working, ["rev-parse", "HEAD"]);
+
+  // The target is schema-valid and hash-valid: it resolves as `current` with
+  // one resource. Only the immutable identity proof is missing.
+  const canonicalManifest = JSON.parse(unverified["lazurio.organization.json"]);
+  const modulesManifest = JSON.parse(unverified["modules.manifest.json"]);
+  expect(canonicalManifest.organization.forge_binding.binding_state).toBe("unverified");
+  expect(resolveOrganizationRootDocuments({ canonicalManifest, companyManifest: null, modulesManifest }))
+    .toMatchObject({ state: "current", resource_count: 1, issues: [] });
+
+  const result = await updateManagedRepo(descriptor(fixture), {
+    runId: "canonical-only-unverified-binding",
+    deps: { activationFormats: currentCohort },
+  });
+
+  expect(result).toMatchObject({
+    state: "blocked",
+    reason: "organization_target_incompatible",
+    next_action: { kind: "codex" },
+  });
+  expect(runGit(fixture.working, ["rev-parse", "HEAD"])).toBe(before);
+  expect(readOrganizationRoot({ organizationRoot: fixture.working }).state).toBe("legacy");
+});
+
+test("Organization update never lets a canonical-only target swap the installed immutable identity", async () => {
+  const currentCohort = [...ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS, "current"];
+  const fixture = await organizationActivationFixture("canonical-only-identity-swap");
+  await addRemoteFiles(fixture, transitionOrganizationDocuments({ verified: true }), "publish verified transition pair");
+  expect(await updateManagedRepo(descriptor(fixture), { runId: "identity-swap-baseline" }))
+    .toMatchObject({ state: "updated" });
+  const swapped = transitionOrganizationDocuments({ verified: true, repositoryId: "99999999" });
+  await publishCanonicalOnly(fixture, swapped["lazurio.organization.json"], "publish canonical-only target with another repository ID");
   const before = runGit(fixture.working, ["rev-parse", "HEAD"]);
 
   const result = await updateManagedRepo(descriptor(fixture), {
-    runId: "canonical-only-unverified",
+    runId: "canonical-only-identity-swap",
+    deps: { activationFormats: currentCohort },
+  });
+
+  expect(result).toMatchObject({ state: "blocked", reason: "organization_target_incompatible" });
+  expect(runGit(fixture.working, ["rev-parse", "HEAD"])).toBe(before);
+});
+
+test("Organization update keeps a canonical-only target with an invalid projection hash blocked in every cohort", async () => {
+  const fixture = await organizationActivationFixture("canonical-only-invalid-hash");
+  const canonical = JSON.parse(transitionOrganizationDocuments({ verified: true })["lazurio.organization.json"]);
+  canonical.compatibility.legacy_projection.sha256 = `sha256:${"0".repeat(64)}`;
+  await publishCanonicalOnly(fixture, `${JSON.stringify(canonical, null, 2)}\n`, "publish canonical-only target with an invalid hash");
+  const before = runGit(fixture.working, ["rev-parse", "HEAD"]);
+
+  const result = await updateManagedRepo(descriptor(fixture), {
+    runId: "canonical-only-invalid-hash",
     deps: { activationFormats: [...ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS, "current"] },
   });
 
@@ -3428,7 +3484,17 @@ async function organizationActivationFixture(name) {
   return fixture;
 }
 
-function transitionOrganizationDocuments() {
+async function publishCanonicalOnly(fixture, canonicalText, message) {
+  await writeFile(join(fixture.contributor, "lazurio.organization.json"), canonicalText);
+  await rm(join(fixture.contributor, "company.gen3.json"), { force: true });
+  runGit(fixture.contributor, ["add", "-A"]);
+  runGit(fixture.contributor, ["commit", "-m", message]);
+  runGit(fixture.contributor, ["push", "origin", "main"]);
+}
+
+// `verified` adds the complete immutable GitHub binding (verified forge binding
+// with organization_id and a verified root repository with repository_id).
+function transitionOrganizationDocuments({ verified = false, repositoryId = "42424242" } = {}) {
   const modules = {
     organization_generation: "gen3",
     company: "test",
@@ -3441,10 +3507,20 @@ function transitionOrganizationDocuments() {
     organization: {
       slug: "test",
       display_name: "Test Organization",
-      forge_binding: { forge: "github", locator: "test", binding_state: "unverified" },
+      forge_binding: verified
+        ? { forge: "github", locator: "test", binding_state: "verified", organization_id: "314957563" }
+        : { forge: "github", locator: "test", binding_state: "unverified" },
       metadata: {},
     },
-    root_repository: null,
+    root_repository: verified
+      ? {
+          forge: "github",
+          locator: "test/test_GEN3",
+          default_branch: "main",
+          binding_state: "verified",
+          repository_id: repositoryId,
+        }
+      : null,
     manifests: { modules: "modules.manifest.json" },
     extensions: { legacy: {} },
     compatibility: {

@@ -4,7 +4,10 @@ import {
   checkOrganizationActivation,
   renderHumanOrganizationActivation,
 } from "./organization-activation-lib.mjs";
-import { ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS } from "./core/organization-activation-lib.mjs";
+import {
+  ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
+  organizationLegacyProjectionHash,
+} from "./core/organization-activation-lib.mjs";
 import { createOrganizationScaffold } from "./core/organization-scaffold-lib.mjs";
 
 test("--check provider adapter uses read-only GitHub calls and reports absent root", () => {
@@ -319,18 +322,41 @@ test("verified canonical-only current root activates only for a reader cohort th
     reasons: ["root_manifest_unsupported"],
     observations: { root_repository: { resolver: { status: "unsupported", format: null } } },
   });
+
+  // An unverified but otherwise valid canonical-only root never activates.
+  expect(checkOrganizationActivation({
+    githubOrganizationId: "314957563",
+    activationFormats: [...ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS, "current"],
+    resolveGitHubCli: () => "/usr/bin/gh",
+    runGitHubCli: fixtureRunner({ root: "current", appSelection: "all", unverifiedBinding: true }),
+  })).toMatchObject({
+    outcome: "action_required",
+    reasons: ["root_manifest_unsupported"],
+    observations: {
+      root_repository: { resolver: { status: "unsupported", format: null, reason: "legacy_identity_pair_invalid" } },
+    },
+  });
 });
 
 // A finalized Organization root: canonical + modules, no legacy projection.
-function currentRootDocuments({ tamperedProjectionHash = false } = {}) {
+function currentRootDocuments({ tamperedProjectionHash = false, unverifiedBinding = false } = {}) {
   const scaffold = createOrganizationScaffold({
     organization: { id: "314957563", login: "Example", slug: "example-org", displayName: "Example" },
     repository: { id: "42424242", name: "Example_GEN3", fullName: "Example/Example_GEN3", defaultBranch: "main" },
   });
   const document = (path) => JSON.parse(scaffold.files.find((file) => file.path === path).content);
   const canonical = document("lazurio.organization.json");
+  const modules = document("modules.manifest.json");
+  if (unverifiedBinding) {
+    // Locators only, no immutable IDs — and still a valid declared hash.
+    const { organization_id: _organizationId, ...organizationBinding } = canonical.organization.forge_binding;
+    const { repository_id: _repositoryId, ...rootRepository } = canonical.root_repository;
+    canonical.organization.forge_binding = { ...organizationBinding, binding_state: "unverified" };
+    canonical.root_repository = { ...rootRepository, binding_state: "unverified" };
+    canonical.compatibility.legacy_projection.sha256 = organizationLegacyProjectionHash(canonical, modules);
+  }
   if (tamperedProjectionHash) canonical.compatibility.legacy_projection.sha256 = `sha256:${"0".repeat(64)}`;
-  return { canonical, modules: document("modules.manifest.json") };
+  return { canonical, modules };
 }
 
 function fixtureRunner({
@@ -344,8 +370,9 @@ function fixtureRunner({
   selectedAccess = "included",
   malformedCanonical = false,
   tamperedProjectionHash = false,
+  unverifiedBinding = false,
 }) {
-  const current = root === "current" ? currentRootDocuments({ tamperedProjectionHash }) : null;
+  const current = root === "current" ? currentRootDocuments({ tamperedProjectionHash, unverifiedBinding }) : null;
   return (call) => {
     calls.push(call);
     if (call.args[0] === "auth") return { status: 0, stdout: "", stderr: "" };

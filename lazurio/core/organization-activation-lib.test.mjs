@@ -16,6 +16,9 @@ import {
   ORGANIZATION_MANIFEST_STATES,
   ORGANIZATION_RESOURCE_SCHEMA_VERSION,
   createOrganizationActivationRequest,
+  isOrganizationCanonicalManifestAuthoritative,
+  isOrganizationForgeIdentityVerified,
+  isOrganizationRootSupported,
   isValidOrganizationActivationObservations,
   isValidOrganizationActivationReport,
   organizationActivationError,
@@ -548,6 +551,82 @@ test("activation admits a verified canonical-only current root only when the rea
     companyManifest: projectLegacyOrganizationManifest(canonicalManifest, modulesManifest),
     activationFormats: ["current"],
   })).toMatchObject({ state: "transition", activation: unavailable });
+});
+
+test("one shared predicate decides reader support and demands the verified immutable identity for current", () => {
+  const modulesManifest = organizationModules();
+  const unverifiedCanonical = canonicalOrganization(modulesManifest);
+  const verifiedCanonical = canonicalOrganization(modulesManifest);
+  verifiedCanonical.organization.forge_binding = {
+    ...verifiedCanonical.organization.forge_binding,
+    binding_state: "verified",
+    organization_id: "314957563",
+  };
+  verifiedCanonical.root_repository = {
+    ...verifiedCanonical.root_repository,
+    binding_state: "verified",
+    repository_id: "42424242",
+  };
+  verifiedCanonical.compatibility.legacy_projection.sha256 = organizationLegacyProjectionHash(
+    verifiedCanonical,
+    modulesManifest,
+  );
+  const resolve = (canonicalManifest, { legacy = false } = {}) => resolveOrganizationRootDocuments({
+    canonicalManifest,
+    companyManifest: legacy ? projectLegacyOrganizationManifest(canonicalManifest, modulesManifest) : null,
+    modulesManifest,
+  });
+  const currentCohort = [...ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS, "current"];
+  const verified = resolve(verifiedCanonical);
+  const unverified = resolve(unverifiedCanonical);
+  expect([verified.state, unverified.state]).toEqual(["current", "current"]);
+  expect([verified.issues, unverified.issues]).toEqual([[], []]);
+
+  // Identity proof: structural without expectations, exact with them.
+  const login = verifiedCanonical.organization.forge_binding.locator;
+  const fullName = verifiedCanonical.root_repository.locator;
+  expect(isOrganizationForgeIdentityVerified(verified.resource)).toBe(true);
+  expect(isOrganizationForgeIdentityVerified(verified.resource, {
+    organizationId: "314957563",
+    organizationLogin: login.toUpperCase(),
+    repositoryId: "42424242",
+    repositoryFullName: fullName,
+  })).toBe(true);
+  expect(isOrganizationForgeIdentityVerified(verified.resource, { organizationId: null, repositoryId: undefined })).toBe(true);
+  for (const mismatch of [
+    { organizationId: "999" },
+    { repositoryId: "999" },
+    { organizationLogin: "Other" },
+    { repositoryFullName: "Other/Other_GEN3" },
+    { organizationId: "" },
+  ]) expect(isOrganizationForgeIdentityVerified(verified.resource, mismatch)).toBe(false);
+  expect(isOrganizationForgeIdentityVerified(unverified.resource)).toBe(false);
+  expect(isOrganizationForgeIdentityVerified(null)).toBe(false);
+
+  // Shipped formats: exactly "legacy or transition with one resource".
+  expect(isOrganizationRootSupported(verified)).toBe(false);
+  expect(isOrganizationRootSupported(resolve(unverifiedCanonical, { legacy: true }))).toBe(true);
+  expect(isOrganizationRootSupported(resolve(verifiedCanonical, { legacy: true }))).toBe(true);
+  expect(isOrganizationRootSupported(resolve({ schema_version: "lazurio.organization.v1" }))).toBe(false);
+  expect(isOrganizationRootSupported(null)).toBe(false);
+
+  // Future cohort: `current` is supported only with the verified identity, and
+  // never against a different expected immutable ID.
+  expect(isOrganizationRootSupported(verified, { activationFormats: currentCohort })).toBe(true);
+  expect(isOrganizationRootSupported(unverified, { activationFormats: currentCohort })).toBe(false);
+  expect(isOrganizationRootSupported(verified, {
+    activationFormats: currentCohort,
+    expectedIdentity: { organizationId: "314957563", repositoryId: "42424242" },
+  })).toBe(true);
+  expect(isOrganizationRootSupported(verified, {
+    activationFormats: currentCohort,
+    expectedIdentity: { repositoryId: "999" },
+  })).toBe(false);
+  expect(isOrganizationRootSupported(verified, { activationFormats: null })).toBe(false);
+
+  expect(isOrganizationCanonicalManifestAuthoritative(verified)).toBe(true);
+  expect(isOrganizationCanonicalManifestAuthoritative(resolve(verifiedCanonical, { legacy: true }))).toBe(true);
+  expect(isOrganizationCanonicalManifestAuthoritative(resolve({ schema_version: "lazurio.organization.v1" }))).toBe(false);
 });
 
 test("canonical schema, semantic parity and projection hash are deterministic across key order and formatting", () => {

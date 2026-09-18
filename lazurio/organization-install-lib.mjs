@@ -20,13 +20,14 @@ import {
 import { resolveGitHubCliExecutableOnPath } from "./core/toolchain-lib.mjs";
 import {
   ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
+  isOrganizationForgeIdentityVerified,
+  isOrganizationRootSupported,
   resolveOrganizationRootDocuments,
 } from "./core/organization-activation-lib.mjs";
 import {
   readOrganizationRoot,
   readOrganizationRootDocuments,
 } from "./core/organization-root-reader-lib.mjs";
-import { isValidOrganizationForgeBinding } from "./core/organization-scaffold-lib.mjs";
 import {
   classifyOrganizationSlotAccess,
   githubRepositoryCoordinate,
@@ -247,7 +248,7 @@ export async function installOrganization({
   if (convergence.state !== "blocked" || (blockers.length > 0 && blockers.every((result) => result.reason === "managed_checkout_not_repository"))) {
     const recovered = await recoverOrganizationRepositoryDbParent({
       rootPath: absoluteRoot, organizationPath, organizationRoot: targetPath,
-      source, platform, run, runPinnedChild, materializationDeps: deps.materialization, restrictedSlotPolicy,
+      source, platform, run, runPinnedChild, materializationDeps: deps.materialization, restrictedSlotPolicy, activationFormats,
     });
     if (recovered?.state === "updated") {
       convergence = appendConvergenceResults(await runUpdate({ rootPath: absoluteRoot, organizations: [organization], restrictedSlotPolicy }), [recovered]);
@@ -265,6 +266,7 @@ export async function installOrganization({
       runPinnedChild,
       materializationDeps: deps.materialization,
       restrictedSlotPolicy,
+      activationFormats,
     });
     convergence = appendConvergenceResults(convergence, repositoryDbResults);
   }
@@ -290,9 +292,9 @@ export async function installOrganization({
   return report;
 }
 
-async function recoverOrganizationRepositoryDbParent({ rootPath, organizationPath, organizationRoot, source, platform, run, runPinnedChild, materializationDeps, restrictedSlotPolicy = "include" }) {
+async function recoverOrganizationRepositoryDbParent({ rootPath, organizationPath, organizationRoot, source, platform, run, runPinnedChild, materializationDeps, restrictedSlotPolicy = "include", activationFormats }) {
   const resolution = readOrganizationRoot({ organizationRoot });
-  if (!["current", "legacy", "transition"].includes(resolution.state) || resolution.resource_count !== 1) return null;
+  if (!isOrganizationRootSupported(resolution, { activationFormats })) return null;
   const inventory = resolution.resource?.repository_inventory ?? [];
   const slots = inventory.filter((slot) => slot.path === "mission-control/db" && slot.status === "active" && slot.materialization === "repository_db_mount");
   if (slots.length !== 1) return null;
@@ -365,6 +367,7 @@ export async function installOrganizationRepositoryDbMounts({
   runPinnedChild = runGitInPinnedTemporaryChild,
   materializationDeps = {},
   restrictedSlotPolicy = "include",
+  activationFormats = ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
 } = {}) {
   if (!ORGANIZATION_INSTALL_RESTRICTED_SLOT_SCOPES.includes(restrictedSlotPolicy)) {
     throw new TypeError("Repository-db install restrictedSlotPolicy must be include or exclude.");
@@ -381,8 +384,7 @@ export async function installOrganizationRepositoryDbMounts({
     })];
   }
   if (
-    !["current", "legacy", "transition"].includes(resolution.state)
-    || resolution.resource_count !== 1
+    !isOrganizationRootSupported(resolution, { activationFormats })
     || !Array.isArray(resolution.resource?.repository_inventory)
   ) {
     return [repositoryDbBlockedResult({
@@ -1111,27 +1113,14 @@ function verifyOrganizationRootDocuments({ documents, organization, repository, 
     expectedRepositoryFullName: repository.full_name,
     activationFormats,
   });
-  const identity = resolution.resource;
-  const bindingSupported = identity?.organization?.forge_binding?.binding_state === "verified"
-    && identity?.root_repository?.binding_state === "verified"
-    && isValidOrganizationForgeBinding({
-      schema_version: "lazurio.forge-binding.github.v0",
-      provider: "github",
-      organization: {
-        id: identity.organization.forge_binding.organization_id,
-        asserted_login: identity.organization.forge_binding.locator,
-      },
-      repository: {
-        id: identity.root_repository.repository_id,
-        asserted_full_name: identity.root_repository.locator,
-        default_branch: identity.root_repository.default_branch,
-      },
-    }, {
-      organizationId: organization.id,
-      organizationLogin: organization.login,
-      repositoryId: repository.id,
-      repositoryFullName: repository.full_name,
-    });
+  // Install requires the shared immutable-identity proof in every format,
+  // checked against all four live GitHub facts.
+  const bindingSupported = isOrganizationForgeIdentityVerified(resolution.resource, {
+    organizationId: organization.id,
+    organizationLogin: organization.login,
+    repositoryId: repository.id,
+    repositoryFullName: repository.full_name,
+  });
   if (resolution.activation.status !== "supported" || !bindingSupported) {
     return providerFailure(
       "root_manifest_identity_mismatch",

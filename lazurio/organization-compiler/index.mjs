@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { inspectCanonicalPathBoundary } from "../core/path-boundary-lib.mjs";
+import { isOrganizationCanonicalManifestAuthoritative } from "../core/organization-activation-lib.mjs";
 import { readOrganizationRoot } from "../core/organization-root-reader-lib.mjs";
 import { lstat, mkdir, writeFile, rename, unlink } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
@@ -80,7 +81,7 @@ export async function compileOrganization(options = {}) {
     throw new OrganizationCompilerError("Write requires a linked review worktree on a non-canonical branch");
   }
   const resolution = readOrganizationRoot({ organizationRoot: root });
-  if (resolution.document_presence.canonical && !["current", "transition"].includes(resolution.state)) {
+  if (resolution.document_presence.canonical && !isOrganizationCanonicalManifestAuthoritative(resolution)) {
     throw new OrganizationCompilerError(`Organization authority conflict: ${resolution.state}`);
   }
   for (const path of ["lazurio.organization.json", "company.gen3.json", "modules.manifest.json", "generated/company-summary.json", "generated/business-context.md", "generated/modules.index.json", "generated/generation-policy.md"]) {

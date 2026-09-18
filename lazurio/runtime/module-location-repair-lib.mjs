@@ -13,7 +13,7 @@ import {
 } from "../core/organization-slot-scope-lib.mjs";
 import { isSamePath } from "../core/path-boundary-lib.mjs";
 import { moduleLocationRepairCommand } from "../core/module-location-repair-contract-lib.mjs";
-import { ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS } from "../core/organization-activation-lib.mjs";
+import { isOrganizationRootSupported } from "../core/organization-activation-lib.mjs";
 import {
   ORGANIZATION_DOCUMENT_PATHS,
   readOrganizationRoot,
@@ -1249,8 +1249,7 @@ async function findOrganization({ rootPath, organizationSlug }) {
       || entry.name === `${organizationSlug}_GEN3`;
     if (!matchesRequestedMount) continue;
     if (
-      !ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS.includes(resolution.state)
-      || resolution.resource_count !== 1
+      !isOrganizationRootSupported(resolution)
     ) {
       return {
         ok: false,

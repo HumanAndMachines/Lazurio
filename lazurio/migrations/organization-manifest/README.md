@@ -58,15 +58,16 @@ lazurio migrate organization-manifest <organization-root> --finalize --write
 - Each file is replaced atomically on its own path (canonical first). An
   interruption leaves a visible fail-closed Git state; rerunning the same
   command regenerates deterministically. No hidden transaction state.
-- `--finalize --write` stays blocked (`finalize_reader_gate_closed`) until Core
-  `ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS` admits `current`. That constant
-  is the single reader/update gate and every gated consumer reads it:
-  activation, provider and local install, update, and the local mutation-safety
-  checks (module setup, port allocation, location repair, worktree create and
-  inventory, workspace parity). Each of them already accepts a verified
-  canonical-only `current` root — identity taken from the canonical resource —
-  the moment the list admits it, so opening finalize can never strand a reader.
-  The shipped list is `legacy`, `transition`; admitting `current` is a separate
+- `--finalize` never produces a root its own reader cohort would refuse. It
+  consumes the shared Core contract and owns no state list of its own:
+  `isOrganizationForgeIdentityVerified` — the canonical manifest must carry a
+  complete verified forge binding (`binding_state: "verified"` with
+  `organization_id` and `repository_id`), otherwise `finalize_binding_unverified`
+  in every cohort — and `isOrganizationRootSupported`, otherwise
+  `finalize_reader_gate_closed`. Activation, install, update and the local
+  mutation-safety checks apply the same predicates (activation/install against
+  live GitHub IDs, update against the installed verified IDs). The shipped
+  format list is `legacy`, `transition`; admitting `current` is a separate
   readiness decision (decision 0145), not part of this migrator. Tests exercise
   the `current` cohort by injecting `activationFormats`; the CLI cannot set it.
 - Template roots (`kind: template`) are refused; they migrate in their own

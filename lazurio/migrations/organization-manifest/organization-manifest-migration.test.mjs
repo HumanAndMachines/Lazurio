@@ -10,7 +10,11 @@ import {
   readOrganizationRoot,
   readOrganizationRootDocuments,
 } from "../../core/organization-root-reader-lib.mjs";
-import { ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS } from "../../core/organization-activation-lib.mjs";
+import {
+  ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
+  isOrganizationRootSupported,
+  resolveOrganizationRootDocuments,
+} from "../../core/organization-activation-lib.mjs";
 import { resolveGitExecutableOnPath } from "../../core/toolchain-lib.mjs";
 import {
   organizationManifestMigrationExitCode,
@@ -234,6 +238,9 @@ test("finalize opens exactly with the reader gate and leaves a root the same rea
     ...expectations,
     activationFormats: ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
   }).activation).toEqual({ status: "unsupported", format: null, reason: "canonical_resolver_unavailable" });
+  const finalized = readOrganizationRoot({ organizationRoot: worktree });
+  expect(isOrganizationRootSupported(finalized, { activationFormats: currentCohort })).toBe(true);
+  expect(isOrganizationRootSupported(finalized)).toBe(false);
 
   // Finalizing an already current root is a no-op in either cohort.
   expect(await runOrganizationManifestMigration({
@@ -253,6 +260,64 @@ test("finalize opens exactly with the reader gate and leaves a root the same rea
   });
   expect(planOrganizationManifestMigration({ documents, finalize: true, activationFormats: currentCohort }))
     .toMatchObject({ outcome: "planned", blockers: [], after: { state: "current" } });
+});
+
+test("finalize refuses an unverified but otherwise valid canonical root that activation would refuse", async () => {
+  const currentCohort = [...ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS, "current"];
+  // A legacy root without the immutable forge binding migrates to a valid
+  // transition whose canonical binding is `unverified`.
+  const { worktree } = organizationRepository({ mutate: (company) => { delete company.forge_binding; } });
+  expect(await runOrganizationManifestMigration({ organizationRoot: worktree, write: true }))
+    .toMatchObject({ outcome: "written", readback: { state: "transition", issues: [] } });
+  const documents = readOrganizationRootDocuments({ organizationRoot: worktree });
+  expect(documents.canonicalManifest).toMatchObject({
+    organization: { forge_binding: { binding_state: "unverified" } },
+    root_repository: { binding_state: "unverified" },
+  });
+
+  // The reviewer's reproduction: canonical-only it is schema-valid and
+  // hash-valid (`current`, one resource), yet the same cohort's activation
+  // refuses it against the expected immutable IDs.
+  const canonicalOnly = resolveOrganizationRootDocuments({
+    canonicalManifest: documents.canonicalManifest,
+    companyManifest: null,
+    modulesManifest: documents.modulesManifest,
+    expectedOrganizationId: "314957563",
+    expectedOrganizationLogin: "Example-ai",
+    expectedRepositoryId: "1276680840",
+    expectedRepositoryFullName: "Example-ai/Example-ai_GEN3",
+    activationFormats: currentCohort,
+  });
+  expect(canonicalOnly).toMatchObject({
+    state: "current",
+    resource_count: 1,
+    issues: [],
+    activation: { status: "unsupported", format: null, reason: "legacy_identity_pair_invalid" },
+  });
+  expect(isOrganizationRootSupported(canonicalOnly, { activationFormats: currentCohort })).toBe(false);
+
+  // So finalization must not produce it — as a plan, as a write, in any cohort.
+  const before = snapshot(worktree);
+  for (const options of [
+    { activationFormats: currentCohort },
+    { activationFormats: currentCohort, write: true },
+    { write: true },
+  ]) {
+    const report = await runOrganizationManifestMigration({ organizationRoot: worktree, finalize: true, ...options });
+    expect(validateAgainstSchema(report, reportSchema, "report")).toEqual([]);
+    expect(report).toMatchObject({
+      operation: "finalize",
+      outcome: "blocked",
+      ok: false,
+      after: { state: "current" },
+      blockers: [{ code: "finalize_binding_unverified" }],
+    });
+    expect(organizationManifestMigrationExitCode(report)).toBe(1);
+  }
+  expect(planOrganizationManifestMigration({ documents, finalize: true, activationFormats: currentCohort }))
+    .toMatchObject({ outcome: "blocked", blockers: [{ code: "finalize_binding_unverified" }] });
+  expect(snapshot(worktree)).toEqual(before);
+  expect(readOrganizationRoot({ organizationRoot: worktree }).state).toBe("transition");
 });
 
 test("template kind, missing roots and unreconciled legacy modules fail closed", async () => {

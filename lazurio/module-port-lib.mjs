@@ -10,7 +10,7 @@ import {
   normalizeOrganizationPortPool,
   validateModuleLeasesAgainstOrganizationPools,
 } from "./core/organization-port-policy-lib.mjs";
-import { ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS } from "./core/organization-activation-lib.mjs";
+import { isOrganizationRootSupported } from "./core/organization-activation-lib.mjs";
 import { readOrganizationRoot } from "./core/organization-root-reader-lib.mjs";
 
 const ignored = new Set([".git", ".worktrees", "personalspace", "node_modules", "dist", "build", ".next", "coverage", "generated"]);
@@ -159,8 +159,7 @@ function mutationSafeOrganizationResolution(organizationRoot) {
   const resolution = readOrganizationRoot({ organizationRoot });
   if (resolution.state === "missing") return null;
   if (
-    !ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS.includes(resolution.state)
-    || resolution.resource_count !== 1
+    !isOrganizationRootSupported(resolution)
   ) {
     throw new Error(
       `${organizationRoot}: Organization manifest není bezpečný pro mutaci (${resolution.state}; ${resolution.issues.join(", ") || "no stable resource"})`,
