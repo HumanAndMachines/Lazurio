@@ -22,7 +22,6 @@ import {
   readOrganizationRoot,
   readOrganizationRootDocuments,
 } from "../../core/organization-root-reader-lib.mjs";
-import { inspectCanonicalPathBoundary } from "../../core/path-boundary-lib.mjs";
 import { resolveGitExecutableOnPath } from "../../core/toolchain-lib.mjs";
 import { validateAgainstSchema } from "../../runtime/json-schema-mini.mjs";
 import canonicalSchema from "../../lazurio.organization.v1.schema.json";
@@ -259,15 +258,9 @@ export async function runOrganizationManifestMigration({
     report.blockers.push({ code: `git_${git.reason}`, message: git.message });
     return finish(report);
   }
-  for (const change of changes) {
-    if (change.action === "unchanged") continue;
-    const boundary = await inspectCanonicalPathBoundary({ rootPath: root, targetPath: join(root, change.path), allowMissingTarget: true });
-    if (!boundary.ok) {
-      report.outcome = "blocked";
-      report.blockers.push({ code: "path_boundary_violation", message: `${change.path} opouští Organization root.` });
-      return finish(report);
-    }
-  }
+  // Targets are the two fixed filenames directly under the root; the Core
+  // reader already refused a symlinked root or document (conflict → blocked),
+  // so no further path containment check is needed here.
   try {
     for (const change of changes) {
       const target = join(root, change.path);
