@@ -32,6 +32,9 @@ export function checkOrganizationActivation({
   appSlug = LAZURIO_GITHUB_APP_SLUG,
   platform = process.platform,
   environment = process.env,
+  // Reader contract seam: production always uses the shipped Core gate; tests
+  // inject a future cohort (e.g. with `current`) without changing the default.
+  activationFormats = ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
   resolveGitHubCli = resolveGitHubCliExecutableOnPath,
   runGitHubCli = runTrustedGitHubCliSync,
 } = {}) {
@@ -57,6 +60,7 @@ export function checkOrganizationActivation({
       request,
       appSlug,
       provider,
+      activationFormats,
     });
     return resolveOrganizationActivation({ request, observations });
   } catch (error) {
@@ -107,7 +111,7 @@ export function renderHumanOrganizationActivation(report) {
 
 export { organizationActivationExitCode };
 
-function collectObservations({ request, appSlug, provider }) {
+function collectObservations({ request, appSlug, provider, activationFormats }) {
   const invoke = (args) => provider.json(args);
 
   const principalResponse = invoke(["api", "user"]);
@@ -172,7 +176,7 @@ function collectObservations({ request, appSlug, provider }) {
   // endpoint: GitHub may conceal both boundaries as 403/404 and neither is
   // needed to return the stable owner-required action.
   const rootRepository = viewerIsOwner
-    ? inspectRootRepository({ invoke, organization })
+    ? inspectRootRepository({ invoke, organization, activationFormats })
     : unavailableRoot(organization);
   const githubApp = viewerIsOwner
     ? inspectGitHubApp({ invoke, organization, appSlug, rootRepository })
@@ -193,7 +197,7 @@ function collectObservations({ request, appSlug, provider }) {
   };
 }
 
-function inspectRootRepository({ invoke, organization }) {
+function inspectRootRepository({ invoke, organization, activationFormats }) {
   const name = `${organization.login}_GEN3`;
   const fullName = `${organization.login}/${name}`;
   const repositoryResponse = invoke(["api", `repos/${fullName}`]);
@@ -268,7 +272,7 @@ function inspectRootRepository({ invoke, organization }) {
     expectedOrganizationLogin: organization.login,
     expectedRepositoryId: repositoryId,
     expectedRepositoryFullName: fullName,
-    activationFormats: ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
+    activationFormats,
   });
   return {
     presence: "present",

@@ -58,8 +58,16 @@ lazurio migrate organization-manifest <organization-root> --finalize --write
 - Each file is replaced atomically on its own path (canonical first). An
   interruption leaves a visible fail-closed Git state; rerunning the same
   command regenerates deterministically. No hidden transaction state.
-- `--finalize --write` stays blocked until Core
-  `ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS` admits `current` — the single
-  reader/update gate shared with install and update.
+- `--finalize --write` stays blocked (`finalize_reader_gate_closed`) until Core
+  `ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS` admits `current`. That constant
+  is the single reader/update gate and every gated consumer reads it:
+  activation, provider and local install, update, and the local mutation-safety
+  checks (module setup, port allocation, location repair, worktree create and
+  inventory, workspace parity). Each of them already accepts a verified
+  canonical-only `current` root — identity taken from the canonical resource —
+  the moment the list admits it, so opening finalize can never strand a reader.
+  The shipped list is `legacy`, `transition`; admitting `current` is a separate
+  readiness decision (decision 0145), not part of this migrator. Tests exercise
+  the `current` cohort by injecting `activationFormats`; the CLI cannot set it.
 - Template roots (`kind: template`) are refused; they migrate in their own
   explicit plan.

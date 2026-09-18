@@ -4,6 +4,8 @@ import {
   checkOrganizationActivation,
   renderHumanOrganizationActivation,
 } from "./organization-activation-lib.mjs";
+import { ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS } from "./core/organization-activation-lib.mjs";
+import { createOrganizationScaffold } from "./core/organization-scaffold-lib.mjs";
 
 test("--check provider adapter uses read-only GitHub calls and reports absent root", () => {
   const calls = [];
@@ -271,6 +273,66 @@ test("present malformed canonical manifest blocks a legacy active result", () =>
   });
 });
 
+test("verified canonical-only current root activates only for a reader cohort that lists current", () => {
+  const check = (options = {}) => checkOrganizationActivation({
+    githubOrganizationId: "314957563",
+    resolveGitHubCli: () => "/usr/bin/gh",
+    runGitHubCli: fixtureRunner({ root: "current", appSelection: "all" }),
+    ...options,
+  });
+
+  // Shipped gate: `current` is not activatable yet.
+  expect(ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS).not.toContain("current");
+  expect(check()).toMatchObject({
+    execution: { status: "ok" },
+    outcome: "action_required",
+    reasons: ["root_manifest_unsupported"],
+    observations: {
+      root_repository: {
+        resolver: { status: "unsupported", format: null, reason: "canonical_resolver_unavailable" },
+      },
+    },
+  });
+
+  // Future cohort, injected: the same reader admits the canonical-only root
+  // and takes its identity from the canonical resource.
+  expect(check({ activationFormats: [...ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS, "current"] })).toMatchObject({
+    execution: { status: "ok" },
+    outcome: "active",
+    reasons: ["root_supported_current"],
+    observations: {
+      root_repository: {
+        presence: "present",
+        resolver: { status: "supported", format: "current", reason: "current_identity_pair_supported" },
+      },
+    },
+  });
+
+  // A canonical document with a wrong declared projection hash is never verified.
+  expect(checkOrganizationActivation({
+    githubOrganizationId: "314957563",
+    activationFormats: [...ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS, "current"],
+    resolveGitHubCli: () => "/usr/bin/gh",
+    runGitHubCli: fixtureRunner({ root: "current", appSelection: "all", tamperedProjectionHash: true }),
+  })).toMatchObject({
+    outcome: "action_required",
+    reasons: ["root_manifest_unsupported"],
+    observations: { root_repository: { resolver: { status: "unsupported", format: null } } },
+  });
+});
+
+// A finalized Organization root: canonical + modules, no legacy projection.
+function currentRootDocuments({ tamperedProjectionHash = false } = {}) {
+  const scaffold = createOrganizationScaffold({
+    organization: { id: "314957563", login: "Example", slug: "example-org", displayName: "Example" },
+    repository: { id: "42424242", name: "Example_GEN3", fullName: "Example/Example_GEN3", defaultBranch: "main" },
+  });
+  const document = (path) => JSON.parse(scaffold.files.find((file) => file.path === path).content);
+  const canonical = document("lazurio.organization.json");
+  if (tamperedProjectionHash) canonical.compatibility.legacy_projection.sha256 = `sha256:${"0".repeat(64)}`;
+  return { canonical, modules: document("modules.manifest.json") };
+}
+
 function fixtureRunner({
   calls = [],
   root,
@@ -281,7 +343,9 @@ function fixtureRunner({
   membershipStatus = null,
   selectedAccess = "included",
   malformedCanonical = false,
+  tamperedProjectionHash = false,
 }) {
+  const current = root === "current" ? currentRootDocuments({ tamperedProjectionHash }) : null;
   return (call) => {
     calls.push(call);
     if (call.args[0] === "auth") return { status: 0, stdout: "", stderr: "" };
@@ -324,6 +388,7 @@ function fixtureRunner({
       return root === "empty" ? httpError(409) : ok([{ sha: "a".repeat(40) }]);
     }
     if (endpoint?.includes("contents/company.gen3.json")) {
+      if (current) return httpError(404);
       return content({
         organization_generation: "gen3",
         organization_kind: "organization",
@@ -335,6 +400,7 @@ function fixtureRunner({
       });
     }
     if (endpoint?.includes("contents/modules.manifest.json")) {
+      if (current) return content(current.modules);
       return content({
         organization_generation: "gen3",
         company: "Example",
@@ -343,6 +409,7 @@ function fixtureRunner({
       });
     }
     if (endpoint?.includes("contents/lazurio.organization.json")) {
+      if (current) return content(current.canonical);
       return malformedCanonical
         ? ok({ encoding: "base64", content: Buffer.from("{broken", "utf8").toString("base64") })
         : httpError(404);

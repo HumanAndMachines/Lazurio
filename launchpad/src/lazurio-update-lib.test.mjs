@@ -26,6 +26,7 @@ import {
 } from "./git-fixture-helpers.test.mjs";
 import { buildRepositoryLocationIssue } from "../../lazurio/core/module-location-repair-contract-lib.mjs";
 import {
+  ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
   organizationLegacyProjectionHash,
   projectLegacyOrganizationManifest,
 } from "../../lazurio/core/organization-activation-lib.mjs";
@@ -533,6 +534,52 @@ test("Organization update leaves an incompatible canonical-only target inactive"
   });
   expect(runGit(fixture.working, ["rev-parse", "HEAD"])).toBe(before);
   expect(readOrganizationRoot({ organizationRoot: fixture.working }).state).toBe("legacy");
+});
+
+test("Organization update fast-forwards to a verified canonical-only target once the reader gate lists current", async () => {
+  // Same finalized target as above; only the injected reader cohort differs.
+  // The shipped ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS stays closed.
+  expect(ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS).not.toContain("current");
+  const fixture = await organizationActivationFixture("canonical-only-current-cohort");
+  const transition = transitionOrganizationDocuments();
+  await writeFile(join(fixture.contributor, "lazurio.organization.json"), transition["lazurio.organization.json"]);
+  await rm(join(fixture.contributor, "company.gen3.json"));
+  runGit(fixture.contributor, ["add", "-A"]);
+  runGit(fixture.contributor, ["commit", "-m", "publish finalized canonical-only target"]);
+  runGit(fixture.contributor, ["push", "origin", "main"]);
+
+  const result = await updateManagedRepo(descriptor(fixture), {
+    runId: "canonical-only-current-cohort",
+    deps: { activationFormats: [...ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS, "current"] },
+  });
+
+  expect(result).toMatchObject({ state: "updated", actions: expect.arrayContaining(["fast_forward"]) });
+  expect(existsSync(join(fixture.working, "company.gen3.json"))).toBe(false);
+  expect(readOrganizationRoot({ organizationRoot: fixture.working })).toMatchObject({
+    state: "current",
+    resource_count: 1,
+  });
+  expect(status(fixture.working)).toBe("");
+});
+
+test("Organization update keeps a canonical-only target with an invalid projection hash blocked in every cohort", async () => {
+  const fixture = await organizationActivationFixture("canonical-only-unverified");
+  const canonical = JSON.parse(transitionOrganizationDocuments()["lazurio.organization.json"]);
+  canonical.compatibility.legacy_projection.sha256 = `sha256:${"0".repeat(64)}`;
+  await writeFile(join(fixture.contributor, "lazurio.organization.json"), `${JSON.stringify(canonical, null, 2)}\n`);
+  await rm(join(fixture.contributor, "company.gen3.json"));
+  runGit(fixture.contributor, ["add", "-A"]);
+  runGit(fixture.contributor, ["commit", "-m", "publish unverified canonical-only target"]);
+  runGit(fixture.contributor, ["push", "origin", "main"]);
+  const before = runGit(fixture.working, ["rev-parse", "HEAD"]);
+
+  const result = await updateManagedRepo(descriptor(fixture), {
+    runId: "canonical-only-unverified",
+    deps: { activationFormats: [...ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS, "current"] },
+  });
+
+  expect(result).toMatchObject({ state: "blocked", reason: "organization_target_incompatible" });
+  expect(runGit(fixture.working, ["rev-parse", "HEAD"])).toBe(before);
 });
 
 test("Organization update treats a present null target document as invalid, not absent", async () => {

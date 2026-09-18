@@ -4,6 +4,7 @@ import { validateAgainstSchema } from "../runtime/json-schema-mini.mjs";
 import schema from "../organization-activation-report.v0.schema.json";
 import organizationManifestSchema from "../lazurio.organization.v1.schema.json";
 import {
+  ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
   ORGANIZATION_ACTIVATION_ERROR_CODES,
   ORGANIZATION_ACTIVATION_NEXT_ACTIONS,
   ORGANIZATION_ACTIVATION_OUTCOMES,
@@ -459,6 +460,94 @@ test("activation admits a parity-verified transition only for an explicit capabl
     format: "transition",
     reason: "transition_identity_pair_supported",
   });
+});
+
+test("activation admits a verified canonical-only current root only when the reader contract lists current", () => {
+  const modulesManifest = organizationModules();
+  const canonicalManifest = canonicalOrganization(modulesManifest);
+  canonicalManifest.organization.forge_binding = {
+    ...canonicalManifest.organization.forge_binding,
+    binding_state: "verified",
+    organization_id: "314957563",
+  };
+  canonicalManifest.root_repository = {
+    ...canonicalManifest.root_repository,
+    binding_state: "verified",
+    repository_id: "42424242",
+  };
+  canonicalManifest.compatibility.legacy_projection.sha256 = organizationLegacyProjectionHash(
+    canonicalManifest,
+    modulesManifest,
+  );
+  const input = {
+    companyManifest: null,
+    modulesManifest,
+    canonicalManifest,
+    expectedOrganizationId: "314957563",
+    expectedOrganizationLogin: canonicalManifest.organization.forge_binding.locator,
+    expectedRepositoryId: "42424242",
+    expectedRepositoryFullName: canonicalManifest.root_repository.locator,
+  };
+  const currentCohort = [...ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS, "current"];
+  const unavailable = { status: "unsupported", format: null, reason: "canonical_resolver_unavailable" };
+
+  // The shipped gate stays closed: `current` resolves but does not activate.
+  expect(ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS).toEqual(["legacy", "transition"]);
+  expect(resolveOrganizationRootDocuments({
+    ...input,
+    activationFormats: ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
+  })).toMatchObject({ state: "current", resource_count: 1, activation: unavailable });
+
+  // The reviewer's reproduction: the expanded allowlist must really activate.
+  const admitted = resolveOrganizationRootDocuments({ ...input, activationFormats: currentCohort });
+  expect(admitted).toMatchObject({
+    state: "current",
+    resource_count: 1,
+    declaration_source: "lazurio.organization.json",
+    document_presence: { canonical: true, legacy_projection: false },
+  });
+  expect(admitted.activation).toEqual({
+    status: "supported",
+    format: "current",
+    reason: "current_identity_pair_supported",
+  });
+
+  // Identity is the canonical resource checked against the live Forge facts.
+  for (const mismatch of [
+    { expectedOrganizationId: "999" },
+    { expectedRepositoryId: "999" },
+    { expectedOrganizationLogin: "Renamed" },
+    { expectedRepositoryFullName: "Example/Other" },
+  ]) {
+    expect(resolveOrganizationRootDocuments({ ...input, ...mismatch, activationFormats: currentCohort }).activation)
+      .toEqual({ status: "unsupported", format: null, reason: "legacy_identity_pair_invalid" });
+  }
+  // An unverified Forge binding carries no immutable identity to activate on.
+  expect(resolveOrganizationRootDocuments({
+    ...input,
+    canonicalManifest: canonicalOrganization(modulesManifest),
+    activationFormats: currentCohort,
+  })).toMatchObject({
+    state: "current",
+    activation: { status: "unsupported", format: null, reason: "legacy_identity_pair_invalid" },
+  });
+
+  // "Verified" means the resolver proof. A wrong declared projection hash is a
+  // conflict with no resource, and a template never activates, in any cohort.
+  const tampered = structuredClone(canonicalManifest);
+  tampered.compatibility.legacy_projection.sha256 = `sha256:${"0".repeat(64)}`;
+  expect(resolveOrganizationRootDocuments({ ...input, canonicalManifest: tampered, activationFormats: currentCohort }))
+    .toMatchObject({ state: "conflict", resource_count: 0, activation: unavailable });
+  const template = canonicalOrganization(modulesManifest, { kind: "template" });
+  expect(resolveOrganizationRootDocuments({ ...input, canonicalManifest: template, activationFormats: currentCohort }))
+    .toMatchObject({ state: "current", activation: unavailable });
+
+  // Listing only `current` does not silently admit the other formats.
+  expect(resolveOrganizationRootDocuments({
+    ...input,
+    companyManifest: projectLegacyOrganizationManifest(canonicalManifest, modulesManifest),
+    activationFormats: ["current"],
+  })).toMatchObject({ state: "transition", activation: unavailable });
 });
 
 test("canonical schema, semantic parity and projection hash are deterministic across key order and formatting", () => {

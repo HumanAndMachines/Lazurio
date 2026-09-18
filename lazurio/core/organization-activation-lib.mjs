@@ -21,9 +21,15 @@ export const ORGANIZATION_ROOT_RESOLUTION_VERSION = "lazurio.organization.root-r
 export const ORGANIZATION_MANIFEST_SCHEMA_VERSION = "lazurio.organization.v1";
 export const ORGANIZATION_RESOURCE_SCHEMA_VERSION = "lazurio.organization.resource.v1";
 export const ORGANIZATION_LEGACY_PROJECTION_HASH_ALGORITHM = "sha256-canonical-json-v1";
-// Manifest formats the supported Machine cohort may activate, install and
-// fast-forward to during the compatibility window. Adding "current" here is
-// the single reader-readiness gate that unblocks `--finalize` (decision 0145).
+// Manifest formats the supported Machine cohort may activate, install,
+// fast-forward to and mutate under during the compatibility window. Every
+// gated consumer — activation, provider and local install, update, the local
+// mutation-safety checks and `--finalize` — reads exactly this list and keeps
+// no list of its own (scripts/organization-manifest-consumers.test.mjs), and
+// every reader already accepts a verified canonical-only `current` root once
+// the list admits it. Adding "current" here is therefore the single, complete
+// reader-readiness gate that unblocks `--finalize` (decision 0145); shipping
+// it is a separate readiness decision, not a code change elsewhere.
 export const ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS = Object.freeze(["legacy", "transition"]);
 export const ORGANIZATION_MANIFEST_STATES = Object.freeze([
   "legacy",
@@ -292,7 +298,7 @@ export function resolveOrganizationRootDocuments({
   }
 
   if (resource) semanticHash = organizationSemanticHash(resource);
-  const activation = legacyActivationProjection({
+  const activation = organizationActivationSupport({
     state,
     resource,
     modulesValid: modules.valid,
@@ -751,7 +757,7 @@ function canonicalCompatibilityBindingIssue(organization, root) {
     : "canonical_compatibility_binding_invalid";
 }
 
-function legacyActivationProjection({
+function organizationActivationSupport({
   state,
   resource,
   modulesValid,
@@ -764,12 +770,11 @@ function legacyActivationProjection({
   activationFormats,
 }) {
   const allowedFormats = new Set(Array.isArray(activationFormats) ? activationFormats : []);
-  const eligibleFormat = state === "legacy"
-    ? "legacy"
-    : state === "transition" && canonicalPresent
-      ? "transition"
-      : null;
-  if (canonicalPresent && (eligibleFormat !== "transition" || !allowedFormats.has("transition"))) {
+  // `transition` and `current` are both proven by the resolver above: valid
+  // canonical + modules documents whose declared legacy projection hash equals
+  // the deterministic one. `current` is the same proof without the legacy file.
+  const eligibleFormat = ["legacy", "transition", "current"].includes(state) ? state : null;
+  if (canonicalPresent && (eligibleFormat === null || !allowedFormats.has(eligibleFormat))) {
     return { status: "unsupported", format: null, reason: "canonical_resolver_unavailable" };
   }
   if (eligibleFormat === null || !allowedFormats.has(eligibleFormat) || resource?.kind !== "organization") {
@@ -785,7 +790,9 @@ function legacyActivationProjection({
   const organizationBinding = resource.organization.forge_binding;
   const repositoryBinding = resource.root_repository;
   const forgeBinding = companyManifest?.forge_binding;
-  const forgeBindingSupported = eligibleFormat === "transition"
+  // Canonical formats take the immutable identity from the normalized canonical
+  // resource; only the legacy format reads it from the legacy document.
+  const forgeBindingSupported = eligibleFormat !== "legacy"
     ? organizationBinding?.binding_state === "verified"
       && repositoryBinding?.binding_state === "verified"
       && String(organizationBinding.organization_id ?? "") === String(expectedOrganizationId ?? "")
@@ -804,9 +811,7 @@ function legacyActivationProjection({
     ? {
         status: "supported",
         format: eligibleFormat,
-        reason: eligibleFormat === "transition"
-          ? "transition_identity_pair_supported"
-          : "legacy_identity_pair_supported",
+        reason: `${eligibleFormat}_identity_pair_supported`,
       }
     : { status: "unsupported", format: null, reason: "legacy_identity_pair_invalid" };
 }

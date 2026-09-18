@@ -38,6 +38,7 @@ import {
   readMissionControlRepositoryDbAuthority,
 } from "./repository-db-authority-contract.mjs";
 import { resolveTaskAgentLocator } from "../lazurio/core/task-agent-locator.mjs";
+import { ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS } from "../lazurio/core/organization-activation-lib.mjs";
 import { readOrganizationRoot } from "../lazurio/core/organization-root-reader-lib.mjs";
 import {
   validateCanonicalMissionControlPlan,
@@ -168,7 +169,7 @@ function organizationAuthorityPath(primaryRoot, authorityRoot) {
   const canonicalOrganizationRoot = join(primaryRoot, "organizations", organizationName);
   const resolution = readOrganizationRoot({ organizationRoot: canonicalOrganizationRoot });
   if (
-    !["legacy", "transition"].includes(resolution.state)
+    !ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS.includes(resolution.state)
     || resolution.resource_count !== 1
   ) {
     fail(`Mission Control authority nemá mutation-safe Organization manifest (${resolution.state}; ${resolution.issues.join(", ") || "no stable resource"}).`);
@@ -260,7 +261,7 @@ function resolveEditRepository(lazurioRoot, rawRepository) {
   }
   const resolution = readOrganizationRoot({ organizationRoot: repositoryRoot });
   if (
-    !["legacy", "transition"].includes(resolution.state)
+    !ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS.includes(resolution.state)
     || resolution.resource_count !== 1
     || resolution.resource?.kind !== "organization"
   ) {

@@ -603,6 +603,9 @@ export async function updateManagedRepo(repo, context = {}) {
     run,
     target,
     sourceUrl: source.url,
+    // Reader contract seam: production always uses the shipped Core gate;
+    // tests inject a future cohort (e.g. with `current`) through `deps`.
+    activationFormats: context.deps?.activationFormats ?? ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
   });
   if (!organizationTarget.ok) {
     return block(organizationTarget.reason, {
@@ -749,6 +752,7 @@ async function verifyOrganizationUpdateTarget({
   run,
   target,
   sourceUrl,
+  activationFormats,
 }) {
   if (repo.repo_kind !== "organization_root") return { ok: true };
 
@@ -811,7 +815,7 @@ async function verifyOrganizationUpdateTarget({
   }
 
   const resolution = resolveOrganizationRootDocuments(documents);
-  if (!ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS.includes(resolution.state) || resolution.resource_count !== 1) {
+  if (!activationFormats.includes(resolution.state) || resolution.resource_count !== 1) {
     return {
       ok: false,
       reason: "organization_target_incompatible",

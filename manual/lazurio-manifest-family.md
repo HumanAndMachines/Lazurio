@@ -185,7 +185,7 @@ runtime/process state, consistent with DEV-6439.
 | both, normalized semantics and canonical projection hash match | `transition` | supported; Lazurio file is canonical and legacy is a generated projection |
 | semantics match but canonical projection hash drifts | `projection_drift` | canonical Lazurio read remains available; mutations block until projection regeneration |
 | normalized semantics differ | `conflict` | fail closed for mutation; never choose silently |
-| only Lazurio | `current` | readable for diagnosis; mutations remain blocked until the finalization gate |
+| only Lazurio | `current` | readable for diagnosis; activation, install, update and local mutations remain blocked until the single reader gate `ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS` admits `current` |
 | neither | `missing` | not a Lazurio resource; fail only when the mount is expected |
 | any present document is invalid or unreadable | `conflict` | fail closed; `issues[]` identifies the malformed or unreadable document even when no second file exists |
 
@@ -238,7 +238,7 @@ Implemented behavior per resolver state:
 | `projection_drift`, or `conflict` with a canonical document present | `regenerate` | recomputes the declared hash of the canonical manifest and rewrites the legacy projection from it; the canonical file is the only authority, a hand edit of the legacy file is discarded visibly in the Git diff |
 | `transition` | none | `noop`; next step is `--finalize` |
 | `current` | none | `noop` |
-| `transition` + `--finalize` | `finalize` | removes `company.gen3.json` only when the canonical document alone resolves to `current` with the same semantic hash; `--write` stays blocked (`finalize_reader_gate_closed`) until Core `ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS` admits `current` — the same constant that gates install and update |
+| `transition` + `--finalize` | `finalize` | removes `company.gen3.json` only when the canonical document alone resolves to `current` with the same semantic hash; `--write` stays blocked (`finalize_reader_gate_closed`) until Core `ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS` admits `current` — the single reader/update gate that every gated consumer reads (see "Single reader gate" below) |
 | `missing`, malformed, `kind: template`, legacy `modules[]` not reconciled | — | `blocked`; nothing is written |
 
 `company.gen3.json#modules[]` is never copied: every entry must be a declared
@@ -271,6 +271,39 @@ Contract:
   the minimum reader version for every supported Machine cohort; the code-owned
   gate is Core `ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS` (decision 0145).
 
+### Single reader gate
+
+`ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS` (Core
+`lazurio/core/organization-activation-lib.mjs`) is the one list of manifest
+formats this Machine cohort supports. It is complete in both directions:
+
+- **Every gated consumer reads it; none keeps its own list.** Activation
+  (`lazurio organization activate --check`), provider and local Organization
+  install, the update target check, `--finalize`, and the local mutation-safety
+  checks (module setup, port allocation, module location repair, worktree
+  create and inventory, workspace parity).
+  `scripts/organization-manifest-consumers.test.mjs` fails on any second
+  hard-coded state allowlist and pins the consumer inventory.
+- **Every reader already accepts a verified canonical-only `current` root once
+  the list admits it.** "Verified" is the resolver proof: canonical and modules
+  documents valid and the declared legacy projection hash equal to the
+  deterministic one. Activation identity for `current` comes from the
+  normalized canonical resource (verified Forge binding checked against the
+  live immutable Organization and repository IDs), never from the absent
+  legacy file. While the list lacks `current`, provider install still treats
+  `company.gen3.json` as a required document.
+
+The shipped list is `legacy`, `transition`, so `current` does not activate,
+install or update and `--finalize --write` stays blocked. Admitting `current`
+is a separate readiness decision about the supported Machine cohort, not a
+code change in any reader. Tests prove the `current` cohort by injecting the
+list through the `activationFormats` seam (resolver, activation, install,
+update `deps`, migration planner) — directly for activation, provider install,
+local install, update and finalize; the mutation-safety consumers are bound to
+the same constant, consume only the format-independent normalized resource and
+are covered structurally by the consumer inventory test. No CLI surface can
+set the list.
+
 ### Authoring worktree protocol
 
 Git is the recovery authority for authoring. The migrator uses a clean,
@@ -297,10 +330,13 @@ a manifest-specific activation lifecycle:
 2. Read the exact target documents through Git object inspection and resolve
    them with the same Core resolver as the live filesystem. Bind the normalized
    Organization and root-repository identity to the already verified checkout
-   and remote. During the compatibility window only `legacy` and parity-valid
-   `transition` targets may advance; `projection_drift`, `conflict`, `current`,
-   `missing`, malformed, unreadable or mismatched targets block before stash,
-   branch switch or pull.
+   and remote. Only targets whose state is listed in the single reader gate
+   `ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS` may advance — during the
+   compatibility window `legacy` and parity-valid `transition`;
+   `projection_drift`, `conflict`, `current`, `missing`, malformed, unreadable
+   or mismatched targets block before stash, branch switch or pull. A verified
+   canonical-only `current` target advances through the same check once the
+   gate admits it.
 3. Apply the existing local-work gates, verified recovery stash and exact
    pinned fast-forward update. Verify final HEAD and source identity against the
    pinned OID, then rediscover the Organization inventory and invalidate stale

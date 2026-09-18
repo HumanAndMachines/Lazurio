@@ -227,7 +227,9 @@ nebo `conflict` v `git status` a tentýž příkaz jej deterministicky dokončí
 Legacy `modules[]` musí být před zápisem sladěné s `modules.manifest.json`;
 jinak plán skončí `blocked` s přesným seznamem polí. `--finalize --write`
 zůstává blokovaný, dokud Core `ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS`
-nepřipustí `current` (tentýž gate pro install a update). Exit code `0` = plán
+nepřipustí `current` — jediný reader/update gate, který čtou aktivace,
+provider i lokální install, update i lokální mutation-safety kontroly.
+Exit code `0` = plán
 existuje nebo zápis proběhl, `1` = blocked, `2` = chyba použití. Doctor stav
 manifestů hlásí v checku `launchpad.organization_manifests`.
 

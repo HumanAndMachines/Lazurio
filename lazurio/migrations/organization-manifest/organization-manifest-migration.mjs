@@ -45,8 +45,16 @@ const managedPaths = Object.freeze([
  * single Core filesystem adapter returns it; output is the deterministic plan:
  * resolver state before and after, the exact documents to write or remove,
  * parity evidence and fail-closed blockers. No filesystem, no Git.
+ *
+ * `activationFormats` is the reader contract `--finalize` is gated on. It
+ * defaults to the shipped Core gate; the CLI never sets it — only tests inject
+ * a future cohort to prove the gate opens exactly with the readers.
  */
-export function planOrganizationManifestMigration({ documents, finalize = false }) {
+export function planOrganizationManifestMigration({
+  documents,
+  finalize = false,
+  activationFormats = ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
+}) {
   const before = resolveOrganizationRootDocuments(documents);
   const plan = {
     operation: "none",
@@ -75,7 +83,7 @@ export function planOrganizationManifestMigration({ documents, finalize = false 
     return block("template_kind_not_migratable", "Template root (kind: template) se tímto příkazem nemigruje; template dostává vlastní explicitní plán.");
   }
 
-  if (finalize) return planFinalize({ plan, before, documents, block });
+  if (finalize) return planFinalize({ plan, before, documents, block, activationFormats });
 
   if (before.state === "legacy") {
     plan.operation = "migrate";
@@ -130,7 +138,7 @@ export function planOrganizationManifestMigration({ documents, finalize = false 
   return stagePair({ plan, before, documents, canonicalManifest, block });
 }
 
-function planFinalize({ plan, before, documents, block }) {
+function planFinalize({ plan, before, documents, block, activationFormats }) {
   plan.operation = "finalize";
   if (before.state === "current") {
     plan.outcome = "noop";
@@ -152,12 +160,12 @@ function planFinalize({ plan, before, documents, block }) {
   if (after.state !== "current" || !plan.parity.semantic) {
     return block("finalize_readback_invalid", `Canonical manifest sám o sobě neresolvuje jako current (${after.issues.join(", ") || after.state}).`);
   }
-  if (!ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS.includes("current")) {
+  if (!activationFormats.includes("current")) {
     plan.outcome = "blocked";
     plan.blockers.push({
       code: "finalize_reader_gate_closed",
       message: "Reader/update gate ještě nepřijímá stav current: podporované Machines aktivují pouze "
-        + `${ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS.join(", ")}. Legacy projekce zůstává povinná (decision 0145).`,
+        + `${activationFormats.join(", ")}. Legacy projekce zůstává povinná (decision 0145).`,
     });
     return plan;
   }
@@ -214,11 +222,12 @@ export async function runOrganizationManifestMigration({
   organizationRoot,
   write = false,
   finalize = false,
+  activationFormats = ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
   runGit = defaultRunGit,
 }) {
   const root = resolve(organizationRoot);
   const documents = readOrganizationRootDocuments({ organizationRoot: root });
-  const plan = planOrganizationManifestMigration({ documents, finalize });
+  const plan = planOrganizationManifestMigration({ documents, finalize, activationFormats });
   const git = observeGitGate({ root, runGit });
   const changes = plan.documents.map((document) => describeChange(root, document));
   const report = {

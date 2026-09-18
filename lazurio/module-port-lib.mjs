@@ -10,6 +10,7 @@ import {
   normalizeOrganizationPortPool,
   validateModuleLeasesAgainstOrganizationPools,
 } from "./core/organization-port-policy-lib.mjs";
+import { ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS } from "./core/organization-activation-lib.mjs";
 import { readOrganizationRoot } from "./core/organization-root-reader-lib.mjs";
 
 const ignored = new Set([".git", ".worktrees", "personalspace", "node_modules", "dist", "build", ".next", "coverage", "generated"]);
@@ -158,7 +159,7 @@ function mutationSafeOrganizationResolution(organizationRoot) {
   const resolution = readOrganizationRoot({ organizationRoot });
   if (resolution.state === "missing") return null;
   if (
-    !["legacy", "transition"].includes(resolution.state)
+    !ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS.includes(resolution.state)
     || resolution.resource_count !== 1
   ) {
     throw new Error(

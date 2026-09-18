@@ -6,7 +6,10 @@ import { join } from "node:path";
 
 import { validateAgainstSchema } from "../../runtime/json-schema-mini.mjs";
 import reportSchema from "./organization-manifest-migration-report.v0.schema.json";
-import { readOrganizationRoot } from "../../core/organization-root-reader-lib.mjs";
+import {
+  readOrganizationRoot,
+  readOrganizationRootDocuments,
+} from "../../core/organization-root-reader-lib.mjs";
 import { ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS } from "../../core/organization-activation-lib.mjs";
 import { resolveGitExecutableOnPath } from "../../core/toolchain-lib.mjs";
 import {
@@ -168,6 +171,88 @@ test("finalize plans transition → current but stays blocked by the reader gate
     outcome: "blocked",
     blockers: [{ code: "finalize_requires_transition" }],
   });
+});
+
+test("finalize opens exactly with the reader gate and leaves a root the same readers activate", async () => {
+  // A future reader cohort, injected; the shipped constant stays closed and the
+  // CLI has no way to set it.
+  const currentCohort = [...ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS, "current"];
+  const { worktree } = organizationRepository();
+  await runOrganizationManifestMigration({ organizationRoot: worktree, write: true });
+  const transition = readOrganizationRoot({ organizationRoot: worktree });
+
+  const planned = await runOrganizationManifestMigration({
+    organizationRoot: worktree,
+    finalize: true,
+    activationFormats: currentCohort,
+  });
+  expect(validateAgainstSchema(planned, reportSchema, "report")).toEqual([]);
+  expect(planned).toMatchObject({
+    mode: "plan",
+    operation: "finalize",
+    outcome: "planned",
+    ok: true,
+    after: { state: "current" },
+    changes: [{ path: "company.gen3.json", action: "remove" }],
+    blockers: [],
+  });
+  expect(snapshot(worktree).legacy).not.toBeNull();
+
+  const written = await runOrganizationManifestMigration({
+    organizationRoot: worktree,
+    finalize: true,
+    write: true,
+    activationFormats: currentCohort,
+  });
+  expect(validateAgainstSchema(written, reportSchema, "report")).toEqual([]);
+  expect(written).toMatchObject({
+    mode: "write",
+    operation: "finalize",
+    outcome: "written",
+    ok: true,
+    readback: { state: "current", semantic_hash: transition.semantic_hash },
+    blockers: [],
+  });
+  expect(snapshot(worktree).legacy).toBeNull();
+
+  // The finalized root is activatable by that same cohort — identity from the
+  // canonical resource — and by no cohort without `current`.
+  const expectations = {
+    expectedOrganizationId: "314957563",
+    expectedOrganizationLogin: "Example-ai",
+    expectedRepositoryId: "1276680840",
+    expectedRepositoryFullName: "Example-ai/Example-ai_GEN3",
+  };
+  expect(readOrganizationRoot({ organizationRoot: worktree, ...expectations, activationFormats: currentCohort }))
+    .toMatchObject({
+      state: "current",
+      resource_count: 1,
+      activation: { status: "supported", format: "current" },
+    });
+  expect(readOrganizationRoot({
+    organizationRoot: worktree,
+    ...expectations,
+    activationFormats: ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
+  }).activation).toEqual({ status: "unsupported", format: null, reason: "canonical_resolver_unavailable" });
+
+  // Finalizing an already current root is a no-op in either cohort.
+  expect(await runOrganizationManifestMigration({
+    organizationRoot: worktree,
+    finalize: true,
+    write: true,
+    activationFormats: currentCohort,
+  })).toMatchObject({ operation: "finalize", outcome: "noop", ok: true });
+
+  // Pure planner, same seam: the gate is the only difference between cohorts.
+  const other = organizationRepository();
+  await runOrganizationManifestMigration({ organizationRoot: other.worktree, write: true });
+  const documents = readOrganizationRootDocuments({ organizationRoot: other.worktree });
+  expect(planOrganizationManifestMigration({ documents, finalize: true })).toMatchObject({
+    outcome: "blocked",
+    blockers: [{ code: "finalize_reader_gate_closed" }],
+  });
+  expect(planOrganizationManifestMigration({ documents, finalize: true, activationFormats: currentCohort }))
+    .toMatchObject({ outcome: "planned", blockers: [], after: { state: "current" } });
 });
 
 test("template kind, missing roots and unreconciled legacy modules fail closed", async () => {
