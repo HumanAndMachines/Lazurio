@@ -1834,6 +1834,53 @@ test("a nested slot waits until its ancestor slot settled", async () => {
   expect(events.indexOf(`start ${sibling.key}`)).toBeLessThan(events.indexOf(`end ${parent.key}`));
 });
 
+test("descendants of a blocked nested slot are deferred without update or materialization", async () => {
+  const root = await mkdtemp(join(tmpdir(), "lazurio-update-blocked-ancestor-"));
+  cleanup.push(root);
+  const organization = repo("alpha::root", "organization_root", "alpha", "root");
+  const parent = repo("alpha::parent", "module", "alpha", "parent", "workspace");
+  parent.slot_path = "workspace/parent";
+  const child = repo("alpha::child", "module", "alpha", "child", "workspace");
+  child.slot_path = "workspace/parent/child";
+  child.absolute_path = join(root, "absent-child");
+  const grandchild = repo("alpha::grandchild", "module", "alpha", "grandchild", "workspace");
+  grandchild.slot_path = "workspace/parent/child/db";
+  grandchild.absolute_path = join(root, "absent-grandchild");
+  const sibling = repo("alpha::sibling", "module", "alpha", "sibling", "workspace");
+  sibling.slot_path = "workspace/sibling";
+  const updated = [];
+  const materialized = [];
+  const report = await runLazurioUpdate({
+    rootPath: "/working",
+    runtimeRoot: "/runtime",
+    deps: {
+      runId: "blocked-ancestor",
+      acquireLock: async () => ({ release: async () => {} }),
+      buildInventory: async () => ({ repos: [organization, parent, child, grandchild, sibling], warnings: [] }),
+      updateRepo: async (item) => {
+        updated.push(item.key);
+        return item.key === parent.key
+          ? { ...identity(item), state: "blocked", reason: "main_diverged", message: "diverged" }
+          : { ...identity(item), state: "current", reason: "already_current", message: "current" };
+      },
+      materializeRepo: async ({ repo: item }) => {
+        materialized.push(item.key);
+        return { ok: true, outcome: "materialized", head: "a".repeat(40) };
+      },
+      discoverApps: async () => ({ apps: [], failures: [] }),
+    },
+  });
+  expect(materialized).toEqual([]);
+  expect(updated).not.toContain(child.key);
+  expect(updated).not.toContain(grandchild.key);
+  expect(updated).toContain(sibling.key);
+  const byKey = (key) => report.results.find((result) => result.repo_key === key);
+  expect(byKey(parent.key)).toMatchObject({ state: "blocked", reason: "main_diverged" });
+  expect(byKey(child.key)).toMatchObject({ state: "blocked", reason: "parent_blocked" });
+  expect(byKey(grandchild.key)).toMatchObject({ state: "blocked", reason: "parent_blocked" });
+  expect(byKey(sibling.key)).toMatchObject({ state: "current", reason: "already_current" });
+});
+
 test("scoped convergence materializes accessible Modules and reports inaccessible siblings", async () => {
   const root = await mkdtemp(join(tmpdir(), "lazurio-update-partial-access-"));
   cleanup.push(root);

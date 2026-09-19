@@ -494,24 +494,27 @@ async function syncOrganizationChild({
   return safeUpdateRepo(repo, { runId, updateRepo, checkpoint, deps });
 }
 
-// A slot nested inside another declared slot of the same Organization must
-// not start before its ancestor settled (materialized or updated). Jobs are
-// therefore grouped into waves by nesting depth; each wave runs concurrently.
+// A slot nested inside other declared slots of the same Organization must not
+// start before all of its ancestors settled, and must not be touched at all
+// when any of them is blocked. Jobs are therefore grouped into waves by
+// nesting depth; each wave runs concurrently.
 async function syncOrganizationChildren(jobs, concurrency, syncChild) {
-  const depthOf = (job) => job.siblings
-    .filter((candidate) => candidate !== job.repo && isSlotDescendantPath(job.repo.slot_path, candidate.slot_path))
-    .length;
+  const ancestorsOf = (job) => job.siblings
+    .filter((candidate) => candidate !== job.repo && isSlotDescendantPath(job.repo.slot_path, candidate.slot_path));
   const waves = new Map();
   for (const job of jobs) {
-    const depth = depthOf(job);
-    if (!waves.has(depth)) waves.set(depth, []);
-    waves.get(depth).push(job);
+    const ancestors = ancestorsOf(job);
+    if (!waves.has(ancestors.length)) waves.set(ancestors.length, []);
+    waves.get(ancestors.length).push({ job, ancestors });
   }
   const results = new Map();
   for (const depth of [...waves.keys()].sort((left, right) => left - right)) {
     const wave = waves.get(depth);
-    const waveResults = await mapWithConcurrency(wave, concurrency, syncChild);
-    wave.forEach((job, index) => results.set(job.repo, waveResults[index]));
+    const waveResults = await mapWithConcurrency(wave, concurrency, ({ job, ancestors }) => {
+      const blockedAncestor = ancestors.find((ancestor) => results.get(ancestor)?.state === "blocked");
+      return blockedAncestor ? deferredResult(job.repo, blockedAncestor.key) : syncChild(job);
+    });
+    wave.forEach(({ job }, index) => results.set(job.repo, waveResults[index]));
   }
   return results;
 }
