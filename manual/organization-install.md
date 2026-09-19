@@ -571,8 +571,8 @@ lazurio organization install <github-login> --role builder --json
   (`scope.restricted_slots: "include"`): absentní restricted slot se
   materializuje stejně jako běžné.
 - **`--role steward` a `--role builder`** (`scope.restricted_slots: "exclude"`)
-  materializují jen běžné sloty a jejich descendants včetně povinného
-  `repository_db_mount` Mission Control dat. Restricted slot i každý slot pod
+  materializují jen běžné sloty a jejich descendants včetně všech aktivních
+  deklarovaných `repository_db_mount`. Restricted slot i každý slot pod
   ním skončí ve výsledku jako `current` s reason `excluded_by_role_scope`:
   nad nimi neproběhne žádný `git clone`, `fetch`, `ls-remote` ani `gh api`.
   Tento stav je záměrný a odlišný od chybějícího grantu
@@ -629,13 +629,13 @@ současně nese uživatele Mašiny. `--root` proto tato operace nepřijímá.
 První běh materializuje exact Organization root do
 `organizations/<CanonicalLogin>_GEN3` a přes běžný update reconciler doplní
 dostupné deklarované Moduly. Potom může tentýž explicitní installer atomicky
-doplnit aktivní root-space `mission-control/db` s materializací
-`repository_db_mount`, ale jen pod právě jedním deklarovaným a skutečně
-materializovaným parent Git repozitářem. Ověří Organization-owned remote,
+doplnit každý aktivní `repository_db_mount`: root-space `mission-control/db`
+i `workspace/<modul>/db`, vždy jen pod právě jedním deklarovaným a skutečně
+materializovaným parent Git repozitářem. Ověří Organization-owned child remote,
 deklarovanou branch, Git ignore v parent repozitáři a bezpečnou fyzickou cestu.
 Duplicitní legacy `repository_db` projekce není další autorita; rozhodují
 normalizovaná Git pole slotu. Nemá-li deklarovaný Mission Control právě jeden
-aktivní `mission-control/db` mount s tímto kontraktem, install skončí
+aktivní `mission-control/db` mount s tímto kontraktem, install dál skončí
 `blocked` — nesmí hlásit úspěšnou konvergenci s chybějícími daty. Každý
 čerstvě materializovaný checkout používá pro úvodní clone
 `--single-branch`, ale před publikací dostane přesně jeden kanonický fetch
