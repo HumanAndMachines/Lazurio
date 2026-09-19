@@ -4,14 +4,8 @@ Tento manuálový záznam je součást základního balíku Konglomerátu. Popis
 jak mají Buddy a workspace-local AI kolegové spolupracovat s viditelnými
 Claude/Codex Desktop App agenty.
 
-**Kanonický domov postupu je skill**
-`.agents/skills/desktop-execution-agent-collaboration/SKILL.md`. Tam je celá
-standardní smyčka (najít správný Desktop thread → ověřit live source of truth
-mimo self-report → poslat konverzační rozhodnutí → nechat agenta udělat maximum
-práce → QA counterweight po handoffu → úzký feedback zpět do threadu → reviewer
-routing → closeout), superseded PR cleanup, minimální ověření i anti-patterny.
-Neduplikuj ten postup sem — tento manuál drží jen zařazení do onboardingu
-a nepřekročitelné invarianty.
+Tento manuál drží zařazení do onboardingu a nepřekročitelné invarianty;
+konkrétní postup volí delegující Kolega podle nich.
 
 ## Princip
 

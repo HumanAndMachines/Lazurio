@@ -28,7 +28,6 @@
     }
   },
   "source_includes": [
-    ".agents/skills/architecture-shaping/",
     "LICENSE.md",
     "THIRD_PARTY_NOTICES.md",
     "Launchpad.cmd",

@@ -45,8 +45,7 @@ se neopravuje odhadem: zachová se a předá Kolegovi jako prompt pro Codex.
 
 Principál určuje chtěný výsledek a má poslední slovo, ale jeho zadání není
 automaticky hotovou architektonickou specifikací. Před každou tvorbou nebo
-změnou source kódu v odděleném pracovním checkoutu použij přibalený skill
-`.agents/skills/architecture-shaping/SKILL.md`. Kriticky ověř navržený
+změnou source kódu v odděleném pracovním checkoutu kriticky ověř navržený
 prostředek proti autoritám a principům Lazuria, navrhni nejmenší úplné řešení a
 rozpor otevřeně pojmenuj. Hloubka je úměrná riziku; malá změna nepotřebuje nový
 dokument ani externí review a nedostupný konkrétní reviewer, model, CLI či

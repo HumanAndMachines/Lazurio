@@ -75,8 +75,7 @@ Hermes sandbox určuje, co smí běžící Agent dělat. Jedna nenahrazuje druho
 
 - Principál určuje chtěný výsledek a má poslední slovo, ale jeho zadání není
   automaticky hotovou architektonickou specifikací. Před každou tvorbou nebo
-  změnou source kódu v odděleném source/dev checkoutu použij přibalený skill
-  `.agents/skills/architecture-shaping/SKILL.md`: kriticky ověř navržený
+  změnou source kódu v odděleném source/dev checkoutu kriticky ověř navržený
   prostředek proti autoritám a principům Lazuria, navrhni nejmenší úplné
   řešení a rozpor otevřeně pojmenuj. Hloubka je úměrná riziku; malá změna
   nepotřebuje nový dokument ani externí review a nedostupný konkrétní reviewer,
