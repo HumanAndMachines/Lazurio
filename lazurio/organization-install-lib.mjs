@@ -346,9 +346,11 @@ async function recoverOrganizationRepositoryDbParent({ rootPath, organizationPat
 
 // General `lazurio update` intentionally excludes repository-db checkouts from
 // its Git action inventory. The explicit Organization install command is the
-// bounded bootstrap authority: it may materialize every active declared mount
-// under its exact managed Git parent, but it never gains repository-db
-// commit/publish or ongoing sync authority.
+// bounded bootstrap authority: it may materialize active declared mounts only
+// at mission-control/db or canonical workspace/<module>/db under the exact
+// managed Git parent. Deprecated modules/<module>/db remains readable by the
+// shared compatibility matcher but is never materialized. The installer never
+// gains repository-db commit/publish or ongoing sync authority.
 export async function installOrganizationRepositoryDbMounts({
   rootPath,
   organizationPath,

@@ -375,9 +375,10 @@ když manifest explicitně deklaruje `materialization:
 doctor_managed_nested_repo`. Productionspace a repository-db tím v obecném
 update autoritu nezískávají. Jedinou úzkou bootstrap výjimkou je explicitní
 `lazurio organization install`: po materializaci aktivního deklarovaného
-parent Git repozitáře smí jednorázově atomicky doplnit každý jeho aktivní
-`repository_db_mount`, tedy root-level `mission-control/db` i deklarované
-`workspace/<modul>/db`. Jakmile je deklarovaná Mission Control app/data hranice
+parent Git repozitáře smí jednorázově atomicky doplnit aktivní
+`repository_db_mount` pouze na root-level `mission-control/db` nebo kanonickém
+`workspace/<module>/db`; deprecated `modules/<module>/db` se nematerializuje.
+Jakmile je deklarovaná Mission Control app/data hranice
 neúplná, neaktivní nebo pod jiným materializačním kontraktem, instalace dál
 fail-closed skončí jako blokovaná. Existující databázi pouze ověří; nefetchuje
 ji, nefast-forwarduje a nezískává commit ani publish autoritu.
