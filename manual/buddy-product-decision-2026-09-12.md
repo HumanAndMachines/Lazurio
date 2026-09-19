@@ -18,4 +18,6 @@ Výchozí instalační směr používá oficiální Hermes, gbrain a Lazurio roo
 
 ## Důsledky a ověření
 
-Odkazy popisující původní VPS baseline mohou dál citovat 0080; nové obecné umístění musí citovat tento záznam. Consumerem je hosted-access manuál a mapa rootu. Cílový návrh nezaručuje bezchybnost hypervizoru ani sítě. Detailní obnova, přenos instalace a aplikačních dat, ceny a SLA zůstávají otevřené. Samotné přijetí dokumentace neprokazuje hotovou instalaci ani migraci.
+Odkazy popisující původní VPS baseline mohou dál citovat 0080; nové obecné umístění musí citovat tento záznam. Consumery jsou [hosted-access manuál](hosted-buddy-vps.md), [mapa rootu](../MAP.md),
+[root instrukce](../AGENTS.md) v hranici Personalspace a orientaci před prací
+a [Personalspace kontrakt](../personalspace/README.md) včetně budoucího bindingu. Cílový návrh nezaručuje bezchybnost hypervizoru ani sítě. Detailní obnova, přenos instalace a aplikačních dat, ceny a SLA zůstávají otevřené. Samotné přijetí dokumentace neprokazuje hotovou instalaci ani migraci.

@@ -16,13 +16,16 @@ pravda sem nepatří a nikdy se odsud nepřenáší mezi Organizacemi.
 
 Personalspace může fungovat bez Buddyho. Jeho Principálem je vlastník; Buddy
 binding a přístup ke gbrainu se přidávají jen tehdy, když vlastník Buddyho
-skutečně onboarduje. Aktivní Buddy smí běžet pouze na dedikované per-owner
-VPS; tento lokální mount drží jeho Git konfiguraci, ne Hermes/Buddy runtime.
+skutečně onboarduje. Nasazený baseline podle 0080 používá dedikovanou per-owner
+VPS. Cílový model [BUDDY-2026-09-12](../manual/buddy-product-decision-2026-09-12.md)
+připouští samostatnou zákaznickou VM, VPS nebo vlastní hardware; tato dokumentace
+instalace nemigruje. Tento lokální mount dál drží jen Git konfiguraci, ne
+Hermes/Buddy runtime.
 
 **Agentům:** jestli tvůj Principál hostovaného Buddyho má, se nepozná
 z manifestu — deklarace není důkaz a instalace mimo self-service lane v něm
 nemusí být vidět vůbec. Postup zjištění, hranice toho, co s hostem smíš dělat, a pravidlo,
-že **na VPS platí vygenerované instrukce aktivního Buddy resident rootu spolu
+že **na Buddyho Mašině platí vygenerované instrukce aktivního Buddy resident rootu spolu
 s privátním profilem Principála** a ne pravidla source checkoutu, drží
 [`../manual/hosted-buddy-vps.md`](../manual/hosted-buddy-vps.md).
 
@@ -99,9 +102,12 @@ a cross-platform evidence drží `CAC-0071`.
 
 Třírepo onboarding s private Hermes profilem Buddyho zůstává **PENDING
 `CAC-0072`**. Live root parser `--with-buddy` odmítá jako neznámý argument;
-Buddy repo ani hosted handoff nevytváří. Cílový binding bude fail-closed
-vyžadovat `deployment_target: owner-dedicated-personalspace-vps` a
-`local_execution: forbidden`, ale akční surface smí vzniknout až po publikaci
+Buddy repo ani hosted handoff nevytváří. Původní návrh bindingu s
+`deployment_target: owner-dedicated-personalspace-vps` odpovídá VPS baseline,
+ne obecnému cílovému modelu BUDDY-2026-09-12. Budoucí adapter musí fail-closed
+ověřit samostatnou per-owner Mašinu a podporovaný deployment target; konkrétní
+schéma pro VM/VPS/hardware zůstává otevřené. `local_execution: forbidden`
+pro tento profilový mount zůstává. Akční surface smí vzniknout až po publikaci
 a cross-repo contract testu samostatného adapteru.
 
 Existující neversionované manifesty zůstávají přechodně čitelné s Doctor
@@ -140,6 +146,7 @@ Do Gitu patří jen tento standard a no-secret runbooky, nikdy skutečné secret
 hodnoty ani obsah JSON souborů. Personalspace ani jeho secrets custody se
 nesdílejí.
 Buddy/Hermes provider auth, sessions a runtime secrets patří pouze do
-oddělené custody na dedikované VPS, ne do této lokální cesty.
+oddělené custody na Buddyho Mašině (v nasazeném baseline dedikované VPS),
+ne do této lokální profilové cesty.
 Detailní pravidla jsou v `manual/security/local-secret-custody.md`
 (aktualizace cesty na owner-scoped tvar je součást CAC-0048).
