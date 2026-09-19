@@ -216,9 +216,11 @@ Organization rootu. Každý aktivní modul pak deklaruje vlastní `git.url`,
 
 První render a quiet refresh jsou GET-only: čtou lokální snapshot bez fetch a
 bez Git mutace. **Synchronizovat** a CLI `lazurio update` volají tentýž jediný
-sekvenční engine. Ten provede Lazurio
+engine. Ten po vrstvách provede Lazurio
 Root → Organization Rooty → z čerstvého
-manifestu sestavená spravovaná org-level repa a Workspace Moduly. Existující
+manifestu sestavená spravovaná org-level repa a Workspace Moduly; repozitáře
+jedné vrstvy běží souběžně s pevným limitem a vnořený slot čeká na svého
+předka. Existující
 checkouty převádí výhradně na clean `main` přes ff-only; chybějící aktivní
 Workspace Modul a chybějící root repo s explicitním
 `materialization: doctor_managed_nested_repo` naklonuje atomicky na
@@ -818,8 +820,9 @@ jasný mechanismus:
   nebezpečný detached stav nebo rozpracovaný merge/rebase/am vrátí `blocked`
   s přesným tlačítkem/promptem **Vyřešit s Codexem**. Každé nové spuštění stav
   znovu zjistí; nevzniká plan/apply/resume ani skrytý update journal.
-- Nový commit v Organization rootu může změnit manifest. Engine ho proto po
-  root update načte znovu a teprve pak sekvenčně aktualizuje namountovaná
+- Nový commit v Organization rootu může změnit manifest. Engine proto po
+  update všech Organization rootů jednou znovu načte inventář a teprve pak
+  aktualizuje namountovaná
   org-level repa, atomicky materializuje explicitně opt-in root repa a
   aktualizuje nebo atomicky materializuje Workspace Moduly.
   Po skutečné změně repa obnoví jeho root
