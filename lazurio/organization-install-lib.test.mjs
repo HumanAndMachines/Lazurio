@@ -920,7 +920,12 @@ async function organizationRemoteFixture({ repositoryId = ids.repository } = {})
       defaultBranch: "main",
     },
   });
-  for (const file of scaffold.files) {
+  // These fixtures model a legacy Organization root that tests then edit
+  // through company.gen3.json. A scaffold now also emits the canonical
+  // lazurio.organization.json (transition); keeping it here would turn every
+  // hand edit of the legacy file into the fail-closed `conflict` state. The
+  // canonical scaffold pair is covered by the scaffold and migration tests.
+  for (const file of scaffold.files.filter((entry) => entry.path !== "lazurio.organization.json")) {
     const path = join(source, file.path);
     await mkdir(dirname(path), { recursive: true });
     await writeFile(path, file.content);

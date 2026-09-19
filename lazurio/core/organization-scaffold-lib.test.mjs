@@ -9,6 +9,10 @@ import {
   ORGANIZATION_FORGE_BINDING_VERSION,
   ORGANIZATION_SCAFFOLD_CONTRACT_VERSION,
 } from "./organization-scaffold-lib.mjs";
+import {
+  projectLegacyOrganizationManifest,
+  resolveOrganizationRootDocuments,
+} from "./organization-activation-lib.mjs";
 
 const input = Object.freeze({
   organization: {
@@ -40,7 +44,7 @@ describe("Organization scaffold", () => {
         default_branch: "main",
       },
     });
-    expect(scaffold.git_tree_oid).toBe("7d5ca2ff545ddb0cafe4e1b3e8d3e310fecdfee8");
+    expect(scaffold.git_tree_oid).toBe("368142626b715f166ee0098bdc70c02242f4f906");
     expect(scaffold.files.map((file) => file.path)).toEqual([
       ".github/ISSUE_TEMPLATE/agent-report.md",
       ".gitignore",
@@ -50,6 +54,7 @@ describe("Organization scaffold", () => {
       "TODO.tasks.json",
       "company.gen3.json",
       "company/colleagues/README.md",
+      "lazurio.organization.json",
       "manual/README.md",
       "modules.manifest.json",
       "productionspace/README.md",
@@ -70,6 +75,37 @@ describe("Organization scaffold", () => {
     expect(company.module_port_pool).toBeUndefined();
     const modules = JSON.parse(scaffold.files.find((file) => file.path === "modules.manifest.json").content);
     expect(modules.module_slots).toEqual([]);
+
+    const canonical = JSON.parse(scaffold.files.find((file) => file.path === "lazurio.organization.json").content);
+    expect(canonical).toMatchObject({
+      schema_version: "lazurio.organization.v1",
+      kind: "organization",
+      organization: {
+        slug: "example-org",
+        forge_binding: { forge: "github", locator: "ExampleOrg", binding_state: "verified", organization_id: "12345678" },
+      },
+      root_repository: { locator: "ExampleOrg/ExampleOrg_GEN3", binding_state: "verified", repository_id: "87654321" },
+    });
+    // A new root starts in `transition`: the canonical manifest is authored,
+    // the legacy file is its exact projection and the declared hash matches.
+    const resolution = resolveOrganizationRootDocuments({
+      canonicalManifest: canonical,
+      companyManifest: company,
+      modulesManifest: modules,
+    });
+    expect(resolution).toMatchObject({ state: "transition", resource_count: 1, issues: [] });
+    expect(projectLegacyOrganizationManifest(canonical, modules)).toEqual(company);
+  });
+
+  test("a scaffold whose legacy projection drifts from its canonical manifest is invalid", () => {
+    const scaffold = createOrganizationScaffold(input);
+    const files = scaffold.files.map((file) => {
+      if (file.path !== "company.gen3.json") return file;
+      const company = JSON.parse(file.content);
+      company.company.display_name = "Edited by hand";
+      return { ...file, content: `${JSON.stringify(company, null, 2)}\n` };
+    });
+    expect(isValidOrganizationScaffold({ ...scaffold, files })).toBe(false);
   });
 
   test("pins the same tree object as standard Git", async () => {

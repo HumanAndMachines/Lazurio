@@ -478,6 +478,13 @@ Root upravuj jen když se mění:
   root/operator secrets patří do gitignored `personalspace/<owner>_GEN3/secrets/...`,
   organization/AI-colleague secrets do organization-local `private/secrets/...`.
 - Lokální drafty: `drafts/`
+- Migrační kód (přesun ze starého směru do nového, např. legacy
+  `company.gen3.json` → `lazurio.organization.json`) žije výhradně ve
+  vyhrazené migrations složce (`lazurio/migrations/<migrace>/` s vlastním
+  README, vstupními body a podmínkou smazání) a po dokončení migrace se maže;
+  nikdy se nemíchá do modulů aktuálního směru — Core drží jen forward
+  resolver/projekci, CLI je tenký dispatch a Doctor/compiler na příkaz jen
+  odkazují.
 
 ## Organization GEN3 model
 

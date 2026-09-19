@@ -210,23 +210,57 @@ complete reader-version evidence today. It is not a second authority:
 
 ## Doctor and migrator
 
-Doctor remains read-only and returns the next safe command:
+Doctor remains read-only and returns the next safe command. The Organization
+migrator is **implemented for `legacy → transition` and projection regeneration
+only** (DEV-6512 task 010). **Finalization (`transition → current`) is not
+implemented**: opening `current` requires a separately accepted
+reader-readiness mechanism that proves trusted identity continuity live
+(decision 0145) — an offline tool can only restate what the manifest asserts
+about itself. Until then every Organization stays in `transition` with the
+generated projection. The migrator lives, together with its
+tests and fixtures, in the dedicated migration folder
+`lazurio/migrations/organization-manifest/` — never in Core, Doctor or the
+compiler (root `AGENTS.md`: migration code is separated from current-direction
+modules and deleted when every Organization is `current`). The Personalspace
+migrator remains a separate, unimplemented rollout.
 
 ```text
-lazurio migrate organization-manifest
-lazurio migrate organization-manifest --write
-lazurio migrate organization-manifest --finalize --write
+lazurio migrate organization-manifest <organization-root>                   # plan only, exit 0 when a safe plan exists
+lazurio migrate organization-manifest <organization-root> --write           # legacy → transition, or regenerate the projection
+lazurio migrate organization-manifest <organization-root> --finalize        # not implemented: refused, `finalize_not_implemented`, exit 1
+lazurio migrate organization-manifest <organization-root> --json            # lazurio.organization.manifest-migration.v0
 
-lazurio migrate personalspace-manifest
+lazurio migrate personalspace-manifest                                      # not implemented
 lazurio migrate personalspace-manifest --write
 lazurio migrate personalspace-manifest --finalize --write
 ```
+
+Implemented behavior per resolver state:
+
+| Before | Operation | Result |
+| --- | --- | --- |
+| `legacy` | `migrate` | derives `lazurio.organization.json` as the exact inverse of the Core projection (the resolver's normalized legacy resource re-shaped into `lazurio.organization.v1` plus the declared projection hash), regenerates `company.gen3.json` from it, and accepts only when the staged pair resolves to `transition` with `issues: []`, the same semantic hash as the legacy input and both JSON schemas valid |
+| `projection_drift`, or `conflict` with a canonical document present | `regenerate` | recomputes the declared hash of the canonical manifest and rewrites the legacy projection from it; the canonical file is the only authority, a hand edit of the legacy file is discarded visibly in the Git diff |
+| `transition` | none | `noop`; this is the end state of the implemented migrator |
+| `current` | none | `noop` |
+| any state + `--finalize` (with or without `--write`) | none | refused before anything is planned: `blocked` with `finalize_not_implemented`, exit 1; nothing is read back or written. `company.gen3.json` is never removed by this tool |
+| `missing`, malformed, `kind: template`, legacy `modules[]` not reconciled | — | `blocked`; nothing is written |
+
+`company.gen3.json#modules[]` is never copied: every entry must be a declared
+`modules.manifest.json` slot projecting identically (`legacy_modules_unreconciled`
+otherwise). The Organization aligns `modules.manifest.json` first, in its own
+PR; only then does `--write` proceed. The compiler classifies
+`lazurio.organization.json` by the Organization's own `governance.file_ownership`,
+so list it next to `modules.manifest.json` (typically under `manual`) before or
+in the migration PR.
 
 Contract:
 
 - without `--write`, print a plan and machine-readable diff summary;
 - Organization `--write` operates only in a clean plan-owned worktree on its
-  expected branch; it never edits a primary checkout;
+  expected branch; it never edits a primary checkout (implemented gate: linked
+  Git worktree, branch other than `main`/`master`, no detached HEAD, no dirty
+  path other than the two managed manifests);
 - Personalspace `--write` uses an owner-private task/worktree contract and
   never depends on an Organization Mission Control;
 - build and validate the complete Lazurio manifest and legacy projection before
@@ -238,8 +272,13 @@ Contract:
   hash and changed files;
 - preserve supported extension fields; refuse ambiguous roots, dirty
   worktrees, unpreservable fields, binding mismatch and path traversal;
-- keep `--finalize` blocked until a separate accepted mechanism proves the
-  minimum reader version for every supported Machine cohort.
+- keep `--finalize` refused (`finalize_not_implemented`; not implemented, no
+  plan and no write) until a separate accepted mechanism proves the minimum
+  reader version for every supported Machine cohort **and** trusted identity
+  continuity of the canonical-only root, live against the Forge (decision
+  0145). Core `ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS` only names the
+  formats activation, install and update accept today (`legacy`,
+  `transition`); it is not a finalization switch.
 
 ### Authoring worktree protocol
 
@@ -327,7 +366,7 @@ a second registry: each follow-up removes a direct document read by consuming
 | Launchpad discovery and diagnostics | `launchpad/src/discovery-lib.mjs`, `launchpad/src/diagnostics-lib.mjs`, `launchpad/src/git-inventory-lib.mjs`, `launchpad/src/doctor-children-lib.mjs`, `launchpad/src/module-location-repair-lib.mjs`, `launchpad/src/workspace-parity-runner.mjs` | Consume one normalized Organization resource, preserve fail-closed conflict, and compose exactly one Organization child Doctor per mount. |
 | Lazurio CLI, update and Module policy | `lazurio/lib.mjs`, `lazurio/module-port-lib.mjs`, `lazurio/module-setup-lib.mjs` | Stop opening the legacy projection as authority; use the same normalized identity, policy and repository inventory. |
 | Root scripts and worktree inventory | `scripts/worktree-create.mjs`, `scripts/lazurio-module-inventory.mjs`, `scripts/mission-control-trust-smoke.mjs`, `scripts/gen2-gen3-sync-inventory.mjs`, `.agents/skills/worktree-development-discipline/scripts/worktree-inventory.mjs`, `.claude/skills/worktree-development-discipline/scripts/worktree-inventory.mjs` | Resolve the mount once through Core; keep the two tracked skill mirrors byte-identical. |
-| Bootstrap follow-up | `lazurio/core/organization-scaffold-lib.mjs` | Emit the canonical manifest plus its deterministic legacy compatibility projection only after reader and target-tree update gates. |
+| Bootstrap follow-up | `lazurio/core/organization-scaffold-lib.mjs` | Done: the scaffold emits `lazurio.organization.json` plus its deterministic legacy compatibility projection, so a new root starts in `transition`. |
 
 `launchpad/src/doctor-surface-lib.mjs`, `launchpad/src/module-folder-lib.mjs` and
 `lazurio/core/module-location-repair-contract-lib.mjs` mention the legacy
@@ -366,8 +405,10 @@ and cannot become an actionable Organization.
 
 ### 4. Finalize later
 
-`--finalize` remains unavailable until a separate accepted design proves
-reader readiness for online, offline and returning Machines. Finalization then
+`--finalize` remains unavailable — the shipped command refuses it with
+`finalize_not_implemented` — until a separate accepted design proves reader
+readiness for online, offline and returning Machines and a live-verifiable
+identity anchor for the canonical-only root. Finalization then
 requires no conflicts, cross-platform regeneration tests and an owner-approved
 PR for the exact Organization or Personalspace.
 

@@ -69,6 +69,15 @@ if (import.meta.main) {
   }
 }
 
+async function loadOrganizationManifestMigration() {
+  try {
+    return await import("./migrations/organization-manifest/organization-manifest-migration.mjs");
+  } catch (error) {
+    if (error?.code === "ERR_MODULE_NOT_FOUND" || /Cannot find module/.test(String(error?.message))) return null;
+    throw error;
+  }
+}
+
 async function run(argv) {
   const options = parseArgs(argv);
   if (options.help) {
@@ -116,6 +125,32 @@ async function run(argv) {
       ? JSON.stringify(report, null, 2)
       : renderHumanOrganizationInstall(report));
     return organizationInstallExitCode(report);
+  }
+
+  if (options.command === "migrate") {
+    // Thin dispatch only: the migration mechanism lives in
+    // lazurio/migrations/organization-manifest and is deleted with it. It is
+    // loaded lazily so distributions without the migrations folder (resident
+    // artifacts) keep a working CLI and report the absence explicitly.
+    const migration = await loadOrganizationManifestMigration();
+    if (!migration) {
+      console.error("migrate organization-manifest není v této distribuci dostupný; použij source checkout nebo package-managed lazurio.");
+      return 2;
+    }
+    const {
+      organizationManifestMigrationExitCode,
+      renderHumanOrganizationManifestMigration,
+      runOrganizationManifestMigration,
+    } = migration;
+    const report = await runOrganizationManifestMigration({
+      organizationRoot: options.migrateRoot,
+      write: options.write,
+      finalize: options.finalize,
+    });
+    console.log(options.json
+      ? JSON.stringify(report, null, 2)
+      : renderHumanOrganizationManifestMigration(report));
+    return organizationManifestMigrationExitCode(report);
   }
 
   if (options.command === "module" && options.moduleAction !== "setup") {
@@ -280,6 +315,9 @@ function parseArgs(argv) {
     update: false,
     check: false,
     toolUpdates: false,
+    write: false,
+    finalize: false,
+    migrateRoot: null,
     githubOrganizationId: null,
     organizationRole: null,
     apply: false,
@@ -307,7 +345,7 @@ function parseArgs(argv) {
       parsed.command = arg;
       continue;
     }
-    if (["search", "launchpad", "cli", "organization", "module", "repair"].includes(parsed.command) && !arg.startsWith("-")) {
+    if (["search", "launchpad", "cli", "organization", "module", "repair", "migrate"].includes(parsed.command) && !arg.startsWith("-")) {
       parsed.operands.push(arg);
       continue;
     }
@@ -334,6 +372,10 @@ function parseArgs(argv) {
     }
     if (arg === "--tool-updates") {
       parsed.toolUpdates = true;
+      continue;
+    }
+    if (arg === "--write" || arg === "--finalize") {
+      parsed[arg.slice(2)] = true;
       continue;
     }
     if (arg === "--apply" || arg === "--no-app") {
@@ -556,6 +598,21 @@ function parseArgs(argv) {
       throw new Error("--expect lze použít pouze společně s --apply.");
     }
     parsed.repairAction = "module-location";
+  } else if (parsed.command === "migrate") {
+    if (parsed.searchFlags.size > 0) {
+      throw new Error(`${[...parsed.searchFlags].join(", ")} lze použít pouze s příkazem search.`);
+    }
+    if (parsed.operands[0] !== "organization-manifest") {
+      throw new Error("migrate vyžaduje jedinou akci `organization-manifest`.");
+    }
+    if ((!parsed.help && parsed.operands.length !== 2) || (parsed.help && parsed.operands.length > 2)) {
+      throw new Error("migrate organization-manifest vyžaduje <organization-root>.");
+    }
+    if (parsed.rootExplicit) {
+      throw new Error("migrate organization-manifest přijímá explicitní <organization-root>, ne --root.");
+    }
+    parsed.migrateAction = "organization-manifest";
+    parsed.migrateRoot = parsed.operands[1] ? resolve(parsed.operands[1]) : null;
   } else if (parsed.command === "launchpad") {
     if (parsed.searchFlags.size > 0) {
       throw new Error(`${[...parsed.searchFlags].join(", ")} lze použít pouze s příkazem search.`);
@@ -659,6 +716,9 @@ function parseArgs(argv) {
   if (parsed.check && parsed.command !== "organization") {
     throw new Error("--check lze použít pouze s `lazurio organization activate`.");
   }
+  if ((parsed.write || parsed.finalize) && parsed.command !== "migrate") {
+    throw new Error("--write a --finalize lze použít pouze s `lazurio migrate organization-manifest`.");
+  }
   if (parsed.toolUpdates && parsed.command !== "doctor") {
     throw new Error("--tool-updates lze použít pouze s `lazurio doctor`.");
   }
@@ -741,6 +801,9 @@ function usage() {
     "  lazurio context [--organization <slug>] [--json] [--root <cesta>]",
     "  lazurio doctor [--tool-updates] [--json] [--root <cesta>]",
     "  lazurio update [--json] [--root <cesta>]",
+    "  lazurio migrate organization-manifest <organization-root> [--write] [--json]",
+    "    bez --write: jen plán (stav před/po, hashe, změny); --write: legacy → transition v čistém task worktree",
+    "    --finalize: není implementováno — příkaz skončí blocked `finalize_not_implemented` (decision 0145, manual/lazurio-manifest-family.md)",
     "  lazurio repair module-location --org <slug> --module <slug> [--json] [--root <cesta>]",
     "  lazurio repair module-location --org <slug> --module <slug> --apply --expect <fingerprint> [--json] [--root <cesta>]",
     "  lazurio module setup <module-root> [--apply] [--json] [--root <cesta>]",

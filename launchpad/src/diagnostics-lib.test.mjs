@@ -3543,3 +3543,54 @@ test("missing declared App blocks readiness but explicit data-only does not", as
   expect(dataOnly.organizations[0].organization_modules[0].apps.state).toBe("explicit-none");
   expect(dataOnly.organizations[0].space_readiness.blocking_slots).toEqual([]);
 });
+
+test("Doctor reports Organization manifest state and points legacy or drifted roots to the migrator", () => {
+  const organization = (slug, manifestState, extra = {}) => ({
+    slug,
+    display_name: slug,
+    path: `organizations/${slug}_GEN3`,
+    status: "mounted",
+    organization_type: "organization-gen3",
+    manifest_state: manifestState,
+    declaration_source: manifestState === "legacy" ? "legacy_compatibility_projection" : "lazurio.organization.json",
+    ...extra,
+  });
+  const report = buildDoctorReportFromAppsResponse({
+    launchpad_root: { display_name: "Test root" },
+    root: "/tmp/test-root",
+    failures: [],
+    warnings: [],
+    apps: [],
+    organizations: [
+      organization("LegacyCo", "legacy"),
+      organization("DriftCo", "projection_drift"),
+      organization("MovedCo", "transition"),
+      organization("DoneCo", "current"),
+      organization("PlannedCo", null, { status: "planned", path: null }),
+      organization("TemplateCo", "legacy", { organization_type: "organization-template" }),
+    ],
+  }, { childLane: { children: [], checks: [] } });
+  const check = report.checks.find((item) => item.id === "launchpad.organization_manifests");
+
+  expect(check).toMatchObject({ status: "warn", severity: "recommended" });
+  expect(check.message).toContain("2 Organizace čekají na lazurio migrate organization-manifest");
+  expect(check.details).toEqual([
+    expect.stringContaining("organizations/LegacyCo_GEN3: legacy — company.gen3.json je deprecated (decision 0145); migrace: lazurio migrate organization-manifest <Lazurio>/organizations/LegacyCo_GEN3 --write"),
+    expect.stringContaining("organizations/DriftCo_GEN3: projection_drift — company.gen3.json neodpovídá lazurio.organization.json; regenerace: lazurio migrate organization-manifest <Lazurio>/organizations/DriftCo_GEN3 --write"),
+    "organizations/MovedCo_GEN3: transition (lazurio.organization.json)",
+    "organizations/DoneCo_GEN3: current (lazurio.organization.json)",
+  ]);
+
+  const settled = buildDoctorReportFromAppsResponse({
+    launchpad_root: { display_name: "Test root" },
+    root: "/tmp/test-root",
+    failures: [],
+    warnings: [],
+    apps: [],
+    organizations: [organization("MovedCo", "transition")],
+  }, { childLane: { children: [], checks: [] } });
+  expect(settled.checks.find((item) => item.id === "launchpad.organization_manifests")).toMatchObject({
+    status: "ok",
+    message: "Organization manifesty: 1 Organizace bez migračního kroku",
+  });
+});

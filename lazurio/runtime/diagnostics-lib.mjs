@@ -164,6 +164,10 @@ export async function buildLaunchpadAppsResponse({
       // mounted (default) | planned — planned Organizace ještě nemá mount (decision 0024).
       status: organization.status ?? "mounted",
       discovery_source: organization.discovery_source ?? "registry",
+      // Organization manifest compatibility state (decision 0145): Doctor
+      // reports it and points to the explicit migrator; read-only otherwise.
+      manifest_state: organization.manifest_state ?? null,
+      declaration_source: organization.declaration_source ?? null,
       // GEN3 organization model: Organization-root modules, flat Workspace
       // modules grouped N:M by Team, and a read-only Productionspace boundary.
       ...publicSpaces,
@@ -1027,6 +1031,7 @@ export function buildDoctorReportFromAppsResponse(
     discoveryCheck(appsResponse),
     portOverlapCheck(appsResponse),
     workspaceDeclarationCheck(appsResponse),
+    organizationManifestCheck(appsResponse),
     ...runtimeChecks(appsResponse),
     // Additivní checks (např. personalspace, CAC-0048) — nikdy nemění org
     // appsResponse, jen se přidají do reportu.
@@ -3141,6 +3146,52 @@ function discoveryCheck(appsResponse) {
 // lease. Oddělené Organizations mohou zachovat stejné číslo; na jednom hostu
 // je jejich runtime one-at-a-time a takeover je vždy potvrzený. Port se nikdy
 // nepřemapovává.
+// Organization manifest compatibility state per mounted Organization
+// (decision 0145): `legacy` and `projection_drift` are actionable and point to
+// the one explicit migrator command; the mechanism itself lives in
+// lazurio/migrations/organization-manifest, never in Doctor.
+function organizationManifestCheck(appsResponse) {
+  const organizations = (appsResponse.organizations ?? []).filter((organization) => (
+    (organization.status ?? "mounted") === "mounted"
+    && typeof organization.path === "string"
+    && organization.organization_type !== "organization-template"
+  ));
+  const details = [];
+  const actionable = [];
+  for (const organization of organizations) {
+    const state = organization.manifest_state ?? "unresolved";
+    const checkout = `<Lazurio>/${organization.path}`;
+    if (state === "legacy") {
+      actionable.push(organization.path);
+      details.push(
+        `${organization.path}: legacy — company.gen3.json je deprecated (decision 0145); migrace: `
+        + `lazurio migrate organization-manifest ${checkout} --write v plan-owned task worktree`,
+      );
+    } else if (state === "projection_drift") {
+      actionable.push(organization.path);
+      details.push(
+        `${organization.path}: projection_drift — company.gen3.json neodpovídá lazurio.organization.json; regenerace: `
+        + `lazurio migrate organization-manifest ${checkout} --write`,
+      );
+    } else {
+      details.push(`${organization.path}: ${state} (${organization.declaration_source ?? "n/a"})`);
+    }
+  }
+  const status = actionable.length > 0 ? "warn" : "ok";
+  return {
+    id: "launchpad.organization_manifests",
+    status,
+    severity: "recommended",
+    title: "Organization manifesty",
+    message: status === "ok"
+      ? `Organization manifesty: ${formatCount(organizations.length, "Organizace", "Organizace", "Organizací")} bez migračního kroku`
+      : `Organization manifesty: ${formatCount(actionable.length, "Organizace čeká", "Organizace čekají", "Organizací čeká")} na lazurio migrate organization-manifest`,
+    paths: ["organizations"],
+    links: [],
+    details,
+  };
+}
+
 function portOverlapCheck(appsResponse) {
   const overlaps = appsResponse.port_overlaps ?? [];
   const policyIssues = appsResponse.port_policy_issues ?? [];

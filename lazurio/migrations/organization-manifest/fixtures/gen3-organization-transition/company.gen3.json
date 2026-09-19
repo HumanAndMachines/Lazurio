@@ -1,0 +1,324 @@
+{
+  "access_governance": {
+    "admin_boundary": "Admins only.",
+    "agent_rule": "Propose, do not apply.",
+    "source_of_truth": "infra/access"
+  },
+  "business_context": {
+    "customer_segments": [
+      {
+        "description": "Fixture customer segment.",
+        "slug": "sme-management"
+      }
+    ],
+    "decision_rules": [
+      {
+        "owner": "founder",
+        "rule": "Escalate to the founder.",
+        "trigger": "money or security impact"
+      }
+    ],
+    "metrics": [
+      {
+        "description": "Fixture metric.",
+        "slug": "accepted-proposals"
+      }
+    ],
+    "revenue_drivers": [
+      {
+        "description": "Fixture revenue driver.",
+        "priority": "high",
+        "slug": "workspace-delivery"
+      }
+    ],
+    "risks": [
+      {
+        "description": "Fixture risk.",
+        "slug": "unclear-impact"
+      }
+    ],
+    "value_propositions": [
+      {
+        "description": "Fixture value proposition.",
+        "slug": "working-system"
+      }
+    ]
+  },
+  "colleague_overlays": {
+    "agent_rule": "Personalspace never lands here.",
+    "folder_name_rule": "<github-login>",
+    "gitignored_local_paths": [
+      "archive/",
+      "private/",
+      "scratch/"
+    ],
+    "path": "company/colleagues"
+  },
+  "company": {
+    "default_branch": "main",
+    "display_name": "Example Organization",
+    "github_org": "Example-ai",
+    "repository": "git@github.com:Example-ai/Example-ai_GEN3.git",
+    "root_repository": "Example-ai/Example-ai_GEN3",
+    "slug": "Example-ai"
+  },
+  "forge_binding": {
+    "organization": {
+      "asserted_login": "Example-ai",
+      "id": "314957563"
+    },
+    "provider": "github",
+    "repository": {
+      "asserted_full_name": "Example-ai/Example-ai_GEN3",
+      "default_branch": "main",
+      "id": "1276680840"
+    },
+    "schema_version": "lazurio.forge-binding.github.v0"
+  },
+  "generation_policy": {
+    "application_versions": [
+      {
+        "purpose": "Current stable applications.",
+        "version": "v3"
+      }
+    ],
+    "data_versions": [
+      {
+        "namespace": "mission-control",
+        "source_of_truth": "repository-db:v3"
+      }
+    ],
+    "migration_rules": [
+      {
+        "rule": "Never rewrite published history."
+      }
+    ],
+    "prototype_rule": "Prototype in v1, stabilize in v2."
+  },
+  "glossary_contract": {
+    "agent_rule": "Do not guess terms.",
+    "required_term_fields": [
+      "term",
+      "definition"
+    ],
+    "source": "GLOSSARY.md"
+  },
+  "governance": {
+    "classification_reports": [
+      {
+        "issue": "issue-fixture-001",
+        "label": "Fixture classification report",
+        "path": "Example-ai/mission-control-data:v3:data/mission-control/reports/fixture.md"
+      }
+    ],
+    "default_branch": "main",
+    "file_ownership": {
+      "derived": [
+        "generated/**"
+      ],
+      "managed": [],
+      "manual": [
+        "AGENTS.md",
+        "README.md",
+        "company.gen3.json",
+        "lazurio.organization.json",
+        "modules.manifest.json",
+        "manual/**",
+        "workspace/**",
+        "productionspace/**",
+        "infra/**"
+      ],
+      "override": [
+        "company/roles/**",
+        "company/colleagues/**",
+        "design-system/**",
+        "guide/**"
+      ]
+    },
+    "migration_policy": {
+      "source_generation": "gen2",
+      "source_repository": "Example-legacy/Example-legacy",
+      "transition_marker_rule": "_GEN3 is a permanent repository generation marker.",
+      "transition_repository": "Example-ai/Example-ai_GEN3",
+      "write_policy": "Structural work happens in the GEN3 root."
+    },
+    "update_model": "standalone"
+  },
+  "layers": [
+    {
+      "kind": "company-shell",
+      "ownership": "override",
+      "path": "company"
+    },
+    {
+      "kind": "workspace",
+      "ownership": "manual",
+      "path": "workspace"
+    },
+    {
+      "kind": "design-system",
+      "ownership": "override",
+      "path": "design-system"
+    },
+    {
+      "kind": "productionspace",
+      "ownership": "manual",
+      "path": "productionspace",
+      "status": "active"
+    },
+    {
+      "kind": "infra",
+      "ownership": "manual",
+      "path": "infra"
+    },
+    {
+      "kind": "mission-control",
+      "ownership": "manual",
+      "path": "mission-control"
+    },
+    {
+      "kind": "manual",
+      "ownership": "manual",
+      "path": "manual"
+    }
+  ],
+  "module_port_pool": {
+    "end": 24299,
+    "start": 24200
+  },
+  "modules": [
+    {
+      "access": {
+        "default": "role_based",
+        "roles": [
+          "co-founder",
+          "team-member"
+        ]
+      },
+      "branch": "main",
+      "category": "knowledge",
+      "classification": "public-productionspace-documentation",
+      "materialization": "doctor_managed_nested_repo",
+      "notes": "Public documentation repository.",
+      "path": "productionspace/documentation",
+      "repo": "git@github.com:Example-public/documentation.git",
+      "slug": "documentation",
+      "source_of_truth": "git-native"
+    },
+    {
+      "access": {
+        "default": "expected",
+        "roles": [
+          "*"
+        ]
+      },
+      "branch": "main",
+      "category": "publishing",
+      "classification": "workspace",
+      "materialization": "doctor_managed_nested_repo",
+      "notes": "Content module.",
+      "path": "workspace/content-example",
+      "repo": "git@github.com:Example-ai/content-example.git",
+      "slug": "content",
+      "source_of_truth": "git-native",
+      "teams": [
+        "delivery"
+      ]
+    },
+    {
+      "access": {
+        "default": "expected",
+        "roles": [
+          "*"
+        ]
+      },
+      "branch": "main",
+      "category": "publishing-data",
+      "classification": "workspace-data",
+      "materialization": "repository_db_mount",
+      "notes": "Content repository-db.",
+      "path": "workspace/content-example/db",
+      "repo": "git@github.com:Example-ai/content-example-data.git",
+      "slug": "content-example-data",
+      "source_of_truth": "repository-db:v3",
+      "teams": [
+        "delivery"
+      ]
+    },
+    {
+      "access": {
+        "default": "role_based",
+        "roles": [
+          "co-founder"
+        ]
+      },
+      "branch": "main",
+      "category": "knowledge",
+      "classification": "workspace",
+      "materialization": "doctor_managed_nested_repo",
+      "notes": "Shared knowledge module.",
+      "path": "workspace/knowledgebase",
+      "repo": "git@github.com:Example-ai/knowledgebase.git",
+      "slug": "knowledgebase",
+      "source_of_truth": "git-native",
+      "teams": [
+        "delivery",
+        "platform"
+      ]
+    }
+  ],
+  "organization_generation": "gen3",
+  "organization_kind": "organization",
+  "source_of_truth_matrix": [
+    {
+      "domain": "plans",
+      "note": "Fixture matrix row.",
+      "source": "mission-control/db"
+    }
+  ],
+  "task_sources": [
+    {
+      "authority": "source-of-truth",
+      "kind": "todo-tasks-json",
+      "path": "mission-control/db/data/mission-control/TODO.tasks.json",
+      "slug": "mission-control-todo"
+    },
+    {
+      "authority": "source-of-truth",
+      "kind": "done-tasks-json",
+      "path": "mission-control/db/data/mission-control/DONE.tasks.json",
+      "slug": "mission-control-done"
+    }
+  ],
+  "teams": [
+    {
+      "default": true,
+      "description": "Default fixture Team.",
+      "display_name": "Delivery",
+      "forge_binding": {
+        "provider": "github",
+        "schema_version": "lazurio.team-forge-binding.github.v0",
+        "team": {
+          "asserted_slug": "delivery",
+          "id": "18910781"
+        }
+      },
+      "slug": "delivery"
+    },
+    {
+      "default": false,
+      "description": "Second fixture Team.",
+      "display_name": "Platform",
+      "forge_binding": {
+        "provider": "github",
+        "schema_version": "lazurio.team-forge-binding.github.v0",
+        "team": {
+          "asserted_slug": "platform",
+          "id": "18910782"
+        }
+      },
+      "slug": "platform"
+    }
+  ],
+  "template_sync_role": "consumer"
+}

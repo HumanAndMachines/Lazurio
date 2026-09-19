@@ -18,7 +18,10 @@ import {
   observeGitHubRoleReadiness,
 } from "./core/github-builder-readiness-lib.mjs";
 import { resolveGitHubCliExecutableOnPath } from "./core/toolchain-lib.mjs";
-import { resolveOrganizationRootDocuments } from "./core/organization-activation-lib.mjs";
+import {
+  ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
+  resolveOrganizationRootDocuments,
+} from "./core/organization-activation-lib.mjs";
 import { readOrganizationRoot } from "./core/organization-root-reader-lib.mjs";
 import { isValidOrganizationForgeBinding } from "./core/organization-scaffold-lib.mjs";
 import {
@@ -1069,7 +1072,7 @@ function verifyOrganizationRootDocuments({ documents, organization, repository }
     expectedOrganizationLogin: organization.login,
     expectedRepositoryId: repository.id,
     expectedRepositoryFullName: repository.full_name,
-    activationFormats: ["legacy", "transition"],
+    activationFormats: ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
   });
   const identity = resolution.resource;
   const bindingSupported = identity?.organization?.forge_binding?.binding_state === "verified"

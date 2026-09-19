@@ -199,6 +199,42 @@ do GitHub Issues přesného owning repa, nikoli do nového lokálního JSON ledg
 Vytvoření issue nebo komentáře je Publikace; úplný routing, prompt mandát a
 fallback draft drží [GitHub Issues manuál](../manual/github-issues.md).
 
+## Migrace Organization manifestu
+
+`company.gen3.json` je deprecated (decision 0145); kanonický Organization
+manifest je `lazurio.organization.json`. Přesun jedné Organizace dělá výhradně
+explicitní migrátor, jehož kód žije ve vyhrazené složce
+`lazurio/migrations/organization-manifest/` a po dokončení migrace se smaže:
+
+```sh
+lazurio migrate organization-manifest <organization-root>            # jen plán
+lazurio migrate organization-manifest <organization-root> --write    # legacy → transition (nebo regenerace projekce)
+lazurio migrate organization-manifest <organization-root> --finalize # neimplementováno: blocked `finalize_not_implemented`
+lazurio migrate organization-manifest <organization-root> --json
+```
+
+Bez `--write` příkaz nic nezapisuje: vypíše stav resolveru před a po,
+sémantický a projekční hash, seznam změněných souborů, sladění legacy
+`modules[]` s `modules.manifest.json` a výsledek Git gate. `--write` je dovolený
+jen v linked task worktree na jiné než kanonické branchi bez cizích
+necommitnutých změn; primární checkout na `main` odmítne. Zapíše
+`lazurio.organization.json` (odvozený jako přesná inverze Core projekce), znovu
+vygeneruje `company.gen3.json` jako jeho projekci a výsledek přečte zpět týmž
+Core resolverem — přijímá jen stav `transition` bez issues a se stejným
+sémantickým hashem jako legacy vstup. Nic necommituje ani nepushuje; commit a
+PR zůstávají na Agentovi. Přerušený zápis je viditelný `projection_drift`
+nebo `conflict` v `git status` a tentýž příkaz jej deterministicky dokončí.
+Legacy `modules[]` musí být před zápisem sladěné s `modules.manifest.json`;
+jinak plán skončí `blocked` s přesným seznamem polí. Migrátor umí jen
+`legacy → transition` a regeneraci projekce; finalizace (`transition →
+current`) **není implementovaná** a `--finalize` příkaz odmítne typed blockerem
+`finalize_not_implemented`. Otevření `current` vyžaduje samostatně přijatý
+reader-readiness mechanismus, který živě prokáže důvěryhodnou kontinuitu
+identity (decision 0145); do té doby Organizace zůstává v `transition`
+s generovanou projekcí. Exit code `0` = plán
+existuje nebo zápis proběhl, `1` = blocked, `2` = chyba použití. Doctor stav
+manifestů hlásí v checku `launchpad.organization_manifests`.
+
 ## Module setup
 
 Agenti nových i privátních Organizací používají jediný konvergentní vstup:
