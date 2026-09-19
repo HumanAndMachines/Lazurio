@@ -585,6 +585,9 @@ async function validateOrganizationRepositoryDbMount({
   const sourceOfTruth = typeof slot?.source_of_truth === "string" ? slot.source_of_truth.trim() : "";
   const organizationLogin = source?.organization?.login;
   const isMissionControlRepositoryDb = path === "mission-control/db";
+  const isCanonicalWorkspaceRepositoryDb = typeof path === "string"
+    && path.startsWith("workspace/")
+    && isOrganizationRepositoryDbSlot(slot, path);
   if (slot?.status !== "active") {
     return providerFailure("repository_db_not_active", "Repository-db mount musí být aktivní.");
   }
@@ -597,7 +600,7 @@ async function validateOrganizationRepositoryDbMount({
   if (
     !path
     || path !== slot.path
-    || !(isMissionControlRepositoryDb || isOrganizationRepositoryDbSlot(slot, path))
+    || !(isMissionControlRepositoryDb || isCanonicalWorkspaceRepositoryDb)
     || !/^repository-db:[a-z0-9]+(?:[._-][a-z0-9]+)*$/u.test(sourceOfTruth)
     || typeof remote !== "string"
     || typeof branch !== "string"
