@@ -625,8 +625,9 @@ lazurio organization install <github-login> --role builder --json
   materialized like an ordinary one.
 - **`--role steward` and `--role builder`**
   (`scope.restricted_slots: "exclude"`) materialize only ordinary slots and
-  their descendants, including every active declared `repository_db_mount`.
-  The restricted slot and every slot below it end up in the result as `current`
+  their descendants, including supported active `repository_db_mount` slots at
+  `mission-control/db` or `workspace/<module>/db`; deprecated
+  `modules/<module>/db` is not materialized. The restricted slot and every slot below it end up in the result as `current`
   with reason `excluded_by_role_scope`: no `git clone`, `fetch`, `ls-remote`, or `gh api`
   runs over them. This state is intentional and distinct from a missing grant
   (`materialization_source_unavailable`, `next_action.kind: github_access`).
@@ -684,9 +685,10 @@ user. This operation therefore does not accept `--root`.
 The first run materializes the exact Organization root into
 `organizations/<CanonicalLogin>_GEN3` and, via the regular update reconciler,
 adds the available declared Modules. The same explicit installer can then
-atomically add every active `repository_db_mount`: root-space
-`mission-control/db` and `workspace/<modul>/db`, always under exactly one
-declared and actually materialized parent Git repository. It verifies the
+atomically add an active `repository_db_mount` only at root-space
+`mission-control/db` or canonical `workspace/<module>/db`, always under exactly
+one declared and actually materialized parent Git repository. Deprecated
+`modules/<module>/db` fails closed without materialization. It verifies the
 Organization-owned child remote, the declared branch, the Git ignore in the
 parent repository, and a safe physical path. A duplicate legacy `repository_db`
 projection is not an additional authority; the slot's normalized Git fields
