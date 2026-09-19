@@ -396,6 +396,46 @@ test("malformed active Workspace repository-db fails closed", async () => {
   expect(existsSync(join(fixture.organizationRoot, "workspace", "content-lazurio", "db"))).toBe(false);
 });
 
+test("deprecated modules repository-db path blocks before any data provider operation", async () => {
+  const fixture = await organizationWorkspaceRepositoryDbFixture();
+  for (const slot of fixture.documents.modules.module_slots) {
+    if (slot.path === "workspace/content-lazurio") slot.path = "modules/content-lazurio";
+    if (slot.path === "workspace/content-lazurio/db") slot.path = "modules/content-lazurio/db";
+  }
+  await writeFile(
+    join(fixture.source, "modules.manifest.json"),
+    `${JSON.stringify(fixture.documents.modules, null, 2)}\n`,
+  );
+  await runGit(["add", "modules.manifest.json"], { cwd: fixture.source });
+  await runGit(["commit", "-m", "Declare deprecated modules repository-db path"], { cwd: fixture.source });
+  await runGit(["push", "origin", "main"], { cwd: fixture.source });
+  const dataProviderCalls = [];
+  const recordDataProviderCall = (runner) => async (args, options) => {
+    if (args.includes(fakeWorkspaceDataRemote)) dataProviderCalls.push([...args]);
+    return runner(args, options);
+  };
+  const report = await installOrganization({
+    rootPath: fixture.root,
+    githubLogin: login,
+    deps: {
+      observe: async () => sourceObservation({ documents: fixture.documents }),
+      reobserve: async () => ({ ok: true }),
+      runGit: recordDataProviderCall(translatedGitRunner(fixture.remote)),
+      runPinnedChild: recordDataProviderCall(translatedPinnedGitRunner(fixture.remote)),
+      runUpdate: async () => updateReport("current"),
+    },
+  });
+
+  expect(report).toMatchObject({ state: "blocked", ok: false });
+  expect(report.convergence.results).toContainEqual(expect.objectContaining({
+    module: "content-lazurio-data",
+    state: "blocked",
+    reason: "repository_db_manifest_invalid",
+  }));
+  expect(dataProviderCalls).toEqual([]);
+  expect(existsSync(join(fixture.organizationRoot, "modules", "content-lazurio", "db"))).toBe(false);
+});
+
 test("declared Mission Control never reports successful install without its active repository-db mount", async () => {
   const scenarios = [
     {
