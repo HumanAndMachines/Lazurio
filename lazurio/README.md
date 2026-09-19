@@ -184,9 +184,9 @@ lazurio organization install <github-login> --role builder # Builder: totéž + 
 Instalace bez `--role` je explicitní Admin opt-in (`scope.restricted_slots:
 "include"`) a materializuje i absentní restricted slot. `--role steward` a
 `--role builder` (`"exclude"`) materializují jen běžné sloty a jejich
-descendants včetně povinného Mission Control `repository_db_mount`; restricted
-slot a vše pod ním vrátí jako `current`/`excluded_by_role_scope` bez jediného
-`git clone`, `fetch`, `ls-remote` nebo `gh api`. Role gate před klonem read-only
+descendants včetně všech aktivních deklarovaných `repository_db_mount`;
+restricted slot a vše pod ním vrátí jako `current`/`excluded_by_role_scope`
+bez jediného `git clone`, `fetch`, `ls-remote` nebo `gh api`. Role gate před klonem read-only
 ověří membership a WRITE na běžných repozitářích dané role. Běžný
 `lazurio update` (`restricted_slot_policy: "defer"`) absentní restricted slot
 nikdy automaticky neklonuje (`restricted_not_materialized`), namountovaný dál
