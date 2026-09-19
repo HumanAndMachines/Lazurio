@@ -143,7 +143,7 @@ Launchpad tuto výjimku nepoužívá: musí vždy běžet z instalovaného runti
 ## Update a rollout
 
 Explicitní Launchpad `Synchronizovat`, `/api/update`, legacy pull adaptéry i
-CLI volají stejný sekvenční engine. První render používá jen GET lokálního
+CLI volají stejný engine, který aktualizuje po vrstvách hierarchie. První render používá jen GET lokálního
 snapshotu bez fetch/mutace. Runtime release a working checkout update jsou dvě
 oddělené operace:
 

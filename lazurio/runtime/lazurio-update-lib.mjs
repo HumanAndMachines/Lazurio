@@ -28,6 +28,7 @@ import {
 import {
   GIT_FETCH_TIMEOUT_MS,
   GIT_LOCAL_TIMEOUT_MS,
+  mapWithConcurrency,
   runGit,
   safeGitCommandEnv,
 } from "./git-lib.mjs";
@@ -42,6 +43,10 @@ export const LAZURIO_UPDATE_STATES = Object.freeze(["current", "updated", "block
 //   `excluded_by_role_scope` bez jediné provider operace.
 // Už namountované restricted checkouty se aktualizují při každé politice.
 export const RESTRICTED_SLOT_POLICIES = Object.freeze(["defer", "include", "exclude"]);
+// Independent checkouts of one hierarchy layer sync concurrently. Each one is
+// dominated by an SSH fetch handshake, so a small fixed pool removes most of
+// the wall-clock cost without opening many parallel GitHub connections.
+export const UPDATE_REPO_CONCURRENCY = 8;
 
 const BLOCKING_RELATIONS = new Set(["ahead", "diverged", "unknown"]);
 const BLOCKING_OPERATIONS = new Set(["merge", "rebase", "am", "cherry_pick", "revert"]);
@@ -202,100 +207,94 @@ export async function runLazurioUpdate({
       });
     }
 
+    // Hierarchy is preserved layer by layer: every Organization root finishes
+    // before any of its children starts. Repositories inside one layer are
+    // independent checkouts, so they sync concurrently under a fixed limit;
+    // the report below is still assembled in the deterministic declared order.
+    const repoConcurrency = deps.repoConcurrency ?? UPDATE_REPO_CONCURRENCY;
     for (const organizationRoot of organizationRoots) {
       repoDescriptors.set(organizationRoot.key, organizationRoot);
-      const organizationResult = await safeUpdateRepo(organizationRoot, {
+    }
+    const organizationResults = await mapWithConcurrency(
+      organizationRoots,
+      repoConcurrency,
+      (organizationRoot) => safeUpdateRepo(organizationRoot, {
         runId,
         updateRepo,
         checkpoint,
         deps,
-      });
-      results.push(organizationResult);
-
-      if (organizationResult.state === "blocked") {
-        results.push(...deferredOrganizationChildResults(initialInventory, organizationRoot.organization));
-        continue;
-      }
-      if (organizationResult.state === "updated") {
+      }),
+    );
+    organizationRoots.forEach((organizationRoot, index) => {
+      if (organizationResults[index].state === "updated") {
         // Once the manifest owner moved, its pre-update slot diagnostics are no
         // longer authoritative even if the mandatory refresh itself fails.
         invalidatedInitialOrganizations.add(organizationRoot.organization);
       }
+    });
 
-      // The Organization root owns the manifest. Re-read after its update so
-      // a newly declared Workspace Modul can be materialized and every mounted
-      // Organization-level repository can be updated during this same run.
-      const refreshed = await safeInventory(buildInventory, absoluteRoot, warnings, organizations, hostedWorkspace);
-      if (refreshed.failed) {
-        results.push(blockedResult(inventoryDescriptor(absoluteRoot, organizationRoot.organization), "inventory_unavailable", {
-          detail: `Po aktualizaci Organization rootu ${organizationRoot.organization} nešel znovu načíst manifest; jeho repozitáře zůstaly nedotčené.`,
-        }));
-        continue;
-      }
+    // The Organization roots own the manifests. Re-read once after all of them
+    // moved so a newly declared Workspace Modul can be materialized and every
+    // mounted Organization-level repository can be updated during this run.
+    const readyOrganizations = organizationRoots
+      .filter((_, index) => organizationResults[index].state !== "blocked");
+    const refreshed = readyOrganizations.length > 0
+      ? await safeInventory(buildInventory, absoluteRoot, warnings, organizations, hostedWorkspace)
+      : null;
+    if (refreshed && !refreshed.failed) {
       // buildInventory always returns a complete machine snapshot. The newest
       // successful read therefore replaces (rather than appends to) all older
       // diagnostics, including the pre-cutover view of a renamed slot.
       finalInventory = refreshed;
+    }
+
+    const childJobs = [];
+    const childrenByOrganization = new Map();
+    if (refreshed && !refreshed.failed) {
+      for (const organizationRoot of readyOrganizations) {
+        const children = managedOrganizationChildren(refreshed, organizationRoot.organization);
+        childrenByOrganization.set(organizationRoot.organization, children);
+        for (const childRepo of children) {
+          repoDescriptors.set(childRepo.key, childRepo);
+          childJobs.push({ repo: childRepo, siblings: children });
+        }
+      }
+    }
+    const childResults = await syncOrganizationChildren(childJobs, repoConcurrency, (job) => syncOrganizationChild({
+      ...job,
+      rootPath: absoluteRoot,
+      initialInventory,
+      restrictedSlotPolicy,
+      runId,
+      updateRepo,
+      materializeRepo,
+      checkpoint,
+      deps,
+    }));
+
+    organizationRoots.forEach((organizationRoot, index) => {
+      results.push(organizationResults[index]);
+      if (organizationResults[index].state === "blocked") {
+        results.push(...deferredOrganizationChildResults(initialInventory, organizationRoot.organization));
+        return;
+      }
+      if (refreshed.failed) {
+        results.push(blockedResult(inventoryDescriptor(absoluteRoot, organizationRoot.organization), "inventory_unavailable", {
+          detail: `Po aktualizaci Organization rootu ${organizationRoot.organization} nešel znovu načíst manifest; jeho repozitáře zůstaly nedotčené.`,
+        }));
+        return;
+      }
       refreshedOrganizations.add(organizationRoot.organization);
       results.push(...inventoryIssueResults({
         rootPath: absoluteRoot,
         inventory: refreshed,
         organization: organizationRoot.organization,
       }));
-      const children = managedOrganizationChildren(refreshed, organizationRoot.organization);
-      for (const childRepo of children) {
-        repoDescriptors.set(childRepo.key, childRepo);
-        const childPresence = await inspectPathPresence(
-          childRepo.absolute_path,
-          deps.lstatPath ?? lstat,
-        );
-        if (childPresence.state === "unreadable") {
-          results.push(blockedResult(childRepo, "checkout_unreadable", {
-            detail: `Deklarovanou cestu nelze bezpečně ověřit (${childPresence.detail}); Sync ji nepovažuje za prázdnou a nic neklonuje ani nemutuje.`,
-          }));
-          continue;
-        }
-        if (childPresence.state === "absent") {
-          if (!isAutoMaterializationCandidate(childRepo)) continue;
-          const scoped = restrictedSlotMaterializationResult({
-            repo: childRepo,
-            siblings: children,
-            restrictedSlotPolicy,
-          });
-          if (scoped) {
-            results.push(scoped);
-            continue;
-          }
-          if (childRepo.repo_kind === "module") {
-            const transitionBlocker = await moduleCheckoutTransitionBlocker({
-              initialInventory,
-              repo: childRepo,
-              lstatPath: deps.lstatPath ?? lstat,
-            });
-            if (transitionBlocker) {
-              results.push(transitionBlocker);
-              continue;
-            }
-          }
-          const materialized = await safeMaterializeCheckout({
-            rootPath: absoluteRoot,
-            repo: childRepo,
-            runId,
-            materializeRepo,
-            checkpoint,
-            deps,
-          });
-          results.push(materialized);
-          continue;
-        }
-        results.push(await safeUpdateRepo(childRepo, {
-          runId,
-          updateRepo,
-          checkpoint,
-          deps,
-        }));
+      for (const childRepo of childrenByOrganization.get(organizationRoot.organization) ?? []) {
+        const childResult = childResults.get(childRepo);
+        if (childResult) results.push(childResult);
       }
-    }
+    });
 
     // Organizace, které nebylo možné refreshnout (například kvůli nevalidnímu
     // root mountu), si ponechají diagnostiku z počátečního snapshotu. U
@@ -457,6 +456,64 @@ async function safeUpdateRepo(repo, context) {
       detail: error instanceof Error ? error.message : String(error),
     });
   }
+}
+
+// Returns null for an absent slot that general Sync deliberately skips.
+async function syncOrganizationChild({
+  repo,
+  siblings,
+  rootPath,
+  initialInventory,
+  restrictedSlotPolicy,
+  runId,
+  updateRepo,
+  materializeRepo,
+  checkpoint,
+  deps,
+}) {
+  const presence = await inspectPathPresence(repo.absolute_path, deps.lstatPath ?? lstat);
+  if (presence.state === "unreadable") {
+    return blockedResult(repo, "checkout_unreadable", {
+      detail: `Deklarovanou cestu nelze bezpečně ověřit (${presence.detail}); Sync ji nepovažuje za prázdnou a nic neklonuje ani nemutuje.`,
+    });
+  }
+  if (presence.state === "absent") {
+    if (!isAutoMaterializationCandidate(repo)) return null;
+    const scoped = restrictedSlotMaterializationResult({ repo, siblings, restrictedSlotPolicy });
+    if (scoped) return scoped;
+    if (repo.repo_kind === "module") {
+      const transitionBlocker = await moduleCheckoutTransitionBlocker({
+        initialInventory,
+        repo,
+        lstatPath: deps.lstatPath ?? lstat,
+      });
+      if (transitionBlocker) return transitionBlocker;
+    }
+    return safeMaterializeCheckout({ rootPath, repo, runId, materializeRepo, checkpoint, deps });
+  }
+  return safeUpdateRepo(repo, { runId, updateRepo, checkpoint, deps });
+}
+
+// A slot nested inside another declared slot of the same Organization must
+// not start before its ancestor settled (materialized or updated). Jobs are
+// therefore grouped into waves by nesting depth; each wave runs concurrently.
+async function syncOrganizationChildren(jobs, concurrency, syncChild) {
+  const depthOf = (job) => job.siblings
+    .filter((candidate) => candidate !== job.repo && isSlotDescendantPath(job.repo.slot_path, candidate.slot_path))
+    .length;
+  const waves = new Map();
+  for (const job of jobs) {
+    const depth = depthOf(job);
+    if (!waves.has(depth)) waves.set(depth, []);
+    waves.get(depth).push(job);
+  }
+  const results = new Map();
+  for (const depth of [...waves.keys()].sort((left, right) => left - right)) {
+    const wave = waves.get(depth);
+    const waveResults = await mapWithConcurrency(wave, concurrency, syncChild);
+    wave.forEach((job, index) => results.set(job.repo, waveResults[index]));
+  }
+  return results;
 }
 
 function unmaterializedCheckoutResult(repo) {

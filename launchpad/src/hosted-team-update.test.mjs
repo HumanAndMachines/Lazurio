@@ -61,8 +61,9 @@ test("Hosted Team Sync excludes absent and mounted sibling-Team modules using th
   };
   const first = await runLazurioUpdate({ rootPath: root, hostedWorkspace, deps });
   expect(first.ok).toBe(true);
-  expect(calls.filter(([operation]) => operation === "materialize")).toEqual([
-    ["materialize", "legacy-sales"], ["materialize", "shared-handbook"], ["materialize", "team-notes"],
+  // Modules of one layer materialize concurrently; only the set is a contract.
+  expect(calls.filter(([operation]) => operation === "materialize").map(([, module]) => module).sort()).toEqual([
+    "legacy-sales", "shared-handbook", "team-notes",
   ]);
   expect(calls.some(([, module]) => module.startsWith("other-team"))).toBe(false);
   expect(existsSync(join(orgRoot, "workspace/other-team-absent"))).toBe(false);
