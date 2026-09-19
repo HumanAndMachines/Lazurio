@@ -7,7 +7,7 @@ license: MIT
 metadata:
   hermes:
     tags: [organization-admin, github, pull-requests, cross-organization, sweep]
-    related_skills: [nightly-steward-pr-sweep, worktree-development-discipline, architecture-shaping]
+    related_skills: [worktree-development-discipline]
 ---
 
 # Admin PR Sweep
@@ -21,7 +21,7 @@ předaný jmenovanému ownerovi s konkrétní next action. Task Agent tvoří Dr
 a provádí Publikaci (merge/close) jen na explicitní pokyn Principála platný
 v aktuálním threadu.
 
-Liší se od `nightly-steward-pr-sweep`: ten běží pro právě jednu Organizaci
+Liší se od nočního Steward sweepu, který běží pro právě jednu Organizaci
 pod Steward seatem a Steward autoritou. Admin sweep je interaktivní,
 cross-Organization, a používá živá admin práva Principála — včetně bypassu
 tam, kde ho ruleset dovolí a kde je to zdůvodněné.

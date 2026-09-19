@@ -909,15 +909,19 @@ Doctor musí hlídat:
 - existenci `dev_script`
 - existenci a validitu read-only plugin manifestu, pokud je uvedený
 - u Organizací, které přijaly agent-skills entrypoint kontrakt, že
-  `.claude/skills` přes `realpath` míří na kanonické `.agents/skills`; shared
-  Doctor nikdy nespouští Organization skript ani nematerializuje odkaz, pouze
-  vrací `ok`, `repair_needed` nebo `blocked`; explicitní capability mode
+  `.claude/skills` je samostatný Git-tracked mirror bez symlinků, byte-for-byte
+  shodný s aktivními skilly kanonického `.agents/skills` (výběr podle
+  `.agents/skills/manifest.json`, bez manifestu každý adresář s `SKILL.md`;
+  decision 0104). Shared Doctor nikdy nespouští Organization skript ani mirror
+  nematerializuje, pouze vrací `ok`, `repair_needed` nebo `blocked`; legacy
+  symlink (`mirror_legacy_link`), placeholder a drift jsou `repair_needed` a
+  opravují se explicitní reviewovanou úpravou v task worktree, protože
+  `repair:agent-skills` nic nezapisuje. Explicitní capability mode
   `codex-only` lze pro lokální Doctor nastavit přes
   `COMPANYASCODE_AGENT_CAPABILITY_MODE=codex-only`. Jen v tomto režimu je na
-  Windows chybějící odkaz nebo jeho textový Git placeholder stav `ok`, protože
-  Codex čte přímo `.agents/skills`. V bezpečném výchozím režimu
-  `claude-compatible` zůstává entrypoint vyžadovaný; skutečná druhá složka
-  je blokovaná v obou režimech
+  Windows chybějící mirror nebo jeho textový Git placeholder stav `ok`, protože
+  Codex čte přímo `.agents/skills`. V
+  bezpečném výchozím režimu `claude-compatible` zůstává mirror vyžadovaný
 
 Když Doctor selže, chyba má být napsaná tak, aby ji mohl opravit další
 agent bez znalosti historie.

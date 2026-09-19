@@ -553,16 +553,20 @@ Organization pravidla.
 ### Gate 4C — skills flip
 
 GEN3 kanonická knihovna je `.agents/skills/`; `.claude/skills` je **Git-tracked
-odvozený byte-for-byte mirror** (`<slug>/SKILL.md` aktivních skillů z manifestu,
-žádné symlinky ani junctiony — decision 0104). Mirror není druhý source of
-truth: edituje se výhradně kanonická knihovna a mirror regeneruje
-`bun run repair:agent-skills`; paritu hlídá `bun run doctor:agent-skills`.
+odvozený byte-for-byte mirror**: samostatný adresář (žádný symlink ani
+junction — decision 0104), který obsahuje jen celé adresáře aktivních skillů.
+Aktivní skilly vybírá `.agents/skills/manifest.json`; bez manifestu je to každý
+adresář s `SKILL.md`. Mirror není druhý source of truth: edituje se výhradně
+kanonická knihovna a mirror se srovná explicitní Git-reviewovanou úpravou v
+task worktree. `bun run doctor:agent-skills` hlídá paritu a
+`bun run repair:agent-skills` je jen fail-closed diagnostika, která nic
+nezapisuje.
 
 Na Windows Codex-only stroji, kde se Claude nepoužívá, je autoritou přímo
 `.agents/skills/` a chybějící mirror není blocker. Legacy symlink/junction
-nebo textový placeholder z období symlink modelu hlásí doctor jako
-`repair_needed`; repair lane je nahradí trackovaným mirrorem (cíl linku
-zůstává nedotčený).
+(`mirror_legacy_link`) nebo textový placeholder z období symlink modelu hlásí
+Doctor jako `repair_needed`; nahradíš je stejnou reviewovanou úpravou jako
+drift (cíl linku zůstává nedotčený).
 
 GEN2 s reverzním layoutem má `.agents/skills` jako **existující symlink** →
 `../.claude/skills`; ten je nutné nejdřív odstranit. `git rm` symlinku smaže i
@@ -574,12 +578,15 @@ cd "$WT"
 test -L .agents/skills && git rm .agents/skills      # reverzní výchozí stav
 mkdir -p .agents \
   && git mv .claude/skills .agents/skills \
-  && ln -s ../.agents/skills .claude/skills \
-  && git add .claude/skills .agents/skills
+  && mkdir .claude/skills \
+  && for slug in <aktivní slugy z manifestu nebo adresáře s SKILL.md>; do
+       cp -R ".agents/skills/$slug" ".claude/skills/$slug" || exit 1
+     done \
+  && git add .agents/skills .claude/skills
 ```
 
 Před `git mv` klasifikuj případné existující obě složky a sluč je po jednom
-skillu. Nevytvářej symlink přes neznámou dirty knihovnu. Pokud Organizace
+skillu. Nepřepisuj neznámou dirty knihovnu. Pokud Organizace
 `.agents/skills/manifest.json` má, přegeneruj/validuj ho podle Organization
 tooling; pokud ho nemá a žádné tooling ho negeneruje, flip ho nezakládá —
 založení manifestu je samostatný krok/post-cutover.
@@ -587,22 +594,20 @@ založení manifestu je samostatný krok/post-cutover.
 Ověření:
 
 ```bash
-test -d .agents/skills
-test -L .claude/skills
-test "$(readlink .claude/skills)" = "../.agents/skills"
-git ls-files -s .claude/skills | grep '^120000 '
-find .agents/skills -name SKILL.md -print
+test -d .agents/skills && test ! -L .agents/skills
+test -d .claude/skills && test ! -L .claude/skills
+git ls-files -s .claude/skills | grep -v '^100' && echo "mirror obsahuje symlink" && exit 1
+diff -r .agents/skills/<slug> .claude/skills/<slug>   # pro každý aktivní skill
+bun run doctor:agent-skills                            # očekávaný stav mirror_ready
 ```
 
 Flip nezmění jen resolvery — přepni i všechny skills-flip **validace**
 (`doctor.sh`/`doctor.ps1` sekce „Skills entrypointy", testy), které by jinak dál
-asserovaly starý směr a na korektním GEN3 layoutu by `doctor check` false-failoval
-(`.agents/skills není symlink`). Čtení skillů přes symlink funguje obousměrně,
-validační assert ne. Po flipu spusť `doctor check` a potvrď, že sekce Skills
-entrypointy je zelená.
+asserovaly starý směr a na korektním GEN3 layoutu by `doctor check` false-failoval.
+Po flipu spusť `doctor check` a potvrď, že sekce Skills entrypointy je zelená.
 
-Na platformě bez funkčního Git symlinku je stav setup gap, ne oprávnění držet
-dva sources of truth. Zapiš ownera a Doctor/init opravu.
+Mirror jsou obyčejné soubory, takže flip nevyžaduje funkční Git symlinky na
+žádné platformě; dva editovatelné sources of truth tím ale nevznikají.
 
 ### Gate 4D — overlay mapping
 
