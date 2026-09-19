@@ -788,11 +788,20 @@ function legacyActivationProjection({
   const organizationBinding = resource.organization.forge_binding;
   const repositoryBinding = resource.root_repository;
   const forgeBinding = companyManifest?.forge_binding;
+  // A parity-valid transition declares exactly the identity of its legacy
+  // projection. A legacy root without `forge_binding` normalizes to an
+  // unverified Organization binding with an absent or unverified root binding
+  // and is bound by the locators below; its migrated transition form carries
+  // the same facts, so it follows the same rule. A verified pair still has to
+  // match the live immutable IDs, and a partial pair never qualifies.
+  const transitionBindingsUnverified = organizationBinding?.binding_state === "unverified"
+    && (repositoryBinding === null || repositoryBinding?.binding_state === "unverified");
+  const transitionBindingsVerified = organizationBinding?.binding_state === "verified"
+    && repositoryBinding?.binding_state === "verified"
+    && String(organizationBinding.organization_id ?? "") === String(expectedOrganizationId ?? "")
+    && String(repositoryBinding.repository_id ?? "") === String(expectedRepositoryId ?? "");
   const forgeBindingSupported = eligibleFormat === "transition"
-    ? organizationBinding?.binding_state === "verified"
-      && repositoryBinding?.binding_state === "verified"
-      && String(organizationBinding.organization_id ?? "") === String(expectedOrganizationId ?? "")
-      && String(repositoryBinding.repository_id ?? "") === String(expectedRepositoryId ?? "")
+    ? transitionBindingsUnverified || transitionBindingsVerified
     : forgeBinding === undefined
     || isValidOrganizationForgeBinding(forgeBinding, {
       organizationId: expectedOrganizationId,

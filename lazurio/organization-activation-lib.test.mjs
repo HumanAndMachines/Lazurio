@@ -4,6 +4,10 @@ import {
   checkOrganizationActivation,
   renderHumanOrganizationActivation,
 } from "./organization-activation-lib.mjs";
+import {
+  organizationLegacyProjectionHash,
+  projectLegacyOrganizationManifest,
+} from "./core/organization-activation-lib.mjs";
 
 test("--check provider adapter uses read-only GitHub calls and reports absent root", () => {
   const calls = [];
@@ -271,6 +275,68 @@ test("present malformed canonical manifest blocks a legacy active result", () =>
   });
 });
 
+test("unbound legacy root stays active after its parity-valid migration to transition", () => {
+  const modules = {
+    organization_generation: "gen3",
+    company: "Example",
+    github_org: "Example",
+    module_slots: [],
+  };
+  const canonical = {
+    schema_version: "lazurio.organization.v1",
+    kind: "organization",
+    organization: {
+      slug: "Example",
+      display_name: "Example",
+      forge_binding: { forge: "github", locator: "Example", binding_state: "unverified" },
+      metadata: {},
+    },
+    root_repository: null,
+    manifests: { modules: "modules.manifest.json" },
+    extensions: { legacy: {} },
+    compatibility: {
+      legacy_projection: {
+        path: "company.gen3.json",
+        algorithm: "sha256-canonical-json-v1",
+        sha256: `sha256:${"0".repeat(64)}`,
+      },
+    },
+  };
+  canonical.compatibility.legacy_projection.sha256 = organizationLegacyProjectionHash(canonical, modules);
+  const company = projectLegacyOrganizationManifest(canonical, modules);
+  const check = (rootDocuments) => checkOrganizationActivation({
+    githubOrganizationId: "314957563",
+    resolveGitHubCli: () => "/usr/bin/gh",
+    runGitHubCli: fixtureRunner({ root: "legacy", appSelection: "all", rootDocuments }),
+  });
+
+  expect(check({ company, modules, canonical: null })).toMatchObject({
+    outcome: "active",
+    reasons: ["root_supported_legacy"],
+  });
+  expect(check({ company, modules, canonical })).toMatchObject({
+    outcome: "active",
+    reasons: ["root_supported_transition"],
+    observations: {
+      root_repository: {
+        resolver: { status: "supported", format: "transition", reason: "transition_identity_pair_supported" },
+      },
+    },
+  });
+  const renamed = structuredClone(canonical);
+  renamed.organization.forge_binding.locator = "Foreign";
+  const renamedModules = { ...modules, github_org: "Foreign" };
+  renamed.compatibility.legacy_projection.sha256 = organizationLegacyProjectionHash(renamed, renamedModules);
+  expect(check({
+    company: projectLegacyOrganizationManifest(renamed, renamedModules),
+    modules: renamedModules,
+    canonical: renamed,
+  })).toMatchObject({
+    outcome: "action_required",
+    reasons: ["root_manifest_unsupported"],
+  });
+});
+
 function fixtureRunner({
   calls = [],
   root,
@@ -281,6 +347,7 @@ function fixtureRunner({
   membershipStatus = null,
   selectedAccess = "included",
   malformedCanonical = false,
+  rootDocuments = null,
 }) {
   return (call) => {
     calls.push(call);
@@ -322,6 +389,16 @@ function fixtureRunner({
     if (endpoint === "orgs/Example/repos?type=all&per_page=100&page=1") return ok([]);
     if (endpoint === "repos/Example/Example_GEN3/commits?per_page=1") {
       return root === "empty" ? httpError(409) : ok([{ sha: "a".repeat(40) }]);
+    }
+    if (rootDocuments !== null) {
+      const path = ["company.gen3.json", "modules.manifest.json", "lazurio.organization.json"]
+        .find((candidate) => endpoint?.includes(`contents/${candidate}`));
+      const document = {
+        "company.gen3.json": rootDocuments.company,
+        "modules.manifest.json": rootDocuments.modules,
+        "lazurio.organization.json": rootDocuments.canonical,
+      }[path];
+      if (path) return document === null ? httpError(404) : content(document);
     }
     if (endpoint?.includes("contents/company.gen3.json")) {
       return content({

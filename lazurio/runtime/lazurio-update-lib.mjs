@@ -46,6 +46,11 @@ export const RESTRICTED_SLOT_POLICIES = Object.freeze(["defer", "include", "excl
 const BLOCKING_RELATIONS = new Set(["ahead", "diverged", "unknown"]);
 const BLOCKING_OPERATIONS = new Set(["merge", "rebase", "am", "cherry_pick", "revert"]);
 const DOCTOR_MANAGED_NESTED_REPO = "doctor_managed_nested_repo";
+// Formats whose target may omit the root repository binding and is then bound
+// by the canonical GitHub root repository name. Deliberately an own literal,
+// not ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS: a future `current` cohort
+// must keep requiring an explicit binding even once it becomes updatable.
+const ABSENT_ROOT_BINDING_NAME_RULE_FORMATS = Object.freeze(["legacy", "transition"]);
 
 /**
  * The complete public classifier. It intentionally has no intermediate
@@ -834,7 +839,7 @@ async function verifyOrganizationUpdateTarget({
   return { ok: true };
 }
 
-function organizationTargetIdentityIssue({ repo, sourceUrl, state, resource }) {
+export function organizationTargetIdentityIssue({ repo, sourceUrl, state, resource }) {
   if (resource?.kind !== "organization" || resource.organization?.slug !== repo.organization) {
     return "Exact target neodpovídá ověřené identitě Organization mountu.";
   }
@@ -851,11 +856,16 @@ function organizationTargetIdentityIssue({ repo, sourceUrl, state, resource }) {
     return "Organization forge binding v exact targetu neodpovídá ověřenému GitHub originu.";
   }
   const repositoryLocator = resource.root_repository?.locator;
-  if (state === "legacy" && resource.root_repository === null) {
+  // A parity-valid `transition` target declares exactly the identity of its
+  // legacy projection (the migrator cannot invent a binding the legacy root
+  // never had), so an absent root binding follows the same canonical name rule
+  // in both formats. Every other format requires the explicit binding below.
+  if (ABSENT_ROOT_BINDING_NAME_RULE_FORMATS.includes(state) && resource.root_repository === null) {
     const owner = remote.owner.toLowerCase();
     const repository = remote.repository.toLowerCase();
     if (repository === owner || repository === `${owner}_gen3`) return null;
-    return "Legacy Organization target bez explicitního root repository bindingu neodpovídá kanonickému GitHub root repository názvu.";
+    const format = state === "legacy" ? "Legacy" : "Transition";
+    return `${format} Organization target bez explicitního root repository bindingu neodpovídá kanonickému GitHub root repository názvu.`;
   }
   if (typeof repositoryLocator !== "string") {
     return "Exact target postrádá Organization root repository binding k ověřenému GitHub originu.";

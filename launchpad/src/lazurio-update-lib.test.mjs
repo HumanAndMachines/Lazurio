@@ -10,6 +10,7 @@ import {
   acquireUpdateLock,
   classifyLazurioRepoUpdate,
   inspectLocalRepo,
+  organizationTargetIdentityIssue,
   readLazurioUpdateStatus,
   runLazurioUpdate,
   updateManagedRepo,
@@ -28,6 +29,7 @@ import { buildRepositoryLocationIssue } from "../../lazurio/core/module-location
 import {
   organizationLegacyProjectionHash,
   projectLegacyOrganizationManifest,
+  resolveOrganizationRootDocuments,
 } from "../../lazurio/core/organization-activation-lib.mjs";
 import { readOrganizationRoot } from "../../lazurio/core/organization-root-reader-lib.mjs";
 import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.mjs";
@@ -653,6 +655,7 @@ test("legacy Organization target without a binding rejects another repository un
     state: "blocked",
     reason: "organization_target_identity_mismatch",
   });
+  expect(result.message).toContain("Legacy Organization target bez explicitního root repository bindingu");
   expect(runGit(fixture.working, ["rev-parse", "HEAD"])).toBe(before);
   expect(runGit(fixture.working, ["stash", "list", "--format=%H"])).toBe("");
 });
@@ -692,18 +695,115 @@ test("legacy Organization target still binds its forge owner to the verified Git
   expect(runGit(fixture.working, ["stash", "list", "--format=%H"])).toBe("");
 });
 
-test("transition target still requires a root repository binding on a verified GitHub origin", async () => {
-  const fixture = await organizationActivationFixture("transition-target-missing-root-binding");
-  const githubSource = "git@github.com:test/root.git";
-  await addRemoteFiles(
-    fixture,
-    transitionOrganizationDocuments(),
-    "publish transition without root repository binding",
-  );
+test("absent root binding name rule covers legacy and transition but never current", () => {
+  const migrated = transitionOrganizationDocuments();
+  const { resource } = resolveOrganizationRootDocuments({
+    companyManifest: JSON.parse(migrated["company.gen3.json"]),
+    modulesManifest: JSON.parse(migrated["modules.manifest.json"]),
+    canonicalManifest: JSON.parse(migrated["lazurio.organization.json"]),
+  });
+  const issue = (state, sourceUrl) => organizationTargetIdentityIssue({
+    repo: { organization: "test", repo: sourceUrl },
+    sourceUrl,
+    state,
+    resource,
+  });
+
+  expect(resource.root_repository).toBeNull();
+  for (const state of ["legacy", "transition"]) {
+    expect(issue(state, "git@github.com:test/test.git")).toBeNull();
+    expect(issue(state, "git@github.com:Test/TEST_gen3.git")).toBeNull();
+    expect(issue(state, "git@github.com:test/shadow.git")).toContain("bez explicitního root repository bindingu");
+    expect(issue(state, "git@github.com:foreign/foreign.git")).toContain("forge binding");
+  }
+  expect(issue("legacy", "git@github.com:test/shadow.git")).toStartWith("Legacy Organization target");
+  expect(issue("transition", "git@github.com:test/shadow.git")).toStartWith("Transition Organization target");
+  for (const sourceUrl of ["git@github.com:test/test.git", "git@github.com:test/test_GEN3.git"]) {
+    expect(issue("current", sourceUrl)).toBe(
+      "Exact target postrádá Organization root repository binding k ověřenému GitHub originu.",
+    );
+  }
+});
+
+test("migrated transition fixture is the parity-valid projection of the legacy baseline without a root binding", async () => {
+  const fixture = await organizationActivationFixture("transition-fixture-parity");
+  const readJson = async (path) => JSON.parse(await readFile(join(fixture.contributor, path), "utf8"));
+  const legacy = resolveOrganizationRootDocuments({
+    companyManifest: await readJson("company.gen3.json"),
+    modulesManifest: await readJson("modules.manifest.json"),
+    canonicalManifest: null,
+  });
+  const migrated = transitionOrganizationDocuments();
+  const transition = resolveOrganizationRootDocuments({
+    companyManifest: JSON.parse(migrated["company.gen3.json"]),
+    modulesManifest: JSON.parse(migrated["modules.manifest.json"]),
+    canonicalManifest: JSON.parse(migrated["lazurio.organization.json"]),
+  });
+
+  expect(legacy).toMatchObject({ state: "legacy", resource: { root_repository: null } });
+  expect(transition).toMatchObject({ state: "transition", resource: { root_repository: null } });
+  expect(transition.semantic_hash).toBe(legacy.semantic_hash);
+  expect(transition.projection.actual_hash).toBe(transition.projection.expected_hash);
+});
+
+test("migrated transition Organization target accepts the historical owner-named root repository convention", async () => {
+  const fixture = await organizationActivationFixture("transition-target-optional-root-binding");
+  const githubSource = "git@github.com:test/test.git";
+  await addRemoteFiles(fixture, transitionOrganizationDocuments(), "migrate legacy Organization root to transition");
+
+  const result = await updateManagedRepo({ ...descriptor(fixture), repo: githubSource }, {
+    runId: "transition-target-optional-root-binding",
+    deps: { runGit: runGitThroughFixtureSource(fixture, githubSource) },
+  });
+
+  expect(result).toMatchObject({ state: "updated" });
+  expect(readOrganizationRoot({ organizationRoot: fixture.working }).state).toBe("transition");
+  expect(runGit(fixture.working, ["rev-parse", "HEAD"])).toBe(runGit(fixture.contributor, ["rev-parse", "HEAD"]));
+  expect(status(fixture.working)).toBe("");
+});
+
+test("migrated transition Organization target accepts the canonical owner_GEN3 root repository convention", async () => {
+  const fixture = await organizationActivationFixture("transition-target-canonical-gen3-root");
+  const githubSource = "git@github.com:test/test_GEN3.git";
+  await addRemoteFiles(fixture, transitionOrganizationDocuments(), "migrate legacy Organization root to transition");
+
+  const result = await updateManagedRepo({ ...descriptor(fixture), repo: githubSource }, {
+    runId: "transition-target-canonical-gen3-root",
+    deps: { runGit: runGitThroughFixtureSource(fixture, githubSource) },
+  });
+
+  expect(result).toMatchObject({ state: "updated" });
+  expect(readOrganizationRoot({ organizationRoot: fixture.working }).state).toBe("transition");
+  expect(status(fixture.working)).toBe("");
+});
+
+test("already migrated transition checkout without a root binding keeps receiving later commits", async () => {
+  const fixture = await organizationActivationFixture("transition-to-transition-update");
+  const githubSource = "git@github.com:test/test_GEN3.git";
+  const repo = { ...descriptor(fixture), repo: githubSource };
+  const deps = { runGit: runGitThroughFixtureSource(fixture, githubSource) };
+  await addRemoteFiles(fixture, transitionOrganizationDocuments(), "migrate legacy Organization root to transition");
+  const migrated = await updateManagedRepo(repo, { runId: "transition-to-transition-migrate", deps });
+  expect(migrated).toMatchObject({ state: "updated" });
+  expect(readOrganizationRoot({ organizationRoot: fixture.working }).state).toBe("transition");
+  await addRemoteCommit(fixture, "transition-update.txt", "later transition commit\n");
+
+  const result = await updateManagedRepo(repo, { runId: "transition-to-transition-update", deps });
+
+  expect(result).toMatchObject({ state: "updated" });
+  expect(readOrganizationRoot({ organizationRoot: fixture.working }).state).toBe("transition");
+  expect(runGit(fixture.working, ["rev-parse", "HEAD"])).toBe(runGit(fixture.contributor, ["rev-parse", "HEAD"]));
+  expect(status(fixture.working)).toBe("");
+});
+
+test("transition Organization target without a binding rejects another repository under the same owner", async () => {
+  const fixture = await organizationActivationFixture("transition-target-same-owner-shadow");
+  const githubSource = "git@github.com:test/shadow.git";
+  await addRemoteFiles(fixture, transitionOrganizationDocuments(), "migrate legacy Organization root to transition");
   const before = runGit(fixture.working, ["rev-parse", "HEAD"]);
 
   const result = await updateManagedRepo({ ...descriptor(fixture), repo: githubSource }, {
-    runId: "transition-target-missing-root-binding",
+    runId: "transition-target-same-owner-shadow",
     deps: { runGit: runGitThroughFixtureSource(fixture, githubSource) },
   });
 
@@ -711,8 +811,64 @@ test("transition target still requires a root repository binding on a verified G
     state: "blocked",
     reason: "organization_target_identity_mismatch",
   });
+  expect(result.message).toContain("Transition Organization target bez explicitního root repository bindingu");
   expect(runGit(fixture.working, ["rev-parse", "HEAD"])).toBe(before);
   expect(runGit(fixture.working, ["stash", "list", "--format=%H"])).toBe("");
+});
+
+test("transition Organization target still binds its forge owner to the verified GitHub origin", async () => {
+  const fixture = await organizationActivationFixture("transition-target-forge-mismatch");
+  const githubSource = "git@github.com:test/test.git";
+  const transition = transitionOrganizationDocuments();
+  const modules = { ...JSON.parse(transition["modules.manifest.json"]), github_org: "foreign" };
+  const canonical = JSON.parse(transition["lazurio.organization.json"]);
+  canonical.organization.forge_binding.locator = "foreign";
+  canonical.compatibility.legacy_projection.sha256 = organizationLegacyProjectionHash(canonical, modules);
+  await addRemoteFiles(fixture, {
+    "lazurio.organization.json": `${JSON.stringify(canonical, null, 2)}\n`,
+    "company.gen3.json": `${JSON.stringify(projectLegacyOrganizationManifest(canonical, modules), null, 2)}\n`,
+    "modules.manifest.json": `${JSON.stringify(modules, null, 2)}\n`,
+  }, "publish foreign transition forge binding");
+  const before = runGit(fixture.working, ["rev-parse", "HEAD"]);
+
+  const result = await updateManagedRepo({ ...descriptor(fixture), repo: githubSource }, {
+    runId: "transition-target-forge-mismatch",
+    deps: { runGit: runGitThroughFixtureSource(fixture, githubSource) },
+  });
+
+  expect(result).toMatchObject({
+    state: "blocked",
+    reason: "organization_target_identity_mismatch",
+  });
+  expect(result.message).toContain("forge binding");
+  expect(runGit(fixture.working, ["rev-parse", "HEAD"])).toBe(before);
+  expect(runGit(fixture.working, ["stash", "list", "--format=%H"])).toBe("");
+});
+
+test("current canonical-only target without a root binding stays refused on a canonical GitHub origin", async () => {
+  const fixture = await organizationActivationFixture("current-target-missing-root-binding");
+  const githubSource = "git@github.com:test/test_GEN3.git";
+  const transition = transitionOrganizationDocuments();
+  await writeFile(join(fixture.contributor, "lazurio.organization.json"), transition["lazurio.organization.json"]);
+  await rm(join(fixture.contributor, "company.gen3.json"));
+  runGit(fixture.contributor, ["add", "-A"]);
+  runGit(fixture.contributor, ["commit", "-m", "publish canonical-only target without root binding"]);
+  runGit(fixture.contributor, ["push", "origin", "main"]);
+  const before = runGit(fixture.working, ["rev-parse", "HEAD"]);
+
+  const result = await updateManagedRepo({ ...descriptor(fixture), repo: githubSource }, {
+    runId: "current-target-missing-root-binding",
+    deps: { runGit: runGitThroughFixtureSource(fixture, githubSource) },
+  });
+
+  expect(result).toMatchObject({
+    state: "blocked",
+    reason: "organization_target_incompatible",
+    next_action: { kind: "codex" },
+  });
+  expect(runGit(fixture.working, ["rev-parse", "HEAD"])).toBe(before);
+  expect(runGit(fixture.working, ["stash", "list", "--format=%H"])).toBe("");
+  expect(readOrganizationRoot({ organizationRoot: fixture.working }).state).toBe("legacy");
 });
 
 test("Organization target binds its declared root repository to the verified GitHub origin", async () => {
