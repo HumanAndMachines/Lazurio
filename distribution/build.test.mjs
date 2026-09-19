@@ -21,13 +21,26 @@ import { ORGANIZATION_INSTALL_GUIDE_SOURCES } from "../launchpad/src/guide-conte
 // instructions must hold the complete risk-proportional architecture gate
 // that root AGENTS.md and decision 0132 require.
 const ARCHITECTURE_GATE_CLAUSES = [
+  // Quick path and each of its conditions.
   "Rychlá kontrola stačí jen tehdy",
-  "nepřidává trvalou abstrakci",
+  "zachovává existující architekturu, ownership i source of truth",
+  "nepřidává trvalou abstrakci, závislost, stav, konfiguraci ani fallback",
+  "nemění access, security, data, lifecycle ani cross-scope kontrakt",
+  "má malý blast radius se zřejmým rollbackem",
+  "nepotřebuje nový dokument ani externí review",
+  // Mandatory full-shaping triggers.
+  "vždy u nové dlouhodobé abstrakce, stavu, autority, hranice, rozhraní, závislosti, distribuce nebo obtížně vratné migrace",
   "proveď plný shaping",
-  "baseline bez nového mechanismu",
-  "failure modes a rollback",
-  "skutečném nebo věrném consumerovi",
-  "solo inversion pass",
+  // What full shaping requires.
+  "odděl cíl od navrženého prostředku",
+  "porovnej skutečné varianty včetně baseline bez nového mechanismu",
+  "projdi failure modes a rollback",
+  "dokaž na skutečném nebo věrném consumerovi",
+  "Každý nový trvalý koncept má ownera, consumera, lifecycle a vztah k tomu, co nahrazuje",
+  // Counterweight without a blocker, and routing of principle changes.
+  "Nedostupný konkrétní reviewer, model, CLI či subagent není blocker",
+  "pravdivě označený solo inversion pass",
+  "kanonické autoritě",
 ];
 
 function expectArchitectureGate(instructions) {
