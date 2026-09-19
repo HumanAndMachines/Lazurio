@@ -146,9 +146,8 @@ místo přidávání paralelních cest. Konkrétní rozpor otevřeně pojmenuj; 
 úsudek ale nepoužívej k převzetí business, access ani publikační pravomoci
 Principála.
 
-Před každou tvorbou nebo změnou source použij skill
-`.agents/skills/architecture-shaping/SKILL.md`. Malá změna dostane rychlou
-kontrolu bez nového dokumentu. Nová dlouhodobá abstrakce, stav, autorita,
+Před každou tvorbou nebo změnou source návrh architektonicky vytvaruj. Malá
+změna dostane rychlou kontrolu bez nového dokumentu. Nová dlouhodobá abstrakce, stav, autorita,
 hranice, rozhraní, závislost nebo migrace vyžaduje plný shaping, srovnání
 variant, failure modes a důkaz na skutečném consumerovi. Pokud čisté řešení
 vyžaduje změnu cíle nebo schváleného principu, vrať volbu s doporučením
@@ -404,8 +403,7 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    vytvoří nebo doplní a jeho URL vrátí v handoffu. Mandát nepovoluje issue
    zavřít, přiřadit, prioritizovat ani do veřejného repa zapsat
    Organization-specific obsah.
-6. **Delegace.** Pro Claude/Codex/Desktop delegaci platí skill
-   `.agents/skills/desktop-execution-agent-collaboration/SKILL.md`:
+6. **Delegace.** Při delegaci na Claude, Codex nebo Desktop agenta platí:
    self-report není důkaz, QA gate drží delegující Kolega.
 
 Root upravuj jen když se mění:
@@ -457,13 +455,8 @@ Root upravuj jen když se mění:
   Organization Machine ani veřejný fixture.
 - First-client rollout a migrace: `manual/first-client-organization-rollout.md`,
   `manual/gen2-to-gen3-migration.md`
-- Desktop-agent collaboration — kanonický domov je skill
-  `.agents/skills/desktop-execution-agent-collaboration/SKILL.md`; manuálový
-  pointer `manual/desktop-execution-agent-collaboration.md`
 - Architektonické vytvarování source změn — hodnotový kontrakt drží Model
-  spolupráce výše, opakovatelnou metodu skill
-  `.agents/skills/architecture-shaping/SKILL.md` a trvalé rozhodnutí 0132
-  (`manual/decision-register.md`)
+  spolupráce výše a trvalé rozhodnutí 0132 (`manual/decision-register.md`)
 - Cross-Organization closeout cizích PR Organization Adminem (inventura,
   jeden PR = jeden worktree, merge/close/předání ownerovi) — skill
   `.agents/skills/admin-pr-sweep/SKILL.md`
@@ -483,8 +476,7 @@ Root upravuj jen když se mění:
 - Privátní osobní kontext: `personalspace/` — gitignored, mimo GitHub organizace
 - Napojení na externí aplikace (MCP/CLI) — standard
   `manual/external-app-integrations.md`, per-provider runbooky
-  `manual/integrations/`, skill
-  `.agents/skills/external-app-integrations/SKILL.md`; Codex specifika
+  `manual/integrations/`; Codex specifika
   `manual/codex-manual-mcp-integrations.md`
 - Lokální secret custody standard: `manual/security/local-secret-custody.md`;
   root/operator secrets patří do gitignored `personalspace/<owner>_GEN3/secrets/...`,
@@ -545,8 +537,7 @@ browser fallback; scraping/cookie-session servery nikdy. Identita harnessu
 se sdílet smí, přístupy k aplikacím ne — každá mašina má vlastní, samostatně
 revokovatelné přihlášení; schválené integrace drží tracked katalog
 Organizace (jen jména env proměnných, nikdy hodnoty), osobní integrace patří
-do personalspace scope. Postup a standard: skill
-`.agents/skills/external-app-integrations/SKILL.md`,
+do personalspace scope. Postup a standard:
 `manual/external-app-integrations.md` + per-provider runbooky. Zaseknutí
 nebo zastaralý postup řeš opravným PR na standard, ne poznámkou v chatu.
 

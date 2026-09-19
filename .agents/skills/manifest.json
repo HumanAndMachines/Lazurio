@@ -1,0 +1,50 @@
+{
+  "schema_version": "conglomerate.skills.v0",
+  "claude_compatibility": "tracked-derived-mirror",
+  "policy": {
+    "principle": "Opakovatelné postupy pro Buddy a AI kolegy v Launchpad rootu patří do .agents/skills.",
+    "directory": ".agents/skills",
+    "required_headings": [
+      "## Kdy použít",
+      "## Postup",
+      "## Ověření"
+    ]
+  },
+  "skills": [
+    {
+      "slug": "admin-pr-sweep",
+      "path": ".agents/skills/admin-pr-sweep/SKILL.md",
+      "applies_to": [
+        "organization-admin",
+        "github-pull-requests",
+        "cross-organization-sweep",
+        "pr-closeout"
+      ],
+      "required": false
+    },
+    {
+      "slug": "lazurio-workstation-install",
+      "path": ".agents/skills/lazurio-workstation-install/SKILL.md",
+      "applies_to": [
+        "lazurio-installation",
+        "workstation-onboarding",
+        "machine-toolchain",
+        "organization-install",
+        "installation-repair"
+      ],
+      "required": true
+    },
+    {
+      "slug": "worktree-development-discipline",
+      "path": ".agents/skills/worktree-development-discipline/SKILL.md",
+      "applies_to": [
+        "worktree-create",
+        "worktree-inventory",
+        "worktree-handoff",
+        "worktree-cleanup",
+        "pr-preflight"
+      ],
+      "required": true
+    }
+  ]
+}

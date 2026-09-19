@@ -11,14 +11,12 @@ const manualPath = repoPath("../manual/external-app-integrations.md");
 const codexManualPath = repoPath("../manual/codex-manual-mcp-integrations.md");
 const googleRunbookPath = repoPath("../manual/integrations/google-workspace.md");
 const microsoftRunbookPath = repoPath("../manual/integrations/microsoft-365.md");
-const integrationSkillPath = repoPath("../.agents/skills/external-app-integrations/SKILL.md");
 const smokeInstructionPaths = [
   "../manual/integrations/slack.md",
   "../manual/integrations/google-workspace.md",
   "../manual/integrations/microsoft-365.md",
   "../manual/integrations/atlassian.md",
   "../manual/integrations/canva.md",
-  "../.agents/skills/external-app-integrations/SKILL.md",
 ].map(repoPath);
 
 function canonicalNewlines(text) {
@@ -95,7 +93,7 @@ test("write smoke cleanup zůstává úzce vymezenou součástí schváleného s
   );
 });
 
-test("provider runbooky a skill nesmí cleanup vydávat za obecné oprávnění mazat", async () => {
+test("provider runbooky nesmí cleanup vydávat za obecné oprávnění mazat", async () => {
   for (const path of smokeInstructionPaths) {
     const policy = await readPolicy(path);
 
@@ -118,10 +116,9 @@ test("Google smoke eviduje a schvaluje každý cleanupovaný write cíl", async 
 });
 
 test("Google OAuth kontrakt drží sedmidenní provider gate a persistentní cache", async () => {
-  const [google, codex, skill] = await Promise.all([
+  const [google, codex] = await Promise.all([
     readPolicy(googleRunbookPath),
     readPolicy(codexManualPath),
-    readPolicy(integrationSkillPath),
   ]);
 
   expect(google).toContain("publishing statusem `Testing`");
@@ -139,21 +136,18 @@ test("Google OAuth kontrakt drží sedmidenní provider gate a persistentní cac
   expect(codex).toMatch(
     /export WORKSPACE_MCP_CREDENTIALS_DIR="\/custody\/cesta\/google\/tokens"\s+export GOOGLE_MCP_CREDENTIALS_DIR="\/custody\/cesta\/google\/tokens"/,
   );
-  expect(skill).toMatch(/Přihlášení musí přežít běžný restart/);
 });
 
 test("OAuth write scope zůstává schopností, ne souhlasem s publikací", async () => {
-  const [manual, google, skill] = await Promise.all([
+  const [manual, google] = await Promise.all([
     readPolicy(manualPath),
     readPolicy(googleRunbookPath),
-    readPolicy(integrationSkillPath),
   ]);
 
   expect(manual).toMatch(/Souhlas s OAuth grantem zpřístupní\s+schopnost mašině/);
   expect(manual).toContain("write agenta je Draft, ne Publikace");
   expect(google).toMatch(/Udělený OAuth grant je schopnost mašiny, ne souhlas/);
   expect(google).toContain("approval mode harnessu");
-  expect(skill).toMatch(/Udělený OAuth grant je\s+schopnost mašiny, ne souhlas/);
 });
 
 test("Microsoft 365 launcher obchází Windows shell a zachovává přesné argv", async () => {
