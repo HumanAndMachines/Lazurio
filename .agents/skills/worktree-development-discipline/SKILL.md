@@ -20,9 +20,9 @@ autoritu.
    Neměň v něm trackovaný obsah, nezakládej v něm feature branch a drž ho na
    `main`, pokud tomu nebrání už existující zachovaná práce. Před převzetím
    každého tasku v něm spusť nejdřív `lazurio update` a po jeho úspěchu
-   `bun run doctor:task`. Update sekvenčně srovná Lazurio Root, Organization
+   `bun run doctor:task`. Update po vrstvách srovná Lazurio Root, Organization
    Rooty, namountovaná org-level repa a Workspace Moduly na clean `main` jen
-   fast-forwardem. Náhodné dirty změny uloží do ověřeného
+   fast-forwardem; repozitáře jedné vrstvy běží souběžně. Náhodné dirty změny uloží do ověřeného
    recovery stashe bez automatického obnovení, cizí branch přepne na `main` a
    její commity zachová. U skutečně změněného source ověří package rooty
    deklarovaných Apps a neúspěšné ověření jednou zopakuje jako čistou frozen

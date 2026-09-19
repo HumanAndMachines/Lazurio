@@ -297,9 +297,10 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    Buddyho má, drží [`manual/hosted-buddy-vps.md`](manual/hosted-buddy-vps.md).
 2. **Synchronizuj a ověř primární checkouty.** Před taskem spusť v primárním
    Lazurio checkoutu nejdřív `lazurio update` a po jeho úspěchu
-   `bun run doctor:task`. Update sekvenčně srovná Lazurio Root → Organization
+   `bun run doctor:task`. Update po vrstvách srovná Lazurio Root → Organization
    Rooty → jejich namountovaná org-level repa a Workspace Moduly na clean
-   `main` výhradně fast-forwardem. Náhodné
+   `main` výhradně fast-forwardem; repozitáře jedné vrstvy běží souběžně.
+   Náhodné
    tracked i untracked změny uloží do ověřeného recovery stashe a neobnovuje
    je; cizí branch přepne zpět na `main`, její commity ale zachová. Po skutečné
    změně source ověří přesné package rooty deklarovaných Apps; při problému

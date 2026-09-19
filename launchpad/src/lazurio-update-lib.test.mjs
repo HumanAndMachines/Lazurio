@@ -1708,7 +1708,7 @@ test("actual rebase and git am operations stay blocked and untouched", async () 
   expect(runGit(applying.working, ["rev-parse", "HEAD"])).toBe(amHead);
 });
 
-test("hierarchy is sequential and excludes root-space db and productionspace", async () => {
+test("hierarchy syncs layer by layer and excludes root-space db and productionspace", async () => {
   const calls = [];
   const missionControl = repo("alpha::mission-control", "root_repo", "alpha", "mission-control", null);
   missionControl.slot_path = "mission-control";
@@ -1740,9 +1740,98 @@ test("hierarchy is sequential and excludes root-space db and productionspace", a
     },
   });
   expect(report.state).toBe("current");
-  expect(calls).toEqual(["lazurio::root", "alpha::root", "alpha::mission-control", "alpha::module", "beta::root"]);
+  // Layers are ordered; repositories inside one layer run concurrently.
+  expect(calls.slice(0, 3)).toEqual(["lazurio::root", "alpha::root", "beta::root"]);
+  expect(calls.slice(3).sort()).toEqual(["alpha::mission-control", "alpha::module"]);
   expect(JSON.stringify(report)).not.toContain("alpha::db");
   expect(JSON.stringify(report)).not.toContain("alpha::production");
+});
+
+test("repositories of one layer sync concurrently under the limit while the report keeps declared order", async () => {
+  const organizationNames = ["alpha", "beta", "gamma"];
+  const roots = organizationNames.map((name) => repo(`${name}::root`, "organization_root", name, "root"));
+  const children = organizationNames.flatMap((name) => ["one", "two", "three"].map((module) => {
+    const item = repo(`${name}::${module}`, "module", name, module, "workspace");
+    item.slot_path = `workspace/${module}`;
+    return item;
+  }));
+  const inventory = { repos: [...roots, ...children], warnings: [] };
+  const finished = new Set();
+  let active = 0;
+  let maxActive = 0;
+  let inventoryReads = 0;
+  const violations = [];
+  const report = await runLazurioUpdate({
+    rootPath: "/working",
+    runtimeRoot: "/runtime",
+    deps: {
+      runId: "concurrency",
+      repoConcurrency: 3,
+      acquireLock: async () => ({ release: async () => {} }),
+      buildInventory: async () => {
+        inventoryReads += 1;
+        return inventory;
+      },
+      updateRepo: async (item) => {
+        if (item.repo_kind === "module" && !finished.has(`${item.organization}::root`)) violations.push(item.key);
+        if (item.repo_kind === "organization_root" && [...finished].some((key) => !key.endsWith("::root"))) {
+          violations.push(item.key);
+        }
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        // Finish in reverse declaration order to prove the report is not
+        // assembled in completion order.
+        await Bun.sleep(item.key === "lazurio::root" ? 0 : 20 - item.key.length);
+        active -= 1;
+        finished.add(item.key);
+        return { ...identity(item), state: "current", reason: "already_current", message: "current" };
+      },
+      discoverApps: async () => ({ apps: [], failures: [] }),
+    },
+  });
+  expect(report.state).toBe("current");
+  expect(violations).toEqual([]);
+  expect(maxActive).toBe(3);
+  // One manifest read before the Organization roots and one after all of them.
+  expect(inventoryReads).toBe(2);
+  expect(report.results.map((item) => item.repo_key)).toEqual([
+    "lazurio::root",
+    ...organizationNames.flatMap((name) => [
+      `${name}::root`,
+      ...["one", "three", "two"].map((module) => `${name}::${module}`),
+    ]),
+  ]);
+});
+
+test("a nested slot waits until its ancestor slot settled", async () => {
+  const organization = repo("alpha::root", "organization_root", "alpha", "root");
+  const parent = repo("alpha::parent", "module", "alpha", "parent", "workspace");
+  parent.slot_path = "workspace/parent";
+  const nested = repo("alpha::aaa-nested", "module", "alpha", "aaa-nested", "workspace");
+  nested.slot_path = "workspace/parent/db";
+  const sibling = repo("alpha::sibling", "module", "alpha", "sibling", "workspace");
+  sibling.slot_path = "workspace/sibling";
+  const events = [];
+  const report = await runLazurioUpdate({
+    rootPath: "/working",
+    runtimeRoot: "/runtime",
+    deps: {
+      runId: "nested",
+      acquireLock: async () => ({ release: async () => {} }),
+      buildInventory: async () => ({ repos: [organization, nested, parent, sibling], warnings: [] }),
+      updateRepo: async (item) => {
+        events.push(`start ${item.key}`);
+        await Bun.sleep(item.key === parent.key ? 30 : 1);
+        events.push(`end ${item.key}`);
+        return { ...identity(item), state: "current", reason: "already_current", message: "current" };
+      },
+      discoverApps: async () => ({ apps: [], failures: [] }),
+    },
+  });
+  expect(report.state).toBe("current");
+  expect(events.indexOf(`start ${nested.key}`)).toBeGreaterThan(events.indexOf(`end ${parent.key}`));
+  // Independent siblings of the same layer are not held back by the slow parent.
+  expect(events.indexOf(`start ${sibling.key}`)).toBeLessThan(events.indexOf(`end ${parent.key}`));
 });
 
 test("scoped convergence materializes accessible Modules and reports inaccessible siblings", async () => {
@@ -1787,7 +1876,7 @@ test("scoped convergence materializes accessible Modules and reports inaccessibl
     },
   });
 
-  expect(calls).toEqual([available.key, privateModule.key]);
+  expect([...calls].sort()).toEqual([available.key, privateModule.key].sort());
   expect(report.state).toBe("blocked");
   expect(report.results.find((result) => result.repo_key === available.key)).toMatchObject({
     state: "updated",
@@ -1862,7 +1951,7 @@ test("explicit root-repository materialization is scoped, atomic and access-awar
     },
   });
 
-  expect(calls).toEqual([available.key, inaccessible.key]);
+  expect([...calls].sort()).toEqual([available.key, inaccessible.key].sort());
   expect(report.results.find((result) => result.repo_key === available.key)).toMatchObject({
     state: "updated",
     reason: "organization_repository_materialized",
@@ -2754,7 +2843,8 @@ test("blocked parent defers descendants while safe sibling continues", async () 
       },
     },
   });
-  expect(calls).toEqual(["lazurio::root", "alpha::root", "beta::root", "beta::mission-control", "beta::module"]);
+  expect(calls.slice(0, 3)).toEqual(["lazurio::root", "alpha::root", "beta::root"]);
+  expect(calls.slice(3).sort()).toEqual(["beta::mission-control", "beta::module"]);
   expect(report.results.find((item) => item.repo_key === "alpha::mission-control"))
     .toMatchObject({ state: "blocked", reason: "parent_blocked" });
   expect(report.results.find((item) => item.repo_key === "alpha::module"))
@@ -2876,13 +2966,8 @@ test("slot collection conflicts never block healthy modules in the same or anoth
     },
   });
 
-  expect(calls).toEqual([
-    "lazurio::root",
-    alphaRoot.key,
-    alphaHealthy.key,
-    betaRoot.key,
-    betaHealthy.key,
-  ]);
+  expect(calls.slice(0, 3)).toEqual(["lazurio::root", alphaRoot.key, betaRoot.key]);
+  expect(calls.slice(3).sort()).toEqual([alphaHealthy.key, betaHealthy.key].sort());
   expect(calls.some((key) => key.includes("shared"))).toBe(false);
   expect(report.results.filter((item) => item.reason === "slot_collection_ambiguous"))
     .toHaveLength(2);
