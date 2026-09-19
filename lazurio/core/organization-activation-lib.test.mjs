@@ -461,6 +461,94 @@ test("activation admits a parity-verified transition only for an explicit capabl
   });
 });
 
+test("activation treats a parity-valid transition without verified Forge bindings exactly like its legacy projection", () => {
+  const modulesManifest = organizationModules();
+  const declared = canonicalOrganization(modulesManifest);
+  const unbound = structuredClone(declared);
+  unbound.root_repository = null;
+  unbound.compatibility.legacy_projection.sha256 = organizationLegacyProjectionHash(unbound, modulesManifest);
+  const login = declared.organization.forge_binding.locator;
+
+  for (const canonicalManifest of [declared, unbound]) {
+    const companyManifest = projectLegacyOrganizationManifest(canonicalManifest, modulesManifest);
+    expect(companyManifest.forge_binding).toBeUndefined();
+    const expectedRepositoryFullName = canonicalManifest.root_repository?.locator ?? `${login}/${login}_GEN3`;
+    const activation = (overrides = {}) => {
+      const expectations = {
+        expectedOrganizationId: "314957563",
+        expectedOrganizationLogin: login,
+        expectedRepositoryId: "42424242",
+        expectedRepositoryFullName,
+        activationFormats: ["legacy", "transition"],
+        ...overrides,
+      };
+      const legacy = resolveOrganizationRootDocuments({
+        companyManifest,
+        modulesManifest,
+        canonicalManifest: null,
+        ...expectations,
+      });
+      const transition = resolveOrganizationRootDocuments({
+        companyManifest,
+        modulesManifest,
+        canonicalManifest,
+        ...expectations,
+      });
+      expect(legacy.state).toBe("legacy");
+      expect(transition.state).toBe("transition");
+      expect(transition.semantic_hash).toBe(legacy.semantic_hash);
+      return { legacy: legacy.activation, transition: transition.activation };
+    };
+
+    expect(activation()).toEqual({
+      legacy: { status: "supported", format: "legacy", reason: "legacy_identity_pair_supported" },
+      transition: { status: "supported", format: "transition", reason: "transition_identity_pair_supported" },
+    });
+    const unsupported = { status: "unsupported", format: null, reason: "legacy_identity_pair_invalid" };
+    expect(activation({ expectedOrganizationLogin: "RenamedExample" }))
+      .toEqual({ legacy: unsupported, transition: unsupported });
+    if (canonicalManifest.root_repository !== null) {
+      expect(activation({ expectedRepositoryFullName: `${login}/Other` }))
+        .toEqual({ legacy: unsupported, transition: unsupported });
+    }
+  }
+});
+
+test("transition activation never accepts a verified Forge binding pair with foreign immutable IDs", () => {
+  const modulesManifest = organizationModules();
+  const canonicalManifest = canonicalOrganization(modulesManifest);
+  canonicalManifest.organization.forge_binding = {
+    ...canonicalManifest.organization.forge_binding,
+    binding_state: "verified",
+    organization_id: "314957563",
+  };
+  canonicalManifest.root_repository = {
+    ...canonicalManifest.root_repository,
+    binding_state: "verified",
+    repository_id: "42424242",
+  };
+  canonicalManifest.compatibility.legacy_projection.sha256 = organizationLegacyProjectionHash(
+    canonicalManifest,
+    modulesManifest,
+  );
+  const input = {
+    companyManifest: projectLegacyOrganizationManifest(canonicalManifest, modulesManifest),
+    modulesManifest,
+    canonicalManifest,
+    expectedOrganizationId: "314957563",
+    expectedOrganizationLogin: canonicalManifest.organization.forge_binding.locator,
+    expectedRepositoryId: "42424242",
+    expectedRepositoryFullName: canonicalManifest.root_repository.locator,
+    activationFormats: ["legacy", "transition"],
+  };
+
+  expect(resolveOrganizationRootDocuments(input).activation).toMatchObject({ status: "supported", format: "transition" });
+  for (const foreign of [{ expectedOrganizationId: "999" }, { expectedRepositoryId: "999" }, { expectedRepositoryId: undefined }]) {
+    expect(resolveOrganizationRootDocuments({ ...input, ...foreign }).activation)
+      .toEqual({ status: "unsupported", format: null, reason: "legacy_identity_pair_invalid" });
+  }
+});
+
 test("canonical schema, semantic parity and projection hash are deterministic across key order and formatting", () => {
   const modulesManifest = organizationModules();
   const canonical = canonicalOrganization(modulesManifest);

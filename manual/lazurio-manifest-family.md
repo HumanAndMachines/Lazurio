@@ -309,7 +309,13 @@ a manifest-specific activation lifecycle:
    and remote. During the compatibility window only `legacy` and parity-valid
    `transition` targets may advance; `projection_drift`, `conflict`, `current`,
    `missing`, malformed, unreadable or mismatched targets block before stash,
-   branch switch or pull.
+   branch switch or pull. A target without an explicit root repository
+   binding — a `legacy` root or its parity-valid `transition` migration, which
+   cannot invent a binding the legacy root never declared — is bound to a
+   GitHub origin by the canonical root repository name (`<owner>` or
+   `<owner>_GEN3`, case-insensitive); activation applies the same
+   legacy-equivalent rule to an unverified transition pair. Any later format
+   requires the explicit binding.
 3. Apply the existing local-work gates, verified recovery stash and exact
    pinned fast-forward update. Verify final HEAD and source identity against the
    pinned OID, then rediscover the Organization inventory and invalidate stale

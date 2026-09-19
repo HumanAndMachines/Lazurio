@@ -8,6 +8,11 @@ import { initGitRepo } from "../launchpad/src/git-fixture-helpers.test.mjs";
 import { runGit, runGitInPinnedTemporaryChild } from "./runtime/git-lib.mjs";
 import { runLazurioUpdate } from "./runtime/lazurio-update-lib.mjs";
 import { createOrganizationScaffold } from "./core/organization-scaffold-lib.mjs";
+import {
+  organizationLegacyProjectionHash,
+  projectLegacyOrganizationManifest,
+  resolveOrganizationRootDocuments,
+} from "./core/organization-activation-lib.mjs";
 import { CANONICAL_GIT_FETCH_REFSPEC } from "./core/git-materialization-lib.mjs";
 import {
   installOrganization,
@@ -423,6 +428,72 @@ test("foreign staged Forge binding never reaches the Organization target", async
   });
   expect(reobserved).toBe(false);
   expect(existsSync(join(fixture.root, "organizations", `${login}_GEN3`))).toBe(false);
+});
+
+test("root without a verified Forge binding is refused identically as legacy and as its migrated transition", async () => {
+  // DEV-6512 parity evidence: explicit install demands the verified immutable
+  // ID pair in every format, so a legacy -> transition migration of an unbound
+  // root changes nothing here (unlike the update and activation gates).
+  const modules = scaffoldDocuments().modules;
+  const canonical = {
+    schema_version: "lazurio.organization.v1",
+    kind: "organization",
+    organization: {
+      slug: "lazurio-example-organization",
+      display_name: "Lazurio Example Organization",
+      forge_binding: { forge: "github", locator: login, binding_state: "unverified" },
+      metadata: {},
+    },
+    root_repository: null,
+    manifests: { modules: "modules.manifest.json" },
+    extensions: { legacy: {} },
+    compatibility: {
+      legacy_projection: {
+        path: "company.gen3.json",
+        algorithm: "sha256-canonical-json-v1",
+        sha256: `sha256:${"0".repeat(64)}`,
+      },
+    },
+  };
+  canonical.compatibility.legacy_projection.sha256 = organizationLegacyProjectionHash(canonical, modules);
+  const company = projectLegacyOrganizationManifest(canonical, modules);
+  const resolve = (canonicalManifest) => resolveOrganizationRootDocuments({
+    companyManifest: company,
+    modulesManifest: modules,
+    canonicalManifest,
+  });
+  expect(resolve(null)).toMatchObject({ state: "legacy", resource: { root_repository: null } });
+  expect(resolve(canonical)).toMatchObject({ state: "transition", resource: { root_repository: null } });
+  expect(resolve(canonical).semantic_hash).toBe(resolve(null).semantic_hash);
+
+  for (const format of ["legacy", "transition"]) {
+    const fixture = await organizationRemoteFixture();
+    await writeFile(join(fixture.source, "company.gen3.json"), `${JSON.stringify(company, null, 2)}\n`);
+    if (format === "transition") {
+      await writeFile(join(fixture.source, "lazurio.organization.json"), `${JSON.stringify(canonical, null, 2)}\n`);
+    }
+    await runGit(["add", "--all"], { cwd: fixture.source });
+    await runGit(["commit", "-m", `Publish unbound ${format} Organization root`], { cwd: fixture.source });
+    await runGit(["push", "origin", "main"], { cwd: fixture.source });
+
+    const report = await installOrganization({
+      rootPath: fixture.root,
+      githubLogin: login,
+      deps: {
+        observe: async () => sourceObservation(),
+        reobserve: async () => ({ ok: true }),
+        runGit: translatedGitRunner(fixture.remote),
+        runPinnedChild: translatedPinnedGitRunner(fixture.remote),
+        runUpdate: async () => updateReport("current"),
+      },
+    });
+
+    expect(report, format).toMatchObject({
+      state: "blocked",
+      target: { reason: "root_manifest_identity_mismatch" },
+    });
+    expect(existsSync(join(fixture.root, "organizations", `${login}_GEN3`)), format).toBe(false);
+  }
 });
 
 test("dirty existing root fails closed before scoped update", async () => {
