@@ -360,8 +360,8 @@ describe("documented origin activation", () => {
     expect(manual).toContain("nevydává se za install-ready");
 
     const decisions = await readFile(join(repoRoot, "manual", "decision-register.md"), "utf8");
-    expect(decisions).toContain("| 0144 | Greenfield klientská Organizace dokončí GitHub access baseline");
-    expect(decisions).toContain("| 0145 | Výchozí krátký prompt pro novou Builder Mašinu");
+    expect(decisions).toContain("| 0150 | Greenfield klientská Organizace dokončí GitHub access baseline");
+    expect(decisions).toContain("| 0151 | Výchozí krátký prompt pro novou Builder Mašinu");
   });
 
   test("required template access is read-only, exact and checked before template remote mutation", async () => {
