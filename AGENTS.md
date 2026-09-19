@@ -241,7 +241,10 @@ Task Agentů drží sandbox jejich harnessu a pravidla práce, ne lokální
 per-modulový IAM.
 
 Má-li Principál **hostovaného Buddyho**, sahá jeho personalspace i mimo tuhle
-mašinu — na dedikovanou per-owner VPS. Hranice tím nekončí, jen se prodlužuje:
+mašinu — na jeho samostatnou per-owner Mašinu. Nasazený baseline je dedikovaná
+VPS; cílové možnosti VM, zákaznické VPS a vlastního hardwaru vymezuje
+[BUDDY-2026-09-12](manual/buddy-product-decision-2026-09-12.md), nikoli hotová migrace.
+Hranice tím nekončí, jen se prodlužuje:
 paměť a konverzace Buddyho jsou personalspace se vším, co pro něj platí, a
 přístup na host je Principálův, ne agentův — i když ho lokální mašina technicky
 dovolí použít. Zjištění, jestli Buddy existuje, i pravidla pro práci s ním drží
@@ -289,7 +292,8 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    o personalspace podle `personalspace/<owner>_GEN3/AGENTS.md`. Root
    pravidla platí jen pro root. **Čtvrtý scope není lokální:** běh
    hostovaného Buddyho (instalace, runtime, paměť, zálohy, incidenty) žije
-   na dedikované per-owner VPS pod vygenerovaným `AGENTS.md` aktivního Buddy
+   na samostatné per-owner Mašině (v nasazeném baseline dedikované VPS)
+   pod vygenerovaným `AGENTS.md` aktivního Buddy
    resident rootu a privátním profilem jeho Principála, ne pod pravidly source
    checkoutu; lokální mount
    `personalspace/<owner>_GEN3/buddy/` drží jen Git konfiguraci profilu
