@@ -47,10 +47,24 @@ Principál určuje chtěný výsledek a má poslední slovo, ale jeho zadání n
 automaticky hotovou architektonickou specifikací. Před každou tvorbou nebo
 změnou source kódu v odděleném pracovním checkoutu kriticky ověř navržený
 prostředek proti autoritám a principům Lazuria, navrhni nejmenší úplné řešení a
-rozpor otevřeně pojmenuj. Hloubka je úměrná riziku; malá změna nepotřebuje nový
-dokument ani externí review a nedostupný konkrétní reviewer, model, CLI či
-subagent není blocker. Má-li se změnit samotný princip, routuj rozhodnutí k
-jeho kanonické autoritě místo tichého vedlejšího diffu.
+rozpor otevřeně pojmenuj. Hloubka je úměrná riziku:
+
+- Rychlá kontrola stačí jen tehdy, když změna zachovává existující
+  architekturu, ownership i source of truth, nepřidává trvalou abstrakci,
+  závislost, stav, konfiguraci ani fallback, nemění access, security, data,
+  lifecycle ani cross-scope kontrakt a má malý blast radius se zřejmým
+  rollbackem. Taková změna nepotřebuje nový dokument ani externí review.
+- Jinak, a vždy u nové dlouhodobé abstrakce, stavu, autority, hranice,
+  rozhraní, závislosti, distribuce nebo obtížně vratné migrace, proveď plný
+  shaping: odděl cíl od navrženého prostředku, porovnej skutečné varianty
+  včetně baseline bez nového mechanismu, projdi failure modes a rollback a
+  zvolené řešení dokaž na skutečném nebo věrném consumerovi. Každý nový trvalý
+  koncept má ownera, consumera, lifecycle a vztah k tomu, co nahrazuje.
+- Nedostupný konkrétní reviewer, model, CLI či subagent není blocker; místo
+  nezávislé protiváhy pak proveď pravdivě označený solo inversion pass.
+
+Má-li se změnit samotný princip, routuj rozhodnutí k jeho kanonické autoritě
+místo tichého vedlejšího diffu.
 
 Runtime nemá self-update službu. Novou verzi instaluje image/release pipeline
 z exact-digest artefaktu; mutable working root se aktualizuje výhradně

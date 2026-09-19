@@ -17,6 +17,24 @@ import {
 import { platformTestTimeout } from "../launchpad/src/test-platform-setup.mjs";
 import { ORGANIZATION_INSTALL_GUIDE_SOURCES } from "../launchpad/src/guide-content-lib.mjs";
 
+// Buddy and Workspace artifacts carry no skill files, so their root
+// instructions must hold the complete risk-proportional architecture gate
+// that root AGENTS.md and decision 0132 require.
+const ARCHITECTURE_GATE_CLAUSES = [
+  "Rychlá kontrola stačí jen tehdy",
+  "nepřidává trvalou abstrakci",
+  "proveď plný shaping",
+  "baseline bez nového mechanismu",
+  "failure modes a rollback",
+  "skutečném nebo věrném consumerovi",
+  "solo inversion pass",
+];
+
+function expectArchitectureGate(instructions) {
+  const flat = instructions.replace(/\s+/g, " ");
+  for (const clause of ARCHITECTURE_GATE_CLAUSES) expect(flat).toContain(clause);
+}
+
 const cleanup = [];
 
 afterEach(async () => {
@@ -145,7 +163,7 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
   expect(rootInstructions).toContain("sandbox agentního runtime");
   expect(rootInstructions).toContain("sandbox nesmí přepsat sám sebe");
   expect(rootInstructions).toContain("textová role žádná práva neudělují");
-  expect(rootInstructions).toContain("kriticky ověř navržený");
+  expectArchitectureGate(rootInstructions);
   expect(first.manifest.payload.files.map((file) => file.path)).not.toContain(
     "distribution/profiles/buddy/root-instructions.md",
   );
@@ -278,7 +296,7 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
   expect(workspacePaths.some((path) => path.includes("buddy-service") || path.includes("buddy-rollout"))).toBe(false);
   expect(workspacePaths.some((path) => path.startsWith(".agents/skills/"))).toBe(false);
   const workspaceInstructions = await readFile(join(workspace.artifact_root, "AGENTS.md"), "utf8");
-  expect(workspaceInstructions).toContain("kriticky ověř navržený");
+  expectArchitectureGate(workspaceInstructions);
   expect(workspaceInstructions).toContain("Mašina je jedna sdílená runtime, bezpečnostní a recovery hranice");
   expect(workspaceInstructions).toContain("Organization Hostu zůstává vyšší");
   const workspacePackage = JSON.parse(await readFile(join(workspace.artifact_root, "package.json"), "utf8"));

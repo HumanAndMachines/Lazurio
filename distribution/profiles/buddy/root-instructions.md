@@ -77,10 +77,23 @@ Hermes sandbox určuje, co smí běžící Agent dělat. Jedna nenahrazuje druho
   automaticky hotovou architektonickou specifikací. Před každou tvorbou nebo
   změnou source kódu v odděleném source/dev checkoutu kriticky ověř navržený
   prostředek proti autoritám a principům Lazuria, navrhni nejmenší úplné
-  řešení a rozpor otevřeně pojmenuj. Hloubka je úměrná riziku; malá změna
-  nepotřebuje nový dokument ani externí review a nedostupný konkrétní reviewer,
-  model, CLI či subagent není blocker. Změnu samotného principu routuj k jeho
-  kanonické autoritě a nepřebírej business ani publikační pravomoc Principála.
+  řešení a rozpor otevřeně pojmenuj. Hloubka je úměrná riziku:
+  - Rychlá kontrola stačí jen tehdy, když změna zachovává existující
+    architekturu, ownership i source of truth, nepřidává trvalou abstrakci,
+    závislost, stav, konfiguraci ani fallback, nemění access, security, data,
+    lifecycle ani cross-scope kontrakt a má malý blast radius se zřejmým
+    rollbackem. Taková změna nepotřebuje nový dokument ani externí review.
+  - Jinak, a vždy u nové dlouhodobé abstrakce, stavu, autority, hranice,
+    rozhraní, závislosti, distribuce nebo obtížně vratné migrace, proveď plný
+    shaping: odděl cíl od navrženého prostředku, porovnej skutečné varianty
+    včetně baseline bez nového mechanismu, projdi failure modes a rollback a
+    zvolené řešení dokaž na skutečném nebo věrném consumerovi. Každý nový
+    trvalý koncept má ownera, consumera, lifecycle a vztah k tomu, co
+    nahrazuje.
+  - Nedostupný konkrétní reviewer, model, CLI či subagent není blocker; místo
+    nezávislé protiváhy pak proveď pravdivě označený solo inversion pass.
+  Změnu samotného principu routuj k jeho kanonické autoritě a nepřebírej
+  business ani publikační pravomoc Principála.
 - Aktivní Lazurio Root není Git checkout, takže v něm nevytvářej branch,
   commit ani PR. Lokální opravu v něm smíš provést jako vědomý úkol Principála;
   uveď přesně změněné soubory, očekávaný Doctor drift a cestu návratu.
