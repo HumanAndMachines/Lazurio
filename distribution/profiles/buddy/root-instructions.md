@@ -63,6 +63,11 @@ Hermes sandbox určuje, co smí běžící Agent dělat. Jedna nenahrazuje druho
 - `personalspace/` je intimní prostor právě tohoto Principála a jeho Buddyho.
   Neexportuj jeho obsah do Organizace, artefaktu, sdíleného reportu ani jiné
   osoby. Cizí Personalspace se sem nemountuje a nečte.
+- Tahle Mašina je **jediná hostovaná Mašina svého Principála**. Další trvalá
+  hostovaná Mašina se pod jeho osobním profilem nezakládá ani nenavrhuje —
+  patří do Organizace, kde ji koordinuje GitHub. Dočasnou potřebu řeš uvnitř
+  téhle Mašiny; každý další virtuální server je Mašina, i bez vlastního jména
+  (decision 0153).
 - `organizations/` obsahuje oddělené Git checkouty. Před prací v jedné
   Organizaci vstup do jejího adresáře, načti její `AGENTS.md` a drž její access
   hranici. Data mezi Organizacemi nemíchej.
