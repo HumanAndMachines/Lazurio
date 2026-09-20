@@ -1782,7 +1782,7 @@ test("one run shares a single SSH connection across fetches of the same remote i
       return `${prefix}fixture`;
     },
   });
-  expect(fallback.configArgs[1]).toContain("/fixture-short/lz-ssh-fixture/");
+  expect(fallback.configArgs[1]).toContain(join("/fixture-short", "lz-ssh-fixture", "%C"));
   expect(rejected).toHaveLength(2);
   expect(await createSshConnectionSharing({
     platform: "linux",
