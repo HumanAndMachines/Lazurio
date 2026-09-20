@@ -1,5 +1,9 @@
 # Hostovaný Lazurio Buddy — co o něm musí vědět agent v rootu
 
+## Schválené upřesnění Ownera a Mašiny
+
+Schválený společný tvar je `<aplikace>.<mašina>.<owner-slug>.lazurio.io`. Owner je GitHub User nebo GitHub Organization, nikoli správce infrastruktury; model ukládá typ `user` / `organization`, stabilní GitHub ID a aktuální login. `owner-slug` přesně zrcadlí GitHub login. `personal` je pouze jméno první osobní Mašiny, ne pevná vrstva ani typ: další Mašiny mají jiné slugy pod stejným Ownerem. Dashboard musí konceptuálně podporovat více Mašin osobního Ownera. Přejmenování loginu a migrace adres zůstávají otevřené. DNS neposkytuje oprávnění ani veřejný přístup; platí osobní WireGuard, autentizace a GitHub autorita. Osobní VM nehostí org repozitáře; práce v nich probíhá přes SSH na org Mašinách. T3 Code není tímto prohlášen za nasazený a neblokuje první milník WireGuard + SSH/Codex.
+
 > **Pro koho to je.** Task Agent (Codex, Claude Code, Cursor…), kterého
 > Principál pustil z Lazurio rootu na svém počítači. Tenhle dokument
 > odpovídá na dvě otázky: *má můj Principál hostovaného Buddyho?* a *co platí,
@@ -29,7 +33,7 @@ Buddy používá GitHub a další podporované účty svého Principála. Stejn�
 může být na jeho notebooku i u Buddyho; mašina sama není persona ani IAM.
 Finální osobní přístup používá WireGuard + SSH/Codex. Osobní VM drží pouze Personalspace, Buddyho, Gbrain a identity; organizační pracovní klony a běhy žijí na přidělených Organization-owned VM. Buddy k nim zahajuje SSH přes Tailscale klienty a Headscale na Conglomerate Hostu. Společný tailnet není plošný grant; nová opačná a cross-org spojení jsou zakázaná, odpovědi existujícího SSH fungují. Žádné osobní mounty ani key forwarding do org VM.
 
-**Hosted Buddy je produkt 1 — osobní VM lidského Operátora/Principála s Hermesem v roli Buddyho.** Produkt 2 následně zpřístupní org prostředí přes Dashboard. Osobní URL `<app>.<github-username>.lazurio.io` je cílově dostupná jen přes osobní WG; vlastní VM odkaz navazuje na stávající Workspaces/osobní záložku. Přesná podpora, DNS/TLS a lifecycle vyžadují ověření. Úplné rozhodnutí a zachované historické hranice drží [BUDDY-2026-09-12, upřesnění 2026-09-20](buddy-product-decision-2026-09-12.md#upřesnění-2026-09-20--hosted-buddy-je-produkt-1).
+**Hosted Buddy je produkt 1 — osobní VM lidského Operátora/Principála s Hermesem v roli Buddyho.** Produkt 2 následně zpřístupní org prostředí přes Dashboard. Osobní URL `<aplikace>.<mašina>.<owner-slug>.lazurio.io` je cílově dostupná jen přes osobní WG; vlastní VM odkaz navazuje na stávající Workspaces/osobní záložku. Přesná podpora, DNS/TLS a lifecycle vyžadují ověření. Úplné rozhodnutí a zachované historické hranice drží [BUDDY-2026-09-12, upřesnění 2026-09-20](buddy-product-decision-2026-09-12.md#upřesnění-2026-09-20--hosted-buddy-je-produkt-1).
 
 Izolace VM i Tailscale závisí na bezpečné konfiguraci a údržbě; bezchybnost
 softwaru ani absolutní nepřístupnost pro správce hypervizoru nejsou slibem.

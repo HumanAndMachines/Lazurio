@@ -1,5 +1,9 @@
 # BUDDY-2026-09-12 — cílový model Lazurio Buddy
 
+## Schválené upřesnění Ownera a Mašiny
+
+Schválený společný tvar je `<aplikace>.<mašina>.<owner-slug>.lazurio.io`. Owner je GitHub User nebo GitHub Organization, nikoli správce infrastruktury; model ukládá typ `user` / `organization`, stabilní GitHub ID a aktuální login. `owner-slug` přesně zrcadlí GitHub login. `personal` je pouze jméno první osobní Mašiny, ne pevná vrstva ani typ: další Mašiny mají jiné slugy pod stejným Ownerem. Dashboard musí konceptuálně podporovat více Mašin osobního Ownera. Přejmenování loginu a migrace adres zůstávají otevřené. DNS neposkytuje oprávnění ani veřejný přístup; platí osobní WireGuard, autentizace a GitHub autorita. Osobní VM nehostí org repozitáře; práce v nich probíhá přes SSH na org Mašinách. T3 Code není tímto prohlášen za nasazený a neblokuje první milník WireGuard + SSH/Codex.
+
 Datum rozhodnutí: 2026-09-12. Stav: přijatý produktový směr Principála, implementace vyžaduje ověření. Tento samostatný identifikátor nemění obsah historického rozhodnutí 0080.
 
 ## Rozhodnutí a rozsah
@@ -28,7 +32,7 @@ Hosted Buddy je osobní VM lidského Operátora s Hermes agentem v roli Buddyho.
 
 Mac → osobní VM používá od začátku finální WireGuard a SSH/Codex. Osobní → org SSH používá Tailscale klienty a Headscale na Conglomerate Hostu. Společný tailnet nesmí udělit přístup k nepřidělené Mašině: nová org→osobní a cross-org spojení jsou zakázána, odpovědi existujícím spojením fungují. Žádné Personalspace mounty, osobní klíče v org VM, agent forwarding, reverse-tunnel bypass ani nekontrolované přenášení org kontextů do osobní paměti. GitHub zůstává autoritou organizačních oprávnění.
 
-Cílový osobní app namespace je `<app>.<github-username>.lazurio.io`, například `launchpad.<github-username>.lazurio.io`; browser přístup vyžaduje osobní WireGuard. DNS není veřejný přístup ani grant. Reuse stávajícího Dashboard **Workspaces → osobní záložky** pro osobní VM link a Machines pro lifecycle; nevytvářet druhý inventář, UI nebo provisioning. Osobní owner/discovery, DNS/TLS a rename/multiple-Machine podporu musí doložit implementace.
+Cílový osobní app namespace je `<aplikace>.<mašina>.<owner-slug>.lazurio.io`, například `launchpad.<mašina>.<owner-slug>.lazurio.io`; browser přístup vyžaduje osobní WireGuard. DNS není veřejný přístup ani grant. Reuse stávajícího Dashboard **Workspaces → osobní záložky** pro osobní VM link a Machines pro lifecycle; nevytvářet druhý inventář, UI nebo provisioning. Osobní owner/discovery, DNS/TLS a rename/multiple-Machine podporu musí doložit implementace.
 
 Nejdřív funkční a kvalifikovaný produkt 1. Produkt 2 je navazující zpřístupnění org prostředí přes Dashboard ve stejné cílové platformě. Dosavadní org prostředí mohou sloužit integračnímu ověření, nemusí čekat na přejmenování ani se stát osobními VM. Conglomerate je graf oprávněně dostupných Mašin; Conglomerate Host je konkrétní control-plane role.
 
