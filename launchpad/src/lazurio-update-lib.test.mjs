@@ -1790,6 +1790,16 @@ test("one run shares a single SSH connection across fetches of the same remote i
     makeTemporaryDirectory: async (prefix) => `${prefix}fixture`,
   })).toBeNull();
 
+  // Git splits core.sshCommand like a shell, so a path that would not survive
+  // that split must disable sharing instead of breaking the fetch.
+  for (const unusableRoot of ["/fixture root", "/fixture\"quote", "/fixture'apostrophe", "/fixture$expansion"]) {
+    expect(await createSshConnectionSharing({
+      platform: "linux",
+      temporaryRoots: [unusableRoot],
+      makeTemporaryDirectory: async (prefix) => `${prefix}fixture`,
+    })).toBeNull();
+  }
+
   // A temporary root that cannot be created at all is skipped like any other
   // unusable candidate.
   expect(await createSshConnectionSharing({
@@ -1850,6 +1860,23 @@ test("fetch reuses the shared connection only for an SSH origin without its own 
     source: "git@github.com:FixtureOrganization/module.git",
     ownSshCommand: "ssh -i /custom/key",
   }))[0]).toBe("fetch");
+});
+
+test("a checkout that changes during the fetch window never reports success", async () => {
+  const fixture = await repositoryFixture("verification-changed-during-fetch");
+  const actual = runGitThroughFixtureSource(fixture, fixture.remote);
+  const result = await updateManagedRepo(descriptor(fixture), {
+    runId: "changed-during-fetch",
+    checkpoint: async (stage) => {
+      if (stage === "after_fetch") await writeFile(join(fixture.working, "changed-during-fetch.txt"), "appeared\n");
+    },
+    deps: { runGit: actual },
+  });
+  // The run itself changed nothing, but the closing proof must still see the
+  // checkout as it is now, not as it was before the fetch.
+  expect(result.state).toBe("blocked");
+  expect(result.reason).toBe("post_update_verification_failed");
+  expect(status(fixture.working)).toContain("changed-during-fetch.txt");
 });
 
 test("a repository the run did not touch is not inspected a second time", async () => {

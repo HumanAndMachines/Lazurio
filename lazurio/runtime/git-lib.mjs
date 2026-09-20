@@ -200,6 +200,11 @@ export const SSH_CONTROL_PERSIST_SECONDS = 30;
 // skipped instead of failing the fetch.
 const SSH_CONTROL_PATH_LIMIT = 104;
 const SSH_CONTROL_PATH_RESERVED = 40 + 17;
+// Git splits core.sshCommand like a shell, so a control path is only usable
+// when it survives that split as one argument. Rather than quoting on behalf
+// of every platform, a path that would not survive is refused and sharing is
+// skipped for that candidate.
+const SSH_CONTROL_PATH_SAFE = /^[A-Za-z0-9:@%+=_./\\-]+$/;
 
 export async function createSshConnectionSharing({
   platform = process.platform,
@@ -223,7 +228,10 @@ export async function createSshConnectionSharing({
     }
     // %C is OpenSSH's hash of user, host and port, so one run keeps one socket
     // per remote identity without ever deriving the path from repository input.
-    if (candidate.length + 1 + SSH_CONTROL_PATH_RESERVED < SSH_CONTROL_PATH_LIMIT) {
+    if (
+      candidate.length + 1 + SSH_CONTROL_PATH_RESERVED < SSH_CONTROL_PATH_LIMIT
+      && SSH_CONTROL_PATH_SAFE.test(candidate)
+    ) {
       directory = candidate;
       break;
     }
