@@ -16,6 +16,7 @@ import {
   updateManagedRepo,
 } from "../../lazurio/runtime/lazurio-update-lib.mjs";
 import {
+  createSshConnectionSharing,
   runGit as runGitAsync,
   runGitInPinnedTemporaryChild,
 } from "../../lazurio/runtime/git-lib.mjs";
@@ -1745,6 +1746,119 @@ test("hierarchy syncs layer by layer and excludes root-space db and productionsp
   expect(calls.slice(3).sort()).toEqual(["alpha::mission-control", "alpha::module"]);
   expect(JSON.stringify(report)).not.toContain("alpha::db");
   expect(JSON.stringify(report)).not.toContain("alpha::production");
+});
+
+test("one run shares a single SSH connection across fetches of the same remote identity", async () => {
+  const sharing = await createSshConnectionSharing();
+  expect(sharing).not.toBeNull();
+  cleanup.push(sharing.directory);
+  const [flag, override] = sharing.configArgs;
+  expect(flag).toBe("-c");
+  expect(override).toMatch(/^core\.sshCommand=ssh -o ControlMaster=auto -o ControlPath=.+ -o ControlPersist=\d+$/);
+  expect(override).toContain(sharing.directory);
+  // ssh expands %C to a 40 character hash and appends a 17 character suffix
+  // while the master is being established; both must fit the socket limit.
+  const controlPath = override.split("ControlPath=")[1].split(" ")[0];
+  expect(controlPath.replace("%C", "c".repeat(40)).length + 17).toBeLessThan(104);
+  await sharing.release();
+  expect(existsSync(sharing.directory)).toBe(false);
+
+  // OpenSSH for Windows has no ControlMaster; Sync must not pretend otherwise.
+  expect(await createSshConnectionSharing({ platform: "win32" })).toBeNull();
+
+  // A temporary root that cannot hold a socket path is skipped for the next
+  // candidate, and sharing is dropped when no candidate fits.
+  const removed = [];
+  const fallback = await createSshConnectionSharing({
+    temporaryRoots: [join(tmpdir(), "x".repeat(90)), "/tmp"],
+    makeTemporaryDirectory: async (prefix) => (prefix.includes("x".repeat(90)) ? `${prefix}toolong` : mkdtemp(prefix)),
+  });
+  expect(fallback).not.toBeNull();
+  cleanup.push(fallback.directory);
+  expect(fallback.directory.startsWith("/tmp/")).toBe(true);
+  await fallback.release();
+  expect(await createSshConnectionSharing({
+    temporaryRoots: [join(tmpdir(), "y".repeat(90))],
+    makeTemporaryDirectory: async (prefix) => {
+      removed.push(prefix);
+      return `${prefix}toolong`;
+    },
+  })).toBeNull();
+  expect(removed).toHaveLength(1);
+});
+
+test("fetch reuses the shared connection only for an SSH origin without its own ssh command", async () => {
+  const sharing = { directory: "/fixture/ssh", configArgs: ["-c", "core.sshCommand=ssh -o ControlMaster=auto"], release: async () => {} };
+  const probe = async ({ source, ownSshCommand = null }) => {
+    const fixture = await repositoryFixture(`ssh-sharing-${createHash("sha1").update(source + String(ownSshCommand)).digest("hex").slice(0, 8)}`);
+    // The sharing decision reads the configured origin of the checkout, so the
+    // fixture carries the real remote URL while the fetch stays local.
+    runGit(fixture.working, ["remote", "set-url", "origin", source]);
+    if (ownSshCommand) runGit(fixture.working, ["config", "core.sshCommand", ownSshCommand]);
+    const actual = runGitThroughFixtureSource(fixture, source);
+    let fetchArgs = null;
+    const result = await updateManagedRepo({ ...descriptor(fixture), repo_kind: "module", repo: source }, {
+      runId: "ssh-sharing",
+      sshSharing: sharing,
+      deps: {
+        runGit: async (args, options) => {
+          const fetchIndex = args.indexOf("fetch");
+          if (fetchIndex !== -1) {
+            fetchArgs ??= [...args];
+            return actual(args.slice(fetchIndex), options);
+          }
+          return actual(args, options);
+        },
+      },
+    });
+    expect(result.state).toBe("current");
+    return fetchArgs;
+  };
+
+  const shared = sharing.configArgs.join(" ");
+  expect((await probe({ source: "git@github.com:FixtureOrganization/module.git" })).slice(0, 2).join(" ")).toBe(shared);
+  expect((await probe({ source: "ssh://git@github.com/FixtureOrganization/module.git" })).slice(0, 2).join(" ")).toBe(shared);
+  // An HTTPS origin never reaches ssh, and a checkout with its own ssh command
+  // keeps using exactly that command.
+  expect((await probe({ source: "https://github.com/FixtureOrganization/module.git" }))[0]).toBe("fetch");
+  expect((await probe({
+    source: "git@github.com:FixtureOrganization/module.git",
+    ownSshCommand: "ssh -i /custom/key",
+  }))[0]).toBe("fetch");
+});
+
+test("a repository the run did not touch is not inspected a second time", async () => {
+  const probe = async (fixture) => {
+    const actual = runGitThroughFixtureSource(fixture, fixture.remote);
+    const counts = { inspections: 0, originReads: 0 };
+    const result = await updateManagedRepo(descriptor(fixture), {
+      runId: "no-op-verification",
+      deps: {
+        runGit: async (args, options) => {
+          // `rev-parse --show-toplevel` opens every inspection and
+          // `remote get-url` every origin verification.
+          if (args[0] === "rev-parse" && args[1] === "--show-toplevel") counts.inspections += 1;
+          if (args[0] === "remote" && args[1] === "get-url") counts.originReads += 1;
+          return actual(args, options);
+        },
+      },
+    });
+    return { result, counts };
+  };
+
+  const current = await repositoryFixture("verification-current");
+  const untouched = await probe(current);
+  expect(untouched.result).toMatchObject({ state: "current", reason: "already_current" });
+  expect(untouched.result.head).toBe(runGit(current.working, ["rev-parse", "HEAD"]));
+  expect(untouched.counts).toEqual({ inspections: 1, originReads: 2 });
+
+  const behind = await repositoryFixture("verification-fast-forward");
+  await addRemoteCommit(behind, "tracked.txt", "remote update\n");
+  const updated = await probe(behind);
+  expect(updated.result).toMatchObject({ state: "updated", reason: "checkout_updated" });
+  // A real mutation keeps its full closing proof.
+  expect(updated.counts).toEqual({ inspections: 2, originReads: 3 });
+  expect(status(behind.working)).toBe("");
 });
 
 test("repositories of one layer sync concurrently under the limit while the report keeps declared order", async () => {
