@@ -1800,6 +1800,10 @@ async function startLaunchpadServer(root, { env = {}, useDefaultStateRoot = fals
     stderr: "pipe",
   });
   servers.push(server);
+  // The listener can answer /health before hosted inventory validation ends.
+  // Wait for the post-validation startup announcement, otherwise a rejecting
+  // child can look ready on Windows before its exit is observed.
+  await readLaunchpadPort(server);
   await waitForHealth(port, server, env.LAZURIO_LAUNCHPAD_BASE_PATH ?? "/");
   return { server, port, environment, serverStateDirectory };
 }
