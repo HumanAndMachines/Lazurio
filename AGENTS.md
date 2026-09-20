@@ -146,9 +146,8 @@ místo přidávání paralelních cest. Konkrétní rozpor otevřeně pojmenuj; 
 úsudek ale nepoužívej k převzetí business, access ani publikační pravomoci
 Principála.
 
-Před každou tvorbou nebo změnou source použij skill
-`.agents/skills/architecture-shaping/SKILL.md`. Malá změna dostane rychlou
-kontrolu bez nového dokumentu. Nová dlouhodobá abstrakce, stav, autorita,
+Před každou tvorbou nebo změnou source návrh architektonicky vytvaruj. Malá
+změna dostane rychlou kontrolu bez nového dokumentu. Nová dlouhodobá abstrakce, stav, autorita,
 hranice, rozhraní, závislost nebo migrace vyžaduje plný shaping, srovnání
 variant, failure modes a důkaz na skutečném consumerovi. Pokud čisté řešení
 vyžaduje změnu cíle nebo schváleného principu, vrať volbu s doporučením
@@ -301,9 +300,10 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    Buddyho má, drží [`manual/hosted-buddy-vps.md`](manual/hosted-buddy-vps.md).
 2. **Synchronizuj a ověř primární checkouty.** Před taskem spusť v primárním
    Lazurio checkoutu nejdřív `lazurio update` a po jeho úspěchu
-   `bun run doctor:task`. Update sekvenčně srovná Lazurio Root → Organization
+   `bun run doctor:task`. Update po vrstvách srovná Lazurio Root → Organization
    Rooty → jejich namountovaná org-level repa a Workspace Moduly na clean
-   `main` výhradně fast-forwardem. Náhodné
+   `main` výhradně fast-forwardem; repozitáře jedné vrstvy běží souběžně.
+   Náhodné
    tracked i untracked změny uloží do ověřeného recovery stashe a neobnovuje
    je; cizí branch přepne zpět na `main`, její commity ale zachová. Po skutečné
    změně source ověří přesné package rooty deklarovaných Apps; při problému
@@ -313,11 +313,13 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    neopravuje odhadem: vrátí přesný prompt „Vyřešit s Codexem“. Productionspace,
    Personalspace, worktrees a root-space repository-db jsou z obecného update
    mechanismu vyloučené. Explicitní `lazurio organization install` smí jako
-   úzký bootstrap doplnit pouze aktivní deklarovaný root-space
-   `mission-control/db` pod ověřeným parent Git repem; existující repository-db
-   neaktualizuje a nezískává commit/publish autoritu. Deklarovaný Mission Control
-   bez právě jednoho aktivního `repository_db_mount` končí `blocked`, nikdy
-   zdánlivě úspěšnou instalací. Agent nikdy nezačíná práci
+   úzký bootstrap doplnit aktivní deklarovaný `repository_db_mount` pouze na
+   `mission-control/db` nebo kanonickém `workspace/<module>/db` pod ověřeným
+   parent Git repem; deprecated `modules/<module>/db` odmítne bez materializace.
+   Existující repository-db neaktualizuje a nezískává commit/publish autoritu.
+   Deklarovaný Mission Control bez právě jednoho aktivního
+   `repository_db_mount` dál končí `blocked`, nikdy zdánlivě úspěšnou instalací.
+   Agent nikdy nezačíná práci
    v primárním checkoutu; pro všechny změny používá task/PR worktree. Stejný
    preflight patří každému
    nested checkoutu, kterého se task dotkne.
@@ -335,12 +337,18 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    na Windows po přesném resume handoffu úplně ukončí a znovu spustí Codex a
    ověří ji z čistého procesu nové relace; child proces právě běžícího Codexu
    není důkaz. Odhlášení uživatele nebo restart Windows je až fallback, když
-   ani relaunchnutý Codex správné persistentní hodnoty nevidí. Výchozí
-   nejmenší mandát dovoluje jen User `PATH` a
-   chybějící nástroje. Rozšířený instalační mandát smí navíc přesně
-   povolit Machine/system-wide `PATH`, standardní OS package manager a upgrade
-   jmenovaných nástrojů; Agent zachová nesouvisející položky a bezpečnostní
-   nastavení a nikdy z tohoto souhlasu neodvodí obecný machine-admin mandát.
+   ani relaunchnutý Codex správné persistentní hodnoty nevidí. Obecný nejmenší
+   mandát dovoluje jen User `PATH` a chybějící nástroje. Krátký prompt pro
+   novou Builder Mašinu v `manual/organization-install.md` ale záměrně
+   předautorizuje end-to-end instalaci chybějících povinných nástrojů,
+   standardní OS package manager, standardní elevation a nezbytný User i
+   Machine/system-wide `PATH`; Agent zachová nesouvisející položky a
+   bezpečnostní nastavení a nikdy z tohoto souhlasu neodvodí obecný
+   machine-admin mandát ani upgrade již vyhovujících nástrojů. Příkazy provádí
+   background nástroji a po člověku nikdy nechce otevřít Terminal nebo
+   PowerShell, kopírovat do něj příkazy ani číst konzolový výstup. Nativní UAC,
+   heslo a browser consent jsou dovolené osobní kroky; neumí-li harness příkaz
+   spustit bez viditelné konzole, instalace failne zavřeně s přesným blockerem.
    Git, GitHub CLI a Codex směřují na aktuální oficiální stable, Node na
    podporované aktuální LTS. Codex CLI instaluj a aktualizuj přes oficiální
    OpenAI standalone instalátor pro macOS/Linux/Windows jako doporučenou cestu.
@@ -368,10 +376,14 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    provider operace (`excluded_by_role_scope`); běžný `lazurio update`
    absentní restricted slot nikdy automaticky neklonuje a materializuje jej
    jen explicitní Admin install bez `--role`. Nový GitHub účet páruje jednou přes
-   `gh auth login --hostname github.com --git-protocol ssh --web`, po souhlasu
+   `gh auth login --hostname github.com --git-protocol ssh --web` bez
+   `--clipboard`, po souhlasu
    nechá tentýž flow vytvořit nebo nahrát veřejnou část SSH klíče a výsledek
-   dokáže exact `git ls-remote` cílového root repa. Device kód, token ani
-   privátní klíč neloguje.
+   dokáže exact `git ls-remote` cílového root repa. Krátkodobý user-facing
+   ověřovací (device) kód a `https://github.com/login/device` předá jen do
+   aktuálního soukromého chatu, nikdy do schránky, issue, repozitáře nebo
+   trvalého logu. Interní OAuth `device_code`, access token ani privátní klíč
+   nikdy nevypíše.
 3. **Drž worktree disciplínu.** Primární checkout zůstává na `main` a nemění
    se v něm trackovaný obsah. Postup, kanonickou cestu
    `.worktrees/root/<canonical-plan-basename>/` se sidecarem, PR lifecycle
@@ -396,8 +408,7 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    vytvoří nebo doplní a jeho URL vrátí v handoffu. Mandát nepovoluje issue
    zavřít, přiřadit, prioritizovat ani do veřejného repa zapsat
    Organization-specific obsah.
-6. **Delegace.** Pro Claude/Codex/Desktop delegaci platí skill
-   `.agents/skills/desktop-execution-agent-collaboration/SKILL.md`:
+6. **Delegace.** Při delegaci na Claude, Codex nebo Desktop agenta platí:
    self-report není důkaz, QA gate drží delegující Kolega.
 
 Root upravuj jen když se mění:
@@ -449,13 +460,8 @@ Root upravuj jen když se mění:
   Organization Machine ani veřejný fixture.
 - First-client rollout a migrace: `manual/first-client-organization-rollout.md`,
   `manual/gen2-to-gen3-migration.md`
-- Desktop-agent collaboration — kanonický domov je skill
-  `.agents/skills/desktop-execution-agent-collaboration/SKILL.md`; manuálový
-  pointer `manual/desktop-execution-agent-collaboration.md`
 - Architektonické vytvarování source změn — hodnotový kontrakt drží Model
-  spolupráce výše, opakovatelnou metodu skill
-  `.agents/skills/architecture-shaping/SKILL.md` a trvalé rozhodnutí 0132
-  (`manual/decision-register.md`)
+  spolupráce výše a trvalé rozhodnutí 0132 (`manual/decision-register.md`)
 - Cross-Organization closeout cizích PR Organization Adminem (inventura,
   jeden PR = jeden worktree, merge/close/předání ownerovi) — skill
   `.agents/skills/admin-pr-sweep/SKILL.md`
@@ -475,8 +481,7 @@ Root upravuj jen když se mění:
 - Privátní osobní kontext: `personalspace/` — gitignored, mimo GitHub organizace
 - Napojení na externí aplikace (MCP/CLI) — standard
   `manual/external-app-integrations.md`, per-provider runbooky
-  `manual/integrations/`, skill
-  `.agents/skills/external-app-integrations/SKILL.md`; Codex specifika
+  `manual/integrations/`; Codex specifika
   `manual/codex-manual-mcp-integrations.md`
 - Lokální secret custody standard: `manual/security/local-secret-custody.md`;
   root/operator secrets patří do gitignored `personalspace/<owner>_GEN3/secrets/...`,
@@ -537,8 +542,7 @@ browser fallback; scraping/cookie-session servery nikdy. Identita harnessu
 se sdílet smí, přístupy k aplikacím ne — každá mašina má vlastní, samostatně
 revokovatelné přihlášení; schválené integrace drží tracked katalog
 Organizace (jen jména env proměnných, nikdy hodnoty), osobní integrace patří
-do personalspace scope. Postup a standard: skill
-`.agents/skills/external-app-integrations/SKILL.md`,
+do personalspace scope. Postup a standard:
 `manual/external-app-integrations.md` + per-provider runbooky. Zaseknutí
 nebo zastaralý postup řeš opravným PR na standard, ne poznámkou v chatu.
 

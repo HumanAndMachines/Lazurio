@@ -67,7 +67,7 @@ rozhodnutí Principála, ne automatický fallback agenta.
 
 | Vrstva | Místo | V Gitu |
 | --- | --- | --- |
-| Pravidlo chování agentů | root `AGENTS.md`, tento manuál, skill `.agents/skills/external-app-integrations/` | ano |
+| Pravidlo chování agentů | root `AGENTS.md`, tento manuál | ano |
 | Kurátorovaný katalog Organizace | `organizations/<org>/INTEGRATIONS.md` + `organizations/<org>/.mcp.json` + `organizations/<org>/.codex/config.toml` | ano (org repo, bez secretů) |
 | Osobní integrace Principála | user-level config harnessu (`~/.codex/config.toml`, user scope Claude Code) | ne |
 | Per-machine aktivace | env soubor v custody cestě, OAuth consent, token cache | ne (gitignored/lokální) |

@@ -376,14 +376,16 @@ Organization rooty a všechny spravované modulové checkouty na `main` — jak
 org-level repa typu Mission Control, tak Workspace Moduly. Chybějící Workspace
 Modul se materializuje z úplných Git souřadnic; chybějící root repo jen tehdy,
 když manifest explicitně deklaruje `materialization:
-doctor_managed_nested_repo`. Productionspace a root-space repository-db tím
-autoritu nezískávají. Jedinou úzkou výjimkou je explicitní
-`lazurio organization install`: po materializaci aktivního root-level parent
-repozitáře smí jednorázově atomicky doplnit deklarovaný
-`mission-control/db` `repository_db_mount`. Jakmile je deklarovaná Mission
-Control app/data hranice neúplná, neaktivní nebo pod jiným materializačním
-kontraktem, instalace fail-closed skončí jako blokovaná. Existující databázi pouze ověří;
-nefetchuje ji, nefast-forwarduje a nezískává commit ani publish autoritu.
+doctor_managed_nested_repo`. Productionspace a repository-db tím v obecném
+update autoritu nezískávají. Jedinou úzkou bootstrap výjimkou je explicitní
+`lazurio organization install`: po materializaci aktivního deklarovaného
+parent Git repozitáře smí jednorázově atomicky doplnit aktivní
+`repository_db_mount` pouze na root-level `mission-control/db` nebo kanonickém
+`workspace/<module>/db`; deprecated `modules/<module>/db` se nematerializuje.
+Jakmile je deklarovaná Mission Control app/data hranice
+neúplná, neaktivní nebo pod jiným materializačním kontraktem, instalace dál
+fail-closed skončí jako blokovaná. Existující databázi pouze ověří; nefetchuje
+ji, nefast-forwarduje a nezískává commit ani publish autoritu.
 Dirty obsah primárního checkoutu nejdřív
 uloží do ověřeného recovery stashe, který nikdy automaticky nevrací, a potom
 použije jen fast-forward. Historii s lokálními commity nebo konfliktem

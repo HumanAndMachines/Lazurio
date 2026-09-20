@@ -27,6 +27,7 @@ const fullName = `${login}/${login}_GEN3`;
 const fakeHttpsRemote = `https://github.com/${fullName}.git`;
 const fakeSshRemote = `git@github.com:${fullName}.git`;
 const fakeDataRemote = `git@github.com:${login}/mission-control-data.git`;
+const fakeWorkspaceDataRemote = `git@github.com:${login}/content-lazurio-data.git`;
 
 afterAll(async () => {
   await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })));
@@ -268,6 +269,171 @@ test("explicit Organization install materializes an active repository-db mount o
     ["config", "--local", "--get-all", "remote.origin.fetch"],
     { cwd: dataPath },
   )).stdout).toBe(CANONICAL_GIT_FETCH_REFSPEC);
+});
+
+test("explicit Organization install materializes every active Workspace repository-db mount", async () => {
+  const fixture = await organizationWorkspaceRepositoryDbFixture();
+  const source = sourceObservation({ documents: fixture.documents });
+  const remoteMap = new Map([
+    [fakeHttpsRemote, fixture.remote],
+    [fakeWorkspaceDataRemote, fixture.dataRemote],
+  ]);
+  const deps = {
+    observe: async () => source,
+    reobserve: async () => ({ ok: true }),
+    runGit: translatedGitRunner(fixture.remote, remoteMap),
+    runPinnedChild: translatedPinnedGitRunner(fixture.remote, remoteMap),
+    runUpdate: async () => {
+      await ensureWorkspaceRepositoryDbParentCheckout(fixture);
+      return updateReport("current");
+    },
+  };
+
+  const first = await installOrganization({ rootPath: fixture.root, githubLogin: login, deps });
+  const second = await installOrganization({ rootPath: fixture.root, githubLogin: login, deps });
+  const dataPath = join(
+    fixture.root,
+    "organizations",
+    `${login}_GEN3`,
+    "workspace",
+    "content-lazurio",
+    "db",
+  );
+
+  expect(first).toMatchObject({ state: "updated", ok: true });
+  expect(first.convergence.results).toContainEqual(expect.objectContaining({
+    repo_key: "lazurio-example-organization::content-lazurio-data",
+    state: "updated",
+    reason: "repository_db_materialized",
+    path: `organizations/${login}_GEN3/workspace/content-lazurio/db`,
+  }));
+  expect(second).toMatchObject({ state: "current", ok: true });
+  expect(second.convergence.results).toContainEqual(expect.objectContaining({
+    repo_key: "lazurio-example-organization::content-lazurio-data",
+    state: "current",
+    reason: "repository_db_current",
+  }));
+  expect(existsSync(join(dataPath, "repository-db.yaml"))).toBe(true);
+  expect((await runGit(["branch", "--show-current"], { cwd: dataPath })).stdout).toBe("v3");
+  expect((await runGit(["remote", "get-url", "origin"], { cwd: dataPath })).stdout).toBe(fakeWorkspaceDataRemote);
+});
+
+test("inactive Workspace repository-db remains absent", async () => {
+  const fixture = await organizationWorkspaceRepositoryDbFixture({ repositoryDbStatus: "inactive" });
+  const report = await installOrganization({
+    rootPath: fixture.root,
+    githubLogin: login,
+    deps: {
+      observe: async () => sourceObservation({ documents: fixture.documents }),
+      reobserve: async () => ({ ok: true }),
+      runGit: translatedGitRunner(fixture.remote),
+      runPinnedChild: translatedPinnedGitRunner(fixture.remote),
+      runUpdate: async () => {
+        await ensureWorkspaceRepositoryDbParentCheckout(fixture);
+        return updateReport("current");
+      },
+    },
+  });
+
+  expect(report).toMatchObject({ state: "updated", ok: true });
+  expect(report.convergence.results.some((result) => result.module === "content-lazurio-data")).toBe(false);
+  expect(existsSync(join(fixture.organizationRoot, "workspace", "content-lazurio", "db"))).toBe(false);
+});
+
+test("role-scoped install inherits a restricted Workspace parent without touching its repository-db", async () => {
+  const fixture = await organizationWorkspaceRepositoryDbFixture({ parentAccess: "restricted" });
+  const source = {
+    ...sourceObservation({ documents: fixture.documents }),
+    access: roleReadiness("steward"),
+  };
+  const report = await installOrganization({
+    rootPath: fixture.root,
+    githubLogin: login,
+    role: "steward",
+    deps: {
+      observe: async () => source,
+      reobserve: async () => ({ ok: true }),
+      runGit: translatedGitRunner(fixture.remote),
+      runPinnedChild: translatedPinnedGitRunner(fixture.remote),
+      runUpdate: async () => updateReport("current"),
+    },
+  });
+
+  expect(report).toMatchObject({ state: "updated", ok: true });
+  expect(report.convergence.results).toContainEqual(expect.objectContaining({
+    module: "content-lazurio-data",
+    state: "current",
+    reason: "excluded_by_role_scope",
+  }));
+  expect(existsSync(join(fixture.organizationRoot, "workspace", "content-lazurio", "db"))).toBe(false);
+});
+
+test("malformed active Workspace repository-db fails closed", async () => {
+  const fixture = await organizationWorkspaceRepositoryDbFixture({
+    repositoryDbMaterialization: "doctor_managed_nested_repo",
+  });
+  const report = await installOrganization({
+    rootPath: fixture.root,
+    githubLogin: login,
+    deps: {
+      observe: async () => sourceObservation({ documents: fixture.documents }),
+      reobserve: async () => ({ ok: true }),
+      runGit: translatedGitRunner(fixture.remote),
+      runPinnedChild: translatedPinnedGitRunner(fixture.remote),
+      runUpdate: async () => {
+        await ensureWorkspaceRepositoryDbParentCheckout(fixture);
+        return updateReport("current");
+      },
+    },
+  });
+
+  expect(report).toMatchObject({ state: "blocked", ok: false });
+  expect(report.convergence.results).toContainEqual(expect.objectContaining({
+    module: "content-lazurio-data",
+    state: "blocked",
+    reason: "repository_db_materialization_invalid",
+  }));
+  expect(existsSync(join(fixture.organizationRoot, "workspace", "content-lazurio", "db"))).toBe(false);
+});
+
+test("deprecated modules repository-db path blocks before any data provider operation", async () => {
+  const fixture = await organizationWorkspaceRepositoryDbFixture();
+  for (const slot of fixture.documents.modules.module_slots) {
+    if (slot.path === "workspace/content-lazurio") slot.path = "modules/content-lazurio";
+    if (slot.path === "workspace/content-lazurio/db") slot.path = "modules/content-lazurio/db";
+  }
+  await writeFile(
+    join(fixture.source, "modules.manifest.json"),
+    `${JSON.stringify(fixture.documents.modules, null, 2)}\n`,
+  );
+  await runGit(["add", "modules.manifest.json"], { cwd: fixture.source });
+  await runGit(["commit", "-m", "Declare deprecated modules repository-db path"], { cwd: fixture.source });
+  await runGit(["push", "origin", "main"], { cwd: fixture.source });
+  const dataProviderCalls = [];
+  const recordDataProviderCall = (runner) => async (args, options) => {
+    if (args.includes(fakeWorkspaceDataRemote)) dataProviderCalls.push([...args]);
+    return runner(args, options);
+  };
+  const report = await installOrganization({
+    rootPath: fixture.root,
+    githubLogin: login,
+    deps: {
+      observe: async () => sourceObservation({ documents: fixture.documents }),
+      reobserve: async () => ({ ok: true }),
+      runGit: recordDataProviderCall(translatedGitRunner(fixture.remote)),
+      runPinnedChild: recordDataProviderCall(translatedPinnedGitRunner(fixture.remote)),
+      runUpdate: async () => updateReport("current"),
+    },
+  });
+
+  expect(report).toMatchObject({ state: "blocked", ok: false });
+  expect(report.convergence.results).toContainEqual(expect.objectContaining({
+    module: "content-lazurio-data",
+    state: "blocked",
+    reason: "repository_db_manifest_invalid",
+  }));
+  expect(dataProviderCalls).toEqual([]);
+  expect(existsSync(join(fixture.organizationRoot, "modules", "content-lazurio", "db"))).toBe(false);
 });
 
 test("declared Mission Control never reports successful install without its active repository-db mount", async () => {
@@ -1053,6 +1219,54 @@ async function organizationRepositoryDbFixture({
   return { ...fixture, documents, dataRemote };
 }
 
+async function organizationWorkspaceRepositoryDbFixture({
+  repositoryDbStatus = "active",
+  repositoryDbMaterialization = "repository_db_mount",
+  parentAccess = "role_based",
+} = {}) {
+  const fixture = await organizationRemoteFixture();
+  const organizationRoot = join(fixture.root, "organizations", `${login}_GEN3`);
+  const documents = scaffoldDocuments();
+  documents.modules.module_slots.push(
+    {
+      path: "workspace/content-lazurio",
+      slug: "content-lazurio",
+      teams: ["lazurio"],
+      source_of_truth: "git-native",
+      status: "active",
+      default_access: parentAccess,
+      required_roles: ["team-member"],
+      git: { url: `git@github.com:${login}/content-lazurio.git`, branch: "main" },
+    },
+    {
+      path: "workspace/content-lazurio/db",
+      slug: "content-lazurio-data",
+      teams: ["lazurio"],
+      source_of_truth: "repository-db:v3",
+      status: repositoryDbStatus,
+      default_access: "role_based",
+      required_roles: ["team-member"],
+      materialization: repositoryDbMaterialization,
+      git: { url: fakeWorkspaceDataRemote, branch: "v3" },
+    },
+  );
+  await writeFile(join(fixture.source, "company.gen3.json"), `${JSON.stringify(documents.company, null, 2)}\n`);
+  await writeFile(join(fixture.source, "modules.manifest.json"), `${JSON.stringify(documents.modules, null, 2)}\n`);
+  await runGit(["add", "company.gen3.json", "modules.manifest.json"], { cwd: fixture.source });
+  await runGit(["commit", "-m", "Declare Workspace repository-db fixture"], { cwd: fixture.source });
+  await runGit(["push", "origin", "main"], { cwd: fixture.source });
+
+  const dataSource = join(fixture.root, "workspace-data-source");
+  const dataRemote = join(fixture.root, "workspace-data-remote.git");
+  await initGitRepo(dataSource, { remotePath: dataRemote });
+  await runGit(["switch", "-c", "v3"], { cwd: dataSource });
+  await writeFile(join(dataSource, "repository-db.yaml"), "schema_version: repository-db.config.v1\n");
+  await runGit(["add", "repository-db.yaml"], { cwd: dataSource });
+  await runGit(["commit", "-m", "Add Workspace repository-db fixture"], { cwd: dataSource });
+  await runGit(["push", "origin", "v3"], { cwd: dataSource });
+  return { ...fixture, organizationRoot, documents, dataRemote };
+}
+
 async function ensureRepositoryDbParentCheckout(fixture) {
   const parentPath = join(fixture.root, "organizations", `${login}_GEN3`, "mission-control");
   if (existsSync(join(parentPath, ".git"))) return parentPath;
@@ -1061,6 +1275,19 @@ async function ensureRepositoryDbParentCheckout(fixture) {
   await writeFile(join(parentPath, ".gitignore"), "db/\n");
   await runGit(["add", ".gitignore"], { cwd: parentPath });
   await runGit(["commit", "-m", "Ignore repository-db checkout"], { cwd: parentPath });
+  await runGit(["push", "origin", "main"], { cwd: parentPath });
+  return parentPath;
+}
+
+async function ensureWorkspaceRepositoryDbParentCheckout(fixture) {
+  const parentPath = join(fixture.organizationRoot, "workspace", "content-lazurio");
+  if (existsSync(join(parentPath, ".git"))) return parentPath;
+  const parentRemote = join(fixture.root, "content-lazurio-remote.git");
+  await mkdir(dirname(parentPath), { recursive: true });
+  await initGitRepo(parentPath, { remotePath: parentRemote });
+  await writeFile(join(parentPath, ".gitignore"), "db/\n");
+  await runGit(["add", ".gitignore"], { cwd: parentPath });
+  await runGit(["commit", "-m", "Ignore Workspace repository-db checkout"], { cwd: parentPath });
   await runGit(["push", "origin", "main"], { cwd: parentPath });
   return parentPath;
 }
