@@ -990,6 +990,52 @@ test("hosted Launchpad omits another Team app and rejects its runtime route befo
   });
 });
 
+test("fresh hosted Launchpad stays usable before operator Organization checkout and discovers it later", async () => {
+  const root = await createLaunchpadGitFixture();
+  const stateRoot = `${root}-empty-hosted-state`;
+  const organization = join(root, "organizations", "BetaCo_GEN3");
+  const stagedOrganization = `${root}-operator-checkout`;
+  await cp(organization, stagedOrganization, { recursive: true });
+  await rm(organization, { recursive: true });
+  tempRoots.push(root, stateRoot, stagedOrganization);
+
+  const { port } = await startLaunchpadServer(root, {
+    env: {
+      LAZURIO_WORKSPACE_PROFILE: "hosted",
+      LAZURIO_ORGANIZATION_SLUG: "BetaCo",
+      LAZURIO_TEAM_ID: "sales",
+      LAZURIO_HOSTED_DOMAIN: "workspace.example.test",
+      LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot,
+      LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN: "https://launchpad.builder.workspace.example.test",
+      LAZURIO_LAUNCHPAD_AUTH_COOKIE_NAME: "__Secure-lazurio-sales-workspace",
+      LAZURIO_LAUNCHPAD_AUTH_CHECK_URL: `https://127.0.0.1:${await findFreePort()}/oauth2/auth`,
+    },
+  });
+  expect((await fetch(`http://127.0.0.1:${port}/`)).status).toBe(200);
+  const empty = await getJson(port, "/api/apps");
+  expect(empty.apps).toEqual([]);
+  expect(empty.organizations).toEqual([]);
+  expect((await getJson(port, "/health")).maintenance.total).toBe(0);
+  // Other fixture Organizations do not become visible just because the
+  // selected checkout is absent. Hosted authentication remains in force.
+  const forged = await fetch(`http://127.0.0.1:${port}/api/internal/hosted/apps/foreign/ensure`, {
+    headers: { origin: "https://launchpad.builder.workspace.example.test" },
+  });
+  expect(forged.status).toBe(403);
+
+  // Models the operator's later successful checkout, with no server restart.
+  await cp(stagedOrganization, organization, { recursive: true });
+  let mounted;
+  const discoveryDeadline = Date.now() + 12_000;
+  do {
+    mounted = await getJson(port, "/api/apps");
+    if (mounted.organizations.some((item) => item.slug === "BetaCo")) break;
+    await Bun.sleep(100);
+  } while (Date.now() < discoveryDeadline);
+  expect(mounted.organizations.map((item) => item.slug)).toEqual(["BetaCo"]);
+  expect((await getJson(port, "/health")).status).toBe("ok");
+}, platformTestTimeout(15_000));
+
 test("hosted Launchpad keeps Team modules cold and derives their external URLs", async () => {
   const root = await createLaunchpadGitFixture();
   const stateRoot = `${root}-launchpad-state`;
