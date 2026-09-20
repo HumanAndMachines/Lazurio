@@ -47,6 +47,7 @@
     "live-github-rights",
     "draft-and-escalate",
     "principal-owns-machine",
+    "single-hosted-personal-machine",
     "report-local-drift",
     "preserve-last-known-good",
     "offer-separate-source-fix",
