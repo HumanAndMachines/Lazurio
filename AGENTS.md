@@ -91,9 +91,10 @@ ohraničené hranice** a **definované procesy**.
   Organization-owned Mašina může být další pracovní prostředí Principála,
   ale jeho Personalspace nepřebírá ani nemountuje.
 - **Jedna osobní hostovaná Mašina.** Principál má v personalspace právě jednu
-  hostovanou Mašinu (osobní VM). Jeho vlastní hardware stojí mimo pool a jméno
-  nepotřebuje — je to klient; hostovaný Buddy host není další pracovní Mašina
-  Principála, ale runtime jeho Buddyho s vlastními pravidly. Personalspace je
+  hostovanou Mašinu (osobní VM), a právě na ní žije jako rezident jeho Buddy —
+  není to druhý host, ale runtime uvnitř téže hranice pod pravidly
+  [`manual/hosted-buddy-vps.md`](manual/hosted-buddy-vps.md). Vlastní hardware
+  Principála stojí mimo pool a jméno nepotřebuje — je to klient. Personalspace je
   gitignored a mimo GitHub organizace, takže víc hostovaných Mašin nemá čím
   koordinovat vlastnictví, jména ani přístupy. Druhá trvalá Mašina proto patří
   do Organizace, kde ji koordinuje GitHub; dočasnou potřebu řeš snapshotem,
@@ -249,7 +250,8 @@ Task Agentů drží sandbox jejich harnessu a pravidla práce, ne lokální
 per-modulový IAM.
 
 Má-li Principál **hostovaného Buddyho**, sahá jeho personalspace i mimo tuhle
-mašinu — na dedikovanou per-owner VPS. Hranice tím nekončí, jen se prodlužuje:
+mašinu — na dedikovanou per-owner VPS, což je právě ta jediná hostovaná Mašina
+Principála výše, ne další host vedle ní. Hranice tím nekončí, jen se prodlužuje:
 paměť a konverzace Buddyho jsou personalspace se vším, co pro něj platí, a
 přístup na host je Principálův, ne agentův — i když ho lokální mašina technicky
 dovolí použít. Zjištění, jestli Buddy existuje, i pravidla pro práci s ním drží
