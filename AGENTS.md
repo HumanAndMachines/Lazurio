@@ -91,14 +91,17 @@ ohraničené hranice** a **definované procesy**.
   Organization-owned Mašina může být další pracovní prostředí Principála,
   ale jeho Personalspace nepřebírá ani nemountuje.
 - **Jedna osobní hostovaná Mašina.** Principál má v personalspace právě jednu
-  hostovanou Mašinu (osobní VM), a právě na ní žije jako rezident jeho Buddy —
-  není to druhý host, ale runtime uvnitř téže hranice pod pravidly
-  [`manual/hosted-buddy-vps.md`](manual/hosted-buddy-vps.md). Vlastní hardware
-  Principála stojí mimo pool a jméno nepotřebuje — je to klient. Personalspace je
-  gitignored a mimo GitHub organizace, takže víc hostovaných Mašin nemá čím
-  koordinovat vlastnictví, jména ani přístupy. Druhá trvalá Mašina proto patří
-  do Organizace, kde ji koordinuje GitHub; dočasnou potřebu řeš snapshotem,
-  guestem uvnitř své Mašiny nebo krátkodobou VM bez jména v `lazurio.io`
+  hostovanou Mašinu (osobní VM). **Má-li** Buddyho, bydlí právě na ní — není to
+  druhý host, ale runtime uvnitř téže hranice pod pravidly
+  [`manual/hosted-buddy-vps.md`](manual/hosted-buddy-vps.md); Buddy zůstává
+  volitelný a jen pro lidského Principála, tahle Mašina ho nezakládá. Vlastní
+  hardware Principála stojí mimo pool a jméno nepotřebuje — je to klient.
+  Personalspace je gitignored a mimo GitHub organizace, takže víc hostovaných
+  Mašin nemá čím koordinovat vlastnictví, jména ani přístupy. Druhá trvalá
+  Mašina proto patří do Organizace, kde ji koordinuje GitHub. Dočasnou potřebu
+  řeš uvnitř své Mašiny — snapshotem nebo kontejnerovou či procesní izolací,
+  které Mašinou samy nejsou; každý další virtuální server Mašina je, i bez
+  jména v `lazurio.io`, a druhý domov se z něj nedělá
   (decision 0153 v manual/decision-register.md).
 - **Buddy je osobní.** Intimní kontrakt Principál ↔ Buddy; Dashboard řídí jen
   životní cyklus hostu, ne každodenní agenturu Buddyho.
