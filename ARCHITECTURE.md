@@ -63,8 +63,11 @@ Machines a LazurioPlatform se potkávají na handoveru jedné Mašiny (decision
 0144): Machines dodají Mašinu online se systémem, sítí, SSH a sudo,
 `lazurio.machine.json`, vstupem přes společnou Auth bránu a nainstalovaným
 releasem LazurioPlatform; od té chvíle vlastní Lazurio Environment uvnitř
-LazurioPlatform a operátor Mašiny. Machines neudržují vlastní resident ani
-artefakty.
+LazurioPlatform a operátor Mašiny. Machines v cílovém kontraktu neudržují vlastní workspace resident ani
+artefakty. Současný workspace-VM installer je výslovný migrační stav, nikoli
+přenos vlastnictví Environment do Machines. Podrobný kontrakt předání,
+prázdného startupu a odpovědností drží
+[manuál předání hostované Mašiny](manual/hosted-machine-handover.md).
 
 ## Pevná pravidla systému
 
@@ -171,6 +174,20 @@ Lokální a hostovaný Workspace mají pro Buildera stejný model: Lazurio root,
 Organization checkouty, worktrees, nástroje Agentů, Launchpad a vývojové
 procesy Modulů. Liší se infrastrukturním a síťovým obalem.
 
+### Individuální hostovaná VM
+
+Individuální VM je pracovní Mašina jednoho přiřazeného operátora. Machines
+připraví čisté Lazurio; operátor se přihlásí vlastním GitHub účtem a vybírá
+Organizace podle svých živých práv a pravidel umístění dat. Ownerem VM může
+zůstat Organizace, ale její vlastnický label není allowlist jejího pracovního
+obsahu. Přístup do VM není přihlášení k repozitářům. Jednočlenný Team použitý
+pro gateway admission sám neurčuje sdílenou Git identitu.
+
+Více Organizací na individuální VM je cílový kontrakt; současný hosted runtime
+ještě používá single-Organization/Team filtr. Dokud tento rozdíl není
+verzovaně odstraněný a ověřený, jde o migrační omezení popsané v manuálu
+předání, nikoli o hotovou podporu. Hosted request trust zůstává zachovaný.
+
 ### Hosted Team Workspace
 
 Každý Hosted Team Workspace se na tenantní vrstvě počítá jako samostatná
@@ -179,7 +196,8 @@ Workspace vymezuje jednu sdílenou vývojovou dílnu pro konkrétní Team:
 
 - členové Teamu sdílejí soubory, procesy a síťový prostor;
 - různé Team Workspaces jsou od sebe oddělené na tenantní vrstvě;
-- individuální izolaci poskytne jednočlenný Team Workspace;
+- jednočlenný Team Workspace stále používá týmovou identitu a kontrakt;
+  není náhradou individuální VM s osobním GitHub přihlášením;
 - uvnitř běží T3 Code, nástroje Agentů, Launchpad, checkouty a worktrees;
 - řídicí infrastruktura, klíče poskytovatele, Tailscale/VPN sidecar a HTTPS ingress
   zůstávají mimo pracovní prostředí.

@@ -508,6 +508,21 @@ async function refreshHostedWorkspaceMaintenance({ warnSkipped = false } = {}) {
 }
 
 function syncHostedWorkspaceMaintenance(inventory) {
+  // A fresh hosted Machine is handed to its operator before they authenticate
+  // to GitHub and materialize an Organization. Keep the authenticated shell
+  // alive with no maintained apps; absence never widens its configured scope.
+  // Once mounted, the existing Organization/Team checks still apply.
+  const organization = (inventory.organizations ?? []).find(
+    (candidate) => candidate.slug === hostedWorkspace.organization_slug,
+  );
+  if (!organization?.path || organization.status === "planned") {
+    // A rejected mount is not an empty Machine. Discovery owns boundary
+    // validation; retain its failure instead of masking corruption as absence.
+    if ((inventory.failures ?? []).length > 0) {
+      throw new Error(`Hosted Workspace discovery failed: ${inventory.failures.join("; ")}`);
+    }
+    return { ...runtimeManager.maintainApps([]), skipped: [] };
+  }
   validateHostedWorkspaceBindings(hostedWorkspace, inventory);
   const selected = selectHostedWorkspaceApps(hostedWorkspace, inventory);
   const maintenance = runtimeManager.maintainApps(selected.apps);
