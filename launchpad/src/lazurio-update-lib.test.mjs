@@ -1790,9 +1790,21 @@ test("one run shares a single SSH connection across fetches of the same remote i
     makeTemporaryDirectory: async (prefix) => `${prefix}fixture`,
   })).toBeNull();
 
+  // A temporary root that cannot be created at all is skipped like any other
+  // unusable candidate.
+  expect(await createSshConnectionSharing({
+    platform: "linux",
+    temporaryRoots: ["/fixture-missing"],
+    makeTemporaryDirectory: async () => {
+      const error = new Error("no such directory");
+      error.code = "ENOENT";
+      throw error;
+    },
+  })).toBeNull();
+
   // Releasing removes the private directory of the run. The socket path limit
   // can legitimately rule this lane out on a runner with a long temp path.
-  const created = await createSshConnectionSharing({ platform: "linux" });
+  const created = await createSshConnectionSharing();
   if (created) {
     expect(existsSync(created.directory)).toBe(true);
     await created.release();

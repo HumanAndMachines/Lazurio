@@ -213,7 +213,14 @@ export async function createSshConnectionSharing({
   if (platform === "win32") return null;
   let directory = null;
   for (const root of temporaryRoots) {
-    const candidate = await makeTemporaryDirectory(join(root, "lz-ssh-"));
+    // Sharing is an optimization: a candidate root that cannot hold a private
+    // directory is skipped, never a reason to fail the run.
+    let candidate;
+    try {
+      candidate = await makeTemporaryDirectory(join(root, "lz-ssh-"));
+    } catch {
+      continue;
+    }
     // %C is OpenSSH's hash of user, host and port, so one run keeps one socket
     // per remote identity without ever deriving the path from repository input.
     if (candidate.length + 1 + SSH_CONTROL_PATH_RESERVED < SSH_CONTROL_PATH_LIMIT) {
