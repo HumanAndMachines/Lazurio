@@ -90,6 +90,15 @@ ohraničené hranice** a **definované procesy**.
   Personalspace svého Principála; vlastní tím nezískává. Sdílená
   Organization-owned Mašina může být další pracovní prostředí Principála,
   ale jeho Personalspace nepřebírá ani nemountuje.
+- **Jedna osobní hostovaná Mašina.** Principál má v personalspace právě jednu
+  hostovanou Mašinu (osobní VM). Jeho vlastní hardware stojí mimo pool a jméno
+  nepotřebuje — je to klient; hostovaný Buddy host není další pracovní Mašina
+  Principála, ale runtime jeho Buddyho s vlastními pravidly. Personalspace je
+  gitignored a mimo GitHub organizace, takže víc hostovaných Mašin nemá čím
+  koordinovat vlastnictví, jména ani přístupy. Druhá trvalá Mašina proto patří
+  do Organizace, kde ji koordinuje GitHub; dočasnou potřebu řeš snapshotem,
+  guestem uvnitř své Mašiny nebo krátkodobou VM bez jména v `lazurio.io`
+  (decision 0153 v manual/decision-register.md).
 - **Buddy je osobní.** Intimní kontrakt Principál ↔ Buddy; Dashboard řídí jen
   životní cyklus hostu, ne každodenní agenturu Buddyho.
 - **Opatrovník.** Každý seat AI Kolegy má právě jednoho jmenovaného lidského
