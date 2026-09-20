@@ -508,6 +508,15 @@ async function refreshHostedWorkspaceMaintenance({ warnSkipped = false } = {}) {
 }
 
 function syncHostedWorkspaceMaintenance(inventory) {
+  // A fresh hosted Machine is handed to its operator before they authenticate
+  // to GitHub and materialize an Organization. Keep the authenticated shell
+  // alive with no maintained apps; absence never widens its configured scope.
+  // Once mounted, the existing Organization/Team checks still apply.
+  if (!(inventory.organizations ?? []).some(
+    (organization) => organization.slug === hostedWorkspace.organization_slug,
+  )) {
+    return { ...runtimeManager.maintainApps([]), skipped: [] };
+  }
   validateHostedWorkspaceBindings(hostedWorkspace, inventory);
   const selected = selectHostedWorkspaceApps(hostedWorkspace, inventory);
   const maintenance = runtimeManager.maintainApps(selected.apps);
