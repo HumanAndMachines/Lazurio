@@ -145,6 +145,8 @@ přístupy u poskytovatelů.
 
 ## Buddy a AI Kolega
 
+Hard pravidlo Lazuria: jeden Principál/Operátor má právě jednu vlastní hostovanou osobní Mašinu. Buddy je rezident přímo na téže osobní Mašině a funguje v jejím rámci; žádný vedlejší osobní Buddy host ani výjimka ze singletonu. Další hostované Mašiny vyžadují Organizaci. Organizace může vlastnit více oprávněných Mašin i pro stejného Operátora; GitHub určuje oprávnění. Více fyzických klientských zařízení, migrace nebo záloha nejsou druhé nezávislé hostované osobní prostředí. Osobní URL je `<app>.<github-user-login>.lazurio.io`; organizační URL `<app>.<machine>.<github-org-login>.lazurio.io`. Kanonický zápis je lowercase, hostname case-insensitive; tím nevzniká nový grant ani runtime změna. Rozhodnutí drží [existující Buddy kontrakt](manual/buddy-product-decision-2026-09-12.md).
+
 Buddy a AI Kolega používají stejný technický základ. Liší se vlastníkem,
 mandátem a správou dat, ne odděleným vývojem runtime.
 

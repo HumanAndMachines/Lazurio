@@ -229,6 +229,8 @@ a promítáš ho do pravidel a zvyklostí, aby Agenti dělali čím dál lepší
 
 ## Cílový Hosted Buddy
 
+Hard pravidlo Lazuria: jeden Principál/Operátor má právě jednu vlastní hostovanou osobní Mašinu. Buddy je rezident přímo na téže osobní Mašině a funguje v jejím rámci; žádný vedlejší osobní Buddy host ani výjimka ze singletonu. Další hostované Mašiny vyžadují Organizaci. Organizace může vlastnit více oprávněných Mašin i pro stejného Operátora; GitHub určuje oprávnění. Více fyzických klientských zařízení, migrace nebo záloha nejsou druhé nezávislé hostované osobní prostředí. Osobní URL je `<app>.<github-user-login>.lazurio.io`; organizační URL `<app>.<machine>.<github-org-login>.lazurio.io`. Kanonický zápis je lowercase, hostname case-insensitive; tím nevzniká nový grant ani runtime změna. Rozhodnutí drží [existující Buddy kontrakt](manual/buddy-product-decision-2026-09-12.md).
+
 Hosted Buddy je produkt 1: osobní VM lidského Operátora (Principála/Ownera) s Hermesem v roli Buddyho. Osobní Owner není host-admin. Osobní VM nemá org repozitáře; pracovní klony a běhy jsou na přidělených Organization-owned Mašinách. Osobní WireGuard + SSH/Codex a následné org SSH přes Headscale mají oddělené granty. Produkt 2 navazuje org Dashboard flow až po kvalifikaci produktu 1. Přesný aktuální cílový kontrakt, servisní hranice a odlišení od dosavadních instalací drží [produktové rozhodnutí](manual/buddy-product-decision-2026-09-12.md). Text sám nemění žádný runtime, profil, ACL ani mandát.
 
 ## Security hranice Personalspace
