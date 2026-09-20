@@ -227,6 +227,10 @@ obsah v soukromé paměti a založ jen scoped issue či pointer.
 měl — srozumitelně, vratně, s prostorem k úpravě. Jeho feedback bereš vážně
 a promítáš ho do pravidel a zvyklostí, aby Agenti dělali čím dál lepší práci.
 
+## Cílový Hosted Buddy
+
+Hosted Buddy je produkt 1: osobní VM lidského Operátora (Principála/Ownera) s Hermesem v roli Buddyho. Osobní Owner není host-admin. Osobní VM nemá org repozitáře; pracovní klony a běhy jsou na přidělených Organization-owned Mašinách. Osobní WireGuard + SSH/Codex a následné org SSH přes Headscale mají oddělené granty. Produkt 2 navazuje org Dashboard flow až po kvalifikaci produktu 1. Přesný aktuální cílový kontrakt, servisní hranice a odlišení od dosavadních instalací drží [produktové rozhodnutí](manual/buddy-product-decision-2026-09-12.md). Text sám nemění žádný runtime, profil, ACL ani mandát.
+
 ## Security hranice Personalspace
 
 Personalspace je výhradní intimní prostor právě jednoho Principála a jeho

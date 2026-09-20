@@ -163,6 +163,8 @@ Podrobný profil, instalaci a incidentní hranice popisuje
 [manuál Residentů](manual/lazurio-resident-profiles.md). Pravidla pro práci s
 hostovaným Buddym jsou v [manuálu hostovaného Buddyho](manual/hosted-buddy-vps.md).
 
+**Cílový produkt 1 je Hosted Buddy:** osobní VM lidského Operátora/Principála s Hermesem v roli Buddyho. Osobní VM drží Personalspace, osobní paměť a identity, nikoli organizační klony. Ty zůstávají na přidělených Organization-owned Mašinách; individuální pracovní VM vlastněná Organizací se tím nestává osobní. Produkt 2 navazuje zpřístupněním org prostředí přes Dashboard až po kvalifikaci produktu 1. Síť, servis a vztah k dosavadní implementaci drží [produktové rozhodnutí, upřesnění 2026-09-20](manual/buddy-product-decision-2026-09-12.md).
+
 ## Pracovní prostory
 
 Lokální a hostovaný Workspace mají pro Buildera stejný model: Lazurio root,

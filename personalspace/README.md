@@ -150,3 +150,5 @@ oddělené custody na Buddyho Mašině (v nasazeném baseline dedikované VPS),
 ne do této lokální profilové cesty.
 Detailní pravidla jsou v `manual/security/local-secret-custody.md`
 (aktualizace cesty na owner-scoped tvar je součást CAC-0048).
+
+Aktuální produktový cíl z 20. září 2026: Hosted Buddy je osobní VM lidského Principála s Hermesem, osobní WG a bez org klonů; org execution zůstává na přidělených org-owned Mašinách. Produkt 2 navazuje až po kvalifikaci produktu 1. Viz [produktové rozhodnutí](../manual/buddy-product-decision-2026-09-12.md). Existující verzované profily a manifesty dál popisují dosavadní instalace; cílová próza neobchází qualification gate ani neprovádí migraci.

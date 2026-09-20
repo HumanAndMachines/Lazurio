@@ -27,11 +27,9 @@ běžící profil, vypnout kanál ani obejít jeho kontroly jen podle cílové p
 
 Buddy používá GitHub a další podporované účty svého Principála. Stejná identita
 může být na jeho notebooku i u Buddyho; mašina sama není persona ani IAM.
-Každý zákazník má vlastní osobní tailnet, bez společného zákaznického tailnetu
-flotily. Obousměrné SSH se povoluje výslovně a vyžaduje odpovídající přihlášení,
-nástroje a mandát. Organizace schvaluje pracovní přístup do své sítě samostatně;
-směr Buddy → dílna neuděluje dílně právo zahajovat spojení do Personalspace.
-Síťová dosažitelnost, aplikační přihlášení a oprávnění jsou oddělené kontroly.
+Finální osobní přístup používá WireGuard + SSH/Codex. Osobní VM drží pouze Personalspace, Buddyho, Gbrain a identity; organizační pracovní klony a běhy žijí na přidělených Organization-owned VM. Buddy k nim zahajuje SSH přes Tailscale klienty a Headscale na Conglomerate Hostu. Společný tailnet není plošný grant; nová opačná a cross-org spojení jsou zakázaná, odpovědi existujícího SSH fungují. Žádné osobní mounty ani key forwarding do org VM.
+
+**Hosted Buddy je produkt 1 — osobní VM lidského Operátora/Principála s Hermesem v roli Buddyho.** Produkt 2 následně zpřístupní org prostředí přes Dashboard. Osobní URL `<app>.<github-username>.lazurio.io` je cílově dostupná jen přes osobní WG; vlastní VM odkaz navazuje na stávající Workspaces/osobní záložku. Přesná podpora, DNS/TLS a lifecycle vyžadují ověření. Úplné rozhodnutí a zachované historické hranice drží [BUDDY-2026-09-12, upřesnění 2026-09-20](buddy-product-decision-2026-09-12.md#upřesnění-2026-09-20--hosted-buddy-je-produkt-1).
 
 Izolace VM i Tailscale závisí na bezpečné konfiguraci a údržbě; bezchybnost
 softwaru ani absolutní nepřístupnost pro správce hypervizoru nejsou slibem.
