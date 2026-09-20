@@ -28,6 +28,8 @@ import {
 import {
   GIT_FETCH_TIMEOUT_MS,
   GIT_LOCAL_TIMEOUT_MS,
+  createSshConnectionSharing,
+  isSshGitRemote,
   mapWithConcurrency,
   runGit,
   safeGitCommandEnv,
@@ -174,7 +176,15 @@ export async function runLazurioUpdate({
   const refreshedOrganizations = new Set();
   const invalidatedInitialOrganizations = new Set();
   let finalInventory = null;
+  let sshSharing = null;
   try {
+    // One run shares one SSH connection per remote identity instead of paying
+    // a full handshake per repository. Created inside the lock scope so the
+    // lock is always released, and overridable for hermetic tests.
+    sshSharing = deps.sshSharing !== undefined
+      ? deps.sshSharing
+      : await (deps.createSshSharing ?? createSshConnectionSharing)();
+
     const rootRepo = rootDescriptor(absoluteRoot);
     repoDescriptors.set(rootRepo.key, rootRepo);
     const rootResult = await safeUpdateRepo(rootRepo, {
@@ -182,6 +192,7 @@ export async function runLazurioUpdate({
       updateRepo,
       checkpoint,
       deps,
+      sshSharing,
     });
     results.push(rootResult);
 
@@ -223,6 +234,7 @@ export async function runLazurioUpdate({
         updateRepo,
         checkpoint,
         deps,
+        sshSharing,
       }),
     );
     organizationRoots.forEach((organizationRoot, index) => {
@@ -270,6 +282,7 @@ export async function runLazurioUpdate({
       materializeRepo,
       checkpoint,
       deps,
+      sshSharing,
     }));
 
     organizationRoots.forEach((organizationRoot, index) => {
@@ -338,6 +351,7 @@ export async function runLazurioUpdate({
       restrictedSlotPolicy,
     });
   } finally {
+    await sshSharing?.release().catch(() => {});
     await lock.release().catch(() => {});
   }
 }
@@ -470,6 +484,7 @@ async function syncOrganizationChild({
   materializeRepo,
   checkpoint,
   deps,
+  sshSharing,
 }) {
   const presence = await inspectPathPresence(repo.absolute_path, deps.lstatPath ?? lstat);
   if (presence.state === "unreadable") {
@@ -491,7 +506,7 @@ async function syncOrganizationChild({
     }
     return safeMaterializeCheckout({ rootPath, repo, runId, materializeRepo, checkpoint, deps });
   }
-  return safeUpdateRepo(repo, { runId, updateRepo, checkpoint, deps });
+  return safeUpdateRepo(repo, { runId, updateRepo, checkpoint, deps, sshSharing });
 }
 
 // A slot nested inside other declared slots of the same Organization must not
@@ -523,6 +538,21 @@ function unmaterializedCheckoutResult(repo) {
   return blockedResult(repo, "managed_checkout_not_repository", {
     detail: "Deklarovaný managed checkout obsahuje jen adresář bez vlastního Git rootu. Explicitní Organization instalace musí bezpečně doplnit app-code; existující obsah zůstal nedotčený.",
   });
+}
+
+// Connection sharing is an optimization, never an override of how this Machine
+// reaches its remote. It applies only to a verified SSH origin and steps aside
+// for any checkout that configures its own ssh command.
+async function sshConnectionSharingArgs({ repo, run, sharing, fetchUrl }) {
+  if (!sharing || !isSshGitRemote(fetchUrl)) return [];
+  const configured = await run(["config", "--get", "core.sshCommand"], {
+    cwd: repo.absolute_path,
+    timeoutMs: GIT_LOCAL_TIMEOUT_MS,
+    env: safeGitCommandEnv(),
+  });
+  if (!configured.ok && configured.exitCode !== 1) return [];
+  if ((configured.stdout ?? "").trim() !== "") return [];
+  return sharing.configArgs;
 }
 
 export async function updateManagedRepo(repo, context = {}) {
@@ -594,7 +624,14 @@ export async function updateManagedRepo(repo, context = {}) {
       action: repairAction,
     });
   }
+  const sharedConnectionArgs = await sshConnectionSharingArgs({
+    repo,
+    run,
+    sharing: context.sshSharing ?? null,
+    fetchUrl: source.fetchUrl,
+  });
   const fetchArgs = [
+    ...sharedConnectionArgs,
     "fetch",
     "--no-tags",
     "--prune",
@@ -766,6 +803,16 @@ export async function updateManagedRepo(repo, context = {}) {
     }
     actions.push("fast_forward");
     await checkpoint("after_fast_forward", { repo, runId: context.runId });
+  }
+
+  if (actions.length === 0 && local.head === target) {
+    // Nothing was mutated, so there is no mutation to prove. The inspection
+    // above already showed a clean main whose HEAD is exactly the commit the
+    // verified origin advertised in this run, and the origin was reverified
+    // after the fetch. Reinspecting it would only repeat those reads.
+    return withFetchDiagnostic(currentResult(repo, "already_current", "Repo už je clean main na origin/main.", {
+      head: local.head,
+    }));
   }
 
   const final = await inspect(repo, { ...context.deps, runGit: run });
