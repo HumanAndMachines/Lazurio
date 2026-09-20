@@ -15,7 +15,7 @@ Deployment Repa vlastníka a jeho Mission Controlu.
 | Tailnet, DNS, TLS, gateway a vstup do konkrétní VM | Machines a příslušné síťové/Auth služby | Vstup funguje pro oprávněný subjekt, neoprávněný vstup je odmítnut |
 | Identita Mašiny, Owner a vyšší provider/operator hranice | Machines, projekce owner Deployment Repa | Platný popis identity; nejde o oprávnění číst repozitáře |
 | Instalace podporované distribuce Lazuria | Machines vyvolají podporovaný Platform instalátor | Čisté Lazurio se spustí bez Organization checkoutu |
-| Lazurio Folder, Environment profil, Launchpad, nástroje a jejich aktualizace | LazurioPlatform přes `lazurio` | Jedna instalační a aktualizační cesta vlastněná Platformou |
+| Lazurio Folder, Environment preset, instrukční profil, Launchpad, nástroje a jejich aktualizace | LazurioPlatform přes `lazurio` | Jedna instalační a aktualizační cesta vlastněná Platformou |
 | Osobní `gh` přihlášení a volba Organizací | Operátor individuální VM | Přihlášení vlastním účtem; žádná identita vypůjčená od provisionera |
 | Materializace a synchronizace Organizací a Modulů | LazurioPlatform na explicitní volbu operátora | Čerstvá živá práva na GitHubu, existující materializační mechanismus |
 | Projektové závislosti, pracovní nastavení, aplikace a data | Operátor a příslušná Organizace | Jejich vlastní workflow; nejsou podmínkou vytvoření VM |
@@ -44,8 +44,9 @@ samostatným checkoutem a access hranicí. Změna výběru není Machines rollou
 ani změna identity Mašiny. Repository credentials nejsou součástí image,
 Deployment Repa, záloh s širší dostupností ani předávací evidence. Povolení
 na GitHubu neodstraňuje pravidla dané Organizace o umístění dat ani vyšší
-provider/operator hranici hostované VM. Personalspace se tím automaticky
-nematerializuje a na sdílené týmové Mašině se nemountuje.
+provider/operator hranici hostované VM. Personalspace se na Organization-owned Mašině nemountuje, ani když ji používá
+jen jeden přiřazený člověk; jeho vlastní osobní Mašina má odlišného Ownera
+a privátní hranici.
 
 ## Individuální VM a sdílený Team Workspace
 
@@ -64,10 +65,25 @@ Lazuria ani zde nesmí potřebovat checkout firemních dat; následná týmová
 materializace je samostatná Platform operace s týmovou identitou.
 
 **Machine Profile** v Machines vyjadřuje custody, access a recovery politiku.
-**Environment profil** v Lazuriu vybírá chování a nástroje uvnitř Mašiny.
-Požadovaný „Hosted Virtual Machine“ Environment profil není zkratka pro
-GitHub Team ani náhrada Machine Recordu. Tento text nezavádí nový enum do
-současného schématu; nasazení profilu vyžaduje jeho verzovaný kontrakt a testy.
+**Workspace preset** v LazurioPlatform skládá Environment: způsob provider
+identity, nástroje, nabízená rozhraní, správu procesů a výchozí update channel.
+Jeho kanonický kontrakt je [Platform workspace presets](https://github.com/Lazurio/LazurioPlatform/blob/main/docs/workspace-presets.md):
+`hosted-private` pro individuální použití a `hosted-team` pro sdílené použití
+jsou přijatý směr, dosud ne hotová funkcionalita. Preset se volí explicitně,
+neodvozuje se z Teamu, hostname ani OS účtu. **Instrukční profil** Folderu
+(locale, odbornost, způsob spolupráce) je užší oblast; nevlastní infrastrukturu,
+procesy ani aktualizace produktu. Požadavek „Hosted Virtual Machine“ se promítá
+do těchto existujících kontraktů, nikoli do dalšího univerzálního profilu.
+Tento text nezavádí nový enum, store nebo nastavovací CLI.
+
+Instalace a aktualizace produktu jsou oddělené od výběru/synchronizace obsahu;
+aktualizace neklonuje Organizace a synchronizace neaktivuje produktový release.
+Závazné návrhy a jejich implementační stav drží Platform
+[handover consumer](https://github.com/Lazurio/LazurioPlatform/blob/main/docs/machine-handover.md),
+[hosted entry](https://github.com/Lazurio/LazurioPlatform/blob/main/docs/hosted-entry.md)
+a [content sync](https://github.com/Lazurio/LazurioPlatform/blob/main/docs/content-sync.md).
+Současné Organization příkazy legacy Lazuria nejsou důkazem implementace těchto
+operací v nové Platform distribuci.
 
 ## Dva samostatné výsledky
 
