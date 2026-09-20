@@ -16,6 +16,7 @@ import {
   updateManagedRepo,
 } from "../../lazurio/runtime/lazurio-update-lib.mjs";
 import {
+  SSH_CONTROL_PERSIST_SECONDS,
   createSshConnectionSharing,
   runGit as runGitAsync,
   runGitInPinnedTemporaryChild,
@@ -1749,42 +1750,54 @@ test("hierarchy syncs layer by layer and excludes root-space db and productionsp
 });
 
 test("one run shares a single SSH connection across fetches of the same remote identity", async () => {
-  const sharing = await createSshConnectionSharing();
+  // The POSIX lane is driven explicitly so the contract is asserted on every
+  // runner, including Windows where sharing itself is unavailable.
+  const sharing = await createSshConnectionSharing({
+    platform: "linux",
+    temporaryRoots: ["/fixture-root"],
+    makeTemporaryDirectory: async (prefix) => `${prefix}fixture`,
+  });
   expect(sharing).not.toBeNull();
-  cleanup.push(sharing.directory);
   const [flag, override] = sharing.configArgs;
   expect(flag).toBe("-c");
-  expect(override).toMatch(/^core\.sshCommand=ssh -o ControlMaster=auto -o ControlPath=.+ -o ControlPersist=\d+$/);
-  expect(override).toContain(sharing.directory);
+  expect(override).toBe(
+    `core.sshCommand=ssh -o ControlMaster=auto -o ControlPath=${join("/fixture-root", "lz-ssh-fixture", "%C")} -o ControlPersist=${SSH_CONTROL_PERSIST_SECONDS}`,
+  );
   // ssh expands %C to a 40 character hash and appends a 17 character suffix
   // while the master is being established; both must fit the socket limit.
   const controlPath = override.split("ControlPath=")[1].split(" ")[0];
   expect(controlPath.replace("%C", "c".repeat(40)).length + 17).toBeLessThan(104);
-  await sharing.release();
-  expect(existsSync(sharing.directory)).toBe(false);
 
   // OpenSSH for Windows has no ControlMaster; Sync must not pretend otherwise.
   expect(await createSshConnectionSharing({ platform: "win32" })).toBeNull();
 
-  // A temporary root that cannot hold a socket path is skipped for the next
-  // candidate, and sharing is dropped when no candidate fits.
-  const removed = [];
+  // A temporary root that cannot hold a socket path is dropped in favour of
+  // the next candidate, and sharing is skipped when no candidate fits.
+  const rejected = [];
   const fallback = await createSshConnectionSharing({
-    temporaryRoots: [join(tmpdir(), "x".repeat(90)), "/tmp"],
-    makeTemporaryDirectory: async (prefix) => (prefix.includes("x".repeat(90)) ? `${prefix}toolong` : mkdtemp(prefix)),
-  });
-  expect(fallback).not.toBeNull();
-  cleanup.push(fallback.directory);
-  expect(fallback.directory.startsWith("/tmp/")).toBe(true);
-  await fallback.release();
-  expect(await createSshConnectionSharing({
-    temporaryRoots: [join(tmpdir(), "y".repeat(90))],
+    platform: "linux",
+    temporaryRoots: [`/${"x".repeat(90)}`, "/fixture-short"],
     makeTemporaryDirectory: async (prefix) => {
-      removed.push(prefix);
-      return `${prefix}toolong`;
+      rejected.push(prefix);
+      return `${prefix}fixture`;
     },
+  });
+  expect(fallback.configArgs[1]).toContain("/fixture-short/lz-ssh-fixture/");
+  expect(rejected).toHaveLength(2);
+  expect(await createSshConnectionSharing({
+    platform: "linux",
+    temporaryRoots: [`/${"y".repeat(90)}`],
+    makeTemporaryDirectory: async (prefix) => `${prefix}fixture`,
   })).toBeNull();
-  expect(removed).toHaveLength(1);
+
+  // Releasing removes the private directory of the run. The socket path limit
+  // can legitimately rule this lane out on a runner with a long temp path.
+  const created = await createSshConnectionSharing({ platform: "linux" });
+  if (created) {
+    expect(existsSync(created.directory)).toBe(true);
+    await created.release();
+    expect(existsSync(created.directory)).toBe(false);
+  }
 });
 
 test("fetch reuses the shared connection only for an SSH origin without its own ssh command", async () => {
