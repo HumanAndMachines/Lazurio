@@ -1036,6 +1036,47 @@ test("fresh hosted Launchpad stays usable before operator Organization checkout 
   expect((await getJson(port, "/health")).status).toBe("ok");
 }, platformTestTimeout(15_000));
 
+for (const state of ["planned", "corrupt", "conflicting"]) {
+  test(`fresh hosted Launchpad distinguishes ${state} Organization state from an absent checkout`, async () => {
+    const root = await createLaunchpadGitFixture();
+    tempRoots.push(root);
+    const organization = join(root, "organizations", "BetaCo_GEN3");
+    if (state === "planned") {
+      await rm(organization, { recursive: true });
+      await writeJson(join(root, "launchpad.gen3.local.json"), {
+        planned_organizations: [{ slug: "BetaCo", display_name: "Beta Co" }],
+      });
+    } else if (state === "corrupt") {
+      await writeFile(join(organization, "company.gen3.json"), "{ broken");
+    } else {
+      const manifestPath = join(organization, "modules.manifest.json");
+      const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+      manifest.company = "WrongCompany";
+      await writeJson(manifestPath, manifest);
+    }
+    const startup = startLaunchpadServer(root, {
+      env: {
+        LAZURIO_WORKSPACE_PROFILE: "hosted",
+        LAZURIO_ORGANIZATION_SLUG: "BetaCo",
+        LAZURIO_TEAM_ID: "sales",
+        LAZURIO_HOSTED_DOMAIN: "workspace.example.test",
+        LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN: "https://launchpad.builder.workspace.example.test",
+        LAZURIO_LAUNCHPAD_AUTH_COOKIE_NAME: "__Secure-lazurio-sales-workspace",
+        LAZURIO_LAUNCHPAD_AUTH_CHECK_URL: `https://127.0.0.1:${await findFreePort()}/oauth2/auth`,
+      },
+    });
+    if (state === "planned") {
+      const { port } = await startup;
+      const inventory = await getJson(port, "/api/apps");
+      expect(inventory.apps).toEqual([]);
+      expect(inventory.organizations).toMatchObject([{ slug: "BetaCo", status: "planned", path: null }]);
+      expect((await getJson(port, "/health")).maintenance.total).toBe(0);
+    } else {
+      await expect(startup).rejects.toThrow("Hosted Workspace discovery failed");
+    }
+  });
+}
+
 test("hosted Launchpad keeps Team modules cold and derives their external URLs", async () => {
   const root = await createLaunchpadGitFixture();
   const stateRoot = `${root}-launchpad-state`;
