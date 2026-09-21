@@ -1162,6 +1162,42 @@ test("fresh hosted Launchpad stays usable before operator Organization checkout 
   expect((await getJson(port, "/health")).status).toBe("ok");
 }, platformTestTimeout(15_000));
 
+test("hosted Chat is offered but never mints a T3 token for an unadmitted request", async () => {
+  const root = await createLaunchpadGitFixture();
+  const stateRoot = `${root}-chat-state`;
+  const marker = `${root}-chat-minted`;
+  const cli = `${root}-fake-t3.sh`;
+  await writeFile(cli, `touch '${marker}'\nprintf '{"credential":"G2RQZFN6MK77"}'\n`);
+  tempRoots.push(root, stateRoot, marker, cli);
+
+  const { port } = await startLaunchpadServer(root, {
+    env: {
+      LAZURIO_WORKSPACE_PROFILE: "hosted",
+      LAZURIO_ORGANIZATION_SLUG: "BetaCo",
+      LAZURIO_TEAM_ID: "sales",
+      LAZURIO_HOSTED_DOMAIN: "workspace.example.test",
+      LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot,
+      LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN: "https://launchpad.builder.workspace.example.test",
+      LAZURIO_LAUNCHPAD_AUTH_COOKIE_NAME: "__Secure-lazurio-sales-workspace",
+      LAZURIO_LAUNCHPAD_AUTH_CHECK_URL: `https://127.0.0.1:${await findFreePort()}/oauth2/auth`,
+      LAZURIO_T3CODE_URL: "https://t3code.builder.workspace.example.test/t3code/",
+      LAZURIO_T3CODE_PAIRING_COMMAND: JSON.stringify(["/bin/sh", cli]),
+    },
+  });
+  expect((await getJson(port, "/api/chat")).available).toBe(true);
+  const forged = await fetch(`http://127.0.0.1:${port}/api/chat/pair`, {
+    method: "POST",
+    headers: {
+      origin: "https://launchpad.builder.workspace.example.test",
+      "sec-fetch-site": "same-origin",
+      cookie: "__Secure-lazurio-sales-workspace=forged",
+    },
+  });
+  expect(forged.status).toBe(403);
+  expect((await forged.json()).error).toBe("mutating_request_forbidden");
+  expect(existsSync(marker)).toBe(false);
+}, platformTestTimeout(15_000));
+
 for (const state of ["planned", "corrupt", "conflicting"]) {
   test(`fresh hosted Launchpad distinguishes ${state} Organization state from an absent checkout`, async () => {
     const root = await createLaunchpadGitFixture();

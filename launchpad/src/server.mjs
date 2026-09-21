@@ -50,6 +50,7 @@ import { createGenerationSafeResponseCache } from "./apps-response-cache-lib.mjs
 import { createServerShutdownStateAuthority } from "./server-shutdown-state-lib.mjs";
 import { LAZURIO_LAUNCHPAD_NAME } from "../../lazurio/runtime/launchpad-identity-lib.mjs";
 import { readOrganizationLaunchpadTheme } from "./organization-theme-lib.mjs";
+import { T3ChatError, issueT3ChatUrl, t3ChatConfigurationFromEnvironment } from "./t3-chat-lib.mjs";
 import { ModuleFolderActionError, createModuleFolderOpener } from "./module-folder-lib.mjs";
 import {
   HostedAppUrlError,
@@ -133,6 +134,11 @@ if (personalHostedScope && options.organization !== undefined) {
 if (personalHostedScope) await validatePersonalHostedBinding();
 const personalEntry = loadPersonalEntryConfiguration(process.env);
 const requestTrustProfile = personalEntry ? "personal" : hostedWorkspace.profile;
+const t3Chat = t3ChatConfigurationFromEnvironment(process.env);
+if (t3Chat && requestTrustProfile === "local") {
+  // A local Launchpad has no gateway admission to lean on.
+  throw new Error("LAZURIO_T3CODE_URL is valid only behind a hosted Machine gateway.");
+}
 const launchpadLifecycleConfigurationId = personalEntry
   ? personalEntryConfigurationId(personalEntry)
   : hostedLifecycleConfigurationId(hostedWorkspace);
@@ -634,6 +640,7 @@ function isMutatingApiRequest(request, url) {
 
 async function worktreeMutationTouchesCanonicalMount(url) {
   if (url.pathname === "/api/lazurio/agent-entry-refresh") return false;
+  if (url.pathname === "/api/chat/pair") return false;
   if (!worktreeMountContextReadOnly) return false;
   const route = appRuntimeRoute(url.pathname);
   if (!route) return true;
@@ -1573,6 +1580,21 @@ function startServer(startPort) {
           return jsonResponse(result);
         }
         if (url.pathname === "/api/apps") return jsonResponse(await buildAppsResponse());
+        if (url.pathname === "/api/chat" && request.method === "GET") {
+          return jsonResponse({ available: Boolean(t3Chat) });
+        }
+        // POST already passed the shared mutation trust gate: same origin and
+        // a gateway-revalidated session. The token only travels back here.
+        if (url.pathname === "/api/chat/pair" && request.method === "POST") {
+          if (!t3Chat) return notFound();
+          try {
+            return jsonResponse({ url: await issueT3ChatUrl(t3Chat) });
+          } catch (error) {
+            if (!(error instanceof T3ChatError)) throw error;
+            console.warn(`[lazurio] chat pairing failed: ${error.message}`);
+            return jsonResponse({ error: error.message }, 502);
+          }
+        }
         // Jediná explicitní Sync mutace: tentýž engine jako `lazurio update`,
         // potom čerstvá lokální projekce pro UI. Onboarding nových Organization
         // rootů podle GitHub grantů zůstává samostatná access Sync lane.
