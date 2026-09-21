@@ -274,6 +274,7 @@ describe("Core-owned Module lifecycle client", () => {
     expect(report.status).toBe("action_required");
     expect(report.reason).toBe("hosted_lifecycle_requires_authenticated_surface");
     expect(moduleLifecycleExitCode(report)).toBe(3);
+    expect(validateAgainstSchema(report, reportSchema, "report")).toEqual([]);
     expect(requests.map(request => request.pathname)).toEqual(["/api/lazurio/server-identity"]);
   });
 
