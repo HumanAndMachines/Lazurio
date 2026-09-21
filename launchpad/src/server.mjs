@@ -514,6 +514,13 @@ async function refreshHostedWorkspaceMaintenance({ warnSkipped = false } = {}) {
 }
 
 function syncHostedWorkspaceMaintenance(inventory) {
+  // A personal Machine carries no Organization repositories; the Organization
+  // lane never schedules an App there. Personalspace Apps are selected by
+  // selectHostedWorkspaceApps in the personal scope and are not yet routed
+  // through this Organization runtime manager.
+  if (hostedWorkspace.scope === "personal") {
+    return { ...runtimeManager.maintainApps([]), skipped: [] };
+  }
   // A fresh hosted Machine is handed to its operator before they authenticate
   // to GitHub and materialize an Organization. Keep the authenticated shell
   // alive with no maintained apps; absence never widens its configured scope.

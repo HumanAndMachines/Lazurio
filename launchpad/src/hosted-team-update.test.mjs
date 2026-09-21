@@ -217,3 +217,26 @@ test("hosted reports omit proven out-of-Team slot errors but retain selected-Tea
   expect(broken.results.some((result) => result.reason === "inventory_unavailable")).toBe(false);
   expect(calls.every((module) => module === "root")).toBe(true);
 });
+
+test("personal hosted scope updates only the Lazurio Root, never a stray Organization", async () => {
+  const root = await mkdtemp(join(tmpdir(), "hosted-personal-update-"));
+  fixtures.push(root);
+  await createOrganization({ root, orgPath: "organizations/WorkspaceTestOrg_GEN3", slug: "WorkspaceTestOrg",
+    moduleSlots: [{ slug: "team-notes", path: "workspace/team-notes", teams: ["sales"],
+      default_access: "role_based", git: { url: "git@github.com:WorkspaceTestOrg/team-notes.git", branch: "main" } }] });
+  const hostedWorkspace = createHostedWorkspaceConfiguration({ profile: "hosted", scope: "personal",
+    owner: "immakermatty", domain: "lazurio.io", machine: "immakermatty" });
+  const calls = [];
+  const report = await runLazurioUpdate({ rootPath: root, hostedWorkspace, deps: {
+    acquireLock: async () => ({ release: async () => {} }),
+    discoverApps: async () => ({ apps: [], organizations: [], warnings: [] }),
+    updateRepo: async (repo) => {
+      calls.push(["update", repo.module]);
+      return { repo_key: repo.key, repo_kind: repo.repo_kind, organization: repo.organization,
+        module: repo.module, path: repo.repo_path, state: "current", reason: "already_current" };
+    },
+    materializeRepo: async ({ repo }) => { throw new Error(`Personal Machine materialized ${repo.module}`); },
+  } });
+  expect(report.ok).toBe(true);
+  expect(calls).toEqual([["update", "root"]]);
+});

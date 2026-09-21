@@ -5,6 +5,12 @@ import { mkdir, mkdtemp, realpath, rename, rm, symlink, writeFile } from "fs/pro
 import { buddyPresentationProjection, discoverPersonalspace, personalAppRuntimeId } from "../../lazurio/runtime/personalspace-lib.mjs";
 import { APP_CHECKOUT_ROOT, APP_FILESYSTEM_ROOT, discoverLaunchpadApps } from "../../lazurio/runtime/discovery-lib.mjs";
 import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.mjs";
+import {
+  createHostedWorkspaceConfiguration,
+  requireHostedAppUrl,
+  selectHostedWorkspaceApps,
+  validateHostedWorkspaceBindings,
+} from "../../lazurio/runtime/hosted-app-url-lib.mjs";
 
 const tempRoots = [];
 const fileSymlinkTest = (await supportsFileSymlinks()) ? test : test.skip;
@@ -295,6 +301,46 @@ test("Personalspace materializes lazurio.runtime.v1 from the module-owned lease"
     module_contract: { schema_version: "lazurio.module.v1", id: "notes" },
     listeners: [{ lease: "main", allocation: "static", port: 41_120 }],
   });
+});
+
+test("hosted personal scope selects the discovered default App of the owner's Personalspace", async () => {
+  const root = await createPersonalspaceFixture({
+    localOwner: "ExampleUser",
+    spaces: [{
+      dirName: "ExampleUser_GEN3",
+      owner: "ExampleUser",
+      // Mixed-case login: the hosted owner label is its lowercase form.
+      config: {
+        ...personalConfig("ExampleUser"),
+        buddy: { ...personalConfig("ExampleUser").buddy, slug: "exampleuser-buddy" },
+      },
+      apps: [{
+        module: "notes",
+        manifest: lazurioPersonalAppManifest("ExampleUser", { id: "notes-v2" }),
+        moduleManifest: {
+          schema_version: "lazurio.module.v1",
+          id: "notes",
+          company: "ExampleUser",
+          apps: ["app/v1/package.json"],
+          default_app: "app/v1/package.json",
+          tcp_port_policy: { mode: "single" },
+          port_leases: [{ id: "main", host: "127.0.0.1", port: 41_121 }],
+        },
+      }],
+    }],
+  });
+
+  const discovery = await discoverPersonalspace(root, { primaryOwner: "exampleuser" });
+  expect(discovery.apps).toHaveLength(1);
+  expect(discovery.apps[0].module_app).toMatchObject({ declared: true, default: true });
+  const configuration = createHostedWorkspaceConfiguration({
+    profile: "hosted", scope: "personal", owner: "exampleuser",
+    domain: "lazurio.io", launchpadExternalOrigin: "https://launchpad.exampleuser.lazurio.io",
+  });
+  expect(validateHostedWorkspaceBindings(configuration, discovery)).toBe(configuration);
+  const selection = selectHostedWorkspaceApps(configuration, discovery);
+  expect(selection).toEqual({ apps: [discovery.apps[0]], skipped: [] });
+  expect(requireHostedAppUrl(selection.apps[0], configuration)).toBe("https://notes.exampleuser.lazurio.io/");
 });
 
 test("Personalspace odmítne workspace junction mimo owner checkout a neuniknou z něj aplikace", async () => {

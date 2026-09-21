@@ -19,6 +19,8 @@ if (
     rootPath: resolve(options.root),
     hostedWorkspace: {
       profile: process.env.LAZURIO_WORKSPACE_PROFILE,
+      scope: process.env.LAZURIO_HOSTED_SCOPE,
+      owner: process.env.LAZURIO_HOSTED_OWNER,
       organization_slug: process.env.LAZURIO_ORGANIZATION_SLUG,
       team_id: process.env.LAZURIO_TEAM_ID,
       domain: process.env.LAZURIO_HOSTED_DOMAIN,

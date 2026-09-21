@@ -11,6 +11,12 @@ const hostedLabelPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const hostedMachineLabelMax = 32;
 const hostedApplicationLabelMax = 63;
 const reservedHostedApplicationLabels = new Set(["launchpad", "oauth2", "api", "well-known"]);
+// A hosted Workspace serves either one Organization Team (default) or the
+// personal Machine of one human Principal (decisions 0153/0154). The personal
+// scope names its Machine after the Principal's lowercase GitHub login and
+// exposes only Apps of that Principal's own mounted Personalspace.
+const hostedScopes = new Set(["organization", "personal"]);
+const personalspaceDirSuffix = "_GEN3";
 
 export class HostedAppUrlError extends Error {
   constructor(code, message) {
@@ -29,9 +35,19 @@ export function parseWorkspaceProfile(value = "local") {
   return profile;
 }
 
+export function parseHostedScope(value = "organization") {
+  const scope = String(value ?? "organization").trim().toLowerCase() || "organization";
+  if (!hostedScopes.has(scope)) {
+    throw new Error("LAZURIO_HOSTED_SCOPE must be organization or personal.");
+  }
+  return scope;
+}
+
 export function hostedWorkspaceConfigurationFromEnvironment(env = process.env) {
   return createHostedWorkspaceConfiguration({
     profile: env.LAZURIO_WORKSPACE_PROFILE,
+    scope: env.LAZURIO_HOSTED_SCOPE,
+    owner: env.LAZURIO_HOSTED_OWNER,
     organizationSlug: env.LAZURIO_ORGANIZATION_SLUG,
     teamId: env.LAZURIO_TEAM_ID,
     domain: env.LAZURIO_HOSTED_DOMAIN,
@@ -42,6 +58,8 @@ export function hostedWorkspaceConfigurationFromEnvironment(env = process.env) {
 
 export function createHostedWorkspaceConfiguration({
   profile = "local",
+  scope = "organization",
+  owner = "",
   organizationSlug = "",
   teamId = "",
   domain = "",
@@ -52,6 +70,8 @@ export function createHostedWorkspaceConfiguration({
   if (normalizedProfile === "local") {
     return Object.freeze({
       profile: "local",
+      scope: null,
+      owner: null,
       organization_slug: null,
       team_id: null,
       domain: null,
@@ -60,6 +80,20 @@ export function createHostedWorkspaceConfiguration({
     });
   }
 
+  const normalizedScope = parseHostedScope(scope);
+  if (normalizedScope === "personal") {
+    return createPersonalHostedConfiguration({
+      owner,
+      organizationSlug,
+      teamId,
+      domain,
+      machine,
+      launchpadExternalOrigin,
+    });
+  }
+  if (String(owner ?? "").trim() !== "") {
+    throw new Error("LAZURIO_HOSTED_OWNER is valid only with LAZURIO_HOSTED_SCOPE=personal.");
+  }
   if (!organizationSlugPattern.test(organizationSlug)) {
     throw new Error("LAZURIO_ORGANIZATION_SLUG is required for the hosted Workspace profile.");
   }
@@ -72,10 +106,58 @@ export function createHostedWorkspaceConfiguration({
 
   return Object.freeze({
     profile: "hosted",
+    scope: "organization",
+    owner: null,
     organization_slug: organizationSlug,
     team_id: teamId,
     domain,
     machine: resolveHostedMachineLabel({ machine, launchpadExternalOrigin, domain }),
+    source: "workspace-identity",
+  });
+}
+
+function createPersonalHostedConfiguration({
+  owner,
+  organizationSlug,
+  teamId,
+  domain,
+  machine,
+  launchpadExternalOrigin,
+}) {
+  // A personal Machine holds no Organization repositories; an inherited
+  // Organization or Team identity would silently widen its scope.
+  const inherited = [
+    ["LAZURIO_ORGANIZATION_SLUG", organizationSlug],
+    ["LAZURIO_TEAM_ID", teamId],
+  ].filter(([, value]) => String(value ?? "").trim() !== "").map(([name]) => name);
+  if (inherited.length > 0) {
+    throw new Error(
+      `${inherited.join(" and ")} must not be set for LAZURIO_HOSTED_SCOPE=personal; a personal Machine serves no Organization.`,
+    );
+  }
+  const normalizedOwner = String(owner ?? "").trim();
+  if (!validHostedMachineLabel(normalizedOwner)) {
+    throw new Error(
+      `LAZURIO_HOSTED_OWNER is required for LAZURIO_HOSTED_SCOPE=personal and must be the lowercase GitHub login as a single-dash DNS label of at most ${hostedMachineLabelMax} characters.`,
+    );
+  }
+  if (!dnsDomainPattern.test(domain)) {
+    throw new Error("LAZURIO_HOSTED_DOMAIN must be a lowercase DNS domain without scheme, path, port or wildcard.");
+  }
+  const resolvedMachine = resolveHostedMachineLabel({ machine, launchpadExternalOrigin, domain });
+  if (resolvedMachine !== normalizedOwner) {
+    throw new Error(
+      `Personal hosted Machine ${resolvedMachine} must be named after its owner ${normalizedOwner} (https://launchpad.${normalizedOwner}.${domain}).`,
+    );
+  }
+  return Object.freeze({
+    profile: "hosted",
+    scope: "personal",
+    owner: normalizedOwner,
+    organization_slug: null,
+    team_id: null,
+    domain,
+    machine: resolvedMachine,
     source: "workspace-identity",
   });
 }
@@ -143,6 +225,17 @@ function validHostedApplicationLabel(label) {
 
 export function hostedLifecycleConfigurationId(configuration) {
   if (configuration?.profile !== "hosted") return null;
+  if (configuration.scope === "personal") {
+    return createHash("sha256").update(JSON.stringify({
+      scope: "personal",
+      owner: configuration.owner,
+      domain: configuration.domain,
+      machine: configuration.machine,
+      routing: "application-hostname-v1",
+    })).digest("hex");
+  }
+  // Organization scope keeps its original hash input byte-for-byte, so an
+  // existing hosted Team Workspace keeps its lifecycle identity.
   return createHash("sha256").update(JSON.stringify({
     organization_slug: configuration.organization_slug,
     team_id: configuration.team_id,
@@ -154,9 +247,23 @@ export function hostedLifecycleConfigurationId(configuration) {
 
 export function validateHostedWorkspaceBindings(
   configuration,
-  { organizations = [] } = {},
+  { organizations = [], spaces = [] } = {},
 ) {
   if (configuration?.profile !== "hosted") return configuration;
+  if (configuration.scope === "personal") {
+    const space = ownerPersonalspace(configuration, spaces);
+    if (!space) {
+      throw new Error(
+        `Hosted personal Workspace owner ${configuration.owner} has no mounted Personalspace personalspace/${configuration.owner}${personalspaceDirSuffix}.`,
+      );
+    }
+    if (space.config_valid !== true) {
+      throw new Error(
+        `Hosted personal Workspace Personalspace ${space.mount_path ?? space.dir_name} has an invalid personal.gen3.json.`,
+      );
+    }
+    return configuration;
+  }
   const organization = organizations.find(
     (candidate) => candidate?.slug === configuration.organization_slug,
   );
@@ -173,6 +280,7 @@ export function validateHostedWorkspaceBindings(
 
 export function selectHostedWorkspaceApps(configuration, { apps = [], organizations = [] } = {}) {
   if (!validHostedContext(configuration)) return { apps: [], skipped: [] };
+  if (configuration.scope === "personal") return selectPersonalHostedApps(configuration, apps);
   const candidates = apps.filter((app) =>
     app?.company === configuration.organization_slug
     && appInHostedScope(app, configuration)
@@ -239,6 +347,65 @@ export function selectHostedWorkspaceApps(configuration, { apps = [], organizati
   return { apps: selected, skipped };
 }
 
+// Personal scope: every Module of the owner's Personalspace with exactly one
+// declared default App. Organization Apps never qualify, whatever their
+// placement, because a personal Machine carries no Organization boundary.
+function selectPersonalHostedApps(configuration, apps) {
+  const groups = new Map();
+  for (const app of apps) {
+    if (!personalAppOfOwner(app, configuration) || typeof app.module !== "string") continue;
+    const group = groups.get(app.module) ?? [];
+    group.push(app);
+    groups.set(app.module, group);
+  }
+  const selected = [];
+  const skipped = [];
+  for (const [module, group] of [...groups].sort(([left], [right]) => left.localeCompare(right))) {
+    const defaults = group.filter((app) => personalAppInHostedScope(app, configuration));
+    if (defaults.length === 1 && validHostedApplicationLabel(module)) {
+      selected.push(defaults[0]);
+      continue;
+    }
+    skipped.push({
+      module,
+      failure_kind: !validHostedApplicationLabel(module)
+        ? "hosted_module_dns_label_invalid"
+        : defaults.length > 1
+          ? "hosted_module_open_target_ambiguous"
+          : "hosted_module_open_target_missing",
+    });
+  }
+  return { apps: selected, skipped };
+}
+
+function ownerPersonalspace(configuration, spaces) {
+  const dirName = `${configuration.owner}${personalspaceDirSuffix}`.toLowerCase();
+  return (spaces ?? []).find((space) =>
+    typeof space?.dir_name === "string"
+    && space.dir_name.toLowerCase() === dirName
+    && space.is_owner_primary === true
+    && typeof space.owner === "string"
+    && space.owner.toLowerCase() === configuration.owner) ?? null;
+}
+
+function personalAppOfOwner(app, configuration) {
+  return app?.personal === true
+    && app.surface_scope === "private"
+    && typeof app.space_owner === "string"
+    && app.space_owner.toLowerCase() === configuration.owner
+    && typeof app.space === "string"
+    && app.space.toLowerCase() === `${configuration.owner}${personalspaceDirSuffix}`.toLowerCase();
+}
+
+function personalAppInHostedScope(app, configuration) {
+  return personalAppOfOwner(app, configuration)
+    && app.module_contract?.schema_version === "lazurio.module.v1"
+    && app.module_contract.id === app.module
+    && app.module_app?.declared === true
+    && app.module_app.default === true
+    && app.runtime_contract?.schema_version === "lazurio.runtime.v1";
+}
+
 export function requireHostedAppUrl(app, configuration) {
   if (configuration.profile !== "hosted") return null;
   const url = hostedAppUrl(app, configuration);
@@ -279,9 +446,14 @@ export function projectHostedRuntimePayload(payload, app, configuration) {
 // slug is the application label on the Machine's own hostname. Team scope is
 // not part of the name; it decides only whether the Launchpad exposes the App.
 export function hostedApplicationOrigin(app, configuration) {
+  if (!validHostedContext(configuration)) return null;
+  if (configuration.scope === "personal") {
+    return personalAppOfOwner(app, configuration) && validHostedApplicationLabel(app?.module)
+      ? `https://${app.module}.${configuration.machine}.${configuration.domain}`
+      : null;
+  }
   if (
-    !validHostedContext(configuration)
-    || app?.company !== configuration.organization_slug
+    app?.company !== configuration.organization_slug
     || !validHostedApplicationLabel(app?.module)
   ) return null;
   return `https://${app.module}.${configuration.machine}.${configuration.domain}`;
@@ -294,6 +466,13 @@ function hostedAppUrl(app, configuration) {
 }
 
 function validHostedContext(configuration) {
+  if (configuration?.profile === "hosted" && configuration.scope === "personal") {
+    return validHostedMachineLabel(configuration.owner)
+      && configuration.machine === configuration.owner
+      && configuration.organization_slug === null
+      && configuration.team_id === null
+      && dnsDomainPattern.test(configuration.domain ?? "");
+  }
   return configuration?.profile === "hosted"
     && organizationSlugPattern.test(configuration.organization_slug ?? "")
     && dnsLabelPattern.test(configuration.team_id ?? "")
@@ -309,6 +488,7 @@ function declarationInHostedScope(slot, configuration) {
 }
 
 function appInHostedScope(app, configuration) {
+  if (configuration?.scope === "personal") return personalAppInHostedScope(app, configuration);
   if (app?.space === "workspace") return (app.teams ?? []).includes(configuration.team_id);
   if (app?.space !== "root") return false;
   const projection = app.module_apps;
