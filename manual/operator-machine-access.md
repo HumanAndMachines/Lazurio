@@ -64,7 +64,7 @@ nestaví žádný most.
 
 - Osobní klienti a osobní VM patří pod **osobního Headscale usera**
   pojmenovaného lowercase GitHub loginem zmrazeným při založení (stejný slug
-  jako `<app>.<login>.lazurio.io` a personalspace).
+  jako `<app>.<login>.lazurio.io`).
 - Pracovní VM jsou tagované workloady Organizace; pracovní laptop je
   netagovaný uzel v namespace Organizace.
 - Linuxové admin účty na hostu jsou samostatná osa a nesmějí vytvářet vlastní
