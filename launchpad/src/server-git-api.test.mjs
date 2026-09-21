@@ -882,7 +882,7 @@ test.skipIf(process.platform === "win32")("personal Launchpad protects reads and
   await writeFile(secretFile, "synthetic-introspection-secret", { mode: 0o600 });
   await chmod(secretFile, 0o600);
   const authPort = await findFreePort();
-  const { port } = await startLaunchpadServer(root, { env: {
+  const { port, server, serverStateDirectory } = await startLaunchpadServer(root, { env: {
     LAZURIO_LAUNCHPAD_ENTRY_PROFILE: "personal",
     LAZURIO_LAUNCHPAD_PERSONAL_PROJECTION_FILE: projectionFile,
     LAZURIO_LAUNCHPAD_PERSONAL_SECRET_FILE: secretFile,
@@ -900,10 +900,32 @@ test.skipIf(process.platform === "win32")("personal Launchpad protects reads and
       expect((await response.json()).error).toBe("personal_entry_forbidden");
     }
   }
-  for (const path of ["/api/sync", "/api/lazurio/server-shutdown"]) {
+  for (const path of ["/api/sync"]) {
     const response = await fetch(`http://127.0.0.1:${port}${path}`, { method: "POST" });
     expect(response.status).toBe(403);
   }
+  const identity = await getJson(port, "/api/lazurio/server-identity");
+  // Service control must work without an RP/browser session, while a browser
+  // cannot turn the maintenance endpoint into an owner-admission bypass.
+  for (const headers of [
+    { origin: externalOrigin, "sec-fetch-site": "same-origin" },
+    { "sec-fetch-site": "cross-site" },
+  ]) {
+    const response = await fetch(`http://127.0.0.1:${port}/api/lazurio/server-shutdown`, {
+      method: "POST", headers: { "content-type": "application/json", ...headers },
+      body: JSON.stringify({ instance_id: identity.instance_id }),
+    });
+    expect(response.status).toBe(403);
+  }
+  const mismatch = await postJson(port, "/api/lazurio/server-shutdown", {
+    instance_id: "00000000-0000-4000-8000-000000000000",
+  }, 409);
+  expect(mismatch.error).toBe("server_instance_mismatch");
+  expect((await getJson(port, "/health")).status).toBe("ok");
+  const accepted = await postJson(port, "/api/lazurio/server-shutdown", { instance_id: identity.instance_id });
+  expect(accepted.stopping).toBe(true);
+  expect(await server.exited).toBe(0);
+  expect(await readServerLocatorIfPresent({ stateDirectory: serverStateDirectory })).toBeNull();
 });
 
 test.skipIf(process.platform === "win32")("personal Launchpad consumes RP and TLS introspection, denies owner change and preserves CSRF", async () => {

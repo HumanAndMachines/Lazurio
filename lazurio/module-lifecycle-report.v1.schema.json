@@ -40,7 +40,7 @@
         "instance_id": { "type": ["string", "null"] },
         "root_id": { "type": ["string", "null"] },
         "install_generation": { "type": ["string", "null"] },
-        "request_trust_profile": { "enum": ["local", "hosted", "unknown"] }
+        "request_trust_profile": { "enum": ["local", "hosted", "personal", "unknown"] }
       },
       "additionalProperties": false
     },

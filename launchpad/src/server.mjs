@@ -1430,6 +1430,14 @@ function startServer(startPort) {
       };
       let mutationAdmission = null;
       try {
+        // Instance-bound local service control is independent of browser login.
+        // The gateway hides this route; retain local Origin/Fetch-Metadata checks.
+        if (url.pathname === "/api/lazurio/server-shutdown" && request.method === "POST") {
+          if (!requestTrust.isTrustedLocalRequest(request, url)) {
+            return jsonResponse({ error: "server_shutdown_forbidden" }, 403);
+          }
+          return handleServerShutdown(request);
+        }
         // Personal contents, discovery and static UI all require the owner.
         // Only bounded, content-free GET health/identity remain available for
         // the local service locator. The private gateway must hide these routes.
@@ -1441,12 +1449,6 @@ function startServer(startPort) {
         }
         if (url.pathname.startsWith("/api/personalspace") && !personalEntry && !requestTrust.isTrustedLocalRequest(request, url)) {
           return jsonResponse({ error: "personalspace_request_forbidden" }, 403);
-        }
-        if (url.pathname === "/api/lazurio/server-shutdown" && request.method === "POST") {
-          if (!requestTrust.isTrustedLocalRequest(request, url)) {
-            return jsonResponse({ error: "server_shutdown_forbidden" }, 403);
-          }
-          return handleServerShutdown(request);
         }
         if (isMutatingApiRequest(request, url)) {
           const trustDecision = await evaluateWorkspaceRequest();
