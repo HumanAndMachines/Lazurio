@@ -102,7 +102,12 @@ ohraničené hranice** a **definované procesy**.
   řeš uvnitř své Mašiny — snapshotem nebo kontejnerovou či procesní izolací,
   které Mašinou samy nejsou; každý další virtuální server Mašina je, i bez
   jména v `lazurio.io`, a druhý domov se z něj nedělá
-  (decision 0153 v manual/decision-register.md).
+  (decision 0153 v manual/decision-register.md). Do sítě se osobní Mašina
+  připojuje **výhradně jako node Headscale tailnetu Conglomerate Hostu**, pod
+  osobním Headscale userem Principála — stejně jako jeho laptop a telefon, na
+  kterých tak stačí jediný klient Tailscale. Samostatný VPN pro ni nezakládej:
+  žádný WireGuard tunel, veřejný port ani DNAT; WireGuard pilot z 2026-09-20 je
+  zrušený a platí jen jako historie v decision 0154.
 - **Buddy je osobní.** Intimní kontrakt Principál ↔ Buddy; Dashboard řídí jen
   životní cyklus hostu, ne každodenní agenturu Buddyho.
 - **Opatrovník.** Každý seat AI Kolegy má právě jednoho jmenovaného lidského
