@@ -145,7 +145,7 @@ přístupy u poskytovatelů.
 
 ## Buddy a AI Kolega
 
-Hard pravidlo Lazuria: jeden Principál/Operátor má právě jednu vlastní hostovanou osobní Mašinu. Buddy je rezident přímo na téže osobní Mašině a funguje v jejím rámci; žádný vedlejší osobní Buddy host ani výjimka ze singletonu. Další hostované Mašiny vyžadují Organizaci. Organizace může vlastnit více oprávněných Mašin i pro stejného Operátora; GitHub určuje oprávnění. Více fyzických klientských zařízení, migrace nebo záloha nejsou druhé nezávislé hostované osobní prostředí. Osobní URL je `<app>.<personal-dns-slug>.lazurio.io`; organizační URL `<app>.<machine>.<github-org-login>.lazurio.io`. Kanonický zápis je lowercase, hostname case-insensitive; tím nevzniká nový grant ani runtime změna. Rozhodnutí drží [existující Buddy kontrakt](manual/buddy-product-decision-2026-09-12.md).
+Hard pravidlo Lazuria: jeden Principál/Operátor má právě jednu vlastní hostovanou osobní Mašinu. Buddy je rezident přímo na téže osobní Mašině a funguje v jejím rámci; žádný vedlejší osobní Buddy host ani výjimka ze singletonu. Další hostované Mašiny vyžadují Organizaci. Organizace může vlastnit více oprávněných Mašin i pro stejného Operátora; GitHub určuje oprávnění. Více fyzických klientských zařízení, migrace nebo záloha nejsou druhé nezávislé hostované osobní prostředí. Osobní URL je `<app>.<personal-dns-slug>.lazurio.io`; organizační URL `<app>.<machine>.<github-org-login>.lazurio.io`. Kanonický zápis je lowercase, hostname case-insensitive; tím nevzniká nový grant ani runtime změna. Autoritou jsou [root rozhodnutí 0153/0154](manual/decision-register.md).
 
 Buddy a AI Kolega používají stejný technický základ. Liší se vlastníkem,
 mandátem a správou dat, ne odděleným vývojem runtime.
@@ -168,7 +168,7 @@ Podrobný profil, instalaci a incidentní hranice popisuje
 [manuál Residentů](manual/lazurio-resident-profiles.md). Pravidla pro práci s
 hostovaným Buddym jsou v [manuálu hostovaného Buddyho](manual/hosted-buddy-vps.md).
 
-**Cílový produkt 1 je Hosted Buddy:** osobní VM lidského Operátora/Principála s Hermesem v roli Buddyho. Osobní VM drží Personalspace, osobní paměť a identity, nikoli organizační klony. Ty zůstávají na přidělených Organization-owned Mašinách; individuální pracovní VM vlastněná Organizací se tím nestává osobní. Produkt 2 navazuje zpřístupněním org prostředí přes Dashboard až po kvalifikaci produktu 1. Síť, servis a vztah k dosavadní implementaci drží [produktové rozhodnutí, upřesnění 2026-09-20](manual/buddy-product-decision-2026-09-12.md).
+**Hosted Buddy:** osobní VM lidského Operátora/Principála s Hermesem v roli Buddyho. Osobní VM drží Personalspace, osobní paměť a identity, nikoli organizační klony. Ty zůstávají na přidělených Organization-owned Mašinách; individuální pracovní VM vlastněná Organizací se tím nestává osobní. Produktové pořadí a Dashboard etapy určuje kanonický plán v Mission Control v3. Síť, servis a vztah k dosavadní implementaci drží [synchronizační přehled, upřesnění 2026-09-20](manual/buddy-product-decision-2026-09-12.md).
 
 ## Pracovní prostory
 

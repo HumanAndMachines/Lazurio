@@ -33,7 +33,7 @@ Buddy používá GitHub a další podporované účty svého Principála. Stejn�
 může být na jeho notebooku i u Buddyho; mašina sama není persona ani IAM.
 Finální osobní přístup používá Headscale + SSH/Codex. Osobní VM drží pouze Personalspace, Buddyho, Gbrain a identity; organizační pracovní klony a běhy žijí na přidělených Organization-owned VM. Buddy k nim zahajuje SSH přes Tailscale klienty a Headscale na Conglomerate Hostu. Společný tailnet není plošný grant; nová opačná a cross-org spojení jsou zakázaná, odpovědi existujícího SSH fungují. Žádné osobní mounty ani key forwarding do org VM.
 
-**Hosted Buddy je produkt 1 — osobní VM lidského Operátora/Principála s Hermesem v roli Buddyho.** Produkt 2 následně zpřístupní org prostředí přes Dashboard. Osobní URL `<app>.<personal-dns-slug>.lazurio.io` je cílově dostupná jen přes osobní Headscale; vlastní VM odkaz navazuje na stávající Workspaces/osobní záložku. Přesná podpora, DNS/TLS a lifecycle vyžadují ověření. Úplné rozhodnutí a zachované historické hranice drží [BUDDY-2026-09-12, upřesnění 2026-09-20](buddy-product-decision-2026-09-12.md#upřesnění-2026-09-20--hosted-buddy-je-produkt-1).
+**Hosted Buddy — osobní VM lidského Operátora/Principála s Hermesem v roli Buddyho.** Dashboard etapy určuje kanonický plán v Mission Control v3. Osobní URL `<app>.<personal-dns-slug>.lazurio.io` je cílově dostupná jen přes osobní Headscale; vlastní VM odkaz navazuje na stávající Workspaces/osobní záložku. Přesná podpora, DNS/TLS a lifecycle vyžadují ověření. Odkazy na kanonická rozhodnutí, plány a dosavadní evidence shrnuje [synchronizace Buddy dokumentace](buddy-product-decision-2026-09-12.md#autorita-plánu-a-evidence-instalací).
 
 Izolace VM i Tailscale závisí na bezpečné konfiguraci a údržbě; bezchybnost
 softwaru ani absolutní nepřístupnost pro správce hypervizoru nejsou slibem.
@@ -50,7 +50,7 @@ migrace. Lokální profilový mount se změnou cíle nestává execution prostř
 
 Personalspace může existovat bez Buddyho a většina jich tak začíná. Když si ale
 Principál Buddyho onboarduje, vznikne mu druhé místo, kde jeho osobní vrstva
-žije: **samostatná per-owner Mašina**. Decision 0080 zachovává původní VPS-only baseline; nové cílové umístění na VM, VPS nebo hardware zavádí samostatné [BUDDY-2026-09-12](buddy-product-decision-2026-09-12.md). Lokální
+žije: **samostatná per-owner Mašina**. Decision 0080 zachovává původní VPS-only baseline; nové cílové umístění na VM, VPS nebo hardware zavádí samostatné [Synchronizace Buddy dokumentace](buddy-product-decision-2026-09-12.md). Lokální
 mount `personalspace/<owner>_GEN3/buddy/` drží jen Git konfiguraci profilu —
 **runtime tam není a nikdy nebude** (`local_execution: forbidden`).
 

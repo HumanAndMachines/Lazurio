@@ -17,7 +17,7 @@ pravda sem nepatří a nikdy se odsud nepřenáší mezi Organizacemi.
 Personalspace může fungovat bez Buddyho. Jeho Principálem je vlastník; Buddy
 binding a přístup ke gbrainu se přidávají jen tehdy, když vlastník Buddyho
 skutečně onboarduje. Nasazený baseline podle 0080 používá dedikovanou per-owner
-VPS. Cílový model [BUDDY-2026-09-12](../manual/buddy-product-decision-2026-09-12.md)
+VPS. Cílový model [Synchronizace Buddy dokumentace](../manual/buddy-product-decision-2026-09-12.md)
 připouští samostatnou zákaznickou VM, VPS nebo vlastní hardware; tato dokumentace
 instalace nemigruje. Tento lokální mount dál drží jen Git konfiguraci, ne
 Hermes/Buddy runtime.
@@ -104,7 +104,7 @@ Třírepo onboarding s private Hermes profilem Buddyho zůstává **PENDING
 `CAC-0072`**. Live root parser `--with-buddy` odmítá jako neznámý argument;
 Buddy repo ani hosted handoff nevytváří. Původní návrh bindingu s
 `deployment_target: owner-dedicated-personalspace-vps` odpovídá VPS baseline,
-ne obecnému cílovému modelu BUDDY-2026-09-12. Budoucí adapter musí fail-closed
+ne obecnému cílovému modelu Synchronizace Buddy dokumentace. Budoucí adapter musí fail-closed
 ověřit samostatnou per-owner Mašinu a podporovaný deployment target; konkrétní
 schéma pro VM/VPS/hardware zůstává otevřené. `local_execution: forbidden`
 pro tento profilový mount zůstává. Akční surface smí vzniknout až po publikaci
@@ -151,4 +151,4 @@ ne do této lokální profilové cesty.
 Detailní pravidla jsou v `manual/security/local-secret-custody.md`
 (aktualizace cesty na owner-scoped tvar je součást CAC-0048).
 
-Aktuální produktový cíl z 20. září 2026: Hosted Buddy je osobní VM lidského Principála s Hermesem, osobní Headscale a bez org klonů; org execution zůstává na přidělených org-owned Mašinách. Produkt 2 navazuje až po kvalifikaci produktu 1. Viz [produktové rozhodnutí](../manual/buddy-product-decision-2026-09-12.md). Existující verzované profily a manifesty dál popisují dosavadní instalace; cílová próza neobchází qualification gate ani neprovádí migraci.
+Odvozený popis podle root rozhodnutí 0153/0154: Hosted Buddy je osobní VM lidského Principála s Hermesem, osobní Headscale a bez org klonů; org execution zůstává na přidělených org-owned Mašinách. Produktové pořadí určuje kanonický plán v Mission Control v3. Viz [synchronizační přehled](../manual/buddy-product-decision-2026-09-12.md). Existující verzované profily a manifesty dál popisují dosavadní instalace; cílová próza neobchází qualification gate ani neprovádí migraci.
