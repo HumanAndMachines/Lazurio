@@ -1,7 +1,10 @@
 # Správa Conglomerate Hostu vlastníky Organizace
 
 Tento standard platí stejně pro každou Organizaci. Konkrétní účty, zařízení,
-klíče, síťové vazby a důkazy patří výhradně do jejího Deployment Repa. Text
+klíče, síťové vazby a důkazy celého hostu patří výhradně do Deployment Repa
+vlastníka této Mašiny. U sdíleného hostu tenantní Organizace drží jen své
+ohraničené vstupy nebo reference; nevytvářejí další autoritu nad společným
+hostem a nekopírují přístupová data jiných tenantů. Text
 standardu sám nezakládá oprávnění a nedokazuje, že je daná Organizace nasazená.
 
 ## Běžná práce Ownera
@@ -34,7 +37,8 @@ Vazbu nové IP či reenrollmentu nikdy neopravuj automatickým širokým grantem
 4. rozumět publikaci, review a obnově a mít dostupnou recovery cestu.
 
 Správní sudo neruší pravidla pro Task Agenty: požadovaný stav stále vlastní
-Deployment Repo a změny procházejí podporovaným lifecycle, kontrolou a publikací.
+Deployment Repo vlastníka Mašiny a změny procházejí podporovaným lifecycle,
+kontrolou a publikací.
 Nezávislá kontrola může vyžadovat oprávněného Kolegu, nesmí však stát na tajných
 údajích, které vlastní jen dodavatel. Popiš rozdíl mezi technickou závislostí a
 vědomě nastaveným schvalovacím procesem.
@@ -63,7 +67,8 @@ následně promítni do autoritativního stavu a auditního záznamu.
 
 ## Evidence skutečného nasazení
 
-Každá Organizace eviduje schválené zdrojové mašiny, vazby na aktuální Ownery,
+Deployment Repo vlastníka hostu eviduje schválené zdrojové mašiny, vazby na
+aktuální Ownery,
 verzi implementace, nasazovací důkaz a úspěšné i negativní testy. Test proveď
 z každého povoleného zdroje včetně skutečného SSH/sudo ověření. Nepovolené
 zdroje nesmějí navázat správní spojení. Diagram označí cílové a ověřené cesty.

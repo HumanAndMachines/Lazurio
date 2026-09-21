@@ -249,8 +249,9 @@ a promítáš ho do pravidel a zvyklostí, aby Agenti dělali čím dál lepší
 
 Při onboardingu nebo změnách správy Conglomerate Hostu postupuj podle
 [`manual/conglomerate-owner-administration.md`](manual/conglomerate-owner-administration.md).
-Standard platí pro všechny Organizace; konkrétní granty a důkazy drží jejich
-Deployment Repa. Ověř živou roli GitHub Owner a povol pouze jmenovitě schválené
+Standard platí pro všechny Organizace; úplné granty a důkazy hostu drží
+Deployment Repo vlastníka této Mašiny, tenantní repa pouze vlastní scoped vstupy
+nebo reference. Ověř živou roli GitHub Owner a povol pouze jmenovitě schválené
 zdrojové mašiny. Běžná správa má fungovat přes Headscale z Ownerova počítače
 nebo osobní VM bez závislosti na mašině jiného Ownera; provider rescue je
 nouzová cesta. Neslibuj nasazení ani automatickou revokaci jen na základě
