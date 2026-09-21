@@ -1,8 +1,11 @@
 import { expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import {
   HostedAppUrlError,
   createHostedWorkspaceConfiguration,
+  hostedApplicationOrigin,
   hostedLifecycleConfigurationId,
+  hostedWorkspaceConfigurationFromEnvironment,
   projectHostedAppUrl,
   projectHostedRuntimePayload,
   requireHostedAppUrl,
@@ -32,6 +35,8 @@ test("local workspace keeps loopback URLs and has no lifecycle configuration ide
 test("hosted workspace identity is four validated scalars rather than a service catalog", () => {
   expect(configuration).toEqual({
     profile: "hosted",
+    scope: "organization",
+    owner: null,
     organization_slug: "ExampleOrg",
     team_id: "builders",
     domain: "workspace.example.test",
@@ -368,4 +373,187 @@ test("invalid hosted context never manufactures a root application URL", () => {
     expect(projectHostedAppUrl(declaredOrganizationApp(), invalid).url).toBeNull();
     expect(selectHostedWorkspaceApps(invalid, { apps: [declaredOrganizationApp()] }).apps).toEqual([]);
   }
+});
+
+// Personal scope (decisions 0153/0154): one hosted Machine per human
+// Principal, named after the lowercase GitHub login, serving only the
+// Principal's own Personalspace Apps at https://<app>.<login>.lazurio.io/.
+const personalEnvironment = Object.freeze({
+  LAZURIO_WORKSPACE_PROFILE: "hosted",
+  LAZURIO_HOSTED_SCOPE: "personal",
+  LAZURIO_HOSTED_OWNER: "immakermatty",
+  LAZURIO_HOSTED_DOMAIN: "lazurio.io",
+  LAZURIO_HOSTED_MACHINE: "immakermatty",
+  LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN: "https://launchpad.immakermatty.lazurio.io",
+});
+const personal = hostedWorkspaceConfigurationFromEnvironment(personalEnvironment);
+
+function personalApp(overrides = {}) {
+  return {
+    id: "personal--ImMakerMatty_GEN3--journal",
+    app_id: "journal",
+    company: "ImMakerMatty",
+    module: "journal",
+    personal: true,
+    surface_scope: "private",
+    space: "ImMakerMatty_GEN3",
+    space_mount_path: "personalspace/ImMakerMatty_GEN3",
+    space_owner: "ImMakerMatty",
+    module_app: { declared: true, default: true, state: "explicit", package: "package.json" },
+    module_contract: { schema_version: "lazurio.module.v1", id: "journal", company: "ImMakerMatty" },
+    runtime_contract: { schema_version: "lazurio.runtime.v1" },
+    ...overrides,
+  };
+}
+
+function personalSpace(overrides = {}) {
+  return {
+    owner: "ImMakerMatty",
+    dir_name: "ImMakerMatty_GEN3",
+    mount_path: "personalspace/ImMakerMatty_GEN3",
+    is_owner_primary: true,
+    config_valid: true,
+    ...overrides,
+  };
+}
+
+test("personal scope parses the owner-named Machine without Organization identity", () => {
+  expect(personal).toEqual({
+    profile: "hosted",
+    scope: "personal",
+    owner: "immakermatty",
+    organization_slug: null,
+    team_id: null,
+    domain: "lazurio.io",
+    machine: "immakermatty",
+    source: "workspace-identity",
+  });
+  // The Machine label may come from the Launchpad origin alone.
+  const { LAZURIO_HOSTED_MACHINE: _machine, ...originOnly } = personalEnvironment;
+  expect(hostedWorkspaceConfigurationFromEnvironment(originOnly)).toEqual(personal);
+  expect(hostedWorkspaceConfigurationFromEnvironment({
+    ...personalEnvironment, LAZURIO_HOSTED_SCOPE: "Personal",
+  })).toEqual(personal);
+});
+
+test("personal scope fails closed on a missing owner, a foreign Machine or inherited Organization env", () => {
+  const { LAZURIO_HOSTED_OWNER: _owner, ...withoutOwner } = personalEnvironment;
+  expect(() => hostedWorkspaceConfigurationFromEnvironment(withoutOwner)).toThrow("LAZURIO_HOSTED_OWNER is required");
+  expect(() => hostedWorkspaceConfigurationFromEnvironment({
+    ...personalEnvironment, LAZURIO_HOSTED_OWNER: "ImMakerMatty",
+  })).toThrow("LAZURIO_HOSTED_OWNER");
+  expect(() => hostedWorkspaceConfigurationFromEnvironment({
+    ...personalEnvironment, LAZURIO_HOSTED_OWNER: "a".repeat(33),
+  })).toThrow("LAZURIO_HOSTED_OWNER");
+  expect(() => hostedWorkspaceConfigurationFromEnvironment({
+    ...personalEnvironment,
+    LAZURIO_HOSTED_MACHINE: "other",
+    LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN: "https://launchpad.other.lazurio.io",
+  })).toThrow("must be named after its owner immakermatty");
+  expect(() => hostedWorkspaceConfigurationFromEnvironment({
+    ...personalEnvironment, LAZURIO_HOSTED_MACHINE: "other",
+  })).toThrow("does not match");
+  expect(() => hostedWorkspaceConfigurationFromEnvironment({
+    ...personalEnvironment, LAZURIO_ORGANIZATION_SLUG: "ExampleOrg",
+  })).toThrow("LAZURIO_ORGANIZATION_SLUG must not be set for LAZURIO_HOSTED_SCOPE=personal");
+  expect(() => hostedWorkspaceConfigurationFromEnvironment({
+    ...personalEnvironment, LAZURIO_TEAM_ID: "builders",
+  })).toThrow("LAZURIO_TEAM_ID must not be set");
+  expect(() => hostedWorkspaceConfigurationFromEnvironment({
+    ...personalEnvironment, LAZURIO_HOSTED_SCOPE: "team",
+  })).toThrow("LAZURIO_HOSTED_SCOPE must be organization or personal");
+  // An owner never widens the Organization scope either.
+  expect(() => createHostedWorkspaceConfiguration({
+    profile: "hosted", owner: "immakermatty", organizationSlug: "ExampleOrg",
+    teamId: "builders", domain: "workspace.example.test", machine: "builder",
+  })).toThrow("LAZURIO_HOSTED_OWNER is valid only with LAZURIO_HOSTED_SCOPE=personal");
+});
+
+test("Organization scope keeps its lifecycle identity byte-for-byte; personal scope has its own", () => {
+  const legacyInput = JSON.stringify({
+    organization_slug: "ExampleOrg",
+    team_id: "builders",
+    domain: "workspace.example.test",
+    machine: "builder",
+    routing: "application-hostname-v1",
+  });
+  expect(hostedLifecycleConfigurationId(configuration))
+    .toBe(createHash("sha256").update(legacyInput).digest("hex"));
+  expect(hostedLifecycleConfigurationId(personal)).toMatch(/^[a-f0-9]{64}$/);
+  expect(hostedLifecycleConfigurationId(personal)).not.toBe(hostedLifecycleConfigurationId(configuration));
+  expect(hostedLifecycleConfigurationId(createHostedWorkspaceConfiguration({
+    profile: "hosted", scope: "personal", owner: "annavesela", domain: "lazurio.io", machine: "annavesela",
+  }))).not.toBe(hostedLifecycleConfigurationId(personal));
+});
+
+test("personal Apps open at <app>.<owner>.lazurio.io and Organization Apps never do", () => {
+  const app = personalApp();
+  const url = "https://journal.immakermatty.lazurio.io/";
+  expect(hostedApplicationOrigin(app, personal)).toBe("https://journal.immakermatty.lazurio.io");
+  expect(requireHostedAppUrl(app, personal)).toBe(url);
+  expect(projectHostedAppUrl({ ...app, url: "http://127.0.0.1:4310/" }, personal)).toMatchObject({
+    url, hosted_url_source: "workspace-identity",
+  });
+  expect(hostedApplicationOrigin(workspaceApp(), personal)).toBeNull();
+  expect(hostedApplicationOrigin(declaredOrganizationApp(), personal)).toBeNull();
+  expect(() => requireHostedAppUrl(workspaceApp(), personal)).toThrow(HostedAppUrlError);
+  // A personal App of another Principal or with a reserved label gets nothing.
+  expect(hostedApplicationOrigin(personalApp({ space_owner: "annavesela", space: "annavesela_GEN3" }), personal))
+    .toBeNull();
+  expect(hostedApplicationOrigin(personalApp({ module: "launchpad" }), personal)).toBeNull();
+  // And the Organization scope never serves a personal App.
+  expect(hostedApplicationOrigin(personalApp(), configuration)).toBeNull();
+});
+
+test("personal selection takes one declared default per Personalspace Module and excludes Organization Apps", () => {
+  const journal = personalApp();
+  const journalWorker = personalApp({
+    id: "personal--ImMakerMatty_GEN3--journal-worker",
+    module_app: { declared: true, default: false, state: "explicit", package: "worker/package.json" },
+  });
+  const notes = personalApp({
+    id: "personal--ImMakerMatty_GEN3--notes",
+    module: "notes",
+    module_contract: { schema_version: "lazurio.module.v1", id: "notes", company: "ImMakerMatty" },
+  });
+  const legacy = personalApp({
+    id: "personal--ImMakerMatty_GEN3--legacy",
+    module: "legacy",
+    module_app: null,
+    module_contract: null,
+    runtime_contract: { schema_version: null, legacy: true },
+  });
+  const result = selectHostedWorkspaceApps(personal, {
+    apps: [
+      journal,
+      journalWorker,
+      notes,
+      legacy,
+      workspaceApp(),
+      declaredOrganizationApp(),
+      personalApp({ id: "personal--other", space_owner: "annavesela", space: "annavesela_GEN3" }),
+    ],
+    organizations: [{ slug: "ExampleOrg", module_declarations: [] }],
+  });
+  expect(result.apps.map((app) => app.id)).toEqual([journal.id, notes.id]);
+  expect(result.skipped).toEqual([{ module: "legacy", failure_kind: "hosted_module_open_target_missing" }]);
+  expect(selectHostedWorkspaceApps(configuration, { apps: [journal, notes] })).toEqual({ apps: [], skipped: [] });
+});
+
+test("personal binding requires the owner's own mounted Personalspace", () => {
+  expect(validateHostedWorkspaceBindings(personal, { spaces: [personalSpace()] })).toBe(personal);
+  expect(validateHostedWorkspaceBindings(personal, {
+    spaces: [personalSpace({ owner: "immakermatty", dir_name: "immakermatty_GEN3" })],
+  })).toBe(personal);
+  expect(() => validateHostedWorkspaceBindings(personal, { spaces: [] }))
+    .toThrow("has no mounted Personalspace personalspace/immakermatty_GEN3");
+  expect(() => validateHostedWorkspaceBindings(personal, {
+    organizations: [{ slug: "ExampleOrg", teams: [{ slug: "builders" }] }],
+  })).toThrow("has no mounted Personalspace");
+  expect(() => validateHostedWorkspaceBindings(personal, {
+    spaces: [personalSpace({ owner: "annavesela", dir_name: "annavesela_GEN3" })],
+  })).toThrow("has no mounted Personalspace");
+  expect(() => validateHostedWorkspaceBindings(personal, {
+    spaces: [personalSpace({ config_valid: false })],
+  })).toThrow("invalid personal.gen3.json");
 });

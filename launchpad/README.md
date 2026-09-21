@@ -83,6 +83,35 @@ i v hosted profilu local-only. Chybějící nebo neplatný external origin či a
 check URL je startup chyba; chybějící session, neúspěšný auth check, odlišný
 origin nebo cross-site request končí `403` před routingem.
 
+### Osobní hosted scope
+
+Výchozí hosted scope je `LAZURIO_HOSTED_SCOPE=organization` (výše popsaný
+Team Workspace; jeho výstupy i lifecycle identita se nemění). Osobní hostovaná
+Mašina Principála (decisions 0153/0154) používá
+`LAZURIO_HOSTED_SCOPE=personal` s tímto kontraktem:
+
+- `LAZURIO_WORKSPACE_PROFILE=hosted`, `LAZURIO_HOSTED_DOMAIN=lazurio.io`;
+- `LAZURIO_HOSTED_OWNER=<lowercase GitHub login>` — povinný, stejná pravidla
+  jako label Mašiny (`[a-z0-9]` s jednoduchými pomlčkami, nejvýše 32 znaků);
+- label Mašiny (`LAZURIO_HOSTED_MACHINE` nebo
+  `LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN=https://launchpad.<login>.lazurio.io`)
+  se musí rovnat ownerovi;
+- `LAZURIO_ORGANIZATION_SLUG` ani `LAZURIO_TEAM_ID` nastavené být nesmí —
+  osobní Mašina nemá org repozitáře; `LAZURIO_HOSTED_OWNER` naopak v
+  organization scope Launchpad odmítne;
+- auth-check a cookie proměnné zůstávají stejné jako výše.
+
+Hosted vazba vyžaduje namountovaný vlastní Personalspace
+`personalspace/<login>_GEN3` (login se porovnává bez ohledu na velikost
+písmen, stejně jako Personalspace discovery); jinak failne s jasnou chybou.
+Z výběru jsou jen osobní Apps tohoto ownera — pro každý Modul jeho deklarovaná
+výchozí App (`lazurio.module.v1` `default_app`, `lazurio.runtime.v1`) — a
+Apps Organizací se nikdy nevyberou. URL je `https://<module>.<login>.lazurio.io/`
+se stejnými pravidly labelu jako Team Workspace. `lazurio update` v osobním
+scope aktualizuje pouze Lazurio Root. Organization lane osobní Mašiny žádnou
+App neudržuje; napojení osobní lane na hosted ingress (`ensure`) a otevření
+Personalspace API mimo loopback je samostatný follow-up.
+
 Hosted profil je privátní vývojový preview povrch uvnitř schváleného
 Tailscale/VPN access plane, nikoli produkční deployment. Zdroj lze editovat bez
 běžící aplikace a Launchpad spouští dev proces pouze pro UI/API/MCP preview,

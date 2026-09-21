@@ -1938,6 +1938,8 @@ function inventoryWarningsWithoutIssues(inventory) {
 function normalizeHostedWorkspace(workspace) {
   return createHostedWorkspaceConfiguration({
     profile: workspace?.profile,
+    scope: workspace?.scope ?? undefined,
+    owner: workspace?.owner ?? undefined,
     organizationSlug: workspace?.organization_slug,
     teamId: workspace?.team_id,
     domain: workspace?.domain,
@@ -1949,6 +1951,19 @@ function normalizeHostedWorkspace(workspace) {
 function scopeHostedUpdateInventory(inventory, workspace) {
   const configuration = normalizeHostedWorkspace(workspace);
   if (configuration.profile !== "hosted") return inventory;
+  if (configuration.scope === "personal") {
+    // A personal Machine updates only the Lazurio Root. It carries no
+    // Organization repositories, and Personalspace stays outside the generic
+    // update mechanism; any stray Organization record is never Git work here.
+    const excludedIssues = new Set((inventory.inventory_issues ?? []).filter((issue) => issue.organization));
+    const excludedMessages = new Set([...excludedIssues].map((issue) => issue.message));
+    return {
+      ...inventory,
+      inventory_issues: (inventory.inventory_issues ?? []).filter((issue) => !excludedIssues.has(issue)),
+      warnings: (inventory.warnings ?? []).filter((warning) => !excludedMessages.has(warning)),
+      repos: [],
+    };
+  }
   const organization = (inventory.repos ?? []).find((repo) =>
     repo.repo_kind === "organization_root" && repo.organization === configuration.organization_slug);
   if (!organization) {

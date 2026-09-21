@@ -1096,6 +1096,9 @@ export async function discoverPersonalspace(
         listeners: app.listeners ?? [],
         entrypoint_listener: app.entrypoint_listener ?? null,
         module_contract: app.module_contract ?? null,
+        // Declared default App of the Module; the hosted personal scope
+        // selects exactly this App per Module (hosted-app-url-lib).
+        module_app: app.module_app ?? null,
         runtime_contract: app.runtime_contract ?? null,
         package_path: packagePath,
         cwd: dirname(packagePath),
