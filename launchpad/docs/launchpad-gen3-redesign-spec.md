@@ -71,7 +71,7 @@ V Osobním prostoru se organizační panel nezobrazuje; na úzké obrazovce se
 sloupec skládá pod hlavní plochu.
 Revidováno 2026-09-21 (owner-approved, horní část shellu; plán DEV-6615) —
 **výběr aktivního prostoru se vrací z dropdownu v záhlaví do levého railu** a
-nahrazuje tím revizi z 2026-07-14. Rail je světlý (`--lz-paper`), nikoli tmavý:
+nahrazuje tím revizi z 2026-07-14. Rail je papírový (`--lz-paper`) proti bílé obsahové ploše, nikoli tmavý:
 design systém Lazurio vyhrazuje černou tlačítkům a shell zůstává ve stupních
 bílé a šedi. Rail je široký přesně jeden modul mřížky a rozbalený čtyři moduly;
 v rozbaleném stavu **odsouvá** obsah, nepřekrývá ho. Nese výhradně scope Lazuria
@@ -91,12 +91,18 @@ takže prázdno je vědomý okraj a sekční linky nejsou pruhy přes celý view
 Sekční záhlaví si ponechává modrou vlaječku a modrou linku shodnou s Guide —
 je to nosný brand prvek, ne dekorace.
 
+Pořadí ploch: **obsahová plocha je bílá** jako dokument a **rám je papírový
+rail** vedle ní, oddělený vlasovou linkou. Obrácené pořadí, tedy papír jako
+jeviště pro bílé objekty, zůstává v kánonu a používá ho `lz-article-card`;
+pro shell Launchpadu zvolené není.
+
 Modulová dlaždice je vodorovná (`lz-tile--row`): ikona vlevo, název, jednořádkový
-popis s elipsou, pevná nízká výška. Dlaždice je **bílá na papírovém pásu**, bez
-rámečku, bez poloměru a **bez vrženého stínu**; papír je jeviště pro bílé
-objekty a hloubku nese plocha a hrana, protože design systém žádný vržený stín
-nemá. Hover a výběr proto používají inkoustovou hranu. Nedostupný modul je
-prázdné místo s čárkovanou linkou, ne ztmavená dlaždice.
+popis s elipsou, pevná nízká výška. Dlaždice je bílá na bílé ploše, takže
+hranici nemůže držet výplň a drží ji **vlasový rámeček** — stejný materiál jako
+`lz-app-window`. Poloměr ani **vržený stín** se nepoužívají, protože design
+systém žádný vržený stín nemá; hover proto ztmaví rámeček na inkoust. Důraz je
+na hraně, ne pod objektem. Nedostupný modul je papírový slot s čárkovanou
+linkou, takže na bílé ploše čte jako místo čekající na modul.
 
 Stav modulu se ukazuje **jen výjimkou**: běžící modul, nedostupný modul a větev
 mimo `main`. Výchozí připravený stav se nepopisuje a textové stavové řádky
