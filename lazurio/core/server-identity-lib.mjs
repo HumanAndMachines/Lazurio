@@ -277,6 +277,7 @@ function isPreControlRootServerIdentity(identity) {
       identity.request_trust_profile === undefined
       || identity.request_trust_profile === "local"
       || identity.request_trust_profile === "hosted"
+      || identity.request_trust_profile === "personal"
     )
     && (
       identity.lifecycle_configuration_id === undefined
@@ -306,6 +307,7 @@ export function isValidServerIdentity(identity) {
       identity.request_trust_profile === undefined
       || identity.request_trust_profile === "local"
       || identity.request_trust_profile === "hosted"
+      || identity.request_trust_profile === "personal"
     )
     && (
       identity.lifecycle_configuration_id === undefined
