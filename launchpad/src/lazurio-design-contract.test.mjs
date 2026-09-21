@@ -94,7 +94,10 @@ test("modulové ikony a hover hrany používají shodnou Lazurio barvu kamene", 
   expect(app).toContain('stroj: { color: "var(--lz-expressive-mint-figure)"');
   expect(app).toContain('obchod: { color: "var(--lz-expressive-vermilion-figure)"');
   expect(app).toContain('kampan: { color: "var(--lz-blue-700)"');
-  expect(tokens).toContain("--lz-expressive-orchid: #db7eca");
+  // Připnutá hodnota se hýbe se snapshotem design systému. Tlumená
+  // orchidejová #c77dbb je schválená podoba (rozhodnutí Principála
+  // 2026-08-18); dřív tu stál neschválený sytější #db7eca.
+  expect(tokens).toContain("--lz-expressive-orchid: #c77dbb");
   expect(app).toContain('"lazurio-design-system-96.png": "var(--lz-expressive-orchid)"');
   expect(app).toContain('"presentation-96.png": "var(--lz-expressive-orchid)"');
   expect(app).toContain('"website-lazurio-96.png": "var(--lz-blue-500)"');
