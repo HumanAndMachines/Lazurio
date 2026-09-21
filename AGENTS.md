@@ -425,6 +425,16 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    Organization-specific obsah.
 6. **Delegace.** Při delegaci na Claude, Codex nebo Desktop agenta platí:
    self-report není důkaz, QA gate drží delegující Kolega.
+7. **SSH na Mašiny v tailnetu.** Tailscale profil je na Mašině jeden a
+   globální pro všechny běžící relace; adresy `100.64.0.x` se v každém
+   tailnetu opakují a znamenají pokaždé jinou Mašinu. Nepřipojuj se na holou
+   tailnet adresu ani přes obecný `~/.ssh/known_hosts`: identitu ber z Machine
+   Recordu owning Organizace (pinnutý host klíč přes `HostKeyAlias`
+   a vlastní `UserKnownHostsFile`) a před spojením ověř aktivní tailnet
+   (`tailscale status --json` → `CurrentTailnet.Name`). Hláška „host key
+   changed" na tailnet adrese znamená nejdřív „jiný aktivní tailnet", ne důvod
+   klíč přepsat nebo znovu přijmout. Profil bez souhlasu Principála
+   nepřepínej — přepneš ho všem ostatním agentům.
 
 Root upravuj jen když se mění:
 
