@@ -70,6 +70,13 @@ nestaví žádný most.
   netagovaný uzel v namespace Organizace.
 - Linuxové admin účty na hostu jsou samostatná osa a nesmějí vytvářet vlastní
   Headscale usery.
+- **Přechodný stav existujících uzlů:** nové uzly se zakládají rovnou pod
+  osobním Headscale userem. Existující uzel pod jiným userem (např. Matoušův
+  Windows, iPhone a Friday v `org-macano-tech`) se přesune jen při příležitosti,
+  kdy se zařízení stejně znovu přihlašuje, nebo až Headscale přesun uzlu bez
+  nového přihlášení umožní (v0.29.3 `nodes move` nemá). Znovu párovat zařízení
+  jen kvůli tomuto pravidlu se nesmí. Zóny se do té doby odvozují z
+  deklarovaného záznamu Mašiny v infra, ne z Headscale usera.
 - Technické jméno osobní VM = lowercase GitHub login (stejný slug jako Headscale
   user a `<login>.lazurio.io`); personalspace si zachovává svůj tvar
   `personalspace/<login>_GEN3`. Pracovní VM má label podle 0146. **Zobrazované jméno** si volí Principál (osobní VM
