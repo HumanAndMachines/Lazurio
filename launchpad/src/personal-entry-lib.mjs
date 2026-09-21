@@ -77,7 +77,8 @@ export function selectPersonalSessionCookies(header, name) {
     const split = pair.indexOf("=");
     if (split < 1) continue;
     const key = pair.slice(0, split).trim(), value = pair.slice(split + 1).trim();
-    if (key !== name && !key.startsWith(`${name}_`)) continue;
+    // Stock RP per-request CSRF cookies share the prefix but are not session chunks.
+    if (key !== name && !(key.startsWith(`${name}_`) && /^\d+$/.test(key.slice(name.length + 1)))) continue;
     if (!value || /[\x00-\x20\x7f]/.test(value) || selected.has(key)) return null;
     selected.set(key, value);
   }

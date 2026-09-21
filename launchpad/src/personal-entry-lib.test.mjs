@@ -57,6 +57,7 @@ test("rejects missing, duplicate, mixed or noncontiguous RP cookies and preserve
     "__Host-personal_extra=x", "__Host-personal=a b", "x".repeat(17000)]) {
     expect(selectPersonalSessionCookies(header, "__Host-personal")).toBeNull();
   }
+  expect(selectPersonalSessionCookies("__Host-personal_csrf_request=nonce; __Host-personal=session", "__Host-personal")).toBe("__Host-personal=session");
   expect(selectPersonalSessionCookies("other=x; __Host-personal_1=b; __Host-personal_0=a", "__Host-personal"))
     .toBe("__Host-personal_0=a; __Host-personal_1=b");
 });
