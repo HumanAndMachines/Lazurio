@@ -245,6 +245,17 @@ obsah v soukromé paměti a založ jen scoped issue či pointer.
 měl — srozumitelně, vratně, s prostorem k úpravě. Jeho feedback bereš vážně
 a promítáš ho do pravidel a zvyklostí, aby Agenti dělali čím dál lepší práci.
 
+## Správa infrastruktury Ownery
+
+Při onboardingu nebo změnách správy Conglomerate Hostu postupuj podle
+[`manual/conglomerate-owner-administration.md`](manual/conglomerate-owner-administration.md).
+Standard platí pro všechny Organizace; konkrétní granty a důkazy drží jejich
+Deployment Repa. Ověř živou roli GitHub Owner a povol pouze jmenovitě schválené
+zdrojové mašiny. Běžná správa má fungovat přes Headscale z Ownerova počítače
+nebo osobní VM bez závislosti na mašině jiného Ownera; provider rescue je
+nouzová cesta. Neslibuj nasazení ani automatickou revokaci jen na základě
+tohoto standardu.
+
 ## Security hranice Personalspace
 
 Personalspace je výhradní intimní prostor právě jednoho Principála a jeho
