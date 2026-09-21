@@ -13,9 +13,11 @@ a aby Agenti stavějící Lazurio Platformu měli jednu pravdu.
 | **Pracovní** | pracovní VM přiřazené právě tomuto Operátorovi (klidně víc, v různých Organizacích téhož Conglomerate) a pracovní laptop, který mu vydala Organizace | Organizace |
 
 Každá položka v infra nese dvě oddělená pole: `owner` (Principál u osobní
-Mašiny a osobních klientů, Organizace u pracovních) a `operator` (GitHub login
-člověka, kterému je pracovní VM nebo pracovní laptop přiřazený). Zóna se
-odvozuje z nich, ne z Headscale usera ani ze jména.
+Mašiny a osobních klientů, Organizace u pracovních) a `operator` (člověk,
+kterému je pracovní VM nebo pracovní laptop přiřazený). Oba vztahy se váží na
+neměnné GitHub ID; login je jen čitelný popis. Zmrazený lowercase login slouží
+výhradně jako síťový a DNS slug (Headscale user, `<login>.lazurio.io`). Zóna se
+odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
 
 ## Pravidla
 
@@ -23,13 +25,17 @@ odvozuje z nich, ne z Headscale usera ani ze jména.
    prostoru a Operátor nemusí řešit, kde co leží.
    - osobní klient → osobní VM: SSH + HTTPS; osobní VM → osobní laptop: SSH;
    - pracovní laptop ↔ pracovní VM téže Organizace přiřazená témuž Operátorovi: SSH.
+   - Pracovní VM mezi sebou grant nemají — ani v rámci jedné Organizace, ani
+     napříč Organizacemi téhož Conglomerate. Hranice Organizací zůstává
+     zachovaná; propojení drží Operátorův pracovní laptop nebo jeho osobní strana.
 2. **Z osobní do pracovní ano.** Osobní klienti a osobní VM → každá pracovní VM
    téhož Operátora: SSH + HTTPS.
 3. **Z pracovní do osobní nikdy.** Pracovní VM ani pracovní laptop nemají grant
    na osobní VM ani na osobní laptop.
 4. **Sdílená týmová VM** (Hosted Team Workspace, víc Principálů v jednom OS
-   účtu) přijímá jen příchozí spojení od svých členů a nikdy nemá odchozí grant
-   na klienty ani na jiné VM. Obousměrnost z pravidla 1 platí jen pro pracovní
+   účtu) přijímá jen příchozí spojení od členů GitHub Teamu, na který je vázaná
+   neměnným `github_team_id` (0147/0149); členství se čte živě z GitHubu a
+   nevzniká druhý roster. Nikdy nemá odchozí grant na klienty ani na jiné VM. Obousměrnost z pravidla 1 platí jen pro pracovní
    VM jednoho Operátora; jinak by agenti jednoho člena došli na laptop jiného.
 5. **Mezi Principály nic implicitně.**
 6. **Telefon** není SSH server; systémové ovládání telefonu se nesjednává.
@@ -63,8 +69,9 @@ nestaví žádný most.
   netagovaný uzel v namespace Organizace.
 - Linuxové admin účty na hostu jsou samostatná osa a nesmějí vytvářet vlastní
   Headscale usery.
-- Technické jméno osobní VM i personalspace = lowercase GitHub login; pracovní
-  VM má label podle 0146. **Zobrazované jméno** si volí Principál (osobní VM
+- Technické jméno osobní VM = lowercase GitHub login (stejný slug jako Headscale
+  user a `<login>.lazurio.io`); personalspace si zachovává svůj tvar
+  `personalspace/<login>_GEN3`. Pracovní VM má label podle 0146. **Zobrazované jméno** si volí Principál (osobní VM
   „Friday“, pracovní „Henry“) a je jen popis.
 
 ## Infra je blueprint
