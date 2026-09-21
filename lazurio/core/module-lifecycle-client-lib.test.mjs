@@ -266,6 +266,17 @@ describe("Core-owned Module lifecycle client", () => {
     expect(mismatch.server.state).toBe("unavailable");
   });
 
+  test("personal CLI status does not request owner data without the authenticated browser", async () => {
+    const requests = [];
+    const report = await runModuleLifecycle({ action: "status", readLocator: async () => locator,
+      fetchFn: fixtureFetch({ requests, identityOverride: { ...identity, request_trust_profile: "personal" } }),
+    });
+    expect(report.status).toBe("action_required");
+    expect(report.reason).toBe("hosted_lifecycle_requires_authenticated_surface");
+    expect(moduleLifecycleExitCode(report)).toBe(3);
+    expect(requests.map(request => request.pathname)).toEqual(["/api/lazurio/server-identity"]);
+  });
+
   test("hosted lifecycle stays on its authenticated surface instead of forging browser trust", async () => {
     const requests = [];
     const report = await runModuleLifecycle({
