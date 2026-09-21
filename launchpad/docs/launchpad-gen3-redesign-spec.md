@@ -69,6 +69,54 @@ trvale viditelný v pravém sloupci po vzoru Launchpadu GEN2. Moduly řadí podl
 času posledního commitu a každou položku lze rozkliknout do detailu commitů.
 V Osobním prostoru se organizační panel nezobrazuje; na úzké obrazovce se
 sloupec skládá pod hlavní plochu.
+Revidováno 2026-09-21 (owner-approved, horní část shellu; plán DEV-6615) —
+**výběr aktivního prostoru se vrací z dropdownu v záhlaví do levého railu** a
+nahrazuje tím revizi z 2026-07-14. Rail je světlý (`--lz-paper`), nikoli tmavý:
+design systém Lazurio vyhrazuje černou tlačítkům a shell zůstává ve stupních
+bílé a šedi. Rail je široký přesně jeden modul mřížky a rozbalený čtyři moduly;
+v rozbaleném stavu **odsouvá** obsah, nepřekrývá ho. Nese výhradně scope Lazuria
+a Mašiny: symbol, Osobní prostor, oddělovač, Organizace, přidání Organizace,
+upozornění a profil; Doctor a Nastavení žijí pod profilem. Rail **nenese stavové
+indikátory Organizací** — stav zůstává vlastnictvím aktivního prostoru. Aktivní
+prostor pozná plocha o stupeň tmavší a inkoustová hrana; černá dlaždice je
+zrušená (rozhodnutí Principála 2026-08-04).
+
+Horní lišta (topbar) se ruší. Hledání a Guide se přesouvají do řádku hlavičky
+aktivní Organizace; Marketplace placeholder z povrchu mizí, dokud nemá obsah.
+Hlavička drží značku Organizace a její název, bez uvítacího hero a bez počtu
+modulů a Teamů; značka je schválený asset Organizace nebo deterministický
+monogram, nikdy ručně kreslená značka. Obsah běží v kanonickém `lz-container`,
+takže prázdno je vědomý okraj a sekční linky nejsou pruhy přes celý viewport.
+
+Sekční záhlaví si ponechává modrou vlaječku a modrou linku shodnou s Guide —
+je to nosný brand prvek, ne dekorace.
+
+Modulová dlaždice je vodorovná (`lz-tile--row`): ikona vlevo, název, jednořádkový
+popis s elipsou, pevná nízká výška. Dlaždice je **bílá na papírovém pásu**, bez
+rámečku, bez poloměru a **bez vrženého stínu**; papír je jeviště pro bílé
+objekty a hloubku nese plocha a hrana, protože design systém žádný vržený stín
+nemá. Hover a výběr proto používají inkoustovou hranu. Nedostupný modul je
+prázdné místo s čárkovanou linkou, ne ztmavená dlaždice.
+
+Stav modulu se ukazuje **jen výjimkou**: běžící modul, nedostupný modul a větev
+mimo `main`. Výchozí připravený stav se nepopisuje a textové stavové řádky
+v dlaždici zanikají. Tichý stav ale nikdy nenese barvu samotnou — invariant
+„stav nese barva a ikona a slovo" je měřený na deuteranopii, takže
+`lz-status--plain` vypouští pilulku, nikdy slovo. Agregovaný `Stav prostoru` se
+z kompaktní karty pravého sloupce (revize 2026-07-15) mění na tichý signál
+v hlavičce: v pořádku nehlásí nic, jinak je to věta se sémantickou barvou a
+právě jedna černá akce.
+
+Typografie i rytmus vycházejí z existujících tokenů; nová velikost písma se
+nezavádí. Ikony mimo moduly jsou monochromní, badge upozornění je tečka, ne
+číslo.
+
+App-shell prvky (`lz-app-shell`, `lz-rail`, `lz-tile--row`, `lz-status--plain`)
+nejsou lokální CSS Launchpadu: žijí v design systému Lazurio a Launchpad je
+přebírá z vendor snapshotu. Otevřené a záměrně nerozhodnuté: skutečné čtvercové
+assety Organizací pro rail, pravý sloupec panelů včetně `Poslední změny`
+a implementace shellu v `index.html` a `app.js`.
+
 Implementation surface: `Lazurio/launchpad/`
 Source inputs:
 
