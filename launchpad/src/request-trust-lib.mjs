@@ -1,3 +1,5 @@
+import { createPersonalEntryPolicy } from "./personal-entry-lib.mjs";
+
 const localBackendHosts = new Set(["127.0.0.1", "localhost"]);
 const cookieNamePattern = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 const maxHostedCookieHeaderBytes = 16 * 1024;
@@ -9,13 +11,23 @@ export function createRequestTrustPolicy({
   hostedExternalOrigin = "",
   hostedAuthCheckUrl = "",
   hostedAuthCookieName = "",
+  personalEntry = null,
   fetchImpl = globalThis.fetch,
 } = {}) {
   const normalizedProfile = String(profile ?? "local").trim().toLowerCase() || "local";
-  if (normalizedProfile !== "local" && normalizedProfile !== "hosted") {
-    throw new Error("Launchpad request trust profile must be local or hosted.");
+  if (!["local", "hosted", "personal"].includes(normalizedProfile)) {
+    throw new Error("Launchpad request trust profile must be local, hosted or personal.");
   }
 
+  if ((normalizedProfile === "personal") !== Boolean(personalEntry)) {
+    throw new Error("Personal entry configuration and trust profile must agree.");
+  }
+  const personalPolicy = normalizedProfile === "personal" ? createPersonalEntryPolicy({
+    ...personalEntry, authCheckUrl: hostedAuthCheckUrl, cookieName: hostedAuthCookieName, fetchImpl,
+  }) : null;
+  if (personalPolicy && hostedExternalOrigin !== personalEntry.projection.externalOrigin) {
+    throw new Error("Personal entry origin must match the provider-derived projection.");
+  }
   const hostedOrigin = normalizedProfile === "hosted"
     ? normalizeHostedLaunchpadOrigin(hostedExternalOrigin)
     : null;
@@ -39,6 +51,7 @@ export function createRequestTrustPolicy({
   }
 
   async function evaluateWorkspaceRequest(request, url) {
+    if (personalPolicy) return personalPolicy.evaluate(request, url);
     if (normalizedProfile === "local") {
       const trusted = isTrustedLocalRequest(request, url);
       return trustDecision(

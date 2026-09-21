@@ -47,3 +47,32 @@ Rollback disables the new private web entry and its exact issuer clients,
 leaving VM data, owner SSH and other clients intact. Partial configuration or
 missing credentials prevents activation. Ownership transfer requires a new
 qualified provisioning/data-custody operation, never an incidental config edit.
+
+## Explicit entry configuration under qualification
+
+`LAZURIO_LAUNCHPAD_ENTRY_PROFILE=personal` selects the browser admission profile.
+The Workspace runtime remains `local` (this is the owner's machine, with no
+Organization/Team restriction). `LAZURIO_LAUNCHPAD_PERSONAL_PROJECTION_FILE`
+contains the provider-derived consumer projection and
+`LAZURIO_LAUNCHPAD_PERSONAL_SECRET_FILE` the resource introspection credential.
+Both are absolute regular custody files, not symlinks; the secret is mode0600
+and the projection must not be group/world writable. No secrets belong in Git.
+The existing external origin must exactly match the projection. The RP auth
+check URL is now strictly `http://127.0.0.1:<port>/oauth2/auth` for this profile;
+never expose this token-emitting endpoint through the gateway. Signed RP cookie
+chunks are selected by one exact configured cookie name.
+
+Content and mutation routes require current owner admission. Only content-free
+GET health/identity remain available to the local service locator; the gateway
+must hide them. Browser control-plane shutdown and folder-opening remain local
+operations. CLI lifecycle does not borrow browser credentials; live CLI behavior,
+remote application URL projection and OS service update/restart are additional
+qualification gates before deployment. No claim of a fully working hosted
+personal profile follows from the initial route/authentication tests.
+
+The first hosted personal target uses POSIX credential file permissions (Linux
+VM; macOS fixtures). Windows clients connect through the browser/SSH, but this
+server profile is not enabled on Windows. Rotating the resource credential
+requires a controlled service restart; the locator identity intentionally does
+not publish a password fingerprint. Projection and RP endpoint/cookie changes
+participate in the lifecycle configuration identity.
