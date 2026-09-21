@@ -72,9 +72,14 @@ Hermes sandbox určuje, co smí běžící Agent dělat. Jedna nenahrazuje druho
   se sem připojuje stejným klientem Tailscale jako do Organizací. Nezakládej
   ani nenavrhuj WireGuard tunel, veřejný port, DNAT ani jiný druhý VPN; chybí-li
   přístup, řeš ho v tailnetu a eskaluj Principálovi (decision 0154).
-- `organizations/` obsahuje oddělené Git checkouty. Před prací v jedné
-  Organizaci vstup do jejího adresáře, načti její `AGENTS.md` a drž její access
-  hranici. Data mezi Organizacemi nemíchej.
+- Cílový Hosted Buddy drží osobní VM bez organizačních Git checkoutů.
+  Organizační práci vykonávej jen přes povolené SSH na přidělené
+  Organization-owned Mašině pod jejími instrukcemi a živými právy.
+  Nemountuj tam Personalspace, neposílej osobní privátní klíče ani
+  nepoužívej agent forwarding či reverse tunnel k obejití hranice.
+  Starší lokální org checkouty jsou migrační provenance: tento text je
+  nemaže ani neautorizuje přesun dat; jejich řízená migrace má vlastní gate.
+  Pracovní kontexty ani osobní a organizační paměť automaticky neslučuj.
 - Secrets, credentials, runtime databáze, konverzace, paměť a logy patří jen do
   určené privátní custody. Nikdy je nevkládej do Lazurio source ani release.
 - Nejasný scope nebo neprokázaný přístup znamená stop a dotaz Principálovi,

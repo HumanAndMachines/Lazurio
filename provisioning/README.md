@@ -1,5 +1,8 @@
 # Lazurio Resident operator plane
 
+> **Buddy target update (2026-09-12).** The current product direction is documented in [the hosted Buddy manual](../manual/hosted-buddy-vps.md). Existing pinned dependencies and provisioning mechanics below describe the implemented baseline until a separately verified migration; mandatory Zulip/bridge and VPS-only placement are not requirements for new Buddy product design. This documentation change does not alter runtime behavior.
+
+
 `provisioning/` je source-only operator plane pro přípravu a obnovu Resident
 Mašin. Není součástí non-Git Lazurio Rootu a běžící Resident z něj neprovádí
 vlastní autonomní správu hostu.
@@ -137,3 +140,5 @@ AI Kolega později použije stejné role jen tam, kde je kontrakt skutečně
 společný. Linux systemd, macOS launchd, firewall a package manager se nesmějí
 sloučit do jednoho playbooku plného podmínek. Steward nebude třetí host
 playbook: je to role overlay AI Kolegy a práva dál určuje provider.
+
+Odvozený popis podle root rozhodnutí 0153/0154: Hosted Buddy je osobní VM lidského Principála s Hermesem, osobní Headscale a bez org klonů; org execution zůstává na přidělených org-owned Mašinách. Produktové pořadí určuje kanonický plán v Mission Control v3. Viz [synchronizační přehled](../manual/buddy-product-decision-2026-09-12.md). Existující verzované profily a manifesty dál popisují dosavadní instalace; cílová próza neobchází qualification gate ani neprovádí migraci.

@@ -1,4 +1,8 @@
-# Hostovaný Buddy na VPS — co o něm musí vědět agent v rootu
+# Hostovaný Lazurio Buddy — co o něm musí vědět agent v rootu
+
+## Schválené upřesnění Ownera a Mašiny
+
+Podle root rozhodnutí 0153/0154 má každý Principál právě jednu hostovanou osobní Mašinu. Volitelný lidský Buddy žije přímo na ní; další host ani dočasná či vnořená VM není výjimka. Další Mašiny patří Organizaci. Osobní Mašina je osobní user node v Headscale tailnetu Conglomerate Hostu, nikoli org user nebo tagged device. Laptop i telefon používají stejný Tailscale klient pro SSH/Codex a osobní aplikace; žádná druhá VPN, veřejný per-VM port ani DNAT. Buddy/Personalspace zůstává osobní, organizační klony a běhy patří přiděleným Organization-owned Mašinám přes autorizované SSH. Osobní URL je `<app>.<personal-dns-slug>.lazurio.io`, organizační `<app>.<machine>.<github-org-login>.lazurio.io`. Owner model rozlišuje user/organization a stabilní GitHub ID. `personal-dns-slug` je lowercase GitHub login zachycený při založení a zůstává frozen; nejde o aktuální mutable login. Schválený creation-time tvar app.github-user-login.lazurio.io se tím nemění. Rename loginu automaticky nepřepojuje DNS. Case-insensitive lookup je pouze kompatibilita existujícího hostname se stejnou autorizací, nikoli zdroj identity nebo nového DNS bindingu. DNS není grant. Připravenost konkrétního consumera, DNS/TLS a přístupu musí doložit runtime evidence; tento text ji nenahrazuje.
 
 > **Pro koho to je.** Task Agent (Codex, Claude Code, Cursor…), kterého
 > Principál pustil z Lazurio rootu na svém počítači. Tenhle dokument
@@ -10,11 +14,43 @@
 > host se řídí svou ověřenou instalací a privátním profilem — viz
 > [Na VPS platí jiná pravidla](#na-vps-platí-jiná-pravidla-než-v-tomhle-rootu).
 
+## Cílový produktový model — 2026-09-12
+
+**Lazurio Buddy** je jeden produkt pro osobní agenturu právě jednoho člověka.
+Veřejné možnosti jsou „Staráme se my“ a „Spravujete si sami“. Způsob správy
+se vede odděleně od umístění: vlastní VM zákazníka na hostiteli provozovatele,
+zákazníkův VPS nebo jeho fyzický hardware. Buddy Lite ani samostatná produktová
+řada Sovereign nejsou cílovou nabídkou. Více izolovaných zákaznických VM může
+sdílet fyzický host; hypervizor a jeho provozovatel zůstávají vyšší hranicí.
+
+Cíl je oficiální Hermes instalátor, gbrain a Lazurio root propojené standardními
+mechanismy. Povinný Zulip ani buddy-bridge nejsou požadavkem nové instalace.
+Verzované piny, runtime a konfigurační kontrakty existujících instalací však
+zůstávají aktuálním stavem do ověřené migrace. Tento manuál nedovoluje měnit
+běžící profil, vypnout kanál ani obejít jeho kontroly jen podle cílové prózy.
+
+Buddy používá GitHub a další podporované účty svého Principála. Stejná identita
+může být na jeho notebooku i u Buddyho; mašina sama není persona ani IAM.
+Finální osobní přístup používá Headscale + SSH/Codex. Osobní VM drží pouze Personalspace, Buddyho, Gbrain a identity; organizační pracovní klony a běhy žijí na přidělených Organization-owned VM. Buddy k nim zahajuje SSH přes Tailscale klienty a Headscale na Conglomerate Hostu. Společný tailnet není plošný grant; nová opačná a cross-org spojení jsou zakázaná, odpovědi existujícího SSH fungují. Žádné osobní mounty ani key forwarding do org VM.
+
+**Hosted Buddy — osobní VM lidského Operátora/Principála s Hermesem v roli Buddyho.** Dashboard etapy určuje kanonický plán v Mission Control v3. Osobní URL `<app>.<personal-dns-slug>.lazurio.io` je cílově dostupná jen přes osobní Headscale; vlastní VM odkaz navazuje na stávající Workspaces/osobní záložku. Přesná podpora, DNS/TLS a lifecycle vyžadují ověření. Odkazy na kanonická rozhodnutí, plány a dosavadní evidence shrnuje [synchronizace Buddy dokumentace](buddy-product-decision-2026-09-12.md#autorita-plánu-a-evidence-instalací).
+
+Izolace VM i Tailscale závisí na bezpečné konfiguraci a údržbě; bezchybnost
+softwaru ani absolutní nepřístupnost pro správce hypervizoru nejsou slibem.
+Běžný přístup uživatele a vyžádaný servis přes infrastrukturu jsou oddělené.
+Detailní rescue, obnova, předání instalace a dat, ceny a SLA zůstávají otevřené.
+Předání cílově přenáší aplikaci a data, nikoli celý obraz virtualizační VM.
+
+Publikovaný produktový kontrakt drží Knowledgebase Organizace vyvíjející
+Lazurio; provedení a aktuální stav drží owning source a ověřená instalace.
+Pravidla níže se týkají přístupu ke skutečné Mašině a zůstávají účinná i během
+migrace. Lokální profilový mount se změnou cíle nestává execution prostředím.
+
 ## Proč o tom root vůbec mluví
 
 Personalspace může existovat bez Buddyho a většina jich tak začíná. Když si ale
 Principál Buddyho onboarduje, vznikne mu druhé místo, kde jeho osobní vrstva
-žije: **dedikovaná per-owner VPS** (decision 0080, VPS-only Buddy). Lokální
+žije: **samostatná per-owner Mašina**. Decision 0080 zachovává původní VPS-only baseline; nové cílové umístění na VM, VPS nebo hardware zavádí samostatné [Synchronizace Buddy dokumentace](buddy-product-decision-2026-09-12.md). Lokální
 mount `personalspace/<owner>_GEN3/buddy/` drží jen Git konfiguraci profilu —
 **runtime tam není a nikdy nebude** (`local_execution: forbidden`).
 

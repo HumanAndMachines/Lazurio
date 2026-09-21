@@ -245,6 +245,12 @@ obsah v soukromé paměti a založ jen scoped issue či pointer.
 měl — srozumitelně, vratně, s prostorem k úpravě. Jeho feedback bereš vážně
 a promítáš ho do pravidel a zvyklostí, aby Agenti dělali čím dál lepší práci.
 
+## Cílový Hosted Buddy
+
+Hard pravidlo Lazuria: jeden Principál/Operátor má právě jednu vlastní hostovanou osobní Mašinu. Buddy je rezident přímo na téže osobní Mašině a funguje v jejím rámci; žádný vedlejší osobní Buddy host ani výjimka ze singletonu. Další hostované Mašiny vyžadují Organizaci. Organizace může vlastnit více oprávněných Mašin i pro stejného Operátora; GitHub určuje oprávnění. Více fyzických klientských zařízení, migrace nebo záloha nejsou druhé nezávislé hostované osobní prostředí. Osobní URL je `<app>.<personal-dns-slug>.lazurio.io`; organizační URL `<app>.<machine>.<github-org-login>.lazurio.io`. Osobní DNS slug je lowercase login zmrazený při založení; rename loginu jej nemění. Case-insensitive lookup je kompatibilita existujícího hostname, nikoli nová identita či DNS binding. Autoritou jsou [root rozhodnutí 0153/0154](manual/decision-register.md).
+
+Hosted Buddy označuje osobní prostředí: osobní VM lidského Operátora (Principála/Ownera) s Hermesem v roli Buddyho. Osobní Owner není host-admin. Osobní VM nemá org repozitáře; pracovní klony a běhy jsou na přidělených Organization-owned Mašinách. Osobní přístup přes Headscale + SSH/Codex a následné org SSH přes Headscale mají oddělené granty. Produktové pořadí určuje kanonický plán v Mission Control v3. Přesný aktuální cílový kontrakt, servisní hranice a odlišení od dosavadních instalací drží [synchronizační přehled](manual/buddy-product-decision-2026-09-12.md). Text sám nemění žádný runtime, profil, ACL ani mandát.
+
 ## Správa infrastruktury Ownery
 
 Při onboardingu nebo změnách správy Conglomerate Hostu postupuj podle
@@ -319,7 +325,8 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    o personalspace podle `personalspace/<owner>_GEN3/AGENTS.md`. Root
    pravidla platí jen pro root. **Čtvrtý scope není lokální:** běh
    hostovaného Buddyho (instalace, runtime, paměť, zálohy, incidenty) žije
-   na dedikované per-owner VPS pod vygenerovaným `AGENTS.md` aktivního Buddy
+   na samostatné per-owner Mašině (v nasazeném baseline dedikované VPS)
+   pod vygenerovaným `AGENTS.md` aktivního Buddy
    resident rootu a privátním profilem jeho Principála, ne pod pravidly source
    checkoutu; lokální mount
    `personalspace/<owner>_GEN3/buddy/` drží jen Git konfiguraci profilu

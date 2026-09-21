@@ -1,5 +1,8 @@
 # Architektura Lazuria
 
+> **Buddy target update (2026-09-12).** The current product direction is documented in [the hosted Buddy manual](manual/hosted-buddy-vps.md). Existing pinned dependencies and provisioning mechanics below describe the implemented baseline until a separately verified migration; mandatory Zulip/bridge and VPS-only placement are not requirements for new Buddy product design. This documentation change does not alter runtime behavior.
+
+
 Tento dokument je krátká mapa cílového systému. Popisuje jeho hlavní části,
 hranice a pravidla. Neobsahuje podrobný provozní postup ani úplný popis
 současné implementace.
@@ -142,6 +145,8 @@ přístupy u poskytovatelů.
 
 ## Buddy a AI Kolega
 
+Hard pravidlo Lazuria: jeden Principál/Operátor má právě jednu vlastní hostovanou osobní Mašinu. Buddy je rezident přímo na téže osobní Mašině a funguje v jejím rámci; žádný vedlejší osobní Buddy host ani výjimka ze singletonu. Další hostované Mašiny vyžadují Organizaci. Organizace může vlastnit více oprávněných Mašin i pro stejného Operátora; GitHub určuje oprávnění. Více fyzických klientských zařízení, migrace nebo záloha nejsou druhé nezávislé hostované osobní prostředí. Osobní URL je `<app>.<personal-dns-slug>.lazurio.io`; organizační URL `<app>.<machine>.<github-org-login>.lazurio.io`. Kanonický zápis je lowercase, hostname case-insensitive; tím nevzniká nový grant ani runtime změna. Autoritou jsou [root rozhodnutí 0153/0154](manual/decision-register.md).
+
 Buddy a AI Kolega používají stejný technický základ. Liší se vlastníkem,
 mandátem a správou dat, ne odděleným vývojem runtime.
 
@@ -162,6 +167,8 @@ Proces omezený sandboxem jej zároveň nesmí vlastnit ani přepisovat.
 Podrobný profil, instalaci a incidentní hranice popisuje
 [manuál Residentů](manual/lazurio-resident-profiles.md). Pravidla pro práci s
 hostovaným Buddym jsou v [manuálu hostovaného Buddyho](manual/hosted-buddy-vps.md).
+
+**Hosted Buddy:** osobní VM lidského Operátora/Principála s Hermesem v roli Buddyho. Osobní VM drží Personalspace, osobní paměť a identity, nikoli organizační klony. Ty zůstávají na přidělených Organization-owned Mašinách; individuální pracovní VM vlastněná Organizací se tím nestává osobní. Produktové pořadí a Dashboard etapy určuje kanonický plán v Mission Control v3. Síť, servis a vztah k dosavadní implementaci drží [synchronizační přehled, upřesnění 2026-09-20](manual/buddy-product-decision-2026-09-12.md).
 
 ## Pracovní prostory
 
@@ -319,7 +326,8 @@ je v [GEN2 → GEN3 runbooku](manual/gen2-to-gen3-migration.md).
 
 ## Konverzační a nástrojové povrchy
 
-- **Zulip je chat s Residentem.** Nese jeho identitu, kontinuitu a mandát.
+- **Osobní kontakt s Buddym používá podporovaný kanál Hermesu.** Soukromý obsah zůstává v osobní hranici.
+- **GitHub Discussions je cílová asynchronní organizační domluva.** Odeslání zprávy neznamená okamžité převzetí úkolu; implementace doručování zbývá ověřit. Mission Control dál drží úkoly a jejich stav.
 - **T3 Code nebo jiné agentní CLI je chat s Agenty na Mašině.** Slouží
   konkrétní práci, opravám a diagnostice.
 - **Lazurio CLI je nástroj Agentů.** Promítá bezpečný kontext, Doctor a
@@ -452,7 +460,8 @@ ani worktrees. Konkrétní produkční topologie vyžaduje vlastní kontrakt.
 
 | Druh informace | Kanonický domov |
 | --- | --- |
-| Konverzace Residenta | Zulip |
+| Osobní konverzace s Buddym | Podporovaný soukromý kanál Hermesu / osobní prostředí |
+| Asynchronní organizační domluva (cílově) | GitHub Discussions příslušného repozitáře |
 | Dlouhodobá znalost Residenta | GBrain |
 | Software, dokumentace a review | GitHub |
 | Plán, stav a odpovědnost | Mission Control |
@@ -460,7 +469,7 @@ ani worktrees. Konkrétní produkční topologie vyžaduje vlastní kontrakt.
 | Důvod zásadního rozhodnutí | decision record |
 
 Tyto vrstvy se nekopírují automaticky jedna do druhé. GBrain není kopie
-Mission Controlu, Zulip není task ledger a Lazurio není vzdálený sklad veškeré
+Mission Controlu, Discussions není druhý task ledger a Lazurio není vzdálený sklad veškeré
 paměti Residenta.
 
 ## Generace nejsou produkty

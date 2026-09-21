@@ -436,8 +436,8 @@ test("deprecated modules repository-db path blocks before any data provider oper
   expect(existsSync(join(fixture.organizationRoot, "modules", "content-lazurio", "db"))).toBe(false);
 });
 
-test("declared Mission Control never reports successful install without its active repository-db mount", async () => {
-  const scenarios = [
+// Each Git-backed scenario gets the suite timeout independently on slower Windows runners.
+for (const scenario of [
     {
       options: { includeRepositoryDb: false },
       reason: "repository_db_required_missing",
@@ -450,9 +450,8 @@ test("declared Mission Control never reports successful install without its acti
       options: { repositoryDbMaterialization: "doctor_managed_nested_repo" },
       reason: "repository_db_materialization_invalid",
     },
-  ];
-
-  for (const scenario of scenarios) {
+  ]) {
+  test(`declared Mission Control rejects ${scenario.reason} without its active repository-db mount`, async () => {
     const fixture = await organizationRepositoryDbFixture(scenario.options);
     const source = sourceObservation({ documents: fixture.documents });
     const report = await installOrganization({
@@ -473,8 +472,8 @@ test("declared Mission Control never reports successful install without its acti
       reason: scenario.reason,
     }));
     expect(existsSync(join(fixture.root, "organizations", `${login}_GEN3`, "mission-control", "db"))).toBe(false);
-  }
-});
+  });
+}
 
 test("Organization-level ignore cannot authorize a repository-db clone into a non-repository parent", async () => {
   const fixture = await organizationRepositoryDbFixture();

@@ -1,5 +1,8 @@
 # Lazurio resident distributions
 
+> **Buddy target update (2026-09-12).** The current product direction is documented in [the hosted Buddy manual](../manual/hosted-buddy-vps.md). Existing pinned dependencies and provisioning mechanics below describe the implemented baseline until a separately verified migration; mandatory Zulip/bridge and VPS-only placement are not requirements for new Buddy product design. This documentation change does not alter runtime behavior.
+
+
 Tato vrstva skládá celý non-Git Lazurio Root z exact commitu společného source.
 Sdílený produkt zůstává v běžných adresářích rootu; nevzniká paralelní
 `common/` strom. Pod `distribution/` žijí pouze build kontrakt, profilové
@@ -201,3 +204,5 @@ engine a updater jsou profilově neutrální; každý další runtime profil neb
 overlay se publikuje teprve s vlastním reviewovaným kontraktem a ověřením.
 Build ani updater sám neopravňuje přístup na živý host, Release nebo production
 cutover.
+
+Odvozený popis podle root rozhodnutí 0153/0154: Hosted Buddy je osobní VM lidského Principála s Hermesem, osobní Headscale a bez org klonů; org execution zůstává na přidělených org-owned Mašinách. Produktové pořadí určuje kanonický plán v Mission Control v3. Viz [synchronizační přehled](../manual/buddy-product-decision-2026-09-12.md). Existující verzované profily a manifesty dál popisují dosavadní instalace; cílová próza neobchází qualification gate ani neprovádí migraci.
