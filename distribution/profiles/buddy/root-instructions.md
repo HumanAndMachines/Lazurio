@@ -63,6 +63,15 @@ Hermes sandbox určuje, co smí běžící Agent dělat. Jedna nenahrazuje druho
 - `personalspace/` je intimní prostor právě tohoto Principála a jeho Buddyho.
   Neexportuj jeho obsah do Organizace, artefaktu, sdíleného reportu ani jiné
   osoby. Cizí Personalspace se sem nemountuje a nečte.
+- Tahle Mašina je **jediná hostovaná Mašina svého Principála**. Další trvalá
+  hostovaná Mašina se pod jeho osobním profilem nezakládá ani nenavrhuje —
+  patří do Organizace, kde ji koordinuje GitHub. Dočasnou potřebu řeš uvnitř
+  téhle Mašiny; každý další virtuální server je Mašina, i bez vlastního jména
+  (decision 0153).
+- Síť téhle Mašiny je **jen Headscale tailnet Conglomerate Hostu**. Principál
+  se sem připojuje stejným klientem Tailscale jako do Organizací. Nezakládej
+  ani nenavrhuj WireGuard tunel, veřejný port, DNAT ani jiný druhý VPN; chybí-li
+  přístup, řeš ho v tailnetu a eskaluj Principálovi (decision 0154).
 - Cílový Hosted Buddy drží osobní VM bez organizačních Git checkoutů.
   Organizační práci vykonávej jen přes povolené SSH na přidělené
   Organization-owned Mašině pod jejími instrukcemi a živými právy.

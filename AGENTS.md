@@ -90,6 +90,24 @@ ohraničené hranice** a **definované procesy**.
   Personalspace svého Principála; vlastní tím nezískává. Sdílená
   Organization-owned Mašina může být další pracovní prostředí Principála,
   ale jeho Personalspace nepřebírá ani nemountuje.
+- **Jedna osobní hostovaná Mašina.** Principál má v personalspace právě jednu
+  hostovanou Mašinu (osobní VM). **Má-li** Buddyho, bydlí právě na ní — není to
+  druhý host, ale runtime uvnitř téže hranice pod pravidly
+  [`manual/hosted-buddy-vps.md`](manual/hosted-buddy-vps.md); Buddy zůstává
+  volitelný a jen pro lidského Principála, tahle Mašina ho nezakládá. Vlastní
+  hardware Principála stojí mimo pool a jméno nepotřebuje — je to klient.
+  Personalspace je gitignored a mimo GitHub organizace, takže víc hostovaných
+  Mašin nemá čím koordinovat vlastnictví, jména ani přístupy. Druhá trvalá
+  Mašina proto patří do Organizace, kde ji koordinuje GitHub. Dočasnou potřebu
+  řeš uvnitř své Mašiny — snapshotem nebo kontejnerovou či procesní izolací,
+  které Mašinou samy nejsou; každý další virtuální server Mašina je, i bez
+  jména v `lazurio.io`, a druhý domov se z něj nedělá
+  (decision 0153 v manual/decision-register.md). Do sítě se osobní Mašina
+  připojuje **výhradně jako node Headscale tailnetu Conglomerate Hostu**, pod
+  osobním Headscale userem Principála — stejně jako jeho laptop a telefon, na
+  kterých tak stačí jediný klient Tailscale. Samostatný VPN pro ni nezakládej:
+  žádný WireGuard tunel, veřejný port ani DNAT; WireGuard pilot z 2026-09-20 je
+  zrušený a platí jen jako historie v decision 0154.
 - **Buddy je osobní.** Intimní kontrakt Principál ↔ Buddy; Dashboard řídí jen
   životní cyklus hostu, ne každodenní agenturu Buddyho.
 - **Opatrovník.** Každý seat AI Kolegy má právě jednoho jmenovaného lidského
@@ -231,7 +249,19 @@ a promítáš ho do pravidel a zvyklostí, aby Agenti dělali čím dál lepší
 
 Hard pravidlo Lazuria: jeden Principál/Operátor má právě jednu vlastní hostovanou osobní Mašinu. Buddy je rezident přímo na téže osobní Mašině a funguje v jejím rámci; žádný vedlejší osobní Buddy host ani výjimka ze singletonu. Další hostované Mašiny vyžadují Organizaci. Organizace může vlastnit více oprávněných Mašin i pro stejného Operátora; GitHub určuje oprávnění. Více fyzických klientských zařízení, migrace nebo záloha nejsou druhé nezávislé hostované osobní prostředí. Osobní URL je `<app>.<github-user-login>.lazurio.io`; organizační URL `<app>.<machine>.<github-org-login>.lazurio.io`. Kanonický zápis je lowercase, hostname case-insensitive; tím nevzniká nový grant ani runtime změna. Rozhodnutí drží [existující Buddy kontrakt](manual/buddy-product-decision-2026-09-12.md).
 
-Hosted Buddy je produkt 1: osobní VM lidského Operátora (Principála/Ownera) s Hermesem v roli Buddyho. Osobní Owner není host-admin. Osobní VM nemá org repozitáře; pracovní klony a běhy jsou na přidělených Organization-owned Mašinách. Osobní WireGuard + SSH/Codex a následné org SSH přes Headscale mají oddělené granty. Produkt 2 navazuje org Dashboard flow až po kvalifikaci produktu 1. Přesný aktuální cílový kontrakt, servisní hranice a odlišení od dosavadních instalací drží [produktové rozhodnutí](manual/buddy-product-decision-2026-09-12.md). Text sám nemění žádný runtime, profil, ACL ani mandát.
+Hosted Buddy je produkt 1: osobní VM lidského Operátora (Principála/Ownera) s Hermesem v roli Buddyho. Osobní Owner není host-admin. Osobní VM nemá org repozitáře; pracovní klony a běhy jsou na přidělených Organization-owned Mašinách. Osobní přístup přes Headscale + SSH/Codex a následné org SSH přes Headscale mají oddělené granty. Produkt 2 navazuje org Dashboard flow až po kvalifikaci produktu 1. Přesný aktuální cílový kontrakt, servisní hranice a odlišení od dosavadních instalací drží [produktové rozhodnutí](manual/buddy-product-decision-2026-09-12.md). Text sám nemění žádný runtime, profil, ACL ani mandát.
+
+## Správa infrastruktury Ownery
+
+Při onboardingu nebo změnách správy Conglomerate Hostu postupuj podle
+[`manual/conglomerate-owner-administration.md`](manual/conglomerate-owner-administration.md).
+Standard platí pro všechny Organizace; úplné granty a důkazy hostu drží
+Deployment Repo vlastníka této Mašiny, tenantní repa pouze vlastní scoped vstupy
+nebo reference. Ověř živou roli GitHub Owner a povol pouze jmenovitě schválené
+zdrojové mašiny. Běžná správa má fungovat přes Headscale z Ownerova počítače
+nebo osobní VM bez závislosti na mašině jiného Ownera; provider rescue je
+nouzová cesta. Neslibuj nasazení ani automatickou revokaci jen na základě
+tohoto standardu.
 
 ## Security hranice Personalspace
 
@@ -246,10 +276,8 @@ Task Agentů drží sandbox jejich harnessu a pravidla práce, ne lokální
 per-modulový IAM.
 
 Má-li Principál **hostovaného Buddyho**, sahá jeho personalspace i mimo tuhle
-mašinu — na jeho samostatnou per-owner Mašinu. Nasazený baseline je dedikovaná
-VPS; cílové možnosti VM, zákaznické VPS a vlastního hardwaru vymezuje
-[BUDDY-2026-09-12](manual/buddy-product-decision-2026-09-12.md), nikoli hotová migrace.
-Hranice tím nekončí, jen se prodlužuje:
+mašinu — na dedikovanou per-owner VPS, což je právě ta jediná hostovaná Mašina
+Principála výše, ne další host vedle ní. Hranice tím nekončí, jen se prodlužuje:
 paměť a konverzace Buddyho jsou personalspace se vším, co pro něj platí, a
 přístup na host je Principálův, ne agentův — i když ho lokální mašina technicky
 dovolí použít. Zjištění, jestli Buddy existuje, i pravidla pro práci s ním drží
@@ -416,6 +444,16 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    Organization-specific obsah.
 6. **Delegace.** Při delegaci na Claude, Codex nebo Desktop agenta platí:
    self-report není důkaz, QA gate drží delegující Kolega.
+7. **SSH na Mašiny v tailnetu.** Tailscale profil je na Mašině jeden a
+   globální pro všechny běžící relace; adresy `100.64.0.x` se v každém
+   tailnetu opakují a znamenají pokaždé jinou Mašinu. Nepřipojuj se na holou
+   tailnet adresu ani přes obecný `~/.ssh/known_hosts`: identitu ber z Machine
+   Recordu owning Organizace (pinnutý host klíč přes `HostKeyAlias`
+   a vlastní `UserKnownHostsFile`) a před spojením ověř aktivní tailnet
+   (`tailscale status --json` → `CurrentTailnet.Name`). Hláška „host key
+   changed" na tailnet adrese znamená nejdřív „jiný aktivní tailnet", ne důvod
+   klíč přepsat nebo znovu přijmout. Profil bez souhlasu Principála
+   nepřepínej — přepneš ho všem ostatním agentům.
 
 Root upravuj jen když se mění:
 

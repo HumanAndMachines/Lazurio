@@ -1,6 +1,7 @@
 import { toolInvocation } from "../core/tool-invocation-lib.mjs";
 import { lstat, mkdtemp, realpath, rm } from "fs/promises";
-import { basename, dirname, isAbsolute, win32 } from "path";
+import { tmpdir } from "os";
+import { basename, dirname, isAbsolute, join, win32 } from "path";
 import { fileURLToPath } from "url";
 
 import { isSamePath } from "../core/path-boundary-lib.mjs";
@@ -185,6 +186,79 @@ export function resetGitExecutableCacheForTests() {
   cachedGitExecutablePromise = null;
   cachedGitExecutableSync = undefined;
   hasCachedGitExecutableSync = false;
+}
+
+// One Sync run fetches many repositories from the same host, and each plain
+// fetch pays a full SSH handshake. OpenSSH connection sharing turns those into
+// one connection per host for the run. The socket lives in a private directory
+// of this run and the control master exits shortly after it is released.
+export const SSH_CONTROL_PERSIST_SECONDS = 30;
+// Unix domain socket paths must stay under 104 bytes. OpenSSH expands %C to a
+// 40 character hash and, while a master is being established, appends a 17
+// character temporary suffix. Only the directory is ours to choose, so it has
+// to leave room for both; otherwise ssh refuses the socket and sharing is
+// skipped instead of failing the fetch.
+const SSH_CONTROL_PATH_LIMIT = 104;
+const SSH_CONTROL_PATH_RESERVED = 40 + 17;
+// Git splits core.sshCommand like a shell, so a control path is only usable
+// when it survives that split as one argument. Rather than quoting on behalf
+// of every platform, a path that would not survive is refused and sharing is
+// skipped for that candidate.
+const SSH_CONTROL_PATH_SAFE = /^[A-Za-z0-9:@%+=_./\\-]+$/;
+
+export async function createSshConnectionSharing({
+  platform = process.platform,
+  // The per-user temporary directory is preferred; on systems where it is too
+  // long for a socket path, the short POSIX fallback still keeps the directory
+  // private to this run.
+  temporaryRoots = [tmpdir(), "/tmp"],
+  makeTemporaryDirectory = mkdtemp,
+} = {}) {
+  // OpenSSH for Windows has no ControlMaster support.
+  if (platform === "win32") return null;
+  let directory = null;
+  for (const root of temporaryRoots) {
+    // Sharing is an optimization: a candidate root that cannot hold a private
+    // directory is skipped, never a reason to fail the run.
+    let candidate;
+    try {
+      candidate = await makeTemporaryDirectory(join(root, "lz-ssh-"));
+    } catch {
+      continue;
+    }
+    // %C is OpenSSH's hash of user, host and port, so one run keeps one socket
+    // per remote identity without ever deriving the path from repository input.
+    if (
+      candidate.length + 1 + SSH_CONTROL_PATH_RESERVED < SSH_CONTROL_PATH_LIMIT
+      && SSH_CONTROL_PATH_SAFE.test(candidate)
+    ) {
+      directory = candidate;
+      break;
+    }
+    await rm(candidate, { recursive: true, force: true }).catch(() => {});
+  }
+  if (!directory) return null;
+  const controlPath = join(directory, "%C");
+  return {
+    directory,
+    // Passed as an explicit `-c` override rather than through the environment:
+    // the sharing decision stays visible in the exact recorded invocation.
+    configArgs: Object.freeze([
+      "-c",
+      `core.sshCommand=ssh -o ControlMaster=auto -o ControlPath=${controlPath} -o ControlPersist=${SSH_CONTROL_PERSIST_SECONDS}`,
+    ]),
+    async release() {
+      await rm(directory, { recursive: true, force: true }).catch(() => {});
+    },
+  };
+}
+
+export function isSshGitRemote(url) {
+  if (typeof url !== "string") return false;
+  const value = url.trim();
+  if (/^ssh:\/\//i.test(value)) return true;
+  // scp-like syntax, for example git@github.com:Organization/repo.git
+  return /^[^/@\s]+@[^/:\s]+:/.test(value);
 }
 
 export async function mapWithConcurrency(items, limit, fn) {

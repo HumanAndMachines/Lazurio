@@ -262,4 +262,4 @@ nepřátelský model.
 Žádná z těchto vrstev se nestává druhou autoritou jen proto, že je lokálně
 dostupná.
 
-Aktuální produktový cíl z 20. září 2026: Hosted Buddy je osobní VM lidského Principála s Hermesem, osobní WG a bez org klonů; org execution zůstává na přidělených org-owned Mašinách. Produkt 2 navazuje až po kvalifikaci produktu 1. Viz [produktové rozhodnutí](buddy-product-decision-2026-09-12.md). Existující verzované profily a manifesty dál popisují dosavadní instalace; cílová próza neobchází qualification gate ani neprovádí migraci.
+Aktuální produktový cíl z 20. září 2026: Hosted Buddy je osobní VM lidského Principála s Hermesem, osobní Headscale a bez org klonů; org execution zůstává na přidělených org-owned Mašinách. Produkt 2 navazuje až po kvalifikaci produktu 1. Viz [produktové rozhodnutí](buddy-product-decision-2026-09-12.md). Existující verzované profily a manifesty dál popisují dosavadní instalace; cílová próza neobchází qualification gate ani neprovádí migraci.

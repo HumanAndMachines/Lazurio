@@ -65,6 +65,7 @@ import {
   safeGitCommandEnv,
 } from "../../lazurio/runtime/git-lib.mjs";
 import { createRequestTrustPolicy } from "./request-trust-lib.mjs";
+import { loadPersonalEntryConfiguration, personalEntryConfigurationId } from "./personal-entry-lib.mjs";
 import { launchpadEntryHash, launchpadEntryUrl } from "../../lazurio/runtime/deep-link-lib.mjs";
 import {
   assertAvailableAgentEntryOrganization,
@@ -118,7 +119,11 @@ const launchpadRootId = computeServerRootId(canonicalCompaniesRoot);
 const launchpadControlRootId = computeServerRootId(rootSourceRoot);
 const launchpadInstallGeneration = computeServerInstallGeneration(lazurioCodeRoot);
 const hostedWorkspace = hostedWorkspaceConfigurationFromEnvironment(process.env);
-const launchpadLifecycleConfigurationId = hostedLifecycleConfigurationId(hostedWorkspace);
+const personalEntry = loadPersonalEntryConfiguration(process.env);
+const requestTrustProfile = personalEntry ? "personal" : hostedWorkspace.profile;
+const launchpadLifecycleConfigurationId = personalEntry
+  ? personalEntryConfigurationId(personalEntry)
+  : hostedLifecycleConfigurationId(hostedWorkspace);
 const basePath = normalizeLaunchpadBasePath(process.env.LAZURIO_LAUNCHPAD_BASE_PATH ?? "/");
 const knownLaunchpadMounts = new Map();
 const launchpadServerIdentity = buildServerIdentity({
@@ -130,7 +135,7 @@ const launchpadServerIdentity = buildServerIdentity({
   instanceId: randomUUID(),
   pid: process.pid,
   startedAt: new Date().toISOString(),
-  requestTrustProfile: hostedWorkspace.profile,
+  requestTrustProfile,
 });
 const host = options.host ?? defaultHost;
 const port = Number(options.port ?? process.env.PORT ?? defaultPort);
@@ -151,7 +156,8 @@ const launchpadStateRoot = resolveLaunchpadStateRoot({
 // the same OS-standard per-user locator directory.
 const serverStateDirectory = resolveServerStateDirectory();
 const requestTrust = createRequestTrustPolicy({
-  profile: hostedWorkspace.profile,
+  profile: requestTrustProfile,
+  personalEntry,
   hostedExternalOrigin: process.env.LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN,
   hostedAuthCheckUrl: process.env.LAZURIO_LAUNCHPAD_AUTH_CHECK_URL,
   hostedAuthCookieName: process.env.LAZURIO_LAUNCHPAD_AUTH_COOKIE_NAME,
@@ -1424,14 +1430,25 @@ function startServer(startPort) {
       };
       let mutationAdmission = null;
       try {
-        if (url.pathname.startsWith("/api/personalspace") && !requestTrust.isTrustedLocalRequest(request, url)) {
-          return jsonResponse({ error: "personalspace_request_forbidden" }, 403);
-        }
+        // Instance-bound local service control is independent of browser login.
+        // The gateway hides this route; retain local Origin/Fetch-Metadata checks.
         if (url.pathname === "/api/lazurio/server-shutdown" && request.method === "POST") {
           if (!requestTrust.isTrustedLocalRequest(request, url)) {
             return jsonResponse({ error: "server_shutdown_forbidden" }, 403);
           }
           return handleServerShutdown(request);
+        }
+        // Personal contents, discovery and static UI all require the owner.
+        // Only bounded, content-free GET health/identity remain available for
+        // the local service locator. The private gateway must hide these routes.
+        const personalMetadata = request.method === "GET" && [
+          "/health", "/api/lazurio/server-identity", "/api/launchpad/identity",
+        ].includes(url.pathname);
+        if (personalEntry && !personalMetadata && !(await evaluateWorkspaceRequest()).trusted) {
+          return jsonResponse({ error: "personal_entry_forbidden" }, 403);
+        }
+        if (url.pathname.startsWith("/api/personalspace") && !personalEntry && !requestTrust.isTrustedLocalRequest(request, url)) {
+          return jsonResponse({ error: "personalspace_request_forbidden" }, 403);
         }
         if (isMutatingApiRequest(request, url)) {
           const trustDecision = await evaluateWorkspaceRequest();

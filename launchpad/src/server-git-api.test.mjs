@@ -1,7 +1,8 @@
 import { afterAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { existsSync, realpathSync } from "fs";
-import { cp, mkdir, readFile, rm, symlink, writeFile } from "fs/promises";
+import { cp, mkdir, readFile, rm, symlink, writeFile, chmod } from "fs/promises";
 import { createServer } from "net";
 import { join } from "path";
 import {
@@ -866,6 +867,131 @@ test("locator publication failure releases Server leases for retry", async () =>
   });
   await lifetimeProbe.release();
 }, platformTestTimeout(15_000));
+
+test.skipIf(process.platform === "win32")("personal Launchpad protects reads and mutations without borrowing Organization identity", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const projectionFile = join(root, "personal-projection.json");
+  const secretFile = join(root, "personal-secret");
+  const externalOrigin = "https://personal.example.invalid";
+  await writeJson(projectionFile, {
+    schema_version: "auth.personal-vm-consumer.v1", projectionVersion: `personal-v1-${"a".repeat(64)}`,
+    issuer: "https://issuer.example.invalid/realms/workspace", clientId: "personal-fixture",
+    externalOrigin, resource: `${externalOrigin}/`, redirectUri: `${externalOrigin}/oauth2/callback`, ownerGithubId: "1001",
+  });
+  await writeFile(secretFile, "synthetic-introspection-secret", { mode: 0o600 });
+  await chmod(secretFile, 0o600);
+  const authPort = await findFreePort();
+  const { port, server, serverStateDirectory } = await startLaunchpadServer(root, { env: {
+    LAZURIO_LAUNCHPAD_ENTRY_PROFILE: "personal",
+    LAZURIO_LAUNCHPAD_PERSONAL_PROJECTION_FILE: projectionFile,
+    LAZURIO_LAUNCHPAD_PERSONAL_SECRET_FILE: secretFile,
+    LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN: externalOrigin,
+    LAZURIO_LAUNCHPAD_AUTH_CHECK_URL: `http://127.0.0.1:${authPort}/oauth2/auth`,
+    LAZURIO_LAUNCHPAD_AUTH_COOKIE_NAME: "__Host-personal",
+  } });
+  expect((await getJson(port, "/health")).status).toBe("ok");
+  expect((await getJson(port, "/api/lazurio/server-identity")).request_trust_profile).toBe("personal");
+  for (const path of ["/", "/api/apps", "/api/personalspace", "/api/doctor", "/api/git/repos"]) {
+    for (const headers of [{}, { "x-auth-request-user": "1001", "x-auth-request-groups": "admin" },
+      { origin: externalOrigin, "sec-fetch-site": "same-origin", cookie: "__Host-personal=forged" }]) {
+      const response = await fetch(`http://127.0.0.1:${port}${path}`, { headers });
+      expect(response.status).toBe(403);
+      expect((await response.json()).error).toBe("personal_entry_forbidden");
+    }
+  }
+  for (const path of ["/api/sync"]) {
+    const response = await fetch(`http://127.0.0.1:${port}${path}`, { method: "POST" });
+    expect(response.status).toBe(403);
+  }
+  const identity = await getJson(port, "/api/lazurio/server-identity");
+  // Service control must work without an RP/browser session, while a browser
+  // cannot turn the maintenance endpoint into an owner-admission bypass.
+  for (const headers of [
+    { origin: externalOrigin, "sec-fetch-site": "same-origin" },
+    { "sec-fetch-site": "cross-site" },
+  ]) {
+    const response = await fetch(`http://127.0.0.1:${port}/api/lazurio/server-shutdown`, {
+      method: "POST", headers: { "content-type": "application/json", ...headers },
+      body: JSON.stringify({ instance_id: identity.instance_id }),
+    });
+    expect(response.status).toBe(403);
+  }
+  const mismatch = await postJson(port, "/api/lazurio/server-shutdown", {
+    instance_id: "00000000-0000-4000-8000-000000000000",
+  }, 409);
+  expect(mismatch.error).toBe("server_instance_mismatch");
+  expect((await getJson(port, "/health")).status).toBe("ok");
+  const accepted = await postJson(port, "/api/lazurio/server-shutdown", { instance_id: identity.instance_id });
+  expect(accepted.stopping).toBe(true);
+  expect(await server.exited).toBe(0);
+  expect(await readServerLocatorIfPresent({ stateDirectory: serverStateDirectory })).toBeNull();
+});
+
+test.skipIf(process.platform === "win32")("personal Launchpad consumes RP and TLS introspection, denies owner change and preserves CSRF", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const keyPath = join(root, "fixture-key.pem"), certPath = join(root, "fixture-cert.pem");
+  execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
+    "-subj", "/CN=localhost", "-addext", "subjectAltName=DNS:localhost,IP:127.0.0.1",
+    "-keyout", keyPath, "-out", certPath], { stdio: "ignore" });
+  let currentId = "1001", introspections = 0;
+  let issuer = "";
+  const externalOrigin = "https://personal.example.invalid";
+  const resource = `${externalOrigin}/`;
+  const clientSecret = "synthetic-personal-secret";
+  const provider = Bun.serve({ hostname: "127.0.0.1", port: 0,
+    tls: { key: await readFile(keyPath), cert: await readFile(certPath) },
+    async fetch(request) {
+      expect(new URL(request.url).pathname).toBe("/realms/workspace/protocol/openid-connect/token/introspect");
+      const body = new URLSearchParams(await request.text());
+      expect(body.get("token")).toBe("rp-held-token");
+      expect(request.headers.get("authorization")).toBe(`Basic ${Buffer.from(`https%3A%2F%2Fpersonal.example.invalid%2F:${clientSecret}`).toString("base64")}`);
+      introspections++;
+      const now = Math.floor(Date.now() / 1000);
+      return Response.json({ active: true, iss: issuer, aud: resource, client_id: "personal-fixture",
+        sub: "synthetic-subject", iat: now, exp: now + 300, "https://lazurio.ai/github-id": currentId });
+    },
+  });
+  issuer = `https://localhost:${provider.port}/realms/workspace`;
+  const rp = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch(request) {
+    if (new URL(request.url).pathname !== "/oauth2/auth" || request.headers.get("cookie") !== "__Host-personal=valid-session") return new Response(null, { status: 401 });
+    return new Response(null, { status: 202, headers: { "x-auth-request-access-token": "rp-held-token" } });
+  } });
+  try {
+    const projectionFile = join(root, "personal-projection.json"), secretFile = join(root, "personal-secret");
+    await writeJson(projectionFile, { schema_version: "auth.personal-vm-consumer.v1",
+      projectionVersion: `personal-v1-${"b".repeat(64)}`, issuer, clientId: "personal-fixture",
+      externalOrigin, resource, redirectUri: `${externalOrigin}/oauth2/callback`, ownerGithubId: "1001" });
+    await writeFile(secretFile, clientSecret, { mode: 0o600 });
+    await chmod(secretFile, 0o600);
+    const { port } = await startLaunchpadServer(root, { env: {
+      LAZURIO_LAUNCHPAD_ENTRY_PROFILE: "personal", LAZURIO_LAUNCHPAD_PERSONAL_PROJECTION_FILE: projectionFile,
+      LAZURIO_LAUNCHPAD_PERSONAL_SECRET_FILE: secretFile, LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN: externalOrigin,
+      LAZURIO_LAUNCHPAD_AUTH_CHECK_URL: `http://127.0.0.1:${rp.port}/oauth2/auth`,
+      LAZURIO_LAUNCHPAD_AUTH_COOKIE_NAME: "__Host-personal", NODE_EXTRA_CA_CERTS: certPath,
+    } });
+    const origin = `http://127.0.0.1:${port}`;
+    const headers = { cookie: "__Host-personal=valid-session", "sec-fetch-site": "same-origin" };
+    for (const path of ["/", "/api/apps", "/api/personalspace"]) {
+      const result = await fetch(origin + path, { headers });
+      expect(result.status).toBe(200);
+      expect(result.headers.has("x-auth-request-access-token")).toBe(false);
+      expect(result.headers.has("authorization")).toBe(false);
+      await result.body?.cancel();
+    }
+    expect(introspections).toBe(3);
+    const csrf = await fetch(origin + "/api/sync", { method: "POST", headers });
+    expect(csrf.status).toBe(403);
+    expect(introspections).toBe(3);
+    currentId = "1002";
+    expect((await fetch(origin + "/api/apps", { headers })).status).toBe(403);
+    currentId = "1001";
+    expect((await fetch(origin + "/api/apps", { headers })).status).toBe(200);
+    provider.stop(true);
+    expect((await fetch(origin + "/api/apps", { headers })).status).toBe(403);
+  } finally { provider.stop(true); rp.stop(true); }
+});
 
 test("hosted Launchpad rejects forged browser context without a TLS-authenticated OAuth session", async () => {
   const root = await createLaunchpadGitFixture();
