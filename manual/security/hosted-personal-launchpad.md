@@ -1,5 +1,15 @@
 # Hosted personal Launchpad entry
 
+> **Superseded for hosted personal VMs by decision 0157 (2026-09-22).** The
+> hosted personal VM gateway admits the owner through the same stock
+> oauth2-proxy gateway as work VMs (ID-token `groups` from the
+> `lazurio-personal-owner` mapper, `cookie_refresh = 2m`, non-minimal session),
+> and Launchpad runs in the hosted profile with `LAZURIO_HOSTED_SCOPE=personal`
+> (`launchpad/README.md`). The per-request introspection design below and
+> `LAZURIO_LAUNCHPAD_ENTRY_PROFILE=personal` remain only as a historical,
+> not-activated design; they are not a requirement for hosted personal VMs and
+> no new consumer should build on them.
+
 Design under qualification, not an enabled deployment. A personal Launchpad
 belongs to exactly one Principal; Organization access and provider service
 access are separate authorities. The selected Organizations remain that
