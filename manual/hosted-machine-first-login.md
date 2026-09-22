@@ -1,0 +1,84 @@
+# Hostovaná pracovní VM: první přihlášení a donastavení
+
+Platí pro hostované pracovní Mašiny, které Machines předá jako `workspace-vm`
+(decision 0144, handover `~/Lazurio/.lazurio/` a `/etc/lazurio/lazurio.machine.json`).
+Machines dodá systém, síť, SSH, bránu a nainstalované Lazurio; **všechno uvnitř
+je práce operátora a jeho Task Agenta** podle tohoto postupu. Cíl: operátor
+nikdy nedostane prostředí, které vypadá hotově, ale není donastavené.
+
+## Jak Agent pozná, o jakou Mašinu jde
+
+`lazurio machine inspect` (nebo `/etc/lazurio/lazurio.machine.json`):
+
+- `machine.kind: workspace-vm` s `owner.kind: organization` a `owner.team`
+  rovným loginu jednoho člověka (například `jakub`) = **osobní pracovní VM**
+  jednoho operátora vlastněná Organizací (preset `hosted-organization-personal`).
+- `machine.kind: workspace-vm` s `owner.team` rovným sdílenému Teamu
+  (například `iotor-team`, `energo`, `management`) = **týmová VM**
+  (preset `hosted-organization-team`). Pro ni platí
+  [samostatná sekce níže](#týmová-vm-identita-organizace-ne-člověka).
+- `machine.kind: personal-vm` = osobní Mašina Principála podle
+  [`hosted-buddy-vps.md`](hosted-buddy-vps.md); tento manuál se na ni nevztahuje.
+
+## Osobní pracovní VM: identita operátora
+
+Osobní pracovní VM funguje jako pracovní stanice svého operátora v cloudu:
+GitHub je jediná autorita přístupů, a proto je `gh` na této Mašině přihlášený
+**účtem operátora**, ne účtem Organizace ani jiného člověka. Bez přihlášení
+nemá Agent žádnou Organizaci, žádné moduly a žádná repa; má jen čisté Lazurio.
+
+Když Agent na takové Mašině zjistí (`gh auth status --hostname github.com`),
+že `gh` přihlášený není, **nepokračuje v úkolu, dokud operátora neprovede
+přihlášením**, a vysvětlí mu proč: je to jeho osobní pracovní VM, GitHub
+rozhoduje, co v ní smí Agent vidět a měnit, a všechna práce z této Mašiny
+bude připsaná jeho účtu. Postup je stejný jako na pracovní stanici
+(kanonicky skill `lazurio-workstation-install`, sekce o GitHub účtu):
+
+1. `gh auth login --hostname github.com --git-protocol ssh --web` bez
+   `--clipboard`. Agent předá operátorovi jednorázový ověřovací (device) kód a
+   adresu `https://github.com/login/device` **jen v aktuálním soukromém
+   chatu**; nikdy do schránky, issue, repa nebo trvalého logu. Interní
+   `device_code`, access token ani privátní klíč nikdy nevypíše.
+2. Po souhlasu operátora nechá tentýž flow nahrát veřejný SSH klíč Mašiny
+   k jeho účtu a ověří `gh auth status` a `git ls-remote` na root repo
+   Organizace.
+3. `lazurio update` (aktualizace Lazuria je vědomý krok; bez přihlášení
+   Organizaci nenatáhne).
+4. `lazurio organization install <github-login-organizace> --role builder --json`
+   (u Iotoru `IotorLazurio`). Gate read-only ověří živé členství operátora
+   v Organizaci a Teamech a WRITE capability na aktivních Builder repech,
+   pak zmaterializuje Organizaci a její moduly do `~/Lazurio/organizations/`.
+   Restricted Admin-only sloty (`infra`) Buildera neblokují a nemountují se.
+5. `bun run doctor:task` v primárním checkoutu Organizace a `lazurio doctor`
+   v rootu: dokud hlásí required `fail`, `blocked` nebo `incomplete`, není
+   Mašina donastavená a Agent to operátorovi řekne místo „hotovo“.
+6. Teprve potom Agent pokračuje v původním úkolu. Vstup do T3 Code z
+   prohlížeče vede přes Launchpad Mašiny tlačítkem **Chat**, které vydá
+   jednorázový párovací token; ruční kopírování párovacích odkazů není
+   potřeba.
+
+Co Agent nedělá: nepřihlašuje na osobní VM cizí účet, nepoužívá sdílený
+token Organizace, nemountuje cizí Personalspace a nepřenáší přihlášení z jiné
+Mašiny. Když operátor přihlášení odmítne nebo nemá potřebná práva, Agent
+zapíše přesný blocker a zastaví se.
+
+## Týmová VM: identita Organizace, ne člověka
+
+Sdílená týmová VM (`owner.team` = sdílený Team) nemá osobního operátora.
+Podle rozhodnutí 0147–0149 má Git identitu **Lazurio for GitHub** (bot
+Organizace přes scoped broker), nikdy osobní účet posledního přihlášeného
+člověka. Na týmové VM Agent osobní `gh auth login` **nikdy nespouští**; když
+brokered identita chybí, je to diagnóza pro Organization Admina
+(`hosted-machine-handover.md`), ne důvod přihlásit něčí účet. Přesný postup
+materializace Organizace na týmové VM drží Machines a Platform lane
+`hosted-organization-team`; do doby jejího dokončení Agent zapíše blocker.
+
+## Co drží kdo
+
+- Machines: Mašina online, identita, brána, nainstalované Lazurio a Chat vstup
+  Launchpadu (`LAZURIO_T3CODE_URL`, párovací příkaz).
+- Lazurio (tento manuál, skill `lazurio-workstation-install`, `lazurio
+  organization install`): první přihlášení, materializace Organizace, Doctor.
+- LazurioPlatform (`docs/workspace-presets.md`): presety a generovaný
+  `AGENTS.md` Folderu; až bude `folder-init` součástí handoveru, převezme
+  tento text jeho preset a manuál zůstane jen odkazem.
