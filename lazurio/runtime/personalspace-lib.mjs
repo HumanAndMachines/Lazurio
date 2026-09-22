@@ -750,29 +750,33 @@ async function scanPersonalspaceOwners(personalspaceRoot) {
   for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
     if (!entry.isDirectory()) continue;
     if (entry.name.startsWith(".") || ignoredSpaceDirs.has(entry.name)) continue;
-    const personalPath = join(personalspaceRoot, entry.name, "personal.gen3.json");
-    if (!existsSync(personalPath)) continue;
-    let personal;
-    try {
-      const spaceRoot = join(personalspaceRoot, entry.name);
-      const spaceBoundary = await inspectCanonicalPathBoundary({
-        rootPath: personalspaceRoot,
-        targetPath: spaceRoot,
-      });
-      if (!spaceBoundary.ok || !spaceBoundary.targetRealPath) continue;
-      personal = (await readJsonWithinCanonicalBoundary({
-        rootPath: spaceRoot,
-        rootRealPath: spaceBoundary.targetRealPath,
-        targetPath: personalPath,
-        label: `${entry.name}/personal.gen3.json`,
-      })).value;
-    } catch {
-      continue;
-    }
-    const owner = normalizeOwner(personal?.owner?.github_username);
+    const owner = await readDeclaredSpaceOwner(personalspaceRoot, entry.name);
     if (owner && !owners.includes(owner)) owners.push(owner);
   }
   return owners;
+}
+
+// Declared owner of one exact personalspace/<dir> (metadata only), or null.
+async function readDeclaredSpaceOwner(personalspaceRoot, dirName) {
+  const personalPath = join(personalspaceRoot, dirName, "personal.gen3.json");
+  if (!existsSync(personalPath)) return null;
+  try {
+    const spaceRoot = join(personalspaceRoot, dirName);
+    const spaceBoundary = await inspectCanonicalPathBoundary({
+      rootPath: personalspaceRoot,
+      targetPath: spaceRoot,
+    });
+    if (!spaceBoundary.ok || !spaceBoundary.targetRealPath) return null;
+    const personal = (await readJsonWithinCanonicalBoundary({
+      rootPath: spaceRoot,
+      rootRealPath: spaceBoundary.targetRealPath,
+      targetPath: personalPath,
+      label: `${dirName}/personal.gen3.json`,
+    })).value;
+    return normalizeOwner(personal?.owner?.github_username);
+  } catch {
+    return null;
+  }
 }
 
 // Který prostor patří Principálovi této mašiny. Scan-first (decision 0042):
@@ -796,6 +800,12 @@ async function resolvePrimaryOwner({ companiesRoot, companiesConfig, personalspa
   }
   const fromOption = normalizeOwner(options.primaryOwner);
   if (fromOption) return fromOption;
+  // A hosted personal Machine names its Personalspace by exact folder
+  // (LAZURIO_HOSTED_PERSONALSPACE); its owner is whoever that folder declares.
+  if (typeof options.primarySpaceDir === "string") {
+    if (!/^[^/\\.][^/\\]*$/.test(options.primarySpaceDir)) return null;
+    return readDeclaredSpaceOwner(personalspaceRoot, options.primarySpaceDir);
+  }
   const fromLocal = normalizeOwner((await readLocalOverrideConfig(companiesRoot, warnings))?.personalspace_owner);
   if (fromLocal) return fromLocal;
   const owners = await scanPersonalspaceOwners(personalspaceRoot);
@@ -905,7 +915,9 @@ export async function discoverPersonalspace(
 
     const declaredOwner = normalizeOwner(personal?.owner?.github_username);
     if (!primaryOwner) continue;
-    if (!declaredOwner || declaredOwner.toLowerCase() !== primaryOwner.toLowerCase()) {
+    if (
+      (typeof options.primarySpaceDir === "string" && dirName !== options.primarySpaceDir)
+      || !declaredOwner || declaredOwner.toLowerCase() !== primaryOwner.toLowerCase()) {
       failures.push(
         foreignOrUnrecognizedPersonalspaceDirFailure({
           mountPath,

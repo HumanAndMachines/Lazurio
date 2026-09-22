@@ -225,7 +225,7 @@ test("personal hosted scope updates only the Lazurio Root, never a stray Organiz
     moduleSlots: [{ slug: "team-notes", path: "workspace/team-notes", teams: ["sales"],
       default_access: "role_based", git: { url: "git@github.com:WorkspaceTestOrg/team-notes.git", branch: "main" } }] });
   const hostedWorkspace = createHostedWorkspaceConfiguration({ profile: "hosted", scope: "personal",
-    owner: "immakermatty", domain: "lazurio.io", machine: "immakermatty" });
+    owner: "immakermatty", personalspace: "ImMakerMatty_GEN3", domain: "lazurio.io", machine: "immakermatty" });
   const calls = [];
   const report = await runLazurioUpdate({ rootPath: root, hostedWorkspace, deps: {
     acquireLock: async () => ({ release: async () => {} }),

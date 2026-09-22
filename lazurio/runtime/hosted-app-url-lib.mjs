@@ -12,11 +12,14 @@ const hostedMachineLabelMax = 32;
 const hostedApplicationLabelMax = 63;
 const reservedHostedApplicationLabels = new Set(["launchpad", "oauth2", "api", "well-known"]);
 // A hosted Workspace serves either one Organization Team (default) or the
-// personal Machine of one human Principal (decisions 0153/0154). The personal
-// scope names its Machine after the Principal's lowercase GitHub login and
-// exposes only Apps of that Principal's own mounted Personalspace.
+// personal Machine of one human Principal (decisions 0153/0154/0155). The
+// personal Machine/DNS slug is frozen at creation and never follows a later
+// GitHub login rename, so the Personalspace is bound by its exact folder name,
+// never by comparing the slug with the current login.
 const hostedScopes = new Set(["organization", "personal"]);
-const personalspaceDirSuffix = "_GEN3";
+const personalHostedDomain = "lazurio.io";
+// personalspace/<github-login>_GEN3: one plain folder, no path separators.
+const personalspaceFolderPattern = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})_GEN3$/;
 
 export class HostedAppUrlError extends Error {
   constructor(code, message) {
@@ -48,6 +51,7 @@ export function hostedWorkspaceConfigurationFromEnvironment(env = process.env) {
     profile: env.LAZURIO_WORKSPACE_PROFILE,
     scope: env.LAZURIO_HOSTED_SCOPE,
     owner: env.LAZURIO_HOSTED_OWNER,
+    personalspace: env.LAZURIO_HOSTED_PERSONALSPACE,
     organizationSlug: env.LAZURIO_ORGANIZATION_SLUG,
     teamId: env.LAZURIO_TEAM_ID,
     domain: env.LAZURIO_HOSTED_DOMAIN,
@@ -60,6 +64,7 @@ export function createHostedWorkspaceConfiguration({
   profile = "local",
   scope = "organization",
   owner = "",
+  personalspace = "",
   organizationSlug = "",
   teamId = "",
   domain = "",
@@ -72,6 +77,7 @@ export function createHostedWorkspaceConfiguration({
       profile: "local",
       scope: null,
       owner: null,
+      personalspace: null,
       organization_slug: null,
       team_id: null,
       domain: null,
@@ -84,6 +90,7 @@ export function createHostedWorkspaceConfiguration({
   if (normalizedScope === "personal") {
     return createPersonalHostedConfiguration({
       owner,
+      personalspace,
       organizationSlug,
       teamId,
       domain,
@@ -91,8 +98,10 @@ export function createHostedWorkspaceConfiguration({
       launchpadExternalOrigin,
     });
   }
-  if (String(owner ?? "").trim() !== "") {
-    throw new Error("LAZURIO_HOSTED_OWNER is valid only with LAZURIO_HOSTED_SCOPE=personal.");
+  for (const [name, value] of [["LAZURIO_HOSTED_OWNER", owner], ["LAZURIO_HOSTED_PERSONALSPACE", personalspace]]) {
+    if (String(value ?? "").trim() !== "") {
+      throw new Error(`${name} is valid only with LAZURIO_HOSTED_SCOPE=personal.`);
+    }
   }
   if (!organizationSlugPattern.test(organizationSlug)) {
     throw new Error("LAZURIO_ORGANIZATION_SLUG is required for the hosted Workspace profile.");
@@ -108,6 +117,7 @@ export function createHostedWorkspaceConfiguration({
     profile: "hosted",
     scope: "organization",
     owner: null,
+    personalspace: null,
     organization_slug: organizationSlug,
     team_id: teamId,
     domain,
@@ -118,6 +128,7 @@ export function createHostedWorkspaceConfiguration({
 
 function createPersonalHostedConfiguration({
   owner,
+  personalspace,
   organizationSlug,
   teamId,
   domain,
@@ -138,11 +149,17 @@ function createPersonalHostedConfiguration({
   const normalizedOwner = String(owner ?? "").trim();
   if (!validHostedMachineLabel(normalizedOwner)) {
     throw new Error(
-      `LAZURIO_HOSTED_OWNER is required for LAZURIO_HOSTED_SCOPE=personal and must be the lowercase GitHub login as a single-dash DNS label of at most ${hostedMachineLabelMax} characters.`,
+      `LAZURIO_HOSTED_OWNER is required for LAZURIO_HOSTED_SCOPE=personal and must be the frozen personal Machine slug: a lowercase single-dash DNS label of at most ${hostedMachineLabelMax} characters.`,
     );
   }
-  if (!dnsDomainPattern.test(domain)) {
-    throw new Error("LAZURIO_HOSTED_DOMAIN must be a lowercase DNS domain without scheme, path, port or wildcard.");
+  const folder = String(personalspace ?? "").trim();
+  if (!personalspaceFolderPattern.test(folder)) {
+    throw new Error(
+      "LAZURIO_HOSTED_PERSONALSPACE is required for LAZURIO_HOSTED_SCOPE=personal and must be the exact folder name under personalspace/ (<github-login>_GEN3, no path separators).",
+    );
+  }
+  if (domain !== personalHostedDomain) {
+    throw new Error(`LAZURIO_HOSTED_DOMAIN must be exactly ${personalHostedDomain} for LAZURIO_HOSTED_SCOPE=personal.`);
   }
   const resolvedMachine = resolveHostedMachineLabel({ machine, launchpadExternalOrigin, domain });
   if (resolvedMachine !== normalizedOwner) {
@@ -154,6 +171,7 @@ function createPersonalHostedConfiguration({
     profile: "hosted",
     scope: "personal",
     owner: normalizedOwner,
+    personalspace: folder,
     organization_slug: null,
     team_id: null,
     domain,
@@ -229,6 +247,7 @@ export function hostedLifecycleConfigurationId(configuration) {
     return createHash("sha256").update(JSON.stringify({
       scope: "personal",
       owner: configuration.owner,
+      personalspace: configuration.personalspace,
       domain: configuration.domain,
       machine: configuration.machine,
       routing: "application-hostname-v1",
@@ -251,10 +270,10 @@ export function validateHostedWorkspaceBindings(
 ) {
   if (configuration?.profile !== "hosted") return configuration;
   if (configuration.scope === "personal") {
-    const space = ownerPersonalspace(configuration, spaces);
+    const space = boundPersonalspace(configuration, spaces);
     if (!space) {
       throw new Error(
-        `Hosted personal Workspace owner ${configuration.owner} has no mounted Personalspace personalspace/${configuration.owner}${personalspaceDirSuffix}.`,
+        `Hosted personal Workspace Personalspace personalspace/${configuration.personalspace} (LAZURIO_HOSTED_PERSONALSPACE) is not mounted.`,
       );
     }
     if (space.config_valid !== true) {
@@ -378,23 +397,18 @@ function selectPersonalHostedApps(configuration, apps) {
   return { apps: selected, skipped };
 }
 
-function ownerPersonalspace(configuration, spaces) {
-  const dirName = `${configuration.owner}${personalspaceDirSuffix}`.toLowerCase();
+// The exact configured folder is the binding; the owner slug is a DNS name
+// only and is never compared with the (renameable) GitHub login.
+function boundPersonalspace(configuration, spaces) {
   return (spaces ?? []).find((space) =>
-    typeof space?.dir_name === "string"
-    && space.dir_name.toLowerCase() === dirName
-    && space.is_owner_primary === true
-    && typeof space.owner === "string"
-    && space.owner.toLowerCase() === configuration.owner) ?? null;
+    space?.dir_name === configuration.personalspace
+    && space.is_owner_primary === true) ?? null;
 }
 
 function personalAppOfOwner(app, configuration) {
   return app?.personal === true
     && app.surface_scope === "private"
-    && typeof app.space_owner === "string"
-    && app.space_owner.toLowerCase() === configuration.owner
-    && typeof app.space === "string"
-    && app.space.toLowerCase() === `${configuration.owner}${personalspaceDirSuffix}`.toLowerCase();
+    && app.space === configuration.personalspace;
 }
 
 function personalAppInHostedScope(app, configuration) {
@@ -469,6 +483,8 @@ function validHostedContext(configuration) {
   if (configuration?.profile === "hosted" && configuration.scope === "personal") {
     return validHostedMachineLabel(configuration.owner)
       && configuration.machine === configuration.owner
+      && personalspaceFolderPattern.test(configuration.personalspace ?? "")
+      && configuration.domain === personalHostedDomain
       && configuration.organization_slug === null
       && configuration.team_id === null
       && dnsDomainPattern.test(configuration.domain ?? "");
