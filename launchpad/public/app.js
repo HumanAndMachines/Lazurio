@@ -385,6 +385,7 @@ const elements = {
   toastRoot: document.querySelector("#toastRoot"),
   mostUsedPanel: document.querySelector("#mostUsedPanel"),
   mostUsed: document.querySelector("#mostUsed"),
+  chatButton: document.querySelector("#chatButton"),
   notificationsToggle: document.querySelector("#notificationsToggle"),
   notificationsPanel: document.querySelector("#notificationsPanel"),
   notificationsBadge: document.querySelector("#notificationsBadge"),
@@ -400,6 +401,7 @@ initTheme();
 initScrollOffset();
 initResponsiveChrome();
 initNotifications();
+initChat();
 elements.guideTile?.setAttribute("href", guideDocumentationUrl(getLocale()));
 // Personalspace rail dostane most k toastům a k Synchronizovat reloadu, ať
 // osobní runtime akce vypadají stejně jako firemní.
@@ -2230,6 +2232,32 @@ function persistReadNotifications() {
     // Zaplněný nebo zakázaný localStorage nesmí shodit panel; stav přečtení
     // se pak jen nepřenese do dalšího spuštění.
   }
+}
+
+// Chat pairs this admitted browser with the Machine's own T3 Code. The
+// server mints a one-time token and returns the T3 pair URL; the token rides
+// only in the URL fragment of this navigation.
+function initChat() {
+  const button = elements.chatButton;
+  if (!button) return;
+  fetchJsonSafe("/api/chat").then((chat) => {
+    button.hidden = !chat?.available;
+  });
+  // Back from T3 restores this page from the bfcache with the button still
+  // disabled by the click that navigated away.
+  window.addEventListener("pageshow", () => {
+    button.disabled = false;
+  });
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    try {
+      const { url } = await fetchJson("/api/chat/pair", { method: "POST" });
+      window.location.assign(url);
+    } catch {
+      toast(t("topbar.chatFailed"), "error");
+      button.disabled = false;
+    }
+  });
 }
 
 function initNotifications() {

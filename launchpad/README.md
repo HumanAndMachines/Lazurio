@@ -975,6 +975,26 @@ API calls resolve against this mount, leaving sibling applications such as
 `/t3code/` to the machine gateway. This is URL routing, not an additional
 access boundary; the existing request trust checks still apply.
 
+### Chat: entry into the Machine's T3 Code
+
+A hosted Machine may configure `LAZURIO_T3CODE_URL` (the clean HTTPS mount of
+its own T3 Code, ending with `/`, for example
+`https://t3code.<vm>.<org>.lazurio.io/t3code/`) and
+`LAZURIO_T3CODE_PAIRING_COMMAND` (a JSON argv whose first two items are the
+absolute Node and T3 CLI paths, followed by `auth pairing create --base-dir
+<T3 home>`). Both come from the Machine definition; Launchpad derives nothing
+from the request. With both set, the top bar shows **Chat**; setting only one
+is a start-up error, and a local profile refuses the pair entirely.
+
+`POST /api/chat/pair` passes the shared mutation trust gate (same origin plus a
+gateway-revalidated session), runs the CLI without a shell with `--ttl 60s
+--label launchpad-chat --json` and returns `<T3 mount>pair#token=<token>`.
+The browser navigates there and T3 consumes the one-time token. The token
+never enters a log or an error message. This adds no new boundary: anyone with
+a shell on the Machine can mint the same token, and anyone admitted to
+Launchpad already may change the Machine's source and settings. Opening T3
+directly still shows its pairing page.
+
 Hosted module links use the same machine origin as Launchpad. A module must
 serve its assigned path; there is no fallback to per-module container hosts.
 The lifecycle configuration fingerprint includes the machine-path routing
