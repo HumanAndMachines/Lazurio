@@ -938,17 +938,18 @@
  * 21. 9. 2026, kde horní část shellu potřebovala nízkou dlaždici čitelnou
  * jako seznam, ne jako mřížku aplikací.
  *
- * Plocha je BÍLÁ, protože řádková dlaždice leží na papírovém pásu — papír je
- * jeviště pro bílé objekty. Sloupcová `.lz-tile` zůstává papírová na bílém
- * pásu; obě kompozice jsou v kánonu a tahle varianta ani jednu neruší.
+ * Leží na BÍLÉ obsahové ploše, takže ji od plochy nemůže odlišit výplň a
+ * hranici drží vlasový rámeček — stejný materiál jako `.lz-app-window`.
+ * Sloupcová `.lz-tile` zůstává papírová bez obrysu; tahle varianta ji neruší.
  *
- * Hloubku nenese stín. Design systém žádný vržený stín nemá a hover i výběr
- * drží plocha a inkoustová hrana, stejně jako u `.lz-tile.is-selected`. */
+ * Hloubku nenese stín. Design systém žádný vržený stín nemá, takže hover
+ * ztmaví rámeček na inkoust. Důraz je na hraně, ne pod objektem. */
 .lz-tile--row {
 	min-height: calc(var(--lz-grid-step) + var(--lz-space-32));
 	flex-direction: row;
 	align-items: center;
 	gap: var(--lz-space-16);
+	border: 1px solid var(--lz-line-faint);
 	background: var(--lz-surface);
 }
 
@@ -986,20 +987,21 @@
 
 .lz-tile--row:hover,
 .lz-tile--row:focus-within {
-	box-shadow: inset 2px 0 0 var(--lz-ink);
+	border-color: var(--lz-ink);
 }
 
-/* Nedostupný modul je prázdné místo, ne ztmavená dlaždice: bez výplně a s
- * čárkovanou linkou. Šedá výplň by ho spletla s obyčejnou dlaždicí. */
+/* Nedostupný modul je prázdné místo: papírová výplň a čárkovaná linka. Na
+ * bílé ploše tak čte jako slot, který na modul čeká, a přitom nesoupeří
+ * s připravenými dlaždicemi. */
 .lz-tile--empty {
 	border: 1px dashed var(--lz-line);
-	background: transparent;
+	background: var(--lz-paper);
 	color: var(--lz-ink-faint);
 }
 
 .lz-tile--empty:hover,
 .lz-tile--empty:focus-within {
-	box-shadow: none;
+	border-color: var(--lz-line);
 }
 
 .lz-card-grid,
@@ -1819,13 +1821,17 @@
 
 /* Aplikační shell a scope rail ----------------------------------------- */
 
-/* Shell jedné lišty. Svislý rail nese prostory (Lazurio a Mašinu), obsah
- * aktivního prostoru leží vedle něj na papíru. Druhá vodorovná lišta nad
- * obsahem se nezavádí; utility patří do hlavičky aktivního prostoru. */
+/* Shell jedné lišty. Obsahová plocha je BÍLÁ, protože je to dokument; rám
+ * je papírový rail vedle ní, oddělený vlasovou linkou. Druhá vodorovná lišta
+ * nad obsahem se nezavádí; utility patří do hlavičky aktivního prostoru.
+ *
+ * Pořadí ploch schválila Principálka 2026-09-21: bílá plocha, papírový rail.
+ * Obrácené pořadí (papírová plocha, bílé objekty) je v kánonu taky, ale pro
+ * tenhle shell zvolené není. */
 .lz-app-shell {
 	display: flex;
 	min-height: 100vh;
-	background: var(--lz-paper);
+	background: var(--lz-surface);
 }
 
 .lz-app-shell__main {
