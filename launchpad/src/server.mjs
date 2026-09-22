@@ -1,5 +1,5 @@
 import { normalizeLaunchpadBasePath, launchpadPath, launchpadRoute } from "../public/base-path.js";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { hostedRequestMayStartApp } from "./hosted-readiness-lib.mjs";
 import { constants, existsSync, lstatSync, realpathSync } from "fs";
 import { open, readFile } from "fs/promises";
@@ -139,9 +139,17 @@ if (t3Chat && requestTrustProfile === "local") {
   // A local Launchpad has no gateway admission to lean on.
   throw new Error("LAZURIO_T3CODE_URL is valid only behind a hosted Machine gateway.");
 }
-const launchpadLifecycleConfigurationId = personalEntry
+const baseLifecycleConfigurationId = personalEntry
   ? personalEntryConfigurationId(personalEntry)
   : hostedLifecycleConfigurationId(hostedWorkspace);
+// A changed Chat configuration must replace, not reuse, a running Launchpad.
+// Without Chat the identity stays exactly what it was.
+const launchpadLifecycleConfigurationId = t3Chat && baseLifecycleConfigurationId
+  ? createHash("sha256").update(JSON.stringify({
+    base: baseLifecycleConfigurationId,
+    t3_chat: { url: t3Chat.url, command: t3Chat.command },
+  })).digest("hex")
+  : baseLifecycleConfigurationId;
 const basePath = normalizeLaunchpadBasePath(process.env.LAZURIO_LAUNCHPAD_BASE_PATH ?? "/");
 const knownLaunchpadMounts = new Map();
 const launchpadServerIdentity = buildServerIdentity({

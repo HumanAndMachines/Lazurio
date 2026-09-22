@@ -2243,6 +2243,11 @@ function initChat() {
   fetchJsonSafe("/api/chat").then((chat) => {
     button.hidden = !chat?.available;
   });
+  // Back from T3 restores this page from the bfcache with the button still
+  // disabled by the click that navigated away.
+  window.addEventListener("pageshow", () => {
+    button.disabled = false;
+  });
   button.addEventListener("click", async () => {
     button.disabled = true;
     try {
