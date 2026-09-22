@@ -6,7 +6,7 @@ Launchpad načítá tyto soubory jako runtime kopii kanonického design systému
 - `tokens.css`
 - `components.css`
 
-Snapshot vychází z commitu `861df8fd87f2a473daa4697679020aa51e133895`.
+Snapshot vychází z commitu `dbc4542896cdf14e7135e2b8cc061c92b42f4bff`.
 Při aktualizaci se oba soubory kopírují společně a následně se spouští
 `bun run check` v repozitáři Launchpadu. Lokální úpravy vendor souborů nejsou
 zdrojem pravdy; změna nejdřív patří do design systému Lazurio.
