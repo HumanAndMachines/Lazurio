@@ -104,6 +104,55 @@ const worktreeSupportedPackageManagers = new Set(["bun"]);
 const worktreeDependencyInactiveStatuses = new Set(["stale", "merged_cleanup_needed"]);
 let cachedDoctorReportSchema = null;
 
+// Hosted personal scope: the Machine carries no Organization repositories, so
+// the Launchpad serves the Apps contract without running Organization
+// discovery at all (no Organization read model, lanes or Git census).
+export async function buildEmptyLaunchpadAppsResponse({
+  companiesRoot = join(import.meta.dirname, "..", ".."),
+  rootSourceRoot = companiesRoot,
+} = {}) {
+  const companiesConfig = await readCompaniesConfig(rootSourceRoot);
+  return {
+    schema_version: "companiesascode.launchpad.apps.v1",
+    generated_at: new Date().toISOString(),
+    launchpad_root: workspaceSummary(companiesConfig),
+    companies_workspace: workspaceSummary(companiesConfig),
+    root: companiesRoot,
+    control_root: rootSourceRoot,
+    ok: true,
+    summary: {
+      app_count: 0,
+      invalid_app_count: 0,
+      organization_count: 0,
+      company_count: 0,
+      port_overlap_count: 0,
+      module_listener_drift_count: 0,
+      port_policy_issue_count: 0,
+      organization_port_pool_overlap_count: 0,
+      template_mount_count: 0,
+      template_app_count: 0,
+      failure_count: 0,
+      warning_count: 0,
+    },
+    organizations: [],
+    companies: [],
+    templates: [],
+    template_mounts: [],
+    template_apps: [],
+    apps: [],
+    port_overlaps: [],
+    module_listener_drifts: [],
+    module_contracts: [],
+    port_policy_issues: [],
+    organization_port_pool_overlaps: [],
+    failures: [],
+    discovery_warnings: [],
+    git_inventory_warnings: [],
+    git_worktree_warnings: [],
+    warnings: [],
+  };
+}
+
 export async function buildLaunchpadAppsResponse({
   companiesRoot = join(import.meta.dirname, "..", ".."),
   rootSourceRoot = companiesRoot,

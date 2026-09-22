@@ -87,30 +87,36 @@ origin nebo cross-site request končí `403` před routingem.
 
 Výchozí hosted scope je `LAZURIO_HOSTED_SCOPE=organization` (výše popsaný
 Team Workspace; jeho výstupy i lifecycle identita se nemění). Osobní hostovaná
-Mašina Principála (decisions 0153/0154) používá
+Mašina Principála (decisions 0153/0154/0155) používá
 `LAZURIO_HOSTED_SCOPE=personal` s tímto kontraktem:
 
-- `LAZURIO_WORKSPACE_PROFILE=hosted`, `LAZURIO_HOSTED_DOMAIN=lazurio.io`;
-- `LAZURIO_HOSTED_OWNER=<lowercase GitHub login>` — povinný, stejná pravidla
-  jako label Mašiny (`[a-z0-9]` s jednoduchými pomlčkami, nejvýše 32 znaků);
+- `LAZURIO_WORKSPACE_PROFILE=hosted` a `LAZURIO_HOSTED_DOMAIN` přesně
+  `lazurio.io` (jiná doména je startup chyba);
+- `LAZURIO_HOSTED_OWNER=<osobní DNS slug>` — lowercase login zmrazený při
+  založení Mašiny (`[a-z0-9]` s jednoduchými pomlčkami, nejvýše 32 znaků);
+  rename GitHub loginu ho nemění a s aktuálním loginem se nikdy neporovnává;
 - label Mašiny (`LAZURIO_HOSTED_MACHINE` nebo
-  `LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN=https://launchpad.<login>.lazurio.io`)
-  se musí rovnat ownerovi;
+  `LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN=https://launchpad.<slug>.lazurio.io`)
+  se musí rovnat `LAZURIO_HOSTED_OWNER`;
+- `LAZURIO_HOSTED_PERSONALSPACE=<přesný název složky v personalspace/>`
+  (např. `immakermatty_GEN3`; jen název složky `<login>_GEN3`, bez oddělovačů
+  cesty) — jediná vazba na Personalspace;
 - `LAZURIO_ORGANIZATION_SLUG` ani `LAZURIO_TEAM_ID` nastavené být nesmí —
-  osobní Mašina nemá org repozitáře; `LAZURIO_HOSTED_OWNER` naopak v
-  organization scope Launchpad odmítne;
+  osobní Mašina nemá org repozitáře; `LAZURIO_HOSTED_OWNER` a
+  `LAZURIO_HOSTED_PERSONALSPACE` naopak organization scope odmítne;
 - auth-check a cookie proměnné zůstávají stejné jako výše.
 
-Hosted vazba vyžaduje namountovaný vlastní Personalspace
-`personalspace/<login>_GEN3` (login se porovnává bez ohledu na velikost
-písmen, stejně jako Personalspace discovery); jinak failne s jasnou chybou.
-Z výběru jsou jen osobní Apps tohoto ownera — pro každý Modul jeho deklarovaná
-výchozí App (`lazurio.module.v1` `default_app`, `lazurio.runtime.v1`) — a
-Apps Organizací se nikdy nevyberou. URL je `https://<module>.<login>.lazurio.io/`
-se stejnými pravidly labelu jako Team Workspace. `lazurio update` v osobním
-scope aktualizuje pouze Lazurio Root. Organization lane osobní Mašiny žádnou
-App neudržuje; napojení osobní lane na hosted ingress (`ensure`) a otevření
-Personalspace API mimo loopback je samostatný follow-up.
+Launchpad při startu (před listenerem) ověří, že je přesně tato složka
+namountovaná a je validním Personalspace; jinak nenastartuje. Organizační read
+model, Organization runtime lane ani Git/worktree API se v osobním scope vůbec
+nesestavují: `/api/apps` vrací prázdný katalog bez Organizací a `/api/git/*`
+mimo Root update odpovídá `404 organization_lane_unavailable`. Z výběru jsou
+jen osobní Apps té složky — pro každý Modul jeho deklarovaná výchozí App
+(`lazurio.module.v1` `default_app`, `lazurio.runtime.v1`) — na
+`https://<module>.<slug>.lazurio.io/`. `lazurio update` v osobním scope
+aktualizuje pouze Lazurio Root. Napojení osobní lane na hosted ingress
+(`ensure`) a otevření Personalspace API mimo loopback je samostatný follow-up;
+do té doby osobní Mašina žádnou App automaticky nespouští.
 
 Hosted profil je privátní vývojový preview povrch uvnitř schváleného
 Tailscale/VPN access plane, nikoli produkční deployment. Zdroj lze editovat bez

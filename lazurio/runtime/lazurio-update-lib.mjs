@@ -1940,6 +1940,7 @@ function normalizeHostedWorkspace(workspace) {
     profile: workspace?.profile,
     scope: workspace?.scope ?? undefined,
     owner: workspace?.owner ?? undefined,
+    personalspace: workspace?.personalspace ?? undefined,
     organizationSlug: workspace?.organization_slug,
     teamId: workspace?.team_id,
     domain: workspace?.domain,

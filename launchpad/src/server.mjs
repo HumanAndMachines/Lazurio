@@ -7,6 +7,7 @@ import { createConnection } from "node:net";
 import { isAbsolute, join, normalize, relative, resolve } from "path";
 import {
   buildDoctorReportFromAppsResponse,
+  buildEmptyLaunchpadAppsResponse,
   buildLaunchpadAppsResponse,
   loadRootDoctorSchema,
 } from "../../lazurio/runtime/diagnostics-lib.mjs";
@@ -22,6 +23,7 @@ import {
   acquireServerStartupLock,
 } from "./server-lifetime-lock-lib.mjs";
 import { APP_FILESYSTEM_ROOT, discoverLaunchpadApps } from "../../lazurio/runtime/discovery-lib.mjs";
+import { discoverPersonalspace } from "../../lazurio/runtime/personalspace-lib.mjs";
 import {
   GitApiError,
   buildGitApiResponse,
@@ -119,6 +121,16 @@ const launchpadRootId = computeServerRootId(canonicalCompaniesRoot);
 const launchpadControlRootId = computeServerRootId(rootSourceRoot);
 const launchpadInstallGeneration = computeServerInstallGeneration(lazurioCodeRoot);
 const hostedWorkspace = hostedWorkspaceConfigurationFromEnvironment(process.env);
+// Hosted personal scope (decisions 0153/0154/0155): the Machine carries no
+// Organization repositories. The Launchpad never builds the Organization read
+// model or its lanes there, and refuses to start unless the exact configured
+// Personalspace is mounted and valid.
+const personalHostedScope = hostedWorkspace.profile === "hosted" && hostedWorkspace.scope === "personal";
+if (personalHostedScope && options.organization !== undefined) {
+  throw new Error("--organization is not valid on a hosted personal Machine (LAZURIO_HOSTED_SCOPE=personal).");
+}
+// Fail closed before any listener, lock or locator exists.
+if (personalHostedScope) await validatePersonalHostedBinding();
 const personalEntry = loadPersonalEntryConfiguration(process.env);
 const requestTrustProfile = personalEntry ? "personal" : hostedWorkspace.profile;
 const launchpadLifecycleConfigurationId = personalEntry
@@ -168,12 +180,14 @@ const runtimeManager = createRuntimeManager({
   stateRoot: launchpadStateRoot,
   lifecycleProfile: hostedWorkspace.profile,
   hostedWorkspace,
-  discover: (_root, discoveryOptions = {}) => discoverLaunchpadApps(rootSourceRoot, {
-    ...discoveryOptions,
-    runtime_root: configuredRuntimeRoot,
-    organization_mount_root: companiesRoot,
-    machine_context_root: companiesRoot,
-  }),
+  discover: (_root, discoveryOptions = {}) => personalHostedScope
+    ? { apps: [], invalid_apps: [], failures: [], warnings: [], organizations: [] }
+    : discoverLaunchpadApps(rootSourceRoot, {
+      ...discoveryOptions,
+      runtime_root: configuredRuntimeRoot,
+      organization_mount_root: companiesRoot,
+      machine_context_root: companiesRoot,
+    }),
 });
 function runWorkspaceUpdate() {
   return runLazurioUpdate({
@@ -460,6 +474,12 @@ async function buildAppsResponse({ force = false } = {}) {
 }
 
 async function buildAppsResponseUncached({ includeGit = false } = {}) {
+  if (personalHostedScope) {
+    return {
+      response: await buildEmptyLaunchpadAppsResponse({ companiesRoot, rootSourceRoot }),
+      logoPaths: new Map(),
+    };
+  }
   const response = await buildLaunchpadAppsResponse({
     companiesRoot,
     rootSourceRoot,
@@ -490,7 +510,22 @@ async function buildAppsResponseUncached({ includeGit = false } = {}) {
   return { response, logoPaths: nextLogoPaths };
 }
 
+async function validatePersonalHostedBinding() {
+  const discovery = await discoverPersonalspace(companiesRoot, {
+    rootSourceRoot,
+    primarySpaceDir: hostedWorkspace.personalspace,
+  });
+  return validateHostedWorkspaceBindings(hostedWorkspace, discovery);
+}
+
 async function refreshHostedWorkspaceMaintenance({ warnSkipped = false } = {}) {
+  if (personalHostedScope) {
+    // Personal Apps are not yet routed through a hosted lane; re-check only the
+    // binding so an unmounted Personalspace is reported, never masked.
+    await validatePersonalHostedBinding();
+    hostedMaintenance = { total: 0, skipped: [] };
+    return hostedMaintenance;
+  }
   const inventory = await buildLaunchpadAppsResponse({
     companiesRoot,
     rootSourceRoot,
@@ -514,13 +549,6 @@ async function refreshHostedWorkspaceMaintenance({ warnSkipped = false } = {}) {
 }
 
 function syncHostedWorkspaceMaintenance(inventory) {
-  // A personal Machine carries no Organization repositories; the Organization
-  // lane never schedules an App there. Personalspace Apps are selected by
-  // selectHostedWorkspaceApps in the personal scope and are not yet routed
-  // through this Organization runtime manager.
-  if (hostedWorkspace.scope === "personal") {
-    return { ...runtimeManager.maintainApps([]), skipped: [] };
-  }
   // A fresh hosted Machine is handed to its operator before they authenticate
   // to GitHub and materialize an Organization. Keep the authenticated shell
   // alive with no maintained apps; absence never widens its configured scope.
@@ -1067,6 +1095,11 @@ function gitApiRoute(pathname) {
 }
 
 async function handleGitApiRoute(request, url, route) {
+  // The Git read model and worktree lanes span Organization repositories. A
+  // personal Machine has none; only the Root-only update pulls remain.
+  if (personalHostedScope && !["repo_pull", "repo_autostash_pull", "pull_all"].includes(route.kind)) {
+    return jsonResponse({ error: "organization_lane_unavailable" }, 404);
+  }
   try {
     if (route.kind === "create_worktree") {
       if (request.method !== "POST") return jsonResponse({ error: "method_not_allowed" }, 405);

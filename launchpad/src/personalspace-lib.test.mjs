@@ -303,13 +303,13 @@ test("Personalspace materializes lazurio.runtime.v1 from the module-owned lease"
   });
 });
 
-test("hosted personal scope selects the discovered default App of the owner's Personalspace", async () => {
+test("hosted personal scope binds the exact folder and selects its default App despite a login rename", async () => {
+  // The Machine/DNS slug "frozen-slug" was fixed at creation; the GitHub login
+  // is now ExampleUser. Binding follows only LAZURIO_HOSTED_PERSONALSPACE.
   const root = await createPersonalspaceFixture({
-    localOwner: "ExampleUser",
     spaces: [{
       dirName: "ExampleUser_GEN3",
       owner: "ExampleUser",
-      // Mixed-case login: the hosted owner label is its lowercase form.
       config: {
         ...personalConfig("ExampleUser"),
         buddy: { ...personalConfig("ExampleUser").buddy, slug: "exampleuser-buddy" },
@@ -330,17 +330,27 @@ test("hosted personal scope selects the discovered default App of the owner's Pe
     }],
   });
 
-  const discovery = await discoverPersonalspace(root, { primaryOwner: "exampleuser" });
+  const configuration = createHostedWorkspaceConfiguration({
+    profile: "hosted", scope: "personal", owner: "frozen-slug", personalspace: "ExampleUser_GEN3",
+    domain: "lazurio.io", launchpadExternalOrigin: "https://launchpad.frozen-slug.lazurio.io",
+  });
+  const discovery = await discoverPersonalspace(root, { primarySpaceDir: configuration.personalspace });
+  expect(discovery.primary_owner).toBe("ExampleUser");
   expect(discovery.apps).toHaveLength(1);
   expect(discovery.apps[0].module_app).toMatchObject({ declared: true, default: true });
-  const configuration = createHostedWorkspaceConfiguration({
-    profile: "hosted", scope: "personal", owner: "exampleuser",
-    domain: "lazurio.io", launchpadExternalOrigin: "https://launchpad.exampleuser.lazurio.io",
-  });
   expect(validateHostedWorkspaceBindings(configuration, discovery)).toBe(configuration);
   const selection = selectHostedWorkspaceApps(configuration, discovery);
   expect(selection).toEqual({ apps: [discovery.apps[0]], skipped: [] });
-  expect(requireHostedAppUrl(selection.apps[0], configuration)).toBe("https://notes.exampleuser.lazurio.io/");
+  expect(requireHostedAppUrl(selection.apps[0], configuration)).toBe("https://notes.frozen-slug.lazurio.io/");
+
+  // A folder that is not mounted binds nothing and fails closed.
+  const missing = createHostedWorkspaceConfiguration({
+    profile: "hosted", scope: "personal", owner: "frozen-slug", personalspace: "frozen-slug_GEN3",
+    domain: "lazurio.io", machine: "frozen-slug",
+  });
+  const missingDiscovery = await discoverPersonalspace(root, { primarySpaceDir: missing.personalspace });
+  expect(missingDiscovery.spaces).toEqual([]);
+  expect(() => validateHostedWorkspaceBindings(missing, missingDiscovery)).toThrow("is not mounted");
 });
 
 test("Personalspace odmítne workspace junction mimo owner checkout a neuniknou z něj aplikace", async () => {

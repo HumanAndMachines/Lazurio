@@ -1203,6 +1203,83 @@ for (const state of ["planned", "corrupt", "conflicting"]) {
   });
 }
 
+function personalHostedEnvironment(stateRoot, authPort) {
+  return {
+    LAZURIO_WORKSPACE_PROFILE: "hosted",
+    LAZURIO_HOSTED_SCOPE: "personal",
+    // Frozen Machine/DNS slug; deliberately not the Personalspace login.
+    LAZURIO_HOSTED_OWNER: "frozen-slug",
+    LAZURIO_HOSTED_PERSONALSPACE: "exampleuser_GEN3",
+    LAZURIO_HOSTED_DOMAIN: "lazurio.io",
+    LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot,
+    LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN: "https://launchpad.frozen-slug.lazurio.io",
+    LAZURIO_LAUNCHPAD_AUTH_COOKIE_NAME: "__Secure-lazurio-personal",
+    LAZURIO_LAUNCHPAD_AUTH_CHECK_URL: `https://127.0.0.1:${authPort}/oauth2/auth`,
+  };
+}
+
+async function mountPersonalspace(root, login) {
+  const space = join(root, "personalspace", `${login}_GEN3`);
+  await mkdir(join(space, "workspace"), { recursive: true });
+  await writeJson(join(space, "personal.gen3.json"), {
+    schema_version: "humanandmachines.personal.gen3.v1",
+    personal_generation: "gen3",
+    owner: { github_username: login, display_name: `${login} Display`, type: "human" },
+    repository: {
+      github_repo: `${login}/${login}_GEN3`,
+      mount_path: `personalspace/${login}_GEN3`,
+      visibility: "private",
+      mount_strategy: "doctor-managed-nested-repo",
+    },
+    privacy: { default_share: "private", agent_boundary: "personal-context-only", shared_outputs: "metadata-only" },
+    modules_manifest_path: "modules.manifest.json",
+    workspace_path: "workspace",
+    gbrain: {
+      path: "gbrain",
+      repository: { github_repo: `${login}/${login}-gbrain`, visibility: "private", mount_strategy: "doctor-managed-nested-repo" },
+      software: { github_repo: "Lazurio/gbrain", install_source: "github:Lazurio/gbrain" },
+      default_shared: false,
+      human_editor: "obsidian",
+      agent_access: "mcp-only",
+    },
+    secrets: { path: "secrets", custody_pattern: "personalspace/<owner>_GEN3/secrets/<provider>/<scope>/<purpose>", git: "ignored" },
+    shared_spaces: [],
+  });
+  await writeJson(join(space, "modules.manifest.json"), { personal_generation: "gen3", owner: login, module_slots: [] });
+}
+
+test("hosted personal Launchpad refuses to start without its exact Personalspace", async () => {
+  const root = await createLaunchpadGitFixture();
+  const stateRoot = `${root}-personal-state`;
+  tempRoots.push(root, stateRoot);
+  // A Personalspace of the same slug but another folder is not the binding.
+  await mountPersonalspace(root, "frozen-slug");
+  await expect(startLaunchpadServer(root, {
+    env: personalHostedEnvironment(stateRoot, await findFreePort()),
+  })).rejects.toThrow("personalspace/exampleuser_GEN3 (LAZURIO_HOSTED_PERSONALSPACE) is not mounted");
+});
+
+test("hosted personal Launchpad never builds the Organization read model", async () => {
+  const root = await createLaunchpadGitFixture();
+  const stateRoot = `${root}-personal-state`;
+  tempRoots.push(root, stateRoot);
+  await mountPersonalspace(root, "exampleuser");
+  // A corrupt Organization mount fails every Organization discovery (the
+  // Organization-scope hosted startup rejects it). Personal scope never reads it.
+  await writeFile(join(root, "organizations", "BetaCo_GEN3", "company.gen3.json"), "{ broken");
+  const { port } = await startLaunchpadServer(root, {
+    env: personalHostedEnvironment(stateRoot, await findFreePort()),
+  });
+  const inventory = await getJson(port, "/api/apps");
+  expect(inventory).toMatchObject({ ok: true, apps: [], organizations: [], failures: [], warnings: [] });
+  expect((await getJson(port, "/health")).maintenance.total).toBe(0);
+  const gitRepos = await fetch(`http://127.0.0.1:${port}/api/git/repos`);
+  expect(gitRepos.status).toBe(404);
+  expect((await gitRepos.json()).error).toBe("organization_lane_unavailable");
+  const orgRuntime = await fetch(`http://127.0.0.1:${port}/api/apps/betaco-hosted-deals-v1/health`);
+  expect(orgRuntime.status).toBe(404);
+});
+
 test("hosted Launchpad keeps Team modules cold and derives their external URLs", async () => {
   const root = await createLaunchpadGitFixture();
   const stateRoot = `${root}-launchpad-state`;

@@ -37,6 +37,7 @@ test("hosted workspace identity is four validated scalars rather than a service 
     profile: "hosted",
     scope: "organization",
     owner: null,
+    personalspace: null,
     organization_slug: "ExampleOrg",
     team_id: "builders",
     domain: "workspace.example.test",
@@ -375,13 +376,14 @@ test("invalid hosted context never manufactures a root application URL", () => {
   }
 });
 
-// Personal scope (decisions 0153/0154): one hosted Machine per human
-// Principal, named after the lowercase GitHub login, serving only the
-// Principal's own Personalspace Apps at https://<app>.<login>.lazurio.io/.
+// Personal scope (decisions 0153/0154/0155): one hosted Machine per human
+// Principal. Its DNS/Machine slug is frozen at creation; the Personalspace is
+// bound by its exact folder, never by comparing the slug with the login.
 const personalEnvironment = Object.freeze({
   LAZURIO_WORKSPACE_PROFILE: "hosted",
   LAZURIO_HOSTED_SCOPE: "personal",
   LAZURIO_HOSTED_OWNER: "immakermatty",
+  LAZURIO_HOSTED_PERSONALSPACE: "ImMakerMatty_GEN3",
   LAZURIO_HOSTED_DOMAIN: "lazurio.io",
   LAZURIO_HOSTED_MACHINE: "immakermatty",
   LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN: "https://launchpad.immakermatty.lazurio.io",
@@ -417,11 +419,12 @@ function personalSpace(overrides = {}) {
   };
 }
 
-test("personal scope parses the owner-named Machine without Organization identity", () => {
+test("personal scope parses the owner-named Machine and its exact Personalspace folder", () => {
   expect(personal).toEqual({
     profile: "hosted",
     scope: "personal",
     owner: "immakermatty",
+    personalspace: "ImMakerMatty_GEN3",
     organization_slug: null,
     team_id: null,
     domain: "lazurio.io",
@@ -436,7 +439,7 @@ test("personal scope parses the owner-named Machine without Organization identit
   })).toEqual(personal);
 });
 
-test("personal scope fails closed on a missing owner, a foreign Machine or inherited Organization env", () => {
+test("personal scope fails closed on missing owner/folder, foreign Machine, other domain or Organization env", () => {
   const { LAZURIO_HOSTED_OWNER: _owner, ...withoutOwner } = personalEnvironment;
   expect(() => hostedWorkspaceConfigurationFromEnvironment(withoutOwner)).toThrow("LAZURIO_HOSTED_OWNER is required");
   expect(() => hostedWorkspaceConfigurationFromEnvironment({
@@ -445,6 +448,22 @@ test("personal scope fails closed on a missing owner, a foreign Machine or inher
   expect(() => hostedWorkspaceConfigurationFromEnvironment({
     ...personalEnvironment, LAZURIO_HOSTED_OWNER: "a".repeat(33),
   })).toThrow("LAZURIO_HOSTED_OWNER");
+  const { LAZURIO_HOSTED_PERSONALSPACE: _folder, ...withoutFolder } = personalEnvironment;
+  expect(() => hostedWorkspaceConfigurationFromEnvironment(withoutFolder))
+    .toThrow("LAZURIO_HOSTED_PERSONALSPACE is required");
+  for (const folder of ["ImMakerMatty", "../ImMakerMatty_GEN3", "personalspace/ImMakerMatty_GEN3",
+    "ImMakerMatty_GEN3/", "Im.Maker_GEN3", "_GEN3", "ImMakerMatty\\x_GEN3"]) {
+    expect(() => hostedWorkspaceConfigurationFromEnvironment({
+      ...personalEnvironment, LAZURIO_HOSTED_PERSONALSPACE: folder,
+    })).toThrow("LAZURIO_HOSTED_PERSONALSPACE");
+  }
+  for (const domain of ["example.test", "LAZURIO.io", "lazurio.io.", "dev.lazurio.io"]) {
+    expect(() => hostedWorkspaceConfigurationFromEnvironment({
+      ...personalEnvironment,
+      LAZURIO_HOSTED_DOMAIN: domain,
+      LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN: "",
+    })).toThrow("LAZURIO_HOSTED_DOMAIN must be exactly lazurio.io");
+  }
   expect(() => hostedWorkspaceConfigurationFromEnvironment({
     ...personalEnvironment,
     LAZURIO_HOSTED_MACHINE: "other",
@@ -462,11 +481,15 @@ test("personal scope fails closed on a missing owner, a foreign Machine or inher
   expect(() => hostedWorkspaceConfigurationFromEnvironment({
     ...personalEnvironment, LAZURIO_HOSTED_SCOPE: "team",
   })).toThrow("LAZURIO_HOSTED_SCOPE must be organization or personal");
-  // An owner never widens the Organization scope either.
-  expect(() => createHostedWorkspaceConfiguration({
-    profile: "hosted", owner: "immakermatty", organizationSlug: "ExampleOrg",
+  // Personal identity never widens the Organization scope either.
+  const organizationScope = {
+    profile: "hosted", organizationSlug: "ExampleOrg",
     teamId: "builders", domain: "workspace.example.test", machine: "builder",
-  })).toThrow("LAZURIO_HOSTED_OWNER is valid only with LAZURIO_HOSTED_SCOPE=personal");
+  };
+  expect(() => createHostedWorkspaceConfiguration({ ...organizationScope, owner: "immakermatty" }))
+    .toThrow("LAZURIO_HOSTED_OWNER is valid only with LAZURIO_HOSTED_SCOPE=personal");
+  expect(() => createHostedWorkspaceConfiguration({ ...organizationScope, personalspace: "ImMakerMatty_GEN3" }))
+    .toThrow("LAZURIO_HOSTED_PERSONALSPACE is valid only with LAZURIO_HOSTED_SCOPE=personal");
 });
 
 test("Organization scope keeps its lifecycle identity byte-for-byte; personal scope has its own", () => {
@@ -481,8 +504,8 @@ test("Organization scope keeps its lifecycle identity byte-for-byte; personal sc
     .toBe(createHash("sha256").update(legacyInput).digest("hex"));
   expect(hostedLifecycleConfigurationId(personal)).toMatch(/^[a-f0-9]{64}$/);
   expect(hostedLifecycleConfigurationId(personal)).not.toBe(hostedLifecycleConfigurationId(configuration));
-  expect(hostedLifecycleConfigurationId(createHostedWorkspaceConfiguration({
-    profile: "hosted", scope: "personal", owner: "annavesela", domain: "lazurio.io", machine: "annavesela",
+  expect(hostedLifecycleConfigurationId(hostedWorkspaceConfigurationFromEnvironment({
+    ...personalEnvironment, LAZURIO_HOSTED_PERSONALSPACE: "RenamedLogin_GEN3",
   }))).not.toBe(hostedLifecycleConfigurationId(personal));
 });
 
@@ -497,7 +520,7 @@ test("personal Apps open at <app>.<owner>.lazurio.io and Organization Apps never
   expect(hostedApplicationOrigin(workspaceApp(), personal)).toBeNull();
   expect(hostedApplicationOrigin(declaredOrganizationApp(), personal)).toBeNull();
   expect(() => requireHostedAppUrl(workspaceApp(), personal)).toThrow(HostedAppUrlError);
-  // A personal App of another Principal or with a reserved label gets nothing.
+  // An App of another Personalspace folder or with a reserved label gets nothing.
   expect(hostedApplicationOrigin(personalApp({ space_owner: "annavesela", space: "annavesela_GEN3" }), personal))
     .toBeNull();
   expect(hostedApplicationOrigin(personalApp({ module: "launchpad" }), personal)).toBeNull();
@@ -540,19 +563,27 @@ test("personal selection takes one declared default per Personalspace Module and
   expect(selectHostedWorkspaceApps(configuration, { apps: [journal, notes] })).toEqual({ apps: [], skipped: [] });
 });
 
-test("personal binding requires the owner's own mounted Personalspace", () => {
+test("personal binding is the exact configured folder, independent of a renamed GitHub login", () => {
   expect(validateHostedWorkspaceBindings(personal, { spaces: [personalSpace()] })).toBe(personal);
-  expect(validateHostedWorkspaceBindings(personal, {
-    spaces: [personalSpace({ owner: "immakermatty", dir_name: "immakermatty_GEN3" })],
-  })).toBe(personal);
+  // The frozen slug immakermatty survives a rename to NewLogin: the explicit
+  // folder binds, and the slug is never compared with owner.github_username.
+  const renamed = hostedWorkspaceConfigurationFromEnvironment({
+    ...personalEnvironment, LAZURIO_HOSTED_PERSONALSPACE: "NewLogin_GEN3",
+  });
+  const renamedSpace = personalSpace({ owner: "NewLogin", dir_name: "NewLogin_GEN3", mount_path: "personalspace/NewLogin_GEN3" });
+  expect(validateHostedWorkspaceBindings(renamed, { spaces: [renamedSpace] })).toBe(renamed);
+  const renamedApp = personalApp({ space: "NewLogin_GEN3", space_owner: "NewLogin", company: "NewLogin" });
+  expect(requireHostedAppUrl(renamedApp, renamed)).toBe("https://journal.immakermatty.lazurio.io/");
+  // Wrong or missing folder fails, even when the login would match the slug.
   expect(() => validateHostedWorkspaceBindings(personal, { spaces: [] }))
-    .toThrow("has no mounted Personalspace personalspace/immakermatty_GEN3");
+    .toThrow("Personalspace personalspace/ImMakerMatty_GEN3 (LAZURIO_HOSTED_PERSONALSPACE) is not mounted");
+  expect(() => validateHostedWorkspaceBindings(personal, { spaces: [renamedSpace] })).toThrow("is not mounted");
+  expect(() => validateHostedWorkspaceBindings(personal, {
+    spaces: [personalSpace({ owner: "immakermatty", dir_name: "immakermatty_GEN3" })],
+  })).toThrow("is not mounted");
   expect(() => validateHostedWorkspaceBindings(personal, {
     organizations: [{ slug: "ExampleOrg", teams: [{ slug: "builders" }] }],
-  })).toThrow("has no mounted Personalspace");
-  expect(() => validateHostedWorkspaceBindings(personal, {
-    spaces: [personalSpace({ owner: "annavesela", dir_name: "annavesela_GEN3" })],
-  })).toThrow("has no mounted Personalspace");
+  })).toThrow("is not mounted");
   expect(() => validateHostedWorkspaceBindings(personal, {
     spaces: [personalSpace({ config_valid: false })],
   })).toThrow("invalid personal.gen3.json");
