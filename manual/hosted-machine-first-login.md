@@ -20,8 +20,9 @@ OS účtu ani velikosti Teamu — jednočlenný Team nedělá z Mašiny osobní 
 - `owner.kind: organization` a `owner.assignment.kind: team` = **týmová VM**
   (preset `hosted-organization-team`). Pro ni platí
   [samostatná sekce níže](#týmová-vm-identita-organizace-ne-člověka).
-- `owner.kind: personal` = osobní Mašina Principála podle
-  [`hosted-buddy-vps.md`](hosted-buddy-vps.md); tento manuál se na ni nevztahuje.
+- `machine.kind: personal` s `owner.kind: principal` = osobní Mašina
+  Principála podle [`hosted-buddy-vps.md`](hosted-buddy-vps.md); tento manuál
+  se na ni nevztahuje.
 - Soubor chybí, nevaliduje, nebo `owner.assignment` není deklarovaný: Agent
   **nehádá**. Nahlásí operátorovi přesný blocker („Mašina nemá deklarované
   přiřazení; doplní ho owner Deployment Repo v `provision.assignment` guesta“)
@@ -34,9 +35,15 @@ GitHub je jediná autorita přístupů, a proto je `gh` na této Mašině přihl
 **účtem operátora**, ne účtem Organizace ani jiného člověka. Bez přihlášení
 nemá Agent žádnou Organizaci, žádné moduly a žádná repa; má jen čisté Lazurio.
 
-Když Agent na Mašině s `owner.assignment.kind: operator` zjistí
-(`gh auth status --hostname github.com`), že `gh` přihlášený není, **nepokračuje v úkolu, dokud operátora neprovede
-přihlášením**, a vysvětlí mu proč: je to jeho osobní pracovní VM, GitHub
+Na Mašině s `owner.assignment.kind: operator` Agent **před každou prací
+ověří identitu**: `gh api user` musí vrátit přesně `login` rovný
+`owner.assignment.github_login` (case-insensitive) a `id` rovné
+`owner.assignment.github_id`. Přihlášení jiným účtem — cizím, dřívějším nebo
+Organizace — je blocker: Agent nepokračuje, nespouští `lazurio update` ani
+install a řekne operátorovi, že Mašina je přiřazená jinému loginu, než který
+je přihlášený; přehlášení provede jen operátor sám. Když `gh` přihlášený není
+(`gh auth status --hostname github.com`), Agent **nepokračuje v úkolu, dokud
+operátora neprovede přihlášením**, a vysvětlí mu proč: je to jeho osobní pracovní VM, GitHub
 rozhoduje, co v ní smí Agent vidět a měnit, a všechna práce z této Mašiny
 bude připsaná jeho účtu. Postup je stejný jako na pracovní stanici
 (kanonicky skill `lazurio-workstation-install`, sekce o GitHub účtu):
@@ -47,10 +54,9 @@ bude připsaná jeho účtu. Postup je stejný jako na pracovní stanici
    chatu**; nikdy do schránky, issue, repa nebo trvalého logu. Interní
    `device_code`, access token ani privátní klíč nikdy nevypíše.
 2. Po souhlasu operátora nechá tentýž flow nahrát veřejný SSH klíč Mašiny
-   k jeho účtu a ověří, že přihlášený login je přesně
-   `owner.assignment.github_login` z identity Mašiny; jiný účet Agent
-   odmítne jako blocker. Pak ověří `gh auth status` a `git ls-remote` na
-   root repo Organizace.
+   k jeho účtu a zopakuje kontrolu identity výše (`gh api user` → `login` a
+   `id` proti `owner.assignment`); jiný účet Agent odmítne jako blocker.
+   Pak ověří `gh auth status` a `git ls-remote` na root repo Organizace.
 3. `lazurio update` (aktualizace Lazuria je vědomý krok; bez přihlášení
    Organizaci nenatáhne).
 4. `lazurio organization install <github-login-organizace> --role builder --json`
