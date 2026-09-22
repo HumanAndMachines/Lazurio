@@ -22,6 +22,7 @@ import {
   brokeredAuthStatusSatisfied,
   brokeredGitHubIdentity,
   brokeredGitHubProviderContext,
+  brokeredRepositoryAllowed,
 } from "./core/brokered-github-lib.mjs";
 import {
   ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
@@ -745,7 +746,7 @@ async function verifyExistingRepositoryDbCheckout({ targetPath, remote, branch, 
 // malformed Mission Control hranice nesmí vyvolat žádnou provider operaci
 // (clone, fetch, ls-remote) při role-scoped instalaci. Admin instalace
 // (`include`) pokračuje běžnou cestou; malformed deklarace blokuje vždy.
-function repositoryDbScopeResult({ source, organizationPath, slot, parentSlot, restrictedSlotPolicy }) {
+function repositoryDbScopeResult({ source, organizationPath, slot, parentSlot, restrictedSlotPolicy, brokeredIdentity = brokeredGitHubIdentity() }) {
   const classifications = [
     [slot, slot?.path ?? "mission-control/db"],
     [parentSlot, parentSlot?.path ?? "mission-control"],
@@ -759,6 +760,22 @@ function repositoryDbScopeResult({ source, organizationPath, slot, parentSlot, r
       reason: "access_classification_unknown",
       message: `Slot ${unknown[1]} deklaruje neznámý default_access nebo malformed required_roles; Lazurio repository-db fail-safe nematerializuje.`,
     });
+  }
+  // Shared Team VM: a data mount or its app parent outside the broker policy
+  // is out of scope, exactly like an absent module slot in `lazurio update`.
+  if (brokeredIdentity?.valid) {
+    const outside = classifications.find(([candidate]) => (
+      candidate && !brokeredRepositoryAllowed(brokeredIdentity, organizationSlotRepositoryRemote(candidate))
+    ));
+    if (outside) {
+      return {
+        ...repositoryDbResultIdentity({ source, organizationPath, slot }),
+        state: "current",
+        reason: "excluded_by_broker_policy",
+        message: `Slot ${outside[1]} je mimo repozitáře, které broker Organizace této sdílené Team VM povoluje; žádná GitHub operace se nespustila.`,
+        materialization_scope: "excluded_by_broker_policy",
+      };
+    }
   }
   if (restrictedSlotPolicy !== "exclude") return null;
   const restricted = classifications.find(([candidate]) => classifyOrganizationSlotAccess(candidate) === "restricted");

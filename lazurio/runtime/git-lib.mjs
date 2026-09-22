@@ -417,7 +417,8 @@ function commandEnvironment(base, overrides) {
       const safeSterileGitConfig =
         (normalizedKey === "GIT_CONFIG_NOSYSTEM" && value === "1")
         || (normalizedKey === "GIT_CONFIG_GLOBAL" && ["/dev/null", "NUL"].includes(value))
-        || (normalizedKey === "GIT_CONFIG_COUNT" && value === "0");
+        || (normalizedKey === "GIT_CONFIG_COUNT" && value === "0")
+        || brokeredGitConfigEntry(normalizedKey, value);
       if (safePosixAskpass || safeSterileGitConfig) merged[normalizedKey] = value;
       continue;
     }
@@ -464,8 +465,20 @@ function unsafeAmbientGitEnvironmentKey(key) {
 
 function isSterileGitEnvironment(environment) {
   return environment?.GIT_CONFIG_NOSYSTEM === "1"
-    && environment?.GIT_CONFIG_COUNT === "0"
+    && (environment?.GIT_CONFIG_COUNT === "0" || brokeredGitConfigComplete(environment))
     && ["/dev/null", "NUL"].includes(environment?.GIT_CONFIG_GLOBAL);
+}
+
+// Only the exact entries derived from this Machine's Machines-managed broker
+// file may re-enter the sterile lane; a caller cannot inject other Git config.
+function brokeredGitConfigEntry(key, value) {
+  const expected = brokeredGitConfigEnvironment(brokeredGitHubIdentity());
+  return Boolean(expected && Object.hasOwn(expected, key) && expected[key] === value);
+}
+
+function brokeredGitConfigComplete(environment) {
+  const expected = brokeredGitConfigEnvironment(brokeredGitHubIdentity());
+  return Boolean(expected && Object.entries(expected).every(([key, value]) => environment?.[key] === value));
 }
 
 export function minimalRemoteGitEnvironment(base, platform, gitExecutable) {
