@@ -115,9 +115,33 @@ export function brokeredGitHubProviderContext(identity, organizationLogin) {
   return selected ? { cwd: "/", repository: selected.fullName } : null;
 }
 
-/** Exact brokered viewer proof: `gh auth status --json hosts` names the bot. */
+// The exact envelope the released `brokered-gh` adapter (Lazurio/github-app
+// v0.8.0) prints for `gh auth status --json hosts` after a live broker proof.
+const BROKERED_AUTH_ENTRY_KEYS = ["active", "gitProtocol", "host", "login", "scopes", "state", "tokenSource"];
+
+/**
+ * Exact brokered viewer proof: exactly one host (`github.com`) with exactly
+ * one entry, the live broker proof of the bot. Any additional host, entry,
+ * field or identity (for example a personal login next to the bot) fails.
+ */
 export function brokeredAuthStatusSatisfied(value) {
-  const hosts = value?.hosts?.["github.com"];
-  return Array.isArray(hosts)
-    && hosts.some((entry) => entry?.state === "success" && entry?.active === true && entry?.login === BROKERED_GITHUB_ACTOR);
+  if (!isPlainObject(value) || Object.keys(value).join(",") !== "hosts") return false;
+  const hosts = value.hosts;
+  if (!isPlainObject(hosts) || Object.keys(hosts).join(",") !== "github.com") return false;
+  const entries = hosts["github.com"];
+  if (!Array.isArray(entries) || entries.length !== 1) return false;
+  const [entry] = entries;
+  return isPlainObject(entry)
+    && Object.keys(entry).sort().join(",") === BROKERED_AUTH_ENTRY_KEYS.join(",")
+    && entry.state === "success"
+    && entry.active === true
+    && entry.host === "github.com"
+    && entry.login === BROKERED_GITHUB_ACTOR
+    && entry.tokenSource === "lazurio-broker-live-proof"
+    && entry.gitProtocol === "https"
+    && entry.scopes === "";
+}
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }

@@ -82,7 +82,19 @@ function brokeredProviderFixture({ calls, documents, login: viewer = "lazurio-fo
   return (call) => {
     calls.push(call);
     if (call.args.join(" ") === "auth status --json hosts") {
-      return ok({ hosts: { "github.com": [{ state: "success", active: true, host: "github.com", login: viewer }] } });
+      return ok({
+        hosts: {
+          "github.com": [{
+            state: "success",
+            active: true,
+            host: "github.com",
+            login: viewer,
+            tokenSource: "lazurio-broker-live-proof",
+            scopes: "",
+            gitProtocol: "https",
+          }],
+        },
+      });
     }
     if (call.args[0] === "auth") throw new Error(`personal auth probe on a Team VM: ${call.args.join(" ")}`);
     return provider(call);

@@ -2440,9 +2440,9 @@ function requiredToolFailure({ id, title, message, pathExecutable, args }) {
   };
 }
 
-export function githubAuthenticationCheck({ companiesRoot, executable, brokered = brokeredGitHubIdentity() }) {
+export function githubAuthenticationCheck({ companiesRoot, executable, brokered = brokeredGitHubIdentity(), run = runCommand }) {
   const env = sanitizedGitHubEnvironment(process.env);
-  if (brokered) return brokeredGitHubAuthenticationCheck({ executable, env, brokered });
+  if (brokered) return brokeredGitHubAuthenticationCheck({ executable, env, brokered, run });
   const authArgs = ["auth", "status", "--hostname", "github.com"];
   const auth = executable
     ? runCommand(executable, authArgs, { cwd: companiesRoot, env })
@@ -2474,11 +2474,11 @@ export function githubAuthenticationCheck({ companiesRoot, executable, brokered 
 // Shared Team VM (core/brokered-github-lib.mjs): the only GitHub identity is
 // the Organization bot through the broker; a personal login or SSH protocol
 // is neither expected nor accepted as readiness.
-function brokeredGitHubAuthenticationCheck({ executable, env, brokered }) {
+function brokeredGitHubAuthenticationCheck({ executable, env, brokered, run }) {
   const args = ["auth", "status", "--json", "hosts"];
   let ready = false;
   if (executable && brokered.valid) {
-    const status = runCommand(executable, args, { cwd: "/", env });
+    const status = run(executable, args, { cwd: "/", env });
     try {
       ready = status.ok && brokeredAuthStatusSatisfied(JSON.parse(status.stdout));
     } catch {

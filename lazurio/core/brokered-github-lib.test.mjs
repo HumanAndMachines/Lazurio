@@ -12,6 +12,24 @@ import {
 import { safeGitCommandEnv, safeGitRemoteEnv } from "../runtime/git-lib.mjs";
 
 // Byte-identical to what Machines `workspace_github_broker` renders.
+// Exactly what the released brokered-gh v0.8.0 prints for the live proof.
+function botStatus(overrides = {}) {
+  return {
+    hosts: {
+      "github.com": [{
+        state: "success",
+        active: true,
+        host: "github.com",
+        login: BROKERED_GITHUB_ACTOR,
+        tokenSource: "lazurio-broker-live-proof",
+        scopes: "",
+        gitProtocol: "https",
+        ...overrides,
+      }],
+    },
+  };
+}
+
 const environmentFile = [
   "GITHUB_TOKEN_BROKER_URL=https://example.github-broker.lazurio.ai",
   "GITHUB_BROKER_WORKSPACE_ID=example-team",
@@ -62,11 +80,27 @@ test("policy scope, provider context and bot proof are exact", () => {
   expect(brokeredRepositoryAllowed({ valid: false }, "git@github.com:Example/Example_GEN3.git")).toBe(false);
   expect(brokeredGitHubProviderContext(identity, "Example")).toEqual({ cwd: "/", repository: "Example/Example_GEN3" });
   expect(brokeredGitHubProviderContext(identity, "Other")).toBeNull();
-  const status = (login, extra = {}) => ({ hosts: { "github.com": [{ state: "success", active: true, login, ...extra }] } });
-  expect(brokeredAuthStatusSatisfied(status(BROKERED_GITHUB_ACTOR))).toBe(true);
-  expect(brokeredAuthStatusSatisfied(status("somebody"))).toBe(false);
-  expect(brokeredAuthStatusSatisfied(status(BROKERED_GITHUB_ACTOR, { state: "error" }))).toBe(false);
+  expect(brokeredAuthStatusSatisfied(botStatus())).toBe(true);
+  expect(brokeredAuthStatusSatisfied(botStatus({ login: "somebody" }))).toBe(false);
+  expect(brokeredAuthStatusSatisfied(botStatus({ state: "error" }))).toBe(false);
+  expect(brokeredAuthStatusSatisfied(botStatus({ tokenSource: "keyring" }))).toBe(false);
+  expect(brokeredAuthStatusSatisfied(botStatus({ token: "gho_x" }))).toBe(false);
   expect(brokeredAuthStatusSatisfied(null)).toBe(false);
+  const bot = botStatus().hosts["github.com"][0];
+  const personal = { ...bot, login: "personal-user", tokenSource: "keyring" };
+  // A personal identity next to the bot, a second bot entry, another host or
+  // extra envelope fields are never the brokered identity.
+  for (const value of [
+    { hosts: { "github.com": [bot, personal] } },
+    { hosts: { "github.com": [personal, bot] } },
+    { hosts: { "github.com": [bot, { ...bot, active: false }] } },
+    { hosts: { "github.com": [bot], "ghe.example.com": [personal] } },
+    { hosts: { "github.com": [] } },
+    { hosts: {} },
+    { hosts: { "github.com": [bot] }, extra: true },
+  ]) {
+    expect(brokeredAuthStatusSatisfied(value)).toBe(false);
+  }
 });
 
 test("the sterile Git lane re-enables exactly the broker helper and SSH rewrite", () => {
@@ -85,27 +119,26 @@ test("the sterile Git lane re-enables exactly the broker helper and SSH rewrite"
 });
 
 test("Doctor accepts only the brokered bot as the GitHub identity of a Team VM", async () => {
-  const { mkdtemp, writeFile, chmod, rm } = await import("node:fs/promises");
-  const { tmpdir } = await import("node:os");
-  const { join } = await import("node:path");
   const { githubAuthenticationCheck } = await import("../runtime/diagnostics-lib.mjs");
-  const directory = await mkdtemp(join(tmpdir(), "brokered-doctor-"));
-  const fakeGh = async (login) => {
-    const path = join(directory, `gh-${login.replace(/\W/gu, "")}`);
-    const payload = JSON.stringify({ hosts: { "github.com": [{ state: "success", active: true, login }] } });
-    await writeFile(path, `#!/bin/sh\n[ "$*" = "auth status --json hosts" ] || exit 9\nprintf '%s' '${payload}'\n`);
-    await chmod(path, 0o755);
-    return path;
+  const identity = parseBrokeredGitHubEnvironment(environmentFile);
+  const calls = [];
+  // Injected runner: the check must ask exactly the brokered status envelope.
+  const runner = (value) => (executable, args, options) => {
+    calls.push({ executable, args, cwd: options?.cwd });
+    return { ok: true, stdout: JSON.stringify(value), stderr: "" };
   };
-  try {
-    const identity = parseBrokeredGitHubEnvironment(environmentFile);
-    const bot = githubAuthenticationCheck({ companiesRoot: directory, executable: await fakeGh(BROKERED_GITHUB_ACTOR), brokered: identity });
-    expect(bot).toMatchObject({ id: "platform.github_auth", status: "ok", severity: "required" });
-    const human = githubAuthenticationCheck({ companiesRoot: directory, executable: await fakeGh("somebody"), brokered: identity });
-    expect(human.status).toBe("fail");
-    const broken = githubAuthenticationCheck({ companiesRoot: directory, executable: await fakeGh(BROKERED_GITHUB_ACTOR), brokered: { valid: false } });
-    expect(broken.status).toBe("fail");
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
+  const check = (value, brokered = identity) => githubAuthenticationCheck({
+    companiesRoot: "/root-fixture",
+    executable: "/usr/local/bin/gh",
+    brokered,
+    run: runner(value),
+  });
+  expect(check(botStatus())).toMatchObject({ id: "platform.github_auth", status: "ok", severity: "required" });
+  expect(calls.at(-1)).toEqual({ executable: "/usr/local/bin/gh", args: ["auth", "status", "--json", "hosts"], cwd: "/" });
+  expect(check(botStatus({ login: "somebody" })).status).toBe("fail");
+  const bot = botStatus().hosts["github.com"][0];
+  expect(check({ hosts: { "github.com": [bot, { ...bot, login: "personal-user", tokenSource: "keyring" }] } }).status).toBe("fail");
+  const callsBefore = calls.length;
+  expect(check(botStatus(), { valid: false }).status).toBe("fail");
+  expect(calls.length).toBe(callsBefore);
 });
