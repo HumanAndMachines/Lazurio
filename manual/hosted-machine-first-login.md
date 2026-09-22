@@ -1,24 +1,31 @@
 # Hostovaná pracovní VM: první přihlášení a donastavení
 
 Platí pro hostované pracovní Mašiny, které Machines předá jako `workspace-vm`
-(decision 0144, handover `~/Lazurio/.lazurio/` a `/etc/lazurio/lazurio.machine.json`).
-Machines dodá systém, síť, SSH, bránu a nainstalované Lazurio; **všechno uvnitř
-je práce operátora a jeho Task Agenta** podle tohoto postupu. Cíl: operátor
-nikdy nedostane prostředí, které vypadá hotově, ale není donastavené.
+Organizace (decision 0144). Machines dodá systém, síť, SSH, bránu,
+nainstalované Lazurio a identitu Mašiny v `/etc/lazurio/lazurio.machine.json`
+(kontrakt `lazurio.machine.v1`, Machines `docs/machine-identity.md`); **všechno
+uvnitř je práce operátora a jeho Task Agenta** podle tohoto postupu. Cíl:
+operátor nikdy nedostane prostředí, které vypadá hotově, ale není donastavené.
 
 ## Jak Agent pozná, o jakou Mašinu jde
 
-`lazurio machine inspect` (nebo `/etc/lazurio/lazurio.machine.json`):
+Jediný rozlišovací znak je `owner.assignment.kind` v
+`/etc/lazurio/lazurio.machine.json`; Agent ho přečte přímo ze souboru (žádný
+CLI příkaz na to není) a **nikdy ho neodvozuje** z `owner.team`, hostname,
+OS účtu ani velikosti Teamu — jednočlenný Team nedělá z Mašiny osobní VM.
 
-- `machine.kind: workspace-vm` s `owner.kind: organization` a `owner.team`
-  rovným loginu jednoho člověka (například `jakub`) = **osobní pracovní VM**
-  jednoho operátora vlastněná Organizací (preset `hosted-organization-personal`).
-- `machine.kind: workspace-vm` s `owner.team` rovným sdílenému Teamu
-  (například `iotor-team`, `energo`, `management`) = **týmová VM**
+- `owner.kind: organization` a `owner.assignment.kind: operator`
+  (s `github_login` a `github_id` operátora) = **osobní pracovní VM** jednoho
+  operátora vlastněná Organizací (preset `hosted-organization-personal`).
+- `owner.kind: organization` a `owner.assignment.kind: team` = **týmová VM**
   (preset `hosted-organization-team`). Pro ni platí
   [samostatná sekce níže](#týmová-vm-identita-organizace-ne-člověka).
-- `machine.kind: personal-vm` = osobní Mašina Principála podle
+- `owner.kind: personal` = osobní Mašina Principála podle
   [`hosted-buddy-vps.md`](hosted-buddy-vps.md); tento manuál se na ni nevztahuje.
+- Soubor chybí, nevaliduje, nebo `owner.assignment` není deklarovaný: Agent
+  **nehádá**. Nahlásí operátorovi přesný blocker („Mašina nemá deklarované
+  přiřazení; doplní ho owner Deployment Repo v `provision.assignment` guesta“)
+  a osobní `gh auth login` nespouští.
 
 ## Osobní pracovní VM: identita operátora
 
@@ -27,8 +34,8 @@ GitHub je jediná autorita přístupů, a proto je `gh` na této Mašině přihl
 **účtem operátora**, ne účtem Organizace ani jiného člověka. Bez přihlášení
 nemá Agent žádnou Organizaci, žádné moduly a žádná repa; má jen čisté Lazurio.
 
-Když Agent na takové Mašině zjistí (`gh auth status --hostname github.com`),
-že `gh` přihlášený není, **nepokračuje v úkolu, dokud operátora neprovede
+Když Agent na Mašině s `owner.assignment.kind: operator` zjistí
+(`gh auth status --hostname github.com`), že `gh` přihlášený není, **nepokračuje v úkolu, dokud operátora neprovede
 přihlášením**, a vysvětlí mu proč: je to jeho osobní pracovní VM, GitHub
 rozhoduje, co v ní smí Agent vidět a měnit, a všechna práce z této Mašiny
 bude připsaná jeho účtu. Postup je stejný jako na pracovní stanici
@@ -40,8 +47,10 @@ bude připsaná jeho účtu. Postup je stejný jako na pracovní stanici
    chatu**; nikdy do schránky, issue, repa nebo trvalého logu. Interní
    `device_code`, access token ani privátní klíč nikdy nevypíše.
 2. Po souhlasu operátora nechá tentýž flow nahrát veřejný SSH klíč Mašiny
-   k jeho účtu a ověří `gh auth status` a `git ls-remote` na root repo
-   Organizace.
+   k jeho účtu a ověří, že přihlášený login je přesně
+   `owner.assignment.github_login` z identity Mašiny; jiný účet Agent
+   odmítne jako blocker. Pak ověří `gh auth status` a `git ls-remote` na
+   root repo Organizace.
 3. `lazurio update` (aktualizace Lazuria je vědomý krok; bez přihlášení
    Organizaci nenatáhne).
 4. `lazurio organization install <github-login-organizace> --role builder --json`
@@ -64,7 +73,7 @@ zapíše přesný blocker a zastaví se.
 
 ## Týmová VM: identita Organizace, ne člověka
 
-Sdílená týmová VM (`owner.team` = sdílený Team) nemá osobního operátora.
+Sdílená týmová VM (`owner.assignment.kind: team`) nemá osobního operátora.
 Podle rozhodnutí 0147–0149 má Git identitu **Lazurio for GitHub** (bot
 Organizace přes scoped broker), nikdy osobní účet posledního přihlášeného
 člověka. Na týmové VM Agent osobní `gh auth login` **nikdy nespouští**; když
@@ -75,8 +84,9 @@ materializace Organizace na týmové VM drží Machines a Platform lane
 
 ## Co drží kdo
 
-- Machines: Mašina online, identita, brána, nainstalované Lazurio a Chat vstup
-  Launchpadu (`LAZURIO_T3CODE_URL`, párovací příkaz).
+- Machines: Mašina online, `/etc/lazurio/lazurio.machine.json` včetně
+  `owner.assignment`, brána, nainstalované Lazurio a Chat vstup Launchpadu
+  (`LAZURIO_T3CODE_URL`, párovací příkaz).
 - Lazurio (tento manuál, skill `lazurio-workstation-install`, `lazurio
   organization install`): první přihlášení, materializace Organizace, Doctor.
 - LazurioPlatform (`docs/workspace-presets.md`): presety a generovaný
