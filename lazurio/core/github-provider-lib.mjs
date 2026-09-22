@@ -11,9 +11,13 @@ export function createTrustedGitHubProvider({
   cwd = process.cwd(),
   resolveExecutable = resolveGitHubCliExecutableOnPath,
   runCommand = runTrustedGitHubCliSync,
+  // Brokered Team VM: the brokered `gh` authorizes one repository per call,
+  // taken from GH_REPO when the working directory has no checkout.
+  repository = null,
 } = {}) {
   const executable = resolveExecutable({ platform, environment });
   const providerEnvironment = sanitizedGitHubEnvironment(environment);
+  if (typeof repository === "string" && repository !== "") providerEnvironment.GH_REPO = repository;
 
   const command = (args, { json = true } = {}) => {
     if (!executable) {

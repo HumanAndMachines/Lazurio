@@ -71,6 +71,11 @@ import {
 
 import { sanitizedGitHubEnvironment } from "../core/github-provider-lib.mjs";
 import {
+  BROKERED_GITHUB_ACTOR,
+  brokeredAuthStatusSatisfied,
+  brokeredGitHubIdentity,
+} from "../core/brokered-github-lib.mjs";
+import {
   DEVELOPER_TOOL_UPDATE_POLICY,
   inspectDeveloperToolUpdates,
 } from "../core/tool-update-lib.mjs";
@@ -2435,8 +2440,9 @@ function requiredToolFailure({ id, title, message, pathExecutable, args }) {
   };
 }
 
-function githubAuthenticationCheck({ companiesRoot, executable }) {
+export function githubAuthenticationCheck({ companiesRoot, executable, brokered = brokeredGitHubIdentity() }) {
   const env = sanitizedGitHubEnvironment(process.env);
+  if (brokered) return brokeredGitHubAuthenticationCheck({ executable, env, brokered });
   const authArgs = ["auth", "status", "--hostname", "github.com"];
   const auth = executable
     ? runCommand(executable, authArgs, { cwd: companiesRoot, env })
@@ -2461,6 +2467,39 @@ function githubAuthenticationCheck({ companiesRoot, executable }) {
     details: [
       `command: ${executable ?? "<missing>"} ${authArgs.join(" ")}`,
       `protocol_command: ${executable ?? "<missing>"} ${protocolArgs.join(" ")}`,
+    ],
+  };
+}
+
+// Shared Team VM (core/brokered-github-lib.mjs): the only GitHub identity is
+// the Organization bot through the broker; a personal login or SSH protocol
+// is neither expected nor accepted as readiness.
+function brokeredGitHubAuthenticationCheck({ executable, env, brokered }) {
+  const args = ["auth", "status", "--json", "hosts"];
+  let ready = false;
+  if (executable && brokered.valid) {
+    const status = runCommand(executable, args, { cwd: "/", env });
+    try {
+      ready = status.ok && brokeredAuthStatusSatisfied(JSON.parse(status.stdout));
+    } catch {
+      ready = false;
+    }
+  }
+  return {
+    id: "platform.github_auth",
+    status: ready ? "ok" : "fail",
+    severity: "required",
+    title: "GitHub identita sdílené Team VM",
+    message: ready
+      ? `Team VM jedná na GitHubu jen jako ${BROKERED_GITHUB_ACTOR} přes broker Organizace.`
+      : brokered.valid
+        ? "Broker Organizace nepotvrdil identitu bota; osobní přihlášení na sdílené Team VM nepatří."
+        : "Konfigurace brokeru této Team VM je poškozená.",
+    paths: [],
+    links: [],
+    details: [
+      `command: ${executable ?? "<missing>"} ${args.join(" ")}`,
+      ...(brokered.valid ? [`broker_workspace: ${brokered.workspaceId}`, `repositories: ${brokered.repositories.length}`] : []),
     ],
   };
 }

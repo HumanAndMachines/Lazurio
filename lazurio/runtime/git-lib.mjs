@@ -4,6 +4,7 @@ import { tmpdir } from "os";
 import { basename, dirname, isAbsolute, join, win32 } from "path";
 import { fileURLToPath } from "url";
 
+import { brokeredGitConfigEnvironment, brokeredGitHubIdentity } from "../core/brokered-github-lib.mjs";
 import { isSamePath } from "../core/path-boundary-lib.mjs";
 import { classifyToolVersion, resolveExecutableOnPath } from "../core/toolchain-lib.mjs";
 
@@ -129,7 +130,7 @@ export async function runGitInPinnedTemporaryChild(args, {
   }
 }
 
-export function safeGitRemoteEnv(platform = process.platform) {
+export function safeGitRemoteEnv(platform = process.platform, brokered = brokeredGitHubIdentity({ platform })) {
   const common = {
     GIT_TERMINAL_PROMPT: "0",
     GCM_INTERACTIVE: "never",
@@ -146,6 +147,10 @@ export function safeGitRemoteEnv(platform = process.platform) {
     GIT_OBJECT_DIRECTORY: undefined,
     GIT_PREFIX: undefined,
     GIT_WORK_TREE: undefined,
+    // Shared Team VM (brokered-github-lib.mjs): the sterile lane re-enables
+    // exactly the Machines-managed broker credential helper and the
+    // SSH-to-HTTPS rewrite; every other system setting stays disabled.
+    ...(brokeredGitConfigEnvironment(brokered) ?? {}),
   };
   if (platform === "win32") {
     return {
@@ -169,7 +174,7 @@ export function safeGitCommandEnv(platform = process.platform, base = processEnv
     GIT_CONFIG_GLOBAL: _globalConfig,
     GIT_CONFIG_COUNT: _configCount,
     ...nonInteractive
-  } = safeGitRemoteEnv(platform);
+  } = safeGitRemoteEnv(platform, null);
   // General Git operations retain the user's normal credentials, SSH agent
   // and enterprise proxy, while checkout-context injection variables are
   // stripped. Materialization passes safeGitRemoteEnv() explicitly and is the
