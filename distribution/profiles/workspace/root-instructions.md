@@ -38,7 +38,22 @@ nedotčené. Update je vždy explicitní; první Launchpad render je GET-only a
 nespouští fetch ani mutaci.
 
 Skutečné přístupy určuje přihlášená identita a živá GitHub práva. Runtime,
-textová role ani prompt nevytvářejí druhý ACL. Nejasný nebo nebezpečný Git stav
+textová role ani prompt nevytvářejí druhý ACL.
+
+## Hostovaná pracovní Mašina: identita před prací
+
+Na hostované pracovní VM Organizace (`/etc/lazurio/lazurio.machine.json`,
+`machine.kind: workspace-vm`) se před první prací i před `lazurio update` řiď
+`manual/hosted-machine-first-login.md` v tomto runtime rootu. Jediným
+rozlišovacím znakem je `owner.assignment.kind`:
+
+- `operator`: osobní pracovní VM jednoho operátora. `gh api user` musí vrátit
+  jeho `login` a `id` z `owner.assignment`; jiný účet je blocker a přihlášení
+  provede jen operátor sám.
+- `team`: sdílená týmová VM. GitHub identitou je výhradně bot Organizace
+  `lazurio-for-github[bot]` přes broker; osobní přihlášení Agent nikdy
+  nespouští ani nenavrhuje a chybějící broker předá Organization Adminovi.
+- chybějící nebo neplatné přiřazení: Agent nehádá, nahlásí blocker. Nejasný nebo nebezpečný Git stav
 se neopravuje odhadem: zachová se a předá Kolegovi jako prompt pro Codex.
 
 ## Architektonická odpovědnost při změně source kódu
