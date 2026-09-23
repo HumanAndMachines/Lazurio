@@ -299,37 +299,48 @@ export function validateHostedWorkspaceBindings(
 
 // Hosted personal scope binding state for a running Launchpad. A personal
 // Machine is handed to its owner before their private Personalspace repository
-// is cloned, and no operator may create or read it (decision 0091). Exactly one
-// state is therefore non-fatal besides a valid binding: the configured folder
-// does not exist at all and nothing else sits in the Personalspace mountpoint.
-// Everything else (a present but unbound or invalid folder, a foreign or
-// differently named folder, a discovery failure) keeps failing closed.
+// is cloned, and no operator may create or read it (decision 0091). Both
+// tolerated states require a clean Personalspace mountpoint: no folder other
+// than the configured one and no discovery failure. On top of that, "mounted"
+// means the configured folder is a valid owner-primary Personalspace and
+// "missing" means it does not exist at all. Everything else (a present but
+// unbound or invalid folder, a foreign or differently named sibling, any
+// discovery failure) fails closed, whether or not the configured folder is
+// valid.
 export function resolveHostedPersonalspaceBinding(configuration, discovery = {}) {
   if (configuration?.profile !== "hosted" || configuration.scope !== "personal") {
     throw new Error("Hosted Personalspace binding applies only to LAZURIO_HOSTED_SCOPE=personal.");
   }
-  const mountPath = `personalspace/${configuration.personalspace}`;
+  const label = `Hosted personal Workspace Personalspace personalspace/${configuration.personalspace} (LAZURIO_HOSTED_PERSONALSPACE)`;
+  const mount = discovery.primary_space_mount;
+  const expectedMountPath = `${discovery.mountpoint ?? "personalspace"}/${configuration.personalspace}`;
+  // No filesystem evidence about exactly this folder is never a clean state.
+  if (!mount || mount.mount_path !== expectedMountPath) {
+    throw new Error(`${label} is not mounted; Personalspace discovery did not inspect the configured folder.`);
+  }
   const space = boundPersonalspace(configuration, discovery.spaces);
+  const state = space ? "mounted" : "missing";
   if (space) {
     validateHostedWorkspaceBindings(configuration, discovery);
-    return Object.freeze({ state: "mounted", folder: configuration.personalspace, mount_path: space.mount_path ?? mountPath });
+  } else if (mount.present !== false) {
+    throw new Error(`${label} is not mounted; the folder exists but is not a valid Personalspace of its declared owner.`);
   }
-  const notMounted = `Hosted personal Workspace Personalspace ${mountPath} (LAZURIO_HOSTED_PERSONALSPACE) is not mounted`;
-  const mount = discovery.primary_space_mount;
-  if (!mount || mount.present !== false || mount.mount_path !== `${discovery.mountpoint ?? "personalspace"}/${configuration.personalspace}`) {
-    throw new Error(`${notMounted}; the folder exists but is not a valid Personalspace of its declared owner.`);
-  }
+  const subject = space ? `${label} is mounted, but` : `${label} is not mounted, and`;
   const others = Array.isArray(mount.other_directories) ? mount.other_directories : [];
   if (others.length > 0) {
     throw new Error(
-      `${notMounted}, and the Personalspace mountpoint holds ${others.join(", ")}; a foreign or differently named Personalspace is never adopted (decision 0091).`,
+      `${subject} the Personalspace mountpoint also holds ${others.join(", ")}; a foreign or differently named Personalspace is never adopted or tolerated beside it (decision 0091).`,
     );
   }
   const failures = Array.isArray(discovery.failures) ? discovery.failures : [];
   if (failures.length > 0) {
-    throw new Error(`${notMounted}, and Personalspace discovery failed: ${failures.join("; ")}`);
+    throw new Error(`${subject} Personalspace discovery failed: ${failures.join("; ")}`);
   }
-  return Object.freeze({ state: "missing", folder: configuration.personalspace, mount_path: mount.mount_path });
+  return Object.freeze({
+    state,
+    folder: configuration.personalspace,
+    mount_path: space?.mount_path ?? mount.mount_path,
+  });
 }
 
 export function selectHostedWorkspaceApps(configuration, { apps = [], organizations = [] } = {}) {

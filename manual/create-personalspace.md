@@ -40,8 +40,8 @@ Mašině ještě není nastavený" s přesnou cílovou složkou
 `<login>/<login>_GEN3` naklonuje sám, třeba přes Chat (T3 Code) na téže
 Mašině, případně ho nejdřív vytvoří postupem níže. Launchpad složku převezme
 při dalším 15s refreshi bez restartu; složka, která existuje, ale není validním
-Personalspace, nebo cizí složka v `personalspace/` start Launchpadu dál
-odmítne. Kontrakt drží `launchpad/README.md`, sekce „Osobní hosted scope".
+Personalspace, nebo cizí složka v `personalspace/` (i vedle validního
+Personalspace) start Launchpadu dál odmítne. Kontrakt drží `launchpad/README.md`, sekce „Osobní hosted scope".
 
 ## Self-service
 

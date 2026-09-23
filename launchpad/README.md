@@ -107,12 +107,12 @@ Mašina Principála (decisions 0153/0154/0155) používá
 - auth-check a cookie proměnné zůstávají stejné jako výše.
 
 Launchpad při startu (před listenerem) ověří vazbu na přesně tuto složku.
-Nastartuje ve dvou stavech:
+Nastartuje jen při čistém mountpointu — v `personalspace/` nesedí žádná jiná
+složka a Personalspace discovery nehlásí chybu — a v jednom ze dvou stavů:
 
 - `mounted` — složka je namountovaná a je validním Personalspace svého
   deklarovaného ownera;
-- `missing` — složka vůbec neexistuje (ani jako symlink), v mountpointu
-  `personalspace/` nesedí žádná jiná složka a discovery nehlásí chybu. To je
+- `missing` — složka vůbec neexistuje (ani jako symlink). To je
   čerstvá osobní Mašina, na které owner svůj privátní Personalspace ještě
   nenaklonoval; nikdo jiný ho vytvořit ani číst nesmí (decision 0091).
   Launchpad běží, `/api/apps` vrací prázdný katalog s
@@ -124,8 +124,8 @@ Nastartuje ve dvou stavech:
 
 Každý jiný stav nenastartuje: složka existuje, ale není validním
 Personalspace (prázdný nebo nedokončený checkout, nevalidní
-`personal.gen3.json`, cizí owner), vedle chybějící složky leží jiná (cizí
-nebo jinak pojmenovaná) složka, discovery selže, nebo má
+`personal.gen3.json`, cizí owner), vedle chybějící i validní složky leží
+jiná (cizí nebo jinak pojmenovaná) složka, discovery selže, nebo má
 `LAZURIO_HOSTED_PERSONALSPACE` špatný tvar. `/health` vrací dál
 `status: "ok"` a navíc `hosted_personalspace: { state }` (`mounted`,
 `missing`, nebo `invalid`, pokud se vazba rozbila až za běhu). Běžící

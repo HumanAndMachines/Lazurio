@@ -1292,7 +1292,7 @@ test("hosted personal Launchpad refuses to start without its exact Personalspace
   await mountPersonalspace(root, "frozen-slug");
   await expect(startLaunchpadServer(root, {
     env: personalHostedEnvironment(stateRoot, await findFreePort()),
-  })).rejects.toThrow("personalspace/exampleuser_GEN3 (LAZURIO_HOSTED_PERSONALSPACE) is not mounted, and the Personalspace mountpoint holds personalspace/frozen-slug_GEN3");
+  })).rejects.toThrow("personalspace/exampleuser_GEN3 (LAZURIO_HOSTED_PERSONALSPACE) is not mounted, and the Personalspace mountpoint also holds personalspace/frozen-slug_GEN3");
 });
 
 test("hosted personal Launchpad serves a setup prompt until the owner clones the Personalspace", async () => {
@@ -1356,6 +1356,25 @@ test("hosted personal Launchpad refuses a present but invalid Personalspace", as
   await expect(startLaunchpadServer(root, {
     env: personalHostedEnvironment(stateRoot, await findFreePort()),
   })).rejects.toThrow("is not mounted; the folder exists");
+});
+
+test("hosted personal Launchpad refuses a valid Personalspace beside a foreign one", async () => {
+  const root = await createLaunchpadGitFixture();
+  const stateRoot = `${root}-personal-state`;
+  tempRoots.push(root, stateRoot);
+  await mountPersonalspace(root, "exampleuser");
+  await mountPersonalspace(root, "foreign");
+  await expect(startLaunchpadServer(root, {
+    env: personalHostedEnvironment(stateRoot, await findFreePort()),
+  })).rejects.toThrow(
+    "personalspace/exampleuser_GEN3 (LAZURIO_HOSTED_PERSONALSPACE) is mounted, but the Personalspace mountpoint also holds personalspace/foreign_GEN3",
+  );
+  // A manifestless foreign folder is refused the same way.
+  await rm(join(root, "personalspace", "foreign_GEN3"), { recursive: true, force: true });
+  await mkdir(join(root, "personalspace", "foreign_GEN3"), { recursive: true });
+  await expect(startLaunchpadServer(root, {
+    env: personalHostedEnvironment(stateRoot, await findFreePort()),
+  })).rejects.toThrow("is mounted, but the Personalspace mountpoint also holds personalspace/foreign_GEN3");
 });
 
 test("hosted personal Launchpad refuses a malformed LAZURIO_HOSTED_PERSONALSPACE", async () => {

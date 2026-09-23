@@ -609,6 +609,18 @@ test("personal binding tolerates only a cleanly absent Personalspace folder", ()
     spaces: [], failures: [], mountpoint: "personalspace", primary_space_mount: absentMount(),
   })).toEqual({ state: "missing", folder: "ImMakerMatty_GEN3", mount_path: "personalspace/ImMakerMatty_GEN3" });
 
+  // A valid configured folder is tolerated only in a clean mountpoint.
+  expect(() => resolveHostedPersonalspaceBinding(personal, {
+    spaces: [personalSpace()], mountpoint: "personalspace",
+    primary_space_mount: absentMount({ present: true, other_directories: ["personalspace/foreign_GEN3"] }),
+  })).toThrow("is mounted, but the Personalspace mountpoint also holds personalspace/foreign_GEN3");
+  expect(() => resolveHostedPersonalspaceBinding(personal, {
+    spaces: [personalSpace()], failures: ["foreign_or_unrecognized_personalspace_dir: personalspace/x"],
+    mountpoint: "personalspace", primary_space_mount: absentMount({ present: true }),
+  })).toThrow("is mounted, but Personalspace discovery failed: foreign_or_unrecognized_personalspace_dir");
+  expect(() => resolveHostedPersonalspaceBinding(personal, { spaces: [personalSpace()] }))
+    .toThrow("did not inspect the configured folder");
+
   // Present but invalid, foreign or not owner-primary still refuses.
   expect(() => resolveHostedPersonalspaceBinding(personal, {
     spaces: [personalSpace({ config_valid: false })], mountpoint: "personalspace",

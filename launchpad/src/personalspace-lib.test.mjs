@@ -395,6 +395,31 @@ test("hosted personal scope reports a cleanly absent Personalspace as missing, a
   expect(() => resolveHostedPersonalspaceBinding(configuration, unfinished))
     .toThrow("is not mounted; the folder exists but is not a valid Personalspace");
 
+  // A valid configured Personalspace beside a foreign one is refused, too.
+  const guarded = await createPersonalspaceFixture({
+    spaces: [
+      {
+        dirName: "ExampleUser_GEN3",
+        owner: "ExampleUser",
+        config: {
+          ...personalConfig("ExampleUser"),
+          buddy: { ...personalConfig("ExampleUser").buddy, slug: "exampleuser-buddy" },
+        },
+      },
+      { dirName: "foreign_GEN3", owner: "foreign", config: personalConfig("foreign") },
+    ],
+  });
+  const withSibling = await discoverPersonalspace(guarded, { primarySpaceDir: configuration.personalspace });
+  expect(withSibling.spaces.map((space) => space.dir_name)).toEqual(["ExampleUser_GEN3"]);
+  expect(withSibling.primary_space_mount).toEqual({
+    mount_path: "personalspace/ExampleUser_GEN3", present: true, other_directories: ["personalspace/foreign_GEN3"],
+  });
+  expect(() => resolveHostedPersonalspaceBinding(configuration, withSibling))
+    .toThrow("is mounted, but the Personalspace mountpoint also holds personalspace/foreign_GEN3");
+  await rm(join(guarded, "personalspace", "foreign_GEN3"), { recursive: true, force: true });
+  const alone = await discoverPersonalspace(guarded, { primarySpaceDir: configuration.personalspace });
+  expect(resolveHostedPersonalspaceBinding(configuration, alone)).toMatchObject({ state: "mounted" });
+
   // A present but invalid personal.gen3.json still refuses.
   await writeJson(join(root, "personalspace", "ExampleUser_GEN3", "personal.gen3.json"), {
     ...personalConfig("ExampleUser"),
