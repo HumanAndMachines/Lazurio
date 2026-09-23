@@ -13,6 +13,7 @@ import { buildGitInventory } from "./git-inventory-lib.mjs";
 import { createHostedWorkspaceConfiguration } from "./hosted-app-url-lib.mjs";
 import { materializeRepoCheckout } from "./git-materialization-lib.mjs";
 import { buildModuleLocationRepairAction } from "../core/module-location-repair-contract-lib.mjs";
+import { brokeredGitHubIdentity, brokeredRepositoryAllowed } from "../core/brokered-github-lib.mjs";
 import {
   ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
   resolveOrganizationRootDocuments,
@@ -496,6 +497,11 @@ async function syncOrganizationChild({
     if (!isAutoMaterializationCandidate(repo)) return null;
     const scoped = restrictedSlotMaterializationResult({ repo, siblings, restrictedSlotPolicy });
     if (scoped) return scoped;
+    const brokered = brokeredPolicyMaterializationResult(
+      repo,
+      deps.brokeredIdentity === undefined ? brokeredGitHubIdentity() : deps.brokeredIdentity,
+    );
+    if (brokered) return brokered;
     if (repo.repo_kind === "module") {
       const transitionBlocker = await moduleCheckoutTransitionBlocker({
         initialInventory,
@@ -2081,6 +2087,26 @@ function restrictedSlotMaterializationResult({
     "restricted_not_materialized",
     `Restricted slot${ancestorNote} není namountovaný a běžný update ho záměrně automaticky neklonuje. Materializaci provede jen explicitní Admin \`lazurio organization install <login>\` bez --role.`,
     { materialization_scope: "restricted_deferred" },
+  );
+}
+
+// Shared Team VM (core/brokered-github-lib.mjs): only repositories inside the
+// broker policy of this Machine can be cloned, so an absent slot outside it is
+// deliberately out of scope rather than a failed clone. GitHub grants stay
+// the authority; the broker refuses anything else anyway.
+function brokeredPolicyMaterializationResult(repo, identity) {
+  if (identity === null || identity === undefined) return null;
+  if (!identity.valid) {
+    return blockedResult(repo, "github_broker_invalid", {
+      detail: "Konfigurace brokeru této sdílené Team VM je poškozená; Lazurio nic neklonuje a osobní přihlášení nepoužije.",
+    });
+  }
+  if (brokeredRepositoryAllowed(identity, repo.repo)) return null;
+  return currentResult(
+    repo,
+    "excluded_by_broker_policy",
+    "Repozitář je mimo rozsah, který broker Organizace této sdílené Team VM povoluje; žádná GitHub operace nad ním neproběhla.",
+    { materialization_scope: "excluded_by_broker_policy" },
   );
 }
 

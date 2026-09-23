@@ -500,7 +500,9 @@ async function verifyClonedCheckout({ path, branch, remote, run }) {
       cwd: path,
       timeoutMs: GIT_LOCAL_TIMEOUT_MS,
     }),
-    run(materializationGitArgs(["remote", "get-url", "origin"]), {
+    // The stored remote, not its `insteadOf` expansion: a brokered Team VM
+    // rewrites SSH-style GitHub remotes to HTTPS at use time only.
+    run(materializationGitArgs(["config", "--local", "--get", "remote.origin.url"]), {
       cwd: path,
       timeoutMs: GIT_LOCAL_TIMEOUT_MS,
     }),

@@ -19,6 +19,12 @@ import {
 } from "./core/github-builder-readiness-lib.mjs";
 import { resolveGitHubCliExecutableOnPath } from "./core/toolchain-lib.mjs";
 import {
+  brokeredAuthStatusSatisfied,
+  brokeredGitHubIdentity,
+  brokeredGitHubProviderContext,
+  brokeredRepositoryAllowed,
+} from "./core/brokered-github-lib.mjs";
+import {
   ORGANIZATION_ACTIVATABLE_MANIFEST_FORMATS,
   resolveOrganizationRootDocuments,
 } from "./core/organization-activation-lib.mjs";
@@ -724,7 +730,7 @@ async function verifyExistingRepositoryDbCheckout({ targetPath, remote, branch, 
   if (
     !isSamePath(realRoot, realTarget)
     || currentBranch.stdout !== branch
-    || origin.stdout !== remote
+    || (origin.stdout !== remote && !brokeredSameRepository(origin.stdout, remote))
     || status.stdout !== ""
     || !/^[0-9a-f]{40}$/u.test(head.stdout)
   ) {
@@ -740,7 +746,7 @@ async function verifyExistingRepositoryDbCheckout({ targetPath, remote, branch, 
 // malformed Mission Control hranice nesmí vyvolat žádnou provider operaci
 // (clone, fetch, ls-remote) při role-scoped instalaci. Admin instalace
 // (`include`) pokračuje běžnou cestou; malformed deklarace blokuje vždy.
-function repositoryDbScopeResult({ source, organizationPath, slot, parentSlot, restrictedSlotPolicy }) {
+function repositoryDbScopeResult({ source, organizationPath, slot, parentSlot, restrictedSlotPolicy, brokeredIdentity = brokeredGitHubIdentity() }) {
   const classifications = [
     [slot, slot?.path ?? "mission-control/db"],
     [parentSlot, parentSlot?.path ?? "mission-control"],
@@ -754,6 +760,22 @@ function repositoryDbScopeResult({ source, organizationPath, slot, parentSlot, r
       reason: "access_classification_unknown",
       message: `Slot ${unknown[1]} deklaruje neznámý default_access nebo malformed required_roles; Lazurio repository-db fail-safe nematerializuje.`,
     });
+  }
+  // Shared Team VM: a data mount or its app parent outside the broker policy
+  // is out of scope, exactly like an absent module slot in `lazurio update`.
+  if (brokeredIdentity?.valid) {
+    const outside = classifications.find(([candidate]) => (
+      candidate && !brokeredRepositoryAllowed(brokeredIdentity, organizationSlotRepositoryRemote(candidate))
+    ));
+    if (outside) {
+      return {
+        ...repositoryDbResultIdentity({ source, organizationPath, slot }),
+        state: "current",
+        reason: "excluded_by_broker_policy",
+        message: `Slot ${outside[1]} je mimo repozitáře, které broker Organizace této sdílené Team VM povoluje; žádná GitHub operace se nespustila.`,
+        materialization_scope: "excluded_by_broker_policy",
+      };
+    }
   }
   if (restrictedSlotPolicy !== "exclude") return null;
   const restricted = classifications.find(([candidate]) => classifyOrganizationSlotAccess(candidate) === "restricted");
@@ -831,22 +853,39 @@ export function observeOrganizationInstallSource({
   environment = process.env,
   resolveGitHubCli = resolveGitHubCliExecutableOnPath,
   runGitHubCli = runTrustedGitHubCliSync,
+  brokeredIdentity = brokeredGitHubIdentity({ platform }),
 } = {}) {
   const locator = normalizeGitHubLogin(githubLogin);
   const requestedRole = normalizeOptionalInstallRole(role);
   const expectedId = normalizeOptionalOrganizationId(expectedOrganizationId);
+  // Shared Team VM: the Organization bot through the broker is the only
+  // identity; there is no personal login to verify and no human role.
+  const brokered = brokeredInstallContext({ platform, organizationLogin: locator, brokeredIdentity });
+  if (brokered && !brokered.ok) return brokered;
+  if (brokered && requestedRole !== null) {
+    return providerFailure(
+      "github_broker_role_unsupported",
+      "Sdílená Team VM jedná jako bot Organizace přes broker, ne jako člověk v roli; spusť instalaci bez --role.",
+    );
+  }
   const provider = createTrustedGitHubProvider({
     platform,
     environment,
     resolveExecutable: resolveGitHubCli,
     runCommand: runGitHubCli,
+    ...(brokered ? { cwd: brokered.cwd, repository: brokered.repository } : {}),
   });
   if (!provider.available) return providerFailure("github_cli_unavailable", "GitHub CLI nebylo nalezeno.");
-  const authentication = provider.command(
-    ["auth", "status", "--hostname", "github.com", "--active"],
-    { json: false },
-  );
-  if (!authentication.ok) return providerFailure("github_auth_required", "GitHub CLI vyžaduje přihlášení.");
+  if (brokered) {
+    const gate = brokeredIdentityGate(provider);
+    if (!gate.ok) return gate;
+  } else {
+    const authentication = provider.command(
+      ["auth", "status", "--hostname", "github.com", "--active"],
+      { json: false },
+    );
+    if (!authentication.ok) return providerFailure("github_auth_required", "GitHub CLI vyžaduje přihlášení.");
+  }
 
   const organizationResponse = provider.json(["api", `orgs/${locator}`]);
   if (!organizationResponse.ok) return responseFailure(organizationResponse, "organization_not_found");
@@ -901,14 +940,25 @@ export function observeOrganizationInstallIdentity({
   environment = process.env,
   resolveGitHubCli = resolveGitHubCliExecutableOnPath,
   runGitHubCli = runTrustedGitHubCliSync,
+  brokeredIdentity = brokeredGitHubIdentity({ platform }),
 } = {}) {
+  const brokered = brokeredInstallContext({ platform, organizationLogin: source.organization.login, brokeredIdentity });
+  if (brokered && !brokered.ok) return brokered;
   const provider = createTrustedGitHubProvider({
     platform,
     environment,
     resolveExecutable: resolveGitHubCli,
     runCommand: runGitHubCli,
+    ...(brokered ? { cwd: brokered.cwd, repository: brokered.repository } : {}),
   });
   if (!provider.available) return providerFailure("github_cli_unavailable", "GitHub CLI nebylo nalezeno.");
+  // The final re-observation before publishing the checkout repeats the exact
+  // bot gate: credential or config changes since the first check never let a
+  // provider read run under another identity.
+  if (brokered) {
+    const gate = brokeredIdentityGate(provider);
+    if (!gate.ok) return gate;
+  }
   const organizationResponse = provider.json(["api", `orgs/${source.organization.login}`]);
   if (!organizationResponse.ok) return responseFailure(organizationResponse, "organization_identity_unavailable");
   const organization = providerIdentity(organizationResponse.value, "GitHub Organization");
@@ -1218,6 +1268,41 @@ function roleAccessNotReadyMessage(role) {
 
 function rootOutcome(state, reason, path, message = null) {
   return { state, reason, path, message };
+}
+
+// On a brokered Team VM the system `url.https://github.com/.insteadOf`
+// rewrite makes `git remote get-url` report the HTTPS form of an SSH-style
+// manifest remote; the same GitHub repository is the same checkout there.
+function brokeredSameRepository(actual, expected, identity = brokeredGitHubIdentity()) {
+  if (!identity?.valid) return false;
+  const left = githubRepositoryCoordinate(actual);
+  const right = githubRepositoryCoordinate(expected);
+  return Boolean(left && right && left.ownerRepo.toLowerCase() === right.ownerRepo.toLowerCase());
+}
+
+// Exact brokered bot proof; no provider read may run before it succeeds.
+function brokeredIdentityGate(provider) {
+  const status = provider.json(["auth", "status", "--json", "hosts"]);
+  if (!status.ok || !brokeredAuthStatusSatisfied(status.value)) {
+    return providerFailure("github_broker_unavailable", "Broker Organizace nepotvrdil identitu bota; osobní přihlášení na sdílené Team VM nepatří.");
+  }
+  return { ok: true };
+}
+
+// Null on every Machine without the Machines-managed broker environment.
+function brokeredInstallContext({ organizationLogin, brokeredIdentity }) {
+  if (brokeredIdentity === null || brokeredIdentity === undefined) return null;
+  if (!brokeredIdentity.valid) {
+    return providerFailure("github_broker_invalid", "Konfigurace brokeru této Team VM je poškozená; instalace fail-closed nepokračuje.");
+  }
+  const context = brokeredGitHubProviderContext(brokeredIdentity, organizationLogin);
+  if (!context) {
+    return providerFailure(
+      "github_broker_root_outside_policy",
+      "Root repo Organizace není v repozitářích, které broker této Team VM povoluje.",
+    );
+  }
+  return { ok: true, ...context };
 }
 
 function providerIdentity(value, label) {
