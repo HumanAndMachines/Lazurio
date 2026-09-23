@@ -44,8 +44,8 @@ async function service({ run } = {}) {
   await writeFile(hostKeyPath, `${hostKey}\n`);
   const machineIdentityPath = join(root, "lazurio.machine.json");
   await writeFile(machineIdentityPath, JSON.stringify({
-    machine: { id: "spectoda-anna" },
-    network: { headscale_hostname: "spectoda-anna-vm" },
+    machine: { id: "alpha-anna" },
+    network: { headscale_hostname: "alpha-anna-vm" },
   }));
   const stateRoot = join(root, "state");
   const calls = [];
@@ -113,19 +113,19 @@ test("authorized_keys listing marks only keys Launchpad added as removable", () 
 });
 
 test("host label prefers the Headscale node name and stays DNS-safe", () => {
-  expect(sshHostLabel({ machineIdentity: { network: { headscale_hostname: "Spectoda-Anna-VM" } }, hostName: "anna" }))
-    .toBe("spectoda-anna-vm");
-  expect(sshHostLabel({ machineIdentity: { machine: { id: "iotor_jakub" } }, hostName: "jakub" })).toBe("iotor-jakub");
+  expect(sshHostLabel({ machineIdentity: { network: { headscale_hostname: "Alpha-Anna-VM" } }, hostName: "anna" }))
+    .toBe("alpha-anna-vm");
+  expect(sshHostLabel({ machineIdentity: { machine: { id: "beta_jakub" } }, hostName: "jakub" })).toBe("beta-jakub");
   expect(sshHostLabel({ hostName: "vm.local" })).toBe("vm-local");
   expect(sshHostLabel({ hostName: "!!" })).toBe("lazurio-machine");
 });
 
 test("setup commands exist only for validated values and never ask for admin rights", () => {
   const hostKey = { type: "ssh-ed25519", key: syntheticKey().split(" ")[1] };
-  const commands = buildSetupCommands({ label: "spectoda-anna-vm", ipv4: "100.64.0.7", user: "anna", hostKey });
-  expect(commands.connect).toBe("ssh spectoda-anna-vm");
+  const commands = buildSetupCommands({ label: "alpha-anna-vm", ipv4: "100.64.0.7", user: "anna", hostKey });
+  expect(commands.connect).toBe("ssh alpha-anna-vm");
   for (const script of [commands.macos, commands.windows]) {
-    expect(script).toContain(`spectoda-anna-vm ssh-ed25519 ${hostKey.key}`);
+    expect(script).toContain(`alpha-anna-vm ssh-ed25519 ${hostKey.key}`);
     expect(script).toContain("HostKeyAlias");
     expect(script).toContain("IdentitiesOnly yes");
     expect(script).not.toMatch(/sudo|RunAs|Administrator/);
@@ -149,23 +149,23 @@ test.skipIf(!posix)("macOS setup command is idempotent and yields a pinned ssh h
   await writeFile(join(bin, "pbcopy"), `#!/bin/sh\ncat > "${join(root, "clipboard")}"\n`);
   await chmod(join(bin, "pbcopy"), 0o755);
   const hostKey = { type: "ssh-ed25519", key: syntheticKey().split(" ")[1] };
-  const { macos } = buildSetupCommands({ label: "spectoda-anna-vm", ipv4: "100.64.0.7", user: "anna", hostKey });
+  const { macos } = buildSetupCommands({ label: "alpha-anna-vm", ipv4: "100.64.0.7", user: "anna", hostKey });
   const env = { ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH}` };
   const first = execFileSync("/bin/sh", ["-c", macos], { env, encoding: "utf8" });
   execFileSync("/bin/sh", ["-c", macos], { env, encoding: "utf8" });
 
-  const publicKey = await readFile(join(home, ".ssh", "lazurio-spectoda-anna-vm.pub"), "utf8");
+  const publicKey = await readFile(join(home, ".ssh", "lazurio-alpha-anna-vm.pub"), "utf8");
   expect(first.trim()).toBe(publicKey.trim());
   expect(await readFile(join(root, "clipboard"), "utf8")).toBe(publicKey);
   expect(parsePublicKeyInput(publicKey).type).toBe("ssh-ed25519");
   const config = await readFile(join(home, ".ssh", "config"), "utf8");
-  expect(config.match(/^Host spectoda-anna-vm$/gm)).toHaveLength(1);
+  expect(config.match(/^Host alpha-anna-vm$/gm)).toHaveLength(1);
   const knownHosts = await readFile(join(home, ".ssh", "known_hosts"), "utf8");
-  expect(knownHosts.trim().split("\n")).toEqual([`spectoda-anna-vm ssh-ed25519 ${hostKey.key}`]);
-  const resolved = execFileSync("ssh", ["-G", "-F", join(home, ".ssh", "config"), "spectoda-anna-vm"], { env, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+  expect(knownHosts.trim().split("\n")).toEqual([`alpha-anna-vm ssh-ed25519 ${hostKey.key}`]);
+  const resolved = execFileSync("ssh", ["-G", "-F", join(home, ".ssh", "config"), "alpha-anna-vm"], { env, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
   expect(resolved).toContain("hostname 100.64.0.7");
   expect(resolved).toContain("user anna");
-  expect(resolved).toContain("hostkeyalias spectoda-anna-vm");
+  expect(resolved).toContain("hostkeyalias alpha-anna-vm");
   expect(resolved).toContain("identitiesonly yes");
 });
 
@@ -175,13 +175,13 @@ test.skipIf(!posix)("service reads Machine facts and builds commands", async () 
   expect(state).toMatchObject({
     available: true,
     user: "anna",
-    label: "spectoda-anna-vm",
+    label: "alpha-anna-vm",
     tailnet_ipv4: "100.64.0.7",
     host_key: { type: "ssh-ed25519", fingerprint: parsePublicKeyInput(hostKey).fingerprint },
     keys: [],
     issues: [],
   });
-  expect(state.commands.connect).toBe("ssh spectoda-anna-vm");
+  expect(state.commands.connect).toBe("ssh alpha-anna-vm");
 
   const offline = await service({ run: async () => { throw new Error("tailscale missing"); } });
   const degraded = await offline.access.read();
