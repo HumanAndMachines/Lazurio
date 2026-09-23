@@ -52,8 +52,10 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
    - **Owner a Principál jsou tatáž osoba.** Neměnné GitHub ID vlastníka
      zařízení je zároveň Owner té Organizace, jejíž pracovní Mašiny na ně mají
      dosáhnout. Pravidlo „z pracovní do osobní nikdy“ chrání Principála před
-     autoritou Organizace; když je to jeden a týž člověk, není koho chránit před
-     kým a rozhodnutí je jeho.
+     autoritou Organizace a jejích pracovních VM. Výjimka tu ochranu neruší;
+     Principál, který je sám Ownerem, ji vědomě a výslovně vzdává pro jedno své
+     zařízení a přijímá důsledek popsaný níže. Rozhodnutí je jeho, protože se
+     týká jeho vlastního zařízení.
    - **Výslovná deklarace, nikdy odvození.** Dvojí zařazení se zapisuje v infra
      u konkrétního zařízení spolu s Organizacemi, kterých se týká. Neodvozuje se
      z jména uzlu, popisu, Headscale usera ani z toho, že je někdo Owner.
@@ -152,10 +154,14 @@ Pro nové Conglomerate Hosty je prefix povinný; existující se přečíslují 
 | Anička (`annavesela`) | HumanAndMachine-ai | MacBook, telefon, osobní VM | pracovní VM ve Spectodě |
 
 Matěj a Anička mají osobní laptop, takže jejich pracovní VM na laptop nesmí.
-Matouš je Owner Macano-Techu a jeho Windows notebook je podle pravidla 8
-deklarovaný v obou zónách pro Macano-Tech, takže pracovní VM Macano-Techu na něj
-dosáhne; do osobní zóny jiných Principálů ani jiných Organizací se tím nic
-neotevírá.
+Matouš je Owner Macano-Techu a rozhodl, že jeho Windows notebook má být podle
+pravidla 8 v obou zónách pro Macano-Tech. **Dnes to ještě neplatí:** Machines
+dvojí zařazení zatím neumí výslovně deklarovat, takže podle přísného pravidla 3
+pracovní VM Macano-Techu na notebook nedosáhne a notebook je v příkladu jen v
+osobní zóně. Pracovní VM na něj dosáhne teprve po třech krocích: schopnost
+Machines deklarovat dvojí zařazení, výslovná deklarace v `Macano-Tech/infra` a
+běžné nasazení s Plánem a Permitem. Pak se notebook objeví v obou sloupcích.
+Do osobní zóny jiných Principálů ani jiných Organizací se tím nic neotevírá.
 Operátor s pracovním laptopem Organizace (např. v ConceptLine) má pracovní
 laptop ↔ pracovní VM obousměrně.
 
