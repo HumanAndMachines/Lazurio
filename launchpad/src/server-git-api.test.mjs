@@ -1317,10 +1317,10 @@ test("hosted personal Launchpad serves a setup prompt until the owner clones the
     ok: true,
     apps: [],
     organizations: [],
-    hosted_personalspace: { state: "missing", mount_path: "personalspace/exampleuser_GEN3" },
+    hosted_personalspace: { state: "missing", mount_path: "personalspace/exampleuser_GEN3", discovery_failures: 0 },
   });
   const health = await getJson(port, "/health");
-  expect(health).toMatchObject({ status: "ok", hosted_personalspace: { state: "missing" } });
+  expect(health).toMatchObject({ status: "ok", hosted_personalspace: { state: "missing", discovery_failures: 0 } });
   expect(health.maintenance.total).toBe(0);
   // The Chat/T3 Code entry is how the owner clones it; it stays available.
   expect((await getJson(port, "/api/chat")).available).toBe(true);
@@ -1334,9 +1334,9 @@ test("hosted personal Launchpad serves a setup prompt until the owner clones the
     if (observed.hosted_personalspace?.state === "mounted") break;
     await Bun.sleep(250);
   } while (Date.now() < deadline);
-  expect(observed.hosted_personalspace).toEqual({ state: "mounted" });
+  expect(observed.hosted_personalspace).toEqual({ state: "mounted", discovery_failures: 0 });
   expect((await getJson(port, "/api/apps")).hosted_personalspace).toEqual({
-    state: "mounted", mount_path: "personalspace/exampleuser_GEN3",
+    state: "mounted", mount_path: "personalspace/exampleuser_GEN3", discovery_failures: 0,
   });
 }, platformTestTimeout(40_000));
 
@@ -1375,6 +1375,50 @@ test("hosted personal Launchpad refuses a valid Personalspace beside a foreign o
   await expect(startLaunchpadServer(root, {
     env: personalHostedEnvironment(stateRoot, await findFreePort()),
   })).rejects.toThrow("is mounted, but the Personalspace mountpoint also holds personalspace/foreign_GEN3");
+});
+
+test("hosted personal Launchpad starts and reports per-app discovery failures in a valid Personalspace", async () => {
+  const root = await createLaunchpadGitFixture();
+  const stateRoot = `${root}-personal-state`;
+  tempRoots.push(root, stateRoot);
+  await mountPersonalspace(root, "exampleuser");
+  // Two personal apps claiming the same lease port: an app-level failure that
+  // isolates them, never a reason to stop serving the Machine.
+  for (const module of ["notes", "journal"]) {
+    const appDir = join(root, "personalspace", "exampleuser_GEN3", "workspace", module, "app", "v1");
+    await mkdir(appDir, { recursive: true });
+    await writeJson(join(appDir, "package.json"), {
+      name: `exampleuser-${module}`,
+      version: "1.0.0",
+      packageManager: "bun@1.0.0",
+      scripts: { dev: "bun run server.mjs" },
+      companyascode: {
+        app: {
+          schema_version: "companyascode.launchpad_app.v1",
+          id: `${module}-v1`,
+          title: module,
+          company: "exampleuser",
+          module,
+          surface: "internal",
+          port: 41_150,
+          host: "127.0.0.1",
+          health_path: "/health",
+          dev_script: "dev",
+          tags: ["personal"],
+        },
+      },
+    });
+  }
+  const { port } = await startLaunchpadServer(root, {
+    env: personalHostedEnvironment(stateRoot, await findFreePort()),
+  });
+  const health = await getJson(port, "/health");
+  expect(health.status).toBe("ok");
+  expect(health.hosted_personalspace.state).toBe("mounted");
+  expect(health.hosted_personalspace.discovery_failures).toBeGreaterThan(0);
+  const inventory = await getJson(port, "/api/apps");
+  expect(inventory.hosted_personalspace).toMatchObject({ state: "mounted", mount_path: "personalspace/exampleuser_GEN3" });
+  expect(inventory.hosted_personalspace.discovery_failures).toBeGreaterThan(0);
 });
 
 test("hosted personal Launchpad refuses a malformed LAZURIO_HOSTED_PERSONALSPACE", async () => {

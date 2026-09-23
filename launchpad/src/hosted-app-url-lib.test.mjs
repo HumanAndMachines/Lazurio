@@ -603,21 +603,43 @@ test("personal binding tolerates only a cleanly absent Personalspace folder", ()
   // Mounted and valid: the running Launchpad serves it.
   expect(resolveHostedPersonalspaceBinding(personal, {
     spaces: [personalSpace()], mountpoint: "personalspace", primary_space_mount: absentMount({ present: true }),
-  })).toEqual({ state: "mounted", folder: "ImMakerMatty_GEN3", mount_path: "personalspace/ImMakerMatty_GEN3" });
+  })).toEqual({
+    state: "mounted", folder: "ImMakerMatty_GEN3", mount_path: "personalspace/ImMakerMatty_GEN3", discovery_failures: [],
+  });
   // Not cloned yet: no folder, nothing else in the mountpoint, no failures.
   expect(resolveHostedPersonalspaceBinding(personal, {
     spaces: [], failures: [], mountpoint: "personalspace", primary_space_mount: absentMount(),
-  })).toEqual({ state: "missing", folder: "ImMakerMatty_GEN3", mount_path: "personalspace/ImMakerMatty_GEN3" });
+  })).toEqual({
+    state: "missing", folder: "ImMakerMatty_GEN3", mount_path: "personalspace/ImMakerMatty_GEN3", discovery_failures: [],
+  });
 
   // A valid configured folder is tolerated only in a clean mountpoint.
   expect(() => resolveHostedPersonalspaceBinding(personal, {
     spaces: [personalSpace()], mountpoint: "personalspace",
     primary_space_mount: absentMount({ present: true, other_directories: ["personalspace/foreign_GEN3"] }),
   })).toThrow("is mounted, but the Personalspace mountpoint also holds personalspace/foreign_GEN3");
+  // Boundary failures are fatal: the structured subset, and the foreign code
+  // wherever it appears, even outside that subset.
+  expect(() => resolveHostedPersonalspaceBinding(personal, {
+    spaces: [personalSpace()], failures: ["personalspace: nejde přečíst personalspace mountpoint"],
+    boundary_failures: ["personalspace: nejde přečíst personalspace mountpoint"],
+    mountpoint: "personalspace", primary_space_mount: absentMount({ present: true }),
+  })).toThrow("is mounted, but the Personalspace boundary check failed: personalspace: nejde přečíst");
   expect(() => resolveHostedPersonalspaceBinding(personal, {
     spaces: [personalSpace()], failures: ["foreign_or_unrecognized_personalspace_dir: personalspace/x"],
+    boundary_failures: [], mountpoint: "personalspace", primary_space_mount: absentMount({ present: true }),
+  })).toThrow("is mounted, but the Personalspace boundary check failed: foreign_or_unrecognized_personalspace_dir");
+  // Without the structured subset every failure is treated as boundary.
+  expect(() => resolveHostedPersonalspaceBinding(personal, {
+    spaces: [personalSpace()], failures: ["personal lease port 41100 vlastní dvě aplikace: a a b"],
     mountpoint: "personalspace", primary_space_mount: absentMount({ present: true }),
-  })).toThrow("is mounted, but Personalspace discovery failed: foreign_or_unrecognized_personalspace_dir");
+  })).toThrow("boundary check failed");
+  // Per-app/module failures inside a valid owner space stay non-fatal and are
+  // reported with the mounted binding.
+  expect(resolveHostedPersonalspaceBinding(personal, {
+    spaces: [personalSpace()], failures: ["personal lease port 41100 vlastní dvě aplikace: a a b"],
+    boundary_failures: [], mountpoint: "personalspace", primary_space_mount: absentMount({ present: true }),
+  })).toMatchObject({ state: "mounted", discovery_failures: ["personal lease port 41100 vlastní dvě aplikace: a a b"] });
   expect(() => resolveHostedPersonalspaceBinding(personal, { spaces: [personalSpace()] }))
     .toThrow("did not inspect the configured folder");
 
@@ -642,7 +664,7 @@ test("personal binding tolerates only a cleanly absent Personalspace folder", ()
   expect(() => resolveHostedPersonalspaceBinding(personal, {
     spaces: [], failures: ["personalspace: nejde přečíst"], mountpoint: "personalspace",
     primary_space_mount: absentMount(),
-  })).toThrow("Personalspace discovery failed");
+  })).toThrow("is not mounted, and the Personalspace boundary check failed");
   // No filesystem evidence, or evidence about another folder, is never absence.
   expect(() => resolveHostedPersonalspaceBinding(personal, { spaces: [] })).toThrow("is not mounted");
   expect(() => resolveHostedPersonalspaceBinding(personal, {

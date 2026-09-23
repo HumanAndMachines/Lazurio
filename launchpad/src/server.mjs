@@ -133,7 +133,9 @@ if (personalHostedScope && options.organization !== undefined) {
   throw new Error("--organization is not valid on a hosted personal Machine (LAZURIO_HOSTED_SCOPE=personal).");
 }
 // Fail closed before any listener, lock or locator exists.
+let reportedPersonalspaceFailures = "";
 let hostedPersonalspace = personalHostedScope ? await resolvePersonalHostedBinding() : null;
+if (personalHostedScope) reportPersonalspaceDiscoveryFailures();
 const personalEntry = loadPersonalEntryConfiguration(process.env);
 const requestTrustProfile = personalEntry ? "personal" : hostedWorkspace.profile;
 const t3Chat = t3ChatConfigurationFromEnvironment(process.env);
@@ -546,14 +548,32 @@ async function resolvePersonalHostedBinding() {
 // configured folder only, never anything read from inside a Personalspace.
 function hostedPersonalspaceProjection() {
   return hostedPersonalspace
-    ? { state: hostedPersonalspace.state, mount_path: hostedPersonalspace.mount_path }
+    ? {
+        state: hostedPersonalspace.state,
+        mount_path: hostedPersonalspace.mount_path,
+        discovery_failures: hostedPersonalspace.discovery_failures?.length ?? 0,
+      }
     : null;
+}
+
+// Per-app/module failures inside a valid Personalspace never stop the
+// Launchpad; they are logged once per distinct set and counted in health.
+function reportPersonalspaceDiscoveryFailures() {
+  const failures = hostedPersonalspace?.discovery_failures ?? [];
+  const key = JSON.stringify(failures);
+  if (key === reportedPersonalspaceFailures) return;
+  reportedPersonalspaceFailures = key;
+  for (const failure of failures) {
+    console.warn(`[launchpad] hosted personal Personalspace discovery (non-fatal): ${failure}`);
+  }
 }
 
 async function refreshPersonalHostedBinding() {
   const previous = hostedPersonalspace?.state ?? null;
+  const previousFailures = hostedPersonalspace?.discovery_failures?.length ?? 0;
   try {
     hostedPersonalspace = await resolvePersonalHostedBinding();
+    reportPersonalspaceDiscoveryFailures();
   } catch (error) {
     // Already listening: report the unbound state honestly instead of keeping
     // a stale "mounted"/"missing", and let the caller log the exact reason.
@@ -569,6 +589,8 @@ async function refreshPersonalHostedBinding() {
       console.log(
         `[launchpad] hosted personal Personalspace ${hostedPersonalspace?.mount_path} is now ${hostedPersonalspace?.state}`,
       );
+    } else if ((hostedPersonalspace?.discovery_failures?.length ?? 0) !== previousFailures) {
+      appsResponseCache.invalidate();
     }
   }
 }
@@ -1687,7 +1709,12 @@ function startServer(startPort) {
             ? jsonResponse({
                 status: "ok",
                 ...(personalHostedScope
-                  ? { hosted_personalspace: { state: hostedPersonalspace?.state ?? "invalid" } }
+                  ? {
+                      hosted_personalspace: {
+                        state: hostedPersonalspace?.state ?? "invalid",
+                        discovery_failures: hostedPersonalspace?.discovery_failures?.length ?? 0,
+                      },
+                    }
                   : {}),
                 ...(maintenance
                   ? {

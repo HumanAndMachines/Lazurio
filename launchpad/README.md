@@ -107,8 +107,10 @@ Mašina Principála (decisions 0153/0154/0155) používá
 - auth-check a cookie proměnné zůstávají stejné jako výše.
 
 Launchpad při startu (před listenerem) ověří vazbu na přesně tuto složku.
-Nastartuje jen při čistém mountpointu — v `personalspace/` nesedí žádná jiná
-složka a Personalspace discovery nehlásí chybu — a v jednom ze dvou stavů:
+Nastartuje jen při čisté hranici Personalspace — discovery prověřila přesně
+nakonfigurovanou složku, v `personalspace/` nesedí žádná jiná složka a
+discovery nehlásí hraniční chybu (nečitelný mountpoint, cizí nebo
+nerozpoznaný prostor, nevalidní prostor ownera) — a v jednom ze dvou stavů:
 
 - `mounted` — složka je namountovaná a je validním Personalspace svého
   deklarovaného ownera;
@@ -125,10 +127,16 @@ složka a Personalspace discovery nehlásí chybu — a v jednom ze dvou stavů:
 Každý jiný stav nenastartuje: složka existuje, ale není validním
 Personalspace (prázdný nebo nedokončený checkout, nevalidní
 `personal.gen3.json`, cizí owner), vedle chybějící i validní složky leží
-jiná (cizí nebo jinak pojmenovaná) složka, discovery selže, nebo má
-`LAZURIO_HOSTED_PERSONALSPACE` špatný tvar. `/health` vrací dál
-`status: "ok"` a navíc `hosted_personalspace: { state }` (`mounted`,
-`missing`, nebo `invalid`, pokud se vazba rozbila až za běhu). Běžící
+jiná (cizí nebo jinak pojmenovaná) složka, discovery hlásí hraniční chybu,
+nebo má `LAZURIO_HOSTED_PERSONALSPACE` špatný tvar. Chyby jednotlivých
+aplikací nebo modulů uvnitř validního Personalspace ownera (kolize port
+lease, nevalidní manifest aplikace, `workspace` symlink mimo prostor) start
+naopak nezastaví, stejně jako dřív: postižené Apps discovery izoluje, Launchpad
+je vypíše do logu a jejich počet hlásí. `/health` vrací dál `status: "ok"` a
+navíc `hosted_personalspace: { state, discovery_failures }` (`state` je
+`mounted`, `missing`, nebo `invalid`, pokud se vazba rozbila až za běhu;
+`discovery_failures` je počet nefatálních discovery chyb); `/api/apps` nese
+totéž spolu s `mount_path`. Běžící
 Launchpad vazbu obnovuje stejným 15s hosted refreshem jako Team inventory, takže
 naklonovaný Personalspace převezme bez restartu unitu (`missing` → `mounted`);
 rozbitou vazbu za běhu hlásí jako `invalid` a v logu (krátce i uprostřed

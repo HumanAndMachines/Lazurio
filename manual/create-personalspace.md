@@ -41,7 +41,8 @@ Mašině ještě není nastavený" s přesnou cílovou složkou
 Mašině, případně ho nejdřív vytvoří postupem níže. Launchpad složku převezme
 při dalším 15s refreshi bez restartu; složka, která existuje, ale není validním
 Personalspace, nebo cizí složka v `personalspace/` (i vedle validního
-Personalspace) start Launchpadu dál odmítne. Kontrakt drží `launchpad/README.md`, sekce „Osobní hosted scope".
+Personalspace) start Launchpadu dál odmítne; chyba jednotlivé osobní aplikace
+(např. kolize portu) ho nezastaví, jen se nahlásí. Kontrakt drží `launchpad/README.md`, sekce „Osobní hosted scope".
 
 ## Self-service
 

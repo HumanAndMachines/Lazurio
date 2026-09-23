@@ -379,7 +379,7 @@ test("hosted personal scope reports a cleanly absent Personalspace as missing, a
     mount_path: "personalspace/ExampleUser_GEN3", present: false, other_directories: [],
   });
   expect(resolveHostedPersonalspaceBinding(configuration, absent)).toEqual({
-    state: "missing", folder: "ExampleUser_GEN3", mount_path: "personalspace/ExampleUser_GEN3",
+    state: "missing", folder: "ExampleUser_GEN3", mount_path: "personalspace/ExampleUser_GEN3", discovery_failures: [],
   });
 
   // Without the mountpoint at all the answer is the same.
@@ -419,6 +419,8 @@ test("hosted personal scope reports a cleanly absent Personalspace as missing, a
   await rm(join(guarded, "personalspace", "foreign_GEN3"), { recursive: true, force: true });
   const alone = await discoverPersonalspace(guarded, { primarySpaceDir: configuration.personalspace });
   expect(resolveHostedPersonalspaceBinding(configuration, alone)).toMatchObject({ state: "mounted" });
+  // A foreign sibling is also a structured boundary failure of discovery.
+  expect(withSibling.boundary_failures.join(" ")).toContain("foreign_or_unrecognized_personalspace_dir");
 
   // A present but invalid personal.gen3.json still refuses.
   await writeJson(join(root, "personalspace", "ExampleUser_GEN3", "personal.gen3.json"), {
@@ -1398,4 +1400,33 @@ test("gbrain transitional_source_path mířící do organizations/ se odmítne (
   expect(result.spaces[0].gbrain.mode).toBe("canonical");
   expect(result.spaces[0].gbrain.source_rel).toContain("exampleuser_GEN3/gbrain");
   expect(result.warnings.join(" ")).toContain("mimo personalspace mountpoint");
+});
+
+test("hosted personal binding keeps per-app discovery failures in a valid Personalspace non-fatal", async () => {
+  const configuration = createHostedWorkspaceConfiguration({
+    profile: "hosted", scope: "personal", owner: "frozen-slug", personalspace: "ExampleUser_GEN3",
+    domain: "lazurio.io", machine: "frozen-slug",
+  });
+  const root = await createPersonalspaceFixture({
+    spaces: [{
+      dirName: "ExampleUser_GEN3",
+      owner: "ExampleUser",
+      config: {
+        ...personalConfig("ExampleUser"),
+        buddy: { ...personalConfig("ExampleUser").buddy, slug: "exampleuser-buddy" },
+      },
+      // Two personal apps claiming the same lease port.
+      apps: [
+        { module: "notes", manifest: personalAppManifest("ExampleUser", { id: "notes-v1", module: "notes", port: 41_150 }) },
+        { module: "journal", manifest: personalAppManifest("ExampleUser", { id: "journal-v1", module: "journal", port: 41_150 }) },
+      ],
+    }],
+  });
+  const discovery = await discoverPersonalspace(root, { primarySpaceDir: configuration.personalspace });
+  const lease = discovery.failures.filter((failure) => failure.includes("personal lease port 41150"));
+  expect(lease.length).toBeGreaterThan(0);
+  expect(discovery.boundary_failures).toEqual([]);
+  const binding = resolveHostedPersonalspaceBinding(configuration, discovery);
+  expect(binding.state).toBe("mounted");
+  expect(binding.discovery_failures).toEqual(discovery.failures);
 });

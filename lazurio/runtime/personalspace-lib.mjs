@@ -822,6 +822,14 @@ export async function discoverPersonalspace(
   options = {},
 ) {
   const failures = [];
+  // Subset of failures about the Personalspace boundary itself (mountpoint,
+  // a foreign/unrecognized/invalid space). Per-app and per-module failures
+  // inside a valid owner space never land here.
+  const boundaryFailures = [];
+  const boundaryFailure = (...issues) => {
+    failures.push(...issues);
+    boundaryFailures.push(...issues);
+  };
   const warnings = [];
   const presentationWarnings = [];
   const spaces = [];
@@ -852,20 +860,20 @@ export async function discoverPersonalspace(
     : null;
 
   if (!existsSync(personalspaceRoot)) {
-    return { spaces, apps, invalid_apps: invalidApps, failures, warnings, presentation_warnings: presentationWarnings, mountpoint, primary_owner: primaryOwner ?? null, primary_space_mount: primarySpaceMount };
+    return { spaces, apps, invalid_apps: invalidApps, failures, warnings, presentation_warnings: presentationWarnings, mountpoint, primary_owner: primaryOwner ?? null, primary_space_mount: primarySpaceMount, boundary_failures: boundaryFailures };
   }
 
   const personalSchema = existsSync(personalSchemaPath) ? await readJson(personalSchemaPath) : null;
   const buddyPresentationSchema = existsSync(buddyPresentationSchemaPath) ? await readJson(buddyPresentationSchemaPath) : null;
   const appSchema = existsSync(appSchemaPath) ? await readJson(appSchemaPath) : null;
-  if (!personalSchema) failures.push(`Chybí ${relative(companiesRoot, personalSchemaPath)} pro personalspace validaci`);
+  if (!personalSchema) boundaryFailure(`Chybí ${relative(companiesRoot, personalSchemaPath)} pro personalspace validaci`);
 
   let entries;
   try {
     entries = await readdir(personalspaceRoot, { withFileTypes: true });
   } catch (error) {
-    failures.push(`${mountpoint}: nejde přečíst personalspace mountpoint: ${error.message}`);
-    return { spaces, apps, invalid_apps: invalidApps, failures, warnings, presentation_warnings: presentationWarnings, mountpoint, primary_owner: primaryOwner ?? null, primary_space_mount: primarySpaceMount };
+    boundaryFailure(`${mountpoint}: nejde přečíst personalspace mountpoint: ${error.message}`);
+    return { spaces, apps, invalid_apps: invalidApps, failures, warnings, presentation_warnings: presentationWarnings, mountpoint, primary_owner: primaryOwner ?? null, primary_space_mount: primarySpaceMount, boundary_failures: boundaryFailures };
   }
 
   const appIds = new Set();
@@ -891,7 +899,7 @@ export async function discoverPersonalspace(
           && directoryOwner.toLowerCase() !== primaryOwner.toLowerCase()
         )
       ) {
-        failures.push(
+        boundaryFailure(
           foreignOrUnrecognizedPersonalspaceDirFailure({ mountPath, directoryOwner, primaryOwner }),
         );
       }
@@ -903,7 +911,7 @@ export async function discoverPersonalspace(
       targetPath: spaceRoot,
     });
     if (!spaceBoundary.ok || !spaceBoundary.targetRealPath) {
-      failures.push(`${mountPath}: Personalspace mount překračuje canonical personalspace boundary`);
+      boundaryFailure(`${mountPath}: Personalspace mount překračuje canonical personalspace boundary`);
       continue;
     }
 
@@ -916,7 +924,7 @@ export async function discoverPersonalspace(
         label: `${mountPath}/personal.gen3.json`,
       })).value;
     } catch (error) {
-      failures.push(`${mountPath}: personal.gen3.json nejde přečíst: ${error.message}`);
+      boundaryFailure(`${mountPath}: personal.gen3.json nejde přečíst: ${error.message}`);
       continue;
     }
 
@@ -925,7 +933,7 @@ export async function discoverPersonalspace(
     if (
       (typeof options.primarySpaceDir === "string" && dirName !== options.primarySpaceDir)
       || !declaredOwner || declaredOwner.toLowerCase() !== primaryOwner.toLowerCase()) {
-      failures.push(
+      boundaryFailure(
         foreignOrUnrecognizedPersonalspaceDirFailure({
           mountPath,
           directoryOwner: declaredOwner,
@@ -941,7 +949,7 @@ export async function discoverPersonalspace(
     // Fail-closed: nevalidní config nebo porušený identity invariant → prostor se
     // NEMATERIALIZUJE (žádné osobní appky, žádný gbrain). Jen metadata + failures.
     if (configIssues.length > 0) {
-      failures.push(...configIssues.map((issue) => `${mountPath}: ${issue}`));
+      boundaryFailure(...configIssues.map((issue) => `${mountPath}: ${issue}`));
       spaces.push({
         owner: personal?.owner?.github_username ?? null,
         display_name: personal?.owner?.display_name ?? dirName,
@@ -1238,6 +1246,7 @@ export async function discoverPersonalspace(
     mountpoint,
     primary_owner: primaryOwner ?? null,
     primary_space_mount: primarySpaceMount,
+    boundary_failures: boundaryFailures,
   };
 }
 

@@ -300,13 +300,17 @@ export function validateHostedWorkspaceBindings(
 // Hosted personal scope binding state for a running Launchpad. A personal
 // Machine is handed to its owner before their private Personalspace repository
 // is cloned, and no operator may create or read it (decision 0091). Both
-// tolerated states require a clean Personalspace mountpoint: no folder other
-// than the configured one and no discovery failure. On top of that, "mounted"
-// means the configured folder is a valid owner-primary Personalspace and
-// "missing" means it does not exist at all. Everything else (a present but
-// unbound or invalid folder, a foreign or differently named sibling, any
-// discovery failure) fails closed, whether or not the configured folder is
-// valid.
+// tolerated states require a clean Personalspace boundary: discovery inspected
+// exactly the configured folder, no other folder sits in the mountpoint and
+// discovery reports no boundary failure (unreadable mountpoint, a foreign or
+// unrecognized space, an invalid owner space). On top of that, "mounted" means
+// the configured folder is a valid owner-primary Personalspace and "missing"
+// means it does not exist at all. Per-app and per-module failures inside a
+// valid owner space (a port lease conflict, an invalid app manifest, a
+// workspace symlink out of the space) stay non-fatal, as before: they isolate
+// the affected Apps and are reported, and the Launchpad keeps serving.
+const foreignPersonalspaceFailureCode = "foreign_or_unrecognized_personalspace_dir";
+
 export function resolveHostedPersonalspaceBinding(configuration, discovery = {}) {
   if (configuration?.profile !== "hosted" || configuration.scope !== "personal") {
     throw new Error("Hosted Personalspace binding applies only to LAZURIO_HOSTED_SCOPE=personal.");
@@ -332,14 +336,23 @@ export function resolveHostedPersonalspaceBinding(configuration, discovery = {})
       `${subject} the Personalspace mountpoint also holds ${others.join(", ")}; a foreign or differently named Personalspace is never adopted or tolerated beside it (decision 0091).`,
     );
   }
-  const failures = Array.isArray(discovery.failures) ? discovery.failures : [];
-  if (failures.length > 0) {
-    throw new Error(`${subject} Personalspace discovery failed: ${failures.join("; ")}`);
+  const failures = Array.isArray(discovery.failures) ? discovery.failures.map(String) : [];
+  // Without the structured boundary subset every failure counts as boundary.
+  const boundary = Array.isArray(discovery.boundary_failures)
+    ? discovery.boundary_failures.map(String)
+    : failures;
+  const fatal = [...new Set([
+    ...boundary,
+    ...failures.filter((failure) => failure.includes(foreignPersonalspaceFailureCode)),
+  ])];
+  if (fatal.length > 0) {
+    throw new Error(`${subject} the Personalspace boundary check failed: ${fatal.join("; ")}`);
   }
   return Object.freeze({
     state,
     folder: configuration.personalspace,
     mount_path: space?.mount_path ?? mount.mount_path,
+    discovery_failures: Object.freeze(failures),
   });
 }
 
