@@ -3,17 +3,20 @@ import { launchpadFetch } from "./session-aware-fetch.js";
 
 // SSH access: connect a laptop to this hosted Machine over the Headscale
 // tailnet in three steps. The server offers it only in the hosted profile;
-// on localhost the button stays hidden.
+// on localhost the button stays hidden. `mountSshAccessStep` is the
+// self-contained setup step; the top-bar dialog is only one host for it, so a
+// later Machine setup guide can mount the same step next to its siblings.
 
 const STYLESHEET_ID = "ssh-access-styles";
 let dialog = null;
+let dialogBody = null;
 let content = null;
 let state = null;
 let platform = /Windows/i.test(globalThis.navigator?.userAgent ?? "") ? "windows" : "macos";
 
 export function initSshAccess(button = document.querySelector("#sshAccessButton")) {
   if (!button) return;
-  requestJson("/api/ssh-access").then((data) => {
+  requestJson("/api/setup/ssh").then((data) => {
     button.hidden = !data?.available;
   }).catch(() => {});
   button.addEventListener("click", () => openSshAccessDialog());
@@ -32,13 +35,19 @@ async function requestJson(path, body) {
   return payload;
 }
 
-export async function openSshAccessDialog() {
-  ensureStylesheet();
+export function openSshAccessDialog() {
   ensureDialog();
-  content.replaceChildren(paragraph(t("ssh.loading")));
   if (!dialog.open) dialog.showModal();
+  return mountSshAccessStep(dialogBody);
+}
+
+export async function mountSshAccessStep(container) {
+  ensureStylesheet();
+  content = container;
+  content.classList.add("ssh-access-body");
+  content.replaceChildren(paragraph(t("ssh.loading")));
   try {
-    state = await requestJson("/api/ssh-access");
+    state = await requestJson("/api/setup/ssh");
     render();
   } catch {
     content.replaceChildren(paragraph(t("ssh.loadFailed"), "ssh-access-error"));
@@ -67,9 +76,8 @@ function ensureDialog() {
   const close = button("×", () => dialog.close(), "ssh-access-close");
   close.setAttribute("aria-label", t("a11y.closeWindow"));
   header.append(title, close);
-  content = document.createElement("div");
-  content.className = "ssh-access-body";
-  dialog.append(header, content);
+  dialogBody = document.createElement("div");
+  dialog.append(header, dialogBody);
   document.body.append(dialog);
 }
 
@@ -115,7 +123,7 @@ function render() {
   const add = button(t("ssh.addKey"), async () => {
     add.disabled = true;
     try {
-      const result = await requestJson("/api/ssh-access/keys", { public_key: keyField.value });
+      const result = await requestJson("/api/setup/ssh/keys", { public_key: keyField.value });
       state = result;
       render();
       content.querySelector(".ssh-access-connect")?.scrollIntoView?.({ block: "nearest" });
@@ -163,7 +171,7 @@ function keysSection() {
         if (!globalThis.confirm(t("ssh.removeConfirm", { name: name.textContent }))) return;
         remove.disabled = true;
         try {
-          state = await requestJson("/api/ssh-access/keys/remove", { fingerprint: key.fingerprint });
+          state = await requestJson("/api/setup/ssh/keys/remove", { fingerprint: key.fingerprint });
           render();
           flash(t("ssh.keyRemoved"));
         } catch (error) {

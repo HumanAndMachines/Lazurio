@@ -1202,8 +1202,8 @@ test("SSH access stays hidden and read-only on a localhost Launchpad", async () 
   const root = await createLaunchpadGitFixture();
   tempRoots.push(root);
   const { port, environment } = await startLaunchpadServer(root);
-  expect(await getJson(port, "/api/ssh-access")).toEqual({ available: false });
-  const add = await fetch(`http://127.0.0.1:${port}/api/ssh-access/keys`, {
+  expect(await getJson(port, "/api/setup/ssh")).toEqual({ available: false });
+  const add = await fetch(`http://127.0.0.1:${port}/api/setup/ssh/keys`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ public_key: syntheticSshKey("laptop") }),
@@ -1222,10 +1222,10 @@ test("hosted SSH access never writes a key for an unadmitted request", async () 
       LAZURIO_LAUNCHPAD_AUTH_CHECK_URL: `https://127.0.0.1:${await findFreePort()}/oauth2/auth`,
     },
   });
-  const state = await getJson(port, "/api/ssh-access");
+  const state = await getJson(port, "/api/setup/ssh");
   expect(state.available).toBe(true);
   expect(state.keys).toEqual([]);
-  for (const path of ["/api/ssh-access/keys", "/api/ssh-access/keys/remove"]) {
+  for (const path of ["/api/setup/ssh/keys", "/api/setup/ssh/keys/remove"]) {
     const forged = await fetch(`http://127.0.0.1:${port}${path}`, {
       method: "POST",
       headers: {
@@ -1279,7 +1279,7 @@ test.skipIf(process.platform === "win32")("hosted SSH access adds, lists and rem
       body: JSON.stringify(body),
     });
     const key = syntheticSshKey("matej@laptop");
-    const added = await post("/api/ssh-access/keys", { public_key: key });
+    const added = await post("/api/setup/ssh/keys", { public_key: key });
     expect(added.status).toBe(200);
     const addedBody = await added.json();
     expect(addedBody).toMatchObject({ added: true, available: true });
@@ -1289,13 +1289,13 @@ test.skipIf(process.platform === "win32")("hosted SSH access adds, lists and rem
     const authorizedKeys = join(environment.HOME, ".ssh", "authorized_keys");
     expect(await readFile(authorizedKeys, "utf8")).toContain(key.split(" ")[1]);
 
-    const duplicate = await (await post("/api/ssh-access/keys", { public_key: key })).json();
+    const duplicate = await (await post("/api/setup/ssh/keys", { public_key: key })).json();
     expect(duplicate.added).toBe(false);
-    const privateKey = await post("/api/ssh-access/keys", { public_key: "-----BEGIN OPENSSH PRIVATE KEY-----" });
+    const privateKey = await post("/api/setup/ssh/keys", { public_key: "-----BEGIN OPENSSH PRIVATE KEY-----" });
     expect(privateKey.status).toBe(400);
     expect((await privateKey.json()).error).toBe("ssh_key_private_material");
 
-    const removed = await post("/api/ssh-access/keys/remove", { fingerprint: addedBody.fingerprint });
+    const removed = await post("/api/setup/ssh/keys/remove", { fingerprint: addedBody.fingerprint });
     expect(removed.status).toBe(200);
     expect((await removed.json()).keys).toEqual([]);
     const audit = await readFile(join(stateRoot, "runtime", "audit", "ssh-access.jsonl"), "utf8");
