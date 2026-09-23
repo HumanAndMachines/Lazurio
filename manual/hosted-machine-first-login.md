@@ -45,7 +45,18 @@ je přihlášený; přehlášení provede jen operátor sám. Když `gh` přihl�
 (`gh auth status --hostname github.com`), Agent **nepokračuje v úkolu, dokud
 operátora neprovede přihlášením**, a vysvětlí mu proč: je to jeho osobní pracovní VM, GitHub
 rozhoduje, co v ní smí Agent vidět a měnit, a všechna práce z této Mašiny
-bude připsaná jeho účtu. Postup je stejný jako na pracovní stanici
+bude připsaná jeho účtu.
+
+**Preferovaná cesta je tlačítko v Launchpadu.** Ikona GitHubu v hlavičce
+Launchpadu této Mašiny otevře stránku **GitHub účet** a tlačítko **Přihlásit
+GitHub** provede kroky 1 a 2 celé: `gh` login se SSH protokolem, jednorázový
+kód jen na přihlášené stránce, SSH klíč jen když chybí a SSH přístup ještě
+nefunguje, nahrání veřejné části na ověřený účet, kontrolu účtu proti
+`owner.assignment` a důkaz přes `ssh -T` a `git ls-remote` root repa. Kroky 3
+a 4 nabídne jako další tlačítka. Agent operátora na tuto stránku pošle a ruční
+postup níže použije jen tam, kde Launchpad Mašiny není dostupný.
+
+Ruční postup je stejný jako na pracovní stanici
 (kanonicky skill `lazurio-workstation-install`, sekce o GitHub účtu):
 
 1. `gh auth login --hostname github.com --git-protocol ssh --web` bez
@@ -59,7 +70,7 @@ bude připsaná jeho účtu. Postup je stejný jako na pracovní stanici
    Pak ověří `gh auth status` a `git ls-remote` na root repo Organizace.
 3. `lazurio update` (aktualizace Lazuria je vědomý krok; bez přihlášení
    Organizaci nenatáhne).
-4. `lazurio organization install <github-login-organizace> --role builder --json`
+4. `lazurio organization install <setup-organizace> --role builder --json`
    (u Iotoru `IotorLazurio`). Gate read-only ověří živé členství operátora
    v Organizaci a Teamech a WRITE capability na aktivních Builder repech,
    pak zmaterializuje Organizaci a její moduly do `~/Lazurio/organizations/`.
@@ -105,7 +116,7 @@ identitu** — před `lazurio update`, instalací i původním úkolem:
 Donastavení (místo kroků 1–5 osobní VM; krok 6 platí stejně):
 
 1. `lazurio update`.
-2. `lazurio organization install <github-login-organizace> --json` **bez
+2. `lazurio organization install <setup-organizace> --json` **bez
    `--role`** (u Iotoru `IotorLazurio`): bot nemá lidskou roli. Lazurio ověří
    bota, zmaterializuje root Organizace a jen ty moduly, jejichž repozitáře
    jsou v klientském rozsahu této VM (repository policy v

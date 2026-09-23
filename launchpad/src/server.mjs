@@ -53,6 +53,7 @@ import { LAZURIO_LAUNCHPAD_NAME } from "../../lazurio/runtime/launchpad-identity
 import { readOrganizationLaunchpadTheme } from "./organization-theme-lib.mjs";
 import { T3ChatError, issueT3ChatUrl, t3ChatConfigurationFromEnvironment } from "./t3-chat-lib.mjs";
 import { SshAccessError, createSshAccessService } from "./ssh-access-lib.mjs";
+import { GitHubLoginError, createGitHubLoginController } from "./setup-github-lib.mjs";
 import { ModuleFolderActionError, createModuleFolderOpener } from "./module-folder-lib.mjs";
 import {
   HostedAppUrlError,
@@ -262,6 +263,19 @@ const personalspaceRuntimeManager = createPersonalspaceRuntimeManager({
   stateRoot: launchpadStateRoot,
 });
 const serverShutdownState = createServerShutdownStateAuthority();
+// Machine setup, step GitHub: login of this Machine's operator (gh + SSH
+// key + transport proof), served under /api/setup/.
+// Hosted and personal entries are bound to lazurio.machine.json; the
+// Organization install step runs the same `lazurio` CLI an Agent would.
+const setupGitHub = createGitHubLoginController({
+  hosted: hostedWorkspace.profile === "hosted" || Boolean(personalEntry),
+  personalScope: personalHostedScope || Boolean(personalEntry),
+  cliCommand: [process.execPath, join(lazurioCodeRoot, "lazurio", "cli.mjs")],
+  cliCwd: companiesRoot,
+  organizationScope: hostedWorkspace.profile === "hosted" && !personalHostedScope
+    ? hostedWorkspace.organization_slug
+    : null,
+});
 
 if (!Number.isInteger(port) || port < 1024 || port > 65535) {
   console.error(`Neplatný port: ${options.port ?? process.env.PORT}`);
@@ -726,11 +740,72 @@ async function worktreeMutationTouchesCanonicalMount(url) {
   if (url.pathname === "/api/lazurio/agent-entry-refresh") return false;
   if (url.pathname === "/api/chat/pair") return false;
   if (url.pathname.startsWith("/api/setup/ssh/")) return false;
+  // Machine-level GitHub login state, not the canonical mount. Organization
+  // install does write the mount and stays refused in a worktree context.
+  if (setupReadOnlyMountRoutes.has(url.pathname)) return false;
   if (!worktreeMountContextReadOnly) return false;
   const route = appRuntimeRoute(url.pathname);
   if (!route) return true;
   const app = (await buildAppsResponse()).apps.find((item) => item.id === route.appId);
   return app?.[APP_FILESYSTEM_ROOT] !== rootSourceRoot;
+}
+
+const setupReadOnlyMountRoutes = new Set([
+  "/api/setup/github/status",
+  "/api/setup/github/start",
+  "/api/setup/github/session",
+  "/api/setup/github/cancel",
+]);
+
+// Organization root repositories the page may verify and install. Scoped to
+// this Launchpad's Organization when it has one; never on a personal Machine.
+async function setupOrganizationSuggestions() {
+  if (personalHostedScope || personalEntry) return [];
+  const scopedSlug = hostedWorkspace.profile === "hosted"
+    ? hostedWorkspace.organization_slug
+    : options.organization ?? null;
+  const { organizations = [] } = await buildAppsResponse();
+  const logins = organizations
+    .filter((organization) => scopedSlug === null || organization.slug === scopedSlug)
+    .map((organization) => String(organization.repository ?? "").split("/")[0])
+    .filter((login) => /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/u.test(login));
+  return [...new Set(logins)];
+}
+
+async function handleSetupRoute(request, url) {
+  if (request.method !== "POST") return jsonResponse({ error: "method_not_allowed" }, 405);
+  const payload = await request.json().catch(() => ({}));
+  const body = payload && typeof payload === "object" ? payload : {};
+  const organization = body.organization ?? null;
+  // Issued by start to the starting page only; required to see the code or cancel.
+  const capability = typeof body.capability === "string" ? body.capability : null;
+  try {
+    switch (url.pathname) {
+      case "/api/setup/github/status":
+        return jsonResponse({
+          ...(await setupGitHub.status({ organization })),
+          organization_suggestions: await setupOrganizationSuggestions(),
+        });
+      case "/api/setup/github/start":
+        return jsonResponse({ session: setupGitHub.start({ organization }) });
+      case "/api/setup/github/session":
+        return jsonResponse({ session: setupGitHub.snapshot(capability) });
+      case "/api/setup/github/cancel":
+        return jsonResponse({ session: setupGitHub.cancel(capability) });
+      case "/api/setup/organization-install":
+        return jsonResponse(await appsResponseCache.runMutation(() =>
+          gitStatusService.withRemoteRefreshPaused(() =>
+            setupGitHub.organizationInstall({ organization }))));
+      default:
+        return notFound();
+    }
+  } catch (error) {
+    if (!(error instanceof GitHubLoginError)) throw error;
+    const statusCode = error.code === "organization_login_invalid"
+      ? 400
+      : error.code === "session_capability_invalid" ? 403 : 409;
+    return jsonResponse({ error: error.code }, statusCode);
+  }
 }
 
 async function buildDoctorReport() {
@@ -1492,6 +1567,7 @@ function beginServerShutdownCleanup() {
 async function completeServerShutdown() {
   console.error(`[lazurio] stopping Server instance ${launchpadServerIdentity.instance_id}\n`);
   if (hostedMaintenanceRefreshTimer) clearInterval(hostedMaintenanceRefreshTimer);
+  setupGitHub.cancel(null, { force: true });
   let failed = false;
   try {
     await server.stop(true);
@@ -1686,6 +1762,12 @@ function startServer(startPort) {
           return jsonResponse(result);
         }
         if (url.pathname === "/api/apps") return jsonResponse(await buildAppsResponse());
+        // POST only: the trust gate above has admitted the request (hosted
+        // gateway session or trusted local origin) before the one-time
+        // device code can be read.
+        if (url.pathname.startsWith("/api/setup/github/") || url.pathname === "/api/setup/organization-install") {
+          return await handleSetupRoute(request, url);
+        }
         if (url.pathname === "/api/chat" && request.method === "GET") {
           return jsonResponse({ available: Boolean(t3Chat) });
         }

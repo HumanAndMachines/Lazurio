@@ -1,0 +1,144 @@
+/* Machine setup steps (GitHub today; later SSH access, Codex and Claude
+   logins): one narrow column of step cards on the shared Launchpad tokens. */
+.setup {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 3rem;
+  display: grid;
+  gap: 1.25rem;
+}
+
+.setup h1 {
+  margin: 0;
+  font-size: 1.6rem;
+}
+
+.setup h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+}
+
+.setup-back {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.setup-intro,
+.setup-muted {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.setup-card {
+  border: 1px solid var(--line);
+  border-radius: var(--lz-radius-md);
+  background: var(--surface);
+  padding: 1.25rem;
+}
+
+.setup-status {
+  display: grid;
+  grid-template-columns: minmax(9rem, max-content) 1fr;
+  gap: 0.5rem 1rem;
+  margin: 0 0 1rem;
+}
+
+.setup-status dt {
+  color: var(--text-muted);
+}
+
+.setup-status dd {
+  margin: 0;
+}
+
+.setup-status [data-tone="ok"]::before {
+  content: "✓ ";
+  color: var(--c-success);
+}
+
+.setup-status [data-tone="bad"]::before {
+  content: "✕ ";
+  color: var(--c-danger);
+}
+
+.setup-notice {
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--lz-radius-sm);
+  border: 1px solid var(--c-warn-line);
+  background: var(--c-warn-bg);
+}
+
+.setup-notice[data-tone="ok"] {
+  border-color: var(--c-success-line);
+  background: var(--c-success-bg);
+}
+
+.setup-notice[data-tone="bad"] {
+  border-color: var(--c-danger-line);
+  background: var(--c-danger-bg);
+}
+
+.setup-organization {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+}
+
+.setup-organization input {
+  font: inherit;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--lz-radius-sm);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.setup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.setup-steps {
+  margin: 0 0 1rem;
+  padding-left: 1.25rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.setup-steps [data-state="done"]::marker {
+  color: var(--c-success);
+}
+
+.setup-steps [data-state="failed"]::marker {
+  color: var(--c-danger);
+}
+
+.setup-steps [data-state="pending"] {
+  color: var(--text-muted);
+}
+
+.setup-device {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--lz-radius-sm);
+  background: var(--bg-subtle);
+}
+
+.setup-device p {
+  margin: 0 0 0.75rem;
+}
+
+.setup-code-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.setup-code {
+  font-size: 1.6rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+}
