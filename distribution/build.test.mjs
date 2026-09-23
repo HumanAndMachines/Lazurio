@@ -312,6 +312,10 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
   expectArchitectureGate(workspaceInstructions);
   expect(workspaceInstructions).toContain("Mašina je jedna sdílená runtime, bezpečnostní a recovery hranice");
   expect(workspaceInstructions).toContain("Organization Hostu zůstává vyšší");
+  // Hosted work VMs: the generated instructions route to the shipped manual.
+  expect(workspacePaths).toContain("manual/hosted-machine-first-login.md");
+  expect(workspaceInstructions).toContain("manual/hosted-machine-first-login.md");
+  expect(workspaceInstructions).toContain("owner.assignment.kind");
   const workspacePackage = JSON.parse(await readFile(join(workspace.artifact_root, "package.json"), "utf8"));
   expect(workspacePackage).toMatchObject({
     name: "lazurio",
