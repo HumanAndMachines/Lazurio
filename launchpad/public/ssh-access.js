@@ -83,7 +83,7 @@ function ensureDialog() {
 
 function render() {
   const { label, commands, host_key: hostKey } = state;
-  const nodes = [paragraph(t("ssh.intro", { label }))];
+  const nodes = [paragraph(t("ssh.intro", { label, tailnet: state.tailnet ?? "Headscale" }))];
   if (!commands) {
     nodes.push(paragraph(t("ssh.unavailable"), "ssh-access-error"));
     for (const issue of state.issues ?? []) nodes.push(paragraph(issueText(issue), "ssh-access-muted"));

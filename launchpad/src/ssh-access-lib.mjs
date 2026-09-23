@@ -27,6 +27,7 @@ const base64Pattern = /^[A-Za-z0-9+/]+={0,2}$/;
 const fingerprintPattern = /^SHA256:[A-Za-z0-9+/]{43}$/;
 const ipv4Pattern = /^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/;
 const userPattern = /^[a-z_][a-z0-9_-]{0,31}$/;
+const tailnetPattern = /^[A-Za-z0-9._@+-]{1,253}$/;
 
 export class SshAccessError extends Error {
   constructor(code, status = 400) {
@@ -119,46 +120,85 @@ export function sshHostLabel({ machineIdentity = null, hostName = "" } = {}) {
 }
 
 // One idempotent paste per laptop OS. Every interpolated value was validated
-// above (label [a-z0-9-], IPv4, POSIX user, key type and canonical base64), so
-// no value can escape its quotes. The host key lives in its own known_hosts
-// file under HostKeyAlias with strict checking: a 100.64.x.y address repeats
-// in every tailnet, so a laptop on the wrong tailnet fails the host key check
-// instead of reaching another Machine, and no shared known_hosts line clashes.
-export function buildSetupCommands({ label, ipv4, user, hostKey }) {
-  if (!label || !ipv4Pattern.test(ipv4 ?? "") || !userPattern.test(user ?? "") || !hostKey) return null;
+// above (label [a-z0-9-], IPv4, POSIX user, tailnet name, key type and
+// canonical base64), so no value can escape its quotes.
+//
+// The Machine's Host block lives in its own ~/.ssh/lazurio/<label>.conf,
+// rewritten on every run and included at the top of ~/.ssh/config, so it wins
+// over any older block for the same name and a changed address or key is
+// picked up by pasting again. Its host key lives in a dedicated known_hosts
+// file under HostKeyAlias with strict checking: 100.64.x.y repeats in every
+// tailnet, so before writing anything the command also checks that the laptop's
+// active tailnet is the Machine's one.
+export function buildSetupCommands({ label, ipv4, user, tailnet, hostKey }) {
+  if (!label || !ipv4Pattern.test(ipv4 ?? "") || !userPattern.test(user ?? "")
+    || !tailnetPattern.test(tailnet ?? "") || !hostKey) return null;
   const knownHost = `${label} ${hostKey.type} ${hostKey.key}`;
+  const hostBlock = [
+    `Host ${label}`,
+    `  HostName ${ipv4}`,
+    `  User ${user}`,
+    `  IdentityFile ~/.ssh/lazurio-${label}`,
+    "  IdentitiesOnly yes",
+    `  HostKeyAlias ${label}`,
+    `  UserKnownHostsFile ~/.ssh/lazurio/${label}.known_hosts`,
+    "  StrictHostKeyChecking yes",
+  ];
+  const wrongTailnet = `Tailscale on this laptop is connected to '$N', not to '${tailnet}'. Switch the tailnet in the Tailscale app and paste this again.`;
+  const noCli = `Tailscale CLI not found: make sure the Tailscale app is connected to '${tailnet}'.`;
   const macos = [
     "(",
     "set -e",
+    "T=$(command -v tailscale || true)",
+    '[ -n "$T" ] || [ ! -x /Applications/Tailscale.app/Contents/MacOS/Tailscale ] || T=/Applications/Tailscale.app/Contents/MacOS/Tailscale',
+    'if [ -n "$T" ]; then',
+    `  N=$("$T" status --json 2>/dev/null | tr -d '\\n' | sed -n 's/.*"CurrentTailnet": *{[^}]*"Name": *"\\([^"]*\\)".*/\\1/p')`,
+    `  [ "$N" = '${tailnet}' ] || { echo "${wrongTailnet}" >&2; exit 1; }`,
+    "else",
+    `  echo "${noCli}" >&2`,
+    "fi",
     `L='${label}'`,
-    'K="$HOME/.ssh/lazurio-$L"',
-    'mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"',
-    '[ -f "$K" ] || ssh-keygen -q -t ed25519 -N \'\' -C "$(whoami)@$(hostname -s)" -f "$K"',
-    'touch "$HOME/.ssh/config"',
-    `grep -qx "Host $L" "$HOME/.ssh/config" || printf '\\nHost %s\\n  HostName %s\\n  User %s\\n  IdentityFile ~/.ssh/lazurio-%s\\n  IdentitiesOnly yes\\n  HostKeyAlias %s\\n  UserKnownHostsFile ~/.ssh/lazurio-%s.known_hosts\\n  StrictHostKeyChecking yes\\n' "$L" '${ipv4}' '${user}' "$L" "$L" "$L" >> "$HOME/.ssh/config"`,
-    `printf '%s\\n' '${knownHost}' > "$K.known_hosts"`,
-    'pbcopy < "$K.pub" 2>/dev/null || true',
-    'cat "$K.pub"',
+    'D="$HOME/.ssh"',
+    'mkdir -p "$D/lazurio" && chmod 700 "$D" "$D/lazurio"',
+    '[ -f "$D/lazurio-$L" ] || ssh-keygen -q -t ed25519 -N \'\' -C "$(whoami)@$(hostname -s)" -f "$D/lazurio-$L"',
+    `printf '%s\\n' ${hostBlock.map((line) => `'${line}'`).join(" ")} > "$D/lazurio/$L.conf"`,
+    `printf '%s\\n' '${knownHost}' > "$D/lazurio/$L.known_hosts"`,
+    'touch "$D/config"',
+    // Rewrite through the existing file so a symlinked config stays a symlink.
+    "grep -qxF 'Include lazurio/*.conf' \"$D/config\" || { { printf 'Include lazurio/*.conf\\n\\n'; cat \"$D/config\"; } > \"$D/config.lazurio-tmp\" && cat \"$D/config.lazurio-tmp\" > \"$D/config\" && rm \"$D/config.lazurio-tmp\"; }",
+    'pbcopy < "$D/lazurio-$L.pub" 2>/dev/null || true',
+    'cat "$D/lazurio-$L.pub"',
     ")",
   ].join("\n");
   const windows = [
     "& {",
     "$ErrorActionPreference = 'Stop'",
+    "$T = (Get-Command tailscale.exe -ErrorAction SilentlyContinue).Source",
+    "if (-not $T -and (Test-Path -LiteralPath \"$env:ProgramFiles\\Tailscale\\tailscale.exe\")) { $T = \"$env:ProgramFiles\\Tailscale\\tailscale.exe\" }",
+    "if ($T) {",
+    "  $N = $null",
+    "  try { $N = ((& $T status --json 2>$null) -join \"`n\" | ConvertFrom-Json).CurrentTailnet.Name } catch {}",
+    `  if ($N -ne '${tailnet}') { throw "${wrongTailnet}" }`,
+    `} else { Write-Warning "${noCli}" }`,
     `$L = '${label}'`,
     "$D = Join-Path $HOME '.ssh'",
-    '$K = Join-Path $D "lazurio-$L"',
     "if (-not (Get-Command ssh-keygen.exe -ErrorAction SilentlyContinue)) { throw 'OpenSSH Client is missing: Settings > System > Optional features > OpenSSH Client' }",
-    "New-Item -ItemType Directory -Force -Path $D | Out-Null",
+    "New-Item -ItemType Directory -Force -Path (Join-Path $D 'lazurio') | Out-Null",
+    '$K = Join-Path $D "lazurio-$L"',
     "if (-not (Test-Path -LiteralPath $K)) {",
     // Windows PowerShell 5.1 drops an empty native argument; 7.3+ passes it.
-    "  $N = if ($PSNativeCommandArgumentPassing -and $PSNativeCommandArgumentPassing -ne 'Legacy') { '' } else { '\"\"' }",
-    '  ssh-keygen.exe -q -t ed25519 -N $N -C "$env:USERNAME@$env:COMPUTERNAME" -f $K',
+    "  $E = if ($PSNativeCommandArgumentPassing -and $PSNativeCommandArgumentPassing -ne 'Legacy') { '' } else { '\"\"' }",
+    '  ssh-keygen.exe -q -t ed25519 -N $E -C "$env:USERNAME@$env:COMPUTERNAME" -f $K',
     "  if ($LASTEXITCODE -ne 0) { throw 'ssh-keygen failed' }",
     "}",
+    // UTF-8 without BOM: OpenSSH rejects a BOM, and Windows PowerShell's own
+    // cmdlets would add one or rewrite non-ASCII lines.
+    `[IO.File]::WriteAllLines((Join-Path $D "lazurio\\$L.conf"), [string[]]@(${hostBlock.map((line) => `'${line}'`).join(", ")}))`,
+    `[IO.File]::WriteAllLines((Join-Path $D "lazurio\\$L.known_hosts"), [string[]]@('${knownHost}'))`,
     "$C = Join-Path $D 'config'",
-    `if (@(Get-Content -LiteralPath $C -ErrorAction SilentlyContinue) -notcontains "Host $L") { Add-Content -LiteralPath $C -Encoding ascii -Value @('', "Host $L", '  HostName ${ipv4}', '  User ${user}', "  IdentityFile ~/.ssh/lazurio-$L", '  IdentitiesOnly yes', "  HostKeyAlias $L", "  UserKnownHostsFile ~/.ssh/lazurio-$L.known_hosts", '  StrictHostKeyChecking yes') }`,
-    `Set-Content -LiteralPath "$K.known_hosts" -Encoding ascii -Value '${knownHost}'`,
-    '$Pub = (Get-Content -LiteralPath "$K.pub" -Raw).Trim()',
+    "$Lines = if (Test-Path -LiteralPath $C) { [IO.File]::ReadAllLines($C) } else { @() }",
+    "if ($Lines -notcontains 'Include lazurio/*.conf') { [IO.File]::WriteAllLines($C, [string[]](@('Include lazurio/*.conf', '') + $Lines)) }",
+    '$Pub = [IO.File]::ReadAllText("$K.pub").Trim()',
     "Set-Clipboard -Value $Pub",
     "$Pub",
     "}",
@@ -205,12 +245,16 @@ export function createSshAccessService({
     return result;
   }
 
-  async function readTailnetIpv4() {
+  // One status call gives the Machine's own tailnet address and the tailnet
+  // name the laptop must be on.
+  async function readTailnet() {
     try {
-      const address = (await run("tailscale", ["ip", "-4"])).split(/\s+/).find((value) => ipv4Pattern.test(value));
-      return address ?? null;
+      const status = JSON.parse(await run("tailscale", ["status", "--json"]));
+      const ipv4 = (status?.Self?.TailscaleIPs ?? []).find((value) => ipv4Pattern.test(value)) ?? null;
+      const name = status?.CurrentTailnet?.Name;
+      return { ipv4, name: tailnetPattern.test(name ?? "") ? name : null };
     } catch {
-      return null;
+      return { ipv4: null, name: null };
     }
   }
 
@@ -237,8 +281,8 @@ export function createSshAccessService({
   }
 
   async function read() {
-    const [ipv4, hostKey, machineIdentity, keys] = await Promise.all([
-      readTailnetIpv4(),
+    const [{ ipv4, name: tailnet }, hostKey, machineIdentity, keys] = await Promise.all([
+      readTailnet(),
       readHostKey(),
       readMachineIdentity(),
       readKeys(),
@@ -246,7 +290,7 @@ export function createSshAccessService({
     const label = sshHostLabel({ machineIdentity, hostName });
     const validUser = userPattern.test(user ?? "") ? user : null;
     const issues = [
-      ...(ipv4 ? [] : ["tailnet_ip_unavailable"]),
+      ...(ipv4 && tailnet ? [] : ["tailnet_ip_unavailable"]),
       ...(hostKey ? [] : ["host_key_unavailable"]),
       ...(validUser ? [] : ["workspace_user_unsupported"]),
     ];
@@ -255,9 +299,10 @@ export function createSshAccessService({
       user: validUser,
       label,
       tailnet_ipv4: ipv4,
+      tailnet,
       host_key: hostKey ? { type: hostKey.type, fingerprint: hostKey.fingerprint } : null,
       keys,
-      commands: buildSetupCommands({ label, ipv4, user: validUser, hostKey }),
+      commands: buildSetupCommands({ label, ipv4, user: validUser, tailnet, hostKey }),
       issues,
     };
   }

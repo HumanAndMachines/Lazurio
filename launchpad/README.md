@@ -1035,7 +1035,8 @@ directly still shows its pairing page.
 In the hosted profile the top bar also shows **SSH** (localhost never does;
 `GET /api/setup/ssh` answers `{ "available": false }` there and the write
 routes return 404). The dialog reads everything on the Machine at request
-time: the workspace OS user, the tailnet IPv4 from `tailscale ip -4`, the
+time: the workspace OS user, the tailnet IPv4 and tailnet name from
+`tailscale status --json` (`Self.TailscaleIPs`, `CurrentTailnet.Name`), the
 public host key `/etc/ssh/ssh_host_ed25519_key.pub` with its SHA256
 fingerprint, and a host label (`machine.id` from
 `/etc/lazurio/lazurio.machine.json`, which the Machines contract qualifies by
@@ -1045,15 +1046,21 @@ dialog explains what is missing instead of offering a command.
 
 1. **Prepare the laptop.** One idempotent paste for macOS (Terminal) or
    Windows (PowerShell 5.1+, built-in OpenSSH, no administrator and no Git for
-   Windows): create `~/.ssh/lazurio-<label>` (ed25519, no passphrase) if
-   missing, append `Host <label>` with `HostName <tailnet IPv4>`, `User`,
-   `IdentityFile`, `IdentitiesOnly yes`, `HostKeyAlias <label>`,
-   `UserKnownHostsFile ~/.ssh/lazurio-<label>.known_hosts` and
-   `StrictHostKeyChecking yes`, write `<label> <type> <key>` into that
-   dedicated file and copy the public key to the clipboard. The same
-   `100.64.x.y` repeats in every tailnet, so a laptop on the wrong tailnet fails
-   the host key check instead of connecting to a different Machine, and no line
-   in the shared `~/.ssh/known_hosts` is touched.
+   Windows). It first checks that the laptop's Tailscale is on the Machine's
+   tailnet (`tailscale status --json` → `CurrentTailnet.Name`, including the
+   macOS app and `Program Files` CLI locations) and stops without writing
+   anything when it is not; without a Tailscale CLI it warns and continues. It
+   then creates `~/.ssh/lazurio-<label>` (ed25519, no passphrase) if missing,
+   rewrites `~/.ssh/lazurio/<label>.conf` (`Host <label>` with `HostName`,
+   `User`, `IdentityFile`, `IdentitiesOnly yes`, `HostKeyAlias <label>`,
+   `UserKnownHostsFile ~/.ssh/lazurio/<label>.known_hosts`,
+   `StrictHostKeyChecking yes`) and `~/.ssh/lazurio/<label>.known_hosts`,
+   puts `Include lazurio/*.conf` at the top of `~/.ssh/config` once, and copies
+   the public key to the clipboard. The include comes first, so the managed
+   block wins over any older block with the same name, and pasting again picks
+   up a new address or host key. `100.64.x.y` repeats in every tailnet, so the
+   strict pin also refuses a Machine reached on the wrong tailnet; the shared
+   `~/.ssh/known_hosts` is never touched.
 2. **Paste the public key.** `POST /api/setup/ssh/keys` accepts exactly one
    `ssh-ed25519`, `ecdsa-sha2-*` or `ssh-rsa` line that `ssh-keygen -l`
    accepts, refuses private key material, deduplicates by fingerprint and
