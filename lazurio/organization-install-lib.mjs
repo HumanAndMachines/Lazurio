@@ -877,10 +877,8 @@ export function observeOrganizationInstallSource({
   });
   if (!provider.available) return providerFailure("github_cli_unavailable", "GitHub CLI nebylo nalezeno.");
   if (brokered) {
-    const status = provider.json(["auth", "status", "--json", "hosts"]);
-    if (!status.ok || !brokeredAuthStatusSatisfied(status.value)) {
-      return providerFailure("github_broker_unavailable", "Broker Organizace nepotvrdil identitu bota; osobní přihlášení na sdílené Team VM nepatří.");
-    }
+    const gate = brokeredIdentityGate(provider);
+    if (!gate.ok) return gate;
   } else {
     const authentication = provider.command(
       ["auth", "status", "--hostname", "github.com", "--active"],
@@ -954,6 +952,13 @@ export function observeOrganizationInstallIdentity({
     ...(brokered ? { cwd: brokered.cwd, repository: brokered.repository } : {}),
   });
   if (!provider.available) return providerFailure("github_cli_unavailable", "GitHub CLI nebylo nalezeno.");
+  // The final re-observation before publishing the checkout repeats the exact
+  // bot gate: credential or config changes since the first check never let a
+  // provider read run under another identity.
+  if (brokered) {
+    const gate = brokeredIdentityGate(provider);
+    if (!gate.ok) return gate;
+  }
   const organizationResponse = provider.json(["api", `orgs/${source.organization.login}`]);
   if (!organizationResponse.ok) return responseFailure(organizationResponse, "organization_identity_unavailable");
   const organization = providerIdentity(organizationResponse.value, "GitHub Organization");
@@ -1273,6 +1278,15 @@ function brokeredSameRepository(actual, expected, identity = brokeredGitHubIdent
   const left = githubRepositoryCoordinate(actual);
   const right = githubRepositoryCoordinate(expected);
   return Boolean(left && right && left.ownerRepo.toLowerCase() === right.ownerRepo.toLowerCase());
+}
+
+// Exact brokered bot proof; no provider read may run before it succeeds.
+function brokeredIdentityGate(provider) {
+  const status = provider.json(["auth", "status", "--json", "hosts"]);
+  if (!status.ok || !brokeredAuthStatusSatisfied(status.value)) {
+    return providerFailure("github_broker_unavailable", "Broker Organizace nepotvrdil identitu bota; osobní přihlášení na sdílené Team VM nepatří.");
+  }
+  return { ok: true };
 }
 
 // Null on every Machine without the Machines-managed broker environment.

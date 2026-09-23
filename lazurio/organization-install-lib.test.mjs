@@ -17,6 +17,7 @@ import { CANONICAL_GIT_FETCH_REFSPEC } from "./core/git-materialization-lib.mjs"
 import { parseBrokeredGitHubEnvironment } from "./core/brokered-github-lib.mjs";
 import {
   installOrganization,
+  observeOrganizationInstallIdentity,
   observeOrganizationInstallSource,
   organizationInstallExitCode,
 } from "./organization-install-lib.mjs";
@@ -129,6 +130,57 @@ test("shared Team VM install reads the Organization only as the brokered bot", (
     .toBe("github_broker_root_outside_policy");
   expect(observe({ observe: { brokeredIdentity: { valid: false } } }).source.code).toBe("github_broker_invalid");
   expect(observe({ observe: { brokeredIdentity: { valid: false } } }).calls).toEqual([]);
+});
+
+test("final Team VM re-observation repeats the exact bot gate before any provider read", () => {
+  const documents = scaffoldDocuments();
+  const source = {
+    organization: { id: ids.organization, login },
+    repository: { id: ids.repository, full_name: fullName },
+  };
+  const botEntry = {
+    state: "success",
+    active: true,
+    host: "github.com",
+    login: "lazurio-for-github[bot]",
+    tokenSource: "lazurio-broker-live-proof",
+    scopes: "",
+    gitProtocol: "https",
+  };
+  const reobserve = (status) => {
+    const calls = [];
+    const provider = providerFixture({ calls: [], documents, privateRepository: true });
+    const result = observeOrganizationInstallIdentity({
+      source,
+      platform: "linux",
+      environment: { HOME: "/home/team", PATH: "/usr/local/bin:/usr/bin" },
+      resolveGitHubCli: () => "/usr/local/bin/gh",
+      brokeredIdentity: brokeredIdentityFixture(),
+      runGitHubCli: (call) => {
+        calls.push(call);
+        if (call.args.join(" ") === "auth status --json hosts") return ok(status);
+        if (call.args[0] === "auth") throw new Error(`personal auth probe on a Team VM: ${call.args.join(" ")}`);
+        if (call.args[1] === `repositories/${ids.repository}`) {
+          return ok({ id: Number(ids.repository), full_name: fullName, owner: { id: Number(ids.organization) } });
+        }
+        return provider(call);
+      },
+    });
+    return { result, apiCalls: calls.filter((call) => call.args[0] === "api") };
+  };
+  const accepted = reobserve({ hosts: { "github.com": [botEntry] } });
+  expect(accepted.result).toEqual({ ok: true });
+  expect(accepted.apiCalls.length).toBe(2);
+  for (const status of [
+    { hosts: { "github.com": [botEntry, { ...botEntry, login: "personal-user", tokenSource: "keyring" }] } },
+    { hosts: { "github.com": [{ ...botEntry, login: "personal-user", tokenSource: "keyring" }] } },
+    { hosts: { "github.com": [botEntry] }, extra: true },
+    { hosts: {} },
+  ]) {
+    const refused = reobserve(status);
+    expect(refused.result.code).toBe("github_broker_unavailable");
+    expect(refused.apiCalls).toEqual([]);
+  }
 });
 
 test("update on a shared Team VM leaves repositories outside the broker policy unmaterialized", async () => {
