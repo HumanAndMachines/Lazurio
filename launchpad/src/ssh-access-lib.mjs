@@ -103,10 +103,12 @@ export function authorizedKeyLine(parsed) {
   return [parsed.type, parsed.body, LAUNCHPAD_KEY_MARKER, parsed.comment].filter(Boolean).join(" ");
 }
 
+// machine.id is Organization- or owner-qualified by the Machines contract,
+// so one laptop can hold aliases for Machines of several tailnets.
 export function sshHostLabel({ machineIdentity = null, hostName = "" } = {}) {
   for (const candidate of [
-    machineIdentity?.network?.headscale_hostname,
     machineIdentity?.machine?.id,
+    machineIdentity?.network?.headscale_hostname,
     hostName,
   ]) {
     const label = String(candidate ?? "").toLowerCase().replace(/[^a-z0-9-]/g, "-")
@@ -118,8 +120,10 @@ export function sshHostLabel({ machineIdentity = null, hostName = "" } = {}) {
 
 // One idempotent paste per laptop OS. Every interpolated value was validated
 // above (label [a-z0-9-], IPv4, POSIX user, key type and canonical base64), so
-// no value can escape its quotes. HostKeyAlias pins the Machine by its label,
-// not by a 100.64.x.y address that repeats in every other tailnet.
+// no value can escape its quotes. The host key lives in its own known_hosts
+// file under HostKeyAlias with strict checking: a 100.64.x.y address repeats
+// in every tailnet, so a laptop on the wrong tailnet fails the host key check
+// instead of reaching another Machine, and no shared known_hosts line clashes.
 export function buildSetupCommands({ label, ipv4, user, hostKey }) {
   if (!label || !ipv4Pattern.test(ipv4 ?? "") || !userPattern.test(user ?? "") || !hostKey) return null;
   const knownHost = `${label} ${hostKey.type} ${hostKey.key}`;
@@ -130,9 +134,9 @@ export function buildSetupCommands({ label, ipv4, user, hostKey }) {
     'K="$HOME/.ssh/lazurio-$L"',
     'mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"',
     '[ -f "$K" ] || ssh-keygen -q -t ed25519 -N \'\' -C "$(whoami)@$(hostname -s)" -f "$K"',
-    'touch "$HOME/.ssh/config" "$HOME/.ssh/known_hosts"',
-    `grep -qx "Host $L" "$HOME/.ssh/config" || printf '\\nHost %s\\n  HostName %s\\n  User %s\\n  IdentityFile ~/.ssh/lazurio-%s\\n  IdentitiesOnly yes\\n  HostKeyAlias %s\\n' "$L" '${ipv4}' '${user}' "$L" "$L" >> "$HOME/.ssh/config"`,
-    `grep -qxF '${knownHost}' "$HOME/.ssh/known_hosts" || echo '${knownHost}' >> "$HOME/.ssh/known_hosts"`,
+    'touch "$HOME/.ssh/config"',
+    `grep -qx "Host $L" "$HOME/.ssh/config" || printf '\\nHost %s\\n  HostName %s\\n  User %s\\n  IdentityFile ~/.ssh/lazurio-%s\\n  IdentitiesOnly yes\\n  HostKeyAlias %s\\n  UserKnownHostsFile ~/.ssh/lazurio-%s.known_hosts\\n  StrictHostKeyChecking yes\\n' "$L" '${ipv4}' '${user}' "$L" "$L" "$L" >> "$HOME/.ssh/config"`,
+    `printf '%s\\n' '${knownHost}' > "$K.known_hosts"`,
     'pbcopy < "$K.pub" 2>/dev/null || true',
     'cat "$K.pub"',
     ")",
@@ -152,10 +156,8 @@ export function buildSetupCommands({ label, ipv4, user, hostKey }) {
     "  if ($LASTEXITCODE -ne 0) { throw 'ssh-keygen failed' }",
     "}",
     "$C = Join-Path $D 'config'",
-    `if (@(Get-Content -LiteralPath $C -ErrorAction SilentlyContinue) -notcontains "Host $L") { Add-Content -LiteralPath $C -Encoding ascii -Value @('', "Host $L", '  HostName ${ipv4}', '  User ${user}', "  IdentityFile ~/.ssh/lazurio-$L", '  IdentitiesOnly yes', "  HostKeyAlias $L") }`,
-    "$KH = Join-Path $D 'known_hosts'",
-    `$P = '${knownHost}'`,
-    "if (@(Get-Content -LiteralPath $KH -ErrorAction SilentlyContinue) -notcontains $P) { Add-Content -LiteralPath $KH -Encoding ascii -Value $P }",
+    `if (@(Get-Content -LiteralPath $C -ErrorAction SilentlyContinue) -notcontains "Host $L") { Add-Content -LiteralPath $C -Encoding ascii -Value @('', "Host $L", '  HostName ${ipv4}', '  User ${user}', "  IdentityFile ~/.ssh/lazurio-$L", '  IdentitiesOnly yes', "  HostKeyAlias $L", "  UserKnownHostsFile ~/.ssh/lazurio-$L.known_hosts", '  StrictHostKeyChecking yes') }`,
+    `Set-Content -LiteralPath "$K.known_hosts" -Encoding ascii -Value '${knownHost}'`,
     '$Pub = (Get-Content -LiteralPath "$K.pub" -Raw).Trim()',
     "Set-Clipboard -Value $Pub",
     "$Pub",
@@ -278,8 +280,8 @@ export function createSshAccessService({
   async function readForWrite() {
     if (!(await assertRegularOrAbsent(sshDirectory, "directory"))) {
       await mkdir(sshDirectory, { mode: 0o700 });
-      await chmod(sshDirectory, 0o700);
     }
+    await chmod(sshDirectory, 0o700);
     await assertRegularOrAbsent(authorizedKeysPath, "file");
     return await readOptional(authorizedKeysPath) ?? "";
   }
@@ -296,11 +298,23 @@ export function createSshAccessService({
     }
   }
 
-  async function audit(action, key) {
+  async function audit(action, key, result = null) {
     await mkdir(join(stateRoot, "runtime", "audit"), { recursive: true });
     await appendFile(auditPath, `${JSON.stringify({
-      at: now().toISOString(), action, type: key.type, fingerprint: key.fingerprint,
+      at: now().toISOString(), action, type: key.type, fingerprint: key.fingerprint, ...(result ? { result } : {}),
     })}\n`, "utf8");
+  }
+
+  // The audit line comes first: without it no access change happens. A change
+  // that fails after its line was written is recorded as failed, best effort.
+  async function auditedWrite(action, key, text) {
+    await audit(action, key);
+    try {
+      await writeAuthorizedKeys(text);
+    } catch (error) {
+      await audit(action, key, "failed").catch(() => {});
+      throw error;
+    }
   }
 
   // OpenSSH itself must accept the key, not only this parser.
@@ -331,8 +345,7 @@ export function createSshAccessService({
         return { added: false, fingerprint: parsed.fingerprint };
       }
       const separator = current && !current.endsWith("\n") ? "\n" : "";
-      await writeAuthorizedKeys(`${current}${separator}${authorizedKeyLine(parsed)}\n`);
-      await audit("add", parsed);
+      await auditedWrite("add", parsed, `${current}${separator}${authorizedKeyLine(parsed)}\n`);
       return { added: true, fingerprint: parsed.fingerprint };
     });
   }
@@ -346,8 +359,7 @@ export function createSshAccessService({
       const matches = lines.map(parseAuthorizedKeyLine).filter((key) => key?.fingerprint === fingerprint);
       if (matches.length === 0) throw new SshAccessError("ssh_key_not_found", 404);
       if (!matches.every((key) => key.removable)) throw new SshAccessError("ssh_key_not_managed", 409);
-      await writeAuthorizedKeys(lines.filter((line) => parseAuthorizedKeyLine(line)?.fingerprint !== fingerprint).join("\n"));
-      await audit("remove", matches[0]);
+      await auditedWrite("remove", matches[0], lines.filter((line) => parseAuthorizedKeyLine(line)?.fingerprint !== fingerprint).join("\n"));
       return { removed: true, fingerprint };
     });
   }
