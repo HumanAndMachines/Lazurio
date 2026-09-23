@@ -193,6 +193,31 @@ revize ani druhý controller nejsou součástí kontraktu.
 Produkční Buildy používají samostatný immutable build/runtime kontrakt bez
 Launchpadu a worktrees.
 
+## GitHub účet Mašiny
+
+Ikona GitHubu v hlavičce otevře stránku `setup-github.html`: jedno tlačítko
+**Přihlásit GitHub** provede postup z `manual/organization-install.md` a
+`manual/hosted-machine-first-login.md` celý. Přihlásí `gh` device loginem se
+SSH protokolem, `--skip-ssh-key` a scope `admin:public_key`, jednorázový kód ukáže jen na této
+stránce a jen kartě, která login spustila (capability ze `start`; nikdy v
+logu, souboru ani schránce), SSH klíč
+`~/.ssh/id_ed25519` vytvoří jen tehdy, když SSH přístup ke GitHubu ještě
+nefunguje, nahraje jeho veřejnou část na právě ověřený účet a výsledek dokáže
+přes `ssh -T` a `git ls-remote` root repa zvolené Organizace. Neznámý klíč
+serveru GitHubu připne z TLS `https://api.github.com/meta`; změněný nikdy
+nepřepíše. Na hostované Mašině porovná účet s přiřazením v
+`/etc/lazurio/lazurio.machine.json` a cizí účet je blocker; na týmové VM s
+`lazurio-for-github[bot]` nenabízí nic. Navazující tlačítka volají existující
+`POST /api/update` a `lazurio organization install <login> --role builder
+--json`; install server znovu ověří připravenost účtu a SSH a na hostované
+Mašině Organizace jen její vlastní Organizaci (slug z `company.gen3.json`
+root repa). API je jen POST (`/api/setup/github/{status,start,session,cancel}`
+a `/api/setup/organization-install`) za stejnou trust branou jako ostatní
+mutace, takže kód nikdy neopustí přihlášenou stránku. Namespace `setup` je
+první krok budoucího průvodce nastavením Mašiny (SSH přístup, Codex a Claude
+login, instalace Organizace podle přiřazení); každý krok zůstává samostatná
+stránka s vlastním malým API modulem.
+
 ## Stabilní odkazy na prostor
 
 Launchpad přijímá a při přepnutí prostoru sám udržuje stabilní hash route:

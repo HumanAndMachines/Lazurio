@@ -1306,6 +1306,62 @@ test.skipIf(process.platform === "win32")("hosted SSH access adds, lists and rem
   }
 }, platformTestTimeout(20_000));
 
+test("GitHub login API answers only admitted POST requests", async () => {
+  const root = await createLaunchpadGitFixture();
+  const hostedState = `${root}-setup-state`;
+  const ghConfig = `${root}-gh-config`;
+  tempRoots.push(root, hostedState, ghConfig);
+  const isolatedGitHub = { GH_CONFIG_DIR: ghConfig, GH_TOKEN: "", GITHUB_TOKEN: "" };
+
+  const hosted = await startLaunchpadServer(root, {
+    env: {
+      ...isolatedGitHub,
+      LAZURIO_WORKSPACE_PROFILE: "hosted",
+      LAZURIO_ORGANIZATION_SLUG: "BetaCo",
+      LAZURIO_TEAM_ID: "sales",
+      LAZURIO_HOSTED_DOMAIN: "workspace.example.test",
+      LAZURIO_LAUNCHPAD_STATE_ROOT: hostedState,
+      LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN: "https://launchpad.builder.workspace.example.test",
+      LAZURIO_LAUNCHPAD_AUTH_COOKIE_NAME: "__Secure-lazurio-sales-workspace",
+      LAZURIO_LAUNCHPAD_AUTH_CHECK_URL: `https://127.0.0.1:${await findFreePort()}/oauth2/auth`,
+    },
+  });
+  for (const path of ["/api/setup/github/status", "/api/setup/github/start", "/api/setup/github/session"]) {
+    const forged = await fetch(`http://127.0.0.1:${hosted.port}${path}`, {
+      method: "POST",
+      headers: {
+        origin: "https://launchpad.builder.workspace.example.test",
+        "sec-fetch-site": "same-origin",
+        cookie: "__Secure-lazurio-sales-workspace=forged",
+        "content-type": "application/json",
+      },
+      body: "{}",
+    });
+    expect(forged.status).toBe(403);
+    expect((await forged.json()).error).toBe("mutating_request_forbidden");
+  }
+  // A GET never carries the one-time code, even behind the gateway.
+  expect((await fetch(`http://127.0.0.1:${hosted.port}/api/setup/github/session`)).status).toBe(405);
+  hosted.server.kill();
+  await hosted.server.exited;
+
+  const local = await startLaunchpadServer(root, { env: isolatedGitHub });
+  const crossSite = await fetch(`http://127.0.0.1:${local.port}/api/setup/github/status`, {
+    method: "POST",
+    headers: { origin: "https://attacker.example", "sec-fetch-site": "cross-site" },
+  });
+  expect(crossSite.status).toBe(403);
+  const status = await postJson(local.port, "/api/setup/github/status", { organization: "BetaCo" });
+  expect(status.schema_version).toBe("lazurio.launchpad.setup.github.v1");
+  expect(status.machine.profile).toBe("local");
+  expect(status.session).toBeNull();
+  expect((await postJson(local.port, "/api/setup/github/session", {})).session).toBeNull();
+  // Cancel needs the capability that only start hands to the starting page.
+  expect((await postJson(local.port, "/api/setup/github/cancel", {}, 403)).error).toBe("session_capability_invalid");
+  expect((await postJson(local.port, "/api/setup/github/status", { organization: "../x" }, 400)).error)
+    .toBe("organization_login_invalid");
+}, platformTestTimeout(30_000));
+
 for (const state of ["planned", "corrupt", "conflicting"]) {
   test(`fresh hosted Launchpad distinguishes ${state} Organization state from an absent checkout`, async () => {
     const root = await createLaunchpadGitFixture();

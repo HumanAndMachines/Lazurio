@@ -603,7 +603,10 @@ test("CAC-0095: topbar uses canonical Iconoir icons without circular wrappers", 
   expect(html).not.toContain('<circle cx="5" cy="12" r="1.7" />');
   expect(html).not.toContain("M21 12.8A9 9 0 1 1");
   expect(html).not.toContain("M3 12a9 9 0 0 1");
-  expect((html.match(/topbar-icon-plain/g) ?? []).length).toBe(5);
+  expect((html.match(/topbar-icon-plain/g) ?? []).length).toBe(6);
+  // GitHub login of this Machine: one plain entry to its own page.
+  expect(html).toContain("<!-- iconoir/github -->");
+  expect(html).toMatch(/<a\s+id="setupGitHubLink"\s+href="\.\/setup-github\.html"/);
   expect(css).toContain(".topbar-icon-plain,");
   expect(css).toContain("border-color: transparent;");
   expect(css).toContain("border-radius: 0;");
