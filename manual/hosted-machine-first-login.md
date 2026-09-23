@@ -108,8 +108,13 @@ Donastavení (místo kroků 1–5 osobní VM; krok 6 platí stejně):
 2. `lazurio organization install <github-login-organizace> --json` **bez
    `--role`** (u Iotoru `IotorLazurio`): bot nemá lidskou roli. Lazurio ověří
    bota, zmaterializuje root Organizace a jen ty moduly, jejichž repozitáře
-   broker této VM povoluje (= živé GitHub granty Teamu); ostatní sloty vrátí
-   jako `excluded_by_broker_policy` bez jediné GitHub operace.
+   jsou v klientském rozsahu této VM (repository policy v
+   `/etc/lazurio/github-broker/environment`); ostatní sloty vrátí jako
+   `excluded_by_broker_policy` bez jediné GitHub operace. Ten rozsah je jen
+   lokální omezení klonování, ne autorita: o každém tokenu rozhoduje broker
+   Organizace a autoritou přístupu zůstávají živé GitHub granty Teamu. Repo v
+   rozsahu, ke kterému broker token odmítne (např. po odebrání grantu), je
+   blocker pro Organization Admina, ne důvod k jinému přihlášení.
 3. `lazurio doctor`: `platform.github_auth` musí hlásit bota. Required
    `fail`/`blocked`/`incomplete` znamená, že VM není donastavená.
 
