@@ -21,7 +21,7 @@
 // nematerializuje.
 
 import { existsSync } from "fs";
-import { readdir } from "fs/promises";
+import { lstat, readdir } from "fs/promises";
 import { dirname, join, relative, resolve, sep } from "path";
 import {
   APP_CHECKOUT_ROOT,
@@ -844,8 +844,15 @@ export async function discoverPersonalspace(
     warnings,
   });
 
+  // A hosted personal Machine names its Personalspace by exact folder. Report
+  // the plain filesystem facts about that folder so the caller can tell "not
+  // cloned yet" apart from every other unbound state. Metadata only.
+  const primarySpaceMount = typeof options.primarySpaceDir === "string"
+    ? await inspectPrimarySpaceMount({ personalspaceRoot, mountpoint, dirName: options.primarySpaceDir })
+    : null;
+
   if (!existsSync(personalspaceRoot)) {
-    return { spaces, apps, invalid_apps: invalidApps, failures, warnings, presentation_warnings: presentationWarnings, mountpoint, primary_owner: primaryOwner ?? null };
+    return { spaces, apps, invalid_apps: invalidApps, failures, warnings, presentation_warnings: presentationWarnings, mountpoint, primary_owner: primaryOwner ?? null, primary_space_mount: primarySpaceMount };
   }
 
   const personalSchema = existsSync(personalSchemaPath) ? await readJson(personalSchemaPath) : null;
@@ -858,7 +865,7 @@ export async function discoverPersonalspace(
     entries = await readdir(personalspaceRoot, { withFileTypes: true });
   } catch (error) {
     failures.push(`${mountpoint}: nejde přečíst personalspace mountpoint: ${error.message}`);
-    return { spaces, apps, invalid_apps: invalidApps, failures, warnings, presentation_warnings: presentationWarnings, mountpoint, primary_owner: primaryOwner ?? null };
+    return { spaces, apps, invalid_apps: invalidApps, failures, warnings, presentation_warnings: presentationWarnings, mountpoint, primary_owner: primaryOwner ?? null, primary_space_mount: primarySpaceMount };
   }
 
   const appIds = new Set();
@@ -1230,5 +1237,38 @@ export async function discoverPersonalspace(
     presentation_warnings: presentationWarnings,
     mountpoint,
     primary_owner: primaryOwner ?? null,
+    primary_space_mount: primarySpaceMount,
   };
+}
+
+// Filesystem facts for one exact personalspace/<dir> binding: whether any
+// entry exists at that path (lstat, so a dangling symlink still counts as
+// present) and which other folders sit beside it. It never reads a file inside
+// a Personalspace. Only ENOENT means absent; any other I/O error propagates.
+async function inspectPrimarySpaceMount({ personalspaceRoot, mountpoint, dirName }) {
+  const mountPath = `${mountpoint}/${dirName}`;
+  if (!/^[^/\\.][^/\\]*$/.test(dirName)) {
+    return { mount_path: mountPath, present: true, other_directories: [] };
+  }
+  let present = true;
+  try {
+    await lstat(join(personalspaceRoot, dirName));
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+    present = false;
+  }
+  let entries = [];
+  try {
+    entries = await readdir(personalspaceRoot, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  const otherDirectories = entries
+    .filter((entry) => entry.name !== dirName
+      && !entry.name.startsWith(".")
+      && !ignoredSpaceDirs.has(entry.name)
+      && (entry.isDirectory() || entry.isSymbolicLink()))
+    .map((entry) => `${mountpoint}/${entry.name}`)
+    .sort();
+  return { mount_path: mountPath, present, other_directories: otherDirectories };
 }

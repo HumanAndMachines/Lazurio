@@ -117,6 +117,32 @@ export function renderPersonalspace(container, data) {
   restoreGbrainSearchFocus(container, activeFocus);
 }
 
+// Hosted personal Machine whose Personalspace the owner has not cloned yet.
+// Only the owner can add it (decision 0091), so the prompt names the exact
+// folder and never invents a repository URL.
+export function renderHostedPersonalspaceSetup(container, { path }) {
+  if (!container) return;
+  const card = document.createElement("section");
+  card.className = "personalspace-friendly-empty personalspace-hosted-setup";
+  const title = document.createElement("h2");
+  title.textContent = t("personal.hostedMissing.title");
+  const copy = document.createElement("p");
+  copy.textContent = t("personal.hostedMissing.message");
+  const location = document.createElement("p");
+  const label = document.createElement("span");
+  label.textContent = `${t("personal.hostedMissing.pathLabel")}: `;
+  const folder = document.createElement("code");
+  folder.textContent = path;
+  location.append(label, folder);
+  const refresh = document.createElement("p");
+  refresh.textContent = t("personal.hostedMissing.refresh");
+  card.append(title, copy, location, refresh);
+  const root = document.createElement("div");
+  root.className = "personalspace-body-inner";
+  root.append(card);
+  container.replaceChildren(root);
+}
+
 function personalspaceErrorState() {
   const card = document.createElement("section");
   card.className = "personalspace-friendly-empty is-error";

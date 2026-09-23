@@ -106,8 +106,33 @@ Mašina Principála (decisions 0153/0154/0155) používá
   `LAZURIO_HOSTED_PERSONALSPACE` naopak organization scope odmítne;
 - auth-check a cookie proměnné zůstávají stejné jako výše.
 
-Launchpad při startu (před listenerem) ověří, že je přesně tato složka
-namountovaná a je validním Personalspace; jinak nenastartuje. Organizační read
+Launchpad při startu (před listenerem) ověří vazbu na přesně tuto složku.
+Nastartuje ve dvou stavech:
+
+- `mounted` — složka je namountovaná a je validním Personalspace svého
+  deklarovaného ownera;
+- `missing` — složka vůbec neexistuje (ani jako symlink), v mountpointu
+  `personalspace/` nesedí žádná jiná složka a discovery nehlásí chybu. To je
+  čerstvá osobní Mašina, na které owner svůj privátní Personalspace ještě
+  nenaklonoval; nikdo jiný ho vytvořit ani číst nesmí (decision 0091).
+  Launchpad běží, `/api/apps` vrací prázdný katalog s
+  `hosted_personalspace: { state: "missing", mount_path }` a UI v osobním
+  scope ukáže lokalizovanou výzvu „Personalspace na této Mašině ještě není
+  nastavený" s přesnou cílovou složkou (`<Lazurio Root>/personalspace/<složka>`)
+  — owner si do ní naklonuje svůj vlastní repozitář, třeba přes Chat (T3 Code)
+  na této Mašině; žádnou repo URL Launchpad nevymýšlí. Chat vstup funguje dál.
+
+Každý jiný stav nenastartuje: složka existuje, ale není validním
+Personalspace (prázdný nebo nedokončený checkout, nevalidní
+`personal.gen3.json`, cizí owner), vedle chybějící složky leží jiná (cizí
+nebo jinak pojmenovaná) složka, discovery selže, nebo má
+`LAZURIO_HOSTED_PERSONALSPACE` špatný tvar. `/health` vrací dál
+`status: "ok"` a navíc `hosted_personalspace: { state }` (`mounted`,
+`missing`, nebo `invalid`, pokud se vazba rozbila až za běhu). Běžící
+Launchpad vazbu obnovuje stejným 15s hosted refreshem jako Team inventory, takže
+naklonovaný Personalspace převezme bez restartu unitu (`missing` → `mounted`);
+rozbitou vazbu za běhu hlásí jako `invalid` a v logu (krátce i uprostřed
+probíhajícího klonu) a další start ji odmítne. Organizační read
 model, Organization runtime lane ani Git/worktree API se v osobním scope vůbec
 nesestavují: `/api/apps` vrací prázdný katalog bez Organizací a `/api/git/*`
 mimo Root update odpovídá `404 organization_lane_unavailable`. Z výběru jsou

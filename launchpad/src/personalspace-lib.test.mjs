@@ -8,6 +8,7 @@ import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.m
 import {
   createHostedWorkspaceConfiguration,
   requireHostedAppUrl,
+  resolveHostedPersonalspaceBinding,
   selectHostedWorkspaceApps,
   validateHostedWorkspaceBindings,
 } from "../../lazurio/runtime/hosted-app-url-lib.mjs";
@@ -351,6 +352,56 @@ test("hosted personal scope binds the exact folder and selects its default App d
   const missingDiscovery = await discoverPersonalspace(root, { primarySpaceDir: missing.personalspace });
   expect(missingDiscovery.spaces).toEqual([]);
   expect(() => validateHostedWorkspaceBindings(missing, missingDiscovery)).toThrow("is not mounted");
+  // The other owner's folder beside it is never a clean "not cloned yet".
+  expect(missingDiscovery.primary_space_mount).toEqual({
+    mount_path: "personalspace/frozen-slug_GEN3",
+    present: false,
+    other_directories: ["personalspace/ExampleUser_GEN3"],
+  });
+  expect(() => resolveHostedPersonalspaceBinding(missing, missingDiscovery))
+    .toThrow("holds personalspace/ExampleUser_GEN3; a foreign or differently named Personalspace is never adopted");
+  expect(resolveHostedPersonalspaceBinding(configuration, discovery)).toMatchObject({ state: "mounted" });
+});
+
+test("hosted personal scope reports a cleanly absent Personalspace as missing, anything present as unbound", async () => {
+  const configuration = createHostedWorkspaceConfiguration({
+    profile: "hosted", scope: "personal", owner: "frozen-slug", personalspace: "ExampleUser_GEN3",
+    domain: "lazurio.io", machine: "frozen-slug",
+  });
+  // A fresh personal Machine: the Root is installed, personalspace/ holds only
+  // the tracked README, and the owner has not cloned their private repo yet.
+  const root = await createPersonalspaceFixture();
+  await mkdir(join(root, "personalspace"), { recursive: true });
+  await writeFile(join(root, "personalspace", "README.md"), "# personalspace\n", "utf8");
+  const absent = await discoverPersonalspace(root, { primarySpaceDir: configuration.personalspace });
+  expect(absent).toMatchObject({ spaces: [], failures: [], primary_owner: null });
+  expect(absent.primary_space_mount).toEqual({
+    mount_path: "personalspace/ExampleUser_GEN3", present: false, other_directories: [],
+  });
+  expect(resolveHostedPersonalspaceBinding(configuration, absent)).toEqual({
+    state: "missing", folder: "ExampleUser_GEN3", mount_path: "personalspace/ExampleUser_GEN3",
+  });
+
+  // Without the mountpoint at all the answer is the same.
+  const bare = await createPersonalspaceFixture();
+  const bareDiscovery = await discoverPersonalspace(bare, { primarySpaceDir: configuration.personalspace });
+  expect(resolveHostedPersonalspaceBinding(configuration, bareDiscovery)).toMatchObject({ state: "missing" });
+
+  // The exact folder exists but is not a Personalspace (e.g. an empty or
+  // unfinished clone): present, therefore still refused.
+  await mkdir(join(root, "personalspace", "ExampleUser_GEN3"), { recursive: true });
+  const unfinished = await discoverPersonalspace(root, { primarySpaceDir: configuration.personalspace });
+  expect(unfinished.primary_space_mount.present).toBe(true);
+  expect(() => resolveHostedPersonalspaceBinding(configuration, unfinished))
+    .toThrow("is not mounted; the folder exists but is not a valid Personalspace");
+
+  // A present but invalid personal.gen3.json still refuses.
+  await writeJson(join(root, "personalspace", "ExampleUser_GEN3", "personal.gen3.json"), {
+    ...personalConfig("ExampleUser"),
+    schema_version: "broken",
+  });
+  const invalid = await discoverPersonalspace(root, { primarySpaceDir: configuration.personalspace });
+  expect(() => resolveHostedPersonalspaceBinding(configuration, invalid)).toThrow("invalid personal.gen3.json");
 });
 
 test("Personalspace odmítne workspace junction mimo owner checkout a neuniknou z něj aplikace", async () => {

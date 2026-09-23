@@ -9,6 +9,7 @@ import {
   projectHostedAppUrl,
   projectHostedRuntimePayload,
   requireHostedAppUrl,
+  resolveHostedPersonalspaceBinding,
   selectHostedWorkspaceApps,
   validateHostedWorkspaceBindings,
 } from "./hosted-app-url-lib.mjs";
@@ -587,4 +588,57 @@ test("personal binding is the exact configured folder, independent of a renamed 
   expect(() => validateHostedWorkspaceBindings(personal, {
     spaces: [personalSpace({ config_valid: false })],
   })).toThrow("invalid personal.gen3.json");
+});
+
+function absentMount(overrides = {}) {
+  return {
+    mount_path: "personalspace/ImMakerMatty_GEN3",
+    present: false,
+    other_directories: [],
+    ...overrides,
+  };
+}
+
+test("personal binding tolerates only a cleanly absent Personalspace folder", () => {
+  // Mounted and valid: the running Launchpad serves it.
+  expect(resolveHostedPersonalspaceBinding(personal, {
+    spaces: [personalSpace()], mountpoint: "personalspace", primary_space_mount: absentMount({ present: true }),
+  })).toEqual({ state: "mounted", folder: "ImMakerMatty_GEN3", mount_path: "personalspace/ImMakerMatty_GEN3" });
+  // Not cloned yet: no folder, nothing else in the mountpoint, no failures.
+  expect(resolveHostedPersonalspaceBinding(personal, {
+    spaces: [], failures: [], mountpoint: "personalspace", primary_space_mount: absentMount(),
+  })).toEqual({ state: "missing", folder: "ImMakerMatty_GEN3", mount_path: "personalspace/ImMakerMatty_GEN3" });
+
+  // Present but invalid, foreign or not owner-primary still refuses.
+  expect(() => resolveHostedPersonalspaceBinding(personal, {
+    spaces: [personalSpace({ config_valid: false })], mountpoint: "personalspace",
+    primary_space_mount: absentMount({ present: true }),
+  })).toThrow("invalid personal.gen3.json");
+  expect(() => resolveHostedPersonalspaceBinding(personal, {
+    spaces: [personalSpace({ is_owner_primary: false })], mountpoint: "personalspace",
+    primary_space_mount: absentMount({ present: true }),
+  })).toThrow("the folder exists but is not a valid Personalspace");
+  expect(() => resolveHostedPersonalspaceBinding(personal, {
+    spaces: [], mountpoint: "personalspace", primary_space_mount: absentMount({ present: true }),
+  })).toThrow("is not mounted; the folder exists");
+  // Absent, but a foreign or differently named folder sits beside it.
+  expect(() => resolveHostedPersonalspaceBinding(personal, {
+    spaces: [], mountpoint: "personalspace",
+    primary_space_mount: absentMount({ other_directories: ["personalspace/someone_GEN3"] }),
+  })).toThrow("holds personalspace/someone_GEN3; a foreign or differently named Personalspace is never adopted");
+  // Absent, but discovery itself failed.
+  expect(() => resolveHostedPersonalspaceBinding(personal, {
+    spaces: [], failures: ["personalspace: nejde přečíst"], mountpoint: "personalspace",
+    primary_space_mount: absentMount(),
+  })).toThrow("Personalspace discovery failed");
+  // No filesystem evidence, or evidence about another folder, is never absence.
+  expect(() => resolveHostedPersonalspaceBinding(personal, { spaces: [] })).toThrow("is not mounted");
+  expect(() => resolveHostedPersonalspaceBinding(personal, {
+    spaces: [], mountpoint: "personalspace",
+    primary_space_mount: absentMount({ mount_path: "personalspace/Other_GEN3" }),
+  })).toThrow("is not mounted");
+  // Organization scope keeps its own binding and never uses this state.
+  expect(() => resolveHostedPersonalspaceBinding(configuration, {})).toThrow("only to LAZURIO_HOSTED_SCOPE=personal");
+  expect(() => validateHostedWorkspaceBindings(configuration, { organizations: [] }))
+    .toThrow("Hosted Workspace Organization ExampleOrg is not mounted.");
 });

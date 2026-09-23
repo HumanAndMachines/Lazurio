@@ -1292,7 +1292,81 @@ test("hosted personal Launchpad refuses to start without its exact Personalspace
   await mountPersonalspace(root, "frozen-slug");
   await expect(startLaunchpadServer(root, {
     env: personalHostedEnvironment(stateRoot, await findFreePort()),
-  })).rejects.toThrow("personalspace/exampleuser_GEN3 (LAZURIO_HOSTED_PERSONALSPACE) is not mounted");
+  })).rejects.toThrow("personalspace/exampleuser_GEN3 (LAZURIO_HOSTED_PERSONALSPACE) is not mounted, and the Personalspace mountpoint holds personalspace/frozen-slug_GEN3");
+});
+
+test("hosted personal Launchpad serves a setup prompt until the owner clones the Personalspace", async () => {
+  const root = await createLaunchpadGitFixture();
+  const stateRoot = `${root}-personal-state`;
+  const cli = `${root}-fake-t3.sh`;
+  await writeFile(cli, `printf '{"credential":"G2RQZFN6MK77"}'\n`);
+  tempRoots.push(root, stateRoot, cli);
+  // A fresh personal Machine: nobody may create the owner's private repo.
+  await rm(join(root, "personalspace", "exampleuser_GEN3"), { recursive: true, force: true });
+
+  const { port } = await startLaunchpadServer(root, {
+    env: {
+      ...personalHostedEnvironment(stateRoot, await findFreePort()),
+      LAZURIO_T3CODE_URL: "https://t3code.frozen-slug.lazurio.io/",
+      LAZURIO_T3CODE_PAIRING_COMMAND: JSON.stringify(["/bin/sh", cli]),
+    },
+  });
+  expect((await fetch(`http://127.0.0.1:${port}/`)).status).toBe(200);
+  const inventory = await getJson(port, "/api/apps");
+  expect(inventory).toMatchObject({
+    ok: true,
+    apps: [],
+    organizations: [],
+    hosted_personalspace: { state: "missing", mount_path: "personalspace/exampleuser_GEN3" },
+  });
+  const health = await getJson(port, "/health");
+  expect(health).toMatchObject({ status: "ok", hosted_personalspace: { state: "missing" } });
+  expect(health.maintenance.total).toBe(0);
+  // The Chat/T3 Code entry is how the owner clones it; it stays available.
+  expect((await getJson(port, "/api/chat")).available).toBe(true);
+
+  // The owner clones their Personalspace; the periodic refresh picks it up.
+  await mountPersonalspace(root, "exampleuser");
+  let observed;
+  const deadline = Date.now() + 25_000;
+  do {
+    observed = await getJson(port, "/health");
+    if (observed.hosted_personalspace?.state === "mounted") break;
+    await Bun.sleep(250);
+  } while (Date.now() < deadline);
+  expect(observed.hosted_personalspace).toEqual({ state: "mounted" });
+  expect((await getJson(port, "/api/apps")).hosted_personalspace).toEqual({
+    state: "mounted", mount_path: "personalspace/exampleuser_GEN3",
+  });
+}, platformTestTimeout(40_000));
+
+test("hosted personal Launchpad refuses a present but invalid Personalspace", async () => {
+  const root = await createLaunchpadGitFixture();
+  const stateRoot = `${root}-personal-state`;
+  tempRoots.push(root, stateRoot);
+  await mountPersonalspace(root, "exampleuser");
+  await writeFile(join(root, "personalspace", "exampleuser_GEN3", "personal.gen3.json"), "{ broken");
+  await expect(startLaunchpadServer(root, {
+    env: personalHostedEnvironment(stateRoot, await findFreePort()),
+  })).rejects.toThrow("personalspace/exampleuser_GEN3 (LAZURIO_HOSTED_PERSONALSPACE) is not mounted; the folder exists");
+
+  // An empty or unfinished checkout of the exact folder is present, not absent.
+  await rm(join(root, "personalspace", "exampleuser_GEN3"), { recursive: true, force: true });
+  await mkdir(join(root, "personalspace", "exampleuser_GEN3"), { recursive: true });
+  await expect(startLaunchpadServer(root, {
+    env: personalHostedEnvironment(stateRoot, await findFreePort()),
+  })).rejects.toThrow("is not mounted; the folder exists");
+});
+
+test("hosted personal Launchpad refuses a malformed LAZURIO_HOSTED_PERSONALSPACE", async () => {
+  const root = await createLaunchpadGitFixture();
+  const stateRoot = `${root}-personal-state`;
+  tempRoots.push(root, stateRoot);
+  for (const folder of ["../exampleuser_GEN3", "exampleuser", ""]) {
+    await expect(startLaunchpadServer(root, {
+      env: { ...personalHostedEnvironment(stateRoot, await findFreePort()), LAZURIO_HOSTED_PERSONALSPACE: folder },
+    })).rejects.toThrow("LAZURIO_HOSTED_PERSONALSPACE is required for LAZURIO_HOSTED_SCOPE=personal");
+  }
 });
 
 test("hosted personal Launchpad never builds the Organization read model", async () => {

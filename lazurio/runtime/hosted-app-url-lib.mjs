@@ -297,6 +297,41 @@ export function validateHostedWorkspaceBindings(
   return configuration;
 }
 
+// Hosted personal scope binding state for a running Launchpad. A personal
+// Machine is handed to its owner before their private Personalspace repository
+// is cloned, and no operator may create or read it (decision 0091). Exactly one
+// state is therefore non-fatal besides a valid binding: the configured folder
+// does not exist at all and nothing else sits in the Personalspace mountpoint.
+// Everything else (a present but unbound or invalid folder, a foreign or
+// differently named folder, a discovery failure) keeps failing closed.
+export function resolveHostedPersonalspaceBinding(configuration, discovery = {}) {
+  if (configuration?.profile !== "hosted" || configuration.scope !== "personal") {
+    throw new Error("Hosted Personalspace binding applies only to LAZURIO_HOSTED_SCOPE=personal.");
+  }
+  const mountPath = `personalspace/${configuration.personalspace}`;
+  const space = boundPersonalspace(configuration, discovery.spaces);
+  if (space) {
+    validateHostedWorkspaceBindings(configuration, discovery);
+    return Object.freeze({ state: "mounted", folder: configuration.personalspace, mount_path: space.mount_path ?? mountPath });
+  }
+  const notMounted = `Hosted personal Workspace Personalspace ${mountPath} (LAZURIO_HOSTED_PERSONALSPACE) is not mounted`;
+  const mount = discovery.primary_space_mount;
+  if (!mount || mount.present !== false || mount.mount_path !== `${discovery.mountpoint ?? "personalspace"}/${configuration.personalspace}`) {
+    throw new Error(`${notMounted}; the folder exists but is not a valid Personalspace of its declared owner.`);
+  }
+  const others = Array.isArray(mount.other_directories) ? mount.other_directories : [];
+  if (others.length > 0) {
+    throw new Error(
+      `${notMounted}, and the Personalspace mountpoint holds ${others.join(", ")}; a foreign or differently named Personalspace is never adopted (decision 0091).`,
+    );
+  }
+  const failures = Array.isArray(discovery.failures) ? discovery.failures : [];
+  if (failures.length > 0) {
+    throw new Error(`${notMounted}, and Personalspace discovery failed: ${failures.join("; ")}`);
+  }
+  return Object.freeze({ state: "missing", folder: configuration.personalspace, mount_path: mount.mount_path });
+}
+
 export function selectHostedWorkspaceApps(configuration, { apps = [], organizations = [] } = {}) {
   if (!validHostedContext(configuration)) return { apps: [], skipped: [] };
   if (configuration.scope === "personal") return selectPersonalHostedApps(configuration, apps);
