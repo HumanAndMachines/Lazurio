@@ -112,7 +112,9 @@ test("authorized_keys listing marks only keys Launchpad added as removable", () 
   ]);
 });
 
-test("host label prefers the Headscale node name and stays DNS-safe", () => {
+test("host label prefers the qualified machine id and stays DNS-safe", () => {
+  expect(sshHostLabel({ machineIdentity: { machine: { id: "alpha-anna" }, network: { headscale_hostname: "friday" } } }))
+    .toBe("alpha-anna");
   expect(sshHostLabel({ machineIdentity: { network: { headscale_hostname: "Alpha-Anna-VM" } }, hostName: "anna" }))
     .toBe("alpha-anna-vm");
   expect(sshHostLabel({ machineIdentity: { machine: { id: "beta_jakub" } }, hostName: "jakub" })).toBe("beta-jakub");
@@ -127,6 +129,9 @@ test("setup commands exist only for validated values and never ask for admin rig
   for (const script of [commands.macos, commands.windows]) {
     expect(script).toContain(`alpha-anna-vm ssh-ed25519 ${hostKey.key}`);
     expect(script).toContain("HostKeyAlias");
+    expect(script).toContain("UserKnownHostsFile ~/.ssh/lazurio-");
+    expect(script).toContain("StrictHostKeyChecking yes");
+    expect(script).not.toContain(".ssh/known_hosts");
     expect(script).toContain("IdentitiesOnly yes");
     expect(script).not.toMatch(/sudo|RunAs|Administrator/);
   }
@@ -160,13 +165,16 @@ test.skipIf(!posix)("macOS setup command is idempotent and yields a pinned ssh h
   expect(parsePublicKeyInput(publicKey).type).toBe("ssh-ed25519");
   const config = await readFile(join(home, ".ssh", "config"), "utf8");
   expect(config.match(/^Host alpha-anna-vm$/gm)).toHaveLength(1);
-  const knownHosts = await readFile(join(home, ".ssh", "known_hosts"), "utf8");
-  expect(knownHosts.trim().split("\n")).toEqual([`alpha-anna-vm ssh-ed25519 ${hostKey.key}`]);
+  const knownHosts = await readFile(join(home, ".ssh", "lazurio-alpha-anna-vm.known_hosts"), "utf8");
+  expect(knownHosts).toBe(`alpha-anna-vm ssh-ed25519 ${hostKey.key}\n`);
+  expect(await Bun.file(join(home, ".ssh", "known_hosts")).exists()).toBe(false);
   const resolved = execFileSync("ssh", ["-G", "-F", join(home, ".ssh", "config"), "alpha-anna-vm"], { env, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
   expect(resolved).toContain("hostname 100.64.0.7");
   expect(resolved).toContain("user anna");
   expect(resolved).toContain("hostkeyalias alpha-anna-vm");
   expect(resolved).toContain("identitiesonly yes");
+  expect(resolved).toContain("stricthostkeychecking true");
+  expect(resolved).toMatch(/userknownhostsfile \S*lazurio-alpha-anna-vm\.known_hosts/);
 });
 
 test.skipIf(!posix)("service reads Machine facts and builds commands", async () => {
@@ -175,13 +183,13 @@ test.skipIf(!posix)("service reads Machine facts and builds commands", async () 
   expect(state).toMatchObject({
     available: true,
     user: "anna",
-    label: "alpha-anna-vm",
+    label: "alpha-anna",
     tailnet_ipv4: "100.64.0.7",
     host_key: { type: "ssh-ed25519", fingerprint: parsePublicKeyInput(hostKey).fingerprint },
     keys: [],
     issues: [],
   });
-  expect(state.commands.connect).toBe("ssh alpha-anna-vm");
+  expect(state.commands.connect).toBe("ssh alpha-anna");
 
   const offline = await service({ run: async () => { throw new Error("tailscale missing"); } });
   const degraded = await offline.access.read();
@@ -237,4 +245,20 @@ test.skipIf(!posix)("a symlinked authorized_keys is refused, never written throu
   await symlink(outside, join(home, ".ssh", "authorized_keys"));
   await expect(access.addKey(syntheticKey())).rejects.toThrow("ssh_path_unsafe");
   expect(await readFile(outside, "utf8")).toBe("original\n");
+});
+
+test.skipIf(!posix)("an existing ~/.ssh is tightened to 0700 before a key is written", async () => {
+  const { access, home } = await service();
+  await mkdir(join(home, ".ssh"), { mode: 0o755 });
+  await chmod(join(home, ".ssh"), 0o755);
+  await access.addKey(syntheticKey("ssh-ed25519", "laptop"));
+  expect((await lstat(join(home, ".ssh"))).mode & 0o777).toBe(0o700);
+  expect((await lstat(join(home, ".ssh", "authorized_keys"))).mode & 0o777).toBe(0o600);
+});
+
+test.skipIf(!posix)("no access change happens when its audit line cannot be written", async () => {
+  const { access, home, stateRoot } = await service();
+  await writeFile(stateRoot, "not a directory");
+  await expect(access.addKey(syntheticKey("ssh-ed25519", "laptop"))).rejects.toThrow();
+  expect(await Bun.file(join(home, ".ssh", "authorized_keys")).exists()).toBe(false);
 });
