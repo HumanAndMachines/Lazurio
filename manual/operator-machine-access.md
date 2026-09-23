@@ -31,7 +31,8 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
 2. **Z osobní do pracovní ano.** Osobní klienti a osobní VM → každá pracovní VM
    téhož Operátora: SSH + HTTPS.
 3. **Z pracovní do osobní nikdy.** Pracovní VM ani pracovní laptop nemají grant
-   na osobní VM ani na osobní laptop.
+   na osobní VM ani na osobní laptop. Jedinou výjimkou je zařízení vědomě
+   deklarované v obou zónách podle pravidla 8.
 4. **Sdílená týmová VM** (Hosted Team Workspace, víc Principálů v jednom OS
    účtu) přijímá jen příchozí spojení od členů GitHub Teamu, na který je vázaná
    neměnným `github_team_id` (0147/0149); členství se čte živě z GitHubu a
@@ -44,6 +45,36 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
    Conglomerate Host vlastní, a jde jen z jeho osobního laptopu a osobní VM
    (`owner_admin_ssh_grants`). Ownerství jiné Organizace obsluhované tímtéž
    hostem správu nedává; telefon, pracovní VM ani pracovní laptop ji nedostávají.
+
+8. **Zařízení v obou zónách (founder).** Zakladatel bývá týž člověk jako Owner
+   Organizace a jeden notebook mu slouží osobně i pracovně. Takové zařízení smí
+   být deklarované v obou zónách, ale jen při splnění všech podmínek:
+   - **Owner a Principál jsou tatáž osoba.** Neměnné GitHub ID vlastníka
+     zařízení je zároveň Owner té Organizace, jejíž pracovní Mašiny na ně mají
+     dosáhnout. Pravidlo „z pracovní do osobní nikdy“ chrání Principála před
+     autoritou Organizace a jejích pracovních VM. Výjimka tu ochranu neruší;
+     Principál, který je sám Ownerem, ji vědomě a výslovně vzdává pro jedno své
+     zařízení a přijímá důsledek popsaný níže. Rozhodnutí je jeho, protože se
+     týká jeho vlastního zařízení.
+   - **Výslovná deklarace, nikdy odvození.** Dvojí zařazení se zapisuje v infra
+     u konkrétního zařízení spolu s Organizacemi, kterých se týká. Neodvozuje se
+     z jména uzlu, popisu, Headscale usera ani z toho, že je někdo Owner.
+   - **Jen jmenovaná Organizace.** Grant dostanou pouze pracovní Mašiny
+     deklarovaných Organizací. Ostatní Organizace téhož Conglomerate ani cizí
+     Principálové z toho nic nezískávají.
+   - **Vědomý důsledek.** Autorita Organization Hostu a Conglomerate Hostu tím
+     dostane technickou cestu do zařízení, na kterém Principál pracuje i
+     soukromě. Ta autorita nepatří jen jemu: mají ji všichni Owneři té
+     Organizace a každý, kdo smí spouštět práci na jejích pracovních VM, včetně
+     agentních účtů. To je přijatý důsledek; proto tuhle výjimku nesmí dostat
+     zařízení nikoho jiného než Ownera a vždy jen jeho vlastním rozhodnutím.
+   - **Osobní VM výjimku nedostává.** Dvojí zařazení platí pro klientské
+     zařízení, ne pro osobní VM. Ta zůstává výhradně v osobní zóně (0153) a
+     pracovní VM na ni nikdy nedosáhne. Mezi zakladatelovým notebookem, jeho
+     osobní VM a jeho pracovní VM je to jediná zakázaná cesta.
+   - **Mechanismus až po deklaraci.** Dokud Machines neumí dvojí zařazení
+     výslovně deklarovat, platí přísné pravidlo 3 i pro zakladatelovo zařízení
+     a žádná pracovní VM na deklarovaného osobního klienta nedosáhne.
 
 **Vědomý důsledek pracovního laptopu:** pracovní VM vlastní Organizace a nad ní
 stojí autorita Organization Hostu a Conglomerate Hostu. Grant pracovní VM →
@@ -122,7 +153,15 @@ Pro nové Conglomerate Hosty je prefix povinný; existující se přečíslují 
 | Matěj (`immakermatty`) | HumanAndMachine-ai | MacBook, telefon, osobní VM | pracovní VM ve Spectodě, HumanAndMachine-ai a Lumbio |
 | Anička (`annavesela`) | HumanAndMachine-ai | MacBook, telefon, osobní VM | pracovní VM ve Spectodě |
 
-Všichni tři mají osobní laptop, takže jejich pracovní VM na laptop nesmí.
+Matěj a Anička mají osobní laptop, takže jejich pracovní VM na laptop nesmí.
+Matouš je Owner Macano-Techu a rozhodl, že jeho Windows notebook má být podle
+pravidla 8 v obou zónách pro Macano-Tech. **Dnes to ještě neplatí:** Machines
+dvojí zařazení zatím neumí výslovně deklarovat, takže podle přísného pravidla 3
+pracovní VM Macano-Techu na notebook nedosáhne a notebook je v příkladu jen v
+osobní zóně. Pracovní VM na něj dosáhne teprve po třech krocích: schopnost
+Machines deklarovat dvojí zařazení, výslovná deklarace v `Macano-Tech/infra` a
+běžné nasazení s Plánem a Permitem. Pak se notebook objeví v obou sloupcích.
+Do osobní zóny jiných Principálů ani jiných Organizací se tím nic neotevírá.
 Operátor s pracovním laptopem Organizace (např. v ConceptLine) má pracovní
 laptop ↔ pracovní VM obousměrně.
 
