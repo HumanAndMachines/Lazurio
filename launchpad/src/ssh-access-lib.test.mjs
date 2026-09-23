@@ -59,7 +59,9 @@ async function service({ run } = {}) {
     now: () => new Date("2026-09-23T10:00:00Z"),
     run: run ?? (async (program, args) => {
       calls.push([program, ...args]);
-      if (program === "tailscale") return "100.64.0.7\n";
+      if (program === "tailscale") {
+        return JSON.stringify({ Self: { TailscaleIPs: ["100.64.0.7", "fd7a:115c::7"] }, CurrentTailnet: { Name: "headscale.alpha.example" } });
+      }
       return execFileSync(program, args, { encoding: "utf8" });
     }),
   });
@@ -122,59 +124,115 @@ test("host label prefers the qualified machine id and stays DNS-safe", () => {
   expect(sshHostLabel({ hostName: "!!" })).toBe("lazurio-machine");
 });
 
+const tailnet = "headscale.alpha.example";
+
 test("setup commands exist only for validated values and never ask for admin rights", () => {
   const hostKey = { type: "ssh-ed25519", key: syntheticKey().split(" ")[1] };
-  const commands = buildSetupCommands({ label: "alpha-anna-vm", ipv4: "100.64.0.7", user: "anna", hostKey });
+  const values = { label: "alpha-anna-vm", ipv4: "100.64.0.7", user: "anna", tailnet, hostKey };
+  const commands = buildSetupCommands(values);
   expect(commands.connect).toBe("ssh alpha-anna-vm");
   for (const script of [commands.macos, commands.windows]) {
     expect(script).toContain(`alpha-anna-vm ssh-ed25519 ${hostKey.key}`);
-    expect(script).toContain("HostKeyAlias");
-    expect(script).toContain("UserKnownHostsFile ~/.ssh/lazurio-");
+    expect(script).toContain("HostKeyAlias alpha-anna-vm");
+    expect(script).toContain("UserKnownHostsFile ~/.ssh/lazurio/alpha-anna-vm.known_hosts");
     expect(script).toContain("StrictHostKeyChecking yes");
-    expect(script).not.toContain(".ssh/known_hosts");
     expect(script).toContain("IdentitiesOnly yes");
+    expect(script).toContain("Include lazurio/*.conf");
+    expect(script).toContain("CurrentTailnet");
+    expect(script).toContain(`'${tailnet}'`);
+    expect(script).not.toContain(".ssh/known_hosts");
     expect(script).not.toMatch(/sudo|RunAs|Administrator/);
   }
   expect(commands.macos).toContain("pbcopy");
   expect(commands.windows).toContain("ssh-keygen.exe");
   expect(commands.windows).toContain("Set-Clipboard");
-  expect(commands.windows).toContain("-Encoding ascii");
+  expect(commands.windows).toContain("[IO.File]::WriteAllLines");
   expect(commands.windows).toContain("$PSNativeCommandArgumentPassing");
-  expect(buildSetupCommands({ label: "x", ipv4: "100.64.0.7'; rm", user: "anna", hostKey })).toBeNull();
-  expect(buildSetupCommands({ label: "x", ipv4: "100.64.0.7", user: "an'na", hostKey })).toBeNull();
-  expect(buildSetupCommands({ label: "x", ipv4: null, user: "anna", hostKey })).toBeNull();
+  expect(commands.windows).not.toMatch(/Add-Content|Set-Content|Out-File/);
+  for (const invalid of [
+    { ipv4: "100.64.0.7'; rm" },
+    { user: "an'na" },
+    { ipv4: null },
+    { tailnet: "evil'; rm -rf ~" },
+    { tailnet: null },
+  ]) {
+    expect(buildSetupCommands({ ...values, ...invalid })).toBeNull();
+  }
 });
 
-test.skipIf(!posix)("macOS setup command is idempotent and yields a pinned ssh host", async () => {
+async function laptop() {
   const root = await tempDir("lazurio-ssh-laptop-");
   const home = join(root, "home");
   const bin = join(root, "bin");
   await mkdir(home);
   await mkdir(bin);
   await writeFile(join(bin, "pbcopy"), `#!/bin/sh\ncat > "${join(root, "clipboard")}"\n`);
+  await writeFile(join(bin, "tailscale"), `#!/bin/sh\nprintf '{\\n  "Version": "1.80.0",\\n  "CurrentTailnet": {\\n    "Name": "%s",\\n    "MagicDNSSuffix": "x"\\n  }\\n}\\n' "$FAKE_TAILNET"\n`);
   await chmod(join(bin, "pbcopy"), 0o755);
+  await chmod(join(bin, "tailscale"), 0o755);
   const hostKey = { type: "ssh-ed25519", key: syntheticKey().split(" ")[1] };
-  const { macos } = buildSetupCommands({ label: "alpha-anna-vm", ipv4: "100.64.0.7", user: "anna", hostKey });
-  const env = { ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH}` };
-  const first = execFileSync("/bin/sh", ["-c", macos], { env, encoding: "utf8" });
-  execFileSync("/bin/sh", ["-c", macos], { env, encoding: "utf8" });
+  const run = (script, activeTailnet = tailnet) => execFileSync("/bin/sh", ["-c", script], {
+    env: { ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH}`, FAKE_TAILNET: activeTailnet },
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  // ssh resolves ~ and relative Includes from the passwd home, not $HOME, so
+  // resolve the fixture's config through an absolute Include.
+  const resolve = async (alias) => {
+    const config = (await readFile(join(home, ".ssh", "config"), "utf8"))
+      .replace("Include lazurio/*.conf", `Include ${join(home, ".ssh", "lazurio")}/*.conf`);
+    await writeFile(join(root, "resolved-config"), config);
+    return execFileSync("ssh", ["-G", "-F", join(root, "resolved-config"), alias], {
+      encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
+    });
+  };
+  return { root, home, hostKey, run, resolve };
+}
+
+test.skipIf(!posix)("macOS setup command is idempotent, pins the Machine and wins over an older block", async () => {
+  const { root, home, hostKey, run, resolve } = await laptop();
+  await mkdir(join(home, ".ssh"));
+  const olderConfig = "Host alpha-anna-vm\n  HostName 100.64.0.99\n  StrictHostKeyChecking no\n";
+  await writeFile(join(home, ".ssh", "config"), olderConfig);
+  const commands = buildSetupCommands({ label: "alpha-anna-vm", ipv4: "100.64.0.7", user: "anna", tailnet, hostKey });
+  const first = run(commands.macos);
+  run(commands.macos);
 
   const publicKey = await readFile(join(home, ".ssh", "lazurio-alpha-anna-vm.pub"), "utf8");
   expect(first.trim()).toBe(publicKey.trim());
   expect(await readFile(join(root, "clipboard"), "utf8")).toBe(publicKey);
   expect(parsePublicKeyInput(publicKey).type).toBe("ssh-ed25519");
   const config = await readFile(join(home, ".ssh", "config"), "utf8");
-  expect(config.match(/^Host alpha-anna-vm$/gm)).toHaveLength(1);
-  const knownHosts = await readFile(join(home, ".ssh", "lazurio-alpha-anna-vm.known_hosts"), "utf8");
-  expect(knownHosts).toBe(`alpha-anna-vm ssh-ed25519 ${hostKey.key}\n`);
+  expect(config).toBe(`Include lazurio/*.conf\n\n${olderConfig}`);
+  expect(await readFile(join(home, ".ssh", "lazurio", "alpha-anna-vm.known_hosts"), "utf8"))
+    .toBe(`alpha-anna-vm ssh-ed25519 ${hostKey.key}\n`);
   expect(await Bun.file(join(home, ".ssh", "known_hosts")).exists()).toBe(false);
-  const resolved = execFileSync("ssh", ["-G", "-F", join(home, ".ssh", "config"), "alpha-anna-vm"], { env, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+  const resolved = await resolve("alpha-anna-vm");
   expect(resolved).toContain("hostname 100.64.0.7");
   expect(resolved).toContain("user anna");
   expect(resolved).toContain("hostkeyalias alpha-anna-vm");
   expect(resolved).toContain("identitiesonly yes");
   expect(resolved).toContain("stricthostkeychecking true");
-  expect(resolved).toMatch(/userknownhostsfile \S*lazurio-alpha-anna-vm\.known_hosts/);
+  expect(resolved).toMatch(/userknownhostsfile \S*lazurio\/alpha-anna-vm\.known_hosts/);
+
+  // A moved Machine is picked up by pasting its new command again.
+  run(buildSetupCommands({ label: "alpha-anna-vm", ipv4: "100.64.0.8", user: "anna", tailnet, hostKey }).macos);
+  expect(await resolve("alpha-anna-vm")).toContain("hostname 100.64.0.8");
+});
+
+test.skipIf(!posix)("macOS setup command refuses a laptop on another tailnet and writes nothing", async () => {
+  const { home, hostKey, run } = await laptop();
+  const { macos } = buildSetupCommands({ label: "alpha-anna-vm", ipv4: "100.64.0.7", user: "anna", tailnet, hostKey });
+  let failure;
+  try {
+    run(macos, "headscale.other.example");
+  } catch (error) {
+    failure = error;
+  }
+  expect(failure?.status).toBe(1);
+  expect(String(failure?.stderr)).toContain("not to 'headscale.alpha.example'");
+  expect(await Bun.file(join(home, ".ssh", "config")).exists()).toBe(false);
+  expect(await Bun.file(join(home, ".ssh", "lazurio-alpha-anna-vm")).exists()).toBe(false);
 });
 
 test.skipIf(!posix)("service reads Machine facts and builds commands", async () => {
@@ -185,6 +243,7 @@ test.skipIf(!posix)("service reads Machine facts and builds commands", async () 
     user: "anna",
     label: "alpha-anna",
     tailnet_ipv4: "100.64.0.7",
+    tailnet: "headscale.alpha.example",
     host_key: { type: "ssh-ed25519", fingerprint: parsePublicKeyInput(hostKey).fingerprint },
     keys: [],
     issues: [],
