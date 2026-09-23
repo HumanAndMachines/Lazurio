@@ -1033,7 +1033,7 @@ directly still shows its pairing page.
 ### SSH: connect a laptop over the Headscale tailnet
 
 In the hosted profile the top bar also shows **SSH** (localhost never does;
-`GET /api/ssh-access` answers `{ "available": false }` there and the write
+`GET /api/setup/ssh` answers `{ "available": false }` there and the write
 routes return 404). The dialog reads everything on the Machine at request
 time: the workspace OS user, the tailnet IPv4 from `tailscale ip -4`, the
 public host key `/etc/ssh/ssh_host_ed25519_key.pub` with its SHA256
@@ -1051,7 +1051,7 @@ dialog explains what is missing instead of offering a command.
    the clipboard. `HostKeyAlias` pins the Machine by name, so the same
    `100.64.x.y` in another tailnet fails the host key check instead of
    connecting to a different Machine.
-2. **Paste the public key.** `POST /api/ssh-access/keys` accepts exactly one
+2. **Paste the public key.** `POST /api/setup/ssh/keys` accepts exactly one
    `ssh-ed25519`, `ecdsa-sha2-*` or `ssh-rsa` line that `ssh-keygen -l`
    accepts, refuses private key material, deduplicates by fingerprint and
    appends it to the workspace user's own `~/.ssh/authorized_keys` (directory
@@ -1061,7 +1061,7 @@ dialog explains what is missing instead of offering a command.
 
 Both write routes pass the shared mutation trust gate, like Chat. Keys added
 here carry the comment prefix `lazurio-launchpad`; only those can be removed
-from the page (`POST /api/ssh-access/keys/remove`), so the recovery keys
+from the page (`POST /api/setup/ssh/keys/remove`), so the recovery keys
 Machines provisioned, whose presence every Machine readback proves, stay out
 of reach of a click. Each add and remove appends one line with the time,
 action, key type and fingerprint to

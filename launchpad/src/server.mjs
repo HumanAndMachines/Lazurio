@@ -725,7 +725,7 @@ function isMutatingApiRequest(request, url) {
 async function worktreeMutationTouchesCanonicalMount(url) {
   if (url.pathname === "/api/lazurio/agent-entry-refresh") return false;
   if (url.pathname === "/api/chat/pair") return false;
-  if (url.pathname.startsWith("/api/ssh-access/")) return false;
+  if (url.pathname.startsWith("/api/setup/ssh/")) return false;
   if (!worktreeMountContextReadOnly) return false;
   const route = appRuntimeRoute(url.pathname);
   if (!route) return true;
@@ -1289,7 +1289,7 @@ async function handleGitApiRoute(request, url, route) {
 }
 
 async function handleSshAccessRoute(request, url) {
-  const action = { "/api/ssh-access/keys": "add", "/api/ssh-access/keys/remove": "remove" }[url.pathname];
+  const action = { "/api/setup/ssh/keys": "add", "/api/setup/ssh/keys/remove": "remove" }[url.pathname];
   if (!sshAccess || !action) return notFound();
   if (request.method !== "POST") return jsonResponse({ error: "method_not_allowed" }, 405);
   let payload;
@@ -1701,11 +1701,11 @@ function startServer(startPort) {
             return jsonResponse({ error: error.message }, 502);
           }
         }
-        if (url.pathname === "/api/ssh-access" && request.method === "GET") {
+        if (url.pathname === "/api/setup/ssh" && request.method === "GET") {
           return jsonResponse(sshAccess ? await sshAccess.read() : { available: false });
         }
         // Both writes already passed the shared mutation trust gate above.
-        if (url.pathname.startsWith("/api/ssh-access/")) return await handleSshAccessRoute(request, url);
+        if (url.pathname.startsWith("/api/setup/ssh/")) return await handleSshAccessRoute(request, url);
         // Jediná explicitní Sync mutace: tentýž engine jako `lazurio update`,
         // potom čerstvá lokální projekce pro UI. Onboarding nových Organization
         // rootů podle GitHub grantů zůstává samostatná access Sync lane.
