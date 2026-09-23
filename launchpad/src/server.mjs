@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { hostedRequestMayStartApp } from "./hosted-readiness-lib.mjs";
 import { constants, existsSync, lstatSync, realpathSync } from "fs";
 import { open, readFile } from "fs/promises";
+import { homedir, hostname, userInfo } from "node:os";
 import { createConnection } from "node:net";
 import { isAbsolute, join, normalize, relative, resolve } from "path";
 import {
@@ -51,6 +52,7 @@ import { createServerShutdownStateAuthority } from "./server-shutdown-state-lib.
 import { LAZURIO_LAUNCHPAD_NAME } from "../../lazurio/runtime/launchpad-identity-lib.mjs";
 import { readOrganizationLaunchpadTheme } from "./organization-theme-lib.mjs";
 import { T3ChatError, issueT3ChatUrl, t3ChatConfigurationFromEnvironment } from "./t3-chat-lib.mjs";
+import { SshAccessError, createSshAccessService } from "./ssh-access-lib.mjs";
 import { ModuleFolderActionError, createModuleFolderOpener } from "./module-folder-lib.mjs";
 import {
   HostedAppUrlError,
@@ -219,6 +221,16 @@ function runWorkspaceUpdate() {
     },
   });
 }
+// SSH access exists only behind the hosted gateway: the page manages the
+// workspace user's own ~/.ssh/authorized_keys and nothing else.
+const sshAccess = requestTrust.profile === "hosted"
+  ? createSshAccessService({
+    home: homedir(),
+    user: userInfo().username,
+    hostName: hostname(),
+    stateRoot: launchpadStateRoot,
+  })
+  : null;
 const moduleFolderOpener = createModuleFolderOpener({ companiesRoot, getAppsResponse: buildAppsResponse });
 const gitStatusService = createGitStatusService();
 // Delší než jeden render burst (sync + notifications + usage), kratší než
@@ -713,6 +725,7 @@ function isMutatingApiRequest(request, url) {
 async function worktreeMutationTouchesCanonicalMount(url) {
   if (url.pathname === "/api/lazurio/agent-entry-refresh") return false;
   if (url.pathname === "/api/chat/pair") return false;
+  if (url.pathname.startsWith("/api/ssh-access/")) return false;
   if (!worktreeMountContextReadOnly) return false;
   const route = appRuntimeRoute(url.pathname);
   if (!route) return true;
@@ -1275,6 +1288,27 @@ async function handleGitApiRoute(request, url, route) {
   }
 }
 
+async function handleSshAccessRoute(request, url) {
+  const action = { "/api/ssh-access/keys": "add", "/api/ssh-access/keys/remove": "remove" }[url.pathname];
+  if (!sshAccess || !action) return notFound();
+  if (request.method !== "POST") return jsonResponse({ error: "method_not_allowed" }, 405);
+  let payload;
+  try {
+    payload = await jsonRequestPayload(request, "ssh_access_request");
+  } catch (error) {
+    return jsonResponse({ error: error.code ?? "invalid_ssh_access_request" }, 400);
+  }
+  try {
+    const result = action === "add"
+      ? await sshAccess.addKey(payload.public_key)
+      : await sshAccess.removeKey(payload.fingerprint);
+    return jsonResponse({ ...result, ...(await sshAccess.read()) });
+  } catch (error) {
+    if (!(error instanceof SshAccessError)) throw error;
+    return jsonResponse({ error: error.code }, error.status);
+  }
+}
+
 async function jsonRequestPayload(request, code) {
   const contentType = request.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) {
@@ -1667,6 +1701,11 @@ function startServer(startPort) {
             return jsonResponse({ error: error.message }, 502);
           }
         }
+        if (url.pathname === "/api/ssh-access" && request.method === "GET") {
+          return jsonResponse(sshAccess ? await sshAccess.read() : { available: false });
+        }
+        // Both writes already passed the shared mutation trust gate above.
+        if (url.pathname.startsWith("/api/ssh-access/")) return await handleSshAccessRoute(request, url);
         // Jediná explicitní Sync mutace: tentýž engine jako `lazurio update`,
         // potom čerstvá lokální projekce pro UI. Onboarding nových Organization
         // rootů podle GitHub grantů zůstává samostatná access Sync lane.

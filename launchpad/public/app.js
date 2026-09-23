@@ -28,6 +28,7 @@ import {
   variantTag,
 } from "./app-state.js";
 import { gitChipModel } from "./git-status-copy.js";
+import { initSshAccess } from "./ssh-access.js";
 import {
   changeKindLabel,
   changeOriginLabel,
@@ -405,6 +406,7 @@ initScrollOffset();
 initResponsiveChrome();
 initNotifications();
 initChat();
+initSshAccess();
 elements.guideTile?.setAttribute("href", guideDocumentationUrl(getLocale()));
 // Personalspace rail dostane most k toastům a k Synchronizovat reloadu, ať
 // osobní runtime akce vypadají stejně jako firemní.
