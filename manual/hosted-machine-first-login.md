@@ -79,14 +79,63 @@ zapíše přesný blocker a zastaví se.
 
 ## Týmová VM: identita Organizace, ne člověka
 
-Sdílená týmová VM (`owner.assignment.kind: team`) nemá osobního operátora.
-Podle rozhodnutí 0147–0149 má Git identitu **Lazurio for GitHub** (bot
-Organizace přes scoped broker), nikdy osobní účet posledního přihlášeného
-člověka. Na týmové VM Agent osobní `gh auth login` **nikdy nespouští**; když
-brokered identita chybí, je to diagnóza pro Organization Admina
-(`hosted-machine-handover.md`), ne důvod přihlásit něčí účet. Přesný postup
-materializace Organizace na týmové VM drží Machines a Platform lane
-`hosted-organization-team`; do doby jejího dokončení Agent zapíše blocker.
+Sdílená týmová VM (`owner.assignment.kind: team`) nemá osobního operátora a
+pracuje na ní více lidí z Teamu. Podle rozhodnutí 0147–0149 jedná na GitHubu
+**jen jako bot Organizace `lazurio-for-github[bot]` přes broker Organizace**
+(Lazurio for GitHub), nikdy jako účet člověka, který je právě přihlášený.
+Machines na takové VM nainstaluje brokered `gh`, Git credential helper a
+soubor `/etc/lazurio/github-broker/environment` (Machines
+`workspace_guest.github_broker`); privátní klíč App na VM nikdy není.
+
+Na Mašině s `owner.assignment.kind: team` Agent **před každou prací ověří
+identitu** — před `lazurio update`, instalací i původním úkolem:
+
+- `/etc/lazurio/github-broker/environment` existuje a
+  `gh auth status --json hosts` hlásí právě `lazurio-for-github[bot]` (jeden
+  host `github.com`, jedna položka, žádná další identita).
+- Chybí-li broker soubor, `gh` bota nehlásí, nebo se vedle bota objeví jiný
+  účet, je to blocker pro Organization Admina (níže): Agent nepokračuje,
+  nespouští `lazurio update` ani install a nenavrhuje osobní přihlášení.
+- `gh auth login`, `gh auth token` a ostatní `gh auth`/`gh config` příkazy
+  brokered `gh` záměrně odmítne. **Osobní přihlášení Agent nikdy nespouští,
+  nenavrhuje a neobchází** (žádný osobní token v `GH_TOKEN`, žádný osobní SSH
+  klíč na GitHub, žádné `~/.config/gh/hosts.yml`). Readback Machines by takové
+  přihlášení nahlásil jako drift.
+
+Donastavení (místo kroků 1–5 osobní VM; krok 6 platí stejně):
+
+1. `lazurio update`.
+2. `lazurio organization install <github-login-organizace> --json` **bez
+   `--role`** (u Iotoru `IotorLazurio`): bot nemá lidskou roli. Lazurio ověří
+   bota, zmaterializuje root Organizace a jen ty moduly, jejichž repozitáře
+   jsou v klientském rozsahu této VM (repository policy v
+   `/etc/lazurio/github-broker/environment`); ostatní sloty vrátí jako
+   `excluded_by_broker_policy` bez jediné GitHub operace. Ten rozsah je jen
+   lokální omezení klonování, ne autorita: o každém tokenu rozhoduje broker
+   Organizace a autoritou přístupu zůstávají živé GitHub granty Teamu. Repo v
+   rozsahu, ke kterému broker token odmítne (např. po odebrání grantu), je
+   blocker pro Organization Admina, ne důvod k jinému přihlášení.
+3. `lazurio doctor`: `platform.github_auth` musí hlásit bota. Required
+   `fail`/`blocked`/`incomplete` znamená, že VM není donastavená.
+
+Pravidla práce na týmové VM (0148):
+
+- Author commitu je Teamová pseudo-identita
+  (`<Organizace> Team <slug> <team.<slug>@<doména>>`), committer bot; obojí
+  nastavuje systémová Git konfigurace, Agent je nepřepisuje.
+- Každý commit nese trailer `Lazurio-Workspace: <organization-slug>/<team-slug>`.
+- Do `main` Agent nikdy nepushuje. Každá změna jde přes pull request otevřený
+  botem z branche, s labelem `team:<slug>` (pokud v repu existuje) a
+  hlavičkou popisu „Navrhuje Team <slug> z Team Workspace“. Merguje
+  oprávněný člověk (Operátor s právy), který tím přebírá odpovědnost; na
+  GitHub Free to drží proces, ne technika.
+- Repozitář mimo rozsah brokeru Agent neklonuje jinou cestou; přístup Teamu
+  mění Organization Admin grantem GitHub Teamu, ne Agent.
+
+Když brokered identita chybí nebo selhává (`gh auth status` nehlásí bota,
+Doctor `github_broker_*`, Machines readback `vm-<vmid>-github-broker: fail`),
+je to diagnóza pro Organization Admina (`hosted-machine-handover.md`), ne
+důvod přihlásit něčí účet. Agent zapíše přesný blocker a zastaví se.
 
 ## Co drží kdo
 
