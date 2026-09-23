@@ -1,0 +1,145 @@
+.ssh-access-dialog {
+  width: min(760px, calc(100vw - 32px));
+  max-height: min(900px, calc(100vh - 32px));
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 0;
+  box-shadow: 0 24px 80px rgb(9 9 11 / 24%);
+}
+
+.ssh-access-dialog::backdrop {
+  background: rgb(9 9 11 / 48%);
+}
+
+.ssh-access-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 20px 28px;
+  border-bottom: 1px solid var(--line);
+}
+
+.ssh-access-head h2 {
+  margin: 0;
+  font-size: clamp(22px, 3vw, 28px);
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+.ssh-access-close {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  font: inherit;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.ssh-access-body {
+  display: grid;
+  gap: 20px;
+  max-height: calc(100vh - 140px);
+  padding: 20px 28px 28px;
+  overflow: auto;
+}
+
+.ssh-access-body p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.ssh-access-step,
+.ssh-access-keys {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+
+.ssh-access-step h3,
+.ssh-access-keys h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.ssh-access-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.ssh-access-tabs [aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.ssh-access-code {
+  width: 100%;
+  resize: vertical;
+  padding: 12px;
+  color: var(--text);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ssh-access-muted {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.ssh-access-error {
+  color: var(--c-warn);
+}
+
+.ssh-access-flash {
+  padding: 10px 12px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+}
+
+.ssh-access-key {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.ssh-access-key div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ssh-access-key code {
+  overflow-wrap: anywhere;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.ssh-access-close:focus-visible,
+.ssh-access-code:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .ssh-access-head,
+  .ssh-access-body {
+    padding-inline: 18px;
+  }
+}

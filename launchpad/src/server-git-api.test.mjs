@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { existsSync, realpathSync } from "fs";
 import { cp, mkdir, readFile, rm, symlink, writeFile, chmod } from "fs/promises";
@@ -1198,6 +1198,114 @@ test("hosted Chat is offered but never mints a T3 token for an unadmitted reques
   expect(existsSync(marker)).toBe(false);
 }, platformTestTimeout(15_000));
 
+test("SSH access stays hidden and read-only on a localhost Launchpad", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const { port, environment } = await startLaunchpadServer(root);
+  expect(await getJson(port, "/api/ssh-access")).toEqual({ available: false });
+  const add = await fetch(`http://127.0.0.1:${port}/api/ssh-access/keys`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ public_key: syntheticSshKey("laptop") }),
+  });
+  expect(add.status).toBe(404);
+  expect(existsSync(join(environment.HOME, ".ssh"))).toBe(false);
+}, platformTestTimeout(15_000));
+
+test("hosted SSH access never writes a key for an unadmitted request", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const externalOrigin = "https://launchpad.builder.workspace.example.test";
+  const { port, environment } = await startLaunchpadServer(root, {
+    env: {
+      ...hostedSshEnvironment(externalOrigin),
+      LAZURIO_LAUNCHPAD_AUTH_CHECK_URL: `https://127.0.0.1:${await findFreePort()}/oauth2/auth`,
+    },
+  });
+  const state = await getJson(port, "/api/ssh-access");
+  expect(state.available).toBe(true);
+  expect(state.keys).toEqual([]);
+  for (const path of ["/api/ssh-access/keys", "/api/ssh-access/keys/remove"]) {
+    const forged = await fetch(`http://127.0.0.1:${port}${path}`, {
+      method: "POST",
+      headers: {
+        origin: externalOrigin,
+        "sec-fetch-site": "same-origin",
+        cookie: "__Secure-lazurio-sales-workspace=forged",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ public_key: syntheticSshKey("attacker") }),
+    });
+    expect(forged.status).toBe(403);
+    expect((await forged.json()).error).toBe("mutating_request_forbidden");
+  }
+  expect(existsSync(join(environment.HOME, ".ssh", "authorized_keys"))).toBe(false);
+}, platformTestTimeout(15_000));
+
+test.skipIf(process.platform === "win32")("hosted SSH access adds, lists and removes keys for the admitted gateway session", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const keyPath = join(root, "fixture-key.pem"), certPath = join(root, "fixture-cert.pem");
+  execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
+    "-subj", "/CN=localhost", "-addext", "subjectAltName=DNS:localhost,IP:127.0.0.1",
+    "-keyout", keyPath, "-out", certPath], { stdio: "ignore" });
+  const gateway = Bun.serve({ hostname: "127.0.0.1", port: 0,
+    tls: { key: await readFile(keyPath), cert: await readFile(certPath) },
+    fetch(request) {
+      const admitted = new URL(request.url).pathname === "/oauth2/auth"
+        && request.headers.get("cookie") === "__Secure-lazurio-sales-workspace=valid-session";
+      return new Response(null, { status: admitted ? 202 : 401 });
+    },
+  });
+  try {
+    const externalOrigin = "https://launchpad.builder.workspace.example.test";
+    const stateRoot = `${root}-ssh-state`;
+    const { port, environment } = await startLaunchpadServer(root, {
+      env: {
+        ...hostedSshEnvironment(externalOrigin),
+        LAZURIO_LAUNCHPAD_STATE_ROOT: stateRoot,
+        LAZURIO_LAUNCHPAD_AUTH_CHECK_URL: `https://127.0.0.1:${gateway.port}/oauth2/auth`,
+        NODE_EXTRA_CA_CERTS: certPath,
+      },
+    });
+    const post = (path, body) => fetch(`http://127.0.0.1:${port}${path}`, {
+      method: "POST",
+      headers: {
+        origin: externalOrigin,
+        "sec-fetch-site": "same-origin",
+        cookie: "__Secure-lazurio-sales-workspace=valid-session",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    const key = syntheticSshKey("matej@laptop");
+    const added = await post("/api/ssh-access/keys", { public_key: key });
+    expect(added.status).toBe(200);
+    const addedBody = await added.json();
+    expect(addedBody).toMatchObject({ added: true, available: true });
+    expect(addedBody.keys).toEqual([
+      { type: "ssh-ed25519", fingerprint: addedBody.fingerprint, comment: "lazurio-launchpad matej@laptop", removable: true },
+    ]);
+    const authorizedKeys = join(environment.HOME, ".ssh", "authorized_keys");
+    expect(await readFile(authorizedKeys, "utf8")).toContain(key.split(" ")[1]);
+
+    const duplicate = await (await post("/api/ssh-access/keys", { public_key: key })).json();
+    expect(duplicate.added).toBe(false);
+    const privateKey = await post("/api/ssh-access/keys", { public_key: "-----BEGIN OPENSSH PRIVATE KEY-----" });
+    expect(privateKey.status).toBe(400);
+    expect((await privateKey.json()).error).toBe("ssh_key_private_material");
+
+    const removed = await post("/api/ssh-access/keys/remove", { fingerprint: addedBody.fingerprint });
+    expect(removed.status).toBe(200);
+    expect((await removed.json()).keys).toEqual([]);
+    const audit = await readFile(join(stateRoot, "runtime", "audit", "ssh-access.jsonl"), "utf8");
+    expect(audit.trim().split("\n").map((line) => JSON.parse(line).action)).toEqual(["add", "remove"]);
+    expect(audit).not.toContain(key.split(" ")[1]);
+  } finally {
+    gateway.stop(true);
+  }
+}, platformTestTimeout(20_000));
+
 for (const state of ["planned", "corrupt", "conflicting"]) {
   test(`fresh hosted Launchpad distinguishes ${state} Organization state from an absent checkout`, async () => {
     const root = await createLaunchpadGitFixture();
@@ -2207,6 +2315,27 @@ async function readLaunchpadPort(server) {
 // vlastní Bun.serve se nenabindoval, waitForHealth dostal 200 z /health cizího
 // serveru a /api/git/repos pak vrátilo 404. OS přidělený port je garantovaně
 // volný, takže health probe i git routy trefí vždy NÁŠ server.
+function hostedSshEnvironment(externalOrigin) {
+  return {
+    LAZURIO_WORKSPACE_PROFILE: "hosted",
+    LAZURIO_ORGANIZATION_SLUG: "BetaCo",
+    LAZURIO_TEAM_ID: "sales",
+    LAZURIO_HOSTED_DOMAIN: "workspace.example.test",
+    LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN: externalOrigin,
+    LAZURIO_LAUNCHPAD_AUTH_COOKIE_NAME: "__Secure-lazurio-sales-workspace",
+  };
+}
+
+function syntheticSshKey(comment) {
+  const name = Buffer.from("ssh-ed25519");
+  const blob = Buffer.alloc(4 + name.length + 4 + 32);
+  blob.writeUInt32BE(name.length, 0);
+  name.copy(blob, 4);
+  blob.writeUInt32BE(32, 4 + name.length);
+  randomBytes(32).copy(blob, 8 + name.length);
+  return `ssh-ed25519 ${blob.toString("base64")} ${comment}`;
+}
+
 async function startLaunchpadServer(root, { env = {}, useDefaultStateRoot = false } = {}) {
   const port = await findFreePort();
   const stateRoot = useDefaultStateRoot

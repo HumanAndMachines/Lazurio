@@ -1030,6 +1030,46 @@ a shell on the Machine can mint the same token, and anyone admitted to
 Launchpad already may change the Machine's source and settings. Opening T3
 directly still shows its pairing page.
 
+### SSH: connect a laptop over the Headscale tailnet
+
+In the hosted profile the top bar also shows **SSH** (localhost never does;
+`GET /api/ssh-access` answers `{ "available": false }` there and the write
+routes return 404). The dialog reads everything on the Machine at request
+time: the workspace OS user, the tailnet IPv4 from `tailscale ip -4`, the
+public host key `/etc/ssh/ssh_host_ed25519_key.pub` with its SHA256
+fingerprint, and a host label (the Headscale node name from
+`/etc/lazurio/lazurio.machine.json`, else `machine.id`, else `hostname`).
+`lazurio.machine.v1` carries no tailnet address, so without Tailscale the
+dialog explains what is missing instead of offering a command.
+
+1. **Prepare the laptop.** One idempotent paste for macOS (Terminal) or
+   Windows (PowerShell 5.1+, built-in OpenSSH, no administrator and no Git for
+   Windows): create `~/.ssh/lazurio-<label>` (ed25519, no passphrase) if
+   missing, append `Host <label>` with `HostName <tailnet IPv4>`, `User`,
+   `IdentityFile`, `IdentitiesOnly yes` and `HostKeyAlias <label>`, pin
+   `<label> <type> <key>` into `~/.ssh/known_hosts` and copy the public key to
+   the clipboard. `HostKeyAlias` pins the Machine by name, so the same
+   `100.64.x.y` in another tailnet fails the host key check instead of
+   connecting to a different Machine.
+2. **Paste the public key.** `POST /api/ssh-access/keys` accepts exactly one
+   `ssh-ed25519`, `ecdsa-sha2-*` or `ssh-rsa` line that `ssh-keygen -l`
+   accepts, refuses private key material, deduplicates by fingerprint and
+   appends it to the workspace user's own `~/.ssh/authorized_keys` (directory
+   0700, file 0600, atomic replace, symlinks refused).
+3. **Connect** with `ssh <label>` or pick the host in Codex or Claude Code;
+   the dialog shows the Machine fingerprint to compare.
+
+Both write routes pass the shared mutation trust gate, like Chat. Keys added
+here carry the comment prefix `lazurio-launchpad`; only those can be removed
+from the page (`POST /api/ssh-access/keys/remove`), so the recovery keys
+Machines provisioned, whose presence every Machine readback proves, stay out
+of reach of a click. Each add and remove appends one line with the time,
+action, key type and fingerprint to
+`$LAZURIO_LAUNCHPAD_STATE_ROOT/runtime/audit/ssh-access.jsonl`; no key
+material is logged. This adds no new boundary: the operator can edit the same
+file from a shell on the Machine. Headscale ACLs still decide which tailnet
+nodes may reach port 22.
+
 Hosted module links use the same machine origin as Launchpad. A module must
 serve its assigned path; there is no fallback to per-module container hosts.
 The lifecycle configuration fingerprint includes the machine-path routing
