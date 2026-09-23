@@ -14,13 +14,13 @@ Jediný rozlišovací znak je `owner.assignment.kind` v
 CLI příkaz na to není) a **nikdy ho neodvozuje** z `owner.team`, hostname,
 OS účtu ani velikosti Teamu — jednočlenný Team nedělá z Mašiny osobní VM.
 
-- `owner.kind: organization` a `owner.assignment.kind: operator`
+- `machine.kind: workspace-vm`, `owner.kind: organization` a `owner.assignment.kind: operator`
   (s `github_login` a `github_id` operátora) = **osobní pracovní VM** jednoho
   operátora vlastněná Organizací (preset `hosted-organization-personal`).
-- `owner.kind: organization` a `owner.assignment.kind: team` = **týmová VM**
+- `machine.kind: workspace-vm`, `owner.kind: organization` a `owner.assignment.kind: team` = **týmová VM**
   (preset `hosted-organization-team`). Pro ni platí
   [samostatná sekce níže](#týmová-vm-identita-organizace-ne-člověka).
-- `machine.kind: personal` s `owner.kind: principal` = osobní Mašina
+- `machine.kind: personal-vm` s `owner.kind: principal` = osobní Mašina
   Principála podle [`hosted-buddy-vps.md`](hosted-buddy-vps.md); tento manuál
   se na ni nevztahuje.
 - Soubor chybí, nevaliduje, nebo `owner.assignment` není deklarovaný: Agent
