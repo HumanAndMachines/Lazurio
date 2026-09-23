@@ -297,6 +297,75 @@ export function validateHostedWorkspaceBindings(
   return configuration;
 }
 
+// Hosted personal scope binding state for a running Launchpad. A personal
+// Machine is handed to its owner before their private Personalspace repository
+// is cloned, and no operator may create or read it (decision 0091). Both
+// tolerated states require a clean Personalspace boundary: discovery inspected
+// exactly the configured folder, no other folder sits in the mountpoint and
+// discovery reports no boundary failure (unreadable mountpoint, a foreign or
+// unrecognized space, an invalid owner space). On top of that, "mounted" means
+// the configured folder is a valid owner-primary Personalspace and "missing"
+// means it does not exist at all. Per-app and per-module failures inside a
+// valid owner space (a port lease conflict, an invalid app manifest, a
+// workspace symlink out of the space) and discovery warnings stay non-fatal, as
+// before: they isolate the affected Apps and are returned as discovery_issues
+// for reporting, and the Launchpad keeps serving.
+const foreignPersonalspaceFailureCode = "foreign_or_unrecognized_personalspace_dir";
+
+export function resolveHostedPersonalspaceBinding(configuration, discovery = {}) {
+  if (configuration?.profile !== "hosted" || configuration.scope !== "personal") {
+    throw new Error("Hosted Personalspace binding applies only to LAZURIO_HOSTED_SCOPE=personal.");
+  }
+  const label = `Hosted personal Workspace Personalspace personalspace/${configuration.personalspace} (LAZURIO_HOSTED_PERSONALSPACE)`;
+  const mount = discovery.primary_space_mount;
+  const expectedMountPath = `${discovery.mountpoint ?? "personalspace"}/${configuration.personalspace}`;
+  // No filesystem evidence about exactly this folder is never a clean state.
+  if (!mount || mount.mount_path !== expectedMountPath) {
+    throw new Error(`${label} is not mounted; Personalspace discovery did not inspect the configured folder.`);
+  }
+  const space = boundPersonalspace(configuration, discovery.spaces);
+  const state = space ? "mounted" : "missing";
+  if (space) {
+    validateHostedWorkspaceBindings(configuration, discovery);
+  } else if (mount.present !== false) {
+    throw new Error(`${label} is not mounted; the folder exists but is not a valid Personalspace of its declared owner.`);
+  }
+  const subject = space ? `${label} is mounted, but` : `${label} is not mounted, and`;
+  const others = Array.isArray(mount.other_directories) ? mount.other_directories : [];
+  if (others.length > 0) {
+    throw new Error(
+      `${subject} the Personalspace mountpoint also holds ${others.join(", ")}; a foreign or differently named Personalspace is never adopted or tolerated beside it (decision 0091).`,
+    );
+  }
+  const failures = Array.isArray(discovery.failures) ? discovery.failures.map(String) : [];
+  // Without the structured boundary subset every failure counts as boundary.
+  const boundary = Array.isArray(discovery.boundary_failures)
+    ? discovery.boundary_failures.map(String)
+    : failures;
+  const fatal = [...new Set([
+    ...boundary,
+    ...failures.filter((failure) => failure.includes(foreignPersonalspaceFailureCode)),
+  ])];
+  if (fatal.length > 0) {
+    throw new Error(`${subject} the Personalspace boundary check failed: ${fatal.join("; ")}`);
+  }
+  // Non-fatal per-app/module issues and warnings, reported but never gating.
+  const issues = Array.isArray(discovery.non_fatal_issues)
+    ? discovery.non_fatal_issues.map(String)
+    : [...new Set([
+      ...failures.filter((failure) => !fatal.includes(failure)),
+      ...(Array.isArray(discovery.warnings) ? discovery.warnings.map(String) : []),
+      ...(Array.isArray(discovery.invalid_apps) ? discovery.invalid_apps : [])
+        .flatMap((app) => (app?.manifest_issues ?? []).map((issue) => `${issue} (invalid personal app manifest)`)),
+    ])];
+  return Object.freeze({
+    state,
+    folder: configuration.personalspace,
+    mount_path: space?.mount_path ?? mount.mount_path,
+    discovery_issues: Object.freeze(issues),
+  });
+}
+
 export function selectHostedWorkspaceApps(configuration, { apps = [], organizations = [] } = {}) {
   if (!validHostedContext(configuration)) return { apps: [], skipped: [] };
   if (configuration.scope === "personal") return selectPersonalHostedApps(configuration, apps);

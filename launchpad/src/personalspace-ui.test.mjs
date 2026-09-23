@@ -301,3 +301,32 @@ test("Personalspace dlaždice je GEN2-minimal (port GEN2-minimal karty): tile-fi
   expect(server).toContain('route.action === "health" && (request.method === "GET" || request.method === "POST")');
   expect(server).toContain("restart|logs|open");
 });
+
+test("hosted personal Machine without its Personalspace shows the localized owner-only setup prompt", async () => {
+  const [appJs, js, cs, en] = await Promise.all([
+    readFile(join(publicRoot, "app.js"), "utf8"),
+    readFile(join(publicRoot, "personalspace.js"), "utf8"),
+    import(join(publicRoot, "locales", "cs.js")),
+    import(join(publicRoot, "locales", "en.js")),
+  ]);
+  // The state comes from the hosted /api/apps projection, not the local-only
+  // /api/personalspace lane, and wins over its empty or refused answer.
+  expect(appJs).toContain("state.hostedPersonalspace = appsResponse.hosted_personalspace ?? null");
+  expect(appJs).toContain('if (state.hostedPersonalspace?.state === "missing") {');
+  expect(appJs).toContain("renderHostedPersonalspaceSetup(section.querySelector(\"#personalspaceSectionBody\")");
+  expect(appJs).toContain('state.hostedPersonalspace?.state !== "missing"');
+
+  const start = js.indexOf("export function renderHostedPersonalspaceSetup");
+  expect(start).toBeGreaterThan(-1);
+  const setup = js.slice(start, js.indexOf("\nfunction ", start));
+  for (const key of ["title", "message", "pathLabel", "refresh"]) {
+    expect(setup).toContain(`t("personal.hostedMissing.${key}")`);
+    expect(cs.cs[`personal.hostedMissing.${key}`]).toBeString();
+    expect(en.en[`personal.hostedMissing.${key}`]).toBeString();
+  }
+  // Only the owner can clone their private repo: no invented repository URL.
+  expect(setup).not.toMatch(/github\.com|https?:\/\//);
+  expect(en.en["personal.hostedMissing.title"]).toBe("Personalspace is not set up on this Machine");
+  expect(en.en["personal.hostedMissing.message"]).not.toMatch(/https?:\/\//);
+  expect(cs.cs["personal.hostedMissing.message"]).not.toMatch(/https?:\/\//);
+});

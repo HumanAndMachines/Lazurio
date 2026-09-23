@@ -58,7 +58,7 @@ import {
 // filtrů aplikací. Renderuje se jako vlastní vizuálně odlišená sekce v hlavní
 // ploše (nahoře, nad workspace/productionspace); layout se mění, datová izolace
 // (oddělená lane + Private badge) zůstává.
-import { initPersonalspace, renderPersonalspace } from "./personalspace.js";
+import { initPersonalspace, renderHostedPersonalspaceSetup, renderPersonalspace } from "./personalspace.js";
 
 initializeI18n();
 
@@ -70,6 +70,9 @@ const state = {
   loadError: null,
   personalspace: null,
   personalspaceError: null,
+  // Hosted personal Machine only: binding state of its one Personalspace.
+  hostedPersonalspace: null,
+  launchpadRoot: null,
   doctor: null,
   doctorRunState: "idle",
   selectedAppId: null,
@@ -862,6 +865,8 @@ async function runLoadData({ quiet = false, sync = false, isCurrent = () => true
     // snapshot už nesmí změnit UI; přesně jeden fresh read je za ním ve frontě.
     if (!isCurrent()) return;
     state.apps = appsResponse.apps ?? [];
+    state.hostedPersonalspace = appsResponse.hosted_personalspace ?? null;
+    state.launchpadRoot = typeof appsResponse.root === "string" ? appsResponse.root : null;
     state.companies = appsResponse.companies ?? [];
     state.failures = appsResponse.failures ?? [];
     state.warnings = appsResponse.warnings ?? [];
@@ -2445,6 +2450,16 @@ function renderAppsGrid(apps) {
 
   // Osobní scope: hlavní plocha ukazuje jen personalspace sekci (nic z org lane).
   if (scope === "personal") {
+    // Hosted personal Machine without its Personalspace yet: an empty list
+    // plus the owner-only setup prompt, whatever the local lane reports.
+    if (state.hostedPersonalspace?.state === "missing") {
+      const section = personalspaceSectionNode();
+      elements.appsGrid.replaceChildren(section);
+      renderHostedPersonalspaceSetup(section.querySelector("#personalspaceSectionBody"), {
+        path: hostedPersonalspaceSetupPath(),
+      });
+      return;
+    }
     if (personalNode) {
       elements.appsGrid.replaceChildren(personalNode);
       fillPersonalspaceSection();
@@ -2499,6 +2514,11 @@ function renderAppsGrid(apps) {
   for (const entry of productionspace) nodes.push(productionspaceSectionNode(entry));
   elements.appsGrid.replaceChildren(...nodes);
   if (personalNode) fillPersonalspaceSection();
+}
+
+function hostedPersonalspaceSetupPath() {
+  const mountPath = state.hostedPersonalspace?.mount_path ?? "";
+  return state.launchpadRoot ? `${state.launchpadRoot.replace(/[\\/]+$/, "")}/${mountPath}` : mountPath;
 }
 
 // Personalspace má vlastní Buddy-first kompozici. App.js drží jen neutrální
@@ -5235,8 +5255,11 @@ function heroDiagnostics(apps) {
   const personalPresentationWarnings = personalScope
     ? (state.personalspace?.presentation_warnings ?? [])
     : [];
+  // The setup prompt already explains a hosted Personalspace that is not
+  // cloned yet; the local-only lane's refusal is not a second problem.
   const transientPersonalspaceWarnings = personalScope
     && state.personalspaceError
+    && state.hostedPersonalspace?.state !== "missing"
     && personalFailures.length === 0
     ? [state.personalspaceError]
     : [];

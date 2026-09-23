@@ -106,8 +106,43 @@ Mašina Principála (decisions 0153/0154/0155) používá
   `LAZURIO_HOSTED_PERSONALSPACE` naopak organization scope odmítne;
 - auth-check a cookie proměnné zůstávají stejné jako výše.
 
-Launchpad při startu (před listenerem) ověří, že je přesně tato složka
-namountovaná a je validním Personalspace; jinak nenastartuje. Organizační read
+Launchpad při startu (před listenerem) ověří vazbu na přesně tuto složku.
+Nastartuje jen při čisté hranici Personalspace — discovery prověřila přesně
+nakonfigurovanou složku, v `personalspace/` nesedí žádná jiná složka a
+discovery nehlásí hraniční chybu (nečitelný mountpoint, cizí nebo
+nerozpoznaný prostor, nevalidní prostor ownera) — a v jednom ze dvou stavů:
+
+- `mounted` — složka je namountovaná a je validním Personalspace svého
+  deklarovaného ownera;
+- `missing` — složka vůbec neexistuje (ani jako symlink). To je
+  čerstvá osobní Mašina, na které owner svůj privátní Personalspace ještě
+  nenaklonoval; nikdo jiný ho vytvořit ani číst nesmí (decision 0091).
+  Launchpad běží, `/api/apps` vrací prázdný katalog s
+  `hosted_personalspace: { state: "missing", mount_path }` a UI v osobním
+  scope ukáže lokalizovanou výzvu „Personalspace na této Mašině ještě není
+  nastavený" s přesnou cílovou složkou (`<Lazurio Root>/personalspace/<složka>`)
+  — owner si do ní naklonuje svůj vlastní repozitář, třeba přes Chat (T3 Code)
+  na této Mašině; žádnou repo URL Launchpad nevymýšlí. Chat vstup funguje dál.
+
+Každý jiný stav nenastartuje: složka existuje, ale není validním
+Personalspace (prázdný nebo nedokončený checkout, nevalidní
+`personal.gen3.json`, cizí owner), vedle chybějící i validní složky leží
+jiná (cizí nebo jinak pojmenovaná) složka, discovery hlásí hraniční chybu,
+nebo má `LAZURIO_HOSTED_PERSONALSPACE` špatný tvar. Chyby jednotlivých
+aplikací nebo modulů uvnitř validního Personalspace ownera (kolize port
+lease, nevalidní manifest aplikace, `workspace` symlink mimo prostor) start
+naopak nezastaví, stejně jako dřív: postižené Apps discovery izoluje. Discovery
+je vrací odděleně od hraničních chyb v `non_fatal_issues` (nehraniční
+`failures`, `warnings` a problémy `invalid_apps`); Launchpad každou jejich
+novou sadu jednou vypíše do logu a jejich počet hlásí. `/health` vrací dál
+`status: "ok"` a navíc `hosted_personalspace: { state, discovery_issues }`
+(`state` je `mounted`, `missing`, nebo `invalid`, pokud se vazba rozbila až za
+běhu; `discovery_issues` je počet nefatálních problémů); `/api/apps` nese
+totéž spolu s `mount_path`. Běžící
+Launchpad vazbu obnovuje stejným 15s hosted refreshem jako Team inventory, takže
+naklonovaný Personalspace převezme bez restartu unitu (`missing` → `mounted`);
+rozbitou vazbu za běhu hlásí jako `invalid` a v logu (krátce i uprostřed
+probíhajícího klonu) a další start ji odmítne. Organizační read
 model, Organization runtime lane ani Git/worktree API se v osobním scope vůbec
 nesestavují: `/api/apps` vrací prázdný katalog bez Organizací a `/api/git/*`
 mimo Root update odpovídá `404 organization_lane_unavailable`. Z výběru jsou

@@ -21,7 +21,7 @@
 // nematerializuje.
 
 import { existsSync } from "fs";
-import { readdir } from "fs/promises";
+import { lstat, readdir } from "fs/promises";
 import { dirname, join, relative, resolve, sep } from "path";
 import {
   APP_CHECKOUT_ROOT,
@@ -822,11 +822,32 @@ export async function discoverPersonalspace(
   options = {},
 ) {
   const failures = [];
+  // Subset of failures about the Personalspace boundary itself (mountpoint,
+  // a foreign/unrecognized/invalid space). Per-app and per-module failures
+  // inside a valid owner space never land here.
+  const boundaryFailures = [];
+  const boundaryFailure = (...issues) => {
+    failures.push(...issues);
+    boundaryFailures.push(...issues);
+  };
   const warnings = [];
   const presentationWarnings = [];
   const spaces = [];
   const apps = [];
   const invalidApps = [];
+  // Everything discovery reports that is NOT a boundary failure: per-app and
+  // per-module issues (invalid manifests, port lease conflicts, a workspace
+  // symlink out of the space, unreadable package.json) and warnings. These
+  // never decide whether a Personalspace is bound; callers report them.
+  const nonFatalIssues = () => {
+    const boundary = new Set(boundaryFailures);
+    return [...new Set([
+      ...failures.filter((failure) => !boundary.has(failure)),
+      ...warnings,
+      ...invalidApps.flatMap((app) => (app.manifest_issues ?? [])
+        .map((issue) => `${issue} (invalid personal app manifest)`)),
+    ])];
+  };
 
   // Tracked Root configuration follows the selected main/worktree control
   // source. Physical Personalspace data and the gitignored per-machine owner
@@ -844,21 +865,28 @@ export async function discoverPersonalspace(
     warnings,
   });
 
+  // A hosted personal Machine names its Personalspace by exact folder. Report
+  // the plain filesystem facts about that folder so the caller can tell "not
+  // cloned yet" apart from every other unbound state. Metadata only.
+  const primarySpaceMount = typeof options.primarySpaceDir === "string"
+    ? await inspectPrimarySpaceMount({ personalspaceRoot, mountpoint, dirName: options.primarySpaceDir })
+    : null;
+
   if (!existsSync(personalspaceRoot)) {
-    return { spaces, apps, invalid_apps: invalidApps, failures, warnings, presentation_warnings: presentationWarnings, mountpoint, primary_owner: primaryOwner ?? null };
+    return { spaces, apps, invalid_apps: invalidApps, failures, warnings, presentation_warnings: presentationWarnings, mountpoint, primary_owner: primaryOwner ?? null, primary_space_mount: primarySpaceMount, boundary_failures: boundaryFailures, non_fatal_issues: nonFatalIssues() };
   }
 
   const personalSchema = existsSync(personalSchemaPath) ? await readJson(personalSchemaPath) : null;
   const buddyPresentationSchema = existsSync(buddyPresentationSchemaPath) ? await readJson(buddyPresentationSchemaPath) : null;
   const appSchema = existsSync(appSchemaPath) ? await readJson(appSchemaPath) : null;
-  if (!personalSchema) failures.push(`Chybí ${relative(companiesRoot, personalSchemaPath)} pro personalspace validaci`);
+  if (!personalSchema) boundaryFailure(`Chybí ${relative(companiesRoot, personalSchemaPath)} pro personalspace validaci`);
 
   let entries;
   try {
     entries = await readdir(personalspaceRoot, { withFileTypes: true });
   } catch (error) {
-    failures.push(`${mountpoint}: nejde přečíst personalspace mountpoint: ${error.message}`);
-    return { spaces, apps, invalid_apps: invalidApps, failures, warnings, presentation_warnings: presentationWarnings, mountpoint, primary_owner: primaryOwner ?? null };
+    boundaryFailure(`${mountpoint}: nejde přečíst personalspace mountpoint: ${error.message}`);
+    return { spaces, apps, invalid_apps: invalidApps, failures, warnings, presentation_warnings: presentationWarnings, mountpoint, primary_owner: primaryOwner ?? null, primary_space_mount: primarySpaceMount, boundary_failures: boundaryFailures, non_fatal_issues: nonFatalIssues() };
   }
 
   const appIds = new Set();
@@ -884,7 +912,7 @@ export async function discoverPersonalspace(
           && directoryOwner.toLowerCase() !== primaryOwner.toLowerCase()
         )
       ) {
-        failures.push(
+        boundaryFailure(
           foreignOrUnrecognizedPersonalspaceDirFailure({ mountPath, directoryOwner, primaryOwner }),
         );
       }
@@ -896,7 +924,7 @@ export async function discoverPersonalspace(
       targetPath: spaceRoot,
     });
     if (!spaceBoundary.ok || !spaceBoundary.targetRealPath) {
-      failures.push(`${mountPath}: Personalspace mount překračuje canonical personalspace boundary`);
+      boundaryFailure(`${mountPath}: Personalspace mount překračuje canonical personalspace boundary`);
       continue;
     }
 
@@ -909,7 +937,7 @@ export async function discoverPersonalspace(
         label: `${mountPath}/personal.gen3.json`,
       })).value;
     } catch (error) {
-      failures.push(`${mountPath}: personal.gen3.json nejde přečíst: ${error.message}`);
+      boundaryFailure(`${mountPath}: personal.gen3.json nejde přečíst: ${error.message}`);
       continue;
     }
 
@@ -918,7 +946,7 @@ export async function discoverPersonalspace(
     if (
       (typeof options.primarySpaceDir === "string" && dirName !== options.primarySpaceDir)
       || !declaredOwner || declaredOwner.toLowerCase() !== primaryOwner.toLowerCase()) {
-      failures.push(
+      boundaryFailure(
         foreignOrUnrecognizedPersonalspaceDirFailure({
           mountPath,
           directoryOwner: declaredOwner,
@@ -934,7 +962,7 @@ export async function discoverPersonalspace(
     // Fail-closed: nevalidní config nebo porušený identity invariant → prostor se
     // NEMATERIALIZUJE (žádné osobní appky, žádný gbrain). Jen metadata + failures.
     if (configIssues.length > 0) {
-      failures.push(...configIssues.map((issue) => `${mountPath}: ${issue}`));
+      boundaryFailure(...configIssues.map((issue) => `${mountPath}: ${issue}`));
       spaces.push({
         owner: personal?.owner?.github_username ?? null,
         display_name: personal?.owner?.display_name ?? dirName,
@@ -1230,5 +1258,40 @@ export async function discoverPersonalspace(
     presentation_warnings: presentationWarnings,
     mountpoint,
     primary_owner: primaryOwner ?? null,
+    primary_space_mount: primarySpaceMount,
+    boundary_failures: boundaryFailures,
+    non_fatal_issues: nonFatalIssues(),
   };
+}
+
+// Filesystem facts for one exact personalspace/<dir> binding: whether any
+// entry exists at that path (lstat, so a dangling symlink still counts as
+// present) and which other folders sit beside it. It never reads a file inside
+// a Personalspace. Only ENOENT means absent; any other I/O error propagates.
+async function inspectPrimarySpaceMount({ personalspaceRoot, mountpoint, dirName }) {
+  const mountPath = `${mountpoint}/${dirName}`;
+  if (!/^[^/\\.][^/\\]*$/.test(dirName)) {
+    return { mount_path: mountPath, present: true, other_directories: [] };
+  }
+  let present = true;
+  try {
+    await lstat(join(personalspaceRoot, dirName));
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+    present = false;
+  }
+  let entries = [];
+  try {
+    entries = await readdir(personalspaceRoot, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  const otherDirectories = entries
+    .filter((entry) => entry.name !== dirName
+      && !entry.name.startsWith(".")
+      && !ignoredSpaceDirs.has(entry.name)
+      && (entry.isDirectory() || entry.isSymbolicLink()))
+    .map((entry) => `${mountpoint}/${entry.name}`)
+    .sort();
+  return { mount_path: mountPath, present, other_directories: otherDirectories };
 }

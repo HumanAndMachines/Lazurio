@@ -60,6 +60,7 @@ import {
   projectHostedRuntimePayload,
   requireHostedAppUrl,
   selectHostedWorkspaceApps,
+  resolveHostedPersonalspaceBinding,
   validateHostedWorkspaceBindings,
 } from "./hosted-app-url-lib.mjs";
 import {
@@ -124,14 +125,17 @@ const launchpadInstallGeneration = computeServerInstallGeneration(lazurioCodeRoo
 const hostedWorkspace = hostedWorkspaceConfigurationFromEnvironment(process.env);
 // Hosted personal scope (decisions 0153/0154/0155): the Machine carries no
 // Organization repositories. The Launchpad never builds the Organization read
-// model or its lanes there, and refuses to start unless the exact configured
-// Personalspace is mounted and valid.
+// model or its lanes there. It starts either with the exact configured
+// Personalspace mounted and valid, or with that folder cleanly absent (the
+// owner has not cloned it yet); every other state refuses to start.
 const personalHostedScope = hostedWorkspace.profile === "hosted" && hostedWorkspace.scope === "personal";
 if (personalHostedScope && options.organization !== undefined) {
   throw new Error("--organization is not valid on a hosted personal Machine (LAZURIO_HOSTED_SCOPE=personal).");
 }
 // Fail closed before any listener, lock or locator exists.
-if (personalHostedScope) await validatePersonalHostedBinding();
+let reportedPersonalspaceIssues = "";
+let hostedPersonalspace = personalHostedScope ? await resolvePersonalHostedBinding() : null;
+if (personalHostedScope) reportPersonalspaceDiscoveryIssues();
 const personalEntry = loadPersonalEntryConfiguration(process.env);
 const requestTrustProfile = personalEntry ? "personal" : hostedWorkspace.profile;
 const t3Chat = t3ChatConfigurationFromEnvironment(process.env);
@@ -450,6 +454,11 @@ if (hostedWorkspace.profile === "hosted") {
   console.log(
     `[launchpad] hosted Team workspace scheduled ${hostedMaintenance.total} Module(s); ${hostedMaintenance.skipped.length} invalid Module(s) remain isolated`,
   );
+  if (hostedPersonalspace?.state === "missing") {
+    console.warn(
+      `[launchpad] hosted personal Personalspace ${hostedPersonalspace.mount_path} is not set up yet; serving the setup prompt until the owner clones it`,
+    );
+  }
 } else {
   console.log("[launchpad] local session profile ready; Module processes start only on explicit action");
 }
@@ -490,7 +499,10 @@ async function buildAppsResponse({ force = false } = {}) {
 async function buildAppsResponseUncached({ includeGit = false } = {}) {
   if (personalHostedScope) {
     return {
-      response: await buildEmptyLaunchpadAppsResponse({ companiesRoot, rootSourceRoot }),
+      response: {
+        ...await buildEmptyLaunchpadAppsResponse({ companiesRoot, rootSourceRoot }),
+        hosted_personalspace: hostedPersonalspaceProjection(),
+      },
       logoPaths: new Map(),
     };
   }
@@ -524,19 +536,71 @@ async function buildAppsResponseUncached({ includeGit = false } = {}) {
   return { response, logoPaths: nextLogoPaths };
 }
 
-async function validatePersonalHostedBinding() {
+async function resolvePersonalHostedBinding() {
   const discovery = await discoverPersonalspace(companiesRoot, {
     rootSourceRoot,
     primarySpaceDir: hostedWorkspace.personalspace,
   });
-  return validateHostedWorkspaceBindings(hostedWorkspace, discovery);
+  return resolveHostedPersonalspaceBinding(hostedWorkspace, discovery);
+}
+
+// Content-free projection for /api/apps and /health: the state and the exact
+// configured folder only, never anything read from inside a Personalspace.
+function hostedPersonalspaceProjection() {
+  return hostedPersonalspace
+    ? {
+        state: hostedPersonalspace.state,
+        mount_path: hostedPersonalspace.mount_path,
+        discovery_issues: hostedPersonalspace.discovery_issues?.length ?? 0,
+      }
+    : null;
+}
+
+// Per-app/module issues inside a valid Personalspace never stop the
+// Launchpad; they are logged once per distinct set and counted in health.
+function reportPersonalspaceDiscoveryIssues() {
+  const failures = hostedPersonalspace?.discovery_issues ?? [];
+  const key = JSON.stringify(failures);
+  if (key === reportedPersonalspaceIssues) return;
+  reportedPersonalspaceIssues = key;
+  for (const failure of failures) {
+    console.warn(`[launchpad] hosted personal Personalspace discovery issue (non-fatal): ${failure}`);
+  }
+}
+
+async function refreshPersonalHostedBinding() {
+  const previous = hostedPersonalspace?.state ?? null;
+  const previousIssues = hostedPersonalspace?.discovery_issues?.length ?? 0;
+  try {
+    hostedPersonalspace = await resolvePersonalHostedBinding();
+    reportPersonalspaceDiscoveryIssues();
+  } catch (error) {
+    // Already listening: report the unbound state honestly instead of keeping
+    // a stale "mounted"/"missing", and let the caller log the exact reason.
+    hostedPersonalspace = Object.freeze({
+      state: "invalid",
+      folder: hostedWorkspace.personalspace,
+      mount_path: `personalspace/${hostedWorkspace.personalspace}`,
+    });
+    throw error;
+  } finally {
+    if (hostedPersonalspace?.state !== previous) {
+      appsResponseCache.invalidate();
+      console.log(
+        `[launchpad] hosted personal Personalspace ${hostedPersonalspace?.mount_path} is now ${hostedPersonalspace?.state}`,
+      );
+    } else if ((hostedPersonalspace?.discovery_issues?.length ?? 0) !== previousIssues) {
+      appsResponseCache.invalidate();
+    }
+  }
 }
 
 async function refreshHostedWorkspaceMaintenance({ warnSkipped = false } = {}) {
   if (personalHostedScope) {
     // Personal Apps are not yet routed through a hosted lane; re-check only the
-    // binding so an unmounted Personalspace is reported, never masked.
-    await validatePersonalHostedBinding();
+    // binding. The periodic refresh picks up a Personalspace the owner clones
+    // later and reports an invalid one, never masking either.
+    await refreshPersonalHostedBinding();
     hostedMaintenance = { total: 0, skipped: [] };
     return hostedMaintenance;
   }
@@ -1644,6 +1708,14 @@ function startServer(startPort) {
           return serverShutdownState.state === "running"
             ? jsonResponse({
                 status: "ok",
+                ...(personalHostedScope
+                  ? {
+                      hosted_personalspace: {
+                        state: hostedPersonalspace?.state ?? "invalid",
+                        discovery_issues: hostedPersonalspace?.discovery_issues?.length ?? 0,
+                      },
+                    }
+                  : {}),
                 ...(maintenance
                   ? {
                       module_lifecycle: "on-demand-v1",
