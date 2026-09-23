@@ -498,6 +498,12 @@ Root upravuj jen když se mění:
   `manual/lazurio-root-for-agents.md` a `manual/organization-install.md`;
   opakovatelný rozhodovací postup skill
   `.agents/skills/lazurio-workstation-install/SKILL.md`.
+- První přihlášení a donastavení hostované pracovní VM (osobní pracovní VM
+  operátora vs. týmová VM s brokered identitou) — manuál
+  `manual/hosted-machine-first-login.md`; Agent na osobní pracovní VM bez
+  přihlášeného `gh` nejdřív provede operátora device loginem a vysvětlí proč,
+  pak `lazurio update`, exact Organization install a Doctor, teprve potom
+  původní úkol.
 - Native Windows install, bug nebo PR acceptance — veřejný gate
   `manual/windows-e2e-lab.md`; konkrétní osobní testovací notebook, přístup a
   custody zůstávají pouze v omezeném owner runbooku a nikdy se z něj nestává

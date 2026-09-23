@@ -195,6 +195,21 @@ aktualizuje; Doctor tento záměrný stav hlásí jen advisory. Neznámý nebo
 malformed `default_access`/`required_roles` je fail-safe
 `access_classification_unknown`.
 
+**Sdílená Team VM (brokered identita).** Na Organization-owned Team VM
+(Machines `workspace_guest.github_broker`) jedná Lazurio na GitHubu jen jako
+bot Organizace `lazurio-for-github[bot]` přes broker (rozhodnutí 0147–0149).
+Režim vybírá výhradně Machines-managed soubor
+`/etc/lazurio/github-broker/environment` (Linux); osobní `gh auth login` tam
+nepatří. `lazurio organization install <login>` pak ověří bota přesně přes
+`gh auth status --json hosts`, čte Organization z neutrálního cwd s
+`GH_REPO=<login>/<login>_GEN3` (root musí být v policy brokeru), `--role`
+odmítne (`github_broker_role_unsupported`) a sterilní Git lane znovu zapne
+jen broker credential helper a přepis `git@github.com:` → HTTPS. Absentní slot
+mimo repozitáře brokeru vrátí `lazurio update` i instalace jako
+`current`/`excluded_by_broker_policy` bez jediné provider operace; Doctor
+`platform.github_auth` na takové VM vyžaduje právě bota, ne SSH protokol.
+Poškozená konfigurace brokeru je fail-closed `github_broker_invalid`.
+
 Reprodukovatelné instalační problémy patří po kontrole duplicit a sanitizaci
 do GitHub Issues přesného owning repa, nikoli do nového lokálního JSON ledgeru.
 Vytvoření issue nebo komentáře je Publikace; úplný routing, prompt mandát a

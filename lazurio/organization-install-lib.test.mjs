@@ -14,8 +14,10 @@ import {
   resolveOrganizationRootDocuments,
 } from "./core/organization-activation-lib.mjs";
 import { CANONICAL_GIT_FETCH_REFSPEC } from "./core/git-materialization-lib.mjs";
+import { parseBrokeredGitHubEnvironment } from "./core/brokered-github-lib.mjs";
 import {
   installOrganization,
+  observeOrganizationInstallIdentity,
   observeOrganizationInstallSource,
   organizationInstallExitCode,
 } from "./organization-install-lib.mjs";
@@ -63,6 +65,146 @@ test("provider resolves a human login to immutable root identity using read-only
     expect(call.args).not.toContain("--input");
     expect(call.args).not.toContain("-X");
   }
+});
+
+function brokeredIdentityFixture(repositories = [fullName, `${login}/mission-control-data`]) {
+  const policy = Object.fromEntries(repositories.map((name, index) => [name, index + 1]));
+  return parseBrokeredGitHubEnvironment([
+    "GITHUB_TOKEN_BROKER_URL=https://example.github-broker.lazurio.ai",
+    "GITHUB_BROKER_WORKSPACE_ID=example-team",
+    "GITHUB_BROKER_CLIENT_CREDENTIAL_FILE=/run/secrets/github_broker_client_token",
+    `GITHUB_REPOSITORY_POLICY_JSON='${JSON.stringify(policy)}'`,
+    "",
+  ].join("\n"));
+}
+
+function brokeredProviderFixture({ calls, documents, login: viewer = "lazurio-for-github[bot]" }) {
+  const provider = providerFixture({ calls: [], documents, privateRepository: true });
+  return (call) => {
+    calls.push(call);
+    if (call.args.join(" ") === "auth status --json hosts") {
+      return ok({
+        hosts: {
+          "github.com": [{
+            state: "success",
+            active: true,
+            host: "github.com",
+            login: viewer,
+            tokenSource: "lazurio-broker-live-proof",
+            scopes: "",
+            gitProtocol: "https",
+          }],
+        },
+      });
+    }
+    if (call.args[0] === "auth") throw new Error(`personal auth probe on a Team VM: ${call.args.join(" ")}`);
+    return provider(call);
+  };
+}
+
+test("shared Team VM install reads the Organization only as the brokered bot", () => {
+  const documents = scaffoldDocuments();
+  const observe = (overrides = {}) => {
+    const calls = [];
+    const source = observeOrganizationInstallSource({
+      githubLogin: login,
+      platform: "linux",
+      environment: { HOME: "/home/team", PATH: "/usr/local/bin:/usr/bin" },
+      resolveGitHubCli: () => "/usr/local/bin/gh",
+      runGitHubCli: brokeredProviderFixture({ calls, documents, ...overrides.provider }),
+      brokeredIdentity: brokeredIdentityFixture(),
+      ...overrides.observe,
+    });
+    return { source, calls };
+  };
+  const { source, calls } = observe();
+  expect(source).toMatchObject({ ok: true, organization: { login }, repository: { full_name: fullName } });
+  expect(calls[0].args).toEqual(["auth", "status", "--json", "hosts"]);
+  for (const call of calls) {
+    expect(call.cwd).toBe("/");
+    expect(call.environment.GH_REPO).toBe(fullName);
+  }
+  expect(observe({ provider: { login: "somebody" } }).source.code).toBe("github_broker_unavailable");
+  expect(observe({ observe: { role: "builder" } }).source.code).toBe("github_broker_role_unsupported");
+  expect(observe({ observe: { brokeredIdentity: brokeredIdentityFixture([`${login}/mission-control-data`]) } }).source.code)
+    .toBe("github_broker_root_outside_policy");
+  expect(observe({ observe: { brokeredIdentity: { valid: false } } }).source.code).toBe("github_broker_invalid");
+  expect(observe({ observe: { brokeredIdentity: { valid: false } } }).calls).toEqual([]);
+});
+
+test("final Team VM re-observation repeats the exact bot gate before any provider read", () => {
+  const documents = scaffoldDocuments();
+  const source = {
+    organization: { id: ids.organization, login },
+    repository: { id: ids.repository, full_name: fullName },
+  };
+  const botEntry = {
+    state: "success",
+    active: true,
+    host: "github.com",
+    login: "lazurio-for-github[bot]",
+    tokenSource: "lazurio-broker-live-proof",
+    scopes: "",
+    gitProtocol: "https",
+  };
+  const reobserve = (status) => {
+    const calls = [];
+    const provider = providerFixture({ calls: [], documents, privateRepository: true });
+    const result = observeOrganizationInstallIdentity({
+      source,
+      platform: "linux",
+      environment: { HOME: "/home/team", PATH: "/usr/local/bin:/usr/bin" },
+      resolveGitHubCli: () => "/usr/local/bin/gh",
+      brokeredIdentity: brokeredIdentityFixture(),
+      runGitHubCli: (call) => {
+        calls.push(call);
+        if (call.args.join(" ") === "auth status --json hosts") return ok(status);
+        if (call.args[0] === "auth") throw new Error(`personal auth probe on a Team VM: ${call.args.join(" ")}`);
+        if (call.args[1] === `repositories/${ids.repository}`) {
+          return ok({ id: Number(ids.repository), full_name: fullName, owner: { id: Number(ids.organization) } });
+        }
+        return provider(call);
+      },
+    });
+    return { result, apiCalls: calls.filter((call) => call.args[0] === "api") };
+  };
+  const accepted = reobserve({ hosts: { "github.com": [botEntry] } });
+  expect(accepted.result).toEqual({ ok: true });
+  expect(accepted.apiCalls.length).toBe(2);
+  for (const status of [
+    { hosts: { "github.com": [botEntry, { ...botEntry, login: "personal-user", tokenSource: "keyring" }] } },
+    { hosts: { "github.com": [{ ...botEntry, login: "personal-user", tokenSource: "keyring" }] } },
+    { hosts: { "github.com": [botEntry] }, extra: true },
+    { hosts: {} },
+  ]) {
+    const refused = reobserve(status);
+    expect(refused.result.code).toBe("github_broker_unavailable");
+    expect(refused.apiCalls).toEqual([]);
+  }
+});
+
+test("update on a shared Team VM leaves repositories outside the broker policy unmaterialized", async () => {
+  const fixture = await restrictedScopeFixture();
+  const knowledgebaseKey = "lazurio-example-organization::knowledgebase";
+  await installOrganization({ rootPath: fixture.root, githubLogin: login, role: "steward", deps: fixture.deps });
+  await rm(join(fixture.organizationRoot, "workspace", "knowledgebase"), { recursive: true, force: true });
+  fixture.materialized.length = 0;
+  fixture.gitCalls.length = 0;
+  const report = await fixture.runUpdate({ rootPath: fixture.root, brokeredIdentity: brokeredIdentityFixture() });
+  expect(report.results).toContainEqual(expect.objectContaining({
+    repo_key: knowledgebaseKey,
+    state: "current",
+    reason: "excluded_by_broker_policy",
+    materialization_scope: "excluded_by_broker_policy",
+  }));
+  expect(fixture.materialized).not.toContain(knowledgebaseKey);
+  expectNoProviderOperation(fixture, "workspace/knowledgebase");
+  const allowed = await fixture.runUpdate({
+    rootPath: fixture.root,
+    brokeredIdentity: brokeredIdentityFixture([fullName, `${login}/mission-control-data`, `${login}/knowledgebase`]),
+  });
+  expect(allowed.results.some((result) => result.reason === "excluded_by_broker_policy")).toBe(false);
+  expect(fixture.materialized).toContain(knowledgebaseKey);
 });
 
 test("private Organization install keeps SSH while public read-only install uses HTTPS", () => {
@@ -1051,12 +1193,13 @@ async function restrictedScopeFixture({
     module: item.module ?? null,
     path: item.repo_path ?? item.absolute_path,
   });
-  const runUpdate = async ({ rootPath, organizations = null, restrictedSlotPolicy = "defer" }) => runLazurioUpdate({
+  const runUpdate = async ({ rootPath, organizations = null, restrictedSlotPolicy = "defer", brokeredIdentity = undefined }) => runLazurioUpdate({
     rootPath,
     organizations,
     restrictedSlotPolicy,
     runtimeRoot: join(fixture.root, "..", "runtime"),
     deps: {
+      ...(brokeredIdentity === undefined ? {} : { brokeredIdentity }),
       acquireLock: async () => ({ release: async () => {} }),
       updateRepo: async (item) => {
         updated.push(item.key);
