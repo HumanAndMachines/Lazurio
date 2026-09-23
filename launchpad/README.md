@@ -131,11 +131,13 @@ jiná (cizí nebo jinak pojmenovaná) složka, discovery hlásí hraniční chyb
 nebo má `LAZURIO_HOSTED_PERSONALSPACE` špatný tvar. Chyby jednotlivých
 aplikací nebo modulů uvnitř validního Personalspace ownera (kolize port
 lease, nevalidní manifest aplikace, `workspace` symlink mimo prostor) start
-naopak nezastaví, stejně jako dřív: postižené Apps discovery izoluje, Launchpad
-je vypíše do logu a jejich počet hlásí. `/health` vrací dál `status: "ok"` a
-navíc `hosted_personalspace: { state, discovery_failures }` (`state` je
-`mounted`, `missing`, nebo `invalid`, pokud se vazba rozbila až za běhu;
-`discovery_failures` je počet nefatálních discovery chyb); `/api/apps` nese
+naopak nezastaví, stejně jako dřív: postižené Apps discovery izoluje. Discovery
+je vrací odděleně od hraničních chyb v `non_fatal_issues` (nehraniční
+`failures`, `warnings` a problémy `invalid_apps`); Launchpad každou jejich
+novou sadu jednou vypíše do logu a jejich počet hlásí. `/health` vrací dál
+`status: "ok"` a navíc `hosted_personalspace: { state, discovery_issues }`
+(`state` je `mounted`, `missing`, nebo `invalid`, pokud se vazba rozbila až za
+běhu; `discovery_issues` je počet nefatálních problémů); `/api/apps` nese
 totéž spolu s `mount_path`. Běžící
 Launchpad vazbu obnovuje stejným 15s hosted refreshem jako Team inventory, takže
 naklonovaný Personalspace převezme bez restartu unitu (`missing` → `mounted`);

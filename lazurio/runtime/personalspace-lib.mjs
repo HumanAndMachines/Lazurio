@@ -835,6 +835,19 @@ export async function discoverPersonalspace(
   const spaces = [];
   const apps = [];
   const invalidApps = [];
+  // Everything discovery reports that is NOT a boundary failure: per-app and
+  // per-module issues (invalid manifests, port lease conflicts, a workspace
+  // symlink out of the space, unreadable package.json) and warnings. These
+  // never decide whether a Personalspace is bound; callers report them.
+  const nonFatalIssues = () => {
+    const boundary = new Set(boundaryFailures);
+    return [...new Set([
+      ...failures.filter((failure) => !boundary.has(failure)),
+      ...warnings,
+      ...invalidApps.flatMap((app) => (app.manifest_issues ?? [])
+        .map((issue) => `${issue} (invalid personal app manifest)`)),
+    ])];
+  };
 
   // Tracked Root configuration follows the selected main/worktree control
   // source. Physical Personalspace data and the gitignored per-machine owner
@@ -860,7 +873,7 @@ export async function discoverPersonalspace(
     : null;
 
   if (!existsSync(personalspaceRoot)) {
-    return { spaces, apps, invalid_apps: invalidApps, failures, warnings, presentation_warnings: presentationWarnings, mountpoint, primary_owner: primaryOwner ?? null, primary_space_mount: primarySpaceMount, boundary_failures: boundaryFailures };
+    return { spaces, apps, invalid_apps: invalidApps, failures, warnings, presentation_warnings: presentationWarnings, mountpoint, primary_owner: primaryOwner ?? null, primary_space_mount: primarySpaceMount, boundary_failures: boundaryFailures, non_fatal_issues: nonFatalIssues() };
   }
 
   const personalSchema = existsSync(personalSchemaPath) ? await readJson(personalSchemaPath) : null;
@@ -873,7 +886,7 @@ export async function discoverPersonalspace(
     entries = await readdir(personalspaceRoot, { withFileTypes: true });
   } catch (error) {
     boundaryFailure(`${mountpoint}: nejde přečíst personalspace mountpoint: ${error.message}`);
-    return { spaces, apps, invalid_apps: invalidApps, failures, warnings, presentation_warnings: presentationWarnings, mountpoint, primary_owner: primaryOwner ?? null, primary_space_mount: primarySpaceMount, boundary_failures: boundaryFailures };
+    return { spaces, apps, invalid_apps: invalidApps, failures, warnings, presentation_warnings: presentationWarnings, mountpoint, primary_owner: primaryOwner ?? null, primary_space_mount: primarySpaceMount, boundary_failures: boundaryFailures, non_fatal_issues: nonFatalIssues() };
   }
 
   const appIds = new Set();
@@ -1247,6 +1260,7 @@ export async function discoverPersonalspace(
     primary_owner: primaryOwner ?? null,
     primary_space_mount: primarySpaceMount,
     boundary_failures: boundaryFailures,
+    non_fatal_issues: nonFatalIssues(),
   };
 }
 

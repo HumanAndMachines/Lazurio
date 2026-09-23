@@ -604,13 +604,13 @@ test("personal binding tolerates only a cleanly absent Personalspace folder", ()
   expect(resolveHostedPersonalspaceBinding(personal, {
     spaces: [personalSpace()], mountpoint: "personalspace", primary_space_mount: absentMount({ present: true }),
   })).toEqual({
-    state: "mounted", folder: "ImMakerMatty_GEN3", mount_path: "personalspace/ImMakerMatty_GEN3", discovery_failures: [],
+    state: "mounted", folder: "ImMakerMatty_GEN3", mount_path: "personalspace/ImMakerMatty_GEN3", discovery_issues: [],
   });
   // Not cloned yet: no folder, nothing else in the mountpoint, no failures.
   expect(resolveHostedPersonalspaceBinding(personal, {
     spaces: [], failures: [], mountpoint: "personalspace", primary_space_mount: absentMount(),
   })).toEqual({
-    state: "missing", folder: "ImMakerMatty_GEN3", mount_path: "personalspace/ImMakerMatty_GEN3", discovery_failures: [],
+    state: "missing", folder: "ImMakerMatty_GEN3", mount_path: "personalspace/ImMakerMatty_GEN3", discovery_issues: [],
   });
 
   // A valid configured folder is tolerated only in a clean mountpoint.
@@ -634,12 +634,22 @@ test("personal binding tolerates only a cleanly absent Personalspace folder", ()
     spaces: [personalSpace()], failures: ["personal lease port 41100 vlastní dvě aplikace: a a b"],
     mountpoint: "personalspace", primary_space_mount: absentMount({ present: true }),
   })).toThrow("boundary check failed");
-  // Per-app/module failures inside a valid owner space stay non-fatal and are
-  // reported with the mounted binding.
+  // Per-app/module issues inside a valid owner space stay non-fatal and are
+  // reported with the mounted binding: discovery's own collection wins, and
+  // without it warnings and invalid app manifests are still reported.
+  expect(resolveHostedPersonalspaceBinding(personal, {
+    spaces: [personalSpace()], failures: [], boundary_failures: [], non_fatal_issues: ["notes: bad (invalid personal app manifest)"],
+    mountpoint: "personalspace", primary_space_mount: absentMount({ present: true }),
+  })).toMatchObject({ state: "mounted", discovery_issues: ["notes: bad (invalid personal app manifest)"] });
+  expect(resolveHostedPersonalspaceBinding(personal, {
+    spaces: [personalSpace()], failures: [], boundary_failures: [], warnings: ["legacy custody"],
+    invalid_apps: [{ manifest_issues: ["notes: bad"] }],
+    mountpoint: "personalspace", primary_space_mount: absentMount({ present: true }),
+  }).discovery_issues).toEqual(["legacy custody", "notes: bad (invalid personal app manifest)"]);
   expect(resolveHostedPersonalspaceBinding(personal, {
     spaces: [personalSpace()], failures: ["personal lease port 41100 vlastní dvě aplikace: a a b"],
     boundary_failures: [], mountpoint: "personalspace", primary_space_mount: absentMount({ present: true }),
-  })).toMatchObject({ state: "mounted", discovery_failures: ["personal lease port 41100 vlastní dvě aplikace: a a b"] });
+  })).toMatchObject({ state: "mounted", discovery_issues: ["personal lease port 41100 vlastní dvě aplikace: a a b"] });
   expect(() => resolveHostedPersonalspaceBinding(personal, { spaces: [personalSpace()] }))
     .toThrow("did not inspect the configured folder");
 

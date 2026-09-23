@@ -379,7 +379,7 @@ test("hosted personal scope reports a cleanly absent Personalspace as missing, a
     mount_path: "personalspace/ExampleUser_GEN3", present: false, other_directories: [],
   });
   expect(resolveHostedPersonalspaceBinding(configuration, absent)).toEqual({
-    state: "missing", folder: "ExampleUser_GEN3", mount_path: "personalspace/ExampleUser_GEN3", discovery_failures: [],
+    state: "missing", folder: "ExampleUser_GEN3", mount_path: "personalspace/ExampleUser_GEN3", discovery_issues: [],
   });
 
   // Without the mountpoint at all the answer is the same.
@@ -1428,5 +1428,36 @@ test("hosted personal binding keeps per-app discovery failures in a valid Person
   expect(discovery.boundary_failures).toEqual([]);
   const binding = resolveHostedPersonalspaceBinding(configuration, discovery);
   expect(binding.state).toBe("mounted");
-  expect(binding.discovery_failures).toEqual(discovery.failures);
+  expect(binding.discovery_issues).toEqual(discovery.non_fatal_issues);
+  expect(binding.discovery_issues.join("\n")).toContain("personal lease port 41150");
+});
+
+test("hosted personal binding reports an invalid personal app manifest as a non-fatal issue", async () => {
+  const configuration = createHostedWorkspaceConfiguration({
+    profile: "hosted", scope: "personal", owner: "frozen-slug", personalspace: "ExampleUser_GEN3",
+    domain: "lazurio.io", machine: "frozen-slug",
+  });
+  const invalid = personalAppManifest("ExampleUser", { id: "notes-v1", port: 41_160 });
+  invalid.companyascode.app.surface = "not-a-surface";
+  const root = await createPersonalspaceFixture({
+    spaces: [{
+      dirName: "ExampleUser_GEN3",
+      owner: "ExampleUser",
+      config: {
+        ...personalConfig("ExampleUser"),
+        buddy: { ...personalConfig("ExampleUser").buddy, slug: "exampleuser-buddy" },
+      },
+      apps: [{ module: "notes", manifest: invalid }],
+    }],
+  });
+  const discovery = await discoverPersonalspace(root, { primarySpaceDir: configuration.personalspace });
+  // Invalid manifests land in invalid_apps/warnings, never in failures.
+  expect(discovery.invalid_apps).toHaveLength(1);
+  expect(discovery.failures).toEqual([]);
+  expect(discovery.boundary_failures).toEqual([]);
+  expect(discovery.non_fatal_issues.join("\n")).toContain("(invalid personal app manifest)");
+  const binding = resolveHostedPersonalspaceBinding(configuration, discovery);
+  expect(binding.state).toBe("mounted");
+  expect(binding.discovery_issues.length).toBeGreaterThan(0);
+  expect(binding.discovery_issues.join("\n")).toContain("(invalid personal app manifest)");
 });

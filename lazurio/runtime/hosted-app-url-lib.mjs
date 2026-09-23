@@ -307,8 +307,9 @@ export function validateHostedWorkspaceBindings(
 // the configured folder is a valid owner-primary Personalspace and "missing"
 // means it does not exist at all. Per-app and per-module failures inside a
 // valid owner space (a port lease conflict, an invalid app manifest, a
-// workspace symlink out of the space) stay non-fatal, as before: they isolate
-// the affected Apps and are reported, and the Launchpad keeps serving.
+// workspace symlink out of the space) and discovery warnings stay non-fatal, as
+// before: they isolate the affected Apps and are returned as discovery_issues
+// for reporting, and the Launchpad keeps serving.
 const foreignPersonalspaceFailureCode = "foreign_or_unrecognized_personalspace_dir";
 
 export function resolveHostedPersonalspaceBinding(configuration, discovery = {}) {
@@ -348,11 +349,20 @@ export function resolveHostedPersonalspaceBinding(configuration, discovery = {})
   if (fatal.length > 0) {
     throw new Error(`${subject} the Personalspace boundary check failed: ${fatal.join("; ")}`);
   }
+  // Non-fatal per-app/module issues and warnings, reported but never gating.
+  const issues = Array.isArray(discovery.non_fatal_issues)
+    ? discovery.non_fatal_issues.map(String)
+    : [...new Set([
+      ...failures.filter((failure) => !fatal.includes(failure)),
+      ...(Array.isArray(discovery.warnings) ? discovery.warnings.map(String) : []),
+      ...(Array.isArray(discovery.invalid_apps) ? discovery.invalid_apps : [])
+        .flatMap((app) => (app?.manifest_issues ?? []).map((issue) => `${issue} (invalid personal app manifest)`)),
+    ])];
   return Object.freeze({
     state,
     folder: configuration.personalspace,
     mount_path: space?.mount_path ?? mount.mount_path,
-    discovery_failures: Object.freeze(failures),
+    discovery_issues: Object.freeze(issues),
   });
 }
 
