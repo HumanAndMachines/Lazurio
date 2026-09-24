@@ -23,6 +23,7 @@ import {
 import { initGitRepo } from "../../launchpad/src/git-fixture-helpers.test.mjs";
 import {
   CANONICAL_GIT_FETCH_REFSPEC,
+  materializationCloneArgs,
   materializeGitCheckout,
 } from "./git-materialization-lib.mjs";
 
@@ -90,6 +91,23 @@ test("one Core primitive publishes an Organization root only after owner verific
     ok: true,
     stdout: CANONICAL_GIT_FETCH_REFSPEC,
   });
+  const longPaths = await runGit(["config", "--local", "--get", "core.longpaths"], { cwd: target });
+  if (process.platform === "win32") expect(longPaths).toMatchObject({ ok: true, stdout: "true" });
+  else expect(longPaths.ok).toBe(false);
+});
+
+test("Windows clone records core.longpaths in the new repository, other platforms clone unchanged", () => {
+  const request = { remote: "git@github.com:Example/repo.git", branch: "main" };
+  const clone = ["clone", "--branch", "main", "--single-branch", "--origin", "origin", "--", request.remote];
+  const windows = materializationCloneArgs({ ...request, platform: "win32" });
+  const linux = materializationCloneArgs({ ...request, platform: "linux" });
+
+  expect(windows.slice(windows.indexOf("clone"))).toEqual([
+    "clone", "--config", "core.longpaths=true", ...clone.slice(1),
+  ]);
+  expect(windows).toContain("core.hooksPath=NUL");
+  expect(linux.slice(linux.indexOf("clone"))).toEqual(clone);
+  expect(linux).not.toContain("core.longpaths=true");
 });
 
 test("post-clone repository fsmonitor cannot execute during materialization verification", async () => {
