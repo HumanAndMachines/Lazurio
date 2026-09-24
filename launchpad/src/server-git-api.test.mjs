@@ -1198,6 +1198,37 @@ test("hosted Chat is offered but never mints a T3 token for an unadmitted reques
   expect(existsSync(marker)).toBe(false);
 }, platformTestTimeout(15_000));
 
+test("the Environment descriptor names this Machine without secrets", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const local = await startLaunchpadServer(root);
+  expect(await getJson(local.port, "/api/setup/environment")).toEqual({
+    profile: "local",
+    scope: null,
+    machine: null,
+    organization_slug: null,
+    team_id: null,
+    domain: null,
+  });
+
+  const hostedRoot = await createLaunchpadGitFixture();
+  tempRoots.push(hostedRoot);
+  const hosted = await startLaunchpadServer(hostedRoot, {
+    env: {
+      ...hostedSshEnvironment("https://launchpad.builder.workspace.example.test"),
+      LAZURIO_LAUNCHPAD_AUTH_CHECK_URL: `https://127.0.0.1:${await findFreePort()}/oauth2/auth`,
+    },
+  });
+  expect(await getJson(hosted.port, "/api/setup/environment")).toEqual({
+    profile: "hosted",
+    scope: "organization",
+    machine: "builder",
+    organization_slug: "BetaCo",
+    team_id: "sales",
+    domain: "workspace.example.test",
+  });
+}, platformTestTimeout(20_000));
+
 test("SSH access stays hidden and read-only on a localhost Launchpad", async () => {
   const root = await createLaunchpadGitFixture();
   tempRoots.push(root);

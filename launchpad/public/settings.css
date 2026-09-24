@@ -1,0 +1,218 @@
+/* Settings of this Environment: one page, a left list of sections and one
+   section at a time — the layout T3 Code uses for its settings, on the shared
+   Launchpad tokens. Sections mount their own step (GitHub, SSH access). */
+.settings-page {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.settings-topbar {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  min-height: 56px;
+  padding: 0 1.5rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.settings-back {
+  color: var(--text-muted);
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.settings-back:hover,
+.settings-back:focus-visible {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+}
+
+.settings-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.settings-crumbs [aria-current="page"] {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.settings-shell {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 2rem;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 1.5rem 1.5rem 3rem;
+}
+
+.settings-nav {
+  position: sticky;
+  top: 1.5rem;
+  display: grid;
+  align-content: start;
+  gap: 0.15rem;
+}
+
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 36px;
+  padding: 0.35rem 0.6rem;
+  border-radius: var(--r-md);
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.settings-nav-item svg {
+  flex: 0 0 auto;
+}
+
+.settings-nav-item:hover,
+.settings-nav-item:focus-visible {
+  background: var(--bg-muted);
+  color: var(--text);
+}
+
+.settings-nav-item[aria-current="page"] {
+  background: var(--accent-soft);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.settings-main {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+  max-width: 760px;
+}
+
+.settings-section {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.settings-section h1 {
+  margin: 0;
+  font-size: 1.6rem;
+}
+
+.settings-intro {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.settings-group {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.settings-group-title {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.settings-rows {
+  border: 1px solid var(--line);
+  border-radius: var(--lz-radius-md);
+  background: var(--surface);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 0.9rem 1.25rem;
+}
+
+.settings-row + .settings-row {
+  border-top: 1px solid var(--line);
+}
+
+.settings-row-copy {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.settings-row-label {
+  font-weight: 600;
+}
+
+.settings-row-help {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.settings-row-value {
+  font-size: 14px;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.settings-row-value code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.settings-error {
+  color: var(--c-warn);
+}
+
+.settings-select {
+  min-width: 140px;
+  min-height: 34px;
+  padding: 0.25rem 1.8rem 0.25rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.settings-select:hover {
+  border-color: var(--line-strong);
+}
+
+.settings-select:focus-visible,
+.settings-nav-item:focus-visible,
+.settings-back:focus-visible {
+  border-color: var(--accent);
+  outline: 2px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  outline-offset: 1px;
+}
+
+@media (max-width: 760px) {
+  .settings-shell {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+  }
+
+  .settings-nav {
+    position: static;
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .settings-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .settings-row-value {
+    text-align: left;
+  }
+}

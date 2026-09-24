@@ -176,14 +176,12 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(profileBlock).toContain('const name = document.createElement("a")');
   expect(profileBlock).toContain("name.href = profile.settings_url");
   expect(profileBlock).toContain('name.target = "_blank"');
+  // Settings live on their own page; the menu only links there.
   const settingsBlock = js.slice(js.indexOf("function profileSettingsItem"), js.indexOf("function settingsIcon"));
-  expect(settingsBlock).toContain('document.createElement("section")');
-  expect(settingsBlock).toContain('document.createElement("select")');
-  expect(settingsBlock).toContain('select.className = "space-language-select"');
-  expect(settingsBlock).toContain('select.value = getLocale()');
-  expect(settingsBlock).toContain('setLocale(select.value)');
+  expect(settingsBlock).toContain('document.createElement("a")');
+  expect(settingsBlock).toContain('link.href = "./settings.html"');
+  expect(settingsBlock).not.toContain('document.createElement("select")');
   expect(settingsBlock).not.toContain('aria-disabled');
-  expect(settingsBlock).not.toContain(".href");
   expect(server).toContain("organizationLogoCandidates");
   expect(server).toContain("launchpad/app/v1/web/launchpad-icon.png");
   expect(server).toContain("launchpad/app/v1/web/logo-square.png");
@@ -268,8 +266,7 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   expect(css).toContain("width: min(280px");
   expect(css).toContain(".space-profile-card");
   expect(css).toContain(".space-profile-photo img");
-  expect(css).toContain(".space-profile-settings");
-  expect(css).toContain(".space-language-select");
+  expect(css).toContain(".space-profile-settings-link");
   expect(css).toContain("grid-template-columns: minmax(0, 1fr)");
   expect(css).not.toContain(".rail-panel");
   expect(css).not.toContain(".runtime-root-badge");
@@ -604,9 +601,9 @@ test("CAC-0095: topbar uses canonical Iconoir icons without circular wrappers", 
   expect(html).not.toContain("M21 12.8A9 9 0 1 1");
   expect(html).not.toContain("M3 12a9 9 0 0 1");
   expect((html.match(/topbar-icon-plain/g) ?? []).length).toBe(6);
-  // GitHub login of this Machine: one plain entry to its own page.
-  expect(html).toContain("<!-- iconoir/github -->");
-  expect(html).toMatch(/<a\s+id="setupGitHubLink"\s+href="\.\/setup-github\.html"/);
+  // Settings of this Environment: one plain entry to its own page.
+  expect(html).toContain("<!-- iconoir/settings -->");
+  expect(html).toMatch(/<a\s+id="settingsLink"\s+href="\.\/settings\.html"/);
   expect(css).toContain(".topbar-icon-plain,");
   expect(css).toContain("border-color: transparent;");
   expect(css).toContain("border-radius: 0;");

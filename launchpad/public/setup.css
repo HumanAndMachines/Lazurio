@@ -1,29 +1,10 @@
-/* Machine setup steps (GitHub today; later SSH access, Codex and Claude
-   logins): one narrow column of step cards on the shared Launchpad tokens. */
-.setup {
-  max-width: 44rem;
-  margin: 0 auto;
-  padding: 2rem 1.25rem 3rem;
-  display: grid;
-  gap: 1.25rem;
-}
-
-.setup h1 {
-  margin: 0;
-  font-size: 1.6rem;
-}
-
-.setup h2 {
+/* Machine setup step cards (GitHub today; later Codex and Claude logins):
+   mounted inside the Settings page on the shared Launchpad tokens. */
+.setup-card h2 {
   margin: 0 0 0.75rem;
   font-size: 1.05rem;
 }
 
-.setup-back {
-  color: var(--text-muted);
-  text-decoration: none;
-}
-
-.setup-intro,
 .setup-muted {
   margin: 0;
   color: var(--text-muted);

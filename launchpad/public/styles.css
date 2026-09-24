@@ -419,60 +419,27 @@ input:focus-visible,
   font-size: 14px;
 }
 
-.space-profile-settings {
-  display: grid;
-  gap: 0.35rem;
-  padding: 0.35rem 0.48rem 0.48rem;
-  color: var(--text);
-}
-
-.space-profile-settings-heading {
-  min-height: 30px;
+.space-profile-settings-link {
+  min-height: 34px;
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  color: var(--text-muted);
+  padding: 0.28rem 0.48rem;
+  border-radius: var(--r-md);
+  color: var(--text);
   font-size: 14px;
   font-weight: 600;
+  text-decoration: none;
 }
 
-.space-profile-settings-heading svg {
+.space-profile-settings-link svg {
   flex: 0 0 auto;
   color: var(--text-muted);
 }
 
-.space-language-setting {
-  min-height: 34px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding-left: calc(17px + 0.55rem);
-  color: var(--text);
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.space-language-select {
-  min-width: 112px;
-  min-height: 32px;
-  padding: 0.25rem 1.8rem 0.25rem 0.55rem;
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  cursor: pointer;
-}
-
-.space-language-select:hover {
-  border-color: var(--line-strong);
-}
-
-.space-language-select:focus-visible {
-  border-color: var(--accent);
-  outline: 2px solid color-mix(in srgb, var(--accent) 22%, transparent);
-  outline-offset: 1px;
+.space-profile-settings-link:hover,
+.space-profile-settings-link:focus-visible {
+  background: var(--bg-muted);
 }
 
 .space-switcher-divider {
