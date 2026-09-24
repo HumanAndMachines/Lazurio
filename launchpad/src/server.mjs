@@ -1882,6 +1882,12 @@ function startServer(startPort) {
               })
             : jsonResponse({ status: serverShutdownState.state }, 503);
         }
+        // Settings of this Environment live under /settings/<section>: the
+        // section is a path, not a file, and the page loads its assets from `../`.
+        if (url.pathname === "/settings") {
+          return Response.redirect(new URL(launchpadPath("/settings/", basePath), request.url).toString(), 308);
+        }
+        if (/^\/settings\/(?:general|github|ssh)?$/u.test(url.pathname)) return await serveStatic("/settings.html");
         return await serveStatic(url.pathname);
       } catch (error) {
         return jsonResponse({ error: "launchpad_error", message: error.message }, 500);

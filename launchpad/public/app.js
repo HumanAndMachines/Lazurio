@@ -1748,7 +1748,7 @@ function profileSettingsItem() {
   // access) live on their own page; the menu only links there.
   const link = document.createElement("a");
   link.className = "space-profile-settings-link";
-  link.href = "./settings.html";
+  link.href = "./settings/";
   link.append(settingsIcon(), document.createTextNode(t("profile.settings")));
   link.addEventListener("click", () => {
     restoreSpaceMenuFocusOnClose = true;

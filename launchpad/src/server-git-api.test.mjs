@@ -1202,6 +1202,16 @@ test("the Environment descriptor names this Machine without secrets", async () =
   const root = await createLaunchpadGitFixture();
   tempRoots.push(root);
   const local = await startLaunchpadServer(root);
+  // Settings is a route, not a file: /settings redirects to /settings/ and every section serves the page.
+  const bare = await fetch(`http://127.0.0.1:${local.port}/settings`, { redirect: "manual" });
+  expect(bare.status).toBe(308);
+  expect(new URL(bare.headers.get("location")).pathname).toBe("/settings/");
+  for (const path of ["/settings/", "/settings/general", "/settings/ssh"]) {
+    const page = await fetch(`http://127.0.0.1:${local.port}${path}`);
+    expect(page.status).toBe(200);
+    expect(await page.text()).toContain('id="settingsMain"');
+  }
+  expect((await fetch(`http://127.0.0.1:${local.port}/settings/other`)).status).toBe(404);
   expect(await getJson(local.port, "/api/setup/environment")).toEqual({
     profile: "local",
     scope: null,

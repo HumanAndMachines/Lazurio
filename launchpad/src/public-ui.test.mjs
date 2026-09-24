@@ -179,7 +179,7 @@ test("Launchpad public shell exposes a header space switcher and app cards", asy
   // Settings live on their own page; the menu only links there.
   const settingsBlock = js.slice(js.indexOf("function profileSettingsItem"), js.indexOf("function settingsIcon"));
   expect(settingsBlock).toContain('document.createElement("a")');
-  expect(settingsBlock).toContain('link.href = "./settings.html"');
+  expect(settingsBlock).toContain('link.href = "./settings/"');
   expect(settingsBlock).not.toContain('document.createElement("select")');
   expect(settingsBlock).not.toContain('aria-disabled');
   expect(server).toContain("organizationLogoCandidates");
@@ -603,7 +603,7 @@ test("CAC-0095: topbar uses canonical Iconoir icons without circular wrappers", 
   expect((html.match(/topbar-icon-plain/g) ?? []).length).toBe(6);
   // Settings of this Environment: one plain entry to its own page.
   expect(html).toContain("<!-- iconoir/settings -->");
-  expect(html).toMatch(/<a\s+id="settingsLink"\s+href="\.\/settings\.html"/);
+  expect(html).toMatch(/<a\s+id="settingsLink"\s+href="\.\/settings\/"/);
   expect(css).toContain(".topbar-icon-plain,");
   expect(css).toContain("border-color: transparent;");
   expect(css).toContain("border-radius: 0;");

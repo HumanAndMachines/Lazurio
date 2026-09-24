@@ -4,10 +4,11 @@ import { mountGitHubStep } from "./setup-github.js";
 import { mountSshAccessStep, readSshAccess } from "./ssh-access.js";
 
 // Settings of this Environment — the Machine serving this Launchpad. One page,
-// a left list of sections and one section at a time, addressed by the hash
-// (#general, #github, #ssh). Each section is a self-contained step mounted on
-// its first visit; a section the profile does not offer (SSH on localhost)
-// never appears in the list. The Launchpad shell only links here.
+// a left list of sections and one section at a time, addressed by the path
+// (/settings/general, /settings/github, /settings/ssh; the server serves this
+// page for all of them). Each section is a self-contained step mounted on its
+// first visit; a section the profile does not offer (SSH on localhost) never
+// appears in the list. The Launchpad shell only links here.
 
 initializeI18n();
 
@@ -18,9 +19,18 @@ const crumb = document.getElementById("settingsCrumb");
 const mounted = new Set();
 const available = new Set(["general", "github"]);
 
+function pathSection() {
+  return window.location.pathname.split("/").pop();
+}
+
 function requestedSection() {
-  const requested = window.location.hash.replace(/^#/, "");
+  const requested = pathSection();
   return SECTIONS.includes(requested) && available.has(requested) ? requested : "general";
+}
+
+function navigate(section) {
+  if (pathSection() !== section) window.history.pushState(null, "", section);
+  activate();
 }
 
 function activate() {
@@ -109,11 +119,18 @@ async function revealSshSection() {
   if (!state?.available) return;
   available.add("ssh");
   navItems.get("ssh").hidden = false;
-  if (window.location.hash === "#ssh") activate();
+  if (pathSection() === "ssh") activate();
+}
+
+for (const [id, item] of navItems) {
+  item.addEventListener("click", (event) => {
+    event.preventDefault();
+    navigate(id);
+  });
 }
 
 mountLanguage();
 void mountEnvironment();
 void revealSshSection();
-window.addEventListener("hashchange", activate);
+window.addEventListener("popstate", activate);
 activate();

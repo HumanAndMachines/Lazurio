@@ -196,11 +196,13 @@ Launchpadu a worktrees.
 ## Nastavení Prostředí
 
 Ozubené kolo v hlavičce (a položka **Nastavení** v profilovém menu) otevře
-`settings.html`: nastavení tohoto Prostředí, tedy Mašiny, ze které Launchpad
+`/settings/`: nastavení tohoto Prostředí, tedy Mašiny, ze které Launchpad
 běží. Údaje o Prostředí a kroky GitHub/SSH jsou za celou Mašinu; jazyk je
 volba prohlížeče (`launchpad.locale` v localStorage, viz „Jazyk UI“). Stránka
 má jedno rozložení podle T3 Code — vlevo seznam sekcí, vpravo právě jedna sekce
-adresovaná hashem (`#general`, `#github`, `#ssh`):
+adresovaná cestou (`/settings/general`, `/settings/github`, `/settings/ssh`;
+server pro všechny vrací tutéž stránku, holé `/settings` přesměruje na
+`/settings/`):
 
 - **Obecné** — typ Prostředí (`Tento počítač`, `VM Prostředí Organizace`,
   `Osobní VM Prostředí`), label Mašiny, Organizace, Team a doména z
@@ -211,6 +213,9 @@ adresovaná hashem (`#general`, `#github`, `#ssh`):
 - **Zdrojové kódy (GitHub)** — GitHub účet Mašiny, viz níže.
 - **SSH přístup** — jen v hosted profilu; na localhostu sekce v seznamu není
   (`GET /api/setup/ssh` odpoví `available: false`), viz „Hosted machine path“.
+  Je to jeden druh **Spojení** s vyznačeným směrem (příchozí: notebook → tato
+  Mašina); opačný směr a spojení Mašina ↔ Mašina jsou plánované další druhy
+  téhož seznamu, párované mezi Launchpady obou Mašin.
 
 Každá sekce je samostatný krok (`mountGitHubStep`, `mountSshAccessStep`)
 s vlastním malým API modulem pod namespace `setup`; Nastavení je jen jejich
