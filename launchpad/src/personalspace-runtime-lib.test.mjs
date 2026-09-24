@@ -42,6 +42,41 @@ test("personalspace runtime uses the explicit mutable Launchpad state root", () 
   expect(typeof received.discover).toBe("function");
 });
 
+test("hosted personal scope lists the space but never exposes its personal Apps", async () => {
+  const { root } = await createFixture({ withApp: true });
+  const launchpadRoot = join(root, "launchpad");
+  const managerFor = (options) => createPersonalspaceRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot,
+    stateRoot: join(root, "state"),
+    ...options,
+  });
+
+  // Localhost default: the App is listed with its loopback URL and resolvable.
+  const localManager = managerFor({});
+  const local = await buildPersonalspaceResponse({ companiesRoot: root, launchpadRoot, runtimeManager: localManager });
+  expect(local.summary.app_count).toBe(1);
+  const appId = local.spaces[0].apps?.[0]?.id ?? local.apps?.[0]?.id;
+  expect(typeof appId).toBe("string");
+  expect(JSON.stringify(local)).toContain("127.0.0.1:41100");
+
+  // Hosted personal: no local override, the exact folder names the owner.
+  await rm(join(root, "launchpad.gen3.local.json"));
+  const hostedManager = managerFor({ primarySpaceDir: "exampleuser_GEN3", listApps: false });
+  const hosted = await buildPersonalspaceResponse({
+    companiesRoot: root,
+    launchpadRoot,
+    primarySpaceDir: "exampleuser_GEN3",
+    listApps: false,
+    runtimeManager: hostedManager,
+  });
+  expect(hosted.summary.space_count).toBe(1);
+  expect(hosted.summary.app_count).toBe(0);
+  expect(hosted.summary.invalid_app_count).toBe(0);
+  expect(JSON.stringify(hosted)).not.toContain("41100");
+  await expect(hostedManager.health(appId)).rejects.toMatchObject({ code: "app_not_found" });
+});
+
 test("personalspace runtime discovery reads tracked config from the selected Root source", async () => {
   const { root, dir } = await createFixture({ withGbrain: false });
   const selectedRoot = await mkdtemp(join(tmpdir(), "ps-selected-root-"));
@@ -170,7 +205,7 @@ function personalConfig(username) {
   };
 }
 
-async function createFixture({ withGbrain = true, sharedSpace = false } = {}) {
+async function createFixture({ withGbrain = true, sharedSpace = false, withApp = false } = {}) {
   const root = await mkdtemp(join(tmpdir(), "ps-runtime-"));
   tempRoots.push(root);
   await mkdir(join(root, "launchpad", "schemas"), { recursive: true });
@@ -190,6 +225,31 @@ async function createFixture({ withGbrain = true, sharedSpace = false } = {}) {
   await mkdir(join(dir, "workspace"), { recursive: true });
   await writeJson(join(dir, "personal.gen3.json"), personalConfig("exampleuser"));
   await writeJson(join(dir, "modules.manifest.json"), { personal_generation: "gen3", owner: "exampleuser", module_slots: [] });
+  if (withApp) {
+    const appDir = join(dir, "workspace", "notes", "app", "v1");
+    await mkdir(appDir, { recursive: true });
+    await writeJson(join(appDir, "package.json"), {
+      name: "exampleuser-notes-v1",
+      version: "1.0.0",
+      packageManager: "bun@1.0.0",
+      scripts: { dev: "bun run server.mjs" },
+      companyascode: {
+        app: {
+          schema_version: "companyascode.launchpad_app.v1",
+          id: "notes-v1",
+          title: "Osobní poznámky",
+          company: "exampleuser",
+          module: "notes",
+          surface: "internal",
+          port: 41_100,
+          host: "127.0.0.1",
+          health_path: "/health",
+          dev_script: "dev",
+          tags: ["personal"],
+        },
+      },
+    });
+  }
   if (withGbrain) {
     await mkdir(join(dir, "gbrain"), { recursive: true });
     await writeFile(join(dir, "gbrain", "index.md"), "# soukromá poznámka jen pro mě", "utf8");
@@ -233,6 +293,30 @@ test("buildPersonalspaceResponse vrací prostory + summary, metadata-only", asyn
   });
   // Odpověď NIKDY nenese obsah gbrain zápisů.
   expect(JSON.stringify(response)).not.toContain("soukromá poznámka");
+});
+
+test("hosted personal Machine: the exact Personalspace folder names the owner without a local override", async () => {
+  const { root } = await createFixture({ withGbrain: true });
+  await rm(join(root, "launchpad.gen3.local.json"));
+  const withoutFolder = await buildPersonalspaceResponse({ companiesRoot: root, launchpadRoot: join(root, "launchpad") });
+  expect(withoutFolder.summary.space_count).toBe(0);
+  expect(withoutFolder.warnings.join("\n")).toContain("personalspace_owner");
+
+  const response = await buildPersonalspaceResponse({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    primarySpaceDir: "exampleuser_GEN3",
+  });
+  expect(response.primary_owner).toBe("exampleuser");
+  expect(response.summary.space_count).toBe(1);
+  expect(response.spaces[0].is_owner_primary).toBe(true);
+  expect(response.warnings.join("\n")).not.toContain("personalspace_owner");
+  const vault = await resolveSpaceGbrainVault({
+    companiesRoot: root,
+    primarySpaceDir: "exampleuser_GEN3",
+    spaceDirName: "exampleuser_GEN3",
+  });
+  expect(vault.vaultRoot).toBe(join(root, "personalspace", "exampleuser_GEN3", "gbrain"));
 });
 
 test("personalspaceDoctorCheck je metadata-only a nikdy neobsahuje obsah zápisů", async () => {
@@ -568,4 +652,14 @@ test("resolveSpaceGbrainVault cizí Personalspace vůbec nenajde (decision 0091)
   // Vlastní primární prostor zůstává přístupný.
   const vault = await resolveSpaceGbrainVault({ companiesRoot: root, spaceDirName: "exampleuser_GEN3" });
   expect(vault.vaultRoot).toBe(join(root, "personalspace", "exampleuser_GEN3", "gbrain"));
+});
+
+test("the Launchpad server binds every Personalspace lane to the hosted folder", async () => {
+  const server = await Bun.file(join(import.meta.dirname, "server.mjs")).text();
+  expect(server).toContain("const hostedPersonalspaceDir = personalHostedScope ? hostedWorkspace.personalspace : undefined;");
+  // Personal Apps runtime, /api/personalspace and gbrain.
+  expect(server.match(/primarySpaceDir: hostedPersonalspaceDir,/g)?.length).toBe(3);
+  // Personal Apps stay out of both App paths until a hosted lane routes them.
+  expect(server).toContain("const personalspaceListsApps = !personalHostedScope;");
+  expect(server.match(/listApps: personalspaceListsApps,/g)?.length).toBe(2);
 });
