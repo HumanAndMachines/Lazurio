@@ -42,31 +42,39 @@ test("personalspace runtime uses the explicit mutable Launchpad state root", () 
   expect(typeof received.discover).toBe("function");
 });
 
-test("hosted personal runtime lane discovers no personal Apps", async () => {
-  const { root } = await createFixture();
-  let received = null;
-  createPersonalspaceRuntimeManager({
+test("hosted personal scope lists the space but never exposes its personal Apps", async () => {
+  const { root } = await createFixture({ withApp: true });
+  const launchpadRoot = join(root, "launchpad");
+  const managerFor = (options) => createPersonalspaceRuntimeManager({
     companiesRoot: root,
+    launchpadRoot,
+    stateRoot: join(root, "state"),
+    ...options,
+  });
+
+  // Localhost default: the App is listed with its loopback URL and resolvable.
+  const localManager = managerFor({});
+  const local = await buildPersonalspaceResponse({ companiesRoot: root, launchpadRoot, runtimeManager: localManager });
+  expect(local.summary.app_count).toBe(1);
+  const appId = local.spaces[0].apps?.[0]?.id ?? local.apps?.[0]?.id;
+  expect(typeof appId).toBe("string");
+  expect(JSON.stringify(local)).toContain("127.0.0.1:41100");
+
+  // Hosted personal: no local override, the exact folder names the owner.
+  await rm(join(root, "launchpad.gen3.local.json"));
+  const hostedManager = managerFor({ primarySpaceDir: "exampleuser_GEN3", listApps: false });
+  const hosted = await buildPersonalspaceResponse({
+    companiesRoot: root,
+    launchpadRoot,
     primarySpaceDir: "exampleuser_GEN3",
     listApps: false,
-    launchpadRoot: join(root, "launchpad"),
-    createRuntimeManagerFn: (options) => {
-      received = options;
-      return {};
-    },
+    runtimeManager: hostedManager,
   });
-  expect(await received.discover()).toEqual({ apps: [], invalid_apps: [], failures: [], warnings: [] });
-  let listed = null;
-  const response = await buildPersonalspaceResponse({
-    companiesRoot: root,
-    primarySpaceDir: "exampleuser_GEN3",
-    listApps: false,
-    launchpadRoot: join(root, "launchpad"),
-    runtimeManager: { appsWithRuntime: async (apps) => { listed = apps; return apps; } },
-  });
-  expect(listed).toEqual([]);
-  expect(response.summary.space_count).toBe(1);
-  expect(response.summary.app_count).toBe(0);
+  expect(hosted.summary.space_count).toBe(1);
+  expect(hosted.summary.app_count).toBe(0);
+  expect(hosted.summary.invalid_app_count).toBe(0);
+  expect(JSON.stringify(hosted)).not.toContain("41100");
+  await expect(hostedManager.health(appId)).rejects.toMatchObject({ code: "app_not_found" });
 });
 
 test("personalspace runtime discovery reads tracked config from the selected Root source", async () => {
@@ -197,7 +205,7 @@ function personalConfig(username) {
   };
 }
 
-async function createFixture({ withGbrain = true, sharedSpace = false } = {}) {
+async function createFixture({ withGbrain = true, sharedSpace = false, withApp = false } = {}) {
   const root = await mkdtemp(join(tmpdir(), "ps-runtime-"));
   tempRoots.push(root);
   await mkdir(join(root, "launchpad", "schemas"), { recursive: true });
@@ -217,6 +225,31 @@ async function createFixture({ withGbrain = true, sharedSpace = false } = {}) {
   await mkdir(join(dir, "workspace"), { recursive: true });
   await writeJson(join(dir, "personal.gen3.json"), personalConfig("exampleuser"));
   await writeJson(join(dir, "modules.manifest.json"), { personal_generation: "gen3", owner: "exampleuser", module_slots: [] });
+  if (withApp) {
+    const appDir = join(dir, "workspace", "notes", "app", "v1");
+    await mkdir(appDir, { recursive: true });
+    await writeJson(join(appDir, "package.json"), {
+      name: "exampleuser-notes-v1",
+      version: "1.0.0",
+      packageManager: "bun@1.0.0",
+      scripts: { dev: "bun run server.mjs" },
+      companyascode: {
+        app: {
+          schema_version: "companyascode.launchpad_app.v1",
+          id: "notes-v1",
+          title: "Osobní poznámky",
+          company: "exampleuser",
+          module: "notes",
+          surface: "internal",
+          port: 41_100,
+          host: "127.0.0.1",
+          health_path: "/health",
+          dev_script: "dev",
+          tags: ["personal"],
+        },
+      },
+    });
+  }
   if (withGbrain) {
     await mkdir(join(dir, "gbrain"), { recursive: true });
     await writeFile(join(dir, "gbrain", "index.md"), "# soukromá poznámka jen pro mě", "utf8");
