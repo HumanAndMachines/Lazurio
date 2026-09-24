@@ -197,15 +197,17 @@ Launchpadu a worktrees.
 
 Ozubené kolo v hlavičce (a položka **Nastavení** v profilovém menu) otevře
 `settings.html`: nastavení tohoto Prostředí, tedy Mašiny, ze které Launchpad
-běží. Platí pro celou Mašinu, ne jen pro přihlášeného člověka. Stránka má
-jedno rozložení podle T3 Code — vlevo seznam sekcí, vpravo právě jedna sekce
+běží. Údaje o Prostředí a kroky GitHub/SSH jsou za celou Mašinu; jazyk je
+volba prohlížeče (`launchpad.locale` v localStorage, viz „Jazyk UI“). Stránka
+má jedno rozložení podle T3 Code — vlevo seznam sekcí, vpravo právě jedna sekce
 adresovaná hashem (`#general`, `#github`, `#ssh`):
 
 - **Obecné** — typ Prostředí (`Tento počítač`, `VM Prostředí Organizace`,
   `Osobní VM Prostředí`), label Mašiny, Organizace, Team a doména z
   `GET /api/setup/environment` (jen metadata z definice Mašiny, žádné
   tajemství ani grant; localhost vrací `profile: "local"` a případný
-  `--organization` scope) a jazyk Launchpadu (dřív v profilovém menu).
+  `--organization` scope) a jazyk Launchpadu v tomto prohlížeči (dřív
+  v profilovém menu).
 - **Zdrojové kódy (GitHub)** — GitHub účet Mašiny, viz níže.
 - **SSH přístup** — jen v hosted profilu; na localhostu sekce v seznamu není
   (`GET /api/setup/ssh` odpoví `available: false`), viz „Hosted machine path“.

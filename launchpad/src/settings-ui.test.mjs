@@ -38,7 +38,10 @@ test("Settings is one page with a section list; GitHub and SSH mount as steps", 
   expect(script).toContain('window.addEventListener("hashchange", activate)');
   expect(script).toContain('if (active === "github") mountGitHubStep();');
   expect(script).toContain("if (!state?.available) return;");
+  // Language is a browser choice (localStorage via setLocale), not a Machine
+  // setting: the page must say so and never send it to the server.
   expect(script).toContain("setLocale(select.value)");
+  expect(script).not.toMatch(/launchpadFetch\([^)]*locale/i);
   for (const kind of ["local", "organization", "personal"]) {
     expect(script.includes(`settings.environment.kind.${kind}`) || script.includes("settings.environment.kind.${kind}")).toBe(true);
   }
@@ -78,6 +81,7 @@ test("both locales carry the Settings copy and dropped the old topbar entries", 
     ]) {
       expect(locale).toContain(`"${key}":`);
     }
+    expect(locale).toMatch(/"settings\.language\.help": ".*(prohlížeč|browser)/);
     for (const key of ["topbar.ssh", "topbar.setupGitHub", "setup.github.back", "setup.github.title"]) {
       expect(locale).not.toContain(`"${key}":`);
     }
