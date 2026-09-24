@@ -25,10 +25,17 @@ test("Settings is one page with a section list; GitHub and SSH mount as steps", 
   // Sections are paths under /settings/, so the page loads everything from `../`.
   expect(html).toContain('href="../styles.css"');
   expect(html).toContain('src="../settings.js"');
-  for (const section of ["general", "github", "ssh"]) {
+  for (const section of ["general", "github", "network", "connections", "ssh"]) {
     expect(html).toContain(`href="${section}" data-section="${section}"`);
     expect(html).toContain(`class="settings-section" data-section="${section}"`);
   }
+  // The laptop side (Network, Connections) appears only when a local server answers available: true.
+  for (const section of ["network", "connections"]) {
+    expect(html).toMatch(new RegExp(`href="${section}" data-section="${section}" hidden`));
+  }
+  expect(script).toContain('import { mountNetworkStep, readNetwork } from "./network.js";');
+  expect(script).toContain('import { mountConnectionsStep } from "./connections.js";');
+  expect(script).toContain("async function revealLaptopSections()");
   // SSH stays out of the list until a hosted server answers available: true.
   expect(html).toMatch(/href="ssh" data-section="ssh" hidden/);
   expect(html).toContain('id="setupGitHubStart"');
@@ -55,6 +62,28 @@ test("Settings is one page with a section list; GitHub and SSH mount as steps", 
   expect(css).toContain("grid-template-columns: 240px minmax(0, 1fr)");
   expect(css).toContain('.settings-nav-item[aria-current="page"]');
   expect(css).toContain("@media (max-width: 760px)");
+});
+
+test("the laptop side asks to join a network and activates SSH without a terminal", async () => {
+  const [network, connections, ssh] = await Promise.all([read("network.js"), read("connections.js"), read("ssh-access.js")]);
+  expect(network).toContain('requestJson("/api/setup/network/join"');
+  expect(network).toContain("https://tailscale.com/download");
+  expect(network).toContain('case "github_cli_unavailable"');
+  expect(network).toContain("error.details?.registration");
+  // The hand-over fragment is validated: https return URL on lazurio.io only.
+  expect(connections).toContain("export function parseHandover(hash)");
+  expect(connections).toContain('returnUrl.protocol !== "https:"');
+  expect(connections).toContain('returnUrl.hostname.endsWith(".lazurio.io")');
+  expect(connections).toContain('requestJson("/api/setup/connections/connect"');
+  expect(connections).toContain("#add_key=${encodeURIComponent(outcome.public_key)}");
+  expect(connections).toContain('case "tailnet_mismatch"');
+  // The Machine's page hands over to the laptop Launchpad and keeps the paste command as a hidden fallback.
+  expect(ssh).toContain('const LAPTOP_LAUNCHPAD = "http://localhost:4174/settings/connections";');
+  expect(ssh).toContain("function laptopHandoverUrl()");
+  expect(ssh).toContain('document.createElement("details")');
+  expect(ssh).toContain("/^#add_key=(.+)$/");
+  expect(ssh).toContain("if (pendingKey) keyField.value = pendingKey;");
+  expect(ssh).not.toContain("navigator.clipboard.writeText(state.host_key");
 });
 
 test("the GitHub and SSH steps are mountable and carry no page of their own", async () => {
@@ -84,6 +113,8 @@ test("both locales carry the Settings copy and dropped the old topbar entries", 
       "topbar.settings", "settings.title", "settings.back", "settings.nav.general", "settings.nav.github",
       "settings.nav.ssh", "settings.environment.kind.local", "settings.environment.kind.organization",
       "settings.environment.kind.personal", "settings.language.help", "settings.github.title", "settings.ssh.direction",
+      "settings.nav.network", "settings.nav.connections", "network.requestJoin", "network.blocked", "connections.handover.activate",
+      "ssh.launchpad.connect", "ssh.fallback.summary",
     ]) {
       expect(locale).toContain(`"${key}":`);
     }

@@ -222,6 +222,9 @@ export async function buildLaunchpadAppsResponse({
       // reports it and points to the explicit migrator; read-only otherwise.
       manifest_state: organization.manifest_state ?? null,
       declaration_source: organization.declaration_source ?? null,
+      // Public network facts of the Organization's Conglomerate Host (the
+      // Headscale login server a laptop asks to join); no secret, no grant.
+      conglomerate_host: organization.conglomerate_host ?? null,
       // GEN3 organization model: Organization-root modules, flat Workspace
       // modules grouped N:M by Team, and a read-only Productionspace boundary.
       ...publicSpaces,

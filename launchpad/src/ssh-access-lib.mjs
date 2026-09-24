@@ -300,7 +300,7 @@ export function createSshAccessService({
       label,
       tailnet_ipv4: ipv4,
       tailnet,
-      host_key: hostKey ? { type: hostKey.type, fingerprint: hostKey.fingerprint } : null,
+      host_key: hostKey ? { type: hostKey.type, key: hostKey.key, fingerprint: hostKey.fingerprint } : null,
       keys,
       commands: buildSetupCommands({ label, ipv4, user: validUser, tailnet, hostKey }),
       issues,

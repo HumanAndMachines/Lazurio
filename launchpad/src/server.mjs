@@ -53,6 +53,7 @@ import { LAZURIO_LAUNCHPAD_NAME } from "../../lazurio/runtime/launchpad-identity
 import { readOrganizationLaunchpadTheme } from "./organization-theme-lib.mjs";
 import { T3ChatError, issueT3ChatUrl, t3ChatConfigurationFromEnvironment } from "./t3-chat-lib.mjs";
 import { SshAccessError, createSshAccessService } from "./ssh-access-lib.mjs";
+import { LaptopNetworkError, createLaptopNetworkService } from "./laptop-network-lib.mjs";
 import { GitHubLoginError, createGitHubLoginController } from "./setup-github-lib.mjs";
 import { ModuleFolderActionError, createModuleFolderOpener } from "./module-folder-lib.mjs";
 import {
@@ -230,6 +231,16 @@ const sshAccess = requestTrust.profile === "hosted"
     user: userInfo().username,
     hostName: hostname(),
     stateRoot: launchpadStateRoot,
+  })
+  : null;
+// The laptop side of Machine connections exists only on a local Launchpad: it
+// writes the person's own ~/.ssh and asks Organizations to accept the laptop.
+const laptopNetwork = requestTrust.profile === "local"
+  ? createLaptopNetworkService({
+    home: homedir(),
+    stateRoot: launchpadStateRoot,
+    hostName: hostname(),
+    organizations: async () => (await buildAppsResponse()).organizations ?? [],
   })
   : null;
 const moduleFolderOpener = createModuleFolderOpener({ companiesRoot, getAppsResponse: buildAppsResponse });
@@ -740,6 +751,7 @@ async function worktreeMutationTouchesCanonicalMount(url) {
   if (url.pathname === "/api/lazurio/agent-entry-refresh") return false;
   if (url.pathname === "/api/chat/pair") return false;
   if (url.pathname.startsWith("/api/setup/ssh/")) return false;
+  if (url.pathname.startsWith("/api/setup/network/") || url.pathname.startsWith("/api/setup/connections/")) return false;
   // Machine-level GitHub login state, not the canonical mount. Organization
   // install does write the mount and stays refused in a worktree context.
   if (setupReadOnlyMountRoutes.has(url.pathname)) return false;
@@ -1387,6 +1399,28 @@ async function handleGitApiRoute(request, url, route) {
   }
 }
 
+async function handleLaptopNetworkRoute(request, url) {
+  if (!laptopNetwork) return notFound();
+  if (request.method !== "POST") return jsonResponse({ error: "method_not_allowed" }, 405);
+  const payload = await request.json().catch(() => ({}));
+  const input = payload && typeof payload === "object" ? payload : {};
+  try {
+    switch (url.pathname) {
+      case "/api/setup/network/join":
+        return jsonResponse(await laptopNetwork.requestJoin({ organization: input.organization }));
+      case "/api/setup/connections/connect":
+        return jsonResponse(await laptopNetwork.connect(input));
+      case "/api/setup/connections/remove":
+        return jsonResponse(await laptopNetwork.removeConnection({ label: input.label }));
+      default:
+        return notFound();
+    }
+  } catch (error) {
+    if (error instanceof LaptopNetworkError) return jsonResponse({ error: error.code, details: error.details }, 400);
+    throw error;
+  }
+}
+
 async function handleSshAccessRoute(request, url) {
   const action = { "/api/setup/ssh/keys": "add", "/api/setup/ssh/keys/remove": "remove" }[url.pathname];
   if (!sshAccess || !action) return notFound();
@@ -1816,6 +1850,16 @@ function startServer(startPort) {
         }
         // Both writes already passed the shared mutation trust gate above.
         if (url.pathname.startsWith("/api/setup/ssh/")) return await handleSshAccessRoute(request, url);
+        if (url.pathname === "/api/setup/network" && request.method === "GET") {
+          return jsonResponse(laptopNetwork ? await laptopNetwork.read() : { available: false });
+        }
+        if (url.pathname === "/api/setup/connections" && request.method === "GET") {
+          return jsonResponse(laptopNetwork ? { available: true, connections: await laptopNetwork.readConnections() } : { available: false });
+        }
+        // Writes passed the shared mutation trust gate above (trusted local origin).
+        if (url.pathname.startsWith("/api/setup/network/") || url.pathname.startsWith("/api/setup/connections/")) {
+          return await handleLaptopNetworkRoute(request, url);
+        }
         // Jediná explicitní Sync mutace: tentýž engine jako `lazurio update`,
         // potom čerstvá lokální projekce pro UI. Onboarding nových Organization
         // rootů podle GitHub grantů zůstává samostatná access Sync lane.
@@ -1887,7 +1931,7 @@ function startServer(startPort) {
         if (url.pathname === "/settings") {
           return Response.redirect(new URL(launchpadPath("/settings/", basePath), request.url).toString(), 308);
         }
-        if (/^\/settings\/(?:general|github|ssh)?$/u.test(url.pathname)) return await serveStatic("/settings.html");
+        if (/^\/settings\/(?:general|github|network|connections|ssh)?$/u.test(url.pathname)) return await serveStatic("/settings.html");
         return await serveStatic(url.pathname);
       } catch (error) {
         return jsonResponse({ error: "launchpad_error", message: error.message }, 500);

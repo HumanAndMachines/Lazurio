@@ -8,8 +8,10 @@ import { launchpadFetch } from "./session-aware-fetch.js";
 // self-contained step; Settings is one host for it, a later Machine setup
 // guide can mount the same step next to its siblings.
 
+const LAPTOP_LAUNCHPAD = "http://localhost:4174/settings/connections";
 let content = null;
 let state = null;
+let pendingKey = null;
 let platform = /Windows/i.test(globalThis.navigator?.userAgent ?? "") ? "windows" : "macos";
 
 async function requestJson(path, body) {
@@ -33,9 +35,19 @@ export async function mountSshAccessStep(container) {
   content = container;
   content.classList.add("ssh-access-body");
   content.replaceChildren(paragraph(t("ssh.loading")));
+  // A laptop Launchpad returns here with the public key it created.
+  const received = /^#add_key=(.+)$/.exec(window.location.hash);
+  if (received) {
+    try { pendingKey = decodeURIComponent(received[1]); } catch { pendingKey = null; }
+    window.history.replaceState(null, "", window.location.pathname);
+  }
   try {
     state = await readSshAccess();
     render();
+    if (pendingKey) {
+      content.querySelector(".ssh-access-paste")?.scrollIntoView?.({ block: "nearest" });
+      flash(t("ssh.launchpad.keyReceived"));
+    }
   } catch {
     content.replaceChildren(paragraph(t("ssh.loadFailed"), "ssh-access-error"));
   }
@@ -64,19 +76,36 @@ function render() {
     tab.setAttribute("aria-pressed", String(platform === id));
     tabs.append(tab);
   }
-  nodes.push(step(
+  // Preferred path: the person's own laptop Launchpad creates the key and the
+  // Host block and comes back with the public key. The facts travel in the
+  // URL fragment (nothing secret: label, address, user, host key, this page).
+  const handover = document.createElement("a");
+  handover.className = "btn btn-primary btn-sm";
+  handover.href = laptopHandoverUrl();
+  handover.target = "_blank";
+  handover.rel = "noopener noreferrer";
+  handover.textContent = t("ssh.launchpad.connect");
+  nodes.push(step(t("ssh.launchpad.title"), paragraph(t("ssh.launchpad.hint"), "ssh-access-muted"), handover));
+
+  const fallback = document.createElement("details");
+  fallback.className = "ssh-access-fallback";
+  const summary = document.createElement("summary");
+  summary.textContent = t("ssh.fallback.summary");
+  fallback.append(summary, step(
     t("ssh.step1"),
     tabs,
     paragraph(platform === "windows" ? t("ssh.step1.windows") : t("ssh.step1.macos"), "ssh-access-muted"),
     commandField,
     copyButton(t("ssh.copyCommand"), () => commandField.value),
   ));
+  nodes.push(fallback);
 
   const keyField = document.createElement("textarea");
   keyField.className = "ssh-access-code";
   keyField.rows = 3;
   keyField.spellcheck = false;
   keyField.placeholder = "ssh-ed25519 AAAA… name@laptop";
+  if (pendingKey) keyField.value = pendingKey;
   keyField.setAttribute("aria-label", t("ssh.step2"));
   const status = paragraph("", "ssh-access-muted");
   status.setAttribute("aria-live", "polite");
@@ -93,7 +122,9 @@ function render() {
       add.disabled = false;
     }
   }, "btn btn-primary btn-sm");
-  nodes.push(step(t("ssh.step2"), paragraph(t("ssh.step2.hint"), "ssh-access-muted"), keyField, add, status));
+  const pasteStep = step(t("ssh.step2"), paragraph(t("ssh.step2.hint"), "ssh-access-muted"), keyField, add, status);
+  pasteStep.classList.add("ssh-access-paste");
+  nodes.push(pasteStep);
 
   const connect = codeField(commands.connect, 1);
   const connectStep = step(
@@ -107,6 +138,20 @@ function render() {
   nodes.push(connectStep, keysSection());
   nodes.push(paragraph(t("ssh.details", { user: state.user, ip: state.tailnet_ipv4 }), "ssh-access-muted"));
   content.replaceChildren(...nodes);
+}
+
+function laptopHandoverUrl() {
+  const payload = JSON.stringify({
+    label: state.label,
+    ipv4: state.tailnet_ipv4,
+    user: state.user,
+    tailnet: state.tailnet,
+    host_key: { type: state.host_key.type, key: state.host_key.key },
+    fingerprint: state.host_key.fingerprint,
+    return: window.location.href.split("#")[0],
+  });
+  const encoded = btoa(unescape(encodeURIComponent(payload))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return `${LAPTOP_LAUNCHPAD}#connect=${encoded}`;
 }
 
 function keysSection() {

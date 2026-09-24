@@ -211,6 +211,9 @@ server pro všechny vrací tutéž stránku, holé `/settings` přesměruje na
   `--organization` scope) a jazyk Launchpadu v tomto prohlížeči (dřív
   v profilovém menu).
 - **Zdrojové kódy (GitHub)** — GitHub účet Mašiny, viz níže.
+- **Síť** a **Spojení** — jen na lokálním Launchpadu (laptop), viz
+  „Laptopová strana spojení“ níže; hosted server odpoví `available: false`
+  a sekce v seznamu nejsou.
 - **SSH přístup** — jen v hosted profilu; na localhostu sekce v seznamu není
   (`GET /api/setup/ssh` odpoví `available: false`), viz „Hosted machine path“.
   Je to jeden druh **Spojení** s vyznačeným směrem (příchozí: notebook → tato
@@ -222,6 +225,51 @@ s vlastním malým API modulem pod namespace `setup`; Nastavení je jen jejich
 hostitel. Budoucí kroky průvodce (Codex a Claude login, instalace Organizace
 nebo personalspace podle profilu Mašiny, preset) přibývají jako další sekce
 stejného seznamu.
+
+### Laptopová strana spojení: Síť a Spojení
+
+Cíl: nový člověk si při onboardingu naklikne maximum sám, zásah do Headscale
+zůstává na oprávněné osobě (Admin Conglomerate Hostu) a port 22 mezi nody
+zůstává grant deklarovaný v Deployment Repu Organizace (`workspace_ssh_grants`).
+Model hran, směrů a politiky drží issue HumanAndMachines/Lazurio#416.
+
+**Síť** (`/settings/network`, `GET /api/setup/network`): zjistí Tailscale na
+laptopu (macOS: aplikace i CLI, Windows: `Program Files\Tailscale`), aktivní
+tailnet a pro každou Organizaci na tomto počítači stav vůči její síti:
+`connected` (aktivní tailnet = hostname login serveru a backend `Running`),
+`pending` (žádost odeslaná), `none`, nebo `unconfigured` (manifest Organizace
+nemá `conglomerate_host.headscale_login_server`; pole je veřejné metadata a
+jede v `extensions.legacy` manifestu, discovery ho promítá jako
+`organizations[].conglomerate_host`). Tlačítko **Požádat o přijetí do sítě**
+(`POST /api/setup/network/join`) spustí `tailscale login --login-server <url>`,
+z výstupu nebo z `tailscale status --json` (`AuthURL`) vezme registrační URL
+`https://<server>/register/<klíč>` a žádost založí jako GitHub issue v root repu
+Organizace **účtem žadatele** (`gh issue create`): členové tam smějí psát,
+infra zůstává zavřené a GitHub zůstává jedinou autoritou přístupů. Issue
+obsahuje jméno zařízení, login, registrační klíč a přesné kroky pro Admina
+(`headscale nodes register --user <login> --key <klíč>`, grant portu 22
+v Deployment Repu, zavřít issue); zamítnutí = zavřít bez registrace. Žádost si
+Launchpad pamatuje v `$LAZURIO_LAUNCHPAD_STATE_ROOT/runtime/network/join-requests.json`
+a ukazuje stav issue. Bez Tailscale ukáže „Zablokováno“ s odkazem na instalaci;
+bez přihlášeného `gh` vrátí registrační odkaz pro ruční předání Adminovi.
+
+**Spojení** (`/settings/connections`, `GET /api/setup/connections`): seznam
+Mašin, kam se z laptopu jde připojit (`~/.ssh/lazurio/*.conf`), a předávka
+z Launchpadu hostované Mašiny. Ta v sekci SSH nabízí **Připojit tento
+notebook**: odkaz na `http://localhost:4174/settings/connections#connect=<base64url JSON>`
+s labelem, tailnet adresou, účtem, host klíčem a vlastní URL (nic tajného).
+Laptop údaje znovu validuje (label, adresa 100.64.0.0/10, POSIX účet, tailnet,
+veřejný host klíč, návratová URL jen `https://*.lazurio.io`), ověří, že je na
+stejném tailnetu (`tailnet_mismatch` jinak), a `POST /api/setup/connections/connect`
+vytvoří `~/.ssh/lazurio-<label>` (ed25519, `ssh-keygen`), zapíše
+`~/.ssh/lazurio/<label>.conf` a připnutý `<label>.known_hosts` a jednou vloží
+`Include lazurio/*.conf` na začátek `~/.ssh/config` — stejné rozložení jako
+záložní příkaz. Tlačítko **Přidat klíč na <label>** vrátí člověka na Launchpad
+Mašiny s `#add_key=<veřejný klíč>`; stránka klíč předvyplní a člověk klikne
+Přidat (server zůstává jediný, kdo zapisuje `authorized_keys`). Záložní
+one‑liner pro laptop bez Lazuria zůstává schovaný pod „Bez Launchpadu na
+notebooku“. `POST /api/setup/connections/remove` smaže conf, known_hosts i klíč
+na laptopu; klíč na Mašině zůstává, dokud ho tam člověk neodebere.
 
 ### Zdrojové kódy: GitHub účet Mašiny
 

@@ -2,17 +2,20 @@ import { getLocale, initializeI18n, setLocale, t } from "./i18n.js";
 import { launchpadFetch } from "./session-aware-fetch.js";
 import { mountGitHubStep } from "./setup-github.js";
 import { mountSshAccessStep, readSshAccess } from "./ssh-access.js";
+import { mountNetworkStep, readNetwork } from "./network.js";
+import { mountConnectionsStep } from "./connections.js";
 
 // Settings of this Environment — the Machine serving this Launchpad. One page,
 // a left list of sections and one section at a time, addressed by the path
 // (/settings/general, /settings/github, /settings/ssh; the server serves this
 // page for all of them). Each section is a self-contained step mounted on its
-// first visit; a section the profile does not offer (SSH on localhost) never
-// appears in the list. The Launchpad shell only links here.
+// first visit; a section the profile does not offer never appears in the list:
+// SSH access only on a hosted Machine, Network and Connections (the laptop side
+// of Machine connections) only on a local Launchpad. The shell only links here.
 
 initializeI18n();
 
-const SECTIONS = ["general", "github", "ssh"];
+const SECTIONS = ["general", "github", "network", "connections", "ssh"];
 const navItems = new Map([...document.querySelectorAll(".settings-nav-item")].map((item) => [item.dataset.section, item]));
 const sections = new Map([...document.querySelectorAll(".settings-section")].map((section) => [section.dataset.section, section]));
 const crumb = document.getElementById("settingsCrumb");
@@ -45,6 +48,8 @@ function activate() {
   mounted.add(active);
   if (active === "github") mountGitHubStep();
   if (active === "ssh") void mountSshAccessStep(document.getElementById("settingsSshStep"));
+  if (active === "network") void mountNetworkStep(document.getElementById("settingsNetworkStep"));
+  if (active === "connections") void mountConnectionsStep(document.getElementById("settingsConnectionsStep"));
 }
 
 function mountLanguage() {
@@ -122,6 +127,18 @@ async function revealSshSection() {
   if (pathSection() === "ssh") activate();
 }
 
+// The laptop side exists only on a local Launchpad; a hosted server answers
+// available: false and both sections stay out of the list.
+async function revealLaptopSections() {
+  const state = await readNetwork().catch(() => null);
+  if (!state?.available) return;
+  for (const id of ["network", "connections"]) {
+    available.add(id);
+    navItems.get(id).hidden = false;
+  }
+  if (["network", "connections"].includes(pathSection())) activate();
+}
+
 for (const [id, item] of navItems) {
   item.addEventListener("click", (event) => {
     event.preventDefault();
@@ -132,5 +149,6 @@ for (const [id, item] of navItems) {
 mountLanguage();
 void mountEnvironment();
 void revealSshSection();
+void revealLaptopSections();
 window.addEventListener("popstate", activate);
 activate();
