@@ -282,7 +282,7 @@ notebooku“. `POST /api/setup/connections/remove` smaže jen to, co podle
 ledgeru vlastnictví (`$LAZURIO_LAUNCHPAD_STATE_ROOT/runtime/network/connections.json`)
 Launchpad sám zapsal a co je pořád byte‑for‑byte jeho (ledger nese sha256
 confu i known_hosts a veřejný klíč): conf a připnutý host klíč jen při shodě
-digestu, soukromý klíč jen když ho vygeneroval a `.pub` je stále ten jeho;
+digestu, soukromý klíč jen když ho vygeneroval a obě jeho poloviny jsou stále ty jeho (`.pub` text i sha256 soukromého klíče);
 cokoli člověk od té doby nahradil zůstává (`kept`). Ručně psaný
 `~/.ssh/lazurio/<label>.conf` nebo `<label>.known_hosts` je v seznamu jen ke
 čtení a `connect` ho nikdy nepřepíše (`connection_unmanaged`). Klíč na Mašině

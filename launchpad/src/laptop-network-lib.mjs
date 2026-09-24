@@ -207,7 +207,7 @@ export function createLaptopNetworkService({
   const digest = (text) => createHash("sha256").update(text).digest("hex");
   async function fileDigest(path) {
     try {
-      return digest(await readFile(path, "utf8"));
+      return digest(await readFile(path));
     } catch {
       return null;
     }
@@ -395,8 +395,15 @@ export function createLaptopNetworkService({
     await writeFile(confPath, confText, { mode: 0o600 });
     await writeFile(knownHostsPath, knownHostsText, { mode: 0o600 });
     // The key counts as Launchpad's only when it generated it (now or in an
-    // earlier connect of the same label) and it is still that key.
-    const keyCreated = created || (owned[label]?.key_created === true && owned[label]?.public_key === publicKey);
+    // earlier connect of the same label) and both halves are still that key:
+    // the .pub text and the private key's own digest.
+    const keySha256 = await fileDigest(keyPath);
+    const keyCreated = created || (
+      owned[label]?.key_created === true
+      && owned[label]?.public_key === publicKey
+      && typeof owned[label]?.key_sha256 === "string"
+      && owned[label].key_sha256 === keySha256
+    );
     owned[label] = {
       label,
       conf: confPath,
@@ -405,6 +412,7 @@ export function createLaptopNetworkService({
       known_hosts_sha256: digest(knownHostsText),
       key: keyPath,
       key_created: keyCreated,
+      key_sha256: keyCreated ? keySha256 : null,
       public_key: publicKey,
       created_at: owned[label]?.created_at ?? now().toISOString(),
       updated_at: now().toISOString(),
@@ -427,7 +435,8 @@ export function createLaptopNetworkService({
   // Removes only what the ledger proves this Launchpad wrote and that is
   // still byte-for-byte what it wrote: the .conf and the host-key pin when
   // their digests match, the private key only when Launchpad generated it
-  // and the .pub is still that key. Anything else stays and is reported.
+  // and both its halves are still that key. Anything else stays and is
+  // reported.
   async function removeConnection({ label } = {}) {
     if (!labelPattern.test(label ?? "")) throw new LaptopNetworkError("label_invalid");
     const owned = await readOwned();
@@ -451,11 +460,18 @@ export function createLaptopNetworkService({
     const knownHostsRemoved = await removeIfOurs(knownHostsPath, record.known_hosts_sha256);
     let keyRemoved = false;
     if (record.key_created === true) {
+      // Both halves must still be the generated key: the .pub text and the
+      // private key's digest. A private key the person restored under the
+      // same name, even next to the old .pub, is theirs. Fail closed.
       let currentPublicKey = null;
       try {
         currentPublicKey = (await readFile(`${keyPath}.pub`, "utf8")).trim();
       } catch {}
-      if (currentPublicKey !== null && currentPublicKey === record.public_key) {
+      const currentKeySha256 = await fileDigest(keyPath);
+      if (
+        currentPublicKey !== null && currentPublicKey === record.public_key
+        && typeof record.key_sha256 === "string" && currentKeySha256 === record.key_sha256
+      ) {
         await rm(keyPath, { force: true });
         await rm(`${keyPath}.pub`, { force: true });
         keyRemoved = true;

@@ -375,6 +375,18 @@ test("removal never deletes what Launchpad did not create: hand-authored .conf, 
   expect(partial.kept.sort()).toEqual([join(home, ".ssh", "lazurio-swapped"), join(home, ".ssh", "lazurio", "swapped.known_hosts")].sort());
   expect(await readFile(join(home, ".ssh", "lazurio-swapped"), "utf8")).toBe("their new key");
   expect(await readFile(join(home, ".ssh", "lazurio", "swapped.known_hosts"), "utf8")).toBe("swapped ssh-ed25519 AAAAtheirs\n");
+  // A private key the person restored under the same name, next to the unchanged .pub, is theirs too.
+  const restored = await network.connect({ ...request, label: "restored" });
+  expect(restored.created).toBe(true);
+  await writeFile(join(home, ".ssh", "lazurio-restored"), "their restored private key", { mode: 0o600 });
+  const restoredOutcome = await network.removeConnection({ label: "restored" });
+  expect(restoredOutcome).toMatchObject({ removed: true, conf_removed: true, known_hosts_removed: true, key_removed: false, kept: [join(home, ".ssh", "lazurio-restored")] });
+  expect(await readFile(join(home, ".ssh", "lazurio-restored"), "utf8")).toBe("their restored private key");
+  expect(existsSync(join(home, ".ssh", "lazurio-restored.pub"))).toBe(true);
+  // ...and a later connect() of that label reuses it without claiming it.
+  const reclaimed = await network.connect({ ...request, label: "restored" });
+  expect(reclaimed.created).toBe(false);
+  expect(JSON.parse(await readFile(join(stateRoot, "runtime", "network", "connections.json"), "utf8")).restored.key_created).toBe(false);
   // And connect() refuses to overwrite a once-managed file the person changed.
   await writeFile(join(home, ".ssh", "lazurio", "swapped.conf"), "Host swapped\n  HostName 100.64.0.1\n");
   await network.connect({ ...request, label: "edited" });
