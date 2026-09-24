@@ -305,7 +305,7 @@ test("connect writes the key, Host block, pinned known_hosts and one Include, on
     { label: "iotor-jakub-vm", host: "100.72.0.4", user: "jakub", identity_file: "~/.ssh/lazurio-iotor-jakub-vm", connect: "ssh iotor-jakub-vm", managed: true },
   ]);
 
-  expect(await network.removeConnection({ label: "iotor-jakub-vm" })).toEqual({ removed: true, label: "iotor-jakub-vm", key_removed: true });
+  expect(await network.removeConnection({ label: "iotor-jakub-vm" })).toEqual({ removed: true, label: "iotor-jakub-vm", conf_removed: true, known_hosts_removed: true, key_removed: true, kept: [] });
   expect(await network.readConnections()).toEqual([]);
   expect(existsSync(join(home, ".ssh", "lazurio-iotor-jakub-vm"))).toBe(false);
 });
@@ -351,8 +351,33 @@ test("removal never deletes what Launchpad did not create: hand-authored .conf, 
   const ledger = JSON.parse(await readFile(join(stateRoot, "runtime", "network", "connections.json"), "utf8"));
   expect(ledger["betaco-anna-vm"].key_created).toBe(false);
   expect((await network.readConnections()).find((c) => c.label === "betaco-anna-vm").managed).toBe(true);
-  expect(await network.removeConnection({ label: "betaco-anna-vm" })).toEqual({ removed: true, label: "betaco-anna-vm", key_removed: false });
+  expect(await network.removeConnection({ label: "betaco-anna-vm" })).toEqual({ removed: true, label: "betaco-anna-vm", conf_removed: true, known_hosts_removed: true, key_removed: false, kept: [] });
   expect(await readFile(join(home, ".ssh", "lazurio-betaco-anna-vm"), "utf8")).toBe("pre-existing");
   expect(existsSync(join(home, ".ssh", "lazurio", "betaco-anna-vm.conf"))).toBe(false);
   expect(existsSync(join(home, ".ssh", "lazurio", "betaco-anna-vm.known_hosts"))).toBe(false);
+
+  // A person's own host-key pin without a .conf is never replaced nor deleted.
+  await writeFile(join(home, ".ssh", "lazurio", "pinned.known_hosts"), "pinned ssh-ed25519 AAAAtheirs\n");
+  await expect(network.connect({ ...request, label: "pinned" })).rejects.toMatchObject({ code: "connection_unmanaged", details: { label: "pinned" } });
+  expect(await readFile(join(home, ".ssh", "lazurio", "pinned.known_hosts"), "utf8")).toBe("pinned ssh-ed25519 AAAAtheirs\n");
+  await expect(network.removeConnection({ label: "pinned" })).rejects.toMatchObject({ code: "connection_unmanaged" });
+  expect(existsSync(join(home, ".ssh", "lazurio", "pinned.known_hosts"))).toBe(true);
+
+  // Files replaced by the person after connect are theirs again: removal keeps them,
+  // including a key the person swapped in under a label whose key Launchpad once generated.
+  const own = await network.connect({ ...request, label: "swapped" });
+  expect(own.created).toBe(true);
+  await writeFile(join(home, ".ssh", "lazurio-swapped"), "their new key", { mode: 0o600 });
+  await writeFile(join(home, ".ssh", "lazurio-swapped.pub"), "ssh-ed25519 AAAAtheirs later@laptop\n");
+  await writeFile(join(home, ".ssh", "lazurio", "swapped.known_hosts"), "swapped ssh-ed25519 AAAAtheirs\n");
+  const partial = await network.removeConnection({ label: "swapped" });
+  expect(partial).toMatchObject({ removed: true, conf_removed: true, known_hosts_removed: false, key_removed: false });
+  expect(partial.kept.sort()).toEqual([join(home, ".ssh", "lazurio-swapped"), join(home, ".ssh", "lazurio", "swapped.known_hosts")].sort());
+  expect(await readFile(join(home, ".ssh", "lazurio-swapped"), "utf8")).toBe("their new key");
+  expect(await readFile(join(home, ".ssh", "lazurio", "swapped.known_hosts"), "utf8")).toBe("swapped ssh-ed25519 AAAAtheirs\n");
+  // And connect() refuses to overwrite a once-managed file the person changed.
+  await writeFile(join(home, ".ssh", "lazurio", "swapped.conf"), "Host swapped\n  HostName 100.64.0.1\n");
+  await network.connect({ ...request, label: "edited" });
+  await writeFile(join(home, ".ssh", "lazurio", "edited.conf"), "Host edited\n  HostName 100.64.0.1\n");
+  await expect(network.connect({ ...request, label: "edited" })).rejects.toMatchObject({ code: "connection_unmanaged" });
 });

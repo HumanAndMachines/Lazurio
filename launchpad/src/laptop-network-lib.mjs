@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
 import { parsePublicKeyInput } from "./ssh-access-lib.mjs";
@@ -201,6 +202,17 @@ export function createLaptopNetworkService({
     }
   }
 
+  // Content digests let removal prove a file is still the one Launchpad
+  // wrote: a file the person replaced since is theirs and stays.
+  const digest = (text) => createHash("sha256").update(text).digest("hex");
+  async function fileDigest(path) {
+    try {
+      return digest(await readFile(path, "utf8"));
+    } catch {
+      return null;
+    }
+  }
+
   async function writeOwned(owned) {
     await mkdir(dirname(connectionsPath), { recursive: true });
     await writeFile(connectionsPath, JSON.stringify(owned, null, 2) + "\n", { mode: 0o600 });
@@ -354,9 +366,19 @@ export function createLaptopNetworkService({
 
     const owned = await readOwned();
     const confPath = join(lazurioDirectory, `${label}.conf`);
-    if (!owned[label] && existsSync(confPath)) {
-      // Someone wrote this .conf by hand; it is theirs to change.
+    const knownHostsPath = join(lazurioDirectory, `${label}.known_hosts`);
+    // A .conf or a host-key pin under this label that the ledger does not
+    // own was written by the person; it is theirs to change, never replaced.
+    if (!owned[label] && (existsSync(confPath) || existsSync(knownHostsPath))) {
       throw new LaptopNetworkError("connection_unmanaged", { label });
+    }
+    // Once owned, the files must still be the ones Launchpad wrote; a file
+    // the person replaced since is again theirs.
+    if (owned[label]) {
+      for (const [path, recorded] of [[confPath, owned[label].conf_sha256], [knownHostsPath, owned[label].known_hosts_sha256]]) {
+        const current = await fileDigest(path);
+        if (current !== null && current !== recorded) throw new LaptopNetworkError("connection_unmanaged", { label });
+      }
     }
     await mkdir(sshDirectory, { recursive: true, mode: 0o700 });
     await mkdir(lazurioDirectory, { recursive: true, mode: 0o700 });
@@ -368,16 +390,22 @@ export function createLaptopNetworkService({
       created = true;
     }
     const publicKey = (await readFile(`${keyPath}.pub`, "utf8")).trim();
-    await writeFile(confPath, hostBlock({ label, ipv4, user }), { mode: 0o600 });
-    await writeFile(join(lazurioDirectory, `${label}.known_hosts`), `${label} ${parsedHostKey.type} ${parsedHostKey.body}\n`, { mode: 0o600 });
+    const confText = hostBlock({ label, ipv4, user });
+    const knownHostsText = `${label} ${parsedHostKey.type} ${parsedHostKey.body}\n`;
+    await writeFile(confPath, confText, { mode: 0o600 });
+    await writeFile(knownHostsPath, knownHostsText, { mode: 0o600 });
+    // The key counts as Launchpad's only when it generated it (now or in an
+    // earlier connect of the same label) and it is still that key.
+    const keyCreated = created || (owned[label]?.key_created === true && owned[label]?.public_key === publicKey);
     owned[label] = {
       label,
       conf: confPath,
-      known_hosts: join(lazurioDirectory, `${label}.known_hosts`),
+      conf_sha256: digest(confText),
+      known_hosts: knownHostsPath,
+      known_hosts_sha256: digest(knownHostsText),
       key: keyPath,
-      // True only when this Launchpad generated the key (now or earlier);
-      // a key that already existed stays the person's own on removal.
-      key_created: created || owned[label]?.key_created === true,
+      key_created: keyCreated,
+      public_key: publicKey,
       created_at: owned[label]?.created_at ?? now().toISOString(),
       updated_at: now().toISOString(),
     };
@@ -396,24 +424,48 @@ export function createLaptopNetworkService({
     };
   }
 
-  // Removes only what the ledger proves this Launchpad wrote: its .conf and
-  // known_hosts always, the private key only when it generated it. Anything
-  // else (a hand-authored .conf, a pre-existing key) is refused untouched.
+  // Removes only what the ledger proves this Launchpad wrote and that is
+  // still byte-for-byte what it wrote: the .conf and the host-key pin when
+  // their digests match, the private key only when Launchpad generated it
+  // and the .pub is still that key. Anything else stays and is reported.
   async function removeConnection({ label } = {}) {
     if (!labelPattern.test(label ?? "")) throw new LaptopNetworkError("label_invalid");
     const owned = await readOwned();
     const record = owned[label];
     if (!record) throw new LaptopNetworkError("connection_unmanaged", { label });
-    await rm(join(lazurioDirectory, `${label}.conf`), { force: true });
-    await rm(join(lazurioDirectory, `${label}.known_hosts`), { force: true });
-    const keyRemoved = record.key_created === true;
-    if (keyRemoved) {
-      await rm(join(sshDirectory, `lazurio-${label}`), { force: true });
-      await rm(join(sshDirectory, `lazurio-${label}.pub`), { force: true });
+    const confPath = join(lazurioDirectory, `${label}.conf`);
+    const knownHostsPath = join(lazurioDirectory, `${label}.known_hosts`);
+    const keyPath = join(sshDirectory, `lazurio-${label}`);
+    const kept = [];
+    const removeIfOurs = async (path, recorded) => {
+      const current = await fileDigest(path);
+      if (current === null) return false;
+      if (current !== recorded) {
+        kept.push(path);
+        return false;
+      }
+      await rm(path, { force: true });
+      return true;
+    };
+    const confRemoved = await removeIfOurs(confPath, record.conf_sha256);
+    const knownHostsRemoved = await removeIfOurs(knownHostsPath, record.known_hosts_sha256);
+    let keyRemoved = false;
+    if (record.key_created === true) {
+      let currentPublicKey = null;
+      try {
+        currentPublicKey = (await readFile(`${keyPath}.pub`, "utf8")).trim();
+      } catch {}
+      if (currentPublicKey !== null && currentPublicKey === record.public_key) {
+        await rm(keyPath, { force: true });
+        await rm(`${keyPath}.pub`, { force: true });
+        keyRemoved = true;
+      } else if (existsSync(keyPath)) {
+        kept.push(keyPath);
+      }
     }
     delete owned[label];
     await writeOwned(owned);
-    return { removed: true, label, key_removed: keyRemoved };
+    return { removed: true, label, conf_removed: confRemoved, known_hosts_removed: knownHostsRemoved, key_removed: keyRemoved, kept };
   }
 
   return { read, requestJoin, readConnections, connect, removeConnection };
