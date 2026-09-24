@@ -525,6 +525,7 @@ export const en = Object.freeze({
   "connections.intro": "Connections from this laptop to Machines (SSH). A new connection starts in the Machine's Launchpad with “Connect this laptop”.",
   "connections.listTitle": "Machines you reach from here",
   "connections.empty": "No connections yet.",
+  "connections.unmanaged": "Set up outside Launchpad (in ~/.ssh/config); Launchpad leaves it alone.",
   "connections.remove": "Remove",
   "connections.removeConfirm": "Remove the connection {label}? The key and the settings on this laptop are deleted; the Machine keeps the key until you remove it there.",
   "connections.handover.title": "Connect this laptop to Machine {label}",

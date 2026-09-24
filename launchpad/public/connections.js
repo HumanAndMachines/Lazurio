@@ -97,6 +97,11 @@ function listNodes(state) {
     const detail = document.createElement("code");
     detail.textContent = `${connection.user ?? "?"}@${connection.host ?? "?"} · ${connection.connect}`;
     text.append(name, detail);
+    if (connection.managed === false) {
+      row.append(text, paragraph(t("connections.unmanaged"), "ssh-access-muted"));
+      nodes.push(row);
+      continue;
+    }
     const remove = button(t("connections.remove"), async () => {
       if (!globalThis.confirm(t("connections.removeConfirm", { label: connection.label }))) return;
       remove.disabled = true;

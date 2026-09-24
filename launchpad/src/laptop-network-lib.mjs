@@ -81,6 +81,38 @@ export function parseHostBlock(label, text) {
   return { label, host: value("HostName"), user: value("User"), identity_file: value("IdentityFile"), connect: `ssh ${label}` };
 }
 
+// Host blocks of an OpenSSH config: label, HostName, User, IdentityFile.
+// Patterns (`*`, `?`, negations, multi-name) are skipped: they name no Machine.
+export function parseSshConfigHosts(text) {
+  const blocks = [];
+  let current = null;
+  for (const rawLine of String(text ?? "").split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const match = /^(\S+)\s+(.+)$/.exec(line);
+    if (!match) continue;
+    const [, keyword, value] = match;
+    if (keyword.toLowerCase() === "host") {
+      const names = value.trim().split(/\s+/);
+      current = names.length === 1 && /^[A-Za-z0-9._-]+$/.test(names[0]) ? { label: names[0], host: null, user: null, identity_file: null, connect: `ssh ${names[0]}` } : null;
+      if (current) blocks.push(current);
+      continue;
+    }
+    if (keyword.toLowerCase() === "match") { current = null; continue; }
+    if (!current) continue;
+    const lower = keyword.toLowerCase();
+    if (lower === "hostname" && current.host === null) current.host = value.trim();
+    else if (lower === "user" && current.user === null) current.user = value.trim();
+    else if (lower === "identityfile" && current.identity_file === null) current.identity_file = value.trim();
+  }
+  return blocks;
+}
+
+export function isLazurioMachineHost(host) {
+  const value = String(host ?? "").toLowerCase();
+  return ipv4Pattern.test(value) || value.endsWith(".lazurio.io");
+}
+
 function tailscaleCandidates(platform, env) {
   if (platform === "win32") {
     return [join(env.ProgramFiles ?? "C:\\Program Files", "Tailscale", "tailscale.exe"), "tailscale.exe"];
@@ -272,18 +304,33 @@ export function createLaptopNetworkService({
     return { state: "pending", ...record };
   }
 
+  // Managed connections live in ~/.ssh/lazurio/<label>.conf. Hosts a person
+  // (or an earlier runbook) wrote straight into ~/.ssh/config are listed too
+  // when they point at a Lazurio Machine — a tailnet address or a lazurio.io
+  // name — as read-only: Launchpad never rewrites what it did not create.
   async function readConnections() {
+    const connections = [];
     let entries = [];
     try {
       entries = (await readdir(lazurioDirectory)).filter((name) => name.endsWith(".conf")).sort();
     } catch {
-      return [];
+      entries = [];
     }
-    const connections = [];
     for (const name of entries) {
       const label = name.slice(0, -".conf".length);
       if (!labelPattern.test(label)) continue;
-      connections.push(parseHostBlock(label, await readFile(join(lazurioDirectory, name), "utf8")));
+      connections.push({ ...parseHostBlock(label, await readFile(join(lazurioDirectory, name), "utf8")), managed: true });
+    }
+    const managedLabels = new Set(connections.map((connection) => connection.label));
+    let config = "";
+    try {
+      config = await readFile(join(sshDirectory, "config"), "utf8");
+    } catch {
+      return connections;
+    }
+    for (const block of parseSshConfigHosts(config)) {
+      if (managedLabels.has(block.label) || !isLazurioMachineHost(block.host)) continue;
+      connections.push({ ...block, managed: false });
     }
     return connections;
   }

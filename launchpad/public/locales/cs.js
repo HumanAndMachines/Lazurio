@@ -530,6 +530,7 @@ export const cs = Object.freeze({
   "connections.intro": "Spojení z tohoto notebooku na Mašiny (SSH). Nové spojení začíná v Launchpadu dané Mašiny tlačítkem „Připojit tento notebook“.",
   "connections.listTitle": "Mašiny, kam se odsud připojíš",
   "connections.empty": "Zatím žádné spojení.",
+  "connections.unmanaged": "Nastaveno mimo Launchpad (v ~/.ssh/config); Launchpad ho nemění.",
   "connections.remove": "Odebrat",
   "connections.removeConfirm": "Odebrat spojení {label}? Smaže se klíč i nastavení na tomto notebooku; na Mašině zůstane klíč, dokud ho tam neodebereš.",
   "connections.handover.title": "Připojit notebook k Mašině {label}",

@@ -7,7 +7,9 @@ import {
   createLaptopNetworkService,
   extractRegistration,
   hostBlock,
+  isLazurioMachineHost,
   parseHostBlock,
+  parseSshConfigHosts,
   validLoginServer,
 } from "./laptop-network-lib.mjs";
 
@@ -53,6 +55,16 @@ test("login server and registration URL are validated strictly", () => {
   expect(extractRegistration("To authenticate, visit:\n\n\thttps://headscale.betaco.lazurio.io/register/hskey-authreq-abcdefghijklmnop\n"))
     .toEqual({ url: "https://headscale.betaco.lazurio.io/register/hskey-authreq-abcdefghijklmnop", key: "hskey-authreq-abcdefghijklmnop" });
   expect(extractRegistration("nothing here")).toBeNull();
+});
+
+test("ssh config hosts are parsed and only Lazurio Machines count", () => {
+  expect(isLazurioMachineHost("100.64.0.3")).toBe(true);
+  expect(isLazurioMachineHost("spectoda-matej-vm.tailnet.humanandmachine-ai.lazurio.io")).toBe(true);
+  expect(isLazurioMachineHost("vydrinko.console.host.spectoda.com")).toBe(false);
+  expect(isLazurioMachineHost("10.0.0.144")).toBe(false);
+  expect(parseSshConfigHosts("# c\nInclude ~/.orbstack/ssh/config\nHost a b\n  HostName x\nHost one\n  HostName 100.64.0.3\n  User u\n  IdentityFile ~/.ssh/k\nMatch host x\n  User z\n")).toEqual([
+    { label: "one", host: "100.64.0.3", user: "u", identity_file: "~/.ssh/k", connect: "ssh one" },
+  ]);
 });
 
 test("host block round-trips and keeps the paste command's layout", () => {
@@ -163,6 +175,14 @@ test("connect writes the key, Host block, pinned known_hosts and one Include, on
   });
   await mkdir(join(home, ".ssh"), { recursive: true });
   await writeFile(join(home, ".ssh", "config"), "Host old\n  HostName 10.0.0.1\n");
+  // Hosts a person wrote by hand that point at Lazurio Machines are listed read-only.
+  expect(await network.readConnections()).toEqual([]);
+  await writeFile(join(home, ".ssh", "config"), "Host old\n  HostName 10.0.0.1\nHost macano-matous-workspace\n  HostName 100.64.0.3\n  User matous\n  HostKeyAlias macano-matous-workspace\nHost spectoda-matej-workspace\n  HostName spectoda-matej-vm.tailnet.humanandmachine-ai.lazurio.io\nHost *.example.com\n  HostName x\n");
+  expect(await network.readConnections()).toEqual([
+    { label: "macano-matous-workspace", host: "100.64.0.3", user: "matous", identity_file: null, connect: "ssh macano-matous-workspace", managed: false },
+    { label: "spectoda-matej-workspace", host: "spectoda-matej-vm.tailnet.humanandmachine-ai.lazurio.io", user: null, identity_file: null, connect: "ssh spectoda-matej-workspace", managed: false },
+  ]);
+  await writeFile(join(home, ".ssh", "config"), "Host old\n  HostName 10.0.0.1\n");
   const request = { label: "iotor-jakub-vm", ipv4: "100.72.0.3", user: "jakub", tailnet: "headscale.betaco.lazurio.io", host_key: hostKey };
 
   await expect(network.connect({ ...request, tailnet: "headscale.other.lazurio.io" })).rejects.toMatchObject({
@@ -187,7 +207,7 @@ test("connect writes the key, Host block, pinned known_hosts and one Include, on
   expect(calls.filter((call) => call[0] === "ssh-keygen")).toHaveLength(1);
   expect(await readFile(join(home, ".ssh", "config"), "utf8").then((text) => text.split("Include lazurio/*.conf").length - 1)).toBe(1);
   expect(await network.readConnections()).toEqual([
-    { label: "iotor-jakub-vm", host: "100.72.0.4", user: "jakub", identity_file: "~/.ssh/lazurio-iotor-jakub-vm", connect: "ssh iotor-jakub-vm" },
+    { label: "iotor-jakub-vm", host: "100.72.0.4", user: "jakub", identity_file: "~/.ssh/lazurio-iotor-jakub-vm", connect: "ssh iotor-jakub-vm", managed: true },
   ]);
 
   expect(await network.removeConnection({ label: "iotor-jakub-vm" })).toEqual({ removed: true, label: "iotor-jakub-vm" });
