@@ -35,6 +35,24 @@ function materializationGitArgs(args, platform = process.platform) {
   ];
 }
 
+// Git for Windows stops at MAX_PATH (260) unless core.longpaths is set, and
+// the sterile Git lane ignores the user's global and system config. The clone
+// therefore records it in the new repository's own config, which every later
+// Git call in that checkout reads, Lazurio's or the user's.
+export function materializationCloneArgs({ remote, branch, platform = process.platform }) {
+  return materializationGitArgs([
+    "clone",
+    ...(platform === "win32" ? ["--config", "core.longpaths=true"] : []),
+    "--branch",
+    branch,
+    "--single-branch",
+    "--origin",
+    "origin",
+    "--",
+    remote,
+  ], platform);
+}
+
 // One checkout publication primitive is shared by Organization install and
 // Launchpad Sync. Callers own policy (manifest/root identity); Core owns the
 // exact clone, verification, path boundary and atomic publication mechanism.
@@ -142,16 +160,7 @@ export async function materializeGitCheckout({
     // write outside the validated physical owner boundary.
     await beforeStage();
     const clone = await runPinnedChild(
-      materializationGitArgs([
-        "clone",
-        "--branch",
-        branch,
-        "--single-branch",
-        "--origin",
-        "origin",
-        "--",
-        remote,
-      ]),
+      materializationCloneArgs({ remote, branch }),
       {
         cwd: targetParent,
         expectedCwdRealPath: expectedParentRealPath,
