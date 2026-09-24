@@ -211,6 +211,9 @@ server pro všechny vrací tutéž stránku, holé `/settings` přesměruje na
   `--organization` scope) a jazyk Launchpadu v tomto prohlížeči (dřív
   v profilovém menu).
 - **Zdrojové kódy (GitHub)** — GitHub účet Mašiny, viz níže.
+- **Síť** a **Spojení** — jen na lokálním Launchpadu (laptop), viz
+  „Laptopová strana spojení“ níže; hosted server odpoví `available: false`
+  a sekce v seznamu nejsou.
 - **SSH přístup** — jen v hosted profilu; na localhostu sekce v seznamu není
   (`GET /api/setup/ssh` odpoví `available: false`), viz „Hosted machine path“.
   Je to jeden druh **Spojení** s vyznačeným směrem (příchozí: notebook → tato
@@ -222,6 +225,68 @@ s vlastním malým API modulem pod namespace `setup`; Nastavení je jen jejich
 hostitel. Budoucí kroky průvodce (Codex a Claude login, instalace Organizace
 nebo personalspace podle profilu Mašiny, preset) přibývají jako další sekce
 stejného seznamu.
+
+### Laptopová strana spojení: Síť a Spojení
+
+Cíl: nový člověk si při onboardingu naklikne maximum sám, zásah do Headscale
+zůstává na oprávněné osobě (Admin Conglomerate Hostu) a port 22 mezi nody
+zůstává grant deklarovaný v Deployment Repu Organizace (`workspace_ssh_grants`).
+Model hran, směrů a politiky drží issue HumanAndMachines/Lazurio#416.
+
+**Síť** (`/settings/network`, `GET /api/setup/network`): zjistí Tailscale na
+laptopu (macOS: aplikace i CLI, Windows: `Program Files\Tailscale`), aktivní
+tailnet a pro každou Organizaci na tomto počítači stav vůči její síti:
+`connected` (aktivní tailnet = hostname login serveru a backend `Running`),
+`pending` (žádost odeslaná), `none`, nebo `unconfigured` (manifest Organizace
+nemá `conglomerate_host.headscale_login_server`; pole je veřejné metadata a
+jede v `extensions.legacy` manifestu, discovery ho promítá jako
+`organizations[].conglomerate_host`). Pole je **dočasný můstek** jen pro
+laptopy v režimu pracovní stanice: cílově sítě dodá přihlášený Lazurio účet
+z Dashboardu a pole z manifestů zmizí (HumanAndMachines/Lazurio#416,
+migrační README `lazurio/migrations/organization-manifest/`). Tlačítko **Požádat o přijetí do sítě**
+(`POST /api/setup/network/join`) spustí `tailscale login --login-server <url>`,
+z výstupu nebo z `tailscale status --json` (`AuthURL`) vezme registrační URL
+`https://<server>/register/<klíč>` a žádost založí jako GitHub issue v root repu
+Organizace **účtem žadatele** (`gh issue create`): členové tam smějí psát,
+infra zůstává zavřené a GitHub zůstává jedinou autoritou přístupů. Issue
+obsahuje jméno zařízení, login, registrační klíč a přesné kroky pro Admina
+(`headscale nodes register --user <login> --key <klíč>`, grant portu 22
+v Deployment Repu, zavřít issue); zamítnutí = zavřít bez registrace. Žádost si
+Launchpad pamatuje v `$LAZURIO_LAUNCHPAD_STATE_ROOT/runtime/network/join-requests.json`
+a ukazuje stav issue; zavřené issue bez registrace notebooku znamená stav
+`refused` (zamítnuto nebo vypršelo) a tlačítko **Požádat znovu**. Aktivní síť
+laptopu určuje control server, ke kterému je `tailscaled` přihlášený
+(`tailscale debug prefs` → `ControlURL`), porovnaný s login serverem z manifestu;
+`CurrentTailnet.Name` je jen záložní zdroj. Bez Tailscale ukáže „Zablokováno“
+s odkazem na instalaci; bez přihlášeného `gh` vrátí registrační odkaz pro ruční
+předání Adminovi.
+
+**Spojení** (`/settings/connections`, `GET /api/setup/connections`): seznam
+Mašin, kam se z laptopu jde připojit (`~/.ssh/lazurio/*.conf`), a předávka
+z Launchpadu hostované Mašiny. Ta v sekci SSH ukáže **předávací kód**
+(base64url JSON s labelem, tailnet adresou, účtem, host klíčem a vlastní URL,
+nic tajného), který člověk vloží do sekce Spojení svého laptopu; stránka Mašiny
+nezná adresu laptopového Launchpadu (tu má jen jeho locator) a žádný port
+nehádá. Sekce přijme kód holý, jako `connect=<kód>` i ve fragmentu
+`#connect=<kód>` vlastní URL. Laptop údaje znovu validuje (label, adresa 100.64.0.0/10, POSIX účet, tailnet,
+veřejný host klíč, návratová URL jen `https://*.lazurio.io`), ověří, že je na
+stejném tailnetu (`tailnet_mismatch` jinak), a `POST /api/setup/connections/connect`
+vytvoří `~/.ssh/lazurio-<label>` (ed25519, `ssh-keygen`), zapíše
+`~/.ssh/lazurio/<label>.conf` a připnutý `<label>.known_hosts` a jednou vloží
+`Include lazurio/*.conf` na začátek `~/.ssh/config` — stejné rozložení jako
+záložní příkaz. Tlačítko **Přidat klíč na <label>** vrátí člověka na Launchpad
+Mašiny s `#add_key=<veřejný klíč>`; stránka klíč předvyplní a člověk klikne
+Přidat (server zůstává jediný, kdo zapisuje `authorized_keys`). Záložní
+one‑liner pro laptop bez Lazuria zůstává schovaný pod „Bez Launchpadu na
+notebooku“. `POST /api/setup/connections/remove` smaže jen to, co podle
+ledgeru vlastnictví (`$LAZURIO_LAUNCHPAD_STATE_ROOT/runtime/network/connections.json`)
+Launchpad sám zapsal a co je pořád byte‑for‑byte jeho (ledger nese sha256
+confu i known_hosts a veřejný klíč): conf a připnutý host klíč jen při shodě
+digestu, soukromý klíč jen když ho vygeneroval a obě jeho poloviny jsou stále ty jeho (`.pub` text i sha256 soukromého klíče);
+cokoli člověk od té doby nahradil zůstává (`kept`). Ručně psaný
+`~/.ssh/lazurio/<label>.conf` nebo `<label>.known_hosts` je v seznamu jen ke
+čtení a `connect` ho nikdy nepřepíše (`connection_unmanaged`). Klíč na Mašině
+zůstává, dokud ho tam člověk neodebere.
 
 ### Zdrojové kódy: GitHub účet Mašiny
 
@@ -239,7 +304,12 @@ nepřepíše. Na hostované Mašině porovná účet s přiřazením v
 `/etc/lazurio/lazurio.machine.json` a cizí účet je blocker; na týmové VM s
 `lazurio-for-github[bot]` nenabízí nic. Navazující tlačítka volají existující
 `POST /api/update` a `lazurio organization install <login> --role builder
---json`; install server znovu ověří připravenost účtu a SSH a na hostované
+--json`; na lokálním Launchpadu běží update stejně jako CLI z izolovaného
+bundlu mimo pracovní checkout (`runIsolatedLazurioUpdate`), protože Launchpad
+sám běží z checkoutu, který aktualizuje, a engine by ho jinak odmítl
+(`runtime_not_isolated`); hostovaný resident je instalovaný mimo working root
+a engine volá přímo. Výsledek vždy ukáže stav, důvod a další krok, ne jen
+„blocked“; install server znovu ověří připravenost účtu a SSH a na hostované
 Mašině Organizace jen její vlastní Organizaci (slug z `company.gen3.json`
 root repa). API je jen POST (`/api/setup/github/{status,start,session,cancel}`
 a `/api/setup/organization-install`) za stejnou trust branou jako ostatní
@@ -1088,8 +1158,10 @@ directly still shows its pairing page.
 In the hosted profile Settings lists **SSH access** (localhost never does;
 `GET /api/setup/ssh` answers `{ "available": false }` there and the write
 routes return 404). The step reads everything on the Machine at request
-time: the workspace OS user, the tailnet IPv4 and tailnet name from
-`tailscale status --json` (`Self.TailscaleIPs`, `CurrentTailnet.Name`), the
+time: the workspace OS user, the tailnet IPv4 (`tailscale status --json` →
+`Self.TailscaleIPs`) and the tailnet identity resolved by the same code the
+laptop uses (`src/tailscale-identity-lib.mjs`: host of `tailscale debug prefs`
+→ `ControlURL`, `CurrentTailnet.Name` only as fallback), the
 public host key `/etc/ssh/ssh_host_ed25519_key.pub` with its SHA256
 fingerprint, and a host label (`machine.id` from
 `/etc/lazurio/lazurio.machine.json`, which the Machines contract qualifies by
@@ -1100,7 +1172,8 @@ step explains what is missing instead of offering a command.
 1. **Prepare the laptop.** One idempotent paste for macOS (Terminal) or
    Windows (PowerShell 5.1+, built-in OpenSSH, no administrator and no Git for
    Windows). It first checks that the laptop's Tailscale is on the Machine's
-   tailnet (`tailscale status --json` → `CurrentTailnet.Name`, including the
+   tailnet (`tailscale debug prefs` → `ControlURL` host, else `tailscale
+   status --json` → `CurrentTailnet.Name`, including the
    macOS app and `Program Files` CLI locations) and stops without writing
    anything when it is not; without a Tailscale CLI it warns and continues. It
    then creates `~/.ssh/lazurio-<label>` (ed25519, no passphrase) if missing,

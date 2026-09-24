@@ -1810,7 +1810,18 @@ function autoOrganizationFromResource({ resource, resolution, path, directoryNam
     manifest_state: resolution.state,
     declaration_source: resolution.declaration_source,
     module_port_pool_source: `${path}/${resolution.declaration_source === "lazurio.organization.json" ? "lazurio.organization.json" : "legacy compatibility projection"}#module_port_pool`,
+    conglomerate_host: conglomerateHostFromResource(resource),
   };
+}
+
+// Public network facts of the Organization's Conglomerate Host (today only the
+// Headscale login server a laptop asks to join). They ride in the manifest's
+// extensions, so no manifest contract changes; the consumer validates the URL.
+function conglomerateHostFromResource(resource) {
+  const declared = resource.extensions?.legacy?.conglomerate_host;
+  if (!declared || typeof declared !== "object" || Array.isArray(declared)) return null;
+  const loginServer = declared.headscale_login_server;
+  return typeof loginServer === "string" && loginServer ? { headscale_login_server: loginServer } : null;
 }
 
 // Scan-first (decision 0042/0043): jediná autorita je normalized Organization

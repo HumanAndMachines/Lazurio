@@ -25,10 +25,17 @@ test("Settings is one page with a section list; GitHub and SSH mount as steps", 
   // Sections are paths under /settings/, so the page loads everything from `../`.
   expect(html).toContain('href="../styles.css"');
   expect(html).toContain('src="../settings.js"');
-  for (const section of ["general", "github", "ssh"]) {
+  for (const section of ["general", "github", "network", "connections", "ssh"]) {
     expect(html).toContain(`href="${section}" data-section="${section}"`);
     expect(html).toContain(`class="settings-section" data-section="${section}"`);
   }
+  // The laptop side (Network, Connections) appears only when a local server answers available: true.
+  for (const section of ["network", "connections"]) {
+    expect(html).toMatch(new RegExp(`href="${section}" data-section="${section}" hidden`));
+  }
+  expect(script).toContain('import { mountNetworkStep, readNetwork } from "./network.js";');
+  expect(script).toContain('import { mountConnectionsStep } from "./connections.js";');
+  expect(script).toContain("async function revealLaptopSections()");
   // SSH stays out of the list until a hosted server answers available: true.
   expect(html).toMatch(/href="ssh" data-section="ssh" hidden/);
   expect(html).toContain('id="setupGitHubStart"');
@@ -57,11 +64,40 @@ test("Settings is one page with a section list; GitHub and SSH mount as steps", 
   expect(css).toContain("@media (max-width: 760px)");
 });
 
+test("the laptop side asks to join a network and activates SSH without a terminal", async () => {
+  const [network, connections, ssh] = await Promise.all([read("network.js"), read("connections.js"), read("ssh-access.js")]);
+  expect(network).toContain('requestJson("/api/setup/network/join"');
+  expect(network).toContain("https://tailscale.com/download");
+  expect(network).toContain('case "github_cli_unavailable"');
+  expect(network).toContain("error.details?.registration");
+  // The hand-over fragment is validated: https return URL on lazurio.io only.
+  expect(connections).toContain("export function parseHandover(input)");
+  expect(connections).toContain('returnUrl.protocol !== "https:"');
+  expect(connections).toContain('returnUrl.hostname.endsWith(".lazurio.io")');
+  expect(connections).toContain('requestJson("/api/setup/connections/connect"');
+  expect(connections).toContain("#add_key=${encodeURIComponent(outcome.public_key)}");
+  expect(connections).toContain('case "tailnet_mismatch"');
+  // The laptop side accepts the hand-over code pasted in; nothing guesses where a Launchpad listens.
+  expect(connections).toContain("function pasteCard(state)");
+  expect(connections).toContain('t("connections.paste.invalid")');
+  // The Machine's page shows a hand-over code (no laptop URL, no port) and keeps the paste command as a hidden fallback.
+  expect(ssh).not.toContain("localhost:4174");
+  expect(ssh).not.toContain("LAPTOP_LAUNCHPAD");
+  expect(ssh).toContain("export function laptopHandoverCode()");
+  expect(ssh).toContain('document.createElement("details")');
+  expect(ssh).toContain("/^#add_key=(.+)$/");
+  expect(ssh).toContain("if (pendingKey) keyField.value = pendingKey;");
+  expect(ssh).not.toContain("navigator.clipboard.writeText(state.host_key");
+});
+
 test("the GitHub and SSH steps are mountable and carry no page of their own", async () => {
   const [github, ssh, sshCss] = await Promise.all([read("setup-github.js"), read("ssh-access.js"), read("ssh-access.css")]);
   expect(github).toContain("export function mountGitHubStep()");
   expect(github).not.toContain("initializeI18n");
   expect(github).toContain('post("/api/setup/github/start"');
+  // A blocked update names the reason, not just the state.
+  expect(github).toContain('.filter((entry) => entry.state === "blocked")');
+  expect(github).toContain("result.next_action");
 
   expect(ssh).toContain("export function readSshAccess()");
   expect(ssh).toContain("export async function mountSshAccessStep(container)");
@@ -84,6 +120,8 @@ test("both locales carry the Settings copy and dropped the old topbar entries", 
       "topbar.settings", "settings.title", "settings.back", "settings.nav.general", "settings.nav.github",
       "settings.nav.ssh", "settings.environment.kind.local", "settings.environment.kind.organization",
       "settings.environment.kind.personal", "settings.language.help", "settings.github.title", "settings.ssh.direction",
+      "settings.nav.network", "settings.nav.connections", "network.requestJoin", "network.blocked", "connections.handover.activate",
+      "ssh.launchpad.copy", "ssh.fallback.summary", "connections.paste.use", "network.state.refused", "network.requestAgain",
     ]) {
       expect(locale).toContain(`"${key}":`);
     }
@@ -92,4 +130,31 @@ test("both locales carry the Settings copy and dropped the old topbar entries", 
       expect(locale).not.toContain(`"${key}":`);
     }
   }
+});
+
+test("the hand-over code is accepted bare, as connect=<code>, in a fragment or a whole URL, and validated", async () => {
+  const { parseHandover } = await import("../public/connections.js");
+  const payload = {
+    label: "betaco-anna-vm", ipv4: "100.72.0.3", user: "anna", tailnet: "headscale.betaco.lazurio.io",
+    host_key: { type: "ssh-ed25519", key: "AAAAC3NzaC1lZDI1NTE5AAAAIGb7d9Q6Cy1S1ZwZ5vN5a1r0Q6Q4XxT3s1jWl5eGqk0L" },
+    fingerprint: "SHA256:abc", return: "https://launchpad.betaco-anna-vm.betaco.lazurio.io/settings/ssh",
+  };
+  const encode = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  const code = encode(payload);
+  for (const input of [code, `connect=${code}`, `#connect=${code}`, `http://127.0.0.1:4187/settings/connections#connect=${code}`, `  ${code}\n`]) {
+    expect(parseHandover(input)).toEqual({ ...payload, return: payload.return });
+  }
+  expect(parseHandover("")).toBeNull();
+  expect(parseHandover("not a code")).toBeNull();
+  expect(parseHandover(encode({ ...payload, return: "http://launchpad.betaco-anna-vm.betaco.lazurio.io/" }))).toBeNull();
+  expect(parseHandover(encode({ ...payload, return: "https://evil.example.com/" }))).toBeNull();
+});
+
+test("a local Launchpad runs the Lazurio update from an isolated runtime, like the CLI", async () => {
+  const server = await readFile(join(publicRoot, "..", "src", "server.mjs"), "utf8");
+  // The local Launchpad runs from the checkout it updates; in-process the
+  // engine would refuse with runtime_not_isolated. Hosted keeps the in-process
+  // engine (its runtime is installed outside the working root).
+  expect(server).toContain('import { runIsolatedLazurioUpdate } from "../../lazurio/runtime/lazurio-update-runner-lib.mjs";');
+  expect(server).toMatch(/if \(requestTrust\.profile === "local"\) \{\n\s*return runIsolatedLazurioUpdate\(\{ rootPath: companiesRoot \}\);/);
 });

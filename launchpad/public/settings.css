@@ -171,6 +171,31 @@
   color: var(--c-warn);
 }
 
+.settings-ok {
+  color: var(--c-success);
+  font-weight: 600;
+}
+
+.settings-card {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: start;
+  width: 100%;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--lz-radius-md);
+  background: var(--surface);
+}
+
+.settings-card h4 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.settings-card-accent {
+  border-color: var(--accent);
+}
+
 .settings-select {
   min-width: 140px;
   min-height: 34px;
