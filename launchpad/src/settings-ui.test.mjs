@@ -91,6 +91,9 @@ test("the GitHub and SSH steps are mountable and carry no page of their own", as
   expect(github).toContain("export function mountGitHubStep()");
   expect(github).not.toContain("initializeI18n");
   expect(github).toContain('post("/api/setup/github/start"');
+  // A blocked update names the reason, not just the state.
+  expect(github).toContain('.filter((entry) => entry.state === "blocked")');
+  expect(github).toContain("result.next_action");
 
   expect(ssh).toContain("export function readSshAccess()");
   expect(ssh).toContain("export async function mountSshAccessStep(container)");

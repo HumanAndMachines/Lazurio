@@ -261,9 +261,18 @@ export function mountGitHubStep() {
     showNotice(elements.nextResult, t("setup.github.running"));
     try {
       const result = await post("/api/update");
+      // The engine says why it stopped (top-level message, blocked repositories
+      // with their reason, next action); a bare state is not actionable.
+      const blocked = (result.results ?? [])
+        .filter((entry) => entry.state === "blocked")
+        .map((entry) => [entry.path && entry.path !== "." ? `${entry.path}:` : null, entry.message ?? entry.reason].filter(Boolean).join(" "));
+      const detail = [result.message, ...blocked, result.next_action]
+        .filter((text) => typeof text === "string" && text.trim())
+        .filter((text, index, all) => all.indexOf(text) === index)
+        .join(" ");
       showNotice(
         elements.nextResult,
-        t("setup.github.updateResult", { state: result.state ?? "unknown" }),
+        `${t("setup.github.updateResult", { state: result.state ?? "unknown" })}${detail ? ` ${detail}` : ""}`,
         result.state === "blocked" ? "bad" : "ok",
       );
     } catch (error) {
