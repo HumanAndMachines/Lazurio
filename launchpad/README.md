@@ -240,7 +240,10 @@ tailnet a pro každou Organizaci na tomto počítači stav vůči její síti:
 `pending` (žádost odeslaná), `none`, nebo `unconfigured` (manifest Organizace
 nemá `conglomerate_host.headscale_login_server`; pole je veřejné metadata a
 jede v `extensions.legacy` manifestu, discovery ho promítá jako
-`organizations[].conglomerate_host`). Tlačítko **Požádat o přijetí do sítě**
+`organizations[].conglomerate_host`). Pole je **dočasný můstek** jen pro
+laptopy v režimu pracovní stanice: cílově sítě dodá přihlášený Lazurio účet
+z Dashboardu a pole z manifestů zmizí (HumanAndMachines/Lazurio#416,
+migrační README `lazurio/migrations/organization-manifest/`). Tlačítko **Požádat o přijetí do sítě**
 (`POST /api/setup/network/join`) spustí `tailscale login --login-server <url>`,
 z výstupu nebo z `tailscale status --json` (`AuthURL`) vezme registrační URL
 `https://<server>/register/<klíč>` a žádost založí jako GitHub issue v root repu

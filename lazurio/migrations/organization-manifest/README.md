@@ -72,3 +72,9 @@ lazurio migrate organization-manifest <organization-root> --finalize        # no
   never removes `company.gen3.json`.
 - Template roots (`kind: template`) are refused; they migrate in their own
   explicit plan.
+
+## Transitional fields carried in `extensions.legacy`
+
+| Field | Introduced | Fate |
+|---|---|---|
+| `conglomerate_host.headscale_login_server` (top-level in `company.gen3.json`, `extensions.legacy` in the canonical manifest) | HumanAndMachines/Lazurio#417 (2026-09-24), Iotor only | **Temporary bridge.** The laptop Launchpad reads it to ask to join the Organization's Headscale. Target (decision in HumanAndMachines/Lazurio#416): the Lazurio Account signed in to the Launchpad gets the networks from the Dashboard (fed from infra), so the field is not rolled out to other Organizations or `OrganizationTemplate_GEN3` and is removed from manifests once that path exists. The migration keeps it byte-for-byte inside `extensions.legacy` until then. |
