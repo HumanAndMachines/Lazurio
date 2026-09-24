@@ -423,10 +423,13 @@ test("a lone public key is half a pair and is never completed or overwritten", a
 
 test("the page never puts the one-time code on the clipboard", async () => {
   const publicRoot = join(import.meta.dirname, "..", "public");
-  const [script, page] = await Promise.all([
+  const [script, settings] = await Promise.all([
     readFile(join(publicRoot, "setup-github.js"), "utf8"),
-    readFile(join(publicRoot, "setup-github.html"), "utf8"),
+    readFile(join(publicRoot, "settings.html"), "utf8"),
   ]);
+  // The GitHub section of the Settings page hosts the step's markup.
+  const page = settings.slice(settings.indexOf('class="settings-section" data-section="github"'), settings.indexOf('class="settings-section" data-section="ssh"'));
+  expect(page).toContain('id="setupGitHubCode"');
   expect(script).not.toMatch(/navigator\.clipboard|execCommand\(\s*["']copy/);
   expect(page).not.toMatch(/copy/i);
 });

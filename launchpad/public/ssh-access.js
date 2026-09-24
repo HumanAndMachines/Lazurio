@@ -3,24 +3,14 @@ import { launchpadFetch } from "./session-aware-fetch.js";
 
 // SSH access: connect a laptop to this hosted Machine over the Headscale
 // tailnet in three steps. The server offers it only in the hosted profile;
-// on localhost the button stays hidden. `mountSshAccessStep` is the
-// self-contained setup step; the top-bar dialog is only one host for it, so a
-// later Machine setup guide can mount the same step next to its siblings.
+// on localhost `readSshAccess` answers available: false and the Settings page
+// keeps the section out of its list. `mountSshAccessStep` is the
+// self-contained step; Settings is one host for it, a later Machine setup
+// guide can mount the same step next to its siblings.
 
-const STYLESHEET_ID = "ssh-access-styles";
-let dialog = null;
-let dialogBody = null;
 let content = null;
 let state = null;
 let platform = /Windows/i.test(globalThis.navigator?.userAgent ?? "") ? "windows" : "macos";
-
-export function initSshAccess(button = document.querySelector("#sshAccessButton")) {
-  if (!button) return;
-  requestJson("/api/setup/ssh").then((data) => {
-    button.hidden = !data?.available;
-  }).catch(() => {});
-  button.addEventListener("click", () => openSshAccessDialog());
-}
 
 async function requestJson(path, body) {
   const response = await launchpadFetch(path, body === undefined
@@ -35,50 +25,20 @@ async function requestJson(path, body) {
   return payload;
 }
 
-export function openSshAccessDialog() {
-  ensureDialog();
-  if (!dialog.open) dialog.showModal();
-  return mountSshAccessStep(dialogBody);
+export function readSshAccess() {
+  return requestJson("/api/setup/ssh");
 }
 
 export async function mountSshAccessStep(container) {
-  ensureStylesheet();
   content = container;
   content.classList.add("ssh-access-body");
   content.replaceChildren(paragraph(t("ssh.loading")));
   try {
-    state = await requestJson("/api/setup/ssh");
+    state = await readSshAccess();
     render();
   } catch {
     content.replaceChildren(paragraph(t("ssh.loadFailed"), "ssh-access-error"));
   }
-}
-
-function ensureStylesheet() {
-  if (document.getElementById(STYLESHEET_ID)) return;
-  const link = document.createElement("link");
-  link.id = STYLESHEET_ID;
-  link.rel = "stylesheet";
-  link.href = new URL("./ssh-access.css", import.meta.url).href;
-  document.head.append(link);
-}
-
-function ensureDialog() {
-  if (dialog?.isConnected) return;
-  dialog = document.createElement("dialog");
-  dialog.className = "ssh-access-dialog";
-  dialog.setAttribute("aria-labelledby", "sshAccessTitle");
-  const header = document.createElement("header");
-  header.className = "ssh-access-head";
-  const title = document.createElement("h2");
-  title.id = "sshAccessTitle";
-  title.textContent = t("ssh.title");
-  const close = button("×", () => dialog.close(), "ssh-access-close");
-  close.setAttribute("aria-label", t("a11y.closeWindow"));
-  header.append(title, close);
-  dialogBody = document.createElement("div");
-  dialog.append(header, dialogBody);
-  document.body.append(dialog);
 }
 
 function render() {

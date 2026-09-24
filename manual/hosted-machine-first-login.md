@@ -47,9 +47,9 @@ operátora neprovede přihlášením**, a vysvětlí mu proč: je to jeho osobn�
 rozhoduje, co v ní smí Agent vidět a měnit, a všechna práce z této Mašiny
 bude připsaná jeho účtu.
 
-**Preferovaná cesta je tlačítko v Launchpadu.** Ikona GitHubu v hlavičce
-Launchpadu této Mašiny otevře stránku **GitHub účet** a tlačítko **Přihlásit
-GitHub** provede kroky 1 a 2 celé: `gh` login se SSH protokolem, jednorázový
+**Preferovaná cesta je tlačítko v Launchpadu.** Ozubené kolo v hlavičce
+Launchpadu této Mašiny otevře **Nastavení**, sekce **Zdrojové kódy (GitHub)**,
+a tlačítko **Přihlásit GitHub** provede kroky 1 a 2 celé: `gh` login se SSH protokolem, jednorázový
 kód jen na přihlášené stránce, SSH klíč jen když chybí a SSH přístup ještě
 nefunguje, nahrání veřejné části na ověřený účet, kontrolu účtu proti
 `owner.assignment` a důkaz přes `ssh -T` a `git ls-remote` root repa. Kroky 3

@@ -28,7 +28,6 @@ import {
   variantTag,
 } from "./app-state.js";
 import { gitChipModel } from "./git-status-copy.js";
-import { initSshAccess } from "./ssh-access.js";
 import {
   changeKindLabel,
   changeOriginLabel,
@@ -47,7 +46,7 @@ import {
 import { runtimeRecoveryForApp } from "./runtime-recovery.js";
 import { launchpadFetch } from "./session-aware-fetch.js";
 import { writeReservedTabStatus } from "./reserved-tab-status.js";
-import { getLocale, initializeI18n, setLocale, t, tp } from "./i18n.js";
+import { getLocale, initializeI18n, t, tp } from "./i18n.js";
 import { guideDocumentationUrl } from "./guide-link.js";
 import {
   organizationHash,
@@ -406,7 +405,6 @@ initScrollOffset();
 initResponsiveChrome();
 initNotifications();
 initChat();
-initSshAccess();
 elements.guideTile?.setAttribute("href", guideDocumentationUrl(getLocale()));
 // Personalspace rail dostane most k toastům a k Synchronizovat reloadu, ať
 // osobní runtime akce vypadají stejně jako firemní.
@@ -1746,35 +1744,18 @@ function profileInitials(name) {
 }
 
 function profileSettingsItem() {
-  const group = document.createElement("section");
-  group.className = "space-profile-settings";
-
-  const heading = document.createElement("div");
-  heading.className = "space-profile-settings-heading";
-  heading.append(settingsIcon(), document.createTextNode(t("profile.settings")));
-
-  const language = document.createElement("label");
-  language.className = "space-language-setting";
-  const label = document.createElement("span");
-  label.textContent = t("locale.label");
-  const select = document.createElement("select");
-  select.className = "space-language-select";
-  select.setAttribute("aria-label", t("locale.label"));
-  for (const locale of ["cs", "en"]) {
-    const option = document.createElement("option");
-    option.value = locale;
-    option.textContent = t(`locale.${locale}`);
-    select.append(option);
-  }
-  select.value = getLocale();
-  select.addEventListener("change", () => {
-    if (select.value === getLocale()) return;
-    setLocale(select.value);
-    window.location.reload();
+  // Settings of this Environment (language, the Machine's GitHub account, SSH
+  // access) live on their own page; the menu only links there.
+  const link = document.createElement("a");
+  link.className = "space-profile-settings-link";
+  link.href = "./settings/";
+  link.append(settingsIcon(), document.createTextNode(t("profile.settings")));
+  link.addEventListener("click", () => {
+    restoreSpaceMenuFocusOnClose = true;
+    state.spaceMenuOpen = false;
+    applySpaceMenuState();
   });
-  language.append(label, select);
-  group.append(heading, language);
-  return group;
+  return link;
 }
 
 function settingsIcon() {

@@ -757,6 +757,30 @@ const setupReadOnlyMountRoutes = new Set([
   "/api/setup/github/cancel",
 ]);
 
+// What kind of Machine serves this Launchpad and whom it belongs to: the
+// hosted profile answers from the Machine definition (environment), localhost
+// from the optional --organization scope. Nothing here is a secret or a grant.
+function setupEnvironmentDescriptor() {
+  if (hostedWorkspace.profile !== "hosted") {
+    return {
+      profile: "local",
+      scope: null,
+      machine: null,
+      organization_slug: options.organization ?? null,
+      team_id: null,
+      domain: null,
+    };
+  }
+  return {
+    profile: "hosted",
+    scope: hostedWorkspace.scope,
+    machine: hostedWorkspace.machine,
+    organization_slug: hostedWorkspace.organization_slug,
+    team_id: hostedWorkspace.team_id,
+    domain: hostedWorkspace.domain,
+  };
+}
+
 // Organization root repositories the page may verify and install. Scoped to
 // this Launchpad's Organization when it has one; never on a personal Machine.
 async function setupOrganizationSuggestions() {
@@ -1771,6 +1795,10 @@ function startServer(startPort) {
         if (url.pathname === "/api/chat" && request.method === "GET") {
           return jsonResponse({ available: Boolean(t3Chat) });
         }
+        // Non-secret identity of this Environment for the Settings page.
+        if (url.pathname === "/api/setup/environment" && request.method === "GET") {
+          return jsonResponse(setupEnvironmentDescriptor());
+        }
         // POST already passed the shared mutation trust gate: same origin and
         // a gateway-revalidated session. The token only travels back here.
         if (url.pathname === "/api/chat/pair" && request.method === "POST") {
@@ -1854,6 +1882,12 @@ function startServer(startPort) {
               })
             : jsonResponse({ status: serverShutdownState.state }, 503);
         }
+        // Settings of this Environment live under /settings/<section>: the
+        // section is a path, not a file, and the page loads its assets from `../`.
+        if (url.pathname === "/settings") {
+          return Response.redirect(new URL(launchpadPath("/settings/", basePath), request.url).toString(), 308);
+        }
+        if (/^\/settings\/(?:general|github|ssh)?$/u.test(url.pathname)) return await serveStatic("/settings.html");
         return await serveStatic(url.pathname);
       } catch (error) {
         return jsonResponse({ error: "launchpad_error", message: error.message }, 500);

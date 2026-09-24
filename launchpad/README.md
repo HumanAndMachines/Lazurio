@@ -193,10 +193,40 @@ revize ani druhý controller nejsou součástí kontraktu.
 Produkční Buildy používají samostatný immutable build/runtime kontrakt bez
 Launchpadu a worktrees.
 
-## GitHub účet Mašiny
+## Nastavení Prostředí
 
-Ikona GitHubu v hlavičce otevře stránku `setup-github.html`: jedno tlačítko
-**Přihlásit GitHub** provede postup z `manual/organization-install.md` a
+Ozubené kolo v hlavičce (a položka **Nastavení** v profilovém menu) otevře
+`/settings/`: nastavení tohoto Prostředí, tedy Mašiny, ze které Launchpad
+běží. Údaje o Prostředí a kroky GitHub/SSH jsou za celou Mašinu; jazyk je
+volba prohlížeče (`launchpad.locale` v localStorage, viz „Jazyk UI“). Stránka
+má jedno rozložení podle T3 Code — vlevo seznam sekcí, vpravo právě jedna sekce
+adresovaná cestou (`/settings/general`, `/settings/github`, `/settings/ssh`;
+server pro všechny vrací tutéž stránku, holé `/settings` přesměruje na
+`/settings/`):
+
+- **Obecné** — typ Prostředí (`Tento počítač`, `VM Prostředí Organizace`,
+  `Osobní VM Prostředí`), label Mašiny, Organizace, Team a doména z
+  `GET /api/setup/environment` (jen metadata z definice Mašiny, žádné
+  tajemství ani grant; localhost vrací `profile: "local"` a případný
+  `--organization` scope) a jazyk Launchpadu v tomto prohlížeči (dřív
+  v profilovém menu).
+- **Zdrojové kódy (GitHub)** — GitHub účet Mašiny, viz níže.
+- **SSH přístup** — jen v hosted profilu; na localhostu sekce v seznamu není
+  (`GET /api/setup/ssh` odpoví `available: false`), viz „Hosted machine path“.
+  Je to jeden druh **Spojení** s vyznačeným směrem (příchozí: notebook → tato
+  Mašina); opačný směr a spojení Mašina ↔ Mašina jsou plánované další druhy
+  téhož seznamu, párované mezi Launchpady obou Mašin.
+
+Každá sekce je samostatný krok (`mountGitHubStep`, `mountSshAccessStep`)
+s vlastním malým API modulem pod namespace `setup`; Nastavení je jen jejich
+hostitel. Budoucí kroky průvodce (Codex a Claude login, instalace Organizace
+nebo personalspace podle profilu Mašiny, preset) přibývají jako další sekce
+stejného seznamu.
+
+### Zdrojové kódy: GitHub účet Mašiny
+
+Jedno tlačítko **Přihlásit GitHub** provede postup z
+`manual/organization-install.md` a
 `manual/hosted-machine-first-login.md` celý. Přihlásí `gh` device loginem se
 SSH protokolem, `--skip-ssh-key` a scope `admin:public_key`, jednorázový kód ukáže jen na této
 stránce a jen kartě, která login spustila (capability ze `start`; nikdy v
@@ -213,10 +243,8 @@ nepřepíše. Na hostované Mašině porovná účet s přiřazením v
 Mašině Organizace jen její vlastní Organizaci (slug z `company.gen3.json`
 root repa). API je jen POST (`/api/setup/github/{status,start,session,cancel}`
 a `/api/setup/organization-install`) za stejnou trust branou jako ostatní
-mutace, takže kód nikdy neopustí přihlášenou stránku. Namespace `setup` je
-první krok budoucího průvodce nastavením Mašiny (SSH přístup, Codex a Claude
-login, instalace Organizace podle přiřazení); každý krok zůstává samostatná
-stránka s vlastním malým API modulem.
+mutace, takže kód nikdy neopustí přihlášenou stránku. Není to přihlášení do
+Lazuria: to drží brána Mašiny (Lazurio účet), tady jde jen o práva ke kódu.
 
 ## Stabilní odkazy na prostor
 
@@ -271,8 +299,8 @@ nekompatibilní ani cizí listener se nikdy nepřevezme.
 
 Launchpad-owned UI copy žije offline v `public/locales/cs.js` a `en.js`.
 Explicitní preference `launchpad.locale` má přednost před jazykem prohlížeče;
-fallback je čeština. Přepnutí jazyka reloadne stejnou route, takže nemění
-vybraný prostor ani lifecycle běžících Apps.
+fallback je čeština. Jazyk se přepíná v Nastavení → Obecné; přepnutí reloadne
+stránku a nemění vybraný prostor ani lifecycle běžících Apps.
 
 In-shell Guide je součást stejného locale kontraktu a nemá vlastní přepínač.
 Statické nadpisy, slovník, doporučení i loading/error/copy stavy používají
@@ -1057,9 +1085,9 @@ directly still shows its pairing page.
 
 ### SSH: connect a laptop over the Headscale tailnet
 
-In the hosted profile the top bar also shows **SSH** (localhost never does;
+In the hosted profile Settings lists **SSH access** (localhost never does;
 `GET /api/setup/ssh` answers `{ "available": false }` there and the write
-routes return 404). The dialog reads everything on the Machine at request
+routes return 404). The step reads everything on the Machine at request
 time: the workspace OS user, the tailnet IPv4 and tailnet name from
 `tailscale status --json` (`Self.TailscaleIPs`, `CurrentTailnet.Name`), the
 public host key `/etc/ssh/ssh_host_ed25519_key.pub` with its SHA256
@@ -1067,7 +1095,7 @@ fingerprint, and a host label (`machine.id` from
 `/etc/lazurio/lazurio.machine.json`, which the Machines contract qualifies by
 Organization or owner, else the Headscale node name, else `hostname`).
 `lazurio.machine.v1` carries no tailnet address, so without Tailscale the
-dialog explains what is missing instead of offering a command.
+step explains what is missing instead of offering a command.
 
 1. **Prepare the laptop.** One idempotent paste for macOS (Terminal) or
    Windows (PowerShell 5.1+, built-in OpenSSH, no administrator and no Git for
@@ -1092,7 +1120,7 @@ dialog explains what is missing instead of offering a command.
    appends it to the workspace user's own `~/.ssh/authorized_keys` (directory
    0700, file 0600, atomic replace, symlinks refused).
 3. **Connect** with `ssh <label>` or pick the host in Codex or Claude Code;
-   the dialog shows the Machine fingerprint to compare.
+   the step shows the Machine fingerprint to compare.
 
 Both write routes pass the shared mutation trust gate, like Chat. Keys added
 here carry the comment prefix `lazurio-launchpad`; only those can be removed
