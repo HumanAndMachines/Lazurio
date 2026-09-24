@@ -1239,6 +1239,57 @@ test("the Environment descriptor names this Machine without secrets", async () =
   });
 }, platformTestTimeout(20_000));
 
+test("the laptop side of connections exists only on a local Launchpad", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const manifestPath = join(root, "organizations", "BetaCo_GEN3", "company.gen3.json");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  manifest.conglomerate_host = { headscale_login_server: "https://headscale.betaco.lazurio.io" };
+  await writeJson(manifestPath, manifest);
+  const local = await startLaunchpadServer(root);
+  for (const path of ["/settings/network", "/settings/connections"]) {
+    expect((await fetch(`http://127.0.0.1:${local.port}${path}`)).status).toBe(200);
+  }
+  const network = await getJson(local.port, "/api/setup/network");
+  expect(network.available).toBe(true);
+  expect(typeof network.tailscale.installed).toBe("boolean");
+  const betaco = network.organizations.find((organization) => organization.slug === "BetaCo");
+  // The fixture Organization declares no root repository; the login server still projects.
+  expect(betaco).toMatchObject({
+    headscale_login_server: "https://headscale.betaco.lazurio.io",
+    tailnet: "headscale.betaco.lazurio.io",
+    repository: null,
+  });
+  expect(["none", "connected", "pending"]).toContain(betaco.state);
+  expect(await getJson(local.port, "/api/setup/connections")).toEqual({ available: true, connections: [] });
+  // Validation runs before anything touches ~/.ssh.
+  const bad = await fetch(`http://127.0.0.1:${local.port}/api/setup/connections/connect`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ label: "Bad Label" }),
+  });
+  expect(bad.status).toBe(400);
+  expect((await bad.json()).error).toBe("label_invalid");
+  expect(existsSync(join(local.environment.HOME, ".ssh"))).toBe(false);
+
+  const hostedRoot = await createLaunchpadGitFixture();
+  tempRoots.push(hostedRoot);
+  const hosted = await startLaunchpadServer(hostedRoot, {
+    env: {
+      ...hostedSshEnvironment("https://launchpad.builder.workspace.example.test"),
+      LAZURIO_LAUNCHPAD_AUTH_CHECK_URL: `https://127.0.0.1:${await findFreePort()}/oauth2/auth`,
+    },
+  });
+  expect(await getJson(hosted.port, "/api/setup/network")).toEqual({ available: false });
+  expect(await getJson(hosted.port, "/api/setup/connections")).toEqual({ available: false });
+  const joinResponse = await fetch(`http://127.0.0.1:${hosted.port}/api/setup/network/join`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ organization: "BetaCo" }),
+  });
+  expect([403, 404]).toContain(joinResponse.status);
+}, platformTestTimeout(25_000));
+
 test("SSH access stays hidden and read-only on a localhost Launchpad", async () => {
   const root = await createLaunchpadGitFixture();
   tempRoots.push(root);
