@@ -36,6 +36,7 @@ import {
 import { RuntimeActionError, createRuntimeManager } from "../../lazurio/runtime/runtime-lib.mjs";
 import { createGitStatusService } from "../../lazurio/runtime/git-status-lib.mjs";
 import { readLazurioUpdateStatus, runLazurioUpdate } from "../../lazurio/runtime/lazurio-update-lib.mjs";
+import { runIsolatedLazurioUpdate } from "../../lazurio/runtime/lazurio-update-runner-lib.mjs";
 import { WorktreeActionError, createWorktreeFromPlan, publishWorktreeDraft } from "./worktree-actions-lib.mjs";
 import { buildRecentModuleChanges } from "./recent-changes-lib.mjs";
 import { buildNotifications } from "./notifications-lib.mjs";
@@ -212,6 +213,14 @@ const runtimeManager = createRuntimeManager({
     }),
 });
 function runWorkspaceUpdate() {
+  // A local Launchpad runs from the very checkout it would update, which the
+  // engine refuses (`runtime_not_isolated`). Do what `lazurio update` does:
+  // run the engine from a bundled copy outside the working root. The hosted
+  // resident is installed outside the working root and keeps the in-process
+  // engine, which also owns the managed apps' dependency refresh.
+  if (requestTrust.profile === "local") {
+    return runIsolatedLazurioUpdate({ rootPath: companiesRoot });
+  }
   return runLazurioUpdate({
     rootPath: companiesRoot,
     hostedWorkspace,

@@ -149,3 +149,12 @@ test("the hand-over code is accepted bare, as connect=<code>, in a fragment or a
   expect(parseHandover(encode({ ...payload, return: "http://launchpad.betaco-anna-vm.betaco.lazurio.io/" }))).toBeNull();
   expect(parseHandover(encode({ ...payload, return: "https://evil.example.com/" }))).toBeNull();
 });
+
+test("a local Launchpad runs the Lazurio update from an isolated runtime, like the CLI", async () => {
+  const server = await readFile(join(publicRoot, "..", "src", "server.mjs"), "utf8");
+  // The local Launchpad runs from the checkout it updates; in-process the
+  // engine would refuse with runtime_not_isolated. Hosted keeps the in-process
+  // engine (its runtime is installed outside the working root).
+  expect(server).toContain('import { runIsolatedLazurioUpdate } from "../../lazurio/runtime/lazurio-update-runner-lib.mjs";');
+  expect(server).toMatch(/if \(requestTrust\.profile === "local"\) \{\n\s*return runIsolatedLazurioUpdate\(\{ rootPath: companiesRoot \}\);/);
+});

@@ -297,7 +297,12 @@ nepřepíše. Na hostované Mašině porovná účet s přiřazením v
 `/etc/lazurio/lazurio.machine.json` a cizí účet je blocker; na týmové VM s
 `lazurio-for-github[bot]` nenabízí nic. Navazující tlačítka volají existující
 `POST /api/update` a `lazurio organization install <login> --role builder
---json`; install server znovu ověří připravenost účtu a SSH a na hostované
+--json`; na lokálním Launchpadu běží update stejně jako CLI z izolovaného
+bundlu mimo pracovní checkout (`runIsolatedLazurioUpdate`), protože Launchpad
+sám běží z checkoutu, který aktualizuje, a engine by ho jinak odmítl
+(`runtime_not_isolated`); hostovaný resident je instalovaný mimo working root
+a engine volá přímo. Výsledek vždy ukáže stav, důvod a další krok, ne jen
+„blocked“; install server znovu ověří připravenost účtu a SSH a na hostované
 Mašině Organizace jen její vlastní Organizaci (slug z `company.gen3.json`
 root repa). API je jen POST (`/api/setup/github/{status,start,session,cancel}`
 a `/api/setup/organization-install`) za stejnou trust branou jako ostatní
