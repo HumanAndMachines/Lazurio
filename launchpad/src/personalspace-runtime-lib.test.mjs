@@ -235,6 +235,30 @@ test("buildPersonalspaceResponse vrací prostory + summary, metadata-only", asyn
   expect(JSON.stringify(response)).not.toContain("soukromá poznámka");
 });
 
+test("hosted personal Machine: the exact Personalspace folder names the owner without a local override", async () => {
+  const { root } = await createFixture({ withGbrain: true });
+  await rm(join(root, "launchpad.gen3.local.json"));
+  const withoutFolder = await buildPersonalspaceResponse({ companiesRoot: root, launchpadRoot: join(root, "launchpad") });
+  expect(withoutFolder.summary.space_count).toBe(0);
+  expect(withoutFolder.warnings.join("\n")).toContain("personalspace_owner");
+
+  const response = await buildPersonalspaceResponse({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    primarySpaceDir: "exampleuser_GEN3",
+  });
+  expect(response.primary_owner).toBe("exampleuser");
+  expect(response.summary.space_count).toBe(1);
+  expect(response.spaces[0].is_owner_primary).toBe(true);
+  expect(response.warnings.join("\n")).not.toContain("personalspace_owner");
+  const vault = await resolveSpaceGbrainVault({
+    companiesRoot: root,
+    primarySpaceDir: "exampleuser_GEN3",
+    spaceDirName: "exampleuser_GEN3",
+  });
+  expect(vault.vaultRoot).toBe(join(root, "personalspace", "exampleuser_GEN3", "gbrain"));
+});
+
 test("personalspaceDoctorCheck je metadata-only a nikdy neobsahuje obsah zápisů", async () => {
   const { root } = await createFixture();
   const response = await buildPersonalspaceResponse({
@@ -568,4 +592,11 @@ test("resolveSpaceGbrainVault cizí Personalspace vůbec nenajde (decision 0091)
   // Vlastní primární prostor zůstává přístupný.
   const vault = await resolveSpaceGbrainVault({ companiesRoot: root, spaceDirName: "exampleuser_GEN3" });
   expect(vault.vaultRoot).toBe(join(root, "personalspace", "exampleuser_GEN3", "gbrain"));
+});
+
+test("the Launchpad server binds every Personalspace lane to the hosted folder", async () => {
+  const server = await Bun.file(join(import.meta.dirname, "server.mjs")).text();
+  expect(server).toContain("const hostedPersonalspaceDir = personalHostedScope ? hostedWorkspace.personalspace : undefined;");
+  // Personal Apps runtime, /api/personalspace and gbrain.
+  expect(server.match(/primarySpaceDir: hostedPersonalspaceDir,/g)?.length).toBe(3);
 });

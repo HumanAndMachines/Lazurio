@@ -135,6 +135,11 @@ const personalHostedScope = hostedWorkspace.profile === "hosted" && hostedWorksp
 if (personalHostedScope && options.organization !== undefined) {
   throw new Error("--organization is not valid on a hosted personal Machine (LAZURIO_HOSTED_SCOPE=personal).");
 }
+// The exact Personalspace folder of a hosted personal Machine. Every
+// Personalspace lane of this server (API, personal Apps, gbrain) resolves its
+// owner from that folder, as the start-up binding does; elsewhere the owner
+// comes from launchpad.gen3.local.json.
+const hostedPersonalspaceDir = personalHostedScope ? hostedWorkspace.personalspace : undefined;
 // Fail closed before any listener, lock or locator exists.
 let reportedPersonalspaceIssues = "";
 let hostedPersonalspace = personalHostedScope ? await resolvePersonalHostedBinding() : null;
@@ -259,6 +264,7 @@ const appsResponseCache = createGenerationSafeResponseCache({
 const personalspaceRuntimeManager = createPersonalspaceRuntimeManager({
   companiesRoot,
   rootSourceRoot,
+  primarySpaceDir: hostedPersonalspaceDir,
   launchpadRoot,
   stateRoot: launchpadStateRoot,
 });
@@ -882,6 +888,7 @@ async function buildPersonalspace({ verifyRepositoryPrivacy = false } = {}) {
   return buildPersonalspaceResponse({
     companiesRoot,
     rootSourceRoot,
+    primarySpaceDir: hostedPersonalspaceDir,
     launchpadRoot,
     runtimeManager: personalspaceRuntimeManager,
     profileEmail: principalEmail,
@@ -1188,6 +1195,7 @@ async function handleGbrainRoute(request, url, route) {
     const vault = await resolveSpaceGbrainVault({
       companiesRoot,
       rootSourceRoot,
+      primarySpaceDir: hostedPersonalspaceDir,
       spaceDirName: route.space,
     });
     if (route.resource === "tree") {
