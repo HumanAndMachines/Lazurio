@@ -200,6 +200,7 @@ function errorText(error) {
     case "tailscale_missing": return t("network.error.tailscaleMissing");
     case "tailnet_mismatch": return t("connections.error.tailnet", { active: error.details?.active ?? "—", expected: error.details?.expected ?? "" });
     case "ssh_keygen_failed": return t("connections.error.keygen");
+    case "connection_unmanaged": return t("connections.error.unmanaged", { label: error.details?.label ?? "" });
     case "label_invalid":
     case "ipv4_invalid":
     case "user_invalid":

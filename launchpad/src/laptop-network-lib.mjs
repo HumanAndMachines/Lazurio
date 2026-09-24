@@ -147,6 +147,11 @@ export function createLaptopNetworkService({
   const sshDirectory = join(home, ".ssh");
   const lazurioDirectory = join(sshDirectory, "lazurio");
   const requestsPath = join(stateRoot, "runtime", "network", "join-requests.json");
+  // Ownership ledger of the connections this Launchpad wrote: which .conf and
+  // known_hosts it created and whether it generated the private key. Removal
+  // deletes only what the ledger proves is Launchpad's; a hand-authored
+  // ~/.ssh/lazurio/*.conf or a pre-existing key is never touched.
+  const connectionsPath = join(stateRoot, "runtime", "network", "connections.json");
   let tailscalePath;
 
   async function resolveTailscale() {
@@ -185,6 +190,20 @@ export function createLaptopNetworkService({
     requests[record.organization] = record;
     await mkdir(dirname(requestsPath), { recursive: true });
     await writeFile(requestsPath, JSON.stringify(requests, null, 2) + "\n", { mode: 0o600 });
+  }
+
+  async function readOwned() {
+    try {
+      const parsed = JSON.parse(await readFile(connectionsPath, "utf8"));
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  async function writeOwned(owned) {
+    await mkdir(dirname(connectionsPath), { recursive: true });
+    await writeFile(connectionsPath, JSON.stringify(owned, null, 2) + "\n", { mode: 0o600 });
   }
 
   async function issueState(url) {
@@ -284,12 +303,14 @@ export function createLaptopNetworkService({
     return { state: "pending", ...record };
   }
 
-  // Managed connections live in ~/.ssh/lazurio/<label>.conf. Hosts a person
-  // (or an earlier runbook) wrote straight into ~/.ssh/config are listed too
-  // when they point at a Lazurio Machine — a tailnet address or a lazurio.io
-  // name — as read-only: Launchpad never rewrites what it did not create.
+  // Managed connections are the ~/.ssh/lazurio/<label>.conf files the
+  // ownership ledger records. A .conf a person put there by hand, and hosts
+  // written straight into ~/.ssh/config that point at a Lazurio Machine (a
+  // tailnet address or a lazurio.io name), are listed read-only: Launchpad
+  // never rewrites or removes what it did not create.
   async function readConnections() {
     const connections = [];
+    const owned = await readOwned();
     let entries = [];
     try {
       entries = (await readdir(lazurioDirectory)).filter((name) => name.endsWith(".conf")).sort();
@@ -299,7 +320,7 @@ export function createLaptopNetworkService({
     for (const name of entries) {
       const label = name.slice(0, -".conf".length);
       if (!labelPattern.test(label)) continue;
-      connections.push({ ...parseHostBlock(label, await readFile(join(lazurioDirectory, name), "utf8")), managed: true });
+      connections.push({ ...parseHostBlock(label, await readFile(join(lazurioDirectory, name), "utf8")), managed: Boolean(owned[label]) });
     }
     const managedLabels = new Set(connections.map((connection) => connection.label));
     let config = "";
@@ -331,6 +352,12 @@ export function createLaptopNetworkService({
     const status = await readStatus(tailscale);
     if (status.tailnet !== tailnet) throw new LaptopNetworkError("tailnet_mismatch", { active: status.tailnet, expected: tailnet });
 
+    const owned = await readOwned();
+    const confPath = join(lazurioDirectory, `${label}.conf`);
+    if (!owned[label] && existsSync(confPath)) {
+      // Someone wrote this .conf by hand; it is theirs to change.
+      throw new LaptopNetworkError("connection_unmanaged", { label });
+    }
     await mkdir(sshDirectory, { recursive: true, mode: 0o700 });
     await mkdir(lazurioDirectory, { recursive: true, mode: 0o700 });
     const keyPath = join(sshDirectory, `lazurio-${label}`);
@@ -341,8 +368,20 @@ export function createLaptopNetworkService({
       created = true;
     }
     const publicKey = (await readFile(`${keyPath}.pub`, "utf8")).trim();
-    await writeFile(join(lazurioDirectory, `${label}.conf`), hostBlock({ label, ipv4, user }), { mode: 0o600 });
+    await writeFile(confPath, hostBlock({ label, ipv4, user }), { mode: 0o600 });
     await writeFile(join(lazurioDirectory, `${label}.known_hosts`), `${label} ${parsedHostKey.type} ${parsedHostKey.body}\n`, { mode: 0o600 });
+    owned[label] = {
+      label,
+      conf: confPath,
+      known_hosts: join(lazurioDirectory, `${label}.known_hosts`),
+      key: keyPath,
+      // True only when this Launchpad generated the key (now or earlier);
+      // a key that already existed stays the person's own on removal.
+      key_created: created || owned[label]?.key_created === true,
+      created_at: owned[label]?.created_at ?? now().toISOString(),
+      updated_at: now().toISOString(),
+    };
+    await writeOwned(owned);
     const configPath = join(sshDirectory, "config");
     const existing = existsSync(configPath) ? await readFile(configPath, "utf8") : "";
     if (!existing.split(/\r?\n/).includes(includeLine)) {
@@ -357,17 +396,24 @@ export function createLaptopNetworkService({
     };
   }
 
+  // Removes only what the ledger proves this Launchpad wrote: its .conf and
+  // known_hosts always, the private key only when it generated it. Anything
+  // else (a hand-authored .conf, a pre-existing key) is refused untouched.
   async function removeConnection({ label } = {}) {
     if (!labelPattern.test(label ?? "")) throw new LaptopNetworkError("label_invalid");
-    for (const path of [
-      join(lazurioDirectory, `${label}.conf`),
-      join(lazurioDirectory, `${label}.known_hosts`),
-      join(sshDirectory, `lazurio-${label}`),
-      join(sshDirectory, `lazurio-${label}.pub`),
-    ]) {
-      await rm(path, { force: true });
+    const owned = await readOwned();
+    const record = owned[label];
+    if (!record) throw new LaptopNetworkError("connection_unmanaged", { label });
+    await rm(join(lazurioDirectory, `${label}.conf`), { force: true });
+    await rm(join(lazurioDirectory, `${label}.known_hosts`), { force: true });
+    const keyRemoved = record.key_created === true;
+    if (keyRemoved) {
+      await rm(join(sshDirectory, `lazurio-${label}`), { force: true });
+      await rm(join(sshDirectory, `lazurio-${label}.pub`), { force: true });
     }
-    return { removed: true, label };
+    delete owned[label];
+    await writeOwned(owned);
+    return { removed: true, label, key_removed: keyRemoved };
   }
 
   return { read, requestJoin, readConnections, connect, removeConnection };

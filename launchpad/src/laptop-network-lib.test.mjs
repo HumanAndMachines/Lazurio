@@ -305,7 +305,54 @@ test("connect writes the key, Host block, pinned known_hosts and one Include, on
     { label: "iotor-jakub-vm", host: "100.72.0.4", user: "jakub", identity_file: "~/.ssh/lazurio-iotor-jakub-vm", connect: "ssh iotor-jakub-vm", managed: true },
   ]);
 
-  expect(await network.removeConnection({ label: "iotor-jakub-vm" })).toEqual({ removed: true, label: "iotor-jakub-vm" });
+  expect(await network.removeConnection({ label: "iotor-jakub-vm" })).toEqual({ removed: true, label: "iotor-jakub-vm", key_removed: true });
   expect(await network.readConnections()).toEqual([]);
   expect(existsSync(join(home, ".ssh", "lazurio-iotor-jakub-vm"))).toBe(false);
+});
+
+test("removal never deletes what Launchpad did not create: hand-authored .conf, pre-existing key", async () => {
+  const { network, home, stateRoot } = await service({
+    run: async (program, args) => {
+      if (args[0] === "version") return { code: program === "tailscale" ? 0 : 1, stdout: "1.90.0", stderr: "" };
+      if (args[0] === "status") return { code: 0, stdout: status(), stderr: "" };
+      if (program === "ssh-keygen") {
+        const target = args[args.indexOf("-f") + 1];
+        await writeFile(target, "private", { mode: 0o600 });
+        await writeFile(`${target}.pub`, `${laptopKey}\n`);
+        return { code: 0, stdout: "", stderr: "" };
+      }
+      return { code: 1, stdout: "", stderr: "" };
+    },
+  });
+  await mkdir(join(home, ".ssh", "lazurio"), { recursive: true });
+  // A person wrote this .conf and this key themselves.
+  await writeFile(join(home, ".ssh", "lazurio", "recovery.conf"), "Host recovery\n  HostName 100.64.0.9\n  User root\n  IdentityFile ~/.ssh/lazurio-recovery\n");
+  await writeFile(join(home, ".ssh", "lazurio-recovery"), "the only copy", { mode: 0o600 });
+  await writeFile(join(home, ".ssh", "lazurio-recovery.pub"), "ssh-ed25519 AAAA recovery\n");
+  expect(await network.readConnections()).toEqual([
+    { label: "recovery", host: "100.64.0.9", user: "root", identity_file: "~/.ssh/lazurio-recovery", connect: "ssh recovery", managed: false },
+  ]);
+  await expect(network.removeConnection({ label: "recovery" })).rejects.toMatchObject({ code: "connection_unmanaged", details: { label: "recovery" } });
+  // Even a label without any .conf: nothing is deleted without a ledger record.
+  await writeFile(join(home, ".ssh", "lazurio-orphan"), "keep me", { mode: 0o600 });
+  await expect(network.removeConnection({ label: "orphan" })).rejects.toMatchObject({ code: "connection_unmanaged" });
+  expect(await readFile(join(home, ".ssh", "lazurio-recovery"), "utf8")).toBe("the only copy");
+  expect(await readFile(join(home, ".ssh", "lazurio-orphan"), "utf8")).toBe("keep me");
+  expect(existsSync(join(home, ".ssh", "lazurio", "recovery.conf"))).toBe(true);
+  // connect() will not overwrite a hand-authored .conf under the same label either.
+  const request = { label: "recovery", ipv4: "100.72.0.3", user: "jakub", tailnet: "headscale.betaco.lazurio.io", host_key: hostKey };
+  await expect(network.connect(request)).rejects.toMatchObject({ code: "connection_unmanaged" });
+
+  // A connection whose key already existed: removal drops the .conf and known_hosts, keeps the key.
+  await writeFile(join(home, ".ssh", "lazurio-betaco-anna-vm"), "pre-existing", { mode: 0o600 });
+  await writeFile(join(home, ".ssh", "lazurio-betaco-anna-vm.pub"), `${laptopKey}\n`);
+  const reused = await network.connect({ ...request, label: "betaco-anna-vm" });
+  expect(reused.created).toBe(false);
+  const ledger = JSON.parse(await readFile(join(stateRoot, "runtime", "network", "connections.json"), "utf8"));
+  expect(ledger["betaco-anna-vm"].key_created).toBe(false);
+  expect((await network.readConnections()).find((c) => c.label === "betaco-anna-vm").managed).toBe(true);
+  expect(await network.removeConnection({ label: "betaco-anna-vm" })).toEqual({ removed: true, label: "betaco-anna-vm", key_removed: false });
+  expect(await readFile(join(home, ".ssh", "lazurio-betaco-anna-vm"), "utf8")).toBe("pre-existing");
+  expect(existsSync(join(home, ".ssh", "lazurio", "betaco-anna-vm.conf"))).toBe(false);
+  expect(existsSync(join(home, ".ssh", "lazurio", "betaco-anna-vm.known_hosts"))).toBe(false);
 });

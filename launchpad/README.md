@@ -278,8 +278,12 @@ záložní příkaz. Tlačítko **Přidat klíč na <label>** vrátí člověka 
 Mašiny s `#add_key=<veřejný klíč>`; stránka klíč předvyplní a člověk klikne
 Přidat (server zůstává jediný, kdo zapisuje `authorized_keys`). Záložní
 one‑liner pro laptop bez Lazuria zůstává schovaný pod „Bez Launchpadu na
-notebooku“. `POST /api/setup/connections/remove` smaže conf, known_hosts i klíč
-na laptopu; klíč na Mašině zůstává, dokud ho tam člověk neodebere.
+notebooku“. `POST /api/setup/connections/remove` smaže jen to, co podle
+ledgeru vlastnictví (`$LAZURIO_LAUNCHPAD_STATE_ROOT/runtime/network/connections.json`)
+Launchpad sám zapsal: conf a known_hosts vždy, soukromý klíč jen když ho
+vygeneroval; ručně psaný `~/.ssh/lazurio/<label>.conf` je v seznamu jen ke
+čtení a Launchpad ho ani nepřepíše (`connection_unmanaged`). Klíč na Mašině
+zůstává, dokud ho tam člověk neodebere.
 
 ### Zdrojové kódy: GitHub účet Mašiny
 
