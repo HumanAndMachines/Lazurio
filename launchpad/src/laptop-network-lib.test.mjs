@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 import { mkdtemp, readFile, writeFile, mkdir } from "node:fs/promises";
+import { createSshAccessService } from "./ssh-access-lib.mjs";
+import { parseHandover } from "../public/connections.js";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -204,6 +206,52 @@ test("a request whose issue was closed without registering the laptop is refused
   // Asking again is possible and replaces the refused record.
   const again = await network.requestJoin({ organization: "BetaCo" });
   expect(again.state).toBe("pending");
+});
+
+test("full flow: Machine SSH state → hand-over code → laptop activation when CurrentTailnet.Name differs from ControlURL", async () => {
+  // Machine side: tailscaled logged into headscale.betaco.lazurio.io, status name is presentational.
+  const machineRoot = await mkdtemp(join(tmpdir(), "machine-"));
+  await writeFile(join(machineRoot, "host.pub"), `${hostKey.type} ${hostKey.key} root@vm\n`);
+  await writeFile(join(machineRoot, "machine.json"), JSON.stringify({ machine: { id: "betaco-anna" }, network: { headscale_hostname: "betaco-anna-vm" } }));
+  await mkdir(join(machineRoot, "home"));
+  const machine = createSshAccessService({
+    home: join(machineRoot, "home"), user: "anna", hostName: "anna", stateRoot: join(machineRoot, "state"),
+    hostKeyPath: join(machineRoot, "host.pub"), machineIdentityPath: join(machineRoot, "machine.json"),
+    run: async (program, args) => {
+      if (args[0] === "debug") return JSON.stringify({ ControlURL: "https://headscale.betaco.lazurio.io" });
+      return JSON.stringify({ Self: { TailscaleIPs: ["100.72.0.3"] }, CurrentTailnet: { Name: "betaco-tailnet" } });
+    },
+  });
+  const state = await machine.read();
+  expect(state.tailnet).toBe("headscale.betaco.lazurio.io");
+
+  // The hand-over code exactly as ssh-access.js builds it (base64url JSON).
+  const payload = {
+    label: state.label, ipv4: state.tailnet_ipv4, user: state.user, tailnet: state.tailnet,
+    host_key: { type: state.host_key.type, key: state.host_key.key }, fingerprint: state.host_key.fingerprint,
+    return: "https://launchpad.betaco-anna-vm.betaco.lazurio.io/settings/ssh",
+  };
+  const handover = parseHandover(Buffer.from(JSON.stringify(payload)).toString("base64url"));
+  expect(handover.tailnet).toBe("headscale.betaco.lazurio.io");
+
+  // Laptop side: same control server, a different presentational name.
+  const { network, home } = await service({
+    run: async (program, args) => {
+      if (args[0] === "version") return { code: program === "tailscale" ? 0 : 1, stdout: "1.90.0", stderr: "" };
+      if (args[0] === "debug") return { code: 0, stdout: JSON.stringify({ ControlURL: "https://headscale.betaco.lazurio.io" }), stderr: "" };
+      if (args[0] === "status") return { code: 0, stdout: status({ CurrentTailnet: { Name: "anna's laptop net" } }), stderr: "" };
+      if (program === "ssh-keygen") {
+        const target = args[args.indexOf("-f") + 1];
+        await writeFile(target, "private", { mode: 0o600 });
+        await writeFile(`${target}.pub`, `${laptopKey}\n`);
+        return { code: 0, stdout: "", stderr: "" };
+      }
+      return { code: 1, stdout: "", stderr: "" };
+    },
+  });
+  const outcome = await network.connect({ label: handover.label, ipv4: handover.ipv4, user: handover.user, tailnet: handover.tailnet, host_key: handover.host_key });
+  expect(outcome.created).toBe(true);
+  expect(await readFile(join(home, ".ssh", "lazurio", `${state.label}.known_hosts`), "utf8")).toBe(`${state.label} ${hostKey.type} ${hostKey.key}\n`);
 });
 
 test("connect writes the key, Host block, pinned known_hosts and one Include, only on the right tailnet", async () => {

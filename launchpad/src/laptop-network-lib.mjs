@@ -3,6 +3,7 @@ import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
 import { parsePublicKeyInput } from "./ssh-access-lib.mjs";
 import { runProcess } from "./setup-github-lib.mjs";
+import { readTailscaleIdentity, validControlUrl } from "./tailscale-identity-lib.mjs";
 
 // Laptop side of Machine connections — local profile only. Two things a
 // person clicks in the Launchpad of their own laptop:
@@ -35,22 +36,12 @@ const labelPattern = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 const ipv4Pattern = /^100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.(?:25[0-5]|2[0-4]\d|1?\d?\d)\.(?:25[0-5]|2[0-4]\d|1?\d?\d)$/;
 const userPattern = /^[a-z_][a-z0-9_-]{0,31}$/;
 const tailnetPattern = /^[A-Za-z0-9._@+-]{1,253}$/;
-const hostnamePattern = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 const registrationUrlPattern = /https:\/\/[A-Za-z0-9.-]+(?::\d+)?\/register\/([A-Za-z0-9_-]{16,})/;
 const includeLine = "Include lazurio/*.conf";
 const loginTimeoutMs = 15_000;
 
 export function validLoginServer(value) {
-  if (typeof value !== "string") return null;
-  let url;
-  try {
-    url = new URL(value);
-  } catch {
-    return null;
-  }
-  if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) return null;
-  if (url.pathname !== "/" || !hostnamePattern.test(url.hostname)) return null;
-  return url.origin;
+  return validControlUrl(value);
 }
 
 // The registration URL Headscale hands to the client:
@@ -172,43 +163,12 @@ export function createLaptopNetworkService({
     return null;
   }
 
-  // The tailnet a laptop is on is identified by the control server tailscaled
-  // is logged into (`debug prefs` → ControlURL), the same URL the manifest
-  // declares as the login server. `CurrentTailnet.Name` is only the fallback:
-  // Headscale reports the login server host there today, but the name is
-  // presentational and may differ from the control URL.
-  async function readControlUrl(tailscale) {
-    try {
-      const prefs = JSON.parse((await run(tailscale, ["debug", "prefs"], { timeoutMs: 10_000 })).stdout);
-      return validLoginServer(prefs?.ControlURL);
-    } catch {
-      return null;
-    }
-  }
-
+  // One identity resolver with the Machine's SSH step (tailscale-identity-lib):
+  // the control server tailscaled is logged into, CurrentTailnet.Name only as
+  // fallback. The hand-over compares the two sides' answers.
   async function readStatus(tailscale) {
-    const empty = { backend_state: null, tailnet: null, control_url: null, ipv4: null, auth_url: null, host_name: null };
-    if (!tailscale) return empty;
-    let status;
-    let controlUrl;
-    try {
-      [status, controlUrl] = await Promise.all([
-        run(tailscale, ["status", "--json"], { timeoutMs: 10_000 }).then((result) => JSON.parse(result.stdout)),
-        readControlUrl(tailscale),
-      ]);
-    } catch {
-      return empty;
-    }
-    const name = status?.CurrentTailnet?.Name;
-    const tailnet = controlUrl ? new URL(controlUrl).hostname : tailnetPattern.test(name ?? "") ? name : null;
-    return {
-      backend_state: typeof status?.BackendState === "string" ? status.BackendState : null,
-      tailnet,
-      control_url: controlUrl,
-      ipv4: (status?.Self?.TailscaleIPs ?? []).find((value) => ipv4Pattern.test(value)) ?? null,
-      auth_url: typeof status?.AuthURL === "string" ? status.AuthURL : null,
-      host_name: typeof status?.Self?.HostName === "string" ? status.Self.HostName : null,
-    };
+    if (!tailscale) return { backend_state: null, tailnet: null, control_url: null, ipv4: null, auth_url: null, host_name: null };
+    return readTailscaleIdentity(run, tailscale);
   }
 
   async function readRequests() {

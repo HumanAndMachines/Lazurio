@@ -138,6 +138,7 @@ test("setup commands exist only for validated values and never ask for admin rig
     expect(script).toContain("StrictHostKeyChecking yes");
     expect(script).toContain("IdentitiesOnly yes");
     expect(script).toContain("Include lazurio/*.conf");
+    expect(script).toContain("ControlURL");
     expect(script).toContain("CurrentTailnet");
     expect(script).toContain(`'${tailnet}'`);
     expect(script).not.toContain(".ssh/known_hosts");
@@ -167,7 +168,9 @@ async function laptop() {
   await mkdir(home);
   await mkdir(bin);
   await writeFile(join(bin, "pbcopy"), `#!/bin/sh\ncat > "${join(root, "clipboard")}"\n`);
-  await writeFile(join(bin, "tailscale"), `#!/bin/sh\nprintf '{\\n  "Version": "1.80.0",\\n  "CurrentTailnet": {\\n    "Name": "%s",\\n    "MagicDNSSuffix": "x"\\n  }\\n}\\n' "$FAKE_TAILNET"\n`);
+  // The fake tailscale reports the control server through `debug prefs` and a
+  // presentational name through `status`, like a Headscale client may.
+  await writeFile(join(bin, "tailscale"), `#!/bin/sh\nif [ "$1" = debug ]; then printf '{\\n  "ControlURL": "https://%s",\\n  "RouteAll": false\\n}\\n' "$FAKE_TAILNET"; else printf '{\\n  "Version": "1.80.0",\\n  "CurrentTailnet": {\\n    "Name": "presentational name",\\n    "MagicDNSSuffix": "x"\\n  }\\n}\\n'; fi\n`);
   await chmod(join(bin, "pbcopy"), 0o755);
   await chmod(join(bin, "tailscale"), 0o755);
   const hostKey = { type: "ssh-ed25519", key: syntheticKey().split(" ")[1] };
@@ -255,6 +258,19 @@ test.skipIf(!posix)("service reads Machine facts and builds commands", async () 
   expect(degraded.tailnet_ipv4).toBeNull();
   expect(degraded.commands).toBeNull();
   expect(degraded.issues).toEqual(["tailnet_ip_unavailable"]);
+});
+
+test.skipIf(!posix)("the Machine advertises the control server host, not the presentational tailnet name", async () => {
+  const { access } = await service({
+    run: async (program, args) => {
+      if (program !== "tailscale") return execFileSync(program, args, { encoding: "utf8" });
+      if (args[0] === "debug") return JSON.stringify({ ControlURL: "https://headscale.alpha.example" });
+      return JSON.stringify({ Self: { TailscaleIPs: ["100.64.0.7"] }, CurrentTailnet: { Name: "alpha tailnet" } });
+    },
+  });
+  const state = await access.read();
+  expect(state.tailnet).toBe("headscale.alpha.example");
+  expect(state.commands.macos).toContain("'headscale.alpha.example'");
 });
 
 test.skipIf(!posix)("adding keys writes only ~/.ssh/authorized_keys with private modes, dedups and audits", async () => {

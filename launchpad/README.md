@@ -1146,8 +1146,10 @@ directly still shows its pairing page.
 In the hosted profile Settings lists **SSH access** (localhost never does;
 `GET /api/setup/ssh` answers `{ "available": false }` there and the write
 routes return 404). The step reads everything on the Machine at request
-time: the workspace OS user, the tailnet IPv4 and tailnet name from
-`tailscale status --json` (`Self.TailscaleIPs`, `CurrentTailnet.Name`), the
+time: the workspace OS user, the tailnet IPv4 (`tailscale status --json` →
+`Self.TailscaleIPs`) and the tailnet identity resolved by the same code the
+laptop uses (`src/tailscale-identity-lib.mjs`: host of `tailscale debug prefs`
+→ `ControlURL`, `CurrentTailnet.Name` only as fallback), the
 public host key `/etc/ssh/ssh_host_ed25519_key.pub` with its SHA256
 fingerprint, and a host label (`machine.id` from
 `/etc/lazurio/lazurio.machine.json`, which the Machines contract qualifies by
@@ -1158,7 +1160,8 @@ step explains what is missing instead of offering a command.
 1. **Prepare the laptop.** One idempotent paste for macOS (Terminal) or
    Windows (PowerShell 5.1+, built-in OpenSSH, no administrator and no Git for
    Windows). It first checks that the laptop's Tailscale is on the Machine's
-   tailnet (`tailscale status --json` → `CurrentTailnet.Name`, including the
+   tailnet (`tailscale debug prefs` → `ControlURL` host, else `tailscale
+   status --json` → `CurrentTailnet.Name`, including the
    macOS app and `Program Files` CLI locations) and stops without writing
    anything when it is not; without a Tailscale CLI it warns and continues. It
    then creates `~/.ssh/lazurio-<label>` (ed25519, no passphrase) if missing,

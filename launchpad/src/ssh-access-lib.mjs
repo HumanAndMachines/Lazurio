@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { appendFile, chmod, lstat, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { readTailscaleIdentity } from "./tailscale-identity-lib.mjs";
 
 // SSH access lets the operator of a hosted Machine reach it from a laptop over
 // the Headscale tailnet. The Launchpad runs as the Machine's workspace user, so
@@ -152,7 +153,8 @@ export function buildSetupCommands({ label, ipv4, user, tailnet, hostKey }) {
     "T=$(command -v tailscale || true)",
     '[ -n "$T" ] || [ ! -x /Applications/Tailscale.app/Contents/MacOS/Tailscale ] || T=/Applications/Tailscale.app/Contents/MacOS/Tailscale',
     'if [ -n "$T" ]; then',
-    `  N=$("$T" status --json 2>/dev/null | tr -d '\\n' | sed -n 's/.*"CurrentTailnet": *{[^}]*"Name": *"\\([^"]*\\)".*/\\1/p')`,
+    `  N=$("$T" debug prefs 2>/dev/null | tr -d '\\n' | sed -n 's/.*"ControlURL": *"https:\\/\\/\\([^"\\/]*\\)".*/\\1/p')`,
+    `  [ -n "$N" ] || N=$("$T" status --json 2>/dev/null | tr -d '\\n' | sed -n 's/.*"CurrentTailnet": *{[^}]*"Name": *"\\([^"]*\\)".*/\\1/p')`,
     `  [ "$N" = '${tailnet}' ] || { echo "${wrongTailnet}" >&2; exit 1; }`,
     "else",
     `  echo "${noCli}" >&2`,
@@ -177,7 +179,8 @@ export function buildSetupCommands({ label, ipv4, user, tailnet, hostKey }) {
     "if (-not $T -and (Test-Path -LiteralPath \"$env:ProgramFiles\\Tailscale\\tailscale.exe\")) { $T = \"$env:ProgramFiles\\Tailscale\\tailscale.exe\" }",
     "if ($T) {",
     "  $N = $null",
-    "  try { $N = ((& $T status --json 2>$null) -join \"`n\" | ConvertFrom-Json).CurrentTailnet.Name } catch {}",
+    "  try { $N = ([uri]((& $T debug prefs 2>$null) -join \"`n\" | ConvertFrom-Json).ControlURL).Host } catch {}",
+    "  if (-not $N) { try { $N = ((& $T status --json 2>$null) -join \"`n\" | ConvertFrom-Json).CurrentTailnet.Name } catch {} }",
     `  if ($N -ne '${tailnet}') { throw "${wrongTailnet}" }`,
     `} else { Write-Warning "${noCli}" }`,
     `$L = '${label}'`,
@@ -245,14 +248,14 @@ export function createSshAccessService({
     return result;
   }
 
-  // One status call gives the Machine's own tailnet address and the tailnet
-  // name the laptop must be on.
+  // The Machine's own tailnet address and the tailnet identity the laptop
+  // must be on — resolved by the same code the laptop uses
+  // (tailscale-identity-lib: ControlURL host, CurrentTailnet.Name as fallback),
+  // so the hand-over never advertises a name the laptop cannot match.
   async function readTailnet() {
     try {
-      const status = JSON.parse(await run("tailscale", ["status", "--json"]));
-      const ipv4 = (status?.Self?.TailscaleIPs ?? []).find((value) => ipv4Pattern.test(value)) ?? null;
-      const name = status?.CurrentTailnet?.Name;
-      return { ipv4, name: tailnetPattern.test(name ?? "") ? name : null };
+      const identity = await readTailscaleIdentity(run);
+      return { ipv4: identity.ipv4, name: identity.tailnet };
     } catch {
       return { ipv4: null, name: null };
     }
