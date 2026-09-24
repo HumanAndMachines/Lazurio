@@ -2,13 +2,16 @@ import { t } from "./i18n.js";
 import { launchpadFetch } from "./session-aware-fetch.js";
 
 // Connections section of Settings on a laptop: the SSH hosts this laptop may
-// reach, and the hand-over from a hosted Machine's Launchpad. That page links
-// here with `#connect=<base64url JSON>` carrying the Machine's label, tailnet
-// address, user, host key and its own URL; this laptop creates the key and
-// the pinned Host block, then sends the public key back through the return
-// URL's fragment so the Machine's page can add it with one click. The
-// fragment never reaches any server; every field is validated again here and
-// on the laptop's own Launchpad server before anything is written.
+// reach, and the hand-over from a hosted Machine's Launchpad. That page shows
+// a hand-over code (base64url JSON with the Machine's label, tailnet address,
+// user, host key and its own URL) the person pastes here; a `#connect=<code>`
+// fragment is accepted too for a caller that knows this Launchpad's real URL.
+// The Machine's page never guesses where this Launchpad listens. This laptop
+// creates the key and the pinned Host block, then sends the public key back
+// through the return URL's fragment so the Machine's page can add it with one
+// click. The code never reaches any server as such; every field is validated
+// again here and on the laptop's own Launchpad server before anything is
+// written.
 
 let content = null;
 let handover = null;
@@ -31,8 +34,11 @@ export function readConnections() {
   return requestJson("/api/setup/connections");
 }
 
-export function parseHandover(hash) {
-  const match = /^#connect=([A-Za-z0-9_-]+)$/.exec(String(hash ?? ""));
+// Accepts the bare code, `connect=<code>`, `#connect=<code>` or a whole URL
+// whose fragment carries it.
+export function parseHandover(input) {
+  const text = String(input ?? "").trim();
+  const match = /^(?:.*#)?(?:connect=)?([A-Za-z0-9_-]{16,})$/.exec(text);
   if (!match) return null;
   try {
     const json = atob(match[1].replace(/-/g, "+").replace(/_/g, "/"));
@@ -75,7 +81,7 @@ export async function mountConnectionsStep(container) {
 
 function render(state) {
   const nodes = [paragraph(t("connections.intro"))];
-  if (handover) nodes.push(handoverCard(handover));
+  nodes.push(handover ? handoverCard(handover) : pasteCard(state));
   const list = document.createElement("div");
   list.className = "connections-list ssh-access-body";
   list.append(...listNodes(state));
@@ -117,6 +123,34 @@ function listNodes(state) {
     nodes.push(row);
   }
   return nodes;
+}
+
+// Where a new connection starts on the laptop: paste the code the Machine's
+// Launchpad shows under "Through the Launchpad on your laptop".
+function pasteCard(state) {
+  const card = document.createElement("section");
+  card.className = "settings-card connections-paste";
+  const title = document.createElement("h4");
+  title.textContent = t("connections.paste.title");
+  card.append(title, paragraph(t("connections.paste.hint"), "ssh-access-muted"));
+  const field = document.createElement("textarea");
+  field.className = "ssh-access-code";
+  field.rows = 3;
+  field.spellcheck = false;
+  field.setAttribute("aria-label", t("connections.paste.title"));
+  const status = paragraph("", "ssh-access-error");
+  status.setAttribute("aria-live", "polite");
+  const use = button(t("connections.paste.use"), () => {
+    const parsed = parseHandover(field.value);
+    if (!parsed) {
+      status.textContent = t("connections.paste.invalid");
+      return;
+    }
+    handover = parsed;
+    render(state);
+  }, "btn btn-primary btn-sm");
+  card.append(field, use, status);
+  return card;
 }
 
 function handoverCard(payload) {

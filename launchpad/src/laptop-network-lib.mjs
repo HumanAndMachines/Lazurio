@@ -172,19 +172,39 @@ export function createLaptopNetworkService({
     return null;
   }
 
+  // The tailnet a laptop is on is identified by the control server tailscaled
+  // is logged into (`debug prefs` → ControlURL), the same URL the manifest
+  // declares as the login server. `CurrentTailnet.Name` is only the fallback:
+  // Headscale reports the login server host there today, but the name is
+  // presentational and may differ from the control URL.
+  async function readControlUrl(tailscale) {
+    try {
+      const prefs = JSON.parse((await run(tailscale, ["debug", "prefs"], { timeoutMs: 10_000 })).stdout);
+      return validLoginServer(prefs?.ControlURL);
+    } catch {
+      return null;
+    }
+  }
+
   async function readStatus(tailscale) {
-    const empty = { backend_state: null, tailnet: null, ipv4: null, auth_url: null, host_name: null };
+    const empty = { backend_state: null, tailnet: null, control_url: null, ipv4: null, auth_url: null, host_name: null };
     if (!tailscale) return empty;
     let status;
+    let controlUrl;
     try {
-      status = JSON.parse((await run(tailscale, ["status", "--json"], { timeoutMs: 10_000 })).stdout);
+      [status, controlUrl] = await Promise.all([
+        run(tailscale, ["status", "--json"], { timeoutMs: 10_000 }).then((result) => JSON.parse(result.stdout)),
+        readControlUrl(tailscale),
+      ]);
     } catch {
       return empty;
     }
     const name = status?.CurrentTailnet?.Name;
+    const tailnet = controlUrl ? new URL(controlUrl).hostname : tailnetPattern.test(name ?? "") ? name : null;
     return {
       backend_state: typeof status?.BackendState === "string" ? status.BackendState : null,
-      tailnet: tailnetPattern.test(name ?? "") ? name : null,
+      tailnet,
+      control_url: controlUrl,
       ipv4: (status?.Self?.TailscaleIPs ?? []).find((value) => ipv4Pattern.test(value)) ?? null,
       auth_url: typeof status?.AuthURL === "string" ? status.AuthURL : null,
       host_name: typeof status?.Self?.HostName === "string" ? status.Self.HostName : null,
@@ -228,19 +248,19 @@ export function createLaptopNetworkService({
     const projected = [];
     for (const organization of list) {
       const tailnet = organization.headscale_login_server ? new URL(organization.headscale_login_server).hostname : null;
-      const request = requests[organization.slug] ?? null;
+      let request = requests[organization.slug] ?? null;
       const connected = Boolean(tailnet) && status.tailnet === tailnet && status.backend_state === "Running";
+      // A request whose issue the Admin closed without registering the node
+      // was refused (or expired): it must not look pending forever, the
+      // person may ask again.
+      if (request && !connected) {
+        request = { ...request, issue_state: request.issue_url ? await issueState(request.issue_url) : null };
+      }
+      const refused = Boolean(request) && !connected && request.issue_state === "closed";
       const state = !organization.headscale_login_server
         ? "unconfigured"
-        : connected ? "connected" : request ? "pending" : "none";
-      projected.push({
-        ...organization,
-        tailnet,
-        state,
-        request: request && !connected
-          ? { ...request, issue_state: request.issue_url ? await issueState(request.issue_url) : null }
-          : request,
-      });
+        : connected ? "connected" : refused ? "refused" : request ? "pending" : "none";
+      projected.push({ ...organization, tailnet, state, request });
     }
     return {
       available: true,

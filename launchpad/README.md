@@ -253,15 +253,22 @@ obsahuje jméno zařízení, login, registrační klíč a přesné kroky pro Ad
 (`headscale nodes register --user <login> --key <klíč>`, grant portu 22
 v Deployment Repu, zavřít issue); zamítnutí = zavřít bez registrace. Žádost si
 Launchpad pamatuje v `$LAZURIO_LAUNCHPAD_STATE_ROOT/runtime/network/join-requests.json`
-a ukazuje stav issue. Bez Tailscale ukáže „Zablokováno“ s odkazem na instalaci;
-bez přihlášeného `gh` vrátí registrační odkaz pro ruční předání Adminovi.
+a ukazuje stav issue; zavřené issue bez registrace notebooku znamená stav
+`refused` (zamítnuto nebo vypršelo) a tlačítko **Požádat znovu**. Aktivní síť
+laptopu určuje control server, ke kterému je `tailscaled` přihlášený
+(`tailscale debug prefs` → `ControlURL`), porovnaný s login serverem z manifestu;
+`CurrentTailnet.Name` je jen záložní zdroj. Bez Tailscale ukáže „Zablokováno“
+s odkazem na instalaci; bez přihlášeného `gh` vrátí registrační odkaz pro ruční
+předání Adminovi.
 
 **Spojení** (`/settings/connections`, `GET /api/setup/connections`): seznam
 Mašin, kam se z laptopu jde připojit (`~/.ssh/lazurio/*.conf`), a předávka
-z Launchpadu hostované Mašiny. Ta v sekci SSH nabízí **Připojit tento
-notebook**: odkaz na `http://localhost:4174/settings/connections#connect=<base64url JSON>`
-s labelem, tailnet adresou, účtem, host klíčem a vlastní URL (nic tajného).
-Laptop údaje znovu validuje (label, adresa 100.64.0.0/10, POSIX účet, tailnet,
+z Launchpadu hostované Mašiny. Ta v sekci SSH ukáže **předávací kód**
+(base64url JSON s labelem, tailnet adresou, účtem, host klíčem a vlastní URL,
+nic tajného), který člověk vloží do sekce Spojení svého laptopu; stránka Mašiny
+nezná adresu laptopového Launchpadu (tu má jen jeho locator) a žádný port
+nehádá. Sekce přijme kód holý, jako `connect=<kód>` i ve fragmentu
+`#connect=<kód>` vlastní URL. Laptop údaje znovu validuje (label, adresa 100.64.0.0/10, POSIX účet, tailnet,
 veřejný host klíč, návratová URL jen `https://*.lazurio.io`), ověří, že je na
 stejném tailnetu (`tailnet_mismatch` jinak), a `POST /api/setup/connections/connect`
 vytvoří `~/.ssh/lazurio-<label>` (ed25519, `ssh-keygen`), zapíše

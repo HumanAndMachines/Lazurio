@@ -96,8 +96,22 @@ function organizationCard(organization) {
       card.append(paragraph(t("network.state.unconfigured"), "ssh-access-muted"));
       break;
     default: {
-      card.append(paragraph(t("network.state.none"), "ssh-access-muted"));
-      const join = button(t("network.requestJoin"), async () => {
+      // "refused": the Admin closed the request without registering the
+      // laptop; say so and let the person ask again. "none": never asked.
+      if (organization.state === "refused") {
+        card.append(paragraph(t("network.state.refused"), "ssh-access-error"));
+        if (organization.request?.issue_url) {
+          const link = document.createElement("a");
+          link.href = organization.request.issue_url;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.textContent = t("network.requestLink", { state: organization.request.issue_state ?? "closed" });
+          card.append(link);
+        }
+      } else {
+        card.append(paragraph(t("network.state.none"), "ssh-access-muted"));
+      }
+      const join = button(t(organization.state === "refused" ? "network.requestAgain" : "network.requestJoin"), async () => {
         join.disabled = true;
         status.textContent = t("network.requesting");
         try {

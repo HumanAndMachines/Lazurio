@@ -8,7 +8,6 @@ import { launchpadFetch } from "./session-aware-fetch.js";
 // self-contained step; Settings is one host for it, a later Machine setup
 // guide can mount the same step next to its siblings.
 
-const LAPTOP_LAUNCHPAD = "http://localhost:4174/settings/connections";
 let content = null;
 let state = null;
 let pendingKey = null;
@@ -77,15 +76,21 @@ function render() {
     tabs.append(tab);
   }
   // Preferred path: the person's own laptop Launchpad creates the key and the
-  // Host block and comes back with the public key. The facts travel in the
-  // URL fragment (nothing secret: label, address, user, host key, this page).
-  const handover = document.createElement("a");
-  handover.className = "btn btn-primary btn-sm";
-  handover.href = laptopHandoverUrl();
-  handover.target = "_blank";
-  handover.rel = "noopener noreferrer";
-  handover.textContent = t("ssh.launchpad.connect");
-  nodes.push(step(t("ssh.launchpad.title"), paragraph(t("ssh.launchpad.hint"), "ssh-access-muted"), handover));
+  // Host block and comes back with the public key. The facts travel as a
+  // hand-over code the person pastes into the laptop's Connections section
+  // (nothing secret: label, address, user, host key, this page). This page
+  // cannot know where the laptop's Launchpad listens — its URL comes from the
+  // laptop's own locator, never from a guessed port — so the code is the
+  // only thing that crosses.
+  const handoverField = codeField(laptopHandoverCode(), 3);
+  handoverField.classList.add("ssh-access-handover");
+  handoverField.setAttribute("aria-label", t("ssh.launchpad.title"));
+  nodes.push(step(
+    t("ssh.launchpad.title"),
+    paragraph(t("ssh.launchpad.hint"), "ssh-access-muted"),
+    handoverField,
+    copyButton(t("ssh.launchpad.copy"), () => handoverField.value),
+  ));
 
   const fallback = document.createElement("details");
   fallback.className = "ssh-access-fallback";
@@ -140,7 +145,9 @@ function render() {
   content.replaceChildren(...nodes);
 }
 
-function laptopHandoverUrl() {
+// The hand-over code is base64url JSON; the laptop's Connections section
+// accepts it bare, as `connect=<code>` or inside a URL fragment.
+export function laptopHandoverCode() {
   const payload = JSON.stringify({
     label: state.label,
     ipv4: state.tailnet_ipv4,
@@ -150,8 +157,7 @@ function laptopHandoverUrl() {
     fingerprint: state.host_key.fingerprint,
     return: window.location.href.split("#")[0],
   });
-  const encoded = btoa(unescape(encodeURIComponent(payload))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-  return `${LAPTOP_LAUNCHPAD}#connect=${encoded}`;
+  return btoa(unescape(encodeURIComponent(payload))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
 function keysSection() {

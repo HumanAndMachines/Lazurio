@@ -59,8 +59,8 @@ test("login server and registration URL are validated strictly", () => {
 
 test("ssh config hosts are parsed and only Lazurio Machines count", () => {
   expect(isLazurioMachineHost("100.64.0.3")).toBe(true);
-  expect(isLazurioMachineHost("spectoda-matej-vm.tailnet.humanandmachine-ai.lazurio.io")).toBe(true);
-  expect(isLazurioMachineHost("vydrinko.console.host.spectoda.com")).toBe(false);
+  expect(isLazurioMachineHost("betaco-anna-vm.tailnet.betaco.lazurio.io")).toBe(true);
+  expect(isLazurioMachineHost("console.host.example-client.com")).toBe(false);
   expect(isLazurioMachineHost("10.0.0.144")).toBe(false);
   expect(parseSshConfigHosts("# c\nInclude ~/.orbstack/ssh/config\nHost a b\n  HostName x\nHost one\n  HostName 100.64.0.3\n  User u\n  IdentityFile ~/.ssh/k\nMatch host x\n  User z\n")).toEqual([
     { label: "one", host: "100.64.0.3", user: "u", identity_file: "~/.ssh/k", connect: "ssh one" },
@@ -159,6 +159,53 @@ test("requestJoin fails closed without Tailscale, a login server or a signed-in 
   });
 });
 
+test("the tailnet is the control server tailscaled is logged into, not the presentational name", async () => {
+  const organizations = [
+    { slug: "BetaCo", display_name: "BetaCo", repository: "BetaCo/BetaCo_GEN3", conglomerate_host: { headscale_login_server: "https://headscale.betaco.lazurio.io" } },
+  ];
+  const { network } = await service({
+    organizations,
+    run: async (program, args) => {
+      if (args[0] === "version") return { code: program === "tailscale" ? 0 : 1, stdout: "1.90.0", stderr: "" };
+      if (args[0] === "status") return { code: 0, stdout: status({ CurrentTailnet: { Name: "BetaCo tailnet" } }), stderr: "" };
+      if (args[0] === "debug" && args[1] === "prefs") return { code: 0, stdout: JSON.stringify({ ControlURL: "https://headscale.betaco.lazurio.io" }), stderr: "" };
+      return { code: 1, stdout: "", stderr: "" };
+    },
+  });
+  const state = await network.read();
+  expect(state.status.tailnet).toBe("headscale.betaco.lazurio.io");
+  expect(state.status.control_url).toBe("https://headscale.betaco.lazurio.io");
+  expect(state.organizations[0].state).toBe("connected");
+});
+
+test("a request whose issue was closed without registering the laptop is refused, not pending", async () => {
+  const organizations = [
+    { slug: "BetaCo", display_name: "BetaCo", repository: "BetaCo/BetaCo_GEN3", conglomerate_host: { headscale_login_server: "https://headscale.betaco.lazurio.io" } },
+  ];
+  let issueState = "OPEN";
+  const { network } = await service({
+    organizations,
+    run: async (program, args) => {
+      if (args[0] === "version") return { code: program === "tailscale" ? 0 : 1, stdout: "1.90.0", stderr: "" };
+      if (args[0] === "status") return { code: 0, stdout: status({ BackendState: "NeedsLogin", CurrentTailnet: null }), stderr: "" };
+      if (args[0] === "login") return { code: null, stdout: "", stderr: "https://headscale.betaco.lazurio.io/register/hskey-authreq-0123456789abcdef" };
+      if (program === "gh" && args[0] === "api") return { code: 0, stdout: "anna\n", stderr: "" };
+      if (program === "gh" && args[0] === "issue" && args[1] === "create") return { code: 0, stdout: "https://github.com/BetaCo/BetaCo_GEN3/issues/42\n", stderr: "" };
+      if (program === "gh" && args[0] === "issue" && args[1] === "view") return { code: 0, stdout: `${issueState}\n`, stderr: "" };
+      return { code: 1, stdout: "", stderr: "" };
+    },
+  });
+  await network.requestJoin({ organization: "BetaCo" });
+  expect((await network.read()).organizations[0].state).toBe("pending");
+  issueState = "CLOSED";
+  const refused = (await network.read()).organizations[0];
+  expect(refused.state).toBe("refused");
+  expect(refused.request.issue_state).toBe("closed");
+  // Asking again is possible and replaces the refused record.
+  const again = await network.requestJoin({ organization: "BetaCo" });
+  expect(again.state).toBe("pending");
+});
+
 test("connect writes the key, Host block, pinned known_hosts and one Include, only on the right tailnet", async () => {
   const { network, home, calls } = await service({
     run: async (program, args) => {
@@ -177,10 +224,10 @@ test("connect writes the key, Host block, pinned known_hosts and one Include, on
   await writeFile(join(home, ".ssh", "config"), "Host old\n  HostName 10.0.0.1\n");
   // Hosts a person wrote by hand that point at Lazurio Machines are listed read-only.
   expect(await network.readConnections()).toEqual([]);
-  await writeFile(join(home, ".ssh", "config"), "Host old\n  HostName 10.0.0.1\nHost macano-matous-workspace\n  HostName 100.64.0.3\n  User matous\n  HostKeyAlias macano-matous-workspace\nHost spectoda-matej-workspace\n  HostName spectoda-matej-vm.tailnet.humanandmachine-ai.lazurio.io\nHost *.example.com\n  HostName x\n");
+  await writeFile(join(home, ".ssh", "config"), "Host old\n  HostName 10.0.0.1\nHost gamma-otto-workspace\n  HostName 100.64.0.3\n  User otto\n  HostKeyAlias gamma-otto-workspace\nHost betaco-anna-workspace\n  HostName betaco-anna-vm.tailnet.betaco.lazurio.io\nHost *.example.com\n  HostName x\n");
   expect(await network.readConnections()).toEqual([
-    { label: "macano-matous-workspace", host: "100.64.0.3", user: "matous", identity_file: null, connect: "ssh macano-matous-workspace", managed: false },
-    { label: "spectoda-matej-workspace", host: "spectoda-matej-vm.tailnet.humanandmachine-ai.lazurio.io", user: null, identity_file: null, connect: "ssh spectoda-matej-workspace", managed: false },
+    { label: "gamma-otto-workspace", host: "100.64.0.3", user: "otto", identity_file: null, connect: "ssh gamma-otto-workspace", managed: false },
+    { label: "betaco-anna-workspace", host: "betaco-anna-vm.tailnet.betaco.lazurio.io", user: null, identity_file: null, connect: "ssh betaco-anna-workspace", managed: false },
   ]);
   await writeFile(join(home, ".ssh", "config"), "Host old\n  HostName 10.0.0.1\n");
   const request = { label: "iotor-jakub-vm", ipv4: "100.72.0.3", user: "jakub", tailnet: "headscale.betaco.lazurio.io", host_key: hostKey };

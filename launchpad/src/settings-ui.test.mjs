@@ -71,15 +71,19 @@ test("the laptop side asks to join a network and activates SSH without a termina
   expect(network).toContain('case "github_cli_unavailable"');
   expect(network).toContain("error.details?.registration");
   // The hand-over fragment is validated: https return URL on lazurio.io only.
-  expect(connections).toContain("export function parseHandover(hash)");
+  expect(connections).toContain("export function parseHandover(input)");
   expect(connections).toContain('returnUrl.protocol !== "https:"');
   expect(connections).toContain('returnUrl.hostname.endsWith(".lazurio.io")');
   expect(connections).toContain('requestJson("/api/setup/connections/connect"');
   expect(connections).toContain("#add_key=${encodeURIComponent(outcome.public_key)}");
   expect(connections).toContain('case "tailnet_mismatch"');
-  // The Machine's page hands over to the laptop Launchpad and keeps the paste command as a hidden fallback.
-  expect(ssh).toContain('const LAPTOP_LAUNCHPAD = "http://localhost:4174/settings/connections";');
-  expect(ssh).toContain("function laptopHandoverUrl()");
+  // The laptop side accepts the hand-over code pasted in; nothing guesses where a Launchpad listens.
+  expect(connections).toContain("function pasteCard(state)");
+  expect(connections).toContain('t("connections.paste.invalid")');
+  // The Machine's page shows a hand-over code (no laptop URL, no port) and keeps the paste command as a hidden fallback.
+  expect(ssh).not.toContain("localhost:4174");
+  expect(ssh).not.toContain("LAPTOP_LAUNCHPAD");
+  expect(ssh).toContain("export function laptopHandoverCode()");
   expect(ssh).toContain('document.createElement("details")');
   expect(ssh).toContain("/^#add_key=(.+)$/");
   expect(ssh).toContain("if (pendingKey) keyField.value = pendingKey;");
@@ -117,7 +121,7 @@ test("both locales carry the Settings copy and dropped the old topbar entries", 
       "settings.nav.ssh", "settings.environment.kind.local", "settings.environment.kind.organization",
       "settings.environment.kind.personal", "settings.language.help", "settings.github.title", "settings.ssh.direction",
       "settings.nav.network", "settings.nav.connections", "network.requestJoin", "network.blocked", "connections.handover.activate",
-      "ssh.launchpad.connect", "ssh.fallback.summary",
+      "ssh.launchpad.copy", "ssh.fallback.summary", "connections.paste.use", "network.state.refused", "network.requestAgain",
     ]) {
       expect(locale).toContain(`"${key}":`);
     }
@@ -126,4 +130,22 @@ test("both locales carry the Settings copy and dropped the old topbar entries", 
       expect(locale).not.toContain(`"${key}":`);
     }
   }
+});
+
+test("the hand-over code is accepted bare, as connect=<code>, in a fragment or a whole URL, and validated", async () => {
+  const { parseHandover } = await import("../public/connections.js");
+  const payload = {
+    label: "betaco-anna-vm", ipv4: "100.72.0.3", user: "anna", tailnet: "headscale.betaco.lazurio.io",
+    host_key: { type: "ssh-ed25519", key: "AAAAC3NzaC1lZDI1NTE5AAAAIGb7d9Q6Cy1S1ZwZ5vN5a1r0Q6Q4XxT3s1jWl5eGqk0L" },
+    fingerprint: "SHA256:abc", return: "https://launchpad.betaco-anna-vm.betaco.lazurio.io/settings/ssh",
+  };
+  const encode = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  const code = encode(payload);
+  for (const input of [code, `connect=${code}`, `#connect=${code}`, `http://127.0.0.1:4187/settings/connections#connect=${code}`, `  ${code}\n`]) {
+    expect(parseHandover(input)).toEqual({ ...payload, return: payload.return });
+  }
+  expect(parseHandover("")).toBeNull();
+  expect(parseHandover("not a code")).toBeNull();
+  expect(parseHandover(encode({ ...payload, return: "http://launchpad.betaco-anna-vm.betaco.lazurio.io/" }))).toBeNull();
+  expect(parseHandover(encode({ ...payload, return: "https://evil.example.com/" }))).toBeNull();
 });
