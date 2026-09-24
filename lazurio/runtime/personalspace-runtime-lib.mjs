@@ -63,9 +63,12 @@ export async function resolveSpaceGbrainVault({
 // ({ apps, invalid_apps, failures }). Apps mají id = personal runtime id.
 // primarySpaceDir: na hostované osobní Mašině přesná složka Personalspace
 // (LAZURIO_HOSTED_PERSONALSPACE); vlastníka pak určuje ta složka, ne
-// launchpad.gen3.local.json.
-function personalspaceDiscoveryAdapter(companiesRoot, rootSourceRoot, primarySpaceDir) {
+// launchpad.gen3.local.json. listApps: false drží osobní aplikace mimo runtime
+// lane (hostovaná osobní Mašina je zatím nesměruje přes gateway, takže jejich
+// loopback URL a lokální akce by vzdálenému Ownerovi nefungovaly).
+function personalspaceDiscoveryAdapter(companiesRoot, rootSourceRoot, primarySpaceDir, listApps) {
   return async () => {
+    if (!listApps) return { apps: [], invalid_apps: [], failures: [], warnings: [] };
     const discovery = await discoverPersonalspace(companiesRoot, { rootSourceRoot, primarySpaceDir });
     return {
       apps: discovery.apps,
@@ -83,6 +86,7 @@ export function createPersonalspaceRuntimeManager({
   companiesRoot,
   rootSourceRoot = companiesRoot,
   primarySpaceDir,
+  listApps = true,
   launchpadRoot,
   stateRoot = launchpadRoot,
   createRuntimeManagerFn = createRuntimeManager,
@@ -91,7 +95,7 @@ export function createPersonalspaceRuntimeManager({
     companiesRoot,
     launchpadRoot,
     stateRoot,
-    discover: personalspaceDiscoveryAdapter(companiesRoot, rootSourceRoot, primarySpaceDir),
+    discover: personalspaceDiscoveryAdapter(companiesRoot, rootSourceRoot, primarySpaceDir, listApps),
   });
 }
 
@@ -110,8 +114,9 @@ export async function buildPersonalspaceResponse({
   companiesRoot = join(import.meta.dirname, "..", ".."),
   rootSourceRoot = companiesRoot,
   primarySpaceDir,
+  listApps = true,
   launchpadRoot = join(companiesRoot, "launchpad"),
-  runtimeManager = createPersonalspaceRuntimeManager({ companiesRoot, rootSourceRoot, primarySpaceDir, launchpadRoot }),
+  runtimeManager = createPersonalspaceRuntimeManager({ companiesRoot, rootSourceRoot, primarySpaceDir, listApps, launchpadRoot }),
   profileEmail = null,
   verifyRepositoryPrivacy = false,
   inspectRepository = inspectGitHubRepository,
@@ -119,7 +124,7 @@ export async function buildPersonalspaceResponse({
   const discovery = await discoverPersonalspace(companiesRoot, { rootSourceRoot, primarySpaceDir });
 
   const appsWithRuntime = await runtimeManager.appsWithRuntime(
-    discovery.apps.map((app) => ({
+    (listApps ? discovery.apps : []).map((app) => ({
       ...app,
       ...personalspaceRuntimeUrls(app),
     })),
@@ -130,7 +135,7 @@ export async function buildPersonalspaceResponse({
     appsBySpace.get(app.space).push(app);
   }
 
-  const invalidApps = (discovery.invalid_apps ?? []).map((app) => ({
+  const invalidApps = ((listApps ? discovery.invalid_apps : null) ?? []).map((app) => ({
     ...app,
     url: null,
     health_url: null,

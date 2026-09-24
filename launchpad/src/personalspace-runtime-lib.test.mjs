@@ -42,6 +42,33 @@ test("personalspace runtime uses the explicit mutable Launchpad state root", () 
   expect(typeof received.discover).toBe("function");
 });
 
+test("hosted personal runtime lane discovers no personal Apps", async () => {
+  const { root } = await createFixture();
+  let received = null;
+  createPersonalspaceRuntimeManager({
+    companiesRoot: root,
+    primarySpaceDir: "exampleuser_GEN3",
+    listApps: false,
+    launchpadRoot: join(root, "launchpad"),
+    createRuntimeManagerFn: (options) => {
+      received = options;
+      return {};
+    },
+  });
+  expect(await received.discover()).toEqual({ apps: [], invalid_apps: [], failures: [], warnings: [] });
+  let listed = null;
+  const response = await buildPersonalspaceResponse({
+    companiesRoot: root,
+    primarySpaceDir: "exampleuser_GEN3",
+    listApps: false,
+    launchpadRoot: join(root, "launchpad"),
+    runtimeManager: { appsWithRuntime: async (apps) => { listed = apps; return apps; } },
+  });
+  expect(listed).toEqual([]);
+  expect(response.summary.space_count).toBe(1);
+  expect(response.summary.app_count).toBe(0);
+});
+
 test("personalspace runtime discovery reads tracked config from the selected Root source", async () => {
   const { root, dir } = await createFixture({ withGbrain: false });
   const selectedRoot = await mkdtemp(join(tmpdir(), "ps-selected-root-"));
@@ -599,4 +626,7 @@ test("the Launchpad server binds every Personalspace lane to the hosted folder",
   expect(server).toContain("const hostedPersonalspaceDir = personalHostedScope ? hostedWorkspace.personalspace : undefined;");
   // Personal Apps runtime, /api/personalspace and gbrain.
   expect(server.match(/primarySpaceDir: hostedPersonalspaceDir,/g)?.length).toBe(3);
+  // Personal Apps stay out of both App paths until a hosted lane routes them.
+  expect(server).toContain("const personalspaceListsApps = !personalHostedScope;");
+  expect(server.match(/listApps: personalspaceListsApps,/g)?.length).toBe(2);
 });

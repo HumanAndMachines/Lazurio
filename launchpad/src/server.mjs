@@ -138,8 +138,11 @@ if (personalHostedScope && options.organization !== undefined) {
 // The exact Personalspace folder of a hosted personal Machine. Every
 // Personalspace lane of this server (API, personal Apps, gbrain) resolves its
 // owner from that folder, as the start-up binding does; elsewhere the owner
-// comes from launchpad.gen3.local.json.
+// comes from launchpad.gen3.local.json. Personal Apps are not yet routed
+// through a hosted lane, so there the lane lists the space without its Apps:
+// their loopback URLs and local-only actions would not reach a remote owner.
 const hostedPersonalspaceDir = personalHostedScope ? hostedWorkspace.personalspace : undefined;
+const personalspaceListsApps = !personalHostedScope;
 // Fail closed before any listener, lock or locator exists.
 let reportedPersonalspaceIssues = "";
 let hostedPersonalspace = personalHostedScope ? await resolvePersonalHostedBinding() : null;
@@ -265,6 +268,7 @@ const personalspaceRuntimeManager = createPersonalspaceRuntimeManager({
   companiesRoot,
   rootSourceRoot,
   primarySpaceDir: hostedPersonalspaceDir,
+  listApps: personalspaceListsApps,
   launchpadRoot,
   stateRoot: launchpadStateRoot,
 });
@@ -889,6 +893,7 @@ async function buildPersonalspace({ verifyRepositoryPrivacy = false } = {}) {
     companiesRoot,
     rootSourceRoot,
     primarySpaceDir: hostedPersonalspaceDir,
+    listApps: personalspaceListsApps,
     launchpadRoot,
     runtimeManager: personalspaceRuntimeManager,
     profileEmail: principalEmail,
