@@ -162,7 +162,9 @@ export function parseSshConfig(raw) {
 
 /**
  * `/etc/lazurio/lazurio.machine.json` (Machines docs/machine-identity.md).
- * The only signal for who may be signed in; never guessed from hostnames.
+ * Tells a personal VM (no Organization install) from an Organization one.
+ * The declared account does not gate sign-in: until Dashboard binds a
+ * Machine to an account, whoever operates it signs in with any account.
  */
 export function parseMachineAssignment(raw) {
   let value;
@@ -202,12 +204,6 @@ export function readMachineAssignment({ path = MACHINE_IDENTITY_FILE, exists = e
   } catch {
     return Object.freeze({ kind: "invalid" });
   }
-}
-
-export function accountMatchesAssignment(user, assignment) {
-  if (!assignment?.github_login) return true;
-  return String(user?.login ?? "").toLowerCase() === assignment.github_login
-    && Number(user?.id) === assignment.github_id;
 }
 
 export function normalizeOrganizationLogin(value) {
@@ -429,13 +425,9 @@ export function createGitHubLoginController({
     return { brokered, assignment };
   }
 
-  // A reason why this Machine never gets a personal login from this page.
-  function machineBlocker({ brokered, assignment }) {
-    if (brokered || assignment.kind === "team") return "brokered_identity";
-    if (assignment.kind === "invalid") return "machine_identity_invalid";
-    if (assignment.kind === "unassigned") return "machine_assignment_missing";
-    if (hosted && assignment.kind === "none") return "machine_identity_missing";
-    return null;
+  // Only the Organization bot, once installed, keeps a personal login away.
+  function machineBlocker({ brokered }) {
+    return brokered ? "brokered_identity" : null;
   }
 
   function installAllowed(assignment) {
@@ -448,7 +440,7 @@ export function createGitHubLoginController({
     const base = {
       schema_version: GITHUB_LOGIN_SCHEMA,
       checked_at: now().toISOString(),
-      machine: machineProjection(context.assignment, hosted),
+      machine: { profile: hosted ? "hosted" : "local", assignment: context.assignment.kind },
       session: snapshot(),
     };
     const blocker = machineBlocker(context);
@@ -464,17 +456,11 @@ export function createGitHubLoginController({
     if (auth.brokered) {
       return { ...base, mode: "brokered", ready: false, blocker: "brokered_identity", account, actions: noActions() };
     }
-    if (blocker) {
-      return { ...base, mode: "personal", ready: false, blocker, account, actions: { ...noActions(), logout: canLogout(auth) } };
-    }
     let accountBlocker = null;
     if (auth.environment_token) accountBlocker = "environment_token";
     if (auth.state === "unreadable") accountBlocker = "github_cli_unreadable";
     const userIdentity = auth.state === "logged_in" ? await readUser() : null;
     if (userIdentity) account.id = userIdentity.id;
-    if (userIdentity && !accountMatchesAssignment(userIdentity, context.assignment)) {
-      accountBlocker = "account_mismatch";
-    }
     const ssh = auth.state === "logged_in" ? await probeSsh() : { state: "skipped", login: null };
     const sshMatches = ssh.state === "ok" && userIdentity
       ? ssh.login.toLowerCase() === userIdentity.login.toLowerCase()
@@ -524,8 +510,7 @@ export function createGitHubLoginController({
     if (session && ["running", "awaiting_user"].includes(session.state)) {
       throw new GitHubLoginError("login_in_progress");
     }
-    const context = machineContext();
-    if (context.brokered || context.assignment.kind === "team") throw new GitHubLoginError("brokered_identity");
+    if (machineBlocker(machineContext())) throw new GitHubLoginError("brokered_identity");
     if (!executable("gh")) throw new GitHubLoginError("github_cli_missing");
     const auth = await readAuth();
     if (auth.brokered) throw new GitHubLoginError("brokered_identity");
@@ -670,8 +655,7 @@ export function createGitHubLoginController({
 
   async function runSession(current, organizationLogin) {
     step(current, "account", "running");
-    const context = machineContext();
-    const blocker = machineBlocker(context);
+    const blocker = machineBlocker(machineContext());
     if (blocker) throw new GitHubLoginError(blocker);
     if (!executable("gh")) throw new GitHubLoginError("github_cli_missing");
     let auth = await readAuth();
@@ -697,12 +681,10 @@ export function createGitHubLoginController({
     step(current, "login", "done");
     assertActive(current);
 
-    // The account must be the one this Machine is assigned to before any key
-    // is uploaded to it.
+    // The key goes only to the account GitHub just confirmed.
     step(current, "identity", "running");
     const identity = await readUser();
     if (!identity) throw new GitHubLoginError("identity_unavailable");
-    if (!accountMatchesAssignment(identity, context.assignment)) throw new GitHubLoginError("account_mismatch");
     step(current, "identity", "done");
     assertActive(current);
 
@@ -783,8 +765,7 @@ export function createGitHubLoginController({
     if (blocker) throw new GitHubLoginError(blocker);
     if (!installAllowed(context.assignment)) throw new GitHubLoginError("organization_install_not_available");
     if (!cliCommand) throw new GitHubLoginError("organization_install_not_available");
-    // The same gate the page shows, re-run here: assigned account, no
-    // environment token, SSH working for it and the root readable.
+    // The same gate the page shows, re-run here: no environment token, SSH working for it and the root readable.
     const readiness = await status({ organization: organizationLogin });
     if (!readiness.ready) throw new GitHubLoginError(readiness.blocker ?? "organization_install_not_ready");
     if (!await organizationInScope(organizationLogin)) throw new GitHubLoginError("organization_outside_machine_scope");
@@ -812,14 +793,6 @@ export function createGitHubLoginController({
     // Test and shutdown hook: resolves when the current session settles.
     settled: () => session?.done ?? Promise.resolve(),
   });
-}
-
-function machineProjection(assignment, hosted) {
-  return {
-    profile: hosted ? "hosted" : "local",
-    assignment: assignment.kind,
-    expected_login: assignment.github_login ?? null,
-  };
 }
 
 function safeUserName() {

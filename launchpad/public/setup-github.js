@@ -121,9 +121,6 @@ export function mountGitHubStep() {
         status.ssh.state === "ok" && matches !== false ? "ok" : status.ssh.state === "skipped" ? null : "bad",
       ));
     }
-    if (status.machine?.expected_login) {
-      rows.push(...statusRow(t("setup.github.row.machine"), status.machine.expected_login));
-    }
     if (status.organization) {
       const probe = status.organization.ls_remote;
       rows.push(...statusRow(

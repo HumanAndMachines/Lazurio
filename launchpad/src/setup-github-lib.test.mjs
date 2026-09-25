@@ -94,7 +94,7 @@ test("ssh -T and ssh -G output classification", () => {
   expect(parseSshConfig("hostname github.com\nport 22\nhostkeyalias gh-pinned\n").known_hosts_name).toBe("gh-pinned");
 });
 
-test("machine identity selects who may be signed in and never guesses", () => {
+test("machine identity is read exactly as declared and never guessed", () => {
   const organization = (assignment) => JSON.stringify({
     schema_version: "lazurio.machine.v1",
     machine: { id: "example-anna", kind: "workspace-vm", name: "anna", vmid: 102 },
@@ -313,19 +313,18 @@ test("GitHub unreachable over SSH stops before any key is created or uploaded", 
   expect(machine.state.calls.some(([name, sub]) => name === "gh" && sub === "ssh-key")).toBe(false);
 });
 
-test("a different account than the Machine assignment is a blocker and receives no key", async () => {
+test("the operator signs in with any account, whatever the Machine declares", async () => {
   const machine = fakeMachine({ signedIn: true, login: "someone-else", id: 7 });
   const { controller } = await controllerFor(machine, {
     hosted: true,
     readAssignment: () => ({ kind: "operator", github_login: "anna-example", github_id: 12345678 }),
   });
   const status = await controller.status();
-  expect(status).toMatchObject({ blocker: "account_mismatch", ready: false, actions: { login: false }, machine: { expected_login: "anna-example" } });
+  expect(status).toMatchObject({ blocker: null, actions: { login: true, logout: true }, machine: { assignment: "operator" } });
+  expect(status.machine).not.toHaveProperty("expected_login");
   controller.start();
   await controller.settled();
-  expect(controller.snapshot()).toMatchObject({ state: "failed", error: "account_mismatch" });
-  expect(machine.state.calls.some(([name, sub]) => name === "gh" && sub === "ssh-key")).toBe(false);
-  expect(machine.state.calls.some(([name]) => name === "ssh-keygen")).toBe(false);
+  expect(controller.snapshot()).toMatchObject({ state: "completed", ssh_key_created: true, ssh_key_registered: true });
 });
 
 test("Sign out removes this Machine's key from the wrong account, after which the right account signs in", async () => {
@@ -337,7 +336,7 @@ test("Sign out removes this Machine's key from the wrong account, after which th
   await mkdir(join(home, ".ssh"), { recursive: true });
   await writeFile(join(home, ".ssh", "id_ed25519"), "private\n");
   await writeFile(join(home, ".ssh", "id_ed25519.pub"), `${publicKey} example-vm\n`);
-  expect(await controller.status()).toMatchObject({ blocker: "account_mismatch", actions: { login: false, logout: true } });
+  expect(await controller.status()).toMatchObject({ blocker: null, actions: { logout: true } });
 
   expect(await controller.logout()).toEqual({ logged_out: true, login: "someone-else", ssh_key_removed: true });
   expect(machine.state.keysOnGitHub).toEqual([`${otherKey} other`]);
@@ -356,9 +355,13 @@ test("Sign out removes this Machine's key from the wrong account, after which th
 test("Sign out is offered for a broken GitHub CLI state but never for a Team bot or an environment token", async () => {
   const signedOut = fakeMachine();
   expect((await (await controllerFor(signedOut)).controller.status()).actions.logout).toBe(false);
-  const unassigned = fakeMachine({ signedIn: true });
-  const unassignedStatus = await (await controllerFor(unassigned, { readAssignment: () => ({ kind: "unassigned" }) })).controller.status();
-  expect(unassignedStatus).toMatchObject({ blocker: "machine_assignment_missing", actions: { login: false, logout: true } });
+  const unreadable = fakeMachine({ signedIn: true });
+  const unreadableRun = unreadable.run;
+  unreadable.run = async (program, args) => program.endsWith("/gh") && args[0] === "auth" && args[1] === "status"
+    ? { code: 0, stdout: "not json", stderr: "" }
+    : unreadableRun(program, args);
+  const unreadableStatus = await (await controllerFor(unreadable)).controller.status();
+  expect(unreadableStatus).toMatchObject({ blocker: "github_cli_unreadable", actions: { login: false, logout: true } });
   const bot = fakeMachine({ brokered: true });
   const botController = (await controllerFor(bot)).controller;
   expect((await botController.status()).actions.logout).toBe(false);
@@ -366,21 +369,30 @@ test("Sign out is offered for a broken GitHub CLI state but never for a Team bot
   expect(bot.state.calls.some(([name, sub, verb]) => name === "gh" && sub === "auth" && verb === "logout")).toBe(false);
 });
 
-test("brokered Team VM and undeclared hosted Machines never start a personal login", async () => {
+test("only an installed Organization bot keeps a personal login away", async () => {
+  const machine = fakeMachine();
+  const { controller: botMachine } = await controllerFor(machine, { readBrokered: () => ({ valid: true }) });
+  expect((await botMachine.status()).actions).toEqual({ login: false, logout: false, update: false, organization_install: false });
+  botMachine.start();
+  await botMachine.settled();
+  expect(botMachine.snapshot()).toMatchObject({ state: "failed", error: "brokered_identity" });
+  expect(machine.state.flows).toHaveLength(0);
+
+  // A Team VM still without its bot, an undeclared or an invalid identity:
+  // whoever operates the Machine signs in.
   for (const options of [
-    { readBrokered: () => ({ valid: true }) },
     { readAssignment: () => ({ kind: "team" }) },
     { hosted: true, readAssignment: () => ({ kind: "none" }) },
     { readAssignment: () => ({ kind: "unassigned" }) },
+    { hosted: true, readAssignment: () => ({ kind: "invalid" }) },
   ]) {
-    const machine = fakeMachine();
-    const { controller } = await controllerFor(machine, options);
-    const status = await controller.status();
-    expect(status.actions).toEqual({ login: false, logout: false, update: false, organization_install: false });
-    controller.start();
+    const open = fakeMachine();
+    const { controller } = await controllerFor(open, options);
+    expect(await controller.status()).toMatchObject({ blocker: null, actions: { login: true } });
+    const { capability } = controller.start();
+    await waitFor(() => controller.snapshot().state === "awaiting_user");
+    controller.cancel(capability);
     await controller.settled();
-    expect(controller.snapshot().state).toBe("failed");
-    expect(machine.state.flows).toHaveLength(0);
   }
   const bot = fakeMachine({ brokered: true });
   const { controller } = await controllerFor(bot);
