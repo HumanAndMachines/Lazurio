@@ -1540,6 +1540,124 @@ async function mountPersonalspace(root, login) {
   await writeJson(join(space, "modules.manifest.json"), { personal_generation: "gen3", owner: login, module_slots: [] });
 }
 
+async function mountPersonalApp(root, login, { module = "notes", appId = "notes-v1", port }) {
+  const moduleRoot = join(root, "personalspace", `${login}_GEN3`, "workspace", module);
+  const appRoot = join(moduleRoot, "app", "v1");
+  await mkdir(appRoot, { recursive: true });
+  await writeJson(join(moduleRoot, "lazurio.module.json"), {
+    schema_version: "lazurio.module.v1",
+    id: module,
+    company: login,
+    tcp_port_policy: { mode: "single" },
+    port_leases: [{ id: "main", host: "127.0.0.1", port }],
+    apps: ["app/v1/package.json"],
+    default_app: "app/v1/package.json",
+  });
+  await writeJson(join(appRoot, "package.json"), {
+    name: `${login}-${module}`,
+    version: "1.0.0",
+    private: true,
+    type: "module",
+    dependencies: { "fixture-not-installed": "1.0.0" },
+    scripts: { dev: "bun server.mjs" },
+    lazurio: {
+      runtime: {
+        schema_version: "lazurio.runtime.v1",
+        id: appId,
+        title: "Personal Notes",
+        company: login,
+        module,
+        surface: "internal",
+        dev_script: "dev",
+        tags: ["personal"],
+        listeners: [{
+          id: "web",
+          role: "entrypoint",
+          lease: "main",
+          protocol: "http",
+          health: { kind: "http", path: "/health" },
+        }],
+      },
+    },
+  });
+  await writeFile(join(appRoot, "server.mjs"), fixtureServerSource(), "utf8");
+}
+
+test.skipIf(process.platform === "win32")("hosted personal owner can list and control canonical Apps without loopback URL disclosure", async () => {
+  const root = await createLaunchpadGitFixture();
+  const stateRoot = `${root}-personal-owner-state`;
+  const keyPath = join(root, "fixture-key.pem"), certPath = join(root, "fixture-cert.pem");
+  execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
+    "-subj", "/CN=localhost", "-addext", "subjectAltName=DNS:localhost,IP:127.0.0.1",
+    "-keyout", keyPath, "-out", certPath], { stdio: "ignore" });
+  const gateway = Bun.serve({ hostname: "127.0.0.1", port: 0,
+    tls: { key: await readFile(keyPath), cert: await readFile(certPath) },
+    fetch(request) {
+      const admitted = new URL(request.url).pathname === "/oauth2/auth"
+        && request.headers.get("cookie") === "__Secure-lazurio-personal=valid-session";
+      return new Response(null, { status: admitted ? 202 : 401 });
+    },
+  });
+  tempRoots.push(root, stateRoot);
+  await mountPersonalspace(root, "exampleuser");
+  const appPort = await findFreePort();
+  await mountPersonalApp(root, "exampleuser", { port: appPort });
+  try {
+    const externalOrigin = "https://launchpad.frozen-slug.lazurio.io";
+    const { port } = await startLaunchpadServer(root, { env: {
+      ...personalHostedEnvironment(stateRoot, gateway.port),
+      LAZURIO_LAUNCHPAD_AUTH_CHECK_URL: `https://127.0.0.1:${gateway.port}/oauth2/auth`,
+      NODE_EXTRA_CA_CERTS: certPath,
+    } });
+    const origin = `http://127.0.0.1:${port}`;
+    const readHeaders = {
+      cookie: "__Secure-lazurio-personal=valid-session",
+      "sec-fetch-site": "same-origin",
+    };
+    const response = await fetch(`${origin}/api/personalspace`, { headers: readHeaders });
+    expect(response.status).toBe(200);
+    const personalspace = await response.json();
+    const app = personalspace.spaces[0].apps[0];
+    expect(app).toMatchObject({
+      id: "personal--exampleuser_GEN3--notes-v1",
+      url: "https://notes.frozen-slug.lazurio.io/",
+      health_url: "https://notes.frozen-slug.lazurio.io/health",
+    });
+    expect(JSON.stringify(personalspace)).not.toContain(`http://127.0.0.1:${appPort}`);
+    expect((await getJson(port, "/api/apps")).apps).toEqual([]);
+
+    for (const headers of [
+      {},
+      { ...readHeaders, cookie: "__Secure-lazurio-personal=forged" },
+      { ...readHeaders, origin: "https://evil.invalid" },
+      { ...readHeaders, "sec-fetch-site": "cross-site", "sec-fetch-mode": "cors" },
+    ]) {
+      expect((await fetch(`${origin}/api/personalspace`, { headers })).status).toBe(403);
+    }
+
+    const health = await fetch(`${origin}/api/personalspace/apps/${encodeURIComponent(app.id)}/health`, {
+      method: "POST",
+      headers: {
+        ...readHeaders,
+        origin: externalOrigin,
+        "content-type": "application/json",
+      },
+      body: "{}",
+    });
+    expect(health.status).toBe(200);
+    expect(await health.json()).toMatchObject({
+      url: "https://notes.frozen-slug.lazurio.io/",
+      health_url: "https://notes.frozen-slug.lazurio.io/health",
+      hosted_url_source: "workspace-identity",
+    });
+
+    gateway.stop(true);
+    expect((await fetch(`${origin}/api/personalspace`, { headers: readHeaders })).status).toBe(403);
+  } finally {
+    gateway.stop(true);
+  }
+}, platformTestTimeout(45_000));
+
 test("hosted personal Launchpad refuses to start without its exact Personalspace", async () => {
   const root = await createLaunchpadGitFixture();
   const stateRoot = `${root}-personal-state`;

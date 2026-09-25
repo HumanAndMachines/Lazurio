@@ -505,10 +505,13 @@ export function projectHostedAppUrl(app, configuration) {
   return {
     ...app,
     url: hostedUrl,
+    ...(Object.hasOwn(app, "health_url")
+      ? { health_url: projectHostedHealthUrl(app.health_url, hostedUrl) }
+      : {}),
     hosted_url_source: configuration.source,
     ...(!hostedUrl ? { hosted_url_error: "hosted_app_url_unavailable" } : {}),
     runtime: app.runtime && typeof app.runtime === "object"
-      ? { ...app.runtime, url: hostedUrl }
+      ? projectLifecycleUrls(app.runtime, hostedUrl)
       : app.runtime,
   };
 }
@@ -602,6 +605,9 @@ function projectLifecycleUrls(payload, hostedUrl) {
   const projected = {
     ...payload,
     ...(Object.hasOwn(payload, "url") ? { url: payload.url ? hostedUrl : null } : {}),
+    ...(Object.hasOwn(payload, "health_url")
+      ? { health_url: projectHostedHealthUrl(payload.health_url, hostedUrl) }
+      : {}),
   };
   for (const key of ["runtime", "start", "started", "stop"]) {
     if (payload[key] && typeof payload[key] === "object" && !Array.isArray(payload[key])) {
@@ -609,4 +615,14 @@ function projectLifecycleUrls(payload, hostedUrl) {
     }
   }
   return projected;
+}
+
+function projectHostedHealthUrl(healthUrl, hostedUrl) {
+  if (!healthUrl || !hostedUrl) return null;
+  try {
+    const source = new URL(healthUrl);
+    return new URL(`${source.pathname}${source.search}`, hostedUrl).href;
+  } catch {
+    return null;
+  }
 }

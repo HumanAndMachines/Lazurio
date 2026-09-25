@@ -45,6 +45,7 @@ import {
   buildPersonalspaceResponse,
   createPersonalspaceRuntimeManager,
   personalspaceDoctorCheck,
+  projectHostedPersonalspaceResponse,
   resolveSpaceGbrainVault,
 } from "../../lazurio/runtime/personalspace-runtime-lib.mjs";
 import { GbrainAccessError, gbrainFile, gbrainSearch, gbrainTree } from "../../lazurio/runtime/gbrain-lib.mjs";
@@ -140,11 +141,9 @@ if (personalHostedScope && options.organization !== undefined) {
 // The exact Personalspace folder of a hosted personal Machine. Every
 // Personalspace lane of this server (API, personal Apps, gbrain) resolves its
 // owner from that folder, as the start-up binding does; elsewhere the owner
-// comes from launchpad.gen3.local.json. Personal Apps are not yet routed
-// through a hosted lane, so there the lane lists the space without its Apps:
-// their loopback URLs and local-only actions would not reach a remote owner.
+// comes from launchpad.gen3.local.json. Hosted Personal Apps are selected from
+// canonical Module defaults and projected to gateway HTTPS URLs below.
 const hostedPersonalspaceDir = personalHostedScope ? hostedWorkspace.personalspace : undefined;
-const personalspaceListsApps = !personalHostedScope;
 // Fail closed before any listener, lock or locator exists.
 let reportedPersonalspaceIssues = "";
 let hostedPersonalspace = personalHostedScope ? await resolvePersonalHostedBinding() : null;
@@ -282,15 +281,16 @@ const appsResponseCache = createGenerationSafeResponseCache({
   },
 });
 // Personalspace lane (CAC-0048): úplně oddělený runtime manager pro osobní
-// aplikace. Local-only (server běží jen na 127.0.0.1). Osobní data se nikdy
-// nepropisují do org /api/apps ani /api/doctor shared výstupu.
+// aplikace. Osobní data se nikdy nepropisují do org /api/apps ani
+// /api/doctor shared výstupu.
 const personalspaceRuntimeManager = createPersonalspaceRuntimeManager({
   companiesRoot,
   rootSourceRoot,
   primarySpaceDir: hostedPersonalspaceDir,
-  listApps: personalspaceListsApps,
   launchpadRoot,
   stateRoot: launchpadStateRoot,
+  lifecycleProfile: hostedWorkspace.profile,
+  hostedWorkspace,
 });
 const serverShutdownState = createServerShutdownStateAuthority();
 // Machine setup, step GitHub: login of this Machine's operator (gh + SSH
@@ -653,11 +653,26 @@ async function refreshPersonalHostedBinding() {
 
 async function refreshHostedWorkspaceMaintenance({ warnSkipped = false } = {}) {
   if (personalHostedScope) {
-    // Personal Apps are not yet routed through a hosted lane; re-check only the
-    // binding. The periodic refresh picks up a Personalspace the owner clones
-    // later and reports an invalid one, never masking either.
     await refreshPersonalHostedBinding();
-    hostedMaintenance = { total: 0, skipped: [] };
+    if (hostedPersonalspace?.state !== "mounted") {
+      hostedMaintenance = { ...personalspaceRuntimeManager.maintainApps([]), skipped: [] };
+      return hostedMaintenance;
+    }
+    const inventory = await discoverPersonalspace(companiesRoot, {
+      rootSourceRoot,
+      primarySpaceDir: hostedPersonalspaceDir,
+    });
+    validateHostedWorkspaceBindings(hostedWorkspace, inventory);
+    const selected = selectHostedWorkspaceApps(hostedWorkspace, inventory);
+    const maintenance = personalspaceRuntimeManager.maintainApps(selected.apps);
+    hostedMaintenance = { ...maintenance, skipped: selected.skipped };
+    if (warnSkipped) {
+      for (const skipped of selected.skipped) {
+        console.warn(
+          `[launchpad] hosted personal Module ${skipped.module} remains isolated: ${skipped.failure_kind}`,
+        );
+      }
+    }
     return hostedMaintenance;
   }
   const inventory = await buildLaunchpadAppsResponse({
@@ -910,16 +925,16 @@ async function readLaunchpadRootConfig() {
 }
 
 async function buildPersonalspace({ verifyRepositoryPrivacy = false } = {}) {
-  return buildPersonalspaceResponse({
+  const response = await buildPersonalspaceResponse({
     companiesRoot,
     rootSourceRoot,
     primarySpaceDir: hostedPersonalspaceDir,
-    listApps: personalspaceListsApps,
     launchpadRoot,
     runtimeManager: personalspaceRuntimeManager,
     profileEmail: principalEmail,
     verifyRepositoryPrivacy,
   });
+  return projectHostedPersonalspaceResponse(response, hostedWorkspace);
 }
 
 function resolvePrincipalEmail() {
@@ -1189,6 +1204,11 @@ async function handleModuleFolderRoute(request) {
 // Personalspace runtime akce (CAC-0048) — stejné akce jako org, ale přes
 // oddělený personalspace runtime manager. Osobní app id má prefix personal--.
 function personalAppRuntimeRoute(pathname) {
+  const internal = pathname.match(/^\/api\/internal\/hosted\/apps\/([^/]+)\/ensure$/);
+  if (internal) {
+    const appId = decodeURIComponent(internal[1]);
+    return appId.startsWith("personal--") ? { appId, action: "ensure" } : null;
+  }
   const match = pathname.match(/^\/api\/personalspace\/apps\/([^/]+)\/(health|install|repair|start|stop|restart|logs|open)$/);
   if (!match) return null;
   return {
@@ -1243,19 +1263,32 @@ async function handleGbrainRoute(request, url, route) {
 }
 
 async function handlePersonalRuntimeRoute(request, route) {
+  let hostedProjectionApp = null;
   try {
     const runtimeOptions = request.method === "POST"
       ? await runtimeRequestOptions(request, {
-          requireSource: explicitRuntimeSourceActions.has(route.action),
+          requireSource: hostedWorkspace.profile === "local" && explicitRuntimeSourceActions.has(route.action),
         })
       : {};
+    hostedProjectionApp = personalHostedScope
+      ? (await buildPersonalspace()).spaces
+          .flatMap((space) => space.apps ?? [])
+          .find((app) => app.id === route.appId) ?? null
+      : { id: route.appId };
+    if (personalHostedScope && !hostedProjectionApp) {
+      throw new RuntimeActionError(
+        404,
+        "app_not_found",
+        "Aplikace není dostupná v aktivním osobním prostoru.",
+      );
+    }
     // Ingress-only readiness subrequest. The deployment proxy must reject this
     // namespace on every public hostname. It supplies the same signed Team
     // cookie used by hosted mutations; proxy identity headers grant no access.
     if (route.action === "ensure") {
       if (hostedWorkspace.profile !== "hosted") return notFound();
       if (request.method !== "GET") return jsonResponse({ error: "method_not_allowed" }, 405);
-      const ready = await appsResponseCache.runMutation(() => runtimeManager.ensureHostedApp(route.appId, {
+      const ready = await appsResponseCache.runMutation(() => personalspaceRuntimeManager.ensureHostedApp(route.appId, {
         // Team authentication already happened. Fetch Metadata controls lifecycle
         // only: background fetches and WebSocket reconnects are not a new Open.
         // Non-browser clients without Fetch Metadata retain direct-link behavior.
@@ -1264,32 +1297,58 @@ async function handlePersonalRuntimeRoute(request, route) {
       return new Response(null, { status: ready.status === "healthy" ? 204 : 503 });
     }
     if (route.action === "health" && (request.method === "GET" || request.method === "POST")) {
-      return jsonResponse(await personalspaceRuntimeManager.health(route.appId, runtimeOptions));
+      return jsonResponse(projectHostedRuntimePayload(
+        await personalspaceRuntimeManager.health(route.appId, runtimeOptions),
+        hostedProjectionApp,
+        hostedWorkspace,
+      ));
     }
     if (route.action === "logs" && request.method === "GET") {
       return jsonResponse(await personalspaceRuntimeManager.logs(route.appId));
     }
     if ((route.action === "install" || route.action === "repair") && request.method === "POST") {
-      return jsonResponse(await personalspaceRuntimeManager.install(route.appId, { action: route.action, ...runtimeOptions }));
+      return jsonResponse(projectHostedRuntimePayload(
+        await appsResponseCache.runMutation(() =>
+          personalspaceRuntimeManager.install(route.appId, { action: route.action, ...runtimeOptions })),
+        hostedProjectionApp,
+        hostedWorkspace,
+      ));
     }
     if (route.action === "start" && request.method === "POST") {
-      return jsonResponse(await personalspaceRuntimeManager.start(route.appId, runtimeOptions));
+      return jsonResponse(projectHostedRuntimePayload(
+        await appsResponseCache.runMutation(() => personalspaceRuntimeManager.start(route.appId, runtimeOptions)),
+        hostedProjectionApp,
+        hostedWorkspace,
+      ));
     }
     // One-click open chain (ensure install → ensure start → wait healthy → URL)
     // v oddělené personalspace lane — GEN2-minimal dlaždice ho volá klikem na
     // celou kartu (stejný kontrakt jako firemní /api/apps/<id>/open).
     if (route.action === "open" && request.method === "POST") {
-      return jsonResponse(await personalspaceRuntimeManager.open(route.appId, runtimeOptions));
+      if (hostedProjectionApp) requireHostedAppUrl(hostedProjectionApp, hostedWorkspace);
+      return jsonResponse(projectHostedRuntimePayload(
+        await appsResponseCache.runMutation(() => personalspaceRuntimeManager.open(route.appId, runtimeOptions)),
+        hostedProjectionApp,
+        hostedWorkspace,
+      ));
     }
     if (route.action === "stop" && request.method === "POST") {
-      return jsonResponse(await personalspaceRuntimeManager.stop(route.appId, runtimeOptions));
+      return jsonResponse(projectHostedRuntimePayload(
+        await appsResponseCache.runMutation(() => personalspaceRuntimeManager.stop(route.appId, runtimeOptions)),
+        hostedProjectionApp,
+        hostedWorkspace,
+      ));
     }
     if (route.action === "restart" && request.method === "POST") {
-      return jsonResponse(await personalspaceRuntimeManager.restart(route.appId, runtimeOptions));
+      return jsonResponse(projectHostedRuntimePayload(
+        await appsResponseCache.runMutation(() => personalspaceRuntimeManager.restart(route.appId, runtimeOptions)),
+        hostedProjectionApp,
+        hostedWorkspace,
+      ));
     }
     return jsonResponse({ error: "method_not_allowed" }, 405);
   } catch (error) {
-    return runtimeErrorResponse(error);
+    return runtimeErrorResponse(error, { app: hostedProjectionApp, configuration: hostedWorkspace });
   }
 }
 
@@ -1756,8 +1815,13 @@ function startServer(startPort) {
         if (personalEntry && !personalMetadata && !(await evaluateWorkspaceRequest()).trusted) {
           return jsonResponse({ error: "personal_entry_forbidden" }, 403);
         }
-        if (url.pathname.startsWith("/api/personalspace") && !personalEntry && !requestTrust.isTrustedLocalRequest(request, url)) {
-          return jsonResponse({ error: "personalspace_request_forbidden" }, 403);
+        if (url.pathname.startsWith("/api/personalspace") && !personalEntry) {
+          const personalspaceTrusted = personalHostedScope
+            ? (await evaluateWorkspaceRequest()).trusted
+            : requestTrust.isTrustedLocalRequest(request, url);
+          if (!personalspaceTrusted) {
+            return jsonResponse({ error: "personalspace_request_forbidden" }, 403);
+          }
         }
         if (isMutatingApiRequest(request, url)) {
           const trustDecision = await evaluateWorkspaceRequest();

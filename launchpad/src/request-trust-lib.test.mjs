@@ -7,6 +7,10 @@ function request(headers = {}) {
   return new Request(backendUrl, { method: "POST", headers });
 }
 
+function readRequest(headers = {}) {
+  return new Request(backendUrl, { method: "GET", headers });
+}
+
 test("local trust accepts loopback same-origin requests and rejects foreign origins", async () => {
   const trust = createRequestTrustPolicy();
   expect(await trust.evaluateWorkspaceRequest(request(), backendUrl)).toEqual({
@@ -73,6 +77,23 @@ test("hosted trust revalidates only the exact Team-scoped signed OAuth session",
   expect(authCalls[0].url).toBe(authCheckUrl);
   expect(authCalls[0].init.redirect).toBe("manual");
   expect(authCalls[0].init.headers.cookie).toBe(`${authCookieName}=valid-session`);
+
+  expect(await trust.evaluateWorkspaceRequest(readRequest({
+    cookie: `${authCookieName}=valid-session`,
+    "sec-fetch-site": "same-origin",
+  }), backendUrl)).toEqual({
+    trusted: true,
+    reason: "trusted_hosted",
+  });
+  expect(await trust.isTrustedWorkspaceRequest(readRequest({
+    ...headers,
+    origin: "https://evil.invalid",
+  }), backendUrl)).toBe(false);
+  expect(await trust.isTrustedWorkspaceRequest(readRequest({
+    cookie: `${authCookieName}=valid-session`,
+    "sec-fetch-site": "cross-site",
+    "sec-fetch-mode": "cors",
+  }), backendUrl)).toBe(false);
 
   expect(await trust.isTrustedWorkspaceRequest(request(), backendUrl)).toBe(false);
   expect(await trust.isTrustedWorkspaceRequest(request({

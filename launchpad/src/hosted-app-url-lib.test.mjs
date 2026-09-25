@@ -236,18 +236,22 @@ test("hosted URLs are derived from module, Machine and domain for every runtime 
   expect(projectHostedAppUrl({
     ...app,
     url: "http://127.0.0.1:4310/",
+    health_url: "http://127.0.0.1:4310/health",
     runtime: { url: "http://127.0.0.1:4310/" },
   }, configuration)).toMatchObject({
     url: expected,
+    health_url: "https://knowledgebase.builder.workspace.example.test/health",
     hosted_url_source: "workspace-identity",
     runtime: { url: expected },
   });
   expect(projectHostedRuntimePayload({
     url: "http://127.0.0.1:4310/",
-    start: { runtime: { url: "http://127.0.0.1:4310/" } },
+    health_url: "http://127.0.0.1:4310/health",
+    start: { runtime: { url: "http://127.0.0.1:4310/", health_url: "http://127.0.0.1:4310/health" } },
   }, app, configuration)).toEqual({
     url: expected,
-    start: { runtime: { url: expected } },
+    health_url: "https://knowledgebase.builder.workspace.example.test/health",
+    start: { runtime: { url: expected, health_url: "https://knowledgebase.builder.workspace.example.test/health" } },
     hosted_url_source: "workspace-identity",
   });
   expect(requireHostedAppUrl(app, configuration)).toBe(expected);
@@ -515,8 +519,14 @@ test("personal Apps open at <app>.<owner>.lazurio.io and Organization Apps never
   const url = "https://journal.immakermatty.lazurio.io/";
   expect(hostedApplicationOrigin(app, personal)).toBe("https://journal.immakermatty.lazurio.io");
   expect(requireHostedAppUrl(app, personal)).toBe(url);
-  expect(projectHostedAppUrl({ ...app, url: "http://127.0.0.1:4310/" }, personal)).toMatchObject({
-    url, hosted_url_source: "workspace-identity",
+  expect(projectHostedAppUrl({
+    ...app,
+    url: "http://127.0.0.1:4310/",
+    health_url: "http://127.0.0.1:4310/health?full=1",
+  }, personal)).toMatchObject({
+    url,
+    health_url: "https://journal.immakermatty.lazurio.io/health?full=1",
+    hosted_url_source: "workspace-identity",
   });
   expect(hostedApplicationOrigin(workspaceApp(), personal)).toBeNull();
   expect(hostedApplicationOrigin(declaredOrganizationApp(), personal)).toBeNull();

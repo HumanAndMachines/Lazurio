@@ -68,11 +68,24 @@ export function createRequestTrustPolicy({
     // such header participates in trust. Authorization is revalidated over a
     // separately authenticated TLS route against the Team-scoped oauth2-proxy
     // with only the browser's exact signed HttpOnly session cookie.
-    if (request.headers.get("sec-fetch-site") !== "same-origin") {
+    const origin = request.headers.get("origin");
+    const fetchSite = request.headers.get("sec-fetch-site");
+    const safeRead = ["GET", "HEAD"].includes(request.method);
+    if (!safeRead && fetchSite !== "same-origin") {
       return trustDecision(false, "hosted_fetch_site_mismatch");
     }
-    if (request.headers.get("origin") !== hostedOrigin) {
+    if (!safeRead && origin !== hostedOrigin) {
       return trustDecision(false, "hosted_origin_mismatch");
+    }
+    // Browser fetch does not reliably send Origin on same-origin GETs. Keep
+    // owner reads usable while still rejecting an explicit foreign origin or
+    // a cross-site subresource request; the exact signed session is rechecked
+    // below for every request.
+    if (safeRead && (
+      (origin && origin !== hostedOrigin)
+      || (fetchSite === "cross-site" && request.headers.get("sec-fetch-mode") !== "navigate")
+    )) {
+      return trustDecision(false, "hosted_read_origin_mismatch");
     }
     const cookieSelection = selectHostedAuthCookie(
       request.headers.get("cookie") ?? "",
