@@ -369,6 +369,21 @@ test("Sign out without the key deletion scope keeps the account while its key st
   }
 });
 
+test("Sign out from an unreadable gh keeps it while this Machine's key still answers for any account", async () => {
+  const machine = fakeMachine({ signedIn: true, login: "someone-else", keysOnGitHub: [`${publicKey} example-vm`] });
+  const base = machine.run;
+  machine.run = async (program, args) => program.endsWith("/gh") && args[0] === "auth" && args[1] === "status"
+    ? { code: 0, stdout: "not json", stderr: "" }
+    : base(program, args);
+  const { controller } = await controllerFor(machine);
+  expect((await controller.status()).actions.logout).toBe(true);
+  await expect(controller.logout()).rejects.toMatchObject({ code: "ssh_key_still_registered" });
+  expect(machine.state.calls.some(([name, sub, verb]) => name === "gh" && sub === "auth" && verb === "logout")).toBe(false);
+
+  machine.state.keysOnGitHub = [];
+  expect(await controller.logout()).toEqual({ logged_out: true, login: null, ssh_key_removed: false });
+});
+
 test("a token in the environment rules out Sign out even when gh status is unreadable", async () => {
   for (const variable of ["GH_TOKEN", "GITHUB_TOKEN"]) {
     const machine = fakeMachine({ signedIn: true });

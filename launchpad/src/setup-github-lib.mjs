@@ -532,14 +532,14 @@ export function createGitHubLoginController({
         if (removed.code !== 0) throw new GitHubLoginError("ssh_key_remove_failed");
         sshKeyRemoved = true;
       }
-    } else if (auth.state === "logged_in" && auth.login) {
-      // Deleting a key takes admin:public_key (write:public_key cannot). A key
-      // still answering for this account would block the next account's
-      // sign-in, so the account stays signed in until it is removed on GitHub.
-      const ssh = await probeSsh();
-      if (ssh.state === "ok" && ssh.login.toLowerCase() === auth.login.toLowerCase()) {
-        throw new GitHubLoginError("ssh_key_still_registered");
-      }
+    }
+    // Proof before signing out: SSH must no longer answer for the account
+    // left behind, or the next account's sign-in stops at ssh_account_mismatch.
+    // Deleting takes admin:public_key (write:public_key cannot), and an
+    // unreadable gh names no account, so any answering account counts there.
+    const ssh = await probeSsh();
+    if (ssh.state === "ok" && (auth.state === "unreadable" || ssh.login.toLowerCase() === auth.login?.toLowerCase())) {
+      throw new GitHubLoginError("ssh_key_still_registered");
     }
     const args = ["auth", "logout", "--hostname", "github.com"];
     if (auth.login) args.push("--user", auth.login);

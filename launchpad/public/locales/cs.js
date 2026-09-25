@@ -158,7 +158,7 @@ export const cs = Object.freeze({
   "setup.github.error.environment_token": "Launchpad běží s tokenem v GH_TOKEN nebo GITHUB_TOKEN; ten má přednost a přihlášení tlačítkem by nic nezměnilo.",
   "setup.github.error.logout_failed": "GitHub CLI se nepodařilo odhlásit.",
   "setup.github.error.ssh_key_remove_failed": "SSH klíč této Mašiny se nepodařilo z přihlášeného účtu odebrat; nic se neodhlásilo.",
-  "setup.github.error.ssh_key_still_registered": "SSH klíč této Mašiny je na GitHubu pořád u přihlášeného účtu a Launchpad ho bez oprávnění ke správě klíčů neodebere. Odeber ho na github.com/settings/keys (klíč s názvem této Mašiny) a klikni na Odhlásit znovu; do té doby zůstává účet přihlášený.",
+  "setup.github.error.ssh_key_still_registered": "SSH klíč této Mašiny se na GitHubu pořád hlásí k účtu, ze kterého se odhlašuješ, a Launchpad ho odtud odebrat nemůže. Přihlas se na github.com tím účtem, v Settings → SSH keys odeber klíč s názvem této Mašiny a klikni na Odhlásit znovu; do té doby zůstává GitHub na Mašině přihlášený.",
   "setup.github.error.login_in_progress": "Přihlášení už probíhá.",
   "setup.github.error.organization_login_invalid": "Tohle není platný GitHub login Organizace.",
   "setup.github.error.login_incomplete": "GitHub přihlášení nedoběhlo.",
