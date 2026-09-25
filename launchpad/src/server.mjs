@@ -786,6 +786,7 @@ const setupReadOnlyMountRoutes = new Set([
   "/api/setup/github/start",
   "/api/setup/github/session",
   "/api/setup/github/cancel",
+  "/api/setup/github/logout",
 ]);
 
 // What kind of Machine serves this Launchpad and whom it belongs to: the
@@ -847,6 +848,8 @@ async function handleSetupRoute(request, url) {
         return jsonResponse({ session: setupGitHub.snapshot(capability) });
       case "/api/setup/github/cancel":
         return jsonResponse({ session: setupGitHub.cancel(capability) });
+      case "/api/setup/github/logout":
+        return jsonResponse(await setupGitHub.logout());
       case "/api/setup/organization-install":
         return jsonResponse(await appsResponseCache.runMutation(() =>
           gitStatusService.withRemoteRefreshPaused(() =>

@@ -111,6 +111,7 @@ export function parseSshKeyList(raw) {
     keys.push(Object.freeze({
       title: fields[0].trim(),
       key,
+      id: (fields[3] ?? "").trim() || null,
       type: (fields[4] ?? "authentication").trim() || "authentication",
     }));
   }
@@ -464,7 +465,7 @@ export function createGitHubLoginController({
       return { ...base, mode: "brokered", ready: false, blocker: "brokered_identity", account, actions: noActions() };
     }
     if (blocker) {
-      return { ...base, mode: "personal", ready: false, blocker, account, actions: noActions() };
+      return { ...base, mode: "personal", ready: false, blocker, account, actions: { ...noActions(), logout: canLogout(auth) } };
     }
     let accountBlocker = null;
     if (auth.environment_token) accountBlocker = "environment_token";
@@ -499,6 +500,7 @@ export function createGitHubLoginController({
         : null,
       actions: {
         login: accountBlocker === null && !ready,
+        logout: canLogout(auth),
         update: ready,
         organization_install: ready && Boolean(organizationLogin) && installAllowed(context.assignment),
       },
@@ -506,7 +508,48 @@ export function createGitHubLoginController({
   }
 
   function noActions() {
-    return { login: false, update: false, organization_install: false };
+    return { login: false, logout: false, update: false, organization_install: false };
+  }
+
+  // Signing out is the way back from any wrong sign-in (another account, a
+  // broken gh configuration). A token in the environment is not ours to drop.
+  function canLogout(auth) {
+    return !auth.environment_token && (auth.state === "logged_in" || auth.state === "unreadable");
+  }
+
+  // Signs this Machine out of GitHub: unregisters this Machine's own SSH key
+  // from the signed-in account, so the next sign-in can bind it to another
+  // account, then removes the GitHub CLI login. The local key pair stays.
+  async function logout() {
+    if (session && ["running", "awaiting_user"].includes(session.state)) {
+      throw new GitHubLoginError("login_in_progress");
+    }
+    const context = machineContext();
+    if (context.brokered || context.assignment.kind === "team") throw new GitHubLoginError("brokered_identity");
+    if (!executable("gh")) throw new GitHubLoginError("github_cli_missing");
+    const auth = await readAuth();
+    if (auth.brokered) throw new GitHubLoginError("brokered_identity");
+    if (auth.environment_token) throw new GitHubLoginError("environment_token");
+    if (!canLogout(auth)) return { logged_out: false, login: null, ssh_key_removed: false };
+    let sshKeyRemoved = false;
+    const publicPath = join(home, ".ssh", "id_ed25519.pub");
+    const publicKey = existsSync(publicPath) ? normalizePublicKey(await readFile(publicPath, "utf8")) : null;
+    if (auth.state === "logged_in" && publicKey && auth.scopes?.includes(GITHUB_KEY_SCOPE)) {
+      const listed = await gh(["ssh-key", "list"]);
+      if (listed.code !== 0) throw new GitHubLoginError("ssh_key_list_failed");
+      for (const entry of parseSshKeyList(listed.stdout)) {
+        if (entry.key !== publicKey || entry.type === "signing" || !entry.id) continue;
+        const removed = await gh(["ssh-key", "delete", entry.id, "--yes"]);
+        if (removed.code !== 0) throw new GitHubLoginError("ssh_key_remove_failed");
+        sshKeyRemoved = true;
+      }
+    }
+    const args = ["auth", "logout", "--hostname", "github.com"];
+    if (auth.login) args.push("--user", auth.login);
+    const result = await gh(args);
+    if (result.code !== 0) throw new GitHubLoginError("logout_failed");
+    session = null;
+    return { logged_out: true, login: auth.login ?? null, ssh_key_removed: sshKeyRemoved };
   }
 
   function holdsCapability(capability) {
@@ -763,6 +806,7 @@ export function createGitHubLoginController({
     status,
     start,
     cancel,
+    logout,
     snapshot,
     organizationInstall,
     // Test and shutdown hook: resolves when the current session settles.

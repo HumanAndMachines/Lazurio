@@ -39,6 +39,8 @@ test("Settings is one page with a section list; GitHub and SSH mount as steps", 
   // SSH stays out of the list until a hosted server answers available: true.
   expect(html).toMatch(/href="ssh" data-section="ssh" hidden/);
   expect(html).toContain('id="setupGitHubStart"');
+  // Any wrong sign-in (another account, a broken gh) is undone from the page.
+  expect(html).toContain('id="setupGitHubLogout"');
   expect(html).toContain('id="settingsSshStep"');
   expect(html).toContain('data-i18n="settings.ssh.direction"');
   expect(html).toContain('id="settingsLanguage"');
@@ -80,11 +82,15 @@ test("the laptop side asks to join a network and activates SSH without a termina
   // The laptop side accepts the hand-over code pasted in; nothing guesses where a Launchpad listens.
   expect(connections).toContain("function pasteCard(state)");
   expect(connections).toContain('t("connections.paste.invalid")');
-  // The Machine's page shows a hand-over code (no laptop URL, no port) and keeps the paste command as a hidden fallback.
+  // The Machine's page shows a hand-over code (no laptop URL, no port) and keeps the paste command as the fallback step 1.
   expect(ssh).not.toContain("localhost:4174");
   expect(ssh).not.toContain("LAPTOP_LAUNCHPAD");
   expect(ssh).toContain("export function laptopHandoverCode()");
   expect(ssh).toContain('document.createElement("details")');
+  // Step 1 is open by default and survives the macOS/Windows switch, which re-renders.
+  expect(ssh).toContain("let fallbackOpen = true;");
+  expect(ssh).toContain("fallback.open = fallbackOpen;");
+  expect(ssh).toContain('fallback.addEventListener("toggle", () => { fallbackOpen = fallback.open; });');
   expect(ssh).toContain("/^#add_key=(.+)$/");
   expect(ssh).toContain("if (pendingKey) keyField.value = pendingKey;");
   expect(ssh).not.toContain("navigator.clipboard.writeText(state.host_key");
@@ -121,6 +127,8 @@ test("both locales carry the Settings copy and dropped the old topbar entries", 
       "settings.nav.ssh", "settings.environment.kind.local", "settings.environment.kind.organization",
       "settings.environment.kind.personal", "settings.language.help", "settings.github.title", "settings.ssh.direction",
       "settings.nav.network", "settings.nav.connections", "network.requestJoin", "network.blocked", "connections.handover.activate",
+      "setup.github.logout", "setup.github.logoutConfirm", "setup.github.loggedOutNotice", "setup.github.logoutKeyRemoved",
+      "setup.github.error.logout_failed", "setup.github.error.ssh_key_remove_failed",
       "ssh.launchpad.copy", "ssh.fallback.summary", "connections.paste.use", "network.state.refused", "network.requestAgain",
     ]) {
       expect(locale).toContain(`"${key}":`);

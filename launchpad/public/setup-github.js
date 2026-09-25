@@ -18,6 +18,7 @@ export function mountGitHubStep() {
     organizations: $("setupGitHubOrganizations"),
     start: $("setupGitHubStart"),
     refresh: $("setupGitHubRefresh"),
+    logout: $("setupGitHubLogout"),
     session: $("setupGitHubSession"),
     steps: $("setupGitHubSteps"),
     device: $("setupGitHubDevice"),
@@ -152,6 +153,8 @@ export function mountGitHubStep() {
     const running = activeSessionStates.has(status.session?.state);
     elements.start.hidden = !status.actions?.login;
     elements.start.disabled = running;
+    elements.logout.hidden = !status.actions?.logout;
+    elements.logout.disabled = running;
     elements.next.hidden = !status.actions?.update;
     const installTarget = status.actions?.organization_install ? status.organization?.login : null;
     elements.install.hidden = !installTarget;
@@ -250,6 +253,26 @@ export function mountGitHubStep() {
       renderSession((await post("/api/setup/github/cancel", { capability: sessionCapability() })).session);
     } catch (error) {
       showNotice(elements.sessionResult, errorText(error.code ?? "generic"), "bad");
+    }
+  });
+
+  elements.logout.addEventListener("click", async () => {
+    const login = lastStatus?.account?.login;
+    if (!globalThis.confirm(t("setup.github.logoutConfirm", { login: login ?? "GitHub" }))) return;
+    elements.logout.disabled = true;
+    try {
+      const result = await post("/api/setup/github/logout");
+      rememberCapability(null);
+      elements.session.hidden = true;
+      await loadStatus();
+      if (result.logged_out) {
+        const detail = result.ssh_key_removed ? ` ${t("setup.github.logoutKeyRemoved")}` : "";
+        showNotice(elements.notice, `${t("setup.github.loggedOutNotice", { login: result.login ?? "GitHub" })}${detail}`, "ok");
+      }
+    } catch (error) {
+      showNotice(elements.notice, errorText(error.code ?? "generic"), "bad");
+    } finally {
+      elements.logout.disabled = false;
     }
   });
 
