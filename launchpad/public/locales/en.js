@@ -158,6 +158,7 @@ export const en = Object.freeze({
   "setup.github.error.environment_token": "Launchpad runs with a token in GH_TOKEN or GITHUB_TOKEN; it takes precedence, so signing in here would change nothing.",
   "setup.github.error.logout_failed": "GitHub CLI could not sign out.",
   "setup.github.error.ssh_key_remove_failed": "This Machine's SSH key could not be removed from the signed-in account; nothing was signed out.",
+  "setup.github.error.ssh_key_still_registered": "This Machine's SSH key is still on the signed-in GitHub account, and Launchpad cannot remove it without key management permission. Remove it at github.com/settings/keys (the key named after this Machine) and use Sign out again; until then the account stays signed in.",
   "setup.github.error.login_in_progress": "A sign-in is already in progress.",
   "setup.github.error.organization_login_invalid": "This is not a valid GitHub Organization login.",
   "setup.github.error.login_incomplete": "The GitHub sign-in did not finish.",

@@ -352,6 +352,40 @@ test("Sign out removes this Machine's key from the wrong account, after which th
   expect(machine.state.keysOnGitHub).toEqual([`${publicKey} example-vm`]);
 });
 
+test("Sign out without the key deletion scope keeps the account while its key still answers over SSH", async () => {
+  for (const scopes of ["gist, read:org, repo", "gist, read:org, repo, write:public_key"]) {
+    const machine = fakeMachine({ signedIn: true, login: "someone-else", scopes, keysOnGitHub: [`${publicKey} example-vm`] });
+    const { controller, home } = await controllerFor(machine);
+    await mkdir(join(home, ".ssh"), { recursive: true });
+    await writeFile(join(home, ".ssh", "id_ed25519"), "private\n");
+    await writeFile(join(home, ".ssh", "id_ed25519.pub"), `${publicKey} example-vm\n`);
+    await expect(controller.logout()).rejects.toMatchObject({ code: "ssh_key_still_registered" });
+    expect(machine.state.signedIn).toBe(true);
+    expect(machine.state.calls.some(([name, sub, verb]) => name === "gh" && sub === "ssh-key" && verb === "delete")).toBe(false);
+
+    // Once the key is removed on GitHub, the same Sign out goes through.
+    machine.state.keysOnGitHub = [];
+    expect(await controller.logout()).toEqual({ logged_out: true, login: "someone-else", ssh_key_removed: false });
+  }
+});
+
+test("a token in the environment rules out Sign out even when gh status is unreadable", async () => {
+  for (const variable of ["GH_TOKEN", "GITHUB_TOKEN"]) {
+    const machine = fakeMachine({ signedIn: true });
+    const base = machine.run;
+    machine.run = async (program, args) => program.endsWith("/gh") && args[0] === "auth" && args[1] === "status"
+      ? { code: 0, stdout: "not json", stderr: "" }
+      : base(program, args);
+    const { controller } = await controllerFor(machine, { env: { PATH: "/usr/bin", [variable]: "example-value" } });
+    expect(await controller.status()).toMatchObject({ blocker: "environment_token", actions: { login: false, logout: false } });
+    await expect(controller.logout()).rejects.toMatchObject({ code: "environment_token" });
+    controller.start();
+    await controller.settled();
+    expect(controller.snapshot()).toMatchObject({ state: "failed", error: "environment_token" });
+    expect(machine.state.calls.some(([name, sub, verb]) => name === "gh" && sub === "auth" && verb === "logout")).toBe(false);
+  }
+});
+
 test("Sign out is offered for a broken GitHub CLI state but never for a Team bot or an environment token", async () => {
   const signedOut = fakeMachine();
   expect((await (await controllerFor(signedOut)).controller.status()).actions.logout).toBe(false);

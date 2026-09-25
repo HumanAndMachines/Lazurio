@@ -367,6 +367,9 @@ export function createGitHubLoginController({
   // every command here names github.com itself.
   const { GH_HOST: _host, ...githubEnvironment } = sanitizedGitHubEnvironment(env);
   const transportEnvironment = { ...env, GIT_TERMINAL_PROMPT: "0", LC_ALL: "C" };
+  // gh receives these variables; they win over every stored login even when
+  // `gh auth status` itself is unreadable.
+  const environmentToken = Boolean(githubEnvironment.GH_TOKEN || githubEnvironment.GITHUB_TOKEN);
 
   function executable(name) {
     return resolveExecutable(name) ?? null;
@@ -457,8 +460,8 @@ export function createGitHubLoginController({
       return { ...base, mode: "brokered", ready: false, blocker: "brokered_identity", account, actions: noActions() };
     }
     let accountBlocker = null;
-    if (auth.environment_token) accountBlocker = "environment_token";
     if (auth.state === "unreadable") accountBlocker = "github_cli_unreadable";
+    if (environmentToken || auth.environment_token) accountBlocker = "environment_token";
     const userIdentity = auth.state === "logged_in" ? await readUser() : null;
     if (userIdentity) account.id = userIdentity.id;
     const ssh = auth.state === "logged_in" ? await probeSsh() : { state: "skipped", login: null };
@@ -500,7 +503,7 @@ export function createGitHubLoginController({
   // Signing out is the way back from any wrong sign-in (another account, a
   // broken gh configuration). A token in the environment is not ours to drop.
   function canLogout(auth) {
-    return !auth.environment_token && (auth.state === "logged_in" || auth.state === "unreadable");
+    return !environmentToken && !auth.environment_token && (auth.state === "logged_in" || auth.state === "unreadable");
   }
 
   // Signs this Machine out of GitHub: unregisters this Machine's own SSH key
@@ -511,6 +514,7 @@ export function createGitHubLoginController({
       throw new GitHubLoginError("login_in_progress");
     }
     if (machineBlocker(machineContext())) throw new GitHubLoginError("brokered_identity");
+    if (environmentToken) throw new GitHubLoginError("environment_token");
     if (!executable("gh")) throw new GitHubLoginError("github_cli_missing");
     const auth = await readAuth();
     if (auth.brokered) throw new GitHubLoginError("brokered_identity");
@@ -527,6 +531,14 @@ export function createGitHubLoginController({
         const removed = await gh(["ssh-key", "delete", entry.id, "--yes"]);
         if (removed.code !== 0) throw new GitHubLoginError("ssh_key_remove_failed");
         sshKeyRemoved = true;
+      }
+    } else if (auth.state === "logged_in" && auth.login) {
+      // Deleting a key takes admin:public_key (write:public_key cannot). A key
+      // still answering for this account would block the next account's
+      // sign-in, so the account stays signed in until it is removed on GitHub.
+      const ssh = await probeSsh();
+      if (ssh.state === "ok" && ssh.login.toLowerCase() === auth.login.toLowerCase()) {
+        throw new GitHubLoginError("ssh_key_still_registered");
       }
     }
     const args = ["auth", "logout", "--hostname", "github.com"];
@@ -657,6 +669,7 @@ export function createGitHubLoginController({
     step(current, "account", "running");
     const blocker = machineBlocker(machineContext());
     if (blocker) throw new GitHubLoginError(blocker);
+    if (environmentToken) throw new GitHubLoginError("environment_token");
     if (!executable("gh")) throw new GitHubLoginError("github_cli_missing");
     let auth = await readAuth();
     if (auth.brokered) throw new GitHubLoginError("brokered_identity");
