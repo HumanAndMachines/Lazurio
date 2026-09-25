@@ -132,7 +132,16 @@ uvolněné pravidlo pro čtení. Identity hlavička není autorizace. Předaný
 `Sec-Fetch-Mode` je jen lifecycle hint: `navigate` nebo chybějící hodnota je
 Open a spustí i explicitně zastavenou App, ostatní režimy a WebSocket
 reconnect App nespustí. Endpoint vrací 204 jen při zdravé App, 404 pro
-neznámý nebo nevybraný Modul, jinak 503 s omezeným tělem bez interních adres. Původní path,
+neznámý nebo nevybraný Modul, jinak 503 s omezeným tělem bez interních adres.
+
+Hosted Personalspace lane (inventář, lifecycle úspěchy i chyby) prochází
+jednou fail-closed projekcí typu allowlist: URL pole (`url`, `*_url`) smí nést
+jen přesné veřejné HTTPS originy této Mašiny (vybrané Apps, Launchpad, T3),
+jinak `null`; `host` je vždy `null`; v ostatním textu se nahradí každá URL
+libovolného schématu i každý IPv4/IPv6 nebo `host:port` literál; `message`
+je jeden ohraničený řádek bez log tailu a řídicích znaků; `details`, logy a
+stack se nevracejí. Chyby mají tvar `{ error, message, app_id?, status? }`.
+Obsah poznámek gbrain je vědomá výjimka a zůstává beze změny. Původní path,
 query, POST body a WebSocket upgrade se nesmí přepsat nebo opakovat. Starý
 proxy config bez tohoto napojení není kvalifikovaný pro on-demand runtime;
 source testy nenahrazují společný deploy a actual Caddy smoke.

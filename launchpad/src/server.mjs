@@ -64,6 +64,7 @@ import {
   hostedWorkspaceConfigurationFromEnvironment,
   projectHostedAppUrl,
   projectHostedErrorPayload,
+  hostedPublicOrigins,
   projectHostedPublicJson,
   projectHostedRuntimePayload,
   requireHostedAppUrl,
@@ -1044,9 +1045,14 @@ function runtimeErrorResponse(error, { app = null, configuration = hostedWorkspa
 }
 
 // Personalspace lane JSON: in a hosted profile every payload passes the
-// fail-closed public projection (no loopback, internal URL or log output).
-function personalspaceJson(payload, status = 200) {
-  return jsonResponse(projectHostedPublicJson(payload, hostedWorkspace), status);
+// fail-closed public projection. URL fields may name only the listed Apps'
+// derived origins or this Machine's gateway origins (Launchpad, T3).
+function personalspaceJson(payload, apps = []) {
+  const allowedOrigins = hostedPublicOrigins(hostedWorkspace, apps, [
+    requestTrust.hosted_origin,
+    t3Chat?.url,
+  ]);
+  return jsonResponse(projectHostedPublicJson(payload, hostedWorkspace, allowedOrigins));
 }
 
 function hostedErrorResponse(error, app = null, status = null) {
@@ -1299,7 +1305,7 @@ async function handlePersonalRuntimeRoute(request, route) {
       payload,
       hostedProjectionApp,
       hostedWorkspace,
-    ));
+    ), [hostedProjectionApp]);
     if (route.action === "health" && (request.method === "GET" || request.method === "POST")) {
       return lifecycleResponse(await personalspaceRuntimeManager.health(route.appId, runtimeOptions));
     }
@@ -1309,7 +1315,7 @@ async function handlePersonalRuntimeRoute(request, route) {
       // Log text never leaves a hosted Machine through the browser lane.
       const metadata = { ...logs, content_available: false };
       delete metadata.content;
-      return personalspaceJson(metadata);
+      return personalspaceJson(metadata, [hostedProjectionApp]);
     }
     if ((route.action === "install" || route.action === "repair") && request.method === "POST") {
       return lifecycleResponse(await appsResponseCache.runMutation(() =>
@@ -1894,7 +1900,10 @@ function startServer(startPort) {
         if (moduleEnsureRoute) return await handleHostedModuleEnsure(request, moduleEnsureRoute);
         const gbrainMatch = gbrainRoute(url.pathname);
         if (gbrainMatch) return await handleGbrainRoute(request, url, gbrainMatch);
-        if (url.pathname === "/api/personalspace") return personalspaceJson(await buildPersonalspace());
+        if (url.pathname === "/api/personalspace") {
+          const personalspace = await buildPersonalspace();
+          return personalspaceJson(personalspace, (personalspace.spaces ?? []).flatMap((space) => space.apps ?? []));
+        }
         const organizationLogoMatch = url.pathname.match(/^\/api\/organizations\/([^/]+)\/logo$/);
         if (organizationLogoMatch) {
           return await serveOrganizationLogo(request, url, decodeURIComponent(organizationLogoMatch[1]));

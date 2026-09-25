@@ -1546,6 +1546,7 @@ async function mountPersonalApp(root, login, {
   port,
   installed = false,
   serverSource = fixtureServerSource(),
+  title = "Personal Notes",
 }) {
   const moduleRoot = join(root, "personalspace", `${login}_GEN3`, "workspace", module);
   const appRoot = join(moduleRoot, "app", "v1");
@@ -1570,7 +1571,7 @@ async function mountPersonalApp(root, login, {
       runtime: {
         schema_version: "lazurio.runtime.v1",
         id: appId,
-        title: "Personal Notes",
+        title,
         company: login,
         module,
         surface: "internal",
@@ -1590,12 +1591,39 @@ async function mountPersonalApp(root, login, {
   if (installed) await mkdir(join(appRoot, "node_modules"), { recursive: true });
 }
 
-// Hosted responses reach a remote browser: no loopback listener, internal URL
-// or process diagnostics anywhere in the JSON, at any depth.
-function expectNoInternalAddress(value, path = "$") {
+// Hosted responses reach a remote browser. URL fields may name only the
+// allowlisted public origins; every other string holds no URL or address
+// literal of any kind; messages are one line; diagnostics never appear.
+const hostedPersonalOrigins = [
+  "https://notes.frozen-slug.lazurio.io",
+  "https://broken.frozen-slug.lazurio.io",
+];
+const hostedAddressProbes = [
+  "https://10.0.0.5:8443/health",
+  "https://192.168.1.10:4443/logs",
+  "https://app.internal:8080/path",
+  "10.0.0.5:8443",
+  "[fd00::1]:8080",
+];
+
+function expectNoInternalAddress(value, path = "$", key = null) {
+  if (key === "host") {
+    expect({ path, value }).toEqual({ path, value: null });
+    return;
+  }
   if (typeof value === "string") {
-    const internal = /127\.\d{1,3}\.\d{1,3}\.\d{1,3}|localhost|\[::1\]|0\.0\.0\.0|http:\/\//i.test(value);
-    expect({ path, value, internal }).toMatchObject({ internal: false });
+    if (key === "url" || key?.endsWith("_url")) {
+      const allowed = hostedPersonalOrigins.some((origin) => value === origin || value.startsWith(`${origin}/`));
+      expect({ path, value, allowed }).toMatchObject({ allowed: true });
+      return;
+    }
+    const literal = /[a-z][a-z0-9+.-]*:\/\/|(?<![\w.])\d{1,3}(?:\.\d{1,3}){3}(?![\w.])|\[[0-9a-f:.]*:[0-9a-f:.]*\]|(?:[a-z0-9-]+\.)+[a-z0-9-]+:\d{1,5}(?!\d)|localhost|[0-9a-f]{0,4}::[0-9a-f]{0,4}/i;
+    expect({ path, value, literal: literal.test(value) }).toMatchObject({ literal: false });
+    if (key === "message" || key === "last_error") {
+      expect({ path, value, marker: value.includes("crash-marker") }).toMatchObject({ marker: false });
+      expect({ path, value, control: /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(value) })
+        .toMatchObject({ control: false });
+    }
     return;
   }
   if (Array.isArray(value)) {
@@ -1603,11 +1631,11 @@ function expectNoInternalAddress(value, path = "$") {
     return;
   }
   if (value && typeof value === "object") {
-    for (const [key, item] of Object.entries(value)) {
-      expect({ path, key }).not.toMatchObject({
+    for (const [entryKey, item] of Object.entries(value)) {
+      expect({ path, key: entryKey }).not.toMatchObject({
         key: expect.stringMatching(/^(details|log_excerpt|startup_log|stderr|stdout|stack)$/),
       });
-      expectNoInternalAddress(item, `${path}.${key}`);
+      expectNoInternalAddress(item, `${path}.${entryKey}`, entryKey);
     }
   }
 }
@@ -1731,6 +1759,8 @@ test.skipIf(process.platform === "win32")("hosted personal gateway ensure opens 
     appId: "broken-v1",
     port: brokenPort,
     installed: true,
+    // Runtime error messages embed the App title: carry every probe there.
+    title: `Broken ${hostedAddressProbes.join(" ")} boom\rcrash-marker`,
     serverSource: [
       "console.error(`crash-marker binding http://127.0.0.1:${process.env.LAZURIO_RUNTIME_PORT}/health`);",
       "process.exit(1);",
@@ -1812,6 +1842,9 @@ test.skipIf(process.platform === "win32")("hosted personal gateway ensure opens 
       appId,
     ]);
     expectNoInternalAddress(inventory);
+    // Owner-declared free text keeps its words but loses every address.
+    expect(inventory.spaces[0].apps.find((app) => app.module === "broken").title)
+      .toBe(`Broken${" [redacted]".repeat(hostedAddressProbes.length)} boom\rcrash-marker`);
 
     expect(await lifecycle("health", "GET")).toMatchObject({ status: 200, payload: { status: "healthy" } });
     expect(await lifecycle("health")).toMatchObject({ status: 200, payload: { status: "healthy" } });
@@ -1850,9 +1883,10 @@ test.skipIf(process.platform === "win32")("hosted personal gateway ensure opens 
     const brokenText = await brokenResponse.text();
     expect(brokenResponse.status).toBeGreaterThanOrEqual(400);
     expect(brokenText).not.toContain("crash-marker");
-    expect(brokenText).not.toMatch(/127\.0\.0\.1|localhost/);
+    expect(brokenText).not.toMatch(/127\.0\.0\.1|localhost|10\.0\.0\.5|192\.168|app\.internal|fd00/);
     const broken = JSON.parse(brokenText);
     expectNoInternalAddress(broken);
+    expect(broken.message).toStartWith(`Broken${" [redacted]".repeat(hostedAddressProbes.length)} boom`);
     expect(Object.keys(broken).every((key) => ["error", "message", "app_id", "status"].includes(key))).toBe(true);
     const brokenEnsure = await ensure(gatewayHeaders("navigate"), "broken");
     expect(brokenEnsure.status).toBe(503);

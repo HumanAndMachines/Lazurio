@@ -7,6 +7,7 @@ import {
   hostedLifecycleConfigurationId,
   hostedWorkspaceConfigurationFromEnvironment,
   projectHostedAppUrl,
+  hostedPublicOrigins,
   projectHostedErrorPayload,
   projectHostedPublicJson,
   projectHostedRuntimePayload,
@@ -700,50 +701,104 @@ test("personal binding tolerates only a cleanly absent Personalspace folder", ()
     .toThrow("Hosted Workspace Organization ExampleOrg is not mounted.");
 });
 
-test("hosted public JSON projection drops diagnostics and neutralizes every internal address", () => {
-  const payload = {
-    url: "https://notes.frozen-slug.lazurio.io/",
-    host: "127.0.0.1",
-    port: 4310,
-    repository_url: "https://github.com/example/notes",
-    message: "Start selhal na http://127.0.0.1:4310/health. Poslední log:\nlistening http://localhost:4310",
-    details: ["health: http://127.0.0.1:4310/health"],
-    log_excerpt: "boom at http://127.0.0.1:4310",
-    runtime: {
-      last_error: "failed [::1]:4310\nstack line",
-      steps: [{ note: "bound 0.0.0.0:4310 and http://app.internal:80/x and ws://example.test/a" }],
-      stack: "Error: x",
-    },
+// Reviewer probes: private/internal addresses that are not loopback literals.
+const hostedAddressProbes = [
+  "https://10.0.0.5:8443/health",
+  "https://192.168.1.10:4443/logs",
+  "https://app.internal:8080/path",
+  "10.0.0.5:8443",
+  "[fd00::1]:8080",
+  "fd00::1",
+  "http://127.0.0.1:4310/health",
+  "localhost:4310",
+];
+
+test("hosted public JSON projection is an allowlist of this Machine's public origins", () => {
+  const app = {
+    id: "personal--owner_GEN3--notes-v1",
+    personal: true,
+    surface_scope: "private",
+    space: "owner_GEN3",
+    module: "notes",
+    module_contract: { schema_version: "lazurio.module.v1", id: "notes" },
+    module_app: { declared: true, default: true },
+    runtime_contract: { schema_version: "lazurio.runtime.v1" },
   };
-  expect(projectHostedPublicJson(payload, { profile: "local" })).toBe(payload);
-  const projected = projectHostedPublicJson(payload, configuration);
-  expect(projected).toEqual({
-    url: "https://notes.frozen-slug.lazurio.io/",
+  const personal = createHostedWorkspaceConfiguration({
+    profile: "hosted",
+    scope: "personal",
+    owner: "owner",
+    personalspace: "owner_GEN3",
+    domain: "lazurio.io",
+    launchpadExternalOrigin: "https://launchpad.owner.lazurio.io",
+  });
+  const allowed = hostedPublicOrigins(personal, [app], [
+    "https://launchpad.owner.lazurio.io",
+    "https://t3.owner.lazurio.io/",
+    "https://10.0.0.5:8443/",
+    "http://plain.owner.lazurio.io/",
+  ]);
+  expect([...allowed].sort()).toEqual([
+    "https://launchpad.owner.lazurio.io",
+    "https://notes.owner.lazurio.io",
+    "https://t3.owner.lazurio.io",
+  ]);
+  const text = `boom ${hostedAddressProbes.join(" ")}`;
+  const payload = {
+    url: "https://notes.owner.lazurio.io/",
+    health_url: "https://notes.owner.lazurio.io/health",
+    settings_url: "https://github.com/settings/profile",
+    runtime: { url: "https://app.internal:8080/", health_url: "https://10.0.0.5:8443/health" },
+    host: "10.0.0.5",
+    port: 4310,
+    generated_at: "2026-09-26T10:20:30.000Z",
+    message: `${text}\rcrash-marker`,
+    note: `${text} https://github.com/example/notes`,
+    details: ["health: https://10.0.0.5:8443/health"],
+    log_excerpt: "crash-marker",
+    steps: [{ last_error: "one\u2028crash-marker", stack: "Error: x" }],
+  };
+  expect(projectHostedPublicJson(payload, { profile: "local" }, allowed)).toBe(payload);
+  expect(projectHostedPublicJson(payload, personal, allowed)).toEqual({
+    url: "https://notes.owner.lazurio.io/",
+    health_url: "https://notes.owner.lazurio.io/health",
+    settings_url: null,
+    runtime: { url: null, health_url: null },
     host: null,
     port: 4310,
-    repository_url: "https://github.com/example/notes",
-    message: "Start selhal na [internal]",
-    runtime: {
-      last_error: "failed [internal]",
-      steps: [{ note: "bound [internal] and [internal] and [internal]" }],
-    },
+    generated_at: "2026-09-26T10:20:30.000Z",
+    message: `boom${" [redacted]".repeat(hostedAddressProbes.length)}`,
+    note: `boom${" [redacted]".repeat(hostedAddressProbes.length + 1)}`,
+    steps: [{ last_error: "one" }],
   });
-  expect(redactHostedInternalText("see https://127.0.0.1:1/x or https://api.localhost/y"))
-    .toBe("see [internal] or [internal]");
+  for (const probe of hostedAddressProbes) {
+    expect(redactHostedInternalText(`a ${probe} b`)).toBe("a [redacted] b");
+  }
+  expect(redactHostedInternalText("at 12:30, v1.2.3, package.json")).toBe("at 12:30, v1.2.3, package.json");
 });
 
-test("hosted error payload keeps only a bounded, redacted shape", () => {
+test("hosted error payload keeps only a bounded, redacted one-line shape", () => {
+  for (const separator of ["\r", "\n", "\u0085", "\u2028", "\u2029"]) {
+    expect(projectHostedErrorPayload({
+      error: "app_start_failed",
+      message: `boom ${hostedAddressProbes.join(" ")}${separator}crash-marker`,
+    })).toEqual({
+      error: "app_start_failed",
+      message: `boom${" [redacted]".repeat(hostedAddressProbes.length)}`,
+    });
+  }
+  expect(projectHostedErrorPayload({ error: "x", message: "a\u0007b\u009fc\td" }).message).toBe("a b c d");
   expect(projectHostedErrorPayload({
     error: "app_port_conflict",
-    message: `Port obsazený, health http://127.0.0.1:4310/health ${"x".repeat(400)}\nlog`,
+    message: `Port obsazený ${"x".repeat(400)}`,
     app_id: "personal--owner_GEN3--notes-v1",
     status: "unhealthy",
   })).toEqual({
     error: "app_port_conflict",
-    message: expect.stringMatching(/^Port obsazený, health \[internal\] x+…$/),
+    message: expect.stringMatching(/^Port obsazený x+…$/),
     app_id: "personal--owner_GEN3--notes-v1",
     status: "unhealthy",
   });
-  expect(projectHostedErrorPayload({ error: "bad code <script>", message: undefined, status: 409 }))
+  expect(projectHostedErrorPayload({ error: "bad code <script>", app_id: "https://10.0.0.5/", status: 409 }))
     .toEqual({ error: "launchpad_error", message: "" });
 });

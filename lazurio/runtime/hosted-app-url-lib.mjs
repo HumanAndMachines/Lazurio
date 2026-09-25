@@ -628,84 +628,127 @@ function projectHostedHealthUrl(healthUrl, hostedUrl) {
 }
 
 // Fail-closed public projection of hosted JSON. A hosted browser reaches this
-// server only through the gateway, so no loopback listener, internal URL or
-// process output may leave it. Known URL fields are first rewritten to the
-// public HTTPS URL (projectHostedAppUrl / projectHostedRuntimePayload); this
-// pass then drops diagnostics that may carry log output and neutralizes every
-// remaining internal address anywhere in the payload.
-const hostedRedactionToken = "[internal]";
+// server only through the gateway, so nothing about the Machine's internal
+// network or process output may leave it. The projection is an allowlist:
+// - URL fields (`url`, `*_url`) survive only when their origin is exactly one
+//   of this Machine's derived public HTTPS origins; anything else is null;
+// - `host` fields are always null (the public origin is the only address);
+// - every other string is free text: every URL of any scheme, IPv4/IPv6
+//   literal and dotted host:port is replaced by a neutral token, public or not;
+// - message fields are one bounded line without log tails or control chars;
+// - diagnostics that may carry log output are dropped.
+// Owner note content (gbrain) is deliberately outside this projection.
+const hostedRedactionToken = "[redacted]";
 const hostedOmittedKeys = new Set(["details", "log_excerpt", "startup_log", "stderr", "stdout", "stack"]);
 const hostedMessageKeys = new Set(["message", "last_error"]);
 const hostedMessageMaxLength = 300;
-const hostedUrlPattern = /\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>`]+/gi;
-const hostedLoopbackPattern =
-  /(?:\b127(?:\.\d{1,3}){3}|\b(?:[a-z0-9-]+\.)*localhost\b|\[::1\]|\b0\.0\.0\.0\b)(?::\d{1,5})?/gi;
+const hostedFreeTextPatterns = [
+  // Any URL, any scheme.
+  /[a-z][a-z0-9+.-]*:\/\/[^\s"'<>`]*/gi,
+  // Bracketed IPv6 literal, optional port.
+  /\[[0-9a-f:.%a-z]*:[0-9a-f:.%a-z]*\](?::\d{1,5})?/gi,
+  // IPv4 literal, optional port.
+  /(?<![\w.])\d{1,3}(?:\.\d{1,3}){3}(?::\d{1,5})?(?![\w.])/g,
+  // Dotted hostname or localhost with a port.
+  /(?<![\w.-])(?:(?:[a-z0-9-]+\.)+[a-z0-9-]+|localhost):\d{1,5}(?!\d)/gi,
+  /(?<![\w.-])(?:[a-z0-9-]+\.)*localhost(?![\w-])/gi,
+];
+// Bare IPv6 literal (compressed "::" or full eight groups), optional %zone.
+const hostedBareIpv6Pattern = /(?<![\w:])[0-9a-f]{0,4}(?::[0-9a-f]{0,4}){2,7}(?:%[\w.-]+)?(?![\w:])/gi;
+// Line/paragraph separators and every C0/C1 control character.
+const hostedLineBreakPattern = /[\r\n\u0085\u2028\u2029]/;
+const hostedControlPattern = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g;
 
-export function projectHostedPublicJson(value, configuration) {
+// The exact public HTTPS origins a hosted response may name: the selected
+// Apps' derived origins plus explicit gateway origins (Launchpad, T3).
+export function hostedPublicOrigins(configuration, apps = [], extraOrigins = []) {
+  const origins = new Set();
+  if (configuration?.profile !== "hosted") return origins;
+  for (const app of apps) {
+    const url = app ? hostedAppUrl(app, configuration) : null;
+    if (url) origins.add(new URL(url).origin);
+  }
+  for (const candidate of extraOrigins) {
+    const origin = publicHttpsOrigin(candidate);
+    if (origin) origins.add(origin);
+  }
+  return origins;
+}
+
+export function projectHostedPublicJson(value, configuration, allowedOrigins = new Set()) {
   if (configuration?.profile !== "hosted") return value;
-  return sanitizeHostedValue(value, null);
+  return sanitizeHostedValue(value, null, allowedOrigins);
 }
 
 // Errors cross the hosted boundary only in this bounded shape: no details,
-// metadata, logs or stack, and a single redacted line of message.
+// metadata, logs or stack, and one redacted line of message.
 export function projectHostedErrorPayload({ error, message, app_id: appId, status } = {}) {
   return {
     error: typeof error === "string" && /^[a-z0-9_.-]{1,80}$/i.test(error) ? error : "launchpad_error",
     message: boundedHostedMessage(message),
-    ...(typeof appId === "string" && appId !== "" ? { app_id: redactHostedInternalText(appId) } : {}),
+    ...(typeof appId === "string" && /^[A-Za-z0-9_.-]{1,200}$/.test(appId) ? { app_id: appId } : {}),
     ...(typeof status === "string" && /^[a-z_-]{1,40}$/.test(status) ? { status } : {}),
   };
 }
 
 export function redactHostedInternalText(value) {
-  return String(value)
-    .replace(hostedUrlPattern, (candidate) => (publicHttpsUrl(candidate) ? candidate : hostedRedactionToken))
-    .replace(hostedLoopbackPattern, hostedRedactionToken);
+  let text = String(value);
+  for (const pattern of hostedFreeTextPatterns) text = text.replace(pattern, hostedRedactionToken);
+  return text.replace(hostedBareIpv6Pattern, (candidate) =>
+    candidate.includes("::") || candidate.split(":").length === 8 ? hostedRedactionToken : candidate);
 }
 
 function boundedHostedMessage(value) {
-  const firstLine = String(value ?? "").split(/\r?\n/, 1)[0]
-    // Runtime failure messages append the log tail after this marker.
-    .replace(/\s*(?:Poslední log|Last log):.*$/i, "")
+  // A log tail or anything after a line break never belongs to the message.
+  const firstLine = String(value ?? "").split(hostedLineBreakPattern, 1)[0]
+    .replace(/\s*(?:Poslední log|Last log):.*$/i, "");
+  const redacted = redactHostedInternalText(firstLine)
+    .replace(hostedControlPattern, " ")
+    .replace(/\s+/g, " ")
     .trim();
-  const redacted = redactHostedInternalText(firstLine);
   return redacted.length > hostedMessageMaxLength
     ? `${redacted.slice(0, hostedMessageMaxLength - 1)}…`
     : redacted;
 }
 
-function sanitizeHostedValue(value, key) {
+function sanitizeHostedValue(value, key, allowedOrigins) {
+  if (key === "host") return null;
   if (typeof value === "string") {
-    if (key === "host" && internalHostname(value)) return null;
+    if (key === "url" || key?.endsWith("_url")) return allowlistedHostedUrl(value, allowedOrigins);
     return hostedMessageKeys.has(key) ? boundedHostedMessage(value) : redactHostedInternalText(value);
   }
-  if (Array.isArray(value)) return value.map((item) => sanitizeHostedValue(item, null));
+  if (Array.isArray(value)) return value.map((item) => sanitizeHostedValue(item, null, allowedOrigins));
   if (value && typeof value === "object") {
     const projected = {};
     for (const [entryKey, entryValue] of Object.entries(value)) {
       if (hostedOmittedKeys.has(entryKey)) continue;
-      projected[entryKey] = sanitizeHostedValue(entryValue, entryKey);
+      projected[entryKey] = sanitizeHostedValue(entryValue, entryKey, allowedOrigins);
     }
     return projected;
   }
   return value;
 }
 
-function publicHttpsUrl(candidate) {
+function allowlistedHostedUrl(value, allowedOrigins) {
   try {
-    const url = new URL(candidate);
-    return url.protocol === "https:" && !internalHostname(url.hostname);
+    const url = new URL(value);
+    if (url.username || url.password || !allowedOrigins.has(url.origin)) return null;
+    return url.href === value ? value : null;
   } catch {
-    return false;
+    return null;
   }
 }
 
-function internalHostname(value) {
-  const hostname = String(value).replace(/^\[(.*)\]$/, "$1").replace(/\.$/, "").toLowerCase();
-  return hostname === "localhost"
-    || hostname.endsWith(".localhost")
-    || hostname === "0.0.0.0"
-    || hostname === "::1"
-    || hostname === "0:0:0:0:0:0:0:1"
-    || /^127(?:\.\d{1,3}){3}$/.test(hostname);
+function publicHttpsOrigin(candidate) {
+  try {
+    const url = new URL(candidate);
+    if (url.protocol !== "https:" || url.username || url.password) return null;
+    const hostname = url.hostname.replace(/^\[(.*)\]$/, "$1");
+    // Only DNS names qualify; an address literal is never a public origin here.
+    if (/^[\d.]+$/.test(hostname) || hostname.includes(":") || hostname === "localhost"
+      || hostname.endsWith(".localhost")) return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
 }
