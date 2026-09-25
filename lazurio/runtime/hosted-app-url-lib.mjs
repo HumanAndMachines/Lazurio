@@ -626,3 +626,86 @@ function projectHostedHealthUrl(healthUrl, hostedUrl) {
     return null;
   }
 }
+
+// Fail-closed public projection of hosted JSON. A hosted browser reaches this
+// server only through the gateway, so no loopback listener, internal URL or
+// process output may leave it. Known URL fields are first rewritten to the
+// public HTTPS URL (projectHostedAppUrl / projectHostedRuntimePayload); this
+// pass then drops diagnostics that may carry log output and neutralizes every
+// remaining internal address anywhere in the payload.
+const hostedRedactionToken = "[internal]";
+const hostedOmittedKeys = new Set(["details", "log_excerpt", "startup_log", "stderr", "stdout", "stack"]);
+const hostedMessageKeys = new Set(["message", "last_error"]);
+const hostedMessageMaxLength = 300;
+const hostedUrlPattern = /\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>`]+/gi;
+const hostedLoopbackPattern =
+  /(?:\b127(?:\.\d{1,3}){3}|\b(?:[a-z0-9-]+\.)*localhost\b|\[::1\]|\b0\.0\.0\.0\b)(?::\d{1,5})?/gi;
+
+export function projectHostedPublicJson(value, configuration) {
+  if (configuration?.profile !== "hosted") return value;
+  return sanitizeHostedValue(value, null);
+}
+
+// Errors cross the hosted boundary only in this bounded shape: no details,
+// metadata, logs or stack, and a single redacted line of message.
+export function projectHostedErrorPayload({ error, message, app_id: appId, status } = {}) {
+  return {
+    error: typeof error === "string" && /^[a-z0-9_.-]{1,80}$/i.test(error) ? error : "launchpad_error",
+    message: boundedHostedMessage(message),
+    ...(typeof appId === "string" && appId !== "" ? { app_id: redactHostedInternalText(appId) } : {}),
+    ...(typeof status === "string" && /^[a-z_-]{1,40}$/.test(status) ? { status } : {}),
+  };
+}
+
+export function redactHostedInternalText(value) {
+  return String(value)
+    .replace(hostedUrlPattern, (candidate) => (publicHttpsUrl(candidate) ? candidate : hostedRedactionToken))
+    .replace(hostedLoopbackPattern, hostedRedactionToken);
+}
+
+function boundedHostedMessage(value) {
+  const firstLine = String(value ?? "").split(/\r?\n/, 1)[0]
+    // Runtime failure messages append the log tail after this marker.
+    .replace(/\s*(?:Poslední log|Last log):.*$/i, "")
+    .trim();
+  const redacted = redactHostedInternalText(firstLine);
+  return redacted.length > hostedMessageMaxLength
+    ? `${redacted.slice(0, hostedMessageMaxLength - 1)}…`
+    : redacted;
+}
+
+function sanitizeHostedValue(value, key) {
+  if (typeof value === "string") {
+    if (key === "host" && internalHostname(value)) return null;
+    return hostedMessageKeys.has(key) ? boundedHostedMessage(value) : redactHostedInternalText(value);
+  }
+  if (Array.isArray(value)) return value.map((item) => sanitizeHostedValue(item, null));
+  if (value && typeof value === "object") {
+    const projected = {};
+    for (const [entryKey, entryValue] of Object.entries(value)) {
+      if (hostedOmittedKeys.has(entryKey)) continue;
+      projected[entryKey] = sanitizeHostedValue(entryValue, entryKey);
+    }
+    return projected;
+  }
+  return value;
+}
+
+function publicHttpsUrl(candidate) {
+  try {
+    const url = new URL(candidate);
+    return url.protocol === "https:" && !internalHostname(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function internalHostname(value) {
+  const hostname = String(value).replace(/^\[(.*)\]$/, "$1").replace(/\.$/, "").toLowerCase();
+  return hostname === "localhost"
+    || hostname.endsWith(".localhost")
+    || hostname === "0.0.0.0"
+    || hostname === "::1"
+    || hostname === "0:0:0:0:0:0:0:1"
+    || /^127(?:\.\d{1,3}){3}$/.test(hostname);
+}

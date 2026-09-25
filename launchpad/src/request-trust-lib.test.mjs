@@ -95,6 +95,29 @@ test("hosted trust revalidates only the exact Team-scoped signed OAuth session",
     "sec-fetch-mode": "cors",
   }), backendUrl)).toBe(false);
 
+  // The internal readiness namespace may start an App, so a GET there never
+  // qualifies as a read: a signed cross-site navigation without Origin is
+  // refused and only the gateway-shaped same-origin request is trusted.
+  const ensureUrl = new URL("/api/internal/hosted/modules/notes/ensure", backendUrl);
+  const ensureRequest = (ensureHeaders) => new Request(ensureUrl, { method: "GET", headers: ensureHeaders });
+  const authCallsBeforeEnsure = authCalls.length;
+  expect(await trust.evaluateWorkspaceRequest(ensureRequest({
+    cookie: `${authCookieName}=valid-session`,
+    "sec-fetch-site": "cross-site",
+    "sec-fetch-mode": "navigate",
+  }), ensureUrl)).toEqual({ trusted: false, reason: "hosted_fetch_site_mismatch" });
+  expect(await trust.evaluateWorkspaceRequest(ensureRequest({
+    cookie: `${authCookieName}=valid-session`,
+    "sec-fetch-site": "same-origin",
+  }), ensureUrl)).toEqual({ trusted: false, reason: "hosted_origin_mismatch" });
+  expect(authCalls.length).toBe(authCallsBeforeEnsure);
+  expect(await trust.evaluateWorkspaceRequest(ensureRequest({
+    cookie: `${authCookieName}=valid-session`,
+    origin: headers.origin,
+    "sec-fetch-site": "same-origin",
+    "sec-fetch-mode": "navigate",
+  }), ensureUrl)).toEqual({ trusted: true, reason: "trusted_hosted" });
+
   expect(await trust.isTrustedWorkspaceRequest(request(), backendUrl)).toBe(false);
   expect(await trust.isTrustedWorkspaceRequest(request({
     origin: backendUrl.origin,

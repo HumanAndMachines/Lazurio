@@ -7,7 +7,10 @@ import {
   hostedLifecycleConfigurationId,
   hostedWorkspaceConfigurationFromEnvironment,
   projectHostedAppUrl,
+  projectHostedErrorPayload,
+  projectHostedPublicJson,
   projectHostedRuntimePayload,
+  redactHostedInternalText,
   requireHostedAppUrl,
   resolveHostedPersonalspaceBinding,
   selectHostedWorkspaceApps,
@@ -695,4 +698,52 @@ test("personal binding tolerates only a cleanly absent Personalspace folder", ()
   expect(() => resolveHostedPersonalspaceBinding(configuration, {})).toThrow("only to LAZURIO_HOSTED_SCOPE=personal");
   expect(() => validateHostedWorkspaceBindings(configuration, { organizations: [] }))
     .toThrow("Hosted Workspace Organization ExampleOrg is not mounted.");
+});
+
+test("hosted public JSON projection drops diagnostics and neutralizes every internal address", () => {
+  const payload = {
+    url: "https://notes.frozen-slug.lazurio.io/",
+    host: "127.0.0.1",
+    port: 4310,
+    repository_url: "https://github.com/example/notes",
+    message: "Start selhal na http://127.0.0.1:4310/health. Poslední log:\nlistening http://localhost:4310",
+    details: ["health: http://127.0.0.1:4310/health"],
+    log_excerpt: "boom at http://127.0.0.1:4310",
+    runtime: {
+      last_error: "failed [::1]:4310\nstack line",
+      steps: [{ note: "bound 0.0.0.0:4310 and http://app.internal:80/x and ws://example.test/a" }],
+      stack: "Error: x",
+    },
+  };
+  expect(projectHostedPublicJson(payload, { profile: "local" })).toBe(payload);
+  const projected = projectHostedPublicJson(payload, configuration);
+  expect(projected).toEqual({
+    url: "https://notes.frozen-slug.lazurio.io/",
+    host: null,
+    port: 4310,
+    repository_url: "https://github.com/example/notes",
+    message: "Start selhal na [internal]",
+    runtime: {
+      last_error: "failed [internal]",
+      steps: [{ note: "bound [internal] and [internal] and [internal]" }],
+    },
+  });
+  expect(redactHostedInternalText("see https://127.0.0.1:1/x or https://api.localhost/y"))
+    .toBe("see [internal] or [internal]");
+});
+
+test("hosted error payload keeps only a bounded, redacted shape", () => {
+  expect(projectHostedErrorPayload({
+    error: "app_port_conflict",
+    message: `Port obsazený, health http://127.0.0.1:4310/health ${"x".repeat(400)}\nlog`,
+    app_id: "personal--owner_GEN3--notes-v1",
+    status: "unhealthy",
+  })).toEqual({
+    error: "app_port_conflict",
+    message: expect.stringMatching(/^Port obsazený, health \[internal\] x+…$/),
+    app_id: "personal--owner_GEN3--notes-v1",
+    status: "unhealthy",
+  });
+  expect(projectHostedErrorPayload({ error: "bad code <script>", message: undefined, status: 409 }))
+    .toEqual({ error: "launchpad_error", message: "" });
 });

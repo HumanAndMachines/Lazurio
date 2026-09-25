@@ -118,11 +118,21 @@ stopped. Starý worktree se neobnovuje. Local profil dál ověřuje prázdný po
 bez obnovení session child.
 
 Přímý odkaz musí mít samostatný actual ingress důkaz: ověření Team relace,
-internal GET `/api/internal/hosted/apps/<exact-app-id>/ensure`, až potom
-původní proxy request. Interní namespace musí proxy blokovat na všech veřejných
-hostnames. Subrequest předává pouze přesnou Team cookie, loopback Host a
-ověřovaný Launchpad Origin/Sec-Fetch-Site; identity hlavička není autorizace.
-Endpoint vrací 204 jen při zdravé App, jinak chybu nebo 503. Původní path,
+internal GET `/api/internal/hosted/modules/<module-slug>/ensure` (nebo
+`/api/internal/hosted/apps/<exact-app-id>/ensure` pro Organization Team), až
+potom původní proxy request. Module-slug forma je kanonická pro gateway katalog,
+který zná jen `id` z `lazurio.module.json`; Launchpad z něj vybere výchozí App
+Modulu stejnou selekcí jako maintenance, v Organization Teamu i na osobní
+Mašině. Interní namespace musí proxy blokovat (404) na všech veřejných
+hostnames. Subrequest předává pouze přesnou Team/owner cookie, loopback Host a
+gatewayí nastavené `Origin: <Launchpad external origin>` a
+`Sec-Fetch-Site: same-origin`; Launchpad na něj vždy uplatní striktní hosted
+pravidlo (Origin + same-origin + znovu ověřená podepsaná relace), nikdy
+uvolněné pravidlo pro čtení. Identity hlavička není autorizace. Předaný
+`Sec-Fetch-Mode` je jen lifecycle hint: `navigate` nebo chybějící hodnota je
+Open a spustí i explicitně zastavenou App, ostatní režimy a WebSocket
+reconnect App nespustí. Endpoint vrací 204 jen při zdravé App, 404 pro
+neznámý nebo nevybraný Modul, jinak 503 s omezeným tělem bez interních adres. Původní path,
 query, POST body a WebSocket upgrade se nesmí přepsat nebo opakovat. Starý
 proxy config bez tohoto napojení není kvalifikovaný pro on-demand runtime;
 source testy nenahrazují společný deploy a actual Caddy smoke.

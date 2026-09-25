@@ -70,7 +70,12 @@ export function createRequestTrustPolicy({
     // with only the browser's exact signed HttpOnly session cookie.
     const origin = request.headers.get("origin");
     const fetchSite = request.headers.get("sec-fetch-site");
-    const safeRead = ["GET", "HEAD"].includes(request.method);
+    // The internal hosted namespace is a lifecycle mutation even on GET (the
+    // gateway readiness subrequest may start an App). It never qualifies as a
+    // read and always needs the gateway-set same-origin Fetch Metadata and
+    // exact Origin in addition to the signed session.
+    const safeRead = ["GET", "HEAD"].includes(request.method)
+      && !url.pathname.startsWith("/api/internal/");
     if (!safeRead && fetchSite !== "same-origin") {
       return trustDecision(false, "hosted_fetch_site_mismatch");
     }
@@ -78,9 +83,10 @@ export function createRequestTrustPolicy({
       return trustDecision(false, "hosted_origin_mismatch");
     }
     // Browser fetch does not reliably send Origin on same-origin GETs. Keep
-    // owner reads usable while still rejecting an explicit foreign origin or
-    // a cross-site subresource request; the exact signed session is rechecked
-    // below for every request.
+    // side-effect-free owner reads usable while still rejecting an explicit
+    // foreign origin or a cross-site subresource request; the exact signed
+    // session is rechecked below for every request. No GET outside the
+    // internal namespace may change lifecycle state.
     if (safeRead && (
       (origin && origin !== hostedOrigin)
       || (fetchSite === "cross-site" && request.headers.get("sec-fetch-mode") !== "navigate")
