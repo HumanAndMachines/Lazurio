@@ -1014,6 +1014,35 @@ test("doctor report obsahuje platform, git a gitignore checks", async () => {
   expect(checks.get("launchpad.discovery")?.status).toBe("ok");
 });
 
+test("CLI Doctor na sdílené týmové Mašině Personalspace lane nespouští a hlásí not_applicable", async () => {
+  const root = await createCompaniesWorkspaceFixture();
+  const personalspaceCheck = async (assignment) => {
+    const report = await buildLaunchpadDoctorReport({
+      companiesRoot: root,
+      launchpadRoot: join(root, "launchpad"),
+      readMachineAssignment: () => assignment,
+    });
+    return report.checks.find((check) => check.id === "launchpad.personalspace");
+  };
+
+  const team = await personalspaceCheck({ kind: "team" });
+  expect(team.status).toBe("not_applicable");
+  expect(team.not_applicable_reason).toBe("no_such_mount");
+  expect(team.message).toContain("sdílená týmová Mašina");
+  expect(team.details).toEqual([]);
+
+  // Ostatní přiřazení drží dosavadní Personalspace lane.
+  for (const assignment of [
+    { kind: "operator", github_login: "anna-example", github_id: 12345678 },
+    { kind: "principal", github_login: "example-owner", github_id: 42 },
+    { kind: "unassigned" },
+    { kind: "none" },
+    { kind: "invalid" },
+  ]) {
+    expect((await personalspaceCheck(assignment)).message).not.toContain("sdílená týmová Mašina");
+  }
+});
+
 test("Doctor launchpad.discovery failuje na Organization cross-file identitě", async () => {
   const root = await createCompaniesWorkspaceFixture();
   const companyRoot = join(root, "organizations", "BrokenIdentity_GEN3");

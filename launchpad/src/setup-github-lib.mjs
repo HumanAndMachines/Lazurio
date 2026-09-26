@@ -7,6 +7,16 @@ import { join } from "node:path";
 import { BROKERED_GITHUB_ACTOR, brokeredGitHubIdentity } from "../../lazurio/core/brokered-github-lib.mjs";
 import { sanitizedGitHubEnvironment } from "../../lazurio/core/github-provider-lib.mjs";
 import { resolveExecutableOnPath } from "../../lazurio/core/toolchain-lib.mjs";
+import { readMachineAssignment } from "../../lazurio/core/machine-identity-lib.mjs";
+
+// The Machine identity reader lives in Core so the CLI Doctor and this
+// server share one signal; re-exported for existing Launchpad consumers.
+export {
+  MACHINE_IDENTITY_FILE,
+  machineOffersPersonalspace,
+  parseMachineAssignment,
+  readMachineAssignment,
+} from "../../lazurio/core/machine-identity-lib.mjs";
 
 // Machine setup step "GitHub" (Launchpad /api/setup/github/*; later steps of
 // the same setup namespace add SSH access, Codex and Claude logins).
@@ -23,13 +33,11 @@ import { resolveExecutableOnPath } from "../../lazurio/core/toolchain-lib.mjs";
 // device_code, the token and the private key never pass through here at all.
 
 export const GITHUB_LOGIN_SCHEMA = "lazurio.launchpad.setup.github.v1";
-export const MACHINE_IDENTITY_FILE = "/etc/lazurio/lazurio.machine.json";
 export const GITHUB_DEVICE_URL = "https://github.com/login/device";
 export const GITHUB_KEY_SCOPE = "admin:public_key";
 export const ORGANIZATION_INSTALL_ROLE = "builder";
 
 const setupGitHubPattern = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/u;
-const machineLoginPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const deviceCodePattern = /one-time code:\s*([A-Z0-9]{4}-[A-Z0-9]{4})\b/u;
 const publicKeyPattern = /^(ssh-ed25519|ecdsa-sha2-nistp256|ecdsa-sha2-nistp384|ecdsa-sha2-nistp521|ssh-rsa|sk-ssh-ed25519@openssh\.com|sk-ecdsa-sha2-nistp256@openssh\.com)\s+([A-Za-z0-9+/]+={0,3})(?:\s|$)/u;
 const sshGreetingPattern = /^Hi ([A-Za-z0-9-]+)! You've successfully authenticated, but GitHub does not provide shell access/mu;
@@ -167,50 +175,20 @@ export function parseSshConfig(raw) {
   return Object.freeze({ hostname, port, known_hosts_name: knownHostsName });
 }
 
-/**
- * `/etc/lazurio/lazurio.machine.json` (Machines docs/machine-identity.md).
- * Tells a personal VM (no Organization install) from an Organization one.
- * The declared account does not gate sign-in: until Dashboard binds a
- * Machine to an account, whoever operates it signs in with any account.
- */
-export function parseMachineAssignment(raw) {
-  let value;
-  try {
-    value = JSON.parse(String(raw ?? ""));
-  } catch {
-    return Object.freeze({ kind: "invalid" });
-  }
-  if (value?.schema_version !== "lazurio.machine.v1") return Object.freeze({ kind: "invalid" });
-  const owner = value.owner ?? {};
-  const machineKind = value.machine?.kind;
-  if (machineKind === "personal-vm" && owner.kind === "principal") {
-    return expectedAccount("principal", owner.github_login, owner.github_id);
-  }
-  if (machineKind === "workspace-vm" && owner.kind === "organization") {
-    const assignment = owner.assignment;
-    if (!assignment) return Object.freeze({ kind: "unassigned" });
-    if (assignment.kind === "team") return Object.freeze({ kind: "team" });
-    if (assignment.kind === "operator") {
-      return expectedAccount("operator", assignment.github_login, assignment.github_id);
-    }
-  }
-  return Object.freeze({ kind: "invalid" });
-}
+// Route guard for a shared Team Machine; the signal itself is
+// machineOffersPersonalspace() in lazurio/core/machine-identity-lib.mjs.
+export const PERSONALSPACE_TEAM_MACHINE_ERROR = "personalspace_unavailable_on_team_machine";
 
-function expectedAccount(kind, login, id) {
-  if (typeof login !== "string" || !machineLoginPattern.test(login) || !Number.isSafeInteger(id) || id <= 0) {
-    return Object.freeze({ kind: "invalid" });
-  }
-  return Object.freeze({ kind, github_login: login, github_id: id });
-}
-
-export function readMachineAssignment({ path = MACHINE_IDENTITY_FILE, exists = existsSync, read = readFileSync } = {}) {
-  if (!exists(path)) return Object.freeze({ kind: "none" });
-  try {
-    return parseMachineAssignment(read(path, "utf8"));
-  } catch {
-    return Object.freeze({ kind: "invalid" });
-  }
+export function personalspaceRouteRefusal(pathname, { offered }) {
+  if (offered) return null;
+  if (pathname !== "/api/personalspace" && !String(pathname).startsWith("/api/personalspace/")) return null;
+  return {
+    status: 404,
+    body: {
+      error: PERSONALSPACE_TEAM_MACHINE_ERROR,
+      message: "This is a shared Team Machine; it has no Personalspace.",
+    },
+  };
 }
 
 export function normalizeOrganizationLogin(value) {
