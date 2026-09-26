@@ -122,8 +122,8 @@ autoritu.
    standardizovaným handoff blokem (PR URL, base, exact HEAD, lidské
    shrnutí, ověření, odkaz na aplikaci běžící z worktree) a končí
    standardizovanou dvojotázkou „Mám změny Publikovat tvým jménem? Nebo mám
-   požádat jiného Kolegu o kontrolu a Publikaci?" — volbu vždy nabídni,
-   nedomýšlej ji za Principála. Před otázkou zjisti
+   požádat jiného Kolegu o kontrolu a Publikaci?" — pokud Principál dosud nerozhodl, volbu nabídni;
+   nedomýšlej ji a již doložený scoped mandát nevyžaduj znovu. Před otázkou zjisti
    živá GitHub práva Principála a řiď se jimi, ne textovým labelem role —
    např. `gh api repos/<owner>/<repo> --jq .permissions`,
    `gh api repos/<owner>/<repo>/branches/<base>/protection`,
@@ -143,6 +143,9 @@ autoritu.
    branchi: řeší připomínky a CI, rebasuje a po preflightu smí použít jím
    vypsaný exact `--force-with-lease`. Nesmí změnu vrátit autorovi pouhým
    komentářem, pokud ji v rámci živých práv a scope může dotáhnout sám.
+   Výslovné „ať tyto PR publikuje X“ předává X také opravy, ověření a
+   merge podle kontraktu předání v root `AGENTS.md`; pouhé review tento
+   mandát nemá. Již doložený scoped souhlas znovu nevyžaduj.
    Assignment sám nevytváří GitHub práva ani nenahrazuje explicitní pokyn
    Principála k Publikaci. Pokud Principál nikoho neurčil, požádej ho o volbu
    — Stewarda použij bez další otázky jen tehdy, když ho jako výchozí
