@@ -1540,6 +1540,465 @@ async function mountPersonalspace(root, login) {
   await writeJson(join(space, "modules.manifest.json"), { personal_generation: "gen3", owner: login, module_slots: [] });
 }
 
+async function mountPersonalApp(root, login, {
+  module = "notes",
+  appId = "notes-v1",
+  port,
+  installed = false,
+  serverSource = fixtureServerSource(),
+  title = "Personal Notes",
+  healthPath = "/health",
+}) {
+  const moduleRoot = join(root, "personalspace", `${login}_GEN3`, "workspace", module);
+  const appRoot = join(moduleRoot, "app", "v1");
+  await mkdir(appRoot, { recursive: true });
+  await writeJson(join(moduleRoot, "lazurio.module.json"), {
+    schema_version: "lazurio.module.v1",
+    id: module,
+    company: login,
+    tcp_port_policy: { mode: "single" },
+    port_leases: [{ id: "main", host: "127.0.0.1", port }],
+    apps: ["app/v1/package.json"],
+    default_app: "app/v1/package.json",
+  });
+  await writeJson(join(appRoot, "package.json"), {
+    name: `${login}-${module}`,
+    version: "1.0.0",
+    private: true,
+    type: "module",
+    ...(installed ? {} : { dependencies: { "fixture-not-installed": "1.0.0" } }),
+    scripts: { dev: "bun server.mjs" },
+    lazurio: {
+      runtime: {
+        schema_version: "lazurio.runtime.v1",
+        id: appId,
+        title,
+        company: login,
+        module,
+        surface: "internal",
+        dev_script: "dev",
+        tags: ["personal"],
+        listeners: [{
+          id: "web",
+          role: "entrypoint",
+          lease: "main",
+          protocol: "http",
+          health: { kind: "http", path: healthPath },
+        }],
+      },
+    },
+  });
+  await writeFile(join(appRoot, "server.mjs"), serverSource, "utf8");
+  if (installed) await mkdir(join(appRoot, "node_modules"), { recursive: true });
+}
+
+// Hosted responses reach a remote browser. URL fields may name only the
+// allowlisted public origins; every other string holds no URL or address
+// literal of any kind; messages are one line; diagnostics never appear.
+// Health paths outside the public path character allowlist.
+const hostileHealthPaths = [
+  "/health/redis:6379/",
+  "/x/javascript:alert(1)/",
+  "/x/%252525/",
+  "/a/b:c/",
+  "/a@b/",
+  "/%2e%2e/",
+  "/\u00fcni/",
+];
+const hostedPersonalOrigins = [
+  "https://notes.frozen-slug.lazurio.io",
+  "https://broken.frozen-slug.lazurio.io",
+  "https://diag.frozen-slug.lazurio.io",
+  "https://pathy.frozen-slug.lazurio.io",
+  ...hostileHealthPaths.map((_, index) => `https://hostile${index}.frozen-slug.lazurio.io`),
+];
+const hostedAddressProbes = [
+  "https://10.0.0.5:8443/health",
+  "https://192.168.1.10:4443/logs",
+  "https://app.internal:8080/path",
+  "10.0.0.5:8443",
+  "[fd00::1]:8080",
+  "redis:6379",
+];
+
+function expectNoInternalAddress(value, path = "$", key = null) {
+  if (key === "host") {
+    expect({ path, value }).toEqual({ path, value: null });
+    return;
+  }
+  if (typeof value === "string") {
+    if (key === "url" || key?.endsWith("_url")) {
+      // Exactly an allowlisted origin plus a clean path: no query, fragment,
+      // encoded or literal address in the path.
+      const allowed = !/[?#%]/.test(value)
+        && hostedPersonalOrigins.some((origin) => value.startsWith(`${origin}/`))
+        && !/[a-z][a-z0-9+.-]*:\/|\d{1,3}(?:\.\d{1,3}){3}|::|localhost/i.test(value.replace(/^https:\/\/[^/]+/, ""));
+      expect({ path, value, allowed }).toMatchObject({ allowed: true });
+      return;
+    }
+    const literal = /[a-z][a-z0-9+.-]*:\/\/|(?<![\w.])\d{1,3}(?:\.\d{1,3}){3}(?![\w.])|\[[0-9a-f:.]*:[0-9a-f:.]*\]|(?:[a-z0-9-]+\.)+[a-z0-9-]+:\d{1,5}(?!\d)|localhost|[0-9a-f]{0,4}::[0-9a-f]{0,4}/i;
+    expect({ path, value, literal: literal.test(value) }).toMatchObject({ literal: false });
+    if (key === "message" || key === "last_error") {
+      expect({ path, value, marker: value.includes("crash-marker") }).toMatchObject({ marker: false });
+      expect({ path, value, control: /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(value) })
+        .toMatchObject({ control: false });
+    }
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => expectNoInternalAddress(item, `${path}[${index}]`));
+    return;
+  }
+  if (value && typeof value === "object") {
+    for (const [entryKey, item] of Object.entries(value)) {
+      expect({ path, key: entryKey }).not.toMatchObject({
+        key: expect.stringMatching(/^(details|log_excerpt|startup_log|stderr|stdout|stack)$/),
+      });
+      expectNoInternalAddress(item, `${path}.${entryKey}`, entryKey);
+    }
+  }
+}
+
+async function startTlsAuthGateway(root, cookieName) {
+  const keyPath = join(root, "fixture-key.pem"), certPath = join(root, "fixture-cert.pem");
+  execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
+    "-subj", "/CN=localhost", "-addext", "subjectAltName=DNS:localhost,IP:127.0.0.1",
+    "-keyout", keyPath, "-out", certPath], { stdio: "ignore" });
+  const gateway = Bun.serve({ hostname: "127.0.0.1", port: 0,
+    tls: { key: await readFile(keyPath), cert: await readFile(certPath) },
+    fetch(request) {
+      const admitted = new URL(request.url).pathname === "/oauth2/auth"
+        && request.headers.get("cookie") === `${cookieName}=valid-session`;
+      return new Response(null, { status: admitted ? 202 : 401 });
+    },
+  });
+  return {
+    gateway,
+    env: {
+      LAZURIO_LAUNCHPAD_AUTH_CHECK_URL: `https://127.0.0.1:${gateway.port}/oauth2/auth`,
+      NODE_EXTRA_CA_CERTS: certPath,
+    },
+  };
+}
+
+async function expectPortClosed(port) {
+  await expect(fetch(`http://127.0.0.1:${port}/health`)).rejects.toThrow();
+}
+
+test.skipIf(process.platform === "win32")("hosted personal owner can list and control canonical Apps without loopback URL disclosure", async () => {
+  const root = await createLaunchpadGitFixture();
+  const stateRoot = `${root}-personal-owner-state`;
+  const keyPath = join(root, "fixture-key.pem"), certPath = join(root, "fixture-cert.pem");
+  execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
+    "-subj", "/CN=localhost", "-addext", "subjectAltName=DNS:localhost,IP:127.0.0.1",
+    "-keyout", keyPath, "-out", certPath], { stdio: "ignore" });
+  const gateway = Bun.serve({ hostname: "127.0.0.1", port: 0,
+    tls: { key: await readFile(keyPath), cert: await readFile(certPath) },
+    fetch(request) {
+      const admitted = new URL(request.url).pathname === "/oauth2/auth"
+        && request.headers.get("cookie") === "__Secure-lazurio-personal=valid-session";
+      return new Response(null, { status: admitted ? 202 : 401 });
+    },
+  });
+  tempRoots.push(root, stateRoot);
+  await mountPersonalspace(root, "exampleuser");
+  const appPort = await findFreePort();
+  await mountPersonalApp(root, "exampleuser", { port: appPort });
+  try {
+    const externalOrigin = "https://launchpad.frozen-slug.lazurio.io";
+    const { port } = await startLaunchpadServer(root, { env: {
+      ...personalHostedEnvironment(stateRoot, gateway.port),
+      LAZURIO_LAUNCHPAD_AUTH_CHECK_URL: `https://127.0.0.1:${gateway.port}/oauth2/auth`,
+      NODE_EXTRA_CA_CERTS: certPath,
+    } });
+    const origin = `http://127.0.0.1:${port}`;
+    const readHeaders = {
+      cookie: "__Secure-lazurio-personal=valid-session",
+      "sec-fetch-site": "same-origin",
+    };
+    const response = await fetch(`${origin}/api/personalspace`, { headers: readHeaders });
+    expect(response.status).toBe(200);
+    const personalspace = await response.json();
+    const app = personalspace.spaces[0].apps[0];
+    expect(app).toMatchObject({
+      id: "personal--exampleuser_GEN3--notes-v1",
+      url: "https://notes.frozen-slug.lazurio.io/",
+      health_url: "https://notes.frozen-slug.lazurio.io/health",
+    });
+    expect(JSON.stringify(personalspace)).not.toContain(`http://127.0.0.1:${appPort}`);
+    expectNoInternalAddress(personalspace);
+    expect((await getJson(port, "/api/apps")).apps).toEqual([]);
+
+    for (const headers of [
+      {},
+      { ...readHeaders, cookie: "__Secure-lazurio-personal=forged" },
+      { ...readHeaders, origin: "https://evil.invalid" },
+      { ...readHeaders, "sec-fetch-site": "cross-site", "sec-fetch-mode": "cors" },
+    ]) {
+      expect((await fetch(`${origin}/api/personalspace`, { headers })).status).toBe(403);
+    }
+
+    const health = await fetch(`${origin}/api/personalspace/apps/${encodeURIComponent(app.id)}/health`, {
+      method: "POST",
+      headers: {
+        ...readHeaders,
+        origin: externalOrigin,
+        "content-type": "application/json",
+      },
+      body: "{}",
+    });
+    expect(health.status).toBe(200);
+    const healthPayload = await health.json();
+    expect(healthPayload).toMatchObject({
+      url: "https://notes.frozen-slug.lazurio.io/",
+      health_url: "https://notes.frozen-slug.lazurio.io/health",
+      hosted_url_source: "workspace-identity",
+    });
+    expectNoInternalAddress(healthPayload);
+
+    gateway.stop(true);
+    expect((await fetch(`${origin}/api/personalspace`, { headers: readHeaders })).status).toBe(403);
+  } finally {
+    gateway.stop(true);
+  }
+}, platformTestTimeout(45_000));
+
+test.skipIf(process.platform === "win32")("hosted personal gateway ensure opens the Module default only for the gateway-shaped subrequest and keeps every lifecycle answer public", async () => {
+  const root = await createLaunchpadGitFixture();
+  const stateRoot = `${root}-personal-ensure-state`;
+  tempRoots.push(root, stateRoot);
+  const cookie = "__Secure-lazurio-personal=valid-session";
+  const { gateway, env: authEnv } = await startTlsAuthGateway(root, "__Secure-lazurio-personal");
+  await mountPersonalspace(root, "exampleuser");
+  const appPort = await findFreePort();
+  const brokenPort = await findFreePort();
+  await mountPersonalApp(root, "exampleuser", { port: appPort, installed: true });
+  await mountPersonalApp(root, "exampleuser", {
+    module: "broken",
+    appId: "broken-v1",
+    port: brokenPort,
+    installed: true,
+    // Runtime error messages embed the App title: carry every probe there.
+    // (Two more Apps below declare hostile health paths.)
+    title: `Broken ${hostedAddressProbes.join(" ")} boom\rcrash-marker`,
+    serverSource: [
+      "console.error(`crash-marker binding http://127.0.0.1:${process.env.LAZURIO_RUNTIME_PORT}/health`);",
+      "process.exit(1);",
+      "",
+    ].join("\n"),
+  });
+  const diagPort = await findFreePort();
+  const pathyPort = await findFreePort();
+  const answerEverything = [
+    "Bun.serve({",
+    "  hostname: process.env.LAZURIO_RUNTIME_HOST,",
+    "  port: Number(process.env.LAZURIO_RUNTIME_PORT),",
+    "  fetch: () => Response.json({ status: 'ok' }),",
+    "});",
+    "setInterval(() => {}, 2147483647);",
+    "",
+  ].join("\n");
+  await mountPersonalApp(root, "exampleuser", {
+    module: "diag",
+    appId: "diag-v1",
+    port: diagPort,
+    installed: true,
+    healthPath: "/health?diag=http://10.0.0.5:8443/secret",
+    serverSource: answerEverything,
+  });
+  await mountPersonalApp(root, "exampleuser", {
+    module: "pathy",
+    appId: "pathy-v1",
+    port: pathyPort,
+    installed: true,
+    healthPath: "/x/http:%2F%2F10.0.0.5/",
+    serverSource: answerEverything,
+  });
+  for (const [index, healthPath] of hostileHealthPaths.entries()) {
+    await mountPersonalApp(root, "exampleuser", {
+      module: `hostile${index}`,
+      appId: `hostile${index}-v1`,
+      port: await findFreePort(),
+      installed: true,
+      healthPath,
+      serverSource: answerEverything,
+    });
+  }
+  try {
+    const externalOrigin = "https://launchpad.frozen-slug.lazurio.io";
+    const { port } = await startLaunchpadServer(root, { env: {
+      ...personalHostedEnvironment(stateRoot, gateway.port),
+      ...authEnv,
+    } });
+    const origin = `http://127.0.0.1:${port}`;
+    const appId = "personal--exampleuser_GEN3--notes-v1";
+    // Exactly what the Machine gateway sets on its readiness subrequest; the
+    // browser's own Fetch Metadata mode passes through as a lifecycle hint.
+    const gatewayHeaders = (mode) => ({
+      cookie,
+      origin: externalOrigin,
+      "sec-fetch-site": "same-origin",
+      ...(mode ? { "sec-fetch-mode": mode } : {}),
+    });
+    const ensure = (headers, module = "notes") =>
+      fetch(`${origin}/api/internal/hosted/modules/${module}/ensure`, { headers });
+    const mutationHeaders = {
+      cookie,
+      origin: externalOrigin,
+      "sec-fetch-site": "same-origin",
+      "content-type": "application/json",
+    };
+    const lifecycle = async (action, method = "POST") => {
+      const response = await fetch(`${origin}/api/personalspace/apps/${encodeURIComponent(appId)}/${action}`, {
+        method,
+        headers: method === "POST" ? mutationHeaders : { cookie, "sec-fetch-site": "same-origin" },
+        ...(method === "POST" ? { body: "{}" } : {}),
+      });
+      const payload = await response.json();
+      expectNoInternalAddress(payload);
+      return { status: response.status, payload };
+    };
+
+    // A signed browser following a cross-site link (SameSite=Lax cookie, no
+    // Origin) never reaches lifecycle: not via the Module route and not via a
+    // personal App id on the Organization namespace.
+    const crossSite = { cookie, "sec-fetch-site": "cross-site", "sec-fetch-mode": "navigate" };
+    const crossSiteEnsure = await ensure(crossSite);
+    expect(crossSiteEnsure.status).toBe(403);
+    expect(await crossSiteEnsure.json()).toEqual({ error: "mutating_request_forbidden" });
+    expect((await fetch(`${origin}/api/internal/hosted/apps/${appId}/ensure`, { headers: crossSite })).status)
+      .toBe(403);
+    const personalAppIdEnsure = await fetch(`${origin}/api/internal/hosted/apps/${appId}/ensure`, {
+      headers: gatewayHeaders("navigate"),
+    });
+    expect(personalAppIdEnsure.status).toBe(404);
+    expectNoInternalAddress(await personalAppIdEnsure.json());
+    const unknownModule = await ensure(gatewayHeaders("navigate"), "unknown");
+    expect(unknownModule.status).toBe(404);
+    expectNoInternalAddress(await unknownModule.json());
+    expect((await fetch(`${origin}/api/internal/hosted/modules/notes/ensure`, {
+      method: "POST",
+      headers: gatewayHeaders("navigate"),
+    })).status).toBe(405);
+    // Background requests are not an Open.
+    expect((await ensure(gatewayHeaders("cors"))).status).toBe(503);
+    await expectPortClosed(appPort);
+
+    // A signed-in top-level navigation to the App hostname is an Open.
+    expect((await ensure(gatewayHeaders("navigate"))).status).toBe(204);
+    expect((await fetch(`http://127.0.0.1:${appPort}/health`)).status).toBe(200);
+    expect((await ensure(gatewayHeaders("cors"))).status).toBe(204);
+
+    const inventoryResponse = await fetch(`${origin}/api/personalspace`, {
+      headers: { cookie, "sec-fetch-site": "same-origin" },
+    });
+    expect(inventoryResponse.status).toBe(200);
+    const inventory = await inventoryResponse.json();
+    expect(inventory.spaces[0].apps.map((app) => app.id).sort()).toEqual([
+      "personal--exampleuser_GEN3--broken-v1",
+      "personal--exampleuser_GEN3--diag-v1",
+      ...hostileHealthPaths.map((_, index) => `personal--exampleuser_GEN3--hostile${index}-v1`),
+      appId,
+      "personal--exampleuser_GEN3--pathy-v1",
+    ]);
+    const inventoryApp = (module) => inventory.spaces[0].apps.find((app) => app.module === module);
+    expect(inventoryApp("diag").health_url).toBe("https://diag.frozen-slug.lazurio.io/health");
+    expect(inventoryApp("pathy").health_url).toBeNull();
+    for (const index of hostileHealthPaths.keys()) {
+      expect({ index, health_url: inventoryApp(`hostile${index}`).health_url }).toEqual({ index, health_url: null });
+    }
+    expectNoInternalAddress(inventory);
+    // Owner-declared free text keeps its words but loses every address.
+    expect(inventory.spaces[0].apps.find((app) => app.module === "broken").title)
+      .toBe(`Broken${" [redacted]".repeat(hostedAddressProbes.length)} boom\rcrash-marker`);
+
+    expect(await lifecycle("health", "GET")).toMatchObject({ status: 200, payload: { status: "healthy" } });
+    expect(await lifecycle("health")).toMatchObject({ status: 200, payload: { status: "healthy" } });
+    // A real failing lifecycle route: the conflict carries its runtime
+    // diagnostics internally, the hosted answer only the bounded shape.
+    const conflict = await lifecycle("start");
+    expect(conflict.status).toBeGreaterThanOrEqual(400);
+    expect(Object.keys(conflict.payload).every((key) => ["error", "message", "app_id", "status"].includes(key)))
+      .toBe(true);
+    expect(conflict.payload.app_id).toBe(appId);
+    expect(await lifecycle("restart")).toMatchObject({ status: 200 });
+    expect(await lifecycle("logs", "GET")).toMatchObject({ status: 200, payload: { content_available: false } });
+    expect(await lifecycle("stop")).toMatchObject({ status: 200 });
+    await waitForPortVacancy(appPort);
+
+    // Explicit Stop holds against background traffic until the next Open.
+    expect((await ensure(gatewayHeaders("cors"))).status).toBe(503);
+    await expectPortClosed(appPort);
+    expect(await lifecycle("open")).toMatchObject({
+      status: 200,
+      payload: { url: "https://notes.frozen-slug.lazurio.io/" },
+    });
+    expect(await lifecycle("stop")).toMatchObject({ status: 200 });
+    await waitForPortVacancy(appPort);
+    expect((await ensure(gatewayHeaders("navigate"))).status).toBe(204);
+    expect(await lifecycle("stop")).toMatchObject({ status: 200 });
+    await waitForPortVacancy(appPort);
+    const install = await lifecycle("install");
+    expect([200, 409, 500]).toContain(install.status);
+
+    // A start failure with a log tail containing a loopback URL.
+    const brokenResponse = await fetch(
+      `${origin}/api/personalspace/apps/${encodeURIComponent("personal--exampleuser_GEN3--broken-v1")}/start`,
+      { method: "POST", headers: mutationHeaders, body: "{}" },
+    );
+    const brokenText = await brokenResponse.text();
+    expect(brokenResponse.status).toBeGreaterThanOrEqual(400);
+    expect(brokenText).not.toContain("crash-marker");
+    expect(brokenText).not.toMatch(/127\.0\.0\.1|localhost|10\.0\.0\.5|192\.168|app\.internal|fd00|redis:6379/);
+    const broken = JSON.parse(brokenText);
+    expectNoInternalAddress(broken);
+    expect(broken.message).toStartWith(`Broken${" [redacted]".repeat(hostedAddressProbes.length)} boom`);
+    expect(Object.keys(broken).every((key) => ["error", "message", "app_id", "status"].includes(key))).toBe(true);
+    const brokenEnsure = await ensure(gatewayHeaders("navigate"), "broken");
+    expect(brokenEnsure.status).toBe(503);
+    const brokenEnsureText = await brokenEnsure.text();
+    expect(brokenEnsureText).not.toContain("crash-marker");
+    if (brokenEnsureText) expectNoInternalAddress(JSON.parse(brokenEnsureText));
+
+    // Hostile health paths through real hosted lifecycle routes.
+    const hostileLifecycle = async (module, action) => {
+      const response = await fetch(
+        `${origin}/api/personalspace/apps/${encodeURIComponent(`personal--exampleuser_GEN3--${module}-v1`)}/${action}`,
+        { method: "POST", headers: mutationHeaders, body: "{}" },
+      );
+      const text = await response.text();
+      expect(text).not.toMatch(/10\.0\.0\.5|secret|%2F|redis:6379|javascript:|%2525|b:c|a@b|%2e%2e|\u00fcni/i);
+      const payload = JSON.parse(text);
+      expectNoInternalAddress(payload);
+      return { status: response.status, payload };
+    };
+    expect(await hostileLifecycle("diag", "open")).toMatchObject({
+      status: 200,
+      payload: { url: "https://diag.frozen-slug.lazurio.io/" },
+    });
+    expect(await hostileLifecycle("diag", "health")).toMatchObject({
+      status: 200,
+      payload: { status: "healthy", health_url: "https://diag.frozen-slug.lazurio.io/health" },
+    });
+    expect(await hostileLifecycle("diag", "stop")).toMatchObject({ status: 200 });
+    await waitForPortVacancy(diagPort);
+    expect(await hostileLifecycle("pathy", "health")).toMatchObject({
+      status: 200,
+      payload: { health_url: null },
+    });
+    for (const index of hostileHealthPaths.keys()) {
+      const hostile = await hostileLifecycle(`hostile${index}`, "health");
+      expect({ index, status: hostile.status, health_url: hostile.payload.health_url })
+        .toEqual({ index, status: 200, health_url: null });
+    }
+
+    expect((await getJson(port, "/health")).maintenance)
+      .toMatchObject({ total: 4 + hostileHealthPaths.length });
+  } finally {
+    gateway.stop(true);
+  }
+}, platformTestTimeout(60_000));
+
 test("hosted personal Launchpad refuses to start without its exact Personalspace", async () => {
   const root = await createLaunchpadGitFixture();
   const stateRoot = `${root}-personal-state`;
@@ -1782,6 +2241,9 @@ test("hosted Launchpad keeps Team modules cold and derives their external URLs",
   });
   await writeFile(join(appRoot, "server.mjs"), fixtureServerSource(), "utf8");
   tempRoots.push(root, stateRoot);
+  const { gateway, env: authEnv } = process.platform === "win32"
+    ? { gateway: null, env: {} }
+    : await startTlsAuthGateway(root, "__Secure-lazurio-sales-workspace");
 
   const { port, server } = await startLaunchpadServer(root, {
     env: {
@@ -1793,6 +2255,7 @@ test("hosted Launchpad keeps Team modules cold and derives their external URLs",
       LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN: "https://launchpad.builder.workspace.example.test",
       LAZURIO_LAUNCHPAD_AUTH_COOKIE_NAME: "__Secure-lazurio-sales-workspace",
       LAZURIO_LAUNCHPAD_AUTH_CHECK_URL: `https://127.0.0.1:${await findFreePort()}/oauth2/auth`,
+      ...authEnv,
     },
   });
   await Bun.sleep(100);
@@ -1816,7 +2279,38 @@ test("hosted Launchpad keeps Team modules cold and derives their external URLs",
     degraded: 0,
     skipped: 1,
   });
-}, platformTestTimeout(15_000));
+  if (!gateway) return;
+  try {
+    // The Organization Team uses the same Module-keyed gateway contract as a
+    // personal Machine; the App-id form stays available.
+    const cookie = "__Secure-lazurio-sales-workspace=valid-session";
+    const gatewayHeaders = (mode) => ({
+      cookie,
+      origin: "https://launchpad.builder.workspace.example.test",
+      "sec-fetch-site": "same-origin",
+      "sec-fetch-mode": mode,
+    });
+    const ensure = (headers, path = "modules/deals") =>
+      fetch(`http://127.0.0.1:${port}/api/internal/hosted/${path}/ensure`, { headers });
+    expect((await ensure({ cookie, "sec-fetch-site": "cross-site", "sec-fetch-mode": "navigate" })).status)
+      .toBe(403);
+    expect((await ensure(gatewayHeaders("navigate"), "modules/knowledgebase")).status).toBe(404);
+    expect((await ensure(gatewayHeaders("cors"))).status).toBe(503);
+    await expectPortClosed(appPort);
+    expect((await ensure(gatewayHeaders("navigate"))).status).toBe(204);
+    expect((await fetch(`http://127.0.0.1:${appPort}/health`)).status).toBe(200);
+    expect((await ensure(gatewayHeaders("cors"), `apps/${app.id}`)).status).toBe(204);
+    const stopped = await fetch(`http://127.0.0.1:${port}/api/apps/${app.id}/stop`, {
+      method: "POST",
+      headers: { ...gatewayHeaders("cors"), "content-type": "application/json" },
+      body: "{}",
+    });
+    expect(stopped.status).toBe(200);
+    await waitForPortVacancy(appPort);
+  } finally {
+    gateway.stop(true);
+  }
+}, platformTestTimeout(30_000));
 
 test("instance-bound local shutdown rejects stale callers and stops the managed module process tree", async () => {
   const root = await createLaunchpadGitFixture();

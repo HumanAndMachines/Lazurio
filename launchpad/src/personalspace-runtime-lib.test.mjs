@@ -11,6 +11,7 @@ import {
   inspectGitHubRepository,
   personalspaceRuntimeUrls,
   personalspaceDoctorCheck,
+  projectHostedPersonalspaceResponse,
   resolveSpaceGbrainVault,
 } from "../../lazurio/runtime/personalspace-runtime-lib.mjs";
 import { GbrainAccessError } from "../../lazurio/runtime/gbrain-lib.mjs";
@@ -28,6 +29,8 @@ test("personalspace runtime uses the explicit mutable Launchpad state root", () 
     companiesRoot: "/workspace",
     launchpadRoot: "/opt/lazurio-runtime/launchpad",
     stateRoot: "/home/builder/.local/state/lazurio/launchpad",
+    lifecycleProfile: "hosted",
+    hostedWorkspace: { profile: "hosted", scope: "personal" },
     createRuntimeManagerFn: (options) => {
       received = options;
       return expectedManager;
@@ -38,11 +41,13 @@ test("personalspace runtime uses the explicit mutable Launchpad state root", () 
     companiesRoot: "/workspace",
     launchpadRoot: "/opt/lazurio-runtime/launchpad",
     stateRoot: "/home/builder/.local/state/lazurio/launchpad",
+    lifecycleProfile: "hosted",
+    hostedWorkspace: { profile: "hosted", scope: "personal" },
   });
   expect(typeof received.discover).toBe("function");
 });
 
-test("hosted personal scope lists the space but never exposes its personal Apps", async () => {
+test("hosted personal scope exposes only canonical defaults with public HTTPS URLs", async () => {
   const { root } = await createFixture({ withApp: true });
   const launchpadRoot = join(root, "launchpad");
   const managerFor = (options) => createPersonalspaceRuntimeManager({
@@ -62,19 +67,38 @@ test("hosted personal scope lists the space but never exposes its personal Apps"
 
   // Hosted personal: no local override, the exact folder names the owner.
   await rm(join(root, "launchpad.gen3.local.json"));
-  const hostedManager = managerFor({ primarySpaceDir: "exampleuser_GEN3", listApps: false });
-  const hosted = await buildPersonalspaceResponse({
+  const configuration = {
+    profile: "hosted",
+    scope: "personal",
+    owner: "exampleuser",
+    personalspace: "exampleuser_GEN3",
+    organization_slug: null,
+    team_id: null,
+    domain: "lazurio.io",
+    machine: "exampleuser",
+    source: "workspace-identity",
+  };
+  const hostedManager = managerFor({
+    primarySpaceDir: "exampleuser_GEN3",
+    lifecycleProfile: "hosted",
+    hostedWorkspace: configuration,
+  });
+  const hosted = projectHostedPersonalspaceResponse(await buildPersonalspaceResponse({
     companiesRoot: root,
     launchpadRoot,
     primarySpaceDir: "exampleuser_GEN3",
-    listApps: false,
     runtimeManager: hostedManager,
-  });
+  }), configuration);
   expect(hosted.summary.space_count).toBe(1);
-  expect(hosted.summary.app_count).toBe(0);
+  expect(hosted.summary.app_count).toBe(1);
   expect(hosted.summary.invalid_app_count).toBe(0);
-  expect(JSON.stringify(hosted)).not.toContain("41100");
-  await expect(hostedManager.health(appId)).rejects.toMatchObject({ code: "app_not_found" });
+  expect(hosted.spaces[0].apps[0]).toMatchObject({
+    id: appId,
+    url: "https://notes.exampleuser.lazurio.io/",
+    health_url: "https://notes.exampleuser.lazurio.io/health",
+    hosted_url_source: "workspace-identity",
+  });
+  expect(JSON.stringify(hosted)).not.toContain("http://127.0.0.1:41100");
 });
 
 test("personalspace runtime discovery reads tracked config from the selected Root source", async () => {
@@ -226,6 +250,15 @@ async function createFixture({ withGbrain = true, sharedSpace = false, withApp =
   await writeJson(join(dir, "personal.gen3.json"), personalConfig("exampleuser"));
   await writeJson(join(dir, "modules.manifest.json"), { personal_generation: "gen3", owner: "exampleuser", module_slots: [] });
   if (withApp) {
+    await writeJson(join(dir, "workspace", "notes", "lazurio.module.json"), {
+      schema_version: "lazurio.module.v1",
+      id: "notes",
+      company: "exampleuser",
+      tcp_port_policy: { mode: "single" },
+      port_leases: [{ id: "main", host: "127.0.0.1", port: 41_100 }],
+      apps: ["app/v1/package.json"],
+      default_app: "app/v1/package.json",
+    });
     const appDir = join(dir, "workspace", "notes", "app", "v1");
     await mkdir(appDir, { recursive: true });
     await writeJson(join(appDir, "package.json"), {
@@ -233,19 +266,23 @@ async function createFixture({ withGbrain = true, sharedSpace = false, withApp =
       version: "1.0.0",
       packageManager: "bun@1.0.0",
       scripts: { dev: "bun run server.mjs" },
-      companyascode: {
-        app: {
-          schema_version: "companyascode.launchpad_app.v1",
+      lazurio: {
+        runtime: {
+          schema_version: "lazurio.runtime.v1",
           id: "notes-v1",
           title: "Osobní poznámky",
           company: "exampleuser",
           module: "notes",
           surface: "internal",
-          port: 41_100,
-          host: "127.0.0.1",
-          health_path: "/health",
           dev_script: "dev",
           tags: ["personal"],
+          listeners: [{
+            id: "web",
+            role: "entrypoint",
+            lease: "main",
+            protocol: "http",
+            health: { kind: "http", path: "/health" },
+          }],
         },
       },
     });
@@ -676,8 +713,8 @@ test("the Launchpad server binds every Personalspace lane to the hosted folder",
   const server = await Bun.file(join(import.meta.dirname, "server.mjs")).text();
   expect(server).toContain("const hostedPersonalspaceDir = personalHostedScope ? hostedWorkspace.personalspace : undefined;");
   // Personal Apps runtime, /api/personalspace and gbrain.
-  expect(server.match(/primarySpaceDir: hostedPersonalspaceDir,/g)?.length).toBe(3);
-  // Personal Apps stay out of both App paths until a hosted lane routes them.
-  expect(server).toContain("const personalspaceListsApps = !personalHostedScope;");
-  expect(server.match(/listApps: personalspaceListsApps,/g)?.length).toBe(2);
+  expect(server.match(/primarySpaceDir: hostedPersonalspaceDir,/g)?.length).toBe(4);
+  expect(server).toContain("projectHostedPersonalspaceResponse(response, hostedWorkspace)");
+  expect(server).toContain("personalspaceRuntimeManager.maintainApps(selected.apps)");
+  expect(server).not.toContain("personalspaceListsApps");
 });

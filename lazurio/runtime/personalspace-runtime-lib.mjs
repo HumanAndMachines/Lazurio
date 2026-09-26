@@ -14,6 +14,10 @@ import { existsSync } from "fs";
 import { join, win32 } from "path";
 import { discoverPersonalspace } from "./personalspace-lib.mjs";
 import { GbrainAccessError } from "./gbrain-lib.mjs";
+import {
+  projectHostedAppUrl,
+  selectHostedWorkspaceApps,
+} from "./hosted-app-url-lib.mjs";
 import { createRuntimeManager, runtimeUrlHost } from "./runtime-lib.mjs";
 
 const githubRepositoryPattern = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
@@ -89,12 +93,16 @@ export function createPersonalspaceRuntimeManager({
   listApps = true,
   launchpadRoot,
   stateRoot = launchpadRoot,
+  lifecycleProfile = "local",
+  hostedWorkspace = null,
   createRuntimeManagerFn = createRuntimeManager,
 }) {
   return createRuntimeManagerFn({
     companiesRoot,
     launchpadRoot,
     stateRoot,
+    lifecycleProfile,
+    hostedWorkspace,
     discover: personalspaceDiscoveryAdapter(companiesRoot, rootSourceRoot, primarySpaceDir, listApps),
   });
 }
@@ -198,6 +206,34 @@ export async function buildPersonalspaceResponse({
     warnings: discovery.warnings,
     // Privátní UX-only diagnostika. Doctor ji záměrně nikdy nečte.
     presentation_warnings: discovery.presentation_warnings ?? [],
+  };
+}
+
+// A hosted Personalspace is still owner-private, but its App inventory must be
+// bounded to the same canonical contract as gateway routing: exactly one
+// declared default App per Module. Loopback URLs never leave the server.
+export function projectHostedPersonalspaceResponse(response, configuration) {
+  if (configuration?.profile !== "hosted" || configuration.scope !== "personal") return response;
+  const listedApps = (response?.spaces ?? []).flatMap((space) => space?.apps ?? []);
+  const selected = selectHostedWorkspaceApps(configuration, { apps: listedApps });
+  const selectedById = new Map(
+    selected.apps.map((app) => [app.id, projectHostedAppUrl(app, configuration)]),
+  );
+  const spaces = (response?.spaces ?? []).map((space) => ({
+    ...space,
+    apps: (space?.apps ?? []).flatMap((app) => {
+      const projected = selectedById.get(app.id);
+      return projected ? [projected] : [];
+    }),
+  }));
+  return {
+    ...response,
+    spaces,
+    summary: {
+      ...response.summary,
+      app_count: selected.apps.length,
+      invalid_app_count: 0,
+    },
   };
 }
 

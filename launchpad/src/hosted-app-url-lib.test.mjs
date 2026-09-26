@@ -7,7 +7,11 @@ import {
   hostedLifecycleConfigurationId,
   hostedWorkspaceConfigurationFromEnvironment,
   projectHostedAppUrl,
+  hostedPublicOrigins,
+  projectHostedErrorPayload,
+  projectHostedPublicJson,
   projectHostedRuntimePayload,
+  redactHostedInternalText,
   requireHostedAppUrl,
   resolveHostedPersonalspaceBinding,
   selectHostedWorkspaceApps,
@@ -236,18 +240,22 @@ test("hosted URLs are derived from module, Machine and domain for every runtime 
   expect(projectHostedAppUrl({
     ...app,
     url: "http://127.0.0.1:4310/",
+    health_url: "http://127.0.0.1:4310/health",
     runtime: { url: "http://127.0.0.1:4310/" },
   }, configuration)).toMatchObject({
     url: expected,
+    health_url: "https://knowledgebase.builder.workspace.example.test/health",
     hosted_url_source: "workspace-identity",
     runtime: { url: expected },
   });
   expect(projectHostedRuntimePayload({
     url: "http://127.0.0.1:4310/",
-    start: { runtime: { url: "http://127.0.0.1:4310/" } },
+    health_url: "http://127.0.0.1:4310/health",
+    start: { runtime: { url: "http://127.0.0.1:4310/", health_url: "http://127.0.0.1:4310/health" } },
   }, app, configuration)).toEqual({
     url: expected,
-    start: { runtime: { url: expected } },
+    health_url: "https://knowledgebase.builder.workspace.example.test/health",
+    start: { runtime: { url: expected, health_url: "https://knowledgebase.builder.workspace.example.test/health" } },
     hosted_url_source: "workspace-identity",
   });
   expect(requireHostedAppUrl(app, configuration)).toBe(expected);
@@ -515,8 +523,14 @@ test("personal Apps open at <app>.<owner>.lazurio.io and Organization Apps never
   const url = "https://journal.immakermatty.lazurio.io/";
   expect(hostedApplicationOrigin(app, personal)).toBe("https://journal.immakermatty.lazurio.io");
   expect(requireHostedAppUrl(app, personal)).toBe(url);
-  expect(projectHostedAppUrl({ ...app, url: "http://127.0.0.1:4310/" }, personal)).toMatchObject({
-    url, hosted_url_source: "workspace-identity",
+  expect(projectHostedAppUrl({
+    ...app,
+    url: "http://127.0.0.1:4310/",
+    health_url: "http://127.0.0.1:4310/health?full=1",
+  }, personal)).toMatchObject({
+    url,
+    health_url: "https://journal.immakermatty.lazurio.io/health",
+    hosted_url_source: "workspace-identity",
   });
   expect(hostedApplicationOrigin(workspaceApp(), personal)).toBeNull();
   expect(hostedApplicationOrigin(declaredOrganizationApp(), personal)).toBeNull();
@@ -685,4 +699,207 @@ test("personal binding tolerates only a cleanly absent Personalspace folder", ()
   expect(() => resolveHostedPersonalspaceBinding(configuration, {})).toThrow("only to LAZURIO_HOSTED_SCOPE=personal");
   expect(() => validateHostedWorkspaceBindings(configuration, { organizations: [] }))
     .toThrow("Hosted Workspace Organization ExampleOrg is not mounted.");
+});
+
+// Reviewer probes: private/internal addresses that are not loopback literals.
+const hostedAddressProbes = [
+  "https://10.0.0.5:8443/health",
+  "https://192.168.1.10:4443/logs",
+  "https://app.internal:8080/path",
+  "10.0.0.5:8443",
+  "[fd00::1]:8080",
+  "fd00::1",
+  "http://127.0.0.1:4310/health",
+  "localhost:4310",
+];
+
+test("hosted public JSON projection is an allowlist of this Machine's public origins", () => {
+  const app = {
+    id: "personal--owner_GEN3--notes-v1",
+    personal: true,
+    surface_scope: "private",
+    space: "owner_GEN3",
+    module: "notes",
+    module_contract: { schema_version: "lazurio.module.v1", id: "notes" },
+    module_app: { declared: true, default: true },
+    runtime_contract: { schema_version: "lazurio.runtime.v1" },
+  };
+  const personal = createHostedWorkspaceConfiguration({
+    profile: "hosted",
+    scope: "personal",
+    owner: "owner",
+    personalspace: "owner_GEN3",
+    domain: "lazurio.io",
+    launchpadExternalOrigin: "https://launchpad.owner.lazurio.io",
+  });
+  const allowed = hostedPublicOrigins(personal, [app], [
+    "https://launchpad.owner.lazurio.io",
+    "https://t3.owner.lazurio.io/",
+    "https://10.0.0.5:8443/",
+    "http://plain.owner.lazurio.io/",
+  ]);
+  expect([...allowed].sort()).toEqual([
+    "https://launchpad.owner.lazurio.io",
+    "https://notes.owner.lazurio.io",
+    "https://t3.owner.lazurio.io",
+  ]);
+  const text = `boom ${hostedAddressProbes.join(" ")}`;
+  const payload = {
+    url: "https://notes.owner.lazurio.io/",
+    health_url: "https://notes.owner.lazurio.io/health",
+    settings_url: "https://github.com/settings/profile",
+    runtime: { url: "https://app.internal:8080/", health_url: "https://10.0.0.5:8443/health" },
+    host: "10.0.0.5",
+    port: 4310,
+    generated_at: "2026-09-26T10:20:30.000Z",
+    message: `${text}\rcrash-marker`,
+    note: `${text} https://github.com/example/notes`,
+    details: ["health: https://10.0.0.5:8443/health"],
+    log_excerpt: "crash-marker",
+    steps: [{ last_error: "one\u2028crash-marker", stack: "Error: x" }],
+  };
+  expect(projectHostedPublicJson(payload, { profile: "local" }, allowed)).toBe(payload);
+  expect(projectHostedPublicJson(payload, personal, allowed)).toEqual({
+    url: "https://notes.owner.lazurio.io/",
+    health_url: "https://notes.owner.lazurio.io/health",
+    settings_url: null,
+    runtime: { url: null, health_url: null },
+    host: null,
+    port: 4310,
+    generated_at: "2026-09-26T10:20:30.000Z",
+    message: `boom${" [redacted]".repeat(hostedAddressProbes.length)}`,
+    note: `boom${" [redacted]".repeat(hostedAddressProbes.length + 1)}`,
+    steps: [{ last_error: "one" }],
+  });
+  for (const probe of hostedAddressProbes) {
+    expect(redactHostedInternalText(`a ${probe} b`)).toBe("a [redacted] b");
+  }
+  expect(redactHostedInternalText("at 12:30, v1.2.3, package.json")).toBe("at 12:30, v1.2.3, package.json");
+  // Percent-encoding does not smuggle an address through free text.
+  expect(redactHostedInternalText("/x/http:%2F%2F10.0.0.5/")).toBe("/x/[redacted]");
+  expect(redactHostedInternalText("ip 10%2E0%2E0%2E5 here")).toBe("ip [redacted] here");
+  expect(redactHostedInternalText("/health?diag=http%253A%252F%252F10.0.0.5%253A8443")).not.toMatch(/10\.0\.0\.5/);
+  expect(redactHostedInternalText("plain 50% off")).toBe("plain 50% off");
+  // Single-label host:port is an address; a digit-initial time is not.
+  expect(redactHostedInternalText("cache redis:6379, db:5432. at 12:30"))
+    .toBe("cache [redacted], [redacted]. at 12:30");
+});
+
+test("projected URL fields are exactly an allowlisted origin plus a clean path", () => {
+  const app = {
+    id: "personal--owner_GEN3--notes-v1",
+    personal: true,
+    surface_scope: "private",
+    space: "owner_GEN3",
+    module: "notes",
+    module_contract: { schema_version: "lazurio.module.v1", id: "notes" },
+    module_app: { declared: true, default: true },
+    runtime_contract: { schema_version: "lazurio.runtime.v1" },
+  };
+  const personal = createHostedWorkspaceConfiguration({
+    profile: "hosted",
+    scope: "personal",
+    owner: "owner",
+    personalspace: "owner_GEN3",
+    domain: "lazurio.io",
+    launchpadExternalOrigin: "https://launchpad.owner.lazurio.io",
+  });
+  const allowed = hostedPublicOrigins(personal, [app]);
+  const origin = "https://notes.owner.lazurio.io";
+  const project = (healthPath) => projectHostedAppUrl({
+    ...app,
+    health_url: `http://127.0.0.1:4310${healthPath}`,
+  }, personal).health_url;
+  expect(project("/health")).toBe(`${origin}/health`);
+  expect(project("/api/v1/health-check")).toBe(`${origin}/api/v1/health-check`);
+  expect(project("/v1.2/_x~y-z/")).toBe(`${origin}/v1.2/_x~y-z/`);
+  // Decoded exactly once into unreserved characters.
+  expect(project("/a~b/%7E/%41")).toBe(`${origin}/a~b/~/A`);
+  expect(project(`/${"a".repeat(511)}`)).toBe(`${origin}/${"a".repeat(511)}`);
+  // Query and fragment never cross, whatever they contain.
+  expect(project("/health?diag=http://10.0.0.5:8443/secret")).toBe(`${origin}/health`);
+  expect(project("/health#http://10.0.0.5/")).toBe(`${origin}/health`);
+  for (const path of [
+    "/x/http:%2F%2F10.0.0.5/",
+    "/x/http://10.0.0.5/",
+    "/x/%252F%252Fhttp%253A%252F%252F10.0.0.5",
+    "/x/10.0.0.5/",
+    "/x/app.internal:8080/",
+    "/x/%5Bfd00::1%5D/",
+    "/x/fd00::1/",
+    "/x/localhost/",
+    "/x/%0d%0acrash-marker",
+    "/x/%E2%80%A8",
+    "/x/%ZZ",
+    "/x/%25252525",
+    "/x/..%5C..%5Csecret",
+    "/health/redis:6379/",
+    "/x/javascript:alert(1)/",
+    "/x/%252525/",
+    "/a/b:c/",
+    "/a@b/",
+    "/%2e%2e/",
+    "/x/./y",
+    "/x/../y",
+    "/\u00fcni/",
+    "/%C3%BCni/",
+    "/a%20b/",
+    `/${"a".repeat(513)}`,
+  ]) {
+    expect({ path, projected: project(path) }).toEqual({ path, projected: null });
+    expect({ path, allowlisted: projectHostedPublicJson({ url: `${origin}${path}` }, personal, allowed).url })
+      .toEqual({ path, allowlisted: null });
+  }
+  expect(projectHostedPublicJson({
+    url: `${origin}/`,
+    health_url: `${origin}/health?diag=http://10.0.0.5:8443/secret#frag`,
+    runtime: { url: `${origin}/app?next=https://10.0.0.5/` },
+  }, personal, allowed)).toEqual({
+    url: `${origin}/`,
+    health_url: `${origin}/health`,
+    runtime: { url: `${origin}/app` },
+  });
+  // Declared health paths follow the same path allowlist.
+  expect(projectHostedPublicJson({
+    health_path: "/health?diag=http://10.0.0.5:8443/secret",
+    listeners: [{ health: { path: "/x/javascript:alert(1)/" } }, { health: { path: "/ready" } }],
+  }, personal, allowed)).toEqual({
+    health_path: "/health",
+    listeners: [{ health: { path: null } }, { health: { path: "/ready" } }],
+  });
+  expect(projectHostedRuntimePayload({
+    url: "http://127.0.0.1:4310/",
+    health_url: "http://127.0.0.1:4310/health?diag=http://10.0.0.5:8443/secret",
+    start: { runtime: { health_url: "http://127.0.0.1:4310/x/http:%2F%2F10.0.0.5/" } },
+  }, app, personal)).toMatchObject({
+    url: `${origin}/`,
+    health_url: `${origin}/health`,
+    start: { runtime: { health_url: null } },
+  });
+});
+
+test("hosted error payload keeps only a bounded, redacted one-line shape", () => {
+  for (const separator of ["\r", "\n", "\u0085", "\u2028", "\u2029"]) {
+    expect(projectHostedErrorPayload({
+      error: "app_start_failed",
+      message: `boom ${hostedAddressProbes.join(" ")}${separator}crash-marker`,
+    })).toEqual({
+      error: "app_start_failed",
+      message: `boom${" [redacted]".repeat(hostedAddressProbes.length)}`,
+    });
+  }
+  expect(projectHostedErrorPayload({ error: "x", message: "a\u0007b\u009fc\td" }).message).toBe("a b c d");
+  expect(projectHostedErrorPayload({
+    error: "app_port_conflict",
+    message: `Port obsazený ${"x".repeat(400)}`,
+    app_id: "personal--owner_GEN3--notes-v1",
+    status: "unhealthy",
+  })).toEqual({
+    error: "app_port_conflict",
+    message: expect.stringMatching(/^Port obsazený x+…$/),
+    app_id: "personal--owner_GEN3--notes-v1",
+    status: "unhealthy",
+  });
+  expect(projectHostedErrorPayload({ error: "bad code <script>", app_id: "https://10.0.0.5/", status: 409 }))
+    .toEqual({ error: "launchpad_error", message: "" });
 });

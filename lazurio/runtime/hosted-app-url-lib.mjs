@@ -505,10 +505,13 @@ export function projectHostedAppUrl(app, configuration) {
   return {
     ...app,
     url: hostedUrl,
+    ...(Object.hasOwn(app, "health_url")
+      ? { health_url: projectHostedHealthUrl(app.health_url, hostedUrl) }
+      : {}),
     hosted_url_source: configuration.source,
     ...(!hostedUrl ? { hosted_url_error: "hosted_app_url_unavailable" } : {}),
     runtime: app.runtime && typeof app.runtime === "object"
-      ? { ...app.runtime, url: hostedUrl }
+      ? projectLifecycleUrls(app.runtime, hostedUrl)
       : app.runtime,
   };
 }
@@ -602,6 +605,9 @@ function projectLifecycleUrls(payload, hostedUrl) {
   const projected = {
     ...payload,
     ...(Object.hasOwn(payload, "url") ? { url: payload.url ? hostedUrl : null } : {}),
+    ...(Object.hasOwn(payload, "health_url")
+      ? { health_url: projectHostedHealthUrl(payload.health_url, hostedUrl) }
+      : {}),
   };
   for (const key of ["runtime", "start", "started", "stop"]) {
     if (payload[key] && typeof payload[key] === "object" && !Array.isArray(payload[key])) {
@@ -609,4 +615,205 @@ function projectLifecycleUrls(payload, hostedUrl) {
     }
   }
   return projected;
+}
+
+// A projected URL is exactly the public origin plus a path: query and
+// fragment never cross, and a path that names another address fails closed.
+function projectHostedHealthUrl(healthUrl, hostedUrl) {
+  if (!healthUrl || !hostedUrl) return null;
+  try {
+    const path = safeHostedPublicPath(hostedUrlRawPath(healthUrl));
+    return path ? `${new URL(hostedUrl).origin}${path}` : null;
+  } catch {
+    return null;
+  }
+}
+
+// Fail-closed public projection of hosted JSON. A hosted browser reaches this
+// server only through the gateway, so nothing about the Machine's internal
+// network or process output may leave it. The projection is an allowlist:
+// - URL fields (`url`, `*_url`) survive only when their origin is exactly one
+//   of this Machine's derived public HTTPS origins; anything else is null;
+// - `host` fields are always null (the public origin is the only address);
+// - every other string is free text: every URL of any scheme, IPv4/IPv6
+//   literal and dotted host:port is replaced by a neutral token, public or not;
+// - message fields are one bounded line without log tails or control chars;
+// - diagnostics that may carry log output are dropped.
+// Owner note content (gbrain) is deliberately outside this projection.
+const hostedRedactionToken = "[redacted]";
+const hostedOmittedKeys = new Set(["details", "log_excerpt", "startup_log", "stderr", "stdout", "stack"]);
+const hostedMessageKeys = new Set(["message", "last_error"]);
+const hostedMessageMaxLength = 300;
+const hostedFreeTextPatterns = [
+  // Any URL, any scheme.
+  /[a-z][a-z0-9+.-]*:\/\/[^\s"'<>`]*/gi,
+  // Bracketed IPv6 literal, optional port.
+  /\[[0-9a-f:.%a-z]*:[0-9a-f:.%a-z]*\](?::\d{1,5})?/gi,
+  // IPv4 literal, optional port.
+  /(?<![\d.])\d{1,3}(?:\.\d{1,3}){3}(?::\d{1,5})?(?!\.?\d)/g,
+  // Dotted hostname or localhost with a port.
+  /(?<![\w.-])(?:(?:[a-z0-9-]+\.)+[a-z0-9-]+|localhost):\d{1,5}(?!\d)/gi,
+  /(?<![\w.-])(?:[a-z0-9-]+\.)*localhost(?![\w-])/gi,
+  // Single-label host:port (redis:6379, db:5432). A letter-initial label only,
+  // so digit-initial forms such as the time 12:30 stay.
+  /(?<![\w.-])[a-z][a-z0-9-]*:\d{1,5}(?!\d|\.\d|:)/gi,
+];
+// Bare IPv6 literal (compressed "::" or full eight groups), optional %zone.
+const hostedBareIpv6Pattern = /(?<![\w:])[0-9a-f]{0,4}(?::[0-9a-f]{0,4}){2,7}(?:%[\w.-]+)?(?![\w:])/gi;
+// Line/paragraph separators and every C0/C1 control character.
+const hostedLineBreakPattern = /[\r\n\u0085\u2028\u2029]/;
+const hostedControlPattern = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g;
+
+// The exact public HTTPS origins a hosted response may name: the selected
+// Apps' derived origins plus explicit gateway origins (Launchpad, T3).
+export function hostedPublicOrigins(configuration, apps = [], extraOrigins = []) {
+  const origins = new Set();
+  if (configuration?.profile !== "hosted") return origins;
+  for (const app of apps) {
+    const url = app ? hostedAppUrl(app, configuration) : null;
+    if (url) origins.add(new URL(url).origin);
+  }
+  for (const candidate of extraOrigins) {
+    const origin = publicHttpsOrigin(candidate);
+    if (origin) origins.add(origin);
+  }
+  return origins;
+}
+
+export function projectHostedPublicJson(value, configuration, allowedOrigins = new Set()) {
+  if (configuration?.profile !== "hosted") return value;
+  return sanitizeHostedValue(value, null, allowedOrigins);
+}
+
+// Errors cross the hosted boundary only in this bounded shape: no details,
+// metadata, logs or stack, and one redacted line of message.
+export function projectHostedErrorPayload({ error, message, app_id: appId, status } = {}) {
+  return {
+    error: typeof error === "string" && /^[a-z0-9_.-]{1,80}$/i.test(error) ? error : "launchpad_error",
+    message: boundedHostedMessage(message),
+    ...(typeof appId === "string" && /^[A-Za-z0-9_.-]{1,200}$/.test(appId) ? { app_id: appId } : {}),
+    ...(typeof status === "string" && /^[a-z_-]{1,40}$/.test(status) ? { status } : {}),
+  };
+}
+
+export function redactHostedInternalText(value) {
+  const redacted = redactHostedLiterals(String(value));
+  if (!/%[0-9a-f]{2}/i.test(redacted)) return redacted;
+  // Percent-encoding must not smuggle an address past the literal patterns:
+  // when the ASCII-decoded text still names one, return its redacted form.
+  const decoded = decodeHostedAscii(redacted);
+  const redactedDecoded = redactHostedLiterals(decoded);
+  return redactedDecoded === decoded ? redacted : redactedDecoded;
+}
+
+function redactHostedLiterals(text) {
+  let result = text;
+  for (const pattern of hostedFreeTextPatterns) result = result.replace(pattern, hostedRedactionToken);
+  return result.replace(hostedBareIpv6Pattern, (candidate) =>
+    candidate.includes("::") || candidate.split(":").length === 8 ? hostedRedactionToken : candidate);
+}
+
+// Lenient, bounded ASCII percent-decoding (never throws); addresses are ASCII.
+function decodeHostedAscii(text) {
+  let decoded = text;
+  for (let round = 0; round < 3; round += 1) {
+    const next = decoded.replace(/%([0-7][0-9a-f])/gi, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16)));
+    if (next === decoded) break;
+    decoded = next;
+  }
+  return decoded;
+}
+
+function boundedHostedMessage(value) {
+  // A log tail or anything after a line break never belongs to the message.
+  const firstLine = String(value ?? "").split(hostedLineBreakPattern, 1)[0]
+    .replace(/\s*(?:Poslední log|Last log):.*$/i, "");
+  const redacted = redactHostedInternalText(firstLine)
+    .replace(hostedControlPattern, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return redacted.length > hostedMessageMaxLength
+    ? `${redacted.slice(0, hostedMessageMaxLength - 1)}…`
+    : redacted;
+}
+
+function sanitizeHostedValue(value, key, allowedOrigins, parentKey = null) {
+  if (key === "host") return null;
+  if (typeof value === "string") {
+    if (key === "url" || key?.endsWith("_url")) return allowlistedHostedUrl(value, allowedOrigins);
+    // A declared health path is a URL path too: same allowlist, no query.
+    if (key === "health_path" || (key === "path" && parentKey === "health")) {
+      return safeHostedPublicPath(value.split(/[?#]/, 1)[0]);
+    }
+    return hostedMessageKeys.has(key) ? boundedHostedMessage(value) : redactHostedInternalText(value);
+  }
+  if (Array.isArray(value)) return value.map((item) => sanitizeHostedValue(item, null, allowedOrigins, key));
+  if (value && typeof value === "object") {
+    const projected = {};
+    for (const [entryKey, entryValue] of Object.entries(value)) {
+      if (hostedOmittedKeys.has(entryKey)) continue;
+      projected[entryKey] = sanitizeHostedValue(entryValue, entryKey, allowedOrigins, key);
+    }
+    return projected;
+  }
+  return value;
+}
+
+function allowlistedHostedUrl(value, allowedOrigins) {
+  try {
+    const url = new URL(value);
+    if (url.username || url.password || !allowedOrigins.has(url.origin)) return null;
+    const path = safeHostedPublicPath(hostedUrlRawPath(value));
+    return path ? `${url.origin}${path}` : null;
+  } catch {
+    return null;
+  }
+}
+
+function publicHttpsOrigin(candidate) {
+  try {
+    const url = new URL(candidate);
+    if (url.protocol !== "https:" || url.username || url.password) return null;
+    const hostname = url.hostname.replace(/^\[(.*)\]$/, "$1");
+    // Only DNS names qualify; an address literal is never a public origin here.
+    if (/^[\d.]+$/.test(hostname) || hostname.includes(":") || hostname === "localhost"
+      || hostname.endsWith(".localhost")) return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+// The path of a projected URL: a character allowlist, not a blocklist. The
+// raw path (before any URL normalization) is percent-decoded exactly once and
+// must then consist only of "/"-separated RFC 3986 unreserved characters, with
+// no "." or ".." segment, no IPv4/localhost literal and at most 512
+// characters. No scheme, host:port,
+// userinfo, encoding, whitespace or control character can pass; otherwise
+// the whole URL field is null.
+const hostedPublicPathPattern = /^(?:\/[A-Za-z0-9._~-]*)+$/;
+const hostedPublicPathMaxLength = 512;
+
+function hostedUrlRawPath(value) {
+  const match = /^[a-z][a-z0-9+.-]*:\/\/[^/?#\\]*([^?#]*)/i.exec(String(value ?? ""));
+  if (!match) return null;
+  return match[1] === "" ? "/" : match[1];
+}
+
+function safeHostedPublicPath(rawPath) {
+  if (typeof rawPath !== "string" || rawPath.length > hostedPublicPathMaxLength * 3) return null;
+  let decoded;
+  try {
+    decoded = decodeURIComponent(rawPath);
+  } catch {
+    return null;
+  }
+  if (
+    decoded.length > hostedPublicPathMaxLength
+    || !hostedPublicPathPattern.test(decoded)
+    || decoded.split("/").some((segment) => segment === "." || segment === "..")
+    // Unreserved characters still spell an IPv4 literal or localhost.
+    || redactHostedInternalText(decoded) !== decoded
+  ) return null;
+  return decoded;
 }

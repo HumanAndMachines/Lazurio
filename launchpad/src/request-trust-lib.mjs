@@ -68,11 +68,30 @@ export function createRequestTrustPolicy({
     // such header participates in trust. Authorization is revalidated over a
     // separately authenticated TLS route against the Team-scoped oauth2-proxy
     // with only the browser's exact signed HttpOnly session cookie.
-    if (request.headers.get("sec-fetch-site") !== "same-origin") {
+    const origin = request.headers.get("origin");
+    const fetchSite = request.headers.get("sec-fetch-site");
+    // The internal hosted namespace is a lifecycle mutation even on GET (the
+    // gateway readiness subrequest may start an App). It never qualifies as a
+    // read and always needs the gateway-set same-origin Fetch Metadata and
+    // exact Origin in addition to the signed session.
+    const safeRead = ["GET", "HEAD"].includes(request.method)
+      && !url.pathname.startsWith("/api/internal/");
+    if (!safeRead && fetchSite !== "same-origin") {
       return trustDecision(false, "hosted_fetch_site_mismatch");
     }
-    if (request.headers.get("origin") !== hostedOrigin) {
+    if (!safeRead && origin !== hostedOrigin) {
       return trustDecision(false, "hosted_origin_mismatch");
+    }
+    // Browser fetch does not reliably send Origin on same-origin GETs. Keep
+    // side-effect-free owner reads usable while still rejecting an explicit
+    // foreign origin or a cross-site subresource request; the exact signed
+    // session is rechecked below for every request. No GET outside the
+    // internal namespace may change lifecycle state.
+    if (safeRead && (
+      (origin && origin !== hostedOrigin)
+      || (fetchSite === "cross-site" && request.headers.get("sec-fetch-mode") !== "navigate")
+    )) {
+      return trustDecision(false, "hosted_read_origin_mismatch");
     }
     const cookieSelection = selectHostedAuthCookie(
       request.headers.get("cookie") ?? "",
