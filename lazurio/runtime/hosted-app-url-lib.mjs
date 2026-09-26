@@ -617,11 +617,13 @@ function projectLifecycleUrls(payload, hostedUrl) {
   return projected;
 }
 
+// A projected URL is exactly the public origin plus a path: query and
+// fragment never cross, and a path that names another address fails closed.
 function projectHostedHealthUrl(healthUrl, hostedUrl) {
   if (!healthUrl || !hostedUrl) return null;
   try {
-    const source = new URL(healthUrl);
-    return new URL(`${source.pathname}${source.search}`, hostedUrl).href;
+    const path = safeHostedPublicPath(new URL(healthUrl).pathname);
+    return path ? `${new URL(hostedUrl).origin}${path}` : null;
   } catch {
     return null;
   }
@@ -648,7 +650,7 @@ const hostedFreeTextPatterns = [
   // Bracketed IPv6 literal, optional port.
   /\[[0-9a-f:.%a-z]*:[0-9a-f:.%a-z]*\](?::\d{1,5})?/gi,
   // IPv4 literal, optional port.
-  /(?<![\w.])\d{1,3}(?:\.\d{1,3}){3}(?::\d{1,5})?(?![\w.])/g,
+  /(?<![\d.])\d{1,3}(?:\.\d{1,3}){3}(?::\d{1,5})?(?!\.?\d)/g,
   // Dotted hostname or localhost with a port.
   /(?<![\w.-])(?:(?:[a-z0-9-]+\.)+[a-z0-9-]+|localhost):\d{1,5}(?!\d)/gi,
   /(?<![\w.-])(?:[a-z0-9-]+\.)*localhost(?![\w-])/gi,
@@ -692,10 +694,31 @@ export function projectHostedErrorPayload({ error, message, app_id: appId, statu
 }
 
 export function redactHostedInternalText(value) {
-  let text = String(value);
-  for (const pattern of hostedFreeTextPatterns) text = text.replace(pattern, hostedRedactionToken);
-  return text.replace(hostedBareIpv6Pattern, (candidate) =>
+  const redacted = redactHostedLiterals(String(value));
+  if (!/%[0-9a-f]{2}/i.test(redacted)) return redacted;
+  // Percent-encoding must not smuggle an address past the literal patterns:
+  // when the ASCII-decoded text still names one, return its redacted form.
+  const decoded = decodeHostedAscii(redacted);
+  const redactedDecoded = redactHostedLiterals(decoded);
+  return redactedDecoded === decoded ? redacted : redactedDecoded;
+}
+
+function redactHostedLiterals(text) {
+  let result = text;
+  for (const pattern of hostedFreeTextPatterns) result = result.replace(pattern, hostedRedactionToken);
+  return result.replace(hostedBareIpv6Pattern, (candidate) =>
     candidate.includes("::") || candidate.split(":").length === 8 ? hostedRedactionToken : candidate);
+}
+
+// Lenient, bounded ASCII percent-decoding (never throws); addresses are ASCII.
+function decodeHostedAscii(text) {
+  let decoded = text;
+  for (let round = 0; round < 3; round += 1) {
+    const next = decoded.replace(/%([0-7][0-9a-f])/gi, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16)));
+    if (next === decoded) break;
+    decoded = next;
+  }
+  return decoded;
 }
 
 function boundedHostedMessage(value) {
@@ -733,7 +756,8 @@ function allowlistedHostedUrl(value, allowedOrigins) {
   try {
     const url = new URL(value);
     if (url.username || url.password || !allowedOrigins.has(url.origin)) return null;
-    return url.href === value ? value : null;
+    const path = safeHostedPublicPath(url.pathname);
+    return path ? `${url.origin}${path}` : null;
   } catch {
     return null;
   }
@@ -751,4 +775,23 @@ function publicHttpsOrigin(candidate) {
   } catch {
     return null;
   }
+}
+
+// The path of a projected URL, or null when its decoded form carries a URL,
+// scheme, address literal, host:port or control character.
+function safeHostedPublicPath(pathname) {
+  if (typeof pathname !== "string" || !pathname.startsWith("/")) return null;
+  let decoded = pathname;
+  try {
+    for (let round = 0; round < 3; round += 1) {
+      const next = decodeURIComponent(decoded);
+      if (next === decoded) break;
+      decoded = next;
+    }
+  } catch {
+    return null;
+  }
+  if (/[\u0000-\u001f\u007f-\u009f\u2028\u2029\\]|%[0-9a-f]{2}/i.test(decoded)) return null;
+  if (/[a-z][a-z0-9+.-]*:\//i.test(decoded)) return null;
+  return redactHostedInternalText(decoded) === decoded ? pathname : null;
 }

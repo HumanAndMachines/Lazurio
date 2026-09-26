@@ -136,9 +136,12 @@ neznámý nebo nevybraný Modul, jinak 503 s omezeným tělem bez interních adr
 
 Hosted Personalspace lane (inventář, lifecycle úspěchy i chyby) prochází
 jednou fail-closed projekcí typu allowlist: URL pole (`url`, `*_url`) smí nést
-jen přesné veřejné HTTPS originy této Mašiny (vybrané Apps, Launchpad, T3),
-jinak `null`; `host` je vždy `null`; v ostatním textu se nahradí každá URL
-libovolného schématu i každý IPv4/IPv6 nebo `host:port` literál; `message`
+jen přesné veřejné HTTPS originy této Mašiny (vybrané Apps, Launchpad, T3)
+plus čistou cestu — query a fragment se vždy zahodí a cesta, jejíž dekódovaná
+podoba nese URL, schéma, adresní literál, `host:port` nebo řídicí znak, dává
+`null`; `host` je vždy `null`; v ostatním textu se nahradí každá URL
+libovolného schématu i každý IPv4/IPv6 nebo `host:port` literál, i když je
+percent-encoded; `message`
 je jeden ohraničený řádek bez log tailu a řídicích znaků; `details`, logy a
 stack se nevracejí. Chyby mají tvar `{ error, message, app_id?, status? }`.
 Obsah poznámek gbrain je vědomá výjimka a zůstává beze změny. Původní path,
