@@ -92,6 +92,8 @@ test("ssh -T and ssh -G output classification", () => {
   expect(classifySshProbe({ code: 255, output: "ssh: connect to host github.com port 22: Permission denied" }).state).toBe("unreachable");
   expect(classifySshProbe({ code: 255, output: "operator@jump.example: Permission denied (publickey)." }).state).toBe("unreachable");
   expect(classifySshProbe({ code: 0, output: "banner: Hi example-operator! You've successfully authenticated, but GitHub does not provide shell access." }).state).toBe("unreachable");
+  expect(classifySshProbe({ code: 255, output: "Hi example-operator! You've successfully authenticated, but GitHub does not provide shell access." }).state).toBe("unreachable");
+  expect(classifySshProbe({ code: 1, output: "git@github.com: Permission denied (publickey)." }).state).toBe("unreachable");
   expect(classifySshProbe({ code: 0, output: "" }).state).toBe("unreachable");
   expect(parseSshConfig("user git\nhostname github.com\nport 22\n").known_hosts_name).toBe("github.com");
   expect(parseSshConfig("hostname ssh.github.com\nport 443\n").known_hosts_name).toBe("[ssh.github.com]:443");
@@ -185,6 +187,12 @@ function fakeMachine({ signedIn = false, scopes = "gist, read:org, repo, admin:p
       // Only the host key pin asks for the resolved config; it then succeeds.
       state.sshKnown = true;
       return { code: 0, stdout: "hostname github.com\nport 22\n", stderr: "" };
+    }
+    if (name === "ssh-keygen" && args.includes("-y")) {
+      return state.keyEncrypted ? { code: 1, stdout: "", stderr: "incorrect passphrase\n" } : { code: 0, stdout: `${publicKey}\n`, stderr: "" };
+    }
+    if (name === "ssh" && state.defaultSshLogin && !args.includes("-i")) {
+      return { code: 1, stdout: "", stderr: `Hi ${state.defaultSshLogin}! You've successfully authenticated, but GitHub does not provide shell access.\n` };
     }
     if (name === "ssh") {
       if (!state.sshKnown) return { code: 255, stdout: "", stderr: "No ED25519 host key is known for github.com and you have requested strict checking.\nHost key verification failed.\n" };
@@ -394,6 +402,7 @@ test("Sign out stops when SSH cannot prove where this Machine's key belongs", as
     { code: 255, stdout: "", stderr: "@@@@@@@@@@@\nREMOTE HOST IDENTIFICATION HAS CHANGED!\n" },
     { code: 255, stdout: "", stderr: "ssh: connect to host github.com port 22: Permission denied\n" },
     { code: 255, stdout: "", stderr: "operator@jump.example: Permission denied (publickey).\n" },
+    { code: 255, stdout: "", stderr: "Hi someone-else! You've successfully authenticated, but GitHub does not provide shell access.\n" },
   ]) {
     const machine = fakeMachine({ signedIn: true, login: "someone-else" });
     const base = machine.run;
@@ -409,6 +418,26 @@ test("Sign out stops when SSH cannot prove where this Machine's key belongs", as
   const { controller } = await controllerFor(fresh);
   expect(await controller.logout()).toMatchObject({ logged_out: true });
   expect(fresh.state.calls).toContainEqual(["ssh", "-G", "git@github.com"]);
+});
+
+test("Sign out probes this Machine's key alone, so another key answering first hides nothing", async () => {
+  const machine = fakeMachine({ signedIn: true, login: "someone-else", scopes: "gist, read:org, repo", keysOnGitHub: [`${publicKey} example-vm`] });
+  machine.state.defaultSshLogin = "another-account";
+  const { controller, home } = await controllerFor(machine);
+  await mkdir(join(home, ".ssh"), { recursive: true });
+  await writeFile(join(home, ".ssh", "id_ed25519"), "private\n");
+  await writeFile(join(home, ".ssh", "id_ed25519.pub"), `${publicKey} example-vm\n`);
+  await expect(controller.logout()).rejects.toMatchObject({ code: "ssh_key_still_registered" });
+  const keyProbe = machine.state.calls.find(([name, ...args]) => name === "ssh" && args.includes("-i"));
+  expect(keyProbe).toEqual(expect.arrayContaining(["-F", "none", "IdentitiesOnly=yes", "IdentityAgent=none", join(home, ".ssh", "id_ed25519")]));
+  expect(machine.state.calls.some(([name, sub, verb]) => name === "gh" && sub === "auth" && verb === "logout")).toBe(false);
+
+  // A key that needs a passphrase cannot answer, so it proves nothing.
+  machine.state.keysOnGitHub = [];
+  machine.state.keyEncrypted = true;
+  await expect(controller.logout()).rejects.toMatchObject({ code: "logout_ssh_unproven" });
+  machine.state.keyEncrypted = false;
+  expect(await controller.logout()).toMatchObject({ logged_out: true });
 });
 
 test("a token in the environment rules out Sign out even when gh status is unreadable", async () => {

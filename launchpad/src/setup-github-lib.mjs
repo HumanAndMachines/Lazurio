@@ -132,8 +132,10 @@ export function parseDeviceCodeOutput(text) {
 /** `ssh -T git@github.com` output and exit code → transport state. */
 export function classifySshProbe({ code, output }) {
   const text = String(output ?? "");
+  // GitHub ends a successful `ssh -T` with exit code 1 and a refusal with
+  // 255; the text alone could come from a ProxyCommand or a banner.
   const greeting = sshGreetingPattern.exec(text);
-  if (greeting) return Object.freeze({ state: "ok", login: greeting[1] });
+  if (greeting && code === 1) return Object.freeze({ state: "ok", login: greeting[1] });
   if (/REMOTE HOST IDENTIFICATION HAS CHANGED|Host key for .* has changed/u.test(text)) {
     return Object.freeze({ state: "host_key_changed", login: null });
   }
@@ -143,7 +145,7 @@ export function classifySshProbe({ code, output }) {
   // Only GitHub's own refusal of every offered key proves "no account". ssh
   // names the refusing server as user@host, so a jump host's refusal or a
   // local "connect to host … Permission denied" is a network failure.
-  if (/^git@github\.com: Permission denied \(publickey[^)]*\)/mu.test(text)) {
+  if (code === 255 && /^git@github\.com: Permission denied \(publickey[^)]*\)/mu.test(text)) {
     return Object.freeze({ state: "denied", login: null });
   }
   return Object.freeze({ state: "unreachable", login: null });
@@ -410,9 +412,14 @@ export function createGitHubLoginController({
     }
   }
 
-  async function probeSsh() {
+  // `identity` probes exactly that key: no ssh_config, no agent, no other
+  // IdentityFile, so the answer is about this key alone.
+  async function probeSsh({ identity = null } = {}) {
+    const only = identity
+      ? ["-F", "none", "-o", "IdentitiesOnly=yes", "-o", "IdentityAgent=none", "-i", identity]
+      : [];
     const result = await tool("ssh", [
-      "-T", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=15", "git@github.com",
+      "-T", ...only, "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=15", "git@github.com",
     ]);
     if (result.code === null && result.stdout === "" && result.stderr === "") {
       return Object.freeze({ state: "ssh_missing", login: null });
@@ -543,15 +550,29 @@ export function createGitHubLoginController({
     // Deleting takes admin:public_key (write:public_key cannot), and an
     // unreadable gh names no account, so any answering account counts there.
     // Only a GitHub answer proves anything; any other outcome keeps gh as is.
-    let ssh = await probeSsh();
-    if (ssh.state === "host_key_unknown") {
-      await pinGitHubHostKeys({ home, run: (name, args) => tool(name, args), fetchImpl });
-      ssh = await probeSsh();
+    // Two probes: whatever SSH offers by default, and this Machine's own key
+    // alone, which an earlier key answering for another account would hide.
+    const leftBehind = (probe) => probe.state === "ok"
+      && (auth.state === "unreadable" || probe.login.toLowerCase() === auth.login?.toLowerCase());
+    const probes = [{}];
+    const privatePath = join(home, ".ssh", "id_ed25519");
+    if (publicKey && existsSync(privatePath)) {
+      // A key that cannot be used without a passphrase proves nothing here.
+      const derived = await tool("ssh-keygen", ["-y", "-P", "", "-f", privatePath]);
+      if (derived.code !== 0 || normalizePublicKey(derived.stdout) !== publicKey) {
+        throw new GitHubLoginError("logout_ssh_unproven");
+      }
+      probes.push({ identity: privatePath });
     }
-    if (ssh.state === "ok" && (auth.state === "unreadable" || ssh.login.toLowerCase() === auth.login?.toLowerCase())) {
-      throw new GitHubLoginError("ssh_key_still_registered");
+    for (const options of probes) {
+      let ssh = await probeSsh(options);
+      if (ssh.state === "host_key_unknown") {
+        await pinGitHubHostKeys({ home, run: (name, args) => tool(name, args), fetchImpl });
+        ssh = await probeSsh(options);
+      }
+      if (leftBehind(ssh)) throw new GitHubLoginError("ssh_key_still_registered");
+      if (ssh.state !== "ok" && ssh.state !== "denied") throw new GitHubLoginError("logout_ssh_unproven");
     }
-    if (ssh.state !== "ok" && ssh.state !== "denied") throw new GitHubLoginError("logout_ssh_unproven");
     const args = ["auth", "logout", "--hostname", "github.com"];
     if (auth.login) args.push("--user", auth.login);
     const result = await gh(args);
