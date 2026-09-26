@@ -7,12 +7,23 @@ nainstalované Lazurio a identitu Mašiny v `/etc/lazurio/lazurio.machine.json`
 uvnitř je práce operátora a jeho Task Agenta** podle tohoto postupu. Cíl:
 operátor nikdy nedostane prostředí, které vypadá hotově, ale není donastavené.
 
+## Kdo se přihlašuje (dočasně volně, decision 0159)
+
+Dokud vazbu Mašina → GitHub účet neřídí Lazurio Account v Dashboardu,
+přihlásí operátor hostovanou pracovní VM **libovolným GitHub účtem** — osobní
+i týmovou. `owner.assignment` v `/etc/lazurio/lazurio.machine.json` přihlášení
+neomezuje: Agent kvůli chybějícímu, neplatnému ani odlišnému přiřazení
+neblokuje a jiný přihlášený účet není blocker. Jedinou výjimkou je Mašina,
+na které už běží bot Organizace přes broker (níže): tam zůstává bot.
+GitHub dál rozhoduje, co přihlášený účet smí.
+
 ## Jak Agent pozná, o jakou Mašinu jde
 
-Jediný rozlišovací znak je `owner.assignment.kind` v
+Rozlišovací znak je `owner.assignment.kind` v
 `/etc/lazurio/lazurio.machine.json`; Agent ho přečte přímo ze souboru (žádný
 CLI příkaz na to není) a **nikdy ho neodvozuje** z `owner.team`, hostname,
 OS účtu ani velikosti Teamu — jednočlenný Team nedělá z Mašiny osobní VM.
+Určuje jen postup (osobní vs. týmová VM), ne to, kdo se smí přihlásit.
 
 - `machine.kind: workspace-vm`, `owner.kind: organization` a `owner.assignment.kind: operator`
   (s `github_login` a `github_id` operátora) = **osobní pracovní VM** jednoho
@@ -24,24 +35,21 @@ OS účtu ani velikosti Teamu — jednočlenný Team nedělá z Mašiny osobní 
   Principála podle [`hosted-buddy-vps.md`](hosted-buddy-vps.md); tento manuál
   se na ni nevztahuje.
 - Soubor chybí, nevaliduje, nebo `owner.assignment` není deklarovaný: Agent
-  **nehádá**. Nahlásí operátorovi přesný blocker („Mašina nemá deklarované
-  přiřazení; doplní ho owner Deployment Repo v `provision.assignment` guesta“)
-  a osobní `gh auth login` nespouští.
+  typ nehádá a postupuje jako na osobní pracovní VM; přihlášení kvůli tomu
+  neblokuje.
 
 ## Osobní pracovní VM: identita operátora
 
 Osobní pracovní VM funguje jako pracovní stanice svého operátora v cloudu:
 GitHub je jediná autorita přístupů, a proto je `gh` na této Mašině přihlášený
-**účtem operátora**, ne účtem Organizace ani jiného člověka. Bez přihlášení
-nemá Agent žádnou Organizaci, žádné moduly a žádná repa; má jen čisté Lazurio.
+účtem, který si operátor zvolí (decision 0159). Bez přihlášení nemá Agent
+žádnou Organizaci, žádné moduly a žádná repa; má jen čisté Lazurio.
 
-Na Mašině s `owner.assignment.kind: operator` Agent **před každou prací
-ověří identitu**: `gh api user` musí vrátit přesně `login` rovný
-`owner.assignment.github_login` (case-insensitive) a `id` rovné
-`owner.assignment.github_id`. Přihlášení jiným účtem — cizím, dřívějším nebo
-Organizace — je blocker: Agent nepokračuje, nespouští `lazurio update` ani
-install a řekne operátorovi, že Mašina je přiřazená jinému loginu, než který
-je přihlášený; přehlášení provede jen operátor sám. Když `gh` přihlášený není
+Agent **před prací ověří, že `gh` je přihlášený** a jakým účtem
+(`gh api user`), a operátorovi ten login řekne; jiný účet než
+`owner.assignment` blocker není. Chce-li operátor jiný účet, odhlásí ho
+tlačítkem **Odhlásit** v Launchpadu a přihlásí znovu; přehlášení provede jen
+operátor sám. Když `gh` přihlášený není
 (`gh auth status --hostname github.com`), Agent **nepokračuje v úkolu, dokud
 operátora neprovede přihlášením**, a vysvětlí mu proč: je to jeho osobní pracovní VM, GitHub
 rozhoduje, co v ní smí Agent vidět a měnit, a všechna práce z této Mašiny
@@ -51,9 +59,11 @@ bude připsaná jeho účtu.
 Launchpadu této Mašiny otevře **Nastavení**, sekce **Zdrojové kódy (GitHub)**,
 a tlačítko **Přihlásit GitHub** provede kroky 1 a 2 celé: `gh` login se SSH protokolem, jednorázový
 kód jen na přihlášené stránce, SSH klíč jen když chybí a SSH přístup ještě
-nefunguje, nahrání veřejné části na ověřený účet, kontrolu účtu proti
-`owner.assignment` a důkaz přes `ssh -T` a `git ls-remote` root repa. Kroky 3
-a 4 nabídne jako další tlačítka. Agent operátora na tuto stránku pošle a ruční
+nefunguje, nahrání veřejné části na právě ověřený účet a důkaz přes `ssh -T`
+a `git ls-remote` root repa. Kroky 3 a 4 nabídne jako další tlačítka.
+**Odhlásit** vrátí jakékoli přihlášení (jiný účet, rozbitá konfigurace `gh`):
+odebere z účtu SSH klíč této Mašiny a odhlásí `gh`, aby šel přihlásit jiný
+účet. Agent operátora na tuto stránku pošle a ruční
 postup níže použije jen tam, kde Launchpad Mašiny není dostupný.
 
 Ruční postup je stejný jako na pracovní stanici
@@ -65,8 +75,7 @@ Ruční postup je stejný jako na pracovní stanici
    chatu**; nikdy do schránky, issue, repa nebo trvalého logu. Interní
    `device_code`, access token ani privátní klíč nikdy nevypíše.
 2. Po souhlasu operátora nechá tentýž flow nahrát veřejný SSH klíč Mašiny
-   k jeho účtu a zopakuje kontrolu identity výše (`gh api user` → `login` a
-   `id` proti `owner.assignment`); jiný účet Agent odmítne jako blocker.
+   k jeho účtu a přes `gh api user` ověří, kterým účtem je přihlášený.
    Pak ověří `gh auth status` a `git ls-remote` na root repo Organizace.
 3. `lazurio update` (aktualizace Lazuria je vědomý krok; bez přihlášení
    Organizaci nenatáhne).
@@ -83,12 +92,20 @@ Ruční postup je stejný jako na pracovní stanici
    jednorázový párovací token; ruční kopírování párovacích odkazů není
    potřeba.
 
-Co Agent nedělá: nepřihlašuje na osobní VM cizí účet, nepoužívá sdílený
+Co Agent nedělá: sám nevybírá účet za operátora, nepoužívá sdílený
 token Organizace, nemountuje cizí Personalspace a nepřenáší přihlášení z jiné
 Mašiny. Když operátor přihlášení odmítne nebo nemá potřebná práva, Agent
 zapíše přesný blocker a zastaví se.
 
 ## Týmová VM: identita Organizace, ne člověka
+
+**Dočasná výjimka (decision 0159).** Dokud na týmové VM neběží bot
+Organizace (chybí `/etc/lazurio/github-broker/environment`), přihlásí ji
+operátor stejně jako osobní VM — tlačítkem v Launchpadu, libovolným účtem —
+a postupuje podle kroků osobní VM včetně `--role builder`. Agent ho předem
+upozorní, že všichni na této VM pak pracují pod jeho účtem a jeho SSH klíčem.
+Jakmile broker běží, platí pravidla níže a osobní přihlášení operátor
+odhlásí.
 
 Sdílená týmová VM (`owner.assignment.kind: team`) nemá osobního operátora a
 pracuje na ní více lidí z Teamu. Podle rozhodnutí 0147–0149 jedná na GitHubu
@@ -98,13 +115,14 @@ Machines na takové VM nainstaluje brokered `gh`, Git credential helper a
 soubor `/etc/lazurio/github-broker/environment` (Machines
 `workspace_guest.github_broker`); privátní klíč App na VM nikdy není.
 
-Na Mašině s `owner.assignment.kind: team` Agent **před každou prací ověří
-identitu** — před `lazurio update`, instalací i původním úkolem:
+Na Mašině s `owner.assignment.kind: team` a nasazeným brokerem Agent
+**před každou prací ověří identitu** — před `lazurio update`, instalací
+i původním úkolem:
 
 - `/etc/lazurio/github-broker/environment` existuje a
   `gh auth status --json hosts` hlásí právě `lazurio-for-github[bot]` (jeden
   host `github.com`, jedna položka, žádná další identita).
-- Chybí-li broker soubor, `gh` bota nehlásí, nebo se vedle bota objeví jiný
+- `gh` bota nehlásí, nebo se vedle bota objeví jiný
   účet, je to blocker pro Organization Admina (níže): Agent nepokračuje,
   nespouští `lazurio update` ani install a nenavrhuje osobní přihlášení.
 - `gh auth login`, `gh auth token` a ostatní `gh auth`/`gh config` příkazy
@@ -151,7 +169,7 @@ důvod přihlásit něčí účet. Agent zapíše přesný blocker a zastaví se
 ## Co drží kdo
 
 - Machines: Mašina online, `/etc/lazurio/lazurio.machine.json` včetně
-  `owner.assignment`, brána, nainstalované Lazurio a Chat vstup Launchpadu
+  případného `owner.assignment` (popisné, přihlášení neomezuje), brána, nainstalované Lazurio a Chat vstup Launchpadu
   (`LAZURIO_T3CODE_URL`, párovací příkaz).
 - Lazurio (tento manuál, skill `lazurio-workstation-install`, `lazurio
   organization install`): první přihlášení, materializace Organizace, Doctor.

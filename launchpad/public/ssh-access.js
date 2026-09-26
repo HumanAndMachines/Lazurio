@@ -12,6 +12,9 @@ let content = null;
 let state = null;
 let pendingKey = null;
 let platform = /Windows/i.test(globalThis.navigator?.userAgent ?? "") ? "windows" : "macos";
+// Step 1 starts open and keeps the person's choice across re-renders
+// (switching macOS/Windows, adding a key).
+let fallbackOpen = true;
 
 async function requestJson(path, body) {
   const response = await launchpadFetch(path, body === undefined
@@ -94,6 +97,8 @@ function render() {
 
   const fallback = document.createElement("details");
   fallback.className = "ssh-access-fallback";
+  fallback.open = fallbackOpen;
+  fallback.addEventListener("toggle", () => { fallbackOpen = fallback.open; });
   const summary = document.createElement("summary");
   summary.textContent = t("ssh.fallback.summary");
   fallback.append(summary, step(

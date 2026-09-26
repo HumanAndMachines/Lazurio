@@ -32,7 +32,7 @@ const setupGitHubPattern = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/u;
 const machineLoginPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const deviceCodePattern = /one-time code:\s*([A-Z0-9]{4}-[A-Z0-9]{4})\b/u;
 const publicKeyPattern = /^(ssh-ed25519|ecdsa-sha2-nistp256|ecdsa-sha2-nistp384|ecdsa-sha2-nistp521|ssh-rsa|sk-ssh-ed25519@openssh\.com|sk-ecdsa-sha2-nistp256@openssh\.com)\s+([A-Za-z0-9+/]+={0,3})(?:\s|$)/u;
-const sshGreetingPattern = /Hi ([A-Za-z0-9-]+)! You've successfully authenticated/u;
+const sshGreetingPattern = /^Hi ([A-Za-z0-9-]+)! You've successfully authenticated, but GitHub does not provide shell access/mu;
 const keyWriteScopes = new Set([GITHUB_KEY_SCOPE, "write:public_key"]);
 const githubSshHosts = new Set(["github.com", "ssh.github.com"]);
 const commandTimeoutMs = 30_000;
@@ -111,6 +111,7 @@ export function parseSshKeyList(raw) {
     keys.push(Object.freeze({
       title: fields[0].trim(),
       key,
+      id: (fields[3] ?? "").trim() || null,
       type: (fields[4] ?? "authentication").trim() || "authentication",
     }));
   }
@@ -131,16 +132,23 @@ export function parseDeviceCodeOutput(text) {
 /** `ssh -T git@github.com` output and exit code → transport state. */
 export function classifySshProbe({ code, output }) {
   const text = String(output ?? "");
+  // GitHub ends a successful `ssh -T` with exit code 1 and a refusal with
+  // 255; the text alone could come from a ProxyCommand or a banner.
   const greeting = sshGreetingPattern.exec(text);
-  if (greeting) return Object.freeze({ state: "ok", login: greeting[1] });
+  if (greeting && code === 1) return Object.freeze({ state: "ok", login: greeting[1] });
   if (/REMOTE HOST IDENTIFICATION HAS CHANGED|Host key for .* has changed/u.test(text)) {
     return Object.freeze({ state: "host_key_changed", login: null });
   }
   if (/No [A-Z0-9-]+ host key is known for|Host key verification failed/u.test(text)) {
     return Object.freeze({ state: "host_key_unknown", login: null });
   }
-  if (/Permission denied/u.test(text)) return Object.freeze({ state: "denied", login: null });
-  return Object.freeze({ state: code === 0 ? "denied" : "unreachable", login: null });
+  // Only GitHub's own refusal of every offered key proves "no account". ssh
+  // names the refusing server as user@host, so a jump host's refusal or a
+  // local "connect to host … Permission denied" is a network failure.
+  if (code === 255 && /^git@github\.com: Permission denied \(publickey[^)]*\)/mu.test(text)) {
+    return Object.freeze({ state: "denied", login: null });
+  }
+  return Object.freeze({ state: "unreachable", login: null });
 }
 
 /** `ssh -G git@github.com` → the host key name ssh checks for github.com. */
@@ -161,7 +169,9 @@ export function parseSshConfig(raw) {
 
 /**
  * `/etc/lazurio/lazurio.machine.json` (Machines docs/machine-identity.md).
- * The only signal for who may be signed in; never guessed from hostnames.
+ * Tells a personal VM (no Organization install) from an Organization one.
+ * The declared account does not gate sign-in: until Dashboard binds a
+ * Machine to an account, whoever operates it signs in with any account.
  */
 export function parseMachineAssignment(raw) {
   let value;
@@ -201,12 +211,6 @@ export function readMachineAssignment({ path = MACHINE_IDENTITY_FILE, exists = e
   } catch {
     return Object.freeze({ kind: "invalid" });
   }
-}
-
-export function accountMatchesAssignment(user, assignment) {
-  if (!assignment?.github_login) return true;
-  return String(user?.login ?? "").toLowerCase() === assignment.github_login
-    && Number(user?.id) === assignment.github_id;
 }
 
 export function normalizeOrganizationLogin(value) {
@@ -370,6 +374,9 @@ export function createGitHubLoginController({
   // every command here names github.com itself.
   const { GH_HOST: _host, ...githubEnvironment } = sanitizedGitHubEnvironment(env);
   const transportEnvironment = { ...env, GIT_TERMINAL_PROMPT: "0", LC_ALL: "C" };
+  // gh receives these variables; they win over every stored login even when
+  // `gh auth status` itself is unreadable.
+  const environmentToken = Boolean(githubEnvironment.GH_TOKEN || githubEnvironment.GITHUB_TOKEN);
 
   function executable(name) {
     return resolveExecutable(name) ?? null;
@@ -405,9 +412,14 @@ export function createGitHubLoginController({
     }
   }
 
-  async function probeSsh() {
+  // `identity` probes exactly that key: no ssh_config, no agent, no other
+  // IdentityFile, so the answer is about this key alone.
+  async function probeSsh({ identity = null } = {}) {
+    const only = identity
+      ? ["-F", "none", "-o", "IdentitiesOnly=yes", "-o", "IdentityAgent=none", "-i", identity]
+      : [];
     const result = await tool("ssh", [
-      "-T", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=15", "git@github.com",
+      "-T", ...only, "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=15", "git@github.com",
     ]);
     if (result.code === null && result.stdout === "" && result.stderr === "") {
       return Object.freeze({ state: "ssh_missing", login: null });
@@ -428,13 +440,9 @@ export function createGitHubLoginController({
     return { brokered, assignment };
   }
 
-  // A reason why this Machine never gets a personal login from this page.
-  function machineBlocker({ brokered, assignment }) {
-    if (brokered || assignment.kind === "team") return "brokered_identity";
-    if (assignment.kind === "invalid") return "machine_identity_invalid";
-    if (assignment.kind === "unassigned") return "machine_assignment_missing";
-    if (hosted && assignment.kind === "none") return "machine_identity_missing";
-    return null;
+  // Only the Organization bot, once installed, keeps a personal login away.
+  function machineBlocker({ brokered }) {
+    return brokered ? "brokered_identity" : null;
   }
 
   function installAllowed(assignment) {
@@ -447,7 +455,7 @@ export function createGitHubLoginController({
     const base = {
       schema_version: GITHUB_LOGIN_SCHEMA,
       checked_at: now().toISOString(),
-      machine: machineProjection(context.assignment, hosted),
+      machine: { profile: hosted ? "hosted" : "local", assignment: context.assignment.kind },
       session: snapshot(),
     };
     const blocker = machineBlocker(context);
@@ -463,17 +471,11 @@ export function createGitHubLoginController({
     if (auth.brokered) {
       return { ...base, mode: "brokered", ready: false, blocker: "brokered_identity", account, actions: noActions() };
     }
-    if (blocker) {
-      return { ...base, mode: "personal", ready: false, blocker, account, actions: noActions() };
-    }
     let accountBlocker = null;
-    if (auth.environment_token) accountBlocker = "environment_token";
     if (auth.state === "unreadable") accountBlocker = "github_cli_unreadable";
+    if (environmentToken || auth.environment_token) accountBlocker = "environment_token";
     const userIdentity = auth.state === "logged_in" ? await readUser() : null;
     if (userIdentity) account.id = userIdentity.id;
-    if (userIdentity && !accountMatchesAssignment(userIdentity, context.assignment)) {
-      accountBlocker = "account_mismatch";
-    }
     const ssh = auth.state === "logged_in" ? await probeSsh() : { state: "skipped", login: null };
     const sshMatches = ssh.state === "ok" && userIdentity
       ? ssh.login.toLowerCase() === userIdentity.login.toLowerCase()
@@ -499,6 +501,7 @@ export function createGitHubLoginController({
         : null,
       actions: {
         login: accountBlocker === null && !ready,
+        logout: canLogout(auth),
         update: ready,
         organization_install: ready && Boolean(organizationLogin) && installAllowed(context.assignment),
       },
@@ -506,7 +509,83 @@ export function createGitHubLoginController({
   }
 
   function noActions() {
-    return { login: false, update: false, organization_install: false };
+    return { login: false, logout: false, update: false, organization_install: false };
+  }
+
+  // Signing out is the way back from any wrong sign-in (another account, a
+  // broken gh configuration). A token in the environment is not ours to drop.
+  function canLogout(auth) {
+    return !environmentToken && !auth.environment_token && (auth.state === "logged_in" || auth.state === "unreadable");
+  }
+
+  // Signs this Machine out of GitHub: unregisters this Machine's own SSH key
+  // from the signed-in account, so the next sign-in can bind it to another
+  // account, then removes the GitHub CLI login. The local key pair stays.
+  async function logout() {
+    if (session && ["running", "awaiting_user"].includes(session.state)) {
+      throw new GitHubLoginError("login_in_progress");
+    }
+    if (machineBlocker(machineContext())) throw new GitHubLoginError("brokered_identity");
+    if (environmentToken) throw new GitHubLoginError("environment_token");
+    if (!executable("gh")) throw new GitHubLoginError("github_cli_missing");
+    const auth = await readAuth();
+    if (auth.brokered) throw new GitHubLoginError("brokered_identity");
+    if (auth.environment_token) throw new GitHubLoginError("environment_token");
+    if (!canLogout(auth)) return { logged_out: false, login: null, ssh_key_removed: false };
+    // The private key decides what this Machine authenticates as, with or
+    // without a readable .pub; one that needs a passphrase, or disagrees with
+    // its .pub, proves nothing, so nothing changes.
+    const publicPath = join(home, ".ssh", "id_ed25519.pub");
+    const privatePath = join(home, ".ssh", "id_ed25519");
+    // An unreadable .pub counts as present and disagreeing.
+    const publicKey = existsSync(publicPath)
+      ? await readFile(publicPath, "utf8").then(normalizePublicKey, () => null)
+      : null;
+    let machineKey = null;
+    if (existsSync(privatePath)) {
+      const derived = await tool("ssh-keygen", ["-y", "-P", "", "-f", privatePath]);
+      machineKey = derived.code === 0 ? normalizePublicKey(derived.stdout) : null;
+      if (!machineKey || (existsSync(publicPath) && publicKey !== machineKey)) {
+        throw new GitHubLoginError("logout_ssh_unproven");
+      }
+    }
+    let sshKeyRemoved = false;
+    const registeredKey = machineKey ?? publicKey;
+    if (auth.state === "logged_in" && registeredKey && auth.scopes?.includes(GITHUB_KEY_SCOPE)) {
+      const listed = await gh(["ssh-key", "list"]);
+      if (listed.code !== 0) throw new GitHubLoginError("ssh_key_list_failed");
+      for (const entry of parseSshKeyList(listed.stdout)) {
+        if (entry.key !== registeredKey || entry.type === "signing" || !entry.id) continue;
+        const removed = await gh(["ssh-key", "delete", entry.id, "--yes"]);
+        if (removed.code !== 0) throw new GitHubLoginError("ssh_key_remove_failed");
+        sshKeyRemoved = true;
+      }
+    }
+    // Proof before signing out: SSH must no longer answer for the account
+    // left behind, or the next account's sign-in stops at ssh_account_mismatch.
+    // Deleting takes admin:public_key (write:public_key cannot), and an
+    // unreadable gh names no account, so any answering account counts there.
+    // Only a GitHub answer proves anything; any other outcome keeps gh as is.
+    // Two probes: whatever SSH offers by default, and this Machine's own key
+    // alone, which an earlier key answering for another account would hide.
+    const leftBehind = (probe) => probe.state === "ok"
+      && (auth.state === "unreadable" || probe.login.toLowerCase() === auth.login?.toLowerCase());
+    const probes = machineKey ? [{}, { identity: privatePath }] : [{}];
+    for (const options of probes) {
+      let ssh = await probeSsh(options);
+      if (ssh.state === "host_key_unknown") {
+        await pinGitHubHostKeys({ home, run: (name, args) => tool(name, args), fetchImpl });
+        ssh = await probeSsh(options);
+      }
+      if (leftBehind(ssh)) throw new GitHubLoginError("ssh_key_still_registered");
+      if (ssh.state !== "ok" && ssh.state !== "denied") throw new GitHubLoginError("logout_ssh_unproven");
+    }
+    const args = ["auth", "logout", "--hostname", "github.com"];
+    if (auth.login) args.push("--user", auth.login);
+    const result = await gh(args);
+    if (result.code !== 0) throw new GitHubLoginError("logout_failed");
+    session = null;
+    return { logged_out: true, login: auth.login ?? null, ssh_key_removed: sshKeyRemoved };
   }
 
   function holdsCapability(capability) {
@@ -627,9 +706,9 @@ export function createGitHubLoginController({
 
   async function runSession(current, organizationLogin) {
     step(current, "account", "running");
-    const context = machineContext();
-    const blocker = machineBlocker(context);
+    const blocker = machineBlocker(machineContext());
     if (blocker) throw new GitHubLoginError(blocker);
+    if (environmentToken) throw new GitHubLoginError("environment_token");
     if (!executable("gh")) throw new GitHubLoginError("github_cli_missing");
     let auth = await readAuth();
     if (auth.brokered) throw new GitHubLoginError("brokered_identity");
@@ -654,12 +733,10 @@ export function createGitHubLoginController({
     step(current, "login", "done");
     assertActive(current);
 
-    // The account must be the one this Machine is assigned to before any key
-    // is uploaded to it.
+    // The key goes only to the account GitHub just confirmed.
     step(current, "identity", "running");
     const identity = await readUser();
     if (!identity) throw new GitHubLoginError("identity_unavailable");
-    if (!accountMatchesAssignment(identity, context.assignment)) throw new GitHubLoginError("account_mismatch");
     step(current, "identity", "done");
     assertActive(current);
 
@@ -740,8 +817,7 @@ export function createGitHubLoginController({
     if (blocker) throw new GitHubLoginError(blocker);
     if (!installAllowed(context.assignment)) throw new GitHubLoginError("organization_install_not_available");
     if (!cliCommand) throw new GitHubLoginError("organization_install_not_available");
-    // The same gate the page shows, re-run here: assigned account, no
-    // environment token, SSH working for it and the root readable.
+    // The same gate the page shows, re-run here: no environment token, SSH working for it and the root readable.
     const readiness = await status({ organization: organizationLogin });
     if (!readiness.ready) throw new GitHubLoginError(readiness.blocker ?? "organization_install_not_ready");
     if (!await organizationInScope(organizationLogin)) throw new GitHubLoginError("organization_outside_machine_scope");
@@ -763,19 +839,12 @@ export function createGitHubLoginController({
     status,
     start,
     cancel,
+    logout,
     snapshot,
     organizationInstall,
     // Test and shutdown hook: resolves when the current session settles.
     settled: () => session?.done ?? Promise.resolve(),
   });
-}
-
-function machineProjection(assignment, hosted) {
-  return {
-    profile: hosted ? "hosted" : "local",
-    assignment: assignment.kind,
-    expected_login: assignment.github_login ?? null,
-  };
 }
 
 function safeUserName() {
