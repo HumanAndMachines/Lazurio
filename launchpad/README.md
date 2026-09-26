@@ -204,8 +204,8 @@ adresovaná cestou (`/settings/general`, `/settings/github`, `/settings/ssh`;
 server pro všechny vrací tutéž stránku, holé `/settings` přesměruje na
 `/settings/`):
 
-- **Obecné** — typ Prostředí (`Tento počítač`, `VM Prostředí Organizace`,
-  `Osobní VM Prostředí`), label Mašiny, Organizace, Team a doména z
+- **Obecné** — typ Prostředí (`Místní prostředí (tento počítač)`, `Vzdálené prostředí Organizace`,
+  `Osobní vzdálené prostředí`), label Mašiny, Organizace, Team a doména z
   `GET /api/setup/environment` (jen metadata z definice Mašiny, žádné
   tajemství ani grant; localhost vrací `profile: "local"` a případný
   `--organization` scope) a jazyk Launchpadu v tomto prohlížeči (dřív
