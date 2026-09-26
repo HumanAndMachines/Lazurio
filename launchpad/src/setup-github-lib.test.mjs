@@ -440,6 +440,29 @@ test("Sign out probes this Machine's key alone, so another key answering first h
   expect(await controller.logout()).toMatchObject({ logged_out: true });
 });
 
+test("Sign out probes the private key even when its .pub is missing or unreadable", async () => {
+  for (const pub of [null, "not a key\n"]) {
+    const machine = fakeMachine({ signedIn: true, login: "someone-else", scopes: "gist, read:org, repo", keysOnGitHub: [`${publicKey} example-vm`] });
+    machine.state.defaultSshLogin = "another-account";
+    const { controller, home } = await controllerFor(machine);
+    await mkdir(join(home, ".ssh"), { recursive: true });
+    await writeFile(join(home, ".ssh", "id_ed25519"), "private\n");
+    if (pub !== null) await writeFile(join(home, ".ssh", "id_ed25519.pub"), pub);
+    // A readable key pair that disagrees proves nothing; a missing .pub is
+    // derived from the private key and probed alone.
+    await expect(controller.logout()).rejects.toMatchObject({ code: pub === null ? "ssh_key_still_registered" : "logout_ssh_unproven" });
+    expect(machine.state.calls.some(([name, sub, verb]) => name === "gh" && sub === "auth" && verb === "logout")).toBe(false);
+  }
+
+  // With key management, the key derived from the private half is removed.
+  const managed = fakeMachine({ signedIn: true, login: "someone-else", keysOnGitHub: [`${otherKey} other`, `${publicKey} example-vm`] });
+  const { controller, home } = await controllerFor(managed);
+  await mkdir(join(home, ".ssh"), { recursive: true });
+  await writeFile(join(home, ".ssh", "id_ed25519"), "private\n");
+  expect(await controller.logout()).toEqual({ logged_out: true, login: "someone-else", ssh_key_removed: true });
+  expect(managed.state.keysOnGitHub).toEqual([`${otherKey} other`]);
+});
+
 test("a token in the environment rules out Sign out even when gh status is unreadable", async () => {
   for (const variable of ["GH_TOKEN", "GITHUB_TOKEN"]) {
     const machine = fakeMachine({ signedIn: true });

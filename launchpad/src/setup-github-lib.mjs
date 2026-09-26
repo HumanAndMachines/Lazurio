@@ -532,14 +532,27 @@ export function createGitHubLoginController({
     if (auth.brokered) throw new GitHubLoginError("brokered_identity");
     if (auth.environment_token) throw new GitHubLoginError("environment_token");
     if (!canLogout(auth)) return { logged_out: false, login: null, ssh_key_removed: false };
-    let sshKeyRemoved = false;
+    // The private key decides what this Machine authenticates as, with or
+    // without a readable .pub; one that needs a passphrase, or disagrees with
+    // its .pub, proves nothing, so nothing changes.
     const publicPath = join(home, ".ssh", "id_ed25519.pub");
+    const privatePath = join(home, ".ssh", "id_ed25519");
     const publicKey = existsSync(publicPath) ? normalizePublicKey(await readFile(publicPath, "utf8")) : null;
-    if (auth.state === "logged_in" && publicKey && auth.scopes?.includes(GITHUB_KEY_SCOPE)) {
+    let machineKey = null;
+    if (existsSync(privatePath)) {
+      const derived = await tool("ssh-keygen", ["-y", "-P", "", "-f", privatePath]);
+      machineKey = derived.code === 0 ? normalizePublicKey(derived.stdout) : null;
+      if (!machineKey || (existsSync(publicPath) && publicKey !== machineKey)) {
+        throw new GitHubLoginError("logout_ssh_unproven");
+      }
+    }
+    let sshKeyRemoved = false;
+    const registeredKey = machineKey ?? publicKey;
+    if (auth.state === "logged_in" && registeredKey && auth.scopes?.includes(GITHUB_KEY_SCOPE)) {
       const listed = await gh(["ssh-key", "list"]);
       if (listed.code !== 0) throw new GitHubLoginError("ssh_key_list_failed");
       for (const entry of parseSshKeyList(listed.stdout)) {
-        if (entry.key !== publicKey || entry.type === "signing" || !entry.id) continue;
+        if (entry.key !== registeredKey || entry.type === "signing" || !entry.id) continue;
         const removed = await gh(["ssh-key", "delete", entry.id, "--yes"]);
         if (removed.code !== 0) throw new GitHubLoginError("ssh_key_remove_failed");
         sshKeyRemoved = true;
@@ -554,16 +567,7 @@ export function createGitHubLoginController({
     // alone, which an earlier key answering for another account would hide.
     const leftBehind = (probe) => probe.state === "ok"
       && (auth.state === "unreadable" || probe.login.toLowerCase() === auth.login?.toLowerCase());
-    const probes = [{}];
-    const privatePath = join(home, ".ssh", "id_ed25519");
-    if (publicKey && existsSync(privatePath)) {
-      // A key that cannot be used without a passphrase proves nothing here.
-      const derived = await tool("ssh-keygen", ["-y", "-P", "", "-f", privatePath]);
-      if (derived.code !== 0 || normalizePublicKey(derived.stdout) !== publicKey) {
-        throw new GitHubLoginError("logout_ssh_unproven");
-      }
-      probes.push({ identity: privatePath });
-    }
+    const probes = machineKey ? [{}, { identity: privatePath }] : [{}];
     for (const options of probes) {
       let ssh = await probeSsh(options);
       if (ssh.state === "host_key_unknown") {
