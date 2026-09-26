@@ -140,8 +140,10 @@ export function classifySshProbe({ code, output }) {
   if (/No [A-Z0-9-]+ host key is known for|Host key verification failed/u.test(text)) {
     return Object.freeze({ state: "host_key_unknown", login: null });
   }
-  if (/Permission denied/u.test(text)) return Object.freeze({ state: "denied", login: null });
-  return Object.freeze({ state: code === 0 ? "denied" : "unreachable", login: null });
+  // Only GitHub's own refusal of every offered key proves "no account": a
+  // local "connect to host … Permission denied" is a network failure.
+  if (/Permission denied \(publickey[^)]*\)/u.test(text)) return Object.freeze({ state: "denied", login: null });
+  return Object.freeze({ state: "unreachable", login: null });
 }
 
 /** `ssh -G git@github.com` → the host key name ssh checks for github.com. */
