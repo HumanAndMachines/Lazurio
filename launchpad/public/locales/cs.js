@@ -25,6 +25,7 @@ export const cs = Object.freeze({
   "a11y.runModule": "Kde modul spustit",
   "a11y.notificationsFilter": "Filtr notifikací",
   "topbar.personal": "Osobní",
+  "topbar.noOrganization": "Žádná Organizace",
   "topbar.private": "Soukromé",
   "topbar.chat": "Chat",
   "topbar.chatTitle": "Otevřít T3 Code na této Mašině",

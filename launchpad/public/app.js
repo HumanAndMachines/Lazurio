@@ -1579,6 +1579,13 @@ function normalizeActiveSpace() {
     state.filters.company = firstOrganization.slug;
     return;
   }
+  // A shared Team Machine never selects Personal, not even as the fallback
+  // when no Organization is discovered yet: it stays on the neutral scope.
+  if (state.personalspaceUnavailable === "team_machine") {
+    state.filters.scope = "org";
+    state.filters.company = "all";
+    return;
+  }
   state.filters.scope = "personal";
   state.filters.company = "all";
 }
@@ -1594,8 +1601,9 @@ function activeSpace() {
     return { kind: "personal", label: t("topbar.personal"), slug: "personal" };
   }
   const organization = state.companies.find((company) => company.slug === state.filters.company);
-  return organization
-    ? { kind: "organization", label: organization.display_name ?? organization.slug, organization }
+  if (organization) return { kind: "organization", label: organization.display_name ?? organization.slug, organization };
+  return state.personalspaceUnavailable === "team_machine"
+    ? { kind: "none", label: t("topbar.noOrganization"), organization: null }
     : { kind: "personal", label: t("topbar.personal"), slug: "personal" };
 }
 
@@ -1643,6 +1651,15 @@ function applyLaunchpadHash({ notify = false } = {}) {
 }
 
 function syncActiveSpaceHash({ replace = false } = {}) {
+  // Team Machine without an Organization: there is no space to link to, and
+  // the URL must never keep or gain #/personalspace. Drop the fragment.
+  if (activeSpace().kind === "none") {
+    if (window.location.hash) {
+      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+    }
+    appliedLaunchpadHash = window.location.hash;
+    return;
+  }
   writeLaunchpadHash(activeSpaceHash(), { replace });
 }
 
@@ -1858,7 +1875,7 @@ function renderSpaceLogo(mount, space) {
   fallback.setAttribute("aria-hidden", "true");
   fallback.textContent = (space.label.trim()[0] ?? "O").toUpperCase();
   mount.append(fallback);
-  if (space.organization.logo_url) {
+  if (space.organization?.logo_url) {
     const image = document.createElement("img");
     image.src = space.organization.logo_url;
     image.alt = "";

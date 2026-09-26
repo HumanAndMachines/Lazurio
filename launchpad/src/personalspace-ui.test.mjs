@@ -366,3 +366,37 @@ test("shared Team Machine: the refusal code is an answer, so no Personal option,
   expect(server).toContain("personalspaceOffered ? buildPersonalspace({ verifyRepositoryPrivacy: true }) : null");
   expect(server).toContain("personalspaceDoctorCheck({}, { teamMachine: true })");
 });
+
+test("shared Team Machine without an Organization never selects, labels or links the Personal space", async () => {
+  const [appJs, cs, en] = await Promise.all([
+    readFile(join(publicRoot, "app.js"), "utf8"),
+    import(join(publicRoot, "locales", "cs.js")),
+    import(join(publicRoot, "locales", "en.js")),
+  ]);
+  const body = (name) => {
+    const start = appJs.indexOf(`function ${name}(`);
+    expect(start).toBeGreaterThan(-1);
+    return appJs.slice(start, appJs.indexOf("\n}\n", start));
+  };
+
+  // Fallback without an Organization: the Team Machine branch comes before the Personal one.
+  const normalize = body("normalizeActiveSpace");
+  const teamBranch = normalize.indexOf('if (state.personalspaceUnavailable === "team_machine") {');
+  expect(teamBranch).toBeGreaterThan(-1);
+  expect(teamBranch).toBeLessThan(normalize.lastIndexOf('state.filters.scope = "personal";'));
+  expect(normalize.slice(teamBranch, normalize.indexOf("return;", teamBranch))).not.toContain('"personal"');
+
+  // Label: a neutral "No Organization" space, never "Personal".
+  const active = body("activeSpace");
+  expect(active).toContain('state.personalspaceUnavailable === "team_machine"');
+  expect(active).toContain('{ kind: "none", label: t("topbar.noOrganization"), organization: null }');
+  expect(en.en["topbar.noOrganization"]).toBe("No Organization");
+  expect(cs.cs["topbar.noOrganization"]).toBe("Žádná Organizace");
+
+  // URL: the neutral space drops the fragment instead of writing #/personalspace or a fake #/org/all.
+  const sync = body("syncActiveSpaceHash");
+  expect(sync.indexOf('if (activeSpace().kind === "none") {')).toBeLessThan(sync.indexOf("writeLaunchpadHash("));
+  expect(sync).toContain("window.history.replaceState(null, \"\", `${window.location.pathname}${window.location.search}`);");
+  // The neutral space has no Organization logo to read.
+  expect(body("renderSpaceLogo")).toContain("if (space.organization?.logo_url) {");
+});

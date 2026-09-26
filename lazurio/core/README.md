@@ -51,6 +51,9 @@ adapter proto validuje manifestovaný nested slot, ale nedrží druhou clone
 implementaci. Staging je vždy sibling targetu na stejném filesystemu a
 case-folded kolize, cizí cesta nebo neúspěšná owner verifikace failnou před
 publikací.
+`machine-identity-lib.mjs` je jediný čtenář `/etc/lazurio/lazurio.machine.json`.
+Launchpad server i CLI Doctor z něj shodně poznají sdílenou týmovou Mašinu
+(`machineOffersPersonalspace()`), která Personalspace nemá.
 `ui_exposure` zůstává pouze prezentační policy; nevytváří identitu resource ani
 access autoritu. Další doménové vrstvy se přesunují samostatnými PR až nad
 zeleným parity baseline; fyzický přesun souboru sám nesmí měnit schéma ani

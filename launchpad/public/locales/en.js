@@ -25,6 +25,7 @@ export const en = Object.freeze({
   "a11y.runModule": "Where to run the module",
   "a11y.notificationsFilter": "Notification filter",
   "topbar.personal": "Personal",
+  "topbar.noOrganization": "No Organization",
   "topbar.private": "Private",
   "topbar.chat": "Chat",
   "topbar.chatTitle": "Open T3 Code on this Machine",
