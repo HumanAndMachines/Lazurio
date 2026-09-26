@@ -537,10 +537,16 @@ export function createGitHubLoginController({
     // left behind, or the next account's sign-in stops at ssh_account_mismatch.
     // Deleting takes admin:public_key (write:public_key cannot), and an
     // unreadable gh names no account, so any answering account counts there.
-    const ssh = await probeSsh();
+    // Only a GitHub answer proves anything; any other outcome keeps gh as is.
+    let ssh = await probeSsh();
+    if (ssh.state === "host_key_unknown") {
+      await pinGitHubHostKeys({ home, run: (name, args) => tool(name, args), fetchImpl });
+      ssh = await probeSsh();
+    }
     if (ssh.state === "ok" && (auth.state === "unreadable" || ssh.login.toLowerCase() === auth.login?.toLowerCase())) {
       throw new GitHubLoginError("ssh_key_still_registered");
     }
+    if (ssh.state !== "ok" && ssh.state !== "denied") throw new GitHubLoginError("logout_ssh_unproven");
     const args = ["auth", "logout", "--hostname", "github.com"];
     if (auth.login) args.push("--user", auth.login);
     const result = await gh(args);

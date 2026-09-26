@@ -159,6 +159,7 @@ export const cs = Object.freeze({
   "setup.github.error.logout_failed": "GitHub CLI se nepodařilo odhlásit.",
   "setup.github.error.ssh_key_remove_failed": "SSH klíč této Mašiny se nepodařilo z přihlášeného účtu odebrat; nic se neodhlásilo.",
   "setup.github.error.ssh_key_still_registered": "SSH klíč této Mašiny se na GitHubu pořád hlásí k účtu, ze kterého se odhlašuješ, a Launchpad ho odtud odebrat nemůže. Přihlas se na github.com tím účtem, v Settings → SSH keys odeber klíč s názvem této Mašiny a klikni na Odhlásit znovu; do té doby zůstává GitHub na Mašině přihlášený.",
+  "setup.github.error.logout_ssh_unproven": "Odhlášení jsem zastavil: přes SSH se nepodařilo ověřit, že klíč této Mašiny už nepatří odhlašovanému účtu (GitHub přes SSH nedosažitelný, chybí ssh, nebo nesedí klíč serveru GitHubu). GitHub zůstává na Mašině přihlášený; zkus to znovu, až bude GitHub přes SSH dosažitelný.",
   "setup.github.error.login_in_progress": "Přihlášení už probíhá.",
   "setup.github.error.organization_login_invalid": "Tohle není platný GitHub login Organizace.",
   "setup.github.error.login_incomplete": "GitHub přihlášení nedoběhlo.",

@@ -384,6 +384,27 @@ test("Sign out from an unreadable gh keeps it while this Machine's key still ans
   expect(await controller.logout()).toEqual({ logged_out: true, login: null, ssh_key_removed: false });
 });
 
+test("Sign out stops when SSH cannot prove where this Machine's key belongs", async () => {
+  for (const answer of [
+    { code: 255, stdout: "", stderr: "ssh: connect to host github.com port 22: Operation timed out\n" },
+    { code: 255, stdout: "", stderr: "@@@@@@@@@@@\nREMOTE HOST IDENTIFICATION HAS CHANGED!\n" },
+  ]) {
+    const machine = fakeMachine({ signedIn: true, login: "someone-else" });
+    const base = machine.run;
+    machine.run = async (program, args) => program.endsWith("/ssh") && args[0] === "-T" ? answer : base(program, args);
+    const { controller } = await controllerFor(machine);
+    await expect(controller.logout()).rejects.toMatchObject({ code: "logout_ssh_unproven" });
+    expect(machine.state.signedIn).toBe(true);
+    expect(machine.state.calls.some(([name, sub, verb]) => name === "gh" && sub === "auth" && verb === "logout")).toBe(false);
+  }
+
+  // An unknown GitHub host key is pinned first; the probe then decides.
+  const fresh = fakeMachine({ signedIn: true, sshKnown: false });
+  const { controller } = await controllerFor(fresh);
+  expect(await controller.logout()).toMatchObject({ logged_out: true });
+  expect(fresh.state.calls).toContainEqual(["ssh", "-G", "git@github.com"]);
+});
+
 test("a token in the environment rules out Sign out even when gh status is unreadable", async () => {
   for (const variable of ["GH_TOKEN", "GITHUB_TOKEN"]) {
     const machine = fakeMachine({ signedIn: true });

@@ -159,6 +159,7 @@ export const en = Object.freeze({
   "setup.github.error.logout_failed": "GitHub CLI could not sign out.",
   "setup.github.error.ssh_key_remove_failed": "This Machine's SSH key could not be removed from the signed-in account; nothing was signed out.",
   "setup.github.error.ssh_key_still_registered": "This Machine's SSH key still answers on GitHub for the account you are signing out of, and Launchpad cannot remove it from here. Sign in to github.com as that account, remove the key named after this Machine under Settings → SSH keys, and use Sign out again; until then GitHub stays signed in on this Machine.",
+  "setup.github.error.logout_ssh_unproven": "Sign out stopped: SSH could not prove that this Machine's key no longer belongs to the account being signed out (GitHub unreachable over SSH, ssh missing, or GitHub's host key does not match). GitHub stays signed in on this Machine; try again once GitHub is reachable over SSH.",
   "setup.github.error.login_in_progress": "A sign-in is already in progress.",
   "setup.github.error.organization_login_invalid": "This is not a valid GitHub Organization login.",
   "setup.github.error.login_incomplete": "The GitHub sign-in did not finish.",
