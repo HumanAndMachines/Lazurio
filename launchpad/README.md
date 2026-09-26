@@ -204,8 +204,8 @@ adresovaná cestou (`/settings/general`, `/settings/github`, `/settings/ssh`;
 server pro všechny vrací tutéž stránku, holé `/settings` přesměruje na
 `/settings/`):
 
-- **Obecné** — typ Prostředí (`Tento počítač`, `VM Prostředí Organizace`,
-  `Osobní VM Prostředí`), label Mašiny, Organizace, Team a doména z
+- **Obecné** — typ Prostředí (`Místní prostředí (tento počítač)`, `Vzdálené prostředí Organizace`,
+  `Osobní vzdálené prostředí`), label Mašiny, Organizace, Team a doména z
   `GET /api/setup/environment` (jen metadata z definice Mašiny, žádné
   tajemství ani grant; localhost vrací `profile: "local"` a případný
   `--organization` scope) a jazyk Launchpadu v tomto prohlížeči (dřív
@@ -300,8 +300,10 @@ logu, souboru ani schránce), SSH klíč
 nefunguje, nahraje jeho veřejnou část na právě ověřený účet a výsledek dokáže
 přes `ssh -T` a `git ls-remote` root repa zvolené Organizace. Neznámý klíč
 serveru GitHubu připne z TLS `https://api.github.com/meta`; změněný nikdy
-nepřepíše. Na hostované Mašině porovná účet s přiřazením v
-`/etc/lazurio/lazurio.machine.json` a cizí účet je blocker; na týmové VM s
+nepřepíše. Přihlásit jde libovolný účet (decision 0159); přiřazení
+v `/etc/lazurio/lazurio.machine.json` přihlášení neomezuje. **Odhlásit**
+odebere z účtu SSH klíč této Mašiny a odhlásí `gh`, takže jde vrátit jakékoli
+přihlášení i rozbitou konfiguraci. Na Mašině s nasazeným
 `lazurio-for-github[bot]` nenabízí nic. Navazující tlačítka volají existující
 `POST /api/update` a `lazurio organization install <login> --role builder
 --json`; na lokálním Launchpadu běží update stejně jako CLI z izolovaného

@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { existsSync, statSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -11,8 +11,12 @@ import {
   hasKeyWriteScope,
   parseDeviceCodeOutput,
   parseGitHubAuthStatus,
+  PERSONALSPACE_TEAM_MACHINE_ERROR,
+  machineOffersPersonalspace,
   parseMachineAssignment,
   parseSshConfig,
+  personalspaceRouteRefusal,
+  readMachineAssignment,
   parseSshKeyList,
   pinGitHubHostKeys,
   sshKeyComment,
@@ -89,12 +93,18 @@ test("ssh -T and ssh -G output classification", () => {
   expect(classifySshProbe({ code: 255, output: "@ WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! @\nHost key verification failed." }).state)
     .toBe("host_key_changed");
   expect(classifySshProbe({ code: 255, output: "ssh: connect to host github.com port 22: Operation timed out" }).state).toBe("unreachable");
+  expect(classifySshProbe({ code: 255, output: "ssh: connect to host github.com port 22: Permission denied" }).state).toBe("unreachable");
+  expect(classifySshProbe({ code: 255, output: "operator@jump.example: Permission denied (publickey)." }).state).toBe("unreachable");
+  expect(classifySshProbe({ code: 0, output: "banner: Hi example-operator! You've successfully authenticated, but GitHub does not provide shell access." }).state).toBe("unreachable");
+  expect(classifySshProbe({ code: 255, output: "Hi example-operator! You've successfully authenticated, but GitHub does not provide shell access." }).state).toBe("unreachable");
+  expect(classifySshProbe({ code: 1, output: "git@github.com: Permission denied (publickey)." }).state).toBe("unreachable");
+  expect(classifySshProbe({ code: 0, output: "" }).state).toBe("unreachable");
   expect(parseSshConfig("user git\nhostname github.com\nport 22\n").known_hosts_name).toBe("github.com");
   expect(parseSshConfig("hostname ssh.github.com\nport 443\n").known_hosts_name).toBe("[ssh.github.com]:443");
   expect(parseSshConfig("hostname github.com\nport 22\nhostkeyalias gh-pinned\n").known_hosts_name).toBe("gh-pinned");
 });
 
-test("machine identity selects who may be signed in and never guesses", () => {
+test("machine identity is read exactly as declared and never guessed", () => {
   const organization = (assignment) => JSON.stringify({
     schema_version: "lazurio.machine.v1",
     machine: { id: "example-anna", kind: "workspace-vm", name: "anna", vmid: 102 },
@@ -111,6 +121,69 @@ test("machine identity selects who may be signed in and never guesses", () => {
     owner: { kind: "principal", github_login: "example-owner", github_id: 42 },
   }))).toEqual({ kind: "principal", github_login: "example-owner", github_id: 42 });
   expect(parseMachineAssignment("{").kind).toBe("invalid");
+});
+
+test("a shared Team Machine offers no Personalspace; every other assignment keeps it", () => {
+  const identityPath = "/etc/lazurio/lazurio.machine.json";
+  const offered = (contents) => machineOffersPersonalspace(readMachineAssignment({
+    path: identityPath,
+    exists: (path) => path === identityPath && contents !== undefined,
+    read: () => contents,
+  }));
+  const workspaceVm = (assignment) => JSON.stringify({
+    schema_version: "lazurio.machine.v1",
+    machine: { id: "example-team", kind: "workspace-vm", name: "team", vmid: 110 },
+    owner: { kind: "organization", organization: "example", team: "team", ...(assignment ? { assignment } : {}) },
+  });
+  const refusal = (contents, pathname = "/api/personalspace") =>
+    personalspaceRouteRefusal(pathname, { offered: offered(contents) });
+
+  const team = workspaceVm({ kind: "team" });
+  expect(offered(team)).toBe(false);
+  for (const pathname of [
+    "/api/personalspace",
+    "/api/personalspace/apps/personal-notes/start",
+    "/api/personalspace/exampleuser_GEN3/gbrain/tree",
+  ]) {
+    expect(refusal(team, pathname)).toEqual({
+      status: 404,
+      body: {
+        error: PERSONALSPACE_TEAM_MACHINE_ERROR,
+        message: "This is a shared Team Machine; it has no Personalspace.",
+      },
+    });
+  }
+  expect(PERSONALSPACE_TEAM_MACHINE_ERROR).toBe("personalspace_unavailable_on_team_machine");
+
+  // Paths outside /api/personalspace are never refused, not even on a Team Machine.
+  for (const pathname of ["/api/apps", "/api/personalspaces", "/api/personalspace-extra", "/personalspace", "/api/doctor"]) {
+    expect(refusal(team, pathname)).toBeNull();
+  }
+
+  // Operator, principal, unassigned, missing and unreadable identity keep today's behaviour.
+  const allowed = {
+    operator: workspaceVm({ kind: "operator", github_login: "anna-example", github_id: 12345678 }),
+    principal: JSON.stringify({
+      schema_version: "lazurio.machine.v1",
+      machine: { kind: "personal-vm" },
+      owner: { kind: "principal", github_login: "example-owner", github_id: 42 },
+    }),
+    unassigned: workspaceVm(null),
+    none: undefined,
+    invalid: "{",
+  };
+  for (const [kind, contents] of Object.entries(allowed)) {
+    expect(offered(contents)).toBe(true);
+    expect(refusal(contents)).toBeNull();
+    expect(refusal(contents, "/api/personalspace/apps/personal-notes/start")).toBeNull();
+    if (kind !== "invalid") {
+      expect(readMachineAssignment({
+        path: identityPath,
+        exists: () => contents !== undefined,
+        read: () => contents,
+      }).kind).toBe(kind);
+    }
+  }
 });
 
 test("ensureSshKey creates id_ed25519 with private permissions only when both halves are missing", async () => {
@@ -165,6 +238,14 @@ function fakeMachine({ signedIn = false, scopes = "gist, read:org, repo, admin:p
     if (name === "gh" && args[0] === "ssh-key" && args[1] === "list") {
       return { code: 0, stdout: state.keysOnGitHub.map((key, index) => `k${index}\t${key}\t2026\t${index}\tauthentication`).join("\n"), stderr: "" };
     }
+    if (name === "gh" && args[0] === "ssh-key" && args[1] === "delete") {
+      state.keysOnGitHub.splice(Number(args[2]), 1);
+      return { code: 0, stdout: "", stderr: "" };
+    }
+    if (name === "gh" && args[0] === "auth" && args[1] === "logout") {
+      state.signedIn = false;
+      return { code: 0, stdout: "", stderr: "" };
+    }
     if (name === "gh" && args[0] === "ssh-key" && args[1] === "add") {
       state.keysOnGitHub.push((await readFile(args[2], "utf8")).trim());
       return { code: 0, stdout: "", stderr: "" };
@@ -173,6 +254,12 @@ function fakeMachine({ signedIn = false, scopes = "gist, read:org, repo, admin:p
       // Only the host key pin asks for the resolved config; it then succeeds.
       state.sshKnown = true;
       return { code: 0, stdout: "hostname github.com\nport 22\n", stderr: "" };
+    }
+    if (name === "ssh-keygen" && args.includes("-y")) {
+      return state.keyEncrypted ? { code: 1, stdout: "", stderr: "incorrect passphrase\n" } : { code: 0, stdout: `${publicKey}\n`, stderr: "" };
+    }
+    if (name === "ssh" && state.defaultSshLogin && !args.includes("-i")) {
+      return { code: 1, stdout: "", stderr: `Hi ${state.defaultSshLogin}! You've successfully authenticated, but GitHub does not provide shell access.\n` };
     }
     if (name === "ssh") {
       if (!state.sshKnown) return { code: 255, stdout: "", stderr: "No ED25519 host key is known for github.com and you have requested strict checking.\nHost key verification failed.\n" };
@@ -305,36 +392,207 @@ test("GitHub unreachable over SSH stops before any key is created or uploaded", 
   expect(machine.state.calls.some(([name, sub]) => name === "gh" && sub === "ssh-key")).toBe(false);
 });
 
-test("a different account than the Machine assignment is a blocker and receives no key", async () => {
+test("the operator signs in with any account, whatever the Machine declares", async () => {
   const machine = fakeMachine({ signedIn: true, login: "someone-else", id: 7 });
   const { controller } = await controllerFor(machine, {
     hosted: true,
     readAssignment: () => ({ kind: "operator", github_login: "anna-example", github_id: 12345678 }),
   });
   const status = await controller.status();
-  expect(status).toMatchObject({ blocker: "account_mismatch", ready: false, actions: { login: false }, machine: { expected_login: "anna-example" } });
+  expect(status).toMatchObject({ blocker: null, actions: { login: true, logout: true }, machine: { assignment: "operator" } });
+  expect(status.machine).not.toHaveProperty("expected_login");
   controller.start();
   await controller.settled();
-  expect(controller.snapshot()).toMatchObject({ state: "failed", error: "account_mismatch" });
-  expect(machine.state.calls.some(([name, sub]) => name === "gh" && sub === "ssh-key")).toBe(false);
-  expect(machine.state.calls.some(([name]) => name === "ssh-keygen")).toBe(false);
+  expect(controller.snapshot()).toMatchObject({ state: "completed", ssh_key_created: true, ssh_key_registered: true });
 });
 
-test("brokered Team VM and undeclared hosted Machines never start a personal login", async () => {
+test("Sign out removes this Machine's key from the wrong account, after which the right account signs in", async () => {
+  const machine = fakeMachine({ signedIn: true, login: "someone-else", id: 7, keysOnGitHub: [`${otherKey} other`, `${publicKey} example-vm`] });
+  const { controller, home } = await controllerFor(machine, {
+    hosted: true,
+    readAssignment: () => ({ kind: "operator", github_login: "anna-example", github_id: 12345678 }),
+  });
+  await mkdir(join(home, ".ssh"), { recursive: true });
+  await writeFile(join(home, ".ssh", "id_ed25519"), "private\n");
+  await writeFile(join(home, ".ssh", "id_ed25519.pub"), `${publicKey} example-vm\n`);
+  expect(await controller.status()).toMatchObject({ blocker: null, actions: { logout: true } });
+
+  expect(await controller.logout()).toEqual({ logged_out: true, login: "someone-else", ssh_key_removed: true });
+  expect(machine.state.keysOnGitHub).toEqual([`${otherKey} other`]);
+  expect(machine.state.calls).toContainEqual(["gh", "auth", "logout", "--hostname", "github.com", "--user", "someone-else"]);
+  expect(existsSync(join(home, ".ssh", "id_ed25519"))).toBe(true);
+  expect(await controller.status()).toMatchObject({ blocker: null, actions: { login: true, logout: false } });
+
+  controller.start();
+  await waitFor(() => controller.snapshot().state === "awaiting_user");
+  machine.state.flows[0].complete({ signedIn: true, login: "anna-example", id: 12345678, keysOnGitHub: [] });
+  await controller.settled();
+  expect(controller.snapshot()).toMatchObject({ state: "completed", ssh_key_created: false, ssh_key_registered: true });
+  expect(machine.state.keysOnGitHub).toEqual([`${publicKey} example-vm`]);
+});
+
+test("Sign out without the key deletion scope keeps the account while its key still answers over SSH", async () => {
+  for (const scopes of ["gist, read:org, repo", "gist, read:org, repo, write:public_key"]) {
+    const machine = fakeMachine({ signedIn: true, login: "someone-else", scopes, keysOnGitHub: [`${publicKey} example-vm`] });
+    const { controller, home } = await controllerFor(machine);
+    await mkdir(join(home, ".ssh"), { recursive: true });
+    await writeFile(join(home, ".ssh", "id_ed25519"), "private\n");
+    await writeFile(join(home, ".ssh", "id_ed25519.pub"), `${publicKey} example-vm\n`);
+    await expect(controller.logout()).rejects.toMatchObject({ code: "ssh_key_still_registered" });
+    expect(machine.state.signedIn).toBe(true);
+    expect(machine.state.calls.some(([name, sub, verb]) => name === "gh" && sub === "ssh-key" && verb === "delete")).toBe(false);
+
+    // Once the key is removed on GitHub, the same Sign out goes through.
+    machine.state.keysOnGitHub = [];
+    expect(await controller.logout()).toEqual({ logged_out: true, login: "someone-else", ssh_key_removed: false });
+  }
+});
+
+test("Sign out from an unreadable gh keeps it while this Machine's key still answers for any account", async () => {
+  const machine = fakeMachine({ signedIn: true, login: "someone-else", keysOnGitHub: [`${publicKey} example-vm`] });
+  const base = machine.run;
+  machine.run = async (program, args) => program.endsWith("/gh") && args[0] === "auth" && args[1] === "status"
+    ? { code: 0, stdout: "not json", stderr: "" }
+    : base(program, args);
+  const { controller } = await controllerFor(machine);
+  expect((await controller.status()).actions.logout).toBe(true);
+  await expect(controller.logout()).rejects.toMatchObject({ code: "ssh_key_still_registered" });
+  expect(machine.state.calls.some(([name, sub, verb]) => name === "gh" && sub === "auth" && verb === "logout")).toBe(false);
+
+  machine.state.keysOnGitHub = [];
+  expect(await controller.logout()).toEqual({ logged_out: true, login: null, ssh_key_removed: false });
+});
+
+test("Sign out stops when SSH cannot prove where this Machine's key belongs", async () => {
+  for (const answer of [
+    { code: 255, stdout: "", stderr: "ssh: connect to host github.com port 22: Operation timed out\n" },
+    { code: 255, stdout: "", stderr: "@@@@@@@@@@@\nREMOTE HOST IDENTIFICATION HAS CHANGED!\n" },
+    { code: 255, stdout: "", stderr: "ssh: connect to host github.com port 22: Permission denied\n" },
+    { code: 255, stdout: "", stderr: "operator@jump.example: Permission denied (publickey).\n" },
+    { code: 255, stdout: "", stderr: "Hi someone-else! You've successfully authenticated, but GitHub does not provide shell access.\n" },
+  ]) {
+    const machine = fakeMachine({ signedIn: true, login: "someone-else" });
+    const base = machine.run;
+    machine.run = async (program, args) => program.endsWith("/ssh") && args[0] === "-T" ? answer : base(program, args);
+    const { controller } = await controllerFor(machine);
+    await expect(controller.logout()).rejects.toMatchObject({ code: "logout_ssh_unproven" });
+    expect(machine.state.signedIn).toBe(true);
+    expect(machine.state.calls.some(([name, sub, verb]) => name === "gh" && sub === "auth" && verb === "logout")).toBe(false);
+  }
+
+  // An unknown GitHub host key is pinned first; the probe then decides.
+  const fresh = fakeMachine({ signedIn: true, sshKnown: false });
+  const { controller } = await controllerFor(fresh);
+  expect(await controller.logout()).toMatchObject({ logged_out: true });
+  expect(fresh.state.calls).toContainEqual(["ssh", "-G", "git@github.com"]);
+});
+
+test("Sign out probes this Machine's key alone, so another key answering first hides nothing", async () => {
+  const machine = fakeMachine({ signedIn: true, login: "someone-else", scopes: "gist, read:org, repo", keysOnGitHub: [`${publicKey} example-vm`] });
+  machine.state.defaultSshLogin = "another-account";
+  const { controller, home } = await controllerFor(machine);
+  await mkdir(join(home, ".ssh"), { recursive: true });
+  await writeFile(join(home, ".ssh", "id_ed25519"), "private\n");
+  await writeFile(join(home, ".ssh", "id_ed25519.pub"), `${publicKey} example-vm\n`);
+  await expect(controller.logout()).rejects.toMatchObject({ code: "ssh_key_still_registered" });
+  const keyProbe = machine.state.calls.find(([name, ...args]) => name === "ssh" && args.includes("-i"));
+  expect(keyProbe).toEqual(expect.arrayContaining(["-F", "none", "IdentitiesOnly=yes", "IdentityAgent=none", join(home, ".ssh", "id_ed25519")]));
+  expect(machine.state.calls.some(([name, sub, verb]) => name === "gh" && sub === "auth" && verb === "logout")).toBe(false);
+
+  // A key that needs a passphrase cannot answer, so it proves nothing.
+  machine.state.keysOnGitHub = [];
+  machine.state.keyEncrypted = true;
+  await expect(controller.logout()).rejects.toMatchObject({ code: "logout_ssh_unproven" });
+  machine.state.keyEncrypted = false;
+  expect(await controller.logout()).toMatchObject({ logged_out: true });
+});
+
+test("Sign out probes the private key even when its .pub is missing or unreadable", async () => {
+  for (const pub of [null, "not a key\n", "unreadable"]) {
+    const machine = fakeMachine({ signedIn: true, login: "someone-else", scopes: "gist, read:org, repo", keysOnGitHub: [`${publicKey} example-vm`] });
+    machine.state.defaultSshLogin = "another-account";
+    const { controller, home } = await controllerFor(machine);
+    await mkdir(join(home, ".ssh"), { recursive: true });
+    await writeFile(join(home, ".ssh", "id_ed25519"), "private\n");
+    if (pub !== null) await writeFile(join(home, ".ssh", "id_ed25519.pub"), pub === "unreadable" ? `${publicKey} example-vm\n` : pub);
+    if (pub === "unreadable") {
+      await chmod(join(home, ".ssh", "id_ed25519.pub"), 0o000);
+      // root reads it anyway; the case only exists for other users.
+      if (await readFile(join(home, ".ssh", "id_ed25519.pub")).then(() => true, () => false)) continue;
+    }
+    // A readable key pair that disagrees proves nothing; a missing .pub is
+    // derived from the private key and probed alone.
+    await expect(controller.logout()).rejects.toMatchObject({ code: pub === null ? "ssh_key_still_registered" : "logout_ssh_unproven" });
+    expect(machine.state.calls.some(([name, sub, verb]) => name === "gh" && sub === "auth" && verb === "logout")).toBe(false);
+  }
+
+  // With key management, the key derived from the private half is removed.
+  const managed = fakeMachine({ signedIn: true, login: "someone-else", keysOnGitHub: [`${otherKey} other`, `${publicKey} example-vm`] });
+  const { controller, home } = await controllerFor(managed);
+  await mkdir(join(home, ".ssh"), { recursive: true });
+  await writeFile(join(home, ".ssh", "id_ed25519"), "private\n");
+  expect(await controller.logout()).toEqual({ logged_out: true, login: "someone-else", ssh_key_removed: true });
+  expect(managed.state.keysOnGitHub).toEqual([`${otherKey} other`]);
+});
+
+test("a token in the environment rules out Sign out even when gh status is unreadable", async () => {
+  for (const variable of ["GH_TOKEN", "GITHUB_TOKEN"]) {
+    const machine = fakeMachine({ signedIn: true });
+    const base = machine.run;
+    machine.run = async (program, args) => program.endsWith("/gh") && args[0] === "auth" && args[1] === "status"
+      ? { code: 0, stdout: "not json", stderr: "" }
+      : base(program, args);
+    const { controller } = await controllerFor(machine, { env: { PATH: "/usr/bin", [variable]: "example-value" } });
+    expect(await controller.status()).toMatchObject({ blocker: "environment_token", actions: { login: false, logout: false } });
+    await expect(controller.logout()).rejects.toMatchObject({ code: "environment_token" });
+    controller.start();
+    await controller.settled();
+    expect(controller.snapshot()).toMatchObject({ state: "failed", error: "environment_token" });
+    expect(machine.state.calls.some(([name, sub, verb]) => name === "gh" && sub === "auth" && verb === "logout")).toBe(false);
+  }
+});
+
+test("Sign out is offered for a broken GitHub CLI state but never for a Team bot or an environment token", async () => {
+  const signedOut = fakeMachine();
+  expect((await (await controllerFor(signedOut)).controller.status()).actions.logout).toBe(false);
+  const unreadable = fakeMachine({ signedIn: true });
+  const unreadableRun = unreadable.run;
+  unreadable.run = async (program, args) => program.endsWith("/gh") && args[0] === "auth" && args[1] === "status"
+    ? { code: 0, stdout: "not json", stderr: "" }
+    : unreadableRun(program, args);
+  const unreadableStatus = await (await controllerFor(unreadable)).controller.status();
+  expect(unreadableStatus).toMatchObject({ blocker: "github_cli_unreadable", actions: { login: false, logout: true } });
+  const bot = fakeMachine({ brokered: true });
+  const botController = (await controllerFor(bot)).controller;
+  expect((await botController.status()).actions.logout).toBe(false);
+  await expect(botController.logout()).rejects.toMatchObject({ code: "brokered_identity" });
+  expect(bot.state.calls.some(([name, sub, verb]) => name === "gh" && sub === "auth" && verb === "logout")).toBe(false);
+});
+
+test("only an installed Organization bot keeps a personal login away", async () => {
+  const machine = fakeMachine();
+  const { controller: botMachine } = await controllerFor(machine, { readBrokered: () => ({ valid: true }) });
+  expect((await botMachine.status()).actions).toEqual({ login: false, logout: false, update: false, organization_install: false });
+  botMachine.start();
+  await botMachine.settled();
+  expect(botMachine.snapshot()).toMatchObject({ state: "failed", error: "brokered_identity" });
+  expect(machine.state.flows).toHaveLength(0);
+
+  // A Team VM still without its bot, an undeclared or an invalid identity:
+  // whoever operates the Machine signs in.
   for (const options of [
-    { readBrokered: () => ({ valid: true }) },
     { readAssignment: () => ({ kind: "team" }) },
     { hosted: true, readAssignment: () => ({ kind: "none" }) },
     { readAssignment: () => ({ kind: "unassigned" }) },
+    { hosted: true, readAssignment: () => ({ kind: "invalid" }) },
   ]) {
-    const machine = fakeMachine();
-    const { controller } = await controllerFor(machine, options);
-    const status = await controller.status();
-    expect(status.actions).toEqual({ login: false, update: false, organization_install: false });
-    controller.start();
+    const open = fakeMachine();
+    const { controller } = await controllerFor(open, options);
+    expect(await controller.status()).toMatchObject({ blocker: null, actions: { login: true } });
+    const { capability } = controller.start();
+    await waitFor(() => controller.snapshot().state === "awaiting_user");
+    controller.cancel(capability);
     await controller.settled();
-    expect(controller.snapshot().state).toBe("failed");
-    expect(machine.state.flows).toHaveLength(0);
   }
   const bot = fakeMachine({ brokered: true });
   const { controller } = await controllerFor(bot);

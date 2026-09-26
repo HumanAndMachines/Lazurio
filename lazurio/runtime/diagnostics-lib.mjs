@@ -1,4 +1,5 @@
 import { toolInvocation } from "../core/tool-invocation-lib.mjs";
+import { machineOffersPersonalspace, readMachineAssignment } from "../core/machine-identity-lib.mjs";
 import { existsSync, lstatSync, readFileSync, realpathSync } from "fs";
 import { readFile, readdir } from "fs/promises";
 import { basename, dirname, join, posix } from "path";
@@ -462,6 +463,7 @@ export async function buildLaunchpadDoctorReport(options = {}) {
     companiesRoot: appsResponse.root,
     rootSourceRoot: options.rootSourceRoot ?? appsResponse.control_root ?? appsResponse.root,
     launchpadRoot: options.launchpadRoot,
+    teamMachine: !machineOffersPersonalspace((options.readMachineAssignment ?? readMachineAssignment)()),
   });
   const agentSkillsChecks = [
     await agentSkillsEntrypointsDoctorCheck({
@@ -518,9 +520,13 @@ export function loadRootDoctorSchema() {
 // Oddělený od org appsResponse: personalspace má vlastní lane. Dynamický import,
 // aby se personalspace runtime moduly nenatahovaly, když se doctor volá jen na
 // org kontrolu, a aby případná chyba lane zůstala izolovaná.
-async function buildPersonalspaceDoctorChecks({ companiesRoot, rootSourceRoot = companiesRoot, launchpadRoot }) {
+//
+// Sdílená týmová Mašina Personalspace nemá: lane se nespouští a kontrola hlásí
+// not_applicable (no_such_mount) stejně jako HTTP Doctor Launchpadu.
+async function buildPersonalspaceDoctorChecks({ companiesRoot, rootSourceRoot = companiesRoot, launchpadRoot, teamMachine = false }) {
   try {
     const { buildPersonalspaceResponse, personalspaceDoctorCheck } = await import("./personalspace-runtime-lib.mjs");
+    if (teamMachine) return [personalspaceDoctorCheck({}, { teamMachine: true })];
     const personalspaceResponse = await buildPersonalspaceResponse({
       companiesRoot,
       rootSourceRoot,

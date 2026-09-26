@@ -44,16 +44,20 @@ textová role ani prompt nevytvářejí druhý ACL.
 
 Na hostované pracovní VM Organizace (`/etc/lazurio/lazurio.machine.json`,
 `machine.kind: workspace-vm`) se před první prací i před `lazurio update` řiď
-`manual/hosted-machine-first-login.md` v tomto runtime rootu. Jediným
-rozlišovacím znakem je `owner.assignment.kind`:
+`manual/hosted-machine-first-login.md` v tomto runtime rootu. Dočasně
+(decision 0159) operátor přihlásí `gh` libovolným GitHub účtem;
+`owner.assignment` přihlášení neomezuje a jiný účet ani chybějící přiřazení
+nejsou blocker. Rozlišovacím znakem postupu je `owner.assignment.kind`:
 
-- `operator`: osobní pracovní VM jednoho operátora. `gh api user` musí vrátit
-  jeho `login` a `id` z `owner.assignment`; jiný účet je blocker a přihlášení
-  provede jen operátor sám.
-- `team`: sdílená týmová VM. GitHub identitou je výhradně bot Organizace
-  `lazurio-for-github[bot]` přes broker; osobní přihlášení Agent nikdy
-  nespouští ani nenavrhuje a chybějící broker předá Organization Adminovi.
-- chybějící nebo neplatné přiřazení: Agent nehádá, nahlásí blocker. Nejasný nebo nebezpečný Git stav
+- `operator`, chybějící nebo neplatné přiřazení: osobní postup. Agent ověří,
+  že `gh` je přihlášený, a řekne operátorovi kterým účtem; přihlášení
+  a přehlášení provede operátor sám (Launchpad → Nastavení → Zdrojové kódy).
+- `team` s nasazeným brokerem: GitHub identitou je výhradně bot Organizace
+  `lazurio-for-github[bot]`; osobní přihlášení Agent nespouští ani
+  nenavrhuje. Bez brokeru postupuje jako na osobní VM a upozorní, že všichni
+  na VM pracují pod přihlášeným účtem.
+
+Nejasný nebo nebezpečný Git stav
 se neopravuje odhadem: zachová se a předá Kolegovi jako prompt pro Codex.
 
 ## Architektonická odpovědnost při změně source kódu

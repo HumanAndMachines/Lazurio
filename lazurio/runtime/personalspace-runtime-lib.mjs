@@ -454,7 +454,25 @@ function normalizeProfileEmail(value) {
 // ne každá mašina má osobní prostor namountovaný, takže je to FAKT o topologii,
 // ne kontrola, kterou se nepodařilo změřit. Zelenou proto nekazí — na rozdíl od
 // personalspace lane, která spadne (ta je v diagnostics-lib.mjs `blocked`).
-export function personalspaceDoctorCheck(personalspaceResponse) {
+//
+// Sdílená týmová Mašina (`lazurio.machine.json` → assignment `team`) nemá
+// osobního vlastníka, takže Personalspace tu z principu neexistuje: stejný
+// `not_applicable` / `no_such_mount`, jen s pravdivým důvodem.
+export function personalspaceDoctorCheck(personalspaceResponse, { teamMachine = false } = {}) {
+  if (teamMachine) {
+    return {
+      id: "launchpad.personalspace",
+      status: "not_applicable",
+      severity: "local-state",
+      title: "Personalspace",
+      message: "Tohle je sdílená týmová Mašina; nemá osobního vlastníka, takže tu Personalspace není.",
+      paths: [personalspaceResponse?.mountpoint ?? "personalspace"],
+      links: [],
+      details: [],
+      not_applicable_reason: "no_such_mount",
+      owner: "Organizace (sdílená týmová Mašina nemá osobního vlastníka; Personalspace je jen na vlastní Mašině Principála)",
+    };
+  }
   const spaces = personalspaceResponse.spaces ?? [];
   const failures = personalspaceResponse.failures ?? [];
   const warnings = personalspaceResponse.warnings ?? [];

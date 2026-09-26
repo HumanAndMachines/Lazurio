@@ -56,7 +56,13 @@ import { readOrganizationLaunchpadTheme } from "./organization-theme-lib.mjs";
 import { T3ChatError, issueT3ChatUrl, t3ChatConfigurationFromEnvironment } from "./t3-chat-lib.mjs";
 import { SshAccessError, createSshAccessService } from "./ssh-access-lib.mjs";
 import { LaptopNetworkError, createLaptopNetworkService } from "./laptop-network-lib.mjs";
-import { GitHubLoginError, createGitHubLoginController } from "./setup-github-lib.mjs";
+import {
+  GitHubLoginError,
+  createGitHubLoginController,
+  machineOffersPersonalspace,
+  personalspaceRouteRefusal,
+  readMachineAssignment,
+} from "./setup-github-lib.mjs";
 import { ModuleFolderActionError, createModuleFolderOpener } from "./module-folder-lib.mjs";
 import {
   HostedAppUrlError,
@@ -152,6 +158,11 @@ let reportedPersonalspaceIssues = "";
 let hostedPersonalspace = personalHostedScope ? await resolvePersonalHostedBinding() : null;
 if (personalHostedScope) reportPersonalspaceDiscoveryIssues();
 const personalEntry = loadPersonalEntryConfiguration(process.env);
+// A shared Team Machine (lazurio.machine.json assignment `team`) has no
+// personal owner, so it offers no Personalspace: no listing, no personal Apps,
+// no gbrain and no Personalspace Doctor lane. Read once; the identity file is
+// provisioned with the Machine and does not change under a running server.
+const personalspaceOffered = machineOffersPersonalspace(readMachineAssignment());
 const requestTrustProfile = personalEntry ? "personal" : hostedWorkspace.profile;
 const t3Chat = t3ChatConfigurationFromEnvironment(process.env);
 if (t3Chat && requestTrustProfile === "local") {
@@ -804,6 +815,7 @@ const setupReadOnlyMountRoutes = new Set([
   "/api/setup/github/start",
   "/api/setup/github/session",
   "/api/setup/github/cancel",
+  "/api/setup/github/logout",
 ]);
 
 // What kind of Machine serves this Launchpad and whom it belongs to: the
@@ -865,6 +877,8 @@ async function handleSetupRoute(request, url) {
         return jsonResponse({ session: setupGitHub.snapshot(capability) });
       case "/api/setup/github/cancel":
         return jsonResponse({ session: setupGitHub.cancel(capability) });
+      case "/api/setup/github/logout":
+        return jsonResponse(await setupGitHub.logout());
       case "/api/setup/organization-install":
         return jsonResponse(await appsResponseCache.runMutation(() =>
           gitStatusService.withRemoteRefreshPaused(() =>
@@ -884,11 +898,13 @@ async function handleSetupRoute(request, url) {
 async function buildDoctorReport() {
   // Personalspace doctor check je metadata-only a osobní aplikace se nikdy
   // nemíchají do org appsResponse (CAC-0048).
+  // Sdílená týmová Mašina Personalspace nemá: lane se vůbec nespouští a
+  // kontrola hlásí not_applicable (no_such_mount).
   const [appsEnvelope, personalspaceResponse] = await Promise.all([
     // Doctor je oddělená background lane, ne first paint: zachovává plný Git
     // census i tehdy, když /api/apps používá levný includeGit:false snapshot.
     buildAppsResponseUncached({ includeGit: true }),
-    buildPersonalspace({ verifyRepositoryPrivacy: true }),
+    personalspaceOffered ? buildPersonalspace({ verifyRepositoryPrivacy: true }) : null,
   ]);
   const appsResponse = appsEnvelope.response;
   // Podřízené doctory se svolávají i v HTTP lane (decision 0118). Kdyby je
@@ -908,7 +924,9 @@ async function buildDoctorReport() {
     schema,
   });
   return buildDoctorReportFromAppsResponse(appsResponse, {
-    extraChecks: [personalspaceDoctorCheck(personalspaceResponse)],
+    extraChecks: [personalspaceOffered
+      ? personalspaceDoctorCheck(personalspaceResponse)
+      : personalspaceDoctorCheck({}, { teamMachine: true })],
     childLane,
     schema,
   });
@@ -1856,6 +1874,8 @@ function startServer(startPort) {
             return jsonResponse({ error: "personalspace_request_forbidden" }, 403);
           }
         }
+        const personalspaceRefusal = personalspaceRouteRefusal(url.pathname, { offered: personalspaceOffered });
+        if (personalspaceRefusal) return jsonResponse(personalspaceRefusal.body, personalspaceRefusal.status);
         if (isMutatingApiRequest(request, url)) {
           const trustDecision = await evaluateWorkspaceRequest();
           if (!trustDecision.trusted) {
