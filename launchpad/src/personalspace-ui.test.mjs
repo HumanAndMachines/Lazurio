@@ -2,6 +2,9 @@ import { expect, test } from "bun:test";
 import { readFile } from "fs/promises";
 import { join } from "path";
 
+// Windows checkouts may carry CRLF; the source assertions below compare LF text.
+const readSource = async (path) => (await readFile(path, "utf8")).replace(/\r\n/g, "\n");
+
 const publicRoot = join(import.meta.dirname, "..", "public");
 const schemasRoot = join(import.meta.dirname, "..", "..", "lazurio", "schemas");
 
@@ -333,8 +336,8 @@ test("hosted personal Machine without its Personalspace shows the localized owne
 
 test("shared Team Machine: the refusal code is an answer, so no Personal option, no error, and a localized toast", async () => {
   const [appJs, server, setupLib, cs, en] = await Promise.all([
-    readFile(join(publicRoot, "app.js"), "utf8"),
-    readFile(join(import.meta.dirname, "server.mjs"), "utf8"),
+    readSource(join(publicRoot, "app.js")),
+    readSource(join(import.meta.dirname, "server.mjs")),
     import(join(import.meta.dirname, "setup-github-lib.mjs")),
     import(join(publicRoot, "locales", "cs.js")),
     import(join(publicRoot, "locales", "en.js")),
@@ -369,7 +372,7 @@ test("shared Team Machine: the refusal code is an answer, so no Personal option,
 
 test("shared Team Machine without an Organization never selects, labels or links the Personal space", async () => {
   const [appJs, cs, en] = await Promise.all([
-    readFile(join(publicRoot, "app.js"), "utf8"),
+    readSource(join(publicRoot, "app.js")),
     import(join(publicRoot, "locales", "cs.js")),
     import(join(publicRoot, "locales", "en.js")),
   ]);
