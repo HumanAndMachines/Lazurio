@@ -90,6 +90,8 @@ test("ssh -T and ssh -G output classification", () => {
     .toBe("host_key_changed");
   expect(classifySshProbe({ code: 255, output: "ssh: connect to host github.com port 22: Operation timed out" }).state).toBe("unreachable");
   expect(classifySshProbe({ code: 255, output: "ssh: connect to host github.com port 22: Permission denied" }).state).toBe("unreachable");
+  expect(classifySshProbe({ code: 255, output: "operator@jump.example: Permission denied (publickey)." }).state).toBe("unreachable");
+  expect(classifySshProbe({ code: 0, output: "banner: Hi example-operator! You've successfully authenticated, but GitHub does not provide shell access." }).state).toBe("unreachable");
   expect(classifySshProbe({ code: 0, output: "" }).state).toBe("unreachable");
   expect(parseSshConfig("user git\nhostname github.com\nport 22\n").known_hosts_name).toBe("github.com");
   expect(parseSshConfig("hostname ssh.github.com\nport 443\n").known_hosts_name).toBe("[ssh.github.com]:443");
@@ -391,6 +393,7 @@ test("Sign out stops when SSH cannot prove where this Machine's key belongs", as
     { code: 255, stdout: "", stderr: "ssh: connect to host github.com port 22: Operation timed out\n" },
     { code: 255, stdout: "", stderr: "@@@@@@@@@@@\nREMOTE HOST IDENTIFICATION HAS CHANGED!\n" },
     { code: 255, stdout: "", stderr: "ssh: connect to host github.com port 22: Permission denied\n" },
+    { code: 255, stdout: "", stderr: "operator@jump.example: Permission denied (publickey).\n" },
   ]) {
     const machine = fakeMachine({ signedIn: true, login: "someone-else" });
     const base = machine.run;

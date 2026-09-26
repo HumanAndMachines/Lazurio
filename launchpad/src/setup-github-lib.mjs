@@ -32,7 +32,7 @@ const setupGitHubPattern = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/u;
 const machineLoginPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const deviceCodePattern = /one-time code:\s*([A-Z0-9]{4}-[A-Z0-9]{4})\b/u;
 const publicKeyPattern = /^(ssh-ed25519|ecdsa-sha2-nistp256|ecdsa-sha2-nistp384|ecdsa-sha2-nistp521|ssh-rsa|sk-ssh-ed25519@openssh\.com|sk-ecdsa-sha2-nistp256@openssh\.com)\s+([A-Za-z0-9+/]+={0,3})(?:\s|$)/u;
-const sshGreetingPattern = /Hi ([A-Za-z0-9-]+)! You've successfully authenticated/u;
+const sshGreetingPattern = /^Hi ([A-Za-z0-9-]+)! You've successfully authenticated, but GitHub does not provide shell access/mu;
 const keyWriteScopes = new Set([GITHUB_KEY_SCOPE, "write:public_key"]);
 const githubSshHosts = new Set(["github.com", "ssh.github.com"]);
 const commandTimeoutMs = 30_000;
@@ -140,9 +140,12 @@ export function classifySshProbe({ code, output }) {
   if (/No [A-Z0-9-]+ host key is known for|Host key verification failed/u.test(text)) {
     return Object.freeze({ state: "host_key_unknown", login: null });
   }
-  // Only GitHub's own refusal of every offered key proves "no account": a
+  // Only GitHub's own refusal of every offered key proves "no account". ssh
+  // names the refusing server as user@host, so a jump host's refusal or a
   // local "connect to host … Permission denied" is a network failure.
-  if (/Permission denied \(publickey[^)]*\)/u.test(text)) return Object.freeze({ state: "denied", login: null });
+  if (/^git@github\.com: Permission denied \(publickey[^)]*\)/mu.test(text)) {
+    return Object.freeze({ state: "denied", login: null });
+  }
   return Object.freeze({ state: "unreachable", login: null });
 }
 
