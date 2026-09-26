@@ -112,24 +112,49 @@
 }
 
 .lz-band--grid::before,
-.lz-grid-surface::before {
+.lz-grid-surface::before,
+.lz-hero::before,
+.lz-cta::before,
+.lz-band--grid::after,
+.lz-grid-surface::after,
+.lz-hero::after,
+.lz-cta::after {
 	position: absolute;
 	z-index: -1;
 	inset: 0;
-	background-image:
-		linear-gradient(90deg, transparent calc(var(--lz-grid-step) * .8), var(--lz-line-faint) calc(var(--lz-grid-step) * .8) calc(var(--lz-grid-step) * 1.2), transparent calc(var(--lz-grid-step) * 1.2)),
-		linear-gradient(transparent calc(var(--lz-grid-step) * .8), var(--lz-line-faint) calc(var(--lz-grid-step) * .8) calc(var(--lz-grid-step) * 1.2), transparent calc(var(--lz-grid-step) * 1.2)),
-		linear-gradient(var(--lz-line-faint) 1px, transparent 1px),
-		linear-gradient(90deg, var(--lz-line-faint) 1px, transparent 1px);
-	background-position:
-		calc(50% - min(calc(var(--lz-grid-step) * 8), 50%) - var(--lz-grid-step)) calc(-1 * var(--lz-grid-step)),
-		calc(50% - min(calc(var(--lz-grid-step) * 8), 50%) - var(--lz-grid-step)) calc(-1 * var(--lz-grid-step)),
-		calc(50% - min(calc(var(--lz-grid-step) * 8), 50%)) 0,
-		calc(50% - min(calc(var(--lz-grid-step) * 8), 50%)) 0;
-	background-size: calc(var(--lz-grid-step) * 2) calc(var(--lz-grid-step) * 2);
 	content: "";
-	mask-image: radial-gradient(130% 110% at 50% 0%, #000 34%, transparent 82%);
 	pointer-events: none;
+}
+
+.lz-band--grid::before,
+.lz-grid-surface::before,
+.lz-hero::before,
+.lz-cta::before {
+	--_lz-grid-origin: calc(50% - min(calc(var(--lz-grid-step) * 8), 50%));
+	background-image:
+		linear-gradient(var(--lz-gray-50) 1px, transparent 1px),
+		linear-gradient(90deg, var(--lz-gray-50) 1px, transparent 1px);
+	background-position: var(--_lz-grid-origin) 0;
+	background-size: var(--lz-grid-visible-step) var(--lz-grid-visible-step);
+	mask-image: radial-gradient(130% 110% at 50% 0%, #000 34%, transparent 82%);
+}
+
+/* Křížky jsou samostatná vrstva. Maska popisuje geometrii, barvu dál drží
+ * token `line-faint`; komponentová vrstva proto nevlastní žádný hex. */
+.lz-band--grid::after,
+.lz-grid-surface::after,
+.lz-hero::after,
+.lz-cta::after {
+	--_lz-grid-origin: calc(50% - min(calc(var(--lz-grid-step) * 8), 50%));
+	background: radial-gradient(130% 110% at 50% 0%, var(--lz-line-faint) 34%, transparent 82%);
+	-webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Cpath d='M64 51V77M51 64H77' stroke='%23000' stroke-width='1.5'/%3E%3C/svg%3E");
+	-webkit-mask-position: calc(var(--_lz-grid-origin) - var(--lz-grid-step)) calc(-1 * var(--lz-grid-step));
+	-webkit-mask-repeat: repeat;
+	-webkit-mask-size: var(--lz-grid-visible-step) var(--lz-grid-visible-step);
+	mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Cpath d='M64 51V77M51 64H77' stroke='%23000' stroke-width='1.5'/%3E%3C/svg%3E");
+	mask-position: calc(var(--_lz-grid-origin) - var(--lz-grid-step)) calc(-1 * var(--lz-grid-step));
+	mask-repeat: repeat;
+	mask-size: var(--lz-grid-visible-step) var(--lz-grid-visible-step);
 }
 
 .lz-grid-surface {
@@ -462,12 +487,15 @@
 .lz-header__nav {
 	display: flex;
 	align-items: center;
-	gap: var(--lz-space-32);
+	gap: var(--lz-space-28);
 }
 
 .lz-nav-link {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--lz-space-8);
 	color: var(--lz-ink);
-	font-size: var(--lz-size-body);
+	font-size: var(--lz-size-nav);
 	font-weight: var(--lz-weight-akce);
 	letter-spacing: var(--lz-track-body);
 	text-decoration: none;
@@ -486,17 +514,17 @@
 
 .lz-menu__items {
 	display: grid;
-	gap: var(--lz-space-4);
 	padding: var(--lz-space-8);
 }
 
 .lz-menu-item {
 	display: flex;
 	align-items: flex-start;
-	gap: var(--lz-space-16);
+	gap: var(--lz-space-14);
 	padding: var(--lz-space-12);
 	border-radius: var(--lz-radius-sm);
 	color: var(--lz-ink);
+	line-height: normal;
 	text-decoration: none;
 }
 
@@ -523,11 +551,12 @@
 	display: block;
 	font-size: var(--lz-size-body);
 	font-weight: var(--lz-weight-akce);
+	line-height: normal;
 }
 
 .lz-menu-item__description {
 	display: block;
-	margin-top: var(--lz-space-4);
+	margin-top: 2px;
 	color: var(--lz-ink-muted);
 	font-size: var(--lz-size-meta);
 	line-height: 1.45;
@@ -544,11 +573,12 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	gap: var(--lz-space-8);
-	padding: var(--lz-space-16);
+	gap: calc(var(--lz-space-8) + 2px);
+	padding: calc(var(--lz-space-12) + 2px);
 	color: var(--lz-ink);
-	font-size: var(--lz-size-body);
+	font-size: var(--lz-size-nav);
 	font-weight: var(--lz-weight-akce);
+	line-height: normal;
 	text-decoration: none;
 }
 
@@ -558,6 +588,295 @@
 
 .lz-menu__footer a:hover {
 	color: var(--lz-accent);
+}
+
+/* Hero ----------------------------------------------------------------- */
+
+.lz-hero {
+	position: relative;
+	isolation: isolate;
+	overflow: hidden;
+	padding: var(--lz-space-24) var(--lz-space-32) var(--lz-space-128);
+	border-block: 1px solid var(--lz-line-faint);
+	background: var(--lz-white);
+}
+
+.lz-hero > .lz-header {
+	position: relative;
+	z-index: 1;
+	width: min(100%, calc(var(--lz-grid-step) * 16));
+	min-height: var(--lz-space-24);
+	margin-inline: auto;
+	padding: 0;
+	border: 0;
+	background: transparent;
+}
+
+.lz-hero__content {
+	position: relative;
+	z-index: 1;
+	width: min(100%, calc(var(--lz-grid-step) * 16));
+	margin-inline: auto;
+	padding-top: var(--lz-space-128);
+	text-align: center;
+}
+
+.lz-hero__title {
+	max-width: 22ch;
+	margin: 0 auto var(--lz-space-24);
+}
+
+.lz-hero__title-muted {
+	color: var(--lz-ink-faint);
+}
+
+.lz-hero__lead {
+	margin-inline: auto;
+}
+
+.lz-hero__prompt {
+	display: flex;
+	align-items: center;
+	gap: var(--lz-space-16);
+	width: min(100%, calc(var(--lz-grid-step) * 12));
+	margin: var(--lz-space-64) auto 0;
+	padding: var(--lz-space-12) var(--lz-space-12) var(--lz-space-12) var(--lz-space-16);
+	border: 1px solid var(--lz-line);
+	border-radius: var(--lz-radius-sm);
+	background: var(--lz-white);
+	text-align: left;
+}
+
+.lz-hero__field {
+	min-width: 0;
+	flex: 1;
+}
+
+.lz-hero__field input {
+	width: 100%;
+	padding: 0;
+	border: 0;
+	outline: 0;
+	background: transparent;
+	color: var(--lz-ink);
+	font: inherit;
+	font-size: var(--lz-size-body);
+}
+
+.lz-hero__prompt:has(input:focus-visible) {
+	outline: 2px solid var(--lz-ink);
+	outline-offset: var(--lz-space-4);
+}
+
+.lz-hero__submit {
+	width: var(--lz-space-48);
+	height: var(--lz-space-48);
+	min-height: var(--lz-space-48);
+	padding: 0;
+	flex: none;
+}
+
+.lz-hero__actions {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--lz-space-24);
+	margin-top: var(--lz-space-32);
+}
+
+.lz-hero__meta {
+	margin-top: var(--lz-space-20);
+}
+
+.lz-visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+
+/* Přesný systém + lidská stopa --------------------------------------- */
+
+.lz-context-mark {
+	--_lz-context-mark-surface: color-mix(in srgb, var(--lz-expressive-orchid-3) 45%, var(--lz-white));
+	--_lz-context-mark-stroke: var(--lz-expressive-orchid-1);
+	--_lz-context-mark-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 220 100'%3E%3Cpath d='M16 44 C8 16 62 3 134 5 C198 6 222 28 216 55 C210 84 166 97 96 95 C34 93 0 73 6 44 C12 17 68 4 104 5' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+	--_lz-context-mark-transform: rotate(-5deg);
+	position: relative;
+	z-index: 0;
+	display: inline-block;
+	margin-inline: var(--lz-space-16);
+	padding: var(--lz-space-12) var(--lz-space-24);
+	border-radius: var(--lz-radius-pill);
+	background: var(--_lz-context-mark-surface);
+	line-height: 0.9;
+	white-space: nowrap;
+}
+
+.lz-context-mark::after {
+	position: absolute;
+	inset: -22% -8%;
+	z-index: 2;
+	background: var(--_lz-context-mark-stroke);
+	content: "";
+	-webkit-mask: var(--_lz-context-mark-mask) center / 100% 100% no-repeat;
+	mask: var(--_lz-context-mark-mask) center / 100% 100% no-repeat;
+	transform: var(--_lz-context-mark-transform);
+	pointer-events: none;
+}
+
+.lz-context-mark--hero {
+	margin-inline: var(--lz-space-20);
+}
+
+.lz-context-mark--compact {
+	margin-inline: var(--lz-space-12);
+}
+
+.lz-context-mark--lazurite {
+	--_lz-context-mark-surface: var(--lz-blue-100);
+	--_lz-context-mark-stroke: var(--lz-blue-500);
+}
+
+.lz-context-mark--orange {
+	--_lz-context-mark-surface: color-mix(in srgb, var(--lz-expressive-orange-3) 45%, var(--lz-white));
+	--_lz-context-mark-stroke: var(--lz-expressive-orange-1);
+}
+
+.lz-context-mark--yellow {
+	--_lz-context-mark-surface: color-mix(in srgb, var(--lz-expressive-yellow-3) 45%, var(--lz-white));
+	--_lz-context-mark-stroke: var(--lz-expressive-yellow-1);
+}
+
+.lz-context-mark--mint {
+	--_lz-context-mark-surface: color-mix(in srgb, var(--lz-expressive-mint-3) 45%, var(--lz-white));
+	--_lz-context-mark-stroke: var(--lz-expressive-mint-1);
+}
+
+.lz-context-mark--vermilion {
+	--_lz-context-mark-surface: color-mix(in srgb, var(--lz-expressive-vermilion-3) 45%, var(--lz-white));
+	--_lz-context-mark-stroke: var(--lz-expressive-vermilion-1);
+}
+
+.lz-context-mark--orchid {
+	--_lz-context-mark-surface: color-mix(in srgb, var(--lz-expressive-orchid-3) 45%, var(--lz-white));
+	--_lz-context-mark-stroke: var(--lz-expressive-orchid-1);
+}
+
+/* Expresivní paleta ---------------------------------------------------- */
+
+.lz-expressive-grid {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--lz-space-24);
+}
+
+.lz-expressive-swatch {
+	width: calc(var(--lz-grid-step) * 3 + var(--lz-space-48));
+	min-width: 0;
+	flex: none;
+}
+
+.lz-expressive-swatch__surface {
+	--_lz-swatch-line: var(--lz-grid-line-on-color);
+	--_lz-swatch-cross: var(--lz-grid-cross-on-color);
+	position: relative;
+	isolation: isolate;
+	overflow: hidden;
+	aspect-ratio: 1;
+	background: var(--_lz-swatch-0);
+}
+
+.lz-expressive-swatch__surface::before,
+.lz-expressive-swatch__surface::after {
+	position: absolute;
+	inset: 0;
+	content: "";
+	pointer-events: none;
+}
+
+.lz-expressive-swatch__surface::before {
+	background-image:
+		linear-gradient(var(--_lz-swatch-line) 1px, transparent 1px),
+		linear-gradient(90deg, var(--_lz-swatch-line) 1px, transparent 1px);
+	background-size: 12.5% 12.5%;
+	z-index: 1;
+}
+
+.lz-expressive-swatch__surface::after {
+	background: var(--_lz-swatch-cross);
+	-webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 26V38M26 32H38' fill='none' stroke='black' stroke-width='1'/%3E%3C/svg%3E");
+	-webkit-mask-position: -6.25% -6.25%;
+	-webkit-mask-repeat: repeat;
+	-webkit-mask-size: 12.5% 12.5%;
+	mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 26V38M26 32H38' fill='none' stroke='black' stroke-width='1'/%3E%3C/svg%3E");
+	mask-position: -6.25% -6.25%;
+	mask-repeat: repeat;
+	mask-size: 12.5% 12.5%;
+	z-index: 1;
+}
+
+.lz-expressive-swatch--lazurite {
+	--_lz-swatch-0: var(--lz-blue-500);
+	--_lz-swatch-1: var(--lz-blue-400);
+	--_lz-swatch-2: var(--lz-blue-300);
+	--_lz-swatch-3: var(--lz-blue-200);
+	--_lz-swatch-line: var(--lz-grid-line-on-dark);
+	--_lz-swatch-cross: var(--lz-grid-cross-on-dark);
+}
+
+.lz-expressive-swatch--orange {
+	--_lz-swatch-0: var(--lz-expressive-orange);
+	--_lz-swatch-1: var(--lz-expressive-orange-1);
+	--_lz-swatch-2: var(--lz-expressive-orange-2);
+	--_lz-swatch-3: var(--lz-expressive-orange-3);
+}
+
+.lz-expressive-swatch--yellow {
+	--_lz-swatch-0: var(--lz-expressive-yellow);
+	--_lz-swatch-1: var(--lz-expressive-yellow-1);
+	--_lz-swatch-2: var(--lz-expressive-yellow-2);
+	--_lz-swatch-3: var(--lz-expressive-yellow-3);
+}
+
+.lz-expressive-swatch--mint {
+	--_lz-swatch-0: var(--lz-expressive-mint);
+	--_lz-swatch-1: var(--lz-expressive-mint-1);
+	--_lz-swatch-2: var(--lz-expressive-mint-2);
+	--_lz-swatch-3: var(--lz-expressive-mint-3);
+}
+
+.lz-expressive-swatch--vermilion {
+	--_lz-swatch-0: var(--lz-expressive-vermilion);
+	--_lz-swatch-1: var(--lz-expressive-vermilion-1);
+	--_lz-swatch-2: var(--lz-expressive-vermilion-2);
+	--_lz-swatch-3: var(--lz-expressive-vermilion-3);
+}
+
+.lz-expressive-swatch--orchid {
+	--_lz-swatch-0: var(--lz-expressive-orchid);
+	--_lz-swatch-1: var(--lz-expressive-orchid-1);
+	--_lz-swatch-2: var(--lz-expressive-orchid-2);
+	--_lz-swatch-3: var(--lz-expressive-orchid-3);
+}
+
+.lz-expressive-swatch h3 {
+	margin: var(--lz-space-16) 0 2px;
+	font-size: var(--lz-size-body);
+	font-weight: var(--lz-weight-akce);
+}
+
+.lz-expressive-swatch p {
+	margin: 0;
+}
+
+.lz-expressive-swatch__code {
+	margin-top: var(--lz-space-8);
+	color: var(--lz-ink-faint);
+	font-family: var(--lz-font-mono);
+	font-size: var(--lz-size-meta);
 }
 
 /* Panely, dlaždice, karty a reference ---------------------------------- */
@@ -615,6 +934,76 @@
 	color: var(--lz-ink-faint);
 }
 
+/* Řádková dlaždice — provozní seznam modulů a entit. Sklizeň z Launchpadu
+ * 21. 9. 2026, kde horní část shellu potřebovala nízkou dlaždici čitelnou
+ * jako seznam, ne jako mřížku aplikací.
+ *
+ * Leží na BÍLÉ obsahové ploše, takže ji od plochy nemůže odlišit výplň a
+ * hranici drží vlasový rámeček — stejný materiál jako `.lz-app-window`.
+ * Sloupcová `.lz-tile` zůstává papírová bez obrysu; tahle varianta ji neruší.
+ *
+ * Hloubku nenese stín. Design systém žádný vržený stín nemá, takže hover
+ * ztmaví rámeček na inkoust. Důraz je na hraně, ne pod objektem. */
+.lz-tile--row {
+	min-height: calc(var(--lz-grid-step) + var(--lz-space-32));
+	flex-direction: row;
+	align-items: center;
+	gap: var(--lz-space-16);
+	border: 1px solid var(--lz-line-faint);
+	background: var(--lz-surface);
+}
+
+.lz-tile__icon {
+	display: grid;
+	width: var(--lz-space-48);
+	height: var(--lz-space-48);
+	flex-shrink: 0;
+	place-items: center;
+}
+
+.lz-tile__icon > img,
+.lz-tile__icon > svg {
+	display: block;
+	width: 100%;
+	height: auto;
+}
+
+.lz-tile__body {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: var(--lz-space-4);
+}
+
+/* Popis drží jeden řádek, aby dlaždice v mřížce nikdy neměly různou výšku. */
+.lz-tile__desc {
+	overflow: hidden;
+	color: var(--lz-ink-muted);
+	font-size: var(--lz-size-meta);
+	line-height: var(--lz-leading-meta);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.lz-tile--row:hover,
+.lz-tile--row:focus-within {
+	border-color: var(--lz-ink);
+}
+
+/* Nedostupný modul je prázdné místo: papírová výplň a čárkovaná linka. Na
+ * bílé ploše tak čte jako slot, který na modul čeká, a přitom nesoupeří
+ * s připravenými dlaždicemi. */
+.lz-tile--empty {
+	border: 1px dashed var(--lz-line);
+	background: var(--lz-paper);
+	color: var(--lz-ink-faint);
+}
+
+.lz-tile--empty:hover,
+.lz-tile--empty:focus-within {
+	border-color: var(--lz-line);
+}
+
 .lz-card-grid,
 .lz-reference-grid {
 	display: grid;
@@ -659,7 +1048,8 @@
 	gap: var(--lz-space-12);
 	margin-top: auto;
 	padding: var(--lz-space-16) var(--lz-space-32);
-	background: var(--lz-paper);
+	border-top: 1px solid var(--lz-line-faint);
+	background: var(--lz-white);
 	color: var(--lz-ink-muted);
 	font-size: var(--lz-size-meta);
 }
@@ -681,6 +1071,64 @@
 	flex: none;
 	object-fit: cover;
 	background: var(--lz-gray-100);
+}
+
+.lz-person-grid {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--lz-space-24);
+}
+
+.lz-person-card {
+	width: min(100%, calc(var(--lz-grid-step) * 3 + var(--lz-space-48)));
+	min-width: 0;
+}
+
+.lz-person-card__portrait {
+	display: flex;
+	aspect-ratio: 3 / 2;
+	align-items: center;
+	justify-content: center;
+	background: var(--lz-paper);
+	color: var(--lz-ink-faint);
+	font-size: var(--lz-size-meta);
+}
+
+.lz-person-card__portrait img {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.lz-person-card h3 {
+	margin: var(--lz-space-16) 0 2px;
+	font-size: var(--lz-size-title);
+	font-weight: var(--lz-weight-akce);
+}
+
+.lz-person-card p {
+	margin: 0;
+}
+
+.lz-person-card__profile {
+	padding-top: var(--lz-space-12);
+}
+
+.lz-person-card__profile a {
+	display: inline-flex;
+	align-items: center;
+}
+
+.lz-person-card__profile img {
+	display: block;
+	width: auto;
+	height: calc(var(--lz-space-16) + 2px);
+}
+
+.lz-person-card__profile a:focus-visible {
+	outline: 2px solid var(--lz-ink);
+	outline-offset: var(--lz-space-4);
 }
 
 .lz-reference-card__person strong {
@@ -728,8 +1176,9 @@
 	gap: var(--lz-space-8);
 	min-width: calc(var(--lz-grid-step) * 3);
 	padding: var(--lz-space-8) var(--lz-space-12);
-	border-radius: var(--lz-radius-xs);
-	background: var(--lz-paper);
+	border: 1px solid var(--lz-line);
+	border-radius: var(--lz-radius-pill);
+	background: var(--lz-white);
 	color: var(--lz-ink-muted);
 	font-size: var(--lz-size-meta);
 }
@@ -742,6 +1191,7 @@
 
 .lz-app-window__sidebar {
 	padding: var(--lz-space-16) var(--lz-space-12);
+	border-right: 1px solid var(--lz-line-faint);
 	background: var(--lz-paper);
 }
 
@@ -756,6 +1206,7 @@
 	background: var(--lz-white);
 	color: var(--lz-ink);
 	font-weight: var(--lz-weight-akce);
+	box-shadow: inset 2px 0 0 var(--lz-ink);
 }
 
 .lz-app-window__content {
@@ -788,8 +1239,8 @@
 }
 
 .lz-empty-state {
-	max-width: calc(var(--lz-grid-step) * 10);
-	padding: var(--lz-space-64) var(--lz-space-32);
+	width: min(100%, calc(var(--lz-grid-step) * 6));
+	padding: var(--lz-space-48) var(--lz-space-32);
 	border: 1px dashed var(--lz-line);
 	text-align: center;
 }
@@ -853,7 +1304,6 @@
 
 .lz-plan--featured {
 	background: var(--lz-paper);
-	box-shadow: inset 0 2px 0 var(--lz-ink);
 }
 
 .lz-plan__price {
@@ -938,26 +1388,15 @@
 	background: var(--lz-white);
 }
 
+/* Deprecated compatibility only. Nové výstupy používají světlé mřížkové
+ * `lz-cta` podle schváleného listu prvků. */
 .lz-cta--dark {
 	background: var(--lz-gray-950);
 	color: var(--lz-white);
 }
 
-.lz-cta::before {
-	position: absolute;
-	z-index: -1;
-	inset: 0;
-	background-image:
-		linear-gradient(var(--lz-line-faint) 1px, transparent 1px),
-		linear-gradient(90deg, var(--lz-line-faint) 1px, transparent 1px);
-	background-position: calc(50% - min(calc(var(--lz-grid-step) * 8), 50%)) 0;
-	background-size: calc(var(--lz-grid-step) * 2) calc(var(--lz-grid-step) * 2);
-	content: "";
-	mask-image: radial-gradient(130% 110% at 50% 0%, #000 34%, transparent 82%);
-	pointer-events: none;
-}
-
-.lz-cta--dark::before {
+.lz-cta--dark::before,
+.lz-cta--dark::after {
 	opacity: 0.12;
 }
 
@@ -1004,14 +1443,16 @@
 }
 
 .lz-footer__inner {
-	display: grid;
-	grid-template-columns: calc(var(--lz-grid-step) * 3) minmax(0, 1fr);
+	display: flex;
 	gap: var(--lz-space-64);
+	align-items: flex-start;
+	flex-wrap: wrap;
 	padding: var(--lz-space-64);
 }
 
 .lz-footer__brand {
 	display: flex;
+	flex: 0 0 calc(var(--lz-grid-step) * 3);
 	flex-direction: column;
 	align-items: flex-start;
 	gap: var(--lz-space-24);
@@ -1024,14 +1465,17 @@
 }
 
 .lz-footer__columns {
-	display: grid;
-	grid-template-columns: repeat(4, minmax(0, 1fr));
+	display: flex;
+	min-width: 0;
+	flex: 1 1 calc(var(--lz-grid-step) * 7);
 	gap: var(--lz-space-32);
+	flex-wrap: wrap;
 }
 
 .lz-footer__column {
 	display: flex;
-	min-width: 0;
+	min-width: max-content;
+	flex: 1 1 calc(var(--lz-grid-step) + var(--lz-space-32));
 	flex-direction: column;
 	gap: var(--lz-space-12);
 }
@@ -1054,12 +1498,25 @@
 	color: var(--lz-accent);
 }
 
+.lz-footer__placeholder {
+	color: var(--lz-ink-faint);
+	font-size: var(--lz-size-body);
+	line-height: var(--lz-leading-body);
+}
+
 .lz-footer__bottom {
-	grid-column: 1 / -1;
+	width: 100%;
+	flex: 1 0 100%;
 	padding-top: var(--lz-space-24);
 	border-top: 1px solid var(--lz-line-faint);
 	color: var(--lz-ink-faint);
 	font-size: var(--lz-size-meta);
+}
+
+.lz-footer__social {
+	color: var(--lz-ink-faint);
+	font-size: var(--lz-size-meta);
+	line-height: var(--lz-leading-body);
 }
 
 /* Responsivní hranice --------------------------------------------------- */
@@ -1097,6 +1554,7 @@
 	.lz-section-head,
 	.lz-header,
 	.lz-header__nav,
+	.lz-hero__actions,
 	.lz-cta__actions {
 		align-items: flex-start;
 		flex-direction: column;
@@ -1131,7 +1589,14 @@
 	.lz-contact__form,
 	.lz-cta__inner,
 	.lz-footer__inner {
+		gap: var(--lz-space-32);
 		padding: var(--lz-space-32) var(--lz-space-24);
+	}
+
+	.lz-footer__brand,
+	.lz-footer__columns {
+		width: 100%;
+		flex-basis: 100%;
 	}
 
 	.lz-app-window__body {
@@ -1170,4 +1635,305 @@
 	.lz-faq summary svg {
 		transition: none;
 	}
+}
+
+/* ==========================================================================
+   Sklizeň z Launchpadu · 9. 8. 2026
+   ==========================================================================
+
+   Launchpad je první aplikace, která na identitě běží doopravdy. Při jejím
+   přebrandování se ukázalo šest prvků, které kanonické komponenty nemají —
+   ne proto, že by se na ně zapomnělo, ale protože v marketingovém listu
+   nevzniknou. Vznikají v provozním rozhraní, kde je seznam, stav a akce.
+
+   VŠECHNY SE ROZHODUJÍ PODLE JEDNOHO PRAVIDLA: pilulka patří stavu.
+   Launchpad ji měl na tlačítku, štítku, přepínači i vyhledávacím poli —
+   osm míst. Když ten tvar dostane všechno, přestane cokoli znamenat,
+   a pak nemá smysl ani u stavu.
+
+   Kontext a čísla jsou v `content/brand/prvky/prvky.md`.
+   ========================================================================== */
+
+/* Štítek — popiska DAT, ne stav. `catalog`, `v2`, název větve.
+   Od stavu se liší TVAREM: poloměr formulářového pole, ne pilulka. Kdyby se
+   lišil jen barvou, musel by ho člověk číst, aby poznal, že po něm nic
+   nechceme. */
+.lz-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lz-space-4);
+  padding: var(--lz-space-4) var(--lz-space-8);
+  border: 1px solid var(--lz-line);
+  border-radius: var(--lz-radius-xs);
+  background: var(--lz-paper);
+  color: var(--lz-ink-muted);
+  font-size: var(--lz-size-meta);
+  font-weight: var(--lz-weight-body);
+  line-height: var(--lz-leading-meta);
+  white-space: nowrap;
+}
+
+/* Přepínač — jeden výběr z několika. Řídí se pravidlem „natěsno v řadě =
+   jeden výběr": je to JEDNA skupina s jedním rámem, ne tři samostatné
+   pilulky vedle sebe. Vybraný segment nese inkoustovou plochu jako hlavní
+   tlačítko, protože je to tatáž míra rozhodnutí. */
+.lz-segmented {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--lz-line);
+  border-radius: var(--lz-radius-sm);
+  overflow: hidden;
+  background: var(--lz-surface);
+}
+
+.lz-segment {
+  appearance: none;
+  border: 0;
+  border-radius: 0;
+  padding: var(--lz-space-8) var(--lz-space-16);
+  background: transparent;
+  color: var(--lz-ink-muted);
+  font: inherit;
+  font-size: var(--lz-size-meta);
+  font-weight: var(--lz-weight-akce);
+  letter-spacing: var(--lz-track-body);
+  cursor: pointer;
+}
+
+.lz-segment[aria-pressed="true"],
+.lz-segment[aria-selected="true"] {
+  background: var(--lz-accent-button);
+  color: var(--lz-on-accent);
+}
+
+.lz-segment:focus-visible {
+  outline: 2px solid var(--lz-ink);
+  outline-offset: calc(-1 * var(--lz-space-4));
+}
+
+/* Ikonové tlačítko — akce bez popisku. Je to ČTVEREC, ne kolečko: kolečko
+   je v identitě tvar stavové tečky, a dvě věci téhož tvaru s různým
+   významem se pletou.
+
+   Padding je nula schválně. Pevná velikost plus vodorovný padding pod
+   `border-box` nechá na obsah pár pixelů a ikona se zmáčkne na proužek;
+   nezmizí, jen se ztenčí, takže si toho nikdo nevšimne. */
+.lz-button--icon {
+  width: var(--lz-space-48);
+  min-width: var(--lz-space-48);
+  height: var(--lz-space-48);
+  min-height: var(--lz-space-48);
+  padding: 0;
+  flex: none;
+}
+
+.lz-button--icon svg {
+  flex: none;
+}
+
+/* Ztišená hláška — nabídka, ne úkol. Plný `lz-notice` je pás; tohle je
+   řádek s tečkou pro sdělení, které nikoho nebrzdí (nová verze je ke
+   stažení). Barvu nese TEČKA, ne plocha: pás přes celou šířku dělá
+   z nabídky poplach. */
+.lz-notice--quiet {
+  display: flex;
+  align-items: center;
+  gap: var(--lz-space-12);
+  max-width: none;
+  padding: var(--lz-space-8) 0;
+  border: 0;
+  border-bottom: 1px solid var(--lz-line-faint);
+  border-radius: 0;
+  background: none;
+  color: var(--lz-ink-muted);
+  font-size: var(--lz-size-meta);
+}
+
+.lz-notice--quiet::before {
+  content: "";
+  flex: none;
+  width: var(--lz-space-8);
+  height: var(--lz-space-8);
+  border-radius: 50%;
+  background: var(--lz-info);
+}
+
+.lz-notice--quiet.lz-notice--warning::before {
+  background: var(--lz-warning);
+}
+
+.lz-notice--quiet.lz-notice--danger::before {
+  background: var(--lz-danger);
+}
+
+.lz-notice--quiet.lz-notice--success::before {
+  background: var(--lz-success);
+}
+
+/* Počítadlo — číslo u ikony, ne stav. Nese kolik, ne jak vážné; závažnost
+   patří tomu, na co ukazuje. Proto akcent a ne sémantická barva. */
+.lz-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--lz-space-24);
+  padding: 0 var(--lz-space-4);
+  border-radius: var(--lz-radius-pill);
+  background: var(--lz-accent);
+  color: var(--lz-on-accent);
+  font-size: var(--lz-size-meta);
+  font-weight: var(--lz-weight-akce);
+  line-height: var(--lz-leading-meta);
+}
+
+/* Hrana stavu — svislý pruh u levé hrany karty v seznamu. Značka „něco se
+   tu má řešit", ne text; bere proto ŽIVÝ stupeň odstínu, ne tmavý textový.
+   Tmavý dá blátivý pruh a patnáct karet vedle sebe je stěna hnědých čar.
+
+   FAKT HRANU NEDOSTANE. Rozdělaná práce v repozitáři je normální stav —
+   když ji nese hrana na šesti kartách z deseti, přestane hrana být signál.
+   Rozhodnutí Principálky 8. 8. 2026; kontext v `prvky.md`. */
+.lz-edge {
+  position: relative;
+  padding-left: var(--lz-space-16);
+}
+
+.lz-edge::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 2px;
+  background: var(--lz-line);
+}
+
+.lz-edge--danger::before {
+  background: var(--lz-red-500);
+}
+
+.lz-edge--warning::before {
+  background: var(--lz-warning);
+}
+
+.lz-edge--success::before {
+  background: var(--lz-green-500);
+}
+
+/* Aplikační shell a scope rail ----------------------------------------- */
+
+/* Shell jedné lišty. Obsahová plocha je BÍLÁ, protože je to dokument; rám
+ * je papírový rail vedle ní, oddělený vlasovou linkou. Druhá vodorovná lišta
+ * nad obsahem se nezavádí; utility patří do hlavičky aktivního prostoru.
+ *
+ * Pořadí ploch schválila Principálka 2026-09-21: bílá plocha, papírový rail.
+ * Obrácené pořadí (papírová plocha, bílé objekty) je v kánonu taky, ale pro
+ * tenhle shell zvolené není. */
+.lz-app-shell {
+	display: flex;
+	min-height: 100vh;
+	background: var(--lz-surface);
+}
+
+.lz-app-shell__main {
+	min-width: 0;
+	flex-grow: 1;
+}
+
+/* Rail je přesně jeden modul mřížky široký, rozbalený čtyři. Rozbalení
+ * obsah odsouvá, nepřekrývá ho — shell nemá plovoucí vrstvy. */
+.lz-rail {
+	display: flex;
+	width: var(--lz-grid-step);
+	box-sizing: border-box;
+	flex-direction: column;
+	flex-shrink: 0;
+	gap: var(--lz-space-4);
+	padding: var(--lz-space-12);
+	border-right: 1px solid var(--lz-line-faint);
+	background: var(--lz-paper);
+}
+
+.lz-rail--expanded {
+	width: calc(var(--lz-grid-step) * 4);
+}
+
+.lz-rail__item {
+	display: flex;
+	min-height: var(--lz-space-48);
+	align-items: center;
+	gap: var(--lz-space-12);
+	color: var(--lz-ink-muted);
+	text-decoration: none;
+}
+
+/* Aktivní prostor nese plochu o stupeň tmavší a inkoustovou hranu. Černá
+ * dlaždice je zrušená (rozhodnutí Principála 4. 8. 2026), takže důraz
+ * v railu používá stejný jazyk jako `.lz-tile.is-selected`. */
+.lz-rail__item.is-active {
+	background: var(--lz-gray-100);
+	box-shadow: inset 2px 0 0 var(--lz-ink);
+	color: var(--lz-ink);
+}
+
+/* Značka prostoru. Sem patří schválený asset Organizace nebo deterministický
+ * monogram — nikdy ručně překreslená značka a nikdy inkoustová výplň. */
+.lz-rail__mark {
+	display: grid;
+	width: var(--lz-space-32);
+	height: var(--lz-space-32);
+	flex-shrink: 0;
+	place-items: center;
+	overflow: hidden;
+	background: var(--lz-gray-100);
+	color: var(--lz-ink-muted);
+	font-size: var(--lz-size-meta);
+	font-weight: var(--lz-weight-akce);
+	line-height: 1;
+}
+
+.lz-rail__mark > img,
+.lz-rail__mark > svg {
+	display: block;
+	width: 100%;
+	height: auto;
+}
+
+.lz-rail__mark--quiet {
+	background: transparent;
+	border: 1px dashed var(--lz-line);
+}
+
+.lz-rail__label {
+	font-size: var(--lz-size-meta);
+	font-weight: var(--lz-weight-akce);
+	letter-spacing: var(--lz-track-body);
+	white-space: nowrap;
+}
+
+.lz-rail__divider {
+	height: 1px;
+	margin-block: var(--lz-space-8);
+	background: var(--lz-line-faint);
+}
+
+.lz-rail__spacer {
+	flex-grow: 1;
+}
+
+/* Tichý stav pro provozní seznamy: bez pilulky, jen tečka a slovo. Slovo je
+ * povinné — invariant „stav nese barva + ikona + slovo" platí i tady, protože
+ * po simulaci deuteranopie neprojde ani jedna dvojice barev přes 3:1.
+ * Výchozí připravený stav se nehlásí vůbec; hlásí se jen výjimka. */
+.lz-status--plain {
+	padding: 0;
+	border-color: transparent;
+	background: transparent;
+}
+
+.lz-status__dot {
+	width: var(--lz-space-8);
+	height: var(--lz-space-8);
+	flex-shrink: 0;
+	border-radius: var(--lz-radius-pill);
+	background: currentColor;
 }
