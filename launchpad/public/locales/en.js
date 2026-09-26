@@ -467,6 +467,7 @@ export const en = Object.freeze({
   "message.close": "Close message",
   "navigation.organizationUnavailable": "Organization {organization} is not available on this machine.",
   "navigation.personalUnavailable": "Personalspace is not available on this machine.",
+  "navigation.personalTeamMachine": "This is a shared Team Machine; Personalspace is only on your own Machine.",
   "navigation.invalidLink": "This Launchpad link is invalid.",
   "profile.settings": "Settings",
   "topbar.settings": "Settings",

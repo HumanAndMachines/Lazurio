@@ -472,6 +472,7 @@ export const cs = Object.freeze({
   "message.close": "Zavřít zprávu",
   "navigation.organizationUnavailable": "Organizace {organization} na této mašině není dostupná.",
   "navigation.personalUnavailable": "Personalspace na této mašině není dostupný.",
+  "navigation.personalTeamMachine": "Tohle je sdílená týmová Mašina; Personalspace je jen na tvé vlastní Mašině.",
   "navigation.invalidLink": "Odkaz na Launchpad není platný.",
   "profile.settings": "Nastavení",
   "topbar.settings": "Nastavení",

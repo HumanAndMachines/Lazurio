@@ -330,3 +330,39 @@ test("hosted personal Machine without its Personalspace shows the localized owne
   expect(en.en["personal.hostedMissing.message"]).not.toMatch(/https?:\/\//);
   expect(cs.cs["personal.hostedMissing.message"]).not.toMatch(/https?:\/\//);
 });
+
+test("shared Team Machine: the refusal code is an answer, so no Personal option, no error, and a localized toast", async () => {
+  const [appJs, server, setupLib, cs, en] = await Promise.all([
+    readFile(join(publicRoot, "app.js"), "utf8"),
+    readFile(join(import.meta.dirname, "server.mjs"), "utf8"),
+    import(join(import.meta.dirname, "setup-github-lib.mjs")),
+    import(join(publicRoot, "locales", "cs.js")),
+    import(join(publicRoot, "locales", "en.js")),
+  ]);
+  // The UI keeps its own copy of the error code; it must stay equal to the server's.
+  expect(appJs).toContain(`const PERSONALSPACE_TEAM_MACHINE_ERROR = "${setupLib.PERSONALSPACE_TEAM_MACHINE_ERROR}";`);
+  const start = appJs.indexOf("async function fetchPersonalspaceSafe");
+  const safe = appJs.slice(start, appJs.indexOf("\n}\n", start));
+  expect(safe).toContain("if (error.code === PERSONALSPACE_TEAM_MACHINE_ERROR) {");
+  expect(safe).toContain('return { ok: true, data: null, error: null, unavailable: "team_machine" };');
+  // null data keeps state.personalspace null, which is the only gate of the Personal option.
+  expect(appJs).toContain("state.personalspaceUnavailable = personalspaceResponse.unavailable ?? null;");
+  expect(appJs).toContain("if (state.personalspace) {\n    options.push(spaceOption({ kind: \"personal\"");
+  // #/personalspace on a Team Machine explains itself instead of the generic message.
+  expect(appJs).toContain('state.personalspaceUnavailable === "team_machine"');
+  expect(appJs).toContain('"navigation.personalTeamMachine"');
+  expect(en.en["navigation.personalTeamMachine"])
+    .toBe("This is a shared Team Machine; Personalspace is only on your own Machine.");
+  expect(cs.cs["navigation.personalTeamMachine"])
+    .toBe("Tohle je sdílená týmová Mašina; Personalspace je jen na tvé vlastní Mašině.");
+
+  // Server: read once at start-up, refused right after the trust check, and no Doctor lane.
+  expect(server).toContain("const personalspaceOffered = machineOffersPersonalspace(readMachineAssignment());");
+  const forbidden = server.indexOf('return jsonResponse({ error: "personalspace_request_forbidden" }, 403);');
+  const refusal = server.indexOf("personalspaceRouteRefusal(url.pathname, { offered: personalspaceOffered })");
+  expect(forbidden).toBeGreaterThan(-1);
+  expect(refusal).toBeGreaterThan(forbidden);
+  expect(refusal).toBeLessThan(server.indexOf("if (isMutatingApiRequest(request, url)) {", forbidden));
+  expect(server).toContain("personalspaceOffered ? buildPersonalspace({ verifyRepositoryPrivacy: true }) : null");
+  expect(server).toContain("personalspaceDoctorCheck({}, { teamMachine: true })");
+});

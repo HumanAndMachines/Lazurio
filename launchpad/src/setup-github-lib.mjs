@@ -213,6 +213,27 @@ export function readMachineAssignment({ path = MACHINE_IDENTITY_FILE, exists = e
   }
 }
 
+// A shared Team Machine (workspace-vm assigned to a Team) has no personal
+// owner, so it has no Personalspace. Every other assignment keeps today's
+// behaviour, including an absent or unreadable identity file.
+export const PERSONALSPACE_TEAM_MACHINE_ERROR = "personalspace_unavailable_on_team_machine";
+
+export function machineOffersPersonalspace(assignment) {
+  return assignment?.kind !== "team";
+}
+
+export function personalspaceRouteRefusal(pathname, { offered }) {
+  if (offered) return null;
+  if (pathname !== "/api/personalspace" && !String(pathname).startsWith("/api/personalspace/")) return null;
+  return {
+    status: 404,
+    body: {
+      error: PERSONALSPACE_TEAM_MACHINE_ERROR,
+      message: "This is a shared Team Machine; it has no Personalspace.",
+    },
+  };
+}
+
 export function normalizeOrganizationLogin(value) {
   if (value === undefined || value === null || value === "") return null;
   const login = String(value).trim();

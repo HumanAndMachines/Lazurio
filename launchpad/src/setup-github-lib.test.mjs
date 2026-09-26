@@ -11,8 +11,12 @@ import {
   hasKeyWriteScope,
   parseDeviceCodeOutput,
   parseGitHubAuthStatus,
+  PERSONALSPACE_TEAM_MACHINE_ERROR,
+  machineOffersPersonalspace,
   parseMachineAssignment,
   parseSshConfig,
+  personalspaceRouteRefusal,
+  readMachineAssignment,
   parseSshKeyList,
   pinGitHubHostKeys,
   sshKeyComment,
@@ -117,6 +121,69 @@ test("machine identity is read exactly as declared and never guessed", () => {
     owner: { kind: "principal", github_login: "example-owner", github_id: 42 },
   }))).toEqual({ kind: "principal", github_login: "example-owner", github_id: 42 });
   expect(parseMachineAssignment("{").kind).toBe("invalid");
+});
+
+test("a shared Team Machine offers no Personalspace; every other assignment keeps it", () => {
+  const identityPath = "/etc/lazurio/lazurio.machine.json";
+  const offered = (contents) => machineOffersPersonalspace(readMachineAssignment({
+    path: identityPath,
+    exists: (path) => path === identityPath && contents !== undefined,
+    read: () => contents,
+  }));
+  const workspaceVm = (assignment) => JSON.stringify({
+    schema_version: "lazurio.machine.v1",
+    machine: { id: "example-team", kind: "workspace-vm", name: "team", vmid: 110 },
+    owner: { kind: "organization", organization: "example", team: "team", ...(assignment ? { assignment } : {}) },
+  });
+  const refusal = (contents, pathname = "/api/personalspace") =>
+    personalspaceRouteRefusal(pathname, { offered: offered(contents) });
+
+  const team = workspaceVm({ kind: "team" });
+  expect(offered(team)).toBe(false);
+  for (const pathname of [
+    "/api/personalspace",
+    "/api/personalspace/apps/personal-notes/start",
+    "/api/personalspace/exampleuser_GEN3/gbrain/tree",
+  ]) {
+    expect(refusal(team, pathname)).toEqual({
+      status: 404,
+      body: {
+        error: PERSONALSPACE_TEAM_MACHINE_ERROR,
+        message: "This is a shared Team Machine; it has no Personalspace.",
+      },
+    });
+  }
+  expect(PERSONALSPACE_TEAM_MACHINE_ERROR).toBe("personalspace_unavailable_on_team_machine");
+
+  // Paths outside /api/personalspace are never refused, not even on a Team Machine.
+  for (const pathname of ["/api/apps", "/api/personalspaces", "/api/personalspace-extra", "/personalspace", "/api/doctor"]) {
+    expect(refusal(team, pathname)).toBeNull();
+  }
+
+  // Operator, principal, unassigned, missing and unreadable identity keep today's behaviour.
+  const allowed = {
+    operator: workspaceVm({ kind: "operator", github_login: "anna-example", github_id: 12345678 }),
+    principal: JSON.stringify({
+      schema_version: "lazurio.machine.v1",
+      machine: { kind: "personal-vm" },
+      owner: { kind: "principal", github_login: "example-owner", github_id: 42 },
+    }),
+    unassigned: workspaceVm(null),
+    none: undefined,
+    invalid: "{",
+  };
+  for (const [kind, contents] of Object.entries(allowed)) {
+    expect(offered(contents)).toBe(true);
+    expect(refusal(contents)).toBeNull();
+    expect(refusal(contents, "/api/personalspace/apps/personal-notes/start")).toBeNull();
+    if (kind !== "invalid") {
+      expect(readMachineAssignment({
+        path: identityPath,
+        exists: () => contents !== undefined,
+        read: () => contents,
+      }).kind).toBe(kind);
+    }
+  }
 });
 
 test("ensureSshKey creates id_ed25519 with private permissions only when both halves are missing", async () => {

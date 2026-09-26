@@ -70,6 +70,9 @@ const state = {
   loadError: null,
   personalspace: null,
   personalspaceError: null,
+  // "team_machine" when the server answered that this shared Team Machine has
+  // no Personalspace. An answer, not a failure: no Personal option, no error.
+  personalspaceUnavailable: null,
   // Hosted personal Machine only: binding state of its one Personalspace.
   hostedPersonalspace: null,
   launchpadRoot: null,
@@ -878,6 +881,7 @@ async function runLoadData({ quiet = false, sync = false, isCurrent = () => true
     if (personalspaceResponse.ok) {
       state.personalspace = replacePersonalspaceResponse(state.personalspace, personalspaceResponse.data);
       state.personalspaceError = personalspaceResponse.error;
+      state.personalspaceUnavailable = personalspaceResponse.unavailable ?? null;
     } else {
       state.personalspaceError = personalspaceResponse.error;
     }
@@ -947,6 +951,9 @@ async function fetchJson(path, { method = "GET", headers = undefined, body = und
   return response.json();
 }
 
+// Must match PERSONALSPACE_TEAM_MACHINE_ERROR in launchpad/src/setup-github-lib.mjs.
+const PERSONALSPACE_TEAM_MACHINE_ERROR = "personalspace_unavailable_on_team_machine";
+
 async function fetchPersonalspaceSafe() {
   try {
     const data = await fetchJson("/api/personalspace");
@@ -959,6 +966,12 @@ async function fetchPersonalspaceSafe() {
       error: detail ? t("personal.partialRefresh", { detail }) : null,
     };
   } catch (error) {
+    // A shared Team Machine has no Personalspace: that is the answer, not a
+    // failed read. state.personalspace stays null, so the space switcher never
+    // offers "Personal" and no error is shown.
+    if (error.code === PERSONALSPACE_TEAM_MACHINE_ERROR) {
+      return { ok: true, data: null, error: null, unavailable: "team_machine" };
+    }
     return { ok: false, data: undefined, error: t("personal.refreshFailed", { error: error.message }) };
   }
 }
@@ -1608,7 +1621,9 @@ function applyLaunchpadHash({ notify = false } = {}) {
       const message = resolution.status === "not_found"
         ? t("navigation.organizationUnavailable", { organization: resolution.route.organization })
         : resolution.status === "unavailable"
-          ? t("navigation.personalUnavailable")
+          ? t(state.personalspaceUnavailable === "team_machine"
+            ? "navigation.personalTeamMachine"
+            : "navigation.personalUnavailable")
           : t("navigation.invalidLink");
       toast(message, "warning");
     }

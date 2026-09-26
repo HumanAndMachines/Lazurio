@@ -359,6 +359,24 @@ test("personalspaceDoctorCheck = not_applicable, když není žádný osobní pr
   expect(check.owner.length).toBeGreaterThan(0);
 });
 
+test("personalspaceDoctorCheck = not_applicable (no_such_mount) na sdílené týmové Mašině", () => {
+  // Týmová Mašina nemá osobního vlastníka: kontrola nečte žádný prostor a
+  // nekazí zelenou, i kdyby odpověď nějaká data nesla.
+  for (const response of [{}, { mountpoint: "personalspace", spaces: [{ config_valid: false }], failures: ["x"] }]) {
+    const check = personalspaceDoctorCheck(response, { teamMachine: true });
+    expect(check.id).toBe("launchpad.personalspace");
+    expect(check.status).toBe("not_applicable");
+    expect(check.not_applicable_reason).toBe("no_such_mount");
+    expect(check.message).toContain("sdílená týmová Mašina");
+    expect(check.message).toContain("osobního vlastníka");
+    expect(check.details).toEqual([]);
+    expect(check.owner.length).toBeGreaterThan(0);
+  }
+  // Bez volby zůstává dosavadní chování.
+  expect(personalspaceDoctorCheck({ spaces: [], failures: [], warnings: [] }).message)
+    .toBe("Na této mašině není namountovaný žádný osobní prostor.");
+});
+
 test("Doctor fail-closed odmítne public gbrain repo i při private deklaraci v manifestu", async () => {
   const { root } = await createFixture();
   const response = await buildPersonalspaceResponse({
