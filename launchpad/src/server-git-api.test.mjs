@@ -1595,11 +1595,22 @@ async function mountPersonalApp(root, login, {
 // Hosted responses reach a remote browser. URL fields may name only the
 // allowlisted public origins; every other string holds no URL or address
 // literal of any kind; messages are one line; diagnostics never appear.
+// Health paths outside the public path character allowlist.
+const hostileHealthPaths = [
+  "/health/redis:6379/",
+  "/x/javascript:alert(1)/",
+  "/x/%252525/",
+  "/a/b:c/",
+  "/a@b/",
+  "/%2e%2e/",
+  "/\u00fcni/",
+];
 const hostedPersonalOrigins = [
   "https://notes.frozen-slug.lazurio.io",
   "https://broken.frozen-slug.lazurio.io",
   "https://diag.frozen-slug.lazurio.io",
   "https://pathy.frozen-slug.lazurio.io",
+  ...hostileHealthPaths.map((_, index) => `https://hostile${index}.frozen-slug.lazurio.io`),
 ];
 const hostedAddressProbes = [
   "https://10.0.0.5:8443/health",
@@ -1607,6 +1618,7 @@ const hostedAddressProbes = [
   "https://app.internal:8080/path",
   "10.0.0.5:8443",
   "[fd00::1]:8080",
+  "redis:6379",
 ];
 
 function expectNoInternalAddress(value, path = "$", key = null) {
@@ -1802,6 +1814,16 @@ test.skipIf(process.platform === "win32")("hosted personal gateway ensure opens 
     healthPath: "/x/http:%2F%2F10.0.0.5/",
     serverSource: answerEverything,
   });
+  for (const [index, healthPath] of hostileHealthPaths.entries()) {
+    await mountPersonalApp(root, "exampleuser", {
+      module: `hostile${index}`,
+      appId: `hostile${index}-v1`,
+      port: await findFreePort(),
+      installed: true,
+      healthPath,
+      serverSource: answerEverything,
+    });
+  }
   try {
     const externalOrigin = "https://launchpad.frozen-slug.lazurio.io";
     const { port } = await startLaunchpadServer(root, { env: {
@@ -1875,12 +1897,16 @@ test.skipIf(process.platform === "win32")("hosted personal gateway ensure opens 
     expect(inventory.spaces[0].apps.map((app) => app.id).sort()).toEqual([
       "personal--exampleuser_GEN3--broken-v1",
       "personal--exampleuser_GEN3--diag-v1",
+      ...hostileHealthPaths.map((_, index) => `personal--exampleuser_GEN3--hostile${index}-v1`),
       appId,
       "personal--exampleuser_GEN3--pathy-v1",
     ]);
     const inventoryApp = (module) => inventory.spaces[0].apps.find((app) => app.module === module);
     expect(inventoryApp("diag").health_url).toBe("https://diag.frozen-slug.lazurio.io/health");
     expect(inventoryApp("pathy").health_url).toBeNull();
+    for (const index of hostileHealthPaths.keys()) {
+      expect({ index, health_url: inventoryApp(`hostile${index}`).health_url }).toEqual({ index, health_url: null });
+    }
     expectNoInternalAddress(inventory);
     // Owner-declared free text keeps its words but loses every address.
     expect(inventory.spaces[0].apps.find((app) => app.module === "broken").title)
@@ -1923,7 +1949,7 @@ test.skipIf(process.platform === "win32")("hosted personal gateway ensure opens 
     const brokenText = await brokenResponse.text();
     expect(brokenResponse.status).toBeGreaterThanOrEqual(400);
     expect(brokenText).not.toContain("crash-marker");
-    expect(brokenText).not.toMatch(/127\.0\.0\.1|localhost|10\.0\.0\.5|192\.168|app\.internal|fd00/);
+    expect(brokenText).not.toMatch(/127\.0\.0\.1|localhost|10\.0\.0\.5|192\.168|app\.internal|fd00|redis:6379/);
     const broken = JSON.parse(brokenText);
     expectNoInternalAddress(broken);
     expect(broken.message).toStartWith(`Broken${" [redacted]".repeat(hostedAddressProbes.length)} boom`);
@@ -1941,7 +1967,7 @@ test.skipIf(process.platform === "win32")("hosted personal gateway ensure opens 
         { method: "POST", headers: mutationHeaders, body: "{}" },
       );
       const text = await response.text();
-      expect(text).not.toMatch(/10\.0\.0\.5|secret|%2F/i);
+      expect(text).not.toMatch(/10\.0\.0\.5|secret|%2F|redis:6379|javascript:|%2525|b:c|a@b|%2e%2e|\u00fcni/i);
       const payload = JSON.parse(text);
       expectNoInternalAddress(payload);
       return { status: response.status, payload };
@@ -1960,8 +1986,14 @@ test.skipIf(process.platform === "win32")("hosted personal gateway ensure opens 
       status: 200,
       payload: { health_url: null },
     });
+    for (const index of hostileHealthPaths.keys()) {
+      const hostile = await hostileLifecycle(`hostile${index}`, "health");
+      expect({ index, status: hostile.status, health_url: hostile.payload.health_url })
+        .toEqual({ index, status: 200, health_url: null });
+    }
 
-    expect((await getJson(port, "/health")).maintenance).toMatchObject({ total: 4 });
+    expect((await getJson(port, "/health")).maintenance)
+      .toMatchObject({ total: 4 + hostileHealthPaths.length });
   } finally {
     gateway.stop(true);
   }

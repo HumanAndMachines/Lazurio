@@ -780,6 +780,9 @@ test("hosted public JSON projection is an allowlist of this Machine's public ori
   expect(redactHostedInternalText("ip 10%2E0%2E0%2E5 here")).toBe("ip [redacted] here");
   expect(redactHostedInternalText("/health?diag=http%253A%252F%252F10.0.0.5%253A8443")).not.toMatch(/10\.0\.0\.5/);
   expect(redactHostedInternalText("plain 50% off")).toBe("plain 50% off");
+  // Single-label host:port is an address; a digit-initial time is not.
+  expect(redactHostedInternalText("cache redis:6379, db:5432. at 12:30"))
+    .toBe("cache [redacted], [redacted]. at 12:30");
 });
 
 test("projected URL fields are exactly an allowlisted origin plus a clean path", () => {
@@ -809,6 +812,10 @@ test("projected URL fields are exactly an allowlisted origin plus a clean path",
   }, personal).health_url;
   expect(project("/health")).toBe(`${origin}/health`);
   expect(project("/api/v1/health-check")).toBe(`${origin}/api/v1/health-check`);
+  expect(project("/v1.2/_x~y-z/")).toBe(`${origin}/v1.2/_x~y-z/`);
+  // Decoded exactly once into unreserved characters.
+  expect(project("/a~b/%7E/%41")).toBe(`${origin}/a~b/~/A`);
+  expect(project(`/${"a".repeat(511)}`)).toBe(`${origin}/${"a".repeat(511)}`);
   // Query and fragment never cross, whatever they contain.
   expect(project("/health?diag=http://10.0.0.5:8443/secret")).toBe(`${origin}/health`);
   expect(project("/health#http://10.0.0.5/")).toBe(`${origin}/health`);
@@ -826,6 +833,18 @@ test("projected URL fields are exactly an allowlisted origin plus a clean path",
     "/x/%ZZ",
     "/x/%25252525",
     "/x/..%5C..%5Csecret",
+    "/health/redis:6379/",
+    "/x/javascript:alert(1)/",
+    "/x/%252525/",
+    "/a/b:c/",
+    "/a@b/",
+    "/%2e%2e/",
+    "/x/./y",
+    "/x/../y",
+    "/\u00fcni/",
+    "/%C3%BCni/",
+    "/a%20b/",
+    `/${"a".repeat(513)}`,
   ]) {
     expect({ path, projected: project(path) }).toEqual({ path, projected: null });
     expect({ path, allowlisted: projectHostedPublicJson({ url: `${origin}${path}` }, personal, allowed).url })
@@ -839,6 +858,14 @@ test("projected URL fields are exactly an allowlisted origin plus a clean path",
     url: `${origin}/`,
     health_url: `${origin}/health`,
     runtime: { url: `${origin}/app` },
+  });
+  // Declared health paths follow the same path allowlist.
+  expect(projectHostedPublicJson({
+    health_path: "/health?diag=http://10.0.0.5:8443/secret",
+    listeners: [{ health: { path: "/x/javascript:alert(1)/" } }, { health: { path: "/ready" } }],
+  }, personal, allowed)).toEqual({
+    health_path: "/health",
+    listeners: [{ health: { path: null } }, { health: { path: "/ready" } }],
   });
   expect(projectHostedRuntimePayload({
     url: "http://127.0.0.1:4310/",

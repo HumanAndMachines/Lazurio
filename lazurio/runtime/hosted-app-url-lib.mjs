@@ -622,7 +622,7 @@ function projectLifecycleUrls(payload, hostedUrl) {
 function projectHostedHealthUrl(healthUrl, hostedUrl) {
   if (!healthUrl || !hostedUrl) return null;
   try {
-    const path = safeHostedPublicPath(new URL(healthUrl).pathname);
+    const path = safeHostedPublicPath(hostedUrlRawPath(healthUrl));
     return path ? `${new URL(hostedUrl).origin}${path}` : null;
   } catch {
     return null;
@@ -654,6 +654,9 @@ const hostedFreeTextPatterns = [
   // Dotted hostname or localhost with a port.
   /(?<![\w.-])(?:(?:[a-z0-9-]+\.)+[a-z0-9-]+|localhost):\d{1,5}(?!\d)/gi,
   /(?<![\w.-])(?:[a-z0-9-]+\.)*localhost(?![\w-])/gi,
+  // Single-label host:port (redis:6379, db:5432). A letter-initial label only,
+  // so digit-initial forms such as the time 12:30 stay.
+  /(?<![\w.-])[a-z][a-z0-9-]*:\d{1,5}(?!\d|\.\d|:)/gi,
 ];
 // Bare IPv6 literal (compressed "::" or full eight groups), optional %zone.
 const hostedBareIpv6Pattern = /(?<![\w:])[0-9a-f]{0,4}(?::[0-9a-f]{0,4}){2,7}(?:%[\w.-]+)?(?![\w:])/gi;
@@ -734,18 +737,22 @@ function boundedHostedMessage(value) {
     : redacted;
 }
 
-function sanitizeHostedValue(value, key, allowedOrigins) {
+function sanitizeHostedValue(value, key, allowedOrigins, parentKey = null) {
   if (key === "host") return null;
   if (typeof value === "string") {
     if (key === "url" || key?.endsWith("_url")) return allowlistedHostedUrl(value, allowedOrigins);
+    // A declared health path is a URL path too: same allowlist, no query.
+    if (key === "health_path" || (key === "path" && parentKey === "health")) {
+      return safeHostedPublicPath(value.split(/[?#]/, 1)[0]);
+    }
     return hostedMessageKeys.has(key) ? boundedHostedMessage(value) : redactHostedInternalText(value);
   }
-  if (Array.isArray(value)) return value.map((item) => sanitizeHostedValue(item, null, allowedOrigins));
+  if (Array.isArray(value)) return value.map((item) => sanitizeHostedValue(item, null, allowedOrigins, key));
   if (value && typeof value === "object") {
     const projected = {};
     for (const [entryKey, entryValue] of Object.entries(value)) {
       if (hostedOmittedKeys.has(entryKey)) continue;
-      projected[entryKey] = sanitizeHostedValue(entryValue, entryKey, allowedOrigins);
+      projected[entryKey] = sanitizeHostedValue(entryValue, entryKey, allowedOrigins, key);
     }
     return projected;
   }
@@ -756,7 +763,7 @@ function allowlistedHostedUrl(value, allowedOrigins) {
   try {
     const url = new URL(value);
     if (url.username || url.password || !allowedOrigins.has(url.origin)) return null;
-    const path = safeHostedPublicPath(url.pathname);
+    const path = safeHostedPublicPath(hostedUrlRawPath(value));
     return path ? `${url.origin}${path}` : null;
   } catch {
     return null;
@@ -777,21 +784,36 @@ function publicHttpsOrigin(candidate) {
   }
 }
 
-// The path of a projected URL, or null when its decoded form carries a URL,
-// scheme, address literal, host:port or control character.
-function safeHostedPublicPath(pathname) {
-  if (typeof pathname !== "string" || !pathname.startsWith("/")) return null;
-  let decoded = pathname;
+// The path of a projected URL: a character allowlist, not a blocklist. The
+// raw path (before any URL normalization) is percent-decoded exactly once and
+// must then consist only of "/"-separated RFC 3986 unreserved characters, with
+// no "." or ".." segment, no IPv4/localhost literal and at most 512
+// characters. No scheme, host:port,
+// userinfo, encoding, whitespace or control character can pass; otherwise
+// the whole URL field is null.
+const hostedPublicPathPattern = /^(?:\/[A-Za-z0-9._~-]*)+$/;
+const hostedPublicPathMaxLength = 512;
+
+function hostedUrlRawPath(value) {
+  const match = /^[a-z][a-z0-9+.-]*:\/\/[^/?#\\]*([^?#]*)/i.exec(String(value ?? ""));
+  if (!match) return null;
+  return match[1] === "" ? "/" : match[1];
+}
+
+function safeHostedPublicPath(rawPath) {
+  if (typeof rawPath !== "string" || rawPath.length > hostedPublicPathMaxLength * 3) return null;
+  let decoded;
   try {
-    for (let round = 0; round < 3; round += 1) {
-      const next = decodeURIComponent(decoded);
-      if (next === decoded) break;
-      decoded = next;
-    }
+    decoded = decodeURIComponent(rawPath);
   } catch {
     return null;
   }
-  if (/[\u0000-\u001f\u007f-\u009f\u2028\u2029\\]|%[0-9a-f]{2}/i.test(decoded)) return null;
-  if (/[a-z][a-z0-9+.-]*:\//i.test(decoded)) return null;
-  return redactHostedInternalText(decoded) === decoded ? pathname : null;
+  if (
+    decoded.length > hostedPublicPathMaxLength
+    || !hostedPublicPathPattern.test(decoded)
+    || decoded.split("/").some((segment) => segment === "." || segment === "..")
+    // Unreserved characters still spell an IPv4 literal or localhost.
+    || redactHostedInternalText(decoded) !== decoded
+  ) return null;
+  return decoded;
 }
