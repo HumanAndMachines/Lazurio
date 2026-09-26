@@ -537,7 +537,10 @@ export function createGitHubLoginController({
     // its .pub, proves nothing, so nothing changes.
     const publicPath = join(home, ".ssh", "id_ed25519.pub");
     const privatePath = join(home, ".ssh", "id_ed25519");
-    const publicKey = existsSync(publicPath) ? normalizePublicKey(await readFile(publicPath, "utf8")) : null;
+    // An unreadable .pub counts as present and disagreeing.
+    const publicKey = existsSync(publicPath)
+      ? await readFile(publicPath, "utf8").then(normalizePublicKey, () => null)
+      : null;
     let machineKey = null;
     if (existsSync(privatePath)) {
       const derived = await tool("ssh-keygen", ["-y", "-P", "", "-f", privatePath]);

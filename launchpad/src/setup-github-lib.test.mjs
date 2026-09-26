@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { existsSync, statSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -441,13 +441,18 @@ test("Sign out probes this Machine's key alone, so another key answering first h
 });
 
 test("Sign out probes the private key even when its .pub is missing or unreadable", async () => {
-  for (const pub of [null, "not a key\n"]) {
+  for (const pub of [null, "not a key\n", "unreadable"]) {
     const machine = fakeMachine({ signedIn: true, login: "someone-else", scopes: "gist, read:org, repo", keysOnGitHub: [`${publicKey} example-vm`] });
     machine.state.defaultSshLogin = "another-account";
     const { controller, home } = await controllerFor(machine);
     await mkdir(join(home, ".ssh"), { recursive: true });
     await writeFile(join(home, ".ssh", "id_ed25519"), "private\n");
-    if (pub !== null) await writeFile(join(home, ".ssh", "id_ed25519.pub"), pub);
+    if (pub !== null) await writeFile(join(home, ".ssh", "id_ed25519.pub"), pub === "unreadable" ? `${publicKey} example-vm\n` : pub);
+    if (pub === "unreadable") {
+      await chmod(join(home, ".ssh", "id_ed25519.pub"), 0o000);
+      // root reads it anyway; the case only exists for other users.
+      if (await readFile(join(home, ".ssh", "id_ed25519.pub")).then(() => true, () => false)) continue;
+    }
     // A readable key pair that disagrees proves nothing; a missing .pub is
     // derived from the private key and probed alone.
     await expect(controller.logout()).rejects.toMatchObject({ code: pub === null ? "ssh_key_still_registered" : "logout_ssh_unproven" });
