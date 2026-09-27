@@ -93,6 +93,39 @@ test("write smoke cleanup zůstává úzce vymezenou součástí schváleného s
   );
 });
 
+test("napojení jen na Environmentu operátora nevyžaduje katalog Organizace ani klíč Composia", async () => {
+  const manual = await readPolicy(manualPath);
+
+  // Decision 0162: o napojení rozhoduje operátor; katalog je doporučení.
+  expect(manual).toMatch(/Není to\s+povolovací brána pro Environment operátora/);
+  expect(manual).toMatch(
+    /Operátor smí svůj Environment\s+napojit i na to, co v katalogu není/,
+  );
+  expect(manual).toMatch(
+    /vlastní napojení\s+operátora na jeho Environmentu tímto procesem neprochází/,
+  );
+  // Nástroj povolený jen operátorem se do katalogu Organizace nezapisuje.
+  expect(manual).toMatch(
+    /operátor povolil jen \*\*na svém Environmentu\*\*, se do katalogu Organizace\s+nezapisuje/,
+  );
+  // Smoke u operátorova napojení schvaluje Principál v threadu, ne katalog.
+  expect(manual).toMatch(
+    /které je jen na Environmentu operátora, se do katalogu Organizace nic\s+nezapisuje/,
+  );
+  expect(manual).toMatch(/jmenovitě určí a schválí Principál v threadu/);
+  expect(manual).toMatch(
+    /jmenovitě schválený\s+Principálem v threadu \(u napojení jen na Environmentu operátora\)/,
+  );
+  // Composio se přihlašuje přes prohlížeč; žádný projekt ani klíč na mašině.
+  expect(manual).toMatch(
+    /žádný\s+projekt ani klíč Composia se na mašinu nezakládá a nekopíruje/,
+  );
+  expect(manual).not.toMatch(/jeden projekt na Environment/);
+  expect(manual).not.toMatch(/klíč projektu jen na té mašině/);
+  // Pořadí při práci: aktivovaná CLI před MCP.
+  expect(manual).toMatch(/Agent nejdřív použije CLI nástroje/);
+});
+
 test("provider runbooky nesmí cleanup vydávat za obecné oprávnění mazat", async () => {
   for (const path of smokeInstructionPaths) {
     const policy = await readPolicy(path);
