@@ -595,7 +595,8 @@ znamenají jinou Mašinu. Operátor volí mezi Composiem (doporučené, opt-in,
 přihlášení přes prohlížeč jako u `gh`, bez kopírování klíčů), dalšími
 podporovanými CLI a MCP serverem, který mu na požádání nastaví Agent; nic se
 centrálně nevynucuje. Do vydání příslušné sekce Nastavení Launchpadu se
-Composio zřizuje jen v pilotu DEV-6626. Výchozí pořadí pro danou aplikaci:
+Composio zřizuje jen v pilotu DEV-6626. Při práci má přednost aktivovaný
+CLI nástroj podle návodů Folderu, potom MCP. Výchozí pořadí nového napojení:
 oficiální MCP → oficiální CLI → Composio → reviewnutý pinned OSS → browser
 fallback; scraping/cookie-session servery nikdy. Napojená aplikace je ve
 výchozím stavu ke čtení, zápisu i mazání, rozsah omezuje operátor; schopnost

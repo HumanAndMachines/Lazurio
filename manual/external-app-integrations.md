@@ -45,8 +45,15 @@ doporučení „účet Environmentu“ ze sekce níže.
 
 ## Žebříček výběru integrace
 
-Při požadavku „napoj aplikaci X" postupuj v tomto pořadí a první funkční
-úroveň vyhrává:
+**Pořadí při práci (decision 0162).** Agent nejdřív použije CLI nástroje,
+které jsou na Environmentu aktivované, tak jak mu říkají generované návody
+Lazurio Folderu. Teprve potom sáhne po MCP serverech: pro ně má jen obecný
+pokyn zjistit, co je v harnessu právě k dispozici, a podrobnosti se dozví
+z MCP serveru samotného.
+
+**Pořadí při novém napojení.** Při požadavku „napoj aplikaci X" postupuj
+v tomto pořadí a první funkční úroveň vyhrává; poslední slovo má operátor
+Environmentu:
 
 1. **Oficiální MCP server poskytovatele** — remote endpoint nebo oficiální
    self-hosted server.
@@ -95,6 +102,9 @@ operátora; agenti v něm jednají tam, kam sahají přihlášení na té mašin
 | CLI-first | Lazurio se stará o Environment, tedy o nástroje v něm, a říká agentům, jak se v něm pohybovat. Codex, Claude Code, `gh`, Composio i další nástroje jsou CLI nainstalovaná a přihlášená na mašině. |
 | Katalog Launchpadu | Jen nástroje s uživatelsky přívětivým přihlášením (prohlížeč, ověřovací kód, párování). Atypický nástroj napojí na zadání operátora agent. |
 | Závazek údržby | Každý nástroj katalogu má popsáno, co má jeho instalace udělat. Když instalátor selže, spustí se agent, který instalaci dotáhne podle tohoto popisu. |
+| Pořadí pro agenty | Nejdřív aktivované CLI nástroje podle návodů Folderu, potom MCP servery podle obecného pokynu. |
+| Přihlášení bez tření | Přihlášení nástroje má operátora stát co nejméně: odkaz, ověřovací kód nebo čitelný QR kód v Launchpadu, nikdy rozsypaný QR kód v terminálu. |
+| Dokumentace pro operátory | Hranice a přijaté kompromisy tohoto modelu se operátorům srozumitelně vysvětlují ve veřejné dokumentaci Lazuria. |
 | Data | Tokeny aplikací a obsah volání drží Composio. Operátor i Organizace to vědí před prvním připojením. |
 
 **Dnes versus cíl.** Sekce Nastavení Launchpadu s povinnými, doporučenými a
@@ -203,8 +213,12 @@ per-machine onboarding a cutover ze sdíleného brokeru.
 
 ### CLI lane
 
-CLI nástroje jsou rovnocenná forma integrace se stejnými pravidly custody
-a stejným katalogem (zapisuj je do `INTEGRATIONS.md`):
+CLI nástroje jsou pro agenty první volba (decision 0162) a platí pro ně
+stejná pravidla custody. Rozlišuj dvě situace: integraci, kterou má **sdílet
+celá Organizace**, zapiš do jejího `INTEGRATIONS.md`; nástroj, který si
+operátor povolil jen **na svém Environmentu**, se do katalogu Organizace
+nezapisuje a jeho aktivace se propisuje do návodů Lazurio Folderu té mašiny.
+Příklady:
 
 - `gh` — GitHub (kanonický vzor),
 - Google Workspace: oficiální [googleworkspace/cli](https://github.com/googleworkspace/cli)
@@ -259,7 +273,9 @@ změna oprávnění) potvrzuje Principál per akci.
 
 Mechanická vrstva se liší podle harnessu a formy integrace. Nepředpokládej
 jednotný „approval mode"; při aktivaci nastav to, co daná cesta skutečně
-nabízí, a zapiš to k integraci do `INTEGRATIONS.md`:
+nabízí. U integrace sdílené Organizací to zapiš k integraci do
+`INTEGRATIONS.md`; u napojení, které je jen na Environmentu operátora, to
+zůstává nastavením té mašiny:
 
 | Cesta | Mechanický gate | Co gate nepokrývá |
 | --- | --- | --- |
