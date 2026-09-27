@@ -397,15 +397,37 @@ export function hostedInstallSlotScope(hostedWorkspace) {
   };
 }
 
-// An invalid hosted configuration never narrows the readiness scope: the gate
-// then covers the whole Organization and the install reports the invalid
-// configuration itself before any repository-db work.
-function installHostedWorkspace(environment) {
+// A hosted Organization Machine installs only its own Organization and a Team
+// that Organization declares, the same binding the scoped update enforces
+// ("Hosted Workspace Team is not declared by its Organization"). It is checked
+// against the verified root manifest before readiness narrows its scope and
+// before any root materialization; an invalid or foreign binding fails closed
+// instead of widening or narrowing the scope.
+function installHostedWorkspace(environment, resource) {
+  let hostedWorkspace;
   try {
-    return hostedWorkspaceConfigurationFromEnvironment(environment);
-  } catch {
-    return createHostedWorkspaceConfiguration();
+    hostedWorkspace = hostedWorkspaceConfigurationFromEnvironment(environment);
+  } catch (error) {
+    return providerFailure("workspace_configuration_invalid", error.message);
   }
+  if (hostedWorkspace.profile !== "hosted" || hostedWorkspace.scope !== "organization") {
+    return { ok: true, hostedWorkspace };
+  }
+  const organizationSlug = resource?.organization?.slug ?? null;
+  if (hostedWorkspace.organization_slug !== organizationSlug) {
+    return providerFailure(
+      "hosted_organization_mismatch",
+      `Hostovaná Mašina patří Organizaci '${hostedWorkspace.organization_slug}', ne instalované '${organizationSlug}'; instalace nic nematerializovala.`,
+    );
+  }
+  const teams = (Array.isArray(resource?.teams) ? resource.teams : []).map((team) => team?.slug);
+  if (!teams.includes(hostedWorkspace.team_id)) {
+    return providerFailure(
+      "hosted_team_not_declared",
+      `Team hostované Mašiny '${hostedWorkspace.team_id}' Organization manifest nedeklaruje; instalace nic nematerializovala.`,
+    );
+  }
+  return { ok: true, hostedWorkspace };
 }
 
 // General `lazurio update` intentionally excludes repository-db checkouts from
@@ -978,6 +1000,8 @@ export function observeOrganizationInstallSource({
   if (!documents.ok) return documents;
   const rootVerification = verifyOrganizationRootDocuments({ documents, organization, repository });
   if (!rootVerification.ok) return rootVerification;
+  const hosted = installHostedWorkspace(environment, rootVerification.resource);
+  if (!hosted.ok) return hosted;
   const access = requestedRole !== null
     ? observeGitHubRoleReadiness({
         provider,
@@ -985,7 +1009,7 @@ export function observeOrganizationInstallSource({
         rootRepository: repository,
         resource: rootVerification.resource,
         role: requestedRole,
-        slotInInstallScope: hostedInstallSlotScope(installHostedWorkspace(environment)),
+        slotInInstallScope: hostedInstallSlotScope(hosted.hostedWorkspace),
       })
     : githubRoleReadinessNotRequested();
   if (access.status === "blocked") {

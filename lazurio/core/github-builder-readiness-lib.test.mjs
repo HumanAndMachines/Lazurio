@@ -33,9 +33,12 @@ test("Builder readiness is GitHub's effective WRITE, not Team membership or Team
   expect(report.blockers).toEqual([]);
   expect(report.account).toEqual({ id: String(account.id), login: account.login });
   expect(report.repositories).toEqual([
-    { full_name: "ExampleOrganization/ExampleOrganization_GEN3", repository_id: rootRepository.id, effective_permission: "write" },
-    { full_name: "ExampleOrganization/knowledgebase", repository_id: "71717171", effective_permission: "write" },
+    { full_name: "ExampleOrganization/ExampleOrganization_GEN3", repository_id: rootRepository.id, effective_permission: "write", team_grants: [] },
+    { full_name: "ExampleOrganization/knowledgebase", repository_id: "71717171", effective_permission: "write", team_grants: [] },
   ]);
+  // Report v0 keeps its shape with truthful values: nothing Team-related is observed.
+  expect(report.organization_membership).toBeNull();
+  expect(report.teams).toEqual([]);
   expect(calls).toEqual([
     "user",
     "repos/ExampleOrganization/ExampleOrganization_GEN3",

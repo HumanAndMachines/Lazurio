@@ -19,6 +19,8 @@ export function githubRoleReadinessNotRequested() {
     role: null,
     status: "not_requested",
     account: null,
+    organization_membership: null,
+    teams: [],
     repositories: [],
     blockers: [],
   });
@@ -31,6 +33,8 @@ export function githubRoleReadinessUnavailable(role, reason, message) {
     role: normalizedRole,
     status: "blocked",
     account: null,
+    organization_membership: null,
+    teams: [],
     repositories: [],
     blockers: [blocker(
       reason ?? "provider_observation_failed",
@@ -77,6 +81,10 @@ export function observeGitHubRoleReadiness({
     role: normalizedRole,
     status: blockers.length === 0 ? "ready" : "blocked",
     account,
+    // Report v0 compatibility: gate Organization ani Team membership
+    // nepozoruje, proto jsou tato pole pravdivě prázdná.
+    organization_membership: null,
+    teams: [],
     repositories,
     blockers,
   });
@@ -88,6 +96,7 @@ export function isValidGitHubRoleReadiness(value) {
     || value.authority !== "github"
     || ![null, ...ORGANIZATION_INSTALL_ROLES].includes(value.role)
     || !["not_requested", "ready", "blocked"].includes(value.status)
+    || !Array.isArray(value.teams)
     || !Array.isArray(value.repositories)
     || !Array.isArray(value.blockers)
   ) return false;
@@ -251,6 +260,7 @@ function observeRepository(provider, organization, repository, blockers) {
     full_name: repository.full_name,
     repository_id: identityMatches ? observedId : null,
     effective_permission: effectivePermission,
+    team_grants: [],
   };
 }
 
@@ -274,7 +284,7 @@ function providerIdentity(value) {
 }
 
 function blocker(reason, message, { repository = null } = {}) {
-  return { reason, repository, message };
+  return { reason, team: null, repository, message };
 }
 
 function validIdentity(value) {

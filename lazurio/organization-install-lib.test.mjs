@@ -87,33 +87,38 @@ test("Builder install readiness on a hosted Team Machine covers only that Team's
     moduleSlot("energo-offers", ["energo"]),
   );
   const writable = new Set([fullName, `${login}/knowledgebase`]);
-  const observe = (environment) => {
-    const calls = [];
+  const environmentFor = (environment) => ({ SystemRoot: "C:\\Windows", USERPROFILE: "C:\\Users\\Example", ...environment });
+  const resolveGitHubCli = () => "C:\\Program Files\\GitHub CLI\\gh.exe";
+  const providerFor = (calls) => {
     const base = providerFixture({ calls: [], documents });
+    return (call) => {
+      calls.push(call.args[1]);
+      const endpoint = call.args[1];
+      if (endpoint === "user") return ok({ id: 51515151, login: "tereza-account" });
+      const repository = /^repos\/([^/]+\/[^/]+)$/u.exec(endpoint ?? "")?.[1];
+      const permissions = { push: writable.has(repository), pull: true };
+      if (repository === fullName) return ok({ ...JSON.parse(base(call).stdout), permissions });
+      if (repository) {
+        return ok({
+          id: 73000000 + repository.length,
+          name: repository.split("/")[1],
+          full_name: repository,
+          owner: { id: Number(ids.organization), login },
+          permissions,
+        });
+      }
+      return base(call);
+    };
+  };
+  const observe = (environment, role = "builder") => {
+    const calls = [];
     const source = observeOrganizationInstallSource({
       githubLogin: login,
-      role: "builder",
+      role,
       platform: "win32",
-      environment: { SystemRoot: "C:\\Windows", USERPROFILE: "C:\\Users\\Example", ...environment },
-      resolveGitHubCli: () => "C:\\Program Files\\GitHub CLI\\gh.exe",
-      runGitHubCli: (call) => {
-        calls.push(call.args[1]);
-        const endpoint = call.args[1];
-        if (endpoint === "user") return ok({ id: 51515151, login: "tereza-account" });
-        const repository = /^repos\/([^/]+\/[^/]+)$/u.exec(endpoint ?? "")?.[1];
-        const permissions = { push: writable.has(repository), pull: true };
-        if (repository === fullName) return ok({ ...JSON.parse(base(call).stdout), permissions });
-        if (repository) {
-          return ok({
-            id: 73000000 + repository.length,
-            name: repository.split("/")[1],
-            full_name: repository,
-            owner: { id: Number(ids.organization), login },
-            permissions,
-          });
-        }
-        return base(call);
-      },
+      environment: environmentFor(environment),
+      resolveGitHubCli,
+      runGitHubCli: providerFor(calls),
     });
     return { source, calls };
   };
@@ -126,15 +131,60 @@ test("Builder install readiness on a hosted Team Machine covers only that Team's
   ]);
   expect(hosted.calls.some((endpoint) => /energo|\/teams\/|memberships/u.test(endpoint ?? ""))).toBe(false);
 
-  // Outside the hosted profile, and with an invalid hosted configuration, the
-  // gate keeps the full Organization scope.
-  for (const environment of [{}, { ...hostedTeamEnvironment("tereza"), LAZURIO_TEAM_ID: "Not A Team" }]) {
-    const local = observe(environment);
-    expect(local.source).toMatchObject({ ok: false, code: "builder_access_not_ready" });
-    expect(local.source.access.blockers).toEqual([expect.objectContaining({
-      reason: "repository_write_missing",
-      repository: `${login}/energo-offers`,
-    })]);
+  // Outside the hosted profile the gate keeps the full Organization scope.
+  const local = observe({});
+  expect(local.source).toMatchObject({ ok: false, code: "builder_access_not_ready" });
+  expect(local.source.access.blockers).toEqual([expect.objectContaining({
+    reason: "repository_write_missing",
+    repository: `${login}/energo-offers`,
+  })]);
+
+  // An invalid, foreign or undeclared hosted binding never narrows the scope:
+  // it fails closed before readiness reads a single repository.
+  for (const [environment, code] of [
+    [{ ...hostedTeamEnvironment("tereza"), LAZURIO_TEAM_ID: "Not A Team" }, "workspace_configuration_invalid"],
+    [{ ...hostedTeamEnvironment("tereza"), LAZURIO_ORGANIZATION_SLUG: "another-organization" }, "hosted_organization_mismatch"],
+    [hostedTeamEnvironment("other-team"), "hosted_team_not_declared"],
+  ]) {
+    for (const role of ["builder", null]) {
+      const rejected = observe(environment, role);
+      expect(rejected.source).toMatchObject({ ok: false, code });
+      expect(rejected.calls.some((endpoint) => endpoint === "user" || /knowledgebase|energo/u.test(endpoint ?? ""))).toBe(false);
+    }
+  }
+});
+
+test("hosted install with an undeclared Team or foreign Organization materializes nothing", async () => {
+  for (const [environment, code] of [
+    [hostedTeamEnvironment("other-team"), "hosted_team_not_declared"],
+    [{ ...hostedTeamEnvironment("workspace"), LAZURIO_ORGANIZATION_SLUG: "another-organization" }, "hosted_organization_mismatch"],
+  ]) {
+    const fixture = await organizationRemoteFixture();
+    const documents = scaffoldDocuments();
+    let materialized = false;
+    const report = await installOrganization({
+      rootPath: fixture.root,
+      githubLogin: login,
+      role: "builder",
+      platform: "win32",
+      environment: { SystemRoot: "C:\\Windows", USERPROFILE: "C:\\Users\\Example", ...environment },
+      deps: {
+        resolveGitHubCli: () => "C:\\Program Files\\GitHub CLI\\gh.exe",
+        runGitHubCli: providerFixture({ calls: [], documents }),
+        runPinnedChild: async () => {
+          materialized = true;
+          throw new Error("must not materialize");
+        },
+      },
+    });
+
+    expect(report).toMatchObject({
+      state: "blocked",
+      target: { reason: code },
+      access: { role: "builder", status: "blocked", blockers: [{ reason: code }] },
+    });
+    expect(materialized).toBe(false);
+    expect(existsSync(join(fixture.root, "organizations", `${login}_GEN3`))).toBe(false);
   }
 });
 
@@ -1282,6 +1332,8 @@ function roleReadiness(role) {
     role,
     status: "ready",
     account: { id: "51515151", login: `${role}-account` },
+    organization_membership: { state: "active", role: "member" },
+    teams: [],
     repositories: [],
     blockers: [],
   };

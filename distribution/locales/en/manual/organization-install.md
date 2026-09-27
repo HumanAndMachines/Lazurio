@@ -253,7 +253,13 @@ On a hosted Organization Machine (`LAZURIO_WORKSPACE_PROFILE=hosted`) the gate
 covers only what the install actually materializes for the Machine's Team
 (`LAZURIO_TEAM_ID`): the root, its root slots, and the Workspace Modules whose
 `teams` include the Machine's Team, including their `workspace/<module>/db`;
-other Teams' Modules and productionspace do not block it.
+other Teams' Modules and productionspace do not block it. A hosted Machine
+installs only its own Organization (`LAZURIO_ORGANIZATION_SLUG` =
+`company.slug`) and a Team the manifest declares; an invalid configuration
+(`workspace_configuration_invalid`), a foreign Organization
+(`hosted_organization_mismatch`), or an undeclared Team
+(`hosted_team_not_declared`) blocks the install before any repository read and
+before the root is materialized, with or without `--role`.
 
 ## Toolchain gate before the Organization scope
 

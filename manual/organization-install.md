@@ -231,7 +231,12 @@ deklarací se záměrně nezařazují a gate nad nimi neprovede žádné provide
 gate pokrývá jen to, co instalace pro Team Mašiny (`LAZURIO_TEAM_ID`)
 skutečně materializuje: root, jeho root sloty a Workspace Moduly, jejichž
 `teams` Team Mašiny obsahují, včetně jejich `workspace/<module>/db`; Moduly
-jiných Teamů ani productionspace ji neblokují.
+jiných Teamů ani productionspace ji neblokují. Hostovaná Mašina instaluje jen
+svou Organizaci (`LAZURIO_ORGANIZATION_SLUG` = `company.slug`) a Team, který
+manifest deklaruje; nevalidní konfigurace (`workspace_configuration_invalid`),
+cizí Organizace (`hosted_organization_mismatch`) nebo nedeklarovaný Team
+(`hosted_team_not_declared`) instalaci zablokují ještě před čtením repozitářů
+a před materializací rootu, s `--role` i bez něj.
 
 ## Toolchain gate před Organization scope
 
