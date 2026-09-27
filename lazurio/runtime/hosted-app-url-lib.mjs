@@ -60,6 +60,16 @@ export function hostedWorkspaceConfigurationFromEnvironment(env = process.env) {
   });
 }
 
+// Hosted Team work selection of one Workspace Module: on a hosted Organization
+// Machine a Module (and every repository mounted under it) is Git work only
+// when its declared Teams include the Machine's Team. Work selection only;
+// GitHub and the broker remain the access authorities. Every other profile
+// keeps its full selection.
+export function hostedTeamSelectsModule(configuration, teams) {
+  if (configuration?.profile !== "hosted") return true;
+  return Array.isArray(teams) && teams.includes(configuration.team_id);
+}
+
 export function createHostedWorkspaceConfiguration({
   profile = "local",
   scope = "organization",
