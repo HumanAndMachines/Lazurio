@@ -142,18 +142,49 @@ test("AGENTS.md drží účet Environmentu a nevrací povinný zápis operátoro
   expect(agents).not.toMatch(/jeden projekt Composia na Environment/);
 });
 
+// Věta, která ukládá zápis do katalogu Organizace: jmenuje INTEGRATIONS.md a
+// obsahuje sloveso zápisu nebo evidence v jakémkoli tvaru.
+const catalogObligation =
+  /(?:zapi[šs]|zapisuj|zapsat|zapsán|zaznamen|eviduj|evidov|uveď|uváděj|doplň|přidej|veď)/i;
+const sharedQualifier = /sdílen|sdílet|sdílí/i;
+
+function sentencesOf(text) {
+  return text
+    .replace(/\s+/g, " ")
+    .split(/(?<=[.;:!?])\s+(?=[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ*`„(])/u)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+}
+
+function unqualifiedCatalogObligations(text) {
+  return sentencesOf(text).filter(
+    (sentence) =>
+      sentence.includes("INTEGRATIONS.md") &&
+      catalogObligation.test(sentence) &&
+      !sharedQualifier.test(sentence),
+  );
+}
+
 test("každý pokyn zapsat do katalogu Organizace v manuálu platí jen pro sdílenou integraci", async () => {
   const manual = await readPolicy(manualPath);
-  // Odstavec, který přikazuje zápis do INTEGRATIONS.md, musí sám říkat, že jde
-  // o integraci sdílenou Organizací; jinak by znovu zavazoval i operátora.
-  const paragraphs = manual.split(/\n\s*\n/);
-  const ordering = paragraphs.filter(
-    (paragraph) =>
-      /zapiš/i.test(paragraph) && paragraph.includes("INTEGRATIONS.md"),
-  );
-  expect(ordering.length).toBeGreaterThan(0);
-  for (const paragraph of ordering)
-    expect(paragraph).toMatch(/sdílen|sdílet/);
+  // Kvalifikace musí být v téže větě jako pokyn, ne jen někde v odstavci.
+  expect(unqualifiedCatalogObligations(manual)).toEqual([]);
+  // Hlídač sám pozná protipříklady: jiné sloveso i kvalifikaci jinde v odstavci.
+  expect(
+    unqualifiedCatalogObligations(
+      "Napojení operátora eviduj v `INTEGRATIONS.md`.",
+    ),
+  ).toHaveLength(1);
+  expect(
+    unqualifiedCatalogObligations(
+      "Katalog je sdílený. Každé napojení uveď v `INTEGRATIONS.md`.",
+    ),
+  ).toHaveLength(1);
+  expect(
+    unqualifiedCatalogObligations(
+      "U integrace sdílené Organizací zapiš cíl do `INTEGRATIONS.md`.",
+    ),
+  ).toEqual([]);
 });
 
 test("provider runbooky nesmí cleanup vydávat za obecné oprávnění mazat", async () => {
