@@ -25,8 +25,9 @@ Při publikačním mandátu pro instalační vady přečti také
    Ownera Mašiny, případnou vyšší device-management hranici, existující Root,
    nástroje a User/Machine `PATH`. Prompt musí zvlášť autorizovat instalace,
    upgrade existujících nástrojů, systémový package manager,
-   Machine/system-wide `PATH`, SSH access změnu a publikaci Issues. Jedna
-   kategorie se neodvozuje z jiné. Krátký prompt pro novou Builder Mašinu
+   Machine/system-wide `PATH` a SSH access změnu. Jedna
+   kategorie se neodvozuje z jiné. Zápis Issues zvláštní souhlas nepotřebuje
+   (decision 0163). Krátký prompt pro novou Builder Mašinu
    v `manual/organization-install.md` tyto instalační a PATH kategorie
    autorizuje přímo; další souhlas k nim znovu nevyžaduj.
 2. **Zachovej jeden Root.** Fresh target je `<home>/Lazurio`. Dnešní podporovaný
@@ -104,9 +105,10 @@ Při publikačním mandátu pro instalační vady přečti také
    `lazurio doctor`. Required `fail`, `blocked` nebo `incomplete` v uděleném
    mandátu oprav a probe zopakuj. Warning dostane explicitní disposition; required
    nález se nevydává za hotovou instalaci.
-10. **Publikuj jen autorizované instalační Issues.** Pokud prompt jmenuje exact
-    repo, u každého obecného reprodukovaného problému prohledej otevřené i
-    zavřené duplicity, sanitizuj username, absolutní cesty, secrets,
+10. **Zapisuj instalační Issues.** Je to trvalý mandát (decision 0163): do
+    exact owning repa, které prompt jmenuje nebo které plyne z
+    `manual/github-issues.md`. U každého obecného reprodukovaného problému
+    prohledej otevřené i zavřené duplicity, sanitizuj username, absolutní cesty, secrets,
     Personalspace a Organization data a issue vytvoř nebo doplň pomocí body
     file. U téhož nálezu se znovu neptej. Transient nebo domněnku nepublikuj;
     issue bez dalšího mandátu nezavírej, nepřiřazuj ani neprioritizuj.

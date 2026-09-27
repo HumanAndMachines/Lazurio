@@ -178,12 +178,12 @@ per-worktree lokální materializátor nevzniká. Paritu dokazuje
 
 Když onboarding odhalí reprodukovatelný problém, nenechá jej Agent jen v
 chatu. Vybere přesný owning repo a postupuje podle
-[`manual/github-issues.md`](github-issues.md). Vytvoření issue nebo komentáře
-je Publikace a vyžaduje explicitní mandát v instalačním promptu; bez něj Agent
-vrátí sanitizovaný draft, cílový repo a důvod, proč jej nezveřejnil. Pokud
-prompt exact repo předem povolil, Agent se u každého stejného nálezu znovu
-neptá: ověří reprodukci, najde duplicity, sanitizuje evidence a issue vytvoří
-nebo doplní. Tento mandát nepovoluje issue zavřít, přiřadit ani prioritizovat.
+[`manual/github-issues.md`](github-issues.md). Zapsat issue je trvalý mandát
+Agenta (decision 0163): ověří reprodukci, najde duplicity, sanitizuje evidence
+a issue vytvoří nebo doplní, aniž se předem ptá, a pokračuje na práci, která
+na něm nestojí. Sanitizovaný draft s cílovým repem a důvodem vrátí jen tehdy,
+když zápis není možný nebo public-safety není jistá. Tento mandát nepovoluje
+issue zavřít, přiřadit ani prioritizovat.
 
 Kompletní rozhodovací postup pro fresh install, repair i opakovaný onboarding
 drží skill

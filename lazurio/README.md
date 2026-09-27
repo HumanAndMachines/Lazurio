@@ -212,8 +212,8 @@ Poškozená konfigurace brokeru je fail-closed `github_broker_invalid`.
 
 Reprodukovatelné instalační problémy patří po kontrole duplicit a sanitizaci
 do GitHub Issues přesného owning repa, nikoli do nového lokálního JSON ledgeru.
-Vytvoření issue nebo komentáře je Publikace; úplný routing, prompt mandát a
-fallback draft drží [GitHub Issues manuál](../manual/github-issues.md).
+Zapsat takové issue je trvalý mandát Agenta (decision 0163); úplný routing,
+sanitizaci a fallback draft drží [GitHub Issues manuál](../manual/github-issues.md).
 
 ## Migrace Organization manifestu
 
