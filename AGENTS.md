@@ -602,11 +602,13 @@ fallback; scraping/cookie-session servery nikdy. Napojená aplikace je ve
 výchozím stavu ke čtení, zápisu i mazání, rozsah omezuje operátor; schopnost
 zápisu není souhlas s Publikací. Agent na Mašině s více Organizacemi volí
 nástroj Organizace, pro kterou pracuje, a data mezi Organizacemi nepřenáší.
-Identita harnessu
-se sdílet smí, přístupy k aplikacím ne — každá mašina má vlastní, samostatně
-revokovatelné přihlášení; schválené integrace drží tracked katalog
-Organizace (jen jména env proměnných, nikdy hodnoty), osobní integrace patří
-do personalspace scope. Postup a standard:
+Přístupy k aplikacím jsou svázané s Environmentem: každé přihlášení na
+Mašině jde samostatně odhlásit. Kde přihlášení patří účtu a ne Mašině
+(Composio), vidí Mašiny se stejným účtem stejná připojení; jiný rozsah
+znamená jiný účet. Integrace sdílené celou Organizací drží její tracked
+katalog (jen jména env proměnných, nikdy hodnoty); nástroj povolený jen
+operátorem na jeho Environmentu se do katalogu nezapisuje; osobní integrace
+patří do personalspace scope. Postup a standard:
 `manual/external-app-integrations.md` + per-provider runbooky. Zaseknutí
 nebo zastaralý postup řeš opravným PR na standard, ne poznámkou v chatu.
 

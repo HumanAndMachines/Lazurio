@@ -197,8 +197,10 @@ Definice z katalogu se na mašině stává funkční až lokální aktivací:
   (projektová `.claude/settings.json` Organizace, nebo user settings pro
   osobní integrace) — kontrakt harnessu ověř v jeho aktuální dokumentaci,
   názvy nástrojů vyčti z `/mcp`.
-- Nastavení zapiš do `INTEGRATIONS.md` k dané integraci, ať je
-  reprodukovatelné a ověřitelné i na další mašině.
+- U integrace sdílené Organizací zapiš nastavení do `INTEGRATIONS.md`
+  k dané integraci, ať je reprodukovatelné a ověřitelné i na další mašině.
+  U napojení, které je jen na Environmentu operátora, zůstává nastavením té
+  mašiny.
 - Osobní integrace přidávej do user scope
   (`claude mcp add --scope user <name> …`), ne do project scope
   Organizace.
@@ -299,9 +301,12 @@ jediná spolehlivá ochrana.
 
 Write smoke nedělej na ostrém obsahu. Použij k tomu určený jednorázový cíl
 — testovací kanál, scratch složku nebo drafts cestu, sandbox projekt/space,
-vlastní draft. Cíl použitý pro smoke zapiš do `INTEGRATIONS.md`, ať ho další
-mašina používá taky a nevzniká nepořádek ani zbytečné notifikace
-v produkčních prostorech Organizace.
+vlastní draft. U integrace sdílené Organizací zapiš cíl použitý pro smoke
+do `INTEGRATIONS.md`, ať ho další mašina používá taky a nevzniká nepořádek
+ani zbytečné notifikace v produkčních prostorech Organizace. U napojení,
+které je jen na Environmentu operátora, se do katalogu Organizace nic
+nezapisuje: smoke cíl jmenovitě určí a schválí Principál v threadu a agent
+ho uvede v evidenci svého úkolu.
 
 **Výjimka pro úklid určeného smoke artefaktu:** když Principál výslovně
 schválil tento jmenovitý smoke cíl, patří do téže schválené operace i úklid
@@ -309,9 +314,16 @@ artefaktu, který agent v tomto konkrétním smoke sám vytvořil (draft, testov
 zpráva nebo testovací záznam). Agent jej smí po ověření odstranit; nejde o
 samostatnou Publikaci ani o obecné oprávnění mazat. Výjimka se nikdy netýká
 existujícího, ostrého nebo cizího obsahu. Není-li cíl jmenovitě určený v
-`INTEGRATIONS.md`, původ artefaktu není prokazatelný nebo úklid zasahuje mimo
-tento smoke, artefakt ponech a vyžádej si samostatný explicitní pokyn
-Principála.
+`INTEGRATIONS.md` (u integrace sdílené Organizací) nebo jmenovitě schválený
+Principálem v threadu (u napojení jen na Environmentu operátora), původ
+artefaktu není prokazatelný nebo úklid zasahuje mimo tento smoke, artefakt
+ponech a vyžádej si samostatný explicitní pokyn Principála.
+
+**Runbooky poskytovatelů** v [integrations/](integrations/) popisují integrace
+sdílené Organizací; kde říkají „zapiš do `INTEGRATIONS.md`“, platí to pro ně.
+Pro napojení jen na Environmentu operátora platí stejný postup s tím
+rozdílem, že místo zápisu do katalogu stačí jmenovité schválení Principála
+v threadu.
 
 ## Org-side admin kroky
 
