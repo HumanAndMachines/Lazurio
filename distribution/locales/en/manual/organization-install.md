@@ -211,9 +211,9 @@ installations endpoint is deliberately unobservable for them, and GitHub may
 return the boundary as HTTP 403 or even a hidden 404. Such a response proves
 neither a missing App nor a broken transport. The Builder materializes the
 already active Organization via
-`lazurio organization install <github-login> --role builder`. Besides read
-access, this proves, before cloning, their own active Organization and Team
-membership and WRITE or higher permission on the Builder repositories.
+`lazurio organization install <github-login> --role builder`. Before cloning,
+this proves that the signed-in account has effective WRITE or higher
+permission on every Builder repository in the install scope.
 
 ## Prerequisites
 
@@ -237,15 +237,23 @@ App grant, Team membership, branch rules, visibility, a port, or a commit. A
 separate explicit activation procedure serves to establish a remote
 Organization.
 
-An internal Team slug is not an authorization identity. For the Builder gate,
-the Organization manifest maps it via `teams[].forge_binding` to
-`lazurio.team-forge-binding.github.v0`, the immutable GitHub Team `id`, and its
-`asserted_slug`. A missing or renamed binding is an owner blocker, not a reason
-to guess the Team by display name. The Organization root and the active slots
-assigned to the given role (`--role builder` or `--role steward`) are checked;
-`planned_slot`, restricted/Admin-only slots, and slots with a malformed access
-declaration are deliberately not included, and the gate performs no provider
-read over them.
+The role gate (`--role builder` and `--role steward`) decides exactly like
+GitHub: the role is ready when the signed-in account has effective WRITE or
+higher on every repository in the install scope (`GET /repos/{owner}/{repo}`
+→ `permissions`). How that access was granted — any Team, a direct
+collaborator, or an Organization role — is not examined; Team membership, Team
+grants, and `teams[].forge_binding` are not conditions. An inactive membership
+or a revoked grant shows up as missing effective WRITE and the gate blocks; it
+also blocks on an unverifiable account, a different root repository identity,
+and every failed provider observation. The scope is the Organization root and
+the active ordinary slots assigned to the given role; `planned_slot`,
+restricted/Admin-only slots, and slots with a malformed access declaration are
+deliberately not included, and the gate performs no provider read over them.
+On a hosted Organization Machine (`LAZURIO_WORKSPACE_PROFILE=hosted`) the gate
+covers only what the install actually materializes for the Machine's Team
+(`LAZURIO_TEAM_ID`): the root, its root slots, and the Workspace Modules whose
+`teams` include the Machine's Team, including their `workspace/<module>/db`;
+other Teams' Modules and productionspace do not block it.
 
 ## Toolchain gate before the Organization scope
 
@@ -631,10 +639,10 @@ lazurio organization install <github-login> --role builder --json
   with reason `excluded_by_role_scope`: no `git clone`, `fetch`, `ls-remote`, or `gh api`
   runs over them. This state is intentional and distinct from a missing grant
   (`materialization_source_unavailable`, `next_action.kind: github_access`).
-  Before cloning, the Steward gate verifies read-only the active Organization
-  membership, Team membership, and WRITE on the Organization root and the
-  ordinary slots whose `required_roles` are empty, `*`, or name `steward`; a
-  blocked gate returns `steward_access_not_ready` and materializes nothing.
+  Before cloning, the Steward gate verifies read-only the signed-in account's
+  effective WRITE on the Organization root and the ordinary slots whose
+  `required_roles` are empty, `*`, or name `steward`; a blocked gate returns
+  `steward_access_not_ready` and materializes nothing.
 - **Generic `lazurio update`** (`restricted_slot_policy: "defer"`) never
   auto-clones an absent restricted slot and returns `current` with reason
   `restricted_not_materialized`. Already mounted restricted checkouts keep

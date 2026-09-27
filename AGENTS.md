@@ -403,9 +403,10 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    handoffu dá explicitní disposition; required nález nevydává za hotovou
    instalaci. Na Builder Mašině používá exact Organization gate
    `lazurio organization install <github-login> --role builder --json`, který
-   read-only ověří čerstvé Organization/Team membership a WRITE capability na
-   aktivních Builder repozitářích; `planned_slot` ani restricted Admin-only
-   repo Buildera neblokuje. Steward Mašina používá `--role steward`: obě role
+   read-only ověří čerstvé efektivní WRITE přihlášeného účtu na aktivních
+   Builder repozitářích bez ohledu na Team, přes který vzniklo (na hostované
+   Mašině jen na těch, které vybírá její Team); `planned_slot` ani restricted
+   Admin-only repo Buildera neblokuje. Steward Mašina používá `--role steward`: obě role
    vyloučí deklarované restricted sloty a jejich descendants bez jediné
    provider operace (`excluded_by_role_scope`); běžný `lazurio update`
    absentní restricted slot nikdy automaticky neklonuje a materializuje jej

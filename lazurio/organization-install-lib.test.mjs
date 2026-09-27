@@ -67,6 +67,77 @@ test("provider resolves a human login to immutable root identity using read-only
   }
 });
 
+test("Builder install readiness on a hosted Team Machine covers only that Team's selection", () => {
+  const documents = scaffoldDocuments();
+  const team = (slug) => ({ slug, display_name: slug });
+  documents.company.teams.push(team("iotor-team"), team("energo"), team("tereza"), team("jakub"));
+  documents.modules.teams.push(team("iotor-team"), team("energo"), team("tereza"), team("jakub"));
+  const moduleSlot = (slug, teams) => ({
+    path: `workspace/${slug}`,
+    slug,
+    teams,
+    source_of_truth: "git-native",
+    status: "active",
+    default_access: "expected",
+    required_roles: ["*"],
+    git: { url: `git@github.com:${login}/${slug}.git`, branch: "main" },
+  });
+  documents.modules.module_slots.push(
+    moduleSlot("knowledgebase", ["iotor-team", "tereza", "jakub"]),
+    moduleSlot("energo-offers", ["energo"]),
+  );
+  const writable = new Set([fullName, `${login}/knowledgebase`]);
+  const observe = (environment) => {
+    const calls = [];
+    const base = providerFixture({ calls: [], documents });
+    const source = observeOrganizationInstallSource({
+      githubLogin: login,
+      role: "builder",
+      platform: "win32",
+      environment: { SystemRoot: "C:\\Windows", USERPROFILE: "C:\\Users\\Example", ...environment },
+      resolveGitHubCli: () => "C:\\Program Files\\GitHub CLI\\gh.exe",
+      runGitHubCli: (call) => {
+        calls.push(call.args[1]);
+        const endpoint = call.args[1];
+        if (endpoint === "user") return ok({ id: 51515151, login: "tereza-account" });
+        const repository = /^repos\/([^/]+\/[^/]+)$/u.exec(endpoint ?? "")?.[1];
+        const permissions = { push: writable.has(repository), pull: true };
+        if (repository === fullName) return ok({ ...JSON.parse(base(call).stdout), permissions });
+        if (repository) {
+          return ok({
+            id: 73000000 + repository.length,
+            name: repository.split("/")[1],
+            full_name: repository,
+            owner: { id: Number(ids.organization), login },
+            permissions,
+          });
+        }
+        return base(call);
+      },
+    });
+    return { source, calls };
+  };
+
+  const hosted = observe(hostedTeamEnvironment("tereza"));
+  expect(hosted.source, JSON.stringify(hosted.source.access)).toMatchObject({ ok: true, access: { status: "ready" } });
+  expect(hosted.source.access.repositories.map((repository) => repository.full_name)).toEqual([
+    fullName,
+    `${login}/knowledgebase`,
+  ]);
+  expect(hosted.calls.some((endpoint) => /energo|\/teams\/|memberships/u.test(endpoint ?? ""))).toBe(false);
+
+  // Outside the hosted profile, and with an invalid hosted configuration, the
+  // gate keeps the full Organization scope.
+  for (const environment of [{}, { ...hostedTeamEnvironment("tereza"), LAZURIO_TEAM_ID: "Not A Team" }]) {
+    const local = observe(environment);
+    expect(local.source).toMatchObject({ ok: false, code: "builder_access_not_ready" });
+    expect(local.source.access.blockers).toEqual([expect.objectContaining({
+      reason: "repository_write_missing",
+      repository: `${login}/energo-offers`,
+    })]);
+  }
+});
+
 function brokeredIdentityFixture(repositories = [fullName, `${login}/mission-control-data`]) {
   const policy = Object.fromEntries(repositories.map((name, index) => [name, index + 1]));
   return parseBrokeredGitHubEnvironment([
@@ -1211,8 +1282,6 @@ function roleReadiness(role) {
     role,
     status: "ready",
     account: { id: "51515151", login: `${role}-account` },
-    organization_membership: { state: "active", role: "member" },
-    teams: [],
     repositories: [],
     blockers: [],
   };

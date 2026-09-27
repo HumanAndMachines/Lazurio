@@ -368,6 +368,46 @@ async function recoverOrganizationRepositoryDbParent({ rootPath, organizationPat
   return { ...identity, state: "updated", reason: "repository_parent_recovered", message: "App-code byl doplněn nad existujícím db; canonical cesta, inode i HEAD dat zůstaly zachované.", head: result.head, actions: ["materialize"] };
 }
 
+// Role readiness covers what this install materializes. On a hosted
+// Organization Machine that is the root, its root slots and the Workspace
+// Modules its Team selects through the same `hostedTeamSelectsModule`
+// predicate as the scoped `lazurio update`; a nested Workspace slot (such as
+// `workspace/<module>/db`) follows its declared parent Module exactly like the
+// repository-db step below. Productionspace is never materialized by install.
+// Every other profile keeps the full Organization scope.
+export function hostedInstallSlotScope(hostedWorkspace) {
+  if (hostedWorkspace?.profile !== "hosted" || hostedWorkspace.scope !== "organization") {
+    return () => true;
+  }
+  return (slot, inventory = []) => {
+    const path = normalizeOrganizationSlotPath(slot?.path);
+    if (!path) return true;
+    const space = organizationSlotScope(slot, path);
+    if (space === "root") return true;
+    if (space !== "workspace") return false;
+    const parentPath = posix.dirname(path);
+    const parents = inventory.filter((candidate) => normalizeOrganizationSlotPath(candidate?.path) === parentPath);
+    const parent = parents.length === 1 && organizationSlotScope(parents[0], parentPath) === "workspace"
+      ? parents[0]
+      : null;
+    return hostedTeamSelectsModule(
+      hostedWorkspace,
+      parent ? organizationSlotTeams(parent, parentPath) : organizationSlotTeams(slot, path),
+    );
+  };
+}
+
+// An invalid hosted configuration never narrows the readiness scope: the gate
+// then covers the whole Organization and the install reports the invalid
+// configuration itself before any repository-db work.
+function installHostedWorkspace(environment) {
+  try {
+    return hostedWorkspaceConfigurationFromEnvironment(environment);
+  } catch {
+    return createHostedWorkspaceConfiguration();
+  }
+}
+
 // General `lazurio update` intentionally excludes repository-db checkouts from
 // its Git action inventory. The explicit Organization install command is the
 // bounded bootstrap authority: it may materialize active declared mounts only
@@ -945,6 +985,7 @@ export function observeOrganizationInstallSource({
         rootRepository: repository,
         resource: rootVerification.resource,
         role: requestedRole,
+        slotInInstallScope: hostedInstallSlotScope(installHostedWorkspace(environment)),
       })
     : githubRoleReadinessNotRequested();
   if (access.status === "blocked") {
@@ -1083,8 +1124,8 @@ export function renderHumanOrganizationInstall(report) {
     `Root: ${report.target.state} — ${report.target.reason} (${report.target.path})`,
   ];
   if (report.access.account) lines.push(`  GitHub account: ${report.access.account.login} · ID ${report.access.account.id}`);
-  for (const team of report.access.teams) {
-    lines.push(`  Team ${team.internal_slug}: ${team.github_team_slug ?? "unbound"} · membership ${team.membership}`);
+  for (const repository of report.access.repositories) {
+    lines.push(`  Repo ${repository.full_name}: ${repository.effective_permission}`);
   }
   for (const blocker of report.access.blockers) {
     lines.push(`! ${blocker.message}`);
