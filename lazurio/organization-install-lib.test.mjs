@@ -510,6 +510,92 @@ test("role-scoped install inherits a restricted Workspace parent without touchin
   expect(existsSync(join(fixture.organizationRoot, "workspace", "content-lazurio", "db"))).toBe(false);
 });
 
+test("hosted Team install leaves another Team's Workspace repository-db unselected with its parent", async () => {
+  // Iotor-like Machine: the person's work Team owns no Workspace Module, so
+  // the scoped update never materializes the parent and install must neither
+  // select its data mount nor block on the absent parent.
+  const fixture = await organizationWorkspaceRepositoryDbFixture({ teams: ["iotor-team"] });
+  const report = await installOrganization({
+    rootPath: fixture.root,
+    githubLogin: login,
+    role: "builder",
+    environment: hostedTeamEnvironment("tereza"),
+    deps: {
+      observe: async () => ({ ...sourceObservation({ documents: fixture.documents }), access: roleReadiness("builder") }),
+      reobserve: async () => ({ ok: true }),
+      runGit: translatedGitRunner(fixture.remote),
+      runPinnedChild: translatedPinnedGitRunner(fixture.remote),
+      runUpdate: async () => updateReport("current"),
+    },
+  });
+
+  expect(report).toMatchObject({ state: "updated", ok: true });
+  expect(report.convergence.state).toBe("current");
+  expect(report.convergence.results.some((result) => result.module === "content-lazurio-data")).toBe(false);
+  expect(existsSync(join(fixture.organizationRoot, "workspace", "content-lazurio"))).toBe(false);
+});
+
+test("hosted Team install still materializes the Workspace repository-db of its own Module", async () => {
+  const fixture = await organizationWorkspaceRepositoryDbFixture({ teams: ["iotor-team"] });
+  const remoteMap = new Map([
+    [fakeHttpsRemote, fixture.remote],
+    [fakeWorkspaceDataRemote, fixture.dataRemote],
+  ]);
+  const report = await installOrganization({
+    rootPath: fixture.root,
+    githubLogin: login,
+    environment: hostedTeamEnvironment("iotor-team"),
+    deps: {
+      observe: async () => sourceObservation({ documents: fixture.documents }),
+      reobserve: async () => ({ ok: true }),
+      runGit: translatedGitRunner(fixture.remote, remoteMap),
+      runPinnedChild: translatedPinnedGitRunner(fixture.remote, remoteMap),
+      runUpdate: async () => {
+        await ensureWorkspaceRepositoryDbParentCheckout(fixture);
+        return updateReport("current");
+      },
+    },
+  });
+
+  expect(report).toMatchObject({ state: "updated", ok: true });
+  expect(report.convergence.results).toContainEqual(expect.objectContaining({
+    module: "content-lazurio-data",
+    state: "updated",
+    reason: "repository_db_materialized",
+  }));
+  expect(existsSync(join(fixture.organizationRoot, "workspace", "content-lazurio", "db", "repository-db.yaml"))).toBe(true);
+});
+
+test("hosted Team install keeps the Mission Control repository-db in scope", async () => {
+  const fixture = await organizationRepositoryDbFixture();
+  const remoteMap = new Map([
+    [fakeHttpsRemote, fixture.remote],
+    [fakeDataRemote, fixture.dataRemote],
+  ]);
+  const report = await installOrganization({
+    rootPath: fixture.root,
+    githubLogin: login,
+    environment: hostedTeamEnvironment("tereza"),
+    deps: {
+      observe: async () => sourceObservation({ documents: fixture.documents }),
+      reobserve: async () => ({ ok: true }),
+      runGit: translatedGitRunner(fixture.remote, remoteMap),
+      runPinnedChild: translatedPinnedGitRunner(fixture.remote, remoteMap),
+      runUpdate: async () => {
+        await ensureRepositoryDbParentCheckout(fixture);
+        return updateReport("current");
+      },
+    },
+  });
+
+  expect(report).toMatchObject({ state: "updated", ok: true });
+  expect(report.convergence.results).toContainEqual(expect.objectContaining({
+    state: "updated",
+    reason: "repository_db_materialized",
+    path: `organizations/${login}_GEN3/mission-control/db`,
+  }));
+});
+
 test("malformed active Workspace repository-db fails closed", async () => {
   const fixture = await organizationWorkspaceRepositoryDbFixture({
     repositoryDbMaterialization: "doctor_managed_nested_repo",
@@ -1365,6 +1451,7 @@ async function organizationWorkspaceRepositoryDbFixture({
   repositoryDbStatus = "active",
   repositoryDbMaterialization = "repository_db_mount",
   parentAccess = "role_based",
+  teams = ["lazurio"],
 } = {}) {
   const fixture = await organizationRemoteFixture();
   const organizationRoot = join(fixture.root, "organizations", `${login}_GEN3`);
@@ -1373,7 +1460,7 @@ async function organizationWorkspaceRepositoryDbFixture({
     {
       path: "workspace/content-lazurio",
       slug: "content-lazurio",
-      teams: ["lazurio"],
+      teams,
       source_of_truth: "git-native",
       status: "active",
       default_access: parentAccess,
@@ -1383,7 +1470,7 @@ async function organizationWorkspaceRepositoryDbFixture({
     {
       path: "workspace/content-lazurio/db",
       slug: "content-lazurio-data",
-      teams: ["lazurio"],
+      teams,
       source_of_truth: "repository-db:v3",
       status: repositoryDbStatus,
       default_access: "role_based",
@@ -1459,6 +1546,16 @@ function translatedPinnedGitRunner(localRemote, remoteMap = new Map([[fakeHttpsR
       if (!setRemote.ok) return setRemote;
     }
     return result;
+  };
+}
+
+function hostedTeamEnvironment(teamId) {
+  return {
+    LAZURIO_WORKSPACE_PROFILE: "hosted",
+    LAZURIO_ORGANIZATION_SLUG: "lazurio-example-organization",
+    LAZURIO_TEAM_ID: teamId,
+    LAZURIO_HOSTED_DOMAIN: "example.lazurio.io",
+    LAZURIO_HOSTED_MACHINE: "vm-01",
   };
 }
 

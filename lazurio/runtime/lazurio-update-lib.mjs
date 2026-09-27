@@ -10,7 +10,7 @@ import {
 } from "./discovery-lib.mjs";
 import { inspectRequiredDependencies, refreshFrozenBunDependencies } from "./dependency-install-lib.mjs";
 import { buildGitInventory } from "./git-inventory-lib.mjs";
-import { createHostedWorkspaceConfiguration } from "./hosted-app-url-lib.mjs";
+import { createHostedWorkspaceConfiguration, hostedTeamSelectsModule } from "./hosted-app-url-lib.mjs";
 import { materializeRepoCheckout } from "./git-materialization-lib.mjs";
 import { buildModuleLocationRepairAction } from "../core/module-location-repair-contract-lib.mjs";
 import { brokeredGitHubIdentity, brokeredRepositoryAllowed } from "../core/brokered-github-lib.mjs";
@@ -2000,7 +2000,7 @@ function scopeHostedUpdateInventory(inventory, workspace) {
     warnings: (inventory.warnings ?? []).filter((warning) => !excludedMessages.has(warning)),
     repos: (inventory.repos ?? []).filter((repo) =>
       repo.organization === configuration.organization_slug
-      && (repo.repo_kind !== "module" || (repo.teams ?? []).includes(configuration.team_id))),
+      && (repo.repo_kind !== "module" || hostedTeamSelectsModule(configuration, repo.teams))),
   };
 }
 

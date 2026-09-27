@@ -38,8 +38,14 @@ import {
   organizationSlotRepositoryBranch,
   organizationSlotRepositoryRemote,
   organizationSlotScope,
+  organizationSlotTeams,
 } from "./core/organization-slot-scope-lib.mjs";
 import { isSamePath } from "./core/path-boundary-lib.mjs";
+import {
+  createHostedWorkspaceConfiguration,
+  hostedTeamSelectsModule,
+  hostedWorkspaceConfigurationFromEnvironment,
+} from "./runtime/hosted-app-url-lib.mjs";
 import { runIsolatedLazurioUpdate } from "./runtime/lazurio-update-runner-lib.mjs";
 import {
   runGit,
@@ -254,7 +260,19 @@ export async function installOrganization({
   }
 
   if (convergence.state !== "blocked") {
-    const repositoryDbResults = await installRepositoryDb({
+    let hostedWorkspace;
+    try {
+      hostedWorkspace = hostedWorkspaceConfigurationFromEnvironment(environment);
+    } catch (error) {
+      hostedWorkspace = null;
+      convergence = appendConvergenceResults(convergence, [repositoryDbBlockedResult({
+        source,
+        organizationPath,
+        reason: "workspace_configuration_invalid",
+        message: error.message,
+      })]);
+    }
+    if (hostedWorkspace) convergence = appendConvergenceResults(convergence, await installRepositoryDb({
       rootPath: absoluteRoot,
       organizationPath,
       organizationRoot: targetPath,
@@ -264,8 +282,8 @@ export async function installOrganization({
       runPinnedChild,
       materializationDeps: deps.materialization,
       restrictedSlotPolicy,
-    });
-    convergence = appendConvergenceResults(convergence, repositoryDbResults);
+      hostedWorkspace,
+    }));
   }
   const state = convergence.state === "blocked"
     ? "blocked"
@@ -367,6 +385,7 @@ export async function installOrganizationRepositoryDbMounts({
   runPinnedChild = runGitInPinnedTemporaryChild,
   materializationDeps = {},
   restrictedSlotPolicy = "include",
+  hostedWorkspace = createHostedWorkspaceConfiguration(),
 } = {}) {
   if (!ORGANIZATION_INSTALL_RESTRICTED_SLOT_SCOPES.includes(restrictedSlotPolicy)) {
     throw new TypeError("Repository-db install restrictedSlotPolicy must be include or exclude.");
@@ -459,6 +478,14 @@ export async function installOrganizationRepositoryDbMounts({
     const parentSlots = repositoryInventory
       .filter((candidate) => normalizeOrganizationSlotPath(candidate?.path) === parentPath);
     const parentSlot = parentSlots.length === 1 ? parentSlots[0] : null;
+    // A Workspace data mount follows its parent Module's hosted Team work
+    // selection, exactly as `lazurio update` leaves that parent unselected.
+    // Mission Control's root data mount has no Team and stays in scope.
+    if (
+      parentSlot
+      && organizationSlotScope(parentSlot, parentPath) === "workspace"
+      && !hostedTeamSelectsModule(hostedWorkspace, organizationSlotTeams(parentSlot, parentPath))
+    ) continue;
     const scoped = repositoryDbScopeResult({
       source,
       organizationPath,
