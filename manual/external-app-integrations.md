@@ -25,19 +25,23 @@ definovaným MCP serverem nebo CLI nástrojem na konkrétní mašině**.
   nebo hostovaný agregátorový MCP, kde OAuth granty a tokeny drží třetí
   strana místo dané mašiny. **Jedinou výjimkou je Composio** za podmínek
   decision 0162 a sekce [Composio jako schválený broker](#composio-jako-schválený-broker):
-  jeden projekt na Environment, klíč projektu jen na té mašině.
+  operátor ho na mašině povolí a přihlásí svůj účet přes prohlížeč; žádný
+  projekt ani klíč Composia se na mašinu nezakládá a nekopíruje.
 - Vzdálený MCP endpoint provozovaný **přímo poskytovatelem služby**
   (například Slack, Atlassian, Canva, Google) je v pořádku — pokud je
   definovaný v lokálním configu harnessu na dané mašině a OAuth grant vzniká
   a je revokovatelný per mašina. Rozhoduje místo konfigurace a custody
   tokenu, ne to, kde běží proces serveru.
 
-Motivace: jeden Principál smí sdílet svůj ChatGPT/Claude účet a subscription
-napříč svými mašinami, ale **přístupy k externím aplikacím zůstávají per
-mašina**. Default deployment je „jedna mašina = jedna Organizace"; každá
-mašina je samostatný, jednotlivě revokovatelný přístup. Multi-org mašina
-(typicky root Principála) je povolená — separaci tam drží pojmenování
-`<org_slug>_<provider>` a oddělené OAuth sessions.
+Motivace: přístupy a schopnosti jsou svázané s Environmentem, tedy
+s mašinou a tím, co je na ní nainstalované a přihlášené. Environment zrcadlí
+svého operátora (decision 0162): agenti jednají tam, kam sahají přihlášení na
+té mašině. Každé přihlášení na mašině jde odhlásit samostatně. Kdo potřebuje
+oddělit kontexty nebo přístupy, zakládá další Environment. Multi-org mašina
+je jeden Environment; pojmenování `<org_slug>_<provider>` tam pomáhá agentovi
+zvolit nástroj správné Organizace, technickou hranici mezi Organizacemi ale
+netvoří. U cest, kde přihlášení patří účtu a ne mašině (Composio), platí
+doporučení „účet Environmentu“ ze sekce níže.
 
 ## Žebříček výběru integrace
 
@@ -87,7 +91,10 @@ operátora; agenti v něm jednají tam, kam sahají přihlášení na té mašin
 | Organizace | Kdo chce přehled, založí vlastní Composio organizaci a žádá operátory, aby se přihlašovali do ní. Lazurio to nevynucuje a centrální přehled není cílem. |
 | Výchozí rozsah | Vše, co aplikace nabízí: čtení, zápis i mazání. Rozsah omezí operátor. |
 | Zápisy | Schopnost zápisu není souhlas s Publikací; platí sekce o write operacích níže. |
-| Návody pro agenty | Aktivovaný CLI nástroj se propíše do instrukcí Lazurio Folderu té mašiny. MCP servery se do Folderu nezapisují. |
+| Návody pro agenty | Aktivovaný CLI nástroj se propíše do instrukcí a manuálů Lazurio Folderu té mašiny. Návody říkají, co je v Environmentu povoleno, ať to operátor povolil v Launchpadu nebo příkazem `lazurio`; je to jedna věc. MCP servery se do Folderu nezapisují. |
+| CLI-first | Lazurio se stará o Environment, tedy o nástroje v něm, a říká agentům, jak se v něm pohybovat. Codex, Claude Code, `gh`, Composio i další nástroje jsou CLI nainstalovaná a přihlášená na mašině. |
+| Katalog Launchpadu | Jen nástroje s uživatelsky přívětivým přihlášením (prohlížeč, ověřovací kód, párování). Atypický nástroj napojí na zadání operátora agent. |
+| Závazek údržby | Každý nástroj katalogu má popsáno, co má jeho instalace udělat. Když instalátor selže, spustí se agent, který instalaci dotáhne podle tohoto popisu. |
 | Data | Tokeny aplikací a obsah volání drží Composio. Operátor i Organizace to vědí před prvním připojením. |
 
 **Dnes versus cíl.** Sekce Nastavení Launchpadu s povinnými, doporučenými a
@@ -109,8 +116,12 @@ cesty žebříčku. Model a otevřené otázky drží
 
 ### Kurátorovaný katalog Organizace
 
-Katalog je trackovaný v repu Organizace a je to jediné místo, kde se
-schvaluje, **co** se smí připojovat:
+Katalog je trackovaný v repu Organizace a říká, **co Organizace doporučuje
+a sdílí**: které integrace používá, jakou cestou a s jakou definicí. Není to
+povolovací brána pro Environment operátora. Operátor smí svůj Environment
+napojit i na to, co v katalogu není (decision 0162); takové napojení zůstává
+jeho a do katalogu se dostane jen běžným PR, když ho má sdílet celá
+Organizace. Katalog obsahuje:
 
 - `INTEGRATIONS.md` — lidský katalog: schválené integrace, owner, scope,
   jména env proměnných, org-side admin kroky, datum schválení.
@@ -121,7 +132,8 @@ schvaluje, **co** se smí připojovat:
   `env_vars` nese jen jména proměnných.
 
 Přidání nebo změna integrace v katalogu = PR ze worktree ke Stewardovi.
-Tím je „manuálně kurátorované" vynucené procesně, ne jen konvencí.
+Tím je kurátorovaný obsah katalogu vynucený procesně; vlastní napojení
+operátora na jeho Environmentu tímto procesem neprochází.
 
 Pojmenování: server `<org_slug>_<provider>` (např. `example_organization_slack`),
 env proměnné `<ORG_SLUG>_<PROVIDER>_<PURPOSE>` (např.
