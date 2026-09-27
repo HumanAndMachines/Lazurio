@@ -45,6 +45,7 @@
           ]
         },
         "organization_membership": {
+          "description": "Zachováno kvůli kompatibilitě v0. Readiness rozhoduje efektivním oprávněním přihlášeného účtu na repozitářích; Organization membership nepozoruje a hodnota je vždy null.",
           "oneOf": [
             { "type": "null" },
             {
@@ -59,6 +60,7 @@
           ]
         },
         "teams": {
+          "description": "Zachováno kvůli kompatibilitě v0. Team membership není podmínkou readiness; pole je vždy prázdné.",
           "type": "array",
           "items": {
             "type": "object",
@@ -84,6 +86,7 @@
               "repository_id": { "type": ["string", "null"] },
               "effective_permission": { "enum": ["none", "read", "triage", "write", "maintain", "admin", "unknown", "unavailable"] },
               "team_grants": {
+                "description": "Zachováno kvůli kompatibilitě v0. Team granty readiness nevyhodnocuje; pole je vždy prázdné.",
                 "type": "array",
                 "items": {
                   "type": "object",

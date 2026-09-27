@@ -1,12 +1,13 @@
 import { expect, test } from "bun:test";
 
 import {
-  GITHUB_TEAM_FORGE_BINDING_SCHEMA,
   ORGANIZATION_INSTALL_ROLES,
   githubRoleReadinessUnavailable,
   isValidGitHubRoleReadiness,
   observeGitHubRoleReadiness,
 } from "./github-builder-readiness-lib.mjs";
+import { hostedInstallSlotScope } from "../organization-install-lib.mjs";
+import { createHostedWorkspaceConfiguration } from "../runtime/hosted-app-url-lib.mjs";
 
 const organization = Object.freeze({ id: "314957563", login: "ExampleOrganization" });
 const rootRepository = Object.freeze({
@@ -15,34 +16,41 @@ const rootRepository = Object.freeze({
 });
 const account = Object.freeze({ id: 51515151, login: "builder-account" });
 
-test("Builder readiness distinguishes active Organization membership from missing Team membership", () => {
-  const provider = providerFixture({ teamMembership: "missing", permission: "write" });
+test("Builder readiness is GitHub's effective WRITE, not Team membership or Team grants", () => {
+  const calls = [];
+  const resource = resourceFixture();
+  // Team declarations and bindings are manifest metadata, never a gate input.
+  delete resource.teams[0].forge_binding;
   const report = observeGitHubRoleReadiness({
     role: "builder",
-    provider,
+    provider: providerFixture({ permission: "write", calls }),
     organization,
     rootRepository,
-    resource: resourceFixture(),
+    resource,
   });
 
-  expect(report.status).toBe("blocked");
-  expect(report.organization_membership).toEqual({ state: "active", role: "member" });
-  expect(report.teams).toContainEqual(expect.objectContaining({
-    internal_slug: "workspace",
-    github_team_slug: "builders",
-    identity: "verified",
-    membership: "missing",
-  }));
-  expect(report.blockers).toContainEqual(expect.objectContaining({
-    reason: "team_membership_missing",
-    team: "workspace",
-  }));
+  expect(report.status).toBe("ready");
+  expect(report.blockers).toEqual([]);
+  expect(report.account).toEqual({ id: String(account.id), login: account.login });
+  expect(report.repositories).toEqual([
+    { full_name: "ExampleOrganization/ExampleOrganization_GEN3", repository_id: rootRepository.id, effective_permission: "write", team_grants: [] },
+    { full_name: "ExampleOrganization/knowledgebase", repository_id: "71717171", effective_permission: "write", team_grants: [] },
+  ]);
+  // Report v0 keeps its shape with truthful values: nothing Team-related is observed.
+  expect(report.organization_membership).toBeNull();
+  expect(report.teams).toEqual([]);
+  expect(calls).toEqual([
+    "user",
+    "repos/ExampleOrganization/ExampleOrganization_GEN3",
+    "repos/ExampleOrganization/knowledgebase",
+  ]);
+  expect(isValidGitHubRoleReadiness(report)).toBe(true);
 });
 
-test("Builder readiness rejects READ even when Team membership is active", () => {
+test("Builder readiness rejects effective READ on any covered repository", () => {
   const report = observeGitHubRoleReadiness({
     role: "builder",
-    provider: providerFixture({ teamMembership: "active", permission: "read" }),
+    provider: providerFixture({ permission: "read" }),
     organization,
     rootRepository,
     resource: resourceFixture(),
@@ -50,200 +58,65 @@ test("Builder readiness rejects READ even when Team membership is active", () =>
 
   expect(report.status).toBe("blocked");
   expect(report.blockers.filter((item) => item.reason === "repository_write_missing")).toHaveLength(2);
-  expect(report.blockers.filter((item) => item.reason === "team_repository_write_missing")).toHaveLength(2);
   expect(report.repositories.every((repository) => repository.effective_permission === "read")).toBe(true);
 });
 
-test("Builder readiness accepts Team and effective WRITE on active Builder repositories only", () => {
-  const calls = [];
-  const report = observeGitHubRoleReadiness({
-    role: "builder",
-    provider: providerFixture({ teamMembership: "active", permission: "write", calls }),
-    organization,
-    rootRepository,
-    resource: resourceFixture(),
-  });
-
-  expect(report.status).toBe("ready");
-  expect(report.blockers).toEqual([]);
-  expect(report.repositories.map((repository) => repository.full_name)).toEqual([
-    "ExampleOrganization/ExampleOrganization_GEN3",
-    "ExampleOrganization/knowledgebase",
-  ]);
-  expect(calls.some((endpoint) => endpoint.includes("/infra"))).toBe(false);
-  expect(calls.some((endpoint) => endpoint.includes("/admin-only"))).toBe(false);
-  expect(report.repositories.every((repository) => (
-    repository.effective_permission === "write"
-    && repository.team_grants.every((grant) => grant.permission === "write")
-  ))).toBe(true);
+test("Builder readiness accepts MAINTAIN and ADMIN as WRITE or higher", () => {
+  for (const permission of ["maintain", "admin"]) {
+    const report = observeGitHubRoleReadiness({
+      role: "builder",
+      provider: providerFixture({ permission }),
+      organization,
+      rootRepository,
+      resource: resourceFixture(),
+    });
+    expect(report.status).toBe("ready");
+  }
 });
 
-test("Builder readiness fails closed when an internal Team lacks immutable GitHub binding", () => {
-  const calls = [];
-  const resource = resourceFixture();
-  delete resource.teams[0].forge_binding;
+test("Builder readiness fails closed when the signed-in account cannot be observed", () => {
   const report = observeGitHubRoleReadiness({
     role: "builder",
-    provider: providerFixture({ teamMembership: "active", permission: "write", calls }),
-    organization,
-    rootRepository,
-    resource,
-  });
-
-  expect(report.status).toBe("blocked");
-  expect(report.blockers).toContainEqual(expect.objectContaining({
-    reason: "team_forge_binding_missing",
-    team: "workspace",
-  }));
-  expect(calls.some((endpoint) => endpoint.includes("/teams/"))).toBe(false);
-});
-
-test("Builder readiness reports a Team provider failure without inventing an identity mismatch", () => {
-  const report = observeGitHubRoleReadiness({
-    role: "builder",
-    provider: providerFixture({
-      teamMembership: "active",
-      permission: "write",
-      failures: { teamIdentity: 403 },
-    }),
+    provider: providerFixture({ permission: "write", failures: { account: 401 } }),
     organization,
     rootRepository,
     resource: resourceFixture(),
   });
 
   expect(report.status).toBe("blocked");
-  expect(report.teams).toContainEqual(expect.objectContaining({
-    internal_slug: "workspace",
-    identity: "unavailable",
-    membership: "not_evaluated",
-  }));
-  expect(report.blockers).toContainEqual(expect.objectContaining({
-    reason: "provider_observation_failed",
-    team: "workspace",
-  }));
-  expect(report.blockers.some((item) => item.reason === "team_identity_mismatch")).toBe(false);
+  expect(report.account).toBeNull();
+  expect(report.blockers).toContainEqual(expect.objectContaining({ reason: "authenticated_account_unavailable" }));
 });
 
-test("Builder readiness keeps verified Team identity mismatch distinct from provider failure", () => {
+test("Builder readiness reports a repository provider failure without inventing missing WRITE", () => {
   const report = observeGitHubRoleReadiness({
     role: "builder",
-    provider: providerFixture({
-      teamMembership: "active",
-      permission: "write",
-      teamId: 99999999,
-    }),
+    provider: providerFixture({ permission: "write", failures: { repository: 403 } }),
     organization,
     rootRepository,
     resource: resourceFixture(),
   });
 
-  expect(report.teams).toContainEqual(expect.objectContaining({
-    internal_slug: "workspace",
-    identity: "mismatch",
-  }));
-  expect(report.blockers).toContainEqual(expect.objectContaining({
-    reason: "team_identity_mismatch",
-    team: "workspace",
-  }));
-  expect(report.blockers.some((item) => item.reason === "provider_observation_failed")).toBe(false);
-});
-
-test("Builder readiness distinguishes missing Team membership from an unavailable observation", () => {
-  const missing = observeGitHubRoleReadiness({
-    role: "builder",
-    provider: providerFixture({ teamMembership: "missing", permission: "write" }),
-    organization,
-    rootRepository,
-    resource: resourceFixture(),
-  });
-  const unavailable = observeGitHubRoleReadiness({
-    role: "builder",
-    provider: providerFixture({
-      teamMembership: "active",
-      permission: "write",
-      failures: { teamMembership: 403 },
-    }),
-    organization,
-    rootRepository,
-    resource: resourceFixture(),
-  });
-
-  expect(missing.teams[0].membership).toBe("missing");
-  expect(missing.blockers.some((item) => item.reason === "team_membership_missing")).toBe(true);
-  expect(unavailable.teams[0].membership).toBe("unavailable");
-  expect(unavailable.blockers.some((item) => item.reason === "provider_observation_failed")).toBe(true);
-  expect(unavailable.blockers.some((item) => item.reason === "team_membership_missing")).toBe(false);
-});
-
-test("Builder readiness reports unavailable Organization membership without inventing a missing membership", () => {
-  const report = observeGitHubRoleReadiness({
-    role: "builder",
-    provider: providerFixture({
-      teamMembership: "active",
-      permission: "write",
-      failures: { organizationMembership: 403 },
-    }),
-    organization,
-    rootRepository,
-    resource: resourceFixture(),
-  });
-
-  expect(report.organization_membership).toEqual({ state: "unavailable", role: null });
+  expect(report.status).toBe("blocked");
+  expect(report.repositories.every((item) => item.effective_permission === "unavailable")).toBe(true);
+  expect(report.blockers.some((item) => item.reason === "repository_write_missing")).toBe(false);
   expect(report.blockers.some((item) => item.reason === "provider_observation_failed")).toBe(true);
-  expect(report.blockers.some((item) => item.reason === "organization_membership_missing")).toBe(false);
 });
 
-test("Builder readiness distinguishes repository and Team grant provider failures from missing WRITE", () => {
-  const repositoryUnavailable = observeGitHubRoleReadiness({
+test("Builder readiness keeps the root repository identity pinned", () => {
+  const report = observeGitHubRoleReadiness({
     role: "builder",
-    provider: providerFixture({
-      teamMembership: "active",
-      permission: "write",
-      failures: { repository: 403 },
-    }),
+    provider: providerFixture({ permission: "write" }),
     organization,
-    rootRepository,
-    resource: resourceFixture(),
-  });
-  const grantsUnavailable = observeGitHubRoleReadiness({
-    role: "builder",
-    provider: providerFixture({
-      teamMembership: "active",
-      permission: "write",
-      failures: { teamRepositories: 403 },
-    }),
-    organization,
-    rootRepository,
+    rootRepository: { ...rootRepository, id: "43434343" },
     resource: resourceFixture(),
   });
 
-  expect(repositoryUnavailable.repositories.every((item) => (
-    item.effective_permission === "unavailable"
-  ))).toBe(true);
-  expect(repositoryUnavailable.blockers.some((item) => item.reason === "repository_write_missing")).toBe(false);
-  expect(repositoryUnavailable.blockers.some((item) => item.reason === "provider_observation_failed")).toBe(true);
-  expect(grantsUnavailable.repositories.every((item) => (
-    item.team_grants.every((grant) => grant.permission === "unavailable")
-  ))).toBe(true);
-  expect(grantsUnavailable.blockers.some((item) => item.reason === "team_repository_write_missing")).toBe(false);
-  expect(grantsUnavailable.blockers.some((item) => item.reason === "provider_observation_failed")).toBe(true);
-
-  const grantMissing = observeGitHubRoleReadiness({
-    role: "builder",
-    provider: providerFixture({
-      teamMembership: "active",
-      permission: "write",
-      missingTeamRepository: "ExampleOrganization/knowledgebase",
-    }),
-    organization,
-    rootRepository,
-    resource: resourceFixture(),
-  });
-  expect(grantMissing.blockers).toContainEqual(expect.objectContaining({
-    reason: "team_repository_write_missing",
-    repository: "ExampleOrganization/knowledgebase",
+  expect(report.status).toBe("blocked");
+  expect(report.blockers).toContainEqual(expect.objectContaining({
+    reason: "repository_identity_mismatch",
+    repository: rootRepository.full_name,
   }));
-  expect(grantMissing.blockers.some((item) => item.reason === "provider_observation_failed")).toBe(false);
 });
 
 function resourceFixture() {
@@ -253,7 +126,7 @@ function resourceFixture() {
       display_name: "Builders",
       default: true,
       forge_binding: {
-        schema_version: GITHUB_TEAM_FORGE_BINDING_SCHEMA,
+        schema_version: "lazurio.team-forge-binding.github.v0",
         provider: "github",
         team: { id: "61616161", asserted_slug: "builders" },
       },
@@ -289,12 +162,9 @@ function resourceFixture() {
 }
 
 function providerFixture({
-  teamMembership,
   permission,
   calls = [],
   failures = {},
-  teamId = 61616161,
-  missingTeamRepository = null,
   extraRepositories = {},
 }) {
   const repositories = new Map([
@@ -306,34 +176,9 @@ function providerFixture({
     json(args) {
       const endpoint = args.at(-1);
       calls.push(endpoint);
-      if (endpoint === "user") return ok(account);
-      if (endpoint === `orgs/${organization.login}/memberships/${account.login}`) {
-        if (failures.organizationMembership) return failed(failures.organizationMembership);
-        return ok({ state: "active", role: "member" });
-      }
-      if (endpoint === `orgs/${organization.login}/teams/builders`) {
-        if (failures.teamIdentity) return failed(failures.teamIdentity);
-        return ok({ id: teamId, slug: "builders" });
-      }
-      if (endpoint === `orgs/${organization.login}/teams/builders/memberships/${account.login}`) {
-        if (failures.teamMembership) return failed(failures.teamMembership);
-        return teamMembership === "active"
-          ? ok({ state: "active", role: "member" })
-          : { ok: false, httpStatus: 404, value: null };
-      }
-      if (endpoint === `orgs/${organization.login}/teams/builders/repos?per_page=100`) {
-        if (failures.teamRepositories) return failed(failures.teamRepositories);
-        return ok([
-          [...repositories.entries()]
-            .filter(([fullName]) => fullName !== missingTeamRepository)
-            .map(([fullName, repository]) => ({
-              ...repository,
-              full_name: fullName,
-              owner: { id: Number(organization.id), login: organization.login },
-              permissions: permissions(permission),
-              role_name: permission,
-            })),
-        ]);
+      if (endpoint === "user") {
+        if (failures.account) return failed(failures.account);
+        return ok(account);
       }
       for (const [fullName, repository] of repositories) {
         if (endpoint === `repos/${fullName}`) {
@@ -384,7 +229,6 @@ test("Steward readiness reuses the Builder gate over Steward-scoped ordinary rep
   const report = observeGitHubRoleReadiness({
     role: "steward",
     provider: providerFixture({
-      teamMembership: "active",
       permission: "write",
       calls,
       extraRepositories: { "ExampleOrganization/steward-desk": { id: 81818181, name: "steward-desk" } },
@@ -411,7 +255,7 @@ test("Steward readiness reuses the Builder gate over Steward-scoped ordinary rep
     status: "blocked",
     blockers: [{ reason: "github_auth_required" }],
   });
-  expect(() => observeGitHubRoleReadiness({ role: "admin", provider: providerFixture({ teamMembership: "active", permission: "write" }), organization, rootRepository, resource })).toThrow(/builder, steward/);
+  expect(() => observeGitHubRoleReadiness({ role: "admin", provider: providerFixture({ permission: "write" }), organization, rootRepository, resource })).toThrow(/builder, steward/);
 });
 
 test("role readiness never reads a repository whose access declaration is malformed", () => {
@@ -428,7 +272,7 @@ test("role readiness never reads a repository whose access declaration is malfor
   });
   const report = observeGitHubRoleReadiness({
     role: "builder",
-    provider: providerFixture({ teamMembership: "active", permission: "write", calls }),
+    provider: providerFixture({ permission: "write", calls }),
     organization,
     rootRepository,
     resource,
@@ -476,7 +320,7 @@ test("role readiness never reads an ordinary repository declared below a restric
   );
   const report = observeGitHubRoleReadiness({
     role: "steward",
-    provider: providerFixture({ teamMembership: "active", permission: "write", calls }),
+    provider: providerFixture({ permission: "write", calls }),
     organization,
     rootRepository,
     resource,
@@ -487,4 +331,213 @@ test("role readiness never reads an ordinary repository declared below a restric
     "ExampleOrganization/knowledgebase",
   ]);
   expect(calls.filter((endpoint) => /mission-control|typo/u.test(endpoint))).toEqual([]);
+});
+
+// Iotor-like Organization: a shared work Team, a business Team and personal
+// Team slots of individual operators. Each hosted work Machine selects its
+// operator's slot through LAZURIO_TEAM_ID.
+const sharedModuleTeams = ["iotor-team", "management", "tereza", "jakub"];
+
+function teamOrganizationResource() {
+  return {
+    teams: ["iotor-team", "management", "energo", "tereza", "jakub"]
+      .map((slug) => ({ slug, default: slug === "iotor-team" })),
+    repository_inventory: [
+      moduleSlot("mission-control-app", "workspace/mission-control", sharedModuleTeams),
+      repositoryDbSlot("mission-control-data", "workspace/mission-control/db"),
+      moduleSlot("knowledgebase", "workspace/knowledgebase", sharedModuleTeams),
+      moduleSlot("energo-offers", "workspace/energo-offers", ["energo"]),
+      repositoryDbSlot("energo-offers-data", "workspace/energo-offers/db"),
+      {
+        path: "productionspace/firmware",
+        slug: "firmware",
+        status: "active",
+        git: { url: "git@github.com:ExampleOrganization/firmware.git", branch: "main" },
+      },
+    ],
+  };
+}
+
+function moduleSlot(slug, path, teams) {
+  return {
+    path,
+    slug,
+    status: "active",
+    default_access: "expected",
+    required_roles: ["*"],
+    teams,
+    git: { url: `git@github.com:ExampleOrganization/${slug}.git`, branch: "main" },
+  };
+}
+
+function repositoryDbSlot(slug, path) {
+  return {
+    path,
+    slug,
+    status: "active",
+    materialization: "repository_db_mount",
+    source_of_truth: "repository-db:v3",
+    git: { url: `git@github.com:ExampleOrganization/${slug}.git`, branch: "v3" },
+  };
+}
+
+function hostedTeamScope(teamId) {
+  return hostedInstallSlotScope(createHostedWorkspaceConfiguration({
+    profile: "hosted",
+    organizationSlug: "example-organization",
+    teamId,
+    domain: "example.lazurio.io",
+    machine: "vm-01",
+  }));
+}
+
+// GitHub's effective permission of the signed-in account per repository;
+// anything unlisted is READ. How it was granted is invisible, as on GitHub.
+function effectivePermissionProvider({ writable, calls = [] }) {
+  const ids = new Map([[rootRepository.full_name, Number(rootRepository.id)]]);
+  return {
+    json(args) {
+      const endpoint = args.at(-1);
+      calls.push(endpoint);
+      if (endpoint === "user") return ok(account);
+      const fullName = /^repos\/(ExampleOrganization\/[^/]+)$/u.exec(endpoint)?.[1];
+      if (!fullName) throw new Error(`Unexpected provider endpoint: ${endpoint}`);
+      if (!ids.has(fullName)) ids.set(fullName, 72000000 + ids.size);
+      return ok({
+        id: ids.get(fullName),
+        name: fullName.split("/")[1],
+        full_name: fullName,
+        owner: { id: Number(organization.id), login: organization.login },
+        permissions: permissions(writable.includes(fullName) ? "write" : "read"),
+      });
+    },
+  };
+}
+
+const personalMachineRepositories = [
+  rootRepository.full_name,
+  "ExampleOrganization/knowledgebase",
+  "ExampleOrganization/mission-control-app",
+  "ExampleOrganization/mission-control-data",
+];
+
+test("hosted personal Team Machine is ready with WRITE on exactly the repositories it materializes", () => {
+  // The operator holds WRITE through the shared work Team only; membership in
+  // the other declared Teams, including other people's personal ones, is
+  // neither required nor read.
+  const calls = [];
+  const report = observeGitHubRoleReadiness({
+    role: "builder",
+    provider: effectivePermissionProvider({ writable: personalMachineRepositories, calls }),
+    organization,
+    rootRepository,
+    resource: teamOrganizationResource(),
+    slotInInstallScope: hostedTeamScope("tereza"),
+  });
+
+  expect(report.blockers).toEqual([]);
+  expect(report.status).toBe("ready");
+  expect(report.repositories.map((repository) => repository.full_name)).toEqual(personalMachineRepositories);
+  expect(calls.some((endpoint) => endpoint.includes("/teams/") || endpoint.includes("/memberships/"))).toBe(false);
+  expect(calls.some((endpoint) => /energo|firmware/u.test(endpoint))).toBe(false);
+});
+
+test("hosted personal Team Machine stays blocked without WRITE on a selected repository", () => {
+  const report = observeGitHubRoleReadiness({
+    role: "builder",
+    provider: effectivePermissionProvider({ writable: [rootRepository.full_name] }),
+    organization,
+    rootRepository,
+    resource: teamOrganizationResource(),
+    slotInInstallScope: hostedTeamScope("tereza"),
+  });
+
+  expect(report.status).toBe("blocked");
+  expect(report.blockers.map((item) => item.repository).sort()).toEqual([
+    "ExampleOrganization/knowledgebase",
+    "ExampleOrganization/mission-control-app",
+    "ExampleOrganization/mission-control-data",
+  ]);
+  expect(report.blockers.every((item) => item.reason === "repository_write_missing")).toBe(true);
+});
+
+test("hosted Team Machine is not blocked by another Team's Modules it does not select", () => {
+  const calls = [];
+  const report = observeGitHubRoleReadiness({
+    role: "builder",
+    provider: effectivePermissionProvider({ writable: personalMachineRepositories, calls }),
+    organization,
+    rootRepository,
+    resource: teamOrganizationResource(),
+    slotInInstallScope: hostedTeamScope("iotor-team"),
+  });
+
+  expect(report.status).toBe("ready");
+  expect(calls.some((endpoint) => /energo|firmware/u.test(endpoint))).toBe(false);
+});
+
+test("hosted scope never widens past restricted or malformed slots", () => {
+  const calls = [];
+  const resource = teamOrganizationResource();
+  resource.repository_inventory.find((slot) => slot.slug === "knowledgebase").default_access = "restricted";
+  resource.repository_inventory.push({
+    ...moduleSlot("typo", "workspace/typo", ["tereza"]),
+    default_access: "Expected",
+  });
+  const report = observeGitHubRoleReadiness({
+    role: "builder",
+    provider: effectivePermissionProvider({ writable: personalMachineRepositories, calls }),
+    organization,
+    rootRepository,
+    resource,
+    slotInInstallScope: hostedTeamScope("tereza"),
+  });
+
+  expect(report.status).toBe("ready");
+  expect(calls.some((endpoint) => /knowledgebase|typo/u.test(endpoint))).toBe(false);
+});
+
+test("non-hosted role install keeps the full Organization scope", () => {
+  const calls = [];
+  const localScope = hostedInstallSlotScope(createHostedWorkspaceConfiguration());
+  const report = observeGitHubRoleReadiness({
+    role: "builder",
+    provider: effectivePermissionProvider({ writable: personalMachineRepositories, calls }),
+    organization,
+    rootRepository,
+    resource: teamOrganizationResource(),
+    slotInInstallScope: localScope,
+  });
+
+  // Every active ordinary slot, including another Team's Module, its data and
+  // productionspace, is still covered and must be writable.
+  expect(report.status).toBe("blocked");
+  expect(report.blockers.map((item) => item.repository).sort()).toEqual([
+    "ExampleOrganization/energo-offers",
+    "ExampleOrganization/energo-offers-data",
+    "ExampleOrganization/firmware",
+  ]);
+  // Omitting the predicate is the same full scope.
+  const unscoped = observeGitHubRoleReadiness({
+    role: "builder",
+    provider: effectivePermissionProvider({ writable: personalMachineRepositories }),
+    organization,
+    rootRepository,
+    resource: teamOrganizationResource(),
+  });
+  expect(unscoped.repositories).toEqual(report.repositories);
+});
+
+test("Steward readiness follows the same effective WRITE rule without Team bindings", () => {
+  const report = observeGitHubRoleReadiness({
+    role: "steward",
+    provider: effectivePermissionProvider({ writable: personalMachineRepositories }),
+    organization,
+    rootRepository,
+    resource: teamOrganizationResource(),
+    slotInInstallScope: hostedTeamScope("tereza"),
+  });
+
+  expect(report.status).toBe("ready");
+  expect(report.blockers).toEqual([]);
 });

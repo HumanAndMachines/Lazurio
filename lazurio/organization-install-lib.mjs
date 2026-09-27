@@ -368,6 +368,68 @@ async function recoverOrganizationRepositoryDbParent({ rootPath, organizationPat
   return { ...identity, state: "updated", reason: "repository_parent_recovered", message: "App-code byl doplněn nad existujícím db; canonical cesta, inode i HEAD dat zůstaly zachované.", head: result.head, actions: ["materialize"] };
 }
 
+// Role readiness covers what this install materializes. On a hosted
+// Organization Machine that is the root, its root slots and the Workspace
+// Modules its Team selects through the same `hostedTeamSelectsModule`
+// predicate as the scoped `lazurio update`; a nested Workspace slot (such as
+// `workspace/<module>/db`) follows its declared parent Module exactly like the
+// repository-db step below. Productionspace is never materialized by install.
+// Every other profile keeps the full Organization scope.
+export function hostedInstallSlotScope(hostedWorkspace) {
+  if (hostedWorkspace?.profile !== "hosted" || hostedWorkspace.scope !== "organization") {
+    return () => true;
+  }
+  return (slot, inventory = []) => {
+    const path = normalizeOrganizationSlotPath(slot?.path);
+    if (!path) return true;
+    const space = organizationSlotScope(slot, path);
+    if (space === "root") return true;
+    if (space !== "workspace") return false;
+    const parentPath = posix.dirname(path);
+    const parents = inventory.filter((candidate) => normalizeOrganizationSlotPath(candidate?.path) === parentPath);
+    const parent = parents.length === 1 && organizationSlotScope(parents[0], parentPath) === "workspace"
+      ? parents[0]
+      : null;
+    return hostedTeamSelectsModule(
+      hostedWorkspace,
+      parent ? organizationSlotTeams(parent, parentPath) : organizationSlotTeams(slot, path),
+    );
+  };
+}
+
+// A hosted Organization Machine installs only its own Organization and a Team
+// that Organization declares, the same binding the scoped update enforces
+// ("Hosted Workspace Team is not declared by its Organization"). It is checked
+// against the verified root manifest before readiness narrows its scope and
+// before any root materialization; an invalid or foreign binding fails closed
+// instead of widening or narrowing the scope.
+function installHostedWorkspace(environment, resource) {
+  let hostedWorkspace;
+  try {
+    hostedWorkspace = hostedWorkspaceConfigurationFromEnvironment(environment);
+  } catch (error) {
+    return providerFailure("workspace_configuration_invalid", error.message);
+  }
+  if (hostedWorkspace.profile !== "hosted" || hostedWorkspace.scope !== "organization") {
+    return { ok: true, hostedWorkspace };
+  }
+  const organizationSlug = resource?.organization?.slug ?? null;
+  if (hostedWorkspace.organization_slug !== organizationSlug) {
+    return providerFailure(
+      "hosted_organization_mismatch",
+      `Hostovaná Mašina patří Organizaci '${hostedWorkspace.organization_slug}', ne instalované '${organizationSlug}'; instalace nic nematerializovala.`,
+    );
+  }
+  const teams = (Array.isArray(resource?.teams) ? resource.teams : []).map((team) => team?.slug);
+  if (!teams.includes(hostedWorkspace.team_id)) {
+    return providerFailure(
+      "hosted_team_not_declared",
+      `Team hostované Mašiny '${hostedWorkspace.team_id}' Organization manifest nedeklaruje; instalace nic nematerializovala.`,
+    );
+  }
+  return { ok: true, hostedWorkspace };
+}
+
 // General `lazurio update` intentionally excludes repository-db checkouts from
 // its Git action inventory. The explicit Organization install command is the
 // bounded bootstrap authority: it may materialize active declared mounts only
@@ -938,6 +1000,8 @@ export function observeOrganizationInstallSource({
   if (!documents.ok) return documents;
   const rootVerification = verifyOrganizationRootDocuments({ documents, organization, repository });
   if (!rootVerification.ok) return rootVerification;
+  const hosted = installHostedWorkspace(environment, rootVerification.resource);
+  if (!hosted.ok) return hosted;
   const access = requestedRole !== null
     ? observeGitHubRoleReadiness({
         provider,
@@ -945,6 +1009,7 @@ export function observeOrganizationInstallSource({
         rootRepository: repository,
         resource: rootVerification.resource,
         role: requestedRole,
+        slotInInstallScope: hostedInstallSlotScope(hosted.hostedWorkspace),
       })
     : githubRoleReadinessNotRequested();
   if (access.status === "blocked") {
@@ -1083,8 +1148,8 @@ export function renderHumanOrganizationInstall(report) {
     `Root: ${report.target.state} — ${report.target.reason} (${report.target.path})`,
   ];
   if (report.access.account) lines.push(`  GitHub account: ${report.access.account.login} · ID ${report.access.account.id}`);
-  for (const team of report.access.teams) {
-    lines.push(`  Team ${team.internal_slug}: ${team.github_team_slug ?? "unbound"} · membership ${team.membership}`);
+  for (const repository of report.access.repositories) {
+    lines.push(`  Repo ${repository.full_name}: ${repository.effective_permission}`);
   }
   for (const blocker of report.access.blockers) {
     lines.push(`! ${blocker.message}`);

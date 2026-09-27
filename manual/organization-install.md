@@ -192,9 +192,9 @@ Builder ji neopakuje a nepotřebuje `admin:org`: installations endpoint je pro
 něj záměrně nepozorovatelný a GitHub může hranici vrátit jako HTTP 403 i skryté
 404. Taková odpověď nedokazuje chybějící App ani rozbitý transport. Builder
 materializuje už aktivní Organizaci přes
-`lazurio organization install <github-login> --role builder`. Vedle read
-přístupu tím před klonem prokáže i vlastní aktivní Organization a Team
-membership a WRITE nebo vyšší oprávnění k Builder repozitářům.
+`lazurio organization install <github-login> --role builder`. Před klonem
+tím prokáže, že přihlášený účet má efektivní WRITE nebo vyšší oprávnění ke
+každému Builder repozitáři instalačního scope.
 
 ## Předpoklady
 
@@ -216,14 +216,27 @@ Příkaz je local-only. Nikdy nevytváří nebo nemění GitHub repo, GitHub App
 Team membership, branch rules, visibility, port ani commit. K založení remote
 Organization slouží oddělený explicitní activation postup.
 
-Interní Team slug není autorizační identita. Organization manifest jej pro
-Builder gate mapuje přes `teams[].forge_binding` na
-`lazurio.team-forge-binding.github.v0`, neměnné GitHub Team `id` a jeho
-`asserted_slug`. Chybějící nebo přejmenovaná vazba je owner blocker, ne důvod
-hádat Team podle display name. Kontrolují se Organization root a aktivní sloty
-určené dané roli (`--role builder` nebo `--role steward`); `planned_slot`,
-restricted/Admin-only sloty a sloty s malformed access deklarací se záměrně
-nezařazují a gate nad nimi neprovede žádné provider čtení.
+Role gate (`--role builder` i `--role steward`) rozhoduje stejně jako GitHub:
+role je připravená, když přihlášený účet má na každém repozitáři
+instalačního scope efektivní WRITE nebo vyšší (`GET /repos/{owner}/{repo}` →
+`permissions`). Jakou cestou přístup vznikl — kterýkoli Team, přímý
+collaborator nebo Organization role — gate nezkoumá; Team membership, Team
+granty ani `teams[].forge_binding` nejsou podmínkou. Neaktivní členství nebo
+odebraný grant se projeví chybějícím efektivním WRITE a gate blokuje; stejně
+blokuje neověřitelný účet, jiná identita root repa i každá neúspěšná provider
+observace. Scope tvoří Organization root a aktivní ordinary sloty určené dané
+roli; `planned_slot`, restricted/Admin-only sloty a sloty s malformed access
+deklarací se záměrně nezařazují a gate nad nimi neprovede žádné provider
+čtení. Na hostované Organization Mašině (`LAZURIO_WORKSPACE_PROFILE=hosted`)
+gate pokrývá jen to, co instalace pro Team Mašiny (`LAZURIO_TEAM_ID`)
+skutečně materializuje: root, jeho root sloty a Workspace Moduly, jejichž
+`teams` Team Mašiny obsahují, včetně jejich `workspace/<module>/db`; Moduly
+jiných Teamů ani productionspace ji neblokují. Hostovaná Mašina instaluje jen
+svou Organizaci (`LAZURIO_ORGANIZATION_SLUG` = `company.slug`) a Team, který
+manifest deklaruje; nevalidní konfigurace (`workspace_configuration_invalid`),
+cizí Organizace (`hosted_organization_mismatch`) nebo nedeklarovaný Team
+(`hosted_team_not_declared`) instalaci zablokují ještě před čtením repozitářů
+a před materializací rootu, s `--role` i bez něj.
 
 ## Toolchain gate před Organization scope
 
@@ -579,10 +592,10 @@ lazurio organization install <github-login> --role builder --json
   nad nimi neproběhne žádný `git clone`, `fetch`, `ls-remote` ani `gh api`.
   Tento stav je záměrný a odlišný od chybějícího grantu
   (`materialization_source_unavailable`, `next_action.kind: github_access`).
-  Steward gate před klonem read-only ověří aktivní Organization membership,
-  Team membership a WRITE na Organization rootu a běžných slotech, jejichž
-  `required_roles` jsou prázdné, `*` nebo jmenují `steward`; blokovaný gate
-  vrátí `steward_access_not_ready` a nic nematerializuje.
+  Steward gate před klonem read-only ověří efektivní WRITE přihlášeného účtu
+  na Organization rootu a běžných slotech, jejichž `required_roles` jsou
+  prázdné, `*` nebo jmenují `steward`; blokovaný gate vrátí
+  `steward_access_not_ready` a nic nematerializuje.
 - **Běžný `lazurio update`** (`restricted_slot_policy: "defer"`) absentní
   restricted slot nikdy automaticky neklonuje a vrátí `current` s reason
   `restricted_not_materialized`. Už namountované restricted checkouty dál
