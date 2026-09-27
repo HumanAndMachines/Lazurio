@@ -9,6 +9,8 @@ návod k samostatnému zřízení mimo pilot.
 - Přihlášení do aplikace platí pro celý Environment. Jiné přihlášení znamená
   jinou mašinu.
 - Jeden projekt Composia na Environment. Klíč projektu leží jen na té mašině.
+- Platí pro Environment jedné Organizace a pro osobní Environment. Multi-org
+  mašina čeká na rozhodnutí Principála o oddělení připojení mezi Organizacemi.
 - Pracovní mašina používá Composio organizaci své Organizace, osobní mašina
   účet Principála.
 - „Uživatel“ uvnitř projektu je identifikátor mašiny; operátor žádný Composio
@@ -24,8 +26,8 @@ návod k samostatnému zřízení mimo pilot.
 
 ## Co agent smí
 
-- Napojenou aplikaci číst i do ní zapisovat, pokud operátor nenastavil režim
-  jen pro čtení.
+- S napojenou aplikací dělat vše, co nabízí, tedy číst, zapisovat i mazat,
+  pokud operátor rozsah neomezil.
 - Navenek viditelný zápis provést jen na pokyn Principála.
 - Připojení účtu zprostředkovat operátorovi odkazem; přihlašovací údaje nikdy
   nedrží.
@@ -33,8 +35,9 @@ návod k samostatnému zřízení mimo pilot.
 
 ## Pilot DEV-6626
 
-Organizace Spectoda, první aplikace ClickUp, nejdřív jedna pracovní VM a potom
-všechny. Konkrétní jména, custody a důkazy zůstávají v owner infra Spectody.
+Jedna Organizace, jedna první aplikace, nejdřív jedna pracovní VM a potom
+všechny. Konkrétní jména, custody a důkazy zůstávají v owner infra té
+Organizace a v plánu DEV-6626, ne v tomto veřejném repu.
 
 ## Otevřené otázky
 

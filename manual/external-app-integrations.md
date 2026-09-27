@@ -82,7 +82,8 @@ to umí držet odděleně.
 | Klíč | Omezený projektový klíč s nejmenšími oprávněními, jen na té mašině, v custody operátora. Klíč celé Composio organizace na pracovní mašině nikdy. |
 | Vlastník | Pracovní mašina: Composio organizace patří Organizaci a spravuje ji Admin. Osobní mašina: účet Principála. |
 | Kdo připojuje | Operátor Environmentu, z Nastavení Launchpadu nebo požádáním agenta. |
-| Výchozí režim | Čtení i zápis. Jen pro čtení, když si to operátor výslovně řekne nebo nastaví. |
+| Výchozí režim | Vše, co aplikace nabízí: čtení, zápis i mazání. Rozsah omezí operátor, když ví, že potřebuje méně. |
+| Rozsah rozhodnutí | Environment jedné Organizace a osobní Environment. Na multi-org mašině se Composio nezřizuje, dokud Principál neurčí oddělení připojení mezi Organizacemi. |
 | Zápisy | Schopnost zápisu není souhlas s Publikací; platí sekce o write operacích níže. |
 | Session agenta | Vzdálený sandbox Composia a nástroj pro správu připojení vypnuté. |
 | Data | Ukládání obsahu volání vypnuté. Tokeny a obsah procházejí Composiem, dokud Organizace nemá vlastní instalaci; Admin to ví před prvním připojením. |
@@ -90,7 +91,7 @@ to umí držet odděleně.
 **Dnes versus cíl.** Stránka Aplikace v Nastavení Launchpadu, příkaz
 `lazurio apps` a návody ve Folderu teprve vznikají v LazurioPlatform (plán
 DEV-6626). Do jejich vydání se Composio zřizuje jen v pilotu DEV-6626 na
-Organizaci Spectoda s aplikací ClickUp. Mimo pilot agent Composio sám
+jedné Organizaci. Mimo pilot agent Composio sám
 nezřizuje a použije dosavadní cesty žebříčku. Postup pilotu a otevřené otázky
 drží [integrations/composio.md](integrations/composio.md).
 
