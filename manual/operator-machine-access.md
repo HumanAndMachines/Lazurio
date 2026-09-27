@@ -112,6 +112,14 @@ nestaví žádný most.
   user a `<login>.lazurio.io`); personalspace si zachovává svůj tvar
   `personalspace/<login>_GEN3`. Pracovní VM má label podle 0146. **Zobrazované jméno** si volí Principál (osobní VM
   „Friday“, pracovní „Henry“) a je jen popis.
+- **Nové infrastrukturní Mašiny** Organizace mají výchozí jména: fyzický
+  virtualizační host `virt-NN`, servisní VM na něm `services-NN`, logický AI
+  pool `team-NN` s administrační aplikací `ai-team-NN`
+  (`https://ai-team-01.services-01.<org-DNS-slug>.lazurio.io/`); číslování od
+  `01`, smí přerůst dvě číslice. Kanonický kontrakt, validaci a kontrolu kolizí
+  drží Machines (`workloads/workspace-vm/AI-POOL.md`, kapitola „Names“; DEV-6625).
+  Jméno nic neuděluje, vazbu servisní VM na host drží Machine Record vlastníka
+  a existující Mašiny se kvůli konvenci nepřejmenovávají.
 
 ## Infra je blueprint
 
