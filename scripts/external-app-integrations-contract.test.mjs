@@ -142,11 +142,16 @@ test("AGENTS.md drží účet Environmentu a nevrací povinný zápis operátoro
   expect(agents).not.toMatch(/jeden projekt Composia na Environment/);
 });
 
-// Věta, která ukládá zápis do katalogu Organizace: jmenuje INTEGRATIONS.md a
-// obsahuje sloveso zápisu nebo evidence v jakémkoli tvaru.
-const catalogObligation =
-  /(?:zapi[šs]|zapisuj|zapsat|zapsán|zaznamen|eviduj|evidov|uveď|uváděj|doplň|přidej|veď)/i;
+// Hlídač nepozná pokyn podle slovesa, protože tvarů je neomezeně. Platí
+// obrácené pravidlo: KAŽDÁ věta manuálu, která jmenuje INTEGRATIONS.md, musí
+// sama říkat, že jde o integraci sdílenou Organizací, nebo být jednou ze dvou
+// popisných vět vyjmenovaných níže. Nová věta jakéhokoli znění tak neprojde
+// bez vědomé úpravy tohoto seznamu.
 const sharedQualifier = /sdílen|sdílet|sdílí/i;
+const descriptiveCatalogSentences = [
+  "Katalog obsahuje: - `INTEGRATIONS.md` — lidský katalog:",
+  "patří do `INTEGRATIONS.md` katalogu dané Organizace",
+];
 
 function sentencesOf(text) {
   return text
@@ -156,32 +161,34 @@ function sentencesOf(text) {
     .filter(Boolean);
 }
 
-function unqualifiedCatalogObligations(text) {
+function unqualifiedCatalogSentences(text) {
   return sentencesOf(text).filter(
     (sentence) =>
       sentence.includes("INTEGRATIONS.md") &&
-      catalogObligation.test(sentence) &&
-      !sharedQualifier.test(sentence),
+      !sharedQualifier.test(sentence) &&
+      !descriptiveCatalogSentences.some((known) => sentence.includes(known)),
   );
 }
 
-test("každý pokyn zapsat do katalogu Organizace v manuálu platí jen pro sdílenou integraci", async () => {
+test("každá věta manuálu o katalogu Organizace platí jen pro sdílenou integraci", async () => {
   const manual = await readPolicy(manualPath);
-  // Kvalifikace musí být v téže větě jako pokyn, ne jen někde v odstavci.
-  expect(unqualifiedCatalogObligations(manual)).toEqual([]);
-  // Hlídač sám pozná protipříklady: jiné sloveso i kvalifikaci jinde v odstavci.
+  expect(unqualifiedCatalogSentences(manual)).toEqual([]);
+  // Protipříklady: jakýkoli tvar pokynu bez kvalifikace v téže větě neprojde.
+  for (const sentence of [
+    "Napojení operátora eviduj v `INTEGRATIONS.md`.",
+    "Každé napojení je nutné přidat do `INTEGRATIONS.md`.",
+    "Nástroj operátora je třeba uvést v `INTEGRATIONS.md`.",
+    "Bez záznamu v `INTEGRATIONS.md` se nástroj nesmí použít.",
+  ])
+    expect(unqualifiedCatalogSentences(sentence)).toHaveLength(1);
+  // Kvalifikace v sousední větě nestačí.
   expect(
-    unqualifiedCatalogObligations(
-      "Napojení operátora eviduj v `INTEGRATIONS.md`.",
-    ),
-  ).toHaveLength(1);
-  expect(
-    unqualifiedCatalogObligations(
+    unqualifiedCatalogSentences(
       "Katalog je sdílený. Každé napojení uveď v `INTEGRATIONS.md`.",
     ),
   ).toHaveLength(1);
   expect(
-    unqualifiedCatalogObligations(
+    unqualifiedCatalogSentences(
       "U integrace sdílené Organizací zapiš cíl do `INTEGRATIONS.md`.",
     ),
   ).toEqual([]);
