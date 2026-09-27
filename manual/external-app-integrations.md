@@ -25,24 +25,35 @@ definovaným MCP serverem nebo CLI nástrojem na konkrétní mašině**.
   nebo hostovaný agregátorový MCP, kde OAuth granty a tokeny drží třetí
   strana místo dané mašiny. **Jedinou výjimkou je Composio** za podmínek
   decision 0162 a sekce [Composio jako schválený broker](#composio-jako-schválený-broker):
-  jeden projekt na Environment, klíč projektu jen na té mašině.
+  operátor ho na mašině povolí a přihlásí svůj účet přes prohlížeč; žádný
+  projekt ani klíč Composia se na mašinu nezakládá a nekopíruje.
 - Vzdálený MCP endpoint provozovaný **přímo poskytovatelem služby**
   (například Slack, Atlassian, Canva, Google) je v pořádku — pokud je
   definovaný v lokálním configu harnessu na dané mašině a OAuth grant vzniká
   a je revokovatelný per mašina. Rozhoduje místo konfigurace a custody
   tokenu, ne to, kde běží proces serveru.
 
-Motivace: jeden Principál smí sdílet svůj ChatGPT/Claude účet a subscription
-napříč svými mašinami, ale **přístupy k externím aplikacím zůstávají per
-mašina**. Default deployment je „jedna mašina = jedna Organizace"; každá
-mašina je samostatný, jednotlivě revokovatelný přístup. Multi-org mašina
-(typicky root Principála) je povolená — separaci tam drží pojmenování
-`<org_slug>_<provider>` a oddělené OAuth sessions.
+Motivace: přístupy a schopnosti jsou svázané s Environmentem, tedy
+s mašinou a tím, co je na ní nainstalované a přihlášené. Environment zrcadlí
+svého operátora (decision 0162): agenti jednají tam, kam sahají přihlášení na
+té mašině. Každé přihlášení na mašině jde odhlásit samostatně. Kdo potřebuje
+oddělit kontexty nebo přístupy, zakládá další Environment. Multi-org mašina
+je jeden Environment; pojmenování `<org_slug>_<provider>` tam pomáhá agentovi
+zvolit nástroj správné Organizace, technickou hranici mezi Organizacemi ale
+netvoří. U cest, kde přihlášení patří účtu a ne mašině (Composio), platí
+doporučení „účet Environmentu“ ze sekce níže.
 
 ## Žebříček výběru integrace
 
-Při požadavku „napoj aplikaci X" postupuj v tomto pořadí a první funkční
-úroveň vyhrává:
+**Pořadí při práci (decision 0162).** Agent nejdřív použije CLI nástroje,
+které jsou na Environmentu aktivované, tak jak mu říkají generované návody
+Lazurio Folderu. Teprve potom sáhne po MCP serverech: pro ně má jen obecný
+pokyn zjistit, co je v harnessu právě k dispozici, a podrobnosti se dozví
+z MCP serveru samotného.
+
+**Pořadí při novém napojení.** Při požadavku „napoj aplikaci X" postupuj
+v tomto pořadí a první funkční úroveň vyhrává; poslední slovo má operátor
+Environmentu:
 
 1. **Oficiální MCP server poskytovatele** — remote endpoint nebo oficiální
    self-hosted server.
@@ -50,9 +61,9 @@ Při požadavku „napoj aplikaci X" postupuj v tomto pořadí a první funkčn�
    pro agenty se shell přístupem rovnocenná a často jednodušší cesta;
    credentials drží CLI lokálně stejně jako MCP server.
 3. **Composio** — schválený broker podle decision 0162, když oficiální MCP
-   ani CLI poskytovatele neexistuje nebo nevyhovuje. Agent brokera sám
-   neprohledává: cestu pro danou aplikaci určuje kurátorovaný katalog
-   Organizace.
+   ani CLI poskytovatele neexistuje nebo nevyhovuje, a operátor Composio na
+   mašině povolil. Kurátorovaný katalog Organizace je doporučení cesty pro
+   danou aplikaci; poslední slovo má operátor Environmentu.
 4. **Reviewnutý open-source MCP server nebo CLI** — jen s ukotvenou verzí
    (release/commit pin), ověřeným publisherem a licencí; komunitní server
    není „oficiální integrace" jen proto, že obsluhuje známou službu.
@@ -62,8 +73,8 @@ Při požadavku „napoj aplikaci X" postupuj v tomto pořadí a první funkčn�
 **Zakázané v každém kroku:** servery postavené na scraping/cookie-session
 přístupu (reuse browser session tokenů, obcházení bot detekce) — porušují
 ToS poskytovatele a riskují ban účtu Organizace; sdílené brokery jiné než
-Composio podle decision 0162; osobní Composio účty na pracovních mašinách;
-zřizování nových konektorů v cloud UI účtu.
+Composio podle decision 0162; kopírování klíčů a tokenů do chatu, Gitu nebo
+logu; zřizování nových konektorů v cloud UI účtu.
 
 **Když žádná MCP/CLI cesta neexistuje:** použij browser fallback, případně
 existující už nainstalovaný konektor, a chybějící MCP zapiš jako issue/PR
@@ -72,28 +83,36 @@ rozhodnutí Principála, ne automatický fallback agenta.
 
 ## Composio jako schválený broker
 
-Decision 0162 (Principál 2026-09-27) mění dřívější plošný zákaz: Composio je
-dovolené, protože přihlášení do aplikací vážeme na celý Environment a Composio
-to umí držet odděleně.
+Decision 0162 (Principál 2026-09-27) mění dřívější plošný zákaz a určuje, kdo
+o napojení rozhoduje: **operátor Environmentu**. Environment zrcadlí svého
+operátora; agenti v něm jednají tam, kam sahají přihlášení na té mašině.
 
 | Pravidlo | Znění |
 | --- | --- |
-| Jednotka izolace | Jeden projekt Composia na Environment. Composio nemá přístupový údaj užší než klíč projektu. |
-| Klíč | Omezený projektový klíč s nejmenšími oprávněními, jen na té mašině, v custody operátora. Klíč celé Composio organizace na pracovní mašině nikdy. |
-| Vlastník | Pracovní mašina: Composio organizace patří Organizaci a spravuje ji Admin. Osobní mašina: účet Principála. |
-| Kdo připojuje | Operátor Environmentu, z Nastavení Launchpadu nebo požádáním agenta. |
-| Výchozí režim | Vše, co aplikace nabízí: čtení, zápis i mazání. Rozsah omezí operátor, když ví, že potřebuje méně. |
-| Rozsah rozhodnutí | Environment jedné Organizace a osobní Environment. Na multi-org mašině se Composio nezřizuje, dokud Principál neurčí oddělení připojení mezi Organizacemi. |
+| Kdo rozhoduje | Operátor. Napojení je volitelné a nic se centrálně nevynucuje. |
+| Cesty | Composio (doporučené), další podporované CLI z výběru Launchpadu, nebo MCP server, který operátorovi nastaví agent. `gh` je povinný, ne volitelný. |
+| Přihlášení Composia | Přes prohlížeč, stejně jako `gh`. API klíč se nikdy nekopíruje. Agenti používají příkazovou řádku `composio`. |
+| Účet Environmentu | Připojení patří účtu a jeho Composio organizaci, ne mašině. Stejný účet a organizace na dvou mašinách znamená stejná připojení; jiný rozsah znamená jiný účet nebo organizaci. |
+| Oddělení kontextů | Nový Environment, tedy nová mašina s vlastními přihlášeními. |
+| Mašina s více Organizacemi | Jeden Environment. Agent volí nástroj Organizace, pro kterou pracuje, a data mezi Organizacemi nepřenáší; je to pravidlo práce, ne technická hranice. |
+| Organizace | Kdo chce přehled, založí vlastní Composio organizaci a žádá operátory, aby se přihlašovali do ní. Lazurio to nevynucuje a centrální přehled není cílem. |
+| Výchozí rozsah | Vše, co aplikace nabízí: čtení, zápis i mazání. Rozsah omezí operátor. |
 | Zápisy | Schopnost zápisu není souhlas s Publikací; platí sekce o write operacích níže. |
-| Session agenta | Vzdálený sandbox Composia a nástroj pro správu připojení vypnuté. |
-| Data | Ukládání obsahu volání vypnuté. Tokeny a obsah procházejí Composiem, dokud Organizace nemá vlastní instalaci; Admin to ví před prvním připojením. |
+| Návody pro agenty | Aktivovaný CLI nástroj se propíše do instrukcí a manuálů Lazurio Folderu té mašiny. Návody říkají, co je v Environmentu povoleno, ať to operátor povolil v Launchpadu nebo příkazem `lazurio`; je to jedna věc. MCP servery se do Folderu nezapisují. |
+| CLI-first | Lazurio se stará o Environment, tedy o nástroje v něm, a říká agentům, jak se v něm pohybovat. Codex, Claude Code, `gh`, Composio i další nástroje jsou CLI nainstalovaná a přihlášená na mašině. |
+| Katalog Launchpadu | Jen nástroje s uživatelsky přívětivým přihlášením (prohlížeč, ověřovací kód, párování). Atypický nástroj napojí na zadání operátora agent. |
+| Závazek údržby | Každý nástroj katalogu má popsáno, co má jeho instalace udělat. Když instalátor selže, spustí se agent, který instalaci dotáhne podle tohoto popisu. |
+| Pořadí pro agenty | Nejdřív aktivované CLI nástroje podle návodů Folderu, potom MCP servery podle obecného pokynu. |
+| Přihlášení bez tření | Přihlášení nástroje má operátora stát co nejméně: odkaz, ověřovací kód nebo čitelný QR kód v Launchpadu, nikdy rozsypaný QR kód v terminálu. |
+| Dokumentace pro operátory | Hranice a přijaté kompromisy tohoto modelu se operátorům srozumitelně vysvětlují ve veřejné dokumentaci Lazuria. |
+| Data | Tokeny aplikací a obsah volání drží Composio. Operátor i Organizace to vědí před prvním připojením. |
 
-**Dnes versus cíl.** Stránka Aplikace v Nastavení Launchpadu, příkaz
-`lazurio apps` a návody ve Folderu teprve vznikají v LazurioPlatform (plán
-DEV-6626). Do jejich vydání se Composio zřizuje jen v pilotu DEV-6626 na
-jedné Organizaci. Mimo pilot agent Composio sám
-nezřizuje a použije dosavadní cesty žebříčku. Postup pilotu a otevřené otázky
-drží [integrations/composio.md](integrations/composio.md).
+**Dnes versus cíl.** Sekce Nastavení Launchpadu s povinnými, doporučenými a
+volitelnými nástroji, jejich aktivace a propsání do Folderu teprve vznikají
+v LazurioPlatform (plán DEV-6626). Do jejich vydání se Composio zřizuje jen
+v pilotu DEV-6626. Mimo pilot agent Composio sám nezřizuje a použije dosavadní
+cesty žebříčku. Model a otevřené otázky drží
+[integrations/composio.md](integrations/composio.md).
 
 ## Kde co žije
 
@@ -107,8 +126,12 @@ drží [integrations/composio.md](integrations/composio.md).
 
 ### Kurátorovaný katalog Organizace
 
-Katalog je trackovaný v repu Organizace a je to jediné místo, kde se
-schvaluje, **co** se smí připojovat:
+Katalog je trackovaný v repu Organizace a říká, **co Organizace doporučuje
+a sdílí**: které integrace používá, jakou cestou a s jakou definicí. Není to
+povolovací brána pro Environment operátora. Operátor smí svůj Environment
+napojit i na to, co v katalogu není (decision 0162); takové napojení zůstává
+jeho a do katalogu se dostane jen běžným PR, když ho má sdílet celá
+Organizace. Katalog obsahuje:
 
 - `INTEGRATIONS.md` — lidský katalog: schválené integrace, owner, scope,
   jména env proměnných, org-side admin kroky, datum schválení.
@@ -119,7 +142,8 @@ schvaluje, **co** se smí připojovat:
   `env_vars` nese jen jména proměnných.
 
 Přidání nebo změna integrace v katalogu = PR ze worktree ke Stewardovi.
-Tím je „manuálně kurátorované" vynucené procesně, ne jen konvencí.
+Tím je kurátorovaný obsah katalogu vynucený procesně; vlastní napojení
+operátora na jeho Environmentu tímto procesem neprochází.
 
 Pojmenování: server `<org_slug>_<provider>` (např. `example_organization_slack`),
 env proměnné `<ORG_SLUG>_<PROVIDER>_<PURPOSE>` (např.
@@ -173,8 +197,10 @@ Definice z katalogu se na mašině stává funkční až lokální aktivací:
   (projektová `.claude/settings.json` Organizace, nebo user settings pro
   osobní integrace) — kontrakt harnessu ověř v jeho aktuální dokumentaci,
   názvy nástrojů vyčti z `/mcp`.
-- Nastavení zapiš do `INTEGRATIONS.md` k dané integraci, ať je
-  reprodukovatelné a ověřitelné i na další mašině.
+- U integrace sdílené Organizací zapiš nastavení do `INTEGRATIONS.md`
+  k dané integraci, ať je reprodukovatelné a ověřitelné i na další mašině.
+  U napojení, které je jen na Environmentu operátora, zůstává nastavením té
+  mašiny.
 - Osobní integrace přidávej do user scope
   (`claude mcp add --scope user <name> …`), ne do project scope
   Organizace.
@@ -189,8 +215,12 @@ per-machine onboarding a cutover ze sdíleného brokeru.
 
 ### CLI lane
 
-CLI nástroje jsou rovnocenná forma integrace se stejnými pravidly custody
-a stejným katalogem (zapisuj je do `INTEGRATIONS.md`):
+CLI nástroje jsou pro agenty první volba (decision 0162) a platí pro ně
+stejná pravidla custody. Rozlišuj dvě situace: integraci, kterou má **sdílet
+celá Organizace**, zapiš do jejího `INTEGRATIONS.md`; nástroj, který si
+operátor povolil jen **na svém Environmentu**, se do katalogu Organizace
+nezapisuje a jeho aktivace se propisuje do návodů Lazurio Folderu té mašiny.
+Příklady:
 
 - `gh` — GitHub (kanonický vzor),
 - Google Workspace: oficiální [googleworkspace/cli](https://github.com/googleworkspace/cli)
@@ -245,7 +275,9 @@ změna oprávnění) potvrzuje Principál per akci.
 
 Mechanická vrstva se liší podle harnessu a formy integrace. Nepředpokládej
 jednotný „approval mode"; při aktivaci nastav to, co daná cesta skutečně
-nabízí, a zapiš to k integraci do `INTEGRATIONS.md`:
+nabízí. U integrace sdílené Organizací to zapiš k integraci do
+`INTEGRATIONS.md`; u napojení, které je jen na Environmentu operátora, to
+zůstává nastavením té mašiny:
 
 | Cesta | Mechanický gate | Co gate nepokrývá |
 | --- | --- | --- |
@@ -269,9 +301,12 @@ jediná spolehlivá ochrana.
 
 Write smoke nedělej na ostrém obsahu. Použij k tomu určený jednorázový cíl
 — testovací kanál, scratch složku nebo drafts cestu, sandbox projekt/space,
-vlastní draft. Cíl použitý pro smoke zapiš do `INTEGRATIONS.md`, ať ho další
-mašina používá taky a nevzniká nepořádek ani zbytečné notifikace
-v produkčních prostorech Organizace.
+vlastní draft. U integrace sdílené Organizací zapiš cíl použitý pro smoke
+do `INTEGRATIONS.md`, ať ho další mašina používá taky a nevzniká nepořádek
+ani zbytečné notifikace v produkčních prostorech Organizace. U napojení,
+které je jen na Environmentu operátora, se do katalogu Organizace nic
+nezapisuje: smoke cíl jmenovitě určí a schválí Principál v threadu a agent
+ho uvede v evidenci svého úkolu.
 
 **Výjimka pro úklid určeného smoke artefaktu:** když Principál výslovně
 schválil tento jmenovitý smoke cíl, patří do téže schválené operace i úklid
@@ -279,9 +314,16 @@ artefaktu, který agent v tomto konkrétním smoke sám vytvořil (draft, testov
 zpráva nebo testovací záznam). Agent jej smí po ověření odstranit; nejde o
 samostatnou Publikaci ani o obecné oprávnění mazat. Výjimka se nikdy netýká
 existujícího, ostrého nebo cizího obsahu. Není-li cíl jmenovitě určený v
-`INTEGRATIONS.md`, původ artefaktu není prokazatelný nebo úklid zasahuje mimo
-tento smoke, artefakt ponech a vyžádej si samostatný explicitní pokyn
-Principála.
+`INTEGRATIONS.md` (u integrace sdílené Organizací) nebo jmenovitě schválený
+Principálem v threadu (u napojení jen na Environmentu operátora), původ
+artefaktu není prokazatelný nebo úklid zasahuje mimo tento smoke, artefakt
+ponech a vyžádej si samostatný explicitní pokyn Principála.
+
+**Runbooky poskytovatelů** v [integrations/](integrations/) popisují integrace
+sdílené Organizací; kde říkají „zapiš do `INTEGRATIONS.md`“, platí to pro ně.
+Pro napojení jen na Environmentu operátora platí stejný postup s tím
+rozdílem, že místo zápisu do katalogu stačí jmenovité schválení Principála
+v threadu.
 
 ## Org-side admin kroky
 

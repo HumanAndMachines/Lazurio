@@ -1,28 +1,32 @@
-# Composio: schválený broker pro napojení aplikací
+# Composio: doporučená cesta k napojení aplikací
 
-Stav k 2026-09-27: rozhodnutí 0162 je přijaté, implementace v LazurioPlatform
-teprve vzniká (plán DEV-6626). Tento runbook popisuje model a pilot; není to
-návod k samostatnému zřízení mimo pilot.
+Stav k 2026-09-27: rozhodnutí 0162 je přijaté, podpora v Launchpadu teprve
+vzniká (plán DEV-6626). Tento runbook popisuje model; mimo pilot DEV-6626 se
+Composio nezřizuje.
 
 ## Model
 
-- Přihlášení do aplikace platí pro celý Environment. Jiné přihlášení znamená
-  jinou mašinu.
-- Jeden projekt Composia na Environment. Klíč projektu leží jen na té mašině.
-- Platí pro Environment jedné Organizace a pro osobní Environment. Multi-org
-  mašina čeká na rozhodnutí Principála o oddělení připojení mezi Organizacemi.
-- Pracovní mašina používá Composio organizaci své Organizace, osobní mašina
-  účet Principála.
-- „Uživatel“ uvnitř projektu je identifikátor mašiny; operátor žádný Composio
-  účet nepotřebuje a přihlašuje se jen do samotné aplikace.
+- O napojení rozhoduje operátor Environmentu. Je volitelné a nic se centrálně
+  nevynucuje.
+- Operátor Composio povolí v Nastavení Launchpadu a přihlásí svůj účet přes
+  prohlížeč, stejně jako `gh`. API klíč se nikdy nekopíruje.
+- Agenti používají příkazovou řádku `composio`. Její aktivace se propíše do
+  instrukcí Lazurio Folderu té mašiny.
+- Aplikaci operátor připojí odkazem, který mu vrátí Launchpad nebo agent, a
+  přihlásí se přímo do ní.
 
-## Custody
+## Účet Environmentu
 
-- Klíč projektu je secret podle
-  [../security/local-secret-custody.md](../security/local-secret-custody.md);
-  do Gitu, logu ani chatu se nikdy nezapisuje.
-- Klíč celé Composio organizace drží jen Admin mimo pracovní mašiny.
-- Odchod operátora nebo zrušení mašiny řeší Admin zrušením klíče nebo projektu.
+Připojené aplikace patří u Composia účtu a jeho organizaci, ne mašině. Dvě
+mašiny přihlášené stejným účtem a organizací vidí stejná připojení. Berte
+proto přihlášení jako účet Environmentu: kde má mít mašina jiný rozsah,
+přihlaste jiný účet nebo jinou Composio organizaci.
+
+## Organizace
+
+Organizace, která chce přehled, si založí vlastní Composio organizaci a žádá
+operátory, aby se přihlašovali do ní. Je to samostatně spravovaná služba mimo
+Lazurio Dashboard. Lazurio Environment to nevynucuje.
 
 ## Co agent smí
 
@@ -30,17 +34,19 @@ návod k samostatnému zřízení mimo pilot.
   pokud operátor rozsah neomezil.
 - Navenek viditelný zápis provést jen na pokyn Principála.
 - Připojení účtu zprostředkovat operátorovi odkazem; přihlašovací údaje nikdy
-  nedrží.
+  nedrží a nikam je nezapisuje.
+- Na mašině s více Organizacemi volit nástroj Organizace, pro kterou pracuje,
+  a data mezi Organizacemi nepřenášet.
 - Mimo pilot Composio nezřizovat.
 
-## Pilot DEV-6626
+## Alternativy pro operátora
 
-Jedna Organizace, jedna první aplikace, nejdřív jedna pracovní VM a potom
-všechny. Konkrétní jména, custody a důkazy zůstávají v owner infra té
-Organizace a v plánu DEV-6626, ne v tomto veřejném repu.
+- Další podporované CLI nástroje z výběru Launchpadu.
+- MCP server, který na požádání nastaví agent. MCP servery se do Folderu
+  nezapisují.
 
 ## Otevřené otázky
 
-Issues v `Lazurio/LazurioPlatform`: #38 izolace a klíče, #39 zápisy a omezení
-akcí, #40 custody dat a region, #41 cesta pro agenty, #42 vlastní instalace,
-#43 spravovaná versus vlastní OAuth aplikace.
+Issues v `Lazurio/LazurioPlatform`: #39 zápisy a omezení rozsahu, #40 custody
+dat a region, #41 cesta pro agenty, #42 vlastní instalace, #43 spravovaná
+versus vlastní OAuth aplikace, #44 model napojení.

@@ -93,6 +93,107 @@ test("write smoke cleanup zůstává úzce vymezenou součástí schváleného s
   );
 });
 
+test("napojení jen na Environmentu operátora nevyžaduje katalog Organizace ani klíč Composia", async () => {
+  const manual = await readPolicy(manualPath);
+
+  // Decision 0162: o napojení rozhoduje operátor; katalog je doporučení.
+  expect(manual).toMatch(/Není to\s+povolovací brána pro Environment operátora/);
+  expect(manual).toMatch(
+    /Operátor smí svůj Environment\s+napojit i na to, co v katalogu není/,
+  );
+  expect(manual).toMatch(
+    /vlastní napojení\s+operátora na jeho Environmentu tímto procesem neprochází/,
+  );
+  // Nástroj povolený jen operátorem se do katalogu Organizace nezapisuje.
+  expect(manual).toMatch(
+    /operátor povolil jen \*\*na svém Environmentu\*\*, se do katalogu Organizace\s+nezapisuje/,
+  );
+  // Smoke u operátorova napojení schvaluje Principál v threadu, ne katalog.
+  expect(manual).toMatch(
+    /které je jen na Environmentu operátora, se do katalogu Organizace nic\s+nezapisuje/,
+  );
+  expect(manual).toMatch(/jmenovitě určí a schválí Principál v threadu/);
+  expect(manual).toMatch(
+    /jmenovitě schválený\s+Principálem v threadu \(u napojení jen na Environmentu operátora\)/,
+  );
+  // Composio se přihlašuje přes prohlížeč; žádný projekt ani klíč na mašině.
+  expect(manual).toMatch(
+    /žádný\s+projekt ani klíč Composia se na mašinu nezakládá a nekopíruje/,
+  );
+  expect(manual).not.toMatch(/jeden projekt na Environment/);
+  expect(manual).not.toMatch(/klíč projektu jen na té mašině/);
+  // Pořadí při práci: aktivovaná CLI před MCP.
+  expect(manual).toMatch(/Agent nejdřív použije CLI nástroje/);
+});
+
+test("AGENTS.md drží účet Environmentu a nevrací povinný zápis operátorova napojení do katalogu", async () => {
+  const agents = await readPolicy(repoPath("../AGENTS.md"));
+
+  // Přístupy jsou svázané s Environmentem; u Composia patří přihlášení účtu.
+  expect(agents).toMatch(/Přístupy k aplikacím jsou svázané s Environmentem/);
+  expect(agents).toMatch(
+    /vidí Mašiny se stejným účtem stejná připojení; jiný rozsah\s+znamená jiný účet/,
+  );
+  expect(agents).toMatch(
+    /nástroj povolený jen\s+operátorem na jeho Environmentu se do katalogu nezapisuje/,
+  );
+  // Nahrazené znění se nesmí vrátit.
+  expect(agents).not.toMatch(/přístupy k aplikacím ne\b/);
+  expect(agents).not.toMatch(/jeden projekt Composia na Environment/);
+});
+
+// Hlídač nepozná pokyn podle slovesa, protože tvarů je neomezeně. Platí
+// obrácené pravidlo: KAŽDÁ věta manuálu, která jmenuje INTEGRATIONS.md, musí
+// sama říkat, že jde o integraci sdílenou Organizací, nebo být jednou ze dvou
+// popisných vět vyjmenovaných níže. Nová věta jakéhokoli znění tak neprojde
+// bez vědomé úpravy tohoto seznamu.
+const sharedQualifier = /sdílen|sdílet|sdílí/i;
+const descriptiveCatalogSentences = [
+  "Katalog obsahuje: - `INTEGRATIONS.md` — lidský katalog:",
+  "patří do `INTEGRATIONS.md` katalogu dané Organizace",
+];
+
+function sentencesOf(text) {
+  return text
+    .replace(/\s+/g, " ")
+    .split(/(?<=[.;:!?])\s+(?=[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ*`„(])/u)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+}
+
+function unqualifiedCatalogSentences(text) {
+  return sentencesOf(text).filter(
+    (sentence) =>
+      sentence.includes("INTEGRATIONS.md") &&
+      !sharedQualifier.test(sentence) &&
+      !descriptiveCatalogSentences.some((known) => sentence.includes(known)),
+  );
+}
+
+test("každá věta manuálu o katalogu Organizace platí jen pro sdílenou integraci", async () => {
+  const manual = await readPolicy(manualPath);
+  expect(unqualifiedCatalogSentences(manual)).toEqual([]);
+  // Protipříklady: jakýkoli tvar pokynu bez kvalifikace v téže větě neprojde.
+  for (const sentence of [
+    "Napojení operátora eviduj v `INTEGRATIONS.md`.",
+    "Každé napojení je nutné přidat do `INTEGRATIONS.md`.",
+    "Nástroj operátora je třeba uvést v `INTEGRATIONS.md`.",
+    "Bez záznamu v `INTEGRATIONS.md` se nástroj nesmí použít.",
+  ])
+    expect(unqualifiedCatalogSentences(sentence)).toHaveLength(1);
+  // Kvalifikace v sousední větě nestačí.
+  expect(
+    unqualifiedCatalogSentences(
+      "Katalog je sdílený. Každé napojení uveď v `INTEGRATIONS.md`.",
+    ),
+  ).toHaveLength(1);
+  expect(
+    unqualifiedCatalogSentences(
+      "U integrace sdílené Organizací zapiš cíl do `INTEGRATIONS.md`.",
+    ),
+  ).toEqual([]);
+});
+
 test("provider runbooky nesmí cleanup vydávat za obecné oprávnění mazat", async () => {
   for (const path of smokeInstructionPaths) {
     const policy = await readPolicy(path);
