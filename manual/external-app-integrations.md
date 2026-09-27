@@ -83,7 +83,7 @@ to umí držet odděleně.
 | Vlastník | Pracovní mašina: Composio organizace patří Organizaci a spravuje ji Admin. Osobní mašina: účet Principála. |
 | Kdo připojuje | Operátor Environmentu, z Nastavení Launchpadu nebo požádáním agenta. |
 | Výchozí režim | Vše, co aplikace nabízí: čtení, zápis i mazání. Rozsah omezí operátor, když ví, že potřebuje méně. |
-| Rozsah rozhodnutí | Environment jedné Organizace a osobní Environment. Na multi-org mašině se Composio nezřizuje, dokud Principál neurčí oddělení připojení mezi Organizacemi. |
+| Multi-org mašina | Je to jeden Environment, osobní Environment svého Principála: jeden projekt pod jeho účtem, připojení společná napříč Organizacemi na mašině. Agent volí nástroj Organizace, ve které pracuje, a data mezi Organizacemi nepřenáší; to je pravidlo práce, ne technická hranice. Oddělená přihlášení znamenají oddělené mašiny. |
 | Zápisy | Schopnost zápisu není souhlas s Publikací; platí sekce o write operacích níže. |
 | Session agenta | Vzdálený sandbox Composia a nástroj pro správu připojení vypnuté. |
 | Data | Ukládání obsahu volání vypnuté. Tokeny a obsah procházejí Composiem, dokud Organizace nemá vlastní instalaci; Admin to ví před prvním připojením. |

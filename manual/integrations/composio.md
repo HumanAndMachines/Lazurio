@@ -9,8 +9,10 @@ návod k samostatnému zřízení mimo pilot.
 - Přihlášení do aplikace platí pro celý Environment. Jiné přihlášení znamená
   jinou mašinu.
 - Jeden projekt Composia na Environment. Klíč projektu leží jen na té mašině.
-- Platí pro Environment jedné Organizace a pro osobní Environment. Multi-org
-  mašina čeká na rozhodnutí Principála o oddělení připojení mezi Organizacemi.
+- Multi-org mašina je jeden Environment, osobní Environment svého Principála:
+  jeden projekt pod jeho účtem, připojení společná napříč Organizacemi na
+  mašině. Agent ví, že jeho přístupy sahají napříč, volí nástroj Organizace,
+  ve které pracuje, a data mezi Organizacemi nepřenáší.
 - Pracovní mašina používá Composio organizaci své Organizace, osobní mašina
   účet Principála.
 - „Uživatel“ uvnitř projektu je identifikátor mašiny; operátor žádný Composio

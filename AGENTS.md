@@ -594,8 +594,10 @@ přihlášení platí pro celý Environment; do vydání Launchpad stránky Apli
 Organizace, výchozí pořadí: oficiální MCP → oficiální CLI → Composio →
 reviewnutý pinned OSS → browser fallback; scraping/cookie-session servery
 nikdy. Napojená aplikace je ve výchozím stavu ke čtení, zápisu i mazání,
-rozsah omezuje operátor; schopnost zápisu není souhlas s Publikací. Na
-multi-org mašině se Composio do rozhodnutí Principála nezřizuje. Identita harnessu
+rozsah omezuje operátor; schopnost zápisu není souhlas s Publikací.
+Multi-org mašina je jeden Environment: připojení jsou společná napříč jejími
+Organizacemi, Agent ví, že jeho přístupy sahají napříč, volí nástroj správné
+Organizace a data mezi Organizacemi nepřenáší. Identita harnessu
 se sdílet smí, přístupy k aplikacím ne — každá mašina má vlastní, samostatně
 revokovatelné přihlášení; schválené integrace drží tracked katalog
 Organizace (jen jména env proměnných, nikdy hodnoty), osobní integrace patří
