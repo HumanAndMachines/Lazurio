@@ -586,10 +586,17 @@ Povolené jsou obecné patterny, anonymizované šablony a poučení převedené
 
 Externí aplikace (Gmail, Slack, Jira, Canva…) se napojují primárně lokálně
 kurátorovaným MCP serverem nebo CLI na dané mašině; nové napojení nikdy přes
-ChatGPT/claude.ai konektor ani cloudový broker (už nainstalovaný konektor se
-používat smí; chybí-li MCP cesta, konektor sám neinstaluj — browser fallback
-+ issue). Výběr: oficiální MCP → oficiální CLI → reviewnutý pinned OSS →
-browser fallback; scraping/cookie-session servery nikdy. Identita harnessu
+ChatGPT/claude.ai konektor ani jiný cloudový broker než Composio (už
+nainstalovaný konektor se používat smí; chybí-li cesta, konektor sám
+neinstaluj — browser fallback + issue). **Composio je schválený broker**
+(decision 0162): jeden projekt Composia na Environment, klíč jen na té Mašině,
+přihlášení platí pro celý Environment; do vydání Launchpad stránky Aplikace a
+`lazurio apps` se zřizuje jen v pilotu DEV-6626. Výběr určuje katalog
+Organizace, výchozí pořadí: oficiální MCP → oficiální CLI → Composio →
+reviewnutý pinned OSS → browser fallback; scraping/cookie-session servery
+nikdy. Napojená aplikace je ve výchozím stavu ke čtení, zápisu i mazání,
+rozsah omezuje operátor; schopnost zápisu není souhlas s Publikací. Na
+multi-org mašině se Composio do rozhodnutí Principála nezřizuje. Identita harnessu
 se sdílet smí, přístupy k aplikacím ne — každá mašina má vlastní, samostatně
 revokovatelné přihlášení; schválené integrace drží tracked katalog
 Organizace (jen jména env proměnných, nikdy hodnoty), osobní integrace patří

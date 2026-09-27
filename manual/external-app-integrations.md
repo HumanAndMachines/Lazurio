@@ -23,7 +23,9 @@ definovaným MCP serverem nebo CLI nástrojem na konkrétní mašině**.
   obdobně).
 - **Nikdy** přes sdílený cloudový integrační broker — tedy jakoukoli službu
   nebo hostovaný agregátorový MCP, kde OAuth granty a tokeny drží třetí
-  strana místo dané mašiny.
+  strana místo dané mašiny. **Jedinou výjimkou je Composio** za podmínek
+  decision 0162 a sekce [Composio jako schválený broker](#composio-jako-schválený-broker):
+  jeden projekt na Environment, klíč projektu jen na té mašině.
 - Vzdálený MCP endpoint provozovaný **přímo poskytovatelem služby**
   (například Slack, Atlassian, Canva, Google) je v pořádku — pokud je
   definovaný v lokálním configu harnessu na dané mašině a OAuth grant vzniká
@@ -47,21 +49,51 @@ Při požadavku „napoj aplikaci X" postupuj v tomto pořadí a první funkčn�
 2. **Oficiální CLI poskytovatele** (`gh`, `acli`, Google Workspace CLI…) —
    pro agenty se shell přístupem rovnocenná a často jednodušší cesta;
    credentials drží CLI lokálně stejně jako MCP server.
-3. **Reviewnutý open-source MCP server nebo CLI** — jen s ukotvenou verzí
+3. **Composio** — schválený broker podle decision 0162, když oficiální MCP
+   ani CLI poskytovatele neexistuje nebo nevyhovuje. Agent brokera sám
+   neprohledává: cestu pro danou aplikaci určuje kurátorovaný katalog
+   Organizace.
+4. **Reviewnutý open-source MCP server nebo CLI** — jen s ukotvenou verzí
    (release/commit pin), ověřeným publisherem a licencí; komunitní server
    není „oficiální integrace" jen proto, že obsluhuje známou službu.
-4. **Browser fallback** — čtení/obsluha webu agentem v browseru pod přímým
+5. **Browser fallback** — čtení/obsluha webu agentem v browseru pod přímým
    dohledem Principála, když MCP/CLI cesta neexistuje.
 
 **Zakázané v každém kroku:** servery postavené na scraping/cookie-session
 přístupu (reuse browser session tokenů, obcházení bot detekce) — porušují
-ToS poskytovatele a riskují ban účtu Organizace; sdílené brokery; zřizování
-nových konektorů v cloud UI účtu.
+ToS poskytovatele a riskují ban účtu Organizace; sdílené brokery jiné než
+Composio podle decision 0162; osobní Composio účty na pracovních mašinách;
+zřizování nových konektorů v cloud UI účtu.
 
 **Když žádná MCP/CLI cesta neexistuje:** použij browser fallback, případně
 existující už nainstalovaný konektor, a chybějící MCP zapiš jako issue/PR
 živého standardu — nový konektor sám neinstaluj; jeho zřízení je vědomé
 rozhodnutí Principála, ne automatický fallback agenta.
+
+## Composio jako schválený broker
+
+Decision 0162 (Principál 2026-09-27) mění dřívější plošný zákaz: Composio je
+dovolené, protože přihlášení do aplikací vážeme na celý Environment a Composio
+to umí držet odděleně.
+
+| Pravidlo | Znění |
+| --- | --- |
+| Jednotka izolace | Jeden projekt Composia na Environment. Composio nemá přístupový údaj užší než klíč projektu. |
+| Klíč | Omezený projektový klíč s nejmenšími oprávněními, jen na té mašině, v custody operátora. Klíč celé Composio organizace na pracovní mašině nikdy. |
+| Vlastník | Pracovní mašina: Composio organizace patří Organizaci a spravuje ji Admin. Osobní mašina: účet Principála. |
+| Kdo připojuje | Operátor Environmentu, z Nastavení Launchpadu nebo požádáním agenta. |
+| Výchozí režim | Vše, co aplikace nabízí: čtení, zápis i mazání. Rozsah omezí operátor, když ví, že potřebuje méně. |
+| Rozsah rozhodnutí | Environment jedné Organizace a osobní Environment. Na multi-org mašině se Composio nezřizuje, dokud Principál neurčí oddělení připojení mezi Organizacemi. |
+| Zápisy | Schopnost zápisu není souhlas s Publikací; platí sekce o write operacích níže. |
+| Session agenta | Vzdálený sandbox Composia a nástroj pro správu připojení vypnuté. |
+| Data | Ukládání obsahu volání vypnuté. Tokeny a obsah procházejí Composiem, dokud Organizace nemá vlastní instalaci; Admin to ví před prvním připojením. |
+
+**Dnes versus cíl.** Stránka Aplikace v Nastavení Launchpadu, příkaz
+`lazurio apps` a návody ve Folderu teprve vznikají v LazurioPlatform (plán
+DEV-6626). Do jejich vydání se Composio zřizuje jen v pilotu DEV-6626 na
+jedné Organizaci. Mimo pilot agent Composio sám
+nezřizuje a použije dosavadní cesty žebříčku. Postup pilotu a otevřené otázky
+drží [integrations/composio.md](integrations/composio.md).
 
 ## Kde co žije
 
@@ -283,6 +315,7 @@ nepoužívají; personalspace izolace má přednost.
 | [integrations/atlassian.md](integrations/atlassian.md) | Jira, Confluence |
 | [integrations/linkedin.md](integrations/linkedin.md) | LinkedIn (post-only + browser fallback) |
 | [integrations/canva.md](integrations/canva.md) | Canva |
+| [integrations/composio.md](integrations/composio.md) | Composio jako schválený broker: model, custody a pilot DEV-6626 |
 | [integrations/eso9.md](integrations/eso9.md) | ESO9 Web API, omezený JSON API fallback a discovery-first read-only rollout |
 
 Stav každého runbooku odpovídá datu uvedenému v jeho úvodní hlavičce; před
