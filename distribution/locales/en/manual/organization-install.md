@@ -93,16 +93,18 @@ extends it.
 > Organization owner.
 <!-- lazurio-guide:organization-install-short:end -->
 
-### Optional mandate for upgrades and Issue publication
+### Optional mandate for upgrades; filing Issues
 
 The default prompt above is a complete end-to-end mandate for missing required
 tools: it explicitly includes a supported standard OS package manager,
 standard elevation, and the necessary change to both the User and
 Machine/system-wide `PATH`. It does not authorize upgrades of already
-compatible tools, migration between package managers, or Issue publication.
-Those separate effects can be consciously authorized for the current
-installation session with the following additions; this is neither a new
-installation profile nor a permanent Lazurio setting.
+compatible tools or migration between package managers. Those separate
+effects can be consciously authorized for the current installation session
+with the following additions; this is neither a new installation profile nor
+a permanent Lazurio setting. Filing a general reproduced defect as a GitHub
+Issue needs no separate consent: it is a standing mandate of the Agent
+(decision 0163), and the addition below only names the target repository.
 
 Add only the paragraphs whose impact the Principal actually approves:
 

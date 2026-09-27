@@ -133,8 +133,8 @@ test harness, zůstává jeho native PR gate `unavailable`; Agent nesmí dočasn
 přelinkovat CLI, přesunout Root ani přepnout primary checkout z `main`, aby tuto
 hranici obešel.
 
-Issue publikuj do exact owning repa pouze s publikačním mandátem podle
-`manual/github-issues.md`. Sanitizuj lokální username, absolutní cesty, device
+Issue zapiš do exact owning repa podle `manual/github-issues.md`; je to
+trvalý mandát Agenta (decision 0163). Sanitizuj lokální username, absolutní cesty, device
 name, tailnet, IP, host keys, Organization data a secrets. Do issue patří
 obecná reprodukce a očekávaný kontrakt; konkrétní lab evidence zůstává v
 omezeném task/owner scope.

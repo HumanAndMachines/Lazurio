@@ -223,6 +223,16 @@ Technické detaily a důkazy zůstávají v PR.
 dalšího můžeme dotáhnout?“ Odpověď stručně předloží Principálovi jako
 doporučené navazující kroky.
 
+**Review bereš vážně, ale ne bez výhrad** (decision 0163). Skutečnou vadu,
+kterou review najde, opravíš hned: špatné chování, rozpor mezi texty, tvrzení
+bez důkazu, únik citlivého obsahu. Nález, který je drobnost bez dopadu,
+spekulace o budoucí změně nebo rozšiřuje záběr PR o nový mechanismus,
+nepřijímáš mlčky dalším kolem oprav. Odpovíš věcnou námitkou přímo v PR: co
+je účelem PR, proč nález nechrání před skutečnou škodou a co už je doložené,
+a požádáš o verdikt na nezměněném headu. Trvá-li reviewer na svém,
+nepokračuješ dalším kolem ani review neobcházíš; obě stanoviska předložíš
+Principálovi. Nález, který má cenu, ale do PR nepatří, zapíšeš jako issue.
+
 **Popis PR nese kontext k rozhodnutí.** Kdo o merge rozhoduje, nesmí „proč"
 odvozovat z diffu: popis pravdivě vysvětlí motivaci, cílový stav a přínos,
 co se mění i záměrně nemění, jak je to ověřené a jaká zůstávají rizika,
@@ -429,20 +439,24 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
 4. **Poznatky zapisuj průběžně, ale vždy do určeného scope a z worktree**
    (kroky 1–3): bez scope nevíš kam, bez worktree hrozí cross-task
    kontaminace. Kam který druh poznatku patří, říká kanonický blok výš.
-5. **Nenechávej rozhodnutí v chatu.** Aktivní technické nejistoty patří do
-   GitHub Issues přesného owning repa; plán, priorita a odpovědnost do Mission
-   Controlu. Vytvoření issue nebo komentáře je Publikace a vyžaduje explicitní
-   mandát Principála. Před Publikací odstraň secrets, Personalspace,
-   Organization-specific obsah mimo jeho access hranici a duplicity; nemáš-li
-   bezpečný repo nebo mandát, vrať sanitizovaný draft. Úplný postup drží
-   `manual/github-issues.md`. Legacy `ISSUES.open.json` a
-   `ISSUES.resolved.json` jsou pouze zmrazený migrační vstup a nové záznamy do
-   nich nevznikají. Když instalační prompt předem jmenuje exact issue repo a
-   dovolí do něj publikovat obecné instalační vady, Agent se u každého
-   reprodukovaného nálezu znovu neptá: po kontrole duplicit a sanitizaci issue
-   vytvoří nebo doplní a jeho URL vrátí v handoffu. Mandát nepovoluje issue
-   zavřít, přiřadit, prioritizovat ani do veřejného repa zapsat
-   Organization-specific obsah.
+5. **Nenechávej rozhodnutí v chatu a nenech se otevřenou otázkou zastavit.**
+   Aktivní technické nejistoty patří do GitHub Issues přesného owning repa;
+   plán, priorita a odpovědnost do Mission Controlu. **Zapsat issue je trvalý
+   mandát** (decision 0163): když při práci narazíš na otevřený technický
+   problém, nejistotu nebo nález, který nejde hned vyřešit, po kontrole
+   duplicit a sanitizaci issue v owning repu sám vytvoříš nebo doplníš a jeho
+   URL uvedeš v handoffu. Neptáš se předem a nezapisuješ to místo toho do
+   Mission Controlu. Issue tě neblokuje: pokračuješ na všem, co na něm
+   nestojí, a zastavíš se jen tam, kde bez odpovědi nejde pokračovat bezpečně
+   nebo kde rozhodnutí patří Principálovi. Před zápisem odstraň secrets,
+   Personalspace, Organization-specific obsah mimo jeho access hranici
+   a duplicity; do veřejného repa nikdy nezapisuj Organization-specific
+   obsah. Když Issues nejsou povolené, účet nemá právo nebo public-safety není
+   jistá, nic neobcházej a vrať sanitizovaný draft s exact cílovým repem.
+   Mandát nepovoluje issue zavřít, přiřadit ani prioritizovat; to děláš jen
+   na pokyn Principála. Úplný postup drží `manual/github-issues.md`. Legacy
+   `ISSUES.open.json` a `ISSUES.resolved.json` jsou pouze zmrazený migrační
+   vstup a nové záznamy do nich nevznikají.
 6. **Delegace.** Při delegaci na Claude, Codex nebo Desktop agenta platí:
    self-report není důkaz, QA gate drží delegující Kolega.
 7. **SSH na Mašiny v tailnetu.** Tailscale profil je na Mašině jeden a

@@ -379,8 +379,9 @@ denně neověřuje. Proto pro každého agenta platí:
    je oprava ověřená — metadata-only, žádné secrets, tokeny ani screenshoty
    s citlivým obsahem.
 3. Neznáš-li řešení, připrav issue podle `manual/github-issues.md` do přesného
-   owning repa. Vytvoření issue nebo komentáře je Publikace: bez explicitního
-   mandátu Principála vrať sanitizovaný draft a cílový repo. Veřejné
+   owning repa a po kontrole duplicit a sanitizaci ho sám zapiš (decision
+   0163); sanitizovaný draft vrať jen tehdy, když zápis není možný nebo
+   public-safety není jistá. Veřejné
    `HumanAndMachines/Lazurio` smí dostat jen obecný, anonymizovaný problém
    frameworku.
 4. Org-specifika (jiné admin kroky, plán, licence) patří do `INTEGRATIONS.md`

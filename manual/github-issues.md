@@ -52,8 +52,14 @@ reprodukci, skutečný a očekávaný výsledek, bezpečný workaround a rozhodn
 acceptance criteria. Screenshot přilož jen tehdy, když byl vizuálně
 zkontrolovaný a neobsahuje citlivý obsah.
 
-Vytvoření issue nebo komentáře je Publikace. Instalační prompt musí obsahovat
-explicitní mandát pro přesný owning repo. Doporučená věta:
+Zapsat issue nebo ho doplnit komentářem je trvalý mandát každého Task Agenta
+(decision 0163): otevřený technický problém, nejistotu nebo nález, který
+nejde hned vyřešit, Agent po kontrole duplicit a sanitizaci sám zapíše do
+přesného owning repa, uvede URL v handoffu a pokračuje na práci, která na
+issue nestojí. Předem se neptá. Mandát se nevztahuje na uzavření, assignment
+ani prioritizaci issue; ty dělá jen na pokyn Principála.
+
+Instalační prompt může owning repo pojmenovat předem. Doporučená věta:
 
 > Pokud během instalace reprodukuješ obecný Lazurio problém, máš svolení po
 > kontrole duplicit a sanitizaci vytvořit nebo doplnit GitHub Issue v
@@ -61,11 +67,10 @@ explicitní mandát pro přesný owning repo. Doporučená věta:
 > Personalspace ani Organization-specific data a issue nezavírej ani
 > nepřiřazuj.
 
-Takto předem udělený repo-specific mandát je dostatečný pro celou aktuální
-instalační relaci. Agent se u každé nové reprodukované vady znovu neptá a
-nezůstane jen u lokální poznámky: po kontrole duplicit a sanitizaci issue
-proaktivně vytvoří nebo doplní. Mandát se nevztahuje na náhodný transient,
-neověřenou domněnku, jiné repo, uzavření, assignment ani prioritizaci issue.
+Agent se u každé nové reprodukované vady znovu neptá a nezůstane jen u lokální
+poznámky: po kontrole duplicit a sanitizaci issue proaktivně vytvoří nebo
+doplní. Do issue nepatří náhodný transient ani neověřená domněnka vydávaná za
+fakt; otevřenou otázku zapiš jako otázku a uveď, co je ověřené a co ne.
 
 Když Issues nejsou povolené, GitHub účet nemá potřebné právo, síť je
 nedostupná nebo public-safety není jistá, Agent nic neobchází a nezapisuje

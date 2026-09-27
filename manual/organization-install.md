@@ -85,15 +85,17 @@ tohoto runbooku; krátký prompt jej nenahrazuje ani nerozšiřuje.
 > blocker pojmenuj přesným účtem, Teamem a repozitářem pro Organization ownera.
 <!-- lazurio-guide:organization-install-short:end -->
 
-### Volitelný mandát pro upgrade a publikaci Issues
+### Volitelný mandát pro upgrade; zápis Issues
 
 Výchozí prompt nahoře je úplný end-to-end mandát pro chybějící povinné
 nástroje: výslovně zahrnuje podporovaný standardní OS package manager,
 standardní elevation a nezbytnou změnu User i Machine/system-wide `PATH`.
-Neautorizuje upgrade již vyhovujících nástrojů, převod jejich správce ani
-publikaci Issue. Tyto oddělené dopady lze pro aktuální instalační relaci
-vědomě povolit následujícími dodatky; nejde o nový instalační profil ani
-trvalé nastavení Lazuria.
+Neautorizuje upgrade již vyhovujících nástrojů ani převod jejich správce.
+Tyto oddělené dopady lze pro aktuální instalační relaci vědomě povolit
+následujícími dodatky; nejde o nový instalační profil ani trvalé nastavení
+Lazuria. Zápis obecné reprodukované vady jako GitHub Issue zvláštní souhlas
+nepotřebuje: je to trvalý mandát Agenta (decision 0163) a dodatek níže jen
+jmenuje cílové repo.
 
 Do promptu přidej pouze ty odstavce, jejichž dopad Principál skutečně schvaluje:
 

@@ -122,7 +122,8 @@ runtime/cache cesty, ne custody source of truth.
 - Otevřený technický problém nebo nejistota patří do GitHub Issues přesného
   owning repa podle [github-issues.md](github-issues.md), ne do ad-hoc
   Markdown poznámky ani nového JSON ledgeru. Plán a odpovědnost dál vlastní
-  Mission Control; vytvoření issue nebo komentáře je Publikace.
+  Mission Control; zapsat issue je trvalý mandát Agenta a práci nezastavuje
+  (decision 0163).
 - Shared Launchpad nesmí držet hardcodované porty jedné Organizace. Přesný
   port vlastní verzovaný module-root `lazurio.module.json`; `package.json`
   pouze odkazuje na lease jejím ID. Přímý start čte lease z manifestu.
