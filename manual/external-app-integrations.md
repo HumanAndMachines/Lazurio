@@ -50,9 +50,9 @@ Při požadavku „napoj aplikaci X" postupuj v tomto pořadí a první funkčn�
    pro agenty se shell přístupem rovnocenná a často jednodušší cesta;
    credentials drží CLI lokálně stejně jako MCP server.
 3. **Composio** — schválený broker podle decision 0162, když oficiální MCP
-   ani CLI poskytovatele neexistuje nebo nevyhovuje. Agent brokera sám
-   neprohledává: cestu pro danou aplikaci určuje kurátorovaný katalog
-   Organizace.
+   ani CLI poskytovatele neexistuje nebo nevyhovuje, a operátor Composio na
+   mašině povolil. Kurátorovaný katalog Organizace je doporučení cesty pro
+   danou aplikaci; poslední slovo má operátor Environmentu.
 4. **Reviewnutý open-source MCP server nebo CLI** — jen s ukotvenou verzí
    (release/commit pin), ověřeným publisherem a licencí; komunitní server
    není „oficiální integrace" jen proto, že obsluhuje známou službu.
@@ -62,8 +62,8 @@ Při požadavku „napoj aplikaci X" postupuj v tomto pořadí a první funkčn�
 **Zakázané v každém kroku:** servery postavené na scraping/cookie-session
 přístupu (reuse browser session tokenů, obcházení bot detekce) — porušují
 ToS poskytovatele a riskují ban účtu Organizace; sdílené brokery jiné než
-Composio podle decision 0162; osobní Composio účty na pracovních mašinách;
-zřizování nových konektorů v cloud UI účtu.
+Composio podle decision 0162; kopírování klíčů a tokenů do chatu, Gitu nebo
+logu; zřizování nových konektorů v cloud UI účtu.
 
 **Když žádná MCP/CLI cesta neexistuje:** použij browser fallback, případně
 existující už nainstalovaný konektor, a chybějící MCP zapiš jako issue/PR
@@ -72,28 +72,30 @@ rozhodnutí Principála, ne automatický fallback agenta.
 
 ## Composio jako schválený broker
 
-Decision 0162 (Principál 2026-09-27) mění dřívější plošný zákaz: Composio je
-dovolené, protože přihlášení do aplikací vážeme na celý Environment a Composio
-to umí držet odděleně.
+Decision 0162 (Principál 2026-09-27) mění dřívější plošný zákaz a určuje, kdo
+o napojení rozhoduje: **operátor Environmentu**. Environment zrcadlí svého
+operátora; agenti v něm jednají tam, kam sahají přihlášení na té mašině.
 
 | Pravidlo | Znění |
 | --- | --- |
-| Jednotka izolace | Jeden projekt Composia na Environment. Composio nemá přístupový údaj užší než klíč projektu. |
-| Klíč | Omezený projektový klíč s nejmenšími oprávněními, jen na té mašině, v custody operátora. Klíč celé Composio organizace na pracovní mašině nikdy. |
-| Vlastník | Pracovní mašina: Composio organizace patří Organizaci a spravuje ji Admin. Osobní mašina: účet Principála. |
-| Kdo připojuje | Operátor Environmentu, z Nastavení Launchpadu nebo požádáním agenta. |
-| Výchozí režim | Vše, co aplikace nabízí: čtení, zápis i mazání. Rozsah omezí operátor, když ví, že potřebuje méně. |
-| Rozsah rozhodnutí | Environment jedné Organizace a osobní Environment. Na multi-org mašině se Composio nezřizuje, dokud Principál neurčí oddělení připojení mezi Organizacemi. |
+| Kdo rozhoduje | Operátor. Napojení je volitelné a nic se centrálně nevynucuje. |
+| Cesty | Composio (doporučené), další podporované CLI z výběru Launchpadu, nebo MCP server, který operátorovi nastaví agent. `gh` je povinný, ne volitelný. |
+| Přihlášení Composia | Přes prohlížeč, stejně jako `gh`. API klíč se nikdy nekopíruje. Agenti používají příkazovou řádku `composio`. |
+| Účet Environmentu | Připojení patří účtu a jeho Composio organizaci, ne mašině. Stejný účet a organizace na dvou mašinách znamená stejná připojení; jiný rozsah znamená jiný účet nebo organizaci. |
+| Oddělení kontextů | Nový Environment, tedy nová mašina s vlastními přihlášeními. |
+| Mašina s více Organizacemi | Jeden Environment. Agent volí nástroj Organizace, pro kterou pracuje, a data mezi Organizacemi nepřenáší; je to pravidlo práce, ne technická hranice. |
+| Organizace | Kdo chce přehled, založí vlastní Composio organizaci a žádá operátory, aby se přihlašovali do ní. Lazurio to nevynucuje a centrální přehled není cílem. |
+| Výchozí rozsah | Vše, co aplikace nabízí: čtení, zápis i mazání. Rozsah omezí operátor. |
 | Zápisy | Schopnost zápisu není souhlas s Publikací; platí sekce o write operacích níže. |
-| Session agenta | Vzdálený sandbox Composia a nástroj pro správu připojení vypnuté. |
-| Data | Ukládání obsahu volání vypnuté. Tokeny a obsah procházejí Composiem, dokud Organizace nemá vlastní instalaci; Admin to ví před prvním připojením. |
+| Návody pro agenty | Aktivovaný CLI nástroj se propíše do instrukcí Lazurio Folderu té mašiny. MCP servery se do Folderu nezapisují. |
+| Data | Tokeny aplikací a obsah volání drží Composio. Operátor i Organizace to vědí před prvním připojením. |
 
-**Dnes versus cíl.** Stránka Aplikace v Nastavení Launchpadu, příkaz
-`lazurio apps` a návody ve Folderu teprve vznikají v LazurioPlatform (plán
-DEV-6626). Do jejich vydání se Composio zřizuje jen v pilotu DEV-6626 na
-jedné Organizaci. Mimo pilot agent Composio sám
-nezřizuje a použije dosavadní cesty žebříčku. Postup pilotu a otevřené otázky
-drží [integrations/composio.md](integrations/composio.md).
+**Dnes versus cíl.** Sekce Nastavení Launchpadu s povinnými, doporučenými a
+volitelnými nástroji, jejich aktivace a propsání do Folderu teprve vznikají
+v LazurioPlatform (plán DEV-6626). Do jejich vydání se Composio zřizuje jen
+v pilotu DEV-6626. Mimo pilot agent Composio sám nezřizuje a použije dosavadní
+cesty žebříčku. Model a otevřené otázky drží
+[integrations/composio.md](integrations/composio.md).
 
 ## Kde co žije
 

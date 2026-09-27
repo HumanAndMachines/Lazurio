@@ -588,15 +588,20 @@ Externí aplikace (Gmail, Slack, Jira, Canva…) se napojují primárně lokáln
 kurátorovaným MCP serverem nebo CLI na dané mašině; nové napojení nikdy přes
 ChatGPT/claude.ai konektor ani jiný cloudový broker než Composio (už
 nainstalovaný konektor se používat smí; chybí-li cesta, konektor sám
-neinstaluj — browser fallback + issue). **Composio je schválený broker**
-(decision 0162): jeden projekt Composia na Environment, klíč jen na té Mašině,
-přihlášení platí pro celý Environment; do vydání Launchpad stránky Aplikace a
-`lazurio apps` se zřizuje jen v pilotu DEV-6626. Výběr určuje katalog
-Organizace, výchozí pořadí: oficiální MCP → oficiální CLI → Composio →
-reviewnutý pinned OSS → browser fallback; scraping/cookie-session servery
-nikdy. Napojená aplikace je ve výchozím stavu ke čtení, zápisu i mazání,
-rozsah omezuje operátor; schopnost zápisu není souhlas s Publikací. Na
-multi-org mašině se Composio do rozhodnutí Principála nezřizuje. Identita harnessu
+neinstaluj — browser fallback + issue). **Napojení je věc operátora**
+(decision 0162): Environment zrcadlí svého operátora a agenti jednají tam,
+kam sahají přihlášení na té Mašině, i napříč Organizacemi; jiné přístupy
+znamenají jinou Mašinu. Operátor volí mezi Composiem (doporučené, opt-in,
+přihlášení přes prohlížeč jako u `gh`, bez kopírování klíčů), dalšími
+podporovanými CLI a MCP serverem, který mu na požádání nastaví Agent; nic se
+centrálně nevynucuje. Do vydání příslušné sekce Nastavení Launchpadu se
+Composio zřizuje jen v pilotu DEV-6626. Výchozí pořadí pro danou aplikaci:
+oficiální MCP → oficiální CLI → Composio → reviewnutý pinned OSS → browser
+fallback; scraping/cookie-session servery nikdy. Napojená aplikace je ve
+výchozím stavu ke čtení, zápisu i mazání, rozsah omezuje operátor; schopnost
+zápisu není souhlas s Publikací. Agent na Mašině s více Organizacemi volí
+nástroj Organizace, pro kterou pracuje, a data mezi Organizacemi nepřenáší.
+Identita harnessu
 se sdílet smí, přístupy k aplikacím ne — každá mašina má vlastní, samostatně
 revokovatelné přihlášení; schválené integrace drží tracked katalog
 Organizace (jen jména env proměnných, nikdy hodnoty), osobní integrace patří
