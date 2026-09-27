@@ -126,6 +126,36 @@ test("napojení jen na Environmentu operátora nevyžaduje katalog Organizace an
   expect(manual).toMatch(/Agent nejdřív použije CLI nástroje/);
 });
 
+test("AGENTS.md drží účet Environmentu a nevrací povinný zápis operátorova napojení do katalogu", async () => {
+  const agents = await readPolicy(repoPath("../AGENTS.md"));
+
+  // Přístupy jsou svázané s Environmentem; u Composia patří přihlášení účtu.
+  expect(agents).toMatch(/Přístupy k aplikacím jsou svázané s Environmentem/);
+  expect(agents).toMatch(
+    /vidí Mašiny se stejným účtem stejná připojení; jiný rozsah\s+znamená jiný účet/,
+  );
+  expect(agents).toMatch(
+    /nástroj povolený jen\s+operátorem na jeho Environmentu se do katalogu nezapisuje/,
+  );
+  // Nahrazené znění se nesmí vrátit.
+  expect(agents).not.toMatch(/přístupy k aplikacím ne\b/);
+  expect(agents).not.toMatch(/jeden projekt Composia na Environment/);
+});
+
+test("každý pokyn zapsat do katalogu Organizace v manuálu platí jen pro sdílenou integraci", async () => {
+  const manual = await readPolicy(manualPath);
+  // Odstavec, který přikazuje zápis do INTEGRATIONS.md, musí sám říkat, že jde
+  // o integraci sdílenou Organizací; jinak by znovu zavazoval i operátora.
+  const paragraphs = manual.split(/\n\s*\n/);
+  const ordering = paragraphs.filter(
+    (paragraph) =>
+      /zapiš/i.test(paragraph) && paragraph.includes("INTEGRATIONS.md"),
+  );
+  expect(ordering.length).toBeGreaterThan(0);
+  for (const paragraph of ordering)
+    expect(paragraph).toMatch(/sdílen|sdílet/);
+});
+
 test("provider runbooky nesmí cleanup vydávat za obecné oprávnění mazat", async () => {
   for (const path of smokeInstructionPaths) {
     const policy = await readPolicy(path);
