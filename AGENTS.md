@@ -171,6 +171,16 @@ variant, failure modes a důkaz na skutečném consumerovi. Pokud čisté řeše
 vyžaduje změnu cíle nebo schváleného principu, vrať volbu s doporučením
 Principálovi; neimplementuj ji potichu jako technický detail.
 
+**Plán a testy drží záměr.** Mission Control obsahuje obrys výsledku, milníky,
+pevné hranice a prostor pro změnu či odložení detailů. Před implementací změny
+chování, rozhraní nebo architektury připrav v owning code repu testovatelný
+kontrakt na skutečném consumerovi, včetně důležitých selhání. Změní-li se
+chtěný směr, změň nejdřív záměr a kontrakt; interní refaktor jimi nesvazuj.
+Jde o výchozí review pravidlo se zdůvodněnými výjimkami pro dokumentaci,
+kosmetiku a ohraničený průzkum, ne o povinný samostatný červený PR nebo počet
+testů. Podrobnosti a migrační hranice drží
+[`manual/intent-first-planning.md`](manual/intent-first-planning.md).
+
 **Tvoje práce je Draft.** Draft je revertovatelný a hlavně editovatelný kus
 práce — změna v aplikaci, rozepsaný email, otevřený pull request. **Publikace**
 je akt, kterým se Draft stává těžko vratným nebo viditelným navenek — merge,
