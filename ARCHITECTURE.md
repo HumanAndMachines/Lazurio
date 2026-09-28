@@ -228,7 +228,8 @@ GitHub Team → repository grantu při každém vydání tokenu (fail closed) je
 cílový kontrakt, který vyžaduje versionovanou změnu `Lazurio/github-app`
 s testy a migrací existujících policy před rolloutem. Commity z Workspace
 mají committera `lazurio-for-github[bot]`, autora jako Teamovou
-pseudo-identitu a trailer `Lazurio-Workspace: <organization-slug>/<team-slug>`;
+pseudo-identitu a trailer `Lazurio-Workspace: <organization-slug>/<team-slug>`
+(cílově vedle něj `Lazurio-Environment: <machine>.<org>`, decision 0167);
 každá změna jde přes pull request otevřený botem s labelem `team:<slug>`,
 který reviewuje a merguje oprávněný Operátor a tím za ni přebírá
 odpovědnost. Token s `contents: write` umí na nechráněné `main` pushnout i
@@ -272,6 +273,14 @@ Launchpad proto používá tři oddělené lifecycle profily:
 
 Machine-wide evidence odvozená ze Start/Open kliknutí není konfigurace žádného
 z těchto profilů. Launchpad ji nevytváří ani nečte.
+
+Launchpad LazurioPlatform, který rezidentní Launchpad nahradí (decision 0167),
+tyto profily mění: na Linuxu jsou moduly služby operačního systému, spouští je
+Launchpad i CLI `lazurio module …` a restart Launchpadu přežijí; na macOS
+zůstávají vázané na session. Spouští moduly z `main`; volba worktree nepatří do
+přepnutí hostovaných Mašin a náhled pull requestu je tam otevřená otázka návrhu.
+Profily výše platí pro Launchpad instalací Root Repa do jejich migrace
+(decision 0164).
 
 ## Runtime Modulu a porty
 
@@ -381,9 +390,13 @@ LazurioPlatform (nejdřív Linux, potom macOS, Windows po buildu Platformy) a
 selhání opraví Agent vpřed ve Folderu. Do své migrace Source Root funguje beze
 změny. Ruční přesun Source Rootu není podporovaný postup.
 
-Hosted Resident profily mohou dál používat verzovaný immutable artefakt s
-atomickou aktivací a rollbackem. Ani tam se běžící runtime neaktualizuje
-přepisem source checkoutu a artefakt nesmí vytvořit druhou datovou autoritu.
+Hosted Resident profily dnes používají verzovaný immutable artefakt s
+atomickou aktivací a rollbackem. Cílově podle decision 0166 nemá Lazurio ani
+Machines návrat na předchozí verzi jako způsob opravy a rezidentní Launchpad
+pracovních Mašin zaniká přepnutím na Launchpad LazurioPlatform (decision 0167);
+změnu rolí Machines provede samostatné rozhodnutí Machines. Ani tam se běžící
+runtime neaktualizuje přepisem source checkoutu a artefakt nesmí vytvořit druhou
+datovou autoritu.
 
 Pracovní checkouty aktualizuje jediná explicitní akce `lazurio update`, kterou
 volá CLI i tlačítko **Synchronizovat**. Postupuje shora dolů přes Lazurio,

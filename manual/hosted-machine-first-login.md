@@ -31,14 +31,14 @@ jednotky s `--user`). Přechod VM na LazurioPlatform včetně práce s Organizac
 je rozpracovaný a sleduje ho LazurioPlatform (issue #50); do té doby tento
 manuál popisuje rezidentní instalaci.
 
-## Kdo se přihlašuje (dočasně volně, decision 0159)
+## Kdo se přihlašuje (decisions 0159 a 0168)
 
 Dokud vazbu Mašina → GitHub účet neřídí Lazurio Account v Dashboardu,
-přihlásí operátor hostovanou pracovní VM **libovolným GitHub účtem** — osobní
-i týmovou. `owner.assignment` v `/etc/lazurio/lazurio.machine.json` přihlášení
+přihlásí operátor osobní pracovní VM **libovolným GitHub účtem**.
+`owner.assignment` v `/etc/lazurio/lazurio.machine.json` přihlášení
 neomezuje: Agent kvůli chybějícímu, neplatnému ani odlišnému přiřazení
-neblokuje a jiný přihlášený účet není blocker. Jedinou výjimkou je Mašina,
-na které už běží bot Organizace přes broker (níže): tam zůstává bot.
+neblokuje a jiný přihlášený účet není blocker. Týmová VM se osobním účtem
+nepřihlašuje nikdy: pracuje přes bota Organizace (níže, decision 0168).
 GitHub dál rozhoduje, co přihlášený účet smí.
 
 ## Jak Agent pozná, o jakou Mašinu jde
@@ -126,13 +126,13 @@ zapíše přesný blocker a zastaví se.
 
 ## Týmová VM: identita Organizace, ne člověka
 
-**Dočasná výjimka (decision 0159).** Dokud na týmové VM neběží bot
-Organizace (chybí `/etc/lazurio/github-broker/environment`), přihlásí ji
-operátor stejně jako osobní VM — tlačítkem v Launchpadu, libovolným účtem —
-a postupuje podle kroků osobní VM včetně `--role builder`. Agent ho předem
-upozorní, že všichni na této VM pak pracují pod jeho účtem a jeho SSH klíčem.
-Jakmile broker běží, platí pravidla níže a osobní přihlášení operátor
-odhlásí.
+**Bez výjimky (decision 0168).** Dočasná výjimka 0159 pro týmovou VM
+skončila: týmová VM má fungovat s botem Organizace hned po předání. Když na ní
+bot neběží (chybí `/etc/lazurio/github-broker/environment`), je to vada
+Machines k opravě vpřed, ne důvod přihlásit člověka: Agent osobní přihlášení
+nespouští ani nenavrhuje, zapíše blocker pro Organization Admina (níže) a
+zastaví se. Osobní účet, který na týmové VM zůstal přihlášený z dřívějška,
+operátor odhlásí.
 
 Sdílená týmová VM (`owner.assignment.kind: team`) nemá osobního operátora a
 pracuje na ní více lidí z Teamu. Podle rozhodnutí 0147–0149 jedná na GitHubu
