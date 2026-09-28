@@ -82,6 +82,17 @@ test("a linked review of a root with external Git metadata compiles the actual O
   expect(await Bun.file(join(other, "generated", "company-summary.json")).exists()).toBe(false);
 });
 
+test("a same-repository linked checkout cannot impersonate the configured primary", async () => {
+  const { primary, review } = await fixture();
+  const container = join(dirname(primary), "impostor");
+  await mkdir(container);
+  const impostor = join(container, "FixtureCompany_GEN3");
+  git(primary, "worktree", "move", review, impostor);
+  git(primary, "config", "core.worktree", impostor);
+  await expect(compileOrganization({ organizationRoot: impostor, write: true })).rejects.toThrow();
+  expect(await Bun.file(join(impostor, "generated", "company-summary.json")).exists()).toBe(false);
+});
+
 test("conflicting canonical Organization authority blocks legacy generation", async () => {
   const {review}=await fixture();
   await Bun.write(join(review,"lazurio.organization.json"),JSON.stringify({organization:{id:"unrelated"}}));

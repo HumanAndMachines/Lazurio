@@ -48,6 +48,7 @@ export function readCheckoutRepositoryObservation(root) {
       ? realpathSync(resolve(common, configuredWorktrees[0]))
       : linkedWorktree ? dirname(common) : actual;
     if (gitAt(checkoutRoot, "rev-parse", "--show-prefix") !== "" ||
+        realpathSync(gitAt(checkoutRoot, "rev-parse", "--absolute-git-dir")) !== common ||
         realpathSync(gitAt(checkoutRoot, "rev-parse", "--path-format=absolute", "--git-common-dir")) !== common) {
       return { status: "invalid", reason: "primary_repository_mismatch" };
     }
