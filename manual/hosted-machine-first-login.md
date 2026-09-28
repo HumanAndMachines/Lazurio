@@ -61,8 +61,12 @@ je Pracovní, týmová VM Pracovní týmové a osobní Mašina Principála Osobn
   Principála podle [`hosted-buddy-vps.md`](hosted-buddy-vps.md); tento manuál
   se na ni nevztahuje.
 - Soubor chybí, nevaliduje, nebo `owner.assignment` není deklarovaný: Agent
-  typ nehádá a postupuje jako na osobní pracovní VM; přihlášení kvůli tomu
-  neblokuje.
+  typ nehádá a **osobní přihlášení `gh` neprovede** — bez platného handoveru
+  nejde vyloučit, že jde o týmovou VM, na které je osobní účet zakázaný
+  (rozhodnutí 0168). Stav nahlásí operátorovi a požádá provozovatele Machines,
+  ať handover ověří nebo doplní (`lazurio machine inspect` rezidentního CLI
+  vypíše přesné odmítnutí); teprve potom pokračuje. Práce, která přihlášení
+  nepotřebuje, blokovaná není.
 
 ## Osobní pracovní VM: identita operátora
 
