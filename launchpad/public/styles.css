@@ -6301,3 +6301,45 @@ html[data-i18n-ready="true"] .locale-bootstrap {
 @keyframes locale-bootstrap-spin {
   to { transform: rotate(360deg); }
 }
+
+/* DEV-6627 — řádková dlaždice (schválený návrh 2026-09-21).
+ *
+ * Provozní seznam modulů se má číst jako seznam, ne jako mřížka aplikací:
+ * ikona vlevo, název a jednořádkový popis vedle ní. Anatomie je vendor
+ * `lz-tile--row`; tahle vrstva ji jen promítá na existující `.app-card`,
+ * protože DOM už má správné pořadí (ikona, pak textový blok).
+ *
+ * Výška je `min-height`, ne pevná: dlaždice s warning panelem nebo řádkem
+ * runtime stages musí mít kam růst. V klidném stavu jsou všechny stejně
+ * vysoké, protože popis drží jeden řádek; roste jen skutečná výjimka.
+ *
+ * Zkrácení popisu drží CSS, ne ořez řetězce v JS, takže celý text zůstává
+ * dostupný pro čtečku i pro detail modulu. */
+.apps-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.apps-grid > .app-card {
+  min-height: calc(var(--lz-grid-step) + var(--lz-space-32));
+}
+
+.apps-grid > .app-card .app-title-block {
+  height: auto;
+  flex: 1 1 auto;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--lz-space-16);
+}
+
+.apps-grid > .app-card .app-title-body {
+  min-width: 0;
+  margin-top: 0;
+}
+
+/* Popis drží jeden řádek, aby mřížka nikdy neposkočila podle délky textu. */
+.apps-grid > .app-card .app-card-desc {
+  margin: var(--lz-space-4) 0 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

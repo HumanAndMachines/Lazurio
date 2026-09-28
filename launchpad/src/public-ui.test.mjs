@@ -1392,8 +1392,13 @@ test("Launchpad používá jednotný kompaktní grid s jemně zvýšenými dlaž
     readFile(join(publicRoot, "styles.css"), "utf8"),
   ]);
 
-  expect(css).toContain("grid-template-columns: repeat(4, minmax(0, 1fr))");
-  expect(css).toContain("min-height: 11rem");
+  // DEV-6627: o počtu sloupců a výšce dlaždice rozhoduje POSLEDNÍ vrstva.
+  // Dřívější `repeat(4, …)` a `min-height: 11rem` v souboru pořád stojí, jen
+  // je řádková vrstva přebíjí — proto se tvrdí pořadí, ne pouhý výskyt.
+  expect(css.lastIndexOf("grid-template-columns: repeat(3, minmax(0, 1fr))"))
+    .toBeGreaterThan(css.lastIndexOf("grid-template-columns: repeat(4, minmax(0, 1fr))"));
+  expect(css.lastIndexOf("min-height: calc(var(--lz-grid-step) + var(--lz-space-32))"))
+    .toBeGreaterThan(css.lastIndexOf("min-height: 11rem"));
   expect(css).toContain("width: 2.6rem");
   expect(css).toContain("border: 1px solid transparent");
   expect(css).toContain("font-weight: 400");
@@ -1404,6 +1409,9 @@ test("Launchpad používá jednotný kompaktní grid s jemně zvýšenými dlaž
   expect(js).toContain('["admin", "productionspace", "public-preview"].includes(app.surface)');
   expect(js).toContain("return surface ? `${surface} · ${purpose}` : purpose");
   expect(js).toContain("if (orgLabel && shouldShowCardOrg())");
+  // Řádková anatomie: ikona vlevo, textový blok vedle ní, popis na jeden řádek.
+  expect(css).toMatch(/\.apps-grid > \.app-card \.app-title-block\s*{[^}]*flex-direction: row;[^}]*align-items: center/);
+  expect(css).toMatch(/\.apps-grid > \.app-card \.app-card-desc\s*{[^}]*white-space: nowrap;[^}]*text-overflow: ellipsis/);
   const appCardRule = css.match(/\.app-card\s*\{[^}]*\}/s)?.[0] ?? "";
   expect(appCardRule).not.toContain("box-shadow");
   expect(appCardRule).not.toContain("text-shadow");
