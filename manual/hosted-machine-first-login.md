@@ -31,15 +31,16 @@ jednotky s `--user`). Přechod VM na LazurioPlatform včetně práce s Organizac
 je rozpracovaný a sleduje ho LazurioPlatform (issue #50); do té doby tento
 manuál popisuje rezidentní instalaci.
 
-## Kdo se přihlašuje (dočasně volně, decision 0159)
+## Kdo se přihlašuje (decisions 0159 a 0168)
 
 Dokud vazbu Mašina → GitHub účet neřídí Lazurio Account v Dashboardu,
-přihlásí operátor hostovanou pracovní VM **libovolným GitHub účtem** — osobní
-i týmovou. `owner.assignment` v `/etc/lazurio/lazurio.machine.json` přihlášení
-neomezuje: Agent kvůli chybějícímu, neplatnému ani odlišnému přiřazení
-neblokuje a jiný přihlášený účet není blocker. Jedinou výjimkou je Mašina,
-na které už běží bot Organizace přes broker (níže): tam zůstává bot.
-GitHub dál rozhoduje, co přihlášený účet smí.
+přihlásí operátor osobní pracovní VM **libovolným GitHub účtem**: platný
+handover s `owner.assignment.kind: operator` přihlášení neomezuje na
+konkrétní účet a jiný přihlášený účet není blocker. Týmová VM se osobním
+účtem nepřihlašuje nikdy: pracuje přes bota Organizace (níže, decision 0168).
+Bez platného handoveru, který druh Mašiny a přiřazení prokáže, Agent osobní
+přihlášení neprovede (viz rozlišení níže). GitHub dál rozhoduje, co přihlášený
+účet smí.
 
 ## Jak Agent pozná, o jakou Mašinu jde
 
@@ -47,7 +48,7 @@ Rozlišovací znak je `owner.assignment.kind` v
 `/etc/lazurio/lazurio.machine.json`; Agent ho přečte přímo ze souboru (žádný
 CLI příkaz na to není) a **nikdy ho neodvozuje** z `owner.team`, hostname,
 OS účtu ani velikosti Teamu — jednočlenný Team nedělá z Mašiny osobní VM.
-Určuje jen postup (osobní vs. týmová VM), ne to, kdo se smí přihlásit.
+Určuje postup (osobní vs. týmová VM) a od decision 0168 i to, kdo se přihlašuje: na týmové VM nikdo osobním účtem, jen bot Organizace; na osobní pracovní VM dál kdokoli podle decision 0159.
 Uživatelsky jde o druhy Environmentu podle decision 0165: osobní pracovní VM
 je Pracovní, týmová VM Pracovní týmové a osobní Mašina Principála Osobní.
 
@@ -61,8 +62,12 @@ je Pracovní, týmová VM Pracovní týmové a osobní Mašina Principála Osobn
   Principála podle [`hosted-buddy-vps.md`](hosted-buddy-vps.md); tento manuál
   se na ni nevztahuje.
 - Soubor chybí, nevaliduje, nebo `owner.assignment` není deklarovaný: Agent
-  typ nehádá a postupuje jako na osobní pracovní VM; přihlášení kvůli tomu
-  neblokuje.
+  typ nehádá a **osobní přihlášení `gh` neprovede** — bez platného handoveru
+  nejde vyloučit, že jde o týmovou VM, na které je osobní účet zakázaný
+  (rozhodnutí 0168). Stav nahlásí operátorovi a požádá provozovatele Machines,
+  ať handover ověří nebo doplní (`lazurio machine inspect` rezidentního CLI
+  vypíše přesné odmítnutí); teprve potom pokračuje. Práce, která přihlášení
+  nepotřebuje, blokovaná není.
 
 ## Osobní pracovní VM: identita operátora
 
@@ -126,13 +131,13 @@ zapíše přesný blocker a zastaví se.
 
 ## Týmová VM: identita Organizace, ne člověka
 
-**Dočasná výjimka (decision 0159).** Dokud na týmové VM neběží bot
-Organizace (chybí `/etc/lazurio/github-broker/environment`), přihlásí ji
-operátor stejně jako osobní VM — tlačítkem v Launchpadu, libovolným účtem —
-a postupuje podle kroků osobní VM včetně `--role builder`. Agent ho předem
-upozorní, že všichni na této VM pak pracují pod jeho účtem a jeho SSH klíčem.
-Jakmile broker běží, platí pravidla níže a osobní přihlášení operátor
-odhlásí.
+**Bez výjimky (decision 0168).** Dočasná výjimka 0159 pro týmovou VM
+skončila: týmová VM má fungovat s botem Organizace hned po předání. Když na ní
+bot neběží (chybí `/etc/lazurio/github-broker/environment`), je to vada
+Machines k opravě vpřed, ne důvod přihlásit člověka: Agent osobní přihlášení
+nespouští ani nenavrhuje, zapíše blocker pro Organization Admina (níže) a
+zastaví se. Osobní účet, který na týmové VM zůstal přihlášený z dřívějška,
+operátor odhlásí.
 
 Sdílená týmová VM (`owner.assignment.kind: team`) nemá osobního operátora a
 pracuje na ní více lidí z Teamu. Podle rozhodnutí 0147–0149 jedná na GitHubu
@@ -196,7 +201,7 @@ důvod přihlásit něčí účet. Agent zapíše přesný blocker a zastaví se
 ## Co drží kdo
 
 - Machines: Mašina online, `/etc/lazurio/lazurio.machine.json` včetně
-  případného `owner.assignment` (popisné, přihlášení neomezuje), brána, nainstalované Lazurio a Chat vstup Launchpadu
+  případného `owner.assignment` (popisné; přihlášení omezuje jen tím, že týmová VM se osobním účtem nepřihlašuje, decision 0168), brána, nainstalované Lazurio a Chat vstup Launchpadu
   (`LAZURIO_T3CODE_URL`, párovací příkaz).
 - Rezidentní instalace Root Repa (tento manuál, skill
   `lazurio-workstation-install`, rezidentní CLI `organization install`): první
