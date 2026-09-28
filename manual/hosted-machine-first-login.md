@@ -47,7 +47,7 @@ Rozlišovací znak je `owner.assignment.kind` v
 `/etc/lazurio/lazurio.machine.json`; Agent ho přečte přímo ze souboru (žádný
 CLI příkaz na to není) a **nikdy ho neodvozuje** z `owner.team`, hostname,
 OS účtu ani velikosti Teamu — jednočlenný Team nedělá z Mašiny osobní VM.
-Určuje jen postup (osobní vs. týmová VM), ne to, kdo se smí přihlásit.
+Určuje postup (osobní vs. týmová VM) a od decision 0168 i to, kdo se přihlašuje: na týmové VM nikdo osobním účtem, jen bot Organizace; na osobní pracovní VM dál kdokoli podle decision 0159.
 Uživatelsky jde o druhy Environmentu podle decision 0165: osobní pracovní VM
 je Pracovní, týmová VM Pracovní týmové a osobní Mašina Principála Osobní.
 
@@ -196,7 +196,7 @@ důvod přihlásit něčí účet. Agent zapíše přesný blocker a zastaví se
 ## Co drží kdo
 
 - Machines: Mašina online, `/etc/lazurio/lazurio.machine.json` včetně
-  případného `owner.assignment` (popisné, přihlášení neomezuje), brána, nainstalované Lazurio a Chat vstup Launchpadu
+  případného `owner.assignment` (popisné; přihlášení omezuje jen tím, že týmová VM se osobním účtem nepřihlašuje, decision 0168), brána, nainstalované Lazurio a Chat vstup Launchpadu
   (`LAZURIO_T3CODE_URL`, párovací příkaz).
 - Rezidentní instalace Root Repa (tento manuál, skill
   `lazurio-workstation-install`, rezidentní CLI `organization install`): první
