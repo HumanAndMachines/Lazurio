@@ -278,7 +278,9 @@ Launchpad LazurioPlatform, který rezidentní Launchpad nahradí (decision 0167)
 tyto profily mění: na Linuxu jsou moduly služby operačního systému, spouští je
 Launchpad i CLI `lazurio module …` a restart Launchpadu přežijí; na macOS
 zůstávají vázané na session. Spouští moduly z `main`; volba worktree nepatří do
-přepnutí hostovaných Mašin a náhled pull requestu je tam otevřená otázka návrhu.
+přepnutí hostovaných Mašin; náhled pull requestu tam dostane dočasnou URL
+Environmentu jako lease (směr rozhodnutý dodatkem 0167, pravidla lease jsou
+návrh shapingu).
 Profily výše platí pro Launchpad instalací Root Repa do jejich migrace
 (decision 0164).
 

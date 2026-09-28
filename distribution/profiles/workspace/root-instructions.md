@@ -46,12 +46,17 @@ Na hostované pracovní VM Organizace (`/etc/lazurio/lazurio.machine.json`,
 `machine.kind: workspace-vm`) se před první prací i před `lazurio update` řiď
 `manual/hosted-machine-first-login.md` v tomto runtime rootu. Na osobní
 pracovní VM dočasně (decision 0159) operátor přihlásí `gh` libovolným GitHub
-účtem; `owner.assignment` přihlášení neomezuje a jiný účet ani chybějící
-přiřazení nejsou blocker. Rozlišovacím znakem postupu je `owner.assignment.kind`:
+účtem; platné přiřazení `operator` přihlášení neomezuje na konkrétní účet
+a jiný účet není blocker. Rozlišovacím znakem postupu je `owner.assignment.kind`
+z platného handoveru:
 
-- `operator`, chybějící nebo neplatné přiřazení: osobní postup. Agent ověří,
-  že `gh` je přihlášený, a řekne operátorovi kterým účtem; přihlášení
-  a přehlášení provede operátor sám (Launchpad → Nastavení → Zdrojové kódy).
+- `operator`: osobní postup. Agent ověří, že `gh` je přihlášený, a řekne
+  operátorovi kterým účtem; přihlášení a přehlášení provede operátor sám
+  (Launchpad → Nastavení → Zdrojové kódy).
+- handover chybí, nevaliduje, nebo přiřazení není deklarované: Agent osobní
+  přihlášení **neprovede** — bez důkazu nejde vyloučit týmovou VM (decision
+  0168). Stav nahlásí operátorovi a požádá provozovatele Machines o ověření
+  handoveru; práce bez přihlášení pokračuje.
 - `team`: GitHub identitou je výhradně bot Organizace
   `lazurio-for-github[bot]`; osobní přihlášení Agent nespouští ani
   nenavrhuje. Chybějící broker je vada Machines k opravě vpřed, ne důvod

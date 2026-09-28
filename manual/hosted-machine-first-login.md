@@ -34,12 +34,13 @@ manuál popisuje rezidentní instalaci.
 ## Kdo se přihlašuje (decisions 0159 a 0168)
 
 Dokud vazbu Mašina → GitHub účet neřídí Lazurio Account v Dashboardu,
-přihlásí operátor osobní pracovní VM **libovolným GitHub účtem**.
-`owner.assignment` v `/etc/lazurio/lazurio.machine.json` přihlášení
-neomezuje: Agent kvůli chybějícímu, neplatnému ani odlišnému přiřazení
-neblokuje a jiný přihlášený účet není blocker. Týmová VM se osobním účtem
-nepřihlašuje nikdy: pracuje přes bota Organizace (níže, decision 0168).
-GitHub dál rozhoduje, co přihlášený účet smí.
+přihlásí operátor osobní pracovní VM **libovolným GitHub účtem**: platný
+handover s `owner.assignment.kind: operator` přihlášení neomezuje na
+konkrétní účet a jiný přihlášený účet není blocker. Týmová VM se osobním
+účtem nepřihlašuje nikdy: pracuje přes bota Organizace (níže, decision 0168).
+Bez platného handoveru, který druh Mašiny a přiřazení prokáže, Agent osobní
+přihlášení neprovede (viz rozlišení níže). GitHub dál rozhoduje, co přihlášený
+účet smí.
 
 ## Jak Agent pozná, o jakou Mašinu jde
 
