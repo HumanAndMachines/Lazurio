@@ -65,7 +65,11 @@ Machines a LazurioPlatform se potkávají na handoveru jedné Mašiny (decision
 0144): Machines dodají Mašinu online se systémem, sítí, SSH a sudo,
 `lazurio.machine.json`, vstupem přes společnou Auth bránu a nainstalovaným
 releasem LazurioPlatform; od té chvíle vlastní Lazurio Environment uvnitř
-LazurioPlatform a operátor Mašiny. Machines v cílovém kontraktu neudržují vlastní workspace resident ani
+LazurioPlatform a operátor Mašiny. Pin provozovatele pro release
+LazurioPlatform je minimum: rollout Lazurio doinstaluje nebo opraví a Mašinu
+pod pinem zvedne, verzi nikdy nesníží; vyšší verzi si operátor aktualizuje sám
+přes `lazurio update` bez rolloutu (decision 0161, dodatek 2026-09-28).
+Machines v cílovém kontraktu neudržují vlastní workspace resident ani
 artefakty. Současný workspace-VM installer je výslovný migrační stav, nikoli
 přenos vlastnictví Environment do Machines. Podrobný kontrakt předání,
 prázdného startupu a odpovědností drží
@@ -352,7 +356,8 @@ uživatele Mašiny. Fresh a Managed target je `~/Lazurio` na macOS/Linuxu a
   sestavený z immutable source jako přesný součin `resident profile × locale`:
   profil určuje například Buddyho nebo AI Kolegu a locale jazyk Root-owned
   generovaných instrukcí včetně `AGENTS.md`. Runtime vlastní immutable package
-  mimo Root.
+  mimo Root. Podle decision 0164 se tento profil nestaví; cílem je Lazurio
+  Folder spravovaný LazurioPlatform (níže).
 
 Výběr jazyka nemění strojové cesty ani identity. Top-level installer nemá root
 picker a žádný profil nevytváří druhý aktivní Root. Přechodové rozpoznání
@@ -386,10 +391,11 @@ názvy, popisy, commit messages a technická evidence se zobrazují beze změny.
 
 `lazurio install` je jediný konvergenční vstup pro oba profily. Nad Source
 Rootem jej defaultně zachová a opraví jen podporovaný stav. Source → Managed
-migrace bude explicitní volba Principála a zůstane nedostupná, dokud není
-complete package-owned Launchpad/runtime, generátor a schema compatibility,
-exact rollback i fyzický macOS/Linux/Windows acceptance. Ruční přesun Source
-Rootu není podporovaný postup.
+migrace ani Managed Root se podle decision 0164 nestaví: instalace Root Repa
+přejdou jednosměrně, bez rollbacku, do Lazurio Folderu spravovaného
+LazurioPlatform (nejdřív Linux, potom macOS, Windows po buildu Platformy) a
+selhání opraví Agent vpřed ve Folderu. Do své migrace Source Root funguje beze
+změny. Ruční přesun Source Rootu není podporovaný postup.
 
 Hosted Resident profily mohou dál používat verzovaný immutable artefakt s
 atomickou aktivací a rollbackem. Ani tam se běžící runtime neaktualizuje
@@ -414,7 +420,9 @@ ji, nefast-forwarduje a nezískává commit ani publish autoritu.
 Dirty obsah primárního checkoutu nejdřív
 uloží do ověřeného recovery stashe, který nikdy automaticky nevrací, a potom
 použije jen fast-forward. Historii s lokálními commity nebo konfliktem
-nepřepisuje — předá ji Agentovi.
+nepřepisuje — předá ji Agentovi. Tento `lazurio update` je příkaz Root Repa
+(decision 0129); stejnojmenný `lazurio update` LazurioPlatform aktualizuje
+produkt v Lazurio Environment a checkouty nesynchronizuje (decision 0161).
 
 Po skutečné změně source se obnovují pouze package rooty deklarovaných Apps v
 dotčeném repozitáři. Autoritou je verzovaný lockfile, ne stáří souborů. První

@@ -191,6 +191,12 @@ drží skill
 
 ## Budoucí Managed Root
 
+**Změněno rozhodnutím 0164:** Managed Root ani Source → Managed migrace níže
+se nestaví. Instalace Root Repa přejdou jednosměrně, bez rollbacku, do Lazurio
+Folderu spravovaného LazurioPlatform a selhání opraví Agent vpřed ve Folderu;
+do té doby Source Root funguje beze změny. Zbytek této a následující kapitoly
+zůstává jen jako popis původního plánu.
+
 Managed Root se nestane podporovanou volbou jen změnou dokumentace. CLI jej
 smí nabídnout až po kompletním package-owned Launchpadu/runtime, verzovaném
 generatoru a schema compatibility, exact rollbacku a fyzických

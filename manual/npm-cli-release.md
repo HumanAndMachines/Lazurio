@@ -3,7 +3,10 @@
 Tento runbook drží jedinou veřejnou distribuční cestu příkazu `lazurio`.
 Využívá standardní npm package, dist-tagy, staged publishing a trusted
 publishing; Lazurio nestaví vlastní registr, packer, release manifest ani
-paralelní důkazní archiv.
+paralelní důkazní archiv. Runbook se týká CLI Root Repa
+(`lazurio/package.json`); vstup první instalace do Lazurio Folderu
+(instalační skript, nebo npm balíček LazurioPlatform) a jeho adresa zůstávají
+podle decision 0164 nerozhodnuté.
 
 Publikace nové npm verze, schválení staged package i přesun `latest` jsou
 **Release**. Agent je smí provést jen po explicitním pokynu oprávněného

@@ -26,7 +26,9 @@ Dnešní instalace může mít source složku stále pojmenovanou například
 `Conglomerate`; musí ale ležet přímo v home a být ověřeným Lazurio source.
 Nejde o volitelný picker ani cílovou alternativní cestu.
 
-Budoucí Managed Root po explicitní fresh instalaci nebo migraci:
+Budoucí Managed Root po explicitní fresh instalaci nebo migraci (podle
+decision 0164 se nestaví; instalace Root Repa přejdou jednosměrně do Lazurio
+Folderu spravovaného LazurioPlatform):
 
 ```text
 <home>/Lazurio/                        # generovaný non-Git pracovní Root

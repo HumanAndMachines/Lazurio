@@ -78,7 +78,9 @@ Ruční postup je stejný jako na pracovní stanici
    k jeho účtu a přes `gh api user` ověří, kterým účtem je přihlášený.
    Pak ověří `gh auth status` a `git ls-remote` na root repo Organizace.
 3. `lazurio update` (aktualizace Lazuria je vědomý krok; bez přihlášení
-   Organizaci nenatáhne).
+   Organizaci nenatáhne). Tady jde o `lazurio update` Root Repa, který
+   synchronizuje checkouty (decision 0129); `lazurio update` LazurioPlatform
+   spouští Agent jen na pokyn operátora (decision 0161, dodatek 2026-09-28).
 4. `lazurio organization install <setup-organizace> --role builder --json`
    (u Iotoru `IotorLazurio`). Gate read-only ověří živé členství operátora
    v Organizaci a Teamech a WRITE capability na aktivních Builder repech,
