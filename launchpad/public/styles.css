@@ -1329,8 +1329,26 @@ input:focus-visible,
   margin-bottom: var(--lz-space-4);
 }
 
-.workspace-welcome-title {
+/* Tichá hlavička prostoru: značka Organizace a její název stojí vedle sebe
+   jako jedna identita, ne jako ikona a nadpis ve dvou tocích. */
+.workspace-identity {
+  display: flex;
+  min-width: 0;
   flex: 1 1 540px;
+  align-items: center;
+  gap: var(--lz-space-12);
+}
+
+.workspace-mark {
+  flex: 0 0 auto;
+}
+
+.workspace-mark[hidden] {
+  display: none;
+}
+
+.workspace-welcome-title {
+  min-width: 0;
   margin: 0;
   color: var(--text);
   font-size: var(--lz-size-display);

@@ -371,6 +371,7 @@ const elements = {
   appsToolbar: document.querySelector("#appsToolbar"),
   workspaceWelcome: document.querySelector("#workspaceWelcome"),
   workspaceWelcomeTitle: document.querySelector("#workspaceWelcomeTitle"),
+  workspaceMark: document.querySelector("#workspaceMark"),
   workspaceMain: document.querySelector("#workspaceMain"),
   guideTile: document.querySelector("#guideTile"),
   appsSearch: document.querySelector("#appsSearch"),
@@ -1954,6 +1955,9 @@ function mountUpdateBannerGroup() {
   if (group.parentElement !== target) target.append(group);
 }
 
+// Hlavička aktivního prostoru je tichá: značka Organizace a její název, nic
+// víc. Uvítací věta (DEV-6627, schválený návrh 2026-09-21) zabírala nejcennější
+// místo nad obsahem a nenesla informaci; kdo Launchpad otevřel, ví, že je vítán.
 function renderWorkspaceWelcome() {
   const personal = state.filters.scope === "personal";
   elements.workspaceWelcome?.toggleAttribute("hidden", personal);
@@ -1961,9 +1965,20 @@ function renderWorkspaceWelcome() {
 
   const organization = state.companies.find((company) => company.slug === state.filters.company);
   const organizationName = organization?.display_name ?? organization?.slug;
-  elements.workspaceWelcomeTitle.textContent = organizationName
-    ? t("workspace.welcomeOrganization", { organization: organizationName })
-    : t("workspace.welcomePlural");
+  elements.workspaceWelcomeTitle.textContent = organizationName ?? t("workspace.allOrganizations");
+  if (!elements.workspaceMark) return;
+  // Značku kreslí tentýž helper jako u přepínače prostorů, takže hlavička a
+  // rail nikdy neukazují dvě různé podoby téže Organizace. Napříč Organizacemi
+  // není co ukázat, proto značka zmizí celá.
+  elements.workspaceMark.hidden = !organization;
+  if (organization) {
+    renderSpaceLogo(elements.workspaceMark, {
+      kind: "organization",
+      label: organizationName ?? "",
+      organization,
+    });
+    elements.workspaceMark.classList.add("workspace-mark");
+  }
 }
 
 /* =========================================================

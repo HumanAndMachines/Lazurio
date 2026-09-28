@@ -34,13 +34,13 @@ test("locale is stored per browser and catalogs interpolate semantic keys", () =
   setLocale("en", { storage });
   expect(getLocale()).toBe("en");
   expect(writes).toEqual([[LOCALE_STORAGE_KEY, "en"]]);
-  expect(t("workspace.welcomeOrganization", { organization: "AVALTAR" })).toBe("Welcome to the AVALTAR workspace");
+  expect(t("ssh.fingerprint", { fingerprint: "SHA256:abc" })).toBe("Machine fingerprint: SHA256:abc");
   expect(tp("plural.blocker", 2)).toBe("blockers");
 });
 
 test("initialization translates text, attributes, document language and locale controls before reveal", () => {
   const nodes = {
-    text: [{ dataset: { i18n: "workspace.welcome" }, textContent: "" }],
+    text: [{ dataset: { i18n: "workspace.allOrganizations" }, textContent: "" }],
     placeholder: [{ dataset: { i18nPlaceholder: "workspace.searchPlaceholder" }, setAttribute(name, value) { this[name] = value; } }],
     aria: [{ dataset: { i18nAriaLabel: "locale.label" }, setAttribute(name, value) { this[name] = value; } }],
     title: [{ dataset: { i18nTitle: "topbar.syncTitle" }, setAttribute(name, value) { this[name] = value; } }],
@@ -68,7 +68,7 @@ test("initialization translates text, attributes, document language and locale c
     documentRef,
   });
 
-  expect(nodes.text[0].textContent).toBe("Welcome to your workspace");
+  expect(nodes.text[0].textContent).toBe("All Organizations");
   expect(nodes.placeholder[0].placeholder).toBe("Search applications…");
   expect(nodes.aria[0]["aria-label"]).toBe("Language");
   expect(attributes.get("lang")).toBe("en");

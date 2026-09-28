@@ -1412,7 +1412,7 @@ test("Launchpad používá jednotný kompaktní grid s jemně zvýšenými dlaž
   expect(css).toContain("box-shadow: 0 10px 24px -22px color-mix(in srgb, var(--lz-ink) 18%, transparent)");
 });
 
-test("Organization workspace má kompaktní uvítání s dynamickým názvem firmy", async () => {
+test("Organization workspace má tichou hlavičku se značkou a názvem firmy", async () => {
   const [html, js, css] = await Promise.all([
     readFile(join(publicRoot, "index.html"), "utf8"),
     readFile(join(publicRoot, "app.js"), "utf8"),
@@ -1422,8 +1422,14 @@ test("Organization workspace má kompaktní uvítání s dynamickým názvem fir
   expect(html).toContain('id="workspaceWelcome"');
   expect(html.indexOf('id="workspaceWelcome"')).toBeLessThan(html.indexOf('id="appsToolbar"'));
   expect(html).not.toContain("Vyberte aplikaci a pokračujte tam, kde potřebujete.");
+  // DEV-6627: hlavička nese značku a název Organizace, ne uvítací větu.
+  expect(html).toContain('id="workspaceMark"');
+  expect(html).toContain('class="workspace-identity"');
+  expect(html).not.toContain('data-i18n="workspace.welcome"');
   expect(js).toContain("function renderWorkspaceWelcome");
-  expect(js).toContain('t("workspace.welcomeOrganization"');
+  expect(js).toContain("elements.workspaceWelcomeTitle.textContent = organizationName ?? t(\"workspace.allOrganizations\")");
+  expect(js).toContain("renderSpaceLogo(elements.workspaceMark");
+  expect(css).toContain(".workspace-identity");
   expect(js).toContain('toggleAttribute("hidden", personal)');
   expect(css).toContain(".workspace-welcome-title");
   expect(css).toContain("margin-top: var(--lz-space-16)");
