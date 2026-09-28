@@ -14,8 +14,8 @@ Deployment Repa vlastníka a jeho Mission Controlu.
 | OS, management transport, přidělený OS účet a sudo | Machines | Fungující správa a oddělení guestů, bez osobních tokenů v image |
 | Tailnet, DNS, TLS, gateway a vstup do konkrétní VM | Machines a příslušné síťové/Auth služby | Vstup funguje pro oprávněný subjekt, neoprávněný vstup je odmítnut |
 | Identita Mašiny, Owner a vyšší provider/operator hranice | Machines, projekce owner Deployment Repa | Platný popis identity; nejde o oprávnění číst repozitáře |
-| Instalace podporované distribuce Lazuria | Machines vyvolají podporovaný Platform instalátor | Čisté Lazurio se spustí bez Organization checkoutu |
-| Lazurio Folder, Environment preset, instrukční profil, Launchpad, nástroje a jejich aktualizace | LazurioPlatform přes `lazurio` | Jedna instalační a aktualizační cesta vlastněná Platformou |
+| Instalace podporované distribuce Lazuria | Machines vyvolají podporovaný Platform instalátor | Čisté Lazurio se spustí bez Organization checkoutu; pin je minimum: rollout chybějící nebo rozbité Lazurio nainstaluje a verzi pod pinem zvedne, nikdy ji nesníží a vyšší verzi operátora nechá (decision 0161, dodatek 2026-09-28) |
+| Lazurio Folder, Environment preset, instrukční profil, Launchpad, nástroje a jejich aktualizace | LazurioPlatform přes `lazurio` | Jedna instalační a aktualizační cesta vlastněná Platformou; aktualizaci Lazuria spouští operátor sám přes `lazurio update`, bez rolloutu |
 | Osobní `gh` přihlášení a volba Organizací | Operátor individuální VM | Přihlášení vlastním účtem; žádná identita vypůjčená od provisionera |
 | Materializace a synchronizace Organizací a Modulů | LazurioPlatform na explicitní volbu operátora | Čerstvá živá práva na GitHubu, existující materializační mechanismus |
 | Projektové závislosti, pracovní nastavení, aplikace a data | Operátor a příslušná Organizace | Jejich vlastní workflow; nejsou podmínkou vytvoření VM |

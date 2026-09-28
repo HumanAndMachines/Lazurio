@@ -47,7 +47,7 @@ Lazurio                             distribuce, životní cyklus a koordinace
 | **Organizace** | Jedna firma, jedna GitHub Organization a jedna access hranice. |
 | **Personalspace** | Privátní prostor právě jednoho Principála a jeho případného Buddyho. |
 | **Modul** | Verzovaná pracovní schopnost uvnitř Organizace nebo Personalspace. Může, ale nemusí obsahovat spustitelnou aplikaci. |
-| **Lazurio Environment** | Prostředí jedné Mašiny: vybraný profil Mašiny, Lazurio Folder a všechny nástroje a přihlášení, které jsou na Mašině dostupné. Je to prostor, ve kterém pracují Agenti; vlastní ho LazurioPlatform přes `lazurio` CLI a operátor Mašiny. |
+| **Lazurio Environment** | Prostředí jedné Mašiny: vybraný profil Mašiny, Lazurio Folder a všechny nástroje a přihlášení, které jsou na Mašině dostupné. Je to prostor, ve kterém pracují Agenti; vlastní ho LazurioPlatform přes `lazurio` CLI a operátor Mašiny. Má jeden ze tří druhů: Osobní, Pracovní (jeden operátor) nebo Pracovní týmové (sdílené Teamem) (decision 0165). |
 | **Remote Environment (Vzdálené prostředí)** | Uživatelský název hostované Mašiny: pracovní VM Organizace na `launchpad.<mašina>.<org>.lazurio.io` v síti Organizace (decision 0146), nebo osobní VM na `launchpad.<login>.lazurio.io` v domovském tailnetu svého Principála (decisions 0153–0155). Stejný pojem používají Codex a T3 Code; „VM“ zůstává jen přívlastek, interní pojem je Mašina (decision 0160). |
 | **Local Environment (Místní prostředí)** | Uživatelský název tohoto počítače: zařízení, u kterého uživatel právě sedí a které není hostovanou Mašinou. Listener není klasifikátor (hostovaný Launchpad také běží na loopbacku za svou bránou). Osobní laptop nikdy není Remote Environment (decisions 0155, 0160). |
 | **Conglomerate** | Pohled na graf všech Mašin Principála napříč jeho Organizacemi. Je to diagram a orientace, ne autorita, ACL ani registr; fakta o Mašině zůstávají u jejího Ownera (decision 0144). |
@@ -65,7 +65,11 @@ Machines a LazurioPlatform se potkávají na handoveru jedné Mašiny (decision
 0144): Machines dodají Mašinu online se systémem, sítí, SSH a sudo,
 `lazurio.machine.json`, vstupem přes společnou Auth bránu a nainstalovaným
 releasem LazurioPlatform; od té chvíle vlastní Lazurio Environment uvnitř
-LazurioPlatform a operátor Mašiny. Machines v cílovém kontraktu neudržují vlastní workspace resident ani
+LazurioPlatform a operátor Mašiny. Pin provozovatele pro release
+LazurioPlatform je minimum: rollout Lazurio doinstaluje nebo opraví a Mašinu
+pod pinem zvedne, verzi nikdy nesníží; vyšší verzi si operátor aktualizuje sám
+přes `lazurio update` bez rolloutu (decision 0161, dodatek 2026-09-28).
+Machines v cílovém kontraktu neudržují vlastní workspace resident ani
 artefakty. Současný workspace-VM installer je výslovný migrační stav, nikoli
 přenos vlastnictví Environment do Machines. Podrobný kontrakt předání,
 prázdného startupu a odpovědností drží
@@ -342,32 +346,17 @@ Podrobný aktuální kontrakt CLI je v [`lazurio/README.md`](lazurio/README.md).
 ## Source, instalace a aktualizace
 
 Na localhost workstation existuje právě jeden pracovní Root přímo v home
-uživatele Mašiny. Fresh a Managed target je `~/Lazurio` na macOS/Linuxu a
-`%USERPROFILE%\Lazurio` na Windows. Lazurio podporuje dvě jeho podoby:
+uživatele Mašiny: **Source Root**, ověřený Lazurio Git checkout, který je
+současně pracovním Rootem. Fresh target je `~/Lazurio` na macOS/Linuxu a
+`%USERPROFILE%\Lazurio` na Windows; existující Source Root smí do své migrace
+zachovat historický název složky. Top-level installer nemá root picker a
+nevytváří druhý aktivní Root. Source Root používá source-linked `lazurio`.
+Organization checkouty, Personalspace a runtime data zůstávají samostatné
+měnitelné mounty.
 
-- **Source Root** je dnešní nasazený a podporovaný profil. Ověřený Lazurio Git
-  checkout přímo v home je současně pracovní Root a může do řízené migrace
-  zachovat svůj existující historický název složky.
-- **Managed Root** je budoucí cílový profil. Canonical cesta je non-Git Root
-  sestavený z immutable source jako přesný součin `resident profile × locale`:
-  profil určuje například Buddyho nebo AI Kolegu a locale jazyk Root-owned
-  generovaných instrukcí včetně `AGENTS.md`. Runtime vlastní immutable package
-  mimo Root.
-
-Výběr jazyka nemění strojové cesty ani identity. Top-level installer nemá root
-picker a žádný profil nevytváří druhý aktivní Root. Přechodové rozpoznání
-existujícího source entrypointu není uložená volba jiné cesty.
-
-Root profil a provenance spuštěného CLI jsou dvě odlišné osy. Dnešní Source
-Root používá source-linked `lazurio`. Budoucí Managed Root běžně používá
-package-managed `lazurio`, ale developer smí stejnou CLI/Core implementaci
-vědomě přelinkovat na jediný ověřený checkout
-`<home>/Lazurio/development/Lazurio`. Package-only Managed profil source
-checkout nepotřebuje a instalátor jej implicitně neklonuje. Generátor
-nevytváří uvnitř Rootu další vendored kopii CLI nebo Launchpadu;
-Organization checkouty se do zvoleného jazyka nikdy nepřekládají ani
-nepřepisují: Organizace si jazyk svého repozitáře vlastní sama. Personalspace
-a runtime data také zůstávají samostatné měnitelné mounty.
+Dříve plánovaný **Managed Root** (generovaný non-Git Root s package-managed
+`lazurio`) se podle decision 0164 nestaví. Cílem je Lazurio Folder spravovaný
+LazurioPlatform; migraci a její manuály připravuje LazurioPlatform (issue #50).
 
 Launchpad locale je oproti tomu runtime preference prohlížeče, ne varianta
 Rootu. Launchpad-owned copy je offline v párových katalozích; přednost má
@@ -384,12 +373,13 @@ Core a API zůstávají locale-neutral: poskytují stabilní reason kódy a para
 zatímco UI vlastní lidské error, warning a loading texty. Organization-owned
 názvy, popisy, commit messages a technická evidence se zobrazují beze změny.
 
-`lazurio install` je jediný konvergenční vstup pro oba profily. Nad Source
-Rootem jej defaultně zachová a opraví jen podporovaný stav. Source → Managed
-migrace bude explicitní volba Principála a zůstane nedostupná, dokud není
-complete package-owned Launchpad/runtime, generátor a schema compatibility,
-exact rollback i fyzický macOS/Linux/Windows acceptance. Ruční přesun Source
-Rootu není podporovaný postup.
+`lazurio install` Root Repa je jediný konvergenční vstup Source Rootu; nad ním
+jej defaultně zachová a opraví jen podporovaný stav. Source → Managed migrace
+se podle decision 0164 nestaví: instalace Root Repa
+přejdou jednosměrně, bez rollbacku, do Lazurio Folderu spravovaného
+LazurioPlatform (nejdřív Linux, potom macOS, Windows po buildu Platformy) a
+selhání opraví Agent vpřed ve Folderu. Do své migrace Source Root funguje beze
+změny. Ruční přesun Source Rootu není podporovaný postup.
 
 Hosted Resident profily mohou dál používat verzovaný immutable artefakt s
 atomickou aktivací a rollbackem. Ani tam se běžící runtime neaktualizuje
@@ -414,7 +404,9 @@ ji, nefast-forwarduje a nezískává commit ani publish autoritu.
 Dirty obsah primárního checkoutu nejdřív
 uloží do ověřeného recovery stashe, který nikdy automaticky nevrací, a potom
 použije jen fast-forward. Historii s lokálními commity nebo konfliktem
-nepřepisuje — předá ji Agentovi.
+nepřepisuje — předá ji Agentovi. Tento `lazurio update` je příkaz Root Repa
+(decision 0129); stejnojmenný `lazurio update` LazurioPlatform aktualizuje
+produkt v Lazurio Environment a checkouty nesynchronizuje (decision 0161).
 
 Po skutečné změně source se obnovují pouze package rooty deklarovaných Apps v
 dotčeném repozitáři. Autoritou je verzovaný lockfile, ne stáří souborů. První

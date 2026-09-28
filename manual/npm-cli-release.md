@@ -1,9 +1,19 @@
-# Vydání Lazurio CLI přes npm
+# Vydání Lazurio CLI přes npm (historický runbook)
 
-Tento runbook drží jedinou veřejnou distribuční cestu příkazu `lazurio`.
-Využívá standardní npm package, dist-tagy, staged publishing a trusted
-publishing; Lazurio nestaví vlastní registr, packer, release manifest ani
-paralelní důkazní archiv.
+> **Historické po decision 0164.** Tento runbook popisoval plánované vydání CLI
+> Root Repa (`lazurio/package.json`) na npm. Instalace Root Repa se ruší a
+> vstupem první instalace Lazuria je instalační skript LazurioPlatform
+> z `https://lazurio.ai/install`; npm balíček `lazurio` je zamýšlený jen jako
+> možný pozdější druhý vstup LazurioPlatform. CLI Root Repa proto pod
+> nescopovaným jménem `lazurio` nepublikuje a doporučení bodu 0 níže toto jméno
+> zabrat neplatí. Zbytek textu zůstává jen jako záznam původního plánu; CI
+> gate `npm-package:gate` dál jen balí a testuje `@lazurio/runtime`, nic
+> nepublikuje.
+
+Runbook popisoval jedinou veřejnou distribuční cestu CLI Root Repa. Využíval
+standardní npm package, dist-tagy, staged publishing a trusted publishing;
+Lazurio nestaví vlastní registr, packer, release manifest ani paralelní
+důkazní archiv.
 
 Publikace nové npm verze, schválení staged package i přesun `latest` jsou
 **Release**. Agent je smí provést jen po explicitním pokynu oprávněného

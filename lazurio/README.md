@@ -19,17 +19,17 @@ lazurio install --language en
 lazurio install --json
 ```
 
-Fresh a Managed Root není uživatelská volba: vždy používá přesně
+Fresh Root není uživatelská volba: vždy používá přesně
 `<home>/Lazurio` (`~/Lazurio` na macOS/Linuxu a
-`%USERPROFILE%\Lazurio` na Windows). Dnešní podporovaný profil `source`
-používá ověřený existující Lazurio checkout přímo v home a do řízené migrace
-smí zachovat historický název složky. Budoucí `managed` profil použije
-canonical target jako generovaný non-Git Root. Top-level
+`%USERPROFILE%\Lazurio` na Windows). Podporovaný profil `source`
+používá ověřený existující Lazurio checkout přímo v home a do své migrace
+smí zachovat historický název složky. Profil `managed` ani Source → Managed
+přechod se podle decision 0164 nestaví: instalace Root Repa přejdou
+jednosměrně do Lazurio Folderu spravovaného LazurioPlatform. Top-level
 `lazurio install` proto nepřijímá `--root`, nic nepersistuje a nenabízí picker.
 Source-linked CLI dál kontroluje svůj ověřený Source Root, aby Agenti mohli
-dogfoodovat tutéž fasádu. Dnešní read-only slice Source Root nemigruje;
-budoucí Source → Managed přechod bude explicitní, samostatně gated operace
-stejného Install Core. Jiná cesta se tiše neadoptuje ani nepřesouvá. Společné Core
+dogfoodovat tutéž fasádu. Source Root nemigruje a jiná cesta se tiše
+neadoptuje ani nepřesouvá. Společné Core
 postupně ověří platformu, exact Bun runtime z
 `package.json#packageManager`, podporovaný Node.js rozsah z
 `package.json#engines.node`, ověřenou identitu příkazů Bun, Git, GitHub CLI a
@@ -383,9 +383,7 @@ neběží přes tento launcher.
 Development link bez `--root` používá ověřený source Root vlastního entrypointu,
 takže funguje z libovolného pracovního adresáře. V dnešním Source profilu je
 source samotný ověřený Root přímo v home, včetně existujícího historického
-názvu do migrace; po Managed migraci je jediný volitelný checkout
-`~/Lazurio/development/Lazurio`. Běžná package instalace jej
-neklonuje ani jej nepotřebuje. Resident a platformně neutrální npm balíček jsou
+názvu do migrace. Resident a platformně neutrální npm balíček jsou
 pouze CLI code origin: rootové příkazy bez explicitního
 diagnostického override používají canonical `<home>/Lazurio`; nic se
 nepersistuje a žádný pracovní Root se nevybírá.
@@ -418,10 +416,9 @@ vlastnost payload bytes; historický Resident channel je proto pouze explicitní
 Root `package.json` je privátní workspace orchestrátor. Skutečný publishable
 package žije celý pod `lazurio/` a vlastní CLI, Core, locales, schemas i
 CLI runtime včetně sdílených Launchpad primitives; Launchpad je jeho consumer,
-ne zdroj skrytých sourozeneckých souborů. Dnešní `@lazurio/runtime` je pouze
-nepublikovaný fallback před live npm provider gatem, který jednou zmrazí
-preferované `lazurio`, nebo tento scoped fallback. Dvě veřejné identity
-nevznikají.
+ne zdroj skrytých sourozeneckých souborů. `@lazurio/runtime` je nepublikovaný
+package; nescopované jméno `lazurio` CLI Root Repa podle decision 0164
+nezabírá, je zamýšlené pro možný druhý vstup LazurioPlatform.
 
 Současný npm package ještě neobsahuje celý Launchpad Server ani jeho UI.
 `lazurio launchpad serve` proto v source a Resident režimu spouští Server jen
