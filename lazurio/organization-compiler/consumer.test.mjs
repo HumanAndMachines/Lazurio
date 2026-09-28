@@ -58,6 +58,30 @@ test("a separate git directory does not turn a primary checkout into a review wo
   await expect(compileOrganization({organizationRoot:primary,write:true})).rejects.toThrow("linked review worktree");
 });
 
+test("a linked review of a root with external Git metadata compiles the actual Organization", async () => {
+  const { primary, review } = await fixture();
+  git(primary, "worktree", "remove", review);
+  const metadata = join(dirname(primary), "metadata", "repo.git");
+  await mkdir(dirname(metadata));
+  git(primary, "init", `--separate-git-dir=${metadata}`);
+  git(primary, "config", "core.worktree", primary);
+  git(primary, "worktree", "add", review, "codex/review");
+
+  const observation = readCheckoutRepositoryObservation(review);
+  expect(observation.linkedWorktree).toBe(true);
+  // The real consumer must accept the Organization basename, not metadata's parent.
+  expect((await compileOrganization({ organizationRoot: review, write: true })).changed_target_count).toBe(4);
+  expect((await compileOrganization({ organizationRoot: review, write: true })).changed_target_count).toBe(0);
+  await expect(compileOrganization({ organizationRoot: primary, write: true })).rejects.toThrow("linked review worktree");
+
+  const other = join(dirname(primary), "Other_GEN3");
+  await mkdir(other);
+  git(other, "init", "-b", "main");
+  git(review, "config", "core.worktree", other);
+  await expect(compileOrganization({ organizationRoot: review, write: true })).rejects.toThrow();
+  expect(await Bun.file(join(other, "generated", "company-summary.json")).exists()).toBe(false);
+});
+
 test("conflicting canonical Organization authority blocks legacy generation", async () => {
   const {review}=await fixture();
   await Bun.write(join(review,"lazurio.organization.json"),JSON.stringify({organization:{id:"unrelated"}}));

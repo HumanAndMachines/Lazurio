@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { realpathSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { resolveGitExecutableOnPath } from "../core/toolchain-lib.mjs";
 import { githubRepositoryUrlIdentity } from "./repository-identity.mjs";
 
@@ -15,18 +15,19 @@ export function readCheckoutRepositoryObservation(root) {
     const executable = resolveGitExecutableOnPath();
     if (!executable) return { status: "unavailable", reason: "git_not_on_path" };
     if (Object.keys(process.env).some(key => /^GIT_(?:DIR|WORK_TREE|COMMON_DIR|CONFIG|SSH|EXEC_PATH|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES)/.test(key))) return { status: "invalid", reason: "git_environment_override" };
-    const git = (...args) => {
+    const gitAt = (directory, ...args) => {
       phase = args[0];
-      const result = spawnSync(executable, ["-C", root, ...args], { encoding: "utf8", timeout: 10000, maxBuffer: 1024 * 1024, shell: false });
+      const result = spawnSync(executable, ["-C", directory, ...args], { encoding: "utf8", timeout: 10000, maxBuffer: 1024 * 1024, shell: false });
       if (result.status !== 0) throw new Error("git observation failed");
       return result.stdout.trimEnd();
     };
+    const git = (...args) => gitAt(root, ...args);
     phase = "checkout_paths";
     const actual = realpathSync(root);
     // Git owns cwd-to-checkout resolution, including Windows short-name aliases.
     if (git("rev-parse", "--show-prefix") !== "") return { status: "invalid", reason: "not_checkout_root" };
     const common = realpathSync(git("rev-parse", "--path-format=absolute", "--git-common-dir"));
-    const checkoutRoot = dirname(common);
+
     const gitDir = realpathSync(git("rev-parse", "--absolute-git-dir"));
     const linkedWorktree = relative(gitDir, common) !== ""
       && relative(dirname(gitDir), join(common, "worktrees")) === ""
@@ -38,6 +39,19 @@ export function readCheckoutRepositoryObservation(root) {
     const local = parse(git("config", "--local", "--no-includes", "--null", "--list"));
     const effective = parse(git("config", "--includes", "--null", "--list"));
     const values = (entries, key) => entries.filter(([k]) => k === key).map(([,v]) => v);
+    // Absorbed/separate Git metadata can live outside the primary checkout.
+    // Resolve Git's explicit worktree relative to its common directory and
+    // prove that the selected primary belongs to this same repository.
+    const configuredWorktrees = values(local, "core.worktree");
+    if (configuredWorktrees.length > 1) return { status: "invalid", reason: "ambiguous_primary_worktree" };
+    const checkoutRoot = configuredWorktrees.length
+      ? realpathSync(resolve(common, configuredWorktrees[0]))
+      : linkedWorktree ? dirname(common) : actual;
+    if (gitAt(checkoutRoot, "rev-parse", "--show-prefix") !== "" ||
+        realpathSync(gitAt(checkoutRoot, "rev-parse", "--path-format=absolute", "--git-common-dir")) !== common) {
+      return { status: "invalid", reason: "primary_repository_mismatch" };
+    }
+
     const exact = (entries, key, expected) => JSON.stringify(values(entries,key)) === JSON.stringify(expected);
     const relevant = ([key]) => /^(?:remote\.|branch\..*\.(?:remote|pushremote)$)/.test(key);
     const inheritedRouting = JSON.stringify(local.filter(relevant)) !== JSON.stringify(effective.filter(relevant));
