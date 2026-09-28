@@ -24,6 +24,8 @@ Rozlišovací znak je `owner.assignment.kind` v
 CLI příkaz na to není) a **nikdy ho neodvozuje** z `owner.team`, hostname,
 OS účtu ani velikosti Teamu — jednočlenný Team nedělá z Mašiny osobní VM.
 Určuje jen postup (osobní vs. týmová VM), ne to, kdo se smí přihlásit.
+Uživatelsky jde o druhy Environmentu podle decision 0165: osobní pracovní VM
+je Pracovní, týmová VM Pracovní týmové a osobní Mašina Principála Osobní.
 
 - `machine.kind: workspace-vm`, `owner.kind: organization` a `owner.assignment.kind: operator`
   (s `github_login` a `github_id` operátora) = **osobní pracovní VM** jednoho
