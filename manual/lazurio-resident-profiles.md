@@ -17,7 +17,7 @@ credentials.
 | Pojem | Co znamená |
 | --- | --- |
 | Principál | Ten, pro koho Agent pracuje a kdo má poslední slovo. |
-| Kolega | Lidský Principál. Jeho pracovní Root leží přímo v home; dnešní Source Root může do migrace nést historický název složky, fresh/Managed target je `<home>/Lazurio`. Managed profil potřebuje source checkout jen pro vývoj Lazuria. |
+| Kolega | Lidský Principál. Jeho pracovní Root leží přímo v home; dnešní Source Root může do migrace nést historický název složky, fresh target je `<home>/Lazurio`. |
 | Buddy | Osobní zástupce jednoho lidského Principála uvnitř jeho Personalspace. Jedná jen v mezích jeho práv a mandátů. |
 | AI Kolega | AI Principál s vlastní identitou, Mašinou, Personalspace a pracovními právy. Není Buddy. |
 | Task Agent | Nástrojová pracovní relace, například Codex nebo Claude Code. Sama žádná práva nevlastní. |
@@ -35,26 +35,21 @@ nedělá Resident profile ani Personalspace.
 
 Kanonický Lazurio source je Git repozitář, ve kterém se vyvíjí společný
 Launchpad, CLI/Core, Doctor, Guide, manuály, generátor a profilové buildy.
-Pracovní Root každé Mašiny žije přímo v home a má dva veřejné profily: dnešní
-podporovaný Source Root je ověřený Git checkout, který může do migrace nést
-historický název složky; fresh/Managed target je přesně `<home>/Lazurio` a je
-generovaným non-Git adresářem pro instrukce, konfiguraci, data a mounty.
-Package-only Managed profil source checkout nepotřebuje.
+Pracovní Root workstation žije přímo v home: podporovaný Source Root je
+ověřený Git checkout, který může do migrace nést historický název složky;
+fresh target je přesně `<home>/Lazurio`. Dříve plánovaný Managed profil
+(generovaný non-Git Root) se podle decision 0164 nestaví; instalace Root Repa
+přejdou jednosměrně do Lazurio Folderu spravovaného LazurioPlatform.
 
 Každý pracovní Root:
 
 - má právě jeden aktivní root `AGENTS.md`; v Source profilu je trackovaný,
-  v Managed profilu generovaný profile buildem;
+  v hosted Resident profilu generovaný profile buildem;
 - obsahuje `personalspace/` a `organizations/` jen jako oddělené mutable Git
   mounty s vlastními access hranicemi;
-- nenese druhou vendored kopii CLI ani Launchpadu;
-- po Managed migraci může v development profilu obsahovat jediný source
-  checkout `<home>/Lazurio/development/Lazurio`.
+- nenese druhou vendored kopii CLI ani Launchpadu.
 
-Běžná budoucí Managed workstation instalace spouští package-managed `lazurio`
-mimo pracovní Root. Dnešní Source Root používá source-linked CLI; Managed
-development profil může tuto právě jednu aktivní CLI/Core provenance
-explicitně přelinkovat na kanonický nested source checkout. Hosted Resident může
+Dnešní Source Root používá source-linked CLI. Hosted Resident může
 stejný reviewovaný source zabalit do immutable artefaktu s manifestem
 `lazurio.resident.json`, exact source SHA, profilem, platformou a payload
 hashi. Artefakt je runtime vrstva, nikoli druhý pracovní Root ani datová
@@ -212,10 +207,8 @@ se kvůli tomu nestává source checkoutem.
 Lifecycle adapter immutable hosted artefaktu v1 je záměrně pouze POSIX (Linux
 a macOS). Windows hosted Resident se nezapne, dokud nebude mít vlastní atomický
 pointer adapter a stejné failure testy. To neomezuje localhost Windows profil:
-pracovní Root zůstává `%USERPROFILE%\\Lazurio` a package-managed CLI má vlastní
-Windows kompatibilní brány. V dnešním Source profilu je source samotný Root;
-po Managed migraci patří source oprava do
-`%USERPROFILE%\\Lazurio\\development\\Lazurio` a task worktree.
+pracovní Root zůstává `%USERPROFILE%\\Lazurio`. V dnešním Source profilu je
+source samotný Root a oprava patří do task worktree.
 
 Konkrétní offline postup pro status, update, rollback a zachování lokálního
 hotfixu je v `manual/update-installed-resident.md` a je součástí resident

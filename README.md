@@ -110,33 +110,14 @@ primární checkout lze také zpřístupnit jako uživatelský příkaz `lazurio
 `PATH`. Opakovaný `lazurio install` tento profil nesmí označit za rozbitý ani
 jej bez explicitní volby migrovat.
 
-### Budoucí Managed Root
+### Cíl: Lazurio Folder, ne Managed Root
 
-```text
-<home>/Lazurio                         jediný pracovní Root, generovaný non-Git
-├── generované instrukce a konfigurace
-├── organizations/                     oddělené Git scope
-├── personalspace/                     privátní mount
-└── development/
-    └── Lazurio/                       volitelný kanonický source checkout
-
-package-managed lazurio ─┐
-source-linked lazurio ───┴─ právě jedna aktivní CLI/Core provenance
-```
-
-Repozitář zůstane zdrojem produktu. Budoucí Managed instalaci obsluhuje jedno
-verzované package-managed `lazurio`; vývojář může tutéž CLI/Core implementaci
-explicitně přelinkovat na jediný checkout
-`<home>/Lazurio/development/Lazurio`. Package-only instalace tento checkout
-nepotřebuje a `lazurio install` jej samo neklonuje. Generátor do pracovního
-Rootu nevkládá další skrytou kopii CLI ani Launchpadu. Lokalizuje se lidský
-obsah výsledného Rootu, nikoli názvy cest, manifestové klíče, identifikátory
-nebo strojová schémata.
-
-Source a Managed jsou jediné dva veřejné Root profily. `package` a `source`
-naopak popisují provenienci právě spuštěného CLI. Tyto dvě osy nejsou jeden
-stavový automat: dnešní Source Root může používat source-linked CLI, zatímco
-budoucí Managed Root může používat package nebo vědomý development source link.
+Dříve plánovaný Managed Root (generovaný non-Git Root s package-managed
+`lazurio`) se podle decision 0164 nestaví. Instalace Root Repa přejdou
+jednosměrně, bez rollbacku, do Lazurio Folderu, který spravuje
+[LazurioPlatform](https://github.com/Lazurio/LazurioPlatform); migraci a její
+manuály připravuje LazurioPlatform (issue #50). Do své migrace funguje Source
+Root beze změny.
 
 Cílově CLI/Core vlastní stavová pravidla, instalaci, validaci, lifecycle a
 výsledný report. Dnešní Launchpad vedle grafického UI ještě přímo řídí start,
@@ -172,8 +153,7 @@ rozložení repozitářů [MAP.md](MAP.md).
 | Lazurio CLI v0 | **Experimentální.** Umí omezený kontext, Doctor, synchronizaci, instalaci desktopového launcheru a scoped search. Primární checkout lze přes Bun zpřístupnit jako uživatelský příkaz `lazurio`; nejde ještě o stabilní distribuční balíček ani veřejné API. |
 | Resident artefakty | **První funkční řez.** Deterministický build a lifecycle dnes pokrývají vybrané profily a platformy; nejde ještě o obecný onboarding každého uživatele. |
 | Source Root | **Podporovaný dnešní profil.** Ověřený Lazurio Git checkout přímo v home je pracovní Root a smí do migrace zachovat existující název složky; žádná automatická migrace se nyní neprovádí. |
-| Package-managed `lazurio` CLI | **Rozpracovaný předpoklad Managed profilu.** Má vlastnit celý workstation runtime. Přesná nevydaná syntaxe zatím není veřejný kontrakt. |
-| Managed Root | **Budoucí explicitní cíl.** Jazykově generovaný non-Git Root se zpřístupní až po package-owned Launchpadu, generátoru, compatibility, rollback a fyzických macOS/Linux/Windows branách. |
+| Lazurio Folder (LazurioPlatform) | **Cílový stav podle decision 0164.** Instalace Root Repa do něj přejdou jednosměrně; Managed Root se nestaví. První instalaci má obsloužit skript z `https://lazurio.ai/install`, který ještě není nasazený; migraci připravuje LazurioPlatform (issue #50). |
 | Lazurio Dashboard | **Samostatně vyvíjený povrch.** Není součástí tohoto root repozitáře ani runtime autoritou Launchpadu. |
 
 ## Rychlý start pro vývojáře
@@ -197,10 +177,8 @@ bun run launchpad
 ```
 
 Na dnešní Mašině pracuj přímo v podporovaném Source Rootu a drž jeho primary
-checkout na `main`. Až Managed profil projde všemi rollout branami, explicitně
-zvolený `lazurio install` vytvoří nebo zmigruje validní `<home>/Lazurio` a
-volitelný development checkout pak bude patřit do
-`<home>/Lazurio/development/Lazurio`. Do té doby tento strom nevytvářej ručně.
+checkout na `main`. Managed profil se podle decision 0164 nestaví; strom
+`<home>/Lazurio/development/Lazurio` proto nevytvářej.
 
 Stejný primární checkout můžeš bezpečně a opakovaně zpřístupnit v `PATH`:
 
@@ -262,14 +240,14 @@ lazurio install --language en
 lazurio install --json
 ```
 
-Fresh/Managed target odvozuje vždy jako `<home>/Lazurio`; root picker ani
+Fresh target odvozuje vždy jako `<home>/Lazurio`; root picker ani
 `--root` nepřijímá. Když příkaz běží z ověřeného existujícího Source Rootu
 přímo v home, inspectuje tento Root bez vytvoření druhého locatoru. Kontroluje
 platformu, exact Bun a jeho příkaz v `PATH`, Git a GitHub CLI v `PATH`,
 přihlášení i tvar rozpoznaného Rootu.
 Chybějící součásti zatím pouze pojmenuje; nic neinstaluje a dnešní Source Root
-nepřesouvá. Navazující řezy nad stejným Core doplní consent, Managed Root a
-bezpečnou reconciliaci. Aktuální build rezidentních artefaktů popisuje
+nepřesouvá. Managed Root se podle decision 0164 nestaví; cílem je Lazurio
+Folder spravovaný LazurioPlatform. Aktuální build rezidentních artefaktů popisuje
 [distribution/README.md](distribution/README.md) a profily
 [manual/lazurio-resident-profiles.md](manual/lazurio-resident-profiles.md).
 
@@ -304,7 +282,7 @@ nejdřív odstraň secrets a zákaznický či osobní obsah z reprodukce.
 | --- | --- |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Cílový systémový model, pojmy a trust hranice. |
 | [MAP.md](MAP.md) | Lidská mapa fyzického rootu a jednotlivých scope. |
-| [manual/lazurio-root-for-agents.md](manual/lazurio-root-for-agents.md) | Stručný postup pro Agenty: dnešní Source Root, budoucí Managed Root, CLI provenance a bezpečná údržba. |
+| [manual/lazurio-root-for-agents.md](manual/lazurio-root-for-agents.md) | Stručný postup pro Agenty: dnešní Source Root, CLI provenance a bezpečná údržba; Managed Root nahradila decision 0164. |
 | [lazurio/](lazurio/README.md) | Aktuální interní CLI v0 a jeho bezpečnostní kontrakty. |
 | [launchpad/](launchpad/README.md) | Builder-first Launchpad, discovery, runtime a UI kontrakty. |
 | [distribution/](distribution/README.md) | Deterministický build non-Git Resident rootů, updater a rollback. |

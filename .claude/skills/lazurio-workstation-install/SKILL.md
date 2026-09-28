@@ -32,12 +32,12 @@ Při publikačním mandátu pro instalační vady přečti také
    autorizuje přímo; další souhlas k nim znovu nevyžaduj.
 2. **Zachovej jeden Root.** Fresh target je `<home>/Lazurio`. Dnešní podporovaný
    profil je Source Root; existující ověřený Source Root smí zachovat historický
-   název. Nezakládej alternativní Root, nepřesouvej source ručně a nevytvářej
-   Managed profil dřív, než jej zpřístupní samotné `lazurio install`.
-3. **Ukotvi fresh Source Root před Bunem.** Pokud Root chybí a
-   package-managed Managed install ještě není dostupný, nainstaluj nejdřív jen
-   chybějící oficiální Git a clone jediný canonical Lazurio source do
-   `<home>/Lazurio`. Clone Bun nepotřebuje. Ponech primární checkout na clean
+   název. Nezakládej alternativní Root a nepřesouvej source ručně. Managed
+   profil se podle decision 0164 nestaví; Source Root později přejde do
+   Lazurio Folderu LazurioPlatform podle jeho migračního manuálu.
+3. **Ukotvi fresh Source Root před Bunem.** Pokud Root chybí, nainstaluj
+   nejdřív jen chybějící oficiální Git a clone jediný canonical Lazurio source
+   do `<home>/Lazurio`. Clone Bun nepotřebuje. Ponech primární checkout na clean
    `main` a přečti z něj exact Bun pin. Existující cizí, dirty, diverged nebo
    nejasný adresář nepřepisuj.
 4. **Konverguj toolchain z oficiálních zdrojů.** Povinné capability jsou Git,

@@ -7,6 +7,30 @@ nainstalované Lazurio a identitu Mašiny v `/etc/lazurio/lazurio.machine.json`
 uvnitř je práce operátora a jeho Task Agenta** podle tohoto postupu. Cíl:
 operátor nikdy nedostane prostředí, které vypadá hotově, ale není donastavené.
 
+## Které Lazurio na VM běží (stav 2026-09-28)
+
+Na hostované pracovní VM dnes leží dvě instalace vedle sebe:
+
+- **Rezidentní instalace Root Repa:** pracovní Root `~/Lazurio` (není to Git
+  checkout), rezidentní Launchpad jako služba `lazurio-launchpad.service` a
+  **rezidentní CLI** `~/.local/share/lazurio/resident/active/lazurio/cli.mjs`.
+  Instalaci a synchronizaci Organizací dnes dělá jen tato instalace.
+- **LazurioPlatform:** install base `~/.local/share/lazurio`, selector
+  `~/.local/share/lazurio/bin/lazurio`. Materializaci ani synchronizaci
+  Organizací zatím nemá (její rozhodnutí F9 není implementované); jeho
+  `lazurio update` aktualizuje jen produkt a Agent ho spouští jen na pokyn
+  operátora (decision 0161, dodatek 2026-09-28).
+
+Na login `PATH` operátora dnes není žádný příkaz `lazurio`; `~/.local/bin/lazurio`
+vytvoří až release LazurioPlatform novější než 0.1.7. Holý příkaz `lazurio`
+proto v postupu níže nepoužívej. **Rezidentním CLI** se tu myslí
+`bun ~/.local/share/lazurio/resident/active/lazurio/cli.mjs` spuštěné se stejným
+prostředím, jaké má služba `lazurio-launchpad.service` (proměnné vypíše
+`systemctl show lazurio-launchpad.service -p Environment`, u uživatelské
+jednotky s `--user`). Přechod VM na LazurioPlatform včetně práce s Organizacemi
+je rozpracovaný a sleduje ho LazurioPlatform (issue #50); do té doby tento
+manuál popisuje rezidentní instalaci.
+
 ## Kdo se přihlašuje (dočasně volně, decision 0159)
 
 Dokud vazbu Mašina → GitHub účet neřídí Lazurio Account v Dashboardu,
@@ -57,8 +81,8 @@ operátora neprovede přihlášením**, a vysvětlí mu proč: je to jeho osobn�
 rozhoduje, co v ní smí Agent vidět a měnit, a všechna práce z této Mašiny
 bude připsaná jeho účtu.
 
-**Preferovaná cesta je tlačítko v Launchpadu.** Ozubené kolo v hlavičce
-Launchpadu této Mašiny otevře **Nastavení**, sekce **Zdrojové kódy (GitHub)**,
+**Preferovaná cesta je tlačítko v rezidentním Launchpadu.** Ozubené kolo v
+hlavičce Launchpadu této Mašiny otevře **Nastavení**, sekce **Zdrojové kódy (GitHub)**,
 a tlačítko **Přihlásit GitHub** provede kroky 1 a 2 celé: `gh` login se SSH protokolem, jednorázový
 kód jen na přihlášené stránce, SSH klíč jen když chybí a SSH přístup ještě
 nefunguje, nahrání veřejné části na právě ověřený účet a důkaz přes `ssh -T`
@@ -79,17 +103,16 @@ Ruční postup je stejný jako na pracovní stanici
 2. Po souhlasu operátora nechá tentýž flow nahrát veřejný SSH klíč Mašiny
    k jeho účtu a přes `gh api user` ověří, kterým účtem je přihlášený.
    Pak ověří `gh auth status` a `git ls-remote` na root repo Organizace.
-3. `lazurio update` (aktualizace Lazuria je vědomý krok; bez přihlášení
-   Organizaci nenatáhne). Tady jde o `lazurio update` Root Repa, který
-   synchronizuje checkouty (decision 0129); `lazurio update` LazurioPlatform
-   spouští Agent jen na pokyn operátora (decision 0161, dodatek 2026-09-28).
-4. `lazurio organization install <setup-organizace> --role builder --json`
+3. Rezidentní CLI `update`: synchronizuje checkouty Root Repa (decision 0129);
+   bez přihlášení Organizaci nenatáhne. Nejde o `lazurio update`
+   LazurioPlatform.
+4. Rezidentní CLI `organization install <setup-organizace> --role builder --json`
    (u Iotoru `IotorLazurio`). Gate read-only ověří živé členství operátora
    v Organizaci a Teamech a WRITE capability na aktivních Builder repech,
    pak zmaterializuje Organizaci a její moduly do `~/Lazurio/organizations/`.
    Restricted Admin-only sloty (`infra`) Buildera neblokují a nemountují se.
-5. `bun run doctor:task` v primárním checkoutu Organizace a `lazurio doctor`
-   v rootu: dokud hlásí required `fail`, `blocked` nebo `incomplete`, není
+5. `bun run doctor:task` v primárním checkoutu Organizace a rezidentní CLI
+   `doctor` v rootu: dokud hlásí required `fail`, `blocked` nebo `incomplete`, není
    Mašina donastavená a Agent to operátorovi řekne místo „hotovo“.
 6. Teprve potom Agent pokračuje v původním úkolu. Vstup do T3 Code z
    prohlížeče vede přes Launchpad Mašiny tlačítkem **Chat**, které vydá
@@ -120,7 +143,7 @@ soubor `/etc/lazurio/github-broker/environment` (Machines
 `workspace_guest.github_broker`); privátní klíč App na VM nikdy není.
 
 Na Mašině s `owner.assignment.kind: team` a nasazeným brokerem Agent
-**před každou prací ověří identitu** — před `lazurio update`, instalací
+**před každou prací ověří identitu** — před rezidentním `update`, instalací
 i původním úkolem:
 
 - `/etc/lazurio/github-broker/environment` existuje a
@@ -128,7 +151,7 @@ i původním úkolem:
   host `github.com`, jedna položka, žádná další identita).
 - `gh` bota nehlásí, nebo se vedle bota objeví jiný
   účet, je to blocker pro Organization Admina (níže): Agent nepokračuje,
-  nespouští `lazurio update` ani install a nenavrhuje osobní přihlášení.
+  nespouští rezidentní `update` ani install a nenavrhuje osobní přihlášení.
 - `gh auth login`, `gh auth token` a ostatní `gh auth`/`gh config` příkazy
   brokered `gh` záměrně odmítne. **Osobní přihlášení Agent nikdy nespouští,
   nenavrhuje a neobchází** (žádný osobní token v `GH_TOKEN`, žádný osobní SSH
@@ -137,8 +160,8 @@ i původním úkolem:
 
 Donastavení (místo kroků 1–5 osobní VM; krok 6 platí stejně):
 
-1. `lazurio update`.
-2. `lazurio organization install <setup-organizace> --json` **bez
+1. Rezidentní CLI `update`.
+2. Rezidentní CLI `organization install <setup-organizace> --json` **bez
    `--role`** (u Iotoru `IotorLazurio`): bot nemá lidskou roli. Lazurio ověří
    bota, zmaterializuje root Organizace a jen ty moduly, jejichž repozitáře
    jsou v klientském rozsahu této VM (repository policy v
@@ -148,7 +171,7 @@ Donastavení (místo kroků 1–5 osobní VM; krok 6 platí stejně):
    Organizace a autoritou přístupu zůstávají živé GitHub granty Teamu. Repo v
    rozsahu, ke kterému broker token odmítne (např. po odebrání grantu), je
    blocker pro Organization Admina, ne důvod k jinému přihlášení.
-3. `lazurio doctor`: `platform.github_auth` musí hlásit bota. Required
+3. Rezidentní CLI `doctor`: `platform.github_auth` musí hlásit bota. Required
    `fail`/`blocked`/`incomplete` znamená, že VM není donastavená.
 
 Pravidla práce na týmové VM (0148):
@@ -175,8 +198,9 @@ důvod přihlásit něčí účet. Agent zapíše přesný blocker a zastaví se
 - Machines: Mašina online, `/etc/lazurio/lazurio.machine.json` včetně
   případného `owner.assignment` (popisné, přihlášení neomezuje), brána, nainstalované Lazurio a Chat vstup Launchpadu
   (`LAZURIO_T3CODE_URL`, párovací příkaz).
-- Lazurio (tento manuál, skill `lazurio-workstation-install`, `lazurio
-  organization install`): první přihlášení, materializace Organizace, Doctor.
+- Rezidentní instalace Root Repa (tento manuál, skill
+  `lazurio-workstation-install`, rezidentní CLI `organization install`): první
+  přihlášení, materializace Organizace, Doctor.
 - LazurioPlatform (`docs/workspace-presets.md`): presety a generovaný
   `AGENTS.md` Folderu; až bude `folder-init` součástí handoveru, převezme
   tento text jeho preset a manuál zůstane jen odkazem.
