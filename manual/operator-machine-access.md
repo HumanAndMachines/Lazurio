@@ -112,6 +112,20 @@ nestaví žádný most.
   user a `<login>.lazurio.io`); personalspace si zachovává svůj tvar
   `personalspace/<login>_GEN3`. Pracovní VM má label podle 0146. **Zobrazované jméno** si volí Principál (osobní VM
   „Friday“, pracovní „Henry“) a je jen popis.
+- **Nové infrastrukturní Mašiny** Organizace mají výchozí jména: fyzický
+  virtualizační host `<org>-proxmox-NN` (např. `lumbio-proxmox-01`, aby ho
+  správce více Organizací rozlišil v konzoli providera, SSH i tailnetu; `<org>`
+  je krátký štítek Organizace, který Owner zvolí jednou a který se nemění
+  s přejmenováním GitHub loginu ani DNS slugu),
+  servisní VM na něm `services-NN`, logický AI
+  pool `team-NN` s administrační aplikací `ai-team-NN`
+  (`https://ai-team-01.services-01.<org-DNS-slug>.lazurio.io/`); číslování od
+  `01`, smí přerůst dvě číslice. Kanonický kontrakt drží Machines
+  (`workloads/workspace-vm/AI-POOL.md`, kapitola „Names“; DEV-6625). Machines
+  vynucuje a kolize kontroluje jen u servisní VM a poolů; jméno fyzického hostu
+  je konvence Owner Recordu, kterou Machines nevynucuje.
+  Jméno nic neuděluje, vazbu servisní VM na host drží Machine Record vlastníka
+  a existující Mašiny se kvůli konvenci nepřejmenovávají.
 
 ## Infra je blueprint
 
