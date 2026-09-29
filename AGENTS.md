@@ -45,6 +45,16 @@ Historická GitHub organization zůstává záměrně `HumanAndMachines` a canon
 repo rootu `HumanAndMachines/Lazurio`; interní identity se rebrandem
 nepřepisují.
 
+**Směrem k lidem říkej „Environment“.** Když Agent mluví nebo píše k člověku
+(chat, handoff, popis PR určený uživateli, texty v aplikaci), pracovní
+prostředí pojmenuje **Environment** (česky v mužském rodě: „ten Environment“,
+„tento Environment“) a hostovaný **Remote Environment**. Slova „Mašina“, „VM“
+ani „server“ v takové komunikaci nepoužívej: lidé znají „Remote Environment“
+z nástrojů, které už používají (rozhodnutí Principála 2026-09-29). **Machine /
+Mašina** zůstává přesný technický a architektonický pojem níže (hranice, na
+které Environment běží) a zůstává v identifikátorech, příkazech, schématech,
+custody záznamech a v `ARCHITECTURE.md`; tam ho nepřepisuj.
+
 ## Model spolupráce: Principál a Agenti
 
 <!-- Kanonický blok Modelu spolupráce pro veřejný Lazurio source drží tento
