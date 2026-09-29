@@ -113,8 +113,10 @@ nestaví žádný most.
   `personalspace/<login>_GEN3`. Pracovní VM má label podle 0146. **Zobrazované jméno** si volí Principál (osobní VM
   „Friday“, pracovní „Henry“) a je jen popis.
 - **Nové infrastrukturní Mašiny** Organizace mají výchozí jména: fyzický
-  virtualizační host `<organizace>-proxmox-NN` (např. `lumbio-proxmox-01`, aby
-  ho správce více Organizací rozlišil v konzoli providera, SSH i tailnetu),
+  virtualizační host `<org>-proxmox-NN` (např. `lumbio-proxmox-01`, aby ho
+  správce více Organizací rozlišil v konzoli providera, SSH i tailnetu; `<org>`
+  je krátký štítek Organizace, který Owner zvolí jednou a který se nemění
+  s přejmenováním GitHub loginu ani DNS slugu),
   servisní VM na něm `services-NN`, logický AI
   pool `team-NN` s administrační aplikací `ai-team-NN`
   (`https://ai-team-01.services-01.<org-DNS-slug>.lazurio.io/`); číslování od
