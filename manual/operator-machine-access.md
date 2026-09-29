@@ -120,8 +120,10 @@ nestaví žádný most.
   servisní VM na něm `services-NN`, logický AI
   pool `team-NN` s administrační aplikací `ai-team-NN`
   (`https://ai-team-01.services-01.<org-DNS-slug>.lazurio.io/`); číslování od
-  `01`, smí přerůst dvě číslice. Kanonický kontrakt, validaci a kontrolu kolizí
-  drží Machines (`workloads/workspace-vm/AI-POOL.md`, kapitola „Names“; DEV-6625).
+  `01`, smí přerůst dvě číslice. Kanonický kontrakt drží Machines
+  (`workloads/workspace-vm/AI-POOL.md`, kapitola „Names“; DEV-6625). Machines
+  vynucuje a kolize kontroluje jen u servisní VM a poolů; jméno fyzického hostu
+  je konvence Owner Recordu, kterou Machines nevynucuje.
   Jméno nic neuděluje, vazbu servisní VM na host drží Machine Record vlastníka
   a existující Mašiny se kvůli konvenci nepřejmenovávají.
 
