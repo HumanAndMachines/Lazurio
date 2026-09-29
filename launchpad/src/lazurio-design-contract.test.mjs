@@ -202,7 +202,8 @@ test("pomůcky tvoří kompaktní skryvatelnou lištu se sbaleným stavem prosto
   expect(html).toContain('id="spaceStatusDetails" class="space-status-details"');
   expect(html).toContain('<summary class="space-status-toggle">');
   expect(html).toContain('class="hero-indicator" aria-hidden="true"');
-  expect(js).toContain('sidebarOpen: true');
+  // DEV-6627: stav prostoru je výjimka — panel začíná zavřený.
+  expect(js).toContain('sidebarOpen: false');
   expect(js).toContain('function applySidebarState()');
   expect(js).toContain('toggleAttribute("inert", collapsed)');
   expect(js).toContain('desktop ? "recentChangesSidebar" : "detailDrawer"');

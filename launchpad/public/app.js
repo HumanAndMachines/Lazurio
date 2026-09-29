@@ -115,7 +115,9 @@ const state = {
   suppressNextDrawerOpen: false,
   // Přehled Organization je na desktopu výchozí otevřený a lze jej zasunout.
   // Detail appky zůstává v samostatném draweru, který se otevře automaticky.
-  sidebarOpen: true,
+  // Stav prostoru se ukazuje výjimkou: panel je zavřený, dokud ho někdo
+  // neotevře přepínačem panelů (schválený návrh 2026-09-21).
+  sidebarOpen: false,
   drawerOpen: false,
   drawerView: "overview",
   filters: {
@@ -1856,6 +1858,7 @@ function spaceOption(space) {
     : state.filters.scope === "org" && state.filters.company === space.organization.slug;
   button.setAttribute("aria-selected", selected ? "true" : "false");
   button.classList.toggle("is-active", selected);
+  button.classList.toggle("is-personal", space.kind === "personal");
   button.title = space.label;
   button.setAttribute("aria-label", space.label);
 

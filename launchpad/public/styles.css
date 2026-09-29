@@ -6542,3 +6542,262 @@ html[data-i18n-ready="true"] .locale-bootstrap {
 .apps-grid > .app-card {
   border-radius: var(--lz-radius-md);
 }
+
+/* DEV-6627 — parita se schváleným návrhem (plátno „Návrh“, 2026-09-29).
+ *
+ * Předchozí vrstvy nesou historii; tahle říká, jak má věc vypadat, a proto
+ * stojí poslední. Hodnoty jsou převzaté z plátna 1:1: rail 64 s 40px
+ * značkami, obsah v sloupci 1120, hlavička 48 se značkou 28 a názvem 24,
+ * řádkové dlaždice 96 s vlasovým rámečkem na bílé ploše, mřížka, která se
+ * v užším okně sama zlomí na dva a pak jeden sloupec. */
+
+/* Obsahový sloupec: pod railem na střed, jako na plátně. */
+.page,
+.page.is-organization {
+  padding-inline: var(--lz-space-32);
+}
+
+/* `.page` je grid a auto okraje by položku smrskly na obsah; šířka drží. */
+.page .layout {
+  width: 100%;
+  max-width: 1120px;
+  margin-inline: auto;
+}
+
+/* --- Rail ------------------------------------------------------------ */
+.scope-rail .lz-rail__item {
+  position: relative;
+  min-height: var(--lz-space-48);
+  border-radius: var(--lz-radius-md);
+}
+
+.scope-rail .lz-rail__mark {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--lz-radius-md);
+  background: var(--lz-gray-100);
+  color: var(--lz-gray-700);
+  font-size: var(--lz-size-meta);
+  font-weight: var(--lz-weight-akce);
+  letter-spacing: 0.02em;
+}
+
+/* Aktivní prostor: žádná výplň, jen 3px inkoustová linka na hraně railu. */
+/* Symbol Lazuria nahoře stojí bez podkladu. */
+.scope-rail .scope-rail-symbol {
+  background: transparent;
+}
+
+.scope-rail .lz-rail__item.is-active {
+  background: transparent;
+  box-shadow: none;
+}
+
+.scope-rail .lz-rail__item.is-active::before {
+  position: absolute;
+  left: calc(-1 * var(--lz-space-12));
+  top: var(--lz-space-12);
+  width: 3px;
+  height: var(--lz-space-24);
+  border-radius: 0 3px 3px 0;
+  background: var(--lz-ink);
+  content: "";
+}
+
+.scope-rail .lz-rail__item:hover .lz-rail__mark {
+  background: var(--lz-gray-200);
+}
+
+/* Osobní prostor má modrou značku, stejně jako profil dole. */
+.scope-rail .space-switcher-option.is-personal .lz-rail__mark {
+  background: var(--lz-blue-100);
+  color: var(--lz-blue-900);
+}
+
+.scope-rail .lz-rail__mark .space-logo,
+.scope-rail .lz-rail__mark .space-logo img {
+  border-radius: inherit;
+}
+
+/* Zvoneček nese jen tečku „něco nového“; číslo je stavový šum. */
+.scope-rail #notificationsToggle {
+  color: var(--lz-gray-700);
+}
+
+.scope-rail .notifications-badge:not([hidden]) {
+  position: absolute;
+  top: var(--lz-space-8);
+  right: var(--lz-space-8);
+  min-width: 0;
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border: 1.5px solid var(--lz-paper);
+  border-radius: var(--lz-radius-pill);
+  background: var(--lz-blue-500);
+  color: transparent;
+  font-size: 0;
+  line-height: 0;
+}
+
+.scope-rail-profile {
+  min-height: 56px;
+  margin-top: var(--lz-space-4);
+  padding-top: 0;
+  border-top: 1px solid var(--lz-line-faint);
+}
+
+.scope-rail-profile-button .lz-rail__mark {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--lz-radius-pill);
+  background: var(--lz-blue-400);
+  color: var(--lz-blue-900);
+  font-size: 12px;
+}
+
+/* --- Hlavička prostoru ---------------------------------------------- */
+.workspace-welcome {
+  min-height: var(--lz-space-48);
+  margin: var(--lz-space-32) 0 var(--lz-space-24);
+  gap: var(--lz-space-12) var(--lz-space-16);
+}
+
+/* Identita nemá pevný základ 540px; jinak Guide a hledání padají pod ni
+ * dřív, než dojde místo. */
+.workspace-identity {
+  flex: 1 1 auto;
+}
+
+.workspace-mark,
+.workspace-mark .space-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.workspace-welcome-title {
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: var(--lz-weight-akce);
+  letter-spacing: -0.015em;
+}
+
+.apps-toolbar,
+.apps-toolbar .search-field {
+  flex: 0 1 auto;
+}
+
+.apps-toolbar .search-field {
+  height: 36px;
+  min-width: 0;
+  width: 240px;
+  padding: 0 var(--lz-space-12);
+  border: 1px solid var(--lz-line);
+  border-radius: var(--lz-radius-sm);
+  background: var(--lz-paper);
+  color: var(--lz-ink-muted);
+  box-shadow: none;
+}
+
+.apps-toolbar .search-field:focus-within {
+  border-color: var(--lz-ink);
+  background: var(--lz-white);
+}
+
+/* Pod hlavičkou není pruh: Guide je v hlavičce, Marketplace je jen
+ * upoutávka a stav se ukazuje výjimkou přes přepínač panelů. */
+.recent-changes-sidebar .guide-tile,
+.recent-changes-sidebar .marketplace-teaser {
+  display: none;
+}
+
+/* --- Sekce ----------------------------------------------------------- */
+.app-section-organization,
+.app-section-workspace {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+/* --- Řádkové dlaždice ----------------------------------------------- */
+.apps-grid {
+  /* `min(300px, 100%)`: v úzkém okně se dlaždice zúží místo přetečení. */
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
+  gap: var(--lz-space-16);
+  padding: var(--lz-space-20) 0 40px;
+}
+
+.apps-grid > .app-card {
+  min-height: 96px;
+  padding: 0 var(--lz-space-20);
+  border: 1px solid var(--lz-line-faint);
+  border-radius: 12px;
+  background: var(--lz-white);
+  box-shadow: none;
+}
+
+.apps-grid > .app-card:hover,
+.apps-grid > .app-card:focus-within {
+  border-color: var(--lz-ink);
+  background: var(--lz-white);
+  box-shadow: none;
+  transform: none;
+}
+
+.apps-grid > .app-card .app-card-icon,
+.apps-grid > .app-card .app-card-icon.is-lazurio-art,
+.apps-grid > .app-card .app-card-icon.is-lazurio-art img,
+.apps-grid > .app-card .app-card-icon svg {
+  width: 40px;
+  height: 40px;
+}
+
+.apps-grid > .app-card .app-card-title {
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: var(--lz-weight-akce);
+  letter-spacing: -0.01em;
+}
+
+.apps-grid > .app-card .app-card-desc {
+  font-size: var(--lz-size-meta);
+  line-height: 20px;
+  color: var(--lz-ink-muted);
+}
+
+.apps-grid > .manifest-module-card.is-unavailable {
+  border: 1px dashed var(--lz-line);
+  background: var(--lz-paper);
+}
+
+.apps-grid > .manifest-module-card.is-unavailable .app-card-icon {
+  filter: grayscale(1);
+  opacity: 0.45;
+}
+
+/* Užší okno: hlavička se zlomí na dva řádky, hledání zabere celou šířku. */
+@media (max-width: 760px) {
+  .page,
+  .page.is-organization {
+    padding-inline: var(--lz-space-16);
+  }
+
+  .workspace-welcome {
+    margin-top: var(--lz-space-20);
+  }
+
+  .apps-toolbar {
+    flex: 1 1 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .apps-toolbar .search-field {
+    order: 1;
+    flex: 1 1 100%;
+    width: auto;
+  }
+}
