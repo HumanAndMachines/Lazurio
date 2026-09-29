@@ -625,7 +625,8 @@ test("DEV-6627: shell jedné lišty používá kanonické Iconoir ikony bez kruh
 
   // Rail je ukotvený vlevo, stránka odsunutá o modul mřížky, výška lišty nula.
   expect(css).toMatch(/\.scope-rail\s*{[^}]*position: fixed;[^}]*inset: 0 auto 0 0/);
-  expect(css).toMatch(/\.page\s*{[^}]*margin-left: var\(--lz-grid-step\)/);
+  // Odsazení nese i `.page.is-organization`, jinak ho přebije jeho `margin: 0`.
+  expect(css).toMatch(/\.page,\s*\.page\.is-organization\s*{[^}]*margin-left: var\(--lz-grid-step\)/);
   expect(css.lastIndexOf("--topbar-h: 0px")).toBeGreaterThan(css.lastIndexOf("--topbar-h: 57px"));
 });
 

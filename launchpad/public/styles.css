@@ -6406,7 +6406,10 @@ html[data-i18n-ready="true"] .locale-bootstrap {
   align-items: stretch;
 }
 
-.page {
+/* Organizace ruší centrování stránky (`.page.is-organization { margin: 0 }`),
+ * proto odsazení od railu nese i tento specifičtější selektor. */
+.page,
+.page.is-organization {
   margin-left: var(--lz-grid-step);
 }
 
