@@ -74,9 +74,10 @@ Revidováno 2026-09-21 (owner-approved, horní část shellu; plán DEV-6615) �
 nahrazuje tím revizi z 2026-07-14. Rail je papírový (`--lz-paper`) proti bílé obsahové ploše, nikoli tmavý:
 design systém Lazurio vyhrazuje černou tlačítkům a shell zůstává ve stupních
 bílé a šedi. Rail je široký přesně jeden modul mřížky a rozbalený čtyři moduly;
-v rozbaleném stavu **odsouvá** obsah, nepřekrývá ho. Nese výhradně scope Lazuria
-a Mašiny: symbol, Osobní prostor, oddělovač, Organizace, přidání Organizace,
-upozornění a profil; Doctor a Nastavení žijí pod profilem. Rail **nenese stavové
+v rozbaleném stavu **odsouvá** obsah, nepřekrývá ho. Rail volí **prostor**:
+Osobní prostor nebo Organizaci; jednotlivou Mašinu nevybírá. Nese symbol Lazuria,
+Osobní prostor, oddělovač, Organizace, přidání Organizace, upozornění a profil;
+Doctor a Nastavení žijí pod profilem. Rail **nenese stavové
 indikátory Organizací** — stav zůstává vlastnictvím aktivního prostoru. Aktivní
 prostor pozná plocha o stupeň tmavší a inkoustová hrana; černá dlaždice je
 zrušená (rozhodnutí Principála 2026-08-04).
@@ -87,6 +88,21 @@ Hlavička drží značku Organizace a její název, bez uvítacího hero a bez p
 modulů a Teamů; značka je schválený asset Organizace nebo deterministický
 monogram, nikdy ručně kreslená značka. Obsah běží v kanonickém `lz-container`,
 takže prázdno je vědomý okraj a sekční linky nejsou pruhy přes celý viewport.
+
+Upřesnění 2026-09-24 (Matěj, navazující domluva k shellu a Nastavení):
+hlavička má přepínač **Prostředí** vedle názvu aktivního prostoru. Rail vybírá
+Osobní prostor nebo Organizaci; přepínač nabízí jen Mašiny dostupné přihlášenému
+člověku v tomto prostoru — v Organizaci týmové a pracovní VM, v Osobním prostoru
+jedinou osobní VM, na workstationu „Tento počítač“. Přepnutí otevře Launchpad
+zvolené Mašiny na jiném originu přes SSO; do railu Mašiny nepatří. Dashboard
+vlastní seznam dostupných Prostředí jako pohled na prostor bez Mašiny a Launchpad
+jej pouze konzumuje jako pohled z jedné Mašiny. Oba sdílejí stejný shell;
+Launchpad si nevytváří druhou autoritu seznamu. Nastavení pod profilem vede
+na stránku vybraného Prostředí podle #414, ne na nastavení Organizace ani rootu.
+Uživatelsky jde o „Prostředí / Environment“; „VM Prostředí“ označuje jen
+hostovanou položku, „Mašina“ zůstává interní pojem. Tato revize zaznamenává
+kontrakt pro navazující implementaci, nepřidává ovládání do `index.html` ani
+`app.js` v tomto PR.
 
 Sekční záhlaví si ponechává modrou vlaječku a modrou linku shodnou s Guide —
 je to nosný brand prvek, ne dekorace.
