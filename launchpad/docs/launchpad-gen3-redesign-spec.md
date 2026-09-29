@@ -74,9 +74,10 @@ Revidováno 2026-09-21 (owner-approved, horní část shellu; plán DEV-6615) �
 nahrazuje tím revizi z 2026-07-14. Rail je papírový (`--lz-paper`) proti bílé obsahové ploše, nikoli tmavý:
 design systém Lazurio vyhrazuje černou tlačítkům a shell zůstává ve stupních
 bílé a šedi. Rail je široký přesně jeden modul mřížky a rozbalený čtyři moduly;
-v rozbaleném stavu **odsouvá** obsah, nepřekrývá ho. Nese výhradně scope Lazuria
-a Mašiny: symbol, Osobní prostor, oddělovač, Organizace, přidání Organizace,
-upozornění a profil; Doctor a Nastavení žijí pod profilem. Rail **nenese stavové
+v rozbaleném stavu **odsouvá** obsah, nepřekrývá ho. Rail je **osa prostoru**:
+symbol, Osobní prostor, oddělovač, Organizace, přidání Organizace, upozornění
+a profil; Doctor a Nastavení žijí pod profilem. Výběrem prostoru se vybírá
+i server, na kterém prostor běží. Rail **nenese stavové
 indikátory Organizací** — stav zůstává vlastnictvím aktivního prostoru. Aktivní
 prostor pozná plocha o stupeň tmavší a inkoustová hrana; černá dlaždice je
 zrušená (rozhodnutí Principála 2026-08-04).
@@ -87,6 +88,27 @@ Hlavička drží značku Organizace a její název, bez uvítacího hero a bez p
 modulů a Teamů; značka je schválený asset Organizace nebo deterministický
 monogram, nikdy ručně kreslená značka. Obsah běží v kanonickém `lz-container`,
 takže prázdno je vědomý okraj a sekční linky nejsou pruhy přes celý viewport.
+
+**Navigace má dvě osy a rail je jen jedna z nich** (upřesnění Principála
+2026-09-24). Druhou osou je přepínač **Prostředí** (Environment) v hlavičce
+prostoru: Mašiny toho prostoru, které přihlášený člověk má — týmové a pracovní
+VM v Organizaci, jedna osobní VM v Osobním prostoru, na workstationu položka
+„Tento počítač". Kliknutí skáče na Launchpad dané VM, tedy na jiný origin přes
+SSO. Přepínač patří **vedle názvu Organizace v hlavičce, ne do railu**: rail
+vybírá prostor, hlavička vybírá Mašinu uvnitř něj.
+
+**Jedna UX, dvě autority.** Dashboard je pohled na prostor bez Mašiny a ukazuje
+přehled Mašin, Teamů a členů; Launchpad je pohled z jedné Mašiny. Shell je
+v obou stejný. **Vlastníkem seznamu Prostředí je Dashboard**; Launchpad ho jen
+konzumuje a nesmí se stát druhou autoritou.
+
+**Nastavení** je nastavení tohoto Prostředí, ne globální nastavení aplikace.
+Má vlastní stránku s rozložením podle T3 Code, tedy sekce vlevo a obsah vpravo
+(issue #414). Do shellu se zavěsí jako odkaz pod profilem, ne jako panel.
+
+Uživatelské názvosloví drží osu jako **Prostředí / Environment**; **VM Prostředí**
+je jen hostovaná položka. Interně zůstává pojmem **Mašina**, jak ho definuje
+`ARCHITECTURE.md`; nová vrstva názvů nevzniká.
 
 Sekční záhlaví si ponechává modrou vlaječku a modrou linku shodnou s Guide —
 je to nosný brand prvek, ne dekorace.
