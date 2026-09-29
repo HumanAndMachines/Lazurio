@@ -3939,6 +3939,17 @@ function variantOptionDescription(app) {
 function appIconNode(app) {
   const span = document.createElement("span");
   span.className = "app-card-icon";
+  // Stav se hlásí jen výjimkou a běžící modul je jednou z nich. Tečku kreslí
+  // CSS na ikoně; tady k ní patří slovo, protože barva nesmí nést stav sama.
+  // Rozdíl "tečka je / tečka není" je tvarový, takže signál projde i tam, kde
+  // se zelená od šedé nerozezná.
+  if (app.runtime_status === "healthy") {
+    span.classList.add("is-running");
+    const word = document.createElement("span");
+    word.className = "sr-only";
+    word.textContent = t("status.running");
+    span.append(word);
+  }
   const key = appIconKey(app);
   const lazurioIcon = lazurioAppIcon(key);
   if (lazurioIcon) {

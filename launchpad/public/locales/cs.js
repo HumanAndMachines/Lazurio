@@ -223,6 +223,7 @@ export const cs = Object.freeze({
   "common.openNamed": "Otevřít {name}",
   "common.selectedSource": "Vybraný zdroj",
   "common.currentVersion": "Aktuální hlavní verze",
+  "status.running": "Běží",
   "status.ready": "Připraveno",
   "status.install": "Instalovat",
   "status.missingPackage": "Chybí balíček",

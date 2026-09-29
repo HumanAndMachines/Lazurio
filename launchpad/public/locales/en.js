@@ -223,6 +223,7 @@ export const en = Object.freeze({
   "common.openNamed": "Open {name}",
   "common.selectedSource": "Selected source",
   "common.currentVersion": "Current main version",
+  "status.running": "Running",
   "status.ready": "Ready",
   "status.install": "Install",
   "status.missingPackage": "Missing package",

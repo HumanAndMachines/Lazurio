@@ -1412,6 +1412,15 @@ test("Launchpad používá jednotný kompaktní grid s jemně zvýšenými dlaž
   // Řádková anatomie: ikona vlevo, textový blok vedle ní, popis na jeden řádek.
   expect(css).toMatch(/\.apps-grid > \.app-card \.app-title-block\s*{[^}]*flex-direction: row;[^}]*align-items: center/);
   expect(css).toMatch(/\.apps-grid > \.app-card \.app-card-desc\s*{[^}]*white-space: nowrap;[^}]*text-overflow: ellipsis/);
+
+  // DEV-6627: stav se hlásí jen výjimkou a každá výjimka nese tvar, ne jen barvu.
+  // Běžící modul pozná tečka na ikoně, nenainstalovaný prázdný slot s čárkovanou
+  // linkou, větev mimo main drobný štítek. Připravený modul nehlásí nic.
+  expect(js).toContain('if (app.runtime_status === "healthy")');
+  expect(js).toContain('word.textContent = t("status.running")');
+  expect(css).toMatch(/\.apps-grid > \.app-card \.app-card-icon\.is-running::after\s*{[^}]*background: var\(--lz-green-600\)/);
+  expect(css).toMatch(/\.apps-grid > \.manifest-module-card\.is-unavailable\s*{[^}]*border: 1px dashed var\(--lz-line\);[^}]*background: var\(--lz-paper\)/);
+  expect(css).toMatch(/\.apps-grid > \.app-card \.app-version-badge\s*{[^}]*font-family: var\(--lz-font-mono\)/);
   const appCardRule = css.match(/\.app-card\s*\{[^}]*\}/s)?.[0] ?? "";
   expect(appCardRule).not.toContain("box-shadow");
   expect(appCardRule).not.toContain("text-shadow");

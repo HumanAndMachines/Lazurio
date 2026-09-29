@@ -6343,3 +6343,45 @@ html[data-i18n-ready="true"] .locale-bootstrap {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+
+/* DEV-6627 — stav jen výjimkou (schválený návrh 2026-09-21).
+ *
+ * Připravený modul je normální případ a normální případ nestojí za popisek.
+ * Značku dostanou jen tři výjimky, a každá nese tvar, ne jen barvu:
+ *   běží        → tečka na ikoně (tečka je, nebo není)
+ *   chybí zde   → prázdný slot s čárkovanou linkou, bez výplně karty
+ *   jiná větev  → drobný štítek s kódem vedle názvu
+ */
+.apps-grid > .app-card .app-card-icon {
+  position: relative;
+}
+
+.apps-grid > .app-card .app-card-icon.is-running::after {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: var(--lz-space-8);
+  height: var(--lz-space-8);
+  border: 2px solid var(--lz-surface);
+  border-radius: var(--lz-radius-pill);
+  background: var(--lz-green-600);
+  content: "";
+}
+
+/* Nenainstalovaný modul je místo, které na modul čeká, ne ztmavená dlaždice. */
+.apps-grid > .manifest-module-card.is-unavailable {
+  border: 1px dashed var(--lz-line);
+  background: var(--lz-paper);
+}
+
+/* Větev mimo main je fakt, ne stav: drobný monospace štítek vedle názvu. */
+.apps-grid > .app-card .app-version-badge {
+  flex: 0 0 auto;
+  padding: 0 var(--lz-space-4);
+  border-radius: var(--lz-radius-xs);
+  background: var(--lz-accent-soft);
+  color: var(--lz-accent-strong);
+  font-family: var(--lz-font-mono);
+  font-size: var(--lz-size-meta);
+  line-height: var(--lz-leading-meta);
+}
