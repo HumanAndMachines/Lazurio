@@ -54,10 +54,15 @@ test("Launchpad nepoužívá neschválenou kapitalizaci ani Lucide ikony", async
   expect(html).not.toContain("lucide/");
 });
 
-test("tmavá hlavička je kanonická bez URL experimentu", async () => {
-  const [styles, app] = await Promise.all([source("styles.css"), source("app.js")]);
-  expect(styles).toMatch(/\/\* Tmavá hlavička ukotvuje shell[\s\S]*?\.topbar\.topbar\s*{[\s\S]*?background: var\(--lz-gray-950\)/);
-  expect(styles).toMatch(/\.topbar \.icon-btn,[\s\S]*?color: var\(--lz-gray-100\)/);
+test("shell má jednu lištu: papírový rail, žádná hlavička ani URL experiment", async () => {
+  const [html, styles, app] = await Promise.all([source("index.html"), source("styles.css"), source("app.js")]);
+  // DEV-6627: tmavá horní lišta zanikla. Starší vrstvy .topbar v styles.css
+  // zůstávají jako mrtvý text bez elementu; kanonický je vendor .lz-rail na
+  // papíru, ukotvený touto vrstvou k levé hraně.
+  expect(html).not.toContain('class="topbar"');
+  expect(html).toContain('class="lz-rail scope-rail"');
+  expect(styles.lastIndexOf("/* DEV-6627 — shell jedné lišty")).toBeGreaterThan(styles.lastIndexOf("/* Tmavá hlavička ukotvuje shell"));
+  expect(styles).toMatch(/\.scope-rail\s*{[^}]*position: fixed/);
   expect(styles).not.toContain("data-header-experiment");
   expect(app).not.toContain("headerExperiment");
 });

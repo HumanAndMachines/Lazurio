@@ -575,43 +575,58 @@ test("Launchpad icon registry is initialized before the first async data render"
   expect(js.indexOf("await loadData();")).toBeGreaterThan(js.indexOf("const APP_ICON_PATHS"));
 });
 
-test("CAC-0095: topbar uses canonical Iconoir icons without circular wrappers", async () => {
+test("DEV-6627: shell jedné lišty používá kanonické Iconoir ikony bez kruhových obalů", async () => {
   const [html, css, js] = await Promise.all([
     readFile(join(publicRoot, "index.html"), "utf8"),
     readFile(join(publicRoot, "styles.css"), "utf8"),
     readFile(join(publicRoot, "app.js"), "utf8"),
   ]);
 
-  for (const icon of ["user", "nav-arrow-down", "lock", "bell", "layout-top", "more-horiz", "refresh"]) {
+  // Horní lišta zmizela; prostory a profil nese levý rail z vendor vzoru.
+  expect(html).not.toContain('class="topbar"');
+  expect(html).not.toContain('id="topbarOverflow"');
+  expect(html).not.toContain('id="currentSpaceLabel" class="space-switcher-label"');
+  expect(html).toContain('<nav id="scopeRail" class="lz-rail scope-rail"');
+  expect(html).toContain('id="railSpaces" class="scope-rail-spaces" role="listbox"');
+  expect(html).toContain('class="lz-rail__mark scope-rail-symbol"><img src="./vendor/lazurio/symbol-color.svg"');
+  expect(html).toMatch(/id="spaceSwitcherButton"[\s\S]*?class="lz-rail__item scope-rail-profile-button"/);
+  expect(html).toContain('id="spaceSwitcherMenu"');
+  expect(html).toContain('id="profileMenuStash" hidden');
+
+  // Ikony, které v shellu zůstávají, jsou dál kanonický Iconoir bez obalu.
+  for (const icon of ["lock", "bell", "layout-top", "refresh", "settings", "book"]) {
     expect(html).toContain(`<!-- iconoir/${icon} -->`);
   }
-
-  expect(html).toContain("M5 20V19C5 15.134");
-  expect(html).toContain("M6 9L12 15L18 9");
   expect(html).toContain("M16 12H17.4C17.7314");
   expect(html).toContain("M18 8.4C18 6.70261");
   expect(html).toContain("M21 9.75H3");
-  expect(html).toContain("M20 12.5C20.2761 12.5");
-  expect(html).not.toContain("M3 11.5066C3 16.7497");
   expect(html).toContain("M21.8883 13.5C21.1645");
-  expect(js).toContain("// iconoir/user");
-  expect(js).toContain("M5 20V19C5 15.134");
+  expect(html).not.toContain("M3 11.5066C3 16.7497");
   expect(html).not.toContain("M18 8a6 6 0 0 0-12 0");
   expect(html).not.toContain('<circle cx="5" cy="12" r="1.7" />');
   expect(html).not.toContain("M21 12.8A9 9 0 1 1");
   expect(html).not.toContain("M3 12a9 9 0 0 1");
-  expect((html.match(/topbar-icon-plain/g) ?? []).length).toBe(6);
-  // Settings of this Environment: one plain entry to its own page.
-  expect(html).toContain("<!-- iconoir/settings -->");
+  // Ikona osoby zůstává v JS jako fallback profilu bez jména.
+  expect(js).toContain("// iconoir/user");
+  expect(js).toContain("M5 20V19C5 15.134");
+
+  // Nastavení tohoto Prostředí: jeden prostý odkaz na vlastní stránku, v menu profilu.
   expect(html).toMatch(/<a\s+id="settingsLink"\s+href="\.\/settings\/"/);
-  expect(css).toContain(".topbar-icon-plain,");
-  expect(css).toContain("border-color: transparent;");
-  expect(css).toContain("border-radius: 0;");
-  expect(css).toContain("background: transparent;");
-  expect(css).toMatch(/\.space-switcher-button \{[\s\S]*?border: 1px solid transparent;/);
-  expect(css).toMatch(/\.topbar \{[\s\S]*?background: var\(--paper\);/);
-  expect(css).toMatch(/\.space-switcher-button \{[\s\S]*?background: transparent;/);
-  expect(css).toMatch(/\.space-switcher-button:hover,[\s\S]*?border-color: transparent;/);
+  expect(js).toContain("function renderRailProfile");
+  expect(js).toContain("elements.railSpaces?.replaceChildren(...options)");
+  expect(js).toContain('button.className = "lz-rail__item space-switcher-option"');
+  expect(js).toContain("tools.append(elements.doctorStatus)");
+  expect(js).toContain("tools.append(elements.reloadButton)");
+
+  // Guide a hledání žijí v hlavičce aktivního prostoru, přepínač panelů vedle nich.
+  expect(html.indexOf('id="guideLink"')).toBeGreaterThan(html.indexOf('id="appsToolbar"'));
+  expect(html.indexOf('id="drawerToggle"')).toBeGreaterThan(html.indexOf('id="appsSearch"'));
+  expect(js).toContain('elements.guideLink?.setAttribute("href", guideDocumentationUrl(getLocale()))');
+
+  // Rail je ukotvený vlevo, stránka odsunutá o modul mřížky, výška lišty nula.
+  expect(css).toMatch(/\.scope-rail\s*{[^}]*position: fixed;[^}]*inset: 0 auto 0 0/);
+  expect(css).toMatch(/\.page\s*{[^}]*margin-left: var\(--lz-grid-step\)/);
+  expect(css.lastIndexOf("--topbar-h: 0px")).toBeGreaterThan(css.lastIndexOf("--topbar-h: 57px"));
 });
 
 test("Version families render as one card with a default version and a more-menu", async () => {
@@ -1020,8 +1035,8 @@ test("mobilní toolbar drží search kompaktní a sekundární panely přesouvá
     readFile(join(publicRoot, "app.js"), "utf8"),
   ]);
 
-  expect(html).toContain('id="topbarOverflow"');
-  expect(html).toContain('class="topbar-overflow-menu"');
+  // DEV-6627: mobilní přetečení horní lišty zaniklo s lištou; sheet a drawer zůstávají.
+  expect(html).not.toContain('id="topbarOverflow"');
   expect(css).toContain("flex: 0 0 46px");
   expect(css).toContain("min-height: 46px");
   expect(css).toContain(".detail-drawer.is-bottom-sheet");

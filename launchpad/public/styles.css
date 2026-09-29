@@ -6385,3 +6385,157 @@ html[data-i18n-ready="true"] .locale-bootstrap {
   font-size: var(--lz-size-meta);
   line-height: var(--lz-leading-meta);
 }
+
+/* DEV-6627 — shell jedné lišty (schválený návrh 2026-09-21, finál 2026-09-29).
+ *
+ * Horní lišta zmizela. Levý rail nese prostory a profil a je to vendor
+ * `.lz-rail` s papírovou plochou; tahle vrstva ho jen ukotví k levé hraně a
+ * odsune stránku o jeden modul mřížky. Utility hlavičky (Guide, hledání,
+ * přepínač panelů) žijí v hlavičce aktivního prostoru.
+ *
+ * Rail je v této mezifázi jen sbalený; rozbalení s názvy a přepínač
+ * Prostředí vedle názvu Organizace přijdou samostatně. */
+:root {
+  --topbar-h: 0px;
+}
+
+.scope-rail {
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 20;
+  align-items: stretch;
+}
+
+.page {
+  margin-left: var(--lz-grid-step);
+}
+
+.scope-rail .lz-rail__item {
+  justify-content: center;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+
+.scope-rail .lz-rail__item:focus-visible {
+  outline: 2px solid var(--lz-ink);
+  outline-offset: 2px;
+}
+
+.scope-rail-brand {
+  margin-bottom: var(--lz-space-8);
+  cursor: default;
+}
+
+.scope-rail-symbol {
+  background: transparent;
+}
+
+.scope-rail-symbol img {
+  width: 30px;
+  height: 30px;
+}
+
+.scope-rail-spaces {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lz-space-4);
+}
+
+/* Značku prostoru kreslí renderSpaceLogo; v railu ji obalí lz-rail__mark,
+   takže logo vyplní celý čtverec a fallback písmeno sedí na střed. */
+.scope-rail .lz-rail__mark .space-logo {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.scope-rail .lz-rail__mark .space-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Zvoneček, přepínač panelů a profil dole. Zvoneček zachovává svůj badge. */
+.scope-rail .notifications-anchor {
+  display: flex;
+  justify-content: center;
+}
+
+.scope-rail .notifications-panel {
+  position: fixed;
+  left: calc(var(--lz-grid-step) + var(--lz-space-8));
+  bottom: var(--lz-space-12);
+  right: auto;
+  top: auto;
+}
+
+.scope-rail-profile {
+  padding-top: var(--lz-space-4);
+  border-top: 1px solid var(--lz-line-faint);
+}
+
+.scope-rail-profile-button .lz-rail__mark {
+  overflow: hidden;
+  border-radius: var(--lz-radius-pill);
+  background: var(--lz-blue-100);
+  color: var(--lz-blue-900);
+}
+
+.scope-rail-profile-button .lz-rail__mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.scope-rail .space-switcher-menu {
+  position: fixed;
+  left: calc(var(--lz-grid-step) + var(--lz-space-8));
+  bottom: var(--lz-space-12);
+  top: auto;
+  right: auto;
+}
+
+.space-profile-tools {
+  display: flex;
+  gap: var(--lz-space-4);
+  padding: var(--lz-space-8) var(--lz-space-12);
+}
+
+/* Hlavička prostoru: Guide, hledání a přepínač panelů v jedné řadě. */
+.apps-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--lz-space-8);
+}
+
+.header-guide-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lz-space-8);
+  height: 36px;
+  padding: 0 var(--lz-space-12);
+  border-radius: var(--lz-radius-sm);
+  color: var(--lz-ink-muted);
+  font-size: var(--lz-size-meta);
+  font-weight: var(--lz-weight-akce);
+  text-decoration: none;
+}
+
+.header-guide-link:hover,
+.header-guide-link:focus-visible {
+  color: var(--lz-ink);
+  background: var(--lz-paper);
+}
+
+/* Dlaždice: poloměr podle finálního návrhu (design-system-lazurio#50). */
+.apps-grid > .app-card {
+  border-radius: var(--lz-radius-md);
+}
