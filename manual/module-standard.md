@@ -217,9 +217,12 @@ Do té doby `MS-04` Python App hlásí `warn`, ne `pass`.
 
 ## 8. Generace App a úklid
 
-- Modul drží nejvýše **výchozí App + jednu předchozí generaci**. Starší
-  generace (Firebase éra `app/v1`, nepoužívané `v2`) se mažou; Git historie
-  zůstává. Rozhodnutí Principála 2026-09-30.
+- Modul drží nejvýše **dvě generace App**: výchozí a jednu další — buď
+  předchozí (ponechanou pro návrat), nebo kandidátní novější, která ještě
+  není výchozí (migrační okno, např. `v2` výchozí a `v3` nad repository-db).
+  Přepnutí `default_app` na kandidáta je rozhodnutí Stewarda nebo Principála,
+  ne oprava konformance. Starší generace (Firebase éra `app/v1`, nepoužívané
+  `v2`) se mažou; Git historie zůstává. Rozhodnutí Principála 2026-09-30.
 - `apps[]` odpovídá adresářům: package bez deklarace v `apps[]` v repu není.
 
 ## 9. Organizace
@@ -282,7 +285,7 @@ skript, `lazurio.preparation` skeleton, lease mimo pool na volný port poolu).
 | `MS-09` | žádné importy mimo repo (`../` nad kořen Modulu, `file:` mimo repo, jiný Modul, `launchpad/`, `infra/`, `design-system/`) |
 | `MS-10` | závislost repository-db a module-kit připnutá na vydaný tag |
 | `MS-11` | žádné absolutní cesty na stroj, žádné symlinky vytvářené při startu, žádné `modules/` |
-| `MS-12` | `apps[]` odpovídá adresářům; nejvýše výchozí + jedna předchozí generace |
+| `MS-12` | `apps[]` odpovídá adresářům; nejvýše dvě generace App (výchozí a jedna předchozí nebo kandidátní) |
 | `MS-13` | `bun run check` a `bun test` skripty existují (spuštění je věc CI Modulu) |
 
 Report `lazurio.module_setup.report.v1` nese seznam kontrol; `current`

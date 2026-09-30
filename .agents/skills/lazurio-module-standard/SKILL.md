@@ -38,7 +38,8 @@ Zkrácený kontrakt, který drží každá App Modulu:
   (`github:<owner>/<repo>#v…`), repository-db a `@lazurio/module-kit` na
   vydaném tagu.
 - TypeScript strict; stack Vite + React (UI/data), Astro (web/KB), Bun
-  (služby), `uv` (Python). Nejvýše výchozí + jedna předchozí generace App.
+  (služby), `uv` (Python). Nejvýše dvě generace App: výchozí a jedna
+  předchozí nebo kandidátní.
 
 ## Co platí dnes a co je cílový stav
 
@@ -116,7 +117,8 @@ ani pro productionspace repa (decision 0041).
    4. **Jazyk**: `.js/.mjs/.cjs` zdroje App převeď na TS (`git mv` + typy ve
       dvou commitech), `tsconfig` strict, biome, `check` + `test` skripty.
    5. **Generace**: smaž staré App generace (Firebase éra `v1`, nepoužívané
-      `v2`); `apps[]` = adresáře.
+      `v2`); `apps[]` = adresáře. Novější kandidát vedle výchozí App zůstat
+      smí; přepnutí `default_app` není součást převodu.
 2. Opakuj `lazurio module setup … --json`, dokud není `current`; potom
    `bun run check && bun test` a skutečný start přes Launchpad
    (`lazurio module start`, otevři URL, `lazurio module stop`).
