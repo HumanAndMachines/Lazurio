@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -346,6 +346,41 @@ test("MS-08 requires TypeScript strict and no JavaScript sources outside public/
   expect(check(await setupModule(relative), "MS-08").status).toBe("pass");
 });
 
+test("MS-01 refuses to move a lease whose port is hardcoded in a Python source", async () => {
+  const fixture = await conformantFixture({ port: 23_502 });
+  await writeText(join(fixture.moduleRoot, "app", "v1", "serve.py"), "PORT = 23502\n");
+
+  const report = await setupModule({ ...fixture, apply: true });
+
+  expect(check(report, "MS-01").details).toContain(
+    "lease main se automaticky nepřesune: port 23502 se objevuje v app/v1/serve.py",
+  );
+  expect((await readJson(join(fixture.moduleRoot, "lazurio.module.json"))).port_leases[0].port).toBe(23_502);
+});
+
+test("MS-09 rejects symlinks that lead outside the Module repository, tracked as fail and untracked as warn", async () => {
+  const fixture = await conformantFixture();
+  const outside = join(fixture.organizationRoot, "launchpad", "contracts");
+  await mkdir(outside, { recursive: true });
+  await writeText(join(outside, "index.ts"), "export const x = 1;\n");
+  await symlink(outside, join(fixture.appRoot, "src", "contracts"));
+  await symlink(join(fixture.appRoot, "src", "local.ts"), join(fixture.appRoot, "src", "alias.ts"));
+  await writeText(join(fixture.appRoot, "src", "shared.ts"), "import { x } from \"./contracts/index.ts\";\nexport { x };\n");
+  runGit(fixture.moduleRoot, ["add", "."]);
+
+  expect(check(await setupModule(fixture), "MS-09")).toMatchObject({
+    status: "fail",
+    details: ["app/v1/src/contracts: symlink vede mimo repo Modulu (" + outside + ")"],
+  });
+
+  const untracked = await conformantFixture();
+  await symlink(join(untracked.lazurioRoot, "elsewhere"), join(untracked.moduleRoot, "db"));
+  expect(check(await setupModule(untracked), "MS-09")).toMatchObject({
+    status: "warn",
+    details: ["db: symlink míří na neexistující cíl mimo repo (" + join(untracked.lazurioRoot, "elsewhere") + ")"],
+  });
+});
+
 test("MS-09 rejects imports and file dependencies outside the Module repository", async () => {
   const fixture = await conformantFixture({
     mutatePackage: (pkg) => { pkg.dependencies.contracts = "file:../../../../launchpad/contracts"; },
@@ -413,8 +448,20 @@ test("MS-12 keeps apps[] and app generations aligned", async () => {
   expect(check(await setupModule(fixture), "MS-12").details).toEqual([
     "app/v1/package.json není deklarovaný v apps[]",
     "app/v2/package.json není deklarovaný v apps[]",
-    "Modul drží 3 generace App (v1, v2, v3); povolené jsou výchozí + jedna předchozí",
+    "Modul drží 3 generace App (v1, v2, v3); povolené jsou dvě: výchozí a jedna předchozí nebo kandidátní",
   ]);
+});
+
+test("MS-12 accepts a declared newer candidate generation beside an older default", async () => {
+  const fixture = await conformantFixture({ appPath: "app/v2/package.json" });
+  const candidate = structuredClone(await readJson(join(fixture.appRoot, "package.json")));
+  candidate.name = "candidate-v3";
+  await writeJsonFile(join(fixture.moduleRoot, "app", "v3", "package.json"), candidate);
+  const manifest = await readJson(join(fixture.moduleRoot, "lazurio.module.json"));
+  manifest.apps.push("app/v3/package.json");
+  await writeJsonFile(join(fixture.moduleRoot, "lazurio.module.json"), manifest);
+
+  expect(check(await setupModule(fixture), "MS-12").status).toBe("pass");
 });
 
 test("MS-03 and MS-13 report a missing runtime and missing check/test scripts", async () => {

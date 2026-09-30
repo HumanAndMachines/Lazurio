@@ -40,6 +40,8 @@
       "not": {
         "enum": [
           "prepare",
+          "preprepare",
+          "postprepare",
           "install",
           "preinstall",
           "postinstall",
@@ -58,6 +60,8 @@
       "not": {
         "enum": [
           "prepare",
+          "preprepare",
+          "postprepare",
           "install",
           "preinstall",
           "postinstall",

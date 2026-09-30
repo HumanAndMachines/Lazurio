@@ -7,8 +7,8 @@
 // writes; this module only measures and proposes the few mechanical repairs
 // the standard allows.
 
-import { lstat, readFile, readdir } from "fs/promises";
-import { extname, isAbsolute, join, posix, resolve } from "path";
+import { lstat, readFile, readdir, readlink, realpath } from "fs/promises";
+import { extname, isAbsolute, join, posix, relative as relativePath, resolve, sep } from "path";
 import { readRequiredBunVersion } from "./core/toolchain-lib.mjs";
 import { findModuleStandardPortFindings } from "./core/organization-port-policy-lib.mjs";
 import { GIT_LOCAL_TIMEOUT_MS, runGit } from "./runtime/git-lib.mjs";
@@ -26,7 +26,7 @@ export const MODULE_STANDARD_CHECKS = Object.freeze([
   { id: "MS-09", summary: "žádné importy mimo repozitář Modulu" },
   { id: "MS-10", summary: "repository-db a module-kit jsou připnuté na vydaný tag" },
   { id: "MS-11", summary: "žádné absolutní cesty na stroj, symlinky vytvářené při startu ani layout modules/" },
-  { id: "MS-12", summary: "apps[] odpovídá adresářům a Modul drží nejvýše výchozí + jednu předchozí generaci" },
+  { id: "MS-12", summary: "apps[] odpovídá adresářům a Modul drží nejvýše dvě generace App (výchozí a jednu předchozí nebo kandidátní)" },
   { id: "MS-13", summary: "skripty check a test existují" },
 ]);
 
@@ -67,7 +67,7 @@ const SKIPPED_DIRECTORIES = new Set([
 const TEST_DIRECTORIES = new Set(["test", "tests", "__tests__", "e2e", "fixtures", "__fixtures__"]);
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".astro"]);
 const JAVASCRIPT_EXTENSIONS = new Set([".js", ".jsx", ".mjs", ".cjs"]);
-const PORT_REFERENCE_EXTENSIONS = new Set([...SOURCE_EXTENSIONS, ".json", ".jsonc", ".yaml", ".yml", ".toml", ".html"]);
+const PORT_REFERENCE_EXTENSIONS = new Set([...SOURCE_EXTENSIONS, ".py", ".sh", ".json", ".jsonc", ".yaml", ".yml", ".toml", ".html"]);
 const MAX_WALKED_FILES = 20_000;
 const MAX_READ_BYTES = 1_048_576;
 const KNOWN_STRICT_TSCONFIG_PRESETS = [
@@ -103,7 +103,7 @@ export async function evaluateModuleStandard({
     if (status === "fail" || (status === "warn" && result.status === "pass")) result.status = status;
     if (detail) result.details.push(detail);
   };
-  const files = await walkModuleFiles(root);
+  const { files, symlinks } = await walkModuleFiles(root);
   const apps = (Array.isArray(manifest?.apps) ? manifest.apps : []).map((appPath) => ({
     appPath,
     appDirectory: posix.dirname(appPath) === "." ? "" : posix.dirname(appPath),
@@ -426,6 +426,24 @@ export async function evaluateModuleStandard({
     );
   }
 
+  // MS-09 symlinks whose target lies outside the Module repository: an
+  // import through them resolves inside the repo textually but reads foreign
+  // code. A tracked symlink is the repo's own boundary breach (fail); an
+  // untracked one is a workstation artifact worth a warning.
+  if (symlinks.length > 0) {
+    const realRoot = await realpath(root).catch(() => resolve(root));
+    const tracked = await gitTrackedPaths(root, symlinks.map((link) => link.path));
+    for (const link of symlinks) {
+      const target = await realpath(join(root, ...link.path.split("/"))).catch(() => null);
+      const inside = target === null ? null : relativePath(realRoot, target).split(sep).join("/");
+      if (inside !== null && !escapesRoot(inside)) continue;
+      const status = tracked === null || tracked.has(link.path) ? "fail" : "warn";
+      record("MS-09", status, target === null
+        ? `${link.path}: symlink míří na neexistující cíl mimo repo (${link.target})`
+        : `${link.path}: symlink vede mimo repo Modulu (${link.target})`);
+    }
+  }
+
   // MS-11 layout
   if (typeof slotPath === "string" && /^modules\//.test(slotPath)) {
     record("MS-11", "fail", `slot ${slotPath} používá zrušený layout modules/; Modul patří do workspace/`);
@@ -444,11 +462,14 @@ export async function evaluateModuleStandard({
     .filter(Boolean)
     .map(Number))].sort((left, right) => left - right);
   if (generations.length > 2) {
-    record("MS-12", "fail", `Modul drží ${generations.length} generace App (${generations.map((value) => `v${value}`).join(", ")}); povolené jsou výchozí + jedna předchozí`);
+    record("MS-12", "fail", `Modul drží ${generations.length} generace App (${generations.map((value) => `v${value}`).join(", ")}); povolené jsou dvě: výchozí a jedna předchozí nebo kandidátní`);
   }
+  // The second generation may be the previous one (kept for rollback) or the
+  // next candidate that is not the default yet (migration window); the
+  // default only has to be one of the declared generations.
   const defaultGeneration = Number(/^app\/v(\d+)\/package\.json$/.exec(manifest?.default_app ?? "")?.[1] ?? Number.NaN);
-  if (generations.length > 0 && Number.isInteger(defaultGeneration) && defaultGeneration !== generations.at(-1)) {
-    record("MS-12", "fail", `výchozí App v${defaultGeneration} není nejnovější generace v${generations.at(-1)}`);
+  if (generations.length > 0 && Number.isInteger(defaultGeneration) && !generations.includes(defaultGeneration)) {
+    record("MS-12", "fail", `výchozí App v${defaultGeneration} není mezi generacemi ${generations.map((value) => `v${value}`).join(", ")}`);
   }
 
   const checks = MODULE_STANDARD_CHECKS.map(({ id, summary }) => {
@@ -711,14 +732,21 @@ async function gitTrackedPaths(root, paths) {
 
 async function walkModuleFiles(root) {
   const files = [];
+  const symlinks = [];
   async function walk(directory, relativeDirectory, flags) {
     if (files.length >= MAX_WALKED_FILES) return;
     const entries = await readdir(directory, { withFileTypes: true }).catch(() => []);
     if (relativeDirectory !== "" && entries.some((entry) => entry.name === ".git")) return;
     for (const entry of entries) {
       if (files.length >= MAX_WALKED_FILES) return;
-      if (entry.isSymbolicLink()) continue;
       const relativePath = relativeDirectory === "" ? entry.name : `${relativeDirectory}/${entry.name}`;
+      if (entry.isSymbolicLink()) {
+        if (!SKIPPED_DIRECTORIES.has(entry.name)) {
+          const target = await readlink(join(directory, entry.name)).catch(() => "?");
+          symlinks.push({ path: relativePath, target });
+        }
+        continue;
+      }
       if (entry.isDirectory()) {
         if (SKIPPED_DIRECTORIES.has(entry.name)) continue;
         await walk(join(directory, entry.name), relativePath, {
@@ -736,7 +764,7 @@ async function walkModuleFiles(root) {
     }
   }
   await walk(root, "", { test: false, public: false });
-  return files;
+  return { files, symlinks };
 }
 
 function filesBelow(files, directory) {
