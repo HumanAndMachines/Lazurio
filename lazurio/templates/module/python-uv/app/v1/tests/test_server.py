@@ -13,6 +13,7 @@ import time
 from {{python_package}} import server
 
 VARIABLE = "{{listener_env_prefix}}"
+SERVER_MODULE = "{{python_package}}.server"
 
 
 def _base_env() -> dict[str, str]:
@@ -51,7 +52,7 @@ def test_host_check_allows_loopback_and_the_hosted_origin_only() -> None:
 
 def test_refuses_to_start_without_the_listener_environment() -> None:
     run = subprocess.run(
-        [sys.executable, "-m", "{{python_package}}.server"],
+        [sys.executable, "-m", SERVER_MODULE],
         env=_base_env(),
         capture_output=True,
         text=True,
@@ -64,7 +65,7 @@ def test_refuses_to_start_without_the_listener_environment() -> None:
 def test_health_foreign_host_and_sigterm() -> None:
     port = _free_port()
     env = {**_base_env(), f"{VARIABLE}_HOST": "127.0.0.1", f"{VARIABLE}_PORT": str(port)}
-    process = subprocess.Popen([sys.executable, "-m", "{{python_package}}.server"], env=env)
+    process = subprocess.Popen([sys.executable, "-m", SERVER_MODULE], env=env)
     try:
         deadline = time.monotonic() + 30
         status = None
