@@ -31,12 +31,25 @@ nebo odmítá (kapitola 10). Kontrolu drží mechanismus `lazurio module setup`
 
 | Soubor | Požadavek |
 | --- | --- |
-| `lazurio.module.json` | `schema_version: lazurio.module.v1`; `id` = slug slotu v `modules.manifest.json`; `company` = slug Organizace; `port_leases[]` s `id`, `host: 127.0.0.1`, `port` **uvnitř `module_port_pool` Organizace**; `apps[]` + `default_app`. Modul bez App má `tcp_port_policy: none` a `apps: []`. |
-| `app/v<N>/package.json` každé App | `name`, `private: true`, `packageManager: "bun@<přesná verze z lazurio/package.json>"`, `lazurio.runtime` (kap. 4), `lazurio.preparation` (kap. 3), skripty `dev`, `check`, `test`. |
+| `lazurio.module.json` | `schema_version: lazurio.module.v1`; `id` = slug slotu v `modules.manifest.json`; `company` = slug Organizace; `port_leases[]` s `id`, `host: 127.0.0.1`, `port` **uvnitř `module_port_pool` Organizace** (přesun existujícího leasu do poolu je součást převodu, viz níže); `apps[]` + `default_app`. Modul bez App má `tcp_port_policy: none` a `apps: []`. |
+| `app/v<N>/package.json` každé App | App žije vždy v podadresáři `app/v<N>/` (nikdy v kořeni Modulu). `name`, `private: true`, `packageManager: "bun@<přesná verze z lazurio/package.json>"`, `lazurio.runtime` (kap. 4), `lazurio.preparation` (kap. 3), skripty `dev`, `check`, `test`. Python App: `app/v<N>/pyproject.toml` (kap. 7). |
 | `app/v<N>/bun.lock` | commitnutý, aktuální; `bun install --frozen-lockfile` projde. Python App: `uv.lock`. |
 | `app/v<N>/tsconfig.json` | `strict: true` (nebo `extends` strict preset frameworku); žádné `allowJs` na zdrojích App. |
 | `biome.json` (v App nebo Modulu) | lint + format; `bun run check` = typecheck + biome. |
 | `README.md`, `AGENTS.md` Modulu | co App dělá, jak ji vyvíjet; pravidla scope. |
+
+**Přesun leasu do poolu.** Dosavadní pravidlo `lazurio module setup`
+(„existující platný lease se automaticky nemění", `--adopt-port` jako vědomé
+tvrzení operátora; [module-setup.md](module-setup.md)) platí dál pro běžný
+provoz: mimo převod se port nepřečíslovává. Při **převodu Modulu na standard**
+(vlny W1–W2) je lease mimo pool Organizace vada `MS-01` a přesouvá se na
+nejnižší volný port poolu jako koordinovaná migrace: `--apply` zapíše nový
+lease a report i PR uvedou mapování starý → nový port; hostované gateway
+čtou lease z manifestu a po dalším apply Machines obsluhují nový port; přesun
+se odmítne, dokud se číslo portu vyskytuje ve zdrojích nebo konfiguraci App
+(nejdřív se odstraní natvrdo zapsaný port, kap. 4.2). Cross-Organization
+takeover kontrakt Launchpadu zůstává pro dobu před cutoverem; po cutoveru
+kolize mezi Organizacemi nevznikají, protože pooly jsou disjunktní.
 
 Zakázané v Modulu: `.env`, `.env.local`, `.env.development` a jakýkoli
 `.env*` na start cestě (kap. 4.3); `node_modules` v Gitu; symlinky vytvářené
@@ -168,16 +181,20 @@ Pro App v Pythonu platí stejný kontrakt s těmito ekvivalenty:
 
 | TS/Bun | Python |
 | --- | --- |
-| `packageManager: bun@…` | `requires-python` + `[tool.uv]` v `pyproject.toml`; pinned `uv` verze v `lazurio.preparation.uv_version` |
+| `packageManager: bun@…` | `requires-python` + `[tool.uv]` v `pyproject.toml`; přesná verze `uv` v `lazurio.preparation.uv_version` (povinná při `runtime: uv`) |
+| `app/v<N>/package.json` jako nositel `lazurio.*` | `app/v<N>/pyproject.toml` s tabulkou `[tool.lazurio]` se stejnými klíči `runtime` a `preparation`; `owner_package` ukazuje na `pyproject.toml` |
 | `bun.lock` | `uv.lock` (commitnutý; `uv sync --frozen`) |
 | `dev: bun run src/server.ts` | `dev` v `[project.scripts]`/`lazurio.runtime.dev_script` = `uv run python -m <balíček>` |
 | `tsconfig strict` + biome | `ruff` + `pyright`/`mypy strict` |
 | `@lazurio/module-kit` | `lazurio-module-kit` (Python balíček z téhož repa) |
 
 `lazurio.preparation.runtime: "uv"` říká Platformě, že příprava je
-`uv sync --frozen` a start `uv run …`; `uv` je nástroj katalogu Environmentu.
-Schéma se rezervuje teď; adaptér Platformy vzniká s prvním reálným Python
-Modulem (proof na skutečném consumerovi).
+`uv sync --frozen` a start `uv run …`; `uv` je nástroj katalogu Environmentu
+v přesné verzi `uv_version`. Schéma se rezervuje teď (`owner_package` smí být
+`package.json` nebo `pyproject.toml`; při `runtime: uv` je `uv_version`
+povinná); čtení `[tool.lazurio]` z `pyproject.toml` a adaptér Platformy
+vznikají s prvním reálným Python Modulem (proof na skutečném consumerovi).
+Do té doby `MS-04` Python App hlásí `warn`, ne `pass`.
 
 ## 8. Generace App a úklid
 

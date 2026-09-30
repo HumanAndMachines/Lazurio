@@ -39,6 +39,19 @@ Zkrácený kontrakt, který drží každá App Modulu:
 - TypeScript strict; stack Vite + React (UI/data), Astro (web/KB), Bun
   (služby), `uv` (Python). Nejvýše výchozí + jedna předchozí generace App.
 
+## Co platí dnes a co je cílový stav
+
+Standard je přijatý (decision 0171), mechanismy přicházejí po vlnách. Agent
+si před prací ověří, co má k dispozici, a nevydává starší stav za důkaz:
+
+| Mechanismus | Stav | Co to znamená pro postup |
+| --- | --- | --- |
+| `lazurio module setup` s `standard.checks[]` (`MS-01`–`MS-13`) | vzniká (HumanAndMachines/Lazurio#454); dostupný, když report obsahuje klíč `standard` | Bez `standard.checks[]` je `current` jen důkaz platného kontraktu Modulu, **ne** konformance. Agent pak projde kapitoly 2–9 manuálu ručně a v PR to napíše. |
+| `lazurio module create` (scaffold) | cílový stav (DEV-6634 W0-4) | Dokud neexistuje, nový Modul zakládá jen Organization Admin na základě rozhodnutí Principála: repo na GitHubu + slot PR; obsah Modulu Agent připraví podle kapitol 2–6 manuálu a po vydání scaffoldu ho sladí se šablonou. Není to „ruční zakládání" ve smyslu zákazu — zákaz míří na Moduly bez slotu, bez repa a mimo standard. |
+| Dashboard „Nový Modul" | cílový stav (DEV-6634 W0-7, DEV-6514) | Do vydání zakládá repo a slot Admin ručně přes GitHub a PR. |
+| `@lazurio/module-kit` | vydaný v0.1.0 (`github:Lazurio/module-kit#v0.1.0`) | Používej hned. |
+| Platform Launchpad: supervize, `module-nonconformant`, `uv` | cílový stav (W0-5, W3) | Nekonformní Modul dnes Launchpad spustí; standard přesto platí pro každý PR. |
+
 ## Kdy použít
 
 - Principál chce nový Modul nebo novou App v Modulu.
@@ -63,10 +76,15 @@ ani pro productionspace repa (decision 0041).
 3. Scaffold v task worktree Organizace:
    `lazurio module create <Org>/<slug> --stack vite-react | astro |
    astro-starlight | bun-service | python-uv`. Dokud scaffold v Core není
-   vydaný, vytvoř stejné soubory ručně podle kapitoly 2–6 manuálu a šablony
-   `lazurio/templates/module/<stack>/` (je-li přítomná v checkoutu).
+   vydaný (viz tabulka výše), připrav stejné soubory podle kapitol 2–6
+   manuálu — App vždy v `app/v1/`, `lazurio.module.json` se slotem a leasem
+   z poolu, `lazurio.runtime` + `lazurio.preparation`, `packageManager`,
+   lockfile, strict `tsconfig`, biome, `check`/`test`, README, `AGENTS.md`,
+   CI — a v PR uveď, že vznikl bez scaffoldu.
 4. `lazurio module setup <module-root> --root <lazurio-root> --json` musí
-   vrátit `current`; jinak oprav podle `checks[]` (ID `MS-01`–`MS-13`).
+   vrátit `current` **a** report musí obsahovat `standard.checks[]` se všemi
+   `pass`; bez klíče `standard` doplň ruční kontrolu kapitol 2–9 a napiš to
+   do PR.
 5. `bun run check && bun test` v App; `lazurio module start <Org>/<slug>
    --json` přes běžící Launchpad a otevři `result.runtime.url`.
 6. Repo Modulu: GitHub repo `<Org>/<slug>` (zakládá Admin nebo Dashboard),
@@ -76,9 +94,12 @@ ani pro productionspace repa (decision 0041).
 ### B. Převod existujícího Modulu
 
 1. Spusť `lazurio module setup <module-root> --root <lazurio-root> --json`
-   read-only a přečti `checks[]`. Mechanické položky nech opravit `--apply`
-   (`packageManager`, chybějící skripty, skeleton `lazurio.preparation`,
-   lease do poolu); ostatní opravuj ručně v tomto pořadí:
+   read-only a přečti `standard.checks[]` (bez toho klíče postupuj podle
+   kapitol 2–9 manuálu a v PR to uveď). Mechanické položky nech opravit
+   `--apply` (`packageManager`, skeleton `lazurio.preparation`, lease do
+   poolu s mapováním starý → nový port v reportu; přesun leasu je součást
+   převodu, mimo převod se port nemění); ostatní opravuj ručně v tomto
+   pořadí:
    1. **Start**: `dev` = jeden proces; vše ostatní (build, symlinky, data,
       migrace) přesuň do `prepare_script`, read-only kontrolu do
       `check_script`. Odstraň `concurrently`, `&&`, `npx`, `node`, `bunx`,
@@ -116,7 +137,8 @@ ani pro productionspace repa (decision 0041).
 ## Ověření
 
 - `lazurio module setup <module-root> --root <lazurio-root> --json` →
-  `status: current`, všechny `checks[].status == "pass"`.
+  `status: current` a `standard.checks[]` se všemi `pass` (je-li klíč
+  `standard` přítomný; jinak ruční kontrola kapitol 2–9 zapsaná v PR).
 - `bun run check` a `bun test` v každé App: 0 selhání.
 - Skutečný start přes Launchpad: `lazurio module start <Org>/<slug> --json`
   → `running`, `result.runtime.url` odpoví 200 pod vlastním hostname a 403
