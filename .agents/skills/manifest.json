@@ -23,6 +23,18 @@
       "required": false
     },
     {
+      "slug": "lazurio-module-standard",
+      "path": ".agents/skills/lazurio-module-standard/SKILL.md",
+      "applies_to": [
+        "module-create",
+        "module-conversion",
+        "module-conformance",
+        "launchpad-start",
+        "lazurio-module-standard"
+      ],
+      "required": true
+    },
+    {
       "slug": "lazurio-workstation-install",
       "path": ".agents/skills/lazurio-workstation-install/SKILL.md",
       "applies_to": [

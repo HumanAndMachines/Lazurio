@@ -1,0 +1,125 @@
+---
+name: lazurio-module-standard
+description: Use whenever a Task Agent creates a new Lazurio Module, converts an existing Module to the Lazurio Module Standard, or verifies conformance before a PR. Covers the required manifests and files, the single-process start contract, the runtime environment, repository boundaries, the allowed stacks (TypeScript strict; Python through uv), the `lazurio module setup` conformance gate and the per-Module PR flow. Never patch the Launchpad around a Module's deviation; fix the Module.
+version: 1.0.0
+author: Lazurio
+license: MIT
+metadata:
+  hermes:
+    tags: [module, standard, typescript, bun, launchpad, conformance, scaffold]
+    related_skills: [worktree-development-discipline]
+---
+
+# Lazurio Module Standard
+
+## Overview
+
+Autorita je [`manual/module-standard.md`](../../../manual/module-standard.md)
+(decision 0171) a schémata v `lazurio/schemas/`. Tento skill je pracovní
+postup nad nimi: jak Modul založit, převést a ověřit tak, aby ho Launchpad
+spustil bez výjimek. Odchylka Modulu se opravuje v Modulu; Launchpad pro ni
+nedostává workaround.
+
+Zkrácený kontrakt, který drží každá App Modulu:
+
+- `lazurio.module.json` (`id` = slot, lease v poolu Organizace, `apps` +
+  `default_app`), v každé App `packageManager: bun@<přesná verze>`,
+  `lazurio.runtime` (listenery + health), `lazurio.preparation`
+  (`runtime: bun | uv`, `prepare_script`, `check_script`), commitnutý
+  `bun.lock` / `uv.lock`, `tsconfig` strict, biome, skripty `dev`, `check`,
+  `test`.
+- `dev` spouští **jeden proces serveru** a nic jiného; funguje jen s `bun` v
+  `PATH`; host/port jen z `LAZURIO_RUNTIME_LISTENER_<ID>_HOST/_PORT`, externí
+  adresa z `_EXTERNAL_ORIGIN`; žádné `.env*`, `PORT`, `LAZURIO_RUNTIME_HOST`,
+  `COMPANYASCODE_*`, lease soubor.
+- Žádné importy mimo repo Modulu (`../../../launchpad/…`, jiný Modul,
+  `infra/`, `design-system/`); sdílené věci jen jako verzované závislosti
+  (`github:<owner>/<repo>#v…`), repository-db a `@lazurio/module-kit` na
+  vydaném tagu.
+- TypeScript strict; stack Vite + React (UI/data), Astro (web/KB), Bun
+  (služby), `uv` (Python). Nejvýše výchozí + jedna předchozí generace App.
+
+## Kdy použít
+
+- Principál chce nový Modul nebo novou App v Modulu.
+- Modul má být převeden na standard (program DEV-6634, wave W1–W2).
+- Před každým PR do Modulu (konformance je součást preflightu).
+- Launchpad hlásí `module-nonconformant` nebo Diagnostika `warn` u Modulu.
+
+Nepoužívej pro Organization manifest (na to je
+`lazurio migrate organization-manifest`, viz `manual/lazurio-manifest-family.md`)
+ani pro productionspace repa (decision 0041).
+
+## Postup
+
+### A. Nový Modul
+
+1. Scope: Organizace `organizations/<Org>/`, přečti její `AGENTS.md`;
+   `lazurio update` + `bun run doctor:task` v primárním checkoutu.
+2. Slot a port: ověř v `modules.manifest.json`, že slug je volný, a vyber
+   volný port z `module_port_pool` Organizace (`lazurio module setup` ho
+   navrhne). Slot přidává PR do root repa Organizace (nebo Dashboard, až
+   bude tlačítko „Nový Modul" vydané); Modul bez slotu se nematerializuje.
+3. Scaffold v task worktree Organizace:
+   `lazurio module create <Org>/<slug> --stack vite-react | astro |
+   astro-starlight | bun-service | python-uv`. Dokud scaffold v Core není
+   vydaný, vytvoř stejné soubory ručně podle kapitoly 2–6 manuálu a šablony
+   `lazurio/templates/module/<stack>/` (je-li přítomná v checkoutu).
+4. `lazurio module setup <module-root> --root <lazurio-root> --json` musí
+   vrátit `current`; jinak oprav podle `checks[]` (ID `MS-01`–`MS-13`).
+5. `bun run check && bun test` v App; `lazurio module start <Org>/<slug>
+   --json` přes běžící Launchpad a otevři `result.runtime.url`.
+6. Repo Modulu: GitHub repo `<Org>/<slug>` (zakládá Admin nebo Dashboard),
+   CI workflow spouštějící `bun run check && bun test`, PR podle pravidel
+   Organizace. Jeden Modul = jeden worktree = jedna branch = jeden PR.
+
+### B. Převod existujícího Modulu
+
+1. Spusť `lazurio module setup <module-root> --root <lazurio-root> --json`
+   read-only a přečti `checks[]`. Mechanické položky nech opravit `--apply`
+   (`packageManager`, chybějící skripty, skeleton `lazurio.preparation`,
+   lease do poolu); ostatní opravuj ručně v tomto pořadí:
+   1. **Start**: `dev` = jeden proces; vše ostatní (build, symlinky, data,
+      migrace) přesuň do `prepare_script`, read-only kontrolu do
+      `check_script`. Odstraň `concurrently`, `&&`, `npx`, `node`, `bunx`,
+      inline `VAR=…`.
+   2. **Env**: host/port jen z listener-keyed proměnných; nahraď kopie
+      `runtime-listener.mjs` závislostí `@lazurio/module-kit`; smaž čtení
+      `PORT`, `LAZURIO_RUNTIME_HOST/PORT`, `COMPANYASCODE_*`, lease souboru;
+      žádné `.env*` na start cestě.
+   3. **Hranice**: odstraň importy mimo repo; sdílený kontrakt Organizace
+      nahraď verzovanou závislostí nebo ho vlož do Modulu; repository-db na
+      vydaný tag.
+   4. **Jazyk**: `.js/.mjs/.cjs` zdroje App převeď na TS (`git mv` + typy ve
+      dvou commitech), `tsconfig` strict, biome, `check` + `test` skripty.
+   5. **Generace**: smaž staré App generace (Firebase éra `v1`, nepoužívané
+      `v2`); `apps[]` = adresáře.
+2. Opakuj `lazurio module setup … --json`, dokud není `current`; potom
+   `bun run check && bun test` a skutečný start přes Launchpad
+   (`lazurio module start`, otevři URL, `lazurio module stop`).
+3. PR Modulu: popis říká, které kontroly byly `fail` před převodem a co se
+   záměrně nemění (chování aplikace). Když převod vyžaduje změnu Organizace
+   (slot, pool, sdílený balíček), jde to samostatným PR do root repa
+   Organizace; oba PR se navzájem odkazují.
+4. Nikdy neuprav Launchpad, Platform ani Core, aby Modul „prošel". Skutečná
+   mezera standardu je issue v `HumanAndMachines/Lazurio` (manuál/schéma)
+   nebo `Lazurio/LazurioPlatform` (consumer), ne výjimka v Modulu.
+
+### C. Organizace (doprovodné PR)
+
+- `lazurio migrate organization-manifest <org-root> --json` → `--write`
+  (legacy → transition); `modules.manifest.json` srovnej s adresáři
+  `workspace/`; `module_port_pool` disjunktní s ostatními Organizacemi na
+  Mašině (`lazurio doctor` to hlásí); org-level aplikace jako samostatná
+  repa se `lazurio.module.json`; layout `modules/` zruš.
+
+## Ověření
+
+- `lazurio module setup <module-root> --root <lazurio-root> --json` →
+  `status: current`, všechny `checks[].status == "pass"`.
+- `bun run check` a `bun test` v každé App: 0 selhání.
+- Skutečný start přes Launchpad: `lazurio module start <Org>/<slug> --json`
+  → `running`, `result.runtime.url` odpoví 200 pod vlastním hostname a 403
+  pod cizím; `lazurio module stop` skončí proces do 10 s.
+- `lazurio doctor` bez `fail` a bez `module-nonconformant` pro Modul.
+- PR popis nese seznam kontrol před/po a odkaz na DEV-6634 task.

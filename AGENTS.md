@@ -316,6 +316,19 @@ dovolí použít. Zjištění, jestli Buddy existuje, i pravidla pro práci s n�
 manifestu není důkaz přístupu; ten se prokazuje operací, a dokud ho nemáš,
 platí odpověď „nemá".**
 
+## Lazurio Module Standard
+
+Každý Modul (i org-level aplikace) vzniká, mění se a spouští podle
+[`manual/module-standard.md`](manual/module-standard.md) (decision 0171):
+TypeScript strict, jednoprocesový `dev` skript, deklarovaná příprava
+(`lazurio.preparation`), host a port jen z `LAZURIO_RUNTIME_LISTENER_<ID>_*`,
+žádné `.env` na start cestě, žádné importy mimo repo Modulu, lease v poolu
+Organizace. Launchpad pro odchylky Modulu **neimplementuje workaroundy**;
+odchylku opravuješ v Modulu. Konformanci ověřuje `lazurio module setup`
+(kontroly `MS-01`–`MS-13`); nový Modul zakládáš scaffoldem
+`lazurio module create` nebo z Dashboardu, nikdy ručně. Postup drží skill
+`.agents/skills/lazurio-module-standard/SKILL.md`.
+
 ## Zásadní pravidlo
 
 Nepracuj v konkrétní firmě z rootu. Nejdřív vyber organizaci v `organizations/<org>/`, přečti její `AGENTS.md` a až potom měň její obsah.
@@ -552,6 +565,10 @@ Root upravuj jen když se mění:
 - Cross-Organization closeout cizích PR Organization Adminem (inventura,
   jeden PR = jeden worktree, merge/close/předání ownerovi) — skill
   `.agents/skills/admin-pr-sweep/SKILL.md`
+- Lazurio Module Standard (jak Modul vypadá, startuje a vzniká) —
+  `manual/module-standard.md`, decision 0171, skill
+  `.agents/skills/lazurio-module-standard/SKILL.md`; konformance
+  `lazurio module setup`
 - Worktree create/inventura/předávka/cleanup — consumer skill
   `.agents/skills/worktree-development-discipline/SKILL.md`; autorita
   decision 0049 (`manual/decision-register.md`) a shaping manual
