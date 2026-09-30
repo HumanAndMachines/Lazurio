@@ -116,9 +116,20 @@ Ruční postup je stejný jako na pracovní stanici
    v Organizaci a Teamech a WRITE capability na aktivních Builder repech,
    pak zmaterializuje Organizaci a její moduly do `~/Lazurio/organizations/`.
    Restricted Admin-only sloty (`infra`) Buildera neblokují a nemountují se.
-5. `bun run doctor:task` v primárním checkoutu Organizace a rezidentní CLI
-   `doctor` v rootu: dokud hlásí required `fail`, `blocked` nebo `incomplete`, není
-   Mašina donastavená a Agent to operátorovi řekne místo „hotovo“.
+5. Brána dokončení má dvě části: výsledek kroku 4 (`organization install …
+   --json`) nehlásí žádný required `fail`, `blocked` ani `incomplete` a
+   `bun run doctor:task` v primárním checkoutu Organizace je zelený. Dokud
+   jedna z nich neprojde, není Mašina donastavená a Agent to operátorovi řekne
+   místo „hotovo“. Rezidentní CLI `doctor` v rootu bránou **není**: pracovní
+   Root `~/Lazurio` není Git checkout, takže jeho kontroly Rootu, Gitu,
+   discovery a hostovaných deklarací (`git.root`, `git.worktree`,
+   `gitignore.protection`, `launchpad.discovery`, `launchpad.runtime`,
+   `hosted.declarations`) tu z principu neprojdou a opravit se nedají
+   ([#434](https://github.com/HumanAndMachines/Lazurio/issues/434)). Agent ho
+   v tomto postupu nespouští, jeho nálezy neopravuje (neklonuje Lazurio do
+   `~/Lazurio`, nežádá o nové nasazení Lazuria) a kvůli nim Mašinu nehlásí
+   jako nedonastavenou. Hostovaný Doctor převezme CLI LazurioPlatform, jehož
+   Launchpad nahrazuje rezidentní (decision 0167, #433).
 6. Teprve potom Agent pokračuje v původním úkolu. Vstup do T3 Code z
    prohlížeče vede přes Launchpad Mašiny tlačítkem **Chat**, které vydá
    jednorázový párovací token; ruční kopírování párovacích odkazů není
@@ -176,8 +187,11 @@ Donastavení (místo kroků 1–5 osobní VM; krok 6 platí stejně):
    Organizace a autoritou přístupu zůstávají živé GitHub granty Teamu. Repo v
    rozsahu, ke kterému broker token odmítne (např. po odebrání grantu), je
    blocker pro Organization Admina, ne důvod k jinému přihlášení.
-3. Rezidentní CLI `doctor`: `platform.github_auth` musí hlásit bota. Required
-   `fail`/`blocked`/`incomplete` znamená, že VM není donastavená.
+3. `bun run doctor:task` v primárním checkoutu Organizace. Brána dokončení je
+   stejná jako v kroku 5 osobní VM (výsledek installu a `doctor:task`);
+   identitu bota už prokázala kontrola `gh auth status` výše. Rezidentní CLI
+   `doctor` bránou není ani tady
+   ([#434](https://github.com/HumanAndMachines/Lazurio/issues/434)).
 
 Pravidla práce na týmové VM (0148):
 
@@ -205,7 +219,8 @@ důvod přihlásit něčí účet. Agent zapíše přesný blocker a zastaví se
   (`LAZURIO_T3CODE_URL`, párovací příkaz).
 - Rezidentní instalace Root Repa (tento manuál, skill
   `lazurio-workstation-install`, rezidentní CLI `organization install`): první
-  přihlášení, materializace Organizace, Doctor.
+  přihlášení a materializace Organizace.
 - LazurioPlatform (`docs/workspace-presets.md`): presety a generovaný
-  `AGENTS.md` Folderu; až bude `folder-init` součástí handoveru, převezme
+  `AGENTS.md` Folderu, cílově i Doctor hostované Mašiny (decision 0167, #433);
+  až bude `folder-init` součástí handoveru, převezme
   tento text jeho preset a manuál zůstane jen odkazem.
