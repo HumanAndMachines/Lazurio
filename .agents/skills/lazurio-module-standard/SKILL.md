@@ -25,7 +25,8 @@ Zkrácený kontrakt, který drží každá App Modulu:
 - `lazurio.module.json` (`id` = slot, lease v poolu Organizace, `apps` +
   `default_app`), v každé App `packageManager: bun@<přesná verze>`,
   `lazurio.runtime` (listenery + health), `lazurio.preparation`
-  (`runtime: bun | uv`, `prepare_script`, `check_script`), commitnutý
+  (`owner_package`, `prepare_script`, `check_script`; klíč `runtime` jen
+  pro `uv` — Bun App ho vynechá, Platforma dnes neznámá pole odmítá), commitnutý
   `bun.lock` / `uv.lock`, `tsconfig` strict, biome, skripty `dev`, `check`,
   `test`.
 - `dev` spouští **jeden proces serveru** a nic jiného; funguje jen s `bun` v

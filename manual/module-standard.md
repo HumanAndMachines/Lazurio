@@ -66,7 +66,6 @@ pro adopci cizích Modulů, ne pro konformní Modul.
   "runtime": { "...": "kap. 4" },
   "preparation": {
     "schema_version": "lazurio.preparation.v1",
-    "runtime": "bun",
     "owner_package": "app/v3/package.json",
     "prepare_script": "prepare",
     "check_script": "check:prepared"
@@ -74,8 +73,14 @@ pro adopci cizích Modulů, ne pro konformní Modul.
 }
 ```
 
-- `runtime`: `bun` (výchozí) nebo `uv` (Python, kap. 7). Nový klíč schématu
-  `lazurio-preparation.schema.json`; chybí-li, platí `bun`.
+- `runtime`: `bun` (výchozí, **klíč se u Bun App nezapisuje**) nebo `uv`
+  (Python, kap. 7). Klíč přidává schéma `lazurio-preparation.schema.json`;
+  chybí-li, platí `bun`. **Mezikrok:** čtečka LazurioPlatform
+  (`lazurio.preparation.v1`, F25) dnes neznámá pole odmítá; dokud vydání
+  Platformy klíč `runtime` nečte (DEV-6634 W0-5), Bun App ho vynechá a
+  Python App (která ho potřebuje) Platforma spustit neumí — to je jeden z
+  důvodů, proč adaptér `uv` vzniká až s prvním reálným Python Modulem.
+  Konformance (`MS-04`) bere chybějící klíč jako `bun`.
 - `prepare_script` dělá **všechno**, co start nesmí: build klienta, generování
   dat, `ensure` symlinků, migrace repository-db, stažení WASI bindings…
   Musí být idempotentní a bez síťového volání mimo instalaci závislostí.
@@ -184,13 +189,13 @@ Pro App v Pythonu platí stejný kontrakt s těmito ekvivalenty:
 | `packageManager: bun@…` | `requires-python` + `[tool.uv]` v `pyproject.toml`; přesná verze `uv` v `lazurio.preparation.uv_version` (povinná při `runtime: uv`) |
 | `app/v<N>/package.json` jako nositel `lazurio.*` | `app/v<N>/pyproject.toml` s tabulkou `[tool.lazurio]` se stejnými klíči `runtime` a `preparation`; `owner_package` ukazuje na `pyproject.toml` |
 | `bun.lock` | `uv.lock` (commitnutý; `uv sync --frozen`) |
-| `dev: bun run src/server.ts` | `dev` v `[project.scripts]`/`lazurio.runtime.dev_script` = `uv run python -m <balíček>` |
+| `dev: bun run src/server.ts` | `[project.scripts]` definuje Python entry point `<slug> = "<balíček>.server:main"`; `lazurio.runtime.dev_script` = jméno toho entry pointu a Platforma jej spouští jako `uv run <slug>` (jeden proces) |
 | `tsconfig strict` + biome | `ruff` + `pyright`/`mypy strict` |
 | `@lazurio/module-kit` | `lazurio-module-kit` (Python balíček z téhož repa) |
 
 `lazurio.preparation.runtime: "uv"` říká Platformě, že příprava je
-`uv sync --frozen` a start `uv run …`; `uv` je nástroj katalogu Environmentu
-v přesné verzi `uv_version`. Schéma se rezervuje teď (`owner_package` smí být
+`uv sync --frozen` a start `uv run <entry point>`; `uv` je nástroj katalogu
+Environmentu v přesné verzi `uv_version`. Schéma se rezervuje teď (`owner_package` smí být
 `package.json` nebo `pyproject.toml`; při `runtime: uv` je `uv_version`
 povinná); čtení `[tool.lazurio]` z `pyproject.toml` a adaptér Platformy
 vznikají s prvním reálným Python Modulem (proof na skutečném consumerovi).
@@ -255,7 +260,7 @@ skript, `lazurio.preparation` skeleton, lease mimo pool na volný port poolu).
 | `MS-01` | `lazurio.module.json` platné, `id` = slot, každý lease v poolu Organizace, pooly disjunktní |
 | `MS-02` | každá App: `packageManager` přesný Bun, lockfile commitnutý a čerstvý |
 | `MS-03` | `lazurio.runtime` s listenery a health; `dev_script` existuje |
-| `MS-04` | `lazurio.preparation` deklarované; `check_script` existuje; `runtime` ∈ {bun, uv} |
+| `MS-04` | `lazurio.preparation` deklarované; `check_script` existuje; `runtime` chybí (= `bun`) nebo `uv`; `runtime: "bun"` zapsané explicitně je do W0-5 vada (Platforma ho odmítne) |
 | `MS-05` | `dev` skript je jednoprocesový: bez `&&`, `concurrently`, `build`, `npx`, `node`, `bunx`, `nvm`, inline `VAR=…` |
 | `MS-06` | žádné čtení `LAZURIO_RUNTIME_HOST`, `LAZURIO_RUNTIME_PORT`, `PORT`, `COMPANYASCODE_*`, lease souboru ze zdrojů App |
 | `MS-07` | žádné `.env*` na start cestě; žádné `dotenv` |
