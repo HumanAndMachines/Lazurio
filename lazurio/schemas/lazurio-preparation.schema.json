@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://lazurio.ai/schemas/lazurio-preparation.v1.json",
   "title": "Lazurio application preparation declaration",
-  "description": "Declared in an application package.json under `lazurio.preparation`. Says how the application is prepared before its single-process start (Lazurio Module Standard, manual/module-standard.md, decision 0171). Scripts name package scripts, never shell commands.",
+  "description": "Declared in an application package.json under `lazurio.preparation`. Says how the application is prepared before its single-process start (Lazurio Module Standard, manual/module-standard.md, decision 0171). Scripts name package scripts, never shell commands. The grammar of `owner_package` and script names equals the LazurioPlatform reader `parsePreparationDeclaration` (F25) so that a declaration this schema accepts is one the Platform accepts, except the reserved Python form (`pyproject.toml`, `runtime: uv`), which the Platform reads only from the release that adds the uv adapter.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -29,19 +29,45 @@
       "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
     },
     "owner_package": {
-      "description": "Module-relative POSIX path of the package that owns the preparation: `app/v<N>/package.json` for a Bun App, `app/v<N>/pyproject.toml` for a Python App (`[tool.lazurio]`); never the Module root, no traversal.",
+      "description": "Module-relative POSIX path of the package that owns the preparation: `app/v<N>/package.json` for a Bun App, `app/v<N>/pyproject.toml` for a Python App (`[tool.lazurio]`). Same character set and traversal rule as the LazurioPlatform reader (`parsePreparationDeclaration`), plus at least one directory segment: the App never sits in the Module root.",
       "type": "string",
-      "pattern": "^(?!/)(?!.*(^|/)\\.\\.(/|$)).+/(package\\.json|pyproject\\.toml)$"
+      "pattern": "^(?:(?!\\.{1,2}/)[A-Za-z0-9._-]+/)+(?:package\\.json|pyproject\\.toml)$"
     },
     "prepare_script": {
-      "description": "Optional idempotent package script that does everything the start must not: client build, data generation, symlinks, migrations.",
+      "description": "Optional idempotent package script that does everything the start must not: client build, data generation, symlinks, migrations. Same name grammar as the LazurioPlatform reader; never an npm lifecycle name (`bun install` runs those by itself). Convention: `prepare:app`.",
       "type": "string",
-      "minLength": 1
+      "pattern": "^[A-Za-z][A-Za-z0-9:_-]*$",
+      "not": {
+        "enum": [
+          "prepare",
+          "install",
+          "preinstall",
+          "postinstall",
+          "prepublish",
+          "prepublishOnly",
+          "prepack",
+          "postpack",
+          "dependencies"
+        ]
+      }
     },
     "check_script": {
-      "description": "Read-only package script that exits 0 when the application is prepared and non-zero otherwise.",
+      "description": "Read-only package script that exits 0 when the application is prepared and non-zero otherwise. Same name grammar as the LazurioPlatform reader; never an npm lifecycle name. Convention: `check:prepared`.",
       "type": "string",
-      "minLength": 1
+      "pattern": "^[A-Za-z][A-Za-z0-9:_-]*$",
+      "not": {
+        "enum": [
+          "prepare",
+          "install",
+          "preinstall",
+          "postinstall",
+          "prepublish",
+          "prepublishOnly",
+          "prepack",
+          "postpack",
+          "dependencies"
+        ]
+      }
     }
   },
   "if": {

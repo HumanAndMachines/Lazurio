@@ -74,19 +74,6 @@ const KNOWN_STRICT_TSCONFIG_PRESETS = [
   /^astro\/tsconfigs\/strict(?:est)?(?:\.json)?$/,
   /^@tsconfig\/strictest(?:\/tsconfig\.json)?$/,
 ];
-// `bun install` runs these package scripts by itself, so a preparation script
-// with such a name would execute during dependency installation.
-const NPM_LIFECYCLE_SCRIPTS = new Set([
-  "prepare",
-  "install",
-  "preinstall",
-  "postinstall",
-  "prepublish",
-  "prepublishOnly",
-  "prepack",
-  "postpack",
-  "dependencies",
-]);
 const PINNED_DEPENDENCY = /^github:Lazurio\/(?:repository-db|module-kit)#v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 
 let preparationSchemaPromise = null;
@@ -199,8 +186,7 @@ export async function evaluateModuleStandard({
       // is still held to the schema (uv_version is required for uv).
       record("MS-04", "warn", `${label}: Python App: čtení [tool.lazurio] z pyproject.toml zatím není v Core; ověř přípravu ručně`);
       if (preparation !== undefined) {
-        const schemaIssues = validateAgainstSchema(preparation, await preparationSchema(), `${label}: lazurio.preparation`);
-        for (const issue of schemaIssues) record("MS-04", "fail", issue);
+        for (const issue of await preparationDeclarationIssues(preparation, label)) record("MS-04", "fail", issue);
       }
     } else if (preparation === undefined) {
       record("MS-04", "fail", `${label}: lazurio.preparation chybí`);
@@ -226,8 +212,7 @@ export async function evaluateModuleStandard({
         if (!skeleton.check_script) record("MS-04", "fail", `${label}: chybí skript check:prepared pro check_script`);
       }
     } else {
-      const schemaIssues = validateAgainstSchema(preparation, await preparationSchema(), `${label}: lazurio.preparation`);
-      for (const issue of schemaIssues) record("MS-04", "fail", issue);
+      for (const issue of await preparationDeclarationIssues(preparation, label)) record("MS-04", "fail", issue);
       if (preparation && typeof preparation === "object" && !Array.isArray(preparation) && preparation.runtime === "bun") {
         record(
           "MS-04",
@@ -249,13 +234,6 @@ export async function evaluateModuleStandard({
         }
         for (const key of ["check_script", "prepare_script"]) {
           const scriptName = preparation[key];
-          if (typeof scriptName === "string" && NPM_LIFECYCLE_SCRIPTS.has(scriptName)) {
-            record(
-              "MS-04",
-              "fail",
-              `${label}: ${scriptName} je npm lifecycle jméno — bun install ho spouští sám; použij prepare:app / check:prepared`,
-            );
-          }
           if (typeof scriptName !== "string" || !ownerPackage) continue;
           if (!nonEmptyString(ownerPackage.scripts?.[scriptName])) {
             record("MS-04", "fail", `${label}: ${key} ${scriptName} neexistuje v ${ownerPackagePath}`);
@@ -785,6 +763,28 @@ async function readJsonOrNull(path) {
   } catch {
     return null;
   }
+}
+
+// Schema findings for one declaration. Script names get the dedicated
+// Platform-grammar and npm-lifecycle details instead of the generic schema
+// wording; both rules are read from the schema, which mirrors the
+// LazurioPlatform reader.
+async function preparationDeclarationIssues(preparation, label) {
+  const schema = await preparationSchema();
+  const scriptKeys = ["check_script", "prepare_script"];
+  const namedScripts = scriptKeys.filter((key) => typeof preparation?.[key] === "string");
+  const issues = validateAgainstSchema(preparation, schema, `${label}: lazurio.preparation`)
+    .filter((issue) => !namedScripts.some((key) => issue.startsWith(`${label}: lazurio.preparation.${key}:`)));
+  for (const key of namedScripts) {
+    const scriptName = preparation[key];
+    const rule = schema.properties[key];
+    if (!new RegExp(rule.pattern).test(scriptName)) {
+      issues.push(`${label}: ${scriptName}: jméno skriptu neodpovídá gramatice čtečky Platformy ${rule.pattern}`);
+    } else if (rule.not?.enum?.includes(scriptName)) {
+      issues.push(`${label}: ${scriptName} je npm lifecycle jméno — bun install ho spouští sám; použij prepare:app / check:prepared`);
+    }
+  }
+  return issues;
 }
 
 async function preparationSchema() {

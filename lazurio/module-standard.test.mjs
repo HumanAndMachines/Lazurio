@@ -225,6 +225,24 @@ test("MS-04 adds the preparation skeleton only when it is unambiguous", async ()
   });
   expect((await readJson(join(lifecycle.appRoot, "package.json"))).lazurio.preparation.check_script).toBe("postinstall");
 
+  const grammar = await conformantFixture({
+    mutatePackage: (pkg) => {
+      pkg.scripts["check prepared"] = "bun run src/check-prepared.ts";
+      pkg.scripts["1prepare"] = "vite build";
+      pkg.lazurio.preparation.check_script = "check prepared";
+      pkg.lazurio.preparation.prepare_script = "1prepare";
+    },
+  });
+  const grammarReport = await setupModule({ ...grammar, apply: true });
+  expect(grammarReport.changes).toEqual([]);
+  expect(check(grammarReport, "MS-04")).toMatchObject({
+    status: "fail",
+    details: [
+      "app/v1/package.json: check prepared: jméno skriptu neodpovídá gramatice čtečky Platformy ^[A-Za-z][A-Za-z0-9:_-]*$",
+      "app/v1/package.json: 1prepare: jméno skriptu neodpovídá gramatice čtečky Platformy ^[A-Za-z][A-Za-z0-9:_-]*$",
+    ],
+  });
+
   const broken = await conformantFixture({
     mutatePackage: (pkg) => {
       pkg.lazurio.preparation.runtime = "deno";
