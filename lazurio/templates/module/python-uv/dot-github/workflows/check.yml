@@ -1,0 +1,24 @@
+name: Check
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app/v1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: {{bun_version}}
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: {{uv_version}}
+      - run: uv sync --frozen
+      - run: bun run check
+      - run: bun run test

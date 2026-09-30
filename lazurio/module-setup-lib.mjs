@@ -1856,7 +1856,7 @@ export async function runRuntimeMigrationCli(argv) {
   if (blockedCount > 0) process.exitCode = 2;
 }
 
-async function readOrganizationPolicies(lazurioRoot) {
+export async function readOrganizationPolicies(lazurioRoot) {
   const organizations = [];
   const issues = [];
   const slugs = new Set();

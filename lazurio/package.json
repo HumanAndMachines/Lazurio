@@ -25,6 +25,7 @@
     "migrations/*/*.mjs",
     "migrations/*/*.json",
     "migrations/*/README.md",
+    "templates/module/**",
     "!**/*.test.mjs",
     "!**/*.test-support.mjs"
   ],

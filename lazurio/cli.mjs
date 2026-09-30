@@ -78,7 +78,27 @@ async function loadOrganizationManifestMigration() {
   }
 }
 
+async function loadModuleCreate() {
+  try {
+    return await import("./module-create-lib.mjs");
+  } catch (error) {
+    if (error?.code === "ERR_MODULE_NOT_FOUND" || /Cannot find module/.test(String(error?.message))) return null;
+    throw error;
+  }
+}
+
 async function run(argv) {
+  if (argv[0] === "module" && argv[1] === "create") {
+    // Thin dispatch: the scaffold lives in module-create-lib.mjs and
+    // module-scaffold-lib.mjs with templates in templates/module/. Loaded lazily
+    // so distributions that do not ship it keep a working CLI.
+    const moduleCreate = await loadModuleCreate();
+    if (!moduleCreate) {
+      console.error("module create není v této distribuci dostupný; použij source checkout nebo package-managed lazurio.");
+      return 3;
+    }
+    return moduleCreate.runModuleCreateCli(argv.slice(2), { defaultRoot: defaultOperatedRoot });
+  }
   const options = parseArgs(argv);
   if (options.help) {
     console.log(usage());
@@ -545,7 +565,7 @@ function parseArgs(argv) {
     }
     const action = parsed.operands[0];
     if (!new Set(["setup", "status", "start", "open", "stop"]).has(action)) {
-      throw new Error("module vyžaduje `setup`, `status`, `start`, `open` nebo `stop`.");
+      throw new Error("module vyžaduje `create`, `setup`, `status`, `start`, `open` nebo `stop`.");
     }
     parsed.moduleAction = action;
     if (action === "setup") {
@@ -806,6 +826,8 @@ function usage() {
     "    --finalize: není implementováno — příkaz skončí blocked `finalize_not_implemented` (decision 0145, manual/lazurio-manifest-family.md)",
     "  lazurio repair module-location --org <slug> --module <slug> [--json] [--root <cesta>]",
     "  lazurio repair module-location --org <slug> --module <slug> --apply --expect <fingerprint> [--json] [--root <cesta>]",
+    "  lazurio module create <Organization>/<slug> --stack vite-react|astro|astro-starlight|bun-service|python-uv|none [--name <název>] [--teams a,b] [--port N] [--dry-run] [--json] [--root <cesta>]",
+    "    z task worktree root repa Organizace; --dry-run jen vypíše plán (soubory, slot, lease, tree_hash)",
     "  lazurio module setup <module-root> [--apply] [--json] [--root <cesta>]",
     "    nový no-app Module: --no-app",
     "    nová App: --app-package <package.json> --app-id <id> --title <název> --dev-script <script>",

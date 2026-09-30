@@ -1,0 +1,21 @@
+---
+import { greeting } from "../greeting.ts";
+
+const title = "{{display_name}}";
+const slug = "{{slug}}";
+const organization = "{{organization}}";
+---
+
+<html lang="cs">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <main>
+      <h1>{greeting(title)}</h1>
+      <p>Modul {slug} Organizace {organization} běží podle Lazurio Module Standardu.</p>
+    </main>
+  </body>
+</html>

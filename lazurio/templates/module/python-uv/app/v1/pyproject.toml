@@ -1,0 +1,68 @@
+[project]
+name = "{{slug}}"
+version = "0.1.0"
+description = "{{display_name}}"
+requires-python = ">=3.12"
+dependencies = ["lazurio-module-kit"]
+
+# One long-running server process; the Launchpad starts it as
+# `uv run --no-sync {{slug}}` (Lazurio Module Standard kap. 7).
+[project.scripts]
+{{slug}} = "{{python_package}}.server:main"
+
+[dependency-groups]
+dev = ["pyright==1.1.414", "pytest==9.1.1", "ruff==0.16.9"]
+
+[tool.uv]
+required-version = "=={{uv_version}}"
+
+[tool.uv.sources]
+lazurio-module-kit = { git = "https://github.com/Lazurio/module-kit", tag = "v{{module_kit_version}}", subdirectory = "python" }
+
+[build-system]
+requires = ["uv_build>=0.11,<0.12"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.pyright]
+include = ["src", "tests"]
+pythonVersion = "3.12"
+typeCheckingMode = "strict"
+venvPath = "."
+venv = ".venv"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+# The same declaration as `lazurio` in package.json, which Core and the
+# Platform read today. Core does not read [tool.lazurio] yet (MS-04 stays warn
+# until the Platform uv adapter, DEV-6634 W0-5); keep both identical.
+[tool.lazurio.runtime]
+schema_version = "lazurio.runtime.v1"
+id = "{{runtime_id}}"
+title = "{{display_name}}"
+company = "{{organization}}"
+module = "{{slug}}"
+surface = "internal"
+dev_script = "dev"
+tags = ["{{slug}}"]
+
+[[tool.lazurio.runtime.listeners]]
+id = "{{listener_id}}"
+role = "entrypoint"
+lease = "main"
+protocol = "http"
+health = { kind = "http", path = "/healthz" }
+
+[tool.lazurio.preparation]
+schema_version = "lazurio.preparation.v1"
+runtime = "uv"
+uv_version = "{{uv_version}}"
+owner_package = "app/v1/package.json"
+check_script = "check:prepared"
