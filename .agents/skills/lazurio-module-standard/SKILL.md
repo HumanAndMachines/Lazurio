@@ -50,7 +50,7 @@ si před prací ověří, co má k dispozici, a nevydává starší stav za důk
 | `lazurio module setup` s `standard.checks[]` (`MS-01`–`MS-13`) | vzniká (HumanAndMachines/Lazurio#454); dostupný, když report obsahuje klíč `standard` | Bez `standard.checks[]` je `current` jen důkaz platného kontraktu Modulu, **ne** konformance. Agent pak projde kapitoly 2–9 manuálu ručně a v PR to napíše. |
 | `lazurio module create` (scaffold) | cílový stav (DEV-6634 W0-4) | Dokud neexistuje, nový Modul zakládá jen Organization Admin na základě rozhodnutí Principála: repo na GitHubu + slot PR; obsah Modulu Agent připraví podle kapitol 2–6 manuálu a po vydání scaffoldu ho sladí se šablonou. Není to „ruční zakládání" ve smyslu zákazu — zákaz míří na Moduly bez slotu, bez repa a mimo standard. |
 | Dashboard „Nový Modul" | cílový stav (DEV-6634 W0-7, DEV-6514) | Do vydání zakládá repo a slot Admin ručně přes GitHub a PR. |
-| `@lazurio/module-kit` | vydaný v0.1.0 (`github:Lazurio/module-kit#v0.1.0`) | Používej hned. |
+| `@lazurio/module-kit` | vydaný v0.2.0 (`github:Lazurio/module-kit#v0.2.0`; `listener`, `health`, `onShutdown`, `viteServerOptions`/`astroServerOptions`, `viteShutdownPlugin`) | Používej hned; Vite App vždy s `viteShutdownPlugin()`. |
 | Platform Launchpad: supervize, `module-nonconformant`, `uv` | cílový stav (W0-5, W3) | Nekonformní Modul dnes Launchpad spustí; standard přesto platí pro každý PR. |
 
 ## Kdy použít

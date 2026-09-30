@@ -185,8 +185,11 @@ v UI. Demo/offline režimy jsou samostatné skripty (`dev:demo`), ne start.
   `github:Lazurio/module-kit#v0.x.y`): `listener("APP")` → `{host, port,
   externalOrigin}` z F26 env s fail-closed chybou, `health()` handler,
   `onShutdown()` pro SIGTERM, `viteServerOptions()`/`astroServerOptions()`
-  pro dev servery. Nahrazuje kopie `runtime-listener.mjs`. Je to jediná
-  sdílená runtime knihovna Modulu; neroste v framework.
+  pro dev servery a `viteShutdownPlugin()` (Vite sám hlásí po SIGTERM
+  128 + signál a otevřené keep-alive spojení drží `close()`; plugin spojení
+  zavře, `close()` ohraničí a skončí 0 — od v0.2.0). Nahrazuje kopie
+  `runtime-listener.mjs` i lokální shutdown pluginy. Je to jediná sdílená
+  runtime knihovna Modulu; neroste v framework.
 - Kvalita: `bun run check` (tsc `--noEmit` + `biome check`) a `bun test`
   v každé App; CI repozitáře je spouští na každém PR.
 
