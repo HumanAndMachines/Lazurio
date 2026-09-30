@@ -74,7 +74,8 @@ pro adopci cizích Modulů, ne pro konformní Modul.
 ```
 
 Jména skriptů přípravy **nesmí** být npm lifecycle jména (`prepare`,
-`install`, `postinstall`, `prepublish`, `prepack`…): `bun install` je spouští
+`preprepare`, `postprepare`, `install`, `postinstall`, `prepublish`,
+`prepack`…): `bun install` je spouští
 samo, takže by build běžel uvnitř instalace závislostí, kterou drží Platforma.
 Konvence: `prepare:app` a `check:prepared`.
 

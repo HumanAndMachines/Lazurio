@@ -42,7 +42,7 @@ test("script names: the schema grammar equals the reader's and adds the lifecycl
     expect(platformScript.test(name)).toBe(false);
     expect(scriptAccepted(name)).toBe(false);
   }
-  for (const name of ["prepare", "install", "postinstall", "prepublishOnly", "prepack"]) {
+  for (const name of ["prepare", "preprepare", "postprepare", "install", "preinstall", "postinstall", "prepublishOnly", "prepack"]) {
     expect(platformScript.test(name)).toBe(true);
     expect(scriptAccepted(name)).toBe(false);
   }
