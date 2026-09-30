@@ -294,6 +294,8 @@ s hostovanými Environmenty → ostatní.
 
 - **W4 nový Modul podle standardu** (kap. 13): scaffold v Core, založení
   repa a slotu z Dashboardu, skill a instrukce pro agenty, Knowledgebase.
+  W4 běží **souběžně s W1–W3** a na cutover nečeká — nový Modul má vznikat
+  konformně co nejdřív; cutover (W3) naopak na W4 nečeká.
 
 Ne-cíle: přepis fungujících aplikací do jiného stacku „pro pořádek",
 sjednocení vzhledu, nový framework pro služby, centrální registr portů,
