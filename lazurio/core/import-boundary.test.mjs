@@ -177,6 +177,7 @@ test("Module declaration validation has one physical Core owner", async () => {
     .sort();
 
   expect(consumers).toEqual([
+    "lazurio/module-create-lib.mjs",
     "lazurio/module-port-lib.mjs",
     "lazurio/module-setup-lib.mjs",
     "lazurio/runtime/diagnostics-lib.mjs",
@@ -205,6 +206,7 @@ test("Organization port allocation policy has one physical Core owner", async ()
 
   expect(consumers).toEqual([
     "lazurio/core/organization-activation-lib.mjs",
+    "lazurio/module-create-lib.mjs",
     "lazurio/module-port-lib.mjs",
     "lazurio/module-setup-lib.mjs",
     "lazurio/module-standard-lib.mjs",
