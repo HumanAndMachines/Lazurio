@@ -78,6 +78,11 @@ Jména skriptů přípravy **nesmí** být npm lifecycle jména (`prepare`,
 samo, takže by build běžel uvnitř instalace závislostí, kterou drží Platforma.
 Konvence: `prepare:app` a `check:prepared`.
 
+- Gramatika `owner_package` a jmen skriptů je totožná se čtečkou Platformy
+  (`parsePreparationDeclaration`, F25): segmenty `[A-Za-z0-9._-]` bez `..`,
+  jména skriptů `^[A-Za-z][A-Za-z0-9:_-]*$`; schéma navíc vyžaduje alespoň
+  jeden adresář (App nikdy v kořeni) a zakazuje lifecycle jména. Co schéma
+  přijme, Platforma spustí — s výjimkou rezervované Python formy.
 - `runtime`: `bun` (výchozí, **klíč se u Bun App nezapisuje**) nebo `uv`
   (Python, kap. 7). Klíč přidává schéma `lazurio-preparation.schema.json`;
   chybí-li, platí `bun`. **Mezikrok:** čtečka LazurioPlatform
