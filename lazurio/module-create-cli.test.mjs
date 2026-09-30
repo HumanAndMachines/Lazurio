@@ -212,7 +212,7 @@ function git(cwd, args) {
     stdout: "pipe",
     stderr: "pipe",
     env: {
-      ...inherited,
+      ...process.env,
       HOME: home,
       GIT_CONFIG_NOSYSTEM: "1",
       GIT_AUTHOR_NAME: "Lazurio Test",
