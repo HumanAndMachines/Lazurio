@@ -557,7 +557,9 @@ export function renderHumanModuleSetup(report) {
     for (const change of report.changes) lines.push(`  - ${change.action}: ${change.path}`);
     lines.push("Pro zápis spusť tentýž příkaz s --apply a potom zkontroluj Git diff.");
   }
-  if (report.status === "action_required") {
+  if (report.status === "action_required" && report.reason === "module_standard_nonconformant") {
+    lines.push("Module kontrakt je platný, ale Modul nesplňuje Lazurio Module Standard; kroky jsou u kontrol níže.");
+  } else if (report.status === "action_required") {
     lines.push("Je potřeba zásah Agenta nebo vlastníka Organizace:");
     for (const issue of report.issues) {
       lines.push(`  - ${issue.message}`);
@@ -573,6 +575,7 @@ export function renderHumanModuleSetup(report) {
       for (const detail of check.details.slice(0, 5)) lines.push(`    - ${detail}`);
       if (check.details.length > 5) lines.push(`    - … a dalších ${check.details.length - 5}`);
       for (const repair of check.repairs ?? []) lines.push(`    oprava --apply: ${repair}`);
+      if (check.action && !check.repairs) lines.push(`    Další krok: ${check.action}`);
     }
   }
   if (report.operator_assertions.length > 0) {
