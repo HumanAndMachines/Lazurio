@@ -193,6 +193,8 @@ test("Buddy build is deterministic, schema-valid, non-Git and self-verifying", a
     "lazurio/launchpad-serve-lib.mjs",
     "lazurio/module-port-lib.mjs",
     "lazurio/module-setup-lib.mjs",
+    "lazurio/module-standard-lib.mjs",
+    "lazurio/schemas/lazurio-preparation.schema.json",
     "lazurio/organization-activation-lib.mjs",
     "lazurio/organization-activation-report.v0.schema.json",
     "lazurio/lazurio.organization.v1.schema.json",

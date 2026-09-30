@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lazurio.ai/schemas/lazurio-preparation.v1.json",
+  "title": "Lazurio application preparation declaration",
+  "description": "Declared in an application package.json under `lazurio.preparation`. Says how the application is prepared before its single-process start (Lazurio Module Standard, manual/module-standard.md, decision 0171). Scripts name package scripts, never shell commands.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "owner_package", "check_script"],
+  "properties": {
+    "schema_version": { "const": "lazurio.preparation.v1" },
+    "runtime": {
+      "description": "Toolchain that installs dependencies and runs the scripts: `bun` (default; frozen install from bun.lock beside owner_package) or `uv` (Python; `uv sync --frozen` from uv.lock, scripts run through `uv run`).",
+      "type": "string",
+      "enum": ["bun", "uv"],
+      "default": "bun"
+    },
+    "uv_version": {
+      "description": "Exact uv version the Environment must provide when runtime is `uv`.",
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "owner_package": {
+      "description": "Module-relative POSIX path of the package that owns the preparation (usually the application package itself); no traversal.",
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(^|/)\\.\\.(/|$)).+package\\.json$"
+    },
+    "prepare_script": {
+      "description": "Optional idempotent package script that does everything the start must not: client build, data generation, symlinks, migrations.",
+      "type": "string",
+      "minLength": 1
+    },
+    "check_script": {
+      "description": "Read-only package script that exits 0 when the application is prepared and non-zero otherwise.",
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

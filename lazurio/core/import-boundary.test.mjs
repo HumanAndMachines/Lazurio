@@ -207,6 +207,8 @@ test("Organization port allocation policy has one physical Core owner", async ()
     "lazurio/core/organization-activation-lib.mjs",
     "lazurio/module-port-lib.mjs",
     "lazurio/module-setup-lib.mjs",
+    "lazurio/module-standard-lib.mjs",
+    "lazurio/runtime/diagnostics-lib.mjs",
     "lazurio/runtime/discovery-lib.mjs",
   ]);
 });

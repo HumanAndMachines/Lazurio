@@ -20,7 +20,7 @@ afterAll(async () => {
 test("legacy Module converges through dry-run, apply and idempotent rerun", async () => {
   const fixture = await moduleFixture({ module: "legacy" });
   const packagePath = join(fixture.moduleRoot, "package.json");
-  await writeJson(packagePath, legacyPackage({ company: "Acme", module: "legacy", port: 23_999 }));
+  await writeJson(packagePath, legacyPackage({ company: "Acme", module: "legacy", port: 24_099 }));
 
   const dryRun = await setupModule(fixture);
   expect(dryRun).toMatchObject({
@@ -37,7 +37,8 @@ test("legacy Module converges through dry-run, apply and idempotent rerun", asyn
   expect(moduleSetupExitCode(dryRun)).toBe(1);
 
   const applied = await setupModule({ ...fixture, apply: true });
-  expect(applied.status).toBe("completed");
+  expectContractConverged(applied);
+  expect(applied.changes.map((change) => change.action)).toEqual(["create", "replace"]);
   expect(applied.runtime).toEqual({
     tcp_port_policy: { mode: "single" },
     default_app: "package.json",
@@ -55,7 +56,7 @@ test("legacy Module converges through dry-run, apply and idempotent rerun", asyn
         lease: "main",
         protocol: "http",
         host: "127.0.0.1",
-        port: 23_999,
+        port: 24_099,
         health: { kind: "http", path: "/health" },
         host_env: "LAZURIO_RUNTIME_HOST",
         port_env: "LAZURIO_RUNTIME_PORT",
@@ -65,12 +66,12 @@ test("legacy Module converges through dry-run, apply and idempotent rerun", asyn
   expect(JSON.stringify(applied.runtime)).not.toContain(fixture.lazurioRoot);
   expect(JSON.stringify(applied.runtime)).not.toContain("\\\\");
   expect(validateAgainstSchema(applied, reportSchema, "module-setup")).toEqual([]);
-  expect(moduleSetupExitCode(applied)).toBe(0);
+  expect(moduleSetupExitCode(applied)).toBe(2);
   const manifest = await readJson(join(fixture.moduleRoot, "lazurio.module.json"));
   expect(manifest).toMatchObject({
     id: "legacy",
     company: "Acme",
-    port_leases: [{ id: "main", port: 23_999 }],
+    port_leases: [{ id: "main", port: 24_099 }],
     apps: ["package.json"],
     default_app: "package.json",
   });
@@ -80,9 +81,11 @@ test("legacy Module converges through dry-run, apply and idempotent rerun", asyn
     expect.objectContaining({ lease: "main" }),
   ]);
 
+  expect(packageJson.packageManager).toMatch(/^bun@\d+\.\d+\.\d+$/);
+
   const rerun = await setupModule(fixture);
+  expectContractConverged(rerun);
   expect(rerun).toMatchObject({
-    status: "current",
     changes: [],
     runtime: applied.runtime,
   });
@@ -91,18 +94,18 @@ test("legacy Module converges through dry-run, apply and idempotent rerun", asyn
 test("interruption after create-only manifest is recoverable by the same setup command", async () => {
   const fixture = await moduleFixture({ module: "interrupted" });
   const packagePath = join(fixture.moduleRoot, "package.json");
-  await writeJson(packagePath, legacyPackage({ company: "Acme", module: "interrupted", port: 23_998 }));
+  await writeJson(packagePath, legacyPackage({ company: "Acme", module: "interrupted", port: 24_098 }));
 
   await expect(setupModule({ ...fixture, apply: true, failAfterWrite: 1 })).rejects.toThrow(
     "Injected module setup failure after write 1",
   );
   expect((await readJson(join(fixture.moduleRoot, "lazurio.module.json"))).id).toBe("interrupted");
-  expect((await readJson(packagePath)).companyascode.app.port).toBe(23_998);
+  expect((await readJson(packagePath)).companyascode.app.port).toBe(24_098);
 
   const resumed = await setupModule({ ...fixture, apply: true });
-  expect(resumed.status).toBe("completed");
+  expectContractConverged(resumed);
   expect((await readJson(packagePath)).companyascode).toBeUndefined();
-  expect((await setupModule(fixture)).status).toBe("current");
+  expectContractConverged(await setupModule(fixture));
 });
 
 test("new explicit App setup resumes after the manifest was published first", async () => {
@@ -128,11 +131,11 @@ test("new explicit App setup resumes after the manifest was published first", as
   expect((await readJson(packagePath)).lazurio).toBeUndefined();
 
   const resumed = await setupModule({ ...options, apply: true });
-  expect(resumed.status).toBe("completed");
+  expectContractConverged(resumed);
   expect((await readJson(packagePath)).lazurio.runtime.listeners).toEqual([
     expect.objectContaining({ lease: "main" }),
   ]);
-  expect((await setupModule(options)).status).toBe("current");
+  expectContractConverged(await setupModule(options));
 });
 
 test("new no-app Module gets an explicit zero-listener contract", async () => {
@@ -189,7 +192,10 @@ test("current multi-listener Module projects canonical entrypoint and auxiliary 
 
   const report = await setupModule(fixture);
 
-  expect(report).toMatchObject({ status: "current", reason: "module_contract_current" });
+  // The contract is current, so the runtime projection is present even while
+  // the standard still offers its mechanical packageManager repair.
+  expect(report).toMatchObject({ status: "actionable", reason: "standard_repairs_ready" });
+  expect(report.changes.map((change) => change.path.endsWith("multi-listener/package.json"))).toEqual([true]);
   expect(report.runtime.apps[0].listeners).toEqual([
     expect.objectContaining({
       id: "app",
@@ -265,7 +271,11 @@ test("explicit App setup rewrites its adopted host and port to injected runtime 
     adoptPort: 5306,
   });
 
-  expect(report).toMatchObject({ status: "completed" });
+  expectContractConverged(report);
+  expect(report.standard.checks.find((check) => check.id === "MS-01")).toMatchObject({
+    status: "fail",
+    details: expect.arrayContaining([expect.stringContaining("--adopt-port")]),
+  });
   expect((await readJson(packagePath)).scripts.dev).toBe(
     'bun -e "process.exit(process.env.LAZURIO_RUNTIME_PORT && process.env.LAZURIO_RUNTIME_HOST ? 0 : 1)" && bun server.mjs --host "$LAZURIO_RUNTIME_HOST" --port "$LAZURIO_RUNTIME_PORT"',
   );
@@ -448,7 +458,7 @@ test("a linked Module task worktree inherits ownership without touching the prim
   expect(planned).toMatchObject({ status: "actionable", module: { company: "Acme", id: "linked-worktree" } });
   const applied = await setupModule({ ...fixture, moduleRoot: worktreeRoot, apply: true });
 
-  expect(applied.status).toBe("completed");
+  expectContractConverged(applied);
   expect((await readJson(primaryPackage)).companyascode.app.port).toBe(24_013);
   expect((await readJson(join(worktreeRoot, "package.json"))).companyascode).toBeUndefined();
   expect((await readJson(join(worktreeRoot, "lazurio.module.json"))).port_leases[0].port).toBe(24_013);
@@ -517,12 +527,23 @@ test("concurrent Module setup serializes on the existing Organization port alloc
     setupModule(appOptions(first)),
     setupModule(appOptions(second)),
   ]);
-  expect(reports.map((report) => report.status)).toEqual(["completed", "completed"]);
+  for (const report of reports) expectContractConverged(report);
   const ports = await Promise.all([first, second].map(async (fixture) =>
     (await readJson(join(fixture.moduleRoot, "lazurio.module.json"))).port_leases[0].port
   ));
   expect(ports.sort((left, right) => left - right)).toEqual([24_000, 24_001]);
 });
+
+// These fixtures exercise the Module contract layer with a root-level App that
+// the Lazurio Module Standard does not accept (no app/v<N>/, bun.lock,
+// tsconfig, check/test). The contract converges and keeps its runtime; the
+// standard stays action_required. Full conformance: module-standard.test.mjs.
+function expectContractConverged(report) {
+  expect(report).toMatchObject({ status: "action_required", reason: "module_standard_nonconformant" });
+  expect(report.runtime).not.toBeNull();
+  expect(report.standard.checks).toHaveLength(13);
+  expect(validateAgainstSchema(report, reportSchema, "module-setup")).toEqual([]);
+}
 
 async function moduleFixture({ module, status = null }) {
   const root = await mkdtemp(join(tmpdir(), "lazurio-module-setup-"));

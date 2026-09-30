@@ -24,6 +24,7 @@ import {
 import { organizationSlotRepositoryId } from "./core/organization-slot-scope-lib.mjs";
 import { readOrganizationRoot } from "./core/organization-root-reader-lib.mjs";
 import { readAllModuleContracts } from "./module-port-lib.mjs";
+import { evaluateModuleStandard, moduleStandardIssues } from "./module-standard-lib.mjs";
 
 const ignoredDirectories = new Set([
   ".git",
@@ -467,49 +468,67 @@ export async function setupModule({
     // existing Organization-scoped creator lock immediately before writing.
     plan = await buildModuleSetupPlan(options);
     if (plan.report.status !== "actionable") return plan.report;
+    const initialPlan = plan;
+    const writtenChanges = [];
     let completedWrites = 0;
-    for (const write of plan.writes) {
-      const containmentRoot = write.containmentRoot ?? options.moduleRoot;
-      const expectedParentRealPath = write.action === "create"
-        ? await assertModuleWriteParent({
-          moduleRoot: containmentRoot,
-          path: write.path,
-          context: plan.context,
-        })
-        : await assertRegularModuleFile({
-          moduleRoot: containmentRoot,
+    // Pass 1 writes the reviewed plan. A lease move of the standard (MS-01) is
+    // deferred while the Module contract itself still changes, so pass 2 may
+    // write exactly that announced repair on the converged contract.
+    for (let pass = 0; pass < 2; pass += 1) {
+      if (pass > 0) {
+        plan = await buildModuleSetupPlan(options);
+        if (plan.report.reason !== "standard_repairs_ready") break;
+      }
+      for (const change of plan.report.changes) {
+        if (!writtenChanges.some((written) => written.path === change.path)) writtenChanges.push(change);
+      }
+      for (const write of plan.writes) {
+        const containmentRoot = write.containmentRoot ?? options.moduleRoot;
+        const expectedParentRealPath = write.action === "create"
+          ? await assertModuleWriteParent({
+            moduleRoot: containmentRoot,
+            path: write.path,
+            context: plan.context,
+          })
+          : await assertRegularModuleFile({
+            moduleRoot: containmentRoot,
+            path: write.path,
+            displayPath: relative(containmentRoot, write.path).split(sep).join("/"),
+            context: plan.context,
+            missingAction: "Filesystem App se po plánu změnil; spusť setup znovu až po jeho kontrole.",
+          });
+        await beforePublish?.({ action: write.action, path: write.path });
+        publishJsonFileAtomically({
+          action: write.action,
           path: write.path,
           displayPath: relative(containmentRoot, write.path).split(sep).join("/"),
+          value: write.value,
+          expectedText: write.expectedText,
+          expectedParentRealPath,
           context: plan.context,
-          missingAction: "Filesystem App se po plánu změnil; spusť setup znovu až po jeho kontrole.",
         });
-      await beforePublish?.({ action: write.action, path: write.path });
-      publishJsonFileAtomically({
-        action: write.action,
-        path: write.path,
-        displayPath: relative(containmentRoot, write.path).split(sep).join("/"),
-        value: write.value,
-        expectedText: write.expectedText,
-        expectedParentRealPath,
-        context: plan.context,
-      });
-      completedWrites += 1;
-      if (failAfterWrite === completedWrites) {
-        throw new Error(`Injected module setup failure after write ${completedWrites}`);
+        completedWrites += 1;
+        if (failAfterWrite === completedWrites) {
+          throw new Error(`Injected module setup failure after write ${completedWrites}`);
+        }
       }
     }
     const verified = await buildModuleSetupPlan(options);
-    if (verified.report.status !== "current") {
+    const standardOnly = verified.report.status === "action_required"
+      && verified.report.reason === "module_standard_nonconformant";
+    if (verified.report.status !== "current" && !standardOnly) {
       throw new Error(
         `Module setup apply se po zápisu neověřil jako current (${verified.report.status})`,
       );
     }
+    // The Module contract converged. Findings of the standard that are not
+    // mechanical stay visible as action_required with what was just written.
     return {
       ...verified.report,
-      status: "completed",
-      reason: "setup_applied_and_reverified",
-      changes: plan.report.changes,
-      operator_assertions: plan.report.operator_assertions,
+      status: standardOnly ? "action_required" : "completed",
+      reason: standardOnly ? verified.report.reason : "setup_applied_and_reverified",
+      changes: writtenChanges,
+      operator_assertions: initialPlan.report.operator_assertions,
     };
   } catch (error) {
     if (error instanceof ModuleSetupActionRequired) return blockedModuleSetupReport(options, error);
@@ -531,7 +550,7 @@ export function renderHumanModuleSetup(report) {
     `Modul: ${report.module.company}/${report.module.id}`,
     `Cesta: ${report.module.root}`,
   ];
-  if (report.status === "current") lines.push("Kontrakt je platný a není co měnit.");
+  if (report.status === "current") lines.push("Kontrakt je platný, Modul splňuje Lazurio Module Standard a není co měnit.");
   if (report.status === "completed") lines.push("Změny byly zapsány a celý Module kontrakt byl znovu ověřen.");
   if (report.status === "actionable") {
     lines.push("Připravené změny:");
@@ -543,6 +562,17 @@ export function renderHumanModuleSetup(report) {
     for (const issue of report.issues) {
       lines.push(`  - ${issue.message}`);
       if (issue.action) lines.push(`    Další krok: ${issue.action}`);
+    }
+  }
+  if (report.standard?.checks) {
+    const passed = report.standard.checks.filter((check) => check.status === "pass").length;
+    lines.push(`Lazurio Module Standard: ${passed}/${report.standard.checks.length} pass`);
+    for (const check of report.standard.checks) {
+      if (check.status === "pass" && !check.repairs) continue;
+      lines.push(`  ${check.id} ${check.status} · ${check.summary}`);
+      for (const detail of check.details.slice(0, 5)) lines.push(`    - ${detail}`);
+      if (check.details.length > 5) lines.push(`    - … a dalších ${check.details.length - 5}`);
+      for (const repair of check.repairs ?? []) lines.push(`    oprava --apply: ${repair}`);
     }
   }
   if (report.operator_assertions.length > 0) {
@@ -559,6 +589,8 @@ async function buildModuleSetupPlan(options) {
   let writes = [];
   let operatorAssertions = [];
   let runtime = null;
+  let diskManifest = null;
+  let diskManifestText = null;
 
   if (manifestEntry) {
     if (!manifestEntry.isFile() || manifestEntry.isSymbolicLink()) {
@@ -571,6 +603,8 @@ async function buildModuleSetupPlan(options) {
     }
     const manifestText = await readFile(manifestPath, "utf8");
     const manifest = parseJsonForSetup(manifestText, manifestPath, context);
+    diskManifest = manifest;
+    diskManifestText = manifestText;
     const normalized = normalizeModuleManifest({ manifest, modulePath: manifestPath });
     const identityIssues = [
       ...normalized.issues,
@@ -613,19 +647,110 @@ async function buildModuleSetupPlan(options) {
     ({ writes, operatorAssertions } = await planNewModule({ options, context, manifestPath }));
   }
 
+  const contractWrites = writes.length;
+  const standard = await planModuleStandard({
+    options,
+    context,
+    manifestPath,
+    diskManifest,
+    diskManifestText,
+    writes,
+    deferManifestRepair: contractWrites > 0,
+  });
+  writes = standard.writes;
+  const conformant = standard.checks.every((check) => check.status === "pass");
+  const status = writes.length > 0 ? "actionable" : conformant ? "current" : "action_required";
   return {
     context,
     writes,
     report: moduleSetupReport({
       options,
       context,
-      status: writes.length === 0 ? "current" : "actionable",
-      reason: writes.length === 0 ? "module_contract_current" : "setup_changes_ready",
+      status,
+      reason: status === "current"
+        ? "module_contract_current"
+        : status === "action_required"
+          ? "module_standard_nonconformant"
+          : contractWrites > 0 ? "setup_changes_ready" : "standard_repairs_ready",
       writes,
       operatorAssertions,
+      // The runtime projection depends only on the Module contract. A Module
+      // that is startable but not yet conformant keeps its runtime (Launchpad
+      // only warns until the cutover, manual/module-standard.md kap. 10).
       runtime,
+      issues: status === "action_required" ? moduleStandardIssues(standard.checks) : [],
+      standard: { checks: standard.checks },
     }),
   };
+}
+
+// Overlays planned contract writes on the checkout, measures the Lazurio Module
+// Standard and folds its mechanical repairs into the same write plan, so the
+// read-only run shows exactly what --apply writes.
+async function planModuleStandard({
+  options,
+  context,
+  manifestPath,
+  diskManifest,
+  diskManifestText,
+  writes,
+  deferManifestRepair,
+}) {
+  const plannedManifestWrite = writes.find((write) => write.path === manifestPath);
+  const manifest = plannedManifestWrite?.value ?? diskManifest;
+  const packages = new Map();
+  const packageTexts = new Map();
+  for (const appPath of Array.isArray(manifest?.apps) ? manifest.apps : []) {
+    const packagePath = resolve(options.moduleRoot, ...appPath.split("/"));
+    const planned = writes.find((write) => write.path === packagePath);
+    if (planned) {
+      packages.set(appPath, planned.value);
+      continue;
+    }
+    const text = await readFile(packagePath, "utf8").catch(() => null);
+    if (text === null) continue;
+    packageTexts.set(appPath, text);
+    packages.set(appPath, parseJsonForSetup(text, packagePath, context));
+  }
+  const [policies, modules] = await Promise.all([
+    readOrganizationPolicies(options.lazurioRoot),
+    // A broken foreign manifest must not crash the check of this Module; MS-01
+    // then reports the cross-Module facts as undecidable.
+    readAllModuleContracts(options.lazurioRoot).catch(() => null),
+  ]);
+  const evaluation = await evaluateModuleStandard({
+    moduleRoot: options.moduleRoot,
+    slotPath: context.slot?.path ?? null,
+    manifest,
+    packages,
+    organization: context.organization,
+    organizations: policies.organizations,
+    modules,
+    adoptPort: options.adoptPort,
+  });
+  const nextWrites = [...writes];
+  const fold = ({ path, value, expectedText }) => {
+    const index = nextWrites.findIndex((write) => write.path === path);
+    if (index >= 0) nextWrites[index] = { ...nextWrites[index], value };
+    else nextWrites.push({ action: "replace", path, value, expectedText, containmentRoot: options.moduleRoot });
+  };
+  if (evaluation.repairedManifest && deferManifestRepair) {
+    // A moved lease must not race the contract migration: a legacy App still
+    // carrying the old port would otherwise drift against the new manifest if
+    // the apply is interrupted. --apply writes it in its second pass.
+    const check = evaluation.checks.find((item) => item.id === "MS-01");
+    check.repairs = check.repairs.map((repair) => `${repair} (po zápisu kontraktu v témže --apply)`);
+  } else if (evaluation.repairedManifest) {
+    fold({ path: manifestPath, value: evaluation.repairedManifest, expectedText: diskManifestText });
+  }
+  for (const [appPath, value] of evaluation.repairedPackages) {
+    fold({
+      path: resolve(options.moduleRoot, ...appPath.split("/")),
+      value,
+      expectedText: packageTexts.get(appPath),
+    });
+  }
+  return { checks: evaluation.checks, writes: nextWrites };
 }
 
 async function materializeModuleSetupRuntime({ options, context, manifest }) {
@@ -1283,6 +1408,7 @@ function moduleSetupReport({
   operatorAssertions = [],
   issues = [],
   runtime = null,
+  standard = null,
 }) {
   return {
     schema_version: "lazurio.module_setup.report.v1",
@@ -1302,6 +1428,7 @@ function moduleSetupReport({
     runtime,
     issues,
     operator_assertions: operatorAssertions,
+    standard,
   };
 }
 

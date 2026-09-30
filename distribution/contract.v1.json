@@ -65,6 +65,7 @@
     "lazurio/module-lifecycle-report.v1.schema.json",
     "lazurio/module-setup-lib.mjs",
     "lazurio/module-setup-report.v1.schema.json",
+    "lazurio/module-standard-lib.mjs",
     "lazurio/organization-activation-lib.mjs",
     "lazurio/organization-activation-report.v0.schema.json",
     "lazurio/lazurio.organization.v1.schema.json",
