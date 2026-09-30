@@ -164,6 +164,9 @@ nese sekci `standard` se stabilním seznamem třinácti kontrol v pořadí
 - `status` je `pass`, `fail`, nebo `warn`. `warn` znamená fakt, který kontrola
   nerozhodne (Modul není Git checkout, tsconfig rozšiřuje nenainstalovaný
   preset, Python App). `current` vyžaduje u všech třinácti `pass`.
+- Bun App klíč `lazurio.preparation.runtime` vynechává (chybí = bun): čtečka
+  LazurioPlatform dnes neznámá pole odmítá, dokud vydání Platformy klíč
+  nečte (DEV-6634 W0-5). Explicitní `runtime: bun` je proto `fail` `MS-04`.
 - Python App (`runtime: uv` nebo `pyproject.toml` vedle App) nese deklaraci
   v `app/v<N>/pyproject.toml` `[tool.lazurio]`. Dokud ji Core nečte, `MS-04`
   hlásí `warn`; viditelná deklarace s `runtime: uv` bez `uv_version` je `fail`.
@@ -185,7 +188,7 @@ nese sekci `standard` se stabilním seznamem třinácti kontrol v pořadí
 | Kontrola | Oprava | Kdy se neprovede |
 | --- | --- | --- |
 | `MS-02` | doplní chybějící `packageManager` na přesný Bun z `lazurio/package.json` | jiná existující hodnota (jen nález) |
-| `MS-04` | doplní skeleton `lazurio.preparation` (`schema_version`, `runtime: bun`, `owner_package` = App, `check_script` jen když existuje skript `check:prepared`) | App bez `lazurio.runtime`, Python App, App v kořeni Modulu místo `app/v<N>/` |
+| `MS-04` | doplní skeleton `lazurio.preparation` (`schema_version`, `owner_package` = App, `check_script` jen když existuje skript `check:prepared`; klíč `runtime` nezapisuje, chybí = bun); explicitně zapsané `runtime: bun` odebere | App bez `lazurio.runtime`, Python App, App v kořeni Modulu místo `app/v<N>/` |
 | `MS-01` | jako součást převodu (koordinovaná migrace) přesune lease mimo pool na nejnižší volný port poolu a mapování `staré → nové` uvede v `repairs` | port se objevuje ve zdrojácích nebo configu App, pool je vyčerpaný, port přišel z `--adopt-port` v tomtéž běhu |
 
 Chybějící `check`/`test` skripty, lockfile, tsconfig, importy, `.env` ani

@@ -191,9 +191,10 @@ export async function evaluateModuleStandard({
       }
     } else if (preparation === undefined) {
       record("MS-04", "fail", `${label}: lazurio.preparation chybí`);
+      // No `runtime` key: absence means bun, and today's Platform reader
+      // refuses unknown fields until it reads the key (DEV-6634 W0-5).
       const skeleton = {
         schema_version: "lazurio.preparation.v1",
-        runtime: "bun",
         owner_package: app.appPath,
         ...(nonEmptyString(scripts["check:prepared"]) ? { check_script: "check:prepared" } : {}),
       };
@@ -214,6 +215,15 @@ export async function evaluateModuleStandard({
     } else {
       const schemaIssues = validateAgainstSchema(preparation, await preparationSchema(), `${label}: lazurio.preparation`);
       for (const issue of schemaIssues) record("MS-04", "fail", issue);
+      if (preparation && typeof preparation === "object" && !Array.isArray(preparation) && preparation.runtime === "bun") {
+        record(
+          "MS-04",
+          "fail",
+          `${label}: runtime: bun zapsané explicitně — Platforma dnes neznámá pole odmítá; klíč vynech (chybí = bun)`,
+        );
+        delete ensureNextPackage().lazurio.preparation.runtime;
+        results.get("MS-04").repairs.push(`${label}: odebrat lazurio.preparation.runtime (chybí = bun)`);
+      }
       if (preparation && typeof preparation === "object" && !Array.isArray(preparation)) {
         const ownerPackagePath = typeof preparation.owner_package === "string" ? preparation.owner_package : null;
         const ownerPackage = ownerPackagePath === app.appPath

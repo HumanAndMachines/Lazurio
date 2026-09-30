@@ -148,7 +148,26 @@ test("MS-04 adds the preparation skeleton only when it is unambiguous", async ()
   expect(applied.status).toBe("completed");
   expect((await readJson(join(withCheck.appRoot, "package.json"))).lazurio.preparation).toEqual({
     schema_version: "lazurio.preparation.v1",
-    runtime: "bun",
+    owner_package: "app/v1/package.json",
+    check_script: "check:prepared",
+  });
+
+  const explicitBun = await conformantFixture({
+    mutatePackage: (pkg) => { pkg.lazurio.preparation.runtime = "bun"; },
+  });
+  const explicitPlan = await setupModule(explicitBun);
+  expect(explicitPlan).toMatchObject({ status: "actionable", reason: "standard_repairs_ready" });
+  expect(check(explicitPlan, "MS-04")).toMatchObject({
+    status: "fail",
+    details: [
+      "app/v1/package.json: runtime: bun zapsané explicitně — Platforma dnes neznámá pole odmítá; klíč vynech (chybí = bun)",
+    ],
+    repairs: ["app/v1/package.json: odebrat lazurio.preparation.runtime (chybí = bun)"],
+  });
+  const explicitApplied = await setupModule({ ...explicitBun, apply: true });
+  expect(explicitApplied.status).toBe("completed");
+  expect((await readJson(join(explicitBun.appRoot, "package.json"))).lazurio.preparation).toEqual({
+    schema_version: "lazurio.preparation.v1",
     owner_package: "app/v1/package.json",
     check_script: "check:prepared",
   });
@@ -474,7 +493,6 @@ async function conformantFixture({
       },
       preparation: {
         schema_version: "lazurio.preparation.v1",
-        runtime: "bun",
         owner_package: appPath,
         check_script: "check:prepared",
       },
