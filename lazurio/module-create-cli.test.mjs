@@ -155,12 +155,17 @@ test("usage errors exit 3", async () => {
 });
 
 function cli(args, { lazurioRoot, organizationRoot, cwd = organizationRoot }, env = {}) {
+  const inherited = { ...process.env };
+  for (const name of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "LAZURIO_SCAFFOLD_SKIP_INSTALL"]) delete inherited[name];
   const result = Bun.spawnSync([process.execPath, "run", cliPath, ...args, "--root", lazurioRoot], {
     cwd,
     stdout: "pipe",
     stderr: "pipe",
+    // The full environment stays (Windows needs SystemRoot and friends to
+    // resolve the lock owner's process identity); home and Git identity are
+    // redirected to the test.
     env: {
-      PATH: process.env.PATH,
+      ...inherited,
       HOME: home,
       XDG_CONFIG_HOME: join(home, ".config"),
       XDG_STATE_HOME: join(home, ".local", "state"),
@@ -207,7 +212,7 @@ function git(cwd, args) {
     stdout: "pipe",
     stderr: "pipe",
     env: {
-      ...process.env,
+      ...inherited,
       HOME: home,
       GIT_CONFIG_NOSYSTEM: "1",
       GIT_AUTHOR_NAME: "Lazurio Test",
