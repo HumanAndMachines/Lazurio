@@ -24,15 +24,20 @@ nikdy nevydá za Modul.
 
 První běh je vždy read-only. Výsledek je právě jeden ze čtyř stavů:
 
-- `current` — kontrakt je platný, nic se nemění;
+- `current` — kontrakt je platný, Modul splňuje všech 13 kontrol Lazurio
+  Module Standardu a nic se nemění;
 - `actionable` — CLI připravilo přesný plán, ale nic nezapsalo;
 - `completed` — `--apply` zapsal plán a celý stav znovu ověřil;
 - `action_required` — před zápisem chybí přístup, Organization deklarace nebo
-  skutečné rozhodnutí. Agent má postupovat podle `issues[].action`, ne hádat.
+  skutečné rozhodnutí, případně Modul nesplňuje standard v bodě, který CLI
+  mechanicky neopraví (`reason: module_standard_nonconformant`). Agent má
+  postupovat podle `issues[].action`, ne hádat.
 
 Po `actionable` spusť stejný příkaz s `--apply`, zkontroluj Git diff a spusť
-jej ještě jednou bez `--apply`. Poslední běh musí být `current`. Teprve potom
-commitni změny a otevři PR podle pravidel Organizace.
+jej ještě jednou bez `--apply`. Cílem je `current`; zbývající
+`module_standard_nonconformant` nálezy oprav v Modulu podle `issues[].action`
+a příkaz opakuj. Teprve potom commitni změny a otevři PR podle pravidel
+Organizace.
 
 ```sh
 lazurio module setup <module-root> --root <lazurio-root> --apply
@@ -116,7 +121,9 @@ lazurio module setup ./workspace/portal \
 review, zkontroluje rozsah a kolizi s Module leases stejné Organizace, ale
 nevymýšlí historickou provenienci čísla. Překryv s jinou Organizací zůstává
 vědomý runtime takeover kontrakt; není důvodem k přečíslování stabilního portu.
-Existující platný lease se automaticky nemění.
+Existující lease uvnitř poolu se automaticky nemění. Lease mimo pool je nález
+standardu (`MS-01`); `--apply` jej přesune jen za podmínek v kapitole níže a
+v tomtéž běhu s `--adopt-port` nikdy.
 
 ## Co musí připravit Organization Admin
 
@@ -131,6 +138,63 @@ Existující platný lease se automaticky nemění.
 
 Admin opraví pouze owning Organization deklaraci a Agent příkaz zopakuje.
 Stabilní porty jiných Modulů se kvůli pohodlnější alokaci neposouvají.
+
+## Konformance se standardem (MS-01–MS-13)
+
+Pravidla drží [Lazurio Module Standard](module-standard.md) (decision 0171);
+tahle kapitola popisuje jen, jak je `lazurio module setup` měří. Každý report
+nese sekci `standard` se stabilním seznamem třinácti kontrol v pořadí
+`MS-01`…`MS-13`:
+
+```json
+"standard": {
+  "checks": [
+    {
+      "id": "MS-01",
+      "status": "fail",
+      "summary": "lazurio.module.json platné, id odpovídá slotu, lease v poolu Organizace, pooly disjunktní",
+      "details": ["lease main 23500 leží mimo pool 24000-24099"],
+      "action": "Přesuň lease do module_port_pool Organizace …",
+      "repairs": ["lazurio.module.json: lease main 23500 → 24001"]
+    }
+  ]
+}
+```
+
+- `status` je `pass`, `fail`, nebo `warn`. `warn` znamená fakt, který kontrola
+  nerozhodne (Modul není Git checkout, tsconfig rozšiřuje nenainstalovaný
+  preset, Python App). `current` vyžaduje u všech třinácti `pass`.
+- `details` jsou konkrétní nálezy s cestou relativní ke kořeni Modulu;
+  `action` říká, co udělat; `repairs` jsou mechanické opravy, které zapíše
+  `--apply`.
+- Kontroly jsou read-only a levné: čtou soubory, JSON a zdrojáky App (bez
+  `node_modules`, `dist` a testů), jednou volají `git ls-files` kvůli
+  commitnutému lockfilu. Nikdy nespouštějí skripty Modulu ani síť; `bun run
+  check` a `bun test` spouští CI Modulu.
+- `standard` je `null`, když setup skončí dřív na samotném Module kontraktu
+  (například chybí pool nebo slot). Nejdřív oprav kontrakt.
+- `runtime` zůstává vyplněný, kdykoli je Module kontrakt platný, i když
+  standard hlásí nálezy: Launchpad nekonformní Modul do cutoveru spouští
+  s varováním (kapitola 10 standardu).
+
+`--apply` opraví jen mechanické a jednoznačné položky:
+
+| Kontrola | Oprava | Kdy se neprovede |
+| --- | --- | --- |
+| `MS-02` | doplní chybějící `packageManager` na přesný Bun z `lazurio/package.json` | jiná existující hodnota (jen nález) |
+| `MS-04` | doplní skeleton `lazurio.preparation` (`schema_version`, `runtime: bun`, `owner_package` = App, `check_script` jen když existuje skript `check:prepared`) | App bez `lazurio.runtime`, `pyproject.toml` vedle App, App mimo `app/v<N>/` |
+| `MS-01` | přesune lease mimo pool na nejnižší volný port poolu a mapování `staré → nové` uvede v `repairs` | port se objevuje ve zdrojácích nebo configu App, pool je vyčerpaný, port přišel z `--adopt-port` v tomtéž běhu |
+
+Chybějící `check`/`test` skripty, lockfile, tsconfig, importy, `.env` ani
+víceprocesový `dev` skript CLI nevymýšlí; zůstávají nálezem s `action`.
+Když v témže běhu mění i Module kontrakt (migrace legacy App), přesun leasu
+zapíše `--apply` až po zápisu kontraktu, aby přerušený běh zůstal
+konvergentní.
+
+Root doctor má navíc kontrolu `module_standard.port_pools`: napříč
+namountovanými Organizacemi hlásí překryv poolů, cross-Organization kolize
+leasů, leasy mimo pool a Organizace bez poolu. Do cutoveru W3 je to
+`warn`; centrální registr portů nevzniká.
 
 ## Exit kódy pro Agenty a automatizaci
 
