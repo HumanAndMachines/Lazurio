@@ -188,7 +188,7 @@ nese sekci `standard` se stabilním seznamem třinácti kontrol v pořadí
 | Kontrola | Oprava | Kdy se neprovede |
 | --- | --- | --- |
 | `MS-02` | doplní chybějící `packageManager` na přesný Bun z `lazurio/package.json` | jiná existující hodnota (jen nález) |
-| `MS-04` | doplní skeleton `lazurio.preparation` (`schema_version`, `owner_package` = App, `check_script` jen když existuje skript `check:prepared`; klíč `runtime` nezapisuje, chybí = bun); explicitně zapsané `runtime: bun` odebere | App bez `lazurio.runtime`, Python App, App v kořeni Modulu místo `app/v<N>/` |
+| `MS-04` | doplní skeleton `lazurio.preparation` (`schema_version`, `owner_package` = App, `check_script` jen když existuje skript `check:prepared`; klíč `runtime` nezapisuje, chybí = bun); explicitně zapsané `runtime: bun` odebere | App bez `lazurio.runtime`, Python App, App v kořeni Modulu místo `app/v<N>/`; `prepare_script`/`check_script` s npm lifecycle jménem (`prepare`, `install`, `preinstall`, `postinstall`, `prepublish`, `prepublishOnly`, `prepack`, `postpack`, `dependencies`) je jen nález, protože je `bun install` spouští sám; přejmenuj je na `prepare:app` / `check:prepared` |
 | `MS-01` | jako součást převodu (koordinovaná migrace) přesune lease mimo pool na nejnižší volný port poolu a mapování `staré → nové` uvede v `repairs` | port se objevuje ve zdrojácích nebo configu App, pool je vyčerpaný, port přišel z `--adopt-port` v tomtéž běhu |
 
 Chybějící `check`/`test` skripty, lockfile, tsconfig, importy, `.env` ani

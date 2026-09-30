@@ -208,6 +208,23 @@ test("MS-04 adds the preparation skeleton only when it is unambiguous", async ()
   });
   expect(check(await setupModule(uvWithVersion), "MS-04")).toMatchObject({ status: "warn", details: [pythonWarning] });
 
+  const lifecycle = await conformantFixture({
+    mutatePackage: (pkg) => {
+      pkg.scripts.prepare = "vite build";
+      pkg.scripts.postinstall = "bun run src/check-prepared.ts";
+      pkg.lazurio.preparation.prepare_script = "prepare";
+      pkg.lazurio.preparation.check_script = "postinstall";
+    },
+  });
+  expect(check(await setupModule({ ...lifecycle, apply: true }), "MS-04")).toMatchObject({
+    status: "fail",
+    details: [
+      "app/v1/package.json: postinstall je npm lifecycle jméno — bun install ho spouští sám; použij prepare:app / check:prepared",
+      "app/v1/package.json: prepare je npm lifecycle jméno — bun install ho spouští sám; použij prepare:app / check:prepared",
+    ],
+  });
+  expect((await readJson(join(lifecycle.appRoot, "package.json"))).lazurio.preparation.check_script).toBe("postinstall");
+
   const broken = await conformantFixture({
     mutatePackage: (pkg) => {
       pkg.lazurio.preparation.runtime = "deno";

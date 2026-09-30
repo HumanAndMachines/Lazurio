@@ -74,6 +74,19 @@ const KNOWN_STRICT_TSCONFIG_PRESETS = [
   /^astro\/tsconfigs\/strict(?:est)?(?:\.json)?$/,
   /^@tsconfig\/strictest(?:\/tsconfig\.json)?$/,
 ];
+// `bun install` runs these package scripts by itself, so a preparation script
+// with such a name would execute during dependency installation.
+const NPM_LIFECYCLE_SCRIPTS = new Set([
+  "prepare",
+  "install",
+  "preinstall",
+  "postinstall",
+  "prepublish",
+  "prepublishOnly",
+  "prepack",
+  "postpack",
+  "dependencies",
+]);
 const PINNED_DEPENDENCY = /^github:Lazurio\/(?:repository-db|module-kit)#v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 
 let preparationSchemaPromise = null;
@@ -236,6 +249,13 @@ export async function evaluateModuleStandard({
         }
         for (const key of ["check_script", "prepare_script"]) {
           const scriptName = preparation[key];
+          if (typeof scriptName === "string" && NPM_LIFECYCLE_SCRIPTS.has(scriptName)) {
+            record(
+              "MS-04",
+              "fail",
+              `${label}: ${scriptName} je npm lifecycle jméno — bun install ho spouští sám; použij prepare:app / check:prepared`,
+            );
+          }
           if (typeof scriptName !== "string" || !ownerPackage) continue;
           if (!nonEmptyString(ownerPackage.scripts?.[scriptName])) {
             record("MS-04", "fail", `${label}: ${key} ${scriptName} neexistuje v ${ownerPackagePath}`);
