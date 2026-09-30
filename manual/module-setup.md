@@ -66,6 +66,14 @@ který bounded migrátor neumí, skončí `action_required`. Správná oprava je
 reviewovaný explicitní `lazurio.module.json` se všemi listenery a portable App
 runtime; nerozšiřuj migrátor na obecný JavaScript/TypeScript analyzátor.
 
+## Nový Modul
+
+Úplně nový Modul zakládej příkazem `lazurio module create` z task worktree
+root repa Organizace ([module-create.md](module-create.md)): vytvoří slot,
+lease, App podle stacku, lockfile a první commit a hned ho změří stejnými
+kontrolami jako `lazurio module setup`. Postupy níže platí pro repozitář,
+který už slot má a jen dostává Module kontrakt.
+
 ## Nový Modul bez aplikace
 
 Repozitář musí být nejdřív deklarovaný jako aktivní `module_slots` položka
