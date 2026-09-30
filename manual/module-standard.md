@@ -319,14 +319,21 @@ Cíl (Principál 2026-09-30): nový Modul se **nezakládá ručně** ani se lok�
 repo neváže na GitHub dodatečně. Tři vrstvy, každá s vlastním ownerem:
 
 1. **Scaffold v Core** — `lazurio module create <Org>/<slug> --stack
-   vite-react | astro | astro-starlight | bun-service | python-uv --port-lease
-   <id>` vytvoří v task worktree Organizace kompletní konformní Modul
-   (`lazurio.module.json` s leasem z volného portu poolu, `app/v1/` se
-   šablonou stacku, `lazurio.runtime`, `lazurio.preparation`, `bun.lock`,
-   `tsconfig` strict, biome, `check`/`test`, README, AGENTS.md, CI workflow
-   spouštějící `bun run check && bun test`) a hned ho ověří `lazurio module
-   setup` → `current`. Šablony stacků žijí v Core (`lazurio/templates/module/<stack>/`),
-   ne v Organizaci; Organization Template je jen konzument.
+   vite-react | astro | astro-starlight | bun-service | python-uv | none
+   [--name <název>] [--teams a,b] [--port N] [--dry-run] [--json]` spuštěný
+   z task worktree root repa Organizace vytvoří kompletní konformní Modul
+   (`lazurio.module.json` s leasem z nejnižšího volného portu poolu, nebo
+   s `--port`; `app/v1/` se šablonou stacku, `lazurio.runtime`,
+   `lazurio.preparation`, `bun.lock`, `tsconfig` strict, biome,
+   `check`/`test`, README, AGENTS.md, CI workflow spouštějící
+   `bun run check && bun test`), vloží slot do `modules.manifest.json`
+   téhož worktree, udělá první commit a hned ho ověří `lazurio module
+   setup` → `current` (varianta `none` = Modul bez App podle DEV-6514). Na
+   `main` odmítne psát; `--dry-run` jen vypíše plán s `tree_hash`. Jediným
+   generátorem je pure funkce `planModuleScaffold`; šablony stacků žijí
+   v Core (`lazurio/templates/module/<stack>/`), ne v Organizaci;
+   Organization Template i Dashboard jsou jen konzumenti
+   (`manual/module-create.md`).
 2. **Založení repa a slotu z Dashboardu** — tlačítko „Nový Modul" v
    Dashboardu (Organization Admin): vybere Organizaci, slug, stack, Team(y);
    Dashboard přes GitHub App založí privátní repo `<Org>/<slug>` s výchozí

@@ -49,7 +49,7 @@ si před prací ověří, co má k dispozici, a nevydává starší stav za důk
 | Mechanismus | Stav | Co to znamená pro postup |
 | --- | --- | --- |
 | `lazurio module setup` s `standard.checks[]` (`MS-01`–`MS-13`) | vzniká (HumanAndMachines/Lazurio#454); dostupný, když report obsahuje klíč `standard` | Bez `standard.checks[]` je `current` jen důkaz platného kontraktu Modulu, **ne** konformance. Agent pak projde kapitoly 2–9 manuálu ručně a v PR to napíše. |
-| `lazurio module create` (scaffold) | cílový stav (DEV-6634 W0-4) | Dokud neexistuje, nový Modul zakládá jen Organization Admin na základě rozhodnutí Principála: repo na GitHubu + slot PR; obsah Modulu Agent připraví podle kapitol 2–6 manuálu a po vydání scaffoldu ho sladí se šablonou. Není to „ruční zakládání" ve smyslu zákazu — zákaz míří na Moduly bez slotu, bez repa a mimo standard. |
+| `lazurio module create` (scaffold) | vzniká (HumanAndMachines/Lazurio#458, stacky vite-react, astro, astro-starlight, bun-service, python-uv, none; dostupný, když `lazurio module create --help` odpoví) | Do vydání nový Modul zakládá jen Organization Admin na základě rozhodnutí Principála: repo na GitHubu + slot PR; obsah Modulu Agent připraví podle kapitol 2–6 manuálu a po vydání scaffoldu ho sladí se šablonou. Není to „ruční zakládání" ve smyslu zákazu — zákaz míří na Moduly bez slotu, bez repa a mimo standard. |
 | Dashboard „Nový Modul" | cílový stav (DEV-6634 W0-7, DEV-6514) | Do vydání zakládá repo a slot Admin ručně přes GitHub a PR. |
 | `@lazurio/module-kit` | vydaný v0.2.0 (`github:Lazurio/module-kit#v0.2.0`; `listener`, `health`, `onShutdown`, `viteServerOptions`/`astroServerOptions`, `viteShutdownPlugin`) | Používej hned; Vite App vždy s `viteShutdownPlugin()`. |
 | Platform Launchpad: supervize, `module-nonconformant`, `uv` | cílový stav (W0-5, W3) | Nekonformní Modul dnes Launchpad spustí; standard přesto platí pro každý PR. |
@@ -77,7 +77,9 @@ ani pro productionspace repa (decision 0041).
    bude tlačítko „Nový Modul" vydané); Modul bez slotu se nematerializuje.
 3. Scaffold v task worktree Organizace:
    `lazurio module create <Org>/<slug> --stack vite-react | astro |
-   astro-starlight | bun-service | python-uv`. Dokud scaffold v Core není
+   astro-starlight | bun-service | python-uv | none [--name …] [--teams …]
+   [--port N] [--dry-run]` (vloží i slot do `modules.manifest.json` téhož
+   worktree a udělá první commit). Dokud scaffold v Core není
    vydaný (viz tabulka výše), připrav stejné soubory podle kapitol 2–6
    manuálu — App vždy v `app/v1/`, `lazurio.module.json` se slotem a leasem
    z poolu, `lazurio.runtime` + `lazurio.preparation`, `packageManager`,
