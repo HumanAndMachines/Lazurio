@@ -11,8 +11,10 @@ generátor je čistá funkce `planModuleScaffold` v
   generuje ho plan funkce z leasu a stacku.
 - **Jména.** Segment cesty začínající `dot-` se zapíše s tečkou
   (`dot-gitignore` → `.gitignore`, `dot-github/` → `.github/`) a přípona
-  `.tmpl` se odstraní (`AGENTS.md.tmpl` → `AGENTS.md`). Díky tomu šablony
-  nepůsobí jako ignore pravidla, CI ani instrukce agentů tohoto repozitáře.
+  `.tmpl` se odstraní (`AGENTS.md.tmpl` → `AGENTS.md`,
+  `start.test.ts.tmpl` → `start.test.ts`). Díky tomu šablony nepůsobí jako
+  ignore pravidla, CI, instrukce agentů ani testy tohoto repozitáře a npm
+  balíček CLI je nese bez testových souborů.
 - **Placeholdery.** `{{name}}` v cestě i obsahu: `slug`, `display_name`,
   `organization`, `github_org`, `stack`, `listener_id`,
   `listener_env_prefix`, `runtime_id`, `python_package`, `port`,
