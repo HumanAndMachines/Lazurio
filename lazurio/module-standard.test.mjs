@@ -163,7 +163,9 @@ test("MS-04 adds the preparation skeleton only when it is unambiguous", async ()
   expect(partial).toMatchObject({ status: "action_required" });
   expect(partial.changes).toHaveLength(1);
   expect((await readJson(join(withoutCheck.appRoot, "package.json"))).lazurio.preparation.check_script).toBeUndefined();
-  expect(check(partial, "MS-04").details).toContain("app/v1/package.json: chybí skript check:prepared pro check_script");
+  expect(check(partial, "MS-04").details).toEqual([
+    "app/v1/package.json: lazurio.preparation: chybí povinné pole 'check_script'",
+  ]);
 
   const python = await conformantFixture({ mutatePackage: (pkg) => { delete pkg.lazurio.preparation; } });
   await writeText(join(python.appRoot, "pyproject.toml"), "[project]\nname = \"portal\"\n");
