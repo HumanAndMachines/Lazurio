@@ -358,6 +358,18 @@ test("MS-01 refuses to move a lease whose port is hardcoded in a Python source",
   expect((await readJson(join(fixture.moduleRoot, "lazurio.module.json"))).port_leases[0].port).toBe(23_502);
 });
 
+test("MS-01 refuses to move a lease when a source is too large to scan for the port", async () => {
+  const fixture = await conformantFixture({ port: 23_503 });
+  await writeText(join(fixture.moduleRoot, "app", "v1", "server.py"), `${"#".repeat(1_048_577)}\nPORT = 23503\n`);
+
+  const report = await setupModule({ ...fixture, apply: true });
+
+  expect(check(report, "MS-01").details).toContain(
+    "lease main se automaticky nepřesune: app/v1/server.py nejde přečíst nebo přesahuje 1048576 B, port 23503 nelze vyloučit",
+  );
+  expect((await readJson(join(fixture.moduleRoot, "lazurio.module.json"))).port_leases[0].port).toBe(23_503);
+});
+
 test("MS-09 rejects symlinks that lead outside the Module repository, tracked as fail and untracked as warn", async () => {
   const fixture = await conformantFixture();
   const outside = join(fixture.organizationRoot, "launchpad", "contracts");

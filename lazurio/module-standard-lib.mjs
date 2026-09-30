@@ -453,7 +453,8 @@ export async function evaluateModuleStandard({
   const declared = new Set(apps.map(({ appPath }) => appPath));
   const appPackages = files
     .filter((file) => /^app\/[^/]+\/package\.json$/.test(file.path))
-    .map((file) => file.path);
+    .map((file) => file.path)
+    .sort();
   for (const path of appPackages) {
     if (!declared.has(path)) record("MS-12", "fail", `${path} není deklarovaný v apps[]`);
   }
@@ -716,7 +717,10 @@ async function portReferenceRefusal({ root, files, port, packages }) {
     const text = packages.has(file.path)
       ? JSON.stringify(packages.get(file.path))
       : await readText(join(root, ...file.path.split("/")));
-    if (text !== null && pattern.test(text)) return `port ${port} se objevuje v ${file.path}`;
+    // A source the scan cannot read (too large, unreadable) may still hold the
+    // port; the move fails closed instead of reporting success.
+    if (text === null) return `${file.path} nejde přečíst nebo přesahuje ${MAX_READ_BYTES} B, port ${port} nelze vyloučit`;
+    if (pattern.test(text)) return `port ${port} se objevuje v ${file.path}`;
   }
   return null;
 }
