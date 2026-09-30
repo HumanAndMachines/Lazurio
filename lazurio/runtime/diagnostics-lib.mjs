@@ -56,6 +56,7 @@ import {
   normalizeModuleManifest,
   resolveModuleApplications,
 } from "../core/module-contract-lib.mjs";
+import { findModuleStandardPortFindings } from "../core/organization-port-policy-lib.mjs";
 import {
   BUN_PACKAGE_RUNNER_PROBE_ARGS,
   classifyBunPackageRunnerProbe,
@@ -1093,6 +1094,7 @@ export function buildDoctorReportFromAppsResponse(
     ...environmentChecks,
     discoveryCheck(appsResponse),
     portOverlapCheck(appsResponse),
+    moduleStandardPortPoolCheck(appsResponse),
     workspaceDeclarationCheck(appsResponse),
     organizationManifestCheck(appsResponse),
     ...runtimeChecks(appsResponse),
@@ -3334,6 +3336,49 @@ function portOverlapCheck(appsResponse) {
       : status === "warn"
         ? `${formatCount(crossOrganizations.length, "skutečný cross-Organization překryv", "skutečné cross-Organization překryvy", "skutečných cross-Organization překryvů")} a ${formatCount(poolOverlaps.length, "lokální překryv poolů", "lokální překryvy poolů", "lokálních překryvů poolů")}; porty zůstávají pevné a převzetí živé aplikace vyžaduje potvrzení.`
         : `${formatCount(conflicts.length, "kolizní listener", "kolizní listenery", "kolizních listenerů")}, ${formatCount(moduleDrifts.length, "drift mezi verzemi", "drifty mezi verzemi", "driftů mezi verzemi")} a ${formatCount(policyIssues.length, "chyba port policy", "chyby port policy", "chyb port policy")}; deklarace musí být opravena.`,
+    paths: ["organizations", "lazurio.module.json"],
+    links: [],
+    details,
+  };
+}
+
+// Lazurio Module Standard (decision 0171, manual/module-standard.md kap. 9):
+// pooly namountovaných Organizací jsou disjunktní a každý Module lease leží
+// v poolu své Organizace. Stejná fakta jako `launchpad.port_ownership`, ale
+// měřená standardem místo runtime takeover kontraktu; žádný centrální registr.
+// Do cutoveru W3 je nekonformita `warn`, ne gate (kap. 10).
+export function moduleStandardPortPoolCheck(appsResponse) {
+  const organizations = (appsResponse.organizations ?? []).filter((organization) => (
+    (organization.status ?? "mounted") === "mounted"
+    && organization.organization_type !== "organization-template"
+  ));
+  const findings = findModuleStandardPortFindings({
+    modules: appsResponse.module_contracts ?? [],
+    organizations,
+  });
+  const details = [
+    ...findings.pool_overlaps.map(({ start, end, organizations: pair = [] }) =>
+      `pooly ${pair.map((item) => `${item.company} ${item.start}-${item.end}`).join(" a ")} se překrývají na ${start}-${end}`,
+    ),
+    ...findings.cross_organization_lease_collisions.map(({ port, owners }) =>
+      `port ${port} drží Moduly více Organizací: ${owners.map((owner) => `${owner.company}/${owner.module}#${owner.lease}`).join(", ")}`,
+    ),
+    ...findings.leases_outside_pool.map(({ company, module, lease, port, pool }) =>
+      `${company}/${module}#${lease} ${port} leží mimo pool ${pool.start}-${pool.end}; oprava: lazurio module setup <module-root> --apply`,
+    ),
+    ...findings.organizations_without_pool.map(({ company }) =>
+      `${company} má Module leases, ale nemá module_port_pool`,
+    ),
+  ];
+  const status = details.length > 0 ? "warn" : "ok";
+  return {
+    id: "module_standard.port_pools",
+    status,
+    severity: "recommended",
+    title: "Module Standard: port pooly",
+    message: status === "ok"
+      ? `Pooly ${formatCount(organizations.length, "Organizace", "Organizací", "Organizací")} jsou disjunktní a každý Module lease leží ve svém poolu.`
+      : `${formatCount(details.length, "nález", "nálezy", "nálezů")} proti Lazurio Module Standardu (MS-01); do cutoveru jen varování.`,
     paths: ["organizations", "lazurio.module.json"],
     links: [],
     details,
