@@ -742,7 +742,10 @@ async function planModuleStandard({
     // carrying the old port would otherwise drift against the new manifest if
     // the apply is interrupted. --apply writes it in its second pass.
     const check = evaluation.checks.find((item) => item.id === "MS-01");
-    check.repairs = check.repairs.map((repair) => `${repair} (po zápisu kontraktu v témže --apply)`);
+    check.repairs = check.repairs.map((repair) => repair.replace(
+      "(součást převodu, koordinovaná migrace)",
+      "(součást převodu, koordinovaná migrace; zapíše se po kontraktu v témže --apply)",
+    ));
   } else if (evaluation.repairedManifest) {
     fold({ path: manifestPath, value: evaluation.repairedManifest, expectedText: diskManifestText });
   }

@@ -155,7 +155,7 @@ nese sekci `standard` se stabilním seznamem třinácti kontrol v pořadí
       "summary": "lazurio.module.json platné, id odpovídá slotu, lease v poolu Organizace, pooly disjunktní",
       "details": ["lease main 23500 leží mimo pool 24000-24099"],
       "action": "Přesuň lease do module_port_pool Organizace …",
-      "repairs": ["lazurio.module.json: lease main 23500 → 24001"]
+      "repairs": ["lazurio.module.json: lease main 23500 → 24001 (součást převodu, koordinovaná migrace)"]
     }
   ]
 }
@@ -164,6 +164,9 @@ nese sekci `standard` se stabilním seznamem třinácti kontrol v pořadí
 - `status` je `pass`, `fail`, nebo `warn`. `warn` znamená fakt, který kontrola
   nerozhodne (Modul není Git checkout, tsconfig rozšiřuje nenainstalovaný
   preset, Python App). `current` vyžaduje u všech třinácti `pass`.
+- Python App (`runtime: uv` nebo `pyproject.toml` vedle App) nese deklaraci
+  v `app/v<N>/pyproject.toml` `[tool.lazurio]`. Dokud ji Core nečte, `MS-04`
+  hlásí `warn`; viditelná deklarace s `runtime: uv` bez `uv_version` je `fail`.
 - `details` jsou konkrétní nálezy s cestou relativní ke kořeni Modulu;
   `action` říká, co udělat; `repairs` jsou mechanické opravy, které zapíše
   `--apply`.
@@ -182,8 +185,8 @@ nese sekci `standard` se stabilním seznamem třinácti kontrol v pořadí
 | Kontrola | Oprava | Kdy se neprovede |
 | --- | --- | --- |
 | `MS-02` | doplní chybějící `packageManager` na přesný Bun z `lazurio/package.json` | jiná existující hodnota (jen nález) |
-| `MS-04` | doplní skeleton `lazurio.preparation` (`schema_version`, `runtime: bun`, `owner_package` = App, `check_script` jen když existuje skript `check:prepared`) | App bez `lazurio.runtime`, `pyproject.toml` vedle App, App mimo `app/v<N>/` |
-| `MS-01` | přesune lease mimo pool na nejnižší volný port poolu a mapování `staré → nové` uvede v `repairs` | port se objevuje ve zdrojácích nebo configu App, pool je vyčerpaný, port přišel z `--adopt-port` v tomtéž běhu |
+| `MS-04` | doplní skeleton `lazurio.preparation` (`schema_version`, `runtime: bun`, `owner_package` = App, `check_script` jen když existuje skript `check:prepared`) | App bez `lazurio.runtime`, Python App, App v kořeni Modulu místo `app/v<N>/` |
+| `MS-01` | jako součást převodu (koordinovaná migrace) přesune lease mimo pool na nejnižší volný port poolu a mapování `staré → nové` uvede v `repairs` | port se objevuje ve zdrojácích nebo configu App, pool je vyčerpaný, port přišel z `--adopt-port` v tomtéž běhu |
 
 Chybějící `check`/`test` skripty, lockfile, tsconfig, importy, `.env` ani
 víceprocesový `dev` skript CLI nevymýšlí; zůstávají nálezem s `action`.

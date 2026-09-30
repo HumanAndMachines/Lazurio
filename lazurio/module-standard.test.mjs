@@ -54,7 +54,7 @@ test("MS-01 moves an out-of-pool lease to the lowest free pool port and reports 
   expect(planned).toMatchObject({ status: "actionable", reason: "standard_repairs_ready" });
   expect(check(planned, "MS-01")).toMatchObject({
     status: "fail",
-    repairs: ["lazurio.module.json: lease main 23500 → 24001"],
+    repairs: ["lazurio.module.json: lease main 23500 → 24001 (součást převodu, koordinovaná migrace)"],
   });
   expect(planned.changes).toEqual([{ action: "replace", path: "organizations/Acme_GEN3/workspace/portal/lazurio.module.json" }]);
 
@@ -167,13 +167,27 @@ test("MS-04 adds the preparation skeleton only when it is unambiguous", async ()
     "app/v1/package.json: lazurio.preparation: chybí povinné pole 'check_script'",
   ]);
 
+  const pythonWarning = "app/v1/package.json: Python App: čtení [tool.lazurio] z pyproject.toml zatím není v Core; ověř přípravu ručně";
   const python = await conformantFixture({ mutatePackage: (pkg) => { delete pkg.lazurio.preparation; } });
   await writeText(join(python.appRoot, "pyproject.toml"), "[project]\nname = \"portal\"\n");
-  const refused = await setupModule({ ...python, apply: true });
-  expect(refused.changes).toEqual([]);
-  expect(check(refused, "MS-04").details).toContain(
-    "app/v1/package.json: vedle package.json je pyproject.toml; runtime přípravy (bun/uv) zvol ručně",
-  );
+  const undecided = await setupModule({ ...python, apply: true });
+  expect(undecided.changes).toEqual([]);
+  expect(check(undecided, "MS-04")).toMatchObject({ status: "warn", details: [pythonWarning] });
+
+  const uvWithoutVersion = await conformantFixture({
+    mutatePackage: (pkg) => { pkg.lazurio.preparation.runtime = "uv"; },
+  });
+  expect(check(await setupModule(uvWithoutVersion), "MS-04")).toMatchObject({
+    status: "fail",
+    details: [pythonWarning, "app/v1/package.json: lazurio.preparation: chybí povinné pole 'uv_version'"],
+  });
+  const uvWithVersion = await conformantFixture({
+    mutatePackage: (pkg) => {
+      pkg.lazurio.preparation.runtime = "uv";
+      pkg.lazurio.preparation.uv_version = "0.8.4";
+    },
+  });
+  expect(check(await setupModule(uvWithVersion), "MS-04")).toMatchObject({ status: "warn", details: [pythonWarning] });
 
   const broken = await conformantFixture({
     mutatePackage: (pkg) => {
@@ -380,7 +394,9 @@ test("human output lists failing checks and planned repairs", async () => {
   const output = cli.stdout.toString();
   expect(output).toContain("Lazurio Module Standard: 12/13 pass");
   expect(output).toContain("MS-01 fail");
-  expect(output).toContain("oprava --apply: lazurio.module.json: lease main 23502 → 24000");
+  expect(output).toContain(
+    "oprava --apply: lazurio.module.json: lease main 23502 → 24000 (součást převodu, koordinovaná migrace)",
+  );
 });
 
 function check(report, id) {

@@ -179,7 +179,17 @@ export async function evaluateModuleStandard({
     }
 
     // MS-04 preparation
-    if (preparation === undefined) {
+    if (preparationRuntime === "uv") {
+      // A Python App carries its declaration in app/v<N>/pyproject.toml
+      // [tool.lazurio] (manual/module-standard.md kap. 7). Core does not read
+      // it yet, so MS-04 stays undecided; a declaration that is visible here
+      // is still held to the schema (uv_version is required for uv).
+      record("MS-04", "warn", `${label}: Python App: čtení [tool.lazurio] z pyproject.toml zatím není v Core; ověř přípravu ručně`);
+      if (preparation !== undefined) {
+        const schemaIssues = validateAgainstSchema(preparation, await preparationSchema(), `${label}: lazurio.preparation`);
+        for (const issue of schemaIssues) record("MS-04", "fail", issue);
+      }
+    } else if (preparation === undefined) {
       record("MS-04", "fail", `${label}: lazurio.preparation chybí`);
       const skeleton = {
         schema_version: "lazurio.preparation.v1",
@@ -191,8 +201,6 @@ export async function evaluateModuleStandard({
       const ownerPattern = new RegExp(schema.properties.owner_package.pattern);
       if (!runtime) {
         record("MS-04", "fail", `${label}: skeleton přípravy se nedoplní bez lazurio.runtime`);
-      } else if (hasPyproject) {
-        record("MS-04", "fail", `${label}: vedle package.json je pyproject.toml; runtime přípravy (bun/uv) zvol ručně`);
       } else if (!ownerPattern.test(app.appPath)) {
         record("MS-04", "fail", `${label}: owner_package ${app.appPath} neodpovídá schématu; přesuň App do app/v<N>/`);
       } else {
@@ -394,7 +402,9 @@ export async function evaluateModuleStandard({
             if (move) lease.port = move.to;
           }
           for (const [leaseId, move] of moved) {
-            results.get("MS-01").repairs.push(`lazurio.module.json: lease ${leaseId} ${move.from} → ${move.to}`);
+            results.get("MS-01").repairs.push(
+              `lazurio.module.json: lease ${leaseId} ${move.from} → ${move.to} (součást převodu, koordinovaná migrace)`,
+            );
           }
         }
       }
