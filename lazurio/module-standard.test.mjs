@@ -370,6 +370,22 @@ test("MS-01 refuses to move a lease when a source is too large to scan for the p
   expect((await readJson(join(fixture.moduleRoot, "lazurio.module.json"))).port_leases[0].port).toBe(23_503);
 });
 
+test("MS-01 refuses to move a lease while a symlink leads outside the Module repository", async () => {
+  const fixture = await conformantFixture({ port: 23_504 });
+  const outside = join(fixture.organizationRoot, "shared");
+  await mkdir(outside, { recursive: true });
+  await writeText(join(outside, "config.ts"), "export const port = 23504;\n");
+  await symlink(outside, join(fixture.appRoot, "src", "shared"));
+  runGit(fixture.moduleRoot, ["add", "."]);
+
+  const report = await setupModule({ ...fixture, apply: true });
+
+  expect(check(report, "MS-01").details).toContain(
+    "lease main se automaticky nepřesune: app/v1/src/shared vede mimo repo Modulu, port 23504 nelze vyloučit",
+  );
+  expect((await readJson(join(fixture.moduleRoot, "lazurio.module.json"))).port_leases[0].port).toBe(23_504);
+});
+
 test("MS-09 rejects symlinks that lead outside the Module repository, tracked as fail and untracked as warn", async () => {
   const fixture = await conformantFixture();
   const outside = join(fixture.organizationRoot, "launchpad", "contracts");

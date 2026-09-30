@@ -349,6 +349,27 @@ export async function evaluateModuleStandard({
     }
   }
 
+  // MS-09 symlinks whose target lies outside the Module repository: an
+  // import through them resolves inside the repo textually but reads foreign
+  // code. A tracked symlink is the repo's own boundary breach (fail); an
+  // untracked one is a workstation artifact worth a warning.
+  const escapingSymlinks = [];
+  if (symlinks.length > 0) {
+    const realRoot = await realpath(root).catch(() => resolve(root));
+    const tracked = await gitTrackedPaths(root, symlinks.map((link) => link.path));
+    for (const link of symlinks) {
+      const target = await realpath(join(root, ...link.path.split("/"))).catch(() => null);
+      const inside = target === null ? null : relativePath(realRoot, target).split(sep).join("/");
+      if (inside !== null && !escapesRoot(inside)) continue;
+      const status = tracked === null || tracked.has(link.path) ? "fail" : "warn";
+      escapingSymlinks.push(link.path);
+      record("MS-09", status, target === null
+        ? `${link.path}: symlink míří na neexistující cíl mimo repo (${link.target})`
+        : `${link.path}: symlink vede mimo repo Modulu (${link.target})`);
+    }
+  }
+
+
   // MS-01 port leases, pool, disjointness
   const leases = Array.isArray(manifest?.port_leases) ? manifest.port_leases : [];
   const pool = organization?.module_port_pool ?? null;
@@ -387,9 +408,13 @@ export async function evaluateModuleStandard({
         const moved = new Map();
         for (const item of outside) {
           record("MS-01", "fail", `lease ${item.lease} ${item.port} leží mimo pool ${pool.start}-${pool.end}`);
+          // A symlink leading outside the repo hides sources the scan cannot
+          // read, so the port cannot be ruled out there either: fail closed.
           const refusal = adoptPort !== null && item.port === adoptPort
             ? `port ${item.port} převzatý přes --adopt-port se v tomtéž běhu nepřesouvá`
-            : await portReferenceRefusal({ root, files, port: item.port, packages });
+            : escapingSymlinks.length > 0
+              ? `${escapingSymlinks[0]} vede mimo repo Modulu, port ${item.port} nelze vyloučit`
+              : await portReferenceRefusal({ root, files, port: item.port, packages });
           if (refusal) {
             record("MS-01", "fail", `lease ${item.lease} se automaticky nepřesune: ${refusal}`);
             continue;
@@ -424,24 +449,6 @@ export async function evaluateModuleStandard({
         ? `id ${manifest?.id} odpovídá slotu; Modul nemá port lease`
         : `id ${manifest?.id} odpovídá slotu; ${leases.map((lease) => `${lease.id} ${lease.port}`).join(", ")} v poolu ${pool.start}-${pool.end}`,
     );
-  }
-
-  // MS-09 symlinks whose target lies outside the Module repository: an
-  // import through them resolves inside the repo textually but reads foreign
-  // code. A tracked symlink is the repo's own boundary breach (fail); an
-  // untracked one is a workstation artifact worth a warning.
-  if (symlinks.length > 0) {
-    const realRoot = await realpath(root).catch(() => resolve(root));
-    const tracked = await gitTrackedPaths(root, symlinks.map((link) => link.path));
-    for (const link of symlinks) {
-      const target = await realpath(join(root, ...link.path.split("/"))).catch(() => null);
-      const inside = target === null ? null : relativePath(realRoot, target).split(sep).join("/");
-      if (inside !== null && !escapesRoot(inside)) continue;
-      const status = tracked === null || tracked.has(link.path) ? "fail" : "warn";
-      record("MS-09", status, target === null
-        ? `${link.path}: symlink míří na neexistující cíl mimo repo (${link.target})`
-        : `${link.path}: symlink vede mimo repo Modulu (${link.target})`);
-    }
   }
 
   // MS-11 layout
