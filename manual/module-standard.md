@@ -67,11 +67,16 @@ pro adopci cizích Modulů, ne pro konformní Modul.
   "preparation": {
     "schema_version": "lazurio.preparation.v1",
     "owner_package": "app/v3/package.json",
-    "prepare_script": "prepare",
+    "prepare_script": "prepare:app",
     "check_script": "check:prepared"
   }
 }
 ```
+
+Jména skriptů přípravy **nesmí** být npm lifecycle jména (`prepare`,
+`install`, `postinstall`, `prepublish`, `prepack`…): `bun install` je spouští
+samo, takže by build běžel uvnitř instalace závislostí, kterou drží Platforma.
+Konvence: `prepare:app` a `check:prepared`.
 
 - `runtime`: `bun` (výchozí, **klíč se u Bun App nezapisuje**) nebo `uv`
   (Python, kap. 7). Klíč přidává schéma `lazurio-preparation.schema.json`;
@@ -260,7 +265,7 @@ skript, `lazurio.preparation` skeleton, lease mimo pool na volný port poolu).
 | `MS-01` | `lazurio.module.json` platné, `id` = slot, každý lease v poolu Organizace, pooly disjunktní |
 | `MS-02` | každá App: `packageManager` přesný Bun, lockfile commitnutý a čerstvý |
 | `MS-03` | `lazurio.runtime` s listenery a health; `dev_script` existuje |
-| `MS-04` | `lazurio.preparation` deklarované; `check_script` existuje; `runtime` chybí (= `bun`) nebo `uv`; `runtime: "bun"` zapsané explicitně je do W0-5 vada (Platforma ho odmítne) |
+| `MS-04` | `lazurio.preparation` deklarované; `check_script` existuje; `runtime` chybí (= `bun`) nebo `uv`; `runtime: "bun"` zapsané explicitně je do W0-5 vada (Platforma ho odmítne); `prepare_script`/`check_script` nejsou npm lifecycle jména |
 | `MS-05` | `dev` skript je jednoprocesový: bez `&&`, `concurrently`, `build`, `npx`, `node`, `bunx`, `nvm`, inline `VAR=…` |
 | `MS-06` | žádné čtení `LAZURIO_RUNTIME_HOST`, `LAZURIO_RUNTIME_PORT`, `PORT`, `COMPANYASCODE_*`, lease souboru ze zdrojů App |
 | `MS-07` | žádné `.env*` na start cestě; žádné `dotenv` |

@@ -102,8 +102,9 @@ ani pro productionspace repa (decision 0041).
    převodu, mimo převod se port nemění); ostatní opravuj ručně v tomto
    pořadí:
    1. **Start**: `dev` = jeden proces; vše ostatní (build, symlinky, data,
-      migrace) přesuň do `prepare_script`, read-only kontrolu do
-      `check_script`. Odstraň `concurrently`, `&&`, `npx`, `node`, `bunx`,
+      migrace) přesuň do `prepare_script` (konvence `prepare:app`; nikdy
+      npm lifecycle jméno jako `prepare`, které `bun install` spouští samo),
+      read-only kontrolu do `check_script` (`check:prepared`). Odstraň `concurrently`, `&&`, `npx`, `node`, `bunx`,
       inline `VAR=…`.
    2. **Env**: host/port jen z listener-keyed proměnných; nahraď kopie
       `runtime-listener.mjs` závislostí `@lazurio/module-kit`; smaž čtení
