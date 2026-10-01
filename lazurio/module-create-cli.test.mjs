@@ -147,7 +147,7 @@ test("a Bun stack without install reports exactly the missing lockfile", async (
     lease: { port: 24_009 },
     issues: [],
   });
-  expect(report.next_steps.join("\n")).toContain("MS-01 „port 24009 drží i …“");
+  expect(report.next_steps.join("\n")).toContain("module_port_conflict, napříč Organizacemi MS-01 „port 24009 drží i …“");
   expect(report.next_steps.join("\n")).toContain("module_port_pool 24000-24099");
   expect(report.warnings).toContain("Instalace přeskočena (LAZURIO_SCAFFOLD_SKIP_INSTALL=1); app/v1/bun.lock nevznikl.");
   const failing = report.standard.checks.filter((check) => check.status !== "pass");

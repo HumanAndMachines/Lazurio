@@ -592,7 +592,7 @@ function nextSteps({ plan, target, moduleRoot, dryRun, report = null }) {
   if (plan.lease) {
     const canonical = join(target.primaryRoot, "workspace", plan.module);
     steps.push(
-      `Před merge rebasuj PR slotu na aktuální main. Po merge slotu a lazurio update spusť lazurio module setup ${canonical}: hlásí-li MS-01 „port ${plan.lease.port} drží i …“ (souběžně založený Modul z jiné branche), přepiš lease v lazurio.module.json Modulu na volný port module_port_pool ${target.pool.start}-${target.pool.end} a commitni to v Modulu; App čte port jen z prostředí, nic dalšího se nemění.`,
+      `Před merge rebasuj PR slotu na aktuální main. Po merge slotu a lazurio update spusť lazurio module setup ${canonical}: hlásí-li kolizi portu ${plan.lease.port} (module_port_conflict, napříč Organizacemi MS-01 „port ${plan.lease.port} drží i …“; souběžně založený Modul z jiné branche), přepiš lease v lazurio.module.json Modulu na volný port module_port_pool ${target.pool.start}-${target.pool.end} a commitni to v Modulu; App čte port jen z prostředí, nic dalšího se nemění.`,
     );
   }
   if (plan.stack === "python-uv") {

@@ -41,7 +41,8 @@ převezme Dashboard „Nový Modul“.
 6. Po merge slotu `lazurio update` Modul materializuje na každém
    Environmentu. U Modulu s App potom znovu spusť
    `lazurio module setup <Org-mount>/workspace/<slug> --root <lazurio-root>`
-   (viz „Port leasu“ níže); hlásí-li `MS-01` `port … drží i …`, přepiš lease
+   (viz „Port leasu“ níže); hlásí-li kolizi portu (`module_port_conflict`,
+   napříč Organizacemi `MS-01` `port … drží i …`), přepiš lease
    v `lazurio.module.json` Modulu na volný port `module_port_pool` a commitni
    to v Modulu. `lazurio module start <Organization>/<slug> --json` Modul
    spustí.
@@ -112,7 +113,8 @@ Pracovní branch nevidí Modul založený v jiné, ještě nemergnuté branchi. 
 se nevolí nejnižší volný port (dvě souběžná založení by dostala vždy stejný),
 ale port odvozený ze slugu: dva různé Moduly se srazí jen náhodou. Registr
 portů ani sken cizích worktrees záměrně nevzniká; přesný port vlastní Modul.
-Náhodnou kolizi ukáže `MS-01` (`port … drží i …`) v `lazurio module setup`,
+Náhodnou kolizi ukáže `lazurio module setup` — uvnitř Organizace kódem
+`module_port_conflict`, napříč Organizacemi nálezem `MS-01` (`port … drží i …`) —
 jakmile jsou oba Moduly na stejném `main` a namountované. Setup měří jen
 Modul na deklarovaném slotu, takže Modul v task worktree Organizace před
 merge slotu odmítne (`module_root_not_linked_to_slot`); proto se spouští
