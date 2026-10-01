@@ -231,8 +231,10 @@ Do té doby `MS-04` Python App hlásí `warn`, ne `pass`.
   generace, zůstanou na existujících checkoutech staré build výstupy
   (`node_modules`, `.astro`, `dist`, `.wrangler`…), které už žádný
   `.gitignore` nekryje; `lazurio update` pak checkout hlásí jako `blocked`.
-  Převodní PR proto tyto staré cesty přidá do kořenového `.gitignore`
-  (s poznámkou, že po cutoveru zmizí).
+  Převodní PR proto tyto staré cesty přidá do kořenového `.gitignore`.
+  Pravidla tam zůstávají: staré výstupy z checkoutů samy nezmizí a
+  odebrání pravidla by je znovu odkrylo jako nesledované soubory. Odebrat
+  je lze až po ověřeném úklidu všech checkoutů Modulu.
 
 ## 9. Organizace
 
