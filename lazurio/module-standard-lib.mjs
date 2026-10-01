@@ -103,7 +103,7 @@ export async function evaluateModuleStandard({
     if (status === "fail" || (status === "warn" && result.status === "pass")) result.status = status;
     if (detail) result.details.push(detail);
   };
-  const { files, symlinks } = await walkModuleFiles(root);
+  const { files, symlinks, unreadable } = await walkModuleFiles(root);
   const apps = (Array.isArray(manifest?.apps) ? manifest.apps : []).map((appPath) => ({
     appPath,
     appDirectory: posix.dirname(appPath) === "." ? "" : posix.dirname(appPath),
@@ -414,7 +414,9 @@ export async function evaluateModuleStandard({
             ? `port ${item.port} převzatý přes --adopt-port se v tomtéž běhu nepřesouvá`
             : escapingSymlinks.length > 0
               ? `${escapingSymlinks[0]} vede mimo repo Modulu, port ${item.port} nelze vyloučit`
-              : await portReferenceRefusal({ root, files, port: item.port, packages });
+              : unreadable.length > 0
+                ? `adresář ${unreadable[0]} nejde přečíst, port ${item.port} nelze vyloučit`
+                : await portReferenceRefusal({ root, files, port: item.port, packages });
           if (refusal) {
             record("MS-01", "fail", `lease ${item.lease} se automaticky nepřesune: ${refusal}`);
             continue;
@@ -744,12 +746,24 @@ async function gitTrackedPaths(root, paths) {
 async function walkModuleFiles(root) {
   const files = [];
   const symlinks = [];
+  // Directories the walk could not list. An incomplete walk must not be read
+  // as "nothing there": the lease move fails closed on it.
+  const unreadable = [];
   async function walk(directory, relativeDirectory, flags) {
-    if (files.length >= MAX_WALKED_FILES) return;
-    const entries = await readdir(directory, { withFileTypes: true }).catch(() => []);
+    if (files.length >= MAX_WALKED_FILES) {
+      if (!unreadable.includes("(limit souborů)")) unreadable.push("(limit souborů)");
+      return;
+    }
+    const entries = await readdir(directory, { withFileTypes: true }).catch(() => {
+      unreadable.push(relativeDirectory === "" ? "." : relativeDirectory);
+      return [];
+    });
     if (relativeDirectory !== "" && entries.some((entry) => entry.name === ".git")) return;
     for (const entry of entries) {
-      if (files.length >= MAX_WALKED_FILES) return;
+      if (files.length >= MAX_WALKED_FILES) {
+        if (!unreadable.includes("(limit souborů)")) unreadable.push("(limit souborů)");
+        return;
+      }
       const relativePath = relativeDirectory === "" ? entry.name : `${relativeDirectory}/${entry.name}`;
       if (entry.isSymbolicLink()) {
         if (!SKIPPED_DIRECTORIES.has(entry.name)) {
@@ -775,7 +789,7 @@ async function walkModuleFiles(root) {
     }
   }
   await walk(root, "", { test: false, public: false });
-  return { files, symlinks };
+  return { files, symlinks, unreadable };
 }
 
 function filesBelow(files, directory) {

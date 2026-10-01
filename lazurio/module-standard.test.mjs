@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -369,6 +369,26 @@ test("MS-01 refuses to move a lease when a source is too large to scan for the p
   );
   expect((await readJson(join(fixture.moduleRoot, "lazurio.module.json"))).port_leases[0].port).toBe(23_503);
 });
+
+test.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
+  "MS-01 refuses to move a lease when a directory cannot be listed",
+  async () => {
+    const fixture = await conformantFixture({ port: 23_505 });
+    const locked = join(fixture.appRoot, "locked");
+    await mkdir(locked, { recursive: true });
+    await writeText(join(locked, "server.py"), "PORT = 23505\n");
+    await chmod(locked, 0o000);
+    try {
+      const report = await setupModule({ ...fixture, apply: true });
+      expect(check(report, "MS-01").details).toContain(
+        "lease main se automaticky nepřesune: adresář app/v1/locked nejde přečíst, port 23505 nelze vyloučit",
+      );
+      expect((await readJson(join(fixture.moduleRoot, "lazurio.module.json"))).port_leases[0].port).toBe(23_505);
+    } finally {
+      await chmod(locked, 0o755);
+    }
+  },
+);
 
 test("MS-01 refuses to move a lease while a symlink leads outside the Module repository", async () => {
   const fixture = await conformantFixture({ port: 23_504 });
