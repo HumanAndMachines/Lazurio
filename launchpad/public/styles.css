@@ -6745,11 +6745,21 @@ html[data-i18n-ready="true"] .locale-bootstrap {
   transition: border-color 120ms ease, background-color 120ms ease;
 }
 
-.apps-grid > .app-card:hover {
+.apps-grid > .app-card:hover,
+.apps-grid > .app-card:not(.selected):not(.has-open-menu):hover {
   border-color: var(--lz-gray-300);
   background: var(--lz-paper);
   box-shadow: none;
   transform: none;
+}
+
+/* Starší vrstva barví rámeček modře jen při skutečné myši; tichý hover
+ * platí i tam. */
+@media (hover: hover) and (pointer: fine) {
+  .apps-grid > .app-card:not(.selected):not(.has-open-menu):hover {
+    border-color: var(--lz-gray-300);
+    background-color: var(--lz-paper);
+  }
 }
 
 .apps-grid > .app-card:focus-within {
@@ -6813,4 +6823,121 @@ html[data-i18n-ready="true"] .locale-bootstrap {
     flex: 1 1 100%;
     width: auto;
   }
+}
+
+/* --- Řádek údržby ----------------------------------------------------
+ * Údržba je výjimka, ne banner: jedna věcná řádka v jazyce dlaždic —
+ * papír, vlasová linka, ikona v tlumeném inkoustu, věta a jedno černé
+ * tlačítko ve tvaru a výšce hledání (36 px, poloměr sm). Bez přechodu,
+ * bez tlusté barevné hrany, bez pilulky. Stav nese ikona: šipka = čeká
+ * na údržbu, kolečko = běží, fajfka = hotovo. */
+.update-banner {
+  min-height: 56px;
+  margin: 0;
+  padding: var(--lz-space-8) var(--lz-space-8) var(--lz-space-8) var(--lz-space-16);
+  gap: var(--lz-space-12);
+  border: 1px solid var(--lz-line-faint);
+  border-left-width: 1px;
+  border-radius: 12px;
+  background: var(--lz-paper);
+}
+
+.update-banner > .update-banner-icon,
+.update-banner > .update-banner-spinner {
+  width: 18px;
+  height: 18px;
+  color: var(--lz-ink-muted);
+}
+
+.update-banner-text {
+  font-size: var(--lz-size-meta);
+  line-height: 20px;
+  font-weight: var(--lz-weight-akce);
+  letter-spacing: -0.005em;
+  color: var(--lz-ink);
+}
+
+.update-banner.is-blocked .update-banner-text {
+  color: var(--lz-ink-muted);
+}
+
+.update-banner.is-current {
+  background: var(--lz-paper);
+  border-color: var(--lz-line-faint);
+}
+
+.update-banner.is-current .update-banner-success {
+  width: 18px;
+  height: 18px;
+  color: var(--lz-green-600);
+}
+
+.update-banner-action,
+.space-status-content > .update-banner-group .update-banner-action {
+  height: 36px;
+  margin-left: auto;
+  padding: 0 var(--lz-space-16);
+  border: 0;
+  border-radius: var(--lz-radius-sm);
+  background: var(--lz-ink);
+  color: var(--lz-white);
+  font-size: var(--lz-size-meta);
+  font-weight: var(--lz-weight-akce);
+  line-height: 1;
+}
+
+.update-banner-action:hover:not(:disabled),
+.update-banner-action:focus-visible:not(:disabled) {
+  background: var(--lz-gray-700);
+}
+
+@media (max-width: 640px) {
+  .update-banner-action {
+    width: auto;
+    margin-left: auto;
+  }
+}
+
+/* --- Drobnosti z kontroly 2026-10-01 --------------------------------- */
+
+/* „Přístup k Teamům" stojí vpravo na lince sekce; pod štítek padá až
+ * v okně, kde se vedle pilulky a počtu opravdu nevejde. */
+@media (min-width: 561px) and (max-width: 820px) {
+  .team-access-summary.is-in-section-head {
+    flex: 0 0 auto;
+    width: auto;
+    margin-left: auto;
+    padding: 0 var(--lz-space-12);
+  }
+}
+
+/* „…" na dlaždici: v rohu s odstupem, tichý hover jen barvou. */
+.apps-grid > .app-card .app-version-menu {
+  position: absolute;
+  top: var(--lz-space-8);
+  right: var(--lz-space-8);
+  margin: 0;
+}
+
+.apps-grid > .app-card .app-more-button {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--lz-radius-sm);
+  background: transparent;
+  color: var(--lz-gray-400);
+  transition: color 120ms ease;
+}
+
+.apps-grid > .app-card .app-more-button:hover,
+.apps-grid > .app-card .app-more-button:focus-visible,
+.apps-grid > .app-card .app-more-button[aria-expanded="true"] {
+  color: var(--lz-ink);
+  border: 0;
+  background: transparent;
+}
+
+.apps-grid > .app-card .app-more-button:focus-visible {
+  outline: 2px solid var(--lz-ink);
+  outline-offset: 1px;
 }
