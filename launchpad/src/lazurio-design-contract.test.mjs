@@ -213,12 +213,11 @@ test("pomůcky tvoří kompaktní skryvatelnou lištu se sbaleným stavem prosto
   expect(styles).toMatch(/\.layout\.is-sidebar-collapsed \.recent-changes-sidebar\s*{[^}]*display: none/);
 });
 
-test("údržba je v rozbaleném Stavu prostoru a hledání je u nadpisu", async () => {
+test("údržba je výjimka v hlavičce prostoru a hledání je u nadpisu", async () => {
   const [html, js, styles] = await Promise.all([source("index.html"), source("app.js"), source("styles.css")]);
-  const details = html.slice(html.indexOf('id="spaceStatusDetails"'), html.indexOf('</details>', html.indexOf('id="spaceStatusDetails"')));
-  expect(details).toContain('id="updateBannerGroup"');
-  expect(details.indexOf('id="hero"')).toBeLessThan(details.indexOf('id="updateBannerGroup"'));
-  expect(js).toContain('global ? elements.globalUpdateSlot : elements.spaceStatusContent');
+  expect(html).toContain('id="updateBannerGroup"');
+  expect(js).toContain('const target = personal ? elements.globalUpdateSlot : elements.appsToolbar');
+  expect(styles).toMatch(/\.apps-toolbar \.update-banner\s*{/);
   expect(js).toContain('elements.page?.classList.toggle("is-organization", !personal)');
   expect(styles).toMatch(/\.page\.is-organization\s*{[^}]*max-width: none;[^}]*padding-right: clamp/);
   expect(html.indexOf('id="appsToolbar"')).toBeLessThan(html.indexOf('id="recentChangesSidebar"'));

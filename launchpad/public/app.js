@@ -1986,15 +1986,17 @@ function renderScopeControls() {
   if (personal && state.drawerOpen) setDrawer(false);
 }
 
-// Na desktopu je update součástí rozbaleného Stavu prostoru. Na mobilu se
-// lišta pomůcek přesouvá do zavřeného draweru a v Personalspace se skrývá;
-// provozní informace proto v těchto stavech přejde do globálního slotu.
+// Údržba Lazuria je výjimka a ukazuje se v hlavičce prostoru vedle Guide a
+// hledání (plátno „když něco potřebuje pozornost", schválený návrh
+// 2026-09-21): tichá pilulka s tečkou a jedno tlačítko. V Personalspace je
+// hlavička skrytá, tam zůstává globální slot. Načítání a stav „aktuální" se
+// neukazují vůbec; normální případ nestojí za popisek.
 function mountUpdateBannerGroup() {
   const group = elements.updateBannerGroup;
-  const global = mobilePanelQuery.matches || state.filters.scope === "personal";
-  const target = global ? elements.globalUpdateSlot : elements.spaceStatusContent;
+  const personal = state.filters.scope === "personal";
+  const target = personal ? elements.globalUpdateSlot : elements.appsToolbar;
   if (!group || !target) return;
-  if (group.parentElement !== target) target.append(group);
+  if (group.parentElement !== target) target.prepend(group);
 }
 
 // Hlavička aktivního prostoru je tichá: značka Organizace a její název, nic
@@ -4903,10 +4905,11 @@ function renderUpdateBanner() {
   elements.updateBannerAction.hidden = !action;
   elements.updateBannerAction.disabled = !action;
   elements.updateBannerAction.textContent = action?.label ?? "";
+  banner.classList.toggle("is-loading", presentation.tone === "loading");
   banner.classList.toggle("is-blocked", presentation.tone === "blocked");
   banner.classList.toggle("is-updating", presentation.tone === "updating");
   banner.classList.toggle("is-current", presentation.tone === "current");
-  banner.hidden = !presentation.visible;
+  banner.hidden = !presentation.visible || presentation.tone === "loading" || presentation.tone === "current";
 }
 
 function renderUpdatePill() {

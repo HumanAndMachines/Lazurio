@@ -1503,9 +1503,10 @@ test("DEV-6493: banner používá GET-first Lazurio stav a pouze current|updated
   expect(js).toContain("function renderUpdateBanner");
   expect(js).toContain("updateBannerPresentation(state.updateStatus");
   expect(js).toContain("function mountUpdateBannerGroup");
-  expect(js).toContain('mobilePanelQuery.matches || state.filters.scope === "personal"');
-  expect(js).toContain('global ? elements.globalUpdateSlot : elements.spaceStatusContent');
-  expect(js).toContain("if (group.parentElement !== target) target.append(group)");
+  // DEV-6627: údržba je výjimka v hlavičce prostoru; v Personalspace globální slot.
+  expect(js).toContain('const target = personal ? elements.globalUpdateSlot : elements.appsToolbar');
+  expect(js).toContain("if (group.parentElement !== target) target.prepend(group)");
+  expect(js).toContain('presentation.tone === "loading" || presentation.tone === "current"');
   expect(js).not.toContain("elements.updateBannerText.textContent = status.message");
   expect(stateLib).toContain('status.state === "blocked"');
   expect(stateLib).toContain('status.state === "current"');
