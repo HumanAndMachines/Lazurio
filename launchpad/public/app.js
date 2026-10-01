@@ -115,7 +115,9 @@ const state = {
   suppressNextDrawerOpen: false,
   // Přehled Organization je na desktopu výchozí otevřený a lze jej zasunout.
   // Detail appky zůstává v samostatném draweru, který se otevře automaticky.
-  sidebarOpen: true,
+  // Stav prostoru se ukazuje výjimkou: panel je zavřený, dokud ho někdo
+  // neotevře přepínačem panelů (schválený návrh 2026-09-21).
+  sidebarOpen: false,
   drawerOpen: false,
   drawerView: "overview",
   filters: {
@@ -353,6 +355,8 @@ const elements = {
   currentSpaceLogo: document.querySelector("#currentSpaceLogo"),
   currentSpaceLabel: document.querySelector("#currentSpaceLabel"),
   topbarOverflow: document.querySelector("#topbarOverflow"),
+  railSpaces: document.querySelector("#railSpaces"),
+  guideLink: document.querySelector("#guideLink"),
   personalPrivacyBadge: document.querySelector("#personalPrivacyBadge"),
   doctorStatus: document.querySelector("#doctorStatus"),
   updateBanner: document.querySelector("#updateBanner"),
@@ -371,6 +375,7 @@ const elements = {
   appsToolbar: document.querySelector("#appsToolbar"),
   workspaceWelcome: document.querySelector("#workspaceWelcome"),
   workspaceWelcomeTitle: document.querySelector("#workspaceWelcomeTitle"),
+  workspaceMark: document.querySelector("#workspaceMark"),
   workspaceMain: document.querySelector("#workspaceMain"),
   guideTile: document.querySelector("#guideTile"),
   appsSearch: document.querySelector("#appsSearch"),
@@ -409,6 +414,7 @@ initResponsiveChrome();
 initNotifications();
 initChat();
 elements.guideTile?.setAttribute("href", guideDocumentationUrl(getLocale()));
+elements.guideLink?.setAttribute("href", guideDocumentationUrl(getLocale()));
 // Personalspace rail dostane most k toastům a k Synchronizovat reloadu, ať
 // osobní runtime akce vypadají stejně jako firemní.
 initPersonalspace({
@@ -1691,8 +1697,7 @@ function applyOrganizationTheme() {
 
 function renderSpaceSwitcher() {
   const current = activeSpace();
-  elements.currentSpaceLabel.textContent = current.label;
-  renderSpaceLogo(elements.currentSpaceLogo, current);
+  renderRailProfile(current);
 
   const options = [];
   // Jakmile Personalspace lane skutečně odpověděla, musí zůstat dosažitelná i
@@ -1709,25 +1714,52 @@ function renderSpaceSwitcher() {
     })),
   );
 
-  const spaces = document.createElement("div");
-  spaces.className = "space-switcher-options";
-  spaces.setAttribute("role", "listbox");
-  spaces.setAttribute("aria-label", t("a11y.chooseSpace"));
-  spaces.append(...options);
+  // Prostory žijí přímo v railu, ne v rozbalovacím seznamu.
+  elements.railSpaces?.replaceChildren(...options);
 
+  // Profilové menu: karta Principála, Nastavení, Doctor a Sync. Doctor a Sync
+  // jsou existující uzly s navěšenými handlery, takže se PŘESOUVAJÍ, ne klonují.
   const profile = state.personalspace?.profile;
   const profileNodes = [];
   if (profile) profileNodes.push(spaceProfileCard(profile));
   profileNodes.push(profileSettingsItem());
-  if (profileNodes.length > 0 && options.length > 0) {
+  const tools = document.createElement("div");
+  tools.className = "space-profile-tools";
+  if (elements.doctorStatus) tools.append(elements.doctorStatus);
+  if (elements.reloadButton) tools.append(elements.reloadButton);
+  if (tools.childElementCount > 0) {
     const divider = document.createElement("div");
     divider.className = "space-switcher-divider";
     divider.setAttribute("aria-hidden", "true");
-    profileNodes.push(divider);
+    profileNodes.push(divider, tools);
   }
-  elements.spaceSwitcherMenu.replaceChildren(...profileNodes, spaces);
-  elements.spaceSwitcherButton.disabled = options.length === 0;
+  elements.spaceSwitcherMenu.replaceChildren(...profileNodes);
+  elements.spaceSwitcherButton.disabled = false;
   applySpaceMenuState();
+}
+
+// Profilové tlačítko dole v railu nese člověka: fotku, nebo monogram jména.
+// Když Personalspace lane ještě neodpověděla, drží aspoň ikonu osoby.
+function renderRailProfile(current) {
+  const mount = elements.currentSpaceLogo;
+  if (!mount) return;
+  const profile = state.personalspace?.profile;
+  const name = (profile?.display_name ?? profile?.github_username ?? "").trim();
+  elements.currentSpaceLabel.textContent = name || current.label;
+  mount.replaceChildren();
+  const fallback = document.createElement("span");
+  fallback.className = "scope-rail-profile-initials";
+  fallback.setAttribute("aria-hidden", "true");
+  if (name) fallback.textContent = profileInitials(name);
+  else fallback.append(personalSpaceIcon());
+  mount.append(fallback);
+  if (profile?.avatar_url) {
+    const image = document.createElement("img");
+    image.src = profile.avatar_url;
+    image.alt = "";
+    image.addEventListener("error", () => image.remove(), { once: true });
+    mount.append(image);
+  }
 }
 
 function spaceProfileCard(profile) {
@@ -1812,22 +1844,33 @@ function settingsIcon() {
   return svg;
 }
 
+// Položka railu (DEV-6627): jedna značka na jeden prostor, bez rozbalování.
+// Rail je sbalený, takže jméno prostoru nese title a aria-label; vizuálně
+// stačí značka, aktivní prostor pozná plocha o stupeň tmavší a inkoustová
+// hrana, kterou kreslí vendor `.lz-rail__item.is-active`.
 function spaceOption(space) {
   const button = document.createElement("button");
   button.type = "button";
-  button.className = "space-switcher-option";
+  button.className = "lz-rail__item space-switcher-option";
   button.setAttribute("role", "option");
   const selected = space.kind === "personal"
     ? state.filters.scope === "personal"
     : state.filters.scope === "org" && state.filters.company === space.organization.slug;
   button.setAttribute("aria-selected", selected ? "true" : "false");
+  button.classList.toggle("is-active", selected);
+  button.classList.toggle("is-personal", space.kind === "personal");
+  button.title = space.label;
+  button.setAttribute("aria-label", space.label);
 
+  const mark = document.createElement("span");
+  mark.className = "lz-rail__mark";
   const logo = document.createElement("span");
   renderSpaceLogo(logo, space);
+  mark.append(logo);
   const label = document.createElement("span");
-  label.className = "space-switcher-option-label";
+  label.className = "sr-only space-switcher-option-label";
   label.textContent = space.label;
-  button.append(logo, label);
+  button.append(mark, label);
   button.addEventListener("click", () => selectSpace(space));
   return button;
 }
@@ -1943,17 +1986,22 @@ function renderScopeControls() {
   if (personal && state.drawerOpen) setDrawer(false);
 }
 
-// Na desktopu je update součástí rozbaleného Stavu prostoru. Na mobilu se
-// lišta pomůcek přesouvá do zavřeného draweru a v Personalspace se skrývá;
-// provozní informace proto v těchto stavech přejde do globálního slotu.
+// Údržba Lazuria je výjimka a ukazuje se v hlavičce prostoru vedle Guide a
+// hledání (plátno „když něco potřebuje pozornost", schválený návrh
+// 2026-09-21): tichá pilulka s tečkou a jedno tlačítko. V Personalspace je
+// hlavička skrytá, tam zůstává globální slot. Načítání a stav „aktuální" se
+// neukazují vůbec; normální případ nestojí za popisek.
 function mountUpdateBannerGroup() {
   const group = elements.updateBannerGroup;
-  const global = mobilePanelQuery.matches || state.filters.scope === "personal";
-  const target = global ? elements.globalUpdateSlot : elements.spaceStatusContent;
+  const personal = state.filters.scope === "personal";
+  const target = personal ? elements.globalUpdateSlot : elements.appsToolbar;
   if (!group || !target) return;
-  if (group.parentElement !== target) target.append(group);
+  if (group.parentElement !== target) target.prepend(group);
 }
 
+// Hlavička aktivního prostoru je tichá: značka Organizace a její název, nic
+// víc. Uvítací věta (DEV-6627, schválený návrh 2026-09-21) zabírala nejcennější
+// místo nad obsahem a nenesla informaci; kdo Launchpad otevřel, ví, že je vítán.
 function renderWorkspaceWelcome() {
   const personal = state.filters.scope === "personal";
   elements.workspaceWelcome?.toggleAttribute("hidden", personal);
@@ -1961,9 +2009,20 @@ function renderWorkspaceWelcome() {
 
   const organization = state.companies.find((company) => company.slug === state.filters.company);
   const organizationName = organization?.display_name ?? organization?.slug;
-  elements.workspaceWelcomeTitle.textContent = organizationName
-    ? t("workspace.welcomeOrganization", { organization: organizationName })
-    : t("workspace.welcomePlural");
+  elements.workspaceWelcomeTitle.textContent = organizationName ?? t("workspace.allOrganizations");
+  if (!elements.workspaceMark) return;
+  // Značku kreslí tentýž helper jako u přepínače prostorů, takže hlavička a
+  // rail nikdy neukazují dvě různé podoby téže Organizace. Napříč Organizacemi
+  // není co ukázat, proto značka zmizí celá.
+  elements.workspaceMark.hidden = !organization;
+  if (organization) {
+    renderSpaceLogo(elements.workspaceMark, {
+      kind: "organization",
+      label: organizationName ?? "",
+      organization,
+    });
+    elements.workspaceMark.classList.add("workspace-mark");
+  }
 }
 
 /* =========================================================
@@ -2817,6 +2876,9 @@ function workspaceModuleCard(module, companySlug, options = {}) {
   const moduleRepair = detail.repair_action?.prompt ? detail.repair_action : null;
   const repairHandoff = moduleRepair ? localizedModuleRepairHandoff(moduleRepair) : null;
   const actsOnApp = Boolean(detail.default_app && defaultAction?.type !== "disabled" && !moduleRepair);
+  // Modul bez samostatné aplikace otevře složku kliknutím na celou dlaždici;
+  // zvláštní tlačítko na kartě není (schválený návrh 2026-09-21).
+  const opensFolder = Boolean(detail.can_open_folder && !actsOnApp && !moduleRepair);
   const openable = Boolean(moduleRepair || actsOnApp || detail.can_open_folder);
   const availabilityClass = module.status === "available" ? "is-available" : "is-unavailable";
   const interactionClass = openable ? "is-openable" : "is-readonly";
@@ -2828,7 +2890,9 @@ function workspaceModuleCard(module, companySlug, options = {}) {
   card.tabIndex = 0;
   card.setAttribute("aria-label", moduleRepair
     ? `${t("common.solveWithCodex")}: ${detail.title}`
-    : actsOnApp ? `${defaultAction.label}: ${detail.title}` : `${detail.title} — ${t("common.detail").toLowerCase()}`);
+    : actsOnApp ? `${defaultAction.label}: ${detail.title}`
+      : opensFolder ? `${t("module.folder")}: ${detail.title}`
+        : `${detail.title} — ${t("common.detail").toLowerCase()}`);
 
   const head = document.createElement("div");
   head.className = "app-card-head";
@@ -2854,7 +2918,7 @@ function workspaceModuleCard(module, companySlug, options = {}) {
       : module.status === "missing_access"
       ? t("module.unavailable")
       : module.status === "available"
-        ? moduleApplicationMessage(detail.module_apps)
+        ? opensFolder ? t("module.opensFolder") : moduleApplicationMessage(detail.module_apps)
         : t("module.planned");
   titleBody.append(titleRow, desc);
   titleBlock.append(titleBody);
@@ -2865,15 +2929,6 @@ function workspaceModuleCard(module, companySlug, options = {}) {
     : null;
   if (defaultWarning && defaultWarning.kind !== "fact") {
     card.append(cardWarningNode(defaultWarning));
-  }
-  if (detail.can_open_folder) {
-    const folderAction = cardActionButton(
-      t("module.folder"),
-      () => openWorkspaceModuleFolder(detail),
-      state.pendingAction === `${detail.id}:open-folder`,
-    );
-    folderAction.classList.add("btn", "btn-ghost", "btn-sm", "manifest-module-folder-action");
-    card.append(folderAction);
   }
   if (detail.repair_action?.prompt) {
     const repairAction = cardActionButton(
@@ -2888,6 +2943,7 @@ function workspaceModuleCard(module, companySlug, options = {}) {
     if (!shouldOpenFromCardSurface(event.target)) return;
     if (moduleRepair) openCodexRepairDialog(repairHandoff);
     else if (actsOnApp) runPrimaryNextAction(detail.default_app, defaultAction, {});
+    else if (opensFolder) void openWorkspaceModuleFolder(detail);
     else selectReadonlyDetail(detail);
   });
   card.addEventListener("keydown", (event) => {
@@ -2896,6 +2952,7 @@ function workspaceModuleCard(module, companySlug, options = {}) {
     event.preventDefault();
     if (moduleRepair) openCodexRepairDialog(repairHandoff);
     else if (actsOnApp) runPrimaryNextAction(detail.default_app, defaultAction, {});
+    else if (opensFolder) void openWorkspaceModuleFolder(detail);
     else selectReadonlyDetail(detail);
   });
   return card;
@@ -3924,6 +3981,17 @@ function variantOptionDescription(app) {
 function appIconNode(app) {
   const span = document.createElement("span");
   span.className = "app-card-icon";
+  // Stav se hlásí jen výjimkou a běžící modul je jednou z nich. Tečku kreslí
+  // CSS na ikoně; tady k ní patří slovo, protože barva nesmí nést stav sama.
+  // Rozdíl "tečka je / tečka není" je tvarový, takže signál projde i tam, kde
+  // se zelená od šedé nerozezná.
+  if (app.runtime_status === "healthy") {
+    span.classList.add("is-running");
+    const word = document.createElement("span");
+    word.className = "sr-only";
+    word.textContent = t("status.running");
+    span.append(word);
+  }
   const key = appIconKey(app);
   const lazurioIcon = lazurioAppIcon(key);
   if (lazurioIcon) {
@@ -4837,10 +4905,11 @@ function renderUpdateBanner() {
   elements.updateBannerAction.hidden = !action;
   elements.updateBannerAction.disabled = !action;
   elements.updateBannerAction.textContent = action?.label ?? "";
+  banner.classList.toggle("is-loading", presentation.tone === "loading");
   banner.classList.toggle("is-blocked", presentation.tone === "blocked");
   banner.classList.toggle("is-updating", presentation.tone === "updating");
   banner.classList.toggle("is-current", presentation.tone === "current");
-  banner.hidden = !presentation.visible;
+  banner.hidden = !presentation.visible || presentation.tone === "loading" || presentation.tone === "current";
 }
 
 function renderUpdatePill() {

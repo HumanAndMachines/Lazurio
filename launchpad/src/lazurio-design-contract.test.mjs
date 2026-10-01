@@ -54,10 +54,15 @@ test("Launchpad nepoužívá neschválenou kapitalizaci ani Lucide ikony", async
   expect(html).not.toContain("lucide/");
 });
 
-test("tmavá hlavička je kanonická bez URL experimentu", async () => {
-  const [styles, app] = await Promise.all([source("styles.css"), source("app.js")]);
-  expect(styles).toMatch(/\/\* Tmavá hlavička ukotvuje shell[\s\S]*?\.topbar\.topbar\s*{[\s\S]*?background: var\(--lz-gray-950\)/);
-  expect(styles).toMatch(/\.topbar \.icon-btn,[\s\S]*?color: var\(--lz-gray-100\)/);
+test("shell má jednu lištu: papírový rail, žádná hlavička ani URL experiment", async () => {
+  const [html, styles, app] = await Promise.all([source("index.html"), source("styles.css"), source("app.js")]);
+  // DEV-6627: tmavá horní lišta zanikla. Starší vrstvy .topbar v styles.css
+  // zůstávají jako mrtvý text bez elementu; kanonický je vendor .lz-rail na
+  // papíru, ukotvený touto vrstvou k levé hraně.
+  expect(html).not.toContain('class="topbar"');
+  expect(html).toContain('class="lz-rail scope-rail"');
+  expect(styles.lastIndexOf("/* DEV-6627 — shell jedné lišty")).toBeGreaterThan(styles.lastIndexOf("/* Tmavá hlavička ukotvuje shell"));
+  expect(styles).toMatch(/\.scope-rail\s*{[^}]*position: fixed/);
   expect(styles).not.toContain("data-header-experiment");
   expect(app).not.toContain("headerExperiment");
 });
@@ -197,7 +202,8 @@ test("pomůcky tvoří kompaktní skryvatelnou lištu se sbaleným stavem prosto
   expect(html).toContain('id="spaceStatusDetails" class="space-status-details"');
   expect(html).toContain('<summary class="space-status-toggle">');
   expect(html).toContain('class="hero-indicator" aria-hidden="true"');
-  expect(js).toContain('sidebarOpen: true');
+  // DEV-6627: stav prostoru je výjimka — panel začíná zavřený.
+  expect(js).toContain('sidebarOpen: false');
   expect(js).toContain('function applySidebarState()');
   expect(js).toContain('toggleAttribute("inert", collapsed)');
   expect(js).toContain('desktop ? "recentChangesSidebar" : "detailDrawer"');
@@ -207,12 +213,11 @@ test("pomůcky tvoří kompaktní skryvatelnou lištu se sbaleným stavem prosto
   expect(styles).toMatch(/\.layout\.is-sidebar-collapsed \.recent-changes-sidebar\s*{[^}]*display: none/);
 });
 
-test("údržba je v rozbaleném Stavu prostoru a hledání je u nadpisu", async () => {
+test("údržba je výjimka v hlavičce prostoru a hledání je u nadpisu", async () => {
   const [html, js, styles] = await Promise.all([source("index.html"), source("app.js"), source("styles.css")]);
-  const details = html.slice(html.indexOf('id="spaceStatusDetails"'), html.indexOf('</details>', html.indexOf('id="spaceStatusDetails"')));
-  expect(details).toContain('id="updateBannerGroup"');
-  expect(details.indexOf('id="hero"')).toBeLessThan(details.indexOf('id="updateBannerGroup"'));
-  expect(js).toContain('global ? elements.globalUpdateSlot : elements.spaceStatusContent');
+  expect(html).toContain('id="updateBannerGroup"');
+  expect(js).toContain('const target = personal ? elements.globalUpdateSlot : elements.appsToolbar');
+  expect(styles).toMatch(/\.apps-toolbar \.update-banner\s*{/);
   expect(js).toContain('elements.page?.classList.toggle("is-organization", !personal)');
   expect(styles).toMatch(/\.page\.is-organization\s*{[^}]*max-width: none;[^}]*padding-right: clamp/);
   expect(html.indexOf('id="appsToolbar"')).toBeLessThan(html.indexOf('id="recentChangesSidebar"'));
