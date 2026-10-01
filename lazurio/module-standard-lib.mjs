@@ -67,7 +67,16 @@ const SKIPPED_DIRECTORIES = new Set([
 const TEST_DIRECTORIES = new Set(["test", "tests", "__tests__", "e2e", "fixtures", "__fixtures__"]);
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".astro"]);
 const JAVASCRIPT_EXTENSIONS = new Set([".js", ".jsx", ".mjs", ".cjs"]);
-const PORT_REFERENCE_EXTENSIONS = new Set([...SOURCE_EXTENSIONS, ".py", ".sh", ".json", ".jsonc", ".yaml", ".yml", ".toml", ".html"]);
+// The port scan reads every file of the Module, whatever its extension: an
+// allowlist kept missing the next config format. Only formats that cannot
+// carry a readable port are skipped.
+const PORT_SCAN_SKIPPED_EXTENSIONS = new Set([
+  ".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".ico", ".icns", ".bmp", ".tiff", ".svgz",
+  ".pdf", ".woff", ".woff2", ".ttf", ".otf", ".eot",
+  ".zip", ".gz", ".tgz", ".br", ".zst", ".7z",
+  ".mp3", ".mp4", ".mov", ".webm", ".wav", ".ogg",
+  ".wasm", ".node", ".dylib", ".so", ".dll", ".exe", ".bin",
+]);
 const MAX_WALKED_FILES = 20_000;
 const MAX_READ_BYTES = 1_048_576;
 const KNOWN_STRICT_TSCONFIG_PRESETS = [
@@ -718,7 +727,7 @@ async function resolveTsconfig({ root, path, appDirectory, depth }) {
 async function portReferenceRefusal({ root, files, port, packages }) {
   const pattern = new RegExp(`(?<![0-9])${port}(?![0-9])`);
   for (const file of files) {
-    if (!PORT_REFERENCE_EXTENSIONS.has(file.extension)) continue;
+    if (PORT_SCAN_SKIPPED_EXTENSIONS.has(file.extension)) continue;
     const name = posix.basename(file.path);
     if (["lazurio.module.json", "bun.lock", "package-lock.json"].includes(name)) continue;
     // Declared App packages are judged by the value setup leaves behind, so a

@@ -358,6 +358,18 @@ test("MS-01 refuses to move a lease whose port is hardcoded in a Python source",
   expect((await readJson(join(fixture.moduleRoot, "lazurio.module.json"))).port_leases[0].port).toBe(23_502);
 });
 
+test("MS-01 refuses to move a lease whose port sits in a config file of any extension", async () => {
+  const fixture = await conformantFixture({ port: 23_506 });
+  await writeText(join(fixture.appRoot, "listener.conf"), "listen 127.0.0.1:23506\n");
+
+  const report = await setupModule({ ...fixture, apply: true });
+
+  expect(check(report, "MS-01").details).toContain(
+    "lease main se automaticky nepřesune: port 23506 se objevuje v app/v1/listener.conf",
+  );
+  expect((await readJson(join(fixture.moduleRoot, "lazurio.module.json"))).port_leases[0].port).toBe(23_506);
+});
+
 test("MS-01 refuses to move a lease when a source is too large to scan for the port", async () => {
   const fixture = await conformantFixture({ port: 23_503 });
   await writeText(join(fixture.moduleRoot, "app", "v1", "server.py"), `${"#".repeat(1_048_577)}\nPORT = 23503\n`);
