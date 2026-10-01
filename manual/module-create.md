@@ -37,14 +37,24 @@ převezme Dashboard „Nový Modul“.
    `<github-org>/<slug>` s chráněnou `main`; Modul se do něj pushne
    (`git remote add origin …` a `git push -u origin main`, přesné příkazy
    vypíše report). Merge slotu je Publikace a patří oprávněnému Principálovi.
-5. Po merge slotu `lazurio update` Modul materializuje na každém
-   Environmentu; `lazurio module start <Organization>/<slug> --json` ho
+5. Před merge rebasuj PR slotu na aktuální `main`.
+6. Po merge slotu `lazurio update` Modul materializuje na každém
+   Environmentu. U Modulu s App potom znovu spusť
+   `lazurio module setup <Org-mount>/workspace/<slug> --root <lazurio-root>`
+   (viz „Port leasu“ níže); hlásí-li `MS-01` `port … drží i …`, přepiš lease
+   v `lazurio.module.json` Modulu na volný port `module_port_pool` a commitni
+   to v Modulu. `lazurio module start <Organization>/<slug> --json` Modul
    spustí.
 
 `<Organization>` je přesný `company.slug` namountované Organizace. Příkaz
 pozná task worktree podle aktuální složky: když leží v Git worktree téhož
 repozitáře jako primární mount Organizace, zapisuje do něj. Jinak míří na
-primární mount a na `main` odmítne zapisovat.
+primární mount a bez `--dry-run` odmítne zapisovat: na `main` nebo detached
+HEAD kódem `organization_root_on_main`, na jiné branchi kódem
+`organization_root_not_task_worktree`. Zapisuje se jen do linked Git
+worktree (jeho `git rev-parse --git-dir` se liší od `--git-common-dir`);
+primární checkout přepnutý na pracovní branch to není. `--dry-run` projde
+odkudkoli.
 
 ## Stacky
 
@@ -69,8 +79,8 @@ i shodně v `[tool.lazurio]` v `pyproject.toml`.
 ## Co příkaz zapíše
 
 - `<organization-root>/workspace/<slug>/`: `lazurio.module.json` (lease
-  z nejnižšího volného portu `module_port_pool`, který nedrží žádný Modul na
-  Mašině), `app/v1/` podle stacku, `README.md`, `AGENTS.md`, `.gitignore` a
+  na volném portu `module_port_pool` odvozeném ze slugu, viz „Port leasu“),
+  `app/v1/` podle stacku, `README.md`, `AGENTS.md`, `.gitignore` a
   `.github/workflows/check.yml` (`bun install --frozen-lockfile`,
   `bun run check`, `bun test`; u Pythonu `uv sync --frozen`).
 - Do `modules.manifest.json` téhož checkoutu přesně jeden slot
@@ -89,11 +99,34 @@ Lease se volí pod stejným Organization lockem jako v `lazurio module setup`.
 Selže-li zápis souborů nebo slotu, příkaz složku z tohoto běhu smaže a nic
 jiného nemění.
 
+### Port leasu
+
+Bez `--port` začíná výběr na `pool.start + (h mod velikost poolu)`, kde `h`
+jsou první 4 bajty (big-endian) sha256 slugu v UTF-8, a jde dopředu
+s přetočením z konce poolu na začátek k prvnímu portu, který nedrží žádný
+Modul viditelný na Mašině (namountované Moduly a Moduly téhož task worktree).
+Výběr je čistý a deterministický: stejný slug a stejný stav dají stejný port
+i `tree_hash`. `--port N` ho přepíše.
+
+Pracovní branch nevidí Modul založený v jiné, ještě nemergnuté branchi. Proto
+se nevolí nejnižší volný port (dvě souběžná založení by dostala vždy stejný),
+ale port odvozený ze slugu: dva různé Moduly se srazí jen náhodou. Registr
+portů ani sken cizích worktrees záměrně nevzniká; přesný port vlastní Modul.
+Náhodnou kolizi ukáže `MS-01` (`port … drží i …`) v `lazurio module setup`,
+jakmile jsou oba Moduly na stejném `main` a namountované. Setup měří jen
+Modul na deklarovaném slotu, takže Modul v task worktree Organizace před
+merge slotu odmítne (`module_root_not_linked_to_slot`); proto se spouští
+po merge slotu a `lazurio update` nad kanonickou cestou
+`<Org-mount>/workspace/<slug>`. Opravou je přepsat lease
+v `lazurio.module.json` na volný port poolu; App čte port jen z prostředí,
+takže se nic jiného nemění.
+
 ## Co odmítne
 
 | Kód | Význam |
 | --- | --- |
 | `organization_root_on_main` | Organization checkout je na `main` nebo detached; spusť z task worktree (s `--dry-run` projde) |
+| `organization_root_not_task_worktree` | Organization checkout je primární checkout na pracovní branchi, ne linked worktree; spusť z task worktree (s `--dry-run` projde) |
 | `invalid_slug`, `reserved_slug` | slug není lowercase kebab-case začínající písmenem (max. 50 znaků), nebo je rezervovaný (`productionspace`, `personalspace`, `mission-control`, `launchpad`, `design-system`, `infra`…) |
 | `slot_exists`, `directory_exists` | slot nebo složka se stejným jménem už existuje (i při jiné velikosti písmen) |
 | `unknown_stack`, `invalid_display_name`, `invalid_team`, `unknown_team` | neplatný vstup; Team musí být deklarovaný v Organizaci |

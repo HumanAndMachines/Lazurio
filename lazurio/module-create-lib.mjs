@@ -32,6 +32,7 @@ import { acquireModuleRuntimeLock } from "./runtime/module-runtime-lock-lib.mjs"
 export const MODULE_CREATE_REPORT_VERSION = "lazurio.module_create.report.v1";
 export const DEFAULT_MODULE_TEMPLATES_ROOT = join(import.meta.dirname, "templates", "module");
 const INSTALL_TIMEOUT_MS = 10 * 60_000;
+const WORKTREE_ACTION = "Založ task worktree root repa Organizace (bun run worktrees:create -- --plan <KOD> --repository organizations/<mount>), spusť příkaz z něj, nebo nejdřív ověř plán přes --dry-run.";
 const IGNORED_ORGANIZATION_ENTRIES = new Set([".git", ".worktrees", "node_modules", "archive"]);
 
 class ModuleCreateRefusal extends Error {
@@ -116,7 +117,14 @@ export async function createModule({
       throw new ModuleCreateRefusal(
         "organization_root_on_main",
         `Organization root ${target.organizationRoot} je na ${target.branch ?? "detached HEAD"}; slot Modulu musí vzniknout v task worktree a PR.`,
-        "Založ task worktree root repa Organizace (bun run worktrees:create -- --plan <KOD> --repository organizations/<mount>), spusť příkaz z něj, nebo nejdřív ověř plán přes --dry-run.",
+        WORKTREE_ACTION,
+      );
+    }
+    if (!dryRun && !target.linkedWorktree) {
+      throw new ModuleCreateRefusal(
+        "organization_root_not_task_worktree",
+        `Organization root ${target.organizationRoot} je primární checkout (branch ${target.branch}), ne task worktree; Modul ani slot do něj nezapisuju.`,
+        WORKTREE_ACTION,
       );
     }
     if (dryRun) {
@@ -432,10 +440,18 @@ async function resolveOrganizationTarget({ lazurioRoot, organizationSlug, cwd })
     throw new ModuleCreateRefusal("manifest_invalid", `${manifestPath} není platný JSON: ${error.message}`);
   }
   const branchResult = await runGit(["symbolic-ref", "--quiet", "--short", "HEAD"], { cwd: organizationRoot });
+  // A linked worktree has its own git dir under the common one; in the
+  // primary checkout both are the same directory.
+  const [gitDir, commonDir] = await Promise.all([
+    gitPath(organizationRoot, "--git-dir"),
+    gitPath(organizationRoot, "--git-common-dir"),
+  ]);
   return {
     slug: resource.organization.slug,
     organizationRoot,
+    primaryRoot: primary,
     source,
+    linkedWorktree: gitDir !== null && commonDir !== null && !(await samePath(gitDir, commonDir)),
     branch: branchResult.ok ? branchResult.stdout.trim() : null,
     defaultBranch: resource.root_repository?.default_branch ?? "main",
     githubOrg: resource.organization.forge_binding?.locator ?? modulesManifest.github_org ?? null,
@@ -573,6 +589,12 @@ function nextSteps({ plan, target, moduleRoot, dryRun, report = null }) {
     `V ${target.organizationRoot} commitni modules.manifest.json (slot ${plan.module_path}) a otevři PR do root repa Organizace; merge je rozhodnutí oprávněného Principála.`,
     `Založ privátní GitHub repo ${target.githubOrg}/${plan.module} s chráněnou main (Organization Admin; Dashboard „Nový Modul“ to převezme) a pushni: git -C ${moduleRoot} remote add origin ${plan.slot.git.url} && git -C ${moduleRoot} push -u origin main`,
   );
+  if (plan.lease) {
+    const canonical = join(target.primaryRoot, "workspace", plan.module);
+    steps.push(
+      `Před merge rebasuj PR slotu na aktuální main. Po merge slotu a lazurio update spusť lazurio module setup ${canonical}: hlásí-li MS-01 „port ${plan.lease.port} drží i …“ (souběžně založený Modul z jiné branche), přepiš lease v lazurio.module.json Modulu na volný port module_port_pool ${target.pool.start}-${target.pool.end} a commitni to v Modulu; App čte port jen z prostředí, nic dalšího se nemění.`,
+    );
+  }
   if (plan.stack === "python-uv") {
     steps.push(`Ověř App ručně: v ${join(moduleRoot, "app", "v1")} uv sync --frozen, bun run check, bun run test a uv run --no-sync ${plan.module} s listener proměnnými; start přes Launchpad přijde s adaptérem uv (DEV-6634 W0-5).`);
   } else if (plan.lease) {

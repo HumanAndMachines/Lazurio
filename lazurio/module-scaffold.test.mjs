@@ -9,6 +9,7 @@ import {
   insertModuleSlotText,
   MODULE_SCAFFOLD_STACKS,
   ModuleScaffoldError,
+  moduleScaffoldDefaultPort,
   moduleScaffoldTreeHash,
   planModuleScaffold,
   templateTargetPath,
@@ -85,9 +86,9 @@ describe("planModuleScaffold", () => {
     expect(first.generated_by_install).toEqual(["app/v1/bun.lock"]);
   });
 
-  test("allocates the lowest free pool port and writes the exact slot", () => {
+  test("allocates the slug-derived free pool port and writes the exact slot", () => {
     const result = plan({ display_name: "Zákaznický portál", teams: ["web"] });
-    expect(result.lease).toEqual({ id: "main", host: "127.0.0.1", port: 24_001 });
+    expect(result.lease).toEqual({ id: "main", host: "127.0.0.1", port: 24_009 });
     expect(result.slot).toEqual({
       path: "workspace/portal",
       slug: "portal",
@@ -107,12 +108,49 @@ describe("planModuleScaffold", () => {
       id: "portal",
       company: "Acme",
       tcp_port_policy: { mode: "single" },
-      port_leases: [{ id: "main", host: "127.0.0.1", port: 24_001 }],
+      port_leases: [{ id: "main", host: "127.0.0.1", port: 24_009 }],
       apps: ["app/v1/package.json"],
       default_app: "app/v1/package.json",
     });
     expect(plan({ port: 24_050 }).lease.port).toBe(24_050);
     expect(plan().slot.teams).toBeUndefined();
+  });
+
+  test("two different slugs against the same Organization state get different ports", () => {
+    // Two work branches cannot see each other's unmerged Module; the default
+    // starts at pool.start + (sha256(slug)[0..4] mod pool size), so they no
+    // longer both take the lowest free port. Exact values pin the algorithm.
+    const portal = plan({ slug: "portal" });
+    const crm = plan({ slug: "crm" });
+    expect(portal.lease.port).toBe(24_009);
+    expect(crm.lease.port).toBe(24_003);
+    expect(plan({ slug: "helpdesk" }).lease.port).toBe(24_027);
+    // The hashed start is taken by another lease: walk forward to the next free port.
+    expect(plan({ slug: "portal", organization: { ...organization, existing_leases: [
+      ...organization.existing_leases,
+      { company: "Acme", module: "shop", port: 24_009 },
+      { company: "Acme", module: "blog", port: 24_010 },
+    ] } }).lease.port).toBe(24_011);
+  });
+
+  test("the default port wraps around from the pool end to the pool start", () => {
+    // "wiki" hashes to offset 96; 24096-24099 are taken, 24000 is billing's.
+    const taken = [24_096, 24_097, 24_098, 24_099].map((port, index) => ({ company: "Acme", module: `m${index}`, port }));
+    const result = plan({ slug: "wiki", organization: { ...organization, existing_leases: [...organization.existing_leases, ...taken] } });
+    expect(result.lease.port).toBe(24_001);
+    expect(moduleScaffoldDefaultPort("wiki", pool)).toBe(24_096);
+    expect(moduleScaffoldDefaultPort("wiki", pool, new Set([24_096, 24_097, 24_098, 24_099, 24_000]))).toBe(24_001);
+    expect(moduleScaffoldDefaultPort("wiki", { start: 24_000, end: 24_000 }, new Set([24_000]))).toBeNull();
+  });
+
+  test("the default port is deterministic: same input gives the same port and tree_hash", () => {
+    for (const slug of ["portal", "crm", "wiki"]) {
+      const first = plan({ slug });
+      const second = plan({ slug });
+      expect(second.lease).toEqual(first.lease);
+      expect(second.tree_hash).toBe(first.tree_hash);
+    }
+    expect(plan({ slug: "portal" }).tree_hash).not.toBe(plan({ slug: "portal", port: 24_050 }).tree_hash);
   });
 
   test("every stack renders without leftover placeholders and with valid runtime and preparation", () => {

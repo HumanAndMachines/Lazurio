@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -47,7 +47,7 @@ test("--dry-run prints the plan and writes nothing, even on main", async () => {
     reason: "scaffold_planned",
     dry_run: true,
     organization: { slug: "Acme", source: "primary", branch: "main" },
-    lease: { id: "main", host: "127.0.0.1", port: 24_001 },
+    lease: { id: "main", host: "127.0.0.1", port: 24_009 },
     slot: { path: "workspace/portal", teams: ["web"], git: { url: "git@github.com:AcmeHQ/portal.git" } },
     generated_by_install: ["app/v1/bun.lock"],
     standard: null,
@@ -68,6 +68,28 @@ test("refuses to write while the Organization root is on main", async () => {
     issues: [{ code: "organization_root_on_main" }],
   });
   expect(await readFile(join(fixture.organizationRoot, "modules.manifest.json"), "utf8")).toBe(modulesManifest);
+  expect(existsSync(join(fixture.organizationRoot, "workspace", "portal"))).toBe(false);
+});
+
+test("refuses to write from a primary checkout switched to a work branch; --dry-run still plans", async () => {
+  const fixture = await organizationFixture({ branch: "agent/DEV-1-portal" });
+  const run = cli(["module", "create", "Acme/portal", "--stack", "none", "--json"], fixture);
+  expect(run.exitCode).toBe(2);
+  const report = JSON.parse(run.stdout);
+  expect(report).toMatchObject({
+    status: "blocked",
+    reason: "organization_root_not_task_worktree",
+    organization: { source: "primary", branch: "agent/DEV-1-portal" },
+    issues: [{ code: "organization_root_not_task_worktree" }],
+  });
+  expect(report.issues[0].action).toContain("worktrees:create");
+  expect(await readFile(join(fixture.organizationRoot, "modules.manifest.json"), "utf8")).toBe(modulesManifest);
+  expect(existsSync(join(fixture.organizationRoot, "workspace", "portal"))).toBe(false);
+  expect(git(fixture.organizationRoot, ["status", "--porcelain"])).toBe("");
+
+  const dryRun = cli(["module", "create", "Acme/portal", "--stack", "none", "--dry-run", "--json"], fixture);
+  expect(dryRun.exitCode).toBe(1);
+  expect(JSON.parse(dryRun.stdout)).toMatchObject({ status: "actionable", reason: "scaffold_planned" });
   expect(existsSync(join(fixture.organizationRoot, "workspace", "portal"))).toBe(false);
 });
 
@@ -109,8 +131,11 @@ test("creates a no-app Module in an Organization task worktree, current from the
 });
 
 test("a Bun stack without install reports exactly the missing lockfile", async () => {
-  const fixture = await organizationFixture({ branch: "agent/DEV-1-portal" });
-  const run = cli(["module", "create", "Acme/portal", "--stack", "vite-react", "--json"], fixture, {
+  const fixture = await organizationFixture();
+  const worktree = join(fixture.organizationRoot, ".worktrees", "root", "DEV-1-portal");
+  git(fixture.organizationRoot, ["worktree", "add", "--quiet", "-b", "agent/DEV-1-portal", worktree]);
+  const inWorktree = { ...fixture, cwd: worktree };
+  const run = cli(["module", "create", "Acme/portal", "--stack", "vite-react", "--json"], inWorktree, {
     LAZURIO_SCAFFOLD_SKIP_INSTALL: "1",
   });
   expect(run.exitCode).toBe(2);
@@ -118,28 +143,59 @@ test("a Bun stack without install reports exactly the missing lockfile", async (
   expect(report).toMatchObject({
     status: "action_required",
     reason: "module_standard_nonconformant",
-    organization: { source: "primary", branch: "agent/DEV-1-portal" },
-    lease: { port: 24_001 },
+    organization: { source: "worktree", branch: "agent/DEV-1-portal" },
+    lease: { port: 24_009 },
     issues: [],
   });
+  expect(report.next_steps.join("\n")).toContain("MS-01 „port 24009 drží i …“");
+  expect(report.next_steps.join("\n")).toContain("module_port_pool 24000-24099");
   expect(report.warnings).toContain("Instalace přeskočena (LAZURIO_SCAFFOLD_SKIP_INSTALL=1); app/v1/bun.lock nevznikl.");
   const failing = report.standard.checks.filter((check) => check.status !== "pass");
   expect(failing.map((check) => check.id)).toEqual(["MS-02"]);
   expect(failing[0].details).toEqual(["app/v1/package.json: bun.lock chybí vedle package.json (app/v1/bun.lock)"]);
 
-  // The primary checkout on a task branch is also what `lazurio module setup` reads.
-  const setup = await setupModule({ lazurioRoot: fixture.lazurioRoot, moduleRoot: report.module_root });
+  // Before the slot reaches main, `lazurio module setup` cannot measure the
+  // Module in the Organization task worktree (it measures declared slots only)…
+  const early = await setupModule({ lazurioRoot: fixture.lazurioRoot, moduleRoot: report.module_root });
+  expect(early.reason).toBe("module_root_not_linked_to_slot");
+  // …so the next steps send it to the canonical path after merge and lazurio update.
+  const canonical = join(fixture.organizationRoot, "workspace", "portal");
+  expect(report.next_steps.join("\n")).toContain(`lazurio module setup ${canonical}`);
+  git(worktree, ["commit", "--quiet", "-am", "Add portal slot"]);
+  git(fixture.organizationRoot, ["merge", "--quiet", "--ff-only", "agent/DEV-1-portal"]);
+  await rename(report.module_root, canonical);
+  const setup = await setupModule({ lazurioRoot: fixture.lazurioRoot, moduleRoot: canonical });
   expect(setup.standard.checks.filter((check) => check.status !== "pass").map((check) => check.id)).toEqual(["MS-02"]);
 
-  const human = cli(["module", "create", "Acme/portal", "--stack", "vite-react"], fixture);
+  const human = cli(["module", "create", "Acme/portal", "--stack", "vite-react"], inWorktree);
   expect(human.exitCode).toBe(2);
   expect(human.stdout).toContain("Lazurio module create · blocked");
   expect(human.stdout).toContain("Problém slot_exists");
 
-  await mkdir(join(fixture.organizationRoot, "workspace", "stray"), { recursive: true });
-  const stray = cli(["module", "create", "Acme/stray", "--stack", "none", "--json"], fixture);
+  await mkdir(join(worktree, "workspace", "stray"), { recursive: true });
+  const stray = cli(["module", "create", "Acme/stray", "--stack", "none", "--json"], inWorktree);
   expect(stray.exitCode).toBe(2);
   expect(JSON.parse(stray.stdout)).toMatchObject({ status: "blocked", reason: "directory_exists" });
+});
+
+test("two Modules created in distinct task worktrees get different default ports", async () => {
+  // Neither worktree sees the other's unmerged Module; the slug-derived start
+  // keeps them apart (portal 24009, crm 24003; billing holds 24000).
+  const fixture = await organizationFixture();
+  const ports = {};
+  for (const slug of ["portal", "crm"]) {
+    const worktree = join(fixture.organizationRoot, ".worktrees", "root", `DEV-1-${slug}`);
+    git(fixture.organizationRoot, ["worktree", "add", "--quiet", "-b", `agent/DEV-1-${slug}`, worktree]);
+    const run = cli(["module", "create", `Acme/${slug}`, "--stack", "bun-service", "--json"], { ...fixture, cwd: worktree }, {
+      LAZURIO_SCAFFOLD_SKIP_INSTALL: "1",
+    });
+    const report = JSON.parse(run.stdout);
+    expect(report.organization.source).toBe("worktree");
+    expect(JSON.parse(await readFile(join(worktree, "workspace", slug, "lazurio.module.json"), "utf8")).port_leases[0].port)
+      .toBe(report.lease.port);
+    ports[slug] = report.lease.port;
+  }
+  expect(ports).toEqual({ portal: 24_009, crm: 24_003 });
 });
 
 test("usage errors exit 3", async () => {

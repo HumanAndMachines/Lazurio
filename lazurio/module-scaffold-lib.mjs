@@ -88,7 +88,7 @@ export class ModuleScaffoldError extends Error {
  * @param {string} [input.display_name]  defaults to the slug in sentence case
  * @param {string} input.stack  one of MODULE_SCAFFOLD_STACKS
  * @param {string[]} [input.teams]  Team slugs for `module_slots[].teams`; empty = default Team
- * @param {number | null} [input.port]  explicit pool port; default is the lowest free pool port
+ * @param {number | null} [input.port]  explicit pool port; default is `moduleScaffoldDefaultPort`
  * @param {{layers: Record<string, Array<{path: string, content: string, mode?: string}>>}} input.templates
  * @param {{bun: string, module_kit: string, uv?: string}} input.versions
  * @returns {{schema_version: string, organization: string, module: string, stack: string,
@@ -123,7 +123,7 @@ export function planModuleScaffold({
 
   const lease = stackSpec.toolchain === null
     ? assertNoPort(port)
-    : { id: SCAFFOLD_LEASE_ID, host: "127.0.0.1", port: choosePort(port, org) };
+    : { id: SCAFFOLD_LEASE_ID, host: "127.0.0.1", port: choosePort(port, org, slug) };
 
   const values = {
     slug,
@@ -193,6 +193,36 @@ export function planModuleScaffold({
     tree_hash: moduleScaffoldTreeHash(sorted),
     warnings,
   };
+}
+
+/**
+ * Default port lease of a new Module: the first port not in `taken`, walking
+ * forward with wrap-around from `pool.start + (h mod poolSize)`, where `h` is
+ * the first 4 bytes (big-endian uint32) of sha256 over the UTF-8 slug. Returns
+ * null when the whole pool is taken.
+ *
+ * Why not the lowest free port: a work branch cannot see a Module created in
+ * a sibling branch before it is merged, so "lowest free" gave two concurrent
+ * creations the same port every time. Starting at a slug-derived offset keeps
+ * the choice pure and deterministic while making such collisions coincidental.
+ * There is deliberately no registry or cross-branch scan (the exact port is
+ * Module-owned); a coincidental collision surfaces as MS-01 in
+ * `lazurio module setup` once both Modules are present, and is fixed by moving
+ * one lease to a free pool port in its lazurio.module.json.
+ *
+ * @param {string} slug
+ * @param {{start: number, end: number}} pool
+ * @param {Set<number>} [taken]
+ * @returns {number | null}
+ */
+export function moduleScaffoldDefaultPort(slug, pool, taken = new Set()) {
+  const size = pool.end - pool.start + 1;
+  const offset = createHash("sha256").update(slug, "utf8").digest().readUInt32BE(0) % size;
+  for (let step = 0; step < size; step += 1) {
+    const candidate = pool.start + ((offset + step) % size);
+    if (!taken.has(candidate)) return candidate;
+  }
+  return null;
 }
 
 /** sha256 over the files sorted by path (path, mode and content of each). */
@@ -376,7 +406,7 @@ function assertNoPort(port) {
   return null;
 }
 
-function choosePort(port, organization) {
+function choosePort(port, organization, slug) {
   const pool = organization.module_port_pool;
   if (!pool) {
     throw new ModuleScaffoldError(
@@ -391,7 +421,7 @@ function choosePort(port, organization) {
       throw new ModuleScaffoldError(
         "port_outside_pool",
         `Port ${port} neleží v module_port_pool ${pool.start}-${pool.end} Organizace ${organization.slug}.`,
-        "Vynech --port (scaffold vybere nejnižší volný port poolu) nebo zvol port z poolu.",
+        "Vynech --port (scaffold vybere volný port poolu odvozený ze slugu) nebo zvol port z poolu.",
       );
     }
     if (taken.has(port)) {
@@ -399,9 +429,8 @@ function choosePort(port, organization) {
     }
     return port;
   }
-  for (let candidate = pool.start; candidate <= pool.end; candidate += 1) {
-    if (!taken.has(candidate)) return candidate;
-  }
+  const chosen = moduleScaffoldDefaultPort(slug, pool, taken);
+  if (chosen !== null) return chosen;
   throw new ModuleScaffoldError(
     "pool_exhausted",
     `module_port_pool ${pool.start}-${pool.end} Organizace ${organization.slug} je vyčerpaný.`,
