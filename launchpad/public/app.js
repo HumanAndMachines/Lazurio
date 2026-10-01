@@ -2874,6 +2874,9 @@ function workspaceModuleCard(module, companySlug, options = {}) {
   const moduleRepair = detail.repair_action?.prompt ? detail.repair_action : null;
   const repairHandoff = moduleRepair ? localizedModuleRepairHandoff(moduleRepair) : null;
   const actsOnApp = Boolean(detail.default_app && defaultAction?.type !== "disabled" && !moduleRepair);
+  // Modul bez samostatné aplikace otevře složku kliknutím na celou dlaždici;
+  // zvláštní tlačítko na kartě není (schválený návrh 2026-09-21).
+  const opensFolder = Boolean(detail.can_open_folder && !actsOnApp && !moduleRepair);
   const openable = Boolean(moduleRepair || actsOnApp || detail.can_open_folder);
   const availabilityClass = module.status === "available" ? "is-available" : "is-unavailable";
   const interactionClass = openable ? "is-openable" : "is-readonly";
@@ -2885,7 +2888,9 @@ function workspaceModuleCard(module, companySlug, options = {}) {
   card.tabIndex = 0;
   card.setAttribute("aria-label", moduleRepair
     ? `${t("common.solveWithCodex")}: ${detail.title}`
-    : actsOnApp ? `${defaultAction.label}: ${detail.title}` : `${detail.title} — ${t("common.detail").toLowerCase()}`);
+    : actsOnApp ? `${defaultAction.label}: ${detail.title}`
+      : opensFolder ? `${t("module.folder")}: ${detail.title}`
+        : `${detail.title} — ${t("common.detail").toLowerCase()}`);
 
   const head = document.createElement("div");
   head.className = "app-card-head";
@@ -2911,7 +2916,7 @@ function workspaceModuleCard(module, companySlug, options = {}) {
       : module.status === "missing_access"
       ? t("module.unavailable")
       : module.status === "available"
-        ? moduleApplicationMessage(detail.module_apps)
+        ? opensFolder ? t("module.opensFolder") : moduleApplicationMessage(detail.module_apps)
         : t("module.planned");
   titleBody.append(titleRow, desc);
   titleBlock.append(titleBody);
@@ -2922,15 +2927,6 @@ function workspaceModuleCard(module, companySlug, options = {}) {
     : null;
   if (defaultWarning && defaultWarning.kind !== "fact") {
     card.append(cardWarningNode(defaultWarning));
-  }
-  if (detail.can_open_folder) {
-    const folderAction = cardActionButton(
-      t("module.folder"),
-      () => openWorkspaceModuleFolder(detail),
-      state.pendingAction === `${detail.id}:open-folder`,
-    );
-    folderAction.classList.add("btn", "btn-ghost", "btn-sm", "manifest-module-folder-action");
-    card.append(folderAction);
   }
   if (detail.repair_action?.prompt) {
     const repairAction = cardActionButton(
@@ -2945,6 +2941,7 @@ function workspaceModuleCard(module, companySlug, options = {}) {
     if (!shouldOpenFromCardSurface(event.target)) return;
     if (moduleRepair) openCodexRepairDialog(repairHandoff);
     else if (actsOnApp) runPrimaryNextAction(detail.default_app, defaultAction, {});
+    else if (opensFolder) void openWorkspaceModuleFolder(detail);
     else selectReadonlyDetail(detail);
   });
   card.addEventListener("keydown", (event) => {
@@ -2953,6 +2950,7 @@ function workspaceModuleCard(module, companySlug, options = {}) {
     event.preventDefault();
     if (moduleRepair) openCodexRepairDialog(repairHandoff);
     else if (actsOnApp) runPrimaryNextAction(detail.default_app, defaultAction, {});
+    else if (opensFolder) void openWorkspaceModuleFolder(detail);
     else selectReadonlyDetail(detail);
   });
   return card;

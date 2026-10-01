@@ -601,6 +601,7 @@ export const cs = Object.freeze({
   "module.applicationRepair": "Aplikaci tohoto modulu je potřeba opravit.",
   "module.applicationReady": "Modul má připravenou aplikaci.",
   "module.folder": "Otevřít složku",
+  "module.opensFolder": "Bez samostatné aplikace, otevře složku modulu.",
   "productionspace.note": "Externě spravované systémy s vlastními pravidly. V Launchpadu jsou pouze k nahlédnutí.",
   "productionspace.description": "Externě spravovaný systém s vlastními pravidly.",
   "productionspace.planned": "Systém je zatím naplánovaný.",

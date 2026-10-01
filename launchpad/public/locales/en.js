@@ -594,6 +594,7 @@ export const en = Object.freeze({
   "module.applicationRepair": "This module's application needs repair.",
   "module.applicationReady": "The module has a ready application.",
   "module.folder": "Open folder",
+  "module.opensFolder": "No standalone application; opens the module folder.",
   "productionspace.note": "Externally managed systems with their own rules. They are view-only in Launchpad.",
   "productionspace.description": "An externally managed system with its own rules.",
   "productionspace.planned": "The system is planned.",

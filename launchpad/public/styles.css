@@ -6738,7 +6738,20 @@ html[data-i18n-ready="true"] .locale-bootstrap {
   box-shadow: none;
 }
 
-.apps-grid > .app-card:hover,
+/* Hover je tichý: linka o stupeň tmavší a papírový podklad, bez posunu,
+ * bez černého rámečku a bez dlouhé animace. Ohnisko z klávesnice drží
+ * výraznější inkoustovou linku, aby bylo vidět, kde jsem. */
+.apps-grid > .app-card {
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.apps-grid > .app-card:hover {
+  border-color: var(--lz-gray-300);
+  background: var(--lz-paper);
+  box-shadow: none;
+  transform: none;
+}
+
 .apps-grid > .app-card:focus-within {
   border-color: var(--lz-ink);
   background: var(--lz-white);

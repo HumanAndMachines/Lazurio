@@ -1095,9 +1095,12 @@ test("UI separates physical Organization/Workspace/Productionspace and prepares 
   expect(js).not.toContain("app-section-eyebrow");
   expect(js).toContain("function workspaceModuleCard");
   expect(js).toContain("function workspaceModulesInView");
-  expect(js).toContain('t("module.folder")');
+  // DEV-6627: modul bez aplikace otevře složku kliknutím na dlaždici, bez tlačítka.
+  expect(js).toContain('const opensFolder = Boolean(detail.can_open_folder && !actsOnApp && !moduleRepair)');
+  expect(js).toContain('else if (opensFolder) void openWorkspaceModuleFolder(detail);');
+  expect(js).toContain('opensFolder ? t("module.opensFolder")');
+  expect(js).not.toContain("manifest-module-folder-action");
   expect(js).toContain('const availabilityClass = module.status === "available" ? "is-available" : "is-unavailable"');
-  expect(js).toContain('folderAction.classList.add("btn", "btn-ghost", "btn-sm", "manifest-module-folder-action")');
   expect(css).toContain(".apps-grid > .manifest-module-card.is-unavailable");
   const unavailableModuleCss = css.slice(
     css.indexOf(".apps-grid > .manifest-module-card.is-unavailable {"),
