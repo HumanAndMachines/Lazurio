@@ -551,9 +551,11 @@ Root upravuj jen když se mění:
   operátora vs. týmová VM s brokered identitou) — manuál
   `manual/hosted-machine-first-login.md`; Agent na osobní pracovní VM bez
   přihlášeného `gh` nejdřív provede operátora device loginem a vysvětlí proč,
-  pak `update`, exact Organization install a Doctor rezidentního CLI (na VM
-  není `lazurio` v `PATH`; manuál říká, který program je který), teprve potom
-  původní úkol.
+  pak `update` a exact Organization install rezidentního CLI (na VM není
+  `lazurio` v `PATH`; manuál říká, který program je který), teprve potom
+  původní úkol. Bránou dokončení je výsledek installu a `bun run doctor:task`
+  Organizace; rezidentní `doctor` na VM bránou není, její Root není Git
+  checkout (#434).
 - Native Windows install, bug nebo PR acceptance — veřejný gate
   `manual/windows-e2e-lab.md`; konkrétní osobní testovací notebook, přístup a
   custody zůstávají pouze v omezeném owner runbooku a nikdy se z něj nestává
