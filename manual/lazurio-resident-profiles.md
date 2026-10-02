@@ -16,7 +16,7 @@ credentials.
 
 | Pojem | Co znamená |
 | --- | --- |
-| Operátor | Ten, kdo Environment ovládá, a tím i Agenty, které v něm spouští; Agenti pracují pro něj a poslední slovo má on. Operátorem je vždy člověk (decision 0174). |
+| Operátor | Ten, kdo Environment ovládá, a tím i Agenty, které v něm spouští; Agenti pracují pro něj a poslední slovo má on. Operátorem je vždy člověk (decision 0175). |
 | Kolega | Člověk v Organizaci. Jeho pracovní Root leží přímo v home; dnešní Source Root může do migrace nést historický název složky, fresh target je `<home>/Lazurio`. |
 | Buddy | Osobní zástupce jednoho člověka uvnitř jeho Personalspace. Jedná jen v mezích jeho práv a mandátů. |
 | AI Kolega | AI s vlastní identitou, Mašinou, Personalspace a pracovními právy jako člověk; pojem je deprecated (decisions 0156/0169). Není Buddy. |

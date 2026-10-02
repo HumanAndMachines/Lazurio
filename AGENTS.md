@@ -144,7 +144,7 @@ frameworku a k práci v Lazuriu nejsou potřeba.
   pracovním Remote Environmentu ten, komu ho Organizace přiřadila, na
   týmovém Remote Environmentu právě připojený člen Teamu a na
   Automatizovaném Environmentu odpovědný Owner nebo Admin Organizace
-  (decision 0174). Provozovatel hostingu, který Remote Environment dodává,
+  (decision 0175). Provozovatel hostingu, který Remote Environment dodává,
   je jiná role.
 - **Kolega** — člověk v Organizaci. Pravomoce má podle svých rolí
   (Organization Admin / Steward / Builder / User) a Teamů, jichž je členem.

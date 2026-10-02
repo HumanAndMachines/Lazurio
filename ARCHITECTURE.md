@@ -60,7 +60,7 @@ pokyn k Publikaci a má poslední slovo. Operátorem je vždy člověk: na osobn
 Environmentu jeho Owner, na pracovním Remote Environmentu ten, komu ho
 Organizace přiřadila, na týmovém Remote Environmentu právě připojený člen
 Teamu a na Automatizovaném Environmentu odpovědný Owner nebo Admin
-Organizace (decision 0174). Ve sdíleném Hosted Team Workspace je Ownerem
+Organizace (decision 0175). Ve sdíleném Hosted Team Workspace je Ownerem
 Organizace a jednotliví Operátoři jsou jeho oprávnění uživatelé; používáním
 Mašiny její vlastnictví ani org-wide pravomoci nezískávají. V Organizaci
 rozhodují jejich skutečná oprávnění u poskytovatelů, ne textový název role.
@@ -225,7 +225,7 @@ credentials.
 
 Cílový model GitHub identity Hosted Team Workspace určují decisions 0147 až
 0149 (`manual/decision-register.md`). Workspace nemá přiřazeného Operátora:
-Operátorem je člen Teamu, který je právě připojený (decision 0174). Jeho Git identitou je platformní GitHub App Lazurio for GitHub dosahovaná
+Operátorem je člen Teamu, který je právě připojený (decision 0175). Jeho Git identitou je platformní GitHub App Lazurio for GitHub dosahovaná
 přes per-Organization token broker, který vydává krátkodobé tokeny scoped na
 jeden repozitář — privátní klíč App na Mašině nikdy neleží. Nasazený broker
 autorizuje podle id workspace, jeho unikátního credentialu a
