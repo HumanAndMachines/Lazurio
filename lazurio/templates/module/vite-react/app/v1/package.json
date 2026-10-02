@@ -1,0 +1,63 @@
+{
+  "name": "{{slug}}-app-v1",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "bun@{{bun_version}}",
+  "scripts": {
+    "dev": "bun ./node_modules/vite/bin/vite.js",
+    "build": "bun ./node_modules/vite/bin/vite.js build",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "check": "bun run typecheck && bun run lint",
+    "check:prepared": "bun run src/prepared.ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@lazurio/module-kit": "github:Lazurio/module-kit#v{{module_kit_version}}",
+    "@vitejs/plugin-react": "6.0.5",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "vite": "8.2.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.15",
+    "@types/bun": "1.4.2",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "typescript": "5.9.3"
+  },
+  "lazurio": {
+    "runtime": {
+      "schema_version": "lazurio.runtime.v1",
+      "id": "{{runtime_id}}",
+      "title": "{{display_name}}",
+      "company": "{{organization}}",
+      "module": "{{slug}}",
+      "surface": "internal",
+      "dev_script": "dev",
+      "build_script": "build",
+      "tags": [
+        "{{slug}}"
+      ],
+      "listeners": [
+        {
+          "id": "{{listener_id}}",
+          "role": "entrypoint",
+          "lease": "main",
+          "protocol": "http",
+          "health": {
+            "kind": "http",
+            "path": "/"
+          }
+        }
+      ]
+    },
+    "preparation": {
+      "schema_version": "lazurio.preparation.v1",
+      "owner_package": "app/v1/package.json",
+      "check_script": "check:prepared"
+    }
+  }
+}

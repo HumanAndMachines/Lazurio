@@ -95,6 +95,10 @@ pracovní Root.
 - `manual/` — technický maintenance manuál Launchpad rootu
 - `manual/module-standard.md` — Lazurio Module Standard (decision 0171): jak Modul vypadá, startuje, na čem stojí a jak vzniká; konformance `lazurio module setup`, skill `.agents/skills/lazurio-module-standard/`
 - `manual/mission-control-trusted-builder-smoke.md` — živý cross-Lazurio audit GitHub-only writeru, root pointerů a progresivního `trusted-process` / `provider-enforced` režimu
+- `manual/module-create.md` — nový Modul příkazem `lazurio module create`:
+  stacky, co scaffold zapíše a odmítne, a kontrakt čisté funkce
+  `planModuleScaffold`, kterou sdílí s Dashboardem; šablony stacků žijí
+  v `lazurio/templates/module/`.
 - `manual/windows-e2e-lab.md` — native Windows 11 E2E acceptance: kdy použít
   owner-controlled testovací Mašinu, co přesně smí znamenat Lazurio-only reset
   a jak prokázat instalaci, nový proces, restart, rollback a PR reprodukci.

@@ -15,6 +15,9 @@
 # schéma je JSON, takže potřebuje vlastní řádek.
 lazurio/schemas/doctor-report.schema.json text eol=lf
 lazurio/testdata/golden/** text eol=lf
+# Module templates are hashed into the scaffold tree_hash and written verbatim
+# into new Modules; a CRLF checkout must not change either.
+lazurio/templates/** text eol=lf
 
 *.png binary
 *.jpg binary

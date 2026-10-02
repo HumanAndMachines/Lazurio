@@ -279,6 +279,21 @@ vyplněným `runtime` (`reason: module_standard_nonconformant`).
 Úplný postup pro private Module migraci, nový Modul, rerun a PR handoff drží
 [veřejný Agent manuál](../manual/module-setup.md).
 
+## Nový Modul
+
+```sh
+lazurio module create ExampleOrganization/portal --stack vite-react --dry-run
+lazurio module create ExampleOrganization/portal --stack vite-react --teams web
+```
+
+Spouští se z task worktree root repa Organizace. Scaffold zapíše Modul podle
+stacku (`vite-react`, `astro`, `astro-starlight`, `bun-service`, `python-uv`,
+`none`), přidá slot do `modules.manifest.json`, nainstaluje závislosti, udělá
+první commit a změří výsledek kontrolami `MS-01`–`MS-13`. Generátor je čistá
+funkce `planModuleScaffold` (`module-scaffold-lib.mjs`) sdílená s Dashboardem;
+report `lazurio.module_create.report.v1` a exit kódy popisuje
+[manuál nového Modulu](../manual/module-create.md).
+
 ## Module lifecycle
 
 CLI obsluhuje explicitně deklarované Apps přes jediný aktivní Lazurio Server:

@@ -1,0 +1,35 @@
+# {{display_name}} — pravidla pro agenty
+
+Modul `{{slug}}` Organizace `{{organization}}`. Vznikl příkazem
+`lazurio module create` (stack `{{stack}}`) a od prvního commitu splňuje
+Lazurio Module Standard. Tak ho drž.
+
+## Scope
+
+- Tento repozitář je jeden Modul: `lazurio.module.json` v kořeni; App, pokud
+  ji Modul má, žije v `app/v<N>/`.
+- Slot, Teamy a přístupy drží `modules.manifest.json` root repa Organizace.
+  Jejich změna jde samostatným PR do root repa Organizace, ne sem.
+- Jeden Modul = jeden task worktree = jedna branch = jeden PR. Primární
+  checkout zůstává na `main`.
+
+## Standard
+
+- `dev` spouští jeden proces serveru a nic jiného; build, data a migrace
+  patří do přípravy (`prepare:app`), kontrola připravenosti do
+  `check:prepared`.
+- Host a port čte App jen z `LAZURIO_RUNTIME_LISTENER_<ID>_HOST` a `_PORT`
+  (přes `@lazurio/module-kit`); bez nich skončí kódem 2. Port patří jen do
+  `lazurio.module.json`, do zdrojů App se nepíše.
+- Žádné `.env*` soubory, tajemství v repozitáři ani importy mimo tento
+  repozitář; sdílený kód jen jako verzovaná závislost.
+- Odchylka se opravuje v Modulu, ne výjimkou v Launchpadu.
+
+## Ověření před PR
+
+```sh
+lazurio module setup <cesta k Modulu> --root <Lazurio root> --json
+```
+
+Očekávaný stav je `current`. Příkazy App (`check`, `test`, ruční start)
+popisuje `README.md`.
