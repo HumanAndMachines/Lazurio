@@ -66,7 +66,7 @@ Maintenance agent před zásahem ověřuje:
   0118): root doctor svolává vlastní doctory namountovaných rep podle deklarace
   v manifestu, agreguje z vnořených reportů a rozbitého potomka hlásí nahlas.
   Nese i slovník `not_applicable` / `blocked` / `incomplete`.
-- `manual/hosted-buddy-vps.md` — pro agenty v source checkoutu: jak zjistit, jestli Principál má hostovaného Buddyho, co s hostem smíš a nesmíš dělat, a pravidlo, že na VPS platí vygenerovaný Buddy resident root a privátní profil místo source pravidel.
+- `manual/hosted-buddy-vps.md` — pro agenty v source checkoutu: jak zjistit, jestli Operátor má hostovaného Buddyho, co s hostem smíš a nesmíš dělat, a pravidlo, že na VPS platí vygenerovaný Buddy resident root a privátní profil místo source pravidel.
 - `manual/lazurio-resident-profiles.md` — public-safe a offline dostupné
   vysvětlení Buddyho, AI Kolegy, instalovaného non-Git Lazurio Rootu,
   aktualizací, incidentů a odděleného source checkoutu.

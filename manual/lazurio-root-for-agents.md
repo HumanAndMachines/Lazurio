@@ -69,7 +69,7 @@ trackované změny připraví v task worktree. Primární Source Root zůstává
 `main`; není místem pro Draft.
 
 Opakovaný `lazurio install` smí Source Root inspectovat a reconciliovat, ale
-bez explicitní volby Principála jej nesmí migrovat ani označit za závadu jen
+bez explicitní volby Operátora jej nesmí migrovat ani označit za závadu jen
 proto, že je Git checkout.
 
 ## Toolchain musí přežít instalační relaci
@@ -89,7 +89,7 @@ nastavený SSH protokol, Node v rozsahu z `lazurio/package.json#engines.node` a
 Troubleshooting lane `lazurio doctor --tool-updates` ověří i čitelnou verzi a
 aktuálnost povinných nástrojů; chybějící nebo nečitelný povinný nástroj je
 required failure, zatímco pouhá dostupnost novější verze zůstává warningem a
-vyžaduje rozhodnutí Principála.
+vyžaduje rozhodnutí Operátora.
 
 Instalační mandát má explicitní rozsah, ne implicitní admin práva:
 
@@ -162,7 +162,7 @@ Interní OAuth `device_code`, access token ani privátní klíč nikdy nezobraz�
 
 Je-li deklarovaný privátní remote SSH a probe selže při platném `gh` loginu,
 Agent ověří existující SSH klíč a vazbu na tentýž GitHub účet. Vytvoření nebo
-nahrání nového klíče je změna přístupu: vyžaduje explicitní souhlas Principála,
+nahrání nového klíče je změna přístupu: vyžaduje explicitní souhlas Operátora,
 privátní klíč se nevypisuje a po nápravě se opakuje `git ls-remote`, ne celý
 GitHub login. Podrobný owner/Builder postup drží
 [`manual/organization-install.md`](organization-install.md).
@@ -192,7 +192,7 @@ decision 0164 nestaví. Instalace Root Repa přejdou jednosměrně do Lazurio
 Folderu spravovaného LazurioPlatform a selhání opraví Agent vpřed ve Folderu;
 migraci a její manuály připravuje LazurioPlatform (issue #50). Do té doby
 Source Root zůstává beze změny: nepřesouvej ho ručně ani vlastním skriptem a
-Principálovi jen předej přesný report.
+Operátorovi jen předej přesný report.
 
 ## Co Agent nesmí obcházet
 

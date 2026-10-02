@@ -17,7 +17,7 @@ decision recordu a znalost do Knowledgebase.
 | Organization root kontrakt nebo org-wide proces | privátní root repo dané Organizace |
 | Jedna aplikace nebo Modul | přesný repo Modulu |
 | Plán, priorita, assignee nebo stav realizace | Mission Control, ne Issue tracker |
-| Personalspace, secrets nebo neveřejný obsah bez bezpečného owning repa | nepublikovat; předat sanitizovaný draft Principálovi |
+| Personalspace, secrets nebo neveřejný obsah bez bezpečného owning repa | nepublikovat; předat sanitizovaný draft Operátorovi |
 
 Nikdy neposílej Organization-specific obsah do veřejného Lazurio repa jen
 proto, že se problém projevil během instalace. Do upstream issue patří pouze
@@ -57,7 +57,7 @@ Zapsat issue nebo ho doplnit komentářem je trvalý mandát každého Task Agen
 nejde hned vyřešit, Agent po kontrole duplicit a sanitizaci sám zapíše do
 přesného owning repa, uvede URL v handoffu a pokračuje na práci, která na
 issue nestojí. Předem se neptá. Mandát se nevztahuje na uzavření, assignment
-ani prioritizaci issue; ty dělá jen na pokyn Principála.
+ani prioritizaci issue; ty dělá jen na pokyn Operátora.
 
 Instalační prompt může owning repo pojmenovat předem. Doporučená věta:
 
@@ -74,7 +74,7 @@ fakt; otevřenou otázku zapiš jako otázku a uveď, co je ověřené a co ne.
 
 Když Issues nejsou povolené, GitHub účet nemá potřebné právo, síť je
 nedostupná nebo public-safety není jistá, Agent nic neobchází a nezapisuje
-fallback do jiné Organizace. Vrátí Principálovi hotový sanitizovaný body draft,
+fallback do jiné Organizace. Vrátí Operátorovi hotový sanitizovaný body draft,
 exact cílový repo a důvod, proč jej nezveřejnil.
 
 ## Migrace starých JSON ledgerů

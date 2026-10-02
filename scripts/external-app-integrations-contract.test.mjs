@@ -83,13 +83,13 @@ test("write smoke cleanup zůstává úzce vymezenou součástí schváleného s
   const manual = await readPolicy(manualPath);
 
   expect(manual).toContain("Výjimka pro úklid určeného smoke artefaktu");
-  expect(manual).toMatch(/Principál\s+výslovně\s+schválil tento jmenovitý smoke cíl/);
+  expect(manual).toMatch(/Operátor\s+výslovně\s+schválil tento jmenovitý smoke cíl/);
   expect(manual).toContain("v tomto konkrétním smoke sám vytvořil");
   expect(manual).toMatch(/nejde o\s+samostatnou Publikaci ani o obecné oprávnění mazat/);
   expect(manual).toContain("existujícího, ostrého nebo cizího obsahu");
-  expect(manual).toMatch(/vyžádej si samostatný explicitní pokyn\s+Principála/);
+  expect(manual).toMatch(/vyžádej si samostatný explicitní pokyn\s+Operátora/);
   expect(manual).toMatch(
-    /Nevratné operace \(odeslání, zveřejnění, mazání, přepis ostrého obsahu,\s+změna oprávnění\) potvrzuje Principál per akci\./,
+    /Nevratné operace \(odeslání, zveřejnění, mazání, přepis ostrého obsahu,\s+změna oprávnění\) potvrzuje Operátor per akci\./,
   );
 });
 
@@ -108,13 +108,13 @@ test("napojení jen na Environmentu operátora nevyžaduje katalog Organizace an
   expect(manual).toMatch(
     /operátor povolil jen \*\*na svém Environmentu\*\*, se do katalogu Organizace\s+nezapisuje/,
   );
-  // Smoke u operátorova napojení schvaluje Principál v threadu, ne katalog.
+  // Smoke u Operátorova napojení schvaluje Operátor v threadu, ne katalog.
   expect(manual).toMatch(
-    /které je jen na Environmentu operátora, se do katalogu Organizace nic\s+nezapisuje/,
+    /které je jen na Environmentu Operátora, se do katalogu Organizace nic\s+nezapisuje/,
   );
-  expect(manual).toMatch(/jmenovitě určí a schválí Principál v threadu/);
+  expect(manual).toMatch(/jmenovitě určí a schválí Operátor v threadu/);
   expect(manual).toMatch(
-    /jmenovitě schválený\s+Principálem v threadu \(u napojení jen na Environmentu operátora\)/,
+    /jmenovitě schválený\s+Operátorem v threadu \(u napojení jen na Environmentu Operátora\)/,
   );
   // Composio se přihlašuje přes prohlížeč; žádný projekt ani klíč na mašině.
   expect(manual).toMatch(
@@ -198,12 +198,12 @@ test("provider runbooky nesmí cleanup vydávat za obecné oprávnění mazat", 
   for (const path of smokeInstructionPaths) {
     const policy = await readPolicy(path);
 
-    expect(policy).toMatch(/Principál\s+výslovně\s+schválil\s+(?:každý použitý\s+)?jmenovitý smoke cíl/);
+    expect(policy).toMatch(/Operátor\s+výslovně\s+schválil\s+(?:každý použitý\s+)?jmenovitý smoke cíl/);
     expect(policy).toContain("INTEGRATIONS.md");
     expect(policy).toMatch(/tento\s+konkrétní smoke/);
     expect(policy).toMatch(/(?:artefakt|zprávu|design)\s+vytvořil\s+tento\s+konkrétní smoke/);
     expect(policy).toMatch(/artefakt\s+ponech/);
-    expect(policy).toMatch(/samostatný explicitní\s+pokyn Principála/);
+    expect(policy).toMatch(/samostatný explicitní\s+pokyn Operátora/);
   }
 });
 
@@ -293,7 +293,7 @@ test("Windows containment odmítne sibling-prefix a jiný drive", () => {
 });
 
 test("kontraktní text se čte shodně z Windows CRLF checkoutu", () => {
-  expect(canonicalNewlines("Principál výslovně\r\nschválil tento jmenovitý smoke cíl")).toBe(
-    "Principál výslovně\nschválil tento jmenovitý smoke cíl",
+  expect(canonicalNewlines("Operátor výslovně\r\nschválil tento jmenovitý smoke cíl")).toBe(
+    "Operátor výslovně\nschválil tento jmenovitý smoke cíl",
   );
 });

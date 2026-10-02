@@ -27,11 +27,12 @@ credentials ani runtime logy se soukromým obsahem.
 
 ## 2. Lokální úprava je legitimní drift
 
-Principál vlastní Mašinu a může aktivní root vědomě opravit. Doctor takovou
+Owner vlastní Mašinu a může aktivní root vědomě opravit. Doctor takovou
 změnu zviditelní, ale nevydává ji za útok ani ji automaticky nevrací. Updater
 ji nesmí potichu přepsat.
 
-Před dalším update Principál nebo jeho operátor vědomě zvolí jednu možnost:
+Před dalším update Owner nebo jím pověřený provozovatel hostingu vědomě
+zvolí jednu možnost:
 
 1. hotfix zatím zachovat a update odložit;
 2. přenést opravu do odděleného Lazurio source checkoutu a vydat nový artefakt;
@@ -92,7 +93,7 @@ sudo bun /opt/lazurio/active/resident/updater.mjs rollback \
 Potom znovu ověř status, Hermes health a čerstvou registraci bridge. Rollback
 nikdy nemaže Personalspace, Organization checkouty ani starší verzované rooty.
 Obnova secrets, dat nebo přístupů je jiná operace a vyžaduje přesný souhlas
-Principála.
+Ownera.
 
 ## 5. Kdy použít operator plane místo updateru
 

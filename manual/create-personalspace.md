@@ -30,7 +30,7 @@ současný live příkaz ji nevytváří.
 
 ## Na hostované osobní Mašině
 
-Osobní Mašina Principála (`LAZURIO_HOSTED_SCOPE=personal`) dostane nainstalované
+Osobní Mašina Operátora (`LAZURIO_HOSTED_SCOPE=personal`) dostane nainstalované
 Lazurio bez Personalspace: jeho privátní repo leží na osobním GitHub účtu
 ownera a nikdo jiný ho vytvořit ani naklonovat nesmí (decision 0091). Dokud
 chybí, Launchpad běží a v osobním scope ukazuje výzvu „Personalspace na této

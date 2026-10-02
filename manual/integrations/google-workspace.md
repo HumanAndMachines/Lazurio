@@ -34,7 +34,7 @@ agregátory (broker drží tokeny — zakázáno standardem).
 2. Vytvoř OAuth client (Desktop pro lokální STDIO/CLI, Web pro remote MCP
    dle dokumentace); client JSON ulož do custody cesty Organizace, nikdy do
    repa.
-3. Před consentem ukaž Principálovi přesný účet, účel a seznam scopes. Pro
+3. Před consentem ukaž Operátorovi přesný účet, účel a seznam scopes. Pro
    používané služby žádej potřebnou read i write schopnost
    (`gmail.modify`/`gmail.send`, `drive.readonly` + `drive.file`,
    `spreadsheets`… dle workflow). Plný `drive` přidej jen když schválený
@@ -69,7 +69,7 @@ Katalogový zápis v org `.mcp.json` (Claude Code), OSS varianta:
 Codex ekvivalent viz příklad B v
 [codex-manual-mcp-integrations.md](../codex-manual-mcp-integrations.md).
 Env hodnoty patří do machine-local `integrations.env` v custody; OAuth
-consent dokončuje Principál v prohlížeči a ověří správný org účet.
+consent dokončuje Operátor v prohlížeči a ověří správný org účet.
 Současná [upstream reference](https://workspacemcp.com/docs/deployment#credential-store-backends)
 dokumentuje `WORKSPACE_MCP_CREDENTIALS_DIR` i zpětně kompatibilní
 `GOOGLE_MCP_CREDENTIALS_DIR`. Katalog předává obě jména na tutéž cestu,
@@ -113,7 +113,7 @@ Pro integraci používanou pouze účty jedné Google Workspace Organizace:
 
 Změna audience, publishing statusu, admin trustu nebo scopes je provider-side
 admin operace. Agent ji neprovede jen proto, že diagnostikoval příčinu: ukáže
-současný a cílový stav a vyžádá si explicitní souhlas oprávněného Principála.
+současný a cílový stav a vyžádá si explicitní souhlas oprávněného Operátora.
 Kanonické reference: [Google OAuth audience a sedmidenní limit](https://support.google.com/cloud/answer/15549945),
 [Workspace Admin app-access policy](https://support.google.com/a/answer/7281227)
 a [důvody zneplatnění refresh tokenu](https://developers.google.com/identity/protocols/oauth2#expiration).
@@ -144,10 +144,10 @@ soubor, čtení známé Sheet range) a pokračuj zápisem **jen v k tomu určen�
 scratch složce Drive a draftu adresovaném sobě** — nikdy v ostrém dokumentu
 a bez odeslání. Do `INTEGRATIONS.md` zapiš oba použité cíle: přesnou Drive
 scratch cestu i jmenovitý Gmail draft cíl (org účet a roli příjemce). Draft i
-testovací soubor smíš po ověření odstranit jen když Principál výslovně
+testovací soubor smíš po ověření odstranit jen když Operátor výslovně
 schválil každý použitý jmenovitý smoke cíl zapsaný v `INTEGRATIONS.md` a
 každý artefakt vytvořil tento konkrétní smoke. Jinak artefakt ponech a
-vyžádej si samostatný explicitní pokyn Principála.
+vyžádej si samostatný explicitní pokyn Operátora.
 
 ## Custody a rizika
 

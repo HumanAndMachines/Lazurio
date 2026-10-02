@@ -34,7 +34,7 @@ Lazurio Dashboard. Lazurio Environment to nevynucuje.
 
 - S napojenou aplikací dělat vše, co nabízí, tedy číst, zapisovat i mazat,
   pokud operátor rozsah neomezil.
-- Navenek viditelný zápis provést jen na pokyn Principála.
+- Navenek viditelný zápis provést jen na pokyn Operátora.
 - Připojení účtu zprostředkovat operátorovi odkazem; přihlašovací údaje nikdy
   nedrží a nikam je nezapisuje.
 - Na mašině s více Organizacemi volit nástroj Organizace, pro kterou pracuje,

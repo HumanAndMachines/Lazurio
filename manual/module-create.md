@@ -8,7 +8,7 @@ převezme Dashboard „Nový Modul“.
 
 ## Kdy použít
 
-- Principál chce nový Modul Organizace (aplikaci, web, dokumentaci, službu
+- Operátor chce nový Modul Organizace (aplikaci, web, dokumentaci, službu
   nebo repozitář bez App).
 - Nepoužívej pro převod existujícího Modulu; ten jde přes
   `lazurio module setup` ([module-setup.md](module-setup.md)).
@@ -36,7 +36,7 @@ převezme Dashboard „Nový Modul“.
    root repa Organizace. Organization Admin založí privátní GitHub repo
    `<github-org>/<slug>` s chráněnou `main`; Modul se do něj pushne
    (`git remote add origin …` a `git push -u origin main`, přesné příkazy
-   vypíše report). Merge slotu je Publikace a patří oprávněnému Principálovi.
+   vypíše report). Merge slotu je Publikace a patří oprávněnému Operátorovi.
 5. Před merge rebasuj PR slotu na aktuální `main`.
 6. Po merge slotu `lazurio update` Modul materializuje na každém
    Environmentu. U Modulu s App potom znovu spusť

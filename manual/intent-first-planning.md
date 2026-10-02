@@ -13,7 +13,7 @@ Plán je obrys, který se zpřesňuje poznáním. Není předem napsaným progra
   nezbytné mechanismy a selhání, která výsledek musí zvládnout.
 - Volnost implementátora: co může vyřešit jinak a jaké detaily lze ořezat
   nebo odložit bez porušení cíle.
-- Podstatné závislosti, nejistoty a rozhodnutí Principála. Technické problémy
+- Podstatné závislosti, nejistoty a rozhodnutí Operátora. Technické problémy
   odkazuj do GitHub Issues přesného owning repa podle [issue flow](github-issues.md).
 
 Použij existující schéma plánu. Tyto informace patří do context, target_state,
@@ -44,7 +44,7 @@ větev musí projít svými kontrolami.
 
 Když se mění chtěné chování, nejdřív vysvětli změnu záměru a uprav plán a jeho
 kontrakt, potom implementaci. Změnu pevného business, access nebo publikačního
-principu rozhoduje Principál. Běžná interní změna nepotřebuje přepisovat plán.
+principu rozhoduje Operátor. Běžná interní změna nepotřebuje přepisovat plán.
 
 Test, který potvrzuje chybu, duplikuje jiný důkaz nebo zamyká nepodstatný detail,
 odstraň či nahraď scénářem správného chování. Zachovej skutečné regresní

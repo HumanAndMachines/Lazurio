@@ -45,7 +45,7 @@ Katalogový zápis v org `.mcp.json`:
 ```
 
 Codex: `codex mcp add <org_slug>_atlassian --url https://mcp.atlassian.com/v1/mcp/authv2`
-+ `codex mcp login`. OAuth consent dokončuje Principál a vybírá správnou
++ `codex mcp login`. OAuth consent dokončuje Operátor a vybírá správnou
 site Organizace.
 
 Pro Jira JQL search je `search:jira-work` samostatný scope; samotný
@@ -63,9 +63,9 @@ Smoke začni čtením známého Jira issue a Confluence stránky přes
 `search_atlassian` a pokračuj zápisem **jen v sandbox projektu/space**
 určeném pro agentní smoke, nikdy v ostrém projektu. Sandbox zapiš do
 `INTEGRATIONS.md`. Vytvořené issue/stránku smíš po ověření smazat nebo
-zavřít jen když Principál výslovně schválil jmenovitý smoke cíl zapsaný v
+zavřít jen když Operátor výslovně schválil jmenovitý smoke cíl zapsaný v
 `INTEGRATIONS.md` a artefakt vytvořil tento konkrétní smoke. Jinak artefakt
-ponech a vyžádej si samostatný explicitní pokyn Principála.
+ponech a vyžádej si samostatný explicitní pokyn Operátora.
 
 ## Custody a rizika
 

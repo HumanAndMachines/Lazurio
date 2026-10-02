@@ -79,7 +79,7 @@ závislost: teprve přepínač načte oficiální stabilní release metadata pro
 GitHub CLI, Codex dostupný v `PATH` a volitelně nainstalovaný Claude Code.
 Nedostupný nebo nečitelný Codex je required failure; chybějící Claude je
 neutrální. Samotná dostupnost novější verze je advisory. `update_available`
-instruuje Agenta, aby ověřil existující mandát nebo požádal Principála o souhlas;
+instruuje Agenta, aby ověřil existující mandát nebo požádal Operátora o souhlas;
 samotný Doctor nikdy nespouští updater ani package manager. Neověřitelná
 aktuálnost zůstává `warn`, ne falešné `ok`. Bun do obecného latest-release
 porovnání nevstupuje — jeho localhost autoritou zůstává exact pin výše.

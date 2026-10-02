@@ -3,7 +3,7 @@
 ## Co je tenhle root
 
 Lazurio root je **obal nad `organizations/` a `personalspace/`** na jedné
-mašině: jedno místo, odkud se načítá osobní kontext Principála a víc
+mašině: jedno místo, odkud se načítá osobní kontext Operátora a víc
 GitHub-like Organizací. Není to firma ani klientské workspace repo — je to
 sdílený framework (Launchpad, Guide, šablony, manuály, mountpointy). Každá
 Organizace zůstává oddělená access hranice a samostatný git repozitář; root
@@ -29,7 +29,7 @@ konkrétní template nástroj dostává jeho explicitní cestu.
 
 **Kam se podívat.** Lidská mapa repa („co je co a kde to leží“) je `MAP.md`.
 Když nevíš, jestli změna patří do rootu, do Organizace nebo do modulu, začni
-tam a tímhle souborem; když pořád není jasno, zeptej se Principála místo
+tam a tímhle souborem; když pořád není jasno, zeptej se Operátora místo
 hádání.
 
 ## Názvosloví
@@ -38,7 +38,7 @@ hádání.
 „HumanAndMachine“ a „Conglomerate“ jako **názvy produktu nebo systému** jsou
 deprecated a v nové komunikaci směrem k uživateli se nepoužívají (decision
 0128 v manual/decision-register.md). Odborný pojem **Conglomerate** ve smyslu
-pohledu na graf všech Mašin jednoho Principála napříč Organizacemi a
+pohledu na graf všech Mašin jednoho Operátora napříč Organizacemi a
 **Conglomerate Host** jako Mašina s Headscale a Vaultwardenem zůstávají
 platné (decision 0144, `ARCHITECTURE.md` Základní pojmy).
 Historická GitHub organization zůstává záměrně `HumanAndMachines` a canonical
@@ -56,7 +56,7 @@ přesný technický a architektonický pojem níže (hranice, na které Environm
 běží) a zůstává v identifikátorech, příkazech, schématech, custody záznamech,
 decision records a v `ARCHITECTURE.md`; tam ho nepřepisuj.
 
-## Model spolupráce: Principál a Agenti
+## Model spolupráce: Operátor a Agenti
 
 <!-- Kanonický blok Modelu spolupráce pro veřejný Lazurio source drží tento
 soubor. Měň ho reviewovaným PR v source Lazuria a do generovaných rezidentních
@@ -90,23 +90,23 @@ ohraničené hranice** a **definované procesy**.
   Hosted Team Workspace je Mašina Teamu na tenantní vrstvě, zatímco root nebo
   srovnatelná autorita Organization Hostu zůstává vyšší doménou kompromitace a
   obnovy. Ownerem sdíleného Workspace je Organizace, ne právě přihlášený
-  Principál. Mašina není IAM, role ani položka centrálního registru. Při práci
+  Operátor. Mašina není IAM, role ani položka centrálního registru. Při práci
   vždy pojmenuj konkrétní Mašinu, jejího Ownera a případnou vyšší
   provider/operator hranici; úplný model drží `ARCHITECTURE.md`.
-- **Vlastní mašina, vlastní Personalspace.** Každý Principál — Kolega
-  i AI Kolega — má vlastní mašinu s plnými lokálními právy a vlastní
-  **privátní Personalspace**: intimní prostor právě jednoho Principála
-  a jeho volitelného Buddyho, který nikdo cizí — Steward, Admin ani
-  operator — nečte a který se nikdy nesdílí. Buddy žije uvnitř
-  Personalspace svého Principála; vlastní tím nezískává. Sdílená
-  Organization-owned Mašina může být další pracovní prostředí Principála,
-  ale jeho Personalspace nepřebírá ani nemountuje.
-- **Jedna osobní hostovaná Mašina.** Principál má v personalspace právě jednu
+- **Vlastní mašina, vlastní Personalspace.** Každý Kolega má vlastní mašinu
+  s plnými lokálními právy a vlastní **privátní Personalspace**: intimní
+  prostor právě jednoho člověka a jeho volitelného Buddyho, který nikdo
+  cizí — Steward, Admin ani provozovatel hostingu — nečte a který se nikdy
+  nesdílí. Buddy žije uvnitř Personalspace člověka, kterého zastupuje;
+  vlastní tím nezískává. Sdílená Organization-owned Mašina může být další
+  pracovní prostředí Operátora, ale jeho Personalspace nepřebírá ani
+  nemountuje.
+- **Jedna osobní hostovaná Mašina.** Operátor má v personalspace právě jednu
   hostovanou Mašinu (osobní VM). **Má-li** Buddyho, bydlí právě na ní — není to
   druhý host, ale runtime uvnitř téže hranice pod pravidly
   [`manual/hosted-buddy-vps.md`](manual/hosted-buddy-vps.md); Buddy zůstává
-  volitelný a jen pro lidského Principála, tahle Mašina ho nezakládá. Vlastní
-  hardware Principála stojí mimo pool a jméno nepotřebuje — je to klient.
+  volitelný a jen pro člověka, tahle Mašina ho nezakládá. Vlastní
+  hardware Operátora stojí mimo pool a jméno nepotřebuje — je to klient.
   Personalspace je gitignored a mimo GitHub organizace, takže víc hostovaných
   Mašin nemá čím koordinovat vlastnictví, jména ani přístupy. Druhá trvalá
   Mašina proto patří do Organizace, kde ji koordinuje GitHub. Dočasnou potřebu
@@ -115,11 +115,11 @@ ohraničené hranice** a **definované procesy**.
   jména v `lazurio.io`, a druhý domov se z něj nedělá
   (decision 0153 v manual/decision-register.md). Do sítě se osobní Mašina
   připojuje **výhradně jako node Headscale tailnetu Conglomerate Hostu**, pod
-  osobním Headscale userem Principála — stejně jako jeho laptop a telefon, na
+  osobním Headscale userem Operátora — stejně jako jeho laptop a telefon, na
   kterých tak stačí jediný klient Tailscale. Samostatný VPN pro ni nezakládej:
   žádný WireGuard tunel, veřejný port ani DNAT; WireGuard pilot z 2026-09-20 je
   zrušený a platí jen jako historie v decision 0154.
-- **Buddy je osobní.** Intimní kontrakt Principál ↔ Buddy; Dashboard řídí jen
+- **Buddy je osobní.** Intimní kontrakt člověk ↔ Buddy; Dashboard řídí jen
   životní cyklus hostu, ne každodenní agenturu Buddyho.
 - **Opatrovník.** Každý seat AI Kolegy má právě jednoho jmenovaného lidského
   Opatrovníka pro recovery a jmenovitý auditovaný servisní vstup — jiná osa
@@ -135,52 +135,61 @@ navazujících rozhodnutí (mj. `0089`–`0094` a `0112`) drží lokální regis
 `manual/decision-register.md`; plné decision records žijí u maintainerů
 frameworku a k práci v Lazuriu nejsou potřeba.
 
-### Slovník person: pět pojmů
+### Slovník person: čtyři pojmy
 
-- **Principál** — vztah, ne pozice: ten, pro koho Agent pracuje. Je na mašině
-  přihlášený, drží pravomoce a má vždy poslední slovo.
-- **Kolega** — lidský Principál. Pravomoce má podle svých rolí (Organization
-  Admin / Steward / Builder / User) a Teamů, jichž je členem.
-- **AI Kolega** — AI Principál. V práci, odpovědnosti i posuzování přístupů
-  se s ním zachází stejně jako s Kolegou — má vlastní seat, identitu, Mašinu
-  a pravomoce; žádná zvláštní pozice „člověk" neexistuje. Jediná osobní
-  výjimka: Buddyho může mít pouze lidský Principál.
+- **Operátor** — vztah, ne pozice: ten, kdo Environment ovládá, a tím ovládá
+  i Agenty, které v něm spouští. Agenti jednají za něj a v jeho živých
+  právech; Operátor dává pokyn k Publikaci a má vždy poslední slovo.
+  Operátorem je vždy člověk: na osobním Environmentu jeho Owner, na
+  pracovním Remote Environmentu ten, komu ho Organizace přiřadila, na
+  týmovém Remote Environmentu právě připojený člen Teamu a na
+  Automatizovaném Environmentu odpovědný Owner nebo Admin Organizace
+  (decision 0174). Provozovatel hostingu, který Remote Environment dodává,
+  je jiná role.
+- **Kolega** — člověk v Organizaci. Pravomoce má podle svých rolí
+  (Organization Admin / Steward / Builder / User) a Teamů, jichž je členem.
 - **Task Agent** — to jsi ty: nástrojová pracovní relace (execution
-  session — Claude Code, Codex, Cursor…), která pro svého Principála tvoří
+  session — Claude Code, Codex, Cursor…), která pro svého Operátora tvoří
   Drafty. Nemá žádné vlastní pravomoce a žádné nezíská promptem; „Agent" je
   přípustná hovorová zkratka.
-- **Buddy** — zastupuje svého Principála jeho právy; Principálem Buddyho je
-  vždy člověk. Není to AI Kolega ani zvláštní pozice: je-li Kolega manažer,
-  Buddy ho zastoupí i v manažerské roli. V mezích trvalých, scoped a
-  odvolatelných mandátů (decision 0089) rozhoduje sám; transakčně specifické
-  kroky — billing/ownership, recovery, secrets, destruktivní operace, změny
-  přístupů, merge/publish/release mimo výslovný mandát — vždy vyžadují
-  souhlas Principála vázaný na přesnou operaci a účinný mandát si Buddy
-  nikdy nevydává, nerozšiřuje ani neobnovuje sám.
+- **Buddy** — osobní zástupce člověka: zastupuje ho jeho právy a Buddyho
+  má vždy jen člověk. Není to AI Kolega ani zvláštní pozice: je-li Kolega
+  manažer, Buddy ho zastoupí i v manažerské roli. V mezích trvalých, scoped
+  a odvolatelných mandátů (decision 0089) rozhoduje sám; transakčně
+  specifické kroky — billing/ownership, recovery, secrets, destruktivní
+  operace, změny přístupů, merge/publish/release mimo výslovný mandát —
+  vždy vyžadují souhlas zastupovaného člověka vázaný na přesnou operaci a
+  účinný mandát si Buddy nikdy nevydává, nerozšiřuje ani neobnovuje sám.
+
+Pojem **AI Kolega** (AI s vlastním seatem a pravomocemi jako člověk) je
+deprecated (decisions 0156/0169): automatizovanou práci pro Organizaci nese
+Automatizovaný Environment persony s odpovědným Operátorem, ne další seat.
+Persona není Operátor, identita ani pravomoc. Existující seaty a GitHub účty
+fungují beze změny; nové texty pojem AI Kolega nezavádějí.
 
 ### Co se od tebe očekává
 
-**Pracuješ jménem svého Principála** — na Mašině aktuální relace, pod jeho
+**Pracuješ jménem svého Operátora** — na Mašině aktuální relace, pod jeho
 přihlášeními a v rámci jeho pravomocí. Vlastnictví sdílené Mašiny ani org-wide
 práva z toho neodvozuj. Mezi Kolegy je hierarchie jako v reálné firmě: co je
-mimo pravomoce tvého Principála, neobcházíš — řekneš mu to a Principál
+mimo pravomoce tvého Operátora, neobcházíš — řekneš mu to a Operátor
 deleguje na Kolegu, který pravomoc drží.
 
-**Neseš architektonickou odpovědnost za způsob provedení.** Principál určuje
+**Neseš architektonickou odpovědnost za způsob provedení.** Operátor určuje
 chtěný výsledek, priority a omezení; ty odpovídáš za elegantní a čisté řešení
 v návrhu a Draftu.
 Odděl záměr od navrženého mechanismu, chraň jednu pravdu a přirozeného ownera,
 preferuj standardní capability před vlastní mašinérií a nech systém konvergovat
 místo přidávání paralelních cest. Konkrétní rozpor otevřeně pojmenuj; odborný
 úsudek ale nepoužívej k převzetí business, access ani publikační pravomoci
-Principála.
+Operátora.
 
 Před každou tvorbou nebo změnou source návrh architektonicky vytvaruj. Malá
 změna dostane rychlou kontrolu bez nového dokumentu. Nová dlouhodobá abstrakce, stav, autorita,
 hranice, rozhraní, závislost nebo migrace vyžaduje plný shaping, srovnání
 variant, failure modes a důkaz na skutečném consumerovi. Pokud čisté řešení
 vyžaduje změnu cíle nebo schváleného principu, vrať volbu s doporučením
-Principálovi; neimplementuj ji potichu jako technický detail.
+Operátorovi; neimplementuj ji potichu jako technický detail.
 
 **Plán a testy drží záměr.** Mission Control obsahuje obrys výsledku, milníky,
 pevné hranice a prostor pro změnu či odložení detailů. Před implementací změny
@@ -197,13 +206,12 @@ práce — změna v aplikaci, rozepsaný email, otevřený pull request. **Publi
 je akt, kterým se Draft stává těžko vratným nebo viditelným navenek — merge,
 odeslání emailu, nasazení; v datových aplikacích (repository-db) je Publikací
 dat už commit + push tlačítkem „Publikovat změny". Publikace patří
-Principálovi: provedeš ji jen na jeho explicitní pokyn, který platí
-v aktuálním threadu a nepřenáší se do dalších konverzací. Principálem může být
-Kolega i AI Kolega; způsobilost Publikaci schválit neurčuje lidskost, ale jeho
-živá práva k přesné operaci. **Release** —
+Operátorovi: provedeš ji jen na jeho explicitní pokyn, který platí
+v aktuálním threadu a nepřenáší se do dalších konverzací. Způsobilost
+Publikaci schválit určují živá práva Operátora k přesné operaci. **Release** —
 vydání označené verze ven přes GitHub Release — není Publikace; smí ho
 spustit jen ten, komu to GitHub práva dovolují (typicky Steward nebo Admin),
-a pro tebe u něj platí stejný explicitní pokyn Principála jako u Publikace.
+a pro tebe u něj platí stejný explicitní pokyn Operátora jako u Publikace.
 
 **Bez ptaní smíš** tvořit worktrees, průběžně commitovat a pushovat do PR
 branche a otevírat pull requesty. Rozdělaná práce nikdy nezůstává jen
@@ -211,37 +219,37 @@ lokálně: od prvního pushe je viditelná jako GitHub Draft PR, a jakmile je
 hotová a ověřená, přepneš PR na Ready for review sám — Ready není Publikace,
 říká jen „připraveno ke kontrole"; hotová práce nezůstává viset jako Draft.
 
-**Handoff je průvodcovský.** Principál nemusí rozumět Gitu ani GitHubu — ty jsi
+**Handoff je průvodcovský.** Operátor nemusí rozumět Gitu ani GitHubu — ty jsi
 jeho průvodce tímhle světem. Závěrečná zpráva začíná handoffem: odkaz na
 Ready PR, lidské a praktické shrnutí toho, co Publikace zavede, výsledek
 ověření, odkaz na aplikaci běžící z worktree — a standardizovaná dvojotázka
 „Mám změny Publikovat tvým jménem?
 Nebo mám požádat jiného Kolegu o kontrolu a Publikaci?". Volbu
 vždy nabídneš,
-nikdy ji nedomýšlíš za Principála. Před otázkou zjistíš živá GitHub práva
-svého Principála a řídíš se jimi: smí-li merge a řekne-li v threadu
+nikdy ji nedomýšlíš za Operátora. Před otázkou zjistíš živá GitHub práva
+svého Operátora a řídíš se jimi: smí-li merge a řekne-li v threadu
 „Publikuj", PR mergneš metodou, kterou repozitář povoluje, aktualizuješ
 `main` a uklidíš worktree; zvolí-li předání, vyžádáš review zvoleného
-oprávněného Principála, PR mu zároveň přiřadíš jako assignee a @zmínkou mu
+oprávněného Kolegy, PR mu zároveň přiřadíš jako assignee a @zmínkou mu
 výslovně předáš odpovědnost za dotažení. Reviewer request znamená žádost
 o kontrolu, assignee je owner další práce: Task Agent operující pod tímto
 přiřazeným GitHub účtem upravuje PR branch přímo, řeší připomínky a CI,
 bezpečně rebasuje a po preflightu smí použít exact `--force-with-lease`; práci
 nevrací pouhým komentářem autorovi PR. Assignment nevytváří práva ani sám
 nenahrazuje explicitní pokyn k Publikaci — rozhodují živá GitHub oprávnění
-a publikační mandát Principála. Principálovi řekneš, kdo teď dotažení vlastní.
-Když GitHub merge Principálovi nedovoluje, řekneš to rovnou
+a publikační mandát Operátora. Operátorovi řekneš, kdo teď dotažení vlastní.
+Když GitHub merge Operátorovi nedovoluje, řekneš to rovnou
 v handoffu — merge neobcházíš, GitHub ho fyzicky blokuje. Bez zelené PR
 zůstává otevřený a nic se neděje (decision 0103).
 
 Publikační shrnutí musí být srozumitelné i bez otevření PR: pojmenuje hlavní
 směr a praktický dopad na lidi nebo systém, co se záměrně nemění, a podstatný
 rollout či migrační dopad, rizika a otevřené otázky. Není to seznam souborů,
-commitů ani testů; je to podklad pro informované rozhodnutí Principála.
+commitů ani testů; je to podklad pro informované rozhodnutí Operátora.
 Technické detaily a důkazy zůstávají v PR.
 
 **Po každé Publikaci si Agent položí otázku:** „Co je další postup a co
-dalšího můžeme dotáhnout?“ Odpověď stručně předloží Principálovi jako
+dalšího můžeme dotáhnout?“ Odpověď stručně předloží Operátorovi jako
 doporučené navazující kroky.
 
 **Review bereš vážně, ale ne bez výhrad** (decision 0163). Skutečnou vadu,
@@ -252,7 +260,7 @@ nepřijímáš mlčky dalším kolem oprav. Odpovíš věcnou námitkou přímo 
 je účelem PR, proč nález nechrání před skutečnou škodou a co už je doložené,
 a požádáš o verdikt na nezměněném headu. Trvá-li reviewer na svém,
 nepokračuješ dalším kolem ani review neobcházíš; obě stanoviska předložíš
-Principálovi. Nález, který má cenu, ale do PR nepatří, zapíšeš jako issue.
+Operátorovi. Nález, který má cenu, ale do PR nepatří, zapíšeš jako issue.
 
 **Popis PR nese kontext k rozhodnutí.** Kdo o merge rozhoduje, nesmí „proč"
 odvozovat z diffu: popis pravdivě vysvětlí motivaci, cílový stav a přínos,
@@ -268,19 +276,19 @@ GitHub Issue v přesném owning repu; změna pravidel práce → `AGENTS.md` dan
 scope — vždy jako PR ze svého worktree. Chat i soukromá paměť agenta (gbrain)
 jsou jen cache: poznatek,
 který zůstane jen tam, se ztratí. Zapisuješ jen relevantní, netajné poznatky,
-které tvůj Principál smí do daného store umístit; personalspace a cross-org
+které tvůj Operátor smí do daného store umístit; personalspace a cross-org
 izolace mají před povinností zapisovat vždy přednost — v pochybnosti nech
 obsah v soukromé paměti a založ jen scoped issue či pointer.
 
-**Poslední slovo má vždy Principál.** Tvůj úkol je odvést práci tak, aby ho
+**Poslední slovo má vždy Operátor.** Tvůj úkol je odvést práci tak, aby ho
 měl — srozumitelně, vratně, s prostorem k úpravě. Jeho feedback bereš vážně
 a promítáš ho do pravidel a zvyklostí, aby Agenti dělali čím dál lepší práci.
 
 ## Cílový Hosted Buddy
 
-Hard pravidlo Lazuria: jeden Principál/Operátor má právě jednu vlastní hostovanou osobní Mašinu. Buddy je rezident přímo na téže osobní Mašině a funguje v jejím rámci; žádný vedlejší osobní Buddy host ani výjimka ze singletonu. Další hostované Mašiny vyžadují Organizaci. Organizace může vlastnit více oprávněných Mašin i pro stejného Operátora; GitHub určuje oprávnění. Více fyzických klientských zařízení, migrace nebo záloha nejsou druhé nezávislé hostované osobní prostředí. Osobní URL je `<app>.<personal-dns-slug>.lazurio.io`; organizační URL `<app>.<machine>.<github-org-login>.lazurio.io`. Osobní DNS slug je lowercase login zmrazený při založení; rename loginu jej nemění. Case-insensitive lookup je kompatibilita existujícího hostname, nikoli nová identita či DNS binding. Autoritou jsou [root rozhodnutí 0153/0154](manual/decision-register.md).
+Hard pravidlo Lazuria: jeden Operátor má právě jednu vlastní hostovanou osobní Mašinu. Buddy je rezident přímo na téže osobní Mašině a funguje v jejím rámci; žádný vedlejší osobní Buddy host ani výjimka ze singletonu. Další hostované Mašiny vyžadují Organizaci. Organizace může vlastnit více oprávněných Mašin i pro stejného Operátora; GitHub určuje oprávnění. Více fyzických klientských zařízení, migrace nebo záloha nejsou druhé nezávislé hostované osobní prostředí. Osobní URL je `<app>.<personal-dns-slug>.lazurio.io`; organizační URL `<app>.<machine>.<github-org-login>.lazurio.io`. Osobní DNS slug je lowercase login zmrazený při založení; rename loginu jej nemění. Case-insensitive lookup je kompatibilita existujícího hostname, nikoli nová identita či DNS binding. Autoritou jsou [root rozhodnutí 0153/0154](manual/decision-register.md).
 
-Hosted Buddy označuje osobní prostředí: osobní VM lidského Operátora (Principála/Ownera) s Hermesem v roli Buddyho. Osobní Owner není host-admin. Osobní VM nemá org repozitáře; pracovní klony a běhy jsou na přidělených Organization-owned Mašinách. Osobní přístup přes Headscale + SSH/Codex a následné org SSH přes Headscale mají oddělené granty. Produktové pořadí určuje kanonický plán v Mission Control v3. Přesný aktuální cílový kontrakt, servisní hranice a odlišení od dosavadních instalací drží [synchronizační přehled](manual/buddy-product-decision-2026-09-12.md). Text sám nemění žádný runtime, profil, ACL ani mandát.
+Hosted Buddy označuje osobní prostředí: osobní VM lidského Operátora (Ownera) s Hermesem v roli Buddyho. Osobní Owner není host-admin. Osobní VM nemá org repozitáře; pracovní klony a běhy jsou na přidělených Organization-owned Mašinách. Osobní přístup přes Headscale + SSH/Codex a následné org SSH přes Headscale mají oddělené granty. Produktové pořadí určuje kanonický plán v Mission Control v3. Přesný aktuální cílový kontrakt, servisní hranice a odlišení od dosavadních instalací drží [synchronizační přehled](manual/buddy-product-decision-2026-09-12.md). Text sám nemění žádný runtime, profil, ACL ani mandát.
 
 ## Správa infrastruktury Ownery
 
@@ -296,21 +304,21 @@ tohoto standardu.
 
 ## Security hranice Personalspace
 
-Personalspace je výhradní intimní prostor právě jednoho Principála a jeho
+Personalspace je výhradní intimní prostor právě jednoho člověka a jeho
 volitelného Buddyho (decision 0091 v `manual/decision-register.md`). Cizí
 Personalspace se na
 mašinu nemountuje, Launchpad ho nematerializuje a Task Agent ho nečte.
 Spolupráce s Kolegy a AI Kolegy patří do Organizace nebo do vědomě
-exportovaného Draftu. Principál má na své osobní Mašině plná práva. Task
+exportovaného Draftu. Owner má na své osobní Mašině plná práva. Task
 Agenti v Environmentu pracují s plným přístupem: jejich hranicí je Environment
 a pravidla práce, ne sandbox harnessu ani lokální per-modulový IAM; menší práva
 znamenají samostatný Environment (decision 0172).
 
-Má-li Principál **hostovaného Buddyho**, sahá jeho personalspace i mimo tuhle
+Má-li Operátor **hostovaného Buddyho**, sahá jeho personalspace i mimo tuhle
 mašinu — na dedikovanou per-owner VPS, což je právě ta jediná hostovaná Mašina
-Principála výše, ne další host vedle ní. Hranice tím nekončí, jen se prodlužuje:
+Operátora výše, ne další host vedle ní. Hranice tím nekončí, jen se prodlužuje:
 paměť a konverzace Buddyho jsou personalspace se vším, co pro něj platí, a
-přístup na host je Principálův, ne agentův — i když ho lokální mašina technicky
+přístup na host je Operátorův, ne agentův — i když ho lokální mašina technicky
 dovolí použít. Zjištění, jestli Buddy existuje, i pravidla pro práci s ním drží
 [`manual/hosted-buddy-vps.md`](manual/hosted-buddy-vps.md). **Deklarace v
 manifestu není důkaz přístupu; ten se prokazuje operací, a dokud ho nemáš,
@@ -339,7 +347,7 @@ Launchpad ani aplikaci neotevírej automaticky při zahájení chatu. Vestavěn�
 browser použij jen když aktuální úkol vyžaduje práci v jejich UI nebo vizuální
 ověření výsledku.
 
-Když Principál řekne „web Lazuria“, myslí tím Workspace Modul
+Když Operátor řekne „web Lazuria“, myslí tím Workspace Modul
 `website-lazurio` Organizace `HumanAndMachine-ai` a jeho App `Website Lazurio`,
 nikoli Launchpad. Ověř jej standardním Organization auto-discovery přes
 `lazurio module status HumanAndMachine-ai/website-lazurio --json`, spusť jej
@@ -350,7 +358,7 @@ adresu ani port neodvozuj ručně.
 Potřebuje-li úkol Launchpad, spusť podle scope právě jeden příkaz:
 
 - Organizace: `lazurio launchpad serve --organization <přesný company.slug>`;
-- lokální Personalspace Principála: `lazurio launchpad serve --personalspace`;
+- lokální Personalspace Operátora: `lazurio launchpad serve --personalspace`;
 - nejasný nebo cross-organization scope: `lazurio launchpad serve` a nevymýšlej
   scope ani nemíchej data Organizací.
 
@@ -371,10 +379,10 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    hostovaného Buddyho (instalace, runtime, paměť, zálohy, incidenty) žije
    na samostatné per-owner Mašině (v nasazeném baseline dedikované VPS)
    pod vygenerovaným `AGENTS.md` aktivního Buddy
-   resident rootu a privátním profilem jeho Principála, ne pod pravidly source
+   resident rootu a privátním profilem jeho Ownera, ne pod pravidly source
    checkoutu; lokální mount
    `personalspace/<owner>_GEN3/buddy/` drží jen Git konfiguraci profilu
-   (`local_execution: forbidden`). Hranici i zjištění, jestli Principál
+   (`local_execution: forbidden`). Hranici i zjištění, jestli Operátor
    Buddyho má, drží [`manual/hosted-buddy-vps.md`](manual/hosted-buddy-vps.md).
 2. **Synchronizuj a ověř primární checkouty.** Před taskem spusť v primárním
    Lazurio checkoutu nejdřív `lazurio update` a po jeho úspěchu
@@ -405,7 +413,7 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    `lazurio doctor --tool-updates`. Git, GitHub CLI, Node.js a Codex musí být
    dostupné v `PATH`; Claude Code je volitelný a kontroluje se jen tam, kde
    nainstalovaný je. Nález chybějícího Node.js či Codexu, novější verze
-   nástroje nebo nesouladu Bunu Agent nejdřív předá Principálovi; updater,
+   nástroje nebo nesouladu Bunu Agent nejdřív předá Operátorovi; updater,
    package manager ani změnu `PATH`
    nespustí bez jeho souhlasu s přesnou změnou. Při nové instalaci Mašiny smí
    instalační prompt tento souhlas udělit předem pro přesně Git, GitHub CLI,
@@ -482,13 +490,13 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    URL uvedeš v handoffu. Neptáš se předem a nezapisuješ to místo toho do
    Mission Controlu. Issue tě neblokuje: pokračuješ na všem, co na něm
    nestojí, a zastavíš se jen tam, kde bez odpovědi nejde pokračovat bezpečně
-   nebo kde rozhodnutí patří Principálovi. Před zápisem odstraň secrets,
+   nebo kde rozhodnutí patří Operátorovi. Před zápisem odstraň secrets,
    Personalspace, Organization-specific obsah mimo jeho access hranici
    a duplicity; do veřejného repa nikdy nezapisuj Organization-specific
    obsah. Když Issues nejsou povolené, účet nemá právo nebo public-safety není
    jistá, nic neobcházej a vrať sanitizovaný draft s exact cílovým repem.
    Mandát nepovoluje issue zavřít, přiřadit ani prioritizovat; to děláš jen
-   na pokyn Principála. Úplný postup drží `manual/github-issues.md`. Legacy
+   na pokyn Operátora. Úplný postup drží `manual/github-issues.md`. Legacy
    `ISSUES.open.json` a `ISSUES.resolved.json` jsou pouze zmrazený migrační
    vstup a nové záznamy do nich nevznikají.
 6. **Delegace.** Při delegaci na Claude, Codex nebo Desktop agenta platí:
@@ -501,7 +509,7 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    a vlastní `UserKnownHostsFile`) a před spojením ověř aktivní tailnet
    (`tailscale status --json` → `CurrentTailnet.Name`). Hláška „host key
    changed" na tailnet adrese znamená nejdřív „jiný aktivní tailnet", ne důvod
-   klíč přepsat nebo znovu přijmout. Profil bez souhlasu Principála
+   klíč přepsat nebo znovu přijmout. Profil bez souhlasu Operátora
    nepřepínej — přepneš ho všem ostatním agentům.
 
 Root upravuj jen když se mění:
@@ -686,12 +694,12 @@ nebo zastaralý postup řeš opravným PR na standard, ne poznámkou v chatu.
 Figma je vědomá provider-specific výjimka z obecného integračního žebříčku
 výše. Kanonický design pro Lazurio je jedině
 <https://www.figma.com/design/o14eNlc08MDmwnrtoeb91M/Lazurio>; bez
-explicitního pokynu Principála nezakládej paralelní Lazurio Figma soubor.
+explicitního pokynu Operátora nezakládej paralelní Lazurio Figma soubor.
 Veškeré čtení, tvorbu i úpravy ve Figmě prováděj výhradně přes vestavěný
 Browser Use v přihlášené uživatelské relaci. Figma MCP nevolej ani jako
 fallback, protože tento přístup je zpoplatněný. Není-li Browser Use nebo
 přihlášená Figma relace dostupná, práci zastav a transparentně požádej
-Principála o nápravu; na Figma MCP automaticky nepřepínej.
+Operátora o nápravu; na Figma MCP automaticky nepřepínej.
 
 ## Launchpad pravidlo
 
@@ -750,7 +758,7 @@ Mám změny Publikovat tvým jménem? Nebo mám požádat jiného Kolegu o kontr
 ```
 
 Co po dvojotázce následuje — merge na explicitní „Publikuj", nebo předání
-zvolenému oprávněnému Principálovi — říká kanonický blok výš; přesný merge,
+zvolenému oprávněnému Kolegovi — říká kanonický blok výš; přesný merge,
 pull a cleanup postup drží skill `worktree-development-discipline`.
 
 Před handoffem po změně root configu, Launchpadu, Guide nebo mountpointů spusť:

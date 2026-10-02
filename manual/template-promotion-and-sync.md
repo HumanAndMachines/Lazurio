@@ -23,7 +23,7 @@ Upstream template: `TemplatesRozjedeme-ai/OrganizationTemplate` (rename na
   seedne fork, dál žije v Organizaci). Managed může být **celý soubor**
   (typicky generický skill), nebo jen **blok uvnitř org souboru** — příklad:
   kanonický blok „Model spolupráce" v AGENTS.md (od nadpisu
-  `## Model spolupráce: Principál a Agenti` po další `## `, md5 po
+  `## Model spolupráce: Operátor a Agenti` po další `## `, md5 po
   `.rstrip()`) a blok mezi markery
   `BEGIN/END TEMPLATE-MANAGED: chat-first-launchpad`. AGENTS.md jako celek je
   soubor Organizace — synchronizují se jen výslovně managed bloky, nikdy celý
@@ -71,7 +71,7 @@ Upstream template: `TemplatesRozjedeme-ai/OrganizationTemplate` (rename na
 ## Kdo co smí
 
 - Agent: worktrees a plnohodnotné PRs v obou směrech bez ptaní; merge jen na
-  explicitní svolení Principála v threadu a jen tam, kde to GitHub Principálovi
+  explicitní svolení Operátora v threadu a jen tam, kde to GitHub Operátorovi
   dovoluje (decisions 0103/0112).
 - Organization Steward: merge sync PRs své Organizace.
 - Owner template (Admin/Steward): merge promotion PRs do template.

@@ -25,8 +25,8 @@ plnohodnotná compliant integrace neexistuje.
    (MIT, oficiální API only) — před nasazením reviewnout, pinnout a omezit
    na post tools, nebo napsat vlastní tenký wrapper.
 2. **Čtení LinkedInu dělá agent výhradně browser fallbackem** (vestavěný
-   browser povrch harnessu) **pod přímým dohledem Principála**, v běžné
-   přihlášené session Principála. Session/cookies se nikdy nepředávají
+   browser povrch harnessu) **pod přímým dohledem Operátora**, v běžné
+   přihlášené session Operátora. Session/cookies se nikdy nepředávají
    žádnému MCP procesu ani nástroji.
 3. **Cookie/scraping MCP servery jsou zakázané** bez ohledu na popularitu
    (`stickerdaniel/linkedin-mcp-server` a podobné) — riziko banu účtu
@@ -38,14 +38,14 @@ plnohodnotná compliant integrace neexistuje.
    `w_member_social`; client credentials do custody.
 2. Publikační workflow (kdo schvaluje drafty příspěvků) zapsat do
    `INTEGRATIONS.md` — publikace na LinkedIn je Publikace ve smyslu root
-   pravidel: dělá ji Principál, nebo agent jen na explicitní pokyn.
+   pravidel: dělá ji Operátor, nebo agent jen na explicitní pokyn.
 
 ## Per-machine aktivace
 
 Post-only server jako lokální STDIO proces s pinned verzí; env jména
 `<ORG_SLUG>_LINKEDIN_CLIENT_ID_PATH` apod. v katalogu, hodnoty a token
 store (SQLite/JSON) v custody cestě s módem `0600`. OAuth consent
-dokončuje Principál.
+dokončuje Operátor.
 
 ## Smoke test
 
@@ -55,7 +55,7 @@ Jednorázové zjištění member URN při OAuth consentu (userinfo) je aktivačn
 krok napojení, ne čtecí workflow; URN se uloží do custody a dál se
 nedotazuje. Smoke je metadata-only: ověř, že token platí, a připrav draft
 payload příspěvku **bez odeslání**. Skutečná publikace jen na explicitní
-pokyn Principála v daném threadu, poprvé na testovacím obsahu.
+pokyn Operátora v daném threadu, poprvé na testovacím obsahu.
 
 ## Custody a rizika
 
@@ -64,4 +64,4 @@ pokyn Principála v daném threadu, poprvé na testovacím obsahu.
 - Rate limit dev tieru (~500 volání/den) — integrace je publikační, ne
   datová.
 - Jakýkoli požadavek „stáhni data z LinkedInu přes MCP" eskaluj
-  Principálovi s odkazem na tuto policy místo hledání obcházky.
+  Operátorovi s odkazem na tuto policy místo hledání obcházky.
