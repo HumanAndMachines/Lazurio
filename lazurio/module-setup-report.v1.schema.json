@@ -176,7 +176,7 @@
               },
               "action": { "type": "string", "minLength": 1 },
               "repairs": {
-                "description": "Mechanical repairs --apply writes for this check, e.g. `lazurio.module.json: lease main 23999 → 24000`.",
+                "description": "Additive repairs --apply writes for this check: only something that is missing and unambiguous, e.g. `app/v1/package.json: doplnit packageManager bun@1.4.2`. A lease is never moved and an existing declaration is never rewritten.",
                 "type": "array",
                 "items": { "type": "string", "minLength": 1 }
               }
