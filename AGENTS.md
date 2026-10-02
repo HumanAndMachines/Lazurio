@@ -598,7 +598,10 @@ Root upravuj jen když se mění:
   ruční, reviewovaný refactor Task Agenta a jeho subagentů podle návodu, který
   nese motivaci, cílový stav, postup a způsob ověření. Nástroje smějí jen
   měřit a hlásit nález s dalším krokem (checker, doctor, ověřovací skript);
-  nový automatický migrátor, automatickou opravu ani codemod nestav. Migrace
+  nový automatický migrátor, automatickou opravu ani codemod nestav.
+  Jednorázový skript, který si Agent pro jeden hromadný převod dat napíše ve
+  svém PR a doloží kontrolou parity, je jeho pracovní výstup, ne mechanismus.
+  Migrace
   „na kliknutí“ spustí Agenta s návodem, nebo člověku návod ukáže ke
   zkopírování do chatu.
 - Dosavadní migrační kód (přesun ze starého směru do nového, např. legacy

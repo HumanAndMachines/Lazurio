@@ -262,6 +262,14 @@ implementace** (`MissionControlTemplate/app/v3`).
 
 ## Upgrade pipeline mezi verzemi
 
+Převod mezi generacemi dělá Task Agent a jeho subagenti jako reviewovaný
+refactor Modulu podle tohoto návodu (decision 0173 v
+[decision-register.md](decision-register.md)); Lazurio pro něj nedodává sdílený
+migrátor. Kde níže stojí „import/migration runner“ nebo
+`migrations/v3/importV2ToRepositoryDb`, jde o jednorázový skript, který Agent
+napíše pro data tohoto jednoho Modulu ve svém PR, doloží kontrolou parity
+a po cutoveru smaže; není to znovupoužitelný mechanismus.
+
 ### 1. Inventarizace aktuální generace
 
 Agent nejdřív sepíše:
