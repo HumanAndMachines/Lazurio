@@ -3,9 +3,9 @@
 // Lazurio Module Standard conformance (manual/module-standard.md kap. 11,
 // decision 0171). Read-only and cheap: file reads, JSON and regex over App
 // sources plus one local `git ls-files`. It never executes Module scripts and
-// never touches the network. It only measures and names the next step: it
-// proposes no write. Bringing a Module to the standard is an Agent's reviewed
-// change in the Module PR; this report is how the Agent verifies it.
+// never touches the network. `lazurio module setup` owns orchestration and
+// writes; this module only measures and proposes the few mechanical repairs
+// the standard allows.
 
 import { lstat, readFile, readdir, readlink, realpath } from "fs/promises";
 import { extname, isAbsolute, join, posix, relative as relativePath, resolve, sep } from "path";
@@ -34,7 +34,7 @@ const CHECK_ACTIONS = Object.freeze({
   "MS-01": "Přepiš port leasu v lazurio.module.json na navržený volný port poolu v PR Modulu a ověř start App na novém portu (lazurio module start); setup lease nepřesouvá. Překryv poolů opraví Organization Admin v Organization manifestu.",
   "MS-02": "Doplň packageManager na přesnou verzi Bunu z Lazuria a commitni čerstvý bun.lock z bun install.",
   "MS-03": "Doplň lazurio.runtime s listenery, health a existujícím dev_script podle manual/module-setup.md.",
-  "MS-04": "Doplň do package.json App lazurio.preparation (schema_version lazurio.preparation.v1, owner_package = cesta App, check_script = read-only skript check:prepared) podle lazurio-preparation.schema.json; klíč runtime vynech, chybí = bun.",
+  "MS-04": "Doplň lazurio.preparation s check_script (read-only package skript) podle lazurio-preparation.schema.json.",
   "MS-05": "Zjednoduš dev skript na jeden dlouho běžící proces; build, guardy a další procesy patří do přípravy nebo do App.",
   "MS-06": "Čti host a port jen z LAZURIO_RUNTIME_LISTENER_<ID>_HOST/_PORT (ideálně přes @lazurio/module-kit) a bez nich skonči chybou; port leasu žije jen v lazurio.module.json.",
   "MS-07": "Odstraň .env soubory a dotenv; konfigurace je runtime env plus commitnuté config soubory, tajemství vault Environmentu.",
@@ -81,7 +81,8 @@ let preparationSchemaPromise = null;
  * Measures one Module against the standard. `manifest` and `packages` are the
  * values setup is about to leave on disk (planned writes overlaid on the
  * checkout), so a dry-run reports the state `--apply` would produce for the
- * contract layer. Returns the 13 checks.
+ * contract layer. Returns the 13 checks and repaired values for the
+ * mechanical items only.
  */
 export async function evaluateModuleStandard({
   moduleRoot,
@@ -94,7 +95,7 @@ export async function evaluateModuleStandard({
   requiredBunVersion = readRequiredBunVersion(),
 }) {
   const root = resolve(moduleRoot);
-  const results = new Map(MODULE_STANDARD_CHECKS.map(({ id }) => [id, { status: "pass", details: [] }]));
+  const results = new Map(MODULE_STANDARD_CHECKS.map(({ id }) => [id, { status: "pass", details: [], repairs: [] }]));
   const record = (id, status, detail) => {
     const result = results.get(id);
     if (status === "fail" || (status === "warn" && result.status === "pass")) result.status = status;
@@ -106,6 +107,7 @@ export async function evaluateModuleStandard({
     appDirectory: posix.dirname(appPath) === "." ? "" : posix.dirname(appPath),
     packageJson: packages.get(appPath) ?? null,
   }));
+  const repairedPackages = new Map();
   const leasePorts = (Array.isArray(manifest?.port_leases) ? manifest.port_leases : [])
     .map((lease) => lease?.port)
     .filter((port) => Number.isInteger(port));
@@ -128,6 +130,11 @@ export async function evaluateModuleStandard({
     const hasPyproject = appFiles.some((file) => file.path === joinPosix(app.appDirectory, "pyproject.toml"));
     const preparationRuntime = preparation?.runtime ?? (hasPyproject ? "uv" : "bun");
     const scripts = packageJson.scripts && typeof packageJson.scripts === "object" ? packageJson.scripts : {};
+    let nextPackage = null;
+    const ensureNextPackage = () => {
+      nextPackage ??= structuredClone(packageJson);
+      return nextPackage;
+    };
 
     // MS-02 packageManager + lockfile
     if (preparationRuntime === "uv") {
@@ -137,6 +144,8 @@ export async function evaluateModuleStandard({
       const expected = `bun@${requiredBunVersion}`;
       if (packageJson.packageManager === undefined) {
         record("MS-02", "fail", `${label}: packageManager chybí (očekáváno ${expected})`);
+        insertKeyAfter(ensureNextPackage(), "packageManager", expected, ["type", "private", "version", "name"]);
+        results.get("MS-02").repairs.push(`${label}: doplnit packageManager ${expected}`);
       } else if (packageJson.packageManager !== expected) {
         record("MS-02", "fail", `${label}: packageManager ${String(packageJson.packageManager)} neodpovídá ${expected}`);
       }
@@ -181,6 +190,27 @@ export async function evaluateModuleStandard({
       }
     } else if (preparation === undefined) {
       record("MS-04", "fail", `${label}: lazurio.preparation chybí`);
+      // No `runtime` key: absence means bun, and today's Platform reader
+      // refuses unknown fields until it reads the key (DEV-6634 W0-5).
+      const skeleton = {
+        schema_version: "lazurio.preparation.v1",
+        owner_package: app.appPath,
+        ...(nonEmptyString(scripts["check:prepared"]) ? { check_script: "check:prepared" } : {}),
+      };
+      const schema = await preparationSchema();
+      const ownerPattern = new RegExp(schema.properties.owner_package.pattern);
+      if (!runtime) {
+        record("MS-04", "fail", `${label}: skeleton přípravy se nedoplní bez lazurio.runtime`);
+      } else if (!ownerPattern.test(app.appPath)) {
+        record("MS-04", "fail", `${label}: owner_package ${app.appPath} neodpovídá schématu; přesuň App do app/v<N>/`);
+      } else {
+        const next = ensureNextPackage();
+        next.lazurio = { ...(next.lazurio ?? {}), preparation: skeleton };
+        results.get("MS-04").repairs.push(
+          `${label}: doplnit lazurio.preparation skeleton${skeleton.check_script ? " s check_script check:prepared" : " (check_script doplň ručně)"}`,
+        );
+        if (!skeleton.check_script) record("MS-04", "fail", `${label}: chybí skript check:prepared pro check_script`);
+      }
     } else {
       for (const issue of await preparationDeclarationIssues(preparation, label)) record("MS-04", "fail", issue);
       if (preparation && typeof preparation === "object" && !Array.isArray(preparation) && preparation.runtime === "bun") {
@@ -189,6 +219,8 @@ export async function evaluateModuleStandard({
           "fail",
           `${label}: runtime: bun zapsané explicitně — Platforma dnes neznámá pole odmítá; klíč vynech (chybí = bun)`,
         );
+        delete ensureNextPackage().lazurio.preparation.runtime;
+        results.get("MS-04").repairs.push(`${label}: odebrat lazurio.preparation.runtime (chybí = bun)`);
       }
       if (preparation && typeof preparation === "object" && !Array.isArray(preparation)) {
         const ownerPackagePath = typeof preparation.owner_package === "string" ? preparation.owner_package : null;
@@ -310,6 +342,10 @@ export async function evaluateModuleStandard({
     // MS-13 check and test scripts
     for (const scriptName of ["check", "test"]) {
       if (!nonEmptyString(scripts[scriptName])) record("MS-13", "fail", `${label}: skript ${scriptName} chybí`);
+    }
+
+    if (nextPackage && JSON.stringify(nextPackage) !== JSON.stringify(packageJson)) {
+      repairedPackages.set(app.appPath, nextPackage);
     }
   }
   if (apps.length === 0) {
@@ -433,9 +469,10 @@ export async function evaluateModuleStandard({
       summary,
       details: [...new Set(result.details)],
       ...(result.status === "pass" ? {} : { action: CHECK_ACTIONS[id] }),
+      ...(result.repairs.length > 0 ? { repairs: result.repairs } : {}),
     };
   });
-  return { checks };
+  return { checks, repairedPackages };
 }
 
 export function moduleStandardIssues(checks) {
@@ -792,6 +829,14 @@ export function stripJsonc(text) {
     }
   }
   return output;
+}
+
+function insertKeyAfter(object, key, value, afterKeys) {
+  const entries = Object.entries(object);
+  const anchorIndex = Math.max(-1, ...afterKeys.map((candidate) => entries.findIndex(([name]) => name === candidate)));
+  entries.splice(anchorIndex + 1, 0, [key, value]);
+  for (const name of Object.keys(object)) delete object[name];
+  for (const [name, entryValue] of entries) object[name] = entryValue;
 }
 
 function joinPosix(directory, path) {

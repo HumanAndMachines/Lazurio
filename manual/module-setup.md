@@ -29,9 +29,9 @@ První běh je vždy read-only. Výsledek je právě jeden ze čtyř stavů:
 - `actionable` — CLI připravilo přesný plán, ale nic nezapsalo;
 - `completed` — `--apply` zapsal plán a celý stav znovu ověřil;
 - `action_required` — před zápisem chybí přístup, Organization deklarace nebo
-  skutečné rozhodnutí, případně Modul nesplňuje standard
-  (`reason: module_standard_nonconformant`). Nálezy standardu CLI nikdy
-  neopravuje; Agent postupuje podle `issues[].action`, ne hádá.
+  skutečné rozhodnutí, případně Modul nesplňuje standard v bodě, který CLI
+  mechanicky neopraví (`reason: module_standard_nonconformant`). Agent má
+  postupovat podle `issues[].action`, ne hádat.
 
 Po `actionable` spusť stejný příkaz s `--apply`, zkontroluj Git diff a spusť
 jej ještě jednou bez `--apply`. Cílem je `current`; zbývající
@@ -170,7 +170,8 @@ nese sekci `standard` se stabilním seznamem třinácti kontrol v pořadí
   v `app/v<N>/pyproject.toml` `[tool.lazurio]`. Dokud ji Core nečte, `MS-04`
   hlásí `warn`; viditelná deklarace s `runtime: uv` bez `uv_version` je `fail`.
 - `details` jsou konkrétní nálezy s cestou relativní ke kořeni Modulu;
-  `action` říká, co má Agent udělat.
+  `action` říká, co udělat; `repairs` jsou mechanické opravy, které zapíše
+  `--apply`.
 - Kontroly jsou read-only a levné: čtou soubory, JSON a zdrojáky App (bez
   `node_modules`, `dist` a testů), jednou volají `git ls-files` kvůli
   commitnutému lockfilu. Nikdy nespouštějí skripty Modulu ani síť; `bun run
@@ -181,14 +182,17 @@ nese sekci `standard` se stabilním seznamem třinácti kontrol v pořadí
   standard hlásí nálezy: Launchpad nekonformní Modul do cutoveru spouští
   s varováním (kapitola 10 standardu).
 
-**Standard CLI jen měří.** `--apply` zapisuje výhradně Module kontrakt
-(`lazurio.module.json` a runtime deklaraci App z kapitol výše); žádný nález
-`MS-01`–`MS-13` se nikdy nestane zápisem. Převod Modulu na standard je práce
-Agenta v PR Modulu podle skillu `lazurio-module-standard`: Agent zná záměr
-standardu, cílový stav i to, jak si výsledek ověřit, a tenhle report je jeho
-kontrola hotové práce, ne nástroj, který převod udělá za něj. Automatická
-oprava by musela dokazovat vlastní úplnost a byla by křehčí než úprava, kterou
-nahrazuje.
+`--apply` jen doplňuje to, co v Modulu chybí a jde zapsat jednoznačně
+(decision 0173: skript smí přidat novou věc; přestavbu existující struktury
+dělá Agent). Nic existujícího nepřepisuje ani nepřesouvá:
+
+| Kontrola | Oprava | Kdy se neprovede |
+| --- | --- | --- |
+| `MS-02` | doplní chybějící `packageManager` na přesný Bun z `lazurio/package.json` | jiná existující hodnota (jen nález) |
+| `MS-04` | doplní skeleton `lazurio.preparation` (`schema_version`, `owner_package` = App, `check_script` jen když existuje skript `check:prepared`; klíč `runtime` nezapisuje, chybí = bun); explicitně zapsané `runtime: bun` odebere | App bez `lazurio.runtime`, Python App, App v kořeni Modulu místo `app/v<N>/`; `prepare_script`/`check_script` s npm lifecycle jménem (`prepare`, `preprepare`, `postprepare`, `install`, `preinstall`, `postinstall`, `prepublish`, `prepublishOnly`, `prepack`, `postpack`, `dependencies`) je jen nález, protože je `bun install` spouští sám; stejně jméno mimo gramatiku čtečky Platformy `^[A-Za-z][A-Za-z0-9:_-]*$` (pravidla čte ze schématu); přejmenuj je na `prepare:app` / `check:prepared` |
+
+Chybějící `check`/`test` skripty, lockfile, tsconfig, importy, `.env` ani
+víceprocesový `dev` skript CLI nevymýšlí; zůstávají nálezem s `action`.
 
 **Lease mimo pool CLI nepřesouvá.** `MS-01` nahlásí lease a nejnižší volný port
 poolu (`volný port poolu: N`; víc leasů jednoho Modulu dostane různé porty).

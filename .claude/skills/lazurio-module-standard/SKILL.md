@@ -99,13 +99,12 @@ ani pro productionspace repa (decision 0041).
 
 1. Spusť `lazurio module setup <module-root> --root <lazurio-root> --json`
    read-only a přečti `standard.checks[]` (bez toho klíče postupuj podle
-   kapitol 2–9 manuálu a v PR to uveď). Kontrola standardu jen měří a
-   u každého nálezu říká další krok (`action`); nic neopraví za tebe.
-   Převod děláš ty jako refactor Modulu a report je tvoje ověření.
-   `packageManager` a `lazurio.preparation` doplň do `package.json` App
-   ručně; u leasu mimo pool hlásí `MS-01` volný port poolu, ten přepiš
-   v `lazurio.module.json`, mapování starý → nový port uveď v PR a start na
-   novém portu dolož (`lazurio module start`). Postupuj v tomto pořadí:
+   kapitol 2–9 manuálu a v PR to uveď). Mechanické položky nech opravit
+   `--apply` (`packageManager`, skeleton `lazurio.preparation`). Lease
+   `--apply` nepřesouvá: u leasu mimo pool hlásí `MS-01` volný port poolu,
+   ten přepiš v `lazurio.module.json` ručně, mapování starý → nový port
+   uveď v PR a start na novém portu dolož (`lazurio module start`). Ostatní
+   opravuj ručně v tomto pořadí:
    1. **Start**: `dev` = jeden proces; vše ostatní (build, symlinky, data,
       migrace) přesuň do `prepare_script` (konvence `prepare:app`; nikdy
       npm lifecycle jméno jako `prepare`, které `bun install` spouští samo),
