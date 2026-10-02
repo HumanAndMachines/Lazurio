@@ -16,14 +16,14 @@ credentials.
 
 | Pojem | Co znamená |
 | --- | --- |
-| Principál | Ten, pro koho Agent pracuje a kdo má poslední slovo. |
-| Kolega | Lidský Principál. Jeho pracovní Root leží přímo v home; dnešní Source Root může do migrace nést historický název složky, fresh target je `<home>/Lazurio`. |
-| Buddy | Osobní zástupce jednoho lidského Principála uvnitř jeho Personalspace. Jedná jen v mezích jeho práv a mandátů. |
-| AI Kolega | AI Principál s vlastní identitou, Mašinou, Personalspace a pracovními právy. Není Buddy. |
+| Operátor | Ten, kdo Environment ovládá, a tím i Agenty, které v něm spouští; Agenti pracují pro něj a poslední slovo má on. Operátorem je vždy člověk (decision 0175). |
+| Kolega | Člověk v Organizaci. Jeho pracovní Root leží přímo v home; dnešní Source Root může do migrace nést historický název složky, fresh target je `<home>/Lazurio`. |
+| Buddy | Osobní zástupce jednoho člověka uvnitř jeho Personalspace. Jedná jen v mezích jeho práv a mandátů. |
+| AI Kolega | AI s vlastní identitou, Mašinou, Personalspace a pracovními právy jako člověk; pojem je deprecated (decisions 0156/0169). Není Buddy. |
 | Task Agent | Nástrojová pracovní relace, například Codex nebo Claude Code. Sama žádná práva nevlastní. |
 | Steward | Organizační role AI Kolegy nebo Kolegy. Její název nic neautorizuje; rozhodují živá GitHub práva. |
 | Mašina | Fyzické zařízení, virtuální server nebo providerem izolovaný hostovaný pracovní prostor, který tvoří jednu sdílenou runtime, bezpečnostní a recovery hranici se známým Ownerem. |
-| Personalspace | Privátní prostor právě jednoho Principála a případného Buddyho. |
+| Personalspace | Privátní prostor právě jednoho člověka a případného Buddyho. |
 | Organizace | Jedna firma, jeden GitHub Organization scope a jedna access hranice. |
 
 Kanonickou cross-profile definici drží root `ARCHITECTURE.md`. Tento manuál dál
@@ -84,26 +84,27 @@ Personalspace.
 Buddy není AI Kolega ani Steward. Běžný Task Agent spuštěný na Buddyho
 Mašině také není Buddy. Transakčně citlivé kroky — přístupy, secrets,
 destruktivní operace, billing, ownership a publish/release mimo trvalý mandát
-— vyžadují přesný souhlas lidského Principála.
+— vyžadují přesný souhlas člověka, kterého Buddy zastupuje.
 
 ### Trust model Buddyho
 
 Pro provoz se vždy rozlišují tři otázky:
 
-1. Buddyho turn smí zadat právě jeden lidský Principál; to drží privátní
+1. Buddyho turn smí zadat právě jeden člověk; to drží privátní
    komunikační surface a provider access.
-2. Mašinu a Lazurio vlastní Principál. Smí je lokálně upravit; Doctor změnu
-   popíše jako drift a lifecycle nabídne vratnou cestu, ale změnu nezakazuje.
+2. Mašinu a Lazurio vlastní tentýž člověk jako Owner. Smí je lokálně
+   upravit; Doctor změnu popíše jako drift a lifecycle nabídne vratnou cestu,
+   ale změnu nezakazuje.
 3. Přístup běžícího Agenta k souborům a nástrojům drží Hermes sandbox. Lazurio
    vedle něj nevytváří druhý ACL ani paralelní sandbox.
 
 Skutečnou vstupní hranicí Buddyho je jeho privátní komunikační surface.
 Zulip realm, membership, credentials a síťový access plane musí být určené
-právě jednomu lidskému Principálovi a technické identitě jeho Buddy botu. Turn
-smí zadat pouze Principál; bot odpovídá a poskytovatel infrastruktury není další
-Principál. Jiný autor konverzace znamená porušené nasazení, ne novou roli.
+právě jednomu člověku a technické identitě jeho Buddy botu. Turn smí zadat
+pouze tento člověk; bot odpovídá a poskytovatel infrastruktury není další
+Operátor. Jiný autor konverzace znamená porušené nasazení, ne novou roli.
 
-Principál vlastní svou Mašinu a systém předpokládá, že to se sebou myslí dobře.
+Owner vlastní svou Mašinu a systém předpokládá, že to se sebou myslí dobře.
 Lazurio proti němu nestaví vlastní ACL, ownership gate ani permission zámek.
 Agentní přístup k souborům a nástrojům omezuje existující sandbox runtime —
 dnes Hermes Agent. Manifest, Doctor, service oddělení a rollback pouze
@@ -112,7 +113,7 @@ nejsou druhou autorizační hranicí.
 
 Jedna úzká provozní podmínka z toho neustupuje: runtime nesmí vlastnit ani umět
 přepsat sandbox, který jej omezuje. Hermes checkout a Bun může vlastnit a měnit
-Principál nebo jím řízená maintenance identita, která nespouští agentní relaci.
+Owner nebo jím řízená maintenance identita, která nespouští agentní relaci.
 Účty `buddy` a `buddy-bridge` k nim musí mít pouze potřebné čtení/spuštění a
 nesmí je nahradit ani přes parent adresář. Preflight kontroluje skutečná host
 oprávnění a tracked Hermes bytes proti pinned commitu bez důvěry v Git index,
@@ -139,20 +140,20 @@ deklarovaný Buddy profil skutečně leží uvnitř `active/personalspace`.
 Produkční příkaz `buddy-rollout` skládá aktivaci rootu a service cutover do
 jedné kompenzované operace. Selže-li service gate, novou aktivaci odstraní nebo
 vrátí last-known-good a znovu zprovozní předchozí service vstupy.
-Bun binárku pro unit volí Principál explicitně přes `--bun PATH`; preflight ji
+Bun binárku pro unit volí Owner explicitně přes `--bun PATH`; preflight ji
 resolveuje a ověří její spustitelnost runtime účtem, ale nevyžaduje root-owned
 instalaci. Současně ověří, že ji ani Hermes checkout účty `buddy` a
 `buddy-bridge` nevlastní a nemohou přepsat nebo nahradit přes zapisovatelný
 parent.
 Sanitizované privileged subprocessy chrání instalační krok před ambientním
-`PATH` a Git hooky, ne Lazurio před Principálem.
+`PATH` a Git hooky, ne Lazurio před Ownerem.
 Privátní Buddy profil zůstává mutable a služba jej čte přes běžná host
 oprávnění. Další sandbox pro Personalspace tu nevzniká; přístup agentních
 nástrojů omezuje existující Hermes sandbox.
 
 ## Profil AI Kolega a Steward overlay
 
-AI Kolega je samostatný Principál. Má vlastní účet, seat, Mašinu,
+AI Kolega je samostatná AI s pravomocemi jako člověk. Má vlastní účet, seat, Mašinu,
 Personalspace a přístupy do Organizací. Budoucí profil `ai-colleague` použije
 stejný build, manifest, Doctor a updater jako Buddy, ale jiné root instrukce.
 
@@ -181,7 +182,7 @@ Zulip ingress.
 Síťový kontrakt Linux profilu v1 má nulový veřejný ingress. SSH, případný
 privátní Zulip HTTPS a servisní UI se připouštějí pouze přes deklarované
 tailnet rozhraní. Najde-li preflight staré veřejné nebo jinak cizí allow
-pravidlo, nic nemaže ani nepřepisuje: zastaví se a nechá Principála rozhodnout,
+pravidlo, nic nemaže ani nepřepisuje: zastaví se a nechá Ownera rozhodnout,
 co na jeho Mašině skutečně patří zachovat.
 
 Release je svázaný s přesným artefaktem. Bezpečný lifecycle má tento tvar:
@@ -216,7 +217,7 @@ artefaktu.
 
 ## Když je potřeba vlastní oprava Launchpadu
 
-Principál může na své Mašině připravit urgentní platformní opravu. Resident mu
+Owner může na své Mašině připravit urgentní platformní opravu. Resident mu
 v tom nestaví vlastnický ani permission zámek, ale package ani immutable
 artefakt se ručně nepatchují. Oprava patří do kanonického development checkoutu
 a task worktree; Doctor současně hlídá, aby runtime nepocházel ze skryté nebo
@@ -225,7 +226,7 @@ neověřitelné kopie.
 Má-li oprava zůstat, projde přes PR a nový package nebo hosted artefakt. Do té
 doby může development source link vědomě držet přesný hotfix commit; provenance
 musí zůstat viditelná a permanentním link targetem nikdy není task worktree.
-Systém zde Principálovi pomáhá odchylku vidět, nepředpokládá proti němu
+Systém zde Ownerovi pomáhá odchylku vidět, nepředpokládá proti němu
 nepřátelský model.
 
 ## Když něco nefunguje
@@ -255,4 +256,4 @@ nepřátelský model.
 Žádná z těchto vrstev se nestává druhou autoritou jen proto, že je lokálně
 dostupná.
 
-Odvozený popis podle root rozhodnutí 0153/0154: Hosted Buddy je osobní VM lidského Principála s Hermesem, osobní Headscale a bez org klonů; org execution zůstává na přidělených org-owned Mašinách. Produktové pořadí určuje kanonický plán v Mission Control v3. Viz [synchronizační přehled](buddy-product-decision-2026-09-12.md). Existující verzované profily a manifesty dál popisují dosavadní instalace; cílová próza neobchází qualification gate ani neprovádí migraci.
+Odvozený popis podle root rozhodnutí 0153/0154: Hosted Buddy je osobní VM člověka s Hermesem, osobní Headscale a bez org klonů; org execution zůstává na přidělených org-owned Mašinách. Produktové pořadí určuje kanonický plán v Mission Control v3. Viz [synchronizační přehled](buddy-product-decision-2026-09-12.md). Existující verzované profily a manifesty dál popisují dosavadní instalace; cílová próza neobchází qualification gate ani neprovádí migraci.

@@ -439,7 +439,7 @@ Minimální obsah:
   "created_at": "2026-07-11T00:00:00Z",
   "created_by": "builder-id",
   "conversation_origin": {
-    "machine_ref": "principal-laptop",
+    "machine_ref": "operator-laptop",
     "surface": "codex",
     "agent_label": "Codex",
     "thread_id": "<opaque-local-thread-id>",
@@ -507,7 +507,7 @@ odvozuje při každém status/cleanup běhu. Sidecar smí držet timestampovaný
 cache/readback, ale report musí jasně ukázat jeho stáří.
 
 `conversation_origin` je gitignored lokální vodítko k původní relaci:
-`machine_ref`, harness `surface` a opaque `thread_id`. Principál podle něj může
+`machine_ref`, harness `surface` a opaque `thread_id`. Operátor podle něj může
 dohledat chat k nedokončenému worktree. Údaj je orientační, editovatelný a
 podvrhnutelný; není identitou, atribucí, auditním důkazem ani oprávněním.
 GitHub zůstává autoritou přístupů a commitové atribuce.

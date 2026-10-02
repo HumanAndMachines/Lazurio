@@ -39,18 +39,18 @@ Katalogový zápis v org `.mcp.json`:
 ```
 
 Codex: `codex mcp add <org_slug>_canva --url https://mcp.canva.com/mcp` +
-`codex mcp login`. OAuth consent dokončuje Principál účtem Organizace
+`codex mcp login`. OAuth consent dokončuje Operátor účtem Organizace
 (správný tým!). Multi-org mašina: OAuth je origin-keyed jako u Atlassianu —
 víc Canva účtů na jedné mašině řeš oddělenými harness profily, nebo drž
 Canva na org-dedikovaných mašinách.
 
 Canva může na consent obrazovce rozšířit užší seznam scope požadovaný
 klientem na celý grant konektoru. Při ověření v Codexu 2026-09-02 grant
-zahrnoval i mazání složek a assetů a publikaci Brand Templates. Principál
+zahrnoval i mazání složek a assetů a publikaci Brand Templates. Operátor
 proto před potvrzením kontroluje skutečný provider grant. Pokud grant obsahuje
 mazání, správu oprávnění, admin operace nebo jiný nevratný drahý scope,
 autorizaci zruší a aktivaci ponechá jako blocker; výslovný provozní souhlas
-Principála takový technický scope nenahrazuje. Parametr `--scopes` není důkaz,
+Operátora takový technický scope nenahrazuje. Parametr `--scopes` není důkaz,
 že provider přístup technicky omezil, a approval gate jednoho harnessu není
 bezpečnostní hranice pro ostatní procesy na mašině.
 
@@ -59,9 +59,9 @@ bezpečnostní hranice pro ostatní procesy na mašině.
 Smoke začni searchem vlastních designů a pokračuj vytvořením **testovacího
 designu ve scratch složce** — nikdy nepřepisuj týmový asset. Scratch složku
 zapiš do `INTEGRATIONS.md`. Design smíš po ověření odstranit jen když
-Principál výslovně schválil jmenovitý smoke cíl zapsaný v
+Operátor výslovně schválil jmenovitý smoke cíl zapsaný v
 `INTEGRATIONS.md` a design vytvořil tento konkrétní smoke. Jinak artefakt
-ponech a vyžádej si samostatný explicitní pokyn Principála. Export směřuj do
+ponech a vyžádej si samostatný explicitní pokyn Operátora. Export směřuj do
 custody/drafts cesty, ne do sdílených složek.
 
 ## Custody a rizika

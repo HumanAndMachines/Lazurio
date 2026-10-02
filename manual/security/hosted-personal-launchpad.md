@@ -11,9 +11,9 @@
 > no new consumer should build on them.
 
 Design under qualification, not an enabled deployment. A personal Launchpad
-belongs to exactly one Principal; Organization access and provider service
+belongs to exactly one person; Organization access and provider service
 access are separate authorities. The selected Organizations remain that
-Principal's responsibility after their own GitHub login.
+person's responsibility after their own GitHub login.
 
 ## Boundary and selected implementation
 
@@ -50,7 +50,7 @@ ownership from a mutable GitHub login/email.
   live indefinitely on an earlier cookie. Admission is point-in-time, not atomic
   with provider changes. Durable T3 and Headscale access have separate lifetimes.
 - Synthetic contents only; operational verification does not read another
-  Principal's Personalspace. Public `.ai` navigation and private `.io` entry
+  person's Personalspace. Public `.ai` navigation and private `.io` entry
   remain separate.
 
 Rollback disables the new private web entry and its exact issuer clients,

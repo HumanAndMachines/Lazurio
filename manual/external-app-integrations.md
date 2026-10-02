@@ -18,7 +18,7 @@ definovaným MCP serverem nebo CLI nástrojem na konkrétní mašině**.
 - **Už nainstalovaný konektor se používat smí.** Když na účtu/mašině
   funkční konektor existuje, agent s ním normálně pracuje — je to ale
   dočasný, ne cílový stav: preferovaná cesta je MCP/CLI z katalogu a při
-  příležitosti navrhni Principálovi řízený přechod (postup v sekci
+  příležitosti navrhni Operátorovi řízený přechod (postup v sekci
   „Přechod ze sdíleného integračního brokeru" Codex runbooku platí
   obdobně).
 - **Nikdy** přes sdílený cloudový integrační broker — tedy jakoukoli službu
@@ -68,7 +68,7 @@ Environmentu:
    (release/commit pin), ověřeným publisherem a licencí; komunitní server
    není „oficiální integrace" jen proto, že obsluhuje známou službu.
 5. **Browser fallback** — čtení/obsluha webu agentem v browseru pod přímým
-   dohledem Principála, když MCP/CLI cesta neexistuje.
+   dohledem Operátora, když MCP/CLI cesta neexistuje.
 
 **Zakázané v každém kroku:** servery postavené na scraping/cookie-session
 přístupu (reuse browser session tokenů, obcházení bot detekce) — porušují
@@ -79,12 +79,12 @@ logu; zřizování nových konektorů v cloud UI účtu.
 **Když žádná MCP/CLI cesta neexistuje:** použij browser fallback, případně
 existující už nainstalovaný konektor, a chybějící MCP zapiš jako issue/PR
 živého standardu — nový konektor sám neinstaluj; jeho zřízení je vědomé
-rozhodnutí Principála, ne automatický fallback agenta.
+rozhodnutí Operátora, ne automatický fallback agenta.
 
 ## Composio jako schválený broker
 
-Decision 0162 (Principál 2026-09-27) mění dřívější plošný zákaz a určuje, kdo
-o napojení rozhoduje: **operátor Environmentu**. Environment zrcadlí svého
+Decision 0162 (Matěj 2026-09-27) mění dřívější plošný zákaz a určuje, kdo
+o napojení rozhoduje: **Operátor Environmentu**. Environment zrcadlí svého
 operátora; agenti v něm jednají tam, kam sahají přihlášení na té mašině.
 
 | Pravidlo | Znění |
@@ -121,7 +121,7 @@ Model a otevřené otázky drží [integrations/composio.md](integrations/compos
 | --- | --- | --- |
 | Pravidlo chování agentů | root `AGENTS.md`, tento manuál | ano |
 | Kurátorovaný katalog Organizace | `organizations/<org>/INTEGRATIONS.md` + `organizations/<org>/.mcp.json` + `organizations/<org>/.codex/config.toml` | ano (org repo, bez secretů) |
-| Osobní integrace Principála | user-level config harnessu (`~/.codex/config.toml`, user scope Claude Code) | ne |
+| Osobní integrace Operátora | user-level config harnessu (`~/.codex/config.toml`, user scope Claude Code) | ne |
 | Per-machine aktivace | env soubor v custody cestě, OAuth consent, token cache | ne (gitignored/lokální) |
 | Secrets | custody dle [security/local-secret-custody.md](security/local-secret-custody.md) | nikdy |
 
@@ -159,7 +159,7 @@ Definice z katalogu se na mašině stává funkční až lokální aktivací:
    custody cestě, například
    `organizations/<org>/company/colleagues/<os-user>/private/secrets/env/integrations.env`
    (mód `0600`); launcher nebo shell profil ho načítá před startem harnessu.
-2. OAuth consent dokončuje **Principál v prohlížeči na té mašině** — agent
+2. OAuth consent dokončuje **Operátor v prohlížeči na té mašině** — agent
    připraví konfiguraci a diagnostiku, ale výběr účtu a souhlas je lidský
    krok (viz Human-action boundary v custody standardu). Před consentem agent
    ukáže přesný účet, účel a seznam scopes. Souhlas s OAuth grantem zpřístupní
@@ -189,7 +189,7 @@ Definice z katalogu se na mašině stává funkční až lokální aktivací:
 
 - Katalogové servery Organizace načte Claude Code automaticky z `.mcp.json`
   v rootu org repa, když agent pracuje v checkoutu té Organizace; první
-  použití na mašině potvrzuje Principál v approval promptu.
+  použití na mašině potvrzuje Operátor v approval promptu.
 - **První approval serveru není per-action write gate.** Claude Code
   rozhoduje per tool přes permission pravidla `mcp__<server>__<tool>`.
   Write nástroje nikdy neschvaluj plošně („allow celý server"); zapiš je
@@ -231,7 +231,7 @@ Příklady:
 - Microsoft 365: komunitní [CLI for Microsoft 365](https://pnp.github.io/cli-microsoft365/).
 
 Agent CLI volá přes shell dané mašiny; přihlášení (`gh auth login`,
-`gog auth add …`) dokončuje Principál. Výhoda: žádný další běžící proces,
+`gog auth add …`) dokončuje Operátor. Výhoda: žádný další běžící proces,
 credentials drží CLI ve vlastním lokálním úložišti, funguje ve všech
 harnessech se shellem. Nevýhoda: bez typovaných tool schémat — pro
 harness bez shellu použij MCP variantu.
@@ -245,20 +245,20 @@ pravidla `mcp__…` nezachytí. Gate má tři úrovně a všechny platí:
    konkrétní čtecí příkazy; ostatní ať procházejí potvrzením.
 2. **Draft forma výstupu** — CLI volej tak, aby výsledek byl vratný
    (draft místo odeslání, nový soubor místo přepisu, testovací cíl).
-3. **Explicitní pokyn Principála** pro každou nevratnou operaci; u CLI je
+3. **Explicitní pokyn Operátora** pro každou nevratnou operaci; u CLI je
    tohle procesní pravidlo hlavní gate, ne pojistka.
 
 ## Draft a Publikace ve write operacích
 
 Write přístup není povolení publikovat. Platí stejný kontrakt jako u kódu
 (root `AGENTS.md`, decisions 0090 a 0103): **co agent v externí aplikaci
-vytvoří, je Draft — revertovatelný a editovatelný Principálem. Publikaci
-dělá Principál, nebo agent, ale jen na jeho explicitní pokyn v daném
+vytvoří, je Draft — revertovatelný a editovatelný Operátorem. Publikaci
+dělá Operátor, nebo agent, ale jen na jeho explicitní pokyn v daném
 threadu.** Právě proto je write scope defaultní: proces, ne zúžený scope,
 drží hranici.
 
 Prakticky to znamená volit vratnou formu výstupu a nechat nevratný krok
-Principálovi:
+Operátorovi:
 
 | Služba | Draft (agent smí sám) | Publikace (jen na explicitní pokyn) |
 | --- | --- | --- |
@@ -270,7 +270,7 @@ Principálovi:
 | LinkedIn | draft příspěvku | publikace příspěvku |
 
 Nevratné operace (odeslání, zveřejnění, mazání, přepis ostrého obsahu,
-změna oprávnění) potvrzuje Principál per akci.
+změna oprávnění) potvrzuje Operátor per akci.
 
 ### Čím je write gate vynucený — a čím ne
 
@@ -285,7 +285,7 @@ zůstává nastavením té mašiny:
 | MCP v Codexu | `default_tools_approval_mode = "writes"` / `"prompt"`, výběr `enabled_tools` | nic mimo MCP tool cally |
 | MCP v Claude Code | permission pravidla per nástroj (`mcp__<server>__<tool>` v `ask`/`deny`), výběr povolených serverů | plošné „allow serveru" gate ruší |
 | CLI přes shell | permission pravidla shellu daného harnessu (allowlist jen čtecích příkazů) | MCP approval mode se **neuplatní** |
-| Browser fallback | přímý dohled Principála u obrazovky | nic automatického |
+| Browser fallback | přímý dohled Operátora u obrazovky | nic automatického |
 
 **Udělený OAuth grant je schopnost mašiny, ne agenta.** Token v lokálním
 úložišti může použít kterýkoli proces, který na něj dosáhne — CLI, Buddy,
@@ -305,25 +305,25 @@ Write smoke nedělej na ostrém obsahu. Použij k tomu určený jednorázový c�
 vlastní draft. U integrace sdílené Organizací zapiš cíl použitý pro smoke
 do `INTEGRATIONS.md`, ať ho další mašina používá taky a nevzniká nepořádek
 ani zbytečné notifikace v produkčních prostorech Organizace. U napojení,
-které je jen na Environmentu operátora, se do katalogu Organizace nic
-nezapisuje: smoke cíl jmenovitě určí a schválí Principál v threadu a agent
+které je jen na Environmentu Operátora, se do katalogu Organizace nic
+nezapisuje: smoke cíl jmenovitě určí a schválí Operátor v threadu a agent
 ho uvede v evidenci svého úkolu.
 
-**Výjimka pro úklid určeného smoke artefaktu:** když Principál výslovně
+**Výjimka pro úklid určeného smoke artefaktu:** když Operátor výslovně
 schválil tento jmenovitý smoke cíl, patří do téže schválené operace i úklid
 artefaktu, který agent v tomto konkrétním smoke sám vytvořil (draft, testovací
 zpráva nebo testovací záznam). Agent jej smí po ověření odstranit; nejde o
 samostatnou Publikaci ani o obecné oprávnění mazat. Výjimka se nikdy netýká
 existujícího, ostrého nebo cizího obsahu. Není-li cíl jmenovitě určený v
 `INTEGRATIONS.md` (u integrace sdílené Organizací) nebo jmenovitě schválený
-Principálem v threadu (u napojení jen na Environmentu operátora), původ
+Operátorem v threadu (u napojení jen na Environmentu Operátora), původ
 artefaktu není prokazatelný nebo úklid zasahuje mimo tento smoke, artefakt
-ponech a vyžádej si samostatný explicitní pokyn Principála.
+ponech a vyžádej si samostatný explicitní pokyn Operátora.
 
 **Runbooky poskytovatelů** v [integrations/](integrations/) popisují integrace
 sdílené Organizací; kde říkají „zapiš do `INTEGRATIONS.md`“, platí to pro ně.
-Pro napojení jen na Environmentu operátora platí stejný postup s tím
-rozdílem, že místo zápisu do katalogu stačí jmenovité schválení Principála
+Pro napojení jen na Environmentu Operátora platí stejný postup s tím
+rozdílem, že místo zápisu do katalogu stačí jmenovité schválení Operátora
 v threadu.
 
 ## Org-side admin kroky

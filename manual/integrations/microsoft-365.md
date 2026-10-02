@@ -69,7 +69,7 @@ runtime dostane `MS365_MCP_EXPECTED_USERNAME`,
 `MS365_MCP_TOKEN_CACHE_PATH` a `MS365_MCP_SELECTED_ACCOUNT_PATH` až od
 launcheru. Obě cache cesty musí být absolutní, různé a ležet v machine-local
 custody dané Organizace. Přihlášení spouštěj přes tentýž launcher s `--login`;
-device-code flow dokončuje Principál.
+device-code flow dokončuje Operátor.
 
 ### Povinný kontrakt launcheru
 
@@ -152,7 +152,7 @@ stringu ani test samotné builder funkce nestačí.
 Před device-code loginem spusť přes stejný launcher `--list-permissions`.
 Smoke musí skončit exit codem `0`, potvrdit `org mode`, `readOnly: true` a
 přesně schválené scopes; nesmí otevřít login ani vyžádat device code. Teprve
-potom pokračuj explicitním `--login`, který dokončí Principál.
+potom pokračuj explicitním `--login`, který dokončí Operátor.
 
 ### `--verify-login` není success gate pro least-privilege launcher
 
@@ -208,9 +208,9 @@ Pouze u samostatně schváleného write katalogu pokračuj **draftem zprávy
 adresované sobě, bez odeslání**, případně událostí v testovacím kalendáři.
 Testovací cíl a pravidla úklidu drží hlavní integrační manuál a Organization
 `INTEGRATIONS.md`. Draft nebo testovací událost smíš po ověření odstranit jen
-když Principál výslovně schválil jmenovitý smoke cíl a artefakt vytvořil tento
+když Operátor výslovně schválil jmenovitý smoke cíl a artefakt vytvořil tento
 konkrétní smoke; jinak artefakt ponech a vyžádej si samostatný explicitní
-pokyn Principála.
+pokyn Operátora.
 
 ## Custody a rizika
 

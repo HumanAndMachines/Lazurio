@@ -27,7 +27,7 @@ Lokální uložení omezuje cloudového prostředníka, ale neodstraňuje důvě
 server, poskytovatele služby ani model. MCP nástroj může číst data, která mu
 udělené OAuth scopes a lokální filesystem dovolí, a obsah e-mailu nebo dokumentu
 může nést prompt injection. Připojuj jen zdroj, jehož kód a datovou hranici
-Principál přijímá.
+Operátor přijímá.
 
 ## Bezpečnostní gate před instalací
 
@@ -109,13 +109,13 @@ přihlášení zachovat; krátkodobý access token se obnovuje refresh tokenem.
 
 Každý Kolega nastavuje integrace ve svém uživatelském profilu Codexu. Agent smí
 instalaci připravit a diagnostikovat, ale výběr účtu a OAuth souhlas dokončuje
-Principál v prohlížeči. Sdílej pouze dokumentovaný postup a metadata; nepřenášej
+Operátor v prohlížeči. Sdílej pouze dokumentovaný postup a metadata; nepřenášej
 mezi lidmi hotové token cache, client secrety ani celý uživatelský
 `~/.codex/config.toml`.
 
-### Výchozí model: jeden Principál, více mašin
+### Výchozí model: jeden Operátor, více mašin
 
-Lazurio počítá s tím, že jeden Principál může používat svůj vlastní
+Lazurio počítá s tím, že jeden Operátor může používat svůj vlastní
 OpenAI účet a subscription na více svých mašinách. Identita a subscription
 mohou být stejné, ale přístupy k ostatním službám zůstávají na každé mašině
 oddělené: každá má vlastní `~/.codex/config.toml`, MCP servery, OAuth granty,

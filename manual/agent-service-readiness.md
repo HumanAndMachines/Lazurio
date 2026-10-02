@@ -8,7 +8,7 @@ konvergence URL je navazující cílová schopnost, ne nový existující CLI p�
 ## Cíl a hranice
 
 Po zadání autorizovaného servisního úkolu má Task Agent použít připravený
-přístup svého Principála bez hledání klíčů, opakovaného zadávání hesel nebo
+přístup svého Operátora bez hledání klíčů, opakovaného zadávání hesel nebo
 provider konzole. Nový Workspace modul má po řádném zařazení projít až
 k funkční autentizované URL. Úspěchem není jen běžící proces.
 
@@ -28,7 +28,7 @@ zachovává jejich vlastní privacy a recovery kontrakty.
 
 | Oblast | Autorita |
 | --- | --- |
-| Identita a GitHub oprávnění | Živý GitHub stav Principála |
+| Identita a GitHub oprávnění | Živý GitHub stav Operátora |
 | Konkrétní Mašina, její Owner a provozní záměr | Deployment repo vlastníka Mašiny |
 | Host a provider přístup | Výslovně přidělená capability a její provider/host konfigurace |
 | Tajné hodnoty a jejich obnova | Existující schválená custody mimo Git |
@@ -57,7 +57,7 @@ Není nutné zpřístupnit celý trezor kvůli jednomu servisnímu klíči.
 Před první změnou se ověří všechny hosty, které úkol skutečně potřebuje,
 včetně řídicího hostu, pokud na něm závisí dokončení:
 
-1. Přesný cíl, Owner, vykonávající Principál a rozsah operace.
+1. Přesný cíl, Owner, vykonávající Operátor a rozsah operace.
 2. Dosažitelnost schválenou sítí a ověřená identita hostu.
 3. Neinteraktivní autentizace z aktuální agentní relace.
 4. Skutečný omezený readback a read-only ověření potřebné capability.
@@ -97,7 +97,7 @@ ověření drží owner evidence, nikoli kopie tajných hodnot.
 
 ## Modul až po funkční URL
 
-Pro hostované workspace VM platí rozhodnutí Principála z 13. 9. 2026:
+Pro hostované workspace VM platí rozhodnutí Matěje z 13. 9. 2026:
 jedna Mašina je jedna dílna a jedna hranice důvěry. Launchpad, T3 a aplikace
 sdílejí origin `machine.organization.lazurio.io` a přihlášení; kanonické
 cesty jsou `/launchpad/`, `/t3code/` a `/<aplikace>/`. Přihlášený návštěvník

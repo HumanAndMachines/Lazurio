@@ -1,7 +1,7 @@
 # Lazurio Module Standard
 
 Standard pro to, jak vypadá, startuje a žije Modul (a org-level aplikace)
-v Lazuriu. Přijal ho Principál 2026-09-30 (decision 0171 v
+v Lazuriu. Přijal ho Matěj 2026-09-30 (decision 0171 v
 [decision-register.md](decision-register.md)) s pořadím: **Launchpad
 neimplementuje workaroundy pro odchylky modulů; moduly se srovnají na
 jeden udržitelný standard a ten se dál rozvíjí.** Standard nezavádí nové
@@ -178,7 +178,7 @@ v UI. Demo/offline režimy jsou samostatné skripty (`dev:demo`), ne start.
 - Jazyk App je **TypeScript strict**. `.js/.mjs/.cjs` se v App nepíší; nové
   JS zdroje jsou nekonformní. Konfigurace frameworků v TS (`vite.config.ts`,
   `astro.config.ts`).
-- Povolené stacky (jiný = rozhodnutí Principála, ne tichá výjimka):
+- Povolené stacky (jiný = rozhodnutí Operátora, ne tichá výjimka):
 
 | Druh App | Stack | Poznámka |
 | --- | --- | --- |
@@ -225,9 +225,9 @@ Do té doby `MS-04` Python App hlásí `warn`, ne `pass`.
 - Modul drží nejvýše **dvě generace App**: výchozí a jednu další — buď
   předchozí (ponechanou pro návrat), nebo kandidátní novější, která ještě
   není výchozí (migrační okno, např. `v2` výchozí a `v3` nad repository-db).
-  Přepnutí `default_app` na kandidáta je rozhodnutí Stewarda nebo Principála,
+  Přepnutí `default_app` na kandidáta je rozhodnutí Stewarda nebo Operátora,
   ne oprava konformance. Starší generace (Firebase éra `app/v1`, nepoužívané
-  `v2`) se mažou; Git historie zůstává. Rozhodnutí Principála 2026-09-30.
+  `v2`) se mažou; Git historie zůstává. Rozhodnutí Matěje 2026-09-30.
 - `apps[]` odpovídá adresářům: package bez deklarace v `apps[]` v repu není.
 - Když se adresář App přesouvá (např. `app/` → `app/v1/`) nebo se maže
   generace, zůstanou na existujících checkoutech staré build výstupy
@@ -265,7 +265,7 @@ Launchpad (LazurioPlatform) drží **jednu politiku** pro všechny Moduly:
   skriptu s uzavřeným env (F26), `umask 077`, loopback;
 - **supervize**: proces, který skončí nenulově, restartuje s omezeným
   backoffem (1 s, 5 s, 30 s; po třetím selhání stav `failed` viditelný v
-  Launchpadu a Diagnostice; další start je explicitní). Rozhodnutí Principála
+  Launchpadu a Diagnostice; další start je explicitní). Rozhodnutí Matěje
   2026-09-30 uzavírá LazurioPlatform #104 řádek 3 jako standard, ne výjimku;
 - obsazený port = chyba Modulu (`port-occupied`), Launchpad nepřebírá cizí
   procesy;
@@ -310,7 +310,7 @@ si vlastní tabulku.
 ## 12. Migrace (W0–W3)
 
 Program drží Mission Control plán DEV-6634 (privátní; jmenuje konkrétní
-Organizace). Pořadí určil Principál: pilot = Organizace maintainerů
+Organizace). Pořadí určil Matěj: pilot = Organizace maintainerů
 (HumanAndMachine-ai) + největší klientská Organizace → Organizace
 s hostovanými Environmenty → ostatní.
 
@@ -330,7 +330,7 @@ generický bridge pro legacy chování v Launchpadu.
 
 ## 13. Nový Modul vzniká už podle standardu
 
-Cíl (Principál 2026-09-30): nový Modul se **nezakládá ručně** ani se lokální
+Cíl (Matěj 2026-09-30): nový Modul se **nezakládá ručně** ani se lokální
 repo neváže na GitHub dodatečně. Tři vrstvy, každá s vlastním ownerem:
 
 1. **Scaffold v Core** — `lazurio module create <Org>/<slug> --stack

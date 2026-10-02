@@ -45,21 +45,27 @@ Lazurio                             distribuce, životní cyklus a koordinace
 | **Resident** | Dlouhodobá digitální identita s kontinuitou, pamětí a mandátem. Buddy a AI Kolega jsou dva profily Residenta. |
 | **Task Agent** | Dočasná pracovní relace pro konkrétní úkol, například Codex, Claude Code nebo Cursor. V běžné řeči se může zkrátit na „Agent“. |
 | **Organizace** | Jedna firma, jedna GitHub Organization a jedna access hranice. |
-| **Personalspace** | Privátní prostor právě jednoho Principála a jeho případného Buddyho. |
+| **Personalspace** | Privátní prostor právě jednoho člověka a jeho případného Buddyho. |
 | **Modul** | Verzovaná pracovní schopnost uvnitř Organizace nebo Personalspace. Může, ale nemusí obsahovat spustitelnou aplikaci. |
 | **Lazurio Environment** | Prostředí jedné Mašiny: vybraný profil Mašiny, Lazurio Folder a všechny nástroje a přihlášení, které jsou na Mašině dostupné. Je to prostor, ve kterém pracují Agenti; vlastní ho LazurioPlatform přes `lazurio` CLI a operátor Mašiny. Má jeden ze tří druhů: Osobní, Pracovní (jeden operátor) nebo Pracovní týmové (sdílené Teamem) (decision 0165). |
-| **Remote Environment (Vzdálené prostředí)** | Uživatelský název hostované Mašiny: pracovní VM Organizace na `launchpad.<mašina>.<org>.lazurio.io` v síti Organizace (decision 0146), nebo osobní VM na `launchpad.<login>.lazurio.io` v domovském tailnetu svého Principála (decisions 0153–0155). Stejný pojem používají Codex a T3 Code; „VM“ zůstává jen přívlastek, interní pojem je Mašina (decision 0160). |
+| **Remote Environment (Vzdálené prostředí)** | Uživatelský název hostované Mašiny: pracovní VM Organizace na `launchpad.<mašina>.<org>.lazurio.io` v síti Organizace (decision 0146), nebo osobní VM na `launchpad.<login>.lazurio.io` v domovském tailnetu svého Operátora (decisions 0153–0155). Stejný pojem používají Codex a T3 Code; „VM“ zůstává jen přívlastek, interní pojem je Mašina (decision 0160). |
 | **Local Environment (Místní prostředí)** | Uživatelský název tohoto počítače: zařízení, u kterého uživatel právě sedí a které není hostovanou Mašinou. Listener není klasifikátor (hostovaný Launchpad také běží na loopbacku za svou bránou). Osobní laptop nikdy není Remote Environment (decisions 0155, 0160). |
-| **Conglomerate** | Pohled na graf všech Mašin Principála napříč jeho Organizacemi. Je to diagram a orientace, ne autorita, ACL ani registr; fakta o Mašině zůstávají u jejího Ownera (decision 0144). |
+| **Conglomerate** | Pohled na graf všech Mašin Operátora napříč jeho Organizacemi. Je to diagram a orientace, ne autorita, ACL ani registr; fakta o Mašině zůstávají u jejího Ownera (decision 0144). |
 | **Conglomerate Host** | Mašina, která pro jeden Conglomerate provozuje Headscale a Vaultwarden. Nehostuje checkouty ani Workspace Moduly Organizací. |
 | **`lazurio.machine.json`** | Identita Mašiny zapsaná při jejím zprovoznění: `machine_id`, Owner, Organizace, profil, custody repozitář a vyšší provider/operator hranice. Zdroj pro každou operaci, která má pojmenovat Mašinu, jejího Ownera a vyšší hranici. |
 
-Principál je ten, pro koho Agent právě pracuje. V osobním prostředí bývá
-Principál současně Ownerem Mašiny. Ve sdíleném Hosted Team Workspace je
-Ownerem Organizace a jednotliví Principálové jsou jeho oprávnění uživatelé;
-používáním Mašiny její vlastnictví ani org-wide pravomoci nezískávají. V
-Organizaci rozhodují jejich skutečná oprávnění u poskytovatelů, ne textový
-název role.
+**Operátor** je ten, kdo Environment ovládá, a tím ovládá i Agenty, které v
+něm spouští. Agenti jednají za něj a v jeho živých právech; Operátor dává
+pokyn k Publikaci a má poslední slovo. Operátorem je vždy člověk: na osobním
+Environmentu jeho Owner, na pracovním Remote Environmentu ten, komu ho
+Organizace přiřadila, na týmovém Remote Environmentu právě připojený člen
+Teamu a na Automatizovaném Environmentu odpovědný Owner nebo Admin
+Organizace (decision 0175). Ve sdíleném Hosted Team Workspace je Ownerem
+Organizace a jednotliví Operátoři jsou jeho oprávnění uživatelé; používáním
+Mašiny její vlastnictví ani org-wide pravomoci nezískávají. V Organizaci
+rozhodují jejich skutečná oprávnění u poskytovatelů, ne textový název role.
+Provozovatel hostingu (Lazurio Machines), který Remote Environment dodává, je
+jiná role.
 
 Machines a LazurioPlatform se potkávají na handoveru jedné Mašiny (decision
 0144): Machines dodají Mašinu online se systémem, sítí, SSH a sudo,
@@ -152,22 +158,22 @@ přístupy u poskytovatelů.
 
 ## Buddy a AI Kolega
 
-Hard pravidlo Lazuria: jeden Principál/Operátor má právě jednu vlastní hostovanou osobní Mašinu. Buddy je rezident přímo na téže osobní Mašině a funguje v jejím rámci; žádný vedlejší osobní Buddy host ani výjimka ze singletonu. Další hostované Mašiny vyžadují Organizaci. Organizace může vlastnit více oprávněných Mašin i pro stejného Operátora; GitHub určuje oprávnění. Více fyzických klientských zařízení, migrace nebo záloha nejsou druhé nezávislé hostované osobní prostředí. Osobní URL je `<app>.<personal-dns-slug>.lazurio.io`; organizační URL `<app>.<machine>.<github-org-login>.lazurio.io`. Kanonický zápis je lowercase, hostname case-insensitive; tím nevzniká nový grant ani runtime změna. Autoritou jsou [root rozhodnutí 0153/0154](manual/decision-register.md).
+Hard pravidlo Lazuria: jeden Operátor má právě jednu vlastní hostovanou osobní Mašinu. Buddy je rezident přímo na téže osobní Mašině a funguje v jejím rámci; žádný vedlejší osobní Buddy host ani výjimka ze singletonu. Další hostované Mašiny vyžadují Organizaci. Organizace může vlastnit více oprávněných Mašin i pro stejného Operátora; GitHub určuje oprávnění. Více fyzických klientských zařízení, migrace nebo záloha nejsou druhé nezávislé hostované osobní prostředí. Osobní URL je `<app>.<personal-dns-slug>.lazurio.io`; organizační URL `<app>.<machine>.<github-org-login>.lazurio.io`. Kanonický zápis je lowercase, hostname case-insensitive; tím nevzniká nový grant ani runtime změna. Autoritou jsou [root rozhodnutí 0153/0154](manual/decision-register.md).
 
 Buddy a AI Kolega používají stejný technický základ. Liší se vlastníkem,
 mandátem a správou dat, ne odděleným vývojem runtime.
 
 | Vlastnost | Buddy | AI Kolega |
 | --- | --- | --- |
-| Owner | jeden lidský Principál | Organizace |
+| Owner | jeden člověk | Organizace |
 | Mandát | osobní | pracovní a organizační |
 | Paměť | osobní GBrain | organizačně svěřený GBrain |
-| Síťová bezpečnostní hranice | Principálova | organizační |
-| Přístupy | delegace Principála | granty Organizace |
+| Síťová bezpečnostní hranice | Ownerova | organizační |
+| Přístupy | delegace Ownera | granty Organizace |
 | Technický základ | Resident runtime | stejný Resident runtime |
 
-Buddyho smí oslovovat právě jeden lidský Principál přes privátní komunikační
-rozhraní. Mašinu vlastní Principál a může ji měnit. Co smí běžící Agent dělat,
+Buddyho smí oslovovat právě jeden člověk, jeho Owner, přes privátní komunikační
+rozhraní. Owner Mašinu vlastní a může ji měnit. Co smí běžící Agent dělat,
 omezuje sandbox agentního runtime; Lazurio vedle něj nestaví druhý sandbox.
 Proces omezený sandboxem jej zároveň nesmí vlastnit ani přepisovat.
 
@@ -175,7 +181,7 @@ Podrobný profil, instalaci a incidentní hranice popisuje
 [manuál Residentů](manual/lazurio-resident-profiles.md). Pravidla pro práci s
 hostovaným Buddym jsou v [manuálu hostovaného Buddyho](manual/hosted-buddy-vps.md).
 
-**Hosted Buddy:** osobní VM lidského Operátora/Principála s Hermesem v roli Buddyho. Osobní VM drží Personalspace, osobní paměť a identity, nikoli organizační klony. Ty zůstávají na přidělených Organization-owned Mašinách; individuální pracovní VM vlastněná Organizací se tím nestává osobní. Produktové pořadí a Dashboard etapy určuje kanonický plán v Mission Control v3. Síť, servis a vztah k dosavadní implementaci drží [synchronizační přehled, upřesnění 2026-09-20](manual/buddy-product-decision-2026-09-12.md).
+**Hosted Buddy:** osobní VM lidského Operátora s Hermesem v roli Buddyho. Osobní VM drží Personalspace, osobní paměť a identity, nikoli organizační klony. Ty zůstávají na přidělených Organization-owned Mašinách; individuální pracovní VM vlastněná Organizací se tím nestává osobní. Produktové pořadí a Dashboard etapy určuje kanonický plán v Mission Control v3. Síť, servis a vztah k dosavadní implementaci drží [synchronizační přehled, upřesnění 2026-09-20](manual/buddy-product-decision-2026-09-12.md).
 
 ## Pracovní prostory
 
@@ -218,8 +224,8 @@ Agent tím nezískává přístup k host OS, jinému Workspace nebo org-wide
 credentials.
 
 Cílový model GitHub identity Hosted Team Workspace určují decisions 0147 až
-0149 (`manual/decision-register.md`). Workspace nemá přiřazeného operátora;
-jeho Git identitou je platformní GitHub App Lazurio for GitHub dosahovaná
+0149 (`manual/decision-register.md`). Workspace nemá přiřazeného Operátora:
+Operátorem je člen Teamu, který je právě připojený (decision 0175). Jeho Git identitou je platformní GitHub App Lazurio for GitHub dosahovaná
 přes per-Organization token broker, který vydává krátkodobé tokeny scoped na
 jeden repozitář — privátní klíč App na Mašině nikdy neleží. Nasazený broker
 autorizuje podle id workspace, jeho unikátního credentialu a
@@ -230,12 +236,15 @@ s testy a migrací existujících policy před rolloutem. Commity z Workspace
 mají committera `lazurio-for-github[bot]`, autora jako Teamovou
 pseudo-identitu a trailer `Lazurio-Workspace: <organization-slug>/<team-slug>`
 (cílově vedle něj `Lazurio-Environment: <machine>.<org>`, decision 0167);
-každá změna jde přes pull request otevřený botem s labelem `team:<slug>`,
-který reviewuje a merguje oprávněný Operátor a tím za ni přebírá
-odpovědnost. Token s `contents: write` umí na nechráněné `main` pushnout i
-merge dokončit, proto na GitHub Free toto pravidlo drží proces a policy a
-provider-enforced je až s branch protection na placeném plánu; principy jsou
-stejné. Jedinou živou autoritou přístupu Teamu k repozitářům zůstává GitHub
+každá změna jde přes pull request otevřený botem s labelem `team:<slug>`;
+přímo do `main` se nepushuje. Pokyn k Publikaci dává člen Teamu připojený
+v aktuálním threadu a o merge rozhodují práva Teamu a branch rules (decision
+0148 ve znění dodatku z 2026-10-02, LazurioPlatform F31). Organizace, která
+chce, aby každý pull request z Team Workspace mergoval člověk, to drží ve svém
+`AGENTS.md` nebo vynutí branch rules. Token s `contents: write` umí na
+nechráněné `main` pushnout i merge dokončit, proto na GitHub Free pravidlo
+„jen přes PR“ drží proces a policy a provider-enforced je až s branch
+protection na placeném plánu; principy jsou stejné. Jedinou živou autoritou přístupu Teamu k repozitářům zůstává GitHub
 (decision 0149): Dashboard smí vlastnit chtěné mapování jako reviewovaný
 vstup broker policy, ale samo přístup neuděluje ani neudržuje.
 
