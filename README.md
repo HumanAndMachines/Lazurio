@@ -318,5 +318,5 @@ přechodem jednotlivých verzí na Apache 2.0; není to zatím finální OSS lic
 režim, který má Lazurio nabídnout komunitě.
 
 Volba a publikace navazující OSS licence je samostatné explicitní rozhodnutí
-Matěje. Dokud není nová licence skutečně publikovaná, nelze ji z plánů ani
+vlastníků projektu. Dokud není nová licence skutečně publikovaná, nelze ji z plánů ani
 záměru projektu domýšlet a platí přesné znění aktuálního `LICENSE.md`.

@@ -224,8 +224,8 @@ Agent tím nezískává přístup k host OS, jinému Workspace nebo org-wide
 credentials.
 
 Cílový model GitHub identity Hosted Team Workspace určují decisions 0147 až
-0149 (`manual/decision-register.md`). Workspace nemá přiřazeného operátora;
-jeho Git identitou je platformní GitHub App Lazurio for GitHub dosahovaná
+0149 (`manual/decision-register.md`). Workspace nemá přiřazeného Operátora:
+Operátorem je člen Teamu, který je právě připojený (decision 0174). Jeho Git identitou je platformní GitHub App Lazurio for GitHub dosahovaná
 přes per-Organization token broker, který vydává krátkodobé tokeny scoped na
 jeden repozitář — privátní klíč App na Mašině nikdy neleží. Nasazený broker
 autorizuje podle id workspace, jeho unikátního credentialu a
@@ -236,12 +236,15 @@ s testy a migrací existujících policy před rolloutem. Commity z Workspace
 mají committera `lazurio-for-github[bot]`, autora jako Teamovou
 pseudo-identitu a trailer `Lazurio-Workspace: <organization-slug>/<team-slug>`
 (cílově vedle něj `Lazurio-Environment: <machine>.<org>`, decision 0167);
-každá změna jde přes pull request otevřený botem s labelem `team:<slug>`,
-který reviewuje a merguje oprávněný Operátor a tím za ni přebírá
-odpovědnost. Token s `contents: write` umí na nechráněné `main` pushnout i
-merge dokončit, proto na GitHub Free toto pravidlo drží proces a policy a
-provider-enforced je až s branch protection na placeném plánu; principy jsou
-stejné. Jedinou živou autoritou přístupu Teamu k repozitářům zůstává GitHub
+každá změna jde přes pull request otevřený botem s labelem `team:<slug>`;
+přímo do `main` se nepushuje. Pokyn k Publikaci dává člen Teamu připojený
+v aktuálním threadu a o merge rozhodují práva Teamu a branch rules (decision
+0148 ve znění dodatku z 2026-10-02, LazurioPlatform F31). Organizace, která
+chce, aby každý pull request z Team Workspace mergoval člověk, to drží ve svém
+`AGENTS.md` nebo vynutí branch rules. Token s `contents: write` umí na
+nechráněné `main` pushnout i merge dokončit, proto na GitHub Free pravidlo
+„jen přes PR“ drží proces a policy a provider-enforced je až s branch
+protection na placeném plánu; principy jsou stejné. Jedinou živou autoritou přístupu Teamu k repozitářům zůstává GitHub
 (decision 0149): Dashboard smí vlastnit chtěné mapování jako reviewovaný
 vstup broker policy, ale samo přístup neuděluje ani neudržuje.
 
