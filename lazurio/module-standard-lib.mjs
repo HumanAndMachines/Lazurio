@@ -64,6 +64,10 @@ const SKIPPED_DIRECTORIES = new Set([
   "build",
   "coverage",
 ]);
+// The lease-move port scan walks build outputs and caches too: a runtime may
+// read a tracked dist/listener.conf. Only Git metadata and installed
+// dependency trees, which are not the Module's own files, stay out.
+const PORT_SCAN_SKIPPED_DIRECTORIES = new Set([".git", "node_modules", ".venv"]);
 const TEST_DIRECTORIES = new Set(["test", "tests", "__tests__", "e2e", "fixtures", "__fixtures__"]);
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".astro"]);
 const JAVASCRIPT_EXTENSIONS = new Set([".js", ".jsx", ".mjs", ".cjs"]);
@@ -112,7 +116,7 @@ export async function evaluateModuleStandard({
     if (status === "fail" || (status === "warn" && result.status === "pass")) result.status = status;
     if (detail) result.details.push(detail);
   };
-  const { files, symlinks, unreadable } = await walkModuleFiles(root);
+  const { files, symlinks } = await walkModuleFiles(root);
   const apps = (Array.isArray(manifest?.apps) ? manifest.apps : []).map((appPath) => ({
     appPath,
     appDirectory: posix.dirname(appPath) === "." ? "" : posix.dirname(appPath),
@@ -415,17 +419,24 @@ export async function evaluateModuleStandard({
       if (outside.length > 0) {
         const used = new Set([...others, candidate].flatMap((module) => (module.port_leases ?? []).map((lease) => lease.port)));
         const moved = new Map();
+        const scan = await walkModuleFiles(root, PORT_SCAN_SKIPPED_DIRECTORIES);
+        const scanEscapes = [...escapingSymlinks];
+        const realScanRoot = await realpath(root).catch(() => resolve(root));
+        for (const link of scan.symlinks) {
+          const target = await realpath(join(root, ...link.path.split("/"))).catch(() => null);
+          if (target === null || escapesRoot(relativePath(realScanRoot, target).split(sep).join("/"))) scanEscapes.push(link.path);
+        }
         for (const item of outside) {
           record("MS-01", "fail", `lease ${item.lease} ${item.port} leží mimo pool ${pool.start}-${pool.end}`);
           // A symlink leading outside the repo hides sources the scan cannot
           // read, so the port cannot be ruled out there either: fail closed.
           const refusal = adoptPort !== null && item.port === adoptPort
             ? `port ${item.port} převzatý přes --adopt-port se v tomtéž běhu nepřesouvá`
-            : escapingSymlinks.length > 0
-              ? `${escapingSymlinks[0]} vede mimo repo Modulu, port ${item.port} nelze vyloučit`
-              : unreadable.length > 0
-                ? `adresář ${unreadable[0]} nejde přečíst, port ${item.port} nelze vyloučit`
-                : await portReferenceRefusal({ root, files, port: item.port, packages });
+            : scanEscapes.length > 0
+              ? `${scanEscapes[0]} vede mimo repo Modulu, port ${item.port} nelze vyloučit`
+              : scan.unreadable.length > 0
+                ? `adresář ${scan.unreadable[0]} nejde přečíst, port ${item.port} nelze vyloučit`
+                : await portReferenceRefusal({ root, files: scan.files, port: item.port, packages });
           if (refusal) {
             record("MS-01", "fail", `lease ${item.lease} se automaticky nepřesune: ${refusal}`);
             continue;
@@ -752,7 +763,7 @@ async function gitTrackedPaths(root, paths) {
   return new Set(result.stdout.split("\0").map((item) => item.trim()).filter(Boolean));
 }
 
-async function walkModuleFiles(root) {
+async function walkModuleFiles(root, skippedDirectories = SKIPPED_DIRECTORIES) {
   const files = [];
   const symlinks = [];
   // Directories the walk could not list. An incomplete walk must not be read
@@ -775,14 +786,14 @@ async function walkModuleFiles(root) {
       }
       const relativePath = relativeDirectory === "" ? entry.name : `${relativeDirectory}/${entry.name}`;
       if (entry.isSymbolicLink()) {
-        if (!SKIPPED_DIRECTORIES.has(entry.name)) {
+        if (!skippedDirectories.has(entry.name)) {
           const target = await readlink(join(directory, entry.name)).catch(() => "?");
           symlinks.push({ path: relativePath, target });
         }
         continue;
       }
       if (entry.isDirectory()) {
-        if (SKIPPED_DIRECTORIES.has(entry.name)) continue;
+        if (skippedDirectories.has(entry.name)) continue;
         await walk(join(directory, entry.name), relativePath, {
           test: flags.test || TEST_DIRECTORIES.has(entry.name),
           public: flags.public || entry.name === "public",
