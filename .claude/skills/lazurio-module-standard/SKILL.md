@@ -120,7 +120,16 @@ ani pro productionspace repa (decision 0041).
       dvou commitech), `tsconfig` strict, biome, `check` + `test` skripty.
    5. **Generace**: smaž staré App generace (Firebase éra `v1`, nepoužívané
       `v2`); `apps[]` = adresáře. Novější kandidát vedle výchozí App zůstat
-      smí; přepnutí `default_app` není součást převodu.
+      smí; přepnutí `default_app` není součást převodu. Přesouvá-li se
+      adresář App nebo maže generace, přidej staré cesty build výstupů
+      (`/app/node_modules/`, `/app/.astro/`, `/app/dist/`…) do kořenového
+      `.gitignore`, jinak `lazurio update` na existujících checkoutech
+      skončí `blocked`. Pravidla neodebírej, dokud není úklid všech
+      checkoutů ověřený.
+   6. **Health**: deklarovaná `health.path` musí vrátit 200 přímo — sonda
+      Launchpadu redirecty nenásleduje (`/cs/`, ne `/` s 301); ověř, že
+      `curl -s -o /dev/null -w '%{http_code}' --max-redirs 0 <url>` vypíše
+      přesně `200` (samotný návratový kód curl je 0 i při 301).
 2. Opakuj `lazurio module setup … --json`, dokud není `current`; potom
    `bun run check && bun test` a skutečný start přes Launchpad
    (`lazurio module start`, otevři URL, `lazurio module stop`).
