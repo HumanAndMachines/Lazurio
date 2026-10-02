@@ -107,12 +107,13 @@ operátora; agenti v něm jednají tam, kam sahají přihlášení na té mašin
 | Dokumentace pro operátory | Hranice a přijaté kompromisy tohoto modelu se operátorům srozumitelně vysvětlují ve veřejné dokumentaci Lazuria. |
 | Data | Tokeny aplikací a obsah volání drží Composio. Operátor i Organizace to vědí před prvním připojením. |
 
-**Dnes versus cíl.** Sekce Nastavení Launchpadu s povinnými, doporučenými a
-volitelnými nástroji, jejich aktivace a propsání do Folderu teprve vznikají
-v LazurioPlatform (plán DEV-6626). Do jejich vydání se Composio zřizuje jen
-v pilotu DEV-6626. Mimo pilot agent Composio sám nezřizuje a použije dosavadní
-cesty žebříčku. Model a otevřené otázky drží
-[integrations/composio.md](integrations/composio.md).
+**Stav.** Sekce Nastavení Launchpadu Platformy s povinnými, doporučenými
+a volitelnými nástroji, jejich zapnutím a propsáním do Folderu je vydaná
+(LazurioPlatform 0.1.8). Pilot DEV-6626 tím skončil: Composio je aktivní
+součást Lazuria na každém Environmentu, kde ho operátor zapne a přihlásí
+v Nastavení → Nástroje (Matěj 2026-10-02). Kde zapnuté není, agent ho sám
+nezřizuje: nabídne operátorovi zapnutí, nebo použije další cesty žebříčku.
+Model a otevřené otázky drží [integrations/composio.md](integrations/composio.md).
 
 ## Kde co žije
 
@@ -357,7 +358,7 @@ nepoužívají; personalspace izolace má přednost.
 | [integrations/atlassian.md](integrations/atlassian.md) | Jira, Confluence |
 | [integrations/linkedin.md](integrations/linkedin.md) | LinkedIn (post-only + browser fallback) |
 | [integrations/canva.md](integrations/canva.md) | Canva |
-| [integrations/composio.md](integrations/composio.md) | Composio jako schválený broker: model, custody a pilot DEV-6626 |
+| [integrations/composio.md](integrations/composio.md) | Composio jako schválený broker: model, custody a zapnutí v Launchpadu |
 | [integrations/eso9.md](integrations/eso9.md) | ESO9 Web API, omezený JSON API fallback a discovery-first read-only rollout |
 
 Stav každého runbooku odpovídá datu uvedenému v jeho úvodní hlavičce; před

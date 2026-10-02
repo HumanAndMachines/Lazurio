@@ -1,8 +1,10 @@
 # Composio: doporučená cesta k napojení aplikací
 
-Stav k 2026-09-27: rozhodnutí 0162 je přijaté, podpora v Launchpadu teprve
-vzniká (plán DEV-6626). Tento runbook popisuje model; mimo pilot DEV-6626 se
-Composio nezřizuje.
+Stav k 2026-10-02: rozhodnutí 0162 je přijaté a sekce Nastavení Launchpadu
+Platformy je vydaná (LazurioPlatform 0.1.8). Composio je aktivní součást
+Lazuria na každém Environmentu, kde ho operátor zapne a přihlásí v Nastavení
+→ Nástroje; pilot DEV-6626 skončil (Matěj 2026-10-02). Tento runbook popisuje
+model.
 
 ## Model
 
@@ -37,7 +39,8 @@ Lazurio Dashboard. Lazurio Environment to nevynucuje.
   nedrží a nikam je nezapisuje.
 - Na mašině s více Organizacemi volit nástroj Organizace, pro kterou pracuje,
   a data mezi Organizacemi nepřenášet.
-- Mimo pilot Composio nezřizovat.
+- Kde ho operátor nezapnul, Composio nezřizovat; nabídnout mu zapnutí
+  v Launchpadu.
 
 ## Alternativy pro operátora
 
