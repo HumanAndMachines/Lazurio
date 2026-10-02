@@ -148,7 +148,10 @@ v UI. Demo/offline režimy jsou samostatné skripty (`dev:demo`), ne start.
 ### 4.4 Připravenost, signály, ukončení
 
 - `lazurio.runtime.listeners[].health` je cesta, která vrátí **200** až když
-  App skutečně obsluhuje; do té doby 503 nebo nic.
+  App skutečně obsluhuje; do té doby 503 nebo nic. Musí odpovědět 200
+  **přímo**: sonda Launchpadu přesměrování nenásleduje, takže 301/302 je pro
+  ni chyba (web s jazykovým indexem deklaruje `/cs/`, ne `/`). Test start
+  kontraktu čte cestu z `package.json` a žádá ji bez následování redirectů.
 - `SIGTERM` = do 10 s čistě skončit (exit 0). Fatální stav = nenulový exit;
   App se sama nerestartuje.
 - Logy jen na stdout/stderr (journal Launchpadu), ne do souborů v repu.
@@ -226,6 +229,14 @@ Do té doby `MS-04` Python App hlásí `warn`, ne `pass`.
   ne oprava konformance. Starší generace (Firebase éra `app/v1`, nepoužívané
   `v2`) se mažou; Git historie zůstává. Rozhodnutí Principála 2026-09-30.
 - `apps[]` odpovídá adresářům: package bez deklarace v `apps[]` v repu není.
+- Když se adresář App přesouvá (např. `app/` → `app/v1/`) nebo se maže
+  generace, zůstanou na existujících checkoutech staré build výstupy
+  (`node_modules`, `.astro`, `dist`, `.wrangler`…), které už žádný
+  `.gitignore` nekryje; `lazurio update` pak checkout hlásí jako `blocked`.
+  Převodní PR proto tyto staré cesty přidá do kořenového `.gitignore`.
+  Pravidla tam zůstávají: staré výstupy z checkoutů samy nezmizí a
+  odebrání pravidla by je znovu odkrylo jako nesledované soubory. Odebrat
+  je lze až po ověřeném úklidu všech checkoutů Modulu.
 
 ## 9. Organizace
 
