@@ -556,12 +556,11 @@ export function renderHumanModuleSetup(report) {
     const passed = report.standard.checks.filter((check) => check.status === "pass").length;
     lines.push(`Lazurio Module Standard: ${passed}/${report.standard.checks.length} pass`);
     for (const check of report.standard.checks) {
-      if (check.status === "pass" && !check.repairs) continue;
+      if (check.status === "pass") continue;
       lines.push(`  ${check.id} ${check.status} · ${check.summary}`);
       for (const detail of check.details.slice(0, 5)) lines.push(`    - ${detail}`);
       if (check.details.length > 5) lines.push(`    - … a dalších ${check.details.length - 5}`);
-      for (const repair of check.repairs ?? []) lines.push(`    oprava --apply: ${repair}`);
-      if (check.action && !check.repairs) lines.push(`    Další krok: ${check.action}`);
+      if (check.action) lines.push(`    Další krok: ${check.action}`);
     }
   }
   if (report.operator_assertions.length > 0) {
@@ -634,7 +633,6 @@ async function buildModuleSetupPlan(options) {
     ({ writes, operatorAssertions } = await planNewModule({ options, context, manifestPath }));
   }
 
-  const contractWrites = writes.length;
   const standard = await planModuleStandard({
     options,
     context,
@@ -642,7 +640,6 @@ async function buildModuleSetupPlan(options) {
     diskManifest,
     writes,
   });
-  writes = standard.writes;
   const conformant = standard.checks.every((check) => check.status === "pass");
   const status = writes.length > 0 ? "actionable" : conformant ? "current" : "action_required";
   return {
@@ -656,7 +653,7 @@ async function buildModuleSetupPlan(options) {
         ? "module_contract_current"
         : status === "action_required"
           ? "module_standard_nonconformant"
-          : contractWrites > 0 ? "setup_changes_ready" : "standard_repairs_ready",
+          : "setup_changes_ready",
       writes,
       operatorAssertions,
       // The runtime projection depends only on the Module contract. A Module
@@ -669,9 +666,9 @@ async function buildModuleSetupPlan(options) {
   };
 }
 
-// Overlays planned contract writes on the checkout, measures the Lazurio Module
-// Standard and folds its mechanical repairs into the same write plan, so the
-// read-only run shows exactly what --apply writes.
+// Overlays planned contract writes on the checkout and measures the Lazurio
+// Module Standard on the result. The standard never adds a write: its findings
+// are the Agent's next steps, not repairs of this command.
 async function planModuleStandard({
   options,
   context,
@@ -682,7 +679,6 @@ async function planModuleStandard({
   const plannedManifestWrite = writes.find((write) => write.path === manifestPath);
   const manifest = plannedManifestWrite?.value ?? diskManifest;
   const packages = new Map();
-  const packageTexts = new Map();
   for (const appPath of Array.isArray(manifest?.apps) ? manifest.apps : []) {
     const packagePath = resolve(options.moduleRoot, ...appPath.split("/"));
     const planned = writes.find((write) => write.path === packagePath);
@@ -692,7 +688,6 @@ async function planModuleStandard({
     }
     const text = await readFile(packagePath, "utf8").catch(() => null);
     if (text === null) continue;
-    packageTexts.set(appPath, text);
     packages.set(appPath, parseJsonForSetup(text, packagePath, context));
   }
   const [policies, modules] = await Promise.all([
@@ -710,20 +705,7 @@ async function planModuleStandard({
     organizations: policies.organizations,
     modules,
   });
-  const nextWrites = [...writes];
-  const fold = ({ path, value, expectedText }) => {
-    const index = nextWrites.findIndex((write) => write.path === path);
-    if (index >= 0) nextWrites[index] = { ...nextWrites[index], value };
-    else nextWrites.push({ action: "replace", path, value, expectedText, containmentRoot: options.moduleRoot });
-  };
-  for (const [appPath, value] of evaluation.repairedPackages) {
-    fold({
-      path: resolve(options.moduleRoot, ...appPath.split("/")),
-      value,
-      expectedText: packageTexts.get(appPath),
-    });
-  }
-  return { checks: evaluation.checks, writes: nextWrites };
+  return { checks: evaluation.checks };
 }
 
 async function materializeModuleSetupRuntime({ options, context, manifest }) {

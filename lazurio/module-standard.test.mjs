@@ -111,13 +111,14 @@ test("MS-01 warns without an Organization pool and fails on overlapping pools or
   ]));
 });
 
-test("MS-02 adds a missing packageManager but only reports wrong versions and lockfile problems", async () => {
+test("MS-02 reports a missing or wrong packageManager and lockfile problems and never writes", async () => {
   const missing = await conformantFixture({ mutatePackage: (pkg) => { delete pkg.packageManager; } });
-  const applied = await setupModule({ ...missing, apply: true });
-  expect(applied.status).toBe("completed");
-  const written = await readJson(join(missing.appRoot, "package.json"));
-  expect(written.packageManager).toBe(`bun@${bunVersion}`);
-  expect(Object.keys(written).indexOf("packageManager")).toBe(Object.keys(written).indexOf("type") + 1);
+  const missingReport = await setupModule({ ...missing, apply: true });
+  expect(missingReport).toMatchObject({ status: "action_required", reason: "module_standard_nonconformant", changes: [] });
+  expect(check(missingReport, "MS-02").details).toEqual([
+    `app/v1/package.json: packageManager chybí (očekáváno bun@${bunVersion})`,
+  ]);
+  expect((await readJson(join(missing.appRoot, "package.json"))).packageManager).toBeUndefined();
 
   const wrong = await conformantFixture({ mutatePackage: (pkg) => { pkg.packageManager = "bun@1.0.0"; } });
   const wrongReport = await setupModule({ ...wrong, apply: true });
@@ -140,49 +141,26 @@ test("MS-02 adds a missing packageManager but only reports wrong versions and lo
   expect(check(await setupModule(notGit), "MS-02")).toMatchObject({ status: "warn" });
 });
 
-test("MS-04 adds the preparation skeleton only when it is unambiguous", async () => {
-  const withCheck = await conformantFixture({ mutatePackage: (pkg) => { delete pkg.lazurio.preparation; } });
-  const applied = await setupModule({ ...withCheck, apply: true });
-  expect(applied.status).toBe("completed");
-  expect((await readJson(join(withCheck.appRoot, "package.json"))).lazurio.preparation).toEqual({
-    schema_version: "lazurio.preparation.v1",
-    owner_package: "app/v1/package.json",
-    check_script: "check:prepared",
+test("MS-04 reports a missing or invalid preparation declaration and never writes", async () => {
+  const missing = await conformantFixture({ mutatePackage: (pkg) => { delete pkg.lazurio.preparation; } });
+  const missingReport = await setupModule({ ...missing, apply: true });
+  expect(missingReport).toMatchObject({ status: "action_required", reason: "module_standard_nonconformant", changes: [] });
+  expect(check(missingReport, "MS-04")).toMatchObject({
+    status: "fail",
+    details: ["app/v1/package.json: lazurio.preparation chybí"],
+    action: expect.stringContaining("check:prepared"),
   });
+  expect((await readJson(join(missing.appRoot, "package.json"))).lazurio.preparation).toBeUndefined();
 
   const explicitBun = await conformantFixture({
     mutatePackage: (pkg) => { pkg.lazurio.preparation.runtime = "bun"; },
   });
-  const explicitPlan = await setupModule(explicitBun);
-  expect(explicitPlan).toMatchObject({ status: "actionable", reason: "standard_repairs_ready" });
-  expect(check(explicitPlan, "MS-04")).toMatchObject({
-    status: "fail",
-    details: [
-      "app/v1/package.json: runtime: bun zapsané explicitně — Platforma dnes neznámá pole odmítá; klíč vynech (chybí = bun)",
-    ],
-    repairs: ["app/v1/package.json: odebrat lazurio.preparation.runtime (chybí = bun)"],
-  });
-  const explicitApplied = await setupModule({ ...explicitBun, apply: true });
-  expect(explicitApplied.status).toBe("completed");
-  expect((await readJson(join(explicitBun.appRoot, "package.json"))).lazurio.preparation).toEqual({
-    schema_version: "lazurio.preparation.v1",
-    owner_package: "app/v1/package.json",
-    check_script: "check:prepared",
-  });
-
-  const withoutCheck = await conformantFixture({
-    mutatePackage: (pkg) => {
-      delete pkg.lazurio.preparation;
-      delete pkg.scripts["check:prepared"];
-    },
-  });
-  const partial = await setupModule({ ...withoutCheck, apply: true });
-  expect(partial).toMatchObject({ status: "action_required" });
-  expect(partial.changes).toHaveLength(1);
-  expect((await readJson(join(withoutCheck.appRoot, "package.json"))).lazurio.preparation.check_script).toBeUndefined();
-  expect(check(partial, "MS-04").details).toEqual([
-    "app/v1/package.json: lazurio.preparation: chybí povinné pole 'check_script'",
+  const explicitReport = await setupModule({ ...explicitBun, apply: true });
+  expect(explicitReport).toMatchObject({ status: "action_required", changes: [] });
+  expect(check(explicitReport, "MS-04").details).toEqual([
+    "app/v1/package.json: runtime: bun zapsané explicitně — Platforma dnes neznámá pole odmítá; klíč vynech (chybí = bun)",
   ]);
+  expect((await readJson(join(explicitBun.appRoot, "package.json"))).lazurio.preparation.runtime).toBe("bun");
 
   const pythonWarning = "app/v1/package.json: Python App: čtení [tool.lazurio] z pyproject.toml zatím není v Core; ověř přípravu ručně";
   const python = await conformantFixture({ mutatePackage: (pkg) => { delete pkg.lazurio.preparation; } });

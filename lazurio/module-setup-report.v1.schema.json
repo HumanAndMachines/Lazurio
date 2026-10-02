@@ -174,12 +174,7 @@
                 "type": "array",
                 "items": { "type": "string", "minLength": 1 }
               },
-              "action": { "type": "string", "minLength": 1 },
-              "repairs": {
-                "description": "Mechanical repairs --apply writes for this check, e.g. `lazurio.module.json: lease main 23999 → 24000`.",
-                "type": "array",
-                "items": { "type": "string", "minLength": 1 }
-              }
+              "action": { "type": "string", "minLength": 1 }
             },
             "additionalProperties": false
           }

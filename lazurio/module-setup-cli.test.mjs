@@ -81,7 +81,8 @@ test("legacy Module converges through dry-run, apply and idempotent rerun", asyn
     expect.objectContaining({ lease: "main" }),
   ]);
 
-  expect(packageJson.packageManager).toMatch(/^bun@\d+\.\d+\.\d+$/);
+  // The standard proposes no write: packageManager stays the Agent's edit.
+  expect(packageJson.packageManager).toBeUndefined();
 
   const rerun = await setupModule(fixture);
   expectContractConverged(rerun);
@@ -193,9 +194,8 @@ test("current multi-listener Module projects canonical entrypoint and auxiliary 
   const report = await setupModule(fixture);
 
   // The contract is current, so the runtime projection is present even while
-  // the standard still offers its mechanical packageManager repair.
-  expect(report).toMatchObject({ status: "actionable", reason: "standard_repairs_ready" });
-  expect(report.changes.map((change) => change.path.endsWith("multi-listener/package.json"))).toEqual([true]);
+  // the standard still has findings; those never become writes.
+  expect(report).toMatchObject({ status: "action_required", reason: "module_standard_nonconformant", changes: [] });
   expect(report.runtime.apps[0].listeners).toEqual([
     expect.objectContaining({
       id: "app",
