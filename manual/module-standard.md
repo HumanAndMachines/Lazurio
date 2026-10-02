@@ -282,9 +282,10 @@ nespouští build ani supervizory za App, nepřebírá porty, nenabízí legacy
 `lazurio module setup <module-root> --root <lazurio-root>` (viz
 [module-setup.md](module-setup.md)) rozšiřuje read-only kontrolu o standard.
 Každá kontrola má stabilní ID a stav `pass | fail | warn`; `actionable` plán
-umí opravit mechanické položky (`packageManager`, chybějící `check`/`test`
-skript, `lazurio.preparation` skeleton). Lease nikdy nepřesouvá; u leasu mimo
-pool navrhne volný port a přesun je ruční úprava manifestu v PR Modulu.
+jen doplní, co chybí a jde zapsat jednoznačně (`packageManager`, skeleton
+`lazurio.preparation`); `check`/`test` skripty nedoplňuje a existující
+deklaraci nepřepisuje. Lease nikdy nepřesouvá; u leasu mimo pool navrhne
+volný port a přesun je ruční úprava manifestu v PR Modulu.
 
 | ID | Kontrola |
 | --- | --- |

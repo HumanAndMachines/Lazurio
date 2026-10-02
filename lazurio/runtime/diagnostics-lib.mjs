@@ -3364,7 +3364,7 @@ export function moduleStandardPortPoolCheck(appsResponse) {
       `port ${port} drží Moduly více Organizací: ${owners.map((owner) => `${owner.company}/${owner.module}#${owner.lease}`).join(", ")}`,
     ),
     ...findings.leases_outside_pool.map(({ company, module, lease, port, pool }) =>
-      `${company}/${module}#${lease} ${port} leží mimo pool ${pool.start}-${pool.end}; oprava: lazurio module setup <module-root> --apply`,
+      `${company}/${module}#${lease} ${port} leží mimo pool ${pool.start}-${pool.end}; oprava: přepiš port leasu v lazurio.module.json na volný port poolu (navrhne ho lazurio module setup <module-root>) a ověř start App`,
     ),
     ...findings.organizations_without_pool.map(({ company }) =>
       `${company} má Module leases, ale nemá module_port_pool`,

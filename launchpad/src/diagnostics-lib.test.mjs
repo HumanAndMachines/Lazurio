@@ -974,7 +974,7 @@ test("Doctor hlásí Module Standard port pooly jako varování do cutoveru", ()
   expect(check.details).toEqual([
     "pooly Alpha 24000-24099 a Beta 24050-24149 se překrývají na 24050-24099",
     "port 24060 drží Moduly více Organizací: Alpha/one#main, Beta/two#main",
-    "Alpha/old#main 5306 leží mimo pool 24000-24099; oprava: lazurio module setup <module-root> --apply",
+    "Alpha/old#main 5306 leží mimo pool 24000-24099; oprava: přepiš port leasu v lazurio.module.json na volný port poolu (navrhne ho lazurio module setup <module-root>) a ověř start App",
   ]);
 
   const clean = buildDoctorReportFromAppsResponse({
