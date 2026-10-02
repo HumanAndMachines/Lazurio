@@ -593,17 +593,19 @@ Root upravuj jen když se mění:
   root/operator secrets patří do gitignored `personalspace/<owner>_GEN3/secrets/...`,
   organization/AI-colleague secrets do organization-local `private/secrets/...`.
 - Lokální drafty: `drafts/`
-- Migrace provádějí Agenti, ne mechanismus (decision 0173 v
-  manual/decision-register.md): převod existujícího stavu do nového směru je
-  ruční, reviewovaný refactor Task Agenta a jeho subagentů podle návodu, který
-  nese motivaci, cílový stav, postup a způsob ověření. Nástroje smějí jen
-  měřit a hlásit nález s dalším krokem (checker, doctor, ověřovací skript);
-  nový automatický migrátor, automatickou opravu ani codemod nestav.
-  Jednorázový skript, který si Agent pro jeden hromadný převod dat napíše ve
-  svém PR a doloží kontrolou parity, je jeho pracovní výstup, ne mechanismus.
-  Migrace
-  „na kliknutí“ spustí Agenta s návodem, nebo člověku návod ukáže ke
-  zkopírování do chatu.
+- Refactor dělá Agent, skript jen doplňuje (decision 0173 v
+  manual/decision-register.md): kde se stará struktura má zahodit nebo
+  přestavět, dělá převod Task Agent a jeho subagenti jako reviewovaný refactor
+  podle návodu, který nese motivaci, cílový stav, postup a způsob ověření.
+  Skript smí doplnit novou věc, která chybí a jde zapsat jednoznačně, nebo
+  provést přímočarý krok bez okrajových případů; pro přestavbu existující
+  struktury automatický migrátor, automatickou opravu ani codemod nestav.
+  Nástroje jinak měří a hlásí nález s dalším krokem. Jednorázový skript,
+  který si Agent pro hromadný převod dat napíše ve svém PR a doloží kontrolou
+  parity, je jeho pracovní výstup. Převod „na kliknutí“ spustí Agenta
+  s návodem, nebo člověku návod ukáže ke zkopírování do chatu. Potřebný
+  update se v Organizacích rovnou provede paralelními PR, které je srovnají
+  jako celek.
 - Dosavadní migrační kód (přesun ze starého směru do nového, např. legacy
   `company.gen3.json` → `lazurio.organization.json`) žije výhradně ve
   vyhrazené migrations složce (`lazurio/migrations/<migrace>/` s vlastním
