@@ -121,9 +121,9 @@ lazurio module setup ./workspace/portal \
 review, zkontroluje rozsah a kolizi s Module leases stejné Organizace, ale
 nevymýšlí historickou provenienci čísla. Překryv s jinou Organizací zůstává
 vědomý runtime takeover kontrakt; není důvodem k přečíslování stabilního portu.
-Existující lease uvnitř poolu se automaticky nemění. Lease mimo pool je nález
-standardu (`MS-01`); `--apply` jej přesune jen za podmínek v kapitole níže a
-v tomtéž běhu s `--adopt-port` nikdy.
+Existující lease CLI nikdy nemění, ani uvnitř poolu, ani mimo něj. Lease mimo
+pool je nález standardu (`MS-01`) s navrženým volným portem poolu; přesun je
+ruční úprava manifestu v PR Modulu (kapitola níže).
 
 ## Co musí připravit Organization Admin
 
@@ -153,9 +153,8 @@ nese sekci `standard` se stabilním seznamem třinácti kontrol v pořadí
       "id": "MS-01",
       "status": "fail",
       "summary": "lazurio.module.json platné, id odpovídá slotu, lease v poolu Organizace, pooly disjunktní",
-      "details": ["lease main 23500 leží mimo pool 24000-24099"],
-      "action": "Přesuň lease do module_port_pool Organizace …",
-      "repairs": ["lazurio.module.json: lease main 23500 → 24001 (součást převodu, koordinovaná migrace)"]
+      "details": ["lease main 23500 leží mimo pool 24000-24099; volný port poolu: 24001"],
+      "action": "Přepiš port leasu v lazurio.module.json na navržený volný port poolu …"
     }
   ]
 }
@@ -189,13 +188,20 @@ nese sekci `standard` se stabilním seznamem třinácti kontrol v pořadí
 | --- | --- | --- |
 | `MS-02` | doplní chybějící `packageManager` na přesný Bun z `lazurio/package.json` | jiná existující hodnota (jen nález) |
 | `MS-04` | doplní skeleton `lazurio.preparation` (`schema_version`, `owner_package` = App, `check_script` jen když existuje skript `check:prepared`; klíč `runtime` nezapisuje, chybí = bun); explicitně zapsané `runtime: bun` odebere | App bez `lazurio.runtime`, Python App, App v kořeni Modulu místo `app/v<N>/`; `prepare_script`/`check_script` s npm lifecycle jménem (`prepare`, `preprepare`, `postprepare`, `install`, `preinstall`, `postinstall`, `prepublish`, `prepublishOnly`, `prepack`, `postpack`, `dependencies`) je jen nález, protože je `bun install` spouští sám; stejně jméno mimo gramatiku čtečky Platformy `^[A-Za-z][A-Za-z0-9:_-]*$` (pravidla čte ze schématu); přejmenuj je na `prepare:app` / `check:prepared` |
-| `MS-01` | jako součást převodu (koordinovaná migrace) přesune lease mimo pool na nejnižší volný port poolu a mapování `staré → nové` uvede v `repairs` | port se objevuje v kterémkoli souboru Modulu (sken čte všechny přípony kromě binárních formátů a prochází i build výstupy a cache jako `dist/`; mimo zůstává jen `.git`, `node_modules` a `.venv`), některý zdroj nejde přečíst nebo přesahuje 1 MiB, některý symlink vede mimo repo Modulu nebo průchod soubory není úplný (nečitelný adresář, limit počtu souborů) — přesun končí zavřeně, pool je vyčerpaný, port přišel z `--adopt-port` v tomtéž běhu |
 
 Chybějící `check`/`test` skripty, lockfile, tsconfig, importy, `.env` ani
 víceprocesový `dev` skript CLI nevymýšlí; zůstávají nálezem s `action`.
-Když v témže běhu mění i Module kontrakt (migrace legacy App), přesun leasu
-zapíše `--apply` až po zápisu kontraktu, aby přerušený běh zůstal
-konvergentní.
+
+**Lease mimo pool CLI nepřesouvá.** `MS-01` nahlásí lease a nejnižší volný port
+poolu (`volný port poolu: N`; víc leasů jednoho Modulu dostane různé porty).
+Návrh platí pro stav checkoutu v okamžiku běhu: při převodu více Modulů jedné
+Organizace přiděluj porty postupně, kolizi dvou leasů hlásí `MS-01`. Přesun dělá Agent
+v PR Modulu ve třech krocích: přepíše `port` leasu v `lazurio.module.json`,
+odstraní port zapsaný natvrdo, pokud ho hlásí `MS-06`, a doloží start App na
+novém portu (`lazurio module start`, URL odpoví, `lazurio module stop`). Port
+žije jen v leasu a App ho čte z `LAZURIO_RUNTIME_LISTENER_<ID>_PORT`, takže
+jiné místo k úpravě konformní Modul nemá; důkazem je skutečný start, ne
+prohledávání souborů.
 
 Root doctor má navíc kontrolu `module_standard.port_pools`: napříč
 namountovanými Organizacemi hlásí překryv poolů, cross-Organization kolize

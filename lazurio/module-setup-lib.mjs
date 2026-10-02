@@ -468,49 +468,35 @@ export async function setupModule({
     // existing Organization-scoped creator lock immediately before writing.
     plan = await buildModuleSetupPlan(options);
     if (plan.report.status !== "actionable") return plan.report;
-    const initialPlan = plan;
-    const writtenChanges = [];
     let completedWrites = 0;
-    // Pass 1 writes the reviewed plan. A lease move of the standard (MS-01) is
-    // deferred while the Module contract itself still changes, so pass 2 may
-    // write exactly that announced repair on the converged contract.
-    for (let pass = 0; pass < 2; pass += 1) {
-      if (pass > 0) {
-        plan = await buildModuleSetupPlan(options);
-        if (plan.report.reason !== "standard_repairs_ready") break;
-      }
-      for (const change of plan.report.changes) {
-        if (!writtenChanges.some((written) => written.path === change.path)) writtenChanges.push(change);
-      }
-      for (const write of plan.writes) {
-        const containmentRoot = write.containmentRoot ?? options.moduleRoot;
-        const expectedParentRealPath = write.action === "create"
-          ? await assertModuleWriteParent({
-            moduleRoot: containmentRoot,
-            path: write.path,
-            context: plan.context,
-          })
-          : await assertRegularModuleFile({
-            moduleRoot: containmentRoot,
-            path: write.path,
-            displayPath: relative(containmentRoot, write.path).split(sep).join("/"),
-            context: plan.context,
-            missingAction: "Filesystem App se po plánu změnil; spusť setup znovu až po jeho kontrole.",
-          });
-        await beforePublish?.({ action: write.action, path: write.path });
-        publishJsonFileAtomically({
-          action: write.action,
+    for (const write of plan.writes) {
+      const containmentRoot = write.containmentRoot ?? options.moduleRoot;
+      const expectedParentRealPath = write.action === "create"
+        ? await assertModuleWriteParent({
+          moduleRoot: containmentRoot,
+          path: write.path,
+          context: plan.context,
+        })
+        : await assertRegularModuleFile({
+          moduleRoot: containmentRoot,
           path: write.path,
           displayPath: relative(containmentRoot, write.path).split(sep).join("/"),
-          value: write.value,
-          expectedText: write.expectedText,
-          expectedParentRealPath,
           context: plan.context,
+          missingAction: "Filesystem App se po plánu změnil; spusť setup znovu až po jeho kontrole.",
         });
-        completedWrites += 1;
-        if (failAfterWrite === completedWrites) {
-          throw new Error(`Injected module setup failure after write ${completedWrites}`);
-        }
+      await beforePublish?.({ action: write.action, path: write.path });
+      publishJsonFileAtomically({
+        action: write.action,
+        path: write.path,
+        displayPath: relative(containmentRoot, write.path).split(sep).join("/"),
+        value: write.value,
+        expectedText: write.expectedText,
+        expectedParentRealPath,
+        context: plan.context,
+      });
+      completedWrites += 1;
+      if (failAfterWrite === completedWrites) {
+        throw new Error(`Injected module setup failure after write ${completedWrites}`);
       }
     }
     const verified = await buildModuleSetupPlan(options);
@@ -527,8 +513,8 @@ export async function setupModule({
       ...verified.report,
       status: standardOnly ? "action_required" : "completed",
       reason: standardOnly ? verified.report.reason : "setup_applied_and_reverified",
-      changes: writtenChanges,
-      operator_assertions: initialPlan.report.operator_assertions,
+      changes: plan.report.changes,
+      operator_assertions: plan.report.operator_assertions,
     };
   } catch (error) {
     if (error instanceof ModuleSetupActionRequired) return blockedModuleSetupReport(options, error);
@@ -593,7 +579,6 @@ async function buildModuleSetupPlan(options) {
   let operatorAssertions = [];
   let runtime = null;
   let diskManifest = null;
-  let diskManifestText = null;
 
   if (manifestEntry) {
     if (!manifestEntry.isFile() || manifestEntry.isSymbolicLink()) {
@@ -607,7 +592,6 @@ async function buildModuleSetupPlan(options) {
     const manifestText = await readFile(manifestPath, "utf8");
     const manifest = parseJsonForSetup(manifestText, manifestPath, context);
     diskManifest = manifest;
-    diskManifestText = manifestText;
     const normalized = normalizeModuleManifest({ manifest, modulePath: manifestPath });
     const identityIssues = [
       ...normalized.issues,
@@ -656,9 +640,7 @@ async function buildModuleSetupPlan(options) {
     context,
     manifestPath,
     diskManifest,
-    diskManifestText,
     writes,
-    deferManifestRepair: contractWrites > 0,
   });
   writes = standard.writes;
   const conformant = standard.checks.every((check) => check.status === "pass");
@@ -695,9 +677,7 @@ async function planModuleStandard({
   context,
   manifestPath,
   diskManifest,
-  diskManifestText,
   writes,
-  deferManifestRepair,
 }) {
   const plannedManifestWrite = writes.find((write) => write.path === manifestPath);
   const manifest = plannedManifestWrite?.value ?? diskManifest;
@@ -729,7 +709,6 @@ async function planModuleStandard({
     organization: context.organization,
     organizations: policies.organizations,
     modules,
-    adoptPort: options.adoptPort,
   });
   const nextWrites = [...writes];
   const fold = ({ path, value, expectedText }) => {
@@ -737,18 +716,6 @@ async function planModuleStandard({
     if (index >= 0) nextWrites[index] = { ...nextWrites[index], value };
     else nextWrites.push({ action: "replace", path, value, expectedText, containmentRoot: options.moduleRoot });
   };
-  if (evaluation.repairedManifest && deferManifestRepair) {
-    // A moved lease must not race the contract migration: a legacy App still
-    // carrying the old port would otherwise drift against the new manifest if
-    // the apply is interrupted. --apply writes it in its second pass.
-    const check = evaluation.checks.find((item) => item.id === "MS-01");
-    check.repairs = check.repairs.map((repair) => repair.replace(
-      "(součást převodu, koordinovaná migrace)",
-      "(součást převodu, koordinovaná migrace; zapíše se po kontraktu v témže --apply)",
-    ));
-  } else if (evaluation.repairedManifest) {
-    fold({ path: manifestPath, value: evaluation.repairedManifest, expectedText: diskManifestText });
-  }
   for (const [appPath, value] of evaluation.repairedPackages) {
     fold({
       path: resolve(options.moduleRoot, ...appPath.split("/")),

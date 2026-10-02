@@ -274,7 +274,7 @@ test("explicit App setup rewrites its adopted host and port to injected runtime 
   expectContractConverged(report);
   expect(report.standard.checks.find((check) => check.id === "MS-01")).toMatchObject({
     status: "fail",
-    details: expect.arrayContaining([expect.stringContaining("--adopt-port")]),
+    details: ["lease main 5306 leží mimo pool 24000-24099; volný port poolu: 24000"],
   });
   expect((await readJson(packagePath)).scripts.dev).toBe(
     'bun -e "process.exit(process.env.LAZURIO_RUNTIME_PORT && process.env.LAZURIO_RUNTIME_HOST ? 0 : 1)" && bun server.mjs --host "$LAZURIO_RUNTIME_HOST" --port "$LAZURIO_RUNTIME_PORT"',

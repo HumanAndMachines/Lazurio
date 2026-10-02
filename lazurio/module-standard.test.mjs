@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
-import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -46,38 +46,36 @@ test("a conformant Module is current with exactly the thirteen passing checks", 
   expect(JSON.parse(cli.stdout.toString()).standard.checks).toHaveLength(13);
 });
 
-test("MS-01 moves an out-of-pool lease to the lowest free pool port and reports the mapping", async () => {
+test("MS-01 reports an out-of-pool lease with the lowest free pool port and never moves it", async () => {
   const fixture = await conformantFixture({ port: 23_500 });
   await addNeighbourModule(fixture, { module: "neighbour", port: 24_000 });
+  const manifestPath = join(fixture.moduleRoot, "lazurio.module.json");
 
-  const planned = await setupModule(fixture);
-  expect(planned).toMatchObject({ status: "actionable", reason: "standard_repairs_ready" });
-  expect(check(planned, "MS-01")).toMatchObject({
-    status: "fail",
-    repairs: ["lazurio.module.json: lease main 23500 → 24001 (součást převodu, koordinovaná migrace)"],
-  });
-  expect(planned.changes).toEqual([{ action: "replace", path: "organizations/Acme_GEN3/workspace/portal/lazurio.module.json" }]);
+  for (const apply of [false, true]) {
+    const report = await setupModule({ ...fixture, apply });
+    expect(report).toMatchObject({ status: "action_required", reason: "module_standard_nonconformant", changes: [] });
+    expect(check(report, "MS-01").details).toEqual([
+      "lease main 23500 leží mimo pool 24000-24099; volný port poolu: 24001",
+    ]);
+    expect(check(report, "MS-01").repairs).toBeUndefined();
+    expect(report.issues.map((issue) => issue.code)).toEqual(["MS-01"]);
+    expect((await readJson(manifestPath)).port_leases[0].port).toBe(23_500);
+  }
 
-  const applied = await setupModule({ ...fixture, apply: true });
-  expect(applied).toMatchObject({ status: "completed", reason: "setup_applied_and_reverified" });
-  expect((await readJson(join(fixture.moduleRoot, "lazurio.module.json"))).port_leases[0].port).toBe(24_001);
-  expect(check(applied, "MS-01").status).toBe("pass");
+  // The move is one manifest edit made by the Agent in the Module PR.
+  const manifest = await readJson(manifestPath);
+  manifest.port_leases[0].port = 24_001;
+  await writeJsonFile(manifestPath, manifest);
   expect((await setupModule(fixture)).status).toBe("current");
 });
 
-test("MS-01 refuses to move a lease whose port is hardcoded in the App", async () => {
-  const fixture = await conformantFixture({ port: 23_501 });
-  await writeText(join(fixture.appRoot, "src", "config.ts"), "export const fallbackPort = 23501;\n");
+test("MS-01 names an exhausted pool instead of a free port", async () => {
+  const fixture = await conformantFixture({ port: 23_501, pool: { start: 24_000, end: 24_000 } });
+  await addNeighbourModule(fixture, { module: "neighbour", port: 24_000 });
 
-  const report = await setupModule({ ...fixture, apply: true });
-
-  expect(report).toMatchObject({ status: "action_required", reason: "module_standard_nonconformant", changes: [] });
-  expect(check(report, "MS-01").details).toContain(
-    "lease main se automaticky nepřesune: port 23501 se objevuje v app/v1/src/config.ts",
-  );
-  expect(check(report, "MS-01").repairs).toBeUndefined();
-  expect((await readJson(join(fixture.moduleRoot, "lazurio.module.json"))).port_leases[0].port).toBe(23_501);
-  expect(report.issues.map((issue) => issue.code)).toEqual(["MS-01"]);
+  expect(check(await setupModule(fixture), "MS-01").details).toEqual([
+    "lease main 23501 leží mimo pool 24000-24000; pool je vyčerpaný",
+  ]);
 });
 
 test("MS-01 warns without an Organization pool and fails on overlapping pools or foreign leases", async () => {
@@ -314,6 +312,20 @@ test("MS-06 finds legacy host/port authority in App sources but not in tests", a
   ]);
 });
 
+test("MS-06 fails when the lease port is hardcoded in an App source", async () => {
+  const fixture = await conformantFixture({ port: 24_010 });
+  await writeText(join(fixture.appRoot, "src", "config.ts"), "export const fallbackPort = 24010;\n");
+  await writeText(join(fixture.appRoot, "src", "other.ts"), "export const unrelated = 124010; export const ratio = 0.24010;\n");
+  await writeText(join(fixture.appRoot, "src", "server.test.ts"), "const port = 24010;\n");
+
+  const report = await setupModule(fixture);
+
+  expect(report.status).toBe("action_required");
+  expect(check(report, "MS-06").details).toEqual([
+    "app/v1/src/config.ts: port leasu 24010 je zapsaný natvrdo",
+  ]);
+});
+
 test("MS-07 rejects .env files on the start path and dotenv", async () => {
   const fixture = await conformantFixture({ mutatePackage: (pkg) => { pkg.dependencies.dotenv = "^16.0.0"; } });
   await writeText(join(fixture.appRoot, ".env.local"), "SECRET=1\n");
@@ -344,90 +356,6 @@ test("MS-08 requires TypeScript strict and no JavaScript sources outside public/
   const relative = await conformantFixture({ tsconfig: { extends: "./tsconfig.base.json" } });
   await writeText(join(relative.appRoot, "tsconfig.base.json"), "{\n  // shared\n  \"compilerOptions\": { \"strict\": true, },\n}\n");
   expect(check(await setupModule(relative), "MS-08").status).toBe("pass");
-});
-
-test("MS-01 refuses to move a lease whose port is hardcoded in a Python source", async () => {
-  const fixture = await conformantFixture({ port: 23_502 });
-  await writeText(join(fixture.moduleRoot, "app", "v1", "serve.py"), "PORT = 23502\n");
-
-  const report = await setupModule({ ...fixture, apply: true });
-
-  expect(check(report, "MS-01").details).toContain(
-    "lease main se automaticky nepřesune: port 23502 se objevuje v app/v1/serve.py",
-  );
-  expect((await readJson(join(fixture.moduleRoot, "lazurio.module.json"))).port_leases[0].port).toBe(23_502);
-});
-
-test("MS-01 refuses to move a lease whose port sits in a config file of any extension", async () => {
-  const fixture = await conformantFixture({ port: 23_506 });
-  await writeText(join(fixture.appRoot, "listener.conf"), "listen 127.0.0.1:23506\n");
-
-  const report = await setupModule({ ...fixture, apply: true });
-
-  expect(check(report, "MS-01").details).toContain(
-    "lease main se automaticky nepřesune: port 23506 se objevuje v app/v1/listener.conf",
-  );
-  expect((await readJson(join(fixture.moduleRoot, "lazurio.module.json"))).port_leases[0].port).toBe(23_506);
-});
-
-test("MS-01 refuses to move a lease whose port sits in a build output directory", async () => {
-  const fixture = await conformantFixture({ port: 23_507 });
-  await writeText(join(fixture.appRoot, "dist", "listener.conf"), "listen 127.0.0.1:23507\n");
-
-  const report = await setupModule({ ...fixture, apply: true });
-
-  expect(check(report, "MS-01").details).toContain(
-    "lease main se automaticky nepřesune: port 23507 se objevuje v app/v1/dist/listener.conf",
-  );
-  expect((await readJson(join(fixture.moduleRoot, "lazurio.module.json"))).port_leases[0].port).toBe(23_507);
-});
-
-test("MS-01 refuses to move a lease when a source is too large to scan for the port", async () => {
-  const fixture = await conformantFixture({ port: 23_503 });
-  await writeText(join(fixture.moduleRoot, "app", "v1", "server.py"), `${"#".repeat(1_048_577)}\nPORT = 23503\n`);
-
-  const report = await setupModule({ ...fixture, apply: true });
-
-  expect(check(report, "MS-01").details).toContain(
-    "lease main se automaticky nepřesune: app/v1/server.py nejde přečíst nebo přesahuje 1048576 B, port 23503 nelze vyloučit",
-  );
-  expect((await readJson(join(fixture.moduleRoot, "lazurio.module.json"))).port_leases[0].port).toBe(23_503);
-});
-
-test.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
-  "MS-01 refuses to move a lease when a directory cannot be listed",
-  async () => {
-    const fixture = await conformantFixture({ port: 23_505 });
-    const locked = join(fixture.appRoot, "locked");
-    await mkdir(locked, { recursive: true });
-    await writeText(join(locked, "server.py"), "PORT = 23505\n");
-    await chmod(locked, 0o000);
-    try {
-      const report = await setupModule({ ...fixture, apply: true });
-      expect(check(report, "MS-01").details).toContain(
-        "lease main se automaticky nepřesune: adresář app/v1/locked nejde přečíst, port 23505 nelze vyloučit",
-      );
-      expect((await readJson(join(fixture.moduleRoot, "lazurio.module.json"))).port_leases[0].port).toBe(23_505);
-    } finally {
-      await chmod(locked, 0o755);
-    }
-  },
-);
-
-test("MS-01 refuses to move a lease while a symlink leads outside the Module repository", async () => {
-  const fixture = await conformantFixture({ port: 23_504 });
-  const outside = join(fixture.organizationRoot, "shared");
-  await mkdir(outside, { recursive: true });
-  await writeText(join(outside, "config.ts"), "export const port = 23504;\n");
-  await symlink(outside, join(fixture.appRoot, "src", "shared"));
-  runGit(fixture.moduleRoot, ["add", "."]);
-
-  const report = await setupModule({ ...fixture, apply: true });
-
-  expect(check(report, "MS-01").details).toContain(
-    "lease main se automaticky nepřesune: app/v1/src/shared vede mimo repo Modulu, port 23504 nelze vyloučit",
-  );
-  expect((await readJson(join(fixture.moduleRoot, "lazurio.module.json"))).port_leases[0].port).toBe(23_504);
 });
 
 test("MS-09 rejects symlinks that lead outside the Module repository, tracked as fail and untracked as warn", async () => {
@@ -558,18 +486,17 @@ test("MS-03 and MS-13 report a missing runtime and missing check/test scripts", 
   ]);
 });
 
-test("human output lists failing checks and planned repairs", async () => {
+test("human output lists failing checks and their next step", async () => {
   const fixture = await conformantFixture({ port: 23_502 });
   const cli = Bun.spawnSync([
     process.execPath, "run", cliPath, "module", "setup", fixture.moduleRoot, "--root", fixture.lazurioRoot,
   ], { cwd: fixture.lazurioRoot, stdout: "pipe", stderr: "pipe" });
-  expect(cli.exitCode).toBe(1);
+  expect(cli.exitCode).toBe(2);
   const output = cli.stdout.toString();
   expect(output).toContain("Lazurio Module Standard: 12/13 pass");
   expect(output).toContain("MS-01 fail");
-  expect(output).toContain(
-    "oprava --apply: lazurio.module.json: lease main 23502 → 24000 (součást převodu, koordinovaná migrace)",
-  );
+  expect(output).toContain("lease main 23502 leží mimo pool 24000-24099; volný port poolu: 24000");
+  expect(output).toContain("Další krok: Přepiš port leasu v lazurio.module.json na navržený volný port poolu");
 });
 
 function check(report, id) {

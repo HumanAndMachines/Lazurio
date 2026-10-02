@@ -20,7 +20,7 @@ export const MODULE_STANDARD_CHECKS = Object.freeze([
   { id: "MS-03", summary: "lazurio.runtime má listenery s health a dev_script existuje" },
   { id: "MS-04", summary: "lazurio.preparation je deklarované, check_script existuje a runtime je bun nebo uv" },
   { id: "MS-05", summary: "dev skript spouští právě jeden proces" },
-  { id: "MS-06", summary: "App nečte legacy LAZURIO_RUNTIME_HOST/PORT, PORT, COMPANYASCODE_* ani lease soubor" },
+  { id: "MS-06", summary: "App nečte legacy LAZURIO_RUNTIME_HOST/PORT, PORT, COMPANYASCODE_* ani lease soubor a port leasu nemá zapsaný natvrdo" },
   { id: "MS-07", summary: "žádné .env* na start cestě a žádné dotenv" },
   { id: "MS-08", summary: "TypeScript strict a žádné .js/.mjs/.cjs zdroje App" },
   { id: "MS-09", summary: "žádné importy mimo repozitář Modulu" },
@@ -31,12 +31,12 @@ export const MODULE_STANDARD_CHECKS = Object.freeze([
 ]);
 
 const CHECK_ACTIONS = Object.freeze({
-  "MS-01": "Přesuň lease do module_port_pool Organizace (lazurio module setup --apply to udělá, když je to jednoznačné); překryv poolů opraví Organization Admin v Organization manifestu.",
+  "MS-01": "Přepiš port leasu v lazurio.module.json na navržený volný port poolu v PR Modulu a ověř start App na novém portu (lazurio module start); setup lease nepřesouvá. Překryv poolů opraví Organization Admin v Organization manifestu.",
   "MS-02": "Doplň packageManager na přesnou verzi Bunu z Lazuria a commitni čerstvý bun.lock z bun install.",
   "MS-03": "Doplň lazurio.runtime s listenery, health a existujícím dev_script podle manual/module-setup.md.",
   "MS-04": "Doplň lazurio.preparation s check_script (read-only package skript) podle lazurio-preparation.schema.json.",
   "MS-05": "Zjednoduš dev skript na jeden dlouho běžící proces; build, guardy a další procesy patří do přípravy nebo do App.",
-  "MS-06": "Čti host a port jen z LAZURIO_RUNTIME_LISTENER_<ID>_HOST/_PORT (ideálně přes @lazurio/module-kit) a bez nich skonči chybou.",
+  "MS-06": "Čti host a port jen z LAZURIO_RUNTIME_LISTENER_<ID>_HOST/_PORT (ideálně přes @lazurio/module-kit) a bez nich skonči chybou; port leasu žije jen v lazurio.module.json.",
   "MS-07": "Odstraň .env soubory a dotenv; konfigurace je runtime env plus commitnuté config soubory, tajemství vault Environmentu.",
   "MS-08": "Zapni strict v tsconfig.json (nebo extends strict preset) a převeď .js/.mjs/.cjs zdroje a configy na TypeScript.",
   "MS-09": "Nahraď importy mimo repo verzovanou závislostí nebo kód vlož do Modulu, který ho jediný používá.",
@@ -64,23 +64,9 @@ const SKIPPED_DIRECTORIES = new Set([
   "build",
   "coverage",
 ]);
-// The lease-move port scan walks build outputs and caches too: a runtime may
-// read a tracked dist/listener.conf. Only Git metadata and installed
-// dependency trees, which are not the Module's own files, stay out.
-const PORT_SCAN_SKIPPED_DIRECTORIES = new Set([".git", "node_modules", ".venv"]);
 const TEST_DIRECTORIES = new Set(["test", "tests", "__tests__", "e2e", "fixtures", "__fixtures__"]);
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".astro"]);
 const JAVASCRIPT_EXTENSIONS = new Set([".js", ".jsx", ".mjs", ".cjs"]);
-// The port scan reads every file of the Module, whatever its extension: an
-// allowlist kept missing the next config format. Only formats that cannot
-// carry a readable port are skipped.
-const PORT_SCAN_SKIPPED_EXTENSIONS = new Set([
-  ".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".ico", ".icns", ".bmp", ".tiff", ".svgz",
-  ".pdf", ".woff", ".woff2", ".ttf", ".otf", ".eot",
-  ".zip", ".gz", ".tgz", ".br", ".zst", ".7z",
-  ".mp3", ".mp4", ".mov", ".webm", ".wav", ".ogg",
-  ".wasm", ".node", ".dylib", ".so", ".dll", ".exe", ".bin",
-]);
 const MAX_WALKED_FILES = 20_000;
 const MAX_READ_BYTES = 1_048_576;
 const KNOWN_STRICT_TSCONFIG_PRESETS = [
@@ -106,7 +92,6 @@ export async function evaluateModuleStandard({
   organization,
   organizations = [],
   modules = [],
-  adoptPort = null,
   requiredBunVersion = readRequiredBunVersion(),
 }) {
   const root = resolve(moduleRoot);
@@ -123,7 +108,9 @@ export async function evaluateModuleStandard({
     packageJson: packages.get(appPath) ?? null,
   }));
   const repairedPackages = new Map();
-  let repairedManifest = null;
+  const leasePorts = (Array.isArray(manifest?.port_leases) ? manifest.port_leases : [])
+    .map((lease) => lease?.port)
+    .filter((port) => Number.isInteger(port));
 
   const lockPaths = apps.flatMap(({ appDirectory }) => ["bun.lock", "uv.lock"].map((name) => joinPosix(appDirectory, name)));
   const tracked = await gitTrackedPaths(root, lockPaths);
@@ -273,6 +260,11 @@ export async function evaluateModuleStandard({
       for (const finding of legacyRuntimeReads(text)) {
         record("MS-06", "fail", `${file.path}: čte ${finding}`);
       }
+      for (const port of leasePorts) {
+        if (new RegExp(`(?<![0-9.])${port}(?![0-9])`).test(text)) {
+          record("MS-06", "fail", `${file.path}: port leasu ${port} je zapsaný natvrdo`);
+        }
+      }
       for (const specifier of importSpecifiers(text)) {
         const issue = importBoundaryIssue({ specifier, filePath: file.path });
         if (issue) record("MS-09", "fail", `${file.path}: ${issue}`);
@@ -366,7 +358,6 @@ export async function evaluateModuleStandard({
   // import through them resolves inside the repo textually but reads foreign
   // code. A tracked symlink is the repo's own boundary breach (fail); an
   // untracked one is a workstation artifact worth a warning.
-  const escapingSymlinks = [];
   if (symlinks.length > 0) {
     const realRoot = await realpath(root).catch(() => resolve(root));
     const tracked = await gitTrackedPaths(root, symlinks.map((link) => link.path));
@@ -375,7 +366,6 @@ export async function evaluateModuleStandard({
       const inside = target === null ? null : relativePath(realRoot, target).split(sep).join("/");
       if (inside !== null && !escapesRoot(inside)) continue;
       const status = tracked === null || tracked.has(link.path) ? "fail" : "warn";
-      escapingSymlinks.push(link.path);
       record("MS-09", status, target === null
         ? `${link.path}: symlink míří na neexistující cíl mimo repo (${link.target})`
         : `${link.path}: symlink vede mimo repo Modulu (${link.target})`);
@@ -418,49 +408,18 @@ export async function evaluateModuleStandard({
       const outside = findings.leases_outside_pool.filter((item) => item.company === candidate.company && item.module === candidate.id);
       if (outside.length > 0) {
         const used = new Set([...others, candidate].flatMap((module) => (module.port_leases ?? []).map((lease) => lease.port)));
-        const moved = new Map();
-        const scan = await walkModuleFiles(root, PORT_SCAN_SKIPPED_DIRECTORIES);
-        const scanEscapes = [...escapingSymlinks];
-        const realScanRoot = await realpath(root).catch(() => resolve(root));
-        for (const link of scan.symlinks) {
-          const target = await realpath(join(root, ...link.path.split("/"))).catch(() => null);
-          if (target === null || escapesRoot(relativePath(realScanRoot, target).split(sep).join("/"))) scanEscapes.push(link.path);
-        }
+        // The checker reports and suggests; it never moves a lease. The port
+        // lives only in the lease, so the move is one manifest edit in the
+        // Module PR, proved by starting the App on the new port.
         for (const item of outside) {
-          record("MS-01", "fail", `lease ${item.lease} ${item.port} leží mimo pool ${pool.start}-${pool.end}`);
-          // A symlink leading outside the repo hides sources the scan cannot
-          // read, so the port cannot be ruled out there either: fail closed.
-          const refusal = adoptPort !== null && item.port === adoptPort
-            ? `port ${item.port} převzatý přes --adopt-port se v tomtéž běhu nepřesouvá`
-            : scanEscapes.length > 0
-              ? `${scanEscapes[0]} vede mimo repo Modulu, port ${item.port} nelze vyloučit`
-              : scan.unreadable.length > 0
-                ? `adresář ${scan.unreadable[0]} nejde přečíst, port ${item.port} nelze vyloučit`
-                : await portReferenceRefusal({ root, files: scan.files, port: item.port, packages });
-          if (refusal) {
-            record("MS-01", "fail", `lease ${item.lease} se automaticky nepřesune: ${refusal}`);
-            continue;
-          }
           let port = pool.start;
           while (port <= pool.end && used.has(port)) port += 1;
           if (port > pool.end) {
-            record("MS-01", "fail", `lease ${item.lease} se automaticky nepřesune: pool ${pool.start}-${pool.end} je vyčerpaný`);
+            record("MS-01", "fail", `lease ${item.lease} ${item.port} leží mimo pool ${pool.start}-${pool.end}; pool je vyčerpaný`);
             continue;
           }
           used.add(port);
-          moved.set(item.lease, { from: item.port, to: port });
-        }
-        if (moved.size > 0) {
-          repairedManifest = structuredClone(manifest);
-          for (const lease of repairedManifest.port_leases) {
-            const move = moved.get(lease.id);
-            if (move) lease.port = move.to;
-          }
-          for (const [leaseId, move] of moved) {
-            results.get("MS-01").repairs.push(
-              `lazurio.module.json: lease ${leaseId} ${move.from} → ${move.to} (součást převodu, koordinovaná migrace)`,
-            );
-          }
+          record("MS-01", "fail", `lease ${item.lease} ${item.port} leží mimo pool ${pool.start}-${pool.end}; volný port poolu: ${port}`);
         }
       }
     }
@@ -513,7 +472,7 @@ export async function evaluateModuleStandard({
       ...(result.repairs.length > 0 ? { repairs: result.repairs } : {}),
     };
   });
-  return { checks, repairedManifest, repairedPackages };
+  return { checks, repairedPackages };
 }
 
 export function moduleStandardIssues(checks) {
@@ -735,25 +694,6 @@ async function resolveTsconfig({ root, path, appDirectory, depth }) {
   };
 }
 
-async function portReferenceRefusal({ root, files, port, packages }) {
-  const pattern = new RegExp(`(?<![0-9])${port}(?![0-9])`);
-  for (const file of files) {
-    if (PORT_SCAN_SKIPPED_EXTENSIONS.has(file.extension)) continue;
-    const name = posix.basename(file.path);
-    if (["lazurio.module.json", "bun.lock", "package-lock.json"].includes(name)) continue;
-    // Declared App packages are judged by the value setup leaves behind, so a
-    // legacy port that the contract migration removes does not block the move.
-    const text = packages.has(file.path)
-      ? JSON.stringify(packages.get(file.path))
-      : await readText(join(root, ...file.path.split("/")));
-    // A source the scan cannot read (too large, unreadable) may still hold the
-    // port; the move fails closed instead of reporting success.
-    if (text === null) return `${file.path} nejde přečíst nebo přesahuje ${MAX_READ_BYTES} B, port ${port} nelze vyloučit`;
-    if (pattern.test(text)) return `port ${port} se objevuje v ${file.path}`;
-  }
-  return null;
-}
-
 async function gitTrackedPaths(root, paths) {
   const marker = await lstat(join(root, ".git")).catch(() => null);
   if (!marker || marker.isSymbolicLink()) return null;
@@ -763,37 +703,25 @@ async function gitTrackedPaths(root, paths) {
   return new Set(result.stdout.split("\0").map((item) => item.trim()).filter(Boolean));
 }
 
-async function walkModuleFiles(root, skippedDirectories = SKIPPED_DIRECTORIES) {
+async function walkModuleFiles(root) {
   const files = [];
   const symlinks = [];
-  // Directories the walk could not list. An incomplete walk must not be read
-  // as "nothing there": the lease move fails closed on it.
-  const unreadable = [];
   async function walk(directory, relativeDirectory, flags) {
-    if (files.length >= MAX_WALKED_FILES) {
-      if (!unreadable.includes("(limit souborů)")) unreadable.push("(limit souborů)");
-      return;
-    }
-    const entries = await readdir(directory, { withFileTypes: true }).catch(() => {
-      unreadable.push(relativeDirectory === "" ? "." : relativeDirectory);
-      return [];
-    });
+    if (files.length >= MAX_WALKED_FILES) return;
+    const entries = await readdir(directory, { withFileTypes: true }).catch(() => []);
     if (relativeDirectory !== "" && entries.some((entry) => entry.name === ".git")) return;
     for (const entry of entries) {
-      if (files.length >= MAX_WALKED_FILES) {
-        if (!unreadable.includes("(limit souborů)")) unreadable.push("(limit souborů)");
-        return;
-      }
+      if (files.length >= MAX_WALKED_FILES) return;
       const relativePath = relativeDirectory === "" ? entry.name : `${relativeDirectory}/${entry.name}`;
       if (entry.isSymbolicLink()) {
-        if (!skippedDirectories.has(entry.name)) {
+        if (!SKIPPED_DIRECTORIES.has(entry.name)) {
           const target = await readlink(join(directory, entry.name)).catch(() => "?");
           symlinks.push({ path: relativePath, target });
         }
         continue;
       }
       if (entry.isDirectory()) {
-        if (skippedDirectories.has(entry.name)) continue;
+        if (SKIPPED_DIRECTORIES.has(entry.name)) continue;
         await walk(join(directory, entry.name), relativePath, {
           test: flags.test || TEST_DIRECTORIES.has(entry.name),
           public: flags.public || entry.name === "public",
@@ -809,7 +737,7 @@ async function walkModuleFiles(root, skippedDirectories = SKIPPED_DIRECTORIES) {
     }
   }
   await walk(root, "", { test: false, public: false });
-  return { files, symlinks, unreadable };
+  return { files, symlinks };
 }
 
 function filesBelow(files, directory) {
