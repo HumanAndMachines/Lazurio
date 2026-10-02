@@ -301,10 +301,10 @@ volitelného Buddyho (decision 0091 v `manual/decision-register.md`). Cizí
 Personalspace se na
 mašinu nemountuje, Launchpad ho nematerializuje a Task Agent ho nečte.
 Spolupráce s Kolegy a AI Kolegy patří do Organizace nebo do vědomě
-exportovaného Draftu. Principál má na své osobní Mašině plná práva; procesní
-hranici
-Task Agentů drží sandbox jejich harnessu a pravidla práce, ne lokální
-per-modulový IAM.
+exportovaného Draftu. Principál má na své osobní Mašině plná práva. Task
+Agenti v Environmentu pracují s plným přístupem: jejich hranicí je Environment
+a pravidla práce, ne sandbox harnessu ani lokální per-modulový IAM; menší práva
+znamenají samostatný Environment (decision 0172).
 
 Má-li Principál **hostovaného Buddyho**, sahá jeho personalspace i mimo tuhle
 mašinu — na dedikovanou per-owner VPS, což je právě ta jediná hostovaná Mašina
