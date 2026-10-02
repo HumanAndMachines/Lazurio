@@ -316,6 +316,9 @@ s hostovanými Environmenty → ostatní.
 
 - **W0 kontrakt**: tento manuál, decision 0171, `lazurio-preparation.schema.json`, konformance v `lazurio module setup`, `Lazurio/module-kit` v0.1, root doctor pool disjunktnosti.
 - **W1 pilot**: Organizace maintainerů (14 Modulů, už kanonická) a největší klientská Organizace (20 Modulů): per-Modul PR (jeden Modul = jeden PR = jeden worktree), Organization PR (manifest reconciliation, pooly, org-level repa), ověření startem přes Platform Launchpad na Environmentu.
+- **Forky šablon** (decision 0174): repozitář založený ze šablony má povolené
+  merge commity a synchronizace šablony se do něj slučuje merge commitem, aby
+  fork držel historii šablony; squash nebo rebase návaznost zahodí.
 - **W2 zbytek**: šablonové změny (KB 14×, MC 14×) jako jedna změna replikovaná; per-Organization PR pro Stewardy; migrace manifestů `lazurio migrate organization-manifest`.
 - **W3 cutover**: Platforma odstraní legacy env pár, zapne `module-nonconformant`; decision 0171 dostane datum cutoveru.
 

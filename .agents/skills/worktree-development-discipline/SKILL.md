@@ -132,7 +132,8 @@ autoritu.
    `gh pr view <číslo> --json mergeable,mergeStateStatus,reviewDecision`.
    Po explicitním „Publikuj" v threadu PR mergni metodou, kterou repozitář
    povoluje (při více povolených je default rebase, pokud Organizace ve svém
-   `AGENTS.md` nedeklaruje jinak), v primárním checkoutu spusť
+   `AGENTS.md` nedeklaruje jinak; PR, který do forku šablony přináší stav
+   šablony, se slučuje merge commitem — decision 0174), v primárním checkoutu spusť
    `lazurio update`, potom `bun run doctor:task` a pokračuj cleanup guardy
    v kroku 13. Když Principál zvolí předání, nebo mu GitHub merge
    nedovoluje, vyžádej review Kolegy, kterého Principál zvolil, PR mu zároveň
