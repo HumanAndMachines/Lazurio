@@ -153,22 +153,18 @@ test("MS-04 adds the preparation skeleton only when it is unambiguous", async ()
   const explicitBun = await conformantFixture({
     mutatePackage: (pkg) => { pkg.lazurio.preparation.runtime = "bun"; },
   });
-  const explicitPlan = await setupModule(explicitBun);
-  expect(explicitPlan).toMatchObject({ status: "actionable", reason: "standard_repairs_ready" });
-  expect(check(explicitPlan, "MS-04")).toMatchObject({
+  // An existing declaration is never rewritten by --apply: the finding stays
+  // for the Agent's reviewed edit.
+  const explicitReport = await setupModule({ ...explicitBun, apply: true });
+  expect(explicitReport).toMatchObject({ status: "action_required", reason: "module_standard_nonconformant", changes: [] });
+  expect(check(explicitReport, "MS-04")).toMatchObject({
     status: "fail",
     details: [
       "app/v1/package.json: runtime: bun zapsané explicitně — Platforma dnes neznámá pole odmítá; klíč vynech (chybí = bun)",
     ],
-    repairs: ["app/v1/package.json: odebrat lazurio.preparation.runtime (chybí = bun)"],
   });
-  const explicitApplied = await setupModule({ ...explicitBun, apply: true });
-  expect(explicitApplied.status).toBe("completed");
-  expect((await readJson(join(explicitBun.appRoot, "package.json"))).lazurio.preparation).toEqual({
-    schema_version: "lazurio.preparation.v1",
-    owner_package: "app/v1/package.json",
-    check_script: "check:prepared",
-  });
+  expect(check(explicitReport, "MS-04").repairs).toBeUndefined();
+  expect((await readJson(join(explicitBun.appRoot, "package.json"))).lazurio.preparation.runtime).toBe("bun");
 
   const withoutCheck = await conformantFixture({
     mutatePackage: (pkg) => {

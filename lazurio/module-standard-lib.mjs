@@ -219,8 +219,6 @@ export async function evaluateModuleStandard({
           "fail",
           `${label}: runtime: bun zapsané explicitně — Platforma dnes neznámá pole odmítá; klíč vynech (chybí = bun)`,
         );
-        delete ensureNextPackage().lazurio.preparation.runtime;
-        results.get("MS-04").repairs.push(`${label}: odebrat lazurio.preparation.runtime (chybí = bun)`);
       }
       if (preparation && typeof preparation === "object" && !Array.isArray(preparation)) {
         const ownerPackagePath = typeof preparation.owner_package === "string" ? preparation.owner_package : null;
