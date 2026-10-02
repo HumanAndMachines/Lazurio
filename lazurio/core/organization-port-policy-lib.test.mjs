@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
   findLocalOrganizationPortPoolOverlaps,
+  findModuleStandardPortFindings,
   nextFreeModulePort,
   normalizeOrganizationPortPool,
   validateModuleLeasesAgainstOrganizationPools,
@@ -74,6 +75,47 @@ test("local pool overlaps are visible but do not invent a global registry", () =
   expect(overlaps).toHaveLength(1);
   expect(overlaps[0]).toMatchObject({ start: 24_050, end: 24_099 });
   expect(overlaps[0].organizations.map((organization) => organization.company)).toEqual(["Alpha", "Beta"]);
+});
+
+test("Module Standard port findings name overlaps, foreign leases, out-of-pool leases and missing pools", () => {
+  const findings = findModuleStandardPortFindings({
+    organizations: [
+      { slug: "Alpha", path: "organizations/Alpha", module_port_pool: { start: 24_000, end: 24_099 } },
+      { slug: "Beta", path: "organizations/Beta", module_port_pool: { start: 24_050, end: 24_149 } },
+      { slug: "Gamma", path: "organizations/Gamma", module_port_pool: null },
+      { slug: "Template", organization_kind: "template", module_port_pool: { start: 24_000, end: 24_999 } },
+    ],
+    modules: [
+      moduleLease("Alpha", "one", 24_060),
+      moduleLease("Beta", "two", 24_060),
+      moduleLease("Alpha", "outside", 5_306),
+      moduleLease("Gamma", "unpooled", 26_000),
+      moduleLease("Template", "ignored", 24_060),
+      moduleLease("Personal", "root-local", 5_306),
+    ],
+  });
+  expect(findings.pool_overlaps.map((overlap) => overlap.organizations.map((item) => item.company))).toEqual([["Alpha", "Beta"]]);
+  expect(findings.cross_organization_lease_collisions).toEqual([{
+    port: 24_060,
+    owners: [
+      { company: "Alpha", module: "one", lease: "main", port: 24_060 },
+      { company: "Beta", module: "two", lease: "main", port: 24_060 },
+    ],
+  }]);
+  expect(findings.leases_outside_pool).toEqual([
+    { company: "Alpha", module: "outside", lease: "main", port: 5_306, pool: { start: 24_000, end: 24_099 } },
+  ]);
+  expect(findings.organizations_without_pool).toEqual([{ company: "Gamma", path: "organizations/Gamma" }]);
+
+  expect(findModuleStandardPortFindings({
+    organizations: [{ slug: "Alpha", module_port_pool: { start: 24_000, end: 24_099 } }],
+    modules: [moduleLease("Alpha", "one", 24_001)],
+  })).toEqual({
+    pool_overlaps: [],
+    leases_outside_pool: [],
+    cross_organization_lease_collisions: [],
+    organizations_without_pool: [],
+  });
 });
 
 test("allocator chooses the first free exact Module port inside one Organization", () => {

@@ -943,6 +943,51 @@ test("Doctor warns on local cross-Organization overlap without remapping ports",
   expect(check?.message).toContain("převzetí živé aplikace vyžaduje potvrzení");
 });
 
+test("Doctor hlásí Module Standard port pooly jako varování do cutoveru", () => {
+  const organization = (slug, start, end) => ({
+    slug,
+    path: `organizations/${slug}_GEN3`,
+    status: "mounted",
+    organization_type: "organization-gen3",
+    module_port_pool: { start, end },
+  });
+  const lease = (company, id, port) => ({
+    company,
+    id,
+    module_path: `organizations/${company}_GEN3/workspace/${id}/lazurio.module.json`,
+    port_leases: [{ id: "main", host: "127.0.0.1", port }],
+  });
+  const base = {
+    launchpad_root: { display_name: "Test root" },
+    root: "/tmp/test-root",
+    failures: [],
+    warnings: [],
+    apps: [],
+  };
+  const report = buildDoctorReportFromAppsResponse({
+    ...base,
+    organizations: [organization("Alpha", 24_000, 24_099), organization("Beta", 24_050, 24_149)],
+    module_contracts: [lease("Alpha", "one", 24_060), lease("Beta", "two", 24_060), lease("Alpha", "old", 5_306)],
+  }, { childLane: { children: [], checks: [] } });
+  const check = report.checks.find((item) => item.id === "module_standard.port_pools");
+  expect(check).toMatchObject({ status: "warn", severity: "recommended" });
+  expect(check.details).toEqual([
+    "pooly Alpha 24000-24099 a Beta 24050-24149 se překrývají na 24050-24099",
+    "port 24060 drží Moduly více Organizací: Alpha/one#main, Beta/two#main",
+    "Alpha/old#main 5306 leží mimo pool 24000-24099; oprava: přepiš port leasu v lazurio.module.json na volný port poolu (navrhne ho lazurio module setup <module-root>) a ověř start App",
+  ]);
+
+  const clean = buildDoctorReportFromAppsResponse({
+    ...base,
+    organizations: [organization("Alpha", 24_000, 24_099), organization("Beta", 24_100, 24_199)],
+    module_contracts: [lease("Alpha", "one", 24_060), lease("Beta", "two", 24_160)],
+  }, { childLane: { children: [], checks: [] } });
+  expect(clean.checks.find((item) => item.id === "module_standard.port_pools")).toMatchObject({
+    status: "ok",
+    details: [],
+  });
+});
+
 test("Doctor reportuje deklarovaný port overlap jako hard failure", () => {
   const report = buildDoctorReportFromAppsResponse({
     launchpad_root: { display_name: "Test root" },

@@ -126,6 +126,54 @@ export function findLocalOrganizationPortPoolOverlaps(organizations) {
   return overlaps;
 }
 
+/**
+ * Lazurio Module Standard view of the same port facts (manual/module-standard.md
+ * kap. 9, decision 0171): every Module lease lies inside its Organization pool
+ * and pools of mounted Organizations are disjoint. The allocation contract
+ * above deliberately tolerates established leases outside the pool; this
+ * projection reports them without changing that contract. Pure: callers pass
+ * already-normalized Organizations (`slug`, `module_port_pool`) and Modules.
+ */
+export function findModuleStandardPortFindings({ modules, organizations }) {
+  const activeOrganizations = (organizations ?? [])
+    .filter((organization) => organization?.organization_kind !== "template")
+    .filter((organization) => organization?.organization_type !== "organization-template");
+  const organizationsBySlug = new Map(activeOrganizations.map((organization) => [organization.slug, organization]));
+  const leasesOutsidePool = [];
+  const organizationsWithoutPool = new Map();
+  const ownersByPort = new Map();
+  for (const module of modules ?? []) {
+    const organization = organizationsBySlug.get(module?.company);
+    if (!organization) continue;
+    for (const lease of module.port_leases ?? []) {
+      if (!Number.isInteger(lease?.port)) continue;
+      const owner = { company: module.company, module: module.id, lease: lease.id, port: lease.port };
+      if (!ownersByPort.has(lease.port)) ownersByPort.set(lease.port, []);
+      ownersByPort.get(lease.port).push(owner);
+      const pool = organization.module_port_pool;
+      if (!pool) {
+        organizationsWithoutPool.set(module.company, organization.path ?? null);
+        continue;
+      }
+      if (lease.port < pool.start || lease.port > pool.end) {
+        leasesOutsidePool.push({ ...owner, pool: { start: pool.start, end: pool.end } });
+      }
+    }
+  }
+  const crossOrganizationLeaseCollisions = [...ownersByPort.entries()]
+    .filter(([, owners]) => new Set(owners.map((owner) => owner.company)).size > 1)
+    .map(([port, owners]) => ({ port, owners }))
+    .sort((left, right) => left.port - right.port);
+  return {
+    pool_overlaps: findLocalOrganizationPortPoolOverlaps(activeOrganizations),
+    leases_outside_pool: leasesOutsidePool,
+    cross_organization_lease_collisions: crossOrganizationLeaseCollisions,
+    organizations_without_pool: [...organizationsWithoutPool.entries()]
+      .map(([company, path]) => ({ company, path }))
+      .sort((left, right) => left.company.localeCompare(right.company)),
+  };
+}
+
 export function nextFreeModulePort({ pool, company, modules }) {
   if (!pool) throw new Error(`Organizace ${company} nemá module_port_pool`);
   const used = new Set(

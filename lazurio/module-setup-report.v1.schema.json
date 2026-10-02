@@ -153,6 +153,39 @@
     "operator_assertions": {
       "type": "array",
       "items": { "type": "string", "minLength": 1 }
+    },
+    "standard": {
+      "description": "Lazurio Module Standard conformance (manual/module-standard.md kap. 11, decision 0171). Additive: older producers omit it; null when the Module contract itself is blocked. `current` means every check is `pass`; `warn` marks a fact the checker cannot decide.",
+      "type": ["object", "null"],
+      "required": ["checks"],
+      "properties": {
+        "checks": {
+          "type": "array",
+          "minItems": 13,
+          "maxItems": 13,
+          "items": {
+            "type": "object",
+            "required": ["id", "status", "summary", "details"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^MS-(0[1-9]|1[0-3])$" },
+              "status": { "enum": ["pass", "fail", "warn"] },
+              "summary": { "type": "string", "minLength": 1 },
+              "details": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 }
+              },
+              "action": { "type": "string", "minLength": 1 },
+              "repairs": {
+                "description": "Additive repairs --apply writes for this check: only something that is missing and unambiguous, e.g. `app/v1/package.json: doplnit packageManager bun@1.4.2`. A lease is never moved and an existing declaration is never rewritten.",
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 }
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

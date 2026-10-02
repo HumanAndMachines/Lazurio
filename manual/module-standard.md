@@ -43,11 +43,13 @@ nebo odmítá (kapitola 10). Kontrolu drží mechanismus `lazurio module setup`
 tvrzení operátora; [module-setup.md](module-setup.md)) platí dál pro běžný
 provoz: mimo převod se port nepřečíslovává. Při **převodu Modulu na standard**
 (vlny W1–W2) je lease mimo pool Organizace vada `MS-01` a přesouvá se na
-nejnižší volný port poolu jako koordinovaná migrace: `--apply` zapíše nový
-lease a report i PR uvedou mapování starý → nový port; hostované gateway
-čtou lease z manifestu a po dalším apply Machines obsluhují nový port; přesun
-se odmítne, dokud se číslo portu vyskytuje ve zdrojích nebo konfiguraci App
-(nejdřív se odstraní natvrdo zapsaný port, kap. 4.2). Cross-Organization
+volný port poolu jako koordinovaná migrace. Checker lease nepřesouvá: nahlásí
+ho s nejnižším volným portem poolu a Agent přepíše `port` v
+`lazurio.module.json` v PR Modulu; PR uvede mapování starý → nový port a
+doloží start App na novém portu. Port žije jen v leasu (App ho čte
+z `LAZURIO_RUNTIME_LISTENER_<ID>_PORT`, kap. 4.2), port zapsaný natvrdo ve
+zdrojích je vada `MS-06`. Hostované gateway čtou lease z manifestu a po
+dalším apply Machines obsluhují nový port. Cross-Organization
 takeover kontrakt Launchpadu zůstává pro dobu před cutoverem; po cutoveru
 kolize mezi Organizacemi nevznikají, protože pooly jsou disjunktní.
 
@@ -280,8 +282,10 @@ nespouští build ani supervizory za App, nepřebírá porty, nenabízí legacy
 `lazurio module setup <module-root> --root <lazurio-root>` (viz
 [module-setup.md](module-setup.md)) rozšiřuje read-only kontrolu o standard.
 Každá kontrola má stabilní ID a stav `pass | fail | warn`; `actionable` plán
-umí opravit mechanické položky (`packageManager`, chybějící `check`/`test`
-skript, `lazurio.preparation` skeleton, lease mimo pool na volný port poolu).
+jen doplní, co chybí a jde zapsat jednoznačně (`packageManager`, skeleton
+`lazurio.preparation`); `check`/`test` skripty nedoplňuje a existující
+deklaraci nepřepisuje. Lease nikdy nepřesouvá; u leasu mimo pool navrhne
+volný port a přesun je ruční úprava manifestu v PR Modulu.
 
 | ID | Kontrola |
 | --- | --- |
@@ -290,7 +294,7 @@ skript, `lazurio.preparation` skeleton, lease mimo pool na volný port poolu).
 | `MS-03` | `lazurio.runtime` s listenery a health; `dev_script` existuje |
 | `MS-04` | `lazurio.preparation` deklarované; `check_script` existuje; `runtime` chybí (= `bun`) nebo `uv`; `runtime: "bun"` zapsané explicitně je do W0-5 vada (Platforma ho odmítne); `prepare_script`/`check_script` nejsou npm lifecycle jména |
 | `MS-05` | `dev` skript je jednoprocesový: bez `&&`, `concurrently`, `build`, `npx`, `node`, `bunx`, `nvm`, inline `VAR=…` |
-| `MS-06` | žádné čtení `LAZURIO_RUNTIME_HOST`, `LAZURIO_RUNTIME_PORT`, `PORT`, `COMPANYASCODE_*`, lease souboru ze zdrojů App |
+| `MS-06` | žádné čtení `LAZURIO_RUNTIME_HOST`, `LAZURIO_RUNTIME_PORT`, `PORT`, `COMPANYASCODE_*`, lease souboru ze zdrojů App; port leasu není ve zdrojích App zapsaný natvrdo |
 | `MS-07` | žádné `.env*` na start cestě; žádné `dotenv` |
 | `MS-08` | TypeScript strict; žádné `.js/.mjs/.cjs` zdroje App (config frameworku v TS) |
 | `MS-09` | žádné importy mimo repo (`../` nad kořen Modulu, `file:` mimo repo, jiný Modul, `launchpad/`, `infra/`, `design-system/`) |
