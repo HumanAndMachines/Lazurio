@@ -91,3 +91,19 @@ Upstream template: `TemplatesRozjedeme-ai/OrganizationTemplate` (rename na
   až po cutoveru.
 - Template flow shrnutí přímo v template: `AGENTS.md` sekce „Template flow"
   v `TemplatesRozjedeme-ai/OrganizationTemplate`.
+
+## Předání Publikace mezi Mašinami
+
+Kontrakt předání dotažení a Publikace jinému oprávněnému Principálovi drží
+kanonický Model spolupráce v Lazurio `AGENTS.md`. OrganizationTemplate
+přebírá stejný význam a organizace jej získávají standardním reviewovaným
+Template Sync Sweepem. Při projekci zachovej rozdíl mezi review-only a
+výslovným předáním oprav, ověření i merge konkrétních PR. Nezaváděj druhou
+autoritu mandátů v lokálních skillech ani výjimku pro konkrétního reviewera.
+
+Pořadí je source PR Lazuria, template projekce a per-Organization sync PR
+se zachováním lokálních doplňků a živých access hranic. Zdrojem synchronizace
+je až publikovaný commit. Merge source nebo templatu není důkaz změny všech
+Organization checkoutů ani vygenerovaných rezidentních rootů: u nich platí
+verzovaný profile build a standardní aktualizace. Předávka rozliší zdrojový
+merge, vydání/distribuci a ověřený stav konkrétní Mašiny.
