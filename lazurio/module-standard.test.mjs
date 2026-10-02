@@ -293,7 +293,7 @@ test("MS-06 finds legacy host/port authority in App sources but not in tests", a
 test("MS-06 fails when the lease port is hardcoded in an App source", async () => {
   const fixture = await conformantFixture({ port: 24_010 });
   await writeText(join(fixture.appRoot, "src", "config.ts"), "export const fallbackPort = 24010;\n");
-  await writeText(join(fixture.appRoot, "src", "other.ts"), "export const unrelated = 124010; export const ratio = 0.24010;\n");
+  await writeText(join(fixture.appRoot, "src", "other.ts"), "export const unrelated = 124010; export const ratio = 0.24010; export const scale = 24010.5;\n");
   await writeText(join(fixture.appRoot, "src", "server.test.ts"), "const port = 24010;\n");
 
   const report = await setupModule(fixture);

@@ -229,7 +229,7 @@ export async function evaluateModuleStandard({
         record("MS-06", "fail", `${file.path}: čte ${finding}`);
       }
       for (const port of leasePorts) {
-        if (new RegExp(`(?<![0-9.])${port}(?![0-9])`).test(text)) {
+        if (new RegExp(`(?<![0-9.])${port}(?![0-9]|\\.[0-9])`).test(text)) {
           record("MS-06", "fail", `${file.path}: port leasu ${port} je zapsaný natvrdo`);
         }
       }
