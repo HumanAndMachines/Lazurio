@@ -593,7 +593,15 @@ Root upravuj jen když se mění:
   root/operator secrets patří do gitignored `personalspace/<owner>_GEN3/secrets/...`,
   organization/AI-colleague secrets do organization-local `private/secrets/...`.
 - Lokální drafty: `drafts/`
-- Migrační kód (přesun ze starého směru do nového, např. legacy
+- Migrace provádějí Agenti, ne mechanismus (decision 0173 v
+  manual/decision-register.md): převod existujícího stavu do nového směru je
+  ruční, reviewovaný refactor Task Agenta a jeho subagentů podle návodu, který
+  nese motivaci, cílový stav, postup a způsob ověření. Nástroje smějí jen
+  měřit a hlásit nález s dalším krokem (checker, doctor, ověřovací skript);
+  nový automatický migrátor, automatickou opravu ani codemod nestav. Migrace
+  „na kliknutí“ spustí Agenta s návodem, nebo člověku návod ukáže ke
+  zkopírování do chatu.
+- Dosavadní migrační kód (přesun ze starého směru do nového, např. legacy
   `company.gen3.json` → `lazurio.organization.json`) žije výhradně ve
   vyhrazené migrations složce (`lazurio/migrations/<migrace>/` s vlastním
   README, vstupními body a podmínkou smazání) a po dokončení migrace se maže;
