@@ -651,8 +651,11 @@ const transpilers = new Map();
 // the template body is kept as written. Type-only imports are turned into
 // plain imports first, because the transpiler drops them and they still pull
 // code from outside the repository. Source the transpiler rejects is measured
-// as written (measure-only, decision 0173). `masked` blanks string and
-// template contents for bracket matching (cwdRelativeArgument).
+// as written (measure-only, decision 0173). `masked` blanks the contents of
+// single- and double-quoted strings for bracket matching
+// (cwdRelativeArgument). Template literals stay as they are, so a call inside
+// ${…} keeps its ( and argument list; brackets or quotes in static template
+// text can at most widen or narrow the window searched for a file anchor.
 export function transpiledSource(text, extension) {
   const raw = String(text);
   let code = raw;
@@ -669,7 +672,7 @@ export function transpiledSource(text, extension) {
     code = raw;
   }
   const masked = code.replace(
-    /"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\[\s\S]|[^`\\])*`/g,
+    /"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'/g,
     (literal) => `${literal[0]}${literal.slice(1, -1).replace(/[^\n]/g, " ")}${literal.at(-1)}`,
   );
   return { code, masked };

@@ -580,6 +580,24 @@ test("MS-09 does not read a path in a comment inside a template interpolation", 
   ]);
 });
 
+test("MS-09 judges a cwd-relative read inside a template interpolation from the App root", async () => {
+  const probe = [
+    "import { readFileSync } from \"node:fs\";",
+    "export const value = `${readFileSync(\"../../../deals/db/prices.json\", \"utf8\")}`;",
+  ].join("\n");
+  const undeclared = await conformantFixture();
+  await writeText(join(undeclared.appRoot, "src", "probe.ts"), probe);
+  expect(check(await setupModule(undeclared), "MS-09").details).toEqual([
+    "app/v1/src/probe.ts: cesta ../../../deals/db/prices.json čte Modul deals, který App nedeklaruje v lazurio.runtime.required_module_slots (vůči kořeni App app/v1, pracovnímu adresáři procesu)",
+  ]);
+
+  const declared = await conformantFixture({
+    mutatePackage: (pkg) => { pkg.lazurio.runtime.required_module_slots = ["workspace/deals"]; },
+  });
+  await writeText(join(declared.appRoot, "src", "probe.ts"), probe);
+  expect(check(await setupModule(declared), "MS-09")).toMatchObject({ status: "pass", details: [] });
+});
+
 test("MS-09 still sees type-only imports the transpiler would drop", async () => {
   const fixture = await conformantFixture();
   await writeText(
