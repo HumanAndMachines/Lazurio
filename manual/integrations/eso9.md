@@ -10,17 +10,17 @@ nevytváří vlastní roster ani vlastní ERP role. Organization-owned bridge je
 zužuje providerem povolené operace na několik jmenovaných doménových nástrojů.
 
 Dokud není uzavřený discovery gate níže, používej pouze browser fallback pod
-dohledem Principála. Nevytvářej credential, nezapisuj server do `.mcp.json`
+dohledem Operátora. Nevytvářej credential, nezapisuj server do `.mcp.json`
 ani `.codex/config.toml` a nepřipojuj agentní mašinu přímo k SQL Serveru.
 
 ## Dostupné provider cesty
 
 | Cesta | Vhodnost | Podmínky |
 | --- | --- | --- |
-| ESO9 Web API přes HTTPS | Preferovaná pro dlouhodobou integraci | Jmenované `vltyp` procedury, samostatný `x-api-key` pro každou mašinu nebo Principála, prokázaný journal a samostatná revokace |
+| ESO9 Web API přes HTTPS | Preferovaná pro dlouhodobou integraci | Jmenované `vltyp` procedury, samostatný `x-api-key` pro každou mašinu nebo Operátora, prokázaný journal a samostatná revokace |
 | ESO9 JSON API přes HTTPS | Omezený read-only pilot | Samostatný backend účet s `SELECT` pouze nad jmenovanými pohledy; bridge nesmí přijmout volný zdroj ani T-SQL podmínku a nesmí vystavit `setFile` |
 | Přímé SQL z agentní mašiny | Zakázané | Obchází podporovanou API hranici a rozšiřuje custody i síťový blast radius |
-| Browser | Bezpečný fallback během discovery | Přímý dohled Principála, bez automatizovaného exportu a bez ukládání zákaznických dat do Gitu |
+| Browser | Bezpečný fallback během discovery | Přímý dohled Operátora, bez automatizovaného exportu a bez ukládání zákaznických dat do Gitu |
 
 Web API používá `x-api-key` jako identifikátor třetí strany a podpis
 `x-eso9-signature`. Komunikaci ukládá do `WS_JOURNAL`; přihlašovací a
@@ -46,7 +46,7 @@ potvrdí:
 1. zda jde o ESO9 Cloud, nebo on-premise, a přesnou nasazenou verzi;
 2. jak jsou oddělené právní entity a aplikační databáze;
 3. zda je dostupné a licencované Web API nebo JSON API a testovací prostředí;
-4. jak vznikne samostatná identita a secret pro každou mašinu nebo Principála;
+4. jak vznikne samostatná identita a secret pro každou mašinu nebo Operátora;
 5. který provider záznam prokáže volající identitu, operaci, čas a výsledek;
 6. že revokace jedné identity neovlivní ostatní;
 7. jmenované procedury nebo pohledy, jejich schémata a ownera změn;
@@ -150,7 +150,7 @@ není přípustný mezistav.
 Zápis není pokračováním read-only rolloutu, ale nový schvalovaný scope.
 Vyžaduje jmenovanou Web API proceduru, provider-side oprávnění, přesný preview
 Draftu, idempotency key, konflikt/verzi cíle, atomickou odpověď, ESO9-native
-audit, rollback nebo kompenzaci a explicitní pokyn Principála k Publikaci.
+audit, rollback nebo kompenzaci a explicitní pokyn Operátora k Publikaci.
 Obecné `execute`, volný `vltyp`, DMS upload, ceny, sklad, fakturace, účetnictví,
 mazání a změny přístupů se nesmějí schválit jako jeden společný balík.
 

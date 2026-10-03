@@ -65,14 +65,14 @@ Při publikačním mandátu pro instalační vady přečti také
    položky a odstraň pouze prokázaný stale/shadow záznam téhož nástroje.
    Neobcházej UAC ani správu zařízení.
    Celou instalaci proveď přes background nástroje bez user-facing Terminalu
-   nebo PowerShellu. Po Principálovi nechtěj kopírovat ani spouštět příkaz;
+   nebo PowerShellu. Po Operátorovi nechtěj kopírovat ani spouštět příkaz;
    nativní UAC, heslo nebo browser consent vyvolej s lidským vysvětlením.
    Neumí-li harness proces skrýt, vrať přesný blocker místo shellového handoffu.
 6. **Aktivuj nový Codex proces.** Po Windows instalaci nebo upgradu nástroje či
    změně persistentního `PATH` obnov Machine + User hodnoty jen dočasně pro
    dokončení právě rozpracované atomické operace. Potom v chatu ulož přesný
    resume bod a, umí-li to harness bezpečně, úplně relaunchnuj Codex sám;
-   jinak nech Principála pouze zavřít a znovu otevřít grafickou aplikaci Codex.
+   jinak nech Operátora pouze zavřít a znovu otevřít grafickou aplikaci Codex.
    Pokračuj v obnoveném threadu jako nová Task Agent relace.
    Nový terminál nebo child proces otevřený ze starého Codexu není acceptance,
    protože může dál dědit staré prostředí rodiče. Až z relaunchnutého Codexu
@@ -84,7 +84,7 @@ Při publikačním mandátu pro instalační vady přečti také
    `gh auth login --hostname github.com --git-protocol ssh --web` bez
    `--clipboard`. Krátkodobý user-facing ověřovací (device) kód a
    `https://github.com/login/device` vypiš jen do aktuálního soukromého chatu
-   a nech Principála dokončit osobní web krok. Kód nikdy nekopíruj do schránky,
+   a nech Operátora dokončit osobní web krok. Kód nikdy nekopíruj do schránky,
    issue, repozitáře ani trvalého diagnostického logu; interní OAuth
    `device_code`, access token a privátní klíč nikdy nevypisuj. Nový ed25519
    klíč a upload jeho veřejné části proveď pouze s

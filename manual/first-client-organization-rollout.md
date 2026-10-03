@@ -296,7 +296,7 @@ Tento gate platí pro `github-first` a pro okamžik, kdy se `local-first`
 Organizaci později připojuje klientský `origin`. Jeho ownerem je GitHub
 Organization Admin: runbook popisuje požadovaný stav, ale sám není trvalým
 mandátem k instalaci App, změně memberů, Teamů ani repository grantů. Každý
-live provider zápis potřebuje explicitní pokyn Principála pro přesnou
+live provider zápis potřebuje explicitní pokyn Operátora pro přesnou
 Organizaci.
 
 Gate má dva přirozené checkpointy: před vytvořením prvního provider repa se
@@ -721,7 +721,7 @@ Kontrolní pravidla:
 - Každý runtime listener odkazuje na stabilní module lease. Main, verze i
   worktrees stejného modulu používají shodný materializovaný port; dynamické
   i inline runtime porty jsou nevalidní.
-- Přesný port je pouze v `lazurio.module.json`. Principál jej nenastavuje v
+- Přesný port je pouze v `lazurio.module.json`. Operátor jej nenastavuje v
   `.env`; Launchpad může procesu předat pouze namespacované
   `LAZURIO_RUNTIME_*` hodnoty, které musí přesně souhlasit. Doctor odmítne
   obecné `HOST`/`PORT`, portový fallback i portovou autoritu v env souboru,

@@ -56,7 +56,7 @@ Katalogový zápis v org `.mcp.json`:
 Tento katalogový tvar je cílový endpoint, ne úplná aktivace. MCP zápis v
 Codexu přidej teprve tehdy, když použitý launcher nebo harness umí načíst
 `client_id` a `client_secret` z lokální custody. OAuth consent dokončuje
-Principál a vybírá **správný workspace Organizace**; víc workspace = víc
+Operátor a vybírá **správný workspace Organizace**; víc workspace = víc
 pojmenovaných serverů, každý s vlastní OAuth session. Pokud klient důvěrné
 credentials předat neumí, eviduj admin blocker a nepředstírej PASS pouhým
 `codex mcp add` + `codex mcp login`.
@@ -67,9 +67,9 @@ Smoke začni čtením (vyhledání známé zprávy, výpis kanálů) a pokračuj
 zápisem **výhradně do k tomu určeného testovacího kanálu** (např.
 `#<org-slug>-agent-smoke`), nikdy do ostrého kanálu ani DM. Testovací
 kanál zapiš do `INTEGRATIONS.md`. Testovací zprávu smíš po ověření odstranit
-jen když Principál výslovně schválil jmenovitý smoke cíl zapsaný v
+jen když Operátor výslovně schválil jmenovitý smoke cíl zapsaný v
 `INTEGRATIONS.md` a zprávu vytvořil tento konkrétní smoke. Jinak artefakt
-ponech a vyžádej si samostatný explicitní pokyn Principála.
+ponech a vyžádej si samostatný explicitní pokyn Operátora.
 
 ## Custody a rizika
 

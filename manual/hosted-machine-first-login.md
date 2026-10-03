@@ -50,7 +50,7 @@ CLI příkaz na to není) a **nikdy ho neodvozuje** z `owner.team`, hostname,
 OS účtu ani velikosti Teamu — jednočlenný Team nedělá z Mašiny osobní VM.
 Určuje postup (osobní vs. týmová VM) a od decision 0168 i to, kdo se přihlašuje: na týmové VM nikdo osobním účtem, jen bot Organizace; na osobní pracovní VM dál kdokoli podle decision 0159.
 Uživatelsky jde o druhy Environmentu podle decision 0165: osobní pracovní VM
-je Pracovní, týmová VM Pracovní týmové a osobní Mašina Principála Osobní.
+je Pracovní, týmová VM Pracovní týmové a osobní Mašina Operátora Osobní.
 
 - `machine.kind: workspace-vm`, `owner.kind: organization` a `owner.assignment.kind: operator`
   (s `github_login` a `github_id` operátora) = **osobní pracovní VM** jednoho
@@ -59,7 +59,7 @@ je Pracovní, týmová VM Pracovní týmové a osobní Mašina Principála Osobn
   (preset `hosted-organization-team`). Pro ni platí
   [samostatná sekce níže](#týmová-vm-identita-organizace-ne-člověka).
 - `machine.kind: personal-vm` s `owner.kind: principal` = osobní Mašina
-  Principála podle [`hosted-buddy-vps.md`](hosted-buddy-vps.md); tento manuál
+  Operátora podle [`hosted-buddy-vps.md`](hosted-buddy-vps.md); tento manuál
   se na ni nevztahuje.
 - Soubor chybí, nevaliduje, nebo `owner.assignment` není deklarovaný: Agent
   typ nehádá a **osobní přihlášení `gh` neprovede** — bez platného handoveru

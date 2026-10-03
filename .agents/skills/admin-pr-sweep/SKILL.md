@@ -18,31 +18,31 @@ Admin PR Sweep je práce **Organization Admina** napříč všemi GitHub
 Organizacemi, kde jeho účet drží admin práva. Cíl: každý otevřený PR od jiného
 autora dostat do koncového stavu — merged, closed jako nahrazený, nebo
 předaný jmenovanému ownerovi s konkrétní next action. Task Agent tvoří Drafty
-a provádí Publikaci (merge/close) jen na explicitní pokyn Principála platný
+a provádí Publikaci (merge/close) jen na explicitní pokyn Operátora platný
 v aktuálním threadu.
 
 Liší se od nočního Steward sweepu, který běží pro právě jednu Organizaci
 pod Steward seatem a Steward autoritou. Admin sweep je interaktivní,
-cross-Organization, a používá živá admin práva Principála — včetně bypassu
+cross-Organization, a používá živá admin práva Operátora — včetně bypassu
 tam, kde ho ruleset dovolí a kde je to zdůvodněné.
 
 ## Kdy použít
 
-- Principál (Admin) chce přehled cizích PR napříč Organizacemi a jejich
+- Operátor (Admin) chce přehled cizích PR napříč Organizacemi a jejich
   dotažení „na main“.
 - Fronta obsahuje PR od Kolegů, AI Kolegů, botů i klientských Organizací.
 
-Nepoužívej pro vlastní PR Principála (ty si řeší sám), pro Release, ani jako
+Nepoužívej pro vlastní PR Operátora (ty si řeší sám), pro Release, ani jako
 náhradu review v jedné Organizaci se Steward seatem.
 
 ## Předpoklady
 
-- `gh auth status` je přihlášený účet Principála; `gh api user --jq .login`
+- `gh auth status` je přihlášený účet Operátora; `gh api user --jq .login`
   vrací jeho login — filtr „cizí PR“ se odvozuje od něj.
 - Primární Lazurio checkout prošel `lazurio update` a `bun run doctor:task`.
-- Explicitní mandát Principála k Publikaci pro celý sweep (merge, close,
+- Explicitní mandát Operátora k Publikaci pro celý sweep (merge, close,
   force-push s lease do cizích PR branchí, komentáře a assignee).
-- Principál před startem rozhodl sporné skupiny: legacy repa (např. staré
+- Operátor před startem rozhodl sporné skupiny: legacy repa (např. staré
   dependabot fronty), cizí Drafty, productionspace repa s vlastním branch
   modelem, Windows testovací Mašina.
 
@@ -137,7 +137,7 @@ autorita) zavři s vysvětlením, ne s mlčením.
 - Smaž scratch clones a `.worktrees/sweep/`.
 - V primárním checkoutu `lazurio update` a `bun run doctor:task`; ověř, že
   primary je na `main` bez lokálních změn.
-- Handoff Principálovi: tabulka merged / closed / open-with-owner, stale
+- Handoff Operátorovi: tabulka merged / closed / open-with-owner, stale
   worktrees z dřívějších relací, doporučené navazující kroky.
 
 ## Ověření

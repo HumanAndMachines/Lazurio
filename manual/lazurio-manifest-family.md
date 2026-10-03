@@ -48,7 +48,7 @@ become compatible before any repository migrates.
 | --- | --- | --- |
 | `lazurio.organization.json` | One Organization root, Organization identity, Organization-wide policy, optional root Forge binding and subordinate manifest pointers | Module runtime, provider grants or Dashboard account state |
 | `lazurio.module.json` | One workspace Module, its explicit applications and module-owned local leases | Organization authority, production deployment or Forge ACL |
-| `lazurio.personalspace.json` | One Principal-owned Personalspace, its privacy boundary, subordinate manifests and optional Resident bindings | Organization membership or another Principal's context |
+| `lazurio.personalspace.json` | One Personalspace owned by a single person, its privacy boundary, subordinate manifests and optional Resident bindings | Organization membership or another person's context |
 
 `launchpad.gen3.json` remains Machine-root configuration. `modules.manifest.json`
 remains the sole Organization repository-slot inventory and Git materialization

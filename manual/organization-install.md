@@ -97,7 +97,7 @@ Lazuria. Zápis obecné reprodukované vady jako GitHub Issue zvláštní souhla
 nepotřebuje: je to trvalý mandát Agenta (decision 0163) a dodatek níže jen
 jmenuje cílové repo.
 
-Do promptu přidej pouze ty odstavce, jejichž dopad Principál skutečně schvaluje:
+Do promptu přidej pouze ty odstavce, jejichž dopad Operátor skutečně schvaluje:
 
 > Aktualizuj existující Git, GitHub CLI a Codex CLI
 > na aktuální oficiální stable a Node.js na aktuální podporované LTS. Bun
@@ -311,7 +311,7 @@ $env:Path = (@($machinePath, $userPath) | Where-Object { $_ }) `
 Tento krok nic nezapisuje do registru ani shell profilu a nepoužívá ručně
 dohledaný verzovaný package adresář. Umožní instalační relaci pokračovat, ale
 není finálním důkazem. Po dokončení právě rozpracované atomické operace Agent
-do chatu zapíše přesný resume bod a Principál úplně ukončí Codex včetně všech
+do chatu zapíše přesný resume bod a Operátor úplně ukončí Codex včetně všech
 oken a znovu jej spustí. Teprve nový čistý proces z relaunchnutého Codexu musí
 bez tohoto snippet najít tytéž příkazy. Nový terminál spuštěný starým Codexem
 stále dědí jeho environment snapshot a nestačí. Jejich skutečnou identitu a
@@ -382,7 +382,7 @@ powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1
 Použij aktuální oficiální stable, ne preview ani verzi napevno opsanou z manuálu.
 Před spuštěním platí scoped instalační nebo aktualizační mandát pro Codex a
 příslušnou vrstvu `PATH`. Už udělený mandát se nevyžaduje podruhé; chybí-li,
-Agent nejdřív připraví přesnou nápravu a požádá Principála o souhlas.
+Agent nejdřív připraví přesnou nápravu a požádá Operátora o souhlas.
 Doctor ani `lazurio update` tento příkaz nikdy nespouštějí. `lazurio install`
 zůstává reportem machine gate, ne instalátorem externího toolchainu.
 
@@ -494,7 +494,7 @@ uživatelský ověřovací (device) kód a
 user-facing kód je určený k opsání do browseru a standardně expiruje. Do
 schránky, issue, repozitáře ani trvalého diagnostického logu jej nekopíruje.
 Interní OAuth `device_code`, access token a privátní klíč nikdy nezobrazí.
-Po otevření autorizační stránky jasně řekne Principálovi jediný čekající lidský
+Po otevření autorizační stránky jasně řekne Operátorovi jediný čekající lidský
 krok. Po dokončení stejné relace ověří:
 
 ```sh
@@ -511,7 +511,7 @@ standardním GitHub postupem. Nejdřív ověř existující klíč a jeho vazbu 
 správný GitHub účet. Samostatné `gh ssh-key add` použij jen jako repair již
 přihlášeného účtu, ne jako druhý výchozí onboarding tok. Vytvoření nového SSH
 klíče a jeho nahrání je změna přístupu a Agent ji smí udělat jen s výslovným
-souhlasem Principála pro tuto mašinu a účet; privátní klíč nikdy nevypisuje ani
+souhlasem Operátora pro tuto mašinu a účet; privátní klíč nikdy nevypisuje ani
 nevkládá do repozitáře. Potom zopakuje přesný `git ls-remote`, ne celý login.
 
 Referenční chování drží oficiální dokumentace
@@ -535,7 +535,7 @@ Instalační prompt pro novou Builder Mašinu musí tuto hranici uvést výslovn
   a teprve potom spusť
   `lazurio organization install <github-login> --role builder`.
 
-Chce-li Principál bez dalšího přerušení autorizovat SSH bootstrap, prompt má
+Chce-li Operátor bez dalšího přerušení autorizovat SSH bootstrap, prompt má
 říct: „Pokud pro tento účet chybí použitelný SSH klíč, máš svolení vytvořit na
 této Mašině nový ed25519 klíč, nahrát přes `gh ssh-key add` pouze jeho veřejnou
 část na právě ověřený GitHub účet a ověřit exact Organization root. Privátní
@@ -616,7 +616,7 @@ Steward Agent po instalaci reportuje zvlášť: aplikace ready, data mount
 access blocker ani neřeší vyžádáním grantu.
 
 Každý doporučený warning má v handoffu explicitní disposition: opraveno,
-vědomě přijato Principálem, nebo blokováno chybějící pravomocí. Required nález
+vědomě přijato Operátorem, nebo blokováno chybějící pravomocí. Required nález
 se pouze „vezme na vědomí“ nikdy. Po změně perzistentního PATH Agent spustí
 novou Codex relaci a z ní čistý proces; na Windows nestačí nový terminál
 otevřený ze starého Codexu ani Explorer se starým environment snapshotem.

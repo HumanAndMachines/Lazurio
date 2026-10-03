@@ -28,7 +28,7 @@ prvním stupni, který problém řeší:
 4. **PR do Lazuria.** Teprve generický bug fix nebo funkce užitečná
    každé instalaci na světě.
 
-**Pravidlo pro agenty:** když tvůj Principál chce změnit chování Launchpadu,
+**Pravidlo pro agenty:** když tvůj Operátor chce změnit chování Launchpadu,
 nenavrhuj úpravu „pro nás" — navrhni ji tak, aby byla aplikovatelná pro celou
 komunitu (konfigurovatelná, org-agnostic, forkable). Pokud to nejde, není to
 změna Lazuria, ale kandidát na plugin nebo obsah Organizace.
@@ -97,7 +97,7 @@ GitHub právy, ne textovým labelem role: chráněnou `main` merguje Organizatio
 Steward nebo Organization Admin (včetně vlastního PR, decision 0095);
 nechráněnou `main` mladého repozitáře smí publikovat i Builder, dokud ji
 Admin vědomě nezamkne (progresivní zamykání). Task Agent merguje jen na
-explicitní pokyn svého Principála platný v aktuálním threadu. Přímý push na
+explicitní pokyn svého Operátora platný v aktuálním threadu. Přímý push na
 `main` tohoto repa nemá nikdo kromě Admina. Otevřené PRs zachytává Nightly
 Steward PR Sweep, je-li pro repo aktivní; GitHub Draft PR bez aktivity delší
 než 48 hodin uvede v reportu jako stale draft vyžadující pozornost.

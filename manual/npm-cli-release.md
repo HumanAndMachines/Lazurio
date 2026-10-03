@@ -17,7 +17,7 @@ důkazní archiv.
 
 Publikace nové npm verze, schválení staged package i přesun `latest` jsou
 **Release**. Agent je smí provést jen po explicitním pokynu oprávněného
-Principála pro přesnou verzi nebo tagovou operaci.
+Operátora pro přesnou verzi nebo tagovou operaci.
 
 ## 0. Zmraz package coordinate
 
@@ -102,7 +102,7 @@ npm stage publish --tag next
 ```
 
 Staging není Release navenek: package ještě není veřejně dostupný. Oprávněný
-Principál zkontroluje metadata a přesně staged bytes přes npm:
+Operátor zkontroluje metadata a přesně staged bytes přes npm:
 
 ```sh
 npm stage list <package-name>

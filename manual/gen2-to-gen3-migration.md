@@ -70,7 +70,7 @@ Template hranice během migrace (decision 0033 a decision 0077 v
   syncem**: `managed` soubory verbatim a `managed` bloky uvnitř org souborů.
   Kanonický blok „Model spolupráce" v Organization `AGENTS.md` je právě takový
   managed blok — synchronizuje se verbatim a drift se hlídá md5 hashem bloku
-  (od nadpisu `## Model spolupráce: Principál a Agenti` po další `## `), nikdy
+  (od nadpisu `## Model spolupráce: Operátor a Agenti` po další `## `), nikdy
   se nepřepisuje celý soubor. Detail mechanismu je v
   `manual/template-promotion-and-sync.md`. Časová výjimka: samotný **seed** tohoto
   managed bloku se dělá už při zakládání kanonického layoutu (Fáze 5) z template
@@ -206,7 +206,7 @@ archivu: není to aktivovaná Organization a nesmí se automaticky kopírovat do
 Rozjedeme-ai `workspace/` ani `productionspace/`. Aktivace konkrétních dat do
 GEN3 je samostatný, reviewovaný owner-repo krok. Ani zelený `SUCCESS.json`
 neopravňuje Agenta smazat GEN2; destruktivní delete stále vyžaduje explicitní
-pokyn Principála v aktuálním threadu.
+pokyn Operátora v aktuálním threadu.
 
 ## Fáze 0 — preflight a přesný source snapshot
 
@@ -763,7 +763,7 @@ listener pro UI i API. Productionspace app
 manifest se tímto automaticky nestává spustitelným Launchpad lifecycle
 povrchem.
 
-Runtime proměnné pouze přenesou verzovaný lease do child procesu. Principál je
+Runtime proměnné pouze přenesou verzovaný lease do child procesu. Operátor je
 nenastavuje v `.env` a aplikace nemá náhradní číselnou hodnotu. Launchpad je
 při každém Start/Open odvodí z `lazurio.module.json`; Doctor kontroluje jen env soubory,
 které `dev_script` skutečně načítá. `.env` zůstává pro lokální hodnoty Mašiny,
@@ -779,7 +779,7 @@ cutover.
 Kanonický blok „Model spolupráce" v Organization `AGENTS.md` se **seeduje už
 tady**, ne až post-cutover: vlož ho VERBATIM z template mountu (reference
 checkout, ne wired remote) a ověř md5 bloku (od nadpisu
-`## Model spolupráce: Principál a Agenti` po další `## `) proti template. Blok je
+`## Model spolupráce: Operátor a Agenti` po další `## `) proti template. Blok je
 čistě managed (HTML komentář ukazuje na reviewovaný Lazurio source),
 Organizace ho nemá jak legitimně customizovat, takže seed je nedestruktivní a
 odpovídá stavu sourozeneckých Organizací.

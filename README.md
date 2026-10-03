@@ -49,10 +49,10 @@ používá následující pojmy s jejich přesným významem.
 
 | Pojem | Co znamená běžnou řečí |
 | --- | --- |
-| **Principál** | Ten, pro koho Agent právě pracuje, z čích oprávnění vychází a kdo má poslední slovo. Principálem může být člověk i AI Kolega. |
-| **Kolega** | Lidský Principál zapojený do práce podle svých firemních rolí a oprávnění. |
+| **Operátor** | Ten, kdo Environment ovládá, a tím i Agenty, které v něm spouští: Agent pracuje pro něj, vychází z jeho oprávnění a poslední slovo má Operátor. Operátorem je vždy člověk. |
+| **Kolega** | Člověk v Organizaci zapojený do práce podle svých firemních rolí a oprávnění. |
 | **AI Kolega** | Dlouhodobá AI identita s vlastním účtem, pracovním prostředím, odpovědností a přístupy. Není to jedna dočasná relace nástroje. |
-| **Task Agent (hovorově Agent)** | Dočasná relace AI nástroje, která pro svého Principála řeší konkrétní úkol. Sama nevlastní žádná oprávnění. |
+| **Task Agent (hovorově Agent)** | Dočasná relace AI nástroje, která pro svého Operátora řeší konkrétní úkol. Sama nevlastní žádná oprávnění. |
 | **Buddy** | Osobní AI zástupce právě jednoho člověka. Jedná v mezích jeho oprávnění a trvalých, ohraničených a odvolatelných mandátů. |
 
 ### Prostory a práce
@@ -61,12 +61,12 @@ používá následující pojmy s jejich přesným významem.
 | --- | --- |
 | **Mašina** | Fyzické zařízení, virtuální server nebo providerem izolovaný hostovaný pracovní prostor, který tvoří jednu sdílenou runtime, bezpečnostní a recovery hranici se známým Ownerem. Není to typ hardwaru ani nový IAM objekt. |
 | **Organizace** | Jedna firma, její GitHub organizace a samostatná hranice repozitářů, dat a přístupů. |
-| **Personalspace** | Soukromý prostor jednoho Principála a jeho případného Buddyho. S firemní Organizací se automaticky nesdílí. |
+| **Personalspace** | Soukromý prostor jednoho člověka a jeho případného Buddyho. S firemní Organizací se automaticky nesdílí. |
 | **Root** | Kořenová složka pracovního prostředí, která zastřešuje Lazurio, dostupné Organizace a případný Personalspace. |
-| **Draft a Publikace** | Draft je vratný a editovatelný výsledek. Publikace jej zviditelní navenek nebo z něj udělá obtížně vratnou změnu a vyžaduje vědomé rozhodnutí oprávněného Principála. |
+| **Draft a Publikace** | Draft je vratný a editovatelný výsledek. Publikace jej zviditelní navenek nebo z něj udělá obtížně vratnou změnu a vyžaduje vědomé rozhodnutí oprávněného Operátora. |
 
 Tento zkrácený slovník stačí pro čtení README. Úplný model spolupráce drží
-[pravidla pro Agenty](AGENTS.md#model-spolupráce-principál-a-agenti) a cílové
+[pravidla pro Agenty](AGENTS.md#model-spolupráce-operátor-a-agenti) a cílové
 vztahy mezi rolemi, prostory a runtime popisuje [architektura](ARCHITECTURE.md).
 
 ## Proč Lazurio vzniká
@@ -82,8 +82,8 @@ Lazurio nad tím staví malý počet pevných pravidel:
   systém oprávnění;
 - **každá Organizace je samostatná hranice** a samostatný Git repozitář;
 - **Personalspace je privátní** a nikdy se automaticky nesdílí s Organizací;
-- **Agent pracuje pro svého Principála** a odevzdává editovatelný Draft;
-- **publikace zůstává vědomým rozhodnutím oprávněného Principála**.
+- **Agent pracuje pro svého Operátora** a odevzdává editovatelný Draft;
+- **publikace zůstává vědomým rozhodnutím oprávněného Operátora**.
 
 Výsledkem má být pracovní prostředí, ve kterém lidé i AI Kolegové používají
 stejnou organizační strukturu, stejné zdroje pravdy a stejné kontrolovatelné
@@ -271,7 +271,7 @@ Folder spravovaný LazurioPlatform. Aktuální build rezidentních artefaktů po
   Hostu zůstává vyšší doménou kompromitace a obnovy.
 
 Podrobnosti najdeš v [architektuře](ARCHITECTURE.md#1-jedna-mašina-je-jedna-bezpečnostní-hranice),
-[pravidlech pro Agenty](AGENTS.md#model-spolupráce-principál-a-agenti) a
+[pravidlech pro Agenty](AGENTS.md#model-spolupráce-operátor-a-agenti) a
 [standardu lokálního držení secrets](manual/security/local-secret-custody.md).
 Bezpečnostní problém nepublikuj do veřejného issue spolu s citlivými daty;
 nejdřív odstraň secrets a zákaznický či osobní obsah z reprodukce.
@@ -318,5 +318,5 @@ přechodem jednotlivých verzí na Apache 2.0; není to zatím finální OSS lic
 režim, který má Lazurio nabídnout komunitě.
 
 Volba a publikace navazující OSS licence je samostatné explicitní rozhodnutí
-Principála. Dokud není nová licence skutečně publikovaná, nelze ji z plánů ani
+vlastníků projektu. Dokud není nová licence skutečně publikovaná, nelze ji z plánů ani
 záměru projektu domýšlet a platí přesné znění aktuálního `LICENSE.md`.

@@ -98,9 +98,9 @@ autoritu.
    `--force-with-lease`, který gate vypíše. Po pushi ověř na GitHubu PR base
    `main`, exact head, mergeability a checks.
 9. Commituj a pushuj do PR branche průběžně — po každém uzavřeném pracovním
-   kroku, nejpozději před každou odpovědí Principálovi, která ohlašuje stav
+   kroku, nejpozději před každou odpovědí Operátorovi, která ohlašuje stav
    práce. Po prvním pushi branch hned otevři PR proti správné base branchi
-   jako GitHub Draft PR. Pokud Principál výslovně zakázal PR otevřít,
+   jako GitHub Draft PR. Pokud Operátor výslovně zakázal PR otevřít,
    nepokračuj za hranici lokálního experimentu a před dalším pushem nebo
    koncem práce si vyžádej rozhodnutí: Draft zahodit, nebo PR povolit —
    samotná remote branch bez PR není přípustná náhrada.
@@ -123,8 +123,8 @@ autoritu.
    shrnutí, ověření, odkaz na aplikaci běžící z worktree) a končí
    standardizovanou dvojotázkou „Mám změny Publikovat tvým jménem? Nebo mám
    požádat jiného Kolegu o kontrolu a Publikaci?" — volbu vždy nabídni,
-   nedomýšlej ji za Principála. Před otázkou zjisti
-   živá GitHub práva Principála a řiď se jimi, ne textovým labelem role —
+   nedomýšlej ji za Operátora. Před otázkou zjisti
+   živá GitHub práva Operátora a řiď se jimi, ne textovým labelem role —
    např. `gh api repos/<owner>/<repo> --jq .permissions`,
    `gh api repos/<owner>/<repo>/branches/<base>/protection`,
    `gh repo view <owner>/<repo> --json
@@ -132,11 +132,12 @@ autoritu.
    `gh pr view <číslo> --json mergeable,mergeStateStatus,reviewDecision`.
    Po explicitním „Publikuj" v threadu PR mergni metodou, kterou repozitář
    povoluje (při více povolených je default rebase, pokud Organizace ve svém
-   `AGENTS.md` nedeklaruje jinak; PR, který do forku šablony přináší stav
-   šablony, se slučuje merge commitem — decision 0174), v primárním checkoutu spusť
+   `AGENTS.md` nedeklaruje jinak; synchronizaci šablony slučuj merge commitem
+   až po ověření `git merge-base --is-ancestor <commit šablony> <head>` a
+   povoleného merge commitu, jinak nesluč a nahlas to — decision 0174), v primárním checkoutu spusť
    `lazurio update`, potom `bun run doctor:task` a pokračuj cleanup guardy
-   v kroku 13. Když Principál zvolí předání, nebo mu GitHub merge
-   nedovoluje, vyžádej review Kolegy, kterého Principál zvolil, PR mu zároveň
+   v kroku 13. Když Operátor zvolí předání, nebo mu GitHub merge
+   nedovoluje, vyžádej review Kolegy, kterého Operátor zvolil, PR mu zároveň
    přiřaď a @zmínkou mu výslovně předej odpovědnost za dotažení
    (`gh pr edit --add-reviewer <login> --add-assignee <login>` + komentář PR).
    Reviewer request znamená kontrolu; assignee je owner další práce. Když
@@ -145,9 +146,9 @@ autoritu.
    vypsaný exact `--force-with-lease`. Nesmí změnu vrátit autorovi pouhým
    komentářem, pokud ji v rámci živých práv a scope může dotáhnout sám.
    Assignment sám nevytváří GitHub práva ani nenahrazuje explicitní pokyn
-   Principála k Publikaci. Pokud Principál nikoho neurčil, požádej ho o volbu
+   Operátora k Publikaci. Pokud Operátor nikoho neurčil, požádej ho o volbu
    — Stewarda použij bez další otázky jen tehdy, když ho jako výchozí
-   rozhodující osobu určuje politika repa. Předej Principálovi, kdo teď
+   rozhodující osobu určuje politika repa. Předej Operátorovi, kdo teď
    dotažení vlastní. Merge neobcházej ani na
    opakovanou žádost — GitHub ho fyzicky blokuje. Bez zelené PR zůstává
    otevřený a nic se neděje.
