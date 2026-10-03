@@ -205,6 +205,17 @@ kosmetiku a ohraničený průzkum, ne o povinný samostatný červený PR nebo p
 testů. Podrobnosti a migrační hranice drží
 [`manual/intent-first-planning.md`](manual/intent-first-planning.md).
 
+**Co člověk uvidí nebo použije, ověříš v prohlížeči** (decision 0178). U
+změny, se kterou se člověk potká (UI, přihlašovací stránka, sign-in, nasazená
+aplikace), Agent, který PR připravuje, před přepnutím na Ready a Agent, který
+ho Publikuje, po nasazení sám otevře výsledek v prohlížeči: stránka se
+skutečně vykreslí a hlavní cesta funguje. Přihlášení projde smoke testem:
+testovacím účtem, který pro to Operátor nebo Organizace určili (Task Agent
+vlastní účet nemá a nezakládá), jinak Agent požádá Operátora o jedno
+přihlášení. Výsledek, nebo že ověření chybí, uvede
+v handoffu pod „Ověřeno“. Pro vzhled stránky se místo toho nestaví vlastní
+automatický test vykreslení; testy dál drží kontrakt chování.
+
 **Tvoje práce je Draft.** Draft je revertovatelný a hlavně editovatelný kus
 práce — změna v aplikaci, rozepsaný email, otevřený pull request. **Publikace**
 je akt, kterým se Draft stává těžko vratným nebo viditelným navenek — merge,

@@ -96,6 +96,11 @@ a `git ls-remote` root repa. Kroky 3 a 4 nabídne jako další tlačítka.
 odebere z účtu SSH klíč této Mašiny a odhlásí `gh`, aby šel přihlásit jiný
 účet. Agent operátora na tuto stránku pošle a ruční
 postup níže použije jen tam, kde Launchpad Mašiny není dostupný.
+Ozubené kolo v hlavičce a sekce Zdrojové kódy platí jen pro rezidentní
+Launchpad (decision 0167). V Launchpadu Platformy je přihlášení GitHubu
+v Nastavení tohoto Environmentu, sekce **Nástroje** (sekce Obecné / Tento
+Environment / Nástroje / Obnova); cílově je otevírá ozubené kolo v railu
+(decision 0179).
 
 Ruční postup je stejný jako na pracovní stanici
 (kanonicky skill `lazurio-workstation-install`, sekce o GitHub účtu):
@@ -133,7 +138,9 @@ Ruční postup je stejný jako na pracovní stanici
 6. Teprve potom Agent pokračuje v původním úkolu. Vstup do T3 Code z
    prohlížeče vede přes Launchpad Mašiny tlačítkem **Chat**, které vydá
    jednorázový párovací token; ruční kopírování párovacích odkazů není
-   potřeba.
+   potřeba. Tlačítko v horní liště má rezidentní Launchpad (decision 0167).
+   V Launchpadu Platformy je **Chat** nahoře v levém sloupci, cílově jako
+   položka přepínače Chat · Apps · Automate (decision 0179), a páruje stejně.
 
 Co Agent nedělá: sám nevybírá účet za operátora, nepoužívá sdílený
 token Organizace, nemountuje cizí Personalspace a nepřenáší přihlášení z jiné
