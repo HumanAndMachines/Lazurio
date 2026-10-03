@@ -3,9 +3,10 @@
 > **Legacy (2026-10-03).** Tento spec popisuje rezidentní Launchpad tohoto
 > repozitáře. Na hostovaných Environmentech ho nahrazuje Launchpad Platformy
 > (decision 0167); instalace Root Repa ho používají do své migrace. Cílovou
-> navigaci drží decision 0179: rail Environmentů, přepínač Chat · Apps ·
-> Automate v levém sloupci a žádná lišta nahoře. Dropdown v záhlaví,
-> monogram Organizace ani další navigace níže nejsou cílovým stavem. Sekce
+> navigaci drží decisions 0179 a 0185: rail Organizací, výběr Environmentu
+> s ozubeným kolem a přepínač Chat · Apps · Automate nahoře v levém sloupci
+> a žádná lišta nahoře. Dropdown v záhlaví, monogram Organizace ani další
+> navigace níže nejsou cílovým stavem. Sekce
 > Organizace (`launchpad_section: "organization"`) ani seskupení podle Teamů
 > také ne: Apps cílově ukazují jen sekce Workspace (všechny Moduly) a
 > Productionspace (decision 0179, dodatek z 2026-10-03 večer).
