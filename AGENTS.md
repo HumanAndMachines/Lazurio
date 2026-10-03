@@ -210,8 +210,9 @@ změny, se kterou se člověk potká (UI, přihlašovací stránka, sign-in, nas
 aplikace), Agent, který PR připravuje, před přepnutím na Ready a Agent, který
 ho Publikuje, po nasazení sám otevře výsledek v prohlížeči: stránka se
 skutečně vykreslí a hlavní cesta funguje. Přihlášení projde smoke testem:
-vlastním testovacím účtem, a když ho Agent nemá nebo jde o účet člověka,
-požádá Operátora o jedno přihlášení. Výsledek, nebo že ověření chybí, uvede
+testovacím účtem, který pro to Operátor nebo Organizace určili (Task Agent
+vlastní účet nemá a nezakládá), jinak Agent požádá Operátora o jedno
+přihlášení. Výsledek, nebo že ověření chybí, uvede
 v handoffu pod „Ověřeno“. Pro vzhled stránky se místo toho nestaví vlastní
 automatický test vykreslení; testy dál drží kontrakt chování.
 
