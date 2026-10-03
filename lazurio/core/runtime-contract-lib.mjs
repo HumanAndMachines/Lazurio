@@ -3,6 +3,10 @@ const COMPANY_ID = /^[A-Za-z0-9][A-Za-z0-9-]*$/;
 const MODULE_ID = /^[a-z0-9][a-z0-9-]*$/;
 const LISTENER_ID = /^[a-z][a-z0-9-]*$/;
 const MODULE_SLOT = /^[A-Za-z0-9][A-Za-z0-9._-]*(\/[A-Za-z0-9][A-Za-z0-9._-]*)*$/;
+// Names of the secrets the App needs at start (decision 0177): names only,
+// never values. The Launchpad injects each as LAZURIO_RUNTIME_SECRET_<NAME>
+// from the Environment vault.
+const SECRET_NAME = /^[A-Z][A-Z0-9_]*$/;
 const SURFACES = new Set(["internal", "manual", "admin", "public-preview"]);
 const PROTOCOLS = new Set(["http", "https", "tcp"]);
 const RUNTIME_KEYS = new Set([
@@ -23,6 +27,7 @@ const RUNTIME_KEYS = new Set([
   "production_url",
   "tags",
   "listeners",
+  "secrets",
 ]);
 const LISTENER_KEYS = new Set([
   "id",
@@ -180,6 +185,20 @@ export function validateDeclaredRuntime({ runtime, packageJson, packagePath = "p
         if (typeof slot === "string") {
           if (slots.has(slot)) issues.push(`${label}.required_module_slots[${index}] ${slot} je duplicitní`);
           slots.add(slot);
+        }
+      });
+    }
+  }
+  if (runtime.secrets !== undefined) {
+    if (!Array.isArray(runtime.secrets) || runtime.secrets.length === 0) {
+      issues.push(`${label}.secrets musí být neprázdné pole jmen`);
+    } else {
+      const names = new Set();
+      runtime.secrets.forEach((name, index) => {
+        validatePattern(name, SECRET_NAME, `${label}.secrets[${index}]`, issues);
+        if (typeof name === "string") {
+          if (names.has(name)) issues.push(`${label}.secrets[${index}] ${name} je duplicitní`);
+          names.add(name);
         }
       });
     }

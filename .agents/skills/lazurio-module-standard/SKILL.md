@@ -113,7 +113,20 @@ ani pro productionspace repa (decision 0041).
    2. **Env**: host/port jen z listener-keyed proměnných; nahraď kopie
       `runtime-listener.mjs` závislostí `@lazurio/module-kit`; smaž čtení
       `PORT`, `LAZURIO_RUNTIME_HOST/PORT`, `COMPANYASCODE_*`, lease souboru;
-      žádné `.env*` na start cestě.
+      žádné `.env*` na start cestě a každé volání `bun` na start cestě
+      s `--no-env-file` před vstupem (`bun --no-env-file run src/server.ts`)
+      a bez `--env-file` (Bun jinak `.env*` načte sám; `MS-07`).
+      **Tajemství** (klíč externí služby, token) App neukládá do `.env*`
+      ani do vlastního souboru: deklaruje jejich jména
+      v `lazurio.runtime.secrets` (`["EXTERNAL_API_KEY"]`), čte je
+      fail-closed z `LAZURIO_RUNTIME_SECRET_<NAME>` (bez proměnné exit 2)
+      a hodnotu Operátor uloží do kolekce Environmentu v trezoru
+      Organizace; Launchpad ji předá při startu, chybějící tajemství
+      start zastaví (kap. 4.3, decision 0177). Dokud Platform Launchpad
+      deklaraci nečte, hlásí ji `MS-03` jako `warn` a App s ní nestartuje;
+      deklaraci proto zapiš až s tím vydáním. Tajemství jen pro ručně
+      spouštěný skript nedeklaruj; skript si ho čte z trezoru sám a README
+      to popisuje.
    3. **Hranice**: odstraň importy mimo repo; sdílený kontrakt Organizace
       nahraď verzovanou závislostí nebo ho vlož do Modulu; repository-db na
       vydaný tag.
