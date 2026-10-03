@@ -26,6 +26,23 @@ síťové granty a potřebné správní oprávnění. Povol jen schválené prot
 směry; odpověď na navázané spojení není oprávnění zahájit opačné spojení.
 Vazbu nové IP či reenrollmentu nikdy neopravuj automatickým širokým grantem.
 
+## Mapa Conglomerate a SSH konfigurace (decision 0183)
+
+Mapa Conglomerate v Dashboardu je jen pohled. Skládá infra Ownera, důkazy
+apply a živý stav tailnetu, který Conglomerate Host posílá do Dashboardu sám;
+klíč Headscale host neopouští. Mapa nic neuděluje. Přístup se mění vždy pull
+requestem do infra se standardním review a apply. Ownera zařízení (jeho GitHub
+ID) deklaruje enrollment, existující zařízení se doplní pull requestem a každý
+záznam přístupu nese GitHub ID osoby.
+
+SSH konfiguraci generuje Lazurio: standardní OpenSSH `~/.ssh/lazurio/config`
+s host klíči připnutými z Machine Recordů a jeden `Include` na začátku
+`~/.ssh/config`. Funguje obyčejné `ssh`; příkaz `lazurio ssh` nevzniká.
+Aliasy v `~/.ssh/config` jsou výstup, ne zdroj. Dokud generovaná konfigurace
+není vydaná, platí bod 7 „SSH na Mašiny v tailnetu“ root `AGENTS.md`
+(připnutý host klíč z Machine Recordu přes `HostKeyAlias` a vlastní
+`UserKnownHostsFile`). Realizaci drží plán DEV-6640.
+
 ## Samostatnost a odpovědnost
 
 Úspěšné SSH není dokončený onboarding. Owner musí pod svým účtem:

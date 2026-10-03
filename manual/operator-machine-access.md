@@ -28,6 +28,8 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
    - Pracovní VM mezi sebou grant nemají — ani v rámci jedné Organizace, ani
      napříč Organizacemi téhož Conglomerate. Hranice Organizací zůstává
      zachovaná; propojení drží Operátorův pracovní laptop nebo jeho osobní strana.
+     Jedinou výjimkou je grant na port proxy AI poolu vlastní Organizace
+     (0181); SSH ani jiný port z něj neplyne.
 2. **Z osobní do pracovní ano.** Osobní klienti a osobní VM → každá pracovní VM
    téhož Operátora: SSH + HTTPS.
 3. **Z pracovní do osobní nikdy.** Pracovní VM ani pracovní laptop nemají grant
@@ -36,7 +38,8 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
 4. **Sdílená týmová VM** (Hosted Team Workspace, víc Operátorů v jednom OS
    účtu) přijímá jen příchozí spojení od členů GitHub Teamu, na který je vázaná
    neměnným `github_team_id` (0147/0149); členství se čte živě z GitHubu a
-   nevzniká druhý roster. Nikdy nemá odchozí grant na klienty ani na jiné VM. Obousměrná hrana pracovní
+   nevzniká druhý roster. Nikdy nemá odchozí grant na klienty ani na jiné VM
+   (kromě portu proxy AI poolu své Organizace, 0181). Obousměrná hrana pracovní
    zóny existuje jen mezi pracovním laptopem a pracovní VM přiřazenou témuž
    Operátorovi; jinak by agenti jednoho člena došli na laptop jiného.
 5. **Mezi Operátory nic implicitně.**
@@ -116,16 +119,16 @@ nestaví žádný most.
   virtualizační host `<org>-proxmox-NN` (např. `lumbio-proxmox-01`, aby ho
   správce více Organizací rozlišil v konzoli providera, SSH i tailnetu; `<org>`
   je krátký štítek Organizace, který Owner zvolí jednou a který se nemění
-  s přejmenováním GitHub loginu ani DNS slugu),
-  servisní VM na něm `services-NN`, logický AI
-  pool `team-NN` s administrační aplikací `ai-team-NN`
-  (`https://ai-team-01.services-01.<org-DNS-slug>.lazurio.io/`); číslování od
-  `01`, smí přerůst dvě číslice. Kanonický kontrakt drží Machines
-  (`workloads/workspace-vm/AI-POOL.md`, kapitola „Names“; DEV-6625). Machines
-  vynucuje a kolize kontroluje jen u servisní VM a poolů; jméno fyzického hostu
-  je konvence Owner Recordu, kterou Machines nevynucuje.
-  Jméno nic neuděluje, vazbu servisní VM na host drží Machine Record vlastníka
-  a existující Mašiny se kvůli konvenci nepřejmenovávají.
+  s přejmenováním GitHub loginu ani DNS slugu); číslování od `01`, smí
+  přerůst dvě číslice. Jméno hostu je konvence Owner Recordu, kterou Machines
+  nevynucuje; nic neuděluje a existující Mašiny se kvůli konvenci
+  nepřejmenovávají.
+- **Servisní VM se nezakládá (0181).** Na hostu virtualizace nevzniká servisní
+  VM (`services-NN`); diagnostický kolektor běží přímo na hostu. AI pool je
+  běžný Environment Organizace s presetem AI pool: jeden na Organizaci, na
+  vlastním stroji, přiřazený jen Ownerovi nebo Adminovi a pojmenovaný jako
+  každý jiný Environment Organizace (0146). Jména `team-NN` a `ai-team-NN` se
+  pro něj nepoužívají.
 
 ## Infra je blueprint
 
