@@ -315,7 +315,9 @@ mkdir -p "$BUILD_APP/Contents/MacOS" "$BUILD_APP/Contents/Resources"
 /usr/bin/xcrun clang -fobjc-arc -framework Cocoa -arch arm64 -arch x86_64 \
   -mmacosx-version-min=12.0 -Wall -Wextra -Werror \
   "$SOURCE_DIR/launchpad-main.m" -o "$BUILD_APP/Contents/MacOS/launchpad-bootstrap"
-/usr/bin/lipo "$BUILD_APP/Contents/MacOS/launchpad-bootstrap" -verify_arch arm64 x86_64
+for architecture in arm64 x86_64; do
+  /usr/bin/lipo -verify_arch "$architecture" "$BUILD_APP/Contents/MacOS/launchpad-bootstrap"
+done
 cp "$SOURCE_DIR/launchpad-bootstrap.sh" "$BUILD_APP/Contents/Resources/launchpad-bootstrap.sh"
 # Package the existing canonical Lazurio profile export, without redrawing it.
 ICONSET="$BUILD_ROOT/Launchpad.iconset"

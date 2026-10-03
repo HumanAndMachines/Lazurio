@@ -30,6 +30,8 @@ async function fixtureRoot({ git = "directory" } = {}) {
   await copyFile(join(sourceRoot, "assets", "launchpad.svg"), join(root, "assets", "launchpad.svg"));
   await copyFile(join(sourceRoot, "scripts", "macos", "launchpad-main.m"), join(root, "scripts", "macos", "launchpad-main.m"));
   await copyFile(join(sourceRoot, "scripts", "install-launchpad-macos.sh"), join(root, "scripts", "install-launchpad-macos.sh"));
+  // Every install stays isolated from the developer's real system application.
+  await redirectLegacySystemApp(root, join(root, "system-applications", "Launchpad GEN3.app"));
   await copyFile(join(sourceRoot, "scripts", "macos", "launchpad-bootstrap.sh"), join(root, "scripts", "macos", "launchpad-bootstrap.sh"));
   await copyFile(join(sourceRoot, "scripts", "macos", "replace-app.jxa"), join(root, "scripts", "macos", "replace-app.jxa"));
   await copyFile(join(sourceRoot, "scripts", "macos", "Info.plist"), join(root, "scripts", "macos", "Info.plist"));
@@ -68,8 +70,8 @@ async function install(root, home) {
 async function redirectLegacySystemApp(root, legacyApp) {
   const installerPath = join(root, "scripts", "install-launchpad-macos.sh");
   const installer = await readFile(installerPath, "utf8");
-  const declaration = 'LEGACY_SYSTEM_APP="/Applications/Launchpad GEN3.app"';
-  expect(installer.split(declaration).length - 1).toBe(1);
+  const declaration = /^LEGACY_SYSTEM_APP=.*$/m;
+  expect(installer.match(/^LEGACY_SYSTEM_APP=.*$/gm)?.length).toBe(1);
   await writeFile(installerPath, installer.replace(declaration, `LEGACY_SYSTEM_APP=${JSON.stringify(legacyApp)}`));
 }
 
@@ -171,8 +173,10 @@ macTest("default install succeeds without admin rights and produces a verified u
   expect(bundleId.exitCode).toBe(0);
   expect(bundleId.stdout.toString().trim()).toBe("com.lazurio.launchpad");
   const executable = join(app, "Contents", "MacOS", "launchpad-bootstrap");
-  const architectures = spawn(["/usr/bin/lipo", executable, "-verify_arch", "arm64", "x86_64"]);
-  expect(architectures.exitCode, architectures.stderr.toString()).toBe(0);
+  for (const architecture of ["arm64", "x86_64"]) {
+    const verification = spawn(["/usr/bin/lipo", "-verify_arch", architecture, executable]);
+    expect(verification.exitCode, verification.stderr.toString()).toBe(0);
+  }
   expect(spawn(["/usr/bin/file", executable]).stdout.toString()).toContain("Mach-O universal binary");
   const icon = join(app, "Contents", "Resources", "Launchpad.icns");
   expect((await readFile(icon)).subarray(0, 4).toString()).toBe("icns");
