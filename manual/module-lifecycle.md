@@ -32,8 +32,7 @@ explicitně deklarovaného, dostupného organizačního Modulu. Samotné `space=
 ani prázdné `teams` nestačí: musí existovat platný Module/runtime kontrakt,
 deklarovaný výchozí package a jeho vazba na materializovaný modul. Databázové,
 diagnostické, nedostupné a nedeklarované root položky se tím nezpřístupňují.
-Workspace modul zobrazený v sekci Organizace stále podléhá původnímu Team
-přiřazení z manifestu. GitHub přístupy a infrastruktura se nemění; tato
+Zobrazení Modulu v Launchpadu nemění jeho Team přiřazení z manifestu. GitHub přístupy a infrastruktura se nemění; tato
 odvozená projekce není ACL ani další service catalog.
 
 ```sh

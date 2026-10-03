@@ -88,9 +88,12 @@ organizations/<org>/
   podle Teamů se nezavádějí. Team je logická deklarace v manifestu, kanonicky
   `modules[].teams` / `module_slots[].teams`. Modul může patřit do více Teamů.
   Chybějící deklarace znamená výchozí Team `workspace`. Starší Organizace
-  mohou během migrace ještě používat singulární alias `workspace`. Launchpad
-  grupuje podle deklarace (decisions 0021/0023/0041 v
-  `manual/decision-register.md`); hostovaná jména aplikací určuje decision
+  mohou během migrace ještě používat singulární alias `workspace`. Deklaraci
+  drží decisions 0021/0023/0041 v `manual/decision-register.md`. Nasazený
+  rezidentní Launchpad tohoto repa podle ní grupuje karty, dokud ho nenahradí
+  Launchpad LazurioPlatform (decision 0167). Ten cílově ukazuje každý Modul
+  jednou v sekci Workspace a podle Teamů neseskupuje ani neoznačuje (decision
+  0179 s dodatkem z 2026-10-03, LazurioPlatform F32). Hostovaná jména aplikací určuje decision
   0146 (`<app>.<vm>.<org>.lazurio.io` v dílně, `<app>.<org>.lazurio.io` pro
   produkční workspace aplikace), starší tvar `<modul>.<team>.<doména>` je
   nahrazený.
