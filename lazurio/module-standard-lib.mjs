@@ -268,8 +268,8 @@ export async function evaluateModuleStandard({
           record("MS-06", "fail", `${file.path}: port leasu ${port} je zapsaný natvrdo`);
         }
       }
-      // Paths in comments are not reads (stripCommentsAndMask).
-      const source = stripCommentsAndMask(text);
+      // Paths in comments are not reads (transpiledSource).
+      const source = transpiledSource(text, file.extension);
       const specifiers = importSpecifiers(source.code);
       const paths = [
         ...specifiers.map((path) => ({ path, isImport: true, cwdRelative: false })),
@@ -639,102 +639,46 @@ function cwdRelativeArgument(masked, start, end) {
   return !FILE_ANCHOR.test(masked.slice(open + 1, close));
 }
 
-const REGEX_PRECEDING_WORDS = new Set([
-  "return", "typeof", "instanceof", "in", "of", "new", "delete", "void", "throw", "case", "do", "else", "yield", "await",
+const TRANSPILER_LOADERS = new Map([
+  [".ts", "ts"], [".mts", "ts"], [".cts", "ts"], [".astro", "ts"],
+  [".tsx", "tsx"], [".js", "js"], [".mjs", "js"], [".cjs", "js"], [".jsx", "jsx"],
 ]);
+const transpilers = new Map();
 
-// Blanks // and /* */ comments of a JS/TS source (length and newlines kept)
-// so that a path named only in a comment is not a read. String, template and
-// regex literals are recognized first, so "https://…" or /\/\// survive.
-// `masked` additionally blanks literal contents for bracket matching. An
-// opening /* without a closing */ is left as code rather than swallowing the
-// rest of the file.
-export function stripCommentsAndMask(text) {
-  const source = String(text);
-  const code = [];
-  const masked = [];
-  const keep = (character) => {
-    code.push(character);
-    masked.push(character);
-  };
-  const blankBoth = (character) => {
-    const blank = character === "\n" ? "\n" : " ";
-    code.push(blank);
-    masked.push(blank);
-  };
-  const literal = (character) => {
-    code.push(character);
-    masked.push(character === "\n" ? "\n" : " ");
-  };
-  let previous = "";
-  let index = 0;
-  while (index < source.length) {
-    const character = source[index];
-    const next = source[index + 1];
-    if (character === "/" && next === "/") {
-      while (index < source.length && source[index] !== "\n") blankBoth(source[index++]);
-      continue;
+// The source as Bun's transpiler prints it, so that comments (line, block and
+// inside template interpolations) are gone and string, template and regex
+// literals stay intact; for .astro only the --- frontmatter is transpiled and
+// the template body is kept as written. Type-only imports are turned into
+// plain imports first, because the transpiler drops them and they still pull
+// code from outside the repository. Source the transpiler rejects is measured
+// as written (measure-only, decision 0173). `masked` blanks string and
+// template contents for bracket matching (cwdRelativeArgument).
+export function transpiledSource(text, extension) {
+  const raw = String(text);
+  let code = raw;
+  const frontmatter = extension === ".astro" ? /^(\s*---\r?\n)([\s\S]*?)(\r?\n---)/.exec(raw) : null;
+  try {
+    const loader = TRANSPILER_LOADERS.get(extension) ?? "tsx";
+    if (!transpilers.has(loader)) transpilers.set(loader, new Bun.Transpiler({ loader }));
+    const transpile = (source) => transpilers.get(loader).transformSync(keepTypeImports(source));
+    if (extension !== ".astro") code = transpile(raw);
+    else if (frontmatter) {
+      code = `${frontmatter[1]}${transpile(frontmatter[2])}${raw.slice(frontmatter.index + frontmatter[1].length + frontmatter[2].length)}`;
     }
-    if (character === "/" && next === "*") {
-      const close = source.indexOf("*/", index + 2);
-      if (close >= 0) {
-        while (index < close + 2) blankBoth(source[index++]);
-        continue;
-      }
-    }
-    if (character === "\"" || character === "'" || character === "`") {
-      keep(character);
-      index += 1;
-      while (index < source.length && source[index] !== character) {
-        if (character !== "`" && source[index] === "\n") break;
-        if (source[index] === "\\" && index + 1 < source.length) literal(source[index++]);
-        literal(source[index++]);
-      }
-      if (source[index] === character) keep(source[index++]);
-      previous = character;
-      continue;
-    }
-    if (character === "/" && regexMayStart(previous, code)) {
-      const close = regexLiteralEnd(source, index);
-      if (close > index) {
-        keep(character);
-        index += 1;
-        while (index < close) literal(source[index++]);
-        keep(source[index++]);
-        previous = "/";
-        continue;
-      }
-    }
-    keep(character);
-    if (!/\s/.test(character)) previous = character;
-    index += 1;
+  } catch {
+    code = raw;
   }
-  return { code: code.join(""), masked: masked.join("") };
+  const masked = code.replace(
+    /"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\[\s\S]|[^`\\])*`/g,
+    (literal) => `${literal[0]}${literal.slice(1, -1).replace(/[^\n]/g, " ")}${literal.at(-1)}`,
+  );
+  return { code, masked };
 }
 
-function regexMayStart(previous, code) {
-  if (previous === "" || /[(,=:[!&|?{};+\-*%<>~^]/.test(previous)) return true;
-  if (!/[\w$]/.test(previous)) return false;
-  const word = /([A-Za-z_$][\w$]*)\s*$/.exec(code.slice(-40).join(""))?.[1];
-  return word !== undefined && REGEX_PRECEDING_WORDS.has(word);
-}
-
-// Index of the closing / of a regex literal starting at `start`, or -1 when
-// the line ends first (then it was a division).
-function regexLiteralEnd(source, start) {
-  let inClass = false;
-  for (let index = start + 1; index < source.length; index += 1) {
-    const character = source[index];
-    if (character === "\n") return -1;
-    if (character === "\\") {
-      index += 1;
-      continue;
-    }
-    if (character === "[") inClass = true;
-    else if (character === "]") inClass = false;
-    else if (character === "/" && !inClass) return index;
-  }
-  return -1;
+function keepTypeImports(source) {
+  return source
+    .replace(/\b(import|export)\s+type\s+(?=\{[^}]*\}\s*from\b|\*|[A-Za-z_$][\w$]*\s+from\b)/g, "$1 ")
+    .replace(/\bimport\s*\{[^}]*\}\s*from\b/g, (statement) => statement.replace(/([{,]\s*)type\s+(?=[A-Za-z_$])/g, "$1"));
 }
 
 // One rule for every path out of the Module, whichever syntax names it. An

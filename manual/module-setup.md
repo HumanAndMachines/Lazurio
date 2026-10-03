@@ -187,7 +187,9 @@ nese sekci `standard` se stabilním seznamem třinácti kontrol v pořadí
 - `MS-09` posuzuje importy i relativní cesty zapsané ve zdrojích
   (`import.meta.glob`, `resolve(import.meta.dirname, "…")`,
   `new URL("…", import.meta.url)`) vůči adresáři souboru; cesty jen
-  v komentářích nepočítá a cestu začínající `./` normalizuje. Cesta, která je
+  v komentářích nepočítá (zdroj nejdřív projde transpilerem Bunu, u `.astro`
+  jen frontmatter; zdroj, který transpiler odmítne, měří tak, jak je) a cestu
+  začínající `./` normalizuje. Cesta, která je
   prvním argumentem volání bez kotvy na soubor (`readFile("../…")`,
   `resolve("../…")`), se posuzuje i vůči kořeni App, protože ji takové API
   řeší vůči pracovnímu adresáři procesu. Cesta do `../<slug>/` projde jen

@@ -9,7 +9,7 @@ import {
   devScriptFindings,
   evaluateModuleStandard,
   legacyRuntimeReads,
-  stripCommentsAndMask,
+  transpiledSource,
 } from "./module-standard-lib.mjs";
 import { readRequiredBunVersion } from "./core/toolchain-lib.mjs";
 import { validateAgainstSchema } from "./runtime/json-schema-mini.mjs";
@@ -565,23 +565,62 @@ test("MS-09 ignores paths named only in comments and keeps code after // inside 
   ]);
 });
 
-test("stripCommentsAndMask blanks comments only and keeps the source length", () => {
-  const source = [
-    "const url = \"https://example.com//x\"; // comment \"../a\"",
-    "const glob = \"src/**/*.ts\"; /* block",
-    "comment */ const tail = `a//b`;",
-    "const unterminated = 1 /* no end",
-  ].join("\n");
-  const { code, masked } = stripCommentsAndMask(source);
-  expect(code.length).toBe(source.length);
-  expect(masked.length).toBe(source.length);
-  expect(code.split("\n")).toEqual([
-    "const url = \"https://example.com//x\";                  ",
-    "const glob = \"src/**/*.ts\";         ",
-    "           const tail = `a//b`;",
-    "const unterminated = 1 /* no end",
+test("MS-09 does not read a path in a comment inside a template interpolation", async () => {
+  const fixture = await conformantFixture();
+  await writeText(
+    join(fixture.appRoot, "src", "probe.ts"),
+    [
+      "const id = 1;",
+      "export const message = `${id /* example only: \"../../../../pricebook/db/prices.json\" */}`;",
+      "export const read = `${/* \"../../../../pricebook/db/note.json\" */ new URL(\"../../../../deals/db/deals.json\", import.meta.url)}`;",
+    ].join("\n"),
+  );
+  expect(check(await setupModule(fixture), "MS-09").details).toEqual([
+    "app/v1/src/probe.ts: cesta ../../../../deals/db/deals.json čte Modul deals, který App nedeklaruje v lazurio.runtime.required_module_slots",
   ]);
-  expect(masked.split("\n")[0]).toBe(`const url = "${" ".repeat(22)}";${" ".repeat(18)}`);
+});
+
+test("MS-09 still sees type-only imports the transpiler would drop", async () => {
+  const fixture = await conformantFixture();
+  await writeText(
+    join(fixture.appRoot, "src", "types.ts"),
+    [
+      "import type { Price } from \"../../../../pricebook/app/v1/src/price.ts\";",
+      "import { type Deal } from \"../../../../deals/app/v1/src/deal.ts\";",
+      "// import type { Old } from \"../../../../deals/app/v1/src/old.ts\";",
+      "export type Pair = [Price, Deal];",
+    ].join("\n"),
+  );
+  expect(check(await setupModule(fixture), "MS-09").details).toEqual([
+    "app/v1/src/types.ts: import ../../../../pricebook/app/v1/src/price.ts míří mimo repo Modulu",
+    "app/v1/src/types.ts: import ../../../../deals/app/v1/src/deal.ts míří mimo repo Modulu",
+  ]);
+});
+
+test("transpiledSource drops comments, keeps literals and falls back to the source", () => {
+  const source = [
+    "// comment \"../../../x.json\"",
+    "const a = `t ${/* \"../../../y.json\" */ \"../z.json\"} https://e.com/a`;",
+    "const b = /\\/\\//.test(a) ? \"../ok.json\" : readFile(\"../../../w.json\");",
+    "/* block \"../../../v.json\" */ export const c: string = a + b;",
+  ].join("\n");
+  const { code, masked } = transpiledSource(source, ".ts");
+  expect(code).not.toContain("x.json");
+  expect(code).not.toContain("y.json");
+  expect(code).not.toContain("v.json");
+  for (const kept of ["\"../z.json\"", "https://e.com/a", "/\\/\\//", "\"../ok.json\"", "readFile(\"../../../w.json\")"]) {
+    expect(code).toContain(kept);
+  }
+  expect(masked.length).toBe(code.length);
+  expect(masked).toContain("readFile(\"" + " ".repeat("../../../w.json".length) + "\")");
+
+  const astro = "---\n// \"../../../x.json\"\nconst posts = import.meta.glob(\"../../content/*.md\");\n---\n<p>// kept as written</p>\n";
+  const astroCode = transpiledSource(astro, ".astro").code;
+  expect(astroCode).not.toContain("x.json");
+  expect(astroCode).toContain("import.meta.glob(\"../../content/*.md\")");
+  expect(astroCode.endsWith("\n---\n<p>// kept as written</p>\n")).toBe(true);
+
+  expect(transpiledSource("const = \"../../../x.json\"; // broken", ".ts").code).toBe("const = \"../../../x.json\"; // broken");
 });
 
 test("a sibling App address derived from the own external origin needs nothing from the checker", async () => {
