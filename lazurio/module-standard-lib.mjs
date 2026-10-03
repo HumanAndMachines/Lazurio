@@ -546,19 +546,19 @@ const BUN_VALUE_OPTIONS = new Set([
 ]);
 
 /**
- * Measures every `bun` invocation of one command. Bun reads its own options
- * only before the entry file or script name (after `bun` or after `bun run`);
- * anything after the entry is an argument of the script. Returns `missing`,
- * `after-entry` (the flag only follows the entry) and `env-file` (an explicit
- * --env-file, which Bun loads even with --no-env-file).
+ * The one reading of `bun` invocations in a command. Bun takes its own
+ * options only before the entry file or script name: after `bun` and after
+ * `bun run`; options in BUN_VALUE_OPTIONS consume the next token as their
+ * value. The first other token is the entry (a file or a package script);
+ * everything after it belongs to the script. MS-07 and the start-path
+ * script chain both read invocations through this function.
  */
-export function bunEnvFileFindings(command) {
+export function bunInvocations(command) {
   const tokens = String(command ?? "").match(/"(?:[^"\\]|\\.)*"|'[^']*'|\S+/g) ?? [];
-  const findings = [];
+  const invocations = [];
   tokens.forEach((token, start) => {
     if (token !== "bun") return;
-    let noEnvFile = false;
-    let envFile = false;
+    const options = [];
     let sawRun = false;
     let index = start + 1;
     while (index < tokens.length) {
@@ -570,15 +570,30 @@ export function bunEnvFileFindings(command) {
       }
       if (!current.startsWith("-")) break;
       const name = current.split("=", 1)[0];
-      if (name === "--no-env-file") noEnvFile = true;
-      if (name === "--env-file") envFile = true;
+      options.push(name);
       index += BUN_VALUE_OPTIONS.has(name) && !current.includes("=") ? 2 : 1;
     }
-    if (!noEnvFile) {
-      findings.push(tokens.slice(index + 1).includes("--no-env-file") ? "after-entry" : "missing");
-    }
-    if (envFile) findings.push("env-file");
+    invocations.push({
+      options,
+      entry: index < tokens.length ? tokens[index] : null,
+      args: tokens.slice(index + 1),
+    });
   });
+  return invocations;
+}
+
+/**
+ * MS-07 findings for every `bun` invocation of one command: `missing`,
+ * `after-entry` (the flag only follows the entry, so Bun passes it to the
+ * script) and `env-file` (an explicit --env-file, which Bun loads even with
+ * --no-env-file).
+ */
+export function bunEnvFileFindings(command) {
+  const findings = [];
+  for (const { options, args } of bunInvocations(command)) {
+    if (!options.includes("--no-env-file")) findings.push(args.includes("--no-env-file") ? "after-entry" : "missing");
+    if (options.includes("--env-file")) findings.push("env-file");
+  }
   return findings;
 }
 
@@ -645,10 +660,12 @@ function scriptChain(scripts, entrypoint) {
     visited.add(name);
     const command = scripts[name];
     commands.push(command);
-    const option = String.raw`\s+--?[A-Za-z][\w-]*(?:=\S+)?`;
-    const invocation = new RegExp(String.raw`\b(?:bun|npm|pnpm|yarn)(?:${option})*\s+(?:run(?:${option})*\s+)?([A-Za-z0-9:_][A-Za-z0-9:_-]*)\b`, "g");
-    for (const match of command.matchAll(invocation)) {
-      if (match[1] !== name && typeof scripts[match[1]] === "string") visit(match[1]);
+    const names = [
+      ...bunInvocations(command).map(({ entry }) => entry),
+      ...[...command.matchAll(/\b(?:npm|pnpm|yarn)\s+(?:run\s+)?([A-Za-z0-9:_-]+)\b/g)].map((match) => match[1]),
+    ];
+    for (const next of names) {
+      if (next !== null && next !== name && typeof scripts[next] === "string") visit(next);
     }
   };
   visit(entrypoint);

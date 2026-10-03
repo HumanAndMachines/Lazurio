@@ -7,6 +7,7 @@ import { moduleSetupExitCode, setupModule } from "./module-setup-lib.mjs";
 import {
   MODULE_STANDARD_CHECKS,
   bunEnvFileFindings,
+  bunInvocations,
   devScriptFindings,
   evaluateModuleStandard,
   legacyRuntimeReads,
@@ -372,6 +373,25 @@ test("MS-07 requires --no-env-file on every Bun invocation of the start path (#4
   });
   expect(check(await setupModule(afterRunFlagged), "MS-07")).toMatchObject({ status: "pass", details: [] });
 
+  // A value-taking option before the script name consumes its value; the
+  // chain still reaches `serve` (one tokenizer for MS-07 and the chain).
+  const valueOption = await conformantFixture({
+    mutatePackage: (pkg) => {
+      pkg.scripts.dev = "bun run --no-env-file --cwd . serve";
+      pkg.scripts.serve = "bun src/server.ts";
+    },
+  });
+  expect(check(await setupModule(valueOption), "MS-07").details).toEqual([
+    "app/v1/package.json: dev spouští Bun bez --no-env-file: bun src/server.ts",
+  ]);
+  const valueOptionFlagged = await conformantFixture({
+    mutatePackage: (pkg) => {
+      pkg.scripts.dev = "bun run --no-env-file --cwd . serve";
+      pkg.scripts.serve = "bun --no-env-file src/server.ts";
+    },
+  });
+  expect(check(await setupModule(valueOptionFlagged), "MS-07")).toMatchObject({ status: "pass", details: [] });
+
   // Bun passes options after the entry to the script: the flag there is no flag.
   const late = await conformantFixture({ mutatePackage: (pkg) => { pkg.scripts.dev = "bun run src/server.ts --no-env-file"; } });
   expect(check(await setupModule(late), "MS-07").details).toEqual([
@@ -399,6 +419,9 @@ test("MS-07 reads Bun options only before the entry, after `bun` or after `bun r
     ["bun run --no-env-file src/server.ts", []],
     ["bun --no-env-file ./node_modules/vite/bin/vite.js --host \"$LAZURIO_RUNTIME_LISTENER_APP_HOST\"", []],
     ["bun --cwd app --no-env-file run src/server.ts", []],
+    ["bun run --no-env-file --cwd . serve", []],
+    ["bun run --no-env-file --cwd=. serve", []],
+    ["bun run --cwd . serve", ["missing"]],
     ["bun run src/server.ts", ["missing"]],
     ["bun run src/server.ts --no-env-file", ["after-entry"]],
     ["bun src/server.ts --no-env-file --env-file x.conf", ["after-entry"]],
@@ -410,6 +433,12 @@ test("MS-07 reads Bun options only before the entry, after `bun` or after `bun r
   ]) {
     expect([command, bunEnvFileFindings(command)]).toEqual([command, findings]);
   }
+  for (const command of ["bun run --no-env-file --cwd . serve", "bun run --no-env-file --cwd=. serve"]) {
+    expect(bunInvocations(command)).toEqual([{ options: ["--no-env-file", "--cwd"], entry: "serve", args: [] }]);
+  }
+  expect(bunInvocations("bun --no-env-file src/server.ts --port 1")).toEqual([
+    { options: ["--no-env-file"], entry: "src/server.ts", args: ["--port", "1"] },
+  ]);
 });
 
 test("lazurio.runtime.secrets declares names only; MS-03 warns until the Launchpad reads them (decision 0177)", async () => {
