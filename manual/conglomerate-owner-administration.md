@@ -31,8 +31,9 @@ Vazbu nové IP či reenrollmentu nikdy neopravuj automatickým širokým grantem
 Mapa Conglomerate v Dashboardu je jen pohled. Skládá infra Ownera, důkazy
 apply a živý stav tailnetu, který Conglomerate Host posílá do Dashboardu sám;
 klíč Headscale host neopouští. Mapa nic neuděluje. Přístup se mění vždy pull
-requestem do infra se standardním review a apply. Ownera zařízení (jeho GitHub
-ID) deklaruje enrollment, existující zařízení se doplní pull requestem a každý
+requestem do infra se standardním review a apply. Ownera zařízení člověka určuje
+jeho přihlášení Lazurio účtem do Headscale (OIDC, vázané na GitHub ID); infra
+ho ověřuje, ale nevytváří, existující zařízení se doplní adopcí (0184) a každý
 záznam přístupu nese GitHub ID osoby.
 
 SSH konfiguraci generuje Lazurio: standardní OpenSSH `~/.ssh/lazurio/config`
