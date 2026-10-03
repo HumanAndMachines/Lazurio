@@ -11,6 +11,7 @@ import {
   devScriptFindings,
   evaluateModuleStandard,
   legacyRuntimeReads,
+  transpiledSource,
 } from "./module-standard-lib.mjs";
 import { readRequiredBunVersion } from "./core/toolchain-lib.mjs";
 import { validateAgainstSchema } from "./runtime/json-schema-mini.mjs";
@@ -527,6 +528,269 @@ test("MS-09 rejects imports and file dependencies outside the Module repository"
     "app/v1/src/shared.ts: import ../../../../deals/app/v1/src/y.ts míří mimo repo Modulu",
     "app/v1/package.json: závislost contracts ukazuje mimo repo (file:../../../../launchpad/contracts)",
   ]);
+});
+
+// Decision 0176: Modules live side by side in workspace/. An App reads a
+// sibling it declares in lazurio.runtime.required_module_slots as ../<slug>/
+// from its Module root (data and read models only); everything else outside
+// the repository stays a finding.
+const siblingReads = [
+  "import prices from \"../../../../pricebook/db/prices.json\";",
+  "const records = import.meta.glob(\"../../../../pricebook/db/records/*.json\", { eager: true });",
+  "const readModel = resolve(import.meta.dirname, \"../../../../pricebook/generated/read-model.json\");",
+  "export { prices, records, readModel };",
+].join("\n");
+
+test("MS-09 accepts data reads of a declared sibling Module under ../<slug>/", async () => {
+  for (const slot of ["workspace/pricebook", "workspace/pricebook/db"]) {
+    const fixture = await conformantFixture({
+      mutatePackage: (pkg) => { pkg.lazurio.runtime.required_module_slots = [slot]; },
+    });
+    await writeText(join(fixture.appRoot, "src", "prices.ts"), `import { resolve } from "node:path";\n${siblingReads}\n`);
+    runGit(fixture.moduleRoot, ["add", "."]);
+
+    const report = await setupModule(fixture);
+
+    expect(check(report, "MS-09")).toMatchObject({ status: "pass", details: [] });
+    expect(check(report, "MS-06").status).toBe("pass");
+    expect(report.status).toBe("current");
+  }
+});
+
+test("MS-09 fails reads of an undeclared sibling, code of a declared sibling and any other escape", async () => {
+  const undeclared = await conformantFixture();
+  await writeText(join(undeclared.appRoot, "src", "prices.ts"), `import { resolve } from "node:path";\n${siblingReads}\n`);
+  expect(check(await setupModule(undeclared), "MS-09")).toMatchObject({
+    status: "fail",
+    details: [
+      "app/v1/src/prices.ts: import ../../../../pricebook/db/prices.json čte Modul pricebook, který App nedeklaruje v lazurio.runtime.required_module_slots",
+      "app/v1/src/prices.ts: cesta ../../../../pricebook/db/records/*.json čte Modul pricebook, který App nedeklaruje v lazurio.runtime.required_module_slots",
+      "app/v1/src/prices.ts: cesta ../../../../pricebook/generated/read-model.json čte Modul pricebook, který App nedeklaruje v lazurio.runtime.required_module_slots",
+    ],
+  });
+
+  const declared = await conformantFixture({
+    mutatePackage: (pkg) => { pkg.lazurio.runtime.required_module_slots = ["workspace/pricebook"]; },
+  });
+  await writeText(
+    join(declared.appRoot, "src", "escape.ts"),
+    [
+      "import { price } from \"../../../../pricebook/app/v1/src/price.ts\";",
+      "import { helper } from \"../../../../pricebook/src/helper\";",
+      "const views = import.meta.glob(\"../../../../pricebook/app/v1/src/views/*.tsx\");",
+      "const other = new URL(\"../../../../deals/db/deals.json\", import.meta.url);",
+      "const organization = resolve(import.meta.dirname, \"../../../../../modules.manifest.json\");",
+      "export { price, helper, views, other, organization };",
+    ].join("\n"),
+  );
+  expect(check(await setupModule(declared), "MS-09").details).toEqual([
+    "app/v1/src/escape.ts: import ../../../../pricebook/app/v1/src/price.ts načítá kód Modulu pricebook; ze sousedního Modulu se čtou jen data",
+    "app/v1/src/escape.ts: import ../../../../pricebook/src/helper načítá kód Modulu pricebook; ze sousedního Modulu se čtou jen data",
+    "app/v1/src/escape.ts: cesta ../../../../pricebook/app/v1/src/views/*.tsx načítá kód Modulu pricebook; ze sousedního Modulu se čtou jen data",
+    "app/v1/src/escape.ts: cesta ../../../../deals/db/deals.json čte Modul deals, který App nedeklaruje v lazurio.runtime.required_module_slots",
+    "app/v1/src/escape.ts: cesta ../../../../../modules.manifest.json míří mimo repo Modulu",
+  ]);
+});
+
+test("MS-06 fails reads of a sibling's manifests even when the sibling is declared", async () => {
+  const fixture = await conformantFixture({
+    mutatePackage: (pkg) => { pkg.lazurio.runtime.required_module_slots = ["workspace/pricebook"]; },
+  });
+  await writeText(
+    join(fixture.appRoot, "src", "links.ts"),
+    [
+      "import { readFile } from \"node:fs/promises\";",
+      "const lease = await readFile(new URL(\"../../../../pricebook/lazurio.module.json\", import.meta.url), \"utf8\");",
+      "const runtime = await readFile(new URL(\"../../../../pricebook/app/v1/package.json\", import.meta.url), \"utf8\");",
+      "export { lease, runtime };",
+    ].join("\n"),
+  );
+
+  const report = await setupModule(fixture);
+
+  expect(check(report, "MS-06").details).toEqual([
+    "app/v1/src/links.ts: čte lazurio.module.json (lease soubor)",
+    "app/v1/src/links.ts: čte package.json Modulu pricebook (runtime a lease souseda)",
+  ]);
+  expect(check(report, "MS-09").status).toBe("pass");
+});
+
+test("MS-09 judges a cwd-relative path from the App root as well as from the file", async () => {
+  const probe = [
+    "import { readFile } from \"node:fs/promises\";",
+    "import { resolve } from \"node:path\";",
+    "const prices = await readFile(\"../../../deals/db/prices.json\", \"utf8\");",
+    "const multi = resolve(",
+    "  import.meta.dirname,",
+    "  \"../../../../deals/db/multi.json\",",
+    ");",
+    "export { prices, multi };",
+  ].join("\n");
+  const undeclared = await conformantFixture();
+  await writeText(join(undeclared.appRoot, "src", "probe.ts"), probe);
+  expect(check(await setupModule(undeclared), "MS-09").details).toEqual([
+    "app/v1/src/probe.ts: cesta ../../../deals/db/prices.json čte Modul deals, který App nedeklaruje v lazurio.runtime.required_module_slots (vůči kořeni App app/v1, pracovnímu adresáři procesu)",
+    "app/v1/src/probe.ts: cesta ../../../../deals/db/multi.json čte Modul deals, který App nedeklaruje v lazurio.runtime.required_module_slots",
+  ]);
+
+  const declared = await conformantFixture({
+    mutatePackage: (pkg) => { pkg.lazurio.runtime.required_module_slots = ["workspace/deals/db"]; },
+  });
+  await writeText(join(declared.appRoot, "src", "probe.ts"), probe);
+  expect(check(await setupModule(declared), "MS-09")).toMatchObject({ status: "pass", details: [] });
+});
+
+test("MS-09 normalizes relative paths that start with ./", async () => {
+  const fixture = await conformantFixture();
+  await writeText(
+    join(fixture.appRoot, "src", "probe.ts"),
+    [
+      "const deals = new URL(\"./../../../../deals/db/deals.json\", import.meta.url);",
+      "const local = new URL(\"./../local.json\", import.meta.url);",
+      "export { deals, local };",
+    ].join("\n"),
+  );
+  expect(check(await setupModule(fixture), "MS-09").details).toEqual([
+    "app/v1/src/probe.ts: cesta ./../../../../deals/db/deals.json čte Modul deals, který App nedeklaruje v lazurio.runtime.required_module_slots",
+  ]);
+});
+
+test("MS-09 allows a declared sibling only under its db/ and generated/ trees", async () => {
+  const fixture = await conformantFixture({
+    mutatePackage: (pkg) => { pkg.lazurio.runtime.required_module_slots = ["workspace/pricebook"]; },
+  });
+  await writeText(
+    join(fixture.appRoot, "src", "probe.ts"),
+    [
+      "const secrets = new URL(\"../../../../pricebook/.env\", import.meta.url);",
+      "const config = new URL(\"../../../../pricebook/app/v1/config.toml\", import.meta.url);",
+      "const readme = new URL(\"../../../../pricebook/README.md\", import.meta.url);",
+      "const hidden = new URL(\"../../../../pricebook/db/.env.local\", import.meta.url);",
+      "const whole = new URL(\"../../../../pricebook\", import.meta.url);",
+      "const data = new URL(\"../../../../pricebook/db/records/\", import.meta.url);",
+      "const model = new URL(\"../../../../pricebook/generated/v2/prices.json\", import.meta.url);",
+      "export { secrets, config, readme, hidden, whole, data, model };",
+    ].join("\n"),
+  );
+  const only = "ze souseda se čte jen db/ a generated/";
+  expect(check(await setupModule(fixture), "MS-09").details).toEqual([
+    `app/v1/src/probe.ts: cesta ../../../../pricebook/.env čte Modul pricebook mimo jeho data; ${only}`,
+    `app/v1/src/probe.ts: cesta ../../../../pricebook/app/v1/config.toml čte Modul pricebook mimo jeho data; ${only}`,
+    `app/v1/src/probe.ts: cesta ../../../../pricebook/README.md čte Modul pricebook mimo jeho data; ${only}`,
+    `app/v1/src/probe.ts: cesta ../../../../pricebook/db/.env.local čte Modul pricebook mimo jeho data; ${only}`,
+    `app/v1/src/probe.ts: cesta ../../../../pricebook čte Modul pricebook mimo jeho data; ${only}`,
+  ]);
+});
+
+test("MS-09 ignores paths named only in comments and keeps code after // inside literals", async () => {
+  const fixture = await conformantFixture();
+  await writeText(
+    join(fixture.appRoot, "src", "probe.ts"),
+    [
+      "import { resolve } from \"node:path\";",
+      "// Example only: \"../../../../../modules.manifest.json\"",
+      "/* import { price } from \"../../../../pricebook/app/v1/src/price.ts\"; */",
+      "const local = resolve(import.meta.dirname, \"../../../src/local.json\"); // in-Module: \"../../../../deals/db/x.json\"",
+      "const api = \"https://example.com/api\"; const leak = new URL(\"../../../../deals/db/url.json\", import.meta.url);",
+      "const slashes = /\\/\\//g; const regexLeak = new URL(\"../../../../deals/db/regex.json\", import.meta.url);",
+      "export { local, api, leak, slashes, regexLeak };",
+    ].join("\n"),
+  );
+  expect(check(await setupModule(fixture), "MS-09").details).toEqual([
+    "app/v1/src/probe.ts: cesta ../../../../deals/db/url.json čte Modul deals, který App nedeklaruje v lazurio.runtime.required_module_slots",
+    "app/v1/src/probe.ts: cesta ../../../../deals/db/regex.json čte Modul deals, který App nedeklaruje v lazurio.runtime.required_module_slots",
+  ]);
+});
+
+test("MS-09 does not read a path in a comment inside a template interpolation", async () => {
+  const fixture = await conformantFixture();
+  await writeText(
+    join(fixture.appRoot, "src", "probe.ts"),
+    [
+      "const id = 1;",
+      "export const message = `${id /* example only: \"../../../../pricebook/db/prices.json\" */}`;",
+      "export const read = `${/* \"../../../../pricebook/db/note.json\" */ new URL(\"../../../../deals/db/deals.json\", import.meta.url)}`;",
+    ].join("\n"),
+  );
+  expect(check(await setupModule(fixture), "MS-09").details).toEqual([
+    "app/v1/src/probe.ts: cesta ../../../../deals/db/deals.json čte Modul deals, který App nedeklaruje v lazurio.runtime.required_module_slots",
+  ]);
+});
+
+test("MS-09 judges a cwd-relative read inside a template interpolation from the App root", async () => {
+  const probe = [
+    "import { readFileSync } from \"node:fs\";",
+    "export const value = `${readFileSync(\"../../../deals/db/prices.json\", \"utf8\")}`;",
+  ].join("\n");
+  const undeclared = await conformantFixture();
+  await writeText(join(undeclared.appRoot, "src", "probe.ts"), probe);
+  expect(check(await setupModule(undeclared), "MS-09").details).toEqual([
+    "app/v1/src/probe.ts: cesta ../../../deals/db/prices.json čte Modul deals, který App nedeklaruje v lazurio.runtime.required_module_slots (vůči kořeni App app/v1, pracovnímu adresáři procesu)",
+  ]);
+
+  const declared = await conformantFixture({
+    mutatePackage: (pkg) => { pkg.lazurio.runtime.required_module_slots = ["workspace/deals"]; },
+  });
+  await writeText(join(declared.appRoot, "src", "probe.ts"), probe);
+  expect(check(await setupModule(declared), "MS-09")).toMatchObject({ status: "pass", details: [] });
+});
+
+test("MS-09 still sees type-only imports the transpiler would drop", async () => {
+  const fixture = await conformantFixture();
+  await writeText(
+    join(fixture.appRoot, "src", "types.ts"),
+    [
+      "import type { Price } from \"../../../../pricebook/app/v1/src/price.ts\";",
+      "import { type Deal } from \"../../../../deals/app/v1/src/deal.ts\";",
+      "// import type { Old } from \"../../../../deals/app/v1/src/old.ts\";",
+      "export type Pair = [Price, Deal];",
+    ].join("\n"),
+  );
+  expect(check(await setupModule(fixture), "MS-09").details).toEqual([
+    "app/v1/src/types.ts: import ../../../../pricebook/app/v1/src/price.ts míří mimo repo Modulu",
+    "app/v1/src/types.ts: import ../../../../deals/app/v1/src/deal.ts míří mimo repo Modulu",
+  ]);
+});
+
+test("transpiledSource drops comments, keeps literals and falls back to the source", () => {
+  const source = [
+    "// comment \"../../../x.json\"",
+    "const a = `t ${/* \"../../../y.json\" */ \"../z.json\"} https://e.com/a`;",
+    "const b = /\\/\\//.test(a) ? \"../ok.json\" : readFile(\"../../../w.json\");",
+    "/* block \"../../../v.json\" */ export const c: string = a + b;",
+  ].join("\n");
+  const { code, masked } = transpiledSource(source, ".ts");
+  expect(code).not.toContain("x.json");
+  expect(code).not.toContain("y.json");
+  expect(code).not.toContain("v.json");
+  for (const kept of ["\"../z.json\"", "https://e.com/a", "/\\/\\//", "\"../ok.json\"", "readFile(\"../../../w.json\")"]) {
+    expect(code).toContain(kept);
+  }
+  expect(masked.length).toBe(code.length);
+  expect(masked).toContain("readFile(\"" + " ".repeat("../../../w.json".length) + "\")");
+
+  const astro = "---\n// \"../../../x.json\"\nconst posts = import.meta.glob(\"../../content/*.md\");\n---\n<p>// kept as written</p>\n";
+  const astroCode = transpiledSource(astro, ".astro").code;
+  expect(astroCode).not.toContain("x.json");
+  expect(astroCode).toContain("import.meta.glob(\"../../content/*.md\")");
+  expect(astroCode.endsWith("\n---\n<p>// kept as written</p>\n")).toBe(true);
+
+  expect(transpiledSource("const = \"../../../x.json\"; // broken", ".ts").code).toBe("const = \"../../../x.json\"; // broken");
+});
+
+test("a sibling App address derived from the own external origin needs nothing from the checker", async () => {
+  const fixture = await conformantFixture();
+  await writeText(
+    join(fixture.appRoot, "src", "sibling-origin.ts"),
+    [
+      "const own = new URL(process.env.LAZURIO_RUNTIME_LISTENER_APP_EXTERNAL_ORIGIN ?? \"\");",
+      "const [, ...rest] = own.hostname.split(\".\");",
+      "export const pricebookOrigin = `${own.protocol}//${[\"pricebook\", ...rest].join(\".\")}`;",
+    ].join("\n"),
+  );
+  runGit(fixture.moduleRoot, ["add", "."]);
+
+  expect((await setupModule(fixture)).status).toBe("current");
 });
 
 test("MS-10 requires released tags for repository-db and module-kit", async () => {

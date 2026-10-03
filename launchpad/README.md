@@ -1146,6 +1146,11 @@ absolute Node and T3 CLI paths, followed by `auth pairing create --base-dir
 from the request. With both set, the top bar shows **Chat**; setting only one
 is a start-up error, and a local profile refuses the pair entirely.
 
+> **Legacy navigation.** The top bar belongs to this resident Launchpad. On
+> hosted Environments the Platform Launchpad replaces it (decision 0167); the
+> target navigation has no top bar and puts **Chat** in the app switch
+> Chat · Apps · Automate at the top of the left column (decision 0179).
+
 `POST /api/chat/pair` passes the shared mutation trust gate (same origin plus a
 gateway-revalidated session), runs the CLI without a shell with `--ttl 60s
 --label launchpad-chat --json` and returns `<T3 mount>pair#token=<token>`.
