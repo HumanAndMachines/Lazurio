@@ -654,8 +654,11 @@ organizace = jedna access hranice. Uvnitř Organizace:
   `organizations/<Org>/workspace/<modul>/`. Team je logická deklarace
   v manifestu, ne adresář; modul smí patřit do více Teamů (N:M, kanonicky
   `modules[].teams` / `module_slots[].teams`, legacy alias singulární
-  `workspace`). Deklarace je autorita (decisions 0021/0023/0041);
-  Launchpad podle ní Moduly neseskupuje ani neoznačuje (decision 0179).
+  `workspace`). Deklarace je autorita (decisions 0021/0023/0041).
+  Nasazený rezidentní Launchpad tohoto repa podle ní grupuje karty, dokud
+  ho nenahradí Launchpad LazurioPlatform (decision 0167). Ten cílově ukazuje
+  každý Modul jednou v sekci Workspace a podle Teamů neseskupuje ani
+  neoznačuje (decision 0179 s dodatkem z 2026-10-03, LazurioPlatform F32).
   Hostovaná jména aplikací určuje decision 0146:
   dílna (hostovaná VM) `<app>.<vm>.<org>.lazurio.io` jen z tailnetu,
   produkční workspace aplikace `<app>.<org>.lazurio.io`; starší hosted vzor
