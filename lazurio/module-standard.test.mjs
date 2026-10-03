@@ -383,7 +383,10 @@ test("lazurio.runtime.secrets declares names only; MS-03 warns until the Launchp
     const invalid = await conformantFixture({ mutatePackage: (pkg) => { pkg.lazurio.runtime.secrets = secrets; } });
     const invalidReport = await setupModule(invalid);
     expect(invalidReport).toMatchObject({ status: "action_required", reason: "runtime_contract_invalid", standard: null });
-    expect(JSON.stringify(invalidReport.issues)).toContain(`app/v1/package.json: lazurio.runtime.${message}`);
+    // The setup message carries the absolute package path, native separators included.
+    expect(invalidReport.issues.map((issue) => issue.message)).toEqual([
+      expect.stringContaining(`package.json: lazurio.runtime.${message}`),
+    ]);
   }
 });
 
