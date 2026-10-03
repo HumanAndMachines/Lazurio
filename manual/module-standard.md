@@ -138,12 +138,28 @@ z `PORT`. Starý pár `LAZURIO_RUNTIME_HOST/PORT` a `PORT` se nečtou.
 Vite/Astro dev servery přijmou vlastní host jen z `_EXTERNAL_ORIGIN`
 (`server.allowedHosts`); loopback vždy. Nikdy `--host 0.0.0.0`.
 
+**Adresa App sousedního Modulu** (decision 0176). Odkaz nebo volání na App
+deklarovaného sousedního Modulu (kap. 5) na témže Environmentu App odvodí
+z vlastní `LAZURIO_RUNTIME_LISTENER_<ID>_EXTERNAL_ORIGIN`: v hostname vymění
+první label (label vlastního Modulu) za label souseda, tedy
+`https://<soused>.<environment>.<org>.lazurio.io` podle decision 0146. Nikdy ji
+neskládá z manifestu, `package.json` ani leasu cizího Modulu. Brána obsluhuje
+jen výchozí App souseda. Kde proměnná chybí (Launchpad na workstation ji dnes
+nepředává a App běží na loopbacku), adresa souseda odvoditelná není: App
+odkaz nevykreslí a port nehádá.
+
 ### 4.3 Konfigurace a tajemství
 
 Konfigurace App = runtime env (F26 allowlist) + soubory commitnuté v repu
 (`config/*.json`, výchozí hodnoty). Tajemství nikdy nejsou v repu ani
 v `.env`; App si je bere z vaultu Environmentu (DEV-6631) nebo od uživatele
 v UI. Demo/offline režimy jsou samostatné skripty (`dev:demo`), ne start.
+
+Team, pod kterým Environment běží, není startovací brána (rozhodnutí
+2026-10-02): kdo smí Modul spustit, určuje manifest Organizace a GitHub
+granty, ne kontrola v App. Co App zapisuje jako jednající Team do auditní
+stopy, standard zatím neurčuje (decision 0176 bod 7,
+HumanAndMachines/Lazurio#467).
 
 ### 4.4 Připravenost, signály, ukončení
 
@@ -162,7 +178,24 @@ v UI. Demo/offline režimy jsou samostatné skripty (`dev:demo`), ne start.
 
 - App importuje jen ze svého repozitáře a z deklarovaných závislostí
   v `package.json`. **Zakázané**: `../../../launchpad/…`, `<org>/infra/…`,
-  `<org>/design-system/…`, jiný Modul (`../deals/app/…`), `file:` mimo repo.
+  `<org>/design-system/…`, kód jiného Modulu (`../deals/app/…`), `file:`
+  mimo repo.
+- **Sousední Modul** (decision 0176). Moduly Organizace leží vždy vedle sebe
+  ve `workspace/`. Potřebuje-li App data jiného Modulu, deklaruje ho
+  v `lazurio.runtime.required_module_slots` svého `package.json` jako
+  Organization-relativní slot (`workspace/<slug>` nebo jeho datový mount
+  `workspace/<slug>/db`) a čte ho jedině jako `../<slug>/` od kořene svého
+  Modulu: jeho repository-db mount `db/` a generované read modely. To je
+  jediná dovolená cesta mimo repozitář, a jen ke čtení. Kód souseda se
+  neimportuje (bod výše) a jeho manifesty (`lazurio.module.json`,
+  `package.json`) App nečte, stejně jako vlastní `lazurio.module.json`
+  (`MS-06`). Cesta se neskládá z `COMPANYASCODE_ORGANIZATION_ROOT`, absolutní
+  cesty ani přes symlink. Celý kontrakt je, že na Environmentu leží oba
+  Moduly vedle sebe: chybí-li deklarovaný soused vedle běžícího checkoutu
+  (není materializovaný, je `planned_slot`, nebo App běží z worktree, vedle
+  kterého neleží), hlásí to Launchpad a doctor jako nález připravenosti
+  (Modul tam není spustitelný) místo pádu App za běhu. Adresu App souseda
+  drží kap. 4.2.
 - Sdílené kontrakty Organizace (`launchpad/contracts/v1`,
   `launchpad/apps/shared`) se stanou **verzovaným balíčkem** vlastněným
   Organizací (repo `<Org>/workspace-contracts`, závislost `github:<Org>/workspace-contracts#v1.x.y`) nebo se vloží do Modulu, který je jediný používá.
@@ -294,10 +327,10 @@ volný port a přesun je ruční úprava manifestu v PR Modulu.
 | `MS-03` | `lazurio.runtime` s listenery a health; `dev_script` existuje |
 | `MS-04` | `lazurio.preparation` deklarované; `check_script` existuje; `runtime` chybí (= `bun`) nebo `uv`; `runtime: "bun"` zapsané explicitně je do W0-5 vada (Platforma ho odmítne); `prepare_script`/`check_script` nejsou npm lifecycle jména |
 | `MS-05` | `dev` skript je jednoprocesový: bez `&&`, `concurrently`, `build`, `npx`, `node`, `bunx`, `nvm`, inline `VAR=…` |
-| `MS-06` | žádné čtení `LAZURIO_RUNTIME_HOST`, `LAZURIO_RUNTIME_PORT`, `PORT`, `COMPANYASCODE_*`, lease souboru ze zdrojů App; port leasu není ve zdrojích App zapsaný natvrdo |
+| `MS-06` | žádné čtení `LAZURIO_RUNTIME_HOST`, `LAZURIO_RUNTIME_PORT`, `PORT`, `COMPANYASCODE_*`, lease souboru (`lazurio.module.json` kteréhokoli Modulu) ani `package.json` sousedního Modulu ze zdrojů App; port leasu není ve zdrojích App zapsaný natvrdo |
 | `MS-07` | žádné `.env*` na start cestě; žádné `dotenv` |
 | `MS-08` | TypeScript strict; žádné `.js/.mjs/.cjs` zdroje App (config frameworku v TS) |
-| `MS-09` | žádné importy mimo repo (`../` nad kořen Modulu, `file:` mimo repo, jiný Modul, `launchpad/`, `infra/`, `design-system/`) |
+| `MS-09` | žádné importy ani relativní cesty mimo repo (`../` nad kořen Modulu, `file:` mimo repo, kód jiného Modulu, `launchpad/`, `infra/`, `design-system/`); výjimkou je jen čtení dat sousedního Modulu v `../<slug>/`, který App deklaruje v `required_module_slots` (decision 0176) |
 | `MS-10` | závislost repository-db a module-kit připnutá na vydaný tag |
 | `MS-11` | žádné absolutní cesty na stroj, žádné symlinky vytvářené při startu, žádné `modules/` |
 | `MS-12` | `apps[]` odpovídá adresářům; nejvýše dvě generace App (výchozí a jedna předchozí nebo kandidátní) |

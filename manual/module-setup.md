@@ -184,6 +184,13 @@ nese sekci `standard` se stabilním seznamem třinácti kontrol v pořadí
   `node_modules`, `dist` a testů), jednou volají `git ls-files` kvůli
   commitnutému lockfilu. Nikdy nespouštějí skripty Modulu ani síť; `bun run
   check` a `bun test` spouští CI Modulu.
+- `MS-09` posuzuje importy i relativní cesty zapsané ve zdrojích
+  (`import.meta.glob`, `resolve(import.meta.dirname, "…")`,
+  `new URL("…", import.meta.url)`) vůči adresáři souboru. Cesta do
+  `../<slug>/` projde jen tehdy, když App souseda deklaruje
+  v `lazurio.runtime.required_module_slots` a čte jeho data, ne kód
+  (decision 0176). Cesty skládané až za běhu kontrola nevidí; hranici drží
+  standard a review.
 - `standard` je `null`, když setup skončí dřív na samotném Module kontraktu
   (například chybí pool nebo slot). Nejdřív oprav kontrakt.
 - `runtime` zůstává vyplněný, kdykoli je Module kontrakt platný, i když

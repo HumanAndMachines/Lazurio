@@ -392,6 +392,106 @@ test("MS-09 rejects imports and file dependencies outside the Module repository"
   ]);
 });
 
+// Decision 0176: Modules live side by side in workspace/. An App reads a
+// sibling it declares in lazurio.runtime.required_module_slots as ../<slug>/
+// from its Module root (data and read models only); everything else outside
+// the repository stays a finding.
+const siblingReads = [
+  "import prices from \"../../../../pricebook/db/prices.json\";",
+  "const records = import.meta.glob(\"../../../../pricebook/db/records/*.json\", { eager: true });",
+  "const readModel = resolve(import.meta.dirname, \"../../../../pricebook/generated/read-model.json\");",
+  "export { prices, records, readModel };",
+].join("\n");
+
+test("MS-09 accepts data reads of a declared sibling Module under ../<slug>/", async () => {
+  for (const slot of ["workspace/pricebook", "workspace/pricebook/db"]) {
+    const fixture = await conformantFixture({
+      mutatePackage: (pkg) => { pkg.lazurio.runtime.required_module_slots = [slot]; },
+    });
+    await writeText(join(fixture.appRoot, "src", "prices.ts"), `import { resolve } from "node:path";\n${siblingReads}\n`);
+    runGit(fixture.moduleRoot, ["add", "."]);
+
+    const report = await setupModule(fixture);
+
+    expect(check(report, "MS-09")).toMatchObject({ status: "pass", details: [] });
+    expect(check(report, "MS-06").status).toBe("pass");
+    expect(report.status).toBe("current");
+  }
+});
+
+test("MS-09 fails reads of an undeclared sibling, code of a declared sibling and any other escape", async () => {
+  const undeclared = await conformantFixture();
+  await writeText(join(undeclared.appRoot, "src", "prices.ts"), `import { resolve } from "node:path";\n${siblingReads}\n`);
+  expect(check(await setupModule(undeclared), "MS-09")).toMatchObject({
+    status: "fail",
+    details: [
+      "app/v1/src/prices.ts: import ../../../../pricebook/db/prices.json čte Modul pricebook, který App nedeklaruje v lazurio.runtime.required_module_slots",
+      "app/v1/src/prices.ts: cesta ../../../../pricebook/db/records/*.json čte Modul pricebook, který App nedeklaruje v lazurio.runtime.required_module_slots",
+      "app/v1/src/prices.ts: cesta ../../../../pricebook/generated/read-model.json čte Modul pricebook, který App nedeklaruje v lazurio.runtime.required_module_slots",
+    ],
+  });
+
+  const declared = await conformantFixture({
+    mutatePackage: (pkg) => { pkg.lazurio.runtime.required_module_slots = ["workspace/pricebook"]; },
+  });
+  await writeText(
+    join(declared.appRoot, "src", "escape.ts"),
+    [
+      "import { price } from \"../../../../pricebook/app/v1/src/price.ts\";",
+      "import { helper } from \"../../../../pricebook/src/helper\";",
+      "const views = import.meta.glob(\"../../../../pricebook/app/v1/src/views/*.tsx\");",
+      "const other = new URL(\"../../../../deals/db/deals.json\", import.meta.url);",
+      "const organization = resolve(import.meta.dirname, \"../../../../../modules.manifest.json\");",
+      "export { price, helper, views, other, organization };",
+    ].join("\n"),
+  );
+  expect(check(await setupModule(declared), "MS-09").details).toEqual([
+    "app/v1/src/escape.ts: import ../../../../pricebook/app/v1/src/price.ts načítá kód Modulu pricebook; ze sousedního Modulu se čtou jen data",
+    "app/v1/src/escape.ts: import ../../../../pricebook/src/helper načítá kód Modulu pricebook; ze sousedního Modulu se čtou jen data",
+    "app/v1/src/escape.ts: cesta ../../../../pricebook/app/v1/src/views/*.tsx načítá kód Modulu pricebook; ze sousedního Modulu se čtou jen data",
+    "app/v1/src/escape.ts: cesta ../../../../deals/db/deals.json čte Modul deals, který App nedeklaruje v lazurio.runtime.required_module_slots",
+    "app/v1/src/escape.ts: cesta ../../../../../modules.manifest.json míří mimo repo Modulu",
+  ]);
+});
+
+test("MS-06 fails reads of a sibling's manifests even when the sibling is declared", async () => {
+  const fixture = await conformantFixture({
+    mutatePackage: (pkg) => { pkg.lazurio.runtime.required_module_slots = ["workspace/pricebook"]; },
+  });
+  await writeText(
+    join(fixture.appRoot, "src", "links.ts"),
+    [
+      "import { readFile } from \"node:fs/promises\";",
+      "const lease = await readFile(new URL(\"../../../../pricebook/lazurio.module.json\", import.meta.url), \"utf8\");",
+      "const runtime = await readFile(new URL(\"../../../../pricebook/app/v1/package.json\", import.meta.url), \"utf8\");",
+      "export { lease, runtime };",
+    ].join("\n"),
+  );
+
+  const report = await setupModule(fixture);
+
+  expect(check(report, "MS-06").details).toEqual([
+    "app/v1/src/links.ts: čte lazurio.module.json (lease soubor)",
+    "app/v1/src/links.ts: čte package.json Modulu pricebook (runtime a lease souseda)",
+  ]);
+  expect(check(report, "MS-09").status).toBe("pass");
+});
+
+test("a sibling App address derived from the own external origin needs nothing from the checker", async () => {
+  const fixture = await conformantFixture();
+  await writeText(
+    join(fixture.appRoot, "src", "sibling-origin.ts"),
+    [
+      "const own = new URL(process.env.LAZURIO_RUNTIME_LISTENER_APP_EXTERNAL_ORIGIN ?? \"\");",
+      "const [, ...rest] = own.hostname.split(\".\");",
+      "export const pricebookOrigin = `${own.protocol}//${[\"pricebook\", ...rest].join(\".\")}`;",
+    ].join("\n"),
+  );
+  runGit(fixture.moduleRoot, ["add", "."]);
+
+  expect((await setupModule(fixture)).status).toBe("current");
+});
+
 test("MS-10 requires released tags for repository-db and module-kit", async () => {
   const fixture = await conformantFixture({
     mutatePackage: (pkg) => {

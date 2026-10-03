@@ -116,7 +116,18 @@ ani pro productionspace repa (decision 0041).
       žádné `.env*` na start cestě.
    3. **Hranice**: odstraň importy mimo repo; sdílený kontrakt Organizace
       nahraď verzovanou závislostí nebo ho vlož do Modulu; repository-db na
-      vydaný tag.
+      vydaný tag. **Sousední Modul** (decision 0176): čte-li App data jiného
+      Modulu, deklaruj ho v `lazurio.runtime.required_module_slots`
+      (`workspace/<slug>` nebo `workspace/<slug>/db`) a čti jen
+      `../<slug>/…` od kořene Modulu (`db/`, generované read modely), nikdy
+      přes `COMPANYASCODE_ORGANIZATION_ROOT`, jeho kód ani jeho
+      `lazurio.module.json`/`package.json`. Adresu App souseda odvoď
+      z vlastního `LAZURIO_RUNTIME_LISTENER_<ID>_EXTERNAL_ORIGIN` výměnou
+      prvního labelu hostname za slug souseda; bez té proměnné odkaz
+      nevykresli. Start bránu podle Teamu z App odstraň. Zápis jednajícího
+      Teamu do auditní stopy je otevřený (#467): nevymýšlej pro něj nový
+      zdroj, ponech ho jako jediný zbývající nález `MS-06` s odkazem na #467
+      a uveď to v PR.
    4. **Jazyk**: `.js/.mjs/.cjs` zdroje App převeď na TS (`git mv` + typy ve
       dvou commitech), `tsconfig` strict, biome, `check` + `test` skripty.
    5. **Generace**: smaž staré App generace (Firebase éra `v1`, nepoužívané
