@@ -206,7 +206,7 @@ je **trezor Environmentu** (DEV-6631); rozhodnutí 0177:
   ne, jeden zdroj) a který trezor slouží Modulům v Personalspace.
 - **Mezikrok.** Čtečka LazurioPlatform (`parseAppRuntime`) dnes neznámé pole
   `secrets` odmítá a App s ním nespustí; čtení a předání z trezoru zavádí
-  Lazurio/LazurioPlatform#PLATFORM_ISSUE. Do jeho vydání hlásí `MS-03`
+  Lazurio/LazurioPlatform#129. Do jeho vydání hlásí `MS-03`
   platnou deklaraci jako `warn` a Modul ji zapisuje až s tímto vydáním na
   svých Environmentech. Launchpad tohoto repa (`lazurio launchpad serve`,
   `lazurio module start`) trezor nečte: deklaraci přijme, tajemství nepředá

@@ -368,7 +368,7 @@ test("lazurio.runtime.secrets declares names only; MS-03 warns until the Launchp
   expect(report.status).toBe("action_required");
   expect(check(report, "MS-03")).toMatchObject({ status: "warn" });
   expect(check(report, "MS-03").details).toEqual([
-    expect.stringMatching(/^app\/v1\/package\.json: lazurio\.runtime\.secrets \(EXTERNAL_API_KEY, WEBHOOK_SIGNING_KEY\) Launchpad zatím nečte/),
+    expect.stringMatching(/^app\/v1\/package\.json: lazurio\.runtime\.secrets \(EXTERNAL_API_KEY, WEBHOOK_SIGNING_KEY\) Launchpad zatím nečte .*Lazurio\/LazurioPlatform#129\)$/),
   ]);
   expect(report.standard.checks.filter((item) => item.status !== "pass").map((item) => item.id)).toEqual(["MS-03"]);
 

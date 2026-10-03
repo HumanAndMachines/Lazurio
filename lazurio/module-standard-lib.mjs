@@ -77,7 +77,7 @@ const PINNED_DEPENDENCY = /^github:Lazurio\/(?:repository-db|module-kit)#v\d+\.\
 
 // Platform issue that makes the Launchpad read lazurio.runtime.secrets; the
 // MS-03 warning goes away with its release (decision 0177).
-const SECRETS_PLATFORM_ISSUE = "Lazurio/LazurioPlatform#PLATFORM_ISSUE";
+const SECRETS_PLATFORM_ISSUE = "Lazurio/LazurioPlatform#129";
 
 let preparationSchemaPromise = null;
 
