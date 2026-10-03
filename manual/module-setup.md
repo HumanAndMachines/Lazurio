@@ -195,8 +195,10 @@ nese sekci `standard` se stabilním seznamem třinácti kontrol v pořadí
   řeší vůči pracovnímu adresáři procesu. Cesta do `../<slug>/` projde jen
   tehdy, když App souseda deklaruje v `lazurio.runtime.required_module_slots`
   a čte jeho `db/` nebo `generated/` (decision 0176). Cesty skládané až za
-  běhu nebo uložené do proměnné kontrola nevidí; hranici drží standard
-  a review.
+  běhu nebo uložené do proměnné kontrola nevidí. Posouzení vůči kořeni App
+  je heuristika nad textem zdroje, ne parser: volání zapsané uvnitř
+  šablonového řetězce (`${…}`) nemusí rozpoznat a takové čtení projde.
+  `MS-09` je měření, ne hranice; hranici drží standard a review.
 - `standard` je `null`, když setup skončí dřív na samotném Module kontraktu
   (například chybí pool nebo slot). Nejdřív oprav kontrakt.
 - `runtime` zůstává vyplněný, kdykoli je Module kontrakt platný, i když
