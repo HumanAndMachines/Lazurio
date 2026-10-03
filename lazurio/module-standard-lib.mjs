@@ -20,10 +20,10 @@ export const MODULE_STANDARD_CHECKS = Object.freeze([
   { id: "MS-03", summary: "lazurio.runtime má listenery s health a dev_script existuje" },
   { id: "MS-04", summary: "lazurio.preparation je deklarované, check_script existuje a runtime je bun nebo uv" },
   { id: "MS-05", summary: "dev skript spouští právě jeden proces" },
-  { id: "MS-06", summary: "App nečte legacy LAZURIO_RUNTIME_HOST/PORT, PORT, COMPANYASCODE_* ani lease soubor a port leasu nemá zapsaný natvrdo" },
+  { id: "MS-06", summary: "App nečte legacy LAZURIO_RUNTIME_HOST/PORT, PORT, COMPANYASCODE_*, lease soubor ani manifest sousedního Modulu a port leasu nemá zapsaný natvrdo" },
   { id: "MS-07", summary: "žádné .env* na start cestě, žádné dotenv a Bun se spouští s --no-env-file" },
   { id: "MS-08", summary: "TypeScript strict a žádné .js/.mjs/.cjs zdroje App" },
-  { id: "MS-09", summary: "žádné importy mimo repozitář Modulu" },
+  { id: "MS-09", summary: "žádné importy ani cesty mimo repozitář Modulu kromě čtení dat deklarovaného sousedního Modulu v ../<slug>/" },
   { id: "MS-10", summary: "repository-db a module-kit jsou připnuté na vydaný tag" },
   { id: "MS-11", summary: "žádné absolutní cesty na stroj, symlinky vytvářené při startu ani layout modules/" },
   { id: "MS-12", summary: "apps[] odpovídá adresářům a Modul drží nejvýše dvě generace App (výchozí a jednu předchozí nebo kandidátní)" },
@@ -36,10 +36,10 @@ const CHECK_ACTIONS = Object.freeze({
   "MS-03": "Doplň lazurio.runtime s listenery, health a existujícím dev_script podle manual/module-setup.md.",
   "MS-04": "Doplň lazurio.preparation s check_script (read-only package skript) podle lazurio-preparation.schema.json.",
   "MS-05": "Zjednoduš dev skript na jeden dlouho běžící proces; build, guardy a další procesy patří do přípravy nebo do App.",
-  "MS-06": "Čti host a port jen z LAZURIO_RUNTIME_LISTENER_<ID>_HOST/_PORT (ideálně přes @lazurio/module-kit) a bez nich skonči chybou; port leasu žije jen v lazurio.module.json.",
+  "MS-06": "Čti host a port jen z LAZURIO_RUNTIME_LISTENER_<ID>_HOST/_PORT (ideálně přes @lazurio/module-kit) a bez nich skonči chybou; port leasu žije jen v lazurio.module.json. Adresu App sousedního Modulu odvoď z vlastního LAZURIO_RUNTIME_LISTENER_<ID>_EXTERNAL_ORIGIN, ne z jeho manifestu (decision 0176).",
   "MS-07": "Odstraň .env soubory a dotenv a spouštěj Bun s --no-env-file; konfigurace je runtime env plus commitnuté config soubory, tajemství deklaruj v lazurio.runtime.secrets (trezor Environmentu).",
   "MS-08": "Zapni strict v tsconfig.json (nebo extends strict preset) a převeď .js/.mjs/.cjs zdroje a configy na TypeScript.",
-  "MS-09": "Nahraď importy mimo repo verzovanou závislostí nebo kód vlož do Modulu, který ho jediný používá.",
+  "MS-09": "Nahraď importy mimo repo verzovanou závislostí nebo kód vlož do Modulu, který ho jediný používá. Data sousedního Modulu čti jen jako ../<slug>/ od kořene Modulu a souseda deklaruj v lazurio.runtime.required_module_slots App (decision 0176).",
   "MS-10": "Připni závislost na vydaný tag, například github:Lazurio/repository-db#v3.1.0.",
   "MS-11": "Odstraň absolutní cesty a vytváření symlinků ze startu (patří do prepare_script); Modul patří do workspace/.",
   "MS-12": "Sjednoť apps[] s adresáři app/*/package.json a smaž starší generace App (historie zůstává v Gitu).",
@@ -67,6 +67,10 @@ const SKIPPED_DIRECTORIES = new Set([
 const TEST_DIRECTORIES = new Set(["test", "tests", "__tests__", "e2e", "fixtures", "__fixtures__"]);
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".astro"]);
 const JAVASCRIPT_EXTENSIONS = new Set([".js", ".jsx", ".mjs", ".cjs"]);
+// What a path into a sibling Module may name (decision 0176): data and read
+// models, never code (see boundaryFinding).
+const CODE_EXTENSIONS = new Set([...SOURCE_EXTENSIONS, ".vue", ".svelte", ".css", ".scss"]);
+const DATA_EXTENSIONS = new Set([".json", ".jsonl", ".ndjson", ".csv", ".tsv", ".yaml", ".yml", ".md", ".mdx", ".txt"]);
 const MAX_WALKED_FILES = 20_000;
 const MAX_READ_BYTES = 1_048_576;
 const KNOWN_STRICT_TSCONFIG_PRESETS = [
@@ -264,8 +268,9 @@ export async function evaluateModuleStandard({
     }
 
     // MS-06 legacy host/port authority in sources
-    // MS-09 imports outside the Module
+    // MS-09 imports and paths outside the Module (declared siblings excepted)
     // MS-11 absolute machine paths
+    const siblings = declaredSiblingSlugs({ slotPath, moduleId: manifest?.id, runtime });
     for (const file of appSources) {
       const text = await readText(join(root, ...file.path.split("/")));
       if (text === null) continue;
@@ -277,9 +282,16 @@ export async function evaluateModuleStandard({
           record("MS-06", "fail", `${file.path}: port leasu ${port} je zapsaný natvrdo`);
         }
       }
-      for (const specifier of importSpecifiers(text)) {
-        const issue = importBoundaryIssue({ specifier, filePath: file.path });
-        if (issue) record("MS-09", "fail", `${file.path}: ${issue}`);
+      // Paths in comments are not reads (transpiledSource).
+      const source = transpiledSource(text, file.extension);
+      const specifiers = importSpecifiers(source.code);
+      const paths = [
+        ...specifiers.map((path) => ({ path, isImport: true, cwdRelative: false })),
+        ...relativePathLiterals(source).filter(({ path }) => !specifiers.includes(path)).map((literal) => ({ ...literal, isImport: false })),
+      ];
+      for (const { path, isImport, cwdRelative } of paths) {
+        const finding = boundaryFinding({ path, filePath: file.path, appDirectory: app.appDirectory, siblings, isImport, cwdRelative });
+        if (finding) record(finding.check, "fail", `${file.path}: ${finding.detail}`);
       }
       for (const path of absoluteMachinePaths(text)) {
         record("MS-11", "fail", `${file.path}: absolutní cesta ${path}`);
@@ -633,6 +645,185 @@ function importBoundaryIssue({ specifier, filePath }) {
   return shared
     ? `import ${specifier} míří mimo repo Modulu do ${shared}/`
     : `import ${specifier} míří mimo repo Modulu`;
+}
+
+// Sibling Modules (decision 0176, manual/module-standard.md kap. 5). Modules
+// of an Organization live side by side in workspace/; an App declares the
+// siblings it needs in lazurio.runtime.required_module_slots (Organization-
+// relative slots such as workspace/<slug> or its data mount workspace/<slug>/db)
+// and reaches them only as ../<slug>/ from its own Module root. Returns the
+// declared sibling slugs; an unknown slot path declares none.
+function declaredSiblingSlugs({ slotPath, moduleId, runtime }) {
+  const slugs = new Set();
+  const required = Array.isArray(runtime?.required_module_slots) ? runtime.required_module_slots : [];
+  if (typeof slotPath !== "string" || !slotPath.includes("/")) return slugs;
+  const parent = posix.dirname(slotPath);
+  const own = posix.basename(slotPath);
+  for (const slot of required) {
+    if (typeof slot !== "string" || !slot.startsWith(`${parent}/`)) continue;
+    const slug = slot.slice(parent.length + 1).split("/")[0];
+    if (slug && slug !== own && slug !== moduleId) slugs.add(slug);
+  }
+  return slugs;
+}
+
+// The sibling a Module-root-relative path lands in: exactly one level up and
+// one named directory (../<slug> or ../<slug>/…), nothing further out.
+function siblingSlug(target) {
+  const match = /^\.\.\/([A-Za-z0-9][A-Za-z0-9._-]*)(?:\/|$)/.exec(target);
+  return match && match[1] !== ".." ? match[1] : null;
+}
+
+// Where a declared sibling may be read (decision 0176): its repository-db
+// mount db/ and its generated read models in generated/ (manual/workspace-
+// module-version-lifecycle.md). No dotfile or dot directory (.env*, .git).
+function siblingDataPath(inside) {
+  return /^(?:db|generated)(?:\/|$)/.test(inside) && !inside.split("/").some((segment) => segment.startsWith("."));
+}
+
+// Relative path literals that are not import specifiers (import.meta.glob,
+// resolve(import.meta.dirname, "…"), new URL("…", import.meta.url),
+// readFile("…")): every string starting with ./ or ../, normalized later.
+// They are judged against the file's directory. A literal passed as the first
+// argument of a call that does not name the file (import.meta.url, .dir,
+// .dirname, .filename, .path, __dirname, __filename) and is not
+// import.meta.glob, such as readFile("../…") or resolve("../…"), is resolved
+// by such APIs against the process cwd, which is the App root
+// (runtimeCwdForApp); it is judged against both bases. Paths composed at
+// runtime are not visible (measure-only, decision 0173).
+function relativePathLiterals({ code, masked }) {
+  const paths = new Map();
+  for (const match of code.matchAll(/(["'`])(\.\.?\/[^"'`\s$]*)/g)) {
+    const cwdRelative = cwdRelativeArgument(masked, match.index, match.index + match[0].length);
+    paths.set(match[2], paths.get(match[2]) === true || cwdRelative);
+  }
+  return [...paths].map(([path, cwdRelative]) => ({ path, cwdRelative }));
+}
+
+const FILE_ANCHOR = /\bimport\.meta\.(?:url|dir|dirname|filename|path)\b|\b__(?:dirname|filename)\b/;
+
+// The literal at [start, end) is the first argument of a call whose argument
+// list does not name the file's own location and which is not
+// import.meta.glob. `masked` has string and comment contents blanked, so
+// brackets inside them do not count.
+function cwdRelativeArgument(masked, start, end) {
+  let open = start - 1;
+  while (open >= 0 && /\s/.test(masked[open])) open -= 1;
+  if (masked[open] !== "(") return false;
+  if (/\bimport\.meta\.glob\w*\s*(?:<[^()]*>)?\s*$/.test(masked.slice(Math.max(0, open - 120), open))) return false;
+  if (/(?:^|[^\w$.])(?:if|while|for|switch|catch|return|typeof|await)\s*$/.test(masked.slice(Math.max(0, open - 12), open))) return false;
+  if (!/[\w$)\]]\s*$/.test(masked.slice(Math.max(0, open - 4), open))) return false;
+  let close = masked.length;
+  let depth = 0;
+  for (let index = end; index < masked.length; index += 1) {
+    const character = masked[index];
+    if (character === "(" || character === "[" || character === "{") depth += 1;
+    else if (character === ")" || character === "]" || character === "}") {
+      if (depth === 0) {
+        close = index;
+        break;
+      }
+      depth -= 1;
+    }
+  }
+  return !FILE_ANCHOR.test(masked.slice(open + 1, close));
+}
+
+const TRANSPILER_LOADERS = new Map([
+  [".ts", "ts"], [".mts", "ts"], [".cts", "ts"], [".astro", "ts"],
+  [".tsx", "tsx"], [".js", "js"], [".mjs", "js"], [".cjs", "js"], [".jsx", "jsx"],
+]);
+const transpilers = new Map();
+
+// The source as Bun's transpiler prints it, so that comments (line, block and
+// inside template interpolations) are gone and string, template and regex
+// literals stay intact; for .astro only the --- frontmatter is transpiled and
+// the template body is kept as written. Type-only imports are turned into
+// plain imports first, because the transpiler drops them and they still pull
+// code from outside the repository. Source the transpiler rejects is measured
+// as written (measure-only, decision 0173). `masked` blanks the contents of
+// single- and double-quoted strings for bracket matching
+// (cwdRelativeArgument). Template literals stay as they are, so a call inside
+// ${…} keeps its ( and argument list; brackets or quotes in static template
+// text can at most widen or narrow the window searched for a file anchor.
+export function transpiledSource(text, extension) {
+  const raw = String(text);
+  let code = raw;
+  const frontmatter = extension === ".astro" ? /^(\s*---\r?\n)([\s\S]*?)(\r?\n---)/.exec(raw) : null;
+  try {
+    const loader = TRANSPILER_LOADERS.get(extension) ?? "tsx";
+    if (!transpilers.has(loader)) transpilers.set(loader, new Bun.Transpiler({ loader }));
+    const transpile = (source) => transpilers.get(loader).transformSync(keepTypeImports(source));
+    if (extension !== ".astro") code = transpile(raw);
+    else if (frontmatter) {
+      code = `${frontmatter[1]}${transpile(frontmatter[2])}${raw.slice(frontmatter.index + frontmatter[1].length + frontmatter[2].length)}`;
+    }
+  } catch {
+    code = raw;
+  }
+  const masked = code.replace(
+    /"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'/g,
+    (literal) => `${literal[0]}${literal.slice(1, -1).replace(/[^\n]/g, " ")}${literal.at(-1)}`,
+  );
+  return { code, masked };
+}
+
+function keepTypeImports(source) {
+  return source
+    .replace(/\b(import|export)\s+type\s+(?=\{[^}]*\}\s*from\b|\*|[A-Za-z_$][\w$]*\s+from\b)/g, "$1 ")
+    .replace(/\bimport\s*\{[^}]*\}\s*from\b/g, (statement) => statement.replace(/([{,]\s*)type\s+(?=[A-Za-z_$])/g, "$1"));
+}
+
+// One rule for every path out of the Module, whichever syntax names it. An
+// import specifier is code unless it names a data file (a JSON read model
+// imported by the bundler is a data read); any other path literal is a read
+// unless it names a code file. Paths resolve against the file's directory; a
+// cwd-relative argument (relativePathLiterals) also against the App root, and
+// the first finding is reported.
+function boundaryFinding({ path, filePath, appDirectory, siblings, isImport, cwdRelative }) {
+  if (isImport && !path.startsWith(".")) {
+    const issue = importBoundaryIssue({ specifier: path, filePath });
+    return issue ? { check: "MS-09", detail: issue } : null;
+  }
+  const fileDirectory = posix.dirname(filePath) === "." ? "" : posix.dirname(filePath);
+  const bases = [[fileDirectory, ""]];
+  if (!isImport && cwdRelative && appDirectory !== fileDirectory) {
+    bases.push([appDirectory, ` (vůči kořeni App ${appDirectory || "."}, pracovnímu adresáři procesu)`]);
+  }
+  for (const [base, note] of bases) {
+    const finding = targetFinding({ path, target: posix.normalize(joinPosix(base, path)), filePath, siblings, isImport });
+    if (finding) return { ...finding, detail: `${finding.detail}${note}` };
+  }
+  return null;
+}
+
+function targetFinding({ path, target, filePath, siblings, isImport }) {
+  if (!escapesRoot(target)) return null;
+  const subject = isImport ? `import ${path}` : `cesta ${path}`;
+  const slug = siblingSlug(target);
+  const name = posix.basename(target);
+  const extension = extname(name).toLowerCase();
+  const code = isImport ? !DATA_EXTENSIONS.has(extension) : CODE_EXTENSIONS.has(extension);
+  if (slug === null || (code && !siblings.has(slug))) {
+    return isImport
+      ? { check: "MS-09", detail: importBoundaryIssue({ specifier: path, filePath }) }
+      : { check: "MS-09", detail: `${subject} míří mimo repo Modulu` };
+  }
+  if (code) return { check: "MS-09", detail: `${subject} načítá kód Modulu ${slug}; ze sousedního Modulu se čtou jen data` };
+  if (!siblings.has(slug)) {
+    return { check: "MS-09", detail: `${subject} čte Modul ${slug}, který App nedeklaruje v lazurio.runtime.required_module_slots` };
+  }
+  // A sibling's package.json carries its runtime and lease references; its
+  // address comes from the own external origin, never from its manifests.
+  // lazurio.module.json of any Module is already an MS-06 finding.
+  if (name === "package.json") {
+    return { check: "MS-06", detail: `čte package.json Modulu ${slug} (runtime a lease souseda)` };
+  }
+  if (name === "lazurio.module.json") return null;
+  if (!siblingDataPath(target.slice(`../${slug}/`.length))) {
+    return { check: "MS-09", detail: `${subject} čte Modul ${slug} mimo jeho data; ze souseda se čte jen db/ a generated/` };
+  }
+  return null;
 }
 
 function absoluteMachinePaths(text) {

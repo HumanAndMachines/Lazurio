@@ -195,6 +195,21 @@ nese sekci `standard` se stabilním seznamem třinácti kontrol v pořadí
   `node_modules`, `dist` a testů), jednou volají `git ls-files` kvůli
   commitnutému lockfilu. Nikdy nespouštějí skripty Modulu ani síť; `bun run
   check` a `bun test` spouští CI Modulu.
+- `MS-09` posuzuje importy i relativní cesty zapsané ve zdrojích
+  (`import.meta.glob`, `resolve(import.meta.dirname, "…")`,
+  `new URL("…", import.meta.url)`) vůči adresáři souboru; cesty jen
+  v komentářích nepočítá (zdroj nejdřív projde transpilerem Bunu, u `.astro`
+  jen frontmatter; zdroj, který transpiler odmítne, měří tak, jak je) a cestu
+  začínající `./` normalizuje. Cesta, která je
+  prvním argumentem volání bez kotvy na soubor (`readFile("../…")`,
+  `resolve("../…")`), se posuzuje i vůči kořeni App, protože ji takové API
+  řeší vůči pracovnímu adresáři procesu. Cesta do `../<slug>/` projde jen
+  tehdy, když App souseda deklaruje v `lazurio.runtime.required_module_slots`
+  a čte jeho `db/` nebo `generated/` (decision 0176). Cesty skládané až za
+  běhu nebo uložené do proměnné kontrola nevidí. Posouzení vůči kořeni App
+  je heuristika nad textem zdroje, ne parser: volání zapsané uvnitř
+  šablonového řetězce (`${…}`) nemusí rozpoznat a takové čtení projde.
+  `MS-09` je měření, ne hranice; hranici drží standard a review.
 - `standard` je `null`, když setup skončí dřív na samotném Module kontraktu
   (například chybí pool nebo slot). Nejdřív oprav kontrakt.
 - `runtime` zůstává vyplněný, kdykoli je Module kontrakt platný, i když
