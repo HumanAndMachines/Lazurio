@@ -185,9 +185,11 @@ HumanAndMachines/Lazurio#467).
   v `lazurio.runtime.required_module_slots` svého `package.json` jako
   Organization-relativní slot (`workspace/<slug>` nebo jeho datový mount
   `workspace/<slug>/db`) a čte ho jedině jako `../<slug>/` od kořene svého
-  Modulu: jeho repository-db mount `db/` a generované read modely. To je
-  jediná dovolená cesta mimo repozitář, a jen ke čtení. Kód souseda se
-  neimportuje (bod výše) a jeho manifesty (`lazurio.module.json`,
+  Modulu: jeho repository-db mount `db/` a generované read modely
+  v `generated/` (`manual/workspace-module-version-lifecycle.md`); nic pod
+  `app/`, žádné tečkové soubory ani `.env*`. To je jediná dovolená cesta mimo
+  repozitář, a jen ke čtení. Kód souseda se neimportuje (bod výše) a jeho
+  manifesty (`lazurio.module.json`,
   `package.json`) App nečte, stejně jako vlastní `lazurio.module.json`
   (`MS-06`). Cesta se neskládá z `COMPANYASCODE_ORGANIZATION_ROOT`, absolutní
   cesty ani přes symlink. Celý kontrakt je, že na Environmentu leží oba
@@ -330,7 +332,7 @@ volný port a přesun je ruční úprava manifestu v PR Modulu.
 | `MS-06` | žádné čtení `LAZURIO_RUNTIME_HOST`, `LAZURIO_RUNTIME_PORT`, `PORT`, `COMPANYASCODE_*`, lease souboru (`lazurio.module.json` kteréhokoli Modulu) ani `package.json` sousedního Modulu ze zdrojů App; port leasu není ve zdrojích App zapsaný natvrdo |
 | `MS-07` | žádné `.env*` na start cestě; žádné `dotenv` |
 | `MS-08` | TypeScript strict; žádné `.js/.mjs/.cjs` zdroje App (config frameworku v TS) |
-| `MS-09` | žádné importy ani relativní cesty mimo repo (`../` nad kořen Modulu, `file:` mimo repo, kód jiného Modulu, `launchpad/`, `infra/`, `design-system/`); výjimkou je jen čtení dat sousedního Modulu v `../<slug>/`, který App deklaruje v `required_module_slots` (decision 0176) |
+| `MS-09` | žádné importy ani relativní cesty mimo repo (`../` nad kořen Modulu, `file:` mimo repo, kód jiného Modulu, `launchpad/`, `infra/`, `design-system/`); výjimkou je jen čtení `db/` a `generated/` sousedního Modulu v `../<slug>/`, který App deklaruje v `required_module_slots` (decision 0176) |
 | `MS-10` | závislost repository-db a module-kit připnutá na vydaný tag |
 | `MS-11` | žádné absolutní cesty na stroj, žádné symlinky vytvářené při startu, žádné `modules/` |
 | `MS-12` | `apps[]` odpovídá adresářům; nejvýše dvě generace App (výchozí a jedna předchozí nebo kandidátní) |

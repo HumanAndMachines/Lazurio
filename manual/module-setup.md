@@ -186,11 +186,15 @@ nese sekci `standard` se stabilním seznamem třinácti kontrol v pořadí
   check` a `bun test` spouští CI Modulu.
 - `MS-09` posuzuje importy i relativní cesty zapsané ve zdrojích
   (`import.meta.glob`, `resolve(import.meta.dirname, "…")`,
-  `new URL("…", import.meta.url)`) vůči adresáři souboru. Cesta do
-  `../<slug>/` projde jen tehdy, když App souseda deklaruje
-  v `lazurio.runtime.required_module_slots` a čte jeho data, ne kód
-  (decision 0176). Cesty skládané až za běhu kontrola nevidí; hranici drží
-  standard a review.
+  `new URL("…", import.meta.url)`) vůči adresáři souboru; cesty jen
+  v komentářích nepočítá a cestu začínající `./` normalizuje. Cesta, která je
+  prvním argumentem volání bez kotvy na soubor (`readFile("../…")`,
+  `resolve("../…")`), se posuzuje i vůči kořeni App, protože ji takové API
+  řeší vůči pracovnímu adresáři procesu. Cesta do `../<slug>/` projde jen
+  tehdy, když App souseda deklaruje v `lazurio.runtime.required_module_slots`
+  a čte jeho `db/` nebo `generated/` (decision 0176). Cesty skládané až za
+  běhu nebo uložené do proměnné kontrola nevidí; hranici drží standard
+  a review.
 - `standard` je `null`, když setup skončí dřív na samotném Module kontraktu
   (například chybí pool nebo slot). Nejdřív oprav kontrakt.
 - `runtime` zůstává vyplněný, kdykoli je Module kontrakt platný, i když

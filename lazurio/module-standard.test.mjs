@@ -9,6 +9,7 @@ import {
   devScriptFindings,
   evaluateModuleStandard,
   legacyRuntimeReads,
+  stripCommentsAndMask,
 } from "./module-standard-lib.mjs";
 import { readRequiredBunVersion } from "./core/toolchain-lib.mjs";
 import { validateAgainstSchema } from "./runtime/json-schema-mini.mjs";
@@ -475,6 +476,112 @@ test("MS-06 fails reads of a sibling's manifests even when the sibling is declar
     "app/v1/src/links.ts: čte package.json Modulu pricebook (runtime a lease souseda)",
   ]);
   expect(check(report, "MS-09").status).toBe("pass");
+});
+
+test("MS-09 judges a cwd-relative path from the App root as well as from the file", async () => {
+  const probe = [
+    "import { readFile } from \"node:fs/promises\";",
+    "import { resolve } from \"node:path\";",
+    "const prices = await readFile(\"../../../deals/db/prices.json\", \"utf8\");",
+    "const multi = resolve(",
+    "  import.meta.dirname,",
+    "  \"../../../../deals/db/multi.json\",",
+    ");",
+    "export { prices, multi };",
+  ].join("\n");
+  const undeclared = await conformantFixture();
+  await writeText(join(undeclared.appRoot, "src", "probe.ts"), probe);
+  expect(check(await setupModule(undeclared), "MS-09").details).toEqual([
+    "app/v1/src/probe.ts: cesta ../../../deals/db/prices.json čte Modul deals, který App nedeklaruje v lazurio.runtime.required_module_slots (vůči kořeni App app/v1, pracovnímu adresáři procesu)",
+    "app/v1/src/probe.ts: cesta ../../../../deals/db/multi.json čte Modul deals, který App nedeklaruje v lazurio.runtime.required_module_slots",
+  ]);
+
+  const declared = await conformantFixture({
+    mutatePackage: (pkg) => { pkg.lazurio.runtime.required_module_slots = ["workspace/deals/db"]; },
+  });
+  await writeText(join(declared.appRoot, "src", "probe.ts"), probe);
+  expect(check(await setupModule(declared), "MS-09")).toMatchObject({ status: "pass", details: [] });
+});
+
+test("MS-09 normalizes relative paths that start with ./", async () => {
+  const fixture = await conformantFixture();
+  await writeText(
+    join(fixture.appRoot, "src", "probe.ts"),
+    [
+      "const deals = new URL(\"./../../../../deals/db/deals.json\", import.meta.url);",
+      "const local = new URL(\"./../local.json\", import.meta.url);",
+      "export { deals, local };",
+    ].join("\n"),
+  );
+  expect(check(await setupModule(fixture), "MS-09").details).toEqual([
+    "app/v1/src/probe.ts: cesta ./../../../../deals/db/deals.json čte Modul deals, který App nedeklaruje v lazurio.runtime.required_module_slots",
+  ]);
+});
+
+test("MS-09 allows a declared sibling only under its db/ and generated/ trees", async () => {
+  const fixture = await conformantFixture({
+    mutatePackage: (pkg) => { pkg.lazurio.runtime.required_module_slots = ["workspace/pricebook"]; },
+  });
+  await writeText(
+    join(fixture.appRoot, "src", "probe.ts"),
+    [
+      "const secrets = new URL(\"../../../../pricebook/.env\", import.meta.url);",
+      "const config = new URL(\"../../../../pricebook/app/v1/config.toml\", import.meta.url);",
+      "const readme = new URL(\"../../../../pricebook/README.md\", import.meta.url);",
+      "const hidden = new URL(\"../../../../pricebook/db/.env.local\", import.meta.url);",
+      "const whole = new URL(\"../../../../pricebook\", import.meta.url);",
+      "const data = new URL(\"../../../../pricebook/db/records/\", import.meta.url);",
+      "const model = new URL(\"../../../../pricebook/generated/v2/prices.json\", import.meta.url);",
+      "export { secrets, config, readme, hidden, whole, data, model };",
+    ].join("\n"),
+  );
+  const only = "ze souseda se čte jen db/ a generated/";
+  expect(check(await setupModule(fixture), "MS-09").details).toEqual([
+    `app/v1/src/probe.ts: cesta ../../../../pricebook/.env čte Modul pricebook mimo jeho data; ${only}`,
+    `app/v1/src/probe.ts: cesta ../../../../pricebook/app/v1/config.toml čte Modul pricebook mimo jeho data; ${only}`,
+    `app/v1/src/probe.ts: cesta ../../../../pricebook/README.md čte Modul pricebook mimo jeho data; ${only}`,
+    `app/v1/src/probe.ts: cesta ../../../../pricebook/db/.env.local čte Modul pricebook mimo jeho data; ${only}`,
+    `app/v1/src/probe.ts: cesta ../../../../pricebook čte Modul pricebook mimo jeho data; ${only}`,
+  ]);
+});
+
+test("MS-09 ignores paths named only in comments and keeps code after // inside literals", async () => {
+  const fixture = await conformantFixture();
+  await writeText(
+    join(fixture.appRoot, "src", "probe.ts"),
+    [
+      "import { resolve } from \"node:path\";",
+      "// Example only: \"../../../../../modules.manifest.json\"",
+      "/* import { price } from \"../../../../pricebook/app/v1/src/price.ts\"; */",
+      "const local = resolve(import.meta.dirname, \"../../../src/local.json\"); // in-Module: \"../../../../deals/db/x.json\"",
+      "const api = \"https://example.com/api\"; const leak = new URL(\"../../../../deals/db/url.json\", import.meta.url);",
+      "const slashes = /\\/\\//g; const regexLeak = new URL(\"../../../../deals/db/regex.json\", import.meta.url);",
+      "export { local, api, leak, slashes, regexLeak };",
+    ].join("\n"),
+  );
+  expect(check(await setupModule(fixture), "MS-09").details).toEqual([
+    "app/v1/src/probe.ts: cesta ../../../../deals/db/url.json čte Modul deals, který App nedeklaruje v lazurio.runtime.required_module_slots",
+    "app/v1/src/probe.ts: cesta ../../../../deals/db/regex.json čte Modul deals, který App nedeklaruje v lazurio.runtime.required_module_slots",
+  ]);
+});
+
+test("stripCommentsAndMask blanks comments only and keeps the source length", () => {
+  const source = [
+    "const url = \"https://example.com//x\"; // comment \"../a\"",
+    "const glob = \"src/**/*.ts\"; /* block",
+    "comment */ const tail = `a//b`;",
+    "const unterminated = 1 /* no end",
+  ].join("\n");
+  const { code, masked } = stripCommentsAndMask(source);
+  expect(code.length).toBe(source.length);
+  expect(masked.length).toBe(source.length);
+  expect(code.split("\n")).toEqual([
+    "const url = \"https://example.com//x\";                  ",
+    "const glob = \"src/**/*.ts\";         ",
+    "           const tail = `a//b`;",
+    "const unterminated = 1 /* no end",
+  ]);
+  expect(masked.split("\n")[0]).toBe(`const url = "${" ".repeat(22)}";${" ".repeat(18)}`);
 });
 
 test("a sibling App address derived from the own external origin needs nothing from the checker", async () => {

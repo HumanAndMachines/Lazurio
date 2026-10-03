@@ -119,7 +119,7 @@ ani pro productionspace repa (decision 0041).
       vydaný tag. **Sousední Modul** (decision 0176): čte-li App data jiného
       Modulu, deklaruj ho v `lazurio.runtime.required_module_slots`
       (`workspace/<slug>` nebo `workspace/<slug>/db`) a čti jen
-      `../<slug>/…` od kořene Modulu (`db/`, generované read modely), nikdy
+      `../<slug>/…` od kořene Modulu (`db/`, read modely v `generated/`), nikdy
       přes `COMPANYASCODE_ORGANIZATION_ROOT`, jeho kód ani jeho
       `lazurio.module.json`/`package.json`. Adresu App souseda odvoď
       z vlastního `LAZURIO_RUNTIME_LISTENER_<ID>_EXTERNAL_ORIGIN` výměnou

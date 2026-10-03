@@ -268,13 +268,15 @@ export async function evaluateModuleStandard({
           record("MS-06", "fail", `${file.path}: port leasu ${port} je zapsaný natvrdo`);
         }
       }
-      const specifiers = importSpecifiers(text);
+      // Paths in comments are not reads (stripCommentsAndMask).
+      const source = stripCommentsAndMask(text);
+      const specifiers = importSpecifiers(source.code);
       const paths = [
-        ...specifiers.map((path) => ({ path, isImport: true })),
-        ...relativePathLiterals(text).filter((path) => !specifiers.includes(path)).map((path) => ({ path, isImport: false })),
+        ...specifiers.map((path) => ({ path, isImport: true, cwdRelative: false })),
+        ...relativePathLiterals(source).filter(({ path }) => !specifiers.includes(path)).map((literal) => ({ ...literal, isImport: false })),
       ];
-      for (const { path, isImport } of paths) {
-        const finding = boundaryFinding({ path, filePath: file.path, siblings, isImport });
+      for (const { path, isImport, cwdRelative } of paths) {
+        const finding = boundaryFinding({ path, filePath: file.path, appDirectory: app.appDirectory, siblings, isImport, cwdRelative });
         if (finding) record(finding.check, "fail", `${file.path}: ${finding.detail}`);
       }
       for (const path of absoluteMachinePaths(text)) {
@@ -582,31 +584,188 @@ function siblingSlug(target) {
   return match && match[1] !== ".." ? match[1] : null;
 }
 
-// Relative path literals that are not import specifiers: import.meta.glob
-// patterns, resolve(__dirname, "…"), new URL("…", import.meta.url), readFile.
-// Resolved against the file's directory, which is what these forms mean;
-// a path meant against process.cwd() may be judged from the wrong base, and
-// paths composed at runtime are not visible (measure-only, decision 0173).
-function relativePathLiterals(text) {
-  const paths = new Set();
-  for (const match of String(text).matchAll(/(["'`])(\.\.\/[^"'`\s$]*)/g)) paths.add(match[2]);
-  return [...paths];
+// Where a declared sibling may be read (decision 0176): its repository-db
+// mount db/ and its generated read models in generated/ (manual/workspace-
+// module-version-lifecycle.md). No dotfile or dot directory (.env*, .git).
+function siblingDataPath(inside) {
+  return /^(?:db|generated)(?:\/|$)/.test(inside) && !inside.split("/").some((segment) => segment.startsWith("."));
+}
+
+// Relative path literals that are not import specifiers (import.meta.glob,
+// resolve(import.meta.dirname, "…"), new URL("…", import.meta.url),
+// readFile("…")): every string starting with ./ or ../, normalized later.
+// They are judged against the file's directory. A literal passed as the first
+// argument of a call that does not name the file (import.meta.url, .dir,
+// .dirname, .filename, .path, __dirname, __filename) and is not
+// import.meta.glob, such as readFile("../…") or resolve("../…"), is resolved
+// by such APIs against the process cwd, which is the App root
+// (runtimeCwdForApp); it is judged against both bases. Paths composed at
+// runtime are not visible (measure-only, decision 0173).
+function relativePathLiterals({ code, masked }) {
+  const paths = new Map();
+  for (const match of code.matchAll(/(["'`])(\.\.?\/[^"'`\s$]*)/g)) {
+    const cwdRelative = cwdRelativeArgument(masked, match.index, match.index + match[0].length);
+    paths.set(match[2], paths.get(match[2]) === true || cwdRelative);
+  }
+  return [...paths].map(([path, cwdRelative]) => ({ path, cwdRelative }));
+}
+
+const FILE_ANCHOR = /\bimport\.meta\.(?:url|dir|dirname|filename|path)\b|\b__(?:dirname|filename)\b/;
+
+// The literal at [start, end) is the first argument of a call whose argument
+// list does not name the file's own location and which is not
+// import.meta.glob. `masked` has string and comment contents blanked, so
+// brackets inside them do not count.
+function cwdRelativeArgument(masked, start, end) {
+  let open = start - 1;
+  while (open >= 0 && /\s/.test(masked[open])) open -= 1;
+  if (masked[open] !== "(") return false;
+  if (/\bimport\.meta\.glob\w*\s*(?:<[^()]*>)?\s*$/.test(masked.slice(Math.max(0, open - 120), open))) return false;
+  if (/(?:^|[^\w$.])(?:if|while|for|switch|catch|return|typeof|await)\s*$/.test(masked.slice(Math.max(0, open - 12), open))) return false;
+  if (!/[\w$)\]]\s*$/.test(masked.slice(Math.max(0, open - 4), open))) return false;
+  let close = masked.length;
+  let depth = 0;
+  for (let index = end; index < masked.length; index += 1) {
+    const character = masked[index];
+    if (character === "(" || character === "[" || character === "{") depth += 1;
+    else if (character === ")" || character === "]" || character === "}") {
+      if (depth === 0) {
+        close = index;
+        break;
+      }
+      depth -= 1;
+    }
+  }
+  return !FILE_ANCHOR.test(masked.slice(open + 1, close));
+}
+
+const REGEX_PRECEDING_WORDS = new Set([
+  "return", "typeof", "instanceof", "in", "of", "new", "delete", "void", "throw", "case", "do", "else", "yield", "await",
+]);
+
+// Blanks // and /* */ comments of a JS/TS source (length and newlines kept)
+// so that a path named only in a comment is not a read. String, template and
+// regex literals are recognized first, so "https://…" or /\/\// survive.
+// `masked` additionally blanks literal contents for bracket matching. An
+// opening /* without a closing */ is left as code rather than swallowing the
+// rest of the file.
+export function stripCommentsAndMask(text) {
+  const source = String(text);
+  const code = [];
+  const masked = [];
+  const keep = (character) => {
+    code.push(character);
+    masked.push(character);
+  };
+  const blankBoth = (character) => {
+    const blank = character === "\n" ? "\n" : " ";
+    code.push(blank);
+    masked.push(blank);
+  };
+  const literal = (character) => {
+    code.push(character);
+    masked.push(character === "\n" ? "\n" : " ");
+  };
+  let previous = "";
+  let index = 0;
+  while (index < source.length) {
+    const character = source[index];
+    const next = source[index + 1];
+    if (character === "/" && next === "/") {
+      while (index < source.length && source[index] !== "\n") blankBoth(source[index++]);
+      continue;
+    }
+    if (character === "/" && next === "*") {
+      const close = source.indexOf("*/", index + 2);
+      if (close >= 0) {
+        while (index < close + 2) blankBoth(source[index++]);
+        continue;
+      }
+    }
+    if (character === "\"" || character === "'" || character === "`") {
+      keep(character);
+      index += 1;
+      while (index < source.length && source[index] !== character) {
+        if (character !== "`" && source[index] === "\n") break;
+        if (source[index] === "\\" && index + 1 < source.length) literal(source[index++]);
+        literal(source[index++]);
+      }
+      if (source[index] === character) keep(source[index++]);
+      previous = character;
+      continue;
+    }
+    if (character === "/" && regexMayStart(previous, code)) {
+      const close = regexLiteralEnd(source, index);
+      if (close > index) {
+        keep(character);
+        index += 1;
+        while (index < close) literal(source[index++]);
+        keep(source[index++]);
+        previous = "/";
+        continue;
+      }
+    }
+    keep(character);
+    if (!/\s/.test(character)) previous = character;
+    index += 1;
+  }
+  return { code: code.join(""), masked: masked.join("") };
+}
+
+function regexMayStart(previous, code) {
+  if (previous === "" || /[(,=:[!&|?{};+\-*%<>~^]/.test(previous)) return true;
+  if (!/[\w$]/.test(previous)) return false;
+  const word = /([A-Za-z_$][\w$]*)\s*$/.exec(code.slice(-40).join(""))?.[1];
+  return word !== undefined && REGEX_PRECEDING_WORDS.has(word);
+}
+
+// Index of the closing / of a regex literal starting at `start`, or -1 when
+// the line ends first (then it was a division).
+function regexLiteralEnd(source, start) {
+  let inClass = false;
+  for (let index = start + 1; index < source.length; index += 1) {
+    const character = source[index];
+    if (character === "\n") return -1;
+    if (character === "\\") {
+      index += 1;
+      continue;
+    }
+    if (character === "[") inClass = true;
+    else if (character === "]") inClass = false;
+    else if (character === "/" && !inClass) return index;
+  }
+  return -1;
 }
 
 // One rule for every path out of the Module, whichever syntax names it. An
 // import specifier is code unless it names a data file (a JSON read model
 // imported by the bundler is a data read); any other path literal is a read
-// unless it names a code file.
-function boundaryFinding({ path, filePath, siblings, isImport }) {
+// unless it names a code file. Paths resolve against the file's directory; a
+// cwd-relative argument (relativePathLiterals) also against the App root, and
+// the first finding is reported.
+function boundaryFinding({ path, filePath, appDirectory, siblings, isImport, cwdRelative }) {
   if (isImport && !path.startsWith(".")) {
     const issue = importBoundaryIssue({ specifier: path, filePath });
     return issue ? { check: "MS-09", detail: issue } : null;
   }
-  const target = posix.normalize(joinPosix(posix.dirname(filePath), path));
+  const fileDirectory = posix.dirname(filePath) === "." ? "" : posix.dirname(filePath);
+  const bases = [[fileDirectory, ""]];
+  if (!isImport && cwdRelative && appDirectory !== fileDirectory) {
+    bases.push([appDirectory, ` (vůči kořeni App ${appDirectory || "."}, pracovnímu adresáři procesu)`]);
+  }
+  for (const [base, note] of bases) {
+    const finding = targetFinding({ path, target: posix.normalize(joinPosix(base, path)), filePath, siblings, isImport });
+    if (finding) return { ...finding, detail: `${finding.detail}${note}` };
+  }
+  return null;
+}
+
+function targetFinding({ path, target, filePath, siblings, isImport }) {
   if (!escapesRoot(target)) return null;
   const subject = isImport ? `import ${path}` : `cesta ${path}`;
   const slug = siblingSlug(target);
-  const extension = extname(posix.basename(target)).toLowerCase();
+  const name = posix.basename(target);
+  const extension = extname(name).toLowerCase();
   const code = isImport ? !DATA_EXTENSIONS.has(extension) : CODE_EXTENSIONS.has(extension);
   if (slug === null || (code && !siblings.has(slug))) {
     return isImport
@@ -620,8 +779,12 @@ function boundaryFinding({ path, filePath, siblings, isImport }) {
   // A sibling's package.json carries its runtime and lease references; its
   // address comes from the own external origin, never from its manifests.
   // lazurio.module.json of any Module is already an MS-06 finding.
-  if (posix.basename(target) === "package.json") {
+  if (name === "package.json") {
     return { check: "MS-06", detail: `čte package.json Modulu ${slug} (runtime a lease souseda)` };
+  }
+  if (name === "lazurio.module.json") return null;
+  if (!siblingDataPath(target.slice(`../${slug}/`.length))) {
+    return { check: "MS-09", detail: `${subject} čte Modul ${slug} mimo jeho data; ze souseda se čte jen db/ a generated/` };
   }
   return null;
 }
