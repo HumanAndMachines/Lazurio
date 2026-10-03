@@ -114,7 +114,8 @@ ani pro productionspace repa (decision 0041).
       `runtime-listener.mjs` závislostí `@lazurio/module-kit`; smaž čtení
       `PORT`, `LAZURIO_RUNTIME_HOST/PORT`, `COMPANYASCODE_*`, lease souboru;
       žádné `.env*` na start cestě a každé volání `bun` na start cestě
-      s `--no-env-file` (Bun jinak `.env*` načte sám; `MS-07`).
+      s `--no-env-file` před vstupem (`bun --no-env-file run src/server.ts`)
+      a bez `--env-file` (Bun jinak `.env*` načte sám; `MS-07`).
       **Tajemství** (klíč externí služby, token) App neukládá do `.env*`
       ani do vlastního souboru: deklaruje jejich jména
       v `lazurio.runtime.secrets` (`["EXTERNAL_API_KEY"]`), čte je

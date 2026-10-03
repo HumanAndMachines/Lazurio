@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import { moduleSetupExitCode, setupModule } from "./module-setup-lib.mjs";
 import {
   MODULE_STANDARD_CHECKS,
+  bunEnvFileFindings,
   devScriptFindings,
   evaluateModuleStandard,
   legacyRuntimeReads,
@@ -353,11 +354,62 @@ test("MS-07 requires --no-env-file on every Bun invocation of the start path (#4
     "app/v1/package.json: dev spouští Bun bez --no-env-file: bun src/server.ts",
   ]);
 
+  // The flag after `run` is a Bun option too; the chain follows into `serve`.
+  const afterRun = await conformantFixture({
+    mutatePackage: (pkg) => {
+      pkg.scripts.dev = "bun run --no-env-file serve";
+      pkg.scripts.serve = "bun src/server.ts";
+    },
+  });
+  expect(check(await setupModule(afterRun), "MS-07").details).toEqual([
+    "app/v1/package.json: dev spouští Bun bez --no-env-file: bun src/server.ts",
+  ]);
+  const afterRunFlagged = await conformantFixture({
+    mutatePackage: (pkg) => {
+      pkg.scripts.dev = "bun run --no-env-file serve";
+      pkg.scripts.serve = "bun --no-env-file src/server.ts";
+    },
+  });
+  expect(check(await setupModule(afterRunFlagged), "MS-07")).toMatchObject({ status: "pass", details: [] });
+
+  // Bun passes options after the entry to the script: the flag there is no flag.
+  const late = await conformantFixture({ mutatePackage: (pkg) => { pkg.scripts.dev = "bun run src/server.ts --no-env-file"; } });
+  expect(check(await setupModule(late), "MS-07").details).toEqual([
+    "app/v1/package.json: dev má --no-env-file až za vstupem (Bun ho předá skriptu jako argument): bun run src/server.ts --no-env-file",
+  ]);
+
+  // An explicit --env-file is loaded even with --no-env-file.
+  const envFile = await conformantFixture({
+    mutatePackage: (pkg) => { pkg.scripts.dev = "bun --no-env-file --env-file=config/local.conf run src/server.ts"; },
+  });
+  expect(check(await setupModule(envFile), "MS-07").details).toEqual([
+    "app/v1/package.json: dev načítá soubor přes --env-file: bun --no-env-file --env-file=config/local.conf run src/server.ts",
+  ]);
+
   // A framework CLI started by the Launchpad's own `bun --no-env-file run`
   // invokes no second Bun process; scripts off the start path are not judged.
   const framework = await conformantFixture({ mutatePackage: (pkg) => { pkg.scripts.dev = "astro dev"; } });
   expect(check(await setupModule(framework), "MS-07")).toMatchObject({ status: "pass", details: [] });
   expect(check(await setupModule(await conformantFixture()), "MS-07")).toMatchObject({ status: "pass" });
+});
+
+test("MS-07 reads Bun options only before the entry, after `bun` or after `bun run`", () => {
+  for (const [command, findings] of [
+    ["bun --no-env-file run src/server.ts", []],
+    ["bun run --no-env-file src/server.ts", []],
+    ["bun --no-env-file ./node_modules/vite/bin/vite.js --host \"$LAZURIO_RUNTIME_LISTENER_APP_HOST\"", []],
+    ["bun --cwd app --no-env-file run src/server.ts", []],
+    ["bun run src/server.ts", ["missing"]],
+    ["bun run src/server.ts --no-env-file", ["after-entry"]],
+    ["bun src/server.ts --no-env-file --env-file x.conf", ["after-entry"]],
+    ["bun --no-env-file --env-file=custom.conf src/server.ts", ["env-file"]],
+    ["bun --no-env-file --env-file custom.conf src/server.ts", ["env-file"]],
+    ["bun run --no-env-file --env-file custom.conf src/server.ts", ["env-file"]],
+    ["bun --env-file custom.conf src/server.ts", ["missing", "env-file"]],
+    ["astro dev", []],
+  ]) {
+    expect([command, bunEnvFileFindings(command)]).toEqual([command, findings]);
+  }
 });
 
 test("lazurio.runtime.secrets declares names only; MS-03 warns until the Launchpad reads them (decision 0177)", async () => {

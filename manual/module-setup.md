@@ -179,7 +179,10 @@ nese sekci `standard` se stabilním seznamem třinácti kontrol v pořadí
   hlásí `warn`; viditelná deklarace s `runtime: uv` bez `uv_version` je `fail`.
 - `MS-07` hlásí `.env*` na start cestě, `dotenv` a každé volání Bun ve
   skriptech start cesty (`dev` a skripty, které spouští) bez `--no-env-file`
-  (Bun jinak `.env`, `.env.local` a `.env.<NODE_ENV>` načte sám). Náhradou
+  před vstupem (Bun jinak `.env`, `.env.local` a `.env.<NODE_ENV>` načte
+  sám; flag za souborem nebo jménem skriptu dostane skript jako argument)
+  nebo s `--env-file` (ten Bun načte i s `--no-env-file`). Volby čte mezi
+  `bun` a vstupem i mezi `bun run` a jménem skriptu. Náhradou
   za `.env` u tajemství je deklarace `lazurio.runtime.secrets`: Launchpad
   hodnoty předá z trezoru Environmentu (standard kap. 4.3, decision 0177).
   Tvar deklarace (jména `^[A-Z][A-Z0-9_]*$`, neprázdné, bez duplicit)

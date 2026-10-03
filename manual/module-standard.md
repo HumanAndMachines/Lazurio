@@ -122,7 +122,10 @@ Povolené tvary:
 ```
 
 Každé volání `bun` na start cestě (`dev` a skripty, které spouští) nese
-`--no-env-file`. Bun jinak sám načte `.env`, `.env.local` a
+`--no-env-file` **před vstupem** (mezi `bun` a souborem, nebo mezi
+`bun run` a jménem skriptu; za vstupem ho Bun předá skriptu jako argument)
+a nenese `--env-file` (ten Bun načte i s `--no-env-file`). Bun jinak sám
+načte `.env`, `.env.local` a
 `.env.<NODE_ENV>` z adresáře App a listener nebo tajemství by mohl přijít
 z necommitnutého souboru v checkoutu. Launchpad spouští `dev` skript jako
 `bun --no-env-file run <dev_script>`, ale druhý proces Bun, který skript
@@ -367,7 +370,7 @@ volný port a přesun je ruční úprava manifestu v PR Modulu.
 | `MS-04` | `lazurio.preparation` deklarované; `check_script` existuje; `runtime` chybí (= `bun`) nebo `uv`; `runtime: "bun"` zapsané explicitně je do W0-5 vada (Platforma ho odmítne); `prepare_script`/`check_script` nejsou npm lifecycle jména |
 | `MS-05` | `dev` skript je jednoprocesový: bez `&&`, `concurrently`, `build`, `npx`, `node`, `bunx`, `nvm`, inline `VAR=…` |
 | `MS-06` | žádné čtení `LAZURIO_RUNTIME_HOST`, `LAZURIO_RUNTIME_PORT`, `PORT`, `COMPANYASCODE_*`, lease souboru ze zdrojů App; port leasu není ve zdrojích App zapsaný natvrdo |
-| `MS-07` | žádné `.env*` na start cestě; žádné `dotenv`; každé volání Bun na start cestě s `--no-env-file`; náhradou `.env` u tajemství je `lazurio.runtime.secrets` (kap. 4.3) |
+| `MS-07` | žádné `.env*` na start cestě; žádné `dotenv`; každé volání Bun na start cestě s `--no-env-file` před vstupem a bez `--env-file`; náhradou `.env` u tajemství je `lazurio.runtime.secrets` (kap. 4.3) |
 | `MS-08` | TypeScript strict; žádné `.js/.mjs/.cjs` zdroje App (config frameworku v TS) |
 | `MS-09` | žádné importy mimo repo (`../` nad kořen Modulu, `file:` mimo repo, jiný Modul, `launchpad/`, `infra/`, `design-system/`) |
 | `MS-10` | závislost repository-db a module-kit připnutá na vydaný tag |

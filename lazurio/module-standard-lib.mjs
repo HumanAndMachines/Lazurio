@@ -291,11 +291,12 @@ export async function evaluateModuleStandard({
 
     // MS-07 Bun loads .env, .env.local and .env.<NODE_ENV> by itself unless
     // started with --no-env-file (HumanAndMachines/Lazurio#471); every Bun
-    // invocation on the start path carries the flag.
+    // invocation on the start path carries the flag before its entry and
+    // loads no --env-file.
     const startPath = nonEmptyString(scripts[devScriptName]) ? scriptChain(scripts, devScriptName) : [];
     for (const command of startPath) {
-      if (/(?:^|[\s(])bun(?=\s|$)/.test(command) && !/(?:^|\s)--no-env-file(?=\s|$)/.test(command)) {
-        record("MS-07", "fail", `${label}: ${devScriptName} spouští Bun bez --no-env-file: ${command}`);
+      for (const finding of bunEnvFileFindings(command)) {
+        record("MS-07", "fail", `${label}: ${devScriptName} ${BUN_ENV_FILE_FINDINGS[finding]}: ${command}`);
       }
     }
 
@@ -531,6 +532,56 @@ export function devScriptFindings(command) {
   return findings;
 }
 
+const BUN_ENV_FILE_FINDINGS = Object.freeze({
+  missing: "spouští Bun bez --no-env-file",
+  "after-entry": "má --no-env-file až za vstupem (Bun ho předá skriptu jako argument)",
+  "env-file": "načítá soubor přes --env-file",
+});
+// Bun options that take their value as the next token; the value is not the entry.
+const BUN_VALUE_OPTIONS = new Set([
+  "--env-file", "--cwd", "--config", "-c", "--preload", "-r", "--require", "--import",
+  "--tsconfig-override", "--conditions", "--define", "-d", "--loader", "-l",
+  "--main-fields", "--extension-order", "--jsx-factory", "--jsx-fragment",
+  "--jsx-import-source", "--jsx-runtime",
+]);
+
+/**
+ * Measures every `bun` invocation of one command. Bun reads its own options
+ * only before the entry file or script name (after `bun` or after `bun run`);
+ * anything after the entry is an argument of the script. Returns `missing`,
+ * `after-entry` (the flag only follows the entry) and `env-file` (an explicit
+ * --env-file, which Bun loads even with --no-env-file).
+ */
+export function bunEnvFileFindings(command) {
+  const tokens = String(command ?? "").match(/"(?:[^"\\]|\\.)*"|'[^']*'|\S+/g) ?? [];
+  const findings = [];
+  tokens.forEach((token, start) => {
+    if (token !== "bun") return;
+    let noEnvFile = false;
+    let envFile = false;
+    let sawRun = false;
+    let index = start + 1;
+    while (index < tokens.length) {
+      const current = tokens[index];
+      if (current === "run" && !sawRun) {
+        sawRun = true;
+        index += 1;
+        continue;
+      }
+      if (!current.startsWith("-")) break;
+      const name = current.split("=", 1)[0];
+      if (name === "--no-env-file") noEnvFile = true;
+      if (name === "--env-file") envFile = true;
+      index += BUN_VALUE_OPTIONS.has(name) && !current.includes("=") ? 2 : 1;
+    }
+    if (!noEnvFile) {
+      findings.push(tokens.slice(index + 1).includes("--no-env-file") ? "after-entry" : "missing");
+    }
+    if (envFile) findings.push("env-file");
+  });
+  return findings;
+}
+
 export function legacyRuntimeReads(text) {
   const findings = [];
   const patterns = [
@@ -594,7 +645,9 @@ function scriptChain(scripts, entrypoint) {
     visited.add(name);
     const command = scripts[name];
     commands.push(command);
-    for (const match of command.matchAll(/\b(?:bun|npm|pnpm|yarn)(?:\s+--[a-z][a-z-]*)*\s+(?:run\s+)?([A-Za-z0-9:_-]+)\b/g)) {
+    const option = String.raw`\s+--?[A-Za-z][\w-]*(?:=\S+)?`;
+    const invocation = new RegExp(String.raw`\b(?:bun|npm|pnpm|yarn)(?:${option})*\s+(?:run(?:${option})*\s+)?([A-Za-z0-9:_][A-Za-z0-9:_-]*)\b`, "g");
+    for (const match of command.matchAll(invocation)) {
       if (match[1] !== name && typeof scripts[match[1]] === "string") visit(match[1]);
     }
   };
