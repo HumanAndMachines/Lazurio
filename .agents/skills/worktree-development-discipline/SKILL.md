@@ -132,7 +132,9 @@ autoritu.
    `gh pr view <číslo> --json mergeable,mergeStateStatus,reviewDecision`.
    Po explicitním „Publikuj" v threadu PR mergni metodou, kterou repozitář
    povoluje (při více povolených je default rebase, pokud Organizace ve svém
-   `AGENTS.md` nedeklaruje jinak), v primárním checkoutu spusť
+   `AGENTS.md` nedeklaruje jinak; synchronizaci šablony slučuj merge commitem
+   až po ověření `git merge-base --is-ancestor <commit šablony> <head>` a
+   povoleného merge commitu, jinak nesluč a nahlas to — decision 0174), v primárním checkoutu spusť
    `lazurio update`, potom `bun run doctor:task` a pokračuj cleanup guardy
    v kroku 13. Když Operátor zvolí předání, nebo mu GitHub merge
    nedovoluje, vyžádej review Kolegy, kterého Operátor zvolil, PR mu zároveň
