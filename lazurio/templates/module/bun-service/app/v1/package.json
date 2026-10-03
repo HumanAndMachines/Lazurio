@@ -5,7 +5,7 @@
   "type": "module",
   "packageManager": "bun@{{bun_version}}",
   "scripts": {
-    "dev": "bun run src/server.ts",
+    "dev": "bun --no-env-file run src/server.ts",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "format": "biome check --write .",

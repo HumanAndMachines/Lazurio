@@ -116,10 +116,18 @@ děti tohoto procesu (například Vite dev middleware uvnitř Bun serveru).
 Povolené tvary:
 
 ```json
-"dev": "bun run src/server.ts",
-"dev": "bun ./node_modules/vite/bin/vite.js --host \"$LAZURIO_RUNTIME_LISTENER_APP_HOST\" --port \"$LAZURIO_RUNTIME_LISTENER_APP_PORT\" --strictPort",
+"dev": "bun --no-env-file run src/server.ts",
+"dev": "bun --no-env-file ./node_modules/vite/bin/vite.js --host \"$LAZURIO_RUNTIME_LISTENER_APP_HOST\" --port \"$LAZURIO_RUNTIME_LISTENER_APP_PORT\" --strictPort",
 "dev": "astro dev"
 ```
+
+Každé volání `bun` na start cestě (`dev` a skripty, které spouští) nese
+`--no-env-file`. Bun jinak sám načte `.env`, `.env.local` a
+`.env.<NODE_ENV>` z adresáře App a listener nebo tajemství by mohl přijít
+z necommitnutého souboru v checkoutu. Launchpad spouští `dev` skript jako
+`bun --no-env-file run <dev_script>`, ale druhý proces Bun, který skript
+spustí, si soubory načte znovu; framework CLI bez dalšího `bun` (`astro dev`)
+flag nepotřebuje. Kontroluje `MS-07` (HumanAndMachines/Lazurio#471).
 
 Skript funguje, když je v `PATH` jen `bun` (Launchpad dává
 `~/.local/bin:/usr/local/bin:/usr/bin:/bin`). `node`, `npx`, `nvm`, `bunx`
@@ -141,9 +149,68 @@ Vite/Astro dev servery přijmou vlastní host jen z `_EXTERNAL_ORIGIN`
 ### 4.3 Konfigurace a tajemství
 
 Konfigurace App = runtime env (F26 allowlist) + soubory commitnuté v repu
-(`config/*.json`, výchozí hodnoty). Tajemství nikdy nejsou v repu ani
-v `.env`; App si je bere z vaultu Environmentu (DEV-6631) nebo od uživatele
-v UI. Demo/offline režimy jsou samostatné skripty (`dev:demo`), ne start.
+(`config/*.json`, výchozí hodnoty). Demo/offline režimy jsou samostatné
+skripty (`dev:demo`), ne start.
+
+**Tajemství** (API klíč externí služby, token, heslo) nikdy nejsou v repu,
+v `.env*` ani v souboru, který si App sama uloží. Jediným zdrojem pro start
+je **trezor Environmentu** (DEV-6631); rozhodnutí 0177:
+
+- **Deklarace.** App vyjmenuje jména tajemství, která ke startu potřebuje,
+  v `lazurio.runtime.secrets` vedle listenerů:
+
+  ```json
+  "runtime": {
+    "schema_version": "lazurio.runtime.v1",
+    "listeners": [{ "id": "app", "...": "..." }],
+    "secrets": ["EXTERNAL_API_KEY"]
+  }
+  ```
+
+  Jen jména, nikdy hodnoty. Jméno odpovídá `^[A-Z][A-Z0-9_]*$` a v seznamu je
+  jednou; pole je neprázdné, App bez tajemství klíč vynechá. Tvar drží
+  `lazurio-runtime.schema.json` a runtime validátor Core.
+- **Předání.** Launchpad před každým startem (i restartem supervize) přečte
+  hodnotu každého deklarovaného jména z trezoru Environmentu a předá ji do
+  uzavřeného env procesu jako `LAZURIO_RUNTIME_SECRET_<NAME>` (například
+  `LAZURIO_RUNTIME_SECRET_EXTERNAL_API_KEY`). Nic jiného z trezoru App
+  nedostane. Hodnoty nejdou do logů, Diagnostiky, souborů v Modulu ani
+  do `XDG_STATE_HOME`; změna hodnoty v trezoru platí od dalšího startu.
+- **Kde hodnota leží.** V trezoru Organizace, které Modul patří, v kolekci
+  tohoto Environmentu (model DEV-6631: trezor = Organizace, kolekce =
+  Environment, účet Environmentu čte jen svou kolekci). Položka má jméno
+  přesně `<NAME>`, hodnotou je její heslo. Ukládá ji Operátor Environmentu
+  nebo Agent na jeho pokyn; jiná Organizace ani jiný Environment ji nevidí.
+- **Fail-closed.** Chybí-li v trezoru některé deklarované jméno, je-li
+  položek se stejným jménem víc, nebo Environment k trezoru přístup nemá,
+  Launchpad App **nespustí** a vrátí typovaný nález připravenosti se jmény
+  chybějících tajemství (nikdy s hodnotami). App nikdy neběží napůl
+  nakonfigurovaná. App sama čte `LAZURIO_RUNTIME_SECRET_<NAME>` stejně jako
+  listener (kap. 4.2): bez proměnné skončí exit 2 s hláškou, která jmenuje
+  proměnnou, ne hodnotu.
+- **Zadání v UI.** App, která dosud nechala uživatele zadat klíč v UI
+  a ukládala ho do `.env.local`, ho místo toho deklaruje. UI smí ukázat
+  „nastaveno / chybí v trezoru“, ale klíč neukládá.
+- **Skript mimo start.** Tajemství, které potřebuje jen ručně spouštěný
+  skript (import, jednorázová migrace dat), se v `lazurio.runtime.secrets`
+  nedeklaruje. Skript si ho přečte z trezoru Environmentu sám, pod účtem
+  Environmentu (například `bw get password <NAME>`), a README Modulu tento
+  krok popisuje. Ani skript nečte `.env*`.
+- **Workstation.** Lokální Environment je Environment jako každý jiný:
+  hodnota leží v kolekci tohoto Environmentu v trezoru Organizace. Dokud
+  Environment identitu v trezoru nemá (rollout DEV-6631), je deklarované
+  tajemství nález připravenosti a App nestartuje. Lokální custody cesty
+  ([security/local-secret-custody.md](security/local-secret-custody.md))
+  jsou úschova, ne zdroj startu. **Otevřené:** zda je smí Launchpad na
+  workstation bez identity trezoru číst jako přechodný zdroj (doporučení:
+  ne, jeden zdroj) a který trezor slouží Modulům v Personalspace.
+- **Mezikrok.** Čtečka LazurioPlatform (`parseAppRuntime`) dnes neznámé pole
+  `secrets` odmítá a App s ním nespustí; čtení a předání z trezoru zavádí
+  Lazurio/LazurioPlatform#PLATFORM_ISSUE. Do jeho vydání hlásí `MS-03`
+  platnou deklaraci jako `warn` a Modul ji zapisuje až s tímto vydáním na
+  svých Environmentech. Launchpad tohoto repa (`lazurio launchpad serve`,
+  `lazurio module start`) trezor nečte: deklaraci přijme, tajemství nepředá
+  a App skončí podle svého fail-closed čtení.
 
 ### 4.4 Připravenost, signály, ukončení
 
@@ -263,6 +330,10 @@ Launchpad (LazurioPlatform) drží **jednu politiku** pro všechny Moduly:
 
 - příprava před startem (`check_script` → `prepare_script`), start `dev`
   skriptu s uzavřeným env (F26), `umask 077`, loopback;
+- **tajemství z trezoru**: před každým startem přečte jména z
+  `lazurio.runtime.secrets` z kolekce Environmentu v trezoru Organizace
+  a předá je jako `LAZURIO_RUNTIME_SECRET_<NAME>`; chybějící tajemství je
+  typovaný nález připravenosti a App nestartuje (kap. 4.3, decision 0177);
 - **supervize**: proces, který skončí nenulově, restartuje s omezeným
   backoffem (1 s, 5 s, 30 s; po třetím selhání stav `failed` viditelný v
   Launchpadu a Diagnostice; další start je explicitní). Rozhodnutí Matěje
@@ -274,6 +345,7 @@ Launchpad (LazurioPlatform) drží **jednu politiku** pro všechny Moduly:
   `module-nonconformant` a odkazem na výstup `lazurio module setup`.
 
 Launchpad **nedělá**: nedědí PATH ani env operátora, nečte `.env`,
+nepíše tajemství do logů ani souborů,
 nespouští build ani supervizory za App, nepřebírá porty, nenabízí legacy
 `LAZURIO_RUNTIME_HOST/PORT` (odstraní jedno vydání po dokončení W2 migrace).
 
@@ -291,11 +363,11 @@ volný port a přesun je ruční úprava manifestu v PR Modulu.
 | --- | --- |
 | `MS-01` | `lazurio.module.json` platné, `id` = slot, každý lease v poolu Organizace, pooly disjunktní |
 | `MS-02` | každá App: `packageManager` přesný Bun, lockfile commitnutý a čerstvý |
-| `MS-03` | `lazurio.runtime` s listenery a health; `dev_script` existuje |
+| `MS-03` | `lazurio.runtime` s listenery a health; `dev_script` existuje; platná deklarace `secrets` je `warn`, dokud ji Launchpad nečte (kap. 4.3) |
 | `MS-04` | `lazurio.preparation` deklarované; `check_script` existuje; `runtime` chybí (= `bun`) nebo `uv`; `runtime: "bun"` zapsané explicitně je do W0-5 vada (Platforma ho odmítne); `prepare_script`/`check_script` nejsou npm lifecycle jména |
 | `MS-05` | `dev` skript je jednoprocesový: bez `&&`, `concurrently`, `build`, `npx`, `node`, `bunx`, `nvm`, inline `VAR=…` |
 | `MS-06` | žádné čtení `LAZURIO_RUNTIME_HOST`, `LAZURIO_RUNTIME_PORT`, `PORT`, `COMPANYASCODE_*`, lease souboru ze zdrojů App; port leasu není ve zdrojích App zapsaný natvrdo |
-| `MS-07` | žádné `.env*` na start cestě; žádné `dotenv` |
+| `MS-07` | žádné `.env*` na start cestě; žádné `dotenv`; každé volání Bun na start cestě s `--no-env-file`; náhradou `.env` u tajemství je `lazurio.runtime.secrets` (kap. 4.3) |
 | `MS-08` | TypeScript strict; žádné `.js/.mjs/.cjs` zdroje App (config frameworku v TS) |
 | `MS-09` | žádné importy mimo repo (`../` nad kořen Modulu, `file:` mimo repo, jiný Modul, `launchpad/`, `infra/`, `design-system/`) |
 | `MS-10` | závislost repository-db a module-kit připnutá na vydaný tag |

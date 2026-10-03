@@ -177,6 +177,14 @@ nese sekci `standard` se stabilním seznamem třinácti kontrol v pořadí
 - Python App (`runtime: uv` nebo `pyproject.toml` vedle App) nese deklaraci
   v `app/v<N>/pyproject.toml` `[tool.lazurio]`. Dokud ji Core nečte, `MS-04`
   hlásí `warn`; viditelná deklarace s `runtime: uv` bez `uv_version` je `fail`.
+- `MS-07` hlásí `.env*` na start cestě, `dotenv` a každé volání Bun ve
+  skriptech start cesty (`dev` a skripty, které spouští) bez `--no-env-file`
+  (Bun jinak `.env`, `.env.local` a `.env.<NODE_ENV>` načte sám). Náhradou
+  za `.env` u tajemství je deklarace `lazurio.runtime.secrets`: Launchpad
+  hodnoty předá z trezoru Environmentu (standard kap. 4.3, decision 0177).
+  Tvar deklarace (jména `^[A-Z][A-Z0-9_]*$`, neprázdné, bez duplicit)
+  hlídá Core runtime kontrakt; vadná deklarace končí `runtime_contract_invalid`.
+  Platná deklarace je `warn` `MS-03`, dokud ji vydání Launchpadu nečte.
 - `details` jsou konkrétní nálezy s cestou relativní ke kořeni Modulu;
   `action` říká, co udělat; `repairs` jsou mechanické opravy, které zapíše
   `--apply`.

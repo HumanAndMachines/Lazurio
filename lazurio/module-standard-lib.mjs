@@ -21,7 +21,7 @@ export const MODULE_STANDARD_CHECKS = Object.freeze([
   { id: "MS-04", summary: "lazurio.preparation je deklarované, check_script existuje a runtime je bun nebo uv" },
   { id: "MS-05", summary: "dev skript spouští právě jeden proces" },
   { id: "MS-06", summary: "App nečte legacy LAZURIO_RUNTIME_HOST/PORT, PORT, COMPANYASCODE_* ani lease soubor a port leasu nemá zapsaný natvrdo" },
-  { id: "MS-07", summary: "žádné .env* na start cestě a žádné dotenv" },
+  { id: "MS-07", summary: "žádné .env* na start cestě, žádné dotenv a Bun se spouští s --no-env-file" },
   { id: "MS-08", summary: "TypeScript strict a žádné .js/.mjs/.cjs zdroje App" },
   { id: "MS-09", summary: "žádné importy mimo repozitář Modulu" },
   { id: "MS-10", summary: "repository-db a module-kit jsou připnuté na vydaný tag" },
@@ -37,7 +37,7 @@ const CHECK_ACTIONS = Object.freeze({
   "MS-04": "Doplň lazurio.preparation s check_script (read-only package skript) podle lazurio-preparation.schema.json.",
   "MS-05": "Zjednoduš dev skript na jeden dlouho běžící proces; build, guardy a další procesy patří do přípravy nebo do App.",
   "MS-06": "Čti host a port jen z LAZURIO_RUNTIME_LISTENER_<ID>_HOST/_PORT (ideálně přes @lazurio/module-kit) a bez nich skonči chybou; port leasu žije jen v lazurio.module.json.",
-  "MS-07": "Odstraň .env soubory a dotenv; konfigurace je runtime env plus commitnuté config soubory, tajemství vault Environmentu.",
+  "MS-07": "Odstraň .env soubory a dotenv a spouštěj Bun s --no-env-file; konfigurace je runtime env plus commitnuté config soubory, tajemství deklaruj v lazurio.runtime.secrets (trezor Environmentu).",
   "MS-08": "Zapni strict v tsconfig.json (nebo extends strict preset) a převeď .js/.mjs/.cjs zdroje a configy na TypeScript.",
   "MS-09": "Nahraď importy mimo repo verzovanou závislostí nebo kód vlož do Modulu, který ho jediný používá.",
   "MS-10": "Připni závislost na vydaný tag, například github:Lazurio/repository-db#v3.1.0.",
@@ -74,6 +74,10 @@ const KNOWN_STRICT_TSCONFIG_PRESETS = [
   /^@tsconfig\/strictest(?:\/tsconfig\.json)?$/,
 ];
 const PINNED_DEPENDENCY = /^github:Lazurio\/(?:repository-db|module-kit)#v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+
+// Platform issue that makes the Launchpad read lazurio.runtime.secrets; the
+// MS-03 warning goes away with its release (decision 0177).
+const SECRETS_PLATFORM_ISSUE = "Lazurio/LazurioPlatform#PLATFORM_ISSUE";
 
 let preparationSchemaPromise = null;
 
@@ -176,6 +180,16 @@ export async function evaluateModuleStandard({
       if (!nonEmptyString(scripts[devScriptName])) {
         record("MS-03", "fail", `${label}: dev_script ${devScriptName} neexistuje v scripts`);
       }
+      // Declared secrets (decision 0177): the shape is validated by the Core
+      // runtime contract. Until a released Platform reads the key, its runtime
+      // reader refuses the whole declaration, so the App would not start.
+      if (Array.isArray(runtime.secrets) && runtime.secrets.length > 0) {
+        record(
+          "MS-03",
+          "warn",
+          `${label}: lazurio.runtime.secrets (${runtime.secrets.join(", ")}) Launchpad zatím nečte a App s deklarací nespustí (${SECRETS_PLATFORM_ISSUE})`,
+        );
+      }
     }
 
     // MS-04 preparation
@@ -272,6 +286,16 @@ export async function evaluateModuleStandard({
       }
       if (/(?:\bfrom\s*|\bimport\s*|\brequire\(\s*|\bimport\(\s*)["']dotenv(?:\/[^"']*)?["']/.test(text)) {
         record("MS-07", "fail", `${file.path}: importuje dotenv`);
+      }
+    }
+
+    // MS-07 Bun loads .env, .env.local and .env.<NODE_ENV> by itself unless
+    // started with --no-env-file (HumanAndMachines/Lazurio#471); every Bun
+    // invocation on the start path carries the flag.
+    const startPath = nonEmptyString(scripts[devScriptName]) ? scriptChain(scripts, devScriptName) : [];
+    for (const command of startPath) {
+      if (/(?:^|[\s(])bun(?=\s|$)/.test(command) && !/(?:^|\s)--no-env-file(?=\s|$)/.test(command)) {
+        record("MS-07", "fail", `${label}: ${devScriptName} spouští Bun bez --no-env-file: ${command}`);
       }
     }
 
@@ -570,7 +594,7 @@ function scriptChain(scripts, entrypoint) {
     visited.add(name);
     const command = scripts[name];
     commands.push(command);
-    for (const match of command.matchAll(/\b(?:bun|npm|pnpm|yarn)\s+(?:run\s+)?([A-Za-z0-9:_-]+)\b/g)) {
+    for (const match of command.matchAll(/\b(?:bun|npm|pnpm|yarn)(?:\s+--[a-z][a-z-]*)*\s+(?:run\s+)?([A-Za-z0-9:_-]+)\b/g)) {
       if (match[1] !== name && typeof scripts[match[1]] === "string") visit(match[1]);
     }
   };

@@ -269,8 +269,8 @@ test("MS-05 flags every non-single-process dev shape and accepts the standard sh
     expect(devScriptFindings(command)).toContain(finding);
   }
   for (const command of [
-    "bun run src/server.ts",
-    "bun ./node_modules/vite/bin/vite.js --host \"$LAZURIO_RUNTIME_LISTENER_APP_HOST\" --port \"$LAZURIO_RUNTIME_LISTENER_APP_PORT\" --strictPort",
+    "bun --no-env-file run src/server.ts",
+    "bun --no-env-file ./node_modules/vite/bin/vite.js --host \"$LAZURIO_RUNTIME_LISTENER_APP_HOST\" --port \"$LAZURIO_RUNTIME_LISTENER_APP_PORT\" --strictPort",
     "astro dev",
   ]) {
     expect(devScriptFindings(command)).toEqual([]);
@@ -332,6 +332,59 @@ test("MS-07 rejects .env files on the start path and dotenv", async () => {
     "app/v1/.env.local: soubor .env.local na start cestě",
     "app/v1/package.json: závislost dotenv",
   ]);
+});
+
+test("MS-07 requires --no-env-file on every Bun invocation of the start path (#471)", async () => {
+  const bare = await conformantFixture({ mutatePackage: (pkg) => { pkg.scripts.dev = "bun run src/server.ts"; } });
+  const bareReport = await setupModule(bare);
+  expect(bareReport.status).toBe("action_required");
+  expect(check(bareReport, "MS-07")).toMatchObject({
+    status: "fail",
+    details: ["app/v1/package.json: dev spouští Bun bez --no-env-file: bun run src/server.ts"],
+  });
+
+  const chained = await conformantFixture({
+    mutatePackage: (pkg) => {
+      pkg.scripts.dev = "bun --no-env-file run serve";
+      pkg.scripts.serve = "bun src/server.ts";
+    },
+  });
+  expect(check(await setupModule(chained), "MS-07").details).toEqual([
+    "app/v1/package.json: dev spouští Bun bez --no-env-file: bun src/server.ts",
+  ]);
+
+  // A framework CLI started by the Launchpad's own `bun --no-env-file run`
+  // invokes no second Bun process; scripts off the start path are not judged.
+  const framework = await conformantFixture({ mutatePackage: (pkg) => { pkg.scripts.dev = "astro dev"; } });
+  expect(check(await setupModule(framework), "MS-07")).toMatchObject({ status: "pass", details: [] });
+  expect(check(await setupModule(await conformantFixture()), "MS-07")).toMatchObject({ status: "pass" });
+});
+
+test("lazurio.runtime.secrets declares names only; MS-03 warns until the Launchpad reads them (decision 0177)", async () => {
+  const declared = await conformantFixture({
+    mutatePackage: (pkg) => { pkg.lazurio.runtime.secrets = ["EXTERNAL_API_KEY", "WEBHOOK_SIGNING_KEY"]; },
+  });
+  const report = await setupModule(declared);
+  expect(report.status).toBe("action_required");
+  expect(check(report, "MS-03")).toMatchObject({ status: "warn" });
+  expect(check(report, "MS-03").details).toEqual([
+    expect.stringMatching(/^app\/v1\/package\.json: lazurio\.runtime\.secrets \(EXTERNAL_API_KEY, WEBHOOK_SIGNING_KEY\) Launchpad zatím nečte/),
+  ]);
+  expect(report.standard.checks.filter((item) => item.status !== "pass").map((item) => item.id)).toEqual(["MS-03"]);
+
+  for (const [secrets, message] of [
+    [[], "secrets musí být neprázdné pole jmen"],
+    ["EXTERNAL_API_KEY", "secrets musí být neprázdné pole jmen"],
+    [["external_api_key"], "secrets[0] není validní"],
+    [["1KEY"], "secrets[0] není validní"],
+    [["EXTERNAL-API-KEY"], "secrets[0] není validní"],
+    [["EXTERNAL_API_KEY", "EXTERNAL_API_KEY"], "secrets[1] EXTERNAL_API_KEY je duplicitní"],
+  ]) {
+    const invalid = await conformantFixture({ mutatePackage: (pkg) => { pkg.lazurio.runtime.secrets = secrets; } });
+    const invalidReport = await setupModule(invalid);
+    expect(invalidReport).toMatchObject({ status: "action_required", reason: "runtime_contract_invalid", standard: null });
+    expect(JSON.stringify(invalidReport.issues)).toContain(`app/v1/package.json: lazurio.runtime.${message}`);
+  }
 });
 
 test("MS-08 requires TypeScript strict and no JavaScript sources outside public/", async () => {
@@ -544,7 +597,7 @@ async function conformantFixture({
     packageManager: `bun@${bunVersion}`,
     type: "module",
     scripts: {
-      dev: "bun run src/server.ts",
+      dev: "bun --no-env-file run src/server.ts",
       check: "tsc --noEmit && biome check",
       test: "bun test",
       "check:prepared": "bun run src/check-prepared.ts",
