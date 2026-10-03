@@ -24,7 +24,10 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
 1. **Uvnitř zóny oběma směry.** Agenti Operátora pracují v jednom souvislém
    prostoru a Operátor nemusí řešit, kde co leží.
    - osobní klient → osobní VM: SSH + HTTPS; osobní VM → osobní laptop: SSH;
-   - pracovní laptop ↔ pracovní VM téže Organizace přiřazená témuž Operátorovi: SSH.
+   - pracovní laptop → pracovní VM téže Organizace přiřazená témuž Operátorovi: SSH.
+     Opačný směr (pracovní VM → zařízení) se obecně nedává (0182); pracovní,
+     týmové a automatizované Environmenty na zařízení nedosáhnou, kromě
+     výslovně deklarovaného zařízení Ownera podle pravidla 8.
    - Pracovní VM mezi sebou grant nemají — ani v rámci jedné Organizace, ani
      napříč Organizacemi téhož Conglomerate. Hranice Organizací zůstává
      zachovaná; propojení drží Operátorův pracovní laptop nebo jeho osobní strana.
@@ -39,9 +42,8 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
    účtu) přijímá jen příchozí spojení od členů GitHub Teamu, na který je vázaná
    neměnným `github_team_id` (0147/0149); členství se čte živě z GitHubu a
    nevzniká druhý roster. Nikdy nemá odchozí grant na klienty ani na jiné VM
-   (kromě portu proxy AI poolu své Organizace, 0181). Obousměrná hrana pracovní
-   zóny existuje jen mezi pracovním laptopem a pracovní VM přiřazenou témuž
-   Operátorovi; jinak by agenti jednoho člena došli na laptop jiného.
+   (kromě portu proxy AI poolu své Organizace, 0181). Pracovní zóna nemá hranu
+   z VM na zařízení (0182); jinak by agenti jednoho člena došli na laptop jiného.
 5. **Mezi Operátory nic implicitně.**
 6. **Telefon** není SSH server; systémové ovládání telefonu se nesjednává.
 7. **Správa Conglomerate Hostu** patří Ownerovi GitHub Organizace, která
