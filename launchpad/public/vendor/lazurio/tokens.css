@@ -2,11 +2,12 @@
  * Lazurio - design tokeny
  *
  * Tenhle soubor je source of truth barev, typografie a tvaru produktu Lazurio.
- * Rozhodovací historii zvolených hodnot zachovává Git historie tohoto souboru;
- * aktivní tokenový kontrakt je celý lokálně a nevyžaduje externí knowledgebase.
+ * Rozhodovací historie a sondy, ze kterých hodnoty vzešly, jsou v
+ * HumanAndMachines: brand/lazurio/ a docs/decisions/0111.
  *
- * Tokeny patří sdílenému Lazurio surface; Organization může doplnit vlastní
- * obsahovou identitu, ale nepřejmenovává ani nepřebarvuje Launchpad shell.
+ * POZOR na scope: úroveň Lazuria (Conglomerate vs produkt Organizace
+ * Rozjedeme-ai) není uzavřená a je eskalovaná na foundera. Hodnoty níž platí;
+ * to, kde je jejich kanonický domov, ne. Detail v AGENTS.md.
  *
  * Princip (Principál, 2026-07-25):
  * minimalismus, stupně šedi + černá a bílá, JEDINÝ výrazný prvek je
@@ -84,31 +85,37 @@
 	--lz-blue-950: #080935;
 
 	/* --- Expresivní barvy mimo rozhraní ----------------------------- */
-	/* Schválená sada z `specimens/08-prvky.html`, rozšířená o orchidejovou
-	 * variantu Lazurio kamenů. Barvy nenesou stav; patří ilustracím, maskotům,
-	 * obálkám a kampaním. V Launchpadu smějí nést identitu modulu na hraně
-	 * pouze tehdy, když přesně opakují barvu jeho kamenné ikony. Základ je
-	 * nejsytější poloha odstínu. Varianta `-figure` je pouze pro menší figuru
-	 * na papíru a drží kontrast 3:1. */
+	/* Schválená sada z `specimens/08-prvky.html`, rozšířená rozhodnutím
+	 * Principála 18. 8. 2026 o tlumenou orchidejovou. Tyto barvy nesmějí nést
+	 * stav ani aktivní prvek produktového UI; patří ilustracím,
+	 * obálkám a kampaním. Původní čtyři doplňkové barvy stojí v nejsytější
+	 * poloze odstínu; orchidejová je záměrně tlumená. Varianta
+	 * `-figure` je pouze pro menší figuru na papíru a drží kontrast 3:1. */
 	--lz-expressive-orange: #ff8800;
+	--lz-expressive-orange-1: #ff9924;
+	--lz-expressive-orange-2: #ffa947;
+	--lz-expressive-orange-3: #ffba6b;
 	--lz-expressive-yellow: #ffcc00;
+	--lz-expressive-yellow-1: #ffd324;
+	--lz-expressive-yellow-2: #ffda47;
+	--lz-expressive-yellow-3: #ffe16b;
 	--lz-expressive-mint: #00ffaa;
+	--lz-expressive-mint-1: #24ffb6;
+	--lz-expressive-mint-2: #47ffc2;
+	--lz-expressive-mint-3: #6bffce;
 	--lz-expressive-vermilion: #ff0004;
-	--lz-expressive-orchid: #db7eca;
+	--lz-expressive-vermilion-1: #ff2427;
+	--lz-expressive-vermilion-2: #ff474a;
+	--lz-expressive-vermilion-3: #ff6b6e;
+	--lz-expressive-orchid: #c77dbb;
+	--lz-expressive-orchid-1: #d296c8;
+	--lz-expressive-orchid-2: #dcafd5;
+	--lz-expressive-orchid-3: #e7c8e2;
 	--lz-expressive-orange-figure: #db7500;
 	--lz-expressive-yellow-figure: #ad8b00;
 	--lz-expressive-mint-figure: #00a36d;
 	--lz-expressive-vermilion-figure: #ff0004;
-
-	/* Tři typy agentů. Kresba ikony je JEDNA a liší se jen barvou (rozhodnutí
-	 * Principála 2026-08-01; dřív měly Kolega a Buddy vlastní siluety).
-	 * DŮSLEDEK: v jednobarevném provedení jsou nerozlišitelné. Kde na rozdílu
-	 * záleží a barva není k dispozici, musí ho nést popisek. */
-	--lz-persona-agent: var(--lz-blue-500);
-	/* Role se liší odstínem ze schválené expresivní sady. Pro postavy se
-	 * používá varianta figury s kontrastem 3:1 na papíru. */
-	--lz-persona-kolega: var(--lz-expressive-mint-figure);
-	--lz-persona-buddy: var(--lz-expressive-yellow-figure);
+	--lz-expressive-orchid-figure: #c476b7;
 
 	/* --- Signál: sémantické barvy ------------------------------------ */
 	/* Sémantická barva NENÍ barva značky, je to signál. Nesmí se použít
@@ -229,7 +236,7 @@
 	--lz-font-mono: "Geist Mono", ui-monospace, monospace;
 
 	/* Tracking je u tohohle typu identity důležitější než volba fontu.
-	 * Referenční weby drží nadpisy stažené a ve váze 500, ne 700. */
+	 * Stažená sazba zůstává součástí kresby i po zesílení nadpisů. */
 	--lz-track-hero: -0.045em;
 	--lz-track-display: -0.035em;
 	--lz-track-title: -0.02em;
@@ -239,13 +246,12 @@
 	 * kompatibilitě; nové použití patří na `--lz-track-body`. */
 	--lz-track-eyebrow: 0.12em;
 
-	/* REVIZE 4. 8. 2026. Do té doby platilo „váha 500 místo 700" jako nález
-	 * z výběru fontu. Principál nad renderem rozhodl, že značka musí být
-	 * výraznější — nadpisy jdou na 600, tlačítka a popisky na 600, běžný
-	 * text zůstává 400. Wordmark si drží vlastních 550 (jiná kresba, viz
-	 * logo manuál). */
-	--lz-weight-hero: 600;
-	--lz-weight-title: 600;
+	/* REVIZE 1. 9. 2026. Principál nad veřejným webem rozhodl, že nadpisy
+	 * potřebují větší důraz: hero, display i title přecházejí z 600 na 700.
+	 * Akční prvky zůstávají na 600 a běžný text na 400. Wordmark si drží
+	 * vlastních 550 (jiná kresba, viz logo manuál). */
+	--lz-weight-hero: 700;
+	--lz-weight-title: 700;
 	--lz-weight-body: 400;
 	--lz-weight-akce: 600;   /* tlačítka, odkazy v navigaci, popisky */
 
@@ -254,7 +260,8 @@
 	 * takže si každý dokument sázel vlastní čísla a `content/brand/stav`
 	 * vedl typografickou škálu jako `část`. Hodnoty vznikly na listu prvků
 	 * (`specimens/08-prvky.html`) a jsou po dvou revizích Principála:
-	 * nejdřív nahoru, protože první návrh byl příliš drobný, pak váhy na 600.
+	 * nejdřív nahoru, protože první návrh byl příliš drobný, pak váhy na 600
+	 * a při revizi veřejného webu 1. 9. 2026 nadpisy na 700.
 	 *
 	 * Poměr je kolem 1,25 nahoře a dolů se zplošťuje. `lead` a `title` mají
 	 * schválně TOUŽ velikost a liší se prokladem a váhou — je to táž
@@ -264,6 +271,7 @@
 	--lz-size-title: 20px;
 	--lz-size-lead: 20px;
 	--lz-size-body: 16.5px;
+	--lz-size-nav: 15px;
 	--lz-size-meta: 14px;
 
 	--lz-leading-hero: 1.02;
@@ -281,8 +289,11 @@
 	--lz-space-4: 4px;
 	--lz-space-8: 8px;
 	--lz-space-12: 12px;
+	--lz-space-14: 14px;
 	--lz-space-16: 16px;
+	--lz-space-20: 20px;
 	--lz-space-24: 24px;
+	--lz-space-28: 28px;
 	--lz-space-32: 32px;
 	--lz-space-48: 48px;
 	--lz-space-64: 64px;   /* = krok mřížky */
@@ -298,8 +309,15 @@
 	--lz-radius-sm: 6px;
 	--lz-radius-md: 10px;
 	--lz-radius-pill: 999px;
-	/* Mřížka jako nosná struktura, ne dekorace. Jeden krok pro celou identitu. */
+	/* Mřížka jako nosná struktura, ne dekorace. Konstrukční modul je 64 px,
+	 * ale kreslí se každá druhá linka: viditelný krok je 128 px. Obě hodnoty
+	 * jsou veřejné, aby komponenty nemusely vztah znovu odhadovat. */
 	--lz-grid-step: 64px;
+	--lz-grid-visible-step: 128px;
+	--lz-grid-line-on-color: rgba(0, 0, 0, 0.16);
+	--lz-grid-cross-on-color: rgba(0, 0, 0, 0.3);
+	--lz-grid-line-on-dark: rgba(255, 255, 255, 0.26);
+	--lz-grid-cross-on-dark: rgba(255, 255, 255, 0.45);
 }
 
 /*
