@@ -5,7 +5,10 @@
 > (decision 0167); instalace Root Repa ho používají do své migrace. Cílovou
 > navigaci drží decision 0179: rail Environmentů, přepínač Chat · Apps ·
 > Automate v levém sloupci a žádná lišta nahoře. Dropdown v záhlaví,
-> monogram Organizace ani další navigace níže nejsou cílovým stavem.
+> monogram Organizace ani další navigace níže nejsou cílovým stavem. Sekce
+> Organizace (`launchpad_section: "organization"`) ani seskupení podle Teamů
+> také ne: Apps cílově ukazují jen sekce Workspace (všechny Moduly) a
+> Productionspace (decision 0179, dodatek z 2026-10-03 večer).
 
 Status: implementation spec for RM-0006 step-005
 Updated: 2026-07-02 (builder-first framing per decision 0047, worktree runtime per decision 0049)

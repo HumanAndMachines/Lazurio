@@ -117,7 +117,8 @@ pracovní Root.
   Team příslušnost je N:M deklarace v `modules[].teams` nebo
   `module_slots[].teams`, ne další adresář. Chybějící deklarace znamená Team
   `workspace`; starší singulární `workspace` je pouze migrační alias. Launchpad
-  podle stejné deklarace grupuje karty (decision 0041). Hostovaná jména
+  podle této deklarace karty neseskupuje ani neoznačuje: všechny Moduly ukazuje
+  jednou v sekci Workspace (decision 0179). Hostovaná jména
   aplikací určuje decision 0146: `<app>.<vm>.<org>.lazurio.io` v dílně
   (hostovaná VM, jen tailnet) a `<app>.<org>.lazurio.io` pro produkční
   workspace aplikace; starší tvar `<modul>.<team>.<doména>` je nahrazený.
