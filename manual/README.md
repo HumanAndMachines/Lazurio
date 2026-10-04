@@ -89,7 +89,9 @@ organizations/<org>/
   `modules[].teams` / `module_slots[].teams`. Modul může patřit do více Teamů.
   Chybějící deklarace znamená výchozí Team `workspace`. Starší Organizace
   mohou během migrace ještě používat singulární alias `workspace`. Deklaraci
-  drží decisions 0021/0023/0041 v `manual/decision-register.md`. Nasazený
+  drží decisions 0021/0023/0041 v `manual/decision-register.md`. Které
+  Teamy na Modul skutečně dosáhnou, určuje živý grant na GitHubu a `teams`
+  je výchozí stav při založení Modulu (decision 0186). Nasazený
   rezidentní Launchpad tohoto repa podle ní grupuje karty, dokud ho nenahradí
   Launchpad LazurioPlatform (decision 0167). Ten cílově ukazuje každý Modul
   jednou v sekci Workspace a podle Teamů neseskupuje ani neoznačuje (decision
