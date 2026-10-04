@@ -99,8 +99,8 @@ postup níže použije jen tam, kde Launchpad Mašiny není dostupný.
 Ozubené kolo v hlavičce a sekce Zdrojové kódy platí jen pro rezidentní
 Launchpad (decision 0167). V Launchpadu Platformy je přihlášení GitHubu
 v Nastavení tohoto Environmentu, sekce **Nástroje** (sekce Obecné / Tento
-Environment / Nástroje / Obnova); cílově je otevírá ozubené kolo v railu
-(decision 0179).
+Environment / Nástroje / Obnova); cílově je otevírá ozubené kolo vedle výběru
+Environmentu v hlavičce levého sloupce (decision 0185).
 
 Ruční postup je stejný jako na pracovní stanici
 (kanonicky skill `lazurio-workstation-install`, sekce o GitHub účtu):
