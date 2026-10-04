@@ -116,7 +116,9 @@ pracovní Root.
 - `organizations/<org>/workspace/` — plochá složka všech workspace Modulů.
   Team příslušnost je N:M deklarace v `modules[].teams` nebo
   `module_slots[].teams`, ne další adresář. Chybějící deklarace znamená Team
-  `workspace`; starší singulární `workspace` je pouze migrační alias. Nasazený
+  `workspace`; starší singulární `workspace` je pouze migrační alias. Které
+  Teamy na Modul skutečně dosáhnou, určuje živý grant na GitHubu; `teams` je
+  výchozí stav při založení Modulu (decision 0186). Nasazený
   rezidentní Launchpad tohoto repa podle stejné deklarace grupuje karty, dokud
   ho nenahradí Launchpad LazurioPlatform (decision 0167). Ten cílově ukazuje
   každý Modul jednou v sekci Workspace a podle Teamů neseskupuje ani neoznačuje
