@@ -368,6 +368,11 @@ Launchpad ani aplikaci neotevírej automaticky při zahájení chatu. Vestavěn�
 browser použij jen když aktuální úkol vyžaduje práci v jejich UI nebo vizuální
 ověření výsledku.
 
+Každé vlákno, které Launchpad, průvodce nebo prompt otevírá v Chatu, začíná v projektu
+Lazurio Folderu; prompt sám jmenuje Organizaci a práci. Předání promptu odkazem nenese
+model ani reasoning effort: platí výchozí model T3 Code z Nastavení, který Environment drží
+jako dobrou volbu (decision 0189 v manual/decision-register.md).
+
 Když Operátor řekne „web Lazuria“, myslí tím Workspace Modul
 `website-lazurio` Organizace `HumanAndMachine-ai` a jeho App `Website Lazurio`,
 nikoli Launchpad. Ověř jej standardním Organization auto-discovery přes
