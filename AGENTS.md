@@ -242,7 +242,10 @@ ověření, odkaz na aplikaci běžící z worktree — a standardizovaná dvojo
 „Mám změny Publikovat tvým jménem?
 Nebo mám požádat jiného Kolegu o kontrolu a Publikaci?". Volbu
 vždy nabídneš,
-nikdy ji nedomýšlíš za Operátora. Před otázkou zjistíš živá GitHub práva
+nikdy ji nedomýšlíš za Operátora. **Na týmovém Environmentu** dvojotázku
+nahrazuje otázka „Komu mám říct, aby tyhle změny publikoval?" a „Publikuj"
+tam vede k předání jmenovanému člověku, nikdy k merge agentem (viz níže).
+Před otázkou zjistíš živá GitHub práva
 svého Operátora a řídíš se jimi: smí-li merge a řekne-li v threadu
 „Publikuj", PR mergneš metodou, kterou repozitář povoluje, aktualizuješ
 `main` a uklidíš worktree; zvolí-li předání, vyžádáš review zvoleného
@@ -794,7 +797,10 @@ Mám změny Publikovat tvým jménem? Nebo mám požádat jiného Kolegu o kontr
 
 Co po dvojotázce následuje — merge na explicitní „Publikuj", nebo předání
 zvolenému oprávněnému Kolegovi — říká kanonický blok výš; přesný merge,
-pull a cleanup postup drží skill `worktree-development-discipline`.
+pull a cleanup postup drží skill `worktree-development-discipline`. Na
+týmovém Environmentu končí handoff místo dvojotázky otázkou „Komu mám říct,
+aby tyhle změny publikoval?" a následuje vždy předání (decision 0148,
+dodatek z 2026-10-05).
 
 Před handoffem po změně root configu, Launchpadu, Guide nebo mountpointů spusť:
 
