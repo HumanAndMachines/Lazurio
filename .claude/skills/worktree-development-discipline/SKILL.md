@@ -123,7 +123,10 @@ autoritu.
    shrnutí, ověření, odkaz na aplikaci běžící z worktree) a končí
    standardizovanou dvojotázkou „Mám změny Publikovat tvým jménem? Nebo mám
    požádat jiného Kolegu o kontrolu a Publikaci?" — volbu vždy nabídni,
-   nedomýšlej ji za Operátora. Před otázkou zjisti
+   nedomýšlej ji za Operátora. Na týmovém Environmentu místo dvojotázky
+   polož otázku „Komu mám říct, aby tyhle změny publikoval?", nikdy
+   nemerguj (ani na „Publikuj") a pokračuj předáním níže (decision 0148,
+   dodatek z 2026-10-05). Před otázkou zjisti
    živá GitHub práva Operátora a řiď se jimi, ne textovým labelem role —
    např. `gh api repos/<owner>/<repo> --jq .permissions`,
    `gh api repos/<owner>/<repo>/branches/<base>/protection`,
