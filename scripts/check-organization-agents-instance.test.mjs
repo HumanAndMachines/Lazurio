@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -710,3 +710,26 @@ function instanceRoot() {
     "",
   ].join("\n");
 }
+
+// Decision 0148, addendum 2026-10-05: the root rules keep the ordinary
+// handoff (the pair of questions, a merge on "Publikuj") and name the Team
+// Environment branch wherever the handoff is written: the closing question
+// "Komu mám říct, aby tyhle změny publikoval?" and no merge by the agent.
+test("the root handoff keeps the ordinary pair and names the Team Environment branch", () => {
+  const read = (relative) =>
+    readFileSync(fileURLToPath(new URL(`../${relative}`, import.meta.url)), "utf8").replace(/\s+/g, " ");
+  const agents = read("AGENTS.md");
+  expect(agents).toContain("Mám změny Publikovat tvým jménem? Nebo mám požádat jiného Kolegu o kontrolu a Publikaci?");
+  expect(agents).toContain("„Publikuj\", PR mergneš metodou, kterou repozitář povoluje");
+  for (const relative of [
+    "AGENTS.md",
+    ".agents/skills/worktree-development-discipline/SKILL.md",
+    ".claude/skills/worktree-development-discipline/SKILL.md",
+  ]) {
+    const text = read(relative);
+    expect([relative, text.includes("„Komu mám říct, aby tyhle změny publikoval?\"")]).toEqual([relative, true]);
+  }
+  expect(agents).toContain("„Publikuj\" tam vede k předání jmenovanému člověku, nikdy k merge agentem");
+  expect(agents).toContain("Agent tam proto sám nikdy nemerguje, ani na pokyn z chatu.");
+  expect(read("CONTRIBUTING.md")).toContain("z týmového Environmentu nemerguje vůbec a pull request předá jmenovanému člověku");
+});
