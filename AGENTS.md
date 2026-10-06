@@ -145,9 +145,11 @@ frameworku a k práci v Lazuriu nejsou potřeba.
   právech; Operátor dává pokyn k Publikaci a má vždy poslední slovo.
   Operátorem je vždy člověk: na osobním Environmentu jeho Owner, na
   pracovním Remote Environmentu ten, komu ho Organizace přiřadila, na
-  týmovém Remote Environmentu právě připojený člen Teamu a na
+  týmovém Remote Environmentu právě připojený oprávněný uživatel (cílově
+  podle vstupního grantu, i bez GitHubu; do nasazení grantů Authu člen
+  GitHub Teamu Environmentu) a na
   Automatizovaném Environmentu odpovědný Owner nebo Admin Organizace
-  (decision 0175). Provozovatel hostingu, který Remote Environment dodává,
+  (decisions 0175/0192). Provozovatel hostingu, který Remote Environment dodává,
   je jiná role.
 - **Kolega** — člověk v Organizaci. Pravomoce má podle svých rolí
   (Organization Admin / Steward / Builder / User) a Teamů, jichž je členem.
