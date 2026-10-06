@@ -1,5 +1,13 @@
 # Přístupy mezi Mašinami jednoho Operátora
 
+> **Cílové zpřesnění 0192 (2026-10-06):** [Model přístupů](environment-access-model.md)
+> odděluje Lazurio účet, schválené zařízení, vstup do Environmentu a pracovní
+> GitHub identitu. Jednočlenný GitHub Team ani připojený GitHub nejsou cílovou
+> podmínkou vstupu; dosavadní postup níže je migrační implementace. GitHub
+> se připojuje pro potřebné pracovní operace, ne jako univerzální brána
+> k užívání aplikací či Environmentu. Tato změna není nasazená tímto textem.
+
+
 Plné znění rozhodnutí 0155 z [decision registru](decision-register.md). Popisuje,
 jak spolu smějí mluvit Mašiny a klienti, se kterými pracuje jeden Operátor, a
 kde se to zapisuje. Cílem je, aby pravidla přečetl i člověk bez IT specialisty

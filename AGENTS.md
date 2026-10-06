@@ -75,13 +75,16 @@ Nadřazený princip, ve kterém všechno ostatní stojí: lidé a stroje pracuj�
 v jednom světě, který nedrží ad-hoc důvěra, ale **hierarchie**, **přesně
 ohraničené hranice** a **definované procesy**.
 
-- **GitHub je jediná autorita přístupů.** Členství, Teamy, repo granty a
-  branch rules určují, co kdo smí; druhý vymyšlený ACL nevzniká a textový
-  název role sám nic neautorizuje — rozhodují živá práva na GitHubu.
-  Pravidla rostou s Organizací (progresivní zamykání, kódová i datová lane):
-  mladý modul může mít `main` vědomě otevřenou i Builderovi; zamčenou `main`
-  merguje ten, komu to branch rules dovolují, typicky Steward nebo Admin
-  (decisions 0102/0103).
+- **GitHub je autorita zdrojových oprávnění a Publikace.** Repo granty,
+  schopnosti Teamů a branch rules určují operace nad zdroji. Cílový vstup
+  uživatele do individuálního i týmového Environmentu určuje Lazurio účet,
+  aktivní členství a konkrétní grant Auth; síť navíc vyžaduje zařízení
+  schválené Adminem v Headscale. GitHub je volitelná propojená identita,
+  ne podmínka každého vstupu. Směrem k lidem říkej uživatel, ne druh člověka
+  Builder. Přesný schválený model, delegaci uvnitř Organizace a migrační
+  hranice drží [decision 0192](manual/environment-access-model.md).
+  Je to cílový kontrakt, ne tvrzení o již nasazené podpoře; aktuální provider
+  práva se neobcházejí a druhý paralelní ACL nevzniká.
 - **Mašina je hranice, ne typ hardwaru.** Je to fyzické zařízení, virtuální
   server nebo providerem izolovaný hostovaný pracovní prostor, který tvoří
   jednu sdílenou runtime, bezpečnostní a recovery hranici se známým Ownerem. Lokální

@@ -1,5 +1,13 @@
 # Předání hostované Mašiny a onboarding operátora
 
+> **Cílové zpřesnění 0192 (2026-10-06):** [Model přístupů](environment-access-model.md)
+> odděluje Lazurio účet, schválené zařízení, vstup do Environmentu a pracovní
+> GitHub identitu. Jednočlenný GitHub Team ani připojený GitHub nejsou cílovou
+> podmínkou vstupu; dosavadní postup níže je migrační implementace. GitHub
+> se připojuje pro potřebné pracovní operace, ne jako univerzální brána
+> k užívání aplikací či Environmentu. Tato změna není nasazená tímto textem.
+
+
 Tento kontrakt rozpracovává rozhodnutí 0144, 0146 a 0147–0149. Jeho autoritou je
 `ARCHITECTURE.md` a registr rozhodnutí; nejde o nový IAM, registr Mašin ani další
 instalační systém. Popisuje cílovou hranici a výslovně odlišuje její dosud
