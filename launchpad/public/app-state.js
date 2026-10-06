@@ -77,6 +77,38 @@ export function findRunningSharedPortPeer(apps, app) {
   ) ?? null;
 }
 
+// A runtime mutation that may replace another App on the shared port. When
+// the running peer belongs to another Module (in practice another
+// Organization), the person must confirm that exact pair before any request
+// is built; the Server then re-verifies { confirmed, replace_app_id }. null
+// means the person declined and no request may be sent.
+const TAKEOVER_ACTIONS = new Set(["open", "start", "restart"]);
+
+export function runtimeMutationRequest({ apps, app, action, source, confirm }) {
+  const takeover = TAKEOVER_ACTIONS.has(action)
+    ? crossModuleTakeoverConsent({ apps, app, confirm })
+    : {};
+  if (takeover === null) return null;
+  return {
+    path: `/api/apps/${encodeURIComponent(app.id)}/${action}`,
+    body: { source, ...takeover },
+  };
+}
+
+function crossModuleTakeoverConsent({ apps, app, confirm }) {
+  const peer = findRunningSharedPortPeer(apps, app);
+  if (!peer || (peer.company === app.company && peer.module === app.module)) return {};
+  const confirmed = confirm(t("confirm.takeover", {
+    port: app.port,
+    currentApp: appBaseTitle(peer),
+    currentOrganization: peer.company,
+    nextApp: appBaseTitle(app),
+    nextOrganization: app.company,
+  }));
+  if (!confirmed) return null;
+  return { confirmed: true, replace_app_id: peer.id };
+}
+
 export function reconcileDetailDrawerState({
   drawerView,
   drawerOpen,
