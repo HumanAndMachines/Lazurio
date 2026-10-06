@@ -152,6 +152,9 @@ z nich (rozhodnutí Matěje z 2026-10-06). Organizace připojené do Environment
 sdílení zkontroluje; že osobní přihlášení, například GitHub, může sahat i do
 dalších Organizací, vysvětlí text u sdílení a odpovídá za to sdílející. Jinak
 zbývá sdílení vybraných aplikací nebo týmový Environment.
+Cílově má GitHub přihlášení v pracovním Environmentu sahat jen do
+Organizací tohoto Environmentu, přes OAuth přihlášení bez osobních tokenů
+(PAT); mechanismus se teprve ověří, do té doby platí vysvětlení výše.
 
 Dashboard a onboarding vysvětlí rozsah přímo u volby plného přístupu,
 bez dalšího schvalovacího workflow. Návrh textu:
