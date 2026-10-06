@@ -1,9 +1,9 @@
 # Účet, zařízení a přístupy k Environmentům
 
-Rozhodnutí Matěje z 2026-10-06, root decision **0192**. Schválený cílový
-směr; před publikací se uzavírají hranice sdílených credentials, propojení
-a migrace popsané v [architektonickém review](environment-access-review-2026-10-06.md).
-Volby v review nejsou dosud schválené. Samotný dokument nemění nasazené přihlášení, členství, brány ani
+Rozhodnutí Matěje z 2026-10-06, root decision **0192**, včetně následného
+rozhodnutí o vědomém sdílení na základě důvěry. [Architektonické review](environment-access-review-2026-10-06.md)
+zachovává nálezy a odlišuje původní doporučení od následné volby Operátora.
+Samotný dokument nemění nasazené přihlášení, členství, brány ani
 síť. Plánování vlastní DEV-6640, síťovou realizaci DEV-6641 a účty
 DEV-6551/DEV-6552 v Mission Controlu Human and Machine. Každý consumer musí
 před přechodem doložit níže uvedené chování. Dosavadní GitHub/Team brány
@@ -86,15 +86,65 @@ downloadů a přímých URL; skrytí navigace nestačí. Role uvnitř aplikace a
 datová oprávnění patří aplikaci. Plný přístup k Environmentu není oprávněním
 automaticky měnit seznam jeho uživatelů nebo členství Organizace.
 
+### Plné sdílení individuálního pracovního Environmentu je vědomá důvěra
+
+Přidělený uživatel může důvěryhodnému člověku udělit plný přístup i tehdy,
+když v Environmentu zůstávají jeho osobní pracovní přihlášení. Přijímá
+riziko, že příjemce může použít **všechno dostupné uvnitř**: soubory,
+procesy, Chat, automatizace, browser a jeho relace, hesla a passkeys,
+GitHub i jiné integrace a existující vzdálené přístupy. Systém před
+sdílením nevynucuje odhlášení, výmaz profilu, výměnu účtů za broker,
+převod na týmový režim ani další schválení Adminem.
+
+Tato volba je pro pomoc člověka, kterému sdílející důvěřuje. Pro spolupráci
+bez takové osobní důvěry slouží samostatný týmový Environment. V obou
+případech zůstává povinné členství v Organizaci a konkrétní zařízení
+schválené Adminem; kamarád nebo příbuzný není výjimkou. Pracovní sdílení
+se netýká soukromého Personalspace.
+
+Dashboard a onboarding vysvětlí rozsah přímo u volby plného přístupu,
+bez dalšího schvalovacího workflow. Návrh textu:
+
+> Dáváš tomuto člověku plný přístup ke všemu v tomto Environmentu, včetně
+> souborů, přihlášených účtů a přístupů do dalších služeb a Environmentů.
+> Uděl ho jen člověku, kterému důvěřuješ; riziko neseš ty. Přístup můžeš
+> odebrat, ale již získaná data nebo zkopírované přihlašovací údaje tím
+> nezmizí.
+
+Akce „Udělit plný přístup“ je vědomé udělení tohoto rozsahu. „Pouze vybrané
+aplikace“ zůstává samostatná skutečně omezená možnost. Žádná nová persona,
+bezpečnostní certifikace příjemce nebo povinný režim sdílených credentials
+se nezavádí.
+
+Plný vstup nepřidá příjemcovu Lazurio účtu Admin roli. Uložená relace
+Admina či jiná privilegovaná identita ale může stejné operace technicky
+umožnit; mezi plnými operátory tohoto runtime systém izolaci neslibuje.
+Odpovědnost za použití sdílených identit a konkrétní publikační pokyny drží
+proces a jmenovaní lidé. Udělení vstupu samo není pokyn provést konkrétní
+merge, vydání nebo nasazení. Audit odlišuje doložený vstup člověka od
+operace pod účtem dostupným uvnitř; neslibuje jejich nezaměnitelnou shodu.
+
+Odebrání sdílení zavře další vstup a ukončí podporované aktivní relace
+podle změřeného kontraktu. Není to vzdálený výmaz kopií ani automatická
+revokace všech externích účtů. Při ztrátě důvěry je revokace či rotace
+dotčených klíčů a kontrola přetrvávajících změn samostatný recovery krok;
+preventivní odhlašování není podmínkou běžného sdílení.
+
 Agent je běh uvnitř Environmentu, nikoli další uživatelská role. Používá
 schopnosti tohoto Environmentu. SSH nepředstavuje výhradně agenty a HTTPS
 výhradně lidi: obojí mohou používat lidé i automatizace.
 
 Pokud mají další lidé plný přístup do A a A může přes SSH ovládat B, získávají
-tím nepřímý přístup k B. Dashboard musí při propojení ukázat tento dopad a
-ověřit oprávnění k takové delegaci. Samotná kontrola přímých grantů nestačí;
-nepřímá cesta nesmí obejít zákaz externího či cross-organization přístupu.
-Audit rozliší člověka, zdrojový Environment, cíl a použitou pracovní identitu.
+tím nepřímý přístup k B. Dashboard musí při propojení i sdílení ukázat tento
+dopad a ověřit oprávnění ke změně příslušného grantu nebo propojení.
+Vědomé plné sdílení A zahrnuje jeho již dostupné vzdálené schopnosti;
+nevyžaduje nový přímý uživatelský grant do B jen proto, že je B dostupné
+zevnitř A. Nevytváří tím novou síťovou hranu, členství, přímý vstup do B
+ani cross-organization grant v Auth. Přihlášená integrace však může mít
+širší dosah a ten patří k přijatému riziku; nelze slibovat, že ho izoluje
+vstupní ACL. Mapa rozliší přímé oprávnění a efektivní cestu přes A.
+Audit rozliší doloženého člověka, zdrojový Environment, cíl a použitou
+pracovní identitu; samotná sdílená identita neprokazuje konkrétního člověka.
 
 ## GitHub a publikace
 
@@ -109,6 +159,13 @@ Schválení a Publikaci provádí jmenovaný člověk s živým GitHub oprávně
 Broker, přihlašovací údaje a ochrana větví musí prokazatelně zabránit tomu,
 aby sdílený Environment sám provedl merge nebo přímý zápis do chráněné
 větve. Bez tohoto důkazu se přístup nové skupině uživatelů nerozšíří.
+
+Tento kontrakt týmové GitHub capability není slib izolace osobní identity
+uvnitř vědomě sdíleného individuálního pracovního Environmentu. Tam je
+možnost použít uloženou publikační identitu výslovně přijaté riziko a
+odpovědnost drží proces. Také v týmovém browseru platí, že dodatečně
+vložené osobní přihlášení je dostupné všem plným operátorům; ochrany
+organizačního bota samy neomezují práva takto vloženého účtu.
 
 ## Autority a mapa Conglomerate
 

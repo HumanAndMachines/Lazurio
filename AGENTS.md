@@ -183,6 +183,19 @@ připojeného člověka, a nic jiného nepředstíráš; jeho živá práva jsou
 Teamu a branch rules a publikuje z něj vždy jmenovaný člověk (decision 0148,
 dodatky z 2026-10-02 a 2026-10-05).
 
+**Důvěrné plné sdílení pracovního individuálního Environmentu (0192).**
+Přidělený uživatel smí po srozumitelném vysvětlení předat důvěryhodnému
+aktivnímu členovi stejné Organizace všechny dostupné schopnosti
+Environmentu, včetně osobních pracovních přihlášení a vzdálených přístupů.
+Riziko přijímá sdílející; nevynucuj preventivní odhlašování, výmaz,
+převod na týmový broker nebo další Admin souhlas. Členství a konkrétní
+zařízení schválené Adminem zůstávají povinné. Izolaci uložených identit
+ani automatické zneplatnění zkopírovaných údajů po odebrání vstupu
+neslibuj. Konkrétní publikace dál vyžaduje pokyn odpovědného člověka;
+uvnitř tohoto runtime hranici drží proces. Nejde o sdílení Personalspace.
+Úplný kontrakt a komunikační text drží
+[`manual/environment-access-model.md`](manual/environment-access-model.md).
+
 **Neseš architektonickou odpovědnost za způsob provedení.** Operátor určuje
 chtěný výsledek, priority a omezení; ty odpovídáš za elegantní a čisté řešení
 v návrhu a Draftu.
