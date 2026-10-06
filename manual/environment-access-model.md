@@ -72,6 +72,14 @@ Environmentů z různých Organizací samo nepovoluje propojení jejich dat.
 Přeshraniční servisní granty vyžadují vlastní výslovnou autoritu a zachovávají
 svůj omezený rozsah; tento model je automaticky nerozšiřuje.
 
+Delegované sdílení celého Environmentu i jednotlivé aplikace se váže na
+konkrétní původní přidělení a cílový prostředek. Ztráta nebo změna přidělení,
+odebrání členství sdílejícího či příjemce a zrušení nebo převázání cíle tato
+sdílení zneplatní; nový přidělený uživatel je nepřebírá a pozdější obnovení
+členství je samo neoživí. Nezávislý platný grant zůstává samostatnou cestou
+přístupu a Dashboard jej musí ukázat. Přidělení novému člověku proto nemůže
+zpřístupnit jeho nová přihlášení lidem, kterým důvěřoval předchozí uživatel.
+
 ## Celý Environment, aplikace a vzdálené operace
 
 | Oprávnění | Důsledek |
@@ -83,7 +91,10 @@ svůj omezený rozsah; tento model je automaticky nerozšiřuje.
 
 Oprávnění k aplikaci musí držet skutečná brána včetně API, WebSocketů,
 downloadů a přímých URL; skrytí navigace nestačí. Role uvnitř aplikace a její
-datová oprávnění patří aplikaci. Plný přístup k Environmentu není oprávněním
+datová oprávnění patří aplikaci. Delegované sdílení aplikace dává nejvýše
+základní vstup `user`; nepřiděluje `admin` ani oprávnění spravovat další
+granty. Přímé základní granty spravuje Admin, aplikační role její vlastní
+autorita. Plný přístup k Environmentu není oprávněním
 automaticky měnit seznam jeho uživatelů nebo členství Organizace.
 
 ### Plné sdílení individuálního pracovního Environmentu je vědomá důvěra
@@ -100,7 +111,10 @@ Tato volba je pro pomoc člověka, kterému sdílející důvěřuje. Pro spolup
 bez takové osobní důvěry slouží samostatný týmový Environment. V obou
 případech zůstává povinné členství v Organizaci a konkrétní zařízení
 schválené Adminem; kamarád nebo příbuzný není výjimkou. Pracovní sdílení
-se netýká soukromého Personalspace.
+se netýká soukromého Personalspace a nezakládá do něj oprávnění ani nová
+propojení. Ručně uložené vzdálené credentials však mohou jeho data technicky
+vystavit; zákaz číst cizí Personalspace tím nezaniká a model neslibuje
+izolaci libovolných přihlášení uložených uvnitř plně sdíleného runtime.
 
 Dashboard a onboarding vysvětlí rozsah přímo u volby plného přístupu,
 bez dalšího schvalovacího workflow. Návrh textu:
@@ -211,6 +225,9 @@ politiku. Nahrazuje také výklad 0183/DEV-6640, že každé uživatelské sdíl
 musí být ruční PR a viditelnost mapy vyžaduje osobní read grant do infra.
 GitHub ID se zachová jako ověřený link a migrační důkaz. Existující DNS
 slugs, adresy, klíče ani servisní granty se bez přesného plánu nepřepisují.
+Existujícímu přístupu bez doložené vazby na přidělení se při migraci nevymyslí
+původ delegovaného sdílení. Zachová se jeho skutečný správcovský/servisní
+původ, přesný rozsah a ověřená autorita; nejasné případy vyřeší migrační plán.
 
 Před realizací musí owning repa prokázat: uživatele bez GitHubu; nové a
 odvolané zařízení; plný versus aplikační přístup; zákaz externího pozvání;

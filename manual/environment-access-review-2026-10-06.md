@@ -255,3 +255,26 @@ jsou však technicky použitelné a systém jejich izolaci nepředstírá.
 
 Implementační mechanismy a zbylé migrační důkazy zůstávají kvalifikací
 owning repozitářů. Review ani toto rozhodnutí nemění živé přístupy.
+
+## Třetí kontrola po volbě důvěry
+
+Další skutečné CLI review použilo `claude-opus-5-5` s `--effort high`,
+bez nástrojů a bez změn runtime. Vstupem byl root kontrakt na `0bc22b19`
+a upravený Auth kontrakt na `b0db65fa`, včetně opravy rozporu mezi
+Admin-managed granty a delegovaným aplikačním sdílením. Posuzovalo text,
+nikoli bezpečnost nasazeného systému.
+
+Opus označil zvolený model a jednu Auth autoritu za konzistentní. Našel
+jednu skutečnou mezeru: zánik delegace při změně přidělení byl výslovný
+jen pro aplikace, takže nebylo vyloučeno přežití plného sdílení do nového
+přidělení. Kontrakt nyní stejně váže **oba** druhy sdílení na původní
+přidělení a nepřenáší důvěru předchozího uživatele na dalšího.
+
+Doplněn je také aplikační strop `user`, skutečný původ migrovaných grantů
+a rozdíl mezi nepřiděleným přímým grantem a zbývající efektivní cestou.
+Systém nezakládá sdílení Personalspace a neslibuje izolaci jeho ručně
+uložených credentials. Povinné schválení zařízení, serverové vynucení,
+revokační lhůty a zobrazení efektivních cest zůstávají implementačními
+proof gates. Další business rozhodnutí Operátora review nevyžádalo;
+podmíněný verdikt „schválit po textové opravě“ není následná kontrola
+opraveného commitu ani GitHub approval.
