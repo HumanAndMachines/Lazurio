@@ -80,7 +80,8 @@ implementace.
 Přidělený uživatel smí v rámci svého oprávnění:
 
 - zpřístupnit svůj pracovní Environment jinému **již aktivnímu členovi téže
-  Organizace**, buď celý, nebo jen vybrané aplikace;
+  Organizace**, buď celý, nebo jen vybrané aplikace; Environment s daty více
+  Organizací celý jen členovi každé z nich (viz níže);
 - odvolat takto udělený přístup;
 - povolit orientované propojení dvou Environmentů přidělených jemu v téže
   Organizaci, včetně deklarovaného účtu a rozsahu vzdálených operací.
@@ -144,14 +145,23 @@ propojení. Ručně uložené vzdálené credentials však mohou jeho data techn
 vystavit; zákaz číst cizí Personalspace tím nezaniká a model neslibuje
 izolaci libovolných přihlášení uložených uvnitř plně sdíleného runtime.
 
+**Environment s daty více Organizací.** Obsahuje-li individuální pracovní
+Environment repozitáře, data nebo přihlášení více Organizací, smí ho
+přidělený uživatel plně sdílet jen s člověkem, který je aktivním členem každé
+z nich (rozhodnutí Matěje z 2026-10-06). Organizace připojené do Environmentu
+sdílení zkontroluje; že osobní přihlášení, například GitHub, může sahat i do
+dalších Organizací, vysvětlí text u sdílení a odpovídá za to sdílející. Jinak
+zbývá sdílení vybraných aplikací nebo týmový Environment.
+
 Dashboard a onboarding vysvětlí rozsah přímo u volby plného přístupu,
 bez dalšího schvalovacího workflow. Návrh textu:
 
 > Dáváš tomuto člověku plný přístup ke všemu v tomto Environmentu, včetně
 > souborů, přihlášených účtů a přístupů do dalších služeb a Environmentů.
-> Uděl ho jen člověku, kterému důvěřuješ; riziko neseš ty. Přístup můžeš
-> odebrat, ale již získaná data nebo zkopírované přihlašovací údaje tím
-> nezmizí.
+> Uděl ho jen člověku, kterému důvěřuješ; riziko neseš ty. Pokud jsou tu data
+> nebo přihlášení i jiných Organizací, dostane se k nim také, proto ho uděl jen
+> členovi všech těchto Organizací. Přístup můžeš odebrat, ale již získaná data
+> nebo zkopírované přihlašovací údaje tím nezmizí.
 
 Akce „Udělit plný přístup“ je vědomé udělení tohoto rozsahu. „Pouze vybrané
 aplikace“ zůstává samostatná skutečně omezená možnost. Žádná nová persona,
