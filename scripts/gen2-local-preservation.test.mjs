@@ -84,8 +84,12 @@ async function makeTempRoot() {
 async function makeSource(root, name = "source") {
   const source = join(root, name);
   await mkdir(join(source, "data"), { recursive: true });
-  await writeFile(join(source, "data", "customer.txt"), "customer data\n", { mode: 0o640 });
-  await writeFile(join(source, ".ignored-secret"), "fixture-secret-value\n", { mode: 0o600 });
+  await writeFile(join(source, "data", "customer.txt"), "customer data\n");
+  await writeFile(join(source, ".ignored-secret"), "fixture-secret-value\n");
+  // writeFile's mode is masked by the process umask (077 would turn 0640
+  // into 0600); chmod pins the exact fixture modes the preservation must keep.
+  await chmod(join(source, "data", "customer.txt"), 0o640);
+  await chmod(join(source, ".ignored-secret"), 0o600);
   if (fileSymlinkSupported) {
     await symlink("data/customer.txt", join(source, "customer-link"), "file");
   } else {
