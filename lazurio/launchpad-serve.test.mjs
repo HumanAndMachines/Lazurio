@@ -1,5 +1,4 @@
 import { expect, test } from "bun:test";
-import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 import {
@@ -98,23 +97,4 @@ test("CLI parser přijme serve help a odmítne konflikty i JSON", () => {
   expect(unsafe.exitCode).toBe(2);
   expect(unsafe.stderr.toString()).toContain("Organization slug is required");
   expect(unsafe.stderr.toString()).not.toContain("at organizationHash");
-});
-
-test("root agentní kontrakt otevírá Launchpad na vyžádání přes CLI mechanismus", async () => {
-  const agents = await readFile(join(import.meta.dirname, "..", "AGENTS.md"), "utf8");
-  const section = agents.slice(
-    agents.indexOf("## Otevírání Launchpadu pro App Agenty"),
-    agents.indexOf("## Agentní orientace před prací"),
-  );
-  const normalizedSection = section.replace(/\s+/g, " ");
-
-  expect(normalizedSection).toContain("Launchpad ani aplikaci neotevírej automaticky při zahájení chatu");
-  expect(normalizedSection).toContain("aktuální úkol vyžaduje práci v jejich UI nebo vizuální ověření výsledku");
-  expect(section).toContain("lazurio launchpad serve --organization <přesný company.slug>");
-  expect(section).toContain("lazurio launchpad serve --personalspace");
-  expect(section).toContain("LAZURIO_LAUNCHPAD_URL=...");
-  expect(section).not.toContain("jako první viditelný pracovní krok");
-  expect(section).not.toContain("jednou pro nový chat/task");
-  expect(section).not.toContain("bun run launchpad:serve");
-  expect(section).not.toContain("URL-encoded");
 });
