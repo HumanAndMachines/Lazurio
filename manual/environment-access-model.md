@@ -1,7 +1,9 @@
 # Účet, zařízení a přístupy k Environmentům
 
 Rozhodnutí Matěje z 2026-10-06, root decision **0192**. Schválený cílový
-kontrakt; samotný dokument nemění nasazené přihlášení, členství, brány ani
+směr; před publikací se uzavírají hranice sdílených credentials, propojení
+a migrace popsané v [architektonickém review](environment-access-review-2026-10-06.md).
+Volby v review nejsou dosud schválené. Samotný dokument nemění nasazené přihlášení, členství, brány ani
 síť. Plánování vlastní DEV-6640, síťovou realizaci DEV-6641 a účty
 DEV-6551/DEV-6552 v Mission Controlu Human and Machine. Každý consumer musí
 před přechodem doložit níže uvedené chování. Dosavadní GitHub/Team brány
