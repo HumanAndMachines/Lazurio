@@ -84,6 +84,26 @@ export function assertAvailableAgentEntryOrganization(options, organizations) {
   throw error;
 }
 
+// Refresh cadences of a running Server. Production always keeps these
+// defaults; the variables exist so real-process tests can prove a refresh
+// without waiting 10-15 s of wall time.
+export function launchpadRefreshIntervals(environment) {
+  return {
+    appsCacheTtlMs: positiveMilliseconds(environment, "LAZURIO_LAUNCHPAD_APPS_CACHE_TTL_MS", 10_000),
+    hostedRefreshIntervalMs: positiveMilliseconds(environment, "LAZURIO_LAUNCHPAD_HOSTED_REFRESH_MS", 15_000),
+  };
+}
+
+function positiveMilliseconds(environment, name, fallback) {
+  const raw = environment?.[name];
+  if (raw === undefined || raw === "") return fallback;
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(`${name} musí být kladný celý počet milisekund.`);
+  }
+  return value;
+}
+
 function requiredFollowingValue(args, index, name) {
   const value = args[index + 1];
   if (value === undefined || value.startsWith("--")) {

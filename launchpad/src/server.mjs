@@ -88,6 +88,7 @@ import { loadPersonalEntryConfiguration, personalEntryConfigurationId } from "./
 import { launchpadEntryHash, launchpadEntryUrl } from "../../lazurio/runtime/deep-link-lib.mjs";
 import {
   assertAvailableAgentEntryOrganization,
+  launchpadRefreshIntervals,
   parseLaunchpadServerArgs,
 } from "./server-args-lib.mjs";
 import { resolveLaunchpadStateRoot } from "./state-root-lib.mjs";
@@ -277,7 +278,8 @@ const moduleFolderOpener = createModuleFolderOpener({ companiesRoot, getAppsResp
 const gitStatusService = createGitStatusService();
 // Delší než jeden render burst (sync + notifications + usage), kratší než
 // 15s active-window poll: out-of-band pád runtime se nezadrží o další tick.
-const appsResponseCacheTtlMs = 10_000;
+const refreshIntervals = launchpadRefreshIntervals(process.env);
+const appsResponseCacheTtlMs = refreshIntervals.appsCacheTtlMs;
 const organizationLogoCandidates = [
   "brand/logo.png",
   "launchpad/app/v1/web/launchpad-icon.png",
@@ -548,7 +550,7 @@ const hostedMaintenanceRefreshTimer = hostedWorkspace.profile === "hosted"
       void refreshHostedWorkspaceMaintenance().catch((error) => {
         console.warn(`[launchpad] hosted Team inventory refresh failed: ${error.message}`);
       });
-    }, 15_000)
+    }, refreshIntervals.hostedRefreshIntervalMs)
   : null;
 setInterval(() => {}, 2_147_483_647);
 
