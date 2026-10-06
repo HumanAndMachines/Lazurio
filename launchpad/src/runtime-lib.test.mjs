@@ -34,7 +34,8 @@ import { platformTestTimeout } from "./test-platform-setup.mjs";
 import { buildWorktreeIndex } from "../../lazurio/runtime/worktree-lib.mjs";
 import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.mjs";
 import { createWorktreeFromPlan } from "./worktree-actions-lib.mjs";
-import { createRepositoryDbWorktreeFixture } from "./git-fixture-helpers.test.mjs";
+import { createRepositoryDbWorktreeFixture, initGitRepo } from "./git-fixture-helpers.test.mjs";
+import { runGit } from "../../lazurio/runtime/git-lib.mjs";
 import { createHostedWorkspaceConfiguration, requireHostedAppUrl, selectHostedWorkspaceApps } from "../../lazurio/runtime/hosted-app-url-lib.mjs";
 
 // One hosted Machine identity for every hosted runtime test: fixture Apps
@@ -4256,28 +4257,37 @@ test("runtime manager open chain odmítne proces, který spadne hned po prvním 
   expect(failure.message).toContain(String(blockedPort));
 });
 
-test("runtime manager replaces main with one worktree instance on the same declared ports", async () => {
+for (const ownerRelative of [false, true]) {
+test(`runtime manager replaces main with one ${ownerRelative ? "owner-repository" : "legacy"} worktree instance on the same declared ports`, async () => {
   const mainPort = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({ port: mainPort });
   const orgRoot = join(root, "organizations", "TestCompany");
   const mainModuleRoot = join(orgRoot, "modules", "demo");
   const worktreeSlug = "CAC-0042-demo-runtime-selector";
-  const worktreeRoot = join(orgRoot, ".worktrees", "workspace", "demo", worktreeSlug);
+  const worktreeContainer = ownerRelative ? join(mainModuleRoot, ".worktrees/root") : join(orgRoot, ".worktrees/workspace/demo");
+  const worktreeRoot = join(worktreeContainer, worktreeSlug);
   await mkdir(join(orgRoot, ".worktrees", "workspace", "demo"), { recursive: true });
   await mkdir(join(orgRoot, "mission-control", "plans", "2026", "07"), { recursive: true });
-  await cp(mainModuleRoot, worktreeRoot, { recursive: true });
+  if (ownerRelative) {
+    await initGitRepo(mainModuleRoot);
+    for (const args of [["remote", "add", "origin", "git@github.com:TestCompany/demo.git"], ["add", "."], ["commit", "-m", "runtime fixture"], ["worktree", "add", "-b", worktreeSlug, worktreeRoot]]) {
+      expect((await runGit(args, { cwd: mainModuleRoot })).ok).toBe(true);
+    }
+  } else {
+    await cp(mainModuleRoot, worktreeRoot, { recursive: true });
+  }
   await declareFixtureLazurioRuntime(worktreeRoot);
   await writeFile(
     join(orgRoot, "mission-control", "plans", "2026", "07", "CAC-0042-demo-runtime-selector.yaml"),
     "dev_code: CAC-0042\ntitle: Demo runtime selector\nstatus: in_progress\n",
   );
-  await writeJson(join(orgRoot, ".worktrees", "workspace", "demo", `${worktreeSlug}.worktree.json`), {
+  await writeJson(join(worktreeContainer, `${worktreeSlug}.worktree.json`), {
     schema_version: "companiesascode.worktree.v1",
     organization: "TestCompany",
     organization_path: "organizations/TestCompany",
     workspace: "workspace",
     module: "demo",
-    module_path: "modules/demo",
+    module_path: ownerRelative ? "." : "modules/demo",
     repo_kind: "module",
     base_branch: "main",
     branch: "CAC-0042-demo-runtime-selector",
@@ -4321,7 +4331,7 @@ test("runtime manager replaces main with one worktree instance on the same decla
   expect(worktree.runtime.listeners).toHaveLength(1);
   expect(worktree.runtime.listeners.every((listener) => listener.allocation === "static")).toBe(true);
   expect(worktree.runtime.listeners.map((listener) => listener.port)).toEqual([mainPort]);
-  expect(worktree.runtime.dependencies.cwd).toContain(`.worktrees/workspace/demo/${worktreeSlug}/app/v1`);
+  expect(worktree.runtime.dependencies.cwd).toContain(`${ownerRelative ? ".worktrees/root" : ".worktrees/workspace/demo"}/${worktreeSlug}/app/v1`);
   const worktreeEnv = await (await fetch(`${worktree.url}/runtime-env`)).json();
   expect(worktreeEnv.organizationRoot).toBe(await realpath(orgRoot));
   expect(worktreeEnv.nodePath).toBe(join(await realpath(worktreeRoot), "app", "v1", "node_modules"));
@@ -4338,6 +4348,7 @@ test("runtime manager replaces main with one worktree instance on the same decla
     runtime_source: { type: "worktree", slug: worktreeSlug },
   });
 }, platformTestTimeout(15_000));
+}
 
 test("worktree Start materializes its explicit contract while main is still legacy", async () => {
   const port = await findFreePort();

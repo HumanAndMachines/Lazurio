@@ -1,6 +1,8 @@
 import { existsSync } from "fs";
 import { lstat, readFile, readdir } from "fs/promises";
-import { basename, join, relative } from "path";
+import { basename, dirname, join, relative, resolve } from "path";
+import { runGit } from "./git-lib.mjs";
+import { githubRepositoryCoordinate } from "../core/organization-slot-scope-lib.mjs";
 import { buildGitInventory } from "./git-inventory-lib.mjs";
 import { readGitRepoStatus } from "./git-status-lib.mjs";
 import { readMissionControlPlanAt } from "./mission-control-plan-lib.mjs";
@@ -52,6 +54,9 @@ export async function buildWorktreeIndex({
       scope: "organization",
     }));
     const scanned = await scanCanonicalOrganizationWorktrees({ companiesRoot, organization: org });
+    scanned.push(...await scanOwnerRepositoryWorktrees({ companiesRoot, organization: org,
+      repos: inventory.repos.filter((repo) => repo.organization === org.slug && repo.repo_kind === "module" && (!module || repo.module === module)),
+    }));
     for (const worktree of scanned) {
       if (module && worktree.module !== module) continue;
       worktrees.push(worktree);
@@ -78,6 +83,62 @@ export async function buildWorktreeIndex({
     invalid_locations,
     warnings,
   };
+}
+
+// Module identity comes from the validated Organization inventory, never from
+// an owner-relative sidecar. Only registered linked checkouts may be started.
+async function scanOwnerRepositoryWorktrees({ companiesRoot, organization, repos }) {
+  const output = [];
+  const organizationRoot = join(companiesRoot, organization.path);
+  for (const repo of repos) {
+    const boundary = await existingWorktreePathBoundary({ organizationRoot, path: repo.absolute_path });
+    if (!boundary.ok) continue;
+    const [listed, origin, topLevel] = await Promise.all([
+      runGit(["worktree", "list", "--porcelain", "-z"], { cwd: repo.absolute_path }),
+      runGit(["remote", "get-url", "--all", "origin"], { cwd: repo.absolute_path }),
+      runGit(["rev-parse", "--show-toplevel"], { cwd: repo.absolute_path }),
+    ]);
+    const expected = githubRepositoryCoordinate(repo.repo);
+    const urls = origin.ok ? origin.stdout.trim().split("\n") : [];
+    const actual = urls.length === 1 ? githubRepositoryCoordinate(urls[0]) : null;
+    if (!listed.ok || !topLevel.ok || resolve(topLevel.stdout.trim()) !== resolve(boundary.targetRealPath)
+      || !expected || !actual || expected.ownerRepo.toLowerCase() !== actual.ownerRepo.toLowerCase()) continue;
+    const base = join(repo.absolute_path, ".worktrees/root");
+    const registeredBase = join(boundary.targetRealPath, ".worktrees/root");
+    for (const fields of listed.stdout.split("\0\0").filter(Boolean).map((record) => record.split("\0"))) {
+      const pathField = fields.find((field) => field.startsWith("worktree "));
+      const branchField = fields.find((field) => field.startsWith("branch refs/heads/"));
+      if (!pathField || !branchField) continue;
+      const registeredPath = pathField.slice(9);
+      if (resolve(dirname(registeredPath)) !== resolve(registeredBase)) continue;
+      const absolutePath = join(base, basename(registeredPath));
+      const checkoutBoundary = await existingWorktreePathBoundary({ organizationRoot, path: absolutePath });
+      if (!checkoutBoundary.ok) continue;
+      const registeredBranch = branchField.slice("branch refs/heads/".length);
+      const [checkoutCommon, ownerCommon, branch] = await Promise.all([
+        runGit(["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd: absolutePath }),
+        runGit(["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd: repo.absolute_path }),
+        runGit(["symbolic-ref", "--short", "HEAD"], { cwd: absolutePath }),
+      ]);
+      if (!checkoutCommon.ok || !ownerCommon.ok || checkoutCommon.stdout.trim() !== ownerCommon.stdout.trim()
+        || !branch.ok || branch.stdout.trim() !== registeredBranch) continue;
+      const commonBoundary = await existingWorktreePathBoundary({ organizationRoot,
+        path: join(repo.absolute_path, relative(boundary.targetRealPath, ownerCommon.stdout.trim())),
+      });
+      if (!commonBoundary.ok) continue;
+      const record = await buildWorktreeRecord({ companiesRoot, organization, organizationRoot,
+        rootRealPath: checkoutBoundary.rootRealPath, absolutePath,
+        sidecarPath: join(base, `${basename(absolutePath)}.worktree.json`),
+        workspace: "workspace", module: repo.module, repoKind: "module", ownerRepository: repo,
+      });
+      output.push({ ...record, module_path: repo.slot_path,
+        ...(record.metadata?.branch !== registeredBranch ? {
+          ownership_status: "invalid", status: "invalid", message: "Sidecar branch neodpovídá Git registraci worktree.",
+        } : {}),
+      });
+    }
+  }
+  return output;
 }
 
 async function scanInvalidWorktreeLocations({ companiesRoot, scopeRoot, organization, scope }) {
@@ -366,6 +427,7 @@ async function buildWorktreeRecord({
   workspace,
   module,
   repoKind,
+  ownerRepository = null,
 }) {
   const slug = basename(absolutePath);
   const base = {
@@ -429,9 +491,16 @@ async function buildWorktreeRecord({
     };
   }
 
-  const planPath = metadata.mission_control_plan_path;
+  let planPath = metadata.mission_control_plan_path;
+  if (ownerRepository) {
+    const localAuthority = `${organization.path}/mission-control/db`;
+    if (metadata.mission_control_authority_path && metadata.mission_control_authority_path !== localAuthority) {
+      return { ...base, metadata, ownership_status: "invalid", status: "invalid", message: "Module worktree plán musí patřit stejné Organizaci." };
+    }
+    if (planPath.startsWith("data/mission-control/plans/")) planPath = `mission-control/db/${planPath}`;
+  }
   const ownerPlan = await readMissionControlPlanAt({ companiesRoot, organizationPath: organization.path, planPath });
-  if (!ownerPlan) {
+  if (!ownerPlan || (ownerRepository && ownerPlan.code !== metadata.mission_control_plan_code)) {
     return {
       ...base,
       metadata,

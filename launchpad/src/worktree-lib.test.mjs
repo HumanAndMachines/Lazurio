@@ -1,10 +1,59 @@
 import { afterAll, expect, test } from "bun:test";
 import { mkdir, rm, symlink, writeFile } from "fs/promises";
 import { join } from "path";
+import { runGit } from "../../lazurio/runtime/git-lib.mjs";
 import { buildWorktreeIndex, detectNonCanonicalSidecarFields } from "../../lazurio/runtime/worktree-lib.mjs";
 import { createLaunchpadGitFixture, initGitRepo, writeJson } from "./git-fixture-helpers.test.mjs";
 
 const tempRoots = [];
+
+test("owner-repository linked worktrees retain module identity and resolve local plan authority", async () => {
+  const root = await createLaunchpadGitFixture();
+  tempRoots.push(root);
+  const orgRoot = join(root, "organizations/BetaCo_GEN3");
+  const repo = join(orgRoot, "workspace/deals");
+  await initGitRepo(repo);
+  expect((await runGit(["remote", "add", "origin", "git@github.com:BetaCo/deals.git"], { cwd: repo })).ok).toBe(true);
+  const slug = "DEV-9001-module-preview";
+  const branch = "codex/DEV-9001-module-preview";
+  const checkout = join(repo, ".worktrees/root", slug);
+  const added = await runGit(["worktree", "add", "-b", branch, checkout], { cwd: repo });
+  expect(added.ok).toBe(true);
+  const plan = "data/mission-control/plans/2026/10/DEV-9001-module-preview.yaml";
+  await mkdir(join(orgRoot, "mission-control/db/data/mission-control/plans/2026/10"), { recursive: true });
+  await writeFile(join(orgRoot, "mission-control/db", plan), "dev_code: DEV-9001\ntitle: Module preview\nstatus: in_progress\n");
+  const sidecar = join(repo, ".worktrees/root", `${slug}.worktree.json`);
+  const metadata = {
+    schema_version: "companiesascode.worktree.v1", branch,
+    organization_path: ".", workspace: "root", module: "deals", module_path: ".",
+    mission_control_plan_code: "DEV-9001", mission_control_plan_path: plan,
+  };
+  await writeJson(sidecar, metadata);
+  const index = await buildWorktreeIndex({ companiesRoot: root, organization: "BetaCo", module: "deals" });
+  expect(index.worktrees.find((item) => item.slug === slug)).toMatchObject({
+    ownership_status: "owned", module: "deals", module_path: "workspace/deals", branch,
+    owner_plan: { code: "DEV-9001" },
+  });
+  for (const invalid of [
+    { branch: "codex/DEV-9999-forged" },
+    { mission_control_plan_code: "DEV-9999" },
+    { mission_control_authority_path: "organizations/OmegaCo_GEN3/mission-control/db" },
+    { mission_control_plan_path: "../../../../personalspace/private.yaml" },
+  ]) {
+    await writeJson(sidecar, { ...metadata, ...invalid });
+    const rejected = await buildWorktreeIndex({ companiesRoot: root, organization: "BetaCo", module: "deals" });
+    expect(rejected.worktrees.find((item) => item.slug === slug)?.ownership_status).not.toBe("owned");
+  }
+  await writeJson(sidecar, metadata);
+  const forged = join(repo, ".worktrees/root/DEV-9002-unregistered");
+  await initGitRepo(forged);
+  await writeJson(`${forged}.worktree.json`, metadata);
+  const registeredOnly = await buildWorktreeIndex({ companiesRoot: root, organization: "BetaCo", module: "deals" });
+  expect(registeredOnly.worktrees.some((item) => item.slug === "DEV-9002-unregistered")).toBe(false);
+  expect((await runGit(["remote", "set-url", "origin", "git@github.com:OmegaCo/deals.git"], { cwd: repo })).ok).toBe(true);
+  const wrongOwner = await buildWorktreeIndex({ companiesRoot: root, organization: "BetaCo", module: "deals" });
+  expect(wrongOwner.worktrees.some((item) => item.slug === slug)).toBe(false);
+});
 
 afterAll(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })));
