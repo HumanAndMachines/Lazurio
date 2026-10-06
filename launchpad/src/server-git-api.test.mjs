@@ -1135,6 +1135,8 @@ test("fresh hosted Launchpad stays usable before operator Organization checkout 
       LAZURIO_LAUNCHPAD_EXTERNAL_ORIGIN: "https://launchpad.builder.workspace.example.test",
       LAZURIO_LAUNCHPAD_AUTH_COOKIE_NAME: "__Secure-lazurio-sales-workspace",
       LAZURIO_LAUNCHPAD_AUTH_CHECK_URL: `https://127.0.0.1:${await findFreePort()}/oauth2/auth`,
+      // The same cache expiry as production (10 s), on a fixture cadence.
+      LAZURIO_LAUNCHPAD_APPS_CACHE_TTL_MS: "200",
     },
   });
   expect((await fetch(`http://127.0.0.1:${port}/`)).status).toBe(200);
@@ -2024,6 +2026,8 @@ test("hosted personal Launchpad serves a setup prompt until the owner clones the
       ...personalHostedEnvironment(stateRoot, await findFreePort()),
       LAZURIO_T3CODE_URL: "https://t3code.frozen-slug.lazurio.io/",
       LAZURIO_T3CODE_PAIRING_COMMAND: JSON.stringify(["/bin/sh", cli]),
+      // The same periodic refresh as production (15 s), on a fixture cadence.
+      LAZURIO_LAUNCHPAD_HOSTED_REFRESH_MS: "250",
     },
   });
   expect((await fetch(`http://127.0.0.1:${port}/`)).status).toBe(200);

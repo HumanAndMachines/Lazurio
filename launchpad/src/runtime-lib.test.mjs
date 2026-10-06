@@ -1125,6 +1125,8 @@ test("POSIX Stop escalates when the launcher exits but its process group survive
     launchpadRoot: join(root, "launchpad"),
     platform: "linux",
     bunExecutable: process.execPath,
+    // The surviving group is the timeout path; a short bound proves it.
+    stopTimeoutMs: 200,
     processGroupAliveFn: async () => groupAlive,
     signalProcessGroupFn: async (_processGroupId, signal, record) => {
       record.child.kill(signal);
@@ -1547,6 +1549,9 @@ test("Windows managed Stop ponechá ownership, když child handle nepotvrdí exi
     instanceId: "windows-test-instance",
     platform: "win32",
     bunExecutable: process.execPath,
+    // The unconfirmed exit is the timeout path; the later real Stop still
+    // gets enough time for a real child to exit.
+    stopTimeoutMs: platformTestTimeout(1_000),
     resolvePortOwnerFn: async () => null,
     spawnProcess: (command, options) => {
       const child = spawnFixtureChild(root, command, options);
@@ -1614,6 +1619,9 @@ test("Windows Stop je po přechodné chybě taskkill znovu bezpečně zkusiteln�
     instanceId: "windows-test-instance",
     platform: "win32",
     bunExecutable: process.execPath,
+    // The failed taskkill is the timeout path; the retried real Stop still
+    // gets enough time for a real child to exit.
+    stopTimeoutMs: platformTestTimeout(1_000),
     resolvePortOwnerFn: async () => null,
     runSystemCommandFn: async (command) => {
       commands.push(command);
@@ -1825,6 +1833,8 @@ test("POSIX Stop po selhání SIGKILL vrátí živý managed proces do retryable
     instanceId: "posix-test-instance",
     platform: "linux",
     bunExecutable: process.execPath,
+    // The ignored SIGTERM is the timeout path; a short bound proves it.
+    stopTimeoutMs: 200,
     resolvePortOwnerFn: async () => null,
     processGroupAliveFn: () => false,
     spawnProcess: () => ({
@@ -2559,6 +2569,8 @@ test("Windows standalone Start reconciles a healthy listener at the timeout boun
       ? { pid: child.pid, cwd_matches: null }
       : null,
     resolveProcessIdentityFn: async (pid) => child && pid === child.pid ? identityFor(pid) : null,
+    // Stop runs only in cleanup, where the fixture process is killed anyway.
+    stopTimeoutMs: 200,
     startedListenerOwnershipTimeoutMs: 1_200,
   });
 
@@ -3048,6 +3060,8 @@ test("Windows owner proof přežije stop failure a po restartu dovolí bezpečn�
       void child.exited.then(() => { childExited = true; });
       return child;
     },
+    // Every taskkill fails, so Stop always takes the timeout path.
+    stopTimeoutMs: 200,
     resolvePortOwnerFn: resolveOwner,
     resolveProcessIdentityFn: async (pid) => pid === child?.pid ? identityFor(pid) : null,
     runSystemCommandFn: async () => ({

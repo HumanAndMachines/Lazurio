@@ -141,12 +141,17 @@ describe("Core-owned Module lifecycle client", () => {
     });
   });
 
+  // The ordering proofs below shrink only the identity deadline; the frozen
+  // production deadlines are pinned separately, so CI does not wait 5 s each.
+  const shortIdentityTimeoutsMs = { ...MODULE_LIFECYCLE_TIMEOUTS_MS, identity: 200 };
+
   test("mutating lifecycle actions wait past the short Server-discovery deadline", async () => {
     const report = await runModuleLifecycle({
       action: "open",
       selector: "ExampleOrganization/website",
       readLocator: async () => locator,
-      fetchFn: fixtureFetch({ actionDelayMs: 5_250 }),
+      fetchFn: fixtureFetch({ actionDelayMs: 500 }),
+      timeoutsMs: shortIdentityTimeoutsMs,
     });
 
     expect(report.status).toBe("completed");
@@ -158,13 +163,15 @@ describe("Core-owned Module lifecycle client", () => {
       runModuleLifecycle({
         action: "status",
         readLocator: async () => locator,
-        fetchFn: fixtureFetch({ inventoryDelayMs: 5_250 }),
+        fetchFn: fixtureFetch({ inventoryDelayMs: 500 }),
+        timeoutsMs: shortIdentityTimeoutsMs,
       }),
       runModuleLifecycle({
         action: "start",
         selector: "ExampleOrganization/website",
         readLocator: async () => locator,
-        fetchFn: fixtureFetch({ inventoryBodyDelayMs: 5_250 }),
+        fetchFn: fixtureFetch({ inventoryBodyDelayMs: 500 }),
+        timeoutsMs: shortIdentityTimeoutsMs,
       }),
     ]);
     expect(reports.map((report) => report.status)).toEqual(["current", "completed"]);
