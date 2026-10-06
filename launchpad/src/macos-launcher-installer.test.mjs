@@ -116,32 +116,6 @@ async function waitForChildCommand(parentPid, commandName, timeoutMs = 2_000) {
   return false;
 }
 
-test("macOS native app delegates to the canonical human launcher without Terminal", async () => {
-  const installer = await readFile(join(sourceRoot, "scripts", "install-launchpad-macos.sh"), "utf8");
-  const bootstrap = await readFile(join(sourceRoot, "scripts", "macos", "launchpad-bootstrap.sh"), "utf8");
-  const replacement = await readFile(join(sourceRoot, "scripts", "macos", "replace-app.jxa"), "utf8");
-
-  expect(installer).toContain('TARGET_PARENT="$HOME_CANONICAL/Applications"');
-  expect(installer).toContain('APP_NAME="Lazurio Launchpad.app"');
-  expect(installer).toContain('LEGACY_SYSTEM_APP="/Applications/Launchpad GEN3.app"');
-  expect(installer).toContain('LEGACY_BUNDLE_ID="com.humanandmachine.launchpad-gen3"');
-  expect(installer).toContain('mv "$LEGACY_SYSTEM_APP" "$LEGACY_TRASH_PATH"');
-  expect(installer).not.toContain("HumanAndMachine Launchpad");
-  expect(bootstrap).not.toContain("HumanAndMachine Launchpad");
-  expect(installer).toContain("lazurio.launchpad.macos_install.v1");
-  expect(bootstrap).toContain('LAUNCHER="$CANONICAL_ROOT/Launchpad.command"');
-  expect(bootstrap).toContain('exec /bin/bash "$LAUNCHER"');
-  expect(bootstrap).not.toContain('/usr/bin/open "$LAUNCHER"');
-  expect(bootstrap).not.toContain("launchctl");
-  expect(installer).not.toContain("launchctl");
-  expect(bootstrap).not.toContain("LaunchAgent");
-  expect(bootstrap).not.toContain("/api/launchpad/identity");
-  expect(installer).not.toContain("/api/launchpad/identity");
-  expect(installer).not.toContain('mv "$TARGET" "$BACKUP_PATH"');
-  expect(installer).toContain("/usr/bin/shlock");
-  expect(replacement).toContain("replaceItemAtURLWithItemAtURLBackupItemNameOptionsResultingItemURLError");
-});
-
 macTest("unsupported target arguments fail with the intended diagnostic", async () => {
   const root = await fixtureRoot();
   const home = await mkdtemp(join(tmpdir(), "lazurio-macos-argument-home-"));

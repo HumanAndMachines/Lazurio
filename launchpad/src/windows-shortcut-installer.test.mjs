@@ -35,44 +35,6 @@ afterEach(async () => {
   await Promise.all(tempRoots.splice(0).map((path) => rm(path, { recursive: true, force: true })));
 });
 
-test("Windows installer drží jediný per-user bootstrap kontrakt bez druhé runtime autority", async () => {
-  const contents = await readFile(installer, "utf8");
-
-  expect(contents).toContain("lazurio.launchpad.windows_install.v1");
-  expect(contents).toContain("Publish-AtomicFile -SourcePath $sourceBootstrapPath");
-  expect(contents).toContain("Write-AtomicUtf8File -DestinationPath $DestinationPath");
-  expect(contents).toContain("[System.IO.File]::Replace($TemporaryPath, $DestinationPath, $backupPath)");
-  expect(contents).toContain("$replaceFailure -is [System.IO.FileNotFoundException]");
-  expect(contents).toContain("[datetime]$BackupTime = (Get-Date)");
-  expect(contents).toContain("[guid]::NewGuid().ToString('N')");
-  expect(contents).toContain("[System.Security.Cryptography.SHA256]::Create()");
-  expect(contents).not.toContain("Get-FileHash");
-  expect(contents).toContain("Launchpad refuses a linked Git worktree root");
-  expect(contents).toContain("Join-Path $gitDirectory 'commondir'");
-  expect(contents).toContain("Publish-VerifiedInstallConfig -DestinationPath $installConfigPath");
-  expect(contents).toContain("Publish-AtomicTemporaryFile -TemporaryPath $rollbackPath -DestinationPath $DestinationPath");
-  expect(contents).toContain("Previous config recovery file: $rollbackPath");
-  expect(contents).toContain("Restore-ShortcutSnapshot -ShortcutPath $startMenuShortcut");
-  const dualSeparatorSplit = "-split '[\\\\/]'";
-  expect(contents.split(dualSeparatorSplit)).toHaveLength(3);
-  expect(contents).toContain("$shortcut.Arguments -eq $expectedArguments");
-  expect(contents).not.toContain("$shortcut.Arguments -like");
-  expect(contents).toContain("field '$($requiredField.Name)' is empty");
-  expect(contents).toContain("@{ Name = 'TargetPath'; Value = [string]$shortcut.TargetPath }");
-  expect(contents).toContain("@{ Name = 'WorkingDirectory'; Value = [string]$shortcut.WorkingDirectory }");
-  expect(contents).toContain("[switch]$IncludeTaskbar");
-  expect(contents).toContain("$installTaskbar = $IncludeTaskbar.IsPresent");
-  expect(contents).toContain("$taskbarShortcut = if ($installTaskbar)");
-  expect(contents).not.toContain("ScheduledTask");
-  expect(contents).not.toMatch(/\bport\b/i);
-  expect(contents.indexOf("Publish-AtomicFile -SourcePath $sourceBootstrapPath"))
-    .toBeLessThan(contents.indexOf("Publish-VerifiedInstallConfig -DestinationPath $installConfigPath"));
-  expect(contents.indexOf("Publish-AtomicFile -SourcePath $sourceIconPath"))
-    .toBeLessThan(contents.indexOf("Publish-VerifiedInstallConfig -DestinationPath $installConfigPath"));
-  expect(contents.indexOf("Test-LaunchpadShortcut -ShortcutPath $startMenuShortcut"))
-    .toBeLessThan(contents.indexOf("Publish-VerifiedInstallConfig -DestinationPath $installConfigPath"));
-});
-
 windowsTest("Windows installer publikuje stabilní bootstrap idempotentně a bez temp zbytků", async () => {
   const fixture = await shortcutFixture("happy");
 

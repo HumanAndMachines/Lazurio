@@ -122,9 +122,14 @@ test("every literal UI key and integer plural category resolves", async () => {
     for (const match of source.matchAll(/\bt\("([^"]+)"/g)) literalKeys.add(match[1]);
     for (const match of source.matchAll(/\btp\("([^"]+)"/g)) pluralKeys.add(match[1]);
   }
-  const html = await readFile(join(publicRoot, "index.html"), "utf8");
-  for (const match of html.matchAll(/data-i18n(?:-placeholder|-aria-label|-title)?="([^"]+)"/g)) {
-    literalKeys.add(match[1]);
+  const pages = (await readdir(publicRoot)).filter((file) => file.endsWith(".html"));
+  expect(pages).toContain("index.html");
+  expect(pages).toContain("settings.html");
+  for (const page of pages) {
+    const html = await readFile(join(publicRoot, page), "utf8");
+    for (const match of html.matchAll(/data-i18n(?:-placeholder|-aria-label|-title)?="([^"]+)"/g)) {
+      literalKeys.add(match[1]);
+    }
   }
   for (const key of literalKeys) {
     expect(Object.hasOwn(cs, key)).toBe(true);
