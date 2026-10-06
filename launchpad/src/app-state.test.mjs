@@ -25,6 +25,7 @@ import {
   reconcileDetailDrawerState,
   replacePersonalspaceResponse,
   reconcileSelectedAppId,
+  runtimeMutationRequest,
   runtimeStagesForApp,
   sidePanelResponseIsCurrent,
   summarizeOrganizationSpaceHealth,
@@ -75,6 +76,77 @@ test("declared shared-port peer is matched by endpoint and ownership, not listen
   };
 
   expect(findRunningSharedPortPeer([target, peer], target)).toBe(peer);
+});
+
+function takeoverFixture({ peerCompany = "BetaCo", peerModule = "knowledgebase" } = {}) {
+  const target = {
+    id: "alfaco-knowledgebase-v2",
+    title: "Knowledgebase v2",
+    company: "AlfaCo",
+    module: "knowledgebase",
+    host: "127.0.0.1",
+    port: 5286,
+    runtime: { owner: "foreign-port", pid: 2635 },
+    shared_port_owners: [{ app_id: "running-peer" }],
+  };
+  const peer = {
+    id: "running-peer",
+    title: "Wiki v1",
+    company: peerCompany,
+    module: peerModule,
+    host: "127.0.0.1",
+    port: 5286,
+    runtime: { owner: "current-instance", pid: 2635 },
+  };
+  return { target, peer };
+}
+
+function recordingConfirm(answer) {
+  const prompts = [];
+  return { prompts, confirm: (message) => { prompts.push(message); return answer; } };
+}
+
+test("cross-Organization takeover is never requested without the person's confirmation", () => {
+  const { target, peer } = takeoverFixture();
+  const source = { type: "main" };
+  for (const action of ["open", "start", "restart"]) {
+    const declined = recordingConfirm(false);
+    expect(runtimeMutationRequest({ apps: [target, peer], app: target, action, source, confirm: declined.confirm }))
+      .toBeNull();
+    expect(declined.prompts).toHaveLength(1);
+
+    const accepted = recordingConfirm(true);
+    expect(runtimeMutationRequest({ apps: [target, peer], app: target, action, source, confirm: accepted.confirm }))
+      .toEqual({
+        path: `/api/apps/alfaco-knowledgebase-v2/${action}`,
+        body: { source, confirmed: true, replace_app_id: "running-peer" },
+      });
+    expect(accepted.prompts).toHaveLength(1);
+    for (const named of ["AlfaCo", "BetaCo", "Knowledgebase", "Wiki", "5286"]) {
+      expect(accepted.prompts[0]).toContain(named);
+    }
+  }
+});
+
+test("runtime requests without a cross-Module peer never prompt or carry takeover fields", () => {
+  const source = { type: "worktree", slug: "DEV-1-example" };
+  const sameModule = takeoverFixture({ peerCompany: "AlfaCo", peerModule: "knowledgebase" });
+  const noPeer = takeoverFixture();
+  const cases = [
+    [[sameModule.target, sameModule.peer], sameModule.target, "open"],
+    [[sameModule.target, sameModule.peer], sameModule.target, "restart"],
+    [[noPeer.target], noPeer.target, "start"],
+    // Actions that never start an App do not ask even with a foreign peer.
+    [[noPeer.target, noPeer.peer], noPeer.target, "stop"],
+  ];
+  for (const [apps, app, action] of cases) {
+    const unexpected = recordingConfirm(true);
+    expect(runtimeMutationRequest({ apps, app, action, source, confirm: unexpected.confirm })).toEqual({
+      path: `/api/apps/${app.id}/${action}`,
+      body: { source },
+    });
+    expect(unexpected.prompts).toEqual([]);
+  }
 });
 
 test("shared-port peer selection stays fail-closed for undeclared or unmanaged Apps", () => {
