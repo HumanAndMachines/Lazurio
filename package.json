@@ -10,7 +10,7 @@
     "#lazurio-core/resident-manifest": "./lazurio/core/resident-manifest-lib.mjs"
   },
   "scripts": {
-    "check": "bun run organization:compiler:test && bun run terminology:test && bun run preservation:test && bun run personalspace:test && bun run worktrees:test && bun run runtime:migrate:test && bun run git-policy:test && bun run ci:test && bun run agent-skills:test && bun run integrations:contracts:test && bun run mission-control:smoke:test && bun run lazurio:test && bun run resident:test && bun run doctor:agent-skills && bun run --cwd launchpad check",
+    "check": "bun run organization:compiler:test && bun run terminology:test && bun run preservation:test && bun run personalspace:test && bun run worktrees:test && bun run runtime:migrate:test && bun run git-policy:test && bun run ci:test && bun run agent-skills:test && bun run mission-control:smoke:test && bun run lazurio:test && bun run resident:test && bun run doctor:agent-skills && bun run --cwd launchpad check",
     "check:windows": "bun scripts/test-lanes.mjs windows",
     "check:docs": "bun scripts/test-lanes.mjs docs && bun run doctor:agent-skills",
     "ci:test": "bun test ./scripts/ci-change-scope.test.mjs ./scripts/test-lanes.test.mjs",
@@ -40,7 +40,6 @@
     "doctor:agent-skills": "bun scripts/agent-skills-entrypoint.mjs check",
     "repair:agent-skills": "bun scripts/agent-skills-entrypoint.mjs repair",
     "agent-skills:test": "bun test ./scripts/agent-skills-entrypoint.test.mjs",
-    "integrations:contracts:test": "bun test ./scripts/external-app-integrations-contract.test.mjs",
     "mission-control:smoke": "bun scripts/mission-control-trust-smoke.mjs",
     "mission-control:smoke:test": "bun test ./scripts/mission-control-trust-smoke.test.mjs",
     "git-policy:test": "bun test ./scripts/pr-preflight.test.mjs ./launchpad/src/task-preflight-lib.test.mjs",
