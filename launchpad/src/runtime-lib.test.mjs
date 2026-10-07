@@ -34,7 +34,8 @@ import { platformTestTimeout } from "./test-platform-setup.mjs";
 import { buildWorktreeIndex } from "../../lazurio/runtime/worktree-lib.mjs";
 import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.mjs";
 import { createWorktreeFromPlan } from "./worktree-actions-lib.mjs";
-import { createRepositoryDbWorktreeFixture } from "./git-fixture-helpers.test.mjs";
+import { createLaunchpadGitFixture, createRepositoryDbWorktreeFixture, initGitRepo } from "./git-fixture-helpers.test.mjs";
+import { runGit } from "../../lazurio/runtime/git-lib.mjs";
 import { createHostedWorkspaceConfiguration, requireHostedAppUrl, selectHostedWorkspaceApps } from "../../lazurio/runtime/hosted-app-url-lib.mjs";
 
 // One hosted Machine identity for every hosted runtime test: fixture Apps
@@ -4270,28 +4271,37 @@ test("runtime manager open chain odmítne proces, který spadne hned po prvním 
   expect(failure.message).toContain(String(blockedPort));
 });
 
-test("runtime manager replaces main with one worktree instance on the same declared ports", async () => {
+for (const ownerRelative of [false, true]) {
+test(`runtime manager replaces main with one ${ownerRelative ? "owner-repository" : "legacy"} worktree instance on the same declared ports`, async () => {
   const mainPort = await findFreePort();
   const root = await createCompaniesWorkspaceFixture({ port: mainPort });
   const orgRoot = join(root, "organizations", "TestCompany");
   const mainModuleRoot = join(orgRoot, "modules", "demo");
   const worktreeSlug = "CAC-0042-demo-runtime-selector";
-  const worktreeRoot = join(orgRoot, ".worktrees", "workspace", "demo", worktreeSlug);
+  const worktreeContainer = ownerRelative ? join(mainModuleRoot, ".worktrees/root") : join(orgRoot, ".worktrees/workspace/demo");
+  const worktreeRoot = join(worktreeContainer, worktreeSlug);
   await mkdir(join(orgRoot, ".worktrees", "workspace", "demo"), { recursive: true });
   await mkdir(join(orgRoot, "mission-control", "plans", "2026", "07"), { recursive: true });
-  await cp(mainModuleRoot, worktreeRoot, { recursive: true });
+  if (ownerRelative) {
+    await initGitRepo(mainModuleRoot);
+    for (const args of [["remote", "add", "origin", "git@github.com:TestCompany/demo.git"], ["add", "."], ["commit", "-m", "runtime fixture"], ["worktree", "add", "-b", worktreeSlug, worktreeRoot]]) {
+      expect((await runGit(args, { cwd: mainModuleRoot })).ok).toBe(true);
+    }
+  } else {
+    await cp(mainModuleRoot, worktreeRoot, { recursive: true });
+  }
   await declareFixtureLazurioRuntime(worktreeRoot);
   await writeFile(
     join(orgRoot, "mission-control", "plans", "2026", "07", "CAC-0042-demo-runtime-selector.yaml"),
     "dev_code: CAC-0042\ntitle: Demo runtime selector\nstatus: in_progress\n",
   );
-  await writeJson(join(orgRoot, ".worktrees", "workspace", "demo", `${worktreeSlug}.worktree.json`), {
+  await writeJson(join(worktreeContainer, `${worktreeSlug}.worktree.json`), {
     schema_version: "companiesascode.worktree.v1",
     organization: "TestCompany",
     organization_path: "organizations/TestCompany",
     workspace: "workspace",
     module: "demo",
-    module_path: "modules/demo",
+    module_path: ownerRelative ? "." : "modules/demo",
     repo_kind: "module",
     base_branch: "main",
     branch: "CAC-0042-demo-runtime-selector",
@@ -4335,7 +4345,7 @@ test("runtime manager replaces main with one worktree instance on the same decla
   expect(worktree.runtime.listeners).toHaveLength(1);
   expect(worktree.runtime.listeners.every((listener) => listener.allocation === "static")).toBe(true);
   expect(worktree.runtime.listeners.map((listener) => listener.port)).toEqual([mainPort]);
-  expect(worktree.runtime.dependencies.cwd).toContain(`.worktrees/workspace/demo/${worktreeSlug}/app/v1`);
+  expect(worktree.runtime.dependencies.cwd).toContain(`${ownerRelative ? ".worktrees/root" : ".worktrees/workspace/demo"}/${worktreeSlug}/app/v1`);
   const worktreeEnv = await (await fetch(`${worktree.url}/runtime-env`)).json();
   expect(worktreeEnv.organizationRoot).toBe(await realpath(orgRoot));
   expect(worktreeEnv.nodePath).toBe(join(await realpath(worktreeRoot), "app", "v1", "node_modules"));
@@ -4352,6 +4362,7 @@ test("runtime manager replaces main with one worktree instance on the same decla
     runtime_source: { type: "worktree", slug: worktreeSlug },
   });
 }, platformTestTimeout(15_000));
+}
 
 test("worktree Start materializes its explicit contract while main is still legacy", async () => {
   const port = await findFreePort();
@@ -5420,6 +5431,131 @@ test("Mission Control worktree uses only its exact owned repository-db binding",
         can_start: false,
       },
     });
+  } finally {
+    await runtime.shutdown();
+  }
+}, platformTestTimeout(15_000));
+
+test("owner-repository Module worktree starts with its required repository-db member", async () => {
+  // A Module worktree registered in the Module's own repository keeps the
+  // owner-relative sidecar module_path "."; the runtime must bind its data
+  // slot through the validated Organization slot, not through ".".
+  const port = await findFreePort();
+  const root = await createLaunchpadGitFixture();
+  registerTempRoot(root, { port });
+  const orgRoot = join(root, "organizations", "BetaCo_GEN3");
+  const companyPath = join(orgRoot, "company.gen3.json");
+  const company = JSON.parse(await readFile(companyPath, "utf8"));
+  company.module_port_pool = { start: port, end: port };
+  await writeJson(companyPath, company);
+  const manifestPath = join(orgRoot, "modules.manifest.json");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  manifest.module_slots.push({
+    path: "workspace/deals/db",
+    slug: "deals-data",
+    workspace: "workspace",
+    category: "sales-data",
+    default_access: "expected",
+    required_roles: ["*"],
+    source_of_truth: "repository-db:v3",
+    status: "active",
+    materialization: "repository_db_mount",
+    git: { url: "git@github.com:BetaCo/deals-data.git", branch: "v3" },
+  });
+  await writeJson(manifestPath, manifest);
+
+  const git = async (args, cwd) => {
+    const result = await runGit(args, { cwd });
+    expect(result.ok).toBe(true);
+    return result.stdout.trim();
+  };
+  const dealsRepo = join(orgRoot, "workspace", "deals");
+  await initGitRepo(dealsRepo, { remotePath: join(root, "remotes", "deals.git") });
+  await writeFile(join(dealsRepo, ".gitignore"), "db\n.worktrees/\n");
+  await writeJson(join(dealsRepo, "lazurio.module.json"), {
+    schema_version: "lazurio.module.v1",
+    id: "deals",
+    company: "BetaCo",
+    tcp_port_policy: { mode: "single" },
+    port_leases: [{ id: "main", host: "127.0.0.1", port }],
+    apps: ["app/v3/package.json"],
+    default_app: "app/v3/package.json",
+  });
+  await mkdir(join(dealsRepo, "app", "v3"), { recursive: true });
+  await writeJson(join(dealsRepo, "app", "v3", "package.json"), {
+    name: "betaco-deals-v3",
+    private: true,
+    type: "module",
+    scripts: { dev: "bun server.mjs" },
+    lazurio: {
+      runtime: {
+        schema_version: "lazurio.runtime.v1",
+        id: "betaco-deals-v3",
+        title: "BetaCo Deals",
+        company: "BetaCo",
+        module: "deals",
+        surface: "internal",
+        dev_script: "dev",
+        required_module_slots: ["workspace/deals/db"],
+        tags: ["deals", "repository-db"],
+        listeners: [{ id: "web", role: "entrypoint", lease: "main", protocol: "http", health: { kind: "http", path: "/" } }],
+      },
+    },
+  });
+  await writeFile(join(dealsRepo, "app", "v3", "server.mjs"), [
+    "import { createServer } from 'node:http';",
+    "createServer((_request, response) => { response.writeHead(200); response.end('ok'); })",
+    "  .listen(Number(process.env.LAZURIO_RUNTIME_PORT), process.env.LAZURIO_RUNTIME_HOST);",
+    "",
+  ].join("\n"));
+  await git(["add", "."], dealsRepo);
+  await git(["commit", "-m", "add deals runtime"], dealsRepo);
+  await git(["push", "origin", "main"], dealsRepo);
+  await git(["remote", "set-url", "origin", "git@github.com:BetaCo/deals.git"], dealsRepo);
+  const dbRepo = join(dealsRepo, "db");
+  await initGitRepo(dbRepo, { branch: "v3", remotePath: join(root, "remotes", "deals-data.git") });
+  await git(["remote", "set-url", "origin", "git@github.com:BetaCo/deals-data.git"], dbRepo);
+
+  const plan = "data/mission-control/plans/2026/10/DEV-9003-owner-worktree-data.yaml";
+  await mkdir(join(orgRoot, "mission-control/db", dirname(plan)), { recursive: true });
+  await writeFile(join(orgRoot, "mission-control/db", plan), "dev_code: DEV-9003\ntitle: Owner worktree data\nstatus: in_progress\n");
+  const slug = "DEV-9003-owner-worktree-data";
+  const branch = `codex/${slug}`;
+  const checkout = join(dealsRepo, ".worktrees", "root", slug);
+  await git(["worktree", "add", "-b", branch, checkout], dealsRepo);
+  const dealsSha = await git(["rev-parse", "HEAD"], dealsRepo);
+  const dbSha = await git(["rev-parse", "HEAD"], dbRepo);
+  await git(["worktree", "add", "--detach", join(checkout, "db"), dbSha], dbRepo);
+  await writeJson(join(dealsRepo, ".worktrees", "root", `${slug}.worktree.json`), {
+    schema_version: "companiesascode.worktree.v1",
+    branch,
+    organization_path: ".",
+    workspace: "root",
+    module: "deals",
+    module_path: ".",
+    mission_control_plan_code: "DEV-9003",
+    mission_control_plan_path: plan,
+    members: [
+      { repo_path: ".", slot_path: "workspace/deals", role: "edit", base_ref: "origin/main", base_sha: dealsSha, branch, materialization: "linked_worktree", disposition: "active" },
+      { repo_path: "db", slot_path: "workspace/deals/db", role: "dependency", base_ref: "origin/v3", base_sha: dbSha, branch: null, materialization: "linked_worktree" },
+    ],
+  });
+
+  const runtime = createRuntimeManager({
+    companiesRoot: root,
+    launchpadRoot: join(root, "launchpad"),
+    instanceId: "owner-worktree-repository-db",
+  });
+  const source = { type: "worktree", slug };
+  try {
+    expect(await runtime.health("betaco-deals-v3", { source })).toMatchObject({
+      runtime_source: source,
+      dependencies: { state: "ready", can_start: true },
+    });
+    const opened = await runtime.open("betaco-deals-v3", { source });
+    expect(opened.url).toBe(`http://127.0.0.1:${port}`);
+    expect(await runtime.health("betaco-deals-v3", { source })).toMatchObject({ status: "healthy" });
+    await runtime.stop("betaco-deals-v3", { source });
   } finally {
     await runtime.shutdown();
   }

@@ -752,7 +752,7 @@ async function worktreeRepositoryDbReadiness({
   worktree,
   absoluteWorktreePath,
 }) {
-  const declaredModulePath = worktree.metadata?.module_path;
+  const declaredModulePath = worktree.module_path ?? worktree.metadata?.module_path;
   const missingModulePath = declaredModulePath === undefined || declaredModulePath === "";
   const moduleSlotPath = missingModulePath
     ? legacyWorktreeModuleSlotPath(worktree)
