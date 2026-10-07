@@ -2249,7 +2249,9 @@ export function createRuntimeManager({
       ...app,
       ...worktreeContract,
       [APP_CHECKOUT_ROOT]: absoluteWorktreeRoot,
-      [APP_WORKTREE_METADATA]: worktree.metadata,
+      [APP_WORKTREE_METADATA]: worktree.module_path
+        ? { ...worktree.metadata, module_path: worktree.module_path }
+        : worktree.metadata,
       [APP_RUNTIME_CWD]: resolve(absoluteWorktreeRoot, cwdFromWorktree),
       // Plugin paths/capabilities are validated only by main discovery. A
       // worktree may change its Module App runtime, but it cannot smuggle a

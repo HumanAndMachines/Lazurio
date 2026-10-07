@@ -3,6 +3,7 @@ import { mkdir, rm, symlink, writeFile } from "fs/promises";
 import { join } from "path";
 import { runGit } from "../../lazurio/runtime/git-lib.mjs";
 import { buildWorktreeIndex, detectNonCanonicalSidecarFields } from "../../lazurio/runtime/worktree-lib.mjs";
+import { buildWorktreesResponse } from "../../lazurio/runtime/git-api-lib.mjs";
 import { createLaunchpadGitFixture, initGitRepo, writeJson } from "./git-fixture-helpers.test.mjs";
 
 const tempRoots = [];
@@ -34,6 +35,10 @@ test("owner-repository linked worktrees retain module identity and resolve local
     ownership_status: "owned", module: "deals", module_path: "workspace/deals", branch,
     owner_plan: { code: "DEV-9001" },
   });
+  // The public Launchpad response must list it too: the sidecar's
+  // owner-relative module_path "." is not the Organization slot.
+  const publicResponse = await buildWorktreesResponse({ companiesRoot: root, organization: "BetaCo", module: "deals" });
+  expect(publicResponse.worktrees.some((item) => item.slug === slug)).toBe(true);
   for (const invalid of [
     { branch: "codex/DEV-9999-forged" },
     { mission_control_plan_code: "DEV-9999" },

@@ -395,7 +395,9 @@ function findRepoForWorktree(worktree, repos) {
     return typeof repo.slot_path === "string" && basename(repo.slot_path) === worktree.module;
   });
   const metadataModule = worktree.metadata?.module;
-  const metadataModulePath = worktree.metadata?.module_path;
+  // An owner-repository worktree carries its validated Organization slot;
+  // its sidecar `module_path` is owner-relative (`.`), not Organization authority.
+  const metadataModulePath = worktree.module_path ?? worktree.metadata?.module_path;
   if (typeof metadataModulePath === "string" && metadataModulePath !== "") {
     const pathMatches = candidates.filter((repo) => repo.slot_path === metadataModulePath);
     if (pathMatches.length !== 1) return null;
