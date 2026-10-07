@@ -30,6 +30,24 @@ Organizace, která chce přehled, si založí vlastní Composio organizaci a ž�
 operátory, aby se přihlašovali do ní. Je to samostatně spravovaná služba mimo
 Lazurio Dashboard. Lazurio Environment to nevynucuje.
 
+## Cíl: dva režimy (rozhodnuto 2026-10-08)
+
+Dodatek k rozhodnutí 0162, plán DEV-6626. Dnes platí model výše; následující
+teprve vzniká.
+
+- **Každý operátor svůj účet** je výchozí režim a pro osobní Environmenty
+  jediný: model výše. Aplikace se budou připojovat přímo v Launchpadu, v Apps
+  → Připojené aplikace, pod přihlášeným Composio účtem.
+- **Firemní Composio organizace** je volba Organizace. Každý Environment
+  Organizace má vlastní projekt ve firemní Composio organizaci. Projekt
+  zakládá, rotuje a maže broker Organizace, který jako jediný drží firemní
+  token. Environment drží jen klíč svého projektu. Při předání nebo zrušení
+  Environmentu se projekt smaže i s přístupy.
+- Agenti i boti používají v obou režimech příkaz `composio`; ve firemním
+  režimu je přihlášený klíčem projektu (úprava CLI nabídnutá upstreamu).
+- Mapa Conglomerate v Dashboardu ukazuje jen ke čtení, kam který Environment
+  sahá; osobní Environmenty vidí jen jejich majitel.
+
 ## Co agent smí
 
 - S napojenou aplikací dělat vše, co nabízí, tedy číst, zapisovat i mazat,
