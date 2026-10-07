@@ -33,6 +33,9 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
    prostoru a Operátor nemusí řešit, kde co leží.
    - osobní klient → osobní VM: SSH + HTTPS; osobní VM → osobní laptop: SSH;
    - pracovní laptop → pracovní VM téže Organizace přiřazená témuž Operátorovi: SSH.
+     Grant se odvozuje z aktuálního stavu (schválené zařízení × právě přidělené
+     Environmenty) bez samostatné žádosti a sleduje změny přidělení, zařízení
+     i členství (dodatek 0192 z 2026-10-07).
      Opačný směr (pracovní VM → zařízení) se obecně nedává (0182); pracovní,
      týmové a automatizované Environmenty na zařízení nedosáhnou, kromě
      výslovně deklarovaného zařízení Ownera podle pravidla 8.
@@ -89,11 +92,13 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
      výslovně deklarovat, platí přísné pravidlo 3 i pro zakladatelovo zařízení
      a žádná pracovní VM na deklarovaného osobního klienta nedosáhne.
 
-**Vědomý důsledek pracovního laptopu:** pracovní VM vlastní Organizace a nad ní
-stojí autorita Organization Hostu a Conglomerate Hostu. Grant pracovní VM →
-pracovní laptop proto dává této vyšší autoritě technickou cestu do laptopu. U
-zařízení vlastněného Organizací je to přijaté; právě proto se třída `work`
-nikdy neodvozuje a osobní laptop ji dostat nesmí.
+**Vědomý důsledek pracovního laptopu:** pracovní laptop dostává SSH do
+pracovního Environmentu, který je přidělený témuž člověku; opačný směr pracovní
+VM → laptop se obecně nedává (0182). Pracovní VM vlastní Organizace a nad ní
+stojí autorita Organization Hostu a Conglomerate Hostu, takže hrana VM →
+zařízení by této vyšší autoritě dala technickou cestu do laptopu. Proto ji
+dostává jen výslovně deklarované zařízení Ownera podle pravidla 8, třída `work`
+se nikdy neodvozuje a osobní laptop ji dostat nesmí.
 
 ## Hranice jednoho Conglomerate
 
@@ -189,8 +194,9 @@ osobní zóně. Pracovní VM na něj dosáhne teprve po třech krocích: schopno
 Machines deklarovat dvojí zařazení, výslovná deklarace v `Macano-Tech/infra` a
 běžné nasazení s Plánem a Permitem. Pak se notebook objeví v obou sloupcích.
 Do osobní zóny jiných Operátorů ani jiných Organizací se tím nic neotevírá.
-Operátor s pracovním laptopem Organizace (např. v ConceptLine) má pracovní
-laptop ↔ pracovní VM obousměrně.
+Operátor s pracovním laptopem Organizace má SSH z pracovního laptopu do
+přiděleného pracovního Environmentu; opačný směr jen u výslovně deklarovaného
+zařízení Ownera podle pravidla 8.
 
 Realizace a stav: Mission Control DEV-6614. Konkrétní instance pro Matouše
 drží `Macano-Tech/infra` v `machines/macano-tech-conglomerate-host/operator-device-access.md`.
