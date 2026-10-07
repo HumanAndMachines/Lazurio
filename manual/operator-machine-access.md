@@ -33,6 +33,8 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
    prostoru a Operátor nemusí řešit, kde co leží.
    - osobní klient → osobní VM: SSH + HTTPS; osobní VM → osobní laptop: SSH;
    - pracovní laptop → pracovní VM téže Organizace přiřazená témuž Operátorovi: SSH.
+     Grant vzniká vždy spolu se schválením zařízení, bez samostatné žádosti
+     (dodatek 0192 z 2026-10-07).
      Opačný směr (pracovní VM → zařízení) se obecně nedává (0182); pracovní,
      týmové a automatizované Environmenty na zařízení nedosáhnou, kromě
      výslovně deklarovaného zařízení Ownera podle pravidla 8.

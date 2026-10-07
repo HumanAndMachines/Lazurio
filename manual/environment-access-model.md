@@ -46,7 +46,11 @@ aplikacím. Přihlašovací/control-plane endpoint nutný k založení požadavk
 připojení není přístupem k pracovním datům. Síťová schválení se vážou na
 konkrétní identitu zařízení a účet; jejich přesný mechanismus musí prokázat
 DEV-6641 na skutečném Headscale. Nová registrace nesmí získat provozní přístup
-v mezeře před schválením. Připojení SSH vyžaduje navíc vlastní oprávnění.
+v mezeře před schválením. SSH ze schváleného zařízení do pracovního
+Environmentu, který je přidělený témuž člověku, je pravidlo: vzniká v téže
+reviewované změně jako schválení zařízení. Opačný směr (Environment →
+zařízení) se obecně nedává a jde o samostatné rozhodnutí (0182); jiné SSH
+vyžaduje vlastní oprávnění.
 
 **Schválení zařízení.** Schválení je vztah konkrétního zařízení, účtu jeho
 vlastníka a cílové Organizace. Na tailnetu, který obsluhuje víc Organizací,
@@ -297,7 +301,9 @@ přihlášením do tailnetu Lazurio účtem (Headscale OIDC); zařízení přist
 jeho osobním Headscale userem s identitou Lazurio subject a nemá žádný dosah.
 Admin každé Organizace schválí konkrétní zařízení. Schválené zařízení dostane
 HTTPS a privátní DNS k Environmentům svých schválených Organizací a o vstupu
-dál rozhoduje brána Environmentu. SSH zůstává jen u výslovných grantů a
+dál rozhoduje brána Environmentu. SSH zůstává u přesných grantů: zařízení →
+Environment přidělený témuž člověku vzniká spolu se schválením zařízení
+(dodatek 0192 z 2026-10-07), ostatní jen výslovně, a
 stávající zařízení se převedou bez nového přihlášení. Vstupní granty brány
 (přidělení, plné a aplikační sdílení, vstup bez GitHubu) patří do
 DEV-6551/6552/6638/6645; do jejich nasazení brány pouští podle GitHub Teamu
