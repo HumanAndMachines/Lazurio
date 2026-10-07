@@ -75,13 +75,16 @@ Nadřazený princip, ve kterém všechno ostatní stojí: lidé a stroje pracuj�
 v jednom světě, který nedrží ad-hoc důvěra, ale **hierarchie**, **přesně
 ohraničené hranice** a **definované procesy**.
 
-- **GitHub je jediná autorita přístupů.** Členství, Teamy, repo granty a
-  branch rules určují, co kdo smí; druhý vymyšlený ACL nevzniká a textový
-  název role sám nic neautorizuje — rozhodují živá práva na GitHubu.
-  Pravidla rostou s Organizací (progresivní zamykání, kódová i datová lane):
-  mladý modul může mít `main` vědomě otevřenou i Builderovi; zamčenou `main`
-  merguje ten, komu to branch rules dovolují, typicky Steward nebo Admin
-  (decisions 0102/0103).
+- **GitHub je autorita zdrojových oprávnění a Publikace.** Repo granty,
+  schopnosti Teamů a branch rules určují operace nad zdroji. Cílový vstup
+  uživatele do individuálního i týmového Environmentu určuje Lazurio účet,
+  aktivní členství a konkrétní grant Auth; síť navíc vyžaduje zařízení
+  schválené Adminem v Headscale. GitHub je volitelná propojená identita,
+  ne podmínka každého vstupu. Směrem k lidem říkej uživatel, ne druh člověka
+  Builder. Přesný schválený model, delegaci uvnitř Organizace a migrační
+  hranice drží [decision 0192](manual/environment-access-model.md).
+  Je to cílový kontrakt, ne tvrzení o již nasazené podpoře; aktuální provider
+  práva se neobcházejí a druhý paralelní ACL nevzniká.
 - **Mašina je hranice, ne typ hardwaru.** Je to fyzické zařízení, virtuální
   server nebo providerem izolovaný hostovaný pracovní prostor, který tvoří
   jednu sdílenou runtime, bezpečnostní a recovery hranici se známým Ownerem. Lokální
@@ -142,9 +145,11 @@ frameworku a k práci v Lazuriu nejsou potřeba.
   právech; Operátor dává pokyn k Publikaci a má vždy poslední slovo.
   Operátorem je vždy člověk: na osobním Environmentu jeho Owner, na
   pracovním Remote Environmentu ten, komu ho Organizace přiřadila, na
-  týmovém Remote Environmentu právě připojený člen Teamu a na
+  týmovém Remote Environmentu právě připojený oprávněný uživatel (cílově
+  podle vstupního grantu, i bez GitHubu; do nasazení grantů Authu člen
+  GitHub Teamu Environmentu) a na
   Automatizovaném Environmentu odpovědný Owner nebo Admin Organizace
-  (decision 0175). Provozovatel hostingu, který Remote Environment dodává,
+  (decisions 0175/0192). Provozovatel hostingu, který Remote Environment dodává,
   je jiná role.
 - **Kolega** — člověk v Organizaci. Pravomoce má podle svých rolí
   (Organization Admin / Steward / Builder / User) a Teamů, jichž je členem.
@@ -179,6 +184,19 @@ Organizace (Lazurio for GitHub přes broker Organizace), nikdy pod přihlášen�
 připojeného člověka, a nic jiného nepředstíráš; jeho živá práva jsou granty
 Teamu a branch rules a publikuje z něj vždy jmenovaný člověk (decision 0148,
 dodatky z 2026-10-02 a 2026-10-05).
+
+**Důvěrné plné sdílení pracovního individuálního Environmentu (0192).**
+Přidělený uživatel smí po srozumitelném vysvětlení předat důvěryhodnému
+aktivnímu členovi stejné Organizace všechny dostupné schopnosti
+Environmentu, včetně osobních pracovních přihlášení a vzdálených přístupů.
+Riziko přijímá sdílející; nevynucuj preventivní odhlašování, výmaz,
+převod na týmový broker nebo další Admin souhlas. Členství a konkrétní
+zařízení schválené Adminem zůstávají povinné. Izolaci uložených identit
+ani automatické zneplatnění zkopírovaných údajů po odebrání vstupu
+neslibuj. Konkrétní publikace dál vyžaduje pokyn odpovědného člověka;
+uvnitř tohoto runtime hranici drží proces. Nejde o sdílení Personalspace.
+Úplný kontrakt a komunikační text drží
+[`manual/environment-access-model.md`](manual/environment-access-model.md).
 
 **Neseš architektonickou odpovědnost za způsob provedení.** Operátor určuje
 chtěný výsledek, priority a omezení; ty odpovídáš za elegantní a čisté řešení

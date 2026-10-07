@@ -1,6 +1,13 @@
 # CI checks sdíleného frameworku: stejné gates, jaké běží lokálně
 # (`bun run check` = Launchpad discovery check + testy; Guide build).
 # Release/binárková pipeline je samostatná práce (CAC-0054, task-2026-07-16-002).
+#
+# Rozsah (DEV-6649): push do main vždy pouští plnou sadu na Ubuntu. PR, který
+# mění jen dokumentační Markdown (scripts/ci-change-scope.mjs), pouští místo
+# plné sady docs lane: všechny kontroly, jejichž vstupem je ten Markdown.
+# Windows pouští jen Windows-relevantní podmnožinu (`bun run check:windows`,
+# scripts/test-lanes.mjs), i na main; podporu Windows opouštíme. Požadované
+# checky se vybírají uvnitř jobu, takže jejich názvy reportují na každém PR.
 name: checks
 
 on:
@@ -35,17 +42,38 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # PR běží na merge commitu; hloubka 2 nese oba rodiče, takže
+          # HEAD^1..HEAD je přesně změna PR vůči aktuálnímu base.
+          fetch-depth: 2
+      - name: Rozsah změny (docs lane nebo plná sada)
+        id: scope
+        # Běží v čistém Node ještě před Bunem. Cokoli jiného než prokázaný
+        # docs-only PR (i prázdný nebo chybějící výstup) znamená plnou sadu.
+        run: node scripts/ci-change-scope.mjs
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        if: runner.os == 'Linux' || steps.scope.outputs.scope != 'docs'
         with:
           # Exact verzi čte ze stejné package autority jako CLI a Doctor.
           bun-version-file: lazurio/package.json
+      - name: Docs lane (PR jen s dokumentačním Markdownem)
+        if: runner.os == 'Linux' && steps.scope.outputs.scope == 'docs'
+        run: bun run check:docs
       - name: Instalace deklarované Lazurio exact-search závislosti
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && steps.scope.outputs.scope != 'docs'
         run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends --yes ripgrep
+          # Pinned upstream binary and checksum, as on Windows; no apt index
+          # refresh (it cost ~10 s per run).
+          archive="$RUNNER_TEMP/ripgrep-15.2.0.tar.gz"
+          curl --fail --silent --show-error --location --retry 3 --output "$archive" \
+            https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-unknown-linux-musl.tar.gz
+          echo "33e15bcf1624b25cdd2a55813a47a2f95dbe126268203e76aa6a585d1e7b149c  $archive" | sha256sum --check --strict
+          tar -xzf "$archive" -C "$RUNNER_TEMP"
+          bin="$RUNNER_TEMP/ripgrep-15.2.0-x86_64-unknown-linux-musl"
+          "$bin/rg" --version
+          echo "$bin" >> "$GITHUB_PATH"
       - name: Instalace deklarované Lazurio exact-search závislosti (Windows)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && steps.scope.outputs.scope != 'docs'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -64,7 +92,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Pinned ripgrep did not execute successfully.' }
           $bin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - name: Launchpad discovery check + testy
+        if: runner.os == 'Linux' && steps.scope.outputs.scope != 'docs'
         run: bun run check
+      - name: Windows-relevantní podmnožina testů
+        if: runner.os == 'Windows' && steps.scope.outputs.scope != 'docs'
+        run: bun run check:windows
 
   guide-build:
     name: guide app build

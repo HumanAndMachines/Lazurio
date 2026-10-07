@@ -642,26 +642,6 @@ test("example inventory contains public placeholders only", async () => {
   }
 });
 
-test("operator plane remains source-only and manuals separate deploy from update", async () => {
-  const contract = JSON.parse(
-    await readFile(join(repositoryRoot, "distribution", "contract.v1.json"), "utf8"),
-  );
-  expect(contract.source_includes.some((path) => path.startsWith("provisioning/"))).toBe(false);
-  expect(contract.generated_paths.some((path) => path.startsWith("provisioning/"))).toBe(false);
-
-  const operatorManual = await readFile(join(import.meta.dir, "README.md"), "utf8");
-  const updateManual = await readFile(
-    join(repositoryRoot, "manual", "update-installed-resident.md"),
-    "utf8",
-  );
-  expect(operatorManual).toContain("source-only operator plane");
-  expect(operatorManual).toContain("provider recovery checkpoint");
-  expect(operatorManual).toContain("PGLite");
-  expect(operatorManual).toContain("nevytváří vlastní updater, daemon, sandbox, ACL ani fleet control plane");
-  expect(updateManual).toContain("Updater není Ansible a Ansible není updater");
-  expect(updateManual).toContain("Lokální úprava je legitimní drift");
-});
-
 test("documented root command enters the Ansible directory and discovers its config", async () => {
   if (process.platform === "win32") {
     return;

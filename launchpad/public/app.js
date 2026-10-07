@@ -21,6 +21,7 @@ import {
   reconcileDetailDrawerState,
   replacePersonalspaceResponse,
   reconcileSelectedAppId,
+  runtimeMutationRequest,
   runtimeStagesForApp,
   summarizeOrganizationSpaceHealth,
   updateBannerPresentation,
@@ -3312,18 +3313,14 @@ function isSameModulePeer(app, peer) {
   return peer?.company === app.company && peer?.module === app.module;
 }
 
-function confirmedTakeoverPayload(app) {
-  const peer = runningSharedPortPeer(app);
-  if (!peer || isSameModulePeer(app, peer)) return {};
-  const confirmed = window.confirm(t("confirm.takeover", {
-    port: app.port,
-    currentApp: appBaseTitle(peer),
-    currentOrganization: peer.company,
-    nextApp: appBaseTitle(app),
-    nextOrganization: app.company,
-  }));
-  if (!confirmed) return null;
-  return { confirmed: true, replace_app_id: peer.id };
+function confirmedRuntimeRequest(app, action) {
+  return runtimeMutationRequest({
+    apps: state.apps,
+    app,
+    action,
+    source: sourcePayloadForApp(app),
+    confirm: (message) => window.confirm(message),
+  });
 }
 
 function cardWarningModel(app, gitRepo) {
@@ -3628,8 +3625,8 @@ async function openAppChain(app, { feedback } = {}) {
     openResultUrl(app.url, null, app);
     return;
   }
-  const takeover = confirmedTakeoverPayload(app);
-  if (takeover === null) return;
+  const request = confirmedRuntimeRequest(app, "open");
+  if (request === null) return;
   if (state.openingApps.has(app.id)) return;
   state.openingApps.add(app.id);
   // Rezervace tabu PŘED akcí, aby ho prohlížeč nezablokoval (není to
@@ -3642,10 +3639,10 @@ async function openAppChain(app, { feedback } = {}) {
   });
   render();
   try {
-    const payload = await fetchJson(`/api/apps/${encodeURIComponent(app.id)}/open`, {
+    const payload = await fetchJson(request.path, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ source: sourcePayloadForApp(app), ...takeover }),
+      body: JSON.stringify(request.body),
     });
     if (payload.url) {
       writeCardProgress(feedback, "");
@@ -5466,19 +5463,17 @@ function appIconSvg(key) {
    ========================================================= */
 
 async function runRuntimeAction(app, action) {
-  const takeover = ["start", "restart"].includes(action)
-    ? confirmedTakeoverPayload(app)
-    : {};
-  if (takeover === null) return;
+  const request = confirmedRuntimeRequest(app, action);
+  if (request === null) return;
   state.pendingAction = `${app.id}:${action}`;
   state.actionMessage = null;
   state.runtimeActionErrors.delete(app.id);
   render();
   try {
-    const response = await launchpadFetch(`/api/apps/${encodeURIComponent(app.id)}/${action}`, {
+    const response = await launchpadFetch(request.path, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ source: sourcePayloadForApp(app), ...takeover }),
+      body: JSON.stringify(request.body),
       cache: "no-store",
     });
     const payload = await response.json();

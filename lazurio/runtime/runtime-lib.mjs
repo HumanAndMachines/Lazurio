@@ -47,7 +47,7 @@ const openHealthyStabilityMs = 1_000;
 const listenerReconciliationCacheMs = 1_000;
 const windowsOwnerProofCaptureAttempts = 3;
 const windowsProcessIdentityTimeoutMs = 5_000;
-const stopTimeoutMs = 5_000;
+const defaultStopTimeoutMs = 5_000;
 const stopKillWaitMs = 2_000;
 const portReclaimTermWaitMs = 1_500;
 const portReclaimKillWaitMs = 1_500;
@@ -222,6 +222,9 @@ export function createRuntimeManager({
   resolvePortOwnerProcessGroupFn = null,
   acquireModuleLockFn = acquireModuleRuntimeLock,
   startedListenerOwnershipTimeoutMs = startGraceMs,
+  // Bounded wait for a stopped child to exit before escalation. Tests that
+  // exercise the timeout path inject a short value; production keeps 5 s.
+  stopTimeoutMs = defaultStopTimeoutMs,
   writeRuntimeStateFile = writeFile,
   bunExecutable = null,
   maintenanceIntervalMs = 5_000,

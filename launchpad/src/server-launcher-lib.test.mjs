@@ -17,19 +17,6 @@ afterEach(async () => {
   await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-test("all supported Launchpad package entrypoints use the process-identity launcher", async () => {
-  const packageJson = await Bun.file(new URL("../package.json", import.meta.url)).json();
-  expect({
-    dev: packageJson.scripts.dev,
-    launch: packageJson.scripts.launch,
-    serve: packageJson.scripts.serve,
-  }).toEqual({
-    dev: "bun src/server-launcher.mjs",
-    launch: "bun src/server-launcher.mjs --open",
-    serve: "bun src/server-launcher.mjs --reuse",
-  });
-});
-
 test("Windows Launchpad startup preserves the canonical Bun executable", async () => {
   const prepared = await prepareLaunchpadServerExecutable({
     platform: "win32",

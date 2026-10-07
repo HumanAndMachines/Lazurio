@@ -1,5 +1,13 @@
 # Hostovaná pracovní VM: první přihlášení a donastavení
 
+> **Cílové zpřesnění 0192 (2026-10-06):** [Model přístupů](environment-access-model.md)
+> odděluje Lazurio účet, schválené zařízení, vstup do Environmentu a pracovní
+> GitHub identitu. Jednočlenný GitHub Team ani připojený GitHub nejsou cílovou
+> podmínkou vstupu; dosavadní postup níže je migrační implementace. GitHub
+> se připojuje pro potřebné pracovní operace, ne jako univerzální brána
+> k užívání aplikací či Environmentu. Tato změna není nasazená tímto textem.
+
+
 Platí pro hostované pracovní Mašiny, které Machines předá jako `workspace-vm`
 Organizace (decision 0144). Machines dodá systém, síť, SSH, bránu,
 nainstalované Lazurio a identitu Mašiny v `/etc/lazurio/lazurio.machine.json`

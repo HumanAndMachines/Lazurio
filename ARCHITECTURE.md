@@ -1,5 +1,14 @@
 # Architektura Lazuria
 
+> **Cílový přístupový model, 2026-10-06 (0192):**
+> [Účet, zařízení a přístupy k Environmentům](manual/environment-access-model.md)
+> rozlišuje Lazurio uživatele, schválení zařízení Adminem, plný/aplikační
+> přístup a směrové vzdálené operace. Platí i pro týmový Environment bez
+> GitHub identity návštěvníka. GitHub Team dál vymezuje zdrojové schopnosti
+> Environmentu. Níže popsané Team/GitHub vstupní vazby jsou dosavadní
+> implementace k migraci; nejde o okamžitou změnu runtime.
+
+
 > **Buddy target update (2026-09-12).** The current product direction is documented in [the hosted Buddy manual](manual/hosted-buddy-vps.md). Existing pinned dependencies and provisioning mechanics below describe the implemented baseline until a separately verified migration; mandatory Zulip/bridge and VPS-only placement are not requirements for new Buddy product design. This documentation change does not alter runtime behavior.
 
 
@@ -225,7 +234,7 @@ credentials.
 
 Cílový model GitHub identity Hosted Team Workspace určují decisions 0147 až
 0149 (`manual/decision-register.md`). Workspace nemá přiřazeného Operátora:
-Operátorem je člen Teamu, který je právě připojený (decision 0175). Jeho Git identitou je platformní GitHub App Lazurio for GitHub dosahovaná
+Operátorem je právě připojený oprávněný uživatel (decisions 0175/0192). Jeho Git identitou je platformní GitHub App Lazurio for GitHub dosahovaná
 přes per-Organization token broker, který vydává krátkodobé tokeny scoped na
 jeden repozitář — privátní klíč App na Mašině nikdy neleží. Nasazený broker
 autorizuje podle id workspace, jeho unikátního credentialu a

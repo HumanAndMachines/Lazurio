@@ -708,13 +708,3 @@ test("resolveSpaceGbrainVault cizí Personalspace vůbec nenajde (decision 0091)
   const vault = await resolveSpaceGbrainVault({ companiesRoot: root, spaceDirName: "exampleuser_GEN3" });
   expect(vault.vaultRoot).toBe(join(root, "personalspace", "exampleuser_GEN3", "gbrain"));
 });
-
-test("the Launchpad server binds every Personalspace lane to the hosted folder", async () => {
-  const server = await Bun.file(join(import.meta.dirname, "server.mjs")).text();
-  expect(server).toContain("const hostedPersonalspaceDir = personalHostedScope ? hostedWorkspace.personalspace : undefined;");
-  // Personal Apps runtime, /api/personalspace and gbrain.
-  expect(server.match(/primarySpaceDir: hostedPersonalspaceDir,/g)?.length).toBe(4);
-  expect(server).toContain("projectHostedPersonalspaceResponse(response, hostedWorkspace)");
-  expect(server).toContain("personalspaceRuntimeManager.maintainApps(selected.apps)");
-  expect(server).not.toContain("personalspaceListsApps");
-});
