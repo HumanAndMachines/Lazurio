@@ -48,7 +48,9 @@ konkrétní identitu zařízení a účet; jejich přesný mechanismus musí pro
 DEV-6641 na skutečném Headscale. Nová registrace nesmí získat provozní přístup
 v mezeře před schválením. SSH ze schváleného zařízení do pracovního
 Environmentu, který je přidělený témuž člověku, je pravidlo: vzniká v téže
-reviewované změně jako schválení zařízení. Opačný směr (Environment →
+reviewované změně jako schválení zařízení a při změně přidělení, odvolání
+zařízení nebo konci členství se v téže změně síťového záměru přidá nebo
+odebere. Opačný směr (Environment →
 zařízení) se obecně nedává a jde o samostatné rozhodnutí (0182); jiné SSH
 vyžaduje vlastní oprávnění.
 
@@ -302,8 +304,8 @@ jeho osobním Headscale userem s identitou Lazurio subject a nemá žádný dosa
 Admin každé Organizace schválí konkrétní zařízení. Schválené zařízení dostane
 HTTPS a privátní DNS k Environmentům svých schválených Organizací a o vstupu
 dál rozhoduje brána Environmentu. SSH zůstává u přesných grantů: zařízení →
-Environment přidělený témuž člověku vzniká spolu se schválením zařízení
-(dodatek 0192 z 2026-10-07), ostatní jen výslovně, a
+Environment přidělený témuž člověku vzniká spolu se schválením zařízení a sleduje
+změny přidělení a členství (dodatek 0192 z 2026-10-07), ostatní jen výslovně, a
 stávající zařízení se převedou bez nového přihlášení. Vstupní granty brány
 (přidělení, plné a aplikační sdílení, vstup bez GitHubu) patří do
 DEV-6551/6552/6638/6645; do jejich nasazení brány pouští podle GitHub Teamu
