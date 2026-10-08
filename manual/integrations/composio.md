@@ -47,6 +47,11 @@ teprve vzniká.
   režimu je přihlášený klíčem projektu (úprava CLI nabídnutá upstreamu).
 - Mapa Conglomerate v Dashboardu ukazuje jen ke čtení, kam který Environment
   sahá; osobní Environmenty vidí jen jejich majitel.
+- Všechno, kam je Environment přihlášený, mají vždy všichni jeho agenti i
+  boti. Uvnitř Environmentu se přístupy nedělí; jiné přístupy znamenají další
+  Environment.
+- MCP servery Environmentu se spravují na stejné stránce (záložka MCP servery)
+  a platí pro Chat, Apps i Automate.
 
 ## Co agent smí
 
