@@ -59,6 +59,8 @@ Potom `systemctl --user daemon-reload` a
   (`loginctl show-user <uživatel> -p Linger`).
 - Pilot ověřil Linux. Na macOS vytvoří `executor install` službu launchd;
   postup pro macOS doplníme po ověření.
+- Nároky v pilotu: balíček zabere asi 470 MB na disku a běžící služba asi
+  250 MB paměti.
 
 ## Napojení agentů
 
