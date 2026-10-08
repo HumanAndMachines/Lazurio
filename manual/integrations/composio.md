@@ -30,6 +30,31 @@ Organizace, která chce přehled, si založí vlastní Composio organizaci a ž�
 operátory, aby se přihlašovali do ní. Je to samostatně spravovaná služba mimo
 Lazurio Dashboard. Lazurio Environment to nevynucuje.
 
+## Cíl: dva režimy (rozhodnuto 2026-10-08)
+
+Dodatek k rozhodnutí 0162, plán DEV-6626. Dnes platí model výše; následující
+teprve vzniká.
+
+- **Každý operátor svůj účet** je výchozí režim a pro osobní Environmenty
+  jediný: model výše. Aplikace se budou připojovat přímo v Launchpadu, v Apps
+  → Připojené aplikace, pod přihlášeným Composio účtem.
+- **Firemní Composio organizace** je volba Organizace. Každý Environment
+  Organizace má vlastní projekt ve firemní Composio organizaci. Projekt
+  zakládá, rotuje a maže broker Organizace, který jako jediný drží firemní
+  token. Environment drží jen klíč svého projektu. Při předání nebo zrušení
+  Environmentu broker požádá o odvolání přístupů a projekt smaže; odvolání je
+  u Composia jen „best effort“, proto broker výsledek ověří a zbytek předá
+  Adminovi k ručnímu odebrání u poskytovatele.
+- Agenti i boti používají v obou režimech příkaz `composio`; ve firemním
+  režimu je přihlášený klíčem projektu (úprava CLI nabídnutá upstreamu).
+- Mapa Conglomerate v Dashboardu ukazuje jen ke čtení, kam který Environment
+  sahá; osobní Environmenty vidí jen jejich majitel.
+- Všechno, kam je Environment přihlášený, mají vždy všichni jeho agenti i
+  boti. Uvnitř Environmentu se přístupy nedělí; jiné přístupy znamenají další
+  Environment.
+- MCP servery Environmentu se spravují na stejné stránce (záložka MCP servery)
+  a platí pro Chat, Apps i Automate.
+
 ## Co agent smí
 
 - S napojenou aplikací dělat vše, co nabízí, tedy číst, zapisovat i mazat,
