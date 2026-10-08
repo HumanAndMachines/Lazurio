@@ -1,10 +1,11 @@
-# Composio: doporučená cesta k napojení aplikací
+# Composio: volitelné napojení aplikací vlastním účtem
 
-Stav k 2026-10-02: rozhodnutí 0162 je přijaté a sekce Nastavení Launchpadu
-Platformy je vydaná (LazurioPlatform 0.1.8). Composio je aktivní součást
-Lazuria na každém Environmentu, kde ho operátor zapne a přihlásí v Nastavení
-→ Nástroje; pilot DEV-6626 skončil (Matěj 2026-10-02). Tento runbook popisuje
-model.
+Stav k 2026-10-09: Composio je volitelný nástroj Lazuria. Zapíná se
+a přihlašuje v Nastavení Launchpadu → Nástroje na každém Environmentu, kde
+ho operátor chce (rozhodnutí 0162, sekce Nastavení vydaná v LazurioPlatform
+0.1.8). MCP servery Environmentu spravuje Executor 1
+([executor.md](executor.md), dodatek 0162 z 2026-10-09). Tento runbook
+popisuje model Composia.
 
 ## Model
 
@@ -30,30 +31,24 @@ Organizace, která chce přehled, si založí vlastní Composio organizaci a ž�
 operátory, aby se přihlašovali do ní. Je to samostatně spravovaná služba mimo
 Lazurio Dashboard. Lazurio Environment to nevynucuje.
 
-## Cíl: dva režimy (rozhodnuto 2026-10-08)
+## Vedle Executoru (dodatek 0162 z 2026-10-09)
 
-Dodatek k rozhodnutí 0162, plán DEV-6626. Dnes platí model výše; následující
-teprve vzniká.
-
-- **Každý operátor svůj účet** je výchozí režim a pro osobní Environmenty
-  jediný: model výše. Aplikace se budou připojovat přímo v Launchpadu, v Apps
-  → Připojené aplikace, pod přihlášeným Composio účtem.
-- **Firemní Composio organizace** je volba Organizace. Každý Environment
-  Organizace má vlastní projekt ve firemní Composio organizaci. Projekt
-  zakládá, rotuje a maže broker Organizace, který jako jediný drží firemní
-  token. Environment drží jen klíč svého projektu. Při předání nebo zrušení
-  Environmentu broker požádá o odvolání přístupů a projekt smaže; odvolání je
-  u Composia jen „best effort“, proto broker výsledek ověří a zbytek předá
-  Adminovi k ručnímu odebrání u poskytovatele.
-- Agenti i boti používají v obou režimech příkaz `composio`; ve firemním
-  režimu je přihlášený klíčem projektu (úprava CLI nabídnutá upstreamu).
-- Mapa Conglomerate v Dashboardu ukazuje jen ke čtení, kam který Environment
-  sahá; osobní Environmenty vidí jen jejich majitel.
-- Všechno, kam je Environment přihlášený, mají vždy všichni jeho agenti i
-  boti. Uvnitř Environmentu se přístupy nedělí; jiné přístupy znamenají další
-  Environment.
-- MCP servery Environmentu se spravují na stejné stránce (záložka MCP servery)
-  a platí pro Chat, Apps i Automate.
+- Composio a Executor se doplňují. Executor spravuje MCP servery
+  Environmentu, Composio připojuje aplikace pod účtem operátora.
+- Agent hledá nástroj nejdřív v Executoru; co tam není, vezme z Composia.
+  Návody Folderu toto pořadí převezmou, až bude Executor v katalogu
+  Nástrojů (plán DEV-6626).
+- Na stránce Apps → Připojené aplikace jsou záložky Vše a Připojené
+  obrazovkou Composia nad účtem přihlášeným v Nastavení. Záložka MCP servery
+  je Executor. Stránka teprve vzniká (plán DEV-6626).
+- Organizace, které Composio používají, ho mají dál beze změny. Nic se
+  nemigruje a nikdo se nepřipojuje znovu.
+- Composio nemá žádné režimy. Firemní Composio organizace s projektem na
+  Environment, broker ani fork Composio CLI se nestaví (dodatek 2026-10-08
+  je v tomto zrušený).
+- Všechno, kam je Environment přihlášený, mají vždy všichni jeho agenti
+  i boti. Uvnitř Environmentu se přístupy nedělí; jiné přístupy znamenají
+  další Environment.
 
 ## Co agent smí
 
@@ -64,14 +59,13 @@ teprve vzniká.
   nedrží a nikam je nezapisuje.
 - Na mašině s více Organizacemi volit nástroj Organizace, pro kterou pracuje,
   a data mezi Organizacemi nepřenášet.
-- Kde ho operátor nezapnul, Composio nezřizovat; nabídnout mu zapnutí
-  v Launchpadu.
+- Kde ho operátor nezapnul, Composio nezřizovat. Pro MCP server nabídnout
+  Executor, pro ostatní aplikace zapnutí Composia v Launchpadu.
 
 ## Alternativy pro operátora
 
+- MCP servery Environmentu v Executoru ([executor.md](executor.md)).
 - Další podporované CLI nástroje z výběru Launchpadu.
-- MCP server, který na požádání nastaví agent. MCP servery se do Folderu
-  nezapisují.
 
 ## Otevřené otázky
 

@@ -24,9 +24,12 @@ definovaným MCP serverem nebo CLI nástrojem na konkrétní mašině**.
 - **Nikdy** přes sdílený cloudový integrační broker — tedy jakoukoli službu
   nebo hostovaný agregátorový MCP, kde OAuth granty a tokeny drží třetí
   strana místo dané mašiny. **Jedinou výjimkou je Composio** za podmínek
-  decision 0162 a sekce [Composio jako schválený broker](#composio-jako-schválený-broker):
+  decision 0162 a sekce [Composio jako volitelný nástroj](#composio-jako-volitelný-nástroj):
   operátor ho na mašině povolí a přihlásí svůj účet přes prohlížeč; žádný
   projekt ani klíč Composia se na mašinu nezakládá a nekopíruje.
+- **Executor brokerem není.** Běží v každém Environmentu jako jeho služba
+  a tokeny MCP serverů drží v Environmentu (decision 0162, dodatek
+  z 2026-10-09; runbook [integrations/executor.md](integrations/executor.md)).
 - Vzdálený MCP endpoint provozovaný **přímo poskytovatelem služby**
   (například Slack, Atlassian, Canva, Google) je v pořádku — pokud je
   definovaný v lokálním configu harnessu na dané mašině a OAuth grant vzniká
@@ -45,28 +48,33 @@ doporučení „účet Environmentu“ ze sekce níže.
 
 ## Žebříček výběru integrace
 
-**Pořadí při práci (decision 0162).** Agent nejdřív použije CLI nástroje,
-které jsou na Environmentu aktivované, tak jak mu říkají generované návody
-Lazurio Folderu. Teprve potom sáhne po MCP serverech: pro ně má jen obecný
-pokyn zjistit, co je v harnessu právě k dispozici, a podrobnosti se dozví
-z MCP serveru samotného.
+**Pořadí při práci (decision 0162, dodatek z 2026-10-09).** Agent hledá
+nástroj nejdřív v Executoru, který drží MCP servery Environmentu, potom
+v Composiu, pokud ho operátor zapnul. Nástroj katalogu určený pro jednu
+aplikaci pro ni platí dál (vždy `gh` pro GitHub). Kde Executor ještě
+neběží, použije MCP servery, které má harness právě k dispozici, a
+podrobnosti se dozví z MCP serveru samotného.
 
 **Pořadí při novém napojení.** Při požadavku „napoj aplikaci X" postupuj
 v tomto pořadí a první funkční úroveň vyhrává; poslední slovo má operátor
 Environmentu:
 
 1. **Oficiální MCP server poskytovatele** — remote endpoint nebo oficiální
-   self-hosted server.
+   self-hosted server, přidaný do Executoru Environmentu (záložka MCP
+   servery, nebo agent na pokyn operátora podle
+   [integrations/executor.md](integrations/executor.md)). Kde Executor ještě
+   neběží, přidá ho agent do harnessu podle sekcí o aktivaci níže.
 2. **Oficiální CLI poskytovatele** (`gh`, `acli`, Google Workspace CLI…) —
    pro agenty se shell přístupem rovnocenná a často jednodušší cesta;
    credentials drží CLI lokálně stejně jako MCP server.
-3. **Composio** — schválený broker podle decision 0162, když oficiální MCP
-   ani CLI poskytovatele neexistuje nebo nevyhovuje, a operátor Composio na
-   mašině povolil. Kurátorovaný katalog Organizace je doporučení cesty pro
+3. **Composio** — volitelný nástroj s vlastním účtem operátora podle
+   decision 0162, když oficiální MCP ani CLI poskytovatele neexistuje nebo
+   nevyhovuje a operátor Composio na mašině zapnul. Kurátorovaný katalog Organizace je doporučení cesty pro
    danou aplikaci; poslední slovo má operátor Environmentu.
 4. **Reviewnutý open-source MCP server nebo CLI** — jen s ukotvenou verzí
    (release/commit pin), ověřeným publisherem a licencí; komunitní server
-   není „oficiální integrace" jen proto, že obsluhuje známou službu.
+   není „oficiální integrace" jen proto, že obsluhuje známou službu. MCP
+   server patří do Executoru Environmentu.
 5. **Browser fallback** — čtení/obsluha webu agentem v browseru pod přímým
    dohledem Operátora, když MCP/CLI cesta neexistuje.
 
@@ -81,7 +89,7 @@ existující už nainstalovaný konektor, a chybějící MCP zapiš jako issue/P
 živého standardu — nový konektor sám neinstaluj; jeho zřízení je vědomé
 rozhodnutí Operátora, ne automatický fallback agenta.
 
-## Composio jako schválený broker
+## Composio jako volitelný nástroj
 
 Decision 0162 (Matěj 2026-09-27) mění dřívější plošný zákaz a určuje, kdo
 o napojení rozhoduje: **Operátor Environmentu**. Environment zrcadlí svého
@@ -90,7 +98,7 @@ operátora; agenti v něm jednají tam, kam sahají přihlášení na té mašin
 | Pravidlo | Znění |
 | --- | --- |
 | Kdo rozhoduje | Operátor. Napojení je volitelné a nic se centrálně nevynucuje. |
-| Cesty | Composio (doporučené), další podporované CLI z výběru Launchpadu, nebo MCP server, který operátorovi nastaví agent. `gh` je povinný, ne volitelný. |
+| Cesty | Executor pro MCP servery Environmentu (doporučený), Composio s vlastním účtem (volitelné) a další podporovaná CLI z výběru Launchpadu. `gh` je povinný, ne volitelný. |
 | Přihlášení Composia | Přes prohlížeč, stejně jako `gh`. API klíč se nikdy nekopíruje. Agenti používají příkazovou řádku `composio`. |
 | Účet Environmentu | Připojení patří účtu a jeho Composio organizaci, ne mašině. Stejný účet a organizace na dvou mašinách znamená stejná připojení; jiný rozsah znamená jiný účet nebo organizaci. |
 | Oddělení kontextů | Nový Environment, tedy nová mašina s vlastními přihlášeními. |
@@ -98,22 +106,26 @@ operátora; agenti v něm jednají tam, kam sahají přihlášení na té mašin
 | Organizace | Kdo chce přehled, založí vlastní Composio organizaci a žádá operátory, aby se přihlašovali do ní. Lazurio to nevynucuje a centrální přehled není cílem. |
 | Výchozí rozsah | Vše, co aplikace nabízí: čtení, zápis i mazání. Rozsah omezí operátor. |
 | Zápisy | Schopnost zápisu není souhlas s Publikací; platí sekce o write operacích níže. |
-| Návody pro agenty | Aktivovaný CLI nástroj se propíše do instrukcí a manuálů Lazurio Folderu té mašiny. Návody říkají, co je v Environmentu povoleno, ať to operátor povolil v Launchpadu nebo příkazem `lazurio`; je to jedna věc. MCP servery se do Folderu nezapisují. |
-| CLI-first | Lazurio se stará o Environment, tedy o nástroje v něm, a říká agentům, jak se v něm pohybovat. Codex, Claude Code, `gh`, Composio i další nástroje jsou CLI nainstalovaná a přihlášená na mašině. |
+| Návody pro agenty | Aktivovaný CLI nástroj se propíše do instrukcí a manuálů Lazurio Folderu té mašiny. Návody říkají, co je v Environmentu povoleno, ať to operátor povolil v Launchpadu nebo příkazem `lazurio`; je to jedna věc. MCP servery Environmentu drží Executor a návody uvádějí Executor před Composiem. |
+| CLI-first | Lazurio se stará o Environment, tedy o nástroje v něm, a říká agentům, jak se v něm pohybovat. Codex, Claude Code, `gh`, Executor, Composio i další nástroje jsou CLI nainstalovaná a přihlášená na mašině. |
 | Katalog Launchpadu | Jen nástroje s uživatelsky přívětivým přihlášením (prohlížeč, ověřovací kód, párování). Atypický nástroj napojí na zadání operátora agent. |
 | Závazek údržby | Každý nástroj katalogu má popsáno, co má jeho instalace udělat. Když instalátor selže, spustí se agent, který instalaci dotáhne podle tohoto popisu. |
-| Pořadí pro agenty | Nejdřív aktivované CLI nástroje podle návodů Folderu, potom MCP servery podle obecného pokynu. |
+| Pořadí pro agenty | Nejdřív Executor, potom Composio. Nástroj katalogu určený pro jednu aplikaci pro ni platí dál (vždy `gh` pro GitHub). |
 | Přihlášení bez tření | Přihlášení nástroje má operátora stát co nejméně: odkaz, ověřovací kód nebo čitelný QR kód v Launchpadu, nikdy rozsypaný QR kód v terminálu. |
 | Dokumentace pro operátory | Hranice a přijaté kompromisy tohoto modelu se operátorům srozumitelně vysvětlují ve veřejné dokumentaci Lazuria. |
-| Data | Tokeny aplikací a obsah volání drží Composio. Operátor i Organizace to vědí před prvním připojením. |
+| Data | U Composia drží tokeny aplikací a obsah volání Composio; operátor i Organizace to vědí před prvním připojením. U Executoru zůstávají tokeny v Environmentu. |
 
 **Stav.** Sekce Nastavení Launchpadu Platformy s povinnými, doporučenými
 a volitelnými nástroji, jejich zapnutím a propsáním do Folderu je vydaná
 (LazurioPlatform 0.1.8). Pilot DEV-6626 tím skončil: Composio je aktivní
 součást Lazuria na každém Environmentu, kde ho operátor zapne a přihlásí
 v Nastavení → Nástroje (Matěj 2026-10-02). Kde zapnuté není, agent ho sám
-nezřizuje: nabídne operátorovi zapnutí, nebo použije další cesty žebříčku.
-Model a otevřené otázky drží [integrations/composio.md](integrations/composio.md).
+nezřizuje: pro MCP server nabídne Executor, pro ostatní aplikace zapnutí
+Composia, nebo použije další cesty žebříčku. Executor 1 zatím běží v pilotu
+na jednom pracovním Environmentu; katalog Nástrojů, pořadí ve Folderu
+a záložka MCP servery teprve vznikají (plán DEV-6626). Modely a otevřené
+otázky drží [integrations/composio.md](integrations/composio.md)
+a [integrations/executor.md](integrations/executor.md).
 
 ## Kde co žije
 
@@ -122,6 +134,7 @@ Model a otevřené otázky drží [integrations/composio.md](integrations/compos
 | Pravidlo chování agentů | root `AGENTS.md`, tento manuál | ano |
 | Kurátorovaný katalog Organizace | `organizations/<org>/INTEGRATIONS.md` + `organizations/<org>/.mcp.json` + `organizations/<org>/.codex/config.toml` | ano (org repo, bez secretů) |
 | Osobní integrace Operátora | user-level config harnessu (`~/.codex/config.toml`, user scope Claude Code) | ne |
+| MCP servery Environmentu | Executor v Environmentu (`~/.executor`): definice, připojení i tokeny | ne |
 | Per-machine aktivace | env soubor v custody cestě, OAuth consent, token cache | ne (gitignored/lokální) |
 | Secrets | custody dle [security/local-secret-custody.md](security/local-secret-custody.md) | nikdy |
 
@@ -216,8 +229,8 @@ per-machine onboarding a cutover ze sdíleného brokeru.
 
 ### CLI lane
 
-CLI nástroje jsou pro agenty první volba (decision 0162) a platí pro ně
-stejná pravidla custody. Rozlišuj dvě situace: integraci, kterou má **sdílet
+CLI nástroje jsou pro agenty běžná cesta vedle Executoru (decision 0162)
+a platí pro ně stejná pravidla custody. Rozlišuj dvě situace: integraci, kterou má **sdílet
 celá Organizace**, zapiš do jejího `INTEGRATIONS.md`; nástroj, který si
 operátor povolil jen **na svém Environmentu**, se do katalogu Organizace
 nezapisuje a jeho aktivace se propisuje do návodů Lazurio Folderu té mašiny.
@@ -358,7 +371,8 @@ nepoužívají; personalspace izolace má přednost.
 | [integrations/atlassian.md](integrations/atlassian.md) | Jira, Confluence |
 | [integrations/linkedin.md](integrations/linkedin.md) | LinkedIn (post-only + browser fallback) |
 | [integrations/canva.md](integrations/canva.md) | Canva |
-| [integrations/composio.md](integrations/composio.md) | Composio jako schválený broker: model, custody a zapnutí v Launchpadu |
+| [integrations/executor.md](integrations/executor.md) | Executor 1: MCP servery Environmentu, instalace, napojení agentů a custody |
+| [integrations/composio.md](integrations/composio.md) | Composio jako volitelný nástroj: model, účet a zapnutí v Launchpadu |
 | [integrations/eso9.md](integrations/eso9.md) | ESO9 Web API, omezený JSON API fallback a discovery-first read-only rollout |
 
 Stav každého runbooku odpovídá datu uvedenému v jeho úvodní hlavičce; před
