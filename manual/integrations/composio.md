@@ -42,7 +42,9 @@ teprve vzniká.
   Organizace má vlastní projekt ve firemní Composio organizaci. Projekt
   zakládá, rotuje a maže broker Organizace, který jako jediný drží firemní
   token. Environment drží jen klíč svého projektu. Při předání nebo zrušení
-  Environmentu se projekt smaže i s přístupy.
+  Environmentu broker požádá o odvolání přístupů a projekt smaže; odvolání je
+  u Composia jen „best effort“, proto broker výsledek ověří a zbytek předá
+  Adminovi k ručnímu odebrání u poskytovatele.
 - Agenti i boti používají v obou režimech příkaz `composio`; ve firemním
   režimu je přihlášený klíčem projektu (úprava CLI nabídnutá upstreamu).
 - Mapa Conglomerate v Dashboardu ukazuje jen ke čtení, kam který Environment
