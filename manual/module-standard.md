@@ -190,8 +190,8 @@ je **trezor Environmentu** (DEV-6631); rozhodnutí 0177:
   nedostane. Hodnoty nejdou do logů, Diagnostiky, souborů v Modulu ani
   do `XDG_STATE_HOME`; změna hodnoty v trezoru platí od dalšího startu.
 - **Kde hodnota leží.** V trezoru Organizace, které Modul patří, v kolekci
-  tohoto Environmentu (model DEV-6631: trezor = Organizace, kolekce =
-  Environment, účet Environmentu čte jen svou kolekci). Položka má jméno
+  tohoto Environmentu (rozhodnutí 0193: trezor = Organizace, kolekce =
+  Environment, účet Environmentu svou kolekci čte i zapisuje). Položka má jméno
   přesně `<NAME>`, hodnotou je její heslo. Ukládá ji Operátor Environmentu
   nebo Agent na jeho pokyn; jiná Organizace ani jiný Environment ji nevidí.
 - **Fail-closed.** Chybí-li v trezoru některé deklarované jméno, je-li
@@ -216,7 +216,8 @@ je **trezor Environmentu** (DEV-6631); rozhodnutí 0177:
   ([security/local-secret-custody.md](security/local-secret-custody.md))
   jsou úschova, ne zdroj startu. **Otevřené:** zda je smí Launchpad na
   workstation bez identity trezoru číst jako přechodný zdroj (doporučení:
-  ne, jeden zdroj) a který trezor slouží Modulům v Personalspace.
+  ne, jeden zdroj). Modulům v Personalspace slouží kolekce osobního
+  Environmentu v osobní organizaci jeho člověka (0193).
 - **Mezikrok.** Čtečka LazurioPlatform (`parseAppRuntime`) dnes neznámé pole
   `secrets` odmítá a App s ním nespustí; čtení a předání z trezoru zavádí
   Lazurio/LazurioPlatform#129. Do jeho vydání hlásí `MS-03`
