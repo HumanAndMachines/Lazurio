@@ -8,6 +8,11 @@ Popisuje, jak Kolega na své mašině přidá MCP server přímo do Codexu a dr�
 přihlašovací artefakty lokálně. Přímý lokální STDIO server ani vzdálený
 HTTP MCP server Docker nepotřebují.
 
+MCP servery Environmentu patří do Executoru 1, kde je dostanou všichni
+agenti i boti najednou ([integrations/executor.md](integrations/executor.md),
+decision 0162, dodatek z 2026-10-09); Codex se pak napojí jen na Executor.
+Tento runbook platí tam, kde Executor ještě neběží.
+
 Codex CLI, desktop aplikace a IDE extension používají stejnou lokální
 konfiguraci. ChatGPT na webu ani v mobilu tuto konfiguraci nečte a pro org
 napojení tam žádná podporovaná cesta neexistuje — cloudové pluginy/konektory

@@ -645,7 +645,8 @@ Root upravuj jen když se mění:
 - Privátní osobní kontext: `personalspace/` — gitignored, mimo GitHub organizace
 - Napojení na externí aplikace (MCP/CLI) — standard
   `manual/external-app-integrations.md`, per-provider runbooky
-  `manual/integrations/`; Codex specifika
+  `manual/integrations/`, přímé Integrace přes Executor 1
+  `manual/integrations/executor.md`; Codex specifika
   `manual/codex-manual-mcp-integrations.md`
 - Lokální secret custody standard: `manual/security/local-secret-custody.md`;
   root/operator secrets patří do gitignored `personalspace/<owner>_GEN3/secrets/...`,
@@ -723,15 +724,29 @@ nainstalovaný konektor se používat smí; chybí-li cesta, konektor sám
 neinstaluj — browser fallback + issue). **Napojení je věc operátora**
 (decision 0162): Environment zrcadlí svého operátora a agenti jednají tam,
 kam sahají přihlášení na té Mašině, i napříč Organizacemi; jiné přístupy
-znamenají jinou Mašinu. Operátor volí mezi Composiem (doporučené, opt-in,
-přihlášení přes prohlížeč jako u `gh`, bez kopírování klíčů), dalšími
-podporovanými CLI a MCP serverem, který mu na požádání nastaví Agent; nic se
-centrálně nevynucuje. Composio je aktivní součást Lazuria na každém
-Environmentu, kde ho operátor zapne v Nastavení Launchpadu (Nástroje); pilot
-DEV-6626 skončil. Při práci má přednost aktivovaný
-CLI nástroj podle návodů Folderu, potom MCP. Výchozí pořadí nového napojení:
-oficiální MCP → oficiální CLI → Composio → reviewnutý pinned OSS → browser
-fallback; scraping/cookie-session servery nikdy. Napojená aplikace je ve
+znamenají jinou Mašinu. **Aplikace připojené k Environmentu jsou
+Integrace** (dodatek 0162 z 2026-10-09) a každá má právě jednu cestu:
+nástrojem z Nastavení Launchpadu → Nástroje (`gh`, `wacli`…), přímo přes
+Executor 1, povinnou službu každého Environmentu, jejíž přístupy zůstávají
+v Environmentu, nebo přes Composio s vlastním účtem člověka, pokud ho
+Organizace (na osobním Environmentu člověk) povolila. Při práci použij
+Integraci tam, kde je připojená, v pořadí nástroj aplikace, Executor,
+Composio. Integraci nikdy nepřipojuj sám, protože přihlášení je souhlas
+člověka: pošli mu odkaz na její kartu v Apps → Integrace. Dokud stránka
+Integrace na Environmentu není, připojíš ji jen na jeho výslovný pokyn
+podle `manual/integrations/executor.md` nebo
+`manual/integrations/composio.md`; přihlášení nebo klíč dokončí on sám na
+stránce, kterou mu otevřeš v prohlížeči Environmentu. Jen na jeho výslovný
+pokyn smíš přidat vlastní MCP server do Executoru; kde Executor ještě
+neběží, nastav ho na pokyn operátora podle téhož runbooku. Konzoli
+Executoru používají agenti a servisní přístup; lidé cílově všechno dělají
+v Launchpadu. Nastavení celé
+Organizace (třeba povolení Composia nebo firemní aplikace Google
+a Microsoftu) mění Admin v Dashboardu a do Environmentů se dostane podle
+decision 0194. Výchozí pořadí nového napojení: oficiální MCP poskytovatele
+přidaný do Executoru → oficiální CLI → Composio → reviewnutý pinned OSS →
+browser fallback; scraping/cookie-session servery nikdy. Napojená aplikace
+je ve
 výchozím stavu ke čtení, zápisu i mazání, rozsah omezuje operátor; schopnost
 zápisu není souhlas s Publikací. Agent na Mašině s více Organizacemi volí
 nástroj Organizace, pro kterou pracuje, a data mezi Organizacemi nepřenáší.

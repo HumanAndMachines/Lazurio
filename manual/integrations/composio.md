@@ -1,10 +1,11 @@
-# Composio: doporučená cesta k napojení aplikací
+# Composio: snadná cesta Integrací přes server třetí strany
 
-Stav k 2026-10-02: rozhodnutí 0162 je přijaté a sekce Nastavení Launchpadu
-Platformy je vydaná (LazurioPlatform 0.1.8). Composio je aktivní součást
-Lazuria na každém Environmentu, kde ho operátor zapne a přihlásí v Nastavení
-→ Nástroje; pilot DEV-6626 skončil (Matěj 2026-10-02). Tento runbook popisuje
-model.
+Stav k 2026-10-09: Composio je jedna ze tří cest Integrací (rozhodnutí 0162,
+dodatek z 2026-10-09). Připojí jedním klikem mnoho aplikací, ale jde přes
+server Composia a s vlastním účtem člověka. Zapíná se a přihlašuje
+v Nastavení Launchpadu → Nástroje (sekce vydaná v LazurioPlatform 0.1.8).
+Přímou cestu z Environmentu drží Executor 1 ([executor.md](executor.md)).
+Tento runbook popisuje model Composia.
 
 ## Model
 
@@ -30,30 +31,28 @@ Organizace, která chce přehled, si založí vlastní Composio organizaci a ž�
 operátory, aby se přihlašovali do ní. Je to samostatně spravovaná služba mimo
 Lazurio Dashboard. Lazurio Environment to nevynucuje.
 
-## Cíl: dva režimy (rozhodnuto 2026-10-08)
+## V modelu Integrací (dodatek 0162 z 2026-10-09)
 
-Dodatek k rozhodnutí 0162, plán DEV-6626. Dnes platí model výše; následující
-teprve vzniká.
-
-- **Každý operátor svůj účet** je výchozí režim a pro osobní Environmenty
-  jediný: model výše. Aplikace se budou připojovat přímo v Launchpadu, v Apps
-  → Připojené aplikace, pod přihlášeným Composio účtem.
-- **Firemní Composio organizace** je volba Organizace. Každý Environment
-  Organizace má vlastní projekt ve firemní Composio organizaci. Projekt
-  zakládá, rotuje a maže broker Organizace, který jako jediný drží firemní
-  token. Environment drží jen klíč svého projektu. Při předání nebo zrušení
-  Environmentu broker požádá o odvolání přístupů a projekt smaže; odvolání je
-  u Composia jen „best effort“, proto broker výsledek ověří a zbytek předá
-  Adminovi k ručnímu odebrání u poskytovatele.
-- Agenti i boti používají v obou režimech příkaz `composio`; ve firemním
-  režimu je přihlášený klíčem projektu (úprava CLI nabídnutá upstreamu).
-- Mapa Conglomerate v Dashboardu ukazuje jen ke čtení, kam který Environment
-  sahá; osobní Environmenty vidí jen jejich majitel.
-- Všechno, kam je Environment přihlášený, mají vždy všichni jeho agenti i
-  boti. Uvnitř Environmentu se přístupy nedělí; jiné přístupy znamenají další
-  Environment.
-- MCP servery Environmentu se spravují na stejné stránce (záložka MCP servery)
-  a platí pro Chat, Apps i Automate.
+- Integrace má v Environmentu jednu cestu: nástrojem, přímo přes Executor,
+  nebo přes Composio. Přímo se připojuje, kde je to stejně snadné; Composio
+  zbývá pro aplikace, které přímo jednoduše nejdou (třeba Google
+  a Microsoft bez firemní aplikace, Salesforce nebo Zoom).
+- Zda se Composio smí používat, rozhoduje na pracovních Environmentech
+  Organizace v nastavení Organizace (rozhodnutí 0194): nová Organizace ho
+  má vypnuté, Organizace, které ho už používají, zapnuté. Na osobním
+  Environmentu rozhoduje člověk sám a Composio je tam snadná výchozí cesta.
+- Organizace, které Composio používají, nic nemigrují a nikdo se
+  nepřipojuje znovu.
+- Composio nemá žádné režimy. Firemní Composio organizace s projektem na
+  Environment ani broker se nestaví (dodatek 2026-10-08 je v tomto
+  zrušený). Fork `Lazurio/composio` zůstává pro drobné úpravy CLI.
+- Composio účet může mít víc organizací a CLI vidí jen tu, do které je
+  přihlášené. Launchpad proto u composia ukazuje organizaci Composia
+  a připojuje aplikace do ní; připojení z webu Composia v jiné organizaci
+  agent nevidí.
+- Všechno, kam je Environment přihlášený, mají vždy všichni jeho agenti
+  i boti. Uvnitř Environmentu se přístupy nedělí; jiné přístupy znamenají
+  další Environment.
 
 ## Co agent smí
 
@@ -64,14 +63,16 @@ teprve vzniká.
   nedrží a nikam je nezapisuje.
 - Na mašině s více Organizacemi volit nástroj Organizace, pro kterou pracuje,
   a data mezi Organizacemi nepřenášet.
-- Kde ho operátor nezapnul, Composio nezřizovat; nabídnout mu zapnutí
-  v Launchpadu.
+- Integraci nepřipojovat sám a Composio nezřizovat, kde zapnuté není:
+  poslat člověku odkaz na kartu v Apps → Integrace. Dokud stránka Integrace
+  na Environmentu není, zprostředkovat připojení jen na výslovný pokyn
+  člověka odkazem z `composio link`; přihlášení dokončí člověk sám.
 
 ## Alternativy pro operátora
 
-- Další podporované CLI nástroje z výběru Launchpadu.
-- MCP server, který na požádání nastaví agent. MCP servery se do Folderu
-  nezapisují.
+- Přímé Integrace a vlastní MCP servery v Executoru
+  ([executor.md](executor.md)).
+- Nástroje pro jednu aplikaci z výběru Launchpadu.
 
 ## Otevřené otázky
 
