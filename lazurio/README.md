@@ -215,6 +215,27 @@ do GitHub Issues přesného owning repa, nikoli do nového lokálního JSON ledg
 Zapsat takové issue je trvalý mandát Agenta (decision 0163); úplný routing,
 sanitizaci a fallback draft drží [GitHub Issues manuál](../manual/github-issues.md).
 
+## Kontrola Organization manifestu a nastavení
+
+Read-only kontrola jednoho Organization rootu pro lidi, agenty i CI
+repozitáře Organizace (decision 0194):
+
+```sh
+lazurio organization check <organization-root>
+lazurio organization check <organization-root> --json   # lazurio.organization.check.v0
+```
+
+Příkaz přečte root jediným Core readerem, přijme jen stavy, které dnes přijímá
+aktivace, instalace i update (`legacy`, `transition`), ověří zbytek
+`lazurio.organization.json` proti publikovanému schématu a sekci `settings`
+uzavřeným Core kontraktem. Vypíše efektivní hodnotu každého známého nastavení:
+hodnotu, kterou Organizace řídí pro všechny své pracovní Environmenty, nebo
+`neřízeno`, když rozhoduje každý Environment. Exit code `0` znamená platný
+root, `1` neplatný (přesné nálezy s JSON Pointerem) a `2` chybu použití.
+Nic nezapisuje ani nevolá GitHub. Význam sekce `settings`, pravidlo „čtenáři
+napřed“ a chování neplatné sekce drží
+[manuál rodiny manifestů](../manual/lazurio-manifest-family.md#organization-settings-settings).
+
 ## Migrace Organization manifestu
 
 `company.gen3.json` je deprecated (decision 0145); kanonický Organization
