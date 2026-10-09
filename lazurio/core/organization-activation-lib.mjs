@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { normalizeOrganizationPortPool } from "./organization-port-policy-lib.mjs";
+import { resolveOrganizationSettings } from "./organization-settings-lib.mjs";
 import {
   isValidOrganizationForgeBinding,
   ORGANIZATION_GITHUB_LOGIN_PATTERN,
@@ -295,6 +296,11 @@ export function resolveOrganizationRootDocuments({
   }
 
   if (resource) semanticHash = organizationSemanticHash(resource);
+  const declarationSource = state === "legacy"
+    ? "legacy_compatibility_projection"
+    : ["transition", "projection_drift", "current"].includes(state)
+      ? "lazurio.organization.json"
+      : null;
   const activation = legacyActivationProjection({
     state,
     resource,
@@ -309,11 +315,7 @@ export function resolveOrganizationRootDocuments({
   });
   return freeze({
     contract_version: ORGANIZATION_ROOT_RESOLUTION_VERSION,
-    declaration_source: state === "legacy"
-      ? "legacy_compatibility_projection"
-      : ["transition", "projection_drift", "current"].includes(state)
-        ? "lazurio.organization.json"
-        : null,
+    declaration_source: declarationSource,
     document_presence: {
       canonical: canonicalPresent,
       legacy_projection: legacyPresent,
@@ -330,6 +332,19 @@ export function resolveOrganizationRootDocuments({
       companyManifest,
       canonicalManifest,
       modulesManifest,
+    }),
+    // Organization settings (decision 0194) ride next to the normalized
+    // resource, never inside it: the semantic hash, transition parity and the
+    // legacy projection ignore them, and an invalid section is reported here
+    // without changing `state`, so update, discovery and activation keep
+    // working while the section itself is never applied.
+    settings: resolveOrganizationSettings({
+      authority: declarationSource === "lazurio.organization.json"
+        ? "canonical"
+        : declarationSource === "legacy_compatibility_projection"
+          ? "legacy"
+          : null,
+      canonicalManifest,
     }),
     activation,
   });
@@ -670,6 +685,9 @@ function canonicalManifestShapeIssues(value) {
     "layers",
     "task_sources",
     "doctor",
+    // Validated on its own by organization-settings-lib.mjs: an invalid
+    // section is a settings verdict, never an Organization conflict.
+    "settings",
     "extensions",
     "compatibility",
   ])) issues.push("canonical_manifest_fields_invalid");

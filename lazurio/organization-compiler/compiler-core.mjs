@@ -155,6 +155,15 @@ function readCompilerInput(root) {
         `Organization authority conflict: ${resolution.state} (${resolution.issues.join(", ") || "invalid documents"})`,
       );
     }
+    // Settings never reach generated output, but an invalid section must not
+    // pass the Organization's authoring tools (decision 0194 point 5).
+    if (resolution.settings.status === "invalid") {
+      throw new OrganizationCompilerError(
+        `Organization settings v ${ORGANIZATION_DOCUMENT_PATHS.canonical} jsou neplatná: `
+          + resolution.settings.issues.map(({ code, path }) => `${code} ${path}`).join(", "),
+        { settings_issues: resolution.settings.issues },
+      );
+    }
     return {
       configPath: ORGANIZATION_DOCUMENT_PATHS.canonical,
       companyConfig: structuredClone(projectLegacyOrganizationManifest(documents.canonicalManifest, modulesManifest)),

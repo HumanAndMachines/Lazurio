@@ -35,6 +35,16 @@ export function readOrganizationRoot({ organizationRoot, ...expectations }) {
 }
 
 /**
+ * Organization settings (decision 0194) of one checked-out Organization root:
+ * the `settings` verdict of the same single resolution `readOrganizationRoot`
+ * returns. Use `readOrganizationRoot` when the caller also needs the state or
+ * the normalized resource, so the documents are read only once.
+ */
+export function readOrganizationSettings({ organizationRoot }) {
+  return readOrganizationRoot({ organizationRoot }).settings;
+}
+
+/**
  * Raw document set of one Organization root exactly as the resolver consumes
  * it: decoded JSON (or `{ invalid: true }`), `null` for an absent file and the
  * filesystem issue codes. Callers that need the authored documents themselves

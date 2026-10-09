@@ -10,6 +10,7 @@ const normalizedConsumers = [
   "lazurio/lib.mjs",
   "lazurio/module-port-lib.mjs",
   "lazurio/module-setup-lib.mjs",
+  "lazurio/organization-check-lib.mjs",
   "lazurio/runtime/diagnostics-lib.mjs",
   "lazurio/runtime/discovery-lib.mjs",
   "lazurio/runtime/doctor-children-lib.mjs",

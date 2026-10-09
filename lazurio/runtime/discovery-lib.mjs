@@ -1901,6 +1901,12 @@ async function discoverOrganizations({
         ? `${path}: legacy compatibility projection deklaruje Module mimo modules.manifest.json; z normalizovaného inventáře byl ignorován (${warning})`
         : `${path}: Organization manifest má rozdílný canonical casing (${warning})`);
     }
+    // An invalid settings section (decision 0194) is never applied, but it
+    // does not make the Organization unusable: warn precisely and continue.
+    if (resolution.settings?.status === "invalid") {
+      const details = resolution.settings.issues.map(({ code, path: pointer }) => `${code} ${pointer}`).join(", ");
+      warnings.push(`${path}: nastavení Organizace (settings v lazurio.organization.json) je neplatné a Environmenty ho nepoužijí (${details}); podrobnosti vypíše \`lazurio organization check <root>\``);
+    }
     const resource = resolution.resource;
     const organizationKind = resource.kind;
     if (organizationKind !== "template") {

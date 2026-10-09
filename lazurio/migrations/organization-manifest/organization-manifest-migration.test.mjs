@@ -147,6 +147,52 @@ test("editing the canonical manifest makes the legacy projection stale until reg
     .toBe(readOrganizationRoot({ organizationRoot: worktree }).projection.declared_hash);
 });
 
+test("migrating an existing Organization never adds Organization settings", async () => {
+  // Absent settings mean the Organization governs nothing (decision 0194):
+  // existing Organizations stay as they are; only a new Organization starts
+  // with its explicit defaults.
+  const { worktree } = organizationRepository();
+  const written = await runOrganizationManifestMigration({ organizationRoot: worktree, write: true });
+  expect(written.outcome).toBe("written");
+  expect(JSON.parse(readFileSync(join(worktree, "lazurio.organization.json"), "utf8"))).not.toHaveProperty("settings");
+  expect(readOrganizationRoot({ organizationRoot: worktree }).settings).toMatchObject({ status: "absent", values: {} });
+});
+
+test("settings are edited without regeneration and survive a later projection regeneration", async () => {
+  const { worktree } = organizationRepository();
+  await runOrganizationManifestMigration({ organizationRoot: worktree, write: true });
+  const canonicalPath = join(worktree, "lazurio.organization.json");
+  const companyPath = join(worktree, "company.gen3.json");
+  const projectionBefore = readFileSync(companyPath, "utf8");
+  const canonical = JSON.parse(readFileSync(canonicalPath, "utf8"));
+  canonical.settings = { integrations: { composio: { allowed: false } } };
+  writeFileSync(canonicalPath, `${JSON.stringify(canonical, null, 2)}\n`);
+
+  // The settings edit alone keeps the root in `transition`: nothing to regenerate.
+  expect(readOrganizationRoot({ organizationRoot: worktree })).toMatchObject({
+    state: "transition",
+    settings: { status: "valid", values: { integrations: { composio: { allowed: false } } } },
+  });
+  expect(await runOrganizationManifestMigration({ organizationRoot: worktree })).toMatchObject({ operation: "none", outcome: "noop" });
+
+  // A later Organization edit that does need regeneration keeps the section.
+  canonical.teams.push({ slug: "sales", display_name: "Sales", default: false });
+  writeFileSync(canonicalPath, `${JSON.stringify(canonical, null, 2)}\n`);
+  const regenerated = await runOrganizationManifestMigration({ organizationRoot: worktree, write: true });
+  expect(regenerated).toMatchObject({ operation: "regenerate", outcome: "written", readback: { state: "transition" } });
+  expect(JSON.parse(readFileSync(canonicalPath, "utf8")).settings).toEqual({ integrations: { composio: { allowed: false } } });
+  expect(readFileSync(companyPath, "utf8")).not.toBe(projectionBefore);
+  expect(JSON.parse(readFileSync(companyPath, "utf8"))).not.toHaveProperty("settings");
+
+  // An invalid section is never written back by the authoring tool.
+  canonical.teams.pop();
+  canonical.settings = { integrations: { composio: { allowed: "no" } } };
+  writeFileSync(canonicalPath, `${JSON.stringify(canonical, null, 2)}\n`);
+  const refused = await runOrganizationManifestMigration({ organizationRoot: worktree, write: true });
+  expect(refused).toMatchObject({ operation: "regenerate", outcome: "blocked", ok: false });
+  expect(refused.blockers.map((blocker) => blocker.code)).toEqual(["schema_validation_failed"]);
+});
+
 test("finalization is not implemented: --finalize is refused before anything is planned or written", async () => {
   // In every state and mode: no plan, no documents, no file change. Opening
   // `current` needs a separately accepted reader-readiness mechanism.

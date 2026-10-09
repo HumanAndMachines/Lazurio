@@ -44,7 +44,7 @@ describe("Organization scaffold", () => {
         default_branch: "main",
       },
     });
-    expect(scaffold.git_tree_oid).toBe("368142626b715f166ee0098bdc70c02242f4f906");
+    expect(scaffold.git_tree_oid).toBe("84c09971eb20d1c4e38f15078214edf45cf3d5ff");
     expect(scaffold.files.map((file) => file.path)).toEqual([
       ".github/ISSUE_TEMPLATE/agent-report.md",
       ".gitignore",
@@ -95,6 +95,15 @@ describe("Organization scaffold", () => {
     });
     expect(resolution).toMatchObject({ state: "transition", resource_count: 1, issues: [] });
     expect(projectLegacyOrganizationManifest(canonical, modules)).toEqual(company);
+
+    // A new Organization starts with Composio off (decision 0162, addendum
+    // 2026-10-09 point 4); the setting lives only in the canonical manifest.
+    expect(canonical.settings).toEqual({ integrations: { composio: { allowed: false } } });
+    expect(company).not.toHaveProperty("settings");
+    expect(resolution.settings).toMatchObject({
+      status: "valid",
+      effective: [{ key: "integrations.composio.allowed", governed: true, value: false }],
+    });
   });
 
   test("a scaffold whose legacy projection drifts from its canonical manifest is invalid", () => {

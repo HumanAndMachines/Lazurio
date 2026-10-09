@@ -101,7 +101,9 @@ The first schema must contain or preserve:
   Module lease allocation; exact ports remain owned only by each
   `lazurio.module.json`;
 - current Organization-owned governance, Team, task-source and Doctor sections
-  without semantic loss.
+  without semantic loss;
+- the optional, closed `settings` section with Organization-wide settings
+  (decision 0194; see [Organization settings](#organization-settings-settings)).
 
 The current `humanandmachines.doctor.declaration.v1` remains unchanged during
 this migration. Renaming the Doctor declaration schema is a separate decision.
@@ -137,6 +139,104 @@ filename decision.
 Local Core, CLI and Launchpad discovery never consult Dashboard state. A future
 Dashboard registry may cache a verified root lookup for remote Dashboard
 operations, but it cannot become local identity, access or runtime authority.
+
+## Organization settings (`settings`)
+
+Decision 0194 makes settings that apply to the whole Organization code in its
+root repository: the optional, closed `settings` section of
+`lazurio.organization.json`. The first setting is the Composio switch of
+decision 0162 (addendum 2026-10-09):
+
+```json
+"settings": {
+  "integrations": {
+    "composio": { "allowed": false }
+  }
+}
+```
+
+- `settings`, `settings.integrations` and `settings.integrations.composio`
+  are closed objects; `allowed` is a required boolean whenever `composio` is
+  present. Every level is optional. The schema is `$defs.organizationSettings`
+  in `lazurio/lazurio.organization.v1.schema.json`; Core validates the same
+  closed tree in `lazurio/core/organization-settings-lib.mjs` and a test pins
+  the two together. A new setting adds a field there, the consumer that applies
+  it and its status report; no new channel (decision 0194 point 6).
+- **Absent value:** the Organization does not govern it and every Environment
+  decides for itself, exactly as before the section existed. Existing
+  Organizations therefore change nothing.
+- **Present value:** governs every work Environment of the Organization, and
+  the Launchpad says at that switch that the Organization sets it. Personal
+  Environments ignore Organization settings.
+- **New Organizations** start with `"allowed": false`; the Core scaffold
+  (`lazurio/core/organization-scaffold-lib.mjs`) writes it. The migrator never
+  adds the section to an existing Organization.
+- **Who changes it:** an Admin, as an exact change approved in the Dashboard
+  and written with the Admin's own rights, or an agent's pull request that the
+  Admin approves; the approval is Publication (decision 0194 point 2). Secrets
+  never live here; a setting names a vault entry instead.
+- **Delivery:** Environments ask the Dashboard what applies to them; a local
+  install with a cloned root reads the same document from Git through
+  `readOrganizationRoot(...).settings` (or `readOrganizationSettings`).
+
+The section is excluded from the legacy compatibility projection and from the
+semantic hash. Editing it touches one file, never needs `lazurio migrate
+organization-manifest --write` and never changes the root state; a later
+projection regeneration keeps it unchanged.
+
+The resolver reports the section next to the normalized resource, never inside
+it, as `settings` (`lazurio.organization.settings.v1`):
+
+| Root | `settings.status` | Consumer behavior |
+| --- | --- | --- |
+| canonical manifest is the read authority, no section | `absent` | nothing governed; `values` is `{}` |
+| canonical manifest is the read authority, valid section | `valid` | apply `values` (exactly the declared keys); `effective[]` lists every known key and whether the Organization governs it |
+| canonical manifest is the read authority, invalid section | `invalid` | apply nothing from this version and keep the last applied one; `issues[]` names every problem with a JSON Pointer |
+| `legacy` | `absent` | a legacy root cannot declare settings and governs nothing |
+| `conflict` or `missing` | `unavailable` | no safe authority; keep the last applied version |
+
+An invalid section is deliberately **not** a `conflict`. A `conflict` stops
+`lazurio update`, discovery and mutations for the whole Organization (see the
+[Machine update compatibility gate](#machine-update-compatibility-gate)); one
+malformed policy must not hold back unrelated changes, nor the commit that
+fixes it. The section is instead never applied, Launchpad discovery and Doctor
+show a precise warning, and the authoring tools refuse it: `lazurio
+organization check` fails, the Organization compiler stops and the migrator
+does not write it back. Every other unknown top-level field still makes the
+root a `conflict`.
+
+### Check in CI
+
+```text
+lazurio organization check <organization-root>          # summary; exit 0 valid, 1 invalid, 2 usage error
+lazurio organization check <organization-root> --json   # lazurio.organization.check.v0
+```
+
+The check is read-only. It accepts exactly the states that activation, install
+and update accept today (`legacy`, `transition`), validates the rest of
+`lazurio.organization.json` against the published schema, validates the
+settings and prints their effective values. An Organization repository's CI can
+run it on every pull request (decision 0194 point 5).
+
+### Readers first
+
+A reader that does not know `settings` treats it as an unknown top-level field:
+older Lazurio Core reports `conflict`, so `lazurio update` keeps the whole
+Organization at its previous commit, and older LazurioPlatform releases reject
+the manifest. Every reader therefore ships before any Organization adds the
+section:
+
+1. Lazurio Core with this contract on `main`. A workstation receives it with
+   `lazurio update` of its Root; the run that fast-forwards the Root still
+   judges Organization targets with the previous Core, so one more run follows.
+2. Resident Lazurio artifacts that Machines pins on Organization Hosts, rebuilt
+   from a commit with this contract.
+3. The LazurioPlatform release whose canonical manifest parser accepts the
+   section, on every Environment of the Organization (the Machines pin is only
+   a minimum).
+
+Only then may an Organization add `settings`: first by a reviewed pull request
+to its root, later through the Dashboard editor.
 
 ## Ownership
 
@@ -190,7 +290,9 @@ runtime/process state, consistent with DEV-6439.
 | any present document is invalid or unreadable | `conflict` | fail closed; `issues[]` identifies the malformed or unreadable document even when no second file exists |
 
 One mount always produces at most one resource and at most one child Doctor.
-Two filenames never create two Organizations or two Personalspaces.
+Two filenames never create two Organizations or two Personalspaces. An invalid
+`settings` section never changes the state; see
+[Organization settings](#organization-settings-settings).
 
 The legacy projection is required during the compatibility window because old
 supported Machines have hardcoded legacy structural gates and there is no

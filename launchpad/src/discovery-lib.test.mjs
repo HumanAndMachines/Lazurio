@@ -2596,6 +2596,26 @@ test("a transition pair discovers one normalized Organization and one app", asyn
   expect(result.apps.map((app) => app.id)).toEqual(["test-company-demo-v1"]);
 });
 
+test("invalid Organization settings warn precisely and keep the Organization and its apps", async () => {
+  const root = await createCompaniesWorkspaceFixture({
+    plugin: { schema_version: "companyascode.launchpad_plugin.v1", title: "Transition" },
+  });
+  const organizationRoot = join(root, "organizations", "TestCompany");
+  await convertOrganizationFixtureToTransition(organizationRoot);
+  const canonicalPath = join(organizationRoot, "lazurio.organization.json");
+  const canonical = await Bun.file(canonicalPath).json();
+  canonical.settings = { integrations: { composio: { allowed: "no" } } };
+  await writeJson(canonicalPath, canonical);
+
+  const result = await discoverLaunchpadApps(root);
+
+  expect(result.failures).toEqual([]);
+  expect(result.organizations[0]).toMatchObject({ slug: "test-company", manifest_state: "transition" });
+  expect(result.apps.map((app) => app.id)).toEqual(["test-company-demo-v1"]);
+  expect(result.warnings).toContainEqual(expect.stringContaining("settings_type_invalid /settings/integrations/composio/allowed"));
+  expect(result.warnings.some((warning) => warning.includes("canonical casing"))).toBe(false);
+});
+
 async function createCompaniesWorkspaceFixture({ plugin, appOverrides = {} }) {
   const root = await mkdtemp(join(tmpdir(), "companiesascode-discovery-"));
   tempRoots.push(root);

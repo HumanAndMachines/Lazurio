@@ -674,6 +674,128 @@ test("canonical resolver rejects schema-shape drift and invalid Organization por
   });
 });
 
+test("Organization settings ride next to the resource and never touch projection, semantic hash or state", () => {
+  const modulesManifest = organizationModules();
+  const canonical = canonicalOrganization(modulesManifest);
+  const projected = projectLegacyOrganizationManifest(canonical, modulesManifest);
+  const governed = structuredClone(canonical);
+  governed.settings = { integrations: { composio: { allowed: false } } };
+
+  // Editing settings never regenerates company.gen3.json: same projection,
+  // same declared hash, and the projection never carries the section.
+  expect(projectLegacyOrganizationManifest(governed, modulesManifest)).toEqual(projected);
+  expect(organizationLegacyProjectionHash(governed, modulesManifest))
+    .toBe(canonical.compatibility.legacy_projection.sha256);
+  expect(projected).not.toHaveProperty("settings");
+  expect(validateAgainstSchema(governed, organizationManifestSchema, "organization")).toEqual([]);
+
+  const plain = resolveOrganizationRootDocuments({ companyManifest: projected, modulesManifest, canonicalManifest: canonical });
+  const withSettings = resolveOrganizationRootDocuments({ companyManifest: projected, modulesManifest, canonicalManifest: governed });
+  expect(withSettings).toMatchObject({ state: "transition", resource_count: 1, issues: [], warnings: [] });
+  expect(withSettings.semantic_hash).toBe(plain.semantic_hash);
+  expect(withSettings.projection).toEqual(plain.projection);
+  expect(withSettings.activation).toEqual(plain.activation);
+  expect(withSettings.resource).toEqual(plain.resource);
+  expect(withSettings.resource).not.toHaveProperty("settings");
+  expect(withSettings.settings).toEqual({
+    contract_version: "lazurio.organization.settings.v1",
+    status: "valid",
+    source: "lazurio.organization.json",
+    values: { integrations: { composio: { allowed: false } } },
+    effective: [{ key: "integrations.composio.allowed", governed: true, value: false }],
+    issues: [],
+  });
+  expect(plain.settings).toMatchObject({ status: "absent", source: "lazurio.organization.json", values: {} });
+
+  // Every state that reads the canonical manifest reads its settings.
+  const drifted = structuredClone(projected);
+  delete drifted.organization_kind;
+  expect(resolveOrganizationRootDocuments({ companyManifest: drifted, modulesManifest, canonicalManifest: governed }))
+    .toMatchObject({ state: "projection_drift", settings: { status: "valid" } });
+  expect(resolveOrganizationRootDocuments({ companyManifest: null, modulesManifest, canonicalManifest: governed }))
+    .toMatchObject({ state: "current", settings: { status: "valid" } });
+});
+
+test("an invalid settings section is reported precisely without making the Organization unusable", () => {
+  const modulesManifest = organizationModules();
+  const canonical = canonicalOrganization(modulesManifest);
+  const projected = projectLegacyOrganizationManifest(canonical, modulesManifest);
+  const valid = resolveOrganizationRootDocuments({ companyManifest: projected, modulesManifest, canonicalManifest: canonical });
+  const cases = [
+    [null, [{ code: "settings_type_invalid", path: "/settings" }]],
+    [
+      { integrations: { composio: { allowed: "no" } } },
+      [{ code: "settings_type_invalid", path: "/settings/integrations/composio/allowed" }],
+    ],
+    [
+      { integrations: { composio: {} }, policies: {} },
+      [
+        { code: "settings_field_missing", path: "/settings/integrations/composio/allowed" },
+        { code: "settings_field_unknown", path: "/settings/policies" },
+      ],
+    ],
+  ];
+  for (const [settings, issues] of cases) {
+    const invalid = structuredClone(canonical);
+    invalid.settings = settings;
+    const resolution = resolveOrganizationRootDocuments({ companyManifest: projected, modulesManifest, canonicalManifest: invalid });
+    // The root stays a usable `transition`: update, discovery, activation and
+    // the semantic parity see exactly the Organization they saw before.
+    expect(resolution).toMatchObject({
+      state: "transition",
+      declaration_source: "lazurio.organization.json",
+      resource_count: 1,
+      issues: [],
+      warnings: [],
+    });
+    expect(resolution.semantic_hash).toBe(valid.semantic_hash);
+    expect(resolution.resource).toEqual(valid.resource);
+    expect(resolution.activation).toEqual(valid.activation);
+    // The section itself is never applied, and its problems are exact.
+    expect(resolution.settings).toEqual({
+      contract_version: "lazurio.organization.settings.v1",
+      status: "invalid",
+      source: "lazurio.organization.json",
+      values: null,
+      effective: null,
+      issues,
+    });
+    expect(validateAgainstSchema(invalid, organizationManifestSchema, "organization").length).toBeGreaterThan(0);
+  }
+
+  // Only `settings` joined the closed top-level allowlist.
+  const shadow = structuredClone(canonical);
+  shadow.settings = { integrations: { composio: { allowed: false } } };
+  shadow.policies = { composio: false };
+  expect(resolveOrganizationRootDocuments({ companyManifest: projected, modulesManifest, canonicalManifest: shadow }))
+    .toMatchObject({
+      state: "conflict",
+      resource_count: 0,
+      issues: expect.arrayContaining(["canonical_manifest_fields_invalid"]),
+      settings: { status: "unavailable", values: null },
+    });
+});
+
+test("a legacy root governs no settings and a root without a readable authority exposes none", () => {
+  const modulesManifest = organizationModules();
+  expect(resolveOrganizationRootDocuments({
+    companyManifest: legacyOrganization(),
+    modulesManifest,
+    canonicalManifest: null,
+  })).toMatchObject({
+    state: "legacy",
+    settings: { status: "absent", source: null, values: {}, issues: [] },
+  });
+  expect(resolveOrganizationRootDocuments({ companyManifest: null, modulesManifest, canonicalManifest: null }))
+    .toMatchObject({ state: "missing", settings: { status: "unavailable", values: null, effective: null } });
+  expect(resolveOrganizationRootDocuments({
+    companyManifest: null,
+    modulesManifest,
+    canonicalManifest: { invalid: true },
+    documentIssues: ["canonical_manifest_unreadable"],
+  })).toMatchObject({ state: "conflict", settings: { status: "unavailable" } });
+});
+
 test("malformed repository slots stay inside the conflict state instead of throwing", () => {
   const validModules = organizationModules();
   const canonical = canonicalOrganization(validModules);
