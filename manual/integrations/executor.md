@@ -16,9 +16,10 @@ z 2026-10-09.
   Běží jako služba uživatele Environmentu, jen na localhostu. Neběží na
   Conglomerate Hostu, nesdílí se mezi Environmenty a Executor Cloud se
   nepoužívá.
-- Lidé Executor ovládají jen z Launchpadu (Apps → Integrace). Konzoli
-  Executoru používají agenti a servisní přístup při potížích; lidé do ní
-  nemají žádný vstup.
+- Lidé Executor ovládají jen z Launchpadu (Apps → Integrace) a do konzole
+  Executoru nemají žádný vstup; používají ji agenti a servisní přístup při
+  potížích. Dokud stránka Integrace na Environmentu není, platí přechodný
+  postup ze sekce MCP servery a připojení.
 - Připojení a hesla, která v něm vzniknou, zůstávají v Environmentu. Kdo
   potřebuje jiné přístupy, zakládá další Environment.
 - Každá Integrace má v Environmentu jednu cestu: nástrojem z Nastavení →
@@ -91,9 +92,11 @@ stejně, jakmile to umí fork MausBotu (plán DEV-6626).
 ## MCP servery a připojení
 
 Lidé připojují Integrace v Launchpadu (Apps → Integrace); Launchpad k tomu
-používá rozhraní Executoru uvnitř Environmentu. Dokud stránka Integrace
-nevznikne, připojí Integraci v pilotu agent na výslovný pokyn člověka
-příkazovou řádkou a přihlášení dokončí člověk v prohlížeči Environmentu:
+používá rozhraní Executoru uvnitř Environmentu. **Přechodně, dokud stránka
+Integrace na Environmentu není,** připojí Integraci agent jen na výslovný
+pokyn člověka příkazovou řádkou. Přihlášení nebo klíč dokončí člověk sám na
+stránce, kterou mu agent otevře v prohlížeči Environmentu; jinam do konzole
+nechodí:
 
 ```sh
 executor call executor mcp probeEndpoint '{"endpoint":"https://mcp.example.com/mcp"}'
@@ -107,13 +110,14 @@ executor call executor coreTools connections create '{"owner":"org","name":"defa
   vlastní OAuth aplikaci.
 - Bez dynamické registrace, typicky u Googlu a Microsoftu, je potřeba
   OAuth aplikace Organizace podle runbooku poskytovatele.
-- Souhlas dej v prohlížeči Environmentu. Executor vrací přihlášení na
+- Souhlas dá člověk v prohlížeči Environmentu. Executor vrací přihlášení na
   `localhost`, jinde se nedokončí.
-- Klíč nebo token, který služba chce, zadává operátor v konzoli Executoru
-  (`connections.createHandoff`), nikdy do chatu.
+- Klíč nebo token, který služba chce, zadá člověk sám na stránce předání
+  (`connections.createHandoff`), kterou mu agent otevře v prohlížeči
+  Environmentu; do chatu ho nikdy nepíše.
 - Executor ve výchozím nastavení přidání serveru i vytvoření připojení
-  pozastaví a čeká na schválení. Schválí ho operátor v konzoli (odkaz
-  `/resume/<id>`), nebo agent na jeho pokyn příkazem
+  pozastaví a čeká na schválení. Výslovný pokyn člověka k připojení je tím
+  schválením; agent ho potvrdí příkazem
   `executor resume --execution-id <id> --action accept --content '{}'`.
   Čtecí nástroje v pilotu běžely bez schvalování.
 - Schválení v Executoru není souhlas s Publikací. Pro zápisy navenek platí
@@ -133,8 +137,9 @@ Například
 
 ## Konzole (jen pro agenty a servisní přístup)
 
-Lidé do konzole nechodí, všechno dělají v Launchpadu. Agent nebo servisní
-přístup ji při potížích otevře v prohlížeči Environmentu na
+Lidé do konzole nechodí a cílově všechno dělají v Launchpadu; přechodně jen
+dokončí přihlášení nebo klíč na stránce, kterou jim agent otevře. Agent nebo
+servisní přístup ji při potížích otevře v prohlížeči Environmentu na
 `http://localhost:4789`; `executor open` ji otevře rovnou přihlášenou.
 
 - Karta „Connect an agent“ ukazuje přístupový token čitelně. Nesdílej
@@ -161,7 +166,8 @@ přístup ji při potížích otevře v prohlížeči Environmentu na
 - Používat všechny integrace Executoru. Uvnitř Environmentu se přístupy
   nedělí.
 - Integraci nikdy nepřipojit sám: přihlášení je souhlas člověka, proto
-  agent pošle odkaz na kartu v Apps → Integrace.
+  agent pošle odkaz na kartu v Apps → Integrace. Dokud stránka Integrace
+  není, připojí ji jen na výslovný pokyn člověka postupem výše.
 - Vlastní MCP server přidat jen na výslovný pokyn člověka, vždy do
   Executoru Environmentu, ne jen do svého nástroje.
 - Navenek viditelný zápis udělat jen na pokyn Operátora.

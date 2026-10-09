@@ -732,11 +732,15 @@ v Environmentu, nebo přes Composio s vlastním účtem člověka, pokud ho
 Organizace (na osobním Environmentu člověk) povolila. Při práci použij
 Integraci tam, kde je připojená, v pořadí nástroj aplikace, Executor,
 Composio. Integraci nikdy nepřipojuj sám, protože přihlášení je souhlas
-člověka: pošli mu odkaz na její kartu v Apps → Integrace. Jen na jeho
-výslovný pokyn smíš přidat vlastní MCP server do Executoru; kde Executor
-ještě neběží, nastav ho na pokyn operátora podle
-`manual/integrations/executor.md`. Konzoli Executoru používají agenti
-a servisní přístup, lidé všechno dělají v Launchpadu. Nastavení celé
+člověka: pošli mu odkaz na její kartu v Apps → Integrace. Dokud stránka
+Integrace na Environmentu není, připojíš ji jen na jeho výslovný pokyn
+podle `manual/integrations/executor.md` nebo
+`manual/integrations/composio.md`; přihlášení nebo klíč dokončí on sám na
+stránce, kterou mu otevřeš v prohlížeči Environmentu. Jen na jeho výslovný
+pokyn smíš přidat vlastní MCP server do Executoru; kde Executor ještě
+neběží, nastav ho na pokyn operátora podle téhož runbooku. Konzoli
+Executoru používají agenti a servisní přístup; lidé cílově všechno dělají
+v Launchpadu. Nastavení celé
 Organizace (třeba povolení Composia nebo firemní aplikace Google
 a Microsoftu) mění Admin v Dashboardu a do Environmentů se dostane podle
 decision 0194. Výchozí pořadí nového napojení: oficiální MCP poskytovatele

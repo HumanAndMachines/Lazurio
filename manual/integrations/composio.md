@@ -64,7 +64,9 @@ Lazurio Dashboard. Lazurio Environment to nevynucuje.
 - Na mašině s více Organizacemi volit nástroj Organizace, pro kterou pracuje,
   a data mezi Organizacemi nepřenášet.
 - Integraci nepřipojovat sám a Composio nezřizovat, kde zapnuté není:
-  poslat člověku odkaz na kartu v Apps → Integrace.
+  poslat člověku odkaz na kartu v Apps → Integrace. Dokud stránka Integrace
+  na Environmentu není, zprostředkovat připojení jen na výslovný pokyn
+  člověka odkazem z `composio link`; přihlášení dokončí člověk sám.
 
 ## Alternativy pro operátora
 

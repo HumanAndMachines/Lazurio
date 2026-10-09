@@ -55,6 +55,10 @@ nástrojem z Nastavení → Nástroje (vždy `gh` pro GitHub, dále například
 použije Integraci tam, kde je připojená, v pořadí nástroj aplikace,
 Executor, Composio. Integraci nikdy nepřipojí sám, protože přihlášení je
 souhlas člověka: chybí-li, pošle mu odkaz na její kartu v Apps → Integrace.
+Dokud stránka Integrace na Environmentu není, připojí ji jen na výslovný
+pokyn člověka podle runbooku Executoru nebo Composia; přihlášení či klíč
+dokončí člověk sám na stránce, kterou mu agent otevře v prohlížeči
+Environmentu.
 Vlastní MCP server přidá do Executoru jen na výslovný pokyn člověka. Kde
 Executor ještě neběží, použije MCP servery, které má harness právě
 k dispozici, a podrobnosti se dozví z MCP serveru samotného.
@@ -115,7 +119,7 @@ operátora; agenti v něm jednají tam, kam sahají přihlášení na té mašin
 | CLI-first | Lazurio se stará o Environment, tedy o nástroje v něm, a říká agentům, jak se v něm pohybovat. Codex, Claude Code, `gh`, Executor, Composio i další nástroje jsou CLI nainstalovaná a přihlášená na mašině. |
 | Katalog Launchpadu | Jen nástroje s uživatelsky přívětivým přihlášením (prohlížeč, ověřovací kód, párování). Atypický nástroj napojí na zadání operátora agent. |
 | Závazek údržby | Každý nástroj katalogu má popsáno, co má jeho instalace udělat. Když instalátor selže, spustí se agent, který instalaci dotáhne podle tohoto popisu. |
-| Pořadí pro agenty | Nástroj aplikace, Executor, Composio. Integraci agent nikdy nepřipojí sám; pošle odkaz na její kartu v Apps → Integrace. |
+| Pořadí pro agenty | Nástroj aplikace, Executor, Composio. Integraci agent nikdy nepřipojí sám; pošle odkaz na její kartu v Apps → Integrace. Dokud stránka Integrace není, připojí ji jen na výslovný pokyn člověka podle runbooku. |
 | Přihlášení bez tření | Přihlášení nástroje má operátora stát co nejméně: odkaz, ověřovací kód nebo čitelný QR kód v Launchpadu, nikdy rozsypaný QR kód v terminálu. |
 | Dokumentace pro operátory | Hranice a přijaté kompromisy tohoto modelu se operátorům srozumitelně vysvětlují ve veřejné dokumentaci Lazuria. |
 | Data | U Composia drží tokeny aplikací a obsah volání Composio; operátor i Organizace to vědí před prvním připojením. U Executoru zůstávají tokeny v Environmentu. |
@@ -125,8 +129,9 @@ a volitelnými nástroji, jejich zapnutím a propsáním do Folderu je vydaná
 (LazurioPlatform 0.1.8). Pilot DEV-6626 tím skončil: Composio je aktivní
 součást Lazuria na každém Environmentu, kde ho operátor zapne a přihlásí
 v Nastavení → Nástroje (Matěj 2026-10-02). Kde zapnuté není, agent ho sám
-nezřizuje ani jinou Integraci nepřipojuje; pošle člověku odkaz na kartu
-v Apps → Integrace, nebo použije další cesty žebříčku. Executor 1 zatím
+nezřizuje. Integraci sám nepřipojuje: dokud stránka Integrace není, připojí
+ji jen na výslovný pokyn člověka podle runbooku Executoru nebo Composia,
+jinak použije další cesty žebříčku. Executor 1 zatím
 běží v pilotu na jednom pracovním Environmentu; stránka Integrace, katalog,
 nastavení Organizace a firemní aplikace Google a Microsoftu teprve vznikají
 (plány DEV-6626 a DEV-6653). Modely a otevřené otázky drží
