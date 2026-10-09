@@ -70,6 +70,31 @@ describe("Organization compiler input", () => {
     }
   });
 
+  test("Organization settings never reach generated output and an invalid section stops the compiler", async () => {
+    const root = await fixtureCopy("gen3-organization-transition");
+    try {
+      const plain = await prepareOrganizationCompilation({ organizationRoot: root, repositoryObservation: offline });
+      const canonicalPath = join(root, "lazurio.organization.json");
+      const canonical = JSON.parse(await readFile(canonicalPath, "utf8"));
+
+      // Adding a valid section changes no generated file and needs no
+      // projection regeneration: company.gen3.json stays untouched.
+      canonical.settings = { integrations: { composio: { allowed: false } } };
+      await Bun.write(canonicalPath, `${JSON.stringify(canonical, null, 2)}\n`);
+      const governed = await prepareOrganizationCompilation({ organizationRoot: root, repositoryObservation: offline });
+      expect(governed.writes).toEqual(plain.writes);
+
+      canonical.settings = { integrations: { composio: { allowed: "no" } } };
+      await Bun.write(canonicalPath, `${JSON.stringify(canonical, null, 2)}\n`);
+      await expect(prepareOrganizationCompilation({ organizationRoot: root, repositoryObservation: offline })).rejects.toMatchObject({
+        name: "OrganizationCompilerError",
+        message: expect.stringContaining("settings_type_invalid /settings/integrations/composio/allowed"),
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("a root without any Organization manifest fails with the canonical filename first", async () => {
     const root = await mkdtemp(join(tmpdir(), "organization-compiler-empty-"));
     try {
