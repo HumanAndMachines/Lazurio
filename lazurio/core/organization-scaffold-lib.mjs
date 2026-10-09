@@ -13,6 +13,7 @@ import {
   ORGANIZATION_GITHUB_LOGIN_PATTERN,
   ORGANIZATION_POSITIVE_GITHUB_ID_PATTERN,
 } from "./organization-forge-binding-lib.mjs";
+import { newOrganizationSettings } from "./organization-settings-lib.mjs";
 
 export {
   isValidOrganizationForgeBinding,
@@ -318,6 +319,10 @@ function organizationManifest({ organization, repository }, modules) {
       { slug: "organization-todo", kind: "todo-tasks-json", path: "TODO.tasks.json", authority: "source-of-truth" },
       { slug: "organization-done", kind: "done-tasks-json", path: "DONE.tasks.json", authority: "source-of-truth" },
     ],
+    // A new Organization governs its explicit defaults from the first commit
+    // (decision 0162, addendum 2026-10-09 point 4); existing Organizations keep
+    // an absent section. Not part of the legacy projection.
+    settings: newOrganizationSettings(),
     extensions: { legacy: {} },
     compatibility: {
       legacy_projection: {
