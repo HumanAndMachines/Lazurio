@@ -68,6 +68,7 @@
     "lazurio/module-standard-lib.mjs",
     "lazurio/organization-activation-lib.mjs",
     "lazurio/organization-activation-report.v0.schema.json",
+    "lazurio/organization-check-lib.mjs",
     "lazurio/lazurio.organization.v1.schema.json",
     "lazurio/organization-install-lib.mjs",
     "lazurio/organization-install-report.v0.schema.json",
