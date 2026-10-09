@@ -6,7 +6,12 @@ import { dirname, join } from "node:path";
 import {
   ORGANIZATION_DOCUMENT_PATHS,
   readOrganizationRoot,
+  readOrganizationSettings,
 } from "./organization-root-reader-lib.mjs";
+import {
+  organizationLegacyProjectionHash,
+  projectLegacyOrganizationManifest,
+} from "./organization-activation-lib.mjs";
 import { supportsFileSymlinks } from "../../scripts/test-platform-capabilities.mjs";
 
 const roots = [];
@@ -95,6 +100,63 @@ test("Organization root boundary fails closed for missing, file and symlink root
   });
 });
 
+test("one Core call reads an Organization's settings from its checked-out root", () => {
+  const root = fixtureRoot();
+  writeTransitionRoot(root, canonicalOrganization({ integrations: { composio: { allowed: false } } }));
+
+  const settings = readOrganizationSettings({ organizationRoot: root });
+  expect(settings).toEqual({
+    contract_version: "lazurio.organization.settings.v1",
+    status: "valid",
+    source: "lazurio.organization.json",
+    values: { integrations: { composio: { allowed: false } } },
+    effective: [{ key: "integrations.composio.allowed", governed: true, value: false }],
+    issues: [],
+  });
+  expect(readOrganizationRoot({ organizationRoot: root })).toMatchObject({
+    state: "transition",
+    resource_count: 1,
+    issues: [],
+    settings,
+  });
+});
+
+test("an invalid settings section on disk stays a settings verdict, never an Organization conflict", () => {
+  const root = fixtureRoot();
+  writeTransitionRoot(root, canonicalOrganization({ integrations: { composio: { allowed: "yes" } } }));
+
+  expect(readOrganizationSettings({ organizationRoot: root })).toMatchObject({
+    status: "invalid",
+    values: null,
+    effective: null,
+    issues: [{ code: "settings_type_invalid", path: "/settings/integrations/composio/allowed" }],
+  });
+  expect(readOrganizationRoot({ organizationRoot: root })).toMatchObject({
+    state: "transition",
+    resource_count: 1,
+    issues: [],
+  });
+});
+
+test("settings of a legacy root are absent and of an unreadable root unavailable", () => {
+  const legacyRoot = fixtureRoot();
+  writeJson(legacyRoot, ORGANIZATION_DOCUMENT_PATHS.legacy_projection, legacyOrganization());
+  writeJson(legacyRoot, ORGANIZATION_DOCUMENT_PATHS.modules, modulesManifest());
+  expect(readOrganizationSettings({ organizationRoot: legacyRoot })).toMatchObject({
+    status: "absent",
+    source: null,
+    values: {},
+  });
+
+  const unreadableRoot = fixtureRoot();
+  writeFileSync(join(unreadableRoot, ORGANIZATION_DOCUMENT_PATHS.canonical), "{ not json\n");
+  writeJson(unreadableRoot, ORGANIZATION_DOCUMENT_PATHS.modules, modulesManifest());
+  expect(readOrganizationSettings({ organizationRoot: unreadableRoot })).toMatchObject({
+    status: "unavailable",
+    values: null,
+  });
+});
+
 function fixtureRoot() {
   const root = mkdtempSync(join(tmpdir(), "lazurio-organization-reader-"));
   roots.push(root);
@@ -123,4 +185,37 @@ function modulesManifest() {
     github_org: "Example",
     module_slots: [],
   };
+}
+
+function canonicalOrganization(settings) {
+  const canonical = {
+    schema_version: "lazurio.organization.v1",
+    kind: "organization",
+    organization: {
+      slug: "example",
+      display_name: "Example",
+      forge_binding: { forge: "github", locator: "Example", binding_state: "unverified" },
+      metadata: {},
+    },
+    root_repository: null,
+    manifests: { modules: "modules.manifest.json" },
+    teams: [],
+    ...(settings === undefined ? {} : { settings }),
+    extensions: { legacy: {} },
+    compatibility: {
+      legacy_projection: {
+        path: "company.gen3.json",
+        algorithm: "sha256-canonical-json-v1",
+        sha256: `sha256:${"0".repeat(64)}`,
+      },
+    },
+  };
+  canonical.compatibility.legacy_projection.sha256 = organizationLegacyProjectionHash(canonical, modulesManifest());
+  return canonical;
+}
+
+function writeTransitionRoot(root, canonical) {
+  writeJson(root, ORGANIZATION_DOCUMENT_PATHS.canonical, canonical);
+  writeJson(root, ORGANIZATION_DOCUMENT_PATHS.legacy_projection, projectLegacyOrganizationManifest(canonical, modulesManifest()));
+  writeJson(root, ORGANIZATION_DOCUMENT_PATHS.modules, modulesManifest());
 }

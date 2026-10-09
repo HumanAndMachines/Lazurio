@@ -81,6 +81,7 @@
     "layers": { "type": "array" },
     "task_sources": { "type": "array" },
     "doctor": { "type": "object" },
+    "settings": { "$ref": "#/$defs/organizationSettings" },
     "extensions": {
       "type": "object",
       "additionalProperties": false,
@@ -116,6 +117,30 @@
     }
   },
   "$defs": {
+    "organizationSettings": {
+      "description": "Organization settings (decision 0194). An absent value is not governed by the Organization and each Environment decides; a present value governs every work Environment of the Organization; personal Environments ignore Organization settings. Excluded from the legacy compatibility projection and the semantic hash. Lazurio Core validates the same closed tree (core/organization-settings-lib.mjs).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "integrations": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "composio": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["allowed"],
+              "properties": {
+                "allowed": {
+                  "type": "boolean",
+                  "description": "Whether Integrations may be connected through Composio on the Organization's work Environments (decision 0162, addendum 2026-10-09)."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "bindingState": { "enum": ["unverified", "verified"] },
     "organizationForgeBinding": {
       "type": "object",

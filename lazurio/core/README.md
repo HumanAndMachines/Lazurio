@@ -39,6 +39,12 @@ generátor pro budoucí explicitní activation writer. Přijímá až živě ov�
 immutable Organization/repository ID, zapisuje je do kořenového Forge bindingu
 a vrací předem validovatelný, deterministický Git tree. Nevolá provider, Git ani
 filesystem a nevytváří activation profil, registry nebo druhý manifest reader.
+`organization-settings-lib.mjs` vlastní uzavřený kontrakt sekce `settings`
+v `lazurio.organization.json` (decision 0194): validaci s JSON Pointer
+issues, efektivní hodnoty každého známého klíče a výchozí nastavení nové
+Organizace. Resolver Organization rootu jeho verdikt vrací vedle
+normalizovaného resource jako `settings`; neplatná sekce se nepoužije, ale
+stav rootu ani sémantický hash nemění.
 `github-provider-lib.mjs` vlastní jediný read-only GitHub CLI transport pro
 Lazurio Core. Vybere přesnou důvěryhodnou executable, pustí ji bez shellu se
 sanitizovaným prostředím a vrací strukturované transport/HTTP/response chyby.

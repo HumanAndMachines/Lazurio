@@ -480,6 +480,34 @@ test("Organization update fast-forwards only a parity-verified transition target
   expect(status(fixture.working)).toBe("");
 });
 
+test("Organization update fast-forwards settings edits that touch only the canonical manifest", async () => {
+  // Organization settings (decision 0194) are excluded from the legacy
+  // projection and the semantic hash: an edit is one file, never a
+  // regeneration, and an invalid section is a settings verdict that must not
+  // hold the whole Organization back.
+  const fixture = await organizationActivationFixture("settings-target");
+  const transition = transitionOrganizationDocuments();
+  await addRemoteFiles(fixture, transition, "publish transition pair");
+  expect(await updateManagedRepo(descriptor(fixture), { runId: "settings-baseline" })).toMatchObject({ state: "updated" });
+
+  const canonical = JSON.parse(transition["lazurio.organization.json"]);
+  for (const [runId, settings, expectedStatus] of [
+    ["settings-valid", { integrations: { composio: { allowed: false } } }, "valid"],
+    ["settings-invalid", { integrations: { composio: { allowed: "no" } } }, "invalid"],
+  ]) {
+    await addRemoteFiles(fixture, {
+      "lazurio.organization.json": `${JSON.stringify({ ...canonical, settings }, null, 2)}\n`,
+    }, `publish ${runId}`);
+    const result = await updateManagedRepo(descriptor(fixture), { runId });
+    expect(result).toMatchObject({ state: "updated", actions: expect.arrayContaining(["fast_forward"]) });
+    expect(readOrganizationRoot({ organizationRoot: fixture.working })).toMatchObject({
+      state: "transition",
+      settings: { status: expectedStatus },
+    });
+    expect(status(fixture.working)).toBe("");
+  }
+});
+
 test("Organization update blocks a projection-drift target before stashing or checkout mutation", async () => {
   const fixture = await organizationActivationFixture("projection-drift-target");
   await addRemoteFiles(fixture, driftedTransitionOrganizationDocuments(), "publish drifted transition pair");
