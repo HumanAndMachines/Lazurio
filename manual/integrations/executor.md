@@ -1,24 +1,33 @@
-# Executor 1: MCP servery Environmentu
+# Executor 1: přímé Integrace Environmentu
 
 Stav ověřen 2026-10-09 na Executoru 1.6.10 (Linux, pilot na jednom pracovním
 Environmentu).
 
 Executor je open source MCP brána ([executor.sh](https://executor.sh),
 [UsefulSoftwareCo/executor](https://github.com/UsefulSoftwareCo/executor),
-licence MIT). V Lazuriu spravuje MCP servery Environmentu: server se přidá
-jednou do Executoru a všichni agenti v Chatu i boti v Automate ho dostanou
-přes jedno napojení. Platí rozhodnutí 0162, dodatek z 2026-10-09.
+licence MIT). V Lazuriu drží přímé Integrace Environmentu a jeho vlastní
+MCP servery: Integrace se připojí jednou a všichni agenti v Chatu i boti
+v Automate ji dostanou přes jedno napojení. Platí rozhodnutí 0162, dodatek
+z 2026-10-09.
 
 ## Model
 
-- Executor běží v každém Environmentu jako služba jeho uživatele, jen na
-  localhostu. Neběží na Conglomerate Hostu, nesdílí se mezi Environmenty
-  a Executor Cloud se nepoužívá.
+- Executor je povinná součást každého Environmentu a instaluje ho Lazurio.
+  Běží jako služba uživatele Environmentu, jen na localhostu. Neběží na
+  Conglomerate Hostu, nesdílí se mezi Environmenty a Executor Cloud se
+  nepoužívá.
+- Lidé Executor ovládají jen z Launchpadu (Apps → Integrace). Konzoli
+  Executoru používají agenti a servisní přístup při potížích; lidé do ní
+  nemají žádný vstup.
 - Připojení a hesla, která v něm vzniknou, zůstávají v Environmentu. Kdo
   potřebuje jiné přístupy, zakládá další Environment.
-- Vedle Executoru může být zapnuté Composio s vlastním účtem operátora
-  ([composio.md](composio.md)). Agent hledá nástroj nejdřív v Executoru,
-  potom v Composiu.
+- Každá Integrace má v Environmentu jednu cestu: nástrojem z Nastavení →
+  Nástroje, přímo přes Executor, nebo přes Composio s vlastním účtem
+  člověka ([composio.md](composio.md)), pokud je povolené. Agent ji použije
+  v pořadí nástroj aplikace, Executor, Composio.
+- Firemní aplikace Google Workspace a Microsoft 365 nastavuje Admin
+  v Dashboardu s agentem; do Executoru každého Environmentu se dostanou
+  podle rozhodnutí 0194. Pak se Gmail, Outlook a další připojují přímo.
 - Teď používáme Executor 1. Na Executor 2 přejdeme, až vyjde stabilní.
   Executor neforkujeme; co nám chybí, posíláme upstreamu.
 
@@ -81,8 +90,10 @@ stejně, jakmile to umí fork MausBotu (plán DEV-6626).
 
 ## MCP servery a připojení
 
-Server přidá operátor v konzoli tlačítkem Add integration, nebo agent na
-jeho pokyn příkazovou řádkou:
+Lidé připojují Integrace v Launchpadu (Apps → Integrace); Launchpad k tomu
+používá rozhraní Executoru uvnitř Environmentu. Dokud stránka Integrace
+nevznikne, připojí Integraci v pilotu agent na výslovný pokyn člověka
+příkazovou řádkou a přihlášení dokončí člověk v prohlížeči Environmentu:
 
 ```sh
 executor call executor mcp probeEndpoint '{"endpoint":"https://mcp.example.com/mcp"}'
@@ -120,10 +131,11 @@ executor call tools <integrace> <owner> <připojení> <nástroj> '<json>'
 Například
 `executor call tools deepwiki org default read_wiki_structure '{"repoName":"owner/repo"}'`.
 
-## Konzole
+## Konzole (jen pro agenty a servisní přístup)
 
-Konzole běží na `http://localhost:4789` v prohlížeči Environmentu.
-`executor open` ji otevře rovnou přihlášenou.
+Lidé do konzole nechodí, všechno dělají v Launchpadu. Agent nebo servisní
+přístup ji při potížích otevře v prohlížeči Environmentu na
+`http://localhost:4789`; `executor open` ji otevře rovnou přihlášenou.
 
 - Karta „Connect an agent“ ukazuje přístupový token čitelně. Nesdílej
   screenshot ani obrazovku s ní a token z ní nekopíruj; agenti ho
@@ -148,8 +160,10 @@ Konzole běží na `http://localhost:4789` v prohlížeči Environmentu.
 
 - Používat všechny integrace Executoru. Uvnitř Environmentu se přístupy
   nedělí.
-- Přidat MCP server na pokyn operátora, vždy do Executoru Environmentu, ne
-  jen do svého nástroje.
+- Integraci nikdy nepřipojit sám: přihlášení je souhlas člověka, proto
+  agent pošle odkaz na kartu v Apps → Integrace.
+- Vlastní MCP server přidat jen na výslovný pokyn člověka, vždy do
+  Executoru Environmentu, ne jen do svého nástroje.
 - Navenek viditelný zápis udělat jen na pokyn Operátora.
 - Kde Executor neběží, nainstalovat ho na pokyn operátora podle tohoto
   runbooku.

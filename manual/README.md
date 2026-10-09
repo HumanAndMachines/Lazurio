@@ -40,7 +40,7 @@ Maintenance agent před zásahem ověřuje:
   externí aplikace: lokálně kurátorované MCP servery a CLI místo cloudových
   konektorů, tracked katalog integrací v repu Organizace, žebříček výběru,
   per-machine aktivace a custody; per-provider runbooky v
-  `manual/integrations/`, MCP servery Environmentu přes Executor 1
+  `manual/integrations/`, přímé Integrace přes Executor 1
   v `manual/integrations/executor.md`.
 - `manual/codex-manual-mcp-integrations.md` — Codex-specifický runbook pro
   ruční přidání lokálních STDIO a vzdálených HTTP MCP serverů; obsahuje
@@ -160,9 +160,9 @@ runtime/cache cesty, ne custody source of truth.
 - [Napojení na externí aplikace](external-app-integrations.md) — závazný
   standard lokálních MCP/CLI integrací, org katalogu a per-machine custody;
   per-provider runbooky pro Google Workspace, Microsoft 365, Slack, Atlassian,
-  LinkedIn a Canva v [integrations/](integrations/); MCP servery Environmentu
-  spravuje [Executor 1](integrations/executor.md), Composio je volitelný
-  ([composio.md](integrations/composio.md)).
+  LinkedIn a Canva v [integrations/](integrations/); přímé Integrace
+  drží [Executor 1](integrations/executor.md), snadná cesta přes server
+  třetí strany je [Composio](integrations/composio.md).
 - [Ruční MCP integrace pro Codex](codex-manual-mcp-integrations.md) — bezpečný
   per-machine postup jako Codex část standardu; přímé STDIO/HTTP varianty
   Docker nepotřebují.

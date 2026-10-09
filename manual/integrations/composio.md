@@ -1,11 +1,11 @@
-# Composio: volitelné napojení aplikací vlastním účtem
+# Composio: snadná cesta Integrací přes server třetí strany
 
-Stav k 2026-10-09: Composio je volitelný nástroj Lazuria. Zapíná se
-a přihlašuje v Nastavení Launchpadu → Nástroje na každém Environmentu, kde
-ho operátor chce (rozhodnutí 0162, sekce Nastavení vydaná v LazurioPlatform
-0.1.8). MCP servery Environmentu spravuje Executor 1
-([executor.md](executor.md), dodatek 0162 z 2026-10-09). Tento runbook
-popisuje model Composia.
+Stav k 2026-10-09: Composio je jedna ze tří cest Integrací (rozhodnutí 0162,
+dodatek z 2026-10-09). Připojí jedním klikem mnoho aplikací, ale jde přes
+server Composia a s vlastním účtem člověka. Zapíná se a přihlašuje
+v Nastavení Launchpadu → Nástroje (sekce vydaná v LazurioPlatform 0.1.8).
+Přímou cestu z Environmentu drží Executor 1 ([executor.md](executor.md)).
+Tento runbook popisuje model Composia.
 
 ## Model
 
@@ -31,21 +31,25 @@ Organizace, která chce přehled, si založí vlastní Composio organizaci a ž�
 operátory, aby se přihlašovali do ní. Je to samostatně spravovaná služba mimo
 Lazurio Dashboard. Lazurio Environment to nevynucuje.
 
-## Vedle Executoru (dodatek 0162 z 2026-10-09)
+## V modelu Integrací (dodatek 0162 z 2026-10-09)
 
-- Composio a Executor se doplňují. Executor spravuje MCP servery
-  Environmentu, Composio připojuje aplikace pod účtem operátora.
-- Agent hledá nástroj nejdřív v Executoru; co tam není, vezme z Composia.
-  Návody Folderu toto pořadí převezmou, až bude Executor v katalogu
-  Nástrojů (plán DEV-6626).
-- Na stránce Apps → Připojené aplikace jsou záložky Vše a Připojené
-  obrazovkou Composia nad účtem přihlášeným v Nastavení. Záložka MCP servery
-  je Executor. Stránka teprve vzniká (plán DEV-6626).
-- Organizace, které Composio používají, ho mají dál beze změny. Nic se
-  nemigruje a nikdo se nepřipojuje znovu.
+- Integrace má v Environmentu jednu cestu: nástrojem, přímo přes Executor,
+  nebo přes Composio. Přímo se připojuje, kde je to stejně snadné; Composio
+  zbývá pro aplikace, které přímo jednoduše nejdou (třeba Google
+  a Microsoft bez firemní aplikace, Salesforce nebo Zoom).
+- Zda se Composio smí používat, rozhoduje na pracovních Environmentech
+  Organizace v nastavení Organizace (rozhodnutí 0194): nová Organizace ho
+  má vypnuté, Organizace, které ho už používají, zapnuté. Na osobním
+  Environmentu rozhoduje člověk sám a Composio je tam snadná výchozí cesta.
+- Organizace, které Composio používají, nic nemigrují a nikdo se
+  nepřipojuje znovu.
 - Composio nemá žádné režimy. Firemní Composio organizace s projektem na
-  Environment, broker ani fork Composio CLI se nestaví (dodatek 2026-10-08
-  je v tomto zrušený).
+  Environment ani broker se nestaví (dodatek 2026-10-08 je v tomto
+  zrušený). Fork `Lazurio/composio` zůstává pro drobné úpravy CLI.
+- Composio účet může mít víc organizací a CLI vidí jen tu, do které je
+  přihlášené. Launchpad proto u composia ukazuje organizaci Composia
+  a připojuje aplikace do ní; připojení z webu Composia v jiné organizaci
+  agent nevidí.
 - Všechno, kam je Environment přihlášený, mají vždy všichni jeho agenti
   i boti. Uvnitř Environmentu se přístupy nedělí; jiné přístupy znamenají
   další Environment.
@@ -59,13 +63,14 @@ Lazurio Dashboard. Lazurio Environment to nevynucuje.
   nedrží a nikam je nezapisuje.
 - Na mašině s více Organizacemi volit nástroj Organizace, pro kterou pracuje,
   a data mezi Organizacemi nepřenášet.
-- Kde ho operátor nezapnul, Composio nezřizovat. Pro MCP server nabídnout
-  Executor, pro ostatní aplikace zapnutí Composia v Launchpadu.
+- Integraci nepřipojovat sám a Composio nezřizovat, kde zapnuté není:
+  poslat člověku odkaz na kartu v Apps → Integrace.
 
 ## Alternativy pro operátora
 
-- MCP servery Environmentu v Executoru ([executor.md](executor.md)).
-- Další podporované CLI nástroje z výběru Launchpadu.
+- Přímé Integrace a vlastní MCP servery v Executoru
+  ([executor.md](executor.md)).
+- Nástroje pro jednu aplikaci z výběru Launchpadu.
 
 ## Otevřené otázky
 

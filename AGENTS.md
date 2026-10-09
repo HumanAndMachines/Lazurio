@@ -645,7 +645,7 @@ Root upravuj jen když se mění:
 - Privátní osobní kontext: `personalspace/` — gitignored, mimo GitHub organizace
 - Napojení na externí aplikace (MCP/CLI) — standard
   `manual/external-app-integrations.md`, per-provider runbooky
-  `manual/integrations/`, MCP servery Environmentu přes Executor 1
+  `manual/integrations/`, přímé Integrace přes Executor 1
   `manual/integrations/executor.md`; Codex specifika
   `manual/codex-manual-mcp-integrations.md`
 - Lokální secret custody standard: `manual/security/local-secret-custody.md`;
@@ -724,21 +724,25 @@ nainstalovaný konektor se používat smí; chybí-li cesta, konektor sám
 neinstaluj — browser fallback + issue). **Napojení je věc operátora**
 (decision 0162): Environment zrcadlí svého operátora a agenti jednají tam,
 kam sahají přihlášení na té Mašině, i napříč Organizacemi; jiné přístupy
-znamenají jinou Mašinu. **MCP servery Environmentu spravuje Executor 1**
-(doporučená cesta, dodatek 0162 z 2026-10-09): běží v každém Environmentu
-jako jeho služba jen na localhostu, všichni agenti a boti ho používají přes
-jedno napojení a jeho tokeny zůstávají v Environmentu. **Composio** zůstává
-volitelný nástroj s vlastním účtem operátora: zapíná se v Nastavení
-Launchpadu (Nástroje), přihlašuje přes prohlížeč jako `gh` a klíče se
-nekopírují; Organizace, které ho používají, ho mají dál beze změny. Další
-podporovaná CLI vybírá operátor z katalogu Launchpadu; nic se centrálně
-nevynucuje. Kde Executor ještě neběží, nastaví ho Agent na pokyn operátora
-podle `manual/integrations/executor.md`. Při práci hledá Agent nástroj
-nejdřív v Executoru, potom v Composiu; nástroj katalogu určený pro jednu
-aplikaci pro ni platí dál (vždy `gh` pro GitHub). Výchozí pořadí nového
-napojení: oficiální MCP poskytovatele přidaný do Executoru → oficiální CLI →
-Composio → reviewnutý pinned OSS → browser fallback; scraping/cookie-session
-servery nikdy. Napojená aplikace je ve
+znamenají jinou Mašinu. **Aplikace připojené k Environmentu jsou
+Integrace** (dodatek 0162 z 2026-10-09) a každá má právě jednu cestu:
+nástrojem z Nastavení Launchpadu → Nástroje (`gh`, `wacli`…), přímo přes
+Executor 1, povinnou službu každého Environmentu, jejíž přístupy zůstávají
+v Environmentu, nebo přes Composio s vlastním účtem člověka, pokud ho
+Organizace (na osobním Environmentu člověk) povolila. Při práci použij
+Integraci tam, kde je připojená, v pořadí nástroj aplikace, Executor,
+Composio. Integraci nikdy nepřipojuj sám, protože přihlášení je souhlas
+člověka: pošli mu odkaz na její kartu v Apps → Integrace. Jen na jeho
+výslovný pokyn smíš přidat vlastní MCP server do Executoru; kde Executor
+ještě neběží, nastav ho na pokyn operátora podle
+`manual/integrations/executor.md`. Konzoli Executoru používají agenti
+a servisní přístup, lidé všechno dělají v Launchpadu. Nastavení celé
+Organizace (třeba povolení Composia nebo firemní aplikace Google
+a Microsoftu) mění Admin v Dashboardu a do Environmentů se dostane podle
+decision 0194. Výchozí pořadí nového napojení: oficiální MCP poskytovatele
+přidaný do Executoru → oficiální CLI → Composio → reviewnutý pinned OSS →
+browser fallback; scraping/cookie-session servery nikdy. Napojená aplikace
+je ve
 výchozím stavu ke čtení, zápisu i mazání, rozsah omezuje operátor; schopnost
 zápisu není souhlas s Publikací. Agent na Mašině s více Organizacemi volí
 nástroj Organizace, pro kterou pracuje, a data mezi Organizacemi nepřenáší.
