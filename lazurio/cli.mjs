@@ -49,6 +49,11 @@ import {
   renderHumanOrganizationActivation,
 } from "./organization-activation-lib.mjs";
 import {
+  checkOrganizationRoot,
+  organizationCheckExitCode,
+  renderHumanOrganizationCheck,
+} from "./organization-check-lib.mjs";
+import {
   installOrganization,
   organizationInstallExitCode,
   renderHumanOrganizationInstall,
@@ -126,6 +131,13 @@ async function run(argv) {
   }
 
   if (options.command === "organization") {
+    if (options.organizationAction === "check") {
+      const report = checkOrganizationRoot({ organizationRoot: options.organizationCheckRoot });
+      console.log(options.json
+        ? JSON.stringify(report, null, 2)
+        : renderHumanOrganizationCheck(report));
+      return organizationCheckExitCode(report);
+    }
     if (options.organizationAction === "activate") {
       const report = checkOrganizationActivation({
         githubOrganizationId: options.githubOrganizationId,
@@ -338,6 +350,7 @@ function parseArgs(argv) {
     write: false,
     finalize: false,
     migrateRoot: null,
+    organizationCheckRoot: null,
     githubOrganizationId: null,
     organizationRole: null,
     apply: false,
@@ -666,11 +679,23 @@ function parseArgs(argv) {
       throw new Error(`${[...parsed.searchFlags].join(", ")} lze použít pouze s příkazem search.`);
     }
     const action = parsed.operands[0];
-    if (!new Set(["activate", "install"]).has(action)) {
-      throw new Error("organization vyžaduje `activate` nebo `install`.");
+    if (!new Set(["activate", "check", "install"]).has(action)) {
+      throw new Error("organization vyžaduje `activate`, `check` nebo `install`.");
     }
     parsed.organizationAction = action;
-    if (action === "activate") {
+    if (action === "check") {
+      if ((!parsed.help && parsed.operands.length !== 2) || parsed.operands.length > 2) {
+        throw new Error("organization check vyžaduje <organization-root>.");
+      }
+      if (parsed.rootExplicit) {
+        throw new Error("organization check přijímá explicitní <organization-root>, nepřijímá --root.");
+      }
+      if (parsed.check) throw new Error("--check lze použít pouze s `lazurio organization activate`.");
+      if (parsed.githubOrganizationId !== null) {
+        throw new Error("--github-id lze použít pouze s `lazurio organization activate`.");
+      }
+      parsed.organizationCheckRoot = parsed.operands[1] ? resolve(parsed.operands[1]) : null;
+    } else if (action === "activate") {
       if (parsed.operands.length !== 1) throw new Error("organization activate nepřijímá GitHub login.");
       if (!parsed.check) {
         throw new Error("Remote writer zatím není veřejný; použij `lazurio organization activate --check --github-id <id>`.");
@@ -815,6 +840,8 @@ function usage() {
     "  lazurio --version [--json]",
     "  lazurio install [--language cs|en] [--json]",
     "  lazurio organization activate --check --github-id <id> [--json]",
+    "  lazurio organization check <organization-root> [--json]",
+    "    read-only: ověří Organization manifest (stav, schéma, settings) a vypíše platná nastavení; exit 1 = neplatný root (pro CI)",
     "  lazurio organization install <github-login> [--role builder|steward] [--json]",
     "    bez --role: Admin instalace včetně restricted (Admin-only) slotů",
     "    --role builder|steward: read-only GitHub readiness gate; restricted sloty zůstanou mimo scope bez provider operace",
