@@ -760,9 +760,10 @@ function isPythonAppSource(file) {
 // App reads LAZURIO_RUNTIME_SIBLING_<SLUG>_ORIGIN only for a sibling it
 // declares as a Module slot; the Launchpad passes nothing else. `code` is
 // the source without comments (siblingReadSource); only reads of the
-// environment count, a name in a string or a log message does not. A name
-// passed through a constant or composed at runtime is not visible
-// (measure-only, decision 0173).
+// environment count, a bare name in a string or a log message does not.
+// Strings and template text are not masked, so text that spells out a read
+// (`"process.env.<NAME>"`) counts as one; a name passed through a constant
+// or composed at runtime is not visible (measure-only, decision 0173).
 export function siblingOriginFindings(code, declaredModules) {
   const declared = new Map([...declaredModules].map((slug) => [siblingVariableKey(slug), slug]));
   const names = [];

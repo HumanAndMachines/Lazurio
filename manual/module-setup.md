@@ -197,7 +197,10 @@ nese sekci `standard` se stabilním seznamem třinácti kontrol v pořadí
   a `os.environ[...]`, `os.environ.get(...)`, `os.getenv(...)` v Pythonu
   (mimo testy). Komentáře (i HTML a JSX komentáře v Astro šabloně) a pouhou
   zmínku jména v textu nebo hlášce nepočítá; jméno předané přes konstantu
-  nebo skládané za běhu nevidí.
+  nebo skládané za běhu nevidí. Řetězce a text šablony nemaskuje: text,
+  který čtení doslova opisuje (například `"process.env.<JMÉNO>"` v hlášce
+  nebo v markupu Astro), hlásí jako čtení. Nález opravíš přeformulováním
+  textu nebo deklarací souseda.
 - `details` jsou konkrétní nálezy s cestou relativní ke kořeni Modulu;
   `action` říká, co udělat; `repairs` jsou mechanické opravy, které zapíše
   `--apply`.
