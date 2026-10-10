@@ -175,11 +175,12 @@ Organizace na témže Environmentu, deklaruje ho v
 
 - **Kdy proměnná je.** Launchpad ji počítá při každém startu App (i po
   restartu) ze současného leasu souseda, jen pro Modul vlastní Organizace,
-  který App deklaruje jako slot Modulu, Organization manifest ho deklaruje,
-  leží vedle a jde přečíst, a jehož výchozí App má HTTP(S) vstupní listener.
-  Na tom, zda soused právě běží, nezávisí. Workstation i Remote Environment ji
-  dostávají stejně. Modul jiné Organizace, Modul Personalspace, nedeklarovaný
-  soused, datový mount ani vlastní Modul nedostanou nic.
+  který App deklaruje jako slot Modulu a jehož výchozí App má čitelný HTTP(S)
+  vstupní listener. Na tom, zda soused právě běží, nezávisí. Workstation
+  i Remote Environment ji dostávají stejně. Modul jiné Organizace, Modul
+  Personalspace, nedeklarovaný soused, datový mount ani vlastní Modul
+  nedostanou nic. Deklarovaný soused, který na Environmentu není, proměnnou
+  nedostane, protože App se vůbec nespustí (decision 0176 bod 4, tabulka níže).
 - **Loopback, ne pro prohlížeč.** Volání nejde přes bránu Environmentu, jejíž
   pravidla se nemění (session cookie se Modulům odebírá, zápis přichází jen ze
   stejného originu). App adresu nikdy nedá prohlížeči: žádný odkaz,
@@ -204,9 +205,10 @@ Selhání a co s nimi dělá App:
 | Soused deklarovaný, leží vedle, běží | je | volání projde |
 | Soused zastavený, startuje nebo padá | je | spojení odmítnuto nebo odpověď 5xx: App odpoví svému volajícímu typovanou chybou (např. 503 „soused na tomto Environmentu neběží“), ve smyčce neopakuje a souseda nespouští; nespouští ho ani Launchpad |
 | Lease souseda přesunutý (reviewovaný PR, pak `lazurio update`) | stará hodnota do restartu volající App | jako zastavený soused; běžící App si drží prostředí, se kterým startovala, a novou adresu dostane při dalším startu (Stop a Start jednou) |
-| Deklarovaný soused chybí (není materializovaný, je `planned_slot`, nejde přečíst, nemá App) | není | App běží dál a funkce souseda hlásí jako nedostupné; typovaný nález připravenosti podle decision 0176 bodu 4 doplní Launchpad (Lazurio/LazurioPlatform#128) |
+| Deklarovaný soused (i jiný povinný slot, třeba datový mount) na Environmentu není: Organization manifest ho nedeklaruje, je `planned_slot`, nebo vedle neleží | — | Launchpad App **nespustí**, a to ještě před instalací závislostí: typovaný nález připravenosti podle decision 0176 bodu 4. Launchpad Platformy vrátí `required-slot-undeclared`, `required-slot-planned` nebo `required-slot-missing` se slotem, Launchpad tohoto repa `required_slot_unavailable` nebo `planned_slot`. Stejný nález v katalogu, Diagnostice a doctoru doplní Lazurio/LazurioPlatform#128 |
+| Soused leží vedle, ale jeho výchozí App nejde přečíst nebo nemá HTTP(S) vstup | není | App startuje (slot na Environmentu je); volání souseda odpoví typovanou chybou „adresa souseda nebyla předána“ a vadu opraví správce souseda |
+| Soused leží vedle, ale Launchpad proměnnou nepředává (Launchpad tohoto repa, starší vydání Platformy) | není | App běží dál a funkce souseda odpoví typovanou chybou „adresa souseda nebyla předána“; port nehádá a manifest souseda nečte |
 | Soused nedeklarovaný nebo deklarovaný jen jako `workspace/<slug>/db` | není | čtení proměnné je vada `MS-06` |
-| Launchpad, který proměnnou nepředává (Launchpad tohoto repa, starší vydání Platformy) | není | jako chybějící soused |
 | Hodnota není přesný loopback origin | — | exit 2 při startu |
 
 **Mezikrok.** Proměnnou předává Launchpad LazurioPlatform od vydání, které tento
@@ -214,7 +216,7 @@ kontrakt zavádí (Lazurio/LazurioPlatform#246). Launchpad tohoto repa
 (`lazurio launchpad serve`, `lazurio module start`) ji nepředává a nedostane ji
 (decision 0167). Modul, který dosud volal souseda po portu z jeho leasu, se na
 proměnnou převádí až na Environmentu, kde takové vydání běží; do té doby by
-jeho volání souseda skončilo jako „chybí“.
+jeho volání souseda skončilo chybou „adresa souseda nebyla předána“.
 
 ### 4.3 Konfigurace a tajemství
 
@@ -471,7 +473,7 @@ volný port a přesun je ruční úprava manifestu v PR Modulu.
 | `MS-03` | `lazurio.runtime` s listenery a health; `dev_script` existuje; platná deklarace `secrets` je `warn`, dokud ji Launchpad nečte (kap. 4.3) |
 | `MS-04` | `lazurio.preparation` deklarované; `check_script` existuje; `runtime` chybí (= `bun`) nebo `uv`; `runtime: "bun"` zapsané explicitně je do W0-5 vada (Platforma ho odmítne); `prepare_script`/`check_script` nejsou npm lifecycle jména |
 | `MS-05` | `dev` skript je jednoprocesový: bez `&&`, `concurrently`, `build`, `npx`, `node`, `bunx`, `nvm`, inline `VAR=…` |
-| `MS-06` | žádné čtení `LAZURIO_RUNTIME_HOST`, `LAZURIO_RUNTIME_PORT`, `PORT`, `COMPANYASCODE_*`, lease souboru (`lazurio.module.json` kteréhokoli Modulu) ani `package.json` sousedního Modulu ze zdrojů App; `LAZURIO_RUNTIME_SIBLING_<SLUG>_ORIGIN` jen pro souseda, kterého App deklaruje jako slot Modulu `workspace/<slug>` (decision 0176 dodatek z 2026-10-10; jméno skládané za běhu kontrola nevidí); port leasu není ve zdrojích App zapsaný natvrdo |
+| `MS-06` | žádné čtení `LAZURIO_RUNTIME_HOST`, `LAZURIO_RUNTIME_PORT`, `PORT`, `COMPANYASCODE_*`, lease souboru (`lazurio.module.json` kteréhokoli Modulu) ani `package.json` sousedního Modulu ze zdrojů App; `LAZURIO_RUNTIME_SIBLING_<SLUG>_ORIGIN` čtené z prostředí (`process.env`, `Bun.env`, `import.meta.env`, v Pythonu `os.environ`, `os.getenv`) jen pro souseda, kterého App deklaruje jako slot Modulu `workspace/<slug>` (decision 0176 dodatek z 2026-10-10; zmínka jména v textu se nepočítá, jméno předané přes konstantu nebo skládané za běhu kontrola nevidí); port leasu není ve zdrojích App zapsaný natvrdo |
 | `MS-07` | žádné `.env*` na start cestě; žádné `dotenv`; každé volání Bun na start cestě s `--no-env-file` před vstupem a bez `--env-file`; náhradou `.env` u tajemství je `lazurio.runtime.secrets` (kap. 4.3) |
 | `MS-08` | TypeScript strict; žádné `.js/.mjs/.cjs` zdroje App (config frameworku v TS) |
 | `MS-09` | žádné importy ani relativní cesty mimo repo (`../` nad kořen Modulu, `file:` mimo repo, kód jiného Modulu, `launchpad/`, `infra/`, `design-system/`); výjimkou je jen čtení `db/` a `generated/` sousedního Modulu v `../<slug>/`, který App deklaruje v `required_module_slots` (decision 0176) |

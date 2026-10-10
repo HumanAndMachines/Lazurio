@@ -142,8 +142,10 @@ ani pro productionspace repa (decision 0041).
       ho jako slot Modulu `workspace/<slug>` a jeho adresu čti jen
       z `LAZURIO_RUNTIME_SIBLING_<SLUG>_ORIGIN` (loopback, předá ji Launchpad
       Platformy; decision 0176 dodatek z 2026-10-10, kap. 4.2): neplatná
-      hodnota = exit 2, chybějící = soused nedostupný a App běží dál,
-      odmítnuté spojení = typovaná chyba (503) bez opakování; adresu nikdy
+      hodnota = exit 2; chybějící proměnná (Launchpad bez podpory) =
+      funkce souseda odpoví typovanou chybou a App běží dál; App, jejíž
+      deklarovaný soused na Environmentu není, Launchpad nespustí (0176
+      bod 4); odmítnuté spojení = typovaná chyba (503) bez opakování; adresu nikdy
       nedávej prohlížeči a na zápis pošli `Origin` rovný této adrese. Převod
       z portu z leasu souseda na proměnnou mergni až tam, kde běží vydání
       Platformy, které ji předává. Start bránu podle Teamu z App odstraň. Zápis jednajícího
