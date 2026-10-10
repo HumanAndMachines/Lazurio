@@ -188,6 +188,19 @@ nese sekci `standard` se stabilním seznamem třinácti kontrol v pořadí
   Tvar deklarace (jména `^[A-Z][A-Z0-9_]*$`, neprázdné, bez duplicit)
   hlídá Core runtime kontrakt; vadná deklarace končí `runtime_contract_invalid`.
   Platná deklarace je `warn` `MS-03`, dokud ji vydání Launchpadu nečte.
+- `MS-06` hlásí čtení `LAZURIO_RUNTIME_SIBLING_<SLUG>_ORIGIN` (adresa API
+  sousedního Modulu, standard kap. 4.2) pro souseda, kterého App nedeklaruje
+  v `lazurio.runtime.required_module_slots` jako slot Modulu
+  `workspace/<slug>`; datový mount `workspace/<slug>/db` adresu nedává.
+  Počítá jen čtení z prostředí: `process.env`, `Bun.env` a `import.meta.env`
+  (tečkou, v hranatých závorkách i destrukturováním) ve zdrojích JS/TS/Astro
+  a `os.environ[...]`, `os.environ.get(...)`, `os.getenv(...)` v Pythonu
+  (mimo testy). Komentáře (i HTML a JSX komentáře v Astro šabloně) a pouhou
+  zmínku jména v textu nebo hlášce nepočítá; jméno předané přes konstantu
+  nebo skládané za běhu nevidí. Řetězce a text šablony nemaskuje: text,
+  který čtení doslova opisuje (například `"process.env.<JMÉNO>"` v hlášce
+  nebo v markupu Astro), hlásí jako čtení. Nález opravíš přeformulováním
+  textu nebo deklarací souseda.
 - `details` jsou konkrétní nálezy s cestou relativní ke kořeni Modulu;
   `action` říká, co udělat; `repairs` jsou mechanické opravy, které zapíše
   `--apply`.

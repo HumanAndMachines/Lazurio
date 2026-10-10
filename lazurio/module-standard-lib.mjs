@@ -20,7 +20,7 @@ export const MODULE_STANDARD_CHECKS = Object.freeze([
   { id: "MS-03", summary: "lazurio.runtime má listenery s health a dev_script existuje" },
   { id: "MS-04", summary: "lazurio.preparation je deklarované, check_script existuje a runtime je bun nebo uv" },
   { id: "MS-05", summary: "dev skript spouští právě jeden proces" },
-  { id: "MS-06", summary: "App nečte legacy LAZURIO_RUNTIME_HOST/PORT, PORT, COMPANYASCODE_*, lease soubor ani manifest sousedního Modulu a port leasu nemá zapsaný natvrdo" },
+  { id: "MS-06", summary: "App nečte legacy LAZURIO_RUNTIME_HOST/PORT, PORT, COMPANYASCODE_*, lease soubor ani manifest sousedního Modulu, adresu souseda čte jen pro deklarovaný Modul a port leasu nemá zapsaný natvrdo" },
   { id: "MS-07", summary: "žádné .env* na start cestě, žádné dotenv a Bun se spouští s --no-env-file" },
   { id: "MS-08", summary: "TypeScript strict a žádné .js/.mjs/.cjs zdroje App" },
   { id: "MS-09", summary: "žádné importy ani cesty mimo repozitář Modulu kromě čtení dat deklarovaného sousedního Modulu v ../<slug>/" },
@@ -36,7 +36,7 @@ const CHECK_ACTIONS = Object.freeze({
   "MS-03": "Doplň lazurio.runtime s listenery, health a existujícím dev_script podle manual/module-setup.md.",
   "MS-04": "Doplň lazurio.preparation s check_script (read-only package skript) podle lazurio-preparation.schema.json.",
   "MS-05": "Zjednoduš dev skript na jeden dlouho běžící proces; build, guardy a další procesy patří do přípravy nebo do App.",
-  "MS-06": "Čti host a port jen z LAZURIO_RUNTIME_LISTENER_<ID>_HOST/_PORT (ideálně přes @lazurio/module-kit) a bez nich skonči chybou; port leasu žije jen v lazurio.module.json. Adresu App sousedního Modulu odvoď z vlastního LAZURIO_RUNTIME_LISTENER_<ID>_EXTERNAL_ORIGIN, ne z jeho manifestu (decision 0176).",
+  "MS-06": "Čti host a port jen z LAZURIO_RUNTIME_LISTENER_<ID>_HOST/_PORT (ideálně přes @lazurio/module-kit) a bez nich skonči chybou; port leasu žije jen v lazurio.module.json. Odkaz na App sousedního Modulu pro prohlížeč odvoď z vlastního LAZURIO_RUNTIME_LISTENER_<ID>_EXTERNAL_ORIGIN; API souseda volej ze serveru na LAZURIO_RUNTIME_SIBLING_<SLUG>_ORIGIN a souseda deklaruj jako slot Modulu workspace/<slug> v lazurio.runtime.required_module_slots, nikdy z jeho manifestu (decision 0176 a dodatek z 2026-10-10).",
   "MS-07": "Odstraň .env soubory a dotenv a spouštěj Bun s --no-env-file; konfigurace je runtime env plus commitnuté config soubory, tajemství deklaruj v lazurio.runtime.secrets (trezor Environmentu).",
   "MS-08": "Zapni strict v tsconfig.json (nebo extends strict preset) a převeď .js/.mjs/.cjs zdroje a configy na TypeScript.",
   "MS-09": "Nahraď importy mimo repo verzovanou závislostí nebo kód vlož do Modulu, který ho jediný používá. Data sousedního Modulu čti jen jako ../<slug>/ od kořene Modulu a souseda deklaruj v lazurio.runtime.required_module_slots App (decision 0176).",
@@ -267,15 +267,20 @@ export async function evaluateModuleStandard({
       }
     }
 
-    // MS-06 legacy host/port authority in sources
+    // MS-06 legacy host/port authority in sources, sibling addresses of
+    // undeclared Modules
     // MS-09 imports and paths outside the Module (declared siblings excepted)
     // MS-11 absolute machine paths
     const siblings = declaredSiblingSlugs({ slotPath, moduleId: manifest?.id, runtime });
+    const siblingModules = declaredSiblingSlugs({ slotPath, moduleId: manifest?.id, runtime, modulesOnly: true });
     for (const file of appSources) {
       const text = await readText(join(root, ...file.path.split("/")));
       if (text === null) continue;
       for (const finding of legacyRuntimeReads(text)) {
         record("MS-06", "fail", `${file.path}: čte ${finding}`);
+      }
+      for (const finding of siblingOriginFindings(siblingReadSource(text, file.extension), siblingModules)) {
+        record("MS-06", "fail", `${file.path}: ${finding}`);
       }
       for (const port of leasePorts) {
         if (new RegExp(`(?<![0-9.])${port}(?![0-9]|\\.[0-9])`).test(text)) {
@@ -298,6 +303,15 @@ export async function evaluateModuleStandard({
       }
       if (/(?:\bfrom\s*|\bimport\s*|\brequire\(\s*|\bimport\(\s*)["']dotenv(?:\/[^"']*)?["']/.test(text)) {
         record("MS-07", "fail", `${file.path}: importuje dotenv`);
+      }
+    }
+    // MS-06 sibling addresses in Python sources of a `runtime: uv` App
+    // (kap. 7); the other checks of Python sources stay with the uv adapter.
+    for (const file of appFiles.filter(isPythonAppSource)) {
+      const text = await readText(join(root, ...file.path.split("/")));
+      if (text === null) continue;
+      for (const finding of siblingOriginFindings(siblingReadSource(text, file.extension), siblingModules)) {
+        record("MS-06", "fail", `${file.path}: ${finding}`);
       }
     }
 
@@ -652,8 +666,11 @@ function importBoundaryIssue({ specifier, filePath }) {
 // siblings it needs in lazurio.runtime.required_module_slots (Organization-
 // relative slots such as workspace/<slug> or its data mount workspace/<slug>/db)
 // and reaches them only as ../<slug>/ from its own Module root. Returns the
-// declared sibling slugs; an unknown slot path declares none.
-function declaredSiblingSlugs({ slotPath, moduleId, runtime }) {
+// declared sibling slugs; an unknown slot path declares none. With
+// `modulesOnly`, only slots naming the Module itself (workspace/<slug>, not
+// its data mount): the ones whose API the App may call (addendum of
+// 2026-10-10, manual/module-standard.md kap. 4.2).
+function declaredSiblingSlugs({ slotPath, moduleId, runtime, modulesOnly = false }) {
   const slugs = new Set();
   const required = Array.isArray(runtime?.required_module_slots) ? runtime.required_module_slots : [];
   if (typeof slotPath !== "string" || !slotPath.includes("/")) return slugs;
@@ -661,10 +678,111 @@ function declaredSiblingSlugs({ slotPath, moduleId, runtime }) {
   const own = posix.basename(slotPath);
   for (const slot of required) {
     if (typeof slot !== "string" || !slot.startsWith(`${parent}/`)) continue;
-    const slug = slot.slice(parent.length + 1).split("/")[0];
+    const segments = slot.slice(parent.length + 1).split("/");
+    if (modulesOnly && segments.length !== 1) continue;
+    const slug = segments[0];
     if (slug && slug !== own && slug !== moduleId) slugs.add(slug);
   }
   return slugs;
+}
+
+// The key of a sibling's address variable: its slug upper-cased, anything but
+// a letter or digit as `_`, as the Launchpad keys listener variables.
+function siblingVariableKey(slug) {
+  return slug.toUpperCase().replace(/[^A-Z0-9]/g, "_");
+}
+
+const SIBLING_ORIGIN_NAME = "LAZURIO_RUNTIME_SIBLING_[A-Z0-9_]+_ORIGIN";
+// Reads of the process environment, not mentions of the name: property and
+// bracket access on process.env, Bun.env and import.meta.env, destructuring
+// from them, and os.environ[...], os.environ.get(...), os.getenv(...) in
+// Python.
+const SIBLING_ORIGIN_READS = [
+  new RegExp(`\\b(?:process\\.env|Bun\\.env|import\\.meta\\.env)\\s*(?:(?:\\?\\.|\\.)\\s*(${SIBLING_ORIGIN_NAME})\\b|(?:\\?\\.)?\\s*\\[\\s*(["'\`])(${SIBLING_ORIGIN_NAME})\\2\\s*\\])`, "g"),
+  new RegExp(`\\b(?:os\\.)?(?:environ\\s*\\[|environ\\s*\\.\\s*get\\s*\\(|getenv\\s*\\()\\s*(["'])(${SIBLING_ORIGIN_NAME})\\1`, "g"),
+];
+const ENVIRONMENT_DESTRUCTURING = /\{([^{}]*)\}\s*=\s*(?:process\.env|Bun\.env|import\.meta\.env)\b/g;
+
+// The source MS-06 reads sibling addresses from: code without comments.
+// JavaScript, TypeScript and Astro frontmatter through Bun's transpiler; the
+// Astro template without its HTML and JSX comments; Python without `#`
+// comments (strings stay, they hold the names).
+function siblingReadSource(text, extension) {
+  if (extension === ".py") return pythonWithoutComments(text);
+  const { code } = transpiledSource(text, extension);
+  return extension === ".astro"
+    ? code.replace(/<!--[\s\S]*?-->/g, " ").replace(/\{\s*\/\*[\s\S]*?\*\/\s*\}/g, " ")
+    : code;
+}
+
+function pythonWithoutComments(text) {
+  let output = "";
+  let quote = null;
+  for (let index = 0; index < text.length; index++) {
+    const character = text[index];
+    if (quote) {
+      output += character;
+      if (character === "\\") {
+        output += text[index + 1] ?? "";
+        index++;
+      } else if (text.startsWith(quote, index)) {
+        output += quote.slice(1);
+        index += quote.length - 1;
+        quote = null;
+      }
+      continue;
+    }
+    if (character === "#") {
+      while (index < text.length && text[index] !== "\n") index++;
+      output += "\n";
+      continue;
+    }
+    if (character === "'" || character === '"') {
+      quote = text.startsWith(character.repeat(3), index) ? character.repeat(3) : character;
+      output += quote;
+      index += quote.length - 1;
+      continue;
+    }
+    output += character;
+  }
+  return output;
+}
+
+// A Python source of the App: not a test (test_*.py, *_test.py or in a test
+// directory) and not under public/.
+function isPythonAppSource(file) {
+  if (file.extension !== ".py" || file.test || file.public) return false;
+  const name = posix.basename(file.path);
+  return !/^test_.*\.py$|_test\.py$/.test(name);
+}
+
+// MS-06 for sibling addresses (decision 0176, addendum of 2026-10-10): an
+// App reads LAZURIO_RUNTIME_SIBLING_<SLUG>_ORIGIN only for a sibling it
+// declares as a Module slot; the Launchpad passes nothing else. `code` is
+// the source without comments (siblingReadSource); only reads of the
+// environment count, a bare name in a string or a log message does not.
+// Strings and template text are not masked, so text that spells out a read
+// (`"process.env.<NAME>"`) counts as one; a name passed through a constant
+// or composed at runtime is not visible (measure-only, decision 0173).
+export function siblingOriginFindings(code, declaredModules) {
+  const declared = new Map([...declaredModules].map((slug) => [siblingVariableKey(slug), slug]));
+  const names = [];
+  const source = String(code);
+  for (const pattern of SIBLING_ORIGIN_READS) {
+    for (const match of source.matchAll(pattern)) names.push(match.slice(1).find((group) => group?.startsWith("LAZURIO_RUNTIME_SIBLING_")));
+  }
+  for (const match of source.matchAll(ENVIRONMENT_DESTRUCTURING)) {
+    for (const name of match[1].matchAll(new RegExp(`\\b(${SIBLING_ORIGIN_NAME})\\b`, "g"))) names.push(name[1]);
+  }
+  const findings = [];
+  const seen = new Set();
+  for (const name of names) {
+    const key = /^LAZURIO_RUNTIME_SIBLING_([A-Z0-9_]+)_ORIGIN$/.exec(name ?? "")?.[1];
+    if (!key || declared.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    findings.push(`čte ${name}, ale App nedeklaruje sousední Modul jako slot workspace/<slug> v lazurio.runtime.required_module_slots`);
+  }
+  return findings;
 }
 
 // The sibling a Module-root-relative path lands in: exactly one level up and

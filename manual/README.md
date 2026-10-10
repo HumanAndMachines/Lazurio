@@ -150,6 +150,11 @@ runtime/cache cesty, ne custody source of truth.
   nenastavuje (žádný fallback na neexistující proměnnou v hosted režimu).
   Kontrakt brány Mašiny drží Machines
   `docs/workspace-application-entry.md` („What the application must do“).
+  App, která deklaruje sousední Modul jako slot `workspace/<slug>`, dostane
+  od Launchpadu Platformy navíc loopback adresu jeho výchozí App
+  `LAZURIO_RUNTIME_SIBLING_<SLUG>_ORIGIN` pro volání ze serveru, nikdy pro
+  prohlížeč (`module-standard.md` kap. 4.2, decision 0176 dodatek
+  z 2026-10-10).
 - Doctor je read-only. Když hlásí problém v Git stavu, submodulech nebo `.gitignore` ochraně runtime/private/archive cest, oprav source-of-truth soubor nebo mountpoint.
 - Secret hodnoty, OAuth URL/kódy, tokeny, hesla a obsah JSON credential souborů
   se nesmí posílat chatem ani commitovat; closeout používej jen metadata-only

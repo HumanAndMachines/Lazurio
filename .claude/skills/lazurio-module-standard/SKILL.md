@@ -31,8 +31,9 @@ Zkrácený kontrakt, který drží každá App Modulu:
   `test`.
 - `dev` spouští **jeden proces serveru** a nic jiného; funguje jen s `bun` v
   `PATH`; host/port jen z `LAZURIO_RUNTIME_LISTENER_<ID>_HOST/_PORT`, externí
-  adresa z `_EXTERNAL_ORIGIN`; žádné `.env*`, `PORT`, `LAZURIO_RUNTIME_HOST`,
-  `COMPANYASCODE_*`, lease soubor.
+  adresa z `_EXTERNAL_ORIGIN`, adresa API deklarovaného souseda jen
+  z `LAZURIO_RUNTIME_SIBLING_<SLUG>_ORIGIN`; žádné `.env*`, `PORT`,
+  `LAZURIO_RUNTIME_HOST`, `COMPANYASCODE_*`, lease soubor.
 - Žádné importy mimo repo Modulu (`../../../launchpad/…`, jiný Modul,
   `infra/`, `design-system/`); sdílené věci jen jako verzované závislosti
   (`github:<owner>/<repo>#v…`), repository-db a `@lazurio/module-kit` na
@@ -134,10 +135,20 @@ ani pro productionspace repa (decision 0041).
       (`workspace/<slug>` nebo `workspace/<slug>/db`) a čti jen
       `../<slug>/…` od kořene Modulu (`db/`, read modely v `generated/`), nikdy
       přes `COMPANYASCODE_ORGANIZATION_ROOT`, jeho kód ani jeho
-      `lazurio.module.json`/`package.json`. Adresu App souseda odvoď
-      z vlastního `LAZURIO_RUNTIME_LISTENER_<ID>_EXTERNAL_ORIGIN` výměnou
-      prvního labelu hostname za slug souseda; bez té proměnné odkaz
-      nevykresli. Start bránu podle Teamu z App odstraň. Zápis jednajícího
+      `lazurio.module.json`/`package.json`. Odkaz pro prohlížeč na App
+      souseda odvoď z vlastního `LAZURIO_RUNTIME_LISTENER_<ID>_EXTERNAL_ORIGIN`
+      výměnou prvního labelu hostname za slug souseda; bez té proměnné odkaz
+      nevykresli. **Volá-li App API souseda** (serverem, i zápisem), deklaruj
+      ho jako slot Modulu `workspace/<slug>` a jeho adresu čti jen
+      z `LAZURIO_RUNTIME_SIBLING_<SLUG>_ORIGIN` (loopback, předá ji Launchpad
+      Platformy; decision 0176 dodatek z 2026-10-10, kap. 4.2): neplatná
+      hodnota = exit 2; chybějící proměnná (Launchpad bez podpory) =
+      funkce souseda odpoví typovanou chybou a App běží dál; App, jejíž
+      deklarovaný soused na Environmentu není, Launchpad nespustí (0176
+      bod 4); odmítnuté spojení = typovaná chyba (503) bez opakování; adresu nikdy
+      nedávej prohlížeči a na zápis pošli `Origin` rovný této adrese. Převod
+      z portu z leasu souseda na proměnnou mergni až tam, kde běží vydání
+      Platformy, které ji předává. Start bránu podle Teamu z App odstraň. Zápis jednajícího
       Teamu do auditní stopy je otevřený (#467): nevymýšlej pro něj nový
       zdroj, ponech ho jako jediný zbývající nález `MS-06` s odkazem na #467
       a uveď to v PR.

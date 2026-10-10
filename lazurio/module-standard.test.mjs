@@ -793,6 +793,134 @@ test("a sibling App address derived from the own external origin needs nothing f
   expect((await setupModule(fixture)).status).toBe("current");
 });
 
+test("MS-06 accepts the sibling address of a declared Module and fails it for an undeclared one or a data mount only (decision 0176, addendum of 2026-10-10)", async () => {
+  const caller = [
+    "// process.env.LAZURIO_RUNTIME_SIBLING_DEALS_ORIGIN in a comment is not a read",
+    "const pricebook = process.env.LAZURIO_RUNTIME_SIBLING_PRICEBOOK_ORIGIN;",
+    "const priceList = Bun.env[\"LAZURIO_RUNTIME_SIBLING_PRICE_LIST_ORIGIN\"];",
+    "export { pricebook, priceList };",
+  ].join("\n");
+
+  const declared = await conformantFixture({
+    mutatePackage: (pkg) => {
+      pkg.lazurio.runtime.required_module_slots = ["workspace/pricebook", "workspace/price-list"];
+    },
+  });
+  await writeText(join(declared.appRoot, "src", "siblings.ts"), `${caller}\n`);
+  runGit(declared.moduleRoot, ["add", "."]);
+  expect(check(await setupModule(declared), "MS-06")).toMatchObject({ status: "pass", details: [] });
+  expect((await setupModule(declared)).status).toBe("current");
+
+  const dataOnly = await conformantFixture({
+    mutatePackage: (pkg) => {
+      pkg.lazurio.runtime.required_module_slots = ["workspace/pricebook/db"];
+    },
+  });
+  await writeText(join(dataOnly.appRoot, "src", "siblings.ts"), `${caller}\n`);
+  await writeText(
+    join(dataOnly.appRoot, "src", "siblings.test.ts"),
+    "process.env.LAZURIO_RUNTIME_SIBLING_DEALS_ORIGIN = \"http://127.0.0.1:1\";\n",
+  );
+  expect(check(await setupModule(dataOnly), "MS-06")).toMatchObject({
+    status: "fail",
+    details: [
+      "app/v1/src/siblings.ts: čte LAZURIO_RUNTIME_SIBLING_PRICEBOOK_ORIGIN, ale App nedeklaruje sousední Modul jako slot workspace/<slug> v lazurio.runtime.required_module_slots",
+      "app/v1/src/siblings.ts: čte LAZURIO_RUNTIME_SIBLING_PRICE_LIST_ORIGIN, ale App nedeklaruje sousední Modul jako slot workspace/<slug> v lazurio.runtime.required_module_slots",
+    ],
+  });
+
+  // Reading a sibling's lease for its address stays an MS-06 finding even
+  // when the sibling is declared.
+  const lease = await conformantFixture({
+    mutatePackage: (pkg) => { pkg.lazurio.runtime.required_module_slots = ["workspace/pricebook"]; },
+  });
+  await writeText(
+    join(lease.appRoot, "src", "siblings.ts"),
+    "const lease = await Bun.file(new URL(\"../../../../pricebook/lazurio.module.json\", import.meta.url)).json();\nexport const origin = `http://127.0.0.1:${lease.port_leases[0].port}`;\n",
+  );
+  expect(check(await setupModule(lease), "MS-06").details).toEqual([
+    "app/v1/src/siblings.ts: čte lazurio.module.json (lease soubor)",
+  ]);
+});
+
+test("MS-06 counts only reads of a sibling address from the environment, in every form, never a mention of its name", async () => {
+  const undeclared = (name) => `čte LAZURIO_RUNTIME_SIBLING_${name}_ORIGIN, ale App nedeklaruje sousední Modul jako slot workspace/<slug> v lazurio.runtime.required_module_slots`;
+  const reads = await conformantFixture({ module: "reports" });
+  await writeText(
+    join(reads.appRoot, "src", "reads.ts"),
+    [
+      "const a = process.env?.LAZURIO_RUNTIME_SIBLING_ALPHA_ORIGIN;",
+      "const b = import.meta.env[`LAZURIO_RUNTIME_SIBLING_BETA_ORIGIN`];",
+      "const { LAZURIO_RUNTIME_SIBLING_GAMMA_ORIGIN: c } = Bun.env;",
+      "export { a, b, c };",
+    ].join("\n"),
+  );
+  expect(check(await setupModule(reads), "MS-06").details).toEqual([
+    `app/v1/src/reads.ts: ${undeclared("ALPHA")}`,
+    `app/v1/src/reads.ts: ${undeclared("BETA")}`,
+    `app/v1/src/reads.ts: ${undeclared("GAMMA")}`,
+  ]);
+
+  // Mentions are not reads: a message, a constant, a comment, an Astro HTML
+  // or JSX comment and template text.
+  const mentions = await conformantFixture({ module: "reports" });
+  await writeText(
+    join(mentions.appRoot, "src", "mentions.ts"),
+    [
+      "export const note = \"LAZURIO_RUNTIME_SIBLING_PRICEBOOK_ORIGIN\";",
+      "export const message = `Launchpad nepředal LAZURIO_RUNTIME_SIBLING_PRICEBOOK_ORIGIN`;",
+      "/* process.env.LAZURIO_RUNTIME_SIBLING_PRICEBOOK_ORIGIN */",
+    ].join("\n"),
+  );
+  await writeText(
+    join(mentions.appRoot, "src", "page.astro"),
+    [
+      "---",
+      "const title = \"Ceny\";",
+      "---",
+      "<!-- process.env.LAZURIO_RUNTIME_SIBLING_PRICEBOOK_ORIGIN -->",
+      "{/* process.env.LAZURIO_RUNTIME_SIBLING_PRICEBOOK_ORIGIN */}",
+      "<p>{title}: LAZURIO_RUNTIME_SIBLING_PRICEBOOK_ORIGIN</p>",
+    ].join("\n"),
+  );
+  runGit(mentions.moduleRoot, ["add", "."]);
+  expect(check(await setupModule(mentions), "MS-06")).toMatchObject({ status: "pass", details: [] });
+});
+
+test("MS-06 reads sibling addresses in the Python sources of a uv App too", async () => {
+  const uvApp = (slots) => conformantFixture({
+    module: "reports",
+    mutatePackage: (pkg) => {
+      pkg.lazurio.preparation.runtime = "uv";
+      pkg.lazurio.preparation.uv_version = "0.8.4";
+      if (slots) pkg.lazurio.runtime.required_module_slots = slots;
+    },
+  });
+  const server = [
+    "import os",
+    "from os import environ",
+    "# os.environ[\"LAZURIO_RUNTIME_SIBLING_DEALS_ORIGIN\"] in a comment is not a read",
+    "NOTE = \"set LAZURIO_RUNTIME_SIBLING_DEALS_ORIGIN # not a comment, not a read\"",
+    "pricebook = os.environ[\"LAZURIO_RUNTIME_SIBLING_PRICEBOOK_ORIGIN\"]",
+    "price_list = os.getenv('LAZURIO_RUNTIME_SIBLING_PRICE_LIST_ORIGIN')",
+    "stock = environ.get(\"LAZURIO_RUNTIME_SIBLING_STOCK_ORIGIN\", \"\")",
+  ].join("\n");
+
+  const undeclared = await uvApp(null);
+  await writeText(join(undeclared.appRoot, "src", "reports", "server.py"), `${server}\n`);
+  await writeText(join(undeclared.appRoot, "tests", "test_server.py"), "os.environ[\"LAZURIO_RUNTIME_SIBLING_TEST_ORIGIN\"] = \"x\"\n");
+  await writeText(join(undeclared.appRoot, "src", "reports", "server_test.py"), "os.getenv(\"LAZURIO_RUNTIME_SIBLING_TEST_ORIGIN\")\n");
+  const message = (name) => `app/v1/src/reports/server.py: čte LAZURIO_RUNTIME_SIBLING_${name}_ORIGIN, ale App nedeklaruje sousední Modul jako slot workspace/<slug> v lazurio.runtime.required_module_slots`;
+  expect(check(await setupModule(undeclared), "MS-06")).toMatchObject({
+    status: "fail",
+    details: [message("PRICEBOOK"), message("PRICE_LIST"), message("STOCK")],
+  });
+
+  const declared = await uvApp(["workspace/pricebook", "workspace/price-list", "workspace/stock"]);
+  await writeText(join(declared.appRoot, "src", "reports", "server.py"), `${server}\n`);
+  expect(check(await setupModule(declared), "MS-06")).toMatchObject({ status: "pass", details: [] });
+});
+
 test("MS-10 requires released tags for repository-db and module-kit", async () => {
   const fixture = await conformantFixture({
     mutatePackage: (pkg) => {
