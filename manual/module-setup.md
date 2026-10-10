@@ -188,6 +188,12 @@ nese sekci `standard` se stabilním seznamem třinácti kontrol v pořadí
   Tvar deklarace (jména `^[A-Z][A-Z0-9_]*$`, neprázdné, bez duplicit)
   hlídá Core runtime kontrakt; vadná deklarace končí `runtime_contract_invalid`.
   Platná deklarace je `warn` `MS-03`, dokud ji vydání Launchpadu nečte.
+- `MS-06` hlásí čtení `LAZURIO_RUNTIME_SIBLING_<SLUG>_ORIGIN` (adresa API
+  sousedního Modulu, standard kap. 4.2) pro souseda, kterého App nedeklaruje
+  v `lazurio.runtime.required_module_slots` jako slot Modulu
+  `workspace/<slug>`; datový mount `workspace/<slug>/db` adresu nedává.
+  Posuzuje kód bez komentářů a jen jméno zapsané celé; jméno skládané za
+  běhu nevidí.
 - `details` jsou konkrétní nálezy s cestou relativní ke kořeni Modulu;
   `action` říká, co udělat; `repairs` jsou mechanické opravy, které zapíše
   `--apply`.

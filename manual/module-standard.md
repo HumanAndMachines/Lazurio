@@ -149,15 +149,72 @@ z `PORT`. Starý pár `LAZURIO_RUNTIME_HOST/PORT` a `PORT` se nečtou.
 Vite/Astro dev servery přijmou vlastní host jen z `_EXTERNAL_ORIGIN`
 (`server.allowedHosts`); loopback vždy. Nikdy `--host 0.0.0.0`.
 
-**Adresa App sousedního Modulu** (decision 0176). Odkaz nebo volání na App
-deklarovaného sousedního Modulu (kap. 5) na témže Environmentu App odvodí
-z vlastní `LAZURIO_RUNTIME_LISTENER_<ID>_EXTERNAL_ORIGIN`: v hostname vymění
-první label (label vlastního Modulu) za label souseda, tedy
+**Odkaz na App sousedního Modulu** (decision 0176 bod 5). Odkaz, který
+otevře člověk v prohlížeči, na App deklarovaného sousedního Modulu (kap. 5) na
+témže Environmentu App odvodí z vlastní
+`LAZURIO_RUNTIME_LISTENER_<ID>_EXTERNAL_ORIGIN`: v hostname vymění první label
+(label vlastního Modulu) za label souseda, tedy
 `https://<soused>.<environment>.<org>.lazurio.io` podle decision 0146. Nikdy ji
 neskládá z manifestu, `package.json` ani leasu cizího Modulu. Brána obsluhuje
 jen výchozí App souseda. Kde proměnná chybí (Launchpad na workstation ji dnes
 nepředává a App běží na loopbacku), adresa souseda odvoditelná není: App
-odkaz nevykreslí a port nehádá.
+odkaz nevykreslí a port nehádá. Tato adresa je pro prohlížeč; volání API
+souseda ze serveru App přes ni nevede, protože požadavek serveru nemá
+přihlášení a brána ho nepustí.
+
+**Volání API sousedního Modulu** (decision 0176, dodatek z 2026-10-10). Volá-li
+App ze svého procesu (serverem, ne prohlížečem) API sousedního Modulu téže
+Organizace na témže Environmentu, deklaruje ho v
+`lazurio.runtime.required_module_slots` jako slot Modulu `workspace/<slug>`
+(datový mount `workspace/<slug>/db` k tomu nestačí) a jeho adresu čte
+**výhradně** z proměnné, kterou předá Launchpad:
+
+| Proměnná | Hodnota |
+| --- | --- |
+| `LAZURIO_RUNTIME_SIBLING_<SLUG>_ORIGIN` | loopback origin vstupního listeneru výchozí App souseda z jeho leasu, `<protokol>://<host>:<port>` bez lomítka a cesty, např. `LAZURIO_RUNTIME_SIBLING_PRICE_LIST_ORIGIN=http://127.0.0.1:24611`; `<SLUG>` je slug souseda velkými písmeny s `-` jako `_` (stejně jako `<ID>` listeneru) |
+
+- **Kdy proměnná je.** Launchpad ji počítá při každém startu App (i po
+  restartu) ze současného leasu souseda, jen pro Modul vlastní Organizace,
+  který App deklaruje jako slot Modulu, Organization manifest ho deklaruje,
+  leží vedle a jde přečíst, a jehož výchozí App má HTTP(S) vstupní listener.
+  Na tom, zda soused právě běží, nezávisí. Workstation i Remote Environment ji
+  dostávají stejně. Modul jiné Organizace, Modul Personalspace, nedeklarovaný
+  soused, datový mount ani vlastní Modul nedostanou nic.
+- **Loopback, ne pro prohlížeč.** Volání nejde přes bránu Environmentu, jejíž
+  pravidla se nemění (session cookie se Modulům odebírá, zápis přichází jen ze
+  stejného originu). App adresu nikdy nedá prohlížeči: žádný odkaz,
+  přesměrování, data stránky ani CORS hlavička; prohlížeč dál volá vlastní App
+  a ta souseda ze serveru (např. proxy `/api/<soused>/*`). Odkaz pro člověka
+  zůstává podle odstavce výše.
+- **Co soused dostane.** Požadavek přichází z Environmentu přímo na jeho
+  listener, bez brány a bez přihlášení člověka. Přijímá-li soused zápis jen ze
+  svého originu, volající pošle `Origin` rovný adrese z proměnné. Kdo z lidí
+  akci vyvolal, volání samo nenese; zápis jednající osoby do auditní stopy
+  standard zatím neurčuje (decision 0176 bod 7).
+- **Čtení a validace.** App proměnnou čte jednou při startu. Je-li přítomná,
+  ale není to přesný loopback origin (`http`/`https`, host `127.0.0.1`,
+  `localhost` nebo `[::1]`, port, bez cesty), App skončí exit 2 s hláškou, která
+  jmenuje proměnnou, stejně jako u listeneru. Manifest, `package.json` ani lease
+  souseda nečte (`MS-06`) a port nehádá.
+
+Selhání a co s nimi dělá App:
+
+| Situace | Proměnná | Chování |
+| --- | --- | --- |
+| Soused deklarovaný, leží vedle, běží | je | volání projde |
+| Soused zastavený, startuje nebo padá | je | spojení odmítnuto nebo odpověď 5xx: App odpoví svému volajícímu typovanou chybou (např. 503 „soused na tomto Environmentu neběží“), ve smyčce neopakuje a souseda nespouští; nespouští ho ani Launchpad |
+| Lease souseda přesunutý (reviewovaný PR, pak `lazurio update`) | stará hodnota do restartu volající App | jako zastavený soused; běžící App si drží prostředí, se kterým startovala, a novou adresu dostane při dalším startu (Stop a Start jednou) |
+| Deklarovaný soused chybí (není materializovaný, je `planned_slot`, nejde přečíst, nemá App) | není | App běží dál a funkce souseda hlásí jako nedostupné; typovaný nález připravenosti podle decision 0176 bodu 4 doplní Launchpad (Lazurio/LazurioPlatform#128) |
+| Soused nedeklarovaný nebo deklarovaný jen jako `workspace/<slug>/db` | není | čtení proměnné je vada `MS-06` |
+| Launchpad, který proměnnou nepředává (Launchpad tohoto repa, starší vydání Platformy) | není | jako chybějící soused |
+| Hodnota není přesný loopback origin | — | exit 2 při startu |
+
+**Mezikrok.** Proměnnou předává Launchpad LazurioPlatform od vydání, které tento
+kontrakt zavádí (Lazurio/LazurioPlatform#246). Launchpad tohoto repa
+(`lazurio launchpad serve`, `lazurio module start`) ji nepředává a nedostane ji
+(decision 0167). Modul, který dosud volal souseda po portu z jeho leasu, se na
+proměnnou převádí až na Environmentu, kde takové vydání běží; do té doby by
+jeho volání souseda skončilo jako „chybí“.
 
 ### 4.3 Konfigurace a tajemství
 
@@ -267,8 +324,11 @@ HumanAndMachines/Lazurio#467).
   Moduly vedle sebe: chybí-li deklarovaný soused vedle běžícího checkoutu
   (není materializovaný, je `planned_slot`, nebo App běží z worktree, vedle
   kterého neleží), hlásí to Launchpad a doctor jako nález připravenosti
-  (Modul tam není spustitelný) místo pádu App za běhu. Adresu App souseda
-  drží kap. 4.2.
+  (Modul tam není spustitelný) místo pádu App za běhu. Odkaz na App souseda
+  a volání jeho API drží kap. 4.2: deklarace slotu Modulu `workspace/<slug>`
+  App dovoluje volat API souseda na adrese, kterou předá Launchpad; datový
+  mount `workspace/<slug>/db` dovoluje jen čtení dat. Do souborů souseda App
+  nezapisuje nikdy; zápis přes jeho API provede soused ve svém Modulu sám.
 - Sdílené kontrakty Organizace (`launchpad/contracts/v1`,
   `launchpad/apps/shared`) se stanou **verzovaným balíčkem** vlastněným
   Organizací (repo `<Org>/workspace-contracts`, závislost `github:<Org>/workspace-contracts#v1.x.y`) nebo se vloží do Modulu, který je jediný používá.
@@ -369,6 +429,11 @@ Launchpad (LazurioPlatform) drží **jednu politiku** pro všechny Moduly:
 
 - příprava před startem (`check_script` → `prepare_script`), start `dev`
   skriptu s uzavřeným env (F26), `umask 077`, loopback;
+- **adresy deklarovaných sousedů**: při každém startu předá za každý
+  deklarovaný slot Modulu `workspace/<slug>` vlastní Organizace
+  `LAZURIO_RUNTIME_SIBLING_<SLUG>_ORIGIN` z leasu výchozí App souseda
+  (kap. 4.2, decision 0176 dodatek z 2026-10-10); bránu Environmentu kvůli
+  tomu nemění;
 - **tajemství z trezoru**: před každým startem přečte jména z
   `lazurio.runtime.secrets` z kolekce Environmentu v trezoru Organizace
   a předá je jako `LAZURIO_RUNTIME_SECRET_<NAME>`; chybějící tajemství je
@@ -384,7 +449,8 @@ Launchpad (LazurioPlatform) drží **jednu politiku** pro všechny Moduly:
   `module-nonconformant` a odkazem na výstup `lazurio module setup`.
 
 Launchpad **nedělá**: nedědí PATH ani env operátora, nečte `.env`,
-nepíše tajemství do logů ani souborů,
+nepíše tajemství do logů ani souborů, nespouští souseda kvůli volání jiné App
+a volání mezi Moduly neproxuje,
 nespouští build ani supervizory za App, nepřebírá porty, nenabízí legacy
 `LAZURIO_RUNTIME_HOST/PORT` (odstraní jedno vydání po dokončení W2 migrace).
 
@@ -405,7 +471,7 @@ volný port a přesun je ruční úprava manifestu v PR Modulu.
 | `MS-03` | `lazurio.runtime` s listenery a health; `dev_script` existuje; platná deklarace `secrets` je `warn`, dokud ji Launchpad nečte (kap. 4.3) |
 | `MS-04` | `lazurio.preparation` deklarované; `check_script` existuje; `runtime` chybí (= `bun`) nebo `uv`; `runtime: "bun"` zapsané explicitně je do W0-5 vada (Platforma ho odmítne); `prepare_script`/`check_script` nejsou npm lifecycle jména |
 | `MS-05` | `dev` skript je jednoprocesový: bez `&&`, `concurrently`, `build`, `npx`, `node`, `bunx`, `nvm`, inline `VAR=…` |
-| `MS-06` | žádné čtení `LAZURIO_RUNTIME_HOST`, `LAZURIO_RUNTIME_PORT`, `PORT`, `COMPANYASCODE_*`, lease souboru (`lazurio.module.json` kteréhokoli Modulu) ani `package.json` sousedního Modulu ze zdrojů App; port leasu není ve zdrojích App zapsaný natvrdo |
+| `MS-06` | žádné čtení `LAZURIO_RUNTIME_HOST`, `LAZURIO_RUNTIME_PORT`, `PORT`, `COMPANYASCODE_*`, lease souboru (`lazurio.module.json` kteréhokoli Modulu) ani `package.json` sousedního Modulu ze zdrojů App; `LAZURIO_RUNTIME_SIBLING_<SLUG>_ORIGIN` jen pro souseda, kterého App deklaruje jako slot Modulu `workspace/<slug>` (decision 0176 dodatek z 2026-10-10; jméno skládané za běhu kontrola nevidí); port leasu není ve zdrojích App zapsaný natvrdo |
 | `MS-07` | žádné `.env*` na start cestě; žádné `dotenv`; každé volání Bun na start cestě s `--no-env-file` před vstupem a bez `--env-file`; náhradou `.env` u tajemství je `lazurio.runtime.secrets` (kap. 4.3) |
 | `MS-08` | TypeScript strict; žádné `.js/.mjs/.cjs` zdroje App (config frameworku v TS) |
 | `MS-09` | žádné importy ani relativní cesty mimo repo (`../` nad kořen Modulu, `file:` mimo repo, kód jiného Modulu, `launchpad/`, `infra/`, `design-system/`); výjimkou je jen čtení `db/` a `generated/` sousedního Modulu v `../<slug>/`, který App deklaruje v `required_module_slots` (decision 0176) |
