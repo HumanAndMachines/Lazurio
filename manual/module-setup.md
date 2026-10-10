@@ -192,8 +192,12 @@ nese sekci `standard` se stabilním seznamem třinácti kontrol v pořadí
   sousedního Modulu, standard kap. 4.2) pro souseda, kterého App nedeklaruje
   v `lazurio.runtime.required_module_slots` jako slot Modulu
   `workspace/<slug>`; datový mount `workspace/<slug>/db` adresu nedává.
-  Posuzuje kód bez komentářů a jen jméno zapsané celé; jméno skládané za
-  běhu nevidí.
+  Počítá jen čtení z prostředí: `process.env`, `Bun.env` a `import.meta.env`
+  (tečkou, v hranatých závorkách i destrukturováním) ve zdrojích JS/TS/Astro
+  a `os.environ[...]`, `os.environ.get(...)`, `os.getenv(...)` v Pythonu
+  (mimo testy). Komentáře (i HTML a JSX komentáře v Astro šabloně) a pouhou
+  zmínku jména v textu nebo hlášce nepočítá; jméno předané přes konstantu
+  nebo skládané za běhu nevidí.
 - `details` jsou konkrétní nálezy s cestou relativní ke kořeni Modulu;
   `action` říká, co udělat; `repairs` jsou mechanické opravy, které zapíše
   `--apply`.
