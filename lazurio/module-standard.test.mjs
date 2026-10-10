@@ -793,6 +793,56 @@ test("a sibling App address derived from the own external origin needs nothing f
   expect((await setupModule(fixture)).status).toBe("current");
 });
 
+test("MS-06 accepts the sibling address of a declared Module and fails it for an undeclared one or a data mount only (decision 0176, addendum of 2026-10-10)", async () => {
+  const caller = [
+    "// LAZURIO_RUNTIME_SIBLING_DEALS_ORIGIN in a comment is not a read",
+    "const pricebook = process.env.LAZURIO_RUNTIME_SIBLING_PRICEBOOK_ORIGIN;",
+    "const priceList = Bun.env[\"LAZURIO_RUNTIME_SIBLING_PRICE_LIST_ORIGIN\"];",
+    "export { pricebook, priceList };",
+  ].join("\n");
+
+  const declared = await conformantFixture({
+    mutatePackage: (pkg) => {
+      pkg.lazurio.runtime.required_module_slots = ["workspace/pricebook", "workspace/price-list"];
+    },
+  });
+  await writeText(join(declared.appRoot, "src", "siblings.ts"), `${caller}\n`);
+  runGit(declared.moduleRoot, ["add", "."]);
+  expect(check(await setupModule(declared), "MS-06")).toMatchObject({ status: "pass", details: [] });
+  expect((await setupModule(declared)).status).toBe("current");
+
+  const dataOnly = await conformantFixture({
+    mutatePackage: (pkg) => {
+      pkg.lazurio.runtime.required_module_slots = ["workspace/pricebook/db"];
+    },
+  });
+  await writeText(join(dataOnly.appRoot, "src", "siblings.ts"), `${caller}\n`);
+  await writeText(
+    join(dataOnly.appRoot, "src", "siblings.test.ts"),
+    "process.env.LAZURIO_RUNTIME_SIBLING_DEALS_ORIGIN = \"http://127.0.0.1:1\";\n",
+  );
+  expect(check(await setupModule(dataOnly), "MS-06")).toMatchObject({
+    status: "fail",
+    details: [
+      "app/v1/src/siblings.ts: čte LAZURIO_RUNTIME_SIBLING_PRICEBOOK_ORIGIN, ale App nedeklaruje sousední Modul jako slot workspace/<slug> v lazurio.runtime.required_module_slots",
+      "app/v1/src/siblings.ts: čte LAZURIO_RUNTIME_SIBLING_PRICE_LIST_ORIGIN, ale App nedeklaruje sousední Modul jako slot workspace/<slug> v lazurio.runtime.required_module_slots",
+    ],
+  });
+
+  // Reading a sibling's lease for its address stays an MS-06 finding even
+  // when the sibling is declared.
+  const lease = await conformantFixture({
+    mutatePackage: (pkg) => { pkg.lazurio.runtime.required_module_slots = ["workspace/pricebook"]; },
+  });
+  await writeText(
+    join(lease.appRoot, "src", "siblings.ts"),
+    "const lease = await Bun.file(new URL(\"../../../../pricebook/lazurio.module.json\", import.meta.url)).json();\nexport const origin = `http://127.0.0.1:${lease.port_leases[0].port}`;\n",
+  );
+  expect(check(await setupModule(lease), "MS-06").details).toEqual([
+    "app/v1/src/siblings.ts: čte lazurio.module.json (lease soubor)",
+  ]);
+});
+
 test("MS-10 requires released tags for repository-db and module-kit", async () => {
   const fixture = await conformantFixture({
     mutatePackage: (pkg) => {
