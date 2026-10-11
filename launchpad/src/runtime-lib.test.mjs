@@ -6415,6 +6415,11 @@ test("Start prepares declared artifacts before the server and Open reuses a read
     expect(await readFile(join(appRoot, "prepared.txt"), "utf8")).toBe("first slide");
     await runtime.open("test-company-demo-v1");
     expect(await readFile(join(appRoot, "runs.txt"), "utf8")).toBe("1");
+    const previousPid = (await runtime.health("test-company-demo-v1")).pid;
+    await rm(join(appRoot, "prepared.txt"));
+    const reopened = await runtime.open("test-company-demo-v1");
+    expect(await readFile(join(appRoot, "runs.txt"), "utf8")).toBe("2");
+    expect(reopened.runtime.pid).not.toBe(previousPid);
   } finally { await runtime.stop("test-company-demo-v1").catch(() => {}); }
 });
 

@@ -45,4 +45,4 @@ a stale but accepted build changes after source update, unchanged source does
 not run preparation, a missing build is prepared before serving, failed
 preparation never starts the App, owner escape is rejected, and a failed
 post-check stays blocked. Browser smoke uses an actual conformant module
-through an isolated Launchpad from the task worktree.
+through an isolated runtime manager from the task worktree.

@@ -36,3 +36,18 @@ linkTest("a preparation owner symlink cannot execute a package outside the selec
   const result = await prepareApplication({ checkoutRoot: root, packagePath, spawnProcess: () => { spawned = true; throw new Error("must not spawn"); } });
   expect(result.ok).toBe(false); expect(spawned).toBe(false);
 });
+
+test("preparation runs without implicit dotenv or inherited listener authority", async () => {
+  const root = await mkdtemp(join(tmpdir(), "lazurio-preparation-env-")); roots.push(root);
+  const cwd = join(root, "app/v1");
+  await mkdir(cwd, { recursive: true });
+  const packagePath = join(cwd, "package.json");
+  await writeFile(packagePath, JSON.stringify({ scripts: {
+    "prepare:app": "bun --no-env-file prepare.mjs", "check:prepared": "bun --no-env-file check.mjs",
+  }, lazurio: { preparation: { schema_version: "lazurio.preparation.v1", owner_package: "app/v1/package.json", prepare_script: "prepare:app", check_script: "check:prepared" } } }));
+  await writeFile(join(cwd, ".env"), "PREPARATION_FILE_ENV=unwanted\n");
+  await writeFile(join(cwd, "prepare.mjs"), 'if(process.env.PREPARATION_FILE_ENV || process.env.LAZURIO_RUNTIME_LISTENER_WEB_PORT) process.exit(1); await Bun.write("built.txt", "ready");');
+  await writeFile(join(cwd, "check.mjs"), 'process.exit(await Bun.file("built.txt").exists() ? 0 : 1);');
+  const result = await prepareApplication({ checkoutRoot: root, packagePath, force: true, env: { ...process.env, LAZURIO_RUNTIME_LISTENER_WEB_PORT: "49999" } });
+  expect(result).toMatchObject({ ok: true, declared: true, prepared: true });
+});
