@@ -4099,6 +4099,7 @@ for (const scenario of ["changed", "unchanged", "build-fails", "check-fails"]) {
     } else {
       expect(result.state).toBe("blocked");
       expect(result.reason).toBe(scenario === "build-fails" ? "preparation_prepare_failed" : "preparation_post_check_failed");
+      expect(result.message).toContain("příprava jedné aplikace selhala");
     }
   });
 }

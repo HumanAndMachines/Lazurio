@@ -1775,7 +1775,9 @@ function applyDependencyOutcomes(results, outcomes, repoDescriptors) {
       ...result,
       state: "blocked",
       reason: blocked.reason,
-      message: "Zdrojové změny jsou stažené, ale jedna aplikace ještě potřebuje opravit balíčky.",
+      message: failed.strategy === "preparation_failed"
+        ? "Zdrojové změny jsou stažené, ale příprava jedné aplikace selhala."
+        : "Zdrojové změny jsou stažené, ale jedna aplikace ještě potřebuje opravit balíčky.",
       actions,
       dependencies: packages,
       next_action: blocked.next_action,
