@@ -442,7 +442,7 @@ test("MS-07 reads Bun options only before the entry, after `bun` or after `bun r
   ]);
 });
 
-test("lazurio.runtime.secrets declares names only; MS-03 warns until the Launchpad reads them (decision 0177)", async () => {
+test("required secrets declare names only; MS-03 warns that this Launchpad has no vault reader", async () => {
   const declared = await conformantFixture({
     mutatePackage: (pkg) => { pkg.lazurio.runtime.secrets = ["EXTERNAL_API_KEY", "WEBHOOK_SIGNING_KEY"]; },
   });
@@ -450,7 +450,7 @@ test("lazurio.runtime.secrets declares names only; MS-03 warns until the Launchp
   expect(report.status).toBe("action_required");
   expect(check(report, "MS-03")).toMatchObject({ status: "warn" });
   expect(check(report, "MS-03").details).toEqual([
-    expect.stringMatching(/^app\/v1\/package\.json: lazurio\.runtime\.secrets \(EXTERNAL_API_KEY, WEBHOOK_SIGNING_KEY\) Launchpad zatím nečte .*Lazurio\/LazurioPlatform#129\)$/),
+    expect.stringContaining("lazurio.runtime.secrets (EXTERNAL_API_KEY, WEBHOOK_SIGNING_KEY) tento Launchpad z trezoru nepředává"),
   ]);
   expect(report.standard.checks.filter((item) => item.status !== "pass").map((item) => item.id)).toEqual(["MS-03"]);
 
@@ -469,6 +469,33 @@ test("lazurio.runtime.secrets declares names only; MS-03 warns until the Launchp
     expect(invalidReport.issues.map((issue) => issue.message)).toEqual([
       expect.stringContaining(`package.json: lazurio.runtime.${message}`),
     ]);
+  }
+});
+
+test("module setup accepts optional capabilities and rejects ambiguous secret declarations", async () => {
+  const fixture = await conformantFixture({
+    mutatePackage: (pkg) => { pkg.lazurio.runtime.optional_secrets = ["WAITLIST_DATABASE_URL"]; },
+  });
+  const report = await setupModule(fixture);
+  expect(report).toMatchObject({ status: "current", reason: "module_contract_current", issues: [] });
+  expect(check(report, "MS-03").status).toBe("pass");
+  expect(report.standard.checks.every((item) => item.status === "pass")).toBe(true);
+
+  for (const declaration of [
+    { optional_secrets: [] },
+    { optional_secrets: "WAITLIST_DATABASE_URL" },
+    { optional_secrets: ["database_url"] },
+    { optional_secrets: ["1KEY"] },
+    { optional_secrets: ["DATABASE-URL"] },
+    { optional_secrets: ["DATABASE_URL", "DATABASE_URL"] },
+    { secrets: ["DATABASE_URL"], optional_secrets: ["DATABASE_URL"] },
+  ]) {
+    const invalid = await conformantFixture({
+      mutatePackage: (pkg) => Object.assign(pkg.lazurio.runtime, declaration),
+    });
+    expect(await setupModule(invalid)).toMatchObject({
+      status: "action_required", reason: "runtime_contract_invalid", standard: null,
+    });
   }
 });
 

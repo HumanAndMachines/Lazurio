@@ -79,10 +79,6 @@ const KNOWN_STRICT_TSCONFIG_PRESETS = [
 ];
 const PINNED_DEPENDENCY = /^github:Lazurio\/(?:repository-db|module-kit)#v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 
-// Platform issue that makes the Launchpad read lazurio.runtime.secrets; the
-// MS-03 warning goes away with its release (decision 0177).
-const SECRETS_PLATFORM_ISSUE = "Lazurio/LazurioPlatform#129";
-
 let preparationSchemaPromise = null;
 
 /**
@@ -184,14 +180,14 @@ export async function evaluateModuleStandard({
       if (!nonEmptyString(scripts[devScriptName])) {
         record("MS-03", "fail", `${label}: dev_script ${devScriptName} neexistuje v scripts`);
       }
-      // Declared secrets (decision 0177): the shape is validated by the Core
-      // runtime contract. Until a released Platform reads the key, its runtime
-      // reader refuses the whole declaration, so the App would not start.
+      // Core validates both lists. This source Launchpad has no vault reader;
+      // required secrets still need a compatible Platform Environment. Optional
+      // capabilities can remain absent without blocking the rest of the App.
       if (Array.isArray(runtime.secrets) && runtime.secrets.length > 0) {
         record(
           "MS-03",
           "warn",
-          `${label}: lazurio.runtime.secrets (${runtime.secrets.join(", ")}) Launchpad zatím nečte a App s deklarací nespustí (${SECRETS_PLATFORM_ISSUE})`,
+          `${label}: lazurio.runtime.secrets (${runtime.secrets.join(", ")}) tento Launchpad z trezoru nepředává; App vyžaduje Platform v0.1.8-rc.49+ a připojený trezor`,
         );
       }
     }

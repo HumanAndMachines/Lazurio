@@ -28,6 +28,7 @@ const RUNTIME_KEYS = new Set([
   "tags",
   "listeners",
   "secrets",
+  "optional_secrets",
 ]);
 const LISTENER_KEYS = new Set([
   "id",
@@ -189,16 +190,17 @@ export function validateDeclaredRuntime({ runtime, packageJson, packagePath = "p
       });
     }
   }
-  if (runtime.secrets !== undefined) {
-    if (!Array.isArray(runtime.secrets) || runtime.secrets.length === 0) {
-      issues.push(`${label}.secrets musí být neprázdné pole jmen`);
+  const secretNames = new Set();
+  for (const key of ["secrets", "optional_secrets"]) {
+    if (runtime[key] === undefined) continue;
+    if (!Array.isArray(runtime[key]) || runtime[key].length === 0) {
+      issues.push(`${label}.${key} musí být neprázdné pole jmen`);
     } else {
-      const names = new Set();
-      runtime.secrets.forEach((name, index) => {
-        validatePattern(name, SECRET_NAME, `${label}.secrets[${index}]`, issues);
+      runtime[key].forEach((name, index) => {
+        validatePattern(name, SECRET_NAME, `${label}.${key}[${index}]`, issues);
         if (typeof name === "string") {
-          if (names.has(name)) issues.push(`${label}.secrets[${index}] ${name} je duplicitní`);
-          names.add(name);
+          if (secretNames.has(name)) issues.push(`${label}.${key}[${index}] ${name} je duplicitní`);
+          secretNames.add(name);
         }
       });
     }

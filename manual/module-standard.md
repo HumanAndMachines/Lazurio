@@ -242,6 +242,12 @@ je **trezor Environmentu** (DEV-6631); rozhodnutí 0177:
   Jen jména, nikdy hodnoty. Jméno odpovídá `^[A-Z][A-Z0-9_]*$` a v seznamu je
   jednou; pole je neprázdné, App bez tajemství klíč vynechá. Tvar drží
   `lazurio-runtime.schema.json` a runtime validátor Core.
+- **Volitelná capability.** `lazurio.runtime.optional_secrets` používá stejný
+  tvar jmen. Jméno nesmí být současně v `secrets`. Platform v0.1.8-rc.49+
+  předá dostupnou hodnotu stejně jako povinnou; chybějící položka nebo
+  nepřipojený či nedostupný trezor nechá capability nedostupnou a zbytek
+  App běží dál. Duplicitní položka nebo prázdná hodnota start blokuje. App musí nepřítomnost obsloužit a nesmí použít náhradní
+  soubor ani sdílené přihlášení (rozhodnutí 0196).
 - **Předání.** Launchpad před každým startem (i restartem supervize) přečte
   hodnotu každého deklarovaného jména z trezoru Environmentu a předá ji do
   uzavřeného env procesu jako `LAZURIO_RUNTIME_SECRET_<NAME>` (například
@@ -277,13 +283,14 @@ je **trezor Environmentu** (DEV-6631); rozhodnutí 0177:
   workstation bez identity trezoru číst jako přechodný zdroj (doporučení:
   ne, jeden zdroj). Modulům v Personalspace slouží kolekce osobního
   Environmentu v osobní organizaci jeho člověka (0193).
-- **Mezikrok.** Čtečka LazurioPlatform (`parseAppRuntime`) dnes neznámé pole
-  `secrets` odmítá a App s ním nespustí; čtení a předání z trezoru zavádí
-  Lazurio/LazurioPlatform#129. Do jeho vydání hlásí `MS-03`
-  platnou deklaraci jako `warn` a Modul ji zapisuje až s tímto vydáním na
-  svých Environmentech. Launchpad tohoto repa (`lazurio launchpad serve`,
-  `lazurio module start`) trezor nečte: deklaraci přijme, tajemství nepředá
-  a App skončí podle svého fail-closed čtení.
+- **Kompatibilita.** Povinné i volitelné deklarace čte LazurioPlatform
+  v0.1.8-rc.49+ (Lazurio/LazurioPlatform#307). Před jejich přidáním do
+  Modulu aktualizuj všechny Environmenty, které jej spouštějí; starší
+  Platform neznámé pole odmítá. Launchpad tohoto repa
+  (`lazurio launchpad serve`, `lazurio module start`) trezor nečte:
+  deklaraci přijme, tajemství nepředá a App obslouží jeho nepřítomnost.
+  U povinné hodnoty proto `MS-03` dál hlásí `warn` a App skončí podle
+  svého fail-closed čtení; volitelná capability zůstane nedostupná.
 
 Team, pod kterým Environment běží, není startovací brána (rozhodnutí
 2026-10-02): kdo smí Modul spustit, určuje manifest Organizace a GitHub
@@ -470,7 +477,7 @@ volný port a přesun je ruční úprava manifestu v PR Modulu.
 | --- | --- |
 | `MS-01` | `lazurio.module.json` platné, `id` = slot, každý lease v poolu Organizace, pooly disjunktní |
 | `MS-02` | každá App: `packageManager` přesný Bun, lockfile commitnutý a čerstvý |
-| `MS-03` | `lazurio.runtime` s listenery a health; `dev_script` existuje; platná deklarace `secrets` je `warn`, dokud ji Launchpad nečte (kap. 4.3) |
+| `MS-03` | `lazurio.runtime` s listenery a health; `dev_script` existuje; povinná `secrets` je v tomto Launchpadu bez čtečky trezoru `warn`, `optional_secrets` dovoluje nedostupnou capability (kap. 4.3) |
 | `MS-04` | `lazurio.preparation` deklarované; `check_script` existuje; `runtime` chybí (= `bun`) nebo `uv`; `runtime: "bun"` zapsané explicitně je do W0-5 vada (Platforma ho odmítne); `prepare_script`/`check_script` nejsou npm lifecycle jména |
 | `MS-05` | `dev` skript je jednoprocesový: bez `&&`, `concurrently`, `build`, `npx`, `node`, `bunx`, `nvm`, inline `VAR=…` |
 | `MS-06` | žádné čtení `LAZURIO_RUNTIME_HOST`, `LAZURIO_RUNTIME_PORT`, `PORT`, `COMPANYASCODE_*`, lease souboru (`lazurio.module.json` kteréhokoli Modulu) ani `package.json` sousedního Modulu ze zdrojů App; `LAZURIO_RUNTIME_SIBLING_<SLUG>_ORIGIN` čtené z prostředí (`process.env`, `Bun.env`, `import.meta.env`, v Pythonu `os.environ`, `os.getenv`) jen pro souseda, kterého App deklaruje jako slot Modulu `workspace/<slug>` (decision 0176 dodatek z 2026-10-10; zmínka jména v textu se nepočítá, text, který čtení doslova opisuje, ano; jméno předané přes konstantu nebo skládané za běhu kontrola nevidí); port leasu není ve zdrojích App zapsaný natvrdo |
