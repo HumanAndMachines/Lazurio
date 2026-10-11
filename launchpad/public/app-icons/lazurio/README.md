@@ -3,7 +3,9 @@
 Tato sada je kanonický modulový povrch Launchpadu schválený Principálem
 2026-08-21. Jednobarevné kameny používají paletu Lazuria a uvnitř nesou
 jednoduchý černobílý symbol modulu. Zdrojové PNG mají 96 × 96 px a UI je
-vykresluje ve 48 × 48 px bez pixel-art filtru.
+vykresluje ve 48 × 48 px bez pixel-art filtru. Okolí kamene je průhledné, aby
+kámen vypadal stejně na každé ploše; soubory jsou byte-for-byte kopie
+`content/brand/icons/` design systému Lazuria.
 
 Sdílený Launchpad vybírá soubor výhradně přes obecný sémantický klíč `icon`
 z app manifestu nebo jeho org-agnostic fallback. Názvy Organizací ani modulů
