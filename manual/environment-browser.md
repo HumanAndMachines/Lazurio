@@ -21,7 +21,9 @@ aktualizace forků (dodatek 0191 z 2026-10-11).
 - **Teprve přijde:**
   - stránka a prvek Nové karty a panel Launchpadu (krok 3);
   - karty vláken v T3 Code s jejich soubory držitelů (krok 4, DEV-6646 úkol 501);
-  - vydání a ověření na Environmentu (krok 5).
+  - vydání a ověření na Environmentu (krok 5);
+  - hodinový limit nečinnosti démonů agent-browseru, který nastaví Platforma. Dnes démon připojený
+    k prohlížeči sám nekončí.
 - **Jen cíl:** MausBot na prohlížeči Environmentu a Nová karta pro Codex Desktop.
 
 ## Principy
@@ -76,7 +78,9 @@ ukáže nad stránkou ve stejném pohledu, novou kartu nabídne aplikace jako no
 **Jak karta končí** (F47 body 5 a 6):
 - **Kdy je karta držená.** Drží ji soubor držitele, který ji uvádí, nebo agent, který v ní
   pracuje. Agent v ní pracuje, když je na ni navázané jeho sezení `agent-browser`
-  (`<sezení>.target`) a démon toho sezení běží (`<sezení>.pid`).
+  (`<sezení>.target`) a démon toho sezení běží (`<sezení>.pid`). Démon skončí po hodině bez
+  příkazu podle limitu, který Platforma nastaví v uživatelském nastavení agent-browseru.
+  Výchozí limit agent-browseru se na prohlížeč připojený přes DevTools nevztahuje.
 - **Konec po posledním držení.** Když poslední držení zmizí a nikdo se na kartu nedívá, karta
   skončí po 8 s. To je okno Vrátit.
 - **Karta, kterou nic nedrží,** skončí 30 s po odchodu posledního diváka. Kartu, kterou ještě
@@ -197,8 +201,11 @@ Codex Desktop upravit nemůžeme, proto:
 - Nová karta je pro něj samostatná stránka `launchpad.<…>/new-tab`. Karty otevřené odtud drží
   Launchpad, výběr existující karty ji jen otevře ve stejném okně;
 - okno agenta Codexu drží jen práce agenta a to, že se na ně někdo dívá. Vlákna Codexu Lazurio
-  nevidí, takže je nedrží. Okno skončí, když agent přestal pracovat (démon skončí po hodině bez
-  příkazu) a nikdo se na ně nedívá ani ho nedrží Launchpad.
+  nevidí, takže je nedrží. Okno skončí, když agent přestal pracovat a nikdo se na ně nedívá ani
+  ho nedrží Launchpad.
+  - Agent přestal pracovat, když jeho démon skončí, tedy po hodině bez příkazu podle limitu, který
+    nastaví Platforma.
+  - Bez toho limitu démon připojený k prohlížeči sám nekončí.
 
 ### agent-browser (fork `Lazurio/agent-browser`)
 
@@ -208,7 +215,11 @@ Na `agent-browser` stojí tato smlouva:
 - vazba sezení na kartu (`<sezení>.target`), která přežije restart démona;
 - `<sezení>.pid`, který démon při skončení smaže;
 - připnutá karta;
-- výchozí hodina nečinnosti démona.
+- hodina nečinnosti démona, kterou Platforma nastaví v jeho uživatelském nastavení
+  (`"idleTimeout": "1h"` v `~/.agent-browser/config.json`).
+  - Výchozí limit agent-browseru prohlížeč připojený přes DevTools vynechává
+    (`blocks_default_idle_shutdown`). Bez tohoto nastavení by démon sám nikdy neskončil.
+  - Po vypršení se démon jen odpojí, kartu nezavře; o jejím konci dál rozhoduje hub.
 
 Dashboard `agent-browser` lidé nepoužívají, lidé mají pohled Platformy. Fork nese jen opravy a
 distribuci; jeho vydání popisuje `docs/operations/lazurio-fork-release.md` ve forku.
