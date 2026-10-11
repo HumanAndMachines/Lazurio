@@ -223,18 +223,20 @@ distribuci; jeho vydání popisuje `docs/operations/lazurio-fork-release.md` ve 
    kartu.
 3. **Overlay je ohraničený.**
    - Kód Lazuria žije ve vlastních souborech overlaye (v T3 Code `apps/*/src/lazurio/`).
-   - Body napojení v upstreamových souborech musí být malé a pokryté testy smlouvy.
-   - Každá schopnost prohlížeče je řádek tabulky „Canonical overlay inventory“ v runbooku forku
-     (`docs/operations/lazurio-fork-release.md`), s důkazem a pravidlem pro odstranění. Patří
-     sem:
+   - Body napojení v upstreamových souborech musí být malé, pokryté testy smlouvy a uvedené
+     v allowlistu `allowed_upstream_changes` fork CI (`lazurio-fork-ci.yml`).
+   - Každá schopnost prohlížeče má řádek v tabulce kapitoly „Overlay“ runbooku forku
+     (`docs/operations/lazurio-fork-release.md`): commit, proč ho Lazurio potřebuje, a kdy
+     zůstane nebo odpadne. Patří sem:
      - soubory držitelů a jejich srovnání;
      - Nová karta;
      - zprávy pohledu;
      - náhledové nástroje;
      - odkazy jiných Environmentů;
      - uvolnění po archivaci.
-   - Při každém stable refreshi se schopnost znovu zařadí (odstranit, ponechat, převést). Co
-     převzal upstream, se odstraní.
+   - Při každé přestavbě na nový upstream stable tag (kapitola „Přestavba na nový upstream
+     tag“ runbooku) se každý commit overlaye přenese podle záměru. Overlay se zmenší o všechno, co
+     už umí upstream.
 4. **Kontrola po aktualizaci.** Na Environmentu ověř, že:
    - lišta drží své karty a archivace je pustí;
    - Nová karta se otevře a otevře stránku i kartu z Přehledu;
