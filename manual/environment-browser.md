@@ -241,9 +241,9 @@ prohlížeč takto:
 ## Co je otevřené
 
 - Uspávání karet a jeho mechanismus (DEV-6656 spike 916).
-- Nastavení doby nečinnosti a strategie zavřít, nebo uspat v Nastavení Launchpadu. Matěj to
-  2026-10-11 navrhl, úkol v plánu zatím není. Do té doby karty vlákna, které stojí, ale není
-  archivované, drží jeho lišta.
+- Nastavení doby nečinnosti okna agenta a strategie zavřít, nebo uspat v Nastavení Launchpadu
+  (Matěj 2026-10-11; DEV-6656 úkol 943, čeká na spike 916). Do té doby karty vlákna, které stojí,
+  ale není archivované, drží jeho lišta.
 - Jména lidí u karet: přijdou s účty Lazuria (0192). Přihlášení přes bránu identitu neříká.
 - Plocha a Computer Use (druhá vlna 0191).
 - Zda T3 Code postavit hned na stable v0.0.45 s vlastním úložištěm karet vláken, nebo nejdřív
