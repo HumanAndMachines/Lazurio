@@ -140,6 +140,14 @@ strop Environmentu. Kdo má celý Environment, pracuje s celým stropem, protož
 v Environmentu má root. Kdo má jen aplikaci, vidí část stropu podle pravidel
 Organizace: zužuje server Modulu u každého požadavku a víc než strop nedá.
 
+Zúžení je služba provozovatele Environmentu vůči lidem, se kterými aplikaci
+sdílí, ne izolace proti němu. Provozovatel má root, může server Modulu změnit
+a návštěvníkovi ukázat celý strop; Admin Organizace mu proto strop svěřuje
+celý a za to, co jeho aplikace ukáže, odpovídá on. Autor změny zapsaný na
+Environmentu je informace, ne důkaz proti provozovateli. Kde má zúžení platit
+i proti provozovateli, data obsluhuje aplikace provozovaná Organizací, na které
+root nemá žádný uživatel, nebo úložiště, které identitu ověřuje samo.
+
 Ověřenou identitu návštěvníka podepisuje Lazurio Auth pro přesný Environment
 a aplikaci. Není klíčem k datům: sdílení aplikace nenese práva k datům
 návštěvníka a majitel Environmentu, který by identitu návštěvníka zachytil,
