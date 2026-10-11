@@ -228,7 +228,7 @@ skripty (`dev:demo`), ne start.
 v `.env*` ani v souboru, který si App sama uloží. Jediným zdrojem pro start
 je **trezor Environmentu** (DEV-6631); rozhodnutí 0177:
 
-- **Deklarace.** App vyjmenuje jména tajemství, která ke startu potřebuje,
+- **Povinná deklarace.** App vyjmenuje jména tajemství, která ke startu potřebuje,
   v `lazurio.runtime.secrets` vedle listenerů:
 
   ```json
@@ -248,8 +248,8 @@ je **trezor Environmentu** (DEV-6631); rozhodnutí 0177:
   nepřipojený či nedostupný trezor nechá capability nedostupnou a zbytek
   App běží dál. Duplicitní položka nebo prázdná hodnota start blokuje. App musí nepřítomnost obsloužit a nesmí použít náhradní
   soubor ani sdílené přihlášení (rozhodnutí 0196).
-- **Předání.** Launchpad před každým startem (i restartem supervize) přečte
-  hodnotu každého deklarovaného jména z trezoru Environmentu a předá ji do
+- **Předání v Platformě.** Platform před každým startem (i restartem supervize)
+  přečte deklarovaná jména z trezoru Environmentu a dostupnou hodnotu předá do
   uzavřeného env procesu jako `LAZURIO_RUNTIME_SECRET_<NAME>` (například
   `LAZURIO_RUNTIME_SECRET_EXTERNAL_API_KEY`). Nic jiného z trezoru App
   nedostane. Hodnoty nejdou do logů, Diagnostiky, souborů v Modulu ani
@@ -259,15 +259,18 @@ je **trezor Environmentu** (DEV-6631); rozhodnutí 0177:
   Environment, účet Environmentu svou kolekci čte i zapisuje). Položka má jméno
   přesně `<NAME>`, hodnotou je její heslo. Ukládá ji Operátor Environmentu
   nebo Agent na jeho pokyn; jiná Organizace ani jiný Environment ji nevidí.
-- **Fail-closed.** Chybí-li v trezoru některé deklarované jméno, je-li
-  položek se stejným jménem víc, nebo Environment k trezoru přístup nemá,
-  Launchpad App **nespustí** a vrátí typovaný nález připravenosti se jmény
-  chybějících tajemství (nikdy s hodnotami). App nikdy neběží napůl
-  nakonfigurovaná. App sama čte `LAZURIO_RUNTIME_SECRET_<NAME>` stejně jako
-  listener (kap. 4.2): bez proměnné skončí exit 2 s hláškou, která jmenuje
-  proměnnou, ne hodnotu.
+- **Odmítnutí startu v Platformě.** Chybí-li hodnota povinného jména ze
+  `secrets` nebo není dostupný trezor, Platform App **nespustí** a vrátí
+  typovaný nález připravenosti se jmény (nikdy s hodnotami). U
+  `optional_secrets` stejné nedostupnosti vypnou jen příslušnou capability.
+  Více položek stejného jména nebo prázdná hodnota v dostupném trezoru
+  blokují start pro oba seznamy. App sama čte
+  `LAZURIO_RUNTIME_SECRET_<NAME>` stejně jako listener (kap. 4.2): bez
+  povinné proměnné skončí exit 2 s hláškou, která jmenuje proměnnou, ne
+  hodnotu; bez volitelné obslouží nedostupnou capability.
 - **Zadání v UI.** App, která dosud nechala uživatele zadat klíč v UI
-  a ukládala ho do `.env.local`, ho místo toho deklaruje. UI smí ukázat
+  a ukládala ho do `.env.local`, ho místo toho deklaruje jako povinný nebo
+  volitelný podle kontraktu App. UI smí ukázat
   „nastaveno / chybí v trezoru“, ale klíč neukládá.
 - **Skript mimo start.** Tajemství, které potřebuje jen ručně spouštěný
   skript (import, jednorázová migrace dat), se v `lazurio.runtime.secrets`
@@ -276,8 +279,9 @@ je **trezor Environmentu** (DEV-6631); rozhodnutí 0177:
   krok popisuje. Ani skript nečte `.env*`.
 - **Workstation.** Lokální Environment je Environment jako každý jiný:
   hodnota leží v kolekci tohoto Environmentu v trezoru Organizace. Dokud
-  Environment identitu v trezoru nemá (rollout DEV-6631), je deklarované
-  tajemství nález připravenosti a App nestartuje. Lokální custody cesty
+  Environment identitu v trezoru nemá (rollout DEV-6631), je povinné
+  tajemství nález připravenosti a App nestartuje; volitelná capability je
+  nedostupná. Lokální custody cesty
   ([security/local-secret-custody.md](security/local-secret-custody.md))
   jsou úschova, ne zdroj startu. **Otevřené:** zda je smí Launchpad na
   workstation bez identity trezoru číst jako přechodný zdroj (doporučení:
