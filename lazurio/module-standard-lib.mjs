@@ -31,19 +31,19 @@ export const MODULE_STANDARD_CHECKS = Object.freeze([
 ]);
 
 const CHECK_ACTIONS = Object.freeze({
-  "MS-01": "Přepiš port leasu v lazurio.module.json na navržený volný port poolu v PR Modulu a ověř start App na novém portu (lazurio module start); setup lease nepřesouvá. Překryv poolů opraví Organization Admin v Organization manifestu.",
-  "MS-02": "Doplň packageManager na přesnou verzi Bunu z Lazuria a commitni čerstvý bun.lock z bun install.",
-  "MS-03": "Doplň lazurio.runtime s listenery, health a existujícím dev_script podle manual/module-setup.md.",
-  "MS-04": "Doplň lazurio.preparation s check_script (read-only package skript) podle lazurio-preparation.schema.json.",
+  "MS-01": "Přepište port leasu v lazurio.module.json na navržený volný port poolu v PR Modulu a ověřte start App na novém portu (lazurio module start); setup lease nepřesouvá. Překryv poolů opraví Organization Admin v Organization manifestu.",
+  "MS-02": "Doplňte packageManager na přesnou verzi Bunu z Lazuria a commitněte čerstvý bun.lock z bun install.",
+  "MS-03": "Doplňte lazurio.runtime s listenery, health a existujícím dev_script podle manual/module-setup.md.",
+  "MS-04": "Doplňte lazurio.preparation s check_script (read-only package skript) podle lazurio-preparation.schema.json.",
   "MS-05": "Zjednoduš dev skript na jeden dlouho běžící proces; build, guardy a další procesy patří do přípravy nebo do App.",
-  "MS-06": "Čti host a port jen z LAZURIO_RUNTIME_LISTENER_<ID>_HOST/_PORT (ideálně přes @lazurio/module-kit) a bez nich skonči chybou; port leasu žije jen v lazurio.module.json. Odkaz na App sousedního Modulu pro prohlížeč odvoď z vlastního LAZURIO_RUNTIME_LISTENER_<ID>_EXTERNAL_ORIGIN; API souseda volej ze serveru na LAZURIO_RUNTIME_SIBLING_<SLUG>_ORIGIN a souseda deklaruj jako slot Modulu workspace/<slug> v lazurio.runtime.required_module_slots, nikdy z jeho manifestu (decision 0176 a dodatek z 2026-10-10).",
-  "MS-07": "Odstraň .env soubory a dotenv a spouštěj Bun s --no-env-file; konfigurace je runtime env plus commitnuté config soubory, tajemství deklaruj v lazurio.runtime.secrets (trezor Environmentu).",
-  "MS-08": "Zapni strict v tsconfig.json (nebo extends strict preset) a převeď .js/.mjs/.cjs zdroje a configy na TypeScript.",
-  "MS-09": "Nahraď importy mimo repo verzovanou závislostí nebo kód vlož do Modulu, který ho jediný používá. Data sousedního Modulu čti jen jako ../<slug>/ od kořene Modulu a souseda deklaruj v lazurio.runtime.required_module_slots App (decision 0176).",
+  "MS-06": "Čtěte host a port jen z LAZURIO_RUNTIME_LISTENER_<ID>_HOST/_PORT (ideálně přes @lazurio/module-kit). Bez nich ať App skončí chybou; port leasu žije jen v lazurio.module.json. Odkaz na App sousedního Modulu pro prohlížeč odvoďte z vlastního LAZURIO_RUNTIME_LISTENER_<ID>_EXTERNAL_ORIGIN; API souseda volejte ze serveru na LAZURIO_RUNTIME_SIBLING_<SLUG>_ORIGIN a souseda deklarujte jako slot Modulu workspace/<slug> v lazurio.runtime.required_module_slots, nikdy z jeho manifestu (decision 0176 a dodatek z 2026-10-10).",
+  "MS-07": "Odstraňte .env soubory a dotenv a spouštějte Bun s --no-env-file; konfigurace je runtime env plus commitnuté config soubory, tajemství deklarujte v lazurio.runtime.secrets (trezor Environmentu).",
+  "MS-08": "Zapněte strict v tsconfig.json (nebo extends strict preset) a převeďte .js/.mjs/.cjs zdroje a configy na TypeScript.",
+  "MS-09": "Nahraďte importy mimo repo verzovanou závislostí nebo kód vložte do Modulu, který ho jediný používá. Data sousedního Modulu čtěte jen jako ../<slug>/ od kořene Modulu a souseda deklarujte v lazurio.runtime.required_module_slots App (decision 0176).",
   "MS-10": "Připni závislost na vydaný tag, například github:Lazurio/repository-db#v3.1.0.",
-  "MS-11": "Odstraň absolutní cesty a vytváření symlinků ze startu (patří do prepare_script); Modul patří do workspace/.",
-  "MS-12": "Sjednoť apps[] s adresáři app/*/package.json a smaž starší generace App (historie zůstává v Gitu).",
-  "MS-13": "Doplň do každé App skripty check (typecheck + biome) a test (bun test).",
+  "MS-11": "Odstraňte absolutní cesty a vytváření symlinků ze startu (patří do prepare_script); Modul patří do workspace/.",
+  "MS-12": "Sjednoťte apps[] s adresáři app/*/package.json a smažte starší generace App (historie zůstává v Gitu).",
+  "MS-13": "Doplňte do každé App skripty check (typecheck + biome) a test (bun test).",
 });
 
 const SKIPPED_DIRECTORIES = new Set([
@@ -155,7 +155,7 @@ export async function evaluateModuleStandard({
       }
       const lockPath = joinPosix(app.appDirectory, "bun.lock");
       if (files.some((file) => file.path === joinPosix(app.appDirectory, "bun.lockb"))) {
-        record("MS-02", "fail", `${label}: binární bun.lockb nahraď textovým bun.lock`);
+        record("MS-02", "fail", `${label}: binární bun.lockb nahraďte textovým bun.lock`);
       }
       if (checkLockTracked({ record, label, lockPath, files, tracked, name: "bun.lock" })) {
         const drift = await bunLockDrift(join(root, ...lockPath.split("/")), packageJson);
@@ -198,7 +198,7 @@ export async function evaluateModuleStandard({
       // [tool.lazurio] (manual/module-standard.md kap. 7). Core does not read
       // it yet, so MS-04 stays undecided; a declaration that is visible here
       // is still held to the schema (uv_version is required for uv).
-      record("MS-04", "warn", `${label}: Python App: čtení [tool.lazurio] z pyproject.toml zatím není v Core; ověř přípravu ručně`);
+      record("MS-04", "warn", `${label}: Python App: čtení [tool.lazurio] z pyproject.toml zatím není v Core; ověřte přípravu ručně`);
       if (preparation !== undefined) {
         for (const issue of await preparationDeclarationIssues(preparation, label)) record("MS-04", "fail", issue);
       }
@@ -216,12 +216,12 @@ export async function evaluateModuleStandard({
       if (!runtime) {
         record("MS-04", "fail", `${label}: skeleton přípravy se nedoplní bez lazurio.runtime`);
       } else if (!ownerPattern.test(app.appPath)) {
-        record("MS-04", "fail", `${label}: owner_package ${app.appPath} neodpovídá schématu; přesuň App do app/v<N>/`);
+        record("MS-04", "fail", `${label}: owner_package ${app.appPath} neodpovídá schématu; přesuňte App do app/v<N>/`);
       } else {
         const next = ensureNextPackage();
         next.lazurio = { ...(next.lazurio ?? {}), preparation: skeleton };
         results.get("MS-04").repairs.push(
-          `${label}: doplnit lazurio.preparation skeleton${skeleton.check_script ? " s check_script check:prepared" : " (check_script doplň ručně)"}`,
+          `${label}: doplnit lazurio.preparation skeleton${skeleton.check_script ? " s check_script check:prepared" : " (check_script doplňte ručně)"}`,
         );
         if (!skeleton.check_script) record("MS-04", "fail", `${label}: chybí skript check:prepared pro check_script`);
       }
@@ -231,7 +231,7 @@ export async function evaluateModuleStandard({
         record(
           "MS-04",
           "fail",
-          `${label}: runtime: bun zapsané explicitně — Platforma dnes neznámá pole odmítá; klíč vynech (chybí = bun)`,
+          `${label}: runtime: bun zapsané explicitně — Platforma dnes neznámá pole odmítá; klíč vynechte (chybí = bun)`,
         );
       }
       if (preparation && typeof preparation === "object" && !Array.isArray(preparation)) {
@@ -1179,7 +1179,7 @@ async function preparationDeclarationIssues(preparation, label) {
     if (!new RegExp(rule.pattern).test(scriptName)) {
       issues.push(`${label}: ${scriptName}: jméno skriptu neodpovídá gramatice čtečky Platformy ${rule.pattern}`);
     } else if (rule.not?.enum?.includes(scriptName)) {
-      issues.push(`${label}: ${scriptName} je npm lifecycle jméno — bun install ho spouští sám; použij prepare:app / check:prepared`);
+      issues.push(`${label}: ${scriptName} je npm lifecycle jméno — bun install ho spouští sám; použijte prepare:app / check:prepared`);
     }
   }
   return issues;

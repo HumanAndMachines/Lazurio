@@ -10,15 +10,15 @@ ukol: false
 ---
 # Uložené postupy
 
-- Co se v této lekci naučíš:
+- Co se v této lekci naučíte:
   - co je opakovaný postup;
   - kdy ho uložit;
   - proč šetří nervy.
 
-Když stejnou věc děláš potřetí, pravděpodobně si zaslouží uložený postup. Nemusí být složitý. Stačí popsat kroky tak, aby je příště pochopil člověk i AI kolega.
+Když stejnou věc děláte potřetí, pravděpodobně si zaslouží uložený postup. Nemusí být složitý. Stačí popsat kroky tak, aby je příště pochopil člověk i AI kolega.
 
-Příklad: jak připravit týdenní shrnutí, jak zkontrolovat klientský text, jak předat rozpracovanou práci. Uložený postup snižuje počet věcí, které musíš držet v hlavě.
+Příklad: jak připravit týdenní shrnutí, jak zkontrolovat klientský text, jak předat rozpracovanou práci. Uložený postup snižuje počet věcí, které musíte držet v hlavě.
 
-Dobrý postup říká: kdy ho použít, co potřebuješ na začátku, jaké kroky udělat a podle čeho poznáš hotovo.
+Dobrý postup říká: kdy ho použít, co potřebujete na začátku, jaké kroky udělat a podle čeho poznáte hotovo.
 
-Shrnutí: vezmi si jeden malý praktický krok a neboj se zeptat lidskou řečí.
+Shrnutí: začněte jedním malým praktickým krokem a nebojte se zeptat lidskou řečí.

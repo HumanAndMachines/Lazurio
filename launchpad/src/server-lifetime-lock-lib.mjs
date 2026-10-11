@@ -30,7 +30,7 @@ export async function acquireServerLifetimeLock({
   } catch (error) {
     if (error?.code !== "LAZURIO_MODULE_RUNTIME_LOCK_TIMEOUT") throw error;
     const conflict = new Error(
-      "Jiný Lazurio Server stále drží per-user lifetime lease. Pokud chybí locator, ukonči starý Server a spusť příkaz znovu.",
+      "Jiný Lazurio Server stále drží per-user lifetime lease. Pokud chybí locator, ukončete starý Server a spusťte příkaz znovu.",
       { cause: error },
     );
     conflict.code = "LAZURIO_SERVER_LIFETIME_LOCKED";
@@ -56,7 +56,7 @@ export async function acquireServerStartupLock({ stateDirectory, instanceId }) {
   } catch (error) {
     if (error?.code !== "LAZURIO_MODULE_RUNTIME_LOCK_TIMEOUT") throw error;
     const conflict = new Error(
-      "Jiný Lazurio launcher stále dokončuje reuse nebo replacement Serveru. Spusť příkaz znovu.",
+      "Jiný Lazurio launcher stále dokončuje reuse nebo replacement Serveru. Spusťte příkaz znovu.",
       { cause: error },
     );
     conflict.code = "LAZURIO_SERVER_STARTUP_LOCKED";

@@ -18,7 +18,7 @@ export async function allocateModulePort({ lazurioRoot, moduleRoot, company, mod
   const root = resolve(lazurioRoot);
   const targetRoot = resolve(moduleRoot);
   if (!existsSync(join(root, "organizations"))) {
-    throw new Error(`${root} není primární Lazurio root: chybí organizations/; předej explicitní --lazurio-root`);
+    throw new Error(`${root} není primární Lazurio root: chybí organizations/; předejte explicitní --lazurio-root`);
   }
   const declaredRoots = await declaredModuleRoots(root);
   if (!declaredRoots.has(targetRoot)) {
@@ -196,12 +196,12 @@ export async function runModulePortCli(argv) {
   const canonicalRoot = argumentValue(argv, "--lazurio-root");
   const deprecatedRoot = argumentValue(argv, "--conglomerate-root");
   if (canonicalRoot && deprecatedRoot) {
-    console.error("Použij právě jeden z --lazurio-root nebo deprecated --conglomerate-root");
+    console.error("Použijte právě jeden z --lazurio-root nebo deprecated --conglomerate-root");
     process.exitCode = 2;
     return;
   }
   const lazurioRoot = canonicalRoot ?? deprecatedRoot ?? resolve(import.meta.dirname, "..");
-  if (deprecatedRoot) console.warn("warning: --conglomerate-root je deprecated; použij --lazurio-root");
+  if (deprecatedRoot) console.warn("warning: --conglomerate-root je deprecated; použijte --lazurio-root");
   if (!company || !module || !moduleRoot) {
     console.error("--company, --module and --module-root are required");
     process.exitCode = 2;

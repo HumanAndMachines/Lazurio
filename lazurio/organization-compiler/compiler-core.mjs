@@ -305,7 +305,7 @@ export function buildCompanyTargets({ companyConfig, modulesManifest = null, con
             legacyCheckoutFields.length > 0
           ) {
             throw new OrganizationCompilerError(
-              `Nested root slot '${slot.path}' nesmí deklarovat legacy checkout souřadnice (${legacyCheckoutFields.join(", ")}); používej výhradně git.url a git.branch`,
+              `Nested root slot '${slot.path}' nesmí deklarovat legacy checkout souřadnice (${legacyCheckoutFields.join(", ")}); používejte výhradně git.url a git.branch`,
             );
           }
           if (
@@ -323,7 +323,7 @@ export function buildCompanyTargets({ companyConfig, modulesManifest = null, con
             !hasCheckoutCoordinates
           ) {
             throw new OrganizationCompilerError(
-              `Aktivní nested repo slot '${slot.path}' musí mít git.url a git.branch; bez checkout údajů použij status planned_slot`,
+              `Aktivní nested repo slot '${slot.path}' musí mít git.url a git.branch; bez checkout údajů použijte status planned_slot`,
             );
           }
           const slotTeams = slotScope === "workspace" ? normalizedTeamMemberships(slot, defaultTeam) : [];

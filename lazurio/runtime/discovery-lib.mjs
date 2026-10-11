@@ -746,7 +746,7 @@ async function validateDeclaredModule({
   }
   if (path.startsWith("modules/")) {
     warnings.push(
-      `${label}: ${source}.path "${path}" používá deprecated modules/*; během incremental rollout zůstává načtený, ale migruj na workspace/<modul>`,
+      `${label}: ${source}.path "${path}" používá deprecated modules/*; během incremental rollout zůstává načtený, ale migrujte na workspace/<modul>`,
     );
   }
   const scopedContractIssues = organizationModuleSlotScopedContractIssues({
@@ -1260,7 +1260,7 @@ export async function runtimeEnvPortAuthorityIssues({
   const issues = [];
   const selection = runtimeLoadedEnvFileSelection({ packageJson, runtime });
   issues.push(...selection.issues.map(
-    (issue) => `${packagePath}: ${issue}; použij statickou cestu uvnitř owning Modulu`,
+    (issue) => `${packagePath}: ${issue}; použijte statickou cestu uvnitř owning Modulu`,
   ));
 
   let canonicalModuleDirectory;
@@ -1307,7 +1307,7 @@ export async function runtimeEnvPortAuthorityIssues({
       const name = declaration?.[1];
       if (!name || !isReservedRuntimeEnvName(name)) continue;
       issues.push(
-        `${displayPath}: ${name} nesmí být per-machine port autorita; deklaruj lease v module-root lazurio.module.json a nech ji injektovat Launchpadem`,
+        `${displayPath}: ${name} nesmí být per-machine port autorita; deklarujte lease v module-root lazurio.module.json a nechte ji injektovat Launchpadem`,
       );
     }
   }
@@ -2414,7 +2414,7 @@ export async function discoverLaunchpadApps(
   const deprecated = deprecatedRegistryKeys(companiesConfig);
   if (deprecated.length > 0) {
     warnings.push(
-      `launchpad.gen3.json: zastaralé registry klíče ${deprecated.join(", ")} se ve scan-first modelu (decision 0042) ignorují; smaž je z trackovaného configu (Organizace i šablony se zjišťují skenem disku).`,
+      `launchpad.gen3.json: zastaralé registry klíče ${deprecated.join(", ")} se ve scan-first modelu (decision 0042) ignorují; smažte je z trackovaného configu (Organizace i šablony se zjišťují skenem disku).`,
     );
   }
   const appSchema = await readJson(appSchemaPath);
@@ -2567,7 +2567,7 @@ export async function discoverLaunchpadApps(
       });
       if (governingModule.module) {
         runtimeContractIssues.push(
-          `${packagePath}: legacy companyascode.app nesmí existovat vedle module-root lazurio.module.json; migruj runtime na lazurio.runtime.v1`,
+          `${packagePath}: legacy companyascode.app nesmí existovat vedle module-root lazurio.module.json; migrujte runtime na lazurio.runtime.v1`,
         );
       }
     } else {

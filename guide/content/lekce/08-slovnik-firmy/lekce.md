@@ -10,15 +10,15 @@ ukol: false
 ---
 # Slovník firmy
 
-- Co se v této lekci naučíš:
+- Co se v této lekci naučíte:
   - proč tým potřebuje společná slova;
-  - co dělat, když nerozumíš pojmu;
+  - co dělat, když nerozumíte pojmu;
   - jak doplnit chybějící vysvětlení.
 
 Každá firma má slova, která jsou pro nového člověka nejasná. Produktové názvy, interní zkratky, role, názvy zákazníků nebo procesů. Slovník pomáhá, aby se lidé nemuseli ptát na totéž pořád dokola.
 
-Když nerozumíš pojmu, není to tvoje selhání. Zeptej se: „Vysvětli mi to jako novému kolegovi a řekni, kde je oficiální význam.“
+Když nerozumíte pojmu, není to vaše selhání. Zeptejte se: „Vysvětli mi to jako novému kolegovi a řekni, kde je oficiální význam.“
 
-Když zjistíš, že pojem ve slovníku chybí, můžeš navrhnout krátké vysvětlení. Stačí jedna jasná věta a příklad použití.
+Když zjistíte, že pojem ve slovníku chybí, můžete navrhnout krátké vysvětlení. Stačí jedna jasná věta a příklad použití.
 
-Shrnutí: vezmi si jeden malý praktický krok a neboj se zeptat lidskou řečí.
+Shrnutí: začněte jedním malým praktickým krokem a nebojte se zeptat lidskou řečí.

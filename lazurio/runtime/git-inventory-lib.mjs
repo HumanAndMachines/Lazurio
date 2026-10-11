@@ -899,7 +899,7 @@ function slotPathBoundaryInventoryIssue(slot) {
   }
   const normalizedPath = normalizeOrganizationSlotPath(slot.path);
   if (isOrganizationSlotContainerPath(normalizedPath)) {
-    return "Organization kontejner není repozitářový slot; použij workspace/<slug>, modules/<slug> nebo productionspace/<slug>";
+    return "Organization kontejner není repozitářový slot; použijte workspace/<slug>, modules/<slug> nebo productionspace/<slug>";
   }
   if (isOrganizationRootSlotDescendantPath(normalizedPath)) {
     return "cesta je uvnitř rezervované Organization root boundary a není samostatný root slot";

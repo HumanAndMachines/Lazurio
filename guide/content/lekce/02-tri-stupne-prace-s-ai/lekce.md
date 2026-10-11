@@ -10,15 +10,15 @@ ukol: false
 ---
 # Tři stupně práce s AI
 
-- Co se v této lekci naučíš:
+- Co se v této lekci naučíte:
   - jak se liší obyčejný chat od pracovního pomocníka;
   - proč je lepší postupovat po malých krocích;
   - kdy chtít kontrolu.
 
-První stupeň je obyčejné ptaní: napíšeš otázku a dostaneš odpověď. Hodí se na rychlé vysvětlení, ale AI nezná celý pracovní kontext.
+První stupeň je obyčejné ptaní: napíšete otázku a dostanete odpověď. Hodí se na rychlé vysvětlení, ale AI nezná celý pracovní kontext.
 
-Druhý stupeň je práce s podklady: ukážeš text, úkol nebo stránku a požádáš o návrh. Tady už může vzniknout něco použitelného, pokud jasně řekneš, z čeho má AI vycházet.
+Druhý stupeň je práce s podklady: ukážete text, úkol nebo stránku a požádáte o návrh. Tady už může vzniknout něco použitelného, pokud jasně řeknete, z čeho má AI vycházet.
 
 Třetí stupeň je pracovní spolupráce: AI kolega ví, kde co hledat, umí připravit změnu a nechá ji zkontrolovat. Tady nejvíc záleží na hranicích a ověření.
 
-Shrnutí: vezmi si jeden malý praktický krok a neboj se zeptat lidskou řečí.
+Shrnutí: začněte jedním malým praktickým krokem a nebojte se zeptat lidskou řečí.

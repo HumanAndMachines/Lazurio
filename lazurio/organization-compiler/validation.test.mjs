@@ -917,7 +917,7 @@ describe("organization config validation", () => {
 
     expect(result.valid).toBe(false);
     expect(result.failures.join("\n")).toContain(
-      "aktivní nested repo musí mít git.url a git.branch; bez checkout údajů použij status planned_slot",
+      "aktivní nested repo musí mít git.url a git.branch; bez checkout údajů použijte status planned_slot",
     );
   });
 

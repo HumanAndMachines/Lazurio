@@ -10,15 +10,15 @@ ukol: true
 ---
 # Rychlá kontrola stavu
 
-- Co se v této lekci naučíš:
+- Co se v této lekci naučíte:
   - jak číst zelenou/červenou kontrolu;
   - co znamená upozornění;
   - kdy požádat o pomoc.
 
-Někdy úvodní stránka ukáže, že je něco v pořádku, něco vypnuté a něco ke kontrole. Ber to jako kontrolku v autě, ne jako zkoušku z techniky.
+Někdy úvodní stránka ukáže, že je něco v pořádku, něco vypnuté a něco ke kontrole. Berte to jako kontrolku v autě, ne jako zkoušku z techniky.
 
-Zelená znamená: můžeš pokračovat. Šedá nebo zastavená část často znamená jen: teď neběží, protože ji nikdo nepoužívá. Červená znamená: přečti detail nebo požádej o vysvětlení.
+Zelená znamená: můžete pokračovat. Šedá nebo zastavená část často znamená jen: teď neběží, protože ji nikdo nepoužívá. Červená znamená: přečtěte si detail nebo požádejte o vysvětlení.
 
 Dobrý dotaz zní: „Vidím tady upozornění. Vysvětli mi lidsky, jestli můžu pokračovat, nebo co mám předat správci.“
 
-Shrnutí: vezmi si jeden malý praktický krok a neboj se zeptat lidskou řečí.
+Shrnutí: začněte jedním malým praktickým krokem a nebojte se zeptat lidskou řečí.

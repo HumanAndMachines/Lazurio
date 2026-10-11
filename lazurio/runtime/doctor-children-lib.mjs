@@ -358,7 +358,7 @@ export async function runChildDoctorLane({
           details: [],
           blocked_reason:
             "Lane podřízených doctorů byla pro tenhle běh vypnutá, takže o mountech nevíme nic.",
-          remedy: "Spusť `bun run doctor` bez přepínače `--skip-children`.",
+          remedy: "Spusťte `bun run doctor` bez přepínače `--skip-children`.",
         },
       ],
     };
@@ -433,7 +433,7 @@ function childrenLaneCheck({ discovered, children }) {
       links: [],
       details: [...discovered.unreadableManifests, ...details],
       blocked_reason: "Manifest mountu nejde přečíst, deklarace 'doctor' se z něj nedá zjistit.",
-      remedy: "Oprav JSON manifestu mountu a spusť doctor znovu.",
+      remedy: "Opravte JSON manifestu mountu a spusťte doctor znovu.",
     };
   }
 

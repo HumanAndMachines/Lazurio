@@ -10,15 +10,15 @@ ukol: true
 ---
 # První procházka
 
-- Co se v této lekci naučíš:
+- Co se v této lekci naučíte:
   - jak si projít kancelář bez stresu;
   - co si zapsat;
   - jak poznat první užitečné místo.
 
-První procházka nemá za cíl všechno pochopit. Cílem je najít tři věci: kde je tvoje dnešní práce, kde jsou znalosti a kde se ptát, když nevíš.
+První procházka nemá za cíl všechno pochopit. Cílem je najít tři věci: kde je vaše dnešní práce, kde jsou znalosti a kde se ptát, když nevíte.
 
-Otevři jednu část, která souvisí s tvou prací. Přečti úvod. Pak se vrať. Další část otevři až potom. Takhle se učíš po malých bezpečných krocích.
+Otevřete jednu část, která souvisí s vaší prací. Přečtěte úvod. Pak se vraťte. Další část otevřete až potom. Takhle se učíte po malých bezpečných krocích.
 
-Když narazíš na místo, které je matoucí, neber to osobně. Zapiš si otázku. Matoucí místa jsou dobré signály, co zlepšit pro dalšího kolegu.
+Když narazíte na místo, které je matoucí, neberte to osobně. Zapište si otázku. Matoucí místa jsou dobré signály, co zlepšit pro dalšího kolegu.
 
-Shrnutí: vezmi si jeden malý praktický krok a neboj se zeptat lidskou řečí.
+Shrnutí: začněte jedním malým praktickým krokem a nebojte se zeptat lidskou řečí.

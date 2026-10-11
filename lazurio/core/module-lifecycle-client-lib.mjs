@@ -67,7 +67,7 @@ export async function runModuleLifecycle({
     return actionRequired(
       base,
       "server_unavailable",
-      "Lazurio Server neběží. Spusť nainstalovaný Lazurio Launchpad a příkaz zopakuj.",
+      "Lazurio Server neběží. Spusťte nainstalovaný Lazurio Launchpad a příkaz zopakujte.",
     );
   }
 
@@ -167,7 +167,7 @@ export async function runModuleLifecycle({
       message: response.payload?.message ?? response.message,
       action: response.payload?.failure_kind === "cross_organization_takeover_confirmation_required"
         ? `Zopakuj příkaz s --confirm-replace ${response.payload?.replace_app_id ?? "<app-id>"} až po výslovném potvrzení uživatele.`
-        : "Vyřeš uvedený problém a zopakuj stejný příkaz.",
+        : "Vyřešte uvedený problém a zopakujte stejný příkaz.",
     }],
   };
   return report;
@@ -428,10 +428,10 @@ function serverSummary(locator, identity) {
 
 function actionRequired(base, reason, message, extra = {}) {
   const action = reason === "server_unavailable"
-    ? "Spusť nainstalovaný Lazurio Launchpad a zopakuj stejný příkaz."
+    ? "Spusťte nainstalovaný Lazurio Launchpad a zopakujte stejný příkaz."
     : reason === "hosted_lifecycle_requires_authenticated_surface"
-      ? "Proveď lifecycle akci v přihlášeném Dashboardu nebo hosted Launchpadu."
-      : "Spusť diagnostiku Lazurio a zopakuj stejný příkaz.";
+      ? "Proveďte lifecycle akci v přihlášeném Dashboardu nebo hosted Launchpadu."
+      : "Spusťte diagnostiku Lazurio a zopakujte stejný příkaz.";
   return {
     ...base,
     status: "action_required",
@@ -462,6 +462,6 @@ function failed(base, reason, message, extra = {}) {
     app: null,
     http_status: extra.http_status ?? 0,
     result: extra.result ?? null,
-    issues: [{ code: reason, message, action: "Spusť diagnostiku Lazurio a zopakuj stejný příkaz." }],
+    issues: [{ code: reason, message, action: "Spusťte diagnostiku Lazurio a zopakujte stejný příkaz." }],
   };
 }

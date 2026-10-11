@@ -10,15 +10,15 @@ ukol: false
 ---
 # Co je kde
 
-- Co se v této lekci naučíš:
+- Co se v této lekci naučíte:
   - jak se dívat na části kanceláře;
   - kde hledat práci a kde znalosti;
-  - proč nemusíš znát všechny názvy.
+  - proč nemusíte znát všechny názvy.
 
-V digitální kanceláři jsou různé místnosti. Některé jsou na plánování práce, jiné na znalosti, jiné na obsah, finance nebo provoz. Nemusíš znát všechny názvy hned první den.
+V digitální kanceláři jsou různé místnosti. Některé jsou na plánování práce, jiné na znalosti, jiné na obsah, finance nebo provoz. Nemusíte znát všechny názvy hned první den.
 
-Když hledáš, co máš dělat, začni u úkolů nebo plánování. Když hledáš, jak něco u nás funguje, jdi do znalostí nebo návodů. Když nevíš, zeptej se průvodce nebo AI kolegy.
+Když hledáte, co máte dělat, začněte u úkolů nebo plánování. Když hledáte, jak něco u nás funguje, jděte do znalostí nebo návodů. Když nevíte, zeptejte se průvodce nebo AI kolegy.
 
 Důležité není zapamatovat si mapu nazpaměť. Důležité je naučit se položit správnou otázku: hledám úkol, znalost, člověka, rozhodnutí, nebo hotový výstup?
 
-Shrnutí: vezmi si jeden malý praktický krok a neboj se zeptat lidskou řečí.
+Shrnutí: začněte jedním malým praktickým krokem a nebojte se zeptat lidskou řečí.

@@ -163,7 +163,7 @@ test("MS-04 adds the preparation skeleton only when it is unambiguous", async ()
   expect(check(explicitReport, "MS-04")).toMatchObject({
     status: "fail",
     details: [
-      "app/v1/package.json: runtime: bun zapsané explicitně — Platforma dnes neznámá pole odmítá; klíč vynech (chybí = bun)",
+      "app/v1/package.json: runtime: bun zapsané explicitně — Platforma dnes neznámá pole odmítá; klíč vynechte (chybí = bun)",
     ],
   });
   expect(check(explicitReport, "MS-04").repairs).toBeUndefined();
@@ -183,7 +183,7 @@ test("MS-04 adds the preparation skeleton only when it is unambiguous", async ()
     "app/v1/package.json: lazurio.preparation: chybí povinné pole 'check_script'",
   ]);
 
-  const pythonWarning = "app/v1/package.json: Python App: čtení [tool.lazurio] z pyproject.toml zatím není v Core; ověř přípravu ručně";
+  const pythonWarning = "app/v1/package.json: Python App: čtení [tool.lazurio] z pyproject.toml zatím není v Core; ověřte přípravu ručně";
   const python = await conformantFixture({ mutatePackage: (pkg) => { delete pkg.lazurio.preparation; } });
   await writeText(join(python.appRoot, "pyproject.toml"), "[project]\nname = \"portal\"\n");
   const undecided = await setupModule({ ...python, apply: true });
@@ -216,8 +216,8 @@ test("MS-04 adds the preparation skeleton only when it is unambiguous", async ()
   expect(check(await setupModule({ ...lifecycle, apply: true }), "MS-04")).toMatchObject({
     status: "fail",
     details: [
-      "app/v1/package.json: postinstall je npm lifecycle jméno — bun install ho spouští sám; použij prepare:app / check:prepared",
-      "app/v1/package.json: prepare je npm lifecycle jméno — bun install ho spouští sám; použij prepare:app / check:prepared",
+      "app/v1/package.json: postinstall je npm lifecycle jméno — bun install ho spouští sám; použijte prepare:app / check:prepared",
+      "app/v1/package.json: prepare je npm lifecycle jméno — bun install ho spouští sám; použijte prepare:app / check:prepared",
     ],
   });
   expect((await readJson(join(lifecycle.appRoot, "package.json"))).lazurio.preparation.check_script).toBe("postinstall");
@@ -1048,7 +1048,7 @@ test("human output lists failing checks and their next step", async () => {
   expect(output).toContain("Lazurio Module Standard: 12/13 pass");
   expect(output).toContain("MS-01 fail");
   expect(output).toContain("lease main 23502 leží mimo pool 24000-24099; volný port poolu: 24000");
-  expect(output).toContain("Další krok: Přepiš port leasu v lazurio.module.json na navržený volný port poolu");
+  expect(output).toContain("Další krok: Přepište port leasu v lazurio.module.json na navržený volný port poolu");
 });
 
 function check(report, id) {

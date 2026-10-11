@@ -1,12 +1,12 @@
 {
   "title": "Průvodce digitální kanceláří",
   "intro": "Cesta pro nové kolegy, kteří chtějí vědět, jak s digitální kanceláří pracovat každý den — lidsky, prakticky a bez technických detailů.",
-  "welcome": "Začni tady. Tohle není technická dokumentace. Je to průvodce pro první dny v digitální kanceláři: co kde najdeš, jak mluvit s AI kolegou, jak si hlídat bezpečí a jak po sobě nechávat práci čitelnou pro ostatní.",
+  "welcome": "Začněte tady. Tohle není technická dokumentace. Je to průvodce pro první dny v digitální kanceláři: co kde najdete, jak mluvit s AI kolegou, jak si hlídat bezpečí a jak po sobě nechávat práci čitelnou pro ostatní.",
   "sections": [
     {
       "id": "1-mindset",
       "title": "Proč to celé dává smysl",
-      "description": "Nejdřív pochopíš, proč digitální kancelář existuje a jak poznat dobrý výstup od AI.",
+      "description": "Nejdřív pochopíte, proč digitální kancelář existuje a jak poznat dobrý výstup od AI.",
       "lessons": [
         "01-vitej-v-digitalni-kancelari",
         "02-tri-stupne-prace-s-ai",
@@ -18,7 +18,7 @@
     {
       "id": "2-prvni-orientace",
       "title": "První orientace",
-      "description": "Kde co najdeš, co znamenají základní rozcestníky a jak si ověřit, že je vše připravené.",
+      "description": "Kde co najdete, co znamenají základní rozcestníky a jak si ověřit, že je vše připravené.",
       "lessons": [
         "06-co-je-kde",
         "07-rozcestniky-ktere-te-navedou",
@@ -41,8 +41,8 @@
     },
     {
       "id": "4-tvoje-prace",
-      "title": "Tvoje práce v kanceláři",
-      "description": "Tvůj profil, role, první úkol, denní rytmus a bezpečné uložení výsledku.",
+      "title": "Vaše práce v kanceláři",
+      "description": "Váš profil, role, první úkol, denní rytmus a bezpečné uložení výsledku.",
       "lessons": [
         "16-tvoje-misto",
         "17-tvoje-role",
@@ -54,7 +54,7 @@
     },
     {
       "id": "5-soucast-tymu",
-      "title": "Jsi součást systému",
+      "title": "Jste součástí systému",
       "description": "Jak přidávat poznatky, rozlišit znalosti a návody, vytvořit postup a pomáhat kolegům.",
       "lessons": [
         "21-kam-pridat-novou-vec",

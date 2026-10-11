@@ -61,12 +61,12 @@ export async function startLaunchpadWithPortPolicy({
     } else if (located?.status === "foreign_root") {
       throw serverConflict(
         "LAZURIO_SERVER_OTHER_ROOT_RUNNING",
-        `Na této Mašině už běží Lazurio Server pro jiný Root na ${locatedUrl}. Nejdřív jej zastav.`,
+        `Na této Mašině už běží Lazurio Server pro jiný Root na ${locatedUrl}. Nejdřív jej zastavte.`,
       );
     } else if (located?.status === "legacy_same_root" || located?.status === "protocol_incompatible") {
       throw serverConflict(
         "LAZURIO_SERVER_UPGRADE_REQUIRED",
-        `Na ${locatedUrl} běží nekompatibilní Lazurio Server stejného rootu. Zastav ho a spusť Launchpad znovu.`,
+        `Na ${locatedUrl} běží nekompatibilní Lazurio Server stejného rootu. Zastavte ho a spusťte Launchpad znovu.`,
       );
     } else if (located?.status === "not_ready") {
       throw serverConflict(
@@ -123,14 +123,14 @@ export async function startLaunchpadWithPortPolicy({
       if (observation?.status === "foreign_root") {
         throw serverConflict(
           "LAZURIO_SERVER_OTHER_ROOT_RUNNING",
-          `Na této Mašině už běží Lazurio Server pro jiný Root na ${candidateUrl}. Nejdřív jej zastav.`,
+          `Na této Mašině už běží Lazurio Server pro jiný Root na ${candidateUrl}. Nejdřív jej zastavte.`,
           error,
         );
       }
       if (observation?.status === "legacy_same_root" || observation?.status === "protocol_incompatible") {
         throw serverConflict(
           "LAZURIO_SERVER_UPGRADE_REQUIRED",
-          `Na ${candidateUrl} běží nekompatibilní Lazurio Server stejného rootu. Zastav ho a spusť Launchpad znovu.`,
+          `Na ${candidateUrl} běží nekompatibilní Lazurio Server stejného rootu. Zastavte ho a spusťte Launchpad znovu.`,
           error,
         );
       }

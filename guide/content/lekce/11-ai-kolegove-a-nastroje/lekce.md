@@ -10,7 +10,7 @@ ukol: false
 ---
 # AI kolegové a nástroje
 
-- Co se v této lekci naučíš:
+- Co se v této lekci naučíte:
   - kdy použít AI kolegu;
   - kdy stačí běžný nástroj;
   - proč je dobré chtít ověření.
@@ -19,6 +19,6 @@ AI kolega je dobrý na práci, kde je potřeba porozumět souvislostem: shrnout,
 
 Běžný nástroj je dobrý na přímou akci: otevřít dokument, najít položku, zobrazit tabulku. Není potřeba dávat AI každou drobnost, když stačí jedno kliknutí.
 
-Když AI něco připraví, ptej se: „Z čeho vycházíš?“ a „Co si mám zkontrolovat?“ Tím z návrhu uděláš bezpečnější pracovní výsledek.
+Když AI něco připraví, ptejte se: „Z čeho vycházíš?“ a „Co si mám zkontrolovat?“ Tím z návrhu uděláte bezpečnější pracovní výsledek.
 
-Shrnutí: vezmi si jeden malý praktický krok a neboj se zeptat lidskou řečí.
+Shrnutí: začněte jedním malým praktickým krokem a nebojte se zeptat lidskou řečí.

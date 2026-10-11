@@ -482,7 +482,7 @@ export async function setupModule({
           path: write.path,
           displayPath: relative(containmentRoot, write.path).split(sep).join("/"),
           context: plan.context,
-          missingAction: "Filesystem App se po plánu změnil; spusť setup znovu až po jeho kontrole.",
+          missingAction: "Filesystem App se po plánu změnil; spusťte setup znovu až po jeho kontrole.",
         });
       await beforePublish?.({ action: write.action, path: write.path });
       publishJsonFileAtomically({
@@ -541,7 +541,7 @@ export function renderHumanModuleSetup(report) {
   if (report.status === "actionable") {
     lines.push("Připravené změny:");
     for (const change of report.changes) lines.push(`  - ${change.action}: ${change.path}`);
-    lines.push("Pro zápis spusť tentýž příkaz s --apply a potom zkontroluj Git diff.");
+    lines.push("Pro zápis spusťte tentýž příkaz s --apply a potom zkontrolujte Git diff.");
   }
   if (report.status === "action_required" && report.reason === "module_standard_nonconformant") {
     lines.push("Module kontrakt je platný, ale Modul nesplňuje Lazurio Module Standard; kroky jsou u kontrol níže.");
@@ -585,7 +585,7 @@ async function buildModuleSetupPlan(options) {
       throw actionRequired(
         "module_manifest_not_regular_file",
         `${relativeForReport(options.lazurioRoot, manifestPath)} není běžný soubor`,
-        "Odstraň cizí filesystem entry až po vědomém review; setup ji nepřepisuje.",
+        "Odstraňte cizí filesystem entry až po vědomém review; setup ji nepřepisuje.",
         context,
       );
     }
@@ -602,7 +602,7 @@ async function buildModuleSetupPlan(options) {
       throw actionRequired(
         "module_manifest_invalid",
         identityIssues.join("; "),
-        "Oprav lazurio.module.json podle Core validátoru; setup neuhodne zamýšlenou identitu ani port.",
+        "Opravte lazurio.module.json podle Core validátoru; setup neuhodne zamýšlenou identitu ani port.",
         context,
       );
     }
@@ -611,7 +611,7 @@ async function buildModuleSetupPlan(options) {
       throw actionRequired(
         "module_port_policy_invalid",
         policyIssues.join("; "),
-        "Odstraň duplicitní lease nebo aktivuj Organization module_port_pool; stabilní port neměň.",
+        "Odstraňte duplicitní lease nebo aktivujte Organization module_port_pool; stabilní port neměňte.",
         context,
       );
     }
@@ -735,7 +735,7 @@ async function materializeModuleSetupRuntime({ options, context, manifest }) {
     throw actionRequired(
       "module_runtime_unavailable",
       normalized.issues.join("; ") || "Module nemá explicitní apps deklaraci",
-      "Nejdřív dokonči lazurio module setup; runtime projekce nikdy nehádá App pořadí.",
+      "Nejdřív dokončete lazurio module setup; runtime projekce nikdy nehádá App pořadí.",
       context,
     );
   }
@@ -748,7 +748,7 @@ async function materializeModuleSetupRuntime({ options, context, manifest }) {
       path: packagePath,
       displayPath: appPath,
       context,
-      missingAction: "Materializuj deklarovanou App nebo oprav apps/default_app v Module manifestu.",
+      missingAction: "Materializujte deklarovanou App nebo opravte apps/default_app v Module manifestu.",
     });
     const packageJson = parseJsonForSetup(await readFile(packagePath, "utf8"), packagePath, context);
     const declaredRuntime = packageJson?.lazurio?.runtime;
@@ -767,7 +767,7 @@ async function materializeModuleSetupRuntime({ options, context, manifest }) {
       throw actionRequired(
         "runtime_contract_invalid",
         issues.join("; "),
-        "Oprav App runtime reference; port zůstává pouze v lazurio.module.json.",
+        "Opravte App runtime reference; port zůstává pouze v lazurio.module.json.",
         context,
       );
     }
@@ -836,7 +836,7 @@ async function planExistingModule({
     throw actionRequired(
       "no_app_conflicts_with_manifest",
       "--no-app vyžaduje v existujícím manifestu explicitní apps: []",
-      "Spusť setup bez --no-app nebo vědomě potvrď bezaplikační kontrakt v samostatném review.",
+      "Spusťte setup bez --no-app nebo vědomě potvrďte bezaplikační kontrakt v samostatném review.",
       context,
     );
   }
@@ -850,8 +850,8 @@ async function planExistingModule({
         "apps_declaration_missing",
         `Module nemá explicitní apps a nalezeno runtime balíčků: ${discovered.length}`,
         discovered.length === 0
-          ? "Potvrď --no-app, nebo předej --app-package, --app-id, --title a --dev-script."
-          : "Vyber default App ručně v lazurio.module.json; setup neuhodne pořadí více Apps.",
+          ? "Potvrďte --no-app, nebo předejte --app-package, --app-id, --title a --dev-script."
+          : "Vyberte default App ručně v lazurio.module.json; setup neuhodne pořadí více Apps.",
         context,
       );
     }
@@ -869,7 +869,7 @@ async function planExistingModule({
       path: packagePath,
       displayPath: appPath,
       context,
-      missingAction: "Materializuj deklarovanou App nebo oprav apps/default_app v Module manifestu.",
+      missingAction: "Materializujte deklarovanou App nebo opravte apps/default_app v Module manifestu.",
     });
     const packageText = await readFile(packagePath, "utf8");
     const packageJson = parseJsonForSetup(packageText, packagePath, context);
@@ -882,7 +882,7 @@ async function planExistingModule({
       throw actionRequired(
         "runtime_migration_blocked",
         migration.issues.join("; "),
-        "Uprav custom nebo víceprocesový runtime ručně podle Agent manuálu; setup obecný source parser nepřidává.",
+        "Upravte custom nebo víceprocesový runtime ručně podle Agent manuálu; setup obecný source parser nepřidává.",
         context,
       );
     }
@@ -891,7 +891,7 @@ async function planExistingModule({
         throw actionRequired(
           "runtime_module_lease_drift",
           `${appPath} odvozuje jiný Module lease než existující lazurio.module.json`,
-          "Zachovej existující stabilní lease a ručně sjednoť runtime reference.",
+          "Zachovejte existující stabilní lease a ručně sjednoťte runtime reference.",
           context,
         );
       }
@@ -915,7 +915,7 @@ async function planExistingModule({
         throw actionRequired(
           "app_runtime_missing",
           `${appPath} nemá lazurio.runtime ani podporovanou legacy deklaraci`,
-          "Předej explicitní --app-package, --app-id, --title a --dev-script pro tuto App, nebo doplň reference-only lazurio.runtime podle manuálu.",
+          "Předejte explicitní --app-package, --app-id, --title a --dev-script pro tuto App, nebo doplňte reference-only lazurio.runtime podle manuálu.",
           context,
         );
       }
@@ -934,7 +934,7 @@ async function planExistingModule({
         throw actionRequired(
           "app_contract_invalid",
           [...runtimeIssues, ...materialized.issues].join("; "),
-          "Oprav explicitní App vstupy; existující Module lease zůstává beze změny.",
+          "Opravte explicitní App vstupy; existující Module lease zůstává beze změny.",
           context,
         );
       }
@@ -957,7 +957,7 @@ async function planExistingModule({
       throw actionRequired(
         "runtime_contract_invalid",
         [...runtimeIssues, ...materialized.issues].join("; "),
-        "Oprav App runtime reference; port zůstává pouze v lazurio.module.json.",
+        "Opravte App runtime reference; port zůstává pouze v lazurio.module.json.",
         context,
       );
     }
@@ -973,7 +973,7 @@ async function planNewModule({ options, context, manifestPath }) {
     throw actionRequired(
       "conflicting_app_mode",
       "--no-app a --app-package se vzájemně vylučují",
-      "Vyber právě jeden explicitní typ Modulu.",
+      "Vyberte právě jeden explicitní typ Modulu.",
       context,
     );
   }
@@ -1001,8 +1001,8 @@ async function planNewModule({ options, context, manifestPath }) {
       "module_kind_required",
       `Module nemá manifest a nalezeno runtime balíčků: ${discovered.length}`,
       discovered.length === 0
-        ? "Použij --no-app, nebo předej --app-package, --app-id, --title a --dev-script."
-        : "Přidej explicitní lazurio.module.json s apps/default_app; setup neuhodne default z více Apps.",
+        ? "Použijte --no-app, nebo předejte --app-package, --app-id, --title a --dev-script."
+        : "Přidejte explicitní lazurio.module.json s apps/default_app; setup neuhodne default z více Apps.",
       context,
     );
   }
@@ -1018,7 +1018,7 @@ async function planNewModule({ options, context, manifestPath }) {
     throw actionRequired(
       "runtime_migration_blocked",
       migration.issues.join("; ") || "Runtime nelze jednoznačně převést na Module lease",
-      "Použij explicitní App vstupy nebo proveď bounded ruční migraci podle Agent manuálu.",
+      "Použijte explicitní App vstupy nebo proveďte bounded ruční migraci podle Agent manuálu.",
       context,
     );
   }
@@ -1055,7 +1055,7 @@ async function planExplicitAppModule({ options, context, manifestPath }) {
     path: packagePath,
     displayPath: options.appPackage,
     context,
-    missingAction: "Nejdřív vytvoř App package a jeho dev script; setup nevytváří aplikační source.",
+    missingAction: "Nejdřív vytvořte App package a jeho dev script; setup nevytváří aplikační source.",
   });
   const packageText = await readFile(packagePath, "utf8");
   const packageJson = parseJsonForSetup(packageText, packagePath, context);
@@ -1063,7 +1063,7 @@ async function planExplicitAppModule({ options, context, manifestPath }) {
     throw actionRequired(
       "app_runtime_already_declared",
       `${options.appPackage} už obsahuje runtime deklaraci`,
-      "Spusť setup bez explicitních App vstupů, nebo nejdřív vyřeš drift deklarace.",
+      "Spusťte setup bez explicitních App vstupů, nebo nejdřív vyřešte drift deklarace.",
       context,
     );
   }
@@ -1077,7 +1077,7 @@ async function planExplicitAppModule({ options, context, manifestPath }) {
     throw actionRequired(
       "adopt_port_invalid",
       `--adopt-port musí být celé číslo 1024-65535, obdrženo ${String(options.adoptPort)}`,
-      "Použij doložený stabilní localhost port.",
+      "Použijte doložený stabilní localhost port.",
       context,
     );
   }
@@ -1102,7 +1102,7 @@ async function planExplicitAppModule({ options, context, manifestPath }) {
     throw actionRequired(
       "app_runtime_port_authority",
       `${options.appPackage}: dev script stále deklaruje číselný port ${remainingPorts.join("/")}`,
-      "Odstraň hardcoded port nebo jej převeď na Launchpadem injektovaný PORT; setup nepřidává druhou portovou autoritu.",
+      "Odstraňte hardcoded port nebo jej převeďte na Launchpadem injektovaný PORT; setup nepřidává druhou portovou autoritu.",
       context,
     );
   }
@@ -1118,7 +1118,7 @@ async function planExplicitAppModule({ options, context, manifestPath }) {
     throw actionRequired(
       "app_contract_invalid",
       validation.issues.join("; "),
-      "Oprav explicitní App vstupy nebo dev script; setup nepublikuje nevalidní kontrakt.",
+      "Opravte explicitní App vstupy nebo dev script; setup nepublikuje nevalidní kontrakt.",
       context,
     );
   }
@@ -1150,7 +1150,7 @@ function explicitRuntimePackage({ options, context, packageJson, packagePath }) 
     throw actionRequired(
       "app_inputs_missing",
       `Chybí explicitní vstupy: ${missing.join(", ")}`,
-      "Doplň App identitu; setup ji neodvozuje z názvu balíčku ani složky.",
+      "Doplňte App identitu; setup ji neodvozuje z názvu balíčku ani složky.",
       context,
     );
   }
@@ -1159,7 +1159,7 @@ function explicitRuntimePackage({ options, context, packageJson, packagePath }) 
     throw actionRequired(
       "app_dev_script_missing",
       `${packagePath}: script ${options.devScript} neexistuje nebo je prázdný`,
-      "Vytvoř skutečný App dev script; setup nevytváří aplikační source.",
+      "Vytvořte skutečný App dev script; setup nevytváří aplikační source.",
       context,
     );
   }
@@ -1198,7 +1198,7 @@ async function resolveModuleSetupContext(options) {
     throw new ModuleSetupActionRequired({
       code: "module_root_unavailable",
       message: `${relativeForReport(options.lazurioRoot, options.moduleRoot)} není běžná materializovaná složka`,
-      action: "Materializuj přesný Organization Module slot; setup nevytváří Git repo ani nepřepisuje symlink.",
+      action: "Materializujte přesný Organization Module slot; setup nevytváří Git repo ani nepřepisuje symlink.",
       context: fallbackContext(options),
     });
   }
@@ -1222,7 +1222,7 @@ async function resolveModuleSetupContext(options) {
       throw new ModuleSetupActionRequired({
         code: "organization_manifest_not_mutation_safe",
         message: `Organization manifest není bezpečný pro setup (${resolution.state}; ${resolution.issues.join(", ") || "no stable resource"})`,
-        action: "Oprav Organization manifest a jeho legacy compatibility projection.",
+        action: "Opravte Organization manifest a jeho legacy compatibility projection.",
         context: fallbackContext(options),
       });
     }
@@ -1282,8 +1282,8 @@ async function resolveModuleSetupContext(options) {
         ? `${relativeForReport(options.lazurioRoot, options.moduleRoot)} není přesný slot ani Git worktree jeho kanonického checkoutu`
         : "Module root odpovídá více Organization slotům",
       action: matches.length === 0 && unlinked
-        ? "Vytvoř task worktree z přesného Module checkoutu deklarovaného v modules.manifest.json; shodný remote URL není důkaz ownershipu."
-        : "Oprav modules.manifest.json; setup nevytváří slot ani nehádá Organization ownership.",
+        ? "Vytvořte task worktree z přesného Module checkoutu deklarovaného v modules.manifest.json; shodný remote URL není důkaz ownershipu."
+        : "Opravte modules.manifest.json; setup nevytváří slot ani nehádá Organization ownership.",
       context: fallbackContext(options),
     });
   }
@@ -1333,7 +1333,7 @@ async function assertCandidatePolicy(lazurioRoot, context, manifest) {
     throw actionRequired(
       "module_port_conflict",
       issues.join("; "),
-      "Zachovej existující leases; pro nový Module nech Lazurio vybrat další volný port.",
+      "Zachovejte existující leases; pro nový Module nechte Lazurio vybrat další volný port.",
       context,
     );
   }
@@ -1346,7 +1346,7 @@ function assertCandidateModule(manifest, manifestPath, context, extraIssues) {
     throw actionRequired(
       "generated_module_invalid",
       issues.join("; "),
-      "Oprav explicitní vstupy; setup nikdy nezapisuje schema-nevalidní manifest.",
+      "Opravte explicitní vstupy; setup nikdy nezapisuje schema-nevalidní manifest.",
       context,
     );
   }
@@ -1358,7 +1358,7 @@ function assertCandidateIdentity(manifest, context) {
     throw actionRequired(
       "generated_module_identity_mismatch",
       `Odvozená identita ${String(manifest.company)}/${String(manifest.id)} neodpovídá slotu ${context.company}/${context.module}`,
-      "Oprav Organization slot nebo legacy runtime identitu; setup ji nepřepisuje odhadem.",
+      "Opravte Organization slot nebo legacy runtime identitu; setup ji nepřepisuje odhadem.",
       context,
     );
   }
@@ -1440,7 +1440,7 @@ function parseJsonForSetup(text, path, context) {
     throw actionRequired(
       "json_invalid",
       `${path}: JSON nejde přečíst (${error.message})`,
-      "Oprav JSON ručně; setup neobnovuje poškozený obsah odhadem.",
+      "Opravte JSON ručně; setup neobnovuje poškozený obsah odhadem.",
       context,
     );
   }
@@ -1449,7 +1449,7 @@ function parseJsonForSetup(text, path, context) {
 function assertPathWithin(root, candidate, context, code) {
   const rel = relative(resolve(root), resolve(candidate));
   if (rel === "" || rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
-    throw actionRequired(code, `${candidate} neleží uvnitř Module rootu`, "Použij relativní package.json cestu uvnitř Modulu.", context);
+    throw actionRequired(code, `${candidate} neleží uvnitř Module rootu`, "Použijte relativní package.json cestu uvnitř Modulu.", context);
   }
 }
 
@@ -1511,7 +1511,7 @@ async function assertRegularModuleFile({ moduleRoot, path, displayPath, context,
       throw actionRequired(
         "app_package_outside_module",
         `${displayPath} prochází přes symlink nebo junction ${relative(root, cursor).split(sep).join("/")}`,
-        "Použij běžnou App složku fyzicky uvnitř Modulu; setup odkazy nepřepisuje.",
+        "Použijte běžnou App složku fyzicky uvnitř Modulu; setup odkazy nepřepisuje.",
         context,
       );
     }
@@ -1557,7 +1557,7 @@ async function assertModuleWriteParent({ moduleRoot, path, context }) {
     throw actionRequired(
       "app_package_outside_module",
       `${relative(root, path).split(sep).join("/")} nemá běžnou rodičovskou složku uvnitř Modulu`,
-      "Obnov běžný Module checkout; setup nezapisuje přes symlink nebo junction.",
+      "Obnovte běžný Module checkout; setup nezapisuje přes symlink nebo junction.",
       context,
     );
   }
@@ -1610,7 +1610,7 @@ function publishJsonFileAtomically({
     throw actionRequired(
       "app_package_outside_module",
       `${displayPath} změnil rodičovskou složku během apply`,
-      "Zkontroluj souběžný zásah do Module checkoutu a spusť setup znovu; mimo Modul nebylo nic změněno.",
+      "Zkontrolujte souběžný zásah do Module checkoutu a spusťte setup znovu; mimo Modul nebylo nic změněno.",
       context,
     );
   }
@@ -1618,7 +1618,7 @@ function publishJsonFileAtomically({
     throw actionRequired(
       "app_package_changed_during_apply",
       `${path}: obsah se během apply změnil`,
-      "Zkontroluj souběžné změny a spusť setup znovu; setup cizí obsah nepřepsal.",
+      "Zkontrolujte souběžné změny a spusťte setup znovu; setup cizí obsah nepřepsal.",
       context,
     );
   }
@@ -1702,7 +1702,7 @@ export function parseRuntimeMigrationArgs(argv) {
     }
     if (["--lazurio-root", "--conglomerate-root"].includes(argument)) {
       if (explicitLazurioRoot !== null) {
-        throw new Error("Použij právě jeden z --lazurio-root nebo deprecated --conglomerate-root");
+        throw new Error("Použijte právě jeden z --lazurio-root nebo deprecated --conglomerate-root");
       }
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) throw new Error(`${argument} vyžaduje cestu`);
@@ -1728,7 +1728,7 @@ export async function runRuntimeMigrationCli(argv) {
   }
   const { write, explicitLazurioRoot, usedDeprecatedRootFlag, targets } = parsed;
   if (usedDeprecatedRootFlag) {
-    console.warn("warning: --conglomerate-root je deprecated; použij --lazurio-root");
+    console.warn("warning: --conglomerate-root je deprecated; použijte --lazurio-root");
   }
   const roots = targets.map((argument) => resolve(argument));
   if (roots.length === 0) {
@@ -1739,7 +1739,7 @@ export async function runRuntimeMigrationCli(argv) {
   const paths = [];
   const lazurioRoot = resolve(explicitLazurioRoot ?? resolve(import.meta.dirname, ".."));
   if (!existsSync(join(lazurioRoot, "organizations"))) {
-    console.error(`${lazurioRoot} není primární Lazurio root: chybí organizations/; předej --lazurio-root`);
+    console.error(`${lazurioRoot} není primární Lazurio root: chybí organizations/; předejte --lazurio-root`);
     process.exitCode = 2;
     return;
   }
@@ -1924,7 +1924,7 @@ async function atomicJsonWrite(path, value) {
 
 if (import.meta.main) {
   if (process.argv[2] !== PINNED_JSON_PUBLISH_MODE) {
-    throw new Error("module-setup-lib.mjs je interní knihovna; použij `lazurio module setup`");
+    throw new Error("module-setup-lib.mjs je interní knihovna; použijte `lazurio module setup`");
   }
   await runPinnedJsonPublisher();
 }

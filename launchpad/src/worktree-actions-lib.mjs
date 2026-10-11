@@ -237,7 +237,7 @@ export async function createWorktreeFromPlan({
     // nahradit jejich adresářové položky dřív, než bychom je znovu ověřili.
     if (sidecarPublished) {
       throw new WorktreeActionError(
-        `Worktree byl vytvořen a sidecar publikován, ale následné ověření selhalo: ${error instanceof Error ? error.message : error}. Neopakuj create; ověř index a případný staging soubor ukliď vědomě.`,
+        `Worktree byl vytvořen a sidecar publikován, ale následné ověření selhalo: ${error instanceof Error ? error.message : error}. Neopakujte create; ověřte index a případný staging soubor ukliďte vědomě.`,
         {
           status: 202,
           code: "worktree_created_index_pending",

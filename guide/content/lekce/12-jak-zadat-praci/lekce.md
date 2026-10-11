@@ -11,15 +11,15 @@ achievement_on_complete: "good-brief"
 ---
 # Jak zadat práci AI kolegovi
 
-- Co se v této lekci naučíš:
+- Co se v této lekci naučíte:
   - co má dobré zadání obsahovat;
   - jak dát hranice;
   - proč chtít náhled před změnou.
 
 Dobré zadání nemusí být dlouhé. Má říct: co chci, proč to chci, z čeho máš vycházet a co nemáš měnit.
 
-Místo „vyřeš to“ napiš třeba: „Potřebuji krátký návrh odpovědi klientovi. Má být přátelský, nemá slibovat termín a nejdřív mi ukaž návrh.“
+Místo „vyřeš to“ napište třeba: „Potřebuji krátký návrh odpovědi klientovi. Má být přátelský, nemá slibovat termín a nejdřív mi ukaž návrh.“
 
-U důležitých věcí chtěj kontrolní krok: „Než něco uložíš nebo odešleš, ukaž mi, co bys změnil a proč.“
+U důležitých věcí chtějte kontrolní krok: „Než něco uložíš nebo odešleš, ukaž mi, co bys změnil a proč.“
 
-Shrnutí: vezmi si jeden malý praktický krok a neboj se zeptat lidskou řečí.
+Shrnutí: začněte jedním malým praktickým krokem a nebojte se zeptat lidskou řečí.

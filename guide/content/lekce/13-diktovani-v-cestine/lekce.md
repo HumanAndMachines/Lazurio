@@ -10,15 +10,15 @@ ukol: false
 ---
 # Diktování v češtině
 
-- Co se v této lekci naučíš:
+- Co se v této lekci naučíte:
   - proč je mluvené zadání v pořádku;
   - jak diktovat jasně;
   - co po diktování nechat upravit.
 
-Nemusíš všechno psát dokonale. Někdy je nejrychlejší říct zadání nahlas a nechat AI kolegu, aby ho srovnal do jasných bodů.
+Nemusíte všechno psát dokonale. Někdy je nejrychlejší říct zadání nahlas a nechat AI kolegu, aby ho srovnal do jasných bodů.
 
-Diktuj jako člověku: co řešíš, pro koho to je, co nechceš pokazit. Nevadí, když věty nejsou krásné. Důležitý je směr.
+Diktujte jako člověku: co řešíte, pro koho to je, co nechcete pokazit. Nevadí, když věty nejsou krásné. Důležitý je směr.
 
-Po nadiktování požádej: „Přepiš to do jasného zadání a zeptej se na jednu věc, která chybí.“ Tím z neuspořádané myšlenky vznikne použitelný brief.
+Po nadiktování požádejte: „Přepiš to do jasného zadání a zeptej se na jednu věc, která chybí.“ Tím z neuspořádané myšlenky vznikne použitelný brief.
 
-Shrnutí: vezmi si jeden malý praktický krok a neboj se zeptat lidskou řečí.
+Shrnutí: začněte jedním malým praktickým krokem a nebojte se zeptat lidskou řečí.

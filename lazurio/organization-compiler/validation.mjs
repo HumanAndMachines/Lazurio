@@ -837,7 +837,7 @@ function validateRootSlotOwnership({ label, item, failures }) {
   );
   if (legacyCheckoutFields.length > 0) {
     failures.push(
-      `${label}: Organization root slot nesmí deklarovat legacy checkout souřadnice (${legacyCheckoutFields.join(", ")}); používej výhradně git.url a git.branch`,
+      `${label}: Organization root slot nesmí deklarovat legacy checkout souřadnice (${legacyCheckoutFields.join(", ")}); používejte výhradně git.url a git.branch`,
     );
   }
   if (organizationNestedRepoSlotPaths.has(item.path)) {
@@ -847,7 +847,7 @@ function validateRootSlotOwnership({ label, item, failures }) {
       );
     } else if (item.status !== "planned_slot" && !hasCheckoutCoordinates(item)) {
       failures.push(
-        `${label}: aktivní nested repo musí mít git.url a git.branch; bez checkout údajů použij status planned_slot`,
+        `${label}: aktivní nested repo musí mít git.url a git.branch; bez checkout údajů použijte status planned_slot`,
       );
     }
   }
@@ -905,7 +905,7 @@ function validateMissionControlSlotPair({ manifestByPath, failures }) {
   if (appDeclared !== dataDeclared) {
     const missingPath = appDeclared ? "mission-control/db" : "mission-control";
     failures.push(
-      `modules.manifest.json/module_slots: Mission Control app/data boundary musí deklarovat oba root sloty; chybí ${missingPath} (během migrace použij status planned_slot)`,
+      `modules.manifest.json/module_slots: Mission Control app/data boundary musí deklarovat oba root sloty; chybí ${missingPath} (během migrace použijte status planned_slot)`,
     );
     return;
   }

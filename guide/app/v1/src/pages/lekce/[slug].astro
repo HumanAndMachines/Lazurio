@@ -122,14 +122,14 @@ const totalSlides = contentSlides.length + interactiveSlides + 1;
         <div class="lesson-slide-card lesson-finish-slide">
           <GuidePet />
           <div class="lesson-slide-kicker">Finále lekce</div>
-          <h2>Jsi na konci tohoto kroku.</h2>
+          <h2>Jste na konci tohoto kroku.</h2>
           <p>
-            Mattyčus: Když ti něco nesedí, můžeš se vrátit šipkou zpět. Chyby jsou tady mapa,
+            Mattyčus: Když vám něco nesedí, můžete se vrátit šipkou zpět. Chyby jsou tady mapa,
             ne trest.
           </p>
           {lekce.achievement_on_complete && (
             <p class="lesson-finish-achievement">
-              Po dokončení získáš odznak <code>{lekce.achievement_on_complete}</code>.
+              Po dokončení získáte odznak <code>{lekce.achievement_on_complete}</code>.
             </p>
           )}
           <button
@@ -155,7 +155,7 @@ const totalSlides = contentSlides.length + interactiveSlides + 1;
 
     <div class="lesson-focus-cue" aria-hidden="true">
       <GuidePet size="sm" />
-      <span data-slide-hint>Držím směr. Pokračuj šipkou vpravo.</span>
+      <span data-slide-hint>Držím směr. Pokračujte šipkou vpravo.</span>
     </div>
   </section>
 
@@ -163,10 +163,10 @@ const totalSlides = contentSlides.length + interactiveSlides + 1;
     <div class="xp-burst" data-xp-burst aria-hidden="true"></div>
     <div class="lesson-complete-card" role="dialog" aria-modal="true" aria-labelledby="lesson-complete-title">
       <GuidePet />
-      <h2 id="lesson-complete-title">Skvělá práce! Právě jsi odemkl další úroveň.</h2>
+      <h2 id="lesson-complete-title">Skvělá práce! Další úroveň je odemčená.</h2>
       <p>
-        Mattyčus: Tahle lekce ti přidala <strong>20 XP</strong> a posunula tě dál na mapě.
-        Nová úroveň čeká, až budeš připravený pokračovat.
+        Mattyčus: Tahle lekce vám přidala <strong>20 XP</strong> a posunula vás dál na mapě.
+        Nová úroveň na vás počká, až budete chtít pokračovat.
       </p>
       <a href={next ? `/lekce/${next}` : "/"} data-complete-next>
         Pokračovat na mapě
@@ -218,8 +218,8 @@ const totalSlides = contentSlides.length + interactiveSlides + 1;
       if (hint instanceof HTMLElement) {
         const title = current?.getAttribute("data-slide-title") || "další krok";
         hint.textContent = index === slides.length - 1
-          ? "Tady můžeš lekci dokončit a odemknout další bod."
-          : `Teď jsi ve slidu „${title}“. Pokračuj šipkou vpravo.`;
+          ? "Tady můžete lekci dokončit a odemknout další bod."
+          : `Teď jste ve slidu „${title}“. Pokračujte šipkou vpravo.`;
       }
     }
 

@@ -106,7 +106,7 @@ export function planOrganizationManifestMigration({ documents, finalize = false 
       plan.blockers.push({
         code: "legacy_modules_unreconciled",
         message: "Legacy company.gen3.json#modules[] není sladěné s modules.manifest.json "
-          + `(${derived.modulesReconciliation.issues.join(", ")}); nejdřív slaď modules.manifest.json v PR Organizace.`,
+          + `(${derived.modulesReconciliation.issues.join(", ")}); nejdřív slaďte modules.manifest.json v PR Organizace.`,
       });
     }
     return plan;
@@ -282,7 +282,7 @@ export function renderHumanOrganizationManifestMigration(report) {
     lines.push(`Legacy modules[]: ${reconciliation.legacy_entries} položek · ${reconciliation.reconciled} sladěno s modules.manifest.json`);
     for (const path of reconciliation.unreconciled) lines.push(`! ${path}: není deklarovaný slot v modules.manifest.json`);
     for (const conflict of reconciliation.field_conflicts) {
-      lines.push(`! ${conflict.path}: pole ${conflict.fields.join(", ")} se liší od modules.manifest.json slotu — nejdřív slaď modules.manifest.json`);
+      lines.push(`! ${conflict.path}: pole ${conflict.fields.join(", ")} se liší od modules.manifest.json slotu — nejdřív slaďte modules.manifest.json`);
     }
   }
   for (const change of report.changes) {
@@ -341,7 +341,7 @@ function observeGitGate({ root, runGit }) {
     return { ...gate, reason: "primary_checkout", message: "Zápis je dovolený jen v linked task worktree; primární checkout se nemění." };
   }
   if (gate.branch === null) {
-    return { ...gate, reason: "detached_head", message: "Worktree je v detached HEAD; přepni na task branch." };
+    return { ...gate, reason: "detached_head", message: "Worktree je v detached HEAD; přepněte na task branch." };
   }
   if (ORGANIZATION_MANIFEST_MIGRATION_CANONICAL_BRANCHES.includes(gate.branch)) {
     return { ...gate, reason: "canonical_branch", message: `Branch ${gate.branch} je kanonická; migrace patří na task branch a do PR.` };

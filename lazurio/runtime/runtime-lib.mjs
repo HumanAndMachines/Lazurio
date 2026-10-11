@@ -432,7 +432,7 @@ export function createRuntimeManager({
         return {
           ok: false,
           reason: "dependency_tree_boundary_invalid",
-          detail: `${app?.personal === true ? "Personalspace" : "Organization"} mount po discovery neleží uvnitř canonical Lazurio rootu. Obnov stav a oprav přesun nebo přejmenování mountu.`,
+          detail: `${app?.personal === true ? "Personalspace" : "Organization"} mount po discovery neleží uvnitř canonical Lazurio rootu. Obnovte stav a opravte přesun nebo přejmenování mountu.`,
         };
       }
       ownerRoot = ownerBoundary.targetRealPath;
@@ -1937,7 +1937,7 @@ export function createRuntimeManager({
         throw new RuntimeActionError(
           409,
           "invalid_manifest",
-          `Aplikace ${appId} má nevalidní runtime manifest; oprav lazurio.runtime nebo legacy manifest a spusť Synchronizovat.`,
+          `Aplikace ${appId} má nevalidní runtime manifest; opravte lazurio.runtime nebo legacy manifest a spusťte Synchronizovat.`,
           invalidApp.manifest_issues ?? [],
           { failure_kind: "invalid_manifest", package_path: invalidApp.package_path },
         );
@@ -3629,7 +3629,7 @@ export function createRuntimeManager({
       status: "stopped",
       message: state?.last_error
         ?? (state?.status === "unhealthy" && state.exit_code !== undefined
-          ? `Poslední managed proces skončil s kódem ${state.exit_code}. Otevři Logs pro detail.`
+          ? `Poslední managed proces skončil s kódem ${state.exit_code}. Otevřete Logs pro detail.`
           : "Aplikace neběží."),
     };
   }
@@ -4021,7 +4021,7 @@ export function createRuntimeManager({
         installCommand: null,
         checkedAt,
         message: missingLockfileState === "missing_lockfile"
-          ? `${app.title}: chybí podporovaný lockfile v package rootu. Vytvoř a commitni lockfile odpovídající packageManager; Lazurio bez něj nic neinstaluje odhadem.`
+          ? `${app.title}: chybí podporovaný lockfile v package rootu. Vytvořte a commitněte lockfile odpovídající packageManager; Lazurio bez něj nic neinstaluje odhadem.`
           : `${app.title}: aktuální dependency strom je úplný; bez podporovaného lockfilu ale Lazurio nenabídne Install ani Repair.`,
       }));
     }
@@ -4043,8 +4043,8 @@ export function createRuntimeManager({
         installCommand: null,
         checkedAt,
         message: manager.lockfile_mismatch
-          ? `Package manager ${manager.name ?? "unknown"} neodpovídá vybranému ${lockfile?.path ?? "lockfilu"} (${lockfile?.package_manager ?? "unknown"}). Sjednoť packageManager a lockfile; Lazurio odhadem nic neinstaluje.`
-          : `Package manager ${manager.name ?? "unknown"} není zatím podporovaný Launchpad Install akcí. Použij Doctor nebo terminál.`,
+          ? `Package manager ${manager.name ?? "unknown"} neodpovídá vybranému ${lockfile?.path ?? "lockfilu"} (${lockfile?.package_manager ?? "unknown"}). Sjednoťte packageManager a lockfile; Lazurio odhadem nic neinstaluje.`
+          : `Package manager ${manager.name ?? "unknown"} není zatím podporovaný Launchpad Install akcí. Použijte Doctor nebo terminál.`,
       }));
     }
 
@@ -4055,7 +4055,7 @@ export function createRuntimeManager({
       const visibleNames = missingDependencyNames.slice(0, 5).join(", ");
       const remainingCount = missingDependencyNames.length - 5;
       const suffix = remainingCount > 0 ? ` a ${remainingCount} dalších` : "";
-      message = `${app.title}: v node_modules chybí deklarované balíčky ${visibleNames}${suffix}. Použij Install (${manager.installCommand.join(" ")}) v ${appCwd}.`;
+      message = `${app.title}: v node_modules chybí deklarované balíčky ${visibleNames}${suffix}. Použijte Install (${manager.installCommand.join(" ")}) v ${appCwd}.`;
     }
 
     return withAuthority(dependencyResult({
@@ -4144,7 +4144,7 @@ async function requiredModuleSlotState({ organizationRoot, app }) {
   if (!organizationPath) {
     return {
       state: "required_slot_unavailable",
-      message: `${app.title} deklaruje povinný Organization slot, ale runtime nemá bezpečně určenou cestu Organizace. Oprav runtime manifest.`,
+      message: `${app.title} deklaruje povinný Organization slot, ale runtime nemá bezpečně určenou cestu Organizace. Opravte runtime manifest.`,
     };
   }
 
@@ -4171,7 +4171,7 @@ async function requiredModuleSlotState({ organizationRoot, app }) {
     if (slot.status === "planned_slot") {
       return {
         state: "planned_slot",
-        message: `${app.title} zatím nejde spustit: datový slot ${requiredPath} je plánovaný. Dokonči jeho schválenou manifestem řízenou aktivaci; repozitář ručně neklonuj.`,
+        message: `${app.title} zatím nejde spustit: datový slot ${requiredPath} je plánovaný. Dokončete jeho schválenou manifestem řízenou aktivaci; repozitář ručně neklonujte.`,
       };
     }
     const worktreeMetadata = app?.[APP_WORKTREE_METADATA];
@@ -4195,7 +4195,7 @@ async function requiredModuleSlotState({ organizationRoot, app }) {
       if (matchingMembers.length !== 1 || typeof app?.[APP_CHECKOUT_ROOT] !== "string") {
         return {
           state: "required_slot_unavailable",
-          message: `${app.title} nejde spustit, protože worktree nemá právě jeden vlastněný repository-db binding ${requiredPath}. Vytvoř nový worktree přes Launchpad nebo oprav sidecar vědomým recovery postupem.`,
+          message: `${app.title} nejde spustit, protože worktree nemá právě jeden vlastněný repository-db binding ${requiredPath}. Vytvořte nový worktree přes Launchpad nebo opravte sidecar vědomým recovery postupem.`,
         };
       }
       const binding = await inspectRepositoryDbWorktreeBinding({
@@ -4220,7 +4220,7 @@ async function requiredModuleSlotState({ organizationRoot, app }) {
     if (!requiredSlotBoundary.ok || !requiredSlotBoundary.targetRealPath) {
       return {
         state: "required_slot_unavailable",
-        message: `${app.title} nejde spustit, protože povinný slot ${requiredPath} není bezpečně dostupný uvnitř canonical Organizace. Spusť Synchronizovat a Doctor.`,
+        message: `${app.title} nejde spustit, protože povinný slot ${requiredPath} není bezpečně dostupný uvnitř canonical Organizace. Spusťte Synchronizovat a Doctor.`,
       };
     }
   }
@@ -4400,7 +4400,7 @@ function startConflictForRuntime(runtime) {
   if (runtime.owner === "foreign-port") {
     return {
       code: "app_port_conflict",
-      message: `Port ${runtime.port} používá proces z jiného checkoutu. Zastav cizí instanci a potom Start zopakuj.`,
+      message: `Port ${runtime.port} používá proces z jiného checkoutu. Zastavte cizí instanci a potom Start zopakujte.`,
       details: [`pid: ${runtime.port_owner?.pid ?? "unknown"}`, `expected_cwd: ${runtime.dependencies?.cwd ?? "unknown"}`],
       metadata: { failure_kind: "port_owner_cwd_mismatch", runtime },
     };
@@ -4418,14 +4418,14 @@ function startConflictForRuntime(runtime) {
   if (runtime.port_owner?.pid && runtime.status === "unhealthy") {
     return {
       code: "app_port_conflict",
-      message: `Port aplikace je obsazený PID ${runtime.port_owner.pid}, ale health endpoint není zdravý. Použij Stop nebo uvolni port.`,
+      message: `Port aplikace je obsazený PID ${runtime.port_owner.pid}, ale health endpoint není zdravý. Použijte Stop nebo uvolněte port.`,
       details: [`pid: ${runtime.port_owner.pid}`, `health: ${runtime.health_url}`],
       metadata: { failure_kind: "port_conflict", runtime },
     };
   }
   return {
     code: "app_already_running",
-    message: "Aplikace už běží na app-owned portu. Použij Restart nebo Stop.",
+    message: "Aplikace už běží na app-owned portu. Použijte Restart nebo Stop.",
     details: [`status: ${runtime.status}`, `owner: ${runtime.owner}`],
     metadata: { failure_kind: "already_running", runtime },
   };
@@ -4434,12 +4434,12 @@ function startConflictForRuntime(runtime) {
 function startFailure(app, exitCode, logExcerpt) {
   const kind = classifyStartFailure(logExcerpt);
   const nextAction = {
-    missing_dependencies: "Použij Install/Repair a potom Start zopakuj.",
-    missing_script: "Oprav dev_script v package.json nebo app manifestu.",
-    bad_cwd: "Oprav cwd/package_path nebo spusť Doctor sync.",
-    port_conflict: "Uvolni obsazený port nebo zastav starou instanci a potom Start zopakuj.",
-    unknown_early_exit: "Otevři Logs a oprav runtime chybu v aplikaci.",
-  }[kind] ?? "Otevři Logs a oprav runtime chybu v aplikaci.";
+    missing_dependencies: "Použijte Install/Repair a potom Start zopakujte.",
+    missing_script: "Opravte dev_script v package.json nebo app manifestu.",
+    bad_cwd: "Opravte cwd/package_path nebo spusťte Doctor sync.",
+    port_conflict: "Uvolněte obsazený port nebo zastavte starou instanci a potom Start zopakujte.",
+    unknown_early_exit: "Otevřete Logs a opravte runtime chybu v aplikaci.",
+  }[kind] ?? "Otevřete Logs a opravte runtime chybu v aplikaci.";
   const suffix = logExcerpt ? ` Poslední log:\n${logExcerpt}` : " Log je zatím prázdný.";
   return {
     kind,

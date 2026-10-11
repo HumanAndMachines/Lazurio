@@ -111,7 +111,7 @@ export function planModuleScaffold({
     throw new ModuleScaffoldError(
       "unknown_stack",
       `Stack ${JSON.stringify(stack)} neexistuje; povolené jsou ${MODULE_SCAFFOLD_STACKS.join(", ")}.`,
-      "Zvol stack podle Lazurio Module Standardu kap. 6; jiný stack je rozhodnutí Principála.",
+      "Zvolte stack podle Lazurio Module Standardu kap. 6; jiný stack je rozhodnutí Principála.",
     );
   }
   assertSlug(slug);
@@ -174,7 +174,7 @@ export function planModuleScaffold({
   const warnings = [];
   if (stackSpec.toolchain === "uv") {
     warnings.push(
-      "Python App: MS-04 a MS-08 zůstanou warn, dokud Platforma nemá adaptér uv (DEV-6634 W0-5); do té doby ji ověř ručně uv run --no-sync " + slug + ".",
+      "Python App: MS-04 a MS-08 zůstanou warn, dokud Platforma nemá adaptér uv (DEV-6634 W0-5); do té doby ji ověřte ručně uv run --no-sync " + slug + ".",
     );
   }
 
@@ -296,14 +296,14 @@ function assertSlug(slug) {
     throw new ModuleScaffoldError(
       "invalid_slug",
       `Slug ${JSON.stringify(slug)} není lowercase kebab-case (${SLUG_PATTERN.source}, nejvýše ${SLUG_MAX_LENGTH} znaků).`,
-      "Použij malá písmena, číslice a pomlčky, na začátku písmeno, například customer-portal.",
+      "Použijte malá písmena, číslice a pomlčky, na začátku písmeno, například customer-portal.",
     );
   }
   if (RESERVED_MODULE_SLUGS.includes(slug)) {
     throw new ModuleScaffoldError(
       "reserved_slug",
       `Slug ${slug} je rezervovaný pro hranici Organizace nebo rootu.`,
-      "Zvol jiný slug Modulu.",
+      "Zvolte jiný slug Modulu.",
     );
   }
 }
@@ -316,7 +316,7 @@ function normalizeDisplayName(value, slug) {
     throw new ModuleScaffoldError(
       "invalid_display_name",
       `Název ${JSON.stringify(value)} není použitelný (1–${DISPLAY_NAME_MAX_LENGTH} znaků, bez " \\ < > { } \` a řídicích znaků).`,
-      "Zadej prostý název, například Zákaznický portál.",
+      "Zadejte prostý název, například Zákaznický portál.",
     );
   }
   return name;
@@ -339,7 +339,7 @@ function normalizeTeams(teams, roster) {
       throw new ModuleScaffoldError(
         "unknown_team",
         `Organizace nedeklaruje Team ${unknown.join(", ")}.`,
-        `Použij Team z lazurio.organization.json#teams (${roster.join(", ") || "žádný"}); nový Team zakládá Organization Admin.`,
+        `Použijte Team z lazurio.organization.json#teams (${roster.join(", ") || "žádný"}); nový Team zakládá Organization Admin.`,
       );
     }
   }
@@ -393,7 +393,7 @@ function assertSlotFree(slug, slots) {
       throw new ModuleScaffoldError(
         "slot_exists",
         `Organizace už má slot ${path || slot?.slug}, který se se slugem ${slug} kryje (i bez ohledu na velikost písmen).`,
-        "Zvol jiný slug nebo pracuj v existujícím Modulu.",
+        "Zvolte jiný slug nebo pracujte v existujícím Modulu.",
       );
     }
   }
@@ -421,11 +421,11 @@ function choosePort(port, organization, slug) {
       throw new ModuleScaffoldError(
         "port_outside_pool",
         `Port ${port} neleží v module_port_pool ${pool.start}-${pool.end} Organizace ${organization.slug}.`,
-        "Vynech --port (scaffold vybere volný port poolu odvozený ze slugu) nebo zvol port z poolu.",
+        "Vynechte --port (scaffold vybere volný port poolu odvozený ze slugu) nebo zvolte port z poolu.",
       );
     }
     if (taken.has(port)) {
-      throw new ModuleScaffoldError("port_taken", `Port ${port} už drží jiný Modul.`, "Vynech --port nebo zvol volný port poolu.");
+      throw new ModuleScaffoldError("port_taken", `Port ${port} už drží jiný Modul.`, "Vynechte --port nebo zvolte volný port poolu.");
     }
     return port;
   }

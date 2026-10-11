@@ -10,15 +10,15 @@ ukol: false
 ---
 # Co je workspace jednoduše
 
-- Co se v této lekci naučíš:
+- Co se v této lekci naučíte:
   - co znamená pracovní prostor;
   - proč má tým společnou mapu;
   - proč částečný přístup není chyba.
 
-Pracovní prostor je digitální kancelář jednoho týmu nebo jedné značky. Firma může mít takových kanceláří víc: jinou má obchod, jinou výroba, jinou konkrétní značka. Ty pracuješ hlavně v té své, a to je v pořádku.
+Pracovní prostor je digitální kancelář jednoho týmu nebo jedné značky. Firma může mít takových kanceláří víc: jinou má obchod, jinou výroba, jinou konkrétní značka. Vy pracujete hlavně v té své, a to je v pořádku.
 
-Ne každý musí vidět všechny kanceláře. Když nějakou nevidíš, nemusí to znamenat chybu. Může to znamenat, že k ní nemáš roli, že ji teď nepotřebuješ, nebo že daná část ještě není připravená.
+Ne každý musí vidět všechny kanceláře. Když nějakou nevidíte, nemusí to znamenat chybu. Může to znamenat, že k ní nemáte roli, že ji teď nepotřebujete, nebo že daná část ještě není připravená.
 
-Smysl společné mapy je, abys věděl/a, kde začít a koho se zeptat. Ne abys nosil/a v hlavě celý systém.
+Společná mapa vám ukáže, kde začít a koho se zeptat. Celý systém v hlavě nosit nemusíte.
 
-Shrnutí: vezmi si jeden malý praktický krok a neboj se zeptat lidskou řečí.
+Shrnutí: začněte jedním malým praktickým krokem a nebojte se zeptat lidskou řečí.

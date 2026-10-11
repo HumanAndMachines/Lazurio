@@ -158,7 +158,7 @@ export async function runLazurioUpdate({
 
   if (await runtimeOverlapsWorkingRoot({ runtimeRoot, workingRoot: absoluteRoot })) {
     const result = blockedResult(rootDescriptor(absoluteRoot), "runtime_not_isolated", {
-      detail: "Launchpad/CLI runtime běží z pracovního checkoutu, který by měl aktualizovat. Nejdřív spusť immutable Lazurio runtime s tímto checkoutem předaným jako working root.",
+      detail: "Launchpad/CLI runtime běží z pracovního checkoutu, který by měl aktualizovat. Nejdřív spusťte immutable Lazurio runtime s tímto checkoutem předaným jako working root.",
       codex: false,
       nextAction: "retry",
     });
@@ -2054,7 +2054,7 @@ function restrictedSlotMaterializationResult({
   const classification = classifyOrganizationSlotAccess(repo);
   if (classification === "unknown") {
     return blockedResult(repo, "access_classification_unknown", {
-      detail: "Slot deklaruje neznámý default_access nebo malformed required_roles; Lazurio ho fail-safe nematerializuje a nic na GitHubu nečte. Oprav deklaraci v Organization manifestu.",
+      detail: "Slot deklaruje neznámý default_access nebo malformed required_roles; Lazurio ho fail-safe nematerializuje a nic na GitHubu nečte. Opravte deklaraci v Organization manifestu.",
     });
   }
   let restrictedBy = classification === "restricted" ? repo : null;

@@ -2,7 +2,7 @@
   "questions": [
     {
       "id": "q1",
-      "text": "Co uděláš při červeném upozornění?",
+      "text": "Co uděláte při červeném upozornění?",
       "type": "single",
       "options": [
         {

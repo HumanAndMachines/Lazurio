@@ -34,7 +34,7 @@ test("agentní Organization entry vyžaduje dostupný slug s přesným casingem"
   expect(() => assertAvailableAgentEntryOrganization(
     { agentEntry: true, organization: "agentmint" },
     organizations,
-  )).toThrow('nemá přesný casing; použij "AgentMint"');
+  )).toThrow('nemá přesný casing; použijte "AgentMint"');
   expect(() => assertAvailableAgentEntryOrganization(
     { agentEntry: true, organization: "MissingCo" },
     organizations,

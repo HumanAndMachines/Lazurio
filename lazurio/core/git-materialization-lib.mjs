@@ -596,7 +596,7 @@ function missingAccess(result = {}) {
     outcome: "missing_access",
     code: "materialization_source_unavailable",
     message: appendGitDiagnostic(
-      "Git nedokázal přečíst repo nebo jeho větev přes deklarovaný remote. Ověř repo access i Git transport; u privátního SSH remote musí uspět exact `git ls-remote`. Opakované `gh auth login` bez tohoto testu transport neopraví. Nic se nenaklonovalo.",
+      "Git nedokázal přečíst repo nebo jeho větev přes deklarovaný remote. Ověřte repo access i Git transport; u privátního SSH remote musí uspět exact `git ls-remote`. Opakované `gh auth login` bez tohoto testu transport neopraví. Nic se nenaklonovalo.",
       diagnostic,
     ),
   };

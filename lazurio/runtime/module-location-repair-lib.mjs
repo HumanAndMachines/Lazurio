@@ -107,7 +107,7 @@ export async function runModuleLocationRepair({
         organizationSlug,
         moduleSlug,
         code: "repair_plan_changed",
-        message: "Ověřený stav se změnil. Spusť nejdřív znovu check-only příkaz a použij jen nový fingerprint.",
+        message: "Ověřený stav se změnil. Spusťte nejdřív znovu check-only příkaz a použijte jen nový fingerprint.",
         plan: checked.plan,
       });
     }
@@ -218,7 +218,7 @@ export async function checkModuleLocationRepair({
       organizationSlug,
       moduleSlug,
       code: "module_declaration_ambiguous",
-      message: "Oprava vyžaduje právě jednu explicitní deklaraci se stabilním slugem v normalizovaném Organization repository inventory. Nejdřív synchronizuj Organization root nebo oprav source kontrakt v PR.",
+      message: "Oprava vyžaduje právě jednu explicitní deklaraci se stabilním slugem v normalizovaném Organization repository inventory. Nejdřív synchronizujte Organization root nebo opravte source kontrakt v PR.",
       plan: {
         ...(unsafeDeclarationPaths.length > 0
           ? { unsafe_declaration_paths: unsafeDeclarationPaths }
@@ -549,7 +549,7 @@ export async function checkModuleLocationRepair({
     if (!targetHead) {
       proofIssue = {
         code: "target_remote_unavailable",
-        message: "Nový manifestovaný remote/main nejde bez interakce načíst. Ověř GitHub přístup; CLI nic nezměnilo.",
+        message: "Nový manifestovaný remote/main nejde bez interakce načíst. Ověřte GitHub přístup; CLI nic nezměnilo.",
         plan: { found_path: sourcePath, expected_path: targetPath, expected_origin: targetRemote },
       };
     } else {
@@ -731,7 +731,7 @@ async function inspectReviewPublishedOrganizationRoot({
           : local.dirtyPaths.length > 0
             ? "organization_source_dirty"
             : "organization_source_hidden_index",
-      "Organization root s repair manifesty není clean main bez skrytého indexu a probíhajících Git operací. Zachovej lokální práci v PR, spusť Synchronizovat a repair check zopakuj; Module checkout zatím zůstal nedotčený.",
+      "Organization root s repair manifesty není clean main bez skrytého indexu a probíhajících Git operací. Zachovejte lokální práci v PR, spusťte Synchronizovat a repair check zopakujte; Module checkout zatím zůstal nedotčený.",
     );
   }
   for (const sourceFile of sourceFiles) {
@@ -780,7 +780,7 @@ async function inspectReviewPublishedOrganizationRoot({
   if (origin.normalized !== expectedOriginIdentity) {
     return blocked(
       "organization_source_origin_mismatch",
-      "Lokální Organization root origin neodpovídá publikovanému canonical repository. Nejdřív bezpečně oprav root remote a znovu spusť Synchronizovat; Module checkout zůstal nedotčený.",
+      "Lokální Organization root origin neodpovídá publikovanému canonical repository. Nejdřív bezpečně opravte root remote a znovu spusťte Synchronizovat; Module checkout zůstal nedotčený.",
       {
         current_origin: origin.url,
         current_origin_identity: origin.normalized,
@@ -803,7 +803,7 @@ async function inspectReviewPublishedOrganizationRoot({
   ) {
     return blocked(
       "organization_source_not_published",
-      "Organization root s repair manifesty neodpovídá přesně lokálnímu main a ověřenému cached origin/main. Nejdřív dokonči review/publikaci source kontraktu a spusť Synchronizovat; CLI nebude jednat podle lokálního Draftu ani stale manifestu.",
+      "Organization root s repair manifesty neodpovídá přesně lokálnímu main a ověřenému cached origin/main. Nejdřív dokončete review/publikaci source kontraktu a spusťte Synchronizovat; CLI nebude jednat podle lokálního Draftu ani stale manifestu.",
       {
         local_main: localMain,
         cached_origin_main: cachedOriginMain,
@@ -1441,7 +1441,7 @@ function blockedRepairReport({
     recovery,
     next_action: {
       kind: "agent_review",
-      message: "Zachovej lokální Git data a vyřeš konkrétní blocker; potom spusť check-only příkaz znovu.",
+      message: "Zachovejte lokální Git data a vyřešte konkrétní blocker; potom spusťte check-only příkaz znovu.",
       argv: retryArgv,
       command: retryArgv ? commandFromArgv(retryArgv) : command,
     },
