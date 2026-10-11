@@ -1,3 +1,4 @@
+import { prepareApplication } from "./preparation-lib.mjs";
 import { isRetiredKnowledgeEditorPath } from "../core/retired-knowledge-editor.mjs";
 import { existsSync } from "fs";
 import { appendFile, lstat, mkdir, readFile, realpath, writeFile } from "fs/promises";
@@ -653,6 +654,21 @@ export function createRuntimeManager({
     };
   }
 
+  async function prepareRuntimeApp(app, dependencies = null) {
+    if (dependencies) app = appWithRuntimeAuthority(app, dependencies);
+    const result = await prepareApplication({
+      checkoutRoot: checkoutRootForApp(app), packagePath: runtimePackagePathForApp(app),
+      bunExecutable: runtimeBunExecutable, spawnProcess,
+      env: runtimeProcessEnv(app, {}),
+      beforePrepare: async () => {
+        if (managedProcesses.has(runtimeKeyForApp(app))) await stopRuntimeAppUnlocked(app);
+      },
+    });
+    if (!result.ok) throw new RuntimeActionError(500, "app_preparation_failed",
+      `${app.title}: preparation failed. ${result.detail}`, [result.detail], { failure_kind: result.reason });
+    return result;
+  }
+
   async function startRuntimeApp(app, takeover = {}) {
     return withModuleLeaseLock(app, async () => {
       assertMaintainedAppAction(app);
@@ -690,6 +706,7 @@ export function createRuntimeManager({
       });
     }
     app = appWithRuntimeAuthority(app, dependencies);
+    await prepareRuntimeApp(app);
     assertRuntimeManagerAcceptingStarts();
 
     await ensureRuntimeDirs();
@@ -1241,6 +1258,8 @@ export function createRuntimeManager({
         dependencies,
       });
     }
+
+    await prepareRuntimeApp(app, dependencies);
 
     // 2) Ensure start — idempotentní jen pro runtime vlastněný touto instancí.
     // Cizí/adoptovaný proces na static lease se při explicitním Open reclaimne

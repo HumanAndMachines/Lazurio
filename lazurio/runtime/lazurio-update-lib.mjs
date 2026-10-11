@@ -1,3 +1,5 @@
+import { readJsonWithinCanonicalBoundary } from "../core/path-boundary-lib.mjs";
+import { prepareApplication } from "./preparation-lib.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { lstat, open, readFile, realpath, unlink } from "node:fs/promises";
@@ -1581,7 +1583,10 @@ async function dependencyTarget({ rootPath, repo, repoRoot, cwd, app = null }) {
     organizationDependencyRoot,
     lockfile: bunLockfile,
   });
-  if (dependencyInspection.ok && !bunLockfile && dependencyInspection.required_dependency_count === 0) return null;
+  if (dependencyInspection.ok && !bunLockfile && dependencyInspection.required_dependency_count === 0) {
+    const packageRead = await readJsonWithinCanonicalBoundary({ rootPath: repoRoot, targetPath: packagePath });
+    if (!app || packageRead.value.lazurio?.preparation === undefined) return null;
+  }
   return {
     repo,
     repo_root: repoRoot,
@@ -1666,10 +1671,21 @@ async function refreshDependencyTarget({ target, rootPath, refreshPackageDepende
         strategy: result.refresh_strategy ?? null,
       });
     }
+    let preparation = null;
+    if (target.app) {
+      preparation = await prepareApplication({
+        checkoutRoot: target.repo_root, packagePath: join(target.cwd, "package.json"), force: true,
+        env: dependencyInstallEnvironment({ target, rootPath }),
+      });
+      if (!preparation.ok) return dependencyOutcome(target, {
+        ok: false, reason: preparation.reason, detail: preparation.detail, strategy: "preparation_failed",
+      });
+    }
     return dependencyOutcome(target, {
       ok: true,
       reason: null,
       detail: null,
+      preparation,
       strategy: result?.refresh_strategy ?? (result?.mode === "clean" ? "clean_repair" : "ensure"),
     });
   } catch (error) {
@@ -1714,11 +1730,12 @@ function dependencyInstallEnvironment({ target, rootPath }) {
   return env;
 }
 
-function dependencyOutcome(target, { ok, reason, detail, strategy }) {
+function dependencyOutcome(target, { ok, reason, detail, strategy, preparation = null }) {
   return {
     ok,
     package_path: relative(target.repo_root, target.cwd).replace(/\\/g, "/") || ".",
     app_id: target.app?.id ?? null,
+    ...(preparation?.declared ? { preparation } : {}),
     strategy,
     reason,
     detail,
@@ -1749,7 +1766,7 @@ function applyDependencyOutcomes(results, outcomes, repoDescriptors) {
       repo_path: result.path,
       absolute_path: result.path,
     };
-    const blocked = blockedResult(descriptor, "dependency_refresh_failed", {
+    const blocked = blockedResult(descriptor, failed.strategy === "preparation_failed" ? failed.reason : "dependency_refresh_failed", {
       detail: `${failed.package_path ?? "Balíčky"}: ${failed.detail ?? "obnova balíčků selhala"}`,
       recoveryStash: result.recovery_stash ?? null,
       actions,
