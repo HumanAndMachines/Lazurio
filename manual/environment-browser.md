@@ -216,6 +216,9 @@ distribuci; jeho vydání popisuje `docs/operations/lazurio-fork-release.md` ve 
 
 Upstream `main` (`pingdotgg/t3code`, 754 commitů za stable v0.0.45, z níž fork vychází) mění
 prohlížeč takto:
+- **Stable zatím není.** Z větve 0.0.46 vyšly jen verze preview a nightly. Refresh forku podle
+  jeho runbooku vychází jen ze stable tagu. Úkol 501 proto staví na v0.0.45 a overlay připraví
+  pro přenos podle bodů níže.
 - **Prohlížeč na serveru.** „Run the browser on the environment server“ (#15328): každé
   prostředí T3 má vlastní prohlížeč na serveru a webový klient, telefon i agenti ho používají
   bez notebooku (`PreviewRuntime` `desktop | server`, `serverBrowser` zapnuté vždy). Bez zásahu
@@ -246,8 +249,7 @@ prohlížeč takto:
   ale není archivované, drží jeho lišta.
 - Jména lidí u karet: přijdou s účty Lazuria (0192). Přihlášení přes bránu identitu neříká.
 - Plocha a Computer Use (druhá vlna 0191).
-- Zda T3 Code postavit hned na stable v0.0.45 s vlastním úložištěm karet vláken, nebo nejdřív
-  obnovit fork na další stable upstreamu a napojit jeho serverový prohlížeč na prohlížeč
-  Environmentu (DEV-6646 úkol 501).
+- Jak při refreshi na stable 0.0.46 napojit serverový prohlížeč upstreamu na prohlížeč
+  Environmentu: buď ho fork vypne, nebo ho nasměruje na DevTools na 9222.
 - Zda pořadí karet v liště vlákna sdílet mezi zařízeními (upstream ho drží v každém klientovi
   zvlášť).
