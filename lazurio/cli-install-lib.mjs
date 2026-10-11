@@ -241,7 +241,7 @@ export function installLazurioCli(options = {}) {
   if (!before.bun.global_bin_on_path) {
     throw new LazurioCliInstallError(
       "global_bin_not_on_path",
-      `Bun global bin není v PATH: ${before.bun.global_bin}. Dokonči standardní Bun instalaci a spusť příkaz znovu.`,
+      `Bun global bin není v PATH: ${before.bun.global_bin}. Dokončete standardní Bun instalaci a spusťte příkaz znovu.`,
     );
   }
 
@@ -393,7 +393,7 @@ function assertNotLinkedWorktree(root) {
   if (existsSync(join(gitDirectory, "commondir"))) {
     throw new LazurioCliInstallError(
       "linked_worktree_forbidden",
-      "Instalace CLI z linked worktree je zakázaná; použij primární Lazurio checkout.",
+      "Instalace CLI z linked worktree je zakázaná; použijte primární Lazurio checkout.",
     );
   }
 }

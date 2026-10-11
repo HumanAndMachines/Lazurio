@@ -10,15 +10,15 @@ ukol: false
 ---
 # Jak pomáhat kolegům
 
-- Co se v této lekci naučíš:
+- Co se v této lekci naučíte:
   - jak sdílet malý poznatek;
   - jak dávat konkrétní feedback;
   - proč oceňovat pokrok.
 
 Pomáhat kolegům neznamená psát dlouhé manuály každý den. Často stačí krátký poznatek: „Tady mě mátl název“, „Tenhle postup mi pomohl“, „Tohle by chtělo příklad“.
 
-Dobrý feedback je konkrétní. Místo „tohle je špatně“ napiš: „Tady chybí zdroj“ nebo „Tuhle větu bych zjednodušil/a, nový člověk jí nemusí rozumět“.
+Dobrý feedback je konkrétní. Místo „tohle je špatně“ napište: „Tady chybí zdroj“ nebo „Tahle věta by šla zjednodušit, nový člověk jí nemusí rozumět“.
 
-Když někdo udělá první krok, oceň ho. Učení v digitální kanceláři má být viditelné a bezpečné, ne trapné.
+Když někdo udělá první krok, oceňte ho. Učení v digitální kanceláři má být viditelné a bezpečné, ne trapné.
 
-Shrnutí: vezmi si jeden malý praktický krok a neboj se zeptat lidskou řečí.
+Shrnutí: začněte jedním malým praktickým krokem a nebojte se zeptat lidskou řečí.

@@ -11,15 +11,15 @@ achievement_on_complete: "slop-aware"
 ---
 # AI vata: hezký text bez opory
 
-- Co se v této lekci naučíš:
+- Co se v této lekci naučíte:
   - jak poznat AI vatu;
   - proč vzniká;
   - jak ji zastavit dřív, než se použije.
 
 AI vata je výstup, který zní plynule, ale v praxi nepomůže. Může být dlouhý, sebejistý a hezky formulovaný, ale bez konkrétní opory.
 
-Poznáš ji podle obecných slov: „inovativní“, „komplexní“, „moderní řešení“ — ale žádný konkrétní příklad, zdroj nebo rozhodnutí. Člověk pak cítí: tohle bych stejně musel/a celé přepsat.
+Poznáte ji podle obecných slov: „inovativní“, „komplexní“, „moderní řešení“ — ale žádný konkrétní příklad, zdroj nebo rozhodnutí. Takový text pak stejně půjde celý přepsat.
 
 Nejlepší obrana je malé zadání, jasné podklady a otázka: „Z čeho vycházíš?“ Když AI neví, má to říct. Lepší nejistota než sebejistý nesmysl.
 
-Shrnutí: vezmi si jeden malý praktický krok a neboj se zeptat lidskou řečí.
+Shrnutí: začněte jedním malým praktickým krokem a nebojte se zeptat lidskou řečí.

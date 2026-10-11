@@ -2,7 +2,7 @@
   "questions": [
     {
       "id": "q1",
-      "text": "Když nevidíš nějakou část kanceláře, co to může znamenat?",
+      "text": "Když nevidíte nějakou část kanceláře, co to může znamenat?",
       "type": "single",
       "options": [
         {
@@ -19,7 +19,7 @@
         },
         {
           "id": "c",
-          "text": "Musíš si ji okamžitě ručně vytvořit.",
+          "text": "Musíte si ji okamžitě ručně vytvořit.",
           "correct": false,
           "feedback": "Tohle není dobrý běžný postup."
         }

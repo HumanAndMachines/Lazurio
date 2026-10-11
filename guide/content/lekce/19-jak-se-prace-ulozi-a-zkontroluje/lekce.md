@@ -10,7 +10,7 @@ ukol: false
 ---
 # Jak se práce uloží a zkontroluje
 
-- Co se v této lekci naučíš:
+- Co se v této lekci naučíte:
   - proč výsledek nemá zůstat jen v chatu;
   - co znamená kontrola změny;
   - proč je normální chtít review.
@@ -19,6 +19,6 @@ Když vznikne použitelný výsledek, nemá zůstat jen v chatu. Musí se dostat
 
 Kontrola změny není nedůvěra. Je to ochrana práce. Druhý člověk nebo AI kolega může všimnout chybějící souvislosti, nejasné formulace nebo rizika.
 
-Pro netechnického kolegu stačí vědět: u důležité věci chtěj náhled, krátké vysvětlení změn a informaci, kdo ji zkontroloval.
+Pro netechnického kolegu stačí vědět: u důležité věci chtějte náhled, krátké vysvětlení změn a informaci, kdo ji zkontroloval.
 
-Shrnutí: vezmi si jeden malý praktický krok a neboj se zeptat lidskou řečí.
+Shrnutí: začněte jedním malým praktickým krokem a nebojte se zeptat lidskou řečí.

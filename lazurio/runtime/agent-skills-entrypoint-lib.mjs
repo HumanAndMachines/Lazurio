@@ -278,7 +278,7 @@ export async function inspectAgentSkillsEntrypoint(organizationRoot, {
     return state({
       status: "repair_needed",
       code: "mirror_missing",
-      message: `${compatibilityRelativePath} mirror chybí; vytvoř ho reviewovanou úpravou v task worktree a commitni (bun run repair:agent-skills jen diagnostikuje).`,
+      message: `${compatibilityRelativePath} mirror chybí; vytvořte ho reviewovanou úpravou v task worktree a commitněte (bun run repair:agent-skills jen diagnostikuje).`,
     });
   }
 

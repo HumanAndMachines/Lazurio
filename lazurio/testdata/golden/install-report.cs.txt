@@ -14,8 +14,8 @@ Lazurio Root: "/Users/example/Lazurio"
 ! Lazurio Root — Lazurio Root je potřeba vygenerovat
 
 Co je potřeba udělat
-- Nainstaluj GitHub CLI (`gh`) standardním postupem pro svou platformu.
+- Nainstalujte GitHub CLI (`gh`) standardním postupem pro svou platformu.
 - Ve schváleném instalačním mandátu zpřístupněte Codex CLI podle manual/organization-install.md a ověřte jej z nové relace.
-- Počkej na navazující instalační slice; tento read-only řez složku záměrně nemění.
+- Počkejte na navazující instalační slice; tento read-only řez složku záměrně nemění.
 
-Příkaz můžeš spustit znovu kdykoli; vždy znovu odvodí aktuální stav.
+Příkaz můžete spustit znovu kdykoli; vždy znovu odvodí aktuální stav.

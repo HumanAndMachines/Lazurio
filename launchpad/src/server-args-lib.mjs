@@ -77,7 +77,7 @@ export function assertAvailableAgentEntryOrganization(options, organizations) {
   );
   const error = new Error(
     caseInsensitive
-      ? `LAZURIO_LAUNCHPAD_ORGANIZATION_NOT_FOUND: Organization slug "${options.organization}" nemá přesný casing; použij "${caseInsensitive.slug}".`
+      ? `LAZURIO_LAUNCHPAD_ORGANIZATION_NOT_FOUND: Organization slug "${options.organization}" nemá přesný casing; použijte "${caseInsensitive.slug}".`
       : `LAZURIO_LAUNCHPAD_ORGANIZATION_NOT_FOUND: Organization "${options.organization}" není v tomto Lazurio rootu dostupná.`,
   );
   error.code = "LAZURIO_LAUNCHPAD_ORGANIZATION_NOT_FOUND";

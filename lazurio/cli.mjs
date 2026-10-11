@@ -99,7 +99,7 @@ async function run(argv) {
     // so distributions that do not ship it keep a working CLI.
     const moduleCreate = await loadModuleCreate();
     if (!moduleCreate) {
-      console.error("module create není v této distribuci dostupný; použij source checkout nebo package-managed lazurio.");
+      console.error("module create není v této distribuci dostupný; použijte source checkout nebo package-managed lazurio.");
       return 3;
     }
     return moduleCreate.runModuleCreateCli(argv.slice(2), { defaultRoot: defaultOperatedRoot });
@@ -166,7 +166,7 @@ async function run(argv) {
     // artifacts) keep a working CLI and report the absence explicitly.
     const migration = await loadOrganizationManifestMigration();
     if (!migration) {
-      console.error("migrate organization-manifest není v této distribuci dostupný; použij source checkout nebo package-managed lazurio.");
+      console.error("migrate organization-manifest není v této distribuci dostupný; použijte source checkout nebo package-managed lazurio.");
       return 2;
     }
     const {
@@ -698,7 +698,7 @@ function parseArgs(argv) {
     } else if (action === "activate") {
       if (parsed.operands.length !== 1) throw new Error("organization activate nepřijímá GitHub login.");
       if (!parsed.check) {
-        throw new Error("Remote writer zatím není veřejný; použij `lazurio organization activate --check --github-id <id>`.");
+        throw new Error("Remote writer zatím není veřejný; použijte `lazurio organization activate --check --github-id <id>`.");
       }
       if (parsed.githubOrganizationId === null) {
         throw new Error("organization activate --check vyžaduje --github-id <immutable GitHub Organization ID>.");

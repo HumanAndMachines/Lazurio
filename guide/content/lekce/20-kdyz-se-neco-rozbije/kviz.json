@@ -7,7 +7,7 @@
       "options": [
         {
           "id": "a",
-          "text": "Klidně popsat, co jsem dělal/a a co vidím.",
+          "text": "Klidně popsat, co se stalo a co vidím.",
           "correct": true,
           "feedback": "Ano. Tohle je správný a bezpečný směr."
         },

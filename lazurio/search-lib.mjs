@@ -404,7 +404,7 @@ export async function updateLazurioQmdIndex({
   }
   if (beforeSnapshot.fingerprint !== afterSnapshot.fingerprint) {
     throw new LazurioSearchError(
-      "Source se během QMD update změnil; fresh state nebyl publikovaný. Spusť update znovu.",
+      "Source se během QMD update změnil; fresh state nebyl publikovaný. Spusťte update znovu.",
       { code: "source_changed_during_qmd_update", exitCode: 3 },
     );
   }
@@ -444,7 +444,7 @@ export async function searchLazurioQmd({
   requireAvailableQmd(runtime);
   if (runtime.index.state !== "present") {
     throw new LazurioSearchError(
-      "QMD index ještě neexistuje; spusť `lazurio search --update`.",
+      "QMD index ještě neexistuje; spusťte `lazurio search --update`.",
       { code: "qmd_index_absent", exitCode: 3 },
     );
   }

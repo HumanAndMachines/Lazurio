@@ -4031,7 +4031,7 @@ test("chybějící dependency bez exact lockfilu vede k repair diagnostice bez I
     can_install: false,
     can_start: false,
   });
-  expect(health.dependencies.message).toContain("Vytvoř a commitni lockfile");
+  expect(health.dependencies.message).toContain("Vytvořte a commitněte lockfile");
 });
 
 test("runtime manager nenabídne Bun Install nad cizím lockfilem", async () => {
@@ -4197,7 +4197,7 @@ test("runtime manager vrátí konkrétní log excerpt, když appka spadne hned p
   });
   const health = await runtime.health("test-company-demo-v1");
   expect(["unknown_early_exit", "missing_dependencies"]).toContain(health.failure_kind);
-  expect(health.message).toMatch(/Otevři Logs|Použij Install\/Repair/);
+  expect(health.message).toMatch(/Otevřete Logs|Použijte Install\/Repair/);
   const logs = await runtime.logs("test-company-demo-v1");
   expect(logs.content).toContain("exit test-company-demo-v1");
 });

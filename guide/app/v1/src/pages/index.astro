@@ -12,7 +12,7 @@ const lekce = loadAllLekce();
 const byId = lekceById(lekce);
 
 const totalLekce = lekce.length;
-const welcome = cesta?.welcome ?? "Vítej. Tohle je tvoje cesta. Postupuj svým tempem — každá lekce navazuje na tu předchozí.";
+const welcome = cesta?.welcome ?? "Vítejte. Tohle je vaše cesta. Postupujte svým tempem, každá lekce navazuje na tu předchozí.";
 const totalMinutes = lekce.reduce((sum, l) => sum + l.duration_min, 0);
 ---
 
@@ -29,7 +29,7 @@ const totalMinutes = lekce.reduce((sum, l) => sum + l.duration_min, 0);
     !ready ? (
       <div class="rounded-2xl border border-[var(--surface-border)] bg-[var(--surface-panel)] p-8 text-center">
         <p class="text-[var(--surface-muted)]">
-          Obsah ještě není připravený, podívej se do <code>guide/content/</code>.
+          Obsah ještě není připravený, podívejte se do <code>guide/content/</code>.
         </p>
       </div>
     ) : (
@@ -43,7 +43,7 @@ const totalMinutes = lekce.reduce((sum, l) => sum + l.duration_min, 0);
               </div>
               <div class="navi-speech">
                 <p data-navi-message>
-                  Zdravím, provedu tě digitální kanceláří krok za krokem.
+                  Zdravím, provedu vás digitální kanceláří krok za krokem.
                 </p>
               </div>
             </div>
@@ -74,7 +74,7 @@ const totalMinutes = lekce.reduce((sum, l) => sum + l.duration_min, 0);
           <div class="locked-lesson-card" role="dialog" aria-modal="true" aria-labelledby="locked-title">
             <GuidePet size="sm" />
             <h2 id="locked-title">Tenhle bod je zatím zamčený</h2>
-            <p data-locked-copy>Nejdřív dokonči předchozí lekce na mapě.</p>
+            <p data-locked-copy>Nejdřív dokončete předchozí lekce na mapě.</p>
             <button type="button" data-locked-close>Rozumím</button>
           </div>
         </div>
@@ -131,7 +131,7 @@ const totalMinutes = lekce.reduce((sum, l) => sum + l.duration_min, 0);
       if (status === "locked") {
         card.addEventListener("click", (e) => {
           e.preventDefault();
-          if (modalCopy) modalCopy.textContent = `Nejdřív dokonči: ${card.dataset.prereqTitles || "předchozí lekce"}.`;
+          if (modalCopy) modalCopy.textContent = `Nejdřív dokončete: ${card.dataset.prereqTitles || "předchozí lekce"}.`;
           if (modal instanceof HTMLElement) {
             modal.dataset.open = "true";
             modal.setAttribute("aria-hidden", "false");
@@ -144,7 +144,7 @@ const totalMinutes = lekce.reduce((sum, l) => sum + l.duration_min, 0);
     if (available instanceof HTMLElement) {
       available.dataset.current = "true";
       available.scrollIntoView({ block: "center", behavior: "smooth" });
-      if (navi) navi.textContent = "Zdravím, provedu tě digitální kanceláří krok za krokem.";
+      if (navi) navi.textContent = "Zdravím, provedu vás digitální kanceláří krok za krokem.";
     }
 
     sections.forEach((section) => {

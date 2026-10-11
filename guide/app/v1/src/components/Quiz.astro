@@ -11,10 +11,10 @@ const { lekceId, kviz } = Astro.props;
 const mode = kviz.mode ?? "standard";
 const isGlossary = mode === "glossary-cards";
 const optionLabels = ["A", "B", "C", "D"];
-const title = kviz.title ?? (isGlossary ? "Slovníček na start" : "Ověř si, co ti utkvělo");
+const title = kviz.title ?? (isGlossary ? "Slovníček na start" : "Ověřte si, co vám utkvělo");
 const subtitle = kviz.subtitle ?? (isGlossary
-  ? "Otoč kartu v hlavě: podívej se na pojem a vyber, jak bys ho vysvětlil/a kolegovi."
-  : "Vyber odpověď u každé otázky.");
+  ? "Otočte kartu v hlavě: podívejte se na pojem a vyberte, jak ho vysvětlit kolegovi."
+  : "Vyberte odpověď u každé otázky.");
 
 const ICONS: Record<string, string> = {
   workspace:
@@ -119,7 +119,7 @@ const iconFor = (name?: string) => ICONS[name ?? ""] ?? ICONS.workspace;
     </div>
 
     <div class="flex items-center justify-between">
-      <div class="text-sm text-[var(--surface-muted)]" data-quiz-status>Vyber odpověď u každé otázky.</div>
+      <div class="text-sm text-[var(--surface-muted)]" data-quiz-status>Vyberte odpověď u každé otázky.</div>
       <button
         type="button"
         data-quiz-submit
@@ -245,10 +245,10 @@ const iconFor = (name?: string) => ICONS[name ?? ""] ?? ICONS.workspace;
 
     function openResult({ passed, correct, total }) {
       if (!(result instanceof HTMLElement)) return;
-      const title = passed ? "Výborně, kvíz je splněný!" : "Ještě kousek a máš to.";
+      const title = passed ? "Výborně, kvíz je splněný!" : "Ještě kousek a máte to.";
       const copy = passed
-        ? "Všechny odpovědi sedí. Můžeš s klidem pokračovat do další části."
-        : `Máš ${correct} z ${total} správně. Oprav označené odpovědi a zkus vyhodnocení znovu.`;
+        ? "Všechny odpovědi sedí. Můžete s klidem pokračovat do další části."
+        : `Máte ${correct} z ${total} správně. Opravte označené odpovědi a zkuste vyhodnocení znovu.`;
       if (resultKicker instanceof HTMLElement) resultKicker.textContent = passed ? "SKVĚLÁ PRÁCE" : "VÝSLEDEK KVÍZU";
       if (resultScore instanceof HTMLElement) resultScore.textContent = `${correct}/${total}`;
       if (resultTitle instanceof HTMLElement) resultTitle.textContent = title;
@@ -272,7 +272,7 @@ const iconFor = (name?: string) => ICONS[name ?? ""] ?? ICONS.workspace;
       if (status instanceof HTMLElement) {
         status.textContent = passed
           ? `Skvělá práce! ${correct}/${total} správně.`
-          : `${correct}/${total} správně (${pct}%). Zkus opravit nesprávné odpovědi.`;
+          : `${correct}/${total} správně (${pct}%). Zkuste opravit nesprávné odpovědi.`;
       }
       openResult({ passed, correct, total });
       localStorage.setItem(`guide:lekce:${lekceId}:quiz-passed`, passed ? "1" : "0");

@@ -2,10 +2,10 @@
 title: "Malý praktický krok"
 type: reflection
 checklist:
-  - "Vyber jednu konkrétní situaci z dnešní nebo nedávné práce."
-  - "Napiš ji jednoduše jednou až třemi větami."
-  - "Doplň, co by měl další člověk nebo AI kolega vědět, aby mohl navázat."
-  - "Pokud si nejsi jistý/jistá, označ otázku místo domněnky."
+  - "Vyberte jednu konkrétní situaci z dnešní nebo nedávné práce."
+  - "Napište ji jednoduše jednou až třemi větami."
+  - "Doplňte, co by měl další člověk nebo AI kolega vědět, aby mohl navázat."
+  - "Když něco nevíte jistě, označte to jako otázku, ne jako domněnku."
 ---
 
 # Malý praktický krok

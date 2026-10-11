@@ -32,7 +32,7 @@ import { acquireModuleRuntimeLock } from "./runtime/module-runtime-lock-lib.mjs"
 export const MODULE_CREATE_REPORT_VERSION = "lazurio.module_create.report.v1";
 export const DEFAULT_MODULE_TEMPLATES_ROOT = join(import.meta.dirname, "templates", "module");
 const INSTALL_TIMEOUT_MS = 10 * 60_000;
-const WORKTREE_ACTION = "Založ task worktree root repa Organizace (bun run worktrees:create -- --plan <KOD> --repository organizations/<mount>), spusť příkaz z něj, nebo nejdřív ověř plán přes --dry-run.";
+const WORKTREE_ACTION = "Založte task worktree root repa Organizace (bun run worktrees:create -- --plan <KOD> --repository organizations/<mount>), spusťte příkaz z něj, nebo nejdřív ověřte plán přes --dry-run.";
 const IGNORED_ORGANIZATION_ENTRIES = new Set([".git", ".worktrees", "node_modules", "archive"]);
 
 class ModuleCreateRefusal extends Error {
@@ -110,7 +110,7 @@ export async function createModule({
       throw new ModuleCreateRefusal(
         "directory_exists",
         `${moduleRoot} už existuje; scaffold nepřepisuje existující Modul.`,
-        "Zvol jiný slug, nebo existující složku po review odstraň či převeď přes lazurio module setup.",
+        "Zvolte jiný slug, nebo existující složku po review odstraňte či převeďte přes lazurio module setup.",
       );
     }
     if (!dryRun && (target.branch === null || target.branch === target.defaultBranch)) {
@@ -240,7 +240,7 @@ export async function runModuleCreateCli(argv, { defaultRoot }) {
 export const MODULE_CREATE_USAGE = [
   "lazurio module create <Organization>/<slug> --stack <stack> [--name <název>] [--teams a,b] [--port N] [--dry-run] [--json] [--root <cesta>]",
   `  stacky: ${MODULE_SCAFFOLD_STACKS.join(", ")}`,
-  "  Spouštěj z task worktree root repa Organizace; --dry-run jen vypíše plán (soubory, slot, lease, tree_hash).",
+  "  Spouštějte z task worktree root repa Organizace; --dry-run jen vypíše plán (soubory, slot, lease, tree_hash).",
 ].join("\n");
 
 export function parseModuleCreateArgs(argv) {
@@ -335,7 +335,7 @@ async function planFor({ lazurioRoot, target, input }) {
     throw new ModuleCreateRefusal(
       "module_contracts_unreadable",
       `Leasy namountovaných Modulů nejdou přečíst, volný port nelze bezpečně vybrat: ${error.message.split("\n")[0]}`,
-      "Oprav nevalidní lazurio.module.json (lazurio doctor ho ukáže) a příkaz zopakuj.",
+      "Opravte nevalidní lazurio.module.json (lazurio doctor ho ukáže) a příkaz zopakujte.",
     );
   }
   // A task checkout may already hold Modules created there but not yet merged.
@@ -376,7 +376,7 @@ async function worktreeModuleContracts(organizationRoot) {
 async function resolveOrganizationTarget({ lazurioRoot, organizationSlug, cwd }) {
   const organizationsRoot = join(lazurioRoot, "organizations");
   if (!existsSync(organizationsRoot)) {
-    throw new ModuleCreateRefusal("lazurio_root_invalid", `${lazurioRoot} není Lazurio Root: chybí organizations/.`, "Předej --root <Lazurio root>.");
+    throw new ModuleCreateRefusal("lazurio_root_invalid", `${lazurioRoot} není Lazurio Root: chybí organizations/.`, "Předejte --root <Lazurio root>.");
   }
   const mounts = [];
   for (const entry of await readdir(organizationsRoot, { withFileTypes: true })) {
@@ -395,7 +395,7 @@ async function resolveOrganizationTarget({ lazurioRoot, organizationSlug, cwd })
       folded.length === 0
         ? `Organizace ${organizationSlug} není v ${organizationsRoot} namountovaná.`
         : `Organizace ${organizationSlug} je namountovaná vícekrát.`,
-      "Použij přesný company.slug namountované Organizace (lazurio context ho ukáže).",
+      "Použijte přesný company.slug namountované Organizace (lazurio context ho ukáže).",
     );
   }
   const primary = folded[0].organizationRoot;
@@ -404,7 +404,7 @@ async function resolveOrganizationTarget({ lazurioRoot, organizationSlug, cwd })
     throw new ModuleCreateRefusal(
       "organization_root_not_git",
       `${primary} není Git checkout root repa Organizace.`,
-      "Materializuj Organizaci přes lazurio organization install.",
+      "Materializujte Organizaci přes lazurio organization install.",
     );
   }
   let organizationRoot = primary;
@@ -420,7 +420,7 @@ async function resolveOrganizationTarget({ lazurioRoot, organizationSlug, cwd })
     throw new ModuleCreateRefusal(
       "organization_manifest_not_mutation_safe",
       `Organization manifest v ${organizationRoot} není bezpečný pro zápis (${resolution.state}).`,
-      "Oprav Organization manifest (lazurio migrate organization-manifest) a příkaz zopakuj.",
+      "Opravte Organization manifest (lazurio migrate organization-manifest) a příkaz zopakujte.",
     );
   }
   const resource = resolution.resource;
@@ -483,7 +483,7 @@ async function writeModule({ moduleRoot, plan, target }) {
     }
     const current = await readFile(target.manifestPath, "utf8");
     if (current !== target.modulesManifestText) {
-      throw new ModuleCreateRefusal("manifest_changed", `${target.manifestPath} se během zápisu změnil.`, "Zkontroluj změnu a příkaz zopakuj.");
+      throw new ModuleCreateRefusal("manifest_changed", `${target.manifestPath} se během zápisu změnil.`, "Zkontrolujte změnu a příkaz zopakujte.");
     }
     const next = insertModuleSlotText(current, plan.slot);
     const temporary = `${target.manifestPath}.lazurio-module-create-${process.pid}.tmp`;
@@ -507,7 +507,7 @@ async function prepareToolchain({ moduleRoot, plan, skipInstall, report }) {
   const uv = lockPath.endsWith("uv.lock");
   const executable = uv ? resolveExecutableOnPath("uv") : process.execPath;
   if (!executable) {
-    report.warnings.push(`uv není v PATH; ${lockPath} nevznikl. Nainstaluj uv ${DEFAULT_SCAFFOLD_VERSIONS.uv} a spusť uv lock v ${appRoot}.`);
+    report.warnings.push(`uv není v PATH; ${lockPath} nevznikl. Nainstalujte uv ${DEFAULT_SCAFFOLD_VERSIONS.uv} a spusťte uv lock v ${appRoot}.`);
     return [];
   }
   const command = uv ? [executable, "lock"] : [executable, "install"];
@@ -516,7 +516,7 @@ async function prepareToolchain({ moduleRoot, plan, skipInstall, report }) {
   return [{
     code: uv ? "uv_lock_failed" : "install_failed",
     message: `${command.slice(1).join(" ")} v ${appRoot} skončil ${result.timedOut ? "timeoutem" : `kódem ${result.exitCode}`}: ${tail(result.output)}`,
-    action: `Oprav příčinu, spusť ${uv ? "uv lock" : "bun install"} v ${appRoot} a commitni ${lockPath}.`,
+    action: `Opravte příčinu, spusťte ${uv ? "uv lock" : "bun install"} v ${appRoot} a commitněte ${lockPath}.`,
   }];
 }
 
@@ -532,7 +532,7 @@ async function commitModule({ moduleRoot, plan }) {
       return {
         code: "module_commit_failed",
         message: `git ${args[0]} v ${moduleRoot} selhal: ${tail(`${result.stderr}${result.stdout}${result.error ?? ""}`)}`,
-        action: "Nastav git user.name a user.email a v Modulu spusť git add --all && git commit.",
+        action: "Nastavte git user.name a user.email a v Modulu spusťte git add --all && git commit.",
       };
     }
   }
@@ -581,24 +581,24 @@ function nextSteps({ plan, target, moduleRoot, dryRun, report = null }) {
   const steps = [];
   const selector = `${target.slug}/${plan.module}`;
   if (dryRun) {
-    steps.push(`Spusť tentýž příkaz bez --dry-run z task worktree root repa Organizace ${target.slug}.`);
+    steps.push(`Spusťte tentýž příkaz bez --dry-run z task worktree root repa Organizace ${target.slug}.`);
     return steps;
   }
   for (const issue of report?.issues ?? []) if (issue.action) steps.push(issue.action);
   steps.push(
-    `V ${target.organizationRoot} commitni modules.manifest.json (slot ${plan.module_path}) a otevři PR do root repa Organizace; merge je rozhodnutí oprávněného Principála.`,
-    `Založ privátní GitHub repo ${target.githubOrg}/${plan.module} s chráněnou main (Organization Admin; Dashboard „Nový Modul“ to převezme) a pushni: git -C ${moduleRoot} remote add origin ${plan.slot.git.url} && git -C ${moduleRoot} push -u origin main`,
+    `V ${target.organizationRoot} commitněte modules.manifest.json (slot ${plan.module_path}) a otevřete PR do root repa Organizace; merge je rozhodnutí oprávněného Principála.`,
+    `Založte privátní GitHub repo ${target.githubOrg}/${plan.module} s chráněnou main (Organization Admin; Dashboard „Nový Modul“ to převezme) a pushněte: git -C ${moduleRoot} remote add origin ${plan.slot.git.url} && git -C ${moduleRoot} push -u origin main`,
   );
   if (plan.lease) {
     const canonical = join(target.primaryRoot, "workspace", plan.module);
     steps.push(
-      `Před merge rebasuj PR slotu na aktuální main. Po merge slotu a lazurio update spusť lazurio module setup ${canonical}: hlásí-li kolizi portu ${plan.lease.port} (module_port_conflict, napříč Organizacemi MS-01 „port ${plan.lease.port} drží i …“; souběžně založený Modul z jiné branche), přepiš lease v lazurio.module.json Modulu na volný port module_port_pool ${target.pool.start}-${target.pool.end} a commitni to v Modulu; App čte port jen z prostředí, nic dalšího se nemění.`,
+      `Před merge rebasujte PR slotu na aktuální main. Po merge slotu a lazurio update spusťte lazurio module setup ${canonical}: hlásí-li kolizi portu ${plan.lease.port} (module_port_conflict, napříč Organizacemi MS-01 „port ${plan.lease.port} drží i …“; souběžně založený Modul z jiné branche), přepište lease v lazurio.module.json Modulu na volný port module_port_pool ${target.pool.start}-${target.pool.end} a commitněte to v Modulu; App čte port jen z prostředí, nic dalšího se nemění.`,
     );
   }
   if (plan.stack === "python-uv") {
-    steps.push(`Ověř App ručně: v ${join(moduleRoot, "app", "v1")} uv sync --frozen, bun run check, bun run test a uv run --no-sync ${plan.module} s listener proměnnými; start přes Launchpad přijde s adaptérem uv (DEV-6634 W0-5).`);
+    steps.push(`Ověřte App ručně: v ${join(moduleRoot, "app", "v1")} uv sync --frozen, bun run check, bun run test a uv run --no-sync ${plan.module} s listener proměnnými; start přes Launchpad přijde s adaptérem uv (DEV-6634 W0-5).`);
   } else if (plan.lease) {
-    steps.push(`Po merge slotu: lazurio update, potom lazurio module start ${selector} --json a otevři result.runtime.url.`);
+    steps.push(`Po merge slotu: lazurio update, potom lazurio module start ${selector} --json a otevřete result.runtime.url.`);
   } else {
     steps.push("Po merge slotu: lazurio update; Launchpad Modul ukáže v katalogu bez App.");
   }

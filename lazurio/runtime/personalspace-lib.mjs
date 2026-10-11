@@ -93,8 +93,8 @@ function foreignOrUnrecognizedPersonalspaceDirFailure({ mountPath, directoryOwne
     ? `cizí Personalspace ownera ${directoryOwner}`
     : "nerozpoznaný adresář, který neodpovídá konvenci <owner>_GEN3";
   const remediation = directoryOwner
-    ? "odmountuj ho, odeber historické GitHub granty a přesuň data mimo personalspace/"
-    : "odmountuj ho nebo přesuň mimo personalspace/";
+    ? "odmountujte ho, odeberte historické GitHub granty a přesuňte data mimo personalspace/"
+    : "odmountujte ho nebo přesuňte mimo personalspace/";
   return `${foreignOrUnrecognizedPersonalspaceDirCode}: ${mountPath}: adresář existuje jako ${classification}, není deklarovaný Personalspace${principal}; ${remediation} (decision 0091)`;
 }
 
@@ -811,7 +811,7 @@ async function resolvePrimaryOwner({ companiesRoot, companiesConfig, personalspa
   const owners = await scanPersonalspaceOwners(personalspaceRoot);
   if (owners.length > 0) {
     warnings.push(
-      `personalspace: Principál mašiny není určen — nastav personalspace_owner v launchpad.gen3.local.json (fail-closed privacy hranice; kandidáti ze skenu: ${owners.join(", ")}). Žádný Personalspace se nematerializuje.`,
+      `personalspace: Principál mašiny není určen — nastavte personalspace_owner v launchpad.gen3.local.json (fail-closed privacy hranice; kandidáti ze skenu: ${owners.join(", ")}). Žádný Personalspace se nematerializuje.`,
     );
   }
   return null;
@@ -986,7 +986,7 @@ export async function discoverPersonalspace(
     if (legacyCustody) {
       warnings.push(
         `${mountPath}: legacy neversionovaný Personalspace zůstává dočasně čitelný; `
-        + "přejdi na humanandmachines.personal.gen3.v1 podle manual/migrate-personalspace-custody-v1.md",
+        + "přejděte na humanandmachines.personal.gen3.v1 podle manual/migrate-personalspace-custody-v1.md",
       );
     } else {
       warnings.push(...personalBindingWarnings(personal, mountPath));

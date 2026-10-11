@@ -291,7 +291,7 @@ export async function buildLaunchpadAppsResponse({
     dependency_status: "invalid_manifest",
     runtime: {
       status: "stopped",
-      message: "Aplikace s nevalidním runtime manifestem se nespouští; oprav lazurio.runtime nebo read-compatible legacy manifest.",
+      message: "Aplikace s nevalidním runtime manifestem se nespouští; opravte lazurio.runtime nebo read-compatible legacy manifest.",
     },
     runtime_status: "stopped",
   }));
@@ -550,7 +550,7 @@ async function buildPersonalspaceDoctorChecks({ companiesRoot, rootSourceRoot = 
         details: [],
         blocked_reason: `Personalspace lane skončila chybou: ${error.message}`,
         remedy:
-          "Oprav personalspace mount (personal.gen3.json, gbrain mount) a spusť doctor znovu.",
+          "Opravte personalspace mount (personal.gen3.json, gbrain mount) a spusťte doctor znovu.",
       },
     ];
   }
@@ -582,7 +582,7 @@ async function buildWorktreeDoctorChecks({ companiesRoot }) {
         message: "Worktree contract kontroly se nedaly provést, protože inventory nejde načíst.",
         paths: ["organizations"],
         blockedReason: `Worktree inventory nejde načíst: ${error.message}`,
-        remedy: "Oprav worktree inventory (sidecary, umístění) a spusť doctor znovu.",
+        remedy: "Opravte worktree inventory (sidecary, umístění) a spusťte doctor znovu.",
       }),
       blockedCheck({
         id: "git.worktrees.dependencies",
@@ -590,7 +590,7 @@ async function buildWorktreeDoctorChecks({ companiesRoot }) {
         message: "Worktree dependency kontroly se nedaly provést, protože inventory nejde načíst.",
         paths: ["organizations"],
         blockedReason: `Worktree inventory nejde načíst: ${error.message}`,
-        remedy: "Oprav worktree inventory (sidecary, umístění) a spusť doctor znovu.",
+        remedy: "Opravte worktree inventory (sidecary, umístění) a spusťte doctor znovu.",
       }),
     ];
   }
@@ -935,7 +935,7 @@ async function worktreePackageReadiness({ worktree, packageRoot, absoluteWorktre
   if (!lockfile && (manager.supported || manager.lockfile_missing === true)) {
     if (dependencyInspection.missing_required_dependencies.length > 0) {
       state = "missing_lockfile";
-      action = "commitni lockfile odpovídající packageManager; Doctor bez něj nenabízí Install";
+      action = "commitněte lockfile odpovídající packageManager; Doctor bez něj nenabízí Install";
     } else {
       action = "ready; bez podporovaného lockfilu Doctor nenabízí Install ani Repair";
     }
@@ -1198,7 +1198,7 @@ export function buildEnvironmentChecks({ companiesRoot, companies = [], template
         message: "Git kontroly se nedaly provést, protože Git není dostupný.",
         paths: ["."],
         blockedReason: "Spustitelný `git` se na téhle mašině nenašel.",
-        remedy: "Nainstaluj Git a spusť doctor znovu.",
+        remedy: "Nainstalujte Git a spusťte doctor znovu.",
       }),
       blockedCheck({
         id: "gitignore.protection",
@@ -1206,7 +1206,7 @@ export function buildEnvironmentChecks({ companiesRoot, companies = [], template
         message: ".gitignore kontroly se nedaly provést, protože Git není dostupný.",
         paths: [".gitignore"],
         blockedReason: "Spustitelný `git` se na téhle mašině nenašel.",
-        remedy: "Nainstaluj Git a spusť doctor znovu.",
+        remedy: "Nainstalujte Git a spusťte doctor znovu.",
       }),
     ];
   }
@@ -1277,8 +1277,8 @@ async function attachModuleApplicationProjections({ companiesRoot, organizations
       if (unavailable && slot.readiness?.severity !== "blocking") {
         const reason = projection.state === "legacy-missing" ? "app_runtime_not_declared" : "declared_app_unavailable";
         const message = projection.state === "legacy-missing"
-          ? "Modul nemá deklarovaný ani dostupný runtime. Doplň app kontrakt, nebo výslovně deklaruj apps: [] pro datový modul."
-          : "Deklarovaná App nemá platný dostupný runtime. Oprav její kontrakt nebo chybějící package.";
+          ? "Modul nemá deklarovaný ani dostupný runtime. Doplňte app kontrakt, nebo výslovně deklarujte apps: [] pro datový modul."
+          : "Deklarovaná App nemá platný dostupný runtime. Opravte její kontrakt nebo chybějící package.";
         slot.readiness = { severity: "blocking", reason, message };
         organization.space_readiness.blocking_slots.push({
           slug: slot.slug, path: slot.path, status: slot.status,
@@ -1709,7 +1709,7 @@ function workspaceConformanceIssues({ declared, productionBoundary, manifest, co
     if (!path) continue;
     if (path !== rawPath) {
       issues.push(
-        `${source}: slot path "${rawPath}" není kanonický; použij "${path}"`,
+        `${source}: slot path "${rawPath}" není kanonický; použijte "${path}"`,
       );
     }
     if (slot.workspace === "productionspace") {
@@ -1792,7 +1792,7 @@ function slotScopeContractIssues(manifest, config) {
     const path = normalizeOrganizationSlotPath(slot.path);
     if (isOrganizationSlotContainerPath(path)) {
       issues.push(
-        `${source}: slot ${path} je Organization kontejner, ne repozitářový slot; použij workspace/<slug>, modules/<slug> nebo productionspace/<slug>`,
+        `${source}: slot ${path} je Organization kontejner, ne repozitářový slot; použijte workspace/<slug>, modules/<slug> nebo productionspace/<slug>`,
       );
       continue;
     }
@@ -1857,7 +1857,7 @@ function rootSlotContractIssues(manifest, config, organizationRoot) {
   for (const { slot, rawPath, path } of rootSlots) {
     if (rawPath !== path) {
       issues.push(
-        `modules.manifest.json: root slot path "${rawPath}" není kanonický; použij "${path}"`,
+        `modules.manifest.json: root slot path "${rawPath}" není kanonický; použijte "${path}"`,
       );
     }
     if (slot.space !== "root") {
@@ -1880,7 +1880,7 @@ function rootSlotContractIssues(manifest, config, organizationRoot) {
     );
     if (legacyCheckoutFields.length > 0) {
       issues.push(
-        `modules.manifest.json: root slot ${path} nesmí deklarovat legacy checkout souřadnice (${legacyCheckoutFields.join(", ")}); používej výhradně git.url a git.branch`,
+        `modules.manifest.json: root slot ${path} nesmí deklarovat legacy checkout souřadnice (${legacyCheckoutFields.join(", ")}); používejte výhradně git.url a git.branch`,
       );
     }
 
@@ -1893,7 +1893,7 @@ function rootSlotContractIssues(manifest, config, organizationRoot) {
     const checkoutCoordinatesStarted = slot.git !== undefined;
     if (slot.status === "planned_slot" && nestedCheckoutExists) {
       issues.push(
-        `modules.manifest.json: materializovaný root slot ${path} nesmí zůstat status: "planned_slot"; aktivní checkout deklaruj bez statusu, staged checkout jako status: "inactive", a v obou případech doplň celé git.url i git.branch`,
+        `modules.manifest.json: materializovaný root slot ${path} nesmí zůstat status: "planned_slot"; aktivní checkout deklarujte bez statusu, staged checkout jako status: "inactive", a v obou případech doplňte celé git.url i git.branch`,
       );
     } else if (slot.status === "planned_slot" && checkoutCoordinatesStarted) {
       issues.push(
@@ -1931,7 +1931,7 @@ function rootSlotContractIssues(manifest, config, organizationRoot) {
     const path = normalizeOrganizationSlotPath(slot.path);
     if (!isOrganizationRootSlotPath(path)) continue;
     issues.push(
-      `legacy compatibility projection company.gen3.json: root slot ${path} nesmí být v modules[]; deklaruj ho v modules.manifest.json/module_slots[]`,
+      `legacy compatibility projection company.gen3.json: root slot ${path} nesmí být v modules[]; deklarujte ho v modules.manifest.json/module_slots[]`,
     );
   }
 
@@ -1946,7 +1946,7 @@ function rootSlotContractIssues(manifest, config, organizationRoot) {
   for (const { rawPath, path } of rootLayers) {
     if (rawPath === path) continue;
     issues.push(
-      `legacy compatibility projection company.gen3.json: root layer path "${rawPath}" není kanonický; použij "${path}"`,
+      `legacy compatibility projection company.gen3.json: root layer path "${rawPath}" není kanonický; použijte "${path}"`,
     );
   }
   for (const path of declaredLayerPaths) {
@@ -2012,7 +2012,7 @@ function moduleSlotWithReadiness(
       readiness: {
         severity: "blocking",
         reason: "managed_checkout_not_repository",
-        message: "Deklarovaný managed checkout nemá vlastní Git root; samotný adresář nestačí. Spusť explicitní Organization instalaci.",
+        message: "Deklarovaný managed checkout nemá vlastní Git root; samotný adresář nestačí. Spusťte explicitní Organization instalaci.",
       },
     };
   }
@@ -2094,7 +2094,7 @@ function classifyModuleSlotReadiness(
       return {
         severity: "blocking",
         reason: "access_classification_unknown",
-        message: "Slot deklaruje neznámý default_access nebo malformed required_roles; Lazurio ho fail-safe nematerializuje. Oprav deklaraci v Organization manifestu.",
+        message: "Slot deklaruje neznámý default_access nebo malformed required_roles; Lazurio ho fail-safe nematerializuje. Opravte deklaraci v Organization manifestu.",
       };
     }
     const accessRestricted = ["role_based", "restricted", "private"].includes(slot.default_access);
@@ -2392,7 +2392,7 @@ function withCodexInstallationGuidance(check, platform) {
       : null;
   return {
     ...check,
-    message: `${check.message} Pro chybějící Codex CLI doporučujeme oficiální OpenAI standalone instalátor podle manual/organization-install.md. Vyhovující instalaci zachovej bez ohledu na jejího správce.`,
+    message: `${check.message} Pro chybějící Codex CLI doporučujeme oficiální OpenAI standalone instalátor podle manual/organization-install.md. Vyhovující instalaci zachovejte bez ohledu na jejího správce.`,
     links: [...check.links, {
       label: "Oficiální instalace Codex CLI",
       kind: "external",
@@ -2941,7 +2941,7 @@ export function lazurioUpdateCheck(companiesRoot) {
     return {
       ...base,
       status: "warn",
-      message: `Lazurio root je podle lokálního snapshotu ${behind} ${behind === 1 ? "commit" : "commitů"} pozadu — spusť lazurio update.`,
+      message: `Lazurio root je podle lokálního snapshotu ${behind} ${behind === 1 ? "commit" : "commitů"} pozadu — spusťte lazurio update.`,
       details: [],
     };
   }
@@ -3364,7 +3364,7 @@ export function moduleStandardPortPoolCheck(appsResponse) {
       `port ${port} drží Moduly více Organizací: ${owners.map((owner) => `${owner.company}/${owner.module}#${owner.lease}`).join(", ")}`,
     ),
     ...findings.leases_outside_pool.map(({ company, module, lease, port, pool }) =>
-      `${company}/${module}#${lease} ${port} leží mimo pool ${pool.start}-${pool.end}; oprava: přepiš port leasu v lazurio.module.json na volný port poolu (navrhne ho lazurio module setup <module-root>) a ověř start App`,
+      `${company}/${module}#${lease} ${port} leží mimo pool ${pool.start}-${pool.end}; oprava: přepište port leasu v lazurio.module.json na volný port poolu (navrhne ho lazurio module setup <module-root>) a ověřte start App`,
     ),
     ...findings.organizations_without_pool.map(({ company }) =>
       `${company} má Module leases, ale nemá module_port_pool`,
@@ -3460,7 +3460,7 @@ function runtimeChecks(appsResponse) {
         blocked_reason:
           `Discovery skončila s ${appsResponse.failures.length} chybami, takže runtime stav `
           + "aplikací nešel změřit.",
-        remedy: "Oprav nálezy kontroly `launchpad.discovery` a spusť doctor znovu.",
+        remedy: "Opravte nálezy kontroly `launchpad.discovery` a spusťte doctor znovu.",
       },
     ];
   }

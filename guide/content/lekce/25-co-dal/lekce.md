@@ -10,15 +10,15 @@ ukol: false
 ---
 # Co dál po kurzu
 
-- Co se v této lekci naučíš:
+- Co se v této lekci naučíte:
   - jak pokračovat po první cestě;
   - proč se vracet k průvodci;
   - jak zlepšit kancelář pro dalšího.
 
-Po dokončení kurzu nemusíš umět všechno. Máš umět začít den, najít pomoc, zadat práci, poznat nejasnost a bezpečně předat výsledek.
+Po dokončení kurzu nemusíte umět všechno. Stačí umět začít den, najít pomoc, zadat práci, poznat nejasnost a bezpečně předat výsledek.
 
-K průvodci se můžeš vracet. Není to zkouška, kterou jednou splníš a zahodíš. Je to mapa pro chvíle, kdy se ztratíš nebo chceš někomu dalšímu pomoct začít.
+K průvodci se můžete vracet. Není to zkouška, kterou jednou splníte a zahodíte. Je to mapa pro chvíle, kdy se ztratíte nebo chcete někomu dalšímu pomoct začít.
 
-Nejlepší další krok je malý: vezmi jeden reálný úkol, použij jeden dobrý postup a na konci napiš, co bylo jasné a co by šlo zlepšit.
+Nejlepší další krok je malý: vezměte jeden reálný úkol, použijte jeden dobrý postup a na konci napište, co bylo jasné a co by šlo zlepšit.
 
-Shrnutí: vezmi si jeden malý praktický krok a neboj se zeptat lidskou řečí.
+Shrnutí: začněte jedním malým praktickým krokem a nebojte se zeptat lidskou řečí.

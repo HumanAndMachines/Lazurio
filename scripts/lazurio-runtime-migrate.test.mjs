@@ -115,7 +115,7 @@ test("migration CLI accepts one canonical root flag and rejects ambiguous root a
     "--conglomerate-root",
     "/tmp/legacy",
     "/tmp/module/package.json",
-  ])).toThrow("Použij právě jeden");
+  ])).toThrow("Použijte právě jeden");
   expect(() => parseRuntimeMigrationArgs(["--lazurio-root", "--write", "/tmp/module"])).toThrow(
     "--lazurio-root vyžaduje cestu",
   );

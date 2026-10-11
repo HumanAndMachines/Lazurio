@@ -590,7 +590,7 @@ const descriptors = {
     severity: "warn",
     title: "Checkout není na očekávané branchi",
     message: ({ branch, expected_branch }) => `Checkout je na ${branch || "detached HEAD"}, očekává se ${expected_branch}.`,
-    recommended_action: "Přesuň práci do worktree nebo vrať referenční checkout na očekávanou branch.",
+    recommended_action: "Přesuňte práci do worktree nebo vraťte referenční checkout na očekávanou branch.",
   },
   rebase_in_progress: {
     severity: "fail",

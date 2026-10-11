@@ -43,7 +43,7 @@ export function checkOrganizationRoot({ organizationRoot }) {
     failures.push({
       code: "settings_invalid",
       message: `Sekce settings v ${ORGANIZATION_DOCUMENT_PATHS.canonical} je neplatná: Environmenty ji nepoužijí a drží `
-        + "poslední použitou verzi. Oprav ji podle issues; company.gen3.json se kvůli ní neregeneruje.",
+        + "poslední použitou verzi. Opravte ji podle issues; company.gen3.json se kvůli ní neregeneruje.",
     });
   }
   return {
@@ -102,7 +102,7 @@ function canonicalSchemaIssues(documents) {
 function stateMessage(resolution) {
   if (resolution.state === "projection_drift") {
     return `${ORGANIZATION_DOCUMENT_PATHS.legacy_projection} není aktuální projekcí ${ORGANIZATION_DOCUMENT_PATHS.canonical}; `
-      + `v task worktree spusť \`${MIGRATE_COMMAND}\` a commitni oba soubory.`;
+      + `v task worktree spusťte \`${MIGRATE_COMMAND}\` a commitněte oba soubory.`;
   }
   if (resolution.state === "current") {
     return `Root drží jen ${ORGANIZATION_DOCUMENT_PATHS.canonical} bez legacy projekce; aktivace ani update ho zatím `

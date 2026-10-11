@@ -10,15 +10,15 @@ ukol: true
 ---
 # Denní pracovní rytmus
 
-- Co se v této lekci naučíš:
+- Co se v této lekci naučíte:
   - jak začít den;
   - kdy plánovat;
   - jak večer uklidit stav.
 
-Ráno si nejdřív ujasni stav: co je dnes důležité, co čeká na odpověď a kde můžeš navázat. Nemusíš otevřít všechno najednou.
+Ráno si nejdřív ujasněte stav: co je dnes důležité, co čeká na odpověď a kde můžete navázat. Nemusíte otevřít všechno najednou.
 
-Přes den si nech pomoct tam, kde AI šetří čas: shrnutí, návrh, kontrola, hledání správného místa. Když je věc nová nebo nejasná, nejdřív plánuj. Když je jasná, pracuj po malých krocích.
+Přes den si nechte pomoct tam, kde AI šetří čas: shrnutí, návrh, kontrola, hledání správného místa. Když je věc nová nebo nejasná, nejdřív plánujte. Když je jasná, pracujte po malých krocích.
 
-Večer po sobě nech krátký stav: hotovo, rozpracováno, čeká na koho. Tři věty často stačí.
+Večer po sobě nechte krátký stav: hotovo, rozpracováno, čeká na koho. Tři věty často stačí.
 
-Shrnutí: vezmi si jeden malý praktický krok a neboj se zeptat lidskou řečí.
+Shrnutí: začněte jedním malým praktickým krokem a nebojte se zeptat lidskou řečí.

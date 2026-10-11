@@ -954,7 +954,7 @@ export function observeOrganizationInstallSource({
   if (brokered && requestedRole !== null) {
     return providerFailure(
       "github_broker_role_unsupported",
-      "Sdílená Team VM jedná jako bot Organizace přes broker, ne jako člověk v roli; spusť instalaci bez --role.",
+      "Sdílená Team VM jedná jako bot Organizace přes broker, ne jako člověk v roli; spusťte instalaci bez --role.",
     );
   }
   const provider = createTrustedGitHubProvider({
@@ -1195,7 +1195,7 @@ async function verifyInstallRootBoundary(rootPath) {
   } catch {
     return providerFailure(
       "lazurio_root_not_ready",
-      "Lazurio Root není připravený; nejdřív dokonči `lazurio install`.",
+      "Lazurio Root není připravený; nejdřív dokončete `lazurio install`.",
     );
   }
 }

@@ -3,7 +3,7 @@
     {
       "id": "first-lesson",
       "name": "První krok",
-      "description": "Začal/a jsi cestu digitální kanceláří.",
+      "description": "Cesta digitální kanceláří začala.",
       "icon": "compass",
       "level": "bronze",
       "trigger": {
@@ -14,7 +14,7 @@
     {
       "id": "slop-aware",
       "name": "Poznám AI vatu",
-      "description": "Umíš poznat hezky znějící, ale nepoužitelný výstup.",
+      "description": "Umíte poznat hezky znějící, ale nepoužitelný výstup.",
       "icon": "star",
       "level": "bronze",
       "trigger": {
@@ -25,7 +25,7 @@
     {
       "id": "orientation-ready",
       "name": "Umím se zorientovat",
-      "description": "Víš, kde hledat rozcestníky, slovník a stav kanceláře.",
+      "description": "Víte, kde hledat rozcestníky, slovník a stav kanceláře.",
       "icon": "book",
       "level": "silver",
       "trigger": {
@@ -36,7 +36,7 @@
     {
       "id": "good-brief",
       "name": "Umím zadat práci",
-      "description": "Umíš AI kolegovi říct cíl, kontext i hranice.",
+      "description": "Umíte AI kolegovi říct cíl, kontext i hranice.",
       "icon": "sparkles",
       "level": "silver",
       "trigger": {
@@ -47,7 +47,7 @@
     {
       "id": "calm-recovery",
       "name": "Klid při chybě",
-      "description": "Víš, jak popsat problém bez paniky.",
+      "description": "Víte, jak popsat problém bez paniky.",
       "icon": "wrench",
       "level": "silver",
       "trigger": {
@@ -58,7 +58,7 @@
     {
       "id": "team-helper",
       "name": "Pomáhám týmu",
-      "description": "Umíš z poznatku udělat pomoc pro další kolegy.",
+      "description": "Umíte z poznatku udělat pomoc pro další kolegy.",
       "icon": "trophy",
       "level": "gold",
       "trigger": {

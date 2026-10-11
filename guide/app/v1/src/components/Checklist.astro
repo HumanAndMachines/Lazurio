@@ -65,7 +65,7 @@ const { lekceId, ukol } = Astro.props;
         const all = Array.from(boxes).every((b) => b.checked);
         if (status instanceof HTMLElement) {
           status.textContent = all
-            ? "Hotovo! Můžeš jít na další krok."
+            ? "Hotovo! Můžete jít na další krok."
             : `${Array.from(boxes).filter((b) => b.checked).length} / ${boxes.length} hotovo`;
         }
         if (all && achievementId) {
@@ -93,7 +93,7 @@ const { lekceId, ukol } = Astro.props;
     const initialAll = Array.from(boxes).every((b) => b.checked);
     if (status instanceof HTMLElement) {
       status.textContent = initialAll
-        ? "Hotovo! Můžeš jít na další krok."
+        ? "Hotovo! Můžete jít na další krok."
         : `${Array.from(boxes).filter((b) => b.checked).length} / ${boxes.length} hotovo`;
     }
   })();

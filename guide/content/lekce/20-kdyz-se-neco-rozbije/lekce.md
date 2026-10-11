@@ -11,15 +11,15 @@ achievement_on_complete: "calm-recovery"
 ---
 # Když se něco rozbije
 
-- Co se v této lekci naučíš:
+- Co se v této lekci naučíte:
   - jak popsat problém;
   - proč neklikat náhodně;
   - kdy udělat screenshot.
 
-Chyba neznamená, že jsi něco zkazil/a. Často jen znamená, že část kanceláře potřebuje pozornost.
+Chyba neznamená, že se něco pokazilo vaší vinou. Často jen znamená, že část kanceláře potřebuje pozornost.
 
-Uděláš nejvíc, když přesně popíšeš, co jsi chtěl/a udělat, co se stalo a co vidíš na obrazovce. Screenshot je často lepší než dlouhé vysvětlování.
+Nejvíc pomůže přesný popis: jaký byl záměr, co se stalo a co je vidět na obrazovce. Screenshot je často lepší než dlouhé vysvětlování.
 
-Neklikej náhodně dál, pokud nevíš, co se děje. Klidný popis problému pomůže správci nebo AI kolegovi mnohem víc než panika.
+Neklikejte náhodně dál, pokud nevíte, co se děje. Klidný popis problému pomůže správci nebo AI kolegovi mnohem víc než panika.
 
-Shrnutí: vezmi si jeden malý praktický krok a neboj se zeptat lidskou řečí.
+Shrnutí: začněte jedním malým praktickým krokem a nebojte se zeptat lidskou řečí.
