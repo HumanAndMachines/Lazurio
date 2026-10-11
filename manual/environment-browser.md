@@ -10,6 +10,20 @@ aplikace, Nová karta, kdy karta zanikne) a návrhy LazurioPlatform **F38**, **F
 v jejím `docs/decisions.md`. Matěj tento dokument zadal 2026-10-11 jako vodítko pro
 aktualizace forků (dodatek 0191 z 2026-10-11).
 
+**Stav k 2026-10-11: cílová smlouva, ne popis nasazeného stavu.** Přítomný čas níže popisuje cíl.
+- **Už běží:**
+  - na části Remote Environmentů prohlížeč Environmentu a pohled jedné karty (F38, F39);
+  - ve webovém T3 Code karty prohlížeče v pravém panelu (0.0.45-lazurio.7, s prozatímním
+    „+ → Browser“).
+- **Čeká na review:** hub, který podle souborů držitelů rozhoduje o konci karty (F47 krok 1,
+  LazurioPlatform #316), a Přehled a akce Launchpadu (krok 2, #318). Jsou to otevřené PR,
+  nasazené ještě nejsou.
+- **Teprve přijde:**
+  - stránka a prvek Nové karty a panel Launchpadu (krok 3);
+  - karty vláken v T3 Code s jejich soubory držitelů (krok 4, DEV-6646 úkol 501);
+  - vydání a ověření na Environmentu (krok 5).
+- **Jen cíl:** MausBot na prohlížeči Environmentu a Nová karta pro Codex Desktop.
+
 ## Principy
 
 1. **Prohlížeč patří Environmentu.** Na každém Remote Environmentu (Ubuntu) běží jeden prohlížeč:
@@ -84,18 +98,39 @@ tohle a nic dalšího nepotřebuje:
 2. **Karta je rámeček pohledu.** Aplikace ukazuje kartu jako rámeček `browser.<…>/t/<id>` a
    naslouchá zprávám pohledu: `lazurio-browser:info` (adresa a titulek),
    `lazurio-browser:new-tab` (nová karta stránky) a `lazurio-browser:closed` (karta skončila).
-3. **Drží, co ukazuje.**
-   - **Soubor držitele.** Server aplikace zapisuje pro každou lištu jeden soubor držitele
-     `<lišta>.json` = `{"strip", "label", "tabs": [<id karty>…]}`. Zapisuje ho atomicky
-     (dočasný soubor a přejmenování), s právy 0600. Lišty jsou `launchpad` a `t3-<vlákno>`, což
-     je zároveň sezení agenta vlákna.
-   - **Čas záznamu.** Ke každé kartě si aplikace ve vlastním úložišti drží čas jejího záznamu.
-     Měří ho na boot clock (`boot_id` a `/proc/uptime`), nikdy systémovými hodinami. T3 Code ho
-     drží ve stavu vlákna, Launchpad jako `recordedAt` ve svém souboru držitele.
-   - **Srovnání se seznamem živých karet.** Aplikace se srovná při startu, při každé změně
-     seznamu (sleduje ho a čte znovu každých 30 s) a před zápisem souboru držitele.
-   - **Kdy kartu pustí.** Jen když ji postrádá seznam ze současného bootu pořízený po jejím
-     záznamu (pravidlo `keptTabs` v LazurioPlatform). Seznam z jiného bootu ignoruje.
+3. **Drží, co ukazuje.** Tvary odpovídají `holds.ts` v LazurioPlatform (F47 bod 4, kroky 1–2).
+   - **Čas na boot clock** je `{"boot": "<boot_id>", "at": <sekundy od bootu>}`. Čte se z
+     `/proc/sys/kernel/random/boot_id` a z prvního čísla `/proc/uptime`, nikdy ze systémových
+     hodin.
+   - **Soubor držitele, který čte hub.** Server aplikace zapisuje pro každou lištu jeden soubor
+     `<lišta>.json`. Hub z něj čte jen tuhle část:
+
+     ```json
+     {"strip": "<lišta>", "label": "<název lišty>", "tabs": ["<id karty>"]}
+     ```
+
+     - `strip` se musí shodovat s názvem souboru a počítají se jen id cílů DevTools.
+     - Soubor se zapisuje atomicky (dočasný soubor a přejmenování), s právy 0600 v adresáři 0700.
+     - Lišty jsou `launchpad` a `t3-<vlákno>`; `t3-<vlákno>` je zároveň sezení agenta vlákna.
+   - **Čas záznamu, který čte jen aplikace sama.** Ke každé kartě si aplikace drží čas, kdy ji
+     do lišty přidala. Čas přečte z boot clock v té chvíli a uloží ho spolu s kartou.
+     - T3 Code ho drží ve stavu vlákna.
+     - Launchpad ho ukládá do svého souboru držitele jako další pole
+       `"recordedAt": {"<id karty>": {"boot": "…", "at": …}}`, které hub ignoruje.
+     - Karta bez času se počítá jako zaznamenaná dávno.
+   - **Seznam živých karet, který zapisuje hub.** `tabs.json` je
+     `{"tabs": ["<id karty>"], "takenAt": {"boot": "…", "at": …}}`, kde `takenAt` je chvíle,
+     kdy hub snímek začal.
+   - **Srovnání.** Aplikace se se seznamem srovná:
+     - při startu;
+     - při každé jeho změně (sleduje ho a čte znovu každých 30 s);
+     - před zápisem souboru držitele.
+   - **Kdy kartu pustí** (pravidlo `keptTabs`):
+     - seznam z jiného bootu ignoruje;
+     - kartu, kterou seznam obsahuje, drží dál;
+     - kartu, kterou seznam postrádá, pustí jen tehdy, když `takenAt` je pozdější než její čas
+       záznamu, protože snímek začatý po záznamu by živou kartu obsahoval;
+     - kartu zaznamenanou ve stejnou chvíli nebo později drží.
 4. **Pouští, co skončilo.**
    - Zavření karty v liště ji odebere z této lišty, s nabídkou Vrátit.
    - Archivace nebo smazání vlákna zavře všechny jeho karty, včetně vlastního okna jeho agenta
