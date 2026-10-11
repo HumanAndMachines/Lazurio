@@ -132,6 +132,28 @@ cíl zvlášť. Bod 10 rozhodnutí 0191 (vymazat profil prohlížeče před
 přeřazením pracovního Environmentu jinému člověku) platí dál; 0192 ruší jen
 povinné odhlašování při běžném sdílení.
 
+### Data Modulů: strop Environmentu a zúžení v aplikaci (0196)
+
+Na data Modulu dosáhne Environment, ne člověk. Admin Organizace mu dá
+přístupy přes jeho kolekci v trezoru Organizace a úložiště je vynucuje; to je
+strop Environmentu. Kdo má celý Environment, pracuje s celým stropem, protože
+v Environmentu má root. Kdo má jen aplikaci, vidí část stropu podle pravidel
+Organizace: zužuje server Modulu u každého požadavku a víc než strop nedá.
+
+Zúžení je služba provozovatele Environmentu vůči lidem, se kterými aplikaci
+sdílí, ne izolace proti němu. Provozovatel má root, může server Modulu změnit
+a návštěvníkovi ukázat celý strop; Admin Organizace mu proto strop svěřuje
+celý a za to, co jeho aplikace ukáže, odpovídá on. Autor změny zapsaný na
+Environmentu je informace, ne důkaz proti provozovateli. Kde má zúžení platit
+i proti provozovateli, data obsluhuje aplikace provozovaná Organizací, na které
+root nemá žádný uživatel, nebo úložiště, které identitu ověřuje samo.
+
+Ověřenou identitu návštěvníka podepisuje Lazurio Auth pro přesný Environment
+a aplikaci. Není klíčem k datům: sdílení aplikace nenese práva k datům
+návštěvníka a majitel Environmentu, který by identitu návštěvníka zachytil,
+nezíská víc než svůj strop. Kdo má vidět data se svými právy, otevře Modul na
+svém Environmentu nebo v aplikaci provozované Organizací.
+
 ### Plné sdílení individuálního pracovního Environmentu je vědomá důvěra
 
 Přidělený uživatel může důvěryhodnému člověku udělit plný přístup i tehdy,
