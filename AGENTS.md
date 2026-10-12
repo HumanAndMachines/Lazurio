@@ -284,7 +284,8 @@ o kontrolu, assignee je owner další práce: Task Agent operující pod tímto
 přiřazeným GitHub účtem upravuje PR branch přímo, řeší připomínky a CI,
 bezpečně rebasuje a po preflightu smí použít exact `--force-with-lease`; práci
 nevrací pouhým komentářem autorovi PR. Platné přiřazení od oprávněného
-předávajícího nese odpovědnost a mandát k dotažení včetně merge v rozsahu PR;
+předávajícího (živé Write/Maintain/Admin a právo předat Publikaci podle
+pravidel repozitáře; Triage nestačí) nese odpovědnost a mandát k dotažení včetně merge v rozsahu PR;
 další publikační komentář ani opakovaný souhlas se nevyžaduje. Assignee
 PR dokončí, nebo předá dalšímu oprávněnému assignee s konkrétním stavem a
 dalším krokem. Assignment nevytváří GitHub práva, neobchází review ani

@@ -150,7 +150,9 @@ autoritu.
    komentářem, pokud ji v rámci živých práv a scope může dotáhnout sám.
    Platné předání přes assignee je scoped pokyn k dotažení PR včetně dovoleného
    merge; další publikační komentář není nutný. Ověř původ a stále platné
-   přiřazení podle `manual/pull-request-handoff.md`. Assignee práci dokončí,
+   přiřazení podle `manual/pull-request-handoff.md`: předávající potřebuje
+   živé Write/Maintain/Admin a právo předat Publikaci podle pravidel repa;
+   samotné Triage oprávnění přiřadit PR nestačí. Assignee práci dokončí,
    nebo ji předá dalšímu oprávněnému assignee s konkrétním stavem. Assignment
    nevytváří GitHub práva ani neobchází review a branch rules. Samostatný
    Release, infra apply a změny přístupů mají vlastní podmínky.
