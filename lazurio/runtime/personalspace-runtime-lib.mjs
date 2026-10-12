@@ -156,7 +156,7 @@ export async function buildPersonalspaceResponse({
     dependency_status: "invalid_manifest",
     runtime: {
       status: "stopped",
-      message: "Osobní aplikace s nevalidním runtime manifestem se nespouští; oprav lazurio.runtime nebo read-compatible legacy manifest.",
+      message: "Osobní aplikace s nevalidním runtime manifestem se nespouští; opravte lazurio.runtime nebo read-compatible legacy manifest.",
     },
     runtime_status: "stopped",
   }));

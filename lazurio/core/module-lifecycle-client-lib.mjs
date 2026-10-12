@@ -166,7 +166,7 @@ export async function runModuleLifecycle({
       code: response.payload?.error ?? "module_lifecycle_action_failed",
       message: response.payload?.message ?? response.message,
       action: response.payload?.failure_kind === "cross_organization_takeover_confirmation_required"
-        ? `Zopakuj příkaz s --confirm-replace ${response.payload?.replace_app_id ?? "<app-id>"} až po výslovném potvrzení uživatele.`
+        ? `Příkaz zopakujte s --confirm-replace ${response.payload?.replace_app_id ?? "<app-id>"}, až to uživatel výslovně potvrdí.`
         : "Vyřešte uvedený problém a zopakujte stejný příkaz.",
     }],
   };
