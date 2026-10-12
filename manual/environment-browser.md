@@ -92,7 +92,14 @@ ukáže nad stránkou ve stejném pohledu, novou kartu nabídne aplikace jako no
   dívá. Jinak skončí po 8 s (0195 bod 14).
 - **Zavřít** v Přehledu zavře kartu všem po 8 s, i drženou. Pracuje-li v ní agent, nejdřív
   varuje.
-- **Selhané čtení.** Když hubu selže čtení držení, kartu nezavře.
+- **Selhané čtení.** Dnes nasazený hub (F47 bod 5): když mu selže čtení držení, nezavře žádnou
+  kartu, ani když nejde přečíst jediný soubor. Rozhodnutý cíl (dodatek 0191 z 2026-10-12, bod
+  32), který přinese Lazurio/LazurioPlatform#347:
+  - nečitelný soubor držitele zastaví jen karty, které držel při svém posledním přečtení;
+  - ostatní karty končí dál a `lazurio doctor` nečitelný soubor hlásí;
+  - soubor, který od startu hubu přečíst nešel, nedrží nic, co by hub znal, protože hub poslední
+    přečtení neukládá;
+  - adresář, který nejde přečíst, dál zastaví ukončování všech karet.
 
 ## Smlouva hostitelské aplikace
 
@@ -237,10 +244,14 @@ Na `agent-browser` stojí tato smlouva:
 - vazba sezení na kartu (`<sezení>.target`), která přežije restart démona;
 - `<sezení>.pid`, který démon při skončení smaže;
 - připnutá karta;
-- hodina nečinnosti démona, kterou Platforma nastaví v jeho uživatelském nastavení
-  (`"idleTimeout": "1h"` v `~/.agent-browser/config.json`).
+- limit nečinnosti démona z jeho uživatelského nastavení (`idleTimeout` v
+  `~/.agent-browser/config.json`).
+  - Platforma tam zapíše hodinu (`"1h"`), jen když tam člověk nemá vlastní limit, a jeho volbu
+    nepřepisuje.
+  - Nastavení, které nejde přečíst, není objekt JSON nebo není obyčejný soubor (třeba odkaz),
+    nechá Platforma být. Démon pak limit mít nemusí a sám neskončí (#533).
   - Výchozí limit agent-browseru prohlížeč připojený přes DevTools vynechává
-    (`blocks_default_idle_shutdown`). Bez tohoto nastavení by démon sám nikdy neskončil.
+    (`blocks_default_idle_shutdown`). Bez limitu v nastavení by démon sám nikdy neskončil.
   - Po vypršení se démon jen odpojí, kartu nezavře; o jejím konci dál rozhoduje hub.
 
 Dashboard `agent-browser` lidé nepoužívají, lidé mají pohled Platformy. Fork nese jen opravy a
