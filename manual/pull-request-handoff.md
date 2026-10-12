@@ -10,7 +10,9 @@ samostatně a samotný tento dokument je nezapíná.
 Reviewer request žádá o kontrolu. Přiřazení PR jako **assignee** předává
 odpovědnost za dotažení včetně dovoleného merge. Autor nebo současný
 odpovědný Kolega může takto předat práci dalšímu Kolegovi. Předávající
-musí mít živá oprávnění repozitáře; samotný název persony je nedokládá.
+musí mít živé Write, Maintain nebo Admin a oprávnění k tomuto předání
+Publikace podle pravidel repozitáře. Pouhá možnost měnit assignees
+(například s rolí Triage) nestačí; samotný název persony práva nedokládá.
 Odpovědný Owner/Admin může předání provést v rámci svých práv také.
 
 Příjemce vyřeší skutečné vady, připomínky, CI a integrační konflikty
