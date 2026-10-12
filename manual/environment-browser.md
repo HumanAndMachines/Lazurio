@@ -10,21 +10,18 @@ aplikace, Nová karta, kdy karta zanikne) a návrhy LazurioPlatform **F38**, **F
 v jejím `docs/decisions.md`. Matěj tento dokument zadal 2026-10-11 jako vodítko pro
 aktualizace forků (dodatek 0191 z 2026-10-11).
 
-**Stav k 2026-10-11: cílová smlouva, ne popis nasazeného stavu.** Přítomný čas níže popisuje cíl.
-- **Už běží:**
-  - na části Remote Environmentů prohlížeč Environmentu a pohled jedné karty (F38, F39);
-  - ve webovém T3 Code karty prohlížeče v pravém panelu (0.0.45-lazurio.7, s prozatímním
-    „+ → Browser“).
-- **Čeká na review:** hub, který podle souborů držitelů rozhoduje o konci karty (F47 krok 1,
-  LazurioPlatform #316), a Přehled a akce Launchpadu (krok 2, #318). Jsou to otevřené PR,
-  nasazené ještě nejsou.
-- **Teprve přijde:**
-  - stránka a prvek Nové karty a panel Launchpadu (krok 3);
-  - karty vláken v T3 Code s jejich soubory držitelů (krok 4, DEV-6646 úkol 501);
-  - vydání a ověření na Environmentu (krok 5);
-  - hodinový limit nečinnosti démonů agent-browseru, který nastaví Platforma. Dnes démon připojený
-    k prohlížeči sám nekončí.
-- **Jen cíl:** MausBot na prohlížeči Environmentu a Nová karta pro Codex Desktop.
+**Stav k 2026-10-12: cílová smlouva, ne popis nasazeného stavu.** Přítomný čas níže popisuje cíl.
+- **Vydané a ověřené na canary Environmentu:**
+  - hub, který podle souborů držitelů rozhoduje o konci karty, Přehled a akce Launchpadu,
+    Nová karta a panel Launchpadu (F47 kroky 1–3, LazurioPlatform v0.1.8-rc.51);
+  - hodina nečinnosti démonů agent-browseru (rc.51) a restart pohledu po aktualizaci (rc.53);
+  - Matějovo doladění panelu Launchpadu a jedno jméno Environmentu v pohledu i přepínači
+    (rc.55), titulek pohledu se stránkou na začátku (rc.56);
+  - karty vláken v T3 Code s jejich soubory držitelů a Nová karta v pravém panelu
+    (preview 0.0.45-preview.20261012.2).
+- **Teprve přijde:** stable T3 Code 0.0.45-lazurio.8 a nasazení na ostatní Environmenty;
+  refaktor podle dodatku 0191 z 2026-10-12 (body 28–35).
+- **Jen cíl:** MausBot na prohlížeči Environmentu.
 
 ## Principy
 
@@ -81,8 +78,9 @@ ukáže nad stránkou ve stejném pohledu, novou kartu nabídne aplikace jako no
 **Jak karta končí** (F47 body 5 a 6):
 - **Kdy je karta držená.** Drží ji soubor držitele, který ji uvádí, nebo agent, který v ní
   pracuje. Agent v ní pracuje, když je na ni navázané jeho sezení `agent-browser`
-  (`<sezení>.target`) a démon toho sezení běží (`<sezení>.pid`). Démon skončí po hodině bez
-  příkazu podle limitu, který Platforma nastaví v uživatelském nastavení agent-browseru.
+  (`<sezení>.target`) a démon toho sezení běží (`<sezení>.pid`). Démon skončí po limitu
+  nečinnosti z uživatelského nastavení agent-browseru: Platforma tam zapíše hodinu, pokud tam
+  člověk nemá vlastní limit, a jeho volbu nepřepisuje.
   Výchozí limit agent-browseru se na prohlížeč připojený přes DevTools nevztahuje.
 - **Konec po posledním držení.** Když poslední držení zmizí a nikdo se na kartu nedívá, karta
   skončí po 8 s. To je okno Vrátit.
@@ -94,7 +92,14 @@ ukáže nad stránkou ve stejném pohledu, novou kartu nabídne aplikace jako no
   dívá. Jinak skončí po 8 s (0195 bod 14).
 - **Zavřít** v Přehledu zavře kartu všem po 8 s, i drženou. Pracuje-li v ní agent, nejdřív
   varuje.
-- **Selhané čtení.** Když hubu selže čtení držení, kartu nezavře.
+- **Selhané čtení.** Dnes nasazený hub (F47 bod 5): když mu selže čtení držení, nezavře žádnou
+  kartu, ani když nejde přečíst jediný soubor. Rozhodnutý cíl (dodatek 0191 z 2026-10-12, bod
+  32), který přinese Lazurio/LazurioPlatform#347:
+  - nečitelný soubor držitele zastaví jen karty, které držel při svém posledním přečtení;
+  - ostatní karty končí dál a `lazurio doctor` nečitelný soubor hlásí;
+  - soubor, který od startu hubu přečíst nešel, nedrží nic, co by hub znal, protože hub poslední
+    přečtení neukládá;
+  - adresář, který nejde přečíst, dál zastaví ukončování všech karet.
 
 ## Smlouva hostitelské aplikace
 
@@ -192,8 +197,10 @@ vidět, které karty jsou nejnáročnější.
   drží každé zařízení a karty jde přetahovat. Do v0.0.45 se přetahování přenáší z upstreamu
   (#17730), v 0.0.46 je upstreamové.
 - **Zavření poslední karty** panel zavře, jako to dělá upstream.
-- **Desktopová aplikace** T3 Code má vlastní prohlížeč počítače, na kterém běží, a 0191 ho
-  nemění.
+- **Desktopová aplikace** T3 Code na lokálním Environmentu dál používá vlastní prohlížeč
+  počítače, na kterém běží. Připojená k Remote Environmentu, který prohlížeč deklaruje, má
+  v pravém panelu ukazovat karty vlákna z prohlížeče Environmentu (dodatek 0191 z 2026-10-12,
+  bod 30). Dnes tam ještě ukazuje vlastní prohlížeč počítače; změnu přinese refaktor.
 - **Upstream.** Až upstream T3 Code přinese vlastní integraci prohlížeče do webového T3, fork
   ji vyřadí a ponechá pohled Environmentu. Vzdálená karta je pro Remote Environment
   správné řešení (Matěj 2026-10-11). Stav upstreamu k 2026-10-11 popisuje kapitola
@@ -216,14 +223,18 @@ Codex Desktop upravit nemůžeme, proto:
 - jeho agenti pracují v prohlížeči Environmentu přes `agent-browser` (přes SSH na Environment)
   a posílají do chatu odkaz `browser.<…>/t/<id>`, který člověk otevře v prohlížeči Codex
   Desktopu;
-- Nová karta je pro něj samostatná stránka `launchpad.<…>/new-tab`. Karty otevřené odtud drží
-  Launchpad, výběr existující karty ji jen otevře ve stejném okně;
+- Nová karta je pro něj samostatná stránka `launchpad.<…>/new-tab`. Výběr existující karty ji
+  jen otevře ve stejném okně. Stránky otevřené odtud a stránky, které agent mimo T3 Code otevře
+  pro člověka, nikdo nedrží: žijí, dokud se na ně někdo dívá, a skončí 30 s po posledním
+  divákovi (dodatek 0191 z 2026-10-12, bod 29). Codex Desktop nemá lištu ani ×, kterými by je
+  člověk pustil;
 - okno agenta Codexu drží jen práce agenta a to, že se na ně někdo dívá. Vlákna Codexu Lazurio
-  nevidí, takže je nedrží. Okno skončí, když agent přestal pracovat a nikdo se na ně nedívá ani
-  ho nedrží Launchpad.
-  - Agent přestal pracovat, když jeho démon skončí, tedy po hodině bez příkazu podle limitu, který
-    nastaví Platforma.
-  - Bez toho limitu démon připojený k prohlížeči sám nekončí.
+  nevidí, takže je nedrží. Na konci ho agent pustí (bod 28) a hub ho ukončí, až se na ně nikdo
+  nedívá.
+  - Agent přestal pracovat, když okno pustí nebo když jeho démon skončí po hodině bez příkazu
+    podle limitu, který nastaví Platforma, pokud si člověk v nastavení agent-browseru nezvolil
+    jiný.
+  - Bez limitu démon připojený k prohlížeči sám nekončí.
 
 ### agent-browser (fork `Lazurio/agent-browser`)
 
@@ -233,10 +244,14 @@ Na `agent-browser` stojí tato smlouva:
 - vazba sezení na kartu (`<sezení>.target`), která přežije restart démona;
 - `<sezení>.pid`, který démon při skončení smaže;
 - připnutá karta;
-- hodina nečinnosti démona, kterou Platforma nastaví v jeho uživatelském nastavení
-  (`"idleTimeout": "1h"` v `~/.agent-browser/config.json`).
+- limit nečinnosti démona z jeho uživatelského nastavení (`idleTimeout` v
+  `~/.agent-browser/config.json`).
+  - Platforma tam zapíše hodinu (`"1h"`), jen když tam člověk nemá vlastní limit, a jeho volbu
+    nepřepisuje.
+  - Nastavení, které nejde přečíst, není objekt JSON nebo není obyčejný soubor (třeba odkaz),
+    nechá Platforma být. Démon pak limit mít nemusí a sám neskončí (#533).
   - Výchozí limit agent-browseru prohlížeč připojený přes DevTools vynechává
-    (`blocks_default_idle_shutdown`). Bez tohoto nastavení by démon sám nikdy neskončil.
+    (`blocks_default_idle_shutdown`). Bez limitu v nastavení by démon sám nikdy neskončil.
   - Po vypršení se démon jen odpojí, kartu nezavře; o jejím konci dál rozhoduje hub.
 
 Dashboard `agent-browser` lidé nepoužívají, lidé mají pohled Platformy. Fork nese jen opravy a
@@ -309,6 +324,17 @@ prohlížeč takto:
 
 ## Co je otevřené
 
+- Refaktor podle dodatku 0191 z 2026-10-12 (body 28–35), který plánují DEV-6656 a DEV-6646:
+  - jeden smluvní modul Platformy s testovacími vektory, který forky převezmou ověřený místo
+    ručních kopií;
+  - prvek shellu pro kartu prohlížeče, společný Launchpadu, T3 Code a MausBotu;
+  - `lazurio browser done` a stránky pro člověka bez držení;
+  - nečitelný soubor držitele zastaví jen svou aplikaci (soubor, který od startu hubu přečíst
+    nešel, nedrží nic, co by hub znal);
+  - jeden jazyk povrchů;
+  - MausBot jako poslední.
+- Viditelné označení cizího Environmentu a karty z jiného Environmentu, například červeným
+  rámečkem (bod 35): zatím jen směr pro návrhy rozhraní.
 - Uspávání karet a jeho mechanismus (DEV-6656 spike 916).
 - Nastavení doby nečinnosti okna agenta a strategie zavřít, nebo uspat v Nastavení Launchpadu
   (Matěj 2026-10-11; DEV-6656 úkol 943, čeká na spike 916). Do té doby karty vlákna, které stojí,
