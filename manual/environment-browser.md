@@ -190,8 +190,10 @@ vidět, které karty jsou nejnáročnější.
   drží každé zařízení a karty jde přetahovat. Do v0.0.45 se přetahování přenáší z upstreamu
   (#17730), v 0.0.46 je upstreamové.
 - **Zavření poslední karty** panel zavře, jako to dělá upstream.
-- **Desktopová aplikace** T3 Code má vlastní prohlížeč počítače, na kterém běží, a 0191 ho
-  nemění.
+- **Desktopová aplikace** T3 Code na lokálním Environmentu dál používá vlastní prohlížeč
+  počítače, na kterém běží. Připojená k Remote Environmentu, který prohlížeč deklaruje, má
+  v pravém panelu ukazovat karty vlákna z prohlížeče Environmentu (dodatek 0191 z 2026-10-12,
+  bod 30). Dnes tam ještě ukazuje vlastní prohlížeč počítače; změnu přinese refaktor.
 - **Upstream.** Až upstream T3 Code přinese vlastní integraci prohlížeče do webového T3, fork
   ji vyřadí a ponechá pohled Environmentu. Vzdálená karta je pro Remote Environment
   správné řešení (Matěj 2026-10-11). Stav upstreamu k 2026-10-11 popisuje kapitola
@@ -316,7 +318,8 @@ prohlížeč takto:
     ručních kopií;
   - prvek shellu pro kartu prohlížeče, společný Launchpadu, T3 Code a MausBotu;
   - `lazurio browser done` a stránky pro člověka bez držení;
-  - nečitelný soubor držitele zastaví jen svou aplikaci;
+  - nečitelný soubor držitele zastaví jen svou aplikaci (soubor, který od startu hubu přečíst
+    nešel, nedrží nic, co by hub znal);
   - jeden jazyk povrchů;
   - MausBot jako poslední.
 - Viditelné označení cizího Environmentu a karty z jiného Environmentu, například červeným
