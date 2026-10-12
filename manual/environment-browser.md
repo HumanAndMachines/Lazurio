@@ -43,9 +43,12 @@ aktualizace forků (dodatek 0191 z 2026-10-11).
    `https://browser.<…>/t/<id>` je pohled právě na ni, holá adresa `browser.<…>/` založí novou
    (0191 bod 11, F39). Každá aplikace ukazuje kartu jako rámeček tohoto pohledu. Agent a člověk
    v ní pracují současně. Plocha (`desktop.<…>`, druhá vlna) je pohled na celou obrazovku.
-4. **Spravuje se z Launchpadu.** Launchpad ukazuje všechny karty Environmentu, jeho paměť a
-   spuštěné Moduly a umí kartu zavřít všem (0195 bod 5 a 9, F47). Stejnou Novou kartu otevře
-   „+“ v každé aplikaci (0195 bod 10).
+4. **Spravuje se z Přehledu, lišta ukazuje karty svého místa.**
+   - Přehled v Nové kartě ukazuje všechny karty Environmentu, jeho paměť a spuštěné Moduly a umí
+     kartu zavřít všem (0195 body 5 a 10, F47).
+   - Stejnou Novou kartu otevře „+“ v každé aplikaci, Launchpad je jejím domovem.
+   - Lišta ukazuje karty svého místa: v T3 Code karty vlákna, v Launchpadu karty otevřené
+     v Launchpadu (0195 bod 13).
 5. **Karta žije, dokud ji něco drží.** Drží ji místo, které ji ukazuje (lišta vlákna v T3 Code,
    Launchpad, ve kterém ji člověk otevřel, výhledově bot MausBotu), a agent, který v ní pracuje.
    Když ji nic nedrží, nikdo se na ni nedívá a nepracuje v ní agent, po krátké lhůtě
@@ -64,7 +67,7 @@ aktualizace forků (dodatek 0191 z 2026-10-11).
 | Soubory držitelů `$XDG_RUNTIME_DIR/lazurio-browser/holders/<lišta>.json` | Server aplikace, které lišta patří | Které karty lišta drží; zapisuje je jen ta aplikace, atomicky, s právy 0600 v adresáři 0700 (F47 bod 4) |
 | Seznam živých karet `$XDG_RUNTIME_DIR/lazurio-browser/tabs.json` | Hub | Čerstvý snímek karet prohlížeče s časem na boot clock; podle něj si aplikace srovnávají svá držení (F47 bod 4) |
 | Loopback API hubu (`/.lazurio/tabs…`) | Hub; volá ho jen Launchpad | Seznam karet, nová karta, zavřít všem, Vrátit; nikdy přes bránu ani z prohlížeče (F47 bod 6) |
-| Přehled a akce Launchpadu (`/api/new-tab/…`) | LazurioPlatform | Paměť, karty, Moduly, otevřít, držet, zavřít, Vrátit (F47 body 7–8) |
+| Přehled a akce Launchpadu (`/api/new-tab/…`) | LazurioPlatform | Paměť, karty, Moduly, otevřít, držet, pustit, zavřít všem, Vrátit (F47 body 7–9) |
 | Nová karta: stránka `/new-tab` a prvek `<lazurio-new-tab>` | LazurioPlatform (shell) | Jedna komponenta pro všechny aplikace; aplikace ji vloží jako prvek shellu (F47 body 1–3) |
 | `agent-browser` | Fork `Lazurio/agent-browser` | Nástroj agentů: sezení, vazba sezení na kartu, připnutá karta (0191 bod 4) |
 | Návody agentům | LazurioPlatform (Folder) | Jak otevřít okno (`lazurio browser window`), poslat odkaz a co dělat po `tab_gone` |
@@ -86,8 +89,11 @@ ukáže nad stránkou ve stejném pohledu, novou kartu nabídne aplikace jako no
 - **Karta, kterou nic nedrží,** skončí 30 s po odchodu posledního diváka. Kartu, kterou ještě
   nikdo neviděl ani nedržel, ukončí hub po 10 minutách.
 - **Držená karta** jen proto, že se na ni nikdo nedívá, nekončí.
-- **Zavřít** v Přehledu nebo v liště Launchpadu zavře kartu všem po 8 s, i drženou. Pracuje-li
-  v ní agent, nejdřív varuje.
+- **× na liště** kterékoli aplikace zavře pohled člověka a kartu za to místo pustí, s nabídkou
+  Vrátit. Karta v Environmentu i v Přehledu zůstává, dokud ji drží něco jiného nebo se na ni někdo
+  dívá. Jinak skončí po 8 s (0195 bod 14).
+- **Zavřít** v Přehledu zavře kartu všem po 8 s, i drženou. Pracuje-li v ní agent, nejdřív
+  varuje.
 - **Selhané čtení.** Když hubu selže čtení držení, kartu nezavře.
 
 ## Smlouva hostitelské aplikace
@@ -118,9 +124,10 @@ tohle a nic dalšího nepotřebuje:
      - Lišty jsou `launchpad` a `t3-<vlákno>`; `t3-<vlákno>` je zároveň sezení agenta vlákna.
    - **Čas záznamu, který čte jen aplikace sama.** Ke každé kartě si aplikace drží čas, kdy ji
      do lišty přidala. Čas přečte z boot clock v té chvíli a uloží ho spolu s kartou.
-     - T3 Code ho drží ve stavu vlákna.
-     - Launchpad ho ukládá do svého souboru držitele jako další pole
+     - Launchpad i T3 Code ho ukládají do svého souboru držitele jako další pole
        `"recordedAt": {"<id karty>": {"boot": "…", "at": …}}`, které hub ignoruje.
+     - Soubor držitele je jediné úložiště karet lišty, takže databáze T3 Code zůstává
+       upstreamová (návrh úkolu 501, Matěj 2026-10-12).
      - Karta bez času se počítá jako zaznamenaná dávno.
    - **Seznam živých karet, který zapisuje hub.** `tabs.json` je
      `{"tabs": ["<id karty>"], "takenAt": {"boot": "…", "at": …}}`, kde `takenAt` je chvíle,
@@ -136,7 +143,8 @@ tohle a nic dalšího nepotřebuje:
        záznamu, protože snímek začatý po záznamu by živou kartu obsahoval;
      - kartu zaznamenanou ve stejnou chvíli nebo později drží.
 4. **Pouští, co skončilo.**
-   - Zavření karty v liště ji odebere z této lišty, s nabídkou Vrátit.
+   - × v liště kartu z této lišty odebere a pustí ji, s nabídkou Vrátit. Karta zůstane, dokud ji
+     potřebuje agent, jiné místo nebo divák, a dokud existuje, je v Přehledu.
    - Archivace nebo smazání vlákna zavře všechny jeho karty, včetně vlastního okna jeho agenta
      (Matěj 2026-10-11, F47 to nechával otevřené).
      - Aplikace karty pustí a ukončí sezení agenta vlákna, aby okno nedržel jeho démon.
@@ -155,10 +163,13 @@ tohle a nic dalšího nepotřebuje:
 
 ### Launchpad
 
-Lišta ukazuje všechny karty Environmentu. „+“ otevře Novou kartu bez nástrojů. Launchpad
-drží karty, které v něm člověk otevřel: z Nové karty, nebo jako novou kartu stránky
-zobrazené v něm (`holders/launchpad.json`). Ty žijí, dokud je někdo nezavře všem. Přehled
-čte paměť Environmentu, karty a Moduly jen tehdy, když je Nová karta vidět. Paměť jedné karty
+- **Lišta** ukazuje karty, které drží Launchpad (`holders/launchpad.json`, 0195 bod 13):
+  - karty, které v něm člověk otevřel z Nové karty, adresou nebo výběrem z Přehledu;
+  - nové karty stránek zobrazených v něm.
+- **„+“** otevře Novou kartu bez nástrojů a s adresním řádkem připraveným k psaní. Když je
+  lišta prázdná, panel ukáže Novou kartu.
+- **× na liště** kartu pustí. Zavřít všem jde v Přehledu.
+- **Přehled** čte paměť Environmentu, karty a Moduly jen tehdy, když je Nová karta vidět. Paměť jedné karty
 je odhad z JavaScript heapu označený „≈“; Matěj 2026-10-11 rozhodl, že odhad stačí, aby bylo
 vidět, které karty jsou nejnáročnější.
 
@@ -174,6 +185,13 @@ vidět, které karty jsou nejnáročnější.
   prohlížeče Environmentu a pravý panel ukazuje kartu vlákna.
 - **Karta vzatá z Přehledu** do vlákna zůstává jednou sdílenou kartou. Lišta ukáže, že ji drží i
   jiné vlákno nebo Launchpad.
+- **Okno agenta** se do lišty dostane samo, ať agent pracuje přes nástroje T3, nebo přes
+  `agent-browser`. Panel se sám otevře, když agent otevře kartu nebo nové okno, ne při každém
+  kliknutí (0195 bod 15).
+- **Pořadí:** nové karty vlákna mají na všech zařízeních stejné pořadí. Místo existující karty si
+  drží každé zařízení a karty jde přetahovat. Do v0.0.45 se přetahování přenáší z upstreamu
+  (#17730), v 0.0.46 je upstreamové.
+- **Zavření poslední karty** panel zavře, jako to dělá upstream.
 - **Desktopová aplikace** T3 Code má vlastní prohlížeč počítače, na kterém běží, a 0191 ho
   nemění.
 - **Upstream.** Až upstream T3 Code přinese vlastní integraci prohlížeče do webového T3, fork
@@ -299,5 +317,3 @@ prohlížeč takto:
 - Plocha a Computer Use (druhá vlna 0191).
 - Jak při refreshi na stable 0.0.46 napojit serverový prohlížeč upstreamu na prohlížeč
   Environmentu: buď ho fork vypne, nebo ho nasměruje na DevTools na 9222.
-- Zda pořadí karet v liště vlákna sdílet mezi zařízeními (upstream ho drží v každém klientovi
-  zvlášť).
