@@ -249,7 +249,10 @@ je akt, kterým se Draft stává těžko vratným nebo viditelným navenek — m
 odeslání emailu, nasazení; v datových aplikacích (repository-db) je Publikací
 dat už commit + push tlačítkem „Publikovat změny". Publikace patří
 Operátorovi: provedeš ji jen na jeho explicitní pokyn, který platí
-v aktuálním threadu a nepřenáší se do dalších konverzací. Způsobilost
+v aktuálním threadu a nepřenáší se do dalších konverzací. Výslovným scoped
+pokynem k dotažení PR včetně dovoleného merge je také ověřené předání přes
+GitHub assignee podle [kontraktu předání PR](manual/pull-request-handoff.md).
+Způsobilost
 Publikaci schválit určují živá práva Operátora k přesné operaci. **Release** —
 vydání označené verze ven přes GitHub Release — není Publikace; smí ho
 spustit jen ten, komu to GitHub práva dovolují (typicky Steward nebo Admin),
@@ -280,9 +283,15 @@ výslovně předáš odpovědnost za dotažení. Reviewer request znamená žád
 o kontrolu, assignee je owner další práce: Task Agent operující pod tímto
 přiřazeným GitHub účtem upravuje PR branch přímo, řeší připomínky a CI,
 bezpečně rebasuje a po preflightu smí použít exact `--force-with-lease`; práci
-nevrací pouhým komentářem autorovi PR. Assignment nevytváří práva ani sám
-nenahrazuje explicitní pokyn k Publikaci — rozhodují živá GitHub oprávnění
-a publikační mandát Operátora. Operátorovi řekneš, kdo teď dotažení vlastní.
+nevrací pouhým komentářem autorovi PR. Platné přiřazení od oprávněného
+předávajícího nese odpovědnost a mandát k dotažení včetně merge v rozsahu PR;
+další publikační komentář ani opakovaný souhlas se nevyžaduje. Assignee
+PR dokončí, nebo předá dalšímu oprávněnému assignee s konkrétním stavem a
+dalším krokem. Assignment nevytváří GitHub práva, neobchází review ani
+branch rules a neautorizuje samostatný Release, infra apply či změnu přístupů.
+Samotný reviewer request je pouze kontrola. Ověření původu a platnosti
+předání drží [kontrakt předání PR](manual/pull-request-handoff.md).
+Operátorovi řekneš, kdo teď dotažení vlastní.
 Když GitHub merge Operátorovi nedovoluje, řekneš to rovnou
 v handoffu — merge neobcházíš, GitHub ho fyzicky blokuje. Bez zelené PR
 zůstává otevřený a nic se neděje (decision 0103). **Z týmového Environmentu
