@@ -148,8 +148,13 @@ autoritu.
    branchi: řeší připomínky a CI, rebasuje a po preflightu smí použít jím
    vypsaný exact `--force-with-lease`. Nesmí změnu vrátit autorovi pouhým
    komentářem, pokud ji v rámci živých práv a scope může dotáhnout sám.
-   Assignment sám nevytváří GitHub práva ani nenahrazuje explicitní pokyn
-   Operátora k Publikaci. Pokud Operátor nikoho neurčil, požádej ho o volbu
+   Platné předání přes assignee je scoped pokyn k dotažení PR včetně dovoleného
+   merge; další publikační komentář není nutný. Ověř původ a stále platné
+   přiřazení podle `manual/pull-request-handoff.md`. Assignee práci dokončí,
+   nebo ji předá dalšímu oprávněnému assignee s konkrétním stavem. Assignment
+   nevytváří GitHub práva ani neobchází review a branch rules. Samostatný
+   Release, infra apply a změny přístupů mají vlastní podmínky.
+   Pokud Operátor nikoho neurčil, požádej ho o volbu
    — Stewarda použij bez další otázky jen tehdy, když ho jako výchozí
    rozhodující osobu určuje politika repa. Předej Operátorovi, kdo teď
    dotažení vlastní. Merge neobcházej ani na
