@@ -187,12 +187,12 @@ Organizací tohoto Environmentu, přes OAuth přihlášení bez osobních token�
 Dashboard a onboarding vysvětlí rozsah přímo u volby plného přístupu,
 bez dalšího schvalovacího workflow. Návrh textu:
 
-> Dáváš tomuto člověku plný přístup ke všemu v tomto Environmentu, včetně
+> Dáváte tomuto člověku plný přístup ke všemu v tomto Environmentu, včetně
 > souborů, přihlášených účtů a přístupů do dalších služeb a Environmentů.
-> Uděl ho jen člověku, kterému důvěřuješ; riziko neseš ty. Pokud jsou tu data
-> nebo přihlášení i jiných Organizací, dostane se k nim také, proto ho uděl jen
-> členovi všech těchto Organizací. Přístup můžeš odebrat, ale již získaná data
-> nebo zkopírované přihlašovací údaje tím nezmizí.
+> Udělte ho jen člověku, kterému důvěřujete; riziko nesete vy. Pokud jsou tu
+> data nebo přihlášení i jiných Organizací, dostane se k nim také, proto ho
+> udělte jen členovi všech těchto Organizací. Přístup můžete odebrat, ale již
+> získaná data nebo zkopírované přihlašovací údaje tím nezmizí.
 
 Akce „Udělit plný přístup“ je vědomé udělení tohoto rozsahu. „Pouze vybrané
 aplikace“ zůstává samostatná skutečně omezená možnost. Žádná nová persona,

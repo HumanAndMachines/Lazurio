@@ -11,9 +11,18 @@ export const PUBLICATION_QUESTION = "Mám změny Publikovat";
 export const ROOT_HANDOFF_HEADING = "Povinný handoff";
 export const ROOT_HANDOFF_HEADING_PATTERN = /^#{1,6}[ \t]+Povinný handoff[ \t]*$/u;
 export const PUBLICATION_DOUBLE_QUESTION = Object.freeze([
-  "Mám změny Publikovat tvým jménem?",
+  "Mám změny Publikovat vaším jménem?",
   "Nebo mám požádat jiného Kolegu o kontrolu a Publikaci?",
 ]);
+
+// TRANSITIONAL (DEV-6658, agents address people formally): Organization
+// AGENTS.md files switch from the informal first question to the formal one in
+// separate PRs that merge after the root. Until then the informal wording is
+// accepted in place of PUBLICATION_DOUBLE_QUESTION[0]; findings always name the
+// formal one. Remove this constant and its single use in inspectRootHandoff
+// once every Organization root AGENTS.md carries "Mám změny Publikovat vaším
+// jménem?".
+export const LEGACY_PUBLICATION_FIRST_QUESTION = "Mám změny Publikovat tvým jménem?";
 
 export const FORBIDDEN_LITERALS = Object.freeze([
   "KnowledgebaseTemplate",
@@ -128,8 +137,11 @@ export function inspectRootHandoff(text, relativePath = "AGENTS.md") {
       detail: ROOT_HANDOFF_HEADING,
     });
   }
+  const content = String(text ?? "");
   for (const statement of PUBLICATION_DOUBLE_QUESTION) {
-    if (!String(text ?? "").includes(statement)) {
+    const legacyAccepted = statement === PUBLICATION_DOUBLE_QUESTION[0]
+      && content.includes(LEGACY_PUBLICATION_FIRST_QUESTION);
+    if (!content.includes(statement) && !legacyAccepted) {
       findings.push({ code: "missing_statement", path: relativePath, detail: statement });
     }
   }

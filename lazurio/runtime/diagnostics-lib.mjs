@@ -2358,7 +2358,7 @@ export function codexRuntimeCheck({
       title: "Codex CLI",
       message:
         `Windows našel pouze target-specific kandidát ${targetCommand}, ale příkaz codex chybí. `
-        + "Tento stav není připravený; s výslovným souhlasem použij oficiální OpenAI standalone Windows instalátor a kontrolu zopakuj z nového procesu.",
+        + "Tento stav není připravený. Agent musí nejdřív požádat Principála o výslovný souhlas; potom použijte oficiální OpenAI standalone Windows instalátor a kontrolu zopakujte z nového procesu.",
       paths: [],
       links: [],
       details: [
@@ -2817,7 +2817,7 @@ function withBunInstallationGuidance(check, { platform, requiredVersion }) {
   const installCommand = officialBunInstallCommand({ platform, version: requiredVersion });
   return {
     ...check,
-    message: `${check.message} S výslovným souhlasem Principála použij oficiální Bun instalátor připnutý přesně na ${requiredVersion}; balíček z jiného registru není náprava. Potom kontrolu zopakuj z nového čistého procesu.`,
+    message: `${check.message} Agent musí nejdřív požádat Principála o výslovný souhlas; potom použijte oficiální Bun instalátor připnutý přesně na ${requiredVersion}; balíček z jiného registru není náprava. Potom kontrolu zopakujte z nového čistého procesu.`,
     links: [...check.links, {
       label: "Oficiální instalace Bun",
       kind: "external",
