@@ -36,6 +36,10 @@ Maintenance agent před zásahem ověřuje:
 - [Servisní připravenost agentů](agent-service-readiness.md) — návrh společné
   acceptance pro neinteraktivní servis, nezávislou obnovu a dostupnost modulu
   přes běžnou URL; rozlišuje dnešní hranice a cílovou automatickou konvergenci.
+- [Prohlížeč Environmentu](environment-browser.md) — jedna architektura
+  prohlížeče Environmentu pro Launchpad, T3 Code, Lazurio MausBot a Codex Desktop:
+  principy, kdo co vlastní, smlouva hostitelské aplikace a pravidla pro
+  aktualizace forků a nové verze upstreamu (dodatek 0191 z 2026-10-11).
 - `manual/external-app-integrations.md` — kanonický standard napojení na
   externí aplikace: lokálně kurátorované MCP servery a CLI místo cloudových
   konektorů, tracked katalog integrací v repu Organizace, žebříček výběru,
