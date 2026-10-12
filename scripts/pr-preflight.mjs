@@ -3,7 +3,7 @@ import {
   GIT_FETCH_TIMEOUT_MS,
   GIT_LOCAL_TIMEOUT_MS,
   runGit,
-  safeGitRemoteEnv,
+  safeGitCommandEnv,
 } from "../lazurio/runtime/git-lib.mjs";
 
 export async function runPrPreflight({
@@ -16,7 +16,9 @@ export async function runPrPreflight({
   const remote = (args) => gitRunner(args, {
     cwd,
     timeoutMs: GIT_FETCH_TIMEOUT_MS,
-    env: safeGitRemoteEnv(),
+    // This is the operator's existing checkout, not sterile materialization.
+    // Keep normal Git authentication while stripping checkout-context injection.
+    env: safeGitCommandEnv(),
   });
   const fetch = await remote(["fetch", "origin", baseBranch, "--prune"]);
   if (!fetch.ok) return failed("fresh_base_unknown", fetch.stderr || fetch.error || "git fetch selhal");
