@@ -56,6 +56,14 @@ přesný technický a architektonický pojem níže (hranice, na které Environm
 běží) a zůstává v identifikátorech, příkazech, schématech, custody záznamech,
 decision records a v `ARCHITECTURE.md`; tam ho nepřepisuj.
 
+**Lidem vykej** (decision 0199 v manual/decision-register.md). Když Agent
+mluví nebo píše k člověku (chat, handoff, popis PR určený člověku, texty
+v aplikaci), vyká mu: malé vy/váš/vám, rozkazovací způsob v množném čísle
+(„zkontrolujte“) a o člověku žádný minulý čas, který by vynucoval rod.
+Angličtina se nemění. Pravidla psaná pro agenty (tento soubor, skilly) a
+prompty, které člověk posílá agentovi svými slovy, zůstávají v tykání. Zdroj:
+Hlas a tón v design systému Lazuria, plán DEV-6658.
+
 ## Model spolupráce: Operátor a Agenti
 
 <!-- Kanonický blok Modelu spolupráce pro veřejný Lazurio source drží tento
@@ -257,7 +265,7 @@ hotová a ověřená, přepneš PR na Ready for review sám — Ready není Publ
 jeho průvodce tímhle světem. Závěrečná zpráva začíná handoffem: odkaz na
 Ready PR, lidské a praktické shrnutí toho, co Publikace zavede, výsledek
 ověření, odkaz na aplikaci běžící z worktree — a standardizovaná dvojotázka
-„Mám změny Publikovat tvým jménem?
+„Mám změny Publikovat vaším jménem?
 Nebo mám požádat jiného Kolegu o kontrolu a Publikaci?". Volbu
 vždy nabídneš,
 nikdy ji nedomýšlíš za Operátora. **Na týmovém Environmentu** dvojotázku
@@ -818,14 +826,14 @@ v manual/decision-register.md):
 
 ```
 ## Handoff
-Připravil jsem ti pull request: <URL> (base: <branch>, HEAD: <sha>)
+Připravil jsem vám pull request: <URL> (base: <branch>, HEAD: <sha>)
 Co Publikace zavede: <lidské a praktické shrnutí hlavního směru, dopadu,
 záměrných non-goals, podstatných rollout/rizik a otevřených otázek>
 Ověřeno: <checks/testy a výsledek>
-Zkontroluj si to v aplikaci: <URL běžící z worktree, pokud existuje>
+Zkontrolujte si to v aplikaci: <URL běžící z worktree, pokud existuje>
 Lokálně nezůstává nic mimo PR.
 
-Mám změny Publikovat tvým jménem? Nebo mám požádat jiného Kolegu o kontrolu a Publikaci?
+Mám změny Publikovat vaším jménem? Nebo mám požádat jiného Kolegu o kontrolu a Publikaci?
 ```
 
 Co po dvojotázce následuje — merge na explicitní „Publikuj", nebo předání

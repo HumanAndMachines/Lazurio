@@ -121,7 +121,7 @@ autoritu.
 12. Handoff veď průvodcovsky (decisions 0103/0112): závěrečná zpráva začíná
    standardizovaným handoff blokem (PR URL, base, exact HEAD, lidské
    shrnutí, ověření, odkaz na aplikaci běžící z worktree) a končí
-   standardizovanou dvojotázkou „Mám změny Publikovat tvým jménem? Nebo mám
+   standardizovanou dvojotázkou „Mám změny Publikovat vaším jménem? Nebo mám
    požádat jiného Kolegu o kontrolu a Publikaci?" — volbu vždy nabídni,
    nedomýšlej ji za Operátora. Na týmovém Environmentu místo dvojotázky
    polož otázku „Komu mám říct, aby tyhle změny publikoval?", nikdy
