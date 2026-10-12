@@ -1,5 +1,42 @@
 import { expect, test } from "bun:test";
+import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { runPrPreflight } from "./pr-preflight.mjs";
+
+test("PR preflight keeps the operator's Git credential helper for fetch and remote-head reads", async () => {
+  const folder = await mkdtemp(join(tmpdir(), "lazurio-preflight-credentials-"));
+  try {
+    const config = join(folder, "gitconfig");
+    await writeFile(config, '[credential "https://github.com"]\n\thelper = lazurio-pilot-fixture\n');
+    const fixture = fixtureGit();
+    let remoteReads = 0;
+    const result = await runPrPreflight({
+      repoRoot: folder,
+      gitRunner: async (args, options) => {
+        if (args[0] === "fetch" || args[0] === "ls-remote") {
+          remoteReads += 1;
+          const read = Bun.spawnSync(["git", "config", "--global", "--get", "credential.https://github.com.helper"], {
+            cwd: folder,
+            env: { ...process.env, GIT_CONFIG_GLOBAL: config, ...options.env },
+            stdout: "pipe", stderr: "pipe",
+          });
+          if (read.exitCode !== 0 || new TextDecoder().decode(read.stdout).trim() !== "lazurio-pilot-fixture") {
+            return { ok: false, stdout: "", stderr: "The configured credential helper is unavailable.", error: null };
+          }
+          expect(options.env.GIT_TERMINAL_PROMPT).toBe("0");
+          expect(options.env.GIT_DIR).toBeUndefined();
+          expect(options.env.GIT_WORK_TREE).toBeUndefined();
+        }
+        return fixture(args);
+      },
+    });
+    expect(result.ok).toBe(true);
+    expect(remoteReads).toBe(2);
+  } finally {
+    await rm(folder, { recursive: true, force: true });
+  }
+});
 
 test("PR preflight blokuje branch bez nejnovějšího mainu", async () => {
   const result = await runPrPreflight({
