@@ -155,6 +155,29 @@ must include the canonical Organization root and all repositories that Lazurio
 is actually meant to serve, and its partial access must never be presented as
 the full Organization scope.
 
+### Design System: Read for every Organization member
+
+Every active Organization member, including accounts used by Automated
+Environments, must have at least GitHub **Read** access to every Organization
+and product Design System owned by that Organization. The rule must also live
+in its own `AGENTS.md`; preserve the corresponding block from
+`OrganizationTemplate_GEN3` when forking or synchronizing it. Organization-scoped
+work must not depend only on instructions in the enclosing Lazurio root.
+
+When creating or extracting a Design System repository, onboarding a member,
+or installing an Environment, compare active GitHub members, including
+automated accounts, against effective repository access. Preserve existing
+stronger permissions. An Admin with the approved mandate supplies Read through
+existing Teams or a scoped repository grant for accounts not covered by a Team,
+then verifies effective permissions again. Without this readback, onboarding or
+migration is incomplete; the handoff names the missing account, repository, and
+responsible Admin. Installer success alone does not prove this process gate.
+
+Read does not imply Write, public visibility, or another Organization's access.
+Do not create a second ACL or an automatic grant without a mandate. An uncreated
+`planned_slot` does not authorize creating a repository; verify access when the
+slot is activated.
+
 ### Access baseline before the first Builder Machine
 
 Installing the App alone does not prove that a new Builder can work in the
