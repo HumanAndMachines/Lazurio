@@ -142,6 +142,27 @@ canonical Organization root a všechny repozitáře, které má Lazurio skutečn
 obsluhovat, a její partial access se nikdy nesmí vydávat za plný Organization
 scope.
 
+### Design System: Read pro každého člena Organizace
+
+Každý aktivní člen Organizace, včetně účtů Automatizovaných Environmentů,
+má mít alespoň GitHub **Read** ke všem organizačním i produktovým Design
+Systemům, které Organizace vlastní. Pravidlo musí být také v jejím vlastním
+`AGENTS.md`; při forku nebo synchronizaci zachovej příslušný blok z
+`OrganizationTemplate_GEN3`. Organization-scoped práce se tak neopírá jen
+o pravidla nadřazeného Lazurio rootu.
+
+Při vytvoření či vyčlenění Design System repa, přijetí člena a instalaci
+Environmentu porovnej aktivní GitHub členy včetně automatizovaných účtů se
+skutečným repo přístupem. Existující vyšší práva nesnižuj. Admin se schváleným
+mandátem doplní Read přes existující Teamy nebo scoped repo grant pro účty,
+které Team nepokrývá, a znovu ověří efektivní oprávnění. Bez tohoto readbacku
+není onboarding nebo migrace dokončená; handoff jmenuje chybějící účet, repo
+a odpovědného Admina. Samotný úspěch installeru tento procesní gate nedokazuje.
+
+Read není Write, veřejná viditelnost ani přístup jiné Organizace. Nevytvářej
+druhý ACL nebo automatický grant bez mandátu. Dosud nevytvořený `planned_slot`
+neopravňuje k založení repa; kontrola jeho přístupu nastane při aktivaci.
+
 ### Access baseline před první Builder Mašinou
 
 Instalace App sama ještě nedokazuje, že nový Builder smí pracovat ve správných
