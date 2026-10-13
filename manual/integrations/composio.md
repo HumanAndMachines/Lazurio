@@ -67,6 +67,11 @@ mašiny přihlášené stejným účtem a organizací vidí stejná připojení.
   id, alias a e-mail nebo login účtu. Apps → Integrace proto nabízí Odpojit
   i u vypršelého nebo nedokončeného pokusu a účty pojmenuje. Až to upstream
   vydá po svém, Lazurio se vrátí k oficiálnímu sestavení.
+- Katalog Integrací nemá všechny aplikace Composia. Chybějící aplikaci člověk
+  připojí v dashboardu Composia: Apps → Integrace → „Aplikace v Composiu“
+  otevře sekci Apps v organizaci Composia tohoto Environmentu. Připojený účet
+  pak Integrace ukážou i mimo katalog (třeba Wispr Flow) a agenti ho najdou
+  v `lazurio integrations list`.
 - Composio účet může mít víc organizací a CLI vidí jen tu, do které je
   přihlášené. Launchpad proto u composia ukazuje organizaci Composia
   a připojuje aplikace do ní; připojení z webu Composia v jiné organizaci
@@ -88,7 +93,8 @@ mašiny přihlášené stejným účtem a organizací vidí stejná připojení.
 - Na mašině s více Organizacemi volit nástroj Organizace, pro kterou pracuje,
   a data mezi Organizacemi nepřenášet.
 - Integraci nepřipojovat sám a Composio nezřizovat, kde zapnuté není:
-  poslat člověku odkaz na kartu v Apps → Integrace. Dokud stránka Integrace
+  poslat člověku odkaz na kartu v Apps → Integrace, a chybí-li aplikace
+  v katalogu, na „Aplikace v Composiu“ tamtéž. Dokud stránka Integrace
   na Environmentu není, zprostředkovat připojení jen na výslovný pokyn
   člověka odkazem z `composio link`; přihlášení dokončí člověk sám.
 - Účet Composia odpojit jen na výslovný pokyn člověka, a jen ten, který
