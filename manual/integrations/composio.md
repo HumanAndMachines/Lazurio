@@ -33,8 +33,13 @@ mašiny přihlášené stejným účtem a organizací vidí stejná připojení.
   (`composio orgs switch`), aby v ní pracovali i agenti.
 - Chybí-li taková organizace, Launchpad to řekne v Apps → Integrace a odkáže
   do dashboardu Composia, kde ji založíte; Composio organizaci jinak založit
-  neumí. Dokud chybí, přes Composio se nic nepřipojí a účty z jiných
-  organizací se v tomto Environmentu nepočítají.
+  neumí. Dokud chybí, Composio dál pracuje v organizaci, kterou máte
+  vybranou, takže nic, co už máte připojené, nepřestane fungovat. Jakmile ji
+  založíte, Launchpad do ní přepne sám a aplikace v ní připojíte znovu;
+  přejmenováním stávající organizace na jméno Organizace zůstanou připojení
+  zachovaná.
+- Nejde-li přečíst jméno Organizace Environmentu (rozbitý Folder), přes
+  Composio se v něm nic nepřipojí ani neodpojí, dokud se to neopraví.
 - Osobní Environment používá výchozí organizaci účtu; vybíráte ji při
   přihlášení v Nastavení → Nástroje.
 - Sdílené organizace Composia se zvanými lidmi, API klíči a sdílením se
