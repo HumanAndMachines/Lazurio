@@ -60,9 +60,9 @@ mašiny přihlášené stejným účtem a organizací vidí stejná připojení.
 - Composio nemá žádné režimy. Firemní Composio organizace s projektem na
   Environment ani broker se nestaví (dodatek 2026-10-08 je v tomto
   zrušený).
-- Lazurio instaluje CLI Composia ze svého forku `Lazurio/composio`,
-  oficiálním instalátorem Composia s připnutou verzí; aktualizace je
-  v Nastavení → Nástroje. Proti upstreamu umí odpojit účet bez dotazu
+- Lazurio instaluje CLI Composia ze svého forku `Lazurio/composio`:
+  instalátorem Composia z forku, připnutým na commit, a v připnuté verzi;
+  na tu ho převede i Aktualizovat v Nastavení → Nástroje. Proti upstreamu umí odpojit účet bez dotazu
   (`composio connections remove <účet> --yes`) a ve výpisu připojení ukazuje
   id, alias a e-mail nebo login účtu. Apps → Integrace proto nabízí Odpojit
   i u vypršelého nebo nedokončeného pokusu a účty pojmenuje. Až to upstream
