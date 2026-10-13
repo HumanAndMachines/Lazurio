@@ -59,7 +59,14 @@ mašiny přihlášené stejným účtem a organizací vidí stejná připojení.
   nepřipojuje znovu.
 - Composio nemá žádné režimy. Firemní Composio organizace s projektem na
   Environment ani broker se nestaví (dodatek 2026-10-08 je v tomto
-  zrušený). Fork `Lazurio/composio` zůstává pro drobné úpravy CLI.
+  zrušený).
+- Lazurio instaluje CLI Composia ze svého forku `Lazurio/composio`,
+  oficiálním instalátorem Composia s připnutou verzí; aktualizace je
+  v Nastavení → Nástroje. Proti upstreamu umí odpojit účet bez dotazu
+  (`composio connections remove <účet> --yes`) a ve výpisu připojení ukazuje
+  id, alias a e-mail nebo login účtu. Apps → Integrace proto nabízí Odpojit
+  i u vypršelého nebo nedokončeného pokusu a účty pojmenuje. Až to upstream
+  vydá po svém, Lazurio se vrátí k oficiálnímu sestavení.
 - Composio účet může mít víc organizací a CLI vidí jen tu, do které je
   přihlášené. Launchpad proto u composia ukazuje organizaci Composia
   a připojuje aplikace do ní; připojení z webu Composia v jiné organizaci
@@ -84,6 +91,10 @@ mašiny přihlášené stejným účtem a organizací vidí stejná připojení.
   poslat člověku odkaz na kartu v Apps → Integrace. Dokud stránka Integrace
   na Environmentu není, zprostředkovat připojení jen na výslovný pokyn
   člověka odkazem z `composio link`; přihlášení dokončí člověk sám.
+- Účet Composia odpojit jen na výslovný pokyn člověka, a jen ten, který
+  člověk jmenoval: v Apps → Integrace (⋯ → Odpojit), nebo příkazem
+  `composio connections remove <id> --yes` s id z
+  `composio connections list`.
 
 ## Alternativy pro operátora
 
