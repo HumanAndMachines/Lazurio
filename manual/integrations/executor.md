@@ -92,11 +92,16 @@ stejně, jakmile to umí fork MausBotu (plán DEV-6626).
 ## MCP servery a připojení
 
 Lidé připojují Integrace v Launchpadu (Apps → Integrace); Launchpad k tomu
-používá rozhraní Executoru uvnitř Environmentu. **Přechodně, dokud stránka
-Integrace na Environmentu není,** připojí Integraci agent jen na výslovný
-pokyn člověka příkazovou řádkou. Přihlášení nebo klíč dokončí člověk sám na
-stránce, kterou mu agent otevře v prohlížeči Environmentu; jinam do konzole
-nechodí:
+používá rozhraní Executoru uvnitř Environmentu. Na Remote Environmentu se
+přihlášení ze stránky Integrace otevře v prohlížeči na počítači člověka,
+kde poskytovatel přijme adresu Launchpadu jako návratovou (dynamická
+registrace klienta); jen poskytovatel, který přijme výhradně návrat na
+`localhost`, zůstává v prohlížeči Environmentu (dodatek 0162 z 2026-10-13).
+**Přechodně, dokud stránka Integrace na Environmentu není,** připojí
+Integraci agent jen na výslovný pokyn člověka příkazovou řádkou. Tahle cesta
+se vrací na `localhost` Executoru, takže přihlášení nebo klíč dokončí člověk
+sám na stránce, kterou mu agent otevře v prohlížeči Environmentu; jinam do
+konzole nechodí:
 
 ```sh
 executor call executor mcp probeEndpoint '{"endpoint":"https://mcp.example.com/mcp"}'
@@ -110,8 +115,8 @@ executor call executor coreTools connections create '{"owner":"org","name":"defa
   vlastní OAuth aplikaci.
 - Bez dynamické registrace, typicky u Googlu a Microsoftu, je potřeba
   OAuth aplikace Organizace podle runbooku poskytovatele.
-- Souhlas dá člověk v prohlížeči Environmentu. Executor vrací přihlášení na
-  `localhost`, jinde se nedokončí.
+- Při téhle přechodné cestě dá souhlas člověk v prohlížeči Environmentu.
+  Executor ji vrací na `localhost`, jinde se nedokončí.
 - Klíč nebo token, který služba chce, zadá člověk sám na stránce předání
   (`connections.createHandoff`), kterou mu agent otevře v prohlížeči
   Environmentu; do chatu ho nikdy nepíše.

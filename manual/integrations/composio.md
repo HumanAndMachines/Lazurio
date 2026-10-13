@@ -63,8 +63,10 @@ mašiny přihlášené stejným účtem a organizací vidí stejná připojení.
 - Composio účet může mít víc organizací a CLI vidí jen tu, do které je
   přihlášené. Launchpad proto u composia ukazuje organizaci Composia
   a připojuje aplikace do ní; připojení z webu Composia v jiné organizaci
-  agent nevidí. Na Environmentu Organizace je to vždy organizace jejího
-  jména (viz Účet a organizace výše).
+  agent nevidí. Na Environmentu Organizace je to organizace jejího jména;
+  dokud ji člověk nemá, ta, kterou má vybranou, a `lazurio integrations list`
+  to agentům řekne (viz Účet a organizace výše). Agent proto stav organizace
+  čte tam, než přes Composio začne pracovat.
 - Všechno, kam je Environment přihlášený, mají vždy všichni jeho agenti
   i boti. Uvnitř Environmentu se přístupy nedělí; jiné přístupy znamenají
   další Environment.
