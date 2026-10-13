@@ -488,7 +488,10 @@ První reálný GEN3 klient začíná s:
    mountuje se jako `design-system/`. Bez objednaného vytvoření zůstává
    `status: "planned_slot"` bez `git`, bez repa a bez předstírání hotové
    vizuální identity; handoff uvádí, že klient může dodavatele kontaktovat pro
-   vytvoření Design Systemu.
+   vytvoření Design Systemu. Při vytvoření či vyčlenění repa Admin zajistí
+   alespoň GitHub Read pro každého aktivního člena Organizace včetně
+   automatizovaných účtů. Ověř efektivní granty podle
+   `manual/organization-install.md` §Design System; manifest není důkaz přístupu.
 4. **Infra** — restricted Organization-owned repo jako aktivní root nested
    checkout `infra/`; manifest slot používá `space: "root"` a kanonické
    `git.url` / `git.branch`. Pokud klient vzniká local-first a
@@ -519,7 +522,11 @@ PR **každého owning nested repa**:
    jiného Kolegu o kontrolu a Publikaci?“. Po dobu přechodu na vykání
    (DEV-6658) gate přijme i dřívější první větu „Mám změny Publikovat tvým
    jménem?“; nový rewrite píše vždy vykání. Nested soubory
-   tenhle kontrakt nenahrazují.
+   tenhle kontrakt nenahrazují. Zachovej také Organization-owned pravidlo
+   **Design System je společný základ Organizace** ze šablony: Read pro všechny
+   aktivní členy a automatizované účty, s ověřením při vytvoření/vyčlenění repa,
+   onboardingu i instalaci Environmentu. Tento procesní krok ověř ručně;
+   stávající instance checker kontroluje handoff, ne živé GitHub granty.
 2. `workspace/knowledgebase/AGENTS.md` — gate vyžaduje `privátní knowledgebase`,
    `AGENTS.md` a otázku na Publikaci; zakazuje `KnowledgebaseTemplate` a
    `není knowledgebase konkrétní firmy` bez ohledu na pomlčkový suffix.
@@ -960,6 +967,9 @@ GEN3 je ready pro prvního klienta, když:
   `DesignSystemTemplate`; Mission Control i Design System template mají
   ověřené GitHub `is_template=true`;
 - Guide je ze shared Lazurio rootu;
+- každý aktivní člen včetně automatizovaných účtů má ověřený Read nebo vyšší
+  přístup k existujícím Design Systemům Organizace; pravidlo je v jejím vlastním
+  `AGENTS.md` a případný chybějící grant blokuje dokončení onboardingu;
 - secrets custody je metadata-only ověřená, bez úniku hodnot;
 - existuje jasný rollback bez mazání klientských dat;
 - jakákoli zbývající práce je zapsaná v klientské Organization Mission Control / TODO ledgeru, ne jen v chatu.
