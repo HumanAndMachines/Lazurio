@@ -448,7 +448,7 @@ Launchpad (LazurioPlatform) drží **jednu politiku** pro všechny Moduly:
   (kap. 4.2, decision 0176 dodatek z 2026-10-10); bránu Environmentu kvůli
   tomu nemění;
 - **tajemství z trezoru**: před každým startem přečte jména z
-  `lazurio.runtime.secrets` z kolekce Environmentu v trezoru Organizace
+  `lazurio.runtime.secrets` z vlastního trezoru Environmentu (rozhodnutí 0198)
   a předá je jako `LAZURIO_RUNTIME_SECRET_<NAME>`; chybějící tajemství je
   typovaný nález připravenosti a App nestartuje (kap. 4.3, decision 0177);
 - **supervize**: proces, který skončí nenulově, restartuje s omezeným
