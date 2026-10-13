@@ -16,10 +16,13 @@ nebo odmítá (kapitola 10). Kontrolu drží mechanismus `lazurio module setup`
 
 ## 1. Pojmy
 
-- **Modul** — jeden Git repozitář v `organizations/<Org>/workspace/<slug>/`
-  s `lazurio.module.json` v kořeni. Org-level aplikace (`mission-control/`,
-  `design-system/`) jsou Moduly se stejnými pravidly; liší se jen slotem
-  v `modules.manifest.json`.
+- **Modul** — jeden Git repozitář s `lazurio.module.json` v kořeni. Modul
+  Organizace leží v `organizations/<Org>/workspace/<slug>/`; osobní Modul
+  (dodatek 0171 z 2026-10-13) je soukromý repozitář na vlastním GitHub účtu
+  člověka v `personalspace/<adresář vlastníka>/workspace/<slug>/`. Org-level
+  aplikace (`mission-control/`, `design-system/`) jsou Moduly se stejnými
+  pravidly. Všechny se liší jen slotem v `modules.manifest.json` své
+  Organizace, nebo osobního prostoru.
 - **App** — spustitelný package Modulu deklarovaný v `apps[]`; právě jedna je
   `default_app`. Cesta `app/v<N>/package.json` je **generace** App.
 - **Listener** — TCP port z `port_leases` Modulu, na který App poslouchá;
@@ -31,7 +34,7 @@ nebo odmítá (kapitola 10). Kontrolu drží mechanismus `lazurio module setup`
 
 | Soubor | Požadavek |
 | --- | --- |
-| `lazurio.module.json` | `schema_version: lazurio.module.v1`; `id` = slug slotu v `modules.manifest.json`; `company` = slug Organizace; `port_leases[]` s `id`, `host: 127.0.0.1`, `port` **uvnitř `module_port_pool` Organizace** (přesun existujícího leasu do poolu je součást převodu, viz níže); `apps[]` + `default_app`. Modul bez App má `tcp_port_policy: none` a `apps: []`. |
+| `lazurio.module.json` | `schema_version: lazurio.module.v1`; `id` = slug slotu v `modules.manifest.json`; `company` = slug Organizace; `port_leases[]` s `id`, `host: 127.0.0.1`, `port` **uvnitř `module_port_pool` Organizace** (přesun existujícího leasu do poolu je součást převodu, viz níže); `apps[]` + `default_app`. Modul bez App má `tcp_port_policy: none` a `apps: []`. Osobní Modul v Personalspace: kap. 13. |
 | `app/v<N>/package.json` každé App | App žije vždy v podadresáři `app/v<N>/` (nikdy v kořeni Modulu). `name`, `private: true`, `packageManager: "bun@<přesná verze z lazurio/package.json>"`, `lazurio.runtime` (kap. 4), `lazurio.preparation` (kap. 3), skripty `dev`, `check`, `test`. Python App: `app/v<N>/pyproject.toml` (kap. 7). |
 | `app/v<N>/bun.lock` | commitnutý, aktuální; `bun install --frozen-lockfile` projde. Python App: `uv.lock`. |
 | `app/v<N>/tsconfig.json` | `strict: true` (nebo `extends` strict preset frameworku); žádné `allowJs` na zdrojích App. |
@@ -558,3 +561,14 @@ repo neváže na GitHub dodatečně. Tři vrstvy, každá s vlastním ownerem:
    `.agents/skills/lazurio-module-standard/SKILL.md` říká, jak Modul založit,
    převést a ověřit; Knowledgebase (`lazurio-ai` namespace) drží syntézu „proč
    takhle". Nový Modul mimo standard je nekonformní od prvního commitu.
+
+**Osobní Modul** (dodatek 0171 z 2026-10-13; tvar je rozhodnutý, ale zatím
+není postavený): `lazurio module create personalspace/<slug>` založí Modul
+v soukromém repozitáři `<login>/<slug>` na vlastním GitHub účtu člověka, bez
+Organizace a Teamů; repozitář založí a první commit pushne až po potvrzeném
+`--dry-run`. Modul je checkout
+`personalspace/<adresář vlastníka>/workspace/<slug>`, `company` je login
+člověka a lease leží ve vyhrazeném `module_port_pool` Personalspace mimo
+pooly Organizací; slot přidá pull request do vlastního Personalspace.
+Generátor přechází do LazurioPlatform (0167), tvar Organizace v rámci
+Lazurio/LazurioPlatform#267; potom se scaffold v Core vyřadí.
