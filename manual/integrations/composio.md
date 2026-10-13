@@ -18,18 +18,32 @@ Tento runbook popisuje model Composia.
 - Aplikaci operátor připojí odkazem, který mu vrátí Launchpad nebo agent, a
   přihlásí se přímo do ní.
 
-## Účet Environmentu
+## Účet a organizace (dodatek 0162 z 2026-10-13)
 
 Připojené aplikace patří u Composia účtu a jeho organizaci, ne mašině. Dvě
-mašiny přihlášené stejným účtem a organizací vidí stejná připojení. Berte
-proto přihlášení jako účet Environmentu: kde má mít mašina jiný rozsah,
-přihlaste jiný účet nebo jinou Composio organizaci.
+mašiny přihlášené stejným účtem a organizací vidí stejná připojení.
 
-## Organizace
-
-Organizace, která chce přehled, si založí vlastní Composio organizaci a žádá
-operátory, aby se přihlašovali do ní. Je to samostatně spravovaná služba mimo
-Lazurio Dashboard. Lazurio Environment to nevynucuje.
+- Každý člověk má jeden svůj účet Composia, přihlášený přes GitHub.
+- V něm má pro každou Organizaci Lazuria jednu vlastní organizaci se stejným
+  jménem, ve které nikdo jiný není, a výchozí organizaci, kterou Composio
+  založilo při registraci.
+- Environment Organizace pracuje v organizaci se jménem své Organizace. Jméno
+  se porovnává bez ohledu na velikost písmen, mezery a diakritiku („Human and
+  Machine“ odpovídá `humanandmachine`). Launchpad ji nastaví sám
+  (`composio orgs switch`), aby v ní pracovali i agenti.
+- Chybí-li taková organizace, Launchpad to řekne v Apps → Integrace a odkáže
+  do dashboardu Composia, kde ji založíte; Composio organizaci jinak založit
+  neumí. Dokud chybí, Composio dál pracuje v organizaci, kterou máte
+  vybranou, takže nic, co už máte připojené, nepřestane fungovat. Jakmile ji
+  založíte, Launchpad do ní přepne sám a aplikace v ní připojíte znovu;
+  přejmenováním stávající organizace na jméno Organizace zůstanou připojení
+  zachovaná.
+- Nejde-li přečíst jméno Organizace Environmentu (rozbitý Folder), přes
+  Composio se v něm nic nepřipojí ani neodpojí, dokud se to neopraví.
+- Osobní Environment používá výchozí organizaci účtu; vybíráte ji při
+  přihlášení v Nastavení → Nástroje.
+- Sdílené organizace Composia se zvanými lidmi, API klíči a sdílením se
+  nedělají.
 
 ## V modelu Integrací (dodatek 0162 z 2026-10-09)
 
@@ -49,7 +63,10 @@ Lazurio Dashboard. Lazurio Environment to nevynucuje.
 - Composio účet může mít víc organizací a CLI vidí jen tu, do které je
   přihlášené. Launchpad proto u composia ukazuje organizaci Composia
   a připojuje aplikace do ní; připojení z webu Composia v jiné organizaci
-  agent nevidí.
+  agent nevidí. Na Environmentu Organizace je to organizace jejího jména;
+  dokud ji člověk nemá, ta, kterou má vybranou, a `lazurio integrations list`
+  to agentům řekne (viz Účet a organizace výše). Agent proto stav organizace
+  čte tam, než přes Composio začne pracovat.
 - Všechno, kam je Environment přihlášený, mají vždy všichni jeho agenti
   i boti. Uvnitř Environmentu se přístupy nedělí; jiné přístupy znamenají
   další Environment.
