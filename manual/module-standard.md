@@ -16,10 +16,13 @@ nebo odmítá (kapitola 10). Kontrolu drží mechanismus `lazurio module setup`
 
 ## 1. Pojmy
 
-- **Modul** — jeden Git repozitář v `organizations/<Org>/workspace/<slug>/`
-  s `lazurio.module.json` v kořeni. Org-level aplikace (`mission-control/`,
-  `design-system/`) jsou Moduly se stejnými pravidly; liší se jen slotem
-  v `modules.manifest.json`.
+- **Modul** — jeden Git repozitář s `lazurio.module.json` v kořeni. Modul
+  Organizace leží v `organizations/<Org>/workspace/<slug>/`; osobní Modul
+  (dodatek 0171 z 2026-10-13) je soukromý repozitář na vlastním GitHub účtu
+  člověka v `personalspace/<adresář vlastníka>/workspace/<slug>/`. Org-level
+  aplikace (`mission-control/`, `design-system/`) jsou Moduly se stejnými
+  pravidly. Všechny se liší jen slotem v `modules.manifest.json` své
+  Organizace, nebo osobního prostoru.
 - **App** — spustitelný package Modulu deklarovaný v `apps[]`; právě jedna je
   `default_app`. Cesta `app/v<N>/package.json` je **generace** App.
 - **Listener** — TCP port z `port_leases` Modulu, na který App poslouchá;
