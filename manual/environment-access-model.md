@@ -136,7 +136,9 @@ povinné odhlašování při běžném sdílení.
 
 Na data Modulu dosáhne Environment, ne člověk. Admin Organizace mu dá
 přístupy přes jeho kolekci v trezoru Organizace a úložiště je vynucuje; to je
-strop Environmentu. Kdo má celý Environment, pracuje s celým stropem, protože
+strop Environmentu. Kam tyto přístupy patří, když každé Prostředí má vlastní
+trezor a trezor Organizace s jeho kolekcí zaniká, je otevřený bod 8
+rozhodnutí 0198. Kdo má celý Environment, pracuje s celým stropem, protože
 v Environmentu má root. Kdo má jen aplikaci, vidí část stropu podle pravidel
 Organizace: zužuje server Modulu u každého požadavku a víc než strop nedá.
 

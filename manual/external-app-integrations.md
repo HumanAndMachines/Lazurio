@@ -146,7 +146,7 @@ a [integrations/executor.md](integrations/executor.md).
 | Kurátorovaný katalog Organizace | `organizations/<org>/INTEGRATIONS.md` + `organizations/<org>/.mcp.json` + `organizations/<org>/.codex/config.toml` | ano (org repo, bez secretů) |
 | Osobní integrace Operátora | user-level config harnessu (`~/.codex/config.toml`, user scope Claude Code) | ne |
 | Přímé Integrace a vlastní MCP servery | Executor v Environmentu (`~/.executor`): definice, připojení i tokeny | ne |
-| Nastavení Integrací pro celou Organizaci | sekce manifestu Organizace v jejím repozitáři (decision 0194), tajemství v trezoru Organizace | ano (bez tajemství) |
+| Nastavení Integrací pro celou Organizaci | sekce manifestu Organizace v jejím repozitáři (decision 0194), tajemství v trezoru Organizace (kam přesně po 0198, je otevřený bod 8 rozhodnutí 0198) | ano (bez tajemství) |
 | Per-machine aktivace | env soubor v custody cestě, OAuth consent, token cache | ne (gitignored/lokální) |
 | Secrets | custody dle [security/local-secret-custody.md](security/local-secret-custody.md) | nikdy |
 

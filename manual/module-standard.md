@@ -257,11 +257,11 @@ je **trezor Environmentu** (DEV-6631); rozhodnutí 0177:
   `LAZURIO_RUNTIME_SECRET_EXTERNAL_API_KEY`). Nic jiného z trezoru App
   nedostane. Hodnoty nejdou do logů, Diagnostiky, souborů v Modulu ani
   do `XDG_STATE_HOME`; změna hodnoty v trezoru platí od dalšího startu.
-- **Kde hodnota leží.** V trezoru Organizace, které Modul patří, v kolekci
-  tohoto Environmentu (rozhodnutí 0193: trezor = Organizace, kolekce =
-  Environment, účet Environmentu svou kolekci čte i zapisuje). Položka má jméno
-  přesně `<NAME>`, hodnotou je její heslo. Ukládá ji Operátor Environmentu
-  nebo Agent na jeho pokyn; jiná Organizace ani jiný Environment ji nevidí.
+- **Kde hodnota leží.** V trezoru tohoto Environmentu (rozhodnutí 0198:
+  každý Environment má vlastní trezor, jeho účet ho čte i zapisuje a spravují
+  ho lidé s přístupem do Environmentu). Položka má jméno přesně `<NAME>`,
+  hodnotou je její heslo. Ukládá ji člověk s přístupem do Environmentu nebo
+  Agent na jeho pokyn; jiná Organizace ani jiný Environment ji nevidí.
 - **Odmítnutí startu v Platformě.** Chybí-li hodnota povinného jména ze
   `secrets` nebo není dostupný trezor, Platform App **nespustí** a vrátí
   typovaný nález připravenosti se jmény (nikdy s hodnotami). U
@@ -281,15 +281,15 @@ je **trezor Environmentu** (DEV-6631); rozhodnutí 0177:
   Environmentu (například `bw get password <NAME>`), a README Modulu tento
   krok popisuje. Ani skript nečte `.env*`.
 - **Workstation.** Lokální Environment je Environment jako každý jiný:
-  hodnota leží v kolekci tohoto Environmentu v trezoru Organizace. Dokud
+  hodnota leží v trezoru tohoto Environmentu. Dokud
   Environment identitu v trezoru nemá (rollout DEV-6631), je povinné
   tajemství nález připravenosti a App nestartuje; volitelná capability je
   nedostupná. Lokální custody cesty
   ([security/local-secret-custody.md](security/local-secret-custody.md))
   jsou úschova, ne zdroj startu. **Otevřené:** zda je smí Launchpad na
   workstation bez identity trezoru číst jako přechodný zdroj (doporučení:
-  ne, jeden zdroj). Modulům v Personalspace slouží kolekce osobního
-  Environmentu v osobní organizaci jeho člověka (0193).
+  ne, jeden zdroj). Modulům v Personalspace slouží trezor osobního
+  Environmentu (0198).
 - **Kompatibilita.** Povinné i volitelné deklarace čte LazurioPlatform
   v0.1.8-rc.49+ (Lazurio/LazurioPlatform#307). Před jejich přidáním do
   Modulu aktualizuj všechny Environmenty, které jej spouštějí; starší
@@ -451,7 +451,7 @@ Launchpad (LazurioPlatform) drží **jednu politiku** pro všechny Moduly:
   (kap. 4.2, decision 0176 dodatek z 2026-10-10); bránu Environmentu kvůli
   tomu nemění;
 - **tajemství z trezoru**: před každým startem přečte jména z
-  `lazurio.runtime.secrets` z kolekce Environmentu v trezoru Organizace
+  `lazurio.runtime.secrets` z vlastního trezoru Environmentu (rozhodnutí 0198)
   a předá je jako `LAZURIO_RUNTIME_SECRET_<NAME>`; chybějící tajemství je
   typovaný nález připravenosti a App nestartuje (kap. 4.3, decision 0177);
 - **supervize**: proces, který skončí nenulově, restartuje s omezeným
