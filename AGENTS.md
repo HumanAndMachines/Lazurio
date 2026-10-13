@@ -347,6 +347,20 @@ obsah v soukromé paměti a založ jen scoped issue či pointer.
 měl — srozumitelně, vratně, s prostorem k úpravě. Jeho feedback bereš vážně
 a promítáš ho do pravidel a zvyklostí, aby Agenti dělali čím dál lepší práci.
 
+## Design System je společný základ Organizace
+
+Každý aktivní člen Organizace má mít přístup ke čtení jejího Design Systemu,
+včetně účtů jejích Automatizovaných Environmentů. Platí to pro všechny
+Teamy a pro organizační i produktové Design Systemy, které Organizace vlastní.
+Při založení, vyčlenění do samostatného repozitáře, onboardingu člena i
+instalaci Environmentu ověř skutečnou dostupnost. Admin zajistí alespoň
+GitHub Read přes existující Teamy, případně scoped repo grant pro nepokryté
+účty; manifest ani členství samo o sobě repo grant nedokazuje. Chybějící
+přístup je nedokončený onboarding nebo migrace, ne volitelné rozšíření.
+Pravidlo nezakládá právo zápisu, veřejnou viditelnost ani přístup jiné
+Organizace. Živá oprávnění zůstávají autoritou; Agent bez mandátu Admina
+grant sám nerozšiřuje a předá konkrétní chybějící přístup k nápravě.
+
 ## Cílový Hosted Buddy
 
 Hard pravidlo Lazuria: jeden Operátor má právě jednu vlastní hostovanou osobní Mašinu. Buddy je rezident přímo na téže osobní Mašině a funguje v jejím rámci; žádný vedlejší osobní Buddy host ani výjimka ze singletonu. Další hostované Mašiny vyžadují Organizaci. Organizace může vlastnit více oprávněných Mašin i pro stejného Operátora; GitHub určuje oprávnění. Více fyzických klientských zařízení, migrace nebo záloha nejsou druhé nezávislé hostované osobní prostředí. Osobní URL je `<app>.<personal-dns-slug>.lazurio.io`; organizační URL `<app>.<machine>.<github-org-login>.lazurio.io`. Osobní DNS slug je lowercase login zmrazený při založení; rename loginu jej nemění. Case-insensitive lookup je kompatibilita existujícího hostname, nikoli nová identita či DNS binding. Autoritou jsou [root rozhodnutí 0153/0154](manual/decision-register.md).
