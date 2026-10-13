@@ -109,10 +109,10 @@ operátora; agenti v něm jednají tam, kam sahají přihlášení na té mašin
 | Kdo rozhoduje | Operátor. Napojení je volitelné a nic se centrálně nevynucuje. |
 | Cesty | Každá Integrace má právě jednu cestu: nástrojem z výběru Launchpadu (`gh` je povinný, ne volitelný), přímo přes Executor (povinná služba každého Environmentu), nebo přes Composio s vlastním účtem, pokud je povolené. |
 | Přihlášení Composia | Přes prohlížeč, stejně jako `gh`. API klíč se nikdy nekopíruje. Agenti používají příkazovou řádku `composio`. |
-| Účet Environmentu | Připojení patří účtu a jeho Composio organizaci, ne mašině. Stejný účet a organizace na dvou mašinách znamená stejná připojení; jiný rozsah znamená jiný účet nebo organizaci. |
+| Účet Environmentu | Připojení patří účtu a jeho Composio organizaci, ne mašině. Stejný účet a organizace na dvou mašinách znamená stejná připojení. Člověk má jeden účet Composia a v něm vlastní organizaci pro každou Organizaci se stejným jménem; Environment Organizace pracuje v té její, osobní Environment ve výchozí (dodatek 0162 z 2026-10-13, [composio.md](integrations/composio.md)). |
 | Oddělení kontextů | Nový Environment, tedy nová mašina s vlastními přihlášeními. |
 | Mašina s více Organizacemi | Jeden Environment. Agent volí nástroj Organizace, pro kterou pracuje, a data mezi Organizacemi nepřenáší; je to pravidlo práce, ne technická hranice. |
-| Organizace | Zda se smí Composio na jejích Environmentech používat, je nastavení Organizace podle decision 0194: nová Organizace ho má vypnuté, Organizace, které ho už používají, zapnuté. Na osobním Environmentu rozhoduje člověk. Kdo chce přehled účtů, založí vlastní Composio organizaci a žádá operátory, aby se přihlašovali do ní. |
+| Organizace | Zda se smí Composio na jejích Environmentech používat, je nastavení Organizace podle decision 0194: nová Organizace ho má vypnuté, Organizace, které ho už používají, zapnuté. Na osobním Environmentu rozhoduje člověk. Sdílené organizace Composia se zvanými lidmi a klíči se nedělají. |
 | Výchozí rozsah | Vše, co aplikace nabízí: čtení, zápis i mazání. Rozsah omezí operátor. |
 | Zápisy | Schopnost zápisu není souhlas s Publikací; platí sekce o write operacích níže. |
 | Návody pro agenty | Aktivovaný CLI nástroj se propíše do instrukcí a manuálů Lazurio Folderu té mašiny. Návody říkají, co je v Environmentu povoleno, ať to operátor povolil v Launchpadu nebo příkazem `lazurio`; je to jedna věc. MCP servery Environmentu drží Executor a návody uvádějí Executor před Composiem. |

@@ -770,8 +770,10 @@ zápisu není souhlas s Publikací. Agent na Mašině s více Organizacemi volí
 nástroj Organizace, pro kterou pracuje, a data mezi Organizacemi nepřenáší.
 Přístupy k aplikacím jsou svázané s Environmentem: každé přihlášení na
 Mašině jde samostatně odhlásit. Kde přihlášení patří účtu a ne Mašině
-(Composio), vidí Mašiny se stejným účtem stejná připojení; jiný rozsah
-znamená jiný účet. Integrace sdílené celou Organizací drží její tracked
+(Composio), vidí Mašiny se stejným účtem a organizací stejná připojení.
+Člověk má jeden účet Composia a v něm vlastní organizaci pro každou
+Organizaci se stejným jménem; Environment Organizace pracuje v té její
+(dodatek 0162 z 2026-10-13). Integrace sdílené celou Organizací drží její tracked
 katalog (jen jména env proměnných, nikdy hodnoty); nástroj povolený jen
 operátorem na jeho Environmentu se do katalogu nezapisuje; osobní integrace
 patří do personalspace scope. Postup a standard:
