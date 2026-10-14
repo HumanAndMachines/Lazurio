@@ -92,9 +92,9 @@ ukáže nad stránkou ve stejném pohledu, novou kartu nabídne aplikace jako no
   dívá. Jinak skončí po 8 s (0195 bod 14).
 - **Zavřít** v Přehledu zavře kartu všem po 8 s, i drženou. Pracuje-li v ní agent, nejdřív
   varuje.
-- **Selhané čtení.** Dnes nasazený hub (F47 bod 5): když mu selže čtení držení, nezavře žádnou
-  kartu, ani když nejde přečíst jediný soubor. Rozhodnutý cíl (dodatek 0191 z 2026-10-12, bod
-  32), který přinese Lazurio/LazurioPlatform#347:
+- **Selhané čtení** (dodatek 0191 z 2026-10-12, bod 32; od Platformy v0.1.8-rc.57,
+  Lazurio/LazurioPlatform#347). Hub starší než rc.57 (F47 bod 5) při selhaném čtení držení
+  nezavřel žádnou kartu, ani když nešel přečíst jediný soubor. Dnes:
   - nečitelný soubor držitele zastaví jen karty, které držel při svém posledním přečtení;
   - ostatní karty končí dál a `lazurio doctor` nečitelný soubor hlásí;
   - soubor, který od startu hubu přečíst nešel, nedrží nic, co by hub znal, protože hub poslední
@@ -379,17 +379,22 @@ prohlížeč takto:
 
 ## Co je otevřené
 
-- Refaktor podle dodatku 0191 z 2026-10-12 (body 28–35), který plánují DEV-6656 a DEV-6646:
-  - jeden smluvní modul Platformy s testovacími vektory, který forky převezmou ověřený místo
-    ručních kopií: modul s vektory pro C1–C7 je ve vydání v0.1.8-rc.61 a artefakt vydání ho
-    nese od Lazurio/LazurioPlatform#404; zbývá převést do něj C8–C17 a zápis souboru držitele
-    a nechat ho převzít T3 Code (úkol 2026-10-12-703);
-  - prvek shellu pro kartu prohlížeče, společný Launchpadu, T3 Code a MausBotu;
-  - `lazurio browser done` a stránky pro člověka bez držení;
-  - nečitelný soubor držitele zastaví jen svou aplikaci (soubor, který od startu hubu přečíst
-    nešel, nedrží nic, co by hub znal);
-  - jeden jazyk povrchů;
-  - MausBot jako poslední.
+- Refaktor podle dodatku 0191 z 2026-10-12 (body 28–35), který plánují DEV-6656 a DEV-6646.
+  Hotové je:
+  - smluvní modul Platformy s testovacími vektory, celá fáze 1 F50: C1–C10 a C13–C17 i zápis
+    souboru držitele jsou v modulu od Platformy v0.1.8-rc.68 a artefakt vydání ho nese pro
+    forky (Lazurio/LazurioPlatform#404 a #407);
+  - `lazurio browser done` a stránky pro člověka bez držení (od rc.58);
+  - nečitelný soubor držitele zastaví jen svou aplikaci (od rc.57; soubor, který od startu hubu
+    přečíst nešel, nedrží nic, co by hub znal).
+
+  Zbývá:
+  - aby modul z artefaktu převzalo T3 Code místo ručních kopií (úkol 2026-10-12-703);
+  - prvek shellu pro kartu prohlížeče, společný Launchpadu, T3 Code a MausBotu, a jeden jazyk
+    povrchů přes `lang` v odpovědi identity (úkol 2026-10-12-704);
+  - společné scénáře lišt a dvě zbývající varování `lazurio doctor` (úkol 2026-10-12-706);
+  - zdokumentovaný příkaz forku agent-browseru pro ukončení sezení (úkol 2026-10-12-707);
+  - MausBot jako poslední (úkol 2026-10-05-510).
 - Viditelné označení cizího Environmentu a karty z jiného Environmentu, například červeným
   rámečkem (bod 35): zatím jen směr pro návrhy rozhraní.
 - Uspávání karet a jeho mechanismus (DEV-6656 spike 916).
