@@ -173,9 +173,11 @@ tohle a nic dalšího nepotřebuje:
 ## Tabulka smluv prohlížeče
 
 Programy, které se v prohlížeči Environmentu potkávají, se domlouvají sedmnácti smlouvami
-C1–C17 z rozhodnutí F50 v LazurioPlatform `docs/decisions.md`. Jedinou definicí každé z nich
-je smluvní modul Platformy `src/browser/contract/` a pravdou jsou jeho vektory
-(`vectors/v1/`); forky modul převezmou ověřený z artefaktu vydání (níže). Tabulka říká, kdo
+C1–C17 z rozhodnutí F50 v LazurioPlatform `docs/decisions.md`. Cílem F50 je, aby jedinou
+definicí každé z nich byl smluvní modul Platformy `src/browser/contract/` a pravdou jeho vektory
+(`vectors/v1/`). Dnes modul a vektory pokrývají C1–C7; C8–C17 definuje F50 a do modulu je
+přenáší zbytek fáze 1 (úkol 2026-10-12-701). Forky z artefaktu vydání (níže) převezmou jen to,
+co modul už nese; u ostatních smluv platí text F50 a sloupec vydání níže. Tabulka říká, kdo
 smlouvu vlastní, kdo podle ní zapisuje a čte a od kterého vydání. **Platforma** je
 LazurioPlatform, **T3 Code** fork `Lazurio/t3code`, **MausBot** fork `Lazurio/OpenMausBot`
 (uveden jen tam, kde se smlouvy dnes dotýká). Stav k 2026-10-14.
@@ -183,7 +185,7 @@ LazurioPlatform, **T3 Code** fork `Lazurio/t3code`, **MausBot** fork `Lazurio/Op
 | # | Smlouva | Vlastník | Kdo zapisuje a kdo čte | Verze a vydání |
 | --- | --- | --- | --- | --- |
 | C1 | **Id vzdálené karty:** id cíle DevTools, 32 hexadecimálních číslic, velkými písmeny | Chrome; pravidlo Platforma | Platforma: hub, pohled, Launchpad, Nová karta, CLI; T3 Code: server i web, zatím vlastní kopií | v1, bez `schema`; v modulu od Platformy v0.1.8-rc.61 |
-| C2 | **Jména lišt a sezení:** `[A-Za-z0-9_-]{1,64}`, lišty `launchpad` a `t3-<vlákno>`, prefixy `codex-`, `claude-` a `bot-` (vyhrazený MausBotu) | Platforma (gramatika a registr prefixů); T3 Code svá jména `t3-…`; agent-browser sezení démona | Platforma: hub, Launchpad, CLI (`threadSession`); T3 Code: sezení vláken, které gramatice odpovídají; MausBot pojmenovává sezení mimo gramatiku (`bot-<id>`, `guest-<uuid>`) a hub je přeskočí | v1; v modulu od v0.1.8-rc.61 |
+| C2 | **Jména lišt a sezení:** `[A-Za-z0-9_-]{1,64}`, lišty `launchpad` a `t3-<vlákno>`, prefixy `codex-`, `claude-` a `bot-` (vyhrazený MausBotu) | Platforma (gramatika a registr prefixů); T3 Code svá jména `t3-…`; agent-browser sezení démona | Platforma: hub, Launchpad, CLI (`threadSession`); T3 Code: sezení vláken, které gramatice odpovídají; MausBot pojmenovává sezení `bot-<id>` a `guest-<uuid>`, která gramatice běžně odpovídají; hub přeskočí jen jméno, které ji poruší (například s tečkou nebo delší než 64 znaků) | v1; v modulu od v0.1.8-rc.61 |
 | C3 | **Adresa pohledu a jeho Environment:** `https://browser.<base>.lazurio.io/t/<id>`, holý origin otevře novou kartu, `<base>` je id Environmentu (`environmentIdOf`) | Platforma | Zapisuje pohled a hub; čte Launchpad (panel, Nová karta), shell a pohled; T3 Code: server i web, každý vlastní kopií | v1; přísný tvar bez portu, přihlašovacích údajů, query, fragmentu a koncového lomítka mají všichni čtenáři Platformy od v0.1.8-rc.61; T3 Code čte týž tvar vlastní kopií, navíc bere i `/T/<ID>` |
 | C4 | **Hodiny bootu:** `{"boot": "<boot_id>", "at": <sekundy>}` z `/proc` | Platforma | Platforma: hub a Launchpad; T3 Code: server, kopií | v1; od v0.1.8-rc.51, T3 Code od 0.0.45-lazurio.8 |
 | C5 | **Soubor držitele:** `$XDG_RUNTIME_DIR/lazurio-browser/holders/<lišta>.json` | Formát Platforma; každý soubor aplikace, které lišta patří | Zapisují Launchpad (`launchpad.json`) a T3 Code (`t3-<vlákno>.json`); čtou hub, `lazurio doctor` a T3 Code (cizí soubory kvůli „drží i…“) | `lazurio.browser-holder.v1`; hub čte od v0.1.8-rc.51, nečitelný soubor drží jen své karty od rc.57, `schema` a `contract` (vydání Platformy zapisovatele) zapisuje Launchpad od rc.61; T3 Code zapisuje od 0.0.45-lazurio.8 zatím bez `schema`, což se čte jako v1 |
