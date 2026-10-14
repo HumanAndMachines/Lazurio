@@ -22,8 +22,9 @@ export const ORGANIZATION_SETTINGS_ISSUE_CODES = Object.freeze([
 ]);
 
 /**
- * Microsoft 365 company app (decision 0162, addendum 2026-10-14): catalog ids
- * of the Integrations an Organization can turn on. Teams joins in phase 2.
+ * Microsoft 365 company app (decision 0162, addendum 2026-10-14): the parts
+ * a connected account gets as one Integration (`outlook` is mail and
+ * calendar). Teams joins in phase 2.
  */
 export const MICROSOFT365_APPS = Object.freeze(["outlook", "one_drive", "share_point"]);
 

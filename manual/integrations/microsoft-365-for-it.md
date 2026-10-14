@@ -54,8 +54,13 @@ viditelnou změnu dělají jen na pokyn člověka.
 
 ## Kdo se připojuje
 
-Každý člověk sám, ve svém prohlížeči a svým pracovním účtem. Bez souhlasu
-nic nevznikne. Doporučujeme v *Enterprise applications* zapnout *Assignment
+Každý člověk sám: v Lazuriu zvolí „Přidat účet“ a jednou se ve svém
+prohlížeči přihlásí pracovním účtem. Tím agenti v jeho Environmentu dostanou
+poštu, kalendář, OneDrive a SharePoint toho účtu. Víc účtů vedle sebe je jeho
+volba. Lazurio samo žádný účet neodpojí: odpojí ho člověk tlačítkem
+„Odpojit“, nebo vy v Entra (níže). Když Environment přechází na jiného
+člověka, odpojí ten, kdo v něm pracuje, účty, které už používat nemá; na
+týmovém Environmentu připojený účet používají všichni jeho agenti. Doporučujeme v *Enterprise applications* zapnout *Assignment
 required* a přiřadit skupinu lidí, kteří se smějí připojit. Podle Microsoftu
 to neomezuje Global Administratory.
 
@@ -75,7 +80,8 @@ to neomezuje Global Administratory.
 ## Jak přístup ukončit
 
 - **Jeden člověk:** zablokujte účet nebo odvolejte jeho přihlášení. Už vydaný
-  přístupový token platí dál, takže přístup skončí až asi do 90 minut.
+  přístupový token platí dál, takže přístup skončí až asi do 90 minut. To
+  platí i pro odchod z firmy: Lazurio samo nic neodpojí.
 - **Celá firma:** v *Enterprise applications* nastavte *Enabled for users to
   sign in* na *No*, nebo odeberte souhlas či aplikaci smažte. To je skutečný
   vypínač; odebrání nastavení v Lazuriu existující připojení neodpojí.

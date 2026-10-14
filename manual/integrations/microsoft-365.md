@@ -44,19 +44,30 @@ Stránku pro IT oddělení firmy drží [microsoft-365-for-it.md](microsoft-365-
   tenantu, id aplikace, zapnuté aplikace a zaregistrované adresy Launchpadů
   v `settings.integrations.microsoft365` manifestu Organizace
   ([tvar a pravidla](../lazurio-manifest-family.md#microsoft-365-company-app-settingsintegrationsmicrosoft365)).
-  Environment podle nich zaregistruje aplikaci a specifikace Graphu do svého
-  Executoru ([executor.md](executor.md)).
-- **Lidé se připojují sami** v Apps → Integrace: Outlook (pošta i kalendář
-  jednou kartou), OneDrive a SharePoint, ve svém prohlížeči a svým pracovním
-  účtem. Agenti dosáhnou jen tam, kam smí ten člověk sám.
+  Environment podle nich zaregistruje aplikaci do svého Executoru
+  ([executor.md](executor.md)). `apps` vybírá části (`outlook` = pošta a
+  kalendář, `one_drive`, `share_point`) a tím i jejich oprávnění.
+- **Jeden účet, jedno přihlášení.** Člověk v Apps → Integrace u Microsoftu
+  365 zvolí „Přidat účet“, jednou se ve svém prohlížeči přihlásí pracovním
+  účtem a účet je připojený. Agenti pak používají jeho poštu, kalendář,
+  OneDrive a SharePoint jako jednu Integraci `m365`, kterou Launchpad sestaví
+  z připnutých specifikací zapnutých částí (pevný commit, ověřený otisk
+  SHA-256). Agenti dosáhnou jen tam, kam smí ten člověk sám. Víc účtů vedle
+  sebe je volba člověka.
+- **Odpojení dělá jen člověk.** Jediné odpojení je „Odpojit“; na straně
+  Lazuria se nic samo neodpojí ani nevyprší. Když Environment přechází na
+  někoho jiného, odpojí ten, kdo v něm pracuje, účty, které už používat nemá,
+  stejně jako u Composia. Firemní aplikace se nabízí na každém druhu
+  Environmentu; na týmovém Environmentu připojený účet používají všichni jeho
+  agenti.
 - **Odesílání pošty je vypnuté.** `Mail.Send` aplikace ve výchozím stavu
   nemá. Organizace ho zapíná vědomě, jako samostatné rozšíření oprávnění se
   souhlasem správce.
 - **Teams přijde ve druhé fázi**, pro čtení a koncepty.
 
-**Dnes versus cíl.** Použití nastavení v Environmentech, karta Připojit pro
-firemní aplikace a odpojení při předání Environmentu v LazurioPlatform
-i nastavení Microsoftu 365 v Dashboardu teprve vznikají (plán DEV-6626).
+**Dnes versus cíl.** Použití nastavení v Environmentech a „Přidat účet“ pro
+firemní aplikaci v LazurioPlatform i nastavení Microsoftu 365 v Dashboardu
+teprve vznikají (plán DEV-6626).
 Do té doby připojení dělá agent na výslovný pokyn člověka přechodnou cestou
 ze sekce [Přechodně: Executor ručně](#přechodně-executor-ručně). Nastavení
 `microsoft365` Organizace do manifestu nezapisuje, dokud nevyjdou čtenáři,
@@ -229,50 +240,124 @@ dělá na výslovný pokyn člověka přes rozhraní Executoru 1.6.10 na
 (popis rozhraní drží `docs/integrations.md` v LazurioPlatform). Token se nikdy
 nevypisuje ani nekopíruje; volání jdou bez proxy (`curl --noproxy '*'`).
 
-**Přechodné slugy `pilot-m365-*`.** První vydání LazurioPlatform s firemní
-aplikací převezme jmenný prostor `m365-*` a připojení, která v něm nezná,
-odebere. Ručně založené integrace proto nesou předponu `pilot-`; po vydání se
-člověk připojí kartou v Integracích a pilotní integrace se odeberou.
+**Přechodná Integrace `pilot-m365`.** První vydání LazurioPlatform s firemní
+aplikací převezme jmenný prostor `m365` a připojení, která v něm nezná,
+odebere. Ručně založená Integrace se proto jmenuje `pilot-m365`; po vydání se
+člověk připojí přes „Přidat účet“ a pilotní Integrace se odebere.
 
-**Připnuté specifikace.** Stejné soubory, jaké připíná LazurioPlatform:
-kurátorovaný katalog Executoru v repozitáři `UsefulSoftwareCo/integrations`
-na commitu `9b7117ce36e9b0a8ec86a51bd40fb380d861fe06`, cesta
-`public/specs/microsoft-graph/<soubor>` na `raw.githubusercontent.com`.
-Agent soubor stáhne a porovná SHA-256, než ho Executoru předá adresou.
+**Jedna specifikace ze čtyř připnutých.** Stejné soubory, jaké připíná
+LazurioPlatform: kurátorovaný katalog Executoru v repozitáři
+`UsefulSoftwareCo/integrations` na commitu
+`9b7117ce36e9b0a8ec86a51bd40fb380d861fe06`, cesta
+`public/specs/microsoft-graph/<soubor>`:
 
-| Slug | Soubor | SHA-256 | Oprávnění nad přihlášení |
+| Soubor | Část | SHA-256 | Oprávnění nad přihlášení |
 | --- | --- | --- | --- |
-| `pilot-m365-outlook-mail` | `mail.json` | `fe66b9a7ea6572077a996bc959a8617b7599369ae54f2b02f926490c4edee62a` | `Mail.ReadWrite` |
-| `pilot-m365-outlook-calendar` | `calendar.json` | `7d665dbb02ce07b8a2fd1e13880f2538e807e078a613fecb80e975357b8cea31` | `Calendars.ReadWrite` |
-| `pilot-m365-onedrive` | `files.json` | `0e9364c576e5ae336fd14b82b23401dc1ecde2daf53ac6ded2574069707e504a` | `Files.ReadWrite.All` |
-| `pilot-m365-sharepoint` | `sites.json` | `3f0400cd5bdee8f826d28d3d310309382f611d3af6a5dd4961be39563e116394` | `Sites.Read.All` |
+| `mail.json` | Outlook pošta | `fe66b9a7ea6572077a996bc959a8617b7599369ae54f2b02f926490c4edee62a` | `Mail.ReadWrite` |
+| `calendar.json` | Outlook kalendář | `7d665dbb02ce07b8a2fd1e13880f2538e807e078a613fecb80e975357b8cea31` | `Calendars.ReadWrite` |
+| `files.json` | OneDrive a knihovny SharePointu | `0e9364c576e5ae336fd14b82b23401dc1ecde2daf53ac6ded2574069707e504a` | `Files.ReadWrite.All` |
+| `sites.json` | weby SharePointu | `3f0400cd5bdee8f826d28d3d310309382f611d3af6a5dd4961be39563e116394` | `Sites.Read.All` |
 
-Přihlášení znamená `openid profile email offline_access User.Read`.
-SharePoint potřebuje i `pilot-m365-onedrive`: procházení knihoven jde přes
-operace nad položkami disku, které specifikace webů nemá.
+Přihlášení znamená `openid profile email offline_access User.Read`. Soubory
+mají shodné jen identické části (jedna cesta `/me` a sdílená schémata), takže
+se dají sloučit beze ztráty. Skript níže je stáhne, ověří otisky, sloučí je,
+nastaví jediné přihlášení s přesně odsouhlasenými oprávněními (bez
+`Mail.Send` a `MailboxSettings.ReadWrite`) a zapíše tělo požadavku pro
+Executor. Při neshodě otisku nebo rozdílné sdílené části skončí a nic
+nezapíše. Výsledek má 2 825 cest a otisk sloučené specifikace
+`0078e0c2d1d32987bb61b43b92309643c7f1ab54d177f3985fdd435d4099cd42`.
 
-1. **Specifikace:** `POST /api/openapi/specs` s `{spec: {kind: "url", url:
-   "<připnutá adresa>"}, slug, name, authenticationTemplate: [{slug:
-   "microsoft365", kind: "oauth2", label: "Microsoft 365", authorizationUrl:
-   "https://login.microsoftonline.com/<TENANT>/oauth2/v2.0/authorize",
-   tokenUrl: "https://login.microsoftonline.com/<TENANT>/oauth2/v2.0/token",
-   resource: null, scopes: [...]}]}`.
+```js
+// node pilot-m365-spec.mjs <TENANT_ID> <request.json> [<local spec dir>]
+// Merges the four commit-pinned Microsoft Graph specs into one OpenAPI
+// document and writes the Executor 1.6.10 `POST /api/openapi/specs` body of
+// the interim integration `pilot-m365`. Fails closed on a SHA-256 mismatch
+// and on a shared path or component that differs between the specs.
+import { createHash } from "node:crypto";
+import { readFile, writeFile } from "node:fs/promises";
+
+const commit = "9b7117ce36e9b0a8ec86a51bd40fb380d861fe06";
+const base = `https://raw.githubusercontent.com/UsefulSoftwareCo/integrations/${commit}/public/specs/microsoft-graph/`;
+const pinned = {
+  "mail.json": "fe66b9a7ea6572077a996bc959a8617b7599369ae54f2b02f926490c4edee62a",
+  "calendar.json": "7d665dbb02ce07b8a2fd1e13880f2538e807e078a613fecb80e975357b8cea31",
+  "files.json": "0e9364c576e5ae336fd14b82b23401dc1ecde2daf53ac6ded2574069707e504a",
+  "sites.json": "3f0400cd5bdee8f826d28d3d310309382f611d3af6a5dd4961be39563e116394",
+};
+const scopes = ["openid", "profile", "email", "offline_access", "User.Read",
+  "Mail.ReadWrite", "Calendars.ReadWrite", "Files.ReadWrite.All", "Sites.Read.All"];
+const [tenant, out, localDir] = process.argv.slice(2);
+if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(tenant ?? "") || !out)
+  throw new Error("usage: node pilot-m365-spec.mjs <TENANT_ID> <request.json>");
+
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+let spec = null;
+for (const [file, sha256] of Object.entries(pinned)) {
+  const bytes = localDir
+    ? await readFile(`${localDir}/${file}`)
+    : Buffer.from(await (await fetch(base + file)).arrayBuffer());
+  const got = createHash("sha256").update(bytes).digest("hex");
+  if (got !== sha256) throw new Error(`${file}: SHA-256 ${got}, expected ${sha256}`);
+  const next = JSON.parse(bytes.toString("utf8"));
+  if (spec === null) { spec = next; continue; }
+  for (const [path, item] of Object.entries(next.paths)) {
+    if (path in spec.paths && !same(spec.paths[path], item)) throw new Error(`${file}: path ${path} differs`);
+    spec.paths[path] = item;
+  }
+  for (const [section, entries] of Object.entries(next.components ?? {})) {
+    if (section === "securitySchemes") continue;
+    const target = (spec.components[section] ??= {});
+    for (const [name, value] of Object.entries(entries)) {
+      if (name in target && !same(target[name], value)) throw new Error(`${file}: ${section}.${name} differs`);
+      target[name] = value;
+    }
+  }
+}
+// One sign-in, exactly the consented scopes: never Mail.Send or
+// MailboxSettings.ReadWrite, which the curated mail spec declares.
+spec.components.securitySchemes.microsoftOAuth2.flows.authorizationCode.scopes =
+  Object.fromEntries(scopes.map((scope) => [scope, ""]));
+spec.security = [{ microsoftOAuth2: scopes }];
+const value = JSON.stringify(spec);
+const login = `https://login.microsoftonline.com/${tenant}/oauth2/v2.0`;
+await writeFile(out, JSON.stringify({
+  spec: { kind: "blob", value },
+  slug: "pilot-m365",
+  name: "Microsoft 365",
+  authenticationTemplate: [{
+    slug: "microsoft365", kind: "oauth2", label: "Microsoft 365",
+    authorizationUrl: `${login}/authorize`, tokenUrl: `${login}/token`,
+    resource: null, scopes,
+  }],
+}));
+console.log(JSON.stringify({ paths: Object.keys(spec.paths).length,
+  sha256: createHash("sha256").update(value).digest("hex") }));
+```
+
+1. **Specifikace:** `node pilot-m365-spec.mjs <TENANT_ID> request.json`, pak
+   `POST /api/openapi/specs` s tímto tělem (asi 13 MB). Token Executoru se
+   předává hlavičkou ze souboru, aby nebyl v seznamu procesů:
+
+   ```sh
+   exe() { curl -sS --noproxy '*' -H @<(printf 'Authorization: Bearer %s\n' "$(node -p 'require(process.env.HOME + "/.executor/server-control/auth.json").token')") -H 'Content-Type: application/json' "$@"; }
+   exe -X POST --data-binary @request.json http://127.0.0.1:4789/api/openapi/specs
+   ```
 2. **Klient:** `POST /api/oauth/clients` s `{owner: "org", slug:
    "microsoft365", authorizationUrl, tokenUrl, grant: "authorization_code",
    clientId: "<APP>", clientSecret: "", resource: null}`. Prázdný
    `clientSecret` dělá z klienta veřejného klienta s PKCE.
-3. **Připojení ve vlastním prohlížeči:** `POST /api/oauth/start` s
+3. **Jedno přihlášení ve vlastním prohlížeči:** `POST /api/oauth/start` s
    `{client: "microsoft365", clientOwner: "org", owner: "org", name:
-   "default", integration: "<slug>", template: "microsoft365", newConnection:
-   true, redirectUri: "<adresa Launchpadu>/api/integrations/oauth/callback"}`.
+   "default", integration: "pilot-m365", template: "microsoft365",
+   newConnection: true, redirectUri: "<adresa Launchpadu>/api/integrations/oauth/callback"}`.
    Člověk otevře `authorizationUrl` ve svém prohlížeči a přihlásí se.
-   Launchpad bez karty Připojit tento návrat nezná, odpoví stránkou s chybou
-   400 a kód nespotřebuje. Člověk agentovi předá adresu té stránky; agent ji
-   hned předá Executoru jako `GET http://localhost:4789/api/oauth/callback?<tentýž dotaz>`.
+   Launchpad tento návrat nezná, odpoví stránkou s chybou 400 a kód
+   nespotřebuje. Člověk agentovi předá adresu té stránky; agent ji hned předá
+   Executoru jako `GET http://localhost:4789/api/oauth/callback?<tentýž dotaz>`.
    Executor najde tok podle `state` a kód vymění s uloženou návratovou adresou
    a PKCE ověřovačem, bez klíče. Kód je jednorázový, platí minuty a bez
    ověřovače, který zůstává v Executoru, je k ničemu; agent ho nikam jinam
-   nepíše.
+   nepíše. Další účet je další `oauth/start` s jiným `name`.
 4. **Jen pro účty bez správcovské role** jde i kratší cesta: `oauth/start`
    bez `redirectUri` vrátí přihlášení na `localhost` Executoru a člověk ho
    dokončí v prohlížeči Environmentu.
@@ -302,7 +387,7 @@ Pořadí je důležité: V1 rozhoduje mezi veřejným a důvěrným klientem.
   tokeny žijí 60 až 90 minut, proto se obnova ověří až po vypršení
   `expiresAt` připojení (nebo nejdřív za 100 minut) dalším voláním a novým,
   pozdějším `expiresAt` bez nového přihlášení.
-- **V2 Executor 1.6.10 celou cestou:** specifikace s šablonou tenantu,
+- **V2 Executor 1.6.10 celou cestou:** sloučená specifikace s šablonou tenantu,
   klient s prázdným klíčem, vyplněné `identityLabel`, obnova po vypršení,
   žádná chybějící oprávnění.
 - **V3 Skutečná práce, nejdřív jen čtení:** najít web SharePointu podle
@@ -326,18 +411,19 @@ připojení. Žádné tokeny, kódy z přihlášení ani obsah pošty.
   `microsoft365` v Lazuriu existující připojení neodpojí; přestane jen
   nabízet nová. Celou firmu zastaví zakázání podnikové aplikace (*Enabled
   for users to sign in: No*), odebrání souhlasu nebo smazání aplikace.
-- **Člověk odpojí** Integraci v Apps → Integrace („⋯“ → Odpojit), což smaže
-  připojení v Executoru. U Microsoftu souhlas ruší v My Apps
-  (`https://myapplications.microsoft.com`).
+- **Člověk odpojí** účet v Apps → Integrace („⋯“ → Odpojit), což smaže
+  připojení v Executoru. Je to jediné odpojení na straně Lazuria. U Microsoftu
+  souhlas ruší v My Apps (`https://myapplications.microsoft.com`).
 - **Odchod člověka:** IT zablokuje účet nebo odvolá jeho přihlášení
   (`revokeSignInSessions`). Obnova pak selže a Executor připojení označí
   `expired`; už vydaný přístupový token platí dál, takže přístup skončí až
   asi do 90 minut.
-- **Předání nebo zrušení Environmentu** jeho připojení Microsoftu odpojí, jinak
-  by další člověk v Environmentu jednal pod účtem předchozího (cílově
-  Launchpad; přechodně agent na pokyn Admina).
-- Obnovovací token platí 90 dní od posledního použití; po 90 dnech bez
-  použití se člověk připojí znovu.
+- **Předání Environmentu:** Lazurio nic samo neodpojí. Kdo Environment
+  přebírá, odpojí účty, které už používat nemá, jinak by agenti dál jednali
+  pod účtem předchozího člověka. Kdo Environment předává a odchází z firmy,
+  toho spolehlivě odstřihne IT blokací účtu.
+- Microsoft obnovovací token zneplatní po 90 dnech bez použití; člověk se pak
+  přihlásí znovu.
 
 ## Tokeny v klidu
 

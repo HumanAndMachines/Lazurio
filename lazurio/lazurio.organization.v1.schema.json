@@ -158,7 +158,7 @@
                   "minItems": 1,
                   "uniqueItems": true,
                   "items": { "enum": ["outlook", "one_drive", "share_point"] },
-                  "description": "Integrations the work Environments offer to connect directly through the company app (Integrations catalog ids). Outlook means mail and calendar."
+                  "description": "Parts of the company app a connected account gets as one Integration, and so its delegated scopes: outlook (mail and calendar), one_drive, share_point."
                 },
                 "callbacks": {
                   "type": "array",

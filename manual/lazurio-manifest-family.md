@@ -232,9 +232,11 @@ not secrets; the runbook is
   present. Any other field is refused, so a secret, a password or a certificate
   can never be declared here.
 - `tenant_id` and `client_id` are lowercase GUIDs, as the Azure CLI prints them.
-- `apps` is a non-empty set of Integrations catalog ids: `outlook` (mail and
-  calendar, one card), `one_drive`, `share_point`. Teams joins in phase 2.
-  Delegated scopes per app live in LazurioPlatform, not in the setting.
+- `apps` is a non-empty set of the parts the company app offers: `outlook`
+  (mail and calendar), `one_drive`, `share_point`. Teams joins in phase 2. A
+  person connects an account once and gets every enabled part as one
+  Integration; `apps` selects the parts and so the delegated scopes, which
+  live in LazurioPlatform, not in the setting.
 - `callbacks` is the projection of the Launchpad callbacks registered as
   redirect URIs of the Entra app: unique HTTPS URLs on the hosted work
   Launchpad host `launchpad.<machine>.<github-org-login>.lazurio.io` (lowercase,
