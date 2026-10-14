@@ -254,7 +254,7 @@ Příklady:
   multi-account (`--account`),
 - Atlassian: oficiální [acli](https://developer.atlassian.com/cloud/acli/),
 - Microsoft 365: oficiální Azure CLI (`az`) jen pro založení firemní
-  aplikace Adminem; práci s poštou a soubory nese firemní aplikace přes
+  aplikace, nejlépe v Azure Cloud Shell ve vlastním prohlížeči správce; práci s poštou a soubory nese firemní aplikace přes
   Executor ([integrations/microsoft-365.md](integrations/microsoft-365.md)).
 
 Agent CLI volá přes shell dané mašiny; přihlášení (`gh auth login`,
@@ -363,7 +363,7 @@ onboarding checklistu Organizace, ne do per-machine kroků:
 | Slack | Admin workspace schvaluje MCP klienta (aplikaci) v app managementu |
 | Atlassian | Org admin spravuje MCP přístup (allowlist klientů, API-token toggle) v Atlassian Administration |
 | Canva | Admin týmu povoluje „AI Connector" v Controls and Permissions |
-| Microsoft 365 | Firemní aplikace Organizace (dodatek 0162 z 2026-10-14): jedna aplikace Entra jen pro tenant firmy, veřejný klient bez tajného klíče, kterou založí agent v pracovním Environmentu Admina přes `az`; správce tenantu jednou potvrdí souhlas jménem organizace; do nastavení Organizace jdou jen id tenantu, id aplikace, zapnuté aplikace a adresy Launchpadů. Postup [integrations/microsoft-365.md](integrations/microsoft-365.md) |
+| Microsoft 365 | Firemní aplikace Organizace (dodatek 0162 z 2026-10-14): jedna aplikace Entra jen pro tenant firmy, veřejný klient bez tajného klíče, kterou založí IT firmy ve svém prohlížeči a jednou udělí souhlas jménem organizace; do nastavení Organizace jdou jen id tenantu, id aplikace, zapnuté aplikace a adresy Launchpadů. Postup [integrations/microsoft-365.md](integrations/microsoft-365.md) |
 | Google Workspace | Organizace vlastní GCP projekt s OAuth clientem; admin řídí povolená API a scopes |
 | ESO9 | Organization owner jmenuje správce nebo implementačního partnera; ten potvrdí API variantu, provider-side oprávnění, audit a samostatnou revokaci před aktivací |
 
@@ -381,6 +381,7 @@ nepoužívají; personalspace izolace má přednost.
 | --- | --- |
 | [integrations/google-workspace.md](integrations/google-workspace.md) | Gmail, Drive, Docs, Sheets, Slides, Meet |
 | [integrations/microsoft-365.md](integrations/microsoft-365.md) | Firemní aplikace Microsoft 365: Outlook (pošta a kalendář), OneDrive, SharePoint, později Teams; Work IQ MCP jako pozdější volba |
+| [integrations/microsoft-365-for-it.md](integrations/microsoft-365-for-it.md) | Stránka pro IT firmy: co firemní aplikace Microsoft 365 smí, kudy tečou data, podmíněný přístup, odvolání a audit |
 | [integrations/slack.md](integrations/slack.md) | Slack |
 | [integrations/atlassian.md](integrations/atlassian.md) | Jira, Confluence |
 | [integrations/linkedin.md](integrations/linkedin.md) | LinkedIn (post-only + browser fallback) |
