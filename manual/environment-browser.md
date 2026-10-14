@@ -92,9 +92,9 @@ ukáže nad stránkou ve stejném pohledu, novou kartu nabídne aplikace jako no
   dívá. Jinak skončí po 8 s (0195 bod 14).
 - **Zavřít** v Přehledu zavře kartu všem po 8 s, i drženou. Pracuje-li v ní agent, nejdřív
   varuje.
-- **Selhané čtení.** Dnes nasazený hub (F47 bod 5): když mu selže čtení držení, nezavře žádnou
-  kartu, ani když nejde přečíst jediný soubor. Rozhodnutý cíl (dodatek 0191 z 2026-10-12, bod
-  32), který přinese Lazurio/LazurioPlatform#347:
+- **Selhané čtení** (dodatek 0191 z 2026-10-12, bod 32; od Platformy v0.1.8-rc.57,
+  Lazurio/LazurioPlatform#347). Hub starší než rc.57 (F47 bod 5) při selhaném čtení držení
+  nezavřel žádnou kartu, ani když nešel přečíst jediný soubor. Dnes:
   - nečitelný soubor držitele zastaví jen karty, které držel při svém posledním přečtení;
   - ostatní karty končí dál a `lazurio doctor` nečitelný soubor hlásí;
   - soubor, který od startu hubu přečíst nešel, nedrží nic, co by hub znal, protože hub poslední
@@ -113,7 +113,9 @@ tohle a nic dalšího nepotřebuje:
 2. **Karta je rámeček pohledu.** Aplikace ukazuje kartu jako rámeček `browser.<…>/t/<id>` a
    naslouchá zprávám pohledu: `lazurio-browser:info` (adresa a titulek),
    `lazurio-browser:new-tab` (nová karta stránky) a `lazurio-browser:closed` (karta skončila).
-3. **Drží, co ukazuje.** Tvary odpovídají `holds.ts` v LazurioPlatform (F47 bod 4, kroky 1–2).
+3. **Drží, co ukazuje.** Tvary definuje smluvní modul LazurioPlatform `src/browser/contract/`
+   (F50; dřív `holds.ts`, F47 bod 4, kroky 1–2) a jeho vektory. Kdo je vlastní a od kterého
+   vydání, říká [tabulka smluv](#tabulka-smluv-prohlížeče).
    - **Čas na boot clock** je `{"boot": "<boot_id>", "at": <sekundy od bootu>}`. Čte se z
      `/proc/sys/kernel/random/boot_id` a z prvního čísla `/proc/uptime`, nikdy ze systémových
      hodin.
@@ -127,6 +129,9 @@ tohle a nic dalšího nepotřebuje:
      - `strip` se musí shodovat s názvem souboru a počítají se jen id cílů DevTools.
      - Soubor se zapisuje atomicky (dočasný soubor a přejmenování), s právy 0600 v adresáři 0700.
      - Lišty jsou `launchpad` a `t3-<vlákno>`; `t3-<vlákno>` je zároveň sezení agenta vlákna.
+     - Soubor nese i `"schema": "lazurio.browser-holder.v1"` a `"contract"`, vydání Platformy
+       svého zapisovatele (Launchpad od v0.1.8-rc.61). Soubor bez `schema` je v1 a hub ho čte
+       dál; soubor jiného majoru hub nepřečte a `lazurio doctor` ho hlásí.
    - **Čas záznamu, který čte jen aplikace sama.** Ke každé kartě si aplikace drží čas, kdy ji
      do lišty přidala. Čas přečte z boot clock v té chvíli a uloží ho spolu s kartou.
      - Launchpad i T3 Code ho ukládají do svého souboru držitele jako další pole
@@ -136,7 +141,8 @@ tohle a nic dalšího nepotřebuje:
      - Karta bez času se počítá jako zaznamenaná dávno.
    - **Seznam živých karet, který zapisuje hub.** `tabs.json` je
      `{"tabs": ["<id karty>"], "takenAt": {"boot": "…", "at": …}}`, kde `takenAt` je chvíle,
-     kdy hub snímek začal.
+     kdy hub snímek začal, a od v0.1.8-rc.61 i `"schema": "lazurio.browser-tabs.v1"`. Seznam
+     jiného majoru se počítá jako žádný seznam, takže se nic nepustí.
    - **Srovnání.** Aplikace se se seznamem srovná:
      - při startu;
      - při každé jeho změně (sleduje ho a čte znovu každých 30 s);
@@ -163,6 +169,55 @@ tohle a nic dalšího nepotřebuje:
    - Webová stránka aplikace nevolá DevTools prohlížeče.
    - Pohled jiného Environmentu aplikace nikdy neotevírá v prohlížeči tohoto Environmentu (0191
      bod 21). Ve svém panelu ho smí vložit s označením toho Environmentu (bod 20).
+
+## Tabulka smluv prohlížeče
+
+Programy, které se v prohlížeči Environmentu potkávají, se domlouvají sedmnácti smlouvami
+C1–C17 z rozhodnutí F50 v LazurioPlatform `docs/decisions.md`. Cílem F50 je, aby jedinou
+definicí každé z nich byl smluvní modul Platformy `src/browser/contract/` a pravdou jeho vektory
+(`vectors/v1/`). Od Platformy v0.1.8-rc.68 modul a vektory pokrývají C1–C10 a C13–C17 a tvary
+vnitřních smluv C11 a C12 drží soubor modulu, který se forkům nedodává; Platforma tím má celou
+fázi 1 (úkol 2026-10-12-701). Forky modul převezmou z artefaktu vydání (níže); do té doby čtou
+a zapisují vlastními kopiemi a sloupec vydání říká, od kdy která strana co umí. Tabulka říká, kdo
+smlouvu vlastní, kdo podle ní zapisuje a čte a od kterého vydání. **Platforma** je
+LazurioPlatform, **T3 Code** fork `Lazurio/t3code`, **MausBot** fork `Lazurio/OpenMausBot`
+(uveden jen tam, kde se smlouvy dnes dotýká). Stav k 2026-10-14.
+
+| # | Smlouva | Vlastník | Kdo zapisuje a kdo čte | Verze a vydání |
+| --- | --- | --- | --- | --- |
+| C1 | **Id vzdálené karty:** id cíle DevTools, 32 hexadecimálních číslic, velkými písmeny | Chrome; pravidlo Platforma | Platforma: hub, pohled, Launchpad, Nová karta, CLI; T3 Code: server i web, zatím vlastní kopií | v1, bez `schema`; v modulu od Platformy v0.1.8-rc.61 |
+| C2 | **Jména lišt a sezení:** `[A-Za-z0-9_-]{1,64}`, lišty `launchpad` a `t3-<vlákno>`, prefixy `codex-`, `claude-` a `bot-` (vyhrazený MausBotu) | Platforma (gramatika a registr prefixů); T3 Code svá jména `t3-…`; agent-browser sezení démona | Platforma: hub, Launchpad, CLI (`threadSession`); T3 Code: sezení vláken, které gramatice odpovídají; MausBot pojmenovává sezení `bot-<id>` a `guest-<uuid>`, která gramatice běžně odpovídají; hub přeskočí jen jméno, které ji poruší (například s tečkou nebo delší než 64 znaků) | v1; v modulu od v0.1.8-rc.61 |
+| C3 | **Adresa pohledu a jeho Environment:** `https://browser.<base>.lazurio.io/t/<id>`, holý origin otevře novou kartu, `<base>` je id Environmentu (`environmentIdOf`) | Platforma | Zapisuje pohled a hub; čte Launchpad (panel, Nová karta), shell a pohled; T3 Code: server i web, každý vlastní kopií | v1; přísný tvar bez portu, přihlašovacích údajů, query, fragmentu a koncového lomítka mají všichni čtenáři Platformy od v0.1.8-rc.61; T3 Code čte týž tvar vlastní kopií, navíc bere i `/T/<ID>` |
+| C4 | **Hodiny bootu:** `{"boot": "<boot_id>", "at": <sekundy>}` z `/proc` | Platforma | Platforma: hub a Launchpad; T3 Code: server, kopií | v1; od v0.1.8-rc.51, T3 Code od 0.0.45-lazurio.8 |
+| C5 | **Soubor držitele:** `$XDG_RUNTIME_DIR/lazurio-browser/holders/<lišta>.json` | Formát Platforma; každý soubor aplikace, které lišta patří | Zapisují Launchpad (`launchpad.json`) a T3 Code (`t3-<vlákno>.json`); čtou hub, `lazurio doctor` a T3 Code (cizí soubory kvůli „drží i…“) | `lazurio.browser-holder.v1`; hub čte od v0.1.8-rc.51, nečitelný soubor drží jen své karty od rc.57, `schema` a `contract` (vydání Platformy zapisovatele) zapisuje Launchpad od rc.61, od rc.68 jedním zápisem modulu (`changeHolderFile`), který soubor lišty, jež nic nedrží, smaže; T3 Code zapisuje od 0.0.45-lazurio.8 zatím bez `schema`, což se čte jako v1 |
+| C6 | **Seznam živých karet a srovnání:** `$XDG_RUNTIME_DIR/lazurio-browser/tabs.json` a pravidlo `keptTabs` | Hub Platformy | Zapisuje hub; čtou Launchpad a T3 Code (server) | `lazurio.browser-tabs.v1`; od v0.1.8-rc.51, `schema` od rc.61; T3 Code čte od 0.0.45-lazurio.8 |
+| C7 | **Soubory sezení agent-browseru a limit nečinnosti:** `<sezení>.target`, `.pid`, `.sock`, `idleTimeout` v `~/.agent-browser/config.json` | Fork `Lazurio/agent-browser` | Píše agent-browser; čtou hub, `lazurio browser done` a T3 Code (vazby vlákna, ukončení démona při archivaci); limit hodiny zapisuje Platforma; MausBot spouští démony s vlastním `AGENT_BROWSER_CONFIG`, takže limit Platformy na ně nedosáhne | Tvar vydání agent-browseru, které připínají Machines; limit od Platformy v0.1.8-rc.51, ukončení přes socket démona (`lazurio browser done`) od rc.58; adresář socketů hledá Platforma od rc.68 jako agent-browser (i `~/.agent-browser` a jmenné prostory) |
+| C8 | **Zprávy pohledu aplikaci:** `lazurio-browser:info`, `lazurio-browser:new-tab`, `lazurio-browser:closed` | Pohled Platformy | Posílá pohled; čtou panel Launchpadu a T3 Code (web) | v1, chybějící `v` znamená v1; `info` a `new-tab` od v0.1.8-rc.38, `closed` od rc.51; `"v": 1`, přísná adresa `view` a jedno pravidlo čtení od rc.68; T3 Code čte `info` a `new-tab` od 0.0.45-lazurio.5, `closed` od lazurio.8, `v` nečte |
+| C9 | **Identita a prvek `<lazurio-environment>`:** dotaz `lazurio-browser:identity-request` a odpověď `lazurio-browser:identity`; atributy `environment`, `lang`, `space` | Shell Platformy (rozhraní v1) | Ptá se pohled; odpovídá shell v aplikaci (Launchpad, T3 Code); prvek ukazuje T3 Code; forky shell načítají za běhu z `/.lazurio/shell.js` Environmentu, MausBot také | Rozhraní shellu v1; od v0.1.8-rc.55; `"v": 1` a člen `majors` od rc.68 (odpověď ho nese, jen když ho aplikace jmenuje, zatím žádná); T3 Code ukazuje prvek od 0.0.45-lazurio.8; `lang` v odpovědi přinese fáze 3 (úkol 2026-10-12-704) |
+| C10 | **Rozhraní Nové karty:** `<lazurio-new-tab strip tools focus-address lang>` a událost `lazurio-new-tab` | Shell Platformy (rozhraní v1) | Prvek a stránku `/new-tab` dodává Platforma; vkládají ho Launchpad a T3 Code (web) | Rozhraní shellu v1; od v0.1.8-rc.51; registr id nástrojů s ikonami od rc.68; T3 Code od 0.0.45-lazurio.8, na id registru své nástroje převede ve fázi 2 (úkol 2026-10-12-703) |
+| C11 | **Loopback API hubu:** `/.lazurio/tabs…` | Hub Platformy | Volá jen Launchpad a `lazurio browser link --url`; žádný fork ho nevolá a forkům se nedodává | Vnitřní smlouva Platformy, obě strany v jednom vydání |
+| C12 | **Trasy pohledu v Launchpadu:** `/.lazurio/browser.json`, `/.lazurio/browser` | Launchpad Platformy | Čtou panel Launchpadu a `lazurio browser`; T3 Code 0.0.45-lazurio.7 se ptal `?session=`, lazurio.8 už ne | Vnitřní; větev `?session=` zůstane, dokud lazurio.8 není všude |
+| C13 | **`lazurio browser … --json`:** odpovědi `window`, `link` a `done` | CLI Platformy | Volají agenti a T3 Code (server: deklarace prohlížeče `link --json`, okno vlákna `window --json`) | `lazurio.browser-cli.v1`, odpověď bez `schema` je v1; `window` a `link` od v0.1.8-rc.31, `done` a `link --url` od rc.58, `schema` a vlastní `kind` i bez prohlížeče od rc.68; T3 Code volá `link` a `window` od 0.0.45-lazurio.5 a člen `schema` přeskočí |
+| C14 | **Časy a meze:** lhůty hubu (8 s po posledním držení, 30 s po posledním divákovi, 10 min), Vrátit, port DevTools 9222, okno 1280×900 | Hub Platformy | Platforma je bere z modulu (`browserTimes`, `browserBounds`); T3 Code je zatím opisuje ručně (Vrátit 7 s, 9222, 1280×900) a převezme je ve fázi 2 | Konstanty modulu a Vrátit 7 s i v Launchpadu od rc.68; v1 nikdy nezkrátí lhůtu, na kterou jiný program spoléhá |
+| C15 | **Rámování:** atributy rámu a `frame-ancestors` pohledu a Nové karty | Pohled Platformy; Launchpad pro Novou kartu | Rámují Launchpad a T3 Code, oba s `referrerpolicy="origin"` | v1; jedna sada atributů rámu (`viewFrameAttributes`) od rc.68, Launchpad do té doby rámoval s `no-referrer` |
+| C16 | **Vstup adresního řádku:** co otevře text napsaný do lišty pohledu a do Nové karty | Platforma | Lišta pohledu, Nová karta, hub (jen http(s) a `about:blank`), `lazurio browser link --url` a `window --url` | v1; adresu pohledu čte Nová karta od v0.1.8-rc.61; jedno pravidlo pro obě lišty podle adresního řádku Chromu a žádná adresa na hostiteli pohledu ani v hubu a CLI od rc.68 |
+| C17 | **Jazyk:** jazyk shellu všude, jazyk prohlížeče jen u pohledu otevřeného samostatně | Shell Platformy | Pohled a Nová karta; T3 Code (jeho overlay mluví jazykem prohlížeče) | Jazyk prohlížeče z modulu (`browserLanguage`) od rc.68; jazyk shellu v rámovaném pohledu (`lang` v odpovědi identity) a prvek karty prohlížeče přinese fáze 3 (úkol 2026-10-12-704) |
+
+**Verze.** Dokument nese `schema`, zpráva `v`; co je nemá, je v1 navždy. Uvnitř v1 smlouva jen
+roste: vydání smí přidat členy, hodnoty, zprávy a případy a přijmout, co dřív odmítlo, nikdy
+nic neodebere, nepřejmenuje ani nezúží a nezkrátí lhůtu, na kterou jiný program spoléhá. Major
+změnu rozhoduje dodatek F50 a ohlásí se nejdřív v runboocích forků. Vydání aplikace, které
+potřebuje novou část Platformy, vyjde až poté, co vydání Platformy, které ji přináší, běží na
+všech Environmentech s prohlížečem (F50 bod 7).
+
+**Smluvní modul pro forky.** Artefakt vydání Platformy `lazurio-shell.tar.gz` nese modul pod
+`browser-contract/`: obě části jako ES moduly s deklaracemi, vektory a vlastní licenci MIT.
+`artifact.json` ho uvádí v `browserContract` (major 1) a každý soubor s jeho SHA-256 v `files`;
+vše kryje jedna atestace vydání. Nese ho každé vydání Platformy od v0.1.8-rc.68
+(Lazurio/LazurioPlatform#404 a #407). Fork ověří jeden přesný tag podle dodatku F50 bodu 5
+z 2026-10-14: atestace `release.yml` s neměnnými id repozitáře a vlastníka, jen uvedené obyčejné
+soubory, každý digest, `LICENSE` a `NOTICE` vedle souborů a `provenance.json`. T3 Code modul
+převezme v úkolu 2026-10-12-703, MausBot až v úkolu 2026-10-05-510.
 
 ## Aplikace po jedné
 
@@ -324,15 +379,22 @@ prohlížeč takto:
 
 ## Co je otevřené
 
-- Refaktor podle dodatku 0191 z 2026-10-12 (body 28–35), který plánují DEV-6656 a DEV-6646:
-  - jeden smluvní modul Platformy s testovacími vektory, který forky převezmou ověřený místo
-    ručních kopií;
-  - prvek shellu pro kartu prohlížeče, společný Launchpadu, T3 Code a MausBotu;
-  - `lazurio browser done` a stránky pro člověka bez držení;
-  - nečitelný soubor držitele zastaví jen svou aplikaci (soubor, který od startu hubu přečíst
-    nešel, nedrží nic, co by hub znal);
-  - jeden jazyk povrchů;
-  - MausBot jako poslední.
+- Refaktor podle dodatku 0191 z 2026-10-12 (body 28–35), který plánují DEV-6656 a DEV-6646.
+  Hotové je:
+  - smluvní modul Platformy s testovacími vektory, celá fáze 1 F50: C1–C10 a C13–C17 i zápis
+    souboru držitele jsou v modulu od Platformy v0.1.8-rc.68 a artefakt vydání ho nese pro
+    forky (Lazurio/LazurioPlatform#404 a #407);
+  - `lazurio browser done` a stránky pro člověka bez držení (od rc.58);
+  - nečitelný soubor držitele zastaví jen svou aplikaci (od rc.57; soubor, který od startu hubu
+    přečíst nešel, nedrží nic, co by hub znal).
+
+  Zbývá:
+  - aby modul z artefaktu převzalo T3 Code místo ručních kopií (úkol 2026-10-12-703);
+  - prvek shellu pro kartu prohlížeče, společný Launchpadu, T3 Code a MausBotu, a jeden jazyk
+    povrchů přes `lang` v odpovědi identity (úkol 2026-10-12-704);
+  - společné scénáře lišt a dvě zbývající varování `lazurio doctor` (úkol 2026-10-12-706);
+  - zdokumentovaný příkaz forku agent-browseru pro ukončení sezení (úkol 2026-10-12-707);
+  - MausBot jako poslední (úkol 2026-10-05-510).
 - Viditelné označení cizího Environmentu a karty z jiného Environmentu, například červeným
   rámečkem (bod 35): zatím jen směr pro návrhy rozhraní.
 - Uspávání karet a jeho mechanismus (DEV-6656 spike 916).
