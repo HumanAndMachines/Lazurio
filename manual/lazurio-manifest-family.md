@@ -205,6 +205,53 @@ organization check` fails, the Organization compiler stops and the migrator
 does not write it back. Every other unknown top-level field still makes the
 root a `conflict`.
 
+### Microsoft 365 company app (`settings.integrations.microsoft365`)
+
+Decision 0162 (addendum 2026-10-14) gives an Organization one single-tenant
+Entra app in its own Microsoft tenant, registered as a public client with
+tenant-wide admin consent. The setting carries only the identifiers that are
+not secrets; the runbook is
+[integrations/microsoft-365.md](integrations/microsoft-365.md).
+
+```json
+"settings": {
+  "integrations": {
+    "microsoft365": {
+      "tenant_id": "<lowercase GUID>",
+      "client_id": "<lowercase GUID>",
+      "apps": ["outlook", "one_drive", "share_point"],
+      "callbacks": [
+        "https://launchpad.<machine>.<github-org-login>.lazurio.io/api/integrations/oauth/callback"
+      ]
+    }
+  }
+}
+```
+
+- `microsoft365` is a closed object; all four fields are required once it is
+  present. Any other field is refused, so a secret, a password or a certificate
+  can never be declared here.
+- `tenant_id` and `client_id` are lowercase GUIDs, as the Azure CLI prints them.
+- `apps` is a non-empty set of Integrations catalog ids: `outlook` (mail and
+  calendar, one card), `one_drive`, `share_point`. Teams joins in phase 2.
+  Delegated scopes per app live in LazurioPlatform, not in the setting.
+- `callbacks` is the projection of the Launchpad callbacks registered as
+  redirect URIs of the Entra app: unique HTTPS URLs with a lowercase host, no
+  port, query or fragment, path exactly `/api/integrations/oauth/callback`, at
+  most 256 characters. It may be empty. Executor's
+  `http://localhost/api/oauth/callback`, the Environment browser fallback, is
+  always registered and never listed.
+- Core reports each of the four fields as its own key in `effective[]`
+  (`integrations.microsoft365.tenant_id` and so on); consumers apply them
+  together. A well-typed value of the wrong form (pattern, unknown app, empty
+  `apps`, duplicate) is `settings_value_invalid`.
+- **Readers first, again.** A reader that knows `settings` but not
+  `microsoft365` judges the whole section `invalid` and applies none of it, so
+  its Composio switch would also stop at the last applied version. No
+  Organization adds `microsoft365` until Lazurio Core, the Dashboard and the
+  LazurioPlatform release that apply it are out, in the order of
+  [Readers first](#readers-first).
+
 ### Check in CI
 
 ```text

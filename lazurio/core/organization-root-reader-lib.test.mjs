@@ -110,7 +110,7 @@ test("one Core call reads an Organization's settings from its checked-out root",
     status: "valid",
     source: "lazurio.organization.json",
     values: { integrations: { composio: { allowed: false } } },
-    effective: [{ key: "integrations.composio.allowed", governed: true, value: false }],
+    effective: [{ key: "integrations.composio.allowed", governed: true, value: false }, ...ungovernedMicrosoft365()],
     issues: [],
   });
   expect(readOrganizationRoot({ organizationRoot: root })).toMatchObject({
@@ -218,4 +218,14 @@ function writeTransitionRoot(root, canonical) {
   writeJson(root, ORGANIZATION_DOCUMENT_PATHS.canonical, canonical);
   writeJson(root, ORGANIZATION_DOCUMENT_PATHS.legacy_projection, projectLegacyOrganizationManifest(canonical, modulesManifest()));
   writeJson(root, ORGANIZATION_DOCUMENT_PATHS.modules, modulesManifest());
+}
+
+// The Microsoft 365 company app (decision 0162, addendum 2026-10-14) is not
+// declared by these fixtures, so its keys stay ungoverned.
+function ungovernedMicrosoft365() {
+  return ["tenant_id", "client_id", "apps", "callbacks"].map((field) => ({
+    key: `integrations.microsoft365.${field}`,
+    governed: false,
+    value: null,
+  }));
 }

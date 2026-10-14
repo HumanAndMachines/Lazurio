@@ -44,7 +44,7 @@ test("a root with valid settings passes and prints the effective values without 
       status: "valid",
       source: "lazurio.organization.json",
       values: { integrations: { composio: { allowed: false } } },
-      effective: [{ key: "integrations.composio.allowed", governed: true, value: false }],
+      effective: [{ key: "integrations.composio.allowed", governed: true, value: false }, ...ungovernedMicrosoft365()],
       issues: [],
     },
     failures: [],
@@ -66,7 +66,7 @@ test("a root without settings passes: the Organization governs nothing", () => {
     settings: {
       status: "absent",
       values: {},
-      effective: [{ key: "integrations.composio.allowed", governed: false, value: null }],
+      effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft365()],
     },
   });
   expect(run(["organization", "check", root]).stdout).toContain("integrations.composio.allowed: neřízeno");
@@ -253,4 +253,14 @@ function run(args) {
     stdout: String(result.stdout ?? ""),
     stderr: String(result.stderr ?? ""),
   };
+}
+
+// The Microsoft 365 company app (decision 0162, addendum 2026-10-14) is not
+// declared by these fixtures, so its keys stay ungoverned.
+function ungovernedMicrosoft365() {
+  return ["tenant_id", "client_id", "apps", "callbacks"].map((field) => ({
+    key: `integrations.microsoft365.${field}`,
+    governed: false,
+    value: null,
+  }));
 }

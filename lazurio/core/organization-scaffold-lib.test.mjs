@@ -102,7 +102,7 @@ describe("Organization scaffold", () => {
     expect(company).not.toHaveProperty("settings");
     expect(resolution.settings).toMatchObject({
       status: "valid",
-      effective: [{ key: "integrations.composio.allowed", governed: true, value: false }],
+      effective: [{ key: "integrations.composio.allowed", governed: true, value: false }, ...ungovernedMicrosoft365()],
     });
   });
 
@@ -276,4 +276,14 @@ function hermeticGitEnvironment(root) {
     if (typeof process.env[key] === "string") env[key] = process.env[key];
   }
   return env;
+}
+
+// The Microsoft 365 company app (decision 0162, addendum 2026-10-14) is not
+// declared by these fixtures, so its keys stay ungoverned.
+function ungovernedMicrosoft365() {
+  return ["tenant_id", "client_id", "apps", "callbacks"].map((field) => ({
+    key: `integrations.microsoft365.${field}`,
+    governed: false,
+    value: null,
+  }));
 }

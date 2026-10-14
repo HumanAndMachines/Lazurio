@@ -136,6 +136,40 @@
                   "description": "Whether Integrations may be connected through Composio on the Organization's work Environments (decision 0162, addendum 2026-10-09)."
                 }
               }
+            },
+            "microsoft365": {
+              "description": "The Organization's Microsoft 365 company app (decision 0162, addendum 2026-10-14): one single-tenant Entra app in the Organization's own tenant, a public client with admin consent. Only identifiers that are not secrets; the closed object refuses any other key, so no secret can be declared here.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["tenant_id", "client_id", "apps", "callbacks"],
+              "properties": {
+                "tenant_id": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                  "description": "Directory (tenant) id of the Organization's Microsoft tenant, lowercase GUID."
+                },
+                "client_id": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                  "description": "Application (client) id of the Organization's Entra app, lowercase GUID."
+                },
+                "apps": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": { "enum": ["outlook", "one_drive", "share_point"] },
+                  "description": "Integrations the work Environments offer to connect directly through the company app (Integrations catalog ids). Outlook means mail and calendar."
+                },
+                "callbacks": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "pattern": "^(?=.{1,256}$)https://(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}/api/integrations/oauth/callback$"
+                  },
+                  "description": "Launchpad callbacks registered as redirect URIs of the Entra app. An Environment whose callback is listed signs in from the person's own browser; any other one uses Executor's redirect URI http://localhost/api/oauth/callback, which is always registered and never listed, in the Environment browser."
+                }
+              }
             }
           }
         }
