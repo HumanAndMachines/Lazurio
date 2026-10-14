@@ -236,9 +236,12 @@ not secrets; the runbook is
   calendar, one card), `one_drive`, `share_point`. Teams joins in phase 2.
   Delegated scopes per app live in LazurioPlatform, not in the setting.
 - `callbacks` is the projection of the Launchpad callbacks registered as
-  redirect URIs of the Entra app: unique HTTPS URLs with a lowercase host, no
-  port, query or fragment, path exactly `/api/integrations/oauth/callback`, at
-  most 256 characters. It may be empty. Executor's
+  redirect URIs of the Entra app: unique HTTPS URLs on the hosted work
+  Launchpad host `launchpad.<machine>.<github-org-login>.lazurio.io` (lowercase,
+  no port, query or fragment), path exactly `/api/integrations/oauth/callback`;
+  any other host is refused, because it would receive the authorization
+  response. At most 255 entries: Entra allows 256 redirect URIs per app and the
+  localhost fallback takes one. It may be empty. Executor's
   `http://localhost/api/oauth/callback`, the Environment browser fallback, is
   always registered and never listed.
 - Core reports each of the four fields as its own key in `effective[]`

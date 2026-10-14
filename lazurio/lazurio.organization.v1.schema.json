@@ -162,12 +162,13 @@
                 },
                 "callbacks": {
                   "type": "array",
+                  "maxItems": 255,
                   "uniqueItems": true,
                   "items": {
                     "type": "string",
-                    "pattern": "^(?=.{1,256}$)https://(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}/api/integrations/oauth/callback$"
+                    "pattern": "^https://launchpad\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?\\.lazurio\\.io/api/integrations/oauth/callback$"
                   },
-                  "description": "Launchpad callbacks registered as redirect URIs of the Entra app. An Environment whose callback is listed signs in from the person's own browser; any other one uses Executor's redirect URI http://localhost/api/oauth/callback, which is always registered and never listed, in the Environment browser."
+                  "description": "Hosted Launchpad callbacks (https://launchpad.<machine>.<github-org-login>.lazurio.io/api/integrations/oauth/callback) registered as redirect URIs of the Entra app, at most 255 because Entra allows 256 and the localhost callback takes one. An Environment whose callback is listed signs in from the person's own browser; any other one uses Executor's redirect URI http://localhost/api/oauth/callback, which is always registered and never listed, in the Environment browser."
                 }
               }
             }

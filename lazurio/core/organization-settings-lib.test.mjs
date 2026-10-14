@@ -23,6 +23,8 @@ const ungovernedMicrosoft = microsoftKeys.map((key) => ({ key, governed: false, 
 const tenantId = "11111111-2222-4333-8444-aaaaaaaaaaaa";
 const clientId = "11111111-2222-4333-8444-bbbbbbbbbbbb";
 const callback = "https://launchpad.machine-1.example-org.lazurio.io/api/integrations/oauth/callback";
+const manyCallbacks = (count) =>
+  Array.from({ length: count }, (_, index) => `https://launchpad.machine-${index}.example-org.lazurio.io/api/integrations/oauth/callback`);
 const microsoft365 = Object.freeze({
   tenant_id: tenantId,
   client_id: clientId,
@@ -209,6 +211,8 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
     // through Executor's always registered localhost callback in the Environment browser.
     const minimal = { integrations: { microsoft365: { ...microsoft365, apps: ["share_point"], callbacks: [] } } };
     expect(settingsOf(manifest(minimal))).toMatchObject({ status: "valid", values: minimal });
+    const full = { integrations: { microsoft365: { ...microsoft365, callbacks: manyCallbacks(255) } } };
+    expect(settingsOf(manifest(full))).toMatchObject({ status: "valid", values: full });
   });
 
   test("Microsoft 365 values are checked exactly and reported with JSON Pointers", () => {
@@ -227,6 +231,8 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
       [{ ...microsoft365, apps: [null] }, [issue("settings_type_invalid", `${base}/apps/0`)]],
       [{ ...microsoft365, callbacks: [callback, callback] }, [issue("settings_value_invalid", `${base}/callbacks/1`)]],
       [{ ...microsoft365, callbacks: callback }, [issue("settings_type_invalid", `${base}/callbacks`)]],
+      // Entra allows 256 redirect URIs per app and the localhost callback takes one.
+      [{ ...microsoft365, callbacks: manyCallbacks(256) }, [issue("settings_value_invalid", `${base}/callbacks`)]],
       ...[
         "http://launchpad.machine-1.example-org.lazurio.io/api/integrations/oauth/callback",
         "http://localhost",
@@ -236,6 +242,12 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
         "https://*.example-org.lazurio.io/api/integrations/oauth/callback",
         "https://launchpad.machine-1.example-org.lazurio.io/",
         `https://${"a".repeat(60)}.${"b".repeat(60)}.${"c".repeat(60)}.${"d".repeat(40)}.example.com/api/integrations/oauth/callback`,
+        // Only a hosted work Launchpad may receive the authorization response.
+        "https://attacker.example/api/integrations/oauth/callback",
+        "https://launchpad.machine-1.example-org.lazurio.io.attacker.example/api/integrations/oauth/callback",
+        "https://launchpad.example-org.lazurio.io/api/integrations/oauth/callback",
+        "https://app.machine-1.example-org.lazurio.io/api/integrations/oauth/callback",
+        "https://launchpad.a.b.example-org.lazurio.io/api/integrations/oauth/callback",
       ].map((value) => [{ ...microsoft365, callbacks: [value] }, [issue("settings_value_invalid", `${base}/callbacks/0`)]]),
     ];
     for (const [value, issues] of cases) {
@@ -294,6 +306,8 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
       { integrations: { microsoft365: { ...microsoft365, callbacks: ["http://localhost"] } } },
       { integrations: { microsoft365: { ...microsoft365, callbacks: [`${callback}?x=1`] } } },
       { integrations: { microsoft365: { ...microsoft365, callbacks: [`https://${"a".repeat(240)}.example.com/api/integrations/oauth/callback`] } } },
+      { integrations: { microsoft365: { ...microsoft365, callbacks: ["https://attacker.example/api/integrations/oauth/callback"] } } },
+      { integrations: { microsoft365: { ...microsoft365, callbacks: manyCallbacks(256) } } },
       { integrations: { microsoft365: { ...microsoft365, client_secret: "value" } } },
     ];
     for (const settings of documents) {

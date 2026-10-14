@@ -210,7 +210,11 @@ az ad app update --id "$APP" --public-client-redirect-uris 'http://localhost/api
 
 a stejnou změnu `callbacks` navrhne PR. Do té doby se lidé z nového
 Environmentu přihlašují v prohlížeči Environmentu. Aplikace unese nejvýš 256
-návratových adres po 256 znacích; zástupné znaky (wildcard) se nepoužívají.
+návratových adres, jednu bere `localhost`, takže `callbacks` má nejvýš 255
+položek; zástupné znaky (wildcard) se nepoužívají. Do `callbacks` patří jen
+adresy hostovaných Launchpadů `launchpad.<machine>.<github-org-login>.lazurio.io`;
+jinou adresu nastavení odmítne, protože by na ni Microsoft poslal
+autorizační odpověď.
 
 ## Executor v Environmentu
 

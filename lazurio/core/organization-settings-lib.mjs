@@ -29,11 +29,15 @@ export const MICROSOFT365_APPS = Object.freeze(["outlook", "one_drive", "share_p
 
 // Lowercase GUID, the form the Azure CLI prints for tenant and client ids.
 const GUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-// A hosted Launchpad's OAuth callback, exactly as registered at Microsoft:
-// HTTPS, a lowercase host name without port, no query or fragment, at most
-// 256 characters (Entra's limit per redirect URI).
+// A work Environment's hosted Launchpad callback, exactly as registered at
+// Microsoft: HTTPS on `launchpad.<machine>.<github-org-login>.lazurio.io`
+// (the Organization URL contract), no port, query or fragment. Any other host
+// would receive the authorization response, so it is refused.
 const LAUNCHPAD_CALLBACK_PATTERN =
-  /^(?=.{1,256}$)https:\/\/(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}\/api\/integrations\/oauth\/callback$/;
+  /^https:\/\/launchpad\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?\.lazurio\.io\/api\/integrations\/oauth\/callback$/;
+// Entra registers at most 256 redirect URIs per app; Executor's localhost
+// callback always takes one of them.
+const MICROSOFT365_MAX_CALLBACKS = 255;
 
 const CANONICAL_SOURCE = "lazurio.organization.json";
 
@@ -55,7 +59,7 @@ const SETTINGS_CONTRACT = objectNode({
         tenant_id: stringLeaf(GUID_PATTERN),
         client_id: stringLeaf(GUID_PATTERN),
         apps: arrayLeaf(enumItem(MICROSOFT365_APPS), { minItems: 1 }),
-        callbacks: arrayLeaf(stringLeaf(LAUNCHPAD_CALLBACK_PATTERN)),
+        callbacks: arrayLeaf(stringLeaf(LAUNCHPAD_CALLBACK_PATTERN), { maxItems: MICROSOFT365_MAX_CALLBACKS }),
       },
       ["tenant_id", "client_id", "apps", "callbacks"],
     ),
@@ -153,7 +157,7 @@ function validateNode(value, node, path, issues) {
       issues.push({ code: "settings_type_invalid", path });
       return;
     }
-    if (value.length < node.minItems) issues.push({ code: "settings_value_invalid", path });
+    if (value.length < node.minItems || value.length > node.maxItems) issues.push({ code: "settings_value_invalid", path });
     const seen = new Set();
     value.forEach((item, index) => {
       const itemPath = pointer(path, String(index));
@@ -201,8 +205,8 @@ function enumItem(values) {
 
 // An array is one setting: its items are validated, never reported as keys.
 // Items are strings and must be unique.
-function arrayLeaf(items, { minItems = 0 } = {}) {
-  return Object.freeze({ kind: "array", items, minItems });
+function arrayLeaf(items, { minItems = 0, maxItems = Infinity } = {}) {
+  return Object.freeze({ kind: "array", items, minItems, maxItems });
 }
 
 function leafKeys(node, prefix) {
