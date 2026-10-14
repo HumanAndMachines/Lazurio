@@ -66,8 +66,11 @@ to neomezuje Global Administratory.
   lokality, vyžádejte si odchozí adresy Environmentů vaší Organizace.
 - Zásada vyžadující vyhovující nebo spravované zařízení zablokuje přihlášení
   z prohlížeče Environmentu (`AADSTS53000`).
-- Frekvence přihlášení připojení po uplynutí ukončí (`AADSTS70043`), stejně
-  jako změna hesla. Člověk se pak připojí znovu.
+- Frekvence přihlášení připojení po uplynutí ukončí (`AADSTS70043`). Člověk
+  se pak připojí znovu.
+- Změna hesla může ukončit připojení vzniklé přihlášením heslem, připojení
+  z přihlášení bez hesla ale platí dál. K ukončení přístupu proto použijte
+  zablokování účtu nebo odvolání relací (níže).
 
 ## Jak přístup ukončit
 

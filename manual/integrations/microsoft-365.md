@@ -34,9 +34,11 @@ Stránku pro IT oddělení firmy drží [microsoft-365-for-it.md](microsoft-365-
 - **Přijaté kompromisy veřejného klienta** (dodatek 0162 bod 3): bez klíče
   může útočník spustit vlastní přihlášení s id aplikace a návratem na
   `localhost` a vylákat z člověka adresu s kódem; protože souhlas za firmu už
-  platí, Microsoft se na nic neptá. Změna hesla zneplatní obnovovací tokeny
-  a frekvence přihlášení z podmíněného přístupu se u veřejného klienta
-  neodkládá. Firmám proto doporučujeme „Assignment required“ a skupinu lidí,
+  platí, Microsoft se na nic neptá. Frekvence přihlášení z podmíněného
+  přístupu se u veřejného klienta neodkládá. Změna hesla může zneplatnit
+  obnovovací tokeny získané přihlášením heslem, ty z přihlášení bez hesla
+  ale platí dál; spolehlivé ukončení je zablokování účtu nebo odvolání
+  relací. Firmám proto doporučujeme „Assignment required“ a skupinu lidí,
   kteří se smějí připojit (krok 3).
 - **Nastavení Organizace nese jen identifikátory** (rozhodnutí 0194): id
   tenantu, id aplikace, zapnuté aplikace a zaregistrované adresy Launchpadů
@@ -215,7 +217,7 @@ odmítne, protože by na ni Microsoft poslal autorizační odpověď.
   na spravovaném zařízení projde, obnova z Environmentu ale může narazit.
 - Frekvence přihlášení (sign-in frequency) připojení po uplynutí ukončí
   (`AADSTS70043`); veřejný klient nedostává odklad. Člověk se pak připojí
-  znovu. Totéž po každé změně hesla.
+  znovu. Změna hesla připojení ukončí jen u tokenu z přihlášení heslem.
 - Executor neumí Continuous Access Evaluation, takže zablokování účtu se
   projeví až po vypršení přístupového tokenu.
 
