@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { validateAgainstSchema } from "../runtime/json-schema-mini.mjs";
 import organizationManifestSchema from "../lazurio.organization.v1.schema.json";
 import {
+  MICROSOFT365_APPS,
   newOrganizationSettings,
   ORGANIZATION_SETTINGS_CONTRACT_VERSION,
   ORGANIZATION_SETTINGS_ISSUE_CODES,
@@ -12,6 +13,24 @@ import {
 } from "./organization-settings-lib.mjs";
 
 const canonicalSource = "lazurio.organization.json";
+const microsoftKeys = [
+  "integrations.microsoft365.tenant_id",
+  "integrations.microsoft365.client_id",
+  "integrations.microsoft365.apps",
+  "integrations.microsoft365.callbacks",
+];
+const ungovernedMicrosoft = microsoftKeys.map((key) => ({ key, governed: false, value: null }));
+const tenantId = "11111111-2222-4333-8444-aaaaaaaaaaaa";
+const clientId = "11111111-2222-4333-8444-bbbbbbbbbbbb";
+const callback = "https://launchpad.machine-1.example-org.lazurio.io/api/integrations/oauth/callback";
+const manyCallbacks = (count) =>
+  Array.from({ length: count }, (_, index) => `https://launchpad.machine-${index}.example-org.lazurio.io/api/integrations/oauth/callback`);
+const microsoft365 = Object.freeze({
+  tenant_id: tenantId,
+  client_id: clientId,
+  apps: ["outlook", "one_drive", "share_point"],
+  callbacks: [callback],
+});
 
 describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
   test("names one closed vocabulary", () => {
@@ -21,8 +40,10 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
       "settings_field_missing",
       "settings_field_unknown",
       "settings_type_invalid",
+      "settings_value_invalid",
     ]);
-    expect(ORGANIZATION_SETTINGS_KEYS).toEqual(["integrations.composio.allowed"]);
+    expect(ORGANIZATION_SETTINGS_KEYS).toEqual(["integrations.composio.allowed", ...microsoftKeys]);
+    expect(MICROSOFT365_APPS).toEqual(["outlook", "one_drive", "share_point"]);
     expect(Object.isFrozen(ORGANIZATION_SETTINGS_KEYS)).toBe(true);
   });
 
@@ -32,7 +53,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
       status: "absent",
       source: canonicalSource,
       values: {},
-      effective: [{ key: "integrations.composio.allowed", governed: false, value: null }],
+      effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft],
       issues: [],
     });
   });
@@ -44,7 +65,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
         status: "valid",
         source: canonicalSource,
         values: settings,
-        effective: [{ key: "integrations.composio.allowed", governed: false, value: null }],
+        effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft],
         issues: [],
       });
     }
@@ -55,7 +76,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
         status: "valid",
         source: canonicalSource,
         values: settings,
-        effective: [{ key: "integrations.composio.allowed", governed: true, value: allowed }],
+        effective: [{ key: "integrations.composio.allowed", governed: true, value: allowed }, ...ungovernedMicrosoft],
         issues: [],
       });
     }
@@ -130,7 +151,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
       status: "absent",
       source: null,
       values: {},
-      effective: [{ key: "integrations.composio.allowed", governed: false, value: null }],
+      effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft],
       issues: [],
     });
     for (const input of [
@@ -166,8 +187,92 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
     expect(newOrganizationSettings()).toEqual({ integrations: { composio: { allowed: false } } });
     expect(settingsOf(manifest(newOrganizationSettings()))).toMatchObject({
       status: "valid",
-      effective: [{ key: "integrations.composio.allowed", governed: true, value: false }],
+      effective: [{ key: "integrations.composio.allowed", governed: true, value: false }, ...ungovernedMicrosoft],
     });
+  });
+
+  test("the Microsoft 365 company app is governed as a whole by its identifiers (decision 0162, addendum 2026-10-14)", () => {
+    const settings = { integrations: { composio: { allowed: false }, microsoft365 } };
+    expect(settingsOf(manifest(settings))).toEqual({
+      contract_version: ORGANIZATION_SETTINGS_CONTRACT_VERSION,
+      status: "valid",
+      source: canonicalSource,
+      values: settings,
+      effective: [
+        { key: "integrations.composio.allowed", governed: true, value: false },
+        { key: "integrations.microsoft365.tenant_id", governed: true, value: tenantId },
+        { key: "integrations.microsoft365.client_id", governed: true, value: clientId },
+        { key: "integrations.microsoft365.apps", governed: true, value: ["outlook", "one_drive", "share_point"] },
+        { key: "integrations.microsoft365.callbacks", governed: true, value: [callback] },
+      ],
+      issues: [],
+    });
+    // One app is enough, and no callback means every Environment signs in
+    // through Executor's always registered localhost callback in the Environment browser.
+    const minimal = { integrations: { microsoft365: { ...microsoft365, apps: ["share_point"], callbacks: [] } } };
+    expect(settingsOf(manifest(minimal))).toMatchObject({ status: "valid", values: minimal });
+    const full = { integrations: { microsoft365: { ...microsoft365, callbacks: manyCallbacks(255) } } };
+    expect(settingsOf(manifest(full))).toMatchObject({ status: "valid", values: full });
+  });
+
+  test("Microsoft 365 values are checked exactly and reported with JSON Pointers", () => {
+    const base = "/settings/integrations/microsoft365";
+    const cases = [
+      [{ ...microsoft365, tenant_id: undefined }, [issue("settings_field_missing", `${base}/tenant_id`)]],
+      [withoutKeys("callbacks"), [issue("settings_field_missing", `${base}/callbacks`)]],
+      [{ ...microsoft365, tenant_id: "example.onmicrosoft.com" }, [issue("settings_value_invalid", `${base}/tenant_id`)]],
+      [{ ...microsoft365, client_id: clientId.toUpperCase() }, [issue("settings_value_invalid", `${base}/client_id`)]],
+      [{ ...microsoft365, client_id: 42 }, [issue("settings_type_invalid", `${base}/client_id`)]],
+      [{ ...microsoft365, apps: [] }, [issue("settings_value_invalid", `${base}/apps`)]],
+      [{ ...microsoft365, apps: "outlook" }, [issue("settings_type_invalid", `${base}/apps`)]],
+      [{ ...microsoft365, apps: ["outlook", "gmail"] }, [issue("settings_value_invalid", `${base}/apps/1`)]],
+      [{ ...microsoft365, apps: ["outlook", "microsoft_teams"] }, [issue("settings_value_invalid", `${base}/apps/1`)]],
+      [{ ...microsoft365, apps: ["outlook", "outlook"] }, [issue("settings_value_invalid", `${base}/apps/1`)]],
+      [{ ...microsoft365, apps: [null] }, [issue("settings_type_invalid", `${base}/apps/0`)]],
+      [{ ...microsoft365, callbacks: [callback, callback] }, [issue("settings_value_invalid", `${base}/callbacks/1`)]],
+      [{ ...microsoft365, callbacks: callback }, [issue("settings_type_invalid", `${base}/callbacks`)]],
+      // Entra allows 256 redirect URIs per app and the localhost callback takes one.
+      [{ ...microsoft365, callbacks: manyCallbacks(256) }, [issue("settings_value_invalid", `${base}/callbacks`)]],
+      ...[
+        "http://launchpad.machine-1.example-org.lazurio.io/api/integrations/oauth/callback",
+        "http://localhost",
+        "https://launchpad.machine-1.example-org.lazurio.io/api/integrations/oauth/callback?x=1",
+        "https://launchpad.machine-1.example-org.lazurio.io:8443/api/integrations/oauth/callback",
+        "https://Launchpad.machine-1.example-org.lazurio.io/api/integrations/oauth/callback",
+        "https://*.example-org.lazurio.io/api/integrations/oauth/callback",
+        "https://launchpad.machine-1.example-org.lazurio.io/",
+        `https://${"a".repeat(60)}.${"b".repeat(60)}.${"c".repeat(60)}.${"d".repeat(40)}.example.com/api/integrations/oauth/callback`,
+        // Only a hosted work Launchpad may receive the authorization response.
+        "https://attacker.example/api/integrations/oauth/callback",
+        "https://launchpad.machine-1.example-org.lazurio.io.attacker.example/api/integrations/oauth/callback",
+        "https://launchpad.example-org.lazurio.io/api/integrations/oauth/callback",
+        "https://app.machine-1.example-org.lazurio.io/api/integrations/oauth/callback",
+        "https://launchpad.a.b.example-org.lazurio.io/api/integrations/oauth/callback",
+      ].map((value) => [{ ...microsoft365, callbacks: [value] }, [issue("settings_value_invalid", `${base}/callbacks/0`)]]),
+    ];
+    for (const [value, issues] of cases) {
+      const settings = { integrations: { microsoft365: JSON.parse(JSON.stringify(value)) } };
+      expect(settingsOf(manifest(settings)), JSON.stringify(value)).toMatchObject({
+        status: "invalid",
+        values: null,
+        effective: null,
+        issues,
+      });
+    }
+  });
+
+  test("the Microsoft 365 setting refuses every secret-like field: the company app is a public client", () => {
+    const base = "/settings/integrations/microsoft365";
+    for (const key of ["client_secret", "secret", "password", "certificate", "token", "refresh_token", "secret_ref"]) {
+      const settings = { integrations: { microsoft365: { ...microsoft365, [key]: "value" } } };
+      expect(settingsOf(manifest(settings)), key).toMatchObject({
+        status: "invalid",
+        values: null,
+        issues: [issue("settings_field_unknown", `${base}/${key}`)],
+      });
+      expect(validateAgainstSchema(manifest(settings), organizationManifestSchema, "organization").length, key)
+        .toBeGreaterThan(0);
+    }
   });
 
   test("the manifest schema and Core pin one settings contract", () => {
@@ -189,6 +294,21 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
       { integrations: { composio: {} } },
       { integrations: { composio: { allowed: "false" } } },
       { integrations: { composio: { allowed: false, mode: "organization" } } },
+      { integrations: { microsoft365 } },
+      { integrations: { composio: { allowed: true }, microsoft365: { ...microsoft365, apps: ["outlook"], callbacks: [] } } },
+      { integrations: { microsoft365: {} } },
+      { integrations: { microsoft365: withoutKeys("apps") } },
+      { integrations: { microsoft365: { ...microsoft365, tenant_id: tenantId.toUpperCase() } } },
+      { integrations: { microsoft365: { ...microsoft365, apps: [] } } },
+      { integrations: { microsoft365: { ...microsoft365, apps: ["outlook", "outlook"] } } },
+      { integrations: { microsoft365: { ...microsoft365, apps: ["microsoft_teams"] } } },
+      { integrations: { microsoft365: { ...microsoft365, callbacks: [callback, callback] } } },
+      { integrations: { microsoft365: { ...microsoft365, callbacks: ["http://localhost"] } } },
+      { integrations: { microsoft365: { ...microsoft365, callbacks: [`${callback}?x=1`] } } },
+      { integrations: { microsoft365: { ...microsoft365, callbacks: [`https://${"a".repeat(240)}.example.com/api/integrations/oauth/callback`] } } },
+      { integrations: { microsoft365: { ...microsoft365, callbacks: ["https://attacker.example/api/integrations/oauth/callback"] } } },
+      { integrations: { microsoft365: { ...microsoft365, callbacks: manyCallbacks(256) } } },
+      { integrations: { microsoft365: { ...microsoft365, client_secret: "value" } } },
     ];
     for (const settings of documents) {
       const coreValid = settingsOf(manifest(settings)).status === "valid";
@@ -200,6 +320,10 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
 
 function settingsOf(canonicalManifest) {
   return resolveOrganizationSettings({ authority: "canonical", canonicalManifest });
+}
+
+function withoutKeys(...keys) {
+  return Object.fromEntries(Object.entries(microsoft365).filter(([key]) => !keys.includes(key)));
 }
 
 function issue(code, path) {

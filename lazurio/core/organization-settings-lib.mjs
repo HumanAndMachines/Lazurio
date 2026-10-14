@@ -18,7 +18,27 @@ export const ORGANIZATION_SETTINGS_ISSUE_CODES = Object.freeze([
   "settings_field_missing",
   "settings_field_unknown",
   "settings_type_invalid",
+  "settings_value_invalid",
 ]);
+
+/**
+ * Microsoft 365 company app (decision 0162, addendum 2026-10-14): the parts
+ * a connected account gets as one Integration (`outlook` is mail and
+ * calendar). Teams joins in phase 2.
+ */
+export const MICROSOFT365_APPS = Object.freeze(["outlook", "one_drive", "share_point"]);
+
+// Lowercase GUID, the form the Azure CLI prints for tenant and client ids.
+const GUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+// A work Environment's hosted Launchpad callback, exactly as registered at
+// Microsoft: HTTPS on `launchpad.<machine>.<github-org-login>.lazurio.io`
+// (the Organization URL contract), no port, query or fragment. Any other host
+// would receive the authorization response, so it is refused.
+const LAUNCHPAD_CALLBACK_PATTERN =
+  /^https:\/\/launchpad\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?\.lazurio\.io\/api\/integrations\/oauth\/callback$/;
+// Entra registers at most 256 redirect URIs per app; Executor's localhost
+// callback always takes one of them.
+const MICROSOFT365_MAX_CALLBACKS = 255;
 
 const CANONICAL_SOURCE = "lazurio.organization.json";
 
@@ -27,9 +47,23 @@ const CANONICAL_SOURCE = "lazurio.organization.json";
 // `lazurio.organization.v1.schema.json` (organization-settings-lib.test.mjs
 // pins both), plus the consumers that apply and report it (decision 0194
 // point 6).
+//
+// `microsoft365` carries only identifiers that are not secrets (decision
+// 0162, addendum 2026-10-14): the Organization's single-tenant Entra app is a
+// public client, so no field may name a secret, and the closed tree refuses
+// any other key.
 const SETTINGS_CONTRACT = objectNode({
   integrations: objectNode({
     composio: objectNode({ allowed: booleanLeaf() }, ["allowed"]),
+    microsoft365: objectNode(
+      {
+        tenant_id: stringLeaf(GUID_PATTERN),
+        client_id: stringLeaf(GUID_PATTERN),
+        apps: arrayLeaf(enumItem(MICROSOFT365_APPS), { minItems: 1 }),
+        callbacks: arrayLeaf(stringLeaf(LAUNCHPAD_CALLBACK_PATTERN), { maxItems: MICROSOFT365_MAX_CALLBACKS }),
+      },
+      ["tenant_id", "client_id", "apps", "callbacks"],
+    ),
   }),
 });
 
@@ -109,6 +143,32 @@ function validateNode(value, node, path, issues) {
     if (typeof value !== "boolean") issues.push({ code: "settings_type_invalid", path });
     return;
   }
+  if (node.kind === "string") {
+    if (typeof value !== "string") issues.push({ code: "settings_type_invalid", path });
+    else if (!node.pattern.test(value)) issues.push({ code: "settings_value_invalid", path });
+    return;
+  }
+  if (node.kind === "enum") {
+    if (typeof value !== "string") issues.push({ code: "settings_type_invalid", path });
+    else if (!node.values.includes(value)) issues.push({ code: "settings_value_invalid", path });
+    return;
+  }
+  if (node.kind === "array") {
+    if (!Array.isArray(value)) {
+      issues.push({ code: "settings_type_invalid", path });
+      return;
+    }
+    if (value.length < node.minItems || value.length > node.maxItems) issues.push({ code: "settings_value_invalid", path });
+    const seen = new Set();
+    value.forEach((item, index) => {
+      const itemPath = pointer(path, String(index));
+      const before = issues.length;
+      validateNode(item, node.items, itemPath, issues);
+      if (issues.length === before && seen.has(item)) issues.push({ code: "settings_value_invalid", path: itemPath });
+      seen.add(item);
+    });
+    return;
+  }
   if (!isRecord(value)) {
     issues.push({ code: "settings_type_invalid", path });
     return;
@@ -134,6 +194,20 @@ function objectNode(fields, required = []) {
 
 function booleanLeaf() {
   return Object.freeze({ kind: "boolean" });
+}
+
+function stringLeaf(pattern) {
+  return Object.freeze({ kind: "string", pattern });
+}
+
+function enumItem(values) {
+  return Object.freeze({ kind: "enum", values });
+}
+
+// An array is one setting: its items are validated, never reported as keys.
+// Items are strings and must be unique.
+function arrayLeaf(items, { minItems = 0, maxItems = Infinity } = {}) {
+  return Object.freeze({ kind: "array", items, minItems, maxItems });
 }
 
 function leafKeys(node, prefix) {

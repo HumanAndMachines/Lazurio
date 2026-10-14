@@ -1,228 +1,477 @@
-# Microsoft 365: Outlook mail a kalendář
+# Microsoft 365: firemní aplikace Organizace
 
-Stav ověřen 2026-09-01 proti `@softeria/ms-365-mcp-server@0.148.0`.
+Stav k 2026-10-14 podle rozhodnutí 0162, dodatek z 2026-10-14
+([registr](../decision-register.md)). Postup zatím neprošel skutečným tenantem:
+kroky označené **neověřeno** potvrdí nebo opraví ověření V1–V6 níže. Kdo na
+skutečném tenantu narazí na jiné chování, opraví tenhle runbook PR podle
+[živého standardu](../external-app-integrations.md#živý-standard-zpětná-vazba-z-instalací-je-povinná).
+Stránku pro IT oddělení firmy drží [microsoft-365-for-it.md](microsoft-365-for-it.md).
 
-## Možnosti
+## Model
 
-| Tvar | Co to je | Poznámka |
-| --- | --- | --- |
-| Oficiální remote MCP | „Work IQ" servery Agent 365 (`Mail`, `Calendar`…), remote HTTP + Entra ID OAuth ([přehled](https://learn.microsoft.com/en-us/microsoft-agent-365/tooling-servers-overview), katalog [microsoft/mcp](https://github.com/microsoft/mcp)) | **Preview, ne pro produkci**; vyžaduje M365 Copilot licenci per user a Entra app registraci tenant adminem |
-| OSS MCP | [softeria/ms-365-mcp-server](https://github.com/Softeria/ms-365-mcp-server) (MIT, velmi aktivní) | Microsoft Graph, 300+ tools (mail, kalendář, OneDrive, Excel, Teams v `--org-mode`), device-code login, šifrovaná souborová cache s klíčem v OS credential store |
-| OSS CLI | [CLI for Microsoft 365](https://pnp.github.io/cli-microsoft365/) (`m365`) | PnP komunita, Graph coverage, `m365 login` device code |
+- **Jedna aplikace na Organizaci.** Organizace má ve svém vlastním tenantu
+  Microsoftu právě jednu aplikaci Entra „Lazurio (<Organizace>)“: jen pro účty
+  tohoto tenantu (`AzureADMyOrg`), jen delegovaná oprávnění Microsoft Graph.
+  Žádná aplikační (app-only) ani správcovská oprávnění.
+- **Založí ji IT firmy samo** ve svém prohlížeči (Microsoft Entra admin center,
+  nebo Azure Cloud Shell s připravenými příkazy) a předá zpět jen id tenantu a
+  id aplikace. Agent v Environmentu jen ověřuje a správcovské přihlášení
+  nikdy nedrží. Postup, kdy `az` spustí agent v Environmentu, je až poslední
+  možnost s povinným odhlášením (krok 5).
+- **Jeden souhlas za celou firmu.** Správce tenantu jednou udělí souhlas
+  jménem organizace; nikdo další souhlas nedává. Výchozí politika Microsoftu
+  („Let Microsoft manage your consent settings“) lidem souhlas s poštou,
+  kalendářem, soubory ani weby stejně nedovolí.
+- **Veřejný klient bez tajného klíče.** Aplikace přihlašuje přes PKCE a žádný
+  klientský tajný klíč ani certifikát nemá. Návratové adresy (typ *Mobile and
+  desktop applications*, tedy `publicClient.redirectUris`) jsou:
+  - adresa Launchpadu každého pracovního Environmentu Organizace,
+    `https://launchpad.<machine>.<github-org-login>.lazurio.io/api/integrations/oauth/callback`,
+    pro přihlášení ve vlastním prohlížeči člověka;
+  - `http://localhost/api/oauth/callback`, návrat Executoru pro přihlášení
+    v prohlížeči Environmentu. U `localhost` Microsoft port nebere v úvahu,
+    cesta se ale shodovat musí, proto se registruje celá cesta.
+- **Přijaté kompromisy veřejného klienta** (dodatek 0162 bod 3): bez klíče
+  může útočník spustit vlastní přihlášení s id aplikace a návratem na
+  `localhost` a vylákat z člověka adresu s kódem; protože souhlas za firmu už
+  platí, Microsoft se na nic neptá. Frekvence přihlášení z podmíněného
+  přístupu se u veřejného klienta neodkládá. Změna hesla může zneplatnit
+  obnovovací tokeny získané přihlášením heslem, ty z přihlášení bez hesla
+  ale platí dál; spolehlivé ukončení je zablokování účtu nebo odvolání
+  relací. Firmám proto doporučujeme „Assignment required“ a skupinu lidí,
+  kteří se smějí připojit (krok 3).
+- **Nastavení Organizace nese jen identifikátory** (rozhodnutí 0194): id
+  tenantu, id aplikace, zapnuté aplikace a zaregistrované adresy Launchpadů
+  v `settings.integrations.microsoft365` manifestu Organizace
+  ([tvar a pravidla](../lazurio-manifest-family.md#microsoft-365-company-app-settingsintegrationsmicrosoft365)).
+  Environment podle nich zaregistruje aplikaci do svého Executoru
+  ([executor.md](executor.md)). `apps` vybírá části (`outlook` = pošta a
+  kalendář, `one_drive`, `share_point`) a tím i jejich oprávnění.
+- **Jeden účet, jedno přihlášení.** Člověk v Apps → Integrace u Microsoftu
+  365 zvolí „Přidat účet“, jednou se ve svém prohlížeči přihlásí pracovním
+  účtem a účet je připojený. Agenti pak používají jeho poštu, kalendář,
+  OneDrive a SharePoint jako jednu Integraci `m365`, kterou Launchpad sestaví
+  z připnutých specifikací zapnutých částí (pevný commit, ověřený otisk
+  SHA-256). Agenti dosáhnou jen tam, kam smí ten člověk sám. Víc účtů vedle
+  sebe je volba člověka.
+- **Odpojení dělá jen člověk.** Jediné odpojení je „Odpojit“; na straně
+  Lazuria se nic samo neodpojí ani nevyprší. Když Environment přechází na
+  někoho jiného, odpojí ten, kdo v něm pracuje, účty, které už používat nemá,
+  stejně jako u Composia. Firemní aplikace se nabízí na každém druhu
+  Environmentu; na týmovém Environmentu připojený účet používají všichni jeho
+  agenti.
+- **Odesílání pošty je vypnuté.** `Mail.Send` aplikace ve výchozím stavu
+  nemá. Organizace ho zapíná vědomě, jako samostatné rozšíření oprávnění se
+  souhlasem správce.
+- **Teams přijde ve druhé fázi**, pro čtení a koncepty.
 
-## Doporučená volba
+**Dnes versus cíl.** Použití nastavení v Environmentech a „Přidat účet“ pro
+firemní aplikaci v LazurioPlatform i nastavení Microsoftu 365 v Dashboardu
+teprve vznikají (plán DEV-6626).
+Do té doby připojení dělá agent na výslovný pokyn člověka přechodnou cestou
+ze sekce [Přechodně: Executor ručně](#přechodně-executor-ručně). Nastavení
+`microsoft365` Organizace do manifestu nezapisuje, dokud nevyjdou čtenáři,
+kteří ho znají (sekce [Readers first](../lazurio-manifest-family.md#readers-first)):
+starší čtenář by celou sekci `settings` odmítl, včetně přepínače Composia.
 
-**Default: `softeria/ms-365-mcp-server` s pinned verzí.** Oficiální Work IQ
-je preview s tvrdými prerekvizitami (Copilot licence, tenant admin
-ceremonie) — přejdi na něj, až bude GA a Organizace licence má; do té doby
-je Graph přes softeria plnohodnotný a bez Copilot licence.
+## Co oprávnění dovolují
 
-Multi-account je first-class: `--login` per účet, `--list-accounts`,
-parametr `account` v každém tool callu při více přihlášených účtech,
-pinning přes `MS365_MCP_EXPECTED_USERNAME`. Víc org účtů na jedné mašině
-tedy zvládne jedna instance. Na multi-org mašině ale per Organizace používej
-oddělený pojmenovaný server, account pin a vlastní absolutní token-cache i
-selected-account cestu. Výchozí globální per-user cache není Organization
-hranice a `--logout` maže všechny účty v právě nakonfigurované cache.
+Všechna oprávnění jsou delegovaná: skutečný přístup je průnik oprávnění
+aplikace a práv přihlášeného člověka. Správcovské role člověka k nim nic
+nepřidávají.
 
-## Org-side kroky
+| Aplikace | Oprávnění | Co tím agent smí | Volitelně později |
+| --- | --- | --- | --- |
+| přihlášení | `openid`, `profile`, `email`, `offline_access`, `User.Read` | přečíst vlastní profil, obnovovat přihlášení | — |
+| Outlook pošta | `Mail.ReadWrite` | číst, třídit, přesouvat a **mazat** poštu, vytvářet koncepty; odeslat ne | `Mail.Send` |
+| Outlook kalendář | `Calendars.ReadWrite` | číst, zakládat, měnit a **rušit schůzky**; to odešle pozvánky a zrušení účastníkům | — |
+| OneDrive a knihovny SharePointu | `Files.ReadWrite.All` | číst, nahrávat, měnit a **mazat** soubory, vytvářet **odkazy ke sdílení** a zvát lidi | — |
+| SharePoint weby | `Sites.Read.All` | najít weby, jejich knihovny a seznamy | `Sites.ReadWrite.All`; delegované `Sites.Selected` |
+| Teams chaty (fáze 2) | `Chat.ReadWrite` | | `ChatMessage.Send` |
+| Teams kanály (fáze 2) | `Channel.ReadBasic.All`, `ChannelMessage.Read.All` | | `ChannelMessage.Send` |
 
-1. Default flow používá sdílenou Softeria Entra app — tenant s přísnou
-   consent policy ji může blokovat; pak Organizace registruje vlastní Entra
-   app a předá `MS365_MCP_CLIENT_ID` (jméno proměnné do katalogu, hodnotu do
-   custody env).
-2. Tool surface odvoď z konkrétního workflow. Široký preset (`mail`,
-   `calendar`…) nepoužívej tam, kde stačí přesný `--enabled-tools` regex a
-   `--allowed-scopes` allowlist. Read-only katalog navíc spouštěj s
-   `--read-only`; write scope a write tools přidej až jako samostatně
-   reviewované rozšíření s Draft/Publikace gate z hlavního manuálu.
+Co agent přečte, odchází jako součást práce k poskytovateli AI modelu, se
+kterým Environment pracuje. Zápisy a mazání drží procesní pravidlo Draft a
+Publikace ([standard](../external-app-integrations.md#draft-a-publikace-ve-write-operacích))
+a schválení v Executoru, ne rozsah oprávnění. Specifikace se nezužují.
 
-## Per-machine aktivace
+Nikdy nežádej aplikační oprávnění, adresářová ani správcovská oprávnění,
+`MailboxSettings.ReadWrite` (které kurátorovaná specifikace pošty uvádí) ani
+oprávnění ke sdíleným schránkám (`.Shared`), dokud sdílená schránka není
+pojmenovaná potřeba.
 
-Pro opakovatelný katalog preferuj jeden Organization-owned launcher sdílený
-Codexem, Claude Code i ruční diagnostikou. Launcher připne package verzi,
-tool surface a scopes a mapuje Organization-prefixed env jména na runtime
-jména serveru. Launcher není součástí tohoto obecného runbooku: jeho prefix,
-tool surface i custody cesty vlastní konkrétní Organizace a jeho implementace
-musí vzniknout a projít testy ve stejném Organization PR jako katalog.
-Následující zápis je proto tvar consumeru, ne odkaz na soubor dodávaný
-Lazuriem:
+## Postup IT firmy (výchozí)
 
-```json
-{
-  "mcpServers": {
-    "<org_slug>_m365": {
-      "command": "node",
-      "args": ["scripts/<org-slug>-m365-mcp.mjs"],
-      "env": {
-        "<ORG_SLUG>_M365_USERNAME": "${<ORG_SLUG>_M365_USERNAME}",
-        "<ORG_SLUG>_M365_TOKEN_CACHE_PATH": "${<ORG_SLUG>_M365_TOKEN_CACHE_PATH}",
-        "<ORG_SLUG>_M365_SELECTED_ACCOUNT_PATH": "${<ORG_SLUG>_M365_SELECTED_ACCOUNT_PATH}"
-      }
+Agent IT předá tuto stránku a [stránku pro IT](microsoft-365-for-it.md),
+připraví seznam adres Launchpadů a čeká na výsledek. Do Environmentu se
+správcovským účtem nikdo nepřihlašuje.
+
+**Role.** Aplikaci smí zaregistrovat každý uživatel, pokud to tenant
+nezakázal; jinak role Application Developer nebo vyšší. Souhlas jménem
+organizace s delegovanými oprávněními Graphu udělí **Cloud Application
+Administrator** nebo **Application Administrator** (tlačítko v admin centru
+i adresa souhlasu níže); Global Administrator je potřeba jen pro příkaz
+`az ad app permission admin-consent`.
+
+### 1. Registrace v Microsoft Entra admin center
+
+V `https://entra.microsoft.com` ve vlastním prohlížeči:
+
+1. **Applications → App registrations → New registration.** Jméno
+   „Lazurio (<Organizace>)“, *Supported account types*: „Accounts in this
+   organizational directory only“. *Redirect URI*: platforma **Public
+   client/native (mobile & desktop)** a první adresa Launchpadu.
+2. **Authentication:** u *Mobile and desktop applications* doplnit další
+   adresy Launchpadů a `http://localhost/api/oauth/callback`. *Allow public
+   client flows* nechat vypnuté (týká se jen toků bez návratové adresy).
+   Platformu *Web* ani *Single-page application* nepřidávat.
+3. **API permissions → Add a permission → Microsoft Graph → Delegated
+   permissions:** `openid`, `profile`, `email`, `offline_access`,
+   `User.Read`, `Mail.ReadWrite`, `Calendars.ReadWrite`,
+   `Files.ReadWrite.All`, `Sites.Read.All`. Pak **Grant admin consent for
+   <tenant>**.
+4. **Certificates & secrets:** nic nepřidávat.
+5. **Overview:** zkopírovat *Application (client) ID* a *Directory (tenant)
+   ID* a předat je agentovi. Nejsou tajné.
+
+### 2. Totéž přes Azure Cloud Shell
+
+Kde má firma předplatné Azure, správce může v `https://shell.azure.com`
+(Bash) ve svém prohlížeči vložit příkazy, které agent připraví s doplněnými
+adresami:
+
+```sh
+APP=$(az ad app create \
+  --display-name 'Lazurio (<Organizace>)' \
+  --sign-in-audience AzureADMyOrg \
+  --public-client-redirect-uris 'http://localhost/api/oauth/callback' '<adresa Launchpadu 1>/api/integrations/oauth/callback' \
+  --query appId -o tsv)
+GRAPH=00000003-0000-0000-c000-000000000000
+for SCOPE in openid profile email offline_access User.Read Mail.ReadWrite Calendars.ReadWrite Files.ReadWrite.All Sites.Read.All; do
+  ID=$(az ad sp show --id "$GRAPH" --query "oauth2PermissionScopes[?value=='$SCOPE'].id | [0]" -o tsv)
+  az ad app permission add --id "$APP" --api "$GRAPH" --api-permissions "$ID=Scope"
+done
+az ad sp create --id "$APP" > /dev/null
+az ad app show --id "$APP" --query '{client:appId,audience:signInAudience,publicClient:publicClient.redirectUris,web:web.redirectUris,secrets:length(passwordCredentials),certs:length(keyCredentials)}'
+az account show --query tenantId -o tsv
+```
+
+Souhlas pak udělí tlačítkem *Grant admin consent* v admin centru, nebo
+adresou (otevřít ve vlastním prohlížeči; po potvrzení prohlížeč ukáže chybu
+spojení na `localhost`, to nevadí):
+
+```text
+https://login.microsoftonline.com/<TENANT>/v2.0/adminconsent?client_id=<APP>&scope=https%3A%2F%2Fgraph.microsoft.com%2F.default&redirect_uri=http%3A%2F%2Flocalhost%2Fapi%2Foauth%2Fcallback&state=<náhodný řetězec>
+```
+
+### 3. Kdo se smí připojit (doporučeno pro firmy)
+
+V **Enterprise applications → Lazurio (<Organizace>) → Properties** zapnout
+*Assignment required* a v *Users and groups* přiřadit skupinu lidí, kteří se
+smějí připojit. Kdo ve skupině není, přihlášení nedokončí. Global
+Administratory to podle Microsoftu neomezuje.
+
+### 4. Ověření agentem (jen čtení)
+
+Agent zkontroluje, že id jsou GUID, a od správce si vyžádá výstup kontroly
+(admin center *Authentication*, *API permissions* se stavem *Granted*, nebo
+výstup posledních příkazů Cloud Shellu): `AzureADMyOrg`, přesně zadané adresy,
+žádná platforma *Web*, nula tajných klíčů a certifikátů, souhlas pro všech
+devět oprávnění. Skutečný důkaz je až první připojení (V1 až V3).
+
+### 5. Poslední možnost: `az` v Environmentu
+
+Jen když IT nemůže použít admin center ani Cloud Shell. Agent spustí stejné
+příkazy jako v kroku 2 v Environmentu po
+`az login --tenant <doména-firmy> --allow-no-subscriptions --use-device-code`:
+
+- Přihlášení kódem zařízení výchozí bezpečnostní nastavení nových tenantů
+  (security defaults) blokuje a vypadá jako phishing; agent předem vysvětlí,
+  odkud kód je, a kód předá jen do soukromého chatu.
+- Správce se nikdy nepřihlašuje do prohlížeče Environmentu. Kdyby to nešlo
+  jinak, hned potom se odhlásí a agent smaže cookies toho prohlížeče.
+- **Povinný poslední krok:** `az logout; az account clear`, potom
+  `az account list` vrátí `[]` a v `~/.azure` nezůstane cache tokenů
+  (`msal_token_cache.*` chybí nebo je prázdná). Bez toho krok není hotový:
+  agenti v Environmentu mají plný přístup a dosáhli by na správcovské
+  přihlášení.
+- Přístupové tokeny `az` nikdy nevypisuj (`az account get-access-token` se
+  nepoužívá).
+
+### 6. Nastavení Organizace
+
+Po vydání čtenářů agent navrhne PR do kořenového repozitáře Organizace
+s `settings.integrations.microsoft365` (`tenant_id`, `client_id`, `apps`,
+`callbacks`) a PR mergne člověk, který na to má práva na GitHubu.
+Schválení v Dashboardu přijde s jeho editorem. `callbacks` obsahuje přesně
+zaregistrované adresy Launchpadů, bez `localhost`.
+
+### 7. Nový Environment
+
+IT doplní adresu jeho Launchpadu v *Authentication* (nebo
+`az ad app update --id <APP> --public-client-redirect-uris <všechny adresy>`,
+příkaz seznam nahrazuje) a stejná změna `callbacks` jde PR. Do té doby se
+lidé z nového Environmentu přihlašují v prohlížeči Environmentu. Aplikace
+unese nejvýš 256 návratových adres, jednu bere `localhost`, takže `callbacks`
+má nejvýš 255 položek; zástupné znaky (wildcard) se nepoužívají. Do
+`callbacks` patří jen adresy hostovaných Launchpadů
+`launchpad.<machine>.<github-org-login>.lazurio.io`; jinou adresu nastavení
+odmítne, protože by na ni Microsoft poslal autorizační odpověď.
+
+## Podmíněný přístup
+
+- Přihlášení se vyhodnocuje na adrese člověka (jeho prohlížeč), obnova tokenu
+  a volání Graphu na odchozí adrese Environmentu. IT proto potřebuje odchozí
+  adresy Environmentů Organizace, pokud má zásady podle lokality.
+- Zásady vyžadující spravované nebo vyhovující zařízení zablokují přihlášení
+  v prohlížeči Environmentu (`AADSTS53000`); přihlášení ve vlastním prohlížeči
+  na spravovaném zařízení projde, obnova z Environmentu ale může narazit.
+- Frekvence přihlášení (sign-in frequency) připojení po uplynutí ukončí
+  (`AADSTS70043`); veřejný klient nedostává odklad. Člověk se pak připojí
+  znovu. Změna hesla připojení ukončí jen u tokenu z přihlášení heslem.
+- Executor neumí Continuous Access Evaluation, takže zablokování účtu se
+  projeví až po vypršení přístupového tokenu.
+
+## Přechodně: Executor ručně
+
+Cílově tohle dělá Launchpad podle nastavení Organizace. Přechodně to agent
+dělá na výslovný pokyn člověka přes rozhraní Executoru 1.6.10 na
+`http://127.0.0.1:4789/api` s tokenem z `~/.executor/server-control/auth.json`
+(popis rozhraní drží `docs/integrations.md` v LazurioPlatform). Token se nikdy
+nevypisuje ani nekopíruje; volání jdou bez proxy (`curl --noproxy '*'`).
+
+**Přechodná Integrace `pilot-m365`.** První vydání LazurioPlatform s firemní
+aplikací převezme jmenný prostor `m365` a připojení, která v něm nezná,
+odebere. Ručně založená Integrace se proto jmenuje `pilot-m365`; po vydání se
+člověk připojí přes „Přidat účet“ a pilotní Integrace se odebere.
+
+**Jedna specifikace ze čtyř připnutých.** Stejné soubory, jaké připíná
+LazurioPlatform: kurátorovaný katalog Executoru v repozitáři
+`UsefulSoftwareCo/integrations` na commitu
+`9b7117ce36e9b0a8ec86a51bd40fb380d861fe06`, cesta
+`public/specs/microsoft-graph/<soubor>`:
+
+| Soubor | Část | SHA-256 | Oprávnění nad přihlášení |
+| --- | --- | --- | --- |
+| `mail.json` | Outlook pošta | `fe66b9a7ea6572077a996bc959a8617b7599369ae54f2b02f926490c4edee62a` | `Mail.ReadWrite` |
+| `calendar.json` | Outlook kalendář | `7d665dbb02ce07b8a2fd1e13880f2538e807e078a613fecb80e975357b8cea31` | `Calendars.ReadWrite` |
+| `files.json` | OneDrive a knihovny SharePointu | `0e9364c576e5ae336fd14b82b23401dc1ecde2daf53ac6ded2574069707e504a` | `Files.ReadWrite.All` |
+| `sites.json` | weby SharePointu | `3f0400cd5bdee8f826d28d3d310309382f611d3af6a5dd4961be39563e116394` | `Sites.Read.All` |
+
+Přihlášení znamená `openid profile email offline_access User.Read`. Soubory
+mají shodné jen identické části (jedna cesta `/me` a sdílená schémata), takže
+se dají sloučit beze ztráty. Skript níže je stáhne, ověří otisky, sloučí je,
+nastaví jediné přihlášení s přesně odsouhlasenými oprávněními (bez
+`Mail.Send` a `MailboxSettings.ReadWrite`) a zapíše tělo požadavku pro
+Executor. Při neshodě otisku nebo rozdílné sdílené části skončí a nic
+nezapíše. Výsledek má 2 825 cest a otisk sloučené specifikace
+`0078e0c2d1d32987bb61b43b92309643c7f1ab54d177f3985fdd435d4099cd42`.
+
+```js
+// node pilot-m365-spec.mjs <TENANT_ID> <request.json> [<local spec dir>]
+// Merges the four commit-pinned Microsoft Graph specs into one OpenAPI
+// document and writes the Executor 1.6.10 `POST /api/openapi/specs` body of
+// the interim integration `pilot-m365`. Fails closed on a SHA-256 mismatch
+// and on a shared path or component that differs between the specs.
+import { createHash } from "node:crypto";
+import { readFile, writeFile } from "node:fs/promises";
+
+const commit = "9b7117ce36e9b0a8ec86a51bd40fb380d861fe06";
+const base = `https://raw.githubusercontent.com/UsefulSoftwareCo/integrations/${commit}/public/specs/microsoft-graph/`;
+const pinned = {
+  "mail.json": "fe66b9a7ea6572077a996bc959a8617b7599369ae54f2b02f926490c4edee62a",
+  "calendar.json": "7d665dbb02ce07b8a2fd1e13880f2538e807e078a613fecb80e975357b8cea31",
+  "files.json": "0e9364c576e5ae336fd14b82b23401dc1ecde2daf53ac6ded2574069707e504a",
+  "sites.json": "3f0400cd5bdee8f826d28d3d310309382f611d3af6a5dd4961be39563e116394",
+};
+const scopes = ["openid", "profile", "email", "offline_access", "User.Read",
+  "Mail.ReadWrite", "Calendars.ReadWrite", "Files.ReadWrite.All", "Sites.Read.All"];
+const [tenant, out, localDir] = process.argv.slice(2);
+if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(tenant ?? "") || !out)
+  throw new Error("usage: node pilot-m365-spec.mjs <TENANT_ID> <request.json>");
+
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+let spec = null;
+for (const [file, sha256] of Object.entries(pinned)) {
+  const bytes = localDir
+    ? await readFile(`${localDir}/${file}`)
+    : Buffer.from(await (await fetch(base + file)).arrayBuffer());
+  const got = createHash("sha256").update(bytes).digest("hex");
+  if (got !== sha256) throw new Error(`${file}: SHA-256 ${got}, expected ${sha256}`);
+  const next = JSON.parse(bytes.toString("utf8"));
+  if (spec === null) { spec = next; continue; }
+  for (const [path, item] of Object.entries(next.paths)) {
+    if (path in spec.paths && !same(spec.paths[path], item)) throw new Error(`${file}: path ${path} differs`);
+    spec.paths[path] = item;
+  }
+  for (const [section, entries] of Object.entries(next.components ?? {})) {
+    if (section === "securitySchemes") continue;
+    const target = (spec.components[section] ??= {});
+    for (const [name, value] of Object.entries(entries)) {
+      if (name in target && !same(target[name], value)) throw new Error(`${file}: ${section}.${name} differs`);
+      target[name] = value;
     }
   }
 }
+// One sign-in, exactly the consented scopes: never Mail.Send or
+// MailboxSettings.ReadWrite, which the curated mail spec declares.
+spec.components.securitySchemes.microsoftOAuth2.flows.authorizationCode.scopes =
+  Object.fromEntries(scopes.map((scope) => [scope, ""]));
+spec.security = [{ microsoftOAuth2: scopes }];
+const value = JSON.stringify(spec);
+const login = `https://login.microsoftonline.com/${tenant}/oauth2/v2.0`;
+await writeFile(out, JSON.stringify({
+  spec: { kind: "blob", value },
+  slug: "pilot-m365",
+  name: "Microsoft 365",
+  authenticationTemplate: [{
+    slug: "microsoft365", kind: "oauth2", label: "Microsoft 365",
+    authorizationUrl: `${login}/authorize`, tokenUrl: `${login}/token`,
+    resource: null, scopes,
+  }],
+}));
+console.log(JSON.stringify({ paths: Object.keys(spec.paths).length,
+  sha256: createHash("sha256").update(value).digest("hex") }));
 ```
 
-Stejná tři Organization-prefixed jména patří do Codex `env_vars`; provider
-runtime dostane `MS365_MCP_EXPECTED_USERNAME`,
-`MS365_MCP_TOKEN_CACHE_PATH` a `MS365_MCP_SELECTED_ACCOUNT_PATH` až od
-launcheru. Obě cache cesty musí být absolutní, různé a ležet v machine-local
-custody dané Organizace. Přihlášení spouštěj přes tentýž launcher s `--login`;
-device-code flow dokončuje Operátor.
+1. **Specifikace:** `node pilot-m365-spec.mjs <TENANT_ID> request.json`, pak
+   `POST /api/openapi/specs` s tímto tělem (asi 13 MB). Token Executoru se
+   předává hlavičkou ze souboru, aby nebyl v seznamu procesů:
 
-### Povinný kontrakt launcheru
+   ```sh
+   exe() { curl -sS --noproxy '*' -H @<(printf 'Authorization: Bearer %s\n' "$(node -p 'require(process.env.HOME + "/.executor/server-control/auth.json").token')") -H 'Content-Type: application/json' "$@"; }
+   exe -X POST --data-binary @request.json http://127.0.0.1:4789/api/openapi/specs
+   ```
+2. **Klient:** `POST /api/oauth/clients` s `{owner: "org", slug:
+   "microsoft365", authorizationUrl, tokenUrl, grant: "authorization_code",
+   clientId: "<APP>", clientSecret: "", resource: null}`. Prázdný
+   `clientSecret` dělá z klienta veřejného klienta s PKCE.
+3. **Jedno přihlášení ve vlastním prohlížeči:** `POST /api/oauth/start` s
+   `{client: "microsoft365", clientOwner: "org", owner: "org", name:
+   "default", integration: "pilot-m365", template: "microsoft365",
+   newConnection: true, redirectUri: "<adresa Launchpadu>/api/integrations/oauth/callback"}`.
+   Člověk otevře `authorizationUrl` ve svém prohlížeči a přihlásí se.
+   Launchpad tento návrat nezná, odpoví stránkou s chybou 400 a kód
+   nespotřebuje. Člověk agentovi předá adresu té stránky; agent ji hned předá
+   Executoru jako `GET http://localhost:4789/api/oauth/callback?<tentýž dotaz>`.
+   Executor najde tok podle `state` a kód vymění s uloženou návratovou adresou
+   a PKCE ověřovačem, bez klíče. Kód je jednorázový, platí minuty a bez
+   ověřovače, který zůstává v Executoru, je k ničemu; agent ho nikam jinam
+   nepíše. Další účet je další `oauth/start` s jiným `name`.
+4. **Jen pro účty bez správcovské role** jde i kratší cesta: `oauth/start`
+   bez `redirectUri` vrátí přihlášení na `localhost` Executoru a člověk ho
+   dokončí v prohlížeči Environmentu.
+5. **Kontrola:** `GET /api/oauth/await/<state>`, pak `GET /api/connections`:
+   `lastHealth.status` `healthy` nebo `unknown`, `identityLabel` s pracovním
+   účtem, `expiresAt` vyplněné.
 
-Organization launcher je připravený k použití teprve tehdy, když:
+Executor zápisy pozastaví ke schválení (`waiting_for_interaction`); výslovný
+pokyn člověka k připojení je schválením připojení, zápisy navenek schvaluje
+jen pro schválený Draft nebo Publikaci.
 
-- spouští přesně reviewovanou verzi balíčku a v kódu drží pevný tool regex,
-  přesný scope allowlist a případný `--org-mode`; read-only varianta vždy
-  přidává `--read-only`;
-- vyžaduje neprázdný Organization-prefixed account pin a dvě absolutní,
-  navzájem různé cache cesty a mapuje je pouze do child-process env
-  `MS365_MCP_EXPECTED_USERNAME`, `MS365_MCP_TOKEN_CACHE_PATH` a
-  `MS365_MCP_SELECTED_ACCOUNT_PATH`;
-- bez argumentů spouští MCP STDIO transport, pro diagnostiku propouští jen
-  jmenovitě podporované management operace dané verze serveru a všechny
-  ostatní argumenty fail-closed odmítne; uživatelský argument nikdy nesmí
-  přepsat připnuté scopes, tools, mód ani package verzi;
-- neloguje hodnoty account pinu, custody cest, device kódu ani child env a
-  vrací exit code nebo ukončovací signál provider procesu;
-- má testy pro běžný start, chybějící nebo relativní cache cestu, shodné
-  cache cesty, zakázaný rozšiřující argument a podporované cílové OS; skutečný
-  `--list-permissions` smoke navíc prokáže efektivní scopes a read-only mód.
+**Práce agentů.** Agenti operace hledají `executor tools search` a volají
+přes Executor. Specifikace nemají adresování cestou (`root:/cesta:`), proto
+se složky procházejí podle id položky (`/drives/{id}/items/{id}/children`)
+a před tvrzením, že je složka prázdná, se přečte i `@odata.nextLink`.
+Koncept zprávy vzniká `POST /me/messages` s `body.contentType: "Text"`,
+odpověď `createReply` a následným `PATCH` těla; agent koncept přečte zpět a
+dá člověku jeho `webLink`. `send` ani `sendMail` agent nevolá.
 
-Dokud soubor launcheru a tyto důkazy v Organization source neexistují,
-katalogový příklad výše není aktivace a nesmí se nasadit Kolegom.
+## Ověření na skutečném tenantu
 
-### Windows: spouštění `npx` bez shellu
+Pořadí je důležité: V1 rozhoduje mezi veřejným a důvěrným klientem.
 
-Na Windows launcher nesmí sestavit command string pro `cmd.exe`, volat
-`npx.cmd` ani zapnout `shell: true`. Předem uvozovaný string může předat npm
-doslovný argument `"-y"`; při oddělených argumentech zase shell interpretuje
-znaky připnutého tool regexu, například `|`. V obou případech se mění
-reviewovaný argumentový kontrakt ještě před spuštěním provideru.
+- **V1 Veřejný klient s návratem na HTTPS bez klíče.** Tok spuštěný
+  s `redirectUri` adresy Launchpadu (Přechodně, bod 3) se vymění za tokeny bez
+  tajného klíče (žádné `AADSTS7000218` ani `AADSTS700025`). Obnova: přístupové
+  tokeny žijí 60 až 90 minut, proto se obnova ověří až po vypršení
+  `expiresAt` připojení (nebo nejdřív za 100 minut) dalším voláním a novým,
+  pozdějším `expiresAt` bez nového přihlášení.
+- **V2 Executor 1.6.10 celou cestou:** sloučená specifikace s šablonou tenantu,
+  klient s prázdným klíčem, vyplněné `identityLabel`, obnova po vypršení,
+  žádná chybějící oprávnění.
+- **V3 Skutečná práce, nejdřív jen čtení:** najít web SharePointu podle
+  adresy (`/sites/<host>:/sites/<cesta>`; když Executor zakóduje `/`, pak
+  `GET /sites?search=<název>`), projít jednu složku podle id i se stránkováním,
+  vytvořit textový koncept sobě, přečíst ho zpět s `webLink`.
+- **V4 Politiky tenantu:** role správce, politika souhlasů, podmíněný přístup
+  (od IT), jedno přihlášení i volání Graphu z adresy Environmentu.
+- **V5 Odvolání:** „Assignment required“ a odebrání testovacího člověka ze
+  skupiny zastaví obnovu tokenu (**neověřeno**); `revokeSignInSessions`
+  udělá z připojení v Executoru `expired`.
+- **V6 Záložní cesty:** přihlášení v prohlížeči Environmentu pro Environment,
+  jehož adresa není zaregistrovaná; kdy je potřeba krok 5.
 
-Použij tentýž Node runtime, který už spustil launcher (`process.execPath`), a
-jeho npm JavaScript entrypoint `node_modules/npm/bin/npx-cli.js`. Node může být
-nalezený z Machine i User `PATH`; launcher nehardcoduje `Program Files` ani
-jinou system-wide cestu. Z reálné cesty `process.execPath` odvoď instalační
-root, vyžaduj, aby `npx-cli.js` byl skutečný běžný soubor a jeho `realpath`
-zůstal uvnitř stejného Node instalačního rootu. Containment nikdy neověřuj
-řetězcovým prefixem: sousední cesta jako `nodejs-evil` by takovou kontrolou
-prošla. Použij separator-aware ekvivalent kanonického
-`isPathDescendant(parent, candidate)` z `lazurio/core/path-boundary-lib.mjs`:
-nad oběma `realpath` hodnotami spočítej platformní
-`relative(resolve(parent), resolve(candidate))` a přijmi jen neprázdný
-výsledek, který není `..`, nezačíná `..${sep}` a není absolutní. `relative`
-na Windows současně respektuje case-insensitive drive/UNC path semantics.
-Když layout nebo containment neprojde, skonči fail-closed — nevracej se k
-shellu ani k jinému `npx` z `PATH`.
+Výsledky se zapisují bez tajemství: id tenantu a aplikace, kód chyby, stav
+připojení. Žádné tokeny, kódy z přihlášení ani obsah pošty.
 
-Každou hodnotu předej jako samostatnou položku `spawn` argv v tomto pořadí:
+## Odvolání a odchod člověka
 
-```js
-const providerArgs = [
-  validatedNpxCliPath,
-  "-y",
-  "@softeria/ms-365-mcp-server@0.148.0",
-  "--org-mode",
-  "--read-only",
-  "--enabled-tools",
-  PINNED_TOOLS_REGEX,
-  "--allowed-scopes",
-  PINNED_ALLOWED_SCOPES,
-  ...validatedManagementArgs,
-];
+- **Skutečný vypínač je v Entra.** Odebrání aplikace nebo nastavení
+  `microsoft365` v Lazuriu existující připojení neodpojí; přestane jen
+  nabízet nová. Celou firmu zastaví zakázání podnikové aplikace (*Enabled
+  for users to sign in: No*), odebrání souhlasu nebo smazání aplikace.
+- **Člověk odpojí** účet v Apps → Integrace („⋯“ → Odpojit), což smaže
+  připojení v Executoru. Je to jediné odpojení na straně Lazuria. U Microsoftu
+  souhlas ruší v My Apps (`https://myapplications.microsoft.com`).
+- **Odchod člověka:** IT zablokuje účet nebo odvolá jeho přihlášení
+  (`revokeSignInSessions`). Obnova pak selže a Executor připojení označí
+  `expired`; už vydaný přístupový token platí dál, takže přístup skončí až
+  asi do 90 minut.
+- **Předání Environmentu:** Lazurio nic samo neodpojí. Kdo Environment
+  přebírá, odpojí účty, které už používat nemá, jinak by agenti dál jednali
+  pod účtem předchozího člověka. Kdo Environment předává a odchází z firmy,
+  toho spolehlivě odstřihne IT blokací účtu.
+- Microsoft obnovovací token zneplatní po 90 dnech bez použití; člověk se pak
+  přihlásí znovu.
 
-const child = spawn(process.execPath, providerArgs, {
-  env: childEnvironment,
-  shell: false,
-  stdio: "inherit",
-});
-```
+## Tokeny v klidu
 
-`PINNED_TOOLS_REGEX`, `PINNED_ALLOWED_SCOPES` i management argumenty vlastní
-Organization launcher; poslední skupina smí obsahovat pouze jeho explicitní
-allowlist operací podporovaných připnutou verzí. Skutečný Windows integrační
-test nahradí `npx-cli.js` lokálním capture shimem spuštěným přes Node, zachytí
-`process.argv` a porovná celý seznam položku po položce — porovnání command
-stringu ani test samotné builder funkce nestačí.
+Executor drží tokeny připojení v `~/.executor` jako nešifrovaný soubor
+čitelný jen uživatelem Environmentu (`0600`), stejně jako přihlášení `gh`
+nebo Codexu. Číst ho mohou všichni agenti v Environmentu (rozhodnutí 0172),
+root hostitele Organizace a každý, kdo má zálohu Environmentu. Šifrované
+úložiště přinese Executor 2.
 
-Před device-code loginem spusť přes stejný launcher `--list-permissions`.
-Smoke musí skončit exit codem `0`, potvrdit `org mode`, `readOnly: true` a
-přesně schválené scopes; nesmí otevřít login ani vyžádat device code. Teprve
-potom pokračuj explicitním `--login`, který dokončí Operátor.
+## Záložní varianta: důvěrný klient
 
-### `--verify-login` není success gate pro least-privilege launcher
+Jen když V1 na skutečném tenantu neprojde: na téže aplikaci jeden klientský
+klíč pro každý Environment, pojmenovaný podle Environmentu, platný nejvýš 24
+měsíců. Doručení klíče do Environmentu závisí na bodu 8 rozhodnutí 0198, který
+musí být nejdřív rozhodnutý a postavený; do té doby se varianta nezavádí.
+Tenant smí klíče politikou správy aplikací zakázat, pak zbývají certifikáty.
 
-Ve verzi 0.148.0 volá `--verify-login` (`testLogin()` v `dist/auth.js`) po
-úspěšném přihlášení `GET /v1.0/me`. Tento endpoint vyžaduje profilový scope
-(typicky `User.Read`), který least-privilege launcher s pouhým `Mail.Read`
-záměrně nemá. Výsledek `Login successful but Graph API access failed: 403` je proto u
-takového launcheru očekávaný falešný neúspěch diagnostiky, ne důkaz rozbitého
-přihlášení nebo cache: samotné přihlášení a persistence účtu proběhly.
+## Work IQ MCP jako pozdější volba
 
-Autoritativní ověření onboardingu je scoped MCP tool smoke přes tentýž
-launcher a tutéž persistentní cache — u mail katalogu reálné
-`list-mail-messages` nad schváleným účtem, případně jiný tool z připnutého
-regexu, který používá právě schválený scope. Teprve jeho úspěch (a jeho
-zopakování po restartu MCP procesu podle kapitoly „Smoke test“) znamená
-`ready`. `--verify-login` je použitelný gate jen tehdy, když katalog profilový
-scope pro `/me` vědomě a reviewovaně obsahuje.
+Work IQ MCP (`https://workiq.svc.cloud.microsoft/mcp`) je oficiální MCP server
+Microsoftu, obecně dostupný od 2026-06-16 a použitelný z klientů třetích stran.
+Výchozí cestou Lazuria není:
 
-Scopes kvůli této diagnostice nerozšiřuj: přidání `User.Read` nebo jiného
-scope jen proto, aby `--verify-login` prošel, je změna reviewovaného katalogu,
-ne oprava onboardingu. Stejně tak 403 z `/me` neřeš `--org-mode`, širším
-presetem ani jiným účtem. Do evidence patří exit code a název použitého toolu;
-adresy účtů, tenant identifikátory ani token materiál ne.
+- účtuje se z Copilot Credits (Pay-as-you-go plán s předplatným Azure a
+  přiřazenými lidmi);
+- jediné delegované oprávnění `WorkIQAgent.Ask` dává čtení i zápis všude, kam
+  Work IQ dosáhne;
+- nastavení vyžaduje Global Administratora a server nemá dynamickou registraci
+  klienta.
 
-## Token storage a persistence
+Organizace, která Copilot platí, ho může později zapnout na téže aplikaci
+přidáním `WorkIQAgent.Ask` a souhlasem správce; server se pak přidá do
+Executoru jako MCP server. Starší servery Agent 365 (`mcp_MailTools` a další)
+jsou podle Microsoftu jen pro zpětnou kompatibilitu a nepoužívají se.
 
-Server 0.148.0 neukládá celou token cache do keychainu. MSAL cache je
-AES-256-GCM šifrovaný soubor; do OS credential store přes `keytar` ukládá jen
-32bytový šifrovací klíč. Výchozí soubory leží v per-user config adresáři
-serveru, proto je na multi-org mašině vždy přesměruj přes dvě explicitní env
-proměnné výše do Organization-local custody.
+## Co se nepoužívá
 
-Parent adresář server vytvoří automaticky a cache soubory zapisuje s módem
-`0600`. Když OS credential store není dostupný, klíč skončí jako `.cache-key`
-vedle cache; to zajišťuje file permissions, ale neodděluje klíč od ciphertextu
-pro útočníka se čtecím přístupem k adresáři. Pro headless host s přísnější
-custody použij serverem podporovaný `MS365_MCP_AUTH_CACHE_COMMAND` wrapper.
-
-Ověř restart MCP procesu i nový task. Samotný úspěšný login persistence
-nedokazuje. Při úplném odebrání revokuj Microsoft grant, odstraň pouze přesně
-pojmenované cache soubory dané Organizace a podle incidentního scope případně
-ručně odstraň i příslušný klíč z credential store; `--logout` klíč z keychainu
-záměrně nemaže.
-
-## Smoke test
-
-Smoke vždy začni čtením (například výpis posledních hlaviček inboxu nebo
-kalendář na dnešek), potom restartuj MCP proces či harness a stejný read smoke
-zopakuj. U read-only katalogu tím smoke končí a žádný draft ani testovací
-zápis nevytvářej.
-
-Pouze u samostatně schváleného write katalogu pokračuj **draftem zprávy
-adresované sobě, bez odeslání**, případně událostí v testovacím kalendáři.
-Testovací cíl a pravidla úklidu drží hlavní integrační manuál a Organization
-`INTEGRATIONS.md`. Draft nebo testovací událost smíš po ověření odstranit jen
-když Operátor výslovně schválil jmenovitý smoke cíl a artefakt vytvořil tento
-konkrétní smoke; jinak artefakt ponech a vyžádej si samostatný explicitní
-pokyn Operátora.
-
-## Custody a rizika
-
-- Device-code flow zobrazuje kód — kód ani token nikdy nepatří do chatu.
-- `MS365_MCP_EXPECTED_USERNAME` připni na přesný pracovní účet; prázdný pin
-  nebo login jiného účtu musí onboarding zastavit před uložením cache.
-- Na multi-org mašině nikdy nesdílej token-cache ani selected-account cestu
-  mezi Organizacemi. Pro odebrání jediného účtu preferuj
-  `--remove-account <id>`; `--logout` vyčistí všechny účty v dané cache.
-- `--org-mode` (Teams, SharePoint, shared mailboxy) rozšiřuje blast radius;
-  kombinuj ho s přesným tool regexem a scope allowlistem nebo ho vůbec
-  nezapínej, pokud workflow Organization funkce nepotřebuje.
-- Odebrání: scoped logout/remove-account, revoke v Entra (My Apps / admin
-  center) a vědomé smazání pouze Organization-specific cache dle výše
-  popsaného postupu.
+- **Konektory ChatGPT a claude.ai** se pro nová napojení nezřizují.
+  Existující konektor na vlastním počítači člověka smí dál běžet; agenti
+  v pracovním Environmentu ho nepoužívají.
+- **Komunitní MCP server** `softeria/ms-365-mcp-server` a launcher
+  Organizace pro něj už nejsou doporučenou cestou: duplikovaly by to, co dávají
+  kurátorované specifikace Graphu v Executoru, s vlastní cache tokenů vedle
+  Executoru. Kde ho Organizace dnes používá, převede ho při zavedení firemní
+  aplikace.
+- **Composio** pro Microsoft 365 na pracovních Environmentech není potřeba,
+  jakmile Organizace firemní aplikaci nastaví. Osobní účty Microsoftu
+  (Outlook.com) firemní aplikace nepřihlásí; na osobním Environmentu zůstávají
+  na Composiu.
+- **Sdílená cizí aplikace Entra** (například klient komunitního nástroje)
+  se nepoužívá: souhlas správce patří vlastní aplikaci Organizace.
