@@ -42,8 +42,10 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
    - Pracovní VM mezi sebou grant nemají — ani v rámci jedné Organizace, ani
      napříč Organizacemi téhož Conglomerate. Hranice Organizací zůstává
      zachovaná; propojení drží Operátorův pracovní laptop nebo jeho osobní strana.
-     Jedinou výjimkou je grant na port proxy AI poolu vlastní Organizace
-     (0181); SSH ani jiný port z něj neplyne.
+     Výjimkami jsou grant na port proxy AI poolu vlastní Organizace
+     (0181), ze kterého SSH ani jiný port neplyne, a servisní SSH
+     z jmenovaného Pracovního Prostředí Ownera nebo Admina do Pracovních
+     a Týmových Prostředí členů téže Organizace (0202).
 2. **Z osobní do pracovní ano.** Osobní klienti a osobní VM → každá pracovní VM
    téhož Operátora: SSH + HTTPS.
 3. **Z pracovní do osobní nikdy.** Pracovní VM ani pracovní laptop nemají grant
@@ -59,8 +61,10 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
 6. **Telefon** není SSH server; systémové ovládání telefonu se nesjednává.
 7. **Správa Conglomerate Hostu** patří Ownerovi GitHub Organizace, která
    Conglomerate Host vlastní, a jde jen z jeho osobního laptopu a osobní VM
-   (`owner_admin_ssh_grants`). Ownerství jiné Organizace obsluhované tímtéž
-   hostem správu nedává; telefon, pracovní VM ani pracovní laptop ji nedostávají.
+   (`owner_admin_ssh_grants`) a podle rozhodnutí 0202 i z jeho jmenovaného
+   Pracovního Prostředí. Ownerství jiné Organizace obsluhované tímtéž
+   hostem správu nedává; telefon, jiné pracovní VM ani pracovní laptop ji
+   nedostávají.
 
 8. **Zařízení v obou zónách (founder).** Zakladatel bývá týž člověk jako Owner
    Organizace a jeden notebook mu slouží osobně i pracovně. Takové zařízení smí
