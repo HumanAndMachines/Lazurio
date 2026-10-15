@@ -42,8 +42,10 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
    - Pracovní VM mezi sebou grant nemají — ani v rámci jedné Organizace, ani
      napříč Organizacemi téhož Conglomerate. Hranice Organizací zůstává
      zachovaná; propojení drží Operátorův pracovní laptop nebo jeho osobní strana.
-     Jedinou výjimkou je grant na port proxy AI poolu vlastní Organizace
-     (0181); SSH ani jiný port z něj neplyne.
+     Výjimkami jsou grant na port proxy AI poolu vlastní Organizace
+     (0181), ze kterého SSH ani jiný port neplyne, a servisní SSH
+     z jmenovaného Pracovního Prostředí Ownera nebo Admina do Pracovních
+     a Týmových Prostředí členů téže Organizace (0202).
 2. **Z osobní do pracovní ano.** Osobní klienti a osobní VM → každá pracovní VM
    téhož Operátora: SSH + HTTPS.
 3. **Z pracovní do osobní nikdy.** Pracovní VM ani pracovní laptop nemají grant
@@ -52,15 +54,20 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
 4. **Sdílená týmová VM** (Hosted Team Workspace, víc Operátorů v jednom OS
    účtu) přijímá jen příchozí spojení od členů GitHub Teamu, na který je vázaná
    neměnným `github_team_id` (0147/0149); členství se čte živě z GitHubu a
-   nevzniká druhý roster. Nikdy nemá odchozí grant na klienty ani na jiné VM
+   nevzniká druhý roster. Výjimkou je servisní SSH z jmenovaného Pracovního
+   Prostředí Ownera nebo Admina téže Organizace podle 0202 (přesný zdrojový
+   uzel a adresa), i když Admin není členem toho Teamu. Nikdy nemá odchozí grant na klienty ani na jiné VM
    (kromě portu proxy AI poolu své Organizace, 0181). Pracovní zóna nemá hranu
    z VM na zařízení (0182); jinak by agenti jednoho člena došli na laptop jiného.
 5. **Mezi Operátory nic implicitně.**
 6. **Telefon** není SSH server; systémové ovládání telefonu se nesjednává.
 7. **Správa Conglomerate Hostu** patří Ownerovi GitHub Organizace, která
    Conglomerate Host vlastní, a jde jen z jeho osobního laptopu a osobní VM
-   (`owner_admin_ssh_grants`). Ownerství jiné Organizace obsluhované tímtéž
-   hostem správu nedává; telefon, pracovní VM ani pracovní laptop ji nedostávají.
+   (`owner_admin_ssh_grants`) a podle rozhodnutí 0202 i z jeho jmenovaného
+   Pracovního Prostředí („Owner nebo Admin“ v 0202 je tatáž role Owner,
+   v GitHub API `admin`). Ownerství jiné Organizace obsluhované tímtéž
+   hostem správu nedává; telefon, jiné pracovní VM ani pracovní laptop ji
+   nedostávají.
 
 8. **Zařízení v obou zónách (founder).** Zakladatel bývá týž člověk jako Owner
    Organizace a jeden notebook mu slouží osobně i pracovně. Takové zařízení smí
