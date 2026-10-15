@@ -664,8 +664,9 @@ Root upravuj jen když se mění:
   Organization Machine ani veřejný fixture.
 - First-client rollout a migrace: `manual/first-client-organization-rollout.md`,
   `manual/gen2-to-gen3-migration.md`
-- Rollout sdíleného softwaru (Machines, LazurioPlatform, T3 Code, MausBot)
-  jde nejdřív na veřejnou referenční Organizaci `LazurioExampleOrganization`,
+- Rollout sdíleného softwaru (Machines, LazurioPlatform, T3 Code, MausBot a
+  změny vstupu v Auth a Dashboardu) jde nejdřív na veřejnou referenční
+  Organizaci `LazurioExampleOrganization`,
   kde rollouty a restarty nepotřebují souhlas ani okno; review a brány vydání
   zůstávají a další vlna následuje po akceptaci v prohlížeči — decision 0204
   v `manual/decision-register.md`.
