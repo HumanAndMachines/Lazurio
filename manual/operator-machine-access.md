@@ -64,7 +64,8 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
 7. **Správa Conglomerate Hostu** patří Ownerovi GitHub Organizace, která
    Conglomerate Host vlastní, a jde jen z jeho osobního laptopu a osobní VM
    (`owner_admin_ssh_grants`) a podle rozhodnutí 0202 i z jeho jmenovaného
-   Pracovního Prostředí. Ownerství jiné Organizace obsluhované tímtéž
+   Pracovního Prostředí („Owner nebo Admin“ v 0202 je tatáž role Owner,
+   v GitHub API `admin`). Ownerství jiné Organizace obsluhované tímtéž
    hostem správu nedává; telefon, jiné pracovní VM ani pracovní laptop ji
    nedostávají.
 

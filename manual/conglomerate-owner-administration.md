@@ -18,7 +18,7 @@ počítači, přihlášení ani privátním klíči jiného Ownera nebo dodavate
 Členství v tailnetu, společný Headscale user, tag pracovního prostředí ani jméno
 mašiny nejsou důkaz role Owner. Ověř živou GitHub roli a přesnou vazbu zařízení
 na schváleného Ownera. Přístup se nedává automaticky všem uzlům Organizace.
-Telefon a pracovní VM správní práva implicitně nezískávají; výjimkou je výslovně jmenované Pracovní Prostředí Ownera nebo Admina podle rozhodnutí 0202 (servisní SSH do Pracovních a Týmových Prostředí členů téže Organizace a správa jejího Conglomerate Hostu). Jejich běžný SSH a
+Telefon a pracovní VM správní práva implicitně nezískávají; výjimkou je výslovně jmenované Pracovní Prostředí Ownera (v 0202 „Owner nebo Admin“, tatáž role) podle rozhodnutí 0202 (servisní SSH do Pracovních a Týmových Prostředí členů téže Organizace a správa jejího Conglomerate Hostu). Jejich běžný SSH a
 webový přístup do pracovních prostředí je samostatná věc.
 
 Privátní klíč zůstává na zdrojové mašině. Server má jmenovité SSH účty, přesné
