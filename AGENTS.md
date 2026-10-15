@@ -54,8 +54,9 @@ Prostředí“), druh přívlastkem (Osobní, Pracovní, Týmové, Místní,
 Automatizované Prostředí). Hostované Prostředí česky vlastní jméno nemá; kde je
 potřeba ho odlišit, je to „Prostředí na serveru“, nikdy „Remote Environment“
 ani „Vzdálené Prostředí“. Anglicky je to **Environment** a hostované **Remote
-Environment**. Pro toto místo nepoužívej slova „Mašina“, „VM“ ani „server“;
-přesné výrazy jako MCP server nebo vývojový server aplikace tím dotčené nejsou.
+Environment**. Prostředí nepojmenovávej slovy „Mašina“, „VM“ ani „server“;
+„Prostředí na serveru“ je povolený popis umístění, ne název, a přesné výrazy
+jako MCP server nebo vývojový server aplikace tím dotčené nejsou.
 V textech pro lidi dále platí: produkt je **Lazurio** (Launchpad a Dashboard
 jsou interní názvy částí, cíl rozliší „Apps“, „Přehled Organizace“ nebo
 „Nastavení“; názvy příkazů zůstávají přesné), Organizaci se říká
