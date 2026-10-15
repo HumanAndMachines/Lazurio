@@ -206,7 +206,7 @@ Selhání a co s nimi dělá App:
 | Situace | Proměnná | Chování |
 | --- | --- | --- |
 | Soused deklarovaný, leží vedle, běží | je | volání projde |
-| Soused zastavený, startuje nebo padá | je | spojení odmítnuto nebo odpověď 5xx: App odpoví svému volajícímu typovanou chybou (např. 503 „soused na tomto Environmentu neběží“), ve smyčce neopakuje a souseda nespouští; nespouští ho ani Launchpad |
+| Soused zastavený, startuje nebo padá | je | spojení odmítnuto nebo odpověď 5xx: App odpoví svému volajícímu typovanou chybou (např. 503 „soused v tomto Prostředí neběží“), ve smyčce neopakuje a souseda nespouští; nespouští ho ani Launchpad |
 | Lease souseda přesunutý (reviewovaný PR, pak `lazurio update`) | stará hodnota do restartu volající App | jako zastavený soused; běžící App si drží prostředí, se kterým startovala, a novou adresu dostane při dalším startu (Stop a Start jednou) |
 | Deklarovaný soused (i jiný povinný slot, třeba datový mount) na Environmentu není: Organization manifest ho nedeklaruje, je `planned_slot`, nebo vedle neleží | — | Launchpad App **nespustí**, a to ještě před instalací závislostí: typovaný nález připravenosti podle decision 0176 bodu 4. Launchpad Platformy vrátí `required-slot-undeclared`, `required-slot-planned` nebo `required-slot-missing` se slotem, Launchpad tohoto repa `required_slot_unavailable` nebo `planned_slot`. Stejný nález v katalogu, Diagnostice a doctoru doplní Lazurio/LazurioPlatform#128 |
 | Soused leží vedle, ale jeho výchozí App nejde přečíst nebo nemá HTTP(S) vstup | není | App startuje (slot na Environmentu je); volání souseda odpoví typovanou chybou „adresa souseda nebyla předána“ a vadu opraví správce souseda |
