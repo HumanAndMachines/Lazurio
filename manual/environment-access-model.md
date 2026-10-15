@@ -42,7 +42,8 @@ nezavádí. Vědomě zpřístupněná aplikace či export nesmí obejít tuto hr
    aplikaci. Brána kontroluje rozsah na serverové straně.
 
 Nevzniká veřejná alternativní cesta k pracovnímu Environmentu ani k jeho
-aplikacím. Přihlašovací/control-plane endpoint nutný k založení požadavku na
+aplikacím. Jedinou výjimkou je veřejná referenční Organizace podle decision
+0204; ostatních Organizací se netýká. Přihlašovací/control-plane endpoint nutný k založení požadavku na
 připojení není přístupem k pracovním datům. Síťová schválení se vážou na
 konkrétní identitu zařízení a účet; jejich přesný mechanismus musí prokázat
 DEV-6641 na skutečném Headscale. Nová registrace nesmí získat provozní přístup
