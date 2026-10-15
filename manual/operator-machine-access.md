@@ -54,7 +54,9 @@ odvozuje z `owner` a `operator`, ne z Headscale usera ani ze jména.
 4. **Sdílená týmová VM** (Hosted Team Workspace, víc Operátorů v jednom OS
    účtu) přijímá jen příchozí spojení od členů GitHub Teamu, na který je vázaná
    neměnným `github_team_id` (0147/0149); členství se čte živě z GitHubu a
-   nevzniká druhý roster. Nikdy nemá odchozí grant na klienty ani na jiné VM
+   nevzniká druhý roster. Výjimkou je servisní SSH z jmenovaného Pracovního
+   Prostředí Ownera nebo Admina téže Organizace podle 0202 (přesný zdrojový
+   uzel a adresa), i když Admin není členem toho Teamu. Nikdy nemá odchozí grant na klienty ani na jiné VM
    (kromě portu proxy AI poolu své Organizace, 0181). Pracovní zóna nemá hranu
    z VM na zařízení (0182); jinak by agenti jednoho člena došli na laptop jiného.
 5. **Mezi Operátory nic implicitně.**
