@@ -45,16 +45,28 @@ Historická GitHub organization zůstává záměrně `HumanAndMachines` a canon
 repo rootu `HumanAndMachines/Lazurio`; interní identity se rebrandem
 nepřepisují.
 
-**Směrem k lidem říkej „Environment“** (decision 0170 v
-manual/decision-register.md). Když Agent mluví nebo píše k člověku (chat,
-handoff, popis PR určený uživateli, texty v aplikaci), místo, ve kterém člověk
-pracuje, pojmenuje **Environment** (česky v mužském rodě: „ten Environment“,
-„tento Environment“) a hostované **Remote Environment**. Pro toto místo
-nepoužívej slova „Mašina“, „VM“ ani „server“; přesné výrazy jako MCP server
-nebo vývojový server aplikace tím dotčené nejsou. **Machine / Mašina** zůstává
-přesný technický a architektonický pojem níže (hranice, na které Environment
-běží) a zůstává v identifikátorech, příkazech, schématech, custody záznamech,
-decision records a v `ARCHITECTURE.md`; tam ho nepřepisuj.
+**Směrem k lidem říkej česky „Prostředí“, anglicky „Environment“**
+(decision 0170 s dodatkem z 2026-10-15 v manual/decision-register.md). Když
+Agent mluví nebo píše k člověku (chat, handoff, popis PR určený uživateli,
+texty v aplikaci), místo, ve kterém člověk pracuje, česky pojmenuje
+**Prostředí**: s velkým P, ve středním rodě („toto Prostředí“, „v tomto
+Prostředí“), druh přívlastkem (Osobní, Pracovní, Týmové, Místní,
+Automatizované Prostředí). Hostované Prostředí česky vlastní jméno nemá; kde je
+potřeba ho odlišit, je to „Prostředí na serveru“, nikdy „Remote Environment“
+ani „Vzdálené Prostředí“. Anglicky je to **Environment** a hostované **Remote
+Environment**. Prostředí nepojmenovávej slovy „Mašina“, „VM“ ani „server“;
+„Prostředí na serveru“ je povolený popis umístění, ne název, a přesné výrazy
+jako MCP server nebo vývojový server aplikace tím dotčené nejsou.
+V textech pro lidi dále platí: produkt je **Lazurio** (Launchpad a Dashboard
+jsou interní názvy částí, cíl rozliší „Apps“, „Přehled Organizace“ nebo
+„Nastavení“; názvy příkazů zůstávají přesné), Organizaci se říká
+**Organizace**, ne „firma“, a píše se **tento/tato/toto**, ne
+tenhle/tahle/tohle. Podrobnosti drží stránka Hlas v design systému Lazuria
+(`HumanAndMachine-ai/design-system-lazurio`).
+**Machine / Mašina** zůstává přesný technický a architektonický pojem níže
+(hranice, na které Environment běží) a zůstává v identifikátorech, příkazech,
+schématech, custody záznamech, decision records a v `ARCHITECTURE.md`; tam ho
+nepřepisuj. Agentní pravidla smějí dál používat odborný pojem Environment.
 
 **Lidem vykej** (decision 0199 v manual/decision-register.md). Když Agent
 mluví nebo píše k člověku (chat, handoff, popis PR určený člověku, texty
