@@ -4053,3 +4053,53 @@ test("declared managed directory-only checkout blocks both Sync and GET readines
   } })).toMatchObject({ state: "blocked", checked_remote: false, reason: "managed_checkout_not_repository", repo_key: parent.key });
   expect(await updateManagedRepo({ ...parent, materialization: null }, { deps: { inspectLocalRepo } })).toMatchObject({ state: "current", reason: "directory_only" });
 });
+
+
+for (const scenario of ["changed", "unchanged", "build-fails", "check-fails"]) {
+  test(`source update declared preparation: ${scenario}`, async () => {
+    const root = await mkdtemp(join(tmpdir(), "lazurio-update-preparation-"));
+    cleanup.push(root);
+    const organizationRoot = join(root, "organizations", "TestCo");
+    const moduleRoot = join(organizationRoot, "workspace", "presentation");
+    const appRoot = join(moduleRoot, "app", "v1");
+    await mkdir(appRoot, { recursive: true });
+    await writeJson(join(appRoot, "package.json"), {
+      name: "test-presentation", scripts: { "prepare:app": "bun --no-env-file prepare.mjs", "check:prepared": "bun --no-env-file check.mjs" },
+      lazurio: { preparation: { schema_version: "lazurio.preparation.v1", owner_package: "app/v1/package.json", prepare_script: "prepare:app", check_script: "check:prepared" } },
+    });
+    await writeFile(join(appRoot, "bun.lock"), "# fixture");
+    await writeFile(join(appRoot, "built.txt"), "old slide");
+    await writeFile(join(appRoot, "prepare.mjs"), scenario === "build-fails"
+      ? 'console.error("build rejected"); process.exit(2);'
+      : 'await Bun.write("built.txt", "updated first slide");');
+    await writeFile(join(appRoot, "check.mjs"), scenario === "check-fails"
+      ? 'process.exit(1);' : 'process.exit((await Bun.file("built.txt").exists()) ? 0 : 1);');
+    const organization = repo("TestCo::root", "organization_root", "TestCo", "root");
+    organization.absolute_path = organizationRoot;
+    const module = repo("TestCo::presentation", "module", "TestCo", "presentation", "workspace");
+    module.absolute_path = moduleRoot;
+    const head = "d".repeat(40);
+    const report = await runLazurioUpdate({ rootPath: root, runtimeRoot: join(root, "..", "runtime"), deps: {
+      acquireLock: async () => ({ release: async () => {} }),
+      buildInventory: async () => ({ repos: [organization, module], warnings: [] }),
+      updateRepo: async (item) => ({ ...identity(item), head, message: "fixture", state: item.key === module.key && scenario !== "unchanged" ? "updated" : "current", actions: item.key === module.key && scenario !== "unchanged" ? ["fast_forward"] : [] }),
+      discoverApps: async () => ({ apps: [{ id: "presentation", package_path: "organizations/TestCo/workspace/presentation/app/v1/package.json" }] }),
+      refreshPackageDependencies: async () => ({ ok: true }),
+      inspectLocalRepo: async () => ({ ok: true, branch: "main", dirtyPaths: [], head }),
+      runGit: async (args) => ({ ok: args[0] === "rev-parse", stdout: head, stderr: "", exitCode: args[0] === "rev-parse" ? 0 : 1 }),
+    } });
+    const result = report.results.find(item => item.repo_key === module.key);
+    if (scenario === "changed") {
+      expect(result.state).toBe("updated");
+      expect(await readFile(join(appRoot, "built.txt"), "utf8")).toBe("updated first slide");
+      expect(result.dependencies[0].preparation).toMatchObject({ ok: true, declared: true, prepared: true });
+    } else if (scenario === "unchanged") {
+      expect(result.state).toBe("current");
+      expect(await readFile(join(appRoot, "built.txt"), "utf8")).toBe("old slide");
+    } else {
+      expect(result.state).toBe("blocked");
+      expect(result.reason).toBe(scenario === "build-fails" ? "preparation_prepare_failed" : "preparation_post_check_failed");
+      expect(result.message).toContain("příprava jedné aplikace selhala");
+    }
+  });
+}

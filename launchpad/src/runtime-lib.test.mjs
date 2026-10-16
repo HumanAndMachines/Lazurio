@@ -6392,3 +6392,53 @@ test("retired document editors and stale reader leases fail before reclaim or sp
     await runtime.shutdown();
   }
 });
+
+
+test("Start prepares declared artifacts before the server and Open reuses a ready build", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port });
+  const packagePath = "organizations/TestCompany/modules/demo/app/v1/package.json";
+  const appRoot = dirname(join(root, packagePath));
+  const pkg = JSON.parse(await readFile(join(root, packagePath), "utf8"));
+  pkg.lazurio = { preparation: {
+    schema_version: "lazurio.preparation.v1", owner_package: "modules/demo/app/v1/package.json",
+    prepare_script: "prepare:app", check_script: "check:prepared",
+  } };
+  pkg.scripts["prepare:app"] = "bun --no-env-file prepare.mjs";
+  pkg.scripts["check:prepared"] = "bun --no-env-file check.mjs";
+  await writeJson(join(root, packagePath), pkg);
+  await writeFile(join(appRoot, "prepare.mjs"), 'await Bun.write("prepared.txt", "first slide"); await Bun.write("runs.txt", String(Number(await Bun.file("runs.txt").text().catch(() => "0")) + 1));');
+  await writeFile(join(appRoot, "check.mjs"), 'process.exit((await Bun.file("prepared.txt").exists()) ? 0 : 1);');
+  const runtime = createRuntimeManager({ companiesRoot: root, stateRoot: join(root, ".state") });
+  try {
+    await runtime.start("test-company-demo-v1");
+    expect(await readFile(join(appRoot, "prepared.txt"), "utf8")).toBe("first slide");
+    await runtime.open("test-company-demo-v1");
+    expect(await readFile(join(appRoot, "runs.txt"), "utf8")).toBe("1");
+    const previousPid = (await runtime.health("test-company-demo-v1")).pid;
+    await rm(join(appRoot, "prepared.txt"));
+    const reopened = await runtime.open("test-company-demo-v1");
+    expect(await readFile(join(appRoot, "runs.txt"), "utf8")).toBe("2");
+    expect(reopened.runtime.pid).not.toBe(previousPid);
+  } finally { await runtime.stop("test-company-demo-v1").catch(() => {}); }
+});
+
+test("failed declared preparation blocks Start instead of serving an unprepared App", async () => {
+  const port = await findFreePort();
+  const root = await createCompaniesWorkspaceFixture({ port });
+  const packagePath = "organizations/TestCompany/modules/demo/app/v1/package.json";
+  const pkg = JSON.parse(await readFile(join(root, packagePath), "utf8"));
+  pkg.lazurio = { preparation: {
+    schema_version: "lazurio.preparation.v1", owner_package: "modules/demo/app/v1/package.json",
+    prepare_script: "prepare:app", check_script: "check:prepared",
+  } };
+  pkg.scripts["check:prepared"] = 'bun --no-env-file -e "process.exit(1)"';
+  pkg.scripts["prepare:app"] = "bun --no-env-file failure.mjs";
+  await writeFile(join(dirname(join(root, packagePath)), "failure.mjs"), 'console.error("missing preview"); process.exit(2);');
+  await writeJson(join(root, packagePath), pkg);
+  const runtime = createRuntimeManager({ companiesRoot: root, stateRoot: join(root, ".state") });
+  try {
+    await expect(runtime.start("test-company-demo-v1")).rejects.toMatchObject({ code: "app_preparation_failed" });
+    expect((await runtime.health("test-company-demo-v1")).managed).toBe(false);
+  } finally { await runtime.stop("test-company-demo-v1").catch(() => {}); }
+});
