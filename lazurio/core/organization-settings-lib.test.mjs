@@ -19,7 +19,8 @@ const microsoftKeys = [
   "integrations.microsoft365.apps",
   "integrations.microsoft365.callbacks",
 ];
-const ungovernedMicrosoft = microsoftKeys.map((key) => ({ key, governed: false, value: null }));
+// Every setting after Composio's, none of them governed.
+const ungovernedAfterComposio = [...microsoftKeys, "workspace.tabs"].map((key) => ({ key, governed: false, value: null }));
 const tenantId = "11111111-2222-4333-8444-aaaaaaaaaaaa";
 const clientId = "11111111-2222-4333-8444-bbbbbbbbbbbb";
 const callback = "https://launchpad.machine-1.example-org.lazurio.io/api/integrations/oauth/callback";
@@ -42,7 +43,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
       "settings_type_invalid",
       "settings_value_invalid",
     ]);
-    expect(ORGANIZATION_SETTINGS_KEYS).toEqual(["integrations.composio.allowed", ...microsoftKeys]);
+    expect(ORGANIZATION_SETTINGS_KEYS).toEqual(["integrations.composio.allowed", ...microsoftKeys, "workspace.tabs"]);
     expect(MICROSOFT365_APPS).toEqual(["outlook", "one_drive", "share_point"]);
     expect(Object.isFrozen(ORGANIZATION_SETTINGS_KEYS)).toBe(true);
   });
@@ -53,7 +54,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
       status: "absent",
       source: canonicalSource,
       values: {},
-      effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft],
+      effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedAfterComposio],
       issues: [],
     });
   });
@@ -65,7 +66,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
         status: "valid",
         source: canonicalSource,
         values: settings,
-        effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft],
+        effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedAfterComposio],
         issues: [],
       });
     }
@@ -76,7 +77,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
         status: "valid",
         source: canonicalSource,
         values: settings,
-        effective: [{ key: "integrations.composio.allowed", governed: true, value: allowed }, ...ungovernedMicrosoft],
+        effective: [{ key: "integrations.composio.allowed", governed: true, value: allowed }, ...ungovernedAfterComposio],
         issues: [],
       });
     }
@@ -151,7 +152,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
       status: "absent",
       source: null,
       values: {},
-      effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedMicrosoft],
+      effective: [{ key: "integrations.composio.allowed", governed: false, value: null }, ...ungovernedAfterComposio],
       issues: [],
     });
     for (const input of [
@@ -187,7 +188,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
     expect(newOrganizationSettings()).toEqual({ integrations: { composio: { allowed: false } } });
     expect(settingsOf(manifest(newOrganizationSettings()))).toMatchObject({
       status: "valid",
-      effective: [{ key: "integrations.composio.allowed", governed: true, value: false }, ...ungovernedMicrosoft],
+      effective: [{ key: "integrations.composio.allowed", governed: true, value: false }, ...ungovernedAfterComposio],
     });
   });
 
@@ -204,6 +205,7 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
         { key: "integrations.microsoft365.client_id", governed: true, value: clientId },
         { key: "integrations.microsoft365.apps", governed: true, value: ["outlook", "one_drive", "share_point"] },
         { key: "integrations.microsoft365.callbacks", governed: true, value: [callback] },
+        { key: "workspace.tabs", governed: false, value: null },
       ],
       issues: [],
     });
@@ -309,11 +311,69 @@ describe("Organization settings contract (decision 0194, DEV-6653 C1)", () => {
       { integrations: { microsoft365: { ...microsoft365, callbacks: ["https://attacker.example/api/integrations/oauth/callback"] } } },
       { integrations: { microsoft365: { ...microsoft365, callbacks: manyCallbacks(256) } } },
       { integrations: { microsoft365: { ...microsoft365, client_secret: "value" } } },
+      { workspace: { tabs } },
+      { workspace: {} },
+      { workspace: { tabs: [] } },
+      { workspace: { tabs: Array.from({ length: 13 }, (_, index) => ({ name: `T${index}`, modules: [] })) } },
+      { workspace: { tabs: [{ name: " Finance", modules: [] }] } },
+      { workspace: { tabs: [{ name: "x".repeat(41), modules: [] }] } },
+      { workspace: { tabs: [{ name: "Fi\nnance", modules: [] }] } },
+      { workspace: { tabs: [{ name: "Finance", modules: ["../deals"] }] } },
+      { workspace: { tabs: [{ name: "Finance", modules: ["deals", "deals"] }] } },
+      { workspace: { tabs: [{ name: "Finance" }] } },
+      { workspace: { tabs: [{ name: "Finance", modules: [], icon: "x" }] } },
     ];
     for (const settings of documents) {
       const coreValid = settingsOf(manifest(settings)).status === "valid";
       const schemaValid = validateAgainstSchema(manifest(settings), organizationManifestSchema, "organization").length === 0;
       expect(schemaValid, JSON.stringify(settings)).toBe(coreValid);
+    }
+  });
+});
+
+// Decision 0206: an Organization's own Workspace tabs, one setting.
+const tabs = [
+  { name: "Každodenní práce", modules: ["deals", "knowledgebase"] },
+  { name: "Finance", modules: ["invoices"] },
+  { name: "Sklad", modules: [] },
+];
+
+describe("Workspace tabs (decision 0206)", () => {
+  test("are one setting: ordered names, each module in one tab at most", () => {
+    expect(settingsOf(manifest({ workspace: { tabs } }))).toMatchObject({
+      status: "valid",
+      values: { workspace: { tabs } },
+    });
+    expect(settingsOf(manifest({ workspace: { tabs } })).effective.at(-1)).toEqual({
+      key: "workspace.tabs",
+      governed: true,
+      value: tabs,
+    });
+    // What the JSON schema cannot express, Core refuses on its own.
+    const twice = [
+      [
+        [
+          { name: "Finance", modules: ["deals"] },
+          { name: "FINANCE", modules: [] },
+        ],
+        "/settings/workspace/tabs/1/name",
+      ],
+      [
+        [
+          { name: "Finance", modules: ["deals"] },
+          { name: "Sklad", modules: ["deals"] },
+        ],
+        "/settings/workspace/tabs/1/modules/0",
+      ],
+    ];
+    for (const [value, path] of twice) {
+      expect(settingsOf(manifest({ workspace: { tabs: value } }))).toMatchObject({
+        status: "invalid",
+        values: null,
+        issues: [issue("settings_value_invalid", path)],
+      });
+      expect(validateAgainstSchema(manifest({ workspace: { tabs: value } }), organizationManifestSchema, "organization"))
+        .toEqual([]);
     }
   });
 });
