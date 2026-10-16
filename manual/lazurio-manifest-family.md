@@ -257,6 +257,38 @@ not secrets; the runbook is
   LazurioPlatform release that apply it are out, in the order of
   [Readers first](#readers-first).
 
+### Workspace tabs (`settings.workspace.tabs`)
+
+Decision 0206 lets an Organization arrange its Workspace in Apps into tabs it
+names itself, the same for every member. Its Owner arranges them in the
+Dashboard, which writes this setting with the Owner's own GitHub rights
+(decision 0194 point 2); agents propose a pull request.
+
+```json
+"settings": {
+  "workspace": {
+    "tabs": [
+      { "name": "Každodenní práce", "modules": ["mission-control", "deals"] },
+      { "name": "Finance", "modules": ["invoices", "pricing"] },
+      { "name": "Sklad", "modules": ["stock"] }
+    ]
+  }
+}
+```
+
+- `tabs` holds 1 to 12 tabs in their order. A `name` has 1 to 40 characters,
+  no control character and no space at either end; `modules` are
+  `lazurio.module.v1` ids, unique in the tab.
+- Core also refuses what the JSON schema cannot express: two tabs of one name
+  (letter case ignored) and a module in two tabs (`settings_value_invalid`).
+- A module named in no tab is in the first tab; ids that name no module are
+  ignored by the reader. The whole list is one key in `effective[]`
+  (`workspace.tabs`).
+- **Readers first, again.** A reader that does not know `workspace` judges the
+  whole section `invalid` and keeps the settings it applied last. No
+  Organization declares tabs until Lazurio Core, the Dashboard and the
+  LazurioPlatform release that read them are out.
+
 ### Check in CI
 
 ```text

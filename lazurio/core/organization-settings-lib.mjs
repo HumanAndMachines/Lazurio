@@ -40,6 +40,14 @@ const LAUNCHPAD_CALLBACK_PATTERN =
 // callback always takes one of them.
 const MICROSOFT365_MAX_CALLBACKS = 255;
 
+// An Organization's own Workspace tabs (decision 0206): 1 to 12 tabs, each a
+// name of 1 to 40 characters without control characters or surrounding
+// space, and the modules in it by their lazurio.module.v1 id.
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the control characters are what it refuses.
+const WORKSPACE_TAB_NAME_PATTERN = /^(?=[^\u0000-\u001f\u007f]{1,40}$)[^\s\u0000-\u001f\u007f](?:.*[^\s\u0000-\u001f\u007f])?$/;
+const WORKSPACE_MODULE_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}$/;
+export const WORKSPACE_TABS_MAX = 12;
+
 const CANONICAL_SOURCE = "lazurio.organization.json";
 
 // The whole contract as one closed tree. Adding an Organization setting adds
@@ -65,6 +73,21 @@ const SETTINGS_CONTRACT = objectNode({
       ["tenant_id", "client_id", "apps", "callbacks"],
     ),
   }),
+  workspace: objectNode(
+    {
+      tabs: arrayLeaf(
+        objectNode(
+          {
+            name: stringLeaf(WORKSPACE_TAB_NAME_PATTERN),
+            modules: arrayLeaf(stringLeaf(WORKSPACE_MODULE_PATTERN), { maxItems: 500 }),
+          },
+          ["name", "modules"],
+        ),
+        { minItems: 1, maxItems: WORKSPACE_TABS_MAX },
+      ),
+    },
+    ["tabs"],
+  ),
 });
 
 /** Dot-separated keys of every known setting, as reported per item to the Dashboard. */
@@ -103,6 +126,7 @@ export function resolveOrganizationSettings({ authority, canonicalManifest }) {
   }
   const issues = [];
   validateNode(canonicalManifest.settings, SETTINGS_CONTRACT, "/settings", issues);
+  if (issues.length === 0) workspaceIssues(canonicalManifest.settings, issues);
   if (issues.length > 0) {
     return settingsResult({
       status: "invalid",
@@ -184,6 +208,26 @@ function validateNode(value, node, path, issues) {
   }
 }
 
+// What the closed tree (and the JSON schema) cannot say about the tabs: two
+// tabs never share a name, letter case ignored, and a module is in one tab
+// at most.
+function workspaceIssues(settings, issues) {
+  const tabs = settings.workspace?.tabs;
+  if (tabs === undefined) return;
+  const names = new Set();
+  const modules = new Set();
+  tabs.forEach((tab, index) => {
+    const at = `/settings/workspace/tabs/${index}`;
+    const name = tab.name.normalize("NFC").toLocaleLowerCase();
+    if (names.has(name)) issues.push({ code: "settings_value_invalid", path: `${at}/name` });
+    names.add(name);
+    tab.modules.forEach((module, position) => {
+      if (modules.has(module)) issues.push({ code: "settings_value_invalid", path: `${at}/modules/${position}` });
+      modules.add(module);
+    });
+  });
+}
+
 function objectNode(fields, required = []) {
   return Object.freeze({
     kind: "object",
@@ -205,7 +249,7 @@ function enumItem(values) {
 }
 
 // An array is one setting: its items are validated, never reported as keys.
-// Items are strings and must be unique.
+// String items must be unique.
 function arrayLeaf(items, { minItems = 0, maxItems = Infinity } = {}) {
   return Object.freeze({ kind: "array", items, minItems, maxItems });
 }

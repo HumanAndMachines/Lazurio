@@ -173,6 +173,39 @@
               }
             }
           }
+        },
+        "workspace": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["tabs"],
+          "description": "The Organization's own tabs in Apps' Workspace (decision 0206), the same for every member; a module named in no tab is in the first. Core also refuses two tabs of one name (letter case ignored) and a module in two tabs, which this schema cannot express.",
+          "properties": {
+            "tabs": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 12,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name", "modules"],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "pattern": "^(?=[^\\u0000-\\u001f\\u007f]{1,40}$)[^\\s\\u0000-\\u001f\\u007f](?:.*[^\\s\\u0000-\\u001f\\u007f])?$",
+                    "description": "The tab's name: 1 to 40 characters, no control character, no space at either end."
+                  },
+                  "modules": {
+                    "type": "array",
+                    "maxItems": 500,
+                    "uniqueItems": true,
+                    "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$" },
+                    "description": "The modules of the tab, by their lazurio.module.v1 id."
+                  }
+                }
+              },
+              "description": "The tabs, in their order."
+            }
+          }
         }
       }
     },

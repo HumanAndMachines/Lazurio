@@ -702,7 +702,7 @@ test("Organization settings ride next to the resource and never touch projection
     status: "valid",
     source: "lazurio.organization.json",
     values: { integrations: { composio: { allowed: false } } },
-    effective: [{ key: "integrations.composio.allowed", governed: true, value: false }, ...ungovernedMicrosoft365()],
+    effective: [{ key: "integrations.composio.allowed", governed: true, value: false }, ...ungovernedAfterComposio()],
     issues: [],
   });
   expect(plain.settings).toMatchObject({ status: "absent", source: "lazurio.organization.json", values: {} });
@@ -1047,12 +1047,12 @@ function fixture({ owner = true, canCreate = true, app = {}, root = {} } = {}) {
   };
 }
 
-// The Microsoft 365 company app (decision 0162, addendum 2026-10-14) is not
-// declared by these fixtures, so its keys stay ungoverned.
-function ungovernedMicrosoft365() {
-  return ["tenant_id", "client_id", "apps", "callbacks"].map((field) => ({
-    key: `integrations.microsoft365.${field}`,
-    governed: false,
-    value: null,
-  }));
+// Neither the Microsoft 365 company app (decision 0162, addendum 2026-10-14)
+// nor the Workspace tabs (decision 0206) are declared by these fixtures, so
+// their keys stay ungoverned.
+function ungovernedAfterComposio() {
+  return [
+    ...["tenant_id", "client_id", "apps", "callbacks"].map((field) => `integrations.microsoft365.${field}`),
+    "workspace.tabs",
+  ].map((key) => ({ key, governed: false, value: null }));
 }
