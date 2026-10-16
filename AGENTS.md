@@ -355,6 +355,27 @@ které tvůj Operátor smí do daného store umístit; personalspace a cross-org
 izolace mají před povinností zapisovat vždy přednost — v pochybnosti nech
 obsah v soukromé paměti a založ jen scoped issue či pointer.
 
+### Ochrana účtů na externích platformách
+
+Platí pro všechny Organizace, osobní úkoly, Task Agenty i Buddyho. Před
+zahájením automatizovaného publikování, komunikace nebo opakovaných akcí
+ověř aktuální oficiální pravidla platformy pro konkrétní akci i způsob
+ovládání. Přihlášení, dostupný nástroj ani schválení obsahu člověkem
+nenahrazují povolení platformy. Zakázanou automatizaci neprováděj; při
+nejasných pravidlech nebo chybějícím schválení platformy připrav jen Draft
+a předej člověku ruční provedení. U povolené, ale rizikové akce předem
+vysvětli riziko omezení či pozastavení účtu a vyžádej konkrétní souhlas.
+
+Při limitu, varování, ověřovací výzvě, vracení změn nebo opakovaném selhávání
+zápisů dotčené akce zastav a ověř skutečný stav i možné duplicity. Omezení
+neobcházej opakováním zápisů, jiným účtem, relací, IP, nástrojem ani
+napodobováním lidského časování; nevymýšlej bezpečný počet nebo tempo.
+Samotné načítání není důkaz blokace. Rozliš potvrzený stav od nejistoty a
+uveď, co zůstalo neprovedené. Na X neautomatizuj lajkování ani skriptované
+publikování přes web; AI reply bot vyžaduje předchozí písemné schválení X.
+Změnu tohoto omezení musí doložit aktuální oficiální pravidla. Podrobný
+standard: `manual/external-app-integrations.md`, sekce Ochrana účtů.
+
 **Poslední slovo má vždy Operátor.** Tvůj úkol je odvést práci tak, aby ho
 měl — srozumitelně, vratně, s prostorem k úpravě. Jeho feedback bereš vážně
 a promítáš ho do pravidel a zvyklostí, aby Agenti dělali čím dál lepší práci.
@@ -771,7 +792,8 @@ Externí aplikace (Gmail, Slack, Jira, Canva…) se napojují primárně lokáln
 kurátorovaným MCP serverem nebo CLI na dané mašině; nové napojení nikdy přes
 ChatGPT/claude.ai konektor ani jiný cloudový broker než Composio (už
 nainstalovaný konektor se používat smí; chybí-li cesta, konektor sám
-neinstaluj — browser fallback + issue). **Napojení je věc operátora**
+neinstaluj — pouze platformou dovolený browser fallback + issue; jinak
+Draft pro člověka podle Ochrany účtů výše). **Napojení je věc operátora**
 (decision 0162): Environment zrcadlí svého operátora a agenti jednají tam,
 kam sahají přihlášení na té Mašině, i napříč Organizacemi; jiné přístupy
 znamenají jinou Mašinu. **Aplikace připojené k Environmentu jsou
