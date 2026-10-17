@@ -497,6 +497,10 @@ Chybí-li vestavěný browser, omezení stručně oznam a pokračuj bez něj.
    `mission-control/db` nebo kanonickém `workspace/<module>/db` pod ověřeným
    parent Git repem; deprecated `modules/<module>/db` odmítne bez materializace.
    Existující repository-db neaktualizuje a nezískává commit/publish autoritu.
+   Stejně omezeně si Modul svůj deklarovaný `workspace/<module>/db` doplní
+   sám při přípravě před startem, pokud chybí a živý uživatel k němu má
+   přístup. Existující datový checkout jen ponechá, nic nefetchuje a nikdy
+   nezakládá prázdný remote (dodatek 0152 z 2026-10-17).
    Deklarovaný Mission Control bez právě jednoho aktivního
    `repository_db_mount` dál končí `blocked`, nikdy zdánlivě úspěšnou instalací.
    Agent nikdy nezačíná práci
