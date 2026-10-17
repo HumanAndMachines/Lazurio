@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
-import { mkdir, rm, symlink, writeFile } from "fs/promises";
+import { mkdir, readFile, rm, symlink, writeFile } from "fs/promises";
 import { join } from "path";
 import { runGit } from "../../lazurio/runtime/git-lib.mjs";
 import { buildWorktreeIndex, detectNonCanonicalSidecarFields } from "../../lazurio/runtime/worktree-lib.mjs";
@@ -8,13 +8,23 @@ import { createLaunchpadGitFixture, initGitRepo, writeJson } from "./git-fixture
 
 const tempRoots = [];
 
-test("owner-repository linked worktrees retain module identity and resolve local plan authority", async () => {
+test.each(["workspace", "root"])("owner-repository %s linked worktrees retain module identity and local plan authority", async (space) => {
   const root = await createLaunchpadGitFixture();
   tempRoots.push(root);
   const orgRoot = join(root, "organizations/BetaCo_GEN3");
-  const repo = join(orgRoot, "workspace/deals");
+  const slotPath = space === "root" ? "design-system" : "workspace/deals";
+  const module = space === "root" ? "design-system" : "deals";
+  if (space === "root") {
+    const manifestPath = join(orgRoot, "modules.manifest.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.module_slots.push({ path: slotPath, space: "root", category: "design",
+      materialization: "doctor_managed_nested_repo",
+      git: { url: `git@github.com:BetaCo/${module}.git`, branch: "main" } });
+    await writeJson(manifestPath, manifest);
+  }
+  const repo = join(orgRoot, slotPath);
   await initGitRepo(repo);
-  expect((await runGit(["remote", "add", "origin", "git@github.com:BetaCo/deals.git"], { cwd: repo })).ok).toBe(true);
+  expect((await runGit(["remote", "add", "origin", `git@github.com:BetaCo/${module}.git`], { cwd: repo })).ok).toBe(true);
   const slug = "DEV-9001-module-preview";
   const branch = "codex/DEV-9001-module-preview";
   const checkout = join(repo, ".worktrees/root", slug);
@@ -26,18 +36,18 @@ test("owner-repository linked worktrees retain module identity and resolve local
   const sidecar = join(repo, ".worktrees/root", `${slug}.worktree.json`);
   const metadata = {
     schema_version: "companiesascode.worktree.v1", branch,
-    organization_path: ".", workspace: "root", module: "deals", module_path: ".",
+    organization_path: ".", workspace: "root", module, module_path: ".",
     mission_control_plan_code: "DEV-9001", mission_control_plan_path: plan,
   };
   await writeJson(sidecar, metadata);
-  const index = await buildWorktreeIndex({ companiesRoot: root, organization: "BetaCo", module: "deals" });
+  const index = await buildWorktreeIndex({ companiesRoot: root, organization: "BetaCo", module });
   expect(index.worktrees.find((item) => item.slug === slug)).toMatchObject({
-    ownership_status: "owned", module: "deals", module_path: "workspace/deals", branch,
+    ownership_status: "owned", module, module_path: slotPath, branch,
     owner_plan: { code: "DEV-9001" },
   });
   // The public Launchpad response must list it too: the sidecar's
   // owner-relative module_path "." is not the Organization slot.
-  const publicResponse = await buildWorktreesResponse({ companiesRoot: root, organization: "BetaCo", module: "deals" });
+  const publicResponse = await buildWorktreesResponse({ companiesRoot: root, organization: "BetaCo", module });
   expect(publicResponse.worktrees.some((item) => item.slug === slug)).toBe(true);
   for (const invalid of [
     { branch: "codex/DEV-9999-forged" },
@@ -46,17 +56,17 @@ test("owner-repository linked worktrees retain module identity and resolve local
     { mission_control_plan_path: "../../../../personalspace/private.yaml" },
   ]) {
     await writeJson(sidecar, { ...metadata, ...invalid });
-    const rejected = await buildWorktreeIndex({ companiesRoot: root, organization: "BetaCo", module: "deals" });
+    const rejected = await buildWorktreeIndex({ companiesRoot: root, organization: "BetaCo", module });
     expect(rejected.worktrees.find((item) => item.slug === slug)?.ownership_status).not.toBe("owned");
   }
   await writeJson(sidecar, metadata);
   const forged = join(repo, ".worktrees/root/DEV-9002-unregistered");
   await initGitRepo(forged);
   await writeJson(`${forged}.worktree.json`, metadata);
-  const registeredOnly = await buildWorktreeIndex({ companiesRoot: root, organization: "BetaCo", module: "deals" });
+  const registeredOnly = await buildWorktreeIndex({ companiesRoot: root, organization: "BetaCo", module });
   expect(registeredOnly.worktrees.some((item) => item.slug === "DEV-9002-unregistered")).toBe(false);
-  expect((await runGit(["remote", "set-url", "origin", "git@github.com:OmegaCo/deals.git"], { cwd: repo })).ok).toBe(true);
-  const wrongOwner = await buildWorktreeIndex({ companiesRoot: root, organization: "BetaCo", module: "deals" });
+  expect((await runGit(["remote", "set-url", "origin", `git@github.com:OmegaCo/${module}.git`], { cwd: repo })).ok).toBe(true);
+  const wrongOwner = await buildWorktreeIndex({ companiesRoot: root, organization: "BetaCo", module });
   expect(wrongOwner.worktrees.some((item) => item.slug === slug)).toBe(false);
 });
 
