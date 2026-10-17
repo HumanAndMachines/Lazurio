@@ -27,17 +27,23 @@ mašiny přihlášené stejným účtem a organizací vidí stejná připojení.
 - V něm má pro každou Organizaci Lazuria jednu vlastní organizaci se stejným
   jménem, ve které nikdo jiný není, a výchozí organizaci, kterou Composio
   založilo při registraci.
-- Environment Organizace pracuje v organizaci se jménem své Organizace. Jméno
-  se porovnává bez ohledu na velikost písmen, mezery a diakritiku („Human and
-  Machine“ odpovídá `humanandmachine`). Launchpad ji nastaví sám
-  (`composio orgs switch`), aby v ní pracovali i agenti.
-- Chybí-li taková organizace, Launchpad to řekne v Apps → Integrace a odkáže
-  do dashboardu Composia, kde ji založíte; Composio organizaci jinak založit
-  neumí. Dokud chybí, Composio dál pracuje v organizaci, kterou máte
-  vybranou, takže nic, co už máte připojené, nepřestane fungovat. Jakmile ji
-  založíte, Launchpad do ní přepne sám a aplikace v ní připojíte znovu;
-  přejmenováním stávající organizace na jméno Organizace zůstanou připojení
-  zachovaná.
+- Environment Organizace pracuje v organizaci se jménem své Organizace.
+  Composio ve jménu dovolí jen písmena, číslice a podtržítka, takže jméno se
+  porovnává bez ohledu na velikost písmen, diakritiku a všechny znaky kromě
+  písmen a číslic („Human and Machine“ odpovídá `humanandmachine` i
+  `Human_and_Machine`). Launchpad ji nastaví sám (`composio orgs switch`), aby
+  v ní pracovali i agenti.
+- Chybí-li taková organizace, Launchpad ukáže jeden krok: jméno ke
+  zkopírování v tvaru, který Composio přijme (např.
+  „LazurioExampleOrganization“), a animaci cesty v dashboardu Composia. V něm
+  máte vlevo nahoře vybrané „FOR YOU“, vlevo dole otevřete kartu organizace,
+  zvolíte „Create Org“ a ve formuláři „Create Organization“ jméno vložíte. Že organizace vznikla, Launchpad pozná sám a přepne do ní (dodatek
+  0162 z 2026-10-17). Composio organizaci jinak založit neumí; Lazurio ho
+  požádalo o rozhraní (ComposioHQ/composio#4949).
+- Dokud organizace chybí, Composio dál pracuje v organizaci, kterou máte
+  vybranou, takže nic, co už máte připojené, nepřestane fungovat. V nové
+  organizaci aplikace připojíte znovu; přejmenováním stávající organizace na
+  jméno Organizace zůstanou připojení zachovaná.
 - Nejde-li přečíst jméno Organizace Environmentu (rozbitý Folder), přes
   Composio se v něm nic nepřipojí ani neodpojí, dokud se to neopraví.
 - Osobní Environment používá výchozí organizaci účtu; vybíráte ji při
