@@ -120,7 +120,7 @@ ohraničené hranice** a **definované procesy**.
   provider/operator hranici; úplný model drží `ARCHITECTURE.md`.
 - **Vlastní mašina, vlastní Personalspace.** Každý Kolega má vlastní mašinu
   s plnými lokálními právy a vlastní **privátní Personalspace**: intimní
-  prostor právě jednoho člověka a jeho volitelného Buddyho, který nikdo
+  prostor právě jednoho člověka a jeho Buddyho, který nikdo
   cizí — Steward, Admin ani provozovatel hostingu — nečte a který se nikdy
   nesdílí. Buddy žije uvnitř Personalspace člověka, kterého zastupuje;
   vlastní tím nezískává. Sdílená Organization-owned Mašina může být další
@@ -129,8 +129,10 @@ ohraničené hranice** a **definované procesy**.
 - **Jedna osobní hostovaná Mašina.** Operátor má v personalspace právě jednu
   hostovanou Mašinu (osobní VM). **Má-li** Buddyho, bydlí právě na ní — není to
   druhý host, ale runtime uvnitř téže hranice pod pravidly
-  [`manual/hosted-buddy-vps.md`](manual/hosted-buddy-vps.md); Buddy zůstává
-  volitelný a jen pro člověka, tahle Mašina ho nezakládá. Vlastní
+  [`manual/hosted-buddy-vps.md`](manual/hosted-buddy-vps.md); Buddy je jen pro
+  člověka. Nově založené osobní Prostředí je Buddy, Produkt 1, a Buddyho má
+  vždy (decision 0207); dosavadní pilotní osobní Mašiny bez Buddyho zůstávají,
+  jak jsou. Vlastní
   hardware Operátora stojí mimo pool a jméno nepotřebuje — je to klient.
   Personalspace je gitignored a mimo GitHub organizace, takže víc hostovaných
   Mašin nemá čím koordinovat vlastnictví, jména ani přístupy. Druhá trvalá
@@ -138,8 +140,12 @@ ohraničené hranice** a **definované procesy**.
   řeš uvnitř své Mašiny — snapshotem nebo kontejnerovou či procesní izolací,
   které Mašinou samy nejsou; každý další virtuální server Mašina je, i bez
   jména v `lazurio.io`, a druhý domov se z něj nedělá
-  (decision 0153 v manual/decision-register.md). Do sítě se osobní Mašina
-  připojuje **výhradně jako node Headscale tailnetu Conglomerate Hostu**, pod
+  (decision 0153 v manual/decision-register.md). **Buddy z Produktu 1 nemá
+  tailnet ani SSH**: vstupuje se do něj jen přihlášením Lazurio účtem z webu a
+  počítač a telefon se připojují přes vlastní účet AI člověka (decision 0207);
+  Headscale mu nezakládej. Pravidlo níže platí pro osobní Mašiny, které už
+  v tailnetu jsou (pilotní osobní Prostředí a Produkt 2): do sítě se
+  připojují **výhradně jako node Headscale tailnetu Conglomerate Hostu**, pod
   osobním Headscale userem Operátora — stejně jako jeho laptop a telefon, na
   kterých tak stačí jediný klient Tailscale. Samostatný VPN pro ni nezakládej:
   žádný WireGuard tunel, veřejný port ani DNAT; WireGuard pilot z 2026-09-20 je
@@ -379,7 +385,7 @@ grant sám nerozšiřuje a předá konkrétní chybějící přístup k náprav�
 
 Hard pravidlo Lazuria: jeden Operátor má právě jednu vlastní hostovanou osobní Mašinu. Buddy je rezident přímo na téže osobní Mašině a funguje v jejím rámci; žádný vedlejší osobní Buddy host ani výjimka ze singletonu. Další hostované Mašiny vyžadují Organizaci. Organizace může vlastnit více oprávněných Mašin i pro stejného Operátora; GitHub určuje oprávnění. Více fyzických klientských zařízení, migrace nebo záloha nejsou druhé nezávislé hostované osobní prostředí. Osobní URL je `<app>.<personal-dns-slug>.lazurio.io`; organizační URL `<app>.<machine>.<github-org-login>.lazurio.io`. Osobní DNS slug je lowercase login zmrazený při založení; rename loginu jej nemění. Case-insensitive lookup je kompatibilita existujícího hostname, nikoli nová identita či DNS binding. Autoritou jsou [root rozhodnutí 0153/0154](manual/decision-register.md).
 
-Hosted Buddy označuje osobní prostředí: osobní VM lidského Operátora (Ownera) s Hermesem v roli Buddyho. Osobní Owner není host-admin. Osobní VM nemá org repozitáře; pracovní klony a běhy jsou na přidělených Organization-owned Mašinách. Osobní přístup přes Headscale + SSH/Codex a následné org SSH přes Headscale mají oddělené granty. Produktové pořadí určuje kanonický plán v Mission Control v3. Přesný aktuální cílový kontrakt, servisní hranice a odlišení od dosavadních instalací drží [synchronizační přehled](manual/buddy-product-decision-2026-09-12.md). Text sám nemění žádný runtime, profil, ACL ani mandát.
+Hosted Buddy označuje osobní prostředí: osobní VM lidského Operátora (Ownera) s Hermesem v roli Buddyho. Osobní Owner není host-admin. Osobní VM nemá org repozitáře; pracovní klony a běhy jsou na přidělených Organization-owned Mašinách. Buddy z Produktu 1 je bez tailnetu a SSH, jen přes Lazurio účet z webu (decision 0207). U osobních Mašin v tailnetu (piloty, Produkt 2) mají osobní přístup přes Headscale + SSH/Codex a následné org SSH přes Headscale oddělené granty. Produktové pořadí určuje kanonický plán v Mission Control v3. Přesný aktuální cílový kontrakt, servisní hranice a odlišení od dosavadních instalací drží [synchronizační přehled](manual/buddy-product-decision-2026-09-12.md). Text sám nemění žádný runtime, profil, ACL ani mandát.
 
 ## Správa infrastruktury Ownery
 
