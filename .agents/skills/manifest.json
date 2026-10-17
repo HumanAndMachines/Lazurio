@@ -23,6 +23,18 @@
       "required": false
     },
     {
+      "slug": "lazurio-example-smoke-test",
+      "path": ".agents/skills/lazurio-example-smoke-test/SKILL.md",
+      "applies_to": [
+        "browser-smoke-test",
+        "sign-in-test",
+        "user-facing-change",
+        "ring0-acceptance",
+        "lazurio-example-organization"
+      ],
+      "required": true
+    },
+    {
       "slug": "lazurio-module-standard",
       "path": ".agents/skills/lazurio-module-standard/SKILL.md",
       "applies_to": [

@@ -251,7 +251,11 @@ ho Publikuje, po nasazení sám otevře výsledek v prohlížeči: stránka se
 skutečně vykreslí a hlavní cesta funguje. Přihlášení projde smoke testem:
 testovacím účtem, který pro to Operátor nebo Organizace určili (Task Agent
 vlastní účet nemá a nezakládá), jinak Agent požádá Operátora o jedno
-přihlášení. Výsledek, nebo že ověření chybí, uvede
+přihlášení. Pro Lazurio samotné jsou to Alena (`lazurio-alena`) a Bob
+(`lazurio-bob`) z referenční Organizace `LazurioExampleOrganization`: Agent
+se jimi sám přihlásí ve vlastním profilu prohlížeče a proklika celou cestu
+včetně odhlášení, Prostředí a migrací podle skillu
+`.agents/skills/lazurio-example-smoke-test/SKILL.md`. Výsledek, nebo že ověření chybí, uvede
 v handoffu pod „Ověřeno“. Pro vzhled stránky se místo toho nestaví vlastní
 automatický test vykreslení; testy dál drží kontrakt chování.
 
